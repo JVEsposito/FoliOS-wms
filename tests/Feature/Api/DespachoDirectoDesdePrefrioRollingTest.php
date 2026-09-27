@@ -40,7 +40,7 @@ class DespachoDirectoDesdePrefrioRollingTest extends TestCase
             'planificador.horizon' => 'rolling',
         ]);
 
-        $temporada = Temporada::create([
+        $temporada = $this->crearTemporadaActivaPrueba([
             'codigo' => 'TEMP-252-PF',
             'nombre' => 'Temporada PR 252 Prefrío',
             'fecha_inicio' => '2026-09-01',

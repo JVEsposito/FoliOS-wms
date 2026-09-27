@@ -46,7 +46,7 @@ class ContextoOficinaTest extends TestCase
         Sanctum::actingAs(User::factory()->create(['rol' => RolUsuario::Administrador]));
         config(['oficina.planta' => 'Planta de prueba']);
         Temporada::create(['codigo' => 'ANTERIOR', 'nombre' => 'Anterior', 'fecha_inicio' => '2025-01-01', 'activa' => false]);
-        Temporada::create(['codigo' => 'ACTUAL', 'nombre' => 'Actual', 'fecha_inicio' => '2026-01-01', 'activa' => true]);
+        $this->crearTemporadaActivaPrueba(['codigo' => 'ACTUAL', 'nombre' => 'Actual', 'fecha_inicio' => '2026-01-01', 'activa' => true]);
         $this->getJson('/api/oficina/contexto')->assertOk()
             ->assertJsonPath('data.planta', 'Planta de prueba')
             ->assertJsonPath('data.temporada.codigo', 'ACTUAL')

@@ -83,6 +83,9 @@ class ServicioTemporadaGlobal
     public function activar(Temporada $temporada, ?int $usuarioId = null): Temporada
     {
         return DB::transaction(function () use ($temporada, $usuarioId): Temporada {
+            // Adquirir primero el bloqueo de la vigente evita invertir el
+            // orden frente a otra activación sobre una fila diferente.
+            $this->temporadaActiva->buscar(bloquear: true);
             $temporada = Temporada::query()->lockForUpdate()->findOrFail($temporada->id);
             $this->asegurarActivable($temporada);
             $this->asegurarVigenciaProductiva($temporada);

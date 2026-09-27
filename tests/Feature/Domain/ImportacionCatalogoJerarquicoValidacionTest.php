@@ -18,7 +18,7 @@ class ImportacionCatalogoJerarquicoValidacionTest extends TestCase
 
     public function test_confirma_una_planilla_en_jerarquias_y_conserva_la_proyeccion_pda(): void
     {
-        $temporada = Temporada::create([
+        $temporada = $this->crearTemporadaActivaPrueba([
             'codigo' => '2028',
             'nombre' => 'Temporada 2028',
             'activa' => true,

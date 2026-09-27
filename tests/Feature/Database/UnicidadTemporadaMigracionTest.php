@@ -30,6 +30,7 @@ class UnicidadTemporadaMigracionTest extends TestCase
     {
         $migracion = require database_path('migrations/2026_09_27_120000_restringir_temporada_activa_unica.php');
         $migracion->down();
+        $this->desactivarTemporadasDePrueba();
 
         $uno = Temporada::create(['codigo' => 'ACTIVA-UNO', 'nombre' => 'Uno', 'activa' => true]);
         $dos = Temporada::create(['codigo' => 'ACTIVA-DOS', 'nombre' => 'Dos', 'activa' => true]);

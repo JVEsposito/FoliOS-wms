@@ -78,6 +78,7 @@ class CatalogoValidacionApiTest extends TestCase
         $origenId = (string) Str::uuid();
         $ahora = now();
 
+        $this->desactivarTemporadasDePrueba();
         DB::table('temporadas')->insert([
             'id' => $temporadaId,
             'codigo' => '2026-2027',

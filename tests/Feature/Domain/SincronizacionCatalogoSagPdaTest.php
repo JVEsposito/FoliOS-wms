@@ -245,13 +245,13 @@ class SincronizacionCatalogoSagPdaTest extends TestCase
     public function test_sag_clientes_y_pda_resuelven_la_misma_temporada_activa(): void
     {
         Temporada::query()->update(['activa' => false]);
-        $anterior = Temporada::create([
+        $anterior = $this->crearTemporadaActivaPrueba([
             'codigo' => 'TEMP-ANTERIOR',
             'nombre' => 'Temporada anterior',
             'fecha_inicio' => '2025-07-01',
             'activa' => true,
         ]);
-        $vigente = Temporada::create([
+        $vigente = $this->crearTemporadaActivaPrueba([
             'codigo' => 'TEMP-VIGENTE',
             'nombre' => 'Temporada vigente',
             'fecha_inicio' => '2026-07-01',
@@ -347,18 +347,18 @@ class SincronizacionCatalogoSagPdaTest extends TestCase
         $this->assertDatabaseCount('combinaciones_validacion', 1);
     }
 
-    public function test_la_pda_desempata_temporadas_activas_por_fecha_de_creacion_e_identificador(): void
+    public function test_la_pda_lee_la_unica_activa_aunque_otra_tenga_la_misma_fecha_de_inicio(): void
     {
         Temporada::query()->update(['activa' => false]);
         $anterior = Temporada::create([
             'codigo' => 'TEMP-MISMA-FECHA-1',
             'nombre' => 'Temporada creada primero',
             'fecha_inicio' => '2026-07-01',
-            'activa' => true,
+            'activa' => false,
             'created_at' => '2026-07-01 08:00:00',
             'updated_at' => '2026-07-01 08:00:00',
         ]);
-        $vigente = Temporada::create([
+        $vigente = $this->crearTemporadaActivaPrueba([
             'codigo' => 'TEMP-MISMA-FECHA-2',
             'nombre' => 'Temporada creada después',
             'fecha_inicio' => '2026-07-01',
@@ -379,7 +379,7 @@ class SincronizacionCatalogoSagPdaTest extends TestCase
     {
         Temporada::query()->update(['activa' => false]);
 
-        return Temporada::create([
+        return $this->crearTemporadaActivaPrueba([
             'codigo' => $codigo,
             'nombre' => "Temporada {$codigo}",
             'fecha_inicio' => $fechaInicio,

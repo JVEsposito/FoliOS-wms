@@ -22,7 +22,7 @@ class OperacionCatalogoJerarquicoValidacionTest extends TestCase
 
     public function test_proyecta_la_jerarquia_al_contrato_actual_de_la_pda(): void
     {
-        $temporada = Temporada::create([
+        $temporada = $this->crearTemporadaActivaPrueba([
             'codigo' => '2026',
             'nombre' => 'Temporada 2026',
             'activa' => true,
@@ -103,7 +103,7 @@ class OperacionCatalogoJerarquicoValidacionTest extends TestCase
 
     public function test_un_csg_solo_habilita_las_variedades_declaradas(): void
     {
-        $temporada = Temporada::create([
+        $temporada = $this->crearTemporadaActivaPrueba([
             'codigo' => '2027',
             'nombre' => 'Temporada 2027',
             'activa' => true,
@@ -168,7 +168,7 @@ class OperacionCatalogoJerarquicoValidacionTest extends TestCase
 
     public function test_un_envase_solo_proyecta_combinaciones_para_su_cliente(): void
     {
-        $temporada = Temporada::create([
+        $temporada = $this->crearTemporadaActivaPrueba([
             'codigo' => '2028',
             'nombre' => 'Temporada 2028',
             'activa' => true,

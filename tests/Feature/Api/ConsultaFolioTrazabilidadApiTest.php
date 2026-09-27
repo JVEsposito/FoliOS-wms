@@ -23,7 +23,7 @@ class ConsultaFolioTrazabilidadApiTest extends TestCase
 
     public function test_explica_folio_agotado_por_repaletizaje_y_su_transicion(): void
     {
-        $temporada = Temporada::create([
+        $temporada = $this->crearTemporadaActivaPrueba([
             'codigo' => '2026-2027',
             'nombre' => 'Temporada 2026-2027',
             'activa' => true,

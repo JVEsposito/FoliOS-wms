@@ -100,7 +100,7 @@ class AdministracionValidacionApiTest extends TestCase
     public function test_activar_una_temporada_desactiva_la_anterior(): void
     {
         $administrador = User::factory()->create(['rol' => RolUsuario::Administrador]);
-        $anterior = Temporada::create([
+        $anterior = $this->crearTemporadaActivaPrueba([
             'codigo' => '2025-2026',
             'nombre' => 'Temporada anterior',
             'activa' => true,
@@ -126,7 +126,7 @@ class AdministracionValidacionApiTest extends TestCase
     {
         $administrador = User::factory()->create(['rol' => RolUsuario::Administrador]);
         Temporada::query()->where('activa', true)->update(['activa' => false]);
-        $temporada = Temporada::create([
+        $temporada = $this->crearTemporadaActivaPrueba([
             'codigo' => 'CAT-2026',
             'nombre' => 'Temporada categorías',
             'activa' => true,
@@ -169,7 +169,7 @@ class AdministracionValidacionApiTest extends TestCase
     public function test_crea_un_envase_asociado_a_un_cliente_de_la_temporada(): void
     {
         $administrador = User::factory()->create(['rol' => RolUsuario::Administrador]);
-        $temporada = Temporada::create([
+        $temporada = $this->crearTemporadaActivaPrueba([
             'codigo' => 'ENV-2026',
             'nombre' => 'Temporada envases',
             'activa' => true,
@@ -216,7 +216,7 @@ class AdministracionValidacionApiTest extends TestCase
     {
         $administrador = User::factory()->create(['rol' => RolUsuario::Administrador]);
         Temporada::query()->update(['activa' => false]);
-        $temporada = Temporada::create([
+        $temporada = $this->crearTemporadaActivaPrueba([
             'codigo' => '2026-2027',
             'nombre' => 'Temporada 2026-2027',
             'activa' => true,
@@ -281,7 +281,7 @@ class AdministracionValidacionApiTest extends TestCase
     public function test_importacion_con_error_no_puede_confirmarse(): void
     {
         $administrador = User::factory()->create(['rol' => RolUsuario::Administrador]);
-        $temporada = Temporada::create([
+        $temporada = $this->crearTemporadaActivaPrueba([
             'codigo' => '2026-2027',
             'nombre' => 'Temporada 2026-2027',
             'activa' => true,
@@ -310,7 +310,7 @@ class AdministracionValidacionApiTest extends TestCase
     public function test_importacion_vacia_se_rechaza_sin_crear_borrador(): void
     {
         $administrador = User::factory()->create(['rol' => RolUsuario::Administrador]);
-        $temporada = Temporada::create([
+        $temporada = $this->crearTemporadaActivaPrueba([
             'codigo' => '2028-2029',
             'nombre' => 'Temporada 2028-2029',
             'activa' => true,
@@ -335,7 +335,7 @@ class AdministracionValidacionApiTest extends TestCase
     public function test_confirmacion_rechaza_defensivamente_un_borrador_sin_filas(): void
     {
         $administrador = User::factory()->create(['rol' => RolUsuario::Administrador]);
-        $temporada = Temporada::create([
+        $temporada = $this->crearTemporadaActivaPrueba([
             'codigo' => '2029-2030',
             'nombre' => 'Temporada 2029-2030',
             'activa' => true,
@@ -372,7 +372,7 @@ class AdministracionValidacionApiTest extends TestCase
             'activo' => true,
         ]);
         $token = $validador->crearTokenParaDispositivo($dispositivo, 'validacion-test')->plainTextToken;
-        $temporada = Temporada::create([
+        $temporada = $this->crearTemporadaActivaPrueba([
             'codigo' => '2026-2027',
             'nombre' => 'Temporada 2026-2027',
             'activa' => true,

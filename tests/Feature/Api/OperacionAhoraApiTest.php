@@ -889,7 +889,7 @@ class OperacionAhoraApiTest extends TestCase
 
     private function crearTemporada(): Temporada
     {
-        return Temporada::create([
+        return $this->crearTemporadaActivaPrueba([
             'codigo' => 'ACTUAL',
             'nombre' => 'Temporada actual',
             'fecha_inicio' => '2026-08-01',

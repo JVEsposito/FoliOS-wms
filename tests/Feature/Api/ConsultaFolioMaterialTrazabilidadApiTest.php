@@ -34,7 +34,7 @@ class ConsultaFolioMaterialTrazabilidadApiTest extends TestCase
 
     public function test_expone_recepcion_existencia_y_consumo_del_folio_material(): void
     {
-        $temporada = Temporada::create([
+        $temporada = $this->crearTemporadaActivaPrueba([
             'codigo' => '2026-2027',
             'nombre' => 'Temporada 2026-2027',
             'activa' => true,

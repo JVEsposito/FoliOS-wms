@@ -87,11 +87,20 @@ class TemporadaActivaUnicaTest extends TestCase
         $this->temporada('ANTERIOR');
 
         $this->expectException(QueryException::class);
-        $this->temporada('DUPLICADA');
+        Temporada::create([
+            'codigo' => 'DUPLICADA',
+            'nombre' => 'DUPLICADA',
+            ...$this->vigenciaProductiva(),
+            'activa' => true,
+        ]);
     }
 
     private function temporada(string $codigo, bool $activa = true): Temporada
     {
+        if ($activa) {
+            $this->desactivarTemporadasDePrueba();
+        }
+
         return Temporada::create([
             'codigo' => $codigo,
             'nombre' => $codigo,

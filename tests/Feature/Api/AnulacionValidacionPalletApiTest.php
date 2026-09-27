@@ -306,6 +306,7 @@ class AnulacionValidacionPalletApiTest extends TestCase
         $origen = (string) Str::uuid();
         $categoria = (string) Str::uuid();
 
+        $this->desactivarTemporadasDePrueba();
         DB::table('temporadas')->insert([
             'id' => $temporada,
             'codigo' => '2026-2027',
