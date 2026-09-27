@@ -3,6 +3,8 @@
 namespace Tests\Feature\Database;
 
 use App\Models\Temporada;
+use App\Services\Temporadas\ServicioTemporadaActiva;
+use App\Services\Temporadas\ServicioTemporadaGlobal;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -50,5 +52,30 @@ class UnicidadTemporadaMigracionTest extends TestCase
         $migracion->up();
         $this->assertTrue(Schema::hasColumn('temporadas', 'activa_unica'));
         $this->assertSame($uno->id, Temporada::query()->where('activa', true)->value('id'));
+    }
+
+    public function test_cache_fuera_de_transaccion_se_invalida_al_activar_y_no_afecta_lecturas_con_bloqueo(): void
+    {
+        $servicio = app(ServicioTemporadaActiva::class);
+        $anterior = $servicio->obtener();
+        $nueva = Temporada::create([
+            'codigo' => 'NUEVA-CACHE',
+            'nombre' => 'Nueva temporada',
+            ...$this->vigenciaProductiva(),
+            'activa' => false,
+            'prefijo_documental' => 'NCACHE',
+        ]);
+
+        DB::transaction(function () use ($anterior, $nueva, $servicio): void {
+            DB::table('temporadas')->where('id', $anterior->id)->update(['activa' => false]);
+            DB::table('temporadas')->where('id', $nueva->id)->update(['activa' => true]);
+            $this->assertSame($nueva->id, $servicio->obtener(bloquear: true)->id);
+            DB::table('temporadas')->where('id', $nueva->id)->update(['activa' => false]);
+            DB::table('temporadas')->where('id', $anterior->id)->update(['activa' => true]);
+        });
+
+        $this->assertSame($anterior->id, $servicio->obtener()->id);
+        app(ServicioTemporadaGlobal::class)->activar($nueva);
+        $this->assertSame($nueva->id, $servicio->obtener()->id);
     }
 }

@@ -21,7 +21,6 @@ use App\Models\MovimientoInventarioMaterial;
 use App\Models\ProveedorMaterial;
 use App\Models\RecepcionMaterial;
 use App\Models\SaldoMaterialAlmacen;
-use App\Models\Temporada;
 use App\Models\TemporadaMaterial;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;

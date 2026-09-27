@@ -18,7 +18,6 @@ use App\Models\ProcesoPrefrio;
 use App\Models\ProcesoPrefrioFolio;
 use App\Models\ReservaCargaFolio;
 use App\Models\TareaMovimiento;
-use App\Models\Temporada;
 use App\Models\TunelPrefrio;
 use App\Models\User;
 use App\Services\Estiba\ServicioPlanesOperacionales;

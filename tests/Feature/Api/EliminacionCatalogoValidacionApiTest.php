@@ -12,7 +12,6 @@ use App\Models\CsgValidacion;
 use App\Models\EnvaseValidacion;
 use App\Models\EspecieValidacion;
 use App\Models\MarcaValidacion;
-use App\Models\Temporada;
 use App\Models\User;
 use App\Models\VariedadValidacion;
 use App\Services\Validacion\ServicioCatalogoJerarquicoValidacion;

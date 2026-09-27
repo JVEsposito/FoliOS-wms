@@ -10,7 +10,6 @@ use App\Models\CsgValidacion;
 use App\Models\EspecieValidacion;
 use App\Models\MarcaValidacion;
 use App\Models\OrigenValidacion;
-use App\Models\Temporada;
 use App\Models\VariedadValidacion;
 use App\Services\Validacion\ServicioCatalogoJerarquicoValidacion;
 use Illuminate\Foundation\Testing\RefreshDatabase;

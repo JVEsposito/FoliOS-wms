@@ -10,7 +10,6 @@ use App\Models\AlmacenMaterial;
 use App\Models\Anden;
 use App\Models\Camara;
 use App\Models\PlanoPlanta;
-use App\Models\Temporada;
 use App\Models\TunelPrefrio;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;

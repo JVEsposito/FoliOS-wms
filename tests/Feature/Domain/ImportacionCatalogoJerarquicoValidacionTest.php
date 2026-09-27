@@ -6,7 +6,6 @@ use App\Models\Cliente;
 use App\Models\ClienteValidacion;
 use App\Models\EnvaseValidacion;
 use App\Models\ImportacionValidacion;
-use App\Models\Temporada;
 use App\Models\User;
 use App\Services\Validacion\ServicioImportacionValidacion;
 use Illuminate\Foundation\Testing\RefreshDatabase;
