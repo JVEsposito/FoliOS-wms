@@ -1,4 +1,5 @@
 import { createOperationalPoller } from './shared/operational-poller';
+import { createOfficeSessionSync } from './shared/office-session-sync';
 
 const orderTokenKey = 'estiba_wms_office_token';
 const orderIdentityKey = 'estiba_wms_office_identity';
@@ -16,6 +17,7 @@ const orderState = {
     cancellationOperations: new Map(),
     loadingDetails: new Set(),
     poller: null,
+    session: null,
 };
 
 const orderElements = {};
@@ -125,10 +127,10 @@ function orderErrorMessage(data, fallback) {
     return Object.values(data?.errors || {}).flat()[0] || data?.message || fallback;
 }
 
-async function orderApi(path, options = {}) {
+async function orderApi(path, options = {}, token = orderState.token) {
     const headers = new Headers(options.headers || {});
     headers.set('Accept', 'application/json');
-    if (orderState.token) headers.set('Authorization', `Bearer ${orderState.token}`);
+    if (token) headers.set('Authorization', `Bearer ${token}`);
     if (options.body) headers.set('Content-Type', 'application/json');
 
     let response;
@@ -807,25 +809,49 @@ function handleOrderAction(event) {
     if (labelButton) openOrderLabels(order.id);
 }
 
-async function loadOrdersOffice(showErrors = false) {
-    orderState.token = localStorage.getItem(orderTokenKey);
-    orderState.identity = orderReadJson(orderIdentityKey);
-    if (!orderSectionIsActive() || !orderState.token || !canConsultOrders()) {
+function clearOrderSession(token) {
+    orderState.token = token;
+    orderState.identity = token ? orderReadJson(orderIdentityKey) : null;
+    orderState.loadedToken = null;
+    orderState.recipes = [];
+    orderState.orders = [];
+    orderState.inventory = [];
+    orderState.creationOperation = null;
+    orderState.planningOperations.clear();
+    orderState.cancellationOperations.clear();
+    orderState.loadingDetails.clear();
+    orderElements.panel?.classList.add('is-hidden');
+    orderElements.form.reset();
+    orderElements.form.elements.version_receta_material_id.innerHTML = '';
+    orderElements.form.elements.fecha_operacional.value = orderToday();
+    orderElements.form.classList.add('is-hidden');
+    orderElements.stateFilter.value = '';
+    orderElements.clientFilter.innerHTML = '<option value="">Todos los clientes</option>';
+    orderElements.search.value = '';
+    orderElements.summary.textContent = '0 órdenes';
+    orderElements.metrics.innerHTML = '';
+    orderElements.requirements.innerHTML = '';
+    orderElements.list.innerHTML = '';
+    orderElements.error.textContent = '';
+}
+
+async function loadOrdersForToken(token, isCurrent, showErrors = false) {
+    if (!orderSectionIsActive() || !isCurrent() || !canConsultOrders()) {
         orderElements.panel?.classList.add('is-hidden');
         return;
     }
-    if (orderState.loading) return;
 
     orderState.loading = true;
-    orderState.loadedToken = orderState.token;
+    orderState.loadedToken = token;
     orderElements.panel.classList.remove('is-hidden');
     orderElements.form.classList.toggle('is-hidden', !canManageOrders());
     try {
         const [recipes, orders, inventory] = await Promise.all([
-            orderApi('/api/materiales/transformaciones/recetas?per_page=100'),
-            orderApi('/api/materiales/transformaciones/ordenes?per_page=100'),
-            orderApi('/api/materiales/inventario?vista=resumen'),
+            orderApi('/api/materiales/transformaciones/recetas?per_page=100', {}, token),
+            orderApi('/api/materiales/transformaciones/ordenes?per_page=100', {}, token),
+            orderApi('/api/materiales/inventario?vista=resumen', {}, token),
         ]);
+        if (!isCurrent()) return;
         orderState.recipes = recipes.data || [];
         orderState.orders = orders.data || [];
         orderState.inventory = inventory.resumen_items || [];
@@ -833,12 +859,17 @@ async function loadOrdersOffice(showErrors = false) {
         renderOrderMetrics();
         renderOrders();
     } catch (error) {
+        if (!isCurrent()) return;
         if (showErrors || !orderState.orders.length) {
             orderElements.list.innerHTML = `<p class="materials-order-empty">${orderEscape(error.message)}</p>`;
         }
     } finally {
         orderState.loading = false;
     }
+}
+
+function loadOrdersOffice(showErrors = false) {
+    return orderState.session?.reload(showErrors) ?? Promise.resolve(false);
 }
 
 function bootMaterialOrders() {
@@ -849,23 +880,12 @@ function bootMaterialOrders() {
 
     document.getElementById('reloadMaterialsButton')
         ?.addEventListener('click', () => loadOrdersOffice(false));
-    window.addEventListener('estiba:office-session', (event) => {
-        if (event.detail?.authenticated) void loadOrdersOffice(false);
-        else {
-            orderState.loadedToken = null;
-            orderElements.panel.classList.add('is-hidden');
-        }
+    orderState.session = createOfficeSessionSync({
+        tokenKey: orderTokenKey,
+        getToken: () => localStorage.getItem(orderTokenKey),
+        onSessionChange: clearOrderSession,
+        load: loadOrdersForToken,
     });
-    window.setInterval(() => {
-        const token = localStorage.getItem(orderTokenKey);
-        if (token && token !== orderState.loadedToken && !orderState.loading) {
-            void loadOrdersOffice(false);
-        }
-        if (!token && orderState.loadedToken) {
-            orderState.loadedToken = null;
-            orderElements.panel.classList.add('is-hidden');
-        }
-    }, 900);
     orderState.poller = createOperationalPoller(
         () => loadOrdersOffice(false),
         {
@@ -874,7 +894,7 @@ function bootMaterialOrders() {
         },
     );
     orderState.poller.start();
-    void loadOrdersOffice(false);
+    orderState.session.start();
 }
 
 bootMaterialOrders();

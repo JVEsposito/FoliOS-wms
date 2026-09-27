@@ -1,3 +1,5 @@
+import { createOfficeSessionSync } from './shared/office-session-sync';
+
 const recipeTokenKey = 'estiba_wms_office_token';
 const recipeIdentityKey = 'estiba_wms_office_identity';
 
@@ -9,6 +11,7 @@ const recipeState = {
     editingRecipeId: null,
     loadedToken: null,
     loading: false,
+    session: null,
 };
 
 const recipeElements = {};
@@ -75,10 +78,10 @@ function recipeRowId() {
     return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-async function recipeApi(path, options = {}) {
+async function recipeApi(path, options = {}, token = recipeState.token) {
     const headers = new Headers(options.headers || {});
     headers.set('Accept', 'application/json');
-    if (recipeState.token) headers.set('Authorization', `Bearer ${recipeState.token}`);
+    if (token) headers.set('Authorization', `Bearer ${token}`);
     if (options.body) headers.set('Content-Type', 'application/json');
 
     let response;
@@ -480,26 +483,49 @@ function renderRecipes() {
     }).join('') || '<p class="materials-recipe-empty">No existen recetas para el filtro seleccionado.</p>';
 }
 
-async function loadRecipesOffice(showErrors = false) {
-    recipeState.token = localStorage.getItem(recipeTokenKey);
-    recipeState.identity = recipeReadJson(recipeIdentityKey);
-    if (!recipeSectionIsActive() || !recipeState.token || !canConsultRecipes()) {
+function clearRecipeSession(token) {
+    recipeState.token = token;
+    recipeState.identity = token ? recipeReadJson(recipeIdentityKey) : null;
+    recipeState.loadedToken = null;
+    recipeState.catalog = { temporada: null, clientes: [], items: [] };
+    recipeState.recipes = [];
+    recipeState.editingRecipeId = null;
+    recipeElements.panel?.classList.add('is-hidden');
+    recipeElements.form.reset();
+    recipeElements.form.classList.add('is-hidden');
+    recipeElements.form.elements.cliente_id.disabled = false;
+    recipeElements.form.elements.item_salida_id.disabled = false;
+    recipeElements.form.elements.nombre.disabled = false;
+    recipeElements.form.elements.cliente_id.innerHTML = '';
+    recipeElements.form.elements.item_salida_id.innerHTML = '';
+    recipeElements.components.innerHTML = '';
+    recipeElements.filter.innerHTML = '<option value="">Todos los clientes</option>';
+    recipeElements.formTitle.textContent = 'Nueva receta';
+    recipeElements.save.textContent = 'Crear receta';
+    recipeElements.cancelVersion.classList.add('is-hidden');
+    recipeElements.summary.textContent = '0 recetas';
+    recipeElements.list.innerHTML = '';
+    recipeElements.error.textContent = '';
+}
+
+async function loadRecipesForToken(token, isCurrent, showErrors = false) {
+    if (!recipeSectionIsActive() || !isCurrent() || !canConsultRecipes()) {
         recipeElements.panel?.classList.add('is-hidden');
         return;
     }
-    if (recipeState.loading) return;
 
     const editingRecipeId = recipeState.editingRecipeId;
     recipeState.loading = true;
-    recipeState.loadedToken = recipeState.token;
+    recipeState.loadedToken = token;
     recipeElements.panel.classList.remove('is-hidden');
     recipeElements.form.classList.toggle('is-hidden', !canAdminRecipes());
 
     try {
         const [catalog, recipes] = await Promise.all([
-            recipeApi('/api/materiales/catalogo'),
-            recipeApi('/api/materiales/transformaciones/recetas?per_page=100'),
+            recipeApi('/api/materiales/catalogo', {}, token),
+            recipeApi('/api/materiales/transformaciones/recetas?per_page=100', {}, token),
         ]);
+        if (!isCurrent()) return;
         recipeState.catalog = catalog;
         recipeState.recipes = recipes.data || [];
         populateRecipeSelectors();
@@ -507,12 +533,17 @@ async function loadRecipesOffice(showErrors = false) {
         else if (!recipeState.editingRecipeId) resetRecipeComponents();
         renderRecipes();
     } catch (error) {
+        if (!isCurrent()) return;
         if (showErrors || !recipeState.recipes.length) {
             recipeElements.list.innerHTML = `<p class="materials-recipe-empty">${recipeEscape(error.message)}</p>`;
         }
     } finally {
         recipeState.loading = false;
     }
+}
+
+function loadRecipesOffice(showErrors = false) {
+    return recipeState.session?.reload(showErrors) ?? Promise.resolve(false);
 }
 
 function bootMaterialRecipes() {
@@ -522,15 +553,13 @@ function bootMaterialRecipes() {
     if (!recipeSectionIsActive()) return;
 
     document.getElementById('reloadMaterialsButton')?.addEventListener('click', () => loadRecipesOffice(false));
-    window.setInterval(() => {
-        const token = localStorage.getItem(recipeTokenKey);
-        if (token && token !== recipeState.loadedToken && !recipeState.loading) loadRecipesOffice(false);
-        if (!token && recipeState.loadedToken) {
-            recipeState.loadedToken = null;
-            recipeElements.panel.classList.add('is-hidden');
-        }
-    }, 900);
-    loadRecipesOffice(false);
+    recipeState.session = createOfficeSessionSync({
+        tokenKey: recipeTokenKey,
+        getToken: () => localStorage.getItem(recipeTokenKey),
+        onSessionChange: clearRecipeSession,
+        load: loadRecipesForToken,
+    });
+    recipeState.session.start();
 }
 
 bootMaterialRecipes();
