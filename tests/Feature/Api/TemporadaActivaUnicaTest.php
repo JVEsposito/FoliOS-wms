@@ -47,7 +47,7 @@ class TemporadaActivaUnicaTest extends TestCase
         $this->assertSame(1, Temporada::query()->where('activa', true)->count());
     }
 
-    public function test_activar_otra_temporada_invalida_el_cache_en_la_misma_peticion(): void
+    public function test_activar_otra_temporada_renueva_la_lectura_dentro_de_la_transaccion_de_prueba(): void
     {
         $anterior = $this->temporada('ANTERIOR');
         $nueva = $this->temporada('SIGUIENTE', false);

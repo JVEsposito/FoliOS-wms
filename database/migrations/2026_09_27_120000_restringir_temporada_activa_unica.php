@@ -1,6 +1,5 @@
 <?php
 
-use App\Models\Temporada;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -10,7 +9,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        $duplicadas = Temporada::query()
+        $duplicadas = DB::table('temporadas')
             ->where('activa', true)
             ->orderBy('codigo')
             ->pluck('codigo');

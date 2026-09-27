@@ -22,4 +22,12 @@ Preparar **dos temporadas productivas** con fechas válidas y prefijos documenta
 php artisan temporadas:probar-activaciones <UUID_A> <UUID_B> --confirmar-entorno-pruebas
 ```
 
-El comando inicia dos procesos Artisan, los libera juntos y exige que ambos terminen bien y que quede exactamente una temporada activa. Presenta los errores de cada proceso para investigar bloqueos o reintentos. Luego se puede volver a activar la temporada que corresponda al entorno de pruebas desde Accesos.
+El comando inicia dos procesos Artisan, los libera juntos y exige que ambos terminen bien y que quede exactamente una temporada activa. Presenta los errores de cada proceso para investigar bloqueos o reintentos.
+
+Para comprobar la inserción dentro de `guardar()` frente a `activar()`, activar primero la temporada A y dejar preparada la temporada B para activarla. El segundo escenario crea automáticamente una **temporada productiva persistente**, con código y prefijo nuevos y fechas posteriores a las existentes:
+
+```bash
+php artisan temporadas:probar-activaciones <UUID_A> <UUID_B> --escenario=guardar-activar --confirmar-entorno-pruebas
+```
+
+Ejecutar este segundo escenario una sola vez en el servidor de pruebas y conservar el código `CONC-...` que muestra el comando para identificar su registro. Ambos escenarios modifican la temporada vigente. Al terminar, volver a activar A desde Accesos; la temporada creada permanecerá inactiva en el historial.
