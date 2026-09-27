@@ -17,6 +17,7 @@ use App\Models\Folio;
 use App\Models\User;
 use App\Models\ValidacionPallet;
 use App\Services\Autorizacion\AlcanceOperacionalUsuario;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\Transiciones\ComandoTransicionOperacional;
 use App\Services\Transiciones\MotorTransicionesOperacionales;
 use Carbon\CarbonImmutable;
@@ -76,11 +77,8 @@ class ServicioValidacionPallet
                 );
             }
 
-            $temporada = DB::table('temporadas')
-                ->where('id', $datos['temporada_id'])
-                ->lockForUpdate()
-                ->first();
-            if (! $temporada || ! $temporada->activa) {
+            $temporada = app(ServicioTemporadaActiva::class)->buscar(bloquear: true);
+            if (! $temporada || $temporada->id !== $datos['temporada_id']) {
                 throw new DomainException('La temporada no existe o no se encuentra activa.');
             }
 

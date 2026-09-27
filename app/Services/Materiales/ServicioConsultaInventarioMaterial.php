@@ -7,6 +7,7 @@ use App\Enums\EstadoCamara;
 use App\Enums\EstadoOperacionalFolio;
 use App\Enums\EstadoPosicion;
 use App\Models\FolioMaterial;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
@@ -256,12 +257,9 @@ class ServicioConsultaInventarioMaterial
                 ->where('cm.id', $id));
     }
 
-    private function consultaTemporadaActiva(): QueryBuilder
+    private function consultaTemporadaActiva(): EloquentBuilder
     {
-        return DB::table('temporadas')
-            ->select('id')
-            ->where('activa', true)
-            ->limit(1);
+        return app(ServicioTemporadaActiva::class)->subconsultaId();
     }
 
     private function expresionDisponible(): array

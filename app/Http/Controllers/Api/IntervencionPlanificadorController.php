@@ -5,8 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Enums\PrioridadOperacional;
 use App\Http\Controllers\Controller;
 use App\Models\ManiobraOperacional;
-use App\Models\Temporada;
 use App\Services\Planificador\ServicioIntervencionesPlanificador;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -83,9 +83,7 @@ class IntervencionPlanificadorController extends Controller
             'motivo' => ['required', 'string', 'min:3', 'max:500'],
             'limite' => ['nullable', 'integer', 'min:1', 'max:250'],
         ]);
-        $temporada = Temporada::query()
-            ->where('activa', true)
-            ->firstOrFail();
+        $temporada = app(ServicioTemporadaActiva::class)->buscar() ?? abort(404);
 
         return response()->json([
             'data' => $servicio->expirarReservasVencidas(

@@ -46,6 +46,7 @@ use App\Observers\ReplanificarSegregacionMovimientoObserver;
 use App\Observers\SolicitarArbitrajePlanificadorObserver;
 use App\Observers\UbicacionActualObserver;
 use App\Services\Autorizacion\AlcanceOperacionalUsuario;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\Transiciones\ContextoEjecucionTransicionOperacional;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -63,6 +64,7 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(ContextoEjecucionTransicionOperacional::class);
+        $this->app->scoped(ServicioTemporadaActiva::class);
 
         if ($this->app->environment('local') &&
             class_exists(\Laravel\Telescope\TelescopeServiceProvider::class)) {

@@ -200,6 +200,7 @@ class CorreccionValidacionPalletApiTest extends TestCase
         $categoriaId = (string) Str::uuid();
         $ahora = now();
 
+        $this->desactivarTemporadasDePrueba();
         DB::table('temporadas')->insert([
             'id' => $temporadaId,
             'codigo' => 'TEMP-CORR',

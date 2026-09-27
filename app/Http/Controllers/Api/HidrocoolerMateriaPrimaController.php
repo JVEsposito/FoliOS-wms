@@ -8,9 +8,9 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\LoteMateriaPrimaResource;
 use App\Models\LoteMateriaPrima;
 use App\Models\ProcesoHidrocoolerMateriaPrima;
-use App\Models\Temporada;
 use App\Services\MateriaPrima\RegistroHidrocoolerPdf;
 use App\Services\MateriaPrima\RegistroHidrocoolerXlsx;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -27,7 +27,7 @@ class HidrocoolerMateriaPrimaController extends Controller
     public function resumen(): JsonResponse
     {
         Gate::authorize('consultar-hidrocooler-materia-prima');
-        $temporada = Temporada::query()->where('activa', true)->first();
+        $temporada = app(ServicioTemporadaActiva::class)->buscar();
         if (! $temporada) {
             return response()->json([
                 'temporada' => null,
@@ -92,7 +92,7 @@ class HidrocoolerMateriaPrimaController extends Controller
             'hasta' => ['nullable', 'date', 'after_or_equal:desde'],
             'per_page' => ['nullable', 'integer', 'between:1,200'],
         ]);
-        $temporada = Temporada::query()->where('activa', true)->first();
+        $temporada = app(ServicioTemporadaActiva::class)->buscar();
         $bandeja = $request->string('bandeja', 'pendientes')->toString();
 
         $consulta = LoteMateriaPrima::query()
@@ -222,7 +222,7 @@ class HidrocoolerMateriaPrimaController extends Controller
     /** @return Collection<int, ProcesoHidrocoolerMateriaPrima> */
     private function procesosRegistro(Request $request): Collection
     {
-        $temporada = Temporada::query()->where('activa', true)->first();
+        $temporada = app(ServicioTemporadaActiva::class)->buscar();
         if (! $temporada) {
             return collect();
         }

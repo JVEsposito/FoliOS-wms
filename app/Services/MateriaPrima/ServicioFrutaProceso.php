@@ -12,6 +12,7 @@ use App\Models\LoteMateriaPrima;
 use App\Models\PersonalAccessToken;
 use App\Models\User;
 use App\Services\Autorizacion\AlcanceOperacionalUsuario;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -51,7 +52,7 @@ class ServicioFrutaProceso
                 }
 
                 $lote = LoteMateriaPrima::query()
-                    ->whereHas('temporada', fn ($consulta) => $consulta->where('activa', true))
+                    ->whereHas('temporada', fn ($consulta) => $consulta->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
                     ->lockForUpdate()
                     ->findOrFail($lote->id);
                 if (! in_array($lote->estado, [
@@ -183,7 +184,7 @@ class ServicioFrutaProceso
                     ->lockForUpdate()
                     ->findOrFail($entrega->id);
                 $lote = LoteMateriaPrima::query()
-                    ->whereHas('temporada', fn ($consulta) => $consulta->where('activa', true))
+                    ->whereHas('temporada', fn ($consulta) => $consulta->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
                     ->lockForUpdate()
                     ->findOrFail($entrega->lote_materia_prima_id);
 

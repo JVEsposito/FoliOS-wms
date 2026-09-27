@@ -15,6 +15,7 @@ use App\Models\ReservaTareaMovimiento;
 use App\Models\TareaMovimiento;
 use App\Models\Temporada;
 use App\Models\User;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use DomainException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -32,9 +33,7 @@ class ServicioFronteraFisica
     public function snapshot(User $usuario, Dispositivo $dispositivo): array
     {
         return DB::transaction(function () use ($usuario, $dispositivo): array {
-            $temporada = Temporada::query()
-                ->where('activa', true)
-                ->first();
+            $temporada = app(ServicioTemporadaActiva::class)->buscar();
             if (! $temporada) {
                 throw new DomainException('No existe una temporada operacional activa.');
             }

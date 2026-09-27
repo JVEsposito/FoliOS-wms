@@ -29,6 +29,7 @@ use App\Models\Folio;
 use App\Services\Cargas\RevisionCargaOperacional;
 use App\Services\Cargas\ServicioCarga;
 use App\Services\Cargas\ServicioPresenciaCargaAnden;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -54,7 +55,7 @@ class CargaController extends Controller
 
         $cargas = Carga::query()
             ->whereHas('temporada', fn (Builder $consulta): Builder => $consulta
-                ->where('activa', true))
+                ->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
             ->with($this->relacionesDetalle())
             ->withCount([
                 'incidencias as incidencias_abiertas' => fn (Builder $consulta): Builder => $consulta
@@ -120,7 +121,7 @@ class CargaController extends Controller
 
         $cargas = Carga::query()
             ->whereHas('temporada', fn (Builder $consulta): Builder => $consulta
-                ->where('activa', true))
+                ->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
             ->whereIn(
                 'estado',
                 collect(EstadoCarga::visiblesEnOperacion())
@@ -160,7 +161,7 @@ class CargaController extends Controller
         $folios = Folio::query()
             ->where('activo', true)
             ->whereHas('temporada', fn (Builder $consulta): Builder => $consulta
-                ->where('activa', true))
+                ->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
             ->whereIn('tipo_bulto', [
                 TipoBulto::Pallet->value,
                 TipoBulto::Saldo->value,
@@ -234,7 +235,7 @@ class CargaController extends Controller
         $folios = Folio::query()
             ->where('activo', true)
             ->whereHas('temporada', fn (Builder $consulta): Builder => $consulta
-                ->where('activa', true))
+                ->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
             ->where('estado_operacional', EstadoOperacionalFolio::Disponible->value)
             ->whereIn('tipo_bulto', [
                 TipoBulto::Pallet->value,

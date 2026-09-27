@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Temporada;
 use App\Services\Temporadas\Cierre\ServicioDiagnosticoCierreTemporada;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Console\Command;
 
 final class DiagnosticarCierreTemporada extends Command
@@ -19,7 +20,7 @@ final class DiagnosticarCierreTemporada extends Command
     {
         $argumento = $this->argument('temporada');
         $temporada = $argumento === null
-            ? Temporada::query()->where('activa', true)->first()
+            ? app(ServicioTemporadaActiva::class)->buscar()
             : Temporada::query()->where('codigo', mb_strtoupper($argumento))->orWhere('id', $argumento)->first();
 
         if (! $temporada) {

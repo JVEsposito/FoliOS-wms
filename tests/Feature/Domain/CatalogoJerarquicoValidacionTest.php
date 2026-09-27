@@ -178,6 +178,10 @@ class CatalogoJerarquicoValidacionTest extends TestCase
 
     private function temporada(string $codigo, bool $activa = false): Temporada
     {
+        if ($activa) {
+            $this->desactivarTemporadasDePrueba();
+        }
+
         return Temporada::create([
             'codigo' => $codigo,
             'nombre' => "Temporada {$codigo}",

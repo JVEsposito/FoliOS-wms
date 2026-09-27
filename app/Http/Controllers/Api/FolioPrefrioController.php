@@ -12,6 +12,7 @@ use App\Http\Requests\ConsultarFoliosPrefrioRequest;
 use App\Http\Resources\FolioPrefrioResource;
 use App\Models\Folio;
 use App\Services\Prefrio\RevisionPrefrioOperacional;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Symfony\Component\HttpFoundation\Response;
@@ -45,7 +46,7 @@ class FolioPrefrioController extends Controller
 
         $consulta = Folio::query()
             ->where('activo', true)
-            ->whereHas('temporada', fn ($consulta) => $consulta->where('activa', true))
+            ->whereHas('temporada', fn ($consulta) => $consulta->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
             ->whereIn('tipo_bulto', [TipoBulto::Pallet->value, TipoBulto::Saldo->value])
             ->whereIn('condicion_termica', [
                 CondicionTermicaFolio::PendientePrefrio->value,

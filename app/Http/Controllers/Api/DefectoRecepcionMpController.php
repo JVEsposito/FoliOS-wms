@@ -12,6 +12,7 @@ use App\Models\Temporada;
 use App\Models\ValidacionMp;
 use App\Services\Existencias\GeneradorLibroXlsx;
 use App\Services\MateriaPrima\RegistroDefectosRecepcionPdf;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -166,7 +167,7 @@ class DefectoRecepcionMpController extends Controller
             throw ValidationException::withMessages(['filtros' => "La descarga {$formato} admite hasta {$limite} registros; acota los filtros de fecha o categoría."]);
         }
         $defectos = $consulta->orderByDesc('registrado_at')->orderByDesc('id')->get();
-        $temporada = Temporada::query()->find($filtros['temporada_id'] ?? Temporada::query()->where('activa', true)->value('id'));
+        $temporada = Temporada::query()->find($filtros['temporada_id'] ?? app(ServicioTemporadaActiva::class)->buscar()?->id);
         $codigo = $temporada?->codigo ?? 'sin-temporada';
         $nombre = 'defectos-recepcion-'.Str::slug($codigo).'-'.now()->format('Ymd-His');
         if ($formato === 'pdf') {
@@ -285,7 +286,7 @@ class DefectoRecepcionMpController extends Controller
     private function consulta(array $filtros): Builder
     {
         $temporadaId = $filtros['temporada_id']
-            ?? Temporada::query()->where('activa', true)->value('id');
+            ?? app(ServicioTemporadaActiva::class)->buscar()?->id;
         $consulta = DefectoRecepcionMp::query()->with(['validador:id,name', 'dispositivo:id,codigo', 'evidencias'])
             ->where('temporada_id', $temporadaId ?? '');
         if (isset($filtros['desde'])) {
@@ -321,7 +322,7 @@ class DefectoRecepcionMpController extends Controller
         $puedeAuditar = Gate::allows('auditar-defectos-recepcion-mp');
         $esSuRegistroVigente = Gate::allows('validar-mp')
             && $defecto->registrado_por_user_id === $request->user()->id
-            && Temporada::query()->whereKey($defecto->temporada_id)->where('activa', true)->exists();
+            && $defecto->temporada_id === app(ServicioTemporadaActiva::class)->buscar()?->id;
         abort_unless($puedeAuditar || $esSuRegistroVigente, 403);
         abort_unless(Storage::disk('local')->exists($evidencia->ruta), 404);
 
@@ -337,7 +338,7 @@ class DefectoRecepcionMpController extends Controller
 
     private function asegurarTemporadaActiva(RecepcionRomana $recepcion): void
     {
-        abort_unless(Temporada::query()->whereKey($recepcion->temporada_id)->where('activa', true)->exists(), 404);
+        abort_unless($recepcion->temporada_id === app(ServicioTemporadaActiva::class)->buscar()?->id, 404);
     }
 
     private function asegurarValidadorAsignado(RecepcionRomana $recepcion, Request $request): ValidacionMp

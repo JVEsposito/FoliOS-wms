@@ -17,6 +17,7 @@ use App\Models\User;
 use App\Services\Autorizacion\AlcanceOperacionalUsuario;
 use App\Services\Cargas\ServicioCarga;
 use App\Services\Temporadas\GuardiaTemporadaActiva;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Carbon\CarbonImmutable;
 use DomainException;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
@@ -35,7 +36,7 @@ class ServicioCalendarioEmbarques
     public function crear(array $datos, User $usuario): Embarque
     {
         return DB::transaction(function () use ($datos, $usuario): Embarque {
-            $temporada = Temporada::query()->where('activa', true)->lockForUpdate()->first()
+            $temporada = app(ServicioTemporadaActiva::class)->buscar(bloquear: true)
                 ?? throw new DomainException('No existe una temporada activa.');
             $cliente = Cliente::query()->whereKey($datos['cliente_id'])
                 ->where('activo', true)->lockForUpdate()->firstOrFail();

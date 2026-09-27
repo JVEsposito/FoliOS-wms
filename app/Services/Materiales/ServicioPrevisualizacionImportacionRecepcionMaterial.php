@@ -7,6 +7,7 @@ use App\Models\ClienteProveedorMaterial;
 use App\Models\ItemMaterial;
 use App\Models\ProveedorMaterial;
 use App\Models\TemporadaMaterial;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Carbon\Carbon;
 use DomainException;
 use Illuminate\Http\UploadedFile;
@@ -44,7 +45,7 @@ class ServicioPrevisualizacionImportacionRecepcionMaterial
 
         $temporada = TemporadaMaterial::query()
             ->where('activa', true)
-            ->whereHas('temporadaGlobal', fn ($consulta) => $consulta->where('activa', true))
+            ->whereHas('temporadaGlobal', fn ($consulta) => $consulta->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
             ->first();
 
         if (! $temporada) {

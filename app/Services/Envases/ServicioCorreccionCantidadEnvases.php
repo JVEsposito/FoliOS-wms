@@ -13,6 +13,7 @@ use App\Models\MovimientoEnvase;
 use App\Models\RecepcionRomana;
 use App\Models\User;
 use App\Models\ValidacionMp;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -29,7 +30,7 @@ class ServicioCorreccionCantidadEnvases
             }
 
             $recepcion = RecepcionRomana::query()->lockForUpdate()->findOrFail($seleccionado->recepcion_romana_id);
-            if (! $recepcion->temporada()->where('activa', true)->exists()
+            if ($recepcion->temporada_id !== app(ServicioTemporadaActiva::class)->buscar(bloquear: true)?->id
                 || $recepcion->tipo_recepcion !== TipoRecepcionRomana::SoloEnvases
                 || $recepcion->estado_validacion_mp !== EstadoValidacionMp::Validada) {
                 throw new ConflictoOperacion('Solo se corrigen recepciones de envases validadas en la temporada activa.');

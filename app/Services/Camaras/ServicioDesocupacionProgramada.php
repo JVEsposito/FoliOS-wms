@@ -37,6 +37,7 @@ use App\Models\User;
 use App\Services\Estiba\ServicioManiobrasOperacionales;
 use App\Services\Planificador\ServicioDesplieguePlanificador;
 use App\Services\Retenciones\ServicioPlanSegregacionRetenidos;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use DomainException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -56,7 +57,7 @@ class ServicioDesocupacionProgramada
     /** @return array<int, array<string, mixed>> */
     public function candidatas(): array
     {
-        $temporada = Temporada::query()->where('activa', true)->first();
+        $temporada = app(ServicioTemporadaActiva::class)->buscar();
         if (! $temporada) {
             return [];
         }
@@ -95,10 +96,7 @@ class ServicioDesocupacionProgramada
                 return $existente;
             }
 
-            $temporada = Temporada::query()
-                ->where('activa', true)
-                ->lockForUpdate()
-                ->first()
+            $temporada = app(ServicioTemporadaActiva::class)->buscar(bloquear: true)
                 ?? throw new DomainException('No existe una temporada activa para planificar el vaciado.');
             $this->validarInicio($camara, $temporada);
             $total = UbicacionActual::query()->where('camara_id', $camara->id)->count();

@@ -12,7 +12,6 @@ use App\Models\CsgValidacion;
 use App\Models\EnvaseValidacion;
 use App\Models\EspecieValidacion;
 use App\Models\MarcaValidacion;
-use App\Models\Temporada;
 use App\Models\User;
 use App\Models\VariedadValidacion;
 use App\Services\Validacion\ServicioCatalogoJerarquicoValidacion;
@@ -26,7 +25,7 @@ class EliminacionCatalogoValidacionApiTest extends TestCase
     public function test_administrador_puede_retirar_todos_los_tipos_del_catalogo_sin_borrarlos_fisicamente(): void
     {
         $administrador = User::factory()->create(['rol' => RolUsuario::Administrador]);
-        $temporada = Temporada::create([
+        $temporada = $this->crearTemporadaActivaPrueba([
             'codigo' => 'DEL-2026',
             'nombre' => 'Temporada eliminación',
             'activa' => true,
@@ -99,7 +98,7 @@ class EliminacionCatalogoValidacionApiTest extends TestCase
     public function test_eliminar_un_envase_despublica_su_proyeccion_pda_y_conserva_trazabilidad(): void
     {
         $administrador = User::factory()->create(['rol' => RolUsuario::Administrador]);
-        $temporada = Temporada::create([
+        $temporada = $this->crearTemporadaActivaPrueba([
             'codigo' => 'PDA-2026',
             'nombre' => 'Temporada proyección',
             'activa' => true,

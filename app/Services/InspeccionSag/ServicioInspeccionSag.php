@@ -19,8 +19,8 @@ use App\Models\Folio;
 use App\Models\LoteInspeccionSag;
 use App\Models\Pais;
 use App\Models\ResultadoDestinoInspeccionSag;
-use App\Models\Temporada;
 use App\Models\User;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\Transiciones\ComandoTransicionOperacional;
 use App\Services\Transiciones\MotorTransicionesOperacionales;
 use Closure;
@@ -62,7 +62,7 @@ class ServicioInspeccionSag
                 return $this->cargar($existente);
             }
 
-            $temporada = Temporada::query()->where('activa', true)->lockForUpdate()->first()
+            $temporada = app(ServicioTemporadaActiva::class)->buscar(bloquear: true)
                 ?? throw new DomainException('No existe una temporada activa.');
             $folioIds = array_values(array_unique($datos['folios']));
 
@@ -409,7 +409,7 @@ class ServicioInspeccionSag
             ->where('tipo_bulto', TipoBulto::Pallet)
             ->whereNotIn('estado_operacional', $estadosTerminales)
             ->whereDoesntHave('material')
-            ->whereHas('temporada', fn ($consulta) => $consulta->where('activa', true))
+            ->whereHas('temporada', fn ($consulta) => $consulta->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
             ->whereDoesntHave('inspeccionesSag.lote', fn ($consulta) => $consulta
                 ->whereIn('estado', $estadosLoteActivos));
     }

@@ -23,6 +23,7 @@ use App\Models\Temporada;
 use App\Models\User;
 use App\Services\Camaras\InterbloqueoEvacuacionEmergencia;
 use App\Services\Planificador\ServicioDesplieguePlanificador;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use DomainException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -98,13 +99,9 @@ class ServicioPlanesOperacionales
             $referenciaId,
             $contexto,
         ): PlanOperacional {
-            $temporadaActiva = Temporada::query()
-                ->whereKey($temporada->id)
-                ->where('activa', true)
-                ->lockForUpdate()
-                ->first();
+            $temporadaActiva = app(ServicioTemporadaActiva::class)->buscar(bloquear: true);
 
-            if (! $temporadaActiva) {
+            if (! $temporadaActiva || $temporadaActiva->id !== $temporada->id) {
                 throw new DomainException('Los planes solo pueden crearse en la temporada activa.');
             }
             if (! User::query()->whereKey($creadoPor->id)->where('activo', true)->exists()) {

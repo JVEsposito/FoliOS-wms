@@ -17,10 +17,10 @@ use App\Models\FolioMaterial;
 use App\Models\ItemMaterial;
 use App\Models\ProveedorMaterial;
 use App\Models\RecepcionMaterial;
-use App\Models\Temporada;
 use App\Models\TemporadaMaterial;
 use App\Services\Materiales\MuestreoXlsx;
 use App\Services\Materiales\ServicioRecepcionMaterial;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -37,7 +37,7 @@ class RecepcionMaterialController extends Controller
         $temporada = TemporadaMaterial::query()
             ->with('temporadaGlobal')
             ->where('activa', true)
-            ->whereHas('temporadaGlobal', fn ($consulta) => $consulta->where('activa', true))
+            ->whereHas('temporadaGlobal', fn ($consulta) => $consulta->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
             ->first();
 
         if (! $temporada || ! $temporada->temporadaGlobal) {
@@ -153,9 +153,7 @@ class RecepcionMaterialController extends Controller
         $filtros = $request->validate([
             'temporada_id' => ['nullable', 'uuid', 'exists:temporadas,id'],
         ]);
-        $temporadaId = $filtros['temporada_id'] ?? Temporada::query()
-            ->where('activa', true)
-            ->value('id');
+        $temporadaId = $filtros['temporada_id'] ?? app(ServicioTemporadaActiva::class)->buscar()?->id;
         $usuario = $request->user();
         $consulta = RecepcionMaterial::query()
             ->when($temporadaId, fn ($query) => $query->where('temporada_id', $temporadaId))

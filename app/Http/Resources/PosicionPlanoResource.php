@@ -5,8 +5,8 @@ namespace App\Http\Resources;
 use App\Enums\EstadoCarga;
 use App\Enums\TipoBulto;
 use App\Models\Folio;
-use App\Models\Temporada;
 use App\Models\UbicacionActual;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -78,7 +78,7 @@ class PosicionPlanoResource extends JsonResource
         if (! $request->attributes->has('plano.temporada_activa_id')) {
             $request->attributes->set(
                 'plano.temporada_activa_id',
-                Temporada::query()->where('activa', true)->value('id'),
+                app(ServicioTemporadaActiva::class)->buscar()?->id,
             );
         }
         $activa = $request->attributes->get('plano.temporada_activa_id');

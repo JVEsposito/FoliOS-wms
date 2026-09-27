@@ -246,7 +246,7 @@ class ReplayCicloPlanificadorApiTest extends TestCase
     /** @return array{Temporada, User} */
     private function contexto(): array
     {
-        $temporada = Temporada::create([
+        $temporada = $this->crearTemporadaActivaPrueba([
             'codigo' => 'TEMP-REPLAY-2026',
             'nombre' => 'Temporada replay',
             'fecha_inicio' => '2026-09-01',

@@ -12,12 +12,12 @@ use App\Http\Resources\ResumenDespachoMaterialResource;
 use App\Models\DespachoMaterial;
 use App\Models\MovimientoInventarioMaterial;
 use App\Models\PersonalAccessToken;
-use App\Models\Temporada;
 use App\Models\User;
 use App\Services\Autenticacion\ContextoOperacional;
 use App\Services\Materiales\ServicioConsultaInventarioMaterial;
 use App\Services\Materiales\ServicioDespachoMaterial;
 use App\Services\Materiales\ServicioDespachoMaterialDistribuido;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -257,9 +257,6 @@ class DespachoMaterialController extends Controller
 
     private function consultaTemporadaActiva(): Builder
     {
-        return Temporada::query()
-            ->select('id')
-            ->where('activa', true)
-            ->limit(1);
+        return app(ServicioTemporadaActiva::class)->subconsultaId();
     }
 }

@@ -6,8 +6,8 @@ use App\Models\Folio;
 use App\Models\LoteMateriaPrima;
 use App\Models\ProductorCsg;
 use App\Models\RecepcionRomana;
-use App\Models\Temporada;
 use App\Models\TrazabilidadFolioOrigen;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use BackedEnum;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -50,7 +50,7 @@ class ServicioConsultaOperacional
     private function buscarFolios(string $termino): array
     {
         $termino = trim($termino);
-        $temporadaActiva = Temporada::query()->where('activa', true)->value('id');
+        $temporadaActiva = app(ServicioTemporadaActiva::class)->buscar()?->id;
         $ids = Folio::query()->where('numero_folio', $termino)->pluck('id');
 
         if ($temporadaActiva !== null) {

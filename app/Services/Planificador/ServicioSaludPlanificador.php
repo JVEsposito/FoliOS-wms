@@ -18,7 +18,7 @@ use App\Models\Movimiento;
 use App\Models\PlanOperacional;
 use App\Models\ReservaTareaMovimiento;
 use App\Models\TareaMovimiento;
-use App\Models\Temporada;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -36,7 +36,7 @@ final class ServicioSaludPlanificador
         CarbonImmutable $hasta,
         ?string $camaraId = null,
     ): array {
-        $temporada = Temporada::query()->where('activa', true)->first();
+        $temporada = app(ServicioTemporadaActiva::class)->buscar();
         $temporadaId = $temporada?->id;
         $vigenciaArbitraje = $temporada
             ? $this->estadoArbitraje->consultar($temporada)

@@ -24,6 +24,7 @@ use App\Models\RecepcionRomana;
 use App\Models\Temporada;
 use App\Services\Romana\GeneradorAvisoReciboPdf;
 use App\Services\Romana\ServicioRecepcionRomana;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
@@ -97,7 +98,7 @@ class RecepcionRomanaController extends Controller
                 ->where('temporada_id', $temporadaId),
             fn (Builder $consulta): Builder => $consulta->whereHas(
                 'temporada',
-                fn (Builder $temporada): Builder => $temporada->where('activa', true),
+                fn (Builder $temporada): Builder => $temporada->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id),
             ),
         );
         if (! empty($filtros['buscar'])) {

@@ -17,12 +17,12 @@ use App\Models\Movimiento;
 use App\Models\Posicion;
 use App\Models\SesionEstiba;
 use App\Models\TareaMovimiento;
-use App\Models\Temporada;
 use App\Services\Autenticacion\ContextoOperacional;
 use App\Services\Autorizacion\AlcanceOperacionalUsuario;
 use App\Services\Estiba\ServicioMovimientoEstiba;
 use App\Services\Estiba\ServicioRecomendacionUbicacion;
 use App\Services\Folios\ServicioHabilitacionAlmacenamiento;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Carbon\CarbonImmutable;
 use DomainException;
 use Illuminate\Database\Eloquent\Builder;
@@ -342,10 +342,7 @@ class MovimientoController extends Controller
 
     private function consultaTemporadaActiva(): Builder
     {
-        return Temporada::query()
-            ->select('id')
-            ->where('activa', true)
-            ->limit(1);
+        return app(ServicioTemporadaActiva::class)->subconsultaId();
     }
 
     /**

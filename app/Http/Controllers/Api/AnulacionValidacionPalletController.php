@@ -37,7 +37,7 @@ class AnulacionValidacionPalletController extends Controller
             ->where('estado', EstadoValidacionPallet::Aceptada->value)
             ->where('resultado', ResultadoValidacionPallet::Aprobado->value)
             ->whereHas('temporada', fn (Builder $consulta): Builder => $consulta
-                ->where('activa', true))
+                ->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
             ->whereHas('folio', fn (Builder $consulta): Builder => $consulta
                 ->where('activo', true))
             ->when($folio !== '', fn (Builder $consulta): Builder => $consulta

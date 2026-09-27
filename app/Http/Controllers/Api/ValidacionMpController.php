@@ -9,9 +9,9 @@ use App\Enums\TipoRecepcionRomana;
 use App\Http\Controllers\Controller;
 use App\Models\CsgValidacion;
 use App\Models\RecepcionRomana;
-use App\Models\Temporada;
 use App\Models\ValidacionMp;
 use App\Models\VariedadValidacion;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\ValidacionMp\ServicioValidacionMp;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -29,7 +29,7 @@ class ValidacionMpController extends Controller
                 'validacionesMp.dispositivo', 'validacionesMp.segmentos.envases',
             ])
             ->whereHas('temporada', fn (Builder $temporada): Builder => $temporada
-                ->where('activa', true))
+                ->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
             ->where(function (Builder $consulta) use ($request): void {
                 $consulta->where('estado_validacion_mp', EstadoValidacionMp::Pendiente->value)
                     ->orWhere(function (Builder $propias) use ($request): void {
@@ -52,7 +52,7 @@ class ValidacionMpController extends Controller
         $recepcion = RecepcionRomana::query()
             ->where('numero_recepcion', mb_strtoupper(trim($numeroRecepcion)))
             ->whereHas('temporada', fn (Builder $temporada): Builder => $temporada
-                ->where('activa', true))
+                ->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
             ->with([
                 'detallesEnvases', 'validacionTomadaPor',
                 'validacionesMp.recepcion', 'validacionesMp.temporada', 'validacionesMp.validador',
@@ -131,7 +131,7 @@ class ValidacionMpController extends Controller
     private function asegurarTemporadaActiva(string $temporadaId): void
     {
         abort_unless(
-            Temporada::query()->whereKey($temporadaId)->where('activa', true)->exists(),
+            $temporadaId === app(ServicioTemporadaActiva::class)->buscar()?->id,
             404,
         );
     }

@@ -6,7 +6,6 @@ use App\Models\Cliente;
 use App\Models\ClienteValidacion;
 use App\Models\EnvaseValidacion;
 use App\Models\ImportacionValidacion;
-use App\Models\Temporada;
 use App\Models\User;
 use App\Services\Validacion\ServicioImportacionValidacion;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -18,7 +17,7 @@ class ImportacionCatalogoJerarquicoValidacionTest extends TestCase
 
     public function test_confirma_una_planilla_en_jerarquias_y_conserva_la_proyeccion_pda(): void
     {
-        $temporada = Temporada::create([
+        $temporada = $this->crearTemporadaActivaPrueba([
             'codigo' => '2028',
             'nombre' => 'Temporada 2028',
             'activa' => true,

@@ -3,9 +3,9 @@
 namespace App\Console\Commands;
 
 use App\Enums\RolUsuario;
-use App\Models\Temporada;
 use App\Models\User;
 use App\Services\Planificador\ServicioConciliacionPalletsHistoricos;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
@@ -20,7 +20,7 @@ final class ConciliarPalletsHistoricosPlanificador extends Command
 
     public function handle(ServicioConciliacionPalletsHistoricos $conciliador): int
     {
-        $temporada = Temporada::query()->where('activa', true)->first();
+        $temporada = app(ServicioTemporadaActiva::class)->buscar();
         if (! $temporada) {
             $this->components->error('No existe una temporada activa.');
 

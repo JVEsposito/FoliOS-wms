@@ -17,6 +17,7 @@ use App\Models\TipoResultadoPacking;
 use App\Models\User;
 use App\Services\Autorizacion\AlcanceOperacionalUsuario;
 use App\Services\Secuencias\ServicioSecuenciaDocumento;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -529,7 +530,7 @@ class ServicioRetornoPacking
     private function loteActivo(string $loteId): LoteMateriaPrima
     {
         return LoteMateriaPrima::query()
-            ->whereHas('temporada', fn ($consulta) => $consulta->where('activa', true))
+            ->whereHas('temporada', fn ($consulta) => $consulta->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
             ->lockForUpdate()
             ->findOrFail($loteId);
     }

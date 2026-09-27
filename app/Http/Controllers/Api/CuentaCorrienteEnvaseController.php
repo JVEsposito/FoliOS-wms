@@ -254,7 +254,7 @@ class CuentaCorrienteEnvaseController extends Controller
         DB::transaction(function () use ($movimientoEnvase, $datos, $request): void {
             $movimiento = MovimientoEnvase::query()
                 ->whereHas('temporada', fn (Builder $temporada): Builder => $temporada
-                    ->where('activa', true))
+                    ->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
                 ->lockForUpdate()
                 ->findOrFail($movimientoEnvase->id);
             $estado = EstadoRevisionMovimientoEnvase::from($datos['estado']);

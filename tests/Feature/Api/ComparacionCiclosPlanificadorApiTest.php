@@ -221,7 +221,7 @@ class ComparacionCiclosPlanificadorApiTest extends TestCase
 
     private function crearTemporada(): Temporada
     {
-        return Temporada::create([
+        return $this->crearTemporadaActivaPrueba([
             'codigo' => 'TEMP-COMP-2026',
             'nombre' => 'Temporada comparación',
             'fecha_inicio' => '2026-09-01',

@@ -2,10 +2,31 @@
 
 namespace Tests;
 
+use App\Models\Temporada;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use Illuminate\Support\Facades\DB;
 
 abstract class TestCase extends BaseTestCase
 {
+    /**
+     * Las migraciones crean una temporada GENERAL activa. Las pruebas que
+     * preparan otra temporada deben cerrar esa vigencia antes del insert.
+     */
+    protected function desactivarTemporadasDePrueba(): void
+    {
+        DB::table('temporadas')->where('activa', true)->update(['activa' => false]);
+        app(ServicioTemporadaActiva::class)->olvidar();
+    }
+
+    /** @param array<string, mixed> $atributos */
+    protected function crearTemporadaActivaPrueba(array $atributos): Temporada
+    {
+        $this->desactivarTemporadasDePrueba();
+
+        return Temporada::create([...$atributos, 'activa' => true]);
+    }
+
     public function withToken($token, $type = 'Bearer')
     {
         if (isset($this->app)) {

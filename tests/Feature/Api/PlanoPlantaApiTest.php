@@ -10,7 +10,6 @@ use App\Models\AlmacenMaterial;
 use App\Models\Anden;
 use App\Models\Camara;
 use App\Models\PlanoPlanta;
-use App\Models\Temporada;
 use App\Models\TunelPrefrio;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -23,7 +22,7 @@ class PlanoPlantaApiTest extends TestCase
 
     public function test_la_vista_incluye_catalogo_operacional_y_solo_el_administrador_puede_editar(): void
     {
-        Temporada::create([
+        $this->crearTemporadaActivaPrueba([
             'codigo' => 'ACTUAL',
             'nombre' => 'Temporada actual',
             'fecha_inicio' => '2026-08-01',
@@ -139,7 +138,7 @@ class PlanoPlantaApiTest extends TestCase
     /** @return array<string, mixed> */
     public function test_el_plano_publica_indicadores_vivos_y_recintos_fuera_de_servicio(): void
     {
-        $temporada = Temporada::create([
+        $temporada = $this->crearTemporadaActivaPrueba([
             'codigo' => 'VIVO',
             'nombre' => 'Temporada viva',
             'fecha_inicio' => '2026-08-01',
@@ -206,7 +205,7 @@ class PlanoPlantaApiTest extends TestCase
 
     public function test_guarda_pasillos_y_conexiones_y_publica_la_red_con_recorridos(): void
     {
-        Temporada::create([
+        $this->crearTemporadaActivaPrueba([
             'codigo' => 'RED',
             'nombre' => 'Temporada red',
             'fecha_inicio' => '2026-08-01',
