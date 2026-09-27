@@ -15,6 +15,9 @@ return [
 
     'name' => env('APP_NAME', 'Laravel'),
 
+    // La versión visible en Oficina sigue la versión del producto FoliOS.
+    'product_version' => json_decode(file_get_contents(base_path('mobile/app.json')), true)['expo']['version'] ?? '—',
+
     /*
     |--------------------------------------------------------------------------
     | Application Environment

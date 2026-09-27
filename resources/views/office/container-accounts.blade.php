@@ -72,6 +72,24 @@
                 <div class="dialog-actions"><button class="secondary-button" type="button" id="propertyCancel">Cancelar</button><button class="primary-button" type="submit">Confirmar corrección</button></div>
             </form>
         </dialog>
+        <dialog class="review-dialog property-dialog" id="quantityDialog" aria-labelledby="quantityDialogTitle" aria-describedby="quantityHelp">
+            <form id="quantityForm" method="dialog">
+                <input name="movimiento_id" type="hidden">
+                <header class="review-dialog__header">
+                    <p class="eyebrow">CORRECCIÓN ADMINISTRATIVA</p>
+                    <h2 id="quantityDialogTitle">Corregir cantidad de envases</h2>
+                </header>
+                <div class="property-dialog__context">
+                    <span>RECEPCIÓN Y AJUSTE PROPUESTO</span>
+                    <strong id="quantitySummary"></strong>
+                </div>
+                <p class="property-dialog__help" id="quantityHelp">Disponible para ingresos de solo envases sin guías ni movimientos vinculados. El ingreso original y el ajuste quedarán visibles en el historial.</p>
+                <label><span>Cantidad correcta</span><input name="cantidad_correcta" type="number" min="1" max="100000" step="1" required placeholder="Ej.: 104"></label>
+                <label><span>Motivo de la corrección</span><textarea name="motivo" minlength="10" maxlength="2000" required placeholder="Explica por qué la cantidad registrada era incorrecta"></textarea></label>
+                <p class="form-error" id="quantityError" role="alert"></p>
+                <div class="dialog-actions"><button class="secondary-button" type="button" id="quantityCancel">Cancelar</button><button class="primary-button" type="submit">Confirmar corrección</button></div>
+            </form>
+        </dialog>
         <div class="loading is-hidden" id="officeLoading"><span></span><strong id="officeLoadingText">Procesando…</strong></div><div class="toast-region" id="officeToasts"></div>
     </body>
 </html>

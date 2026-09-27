@@ -8,6 +8,7 @@ use App\Enums\EstadoRevisionMovimientoEnvase;
 use App\Enums\EstadoValidacionMp;
 use App\Enums\TipoEnvaseRomana;
 use App\Enums\TipoMovimientoEnvase;
+use App\Enums\TipoRecepcionRomana;
 use App\Http\Controllers\Controller;
 use App\Models\Cliente;
 use App\Models\DetalleEnvaseRecepcionRomana;
@@ -15,6 +16,7 @@ use App\Models\DetalleGuiaDespachoEnvase;
 use App\Models\MovimientoEnvase;
 use App\Models\RevisionMovimientoEnvase;
 use App\Models\Temporada;
+use App\Services\Envases\ServicioCorreccionCantidadEnvases;
 use App\Services\Envases\ServicioCorreccionPropiedadEnvases;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Database\Eloquent\Builder;
@@ -61,11 +63,21 @@ class CuentaCorrienteEnvaseController extends Controller
         $filtros['temporada_id'] ??= $temporadaActiva->obtener()->id;
 
         $consulta = MovimientoEnvase::query()
-            ->with(['cliente:id,codigo,nombre', 'temporada:id,codigo,nombre,activa', 'creadoPor:id,name', 'revisiones.usuario:id,name']);
+            ->with(['cliente:id,codigo,nombre', 'temporada:id,codigo,nombre,activa', 'creadoPor:id,name', 'revisiones.usuario:id,name', 'recepcion:id,tipo_recepcion']);
         $this->aplicarFiltros($consulta, $filtros);
         $movimientos = $consulta->orderByDesc('ocurrido_at')->limit(300)->get();
         $corregidos = MovimientoEnvase::query()
             ->where('tipo_movimiento', TipoMovimientoEnvase::CorreccionPropiedad->value)
+            ->whereIn('movimiento_origen_id', $movimientos->pluck('id'))
+            ->pluck('movimiento_origen_id')->all();
+        $cantidadesCorregidas = MovimientoEnvase::query()
+            ->where('tipo_movimiento', TipoMovimientoEnvase::CorreccionCantidad->value)
+            ->whereIn('movimiento_origen_id', $movimientos->pluck('id'))
+            ->pluck('movimiento_origen_id')->all();
+        $conGuias = DetalleGuiaDespachoEnvase::query()
+            ->whereIn('movimiento_origen_id', $movimientos->pluck('id'))
+            ->pluck('movimiento_origen_id')->all();
+        $conMovimientos = MovimientoEnvase::query()
             ->whereIn('movimiento_origen_id', $movimientos->pluck('id'))
             ->pluck('movimiento_origen_id')->all();
 
@@ -185,7 +197,12 @@ class CuentaCorrienteEnvaseController extends Controller
             ->values();
 
         return response()->json([
-            'data' => $movimientos->map(fn (MovimientoEnvase $movimiento): array => $this->movimiento($movimiento, in_array($movimiento->id, $corregidos, true))),
+            'data' => $movimientos->map(fn (MovimientoEnvase $movimiento): array => $this->movimiento(
+                $movimiento,
+                in_array($movimiento->id, $corregidos, true),
+                in_array($movimiento->id, $cantidadesCorregidas, true),
+                in_array($movimiento->id, $conGuias, true) || in_array($movimiento->id, $conMovimientos, true),
+            )),
             'pendientes' => $pendientes->map(fn (DetalleEnvaseRecepcionRomana $detalle): array => [
                 'id' => $detalle->id,
                 'estado' => 'pendiente_validacion',
@@ -276,6 +293,21 @@ class CuentaCorrienteEnvaseController extends Controller
         return response()->json(['message' => 'Propiedad corregida. El ingreso original y sus asientos de ajuste siguen disponibles para auditoría.']);
     }
 
+    public function corregirCantidad(
+        Request $request,
+        MovimientoEnvase $movimientoEnvase,
+        ServicioCorreccionCantidadEnvases $servicio,
+    ): JsonResponse {
+        Gate::authorize('corregir-cantidad-envases');
+        $datos = $request->validate([
+            'cantidad_correcta' => ['required', 'integer', 'min:1', 'max:100000'],
+            'motivo' => ['required', 'string', 'min:10', 'max:2000'],
+        ]);
+        $servicio->corregir($movimientoEnvase, (int) $datos['cantidad_correcta'], trim($datos['motivo']), $request->user());
+
+        return response()->json(['message' => 'Cantidad corregida. El ingreso original y el ajuste permanecen visibles para auditoría.']);
+    }
+
     /** @param array<string, mixed> $filtros */
     private function aplicarFiltros(Builder $consulta, array $filtros): void
     {
@@ -300,7 +332,7 @@ class CuentaCorrienteEnvaseController extends Controller
     }
 
     /** @return array<string, mixed> */
-    private function movimiento(MovimientoEnvase $movimiento, bool $corregido = false): array
+    private function movimiento(MovimientoEnvase $movimiento, bool $corregido = false, bool $cantidadCorregida = false, bool $conVinculos = false): array
     {
         return [
             'id' => $movimiento->id,
@@ -311,12 +343,19 @@ class CuentaCorrienteEnvaseController extends Controller
             'impacto_existencia' => $movimiento->cantidad * $movimiento->signo_existencia,
             'propiedad' => $movimiento->propiedad->value,
             'corregido' => $corregido,
+            'cantidad_corregida' => $cantidadCorregida,
+            'puede_corregir_cantidad' => $corregido === false && $cantidadCorregida === false && $conVinculos === false
+                && $movimiento->temporada?->activa
+                && $movimiento->recepcion?->tipo_recepcion === TipoRecepcionRomana::SoloEnvases
+                && in_array($movimiento->tipo_movimiento, [TipoMovimientoEnvase::RecepcionCompra, TipoMovimientoEnvase::RecepcionArriendo], true)
+                && empty($movimiento->datos['correccion_propiedad']),
             'puede_corregir_propiedad' => $corregido === false
                 && $movimiento->temporada?->activa
                 && $movimiento->recepcion_romana_id !== null
                 && in_array($movimiento->tipo_movimiento, [TipoMovimientoEnvase::RecepcionCompra, TipoMovimientoEnvase::RecepcionArriendo], true)
                 && empty($movimiento->datos['correccion_propiedad']),
             'correccion_propiedad' => $movimiento->datos['correccion_propiedad'] ?? null,
+            'correccion_cantidad' => $movimiento->datos['correccion_cantidad'] ?? null,
             'documento_tipo' => $movimiento->documento_tipo,
             'documento_id' => $movimiento->documento_id,
             'numero_documento' => $movimiento->numero_documento,

@@ -13,6 +13,12 @@ class ContextoOficinaTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_version_de_folios_aparece_en_la_navegacion_de_oficina(): void
+    {
+        $this->get('/oficina/envases/cuenta-corriente')->assertOk()
+            ->assertSee('Versión '.config('app.product_version'));
+    }
+
     public function test_contexto_requiere_sesion(): void
     {
         $this->getJson('/api/oficina/contexto')->assertUnauthorized();

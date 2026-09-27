@@ -28,6 +28,11 @@ const elements = {
     propertySummary: byId('propertySummary'),
     propertyError: byId('propertyError'),
     propertyCancel: byId('propertyCancel'),
+    quantityDialog: byId('quantityDialog'),
+    quantityForm: byId('quantityForm'),
+    quantitySummary: byId('quantitySummary'),
+    quantityError: byId('quantityError'),
+    quantityCancel: byId('quantityCancel'),
     loading: byId('officeLoading'),
     loadingText: byId('officeLoadingText'),
     toasts: byId('officeToasts'),
@@ -182,11 +187,15 @@ function render(data) {
             const propertyButton = state.identity?.puede_corregir_propiedad_envases && movement.puede_corregir_propiedad
                 ? `<button class="property-button" data-correct-property="${escapeHtml(movement.id)}">Corregir propiedad</button>`
                 : '';
-            const documentNote = movement.corregido ? ' · ingreso corregido' : movement.correccion_propiedad ? ' · ajuste de propiedad' : '';
-            const trace = movement.correccion_propiedad
-                ? `<br><small>Motivo: ${escapeHtml(movement.correccion_propiedad.motivo)} · ${formatDate(movement.correccion_propiedad.corregido_at)}</small>`
+            const quantityButton = state.identity?.puede_corregir_cantidad_envases && movement.puede_corregir_cantidad
+                ? `<button class="property-button" data-correct-quantity="${escapeHtml(movement.id)}">Corregir cantidad</button>`
                 : '';
-            return `<tr><td>${formatDate(movement.ocurrido_at)}</td><td><b>${escapeHtml(movement.cliente?.nombre)}</b><br><small>${escapeHtml(movement.numero_documento)}${documentNote}</small>${trace}</td><td>${escapeHtml(label(movement.tipo_envase))} · ${movement.cantidad}</td><td class="${movement.impacto_cuenta < 0 ? 'impact-negative' : 'impact-positive'}">${movement.impacto_cuenta > 0 ? '+' : ''}${movement.impacto_cuenta}</td><td>${escapeHtml(label(movement.propiedad))}</td><td>${escapeHtml(label(movement.estado_revision))}</td><td><div class="table-actions">${guideButton}${reviewButton}${propertyButton || (!guideButton && !reviewButton ? '—' : '')}</div></td></tr>`;
+            const documentNote = movement.corregido ? ' · propiedad corregida' : movement.cantidad_corregida ? ' · cantidad corregida' : movement.correccion_propiedad ? ' · ajuste de propiedad' : movement.correccion_cantidad ? ' · ajuste de cantidad' : '';
+            const correction = movement.correccion_propiedad || movement.correccion_cantidad;
+            const trace = correction
+                ? `<br><small>Motivo: ${escapeHtml(correction.motivo)} · ${formatDate(correction.corregido_at)} · ${escapeHtml(movement.creado_por?.nombre || '')}</small>`
+                : '';
+            return `<tr><td>${formatDate(movement.ocurrido_at)}</td><td><b>${escapeHtml(movement.cliente?.nombre)}</b><br><small>${escapeHtml(movement.numero_documento)}${documentNote}</small>${trace}</td><td>${escapeHtml(label(movement.tipo_envase))} · ${movement.cantidad}</td><td class="${movement.impacto_cuenta < 0 ? 'impact-negative' : 'impact-positive'}">${movement.impacto_cuenta > 0 ? '+' : ''}${movement.impacto_cuenta}</td><td>${escapeHtml(label(movement.propiedad))}</td><td>${escapeHtml(label(movement.estado_revision))}</td><td><div class="table-actions">${guideButton}${reviewButton}${propertyButton}${quantityButton}${!guideButton && !reviewButton && !propertyButton && !quantityButton ? '—' : ''}</div></td></tr>`;
         }).join('')
         : '<tr><td colspan="7">Aún no hay movimientos confirmados.</td></tr>';
 }
@@ -239,6 +248,7 @@ elements.filters.addEventListener('submit', (event) => {
 document.addEventListener('click', async (event) => {
     const reviewButton = event.target.closest('[data-review]');
     const propertyButton = event.target.closest('[data-correct-property]');
+    const quantityButton = event.target.closest('[data-correct-quantity]');
     const documentButton = event.target.closest('[data-guide-document]');
     if (reviewButton) {
         elements.reviewForm.reset();
@@ -255,6 +265,16 @@ document.addEventListener('click', async (event) => {
         updatePropertySummary(movement);
         elements.propertyError.textContent = '';
         elements.propertyDialog.showModal();
+    }
+    if (quantityButton) {
+        const movement = state.movements.find((item) => item.id === quantityButton.dataset.correctQuantity);
+        if (!movement) return;
+        elements.quantityForm.reset();
+        elements.quantityForm.elements.movimiento_id.value = movement.id;
+        elements.quantityForm.elements.cantidad_correcta.max = movement.cantidad - 1;
+        elements.quantityError.textContent = '';
+        updateQuantitySummary(movement);
+        elements.quantityDialog.showModal();
     }
     if (documentButton) {
         try {
@@ -276,6 +296,32 @@ elements.propertyForm.elements.concepto_envases.addEventListener('change', () =>
     if (movement) updatePropertySummary(movement);
 });
 elements.propertyCancel.addEventListener('click', () => elements.propertyDialog.close());
+function updateQuantitySummary(movement) {
+    const next = Number(elements.quantityForm.elements.cantidad_correcta.value);
+    const difference = Number.isInteger(next) && next > 0 && next < movement.cantidad
+        ? ` → ${next} (ajuste −${movement.cantidad - next})` : ' → …';
+    elements.quantitySummary.textContent = `${movement.numero_documento} · ${movement.cliente?.nombre || ''} · ${label(movement.tipo_envase)} ${movement.cantidad}${difference}`;
+}
+elements.quantityForm.elements.cantidad_correcta.addEventListener('input', () => {
+    const movement = state.movements.find((item) => item.id === elements.quantityForm.elements.movimiento_id.value);
+    if (movement) updateQuantitySummary(movement);
+});
+elements.quantityCancel.addEventListener('click', () => elements.quantityDialog.close());
+elements.quantityForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const data = Object.fromEntries(new FormData(elements.quantityForm));
+    try {
+        await api(`/api/envases/cuenta-corriente/movimientos/${data.movimiento_id}/corregir-cantidad`, {
+            method: 'POST',
+            body: JSON.stringify({ cantidad_correcta: Number(data.cantidad_correcta), motivo: data.motivo }),
+        });
+        elements.quantityDialog.close();
+        toast('Cantidad corregida. El ajuste quedó registrado.');
+        await load();
+    } catch (error) {
+        elements.quantityError.textContent = error.message;
+    }
+});
 elements.propertyForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     const data = Object.fromEntries(new FormData(elements.propertyForm));

@@ -491,6 +491,12 @@ class AppServiceProvider extends ServiceProvider
                 && $alcance->puedeConsultarCuentaEnvases($usuario),
         );
         Gate::define(
+            'corregir-cantidad-envases',
+            fn (User $usuario): bool => $usuario->activo
+                && $usuario->rol === RolUsuario::Administrador
+                && $alcance->puedeConsultarCuentaEnvases($usuario),
+        );
+        Gate::define(
             'gestionar-despacho-envases',
             fn (User $usuario): bool => $alcance->puedeGestionarDespachoEnvases($usuario),
         );

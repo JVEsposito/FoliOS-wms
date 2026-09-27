@@ -194,6 +194,7 @@ GET  /api/envases/cuenta-corriente/catalogos
 GET  /api/envases/cuenta-corriente/movimientos
 POST /api/envases/cuenta-corriente/movimientos/{movimiento}/revisar
 POST /api/envases/cuenta-corriente/movimientos/{movimiento}/corregir-propiedad
+POST /api/envases/cuenta-corriente/movimientos/{movimiento}/corregir-cantidad
 ```
 
 ### Guías de despacho
@@ -212,6 +213,14 @@ POST /api/envases/guias-despacho/{guia}/anular
 ```
 
 Todas las rutas requieren `auth:sanctum` y el Gate específico de consulta, revisión o gestión.
+
+### Corrección de cantidad después de Validación MP
+
+Desde **Cuenta Envases → Movimientos**, solo un administrador puede reducir la cantidad de un ingreso `solo_envases` validado de la temporada activa. Se exige `cantidad_correcta` (entero positivo menor que la original) y `motivo` (10 a 2000 caracteres). La corrección se rechaza si existen guías, reservas, otros movimientos vinculados, correcciones anteriores o diferencias entre recepción, validación e ingreso. Los despachos propios sin origen también requieren conciliación manual.
+
+La operación conserva el movimiento original y agrega un asiento negativo vinculado con motivo, usuario, fecha, cantidad previa y cantidad corregida. Actualiza el detalle de recepción, el saldo y la existencia física. Las recepciones `solo_envases` no crean segmentos de lotes. La acción admite una sola corrección por recepción y no elimina movimientos históricos.
+
+La versión FoliOS mostrada bajo el lema en la navegación de Oficina se obtiene de `mobile/app.json` al crear la configuración de Laravel; tras desplegar una versión nueva se limpia la caché de configuración.
 
 ### Corrección de propiedad después de Validación MP
 

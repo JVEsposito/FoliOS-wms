@@ -182,8 +182,8 @@
                 >{{ $definition['label'] }}</a>
             @endforeach
         </nav>
-        <div class="estiba-office-signature" aria-hidden="true">
-            <span></span><strong>FRÍO QUE<br>MANTIENE VALOR</strong>
+        <div class="estiba-office-signature">
+            <span aria-hidden="true"></span><div><strong>FRÍO QUE<br>MANTIENE VALOR</strong><small>Versión {{ config('app.product_version') }}</small></div>
         </div>
     </aside>
 
