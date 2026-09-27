@@ -15,6 +15,7 @@ use App\Models\RegularizacionRetornoPackingLegacy;
 use App\Models\RetornoPacking;
 use App\Models\TipoResultadoPacking;
 use App\Services\MateriaPrima\ServicioBinRetornoPacking;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -28,7 +29,7 @@ class BinRetornoPackingController extends Controller
 
         $bins = BinRetornoPacking::query()
             ->whereNull('anulado_at')
-            ->whereHas('temporada', fn (Builder $consulta) => $consulta->where('activa', true));
+            ->whereHas('temporada', fn (Builder $consulta) => $consulta->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id));
         $regularizados = (clone $bins)->where('estado', 'regularizado');
         $pendientes = (clone $bins)->where('estado', 'pendiente_regularizacion');
         $legadoResuelto = RegularizacionRetornoPackingLegacy::query()
@@ -37,7 +38,7 @@ class BinRetornoPackingController extends Controller
             ->whereNull('anulado_at')
             ->whereHas(
                 'entregas.lote.temporada',
-                fn (Builder $consulta) => $consulta->where('activa', true),
+                fn (Builder $consulta) => $consulta->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id),
             )
             ->whereNotIn('id', $legadoResuelto)
             ->count();
@@ -62,7 +63,7 @@ class BinRetornoPackingController extends Controller
         $entregas = EntregaFrutaProceso::query()
             ->with('lote:id,numero_lote')
             ->whereNull('anulado_at')
-            ->whereHas('lote.temporada', fn (Builder $consulta) => $consulta->where('activa', true))
+            ->whereHas('lote.temporada', fn (Builder $consulta) => $consulta->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
             ->orderByDesc('entregado_at')
             ->get();
 
@@ -101,7 +102,7 @@ class BinRetornoPackingController extends Controller
         $estado = trim($request->string('estado')->value());
         $buscar = trim($request->string('buscar')->value());
         $bins = BinRetornoPacking::query()
-            ->whereHas('temporada', fn (Builder $consulta) => $consulta->where('activa', true))
+            ->whereHas('temporada', fn (Builder $consulta) => $consulta->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
             ->with([
                 'origenes.lote:id,numero_lote',
                 'tipoResultado:id,codigo,nombre',
@@ -139,7 +140,7 @@ class BinRetornoPackingController extends Controller
         $retornos = RetornoPacking::query()
             ->whereHas(
                 'entregas.lote.temporada',
-                fn (Builder $consulta) => $consulta->where('activa', true),
+                fn (Builder $consulta) => $consulta->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id),
             )
             ->with([
                 'entregas.lote:id,numero_lote',

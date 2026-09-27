@@ -20,9 +20,9 @@ use App\Models\LoteTransformacionMaterial;
 use App\Models\OrdenTransformacionMaterial;
 use App\Models\PersonalAccessToken;
 use App\Models\RecetaMaterial;
-use App\Models\Temporada;
 use App\Services\Materiales\ServicioTransformacionMaterial;
 use App\Services\Materiales\ServicioVersionRecetaMaterial;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -245,9 +245,6 @@ class TransformacionMaterialController extends Controller
 
     private function consultaTemporadaActiva(): Builder
     {
-        return Temporada::query()
-            ->select('id')
-            ->where('activa', true)
-            ->limit(1);
+        return app(ServicioTemporadaActiva::class)->subconsultaId();
     }
 }

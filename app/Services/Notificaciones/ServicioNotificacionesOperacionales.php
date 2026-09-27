@@ -13,6 +13,7 @@ use App\Models\NotificacionOperacional;
 use App\Models\RecepcionRomana;
 use App\Models\User;
 use App\Services\Autorizacion\AlcanceOperacionalUsuario;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
@@ -32,15 +33,15 @@ class ServicioNotificacionesOperacionales
             ->where(function (Builder $consulta): void {
                 $consulta
                     ->whereHas('carga.temporada', fn (Builder $temporada): Builder => $temporada
-                        ->where('activa', true))
+                        ->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
                     ->orWhereHas('despachoMaterial.temporada', fn (Builder $temporada): Builder => $temporada
-                        ->where('activa', true))
+                        ->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
                     ->orWhereHas('folio.temporada', fn (Builder $temporada): Builder => $temporada
-                        ->where('activa', true))
+                        ->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
                     ->orWhereHas('incidencia.asignacion.carga.temporada', fn (Builder $temporada): Builder => $temporada
-                        ->where('activa', true))
+                        ->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
                     ->orWhereHas('recepcionRomana.temporada', fn (Builder $temporada): Builder => $temporada
-                        ->where('activa', true))
+                        ->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
                     ->orWhere(function (Builder $sinProceso): void {
                         $sinProceso
                             ->whereNull('carga_id')

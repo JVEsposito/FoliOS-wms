@@ -9,10 +9,10 @@ use App\Http\Resources\CamaraPlanoResource;
 use App\Http\Resources\CamaraResumenResource;
 use App\Models\Camara;
 use App\Models\PersonalAccessToken;
-use App\Models\Temporada;
 use App\Services\Autorizacion\AlcanceOperacionalUsuario;
 use App\Services\Camaras\ServicioBandasOperacionales;
 use App\Services\Estiba\ServicioReservasTareasMovimiento;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -192,7 +192,7 @@ class CamaraController extends Controller
             'sesion_ultima_actividad_at' => $sesion?->ultima_actividad_at?->toAtomString(),
             'revision_reservas' => $camara->revision_reservas,
             // Al cambiar la temporada activa cambia qué folios son registros sin cerrar.
-            'temporada_activa_id' => Temporada::query()->where('activa', true)->value('id'),
+            'temporada_activa_id' => app(ServicioTemporadaActiva::class)->buscar()?->id,
         ], JSON_THROW_ON_ERROR);
 
         return 'plano-'.hash('sha256', $huella);

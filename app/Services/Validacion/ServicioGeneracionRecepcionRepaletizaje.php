@@ -13,9 +13,9 @@ use App\Exceptions\ConflictoOperacion;
 use App\Models\PlanOperacional;
 use App\Models\Repaletizaje;
 use App\Models\RepaletizajeResultado;
-use App\Models\Temporada;
 use App\Models\User;
 use App\Services\Estiba\ServicioPlanesOperacionales;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use DomainException;
 use Illuminate\Database\UniqueConstraintViolationException;
 
@@ -68,12 +68,8 @@ class ServicioGeneracionRecepcionRepaletizaje
             return null;
         }
 
-        $temporada = Temporada::query()
-            ->whereKey($resultados->first()->folio->temporada_id)
-            ->where('activa', true)
-            ->lockForUpdate()
-            ->first();
-        if (! $temporada) {
+        $temporada = app(ServicioTemporadaActiva::class)->buscar(bloquear: true);
+        if (! $temporada || $temporada->id !== $resultados->first()->folio->temporada_id) {
             throw new DomainException(
                 'Los resultados del repaletizaje no pertenecen a la temporada activa.',
             );

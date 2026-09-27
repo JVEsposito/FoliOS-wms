@@ -12,6 +12,7 @@ use App\Models\DiscrepanciaManiobra;
 use App\Models\Posicion;
 use App\Services\Estiba\ServicioManiobrasOperacionales;
 use App\Services\Estiba\ServicioReplanificacionDiscrepancia;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -35,7 +36,7 @@ class DiscrepanciaManiobraController extends Controller
         $base = DiscrepanciaManiobra::query()
             ->whereHas(
                 'maniobraOperacional.planOperacional.temporada',
-                fn (Builder $consulta): Builder => $consulta->where('activa', true),
+                fn (Builder $consulta): Builder => $consulta->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id),
             );
         $conteos = (clone $base)
             ->selectRaw('estado, COUNT(*) as total')

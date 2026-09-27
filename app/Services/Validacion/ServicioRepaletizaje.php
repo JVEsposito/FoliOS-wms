@@ -16,9 +16,9 @@ use App\Models\Folio;
 use App\Models\Repaletizaje;
 use App\Models\RepaletizajeDetalle;
 use App\Models\RepaletizajeResultado;
-use App\Models\Temporada;
 use App\Models\UbicacionActual;
 use App\Models\User;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\Transiciones\ComandoTransicionOperacional;
 use App\Services\Transiciones\MotorTransicionesOperacionales;
 use DomainException;
@@ -107,10 +107,8 @@ class ServicioRepaletizaje
                 throw new DomainException('Uno de los folios ya no existe.');
             }
 
-            $temporadaActivaId = Temporada::query()
-                ->where('activa', true)
-                ->sharedLock()
-                ->value('id');
+            $temporadaActivaId = app(ServicioTemporadaActiva::class)
+                ->buscarConBloqueoCompartido()?->id;
             if (! $temporadaActivaId) {
                 throw new ConflictoOperacion(
                     'No existe una temporada activa para registrar el repaletizaje.',
@@ -422,7 +420,7 @@ class ServicioRepaletizaje
             ->lockForUpdate()
             ->firstOrFail();
 
-        $temporadaActivaId = Temporada::query()->where('activa', true)->sharedLock()->value('id');
+        $temporadaActivaId = app(ServicioTemporadaActiva::class)->buscarConBloqueoCompartido()?->id;
         if (! $temporadaActivaId || $folio->temporada_id !== $temporadaActivaId) {
             throw new ConflictoOperacion('El folio no pertenece a la temporada activa.');
         }

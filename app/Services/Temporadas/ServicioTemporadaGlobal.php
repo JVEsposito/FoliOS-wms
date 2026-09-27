@@ -14,6 +14,7 @@ class ServicioTemporadaGlobal
 {
     public function __construct(
         private readonly ServicioCliente $clientes,
+        private readonly ServicioTemporadaActiva $temporadaActiva,
     ) {}
 
     /** @param array<string, mixed> $datos */
@@ -61,16 +62,22 @@ class ServicioTemporadaGlobal
                 $this->asegurarActivable($temporada);
             }
 
+            $activar = $temporada->activa;
+            if ($activar) {
+                // El índice único impide activar la nueva fila antes de
+                // desactivar la temporada vigente, incluso dentro de la transacción.
+                $temporada->activa = false;
+            }
             $temporada->save();
 
-            if ($temporada->activa) {
+            if ($activar) {
                 $this->activarDentroDeTransaccion($temporada, $usuarioId);
             } else {
                 $this->asegurarConfiguracionMaterial($temporada, $usuarioId);
             }
 
             return $temporada->refresh();
-        });
+        }, attempts: 3);
     }
 
     public function activar(Temporada $temporada, ?int $usuarioId = null): Temporada
@@ -82,7 +89,7 @@ class ServicioTemporadaGlobal
             $this->activarDentroDeTransaccion($temporada, $usuarioId);
 
             return $temporada->refresh();
-        });
+        }, attempts: 3);
     }
 
     /**
@@ -161,8 +168,10 @@ class ServicioTemporadaGlobal
 
     private function activarDentroDeTransaccion(Temporada $temporada, ?int $usuarioId): void
     {
+        $this->temporadaActiva->buscar(bloquear: true);
         Temporada::query()->whereKeyNot($temporada->id)->update(['activa' => false]);
         $temporada->update(['activa' => true]);
+        $this->temporadaActiva->olvidar();
         DB::table('temporadas_materiales')->update(['activa' => false]);
         $this->asegurarConfiguracionMaterial($temporada, $usuarioId);
     }

@@ -17,12 +17,12 @@ use App\Models\Camara;
 use App\Models\ManiobraOperacional;
 use App\Models\PlanOperacional;
 use App\Models\TareaMovimiento;
-use App\Models\Temporada;
 use App\Models\UbicacionActual;
 use App\Models\User;
 use App\Services\Estiba\ServicioManiobrasOperacionales;
 use App\Services\Estiba\ServicioPlanesOperacionales;
 use App\Services\Planificador\ServicioDesplieguePlanificador;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use DomainException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -71,10 +71,7 @@ class ServicioControlEvacuacionEmergencia
             }
             $ultimo = $this->ultimoPlan($camara->id, bloquear: true);
 
-            $temporada = Temporada::query()
-                ->where('activa', true)
-                ->lockForUpdate()
-                ->first()
+            $temporada = app(ServicioTemporadaActiva::class)->buscar(bloquear: true)
                 ?? throw new DomainException('No existe una temporada activa para declarar la emergencia.');
             $this->validarCamara($camara);
 

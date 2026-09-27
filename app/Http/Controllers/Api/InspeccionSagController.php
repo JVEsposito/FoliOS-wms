@@ -17,9 +17,9 @@ use App\Models\Folio;
 use App\Models\LoteInspeccionSag;
 use App\Models\Pais;
 use App\Models\ResultadoDestinoInspeccionSag;
-use App\Models\Temporada;
 use App\Services\InspeccionSag\ServicioEstadoSagFolio;
 use App\Services\InspeccionSag\ServicioInspeccionSag;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -34,15 +34,15 @@ class InspeccionSagController extends Controller
 
         return response()->json([
             'lotes_activos' => LoteInspeccionSag::query()
-                ->whereHas('temporada', fn (Builder $consulta): Builder => $consulta->where('activa', true))
+                ->whereHas('temporada', fn (Builder $consulta): Builder => $consulta->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
                 ->whereIn('estado', $activos)->count(),
             'pallets_en_inspeccion' => Folio::query()
                 ->whereHas('inspeccionesSag.lote', fn (Builder $consulta): Builder => $consulta
                     ->whereIn('estado', $activos)
-                    ->whereHas('temporada', fn (Builder $temporada): Builder => $temporada->where('activa', true)))
+                    ->whereHas('temporada', fn (Builder $temporada): Builder => $temporada->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id)))
                 ->count(),
             'finalizados_hoy' => LoteInspeccionSag::query()
-                ->whereHas('temporada', fn (Builder $consulta): Builder => $consulta->where('activa', true))
+                ->whereHas('temporada', fn (Builder $consulta): Builder => $consulta->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
                 ->where('estado', EstadoLoteInspeccionSag::Finalizado)
                 ->whereDate('finalizado_at', today())
                 ->count(),
@@ -90,7 +90,7 @@ class InspeccionSagController extends Controller
 
     public function opcionesFolios(): JsonResponse
     {
-        $temporadaId = Temporada::query()->where('activa', true)->value('id');
+        $temporadaId = app(ServicioTemporadaActiva::class)->buscar()?->id;
         $combinaciones = $temporadaId
             ? CombinacionValidacion::query()
                 ->where('temporada_id', $temporadaId)
@@ -246,7 +246,7 @@ class InspeccionSagController extends Controller
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
         $lotes = LoteInspeccionSag::query()
-            ->whereHas('temporada', fn (Builder $consulta): Builder => $consulta->where('activa', true))
+            ->whereHas('temporada', fn (Builder $consulta): Builder => $consulta->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
             ->when($datos['estado'] ?? null, fn (Builder $consulta, string $estado): Builder => $consulta->where('estado', $estado))
             ->when($datos['tipo'] ?? null, fn (Builder $consulta, string $tipo): Builder => $consulta->where('tipo', $tipo))
             ->withCount('folios')
@@ -336,7 +336,7 @@ class InspeccionSagController extends Controller
             ->where('tipo_bulto', TipoBulto::Pallet)
             ->whereNotIn('estado_operacional', $estadosTerminales)
             ->whereDoesntHave('material')
-            ->whereHas('temporada', fn (Builder $consulta): Builder => $consulta->where('activa', true))
+            ->whereHas('temporada', fn (Builder $consulta): Builder => $consulta->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
             ->whereDoesntHave('inspeccionesSag.lote', fn (Builder $consulta): Builder => $consulta
                 ->whereIn('estado', $estadosLoteActivos));
     }

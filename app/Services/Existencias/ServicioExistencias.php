@@ -20,6 +20,7 @@ use App\Models\SaldoMaterialAlmacen;
 use App\Models\Temporada;
 use App\Models\User;
 use App\Services\InspeccionSag\ServicioEstadoSagFolio;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Carbon\CarbonImmutable;
 use DomainException;
 use Illuminate\Support\LazyCollection;
@@ -256,7 +257,7 @@ class ServicioExistencias
     public function clientesProductoTerminado(): array
     {
         return Folio::query()
-            ->whereHas('temporada', fn ($consulta) => $consulta->where('activa', true))
+            ->whereHas('temporada', fn ($consulta) => $consulta->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
             ->whereDoesntHave('material')
             ->whereNotNull('exportadora')
             ->distinct()
@@ -275,7 +276,7 @@ class ServicioExistencias
             ->whereNotNull('finalizado_at')
             ->whereHas('carga', fn ($consulta) => $consulta
                 ->where('estado', EstadoCarga::Cerrada->value)
-                ->whereHas('temporada', fn ($temporada) => $temporada->where('activa', true)))
+                ->whereHas('temporada', fn ($temporada) => $temporada->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id)))
             ->when($desde, fn ($consulta) => $consulta->where('finalizado_at', '>=', CarbonImmutable::parse($desde, $zona)->startOfDay()->utc()))
             ->when($hasta, fn ($consulta) => $consulta->where('finalizado_at', '<=', CarbonImmutable::parse($hasta, $zona)->endOfDay()->utc()))
             // El filtro por cliente se resuelve en la base: una temporada puede tener
@@ -349,9 +350,7 @@ class ServicioExistencias
 
     public function temporadaActiva(): ?string
     {
-        return Temporada::query()
-            ->where('activa', true)
-            ->value('codigo');
+        return app(ServicioTemporadaActiva::class)->buscar()?->codigo;
     }
 
     /** @return LazyCollection<int, array<string, mixed>> */
@@ -370,7 +369,7 @@ class ServicioExistencias
             ])
             ->where('activo', true)
             ->whereDoesntHave('material')
-            ->whereHas('temporada', fn ($consulta) => $consulta->where('activa', true))
+            ->whereHas('temporada', fn ($consulta) => $consulta->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
             ->orderBy('numero_folio')
             ->orderBy('id')
             ->lazy(200)
@@ -549,7 +548,7 @@ class ServicioExistencias
                 'asignacionCamara.camara:id,codigo,nombre',
                 'entregasProceso:id,lote_materia_prima_id,cantidad_envases,kilos_enviados,anulado_at',
             ])
-            ->whereHas('temporada', fn ($consulta) => $consulta->where('activa', true))
+            ->whereHas('temporada', fn ($consulta) => $consulta->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
             ->where('estado', '!=', 'anulado')
             ->orderBy('numero_lote')
             ->orderBy('id')
@@ -639,7 +638,7 @@ class ServicioExistencias
                 'origenes.lote.cliente:id,codigo,nombre',
                 'origenes.lote.recepcion:id,numero_recepcion,numero_guia_despacho',
             ])
-            ->whereHas('temporada', fn ($consulta) => $consulta->where('activa', true))
+            ->whereHas('temporada', fn ($consulta) => $consulta->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
             ->whereNull('anulado_at')
             ->orderBy('folio_provisional')
             ->orderBy('id')

@@ -26,6 +26,7 @@ use App\Models\SegmentoValidacionMp;
 use App\Models\Temporada;
 use App\Models\VariedadValidacion;
 use App\Services\MateriaPrima\ServicioLoteMateriaPrima;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -39,7 +40,7 @@ class MateriaPrimaController extends Controller
     public function resumen(): JsonResponse
     {
         Gate::authorize('consultar-materia-prima');
-        $temporada = Temporada::query()->where('activa', true)->first();
+        $temporada = app(ServicioTemporadaActiva::class)->buscar();
         $base = LoteMateriaPrima::query()
             ->when($temporada, fn (Builder $consulta) => $consulta
                 ->where('temporada_id', $temporada->id))
@@ -54,7 +55,7 @@ class MateriaPrimaController extends Controller
             'segmentos_pendientes' => SegmentoValidacionMp::query()
                 ->whereIn('estado', ['pendiente_lote', 'lotizacion_parcial'])
                 ->whereHas('validacion.recepcion.temporada', fn (Builder $consulta) => $consulta
-                    ->where('activa', true))
+                    ->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
                 ->count(),
             'lotes' => [
                 'borradores' => (clone $base)
@@ -82,7 +83,7 @@ class MateriaPrimaController extends Controller
     public function catalogos(Request $request): Response
     {
         Gate::authorize('consultar-materia-prima');
-        $temporada = Temporada::query()->where('activa', true)->firstOrFail();
+        $temporada = app(ServicioTemporadaActiva::class)->buscar() ?? abort(404);
         $camaras = Camara::query()
             ->where('contenido', ContenidoCamara::MateriaPrima->value)
             ->where('estado', EstadoCamara::Activa->value)
@@ -170,7 +171,7 @@ class MateriaPrimaController extends Controller
         $segmentos = SegmentoValidacionMp::query()
             ->whereIn('estado', ['pendiente_lote', 'lotizacion_parcial'])
             ->whereHas('validacion.recepcion.temporada', fn (Builder $consulta) => $consulta
-                ->where('activa', true))
+                ->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
             ->with([
                 'envases',
                 'csg',
@@ -247,7 +248,7 @@ class MateriaPrimaController extends Controller
     public function index(Request $request): AnonymousResourceCollection
     {
         Gate::authorize('consultar-materia-prima');
-        $temporada = Temporada::query()->where('activa', true)->first();
+        $temporada = app(ServicioTemporadaActiva::class)->buscar();
         $lotes = LoteMateriaPrima::query()
             ->when($temporada, fn (Builder $consulta) => $consulta
                 ->where('temporada_id', $temporada->id))

@@ -10,6 +10,7 @@ use App\Models\ReservaBandaManiobra;
 use App\Models\TareaMovimiento;
 use App\Models\Temporada;
 use App\Services\Planificador\ServicioEstadoArbitrajePlanificador;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Contracts\Events\ShouldHandleEventsAfterCommit;
 use Illuminate\Database\Eloquent\Model;
 
@@ -77,7 +78,9 @@ final class SolicitarArbitrajePlanificadorObserver implements ShouldHandleEvents
         }
 
         if ($modelo instanceof Camara) {
-            return Temporada::query()->where('activa', true)->pluck('id')->all();
+            $activa = app(ServicioTemporadaActiva::class)->buscar();
+
+            return $activa ? [$activa->id] : [];
         }
 
         return [];

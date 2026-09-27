@@ -13,8 +13,8 @@ use App\Models\EntregaFrutaProceso;
 use App\Models\LoteMateriaPrima;
 use App\Models\RetornoPacking;
 use App\Models\SubloteRetornoPacking;
-use App\Models\Temporada;
 use App\Services\MateriaPrima\ServicioFrutaProceso;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -27,7 +27,7 @@ class FrutaProcesoController extends Controller
     public function resumen(): JsonResponse
     {
         Gate::authorize('consultar-fruta-proceso');
-        $temporada = Temporada::query()->where('activa', true)->first();
+        $temporada = app(ServicioTemporadaActiva::class)->buscar();
         if (! $temporada) {
             return response()->json([
                 'temporada' => null,
@@ -234,7 +234,7 @@ class FrutaProcesoController extends Controller
     {
         Gate::authorize('consultar-fruta-proceso');
         abort_unless(
-            $loteMateriaPrima->temporada()->where('activa', true)->exists()
+            $loteMateriaPrima->temporada_id === app(ServicioTemporadaActiva::class)->buscar()?->id
             && $loteMateriaPrima->envase_primario === TipoEnvaseRomana::Bins
             && in_array($loteMateriaPrima->estado, $this->estadosProceso(), true),
             Response::HTTP_NOT_FOUND,
@@ -282,7 +282,7 @@ class FrutaProcesoController extends Controller
     private function consultaBase(): Builder
     {
         return LoteMateriaPrima::query()
-            ->whereHas('temporada', fn (Builder $consulta) => $consulta->where('activa', true))
+            ->whereHas('temporada', fn (Builder $consulta) => $consulta->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
             ->where('envase_primario', TipoEnvaseRomana::Bins->value)
             ->whereIn('estado', array_map(
                 fn (EstadoLoteMateriaPrima $estado): string => $estado->value,

@@ -19,12 +19,12 @@ use App\Models\OperacionSincronizacion;
 use App\Models\Posicion;
 use App\Models\SesionEstiba;
 use App\Models\TareaMovimiento;
-use App\Models\Temporada;
 use App\Models\UbicacionActual;
 use App\Models\User;
 use App\Services\Cargas\ServicioPlanDespachoDirecto;
 use App\Services\Cargas\ServicioTareasCarga;
 use App\Services\Temporadas\GuardiaTemporadaActiva;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\Transiciones\ComandoTransicionOperacional;
 use App\Services\Transiciones\MotorTransicionesOperacionales;
 use BackedEnum;
@@ -1007,7 +1007,7 @@ class ServicioMovimientoEstiba
         array $datosFolio,
     ): array {
         $atributos = $this->filtrarDatosFolio($datosFolio);
-        $atributos['temporada_id'] = Temporada::query()->where('activa', true)->value('id');
+        $atributos['temporada_id'] = app(ServicioTemporadaActiva::class)->buscar()?->id;
         $atributos['numero_folio'] = $numeroFolio;
         $atributos['tipo_bulto'] = $tipoBulto;
         $atributos['fecha_ingreso'] ??= $generadoDispositivoAt;

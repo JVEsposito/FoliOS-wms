@@ -12,10 +12,10 @@ use App\Models\ModificacionBinRetornoPacking;
 use App\Models\PersonalAccessToken;
 use App\Models\RegularizacionRetornoPackingLegacy;
 use App\Models\RetornoPacking;
-use App\Models\Temporada;
 use App\Models\TipoResultadoPacking;
 use App\Models\User;
 use App\Services\Secuencias\ServicioSecuenciaDocumento;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -803,7 +803,7 @@ class ServicioBinRetornoPacking
             $vistos[$clave] = true;
 
             $lote = LoteMateriaPrima::query()
-                ->whereHas('temporada', fn ($consulta) => $consulta->where('activa', true))
+                ->whereHas('temporada', fn ($consulta) => $consulta->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
                 ->find($origen['lote_materia_prima_id']);
             if (! $lote) {
                 throw ValidationException::withMessages([
@@ -911,10 +911,8 @@ class ServicioBinRetornoPacking
 
     private function temporadaActivaId(): string
     {
-        $temporadaId = Temporada::query()
-            ->where('activa', true)
-            ->sharedLock()
-            ->value('id');
+        $temporadaId = app(ServicioTemporadaActiva::class)
+            ->buscarConBloqueoCompartido()?->id;
         if (! is_string($temporadaId) || $temporadaId === '') {
             throw new ConflictoOperacion(
                 'No existe una temporada activa para registrar retornos de Packing.',

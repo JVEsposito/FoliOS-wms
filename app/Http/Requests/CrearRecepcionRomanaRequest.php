@@ -8,6 +8,7 @@ use App\Enums\TipoEnvaseRomana;
 use App\Enums\TipoRecepcionRomana;
 use App\Enums\TipoServicioRomana;
 use App\Rules\RutChileno;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -29,7 +30,7 @@ class CrearRecepcionRomanaRequest extends FormRequest
 
         return [
             'operacion_id' => ['required', 'uuid'],
-            'temporada_id' => ['required', 'uuid', Rule::exists('temporadas', 'id')->where('activa', true)],
+            'temporada_id' => ['required', 'uuid', Rule::exists('temporadas', 'id')->where('id', app(ServicioTemporadaActiva::class)->buscar()?->id)],
             'cliente_id' => ['required', 'uuid', Rule::exists('clientes', 'id')->where('activo', true)],
             'tipo_recepcion' => ['required', Rule::enum(TipoRecepcionRomana::class)],
             'fecha_ingreso' => [

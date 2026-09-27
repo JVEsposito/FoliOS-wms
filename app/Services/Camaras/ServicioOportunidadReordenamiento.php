@@ -32,6 +32,7 @@ use App\Models\UbicacionActual;
 use App\Models\User;
 use App\Services\Estiba\ServicioManiobrasOperacionales;
 use App\Services\Planificador\ServicioDesplieguePlanificador;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -761,7 +762,7 @@ class ServicioOportunidadReordenamiento
             ->value('folios.temporada_id');
 
         return $temporadaId
-            ?? DB::table('temporadas')->where('activa', true)->value('id');
+            ?? app(ServicioTemporadaActiva::class)->buscar()?->id;
     }
 
     /** @param array<string, mixed> $datos */

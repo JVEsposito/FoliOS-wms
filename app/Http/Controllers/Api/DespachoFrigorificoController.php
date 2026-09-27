@@ -25,6 +25,7 @@ use App\Services\Autenticacion\ContextoOperacional;
 use App\Services\Cargas\PlanificadorExtraccionCarga;
 use App\Services\Cargas\RevisionCargaOperacional;
 use App\Services\Cargas\ServicioDespachoFrigorifico;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -49,7 +50,7 @@ class DespachoFrigorificoController extends Controller
 
         $incidencias = IncidenciaCargaFolio::query()
             ->whereHas('asignacion.carga.temporada', fn (Builder $consulta): Builder => $consulta
-                ->where('activa', true))
+                ->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
             ->when(
                 isset($filtros['estado']),
                 fn (Builder $consulta): Builder => $consulta

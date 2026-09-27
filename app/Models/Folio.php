@@ -12,6 +12,7 @@ use App\Enums\ResultadoValidacionPallet;
 use App\Enums\TipoBulto;
 use App\Models\Concerns\ImpideEliminacionFisica;
 use App\Models\Contracts\PerteneceATemporada;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\Validacion\ProyeccionTrazabilidadFolio;
 use DomainException;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -63,7 +64,7 @@ class Folio extends Model implements PerteneceATemporada
                 return;
             }
 
-            $folio->temporada_id = Temporada::query()->where('activa', true)->value('id')
+            $folio->temporada_id = app(ServicioTemporadaActiva::class)->buscar()?->id
                 ?? throw new DomainException(
                     'No existe una temporada global activa. Un administrador debe activarla desde Accesos.',
                 );

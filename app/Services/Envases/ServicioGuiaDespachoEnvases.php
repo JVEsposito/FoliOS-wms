@@ -14,6 +14,7 @@ use App\Models\GuiaDespachoEnvase;
 use App\Models\MovimientoEnvase;
 use App\Models\Temporada;
 use App\Models\User;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -87,7 +88,7 @@ class ServicioGuiaDespachoEnvases
 
         return DB::transaction(function () use ($guia, $datos, $usuario, $payload): GuiaDespachoEnvase {
             $guia = GuiaDespachoEnvase::query()
-                ->whereHas('temporada', fn ($temporada) => $temporada->where('activa', true))
+                ->whereHas('temporada', fn ($temporada) => $temporada->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
                 ->with('detalles.movimientoOrigen.cliente')
                 ->lockForUpdate()
                 ->findOrFail($guia->id);
@@ -145,7 +146,7 @@ class ServicioGuiaDespachoEnvases
     {
         return DB::transaction(function () use ($guia, $usuario, $datos): GuiaDespachoEnvase {
             $guia = GuiaDespachoEnvase::query()
-                ->whereHas('temporada', fn ($temporada) => $temporada->where('activa', true))
+                ->whereHas('temporada', fn ($temporada) => $temporada->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
                 ->with(['detalles.movimientoOrigen.cliente', 'temporada', 'cliente', 'creadoPor'])
                 ->lockForUpdate()
                 ->findOrFail($guia->id);
@@ -227,7 +228,7 @@ class ServicioGuiaDespachoEnvases
     ): GuiaDespachoEnvase {
         return DB::transaction(function () use ($guia, $motivo, $usuario): GuiaDespachoEnvase {
             $guia = GuiaDespachoEnvase::query()
-                ->whereHas('temporada', fn ($temporada) => $temporada->where('activa', true))
+                ->whereHas('temporada', fn ($temporada) => $temporada->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
                 ->with('detalles')
                 ->lockForUpdate()
                 ->findOrFail($guia->id);
@@ -263,7 +264,7 @@ class ServicioGuiaDespachoEnvases
     {
         return DB::transaction(function () use ($guia, $motivo, $usuario): GuiaDespachoEnvase {
             $guia = GuiaDespachoEnvase::query()
-                ->whereHas('temporada', fn ($temporada) => $temporada->where('activa', true))
+                ->whereHas('temporada', fn ($temporada) => $temporada->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
                 ->lockForUpdate()
                 ->findOrFail($guia->id);
             if ($guia->estado === EstadoGuiaDespachoEnvase::Anulada) {
@@ -827,7 +828,7 @@ class ServicioGuiaDespachoEnvases
 
     private function temporadaActiva(): Temporada
     {
-        $temporada = Temporada::query()->where('activa', true)->lockForUpdate()->first();
+        $temporada = app(ServicioTemporadaActiva::class)->buscar(bloquear: true);
         if (! $temporada) {
             throw new ConflictoOperacion('No existe una temporada global activa para el despacho.');
         }

@@ -2,9 +2,9 @@
 
 namespace App\Jobs;
 
-use App\Models\Temporada;
 use App\Services\Planificador\ServicioArbitrajeManiobras;
 use App\Services\Planificador\ServicioEstadoArbitrajePlanificador;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Contracts\Queue\ShouldBeUniqueUntilProcessing;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -38,11 +38,8 @@ class RecalcularArbitrajePlanificador implements ShouldBeUniqueUntilProcessing, 
             return;
         }
 
-        $temporada = Temporada::query()
-            ->whereKey($this->temporadaId)
-            ->where('activa', true)
-            ->first();
-        if (! $temporada) {
+        $temporada = app(ServicioTemporadaActiva::class)->buscar();
+        if (! $temporada || $temporada->id !== $this->temporadaId) {
             return;
         }
 

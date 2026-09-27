@@ -15,8 +15,8 @@ use App\Models\Cliente;
 use App\Models\Embarque;
 use App\Models\Pais;
 use App\Models\Puerto;
-use App\Models\Temporada;
 use App\Services\Embarques\ServicioCalendarioEmbarques;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -40,7 +40,7 @@ class EmbarqueController extends Controller
         abort_if($desde->diffInDays($hasta) > 31, Response::HTTP_UNPROCESSABLE_ENTITY,
             'El calendario permite consultar un máximo de 32 días por vez.');
 
-        $temporada = Temporada::query()->where('activa', true)->firstOrFail();
+        $temporada = app(ServicioTemporadaActiva::class)->buscar() ?? abort(404);
         $embarques = Embarque::query()
             ->where('temporada_id', $temporada->id)
             ->whereBetween('fecha_programada', [$desde->toDateString(), $hasta->toDateString()])

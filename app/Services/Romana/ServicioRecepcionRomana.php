@@ -14,6 +14,7 @@ use App\Models\RecepcionRomana;
 use App\Models\Temporada;
 use App\Models\User;
 use App\Services\Notificaciones\ServicioNotificacionesOperacionales;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use JsonException;
@@ -1245,12 +1246,9 @@ class ServicioRecepcionRomana
 
     private function temporadaActiva(string $temporadaId): Temporada
     {
-        $temporada = Temporada::query()
-            ->whereKey($temporadaId)
-            ->where('activa', true)
-            ->first();
+        $temporada = app(ServicioTemporadaActiva::class)->buscar();
 
-        if (! $temporada) {
+        if (! $temporada || $temporada->id !== $temporadaId) {
             throw new ConflictoOperacion('La temporada global no está activa para nuevas recepciones.');
         }
 

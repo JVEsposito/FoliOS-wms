@@ -19,7 +19,6 @@ use App\Models\PlanOperacional;
 use App\Models\Posicion;
 use App\Models\SesionEstiba;
 use App\Models\TareaMovimiento;
-use App\Models\Temporada;
 use App\Services\Autenticacion\ContextoOperacional;
 use App\Services\Estiba\ServicioConfirmacionInicioTarea;
 use App\Services\Estiba\ServicioManiobrasOperacionales;
@@ -29,6 +28,7 @@ use App\Services\Estiba\ServicioReservasTareasMovimiento;
 use App\Services\Planificador\ServicioArbitrajeManiobras;
 use App\Services\Planificador\ServicioDesplieguePlanificador;
 use App\Services\Planificador\ServicioEstadoArbitrajePlanificador;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Carbon\CarbonImmutable;
 use DomainException;
 use Illuminate\Database\Eloquent\Builder;
@@ -50,7 +50,7 @@ class PlanOperacionalController extends Controller
         ]);
 
         $planes = PlanOperacional::query()
-            ->whereHas('temporada', fn (Builder $consulta): Builder => $consulta->where('activa', true))
+            ->whereHas('temporada', fn (Builder $consulta): Builder => $consulta->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
             ->when(
                 $filtros['tipo'] ?? null,
                 fn (Builder $consulta, string $tipo): Builder => $consulta->where('tipo', $tipo),
@@ -81,7 +81,7 @@ class PlanOperacionalController extends Controller
         PlanOperacional $planOperacional,
         ServicioReservasTareasMovimiento $reservas,
     ): PlanOperacionalResource {
-        abort_unless($planOperacional->temporada()->where('activa', true)->exists(), 404);
+        abort_unless($planOperacional->temporada_id === app(ServicioTemporadaActiva::class)->buscar()?->id, 404);
         $reservas->expirarVencidas();
 
         return new PlanOperacionalResource($planOperacional->load([
@@ -109,7 +109,7 @@ class PlanOperacionalController extends Controller
         ServicioReservasTareasMovimiento $reservas,
         ServicioPlanesOperacionales $servicio,
     ): JsonResponse {
-        abort_unless($planOperacional->temporada()->where('activa', true)->exists(), 404);
+        abort_unless($planOperacional->temporada_id === app(ServicioTemporadaActiva::class)->buscar()?->id, 404);
         $reservas->expirarVencidas();
 
         return response()->json(['data' => $servicio->snapshot($planOperacional)]);
@@ -137,7 +137,7 @@ class PlanOperacionalController extends Controller
         $ordenArbitraje = [];
 
         if ($asignacion === 'disponibles' && config('planificador.mode') === 'guided') {
-            $temporada = Temporada::query()->where('activa', true)->first();
+            $temporada = app(ServicioTemporadaActiva::class)->buscar();
             if ($temporada) {
                 $proyeccionArbitraje = $estadoArbitraje->consultar($temporada);
                 $cicloArbitraje = $proyeccionArbitraje['vigente']
@@ -158,7 +158,7 @@ class PlanOperacionalController extends Controller
         }
 
         $consultaTareas = TareaMovimiento::query()
-            ->whereHas('planOperacional.temporada', fn (Builder $consulta): Builder => $consulta->where('activa', true))
+            ->whereHas('planOperacional.temporada', fn (Builder $consulta): Builder => $consulta->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
             ->whereHas('planOperacional', fn (Builder $consulta): Builder => $consulta->whereNotIn('estado', [
                 EstadoPlanOperacional::Pausado->value,
                 EstadoPlanOperacional::Completado->value,
@@ -289,7 +289,7 @@ class PlanOperacionalController extends Controller
         ServicioPlanesOperacionales $servicio,
         ServicioDesplieguePlanificador $despliegue,
     ): JsonResponse {
-        abort_unless($planOperacional->temporada()->where('activa', true)->exists(), 404);
+        abort_unless($planOperacional->temporada_id === app(ServicioTemporadaActiva::class)->buscar()?->id, 404);
         $horizon = ($planOperacional->contexto ?? [])['planner_horizon']
             ?? config('planificador.horizon');
         if (! config('planificador.generacion_automatica')

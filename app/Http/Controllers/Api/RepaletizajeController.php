@@ -10,7 +10,7 @@ use App\Models\Folio;
 use App\Models\PersonalAccessToken;
 use App\Models\Repaletizaje;
 use App\Models\RepaletizajeDetalle;
-use App\Models\Temporada;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\Validacion\ServicioRegistroRepaletizaje;
 use App\Services\Validacion\ServicioRepaletizaje;
 use Illuminate\Http\JsonResponse;
@@ -24,9 +24,7 @@ class RepaletizajeController extends Controller
     {
         $porPagina = min(100, max(10, $request->integer('per_page', 25)));
         $folio = trim($request->string('folio')->value());
-        $temporadaActivaId = Temporada::query()
-            ->where('activa', true)
-            ->value('id');
+        $temporadaActivaId = app(ServicioTemporadaActiva::class)->buscar()?->id;
 
         $paginacion = Repaletizaje::query()
             ->whereHas('folioResultante', fn ($folios) => $folios
@@ -74,7 +72,7 @@ class RepaletizajeController extends Controller
         $planillas = Repaletizaje::query()
             ->whereDate('fecha_operacional', $fecha)
             ->whereHas('folioResultante', fn ($folios) => $folios
-                ->where('temporada_id', Temporada::query()->where('activa', true)->value('id')))
+                ->where('temporada_id', app(ServicioTemporadaActiva::class)->buscar()?->id))
             ->with('usuario:id,name')
             ->get(['id', 'turno', 'user_id', 'estado', 'fecha_operacional'])
             ->groupBy(fn (Repaletizaje $repa): string => ($repa->turno ?? '').'|'.$repa->user_id)
@@ -113,7 +111,7 @@ class RepaletizajeController extends Controller
         $repas = Repaletizaje::query()
             ->whereDate('fecha_operacional', $datos['fecha'])
             ->whereHas('folioResultante', fn ($folios) => $folios
-                ->where('temporada_id', Temporada::query()->where('activa', true)->value('id')))
+                ->where('temporada_id', app(ServicioTemporadaActiva::class)->buscar()?->id))
             ->when($datos['turno'] ?? null, fn ($consulta, string $turno) => $consulta->where('turno', $turno))
             ->when($datos['user_id'] ?? null, fn ($consulta, int $usuario) => $consulta->where('user_id', $usuario))
             ->with([...$this->relaciones(), 'resultados'])
@@ -157,7 +155,7 @@ class RepaletizajeController extends Controller
         $numero = mb_strtoupper(trim($numeroFolio));
         $folio = Folio::query()
             ->where('numero_folio', $numero)
-            ->whereHas('temporada', fn ($consulta) => $consulta->where('activa', true))
+            ->whereHas('temporada', fn ($consulta) => $consulta->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
             ->with([
                 'ubicacionActual.camara:id,codigo,nombre',
                 'ubicacionActual.posicion:id,etiqueta',

@@ -14,6 +14,7 @@ use App\Http\Resources\ValidacionPalletResource;
 use App\Models\Temporada;
 use App\Models\ValidacionPallet;
 use App\Services\Autenticacion\ContextoOperacional;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\Validacion\ServicioCorreccionValidacionPallet;
 use App\Services\Validacion\ServicioExportacionRegistroValidacion;
 use App\Services\Validacion\ServicioValidacionPallet;
@@ -51,9 +52,7 @@ class ValidacionPalletController extends Controller
         [$usuario, $dispositivo] = $contexto->obtener($request);
         $token = $usuario->currentAccessToken();
         $inicio = $token?->created_at ?? now();
-        $temporada = Temporada::query()
-            ->where('activa', true)
-            ->first(['id', 'codigo', 'nombre']);
+        $temporada = app(ServicioTemporadaActiva::class)->buscar();
 
         $base = ValidacionPallet::query()
             ->where('user_id', $usuario->id)
@@ -277,7 +276,7 @@ class ValidacionPalletController extends Controller
                     ->where('temporada_id', $temporadaId),
                 fn (Builder $consulta): Builder => $consulta->whereHas(
                     'temporada',
-                    fn (Builder $temporada): Builder => $temporada->where('activa', true),
+                    fn (Builder $temporada): Builder => $temporada->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id),
                 ),
             )
             ->when(

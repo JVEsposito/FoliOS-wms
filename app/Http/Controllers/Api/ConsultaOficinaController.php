@@ -14,6 +14,7 @@ use App\Services\Consultas\ServicioAsociacionProductorCsg;
 use App\Services\Consultas\ServicioConsultaOperacional;
 use App\Services\Consultas\ServicioTrazabilidadLotes;
 use App\Services\Existencias\GeneradorLibroXlsx;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\Validacion\ProyeccionTrazabilidadFolio;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -106,7 +107,7 @@ class ConsultaOficinaController extends Controller
     {
         return $temporadaId !== null
             ? Temporada::query()->findOrFail($temporadaId)
-            : Temporada::query()->where('activa', true)->first()
+            : app(ServicioTemporadaActiva::class)->buscar()
                 ?? Temporada::query()->productivas()->orderByDesc('codigo')->firstOrFail();
     }
 

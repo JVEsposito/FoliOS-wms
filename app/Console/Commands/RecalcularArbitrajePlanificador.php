@@ -2,8 +2,8 @@
 
 namespace App\Console\Commands;
 
-use App\Models\Temporada;
 use App\Services\Planificador\ServicioEstadoArbitrajePlanificador;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Console\Command;
 
 class RecalcularArbitrajePlanificador extends Command
@@ -14,7 +14,7 @@ class RecalcularArbitrajePlanificador extends Command
 
     public function handle(ServicioEstadoArbitrajePlanificador $estado): int
     {
-        $temporada = Temporada::query()->where('activa', true)->first();
+        $temporada = app(ServicioTemporadaActiva::class)->buscar();
         if (! $temporada) {
             $this->components->info('No existe una temporada activa.');
 
