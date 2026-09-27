@@ -58,7 +58,7 @@ export function createOfficeSessionSync({
                 const errors = pendingShowErrors;
                 pending = false;
                 pendingShowErrors = false;
-                void reload(errors);
+                return reload(errors);
             });
         return activePromise;
     }
@@ -68,7 +68,7 @@ export function createOfficeSessionSync({
     }
 
     function handleStorage(event) {
-        if (event.key === tokenKey) void reload(false, true);
+        if (event.key === tokenKey || event.key === null) void reload(false, true);
     }
 
     return {
