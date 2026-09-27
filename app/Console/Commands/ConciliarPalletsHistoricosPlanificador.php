@@ -3,7 +3,6 @@
 namespace App\Console\Commands;
 
 use App\Enums\RolUsuario;
-use App\Models\Temporada;
 use App\Models\User;
 use App\Services\Planificador\ServicioConciliacionPalletsHistoricos;
 use App\Services\Temporadas\ServicioTemporadaActiva;
