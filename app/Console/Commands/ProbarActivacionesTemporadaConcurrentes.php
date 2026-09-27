@@ -55,6 +55,9 @@ final class ProbarActivacionesTemporadaConcurrentes extends Command
                 return self::FAILURE;
             }
             $inicio = (string) $this->option('inicio');
+            if (file_put_contents($inicio.'-'.$trabajador.'.ready', 'listo') === false) {
+                return self::FAILURE;
+            }
             $espera = microtime(true) + 10;
             while (! file_exists($inicio) && microtime(true) < $espera) {
                 usleep(10000);
@@ -122,9 +125,11 @@ final class ProbarActivacionesTemporadaConcurrentes extends Command
 
         $barrera = sys_get_temp_dir().'/temporadas-activacion-'.Str::uuid();
         $procesos = [];
+        $marcas = [];
         try {
             $trabajadores = $escenario === 'guardar-activar' ? ['guardar', $ids[1]] : $ids;
             foreach ($trabajadores as $id) {
+                $marcas[] = $barrera.'-'.$id.'.ready';
                 $proceso = new Process([
                     PHP_BINARY, base_path('artisan'), $this->getName(), ...$ids,
                     '--confirmar-entorno-pruebas', '--escenario='.$escenario,
@@ -134,6 +139,19 @@ final class ProbarActivacionesTemporadaConcurrentes extends Command
                 $proceso->start();
                 $procesos[] = $proceso;
             }
+            $espera = microtime(true) + 10;
+            while (count(array_filter($marcas, 'is_file')) !== count($marcas) && microtime(true) < $espera) {
+                usleep(10000);
+            }
+            if (count(array_filter($marcas, 'is_file')) !== count($marcas)) {
+                $this->components->error('Uno de los procesos no llegó a la barrera; la prueba de concurrencia no se ejecutó.');
+                foreach ($procesos as $proceso) {
+                    $proceso->stop(1);
+                    $this->line(trim($proceso->getOutput().$proceso->getErrorOutput()));
+                }
+
+                return self::FAILURE;
+            }
             file_put_contents($barrera, 'inicio');
 
             foreach ($procesos as $proceso) {
@@ -142,6 +160,9 @@ final class ProbarActivacionesTemporadaConcurrentes extends Command
             }
         } finally {
             @unlink($barrera);
+            foreach ($marcas as $marca) {
+                @unlink($marca);
+            }
         }
 
         $activa = app(ServicioTemporadaActiva::class)->buscar(bloquear: true);
