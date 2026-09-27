@@ -85,6 +85,10 @@ return [
     */
     'rollout_camaras' => $rolloutCamaras,
 
+    // Preferencia blanda para PT sin destino: solo desempata bandas de igual
+    // afinidad. Acepta código o UUID y jamás reserva la cámara para cargas.
+    'camara_preferente_despacho' => trim((string) env('WMS_PLANNER_CAMARA_PREFERENTE_DESPACHO', '')),
+
     /*
     |--------------------------------------------------------------------------
     | Compatibilidad con la bandera histórica

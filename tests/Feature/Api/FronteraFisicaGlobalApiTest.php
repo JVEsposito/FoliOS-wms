@@ -41,6 +41,7 @@ class FronteraFisicaGlobalApiTest extends TestCase
     public function test_materializa_en_un_ciclo_tareas_asumidas_de_planes_distintos(): void
     {
         $contexto = $this->crearContexto();
+        config(['planificador.camara_preferente_despacho' => $contexto['camara']->codigo]);
         $primera = $this->crearPlan(
             $contexto,
             $contexto['folios'][0],
@@ -63,6 +64,7 @@ class FronteraFisicaGlobalApiTest extends TestCase
             ->assertJsonPath('data.arbitraje.en_ejecucion', 2)
             ->assertJsonPath('data.frontera.tareas_materializables', 2)
             ->assertJsonPath('data.frontera.solo_paso_actual', true)
+            ->assertJsonPath('data.planner.camara_preferente_despacho_id', $contexto['camara']->id)
             ->json('data');
         $tareas = collect($snapshot['tareas'])->keyBy('id');
 

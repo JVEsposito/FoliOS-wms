@@ -41,6 +41,13 @@ final class ServicioDesplieguePlanificador
         return $this->modoEfectivo([$camara]);
     }
 
+    public function camaraPreferenteDespacho(string $id, string $codigo): bool
+    {
+        $preferida = Str::lower(trim((string) config('planificador.camara_preferente_despacho', '')));
+
+        return $preferida !== '' && in_array($preferida, [Str::lower($id), Str::lower($codigo)], true);
+    }
+
     /** @param iterable<int, Camara|string|null> $camaras */
     public function dirige(iterable $camaras): bool
     {
@@ -99,6 +106,7 @@ final class ServicioDesplieguePlanificador
             'generacion_automatica' => (bool) config('planificador.generacion_automatica'),
             'rollout_limitado' => $limitado,
             'camaras_configuradas' => array_values(config('planificador.rollout_camaras', [])),
+            'camara_preferente_despacho' => config('planificador.camara_preferente_despacho'),
             'fuera_de_rollout' => $limitado && $this->modoGlobal() === 'guided' ? 'shadow' : null,
             'rollback' => 'WMS_PLANNER_MODE=off',
         ];

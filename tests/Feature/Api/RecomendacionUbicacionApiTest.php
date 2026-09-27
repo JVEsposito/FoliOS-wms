@@ -22,6 +22,33 @@ class RecomendacionUbicacionApiTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_camara_preferente_para_despacho_solo_desempata_afinidad(): void
+    {
+        $token = $this->crearIdentidad();
+        [$preferida] = $this->crearCamara('CAM-DESPACHO', 1, 2);
+        [$otra, $posiciones] = $this->crearCamara('CAM-OTRA', 1, 2);
+        config(['planificador.camara_preferente_despacho' => $preferida->codigo]);
+
+        $folioExistente = $this->crearFolio('PAL-MISMO-CLIENTE', 'Cliente Norte', 'Marca Norte', 'Caja 5');
+        $this->ocupar($otra, $posiciones[1][1], $folioExistente);
+        $compatible = $this->crearFolio(
+            'PAL-POR-AFINIDAD', 'Cliente Norte', 'Marca Norte', 'Caja 5', pendienteUbicacion: true,
+        );
+
+        $this->withToken($token)
+            ->getJson('/api/movimientos/consultar-folio?numero_folio='.$compatible->numero_folio)
+            ->assertOk()
+            ->assertJsonPath('data.recomendacion_ubicacion.mejor.camara.id', $otra->id);
+
+        $otroCliente = $this->crearFolio(
+            'PAL-POR-DESPACHO', 'Cliente Sur', 'Marca Sur', 'Caja 5', pendienteUbicacion: true,
+        );
+        $this->withToken($token)
+            ->getJson('/api/movimientos/consultar-folio?numero_folio='.$otroCliente->numero_folio)
+            ->assertOk()
+            ->assertJsonPath('data.recomendacion_ubicacion.mejor.camara.id', $preferida->id);
+    }
+
     public function test_prioriza_cliente_marca_y_formato_antes_de_abrir_otra_afinidad(): void
     {
         $token = $this->crearIdentidad();
@@ -114,6 +141,8 @@ class RecomendacionUbicacionApiTest extends TestCase
                 'Clamshell 2 kg',
             )
             ->assertJsonPath('data.bandas_operacionales.0.afinidad.pallets_completos', 1)
+            ->assertJsonPath('data.bandas_operacionales.0.afinidad.perfiles.0.cliente', 'Exportadora Central')
+            ->assertJsonPath('data.bandas_operacionales.0.afinidad.perfiles.0.marca', 'Andes')
             ->assertJsonPath('data.bandas_operacionales.0.afinidad.fuera_alcance', 0);
 
         $ubicacion->delete();

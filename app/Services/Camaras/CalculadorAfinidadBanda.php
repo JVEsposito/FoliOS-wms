@@ -26,11 +26,29 @@ class CalculadorAfinidadBanda
                 'formato' => null,
                 'pallets_completos' => 0,
                 'perfiles_diferentes' => 0,
+                'perfiles' => [],
                 'fuera_alcance' => $fueraAlcance,
             ];
         }
 
         $perfiles = $completos->map(fn (Folio $folio): array => $this->perfil($folio));
+        $perfilesResumidos = $perfiles
+            ->groupBy(fn (array $perfil): string => json_encode([
+                $perfil['cliente_clave'],
+                $perfil['marca_clave'],
+                $perfil['formato_clave'],
+            ], JSON_THROW_ON_ERROR))
+            ->map(function (Collection $grupo): array {
+                $perfil = $grupo->first();
+
+                return [
+                    'cliente' => $perfil['cliente'],
+                    'marca' => $perfil['marca'],
+                    'formato' => $perfil['formato'],
+                    'pallets' => $grupo->count(),
+                ];
+            })
+            ->values();
         $cliente = $this->dominante($perfiles, 'cliente_clave', 'cliente');
         $perfilesCliente = $cliente
             ? $perfiles->where('cliente_clave', $cliente['clave'])->values()
@@ -47,14 +65,8 @@ class CalculadorAfinidadBanda
             'marca' => $this->atributoDominante($marca),
             'formato' => $this->atributoDominante($formato),
             'pallets_completos' => $completos->count(),
-            'perfiles_diferentes' => $perfiles
-                ->map(fn (array $perfil): string => implode('|', [
-                    $perfil['cliente_clave'] ?? '-',
-                    $perfil['marca_clave'] ?? '-',
-                    $perfil['formato_clave'] ?? '-',
-                ]))
-                ->unique()
-                ->count(),
+            'perfiles_diferentes' => $perfilesResumidos->count(),
+            'perfiles' => $perfilesResumidos->all(),
             'fuera_alcance' => $fueraAlcance,
         ];
     }

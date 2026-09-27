@@ -21,7 +21,7 @@ use Illuminate\Support\Facades\DB;
 
 class ServicioFronteraFisica
 {
-    private const VERSION_SNAPSHOT = 'frontera_fisica_global_v1';
+    private const VERSION_SNAPSHOT = 'frontera_fisica_global_v2_preferencia_despacho';
 
     public function __construct(
         private readonly ServicioEstadoArbitrajePlanificador $estadoArbitraje,
@@ -121,6 +121,9 @@ class ServicioFronteraFisica
                     'revision_reservas' => $camara->revision_reservas,
                 ])
                 ->values();
+            $camaraPreferente = $camaras->first(fn (array $camara): bool => $this->despliegue
+                ->camaraPreferenteDespacho($camara['id'], $camara['codigo']));
+            $camaraPreferenteId = $camaraPreferente['id'] ?? null;
             $reservasFisicas = ReservaTareaMovimiento::query()
                 ->whereNotNull('bloqueo_posicion_id')
                 ->whereHas(
@@ -146,6 +149,7 @@ class ServicioFronteraFisica
                     config('planificador.maniobras_simultaneas_max'),
                     config('planificador.rollout_camaras', []),
                     $camarasDirigidas,
+                    $camaraPreferenteId,
                 ],
                 'camaras' => $camaras->all(),
                 'tareas' => $tareas->all(),
@@ -167,6 +171,7 @@ class ServicioFronteraFisica
                     ),
                     'rollout_limitado' => config('planificador.rollout_camaras', []) !== [],
                     'camaras_dirigidas' => $camarasDirigidas,
+                    'camara_preferente_despacho_id' => $camaraPreferenteId,
                 ],
                 'arbitraje' => $this->resumenArbitraje(
                     $ultimoCiclo,

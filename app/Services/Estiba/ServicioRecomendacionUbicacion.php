@@ -6,6 +6,7 @@ use App\Enums\ContenidoCamara;
 use App\Enums\EstadoCamara;
 use App\Enums\EstadoPosicion;
 use App\Enums\ModoBandaOperacional;
+use App\Enums\NivelAfinidadUbicacion;
 use App\Enums\TipoBulto;
 use App\Enums\UsoBandaOperacional;
 use App\Models\BandaOperacional;
@@ -15,6 +16,7 @@ use App\Models\Posicion;
 use App\Models\User;
 use App\Services\Autorizacion\AlcanceOperacionalUsuario;
 use App\Services\Camaras\CalculadorAfinidadBanda;
+use App\Services\Planificador\ServicioDesplieguePlanificador;
 use Illuminate\Support\Collection;
 
 class ServicioRecomendacionUbicacion
@@ -24,6 +26,7 @@ class ServicioRecomendacionUbicacion
     public function __construct(
         private readonly AlcanceOperacionalUsuario $alcance,
         private readonly CalculadorAfinidadBanda $afinidad,
+        private readonly ServicioDesplieguePlanificador $despliegue,
     ) {}
 
     /** @return array<string, mixed> */
@@ -85,8 +88,16 @@ class ServicioRecomendacionUbicacion
                 $camaraConsultadaId,
             ))
             ->sort(function (array $izquierda, array $derecha): int {
-                return ($derecha['afinidad']['puntaje'] <=> $izquierda['afinidad']['puntaje'])
+                $preferida = fn (array $item): int => (int) $this->despliegue->camaraPreferenteDespacho(
+                    $item['camara']['id'],
+                    $item['camara']['codigo'],
+                );
+
+                return ($this->ordenAfinidad($izquierda['afinidad']['nivel'])
+                    <=> $this->ordenAfinidad($derecha['afinidad']['nivel']))
                     ?: ($izquierda['afinidad']['mezclaria_clientes'] <=> $derecha['afinidad']['mezclaria_clientes'])
+                    ?: ($preferida($derecha) <=> $preferida($izquierda))
+                    ?: ($derecha['afinidad']['puntaje'] <=> $izquierda['afinidad']['puntaje'])
                     ?: strcmp($izquierda['camara']['codigo'], $derecha['camara']['codigo'])
                     ?: ($izquierda['banda']['numero'] <=> $derecha['banda']['numero'])
                     ?: ($izquierda['posicion']['posicion'] <=> $derecha['posicion']['posicion'])
@@ -256,6 +267,18 @@ class ServicioRecomendacionUbicacion
             'genera_movimiento' => false,
             'reserva_destino' => false,
             'excluye_destinos_reservados' => true,
+            'camara_preferente_despacho' => config('planificador.camara_preferente_despacho'),
         ];
+    }
+
+    private function ordenAfinidad(string $nivel): int
+    {
+        return match ($nivel) {
+            NivelAfinidadUbicacion::ClienteMarcaFormato->value => 0,
+            NivelAfinidadUbicacion::ClienteMarca->value => 1,
+            NivelAfinidadUbicacion::Cliente->value => 2,
+            NivelAfinidadUbicacion::BandaLibre->value => 3,
+            default => 4,
+        };
     }
 }

@@ -199,6 +199,7 @@ export type OperationalSnapshot = {
     compute: PlannerCompute;
     horizon: PlannerHorizon;
     frontier_max: number;
+    camara_preferente_despacho_id?: string | null;
   };
   plan: {
     id: string;
@@ -229,6 +230,7 @@ export type OperationalPhysicalFrontierSnapshot = {
     maniobras_simultaneas_max: number;
     rollout_limitado: boolean;
     camaras_dirigidas: string[] | null;
+    camara_preferente_despacho_id: string | null;
   };
   arbitraje: {
     ciclo_id: string | null;

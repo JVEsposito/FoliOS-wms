@@ -397,7 +397,7 @@ class PlanOperacionalController extends Controller
     ): TareaMovimientoResource {
         [$usuario, $dispositivo] = $contexto->obtener($request);
 
-        if (! $confirmaciones->exigida()) {
+        if (! $confirmaciones->exigida($tareaMovimiento)) {
             return new TareaMovimientoResource(
                 $servicio->iniciar($tareaMovimiento, $usuario, $dispositivo),
             );

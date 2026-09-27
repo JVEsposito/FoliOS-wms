@@ -1,5 +1,5 @@
-import { CameraPlan, Position } from './estiba';
-import {
+import type { CameraPlan, Position } from './estiba';
+import type {
   OperationalFrontierProposal,
   OperationalPhysicalFrontierSnapshot,
   OperationalSnapshot,
@@ -65,7 +65,13 @@ export function calculateRollingFrontier(
   for (const task of eligible) {
     if (proposals.length >= limit) break;
 
-    const candidate = bestCandidate(task, cameraPlans, usedDestinations, protectedOrigins);
+    const candidate = bestCandidate(
+      task,
+      cameraPlans,
+      usedDestinations,
+      protectedOrigins,
+      snapshot.planner.camara_preferente_despacho_id,
+    );
     const taskSnapshot = snapshot.tareas.find((item) => item.id === task.id);
     const candidatePlan = candidate
       ? cameraPlans.find((plan) => plan.id === candidate.cameraId)
@@ -102,8 +108,15 @@ export function bestCandidate(
   cameraPlans: CameraPlan[],
   usedDestinations: ReadonlySet<string> = new Set(),
   protectedOrigins: ReadonlySet<string> = new Set(),
+  preferredDispatchCameraId: string | null = null,
 ): RollingCandidate | null {
-  const candidates: RollingCandidate[] = [];
+  const candidates: Array<RollingCandidate & {
+    affinityRank: number;
+    mixesClients: boolean;
+    preferred: boolean;
+  }> = [];
+  const initialWithoutTarget = task.tipo_movimiento === 'ubicacion_inicial'
+    && !task.destino?.camara.id;
 
   for (const plan of cameraPlans) {
     if (plan.contenido !== 'productos' || plan.estado !== 'activa') continue;
@@ -118,19 +131,66 @@ export function bestCandidate(
         position,
         score: scoring.score,
         reason: scoring.reason,
+        affinityRank: initialWithoutTarget ? affinityRank(task, plan, position) : 0,
+        mixesClients: initialWithoutTarget && mixesClients(task, plan, position),
+        preferred: initialWithoutTarget && plan.id === preferredDispatchCameraId,
       });
     }
   }
 
   candidates.sort((left, right) => (
-    right.score - left.score
+    left.affinityRank - right.affinityRank
+    || Number(left.mixesClients) - Number(right.mixesClients)
+    || Number(right.preferred) - Number(left.preferred)
+    || right.score - left.score
     || left.position.posicion - right.position.posicion
     || left.position.banda - right.position.banda
     || left.position.nivel - right.position.nivel
     || left.position.id.localeCompare(right.position.id)
   ));
 
-  return candidates[0] ?? null;
+  const best = candidates[0];
+  if (!best) return null;
+  const { affinityRank: _affinityRank, mixesClients: _mixesClients, preferred, ...candidate } = best;
+  if (preferred) candidate.reason += '; cámara preferente para despacho entre bandas de igual afinidad';
+  return candidate;
+}
+
+function mixesClients(task: OperationalTask, plan: CameraPlan, position: Position) {
+  const affinity = plan.bandas_operacionales?.find((band) => band.numero === position.banda)?.afinidad;
+  if (!affinity?.pallets_completos) return false;
+  const client = taskContext(task, ['cliente', 'cliente_codigo', 'cliente_nombre']);
+  if (affinity.perfiles) {
+    return affinity.perfiles.some((profile) => !client || !sameText(client, profile.cliente));
+  }
+  return !client || !sameText(client, affinity.cliente?.valor)
+    || (affinity.cliente?.pallets ?? 0) < affinity.pallets_completos;
+}
+
+function affinityRank(task: OperationalTask, plan: CameraPlan, position: Position) {
+  const band = plan.bandas_operacionales?.find((item) => item.numero === position.banda);
+  const affinity = band?.afinidad;
+  if (!affinity) return band?.capacidad.ocupadas === 0 ? 3 : 4;
+  if (affinity.pallets_completos === 0) return 3;
+
+  const client = taskContext(task, ['cliente', 'cliente_codigo', 'cliente_nombre']);
+  const brand = taskContext(task, ['marca']);
+  const format = taskContext(task, ['formato', 'tipo_formato']);
+  if (affinity.perfiles) {
+    const byClient = affinity.perfiles.filter((profile) => client && sameText(client, profile.cliente));
+    if (byClient.length === 0) return 4;
+    const byBrand = byClient.filter((profile) => brand && sameText(brand, profile.marca));
+    if (byBrand.length === 0) return 2;
+    return byBrand.some((profile) => format && sameText(format, profile.formato)) ? 0 : 1;
+  }
+
+  // Snapshot antiguo: el dominante puede no representar una banda mixta.
+  // En caso de duda se conserva la clasificación conservadora.
+  if (!client || !sameText(client, affinity.cliente?.valor)) return 4;
+
+  if (!brand || !sameText(brand, affinity.marca?.valor)) return 2;
+
+  return format && sameText(format, affinity.formato?.valor) ? 0 : 1;
 }
 
 function compareTasks(left: OperationalTask, right: OperationalTask) {
@@ -239,15 +299,17 @@ function scoreCandidate(task: OperationalTask, plan: CameraPlan, position: Posit
   const brand = taskContext(task, ['marca']);
   const format = taskContext(task, ['formato', 'tipo_formato']);
   if (band?.afinidad?.activa) {
-    if (client && sameText(client, band.afinidad.cliente?.valor)) {
+    const sameClient = Boolean(client && sameText(client, band.afinidad.cliente?.valor));
+    const sameBrand = Boolean(sameClient && brand && sameText(brand, band.afinidad.marca?.valor));
+    if (sameClient) {
       score += 900;
       reasons.push('coincide cliente');
     }
-    if (brand && sameText(brand, band.afinidad.marca?.valor)) {
+    if (sameBrand) {
       score += 450;
       reasons.push('coincide marca');
     }
-    if (format && sameText(format, band.afinidad.formato?.valor)) {
+    if (sameBrand && format && sameText(format, band.afinidad.formato?.valor)) {
       score += 225;
       reasons.push('coincide formato');
     }

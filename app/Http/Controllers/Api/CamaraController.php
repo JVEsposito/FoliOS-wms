@@ -177,6 +177,7 @@ class CamaraController extends Controller
             ? $token->dispositivo_id
             : null;
         $huella = json_encode([
+            'version_perfiles_afinidad' => 2,
             'camara_id' => $camara->id,
             'camara_actualizada_at' => $camara->updated_at?->toAtomString(),
             'version_plano' => $camara->version_plano,

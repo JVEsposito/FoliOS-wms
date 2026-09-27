@@ -538,6 +538,12 @@ export type OperationalBand = {
     formato: { valor: string; pallets: number } | null;
     pallets_completos: number;
     perfiles_diferentes: number;
+    perfiles?: Array<{
+      cliente: string | null;
+      marca: string | null;
+      formato: string | null;
+      pallets: number;
+    }>;
     fuera_alcance: number;
   } | null;
   version: number;

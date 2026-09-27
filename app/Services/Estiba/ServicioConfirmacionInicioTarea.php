@@ -20,9 +20,10 @@ class ServicioConfirmacionInicioTarea
         private readonly ServicioPinOperacional $pines,
     ) {}
 
-    public function exigida(): bool
+    public function exigida(?TareaMovimiento $tarea = null): bool
     {
-        return (bool) config('planificador.confirmacion_inicio_tarea', true);
+        return (bool) data_get($tarea?->contexto, 'confirmar_folio_fisicamente')
+            || (bool) config('planificador.confirmacion_inicio_tarea', true);
     }
 
     public static function digitosEsperados(string $numeroFolio): string

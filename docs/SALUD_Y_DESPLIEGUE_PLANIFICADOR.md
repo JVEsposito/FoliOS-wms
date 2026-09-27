@@ -10,6 +10,7 @@ WMS_PLANNER_COMPUTE=tablet
 WMS_PLANNER_HORIZON=rolling
 WMS_PLANIFICADOR_AUTOMATICO=true
 WMS_PLANNER_ROLLOUT_CAMERAS=CAM-01
+WMS_PLANNER_CAMARA_PREFERENTE_DESPACHO=CAM-01
 ```
 
 Una emergencia solo dirige y bloquea la cámara cuando `guided` coincide con
@@ -20,6 +21,48 @@ incompleta se rechaza antes de crear el plan o modificar labores y bandas.
 lista está vacía, se conserva el comportamiento global anterior. Si contiene
 cámaras y el modo global es `guided`, solo ellas publican trabajo dirigido; las
 demás continúan en `shadow`.
+
+`WMS_PLANNER_CAMARA_PREFERENTE_DESPACHO` admite un código o UUID de cámara PT.
+Solo se aplica si la cámara está activa y dentro del rollout dirigido. La
+compatibilidad de la banda (cliente, después marca y formato, después banda
+libre) precede siempre a la preferencia: una banda con cliente compatible en
+otra cámara gana a la preferida vacía. Cuando dos alternativas tienen la misma
+afinidad se escoge la preferida. No reserva espacio ni vuelve exclusiva la
+cámara; un destino explícito de carga y la separación tienen reglas propias.
+
+## Arranque con pallets anteriores al planificador
+
+La aprobación de Prefrío genera `recepcion_tunel` únicamente cuando ya están
+habilitados `guided`, `tablet` y `WMS_PLANIFICADOR_AUTOMATICO=true`. Activar el
+planificador después no crea tareas para pallets aprobados anteriormente:
+`planificador:recalcular-arbitraje --forzar` solo arbitra maniobras existentes.
+
+Revisar la temporada activa sin escribir:
+
+```bash
+php artisan planificador:conciliar-pallets
+```
+
+Después de comprobar físicamente dónde están los pallets y quién efectuará
+las búsquedas, el supervisor puede incorporar un lote acotado:
+
+```bash
+php artisan planificador:conciliar-pallets --aplicar --usuario=supervisor@planta.cl --limite=50
+```
+
+El comando admite administradores o supervisores de frío activos, registra
+usuario/temporada/cantidad en el log y se puede repetir sin duplicar objetivos.
+Solo incorpora pallets completos de la temporada activa, con Prefrío aprobado,
+habilitación térmica, sin ubicación, asignación de carga, retención ni tarea
+histórica. El diagnóstico distingue los pallets sin ubicación ni objetivo que
+cumplen esos requisitos de los que requieren revisar su expediente y regularizar
+su estado.
+Cada nuevo objetivo es `almacenamiento_pallet` rolling y conserva el ID de su
+proceso, pero **no presume que el pallet siga dentro del túnel**: el camarero
+debe encontrarlo y confirmar folio y PIN antes de iniciar, incluso si se apagó
+la confirmación general. La tarea no asigna destino hasta la frontera física
+validada por el servidor. Si el pallet ya está en una cámara sin registrar,
+regularizar primero esa ubicación física, sin moverlo solo para crear trabajo.
 
 El rollback operacional es siempre:
 
