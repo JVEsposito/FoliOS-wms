@@ -477,7 +477,7 @@
 }
 
 .operation-now-planner__context { grid-template-columns: repeat(2, minmax(0, 1fr)); border-right: 1px solid var(--corporate-border); }
-.operation-now-planner__summary { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.operation-now-planner__summary { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 
 .operation-now-planner__context div,
 .operation-now-planner__summary div {
@@ -512,6 +512,8 @@
 
 .operation-now-planner__summary div { border-top: 3px solid var(--corporate-border); }
 .operation-now-planner__summary div[data-decision="en_ejecucion"] { border-top-color: var(--success-text); }
+.operation-now-planner__summary div[data-decision="pausada"] { border-top-color: var(--warning-text); }
+.operation-now-planner__summary div[data-decision="sin_objetivo"] { border-top-color: var(--danger-text); }
 .operation-now-planner__summary div[data-decision="seleccionada"] { border-top-color: var(--corporate-blue); }
 .operation-now-planner__summary div[data-decision="alternativa"] { border-top-color: var(--text-subtle); }
 .operation-now-planner__summary div[data-decision="excluida_conflicto"] { border-top-color: var(--danger-text); }
@@ -2624,7 +2626,7 @@
     .operation-now-planner__context { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .operation-now-planner__context div:nth-child(2) { border-right: 0; }
     .operation-now-planner__context div:nth-child(-n+2) { border-bottom: 1px solid var(--corporate-border); }
-    .operation-now-planner__summary { grid-template-columns: repeat(5, minmax(98px, 1fr)); overflow-x: auto; }
+    .operation-now-planner__summary { grid-template-columns: repeat(7, minmax(132px, 1fr)); overflow-x: auto; }
     .operation-now-planner__risks { align-items: flex-start; }
 }
 

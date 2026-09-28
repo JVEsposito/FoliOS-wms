@@ -1,4 +1,5 @@
 import { cameraDisplayName } from './shared/camera-display';
+import { bandAffinityText } from './shared/camera-band-affinity';
 import {
     bandNumberingLabel,
     LEFT_TO_RIGHT,
@@ -423,12 +424,7 @@ function allowedUses(band) {
 }
 
 function affinityText(band) {
-    const affinity = band?.afinidad;
-    if (!affinity?.activa) return 'Sin afinidad activa';
-    const values = [affinity.cliente, affinity.marca, affinity.formato].filter(Boolean);
-    if (values.length) return values.join(' · ');
-    if (affinity.perfiles_diferentes) return `${affinity.perfiles_diferentes} perfiles distintos`;
-    return 'Afinidad activa';
+    return bandAffinityText(band);
 }
 
 function renderOperationalCameraList() {

@@ -3,6 +3,8 @@ import { buildOperationalAlerts } from './shared/operation-now-alerts';
 import { buildCycleComparison, renderCycleComparison } from './shared/operation-cycle-comparison';
 import { buildCycleReplay, renderCycleReplay } from './shared/operation-cycle-replay';
 import { plannerProcessCause, plannerProcessWarnings } from './shared/planner-process-health';
+import { cameraReferenceLabel } from './shared/camera-display';
+import { maneuverSituation, plannerCapacityText, plannerEmptyDetail } from './shared/operation-planner-presentation';
 import {
     buildManeuverInterventionRequest,
     createManeuverSupervisionDrawer,
@@ -501,6 +503,7 @@ function plannerDecisionLabel(decision, factor = '') {
     if (decision === 'fuera_frontera') {
         return {
             pausa_supervision: 'Pausada por supervisión',
+            pausa_discrepancia_sin_retiro: 'Pausada · en espera de supervisión',
             objetivo_pausado: 'Objetivo pausado',
             frontera_completa: 'Esperando cupo',
         }[factor] || 'No publicada ahora';
@@ -593,10 +596,12 @@ function renderPlanner(planner = {}) {
     setText('plannerRollout', deployment.rollout_limitado
         ? `${number(deployment.camaras_configuradas?.length || 0)} cámaras`
         : 'Toda la planta');
-    setText('plannerCapacity', cycle
-        ? `${number(cycle.capacidad_ejecucion)} de ${number(cycle.frontera_max)} cupos`
-        : 'Sin cálculo vigente');
-    setText('plannerRunningCount', cycle ? number(summary.en_ejecucion || 0) : '—');
+    setText('plannerCapacity', plannerCapacityText(cycle));
+    setText('plannerRunningCount', cycle ? number(summary.en_curso || 0) : '—');
+    setText('plannerPausedCount', cycle ? number(summary.pausadas || 0) : '—');
+    const unpositioned = planner.conciliacion || {};
+    setText('plannerUnpositionedCount', number(unpositioned.sin_objetivo || 0));
+    byId('plannerUnpositionedCount').title = `${number(unpositioned.saldos_sin_objetivo || 0)} saldos sin ubicación ni objetivo se informan por separado`;
     setText('plannerSelectedCount', cycle ? number(summary.seleccionada || 0) : '—');
     setText('plannerAlternativeCount', cycle ? number(summary.alternativa || 0) : '—');
     setText('plannerConflictCount', cycle ? number(summary.excluida_conflicto || 0) : '—');
@@ -624,7 +629,7 @@ function renderPlanner(planner = {}) {
     }
 
     if (!decisions.length) {
-        elements.plannerDecisionRows.innerHTML = `<tr><td colspan="6">${empty('Sin maniobras pendientes', 'El cálculo está al día y no encontró movimientos que ordenar.')}</td></tr>`;
+        elements.plannerDecisionRows.innerHTML = `<tr><td colspan="6">${empty('Sin maniobras pendientes', plannerEmptyDetail(freshness))}</td></tr>`;
         return;
     }
 
@@ -634,14 +639,15 @@ function renderPlanner(planner = {}) {
         const responsible = decision.responsable?.nombre || 'Sin asignar';
         const device = decision.dispositivo?.codigo || 'Sin dispositivo';
         const stepTitle = step?.instruccion || humanize(step?.tipo_movimiento || 'sin instrucción');
+        const situation = maneuverSituation(decision);
 
         return `<tr data-decision="${escapeHtml(decision.decision)}">
-            <td><span class="operation-now-code">#${escapeHtml(number(decision.orden))}</span>${signal(plannerDecisionLabel(decision.decision, decision.explicacion?.factor_decisivo?.codigo), toneForPlannerDecision(decision.decision))}</td>
+            <td><span class="operation-now-code">#${escapeHtml(number(decision.orden))}</span>${signal(situation?.label || plannerDecisionLabel(decision.decision, decision.explicacion?.factor_decisivo?.codigo), situation?.tone || toneForPlannerDecision(decision.decision))}</td>
             <td><strong>${escapeHtml(decision.titulo || 'Maniobra sin título')}</strong><span class="operation-now-subtext">Prioridad ${escapeHtml(humanize(decision.prioridad))} · ${escapeHtml(humanize(decision.objetivo?.tipo || 'sin objetivo'))}</span></td>
-            <td>${signal(humanize(decision.estado), toneForPriority(decision.prioridad))}<div class="operation-now-planner__progress"><span class="operation-now-meter" data-tone="${toneForPlannerDecision(decision.decision)}" style="--operation-progress:${clampedPercent(progress.porcentaje)}%"><i></i></span><small>${escapeHtml(number(progress.pasos_completados))}/${escapeHtml(number(progress.pasos_total))}</small></div></td>
+            <td>${signal(situation?.label || humanize(decision.estado), situation?.tone || toneForPriority(decision.prioridad))}<div class="operation-now-planner__progress"><span class="operation-now-meter" data-tone="${situation?.tone || toneForPlannerDecision(decision.decision)}" style="--operation-progress:${clampedPercent(progress.porcentaje)}%"><i></i></span><small>${escapeHtml(number(progress.pasos_completados))}/${escapeHtml(number(progress.pasos_total))}</small></div></td>
             <td><span class="operation-now-code">${escapeHtml(step?.folio?.numero_folio || 'Sin folio')}</span><span class="operation-now-subtext">${escapeHtml(plannerRoute(step))} · ${escapeHtml(stepTitle)}</span></td>
             <td><strong>${escapeHtml(responsible)}</strong><span class="operation-now-subtext">${escapeHtml(device)}</span></td>
-            <td><span class="operation-now-planner__reason">${escapeHtml(plannerConflictDetail(decision))}</span><button type="button" class="operation-now-planner__detail" data-maneuver-detail="${escapeHtml(decision.maniobra_id)}">Ver detalle</button></td>
+            <td><span class="operation-now-planner__reason">${escapeHtml(situation?.reason || plannerConflictDetail(decision))}</span><button type="button" class="operation-now-planner__detail" data-maneuver-detail="${escapeHtml(decision.maniobra_id)}">Ver detalle</button></td>
         </tr>`;
     }).join('');
 
@@ -675,7 +681,7 @@ function renderCameras(cameras = []) {
             : '<span class="operation-now-subtext">Sin control configurado</span>';
 
         return `<tr>
-            <td><span class="operation-now-code">${escapeHtml(camera.codigo)}</span><span class="operation-now-subtext">${escapeHtml(camera.nombre)}</span></td>
+            <td><span class="operation-now-code">${escapeHtml(cameraReferenceLabel(camera))}</span></td>
             <td>
                 ${signal(`${number(camera.ocupadas)} / ${number(camera.capacidad_operativa)} · ${percent(camera.ocupacion_porcentaje)}`, occupancyTone)}
                 <span class="operation-now-meter" data-tone="${occupancyTone}" style="--operation-progress:${clampedPercent(camera.ocupacion_porcentaje)}%"><i></i></span>
@@ -688,7 +694,7 @@ function renderCameras(cameras = []) {
 
 function taskLocation(endpoint) {
     if (!endpoint?.camara) return 'Sin ubicación física';
-    return [endpoint.camara.codigo, endpoint.posicion?.etiqueta].filter(Boolean).join(' · ');
+    return [cameraReferenceLabel(endpoint.camara), endpoint.posicion?.etiqueta].filter(Boolean).join(' · ');
 }
 
 function renderOperators(operators = []) {
@@ -702,13 +708,17 @@ function renderOperators(operators = []) {
     });
     setText('operatorPanelCount', number(orderedOperators.length));
     if (!orderedOperators.length) {
-        elements.operatorList.innerHTML = empty('Sin camareros activos', 'No existen sesiones de estiba abiertas en este momento.');
+        elements.operatorList.innerHTML = empty('Sin camareros activos', 'No existen tareas asumidas ni sesiones de cámara con actividad reciente.');
         return;
     }
 
     elements.operatorList.innerHTML = orderedOperators.map((operator) => {
         const task = operator.tarea_actual;
         const currentCamera = operator.ubicacion_actual?.camara;
+        const locationType = operator.ubicacion_actual?.tipo;
+        const locationLabel = locationType === 'transito' ? 'En tránsito'
+            : locationType === 'destino_previsto' ? 'Destino previsto'
+                : locationType === 'origen' ? 'Origen de la tarea' : 'Cámara de sesión';
         const taskMarkup = task ? `<div class="operation-now-operator__task">
             <div class="operation-now-operator__task-head">
                 <div><span class="operation-now-operator__label">TAREA ${escapeHtml(humanize(task.estado).toUpperCase())}</span><p><span class="operation-now-code">${escapeHtml(task.folio?.numero_folio || 'Sin folio')}</span></p></div>
@@ -721,10 +731,10 @@ function renderOperators(operators = []) {
         return `<article class="operation-now-operator">
             <div class="operation-now-operator__identity">
                 <h3>${escapeHtml(operator.usuario?.nombre || 'Camarero')}</h3>
-                <span class="operation-now-operator__meta">${escapeHtml(operator.dispositivo?.codigo || 'Sin dispositivo')} · actividad ${escapeHtml(dateTime(operator.sesion?.ultima_actividad_at, { timeOnly: true }))}</span>
-                <div class="operation-now-operator__status">${signal('En operación', 'success')}</div>
+                <span class="operation-now-operator__meta">${escapeHtml(operator.dispositivo?.codigo || 'Sin dispositivo')} · actividad ${escapeHtml(dateTime(operator.ultima_actividad_at, { timeOnly: true }))}</span>
+                <div class="operation-now-operator__status">${signal(task ? 'Con tarea' : 'Sesión reciente', task ? 'info' : 'success')}</div>
             </div>
-            <div class="operation-now-operator__location"><span class="operation-now-operator__label">UBICACIÓN</span><p><strong>${escapeHtml(currentCamera?.codigo || 'Sin cámara')}</strong><span class="operation-now-subtext">${escapeHtml(currentCamera?.nombre || 'No informada')}</span></p></div>
+            <div class="operation-now-operator__location"><span class="operation-now-operator__label">${escapeHtml(locationLabel.toUpperCase())}</span><p><strong>${escapeHtml(currentCamera ? cameraReferenceLabel(currentCamera) : locationLabel)}</strong></p></div>
             ${taskMarkup}
         </article>`;
     }).join('');
@@ -930,7 +940,7 @@ function incidentContext(incident) {
     if (incident.origen === 'carga') {
         const load = incident.contexto?.carga;
         const location = incident.contexto?.ubicacion_reportada;
-        return [load?.codigo, location?.camara?.codigo, location?.posicion?.etiqueta].filter(Boolean).join(' · ');
+        return [load?.codigo, location?.camara && cameraReferenceLabel(location.camara), location?.posicion?.etiqueta].filter(Boolean).join(' · ');
     }
     const maneuver = incident.contexto?.maniobra;
     const task = incident.contexto?.tarea;
