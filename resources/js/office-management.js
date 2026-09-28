@@ -1,5 +1,6 @@
 import Chart from 'chart.js/auto';
 import { createOperationalPoller } from './shared/operational-poller';
+import { productStateSegments } from './shared/management-product-states';
 
 const byId = (id) => document.getElementById(id);
 
@@ -43,17 +44,30 @@ const elements = {
     weighbridgeSummary: byId('weighbridgeChartSummary'),
     materialUnitSelect: byId('materialUnitSelect'),
     materialSummary: byId('materialChartSummary'),
-    productSummary: byId('productChartSummary'),
+    productEmpty: byId('productEmpty'),
+    productDetails: byId('productDetails'),
+    productTotal: byId('productTotalMetric'),
+    productComposition: byId('productCompositionMetric'),
+    productAvailable: byId('productAvailableMetric'),
+    productAvailableDetail: byId('productAvailableDetail'),
+    productCommitted: byId('productCommittedMetric'),
+    productCommittedDetail: byId('productCommittedDetail'),
+    productOccupancy: byId('productOccupancyMetric'),
+    productOccupancyDetail: byId('productOccupancyDetail'),
+    productStateBar: byId('productStateBar'),
+    productStateLegend: byId('productStateLegend'),
+    productBlocked: byId('productBlockedMetric'),
+    productPendingPrecooling: byId('productPendingPrecoolingMetric'),
+    productAgingRows: byId('productAgingRows'),
+    productAgingThreshold: byId('productAgingThreshold'),
+    productUndated: byId('productUndated'),
     precoolingSummary: byId('precoolingChartSummary'),
     cameraRows: byId('cameraDetailRows'),
     alerts: byId('managementAlerts'),
     alertCount: byId('alertCount'),
     alertTabCount: byId('alertTabCount'),
     materialOperationDetail: byId('materialOperationDetail'),
-    productPallets: byId('productPalletsMetric'),
-    productBalances: byId('productBalancesMetric'),
     productUnlocated: byId('productUnlocatedMetric'),
-    productEnteredToday: byId('productEnteredTodayMetric'),
     activeLoads: byId('activeLoadsMetric'),
     pendingLoads: byId('pendingLoadsMetric'),
     preparingLoads: byId('preparingLoadsMetric'),
@@ -392,7 +406,7 @@ function renderDashboard(data) {
     elements.weighbridgeDetail.textContent = `${formatInteger(weighbridge.en_bascula_ingreso)} en ingreso · ${formatInteger(weighbridge.en_pesaje_envases)} en pesaje · ${formatInteger(rawMaterial.confirmados_hoy)} lotes confirmados hoy`;
 
     renderCameraChart(data.camaras.detalle);
-    renderProductChart(products);
+    renderProducts(products, data.camaras.por_contenido.productos);
     renderLoads(loads);
     renderValidation(validation);
     renderMaterialUnitOptions(materials.unidades_medida);
@@ -449,43 +463,47 @@ function renderCameraChart(cameras) {
     });
 }
 
-function renderProductChart(products) {
-    const labels = ['Disponibles', 'Comprometidos', 'Pendientes prefrío', 'Sin ubicación', 'Bloqueados', 'Otros'];
-    const values = [
-        products.disponibles_despacho,
-        products.comprometidos_carga,
-        products.pendientes_prefrio,
-        products.pendientes_ubicacion,
-        products.bloqueados,
-        products.otros,
-    ];
-    const colors = [palette.green, palette.blue, palette.amber, palette.muted, palette.red, palette.quiet];
-    const style = getComputedStyle(elements.productSummary);
-    const textColors = ['--success-text', '--info-text', '--warning-text', '--text-secondary', '--danger-text', '--text-secondary']
-        .map((name) => style.getPropertyValue(name).trim() || style.color);
+function renderProducts(products, occupancy) {
+    const { empty, segments, ariaLabel } = productStateSegments(products);
+    elements.productEmpty.hidden = !empty;
+    elements.productDetails.hidden = empty;
+    if (empty) return;
 
-    replaceChart('products', 'productAvailabilityChart', {
-        type: 'doughnut',
-        data: { labels, datasets: [{ data: values, backgroundColor: colors, borderColor: style.getPropertyValue('--panel').trim() || style.color, borderWidth: 4, hoverOffset: 5 }] },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            cutout: '70%',
-            plugins: {
-                legend: { display: false },
-                centerLabel: { text: formatInteger(products.total_activos), subtext: 'FOLIOS ACTIVOS' },
-            },
-        },
-    });
+    elements.productTotal.textContent = formatInteger(products.total_activos);
+    elements.productComposition.textContent = `${formatInteger(products.pallets)} pallets · ${formatInteger(products.saldos)} saldos · ${formatInteger(products.ingresados_hoy)} ingresados hoy`;
+    elements.productAvailable.textContent = formatInteger(products.disponibles_despacho);
+    elements.productAvailableDetail.textContent = `${formatQuantity(products.disponibilidad_porcentaje)} % del total`;
+    elements.productCommitted.textContent = formatInteger(products.comprometidos_carga);
+    elements.productCommittedDetail.textContent = `${formatInteger(products.cargas_comprometidas)} cargas`;
+    elements.productOccupancy.textContent = `${formatQuantity(occupancy.ocupacion_porcentaje)} %`;
+    elements.productOccupancyDetail.textContent = `${formatInteger(occupancy.ocupadas)} de ${formatInteger(occupancy.operativas)} posiciones operativas`;
 
-    elements.productSummary.innerHTML = labels
-        .map((label, index) => `<span><b style="color:${textColors[index]}">${formatInteger(values[index])}</b>${escapeHtml(label)}</span>`)
+    elements.productStateBar.setAttribute('aria-label', ariaLabel);
+    elements.productStateBar.innerHTML = segments.filter(({ count }) => count > 0)
+        .map(({ tone, width }) => `<span class="management-products__segment management-products__segment--${tone}" style="width:${width}%"></span>`)
+        .join('');
+    elements.productStateLegend.innerHTML = segments
+        .map(({ tone, count, label }) => `<div class="management-products__legend-item management-products__legend-item--${tone}"><span class="management-products__dot" aria-hidden="true"></span><span>${label}</span><strong>${formatInteger(count)}</strong></div>`)
         .join('');
 
-    elements.productPallets.textContent = formatInteger(products.pallets);
-    elements.productBalances.textContent = formatInteger(products.saldos);
     elements.productUnlocated.textContent = formatInteger(products.pendientes_ubicacion);
-    elements.productEnteredToday.textContent = formatInteger(products.ingresados_hoy);
+    elements.productBlocked.textContent = formatInteger(products.bloqueados);
+    elements.productPendingPrecooling.textContent = formatInteger(products.pendientes_prefrio);
+    elements.productUnlocated.closest('.management-products__exception').classList.toggle('is-zero', !products.pendientes_ubicacion);
+    elements.productBlocked.closest('.management-products__exception').classList.toggle('is-zero', !products.bloqueados);
+    elements.productPendingPrecooling.closest('.management-products__exception').classList.toggle('is-zero', !products.pendientes_prefrio);
+
+    const aging = products.antiguedad;
+    const dated = aging.tramos.reduce((sum, row) => sum + row.total, 0);
+    elements.productAgingThreshold.textContent = `alerta > ${aging.umbral_alerta_dias} días`;
+    elements.productAgingRows.innerHTML = aging.tramos.map(({ desde_dias: from, hasta_dias: to, total }, index) => {
+        const label = to === null ? `Más de ${aging.umbral_alerta_dias} días` : `${from}–${to} días`;
+        const width = dated ? Math.max(total > 0 ? 2 : 0, (total / dated) * 100) : 0;
+        const tone = index === aging.tramos.length - 1 ? 'danger' : 'info';
+        return `<div class="management-products__aging-row"><span>${label}</span><div class="management-products__aging-track" aria-hidden="true"><span class="management-products__aging-fill management-products__aging-fill--${tone}" style="width:${width}%"></span></div><strong>${formatInteger(total)}</strong></div>`;
+    }).join('');
+    elements.productUndated.hidden = !aging.sin_fecha;
+    elements.productUndated.textContent = `${formatInteger(aging.sin_fecha)} folios sin fecha de ingreso`;
 }
 
 function renderLoads(loads) {
@@ -892,7 +910,6 @@ document.addEventListener('estiba:office-panel-change', (event) => {
 });
 
 new MutationObserver(() => {
-    if (state.dashboard?.productos) renderProductChart(state.dashboard.productos);
     state.charts.forEach((chart) => chart.draw());
 }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-office-theme'] });
 

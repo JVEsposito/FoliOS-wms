@@ -190,16 +190,31 @@
                             <div><p class="eyebrow">PRODUCTO TERMINADO</p><h2>Estado y disponibilidad de folios</h2></div>
                             <a class="management-panel-link" href="/oficina/frigorifico/existencias">Existencia PT →</a>
                         </header>
-                        <div class="management-chart-with-metrics">
-                            <div>
-                                <div class="chart-container chart-container--doughnut"><canvas id="productAvailabilityChart" aria-label="Gráfico de disponibilidad de producto" role="img"></canvas></div>
-                                <div class="chart-summary" id="productChartSummary"></div>
+                        <div id="productEmpty" class="management-empty" hidden>Sin folios PT activos en la temporada</div>
+                        <div id="productDetails" class="management-products">
+                            <div class="management-products__indicators">
+                                <article><span>FOLIOS ACTIVOS</span><strong id="productTotalMetric">0</strong><small id="productCompositionMetric">0 pallets · 0 saldos · 0 ingresados hoy</small></article>
+                                <article><span>DISPONIBLES PARA DESPACHO</span><strong id="productAvailableMetric">0</strong><small id="productAvailableDetail">0 % del total</small></article>
+                                <article><span>COMPROMETIDOS EN CARGA</span><strong id="productCommittedMetric">0</strong><small id="productCommittedDetail">0 cargas</small></article>
+                                <article><span>OCUPACIÓN DE CÁMARAS PT</span><strong id="productOccupancyMetric">0 %</strong><small id="productOccupancyDetail">0 de 0 posiciones operativas</small></article>
                             </div>
-                            <div class="management-operational-metrics">
-                                <article><span>PALLETS</span><strong id="productPalletsMetric">0</strong><small>folios completos activos</small></article>
-                                <article><span>SALDOS</span><strong id="productBalancesMetric">0</strong><small>folios incompletos activos</small></article>
-                                <article><span>SIN UBICACIÓN</span><strong id="productUnlocatedMetric">0</strong><small>requieren posición</small></article>
-                                <article><span>INGRESADOS HOY</span><strong id="productEnteredTodayMetric">0</strong><small>nuevos folios PT</small></article>
+                            <section class="management-products__states" aria-label="Distribución de estados PT">
+                                <h3>Estados de folios</h3>
+                                <div id="productStateBar" class="management-products__state-bar" role="img" aria-label="Sin folios PT activos"></div>
+                                <div id="productStateLegend" class="management-products__legend"></div>
+                            </section>
+                            <div class="management-products__bottom">
+                                <section class="management-products__exceptions" aria-label="Folios que requieren acción">
+                                    <h3>Requieren acción</h3>
+                                    <div class="management-products__exception"><span>Sin ubicación</span><strong id="productUnlocatedMetric">0</strong></div>
+                                    <div class="management-products__exception"><span>Bloqueados</span><strong id="productBlockedMetric">0</strong></div>
+                                    <a class="management-products__exception" href="/oficina/prefrio"><span>Pendientes de prefrío</span><strong id="productPendingPrecoolingMetric">0</strong></a>
+                                </section>
+                                <section class="management-products__aging" aria-label="Antigüedad de folios PT desde el ingreso">
+                                    <h3>Antigüedad desde ingreso <small id="productAgingThreshold"></small></h3>
+                                    <div id="productAgingRows" class="management-products__aging-rows"></div>
+                                    <p id="productUndated" class="management-products__undated" hidden></p>
+                                </section>
                             </div>
                         </div>
                     </article>

@@ -88,6 +88,8 @@ class Folio extends Model implements PerteneceATemporada
 
     public function asignacionCargaActual(): HasOne
     {
+        // Gerencia replica este criterio en el EXISTS agregado de ServicioPanelGerencial::productos().
+        // Si cambia qué significa reserva activa, actualizar allí también el conteo de comprometidos.
         return $this->hasOne(CargaFolio::class)
             ->whereHas('reservaActiva');
     }
