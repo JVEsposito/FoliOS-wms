@@ -4,7 +4,10 @@ namespace Tests\Feature\Api;
 
 use App\Enums\CondicionTermicaFolio;
 use App\Enums\EstadoFolioProcesoPrefrio;
+use App\Enums\EstadoManiobraOperacional;
 use App\Enums\EstadoOperacionalFolio;
+use App\Enums\EstadoPlanOperacional;
+use App\Enums\EstadoTareaMovimiento;
 use App\Enums\HabilitacionAlmacenamientoFolio;
 use App\Enums\RolUsuario;
 use App\Enums\TipoBulto;
@@ -17,6 +20,7 @@ use App\Models\Temporada;
 use App\Models\TunelPrefrio;
 use App\Models\User;
 use App\Services\Estiba\ServicioConfirmacionInicioTarea;
+use App\Services\Planificador\ServicioConciliacionPalletsHistoricos;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Str;
@@ -101,6 +105,23 @@ class ConciliacionPalletsHistoricosPlanificadorTest extends TestCase
             'cargado_at' => now()->subDay(),
             'cargado_por_user_id' => $usuario->id,
         ]);
+        Folio::create([
+            'temporada_id' => $elegible->temporada_id,
+            'numero_folio' => 'SAL-SIN-UBICACION',
+            'tipo_bulto' => TipoBulto::Saldo,
+            'estado_operacional' => EstadoOperacionalFolio::PendienteUbicacion,
+            'activo' => true,
+            'fecha_ingreso' => now(),
+        ]);
+
+        $diagnostico = app(ServicioConciliacionPalletsHistoricos::class)
+            ->diagnosticar($elegible->temporada);
+        $this->assertSame(2, $diagnostico['requieren_revision']);
+        $this->assertSame(1, $diagnostico['saldos_sin_objetivo']);
+        $this->assertSame(['SAL-SIN-UBICACION'], $diagnostico['saldos']);
+        $motivos = collect($diagnostico['folios_revision'])->keyBy('folio');
+        $this->assertContains('sin_prefrio_aprobado_temporada', $motivos['PAL-SIN-PREFRIO']['motivos']);
+        $this->assertContains('no_habilitado', $motivos['PAL-PENDIENTE']['motivos']);
 
         $this->assertSame(0, Artisan::call('planificador:conciliar-pallets', [
             '--aplicar' => true,
@@ -109,6 +130,26 @@ class ConciliacionPalletsHistoricosPlanificadorTest extends TestCase
         $this->assertDatabaseCount('planes_operacionales', 1);
         $this->assertDatabaseMissing('tareas_movimiento', ['folio_id' => $sinPrefrio->id]);
         $this->assertDatabaseMissing('tareas_movimiento', ['folio_id' => $bloqueado->id]);
+    }
+
+    public function test_una_tarea_cancelada_no_impide_conciliar_otra_vez_el_pallet(): void
+    {
+        $this->habilitarPlanificador();
+        [$usuario, $folio] = $this->crearPalletHistorico();
+        $argumentos = ['--aplicar' => true, '--usuario' => (string) $usuario->id];
+        $this->assertSame(0, Artisan::call('planificador:conciliar-pallets', $argumentos));
+        $anterior = PlanOperacional::query()->firstOrFail();
+        $anterior->tareas()->update(['estado' => EstadoTareaMovimiento::Cancelada->value]);
+        $anterior->maniobras()->update(['estado' => EstadoManiobraOperacional::Cancelada->value]);
+        $anterior->update(['estado' => EstadoPlanOperacional::Cancelado]);
+
+        $this->assertSame(1, app(ServicioConciliacionPalletsHistoricos::class)
+            ->diagnosticar($folio->temporada)['total']);
+        $this->assertSame(0, Artisan::call('planificador:conciliar-pallets', $argumentos));
+        $this->assertSame(2, PlanOperacional::query()->where('referencia_id', $folio->id)->count());
+        $this->assertSame([1, 2], PlanOperacional::query()->where('referencia_id', $folio->id)
+            ->orderBy('ciclo_referencia')->pluck('ciclo_referencia')->all());
+        $this->assertSame(1, $folio->tareasMovimiento()->where('estado', EstadoTareaMovimiento::Pendiente->value)->count());
     }
 
     public function test_se_niega_a_escribir_si_no_hay_modo_dirigido_o_supervisor_activo(): void

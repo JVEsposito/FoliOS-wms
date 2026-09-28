@@ -19,7 +19,7 @@ use Illuminate\Support\Facades\DB;
 
 class ServicioArbitrajeManiobras
 {
-    private const VERSION_REGLAS = 'arbitraje_global_v4_explicabilidad';
+    private const VERSION_REGLAS = 'arbitraje_global_v5_pausa_fisica';
 
     public function __construct(
         private readonly ServicioDesplieguePlanificador $despliegue,
@@ -269,8 +269,7 @@ class ServicioArbitrajeManiobras
                 return false;
             }
 
-            return $maniobra->estado === EstadoManiobraOperacional::PausadaDiscrepancia
-                || $this->realidadFisicaIniciada($maniobra)
+            return $this->realidadFisicaIniciada($maniobra)
                 || ($maniobra->estado === EstadoManiobraOperacional::EnEjecucion
                     && ! $this->fueraRollout($maniobra, $camarasRollout));
         });
@@ -311,7 +310,11 @@ class ServicioArbitrajeManiobras
                 $factorDecisivo = 'pausa_supervision';
                 $motivo = 'La maniobra permanece pausada por supervisión antes de iniciar.';
             } elseif ($maniobra->estado === EstadoManiobraOperacional::PausadaDiscrepancia
-                || $realidadFisicaIniciada
+                && ! $realidadFisicaIniciada) {
+                $decision = DecisionArbitrajeManiobra::FueraFrontera;
+                $factorDecisivo = 'pausa_discrepancia_sin_retiro';
+                $motivo = 'La discrepancia se reportó antes del retiro: la maniobra espera supervisión y libera el cupo.';
+            } elseif ($realidadFisicaIniciada
                 || ($maniobra->estado === EstadoManiobraOperacional::EnEjecucion
                     && ! $fueraRollout)) {
                 $decision = DecisionArbitrajeManiobra::EnEjecucion;
@@ -385,10 +388,8 @@ class ServicioArbitrajeManiobras
     private function vectorOrden(ManiobraOperacional $maniobra): array
     {
         return [
-            in_array($maniobra->estado, [
-                EstadoManiobraOperacional::EnEjecucion,
-                EstadoManiobraOperacional::PausadaDiscrepancia,
-            ], true) ? 1 : 0,
+            ($maniobra->estado === EstadoManiobraOperacional::EnEjecucion
+                || $this->realidadFisicaIniciada($maniobra)) ? 1 : 0,
             $maniobra->prioridad->peso(),
             $this->pesoObjetivo($maniobra),
             $this->beneficioNeto($maniobra),
@@ -549,10 +550,10 @@ class ServicioArbitrajeManiobras
 
     private function realidadFisicaIniciada(ManiobraOperacional $maniobra): bool
     {
-        return $maniobra->estado === EstadoManiobraOperacional::PausadaDiscrepancia
-            || $maniobra->pasos->contains(
-                fn ($paso): bool => $paso->estado === EstadoTareaMovimiento::EnProceso,
-            )
+        // custodiasTemporales se carga filtrada por estado activa en maniobrasVigentes().
+        return $maniobra->pasos->contains(
+            fn ($paso): bool => $paso->estado === EstadoTareaMovimiento::EnProceso,
+        )
             || $maniobra->custodiasTemporales->isNotEmpty();
     }
 

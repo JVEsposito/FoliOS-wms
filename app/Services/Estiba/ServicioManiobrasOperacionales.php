@@ -898,20 +898,6 @@ class ServicioManiobrasOperacionales
             );
         }
 
-        $usuario = User::query()
-            ->whereKey($maniobra->responsable_user_id)
-            ->where('activo', true)
-            ->first();
-        $dispositivo = Dispositivo::query()
-            ->whereKey($maniobra->dispositivo_id)
-            ->where('activo', true)
-            ->first();
-        if (! $usuario || ! $dispositivo) {
-            throw new ConflictoOperacion(
-                'La maniobra perdió su camarero o tablet activa y requiere reasignación supervisada.',
-            );
-        }
-
         $siguiente->update([
             'estado' => EstadoTareaMovimiento::Pendiente,
             'responsable_user_id' => null,
@@ -920,20 +906,44 @@ class ServicioManiobrasOperacionales
             'iniciada_at' => null,
             'version' => $siguiente->version + 1,
         ]);
-        $maniobra->loadMissing('reservasBandas');
-        $this->bloquearBandas($maniobra);
+        $custodiaActiva = $maniobra->custodiasTemporales()
+            ->where('estado', EstadoCustodiaTemporal::Activa->value)
+            ->lockForUpdate()
+            ->exists();
+        if ($custodiaActiva) {
+            // Ya hubo un retiro físico: el siguiente paso conserva la continuidad
+            // del mismo actor y su destino, como antes de la pausa.
+            $usuario = User::query()->whereKey($maniobra->responsable_user_id)
+                ->where('activo', true)->first();
+            $dispositivo = Dispositivo::query()->whereKey($maniobra->dispositivo_id)
+                ->where('activo', true)->first();
+            if (! $usuario || ! $dispositivo) {
+                throw new ConflictoOperacion(
+                    'La maniobra perdió su camarero o tablet activa y requiere reasignación supervisada.',
+                );
+            }
+            $maniobra->loadMissing('reservasBandas');
+            $this->bloquearBandas($maniobra);
+            $maniobra->update([
+                'estado' => EstadoManiobraOperacional::EnEjecucion,
+                'pausada_at' => null,
+                'secuencia_actual' => $siguiente->secuencia_maniobra,
+                'version' => $maniobra->version + 1,
+            ]);
+            $this->reservas->asumir($siguiente->refresh(), $usuario, $dispositivo);
+            $this->materializarDestinoPrecalculado($siguiente->refresh(), $usuario, $dispositivo);
+
+            return;
+        }
         $maniobra->update([
-            'estado' => EstadoManiobraOperacional::EnEjecucion,
+            'estado' => EstadoManiobraOperacional::Pendiente,
             'pausada_at' => null,
             'secuencia_actual' => $siguiente->secuencia_maniobra,
+            'responsable_user_id' => null,
+            'dispositivo_id' => null,
+            'asumida_at' => null,
             'version' => $maniobra->version + 1,
         ]);
-        $this->reservas->asumir($siguiente->refresh(), $usuario, $dispositivo);
-        $this->materializarDestinoPrecalculado(
-            $siguiente->refresh(),
-            $usuario,
-            $dispositivo,
-        );
     }
 
     private function replanificarTrasDiscrepancia(

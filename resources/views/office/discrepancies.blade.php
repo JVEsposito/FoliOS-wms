@@ -42,6 +42,7 @@
                 <section class="discrepancies-metrics" aria-label="Resumen de discrepancias">
                     <article class="eui-panel"><span>ABIERTAS</span><strong id="openDiscrepanciesCount">0</strong><small>requieren decisión</small></article>
                     <article class="eui-panel"><span>RESUELTAS</span><strong id="resolvedDiscrepanciesCount">0</strong><small>temporada activa</small></article>
+                    <article class="eui-panel"><span>PALLETS NO ENCONTRADOS</span><strong id="missingPalletsCount">0</strong><small>abiertas · localizar físicamente</small></article>
                 </section>
 
                 <section class="eui-panel discrepancies-panel">
@@ -52,6 +53,13 @@
                                 <option value="abierta">Abiertas</option>
                                 <option value="resuelta">Resueltas</option>
                                 <option value="todas">Todas</option>
+                            </select>
+                        </label>
+                        <label>
+                            <span>Tipo</span>
+                            <select class="eui-input" name="tipo">
+                                <option value="">Todos</option>
+                                <option value="pallet_no_encontrado">Pallet no encontrado</option>
                             </select>
                         </label>
                         <label class="discrepancies-search">

@@ -36,6 +36,13 @@ final class ConciliarPalletsHistoricosPlanificador extends Command
         foreach ($diagnostico['folios'] as $folio) {
             $this->line($folio);
         }
+        foreach ($diagnostico['folios_revision'] as $revision) {
+            $this->line("Revisión {$revision['folio']}: ".implode(', ', $revision['motivos']));
+        }
+        $this->line("Saldos sin ubicación ni objetivo: {$diagnostico['saldos_sin_objetivo']}.");
+        foreach ($diagnostico['saldos'] as $saldo) {
+            $this->line("Saldo {$saldo}");
+        }
 
         if (! $this->option('aplicar')) {
             $this->components->info('Vista previa: no se crearon tareas.');

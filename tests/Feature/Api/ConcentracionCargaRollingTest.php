@@ -779,19 +779,19 @@ class ConcentracionCargaRollingTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.estado', 'resuelta')
             ->assertJsonPath('data.accion_resolucion', 'reanudar_maniobra')
-            ->assertJsonPath('data.maniobra.estado', 'en_ejecucion')
-            ->assertJsonPath('data.tarea.estado', 'asumida');
+            ->assertJsonPath('data.maniobra.estado', 'pendiente')
+            ->assertJsonPath('data.tarea.estado', 'pendiente');
         $resueltaAt = $respuesta->json('data.resuelta_at');
 
-        $this->assertSame($operador->id, $tarea->refresh()->responsable_user_id);
-        $this->assertSame($dispositivo->id, $tarea->dispositivo_id);
-        $this->assertNotNull($tarea->reservaActiva()->first());
+        $this->assertNull($tarea->refresh()->responsable_user_id);
+        $this->assertNull($tarea->dispositivo_id);
+        $this->assertNull($tarea->reservaActiva()->first());
+        $this->assertNull($tarea->maniobraOperacional->refresh()->responsable_user_id);
+        $this->assertNull($tarea->maniobraOperacional->dispositivo_id);
         $this->actingAs($operador, 'sanctum')
             ->getJson('/api/tareas-movimiento?asignacion=mias')
             ->assertOk()
-            ->assertJsonPath('data.0.id', $tarea->id)
-            ->assertJsonPath('data.0.estado', 'asumida')
-            ->assertJsonPath('data.0.maniobra.estado', 'en_ejecucion');
+            ->assertJsonMissing(['id' => $tarea->id]);
         $this->assertDatabaseHas('discrepancias_maniobra', [
             'id' => $discrepancia->id,
             'accion_resolucion' => 'reanudar_maniobra',

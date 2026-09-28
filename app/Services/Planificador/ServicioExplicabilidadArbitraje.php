@@ -278,6 +278,7 @@ final class ServicioExplicabilidadArbitraje
         return match ($factor) {
             'fuera_planificador' => 'Flujo independiente',
             'pausa_supervision' => 'Pausa de supervisión',
+            'pausa_discrepancia_sin_retiro' => 'Discrepancia antes del retiro',
             'realidad_fisica_iniciada' => 'Realidad física iniciada',
             'fuera_rollout' => 'Fuera del rollout dirigido',
             'objetivo_pausado' => 'Objetivo pausado',

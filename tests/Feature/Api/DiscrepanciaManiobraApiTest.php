@@ -96,6 +96,23 @@ class DiscrepanciaManiobraApiTest extends TestCase
             ->assertJsonPath('data.0.tarea.destino.posicion', 'B01-P02-N1');
     }
 
+    public function test_distingue_pallet_no_encontrado_en_resumen_y_filtro(): void
+    {
+        $supervisor = User::factory()->create(['rol' => RolUsuario::SupervisorFrio, 'activo' => true]);
+        $temporada = Temporada::query()->where('activa', true)->firstOrFail();
+        $noEncontrado = $this->crearDiscrepancia($temporada, 'PAL-PERDIDO');
+        $noEncontrado->update(['tipo' => 'pallet_no_encontrado']);
+        $this->crearDiscrepancia($temporada, 'PAL-OTRO');
+
+        $this->actingAs($supervisor, 'sanctum')
+            ->getJson('/api/discrepancias-maniobra?tipo=pallet_no_encontrado')
+            ->assertOk()
+            ->assertJsonPath('resumen.abiertas', 2)
+            ->assertJsonPath('resumen.pallets_no_encontrados', 1)
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.id', $noEncontrado->id);
+    }
+
     public function test_valida_los_filtros_de_la_bandeja(): void
     {
         $supervisor = User::factory()->create([

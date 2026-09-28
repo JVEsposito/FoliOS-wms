@@ -114,7 +114,7 @@ class ArbitrajeGlobalManiobrasTest extends TestCase
         $explicacionEmergencia = $decisiones[$emergencia->id]->explicacion;
         $this->assertSame(1, $explicacionEmergencia['version']);
         $this->assertSame(
-            'arbitraje_global_v4_explicabilidad',
+            'arbitraje_global_v5_pausa_fisica',
             $explicacionEmergencia['reglas'],
         );
         $this->assertSame(
@@ -312,6 +312,57 @@ class ArbitrajeGlobalManiobrasTest extends TestCase
             $iniciada->id,
             $decisiones[$urgente->id]->conflictos[0]['maniobra_id'],
         );
+    }
+
+    public function test_pausa_antes_del_retiro_libera_cupo_y_pausa_con_retiro_lo_conserva(): void
+    {
+        config(['planificador.maniobras_simultaneas_max' => 1]);
+        $contexto = $this->crearContexto();
+        $pausada = $this->crearManiobra(
+            $contexto, 0, TipoPlanOperacional::ConcentracionCarga, PrioridadOperacional::Critica, 100,
+        );
+        $siguiente = $this->crearManiobra(
+            $contexto, 1, TipoPlanOperacional::ConcentracionCarga, PrioridadOperacional::Normal, 100,
+        );
+        $pausada->update(['estado' => EstadoManiobraOperacional::PausadaDiscrepancia, 'version' => 2]);
+        $paso = $pausada->pasos()->sole();
+        $paso->update(['estado' => EstadoTareaMovimiento::Bloqueada, 'version' => 2]);
+
+        $servicio = app(ServicioArbitrajeManiobras::class);
+        $decisiones = $servicio->arbitrar($contexto['temporada'])->decisiones->keyBy('maniobra_operacional_id');
+        $this->assertSame(DecisionArbitrajeManiobra::FueraFrontera, $decisiones[$pausada->id]->decision);
+        $this->assertSame('pausa_discrepancia_sin_retiro', $decisiones[$pausada->id]->explicacion['factor_decisivo']['codigo']);
+        $this->assertSame(DecisionArbitrajeManiobra::Seleccionada, $decisiones[$siguiente->id]->decision);
+
+        $paso->update(['estado' => EstadoTareaMovimiento::EnProceso, 'version' => 3]);
+        $decisiones = $servicio->arbitrar($contexto['temporada'])->decisiones->keyBy('maniobra_operacional_id');
+        $this->assertSame(DecisionArbitrajeManiobra::EnEjecucion, $decisiones[$pausada->id]->decision);
+        $this->assertSame(1, $decisiones[$pausada->id]->explicacion['capacidad']['ocupantes_fisicos']);
+        $this->assertSame(DecisionArbitrajeManiobra::Alternativa, $decisiones[$siguiente->id]->decision);
+    }
+
+    public function test_la_tablet_puede_reportar_pallet_no_encontrado_antes_del_retiro(): void
+    {
+        $contexto = $this->crearContexto();
+        $maniobra = $this->crearManiobra(
+            $contexto, 0, TipoPlanOperacional::ConcentracionCarga, PrioridadOperacional::Alta, 100,
+        );
+        $tarea = $maniobra->pasos()->sole();
+        app(ServicioPlanesOperacionales::class)->asumir(
+            $tarea, $contexto['camarero'], $contexto['dispositivo'],
+        );
+
+        $this->conToken($contexto['token'])
+            ->postJson("/api/tareas-movimiento/{$tarea->id}/no-coincide", [
+                'tipo' => 'pallet_no_encontrado',
+                'detalle' => 'El pallet no se encuentra en la zona de retiro.',
+            ])
+            ->assertStatus(202)
+            ->assertJsonPath('data.estado', 'abierta');
+        $this->assertDatabaseHas('discrepancias_maniobra', [
+            'tarea_movimiento_id' => $tarea->id,
+            'tipo' => 'pallet_no_encontrado',
+        ]);
     }
 
     public function test_rollout_excluye_maniobras_fuera_de_camara_sin_consumir_la_frontera(): void

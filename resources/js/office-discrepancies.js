@@ -5,6 +5,7 @@ const elements = {
     app: byId('discrepanciesApp'), reload: byId('discrepanciesReload'),
     filters: byId('discrepanciesFilters'), clear: byId('discrepanciesClear'),
     open: byId('openDiscrepanciesCount'), resolved: byId('resolvedDiscrepanciesCount'),
+    missing: byId('missingPalletsCount'),
     results: byId('discrepanciesResults'), error: byId('discrepanciesError'),
     list: byId('discrepanciesList'), previous: byId('discrepanciesPrevious'),
     next: byId('discrepanciesNext'), page: byId('discrepanciesPage'),
@@ -35,6 +36,7 @@ function escapeHtml(value) {
         .replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
 }
 function statusText(value) {
+    if (value === 'pallet_no_encontrado') return 'Pallet no encontrado';
     return String(value || '').replaceAll('_', ' ').replace(/^./, (letter) => letter.toUpperCase());
 }
 function formatDate(value) {
@@ -146,6 +148,7 @@ function render() {
     const meta = response.meta || {};
     elements.open.textContent = String(response.resumen?.abiertas || 0);
     elements.resolved.textContent = String(response.resumen?.resueltas || 0);
+    elements.missing.textContent = String(response.resumen?.pallets_no_encontrados || 0);
     elements.results.textContent = `${meta.total || 0} ${Number(meta.total) === 1 ? 'registro' : 'registros'}`;
     elements.list.innerHTML = items.length
         ? items.map(renderCard).join('')
