@@ -161,66 +161,6 @@ function orderToast(message, error = false) {
     window.setTimeout(() => node.remove(), 4500);
 }
 
-function injectOrderStyles() {
-    if (document.getElementById('materialsOrderStyles')) return;
-    const style = document.createElement('style');
-    style.id = 'materialsOrderStyles';
-    style.textContent = `
-        .materials-orders-panel { margin-top: 1.25rem; }
-        .materials-order-metrics { display: grid; grid-template-columns: repeat(5, minmax(120px, 1fr)); gap: .65rem; margin-bottom: 1rem; }
-        .materials-order-metrics article { border: 1px solid var(--line, rgba(255,255,255,.12)); border-radius: 11px; background: rgba(255,255,255,.025); padding: .75rem; }
-        .materials-order-metrics span { display: block; color: var(--muted); font-size: .61rem; font-weight: 900; letter-spacing: .06em; }
-        .materials-order-metrics strong { display: block; margin-top: .25rem; font-size: 1.35rem; }
-        .materials-orders-layout { display: grid; grid-template-columns: minmax(310px, .72fr) minmax(520px, 1.28fr); gap: 1rem; align-items: start; }
-        .materials-order-form { border: 1px solid var(--line, rgba(255,255,255,.12)); border-radius: 14px; background: rgba(255,255,255,.025); padding: 1rem; }
-        .materials-order-form.is-hidden { display: none; }
-        .materials-order-requirements { display: grid; gap: .5rem; margin-top: .75rem; }
-        .materials-order-requirement { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .75rem; border: 1px solid var(--line, rgba(255,255,255,.12)); border-radius: 9px; background: var(--deep); padding: .65rem; }
-        .materials-order-requirement strong, .materials-order-requirement small { display: block; }
-        .materials-order-requirement small { margin-top: .2rem; color: var(--muted); }
-        .materials-order-requirement__stock { text-align: right; color: var(--cyan-light); }
-        .materials-order-requirement--short .materials-order-requirement__stock { color: #ff9ba4; }
-        .materials-order-browser { min-width: 0; }
-        .materials-order-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .55rem; margin-bottom: .75rem; }
-        .materials-order-filters input, .materials-order-filters select { min-height: 40px; width: 100%; border: 1px solid var(--line); border-radius: 8px; background: var(--deep); color: var(--text); padding: 9px; }
-        .materials-order-list { display: grid; gap: .75rem; max-height: 980px; overflow: auto; padding-right: .2rem; }
-        .materials-order-card { border: 1px solid var(--line, rgba(255,255,255,.12)); border-radius: 14px; background: rgba(255,255,255,.025); padding: 1rem; }
-        .materials-order-card__header { display: flex; justify-content: space-between; gap: .8rem; align-items: start; }
-        .materials-order-card__header h3 { margin: 0 0 .2rem; font-size: 1rem; }
-        .materials-order-card__header small { color: var(--muted); }
-        .materials-order-status { border: 1px solid var(--line); border-radius: 999px; padding: .3rem .55rem; color: var(--cyan-light); font-size: .64rem; font-weight: 900; white-space: nowrap; text-transform: uppercase; }
-        .materials-order-status--borrador { color: var(--muted); }
-        .materials-order-status--en_proceso, .materials-order-status--pendiente_cierre { color: #f3b94f; }
-        .materials-order-status--cerrada { color: #55d889; }
-        .materials-order-status--cancelada { color: #ff9ba4; }
-        .materials-order-progress { height: 6px; overflow: hidden; margin: .8rem 0 .35rem; border-radius: 999px; background: var(--deep); }
-        .materials-order-progress i { display: block; height: 100%; border-radius: inherit; background: var(--cyan); }
-        .materials-order-meta { display: flex; flex-wrap: wrap; gap: .42rem; margin: .65rem 0; }
-        .materials-order-meta span { border: 1px solid var(--line); border-radius: 999px; padding: .25rem .5rem; font-size: .7rem; }
-        .materials-order-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .5rem; margin-top: .75rem; }
-        .materials-order-details { margin-top: .75rem; border-top: 1px solid var(--line); padding-top: .65rem; }
-        .materials-order-details summary { cursor: pointer; color: var(--cyan-light); font-size: .74rem; font-weight: 800; }
-        .materials-order-table-wrap { overflow: auto; margin-top: .65rem; }
-        .materials-order-table { width: 100%; border-collapse: collapse; font-size: .72rem; }
-        .materials-order-table th, .materials-order-table td { border-top: 1px solid var(--line); padding: .48rem .35rem; text-align: left; vertical-align: top; }
-        .materials-order-table th { color: var(--muted); }
-        .materials-order-table small { display: block; margin-top: .16rem; color: var(--muted); }
-        .materials-order-audit { display: grid; gap: .4rem; margin-top: .75rem; }
-        .materials-order-audit div { border-left: 2px solid var(--line); padding-left: .6rem; color: var(--muted); font-size: .68rem; }
-        .materials-order-empty { margin: 0; border: 1px dashed var(--line); border-radius: 11px; padding: 1rem; color: var(--muted); }
-        @media (max-width: 1100px) {
-            .materials-orders-layout { grid-template-columns: 1fr; }
-            .materials-order-metrics { grid-template-columns: repeat(3, 1fr); }
-        }
-        @media (max-width: 700px) {
-            .materials-order-metrics, .materials-order-filters { grid-template-columns: 1fr 1fr; }
-            .materials-order-filters input { grid-column: 1 / -1; }
-            .materials-order-card__header { flex-direction: column; }
-        }
-    `;
-    document.head.append(style);
-}
-
 function injectOrderPanel() {
     if (document.getElementById('materialsTransformationOrdersPanel')) return;
     const workspace = document.querySelector('.materials-workspace');
@@ -873,7 +813,6 @@ function loadOrdersOffice(showErrors = false) {
 }
 
 function bootMaterialOrders() {
-    injectOrderStyles();
     injectOrderPanel();
     if (!orderElements.panel) return;
     if (!orderSectionIsActive()) return;
