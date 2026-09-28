@@ -135,6 +135,31 @@ class DefectoRecepcionMpApiTest extends TestCase
             ->getJson($base.'/exportaciones/zip'.$filtro)->assertForbidden();
     }
 
+    public function test_admite_fotos_de_cinco_mib_pero_rechaza_las_mayores_en_defecto_y_guia(): void
+    {
+        Storage::fake('local');
+        [$recepcion] = $this->prepararRecepcionTomada();
+        $ruta = "/api/validacion-mp/recepciones/{$recepcion['id']}/defectos";
+
+        $dentroDelLimite = $this->entrada((string) Str::uuid());
+        $dentroDelLimite['fotografias'] = [UploadedFile::fake()->image('defecto.jpg')->size(5120)];
+        $dentroDelLimite['fotografia_guia'] = UploadedFile::fake()->image('guia.jpg')->size(5120);
+        $this->post($ruta, $dentroDelLimite, ['Accept' => 'application/json'])
+            ->assertCreated()->assertJsonCount(2, 'data.evidencias');
+
+        $defectoExcesivo = $this->entrada((string) Str::uuid());
+        $defectoExcesivo['fotografias'] = [UploadedFile::fake()->image('defecto.jpg')->size(5121)];
+        $this->post($ruta, $defectoExcesivo, ['Accept' => 'application/json'])
+            ->assertUnprocessable()->assertJsonValidationErrors(['fotografias.0']);
+
+        $guiaExcesiva = $this->entrada((string) Str::uuid());
+        $guiaExcesiva['fotografia_guia'] = UploadedFile::fake()->image('guia.jpg')->size(5121);
+        $this->post($ruta, $guiaExcesiva, ['Accept' => 'application/json'])
+            ->assertUnprocessable()->assertJsonValidationErrors(['fotografia_guia']);
+
+        $this->assertDatabaseCount('defectos_recepcion_mp', 1);
+    }
+
     public function test_rechaza_defectos_sin_evidencia_fotografica(): void
     {
         Storage::fake('local');

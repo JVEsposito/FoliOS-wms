@@ -16,7 +16,7 @@ const categories: Array<{ value: ReceptionDefectCategory; label: string }> = [
   { value: 'otro', label: 'Otro defecto' },
 ];
 const containers: ReceptionDefectContainer[] = ['bins', 'totes', 'esponjas'];
-const maximumPhotoBytes = 1536 * 1024;
+const maximumPhotoBytes = 5 * 1024 * 1024;
 
 function blankDraft(): ReceptionDefectDraft {
   return { operacionId: Crypto.randomUUID(), categoria: 'envase_danado', tipoEnvase: null,
@@ -29,7 +29,7 @@ function asPhoto(asset: ImagePicker.ImagePickerAsset): ReceptionDefectPhoto {
     throw new Error('La foto debe ser JPG, PNG o WebP. Toma otra foto con la cámara.');
   }
   if (asset.fileSize && asset.fileSize > maximumPhotoBytes) {
-    throw new Error('La foto supera 1,5 MB. Elige otra imagen o vuelve a tomarla.');
+    throw new Error(`La foto pesa ${(asset.fileSize / 1024 / 1024).toFixed(1)} MB y supera el máximo de 5 MB. Elige otra imagen o vuelve a tomarla.`);
   }
   return { uri: asset.uri, name: `recepcion-${Crypto.randomUUID()}.${type === 'image/png' ? 'png' : type === 'image/webp' ? 'webp' : 'jpg'}`, type, fileSize: asset.fileSize };
 }
@@ -124,7 +124,7 @@ export function ReceptionDefectsPanel({ baseUrl, token, receptionId, guideNumber
       <TextInput editable={!sending && !uncertain} keyboardType="number-pad" onChangeText={(value) => change({ cantidadAfectada: value.replace(/\D/g, '') })} placeholder="Ej. 2" placeholderTextColor={colors.muted} style={styles.input} value={draft.cantidadAfectada}/>
       <Text style={styles.muted}>Descripción del defecto *</Text>
       <TextInput editable={!sending && !uncertain} maxLength={2000} multiline onChangeText={(value) => change({ descripcion: value })} placeholder="Describe qué se encontró y dónde" placeholderTextColor={colors.muted} style={[styles.input, styles.description]} textAlignVertical="top" value={draft.descripcion}/>
-      <Text style={styles.muted}>Fotos del defecto * ({draft.fotografias.length}/3, hasta 1,5 MB cada una)</Text>
+      <Text style={styles.muted}>Fotos del defecto * ({draft.fotografias.length}/3, hasta 5 MB cada una)</Text>
       <View style={styles.options}><Pressable disabled={sending || uncertain || draft.fotografias.length >= 3} onPress={() => void pickPhoto(false, true)} style={styles.outline}><Text style={styles.outlineText}>Tomar foto</Text></Pressable><Pressable disabled={sending || uncertain || draft.fotografias.length >= 3} onPress={() => void pickPhoto(false, false)} style={styles.outline}><Text style={styles.outlineText}>Elegir imagen</Text></Pressable></View>
       <View style={styles.previews}>{draft.fotografias.map((photo, index) => <View key={photo.uri} style={styles.preview}><Image source={{ uri: photo.uri }} style={styles.photo}/><Pressable disabled={sending || uncertain} onPress={() => change({ fotografias: draft.fotografias.filter((_, position) => position !== index) })}><Text style={styles.remove}>Quitar foto {index + 1}</Text></Pressable></View>)}</View>
       <Text style={styles.muted}>Foto de la guía (opcional)</Text>

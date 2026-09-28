@@ -32,6 +32,8 @@ class DefectoRecepcionMpController extends Controller
 {
     private const CATEGORIAS = ['envase_danado', 'envase_sucio', 'producto_danado', 'otro'];
 
+    private const MAX_FOTO_KIB = 5120;
+
     public function porRecepcion(Request $request, RecepcionRomana $recepcion): JsonResponse
     {
         $this->asegurarTemporadaActiva($recepcion);
@@ -61,8 +63,8 @@ class DefectoRecepcionMpController extends Controller
             'cantidad_afectada' => ['nullable', 'integer', 'min:1', 'max:100000'],
             'descripcion' => ['required', 'string', 'max:2000'],
             'fotografias' => ['required', 'array', 'min:1', 'max:3'],
-            'fotografias.*' => ['required', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:1536'],
-            'fotografia_guia' => ['nullable', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:1536'],
+            'fotografias.*' => ['required', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:'.self::MAX_FOTO_KIB],
+            'fotografia_guia' => ['nullable', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:'.self::MAX_FOTO_KIB],
         ]);
 
         $hash = $this->hashPeticion($datos);
