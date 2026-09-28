@@ -1,7 +1,7 @@
 import Chart from 'chart.js/auto';
 import { createOperationalPoller } from './shared/operational-poller';
 import { productStateSegments } from './shared/management-product-states';
-import { readManagementChartPalette } from './shared/management-chart-theme';
+import { readManagementChartPaletteSafely } from './shared/management-chart-theme';
 
 const byId = (id) => document.getElementById(id);
 
@@ -143,7 +143,23 @@ const state = {
     charts: new Map(),
 };
 
-let palette;
+const defaultChartColor = Chart.defaults.color;
+const fallbackPalette = {
+    cyan: defaultChartColor,
+    cyanLight: defaultChartColor,
+    blue: defaultChartColor,
+    purple: defaultChartColor,
+    green: defaultChartColor,
+    amber: defaultChartColor,
+    red: defaultChartColor,
+    quiet: defaultChartColor,
+    muted: defaultChartColor,
+    grid: Chart.defaults.borderColor,
+    tooltipBg: Chart.defaults.plugins.tooltip.backgroundColor,
+    tooltipBorder: Chart.defaults.borderColor,
+    tooltipText: Chart.defaults.plugins.tooltip.bodyColor,
+};
+let palette = fallbackPalette;
 
 class ApiError extends Error {
     constructor(message, status) {
@@ -155,7 +171,7 @@ class ApiError extends Error {
 Chart.defaults.font.family = 'Inter, ui-sans-serif, system-ui, sans-serif';
 
 function applyChartTheme() {
-    palette = readManagementChartPalette();
+    palette = readManagementChartPaletteSafely(palette, fallbackPalette);
     Chart.defaults.color = palette.muted;
     Chart.defaults.borderColor = palette.grid;
     Object.assign(Chart.defaults.plugins.tooltip, {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { createManagementChartPalette, normalizeComputedRgb, withAlpha } from '../../resources/js/shared/management-chart-theme.js';
+import { createManagementChartPalette, normalizeComputedRgb, readManagementChartPaletteSafely, withAlpha } from '../../resources/js/shared/management-chart-theme.js';
 
 test('withAlpha acepta RGB computado con comas y espacios y rechaza un token sin resolver', () => {
     assert.equal(withAlpha('rgb(31, 68, 95)', 0.25), 'rgba(31, 68, 95, 0.25)');
@@ -32,6 +32,17 @@ test('la paleta usa series del tema, grilla atenuada y tooltip legible', () => {
     assert.equal(palette.grid, 'rgba(100, 120, 140, 0.45)');
     assert.equal(palette.tooltipBg, colors.chartTooltipBg);
     assert.equal(palette.tooltipText, colors.textStrong);
+});
+
+test('un token incompatible conserva la paleta anterior o los valores por defecto en la primera carga', () => {
+    const fallback = { blue: 'Chart.js default' };
+    const previous = { blue: 'tema anterior' };
+    const next = { blue: 'tema nuevo' };
+    const incompatible = () => { throw new TypeError('Formato de color no compatible'); };
+
+    assert.equal(readManagementChartPaletteSafely(null, fallback, incompatible), fallback);
+    assert.equal(readManagementChartPaletteSafely(previous, fallback, incompatible), previous);
+    assert.equal(readManagementChartPaletteSafely(previous, fallback, () => next), next);
 });
 
 test('los cuatro temas tienen tokens propios y gerencia no reintroduce literales ni el plugin de la dona', () => {

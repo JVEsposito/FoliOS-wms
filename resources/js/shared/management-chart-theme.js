@@ -76,3 +76,11 @@ export function readManagementChartPalette(root = document.body) {
         probe.remove();
     }
 }
+
+export function readManagementChartPaletteSafely(previousPalette, fallbackPalette, read = readManagementChartPalette) {
+    try {
+        return read();
+    } catch {
+        return previousPalette ?? fallbackPalette;
+    }
+}
