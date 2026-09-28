@@ -1,7 +1,7 @@
 .inventory-access-brand {
     background:
-        radial-gradient(circle at 15% 20%, rgba(201, 170, 104, .2), transparent 32%),
-        linear-gradient(135deg, #09151d, #111b22 58%, #17211f);
+        radial-gradient(circle at 15% 20%, color-mix(in srgb, var(--warning-text) 20%, transparent), transparent 32%),
+        linear-gradient(135deg, var(--header-bg), var(--deep) 58%, var(--surface-muted));
 }
 
 .inventory-app {
@@ -29,7 +29,7 @@
 
 .inventory-heading p {
     margin: 0;
-    color: var(--muted, #8fa8b3);
+    color: var(--muted, var(--muted));
 }
 
 .inventory-cards {
@@ -44,10 +44,10 @@
     overflow: hidden;
     min-height: 290px;
     padding: 24px;
-    border: 1px solid #29404d;
+    border: 1px solid var(--line);
     border-radius: 18px;
-    background: linear-gradient(145deg, rgba(20, 31, 39, .98), rgba(10, 20, 27, .98));
-    box-shadow: 0 18px 45px rgba(0, 0, 0, .18);
+    background: linear-gradient(145deg, var(--raised), var(--panel));
+    box-shadow: var(--corporate-shadow-raised);
 }
 
 .inventory-card::after {
@@ -58,15 +58,15 @@
     right: -55px;
     top: -60px;
     border-radius: 50%;
-    background: rgba(201, 170, 104, .08);
+    background: color-mix(in srgb, var(--warning-text) 8%, transparent);
 }
 
 .inventory-card--materials::after {
-    background: rgba(91, 209, 138, .08);
+    background: color-mix(in srgb, var(--success-text) 8%, transparent);
 }
 
 .inventory-card--raw::after {
-    background: rgba(93, 117, 159, .12);
+    background: color-mix(in srgb, var(--info-text) 12%, transparent);
 }
 
 .inventory-card__top {
@@ -81,10 +81,10 @@
     width: 48px;
     height: 48px;
     place-items: center;
-    border: 1px solid #6b5835;
+    border: 1px solid var(--warning-text);
     border-radius: 14px;
-    color: #c9aa68;
-    background: #171b1a;
+    color: var(--warning-text);
+    background: var(--icon-surface);
     font-size: 24px;
     font-weight: 900;
 }
@@ -92,8 +92,8 @@
 .inventory-card__connection-count {
     padding: 6px 10px;
     border-radius: 999px;
-    color: #a9b7bd;
-    background: rgba(255, 255, 255, .04);
+    color: var(--text-secondary);
+    background: var(--surface-muted);
     font-size: 11px;
     font-weight: 800;
     text-transform: uppercase;
@@ -101,14 +101,14 @@
 
 .inventory-card h2 {
     margin: 22px 0 10px;
-    color: #f2f0e9;
+    color: var(--text-strong);
     font-size: 23px;
 }
 
 .inventory-card p {
     min-height: 60px;
     margin: 0;
-    color: #9babb2;
+    color: var(--text-secondary);
     line-height: 1.55;
 }
 
@@ -124,16 +124,16 @@
 }
 
 .inventory-card__connected {
-    border-color: #4d664d !important;
-    color: #c7ecd2 !important;
+    border-color: var(--success-text) !important;
+    color: var(--success-text) !important;
 }
 
 .inventory-empty {
     grid-column: 1 / -1;
     padding: 40px;
-    border: 1px dashed #304a58;
+    border: 1px dashed var(--line);
     border-radius: 16px;
-    color: #9fb0b8;
+    color: var(--muted);
     text-align: center;
 }
 
@@ -157,14 +157,14 @@
     height: 50px;
     place-items: center;
     border-radius: 14px;
-    color: #c9aa68;
-    background: rgba(201, 170, 104, .1);
+    color: var(--warning-text);
+    background: var(--warning-bg);
     font-size: 24px;
 }
 
 .inventory-help-card--connected .inventory-help-card__icon {
-    color: #5bd18a;
-    background: rgba(91, 209, 138, .1);
+    color: var(--success-text);
+    background: var(--success-bg);
 }
 
 .inventory-help-card h2 {
@@ -173,7 +173,7 @@
 
 .inventory-help-card p,
 .inventory-help-card li {
-    color: #9babb2;
+    color: var(--text-secondary);
     line-height: 1.55;
 }
 
@@ -202,7 +202,7 @@
 
 .inventory-connections-panel header p {
     margin: 0;
-    color: #93a5ad;
+    color: var(--text-secondary);
 }
 
 .inventory-connection-count {
@@ -210,9 +210,9 @@
     min-width: 44px;
     height: 44px;
     place-items: center;
-    border: 1px solid #6b5835;
+    border: 1px solid var(--warning-text);
     border-radius: 13px;
-    color: #c9aa68;
+    color: var(--warning-text);
     font-weight: 900;
 }
 
@@ -226,20 +226,20 @@
 }
 
 .inventory-status--active {
-    color: #bdf1ce;
-    background: rgba(91, 209, 138, .13);
+    color: var(--success-text);
+    background: var(--success-bg);
 }
 
 .inventory-status--inactive {
-    color: #ffb3b7;
-    background: rgba(237, 114, 120, .13);
+    color: var(--danger-text);
+    background: var(--danger-bg);
 }
 
 .inventory-revoke {
-    border: 1px solid #733a42;
+    border: 1px solid var(--danger-text);
     border-radius: 9px;
     padding: 7px 10px;
-    color: #ffb3b7;
+    color: var(--danger-text);
     background: transparent;
     font-weight: 800;
     cursor: pointer;

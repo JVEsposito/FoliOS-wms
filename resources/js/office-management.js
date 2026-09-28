@@ -162,10 +162,11 @@ Chart.register({
         ctx.save();
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillStyle = '#f4f8fa';
+        const style = getComputedStyle(chart.canvas);
+        ctx.fillStyle = style.getPropertyValue('--text-strong').trim() || style.color;
         ctx.font = '800 26px Inter, sans-serif';
         ctx.fillText(options.text, centerX, centerY - 6);
-        ctx.fillStyle = palette.muted;
+        ctx.fillStyle = style.getPropertyValue('--text-secondary').trim() || style.color;
         ctx.font = '700 10px Inter, sans-serif';
         ctx.fillText(options.subtext || '', centerX, centerY + 17);
         ctx.restore();
@@ -459,10 +460,13 @@ function renderProductChart(products) {
         products.otros,
     ];
     const colors = [palette.green, palette.blue, palette.amber, palette.muted, palette.red, palette.quiet];
+    const style = getComputedStyle(elements.productSummary);
+    const textColors = ['--success-text', '--info-text', '--warning-text', '--text-secondary', '--danger-text', '--text-secondary']
+        .map((name) => style.getPropertyValue(name).trim() || style.color);
 
     replaceChart('products', 'productAvailabilityChart', {
         type: 'doughnut',
-        data: { labels, datasets: [{ data: values, backgroundColor: colors, borderColor: '#0a1b25', borderWidth: 4, hoverOffset: 5 }] },
+        data: { labels, datasets: [{ data: values, backgroundColor: colors, borderColor: style.getPropertyValue('--panel').trim() || style.color, borderWidth: 4, hoverOffset: 5 }] },
         options: {
             responsive: true,
             maintainAspectRatio: false,
@@ -475,7 +479,7 @@ function renderProductChart(products) {
     });
 
     elements.productSummary.innerHTML = labels
-        .map((label, index) => `<span><b style="color:${colors[index]}">${formatInteger(values[index])}</b>${escapeHtml(label)}</span>`)
+        .map((label, index) => `<span><b style="color:${textColors[index]}">${formatInteger(values[index])}</b>${escapeHtml(label)}</span>`)
         .join('');
 
     elements.productPallets.textContent = formatInteger(products.pallets);
@@ -886,6 +890,11 @@ document.addEventListener('estiba:office-panel-change', (event) => {
         });
     });
 });
+
+new MutationObserver(() => {
+    if (state.dashboard?.productos) renderProductChart(state.dashboard.productos);
+    state.charts.forEach((chart) => chart.draw());
+}).observe(document.documentElement, { attributes: true, attributeFilter: ['data-office-theme'] });
 
 async function boot() {
     if (!state.token || state.identity?.puede_consultar_panel_gerencial !== true) return;

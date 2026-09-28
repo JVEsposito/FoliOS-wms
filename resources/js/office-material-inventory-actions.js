@@ -17,30 +17,6 @@ function actionPresentation(button) {
     return ['⊘', 'Bloquear material', 'danger'];
 }
 
-function injectStyles() {
-    if (document.getElementById('materialInventoryActionMenuStyles')) return;
-    const style = document.createElement('style');
-    style.id = 'materialInventoryActionMenuStyles';
-    style.textContent = `
-        .material-inventory-action-cell{min-width:118px;text-align:right;white-space:nowrap}
-        .material-inventory-action-toggle{display:inline-flex;align-items:center;justify-content:space-between;gap:9px;min-width:108px;min-height:34px;border:1px solid var(--line);border-radius:8px;background:var(--raised);color:var(--text);padding:7px 10px;font:inherit;font-size:.66rem;font-weight:850;cursor:pointer;transition:border-color .15s ease,background .15s ease,transform .15s ease}
-        .material-inventory-action-toggle:hover,.material-inventory-action-toggle:focus-visible,.material-inventory-action-toggle[aria-expanded="true"]{border-color:var(--cyan);background:var(--selected);outline:none}
-        .material-inventory-action-toggle:active{transform:translateY(1px)}
-        .material-inventory-action-chevron{color:var(--cyan-light);font-size:.72rem;transition:transform .15s ease}
-        .material-inventory-action-toggle[aria-expanded="true"] .material-inventory-action-chevron{transform:rotate(180deg)}
-        .material-inventory-action-popover{position:fixed;z-index:1200;display:grid;gap:4px;min-width:210px;border:1px solid var(--line);border-radius:11px;background:var(--panel);box-shadow:0 18px 45px rgba(0,0,0,.34);padding:6px}
-        .material-inventory-action-popover[hidden]{display:none}
-        .material-inventory-action-item{display:grid;grid-template-columns:24px minmax(0,1fr);align-items:center;gap:8px;width:100%;min-height:38px;border:0;border-radius:8px;background:transparent;color:var(--text);padding:8px 10px;text-align:left;font:inherit;font-size:.69rem;font-weight:760;cursor:pointer}
-        .material-inventory-action-item:hover,.material-inventory-action-item:focus-visible{background:var(--selected);outline:none}
-        .material-inventory-action-icon{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:7px;background:var(--raised);color:var(--cyan-light);font-size:.78rem}
-        .material-inventory-action-item--success .material-inventory-action-icon{background:rgba(56,168,105,.16);color:#6bd99b}
-        .material-inventory-action-item--danger{color:#ffb3ba}
-        .material-inventory-action-item--danger .material-inventory-action-icon{background:rgba(209,69,79,.15);color:#ff9ba4}
-        @media(max-width:760px){.material-inventory-action-cell{min-width:104px}.material-inventory-action-toggle{min-width:96px}}
-    `;
-    document.head.append(style);
-}
-
 function ensurePopover() {
     if (popover) return popover;
     popover = document.createElement('div');
@@ -143,7 +119,6 @@ function enhanceInventory() {
 
 function initialize() {
     if (!window.location.pathname.startsWith('/oficina/materiales/inventario')) return;
-    injectStyles();
     ensurePopover();
     if (!enhanceInventory()) {
         const bootObserver = new MutationObserver(() => {

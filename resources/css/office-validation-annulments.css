@@ -1,51 +1,50 @@
-.annulment-access-brand { background: radial-gradient(circle at top left, rgba(244, 63, 94, .18), transparent 42%), #07151e; }
+.annulment-access-brand { background: radial-gradient(circle at top left, color-mix(in srgb, var(--danger-text) 18%, transparent), transparent 42%), var(--header-bg); }
 .annulment-workspace { display: grid; gap: 18px; padding: 22px; }
 .annulment-heading { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 22px; }
 .annulment-heading h1 { margin: 4px 0 8px; font-size: clamp(26px, 3vw, 38px); }
-.annulment-heading p { max-width: 900px; color: var(--muted, #8fa6b5); }
+.annulment-heading p { max-width: 900px; color: var(--muted, var(--text-secondary)); }
 .annulment-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
-.annulment-metrics article { padding: 16px 18px; border: 1px solid rgba(111, 190, 216, .17); border-radius: 14px; background: rgba(8, 28, 39, .82); }
-.annulment-metrics span { display: block; color: #7f9cac; font-size: 11px; font-weight: 900; letter-spacing: .08em; }
-.annulment-metrics strong { display: block; margin-top: 8px; color: #eef9ff; font-size: 24px; }
+.annulment-metrics article { padding: 16px 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--raised); }
+.annulment-metrics span { display: block; color: var(--muted); font-size: 11px; font-weight: 900; letter-spacing: .08em; }
+.annulment-metrics strong { display: block; margin-top: 8px; color: var(--text); font-size: 24px; }
 .annulment-panel { padding: 20px; }
 .annulment-panel-heading { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
 .annulment-panel-heading h2 { margin: 3px 0 0; }
 .annulment-filter { display: flex; gap: 8px; min-width: min(100%, 420px); }
 .annulment-filter input { flex: 1; }
-.annulment-help { margin: 0 0 14px; color: #8fa6b5; }
+.annulment-help { margin: 0 0 14px; color: var(--text-secondary); }
 .annulment-list, .annulment-history { display: grid; gap: 10px; }
-.annulment-card { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 18px; padding: 16px; border: 1px solid rgba(111, 190, 216, .16); border-radius: 14px; background: rgba(4, 19, 28, .72); }
+.annulment-card { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 18px; padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--raised); }
 .annulment-card-main { display: grid; gap: 4px; }
-.annulment-card-main strong { color: #f4fbff; font-size: 18px; }
-.annulment-card-main span, .annulment-card-main small { color: #8fa6b5; }
+.annulment-card-main strong { font-size: 18px; }
+.annulment-card-main span { color: var(--text-secondary); }
 .annulment-state { display: grid; gap: 3px; text-align: right; }
-.annulment-state span { color: #f6c453; font-size: 11px; font-weight: 900; letter-spacing: .06em; }
-.annulment-state small { color: #7993a2; }
-.danger-button { min-height: 40px; padding: 0 14px; border: 1px solid rgba(251, 113, 133, .55); border-radius: 10px; background: rgba(159, 18, 57, .28); color: #fecdd3; font-weight: 900; cursor: pointer; }
-.danger-button:hover { background: rgba(190, 18, 60, .42); }
-.annulment-readonly { color: #78909d; font-size: 12px; font-weight: 800; }
-.annulment-history-card { display: grid; gap: 7px; padding: 15px 16px; border-left: 3px solid #fb7185; border-radius: 10px; background: rgba(18, 24, 32, .78); }
+.annulment-state span { color: var(--warning-text); font-size: 11px; font-weight: 900; letter-spacing: .06em; }
+.annulment-state small { color: var(--text-subtle); }
+.danger-button { min-height: 40px; padding: 0 14px; border: 1px solid var(--danger-text); border-radius: 10px; background: var(--danger-bg); color: var(--danger-text); font-weight: 900; cursor: pointer; }
+.danger-button:hover { background: var(--surface-hover); }
+.annulment-readonly { color: var(--muted); font-size: 12px; font-weight: 800; }
+.annulment-history-card { display: grid; gap: 7px; padding: 15px 16px; border-left: 3px solid var(--danger-text); border-radius: 10px; background: var(--surface-muted); }
 .annulment-history-card > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.annulment-history-card strong { color: #fff1f2; font-size: 17px; }
-.annulment-history-card span { color: #fda4af; font-size: 12px; font-weight: 900; }
-.annulment-history-card p { margin: 0; color: #d8e4ea; }
-.annulment-history-card small { color: #8098a5; }
-.annulment-released { color: #6ee7b7 !important; font-weight: 800; }
-.annulment-empty { margin: 0; padding: 22px; border: 1px dashed rgba(111, 190, 216, .18); border-radius: 12px; color: #78909d; text-align: center; }
-.annulment-dialog { width: min(620px, calc(100vw - 32px)); padding: 0; border: 1px solid rgba(251, 113, 133, .38); border-radius: 18px; background: #091923; color: #eef9ff; }
-.annulment-dialog::backdrop { background: rgba(0, 7, 12, .78); }
+.annulment-history-card strong { font-size: 17px; }
+.annulment-history-card span { color: var(--danger-text); font-size: 12px; font-weight: 900; }
+.annulment-history-card p { margin: 0; }
+.annulment-released { color: var(--success-text) !important; font-weight: 800; }
+.annulment-empty { margin: 0; padding: 22px; border: 1px dashed var(--line); border-radius: 12px; color: var(--muted); text-align: center; }
+.annulment-dialog { width: min(620px, calc(100vw - 32px)); padding: 0; border: 1px solid var(--danger-text); border-radius: 18px; background: var(--panel); color: var(--text); }
+.annulment-dialog::backdrop { background: var(--overlay); }
 .annulment-dialog form { display: grid; gap: 16px; padding: 22px; }
 .annulment-dialog-heading { display: flex; align-items: start; justify-content: space-between; gap: 14px; }
 .annulment-dialog-heading h2 { margin: 4px 0 0; }
-.annulment-close { border: 0; background: transparent; color: #9bb0bc; font-size: 28px; cursor: pointer; }
-.annulment-warning { margin: 0; padding: 12px 14px; border: 1px solid rgba(251, 113, 133, .28); border-radius: 10px; background: rgba(159, 18, 57, .16); color: #fecdd3; }
+.annulment-close { border: 0; background: transparent; color: var(--text-secondary); font-size: 28px; cursor: pointer; }
+.annulment-warning { margin: 0; padding: 12px 14px; border: 1px solid var(--danger-text); border-radius: 10px; background: var(--danger-bg); color: var(--danger-text); }
 .annulment-dialog label { display: grid; gap: 7px; }
-.annulment-dialog label span { color: #9bb0bc; font-size: 12px; font-weight: 900; }
+.annulment-dialog label span { color: var(--text-secondary); font-size: 12px; font-weight: 900; }
 .annulment-actions { display: flex; justify-content: flex-end; gap: 10px; }
-.annulment-correction-dialog { width: min(720px, calc(100vw - 32px)); border-color: rgba(111, 190, 216, .38); }
-.annulment-correction-state { margin: 0; padding: 12px 14px; border: 1px solid rgba(111, 190, 216, .25); border-radius: 10px; background: rgba(31, 111, 139, .12); color: #b9ddea; }
+.annulment-correction-dialog { width: min(720px, calc(100vw - 32px)); border-color: var(--info-text); }
+.annulment-correction-state { margin: 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--info-bg); color: var(--info-text); }
 .annulment-correction-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.annulment-dialog input, .annulment-dialog select, .annulment-dialog textarea { width: 100%; min-height: 42px; padding: 10px 12px; border: 1px solid rgba(111, 190, 216, .25); border-radius: 10px; background: #07151e; color: #eef9ff; }
+.annulment-dialog input, .annulment-dialog select, .annulment-dialog textarea { width: 100%; min-height: 42px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--header-bg); color: var(--text); }
 .annulment-dialog textarea { resize: vertical; }
 
 @media (max-width: 900px) {
