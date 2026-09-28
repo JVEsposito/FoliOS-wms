@@ -357,7 +357,7 @@ class ArbitrajeGlobalManiobrasTest extends TestCase
                 'tipo' => 'pallet_no_encontrado',
                 'detalle' => 'El pallet no se encuentra en la zona de retiro.',
             ])
-            ->assertOk()
+            ->assertStatus(202)
             ->assertJsonPath('data.estado', 'abierta');
         $this->assertDatabaseHas('discrepancias_maniobra', [
             'tarea_movimiento_id' => $tarea->id,
