@@ -66,6 +66,7 @@ class ServicioPlanesOperacionales
         ?string $referenciaTipo = null,
         ?string $referenciaId = null,
         array $contexto = [],
+        ?int $cicloReferencia = null,
     ): PlanOperacional {
         $titulo = trim($titulo);
         $motivo = filled($motivo) ? trim((string) $motivo) : null;
@@ -86,6 +87,9 @@ class ServicioPlanesOperacionales
         if ($referenciaId !== null && ! Str::isUuid($referenciaId)) {
             throw new DomainException('El identificador de referencia del plan no es válido.');
         }
+        if ($cicloReferencia !== null && $cicloReferencia < 1) {
+            throw new DomainException('El ciclo de referencia debe ser positivo.');
+        }
 
         return DB::transaction(function () use (
             $temporada,
@@ -98,6 +102,7 @@ class ServicioPlanesOperacionales
             $referenciaTipo,
             $referenciaId,
             $contexto,
+            $cicloReferencia,
         ): PlanOperacional {
             $temporadaActiva = app(ServicioTemporadaActiva::class)->buscar(bloquear: true);
 
@@ -122,6 +127,7 @@ class ServicioPlanesOperacionales
                 'motivo' => $motivo,
                 'referencia_tipo' => $referenciaTipo,
                 'referencia_id' => $referenciaId,
+                ...($cicloReferencia === null ? [] : ['ciclo_referencia' => $cicloReferencia]),
                 'contexto' => $contextoPlan,
                 'creado_por_user_id' => $creadoPor->id,
                 'programado_at' => now(),

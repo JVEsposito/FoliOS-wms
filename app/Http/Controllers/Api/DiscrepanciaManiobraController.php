@@ -28,6 +28,7 @@ class DiscrepanciaManiobraController extends Controller
     {
         $datos = validator($request->query(), [
             'estado' => ['nullable', Rule::in(['abierta', 'resuelta', 'todas'])],
+            'tipo' => ['nullable', Rule::in(['pallet_no_encontrado'])],
             'q' => ['nullable', 'string', 'max:120'],
             'pagina' => ['nullable', 'integer', 'min:1'],
             'por_pagina' => ['nullable', 'integer', 'min:10', 'max:50'],
@@ -42,6 +43,10 @@ class DiscrepanciaManiobraController extends Controller
             ->selectRaw('estado, COUNT(*) as total')
             ->groupBy('estado')
             ->pluck('total', 'estado');
+        $palletsNoEncontrados = (clone $base)
+            ->where('tipo', 'pallet_no_encontrado')
+            ->where('estado', EstadoDiscrepanciaManiobra::Abierta->value)
+            ->count();
 
         $consulta = (clone $base)->with([
             'folio:id,numero_folio',
@@ -60,6 +65,9 @@ class DiscrepanciaManiobraController extends Controller
 
         if (($datos['estado'] ?? 'abierta') !== 'todas') {
             $consulta->where('estado', $datos['estado'] ?? EstadoDiscrepanciaManiobra::Abierta->value);
+        }
+        if (filled($datos['tipo'] ?? null)) {
+            $consulta->where('tipo', $datos['tipo']);
         }
         if (filled($datos['q'] ?? null)) {
             $termino = trim((string) $datos['q']);
@@ -85,6 +93,7 @@ class DiscrepanciaManiobraController extends Controller
             'resumen' => [
                 'abiertas' => (int) ($conteos[EstadoDiscrepanciaManiobra::Abierta->value] ?? 0),
                 'resueltas' => (int) ($conteos[EstadoDiscrepanciaManiobra::Resuelta->value] ?? 0),
+                'pallets_no_encontrados' => $palletsNoEncontrados,
             ],
             'data' => $discrepancias->getCollection()
                 ->map(fn (DiscrepanciaManiobra $discrepancia): array => $this->detalle($discrepancia))

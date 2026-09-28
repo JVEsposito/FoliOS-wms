@@ -501,6 +501,7 @@ class PlanOperacionalController extends Controller
     ): JsonResponse {
         $datos = $request->validate([
             'tipo' => ['required', Rule::in([
+                'pallet_no_encontrado',
                 'pallet_no_coincide',
                 'posicion_no_coincide',
                 'posicion_vacia',

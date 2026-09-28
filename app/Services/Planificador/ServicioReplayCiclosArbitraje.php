@@ -14,7 +14,8 @@ final class ServicioReplayCiclosArbitraje
 
     public function __construct(
         private readonly ServicioEstadoArbitrajePlanificador $estadoArbitraje,
-        private readonly MotorReplayArbitrajeV4 $motor,
+        private readonly MotorReplayArbitrajeV4 $motorV4,
+        private readonly MotorReplayArbitrajeV5 $motorV5,
     ) {}
 
     /** @return array<string, mixed> */
@@ -34,7 +35,7 @@ final class ServicioReplayCiclosArbitraje
         $ciclo->load(['decisiones' => fn ($consulta) => $consulta->with('maniobraOperacional:id,titulo')]);
         $contexto = is_array($ciclo->contexto) ? $ciclo->contexto : [];
         $reglas = (string) ($contexto['version_reglas'] ?? '');
-        if ($reglas !== MotorReplayArbitrajeV4::VERSION_REGLAS
+        if (! in_array($reglas, [MotorReplayArbitrajeV4::VERSION_REGLAS, MotorReplayArbitrajeV5::VERSION_REGLAS], true)
             || ! array_key_exists('camaras_rollout', $contexto)) {
             return $this->insuficiente(
                 $ciclo,
@@ -44,7 +45,7 @@ final class ServicioReplayCiclosArbitraje
         }
 
         $normalizadas = $ciclo->decisiones
-            ->map(fn (DecisionArbitrajeManiobra $decision): ?array => $this->normalizar($decision));
+            ->map(fn (DecisionArbitrajeManiobra $decision): ?array => $this->normalizar($decision, $reglas));
         if ($normalizadas->contains(null)) {
             return $this->insuficiente(
                 $ciclo,
@@ -55,7 +56,8 @@ final class ServicioReplayCiclosArbitraje
 
         /** @var array<int, array<string, mixed>> $candidatos */
         $candidatos = $normalizadas->values()->all();
-        $reproducidas = $this->motor->reproducir(
+        $motor = $reglas === MotorReplayArbitrajeV5::VERSION_REGLAS ? $this->motorV5 : $this->motorV4;
+        $reproducidas = $motor->reproducir(
             $candidatos,
             $ciclo->capacidad_ejecucion,
             $ciclo->frontera_max,
@@ -115,7 +117,7 @@ final class ServicioReplayCiclosArbitraje
     }
 
     /** @return array<string, mixed>|null */
-    private function normalizar(DecisionArbitrajeManiobra $decision): ?array
+    private function normalizar(DecisionArbitrajeManiobra $decision, string $reglas): ?array
     {
         $explicacion = is_array($decision->explicacion) ? $decision->explicacion : [];
         $snapshot = is_array($explicacion['snapshot'] ?? null) ? $explicacion['snapshot'] : [];
@@ -133,7 +135,7 @@ final class ServicioReplayCiclosArbitraje
             : [];
 
         if (($explicacion['version'] ?? null) !== self::VERSION_EXPLICACION
-            || ($explicacion['reglas'] ?? null) !== MotorReplayArbitrajeV4::VERSION_REGLAS
+            || ($explicacion['reglas'] ?? null) !== $reglas
             || ! is_string($maniobra['id'] ?? null)
             || $maniobra['id'] !== $decision->maniobra_operacional_id
             || ! is_string($maniobra['creada_at'] ?? null)
