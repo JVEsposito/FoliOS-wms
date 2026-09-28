@@ -284,6 +284,7 @@ export type TemporaryExtractionPayload = {
 
 export type ManeuverDiscrepancyType =
   | 'pallet_no_coincide'
+  | 'pallet_no_encontrado'
   | 'posicion_no_coincide'
   | 'posicion_vacia'
   | 'obstaculo'

@@ -10,6 +10,7 @@ import {
 } from '../../domain/operationalTasks';
 import {
   operatorExceptionOptions,
+  isLocationReconciliation,
   operatorExceptionPrompt,
   operatorExceptionTitle,
   validateOperatorException,
@@ -145,6 +146,7 @@ export function OperatorExceptionReport({
         <View style={styles.optionGrid}>
           {options.map((option) => {
             const active = option.type === selectedType;
+            const recommended = option.type === 'pallet_no_encontrado' && isLocationReconciliation(task);
             return (
               <Pressable
                 accessibilityRole="radio"
@@ -154,12 +156,13 @@ export function OperatorExceptionReport({
                   setSelectedType(option.type);
                   setValidation('');
                 }}
-                style={[styles.option, active && styles.optionActive]}
+                style={[styles.option, recommended && styles.optionRecommended, active && styles.optionActive]}
               >
                 <View style={[styles.radio, active && styles.radioActive]}>
                   {active ? <View style={styles.radioDot} /> : null}
                 </View>
                 <View style={styles.optionCopy}>
+                  {recommended ? <Text style={styles.optionRecommendation}>RECOMENDADO PARA CONCILIACIÓN</Text> : null}
                   <Text style={[styles.optionTitle, active && styles.optionTitleActive]}>{option.label}</Text>
                   <Text style={styles.optionDescription}>{option.description}</Text>
                 </View>
@@ -247,7 +250,9 @@ const styles = StyleSheet.create({
   sectionEyebrow: { color: o.color.primaryPressed, fontSize: o.type.caption, fontWeight: '900', letterSpacing: 1 },
   optionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: o.space[3] },
   option: { minHeight: 86, flexBasis: 260, flexGrow: 1, padding: o.space[3], flexDirection: 'row', alignItems: 'center', gap: o.space[3], borderWidth: 2, borderColor: o.color.border, borderRadius: o.radius.control, backgroundColor: o.color.surfaceMuted },
+  optionRecommended: { borderColor: o.color.warning, backgroundColor: o.color.warningSurface },
   optionActive: { borderColor: o.color.primary, backgroundColor: o.color.selected },
+  optionRecommendation: { color: o.color.warning, fontSize: o.type.caption, fontWeight: '900' },
   radio: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: o.color.borderStrong, borderRadius: 14, backgroundColor: o.color.surface },
   radioActive: { borderColor: o.color.primary },
   radioDot: { width: 14, height: 14, borderRadius: 7, backgroundColor: o.color.primary },
