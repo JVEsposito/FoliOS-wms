@@ -13,7 +13,7 @@ const migratedStyles = [
 for (const name of migratedStyles) {
     test(`${name} usa tokens en lugar de colores fijos`, () => {
         const css = readFileSync(new URL(`../../resources/css/${name}`, import.meta.url), 'utf8');
-        assert.doesNotMatch(css, /#[\da-f]{3,8}\b|\brgba?\s*\(/i);
+        assert.doesNotMatch(css, /#[\da-f]{3,8}\b|\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\s*\(|(?<![-\w])(?:white|black)(?![-\w])/i);
         assert.doesNotMatch(css, /var\(--selected\)/);
     });
 }
