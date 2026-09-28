@@ -26,3 +26,8 @@ test('porcentajes de la leyenda redondean sin perder los conteos exactos', () =>
     assert.equal(result.segments[1].count, 2);
     assert.equal(result.segments[2].width, 0);
 });
+
+test('sin ubicación y otros conservan tonos distintos en la barra', () => {
+    const { segments } = productStateSegments({ total_activos: 2, pendientes_ubicacion: 1, otros: 1 });
+    assert.notEqual(segments[3].tone, segments[5].tone);
+});

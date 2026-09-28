@@ -907,6 +907,7 @@ body {
 .management-products__segment--warning, .management-products__legend-item--warning { --product-state-color: var(--warning-text); }
 .management-products__segment--danger, .management-products__legend-item--danger { --product-state-color: var(--danger-text); }
 .management-products__segment--quiet, .management-products__legend-item--quiet { --product-state-color: var(--text-secondary); }
+.management-products__segment--other, .management-products__legend-item--other { --product-state-color: var(--text-subtle); }
 .management-products__segment { background: var(--product-state-color); }
 
 .management-products__legend {

@@ -196,6 +196,7 @@ class PanelGerencialApiTest extends TestCase
         };
         $comprometido = $folio('PT-PANEL-COMPROMETIDO', EstadoOperacionalFolio::Disponible, TipoBulto::Pallet, 14);
         $comprometidoSaldo = $folio('PT-PANEL-SALDO', EstadoOperacionalFolio::Disponible, TipoBulto::Saldo, 0);
+        $comprometidoOtraCarga = $folio('PT-PANEL-OTRA-CARGA', EstadoOperacionalFolio::Disponible, TipoBulto::Pallet, 2);
         $folio('PT-PANEL-PREFRIO', EstadoOperacionalFolio::PendientePrefrio, TipoBulto::Pallet, 15);
         $folio('PT-PANEL-BLOQUEADO', EstadoOperacionalFolio::Bloqueado, TipoBulto::Pallet, 30);
         $folio('PT-PANEL-SIN-UBICACION', EstadoOperacionalFolio::PendienteUbicacion, TipoBulto::Pallet, 31);
@@ -220,23 +221,41 @@ class PanelGerencialApiTest extends TestCase
             ReservaCargaFolio::create(['folio_id' => $producto->id, 'carga_folio_id' => $asignacion->id]);
         }
 
+        $segundaCarga = Carga::create([
+            'temporada_id' => $temporada->id,
+            'codigo' => 'CAR-PANEL-PT-02',
+            'estado' => EstadoCarga::Pendiente,
+            'creada_por_user_id' => $administrador->id,
+            'actualizada_por_user_id' => $administrador->id,
+        ]);
+        $segundaAsignacion = CargaFolio::create([
+            'carga_id' => $segundaCarga->id,
+            'folio_id' => $comprometidoOtraCarga->id,
+            'asignado_por_user_id' => $administrador->id,
+            'asignado_at' => now(),
+        ]);
+        ReservaCargaFolio::create([
+            'folio_id' => $comprometidoOtraCarga->id,
+            'carga_folio_id' => $segundaAsignacion->id,
+        ]);
+
         $this->actingAs($gerencia, 'sanctum')
             ->getJson('/api/gerencia/resumen')
             ->assertOk()
-            ->assertJsonPath('data.productos.total_activos', 7)
+            ->assertJsonPath('data.productos.total_activos', 8)
             ->assertJsonPath('data.productos.disponibles_despacho', 1)
-            ->assertJsonPath('data.productos.comprometidos_carga', 2)
-            ->assertJsonPath('data.productos.cargas_comprometidas', 1)
+            ->assertJsonPath('data.productos.comprometidos_carga', 3)
+            ->assertJsonPath('data.productos.cargas_comprometidas', 2)
             ->assertJsonPath('data.productos.pendientes_prefrio', 1)
             ->assertJsonPath('data.productos.bloqueados', 1)
             ->assertJsonPath('data.productos.pendientes_ubicacion', 1)
             ->assertJsonPath('data.productos.ingresados_hoy', 1)
-            ->assertJsonPath('data.productos.pallets', 6)
+            ->assertJsonPath('data.productos.pallets', 7)
             ->assertJsonPath('data.productos.saldos', 1)
             ->assertJsonPath('data.productos.otros', 1)
-            ->assertJsonPath('data.productos.disponibilidad_porcentaje', 14.3)
+            ->assertJsonPath('data.productos.disponibilidad_porcentaje', 12.5)
             ->assertJsonPath('data.productos.antiguedad.umbral_alerta_dias', 30)
-            ->assertJsonPath('data.productos.antiguedad.tramos.0.total', 3)
+            ->assertJsonPath('data.productos.antiguedad.tramos.0.total', 4)
             ->assertJsonPath('data.productos.antiguedad.tramos.1.total', 1)
             ->assertJsonPath('data.productos.antiguedad.tramos.2.total', 2)
             ->assertJsonPath('data.productos.antiguedad.tramos.3.total', 1)

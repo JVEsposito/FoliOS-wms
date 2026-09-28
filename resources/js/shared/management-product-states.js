@@ -4,7 +4,7 @@ const STATES = [
     { key: 'pendientes_prefrio', label: 'Pendientes prefrío', tone: 'warning' },
     { key: 'pendientes_ubicacion', label: 'Sin ubicación', tone: 'quiet' },
     { key: 'bloqueados', label: 'Bloqueados', tone: 'danger' },
-    { key: 'otros', label: 'Otros', tone: 'quiet' },
+    { key: 'otros', label: 'Otros', tone: 'other' },
 ];
 
 // Reserva espacio visible a los segmentos pequeños sin perder el total de 100 %.
