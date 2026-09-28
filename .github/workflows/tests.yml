@@ -82,6 +82,14 @@ jobs:
       - name: Instalar dependencias frontend
         run: npm ci
 
+      - name: Verificar scripts PowerShell cuando exista pwsh
+        run: |
+          if command -v pwsh >/dev/null 2>&1; then
+            pwsh -NoProfile -File scripts/windows/verificar-sintaxis.ps1
+          else
+            echo 'pwsh no disponible; verificación manual documentada.'
+          fi
+
       - name: Probar coordinación de refrescos
         run: npm run test:js
 

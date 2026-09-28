@@ -2,6 +2,7 @@ import { createOperationalPoller } from './shared/operational-poller';
 import { buildOperationalAlerts } from './shared/operation-now-alerts';
 import { buildCycleComparison, renderCycleComparison } from './shared/operation-cycle-comparison';
 import { buildCycleReplay, renderCycleReplay } from './shared/operation-cycle-replay';
+import { plannerProcessCause, plannerProcessWarnings } from './shared/planner-process-health';
 import {
     buildManeuverInterventionRequest,
     createManeuverSupervisionDrawer,
@@ -56,6 +57,7 @@ const elements = {
     plannerPanel: byId('operationPlannerPanel'),
     plannerMode: byId('plannerModeSignal'),
     plannerFreshness: byId('plannerFreshnessSignal'),
+    plannerProcessAlert: byId('plannerProcessAlert'),
     plannerHealth: byId('plannerHealthSignal'),
     plannerTechnical: byId('plannerTechnical'),
     plannerCycleMeta: byId('plannerCycleMeta'),
@@ -545,6 +547,8 @@ function renderPlanner(planner = {}) {
     const risks = health.riesgos || {};
     const cycle = planner.arbitraje?.ciclo;
     const freshness = planner.arbitraje?.vigencia || {};
+    const processCause = plannerProcessCause(planner.procesos);
+    const processWarnings = plannerProcessWarnings(planner.procesos, (value) => dateTime(value, { timeOnly: true }));
     const summary = cycle?.resumen || {};
     const decisions = Array.isArray(cycle?.decisiones) ? cycle.decisiones : [];
     const mode = deployment.mode_global || 'off';
@@ -560,14 +564,17 @@ function renderPlanner(planner = {}) {
     }[freshness.estado] || 'neutral';
     const panelTone = freshnessTone === 'critical' || healthTone === 'critical'
         ? 'critical'
-        : (freshnessTone === 'warning' || healthTone === 'warning' ? 'warning' : healthTone);
+        : (processWarnings.length || freshnessTone === 'warning' || healthTone === 'warning' ? 'warning' : healthTone);
 
     elements.plannerPanel.dataset.tone = panelTone;
     elements.plannerMode.dataset.tone = modeTone;
     elements.plannerMode.textContent = plannerModeStatus(mode);
     elements.plannerFreshness.dataset.tone = freshnessTone;
-    elements.plannerFreshness.textContent = `Cálculo ${plannerFreshnessLabel(freshness.estado)}`;
-    elements.plannerFreshness.title = freshness.detalle || 'Sin detalle del último cálculo';
+    const delayedByProcess = processCause && ['atrasado', 'pendiente', 'recalculando'].includes(freshness.estado);
+    elements.plannerFreshness.textContent = `Cálculo ${plannerFreshnessLabel(freshness.estado)}${delayedByProcess ? ` · ${processCause}` : ''}`;
+    elements.plannerFreshness.title = [freshness.detalle, delayedByProcess ? processWarnings.join(' ') : ''].filter(Boolean).join(' ') || 'Sin detalle del último cálculo';
+    elements.plannerProcessAlert.hidden = processWarnings.length === 0;
+    elements.plannerProcessAlert.textContent = processWarnings.join(' ');
     elements.plannerHealth.dataset.tone = healthTone;
     elements.plannerHealth.textContent = plannerHealthStatus(health.estado);
     elements.plannerCycleMeta.textContent = cycle
@@ -611,7 +618,7 @@ function renderPlanner(planner = {}) {
         const stopped = mode === 'off';
         elements.plannerDecisionRows.innerHTML = `<tr><td colspan="6">${empty(
             stopped ? 'Planificador detenido por configuración' : 'Sin cálculo vigente',
-            stopped ? 'La operación continúa con asignación manual de movimientos.' : (freshness.detalle || 'El planificador todavía no confirma qué maniobras ofrecer.'),
+            stopped ? 'La operación continúa con asignación manual de movimientos.' : (processWarnings.join(' ') || freshness.detalle || 'El planificador todavía no confirma qué maniobras ofrecer.'),
         )}</td></tr>`;
         return;
     }

@@ -82,6 +82,7 @@
                             </div>
                         </header>
                         <div class="operation-now-panel__body operation-now-planner">
+                            <div class="operation-now-planner__process-alert" id="plannerProcessAlert" role="status" aria-live="polite" hidden></div>
                             <dl class="operation-now-planner__context" aria-label="Configuración vigente del planificador">
                                 <div><dt>Cámaras dirigidas</dt><dd id="plannerRollout">—</dd></div>
                                 <div><dt>Maniobras simultáneas</dt><dd id="plannerCapacity">—</dd></div>
