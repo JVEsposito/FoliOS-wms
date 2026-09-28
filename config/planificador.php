@@ -50,6 +50,8 @@ return [
         1,
         (int) env('WMS_PLANNER_MAX_ACTIVE_MANEUVERS', 3),
     ),
+    // Una sesión de cámara sin tarea deja de representar presencia operacional tras este plazo.
+    'camarero_sesion_inactiva_minutos' => max(1, (int) env('WMS_OPERATOR_SESSION_IDLE_MINUTES', 30)),
     'arbitraje_refresco_segundos' => max(
         60,
         (int) env('WMS_PLANNER_ARBITRATION_REFRESH_SECONDS', 240),

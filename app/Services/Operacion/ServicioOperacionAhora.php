@@ -25,6 +25,7 @@ use App\Models\SesionEstiba;
 use App\Models\TareaMovimiento;
 use App\Models\Temporada;
 use App\Models\TunelPrefrio;
+use App\Services\Planificador\ServicioConciliacionPalletsHistoricos;
 use App\Services\Planificador\ServicioPuestoMandoPlanificador;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -38,6 +39,7 @@ class ServicioOperacionAhora
     public function __construct(
         private readonly ServicioPlanoPlanta $planos,
         private readonly ServicioPuestoMandoPlanificador $puestoMando,
+        private readonly ServicioConciliacionPalletsHistoricos $conciliacion,
     ) {}
 
     /**
@@ -69,7 +71,10 @@ class ServicioOperacionAhora
             'camareros' => $this->camareros($temporada),
             'prefrio' => $prefrio,
             'incidencias' => $this->incidencias($temporada, $ahora),
-            'planificador' => $this->puestoMando->obtener($temporada),
+            'planificador' => [
+                ...$this->puestoMando->obtener($temporada),
+                'conciliacion' => $this->conciliacion->diagnosticar($temporada, 0),
+            ],
             'camaras' => $camaras,
             'planta' => $this->planos->obtener(
                 $camaras,
@@ -276,6 +281,7 @@ class ServicioOperacionAhora
      */
     private function camareros(Temporada $temporada): array
     {
+        $limiteActividad = now()->subMinutes((int) config('planificador.camarero_sesion_inactiva_minutos', 30));
         $sesiones = SesionEstiba::query()
             ->where('estado', EstadoSesionEstiba::Abierta->value)
             ->with([
@@ -283,19 +289,11 @@ class ServicioOperacionAhora
                 'dispositivo:id,codigo,nombre',
                 'camara:id,codigo,nombre,contenido',
             ])
-            ->get()
-            ->sortBy(fn (SesionEstiba $sesion): string => mb_strtolower(
-                $sesion->usuario->name.'|'.$sesion->camara->codigo.'|'.$sesion->id,
-            ))
-            ->values();
-
-        if ($sesiones->isEmpty()) {
-            return [];
-        }
+            ->get();
 
         $tareasPorActor = TareaMovimiento::query()
-            ->whereIn('responsable_user_id', $sesiones->pluck('user_id')->unique())
-            ->whereIn('dispositivo_id', $sesiones->pluck('dispositivo_id')->unique())
+            ->whereNotNull('responsable_user_id')
+            ->whereNotNull('dispositivo_id')
             ->whereIn('estado', [
                 EstadoTareaMovimiento::EnProceso->value,
                 EstadoTareaMovimiento::Asumida->value,
@@ -306,6 +304,8 @@ class ServicioOperacionAhora
                     ->where('temporada_id', $temporada->id),
             )
             ->with([
+                'responsable:id,name',
+                'dispositivo:id,codigo,nombre',
                 'planOperacional:id,temporada_id,tipo,titulo',
                 'folio:id,numero_folio,tipo_bulto',
                 'camaraOrigen:id,codigo,nombre',
@@ -322,41 +322,77 @@ class ServicioOperacionAhora
                 ->sort(fn (TareaMovimiento $izquierda, TareaMovimiento $derecha): int => $this->ordenTarea($izquierda) <=> $this->ordenTarea($derecha))
                 ->first());
 
-        return $sesiones->map(function (SesionEstiba $sesion) use ($tareasPorActor): array {
-            /** @var TareaMovimiento|null $tarea */
-            $tarea = $tareasPorActor->get($this->claveActor(
-                $sesion->user_id,
-                $sesion->dispositivo_id,
+        $sesionesPorActor = $sesiones
+            ->sortBy('ultima_actividad_at')
+            ->filter(fn (SesionEstiba $sesion): bool => $tareasPorActor->has($this->claveActor(
+                $sesion->user_id, $sesion->dispositivo_id,
+            )) || (($sesion->ultima_actividad_at ?? $sesion->iniciada_at)?->greaterThanOrEqualTo($limiteActividad) === true))
+            ->keyBy(fn (SesionEstiba $sesion): string => $this->claveActor(
+                $sesion->user_id, $sesion->dispositivo_id,
             ));
 
-            return [
-                'usuario' => [
-                    'id' => $sesion->usuario->id,
-                    'nombre' => $sesion->usuario->name,
-                ],
-                'dispositivo' => [
-                    'id' => $sesion->dispositivo->id,
-                    'codigo' => $sesion->dispositivo->codigo,
-                    'nombre' => $sesion->dispositivo->nombre,
-                ],
-                'sesion' => [
-                    'id' => $sesion->id,
-                    'estado' => $sesion->estado->value,
-                    'iniciada_at' => $sesion->iniciada_at?->toAtomString(),
-                    'ultima_actividad_at' => $sesion->ultima_actividad_at?->toAtomString(),
-                ],
-                'ubicacion_actual' => [
-                    'tipo' => 'camara',
-                    'camara' => [
-                        'id' => $sesion->camara->id,
-                        'codigo' => $sesion->camara->codigo,
-                        'nombre' => $sesion->camara->nombre,
-                        'contenido' => $sesion->camara->contenido->value,
+        return $tareasPorActor->keys()->merge($sesionesPorActor->keys())->unique()
+            ->map(function (string $clave) use ($tareasPorActor, $sesionesPorActor): array {
+                /** @var SesionEstiba|null $sesion */
+                $sesion = $sesionesPorActor->get($clave);
+                /** @var TareaMovimiento|null $tarea */
+                $tarea = $tareasPorActor->get($clave);
+                $usuario = $tarea?->responsable ?? $sesion?->usuario;
+                $dispositivo = $tarea?->dispositivo ?? $sesion?->dispositivo;
+                $ubicacion = $this->ubicacionCamarero($tarea, $sesion);
+
+                return [
+                    'usuario' => [
+                        'id' => $usuario->id,
+                        'nombre' => $usuario->name,
                     ],
-                ],
-                'tarea_actual' => $tarea ? $this->serializarTarea($tarea) : null,
+                    'dispositivo' => [
+                        'id' => $dispositivo->id,
+                        'codigo' => $dispositivo->codigo,
+                        'nombre' => $dispositivo->nombre,
+                    ],
+                    'sesion' => $sesion ? [
+                        'id' => $sesion->id,
+                        'estado' => $sesion->estado->value,
+                        'iniciada_at' => $sesion->iniciada_at?->toAtomString(),
+                        'ultima_actividad_at' => $sesion->ultima_actividad_at?->toAtomString(),
+                    ] : null,
+                    'ultima_actividad_at' => $tarea
+                        ? ($tarea->iniciada_at ?? $tarea->asumida_at ?? $tarea->updated_at)?->toAtomString()
+                        : $sesion?->ultima_actividad_at?->toAtomString(),
+                    'ubicacion_actual' => $ubicacion,
+                    'tarea_actual' => $tarea ? $this->serializarTarea($tarea) : null,
+                ];
+            })->sortBy(fn (array $actor): string => mb_strtolower($actor['usuario']['nombre'].'|'.$actor['dispositivo']['codigo']))
+            ->values()->all();
+    }
+
+    /** @return array<string, mixed> */
+    private function ubicacionCamarero(?TareaMovimiento $tarea, ?SesionEstiba $sesion): array
+    {
+        if ($tarea?->estado === EstadoTareaMovimiento::EnProceso) {
+            return ['tipo' => 'transito', 'camara' => null];
+        }
+        if ($tarea) {
+            $camara = $tarea->camaraOrigen ?? $tarea->camaraDestino;
+
+            return [
+                'tipo' => $tarea->camaraOrigen ? 'origen' : 'destino_previsto',
+                'camara' => $camara ? [
+                    'id' => $camara->id, 'codigo' => $camara->codigo, 'nombre' => $camara->nombre,
+                ] : null,
             ];
-        })->all();
+        }
+
+        return [
+            'tipo' => 'camara',
+            'camara' => [
+                'id' => $sesion->camara->id,
+                'codigo' => $sesion->camara->codigo,
+                'nombre' => $sesion->camara->nombre,
+                'contenido' => $sesion->camara->contenido->value,
+            ],
+        ];
     }
 
     private function claveActor(int $usuarioId, string $dispositivoId): string

@@ -29,7 +29,7 @@ test('no coincide ofrece todas las diferencias físicas aceptadas por el servido
     assert.equal(operatorExceptionTitle('mismatch'), 'NO COINCIDE');
     assert.deepEqual(
         operatorExceptionOptions('mismatch').map((option) => option.type),
-        ['pallet_no_coincide', 'posicion_no_coincide', 'posicion_vacia', 'otra'],
+        ['pallet_no_encontrado', 'pallet_no_coincide', 'posicion_no_coincide', 'posicion_vacia', 'otra'],
     );
 });
 

@@ -21,10 +21,12 @@ type Props = {
   busy: boolean;
   mineCount: number;
   next: OperatorQueueItem | null;
+  plannerFresh: boolean | null;
   onOpen: (item: OperatorQueueItem) => void;
   onRefresh: () => void;
   onViewChange: (source: OperatorQueueSource) => void;
   queue: OperatorQueueItem[];
+  suggestedDestinations: Record<string, string>;
   view: OperatorQueueSource;
 };
 
@@ -33,10 +35,12 @@ export function OperatorTaskHome({
   busy,
   mineCount,
   next,
+  plannerFresh,
   onOpen,
   onRefresh,
   onViewChange,
   queue,
+  suggestedDestinations,
   view,
 }: Props) {
   const { width } = useWindowDimensions();
@@ -55,12 +59,12 @@ export function OperatorTaskHome({
       </View>
 
       {next ? (
-        <NextTaskCard busy={busy} compact={compact} item={next} onOpen={() => onOpen(next)} />
+        <NextTaskCard busy={busy} compact={compact} item={next} onOpen={() => onOpen(next)} suggestion={suggestedDestinations[next.task.id]} />
       ) : (
         <View style={styles.emptyHero}>
-          <OperatorStatusBadge label="SIN LABORES PENDIENTES" tone="success" />
-          <Text style={styles.emptyHeroTitle}>No hay una maniobra para iniciar</Text>
-          <Text style={styles.emptyHeroCopy}>La bandeja se actualizará automáticamente cuando el servidor publique trabajo.</Text>
+          <OperatorStatusBadge label={plannerFresh === false ? 'PLANIFICADOR SIN ACTUALIZAR' : 'SIN LABORES PENDIENTES'} tone={plannerFresh === false ? 'warning' : 'success'} />
+          <Text style={styles.emptyHeroTitle}>{plannerFresh === false ? 'Planificador sin actualizar: las tareas volverán cuando se recalcule' : 'No hay una maniobra para iniciar'}</Text>
+          <Text style={styles.emptyHeroCopy}>{plannerFresh === false ? 'Espera la próxima evaluación del servidor y actualiza la bandeja.' : 'La bandeja se actualizará automáticamente cuando el servidor publique trabajo.'}</Text>
         </View>
       )}
 
@@ -86,6 +90,7 @@ export function OperatorTaskHome({
                 item={item}
                 key={`${item.source}-${item.task.id}`}
                 onOpen={() => onOpen(item)}
+                suggestion={suggestedDestinations[item.task.id]}
               />
             ))}
           </View>
@@ -95,7 +100,9 @@ export function OperatorTaskHome({
             <Text style={styles.emptyQueueCopy}>
               {view === 'mine'
                 ? 'La maniobra principal se muestra arriba. Puedes revisar las tareas ofrecidas en Disponibles.'
-                : 'No se recibieron nuevas labores para esta selección.'}
+                : plannerFresh === false
+                  ? 'Planificador sin actualizar: las tareas volverán cuando se recalcule.'
+                  : 'No se recibieron nuevas labores para esta selección.'}
             </Text>
           </View>
         )}
@@ -104,11 +111,12 @@ export function OperatorTaskHome({
   );
 }
 
-function NextTaskCard({ busy, compact, item, onOpen }: {
+function NextTaskCard({ busy, compact, item, onOpen, suggestion }: {
   busy: boolean;
   compact: boolean;
   item: OperatorQueueItem;
   onOpen: () => void;
+  suggestion?: string;
 }) {
   const { task } = item;
   const paused = task.maniobra?.estado === 'pausada_discrepancia';
@@ -157,7 +165,7 @@ function NextTaskCard({ busy, compact, item, onOpen }: {
 
         <View style={[styles.heroRoute, compact && styles.heroRouteCompact]}>
           <OperatorRouteLine label="Origen" value={operationalTaskPositionLabel(task.origen)} />
-          <OperatorRouteLine label="Destino" value={operationalTaskDestinationLabel(task)} strong />
+          <OperatorRouteLine label="Destino" value={suggestion ? `${suggestion} · sugerido` : operationalTaskDestinationLabel(task)} strong />
           <OperatorRouteLine label="Motivo" value={operationalTaskReason(task)} />
         </View>
       </View>
@@ -179,12 +187,13 @@ function QueueTab({ active, count, label, onPress }: { active: boolean; count: n
   );
 }
 
-function QueueRow({ busy, compact, index, item, onOpen }: {
+function QueueRow({ busy, compact, index, item, onOpen, suggestion }: {
   busy: boolean;
   compact: boolean;
   index: number;
   item: OperatorQueueItem;
   onOpen: () => void;
+  suggestion?: string;
 }) {
   const task = item.task;
   const paused = task.maniobra?.estado === 'pausada_discrepancia';
@@ -200,7 +209,7 @@ function QueueRow({ busy, compact, index, item, onOpen }: {
       <View style={[styles.queueRoute, compact && styles.queueRouteCompact]}>
         <Text numberOfLines={1} style={styles.queueRouteText}>{operationalTaskPositionLabel(task.origen)}</Text>
         <Text style={styles.queueArrow}>→</Text>
-        <Text numberOfLines={1} style={styles.queueRouteDestination}>{operationalTaskDestinationLabel(task)}</Text>
+        <Text numberOfLines={1} style={styles.queueRouteDestination}>{suggestion ? `${suggestion} · sugerido` : operationalTaskDestinationLabel(task)}</Text>
       </View>
       <View style={styles.queueSteps}>
         <Text style={styles.queueStepsValue}>{task.maniobra?.pasos_totales ?? 1}</Text>

@@ -237,7 +237,7 @@ class DiscrepanciaManiobraController extends Controller
         ];
     }
 
-    /** @return array{id: string, camara: string, posicion: ?string}|null */
+    /** @return array{id: string, codigo: string, camara: string, posicion: ?string}|null */
     private function ubicacion(?Camara $camara, ?Posicion $posicion): ?array
     {
         if (! $camara) {
@@ -246,6 +246,7 @@ class DiscrepanciaManiobraController extends Controller
 
         return [
             'id' => $camara->id,
+            'codigo' => $camara->codigo,
             'camara' => $camara->nombre,
             'posicion' => $posicion?->etiqueta,
         ];

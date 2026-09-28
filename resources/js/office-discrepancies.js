@@ -1,3 +1,5 @@
+import { cameraReferenceLabel } from './shared/camera-display';
+
 const tokenKey = 'estiba_wms_office_token';
 const identityKey = 'estiba_wms_office_identity';
 const byId = (id) => document.getElementById(id);
@@ -91,7 +93,7 @@ function queryParameters() {
 }
 function locationText(location) {
     if (!location) return 'Sin ubicación';
-    return [location.camara, location.posicion].filter(Boolean).join(' · ');
+    return [cameraReferenceLabel({ codigo: location.codigo, nombre: location.camara }), location.posicion].filter(Boolean).join(' · ');
 }
 function restrictionText(action, restriction) {
     const labels = {
