@@ -1,6 +1,7 @@
 import Chart from 'chart.js/auto';
 import { createOperationalPoller } from './shared/operational-poller';
 import { productStateSegments } from './shared/management-product-states';
+import { readManagementChartPaletteSafely } from './shared/management-chart-theme';
 
 const byId = (id) => document.getElementById(id);
 
@@ -142,18 +143,23 @@ const state = {
     charts: new Map(),
 };
 
-const palette = {
-    cyan: '#16c9c2',
-    cyanLight: '#55e5df',
-    blue: '#3aa5ff',
-    purple: '#9b7bff',
-    green: '#55d889',
-    amber: '#f3b94f',
-    red: '#ff7070',
-    quiet: '#294754',
-    muted: '#8fa8b3',
-    grid: 'rgba(143, 168, 179, .12)',
+const defaultChartColor = Chart.defaults.color;
+const fallbackPalette = {
+    cyan: defaultChartColor,
+    cyanLight: defaultChartColor,
+    blue: defaultChartColor,
+    purple: defaultChartColor,
+    green: defaultChartColor,
+    amber: defaultChartColor,
+    red: defaultChartColor,
+    quiet: defaultChartColor,
+    muted: defaultChartColor,
+    grid: Chart.defaults.borderColor,
+    tooltipBg: Chart.defaults.plugins.tooltip.backgroundColor,
+    tooltipBorder: Chart.defaults.borderColor,
+    tooltipText: Chart.defaults.plugins.tooltip.bodyColor,
 };
+let palette = fallbackPalette;
 
 class ApiError extends Error {
     constructor(message, status) {
@@ -162,30 +168,20 @@ class ApiError extends Error {
     }
 }
 
-Chart.defaults.color = palette.muted;
 Chart.defaults.font.family = 'Inter, ui-sans-serif, system-ui, sans-serif';
-Chart.defaults.borderColor = palette.grid;
-Chart.register({
-    id: 'centerLabel',
-    afterDraw(chart, _args, options) {
-        if (!options?.text || chart.config.type !== 'doughnut') return;
 
-        const { ctx, chartArea } = chart;
-        const centerX = (chartArea.left + chartArea.right) / 2;
-        const centerY = (chartArea.top + chartArea.bottom) / 2;
-        ctx.save();
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        const style = getComputedStyle(chart.canvas);
-        ctx.fillStyle = style.getPropertyValue('--text-strong').trim() || style.color;
-        ctx.font = '800 26px Inter, sans-serif';
-        ctx.fillText(options.text, centerX, centerY - 6);
-        ctx.fillStyle = style.getPropertyValue('--text-secondary').trim() || style.color;
-        ctx.font = '700 10px Inter, sans-serif';
-        ctx.fillText(options.subtext || '', centerX, centerY + 17);
-        ctx.restore();
-    },
-});
+function applyChartTheme() {
+    palette = readManagementChartPaletteSafely(palette, fallbackPalette);
+    Chart.defaults.color = palette.muted;
+    Chart.defaults.borderColor = palette.grid;
+    Object.assign(Chart.defaults.plugins.tooltip, {
+        backgroundColor: palette.tooltipBg,
+        borderColor: palette.tooltipBorder,
+        borderWidth: 1,
+        titleColor: palette.tooltipText,
+        bodyColor: palette.tooltipText,
+    });
+}
 
 function readJson(key) {
     try {
@@ -369,6 +365,7 @@ function renderSeasonOptions(data) {
 
 function renderDashboard(data) {
     state.dashboard = data;
+    applyChartTheme();
     renderSeasonOptions(data);
     const capacity = data.camaras.resumen;
     const products = data.productos;
@@ -436,8 +433,10 @@ function stackedBarOptions(horizontal = true) {
         plugins: {
             legend: { display: false },
             tooltip: {
-                backgroundColor: '#071820',
-                borderColor: '#1c3845',
+                backgroundColor: palette.tooltipBg,
+                borderColor: palette.tooltipBorder,
+                titleColor: palette.tooltipText,
+                bodyColor: palette.tooltipText,
                 borderWidth: 1,
                 padding: 11,
             },
@@ -586,6 +585,7 @@ function renderMaterialChart() {
             plugins: {
                 ...stackedBarOptions(true).plugins,
                 tooltip: {
+                    ...stackedBarOptions(true).plugins.tooltip,
                     callbacks: {
                         title: (contexts) => {
                             const item = items[contexts[0]?.dataIndex];
@@ -910,7 +910,14 @@ document.addEventListener('estiba:office-panel-change', (event) => {
 });
 
 new MutationObserver(() => {
-    state.charts.forEach((chart) => chart.draw());
+    if (!state.dashboard) return;
+
+    applyChartTheme();
+    renderCameraChart(state.dashboard.camaras.detalle);
+    renderMaterialChart();
+    renderPrecoolingChart(state.dashboard.prefrio);
+    renderWeighbridgeChart(state.dashboard.romana);
+    renderContainerType();
 }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-office-theme'] });
 
 async function boot() {

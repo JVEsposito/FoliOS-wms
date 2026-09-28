@@ -1454,6 +1454,45 @@ td > .office-action-select,
     font-family: "Arial Narrow", "Roboto Condensed", "Segoe UI", Arial, sans-serif;
 }
 
+/* Las series del panel tienen identidad por tema. Los alias se resuelven contra
+   las superficies definitivas de cada tema, declaradas más adelante. */
+:root,
+:root[data-office-theme="light-professional"] {
+    --chart-grid: var(--line);
+    --chart-text: var(--text-secondary);
+    --chart-tooltip-bg: var(--raised);
+    --chart-tooltip-border: var(--line);
+    --series-product: #0e639d;
+    --series-material: #69519b;
+}
+
+:root[data-office-theme="light-natural"] {
+    --chart-grid: var(--line);
+    --chart-text: var(--text-secondary);
+    --chart-tooltip-bg: var(--raised);
+    --chart-tooltip-border: var(--line);
+    --series-product: #286b55;
+    --series-material: #705294;
+}
+
+:root[data-office-theme="light-warm"] {
+    --chart-grid: var(--line);
+    --chart-text: var(--text-secondary);
+    --chart-tooltip-bg: var(--raised);
+    --chart-tooltip-border: var(--line);
+    --series-product: #a35218;
+    --series-material: #74508f;
+}
+
+:root[data-office-theme="dark-industrial"] {
+    --chart-grid: var(--line);
+    --chart-text: var(--text-secondary);
+    --chart-tooltip-bg: var(--raised);
+    --chart-tooltip-border: var(--line);
+    --series-product: #65b5e6;
+    --series-material: #ac96e7;
+}
+
 body,
 .office-app {
     background: #eaf0f4 !important;
@@ -2498,4 +2537,15 @@ dialog[class*="dialog"],
 
 .office-app .management-kpi > p {
     margin: 2px 0 8px !important;
+}
+
+/* La regla transversal de KPI usa --corporate-blue con !important: restaurar
+   únicamente las dos series propias del panel, respetando el tema activo. */
+.office-app .management-kpi--product::before,
+.office-app .management-kpi--product .kpi-progress i {
+    background: var(--series-product) !important;
+}
+
+.office-app .management-kpi--material::before {
+    background: var(--series-material) !important;
 }
