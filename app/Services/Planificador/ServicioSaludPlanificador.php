@@ -28,6 +28,7 @@ final class ServicioSaludPlanificador
         private readonly ServicioDesplieguePlanificador $despliegue,
         private readonly ServicioEstadoArbitrajePlanificador $estadoArbitraje,
         private readonly ServicioRecalculosPendientesPlanificador $recalculos,
+        private readonly ServicioSaludProcesos $procesos,
     ) {}
 
     /** @return array<string, mixed> */
@@ -56,6 +57,7 @@ final class ServicioSaludPlanificador
             ],
             'despliegue' => $despliegue,
             'vigencia_arbitraje' => $vigenciaArbitraje,
+            'procesos' => $this->procesos->consultar(),
             'proyecciones_pendientes' => $this->recalculos->salud(),
             'salud' => $salud,
             'metricas' => $operacion,

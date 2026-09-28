@@ -29,3 +29,5 @@ Schedule::command('planificador:recalcular-arbitraje')
 Schedule::command('planificador:recuperar-proyecciones')
     ->everyMinute()
     ->withoutOverlapping(2);
+
+Schedule::command('salud:latido-scheduler')->everyMinute();

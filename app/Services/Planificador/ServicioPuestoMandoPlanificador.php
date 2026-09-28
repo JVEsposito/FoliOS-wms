@@ -21,6 +21,7 @@ final class ServicioPuestoMandoPlanificador
         private readonly ServicioDesplieguePlanificador $despliegue,
         private readonly ServicioEstadoArbitrajePlanificador $estadoArbitraje,
         private readonly ServicioSaludPlanificador $salud,
+        private readonly ServicioSaludProcesos $procesos,
         private readonly ServicioIntervencionesPlanificador $intervenciones,
     ) {}
 
@@ -40,6 +41,7 @@ final class ServicioPuestoMandoPlanificador
             'generado_at' => now()->toIso8601String(),
             'despliegue' => $this->despliegue->configuracion(),
             'salud' => $this->salud->saludActual($temporada->id),
+            'procesos' => $this->procesos->consultar(),
             'arbitraje' => [
                 'activo' => in_array($modo, ['shadow', 'guided'], true),
                 'vigencia' => $proyeccion,

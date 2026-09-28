@@ -46,12 +46,14 @@ use App\Observers\ReplanificarSegregacionMovimientoObserver;
 use App\Observers\SolicitarArbitrajePlanificadorObserver;
 use App\Observers\UbicacionActualObserver;
 use App\Services\Autorizacion\AlcanceOperacionalUsuario;
+use App\Services\Planificador\ServicioSaludProcesos;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\Transiciones\ContextoEjecucionTransicionOperacional;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Sanctum\Sanctum;
@@ -78,6 +80,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Queue::looping(fn () => app(ServicioSaludProcesos::class)->marcarWorker());
+
         RateLimiter::for(
             'existencias-cortes',
             fn (Request $request): Limit => Limit::perMinute(3)->by(
