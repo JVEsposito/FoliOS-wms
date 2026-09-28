@@ -3,6 +3,7 @@
 namespace Tests\Feature\Api;
 
 use App\Enums\ContenidoCamara;
+use App\Enums\EstadoCarga;
 use App\Enums\EstadoFolioProcesoPrefrio;
 use App\Enums\EstadoOperacionalFolio;
 use App\Enums\EstadoProcesoPrefrio;
@@ -10,6 +11,7 @@ use App\Enums\RolUsuario;
 use App\Enums\TipoBulto;
 use App\Models\Camara;
 use App\Models\Carga;
+use App\Models\CargaFolio;
 use App\Models\Cliente;
 use App\Models\ClienteMaterial;
 use App\Models\Dispositivo;
@@ -22,6 +24,7 @@ use App\Models\PosicionTunelPrefrio;
 use App\Models\ProcesoPrefrio;
 use App\Models\ProcesoPrefrioFolio;
 use App\Models\RecepcionRomana;
+use App\Models\ReservaCargaFolio;
 use App\Models\Temporada;
 use App\Models\TunelPrefrio;
 use App\Models\User;
@@ -170,6 +173,91 @@ class PanelGerencialApiTest extends TestCase
             ->assertJsonPath('data.productos.total_activos', 1)
             ->assertJsonPath('data.productos.pendientes_ubicacion', 0)
             ->assertJsonPath('data.productos.bloqueados', 1);
+    }
+
+    public function test_conserva_los_conteos_pt_y_desglosa_cargas_antiguedad_y_bultos(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-09-28 12:00:00'));
+        $temporada = Temporada::query()->where('activa', true)->firstOrFail();
+        $gerencia = User::factory()->create(['rol' => RolUsuario::Consulta]);
+        $administrador = User::factory()->create(['rol' => RolUsuario::Administrador]);
+        $ubicado = $this->crearProductoUbicado('PT-PANEL-UBICADO');
+        $ubicado->update(['fecha_ingreso' => now()->subDays(7)]);
+
+        $folio = function (string $codigo, EstadoOperacionalFolio $estado, TipoBulto $tipo, int $dias) use ($temporada): Folio {
+            return Folio::create([
+                'temporada_id' => $temporada->id,
+                'numero_folio' => $codigo,
+                'tipo_bulto' => $tipo,
+                'estado_operacional' => $estado,
+                'fecha_ingreso' => now()->subDays($dias),
+                'activo' => true,
+            ]);
+        };
+        $comprometido = $folio('PT-PANEL-COMPROMETIDO', EstadoOperacionalFolio::Disponible, TipoBulto::Pallet, 14);
+        $comprometidoSaldo = $folio('PT-PANEL-SALDO', EstadoOperacionalFolio::Disponible, TipoBulto::Saldo, 0);
+        $folio('PT-PANEL-PREFRIO', EstadoOperacionalFolio::PendientePrefrio, TipoBulto::Pallet, 15);
+        $folio('PT-PANEL-BLOQUEADO', EstadoOperacionalFolio::Bloqueado, TipoBulto::Pallet, 30);
+        $folio('PT-PANEL-SIN-UBICACION', EstadoOperacionalFolio::PendienteUbicacion, TipoBulto::Pallet, 31);
+        $folio('PT-PANEL-OTRO', EstadoOperacionalFolio::Disponible, TipoBulto::Pallet, 2);
+        $inactivo = $folio('PT-PANEL-INACTIVO', EstadoOperacionalFolio::Bloqueado, TipoBulto::Pallet, 31);
+        $inactivo->update(['activo' => false]);
+
+        $carga = Carga::create([
+            'temporada_id' => $temporada->id,
+            'codigo' => 'CAR-PANEL-PT',
+            'estado' => EstadoCarga::Pendiente,
+            'creada_por_user_id' => $administrador->id,
+            'actualizada_por_user_id' => $administrador->id,
+        ]);
+        foreach ([$comprometido, $comprometidoSaldo] as $producto) {
+            $asignacion = CargaFolio::create([
+                'carga_id' => $carga->id,
+                'folio_id' => $producto->id,
+                'asignado_por_user_id' => $administrador->id,
+                'asignado_at' => now(),
+            ]);
+            ReservaCargaFolio::create(['folio_id' => $producto->id, 'carga_folio_id' => $asignacion->id]);
+        }
+
+        $this->actingAs($gerencia, 'sanctum')
+            ->getJson('/api/gerencia/resumen')
+            ->assertOk()
+            ->assertJsonPath('data.productos.total_activos', 7)
+            ->assertJsonPath('data.productos.disponibles_despacho', 1)
+            ->assertJsonPath('data.productos.comprometidos_carga', 2)
+            ->assertJsonPath('data.productos.cargas_comprometidas', 1)
+            ->assertJsonPath('data.productos.pendientes_prefrio', 1)
+            ->assertJsonPath('data.productos.bloqueados', 1)
+            ->assertJsonPath('data.productos.pendientes_ubicacion', 1)
+            ->assertJsonPath('data.productos.ingresados_hoy', 1)
+            ->assertJsonPath('data.productos.pallets', 6)
+            ->assertJsonPath('data.productos.saldos', 1)
+            ->assertJsonPath('data.productos.otros', 1)
+            ->assertJsonPath('data.productos.disponibilidad_porcentaje', 14.3)
+            ->assertJsonPath('data.productos.antiguedad.umbral_alerta_dias', 30)
+            ->assertJsonPath('data.productos.antiguedad.tramos.0.total', 3)
+            ->assertJsonPath('data.productos.antiguedad.tramos.1.total', 1)
+            ->assertJsonPath('data.productos.antiguedad.tramos.2.total', 2)
+            ->assertJsonPath('data.productos.antiguedad.tramos.3.total', 1)
+            ->assertJsonPath('data.productos.antiguedad.sobre_umbral', 1)
+            ->assertJsonPath('data.productos.antiguedad.sin_fecha', 0);
+    }
+
+    public function test_productos_consulta_la_base_como_maximo_tres_veces(): void
+    {
+        $temporada = Temporada::query()->where('activa', true)->firstOrFail();
+        $metodo = new \ReflectionMethod(ServicioPanelGerencial::class, 'productos');
+
+        DB::enableQueryLog();
+        DB::flushQueryLog();
+        try {
+            $metodo->invoke(app(ServicioPanelGerencial::class), $temporada->id);
+            $this->assertLessThanOrEqual(3, count(DB::getQueryLog()));
+        } finally {
+            DB::disableQueryLog();
+            DB::flushQueryLog();
+        }
     }
 
     public function test_desglosa_envases_por_tipo_stock_fisico_cuenta_cliente_y_siete_dias(): void

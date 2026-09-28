@@ -44,7 +44,7 @@ use Illuminate\Support\Str;
 
 class ServicioPanelGerencial
 {
-    public const CLAVE_CACHE = 'gerencia:panel:resumen:v4';
+    public const CLAVE_CACHE = 'gerencia:panel:resumen:v5';
 
     private const CLAVE_BLOQUEO = 'gerencia:panel:resumen:bloqueo';
 
@@ -211,11 +211,31 @@ class ServicioPanelGerencial
      */
     private function productos(string $temporadaId): array
     {
+        $tramos = config('gerencia.antiguedad_pt_tramos_dias', [7, 14, 30]);
+        $inicioHoy = now()->startOfDay();
+        $fecha7 = $inicioHoy->copy()->subDays($tramos[0]);
+        $fecha14 = $inicioHoy->copy()->subDays($tramos[1]);
+        $fechaUmbral = $inicioHoy->copy()->subDays($tramos[2]);
         $base = Folio::query()
             ->where('temporada_id', $temporadaId)
             ->where('activo', true)
             ->whereIn('tipo_bulto', [TipoBulto::Pallet->value, TipoBulto::Saldo->value]);
-        $total = (clone $base)->count();
+        $conteos = (clone $base)
+            ->selectRaw('COUNT(*) as total_activos')
+            ->selectRaw('SUM(CASE WHEN estado_operacional = ? AND EXISTS (SELECT 1 FROM carga_folios cf INNER JOIN reservas_carga_folio r ON r.carga_folio_id = cf.id WHERE cf.folio_id = folios.id) THEN 1 ELSE 0 END) as comprometidos_carga', [EstadoOperacionalFolio::Disponible->value])
+            ->selectRaw('SUM(CASE WHEN estado_operacional = ? THEN 1 ELSE 0 END) as pendientes_prefrio', [EstadoOperacionalFolio::PendientePrefrio->value])
+            ->selectRaw('SUM(CASE WHEN estado_operacional = ? THEN 1 ELSE 0 END) as bloqueados', [EstadoOperacionalFolio::Bloqueado->value])
+            ->selectRaw('SUM(CASE WHEN estado_operacional = ? THEN 1 ELSE 0 END) as pendientes_ubicacion', [EstadoOperacionalFolio::PendienteUbicacion->value])
+            ->selectRaw('SUM(CASE WHEN fecha_ingreso >= ? THEN 1 ELSE 0 END) as ingresados_hoy', [$inicioHoy])
+            ->selectRaw('SUM(CASE WHEN tipo_bulto = ? THEN 1 ELSE 0 END) as pallets', [TipoBulto::Pallet->value])
+            ->selectRaw('SUM(CASE WHEN tipo_bulto = ? THEN 1 ELSE 0 END) as saldos', [TipoBulto::Saldo->value])
+            ->selectRaw('SUM(CASE WHEN fecha_ingreso >= ? THEN 1 ELSE 0 END) as tramo_0_7', [$fecha7])
+            ->selectRaw('SUM(CASE WHEN fecha_ingreso >= ? AND fecha_ingreso < ? THEN 1 ELSE 0 END) as tramo_8_14', [$fecha14, $fecha7])
+            ->selectRaw('SUM(CASE WHEN fecha_ingreso >= ? AND fecha_ingreso < ? THEN 1 ELSE 0 END) as tramo_15_30', [$fechaUmbral, $fecha14])
+            ->selectRaw('SUM(CASE WHEN fecha_ingreso < ? THEN 1 ELSE 0 END) as sobre_umbral', [$fechaUmbral])
+            ->selectRaw('SUM(CASE WHEN fecha_ingreso IS NULL THEN 1 ELSE 0 END) as sin_fecha')
+            ->firstOrFail();
+        $total = (int) $conteos->total_activos;
         $disponibles = (clone $base)
             ->where('estado_operacional', EstadoOperacionalFolio::Disponible->value)
             ->whereDoesntHave('asignacionCargaActual')
@@ -231,24 +251,20 @@ class ServicioPanelGerencial
                     ),
             )
             ->count();
-        $comprometidos = (clone $base)
-            ->where('estado_operacional', EstadoOperacionalFolio::Disponible->value)
-            ->whereHas('asignacionCargaActual')
-            ->count();
-        $pendientes = (clone $base)
-            ->where('estado_operacional', EstadoOperacionalFolio::PendientePrefrio->value)
-            ->count();
-        $bloqueados = (clone $base)
-            ->where('estado_operacional', EstadoOperacionalFolio::Bloqueado->value)
-            ->count();
-        $pendientesUbicacion = (clone $base)
-            ->where('estado_operacional', EstadoOperacionalFolio::PendienteUbicacion->value)
-            ->count();
-        $ingresadosHoy = (clone $base)
-            ->where('fecha_ingreso', '>=', now()->startOfDay())
-            ->count();
-        $pallets = (clone $base)->where('tipo_bulto', TipoBulto::Pallet->value)->count();
-        $saldos = (clone $base)->where('tipo_bulto', TipoBulto::Saldo->value)->count();
+        $cargasComprometidas = DB::table('folios')
+            ->join('carga_folios', 'carga_folios.folio_id', '=', 'folios.id')
+            ->join('reservas_carga_folio', 'reservas_carga_folio.carga_folio_id', '=', 'carga_folios.id')
+            ->where('folios.temporada_id', $temporadaId)
+            ->where('folios.activo', true)
+            ->whereIn('folios.tipo_bulto', [TipoBulto::Pallet->value, TipoBulto::Saldo->value])
+            ->where('folios.estado_operacional', EstadoOperacionalFolio::Disponible->value)
+            ->distinct()
+            ->count('carga_folios.carga_id');
+
+        $comprometidos = (int) $conteos->comprometidos_carga;
+        $pendientes = (int) $conteos->pendientes_prefrio;
+        $bloqueados = (int) $conteos->bloqueados;
+        $pendientesUbicacion = (int) $conteos->pendientes_ubicacion;
 
         return [
             'total_activos' => $total,
@@ -257,9 +273,21 @@ class ServicioPanelGerencial
             'pendientes_prefrio' => $pendientes,
             'bloqueados' => $bloqueados,
             'pendientes_ubicacion' => $pendientesUbicacion,
-            'ingresados_hoy' => $ingresadosHoy,
-            'pallets' => $pallets,
-            'saldos' => $saldos,
+            'ingresados_hoy' => (int) $conteos->ingresados_hoy,
+            'pallets' => (int) $conteos->pallets,
+            'saldos' => (int) $conteos->saldos,
+            'cargas_comprometidas' => $cargasComprometidas,
+            'antiguedad' => [
+                'tramos' => [
+                    ['desde_dias' => 0, 'hasta_dias' => $tramos[0], 'total' => (int) $conteos->tramo_0_7],
+                    ['desde_dias' => $tramos[0] + 1, 'hasta_dias' => $tramos[1], 'total' => (int) $conteos->tramo_8_14],
+                    ['desde_dias' => $tramos[1] + 1, 'hasta_dias' => $tramos[2], 'total' => (int) $conteos->tramo_15_30],
+                    ['desde_dias' => $tramos[2] + 1, 'hasta_dias' => null, 'total' => (int) $conteos->sobre_umbral],
+                ],
+                'umbral_alerta_dias' => $tramos[2],
+                'sobre_umbral' => (int) $conteos->sobre_umbral,
+                'sin_fecha' => (int) $conteos->sin_fecha,
+            ],
             'otros' => max(
                 0,
                 $total - $disponibles - $comprometidos - $pendientes - $bloqueados - $pendientesUbicacion,
