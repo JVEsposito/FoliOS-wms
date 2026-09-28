@@ -19,8 +19,13 @@ recepción, incluso después de confirmar la validación. Las operaciones son in
 | `tipo_envase` | Texto | Opcional: `bins`, `totes` o `esponjas`. |
 | `cantidad_afectada` | Entero | Opcional, entre 1 y 100000. |
 | `descripcion` | Texto | Obligatorio, máximo 2000 caracteres. |
-| `fotografias[]` | Archivo | Entre 1 y 3 imágenes JPEG, PNG o WebP; hasta 1536 KiB cada una. |
+| `fotografias[]` | Archivo | Entre 1 y 3 imágenes JPEG, PNG o WebP; hasta 5 MiB cada una. |
 | `fotografia_guia` | Archivo | Imagen opcional con los mismos formatos y límite. |
+
+Con tres fotos del defecto y una de la guía, una solicitud puede acercarse a 20 MiB.
+En el PHP que usa Apache (Laragon), configurar `upload_max_filesize = 8M` y
+`post_max_size = 32M`, y reiniciar Apache para aplicar los cambios. El límite de
+5 MiB se valida por archivo tanto en la app como en la API.
 
 El número de guía, cliente, temporada, validador, dispositivo y hora se toman del
 servidor. El mismo UUID y contenido devuelve el registro existente (200); un UUID
