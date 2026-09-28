@@ -50,6 +50,9 @@ test('los temas claro y oscuro mantienen contraste AA en contenido y selección'
         assert.ok(contrast(variables['text-subtle'], variables['kpi-surface']) >= 4.5);
         assert.ok(contrast(variables['warning-text'], variables['warning-bg']) >= 4.5);
         assert.ok(contrast(variables['success-text'], variables['surface-muted']) >= 4.5);
+        for (const text of ['text-strong', 'text-secondary', 'success-text', 'info-text', 'warning-text', 'danger-text']) {
+            assert.ok(contrast(variables[text], variables.panel) >= 4.5, `${text} sobre el panel gerencial`);
+        }
     });
 });
 

@@ -564,7 +564,7 @@ body {
     padding: 0 10px;
     border: 1px solid rgba(85, 229, 223, .26);
     border-radius: 8px;
-    color: var(--cyan-light);
+    color: inherit;
     background: rgba(22, 201, 194, .07);
     font-size: .67rem;
     font-weight: 900;
