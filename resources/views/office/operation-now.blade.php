@@ -89,6 +89,8 @@
                             </dl>
                             <dl class="operation-now-planner__summary" aria-label="Decisiones del ciclo vigente">
                                 <div data-decision="en_ejecucion"><dt>En curso</dt><dd id="plannerRunningCount">0</dd></div>
+                                <div data-decision="pausada"><dt>Pausadas</dt><dd id="plannerPausedCount">0</dd></div>
+                                <div data-decision="sin_objetivo"><dt>Pallets sin ubicación ni objetivo</dt><dd id="plannerUnpositionedCount">0</dd></div>
                                 <div data-decision="seleccionada"><dt>Listas para tomar</dt><dd id="plannerSelectedCount">0</dd></div>
                                 <div data-decision="alternativa"><dt>En espera</dt><dd id="plannerAlternativeCount">0</dd></div>
                                 <div data-decision="excluida_conflicto"><dt>Bloqueadas por otra</dt><dd id="plannerConflictCount">0</dd></div>

@@ -5,6 +5,7 @@ namespace App\Services\Planificador;
 use App\Enums\DecisionArbitrajeManiobra;
 use App\Enums\EstadoCustodiaTemporal;
 use App\Enums\EstadoDiscrepanciaManiobra;
+use App\Enums\EstadoManiobraOperacional;
 use App\Enums\EstadoTareaMovimiento;
 use App\Models\Camara;
 use App\Models\CicloArbitrajeManiobras;
@@ -88,12 +89,20 @@ final class ServicioPuestoMandoPlanificador
                     ->count(),
             ])
             ->all();
+        $resumen['en_curso'] = $decisiones->filter(fn (DecisionPersistida $decision): bool => $decision->maniobraOperacional->estado === EstadoManiobraOperacional::EnEjecucion)->count();
+        $resumen['pausadas'] = $decisiones->filter(fn (DecisionPersistida $decision): bool => in_array(
+            $decision->maniobraOperacional->estado,
+            [EstadoManiobraOperacional::PausadaDiscrepancia, EstadoManiobraOperacional::PausadaSupervision],
+            true,
+        ))->count();
 
         return [
             'id' => $ciclo->id,
             'snapshot_version' => $ciclo->snapshot_version,
             'generado_at' => $ciclo->created_at?->toIso8601String(),
             'capacidad_ejecucion' => $ciclo->capacidad_ejecucion,
+            'cupos_ocupados' => data_get($decisiones->first()?->explicacion, 'capacidad.ocupantes_fisicos')
+                ?? $resumen[DecisionArbitrajeManiobra::EnEjecucion->value],
             'frontera_max' => $ciclo->frontera_max,
             'resumen' => $resumen,
             'decisiones' => $decisiones

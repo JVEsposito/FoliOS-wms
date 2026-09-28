@@ -289,7 +289,8 @@ class OperacionAhoraApiTest extends TestCase
             ->assertJsonPath('data.camareros.0.dispositivo.codigo', 'TAB-ACTIVA-01')
             ->assertJsonPath('data.camareros.0.sesion.id', $sesionActiva->id)
             ->assertJsonPath('data.camareros.0.sesion.estado', 'abierta')
-            ->assertJsonPath('data.camareros.0.ubicacion_actual.camara.codigo', 'CAM-SESION')
+            ->assertJsonPath('data.camareros.0.ubicacion_actual.tipo', 'transito')
+            ->assertJsonPath('data.camareros.0.ubicacion_actual.camara', null)
             ->assertJsonPath('data.camareros.0.tarea_actual.id', $tareaActual->id)
             ->assertJsonPath('data.camareros.0.tarea_actual.estado', 'en_proceso')
             ->assertJsonPath('data.camareros.0.tarea_actual.prioridad', 'normal')
@@ -297,6 +298,37 @@ class OperacionAhoraApiTest extends TestCase
             ->assertJsonPath('data.camareros.0.tarea_actual.folio.numero_folio', 'PAL-ACTUAL-001')
             ->assertJsonPath('data.camareros.0.tarea_actual.origen.camara.codigo', 'CAM-ORIGEN')
             ->assertJsonPath('data.camareros.0.tarea_actual.destino.camara.codigo', 'CAM-DESTINO');
+    }
+
+    public function test_muestra_tarea_asumida_sin_sesion_y_oculta_sesion_inactiva(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-09-08 12:00:00 UTC'));
+        config(['planificador.camarero_sesion_inactiva_minutos' => 30]);
+        $temporada = $this->crearTemporada();
+        $consulta = User::factory()->create(['rol' => RolUsuario::Consulta]);
+        $activo = User::factory()->create(['rol' => RolUsuario::CamareroFrio]);
+        $inactivo = User::factory()->create(['rol' => RolUsuario::CamareroFrio]);
+        $tabletActiva = Dispositivo::create(['codigo' => 'TAB-SIN-SESION', 'nombre' => 'Tablet sin sesión']);
+        $tabletInactiva = Dispositivo::create(['codigo' => 'TAB-INACTIVA', 'nombre' => 'Tablet inactiva']);
+        $origen = $this->crearCamara('CAM-ORIGEN-02', 'Cámara origen');
+        $destino = $this->crearCamara('CAM-DESTINO-02', 'Cámara destino');
+        $sesion = app(ServicioSesionEstiba::class)->abrir($origen, $inactivo, $tabletInactiva);
+        $sesion->update(['ultima_actividad_at' => now()->subDays(4)]);
+        $tarea = $this->crearTarea(
+            $this->crearPlan($temporada, $consulta, 'Plan sin sesión'),
+            $temporada, $activo, $tabletActiva, $origen, $destino,
+            EstadoTareaMovimiento::Asumida, PrioridadOperacional::Alta,
+            'PAL-SIN-SESION', now()->subMinutes(3),
+        );
+
+        $this->actingAs($consulta, 'sanctum')->getJson('/api/operacion-ahora')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.camareros')
+            ->assertJsonPath('data.camareros.0.sesion', null)
+            ->assertJsonPath('data.camareros.0.dispositivo.codigo', 'TAB-SIN-SESION')
+            ->assertJsonPath('data.camareros.0.ubicacion_actual.tipo', 'origen')
+            ->assertJsonPath('data.camareros.0.ubicacion_actual.camara.codigo', 'CAM-ORIGEN-02')
+            ->assertJsonPath('data.camareros.0.tarea_actual.id', $tarea->id);
     }
 
     public function test_consolida_estado_y_avance_temporal_de_prefrio(): void
@@ -581,7 +613,10 @@ class OperacionAhoraApiTest extends TestCase
             ->assertJsonPath('data.planificador.arbitraje.vigencia.estado', 'actual')
             ->assertJsonPath('data.planificador.arbitraje.vigencia.vigente', true)
             ->assertJsonPath('data.planificador.arbitraje.ciclo.capacidad_ejecucion', 3)
+            ->assertJsonPath('data.planificador.arbitraje.ciclo.cupos_ocupados', 0)
             ->assertJsonPath('data.planificador.arbitraje.ciclo.frontera_max', 4)
+            ->assertJsonPath('data.planificador.arbitraje.ciclo.resumen.en_curso', 0)
+            ->assertJsonPath('data.planificador.arbitraje.ciclo.resumen.pausadas', 0)
             ->assertJsonPath('data.planificador.arbitraje.ciclo.resumen.seleccionada', 1)
             ->assertJsonCount(1, 'data.planificador.arbitraje.ciclo.decisiones')
             ->assertJsonPath('data.planificador.arbitraje.ciclo.decisiones.0.maniobra_id', $maniobra->id)

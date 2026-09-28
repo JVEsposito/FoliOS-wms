@@ -6,7 +6,7 @@ import {
     operationLocationLabel,
 } from '../../resources/js/shared/operation-supervision-drawer.js';
 
-test('presenta nombres operacionales y posición sin exponer el identificador interno', () => {
+test('presenta código, nombre y posición sin exponer el identificador interno', () => {
     const label = operationLocationLabel({
         id: 'uuid-camara',
         codigo: 'CAM-09',
@@ -17,8 +17,8 @@ test('presenta nombres operacionales y posición sin exponer el identificador in
         },
     });
 
-    assert.equal(label, 'Cámara de tránsito 07 · B02-P04-N1');
-    assert.doesNotMatch(label, /uuid|CAM-09/);
+    assert.equal(label, 'CAM-09 · Cámara de tránsito 07 · B02-P04-N1');
+    assert.doesNotMatch(label, /uuid/);
 });
 
 test('normaliza el detalle completo de supervisión sin publicar UUID de conflictos', () => {
