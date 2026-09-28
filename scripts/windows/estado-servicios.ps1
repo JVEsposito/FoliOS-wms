@@ -12,7 +12,7 @@ foreach ($nombre in @('FoliOS Worker', 'FoliOS Scheduler')) {
         continue
     }
     $info = Get-ScheduledTaskInfo -TaskName $nombre
-    Write-Host "$nombre : $($tarea.State) · ultima ejecucion $($info.LastRunTime) · resultado $($info.LastTaskResult)"
+    Write-Host "$nombre : $($tarea.State) · cuenta $($tarea.Principal.UserId) · ultima ejecucion $($info.LastRunTime) · resultado $($info.LastTaskResult)"
 }
 
 if (-not $Php) {

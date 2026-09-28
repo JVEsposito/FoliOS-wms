@@ -1,6 +1,7 @@
 param(
     [string] $Proyecto = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path,
-    [string] $Php
+    [string] $Php,
+    [string] $Usuario = [Security.Principal.WindowsIdentity]::GetCurrent().Name
 )
 
 $ErrorActionPreference = 'Stop'
@@ -18,8 +19,7 @@ if (-not $Php) {
 $Php = (Resolve-Path $Php -ErrorAction Stop).Path
 if (-not (Test-Path (Join-Path $Proyecto 'artisan'))) { throw "No se encontro artisan en $Proyecto" }
 
-$usuario = [Security.Principal.WindowsIdentity]::GetCurrent().Name
-$principal = New-ScheduledTaskPrincipal -UserId $usuario -LogonType S4U -RunLevel Limited
+$principal = New-ScheduledTaskPrincipal -UserId $Usuario -LogonType S4U -RunLevel Limited
 $ajustes = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Seconds 0) `
     -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -StartWhenAvailable
 
@@ -41,5 +41,5 @@ Register-ScheduledTask -TaskName 'FoliOS Scheduler' -Action $schedulerAccion `
     -Trigger $schedulerTrigger -Settings $ajustes -Principal $principal `
     -Description 'Ejecuta schedule:run cada minuto' -Force | Out-Null
 
-Write-Host "Tareas FoliOS instaladas para $usuario con $Php."
+Write-Host "Tareas FoliOS instaladas para $Usuario con $Php."
 Write-Host 'Verifique el estado con .\scripts\windows\estado-servicios.ps1'
