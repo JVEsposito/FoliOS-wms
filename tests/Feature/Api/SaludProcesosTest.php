@@ -44,14 +44,16 @@ class SaludProcesosTest extends TestCase
         $this->assertNotNull(Cache::get('salud:scheduler:latido'));
 
         Artisan::call('sistema:estado-procesos');
-        $this->assertStringContainsString('worker: activo', Artisan::output());
-        $this->assertStringContainsString('scheduler: activo', Artisan::output());
-        $this->assertStringContainsString('arbitraje:', Artisan::output());
+        $salida = Artisan::output();
+        $this->assertStringContainsString('worker: activo', $salida);
+        $this->assertStringContainsString('scheduler: activo', $salida);
+        $this->assertStringContainsString('arbitraje:', $salida);
 
         $this->travel(151)->seconds();
         Artisan::call('sistema:estado-procesos');
-        $this->assertStringContainsString('worker: detenido', Artisan::output());
-        $this->assertStringContainsString('scheduler: detenido', Artisan::output());
+        $salida = Artisan::output();
+        $this->assertStringContainsString('worker: detenido', $salida);
+        $this->assertStringContainsString('scheduler: detenido', $salida);
     }
 
     public function test_salud_y_operacion_ahora_muestran_ambos_estados_sin_modificar_las_lecturas(): void
