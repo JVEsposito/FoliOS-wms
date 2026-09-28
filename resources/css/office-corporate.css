@@ -2142,6 +2142,9 @@ dialog[class*="dialog"] {
 
 dialog[class*="dialog"] :is(h2, h3, h4, strong) { color: var(--text-strong) !important; }
 dialog[class*="dialog"] :is(p, small, label, legend, label > span) { color: var(--text-secondary) !important; }
+/* Los avisos semánticos del diálogo de anulaciones conservan su estado. */
+dialog[class*="dialog"] .annulment-warning { color: var(--danger-text) !important; }
+dialog[class*="dialog"] .annulment-correction-state { color: var(--info-text) !important; }
 
 /* Cabeceras y filtros permanecen dentro del panel incluso al reducir el ancho. */
 .office-app :is(.raw-material-panel-heading, .process-panel__heading, .return-panel__heading, .admin-panel__heading, .discrepancies-panel__heading) {
