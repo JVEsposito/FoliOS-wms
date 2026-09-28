@@ -28,6 +28,13 @@ import {
 } from '../domain/operationalTasks';
 import { buildOperatorTaskHome, type OperatorQueueItem } from '../domain/operatorTaskQueue';
 import { calculateRollingFrontier } from '../domain/rollingPlanner';
+import {
+  previewableTasks,
+  materializationOutcome,
+  reusablePreviewProposal,
+  simulateFrontierPreview,
+  type FrontierPreview,
+} from '../domain/rollingPlannerPreview';
 import { useOperationalPolling } from '../hooks/useOperationalPolling';
 import { ApiError } from '../services/apiError';
 import { EstibaApi } from '../services/estibaApi';
@@ -71,8 +78,12 @@ export function OperationalTaskInbox({ api, auth }: Props) {
   const [notice, setNotice] = useState('');
   const [confirmation, setConfirmation] = useState<FolioConfirmationState | null>(null);
   const [clock, setClock] = useState(Date.now());
+  const [plannerFresh, setPlannerFresh] = useState<boolean | null>(null);
+  const [suggestedDestinations, setSuggestedDestinations] = useState<Record<string, string>>({});
   const initialLoad = useRef(true);
   const loadInFlight = useRef(false);
+  const preview = useRef<FrontierPreview | null>(null);
+  const previewGeneration = useRef(0);
   const executionSessions = useRef<OpenSession[]>([]);
 
   const inPhysicalMovement = activeTask?.estado === 'en_proceso';
@@ -94,6 +105,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
 
   useEffect(() => {
     void loadTasks();
+    return () => { previewGeneration.current += 1; preview.current = null; };
   }, [taskApi, auth.token]);
 
   // La confirmación pertenece a una tarea concreta antes de iniciar.
@@ -153,6 +165,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
       setMine(nextMine);
       setAvailable(nextAvailable);
       setError('');
+      void precalculate(nextMine, nextAvailable);
 
       setActiveTask((current) => {
         if (!current) return current;
@@ -170,6 +183,43 @@ export function OperationalTaskInbox({ api, auth }: Props) {
     } finally {
       loadInFlight.current = false;
       if (!quiet) setBusy(false);
+    }
+  }
+
+  async function precalculate(nextMine: OperationalTask[], nextAvailable: OperationalTask[]) {
+    if (!taskApi) return;
+    const generation = ++previewGeneration.current;
+    preview.current = null;
+    setSuggestedDestinations({});
+    try {
+      const snapshot = await taskApi.physicalFrontierSnapshot(auth.token);
+      if (generation !== previewGeneration.current) return;
+      setPlannerFresh(snapshot.arbitraje.vigencia.vigente);
+      if (!snapshot.arbitraje.vigencia.vigente
+        || snapshot.planner.horizon !== 'rolling'
+        || snapshot.planner.compute !== 'tablet') return;
+
+      const tasks = previewableTasks([...nextMine, ...nextAvailable]);
+      if (!tasks.length) return;
+      const directedCameraIds = new Set(snapshot.camaras.map((camera) => camera.id));
+      const cameras = (await api.listCameras(auth.token))
+        .filter((camera) => camera.contenido === 'productos'
+          && camera.estado === 'activa'
+          && directedCameraIds.has(camera.id));
+      if (generation !== previewGeneration.current || !cameras.length) return;
+      const requiredIds = candidateCameraIds(tasks, cameras.map((camera) => camera.id));
+      const plans = await Promise.all([...requiredIds].map((id) => api.getPlan(auth.token, id)));
+      if (generation !== previewGeneration.current) return;
+      const result = simulateFrontierPreview(tasks, snapshot, plans);
+      preview.current = result;
+      setSuggestedDestinations(result.destinations);
+    } catch {
+      if (generation === previewGeneration.current) {
+        preview.current = null;
+        setPlannerFresh(null);
+        setSuggestedDestinations({});
+      }
+      // La simulación no bloquea la bandeja: la materialización normal sigue disponible.
     }
   }
 
@@ -289,7 +339,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
     setError('');
 
     try {
-      const snapshot = await taskApi.physicalFrontierSnapshot(auth.token);
+      let snapshot = await taskApi.physicalFrontierSnapshot(auth.token);
       if (snapshot.planner.horizon !== 'rolling' || snapshot.planner.compute !== 'tablet') {
         throw new Error(
           `El planificador está configurado como ${snapshot.planner.compute}/${snapshot.planner.horizon}; no corresponde cálculo rolling en tablet.`,
@@ -300,6 +350,27 @@ export function OperationalTaskInbox({ api, auth }: Props) {
           `El arbitraje está ${snapshot.arbitraje.vigencia.estado}. `
           + `${snapshot.arbitraje.vigencia.detalle} Espera la próxima actualización antes de mover el pallet.`,
         );
+      }
+
+      const cachedProposal = reusablePreviewProposal(preview.current, snapshot, anchorTask);
+      if (cachedProposal) {
+        try {
+          const cachedResult = await taskApi.materializePhysicalFrontier(
+            auth.token, snapshot.snapshot_version, [cachedProposal],
+          );
+          const { accepted, recalculate } = materializationOutcome(cachedResult, anchorTask.id);
+          if (accepted) {
+            replaceMine([accepted]);
+            setActiveTask(accepted);
+            setNotice(`Destino sugerido confirmado: ${operationalTaskPositionLabel(accepted.destino)}.${recalculate ? ' Otras propuestas requieren actualización.' : ''}`);
+            preview.current = null;
+            return;
+          }
+        } catch (reason) {
+          if (!(reason instanceof ApiError && reason.status === 409)) throw reason;
+        }
+        // Un rechazo parcial o una versión obsoleta exige recalcular con estado nuevo.
+        snapshot = await taskApi.physicalFrontierSnapshot(auth.token);
       }
 
       const tasksForFrontier = dedupeTasks([
@@ -807,10 +878,12 @@ export function OperationalTaskInbox({ api, auth }: Props) {
           busy={busy}
           mineCount={mine.length}
           next={home.next}
+          plannerFresh={plannerFresh}
           onOpen={openHomeTask}
           onRefresh={() => void loadTasks()}
           onViewChange={(source) => setTab(source === 'mine' ? 'mias' : 'disponibles')}
           queue={homeQueue}
+          suggestedDestinations={suggestedDestinations}
           view={homeView}
         />
       )}

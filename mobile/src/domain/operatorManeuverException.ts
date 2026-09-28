@@ -1,4 +1,4 @@
-import type { ManeuverDiscrepancyType } from './operationalTasks';
+import type { ManeuverDiscrepancyType, OperationalTask } from './operationalTasks';
 
 export type OperatorExceptionKind = 'mismatch' | 'impossible';
 
@@ -9,6 +9,11 @@ export type OperatorExceptionOption = {
 };
 
 const MISMATCH_OPTIONS: readonly OperatorExceptionOption[] = [
+  {
+    type: 'pallet_no_encontrado',
+    label: 'Pallet no encontrado',
+    description: 'No se encontró físicamente el pallet que indica la tarea.',
+  },
   {
     type: 'pallet_no_coincide',
     label: 'Pallet distinto',
@@ -51,6 +56,10 @@ const IMPOSSIBLE_OPTIONS: readonly OperatorExceptionOption[] = [
 
 export function operatorExceptionOptions(kind: OperatorExceptionKind): readonly OperatorExceptionOption[] {
   return kind === 'mismatch' ? MISMATCH_OPTIONS : IMPOSSIBLE_OPTIONS;
+}
+
+export function isLocationReconciliation(task: OperationalTask): boolean {
+  return task.contexto?.origen_logico === 'ubicacion_historica_por_verificar';
 }
 
 export function operatorExceptionTitle(kind: OperatorExceptionKind) {
