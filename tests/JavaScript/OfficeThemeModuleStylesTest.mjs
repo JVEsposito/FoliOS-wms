@@ -8,6 +8,7 @@ const migratedStyles = [
     'office-raw-material-returns.css',
     'office-validation-annulments.css',
     'office-inventory-exports.css',
+    'office-management.css',
 ];
 
 for (const name of migratedStyles) {
