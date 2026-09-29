@@ -32,6 +32,11 @@ class VerificacionUbicacionApiTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        // CI migra previamente la base MySQL completa. Esta suite utiliza un
+        // esquema mínimo en una conexión privada para no recrear ni alterar
+        // sus tablas y para probar exactamente las consultas del servicio.
+        config(['database.default' => 'sqlite', 'database.connections.sqlite.database' => ':memory:']);
+        DB::purge('sqlite');
         config(['verificaciones.habilitada' => true, 'verificaciones.posiciones_por_ronda' => 1]);
         Schema::create('temporadas', function (Blueprint $t): void {
             $t->uuid('id')->primary();
