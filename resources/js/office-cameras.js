@@ -1,5 +1,6 @@
 import { cameraDisplayName } from './shared/camera-display';
 import { bandAffinityText } from './shared/camera-band-affinity';
+import { canSuperviseEmergency, confirmsCameraCode, emergencyEndpoint, emergencyError } from './shared/camera-emergency';
 import {
     bandNumberingLabel,
     LEFT_TO_RIGHT,
@@ -104,6 +105,18 @@ const elements = {
     cameraManeuverCount: byId('cameraManeuverCount'),
     cameraManeuverList: byId('cameraManeuverList'),
     cameraRecentList: byId('cameraRecentList'),
+    cameraEmergency: byId('cameraEmergency'),
+    cameraEmergencyStatus: byId('cameraEmergencyStatus'),
+    cameraEmergencyDeclare: byId('cameraEmergencyDeclare'),
+    cameraEmergencyCancel: byId('cameraEmergencyCancel'),
+    cameraEmergencyDialog: byId('cameraEmergencyDialog'),
+    cameraEmergencyForm: byId('cameraEmergencyForm'),
+    cameraEmergencyDialogTitle: byId('cameraEmergencyDialogTitle'),
+    cameraEmergencyDialogHelp: byId('cameraEmergencyDialogHelp'),
+    cameraEmergencyConfirmationLabel: byId('cameraEmergencyConfirmationLabel'),
+    cameraEmergencyError: byId('cameraEmergencyError'),
+    cameraEmergencySubmit: byId('cameraEmergencySubmit'),
+    cameraEmergencyClose: byId('cameraEmergencyClose'),
 };
 
 const keys = {
@@ -177,7 +190,10 @@ async function api(path, options = {}) {
     const data = response.status === 204 ? null : await response.json().catch(() => ({}));
     if (!response.ok) {
         if (response.status === 401 && path !== '/api/acceso-oficina') clearSession();
-        throw new ApiError(errorMessage(data, 'No fue posible completar la operación.'), response.status);
+        const fallback = 'No fue posible completar la operación.';
+        throw new ApiError(path.startsWith('/api/evacuaciones-emergencia/')
+            ? emergencyError(data, fallback)
+            : errorMessage(data, fallback), response.status);
     }
     return data;
 }
@@ -633,11 +649,43 @@ function renderSelectedOperationalCamera() {
     elements.cameraOpsMeta.textContent = `${statusText(plan.tipo)} · ${statusText(plan.contenido)} · versión de plano ${plan.version_plano}${unclosed ? ` · ${formatNumber(unclosed)} ${unclosed === 1 ? 'registro' : 'registros'} sin cerrar de otra temporada` : ''}`;
     elements.cameraOpsAccess.textContent = access.text;
     elements.cameraOpsAccess.dataset.tone = access.tone;
+    renderEmergency(plan);
     renderOperationalSummary(plan);
     renderOperationalBands(plan);
     renderOperationalManeuvers(plan);
     renderOperationalMovements(state.operationalMovements);
     renderOperationalEnvironment(state.operationalEnvironment);
+}
+
+function renderEmergency(plan) {
+    const emergency = plan.emergencia;
+    const supervisor = canSuperviseEmergency(state.identity);
+    elements.cameraEmergency.dataset.tone = emergency ? 'critical' : 'neutral';
+    elements.cameraEmergencyDeclare.hidden = !supervisor || Boolean(emergency);
+    elements.cameraEmergencyCancel.hidden = !supervisor || !emergency;
+    if (!emergency) {
+        elements.cameraEmergencyStatus.textContent = 'Sin evacuación de emergencia activa.';
+        return;
+    }
+    const progress = `${formatNumber(emergency.pallets_evacuados)} de ${formatNumber(emergency.pallets_objetivo)} pallets evacuados · ${formatPercent(emergency.porcentaje_actual)}`;
+    elements.cameraEmergencyStatus.innerHTML = `<strong>Evacuación de emergencia activa en ${escapeHtml(plan.codigo)}</strong><span>${escapeHtml(emergency.motivo)} · ${escapeHtml(emergency.declarada_por || 'Supervisor no informado')} · ${escapeHtml(formatDateTime(emergency.declarada_at))}</span><span>${escapeHtml(progress)}</span>`;
+}
+
+function openEmergencyDialog(action) {
+    const plan = state.selectedOperationalPlan;
+    if (!plan || !canSuperviseEmergency(state.identity)) return;
+    elements.cameraEmergencyForm.reset();
+    elements.cameraEmergencyError.textContent = '';
+    elements.cameraEmergencyDialog.dataset.action = action;
+    const declaring = action === 'declarar';
+    elements.cameraEmergencyDialogTitle.textContent = declaring ? 'Declarar evacuación de emergencia' : 'Cancelar emergencia';
+    elements.cameraEmergencyDialogHelp.textContent = declaring
+        ? `La acción es inmediata. Escribe ${plan.codigo} para confirmarla.`
+        : 'Indica el motivo de la cancelación.';
+    elements.cameraEmergencyConfirmationLabel.hidden = !declaring;
+    elements.cameraEmergencyForm.elements.confirmacion.required = declaring;
+    elements.cameraEmergencySubmit.textContent = declaring ? 'Declarar emergencia' : 'Cancelar emergencia';
+    elements.cameraEmergencyDialog.showModal();
 }
 
 async function loadOperationalCamera(id) {
@@ -1115,6 +1163,38 @@ elements.deactivate.addEventListener('click', async () => {
         elements.createError.textContent = error.message;
     } finally {
         setBusy(false);
+    }
+});
+
+elements.cameraEmergencyDeclare?.addEventListener('click', () => openEmergencyDialog('declarar'));
+elements.cameraEmergencyCancel?.addEventListener('click', () => openEmergencyDialog('cancelar'));
+elements.cameraEmergencyClose?.addEventListener('click', () => elements.cameraEmergencyDialog.close());
+elements.cameraEmergencyForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const plan = state.selectedOperationalPlan;
+    const action = elements.cameraEmergencyDialog.dataset.action;
+    if (!plan || !canSuperviseEmergency(state.identity)) return;
+    const motive = elements.cameraEmergencyForm.elements.motivo.value.trim();
+    if (motive.length < 3) {
+        elements.cameraEmergencyError.textContent = 'Ingresa un motivo de al menos tres caracteres.';
+        return;
+    }
+    if (action === 'declarar' && !confirmsCameraCode(elements.cameraEmergencyForm.elements.confirmacion.value, plan.codigo)) {
+        elements.cameraEmergencyError.textContent = `Escribe exactamente ${plan.codigo} para declarar la emergencia.`;
+        return;
+    }
+    elements.cameraEmergencySubmit.disabled = true;
+    try {
+        await api(emergencyEndpoint(plan.id, action), {
+            method: 'POST',
+            body: JSON.stringify({ motivo: motive }),
+        });
+        elements.cameraEmergencyDialog.close();
+        await loadOperationalCamera(plan.id);
+    } catch (error) {
+        elements.cameraEmergencyError.textContent = error.message;
+    } finally {
+        elements.cameraEmergencySubmit.disabled = false;
     }
 });
 

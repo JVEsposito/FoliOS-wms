@@ -7,6 +7,15 @@ use PHPUnit\Framework\TestCase;
 
 class MotorReplayArbitrajeV4Test extends TestCase
 {
+    public function test_recepcion_de_tunel_precede_a_conciliacion_historica_con_un_solo_cupo(): void
+    {
+        $conciliacion = $this->candidato('conciliacion', 'pendiente', 10, 10, false, [], ['camara-1'], 1);
+        $tunel = $this->candidato('tunel', 'pendiente', 20, 10, false, [], ['camara-1'], 2);
+        $resultado = (new MotorReplayArbitrajeV4)->reproducir([$conciliacion, $tunel], 1, 2, ['camara-1']);
+
+        $this->assertSame('seleccionada', $resultado['tunel']['decision']);
+        $this->assertSame('alternativa', $resultado['conciliacion']['decision']);
+    }
     public function test_reproduce_capacidad_conflictos_rollout_y_pausas_sin_depender_del_orden_de_entrada(): void
     {
         $candidatos = [

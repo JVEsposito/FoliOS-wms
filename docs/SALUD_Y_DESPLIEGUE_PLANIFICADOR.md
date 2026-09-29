@@ -37,6 +37,11 @@ habilitados `guided`, `tablet` y `WMS_PLANIFICADOR_AUTOMATICO=true`. Activar el
 planificador después no crea tareas para pallets aprobados anteriormente:
 `planificador:recalcular-arbitraje --forzar` solo arbitra maniobras existentes.
 
+Después de desplegar la migración `2026_09_29_100000_normalizar_prioridad_conciliacion_historica`,
+ejecutar `php artisan planificador:recalcular-arbitraje --forzar`. La migración
+baja a Normal la prioridad de planes, maniobras y tareas vigentes de conciliación
+histórica; el recálculo publica la nueva frontera para la prueba operacional.
+
 Revisar la temporada activa sin escribir:
 
 ```bash

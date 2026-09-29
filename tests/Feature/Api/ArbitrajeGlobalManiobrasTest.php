@@ -30,6 +30,26 @@ class ArbitrajeGlobalManiobrasTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_salida_de_tunel_gana_el_cupo_frente_a_conciliacion_historica(): void
+    {
+        config(['planificador.maniobras_simultaneas_max' => 1]);
+        $contexto = $this->crearContexto();
+        $conciliacion = $this->crearManiobra(
+            $contexto, 0, TipoPlanOperacional::AlmacenamientoPallet,
+            PrioridadOperacional::Normal, 1_000_000,
+        );
+        $tunel = $this->crearManiobra(
+            $contexto, 1, TipoPlanOperacional::RecepcionTunel,
+            PrioridadOperacional::Alta, 1,
+        );
+
+        $ciclo = app(ServicioArbitrajeManiobras::class)->arbitrar($contexto['temporada']);
+        $decisiones = $ciclo->decisiones->keyBy('maniobra_operacional_id');
+        $this->assertSame(DecisionArbitrajeManiobra::Seleccionada, $decisiones[$tunel->id]->decision);
+        $this->assertSame(DecisionArbitrajeManiobra::Alternativa, $decisiones[$conciliacion->id]->decision);
+        $this->assertSame($tunel->id, app(ServicioArbitrajeManiobras::class)->idsPublicables($ciclo)->first());
+    }
+
     protected function setUp(): void
     {
         parent::setUp();

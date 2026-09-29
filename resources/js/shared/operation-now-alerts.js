@@ -134,6 +134,14 @@ export function buildOperationalAlerts(snapshot = {}) {
     const productCameras = (snapshot.camaras || [])
         .filter((camera) => camera.contenido === 'productos');
     const alerts = [
+        ...(snapshot.emergencias || []).map((emergencia) => ({
+            area: emergencia.camara_codigo || 'Cámara',
+            severity: 'critical',
+            condition: `Evacuación de emergencia activa en ${emergencia.camara_codigo || 'cámara'}`,
+            evidence: emergencia.motivo || 'Evacuación declarada',
+            href: '/oficina/frigorifico/camaras',
+            action: 'Revisar plano de la cámara',
+        })),
         ...cameraAlerts(productCameras),
         ...tunnelAlerts(snapshot.prefrio?.tuneles || []),
         ...synchronizationAlerts(snapshot.sincronizacion),

@@ -54,6 +54,32 @@ class ControlEvacuacionEmergenciaTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_plano_expone_emergencia_activa_y_deja_de_mostrarla_tras_cancelar(): void
+    {
+        $contexto = $this->crearContexto();
+        $camara = $contexto['emergencia'];
+        $this->ubicar($contexto, $camara, 1, 1, 'PAL-ESTADO-EMERGENCIA');
+        $url = "/api/camaras/{$camara->id}/plano";
+        $inicial = $this->withToken($contexto['token'])->getJson($url)
+            ->assertOk()->assertJsonPath('data.emergencia', null);
+        $etagInicial = $inicial->headers->get('ETag');
+
+        app(ServicioControlEvacuacionEmergencia::class)->declarar(
+            $camara, $contexto['supervisor'], 'Incidente que obliga a evacuar.',
+        );
+        $this->withToken($contexto['token'])->withHeader('If-None-Match', $etagInicial)->getJson($url)
+            ->assertOk()
+            ->assertJsonPath('data.emergencia.motivo', 'Incidente que obliga a evacuar.')
+            ->assertJsonPath('data.emergencia.declarada_por', $contexto['supervisor']->name)
+            ->assertJsonPath('data.emergencia.pallets_objetivo', 1);
+
+        app(ServicioControlEvacuacionEmergencia::class)->cancelar(
+            $camara, $contexto['supervisor'], 'Incidente resuelto.',
+        );
+        $this->withToken($contexto['token'])->withHeader('If-None-Match', '')->getJson($url)
+            ->assertOk()->assertJsonPath('data.emergencia', null);
+    }
+
     protected function setUp(): void
     {
         parent::setUp();

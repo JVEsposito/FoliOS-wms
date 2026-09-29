@@ -311,6 +311,7 @@ class ConcentracionCargaRollingTest extends TestCase
 
         $movimientoObjetivo = $maniobra->pasos()->where('secuencia_maniobra', 2)->sole();
         $this->assertSame(EstadoTareaMovimiento::Asumida, $movimientoObjetivo->estado);
+        $camaraDestinoAntes = $movimientoObjetivo->camara_destino_id;
         $this->travel(30)->minutes();
         $this->assertSame(
             0,
@@ -318,6 +319,7 @@ class ConcentracionCargaRollingTest extends TestCase
             'Una maniobra con custodia temporal no puede perder su claim por timeout.',
         );
         $this->assertSame(EstadoTareaMovimiento::Asumida, $movimientoObjetivo->refresh()->estado);
+        $this->assertSame($camaraDestinoAntes, $movimientoObjetivo->camara_destino_id);
         $this->assertNotNull($movimientoObjetivo->reservaActiva()->first());
         $movimientoObjetivo = $planes->materializarDestino(
             $movimientoObjetivo,

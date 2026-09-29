@@ -1,5 +1,49 @@
 @import './estiba-tokens.css';
 
+.camera-ops__emergency {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--eui-space-3);
+    padding: var(--eui-space-3) var(--eui-space-4);
+    border: var(--eui-rule-hairline) solid var(--eui-signal-neutral-border);
+    background: var(--eui-signal-neutral-surface);
+    color: var(--eui-color-text);
+}
+.camera-ops__emergency[data-tone="critical"] {
+    border-color: var(--eui-signal-critical-border);
+    background: var(--eui-signal-critical-surface);
+    color: var(--eui-signal-critical-text);
+}
+.camera-ops__emergency > div { display: grid; gap: var(--eui-space-1); flex: 1 1 300px; }
+.camera-ops__emergency button, .camera-ops__emergency-actions button {
+    padding: var(--eui-space-2) var(--eui-space-3);
+    border: var(--eui-rule-hairline) solid var(--eui-color-primary);
+    border-radius: var(--eui-radius-control);
+    background: var(--eui-color-surface);
+    color: var(--eui-color-primary);
+    cursor: pointer;
+}
+.camera-ops__emergency button[hidden] { display: none; }
+.camera-ops__emergency-dialog {
+    width: min(480px, calc(100vw - 32px));
+    padding: var(--eui-space-6);
+    border: var(--eui-rule-hairline) solid var(--eui-color-border);
+    background: var(--eui-color-surface);
+    color: var(--eui-color-text);
+}
+.camera-ops__emergency-dialog::backdrop { background: var(--eui-color-navy); opacity: .7; }
+.camera-ops__emergency-dialog form, .camera-ops__emergency-dialog label { display: grid; gap: var(--eui-space-2); }
+.camera-ops__emergency-dialog [hidden] { display: none; }
+.camera-ops__emergency-dialog form { gap: var(--eui-space-4); }
+.camera-ops__emergency-dialog textarea, .camera-ops__emergency-dialog input {
+    width: 100%; padding: var(--eui-space-2); border: var(--eui-rule-hairline) solid var(--eui-color-input-border);
+    background: var(--eui-color-surface); color: var(--eui-color-text);
+}
+.camera-ops__emergency-dialog textarea { min-height: 96px; }
+.camera-ops__emergency-actions { display: flex; justify-content: flex-end; gap: var(--eui-space-2); }
+.camera-ops__emergency-error { margin: 0; color: var(--eui-signal-critical-text); }
+
 /* Cámaras PT: vista operacional corporativa, alimentada solo por contratos existentes. */
 .office-app[data-camera-mode="operacion"] {
     background: var(--corporate-canvas);

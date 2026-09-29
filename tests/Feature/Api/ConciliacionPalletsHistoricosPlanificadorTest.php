@@ -10,6 +10,8 @@ use App\Enums\EstadoPlanOperacional;
 use App\Enums\EstadoTareaMovimiento;
 use App\Enums\HabilitacionAlmacenamientoFolio;
 use App\Enums\RolUsuario;
+use App\Enums\PrioridadOperacional;
+use App\Enums\EstadoPlanOperacional;
 use App\Enums\TipoBulto;
 use App\Models\Folio;
 use App\Models\PlanOperacional;
@@ -51,6 +53,8 @@ class ConciliacionPalletsHistoricosPlanificadorTest extends TestCase
         $this->assertSame('rolling', $plan->contexto['planner_horizon']);
         $this->assertSame('ubicacion_historica_por_verificar', $plan->contexto['origen_logico']);
         $this->assertSame('almacenamiento_pallet', $plan->tipo->value);
+        $this->assertSame(PrioridadOperacional::Normal, $plan->prioridad);
+        $this->assertSame(PrioridadOperacional::Normal, $tarea->prioridad);
         $this->assertSame('ubicacion_inicial', $tarea->tipo_movimiento->value);
         $this->assertNull($tarea->camara_origen_id);
         $this->assertNull($tarea->camara_destino_id);
@@ -64,6 +68,33 @@ class ConciliacionPalletsHistoricosPlanificadorTest extends TestCase
         $this->assertStringContainsString('0 para revisión manual', Artisan::output());
         $this->assertDatabaseCount('planes_operacionales', 1);
         $this->assertDatabaseCount('tareas_movimiento', 1);
+    }
+
+    public function test_migracion_normaliza_planes_vivos_y_sus_tareas_sin_alterar_finalizados(): void
+    {
+        $this->habilitarPlanificador();
+        [$usuario] = $this->crearPalletHistorico();
+        Artisan::call('planificador:conciliar-pallets', [
+            '--aplicar' => true, '--usuario' => (string) $usuario->id,
+        ]);
+        $plan = PlanOperacional::query()->where('referencia_tipo', 'folio_pendiente_ubicacion')->sole();
+        $tarea = $plan->tareas()->sole();
+        $plan->update(['prioridad' => PrioridadOperacional::Alta]);
+        $tarea->update(['prioridad' => PrioridadOperacional::Alta]);
+        $finalizado = $plan->replicate();
+        $finalizado->referencia_id = (string) Str::uuid();
+        $finalizado->estado = EstadoPlanOperacional::Completado;
+        $finalizado->save();
+
+        $migracion = require database_path('migrations/2026_09_29_100000_normalizar_prioridad_conciliacion_historica.php');
+        $migracion->up();
+        $primeraVersion = $plan->refresh()->version;
+        $migracion->up();
+
+        $this->assertSame(PrioridadOperacional::Normal, $plan->refresh()->prioridad);
+        $this->assertSame(PrioridadOperacional::Normal, $tarea->refresh()->prioridad);
+        $this->assertSame($primeraVersion, $plan->version);
+        $this->assertSame(PrioridadOperacional::Alta, $finalizado->refresh()->prioridad);
     }
 
     public function test_excluye_pallets_no_habilitados_y_procesos_sin_aprobacion(): void

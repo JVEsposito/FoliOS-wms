@@ -26,6 +26,7 @@ use App\Models\TareaMovimiento;
 use App\Models\Temporada;
 use App\Models\TunelPrefrio;
 use App\Services\Planificador\ServicioConciliacionPalletsHistoricos;
+use App\Services\Camaras\EstadoEvacuacionEmergencia;
 use App\Services\Planificador\ServicioPuestoMandoPlanificador;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -52,6 +53,8 @@ class ServicioOperacionAhora
 
         $camaras = $this->camaras($ahora);
         $prefrio = $this->prefrio($temporada, $ahora);
+        $estadoEmergencias = app(EstadoEvacuacionEmergencia::class);
+        $codigosCamara = collect($camaras)->pluck('codigo', 'id');
 
         return [
             'generado_at' => $ahora->toAtomString(),
@@ -71,6 +74,12 @@ class ServicioOperacionAhora
             'camareros' => $this->camareros($temporada),
             'prefrio' => $prefrio,
             'incidencias' => $this->incidencias($temporada, $ahora),
+            'emergencias' => $estadoEmergencias->activas()
+                ->map(fn ($plan) => [
+                    'camara_codigo' => data_get($plan->contexto, 'camara_codigo')
+                        ?? $codigosCamara->get($plan->referencia_id),
+                    ...$estadoEmergencias->resumir($plan),
+                ])->all(),
             'planificador' => [
                 ...$this->puestoMando->obtener($temporada),
                 'conciliacion' => $this->conciliacion->diagnosticar($temporada, 0),

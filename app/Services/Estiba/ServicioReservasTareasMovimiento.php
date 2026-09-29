@@ -341,6 +341,9 @@ class ServicioReservasTareasMovimiento
         }
 
         $this->validarPropietario($reserva, $usuario, $dispositivo);
+        if ($this->estaProtegidaPorMovimiento($reserva)) {
+            throw new ConflictoOperacion('Una tarea con custodia activa no puede liberarse.');
+        }
         $ahora = now();
         $this->finalizarReserva($reserva, EstadoReservaTareaMovimiento::Liberada, [
             'liberada_at' => $ahora,
@@ -986,8 +989,19 @@ class ServicioReservasTareasMovimiento
             return;
         }
 
+        if ($tarea->maniobra_operacional_id && $tarea->maniobraOperacional()
+            ->whereHas('custodiasTemporales', fn ($consulta) => $consulta
+                ->where('estado', EstadoCustodiaTemporal::Activa->value))->exists()) {
+            return;
+        }
+
+        // En rolling el destino pertenece al claim vencido o liberado. En batch
+        // es parte del plan y debe permanecer visible en la bandeja.
+        $rolling = ($tarea->planOperacional?->contexto['planner_horizon']
+            ?? config('planificador.horizon')) === 'rolling';
         $tarea->update([
             'estado' => EstadoTareaMovimiento::Pendiente,
+            ...($rolling ? ['camara_destino_id' => null, 'posicion_destino_id' => null] : []),
             'responsable_user_id' => null,
             'dispositivo_id' => null,
             'asumida_at' => null,
