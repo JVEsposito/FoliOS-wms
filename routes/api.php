@@ -30,6 +30,7 @@ use App\Http\Controllers\Api\CuentaCorrienteEnvaseController;
 use App\Http\Controllers\Api\DefectoRecepcionMpController;
 use App\Http\Controllers\Api\DesocupacionCamaraController;
 use App\Http\Controllers\Api\DespachoFrigorificoController;
+use App\Http\Controllers\Api\DespachoComercialRetornoController;
 use App\Http\Controllers\Api\DespachoMaterialController;
 use App\Http\Controllers\Api\EmbarqueController;
 use App\Http\Controllers\Api\EvacuacionEmergenciaController;
@@ -302,6 +303,14 @@ Route::middleware('auth:sanctum')->group(function () {
         ->middleware('can:supervisar-lotes-materia-prima');
     Route::post('/materia-prima/lotes/{loteMateriaPrima}/anular', [MateriaPrimaController::class, 'anular'])
         ->middleware('can:supervisar-lotes-materia-prima');
+    Route::prefix('materia-prima/despachos-comerciales')->group(function () {
+        Route::get('/', [DespachoComercialRetornoController::class, 'index']);
+        Route::get('/bins-disponibles', [DespachoComercialRetornoController::class, 'disponibles']);
+        Route::post('/', [DespachoComercialRetornoController::class, 'store']);
+        Route::post('/{despacho}/confirmar', [DespachoComercialRetornoController::class, 'confirmar']);
+        Route::post('/{despacho}/cancelar', [DespachoComercialRetornoController::class, 'cancelar']);
+    });
+
     Route::middleware('can:consultar-fruta-proceso')->prefix('materia-prima/fruta-proceso')->group(function () {
         Route::get('/resumen', [FrutaProcesoController::class, 'resumen']);
         Route::get('/catalogos', [RetornoPackingController::class, 'catalogos']);

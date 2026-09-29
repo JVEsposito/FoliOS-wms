@@ -450,6 +450,14 @@ class AppServiceProvider extends ServiceProvider
             fn (User $usuario): bool => $alcance->puedeConsultarFrutaProceso($usuario),
         );
         Gate::define(
+            'consultar-despacho-comercial',
+            fn (User $usuario): bool => $alcance->puedeConsultarDespachoComercial($usuario),
+        );
+        Gate::define(
+            'gestionar-despacho-comercial',
+            fn (User $usuario): bool => $alcance->puedeGestionarDespachoComercial($usuario),
+        );
+        Gate::define(
             'entregar-fruta-proceso',
             fn (User $usuario): bool => $alcance->puedeEntregarFrutaProceso($usuario),
         );
