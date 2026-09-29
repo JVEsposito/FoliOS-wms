@@ -55,7 +55,6 @@ const state = {
     lots: [],
     editingLot: null,
     selectedSegment: null,
-    netManuallyEdited: false,
     poller: null,
 };
 
@@ -307,8 +306,8 @@ function renderSegments() {
 
     const canManage = state.identity?.puede_gestionar_lotes_materia_prima === true;
     elements.segmentList.innerHTML = state.segments.map((segment) => {
-        const base = segment.envases.find((item) => Number(item.cantidad_disponible || 0) > 0);
-        const canCreate = canManage
+        const base = segment.envases.find((item) => item.tipo_envase === segment.recepcion.tipo_envase_calculo_neto);
+        const canCreate = canManage && segment.estado === 'pendiente_lote'
             && Number(base?.cantidad_disponible || 0) > 0
             && Number(segment.recepcion.peso_neto_por_envase || 0) > 0;
         const origin = [
@@ -328,7 +327,7 @@ function renderSegments() {
                     ${segment.envases.map((container) => `<span>${escapeHtml(label(container.tipo_envase))}: ${escapeHtml(container.cantidad_disponible)} disponibles de ${escapeHtml(container.cantidad)}</span>`).join('')}
                 </div>
                 <div class="segment-card__net">
-                    <div><span>NETO RECEPCIÓN</span><strong>${escapeHtml(formatWeight(segment.recepcion.peso_neto))}</strong></div>
+                    <div><span>NETO ESTIMADO SEGMENTO</span><strong>${escapeHtml(formatWeight(segment.neto_estimado))}</strong></div>
                     <div><span>NETO / ${escapeHtml(label(segment.recepcion.tipo_envase_calculo_neto))}</span><strong>${escapeHtml(formatWeight(segment.recepcion.peso_neto_por_envase))}</strong></div>
                 </div>
                 <div class="segment-card__actions">
@@ -369,7 +368,7 @@ function renderLots() {
             <td><strong>${escapeHtml(lot.numero_lote)}</strong><small>${escapeHtml(lot.recepcion?.numero_recepcion)} · guía ${escapeHtml(lot.recepcion?.numero_guia_despacho)}</small><small>${escapeHtml(lot.cliente?.nombre)}</small></td>
             <td><strong>CSG ${escapeHtml(lot.trazabilidad.csg)}</strong><small>SdP ${escapeHtml(lot.trazabilidad.sdp)} · GGN ${escapeHtml(lot.trazabilidad.ggn)}</small><small>${escapeHtml(lot.trazabilidad.predio)}${lot.trazabilidad.cuartel ? ` · ${escapeHtml(lot.trazabilidad.cuartel)}` : ' · Sin cuartel'}</small></td>
             <td><strong>${escapeHtml(lot.trazabilidad.especie)} · ${escapeHtml(lot.trazabilidad.variedad)}</strong><small>${escapeHtml(label(lot.trazabilidad.tipo_producto))}${lot.trazabilidad.calibre ? ` · Calibre histórico: ${escapeHtml(lot.trazabilidad.calibre)}` : ''}</small><small>Cosecha ${escapeHtml(lot.trazabilidad.fecha_cosecha)}</small></td>
-            <td><strong>${escapeHtml(lot.envases.cantidad_primarios)} ${escapeHtml(label(lot.envases.primario))}${lot.envases.secundario ? ` · ${escapeHtml(lot.envases.cantidad_secundarios)} ${escapeHtml(label(lot.envases.secundario))}` : ''}</strong><small class="weight-value">${escapeHtml(formatWeight(lot.pesos.kilos_netos_confirmados))} netos</small><small>${lot.pesos.corregido_por_digitador ? `Calculado: ${escapeHtml(formatWeight(lot.pesos.kilos_netos_calculados))}` : 'Neto calculado confirmado'}</small></td>
+            <td><strong>${(lot.envases.detalle || []).map((item) => `${escapeHtml(item.cantidad)} ${escapeHtml(label(item.tipo_envase))}`).join(' · ')}</strong><small class="weight-value">${escapeHtml(formatWeight(lot.pesos.kilos_netos_confirmados))} netos</small><small>${lot.pesos.corregido_por_digitador ? `Calculado: ${escapeHtml(formatWeight(lot.pesos.kilos_netos_calculados))}` : 'Neto calculado confirmado'}</small></td>
             <td>${stateBadge(lot.estado)}<small>${lot.requiere_hidrocooler ? 'Con hidrocooler' : 'Sin hidrocooler'}</small>${lot.asignacion_camara?.camara ? `<small>Cámara ${escapeHtml(lot.asignacion_camara.camara.codigo)}</small>` : ''}</td>
             <td><div class="lot-actions">${lotActions(lot)}</div></td>
         </tr>`).join('');
@@ -389,10 +388,6 @@ function fillBaseCatalogs() {
     form.tipo_producto.innerHTML = state.catalogs.tipos_producto
         .map((type) => `<option value="${escapeHtml(type)}">${escapeHtml(label(type))}</option>`)
         .join('');
-    form.envase_secundario.innerHTML = '<option value="">Sin envase secundario</option>'
-        + state.catalogs.envases_secundarios
-            .map((type) => `<option value="${escapeHtml(type)}">${escapeHtml(label(type))}</option>`)
-            .join('');
     updateSpeciesDependants();
 }
 
@@ -416,55 +411,15 @@ function renderSourceSummary(segment) {
         <div><span>NETO UNITARIO ROMANA</span><strong>${escapeHtml(formatWeight(segment.recepcion.peso_neto_por_envase))}</strong></div>`;
 }
 
-function setContainerLimits(segment, currentLot = null, preferredType = null) {
-    const form = elements.lotForm.elements;
-    const baseType = preferredType || currentLot?.envases.primario
-        || segment.envases.find((item) => Number(item.cantidad_disponible || 0) > 0)?.tipo_envase;
-    const base = segment.envases.find((item) => item.tipo_envase === baseType);
-    const ownPrimary = currentLot?.envases.primario === baseType
-        ? Number(currentLot.envases.cantidad_primarios)
-        : 0;
-    form.envase_primario.innerHTML = segment.envases.map((item) => `<option value="${escapeHtml(item.tipo_envase)}" ${Number(item.cantidad_disponible || 0) < 1 && currentLot?.envases.primario !== item.tipo_envase ? 'disabled' : ''}>${escapeHtml(label(item.tipo_envase))}</option>`).join('');
-    form.envase_primario.value = baseType;
-    form.cantidad_envases_primarios.max = String(
-        Number(base?.cantidad_disponible || 0) + ownPrimary,
-    );
-    [...form.envase_secundario.options].forEach((option) => {
-        if (!option.value) return;
-        let available = Number(segment.envases.find(
-            (item) => item.tipo_envase === option.value,
-        )?.cantidad_disponible || 0);
-        if (currentLot?.envases.secundario === option.value) {
-            available += Number(currentLot.envases.cantidad_secundarios);
-        }
-        option.disabled = option.value === baseType || available < 1;
-        option.dataset.available = String(available);
-    });
-}
-
-function updateSecondaryLimit() {
-    const form = elements.lotForm.elements;
-    const option = form.envase_secundario.selectedOptions[0];
-    const hasSecondary = Boolean(option?.value);
-    form.cantidad_envases_secundarios.disabled = !hasSecondary;
-    form.cantidad_envases_secundarios.required = hasSecondary;
-    form.cantidad_envases_secundarios.max = option?.dataset.available || '100000';
-    if (!hasSecondary) form.cantidad_envases_secundarios.value = '0';
-}
-
 function updateCalculatedNet() {
     const form = elements.lotForm.elements;
-    const quantity = Number(form.cantidad_envases_primarios.value || 0) + Number(form.cantidad_envases_secundarios.value || 0);
-    const unit = Number(state.selectedSegment?.recepcion.peso_neto_por_envase || 0);
-    const calculated = Math.round(quantity * unit * 1000) / 1000;
-    form.kilos_netos_calculados.value = calculated > 0 ? calculated.toFixed(3) : '';
-    const tare = (type) => Number(state.selectedSegment?.recepcion.envases?.find((item) => item.tipo_envase === type)?.tara_unitaria || 0);
-    const gross = calculated + tare(form.envase_primario.value) * Number(form.cantidad_envases_primarios.value || 0)
-        + tare(form.envase_secundario.value) * Number(form.cantidad_envases_secundarios.value || 0);
-    form.kilos_brutos.value = gross > 0 ? gross.toFixed(3) : '';
-    if (!state.netManuallyEdited) {
-        form.kilos_netos_confirmados.value = calculated > 0 ? calculated.toFixed(3) : '';
-    }
+    const segment = state.selectedSegment;
+    if (!segment) return;
+    const calculated = Number(segment.neto_estimado);
+    const tare = (type) => Number(segment.recepcion.envases?.find((item) => item.tipo_envase === type)?.tara_unitaria || 0);
+    const gross = calculated + segment.envases.reduce((sum, item) => sum + Number(item.cantidad) * tare(item.tipo_envase), 0);
+    form.kilos_netos_calculados.value = calculated.toFixed(3);
+    form.kilos_brutos.value = gross.toFixed(3);
 }
 
 function openCreateLot(segmentId) {
@@ -472,11 +427,10 @@ function openCreateLot(segmentId) {
     if (!segment || !state.catalogs) return;
     state.editingLot = null;
     state.selectedSegment = segment;
-    state.netManuallyEdited = false;
     elements.lotForm.reset();
     elements.lotFormError.textContent = '';
     elements.lotDialogTitle.textContent = 'Crear lote';
-    elements.lotDialogDescription.textContent = 'Puedes crear varios lotes desde el mismo segmento mientras existan envases disponibles.';
+    elements.lotDialogDescription.textContent = 'El lote recibirá todos los envases y kilos calculados para este segmento.';
     const form = elements.lotForm.elements;
     form.lote_id.value = '';
     form.version_conocida.value = '';
@@ -484,13 +438,11 @@ function openCreateLot(segmentId) {
     form.operacion_id.value = operationUuid();
     form.confirmacion_operacion_id.value = operationUuid();
     fillBaseCatalogs();
-    setContainerLimits(segment);
+    updateCalculatedNet();
     renderSourceSummary(segment);
     form.fecha_cosecha.max = localDateValue();
     form.fecha_cosecha.value = localDateValue();
     form.tipo_producto.value = 'materia_prima';
-    form.cantidad_envases_primarios.value = '';
-    form.cantidad_envases_secundarios.value = '0';
     form.requiere_hidrocooler.value = '0';
     if (segment.csg) {
         form.csg_validacion_id.value = segment.csg.id;
@@ -504,7 +456,6 @@ function openCreateLot(segmentId) {
     form.especie_validacion_id.disabled = Boolean(segment.variedad);
     form.variedad_validacion_id.disabled = Boolean(segment.variedad);
     form.cuartel.value = segment.cuartel || '';
-    updateSecondaryLimit();
     elements.lotDialog.showModal();
     form.numero_lote.focus();
 }
@@ -519,14 +470,13 @@ function openEditLot(lotId) {
     }
     state.editingLot = lot;
     state.selectedSegment = segment;
-    state.netManuallyEdited = lot.pesos.corregido_por_digitador;
     elements.lotForm.reset();
     elements.lotFormError.textContent = '';
     elements.lotDialogTitle.textContent = `Editar ${lot.numero_lote}`;
     elements.lotDialogDescription.textContent = 'Solo los borradores pueden editarse. La confirmación cerrará estos antecedentes.';
     const form = elements.lotForm.elements;
     fillBaseCatalogs();
-    setContainerLimits(segment, lot);
+    updateCalculatedNet();
     renderSourceSummary(segment);
     form.lote_id.value = lot.id;
     form.version_conocida.value = lot.version;
@@ -547,16 +497,9 @@ function openEditLot(lotId) {
     form.variedad_validacion_id.disabled = Boolean(segment.variedad);
     form.cuartel.value = lot.trazabilidad.cuartel;
     form.tipo_producto.value = lot.trazabilidad.tipo_producto;
-    form.envase_primario.value = lot.envases.primario;
-    form.cantidad_envases_primarios.value = lot.envases.cantidad_primarios;
-    form.envase_secundario.value = lot.envases.secundario || '';
-    form.cantidad_envases_secundarios.value = lot.envases.cantidad_secundarios;
-    form.kilos_brutos.value = lot.pesos.kilos_brutos;
-    form.kilos_netos_calculados.value = Number(lot.pesos.kilos_netos_calculados).toFixed(3);
-    form.kilos_netos_confirmados.value = Number(lot.pesos.kilos_netos_confirmados).toFixed(3);
+    updateCalculatedNet();
     form.requiere_hidrocooler.value = lot.requiere_hidrocooler ? '1' : '0';
     form.observacion.value = lot.observacion || '';
-    updateSecondaryLimit();
     elements.lotDialog.showModal();
     form.numero_lote.focus();
 }
@@ -577,11 +520,6 @@ function lotPayload() {
         variedad_validacion_id: form.variedad_validacion_id.value,
         cuartel: form.cuartel.value,
         tipo_producto: form.tipo_producto.value,
-        envase_primario: form.envase_primario.value,
-        envase_secundario: form.envase_secundario.value || null,
-        cantidad_envases_primarios: form.cantidad_envases_primarios.value,
-        cantidad_envases_secundarios: form.cantidad_envases_secundarios.value || 0,
-        kilos_netos_confirmados: form.kilos_netos_confirmados.value,
         requiere_hidrocooler: form.requiere_hidrocooler.value === '1',
         observacion: form.observacion.value || null,
     };
@@ -784,16 +722,6 @@ elements.lotForm.elements.csg_validacion_id.addEventListener('change', () => {
     if (selected) elements.lotForm.elements.predio.value = selected.predio || '';
 });
 
-elements.lotForm.elements.envase_secundario.addEventListener('change', updateSecondaryLimit);
-elements.lotForm.elements.envase_primario.addEventListener('change', () => {
-    setContainerLimits(state.selectedSegment, state.editingLot, elements.lotForm.elements.envase_primario.value);
-    updateSecondaryLimit(); updateCalculatedNet();
-});
-elements.lotForm.elements.cantidad_envases_primarios.addEventListener('input', updateCalculatedNet);
-elements.lotForm.elements.cantidad_envases_secundarios.addEventListener('input', updateCalculatedNet);
-elements.lotForm.elements.kilos_netos_confirmados.addEventListener('input', () => {
-    state.netManuallyEdited = true;
-});
 ['sdp', 'ggn'].forEach((name) => {
     elements.lotForm.elements[name].addEventListener('input', (event) => {
         event.target.value = event.target.value.replace(/\D/g, '');

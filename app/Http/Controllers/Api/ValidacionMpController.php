@@ -8,6 +8,7 @@ use App\Enums\TipoEnvaseRomana;
 use App\Enums\TipoRecepcionRomana;
 use App\Http\Controllers\Controller;
 use App\Models\CsgValidacion;
+use App\Models\EspecieValidacion;
 use App\Models\RecepcionRomana;
 use App\Models\ValidacionMp;
 use App\Models\VariedadValidacion;
@@ -120,6 +121,8 @@ class ValidacionMpController extends Controller
                     'predio' => $csg->predio,
                     'variedad_ids' => $csg->variedades->pluck('id')->values(),
                 ]),
+            'especies' => EspecieValidacion::query()->where('temporada_id', $recepcion->temporada_id)
+                ->where('activo', true)->orderBy('nombre')->get(['id', 'nombre']),
             'variedades' => VariedadValidacion::query()->where('activo', true)
                 ->where('especie_validacion_id', $recepcion->especie_validacion_id)
                 ->with('especie:id,nombre')->orderBy('nombre')->get()->map(fn (VariedadValidacion $variedad): array => [
@@ -137,6 +140,21 @@ class ValidacionMpController extends Controller
         $validacion = $servicio->tomar($recepcion, $datos['operacion_id'], $request->user(), $token?->dispositivo_id);
 
         return response()->json(['data' => $this->validacion($validacion)]);
+    }
+
+    public function completarEspecie(Request $request, RecepcionRomana $recepcion, ServicioValidacionMp $servicio): JsonResponse
+    {
+        $this->asegurarTemporadaActiva($recepcion->temporada_id);
+        $datos = $request->validate([
+            'operacion_id' => ['required', 'uuid'],
+            'version_conocida' => ['required', 'integer', 'min:1'],
+            'especie_validacion_id' => ['required', 'uuid'],
+        ]);
+        $actualizada = $servicio->completarEspecie($recepcion, $datos['especie_validacion_id'], $datos['version_conocida'], $datos['operacion_id'], $request->user());
+        $actualizada->load(['detallesEnvases', 'validacionTomadaPor', 'validacionesMp.recepcion', 'validacionesMp.temporada',
+            'validacionesMp.validador', 'validacionesMp.dispositivo', 'validacionesMp.segmentos.envases']);
+
+        return response()->json(['data' => $this->recepcion($actualizada)])->header('Cache-Control', 'no-store, private');
     }
 
     public function confirmar(Request $request, ValidacionMp $validacionMp, ServicioValidacionMp $servicio): JsonResponse
@@ -188,6 +206,7 @@ class ValidacionMpController extends Controller
             'estado_validacion_mp' => $recepcion->estado_validacion_mp->value,
             'tipo_recepcion' => $recepcion->tipo_recepcion->value,
             'especie_validacion_id' => $recepcion->especie_validacion_id,
+            'version' => $recepcion->version,
             'concepto_envases' => $recepcion->concepto_envases?->value,
             'temporada' => ['id' => $recepcion->temporada_id, 'codigo' => $recepcion->temporada_codigo_snapshot, 'nombre' => $recepcion->temporada_nombre_snapshot],
             'cliente' => ['id' => $recepcion->cliente_id, 'codigo' => $recepcion->cliente_codigo_snapshot, 'nombre' => $recepcion->cliente_nombre_snapshot],

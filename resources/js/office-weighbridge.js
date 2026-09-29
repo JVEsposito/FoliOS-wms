@@ -282,11 +282,11 @@ function configureAdministrativeCorrection(enabled) {
     state.administrativeCorrection = enabled;
     elements.administrativeCorrectionField.classList.toggle('is-hidden', !enabled);
     elements.administrativeTareField.classList.toggle('is-hidden', !closedCorrection);
-    elements.administrativeNetContainerField.classList.add('is-hidden');
+    elements.administrativeNetContainerField.classList.toggle('is-hidden', !closedCorrection);
     elements.receptionForm.elements.motivo_correccion.required = enabled;
     elements.receptionForm.elements.peso_tara.required = closedCorrection;
     elements.receptionForm.elements.peso_tara.disabled = !closedCorrection;
-    elements.receptionForm.elements.tipo_envase_calculo_neto.required = false;
+    elements.receptionForm.elements.tipo_envase_calculo_neto.required = closedCorrection;
     elements.receptionForm.elements.tipo_envase_calculo_neto.disabled = !closedCorrection;
     elements.saveReception.textContent = enabled ? 'Guardar corrección' : 'Guardar ingreso';
     if (!enabled) elements.receptionForm.elements.motivo_correccion.value = '';
@@ -548,8 +548,9 @@ function updateNetPreviews() {
     const net = gross - tare - containerTare;
     elements.containerTarePreview.textContent = containerTare > 0 ? formatWeight(containerTare) : '—';
     elements.netWeightPreview.textContent = tare > 0 && net > 0 ? formatWeight(net) : '—';
-    const quantity = Number(state.selected?.cantidad_envases_declarados || 0);
-    elements.netPerContainerPreview.textContent = tare > 0 && net > 0 && quantity > 0 ? `${formatWeight(net / quantity)} / envase` : '—';
+    const type = elements.tareForm.elements.tipo_envase_calculo_neto.value;
+    const quantity = Number(state.selected?.envases.find((item) => item.tipo_envase === type)?.cantidad_declarada || 0);
+    elements.netPerContainerPreview.textContent = tare > 0 && net > 0 && quantity > 0 ? `${formatWeight(net / quantity)} / ${label(type)}` : '—';
 }
 elements.tareForm.elements.peso_tara.addEventListener('input', updateNetPreviews);
 elements.tareForm.elements.tipo_envase_calculo_neto.addEventListener('change', updateNetPreviews);

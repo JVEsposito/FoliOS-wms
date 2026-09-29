@@ -22,6 +22,70 @@ class ValidacionMpApiTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_recepcion_historica_sin_especie_se_completa_con_auditoria_y_filtra_variedades(): void
+    {
+        $temporada = Temporada::query()->where('activa', true)->firstOrFail();
+        $cliente = $this->cliente();
+        $operador = User::factory()->create(['rol' => RolUsuario::OperadorRomana]);
+        $validador = User::factory()->create(['rol' => RolUsuario::ValidadorMp]);
+        $especie = EspecieValidacion::firstOrCreate(['temporada_id' => $temporada->id, 'nombre' => 'Cereza'], ['activo' => true]);
+        $otra = EspecieValidacion::create(['temporada_id' => $temporada->id, 'nombre' => 'Uva', 'activo' => true]);
+        $variedad = VariedadValidacion::create(['especie_validacion_id' => $especie->id, 'nombre' => 'Santina', 'activo' => true]);
+        VariedadValidacion::create(['especie_validacion_id' => $otra->id, 'nombre' => 'Red Globe', 'activo' => true]);
+        $recepcion = $this->actingAs($operador, 'sanctum')
+            ->postJson('/api/romana/recepciones', $this->recepcion($temporada, $cliente))
+            ->assertCreated()->json('data');
+        DB::table('recepciones_romana')->where('id', $recepcion['id'])->update(['especie_validacion_id' => null]);
+        $this->actingAs($validador, 'sanctum');
+        $this->getJson("/api/validacion-mp/recepciones/{$recepcion['id']}/catalogos")
+            ->assertOk()->assertJsonCount(0, 'variedades')->assertJsonCount(2, 'especies');
+        $validacion = $this->postJson("/api/validacion-mp/recepciones/{$recepcion['id']}/tomar", [
+            'operacion_id' => (string) Str::uuid(),
+        ])->assertOk()->json('data');
+        $ruta = "/api/validacion-mp/recepciones/{$recepcion['id']}/especie";
+        $payload = ['operacion_id' => (string) Str::uuid(), 'version_conocida' => $recepcion['version'],
+            'especie_validacion_id' => $especie->id];
+        $this->postJson($ruta, [...$payload, 'especie_validacion_id' => $otra->id,
+            'version_conocida' => $recepcion['version'] - 1])->assertConflict();
+        $this->postJson($ruta, $payload)->assertOk()->assertJsonPath('data.especie_validacion_id', $especie->id);
+        $this->postJson($ruta, $payload)->assertOk();
+        $this->getJson("/api/validacion-mp/recepciones/{$recepcion['id']}/catalogos")
+            ->assertOk()->assertJsonCount(1, 'variedades')->assertJsonPath('variedades.0.id', $variedad->id);
+        $this->assertDatabaseHas('eventos_recepcion_romana', [
+            'recepcion_romana_id' => $recepcion['id'], 'tipo' => 'especie_completada', 'user_id' => $validador->id,
+        ]);
+        $this->assertDatabaseHas('validaciones_mp', ['id' => $validacion['id'], 'estado' => 'en_curso']);
+    }
+
+    public function test_segregacion_rechaza_un_segmento_sin_envase_contenedor(): void
+    {
+        $temporada = Temporada::query()->where('activa', true)->firstOrFail();
+        $cliente = $this->cliente();
+        $operador = User::factory()->create(['rol' => RolUsuario::OperadorRomana]);
+        $validador = User::factory()->create(['rol' => RolUsuario::ValidadorMp]);
+        $recepcion = $this->actingAs($operador, 'sanctum')
+            ->postJson('/api/romana/recepciones', $this->recepcion($temporada, $cliente))
+            ->assertCreated()->json('data');
+        $csg = CsgValidacion::create(['temporada_id' => $temporada->id, 'codigo' => 'CSG-CONTENEDOR', 'activo' => true]);
+        $variedad = VariedadValidacion::create(['especie_validacion_id' => $recepcion['especie_validacion_id'], 'nombre' => 'Santina', 'activo' => true]);
+        $validacion = $this->actingAs($validador, 'sanctum')
+            ->postJson("/api/validacion-mp/recepciones/{$recepcion['id']}/tomar", [
+                'operacion_id' => (string) Str::uuid(),
+            ])->assertOk()->json('data');
+        $this->postJson("/api/validacion-mp/validaciones/{$validacion['id']}/confirmar", [
+            'operacion_id' => (string) Str::uuid(),
+            'envases' => [['tipo_envase' => 'bins', 'cantidad_validada' => 48], ['tipo_envase' => 'totes', 'cantidad_validada' => 10]],
+            'tarjas_verificadas' => true, 'requiere_segregacion' => true,
+            'segmentos' => [
+                ['motivos' => ['cuartel'], 'cuartel' => 'A', 'csg_validacion_id' => $csg->id, 'variedad_validacion_id' => $variedad->id,
+                    'envases' => [['tipo_envase' => 'bins', 'cantidad' => 48], ['tipo_envase' => 'totes', 'cantidad' => 0]]],
+                ['motivos' => ['cuartel'], 'cuartel' => 'B', 'csg_validacion_id' => $csg->id, 'variedad_validacion_id' => $variedad->id,
+                    'envases' => [['tipo_envase' => 'bins', 'cantidad' => 0], ['tipo_envase' => 'totes', 'cantidad' => 10]]],
+            ],
+        ])->assertUnprocessable()->assertJsonValidationErrors('segmentos.1.envases');
+        $this->assertDatabaseCount('segmentos_validacion_mp', 0);
+    }
+
     public function test_solo_ofrece_y_acepta_csg_habilitados_para_el_cliente_de_romana(): void
     {
         $temporada = Temporada::query()->where('activa', true)->firstOrFail();

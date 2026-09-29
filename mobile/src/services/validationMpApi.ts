@@ -33,6 +33,13 @@ export async function getMpCatalog(baseUrl: string, token: string, receptionId: 
   return request<MpCatalog>(baseUrl, `/api/validacion-mp/recepciones/${receptionId}/catalogos`, token);
 }
 
+export async function completeMpSpecies(baseUrl: string, token: string, reception: MpReception, speciesId: string) {
+  return (await request<{ data: MpReception }>(baseUrl, `/api/validacion-mp/recepciones/${reception.id}/especie`, token, {
+    method: 'POST',
+    body: JSON.stringify({ operacion_id: Crypto.randomUUID(), version_conocida: reception.version, especie_validacion_id: speciesId }),
+  })).data;
+}
+
 export async function takeMpReception(baseUrl: string, token: string, receptionId: string) {
   return (await request<{ data: MpValidation }>(baseUrl, `/api/validacion-mp/recepciones/${receptionId}/tomar`, token, {
     method: 'POST', body: JSON.stringify({ operacion_id: Crypto.randomUUID() }),

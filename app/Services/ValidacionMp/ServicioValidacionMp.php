@@ -8,10 +8,13 @@ use App\Enums\EstadoRevisionMovimientoEnvase;
 use App\Enums\EstadoValidacionMp;
 use App\Enums\MotivoSegregacionMp;
 use App\Enums\PropiedadEnvase;
+use App\Enums\TipoEventoRomana;
 use App\Enums\TipoMovimientoEnvase;
 use App\Enums\TipoRecepcionRomana;
 use App\Exceptions\ConflictoOperacion;
 use App\Models\CsgValidacion;
+use App\Models\EspecieValidacion;
+use App\Models\EventoRecepcionRomana;
 use App\Models\MovimientoEnvase;
 use App\Models\RecepcionRomana;
 use App\Models\SegmentoEnvaseValidacionMp;
@@ -19,12 +22,51 @@ use App\Models\SegmentoValidacionMp;
 use App\Models\User;
 use App\Models\ValidacionMp;
 use App\Models\VariedadValidacion;
+use App\Services\Temporadas\GuardiaTemporadaActiva;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class ServicioValidacionMp
 {
+    public function completarEspecie(RecepcionRomana $recepcion, string $especieId, int $version, string $operacionId, User $usuario): RecepcionRomana
+    {
+        return DB::transaction(function () use ($recepcion, $especieId, $version, $operacionId, $usuario): RecepcionRomana {
+            $recepcion = RecepcionRomana::query()->lockForUpdate()->findOrFail($recepcion->id);
+            app(GuardiaTemporadaActiva::class)->asegurar($recepcion);
+            $hash = hash('sha256', $recepcion->id.'|'.$especieId);
+            $evento = EventoRecepcionRomana::query()->where('operacion_id', $operacionId)->first();
+            if ($evento) {
+                if ($evento->recepcion_romana_id !== $recepcion->id || $evento->tipo !== TipoEventoRomana::EspecieCompletada || $evento->payload_hash !== $hash) {
+                    throw new ConflictoOperacion('El identificador de operación ya fue utilizado con datos diferentes.');
+                }
+
+                return $recepcion;
+            }
+            if ($recepcion->validacion_tomada_por_user_id !== $usuario->id || $recepcion->estado_validacion_mp !== EstadoValidacionMp::EnCurso) {
+                throw new ConflictoOperacion('Solo quien tomó la recepción puede completar su especie antes de validarla.');
+            }
+            if ($recepcion->especie_validacion_id || $recepcion->version !== $version || ! $recepcion->tipo_recepcion->contieneFruta()) {
+                throw new ConflictoOperacion('La recepción cambió o ya tiene especie asignada.');
+            }
+            $especie = EspecieValidacion::query()->whereKey($especieId)
+                ->where('temporada_id', $recepcion->temporada_id)->where('activo', true)->first();
+            if (! $especie) {
+                throw ValidationException::withMessages(['especie_validacion_id' => 'La especie no está activa en la temporada de la recepción.']);
+            }
+            $recepcion->update(['especie_validacion_id' => $especieId, 'version' => $version + 1]);
+            EventoRecepcionRomana::create([
+                'operacion_id' => $operacionId, 'payload_hash' => $hash,
+                'recepcion_romana_id' => $recepcion->id, 'tipo' => TipoEventoRomana::EspecieCompletada,
+                'estado_anterior' => $recepcion->estado, 'estado_nuevo' => $recepcion->estado,
+                'user_id' => $usuario->id, 'ocurrido_at' => now(),
+                'datos' => ['especie_validacion_id' => $especieId, 'especie' => $especie->nombre],
+            ]);
+
+            return $recepcion;
+        }, attempts: 3);
+    }
+
     public function tomar(
         RecepcionRomana $recepcion,
         string $operacionId,
@@ -105,6 +147,9 @@ class ServicioValidacionMp
             }
 
             $esFruta = $recepcion->tipo_recepcion->contieneFruta();
+            if ($esFruta && ! $recepcion->especie_validacion_id) {
+                throw ValidationException::withMessages(['especie_validacion_id' => 'Selecciona la especie de la recepción antes de validar.']);
+            }
             if ($esFruta && ($datos['tarjas_verificadas'] ?? false) !== true) {
                 throw ValidationException::withMessages(['tarjas_verificadas' => 'Confirma el chequeo visual de las tarjas de campo.']);
             }
@@ -112,6 +157,14 @@ class ServicioValidacionMp
             $segmentos = $esFruta
                 ? $this->prepararSegmentos($validacion, $recepcion, $datos, $cantidades, $requiereSegregacion)
                 : [];
+            foreach ($segmentos as $indice => $segmento) {
+                $contenedores = collect($segmento['envases'])->firstWhere('tipo_envase', $recepcion->tipo_envase_calculo_neto);
+                if ((int) ($contenedores['cantidad'] ?? 0) < 1) {
+                    throw ValidationException::withMessages([
+                        "segmentos.{$indice}.envases" => 'Cada segmento con fruta debe incluir al menos un envase contenedor.',
+                    ]);
+                }
+            }
 
             $ahora = now();
             foreach ($recepcion->detallesEnvases as $detalle) {

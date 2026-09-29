@@ -61,11 +61,6 @@ class ServicioLoteMateriaPrima
                 $preparados['segmento'],
                 $datos,
             );
-            $this->asegurarKilosRecepcion(
-                $preparados['recepcion'],
-                (float) $datos['kilos_netos_confirmados'],
-            );
-
             $lote = LoteMateriaPrima::create([
                 'operacion_id' => $datos['operacion_id'],
                 'payload_hash' => $hash,
@@ -75,6 +70,8 @@ class ServicioLoteMateriaPrima
                 'creado_por_user_id' => $usuario->id,
                 'actualizado_por_user_id' => $usuario->id,
             ]);
+            $this->guardarEnvases($lote, $preparados['segmento'], $preparados['recepcion']);
+            $this->actualizarEstadoSegmento($preparados['segmento']);
             $this->registrarEvento(
                 $lote,
                 'lote_creado',
@@ -126,17 +123,12 @@ class ServicioLoteMateriaPrima
                 $datos,
                 $lote->id,
             );
-            $this->asegurarKilosRecepcion(
-                $preparados['recepcion'],
-                (float) $datos['kilos_netos_confirmados'],
-                $lote->id,
-            );
-
             $lote->update([
                 ...$this->atributosLote([...$datos, 'lote_id_para_calculo' => $lote->id], $preparados),
                 'version' => $lote->version + 1,
                 'actualizado_por_user_id' => $usuario->id,
             ]);
+            $this->guardarEnvases($lote, $preparados['segmento'], $preparados['recepcion']);
             $this->registrarEvento(
                 $lote,
                 'lote_actualizado',
@@ -267,16 +259,7 @@ class ServicioLoteMateriaPrima
             $recepcion = RecepcionRomana::query()
                 ->lockForUpdate()
                 ->findOrFail($segmento->validacion->recepcion_romana_id);
-            $this->asegurarDisponibilidadSegmento(
-                $segmento,
-                [
-                    'envase_primario' => $lote->envase_primario->value,
-                    'cantidad_envases_primarios' => $lote->cantidad_envases_primarios,
-                    'envase_secundario' => $lote->envase_secundario?->value,
-                    'cantidad_envases_secundarios' => $lote->cantidad_envases_secundarios,
-                ],
-                $lote->id,
-            );
+            $this->asegurarDisponibilidadSegmento($segmento, [], $lote->id);
             $this->asegurarKilosRecepcion(
                 $recepcion,
                 (float) $lote->kilos_netos_confirmados,
@@ -805,10 +788,8 @@ class ServicioLoteMateriaPrima
                 'Romana debe cerrar la recepción y calcular el peso neto por envase antes de lotizar.',
             );
         }
-        if (! $segmento->envases->contains(fn ($envase): bool => $envase->tipo_envase->value === $datos['envase_primario'])) {
-            throw ValidationException::withMessages([
-                'envase_primario' => 'El envase primario debe estar incluido en el segmento validado.',
-            ]);
+        if (! $segmento->envases->contains(fn ($envase): bool => $envase->tipo_envase->value === $recepcion->tipo_envase_calculo_neto && $envase->cantidad > 0)) {
+            throw ValidationException::withMessages(['envases' => 'El segmento no contiene envases contenedores para repartir el neto.']);
         }
 
         $csgId = $segmento->csg_validacion_id ?? ($datos['csg_validacion_id'] ?? null);
@@ -872,30 +853,15 @@ class ServicioLoteMateriaPrima
     {
         /** @var RecepcionRomana $recepcion */
         $recepcion = $preparados['recepcion'];
-        $cantidad = (int) $datos['cantidad_envases_primarios'] + (int) ($datos['cantidad_envases_secundarios'] ?? 0);
-        $total = (int) $recepcion->cantidad_envases_declarados;
-        $otrosLotes = LoteMateriaPrima::query()
-            ->where('recepcion_romana_id', $recepcion->id)
-            ->where('estado', '!=', EstadoLoteMateriaPrima::Anulado->value)
-            ->when($datos['lote_id_para_calculo'] ?? null, fn ($query, $id) => $query->whereKeyNot($id))
-            ->get(['cantidad_envases_primarios', 'cantidad_envases_secundarios', 'kilos_netos_calculados']);
-        $cantidadOcupada = $otrosLotes->sum(fn ($lote): int => $lote->cantidad_envases_primarios + $lote->cantidad_envases_secundarios);
-        $netoMiligramos = (int) round((float) $recepcion->peso_neto * 1000);
-        $calculadosMiligramos = $cantidadOcupada + $cantidad === $total
-            ? $netoMiligramos - (int) round($otrosLotes->sum('kilos_netos_calculados') * 1000)
-            : (int) round($netoMiligramos * $cantidad / $total);
-        $calculados = $calculadosMiligramos / 1000;
-        $confirmados = round((float) $datos['kilos_netos_confirmados'], 3);
+        $segmento = $preparados['segmento'];
+        $contenedor = $recepcion->tipo_envase_calculo_neto;
+        $principal = $segmento->envases->first(fn ($envase): bool => $envase->tipo_envase->value === $contenedor);
+        $secundario = $segmento->envases->first(fn ($envase): bool => $envase->tipo_envase->value !== $contenedor && $envase->cantidad > 0);
+        $calculados = $this->netoEstimado($segmento, $recepcion, $datos['lote_id_para_calculo'] ?? null);
         $taras = $recepcion->detallesEnvases->keyBy(fn ($detalle): string => $detalle->tipo_envase->value);
-        $taraPrimaria = (float) ($taras->get($datos['envase_primario'])?->tara_unitaria_salida ?? 0);
-        $taraSecundaria = (float) ($taras->get($datos['envase_secundario'] ?? '')?->tara_unitaria_salida ?? 0);
-        $brutos = round($calculados + $taraPrimaria * (int) $datos['cantidad_envases_primarios']
-            + $taraSecundaria * (int) ($datos['cantidad_envases_secundarios'] ?? 0), 3);
-        if ($confirmados > $brutos) {
-            throw ValidationException::withMessages([
-                'kilos_netos_confirmados' => 'Los kilos netos no pueden superar los kilos brutos del lote.',
-            ]);
-        }
+        $taraTotal = $segmento->envases->sum(fn ($envase): float => (int) $envase->cantidad
+            * (float) ($taras->get($envase->tipo_envase->value)?->tara_unitaria_salida ?? 0));
+        $brutos = round($calculados + $taraTotal, 3);
 
         return [
             'segmento_validacion_mp_id' => $preparados['segmento']->id,
@@ -926,13 +892,13 @@ class ServicioLoteMateriaPrima
                     ? trim((string) $preparados['segmento']->cuartel)
                     : null),
             'tipo_producto' => $datos['tipo_producto'],
-            'envase_primario' => $datos['envase_primario'],
-            'envase_secundario' => $datos['envase_secundario'] ?? null,
-            'cantidad_envases_primarios' => (int) $datos['cantidad_envases_primarios'],
-            'cantidad_envases_secundarios' => (int) ($datos['cantidad_envases_secundarios'] ?? 0),
+            'envase_primario' => $contenedor,
+            'envase_secundario' => $secundario?->tipo_envase->value,
+            'cantidad_envases_primarios' => (int) $principal->cantidad,
+            'cantidad_envases_secundarios' => (int) ($secundario?->cantidad ?? 0),
             'kilos_brutos' => $brutos,
             'kilos_netos_calculados' => $calculados,
-            'kilos_netos_confirmados' => $confirmados,
+            'kilos_netos_confirmados' => $calculados,
             'requiere_hidrocooler' => (bool) $datos['requiere_hidrocooler'],
             'observacion' => $datos['observacion'] ?? null,
         ];
@@ -946,49 +912,61 @@ class ServicioLoteMateriaPrima
         array $datos,
         ?string $ignorarLoteId = null,
     ): void {
-        $disponibles = $segmento->envases
-            ->mapWithKeys(fn ($envase): array => [
-                $envase->tipo_envase->value => (int) $envase->cantidad,
-            ]);
-        $reservados = LoteMateriaPrima::query()
+        if (LoteMateriaPrima::query()
             ->where('segmento_validacion_mp_id', $segmento->id)
             ->where('estado', '!=', EstadoLoteMateriaPrima::Anulado->value)
-            ->when($ignorarLoteId, fn ($consulta) => $consulta->where('id', '!=', $ignorarLoteId))
-            ->get([
-                'envase_primario',
-                'envase_secundario',
-                'cantidad_envases_primarios',
-                'cantidad_envases_secundarios',
-            ]);
-
-        $solicitados = [
-            $datos['envase_primario'] => (int) $datos['cantidad_envases_primarios'],
-        ];
-        if (filled($datos['envase_secundario'] ?? null)) {
-            $solicitados[$datos['envase_secundario']] =
-                ($solicitados[$datos['envase_secundario']] ?? 0)
-                + (int) ($datos['cantidad_envases_secundarios'] ?? 0);
+            ->when($ignorarLoteId, fn ($consulta) => $consulta->whereKeyNot($ignorarLoteId))
+            ->exists()) {
+            throw ValidationException::withMessages(['segmento_validacion_mp_id' => 'El segmento ya tiene un lote activo.']);
         }
-        foreach ($solicitados as $tipo => $cantidad) {
-            $ocupados = $reservados->sum(function (LoteMateriaPrima $lote) use ($tipo): int {
-                $total = $lote->envase_primario->value === $tipo
-                    ? $lote->cantidad_envases_primarios
-                    : 0;
-                if ($lote->envase_secundario?->value === $tipo) {
-                    $total += $lote->cantidad_envases_secundarios;
-                }
+    }
 
-                return $total;
-            });
-            if (($ocupados + $cantidad) > (int) $disponibles->get($tipo, 0)) {
-                throw ValidationException::withMessages([
-                    'envases' => sprintf(
-                        'La distribución supera los %d %s disponibles en el segmento.',
-                        (int) $disponibles->get($tipo, 0),
-                        $tipo,
-                    ),
-                ]);
+    /** El redondeo final se asigna al último segmento según contenedores ocupados, nunca según esponjas o totes. */
+    public function netoEstimado(SegmentoValidacionMp $segmento, RecepcionRomana $recepcion, ?string $ignorarLoteId = null): float
+    {
+        $segmento->loadMissing('envases');
+        $tipo = $recepcion->tipo_envase_calculo_neto;
+        $cantidad = (int) $segmento->envases->first(fn ($envase): bool => $envase->tipo_envase->value === $tipo)?->cantidad;
+        $total = (int) $recepcion->cantidad_envase_calculo_neto;
+        if ($cantidad < 1 || $total < 1) {
+            throw ValidationException::withMessages(['envases' => 'El segmento necesita al menos un envase contenedor.']);
+        }
+        $anteriores = LoteMateriaPrima::query()
+            ->where('recepcion_romana_id', $recepcion->id)
+            ->where('estado', '!=', EstadoLoteMateriaPrima::Anulado->value)
+            ->when($ignorarLoteId, fn ($consulta) => $consulta->whereKeyNot($ignorarLoteId))
+            ->with('envasesDetalle')->get();
+        $ocupados = $anteriores->sum(fn (LoteMateriaPrima $lote): int => (int) ($lote->envasesDetalle
+            ->first(fn ($envase): bool => $envase->tipo_envase->value === $tipo)?->cantidad
+            ?? ($lote->envase_primario->value === $tipo ? $lote->cantidad_envases_primarios
+                : ($lote->envase_secundario?->value === $tipo ? $lote->cantidad_envases_secundarios : 0))));
+        if ($ocupados + $cantidad > $total) {
+            throw ValidationException::withMessages(['envases' => 'Los contenedores de los lotes superan los declarados en Romana.']);
+        }
+        $miligramos = (int) round((float) $recepcion->peso_neto * 1000);
+        $asignados = (int) round($anteriores->sum('kilos_netos_calculados') * 1000);
+        $calculados = $ocupados + $cantidad === $total
+            ? $miligramos - $asignados
+            : (int) round($miligramos * $cantidad / $total);
+        if ($calculados <= 0 || $calculados + $asignados > $miligramos) {
+            throw ValidationException::withMessages(['envases' => 'El reparto del neto de Romana no es válido.']);
+        }
+
+        return $calculados / 1000;
+    }
+
+    private function guardarEnvases(LoteMateriaPrima $lote, SegmentoValidacionMp $segmento, RecepcionRomana $recepcion): void
+    {
+        $taras = $recepcion->detallesEnvases->keyBy(fn ($detalle): string => $detalle->tipo_envase->value);
+        foreach ($segmento->envases as $envase) {
+            if ($envase->cantidad < 1) {
+                continue;
             }
+            $lote->envasesDetalle()->updateOrCreate(
+                ['tipo_envase' => $envase->tipo_envase->value],
+                ['cantidad' => $envase->cantidad,
+                    'tara_unitaria' => $taras->get($envase->tipo_envase->value)?->tara_unitaria_salida],
+            );
         }
     }
 
@@ -1032,42 +1010,9 @@ class ServicioLoteMateriaPrima
 
     private function actualizarEstadoSegmento(SegmentoValidacionMp $segmento): void
     {
-        $segmento->loadMissing(['envases', 'validacion.recepcion']);
-        $lotesConfirmados = LoteMateriaPrima::query()
-            ->where('segmento_validacion_mp_id', $segmento->id)
-            ->whereNotIn('estado', [
-                EstadoLoteMateriaPrima::Borrador->value,
-                EstadoLoteMateriaPrima::Anulado->value,
-            ])
-            ->get([
-                'envase_primario',
-                'envase_secundario',
-                'cantidad_envases_primarios',
-                'cantidad_envases_secundarios',
-            ]);
-        $cantidadesConfirmadas = [];
-        foreach ($lotesConfirmados as $lote) {
-            $tipoPrimario = $lote->envase_primario->value;
-            $cantidadesConfirmadas[$tipoPrimario] =
-                ($cantidadesConfirmadas[$tipoPrimario] ?? 0)
-                + $lote->cantidad_envases_primarios;
-            if ($lote->envase_secundario) {
-                $tipoSecundario = $lote->envase_secundario->value;
-                $cantidadesConfirmadas[$tipoSecundario] =
-                    ($cantidadesConfirmadas[$tipoSecundario] ?? 0)
-                    + $lote->cantidad_envases_secundarios;
-            }
-        }
-        $completo = $segmento->envases->every(
-            fn ($envase): bool => ($cantidadesConfirmadas[$envase->tipo_envase->value] ?? 0)
-                >= $envase->cantidad,
-        );
-        $estado = match (true) {
-            $lotesConfirmados->isEmpty() => 'pendiente_lote',
-            $completo => 'lotizado',
-            default => 'lotizacion_parcial',
-        };
-        $segmento->update(['estado' => $estado]);
+        $activos = LoteMateriaPrima::query()->where('segmento_validacion_mp_id', $segmento->id)
+            ->where('estado', '!=', EstadoLoteMateriaPrima::Anulado->value)->count();
+        $segmento->update(['estado' => $activos ? 'lotizado' : 'pendiente_lote']);
     }
 
     private function claveNumeroVigente(
@@ -1162,6 +1107,7 @@ class ServicioLoteMateriaPrima
     {
         return $lote->refresh()->load([
             'segmento.envases',
+            'envasesDetalle',
             'segmento.validacion.recepcion.detallesEnvases',
             'recepcion',
             'temporada',

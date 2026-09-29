@@ -165,11 +165,15 @@ class MateriaPrimaController extends Controller
         ]), $etag);
     }
 
-    public function segmentosPendientes(): JsonResponse
+    public function segmentosPendientes(ServicioLoteMateriaPrima $servicio): JsonResponse
     {
         Gate::authorize('consultar-materia-prima');
         $segmentos = SegmentoValidacionMp::query()
-            ->whereIn('estado', ['pendiente_lote', 'lotizacion_parcial'])
+            ->where(function (Builder $consulta): void {
+                $consulta->where('estado', 'pendiente_lote')
+                    ->orWhereHas('lotesMateriaPrima', fn (Builder $lotes) => $lotes
+                        ->where('estado', EstadoLoteMateriaPrima::Borrador->value));
+            })
             ->whereHas('validacion.recepcion.temporada', fn (Builder $consulta) => $consulta
                 ->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
             ->with([
@@ -178,6 +182,7 @@ class MateriaPrimaController extends Controller
                 'variedad.especie',
                 'validacion.recepcion.detallesEnvases',
                 'validacion.recepcion.cliente',
+                'lotesMateriaPrima.envasesDetalle',
                 'lotesMateriaPrima' => fn ($consulta) => $consulta
                     ->where('estado', '!=', EstadoLoteMateriaPrima::Anulado->value),
             ])
@@ -185,21 +190,12 @@ class MateriaPrimaController extends Controller
             ->get();
 
         return response()->json([
-            'data' => $segmentos->map(function (SegmentoValidacionMp $segmento): array {
+            'data' => $segmentos->map(function (SegmentoValidacionMp $segmento) use ($servicio): array {
                 $recepcion = $segmento->validacion->recepcion;
                 $tipoBase = $recepcion->tipo_envase_calculo_neto;
                 $envases = $segmento->envases->map(function ($envase) use ($segmento): array {
                     $tipo = $envase->tipo_envase->value;
-                    $reservada = $segmento->lotesMateriaPrima->sum(function (LoteMateriaPrima $lote) use ($tipo): int {
-                        $cantidad = $lote->envase_primario->value === $tipo
-                            ? $lote->cantidad_envases_primarios
-                            : 0;
-                        if ($lote->envase_secundario?->value === $tipo) {
-                            $cantidad += $lote->cantidad_envases_secundarios;
-                        }
-
-                        return $cantidad;
-                    });
+                    $reservada = $segmento->lotesMateriaPrima->sum(fn (LoteMateriaPrima $lote): int => (int) ($lote->envasesDetalle->first(fn ($item): bool => $item->tipo_envase->value === $tipo)?->cantidad ?? 0));
 
                     return [
                         'tipo_envase' => $tipo,
@@ -226,6 +222,9 @@ class MateriaPrimaController extends Controller
                         'especie_id' => $segmento->variedad->especie_validacion_id,
                     ] : null,
                     'envases' => $envases,
+                    'neto_estimado' => $segmento->lotesMateriaPrima->isNotEmpty()
+                        ? (float) $segmento->lotesMateriaPrima->first()->kilos_netos_calculados
+                        : $servicio->netoEstimado($segmento, $recepcion),
                     'recepcion' => [
                         'id' => $recepcion->id,
                         'numero_recepcion' => $recepcion->numero_recepcion,
@@ -419,6 +418,7 @@ class MateriaPrimaController extends Controller
     {
         $relaciones = [
             'segmento.envases',
+            'envasesDetalle',
             'recepcion',
             'temporada',
             'cliente',

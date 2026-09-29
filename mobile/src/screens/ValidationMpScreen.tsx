@@ -5,7 +5,7 @@ import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, Text
 import { ReceptionDefectsPanel } from '../components/ReceptionDefectsPanel';
 import { AuthSession } from '../domain/estiba';
 import { ContainerType, MpCatalog, MpHistory, MpReception, MpSegmentDraft, SegregationReason } from '../domain/validationMp';
-import { confirmMpValidation, findMpReception, getMpCatalog, listMpHistory, listPendingMp, takeMpReception } from '../services/validationMpApi';
+import { completeMpSpecies, confirmMpValidation, findMpReception, getMpCatalog, listMpHistory, listPendingMp, takeMpReception } from '../services/validationMpApi';
 import { colors } from '../theme/colors';
 import { isPdaBuild } from '../config/appVariant';
 import { ScanInput } from '../components/ui/ScanInput';
@@ -20,6 +20,7 @@ export function ValidationMpScreen({ auth, baseUrl, onLogout }: Props) {
   const [catalog, setCatalog] = useState<MpCatalog | null>(null);
   const [csgId, setCsgId] = useState<string | null>(null);
   const [varietyId, setVarietyId] = useState<string | null>(null);
+  const [speciesId, setSpeciesId] = useState<string | null>(null);
   const [tab, setTab] = useState<'pending' | 'history'>('pending');
   const [historyDate, setHistoryDate] = useState(todayOperational);
   const [history, setHistory] = useState<MpHistory[]>([]);
@@ -62,7 +63,7 @@ export function ValidationMpScreen({ auth, baseUrl, onLogout }: Props) {
       setValidationId(loaded.validacion?.estado === 'en_curso' && loaded.validacion.validador.id === auth.usuario.id ? loaded.validacion.id : null);
       setQuantities(Object.fromEntries(types.map((type) => [type, String(loaded.envases.find((x) => x.tipo_envase === type)?.cantidad_declarada ?? 0)])) as Record<ContainerType, string>);
       setCatalog(await getMpCatalog(baseUrl, auth.token, loaded.id));
-      setCsgId(null); setVarietyId(null);
+      setCsgId(null); setVarietyId(null); setSpeciesId(null);
       setTagsChecked(false); setSegregation(false); setSegments([]); setObservation('');
     } catch (reason) { setError(message(reason)); }
     finally { setBusy(false); }
@@ -76,6 +77,19 @@ export function ValidationMpScreen({ auth, baseUrl, onLogout }: Props) {
     finally { setBusy(false); }
   }
 
+  async function completeSpecies() {
+    if (!reception || !speciesId) return;
+    setBusy(true); setError('');
+    try {
+      const updated = await completeMpSpecies(baseUrl, auth.token, reception, speciesId);
+      setReception(updated);
+      setCatalog(await getMpCatalog(baseUrl, auth.token, updated.id));
+      setVarietyId(null);
+      setSegments((current) => current.map((item) => ({ ...item, variedad_validacion_id: null })));
+    } catch (reason) { setError(message(reason)); }
+    finally { setBusy(false); }
+  }
+
   const actualContainers = useMemo(() => reception?.envases.map((item) => ({
     tipo_envase: item.tipo_envase,
     cantidad_validada: Number(quantities[item.tipo_envase] || 0),
@@ -83,6 +97,7 @@ export function ValidationMpScreen({ auth, baseUrl, onLogout }: Props) {
 
   async function confirm() {
     if (!validationId || !reception) return;
+    if (isFruit && !reception.especie_validacion_id) { setError('Selecciona y guarda la especie de la recepción antes de validar.'); return; }
     if (reception.tipo_recepcion === 'fruta_pesaje_envases' && reception.estado_romana !== 'cerrado') {
       setError('Romana debe completar y cerrar el pesaje acumulativo antes de confirmar.');
       return;
@@ -124,6 +139,7 @@ export function ValidationMpScreen({ auth, baseUrl, onLogout }: Props) {
       {!reception ? <PendingList items={pending} onOpen={(item) => void open(item.numero_recepcion)}/> : <>
         <View style={[styles.receiptCard, tight && styles.cardTight]}><View style={styles.receiptHeading}><View><Text style={styles.eyebrow}>{reception.tipo_recepcion === 'solo_envases' ? 'SOLO ENVASES' : reception.tipo_recepcion === 'fruta_pesaje_envases' ? 'FRUTA · PESAJE ACUMULATIVO' : 'FRUTA CON ENVASES'}</Text><Text style={[styles.receiptNumber, tight && styles.receiptNumberTight]}>{reception.numero_recepcion}</Text></View><Text style={styles.status}>{label(reception.estado_validacion_mp)}</Text></View><Fact inline={tight} label="Cliente" value={reception.cliente.nombre}/><Fact inline={tight} label="Guía" value={reception.numero_guia_despacho}/><Fact inline={tight} label="Camión" value={`${reception.patente_camion} · ${reception.conductor.nombre}`}/><Fact inline={tight} label="Temporada heredada" value={`${reception.temporada.codigo} · ${reception.temporada.nombre}`}/><Fact inline={tight} label="Ingreso exacto" value={formatDate(reception.ingreso_at)}/>{reception.pesaje_envases ? <Fact inline={tight} label="Pesaje en Romana" value={`${reception.pesaje_envases.cantidad_pesada}/${reception.pesaje_envases.cantidad_declarada} ${label(reception.pesaje_envases.tipo_envase)} · neto ${reception.pesaje_envases.peso_neto.toFixed(3)} kg`}/> : null}</View>
         {!validationId ? <Pressable disabled={reception.estado_validacion_mp !== 'pendiente'} onPress={() => void take()} style={[styles.primary, reception.estado_validacion_mp !== 'pendiente' && styles.disabled]}><Text style={styles.primaryText}>Tomar recepción para validar</Text></Pressable> : <View style={[styles.formCard, tight && styles.cardTight]}>
+          {isFruit && !reception.especie_validacion_id ? <View style={styles.segments}><Text style={styles.cardTitle}>Especie de la recepción</Text><Text style={styles.muted}>Esta recepción se pesó antes de registrar la especie. Selecciónala para filtrar las variedades.</Text><View style={styles.chips}>{catalog?.especies.map((item) => <Chip key={item.id} active={speciesId === item.id} label={item.nombre} onPress={() => setSpeciesId(item.id)}/>)}</View><Pressable disabled={!speciesId || busy} onPress={() => void completeSpecies()} style={[styles.primary, (!speciesId || busy) && styles.disabled]}><Text style={styles.primaryText}>Guardar especie</Text></Pressable></View> : null}
           <Text style={styles.cardTitle}>Conteo real en piso</Text><Text style={styles.muted}>La diferencia se registra y no bloquea la validación.</Text>
           {reception.envases.map((item) => { const actual = Number(quantities[item.tipo_envase] || 0); const difference = actual - item.cantidad_declarada; return <View key={item.tipo_envase} style={styles.countRow}><View><Text style={styles.countType}>{label(item.tipo_envase)}</Text><Text style={styles.muted}>Guía: {item.cantidad_declarada} · Diferencia: {difference > 0 ? '+' : ''}{difference}</Text></View><TextInput keyboardType="number-pad" onChangeText={(value) => setQuantities((current) => ({ ...current, [item.tipo_envase]: value.replace(/\D/g, '') }))} style={styles.countInput} value={quantities[item.tipo_envase]}/></View>})}
           {isFruit ? <><Check active={tagsChecked} label="Tarjas de campo verificadas visualmente" onPress={() => setTagsChecked((value) => !value)}/><View style={styles.choiceRow}><Text style={styles.countType}>¿Requiere segregación?</Text><Chip active={!segregation} label="No" onPress={() => { setSegregation(false); setSegments([]); }}/><Chip active={segregation} label="Sí" onPress={() => { setSegregation(true); if (!segments.length) { addSegment(); addSegment(); } }}/></View>{segregation ? <View style={styles.segments}><View style={styles.segmentHeading}><Text style={styles.cardTitle}>Segmentos futuros</Text><Pressable onPress={addSegment} style={styles.secondary}><Text style={styles.secondaryText}>+ Segmento</Text></Pressable></View>{segments.map((segment, index) => <SegmentEditor catalog={catalog} containers={actualContainers.map((item) => item.tipo_envase)} index={index} key={segment.key} onChange={(patch) => updateSegment(segment.key, patch)} onRemove={() => setSegments((current) => current.filter((item) => item.key !== segment.key))} onToggleReason={(reason) => toggleReason(segment, reason)} segment={segment}/>)}</View> : <OriginPicker catalog={catalog} csgId={csgId} varietyId={varietyId} onCsg={(id) => { setCsgId(id); setVarietyId(null); }} onVariety={setVarietyId}/>}</> : <Text style={styles.info}>Recepción solo de envases: no requiere tarjas ni segregación.</Text>}

@@ -10,6 +10,7 @@ export type MpReception = {
   estado_validacion_mp: MpValidationState;
   tipo_recepcion: ReceptionType;
   especie_validacion_id: string | null;
+  version: number;
   concepto_envases: 'compra' | 'arriendo' | null;
   temporada: { id: string; codigo: string; nombre: string };
   cliente: { id: string; codigo: string | null; nombre: string };
@@ -63,6 +64,7 @@ export type MpHistory = { id: string; fecha: string; numero_recepcion: string; c
 
 export type MpCatalog = {
   temporada: { id: string; codigo: string; nombre: string };
+  especies: Array<{ id: string; nombre: string }>;
   csg: Array<{ id: string; codigo: string; predio: string | null; variedad_ids: string[] }>;
   variedades: Array<{ id: string; nombre: string; especie: string | null }>;
   motivos: SegregationReason[];

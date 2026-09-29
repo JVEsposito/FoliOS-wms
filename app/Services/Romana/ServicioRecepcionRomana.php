@@ -715,14 +715,14 @@ class ServicioRecepcionRomana
 
             $ahora = CarbonImmutable::now();
             $pesoNeto = round($bruto - $pesoTaraTotal, 3);
-            $pesoNetoPorEnvase = round($pesoNeto / $recepcion->cantidad_envases_declarados, 3);
+            $pesoNetoPorEnvase = round($pesoNeto / $detalleCalculo->cantidad_declarada, 3);
             $recepcion->update([
                 'peso_tara' => $tara,
                 'peso_neto' => $pesoNeto,
                 'salida_sin_envases' => $payload['salida_sin_envases'],
                 'peso_tara_envases' => $pesoTaraEnvases,
                 'tipo_envase_calculo_neto' => $tipoCalculo,
-                'cantidad_envase_calculo_neto' => $recepcion->cantidad_envases_declarados,
+                'cantidad_envase_calculo_neto' => $detalleCalculo->cantidad_declarada,
                 'peso_neto_por_envase' => $pesoNetoPorEnvase,
                 'estado' => EstadoRecepcionRomana::Cerrado,
                 'salida_at' => $ahora,
@@ -754,7 +754,7 @@ class ServicioRecepcionRomana
                     'peso_tara_total' => $pesoTaraTotal,
                     'peso_neto' => (float) $recepcion->peso_neto,
                     'tipo_envase_calculo_neto' => $tipoCalculo,
-                    'cantidad_envase_calculo_neto' => $recepcion->cantidad_envases_declarados,
+                    'cantidad_envase_calculo_neto' => $detalleCalculo->cantidad_declarada,
                     'peso_neto_por_envase' => $pesoNetoPorEnvase,
                     'observacion_cierre' => $payload['observacion'],
                 ],
@@ -1082,7 +1082,7 @@ class ServicioRecepcionRomana
             );
         }
 
-        $cantidad = collect($payload['envases'])->sum('cantidad');
+        $cantidad = (int) $detalleCalculo['cantidad'];
         $pesoNeto = round($bruto - $pesoTaraTotal, 3);
 
         return [

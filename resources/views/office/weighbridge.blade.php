@@ -117,7 +117,7 @@
                     <label class="field weight-field" id="grossWeightField"><span>Peso bruto *</span><div><input name="peso_bruto" type="number" min="1" max="200000" step="0.01" inputmode="decimal" required><b>kg</b></div><small>Lectura del camión cargado sobre la romana.</small></label>
                     <label class="field field--span-2"><span>Observación</span><textarea name="observacion" maxlength="2000"></textarea></label>
                     <label class="field weight-field is-hidden" id="administrativeTareField"><span>Peso tara corregido *</span><div><input name="peso_tara" type="number" min="1" max="200000" step="0.01" inputmode="decimal"><b>kg</b></div><small>Disponible únicamente para una recepción ya cerrada.</small></label>
-                    <label class="field is-hidden" id="administrativeNetContainerField"><span>Referencia histórica de envase</span><select name="tipo_envase_calculo_neto"></select></label>
+                    <label class="field is-hidden" id="administrativeNetContainerField"><span>Envase contenedor para neto unitario *</span><select name="tipo_envase_calculo_neto"></select></label>
                     <label class="field field--span-2 is-hidden" id="administrativeCorrectionField"><span>Motivo de la corrección administrativa *</span><textarea name="motivo_correccion" maxlength="1000"></textarea><small>Quedará registrado junto al usuario, fecha y valores anteriores en la trazabilidad del expediente.</small></label>
                 </div>
                 <p class="form-error" id="receptionFormError" role="alert"></p>
@@ -142,13 +142,13 @@
             <form method="dialog" class="weighbridge-dialog__shell weighbridge-dialog__shell--compact" id="tareForm" novalidate>
                 <div class="weighbridge-dialog__heading"><div><p class="eyebrow">BÁSCULA DE SALIDA</p><h2>Registrar destare</h2><p id="tareDescription">Captura la lectura del camión vacío.</p></div><button class="dialog-close" value="cancel" type="submit" aria-label="Cerrar">×</button></div>
                 <label class="field weight-field"><span>Peso tara *</span><div><input name="peso_tara" type="number" min="1" max="200000" step="0.01" inputmode="decimal" required><b>kg</b></div></label>
-                <label class="field is-hidden"><span>Referencia histórica de envase</span><select name="tipo_envase_calculo_neto"></select></label>
+                    <label class="field"><span>Envase contenedor para neto unitario *</span><select name="tipo_envase_calculo_neto" required></select></label>
                     <label class="tare-option"><input name="salida_sin_envases" type="checkbox" value="1"><span><strong>El camión sale sin los envases</strong><small>Descuenta del neto la tara de los envases que quedaron en planta.</small></span></label>
                     <fieldset class="outbound-container-tares" id="outboundContainerTares"><legend>Tara de todos los envases declarados *</legend><div id="outboundContainerTareList"></div><small>Se registra por tipo; solo se descuenta del neto cuando el camión sale sin envases.</small></fieldset>
                 <label class="field"><span>Observación de cierre</span><textarea name="observacion" maxlength="2000"></textarea></label>
                 <div class="net-preview is-hidden" id="containerTarePreviewRow"><span>TARA CALCULADA DE ENVASES</span><strong id="containerTarePreview">—</strong></div>
                 <div class="net-preview"><span>PESO NETO CALCULADO</span><strong id="netWeightPreview">—</strong></div>
-                <div class="net-preview"><span>NETO PROMEDIO POR ENVASE DECLARADO</span><strong id="netPerContainerPreview">—</strong></div>
+                <div class="net-preview"><span>NETO POR ENVASE CONTENEDOR</span><strong id="netPerContainerPreview">—</strong></div>
                 <p class="form-error" id="tareFormError" role="alert"></p>
                 <div class="dialog-actions"><button class="secondary-button" value="cancel" type="submit">Cancelar</button><button class="primary-button" value="default" type="submit">Cerrar y emitir aviso</button></div>
             </form>

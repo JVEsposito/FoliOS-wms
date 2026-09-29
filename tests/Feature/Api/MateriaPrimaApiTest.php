@@ -16,6 +16,7 @@ use App\Models\Temporada;
 use App\Models\TipoResultadoPacking;
 use App\Models\User;
 use App\Models\VariedadValidacion;
+use App\Services\MateriaPrima\RellenoEnvasesLotes;
 use App\Services\Temporadas\Cierre\ServicioRegularizacionCierreTemporada;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -27,6 +28,52 @@ use ZipArchive;
 class MateriaPrimaApiTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_relleno_de_migracion_completa_un_lote_y_respeta_los_segmentos_divididos(): void
+    {
+        $contexto = $this->prepararRecepcionValidada();
+        $digitador = User::factory()->create(['rol' => RolUsuario::DigitadorMateriaPrima]);
+        $lote = $this->actingAs($digitador, 'sanctum')
+            ->postJson('/api/materia-prima/lotes', $this->payloadLote($contexto))
+            ->assertCreated()->json('data');
+        $this->assertDatabaseHas('segmentos_validacion_mp', ['id' => $contexto['segmento_id'], 'estado' => 'lotizado']);
+        DB::table('lotes_materia_prima_envases')->where('lote_materia_prima_id', $lote['id'])->delete();
+        DB::table('lotes_materia_prima')->where('id', $lote['id'])->update([
+            'cantidad_envases_primarios' => 20, 'cantidad_envases_secundarios' => 4,
+        ]);
+        DB::table('segmentos_validacion_mp')->where('id', $contexto['segmento_id'])->update(['estado' => 'lotizacion_parcial']);
+
+        // Otro segmento histórico con dos lotes: el relleno no modifica sus pesos ni su estado.
+        $original = (array) DB::table('segmentos_validacion_mp')->where('id', $contexto['segmento_id'])->first();
+        $otroSegmentoId = (string) Str::uuid();
+        DB::table('segmentos_validacion_mp')->insert([
+            ...$original, 'id' => $otroSegmentoId, 'secuencia' => 2, 'estado' => 'lotizacion_parcial',
+        ]);
+        foreach (DB::table('segmentos_envases_validacion_mp')->where('segmento_validacion_mp_id', $contexto['segmento_id'])->get() as $envase) {
+            DB::table('segmentos_envases_validacion_mp')->insert([
+                ...(array) $envase, 'id' => (string) Str::uuid(), 'segmento_validacion_mp_id' => $otroSegmentoId,
+            ]);
+        }
+        $base = (array) DB::table('lotes_materia_prima')->where('id', $lote['id'])->first();
+        foreach (['HIST-A', 'HIST-B'] as $numero) {
+            DB::table('lotes_materia_prima')->insert([
+                ...$base, 'id' => (string) Str::uuid(), 'operacion_id' => (string) Str::uuid(),
+                'segmento_validacion_mp_id' => $otroSegmentoId, 'numero_lote' => $numero,
+                'clave_numero_vigente' => hash('sha256', $numero),
+            ]);
+        }
+        $relleno = app(RellenoEnvasesLotes::class);
+        $this->assertSame([$otroSegmentoId], $relleno->ejecutar());
+        $this->assertDatabaseHas('lotes_materia_prima', [
+            'id' => $lote['id'], 'cantidad_envases_primarios' => 48, 'cantidad_envases_secundarios' => 10,
+        ]);
+        $this->assertDatabaseHas('segmentos_validacion_mp', ['id' => $contexto['segmento_id'], 'estado' => 'lotizado']);
+        $this->assertDatabaseHas('segmentos_validacion_mp', ['id' => $otroSegmentoId, 'estado' => 'lotizacion_parcial']);
+        $this->assertDatabaseCount('lotes_materia_prima_envases', 6);
+        $antes = DB::table('lotes_materia_prima_envases')->orderBy('lote_materia_prima_id')->orderBy('tipo_envase')->get()->toArray();
+        $this->assertSame([$otroSegmentoId], $relleno->ejecutar());
+        $this->assertEquals($antes, DB::table('lotes_materia_prima_envases')->orderBy('lote_materia_prima_id')->orderBy('tipo_envase')->get()->toArray());
+    }
 
     public function test_cancelar_hidrocooler_en_cierre_libera_equipo_sin_inventar_mediciones(): void
     {
@@ -232,10 +279,11 @@ class MateriaPrimaApiTest extends TestCase
         );
     }
 
-    public function test_lotiza_un_segmento_en_varios_lotes_y_completa_hidrocooler_y_camara(): void
+    public function test_lotiza_dos_segmentos_con_tres_envases_y_completa_hidrocooler_y_camara(): void
     {
         $this->travelTo(CarbonImmutable::parse('2026-07-27 15:00:00'));
-        $contexto = $this->prepararRecepcionValidada();
+        $contexto = $this->prepararRecepcionValidada(tresTipos: true);
+        $segundoSegmentoId = $contexto['segundo_segmento_id'];
         $digitador = User::factory()->create(['rol' => RolUsuario::DigitadorMateriaPrima]);
         $camara = Camara::create([
             'codigo' => 'MP-01',
@@ -253,8 +301,9 @@ class MateriaPrimaApiTest extends TestCase
             ->assertJsonPath('data.0.id', $contexto['segmento_id'])
             ->assertJsonPath('data.0.recepcion.peso_neto', 18000)
             ->assertJsonPath('data.0.recepcion.tipo_envase_calculo_neto', 'bins')
-            ->assertJsonPath('data.0.recepcion.peso_neto_por_envase', 310.345)
-            ->assertJsonPath('data.0.envases.0.cantidad_disponible', 48);
+            ->assertJsonPath('data.0.recepcion.peso_neto_por_envase', 375)
+            ->assertJsonPath('data.0.envases.0.cantidad_disponible', 20)
+            ->assertJsonPath('data.0.neto_estimado', 7500);
 
         $primerPayload = $this->payloadLote($contexto, [
             'numero_lote' => 'EXP-2026-001-A',
@@ -269,14 +318,18 @@ class MateriaPrimaApiTest extends TestCase
         $primerLote = $this->postJson('/api/materia-prima/lotes', $primerPayload)
             ->assertCreated()
             ->assertJsonPath('data.estado', 'borrador')
-            ->assertJsonPath('data.pesos.kilos_netos_calculados', 7448.276)
-            ->assertJsonPath('data.pesos.kilos_brutos', 8256.276)
+            ->assertJsonPath('data.pesos.kilos_netos_calculados', 7500)
+            ->assertJsonPath('data.pesos.kilos_brutos', 8311)
             ->assertJsonPath('data.trazabilidad.ggn', null)
             ->assertJsonPath('data.trazabilidad.csg_id', $contexto['csg_id'])
             ->assertJsonPath('data.trazabilidad.variedad_id', $contexto['variedad_id'])
-            ->assertJsonPath('data.pesos.kilos_netos_confirmados', 7495)
-            ->assertJsonPath('data.pesos.corregido_por_digitador', true)
+            ->assertJsonPath('data.pesos.kilos_netos_confirmados', 7500)
+            ->assertJsonPath('data.pesos.corregido_por_digitador', false)
             ->json('data');
+        $this->assertDatabaseHas('segmentos_validacion_mp', ['id' => $contexto['segmento_id'], 'estado' => 'lotizado']);
+        $this->postJson('/api/materia-prima/lotes', $this->payloadLote($contexto, [
+            'numero_lote' => 'DUPLICADO-SEGMENTO',
+        ]))->assertUnprocessable()->assertJsonValidationErrors('segmento_validacion_mp_id');
 
         $primerLote = $this->postJson(
             "/api/materia-prima/lotes/{$primerLote['id']}/confirmar",
@@ -291,10 +344,10 @@ class MateriaPrimaApiTest extends TestCase
 
         $this->assertDatabaseHas('segmentos_validacion_mp', [
             'id' => $contexto['segmento_id'],
-            'estado' => 'lotizacion_parcial',
+            'estado' => 'lotizado',
         ]);
 
-        $segundoPayload = $this->payloadLote($contexto, [
+        $segundoPayload = $this->payloadLote([...$contexto, 'segmento_id' => $segundoSegmentoId], [
             'numero_lote' => 'EXP-2026-001-B',
             'cantidad_envases_primarios' => 28,
             'cantidad_envases_secundarios' => 6,
@@ -304,9 +357,11 @@ class MateriaPrimaApiTest extends TestCase
         ]);
         $segundoLote = $this->postJson('/api/materia-prima/lotes', $segundoPayload)
             ->assertCreated()
-            ->assertJsonPath('data.pesos.kilos_brutos', 11683.724)
+            ->assertJsonPath('data.pesos.kilos_brutos', 11691)
             ->json('data');
-        $this->assertEqualsWithDelta(19940, $primerLote['pesos']['kilos_brutos'] + $segundoLote['pesos']['kilos_brutos'], 0.0001);
+        $this->assertSame(18000.0, (float) ($primerLote['pesos']['kilos_netos_calculados'] + $segundoLote['pesos']['kilos_netos_calculados']));
+        $this->assertEqualsWithDelta(20002, $primerLote['pesos']['kilos_brutos'] + $segundoLote['pesos']['kilos_brutos'], 0.0001);
+        $this->assertDatabaseHas('lotes_materia_prima_envases', ['lote_materia_prima_id' => $primerLote['id'], 'tipo_envase' => 'esponjas', 'cantidad' => 3]);
         $segundoLote = $this->postJson(
             "/api/materia-prima/lotes/{$segundoLote['id']}/confirmar",
             [
@@ -354,7 +409,7 @@ class MateriaPrimaApiTest extends TestCase
             ->assertJsonPath('data.hidrocooler.cantidad_bombas_funcionando', 3)
             ->assertJsonPath('data.hidrocooler.operador', $digitador->name)
             ->assertJsonPath('data.hidrocooler.cantidad_envases', 20)
-            ->assertJsonPath('data.hidrocooler.kilos_netos', 7495)
+            ->assertJsonPath('data.hidrocooler.kilos_netos', 7500)
             ->assertJsonPath('data.hidrocooler.temperatura_inicial_c', 18.25)
             ->assertJsonPath('data.hidrocooler.temperatura_objetivo_c', 4)
             ->assertJsonPath('data.hidrocooler.cloro_libre_ppm', 95)
@@ -693,7 +748,7 @@ class MateriaPrimaApiTest extends TestCase
         ]);
         $this->postJson('/api/materia-prima/lotes', $excedente)
             ->assertUnprocessable()
-            ->assertJsonValidationErrors('envases');
+            ->assertJsonValidationErrors('segmento_validacion_mp_id');
 
         $lote = $this->postJson("/api/materia-prima/lotes/{$lote['id']}/confirmar", [
             'operacion_id' => (string) Str::uuid(),
@@ -1269,7 +1324,7 @@ class MateriaPrimaApiTest extends TestCase
     }
 
     /** @return array<string, mixed> */
-    private function prepararRecepcionValidada(): array
+    private function prepararRecepcionValidada(bool $tresTipos = false): array
     {
         $temporada = Temporada::query()->where('activa', true)->firstOrFail();
         $cliente = Cliente::create([
@@ -1290,6 +1345,7 @@ class MateriaPrimaApiTest extends TestCase
                 'envases' => [
                     ['tipo_envase' => 'bins', 'cantidad' => 48],
                     ['tipo_envase' => 'totes', 'cantidad' => 10],
+                    ...($tresTipos ? [['tipo_envase' => 'esponjas', 'cantidad' => 5]] : []),
                 ],
                 'numero_guia_despacho' => 'GD-MP-100',
                 'patente_camion' => 'ABCD12',
@@ -1305,14 +1361,15 @@ class MateriaPrimaApiTest extends TestCase
         ])->assertOk();
         $this->postJson("/api/romana/recepciones/{$recepcion['id']}/cerrar", [
             'operacion_id' => (string) Str::uuid(),
-            'taras_envases' => [['tipo_envase' => 'bins', 'tara_unitaria' => 40], ['tipo_envase' => 'totes', 'tara_unitaria' => 2]],
+            'taras_envases' => [['tipo_envase' => 'bins', 'tara_unitaria' => 40], ['tipo_envase' => 'totes', 'tara_unitaria' => 2],
+                ...($tresTipos ? [['tipo_envase' => 'esponjas', 'tara_unitaria' => 1]] : [])],
             'peso_tara' => 10000,
             'tipo_envase_calculo_neto' => 'bins',
         ])
             ->assertOk()
             ->assertJsonPath('data.peso_neto', 18000)
-            ->assertJsonPath('data.cantidad_envase_calculo_neto', 58)
-            ->assertJsonPath('data.peso_neto_por_envase', 310.345);
+            ->assertJsonPath('data.cantidad_envase_calculo_neto', 48)
+            ->assertJsonPath('data.peso_neto_por_envase', 375);
 
         $especie = EspecieValidacion::firstOrCreate([
             'temporada_id' => $temporada->id,
@@ -1342,29 +1399,38 @@ class MateriaPrimaApiTest extends TestCase
             ])
             ->assertOk()
             ->json('data');
-        $segmentoId = $this->postJson(
+        $segmentos = $tresTipos ? [
+            ['motivos' => ['cuartel'], 'cuartel' => 'A', 'csg_validacion_id' => $csg->id, 'variedad_validacion_id' => $variedad->id,
+                'envases' => [['tipo_envase' => 'bins', 'cantidad' => 20], ['tipo_envase' => 'totes', 'cantidad' => 4], ['tipo_envase' => 'esponjas', 'cantidad' => 3]]],
+            ['motivos' => ['cuartel'], 'cuartel' => 'B', 'csg_validacion_id' => $csg->id, 'variedad_validacion_id' => $variedad->id,
+                'envases' => [['tipo_envase' => 'bins', 'cantidad' => 28], ['tipo_envase' => 'totes', 'cantidad' => 6], ['tipo_envase' => 'esponjas', 'cantidad' => 2]]],
+        ] : null;
+        $respuestaValidacion = $this->postJson(
             "/api/validacion-mp/validaciones/{$validacion['id']}/confirmar",
             [
                 'operacion_id' => (string) Str::uuid(),
                 'envases' => [
                     ['tipo_envase' => 'bins', 'cantidad_validada' => 48],
                     ['tipo_envase' => 'totes', 'cantidad_validada' => 10],
+                    ...($tresTipos ? [['tipo_envase' => 'esponjas', 'cantidad_validada' => 5]] : []),
                 ],
                 'tarjas_verificadas' => true,
-                'requiere_segregacion' => false,
+                'requiere_segregacion' => $tresTipos,
+                'segmentos' => $segmentos,
                 'csg_validacion_id' => $csg->id,
                 'variedad_validacion_id' => $variedad->id,
             ],
         )
             ->assertOk()
-            ->assertJsonPath('data.estado', 'validada')
-            ->json('data.segmentos.0.id');
+            ->assertJsonPath('data.estado', 'validada')->json('data');
+        $segmentoId = $respuestaValidacion['segmentos'][0]['id'];
 
         return [
             'temporada' => $temporada,
             'cliente' => $cliente,
             'recepcion_id' => $recepcion['id'],
             'segmento_id' => $segmentoId,
+            'segundo_segmento_id' => $respuestaValidacion['segmentos'][1]['id'] ?? null,
             'csg_id' => $csg->id,
             'especie_id' => $especie->id,
             'variedad_id' => $variedad->id,
