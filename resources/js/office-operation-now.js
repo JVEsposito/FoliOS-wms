@@ -56,6 +56,8 @@ const elements = {
     operatorList: byId('operationOperatorList'),
     tunnelList: byId('operationTunnelList'),
     incidentRows: byId('operationIncidentRows'),
+    verificationRows: byId('operationVerificationRows'),
+    verificationSummary: byId('operationVerificationSummary'),
     plannerPanel: byId('operationPlannerPanel'),
     plannerMode: byId('plannerModeSignal'),
     plannerFreshness: byId('plannerFreshnessSignal'),
@@ -937,6 +939,9 @@ function renderTunnels(tunnels = []) {
 }
 
 function incidentContext(incident) {
+    if (incident.origen === 'verificacion') {
+        return [incident.contexto?.camara, incident.contexto?.posicion].filter(Boolean).join(' · ');
+    }
     if (incident.origen === 'carga') {
         const load = incident.contexto?.carga;
         const location = incident.contexto?.ubicacion_reportada;
@@ -955,11 +960,25 @@ function renderIncidents(incidents = []) {
 
     elements.incidentRows.innerHTML = incidents.map((incident) => `<tr>
         <td><span class="operation-now-code">${escapeHtml(duration(incident.antiguedad_minutos))}</span><span class="operation-now-subtext">${escapeHtml(dateTime(incident.reportada_at))}</span></td>
-        <td>${signal(incident.origen === 'maniobra' ? 'Maniobra' : 'Carga', incident.origen === 'maniobra' ? 'warning' : 'info')}</td>
+        <td>${signal(incident.origen === 'verificacion' ? 'Verificación' : incident.origen === 'maniobra' ? 'Maniobra' : 'Carga', incident.origen === 'carga' ? 'info' : 'warning')}</td>
         <td>${signal(humanize(incident.prioridad), toneForPriority(incident.prioridad))}</td>
         <td><span class="operation-now-code">${escapeHtml(incident.folio?.numero_folio || 'Sin folio')}</span><span class="operation-now-subtext">${escapeHtml(incidentContext(incident) || 'Sin contexto adicional')}</span></td>
         <td><strong>${escapeHtml(humanize(incident.tipo))}</strong><span class="operation-now-subtext">${escapeHtml(incident.detalle || 'Sin detalle')} · ${escapeHtml(incident.reportado_por?.nombre || 'Sin reportante')} · ${escapeHtml(incident.dispositivo?.codigo || 'Sin dispositivo')}</span></td>
     </tr>`).join('');
+}
+
+function renderVerifications(data = {}) {
+    const summary = data.resumen || {};
+    elements.verificationSummary.textContent = data.habilitada
+        ? `${number(summary.pendientes)} pendientes · ${number(summary.completadas)} completadas · ${number(summary.vencidas)} vencidas`
+        : 'Desactivada';
+    const rounds = data.rondas || [];
+    elements.verificationRows.innerHTML = rounds.length ? rounds.map((round) => `<tr>
+        <td><strong>${escapeHtml(round.camarero)}</strong><span class="operation-now-subtext">Turno ${escapeHtml(round.turno)}</span></td>
+        <td>${number(round.completadas)} de ${number(round.objetivo)} · ${number(round.pendientes)} pendientes</td>
+        <td>${signal(humanize(round.estado), round.estado === 'vencida' ? 'critical' : round.estado === 'completada' ? 'success' : 'warning')}</td>
+        <td>${escapeHtml(dateTime(round.vence_at))}</td>
+    </tr>`).join('') : `<tr><td colspan="4">${empty(data.habilitada ? 'Sin rondas generadas en este turno' : 'Verificación de ubicaciones desactivada', 'Solo se generan cuando un camarero comienza a trabajar.')}</td></tr>`;
 }
 
 function render(data) {
@@ -972,6 +991,7 @@ function render(data) {
     renderOperators(data.camareros);
     renderTunnels(data.prefrio?.tuneles);
     renderIncidents(data.incidencias?.abiertas);
+    renderVerifications(data.verificaciones);
     renderFacility(data);
     renderAlerts(data);
     elements.workspace.setAttribute('aria-busy', 'false');

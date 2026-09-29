@@ -17,6 +17,7 @@ use App\Enums\EstadoTecnicoTunelPrefrio;
 use App\Models\Camara;
 use App\Models\DiscrepanciaManiobra;
 use App\Models\IncidenciaCargaFolio;
+use App\Models\IncidenciaVerificacionUbicacion;
 use App\Models\OperacionSincronizacion;
 use App\Models\Posicion;
 use App\Models\ProcesoPrefrio;
@@ -25,8 +26,12 @@ use App\Models\SesionEstiba;
 use App\Models\TareaMovimiento;
 use App\Models\Temporada;
 use App\Models\TunelPrefrio;
+use App\Models\User;
+use App\Models\VerificacionUbicacion;
 use App\Services\Planificador\ServicioConciliacionPalletsHistoricos;
 use App\Services\Planificador\ServicioPuestoMandoPlanificador;
+use App\Services\Verificaciones\ServicioVerificacionesUbicacion;
+use App\Services\Verificaciones\VentanasVerificacion;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
@@ -52,6 +57,8 @@ class ServicioOperacionAhora
 
         $camaras = $this->camaras($ahora);
         $prefrio = $this->prefrio($temporada, $ahora);
+        $ventana = app(VentanasVerificacion::class)->actual($ahora);
+        app(ServicioVerificacionesUbicacion::class)->vencer($temporada);
 
         return [
             'generado_at' => $ahora->toAtomString(),
@@ -60,7 +67,7 @@ class ServicioOperacionAhora
                 'fecha' => $horaOperacional->toDateString(),
                 'hora' => $horaOperacional->format('H:i:s'),
                 'zona_horaria' => $horaOperacional->getTimezone()->getName(),
-                'turno' => null,
+                'turno' => $ventana['nombre'],
             ],
             'temporada' => [
                 'id' => $temporada->id,
@@ -71,6 +78,7 @@ class ServicioOperacionAhora
             'camareros' => $this->camareros($temporada),
             'prefrio' => $prefrio,
             'incidencias' => $this->incidencias($temporada, $ahora),
+            'verificaciones' => $this->verificaciones($temporada, $ventana),
             'planificador' => [
                 ...$this->puestoMando->obtener($temporada),
                 'conciliacion' => $this->conciliacion->diagnosticar($temporada, 0),
@@ -133,8 +141,37 @@ class ServicioOperacionAhora
             ->map(fn (DiscrepanciaManiobra $discrepancia): array => $this
                 ->serializarDiscrepanciaManiobra($discrepancia, $ahora));
 
+        $incidenciasVerificacion = IncidenciaVerificacionUbicacion::query()
+            ->where('temporada_id', $temporada->id)->where('estado', 'abierta')
+            ->with(['camara:id,codigo,nombre', 'posicion:id,camara_id,etiqueta,banda,posicion,nivel',
+                'folioEsperado:id,numero_folio', 'folioEncontrado:id,numero_folio',
+                'otraPosicion:id,camara_id,etiqueta,banda,posicion,nivel',
+                'otraPosicion.camara:id,codigo,nombre',
+                'reportadaPor:id,name', 'dispositivo:id,codigo,nombre'])
+            ->get()->map(fn (IncidenciaVerificacionUbicacion $incidencia): array => [
+                'id' => $incidencia->id,
+                'origen' => 'verificacion',
+                'tipo' => $incidencia->tipo,
+                'detalle' => "Ubicación {$incidencia->camara->codigo} · {$incidencia->posicion->etiqueta}: esperado "
+                    .($incidencia->folioEsperado?->numero_folio ?? 'vacío').', encontrado '
+                    .($incidencia->folio_encontrado_numero ?? 'vacío')
+                    .($incidencia->otraPosicion ? "; figura en {$incidencia->otraPosicion->camara->codigo} · {$incidencia->otraPosicion->etiqueta}" : ''),
+                'estado' => 'abierta', 'prioridad' => 'alta',
+                'folio' => $incidencia->folioEsperado ? ['numero_folio' => $incidencia->folioEsperado->numero_folio] : null,
+                'reportado_por' => ['id' => $incidencia->reportadaPor->id, 'nombre' => $incidencia->reportadaPor->name],
+                'dispositivo' => ['id' => $incidencia->dispositivo->id, 'codigo' => $incidencia->dispositivo->codigo],
+                'reportada_at' => $incidencia->reportada_at->toAtomString(),
+                'antiguedad_minutos' => $this->antiguedadMinutos($incidencia->reportada_at, $ahora),
+                'contexto' => ['camara' => $incidencia->camara->codigo, 'posicion' => $incidencia->posicion->etiqueta,
+                    'esperado' => $incidencia->folioEsperado?->numero_folio,
+                    'encontrado' => $incidencia->folio_encontrado_numero,
+                    'otra_posicion' => $incidencia->otraPosicion
+                        ? $incidencia->otraPosicion->camara->codigo.' · '.$incidencia->otraPosicion->etiqueta : null],
+            ]);
+
         $abiertas = $incidenciasCarga
             ->concat($discrepanciasManiobra)
+            ->concat($incidenciasVerificacion)
             ->sortByDesc('reportada_at')
             ->values();
 
@@ -143,10 +180,47 @@ class ServicioOperacionAhora
                 'total_abiertas' => $abiertas->count(),
                 'carga' => $incidenciasCarga->count(),
                 'maniobra' => $discrepanciasManiobra->count(),
+                'verificacion' => $incidenciasVerificacion->count(),
                 'mas_antigua_at' => $abiertas->min('reportada_at'),
                 'antiguedad_maxima_minutos' => $abiertas->max('antiguedad_minutos'),
             ],
             'abiertas' => $abiertas->all(),
+        ];
+    }
+
+    /** @param array{inicio: CarbonImmutable, fin: CarbonImmutable, nombre: string} $ventana
+     * @return array<string, mixed>
+     */
+    private function verificaciones(Temporada $temporada, array $ventana): array
+    {
+        $rondas = VerificacionUbicacion::query()->where('temporada_id', $temporada->id)
+            ->where(function (Builder $q) use ($ventana): void {
+                $q->where('turno_inicio_at', $ventana['inicio'])
+                    ->orWhere(fn (Builder $v) => $v->where('estado', 'vencida')
+                        ->where('turno_inicio_at', '>=', now()->subDay()));
+            })
+            ->with('items:id,verificacion_ubicacion_id,resultado')
+            ->get();
+        $usuarios = User::query()->whereIn('id', $rondas->pluck('user_id'))
+            ->pluck('name', 'id');
+
+        return [
+            'habilitada' => (bool) config('verificaciones.habilitada'),
+            'turno' => $ventana['nombre'],
+            'resumen' => [
+                'pendientes' => $rondas->where('estado', 'pendiente')->count(),
+                'completadas' => $rondas->where('estado', 'completada')->count(),
+                'vencidas' => $rondas->where('estado', 'vencida')->count(),
+            ],
+            'rondas' => $rondas->map(fn (VerificacionUbicacion $ronda): array => [
+                'id' => $ronda->id, 'camarero' => $usuarios[$ronda->user_id] ?? 'Sin nombre',
+                'estado' => $ronda->estado, 'objetivo' => $ronda->objetivo,
+                'turno' => $ronda->turno_inicio_at->setTimezone(config('app.operational_timezone'))->format('H:i')
+                    .'–'.$ronda->turno_fin_at->setTimezone(config('app.operational_timezone'))->format('H:i'),
+                'completadas' => $ronda->items->whereIn('resultado', ['coincide', 'otro_folio', 'posicion_vacia'])->count(),
+                'pendientes' => $ronda->items->whereNull('resultado')->count(),
+                'vence_at' => $ronda->vence_at->toAtomString(),
+            ])->all(),
         ];
     }
 

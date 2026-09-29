@@ -66,6 +66,7 @@ use App\Http\Controllers\Api\TransformacionMaterialController;
 use App\Http\Controllers\Api\TunelPrefrioController;
 use App\Http\Controllers\Api\ValidacionMpController;
 use App\Http\Controllers\Api\ValidacionPalletController;
+use App\Http\Controllers\Api\VerificacionUbicacionController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -586,6 +587,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/movimientos/mover', [MovimientoController::class, 'mover']);
 
     Route::middleware('can:operar-camaras-productos')->group(function () {
+        Route::get('/verificaciones-ubicacion/actual', [VerificacionUbicacionController::class, 'actual']);
+        Route::post('/verificaciones-ubicacion/items/{item}/resultado', [VerificacionUbicacionController::class, 'registrar']);
         Route::get('/planes-operacionales', [PlanOperacionalController::class, 'index']);
         Route::get('/planes-operacionales/{planOperacional}', [PlanOperacionalController::class, 'show']);
         Route::get('/tareas-movimiento', [PlanOperacionalController::class, 'tareas']);

@@ -175,6 +175,14 @@
                             </table>
                         </div>
                     </article>
+                    <article class="management-panel management-table-panel">
+                        <header><div><p class="eyebrow">CONTEO CÍCLICO</p><h2>Exactitud de ubicación y cumplimiento</h2></div></header>
+                        <div id="managementVerificationSummary">Sin rondas generadas.</div>
+                        <div class="table-scroll"><table>
+                            <thead><tr><th>Cámara</th><th>Exactitud 7 días</th><th>Exactitud 30 días</th></tr></thead>
+                            <tbody id="managementVerificationRows"></tbody>
+                        </table></div>
+                    </article>
                 </div>
 
                 <div

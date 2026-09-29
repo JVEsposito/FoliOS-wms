@@ -126,6 +126,7 @@ class ServicioPanelGerencial
             'productos' => $productos,
             'cargas' => $cargas,
             'validacion' => $validacion,
+            'verificaciones' => $this->verificaciones($temporada->id),
             'materiales' => $materiales,
             'prefrio' => $prefrio,
             'romana' => $romana,
@@ -143,6 +144,44 @@ class ServicioPanelGerencial
                 $envases,
             ),
         ];
+    }
+
+    /** @return array<string, mixed> */
+    private function verificaciones(string $temporadaId): array
+    {
+        $hoy = now();
+        $camaras = Camara::query()->where('contenido', ContenidoCamara::Productos->value)
+            ->pluck('codigo', 'id');
+        $periodos = [];
+        foreach ([7, 30] as $dias) {
+            $desde = $hoy->copy()->subDays($dias);
+            $items = DB::table('verificaciones_ubicacion_items as item')
+                ->join('verificaciones_ubicacion as ronda', 'ronda.id', '=', 'item.verificacion_ubicacion_id')
+                ->join('posiciones', 'posiciones.id', '=', 'item.posicion_id')
+                ->where('ronda.temporada_id', $temporadaId)
+                ->where('item.verificada_at', '>=', $desde)
+                ->whereIn('item.resultado', ['coincide', 'otro_folio', 'posicion_vacia'])
+                ->selectRaw("posiciones.camara_id, COUNT(*) as total, SUM(CASE WHEN item.resultado = 'coincide' THEN 1 ELSE 0 END) as correctas")
+                ->groupBy('posiciones.camara_id')->get();
+            $rondas = DB::table('verificaciones_ubicacion')->where('temporada_id', $temporadaId)
+                ->where('turno_inicio_at', '>=', $desde);
+            $generadas = (clone $rondas)->count();
+            $completadas = (clone $rondas)->where('estado', 'completada')->count();
+            $periodos[$dias] = [
+                'cumplimiento' => [
+                    'completadas' => $completadas, 'generadas' => $generadas,
+                    'porcentaje' => $generadas > 0 ? round($completadas * 100 / $generadas, 1) : null,
+                ],
+                'camaras' => $items->map(fn ($item): array => [
+                    'codigo' => $camaras[$item->camara_id] ?? 'Cámara',
+                    'correctas' => (int) $item->correctas,
+                    'total' => (int) $item->total,
+                    'exactitud_porcentaje' => round($item->correctas * 100 / $item->total, 1),
+                ])->all(),
+            ];
+        }
+
+        return ['habilitada' => (bool) config('verificaciones.habilitada'), 'periodos' => $periodos];
     }
 
     /**

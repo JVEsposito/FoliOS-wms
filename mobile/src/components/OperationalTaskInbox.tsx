@@ -27,6 +27,7 @@ import {
   operationalTaskPositionLabel,
 } from '../domain/operationalTasks';
 import { buildOperatorTaskHome, type OperatorQueueItem } from '../domain/operatorTaskQueue';
+import type { ShiftVerification, VerificationItem } from '../domain/verification';
 import { calculateRollingFrontier } from '../domain/rollingPlanner';
 import {
   previewableTasks,
@@ -42,6 +43,7 @@ import { OperationalTasksApi, type StartConfirmation } from '../services/operati
 import type { FolioConfirmationState } from './operator/OperatorFolioConfirmation';
 import { OperatorTaskExecution } from './operator/OperatorTaskExecution';
 import { OperatorTaskHome } from './operator/OperatorTaskHome';
+import { TurnVerification } from './operator/TurnVerification';
 import { operatorTheme as o } from '../theme/operatorTheme';
 
 type Props = {
@@ -80,6 +82,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
   const [clock, setClock] = useState(Date.now());
   const [plannerFresh, setPlannerFresh] = useState<boolean | null>(null);
   const [suggestedDestinations, setSuggestedDestinations] = useState<Record<string, string>>({});
+  const [verification, setVerification] = useState<ShiftVerification | null>(null);
   const initialLoad = useRef(true);
   const loadInFlight = useRef(false);
   const preview = useRef<FrontierPreview | null>(null);
@@ -158,12 +161,14 @@ export function OperationalTaskInbox({ api, auth }: Props) {
     if (!quiet) setBusy(true);
 
     try {
-      const [nextMine, nextAvailable] = await Promise.all([
+      const [nextMine, nextAvailable, nextVerification] = await Promise.all([
         taskApi.list(auth.token, 'mias'),
         taskApi.list(auth.token, 'disponibles'),
+        taskApi.currentVerification(auth.token).catch(() => null),
       ]);
       setMine(nextMine);
       setAvailable(nextAvailable);
+      setVerification(nextVerification);
       setError('');
       void precalculate(nextMine, nextAvailable);
 
@@ -183,6 +188,25 @@ export function OperationalTaskInbox({ api, auth }: Props) {
     } finally {
       loadInFlight.current = false;
       if (!quiet) setBusy(false);
+    }
+  }
+
+  async function verifyPosition(item: VerificationItem, number: string | null) {
+    if (!taskApi) return;
+    setBusy(true);
+    try {
+      const response = await taskApi.recordVerification(auth.token, item.id, item.version, Crypto.randomUUID(), number);
+      setVerification(response.data);
+      setNotice(response.resultado === 'no_aplica'
+        ? 'La posición cambió por un movimiento legítimo. Se asignó otra para este turno.'
+        : response.resultado === 'coincide'
+          ? 'Ubicación confirmada.'
+          : 'Diferencia registrada para revisión en Oficina.');
+    } catch (reason) {
+      setError(messageFrom(reason));
+      setVerification(await taskApi.currentVerification(auth.token).catch(() => verification));
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -885,6 +909,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
           queue={homeQueue}
           suggestedDestinations={suggestedDestinations}
           view={homeView}
+          verification={<TurnVerification round={verification} busy={busy} onVerify={(item, number) => void verifyPosition(item, number)} />}
         />
       )}
 
