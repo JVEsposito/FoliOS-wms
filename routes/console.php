@@ -30,4 +30,10 @@ Schedule::command('planificador:recuperar-proyecciones')
     ->everyMinute()
     ->withoutOverlapping(2);
 
+Schedule::call(function (): void {
+    if (! config('verificaciones.habilitada')) return;
+    $temporada = app(\App\Services\Temporadas\ServicioTemporadaActiva::class)->buscar();
+    if ($temporada) app(\App\Services\Verificaciones\ServicioVerificacionesUbicacion::class)->vencer($temporada);
+})->everyMinute()->name('verificaciones-ubicacion-vencer')->withoutOverlapping(2);
+
 Schedule::command('salud:latido-scheduler')->everyMinute();

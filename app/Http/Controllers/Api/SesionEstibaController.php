@@ -10,6 +10,8 @@ use App\Models\Camara;
 use App\Models\SesionEstiba;
 use App\Services\Autenticacion\ContextoOperacional;
 use App\Services\Estiba\ServicioSesionEstiba;
+use App\Services\Verificaciones\ServicioVerificacionesUbicacion;
+use App\Enums\RolUsuario;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -25,6 +27,14 @@ class SesionEstibaController extends Controller
         $sesion = $servicio
             ->abrir($camara, $usuario, $dispositivo)
             ->load('usuario', 'dispositivo');
+        if (config('verificaciones.habilitada') && $usuario->rol === RolUsuario::CamareroFrio) {
+            try {
+                app(ServicioVerificacionesUbicacion::class)->actual($usuario, $dispositivo);
+            } catch (\Throwable $error) {
+                // El conteo no impide abrir la cámara ni ejecutar labores.
+                report($error);
+            }
+        }
 
         return (new SesionEstibaResource($sesion))
             ->response()

@@ -161,6 +161,17 @@
                         </div>
                     </section>
 
+                    <section class="operation-now-panel" aria-labelledby="operationVerificationsTitle">
+                        <header class="operation-now-panel__heading">
+                            <div class="operation-now-panel__title"><div><h2 id="operationVerificationsTitle">Revisión de turno</h2><span>Conteo cíclico por camarero, sin bloqueo operacional</span></div></div>
+                            <strong class="operation-now-panel__summary" id="operationVerificationSummary">—</strong>
+                        </header>
+                        <div class="operation-now-panel__body operation-now-table-scroll">
+                            <table class="operation-now-table"><thead><tr><th>Camarero</th><th>Avance</th><th>Estado</th><th>Plazo</th></tr></thead>
+                                <tbody id="operationVerificationRows"><tr><td colspan="4">Consultando rondas…</td></tr></tbody></table>
+                        </div>
+                    </section>
+
                     <section class="operation-now-panel operation-now-panel--incidents" aria-labelledby="operationIncidentsTitle">
                         <header class="operation-now-panel__heading">
                             <div class="operation-now-panel__title">

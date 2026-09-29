@@ -64,6 +64,8 @@ const elements = {
     productUndated: byId('productUndated'),
     precoolingSummary: byId('precoolingChartSummary'),
     cameraRows: byId('cameraDetailRows'),
+    verificationSummary: byId('managementVerificationSummary'),
+    verificationRows: byId('managementVerificationRows'),
     alerts: byId('managementAlerts'),
     alertCount: byId('alertCount'),
     alertTabCount: byId('alertTabCount'),
@@ -415,7 +417,28 @@ function renderDashboard(data) {
     renderWeighbridgeOperation(weighbridge);
     renderRawMaterial(rawMaterial, containers);
     renderCameraTable(data.camaras.detalle);
+    renderVerifications(data.verificaciones);
     renderAlerts(data.alertas);
+}
+
+function renderVerifications(verification = {}) {
+    const weekly = verification.periodos?.[7] || {};
+    const monthly = verification.periodos?.[30] || {};
+    const compliance = (period) => period.cumplimiento?.generadas
+        ? `${period.cumplimiento.porcentaje} % (${period.cumplimiento.completadas}/${period.cumplimiento.generadas})`
+        : 'Sin rondas';
+    elements.verificationSummary.textContent = `Cumplimiento: 7 días ${compliance(weekly)} · 30 días ${compliance(monthly)}${verification.habilitada ? '' : ' · función desactivada'}`;
+    const byCamera = new Map();
+    for (const [days, period] of [[7, weekly], [30, monthly]]) {
+        for (const camera of period.camaras || []) {
+            byCamera.set(camera.codigo, { ...(byCamera.get(camera.codigo) || {}), [days]: camera });
+        }
+    }
+    elements.verificationRows.innerHTML = byCamera.size ? [...byCamera].map(([code, values]) => `<tr>
+        <td>${escapeHtml(code)}</td>
+        <td>${values[7] ? `${values[7].exactitud_porcentaje} % (${values[7].correctas}/${values[7].total})` : 'Sin verificaciones'}</td>
+        <td>${values[30] ? `${values[30].exactitud_porcentaje} % (${values[30].correctas}/${values[30].total})` : 'Sin verificaciones'}</td>
+    </tr>`).join('') : '<tr><td colspan="3">Sin posiciones verificadas en los últimos 30 días.</td></tr>';
 }
 
 function replaceChart(name, canvasId, configuration) {

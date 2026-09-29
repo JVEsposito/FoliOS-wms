@@ -10,12 +10,14 @@ use App\Enums\PrioridadOperacional;
 use App\Enums\TipoMovimiento;
 use App\Enums\TipoPasoManiobra;
 use App\Enums\TipoPlanOperacional;
+use App\Enums\RolUsuario;
 use App\Exceptions\ConflictoOperacion;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\PlanOperacionalResource;
 use App\Http\Resources\TareaMovimientoResource;
 use App\Models\Folio;
 use App\Models\PlanOperacional;
+use App\Models\PersonalAccessToken;
 use App\Models\Posicion;
 use App\Models\SesionEstiba;
 use App\Models\TareaMovimiento;
@@ -29,6 +31,7 @@ use App\Services\Planificador\ServicioArbitrajeManiobras;
 use App\Services\Planificador\ServicioDesplieguePlanificador;
 use App\Services\Planificador\ServicioEstadoArbitrajePlanificador;
 use App\Services\Temporadas\ServicioTemporadaActiva;
+use App\Services\Verificaciones\ServicioVerificacionesUbicacion;
 use Carbon\CarbonImmutable;
 use DomainException;
 use Illuminate\Database\Eloquent\Builder;
@@ -129,6 +132,18 @@ class PlanOperacionalController extends Controller
             'page' => ['nullable', 'integer', 'min:1'],
         ]);
         $asignacion = $filtros['asignacion'] ?? 'disponibles';
+        if (config('verificaciones.habilitada') && $request->user()->rol === RolUsuario::CamareroFrio) {
+            $token = $request->user()->currentAccessToken();
+            if ($token instanceof PersonalAccessToken && $token->dispositivo_id) {
+                try {
+                    $dispositivo = $token->dispositivo()->where('activo', true)->first();
+                    if ($dispositivo) app(ServicioVerificacionesUbicacion::class)->actual($request->user(), $dispositivo);
+                } catch (\Throwable $error) {
+                    // El conteo nunca bloquea la bandeja operacional.
+                    report($error);
+                }
+            }
+        }
         $usuarioId = $request->user()->id;
         $reservas->expirarVencidas();
         $cicloArbitraje = null;
