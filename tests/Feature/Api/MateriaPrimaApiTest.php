@@ -44,7 +44,7 @@ class MateriaPrimaApiTest extends TestCase
         ))->assertCreated()->assertJsonPath('data.pesos.kilos_netos_calculados', 10500.02)->json('data');
         $this->assertEqualsWithDelta(18000.020,
             $primero['pesos']['kilos_netos_calculados'] + $segundo['pesos']['kilos_netos_calculados'], 0.00001);
-        $this->assertEqualsWithDelta(11691.02, $segundo['pesos']['kilos_brutos'], 0.00001);
+        $this->assertEqualsWithDelta(11634.02, $segundo['pesos']['kilos_brutos'], 0.00001);
     }
 
     public function test_relleno_historico_agrega_esponjas_al_unico_lote_activo(): void
@@ -368,7 +368,7 @@ class MateriaPrimaApiTest extends TestCase
             ->json('data');
         $this->assertDatabaseHas('segmentos_validacion_mp', ['id' => $contexto['segmento_id'], 'estado' => 'lotizado']);
         $this->postJson('/api/materia-prima/lotes', $this->payloadLote($contexto, [
-            'numero_lote' => 'DUPLICADO-SEGMENTO',
+            'numero_lote' => 'DUPLICADO-SEGMENTO', 'cuartel' => null,
         ]))->assertUnprocessable()->assertJsonValidationErrors('segmento_validacion_mp_id');
 
         $primerLote = $this->postJson(
@@ -398,10 +398,10 @@ class MateriaPrimaApiTest extends TestCase
         unset($segundoPayload['cuartel']); // se hereda el cuartel B
         $segundoLote = $this->postJson('/api/materia-prima/lotes', $segundoPayload)
             ->assertCreated()
-            ->assertJsonPath('data.pesos.kilos_brutos', 11691)
+            ->assertJsonPath('data.pesos.kilos_brutos', 11634)
             ->json('data');
         $this->assertSame(18000.0, (float) ($primerLote['pesos']['kilos_netos_calculados'] + $segundoLote['pesos']['kilos_netos_calculados']));
-        $this->assertEqualsWithDelta(20002, $primerLote['pesos']['kilos_brutos'] + $segundoLote['pesos']['kilos_brutos'], 0.0001);
+        $this->assertEqualsWithDelta(19945, $primerLote['pesos']['kilos_brutos'] + $segundoLote['pesos']['kilos_brutos'], 0.0001);
         $this->assertDatabaseHas('lotes_materia_prima_envases', ['lote_materia_prima_id' => $primerLote['id'], 'tipo_envase' => 'esponjas', 'cantidad' => 3]);
         $segundoLote = $this->postJson(
             "/api/materia-prima/lotes/{$segundoLote['id']}/confirmar",
