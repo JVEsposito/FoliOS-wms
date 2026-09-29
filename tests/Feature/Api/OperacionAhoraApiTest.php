@@ -46,6 +46,7 @@ use App\Models\User;
 use App\Services\Estiba\ServicioMovimientoEstiba;
 use App\Services\Estiba\ServicioSesionEstiba;
 use App\Services\Planificador\ServicioEstadoArbitrajePlanificador;
+use App\Services\Verificaciones\VentanasVerificacion;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -99,7 +100,7 @@ class OperacionAhoraApiTest extends TestCase
             ->assertHeader('Cache-Control', 'no-store, private')
             ->assertJsonPath('data.temporada.id', $temporada->id)
             ->assertJsonPath('data.jornada.zona_horaria', 'America/Santiago')
-            ->assertJsonPath('data.jornada.turno', null)
+            ->assertJsonPath('data.jornada.turno', app(VentanasVerificacion::class)->actual()['nombre'])
             ->assertJsonPath('data.sincronizacion.estado', 'sin_actividad')
             ->assertJsonPath('data.sincronizacion.ultima_operacion', null)
             ->assertJsonPath('data.actualizacion_sugerida_segundos', 30)
