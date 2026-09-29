@@ -12,6 +12,7 @@ import { LoginScreen } from './src/screens/LoginScreen';
 import { FirstPasswordChangeScreen } from './src/screens/FirstPasswordChangeScreen';
 import { MaterialReceptionScreen } from './src/screens/MaterialReceptionScreen';
 import { FrutaProcesoScreen } from './src/screens/FrutaProcesoScreen';
+import { HidrocoolerMpScreen } from './src/screens/HidrocoolerMpScreen';
 import { OperationalWorkspaceScreen } from './src/screens/OperationalWorkspaceScreen';
 import { PrefrioWorkspaceScreen } from './src/screens/PrefrioWorkspaceScreen';
 import { RepalletizingScreen } from './src/screens/RepalletizingScreen';
@@ -157,6 +158,8 @@ export default function App() {
               )
             ) : activeModule === 'fruta_proceso' ? (
               <FrutaProcesoScreen auth={auth} baseUrl={api.baseUrl ?? ''} onLogout={() => void logoutPersistentModule()} />
+            ) : activeModule === 'hidrocooler_mp' ? (
+              <HidrocoolerMpScreen auth={auth} baseUrl={api.baseUrl ?? ''} onLogout={() => void logoutPersistentModule()} />
             ) : activeModule === 'recepcion_materiales' ? (
               <MaterialReceptionScreen
                 auth={auth}
@@ -191,6 +194,7 @@ function availableModules(auth: AuthSession): MobileModule[] {
     'validacion_mp',
     'repaletizaje',
     'fruta_proceso',
+    'hidrocooler_mp',
     'prefrio',
   ];
 
@@ -215,6 +219,8 @@ function moduleLabel(module: MobileModule) {
         ? 'Repaletizaje'
       : module === 'fruta_proceso'
         ? 'Fruta a proceso'
+      : module === 'hidrocooler_mp'
+        ? 'Hidrocooler MP'
       : module === 'prefrio'
         ? 'Prefrío'
         : module === 'operacion_materiales'
@@ -264,6 +270,13 @@ function ModuleSelection({ modules, onSelect, userName }: { modules: MobileModul
             <Text style={styles.selectorIcon}>→</Text>
             <Text style={styles.selectorCardTitle}>Fruta a proceso</Text>
             <Text style={styles.selectorCardCopy}>Entregar bins por viaje físico desde cámara hacia Packing.</Text>
+          </Pressable>
+        ) : null}
+        {modules.includes('hidrocooler_mp') ? (
+          <Pressable onPress={() => onSelect('hidrocooler_mp')} style={[styles.selectorCard, isPdaBuild && styles.selectorCardPda]}>
+            <Text style={styles.selectorIcon}>≈</Text>
+            <Text style={styles.selectorCardTitle}>Hidrocooler MP</Text>
+            <Text style={styles.selectorCardCopy}>Iniciar, finalizar y revisar ciclos de enfriamiento de materia prima.</Text>
           </Pressable>
         ) : null}
         {modules.includes('prefrio') ? (
