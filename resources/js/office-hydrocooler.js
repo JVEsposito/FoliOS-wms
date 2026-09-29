@@ -250,7 +250,7 @@ function openFinish(lotId) {
     form.termino_at.value = localDateTimeValue(); form.termino_at.max = localDateTimeValue();
     form.termino_at.min = localDateTimeValue(new Date(lot.hidrocooler.inicio_at));
     form.destino_salida.value = 'camara';
-    const direct = form.querySelector('[value="proceso"]');
+    const direct = elements.finishForm.querySelector('input[name="destino_salida"][value="proceso"]');
     direct.disabled = lot.envases.primario !== 'bins';
     direct.closest('label')?.classList.toggle('is-disabled', direct.disabled);
     elements.finishTitle.textContent = `Finalizar ${lot.numero_lote}`;

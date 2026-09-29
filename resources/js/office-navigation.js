@@ -1,4 +1,5 @@
 import './office-material-inventory-actions.js';
+import { installOfficeUnexpectedErrorNotice } from './shared/office-unexpected-error.js';
 import { initializeOfficeShell, refreshOfficeShell } from './office-shell.js';
 import {
     nextOfficeTheme,
@@ -8,6 +9,7 @@ import {
 } from './shared/office-preferences.js';
 
 const tokenKey = 'estiba_wms_office_token';
+installOfficeUnexpectedErrorNotice();
 const identityKey = 'estiba_wms_office_identity';
 const lastDomainKey = 'estiba_wms_last_domain';
 const moduleAliases = {
