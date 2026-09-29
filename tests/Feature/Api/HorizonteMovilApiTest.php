@@ -16,6 +16,7 @@ use App\Services\Autenticacion\ServicioPinOperacional;
 use App\Services\Camaras\ServicioBandasOperacionales;
 use App\Services\Estiba\ServicioMovimientoEstiba;
 use App\Services\Estiba\ServicioPlanesOperacionales;
+use App\Services\Estiba\ServicioReservasTareasMovimiento;
 use App\Services\Estiba\ServicioSesionEstiba;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -73,7 +74,7 @@ class HorizonteMovilApiTest extends TestCase
         ]);
 
         $this->travel(11)->minutes();
-        app(\App\Services\Estiba\ServicioReservasTareasMovimiento::class)->expirarVencidas();
+        app(ServicioReservasTareasMovimiento::class)->expirarVencidas();
 
         $this->assertNull($tarea->refresh()->camara_destino_id);
         $this->assertNull($tarea->posicion_destino_id);

@@ -16,6 +16,7 @@ class MotorReplayArbitrajeV4Test extends TestCase
         $this->assertSame('seleccionada', $resultado['tunel']['decision']);
         $this->assertSame('alternativa', $resultado['conciliacion']['decision']);
     }
+
     public function test_reproduce_capacidad_conflictos_rollout_y_pausas_sin_depender_del_orden_de_entrada(): void
     {
         $candidatos = [
