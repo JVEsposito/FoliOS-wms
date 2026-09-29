@@ -203,6 +203,41 @@ class AccesoTabletApiTest extends TestCase
             ->assertOk();
     }
 
+    public function test_hidrocooler_mp_se_puede_abrir_en_tablet_con_perfil_autorizado(): void
+    {
+        $perfil = PerfilAcceso::create([
+            'codigo' => 'HIDRO-TABLET',
+            'nombre' => 'Hidrocooler en tablet',
+            'rol_base' => RolUsuario::DigitadorMateriaPrima,
+            'modulos' => ['materia-prima.hidrocooler'],
+            'modulos_tablet' => [CatalogoModulosAcceso::TABLET_HIDROCOOLER_MP],
+            'activo' => true,
+        ]);
+        $usuario = User::factory()->create([
+            'email' => 'hidro@example.com',
+            'password' => Hash::make('clave-segura'),
+            'rol' => RolUsuario::DigitadorMateriaPrima,
+            'perfil_acceso_id' => $perfil->id,
+        ]);
+        $dispositivo = Dispositivo::create(['codigo' => 'TABLET-HIDRO', 'nombre' => 'Tablet Hidrocooler']);
+
+        $token = $this->postJson('/api/acceso-tablet', [
+            'email' => $usuario->email,
+            'password' => 'clave-segura',
+            'codigo_dispositivo' => $dispositivo->codigo,
+        ])
+            ->assertOk()
+            ->assertJsonPath('usuario.modulos_tablet.0', CatalogoModulosAcceso::TABLET_HIDROCOOLER_MP)
+            ->assertJsonCount(1, 'usuario.modulos_tablet')
+            ->assertJsonPath('usuario.capacidades.puede_consultar_hidrocooler_materia_prima', true)
+            ->assertJsonPath('usuario.capacidades.puede_operar_hidrocooler_materia_prima', true)
+            ->assertJsonPath('usuario.capacidades.puede_supervisar_lotes_materia_prima', false)
+            ->json('token');
+
+        $this->withToken($token)->getJson('/api/materia-prima/hidrocooler/resumen')->assertOk();
+        $this->withToken($token)->getJson('/api/materia-prima/hidrocooler/lotes')->assertOk();
+    }
+
     public function test_un_perfil_solo_de_oficina_no_puede_iniciar_turno_en_tablet(): void
     {
         $perfil = PerfilAcceso::create([

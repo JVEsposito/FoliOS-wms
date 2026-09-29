@@ -15,6 +15,7 @@ export type TabletModule =
   | 'validacion_mp'
   | 'repaletizaje'
   | 'fruta_proceso'
+  | 'hidrocooler_mp'
   | 'prefrio'
   | 'operacion_materiales';
 
@@ -72,6 +73,8 @@ export type UserCapabilities = {
   puede_consultar_materia_prima?: boolean;
   puede_gestionar_lotes_materia_prima?: boolean;
   puede_supervisar_lotes_materia_prima?: boolean;
+  puede_consultar_hidrocooler_materia_prima?: boolean;
+  puede_operar_hidrocooler_materia_prima?: boolean;
   puede_consultar_fruta_proceso?: boolean;
   puede_entregar_fruta_proceso?: boolean;
   puede_corregir_entregas_fruta_proceso?: boolean;

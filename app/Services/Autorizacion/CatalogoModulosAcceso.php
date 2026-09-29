@@ -27,6 +27,8 @@ class CatalogoModulosAcceso
 
     public const TABLET_FRUTA_PROCESO = 'fruta_proceso';
 
+    public const TABLET_HIDROCOOLER_MP = 'hidrocooler_mp';
+
     public const TABLET_PREFRIO = 'prefrio';
 
     public const TABLET_OPERACION_MATERIALES = 'operacion_materiales';
@@ -149,6 +151,12 @@ class CatalogoModulosAcceso
                         'Validación MP',
                         'Validar cantidades, revisar tarjas y preparar segregaciones.',
                         ['materia-prima.validacion-mp'],
+                    ),
+                    $this->moduloTablet(
+                        self::TABLET_HIDROCOOLER_MP,
+                        'Hidrocooler MP',
+                        'Iniciar, finalizar y supervisar ciclos de enfriamiento por lote.',
+                        ['materia-prima.hidrocooler'],
                     ),
                     $this->moduloTablet(
                         self::TABLET_FRUTA_PROCESO,
@@ -280,7 +288,7 @@ class CatalogoModulosAcceso
 
         return array_values(array_intersect(
             $perfil->modulos_tablet ?? [],
-            $this->clavesTablet(),
+            $this->modulosTabletCompatiblesCon($perfil->modulos ?? []),
         ));
     }
 
