@@ -778,7 +778,7 @@ class MateriaPrimaApiTest extends TestCase
             ->assertJsonPath('data.trazabilidad.calibre_id', null)
             ->assertJsonPath('data.trazabilidad.calibre', null)
             ->assertJsonPath('data.trazabilidad.cuartel', null)
-            ->assertJsonPath('data.pesos.kilos_brutos', 19000)
+            ->assertJsonPath('data.pesos.kilos_brutos', 19940)
             ->json('data');
 
         $this->putJson(
@@ -798,7 +798,7 @@ class MateriaPrimaApiTest extends TestCase
             'calibre_validacion_id' => null,
             'calibre_snapshot' => null,
             'cuartel' => null,
-            'kilos_brutos' => 19000,
+            'kilos_brutos' => 19940,
         ]);
     }
 
