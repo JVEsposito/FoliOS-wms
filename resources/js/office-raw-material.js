@@ -416,9 +416,10 @@ function renderSourceSummary(segment) {
         <div><span>NETO UNITARIO ROMANA</span><strong>${escapeHtml(formatWeight(segment.recepcion.peso_neto_por_envase))}</strong></div>`;
 }
 
-function setContainerLimits(segment, currentLot = null) {
+function setContainerLimits(segment, currentLot = null, preferredType = null) {
     const form = elements.lotForm.elements;
-    const baseType = form.envase_primario.value || currentLot?.envases.primario || segment.envases.find((item) => Number(item.cantidad_disponible || 0) > 0)?.tipo_envase;
+    const baseType = preferredType || currentLot?.envases.primario
+        || segment.envases.find((item) => Number(item.cantidad_disponible || 0) > 0)?.tipo_envase;
     const base = segment.envases.find((item) => item.tipo_envase === baseType);
     const ownPrimary = currentLot?.envases.primario === baseType
         ? Number(currentLot.envases.cantidad_primarios)
@@ -580,7 +581,6 @@ function lotPayload() {
         envase_secundario: form.envase_secundario.value || null,
         cantidad_envases_primarios: form.cantidad_envases_primarios.value,
         cantidad_envases_secundarios: form.cantidad_envases_secundarios.value || 0,
-        kilos_brutos: form.kilos_brutos.value,
         kilos_netos_confirmados: form.kilos_netos_confirmados.value,
         requiere_hidrocooler: form.requiere_hidrocooler.value === '1',
         observacion: form.observacion.value || null,
@@ -786,7 +786,7 @@ elements.lotForm.elements.csg_validacion_id.addEventListener('change', () => {
 
 elements.lotForm.elements.envase_secundario.addEventListener('change', updateSecondaryLimit);
 elements.lotForm.elements.envase_primario.addEventListener('change', () => {
-    setContainerLimits(state.selectedSegment, state.editingLot);
+    setContainerLimits(state.selectedSegment, state.editingLot, elements.lotForm.elements.envase_primario.value);
     updateSecondaryLimit(); updateCalculatedNet();
 });
 elements.lotForm.elements.cantidad_envases_primarios.addEventListener('input', updateCalculatedNet);

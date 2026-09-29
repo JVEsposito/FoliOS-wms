@@ -55,7 +55,10 @@ class AdministracionValidacionApiTest extends TestCase
             'turno' => 'A', 'temporada_id' => $temporada->id, 'catalogo_version' => $temporada->version_catalogo,
             'articulo_validacion_id' => $articulo->id, 'origen_validacion_id' => $origen->id,
             'categoria_validacion_id' => $categoria->id, 'resultado' => 'aprobado',
-            'composicion' => [['origen_validacion_id' => $origen->id, 'cantidad_cajas' => 10]],
+            'composicion' => [[
+                'origen_validacion_id' => $origen->id, 'cantidad_cajas' => 10,
+                'lote_materia_prima' => 'LOTE-PT-CSG', 'proceso_packing' => 'PROC-PT-CSG',
+            ]],
             'generado_dispositivo_at' => now()->toAtomString(),
         ])->assertUnprocessable()->assertJsonPath('message', 'La variedad seleccionada no está asociada al CSG elegido.');
     }

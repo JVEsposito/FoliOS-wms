@@ -31,6 +31,13 @@ class RecepcionRomanaApiTest extends TestCase
 
         $datos['especie_validacion_id'] = EspecieValidacion::query()->firstOrFail()->id;
         $recepcion = $this->postJson('/api/romana/recepciones', $datos)->assertCreated()->json('data');
+        $actualizacion = $datos;
+        $actualizacion['operacion_id'] = (string) Str::uuid();
+        $actualizacion['version_conocida'] = $recepcion['version'];
+        unset($actualizacion['especie_validacion_id']);
+        $this->putJson('/api/romana/recepciones/'.$recepcion['id'], $actualizacion)
+            ->assertUnprocessable()->assertJsonValidationErrors('especie_validacion_id');
+
         RecepcionRomana::query()->whereKey($recepcion['id'])->update(['especie_validacion_id' => null]);
         $this->getJson('/api/romana/recepciones/'.$recepcion['id'])
             ->assertOk()->assertJsonPath('data.especie_validacion_id', null);

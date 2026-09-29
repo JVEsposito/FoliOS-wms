@@ -35,6 +35,7 @@ class MateriaPrimaApiTest extends TestCase
         $lote = $this->actingAs($digitador, 'sanctum')
             ->postJson('/api/materia-prima/lotes', $this->payloadLote($contexto, ['requiere_hidrocooler' => true]))
             ->assertCreated()
+            ->assertJsonPath('data.pesos.kilos_brutos', 19940)
             ->json('data');
         $lote = $this->postJson("/api/materia-prima/lotes/{$lote['id']}/confirmar", [
             'operacion_id' => (string) Str::uuid(),
@@ -1310,8 +1311,8 @@ class MateriaPrimaApiTest extends TestCase
         ])
             ->assertOk()
             ->assertJsonPath('data.peso_neto', 18000)
-            ->assertJsonPath('data.cantidad_envase_calculo_neto', 48)
-            ->assertJsonPath('data.peso_neto_por_envase', 375);
+            ->assertJsonPath('data.cantidad_envase_calculo_neto', 58)
+            ->assertJsonPath('data.peso_neto_por_envase', 310.345);
 
         $especie = EspecieValidacion::firstOrCreate([
             'temporada_id' => $temporada->id,

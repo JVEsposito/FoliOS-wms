@@ -21,7 +21,7 @@ class InterfazOficinaRomanaTest extends TestCase
             ->assertSee('Registrar tanda de envases')
             ->assertSee('Tara por envase')
             ->assertSee('El camión sale sin los envases')
-            ->assertSee('Tara de envases retenidos')
+            ->assertSee('Tara de todos los envases declarados')
             ->assertSee('Peso bruto')
             ->assertSee('Fecha de ingreso')
             ->assertSee('containerEntryDateField', false)
