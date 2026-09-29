@@ -3,7 +3,7 @@
 namespace Tests\Feature\Api;
 
 use App\Exceptions\ConflictoOperacion;
-use App\Http\Controllers\Api\VerificacionUbicacionController;
+use App\Http\Middleware\ExigirCambioPasswordTablet;
 use App\Models\Dispositivo;
 use App\Models\Posicion;
 use App\Models\User;
@@ -11,9 +11,10 @@ use App\Services\Autenticacion\ContextoOperacional;
 use App\Services\Gerencia\ServicioPanelGerencial;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\Verificaciones\ServicioVerificacionesUbicacion;
+use Illuminate\Auth\Middleware\Authenticate;
+use Illuminate\Auth\Middleware\Authorize;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -110,6 +111,7 @@ class VerificacionUbicacionApiTest extends TestCase
             $t->uuid('id')->primary();
             $t->uuid('folio_id');
             $t->uuid('carga_id');
+            $t->string('estado');
             $t->uuid('bloqueo_folio_id')->nullable();
         });
         Schema::create('reservas_carga_folio', function (Blueprint $t): void {
@@ -173,17 +175,21 @@ class VerificacionUbicacionApiTest extends TestCase
         $servicio = app(ServicioVerificacionesUbicacion::class);
         $contexto = Mockery::mock(ContextoOperacional::class);
         $contexto->shouldReceive('obtener')->andReturn([$this->camarero, $this->tablet]);
-        $controller = app(VerificacionUbicacionController::class);
-        $respuesta = $controller->actual(Request::create('/api/verificaciones-ubicacion/actual'), $contexto, $servicio);
-        $this->assertSame(200, $respuesta->status());
+        $this->app->instance(ContextoOperacional::class, $contexto);
+        $this->withoutMiddleware([Authenticate::class, Authorize::class,
+            ExigirCambioPasswordTablet::class]);
+
+        $respuesta = $this->getJson('/api/verificaciones-ubicacion/actual')->assertOk();
         $this->assertStringNotContainsString('PT-PRIVADO', $respuesta->getContent());
         $this->assertStringNotContainsString('folio_esperado', $respuesta->getContent());
 
         $item = $servicio->actual($this->camarero, $this->tablet)->items->first();
-        $servicio->registrar($item, $this->camarero, $this->tablet, (string) Str::uuid(), 1, 'PT-PRIVADO');
-        $despues = $controller->actual(Request::create('/api/verificaciones-ubicacion/actual'), $contexto, $servicio);
-        $this->assertStringNotContainsString('PT-PRIVADO', $despues->getContent());
-        $this->assertStringNotContainsString('folio_esperado', $despues->getContent());
+        $registrada = $this->postJson("/api/verificaciones-ubicacion/items/{$item->id}/resultado", [
+            'operacion_id' => (string) Str::uuid(), 'version' => 1,
+            'respuesta' => 'folio', 'numero_folio' => 'PT-PRIVADO',
+        ])->assertOk()->assertJsonPath('resultado', 'coincide');
+        $this->assertStringNotContainsString('PT-PRIVADO', $registrada->getContent());
+        $this->assertStringNotContainsString('folio_esperado', $registrada->getContent());
     }
 
     public function test_el_indice_unico_protege_la_ronda_ante_dos_creaciones_del_mismo_turno(): void
@@ -287,6 +293,23 @@ class VerificacionUbicacionApiTest extends TestCase
             'created_at' => now(), 'updated_at' => now()]);
         $otra = app(ServicioVerificacionesUbicacion::class)->actual(User::findOrFail($otroId), $this->tablet);
         $this->assertCount(0, $otra->items);
+    }
+
+    public function test_una_asignacion_descartada_no_excluye_la_posicion_aunque_haya_camion_en_anden(): void
+    {
+        $posicion = $this->posicion();
+        $folioId = $this->folioEn($posicion, 'PT-DESCARTADO');
+        $cargaId = (string) Str::uuid();
+        DB::table('presencias_carga_anden')->insert([
+            'id' => (string) Str::uuid(), 'carga_id' => $cargaId, 'estado' => 'activa',
+        ]);
+        DB::table('carga_folios')->insert([
+            'id' => (string) Str::uuid(), 'folio_id' => $folioId,
+            'carga_id' => $cargaId, 'estado' => 'descartado',
+        ]);
+
+        $ronda = app(ServicioVerificacionesUbicacion::class)->actual($this->camarero, $this->tablet);
+        $this->assertSame($posicion->id, $ronda->items->first()->posicion_id);
     }
 
     public function test_un_movimiento_posterior_invalida_el_item_y_asigna_reemplazo(): void

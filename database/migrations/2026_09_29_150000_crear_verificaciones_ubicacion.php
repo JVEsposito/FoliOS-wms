@@ -45,7 +45,10 @@ return new class extends Migration
 
         Schema::create('incidencias_verificacion_ubicacion', function (Blueprint $table): void {
             $table->uuid('id')->primary();
-            $table->foreignUuid('verificacion_ubicacion_item_id')->unique()->constrained('verificaciones_ubicacion_items', 'id', 'incidencia_verificacion_item_fk')->restrictOnDelete();
+            $table->foreignUuid('verificacion_ubicacion_item_id')
+                ->unique('incidencia_verificacion_item_unique')
+                ->constrained('verificaciones_ubicacion_items', 'id', 'incidencia_verificacion_item_fk')
+                ->restrictOnDelete();
             $table->foreignUuid('temporada_id')->constrained('temporadas')->restrictOnDelete();
             $table->foreignUuid('camara_id')->constrained('camaras')->restrictOnDelete();
             $table->foreignUuid('posicion_id')->constrained('posiciones')->restrictOnDelete();

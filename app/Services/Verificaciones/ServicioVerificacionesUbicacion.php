@@ -4,6 +4,7 @@ namespace App\Services\Verificaciones;
 
 use App\Enums\ContenidoCamara;
 use App\Enums\EstadoCamara;
+use App\Enums\EstadoCargaFolio;
 use App\Enums\EstadoPosicion;
 use App\Enums\EstadoTareaMovimiento;
 use App\Enums\RolUsuario;
@@ -236,6 +237,11 @@ final class ServicioVerificacionesUbicacion
                         ->where('estado', 'activa')->select('folio_id'))
                     ->orWhereIn('folio_id', DB::table('carga_folios')
                         ->join('presencias_carga_anden', 'presencias_carga_anden.carga_id', '=', 'carga_folios.carga_id')
+                        ->whereIn('carga_folios.estado', [
+                            EstadoCargaFolio::Pendiente->value,
+                            EstadoCargaFolio::ConIncidencia->value,
+                            EstadoCargaFolio::EnAnden->value,
+                        ])
                         ->where('presencias_carga_anden.estado', 'activa')->select('carga_folios.folio_id'));
             })
             ->with('ubicacionActual:id,posicion_id,folio_id')
