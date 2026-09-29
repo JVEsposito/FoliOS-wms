@@ -170,7 +170,7 @@ class MateriaPrimaController extends Controller
         Gate::authorize('consultar-materia-prima');
         $segmentos = SegmentoValidacionMp::query()
             ->where(function (Builder $consulta): void {
-                $consulta->where('estado', 'pendiente_lote')
+                $consulta->whereIn('estado', ['pendiente_lote', 'lotizacion_parcial'])
                     ->orWhereHas('lotesMateriaPrima', fn (Builder $lotes) => $lotes
                         ->where('estado', EstadoLoteMateriaPrima::Borrador->value));
             })
@@ -223,7 +223,7 @@ class MateriaPrimaController extends Controller
                     ] : null,
                     'envases' => $envases,
                     'neto_estimado' => $segmento->lotesMateriaPrima->isNotEmpty()
-                        ? (float) $segmento->lotesMateriaPrima->first()->kilos_netos_calculados
+                        ? (float) $segmento->lotesMateriaPrima->sum('kilos_netos_calculados')
                         : $servicio->netoEstimado($segmento, $recepcion),
                     'recepcion' => [
                         'id' => $recepcion->id,

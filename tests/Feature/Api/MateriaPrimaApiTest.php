@@ -29,6 +29,45 @@ class MateriaPrimaApiTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_ultimo_lote_concilia_milesimas_por_contenedor_sin_repartir_por_esponjas(): void
+    {
+        $contexto = $this->prepararRecepcionValidada(tresTipos: true);
+        DB::table('recepciones_romana')->where('id', $contexto['recepcion_id'])->update(['peso_neto' => 18000.020]);
+        $digitador = User::factory()->create(['rol' => RolUsuario::DigitadorMateriaPrima]);
+        $this->actingAs($digitador, 'sanctum');
+        $primero = $this->postJson('/api/materia-prima/lotes', $this->payloadLote($contexto, [
+            'numero_lote' => 'REPARTO-1',
+        ]))->assertCreated()->assertJsonPath('data.pesos.kilos_netos_calculados', 7500)->json('data');
+        $segundo = $this->postJson('/api/materia-prima/lotes', $this->payloadLote(
+            [...$contexto, 'segmento_id' => $contexto['segundo_segmento_id']],
+            ['numero_lote' => 'REPARTO-2'],
+        ))->assertCreated()->assertJsonPath('data.pesos.kilos_netos_calculados', 10500.02)->json('data');
+        $this->assertEqualsWithDelta(18000.020,
+            $primero['pesos']['kilos_netos_calculados'] + $segundo['pesos']['kilos_netos_calculados'], 0.00001);
+        $this->assertEqualsWithDelta(11691.02, $segundo['pesos']['kilos_brutos'], 0.00001);
+    }
+
+    public function test_relleno_historico_agrega_esponjas_al_unico_lote_activo(): void
+    {
+        $contexto = $this->prepararRecepcionValidada(tresTipos: true);
+        $digitador = User::factory()->create(['rol' => RolUsuario::DigitadorMateriaPrima]);
+        $lote = $this->actingAs($digitador, 'sanctum')
+            ->postJson('/api/materia-prima/lotes', $this->payloadLote($contexto))
+            ->assertCreated()->json('data');
+        DB::table('lotes_materia_prima_envases')->where('lote_materia_prima_id', $lote['id'])
+            ->where('tipo_envase', 'esponjas')->delete();
+        DB::table('segmentos_validacion_mp')->where('id', $contexto['segmento_id'])
+            ->update(['estado' => 'lotizacion_parcial']);
+        $this->assertSame([], app(RellenoEnvasesLotes::class)->ejecutar());
+        $this->assertDatabaseHas('lotes_materia_prima_envases', [
+            'lote_materia_prima_id' => $lote['id'], 'tipo_envase' => 'esponjas',
+            'cantidad' => 3, 'tara_unitaria' => 1,
+        ]);
+        $this->assertDatabaseHas('segmentos_validacion_mp', [
+            'id' => $contexto['segmento_id'], 'estado' => 'lotizado',
+        ]);
+    }
+
     public function test_relleno_de_migracion_completa_un_lote_y_respeta_los_segmentos_divididos(): void
     {
         $contexto = $this->prepararRecepcionValidada();

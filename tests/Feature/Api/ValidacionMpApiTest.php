@@ -35,18 +35,29 @@ class ValidacionMpApiTest extends TestCase
         $recepcion = $this->actingAs($operador, 'sanctum')
             ->postJson('/api/romana/recepciones', $this->recepcion($temporada, $cliente))
             ->assertCreated()->json('data');
+        $this->postJson("/api/romana/recepciones/{$recepcion['id']}/confirmar-ingreso", [
+            'operacion_id' => (string) Str::uuid(),
+        ])->assertOk();
+        $this->postJson("/api/romana/recepciones/{$recepcion['id']}/cerrar", [
+            'operacion_id' => (string) Str::uuid(), 'peso_tara' => 10000,
+            'tipo_envase_calculo_neto' => 'bins',
+            'taras_envases' => [['tipo_envase' => 'bins', 'tara_unitaria' => 40],
+                ['tipo_envase' => 'totes', 'tara_unitaria' => 2]],
+        ])->assertOk();
         DB::table('recepciones_romana')->where('id', $recepcion['id'])->update(['especie_validacion_id' => null]);
         $this->actingAs($validador, 'sanctum');
+        $version = $this->getJson("/api/validacion-mp/recepciones/buscar/{$recepcion['numero_recepcion']}")
+            ->assertOk()->json('data.version');
         $this->getJson("/api/validacion-mp/recepciones/{$recepcion['id']}/catalogos")
             ->assertOk()->assertJsonCount(0, 'variedades')->assertJsonCount(2, 'especies');
         $validacion = $this->postJson("/api/validacion-mp/recepciones/{$recepcion['id']}/tomar", [
             'operacion_id' => (string) Str::uuid(),
         ])->assertOk()->json('data');
         $ruta = "/api/validacion-mp/recepciones/{$recepcion['id']}/especie";
-        $payload = ['operacion_id' => (string) Str::uuid(), 'version_conocida' => $recepcion['version'],
+        $payload = ['operacion_id' => (string) Str::uuid(), 'version_conocida' => $version,
             'especie_validacion_id' => $especie->id];
         $this->postJson($ruta, [...$payload, 'especie_validacion_id' => $otra->id,
-            'version_conocida' => $recepcion['version'] - 1])->assertConflict();
+            'version_conocida' => $version - 1])->assertConflict();
         $this->postJson($ruta, $payload)->assertOk()->assertJsonPath('data.especie_validacion_id', $especie->id);
         $this->postJson($ruta, $payload)->assertOk();
         $this->getJson("/api/validacion-mp/recepciones/{$recepcion['id']}/catalogos")
@@ -55,6 +66,14 @@ class ValidacionMpApiTest extends TestCase
             'recepcion_romana_id' => $recepcion['id'], 'tipo' => 'especie_completada', 'user_id' => $validador->id,
         ]);
         $this->assertDatabaseHas('validaciones_mp', ['id' => $validacion['id'], 'estado' => 'en_curso']);
+        $csg = CsgValidacion::create(['temporada_id' => $temporada->id, 'codigo' => 'CSG-HISTORICO', 'activo' => true]);
+        $this->postJson("/api/validacion-mp/validaciones/{$validacion['id']}/confirmar", [
+            'operacion_id' => (string) Str::uuid(),
+            'envases' => [['tipo_envase' => 'bins', 'cantidad_validada' => 48],
+                ['tipo_envase' => 'totes', 'cantidad_validada' => 10]],
+            'tarjas_verificadas' => true, 'requiere_segregacion' => false,
+            'csg_validacion_id' => $csg->id, 'variedad_validacion_id' => $variedad->id,
+        ])->assertOk()->assertJsonPath('data.estado', 'validada');
     }
 
     public function test_segregacion_rechaza_un_segmento_sin_envase_contenedor(): void

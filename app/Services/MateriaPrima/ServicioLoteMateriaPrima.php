@@ -59,7 +59,6 @@ class ServicioLoteMateriaPrima
             );
             $this->asegurarDisponibilidadSegmento(
                 $preparados['segmento'],
-                $datos,
             );
             $lote = LoteMateriaPrima::create([
                 'operacion_id' => $datos['operacion_id'],
@@ -120,7 +119,6 @@ class ServicioLoteMateriaPrima
             );
             $this->asegurarDisponibilidadSegmento(
                 $preparados['segmento'],
-                $datos,
                 $lote->id,
             );
             $lote->update([
@@ -259,7 +257,7 @@ class ServicioLoteMateriaPrima
             $recepcion = RecepcionRomana::query()
                 ->lockForUpdate()
                 ->findOrFail($segmento->validacion->recepcion_romana_id);
-            $this->asegurarDisponibilidadSegmento($segmento, [], $lote->id);
+            $this->asegurarDisponibilidadSegmento($segmento, $lote->id);
             $this->asegurarKilosRecepcion(
                 $recepcion,
                 (float) $lote->kilos_netos_confirmados,
@@ -904,12 +902,8 @@ class ServicioLoteMateriaPrima
         ];
     }
 
-    /**
-     * @param  array<string, mixed>  $datos
-     */
     private function asegurarDisponibilidadSegmento(
         SegmentoValidacionMp $segmento,
-        array $datos,
         ?string $ignorarLoteId = null,
     ): void {
         if (LoteMateriaPrima::query()
@@ -947,7 +941,7 @@ class ServicioLoteMateriaPrima
         $asignados = (int) round($anteriores->sum('kilos_netos_calculados') * 1000);
         $calculados = $ocupados + $cantidad === $total
             ? $miligramos - $asignados
-            : (int) round($miligramos * $cantidad / $total);
+            : (int) round((float) $recepcion->peso_neto_por_envase * 1000) * $cantidad;
         if ($calculados <= 0 || $calculados + $asignados > $miligramos) {
             throw ValidationException::withMessages(['envases' => 'El reparto del neto de Romana no es válido.']);
         }
