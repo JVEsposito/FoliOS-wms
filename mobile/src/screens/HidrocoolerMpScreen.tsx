@@ -336,7 +336,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
   grow: { flex: 1 },
-  eyebrow: { color: colors.cyan, fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.7 },
+  eyebrow: { color: colors.cyan, fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.7 },
   title: { color: colors.text, fontSize: 26, fontWeight: '900' },
   muted: { color: colors.muted, fontSize: 12, lineHeight: 18 },
   error: { color: colors.red, fontSize: 13, lineHeight: 19, fontWeight: '700' },
