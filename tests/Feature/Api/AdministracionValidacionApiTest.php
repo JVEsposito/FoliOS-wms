@@ -49,6 +49,11 @@ class AdministracionValidacionApiTest extends TestCase
         $dispositivo = Dispositivo::create(['codigo' => 'VAL-PT-CSG', 'nombre' => 'PDA PT', 'activo' => true]);
         $token = $validador->crearTokenParaDispositivo($dispositivo, 'validacion-pt')->plainTextToken;
 
+        $this->withToken($token)->getJson('/api/validacion/catalogos')
+            ->assertOk()
+            ->assertJsonPath('origenes.0.variedad_ids', [])
+            ->assertJsonPath('articulos.0.variedad_validacion_id', $variedad->id);
+
         $this->withToken($token)->postJson('/api/validacion/pallets', [
             'operacion_id' => (string) Str::uuid(), 'numero_folio' => 'PAL-CSG-VAR',
             'tipo_bulto' => 'pallet', 'cantidad_cajas' => 10, 'linea_proceso' => 1,

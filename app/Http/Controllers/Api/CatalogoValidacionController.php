@@ -51,6 +51,16 @@ class CatalogoValidacionController extends Controller
             ->orderBy('marca')
             ->orderBy('csg')
             ->get();
+        $variedadesPorCsg = DB::table('csg_variedades_validacion')
+            ->whereIn('csg_validacion_id', $origenes->pluck('csg_validacion_id')->filter()->unique())
+            ->get(['csg_validacion_id', 'variedad_validacion_id'])
+            ->groupBy('csg_validacion_id');
+        $origenes->each(function (object $origen) use ($variedadesPorCsg): void {
+            $origen->variedad_ids = $origen->csg_validacion_id === null
+                ? null // Origen legado sin CSG normalizado: conserva el filtro por combinaciones.
+                : $variedadesPorCsg->get($origen->csg_validacion_id, collect())
+                    ->pluck('variedad_validacion_id')->values()->all();
+        });
         $combinaciones = DB::table('combinaciones_validacion as combinacion')
             ->join('articulos_validacion as articulo', 'articulo.id', '=', 'combinacion.articulo_validacion_id')
             ->join('origenes_validacion as origen', 'origen.id', '=', 'combinacion.origen_validacion_id')
