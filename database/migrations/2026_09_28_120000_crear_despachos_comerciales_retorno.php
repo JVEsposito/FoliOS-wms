@@ -29,8 +29,12 @@ return new class extends Migration
 
         Schema::create('despachos_comerciales_retorno_bins', function (Blueprint $table): void {
             $table->uuid('id')->primary();
-            $table->foreignUuid('despacho_comercial_id')->constrained('despachos_comerciales_retorno')->restrictOnDelete();
-            $table->foreignUuid('bin_retorno_packing_id')->constrained('bins_retorno_packing')->restrictOnDelete();
+            $table->foreignUuid('despacho_comercial_id');
+            $table->foreign('despacho_comercial_id', 'dcr_detalle_despacho_fk')
+                ->references('id')->on('despachos_comerciales_retorno')->restrictOnDelete();
+            $table->foreignUuid('bin_retorno_packing_id');
+            $table->foreign('bin_retorno_packing_id', 'dcr_detalle_bin_fk')
+                ->references('id')->on('bins_retorno_packing')->restrictOnDelete();
             $table->string('folio_definitivo', 80);
             $table->string('clasificacion', 100);
             $table->decimal('kilos_definitivos', 12, 3);
