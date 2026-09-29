@@ -52,7 +52,7 @@ class AdministracionValidacionApiTest extends TestCase
         $this->withToken($token)->postJson('/api/validacion/pallets', [
             'operacion_id' => (string) Str::uuid(), 'numero_folio' => 'PAL-CSG-VAR',
             'tipo_bulto' => 'pallet', 'cantidad_cajas' => 10, 'linea_proceso' => 1,
-            'turno' => 'A', 'temporada_id' => $temporada->id, 'catalogo_version' => $temporada->version_catalogo,
+            'turno' => 'A', 'temporada_id' => $temporada->id, 'catalogo_version' => $temporada->refresh()->version_catalogo,
             'articulo_validacion_id' => $articulo->id, 'origen_validacion_id' => $origen->id,
             'categoria_validacion_id' => $categoria->id, 'resultado' => 'aprobado',
             'composicion' => [[

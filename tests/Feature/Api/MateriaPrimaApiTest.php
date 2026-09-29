@@ -1352,6 +1352,8 @@ class MateriaPrimaApiTest extends TestCase
                 ],
                 'tarjas_verificadas' => true,
                 'requiere_segregacion' => false,
+                'csg_validacion_id' => $csg->id,
+                'variedad_validacion_id' => $variedad->id,
             ],
         )
             ->assertOk()
