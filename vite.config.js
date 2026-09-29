@@ -76,6 +76,8 @@ export default defineConfig({
                 'resources/js/office-raw-material-process.js',
                 'resources/css/office-raw-material-returns.css',
                 'resources/js/office-raw-material-returns.js',
+                'resources/css/office-raw-material-commercial-dispatch.css',
+                'resources/js/office-raw-material-commercial-dispatch.js',
                 'resources/js/office-queries.js',
             ],
             refresh: true,

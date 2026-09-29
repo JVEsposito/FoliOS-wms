@@ -8,12 +8,13 @@
 @php
     $offices = [
         'materia-prima' => [
-            ['key' => 'resumen', 'module' => '', 'label' => 'Resumen', 'href' => '/oficina/materia-prima', 'permissions' => ['puede_consultar_romana', 'puede_consultar_materia_prima', 'puede_consultar_hidrocooler_materia_prima', 'puede_consultar_fruta_proceso', 'puede_consultar_cuenta_envases', 'puede_gestionar_despacho_envases', 'puede_anular_despacho_envases']],
+            ['key' => 'resumen', 'module' => '', 'label' => 'Resumen', 'href' => '/oficina/materia-prima', 'permissions' => ['puede_consultar_romana', 'puede_consultar_materia_prima', 'puede_consultar_hidrocooler_materia_prima', 'puede_consultar_fruta_proceso', 'puede_consultar_despacho_comercial', 'puede_consultar_cuenta_envases', 'puede_gestionar_despacho_envases', 'puede_anular_despacho_envases']],
             ['key' => 'romana', 'module' => 'materia-prima.romana', 'label' => 'Romana', 'href' => '/oficina/romana', 'permissions' => ['puede_consultar_romana']],
             ['key' => 'defectos-recepcion', 'module' => '', 'label' => 'Defectos de recepción', 'href' => '/oficina/materia-prima/defectos-recepcion', 'permissions' => ['puede_auditar_defectos_recepcion_mp']],
             ['key' => 'digitacion', 'module' => 'materia-prima.digitacion', 'label' => 'Digitación de Lotes', 'href' => '/oficina/materia-prima/lotes', 'permissions' => ['puede_consultar_materia_prima']],
             ['key' => 'hidrocooler', 'module' => 'materia-prima.hidrocooler', 'label' => 'Hidrocooler', 'href' => '/oficina/materia-prima/hidrocooler', 'permissions' => ['puede_consultar_hidrocooler_materia_prima']],
             ['key' => 'fruta-proceso', 'module' => 'materia-prima.fruta-proceso', 'label' => 'Fruta a Proceso', 'href' => '/oficina/materia-prima/fruta-a-proceso', 'permissions' => ['puede_consultar_fruta_proceso']],
+            ['key' => 'despacho-comercial', 'module' => 'materia-prima.despacho-comercial', 'label' => 'Despacho Comercial', 'href' => '/oficina/materia-prima/despacho-comercial', 'permissions' => ['puede_consultar_despacho_comercial']],
             ['key' => 'existencias-mp', 'module' => 'materia-prima.digitacion', 'label' => 'Existencias MP', 'href' => '/oficina/materia-prima/existencias', 'permissions' => ['puede_consultar_materia_prima']],
             ['key' => 'envases', 'module' => 'materia-prima.cuenta-envases', 'label' => 'Cuenta Envases', 'href' => '/oficina/envases/cuenta-corriente', 'permissions' => ['puede_consultar_cuenta_envases']],
             ['key' => 'despacho-envases', 'module' => 'materia-prima.despacho-envases', 'label' => 'Despacho Envases', 'href' => '/oficina/envases/despachos', 'permissions' => ['puede_consultar_cuenta_envases', 'puede_gestionar_despacho_envases', 'puede_anular_despacho_envases']],

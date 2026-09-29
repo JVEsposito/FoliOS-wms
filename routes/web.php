@@ -116,6 +116,7 @@ Route::view('/oficina/envases/despachos', 'office.container-dispatches');
 Route::view('/oficina/materia-prima', 'office.domain-lobby', [
     'lobbyDomain' => 'materia-prima',
 ]);
+Route::view('/oficina/materia-prima/despacho-comercial', 'office.raw-material-commercial-dispatch');
 Route::view('/oficina/consultas', 'office.domain-lobby', [
     'lobbyDomain' => 'consultas',
 ]);

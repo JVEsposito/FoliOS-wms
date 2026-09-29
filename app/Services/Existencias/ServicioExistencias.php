@@ -640,6 +640,10 @@ class ServicioExistencias
             ])
             ->whereHas('temporada', fn ($consulta) => $consulta->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
             ->whereNull('anulado_at')
+            ->where(function ($consulta): void {
+                $consulta->whereNull('despacho_comercial_id')
+                    ->orWhereHas('despachoComercial', fn ($despacho) => $despacho->where('estado', 'borrador'));
+            })
             ->orderBy('folio_provisional')
             ->orderBy('id')
             ->lazy(200)
@@ -671,7 +675,9 @@ class ServicioExistencias
                 ?: $bin->nombre_resultado
                 ?: 'Pendiente de regularización',
             'estado' => $this->humanizar($bin->estado),
-            'estado_entrega' => 'Retornado desde Packing',
+            'estado_entrega' => $bin->despacho_comercial_id === null
+                ? 'Retornado desde Packing'
+                : 'Reservado para despacho comercial',
             'avance_entrega' => '0/1',
             'numero_recepcion' => $this->valoresUnicos(
                 $lotes->map(fn ($lote) => $lote->recepcion?->numero_recepcion),
