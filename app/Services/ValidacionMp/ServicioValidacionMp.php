@@ -157,8 +157,11 @@ class ServicioValidacionMp
             $segmentos = $esFruta
                 ? $this->prepararSegmentos($validacion, $recepcion, $datos, $cantidades, $requiereSegregacion)
                 : [];
+            // En fruta aún abierta, Romana conoce el envase principal aunque no haya calculado el neto.
+            $tipoContenedor = $recepcion->tipo_envase_calculo_neto
+                ?? $recepcion->tipo_envase_declarado?->value;
             foreach ($segmentos as $indice => $segmento) {
-                $contenedores = collect($segmento['envases'])->firstWhere('tipo_envase', $recepcion->tipo_envase_calculo_neto);
+                $contenedores = collect($segmento['envases'])->firstWhere('tipo_envase', $tipoContenedor);
                 if ((int) ($contenedores['cantidad'] ?? 0) < 1) {
                     throw ValidationException::withMessages([
                         "segmentos.{$indice}.envases" => 'Cada segmento con fruta debe incluir al menos un envase contenedor.',

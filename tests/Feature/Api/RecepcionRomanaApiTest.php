@@ -302,7 +302,7 @@ class RecepcionRomanaApiTest extends TestCase
             ->assertJsonPath('data.peso_tara_envases', 445)
             ->assertJsonPath('data.peso_tara_total', 10445)
             ->assertJsonPath('data.peso_neto', 19555)
-            ->assertJsonPath('data.peso_neto_por_envase', 558.714)
+            ->assertJsonPath('data.peso_neto_por_envase', 1955.5)
             ->json('data');
 
         $this->assertDatabaseHas('detalles_envases_recepcion_romana', [

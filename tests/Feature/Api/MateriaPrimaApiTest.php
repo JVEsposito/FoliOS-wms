@@ -36,11 +36,11 @@ class MateriaPrimaApiTest extends TestCase
         $digitador = User::factory()->create(['rol' => RolUsuario::DigitadorMateriaPrima]);
         $this->actingAs($digitador, 'sanctum');
         $primero = $this->postJson('/api/materia-prima/lotes', $this->payloadLote($contexto, [
-            'numero_lote' => 'REPARTO-1',
+            'numero_lote' => 'REPARTO-1', 'cuartel' => null,
         ]))->assertCreated()->assertJsonPath('data.pesos.kilos_netos_calculados', 7500)->json('data');
         $segundo = $this->postJson('/api/materia-prima/lotes', $this->payloadLote(
             [...$contexto, 'segmento_id' => $contexto['segundo_segmento_id']],
-            ['numero_lote' => 'REPARTO-2'],
+            ['numero_lote' => 'REPARTO-2', 'cuartel' => null],
         ))->assertCreated()->assertJsonPath('data.pesos.kilos_netos_calculados', 10500.02)->json('data');
         $this->assertEqualsWithDelta(18000.020,
             $primero['pesos']['kilos_netos_calculados'] + $segundo['pesos']['kilos_netos_calculados'], 0.00001);
@@ -52,7 +52,7 @@ class MateriaPrimaApiTest extends TestCase
         $contexto = $this->prepararRecepcionValidada(tresTipos: true);
         $digitador = User::factory()->create(['rol' => RolUsuario::DigitadorMateriaPrima]);
         $lote = $this->actingAs($digitador, 'sanctum')
-            ->postJson('/api/materia-prima/lotes', $this->payloadLote($contexto))
+            ->postJson('/api/materia-prima/lotes', $this->payloadLote($contexto, ['cuartel' => null]))
             ->assertCreated()->json('data');
         DB::table('lotes_materia_prima_envases')->where('lote_materia_prima_id', $lote['id'])
             ->where('tipo_envase', 'esponjas')->delete();
@@ -353,6 +353,7 @@ class MateriaPrimaApiTest extends TestCase
             'requiere_hidrocooler' => true,
         ]);
         unset($primerPayload['csg_validacion_id'], $primerPayload['especie_validacion_id'], $primerPayload['variedad_validacion_id']);
+        unset($primerPayload['cuartel']); // se hereda el cuartel A del segmento
         $primerPayload['ggn'] = '';
         $primerLote = $this->postJson('/api/materia-prima/lotes', $primerPayload)
             ->assertCreated()
@@ -394,6 +395,7 @@ class MateriaPrimaApiTest extends TestCase
             'kilos_netos_confirmados' => 10500,
             'requiere_hidrocooler' => false,
         ]);
+        unset($segundoPayload['cuartel']); // se hereda el cuartel B
         $segundoLote = $this->postJson('/api/materia-prima/lotes', $segundoPayload)
             ->assertCreated()
             ->assertJsonPath('data.pesos.kilos_brutos', 11691)
