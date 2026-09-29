@@ -2,15 +2,17 @@
 
 namespace Tests\Feature\Api;
 
+use App\Exceptions\ConflictoOperacion;
 use App\Http\Controllers\Api\VerificacionUbicacionController;
 use App\Models\Dispositivo;
 use App\Models\Posicion;
 use App\Models\User;
 use App\Services\Autenticacion\ContextoOperacional;
 use App\Services\Gerencia\ServicioPanelGerencial;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\Verificaciones\ServicioVerificacionesUbicacion;
-use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\QueryException;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -32,55 +34,93 @@ class VerificacionUbicacionApiTest extends TestCase
         parent::setUp();
         config(['verificaciones.habilitada' => true, 'verificaciones.posiciones_por_ronda' => 1]);
         Schema::create('temporadas', function (Blueprint $t): void {
-            $t->uuid('id')->primary(); $t->boolean('activa'); $t->date('fecha_inicio'); $t->timestamps();
+            $t->uuid('id')->primary();
+            $t->boolean('activa');
+            $t->date('fecha_inicio');
+            $t->timestamps();
         });
         Schema::create('users', function (Blueprint $t): void {
-            $t->id(); $t->string('name'); $t->string('rol'); $t->boolean('activo'); $t->timestamps();
+            $t->id();
+            $t->string('name');
+            $t->string('rol');
+            $t->boolean('activo');
+            $t->timestamps();
         });
         Schema::create('dispositivos', function (Blueprint $t): void {
-            $t->uuid('id')->primary(); $t->boolean('activo'); $t->timestamps();
+            $t->uuid('id')->primary();
+            $t->boolean('activo');
+            $t->timestamps();
         });
         Schema::create('camaras', function (Blueprint $t): void {
-            $t->uuid('id')->primary(); $t->string('codigo'); $t->string('estado');
-            $t->string('contenido'); $t->integer('cantidad_bandas');
-            $t->integer('posiciones_por_banda'); $t->integer('cantidad_niveles'); $t->timestamps();
+            $t->uuid('id')->primary();
+            $t->string('codigo');
+            $t->string('estado');
+            $t->string('contenido');
+            $t->integer('cantidad_bandas');
+            $t->integer('posiciones_por_banda');
+            $t->integer('cantidad_niveles');
+            $t->timestamps();
         });
         Schema::create('posiciones', function (Blueprint $t): void {
-            $t->uuid('id')->primary(); $t->uuid('camara_id'); $t->integer('banda');
-            $t->integer('posicion'); $t->integer('nivel'); $t->string('estado'); $t->timestamps();
+            $t->uuid('id')->primary();
+            $t->uuid('camara_id');
+            $t->integer('banda');
+            $t->integer('posicion');
+            $t->integer('nivel');
+            $t->string('estado');
+            $t->timestamps();
         });
         Schema::create('folios', function (Blueprint $t): void {
-            $t->uuid('id')->primary(); $t->uuid('temporada_id'); $t->string('numero_folio'); $t->timestamps();
+            $t->uuid('id')->primary();
+            $t->uuid('temporada_id');
+            $t->string('numero_folio');
+            $t->timestamps();
         });
         Schema::create('ubicaciones_actuales', function (Blueprint $t): void {
-            $t->uuid('id')->primary(); $t->uuid('posicion_id'); $t->uuid('folio_id'); $t->timestamps();
+            $t->uuid('id')->primary();
+            $t->uuid('posicion_id');
+            $t->uuid('folio_id');
+            $t->timestamps();
         });
         Schema::create('tareas_movimiento', function (Blueprint $t): void {
-            $t->uuid('id')->primary(); $t->uuid('folio_id'); $t->string('estado');
+            $t->uuid('id')->primary();
+            $t->uuid('folio_id');
+            $t->string('estado');
         });
         Schema::create('reservas_tareas_movimiento', function (Blueprint $t): void {
-            $t->uuid('id')->primary(); $t->uuid('bloqueo_posicion_id')->nullable();
+            $t->uuid('id')->primary();
+            $t->uuid('bloqueo_posicion_id')->nullable();
             $t->uuid('bloqueo_tarea_id')->nullable();
         });
         Schema::create('reservas_posiciones_inspeccion_sag', function (Blueprint $t): void {
-            $t->uuid('id')->primary(); $t->uuid('clave_bloqueo')->nullable();
+            $t->uuid('id')->primary();
+            $t->uuid('clave_bloqueo')->nullable();
         });
         Schema::create('custodias_temporales_maniobra', function (Blueprint $t): void {
-            $t->uuid('id')->primary(); $t->uuid('folio_id'); $t->string('estado');
+            $t->uuid('id')->primary();
+            $t->uuid('folio_id');
+            $t->string('estado');
         });
         Schema::create('carga_folios', function (Blueprint $t): void {
-            $t->uuid('id')->primary(); $t->uuid('folio_id'); $t->uuid('carga_id');
+            $t->uuid('id')->primary();
+            $t->uuid('folio_id');
+            $t->uuid('carga_id');
             $t->uuid('bloqueo_folio_id')->nullable();
         });
         Schema::create('reservas_carga_folio', function (Blueprint $t): void {
-            $t->uuid('id')->primary(); $t->uuid('folio_id');
+            $t->uuid('id')->primary();
+            $t->uuid('folio_id');
         });
         Schema::create('presencias_carga_anden', function (Blueprint $t): void {
-            $t->uuid('id')->primary(); $t->uuid('carga_id'); $t->string('estado');
+            $t->uuid('id')->primary();
+            $t->uuid('carga_id');
+            $t->string('estado');
         });
         Schema::create('movimientos', function (Blueprint $t): void {
-            $t->uuid('id')->primary(); $t->uuid('posicion_origen_id')->nullable();
-            $t->uuid('posicion_destino_id')->nullable(); $t->timestamps();
+            $t->uuid('id')->primary();
+            $t->uuid('posicion_origen_id')->nullable();
+            $t->uuid('posicion_destino_id')->nullable();
+            $t->timestamps();
         });
         (require database_path('migrations/2026_09_29_150000_crear_verificaciones_ubicacion.php'))->up();
 
@@ -185,7 +225,7 @@ class VerificacionUbicacionApiTest extends TestCase
             $operacion, 1, 'PT-OTRO');
         $this->assertSame('otro_folio', $repetido->resultado);
         $this->assertDatabaseCount('incidencias_verificacion_ubicacion', 1);
-        $this->expectException(\App\Exceptions\ConflictoOperacion::class);
+        $this->expectException(ConflictoOperacion::class);
         $servicio->registrar($item, $this->camarero, $this->tablet, $operacion, 1, null);
     }
 
@@ -271,7 +311,7 @@ class VerificacionUbicacionApiTest extends TestCase
         $ronda = $servicio->actual($this->camarero, $this->tablet);
         DB::table('verificaciones_ubicacion')->where('id', $ronda->id)
             ->update(['vence_at' => now()->subMinute()]);
-        $servicio->vencer(app(\App\Services\Temporadas\ServicioTemporadaActiva::class)->obtener());
+        $servicio->vencer(app(ServicioTemporadaActiva::class)->obtener());
         $this->assertDatabaseHas('verificaciones_ubicacion', ['id' => $ronda->id, 'estado' => 'vencida']);
         $metricas = (new \ReflectionMethod(ServicioPanelGerencial::class, 'verificaciones'))
             ->invoke(app(ServicioPanelGerencial::class), $this->temporadaId);
@@ -290,6 +330,7 @@ class VerificacionUbicacionApiTest extends TestCase
         DB::table('posiciones')->insert(['id' => $id, 'camara_id' => $camaraId,
             'banda' => 1, 'posicion' => $numero, 'nivel' => 1, 'estado' => 'activa',
             'created_at' => now(), 'updated_at' => now()]);
+
         return Posicion::findOrFail($id);
     }
 
@@ -301,6 +342,7 @@ class VerificacionUbicacionApiTest extends TestCase
         DB::table('ubicaciones_actuales')->insert(['id' => (string) Str::uuid(),
             'posicion_id' => $posicion->id, 'folio_id' => $id,
             'created_at' => now(), 'updated_at' => now()]);
+
         return $id;
     }
 }

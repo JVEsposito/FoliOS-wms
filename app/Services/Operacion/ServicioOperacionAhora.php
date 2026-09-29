@@ -26,11 +26,12 @@ use App\Models\SesionEstiba;
 use App\Models\TareaMovimiento;
 use App\Models\Temporada;
 use App\Models\TunelPrefrio;
+use App\Models\User;
 use App\Models\VerificacionUbicacion;
-use App\Services\Verificaciones\VentanasVerificacion;
-use App\Services\Verificaciones\ServicioVerificacionesUbicacion;
 use App\Services\Planificador\ServicioConciliacionPalletsHistoricos;
 use App\Services\Planificador\ServicioPuestoMandoPlanificador;
+use App\Services\Verificaciones\ServicioVerificacionesUbicacion;
+use App\Services\Verificaciones\VentanasVerificacion;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
@@ -200,8 +201,9 @@ class ServicioOperacionAhora
             })
             ->with('items:id,verificacion_ubicacion_id,resultado')
             ->get();
-        $usuarios = \App\Models\User::query()->whereIn('id', $rondas->pluck('user_id'))
+        $usuarios = User::query()->whereIn('id', $rondas->pluck('user_id'))
             ->pluck('name', 'id');
+
         return [
             'habilitada' => (bool) config('verificaciones.habilitada'),
             'turno' => $ventana['nombre'],

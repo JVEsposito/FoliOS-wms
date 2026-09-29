@@ -7,17 +7,17 @@ use App\Enums\EstadoManiobraOperacional;
 use App\Enums\EstadoPlanOperacional;
 use App\Enums\EstadoTareaMovimiento;
 use App\Enums\PrioridadOperacional;
+use App\Enums\RolUsuario;
 use App\Enums\TipoMovimiento;
 use App\Enums\TipoPasoManiobra;
 use App\Enums\TipoPlanOperacional;
-use App\Enums\RolUsuario;
 use App\Exceptions\ConflictoOperacion;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\PlanOperacionalResource;
 use App\Http\Resources\TareaMovimientoResource;
 use App\Models\Folio;
-use App\Models\PlanOperacional;
 use App\Models\PersonalAccessToken;
+use App\Models\PlanOperacional;
 use App\Models\Posicion;
 use App\Models\SesionEstiba;
 use App\Models\TareaMovimiento;
@@ -137,7 +137,9 @@ class PlanOperacionalController extends Controller
             if ($token instanceof PersonalAccessToken && $token->dispositivo_id) {
                 try {
                     $dispositivo = $token->dispositivo()->where('activo', true)->first();
-                    if ($dispositivo) app(ServicioVerificacionesUbicacion::class)->actual($request->user(), $dispositivo);
+                    if ($dispositivo) {
+                        app(ServicioVerificacionesUbicacion::class)->actual($request->user(), $dispositivo);
+                    }
                 } catch (\Throwable $error) {
                     // El conteo nunca bloquea la bandeja operacional.
                     report($error);

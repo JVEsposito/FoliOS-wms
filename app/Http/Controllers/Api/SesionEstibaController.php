@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\RolUsuario;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CerrarSesionEstibaForzosamenteRequest;
 use App\Http\Requests\CerrarSesionEstibaRequest;
@@ -11,7 +12,6 @@ use App\Models\SesionEstiba;
 use App\Services\Autenticacion\ContextoOperacional;
 use App\Services\Estiba\ServicioSesionEstiba;
 use App\Services\Verificaciones\ServicioVerificacionesUbicacion;
-use App\Enums\RolUsuario;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 

@@ -18,8 +18,8 @@ use App\Models\UbicacionActual;
 use App\Models\User;
 use App\Models\VerificacionUbicacion;
 use App\Models\VerificacionUbicacionItem;
-use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\Gerencia\ServicioPanelGerencial;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
@@ -62,8 +62,11 @@ final class ServicioVerificacionesUbicacion
                     $faltantes = $ronda->objetivo - $ronda->items()
                         ->where(fn (Builder $q) => $q->whereNull('resultado')->orWhere('resultado', '!=', 'no_aplica'))
                         ->count();
-                    if ($faltantes > 0) $this->asignar($ronda, $faltantes);
+                    if ($faltantes > 0) {
+                        $this->asignar($ronda, $faltantes);
+                    }
                 }
+
                 return $ronda->load('items.posicion.camara');
             }
 
@@ -118,6 +121,7 @@ final class ServicioVerificacionesUbicacion
                 if (! hash_equals((string) $item->respuesta_payload_hash, $hash)) {
                     throw new ConflictoOperacion('La operación repetida contiene otra respuesta.');
                 }
+
                 return [$ronda->load('items.posicion.camara'), $item];
             }
             if ($item->resultado !== null || $item->version !== $version) {
@@ -187,13 +191,19 @@ final class ServicioVerificacionesUbicacion
 
     public function vencer(Temporada $temporada): void
     {
-        if (! config('verificaciones.habilitada')) return;
+        if (! config('verificaciones.habilitada')) {
+            return;
+        }
         DB::transaction(function () use ($temporada): void {
-            if ($this->temporadas->obtener(bloquear: true)->id !== $temporada->id) return;
+            if ($this->temporadas->obtener(bloquear: true)->id !== $temporada->id) {
+                return;
+            }
             $vencidas = VerificacionUbicacion::query()->where('temporada_id', $temporada->id)
                 ->where('estado', 'pendiente')->where('vence_at', '<=', now())
                 ->update(['estado' => 'vencida', 'updated_at' => now()]);
-            if ($vencidas > 0) DB::afterCommit(fn () => app(ServicioPanelGerencial::class)->invalidar());
+            if ($vencidas > 0) {
+                DB::afterCommit(fn () => app(ServicioPanelGerencial::class)->invalidar());
+            }
         });
     }
 
@@ -233,12 +243,18 @@ final class ServicioVerificacionesUbicacion
         $porCamara = $candidatas->groupBy('camara_id');
         $elegidas = collect();
         foreach ($porCamara as $grupo) {
-            if ($elegidas->count() >= $cantidad) break;
+            if ($elegidas->count() >= $cantidad) {
+                break;
+            }
             $elegidas->push($grupo->first());
         }
         foreach ($candidatas as $posicion) {
-            if ($elegidas->count() >= $cantidad) break;
-            if (! $elegidas->contains('id', $posicion->id)) $elegidas->push($posicion);
+            if ($elegidas->count() >= $cantidad) {
+                break;
+            }
+            if (! $elegidas->contains('id', $posicion->id)) {
+                $elegidas->push($posicion);
+            }
         }
         foreach ($elegidas as $posicion) {
             $ronda->items()->create([
