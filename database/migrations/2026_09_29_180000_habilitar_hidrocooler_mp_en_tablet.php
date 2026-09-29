@@ -1,6 +1,6 @@
 <?php
 
-use AppServices\Autorizacion\CatalogoModulosAcceso;
+use App\Services\Autorizacion\CatalogoModulosAcceso;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
 
