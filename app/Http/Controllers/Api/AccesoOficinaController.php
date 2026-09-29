@@ -66,6 +66,7 @@ class AccesoOficinaController extends Controller
                 'puede_crear_camaras_materiales' => $usuario->can('crear-camaras-materiales'),
                 'puede_crear_camaras_materia_prima' => $usuario->can('crear-camaras-materia-prima'),
                 'puede_administrar_camaras' => $usuario->can('administrar-camaras'),
+                'puede_supervisar_camaras_productos' => $usuario->can('supervisar-camaras-productos'),
                 'puede_administrar_accesos' => $usuario->can('administrar-accesos'),
                 'puede_habilitar_demo' => $usuario->rol === RolUsuario::Administrador,
                 'puede_consultar_accesos' => $capacidades['puede_consultar_accesos'],

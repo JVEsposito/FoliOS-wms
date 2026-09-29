@@ -259,6 +259,8 @@ class PlanesOperacionalesApiTest extends TestCase
         $this->conToken($contexto['token'])
             ->postJson("/api/tareas-movimiento/{$tarea->id}/asumir")
             ->assertOk();
+        $destinoAsignado = $tarea->refresh()->posicion_destino_id;
+        $this->assertNotNull($destinoAsignado);
 
         $this->travel(11)->minutes();
 
@@ -275,6 +277,8 @@ class PlanesOperacionalesApiTest extends TestCase
             'bloqueo_tarea_id' => null,
             'bloqueo_posicion_id' => null,
         ]);
+        $this->assertSame($contexto['camara']->id, $tarea->refresh()->camara_destino_id);
+        $this->assertSame($destinoAsignado, $tarea->posicion_destino_id);
 
         $this->conToken($contexto['tokenOtro'])
             ->postJson("/api/tareas-movimiento/{$tarea->id}/asumir")

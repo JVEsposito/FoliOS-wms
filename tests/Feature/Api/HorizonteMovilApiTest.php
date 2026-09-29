@@ -16,6 +16,7 @@ use App\Services\Autenticacion\ServicioPinOperacional;
 use App\Services\Camaras\ServicioBandasOperacionales;
 use App\Services\Estiba\ServicioMovimientoEstiba;
 use App\Services\Estiba\ServicioPlanesOperacionales;
+use App\Services\Estiba\ServicioReservasTareasMovimiento;
 use App\Services\Estiba\ServicioSesionEstiba;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -60,6 +61,40 @@ class HorizonteMovilApiTest extends TestCase
             'bloqueo_posicion_id' => null,
             'estado' => 'activa',
         ]);
+    }
+
+    public function test_lease_vencido_limpia_destino_rolling_obsoleto(): void
+    {
+        $contexto = $this->crearContexto();
+        $tarea = $this->crearPlanRolling($contexto, [$contexto['folios'][0]])->tareas()->sole();
+        $this->conToken($contexto['token'])->postJson("/api/tareas-movimiento/{$tarea->id}/asumir")->assertOk();
+        $tarea->update([
+            'camara_destino_id' => $contexto['camara']->id,
+            'posicion_destino_id' => $contexto['posiciones'][0]->id,
+        ]);
+
+        $this->travel(11)->minutes();
+        app(ServicioReservasTareasMovimiento::class)->expirarVencidas();
+
+        $this->assertNull($tarea->refresh()->camara_destino_id);
+        $this->assertNull($tarea->posicion_destino_id);
+        $this->assertSame('pendiente', $tarea->estado->value);
+    }
+
+    public function test_liberacion_rolling_limpia_destino_sin_retiro(): void
+    {
+        $contexto = $this->crearContexto();
+        $tarea = $this->crearPlanRolling($contexto, [$contexto['folios'][0]])->tareas()->sole();
+        $this->conToken($contexto['token'])->postJson("/api/tareas-movimiento/{$tarea->id}/asumir")->assertOk();
+        $tarea->update([
+            'camara_destino_id' => $contexto['camara']->id,
+            'posicion_destino_id' => $contexto['posiciones'][0]->id,
+        ]);
+
+        $this->conToken($contexto['token'])->postJson("/api/tareas-movimiento/{$tarea->id}/liberar")->assertOk();
+
+        $this->assertNull($tarea->refresh()->camara_destino_id);
+        $this->assertNull($tarea->posicion_destino_id);
     }
 
     public function test_snapshot_respeta_el_horizonte_persistido_en_el_plan(): void

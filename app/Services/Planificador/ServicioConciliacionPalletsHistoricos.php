@@ -171,6 +171,8 @@ final class ServicioConciliacionPalletsHistoricos
                     ->where('referencia_id', $folio->id)
                     ->max('ciclo_referencia');
 
+                // Rezago histórico: consume solo capacidad sobrante. La salida de
+                // túnel, SAG y despachos siempre tienen precedencia.
                 $this->planes->crear(
                     temporada: $temporada,
                     tipo: TipoPlanOperacional::AlmacenamientoPallet,
@@ -179,7 +181,7 @@ final class ServicioConciliacionPalletsHistoricos
                     tareas: [[
                         'folio_id' => $folio->id,
                         'tipo_movimiento' => TipoMovimiento::UbicacionInicial,
-                        'prioridad' => PrioridadOperacional::Alta,
+                        'prioridad' => PrioridadOperacional::Normal,
                         'instruccion' => "Localizar físicamente {$folio->numero_folio}, confirmar el folio en el pallet y ubicarlo según la frontera vigente.",
                         'contexto' => array_filter([
                             'origen_logico' => 'ubicacion_historica_por_verificar',
@@ -193,7 +195,7 @@ final class ServicioConciliacionPalletsHistoricos
                             'calibre' => $folio->calibre,
                         ], static fn (mixed $valor): bool => $valor !== null && $valor !== ''),
                     ]],
-                    prioridad: PrioridadOperacional::Alta,
+                    prioridad: PrioridadOperacional::Normal,
                     motivo: 'Conciliación de pallet aprobado antes de habilitar el planificador.',
                     referenciaTipo: self::REFERENCIA_TIPO,
                     referenciaId: $folio->id,

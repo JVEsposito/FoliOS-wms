@@ -96,6 +96,25 @@
                                 <div class="camera-ops__access" id="cameraOpsAccess" data-tone="neutral">Sin consultar</div>
                             </header>
 
+                            <section class="camera-ops__emergency" id="cameraEmergency" data-tone="neutral" aria-live="polite">
+                                <div id="cameraEmergencyStatus">Sin evacuación de emergencia activa.</div>
+                                <button type="button" id="cameraEmergencyDeclare" hidden>Declarar evacuación de emergencia</button>
+                                <button type="button" id="cameraEmergencyCancel" hidden>Cancelar emergencia</button>
+                            </section>
+                            <dialog class="camera-ops__emergency-dialog" id="cameraEmergencyDialog" aria-labelledby="cameraEmergencyDialogTitle">
+                                <form id="cameraEmergencyForm">
+                                    <h3 id="cameraEmergencyDialogTitle">Declarar evacuación de emergencia</h3>
+                                    <p id="cameraEmergencyDialogHelp">La acción es inmediata.</p>
+                                    <label>Motivo obligatorio<textarea name="motivo" minlength="3" maxlength="500" required></textarea></label>
+                                    <label id="cameraEmergencyConfirmationLabel">Escribe el código exacto de la cámara<input name="confirmacion" autocomplete="off" required></label>
+                                    <p class="camera-ops__emergency-error" id="cameraEmergencyError" role="alert"></p>
+                                    <div class="camera-ops__emergency-actions">
+                                        <button type="button" id="cameraEmergencyClose">Volver</button>
+                                        <button type="submit" id="cameraEmergencySubmit">Confirmar emergencia</button>
+                                    </div>
+                                </form>
+                            </dialog>
+
                             <section class="camera-ops__summary" aria-label="Resumen de capacidad">
                                 <div><span>CAPACIDAD EFECTIVA</span><strong id="cameraOpsCapacity">—</strong></div>
                                 <div><span>OCUPADAS</span><strong id="cameraOpsOccupied">—</strong></div>

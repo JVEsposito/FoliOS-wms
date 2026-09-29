@@ -28,6 +28,7 @@ use App\Models\Temporada;
 use App\Models\TunelPrefrio;
 use App\Models\User;
 use App\Models\VerificacionUbicacion;
+use App\Services\Camaras\EstadoEvacuacionEmergencia;
 use App\Services\Planificador\ServicioConciliacionPalletsHistoricos;
 use App\Services\Planificador\ServicioPuestoMandoPlanificador;
 use App\Services\Verificaciones\ServicioVerificacionesUbicacion;
@@ -57,6 +58,8 @@ class ServicioOperacionAhora
 
         $camaras = $this->camaras($ahora);
         $prefrio = $this->prefrio($temporada, $ahora);
+        $estadoEmergencias = app(EstadoEvacuacionEmergencia::class);
+        $codigosCamara = collect($camaras)->pluck('codigo', 'id');
         $ventana = app(VentanasVerificacion::class)->actual($ahora);
         app(ServicioVerificacionesUbicacion::class)->vencer($temporada);
 
@@ -78,6 +81,12 @@ class ServicioOperacionAhora
             'camareros' => $this->camareros($temporada),
             'prefrio' => $prefrio,
             'incidencias' => $this->incidencias($temporada, $ahora),
+            'emergencias' => $estadoEmergencias->activas()
+                ->map(fn ($plan) => [
+                    'camara_codigo' => data_get($plan->contexto, 'camara_codigo')
+                        ?? $codigosCamara->get($plan->referencia_id),
+                    ...$estadoEmergencias->resumir($plan),
+                ])->all(),
             'verificaciones' => $this->verificaciones($temporada, $ventana),
             'planificador' => [
                 ...$this->puestoMando->obtener($temporada),

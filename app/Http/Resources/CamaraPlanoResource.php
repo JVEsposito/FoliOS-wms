@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\UbicacionActual;
+use App\Services\Camaras\EstadoEvacuacionEmergencia;
 use Illuminate\Http\Request;
 
 class CamaraPlanoResource extends CamaraResumenResource
@@ -14,6 +15,9 @@ class CamaraPlanoResource extends CamaraResumenResource
     {
         return [
             ...parent::toArray($request),
+            'emergencia' => $this->resource->getRelation('emergenciaActiva')
+                ? app(EstadoEvacuacionEmergencia::class)->resumir($this->resource->getRelation('emergenciaActiva'))
+                : null,
             'bandas_operacionales' => BandaOperacionalResource::collection(
                 $this->whenLoaded('bandasOperacionales'),
             ),
