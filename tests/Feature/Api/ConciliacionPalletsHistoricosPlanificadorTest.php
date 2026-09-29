@@ -11,7 +11,6 @@ use App\Enums\EstadoTareaMovimiento;
 use App\Enums\HabilitacionAlmacenamientoFolio;
 use App\Enums\RolUsuario;
 use App\Enums\PrioridadOperacional;
-use App\Enums\EstadoPlanOperacional;
 use App\Enums\TipoBulto;
 use App\Models\Folio;
 use App\Models\PlanOperacional;
