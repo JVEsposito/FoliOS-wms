@@ -36,13 +36,13 @@ export function ValidationMpScreen({ auth, baseUrl, onLogout }: Props) {
   // En la PDA el encabezado y la ficha se condensan para dejar el conteo a la vista.
   const tight = isPdaBuild || width < 420;
 
-  async function refresh() {
+  async function refresh(selected: MpReception | null = reception) {
     setBusy(true); setError('');
     try {
       setPending(await listPendingMp(baseUrl, auth.token));
       if (tab === 'history') setHistory(await listMpHistory(baseUrl, auth.token, historyDate));
-      if (reception) {
-        const current = await findMpReception(baseUrl, auth.token, reception.numero_recepcion);
+      if (selected) {
+        const current = await findMpReception(baseUrl, auth.token, selected.numero_recepcion);
         setReception(current);
         setValidationId(current.validacion?.estado === 'en_curso' && current.validacion.validador.id === auth.usuario.id ? current.validacion.id : null);
       }
@@ -98,7 +98,7 @@ export function ValidationMpScreen({ auth, baseUrl, onLogout }: Props) {
       setValidationId(null);
       setReception(null);
       setNumber('');
-      await refresh();
+      await refresh(null);
     } catch (reason) { setError(message(reason)); }
     finally { setBusy(false); }
   }
