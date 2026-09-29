@@ -239,6 +239,10 @@ class MateriaPrimaController extends Controller
                         'tipo_envase_calculo_neto' => $tipoBase,
                         'cantidad_envase_calculo_neto' => $recepcion->cantidad_envase_calculo_neto,
                         'peso_neto_por_envase' => (float) $recepcion->peso_neto_por_envase,
+                        'envases' => $recepcion->detallesEnvases->map(fn ($detalle): array => [
+                            'tipo_envase' => $detalle->tipo_envase->value,
+                            'tara_unitaria' => (float) ($detalle->tara_unitaria_salida ?? 0),
+                        ])->values(),
                     ],
                 ];
             }),

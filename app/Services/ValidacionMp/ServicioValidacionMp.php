@@ -151,6 +151,8 @@ class ServicioValidacionMp
         if (! $requiereSegregacion) {
             return [[
                 'motivos' => [],
+                'csg_validacion_id' => $datos['csg_validacion_id'] ?? null,
+                'variedad_validacion_id' => $datos['variedad_validacion_id'] ?? null,
                 'envases' => $cantidades->map(fn (array $envase, string $tipo): array => [
                     'tipo_envase' => $tipo,
                     'cantidad' => (int) $envase['cantidad_validada'],
@@ -174,13 +176,13 @@ class ServicioValidacionMp
                     throw ValidationException::withMessages(["segmentos.{$indice}.motivos" => 'El motivo de segregación no es válido.']);
                 }
             }
-            if ($motivos->contains(MotivoSegregacionMp::Csg->value) && empty($segmento['csg_validacion_id'])) {
+            if (empty($segmento['csg_validacion_id'])) {
                 throw ValidationException::withMessages(["segmentos.{$indice}.csg_validacion_id" => 'Selecciona el CSG que identifica el segmento.']);
             }
             if ($motivos->contains(MotivoSegregacionMp::Cuartel->value) && blank($segmento['cuartel'] ?? null)) {
                 throw ValidationException::withMessages(["segmentos.{$indice}.cuartel" => 'Ingresa el cuartel que identifica el segmento.']);
             }
-            if ($motivos->contains(MotivoSegregacionMp::Variedad->value) && empty($segmento['variedad_validacion_id'])) {
+            if (empty($segmento['variedad_validacion_id'])) {
                 throw ValidationException::withMessages(["segmentos.{$indice}.variedad_validacion_id" => 'Selecciona la variedad que identifica el segmento.']);
             }
             $envases = collect($segmento['envases'] ?? []);
@@ -210,25 +212,22 @@ class ServicioValidacionMp
     private function guardarSegmento(ValidacionMp $validacion, RecepcionRomana $recepcion, array $segmento): void
     {
         $secuencia = $validacion->segmentos()->count() + 1;
-        $csg = ! empty($segmento['csg_validacion_id'])
-            ? CsgValidacion::query()
-                ->whereKey($segmento['csg_validacion_id'])
-                ->where('temporada_id', $recepcion->temporada_id)
-                ->where('activo', true)
-                ->disponibleParaCliente($recepcion->cliente_id)
-                ->first()
-            : null;
-        if (! empty($segmento['csg_validacion_id']) && ! $csg) {
+        $csg = CsgValidacion::query()
+            ->whereKey($segmento['csg_validacion_id'])
+            ->where('temporada_id', $recepcion->temporada_id)
+            ->where('activo', true)
+            ->disponibleParaCliente($recepcion->cliente_id)
+            ->first();
+        if (! $csg) {
             throw ValidationException::withMessages([
                 'segmentos' => 'El CSG no está activo para la temporada y el cliente heredados de Romana.',
             ]);
         }
-        $variedad = ! empty($segmento['variedad_validacion_id'])
-            ? VariedadValidacion::query()->whereKey($segmento['variedad_validacion_id'])
-                ->whereHas('especie', fn ($especie) => $especie->where('temporada_id', $recepcion->temporada_id))->first()
-            : null;
-        if (! empty($segmento['variedad_validacion_id']) && ! $variedad) {
-            throw ValidationException::withMessages(['segmentos' => 'La variedad no pertenece a la temporada heredada de Romana.']);
+        $variedad = VariedadValidacion::query()->whereKey($segmento['variedad_validacion_id'])
+            ->where('especie_validacion_id', $recepcion->especie_validacion_id)
+            ->where('activo', true)->first();
+        if (! $variedad) {
+            throw ValidationException::withMessages(['segmentos' => 'La variedad no pertenece a la especie declarada en Romana.']);
         }
 
         $creado = SegmentoValidacionMp::create([

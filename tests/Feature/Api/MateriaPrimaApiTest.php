@@ -252,7 +252,7 @@ class MateriaPrimaApiTest extends TestCase
             ->assertJsonPath('data.0.id', $contexto['segmento_id'])
             ->assertJsonPath('data.0.recepcion.peso_neto', 18000)
             ->assertJsonPath('data.0.recepcion.tipo_envase_calculo_neto', 'bins')
-            ->assertJsonPath('data.0.recepcion.peso_neto_por_envase', 375)
+            ->assertJsonPath('data.0.recepcion.peso_neto_por_envase', 310.345)
             ->assertJsonPath('data.0.envases.0.cantidad_disponible', 48);
 
         $primerPayload = $this->payloadLote($contexto, [
@@ -263,10 +263,16 @@ class MateriaPrimaApiTest extends TestCase
             'kilos_netos_confirmados' => 7495,
             'requiere_hidrocooler' => true,
         ]);
+        unset($primerPayload['csg_validacion_id'], $primerPayload['especie_validacion_id'], $primerPayload['variedad_validacion_id']);
+        $primerPayload['ggn'] = '';
         $primerLote = $this->postJson('/api/materia-prima/lotes', $primerPayload)
             ->assertCreated()
             ->assertJsonPath('data.estado', 'borrador')
-            ->assertJsonPath('data.pesos.kilos_netos_calculados', 7500)
+            ->assertJsonPath('data.pesos.kilos_netos_calculados', 7448.276)
+            ->assertJsonPath('data.pesos.kilos_brutos', 8256.276)
+            ->assertJsonPath('data.trazabilidad.ggn', null)
+            ->assertJsonPath('data.trazabilidad.csg_id', $contexto['csg_id'])
+            ->assertJsonPath('data.trazabilidad.variedad_id', $contexto['variedad_id'])
             ->assertJsonPath('data.pesos.kilos_netos_confirmados', 7495)
             ->assertJsonPath('data.pesos.corregido_por_digitador', true)
             ->json('data');
@@ -297,7 +303,9 @@ class MateriaPrimaApiTest extends TestCase
         ]);
         $segundoLote = $this->postJson('/api/materia-prima/lotes', $segundoPayload)
             ->assertCreated()
+            ->assertJsonPath('data.pesos.kilos_brutos', 11683.724)
             ->json('data');
+        $this->assertEqualsWithDelta(19940, $primerLote['pesos']['kilos_brutos'] + $segundoLote['pesos']['kilos_brutos'], 0.0001);
         $segundoLote = $this->postJson(
             "/api/materia-prima/lotes/{$segundoLote['id']}/confirmar",
             [
@@ -1276,6 +1284,7 @@ class MateriaPrimaApiTest extends TestCase
                 'temporada_id' => $temporada->id,
                 'cliente_id' => $cliente->id,
                 'tipo_recepcion' => 'fruta_con_envases',
+                'especie_validacion_id' => EspecieValidacion::firstOrCreate(['temporada_id' => $temporada->id, 'nombre' => 'Cereza'], ['activo' => true])->id,
                 'tipo_servicio' => 'proceso',
                 'envases' => [
                     ['tipo_envase' => 'bins', 'cantidad' => 48],
@@ -1295,6 +1304,7 @@ class MateriaPrimaApiTest extends TestCase
         ])->assertOk();
         $this->postJson("/api/romana/recepciones/{$recepcion['id']}/cerrar", [
             'operacion_id' => (string) Str::uuid(),
+            'taras_envases' => [['tipo_envase' => 'bins', 'tara_unitaria' => 40], ['tipo_envase' => 'totes', 'tara_unitaria' => 2]],
             'peso_tara' => 10000,
             'tipo_envase_calculo_neto' => 'bins',
         ])
@@ -1303,7 +1313,7 @@ class MateriaPrimaApiTest extends TestCase
             ->assertJsonPath('data.cantidad_envase_calculo_neto', 48)
             ->assertJsonPath('data.peso_neto_por_envase', 375);
 
-        $especie = EspecieValidacion::create([
+        $especie = EspecieValidacion::firstOrCreate([
             'temporada_id' => $temporada->id,
             'nombre' => 'Cereza',
             'activo' => true,

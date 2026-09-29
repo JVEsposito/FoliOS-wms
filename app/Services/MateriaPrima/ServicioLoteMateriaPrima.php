@@ -133,7 +133,7 @@ class ServicioLoteMateriaPrima
             );
 
             $lote->update([
-                ...$this->atributosLote($datos, $preparados),
+                ...$this->atributosLote([...$datos, 'lote_id_para_calculo' => $lote->id], $preparados),
                 'version' => $lote->version + 1,
                 'actualizado_por_user_id' => $usuario->id,
             ]);
@@ -805,28 +805,28 @@ class ServicioLoteMateriaPrima
                 'Romana debe cerrar la recepción y calcular el peso neto por envase antes de lotizar.',
             );
         }
-        if ($datos['envase_primario'] !== $recepcion->tipo_envase_calculo_neto) {
+        if (! $segmento->envases->contains(fn ($envase): bool => $envase->tipo_envase->value === $datos['envase_primario'])) {
             throw ValidationException::withMessages([
-                'envase_primario' => sprintf(
-                    'El envase primario debe ser %s, seleccionado por Romana para el cálculo neto.',
-                    $recepcion->tipo_envase_calculo_neto,
-                ),
+                'envase_primario' => 'El envase primario debe estar incluido en el segmento validado.',
             ]);
         }
 
+        $csgId = $segmento->csg_validacion_id ?? ($datos['csg_validacion_id'] ?? null);
+        $especieId = $recepcion->especie_validacion_id ?? ($datos['especie_validacion_id'] ?? null);
+        $variedadId = $segmento->variedad_validacion_id ?? ($datos['variedad_validacion_id'] ?? null);
         $csg = CsgValidacion::query()
-            ->whereKey($datos['csg_validacion_id'])
+            ->whereKey($csgId)
             ->where('temporada_id', $recepcion->temporada_id)
             ->where('activo', true)
             ->disponibleParaCliente($recepcion->cliente_id)
             ->first();
         $especie = EspecieValidacion::query()
-            ->whereKey($datos['especie_validacion_id'])
+            ->whereKey($especieId)
             ->where('temporada_id', $recepcion->temporada_id)
             ->where('activo', true)
             ->first();
         $variedad = VariedadValidacion::query()
-            ->whereKey($datos['variedad_validacion_id'])
+            ->whereKey($variedadId)
             ->where('especie_validacion_id', $especie?->id)
             ->where('activo', true)
             ->first();
@@ -834,6 +834,11 @@ class ServicioLoteMateriaPrima
             throw ValidationException::withMessages([
                 'catalogo' => 'CSG, especie y variedad deben pertenecer a la temporada y combinación seleccionadas.',
             ]);
+        }
+        if ((isset($datos['csg_validacion_id']) && $datos['csg_validacion_id'] !== $csg->id)
+            || (isset($datos['especie_validacion_id']) && $datos['especie_validacion_id'] !== $especie->id)
+            || (isset($datos['variedad_validacion_id']) && $datos['variedad_validacion_id'] !== $variedad->id)) {
+            throw ValidationException::withMessages(['catalogo' => 'El origen del lote debe coincidir con el segmento validado.']);
         }
         if ($segmento->csg_validacion_id
             && $segmento->csg_validacion_id !== $csg->id) {
@@ -867,13 +872,25 @@ class ServicioLoteMateriaPrima
     {
         /** @var RecepcionRomana $recepcion */
         $recepcion = $preparados['recepcion'];
-        $calculados = round(
-            (float) $recepcion->peso_neto_por_envase
-            * (int) $datos['cantidad_envases_primarios'],
-            3,
-        );
+        $cantidad = (int) $datos['cantidad_envases_primarios'] + (int) ($datos['cantidad_envases_secundarios'] ?? 0);
+        $total = (int) $recepcion->cantidad_envases_declarados;
+        $otrosLotes = LoteMateriaPrima::query()
+            ->where('recepcion_romana_id', $recepcion->id)
+            ->where('estado', '!=', EstadoLoteMateriaPrima::Anulado->value)
+            ->when($datos['lote_id_para_calculo'] ?? null, fn ($query, $id) => $query->whereKeyNot($id))
+            ->get(['cantidad_envases_primarios', 'cantidad_envases_secundarios', 'kilos_netos_calculados']);
+        $cantidadOcupada = $otrosLotes->sum(fn ($lote): int => $lote->cantidad_envases_primarios + $lote->cantidad_envases_secundarios);
+        $netoMiligramos = (int) round((float) $recepcion->peso_neto * 1000);
+        $calculadosMiligramos = $cantidadOcupada + $cantidad === $total
+            ? $netoMiligramos - (int) round($otrosLotes->sum('kilos_netos_calculados') * 1000)
+            : (int) round($netoMiligramos * $cantidad / $total);
+        $calculados = $calculadosMiligramos / 1000;
         $confirmados = round((float) $datos['kilos_netos_confirmados'], 3);
-        $brutos = round((float) $datos['kilos_brutos'], 3);
+        $taras = $recepcion->detallesEnvases->keyBy(fn ($detalle): string => $detalle->tipo_envase->value);
+        $taraPrimaria = (float) ($taras->get($datos['envase_primario'])?->tara_unitaria_salida ?? 0);
+        $taraSecundaria = (float) ($taras->get($datos['envase_secundario'] ?? '')?->tara_unitaria_salida ?? 0);
+        $brutos = round($calculados + $taraPrimaria * (int) $datos['cantidad_envases_primarios']
+            + $taraSecundaria * (int) ($datos['cantidad_envases_secundarios'] ?? 0), 3);
         if ($confirmados > $brutos) {
             throw ValidationException::withMessages([
                 'kilos_netos_confirmados' => 'Los kilos netos no pueden superar los kilos brutos del lote.',
@@ -894,7 +911,7 @@ class ServicioLoteMateriaPrima
             'csg_validacion_id' => $preparados['csg']->id,
             'csg_snapshot' => $preparados['csg']->codigo,
             'sdp' => $datos['sdp'],
-            'ggn' => $datos['ggn'],
+            'ggn' => $datos['ggn'] ?? null,
             'fecha_cosecha' => $datos['fecha_cosecha'],
             'predio' => $datos['predio'],
             'especie_validacion_id' => $preparados['especie']->id,

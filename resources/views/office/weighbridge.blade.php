@@ -102,6 +102,7 @@
                     <label class="field field--span-2"><span>Temporada global *</span><select name="temporada_id" required><option value="">Seleccionar temporada activa</option></select></label>
                     <label class="field field--span-2"><span>Cliente *</span><select name="cliente_id" required><option value="">Seleccionar cliente activo</option></select></label>
                     <label class="field"><span>Tipo de recepción *</span><select name="tipo_recepcion" required></select></label>
+                    <label class="field" id="receptionSpeciesField"><span>Especie de la fruta *</span><select name="especie_validacion_id" required></select></label>
                     <label class="field is-hidden" id="containerEntryDateField"><span>Fecha de ingreso *</span><input name="fecha_ingreso" type="date" max="{{ now(config('app.operational_timezone'))->toDateString() }}" disabled><small>Disponible solo para ingresos documentales de envases.</small></label>
                     <label class="field is-hidden" id="containerConceptField"><span>Concepto de envases *</span><select name="concepto_envases"></select></label>
                     <label class="field" id="serviceField"><span>Servicio de fruta *</span><select name="tipo_servicio" required></select></label>
@@ -142,8 +143,8 @@
                 <div class="weighbridge-dialog__heading"><div><p class="eyebrow">BÁSCULA DE SALIDA</p><h2>Registrar destare</h2><p id="tareDescription">Captura la lectura del camión vacío.</p></div><button class="dialog-close" value="cancel" type="submit" aria-label="Cerrar">×</button></div>
                 <label class="field weight-field"><span>Peso tara *</span><div><input name="peso_tara" type="number" min="1" max="200000" step="0.01" inputmode="decimal" required><b>kg</b></div></label>
                 <label class="field"><span>Envase para cálculo neto individual *</span><select name="tipo_envase_calculo_neto" required></select></label>
-                <label class="tare-option"><input name="salida_sin_envases" type="checkbox" value="1"><span><strong>El camión sale sin los envases</strong><small>Descuenta del neto la tara de los envases que quedaron en planta.</small></span></label>
-                <fieldset class="outbound-container-tares is-hidden" id="outboundContainerTares"><legend>Tara de envases retenidos *</legend><div id="outboundContainerTareList"></div><small>Configura el peso vacío por unidad para cada tipo declarado.</small></fieldset>
+                    <label class="tare-option"><input name="salida_sin_envases" type="checkbox" value="1"><span><strong>El camión sale sin los envases</strong><small>Descuenta del neto la tara de los envases que quedaron en planta.</small></span></label>
+                    <fieldset class="outbound-container-tares" id="outboundContainerTares"><legend>Tara de todos los envases declarados *</legend><div id="outboundContainerTareList"></div><small>Se registra por tipo; solo se descuenta del neto cuando el camión sale sin envases.</small></fieldset>
                 <label class="field"><span>Observación de cierre</span><textarea name="observacion" maxlength="2000"></textarea></label>
                 <div class="net-preview is-hidden" id="containerTarePreviewRow"><span>TARA CALCULADA DE ENVASES</span><strong id="containerTarePreview">—</strong></div>
                 <div class="net-preview"><span>PESO NETO CALCULADO</span><strong id="netWeightPreview">—</strong></div>

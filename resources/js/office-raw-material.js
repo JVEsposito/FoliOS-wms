@@ -299,12 +299,6 @@ function renderSummary() {
         : 'No existe una temporada global activa.';
 }
 
-function baseContainer(segment) {
-    return segment.envases.find(
-        (container) => container.tipo_envase === segment.recepcion.tipo_envase_calculo_neto,
-    );
-}
-
 function renderSegments() {
     if (!state.segments.length) {
         elements.segmentList.innerHTML = '<div class="raw-material-empty">No hay segmentos pendientes de lotización en la temporada activa.</div>';
@@ -313,7 +307,7 @@ function renderSegments() {
 
     const canManage = state.identity?.puede_gestionar_lotes_materia_prima === true;
     elements.segmentList.innerHTML = state.segments.map((segment) => {
-        const base = baseContainer(segment);
+        const base = segment.envases.find((item) => Number(item.cantidad_disponible || 0) > 0);
         const canCreate = canManage
             && Number(base?.cantidad_disponible || 0) > 0
             && Number(segment.recepcion.peso_neto_por_envase || 0) > 0;
@@ -413,22 +407,24 @@ function updateSpeciesDependants(selectedVariety = '') {
 }
 
 function renderSourceSummary(segment) {
-    const base = baseContainer(segment);
+    const available = segment.envases.filter((item) => Number(item.cantidad_disponible || 0) > 0)
+        .map((item) => `${item.cantidad_disponible} ${label(item.tipo_envase)}`).join(' · ');
     elements.lotSourceSummary.innerHTML = `
         <div><span>RECEPCIÓN</span><strong>${escapeHtml(segment.recepcion.numero_recepcion)}</strong></div>
         <div><span>EXPORTADORA / CLIENTE</span><strong>${escapeHtml(segment.recepcion.cliente.nombre)}</strong></div>
-        <div><span>ENVASE BASE DISPONIBLE</span><strong>${escapeHtml(base?.cantidad_disponible || 0)} ${escapeHtml(label(segment.recepcion.tipo_envase_calculo_neto))}</strong></div>
+        <div><span>ENVASES DISPONIBLES</span><strong>${escapeHtml(available || 'Sin envases')}</strong></div>
         <div><span>NETO UNITARIO ROMANA</span><strong>${escapeHtml(formatWeight(segment.recepcion.peso_neto_por_envase))}</strong></div>`;
 }
 
 function setContainerLimits(segment, currentLot = null) {
     const form = elements.lotForm.elements;
-    const baseType = segment.recepcion.tipo_envase_calculo_neto;
-    const base = baseContainer(segment);
+    const baseType = form.envase_primario.value || currentLot?.envases.primario || segment.envases.find((item) => Number(item.cantidad_disponible || 0) > 0)?.tipo_envase;
+    const base = segment.envases.find((item) => item.tipo_envase === baseType);
     const ownPrimary = currentLot?.envases.primario === baseType
         ? Number(currentLot.envases.cantidad_primarios)
         : 0;
-    form.envase_primario.innerHTML = `<option value="${escapeHtml(baseType)}">${escapeHtml(label(baseType))}</option>`;
+    form.envase_primario.innerHTML = segment.envases.map((item) => `<option value="${escapeHtml(item.tipo_envase)}" ${Number(item.cantidad_disponible || 0) < 1 && currentLot?.envases.primario !== item.tipo_envase ? 'disabled' : ''}>${escapeHtml(label(item.tipo_envase))}</option>`).join('');
+    form.envase_primario.value = baseType;
     form.cantidad_envases_primarios.max = String(
         Number(base?.cantidad_disponible || 0) + ownPrimary,
     );
@@ -457,10 +453,14 @@ function updateSecondaryLimit() {
 
 function updateCalculatedNet() {
     const form = elements.lotForm.elements;
-    const quantity = Number(form.cantidad_envases_primarios.value || 0);
+    const quantity = Number(form.cantidad_envases_primarios.value || 0) + Number(form.cantidad_envases_secundarios.value || 0);
     const unit = Number(state.selectedSegment?.recepcion.peso_neto_por_envase || 0);
     const calculated = Math.round(quantity * unit * 1000) / 1000;
     form.kilos_netos_calculados.value = calculated > 0 ? calculated.toFixed(3) : '';
+    const tare = (type) => Number(state.selectedSegment?.recepcion.envases?.find((item) => item.tipo_envase === type)?.tara_unitaria || 0);
+    const gross = calculated + tare(form.envase_primario.value) * Number(form.cantidad_envases_primarios.value || 0)
+        + tare(form.envase_secundario.value) * Number(form.cantidad_envases_secundarios.value || 0);
+    form.kilos_brutos.value = gross > 0 ? gross.toFixed(3) : '';
     if (!state.netManuallyEdited) {
         form.kilos_netos_confirmados.value = calculated > 0 ? calculated.toFixed(3) : '';
     }
@@ -499,6 +499,9 @@ function openCreateLot(segmentId) {
         form.especie_validacion_id.value = segment.variedad.especie_id;
         updateSpeciesDependants(segment.variedad.id);
     }
+    form.csg_validacion_id.disabled = Boolean(segment.csg);
+    form.especie_validacion_id.disabled = Boolean(segment.variedad);
+    form.variedad_validacion_id.disabled = Boolean(segment.variedad);
     form.cuartel.value = segment.cuartel || '';
     updateSecondaryLimit();
     elements.lotDialog.showModal();
@@ -538,6 +541,9 @@ function openEditLot(lotId) {
     form.ggn.value = lot.trazabilidad.ggn;
     form.especie_validacion_id.value = lot.trazabilidad.especie_id;
     updateSpeciesDependants(lot.trazabilidad.variedad_id);
+    form.csg_validacion_id.disabled = Boolean(segment.csg);
+    form.especie_validacion_id.disabled = Boolean(segment.variedad);
+    form.variedad_validacion_id.disabled = Boolean(segment.variedad);
     form.cuartel.value = lot.trazabilidad.cuartel;
     form.tipo_producto.value = lot.trazabilidad.tipo_producto;
     form.envase_primario.value = lot.envases.primario;
@@ -779,7 +785,12 @@ elements.lotForm.elements.csg_validacion_id.addEventListener('change', () => {
 });
 
 elements.lotForm.elements.envase_secundario.addEventListener('change', updateSecondaryLimit);
+elements.lotForm.elements.envase_primario.addEventListener('change', () => {
+    setContainerLimits(state.selectedSegment, state.editingLot);
+    updateSecondaryLimit(); updateCalculatedNet();
+});
 elements.lotForm.elements.cantidad_envases_primarios.addEventListener('input', updateCalculatedNet);
+elements.lotForm.elements.cantidad_envases_secundarios.addEventListener('input', updateCalculatedNet);
 elements.lotForm.elements.kilos_netos_confirmados.addEventListener('input', () => {
     state.netManuallyEdited = true;
 });

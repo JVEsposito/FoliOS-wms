@@ -75,6 +75,11 @@ class ValidacionMpApiTest extends TestCase
             'operacion_id' => (string) Str::uuid(),
         ])->assertOk()->json('data');
 
+        $variedad = VariedadValidacion::create([
+            'especie_validacion_id' => $recepcion['especie_validacion_id'],
+            'nombre' => 'Santina', 'activo' => true,
+        ]);
+
         $this->postJson('/api/validacion-mp/validaciones/'.$validacion['id'].'/confirmar', [
             'operacion_id' => (string) Str::uuid(),
             'envases' => [
@@ -82,15 +87,9 @@ class ValidacionMpApiTest extends TestCase
                 ['tipo_envase' => 'totes', 'cantidad_validada' => 10],
             ],
             'tarjas_verificadas' => true,
-            'requiere_segregacion' => true,
-            'segmentos' => [[
-                'motivos' => ['csg'],
-                'csg_validacion_id' => $csg->id,
-                'envases' => [
-                    ['tipo_envase' => 'bins', 'cantidad' => 48],
-                    ['tipo_envase' => 'totes', 'cantidad' => 10],
-                ],
-            ]],
+            'requiere_segregacion' => false,
+            'csg_validacion_id' => $csg->id,
+            'variedad_validacion_id' => $variedad->id,
         ])->assertUnprocessable()->assertJsonValidationErrors(['segmentos']);
     }
 
@@ -107,7 +106,7 @@ class ValidacionMpApiTest extends TestCase
             ->assertCreated()
             ->json('data');
 
-        $especie = EspecieValidacion::create(['temporada_id' => $temporada->id, 'nombre' => 'Cereza', 'activo' => true]);
+        $especie = EspecieValidacion::firstOrCreate(['temporada_id' => $temporada->id, 'nombre' => 'Cereza', 'activo' => true]);
         $variedad = VariedadValidacion::create(['especie_validacion_id' => $especie->id, 'nombre' => 'Santina', 'activo' => true]);
         $csg = CsgValidacion::create(['temporada_id' => $temporada->id, 'codigo' => 'CSG-001', 'activo' => true]);
 
@@ -143,6 +142,7 @@ class ValidacionMpApiTest extends TestCase
                 [
                     'motivos' => ['csg'],
                     'csg_validacion_id' => $csg->id,
+                    'variedad_validacion_id' => $variedad->id,
                     'envases' => [
                         ['tipo_envase' => 'bins', 'cantidad' => 20],
                         ['tipo_envase' => 'totes', 'cantidad' => 4],
@@ -150,6 +150,7 @@ class ValidacionMpApiTest extends TestCase
                 ],
                 [
                     'motivos' => ['cuartel', 'variedad'],
+                    'csg_validacion_id' => $csg->id,
                     'cuartel' => 'C-12',
                     'variedad_validacion_id' => $variedad->id,
                     'envases' => [
@@ -159,6 +160,13 @@ class ValidacionMpApiTest extends TestCase
                 ],
             ],
         ];
+        $otraEspecie = EspecieValidacion::create(['temporada_id' => $temporada->id, 'nombre' => 'Uva', 'activo' => true]);
+        $variedadAjena = VariedadValidacion::create(['especie_validacion_id' => $otraEspecie->id, 'nombre' => 'Red Globe', 'activo' => true]);
+        $invalido = $payload;
+        $invalido['operacion_id'] = (string) Str::uuid();
+        $invalido['segmentos'][0]['variedad_validacion_id'] = $variedadAjena->id;
+        $this->postJson('/api/validacion-mp/validaciones/'.$validacion['id'].'/confirmar', $invalido)
+            ->assertUnprocessable()->assertJsonValidationErrors('segmentos');
         $this->postJson('/api/validacion-mp/validaciones/'.$validacion['id'].'/confirmar', $payload)
             ->assertOk()
             ->assertJsonPath('data.estado', 'validada')
@@ -167,6 +175,13 @@ class ValidacionMpApiTest extends TestCase
             ->assertJsonPath('data.segmentos.1.cuartel', 'C-12')
             ->assertJsonCount(2, 'data.segmentos');
         $this->postJson('/api/validacion-mp/validaciones/'.$validacion['id'].'/confirmar', $payload)->assertOk();
+        $this->getJson('/api/validacion-mp/historico?fecha=2026-07-21')
+            ->assertOk()->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.cliente', $cliente->nombre)
+            ->assertJsonPath('data.0.segmentos.0.csg', $csg->codigo)
+            ->assertJsonPath('data.0.segmentos.0.variedad', $variedad->nombre);
+        $this->getJson('/api/validacion-mp/historico?fecha=2026-07-20')
+            ->assertOk()->assertJsonCount(0, 'data');
 
         $this->assertDatabaseHas('detalles_envases_recepcion_romana', [
             'recepcion_romana_id' => $recepcion['id'],
@@ -244,6 +259,8 @@ class ValidacionMpApiTest extends TestCase
             'operacion_id' => (string) Str::uuid(),
         ])->assertOk()->json('data');
 
+        $csg = CsgValidacion::create(['temporada_id' => $temporada->id, 'codigo' => 'CSG-ENV', 'activo' => true]);
+        $variedad = VariedadValidacion::create(['especie_validacion_id' => $recepcion['especie_validacion_id'], 'nombre' => 'Santina', 'activo' => true]);
         $base = [
             'envases' => [
                 ['tipo_envase' => 'bins', 'cantidad_validada' => 48],
@@ -256,11 +273,11 @@ class ValidacionMpApiTest extends TestCase
             ...$base,
             'operacion_id' => (string) Str::uuid(),
             'segmentos' => [
-                ['motivos' => ['cuartel'], 'cuartel' => 'A', 'envases' => [
+                ['motivos' => ['cuartel'], 'csg_validacion_id' => $csg->id, 'variedad_validacion_id' => $variedad->id, 'cuartel' => 'A', 'envases' => [
                     ['tipo_envase' => 'bins', 'cantidad' => 20],
                     ['tipo_envase' => 'esponjas', 'cantidad' => 1],
                 ]],
-                ['motivos' => ['cuartel'], 'cuartel' => 'B', 'envases' => [
+                ['motivos' => ['cuartel'], 'csg_validacion_id' => $csg->id, 'variedad_validacion_id' => $variedad->id, 'cuartel' => 'B', 'envases' => [
                     ['tipo_envase' => 'bins', 'cantidad' => 28],
                     ['tipo_envase' => 'totes', 'cantidad' => 10],
                 ]],
@@ -271,12 +288,12 @@ class ValidacionMpApiTest extends TestCase
             ...$base,
             'operacion_id' => (string) Str::uuid(),
             'segmentos' => [
-                ['motivos' => ['cuartel'], 'cuartel' => 'A', 'envases' => [
+                ['motivos' => ['cuartel'], 'csg_validacion_id' => $csg->id, 'variedad_validacion_id' => $variedad->id, 'cuartel' => 'A', 'envases' => [
                     ['tipo_envase' => 'bins', 'cantidad' => 20],
                     ['tipo_envase' => 'bins', 'cantidad' => 28],
                     ['tipo_envase' => 'totes', 'cantidad' => 5],
                 ]],
-                ['motivos' => ['cuartel'], 'cuartel' => 'B', 'envases' => [
+                ['motivos' => ['cuartel'], 'csg_validacion_id' => $csg->id, 'variedad_validacion_id' => $variedad->id, 'cuartel' => 'B', 'envases' => [
                     ['tipo_envase' => 'totes', 'cantidad' => 5],
                 ]],
             ],
@@ -394,11 +411,15 @@ class ValidacionMpApiTest extends TestCase
             "/api/validacion-mp/recepciones/{$recepcion['id']}/tomar",
             ['operacion_id' => (string) Str::uuid()],
         )->assertOk()->json('data');
+        $csg = CsgValidacion::create(['temporada_id' => $temporada->id, 'codigo' => 'CSG-PESAJE', 'activo' => true]);
+        $variedad = VariedadValidacion::create(['especie_validacion_id' => $recepcion['especie_validacion_id'], 'nombre' => 'Santina', 'activo' => true]);
         $confirmacion = [
             'operacion_id' => (string) Str::uuid(),
             'envases' => [['tipo_envase' => 'bins', 'cantidad_validada' => 2]],
             'tarjas_verificadas' => true,
             'requiere_segregacion' => false,
+            'csg_validacion_id' => $csg->id,
+            'variedad_validacion_id' => $variedad->id,
         ];
         $this->postJson(
             "/api/validacion-mp/validaciones/{$validacion['id']}/confirmar",
@@ -455,6 +476,7 @@ class ValidacionMpApiTest extends TestCase
             'temporada_id' => $temporada->id,
             'cliente_id' => $cliente->id,
             'tipo_recepcion' => 'fruta_con_envases',
+            'especie_validacion_id' => EspecieValidacion::firstOrCreate(['temporada_id' => $temporada->id, 'nombre' => 'Cereza'], ['activo' => true])->id,
             'tipo_servicio' => 'proceso',
             'envases' => [
                 ['tipo_envase' => 'bins', 'cantidad' => 48],

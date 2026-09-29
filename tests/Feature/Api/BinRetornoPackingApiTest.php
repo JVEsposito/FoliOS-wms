@@ -848,6 +848,7 @@ class BinRetornoPackingApiTest extends TestCase
                 'temporada_id' => $temporada->id,
                 'cliente_id' => $cliente->id,
                 'tipo_recepcion' => 'fruta_con_envases',
+                'especie_validacion_id' => EspecieValidacion::firstOrCreate(['temporada_id' => $temporada->id, 'nombre' => "Cereza {$sufijo}"], ['activo' => true])->id,
                 'tipo_servicio' => 'proceso',
                 'envases' => [
                     ['tipo_envase' => 'bins', 'cantidad' => 48],
@@ -867,11 +868,12 @@ class BinRetornoPackingApiTest extends TestCase
         ])->assertOk();
         $this->postJson("/api/romana/recepciones/{$recepcion['id']}/cerrar", [
             'operacion_id' => (string) Str::uuid(),
+            'taras_envases' => [['tipo_envase' => 'bins', 'tara_unitaria' => 40], ['tipo_envase' => 'totes', 'tara_unitaria' => 2]],
             'peso_tara' => 10000,
             'tipo_envase_calculo_neto' => 'bins',
         ])->assertOk();
 
-        $especie = EspecieValidacion::create([
+        $especie = EspecieValidacion::firstOrCreate([
             'temporada_id' => $temporada->id,
             'nombre' => "Cereza {$sufijo}",
             'activo' => true,

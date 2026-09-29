@@ -154,8 +154,12 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
     [activeArticles],
   );
   const varietyOptions = useMemo(
-    () => uniqueOptions(activeArticles.filter((item) => !species || item.especie === species).map((item) => item.variedad)),
-    [activeArticles, species],
+    () => {
+      const originIds = originDrafts.map((draft) => draft.originId).filter(Boolean);
+      return uniqueOptions(activeArticles.filter((item) => (!species || item.especie === species)
+        && originIds.every((id) => catalog?.combinaciones.some((combination) => combination.articulo_validacion_id === item.id && combination.origen_validacion_id === id))).map((item) => item.variedad));
+    },
+    [activeArticles, species, originDrafts, catalog],
   );
   const caliberOptions = useMemo(
     () => uniqueOptions(activeArticles.filter((item) => (!species || item.especie === species) && (!variety || item.variedad === variety)).map((item) => item.calibre)),
@@ -170,14 +174,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
     [activeArticles, species, variety, caliber, packageName],
   );
 
-  const eligibleOrigins = useMemo(() => {
-    if (!catalog) return [];
-    const combinations = selectedArticle
-      ? catalog.combinaciones.filter((item) => item.articulo_validacion_id === selectedArticle.id)
-      : catalog.combinaciones;
-    const ids = new Set(combinations.map((item) => item.origen_validacion_id));
-    return catalog.origenes.filter((item) => item.activo && ids.has(item.id));
-  }, [catalog, selectedArticle]);
+  const eligibleOrigins = useMemo(() => catalog?.origenes.filter((item) => item.activo) ?? [], [catalog]);
   const clientOptions = useMemo(
     () => uniqueOptions(eligibleOrigins.map((item) => item.cliente)),
     [eligibleOrigins],
@@ -774,7 +771,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
 
             <Text style={styles.groupTitle}>Origen comercial</Text>
             <View style={[styles.fieldGrid, compact && styles.fieldGridCompact, tight && styles.fieldGridPair]}>
-              <SelectField compact={compact} half={tight} disabled={terminalDecision || !selectedArticle} label="Cliente" options={clientOptions} value={client} onChange={(value) => { setClient(value); setBrand(''); setOriginDrafts([newOriginDraft()]); }} />
+              <SelectField compact={compact} half={tight} disabled={terminalDecision} label="Cliente" options={clientOptions} value={client} onChange={(value) => { setClient(value); setBrand(''); setOriginDrafts([newOriginDraft()]); }} />
               <SelectField compact={compact} half={tight} disabled={terminalDecision || !client} label="Marca" options={brandOptions} value={brand} onChange={(value) => { setBrand(value); setOriginDrafts([newOriginDraft()]); }} />
               <View style={styles.packingDateField}>
                 <Text style={styles.label}>Fecha de embalaje *</Text>
@@ -796,7 +793,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
             </View>
             {originDrafts.map((draft, index) => (
               <View key={draft.key} style={[styles.originCompositionRow, compact && styles.originCompositionRowCompact]}>
-                <View style={styles.originCompositionSelect}><SelectField compact={compact} disabled={terminalDecision || !brand} label={`CSG / Predio ${index + 1}`} options={csgOptions} searchable value={draft.originId} onChange={(value) => setOriginDrafts((current) => current.map((item) => item.key === draft.key ? { ...item, originId: value } : item))} /></View>
+                <View style={styles.originCompositionSelect}><SelectField compact={compact} disabled={terminalDecision || !brand} label={`CSG / Predio ${index + 1}`} options={csgOptions} searchable value={draft.originId} onChange={(value) => { setOriginDrafts((current) => current.map((item) => item.key === draft.key ? { ...item, originId: value } : item)); if (selectedArticle && !catalog?.combinaciones.some((item) => item.articulo_validacion_id === selectedArticle.id && item.origen_validacion_id === value)) { setVariety(''); setCaliber(''); setPackageName(''); } }} /></View>
                 <View style={styles.originBoxes}><Text style={styles.label}>Cajas *</Text><TextInput editable={!terminalDecision} keyboardType="number-pad" onChangeText={(value) => setOriginDrafts((current) => current.map((item) => item.key === draft.key ? { ...item, boxes: value.replace(/[^0-9]/g, '') } : item))} placeholder="0" placeholderTextColor={colors.muted} style={styles.boxInput} value={draft.boxes} /></View>
                 {originDrafts.length > 1 ? <Pressable disabled={terminalDecision} onPress={() => setOriginDrafts((current) => current.filter((item) => item.key !== draft.key))} style={styles.removeOrigin}><Text style={styles.removeOriginText}>Quitar</Text></Pressable> : null}
                 <View style={styles.traceField}><Text style={styles.label}>Lote MP *</Text><TextInput autoCapitalize="characters" autoCorrect={false} editable={!terminalDecision} onChangeText={(value) => setOriginDrafts((current) => current.map((item) => item.key === draft.key ? { ...item, lot: value } : item))} placeholder="Según etiqueta" placeholderTextColor={colors.muted} style={styles.traceInput} value={draft.lot} /></View>

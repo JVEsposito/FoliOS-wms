@@ -93,7 +93,7 @@
                     <label class="field"><span>CSG *</span><select name="csg_validacion_id" required></select></label>
                     <label class="field"><span>Predio *</span><input name="predio" maxlength="150" required></label>
                     <label class="field"><span>SdP *</span><input name="sdp" inputmode="numeric" pattern="[0-9]+" maxlength="30" required></label>
-                    <label class="field"><span>GGN · 13 dígitos *</span><input name="ggn" inputmode="numeric" pattern="[0-9]{13}" minlength="13" maxlength="13" required></label>
+                    <label class="field"><span>GGN · 13 dígitos (opcional)</span><input name="ggn" inputmode="numeric" pattern="[0-9]{13}" minlength="13" maxlength="13"></label>
                     <label class="field"><span>Especie *</span><select name="especie_validacion_id" required></select></label>
                     <label class="field"><span>Variedad *</span><select name="variedad_validacion_id" required></select></label>
                     <label class="field"><span>Cuartel</span><input name="cuartel" maxlength="100"><small>Opcional; si Validación MP ya lo informó, se conservará automáticamente.</small></label>
@@ -102,7 +102,7 @@
                     <label class="field"><span>Cantidad primarios *</span><input name="cantidad_envases_primarios" type="number" min="1" max="100000" required></label>
                     <label class="field"><span>Envase secundario</span><select name="envase_secundario"><option value="">Sin envase secundario</option></select></label>
                     <label class="field"><span>Cantidad secundarios</span><input name="cantidad_envases_secundarios" type="number" min="0" max="100000" value="0"></label>
-                    <label class="field"><span>Kilos brutos *</span><input name="kilos_brutos" type="number" min="0.001" max="1000000" step="0.001" required></label>
+                    <label class="field"><span>Kilos brutos calculados</span><input name="kilos_brutos" type="number" step="0.001" readonly><small>Fruta distribuida por envases más la tara de los envases asignados; el servidor concilia el último lote.</small></label>
                     <label class="field"><span>Neto calculado</span><input name="kilos_netos_calculados" type="number" step="0.001" readonly></label>
                     <label class="field field--net-confirmed"><span>Neto confirmado por digitador *</span><input name="kilos_netos_confirmados" type="number" min="0.001" max="1000000" step="0.001" required><small>Se completa automáticamente; corrígelo si el documento de origen lo exige.</small></label>
                     <fieldset class="hydrocooler-choice"><legend>¿El lote necesita hidrocooler? *</legend><label><input name="requiere_hidrocooler" type="radio" value="1" required><span>Sí, dejar pendiente de hidrocooler</span></label><label><input name="requiere_hidrocooler" type="radio" value="0" required><span>No, dejar pendiente de cámara</span></label></fieldset>

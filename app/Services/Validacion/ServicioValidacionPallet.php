@@ -134,6 +134,20 @@ class ServicioValidacionPallet
                 );
             }
 
+            // La proyección puede quedar anticuada entre la descarga del catálogo y el registro.
+            // Verificamos la asociación vigente en los maestros antes de aceptar el pallet.
+            if ($articulo->variedad_validacion_id !== null) {
+                foreach ($origenes as $origenValidacion) {
+                    if ($origenValidacion->csg_validacion_id !== null
+                        && ! DB::table('csg_variedades_validacion')
+                            ->where('csg_validacion_id', $origenValidacion->csg_validacion_id)
+                            ->where('variedad_validacion_id', $articulo->variedad_validacion_id)
+                            ->exists()) {
+                        throw new DomainException('La variedad seleccionada no está asociada al CSG elegido.');
+                    }
+                }
+            }
+
             $totalComposicion = (int) $composicionSolicitada->sum('cantidad_cajas');
             if ($totalComposicion !== (int) $datos['cantidad_cajas']) {
                 throw new DomainException(sprintf(

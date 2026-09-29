@@ -22,7 +22,7 @@ const keys = { token: 'estiba_wms_office_token', identity: 'estiba_wms_office_id
 const state = {
     token: localStorage.getItem(keys.token),
     identity: readJson(keys.identity),
-    catalogs: { temporadas: [], clientes: [], tipos_servicio: [], tipos_envase: [], tipos_recepcion: [], conceptos_envases: [] },
+    catalogs: { temporadas: [], clientes: [], especies: [], tipos_servicio: [], tipos_envase: [], tipos_recepcion: [], conceptos_envases: [] },
     receptions: [],
     selected: null,
     page: 1,
@@ -136,6 +136,7 @@ function fillCatalogs() {
     form.cliente_id.innerHTML = '<option value="">Seleccionar cliente activo</option>' + state.catalogs.clientes.map((client) => `<option value="${escapeHtml(client.id)}">${escapeHtml(client.nombre)}${client.codigo ? ` · ${escapeHtml(client.codigo)}` : ''}</option>`).join('');
     form.tipo_servicio.innerHTML = state.catalogs.tipos_servicio.map((type) => `<option value="${escapeHtml(type.codigo)}">${escapeHtml(type.nombre)}</option>`).join('');
     form.tipo_recepcion.innerHTML = state.catalogs.tipos_recepcion.map((type) => `<option value="${escapeHtml(type.codigo)}">${escapeHtml(type.nombre)}</option>`).join('');
+    form.especie_validacion_id.innerHTML = '<option value="">Seleccionar especie</option>' + state.catalogs.especies.map((species) => `<option value="${escapeHtml(species.id)}">${escapeHtml(species.nombre)}</option>`).join('');
     form.concepto_envases.innerHTML = state.catalogs.conceptos_envases.map((type) => `<option value="${escapeHtml(type.codigo)}">${escapeHtml(type.nombre)}</option>`).join('');
 }
 
@@ -327,7 +328,7 @@ function openEditReception() {
     elements.receptionForm.reset(); elements.receptionFormError.textContent = '';
     configureAdministrativeCorrection(canCorrect);
     elements.receptionDialogTitle.textContent = canCorrect ? 'Corregir recepción' : 'Editar pesaje de ingreso';
-    form.recepcion_id.value = reception.id; form.temporada_id.value = reception.temporada.id; form.cliente_id.value = reception.cliente.id; form.tipo_recepcion.value = reception.tipo_recepcion; form.fecha_ingreso.value = reception.fecha_ingreso || ''; form.concepto_envases.value = reception.concepto_envases || ''; form.tipo_servicio.value = reception.tipo_servicio;
+    form.recepcion_id.value = reception.id; form.temporada_id.value = reception.temporada.id; form.cliente_id.value = reception.cliente.id; form.tipo_recepcion.value = reception.tipo_recepcion; form.especie_validacion_id.value = reception.especie_validacion_id || ''; form.fecha_ingreso.value = reception.fecha_ingreso || ''; form.concepto_envases.value = reception.concepto_envases || ''; form.tipo_servicio.value = reception.tipo_servicio;
     form.numero_guia_despacho.value = reception.numero_guia_despacho;
     ['bins', 'totes', 'esponjas'].forEach((tipo) => { const item = reception.envases.find((envase) => envase.tipo_envase === tipo); form[`cantidad_${tipo}`].value = item?.cantidad_declarada || 0; });
     if (reception.pesaje_envases) {
@@ -517,7 +518,7 @@ elements.closeReception.addEventListener('click', async () => {
             <span>${escapeHtml(label(item.tipo_envase))} · ${item.cantidad_declarada} unidades</span>
             <div><input data-container-tare="${escapeHtml(item.tipo_envase)}" type="number" min="0.001" max="1000" step="0.001" inputmode="decimal" value="${escapeHtml(item.tara_unitaria_salida ?? '')}"><b>kg/u</b></div>
         </label>`).join('');
-    elements.outboundContainerTares.classList.add('is-hidden');
+    elements.outboundContainerTares.classList.remove('is-hidden');
     elements.containerTarePreviewRow.classList.add('is-hidden');
     elements.tareDescription.textContent = `${state.selected.patente_camion} · bruto ${formatWeight(state.selected.peso_bruto)}. Captura la lectura del camión vacío.`;
     elements.tareDialog.showModal(); elements.tareForm.elements.peso_tara.focus();
@@ -533,10 +534,9 @@ function calculatedContainerTare() {
 
 function toggleOutboundContainerTares() {
     const enabled = elements.tareForm.elements.salida_sin_envases.checked;
-    elements.outboundContainerTares.classList.toggle('is-hidden', !enabled);
     elements.containerTarePreviewRow.classList.toggle('is-hidden', !enabled);
     elements.outboundContainerTareList.querySelectorAll('[data-container-tare]').forEach((input) => {
-        input.required = enabled;
+        input.required = true;
     });
     updateNetPreviews();
 }
@@ -549,7 +549,7 @@ function updateNetPreviews() {
     elements.containerTarePreview.textContent = containerTare > 0 ? formatWeight(containerTare) : '—';
     elements.netWeightPreview.textContent = tare > 0 && net > 0 ? formatWeight(net) : '—';
     const type = elements.tareForm.elements.tipo_envase_calculo_neto.value;
-    const quantity = Number(state.selected?.envases?.find((item) => item.tipo_envase === type)?.cantidad_declarada || 0);
+    const quantity = Number(state.selected?.cantidad_envases_declarados || 0);
     elements.netPerContainerPreview.textContent = tare > 0 && net > 0 && quantity > 0 ? `${formatWeight(net / quantity)} / ${label(type)}` : '—';
 }
 elements.tareForm.elements.peso_tara.addEventListener('input', updateNetPreviews);
@@ -562,12 +562,10 @@ elements.tareForm.addEventListener('submit', async (event) => {
     const data = Object.fromEntries(new FormData(elements.tareForm));
     data.operacion_id = operationUuid();
     data.salida_sin_envases = elements.tareForm.elements.salida_sin_envases.checked;
-    data.taras_envases = data.salida_sin_envases
-        ? state.selected.envases.map((item) => ({
+    data.taras_envases = state.selected.envases.map((item) => ({
             tipo_envase: item.tipo_envase,
             tara_unitaria: Number(elements.outboundContainerTareList.querySelector(`[data-container-tare="${item.tipo_envase}"]`)?.value || 0),
-        }))
-        : [];
+        }));
     setBusy(true, 'Calculando neto y cerrando recepción…');
     try {
         const payload = await api(`/api/romana/recepciones/${state.selected.id}/cerrar`, { method: 'POST', body: JSON.stringify(data) });
@@ -622,6 +620,8 @@ function toggleReceptionType() {
     const soloEnvases = form.tipo_recepcion.value === 'solo_envases';
     const cumulativeWeighing = form.tipo_recepcion.value === 'fruta_pesaje_envases';
     elements.serviceField.classList.toggle('is-hidden', soloEnvases);
+    document.getElementById('receptionSpeciesField').classList.toggle('is-hidden', soloEnvases);
+    form.especie_validacion_id.required = !soloEnvases;
     elements.containerEntryDateField.classList.toggle('is-hidden', !soloEnvases);
     elements.containerConceptField.classList.toggle('is-hidden', !soloEnvases);
     elements.standardContainerLines.classList.toggle('is-hidden', cumulativeWeighing);
