@@ -787,6 +787,25 @@ class AlcanceOperacionalUsuario
         ], 'materia-prima.fruta-proceso');
     }
 
+    public function puedeConsultarDespachoComercial(User $usuario): bool
+    {
+        return $this->rolActivoEnModulo($usuario, [
+            RolUsuario::Administrador,
+            RolUsuario::SupervisorFrio,
+            RolUsuario::DigitadorMateriaPrima,
+            RolUsuario::Consulta,
+        ], 'materia-prima.despacho-comercial');
+    }
+
+    public function puedeGestionarDespachoComercial(User $usuario): bool
+    {
+        return $this->rolActivoEnModulo($usuario, [
+            RolUsuario::Administrador,
+            RolUsuario::SupervisorFrio,
+            RolUsuario::DigitadorMateriaPrima,
+        ], 'materia-prima.despacho-comercial');
+    }
+
     public function puedeEntregarFrutaProceso(User $usuario): bool
     {
         return $this->rolActivoEnModulo($usuario, [
@@ -945,6 +964,8 @@ class AlcanceOperacionalUsuario
             'puede_consultar_hidrocooler_materia_prima' => $this->puedeConsultarHidrocoolerMateriaPrima($usuario),
             'puede_operar_hidrocooler_materia_prima' => $this->puedeOperarHidrocoolerMateriaPrima($usuario),
             'puede_consultar_fruta_proceso' => $this->puedeConsultarFrutaProceso($usuario),
+            'puede_consultar_despacho_comercial' => $this->puedeConsultarDespachoComercial($usuario),
+            'puede_gestionar_despacho_comercial' => $this->puedeGestionarDespachoComercial($usuario),
             'puede_entregar_fruta_proceso' => $this->puedeEntregarFrutaProceso($usuario),
             'puede_corregir_entregas_fruta_proceso' => $this->puedeCorregirEntregasFrutaProceso($usuario),
             'puede_consultar_oficina_consultas' => $this->puedeConsultarOficinaConsultas($usuario),

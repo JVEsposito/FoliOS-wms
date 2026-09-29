@@ -11,6 +11,7 @@ import {
 } from '../domain/operationalTasks';
 import { ApiError } from './apiError';
 import { fetchWithTimeout } from './httpClient';
+import type { ShiftVerification } from '../domain/verification';
 
 export const TABLET_PLANNER_VERSION = 'rolling-global-2';
 
@@ -26,6 +27,26 @@ export type OperatorPinStatus = {
 
 export class OperationalTasksApi {
   constructor(private readonly baseUrl: string) {}
+
+  async currentVerification(token: string) {
+    return (await this.request<{ data: ShiftVerification | null }>(
+      '/api/verificaciones-ubicacion/actual', token,
+    )).data;
+  }
+
+  async recordVerification(token: string, itemId: string, version: number, operationId: string, number: string | null) {
+    return this.request<{ data: ShiftVerification; resultado: string }>(
+      `/api/verificaciones-ubicacion/items/${encodeURIComponent(itemId)}/resultado`, token, {
+        method: 'POST',
+        body: JSON.stringify({
+          operacion_id: operationId,
+          version,
+          respuesta: number === null ? 'vacia' : 'folio',
+          numero_folio: number,
+        }),
+      },
+    );
+  }
 
   async list(token: string, assignment: OperationalTaskAssignment) {
     const params = new URLSearchParams({

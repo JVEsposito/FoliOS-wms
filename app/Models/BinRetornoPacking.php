@@ -38,6 +38,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
     'anulado_at',
     'motivo_anulacion',
     'observacion',
+    'despacho_comercial_id',
 ])]
 class BinRetornoPacking extends Model implements PerteneceATemporada
 {
@@ -48,6 +49,11 @@ class BinRetornoPacking extends Model implements PerteneceATemporada
     public function temporada(): BelongsTo
     {
         return $this->belongsTo(Temporada::class);
+    }
+
+    public function despachoComercial(): BelongsTo
+    {
+        return $this->belongsTo(DespachoComercialRetorno::class, 'despacho_comercial_id');
     }
 
     public function origenes(): HasMany

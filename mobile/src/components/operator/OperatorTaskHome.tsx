@@ -1,4 +1,5 @@
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import type { ReactNode } from 'react';
 
 import {
   OperationalTask,
@@ -28,6 +29,7 @@ type Props = {
   queue: OperatorQueueItem[];
   suggestedDestinations: Record<string, string>;
   view: OperatorQueueSource;
+  verification?: ReactNode;
 };
 
 export function OperatorTaskHome({
@@ -42,6 +44,7 @@ export function OperatorTaskHome({
   queue,
   suggestedDestinations,
   view,
+  verification,
 }: Props) {
   const { width } = useWindowDimensions();
   const compact = width < o.breakpoint.compact;
@@ -107,6 +110,7 @@ export function OperatorTaskHome({
           </View>
         )}
       </View>
+      {verification}
     </ScrollView>
   );
 }

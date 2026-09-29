@@ -113,6 +113,10 @@ class ServicioBinRetornoPacking
                 throw new ConflictoOperacion('El bin está anulado y no puede modificarse.');
             }
 
+            if ($bin->despacho_comercial_id !== null) {
+                throw new ConflictoOperacion('El bin está reservado o despachado comercialmente y no puede modificarse.');
+            }
+
             if ($bin->temporada_id !== $this->temporadaActivaId()) {
                 throw new ConflictoOperacion(
                     'El bin no pertenece a la temporada activa y no puede modificarse.',
@@ -367,6 +371,10 @@ class ServicioBinRetornoPacking
                 throw new ConflictoOperacion(
                     'El bin no pertenece a la temporada activa y no puede anularse.',
                 );
+            }
+
+            if ($bin->despacho_comercial_id !== null) {
+                throw new ConflictoOperacion('El bin está reservado o despachado comercialmente y no puede anularse.');
             }
 
             $operacionOcupada = BinRetornoPacking::query()

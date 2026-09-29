@@ -1,5 +1,7 @@
 <?php
 
+use App\Services\Temporadas\ServicioTemporadaActiva;
+use App\Services\Verificaciones\ServicioVerificacionesUbicacion;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -29,5 +31,15 @@ Schedule::command('planificador:recalcular-arbitraje')
 Schedule::command('planificador:recuperar-proyecciones')
     ->everyMinute()
     ->withoutOverlapping(2);
+
+Schedule::call(function (): void {
+    if (! config('verificaciones.habilitada')) {
+        return;
+    }
+    $temporada = app(ServicioTemporadaActiva::class)->buscar();
+    if ($temporada) {
+        app(ServicioVerificacionesUbicacion::class)->vencer($temporada);
+    }
+})->everyMinute()->name('verificaciones-ubicacion-vencer')->withoutOverlapping(2);
 
 Schedule::command('salud:latido-scheduler')->everyMinute();
