@@ -21,6 +21,7 @@ export type ValidationSeason = {
 export type ValidationArticle = {
   id: string;
   temporada_id: string;
+  variedad_validacion_id: string | null;
   especie: string;
   variedad: string;
   calibre: string;
@@ -40,6 +41,8 @@ export type ValidationCategory = {
 export type ValidationOrigin = {
   id: string;
   temporada_id: string;
+  csg_validacion_id: string | null;
+  variedad_ids: string[] | null;
   cliente: string;
   marca: string;
   csg: string;

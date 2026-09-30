@@ -58,6 +58,7 @@ class ServicioRecepcionRomana
                 'cliente_id' => $cliente->id,
                 'cliente_codigo_snapshot' => $cliente->codigo,
                 'cliente_nombre_snapshot' => $cliente->nombre,
+                'especie_validacion_id' => $payload['especie_validacion_id'],
                 'tipo_recepcion' => $payload['tipo_recepcion'],
                 'concepto_envases' => $payload['concepto_envases'],
                 'tipo_servicio' => $payload['tipo_servicio'],
@@ -170,6 +171,7 @@ class ServicioRecepcionRomana
                 'cliente_id' => $cliente->id,
                 'cliente_codigo_snapshot' => $cliente->codigo,
                 'cliente_nombre_snapshot' => $cliente->nombre,
+                'especie_validacion_id' => $payload['especie_validacion_id'],
                 'tipo_recepcion' => $payload['tipo_recepcion'],
                 'concepto_envases' => $payload['concepto_envases'],
                 'tipo_servicio' => $payload['tipo_servicio'],
@@ -307,6 +309,7 @@ class ServicioRecepcionRomana
                 'cliente_id' => $cliente->id,
                 'cliente_codigo_snapshot' => $cliente->codigo,
                 'cliente_nombre_snapshot' => $cliente->nombre,
+                'especie_validacion_id' => $payload['especie_validacion_id'],
                 'tipo_recepcion' => $payload['tipo_recepcion'],
                 'concepto_envases' => $payload['concepto_envases'],
                 'tipo_servicio' => $payload['tipo_servicio'],
@@ -712,10 +715,7 @@ class ServicioRecepcionRomana
 
             $ahora = CarbonImmutable::now();
             $pesoNeto = round($bruto - $pesoTaraTotal, 3);
-            $pesoNetoPorEnvase = round(
-                $pesoNeto / $detalleCalculo->cantidad_declarada,
-                3,
-            );
+            $pesoNetoPorEnvase = round($pesoNeto / $detalleCalculo->cantidad_declarada, 3);
             $recepcion->update([
                 'peso_tara' => $tara,
                 'peso_neto' => $pesoNeto,
@@ -931,6 +931,7 @@ class ServicioRecepcionRomana
         return [
             'temporada_id' => $datos['temporada_id'],
             'cliente_id' => $datos['cliente_id'],
+            'especie_validacion_id' => $datos['especie_validacion_id'] ?? null,
             'tipo_recepcion' => $datos['tipo_recepcion'],
             'fecha_ingreso' => $datos['fecha_ingreso'] ?? null,
             'concepto_envases' => $datos['concepto_envases'] ?? null,
@@ -1100,6 +1101,7 @@ class ServicioRecepcionRomana
         return [
             'temporada_id' => $recepcion->temporada_id,
             'cliente_id' => $recepcion->cliente_id,
+            'especie_validacion_id' => $recepcion->especie_validacion_id,
             'tipo_recepcion' => $recepcion->tipo_recepcion->value,
             'ingreso_at' => $recepcion->ingreso_at?->toAtomString(),
             'concepto_envases' => $recepcion->concepto_envases?->value,
@@ -1183,13 +1185,6 @@ class ServicioRecepcionRomana
         RecepcionRomana $recepcion,
         array $payload,
     ): array {
-        if (! $payload['salida_sin_envases']) {
-            return [
-                'peso_tara_envases' => 0.0,
-                'taras_unitarias' => [],
-            ];
-        }
-
         $taras = collect($payload['taras_envases'])->keyBy('tipo_envase');
         $tarasUnitarias = [];
         $pesoTaraEnvases = 0.0;
@@ -1212,7 +1207,7 @@ class ServicioRecepcionRomana
         }
 
         return [
-            'peso_tara_envases' => round($pesoTaraEnvases, 3),
+            'peso_tara_envases' => $payload['salida_sin_envases'] ? round($pesoTaraEnvases, 3) : 0.0,
             'taras_unitarias' => $tarasUnitarias,
         ];
     }
@@ -1226,7 +1221,12 @@ class ServicioRecepcionRomana
         foreach ($envases as $envase) {
             $recepcion->detallesEnvases()->updateOrCreate(
                 ['tipo_envase' => $envase['tipo_envase']],
-                ['cantidad_declarada' => $envase['cantidad']],
+                [
+                    'cantidad_declarada' => $envase['cantidad'],
+                    ...($recepcion->tipo_recepcion === TipoRecepcionRomana::FrutaPesajeEnvases
+                        ? ['tara_unitaria_salida' => $recepcion->tara_unitaria_envase]
+                        : []),
+                ],
             );
         }
     }

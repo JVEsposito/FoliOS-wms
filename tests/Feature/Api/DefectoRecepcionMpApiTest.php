@@ -5,6 +5,7 @@ namespace Tests\Feature\Api;
 use App\Enums\RolUsuario;
 use App\Models\Cliente;
 use App\Models\Dispositivo;
+use App\Models\EspecieValidacion;
 use App\Models\Temporada;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -203,6 +204,7 @@ class DefectoRecepcionMpApiTest extends TestCase
             'temporada_id' => $temporada->id,
             'cliente_id' => $cliente->id,
             'tipo_recepcion' => 'fruta_con_envases',
+            'especie_validacion_id' => EspecieValidacion::firstOrCreate(['temporada_id' => $temporada->id, 'nombre' => 'Cereza'], ['activo' => true])->id,
             'tipo_servicio' => 'proceso',
             'envases' => [['tipo_envase' => 'bins', 'cantidad' => 10]],
             'numero_guia_despacho' => 'GD-DEF-001',

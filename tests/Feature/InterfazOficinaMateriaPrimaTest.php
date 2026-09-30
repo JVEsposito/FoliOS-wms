@@ -22,7 +22,7 @@ class InterfazOficinaMateriaPrimaTest extends TestCase
 
         $this->get('/oficina/materia-prima/lotes')
             ->assertOk()
-            ->assertSee('Neto confirmado por digitador')
+            ->assertSee('Neto calculado')
             ->assertSee('¿El lote necesita hidrocooler?');
 
         $this->get('/oficina/materia-prima/hidrocooler')

@@ -81,6 +81,11 @@ class LoteMateriaPrima extends Model implements PerteneceATemporada
         return $this->belongsTo(SegmentoValidacionMp::class, 'segmento_validacion_mp_id');
     }
 
+    public function envasesDetalle(): HasMany
+    {
+        return $this->hasMany(EnvaseLoteMateriaPrima::class, 'lote_materia_prima_id');
+    }
+
     public function recepcion(): BelongsTo
     {
         return $this->belongsTo(RecepcionRomana::class, 'recepcion_romana_id');

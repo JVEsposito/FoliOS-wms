@@ -40,8 +40,10 @@
     "build:apk": "npx eas-cli@latest build -p android --profile apk-camaras",
     "build:apk:demo": "npx eas-cli@latest build -p android --profile apk-demo",
     "build:apk:pda": "npx eas-cli@latest build -p android --profile apk-pda",
+    "build:apk:pda:pruebas": "npx eas-cli@latest build -p android --profile apk-pda-pruebas",
     "update:production": "npx eas-cli@latest update --channel production --environment production",
-    "update:pda": "cross-env ESTIBA_APP_VARIANT=pda EXPO_PUBLIC_APP_VARIANT=pda npx eas-cli@latest update --channel pda --environment production"
+    "update:pda": "cross-env ESTIBA_APP_VARIANT=pda EXPO_PUBLIC_APP_VARIANT=pda npx eas-cli@latest update --channel pda --environment production",
+    "update:pda:pruebas": "cross-env ESTIBA_APP_VARIANT=pda EXPO_PUBLIC_APP_VARIANT=pda npx eas-cli@latest update --channel pda-pruebas --environment production"
   },
   "private": true
 }

@@ -7,6 +7,7 @@ use App\Models\ArticuloValidacion;
 use App\Models\CategoriaValidacion;
 use App\Models\ClienteValidacion;
 use App\Models\CombinacionValidacion;
+use App\Models\CsgValidacion;
 use App\Models\Dispositivo;
 use App\Models\EnvaseValidacion;
 use App\Models\EspecieValidacion;
@@ -14,6 +15,7 @@ use App\Models\ImportacionValidacion;
 use App\Models\OrigenValidacion;
 use App\Models\Temporada;
 use App\Models\User;
+use App\Models\VariedadValidacion;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Str;
@@ -22,6 +24,49 @@ use Tests\TestCase;
 class AdministracionValidacionApiTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_pt_rechaza_variedad_desasociada_del_csg_aunque_la_combinacion_proyectada_siga_activa(): void
+    {
+        $temporada = $this->crearTemporadaActivaPrueba(['codigo' => 'TEMP-PT-CSG', 'nombre' => 'PT CSG', 'activa' => true]);
+        $especie = EspecieValidacion::create(['temporada_id' => $temporada->id, 'nombre' => 'Cereza', 'activo' => true]);
+        $variedad = VariedadValidacion::create(['especie_validacion_id' => $especie->id, 'nombre' => 'Santina', 'activo' => true]);
+        $csg = CsgValidacion::create(['temporada_id' => $temporada->id, 'codigo' => 'CSG-PT', 'activo' => true]);
+        $articulo = ArticuloValidacion::create([
+            'temporada_id' => $temporada->id, 'especie_validacion_id' => $especie->id,
+            'variedad_validacion_id' => $variedad->id, 'especie' => 'Cereza', 'variedad' => 'Santina',
+            'calibre' => '2J', 'envase' => 'Caja', 'activo' => true,
+        ]);
+        $origen = OrigenValidacion::create([
+            'temporada_id' => $temporada->id, 'csg_validacion_id' => $csg->id,
+            'cliente' => 'DIS', 'marca' => 'Atlas', 'csg' => 'CSG-PT', 'activo' => true,
+        ]);
+        $categoria = CategoriaValidacion::create(['temporada_id' => $temporada->id, 'nombre' => 'Exportación', 'activo' => true]);
+        CombinacionValidacion::create([
+            'temporada_id' => $temporada->id, 'articulo_validacion_id' => $articulo->id,
+            'origen_validacion_id' => $origen->id, 'activo' => true,
+        ]);
+        $validador = User::factory()->create(['rol' => RolUsuario::Validador]);
+        $dispositivo = Dispositivo::create(['codigo' => 'VAL-PT-CSG', 'nombre' => 'PDA PT', 'activo' => true]);
+        $token = $validador->crearTokenParaDispositivo($dispositivo, 'validacion-pt')->plainTextToken;
+
+        $this->withToken($token)->getJson('/api/validacion/catalogos')
+            ->assertOk()
+            ->assertJsonPath('origenes.0.variedad_ids', [])
+            ->assertJsonPath('articulos.0.variedad_validacion_id', $variedad->id);
+
+        $this->withToken($token)->postJson('/api/validacion/pallets', [
+            'operacion_id' => (string) Str::uuid(), 'numero_folio' => 'PAL-CSG-VAR',
+            'tipo_bulto' => 'pallet', 'cantidad_cajas' => 10, 'linea_proceso' => 1,
+            'turno' => 'A', 'temporada_id' => $temporada->id, 'catalogo_version' => $temporada->refresh()->version_catalogo,
+            'articulo_validacion_id' => $articulo->id, 'origen_validacion_id' => $origen->id,
+            'categoria_validacion_id' => $categoria->id, 'resultado' => 'aprobado',
+            'composicion' => [[
+                'origen_validacion_id' => $origen->id, 'cantidad_cajas' => 10,
+                'lote_materia_prima' => 'LOTE-PT-CSG', 'proceso_packing' => 'PROC-PT-CSG',
+            ]],
+            'generado_dispositivo_at' => now()->toAtomString(),
+        ])->assertUnprocessable()->assertJsonPath('message', 'La variedad seleccionada no está asociada al CSG elegido.');
+    }
 
     public function test_administrador_configura_temporada_articulo_origen_y_combinacion(): void
     {

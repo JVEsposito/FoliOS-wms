@@ -8,11 +8,13 @@ use App\Enums\TipoEnvaseRomana;
 use App\Enums\TipoRecepcionRomana;
 use App\Http\Controllers\Controller;
 use App\Models\CsgValidacion;
+use App\Models\EspecieValidacion;
 use App\Models\RecepcionRomana;
 use App\Models\ValidacionMp;
 use App\Models\VariedadValidacion;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\ValidacionMp\ServicioValidacionMp;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -44,6 +46,43 @@ class ValidacionMpController extends Controller
         return response()->json([
             'data' => $recepciones->map(fn (RecepcionRomana $recepcion): array => $this->recepcion($recepcion)),
             'sincronizado_at' => now()->toAtomString(),
+        ])->header('Cache-Control', 'no-store, private');
+    }
+
+    public function historico(Request $request): JsonResponse
+    {
+        $datos = $request->validate(['fecha' => ['nullable', 'date_format:Y-m-d']]);
+        $fecha = $datos['fecha'] ?? now(config('app.operational_timezone'))->toDateString();
+        $inicio = CarbonImmutable::parse($fecha, config('app.operational_timezone'))->startOfDay();
+        $fin = $inicio->addDay();
+        $temporadaId = app(ServicioTemporadaActiva::class)->buscar()?->id;
+
+        $validaciones = ValidacionMp::query()
+            ->where('temporada_id', $temporadaId)
+            ->where('estado', EstadoValidacionMp::Validada->value)
+            ->where('validada_at', '>=', $inicio->utc())
+            ->where('validada_at', '<', $fin->utc())
+            ->with(['recepcion.detallesEnvases', 'validador', 'dispositivo', 'segmentos.envases'])
+            ->orderByDesc('validada_at')
+            ->get();
+
+        return response()->json([
+            'fecha' => $fecha,
+            'data' => $validaciones->map(fn (ValidacionMp $validacion): array => [
+                'id' => $validacion->id,
+                'fecha' => $validacion->validada_at?->toAtomString(),
+                'numero_recepcion' => $validacion->recepcion->numero_recepcion,
+                'cliente' => $validacion->recepcion->cliente_nombre_snapshot,
+                'estado' => $validacion->estado->value,
+                'segmentos' => $validacion->segmentos->map(fn ($segmento): array => [
+                    'csg' => $segmento->csg_snapshot,
+                    'variedad' => $segmento->variedad_snapshot,
+                    'envases' => $segmento->envases->map(fn ($envase): array => [
+                        'tipo_envase' => $envase->tipo_envase->value,
+                        'cantidad' => $envase->cantidad,
+                    ])->values()->all(),
+                ])->values()->all(),
+            ])->values(),
         ])->header('Cache-Control', 'no-store, private');
     }
 
@@ -82,8 +121,10 @@ class ValidacionMpController extends Controller
                     'predio' => $csg->predio,
                     'variedad_ids' => $csg->variedades->pluck('id')->values(),
                 ]),
+            'especies' => EspecieValidacion::query()->where('temporada_id', $recepcion->temporada_id)
+                ->where('activo', true)->orderBy('nombre')->get(['id', 'nombre']),
             'variedades' => VariedadValidacion::query()->where('activo', true)
-                ->whereHas('especie', fn (Builder $especie) => $especie->where('temporada_id', $recepcion->temporada_id))
+                ->where('especie_validacion_id', $recepcion->especie_validacion_id)
                 ->with('especie:id,nombre')->orderBy('nombre')->get()->map(fn (VariedadValidacion $variedad): array => [
                     'id' => $variedad->id, 'nombre' => $variedad->nombre, 'especie' => $variedad->especie?->nombre,
                 ]),
@@ -101,9 +142,26 @@ class ValidacionMpController extends Controller
         return response()->json(['data' => $this->validacion($validacion)]);
     }
 
+    public function completarEspecie(Request $request, RecepcionRomana $recepcion, ServicioValidacionMp $servicio): JsonResponse
+    {
+        $this->asegurarTemporadaActiva($recepcion->temporada_id);
+        $datos = $request->validate([
+            'operacion_id' => ['required', 'uuid'],
+            'version_conocida' => ['required', 'integer', 'min:1'],
+            'especie_validacion_id' => ['required', 'uuid'],
+        ]);
+        $actualizada = $servicio->completarEspecie($recepcion, $datos['especie_validacion_id'], $datos['version_conocida'], $datos['operacion_id'], $request->user());
+        $actualizada->load(['detallesEnvases', 'validacionTomadaPor', 'validacionesMp.recepcion', 'validacionesMp.temporada',
+            'validacionesMp.validador', 'validacionesMp.dispositivo', 'validacionesMp.segmentos.envases']);
+
+        return response()->json(['data' => $this->recepcion($actualizada)])->header('Cache-Control', 'no-store, private');
+    }
+
     public function confirmar(Request $request, ValidacionMp $validacionMp, ServicioValidacionMp $servicio): JsonResponse
     {
         $this->asegurarTemporadaActiva($validacionMp->temporada_id);
+        $sinSegregacion = ! $request->boolean('requiere_segregacion')
+            && $validacionMp->recepcion->tipo_recepcion->contieneFruta();
         $datos = $request->validate([
             'operacion_id' => ['required', 'uuid'],
             'envases' => ['required', 'array', 'min:1', 'max:3'],
@@ -114,9 +172,11 @@ class ValidacionMpController extends Controller
             'segmentos' => ['nullable', 'array', 'max:100'],
             'segmentos.*.motivos' => ['required_with:segmentos', 'array', 'max:3'],
             'segmentos.*.motivos.*' => [Rule::enum(MotivoSegregacionMp::class)],
-            'segmentos.*.csg_validacion_id' => ['nullable', 'uuid'],
+            'csg_validacion_id' => [Rule::requiredIf($sinSegregacion), 'nullable', 'uuid'],
+            'variedad_validacion_id' => [Rule::requiredIf($sinSegregacion), 'nullable', 'uuid'],
+            'segmentos.*.csg_validacion_id' => ['required_with:segmentos', 'uuid'],
             'segmentos.*.cuartel' => ['nullable', 'string', 'max:100'],
-            'segmentos.*.variedad_validacion_id' => ['nullable', 'uuid'],
+            'segmentos.*.variedad_validacion_id' => ['required_with:segmentos', 'uuid'],
             'segmentos.*.envases' => ['required_with:segmentos', 'array', 'min:1', 'max:3'],
             'segmentos.*.envases.*.tipo_envase' => ['required', Rule::enum(TipoEnvaseRomana::class)],
             'segmentos.*.envases.*.cantidad' => ['required', 'integer', 'min:0', 'max:100000'],
@@ -145,6 +205,8 @@ class ValidacionMpController extends Controller
             'estado_romana' => $recepcion->estado->value,
             'estado_validacion_mp' => $recepcion->estado_validacion_mp->value,
             'tipo_recepcion' => $recepcion->tipo_recepcion->value,
+            'especie_validacion_id' => $recepcion->especie_validacion_id,
+            'version' => $recepcion->version,
             'concepto_envases' => $recepcion->concepto_envases?->value,
             'temporada' => ['id' => $recepcion->temporada_id, 'codigo' => $recepcion->temporada_codigo_snapshot, 'nombre' => $recepcion->temporada_nombre_snapshot],
             'cliente' => ['id' => $recepcion->cliente_id, 'codigo' => $recepcion->cliente_codigo_snapshot, 'nombre' => $recepcion->cliente_nombre_snapshot],

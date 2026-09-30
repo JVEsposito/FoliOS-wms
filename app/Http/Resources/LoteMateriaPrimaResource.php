@@ -67,6 +67,12 @@ class LoteMateriaPrimaResource extends JsonResource
                 'cantidad_primarios' => $this->cantidad_envases_primarios,
                 'secundario' => $this->envase_secundario?->value,
                 'cantidad_secundarios' => $this->cantidad_envases_secundarios,
+                'detalle' => $this->whenLoaded('envasesDetalle', fn () => $this->envasesDetalle
+                    ->map(fn ($envase): array => [
+                        'tipo_envase' => $envase->tipo_envase->value,
+                        'cantidad' => $envase->cantidad,
+                        'tara_unitaria' => $envase->tara_unitaria !== null ? (float) $envase->tara_unitaria : null,
+                    ])->values()),
             ],
             'pesos' => [
                 'kilos_brutos' => (float) $this->kilos_brutos,

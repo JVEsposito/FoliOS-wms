@@ -33,6 +33,11 @@ class CrearRecepcionRomanaRequest extends FormRequest
             'temporada_id' => ['required', 'uuid', Rule::exists('temporadas', 'id')->where('id', app(ServicioTemporadaActiva::class)->buscar()?->id)],
             'cliente_id' => ['required', 'uuid', Rule::exists('clientes', 'id')->where('activo', true)],
             'tipo_recepcion' => ['required', Rule::enum(TipoRecepcionRomana::class)],
+            'especie_validacion_id' => [
+                Rule::requiredIf(! $esSoloEnvases),
+                'nullable', 'uuid',
+                Rule::exists('especies_validacion', 'id')->where('temporada_id', $this->input('temporada_id'))->where('activo', true),
+            ],
             'fecha_ingreso' => [
                 'nullable',
                 Rule::requiredIf($esSoloEnvases),
@@ -92,6 +97,7 @@ class CrearRecepcionRomanaRequest extends FormRequest
             'cliente_id.required' => 'Selecciona el cliente del servicio.',
             'cliente_id.exists' => 'El cliente seleccionado no está activo.',
             'tipo_recepcion.required' => 'Selecciona el tipo de recepción.',
+            'especie_validacion_id.required' => 'Selecciona la especie de la fruta recibida.',
             'fecha_ingreso.required' => 'Selecciona la fecha de ingreso de los envases.',
             'fecha_ingreso.date_format' => 'La fecha de ingreso de los envases no es válida.',
             'fecha_ingreso.before_or_equal' => 'La fecha de ingreso de los envases no puede ser futura.',

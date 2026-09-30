@@ -9,6 +9,8 @@ export type MpReception = {
   estado_romana: 'en_bascula_ingreso' | 'en_pesaje_envases' | 'en_bascula_salida' | 'cerrado';
   estado_validacion_mp: MpValidationState;
   tipo_recepcion: ReceptionType;
+  especie_validacion_id: string | null;
+  version: number;
   concepto_envases: 'compra' | 'arriendo' | null;
   temporada: { id: string; codigo: string; nombre: string };
   cliente: { id: string; codigo: string | null; nombre: string };
@@ -58,9 +60,12 @@ export type MpValidation = {
   }>;
 };
 
+export type MpHistory = { id: string; fecha: string; numero_recepcion: string; cliente: string; estado: string; segmentos: Array<{ csg: string | null; variedad: string | null; envases: Array<{ tipo_envase: ContainerType; cantidad: number }> }> };
+
 export type MpCatalog = {
   temporada: { id: string; codigo: string; nombre: string };
-  csg: Array<{ id: string; codigo: string; predio: string | null }>;
+  especies: Array<{ id: string; nombre: string }>;
+  csg: Array<{ id: string; codigo: string; predio: string | null; variedad_ids: string[] }>;
   variedades: Array<{ id: string; nombre: string; especie: string | null }>;
   motivos: SegregationReason[];
 };

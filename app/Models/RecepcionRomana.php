@@ -28,6 +28,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'cliente_id',
     'cliente_codigo_snapshot',
     'cliente_nombre_snapshot',
+    'especie_validacion_id',
     'tipo_recepcion',
     'concepto_envases',
     'tipo_servicio',

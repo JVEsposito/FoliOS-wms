@@ -6,6 +6,7 @@ use App\Enums\EstadoRecepcionRomana;
 use App\Enums\EstadoValidacionMp;
 use App\Enums\RolUsuario;
 use App\Models\Cliente;
+use App\Models\EspecieValidacion;
 use App\Models\EventoRecepcionRomana;
 use App\Models\RecepcionRomana;
 use App\Models\Temporada;
@@ -19,6 +20,28 @@ use Tests\TestCase;
 class RecepcionRomanaApiTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_exige_especie_para_fruta_y_permite_leer_recepciones_historicas_sin_ella(): void
+    {
+        $operador = User::factory()->create(['rol' => RolUsuario::OperadorRomana]);
+        $datos = $this->datosIngreso($this->cliente());
+        unset($datos['especie_validacion_id']);
+        $this->actingAs($operador, 'sanctum')->postJson('/api/romana/recepciones', $datos)
+            ->assertUnprocessable()->assertJsonValidationErrors('especie_validacion_id');
+
+        $datos['especie_validacion_id'] = EspecieValidacion::query()->firstOrFail()->id;
+        $recepcion = $this->postJson('/api/romana/recepciones', $datos)->assertCreated()->json('data');
+        $actualizacion = $datos;
+        $actualizacion['operacion_id'] = (string) Str::uuid();
+        $actualizacion['version_conocida'] = $recepcion['version'];
+        unset($actualizacion['especie_validacion_id']);
+        $this->putJson('/api/romana/recepciones/'.$recepcion['id'], $actualizacion)
+            ->assertUnprocessable()->assertJsonValidationErrors('especie_validacion_id');
+
+        RecepcionRomana::query()->whereKey($recepcion['id'])->update(['especie_validacion_id' => null]);
+        $this->getJson('/api/romana/recepciones/'.$recepcion['id'])
+            ->assertOk()->assertJsonPath('data.especie_validacion_id', null);
+    }
 
     public function test_exige_elegir_un_tipo_de_camion_valido_al_registrar_el_ingreso(): void
     {
@@ -82,6 +105,7 @@ class RecepcionRomanaApiTest extends TestCase
         $this->travelTo(CarbonImmutable::parse('2026-07-21 14:10:00'));
         $cerrada = $this->postJson('/api/romana/recepciones/'.$creada['id'].'/cerrar', [
             'operacion_id' => (string) Str::uuid(),
+            'taras_envases' => [['tipo_envase' => 'bins', 'tara_unitaria' => 40]],
             'peso_tara' => 10540,
             'tipo_envase_calculo_neto' => 'bins',
             'observacion' => 'Sellos y guía verificados.',
@@ -192,6 +216,7 @@ class RecepcionRomanaApiTest extends TestCase
 
         $this->postJson('/api/romana/recepciones/'.$id.'/cerrar', [
             'operacion_id' => (string) Str::uuid(),
+            'taras_envases' => [['tipo_envase' => 'bins', 'tara_unitaria' => 40]],
             'peso_tara' => 10000,
         ])->assertConflict()->assertJsonPath('codigo', 'conflicto_operacional');
 
@@ -214,6 +239,7 @@ class RecepcionRomanaApiTest extends TestCase
 
         $this->postJson('/api/romana/recepciones/'.$id.'/cerrar', [
             'operacion_id' => (string) Str::uuid(),
+            'taras_envases' => [['tipo_envase' => 'bins', 'tara_unitaria' => 40]],
             'peso_tara' => 29000,
         ])
             ->assertConflict()
@@ -234,6 +260,7 @@ class RecepcionRomanaApiTest extends TestCase
         $datos['envases'] = [
             ['tipo_envase' => 'bins', 'cantidad' => 10],
             ['tipo_envase' => 'totes', 'cantidad' => 20],
+            ['tipo_envase' => 'esponjas', 'cantidad' => 5],
         ];
 
         $recepcion = $this->actingAs($operador, 'sanctum')
@@ -265,16 +292,17 @@ class RecepcionRomanaApiTest extends TestCase
             'taras_envases' => [
                 ['tipo_envase' => 'bins', 'tara_unitaria' => 40],
                 ['tipo_envase' => 'totes', 'tara_unitaria' => 2],
+                ['tipo_envase' => 'esponjas', 'tara_unitaria' => 1],
             ],
         ])
             ->assertOk()
             ->assertJsonPath('data.estado', EstadoRecepcionRomana::Cerrado->value)
             ->assertJsonPath('data.salida_sin_envases', true)
             ->assertJsonPath('data.peso_tara', 10000)
-            ->assertJsonPath('data.peso_tara_envases', 440)
-            ->assertJsonPath('data.peso_tara_total', 10440)
-            ->assertJsonPath('data.peso_neto', 19560)
-            ->assertJsonPath('data.peso_neto_por_envase', 1956)
+            ->assertJsonPath('data.peso_tara_envases', 445)
+            ->assertJsonPath('data.peso_tara_total', 10445)
+            ->assertJsonPath('data.peso_neto', 19555)
+            ->assertJsonPath('data.peso_neto_por_envase', 1955.5)
             ->json('data');
 
         $this->assertDatabaseHas('detalles_envases_recepcion_romana', [
@@ -287,11 +315,16 @@ class RecepcionRomanaApiTest extends TestCase
             'tipo_envase' => 'totes',
             'tara_unitaria_salida' => 2,
         ]);
+        $this->assertDatabaseHas('detalles_envases_recepcion_romana', [
+            'recepcion_romana_id' => $cerrada['id'],
+            'tipo_envase' => 'esponjas',
+            'tara_unitaria_salida' => 1,
+        ]);
         $this->assertDatabaseHas('recepciones_romana', [
             'id' => $cerrada['id'],
             'salida_sin_envases' => true,
-            'peso_tara_envases' => 440,
-            'peso_neto' => 19560,
+            'peso_tara_envases' => 445,
+            'peso_neto' => 19555,
         ]);
     }
 
@@ -310,6 +343,7 @@ class RecepcionRomanaApiTest extends TestCase
         ])->assertOk();
         $cerrada = $this->postJson("/api/romana/recepciones/{$recepcion['id']}/cerrar", [
             'operacion_id' => (string) Str::uuid(),
+            'taras_envases' => [['tipo_envase' => 'bins', 'tara_unitaria' => 40]],
             'peso_tara' => 10540,
             'tipo_envase_calculo_neto' => 'bins',
         ])
@@ -944,6 +978,7 @@ class RecepcionRomanaApiTest extends TestCase
             'temporada_id' => Temporada::query()->where('activa', true)->firstOrFail()->id,
             'cliente_id' => $cliente->id,
             'tipo_recepcion' => 'fruta_con_envases',
+            'especie_validacion_id' => EspecieValidacion::firstOrCreate(['temporada_id' => Temporada::query()->where('activa', true)->firstOrFail()->id, 'nombre' => 'Cereza'], ['activo' => true])->id,
             'concepto_envases' => null,
             'tipo_servicio' => 'prefrio',
             'envases' => [

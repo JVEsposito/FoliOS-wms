@@ -40,6 +40,17 @@
       "android": {
         "buildType": "apk"
       }
+    },
+    "apk-pda-pruebas": {
+      "distribution": "internal",
+      "channel": "pda-pruebas",
+      "env": {
+        "ESTIBA_APP_VARIANT": "pda",
+        "EXPO_PUBLIC_APP_VARIANT": "pda"
+      },
+      "android": {
+        "buildType": "apk"
+      }
     }
   }
 }

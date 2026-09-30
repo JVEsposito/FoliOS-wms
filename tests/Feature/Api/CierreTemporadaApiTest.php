@@ -10,6 +10,7 @@ use App\Models\Carga;
 use App\Models\CargaFolio;
 use App\Models\Cliente;
 use App\Models\Dispositivo;
+use App\Models\EspecieValidacion;
 use App\Models\Folio;
 use App\Models\NotificacionOperacional;
 use App\Models\Posicion;
@@ -542,6 +543,7 @@ class CierreTemporadaApiTest extends TestCase
                 'temporada_id' => $temporada->id,
                 'cliente_id' => $cliente->id,
                 'tipo_recepcion' => 'fruta_con_envases',
+                'especie_validacion_id' => EspecieValidacion::firstOrCreate(['temporada_id' => $temporada->id, 'nombre' => 'Cereza'], ['activo' => true])->id,
                 'tipo_servicio' => 'proceso',
                 'envases' => [['tipo_envase' => 'bins', 'cantidad' => 24]],
                 'numero_guia_despacho' => $guia,

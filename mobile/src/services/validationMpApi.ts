@@ -1,4 +1,4 @@
-import { ContainerType, MpCatalog, MpReception, MpSegmentDraft, MpValidation } from '../domain/validationMp';
+import { ContainerType, MpCatalog, MpHistory, MpReception, MpSegmentDraft, MpValidation } from '../domain/validationMp';
 import { ApiError } from './apiError';
 
 async function request<T>(baseUrl: string, path: string, token: string, init: RequestInit = {}): Promise<T> {
@@ -21,12 +21,23 @@ export async function listPendingMp(baseUrl: string, token: string) {
   return (await request<{ data: MpReception[] }>(baseUrl, '/api/validacion-mp/pendientes', token)).data;
 }
 
+export async function listMpHistory(baseUrl: string, token: string, date: string) {
+  return (await request<{ data: MpHistory[] }>(baseUrl, `/api/validacion-mp/historico?fecha=${encodeURIComponent(date)}`, token)).data;
+}
+
 export async function findMpReception(baseUrl: string, token: string, number: string) {
   return (await request<{ data: MpReception }>(baseUrl, `/api/validacion-mp/recepciones/buscar/${encodeURIComponent(number)}`, token)).data;
 }
 
 export async function getMpCatalog(baseUrl: string, token: string, receptionId: string) {
   return request<MpCatalog>(baseUrl, `/api/validacion-mp/recepciones/${receptionId}/catalogos`, token);
+}
+
+export async function completeMpSpecies(baseUrl: string, token: string, reception: MpReception, speciesId: string) {
+  return (await request<{ data: MpReception }>(baseUrl, `/api/validacion-mp/recepciones/${reception.id}/especie`, token, {
+    method: 'POST',
+    body: JSON.stringify({ operacion_id: Crypto.randomUUID(), version_conocida: reception.version, especie_validacion_id: speciesId }),
+  })).data;
 }
 
 export async function takeMpReception(baseUrl: string, token: string, receptionId: string) {
@@ -39,6 +50,8 @@ export async function confirmMpValidation(baseUrl: string, token: string, valida
   containers: Array<{ tipo_envase: ContainerType; cantidad_validada: number }>;
   tagsChecked: boolean;
   segregation: boolean;
+  csgId: string | null;
+  varietyId: string | null;
   segments: MpSegmentDraft[];
   observation: string;
 }) {
@@ -59,6 +72,8 @@ export async function confirmMpValidation(baseUrl: string, token: string, valida
       envases: input.containers,
       tarjas_verificadas: input.tagsChecked,
       requiere_segregacion: input.segregation,
+      csg_validacion_id: input.segregation ? null : input.csgId,
+      variedad_validacion_id: input.segregation ? null : input.varietyId,
       segmentos,
       observacion: input.observation || null,
     }),

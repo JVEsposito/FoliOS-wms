@@ -260,9 +260,11 @@ Route::middleware('auth:sanctum')->group(function () {
     });
     Route::middleware('can:validar-mp')->prefix('validacion-mp')->group(function () {
         Route::get('/pendientes', [ValidacionMpController::class, 'pendientes']);
+        Route::get('/historico', [ValidacionMpController::class, 'historico']);
         Route::get('/recepciones/buscar/{numeroRecepcion}', [ValidacionMpController::class, 'buscar']);
         Route::get('/recepciones/{recepcion}/catalogos', [ValidacionMpController::class, 'catalogos']);
         Route::post('/recepciones/{recepcion}/tomar', [ValidacionMpController::class, 'tomar']);
+        Route::post('/recepciones/{recepcion}/especie', [ValidacionMpController::class, 'completarEspecie']);
         Route::post('/validaciones/{validacionMp}/confirmar', [ValidacionMpController::class, 'confirmar']);
         Route::get('/recepciones/{recepcion}/defectos', [DefectoRecepcionMpController::class, 'porRecepcion']);
         Route::post('/recepciones/{recepcion}/defectos', [DefectoRecepcionMpController::class, 'store'])

@@ -18,6 +18,7 @@ use App\Http\Requests\CorregirRecepcionRomanaRequest;
 use App\Http\Requests\CrearRecepcionRomanaRequest;
 use App\Http\Requests\RegistrarPesajeEnvasesRomanaRequest;
 use App\Models\Cliente;
+use App\Models\EspecieValidacion;
 use App\Models\EventoRecepcionRomana;
 use App\Models\PesajeEnvaseRecepcionRomana;
 use App\Models\RecepcionRomana;
@@ -55,6 +56,9 @@ class RecepcionRomanaController extends Controller
                     'presente_en_validacion' => $cliente->catalogos_validacion_count > 0,
                     'presente_en_materiales' => $cliente->catalogos_materiales_count > 0,
                 ]),
+            'especies' => EspecieValidacion::query()
+                ->where('temporada_id', app(ServicioTemporadaActiva::class)->buscar()?->id)
+                ->where('activo', true)->orderBy('nombre')->get(['id', 'nombre']),
             'tipos_servicio' => array_map(
                 fn (TipoServicioRomana $tipo): array => ['codigo' => $tipo->value, 'nombre' => match ($tipo) {
                     TipoServicioRomana::Almacenaje => 'Almacenaje',
@@ -311,6 +315,7 @@ class RecepcionRomanaController extends Controller
             ],
             'tipo_servicio' => $recepcion->tipo_servicio->value,
             'tipo_recepcion' => $recepcion->tipo_recepcion->value,
+            'especie_validacion_id' => $recepcion->especie_validacion_id,
             'concepto_envases' => $recepcion->concepto_envases?->value,
             'cantidad_envases_declarados' => $recepcion->cantidad_envases_declarados,
             'tipo_envase_declarado' => $recepcion->tipo_envase_declarado->value,

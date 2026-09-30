@@ -519,6 +519,9 @@ class ServicioReinicioOperacional
         $eliminados['hidrocooler'] = DB::table('procesos_hidrocooler_materia_prima')
             ->whereIn('lote_materia_prima_id', clone $lotes)
             ->delete();
+        $eliminados['envases_lotes'] = DB::table('lotes_materia_prima_envases')
+            ->whereIn('lote_materia_prima_id', clone $lotes)
+            ->delete();
         $eliminados['lotes'] = DB::table('lotes_materia_prima')
             ->where('temporada_id', $temporada->id)
             ->delete();

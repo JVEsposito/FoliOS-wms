@@ -284,6 +284,7 @@ class ReinicioOperacionalApiTest extends TestCase
                 'temporada_id' => $temporada->id,
                 'cliente_id' => $cliente->id,
                 'tipo_recepcion' => 'fruta_con_envases',
+                'especie_validacion_id' => EspecieValidacion::firstOrCreate(['temporada_id' => $temporada->id, 'nombre' => 'Cereza reset'], ['activo' => true])->id,
                 'tipo_servicio' => 'proceso',
                 'envases' => [
                     ['tipo_envase' => 'bins', 'cantidad' => 48],
@@ -303,11 +304,12 @@ class ReinicioOperacionalApiTest extends TestCase
         ])->assertOk();
         $this->postJson("/api/romana/recepciones/{$recepcion['id']}/cerrar", [
             'operacion_id' => (string) Str::uuid(),
+            'taras_envases' => [['tipo_envase' => 'bins', 'tara_unitaria' => 40], ['tipo_envase' => 'totes', 'tara_unitaria' => 2]],
             'peso_tara' => 10000,
             'tipo_envase_calculo_neto' => 'bins',
         ])->assertOk();
 
-        $especie = EspecieValidacion::query()->create([
+        $especie = EspecieValidacion::query()->firstOrCreate([
             'temporada_id' => $temporada->id,
             'nombre' => 'Cereza reset',
             'activo' => true,
@@ -345,6 +347,8 @@ class ReinicioOperacionalApiTest extends TestCase
                 ],
                 'tarjas_verificadas' => true,
                 'requiere_segregacion' => false,
+                'csg_validacion_id' => $csg->id,
+                'variedad_validacion_id' => $variedad->id,
             ],
         )
             ->assertOk()
