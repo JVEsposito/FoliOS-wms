@@ -94,6 +94,8 @@ class ServicioLoteMateriaPrima
         $hash = $this->hash($this->payloadLote($datos));
 
         return DB::transaction(function () use ($lote, $datos, $usuario, $hash): LoteMateriaPrima {
+            // Romana bloquea primero la recepción al cerrar el destare.
+            RecepcionRomana::query()->lockForUpdate()->findOrFail($lote->recepcion_romana_id);
             $lote = LoteMateriaPrima::query()->lockForUpdate()->findOrFail($lote->id);
             $evento = EventoLoteMateriaPrima::query()
                 ->where('operacion_id', $datos['operacion_id'])
@@ -229,6 +231,7 @@ class ServicioLoteMateriaPrima
             $versionConocida,
             $usuario,
         ): LoteMateriaPrima {
+            RecepcionRomana::query()->lockForUpdate()->findOrFail($lote->recepcion_romana_id);
             $lote = LoteMateriaPrima::query()->lockForUpdate()->findOrFail($lote->id);
             $evento = EventoLoteMateriaPrima::query()
                 ->where('operacion_id', $operacionId)
