@@ -173,6 +173,7 @@ class MateriaPrimaApiTest extends TestCase
         foreach (['HIST-A', 'HIST-B'] as $numero) {
             DB::table('lotes_materia_prima')->insert([
                 ...$base, 'id' => (string) Str::uuid(), 'operacion_id' => (string) Str::uuid(),
+                'secuencia_creacion' => null,
                 'segmento_validacion_mp_id' => $otroSegmentoId, 'numero_lote' => $numero,
                 'clave_numero_vigente' => hash('sha256', $numero),
             ]);
