@@ -817,8 +817,8 @@ class ServicioRecepcionRomana
             $cambio = $recepcion->modo_salida_envases !== $payload['modo_salida_envases']
                 || $recepcion->numero_guia_salida !== $payload['numero_guia_salida']
                 || abs((float) $recepcion->peso_neto - $nuevoNeto) > 0.0005
-                || $tipos->contains(fn (string $tipo): bool =>
-                    (int) ($anteriores->get($tipo)?->cantidad ?? 0) !== (int) ($resultado['salidas'][$tipo] ?? 0));
+                || $tipos->contains(fn (string $tipo): bool => (int) ($anteriores->get($tipo)?->cantidad ?? 0)
+                    !== (int) ($resultado['salidas'][$tipo] ?? 0));
             if (! $cambio) {
                 throw new ConflictoOperacion('La salida corregida no presenta cambios.');
             }

@@ -1006,6 +1006,7 @@ class RecepcionRomanaApiTest extends TestCase
             'observacion' => 'Carga sellada en origen.',
         ];
     }
+
     private function marcarEnvasesValidadosParaDestare(string $recepcionId): void
     {
         // Estos casos prueban Romana; el flujo real de validación se cubre por API
@@ -1015,5 +1016,4 @@ class RecepcionRomanaApiTest extends TestCase
         DB::table('recepciones_romana')->where('id', $recepcionId)
             ->update(['estado_validacion_mp' => EstadoValidacionMp::Validada->value]);
     }
-
 }
