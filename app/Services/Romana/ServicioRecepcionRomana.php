@@ -13,6 +13,7 @@ use App\Models\PesajeEnvaseRecepcionRomana;
 use App\Models\RecepcionRomana;
 use App\Models\Temporada;
 use App\Models\User;
+use App\Services\MateriaPrima\ServicioLoteMateriaPrima;
 use App\Services\Notificaciones\ServicioNotificacionesOperacionales;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Carbon\CarbonImmutable;
@@ -736,6 +737,7 @@ class ServicioRecepcionRomana
                         ?? null,
                 ]);
             }
+            app(ServicioLoteMateriaPrima::class)->conciliarDestare($recepcion, $usuario);
             $this->registrarEvento(
                 $recepcion,
                 (string) $datos['operacion_id'],
@@ -887,6 +889,7 @@ class ServicioRecepcionRomana
                 'observacion_cierre' => $payload['observacion'],
                 'version' => $recepcion->version + 1,
             ]);
+            app(ServicioLoteMateriaPrima::class)->conciliarDestare($recepcion, $usuario);
             $this->registrarEvento(
                 $recepcion,
                 (string) $datos['operacion_id'],

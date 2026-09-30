@@ -258,6 +258,11 @@ class ServicioLoteMateriaPrima
                 ->lockForUpdate()
                 ->findOrFail($segmento->validacion->recepcion_romana_id);
             $this->asegurarDisponibilidadSegmento($segmento, $lote->id);
+            if ($recepcion->peso_neto === null
+                || $lote->kilos_netos_calculados === null
+                || $lote->kilos_netos_confirmados === null) {
+                throw new ConflictoOperacion('El lote está pendiente de destare. Cierra el destare en Romana antes de confirmarlo.');
+            }
             $this->asegurarKilosRecepcion(
                 $recepcion,
                 (float) $lote->kilos_netos_confirmados,
@@ -779,14 +784,9 @@ class ServicioLoteMateriaPrima
                 'El segmento todavía no pertenece a una Validación MP confirmada.',
             );
         }
-        if (! $recepcion->peso_neto_por_envase
-            || ! $recepcion->tipo_envase_calculo_neto
-            || ! $recepcion->cantidad_envase_calculo_neto) {
-            throw new ConflictoOperacion(
-                'Romana debe cerrar la recepción y calcular el peso neto por envase antes de lotizar.',
-            );
-        }
-        if (! $segmento->envases->contains(fn ($envase): bool => $envase->tipo_envase->value === $recepcion->tipo_envase_calculo_neto && $envase->cantidad > 0)) {
+        $tipoContenedor = $recepcion->tipo_envase_calculo_neto
+            ?? $recepcion->tipo_envase_declarado?->value;
+        if (! $segmento->envases->contains(fn ($envase): bool => $envase->tipo_envase->value === $tipoContenedor && $envase->cantidad > 0)) {
             throw ValidationException::withMessages(['envases' => 'El segmento no contiene envases contenedores para repartir el neto.']);
         }
 
@@ -852,14 +852,18 @@ class ServicioLoteMateriaPrima
         /** @var RecepcionRomana $recepcion */
         $recepcion = $preparados['recepcion'];
         $segmento = $preparados['segmento'];
-        $contenedor = $recepcion->tipo_envase_calculo_neto;
+        $contenedor = $recepcion->tipo_envase_calculo_neto
+            ?? $recepcion->tipo_envase_declarado?->value;
         $principal = $segmento->envases->first(fn ($envase): bool => $envase->tipo_envase->value === $contenedor);
         $secundario = $segmento->envases->first(fn ($envase): bool => $envase->tipo_envase->value !== $contenedor && $envase->cantidad > 0);
-        $calculados = $this->netoEstimado($segmento, $recepcion, $datos['lote_id_para_calculo'] ?? null);
+        $destarePendiente = $recepcion->peso_neto === null;
+        $calculados = $destarePendiente
+            ? null
+            : $this->netoEstimado($segmento, $recepcion, $datos['lote_id_para_calculo'] ?? null);
         $taras = $recepcion->detallesEnvases->keyBy(fn ($detalle): string => $detalle->tipo_envase->value);
         $taraTotal = $segmento->envases->sum(fn ($envase): float => (int) $envase->cantidad
             * (float) ($taras->get($envase->tipo_envase->value)?->tara_unitaria_salida ?? 0));
-        $brutos = round($calculados + $taraTotal, 3);
+        $brutos = $calculados === null ? null : round($calculados + $taraTotal, 3);
 
         return [
             'segmento_validacion_mp_id' => $preparados['segmento']->id,
@@ -947,6 +951,67 @@ class ServicioLoteMateriaPrima
         }
 
         return $calculados / 1000;
+    }
+
+    /**
+     * Distribuye el neto entre borradores de una recepción dentro de la transacción del destare.
+     * Los cálculos usan milésimas y el último contenedor completa el remanente exacto.
+     */
+    public function conciliarDestare(RecepcionRomana $recepcion, User $usuario): void
+    {
+        if ($recepcion->peso_neto === null || ! $recepcion->tipo_envase_calculo_neto
+            || ! $recepcion->cantidad_envase_calculo_neto) {
+            throw new ConflictoOperacion('Romana aún no dispone del neto para conciliar los lotes.');
+        }
+        $recepcion->load('detallesEnvases');
+        $tipo = $recepcion->tipo_envase_calculo_neto;
+        $total = (int) $recepcion->cantidad_envase_calculo_neto;
+        $neto = (int) round((float) $recepcion->peso_neto * 1000);
+        $unitario = (int) round((float) $recepcion->peso_neto_por_envase * 1000);
+        $lotes = LoteMateriaPrima::query()
+            ->where('recepcion_romana_id', $recepcion->id)
+            ->where('estado', '!=', EstadoLoteMateriaPrima::Anulado->value)
+            ->with('envasesDetalle')
+            ->orderBy('created_at')->orderBy('id')
+            ->lockForUpdate()->get();
+        $ocupados = 0;
+        $asignados = 0;
+        foreach ($lotes as $lote) {
+            $cantidad = (int) ($lote->envasesDetalle
+                ->first(fn ($envase): bool => $envase->tipo_envase->value === $tipo)?->cantidad ?? 0);
+            if ($cantidad < 1 || $ocupados + $cantidad > $total) {
+                throw ValidationException::withMessages(['envases' => 'Los contenedores lotizados no coinciden con el destare de Romana.']);
+            }
+            $ocupados += $cantidad;
+            if ($lote->estado !== EstadoLoteMateriaPrima::Borrador) {
+                $asignados += (int) round((float) $lote->kilos_netos_calculados * 1000);
+                continue;
+            }
+            $kilos = $ocupados === $total ? $neto - $asignados : $unitario * $cantidad;
+            if ($kilos <= 0 || $asignados + $kilos > $neto) {
+                throw ValidationException::withMessages(['envases' => 'El neto de los lotes no cabe en el destare de Romana.']);
+            }
+            $taras = $recepcion->detallesEnvases->keyBy(fn ($detalle): string => $detalle->tipo_envase->value);
+            $taraTotal = 0;
+            foreach ($lote->envasesDetalle as $envase) {
+                $tara = $taras->get($envase->tipo_envase->value)?->tara_unitaria_salida;
+                $envase->update(['tara_unitaria' => $tara]);
+                $taraTotal += (int) round((float) $tara * 1000) * $envase->cantidad;
+            }
+            $lote->update([
+                'envase_primario' => $tipo,
+                'cantidad_envases_primarios' => $cantidad,
+                'kilos_netos_calculados' => $kilos / 1000,
+                'kilos_netos_confirmados' => $kilos / 1000,
+                'kilos_brutos' => ($kilos + $taraTotal) / 1000,
+                'version' => $lote->version + 1,
+                'actualizado_por_user_id' => $usuario->id,
+            ]);
+            $this->registrarEvento($lote, 'destare_conciliado', $usuario, null,
+                EstadoLoteMateriaPrima::Borrador, EstadoLoteMateriaPrima::Borrador,
+                ['kilos_netos_calculados' => $kilos / 1000, 'version' => $lote->version]);
+            $asignados += $kilos;
+        }
     }
 
     private function guardarEnvases(LoteMateriaPrima $lote, SegmentoValidacionMp $segmento, RecepcionRomana $recepcion): void

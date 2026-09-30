@@ -192,7 +192,21 @@ class MateriaPrimaController extends Controller
         return response()->json([
             'data' => $segmentos->map(function (SegmentoValidacionMp $segmento) use ($servicio): array {
                 $recepcion = $segmento->validacion->recepcion;
-                $tipoBase = $recepcion->tipo_envase_calculo_neto;
+                $tipoBase = $recepcion->tipo_envase_calculo_neto
+                    ?? $recepcion->tipo_envase_declarado?->value;
+                $destarePendiente = $recepcion->peso_neto === null;
+                $netoEstimado = null;
+                $errorNeto = null;
+                if (! $destarePendiente) {
+                    try {
+                        $netoEstimado = $segmento->lotesMateriaPrima->isNotEmpty()
+                            ? (float) $segmento->lotesMateriaPrima->sum('kilos_netos_calculados')
+                            : $servicio->netoEstimado($segmento, $recepcion);
+                    } catch (\Throwable $exception) {
+                        report($exception);
+                        $errorNeto = 'No fue posible calcular el neto de este segmento. Revisa sus envases en Romana.';
+                    }
+                }
                 $envases = $segmento->envases->map(function ($envase) use ($segmento): array {
                     $tipo = $envase->tipo_envase->value;
                     $reservada = $segmento->lotesMateriaPrima->sum(fn (LoteMateriaPrima $lote): int => (int) ($lote->envasesDetalle->first(fn ($item): bool => $item->tipo_envase->value === $tipo)?->cantidad ?? 0));
@@ -222,9 +236,9 @@ class MateriaPrimaController extends Controller
                         'especie_id' => $segmento->variedad->especie_validacion_id,
                     ] : null,
                     'envases' => $envases,
-                    'neto_estimado' => $segmento->lotesMateriaPrima->isNotEmpty()
-                        ? (float) $segmento->lotesMateriaPrima->sum('kilos_netos_calculados')
-                        : $servicio->netoEstimado($segmento, $recepcion),
+                    'neto_estimado' => $netoEstimado,
+                    'destare_pendiente' => $destarePendiente,
+                    'error_neto' => $errorNeto,
                     'recepcion' => [
                         'id' => $recepcion->id,
                         'numero_recepcion' => $recepcion->numero_recepcion,
@@ -234,10 +248,12 @@ class MateriaPrimaController extends Controller
                             'codigo' => $recepcion->cliente->codigo,
                             'nombre' => $recepcion->cliente->nombre,
                         ],
-                        'peso_neto' => (float) $recepcion->peso_neto,
+                        'peso_neto' => $recepcion->peso_neto !== null
+                            ? (float) $recepcion->peso_neto : null,
                         'tipo_envase_calculo_neto' => $tipoBase,
                         'cantidad_envase_calculo_neto' => $recepcion->cantidad_envase_calculo_neto,
-                        'peso_neto_por_envase' => (float) $recepcion->peso_neto_por_envase,
+                        'peso_neto_por_envase' => $recepcion->peso_neto_por_envase !== null
+                            ? (float) $recepcion->peso_neto_por_envase : null,
                         'envases' => $recepcion->detallesEnvases->map(fn ($detalle): array => [
                             'tipo_envase' => $detalle->tipo_envase->value,
                             'tara_unitaria' => (float) ($detalle->tara_unitaria_salida ?? 0),

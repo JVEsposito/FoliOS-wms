@@ -53,6 +53,7 @@ const state = {
     catalogEtag: null,
     segments: [],
     lots: [],
+    panelErrors: { summary: null, segments: null, lots: null, catalogs: null },
     editingLot: null,
     selectedSegment: null,
     poller: null,
@@ -198,6 +199,7 @@ function clearSession() {
     state.catalogEtag = null;
     state.segments = [];
     state.lots = [];
+    state.panelErrors = { summary: null, segments: null, lots: null, catalogs: null };
     localStorage.removeItem(keys.token);
     localStorage.removeItem(keys.identity);
     state.poller?.stop();
@@ -231,20 +233,22 @@ async function api(path, options = {}) {
     return data;
 }
 
-async function loadCatalogs() {
+async function loadCatalogs(force = false) {
     const headers = new Headers({ Accept: 'application/json' });
     if (state.token) headers.set('Authorization', `Bearer ${state.token}`);
-    if (state.catalogEtag) headers.set('If-None-Match', state.catalogEtag);
+    if (state.catalogEtag && !force) headers.set('If-None-Match', state.catalogEtag);
 
     let response;
     try {
-        response = await fetch('/api/materia-prima/catalogos', { headers });
+        response = await fetch('/api/materia-prima/catalogos', { headers, cache: force ? 'no-store' : 'default' });
     } catch {
         throw new ApiError('No fue posible conectar con Laravel.', 0);
     }
 
-    if (response.status === 304 && state.catalogs) {
-        return state.catalogs;
+    if (response.status === 304) {
+        if (state.catalogs) return state.catalogs;
+        if (!force) return loadCatalogs(true);
+        throw new ApiError('El servidor no entregó los catálogos de materia prima.', 304);
     }
 
     const data = await response.json().catch(() => ({}));
@@ -257,6 +261,10 @@ async function loadCatalogs() {
         );
     }
 
+    if (!Array.isArray(data.csg) || !Array.isArray(data.especies)) {
+        throw new ApiError('La respuesta de catálogos está incompleta.', response.status);
+    }
+    state.catalogs = data;
     state.catalogEtag = response.headers.get('ETag');
 
     return data;
@@ -289,6 +297,12 @@ function showApp() {
 
 function renderSummary() {
     const summary = state.summary;
+    if (state.panelErrors.summary) {
+        [elements.pendingSegmentsCount, elements.draftLotsCount, elements.hydrocoolerLotsCount, elements.cameraPendingCount]
+            .forEach((element) => { element.textContent = '—'; });
+        elements.seasonDescription.textContent = `No se pudo cargar el resumen: ${state.panelErrors.summary}`;
+        return;
+    }
     elements.pendingSegmentsCount.textContent = String(summary?.segmentos_pendientes || 0);
     elements.draftLotsCount.textContent = String(summary?.lotes?.borradores || 0);
     elements.hydrocoolerLotsCount.textContent = String((summary?.lotes?.pendientes_hidrocooler || 0) + (summary?.lotes?.retenidos_hidrocooler || 0));
@@ -299,17 +313,26 @@ function renderSummary() {
 }
 
 function renderSegments() {
+    if (state.panelErrors.segments) {
+        elements.segmentList.innerHTML = `<div class="raw-material-empty" role="alert">No se pudieron cargar los segmentos: ${escapeHtml(state.panelErrors.segments)}</div>`;
+        return;
+    }
     if (!state.segments.length) {
         elements.segmentList.innerHTML = '<div class="raw-material-empty">No hay segmentos pendientes de lotización en la temporada activa.</div>';
         return;
     }
 
     const canManage = state.identity?.puede_gestionar_lotes_materia_prima === true;
-    elements.segmentList.innerHTML = state.segments.map((segment) => {
+    const catalogWarning = state.panelErrors.catalogs
+        ? `<div class="raw-material-empty" role="alert">Catálogos no disponibles: ${escapeHtml(state.panelErrors.catalogs)}</div>`
+        : '';
+    elements.segmentList.innerHTML = catalogWarning + state.segments.map((segment) => {
         const base = segment.envases.find((item) => item.tipo_envase === segment.recepcion.tipo_envase_calculo_neto);
-        const canCreate = canManage && segment.estado === 'pendiente_lote'
+        const canCreate = canManage && Boolean(state.catalogs) && !state.panelErrors.catalogs
+            && segment.estado === 'pendiente_lote'
             && Number(base?.cantidad_disponible || 0) > 0
-            && Number(segment.recepcion.peso_neto_por_envase || 0) > 0;
+            && (segment.destare_pendiente || Number(segment.recepcion.peso_neto_por_envase || 0) > 0)
+            && !segment.error_neto;
         const origin = [
             segment.csg?.codigo,
             segment.variedad?.nombre,
@@ -319,7 +342,7 @@ function renderSegments() {
             <article class="segment-card">
                 <div class="segment-card__top">
                     <strong>${escapeHtml(segment.recepcion.numero_recepcion)} · S${escapeHtml(segment.secuencia)}</strong>
-                    <span>${escapeHtml(label(segment.estado))}</span>
+                    <span>${escapeHtml(segment.destare_pendiente ? 'Destare pendiente' : label(segment.estado))}</span>
                 </div>
                 <p>${escapeHtml(segment.recepcion.cliente.nombre)} · Guía ${escapeHtml(segment.recepcion.numero_guia_despacho)}</p>
                 <p>${escapeHtml(origin)}</p>
@@ -327,8 +350,8 @@ function renderSegments() {
                     ${segment.envases.map((container) => `<span>${escapeHtml(label(container.tipo_envase))}: ${escapeHtml(container.cantidad_disponible)} disponibles de ${escapeHtml(container.cantidad)}</span>`).join('')}
                 </div>
                 <div class="segment-card__net">
-                    <div><span>NETO ESTIMADO SEGMENTO</span><strong>${escapeHtml(formatWeight(segment.neto_estimado))}</strong></div>
-                    <div><span>NETO / ${escapeHtml(label(segment.recepcion.tipo_envase_calculo_neto))}</span><strong>${escapeHtml(formatWeight(segment.recepcion.peso_neto_por_envase))}</strong></div>
+                    <div><span>NETO ESTIMADO SEGMENTO</span><strong>${escapeHtml(segment.destare_pendiente ? 'Pendiente de destare' : segment.error_neto || formatWeight(segment.neto_estimado))}</strong></div>
+                    <div><span>NETO / ${escapeHtml(label(segment.recepcion.tipo_envase_calculo_neto))}</span><strong>${escapeHtml(segment.destare_pendiente ? 'Pendiente de destare' : formatWeight(segment.recepcion.peso_neto_por_envase))}</strong></div>
                 </div>
                 <div class="segment-card__actions">
                     <button class="primary-button" data-create-segment="${escapeHtml(segment.id)}" type="button" ${canCreate ? '' : 'disabled'}>+ Crear lote</button>
@@ -343,7 +366,9 @@ function lotActions(lot) {
     const canSupervise = state.identity?.puede_supervisar_lotes_materia_prima === true;
     if (canManage && lot.estado === 'borrador') {
         actions.push(`<button data-action="edit" data-lot-id="${escapeHtml(lot.id)}" type="button">Editar</button>`);
-        actions.push(`<button class="is-primary" data-action="confirm" data-lot-id="${escapeHtml(lot.id)}" type="button">Confirmar</button>`);
+        if (!lot.pesos.destare_pendiente) {
+            actions.push(`<button class="is-primary" data-action="confirm" data-lot-id="${escapeHtml(lot.id)}" type="button">Confirmar</button>`);
+        }
     }
     if (canManage && !['borrador', 'anulado'].includes(lot.estado)) {
         actions.push(`<button data-action="correct-origin" data-lot-id="${escapeHtml(lot.id)}" type="button">Corregir origen</button>`);
@@ -358,6 +383,10 @@ function lotActions(lot) {
 }
 
 function renderLots() {
+    if (state.panelErrors.lots) {
+        elements.lotTableBody.innerHTML = `<tr><td class="raw-material-empty" colspan="6" role="alert">No se pudieron cargar los lotes: ${escapeHtml(state.panelErrors.lots)}</td></tr>`;
+        return;
+    }
     if (!state.lots.length) {
         elements.lotTableBody.innerHTML = '<tr><td class="raw-material-empty" colspan="6">No existen lotes para los filtros seleccionados.</td></tr>';
         return;
@@ -368,7 +397,7 @@ function renderLots() {
             <td><strong>${escapeHtml(lot.numero_lote)}</strong><small>${escapeHtml(lot.recepcion?.numero_recepcion)} · guía ${escapeHtml(lot.recepcion?.numero_guia_despacho)}</small><small>${escapeHtml(lot.cliente?.nombre)}</small></td>
             <td><strong>CSG ${escapeHtml(lot.trazabilidad.csg)}</strong><small>SdP ${escapeHtml(lot.trazabilidad.sdp)} · GGN ${escapeHtml(lot.trazabilidad.ggn)}</small><small>${escapeHtml(lot.trazabilidad.predio)}${lot.trazabilidad.cuartel ? ` · ${escapeHtml(lot.trazabilidad.cuartel)}` : ' · Sin cuartel'}</small></td>
             <td><strong>${escapeHtml(lot.trazabilidad.especie)} · ${escapeHtml(lot.trazabilidad.variedad)}</strong><small>${escapeHtml(label(lot.trazabilidad.tipo_producto))}${lot.trazabilidad.calibre ? ` · Calibre histórico: ${escapeHtml(lot.trazabilidad.calibre)}` : ''}</small><small>Cosecha ${escapeHtml(lot.trazabilidad.fecha_cosecha)}</small></td>
-            <td><strong>${(lot.envases.detalle || []).map((item) => `${escapeHtml(item.cantidad)} ${escapeHtml(label(item.tipo_envase))}`).join(' · ')}</strong><small class="weight-value">${escapeHtml(formatWeight(lot.pesos.kilos_netos_confirmados))} netos</small><small>${lot.pesos.corregido_por_digitador ? `Calculado: ${escapeHtml(formatWeight(lot.pesos.kilos_netos_calculados))}` : 'Neto calculado confirmado'}</small></td>
+            <td><strong>${(lot.envases.detalle || []).map((item) => `${escapeHtml(item.cantidad)} ${escapeHtml(label(item.tipo_envase))}`).join(' · ')}</strong><small class="weight-value">${escapeHtml(lot.pesos.destare_pendiente ? 'Kilos: pendiente de destare' : formatWeight(lot.pesos.kilos_netos_confirmados) + ' netos')}</small><small>${lot.pesos.destare_pendiente ? 'Confirma el lote después del destare' : lot.pesos.corregido_por_digitador ? `Calculado: ${escapeHtml(formatWeight(lot.pesos.kilos_netos_calculados))}` : 'Neto calculado confirmado'}</small></td>
             <td>${stateBadge(lot.estado)}<small>${lot.requiere_hidrocooler ? 'Con hidrocooler' : 'Sin hidrocooler'}</small>${lot.asignacion_camara?.camara ? `<small>Cámara ${escapeHtml(lot.asignacion_camara.camara.codigo)}</small>` : ''}</td>
             <td><div class="lot-actions">${lotActions(lot)}</div></td>
         </tr>`).join('');
@@ -408,13 +437,18 @@ function renderSourceSummary(segment) {
         <div><span>RECEPCIÓN</span><strong>${escapeHtml(segment.recepcion.numero_recepcion)}</strong></div>
         <div><span>EXPORTADORA / CLIENTE</span><strong>${escapeHtml(segment.recepcion.cliente.nombre)}</strong></div>
         <div><span>ENVASES DISPONIBLES</span><strong>${escapeHtml(available || 'Sin envases')}</strong></div>
-        <div><span>NETO UNITARIO ROMANA</span><strong>${escapeHtml(formatWeight(segment.recepcion.peso_neto_por_envase))}</strong></div>`;
+        <div><span>NETO UNITARIO ROMANA</span><strong>${escapeHtml(segment.destare_pendiente ? 'Pendiente de destare' : formatWeight(segment.recepcion.peso_neto_por_envase))}</strong></div>`;
 }
 
 function updateCalculatedNet() {
     const form = elements.lotForm.elements;
     const segment = state.selectedSegment;
     if (!segment) return;
+    if (segment.destare_pendiente || segment.neto_estimado === null) {
+        form.kilos_netos_calculados.value = '';
+        form.kilos_brutos.value = '';
+        return;
+    }
     const calculated = Number(segment.neto_estimado);
     const tare = (type) => Number(segment.recepcion.envases?.find((item) => item.tipo_envase === type)?.tara_unitaria || 0);
     const gross = calculated + segment.envases.reduce((sum, item) => sum + Number(item.cantidad) * tare(item.tipo_envase), 0);
@@ -430,7 +464,10 @@ function openCreateLot(segmentId) {
     elements.lotForm.reset();
     elements.lotFormError.textContent = '';
     elements.lotDialogTitle.textContent = 'Crear lote';
-    elements.lotDialogDescription.textContent = 'El lote recibirá todos los envases y kilos calculados para este segmento.';
+    elements.lotDialogDescription.textContent = segment.destare_pendiente
+        ? 'El lote recibe todos los envases; los kilos se calcularán al cerrar el destare.'
+        : 'El lote recibirá todos los envases y kilos calculados para este segmento.';
+    elements.saveAndConfirm.disabled = segment.destare_pendiente;
     const form = elements.lotForm.elements;
     form.lote_id.value = '';
     form.version_conocida.value = '';
@@ -473,7 +510,10 @@ function openEditLot(lotId) {
     elements.lotForm.reset();
     elements.lotFormError.textContent = '';
     elements.lotDialogTitle.textContent = `Editar ${lot.numero_lote}`;
-    elements.lotDialogDescription.textContent = 'Solo los borradores pueden editarse. La confirmación cerrará estos antecedentes.';
+    elements.lotDialogDescription.textContent = lot.pesos.destare_pendiente
+        ? 'Kilos: pendiente de destare. Puedes editar el borrador; confirma después del destare.'
+        : 'Solo los borradores pueden editarse. La confirmación cerrará estos antecedentes.';
+    elements.saveAndConfirm.disabled = lot.pesos.destare_pendiente;
     const form = elements.lotForm.elements;
     fillBaseCatalogs();
     updateCalculatedNet();
@@ -636,20 +676,25 @@ async function loadLots() {
 }
 
 async function loadAll({ notify = false } = {}) {
-    const [summary, catalogs, segments, lots] = await Promise.all([
+    const [summary, catalogs, segments, lots] = await Promise.allSettled([
         api('/api/materia-prima/resumen'),
         loadCatalogs(),
         api('/api/materia-prima/segmentos-pendientes'),
         api(`/api/materia-prima/lotes?${filtersQuery()}`),
     ]);
-    state.summary = summary;
-    state.catalogs = catalogs;
-    state.segments = segments.data;
-    state.lots = lots.data;
+    for (const [name, result] of Object.entries({ summary, catalogs, segments, lots })) {
+        state.panelErrors[name] = result.status === 'rejected'
+            ? result.reason?.message || 'Error de conexión'
+            : null;
+    }
+    state.summary = summary.status === 'fulfilled' ? summary.value : null;
+    if (catalogs.status === 'fulfilled') state.catalogs = catalogs.value;
+    state.segments = segments.status === 'fulfilled' ? segments.value.data : [];
+    state.lots = lots.status === 'fulfilled' ? lots.value.data : [];
     renderSummary();
     renderSegments();
     renderLots();
-    if (notify) toast('Materia prima actualizada.');
+    if (notify && !Object.values(state.panelErrors).some(Boolean)) toast('Materia prima actualizada.');
 }
 
 elements.login.addEventListener('submit', async (event) => {
@@ -733,6 +778,10 @@ elements.lotForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     elements.lotFormError.textContent = '';
     const confirmAfterSave = event.submitter?.value === 'confirm';
+    if (confirmAfterSave && state.selectedSegment?.destare_pendiente) {
+        elements.lotFormError.textContent = 'Cierra el destare en Romana antes de confirmar el lote.';
+        return;
+    }
     setBusy(
         true,
         confirmAfterSave ? 'Guardando y confirmando lote…' : 'Guardando borrador…',
