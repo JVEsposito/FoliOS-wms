@@ -15,13 +15,13 @@ class GeneradorAvisoReciboPdf
         if ($recepcion->estado !== EstadoRecepcionRomana::Cerrado) {
             throw new DomainException('El Aviso de Recibo solo está disponible para recepciones cerradas.');
         }
-        $recepcion->loadMissing('detallesEnvases', 'pesajesEnvases');
+        $recepcion->loadMissing('detallesEnvases', 'salidasEnvases', 'pesajesEnvases');
         $esPesajeEnvases = $recepcion->tipo_recepcion === TipoRecepcionRomana::FrutaPesajeEnvases;
         $esSoloEnvases = $recepcion->tipo_recepcion === TipoRecepcionRomana::SoloEnvases;
         $envases = $recepcion->detallesEnvases
             ->map(function ($detalle) use ($recepcion): string {
-                $linea = $detalle->cantidad_declarada.' '.ucfirst($detalle->tipo_envase->value);
-                if ($recepcion->salida_sin_envases && $detalle->tara_unitaria_salida !== null) {
+                $linea = ($recepcion->modo_salida_envases !== null ? $detalle->cantidad_validada : $detalle->cantidad_declarada).' '.ucfirst($detalle->tipo_envase->value);
+                if ($recepcion->modo_salida_envases !== null && $detalle->tara_unitaria_salida !== null) {
                     $linea .= ' (tara/u '.$this->peso($detalle->tara_unitaria_salida).' kg)';
                 }
 
@@ -54,7 +54,13 @@ class GeneradorAvisoReciboPdf
             }],
             ['Servicio / concepto', ucfirst($recepcion->concepto_envases?->value ?? $recepcion->tipo_servicio->value)],
             ['Guía de despacho', $recepcion->numero_guia_despacho],
-            ['Envases declarados', $envases],
+            ...($recepcion->modo_salida_envases !== null ? [
+                ['Guía de salida', $recepcion->numero_guia_salida ?: 'Sin salida de envases'],
+                ['Salida de envases', $recepcion->salidasEnvases->where('cantidad', '>', 0)
+                    ->map(fn ($salida): string => $salida->cantidad.' '.ucfirst($salida->tipo_envase->value))
+                    ->implode(' · ') ?: 'Ninguno'],
+            ] : []),
+            [$recepcion->modo_salida_envases !== null ? 'Envases validados' : 'Envases declarados', $envases],
             ['Patente camión', $recepcion->patente_camion],
             ['Tipo de camión', match ($recepcion->tipo_camion) {
                 TipoCamionRomana::Termo => 'Camión termo',
@@ -74,15 +80,10 @@ class GeneradorAvisoReciboPdf
                 .$this->peso($recepcion->peso_neto_por_envase).' kg/envase'];
         } else {
             $lineas[] = ['Peso bruto', $this->peso($recepcion->peso_bruto).' kg'];
-            $lineas[] = $recepcion->salida_sin_envases
-                ? [
-                    'Tara camión + envases',
-                    $this->peso($recepcion->peso_tara).' + '
-                        .$this->peso($recepcion->peso_tara_envases).' = '
-                        .$this->peso(
-                            (float) $recepcion->peso_tara + (float) $recepcion->peso_tara_envases,
-                        ).' kg',
-                ]
+            $lineas[] = $recepcion->modo_salida_envases !== null || $recepcion->salida_sin_envases
+                ? ['Tara camión / diferencia envases',
+                    $this->peso($recepcion->peso_tara).' / '
+                    .$this->peso($recepcion->peso_tara_envases).' kg']
                 : ['Peso tara camión', $this->peso($recepcion->peso_tara).' kg'];
             $lineas[] = ['PESO NETO', $this->peso($recepcion->peso_neto).' kg'];
         }
@@ -107,10 +108,10 @@ class GeneradorAvisoReciboPdf
             $y -= $indice >= $inicioPesos ? 35 : 25;
         }
 
-        $contenido .= $this->texto(42, 222, 9, 'Observación de ingreso', true);
-        $contenido .= $this->texto(42, 205, 9, $recepcion->observacion ?: 'Sin observaciones.');
-        $contenido .= $this->texto(42, 180, 9, 'Observación de cierre', true);
-        $contenido .= $this->texto(42, 163, 9, $recepcion->observacion_cierre ?: 'Sin observaciones.');
+        $contenido .= $this->texto(42, 195, 9, 'Observación de ingreso', true);
+        $contenido .= $this->texto(42, 178, 9, $recepcion->observacion ?: 'Sin observaciones.');
+        $contenido .= $this->texto(42, 150, 9, 'Observación de cierre', true);
+        $contenido .= $this->texto(42, 133, 9, $recepcion->observacion_cierre ?: 'Sin observaciones.');
         $contenido .= "0.65 0.70 0.72 RG 42 122 m 240 122 l S 355 122 m 553 122 l S\n";
         $contenido .= $this->texto(78, 105, 8, 'Operador de romana');
         $contenido .= $this->texto(403, 105, 8, 'Transportista');

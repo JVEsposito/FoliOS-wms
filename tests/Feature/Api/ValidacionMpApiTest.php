@@ -38,12 +38,12 @@ class ValidacionMpApiTest extends TestCase
         $this->postJson("/api/romana/recepciones/{$recepcion['id']}/confirmar-ingreso", [
             'operacion_id' => (string) Str::uuid(),
         ])->assertOk();
-        $this->postJson("/api/romana/recepciones/{$recepcion['id']}/cerrar", [
-            'operacion_id' => (string) Str::uuid(), 'peso_tara' => 10000,
-            'tipo_envase_calculo_neto' => 'bins',
-            'taras_envases' => [['tipo_envase' => 'bins', 'tara_unitaria' => 40],
-                ['tipo_envase' => 'totes', 'tara_unitaria' => 2]],
-        ])->assertOk();
+        // Simula un recibo cerrado antes de la nueva regla de orden.
+        DB::table('recepciones_romana')->where('id', $recepcion['id'])->update([
+            'estado' => 'cerrado', 'peso_tara' => 10000,
+            'peso_neto' => 18000, 'tipo_envase_calculo_neto' => 'bins',
+            'cantidad_envase_calculo_neto' => 48, 'peso_neto_por_envase' => 375,
+        ]);
         DB::table('recepciones_romana')->where('id', $recepcion['id'])->update(['especie_validacion_id' => null]);
         $this->actingAs($validador, 'sanctum');
         $version = $this->getJson("/api/validacion-mp/recepciones/buscar/{$recepcion['numero_recepcion']}")
@@ -548,10 +548,157 @@ class ValidacionMpApiTest extends TestCase
 
     private function cliente(): Cliente
     {
-        return Cliente::create(['codigo' => 'CLI-MP', 'nombre' => 'Cliente MP', 'activo' => true]);
+        return Cliente::firstOrCreate(['codigo' => 'CLI-MP'], ['nombre' => 'Cliente MP', 'activo' => true]);
     }
 
     /** @return array<string, mixed> */
+    public function test_destare_usa_cantidades_validadas_y_los_tres_modos_ajustan_neto_y_saldo(): void
+    {
+        foreach ([
+            ['modo' => 'mismos', 'neto' => 18000, 'bins' => 0, 'totes' => 0, 'esponjas' => 0],
+            ['modo' => 'vacio', 'neto' => 16180, 'bins' => 45, 'totes' => 10, 'esponjas' => 0],
+            ['modo' => 'diferentes', 'neto' => 18199, 'bins' => -5, 'totes' => 2, 'esponjas' => -3],
+        ] as $indice => $caso) {
+            [$recepcion, $operador] = $this->recepcionConValidacionParaDestare((string) $indice);
+            $ruta = "/api/romana/recepciones/{$recepcion['id']}/cerrar";
+            $salida = $caso['modo'] === 'diferentes' ? [
+                ['tipo_envase' => 'bins', 'cantidad' => 50],
+                ['tipo_envase' => 'totes', 'cantidad' => 8],
+                ['tipo_envase' => 'esponjas', 'cantidad' => 3],
+            ] : [];
+            $datos = [
+                'operacion_id' => (string) Str::uuid(),
+                'modo_salida_envases' => $caso['modo'],
+                'numero_guia_salida' => $caso['modo'] === 'vacio' ? null : 'GS-'.($indice + 1),
+                'salida_envases' => $salida,
+                'peso_tara' => 10000,
+                'tipo_envase_calculo_neto' => 'bins',
+                'taras_envases' => [
+                    ['tipo_envase' => 'bins', 'tara_unitaria' => 40],
+                    ['tipo_envase' => 'totes', 'tara_unitaria' => 2],
+                    ...($caso['modo'] === 'diferentes'
+                        ? [['tipo_envase' => 'esponjas', 'tara_unitaria' => 1]] : []),
+                ],
+            ];
+            $this->actingAs($operador, 'sanctum');
+            if ($caso['modo'] === 'mismos') {
+                $this->postJson($ruta, [...$datos, 'numero_guia_salida' => null])
+                    ->assertUnprocessable()->assertJsonValidationErrors('numero_guia_salida');
+            }
+            if ($caso['modo'] === 'diferentes') {
+                $this->postJson($ruta, [...$datos, 'taras_envases' => array_slice($datos['taras_envases'], 0, 2)])
+                    ->assertUnprocessable()->assertJsonValidationErrors('taras_envases');
+            }
+            $cerrada = $this->postJson($ruta, $datos)->assertOk()
+                ->assertJsonPath('data.peso_neto', $caso['neto'])
+                ->assertJsonPath('data.cantidad_envase_calculo_neto', 45)
+                ->assertJsonPath('data.modo_salida_envases', $caso['modo'])
+                ->json('data');
+            $this->postJson($ruta, $datos)->assertOk()->assertJsonPath('data.id', $recepcion['id']);
+            $this->assertEqualsWithDelta($caso['neto'] / 45, $cerrada['peso_neto_por_envase'], 0.0005);
+            foreach (['bins', 'totes', 'esponjas'] as $tipo) {
+                $saldo = DB::table('movimientos_envases')
+                    ->where('recepcion_romana_id', $recepcion['id'])->where('tipo_envase', $tipo)
+                    ->selectRaw('COALESCE(SUM(cantidad * signo_cuenta), 0) as saldo')->value('saldo');
+                $this->assertSame($caso[$tipo], (int) $saldo);
+            }
+            $this->assertSame($caso['modo'] === 'vacio' ? 0 : ($caso['modo'] === 'diferentes' ? 3 : 2),
+                DB::table('movimientos_envases')->where('recepcion_romana_id', $recepcion['id'])
+                    ->where('tipo_movimiento', 'salida_recepcion_fruta')->count());
+            if ($caso['modo'] !== 'vacio') {
+                $this->assertDatabaseHas('movimientos_envases', [
+                    'recepcion_romana_id' => $recepcion['id'], 'numero_documento' => $datos['numero_guia_salida'],
+                    'tipo_movimiento' => 'salida_recepcion_fruta', 'signo_cuenta' => -1, 'signo_existencia' => -1,
+                ]);
+                $pdf = $this->get("/api/romana/recepciones/{$recepcion['id']}/aviso-recibo")->getContent();
+                $this->assertStringContainsString('(GS-'.($indice + 1).')', (string) $pdf);
+            }
+        }
+    }
+
+    public function test_destare_espera_validacion_mp_y_la_correccion_reversa_movimientos(): void
+    {
+        $temporada = Temporada::query()->where('activa', true)->firstOrFail();
+        $cliente = $this->cliente();
+        $operador = User::factory()->create(['rol' => RolUsuario::OperadorRomana]);
+        $ingreso = $this->recepcion($temporada, $cliente);
+        $recepcion = $this->actingAs($operador, 'sanctum')
+            ->postJson('/api/romana/recepciones', $ingreso)->assertCreated()->json('data');
+        $this->postJson("/api/romana/recepciones/{$recepcion['id']}/confirmar-ingreso", [
+            'operacion_id' => (string) Str::uuid(),
+        ])->assertOk()->assertJsonPath('data.puede_cerrar', false)
+            ->assertJsonPath('data.destare_pendiente_validacion', true);
+        $datos = [
+            'operacion_id' => (string) Str::uuid(), 'modo_salida_envases' => 'mismos',
+            'numero_guia_salida' => 'GS-CORR', 'peso_tara' => 10000,
+            'tipo_envase_calculo_neto' => 'bins',
+            'taras_envases' => [['tipo_envase' => 'bins', 'tara_unitaria' => 40],
+                ['tipo_envase' => 'totes', 'tara_unitaria' => 2]],
+        ];
+        $this->postJson("/api/romana/recepciones/{$recepcion['id']}/cerrar", $datos)
+            ->assertConflict()->assertJsonPath('message', 'Completa la Validación MP en la PDA antes de registrar el destare.');
+        $this->validarParaDestare($recepcion, $operador);
+        $cerrada = $this->actingAs($operador, 'sanctum')
+            ->postJson("/api/romana/recepciones/{$recepcion['id']}/cerrar", $datos)
+            ->assertOk()->json('data');
+        $supervisor = User::factory()->create(['rol' => RolUsuario::Administrador]);
+        $ruta = "/api/romana/recepciones/{$recepcion['id']}/corregir-salida-envases";
+        $correccion = [...$datos, 'operacion_id' => (string) Str::uuid(),
+            'modo_salida_envases' => 'vacio', 'numero_guia_salida' => null,
+            'version_conocida' => $cerrada['version'], 'motivo_correccion' => 'El camión realmente salió vacío.'];
+        $this->actingAs($supervisor, 'sanctum')->postJson($ruta, $correccion)
+            ->assertOk()->assertJsonPath('data.peso_neto', 16180);
+        $this->postJson($ruta, $correccion)->assertOk();
+        $this->assertSame(2, DB::table('movimientos_envases')
+            ->where('recepcion_romana_id', $recepcion['id'])
+            ->where('tipo_movimiento', 'reversion_salida_fruta')->count());
+        $this->assertSame(2, DB::table('movimientos_envases')
+            ->where('recepcion_romana_id', $recepcion['id'])
+            ->where('tipo_movimiento', 'salida_recepcion_fruta')->count());
+        $this->assertDatabaseHas('eventos_recepcion_romana', [
+            'recepcion_romana_id' => $recepcion['id'], 'tipo' => 'salida_envases_corregida',
+        ]);
+    }
+
+    /** @return array{0: array<string, mixed>, 1: User} */
+    private function recepcionConValidacionParaDestare(string $sufijo): array
+    {
+        $temporada = Temporada::query()->where('activa', true)->firstOrFail();
+        $operador = User::factory()->create(['rol' => RolUsuario::OperadorRomana]);
+        $datos = $this->recepcion($temporada, $this->cliente());
+        $datos['numero_guia_despacho'] .= '-'.$sufijo;
+        $recepcion = $this->actingAs($operador, 'sanctum')
+            ->postJson('/api/romana/recepciones', $datos)->assertCreated()->json('data');
+        $this->postJson("/api/romana/recepciones/{$recepcion['id']}/confirmar-ingreso", [
+            'operacion_id' => (string) Str::uuid(),
+        ])->assertOk();
+        $this->validarParaDestare($recepcion, $operador);
+
+        return [$recepcion, $operador];
+    }
+
+    private function validarParaDestare(array $recepcion, User $operador): void
+    {
+        $temporada = Temporada::query()->where('activa', true)->firstOrFail();
+        $validador = User::factory()->create(['rol' => RolUsuario::ValidadorMp]);
+        $csg = CsgValidacion::create(['temporada_id' => $temporada->id,
+            'codigo' => 'CSG-'.Str::random(10), 'activo' => true]);
+        $variedad = VariedadValidacion::create(['especie_validacion_id' => $recepcion['especie_validacion_id'],
+            'nombre' => 'Santina-'.Str::random(5), 'activo' => true]);
+        $this->actingAs($validador, 'sanctum');
+        $validacion = $this->postJson("/api/validacion-mp/recepciones/{$recepcion['id']}/tomar", [
+            'operacion_id' => (string) Str::uuid(),
+        ])->assertOk()->json('data');
+        $this->postJson("/api/validacion-mp/validaciones/{$validacion['id']}/confirmar", [
+            'operacion_id' => (string) Str::uuid(),
+            'envases' => [['tipo_envase' => 'bins', 'cantidad_validada' => 45],
+                ['tipo_envase' => 'totes', 'cantidad_validada' => 10]],
+            'tarjas_verificadas' => true, 'requiere_segregacion' => false,
+            'csg_validacion_id' => $csg->id, 'variedad_validacion_id' => $variedad->id,
+        ])->assertOk();
+        $this->actingAs($operador, 'sanctum');
+    }
+
     private function recepcion(Temporada $temporada, Cliente $cliente): array
     {
         return [

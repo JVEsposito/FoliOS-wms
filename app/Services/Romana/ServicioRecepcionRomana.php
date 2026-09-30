@@ -4,11 +4,16 @@ namespace App\Services\Romana;
 
 use App\Enums\EstadoRecepcionRomana;
 use App\Enums\EstadoValidacionMp;
+use App\Enums\EstadoRevisionMovimientoEnvase;
+use App\Enums\PropiedadEnvase;
+use App\Enums\TipoMovimientoEnvase;
 use App\Enums\TipoEventoRomana;
 use App\Enums\TipoRecepcionRomana;
 use App\Exceptions\ConflictoOperacion;
 use App\Models\Cliente;
+use App\Models\DetalleGuiaDespachoEnvase;
 use App\Models\EventoRecepcionRomana;
+use App\Models\MovimientoEnvase;
 use App\Models\PesajeEnvaseRecepcionRomana;
 use App\Models\RecepcionRomana;
 use App\Models\Temporada;
@@ -18,6 +23,7 @@ use App\Services\Temporadas\ServicioTemporadaActiva;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use JsonException;
+use Ramsey\Uuid\Uuid;
 
 class ServicioRecepcionRomana
 {
@@ -655,22 +661,7 @@ class ServicioRecepcionRomana
             return $this->cerrarSoloEnvases($recepcion, $datos, $usuario);
         }
 
-        $payload = [
-            'accion' => 'cerrar',
-            'recepcion_id' => $recepcion->id,
-            'peso_tara' => round((float) $datos['peso_tara'], 2),
-            'tipo_envase_calculo_neto' => $datos['tipo_envase_calculo_neto'] ?? null,
-            'salida_sin_envases' => (bool) ($datos['salida_sin_envases'] ?? false),
-            'taras_envases' => collect($datos['taras_envases'] ?? [])
-                ->map(fn (array $envase): array => [
-                    'tipo_envase' => $envase['tipo_envase'],
-                    'tara_unitaria' => round((float) $envase['tara_unitaria'], 3),
-                ])
-                ->sortBy('tipo_envase')
-                ->values()
-                ->all(),
-            'observacion' => $datos['observacion'] ?? null,
-        ];
+        $payload = $this->payloadCierre($recepcion, $datos);
         $hash = $this->hash($payload);
 
         return DB::transaction(function () use ($recepcion, $datos, $usuario, $payload, $hash): RecepcionRomana {
@@ -689,17 +680,18 @@ class ServicioRecepcionRomana
                 throw new ConflictoOperacion('La recepción debe confirmar primero el pesaje de ingreso.');
             }
 
+            if ($recepcion->estado_validacion_mp !== EstadoValidacionMp::Validada
+                || $recepcion->detallesEnvases->contains(fn ($detalle): bool => $detalle->cantidad_validada === null)) {
+                throw new ConflictoOperacion('Completa la Validación MP en la PDA antes de registrar el destare.');
+            }
+            $this->temporadaActiva($recepcion->temporada_id);
             $tara = (float) $payload['peso_tara'];
             $bruto = (float) $recepcion->peso_bruto;
             $tarasEnvases = $this->calcularTaraEnvasesSalida($recepcion, $payload);
             $pesoTaraEnvases = $tarasEnvases['peso_tara_envases'];
-            $pesoTaraTotal = round($tara + $pesoTaraEnvases, 3);
-            if ($pesoTaraTotal >= $bruto) {
-                throw new ConflictoOperacion(
-                    $payload['salida_sin_envases']
-                        ? 'La tara del camión más la tara calculada de envases debe ser menor que el peso bruto registrado.'
-                        : 'La tara debe ser menor que el peso bruto registrado.',
-                );
+            $pesoNeto = round($bruto - $tara - $pesoTaraEnvases, 3);
+            if ($pesoNeto <= 0) {
+                throw new ConflictoOperacion('El peso neto de fruta debe ser mayor que cero.');
             }
 
             $tipoCalculo = $payload['tipo_envase_calculo_neto']
@@ -707,22 +699,21 @@ class ServicioRecepcionRomana
                 ?? $recepcion->detallesEnvases->first()?->tipo_envase?->value;
             $detalleCalculo = $recepcion->detallesEnvases
                 ->first(fn ($detalle): bool => $detalle->tipo_envase->value === $tipoCalculo);
-            if (! $detalleCalculo || $detalleCalculo->cantidad_declarada < 1) {
-                throw new ConflictoOperacion(
-                    'Selecciona un envase declarado para calcular el peso neto individual.',
-                );
+            if (! $detalleCalculo || $detalleCalculo->cantidad_validada < 1) {
+                throw new ConflictoOperacion('Selecciona un envase contenedor validado para calcular el neto individual.');
             }
 
             $ahora = CarbonImmutable::now();
-            $pesoNeto = round($bruto - $pesoTaraTotal, 3);
-            $pesoNetoPorEnvase = round($pesoNeto / $detalleCalculo->cantidad_declarada, 3);
+            $pesoNetoPorEnvase = round($pesoNeto / $detalleCalculo->cantidad_validada, 3);
             $recepcion->update([
                 'peso_tara' => $tara,
                 'peso_neto' => $pesoNeto,
-                'salida_sin_envases' => $payload['salida_sin_envases'],
+                'salida_sin_envases' => false,
+                'modo_salida_envases' => $payload['modo_salida_envases'],
+                'numero_guia_salida' => $payload['numero_guia_salida'],
                 'peso_tara_envases' => $pesoTaraEnvases,
                 'tipo_envase_calculo_neto' => $tipoCalculo,
-                'cantidad_envase_calculo_neto' => $detalleCalculo->cantidad_declarada,
+                'cantidad_envase_calculo_neto' => $detalleCalculo->cantidad_validada,
                 'peso_neto_por_envase' => $pesoNetoPorEnvase,
                 'estado' => EstadoRecepcionRomana::Cerrado,
                 'salida_at' => $ahora,
@@ -734,6 +725,17 @@ class ServicioRecepcionRomana
                 $detalle->update([
                     'tara_unitaria_salida' => $tarasEnvases['taras_unitarias'][$detalle->tipo_envase->value]
                         ?? null,
+                ]);
+            }
+            foreach ($tarasEnvases['salidas'] as $tipo => $cantidad) {
+                if ($cantidad === 0) {
+                    continue;
+                }
+                $movimiento = $this->registrarSalidaEnvase($recepcion, $tipo, $cantidad, $payload['numero_guia_salida'], $usuario, $ahora);
+                $recepcion->salidasEnvases()->create([
+                    'tipo_envase' => $tipo, 'cantidad' => $cantidad,
+                    'tara_unitaria' => $tarasEnvases['taras_unitarias'][$tipo],
+                    'movimiento_envase_id' => $movimiento->id,
                 ]);
             }
             $this->registrarEvento(
@@ -749,12 +751,14 @@ class ServicioRecepcionRomana
                     'numero_recepcion' => $recepcion->numero_recepcion,
                     'peso_bruto' => $bruto,
                     'peso_tara' => $tara,
-                    'salida_sin_envases' => $payload['salida_sin_envases'],
+                    'modo_salida_envases' => $payload['modo_salida_envases'],
+                    'numero_guia_salida' => $payload['numero_guia_salida'],
+                    'salidas_envases' => $tarasEnvases['salidas'],
                     'peso_tara_envases' => $pesoTaraEnvases,
-                    'peso_tara_total' => $pesoTaraTotal,
+                    'peso_tara_total' => round($tara + $pesoTaraEnvases, 3),
                     'peso_neto' => (float) $recepcion->peso_neto,
                     'tipo_envase_calculo_neto' => $tipoCalculo,
-                    'cantidad_envase_calculo_neto' => $detalleCalculo->cantidad_declarada,
+                    'cantidad_envase_calculo_neto' => $detalleCalculo->cantidad_validada,
                     'peso_neto_por_envase' => $pesoNetoPorEnvase,
                     'observacion_cierre' => $payload['observacion'],
                 ],
@@ -762,6 +766,185 @@ class ServicioRecepcionRomana
 
             return $this->cargar($recepcion);
         });
+    }
+
+    /** @param array<string, mixed> $datos */
+    public function corregirSalidaEnvases(RecepcionRomana $recepcion, array $datos, User $usuario): RecepcionRomana
+    {
+        $payload = [
+            ...$this->payloadCierre($recepcion, $datos),
+            'accion' => 'corregir_salida_envases',
+            'version_conocida' => (int) $datos['version_conocida'],
+            'motivo_correccion' => $datos['motivo_correccion'],
+        ];
+        $hash = $this->hash($payload);
+
+        return DB::transaction(function () use ($recepcion, $datos, $usuario, $payload, $hash): RecepcionRomana {
+            $recepcion = RecepcionRomana::query()->with(['detallesEnvases', 'salidasEnvases'])
+                ->lockForUpdate()->findOrFail($recepcion->id);
+            $evento = EventoRecepcionRomana::query()->where('operacion_id', $datos['operacion_id'])->first();
+            if ($evento) {
+                $this->asegurarEventoIdempotente($evento, $recepcion, $hash, TipoEventoRomana::SalidaEnvasesCorregida);
+
+                return $this->cargar($recepcion);
+            }
+            if ($recepcion->estado !== EstadoRecepcionRomana::Cerrado
+                || $recepcion->tipo_recepcion !== TipoRecepcionRomana::FrutaConEnvases
+                || $recepcion->modo_salida_envases === null) {
+                throw new ConflictoOperacion('Solo puedes corregir salidas de recepciones cerradas con el nuevo registro por tipo.');
+            }
+            $this->temporadaActiva($recepcion->temporada_id);
+            if ($recepcion->version !== $payload['version_conocida']) {
+                throw new ConflictoOperacion('La recepción cambió. Actualiza el expediente antes de corregir la salida.');
+            }
+            if ($recepcion->lotesMateriaPrima()->exists()) {
+                throw new ConflictoOperacion('El lote ya fue creado. La corrección de pesos y saldos requiere conciliación supervisada.');
+            }
+            if (round((float) $recepcion->peso_tara, 2) !== $payload['peso_tara']
+                || ($payload['tipo_envase_calculo_neto'] !== null
+                    && $payload['tipo_envase_calculo_neto'] !== $recepcion->tipo_envase_calculo_neto)) {
+                throw new ConflictoOperacion('La corrección de salida no permite cambiar el pesaje ni el envase contenedor.');
+            }
+
+            $resultado = $this->calcularTaraEnvasesSalida($recepcion, $payload);
+            $nuevoNeto = round((float) $recepcion->peso_bruto - (float) $recepcion->peso_tara
+                - $resultado['peso_tara_envases'], 3);
+            if ($nuevoNeto <= 0) {
+                throw new ConflictoOperacion('El peso neto de fruta debe ser mayor que cero.');
+            }
+            $anteriores = $recepcion->salidasEnvases->keyBy(fn ($salida): string => $salida->tipo_envase->value);
+            $tipos = collect(array_keys($resultado['salidas']))->merge($anteriores->keys())->unique();
+            $cambio = $recepcion->modo_salida_envases !== $payload['modo_salida_envases']
+                || $recepcion->numero_guia_salida !== $payload['numero_guia_salida']
+                || abs((float) $recepcion->peso_neto - $nuevoNeto) > 0.0005
+                || $tipos->contains(fn (string $tipo): bool =>
+                    (int) ($anteriores->get($tipo)?->cantidad ?? 0) !== (int) ($resultado['salidas'][$tipo] ?? 0));
+            if (! $cambio) {
+                throw new ConflictoOperacion('La salida corregida no presenta cambios.');
+            }
+            $ahora = CarbonImmutable::now();
+            $salidasAnteriores = $anteriores->mapWithKeys(
+                fn ($salida): array => [$salida->tipo_envase->value => $salida->cantidad],
+            )->all();
+            foreach ($tipos as $tipo) {
+                $anterior = $anteriores->get($tipo);
+                $cantidadNueva = (int) ($resultado['salidas'][$tipo] ?? 0);
+                if ($anterior && $anterior->cantidad > 0) {
+                    $movimiento = MovimientoEnvase::query()->lockForUpdate()->findOrFail($anterior->movimiento_envase_id);
+                    if (DetalleGuiaDespachoEnvase::query()->where('movimiento_origen_id', $movimiento->id)->exists()
+                        || MovimientoEnvase::query()->where('movimiento_origen_id', $movimiento->id)->exists()) {
+                        throw new ConflictoOperacion('La salida ya tiene movimientos vinculados; requiere conciliación supervisada.');
+                    }
+                    MovimientoEnvase::create([
+                        'operacion_id' => (string) Uuid::uuid4(),
+                        'temporada_id' => $recepcion->temporada_id,
+                        'cliente_id' => $recepcion->cliente_id,
+                        'recepcion_romana_id' => $recepcion->id,
+                        'documento_tipo' => 'recepcion_romana',
+                        'documento_id' => $recepcion->id,
+                        'numero_documento' => $movimiento->numero_documento,
+                        'tipo_movimiento' => TipoMovimientoEnvase::ReversionSalidaRecepcionFruta,
+                        'tipo_envase' => $tipo,
+                        'cantidad' => $anterior->cantidad,
+                        'signo_cuenta' => 1,
+                        'signo_existencia' => 1,
+                        'propiedad' => PropiedadEnvase::Cliente,
+                        'movimiento_origen_id' => $movimiento->id,
+                        'ocurrido_at' => $ahora,
+                        'salida_at' => $ahora,
+                        'estado_revision' => EstadoRevisionMovimientoEnvase::Pendiente,
+                        'creado_por_user_id' => $usuario->id,
+                        'datos' => ['motivo_correccion' => $payload['motivo_correccion']],
+                    ]);
+                }
+                $nuevo = $cantidadNueva > 0 ? MovimientoEnvase::create([
+                    'operacion_id' => (string) Uuid::uuid4(),
+                    'temporada_id' => $recepcion->temporada_id,
+                    'cliente_id' => $recepcion->cliente_id,
+                    'recepcion_romana_id' => $recepcion->id,
+                    'documento_tipo' => 'recepcion_romana',
+                    'documento_id' => $recepcion->id,
+                    'numero_documento' => $payload['numero_guia_salida'],
+                    'tipo_movimiento' => TipoMovimientoEnvase::SalidaRecepcionFruta,
+                    'tipo_envase' => $tipo,
+                    'cantidad' => $cantidadNueva,
+                    'signo_cuenta' => -1,
+                    'signo_existencia' => -1,
+                    'propiedad' => PropiedadEnvase::Cliente,
+                    'ocurrido_at' => $ahora,
+                    'salida_at' => $ahora,
+                    'estado_revision' => EstadoRevisionMovimientoEnvase::Pendiente,
+                    'creado_por_user_id' => $usuario->id,
+                    'datos' => ['motivo_correccion' => $payload['motivo_correccion']],
+                ]) : null;
+                if ($anterior) {
+                    $anterior->update([
+                        'cantidad' => $cantidadNueva,
+                        'tara_unitaria' => $resultado['taras_unitarias'][$tipo] ?? $anterior->tara_unitaria,
+                        'movimiento_envase_id' => $nuevo?->id,
+                    ]);
+                } elseif ($nuevo) {
+                    $recepcion->salidasEnvases()->create([
+                        'tipo_envase' => $tipo,
+                        'cantidad' => $cantidadNueva,
+                        'tara_unitaria' => $resultado['taras_unitarias'][$tipo],
+                        'movimiento_envase_id' => $nuevo->id,
+                    ]);
+                }
+            }
+            foreach ($recepcion->detallesEnvases as $detalle) {
+                $detalle->update(['tara_unitaria_salida' => $resultado['taras_unitarias'][$detalle->tipo_envase->value]]);
+            }
+            $netoAnterior = (float) $recepcion->peso_neto;
+            $recepcion->update([
+                'modo_salida_envases' => $payload['modo_salida_envases'],
+                'salida_sin_envases' => $payload['modo_salida_envases'] === 'vacio',
+                'numero_guia_salida' => $payload['numero_guia_salida'],
+                'peso_tara_envases' => $resultado['peso_tara_envases'],
+                'peso_neto' => $nuevoNeto,
+                'peso_neto_por_envase' => round($nuevoNeto / $recepcion->cantidad_envase_calculo_neto, 3),
+                'version' => $recepcion->version + 1,
+            ]);
+            $this->registrarEvento(
+                $recepcion, (string) $datos['operacion_id'], $hash,
+                TipoEventoRomana::SalidaEnvasesCorregida,
+                EstadoRecepcionRomana::Cerrado, EstadoRecepcionRomana::Cerrado,
+                $usuario, $ahora, [
+                    'motivo' => $payload['motivo_correccion'],
+                    'salidas_anteriores' => $salidasAnteriores,
+                    'salidas_nuevas' => $resultado['salidas'],
+                    'neto_anterior' => $netoAnterior,
+                    'neto_nuevo' => $nuevoNeto,
+                ],
+            );
+
+            return $this->cargar($recepcion);
+        }, attempts: 3);
+    }
+
+    /** @param array<string, mixed> $datos
+     *  @return array<string, mixed>
+     */
+    private function payloadCierre(RecepcionRomana $recepcion, array $datos): array
+    {
+        return [
+            'accion' => 'cerrar',
+            'recepcion_id' => $recepcion->id,
+            'peso_tara' => round((float) $datos['peso_tara'], 2),
+            'tipo_envase_calculo_neto' => $datos['tipo_envase_calculo_neto'] ?? null,
+            'modo_salida_envases' => $datos['modo_salida_envases'],
+            'numero_guia_salida' => $datos['numero_guia_salida'] ?? null,
+            'salida_envases' => collect($datos['salida_envases'] ?? [])
+                ->map(fn (array $fila): array => [
+                    'tipo_envase' => $fila['tipo_envase'], 'cantidad' => (int) $fila['cantidad'],
+                ])->sortBy('tipo_envase')->values()->all(),
+            'taras_envases' => collect($datos['taras_envases'] ?? [])
+                ->map(fn (array $envase): array => [
+                    'tipo_envase' => $envase['tipo_envase'],
+                    'tara_unitaria' => round((float) $envase['tara_unitaria'], 3),
+                ])->sortBy('tipo_envase')->values()->all(),
+            'observacion' => $datos['observacion'] ?? null,
+        ];
     }
 
     /** @param array<string, mixed> $datos */
@@ -1178,38 +1361,78 @@ class ServicioRecepcionRomana
     }
 
     /**
+     * Diferencia positiva: envases quedan en planta. Negativa: salen envases
+     * adicionales de la planta, por lo que su tara vuelve al neto de fruta.
+     *
      * @param  array<string, mixed>  $payload
-     * @return array{peso_tara_envases: float, taras_unitarias: array<string, float>}
+     * @return array{peso_tara_envases: float, taras_unitarias: array<string, float>, salidas: array<string, int>}
      */
-    private function calcularTaraEnvasesSalida(
-        RecepcionRomana $recepcion,
-        array $payload,
-    ): array {
+    private function calcularTaraEnvasesSalida(RecepcionRomana $recepcion, array $payload): array
+    {
         $taras = collect($payload['taras_envases'])->keyBy('tipo_envase');
+        $entradas = $recepcion->detallesEnvases->mapWithKeys(
+            fn ($detalle): array => [$detalle->tipo_envase->value => (int) $detalle->cantidad_validada],
+        );
+        $salidas = match ($payload['modo_salida_envases']) {
+            'mismos' => $entradas->all(),
+            'diferentes' => collect($payload['salida_envases'])
+                ->mapWithKeys(fn (array $fila): array => [$fila['tipo_envase'] => $fila['cantidad']])->all(),
+            'vacio' => [],
+        };
+        if ($payload['modo_salida_envases'] === 'diferentes'
+            && $entradas->keys()->diff(array_keys($salidas))->isNotEmpty()) {
+            throw new ConflictoOperacion('Indica la cantidad de salida de cada tipo validado.');
+        }
         $tarasUnitarias = [];
-        $pesoTaraEnvases = 0.0;
-        foreach ($recepcion->detallesEnvases as $detalle) {
-            $tipo = $detalle->tipo_envase->value;
+        $diferencia = 0.0;
+        foreach ($entradas->keys()->merge(array_keys($salidas))->unique() as $tipo) {
             $taraUnitaria = (float) ($taras->get($tipo)['tara_unitaria'] ?? 0);
             if ($taraUnitaria <= 0) {
-                throw new ConflictoOperacion(
-                    "Configura la tara unitaria de {$tipo} antes de cerrar la recepción.",
-                );
+                throw new ConflictoOperacion("Configura la tara unitaria de {$tipo} antes de cerrar la recepción.");
             }
             $tarasUnitarias[$tipo] = $taraUnitaria;
-            $pesoTaraEnvases += $taraUnitaria * $detalle->cantidad_declarada;
+            $diferencia += ((int) $entradas->get($tipo, 0) - (int) ($salidas[$tipo] ?? 0)) * $taraUnitaria;
         }
-
         if (count($tarasUnitarias) !== $taras->count()) {
-            throw new ConflictoOperacion(
-                'Las taras configuradas no coinciden con los tipos de envase declarados.',
-            );
+            throw new ConflictoOperacion('Las taras configuradas no coinciden con los tipos de envase.');
         }
 
         return [
-            'peso_tara_envases' => $payload['salida_sin_envases'] ? round($pesoTaraEnvases, 3) : 0.0,
+            'peso_tara_envases' => round($diferencia, 3),
             'taras_unitarias' => $tarasUnitarias,
+            'salidas' => $salidas,
         ];
+    }
+
+    private function registrarSalidaEnvase(
+        RecepcionRomana $recepcion,
+        string $tipo,
+        int $cantidad,
+        string $guia,
+        User $usuario,
+        CarbonImmutable $ahora,
+    ): MovimientoEnvase {
+        return MovimientoEnvase::create([
+            // Clave estable por recepción y tipo, además del bloqueo sobre recepción.
+            'operacion_id' => Uuid::uuid5(Uuid::NAMESPACE_URL, "salida-recepcion-fruta:{$recepcion->id}:{$tipo}")->toString(),
+            'temporada_id' => $recepcion->temporada_id,
+            'cliente_id' => $recepcion->cliente_id,
+            'recepcion_romana_id' => $recepcion->id,
+            'documento_tipo' => 'recepcion_romana',
+            'documento_id' => $recepcion->id,
+            'numero_documento' => $guia,
+            'tipo_movimiento' => TipoMovimientoEnvase::SalidaRecepcionFruta,
+            'tipo_envase' => $tipo,
+            'cantidad' => $cantidad,
+            'signo_cuenta' => -1,
+            'signo_existencia' => -1,
+            'propiedad' => PropiedadEnvase::Cliente,
+            'ocurrido_at' => $ahora,
+            'salida_at' => $ahora,
+            'estado_revision' => EstadoRevisionMovimientoEnvase::Pendiente,
+            'creado_por_user_id' => $usuario->id,
+            'datos' => ['numero_recepcion' => $recepcion->numero_recepcion],
+        ]);
     }
 
     /** @param array<int, array{tipo_envase: string, cantidad: int}> $envases */
@@ -1376,6 +1599,7 @@ class ServicioRecepcionRomana
             'cerradoPor',
             'validacionTomadaPor',
             'detallesEnvases',
+            'salidasEnvases',
             'pesajesEnvases' => fn ($consulta) => $consulta
                 ->with(['registradoPor', 'anuladoPor'])
                 ->orderBy('secuencia'),

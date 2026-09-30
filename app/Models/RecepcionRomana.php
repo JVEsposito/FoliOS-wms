@@ -44,6 +44,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'peso_tara',
     'peso_neto',
     'salida_sin_envases',
+    'modo_salida_envases',
+    'numero_guia_salida',
     'peso_tara_envases',
     'tipo_envase_calculo_neto',
     'tipo_envase_pesaje',
@@ -90,6 +92,11 @@ class RecepcionRomana extends Model implements PerteneceATemporada
     public function detallesEnvases(): HasMany
     {
         return $this->hasMany(DetalleEnvaseRecepcionRomana::class, 'recepcion_romana_id');
+    }
+
+    public function salidasEnvases(): HasMany
+    {
+        return $this->hasMany(SalidaEnvaseRecepcionRomana::class, 'recepcion_romana_id');
     }
 
     public function pesajesEnvases(): HasMany
