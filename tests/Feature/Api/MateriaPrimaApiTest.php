@@ -40,15 +40,17 @@ class MateriaPrimaApiTest extends TestCase
         $this->assertNull($pendientes[0]['neto_estimado']);
 
         $primero = $this->postJson('/api/materia-prima/lotes', $this->payloadLote($contexto, [
-            'numero_lote' => 'PRE-DESTARE-01', 'ggn' => null,
+            'numero_lote' => 'PRE-DESTARE-01', 'ggn' => null, 'cuartel' => null,
         ]))->assertCreated()->assertJsonPath('data.pesos.kilos_netos_calculados', null)
             ->assertJsonPath('data.pesos.kilos_brutos', null)
             ->assertJsonPath('data.pesos.destare_pendiente', true)
             ->assertJsonCount(3, 'data.envases.detalle')->json('data');
         $segundo = $this->postJson('/api/materia-prima/lotes', $this->payloadLote(
             [...$contexto, 'segmento_id' => $contexto['segundo_segmento_id']],
-            ['numero_lote' => 'PRE-DESTARE-02'],
+            ['numero_lote' => 'PRE-DESTARE-02', 'cuartel' => null],
         ))->assertCreated()->assertJsonPath('data.pesos.kilos_netos_confirmados', null)->json('data');
+        $this->assertDatabaseHas('lotes_materia_prima', ['id' => $primero['id'], 'secuencia_creacion' => 1]);
+        $this->assertDatabaseHas('lotes_materia_prima', ['id' => $segundo['id'], 'secuencia_creacion' => 2]);
         $this->postJson("/api/materia-prima/lotes/{$primero['id']}/confirmar", [
             'operacion_id' => (string) Str::uuid(), 'version_conocida' => $primero['version'],
         ])->assertConflict()->assertJsonPath('message', 'El lote está pendiente de destare. Cierra el destare en Romana antes de confirmarlo.');

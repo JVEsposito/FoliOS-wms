@@ -64,6 +64,9 @@ class ServicioLoteMateriaPrima
                 'operacion_id' => $datos['operacion_id'],
                 'payload_hash' => $hash,
                 ...$this->atributosLote($datos, $preparados),
+                'secuencia_creacion' => ((int) LoteMateriaPrima::query()
+                    ->where('recepcion_romana_id', $preparados['recepcion']->id)
+                    ->max('secuencia_creacion')) + 1,
                 'estado' => EstadoLoteMateriaPrima::Borrador,
                 'version' => 1,
                 'creado_por_user_id' => $usuario->id,
@@ -975,7 +978,7 @@ class ServicioLoteMateriaPrima
             ->where('recepcion_romana_id', $recepcion->id)
             ->where('estado', '!=', EstadoLoteMateriaPrima::Anulado->value)
             ->with('envasesDetalle')
-            ->orderBy('created_at')->orderBy('id')
+            ->orderBy('secuencia_creacion')->orderBy('created_at')->orderBy('id')
             ->lockForUpdate()->get();
         $ocupados = 0;
         $asignados = 0;
