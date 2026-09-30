@@ -3,11 +3,11 @@
 namespace App\Services\Romana;
 
 use App\Enums\EstadoRecepcionRomana;
-use App\Enums\EstadoValidacionMp;
 use App\Enums\EstadoRevisionMovimientoEnvase;
+use App\Enums\EstadoValidacionMp;
 use App\Enums\PropiedadEnvase;
-use App\Enums\TipoMovimientoEnvase;
 use App\Enums\TipoEventoRomana;
+use App\Enums\TipoMovimientoEnvase;
 use App\Enums\TipoRecepcionRomana;
 use App\Exceptions\ConflictoOperacion;
 use App\Models\Cliente;
@@ -923,7 +923,7 @@ class ServicioRecepcionRomana
     }
 
     /** @param array<string, mixed> $datos
-     *  @return array<string, mixed>
+     * @return array<string, mixed>
      */
     private function payloadCierre(RecepcionRomana $recepcion, array $datos): array
     {
