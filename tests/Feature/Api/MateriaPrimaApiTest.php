@@ -1476,16 +1476,16 @@ class MateriaPrimaApiTest extends TestCase
         ])->assertOk();
         if (! $sinDestare) {
             $this->postJson("/api/romana/recepciones/{$recepcion['id']}/cerrar", [
-            'operacion_id' => (string) Str::uuid(),
-            'taras_envases' => [['tipo_envase' => 'bins', 'tara_unitaria' => 40], ['tipo_envase' => 'totes', 'tara_unitaria' => 2],
-                ...($tresTipos ? [['tipo_envase' => 'esponjas', 'tara_unitaria' => 1]] : [])],
-            'peso_tara' => 10000,
-            'tipo_envase_calculo_neto' => 'bins',
-        ])
-            ->assertOk()
-            ->assertJsonPath('data.peso_neto', 18000)
-            ->assertJsonPath('data.cantidad_envase_calculo_neto', 48)
-            ->assertJsonPath('data.peso_neto_por_envase', 375);
+                'operacion_id' => (string) Str::uuid(),
+                'taras_envases' => [['tipo_envase' => 'bins', 'tara_unitaria' => 40], ['tipo_envase' => 'totes', 'tara_unitaria' => 2],
+                    ...($tresTipos ? [['tipo_envase' => 'esponjas', 'tara_unitaria' => 1]] : [])],
+                'peso_tara' => 10000,
+                'tipo_envase_calculo_neto' => 'bins',
+            ])
+                ->assertOk()
+                ->assertJsonPath('data.peso_neto', 18000)
+                ->assertJsonPath('data.cantidad_envase_calculo_neto', 48)
+                ->assertJsonPath('data.peso_neto_por_envase', 375);
         }
 
         $especie = EspecieValidacion::firstOrCreate([

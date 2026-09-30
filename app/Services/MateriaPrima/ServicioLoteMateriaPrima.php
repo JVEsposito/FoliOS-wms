@@ -988,6 +988,7 @@ class ServicioLoteMateriaPrima
             $ocupados += $cantidad;
             if ($lote->estado !== EstadoLoteMateriaPrima::Borrador) {
                 $asignados += (int) round((float) $lote->kilos_netos_calculados * 1000);
+
                 continue;
             }
             $kilos = $ocupados === $total ? $neto - $asignados : $unitario * $cantidad;
