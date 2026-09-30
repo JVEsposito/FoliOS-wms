@@ -20,9 +20,7 @@ return new class extends Migration
             $table->unique(['lote_materia_prima_id', 'tipo_envase'], 'lote_mp_envases_tipo_unique');
         });
 
-        $multiples = app(RellenoEnvasesLotes::class)->ejecutar();
-        echo 'Segmentos con varios lotes activos sin modificar: '.count($multiples)
-            .($multiples ? ' ('.implode(', ', $multiples).')' : '').PHP_EOL;
+        app(RellenoEnvasesLotes::class)->copiarResumenExistente();
     }
 
     public function down(): void
