@@ -115,7 +115,12 @@ jobs:
           retention-days: 14
 
       - name: Validar estilo
-        run: vendor/bin/pint --test
+        run: |
+          vendor/bin/pint --test || {
+            vendor/bin/pint app/Services/Romana/ServicioRecepcionRomana.php
+            git diff -- app/Services/Romana/ServicioRecepcionRomana.php
+            exit 1
+          }
 
       - name: Crear esquema limpio
         run: php artisan migrate:fresh --force
