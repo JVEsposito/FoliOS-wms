@@ -130,6 +130,7 @@ class ReinicioOperacionalApiTest extends TestCase
         $this->assertDatabaseCount('validaciones_mp', 0);
         $this->assertDatabaseCount('segmentos_validacion_mp', 0);
         $this->assertDatabaseCount('procesos_hidrocooler_materia_prima', 0);
+        $this->assertDatabaseCount('salidas_envases_recepcion_romana', 0);
         $this->assertDatabaseCount('movimientos_envases', 0);
         $this->assertDatabaseCount('recalculos_pendientes_planificador', 0);
 

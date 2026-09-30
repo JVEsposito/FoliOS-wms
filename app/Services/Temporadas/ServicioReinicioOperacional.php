@@ -536,6 +536,10 @@ class ServicioReinicioOperacional
             ->where('temporada_id', $temporada->id)
             ->delete();
 
+        $eliminados['salidas_envases_romana'] = DB::table('salidas_envases_recepcion_romana')
+            ->whereIn('recepcion_romana_id', clone $recepciones)
+            ->delete();
+
         $eliminados['revisiones_envases'] = DB::table('revisiones_movimientos_envases')
             ->whereIn('movimiento_envase_id', clone $movimientosEnvases)
             ->delete();
