@@ -599,7 +599,7 @@ class ValidacionMpApiTest extends TestCase
             foreach (['bins', 'totes', 'esponjas'] as $tipo) {
                 $saldo = DB::table('movimientos_envases')
                     ->where('recepcion_romana_id', $recepcion['id'])->where('tipo_envase', $tipo)
-                    ->selectRaw('COALESCE(SUM(cantidad * signo_cuenta), 0) as saldo')->value('saldo');
+                    ->selectRaw('COALESCE(SUM(CAST(cantidad AS SIGNED) * signo_cuenta), 0) as saldo')->value('saldo');
                 $this->assertSame($caso[$tipo], (int) $saldo);
             }
             $this->assertSame($caso['modo'] === 'vacio' ? 0 : ($caso['modo'] === 'diferentes' ? 3 : 2),

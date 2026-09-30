@@ -97,7 +97,8 @@ class RecepcionRomanaApiTest extends TestCase
         ])
             ->assertOk()
             ->assertJsonPath('data.estado', EstadoRecepcionRomana::EnBasculaSalida->value)
-            ->assertJsonPath('data.puede_cerrar', true);
+            ->assertJsonPath('data.puede_cerrar', false)
+            ->assertJsonPath('data.destare_pendiente_validacion', true);
 
         $this->postJson('/api/romana/recepciones/'.$creada['id'].'/confirmar-ingreso', [
             'operacion_id' => $operacionConfirmacion,
