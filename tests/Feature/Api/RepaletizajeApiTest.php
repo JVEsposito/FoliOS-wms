@@ -134,8 +134,8 @@ class RepaletizajeApiTest extends TestCase
                 'folios' => [$nuevo->numero_folio],
                 'version_esperada' => 1,
             ])
-            ->assertOk()
-            ->assertJsonPath('data.total_folios', 1);
+            ->assertUnprocessable()
+            ->assertJsonPath('errores.0.codigo', 'tipo_bulto_no_permitido');
     }
 
     public function test_hotfix_corrige_la_secuencia_acumulada_de_migraciones_post_prefrio(): void
