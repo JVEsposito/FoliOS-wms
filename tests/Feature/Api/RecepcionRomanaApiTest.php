@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Services\Temporadas\ServicioTemporadaGlobal;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -96,15 +97,19 @@ class RecepcionRomanaApiTest extends TestCase
         ])
             ->assertOk()
             ->assertJsonPath('data.estado', EstadoRecepcionRomana::EnBasculaSalida->value)
-            ->assertJsonPath('data.puede_cerrar', true);
+            ->assertJsonPath('data.puede_cerrar', false)
+            ->assertJsonPath('data.destare_pendiente_validacion', true);
 
         $this->postJson('/api/romana/recepciones/'.$creada['id'].'/confirmar-ingreso', [
             'operacion_id' => $operacionConfirmacion,
         ])->assertOk();
 
+        $this->marcarEnvasesValidadosParaDestare($creada['id']);
         $this->travelTo(CarbonImmutable::parse('2026-07-21 14:10:00'));
         $cerrada = $this->postJson('/api/romana/recepciones/'.$creada['id'].'/cerrar', [
             'operacion_id' => (string) Str::uuid(),
+            'modo_salida_envases' => 'mismos',
+            'numero_guia_salida' => 'GS-PRUEBA',
             'taras_envases' => [['tipo_envase' => 'bins', 'tara_unitaria' => 40]],
             'peso_tara' => 10540,
             'tipo_envase_calculo_neto' => 'bins',
@@ -216,6 +221,8 @@ class RecepcionRomanaApiTest extends TestCase
 
         $this->postJson('/api/romana/recepciones/'.$id.'/cerrar', [
             'operacion_id' => (string) Str::uuid(),
+            'modo_salida_envases' => 'mismos',
+            'numero_guia_salida' => 'GS-INVALIDO',
             'taras_envases' => [['tipo_envase' => 'bins', 'tara_unitaria' => 40]],
             'peso_tara' => 10000,
         ])->assertConflict()->assertJsonPath('codigo', 'conflicto_operacional');
@@ -237,13 +244,16 @@ class RecepcionRomanaApiTest extends TestCase
             ->assertConflict()
             ->assertJsonPath('message', 'La recepción ya confirmó su ingreso y sus antecedentes no pueden editarse.');
 
+        $this->marcarEnvasesValidadosParaDestare($id);
         $this->postJson('/api/romana/recepciones/'.$id.'/cerrar', [
             'operacion_id' => (string) Str::uuid(),
+            'modo_salida_envases' => 'mismos',
+            'numero_guia_salida' => 'GS-INVALIDO-2',
             'taras_envases' => [['tipo_envase' => 'bins', 'tara_unitaria' => 40]],
             'peso_tara' => 29000,
         ])
             ->assertConflict()
-            ->assertJsonPath('message', 'La tara debe ser menor que el peso bruto registrado.');
+            ->assertJsonPath('message', 'El peso neto de fruta debe ser mayor que cero.');
 
         $this->assertDatabaseHas('recepciones_romana', [
             'id' => $id,
@@ -272,11 +282,12 @@ class RecepcionRomanaApiTest extends TestCase
             'operacion_id' => (string) Str::uuid(),
         ])->assertOk();
 
+        $this->marcarEnvasesValidadosParaDestare($recepcion['id']);
         $this->postJson("/api/romana/recepciones/{$recepcion['id']}/cerrar", [
             'operacion_id' => (string) Str::uuid(),
             'peso_tara' => 10000,
             'tipo_envase_calculo_neto' => 'bins',
-            'salida_sin_envases' => true,
+            'modo_salida_envases' => 'vacio',
             'taras_envases' => [
                 ['tipo_envase' => 'bins', 'tara_unitaria' => 40],
             ],
@@ -288,7 +299,7 @@ class RecepcionRomanaApiTest extends TestCase
             'operacion_id' => (string) Str::uuid(),
             'peso_tara' => 10000,
             'tipo_envase_calculo_neto' => 'bins',
-            'salida_sin_envases' => true,
+            'modo_salida_envases' => 'vacio',
             'taras_envases' => [
                 ['tipo_envase' => 'bins', 'tara_unitaria' => 40],
                 ['tipo_envase' => 'totes', 'tara_unitaria' => 2],
@@ -297,7 +308,7 @@ class RecepcionRomanaApiTest extends TestCase
         ])
             ->assertOk()
             ->assertJsonPath('data.estado', EstadoRecepcionRomana::Cerrado->value)
-            ->assertJsonPath('data.salida_sin_envases', true)
+            ->assertJsonPath('data.modo_salida_envases', 'vacio')
             ->assertJsonPath('data.peso_tara', 10000)
             ->assertJsonPath('data.peso_tara_envases', 445)
             ->assertJsonPath('data.peso_tara_total', 10445)
@@ -322,7 +333,8 @@ class RecepcionRomanaApiTest extends TestCase
         ]);
         $this->assertDatabaseHas('recepciones_romana', [
             'id' => $cerrada['id'],
-            'salida_sin_envases' => true,
+            'salida_sin_envases' => false,
+            'modo_salida_envases' => 'vacio',
             'peso_tara_envases' => 445,
             'peso_neto' => 19555,
         ]);
@@ -341,16 +353,17 @@ class RecepcionRomanaApiTest extends TestCase
         $this->postJson("/api/romana/recepciones/{$recepcion['id']}/confirmar-ingreso", [
             'operacion_id' => (string) Str::uuid(),
         ])->assertOk();
-        $cerrada = $this->postJson("/api/romana/recepciones/{$recepcion['id']}/cerrar", [
-            'operacion_id' => (string) Str::uuid(),
-            'taras_envases' => [['tipo_envase' => 'bins', 'tara_unitaria' => 40]],
-            'peso_tara' => 10540,
-            'tipo_envase_calculo_neto' => 'bins',
-        ])
-            ->assertOk()
-            ->assertJsonPath('data.version', 3)
-            ->assertJsonPath('data.correccion_administrativa_disponible', true)
-            ->json('data');
+        // Expediente histórico cerrado antes de la validación MP: conserva
+        // la corrección administrativa existente y sus pesos.
+        DB::table('recepciones_romana')->where('id', $recepcion['id'])->update([
+            'estado' => 'cerrado', 'peso_tara' => 10540, 'peso_neto' => 18000,
+            'tipo_envase_calculo_neto' => 'bins', 'cantidad_envase_calculo_neto' => 48,
+            'peso_neto_por_envase' => 375, 'version' => 3,
+        ]);
+        DB::table('detalles_envases_recepcion_romana')->where('recepcion_romana_id', $recepcion['id'])
+            ->update(['tara_unitaria_salida' => 40]);
+        $cerrada = $this->getJson("/api/romana/recepciones/{$recepcion['id']}")
+            ->assertOk()->assertJsonPath('data.correccion_administrativa_disponible', true)->json('data');
 
         $correccion = $datos;
         $correccion['operacion_id'] = (string) Str::uuid();
@@ -389,7 +402,7 @@ class RecepcionRomanaApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.version', 4);
 
-        $this->assertSame(4, EventoRecepcionRomana::query()->count());
+        $this->assertSame(3, EventoRecepcionRomana::query()->count());
         $evento = EventoRecepcionRomana::query()
             ->where('recepcion_romana_id', $recepcion['id'])
             ->where('tipo', 'correccion_administrativa')
@@ -993,5 +1006,15 @@ class RecepcionRomanaApiTest extends TestCase
             'peso_bruto' => 28540,
             'observacion' => 'Carga sellada en origen.',
         ];
+    }
+
+    private function marcarEnvasesValidadosParaDestare(string $recepcionId): void
+    {
+        // Estos casos prueban Romana; el flujo real de validación se cubre por API
+        // en ValidacionMpApiTest. La fixture conserva los datos MP inmutables.
+        DB::table('detalles_envases_recepcion_romana')->where('recepcion_romana_id', $recepcionId)
+            ->update(['cantidad_validada' => DB::raw('cantidad_declarada')]);
+        DB::table('recepciones_romana')->where('id', $recepcionId)
+            ->update(['estado_validacion_mp' => EstadoValidacionMp::Validada->value]);
     }
 }
