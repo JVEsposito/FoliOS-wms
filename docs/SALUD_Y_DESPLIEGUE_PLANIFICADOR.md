@@ -100,6 +100,8 @@ La acción requiere el permiso de supervisión de cámaras de productos, un moti
 y confirmar el código exacto. El servicio bloquea nuevos ingresos y busca
 posiciones compatibles en otras cámaras automáticamente; los camareros ejecutan
 las maniobras publicadas. Se recalcula después de cada movimiento confirmado.
+Si espera por falta de destino compatible, un retiro confirmado en otra cámara
+PT dirigida también reintenta los vaciados pendientes automáticamente.
 
 La pantalla muestra el último ciclo, pallets trasladados y restantes, porcentaje
 y el motivo de espera (por ejemplo, falta de destino compatible, retención o
