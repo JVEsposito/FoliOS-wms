@@ -12,7 +12,7 @@ const keys = { token: 'estiba_wms_office_token', identity: 'estiba_wms_office_id
 const state = {
     token: localStorage.getItem(keys.token), identity: readJson(keys.identity), seasons: [], season: null,
     filterSeasons: [], filterSeason: null, validators: [], articles: [], origins: [], categories: [], combinations: [], history: [],
-    correctionTarget: null, correctionOperationId: null,
+    correctionTarget: null, correctionOperationId: null, summary: null, catalogCache: null,
 };
 
 class ApiError extends Error {
@@ -90,37 +90,51 @@ function renderFilterOptions() {
 }
 
 async function loadHistory(seasonId = state.filterSeason?.id || null) {
-    const params = new URLSearchParams();
-    const values = Object.fromEntries(new FormData(elements.filters));
-    for (const [key, value] of Object.entries(values)) if (String(value).trim()) params.set(key, String(value).trim());
-    if (seasonId) params.set('temporada_id', seasonId);
-    params.set('per_page', '25');
+    const params = historyParams(seasonId);
     const response = await api(`/api/validacion/pallets?${params}`);
     state.history = response.data || [];
     renderHistory();
 }
 
+function historyParams(seasonId = state.filterSeason?.id || null) {
+    const params = new URLSearchParams();
+    const values = Object.fromEntries(new FormData(elements.filters));
+    for (const [key, value] of Object.entries(values)) if (String(value).trim()) params.set(key, String(value).trim());
+    if (seasonId) params.set('temporada_id', seasonId);
+    params.set('per_page', '25');
+    return params;
+}
+
+async function loadSummary(seasonId = null) {
+    const response = await api(`/api/validacion/registro/resumen?${historyParams(seasonId)}`);
+    if (state.catalogCache && (state.catalogCache.seasonId !== response.temporada?.id || state.catalogCache.version !== response.temporada?.version_catalogo)) {
+        state.catalogCache = null;
+        state.articles = []; state.origins = []; state.categories = []; state.combinations = [];
+    }
+    state.summary = response;
+    renderMetrics();
+}
+
 async function loadCatalogContext(seasonId = null) {
-    if (state.identity?.puede_administrar_catalogos_validacion !== true) return;
+    if (state.identity?.puede_consultar_catalogos_validacion !== true) return;
+    if (state.catalogCache?.seasonId === seasonId && state.catalogCache?.version === state.summary?.temporada?.version_catalogo) return;
     const suffix = seasonId ? `?temporada_id=${encodeURIComponent(seasonId)}` : '';
     const response = await api(`/api/administracion/validacion${suffix}`);
     state.seasons = response.temporadas || []; state.season = response.temporada || null; state.articles = response.articulos || [];
     state.origins = response.origenes || []; state.categories = response.categorias || []; state.combinations = response.combinaciones || [];
-    renderMetrics();
+    state.catalogCache = { seasonId: state.season?.id, version: state.season?.version_catalogo };
 }
 
 async function loadAll(seasonId = null) {
-    await loadFilterOptions(seasonId);
-    await loadCatalogContext(state.filterSeason?.id || seasonId);
-    await loadHistory(state.filterSeason?.id || seasonId);
+    await Promise.all([loadFilterOptions(seasonId), loadSummary(seasonId), loadHistory(seasonId)]);
 }
 
 function renderMetrics() {
-    elements.catalogVersion.textContent = state.season?.version_catalogo ?? '—';
-    elements.articleCount.textContent = String(state.articles.filter((item) => item.activo).length);
-    elements.originCount.textContent = String(state.origins.filter((item) => item.activo).length);
-    elements.combinationCount.textContent = String(state.combinations.filter((item) => item.activo).length);
-    elements.observedCount.textContent = String(state.history.filter((item) => item.resultado === 'observado').length);
+    elements.catalogVersion.textContent = state.summary?.temporada?.version_catalogo ?? '—';
+    elements.articleCount.textContent = String(state.summary?.articulos_activos ?? 0);
+    elements.originCount.textContent = String(state.summary?.origenes_activos ?? 0);
+    elements.combinationCount.textContent = String(state.summary?.combinaciones_activas ?? 0);
+    elements.observedCount.textContent = String(state.summary?.observados ?? 0);
 }
 
 function renderHistory() {
@@ -134,7 +148,6 @@ function renderHistory() {
             : '<span class="validation-action-unavailable">No disponible</span>';
         return `<tr><td><strong>${escapeHtml(item.numero_folio)}</strong><small>Intento ${item.numero_intento} · ${escapeHtml(statusText(item.tipo_bulto))}</small></td><td><strong>${escapeHtml(article.especie || 'Sin artículo')} · ${escapeHtml(article.variedad || '')}</strong><small>${escapeHtml(category.nombre || 'Sin categoría')} · ${escapeHtml(article.calibre || '')} · ${escapeHtml(article.envase || '')}</small></td><td><strong>${escapeHtml(origin.cliente || 'Sin origen')}</strong><small>${escapeHtml(origin.marca || '')} · CSG ${escapeHtml(origin.csg || '—')}</small></td><td><span class="validation-result validation-result--${escapeHtml(resultClass)}">${escapeHtml(item.estado === 'conflicto' ? 'Conflicto' : item.resultado)}</span>${item.motivo ? `<small>${escapeHtml(statusText(item.motivo))}</small>` : ''}</td><td><strong>${escapeHtml(item.usuario?.nombre || '—')}</strong><small>${escapeHtml(item.dispositivo?.codigo || '')}</small></td><td>${escapeHtml(formatDate(item.generado_dispositivo_at))}<small>${item.linea_proceso && item.turno ? `Línea ${escapeHtml(item.linea_proceso)} · Turno ${escapeHtml(item.turno)}` : 'Sin jornada histórica'}</small>${lastCorrection ? `<small>Corregido ${escapeHtml(formatDate(lastCorrection.corregido_at))}</small>` : ''}</td><td>${correction}</td></tr>`;
     }).join('') || '<tr><td class="empty-validation" colspan="7">No existen validaciones coincidentes.</td></tr>';
-    renderMetrics();
 }
 
 function renderCorrectionOrigins(selectedId = '') {
@@ -196,7 +209,7 @@ async function submitCorrection(event) {
             body: JSON.stringify(payload),
         });
         closeCorrection();
-        await loadHistory(state.filterSeason?.id);
+        await Promise.all([loadHistory(state.filterSeason?.id), loadSummary(state.filterSeason?.id)]);
         toast(response.message || 'Validación corregida y auditada.');
     } catch (error) {
         elements.correctionError.textContent = error.message;
@@ -208,9 +221,9 @@ async function submitCorrection(event) {
 
 elements.login.addEventListener('submit', async (event) => { event.preventDefault(); elements.loginError.textContent = ''; setBusy(true, 'Validando acceso…'); try { const payload = await api('/api/acceso-oficina', { method: 'POST', body: JSON.stringify(Object.fromEntries(new FormData(elements.login))) }); if (payload.usuario.puede_consultar_validaciones_pallet !== true) throw new ApiError('Tu perfil no puede consultar validaciones.', 403); persist(payload); showApp(); await loadAll(); } catch (error) { elements.loginError.textContent = error.message; } finally { setBusy(false); } });
 elements.logout.addEventListener('click', async () => { try { await api('/api/acceso-oficina', { method: 'DELETE' }); } catch {} clearSession(); });
-elements.reload.addEventListener('click', () => { setBusy(true, 'Actualizando validación…'); void loadAll(state.season?.id).catch((error) => toast(error.message, true)).finally(() => setBusy(false)); });
-elements.filters.addEventListener('submit', (event) => { event.preventDefault(); setBusy(true, 'Consultando historial…'); void loadHistory(state.filterSeason?.id).catch((error) => toast(error.message, true)).finally(() => setBusy(false)); });
-elements.history.addEventListener('click', (event) => { const button = event.target.closest('[data-correct-validation]'); if (!button) return; const item = state.history.find((candidate) => candidate.id === button.dataset.correctValidation); if (item) openCorrection(item); });
+elements.reload.addEventListener('click', () => { setBusy(true, 'Actualizando validación…'); void loadAll(state.filterSeason?.id).catch((error) => toast(error.message, true)).finally(() => setBusy(false)); });
+elements.filters.addEventListener('submit', (event) => { event.preventDefault(); setBusy(true, 'Consultando historial…'); void Promise.all([loadHistory(state.filterSeason?.id), loadSummary(state.filterSeason?.id)]).catch((error) => toast(error.message, true)).finally(() => setBusy(false)); });
+elements.history.addEventListener('click', (event) => { const button = event.target.closest('[data-correct-validation]'); if (!button) return; const item = state.history.find((candidate) => candidate.id === button.dataset.correctValidation); if (!item) return; setBusy(true, 'Cargando catálogo de corrección…'); void loadCatalogContext(state.filterSeason?.id).then(() => openCorrection(item)).catch((error) => toast(error.message, true)).finally(() => setBusy(false)); });
 elements.correctionForm.addEventListener('submit', (event) => { void submitCorrection(event); });
 elements.correctionForm.elements.articulo_validacion_id.addEventListener('change', () => renderCorrectionOrigins());
 elements.correctionCancel.addEventListener('click', closeCorrection);

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
   Modal,
   Pressable,
   ScrollView,
@@ -49,6 +50,7 @@ import {
 import { colors } from '../theme/colors';
 import { isPdaBuild } from '../config/appVariant';
 import { ScanInput, ScanInputHandle } from '../components/ui/ScanInput';
+import { createOriginArticleSelector, indexValidationCatalog } from '../domain/validationCatalogIndex';
 
 type ValidationScreenProps = {
   auth: AuthSession;
@@ -135,9 +137,14 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
   const terminalDecision = folioReview?.status === 'aprobado' || folioReview?.status === 'rechazado';
   const observedAttempt = folioReview?.status === 'observado' ? folioReview.attempt : null;
 
-  const activeArticles = useMemo(
-    () => catalog?.articulos.filter((item) => item.activo) ?? [],
-    [catalog],
+  const catalogIndex = useMemo(() => catalog ? indexValidationCatalog(catalog) : null, [catalog]);
+  const selectOriginArticles = useMemo(() => catalogIndex ? createOriginArticleSelector(catalogIndex) : null, [catalogIndex]);
+  // La identidad de esta clave cambia solo al seleccionar/quitar CSG, no al digitar cajas, lote o proceso.
+  const originSelectionKey = originDrafts.map((draft) => draft.originId).join('|');
+  const selectedOriginIds = useMemo(() => originSelectionKey.split('|').filter(Boolean), [originSelectionKey]);
+  const eligibleArticles = useMemo(
+    () => selectOriginArticles?.(selectedOriginIds) ?? [],
+    [selectOriginArticles, selectedOriginIds],
   );
   const categoryOptions = useMemo(
     () => (catalog?.categorias ?? [])
@@ -150,33 +157,24 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
     [catalog, categoryId],
   );
   const speciesOptions = useMemo(
-    () => uniqueOptions(activeArticles.map((item) => item.especie)),
-    [activeArticles],
+    () => uniqueOptions(eligibleArticles.map((item) => item.especie)),
+    [eligibleArticles],
   );
   const varietyOptions = useMemo(
-    () => {
-      const originIds = originDrafts.map((draft) => draft.originId).filter(Boolean);
-      if (!originIds.length) return [];
-      return uniqueOptions(activeArticles.filter((item) => (!species || item.especie === species)
-        && originIds.every((id) => {
-          const origin = catalog?.origenes.find((candidate) => candidate.id === id);
-          return catalog?.combinaciones.some((combination) => combination.articulo_validacion_id === item.id && combination.origen_validacion_id === id)
-            && (origin?.variedad_ids === null || (item.variedad_validacion_id !== null && origin?.variedad_ids.includes(item.variedad_validacion_id)));
-        })).map((item) => item.variedad));
-    },
-    [activeArticles, species, originDrafts, catalog],
+    () => uniqueOptions(eligibleArticles.filter((item) => !species || item.especie === species).map((item) => item.variedad)),
+    [eligibleArticles, species],
   );
   const caliberOptions = useMemo(
-    () => uniqueOptions(activeArticles.filter((item) => (!species || item.especie === species) && (!variety || item.variedad === variety)).map((item) => item.calibre)),
-    [activeArticles, species, variety],
+    () => uniqueOptions(eligibleArticles.filter((item) => (!species || item.especie === species) && (!variety || item.variedad === variety)).map((item) => item.calibre)),
+    [eligibleArticles, species, variety],
   );
   const packageOptions = useMemo(
-    () => uniqueOptions(activeArticles.filter((item) => (!species || item.especie === species) && (!variety || item.variedad === variety) && (!caliber || item.calibre === caliber)).map((item) => item.envase)),
-    [activeArticles, species, variety, caliber],
+    () => uniqueOptions(eligibleArticles.filter((item) => (!species || item.especie === species) && (!variety || item.variedad === variety) && (!caliber || item.calibre === caliber)).map((item) => item.envase)),
+    [eligibleArticles, species, variety, caliber],
   );
   const selectedArticle = useMemo(
-    () => activeArticles.find((item) => item.especie === species && item.variedad === variety && item.calibre === caliber && item.envase === packageName) ?? null,
-    [activeArticles, species, variety, caliber, packageName],
+    () => eligibleArticles.find((item) => item.especie === species && item.variedad === variety && item.calibre === caliber && item.envase === packageName) ?? null,
+    [eligibleArticles, species, variety, caliber, packageName],
   );
 
   const eligibleOrigins = useMemo(() => catalog?.origenes.filter((item) => item.activo) ?? [], [catalog]);
@@ -199,23 +197,25 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
     [eligibleOrigins, client, brand],
   );
   const selectedOrigins = useMemo(
-    () => originDrafts.map((draft) => eligibleOrigins.find((item) => (
-      item.id === draft.originId && item.cliente === client && item.marca === brand
-    )) ?? null),
-    [eligibleOrigins, client, brand, originDrafts],
+    () => originDrafts.map((draft) => {
+      const origin = catalogIndex?.originById.get(draft.originId);
+      return origin?.cliente === client && origin.marca === brand ? origin : null;
+    }),
+    [catalogIndex, client, brand, originDrafts],
   );
   const selectedCombinations = useMemo(
-    () => selectedOrigins.map((origin) => catalog?.combinaciones.find((item) => (
-      item.articulo_validacion_id === selectedArticle?.id
-      && item.origen_validacion_id === origin?.id
-      && (origin?.variedad_ids === null || (selectedArticle?.variedad_validacion_id != null && origin?.variedad_ids.includes(selectedArticle.variedad_validacion_id)))
-    )) ?? null),
-    [catalog, selectedArticle, selectedOrigins],
+    () => selectedOrigins.map((origin) => Boolean(origin && selectedArticle && catalogIndex?.articlesByOrigin.get(origin.id)?.has(selectedArticle.id)
+      && (origin.variedad_ids === null || (selectedArticle.variedad_validacion_id !== null && origin.variedad_ids.includes(selectedArticle.variedad_validacion_id))))),
+    [catalogIndex, selectedArticle, selectedOrigins],
   );
   const compositionBoxes = originDrafts.reduce((sum, draft) => sum + Number(draft.boxes || 0), 0);
   const selectedCombination = originDrafts.length > 0
     && selectedOrigins.every(Boolean)
     && selectedCombinations.every(Boolean);
+
+  function resetProduct() {
+    setSpecies(''); setVariety(''); setCaliber(''); setPackageName(''); setCategoryId('');
+  }
 
   useEffect(() => {
     void initialize();
@@ -758,24 +758,10 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
               <View style={[styles.boxField, compact && styles.boxFieldCompact]}><Text style={styles.label}>Cajas *</Text><TextInput editable={!terminalDecision} keyboardType="number-pad" onChangeText={(value) => { const clean = value.replace(/[^0-9]/g, ''); setBoxes(clean); setOriginDrafts((current) => current.length === 1 ? [{ ...current[0], boxes: clean }] : current); }} placeholder="0" placeholderTextColor={colors.muted} style={[styles.boxInput, terminalDecision && styles.disabled]} value={boxes} /></View>
             </View>
 
-            <Text style={styles.groupTitle}>Categoría</Text>
-            <View style={[styles.fieldGrid, compact && styles.fieldGridCompact]}>
-              <View style={styles.wideField}><SelectField compact={compact} disabled={terminalDecision} label="Categoría" options={categoryOptions} searchable value={categoryId} onChange={setCategoryId} /></View>
-            </View>
-
-            <Text style={styles.groupTitle}>Artículo</Text>
-            {!originDrafts.some((draft) => draft.originId) ? <Text style={styles.label}>Selecciona el CSG en Origen comercial para filtrar las variedades.</Text> : null}
-            <View style={[styles.fieldGrid, compact && styles.fieldGridCompact, tight && styles.fieldGridPair]}>
-              <SelectField compact={compact} half={tight} disabled={terminalDecision} label="Especie" options={speciesOptions} value={species} onChange={(value) => { setSpecies(value); setVariety(''); setCaliber(''); setPackageName(''); }} />
-              <SelectField compact={compact} half={tight} disabled={terminalDecision || !species || !originDrafts.some((draft) => draft.originId)} label="Variedad" options={varietyOptions} value={variety} onChange={(value) => { setVariety(value); setCaliber(''); setPackageName(''); }} />
-              <SelectField compact={compact} half={tight} disabled={terminalDecision || !variety} label="Calibre" options={caliberOptions} value={caliber} onChange={(value) => { setCaliber(value); setPackageName(''); }} />
-              <SelectField compact={compact} half={tight} disabled={terminalDecision || !caliber} label="Envase" options={packageOptions} value={packageName} onChange={setPackageName} />
-            </View>
-
             <Text style={styles.groupTitle}>Origen comercial</Text>
             <View style={[styles.fieldGrid, compact && styles.fieldGridCompact, tight && styles.fieldGridPair]}>
-              <SelectField compact={compact} half={tight} disabled={terminalDecision} label="Cliente" options={clientOptions} value={client} onChange={(value) => { setClient(value); setBrand(''); setOriginDrafts([newOriginDraft()]); setVariety(''); setCaliber(''); setPackageName(''); }} />
-              <SelectField compact={compact} half={tight} disabled={terminalDecision || !client} label="Marca" options={brandOptions} value={brand} onChange={(value) => { setBrand(value); setOriginDrafts([newOriginDraft()]); setVariety(''); setCaliber(''); setPackageName(''); }} />
+              <SelectField compact={compact} half={tight} disabled={terminalDecision} label="Cliente" options={clientOptions} value={client} onChange={(value) => { setClient(value); setBrand(''); setOriginDrafts([newOriginDraft()]); resetProduct(); }} />
+              <SelectField compact={compact} half={tight} disabled={terminalDecision || !client} label="Marca" options={brandOptions} value={brand} onChange={(value) => { setBrand(value); setOriginDrafts([newOriginDraft()]); resetProduct(); }} />
               <View style={styles.packingDateField}>
                 <Text style={styles.label}>Fecha de embalaje *</Text>
                 <TextInput
@@ -796,14 +782,28 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
             </View>
             {originDrafts.map((draft, index) => (
               <View key={draft.key} style={[styles.originCompositionRow, compact && styles.originCompositionRowCompact]}>
-                <View style={styles.originCompositionSelect}><SelectField compact={compact} disabled={terminalDecision || !brand} label={`CSG / Predio ${index + 1}`} options={csgOptions} searchable value={draft.originId} onChange={(value) => { setOriginDrafts((current) => current.map((item) => item.key === draft.key ? { ...item, originId: value } : item)); const origin = catalog?.origenes.find((item) => item.id === value); if (selectedArticle && (!catalog?.combinaciones.some((item) => item.articulo_validacion_id === selectedArticle.id && item.origen_validacion_id === value) || (origin?.variedad_ids !== null && !origin?.variedad_ids.includes(selectedArticle.variedad_validacion_id ?? '')))) { setVariety(''); setCaliber(''); setPackageName(''); } }} /></View>
+                <View style={styles.originCompositionSelect}><SelectField compact={compact} disabled={terminalDecision || !brand} label={`CSG / Predio ${index + 1}`} options={csgOptions} searchable value={draft.originId} onChange={(value) => { setOriginDrafts((current) => current.map((item) => item.key === draft.key ? { ...item, originId: value } : item)); resetProduct(); }} /></View>
                 <View style={styles.originBoxes}><Text style={styles.label}>Cajas *</Text><TextInput editable={!terminalDecision} keyboardType="number-pad" onChangeText={(value) => setOriginDrafts((current) => current.map((item) => item.key === draft.key ? { ...item, boxes: value.replace(/[^0-9]/g, '') } : item))} placeholder="0" placeholderTextColor={colors.muted} style={styles.boxInput} value={draft.boxes} /></View>
-                {originDrafts.length > 1 ? <Pressable disabled={terminalDecision} onPress={() => setOriginDrafts((current) => current.filter((item) => item.key !== draft.key))} style={styles.removeOrigin}><Text style={styles.removeOriginText}>Quitar</Text></Pressable> : null}
+                {originDrafts.length > 1 ? <Pressable disabled={terminalDecision} onPress={() => { setOriginDrafts((current) => current.filter((item) => item.key !== draft.key)); resetProduct(); }} style={styles.removeOrigin}><Text style={styles.removeOriginText}>Quitar</Text></Pressable> : null}
                 <View style={styles.traceField}><Text style={styles.label}>Lote MP *</Text><TextInput autoCapitalize="characters" autoCorrect={false} editable={!terminalDecision} onChangeText={(value) => setOriginDrafts((current) => current.map((item) => item.key === draft.key ? { ...item, lot: value } : item))} placeholder="Según etiqueta" placeholderTextColor={colors.muted} style={styles.traceInput} value={draft.lot} /></View>
                 <View style={styles.traceField}><Text style={styles.label}>Proceso packing *</Text><TextInput autoCapitalize="characters" autoCorrect={false} editable={!terminalDecision} onChangeText={(value) => setOriginDrafts((current) => current.map((item) => item.key === draft.key ? { ...item, process: value } : item))} placeholder="Según etiqueta" placeholderTextColor={colors.muted} style={styles.traceInput} value={draft.process} /></View>
               </View>
             ))}
-            <Pressable disabled={terminalDecision || !brand} onPress={() => setOriginDrafts((current) => [...current, newOriginDraft()])} style={[styles.addOrigin, (terminalDecision || !brand) && styles.disabled]}><Text style={styles.addOriginText}>+ Agregar línea (otro CSG, lote o proceso)</Text></Pressable>
+            <Pressable disabled={terminalDecision || !brand} onPress={() => { setOriginDrafts((current) => [...current, newOriginDraft()]); resetProduct(); }} style={[styles.addOrigin, (terminalDecision || !brand) && styles.disabled]}><Text style={styles.addOriginText}>+ Agregar línea (otro CSG, lote o proceso)</Text></Pressable>
+
+            <Text style={styles.groupTitle}>Producto</Text>
+            {!originDrafts.some((draft) => draft.originId) ? <Text style={styles.label}>Selecciona el CSG en Origen comercial para filtrar las variedades.</Text> : null}
+            <View style={[styles.fieldGrid, compact && styles.fieldGridCompact, tight && styles.fieldGridPair]}>
+              <SelectField compact={compact} half={tight} disabled={terminalDecision || !selectedOriginIds.length} label="Especie" options={speciesOptions} value={species} onChange={(value) => { setSpecies(value); setVariety(''); setCaliber(''); setPackageName(''); }} />
+              <SelectField compact={compact} half={tight} disabled={terminalDecision || !species || !originDrafts.some((draft) => draft.originId)} label="Variedad" options={varietyOptions} value={variety} onChange={(value) => { setVariety(value); setCaliber(''); setPackageName(''); }} />
+              <SelectField compact={compact} half={tight} disabled={terminalDecision || !variety} label="Calibre" options={caliberOptions} value={caliber} onChange={(value) => { setCaliber(value); setPackageName(''); }} />
+              <SelectField compact={compact} half={tight} disabled={terminalDecision || !caliber} label="Envase" options={packageOptions} value={packageName} onChange={setPackageName} />
+            </View>
+
+            <Text style={styles.groupTitle}>Categoría</Text>
+            <View style={[styles.fieldGrid, compact && styles.fieldGridCompact]}>
+              <View style={styles.wideField}><SelectField compact={compact} disabled={terminalDecision || !packageName} label="Categoría" options={categoryOptions} searchable value={categoryId} onChange={setCategoryId} /></View>
+            </View>
 
             <View style={styles.selectionSummary}>
               <Text style={styles.selectionSummaryTitle}>{selectedCombination && selectedCategory ? 'Combinación habilitada' : 'Completa los datos obligatorios'}</Text>
@@ -1004,12 +1004,14 @@ function SelectField({ label, options, value, onChange, compact = false, half = 
   const [visible, setVisible] = useState(false);
   const [query, setQuery] = useState('');
   const selected = options.find((option) => option.value === value);
-  const filtered = options.filter((option) => `${option.label} ${option.search ?? ''}`.toLowerCase().includes(query.trim().toLowerCase()));
+  const filtered = useMemo(() => visible
+    ? options.filter((option) => `${option.label} ${option.search ?? ''}`.toLowerCase().includes(query.trim().toLowerCase()))
+    : [], [visible, options, query]);
 
   return <>
     <View style={[styles.selectField, compact && styles.selectFieldCompact, half && styles.selectFieldHalf]}><Text numberOfLines={1} style={styles.label}>{label} *</Text><Pressable disabled={disabled} onPress={() => setVisible(true)} style={[styles.selectButton, disabled && styles.disabled]}><Text numberOfLines={1} style={[styles.selectText, !selected && styles.placeholder]}>{selected?.label ?? 'Seleccionar'}</Text><Text style={styles.chevron}>⌄</Text></Pressable></View>
     <Modal animationType="fade" transparent visible={visible} onRequestClose={() => setVisible(false)}>
-      <View style={styles.modalBackdrop}><View style={styles.selectorModal}><View style={styles.modalHeader}><Text style={styles.modalTitle}>{label}</Text><Pressable onPress={() => setVisible(false)}><Text style={styles.modalClose}>×</Text></Pressable></View>{searchable || options.length > 8 ? <TextInput autoFocus onChangeText={setQuery} placeholder={`Buscar ${label.toLowerCase()}`} placeholderTextColor={colors.muted} style={styles.searchInput} value={query} /> : null}<ScrollView keyboardShouldPersistTaps="handled" style={styles.optionList}>{filtered.map((option) => <Pressable key={option.value} onPress={() => { onChange(option.value); setQuery(''); setVisible(false); }} style={[styles.option, option.value === value && styles.optionSelected]}><Text style={styles.optionText}>{option.label}</Text></Pressable>)}{!filtered.length ? <Text style={styles.empty}>Sin opciones coincidentes.</Text> : null}</ScrollView></View></View>
+      <View style={styles.modalBackdrop}><View style={styles.selectorModal}><View style={styles.modalHeader}><Text style={styles.modalTitle}>{label}</Text><Pressable onPress={() => setVisible(false)}><Text style={styles.modalClose}>×</Text></Pressable></View>{searchable || options.length > 8 ? <TextInput autoFocus onChangeText={setQuery} placeholder={`Buscar ${label.toLowerCase()}`} placeholderTextColor={colors.muted} style={styles.searchInput} value={query} /> : null}<FlatList data={filtered} keyExtractor={(option) => option.value} keyboardShouldPersistTaps="handled" style={styles.optionList} initialNumToRender={16} maxToRenderPerBatch={24} windowSize={5} renderItem={({ item: option }) => <Pressable onPress={() => { onChange(option.value); setQuery(''); setVisible(false); }} style={[styles.option, option.value === value && styles.optionSelected]}><Text style={styles.optionText}>{option.label}</Text></Pressable>} ListEmptyComponent={<Text style={styles.empty}>Sin opciones coincidentes.</Text>} /></View></View>
     </Modal>
   </>;
 }

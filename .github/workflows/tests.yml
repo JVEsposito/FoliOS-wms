@@ -146,6 +146,9 @@ jobs:
       - name: Validar TypeScript
         run: npm run typecheck
 
+      - name: Probar variantes y rendimiento del catálogo
+        run: npm run test:catalog
+
       - name: Validar bundle Android
         run: npm run export:android
 

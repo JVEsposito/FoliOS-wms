@@ -16,7 +16,7 @@ import {
 
 import { ApiMode, LoginPayload } from '../domain/estiba';
 import { colors } from '../theme/colors';
-import { deviceNoun, isPdaBuild } from '../config/appVariant';
+import { appChannel, appVariant, deviceNoun, isPdaBuild } from '../config/appVariant';
 
 type LoginScreenProps = {
   baseUrl: string | null;
@@ -93,6 +93,7 @@ export function LoginScreen({
             style={[styles.brandLogo, narrow && styles.brandLogoNarrow]}
           />
           <Text style={styles.eyebrow}>{isPdaBuild ? 'PDA · VALIDACIÓN Y REPALETIZAJE' : 'OPERACIÓN EN FRÍO'}</Text>
+          <Text style={styles.eyebrow}>Variante: {appVariant.toUpperCase()} · Canal: {appChannel ?? 'sin canal (Expo Go)'}</Text>
           {narrow ? null : (
             <>
               <Text style={styles.brandCopy}>

@@ -11,6 +11,9 @@ use App\Http\Requests\CorregirValidacionPalletRequest;
 use App\Http\Requests\ExportarRegistroValidacionPalletRequest;
 use App\Http\Requests\RegistrarValidacionPalletRequest;
 use App\Http\Resources\ValidacionPalletResource;
+use App\Models\ArticuloValidacion;
+use App\Models\CombinacionValidacion;
+use App\Models\OrigenValidacion;
 use App\Models\Temporada;
 use App\Models\ValidacionPallet;
 use App\Services\Autenticacion\ContextoOperacional;
@@ -43,6 +46,29 @@ class ValidacionPalletController extends Controller
         return ValidacionPalletResource::collection(
             $consulta->paginate($filtros['per_page'] ?? 25)->withQueryString(),
         );
+    }
+
+    public function resumen(ConsultarValidacionesPalletRequest $request): JsonResponse
+    {
+        $filtros = $request->validated();
+        $temporada = isset($filtros['temporada_id'])
+            ? Temporada::query()->findOrFail($filtros['temporada_id'])
+            : app(ServicioTemporadaActiva::class)->buscar();
+
+        $observados = $this->aplicarFiltros(
+            ValidacionPallet::query(), $filtros, $request->rangoFechaUtc(),
+        )->where('resultado', ResultadoValidacionPallet::Observado->value)->count();
+
+        return response()->json([
+            'temporada' => $temporada ? [
+                'id' => $temporada->id,
+                'version_catalogo' => $temporada->version_catalogo,
+            ] : null,
+            'articulos_activos' => $temporada ? ArticuloValidacion::query()->where('temporada_id', $temporada->id)->where('activo', true)->count() : 0,
+            'origenes_activos' => $temporada ? OrigenValidacion::query()->where('temporada_id', $temporada->id)->where('activo', true)->count() : 0,
+            'combinaciones_activas' => $temporada ? CombinacionValidacion::query()->where('temporada_id', $temporada->id)->where('activo', true)->count() : 0,
+            'observados' => $observados,
+        ]);
     }
 
     public function miSesion(
