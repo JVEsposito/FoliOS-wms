@@ -1,3 +1,4 @@
+import { mountCameraVacating } from './shared/camera-vacating';
 import { cameraDisplayName } from './shared/camera-display';
 import { bandAffinityText } from './shared/camera-band-affinity';
 import { canSuperviseEmergency, confirmsCameraCode, emergencyEndpoint, emergencyError } from './shared/camera-emergency';
@@ -191,7 +192,7 @@ async function api(path, options = {}) {
     if (!response.ok) {
         if (response.status === 401 && path !== '/api/acceso-oficina') clearSession();
         const fallback = 'No fue posible completar la operación.';
-        throw new ApiError(path.startsWith('/api/evacuaciones-emergencia/')
+        throw new ApiError((path.startsWith('/api/evacuaciones-emergencia/') || path.startsWith('/api/desocupaciones-camara/'))
             ? emergencyError(data, fallback)
             : errorMessage(data, fallback), response.status);
     }
@@ -649,6 +650,7 @@ function renderSelectedOperationalCamera() {
     elements.cameraOpsMeta.textContent = `${statusText(plan.tipo)} · ${statusText(plan.contenido)} · versión de plano ${plan.version_plano}${unclosed ? ` · ${formatNumber(unclosed)} ${unclosed === 1 ? 'registro' : 'registros'} sin cerrar de otra temporada` : ''}`;
     elements.cameraOpsAccess.textContent = access.text;
     elements.cameraOpsAccess.dataset.tone = access.tone;
+    cameraVacating.render(plan);
     renderEmergency(plan);
     renderOperationalSummary(plan);
     renderOperationalBands(plan);
@@ -1343,5 +1345,14 @@ async function boot() {
         setBusy(false);
     }
 }
+
+const cameraVacating = mountCameraVacating({
+    root: document,
+    currentCamera: () => state.selectedOperationalPlan,
+    identity: () => state.identity,
+    api,
+    refresh: loadOperationalCamera,
+    notify: toast,
+});
 
 void boot();

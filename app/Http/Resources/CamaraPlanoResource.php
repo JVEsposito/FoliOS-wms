@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\UbicacionActual;
+use App\Services\Camaras\EstadoDesocupacionProgramada;
 use App\Services\Camaras\EstadoEvacuacionEmergencia;
 use Illuminate\Http\Request;
 
@@ -15,6 +16,10 @@ class CamaraPlanoResource extends CamaraResumenResource
     {
         return [
             ...parent::toArray($request),
+            'desocupacion_habilitada' => (bool) $this->resource->getAttribute('desocupacion_habilitada'),
+            'desocupacion' => $this->resource->getRelation('ultimaDesocupacion')
+                ? app(EstadoDesocupacionProgramada::class)->resumir($this->resource->getRelation('ultimaDesocupacion'))
+                : null,
             'emergencia' => $this->resource->getRelation('emergenciaActiva')
                 ? app(EstadoEvacuacionEmergencia::class)->resumir($this->resource->getRelation('emergenciaActiva'))
                 : null,

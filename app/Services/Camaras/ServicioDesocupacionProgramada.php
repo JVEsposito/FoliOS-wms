@@ -212,11 +212,31 @@ class ServicioDesocupacionProgramada
         $emergencia = $this->planEmergenciaActivo($camara->id);
         if ($emergencia) {
             $this->sincronizarPlan($camara, $emergencia, $usuario);
+        } else {
+            $this->sincronizar($camara, $usuario);
+        }
 
+        if ($camara->contenido !== ContenidoCamara::Productos || ! $this->planificadorDirigidoActivo($camara)) {
             return;
         }
 
-        $this->sincronizar($camara, $usuario);
+        // Un retiro de otra cámara puede liberar el destino que faltaba. Cada
+        // sincronización vuelve a bloquear la cámara y comprobar su ciclo vigente.
+        $pendientes = PlanOperacional::query()
+            ->where('tipo', TipoPlanOperacional::DesocupacionCamara->value)
+            ->where('referencia_tipo', self::REFERENCIA)
+            ->where('referencia_id', '!=', $camara->id)
+            ->whereNotIn('estado', [EstadoPlanOperacional::Completado->value, EstadoPlanOperacional::Cancelado->value])
+            ->where('contexto->motivo_pendiente', 'sin_destino_compatible')
+            ->orderBy('referencia_id')
+            ->pluck('referencia_id')
+            ->unique();
+        foreach ($pendientes as $camaraId) {
+            $pendiente = Camara::query()->find($camaraId);
+            if ($pendiente) {
+                $this->sincronizar($pendiente, $usuario);
+            }
+        }
     }
 
     public function cancelar(Camara $camara, User $usuario, string $motivo): PlanOperacional

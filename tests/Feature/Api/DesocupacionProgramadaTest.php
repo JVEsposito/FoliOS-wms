@@ -26,6 +26,7 @@ use App\Models\Carga;
 use App\Models\CargaFolio;
 use App\Models\Dispositivo;
 use App\Models\Folio;
+use App\Models\Movimiento;
 use App\Models\PlanOperacional;
 use App\Models\Posicion;
 use App\Models\ReservaCargaFolio;
@@ -145,6 +146,14 @@ class DesocupacionProgramadaTest extends TestCase
         $this->assertSame(100, $plan->contexto['porcentaje_actual']);
         $this->assertSame(0, $plan->contexto['pallets_restantes']);
         $this->assertTrue($plan->contexto['lista_para_apagar']);
+        $this->actingAs($contexto['supervisor'], 'sanctum')
+            ->getJson("/api/camaras/{$contexto['origen']->id}/plano")
+            ->assertOk()
+            ->assertJsonPath('data.desocupacion.estado', 'completada')
+            ->assertJsonPath('data.desocupacion.activa', false)
+            ->assertJsonPath('data.desocupacion.pallets_evacuados', 2)
+            ->assertJsonPath('data.desocupacion.pallets_restantes', 0)
+            ->assertJsonPath('data.desocupacion.lista_para_apagar', true);
         $this->assertSame(2, $plan->maniobras()->count());
         $this->assertSame(2, $plan->maniobras()
             ->where('estado', EstadoManiobraOperacional::Completada->value)
@@ -428,6 +437,79 @@ class DesocupacionProgramadaTest extends TestCase
             'referencia_tipo' => ServicioDesocupacionProgramada::REFERENCIA,
             'referencia_id' => $otra->id,
         ]);
+    }
+
+    public function test_vaciado_en_espera_reintenta_automaticamente_al_liberarse_otra_camara(): void
+    {
+        $contexto = $this->crearContexto();
+        $objetivo = $this->ubicar($contexto, $contexto['origen'], 1, 'PAL-REINTENTO-ORIGEN');
+        for ($posicion = 1; $posicion <= 4; $posicion++) {
+            $this->ubicar($contexto, $contexto['destino'], $posicion, 'PAL-REINTENTO-DESTINO-'.$posicion);
+        }
+        $servicio = app(ServicioDesocupacionProgramada::class);
+        $plan = $servicio->iniciar($contexto['origen'], $contexto['supervisor'], 'Mantención sin espacio inicial.');
+        $this->assertSame('sin_destino_compatible', $plan->contexto['motivo_pendiente']);
+        $this->assertSame(0, $plan->maniobras()->count());
+
+        // Estado físico ya confirmado por un retiro ajeno al plan de vaciado.
+        $liberada = $contexto['destino']->posiciones()->where('posicion', 4)->sole();
+        UbicacionActual::withoutEvents(fn () => UbicacionActual::query()->where('posicion_id', $liberada->id)->delete());
+        $movimiento = new Movimiento(['camara_origen_id' => $contexto['destino']->id]);
+        $servicio->sincronizarTrasMovimiento($movimiento, $contexto['supervisor']);
+
+        $this->assertSame('publicada', $plan->refresh()->contexto['estado_desocupacion']);
+        $tarea = $plan->tareas()->sole();
+        $this->assertSame($objetivo->id, $tarea->folio_id);
+        $this->assertSame($liberada->id, $tarea->posicion_destino_id);
+        $servicio->sincronizarTrasMovimiento($movimiento, $contexto['supervisor']);
+        $this->assertSame(1, $plan->maniobras()->count());
+    }
+
+    public function test_plano_expone_el_ultimo_ciclo_y_su_avance_sin_recalcular(): void
+    {
+        $contexto = $this->crearContexto();
+        $camara = $contexto['origen'];
+        $this->ubicar($contexto, $camara, 1, 'PAL-PLANO');
+        $this->actingAs($contexto['supervisor'], 'sanctum');
+        $url = "/api/camaras/{$camara->id}/plano";
+        $inicial = $this->getJson($url)->assertOk()
+            ->assertJsonPath('data.desocupacion', null)
+            ->assertJsonPath('data.desocupacion_habilitada', true);
+        $plan = app(ServicioDesocupacionProgramada::class)->iniciar($camara, $contexto['supervisor'], 'Mantención programada.');
+        $respuesta = $this->withHeader('If-None-Match', $inicial->headers->get('ETag'))->getJson($url)->assertOk()
+            ->assertJsonPath('data.desocupacion.id', $plan->id)
+            ->assertJsonPath('data.desocupacion.activa', true)
+            ->assertJsonPath('data.desocupacion.estado', 'publicada')
+            ->assertJsonPath('data.desocupacion.pallets_restantes', 1);
+        $cantidad = $plan->maniobras()->count();
+        $version = $plan->version;
+        $this->withHeader('If-None-Match', $respuesta->headers->get('ETag'))->getJson($url)->assertStatus(304);
+        $this->assertSame($cantidad, $plan->maniobras()->count());
+        $this->assertSame($version, $plan->refresh()->version);
+
+        // El avance del plan invalida el ETag aun sin cambiar el plano físico.
+        $plan->update(['contexto' => [...$plan->contexto, 'estado_desocupacion' => 'pendiente', 'motivo_pendiente' => 'sin_destino_compatible'], 'version' => $version + 1]);
+        $pendiente = $this->getJson($url)->assertOk()
+            ->assertJsonPath('data.desocupacion.motivo_pendiente', 'sin_destino_compatible');
+        app(ServicioDesocupacionProgramada::class)->cancelar($camara, $contexto['supervisor'], 'Cancelar mantención.');
+        $this->withHeader('If-None-Match', $pendiente->headers->get('ETag'))->getJson($url)->assertOk()
+            ->assertJsonPath('data.desocupacion.activa', false)
+            ->assertJsonPath('data.desocupacion.estado', 'cancelada');
+        $nuevo = app(ServicioDesocupacionProgramada::class)->iniciar($camara, $contexto['supervisor'], 'Nueva mantención.');
+        $this->withHeader('If-None-Match', '')->getJson($url)->assertOk()
+            ->assertJsonPath('data.desocupacion.id', $nuevo->id);
+    }
+
+    public function test_plano_invalida_cache_al_deshabilitar_ejecucion_del_planificador(): void
+    {
+        $contexto = $this->crearContexto();
+        $this->actingAs($contexto['supervisor'], 'sanctum');
+        $url = "/api/camaras/{$contexto['origen']->id}/plano";
+        $respuesta = $this->getJson($url)->assertOk()->assertJsonPath('data.desocupacion_habilitada', true);
+        config(['planificador.compute' => 'server']);
+        $this->withHeader('If-None-Match', $respuesta->headers->get('ETag'))->getJson($url)->assertOk()
+            ->assertJsonPath('data.desocupacion_habilitada', false);
+        $this->assertSame(0, PlanOperacional::query()->count());
     }
 
     /** @return array<string, mixed> */

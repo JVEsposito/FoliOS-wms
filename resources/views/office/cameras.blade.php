@@ -96,6 +96,30 @@
                                 <div class="camera-ops__access" id="cameraOpsAccess" data-tone="neutral">Sin consultar</div>
                             </header>
 
+                            <section class="camera-ops__vacating" id="cameraVacatingSection" aria-live="polite">
+                                <div>
+                                    <strong>Desocupación programada</strong>
+                                    <span>El planificador busca espacio compatible en otras cámaras; los camareros ejecutan los traslados.</span>
+                                    <span id="cameraVacatingStatus">Sin desocupación programada.</span>
+                                    <small>Usa Actualizar para consultar el avance.</small>
+                                </div>
+                                <button type="button" id="cameraVacatingStart" hidden>Vaciar cámara</button>
+                                <button type="button" id="cameraVacatingCancel" hidden>Cancelar vaciado</button>
+                            </section>
+                            <dialog class="camera-ops__vacating-dialog" id="cameraVacatingDialog" aria-labelledby="cameraVacatingTitle">
+                                <form id="cameraVacatingForm">
+                                    <h3 id="cameraVacatingTitle">Vaciar cámara</h3>
+                                    <p id="cameraVacatingHelp"></p>
+                                    <label>Motivo obligatorio<textarea name="motivo" minlength="3" maxlength="500" required></textarea></label>
+                                    <label id="cameraVacatingConfirmation">Escribe el código exacto de la cámara<input name="confirmacion" autocomplete="off" required></label>
+                                    <p class="camera-ops__vacating-error" id="cameraVacatingError" role="alert"></p>
+                                    <div class="camera-ops__vacating-actions">
+                                        <button type="button" id="cameraVacatingClose">Volver</button>
+                                        <button type="submit" id="cameraVacatingSubmit">Iniciar vaciado</button>
+                                    </div>
+                                </form>
+                            </dialog>
+
                             <section class="camera-ops__emergency" id="cameraEmergency" data-tone="neutral" aria-live="polite">
                                 <div id="cameraEmergencyStatus">Sin evacuación de emergencia activa.</div>
                                 <button type="button" id="cameraEmergencyDeclare" hidden>Declarar evacuación de emergencia</button>
