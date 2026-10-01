@@ -18,6 +18,54 @@ class ValidacionPalletApiTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_resumen_cuenta_observados_de_toda_la_temporada_y_aplica_los_filtros_del_historial(): void
+    {
+        [$catalogo, $token] = $this->contexto(RolUsuario::Administrador, 'VAL-RESUMEN');
+        $usuarioId = User::query()->where('rol', RolUsuario::Administrador->value)->latest('id')->value('id');
+        $dispositivoId = Dispositivo::query()->where('codigo', 'VAL-RESUMEN')->value('id');
+        for ($numero = 1; $numero <= 27; $numero++) {
+            DB::table('validaciones_pallet')->insert([
+                'id' => (string) Str::uuid(),
+                'operacion_id' => (string) Str::uuid(),
+                'payload_hash' => str_repeat('a', 64),
+                'numero_folio' => sprintf('PAL-RES-%02d', $numero),
+                'numero_intento' => 1,
+                'tipo_bulto' => 'pallet',
+                'cantidad_cajas' => 100,
+                'temporada_id' => $catalogo['temporada_id'],
+                'articulo_validacion_id' => $catalogo['articulo_validacion_id'],
+                'origen_validacion_id' => $catalogo['origen_validacion_id'],
+                'resultado' => $numero === 27 ? 'aprobado' : 'observado',
+                'estado' => 'aceptada',
+                'catalogo_version_dispositivo' => 1,
+                'catalogo_version_servidor' => 1,
+                'snapshot' => '{}',
+                'user_id' => $usuarioId,
+                'dispositivo_id' => $dispositivoId,
+                'generado_dispositivo_at' => now(),
+                'recibido_servidor_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $this->conToken($token)->getJson('/api/validacion/pallets?per_page=25')
+            ->assertOk()->assertJsonCount(25, 'data');
+        $this->conToken($token)->getJson('/api/validacion/registro/resumen')
+            ->assertOk()
+            ->assertJsonPath('temporada.id', $catalogo['temporada_id'])
+            ->assertJsonPath('temporada.version_catalogo', 1)
+            ->assertJsonPath('articulos_activos', 1)
+            ->assertJsonPath('origenes_activos', 1)
+            ->assertJsonPath('combinaciones_activas', 1)
+            ->assertJsonPath('observados', 26)
+            ->assertJsonMissingPath('articulos');
+        $this->conToken($token)->getJson('/api/validacion/registro/resumen?folio=PAL-RES-01')
+            ->assertOk()->assertJsonPath('observados', 1);
+        $this->conToken($token)->getJson('/api/validacion/registro/resumen?resultado=aprobado')
+            ->assertOk()->assertJsonPath('observados', 0);
+    }
+
     public function test_aprueba_y_crea_folio_pendiente_de_prefrio_de_forma_idempotente(): void
     {
         [$catalogo, $token] = $this->contexto(RolUsuario::Validador, 'VAL-01');

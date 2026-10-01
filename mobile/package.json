@@ -33,6 +33,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
+    "test:catalog": "node --experimental-strip-types --test tests/*.test.mjs",
     "export:android": "expo export --clear --platform android --output-dir dist",
     "export:pda": "cross-env ESTIBA_APP_VARIANT=pda EXPO_PUBLIC_APP_VARIANT=pda expo export --clear --platform android --output-dir dist-pda",
     "export:demo": "cross-env ESTIBA_APP_VARIANT=demo EXPO_PUBLIC_DEMO_MODE=true EXPO_PUBLIC_DEMO_ONLY=true EXPO_PUBLIC_API_URL= expo export --clear --platform android --output-dir dist-demo",

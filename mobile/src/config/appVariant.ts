@@ -1,4 +1,5 @@
 import * as Updates from 'expo-updates';
+import { resolveAppVariant, type AppVariant } from './resolveAppVariant';
 
 function enabled(value: string | undefined): boolean {
   return value?.trim().toLowerCase() === 'true';
@@ -15,7 +16,7 @@ export const isDemoRuntime = isDemoOnlyBuild || enabled(process.env.EXPO_PUBLIC_
  * Cada variante tiene su propio canal EAS (`production` y `pda`), de modo que
  * una actualización publicada para la tablet nunca llega a la PDA.
  */
-export type AppVariant = 'tablet' | 'pda';
+export type { AppVariant } from './resolveAppVariant';
 
 // El canal viene del binario instalado, no del bundle, y cuando existe manda:
 // un bundle publicado por error en el canal equivocado no convierte una tablet
@@ -29,13 +30,8 @@ function nativeChannel(): string | null {
   }
 }
 
-function resolveVariant(): AppVariant {
-  const channel = nativeChannel();
-  if (channel) return channel === 'pda' ? 'pda' : 'tablet';
-  return process.env.EXPO_PUBLIC_APP_VARIANT?.trim().toLowerCase() === 'pda' ? 'pda' : 'tablet';
-}
-
-export const appVariant: AppVariant = resolveVariant();
+export const appChannel = nativeChannel();
+export const appVariant: AppVariant = resolveAppVariant(appChannel, process.env.EXPO_PUBLIC_APP_VARIANT);
 export const isPdaBuild = appVariant === 'pda';
 
 /** Módulos que la PDA puede abrir; el resto del perfil se ignora en ese equipo. */
