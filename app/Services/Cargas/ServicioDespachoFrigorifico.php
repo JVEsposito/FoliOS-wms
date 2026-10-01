@@ -646,10 +646,18 @@ class ServicioDespachoFrigorifico
                 ]);
                 $asignacion->reservaActiva()->lockForUpdate()->first()?->delete();
                 $asignacion->update([
+                    'estado' => EstadoCargaFolio::Despachado,
                     'finalizado_por_user_id' => $usuario->id,
                     'finalizado_at' => $salidaAt,
                     'motivo_finalizacion' => 'Salida de camión confirmada',
                 ]);
+                $this->registrarEvento(
+                    $cargaBloqueada,
+                    TipoEventoCarga::FolioDespachado,
+                    $usuario,
+                    $asignacion->folio,
+                    ['salida_fisica_at' => $salidaAt->toAtomString()],
+                );
             }
 
             $cargaBloqueada->update([

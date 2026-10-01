@@ -244,6 +244,7 @@ class ProcesoPrefrioController extends Controller
         ProcesoPrefrio $procesoPrefrio,
         ServicioProcesoPrefrio $servicio,
         ServicioGeneracionRecepcionTunel $generador,
+        \App\Services\Cargas\ServicioPlanDespachoDirecto $despachoDirecto,
     ): ProcesoPrefrioResource {
         $dispositivo = $this->dispositivo($request);
         $proceso = DB::transaction(function () use (
@@ -251,6 +252,7 @@ class ProcesoPrefrioController extends Controller
             $procesoPrefrio,
             $servicio,
             $generador,
+            $despachoDirecto,
             $dispositivo,
         ): ProcesoPrefrio {
             $aprobado = $servicio->aprobar(
@@ -260,6 +262,17 @@ class ProcesoPrefrioController extends Controller
                 $dispositivo,
             );
             $generador->generar($aprobado, $request->user());
+            // La aprobación es el momento en que un pallet del túnel pasa a
+            // ser elegible para la tarea crítica hacia un camión presente.
+            $presencias = \App\Models\PresenciaCargaAnden::query()
+                ->whereNotNull('bloqueo_carga_id')
+                ->whereIn('carga_id', \App\Models\CargaFolio::query()
+                    ->select('carga_id')
+                    ->whereIn('folio_id', $aprobado->folios()->select('folio_id')))
+                ->get();
+            foreach ($presencias as $presencia) {
+                $despachoDirecto->sincronizar($presencia, $request->user());
+            }
 
             return $aprobado;
         }, attempts: 3);

@@ -119,5 +119,6 @@
                 </section>
             </section>
         </main>
+        <div class="toast-region" id="officeToasts" aria-live="polite"></div>
     </body>
 </html>

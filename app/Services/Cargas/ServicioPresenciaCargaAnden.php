@@ -11,7 +11,9 @@ use App\Models\Anden;
 use App\Models\Carga;
 use App\Models\EventoCarga;
 use App\Models\PresenciaCargaAnden;
+use App\Models\ProcesoPrefrio;
 use App\Models\User;
+use App\Services\Prefrio\ServicioGeneracionRecepcionTunel;
 use App\Services\Transiciones\ComandoTransicionOperacional;
 use App\Services\Transiciones\MotorTransicionesOperacionales;
 use App\Services\Transiciones\NormalizadorTransicionOperacional;
@@ -28,6 +30,7 @@ class ServicioPresenciaCargaAnden
         private readonly MotorTransicionesOperacionales $transiciones,
         private readonly NormalizadorTransicionOperacional $normalizador,
         private readonly ServicioPlanDespachoDirecto $planificador,
+        private readonly ServicioGeneracionRecepcionTunel $recepcionTunel,
     ) {}
 
     /** @param array<string, mixed> $datos */
@@ -275,6 +278,18 @@ class ServicioPresenciaCargaAnden
             'finalizada_por_user_id' => $usuario->id,
             'finalizada_at' => now(),
         ]);
+        // Si el prefrío se aprobó mientras estaba el camión, todavía no había
+        // una tarea de recepción que restaurar. Publicarla ahora para los
+        // pallets que permanecen físicamente en el túnel.
+        $procesos = ProcesoPrefrio::query()
+            ->where('estado', 'aprobado')
+            ->whereHas('folios', fn ($folios) => $folios
+                ->whereHas('folio.asignacionCargaActual', fn ($asignacion) => $asignacion
+                    ->where('carga_id', $carga->id)))
+            ->get();
+        foreach ($procesos as $proceso) {
+            $this->recepcionTunel->generar($proceso, $usuario);
+        }
         if ($incrementarVersionCarga) {
             $carga->update([
                 'version' => $carga->version + 1,

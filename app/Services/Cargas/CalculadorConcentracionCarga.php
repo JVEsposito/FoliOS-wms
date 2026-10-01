@@ -47,6 +47,9 @@ class CalculadorConcentracionCarga
         $enAnden = $asignaciones
             ->where('estado', EstadoCargaFolio::EnAnden)
             ->count();
+        $despachados = $asignaciones
+            ->where('estado', EstadoCargaFolio::Despachado)
+            ->count();
         $conIncidencia = $asignaciones
             ->where('estado', EstadoCargaFolio::ConIncidencia)
             ->count();
@@ -58,7 +61,7 @@ class CalculadorConcentracionCarga
             ->values();
 
         $grupoPrincipal = $this->grupoPrincipal($ubicadas, $camaraObjetivoId);
-        $concentrados = min($total, $enAnden + $grupoPrincipal['cantidad']);
+        $concentrados = min($total, $enAnden + $despachados + $grupoPrincipal['cantidad']);
         $porcentaje = $total === 0
             ? 0
             : (int) round(($concentrados / $total) * 100);
@@ -71,8 +74,9 @@ class CalculadorConcentracionCarga
             'faltantes' => max(0, $total - $concentrados),
             'total' => $total,
             'en_anden' => $enAnden,
+            'despachados' => $despachados,
             'con_incidencia' => $conIncidencia,
-            'pendientes' => max(0, $total - $enAnden - $conIncidencia),
+            'pendientes' => max(0, $total - $enAnden - $despachados - $conIncidencia),
             'grupo_principal' => $grupoPrincipal['ubicacion'],
             'grupo_principal_folio_ids' => $grupoPrincipal['folio_ids'],
             'grupo_principal_puntos' => $grupoPrincipal['puntos'],

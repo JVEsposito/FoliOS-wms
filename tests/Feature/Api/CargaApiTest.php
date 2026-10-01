@@ -309,6 +309,56 @@ class CargaApiTest extends TestCase
             ->assertJsonPath('errores.0.codigo', 'sin_ubicacion');
     }
 
+    public function test_asigna_pallet_en_tunel_sin_posicion_pero_rechaza_saldo_y_reserva_de_otra_carga(): void
+    {
+        $despachador = $this->despachador();
+        $primera = $this->crearCarga($despachador);
+        $segunda = $this->crearCarga($despachador);
+        $pallet = Folio::create([
+            'numero_folio' => 'PAL-TUNEL-SIN-POSICION',
+            'tipo_bulto' => TipoBulto::Pallet,
+            'estado_operacional' => EstadoOperacionalFolio::PendientePrefrio,
+            'fecha_ingreso' => now(),
+            'activo' => true,
+        ]);
+        $saldo = Folio::create([
+            'numero_folio' => 'SALDO-TUNEL',
+            'tipo_bulto' => TipoBulto::Saldo,
+            'estado_operacional' => EstadoOperacionalFolio::PendientePrefrio,
+            'fecha_ingreso' => now(),
+            'activo' => true,
+        ]);
+
+        $this->actingAs($despachador, 'sanctum')
+            ->getJson('/api/cargas/folios-disponibles?q=PAL-TUNEL-SIN-POSICION')
+            ->assertOk()
+            ->assertJsonPath('data.0.ubicacion', null);
+
+        $this->actingAs($despachador, 'sanctum')
+            ->postJson("/api/cargas/{$primera->id}/folios", [
+                'folios' => [$pallet->numero_folio],
+                'version_esperada' => 1,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.folios.0.ubicacion', null);
+
+        $this->actingAs($despachador, 'sanctum')
+            ->postJson("/api/cargas/{$segunda->id}/folios", [
+                'folios' => [$pallet->numero_folio],
+                'version_esperada' => 1,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('errores.0.codigo', 'asignado_otra_carga');
+
+        $this->actingAs($despachador, 'sanctum')
+            ->postJson("/api/cargas/{$segunda->id}/folios", [
+                'folios' => [$saldo->numero_folio],
+                'version_esperada' => 1,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('errores.0.codigo', 'tipo_bulto_no_permitido');
+    }
+
     public function test_operador_no_gestiona_cargas_y_el_lote_no_supera_26_folios(): void
     {
         $operador = User::factory()->create([

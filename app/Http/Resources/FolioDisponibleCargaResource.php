@@ -29,7 +29,7 @@ class FolioDisponibleCargaResource extends JsonResource
             'marca' => $this->marca,
             'exportadora' => $this->exportadora,
             'fecha_ingreso' => $this->fecha_ingreso?->toAtomString(),
-            'ubicacion' => [
+            'ubicacion' => $posicion && $camara ? [
                 'camara' => [
                     'id' => $camara?->id,
                     'codigo' => $camara?->codigo,
@@ -39,7 +39,7 @@ class FolioDisponibleCargaResource extends JsonResource
                     'id' => $posicion?->id,
                     'etiqueta' => $posicion?->etiqueta,
                 ],
-            ],
+            ] : null,
         ];
     }
 }

@@ -229,6 +229,7 @@ class DespachoFrigorificoApiTest extends TestCase
             ->assertJsonPath('data.cierre.cerrada_at', $salidaFisica->toAtomString())
             ->assertJsonPath('data.total_folios', 1)
             ->assertJsonPath('data.folios.0.numero_folio', $folio->numero_folio)
+            ->assertJsonPath('data.folios.0.estado_carga', 'despachado')
             ->assertJsonPath('data.progreso.porcentaje', 100);
 
         $this->conToken($contexto['tokenOficina'])
@@ -242,6 +243,12 @@ class DespachoFrigorificoApiTest extends TestCase
             'activo' => false,
         ]);
         $this->assertDatabaseMissing('reservas_carga_folio', ['folio_id' => $folio->id]);
+        $this->assertDatabaseHas('carga_folios', ['folio_id' => $folio->id, 'estado' => 'despachado']);
+        $this->assertDatabaseHas('eventos_carga', [
+            'carga_id' => $carga->id,
+            'folio_id' => $folio->id,
+            'tipo' => 'folio_despachado',
+        ]);
         $this->assertDatabaseHas('cargas', [
             'id' => $carga->id,
             'cerrada_at' => $salidaFisica->format('Y-m-d H:i:s'),

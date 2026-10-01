@@ -149,7 +149,7 @@ class CargaResource extends JsonResource
         }
 
         return $this->asignacionesHistoricas
-            ->filter(fn ($asignacion): bool => $asignacion->estado === EstadoCargaFolio::EnAnden)
+            ->filter(fn ($asignacion): bool => in_array($asignacion->estado, [EstadoCargaFolio::EnAnden, EstadoCargaFolio::Despachado], true))
             ->values();
     }
 
@@ -165,6 +165,11 @@ class CargaResource extends JsonResource
                 $ubicacion = $folio?->ubicacionActual;
                 $posicion = $ubicacion?->posicion;
                 $camara = $posicion?->camara;
+                $prefrio = $folio && $folio->relationLoaded('procesosPrefrio')
+                    ? $folio->procesosPrefrio->sortByDesc('created_at')->first(
+                        fn ($item): bool => in_array($item->estado->value, ['en_proceso', 'aprobado'], true),
+                    )
+                    : null;
 
                 return [
                     'asignacion_id' => $asignacion->id,
@@ -173,6 +178,10 @@ class CargaResource extends JsonResource
                     'tipo_bulto' => $folio?->tipo_bulto?->value,
                     'estado_operacional' => $folio?->estado_operacional?->value,
                     'estado_carga' => $asignacion->estado->value,
+                    'prefrio' => $prefrio?->proceso?->tunel ? [
+                        'tunel' => $prefrio->proceso->tunel->codigo,
+                        'estado' => $prefrio->estado->value,
+                    ] : null,
                     'anden' => $asignacion->relationLoaded('anden') && $asignacion->anden ? [
                         'id' => $asignacion->anden->id,
                         'codigo' => $asignacion->anden->codigo,

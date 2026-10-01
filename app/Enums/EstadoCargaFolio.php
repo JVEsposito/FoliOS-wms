@@ -7,6 +7,7 @@ enum EstadoCargaFolio: string
     case Pendiente = 'pendiente';
     case ConIncidencia = 'con_incidencia';
     case EnAnden = 'en_anden';
+    case Despachado = 'despachado';
     case Descartado = 'descartado';
     case Reemplazado = 'reemplazado';
 

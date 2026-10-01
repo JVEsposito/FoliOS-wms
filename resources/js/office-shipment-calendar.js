@@ -1,3 +1,5 @@
+import { showOfficeToast } from './office-toast.js';
+
 const byId = (id) => document.getElementById(id);
 const elements = {
     access: byId('officeAccess'), app: byId('officeApp'), loginForm: byId('officeLoginForm'),
@@ -70,10 +72,7 @@ function setBusy(active, message = 'Procesando…') {
     elements.loading.classList.toggle('is-hidden', !active);
     elements.loading.setAttribute('aria-hidden', String(!active));
 }
-function toast(message, error = false) {
-    const item = document.createElement('div'); item.className = `toast${error ? ' toast--error' : ''}`; item.textContent = message;
-    elements.toasts.append(item); window.setTimeout(() => item.remove(), 4500);
-}
+function toast(message, error = false) { showOfficeToast(elements.toasts, message, error); }
 function persistSession(payload) {
     state.token = payload.token; state.identity = payload.usuario;
     localStorage.setItem(keys.token, payload.token); localStorage.setItem(keys.identity, JSON.stringify(payload.usuario));
@@ -301,9 +300,11 @@ async function saveCurrent({ close = true } = {}) {
     try {
         const response = await api(id ? `/api/embarques/${id}` : '/api/embarques', { method: id ? 'PUT' : 'POST', body: JSON.stringify(shipmentPayload()) });
         state.selected = response.data; elements.form.elements.id.value = response.data.id; elements.form.elements.version_esperada.value = response.data.version;
-        await loadCalendar({ preserveScroll: true }); toast(`${response.data.codigo} guardado correctamente.`);
-        if (close) elements.dialog.close(); return response.data;
-    } catch (error) { elements.formError.textContent = error.message; return null; }
+        await loadCalendar({ preserveScroll: true });
+        if (close) elements.dialog.close();
+        toast(`${response.data.codigo} guardado correctamente.`);
+        return response.data;
+    } catch (error) { elements.formError.textContent = error.message; toast(error.message, true); return null; }
     finally { setBusy(false); }
 }
 
@@ -362,7 +363,7 @@ elements.confirm.addEventListener('click', async () => {
         }) });
         elements.dialog.close(); await loadCalendar({ preserveScroll: true });
         toast(`${response.data.codigo} confirmado y vinculado a ${response.data.carga.codigo}.`);
-    } catch (error) { elements.formError.textContent = error.message; }
+    } catch (error) { elements.formError.textContent = error.message; toast(error.message, true); }
     finally { setBusy(false); }
 });
 elements.cancel.addEventListener('click', async () => {
@@ -371,7 +372,7 @@ elements.cancel.addEventListener('click', async () => {
     try {
         await api(`/api/embarques/${state.selected.id}/cancelar`, { method: 'POST', body: JSON.stringify({ version_esperada: Number(elements.form.elements.version_esperada.value), motivo: reason }) });
         elements.dialog.close(); await loadCalendar({ preserveScroll: true }); toast(`${state.selected.codigo} fue cancelado.`);
-    } catch (error) { elements.formError.textContent = error.message; }
+    } catch (error) { elements.formError.textContent = error.message; toast(error.message, true); }
     finally { setBusy(false); }
 });
 

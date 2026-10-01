@@ -94,10 +94,15 @@ class DespachoDirectoPrefrioApiTest extends TestCase
         $this->assertDatabaseHas('carga_folios', [
             'carga_id' => $cargaId,
             'folio_id' => $primerFolio->id,
-            'estado' => 'en_anden',
+            'estado' => 'despachado',
             'anden_id' => $anden->id,
             'enviado_anden_at' => $salidaFisica->format('Y-m-d H:i:s'),
             'finalizado_at' => $salidaFisica->format('Y-m-d H:i:s'),
+        ]);
+        $this->assertDatabaseHas('eventos_carga', [
+            'carga_id' => $cargaId,
+            'folio_id' => $primerFolio->id,
+            'tipo' => 'folio_despachado',
         ]);
         $this->assertDatabaseHas('folios', [
             'id' => $primerFolio->id,
