@@ -31,6 +31,130 @@ class MateriaPrimaApiTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_borradores_previos_al_destare_se_concilian_en_orden_y_no_se_confirman_antes(): void
+    {
+        $contexto = $this->prepararRecepcionValidada(tresTipos: true, sinDestare: true);
+        $digitador = User::factory()->create(['rol' => RolUsuario::DigitadorMateriaPrima]);
+        $this->actingAs($digitador, 'sanctum');
+        $pendientes = $this->getJson('/api/materia-prima/segmentos-pendientes')->assertOk()->json('data');
+        $this->assertCount(2, $pendientes);
+        $this->assertTrue($pendientes[0]['destare_pendiente']);
+        $this->assertNull($pendientes[0]['neto_estimado']);
+
+        $primero = $this->postJson('/api/materia-prima/lotes', $this->payloadLote($contexto, [
+            'numero_lote' => 'PRE-DESTARE-01', 'ggn' => null, 'cuartel' => null,
+        ]))->assertCreated()->assertJsonPath('data.pesos.kilos_netos_calculados', null)
+            ->assertJsonPath('data.pesos.kilos_brutos', null)
+            ->assertJsonPath('data.pesos.destare_pendiente', true)
+            ->assertJsonCount(3, 'data.envases.detalle')->json('data');
+        $segundo = $this->postJson('/api/materia-prima/lotes', $this->payloadLote(
+            [...$contexto, 'segmento_id' => $contexto['segundo_segmento_id']],
+            ['numero_lote' => 'PRE-DESTARE-02', 'cuartel' => null],
+        ))->assertCreated()->assertJsonPath('data.pesos.kilos_netos_confirmados', null)->json('data');
+        $this->assertDatabaseHas('lotes_materia_prima', ['id' => $primero['id'], 'secuencia_creacion' => 1]);
+        $this->assertDatabaseHas('lotes_materia_prima', ['id' => $segundo['id'], 'secuencia_creacion' => 2]);
+        $this->postJson("/api/materia-prima/lotes/{$primero['id']}/confirmar", [
+            'operacion_id' => (string) Str::uuid(), 'version_conocida' => $primero['version'],
+        ])->assertConflict()->assertJsonPath('message', 'El lote está pendiente de destare. Cierra el destare en Romana antes de confirmarlo.');
+
+        // Forzar un remanente de 0,020 kg que debe recibir exactamente el segundo lote.
+        DB::table('recepciones_romana')->where('id', $contexto['recepcion_id'])
+            ->update(['peso_bruto' => 28000.020]);
+        $cierre = [
+            'operacion_id' => (string) Str::uuid(),
+            'modo_salida_envases' => 'mismos',
+            'numero_guia_salida' => 'GS-PRE-DESTARE-01',
+            'taras_envases' => [
+                ['tipo_envase' => 'bins', 'tara_unitaria' => 40],
+                ['tipo_envase' => 'totes', 'tara_unitaria' => 2],
+                ['tipo_envase' => 'esponjas', 'tara_unitaria' => 1],
+            ],
+            'peso_tara' => 10000,
+            'tipo_envase_calculo_neto' => 'bins',
+        ];
+        $this->actingAs(User::factory()->create(['rol' => RolUsuario::OperadorRomana]), 'sanctum')
+            ->postJson("/api/romana/recepciones/{$contexto['recepcion_id']}/cerrar", $cierre)
+            ->assertOk()->assertJsonPath('data.peso_neto', 18000.02);
+        $this->postJson("/api/romana/recepciones/{$contexto['recepcion_id']}/cerrar", $cierre)->assertOk();
+
+        $this->assertSame(3, DB::table('salidas_envases_recepcion_romana')
+            ->where('recepcion_romana_id', $contexto['recepcion_id'])->count());
+        $this->assertSame(3, DB::table('movimientos_envases')
+            ->where('recepcion_romana_id', $contexto['recepcion_id'])
+            ->where('tipo_movimiento', 'salida_recepcion_fruta')->count());
+        $this->assertSame(2, DB::table('eventos_lote_materia_prima')
+            ->whereIn('lote_materia_prima_id', [$primero['id'], $segundo['id']])
+            ->where('tipo', 'destare_conciliado')->count());
+
+        $this->actingAs($digitador, 'sanctum');
+        $lote1 = $this->getJson("/api/materia-prima/lotes/{$primero['id']}")->assertOk()->json('data');
+        $lote2 = $this->getJson("/api/materia-prima/lotes/{$segundo['id']}")->assertOk()->json('data');
+        $this->assertEqualsWithDelta(7500, $lote1['pesos']['kilos_netos_calculados'], 0.00001);
+        $this->assertEqualsWithDelta(10500.02, $lote2['pesos']['kilos_netos_calculados'], 0.00001);
+        $this->assertSame(18000020, (int) round(($lote1['pesos']['kilos_netos_calculados']
+            + $lote2['pesos']['kilos_netos_calculados']) * 1000));
+        $this->assertEqualsWithDelta(11634.02, $lote2['pesos']['kilos_brutos'], 0.00001);
+        $this->assertFalse($lote1['pesos']['destare_pendiente']);
+        $this->assertSame($primero['version'] + 1, $lote1['version']);
+        $this->postJson("/api/materia-prima/lotes/{$primero['id']}/confirmar", [
+            'operacion_id' => (string) Str::uuid(), 'version_conocida' => $lote1['version'],
+        ])->assertOk()->assertJsonPath('data.estado', 'pendiente_asignacion');
+    }
+
+    public function test_destare_revierte_salidas_y_pesos_si_falla_la_conciliacion_del_borrador(): void
+    {
+        $contexto = $this->prepararRecepcionValidada(sinDestare: true);
+        $digitador = User::factory()->create(['rol' => RolUsuario::DigitadorMateriaPrima]);
+        $lote = $this->actingAs($digitador, 'sanctum')
+            ->postJson('/api/materia-prima/lotes', $this->payloadLote($contexto))
+            ->assertCreated()->json('data');
+        DB::table('lotes_materia_prima_envases')
+            ->where('lote_materia_prima_id', $lote['id'])->where('tipo_envase', 'bins')
+            ->update(['cantidad' => 49]);
+
+        $this->actingAs(User::factory()->create(['rol' => RolUsuario::OperadorRomana]), 'sanctum')
+            ->postJson("/api/romana/recepciones/{$contexto['recepcion_id']}/cerrar", [
+                'operacion_id' => (string) Str::uuid(),
+                'modo_salida_envases' => 'mismos',
+                'numero_guia_salida' => 'GS-DESTARE-INVALIDO',
+                'taras_envases' => [
+                    ['tipo_envase' => 'bins', 'tara_unitaria' => 40],
+                    ['tipo_envase' => 'totes', 'tara_unitaria' => 2],
+                ],
+                'peso_tara' => 10000,
+                'tipo_envase_calculo_neto' => 'bins',
+            ])->assertUnprocessable()->assertJsonValidationErrors('envases');
+
+        $this->assertDatabaseHas('recepciones_romana', [
+            'id' => $contexto['recepcion_id'], 'peso_neto' => null,
+        ]);
+        $this->assertDatabaseHas('lotes_materia_prima', [
+            'id' => $lote['id'], 'kilos_netos_calculados' => null, 'version' => $lote['version'],
+        ]);
+        $this->assertSame(0, DB::table('salidas_envases_recepcion_romana')
+            ->where('recepcion_romana_id', $contexto['recepcion_id'])->count());
+        $this->assertSame(0, DB::table('movimientos_envases')
+            ->where('recepcion_romana_id', $contexto['recepcion_id'])
+            ->where('tipo_movimiento', 'salida_recepcion_fruta')->count());
+    }
+
+    public function test_listado_aisla_el_error_de_un_segmento_y_mantiene_el_otro(): void
+    {
+        $contexto = $this->prepararRecepcionValidada(tresTipos: true);
+        $digitador = User::factory()->create(['rol' => RolUsuario::DigitadorMateriaPrima]);
+        DB::table('segmentos_envases_validacion_mp')
+            ->where('segmento_validacion_mp_id', $contexto['segmento_id'])
+            ->where('tipo_envase', 'bins')->delete();
+        $segmentos = $this->actingAs($digitador, 'sanctum')
+            ->getJson('/api/materia-prima/segmentos-pendientes')->assertOk()->json('data');
+        $this->assertCount(2, $segmentos);
+        $this->assertNull($segmentos[0]['neto_estimado']);
+        $this->assertNotNull($segmentos[0]['error_neto']);
+        $this->assertEqualsWithDelta(10500, $segmentos[1]['neto_estimado'], 0.00001);
+        $this->assertNull($segmentos[1]['error_neto']);
+        $this->assertFalse($segmentos[1]['destare_pendiente']);
+    }
+
     public function test_ultimo_lote_concilia_milesimas_por_contenedor_sin_repartir_por_esponjas(): void
     {
         $contexto = $this->prepararRecepcionValidada(tresTipos: true);
@@ -125,6 +249,7 @@ class MateriaPrimaApiTest extends TestCase
         foreach (['HIST-A', 'HIST-B'] as $numero) {
             DB::table('lotes_materia_prima')->insert([
                 ...$base, 'id' => (string) Str::uuid(), 'operacion_id' => (string) Str::uuid(),
+                'secuencia_creacion' => null,
                 'segmento_validacion_mp_id' => $otroSegmentoId, 'numero_lote' => $numero,
                 'clave_numero_vigente' => hash('sha256', $numero),
             ]);
@@ -1451,7 +1576,7 @@ class MateriaPrimaApiTest extends TestCase
     }
 
     /** @return array<string, mixed> */
-    private function prepararRecepcionValidada(bool $tresTipos = false): array
+    private function prepararRecepcionValidada(bool $tresTipos = false, bool $sinDestare = false): array
     {
         $temporada = Temporada::query()->where('activa', true)->firstOrFail();
         $cliente = Cliente::create([
@@ -1539,19 +1664,21 @@ class MateriaPrimaApiTest extends TestCase
         )
             ->assertOk()
             ->assertJsonPath('data.estado', 'validada')->json('data');
-        $this->actingAs($operador, 'sanctum')->postJson("/api/romana/recepciones/{$recepcion['id']}/cerrar", [
-            'operacion_id' => (string) Str::uuid(),
-            'modo_salida_envases' => 'mismos',
-            'numero_guia_salida' => 'GS-MP-100',
-            'taras_envases' => [['tipo_envase' => 'bins', 'tara_unitaria' => 40], ['tipo_envase' => 'totes', 'tara_unitaria' => 2],
-                ...($tresTipos ? [['tipo_envase' => 'esponjas', 'tara_unitaria' => 1]] : [])],
-            'peso_tara' => 10000,
-            'tipo_envase_calculo_neto' => 'bins',
-        ])
-            ->assertOk()
-            ->assertJsonPath('data.peso_neto', 18000)
-            ->assertJsonPath('data.cantidad_envase_calculo_neto', 48)
-            ->assertJsonPath('data.peso_neto_por_envase', 375);
+        if (! $sinDestare) {
+            $this->actingAs($operador, 'sanctum')->postJson("/api/romana/recepciones/{$recepcion['id']}/cerrar", [
+                'operacion_id' => (string) Str::uuid(),
+                'modo_salida_envases' => 'mismos',
+                'numero_guia_salida' => 'GS-MP-100',
+                'taras_envases' => [['tipo_envase' => 'bins', 'tara_unitaria' => 40], ['tipo_envase' => 'totes', 'tara_unitaria' => 2],
+                    ...($tresTipos ? [['tipo_envase' => 'esponjas', 'tara_unitaria' => 1]] : [])],
+                'peso_tara' => 10000,
+                'tipo_envase_calculo_neto' => 'bins',
+            ])
+                ->assertOk()
+                ->assertJsonPath('data.peso_neto', 18000)
+                ->assertJsonPath('data.cantidad_envase_calculo_neto', 48)
+                ->assertJsonPath('data.peso_neto_por_envase', 375);
+        }
 
         $segmentoId = $respuestaValidacion['segmentos'][0]['id'];
 

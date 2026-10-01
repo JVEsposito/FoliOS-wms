@@ -60,9 +60,10 @@ class InterfazOficinaMateriaPrimaTest extends TestCase
             $interfaz,
         );
         $this->assertStringContainsString(
-            'response.status === 304 && state.catalogs',
+            'if (response.status === 304)',
             $interfaz,
         );
+        $this->assertStringContainsString('return loadCatalogs(true)', $interfaz);
         $this->assertStringContainsString(
             "state.catalogEtag = response.headers.get('ETag')",
             $interfaz,

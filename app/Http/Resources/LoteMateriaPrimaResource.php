@@ -30,9 +30,9 @@ class LoteMateriaPrimaResource extends JsonResource
                 'id' => $this->recepcion->id,
                 'numero_recepcion' => $this->recepcion->numero_recepcion,
                 'numero_guia_despacho' => $this->recepcion->numero_guia_despacho,
-                'peso_neto' => (float) $this->recepcion->peso_neto,
+                'peso_neto' => $this->recepcion->peso_neto !== null ? (float) $this->recepcion->peso_neto : null,
                 'tipo_envase_calculo_neto' => $this->recepcion->tipo_envase_calculo_neto,
-                'peso_neto_por_envase' => (float) $this->recepcion->peso_neto_por_envase,
+                'peso_neto_por_envase' => $this->recepcion->peso_neto_por_envase !== null ? (float) $this->recepcion->peso_neto_por_envase : null,
             ] : null,
             'segmento' => $this->segmento ? [
                 'id' => $this->segmento->id,
@@ -75,13 +75,14 @@ class LoteMateriaPrimaResource extends JsonResource
                     ])->values()),
             ],
             'pesos' => [
-                'kilos_brutos' => (float) $this->kilos_brutos,
-                'kilos_netos_calculados' => (float) $this->kilos_netos_calculados,
-                'kilos_netos_confirmados' => (float) $this->kilos_netos_confirmados,
-                'corregido_por_digitador' => abs(
-                    (float) $this->kilos_netos_calculados
-                    - (float) $this->kilos_netos_confirmados,
-                ) > 0.0001,
+                'destare_pendiente' => $this->kilos_netos_calculados === null,
+                'kilos_brutos' => $this->kilos_brutos !== null ? (float) $this->kilos_brutos : null,
+                'kilos_netos_calculados' => $this->kilos_netos_calculados !== null ? (float) $this->kilos_netos_calculados : null,
+                'kilos_netos_confirmados' => $this->kilos_netos_confirmados !== null ? (float) $this->kilos_netos_confirmados : null,
+                'corregido_por_digitador' => $this->kilos_netos_calculados !== null
+                    && $this->kilos_netos_confirmados !== null
+                    && abs((float) $this->kilos_netos_calculados
+                        - (float) $this->kilos_netos_confirmados) > 0.0001,
             ],
             'requiere_hidrocooler' => $this->requiere_hidrocooler,
             'hidrocooler' => $this->whenLoaded('hidrocooler', fn () => $this->hidrocooler ? [
