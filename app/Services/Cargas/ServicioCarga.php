@@ -999,7 +999,7 @@ class ServicioCarga
         if ($folio->tipo_bulto !== TipoBulto::Pallet) {
             return [
                 'codigo' => 'tipo_bulto_no_permitido',
-                'mensaje' => "Solo un pallet completo puede incorporarse a una carga.",
+                'mensaje' => 'Solo un pallet completo puede incorporarse a una carga.',
             ];
         }
 
@@ -1025,8 +1025,7 @@ class ServicioCarga
             ];
         }
 
-        if ($folio->estado_operacional === EstadoOperacionalFolio::Bloqueado
-            || $folio->condicion_termica === CondicionTermicaFolio::Retenido
+        if ($folio->condicion_termica === CondicionTermicaFolio::Retenido
             || $folio->habilitacion_almacenamiento === HabilitacionAlmacenamientoFolio::Retenido
             || $folio->retencionOperacionalActiva()->exists()) {
             return [
@@ -1043,6 +1042,7 @@ class ServicioCarga
                     'mensaje' => "El folio {$folio->numero_folio} no posee una ubicación actual ni está en Prefrío.",
                 ];
             }
+
             return null;
         }
 

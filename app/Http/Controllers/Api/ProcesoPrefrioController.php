@@ -16,10 +16,13 @@ use App\Http\Requests\CorregirProcesoPrefrioRequest;
 use App\Http\Requests\CrearProcesoPrefrioRequest;
 use App\Http\Requests\ReprocesarProcesoPrefrioRequest;
 use App\Http\Resources\ProcesoPrefrioResource;
+use App\Models\CargaFolio;
 use App\Models\Dispositivo;
 use App\Models\PersonalAccessToken;
+use App\Models\PresenciaCargaAnden;
 use App\Models\ProcesoPrefrio;
 use App\Models\ProcesoPrefrioFolio;
+use App\Services\Cargas\ServicioPlanDespachoDirecto;
 use App\Services\Prefrio\RevisionPrefrioOperacional;
 use App\Services\Prefrio\ServicioCorreccionProcesoPrefrio;
 use App\Services\Prefrio\ServicioGeneracionRecepcionTunel;
@@ -244,7 +247,7 @@ class ProcesoPrefrioController extends Controller
         ProcesoPrefrio $procesoPrefrio,
         ServicioProcesoPrefrio $servicio,
         ServicioGeneracionRecepcionTunel $generador,
-        \App\Services\Cargas\ServicioPlanDespachoDirecto $despachoDirecto,
+        ServicioPlanDespachoDirecto $despachoDirecto,
     ): ProcesoPrefrioResource {
         $dispositivo = $this->dispositivo($request);
         $proceso = DB::transaction(function () use (
@@ -264,9 +267,9 @@ class ProcesoPrefrioController extends Controller
             $generador->generar($aprobado, $request->user());
             // La aprobación es el momento en que un pallet del túnel pasa a
             // ser elegible para la tarea crítica hacia un camión presente.
-            $presencias = \App\Models\PresenciaCargaAnden::query()
+            $presencias = PresenciaCargaAnden::query()
                 ->whereNotNull('bloqueo_carga_id')
-                ->whereIn('carga_id', \App\Models\CargaFolio::query()
+                ->whereIn('carga_id', CargaFolio::query()
                     ->select('carga_id')
                     ->whereIn('folio_id', $aprobado->folios()->select('folio_id')))
                 ->get();
