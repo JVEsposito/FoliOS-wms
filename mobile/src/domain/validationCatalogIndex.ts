@@ -40,6 +40,18 @@ export function articlesForOrigins(index: ValidationCatalogIndex, originIds: rea
   return articles;
 }
 
+export function productCompatibleWithOrigins(
+  index: ValidationCatalogIndex,
+  originIds: readonly string[],
+  selection: Pick<ValidationArticle, 'especie' | 'variedad' | 'calibre' | 'envase'>,
+): boolean {
+  const fields = ['especie', 'variedad', 'calibre', 'envase'] as const;
+  if (fields.every((field) => !selection[field])) return true;
+  return articlesForOrigins(index, originIds.filter(Boolean)).some((article) => fields.every(
+    (field) => !selection[field] || article[field] === selection[field],
+  ));
+}
+
 export function createOriginArticleSelector(
   index: ValidationCatalogIndex,
   calculate = articlesForOrigins,

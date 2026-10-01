@@ -50,7 +50,7 @@ import {
 import { colors } from '../theme/colors';
 import { isPdaBuild } from '../config/appVariant';
 import { ScanInput, ScanInputHandle } from '../components/ui/ScanInput';
-import { createOriginArticleSelector, indexValidationCatalog } from '../domain/validationCatalogIndex';
+import { createOriginArticleSelector, indexValidationCatalog, productCompatibleWithOrigins } from '../domain/validationCatalogIndex';
 
 type ValidationScreenProps = {
   auth: AuthSession;
@@ -215,6 +215,15 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
 
   function resetProduct() {
     setSpecies(''); setVariety(''); setCaliber(''); setPackageName(''); setCategoryId('');
+  }
+
+  function updateOriginDrafts(nextDrafts: OriginDraft[]) {
+    setOriginDrafts(nextDrafts);
+    if (catalogIndex && !productCompatibleWithOrigins(
+      catalogIndex,
+      nextDrafts.map((draft) => draft.originId).filter(Boolean),
+      { especie: species, variedad: variety, calibre: caliber, envase: packageName },
+    )) resetProduct();
   }
 
   useEffect(() => {
@@ -782,14 +791,14 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
             </View>
             {originDrafts.map((draft, index) => (
               <View key={draft.key} style={[styles.originCompositionRow, compact && styles.originCompositionRowCompact]}>
-                <View style={styles.originCompositionSelect}><SelectField compact={compact} disabled={terminalDecision || !brand} label={`CSG / Predio ${index + 1}`} options={csgOptions} searchable value={draft.originId} onChange={(value) => { setOriginDrafts((current) => current.map((item) => item.key === draft.key ? { ...item, originId: value } : item)); resetProduct(); }} /></View>
+                <View style={styles.originCompositionSelect}><SelectField compact={compact} disabled={terminalDecision || !brand} label={`CSG / Predio ${index + 1}`} options={csgOptions} searchable value={draft.originId} onChange={(value) => updateOriginDrafts(originDrafts.map((item) => item.key === draft.key ? { ...item, originId: value } : item))} /></View>
                 <View style={styles.originBoxes}><Text style={styles.label}>Cajas *</Text><TextInput editable={!terminalDecision} keyboardType="number-pad" onChangeText={(value) => setOriginDrafts((current) => current.map((item) => item.key === draft.key ? { ...item, boxes: value.replace(/[^0-9]/g, '') } : item))} placeholder="0" placeholderTextColor={colors.muted} style={styles.boxInput} value={draft.boxes} /></View>
-                {originDrafts.length > 1 ? <Pressable disabled={terminalDecision} onPress={() => { setOriginDrafts((current) => current.filter((item) => item.key !== draft.key)); resetProduct(); }} style={styles.removeOrigin}><Text style={styles.removeOriginText}>Quitar</Text></Pressable> : null}
+                {originDrafts.length > 1 ? <Pressable disabled={terminalDecision} onPress={() => updateOriginDrafts(originDrafts.filter((item) => item.key !== draft.key))} style={styles.removeOrigin}><Text style={styles.removeOriginText}>Quitar</Text></Pressable> : null}
                 <View style={styles.traceField}><Text style={styles.label}>Lote MP *</Text><TextInput autoCapitalize="characters" autoCorrect={false} editable={!terminalDecision} onChangeText={(value) => setOriginDrafts((current) => current.map((item) => item.key === draft.key ? { ...item, lot: value } : item))} placeholder="Según etiqueta" placeholderTextColor={colors.muted} style={styles.traceInput} value={draft.lot} /></View>
                 <View style={styles.traceField}><Text style={styles.label}>Proceso packing *</Text><TextInput autoCapitalize="characters" autoCorrect={false} editable={!terminalDecision} onChangeText={(value) => setOriginDrafts((current) => current.map((item) => item.key === draft.key ? { ...item, process: value } : item))} placeholder="Según etiqueta" placeholderTextColor={colors.muted} style={styles.traceInput} value={draft.process} /></View>
               </View>
             ))}
-            <Pressable disabled={terminalDecision || !brand} onPress={() => { setOriginDrafts((current) => [...current, newOriginDraft()]); resetProduct(); }} style={[styles.addOrigin, (terminalDecision || !brand) && styles.disabled]}><Text style={styles.addOriginText}>+ Agregar línea (otro CSG, lote o proceso)</Text></Pressable>
+            <Pressable disabled={terminalDecision || !brand} onPress={() => updateOriginDrafts([...originDrafts, newOriginDraft()])} style={[styles.addOrigin, (terminalDecision || !brand) && styles.disabled]}><Text style={styles.addOriginText}>+ Agregar línea (otro CSG, lote o proceso)</Text></Pressable>
 
             <Text style={styles.groupTitle}>Producto</Text>
             {!originDrafts.some((draft) => draft.originId) ? <Text style={styles.label}>Selecciona el CSG en Origen comercial para filtrar las variedades.</Text> : null}

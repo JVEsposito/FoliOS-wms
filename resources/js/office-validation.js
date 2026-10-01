@@ -1,3 +1,5 @@
+import { catalogCacheMatches, loadIndependentSections } from './office-validation-loading.js';
+
 const byId = (id) => document.getElementById(id);
 const elements = {
     access: byId('officeAccess'), app: byId('officeApp'), login: byId('officeLoginForm'), loginError: byId('officeLoginError'),
@@ -117,7 +119,8 @@ async function loadSummary(seasonId = null) {
 
 async function loadCatalogContext(seasonId = null) {
     if (state.identity?.puede_consultar_catalogos_validacion !== true) return;
-    if (state.catalogCache?.seasonId === seasonId && state.catalogCache?.version === state.summary?.temporada?.version_catalogo) return;
+    const currentSeason = state.summary?.temporada;
+    if (catalogCacheMatches(state.catalogCache, currentSeason, seasonId)) return;
     const suffix = seasonId ? `?temporada_id=${encodeURIComponent(seasonId)}` : '';
     const response = await api(`/api/administracion/validacion${suffix}`);
     state.seasons = response.temporadas || []; state.season = response.temporada || null; state.articles = response.articulos || [];
@@ -126,7 +129,10 @@ async function loadCatalogContext(seasonId = null) {
 }
 
 async function loadAll(seasonId = null) {
-    await Promise.all([loadFilterOptions(seasonId), loadSummary(seasonId), loadHistory(seasonId)]);
+    await loadIndependentSections(
+        [() => loadFilterOptions(seasonId), () => loadSummary(seasonId), () => loadHistory(seasonId)],
+        (error) => toast(error?.message || 'No fue posible cargar una sección de Validación.', true),
+    );
 }
 
 function renderMetrics() {
