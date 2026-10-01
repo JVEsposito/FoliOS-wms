@@ -15,6 +15,7 @@ use App\Http\Requests\CerrarRecepcionRomanaRequest;
 use App\Http\Requests\ConfirmarIngresoRomanaRequest;
 use App\Http\Requests\ConsultarRecepcionesRomanaRequest;
 use App\Http\Requests\CorregirRecepcionRomanaRequest;
+use App\Http\Requests\CorregirSalidaEnvasesRomanaRequest;
 use App\Http\Requests\CrearRecepcionRomanaRequest;
 use App\Http\Requests\RegistrarPesajeEnvasesRomanaRequest;
 use App\Models\Cliente;
@@ -129,7 +130,7 @@ class RecepcionRomanaController extends Controller
             $base->where('estado', $filtros['estado']);
         }
         $paginacion = $base
-            ->with(['creadoPor', 'ingresoConfirmadoPor', 'cerradoPor', 'validacionTomadaPor', 'detallesEnvases'])
+            ->with(['creadoPor', 'ingresoConfirmadoPor', 'cerradoPor', 'validacionTomadaPor', 'detallesEnvases', 'salidasEnvases'])
             ->orderByDesc('ingreso_at')
             ->paginate((int) ($filtros['por_pagina'] ?? 30));
 
@@ -163,6 +164,7 @@ class RecepcionRomanaController extends Controller
             'ingresoConfirmadoPor',
             'cerradoPor',
             'detallesEnvases',
+            'salidasEnvases',
             'pesajesEnvases' => fn ($consulta) => $consulta
                 ->with(['registradoPor', 'anuladoPor'])
                 ->orderBy('secuencia'),
@@ -218,6 +220,16 @@ class RecepcionRomanaController extends Controller
         ServicioRecepcionRomana $servicio,
     ): JsonResponse {
         $recepcion = $servicio->cerrar($recepcion, $request->validated(), $request->user());
+
+        return response()->json(['data' => $this->recepcion($recepcion, true)]);
+    }
+
+    public function corregirSalidaEnvases(
+        CorregirSalidaEnvasesRomanaRequest $request,
+        RecepcionRomana $recepcion,
+        ServicioRecepcionRomana $servicio,
+    ): JsonResponse {
+        $recepcion = $servicio->corregirSalidaEnvases($recepcion, $request->validated(), $request->user());
 
         return response()->json(['data' => $this->recepcion($recepcion, true)]);
     }
@@ -332,6 +344,15 @@ class RecepcionRomanaController extends Controller
                     : $detalle->cantidad_validada - $detalle->cantidad_declarada,
             ])->values(),
             'numero_guia_despacho' => $recepcion->numero_guia_despacho,
+            'numero_guia_salida' => $recepcion->numero_guia_salida,
+            'modo_salida_envases' => $recepcion->modo_salida_envases
+                ?? ($recepcion->estado === EstadoRecepcionRomana::Cerrado && ! $esPesajeEnvases && ! $esSoloEnvases
+                    ? ($recepcion->salida_sin_envases ? 'vacio' : 'mismos') : null),
+            'salida_envases' => $recepcion->salidasEnvases->map(fn ($salida): array => [
+                'tipo_envase' => $salida->tipo_envase->value,
+                'cantidad' => $salida->cantidad,
+                'tara_unitaria' => (float) $salida->tara_unitaria,
+            ])->values(),
             'patente_camion' => $recepcion->patente_camion,
             'tipo_camion' => $recepcion->tipo_camion?->value,
             'patente_carro' => $recepcion->patente_carro,
@@ -386,7 +407,14 @@ class RecepcionRomanaController extends Controller
                 && (! $esPesajeEnvases || $cantidadPesada === 0),
             'puede_confirmar_ingreso' => $recepcion->estado === EstadoRecepcionRomana::EnBasculaIngreso,
             'puede_registrar_pesaje' => $recepcion->estado === EstadoRecepcionRomana::EnPesajeEnvases,
-            'puede_cerrar' => $recepcion->estado === EstadoRecepcionRomana::EnBasculaSalida
+            'puede_corregir_salida' => $conEventos && $recepcion->estado === EstadoRecepcionRomana::Cerrado
+                && $recepcion->modo_salida_envases !== null
+                && ! $recepcion->lotesMateriaPrima()->exists(),
+            'destare_pendiente_validacion' => $recepcion->estado === EstadoRecepcionRomana::EnBasculaSalida
+                && ! $esSoloEnvases && ! $esPesajeEnvases
+                && $recepcion->estado_validacion_mp !== EstadoValidacionMp::Validada,
+            'puede_cerrar' => ($recepcion->estado === EstadoRecepcionRomana::EnBasculaSalida
+                && ($esSoloEnvases || $esPesajeEnvases || $recepcion->estado_validacion_mp === EstadoValidacionMp::Validada))
                 || ($recepcion->estado === EstadoRecepcionRomana::EnPesajeEnvases && $pesajeCompleto),
             'aviso_recibo_disponible' => $recepcion->estado === EstadoRecepcionRomana::Cerrado,
             'creado_por' => $this->usuario($recepcion->creadoPor),

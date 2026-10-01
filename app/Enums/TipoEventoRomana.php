@@ -10,6 +10,7 @@ enum TipoEventoRomana: string
     case IngresoConfirmado = 'ingreso_confirmado';
     case PesajeEnvasesRegistrado = 'pesaje_envases_registrado';
     case PesajeEnvasesAnulado = 'pesaje_envases_anulado';
+    case SalidaEnvasesCorregida = 'salida_envases_corregida';
     case RecepcionCerrada = 'recepcion_cerrada';
     case EspecieCompletada = 'especie_completada';
 }

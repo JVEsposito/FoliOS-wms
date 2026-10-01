@@ -5,6 +5,8 @@ namespace App\Enums;
 enum TipoMovimientoEnvase: string
 {
     case RecepcionFruta = 'recepcion_fruta';
+    case SalidaRecepcionFruta = 'salida_recepcion_fruta';
+    case ReversionSalidaRecepcionFruta = 'reversion_salida_fruta';
     case RecepcionArriendo = 'recepcion_arriendo';
     case RecepcionCompra = 'recepcion_compra';
     case DespachoCliente = 'despacho_cliente';

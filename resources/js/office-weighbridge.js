@@ -9,11 +9,11 @@ const elements = {
     entryCount: byId('entryCount'), containerWeighingCount: byId('containerWeighingCount'), exitCount: byId('exitCount'), closedCount: byId('closedCount'), netWeight: byId('netWeight'),
     paginationSummary: byId('paginationSummary'), previousPage: byId('previousPageButton'), nextPage: byId('nextPageButton'),
     detail: byId('receptionDetail'), detailTitle: byId('detailTitle'), detailSubtitle: byId('detailSubtitle'), detailFacts: byId('detailFacts'), detailTimeline: byId('detailTimeline'), weightBalance: byId('weightBalance'),
-    editReception: byId('editReceptionButton'), confirmEntry: byId('confirmEntryButton'), addContainerWeighing: byId('addContainerWeighingButton'), closeReception: byId('closeReceptionButton'), downloadReceipt: byId('downloadReceiptButton'), closeDetail: byId('closeDetailButton'),
+    editReception: byId('editReceptionButton'), confirmEntry: byId('confirmEntryButton'), addContainerWeighing: byId('addContainerWeighingButton'), closeReception: byId('closeReceptionButton'), correctExit: byId('correctExitButton'), downloadReceipt: byId('downloadReceiptButton'), closeDetail: byId('closeDetailButton'),
     containerWeighingPanel: byId('containerWeighingPanel'), containerWeighingProgress: byId('containerWeighingProgress'), containerWeighingList: byId('containerWeighingList'),
     receptionDialog: byId('receptionDialog'), receptionForm: byId('receptionForm'), receptionDialogTitle: byId('receptionDialogTitle'), receptionDialogDescription: byId('receptionDialogDescription'), receptionFormError: byId('receptionFormError'), saveReception: byId('saveReceptionButton'),
     serviceField: byId('serviceField'), containerEntryDateField: byId('containerEntryDateField'), containerConceptField: byId('containerConceptField'), standardContainerLines: byId('standardContainerLines'), containerWeighingFields: byId('containerWeighingFields'), grossWeightField: byId('grossWeightField'), administrativeCorrectionField: byId('administrativeCorrectionField'), administrativeTareField: byId('administrativeTareField'), administrativeNetContainerField: byId('administrativeNetContainerField'),
-    tareDialog: byId('tareDialog'), tareForm: byId('tareForm'), tareDescription: byId('tareDescription'), tareFormError: byId('tareFormError'), outboundContainerTares: byId('outboundContainerTares'), outboundContainerTareList: byId('outboundContainerTareList'), containerTarePreviewRow: byId('containerTarePreviewRow'), containerTarePreview: byId('containerTarePreview'), netWeightPreview: byId('netWeightPreview'), netPerContainerPreview: byId('netPerContainerPreview'),
+    tareDialog: byId('tareDialog'), tareForm: byId('tareForm'), tareDescription: byId('tareDescription'), tareFormError: byId('tareFormError'), outboundContainerTares: byId('outboundContainerTares'), outboundContainerTareList: byId('outboundContainerTareList'), outboundGuideField: byId('outboundGuideField'), outboundExtraField: byId('outboundExtraField'), outboundExtraType: byId('outboundExtraType'), outboundAddType: byId('outboundAddType'), exitCorrectionReasonField: byId('exitCorrectionReasonField'), containerTarePreviewRow: byId('containerTarePreviewRow'), containerTarePreview: byId('containerTarePreview'), netWeightPreview: byId('netWeightPreview'), netPerContainerPreview: byId('netPerContainerPreview'),
     containerWeighingDialog: byId('containerWeighingDialog'), containerWeighingForm: byId('containerWeighingForm'), containerWeighingDescription: byId('containerWeighingDescription'), containerWeighingFormError: byId('containerWeighingFormError'), containerWeighingTarePreview: byId('containerWeighingTarePreview'), containerWeighingNetPreview: byId('containerWeighingNetPreview'),
     loading: byId('officeLoading'), loadingText: byId('officeLoadingText'), toasts: byId('officeToasts'),
 };
@@ -29,6 +29,7 @@ const state = {
     meta: null,
     poller: null,
     administrativeCorrection: false,
+    tareCorrection: false,
 };
 
 class ApiError extends Error {
@@ -55,8 +56,9 @@ function formatWeight(value, fallback = '—') {
 }
 function label(value) {
     const labels = {
+        mismos: 'Se va con los mismos', diferentes: 'Se va con más o menos', vacio: 'Se va vacío',
         en_bascula_ingreso: 'En báscula ingreso', en_pesaje_envases: 'Pesaje acumulativo', en_bascula_salida: 'Pendiente de destare', cerrado: 'Cerrado',
-        ingreso_registrado: 'Ingreso registrado', ingreso_actualizado: 'Antecedentes de ingreso actualizados', correccion_administrativa: 'Corrección administrativa', ingreso_confirmado: 'Ingreso confirmado', pesaje_envases_registrado: 'Tanda de envases pesada', pesaje_envases_anulado: 'Tanda de pesaje anulada', recepcion_cerrada: 'Recepción cerrada',
+        ingreso_registrado: 'Ingreso registrado', ingreso_actualizado: 'Antecedentes de ingreso actualizados', correccion_administrativa: 'Corrección administrativa', ingreso_confirmado: 'Ingreso confirmado', pesaje_envases_registrado: 'Tanda de envases pesada', pesaje_envases_anulado: 'Tanda de pesaje anulada', recepcion_cerrada: 'Recepción cerrada', salida_envases_corregida: 'Salida de envases corregida',
         almacenaje: 'Almacenaje', proceso: 'Proceso', prefrio: 'Pre-frío', bins: 'Bins', totes: 'Totes', esponjas: 'Esponjas', fruta_con_envases: 'Fruta con envases', fruta_pesaje_envases: 'Fruta con pesaje acumulativo', solo_envases: 'Solo envases', termo: 'Camión termo', plano: 'Camión plano', compra: 'Compra', arriendo: 'Arriendo', pendiente: 'Pendiente', en_curso: 'En curso', validada: 'Validada',
     };
     return labels[value] || String(value || '').replaceAll('_', ' ').replace(/^./, (character) => character.toUpperCase());
@@ -225,12 +227,12 @@ function renderDetail(reception) {
     ] : [
         fact(reception.pesaje_envases ? 'BRUTO ACUMULADO' : 'PESO BRUTO', formatWeight(reception.peso_bruto), true),
         fact(reception.pesaje_envases ? 'TARA ACUMULADA' : 'TARA CAMIÓN', formatWeight(reception.peso_tara), true),
-        ...(reception.salida_sin_envases ? [
-            fact('TARA CALCULADA DE ENVASES', formatWeight(reception.peso_tara_envases), true),
+        ...(reception.modo_salida_envases && reception.peso_tara_envases !== 0 ? [
+            fact('DIFERENCIA DE TARA DE ENVASES', formatWeight(reception.peso_tara_envases), true),
         ] : []),
         fact('PESO NETO', formatWeight(reception.peso_neto), true),
     ];
-    const outboundTareFacts = reception.salida_sin_envases ? [
+    const outboundTareFacts = reception.modo_salida_envases ? [
         fact(
             'TARAS UNITARIAS',
             reception.envases
@@ -240,6 +242,8 @@ function renderDetail(reception) {
     ] : [];
     elements.detailFacts.innerHTML = [
         fact('INGRESO', formatDate(reception.ingreso_at)), fact(reception.tipo_recepcion === 'solo_envases' ? 'CIERRE DOCUMENTAL' : reception.pesaje_envases ? 'CIERRE DE PESAJE' : 'SALIDA / DESTARE', formatDate(reception.salida_at)), fact('TEMPORADA GLOBAL', `${reception.temporada.nombre} · ${reception.temporada.codigo}`), fact('CLIENTE', reception.cliente.nombre), fact('TIPO RECEPCIÓN', label(reception.tipo_recepcion)), fact('SERVICIO / CONCEPTO', reception.tipo_recepcion === 'solo_envases' ? label(reception.concepto_envases) : label(reception.tipo_servicio)), fact('GUÍA', reception.numero_guia_despacho),
+        ...(reception.destare_pendiente_validacion ? [fact('DESTARE', 'Espera la Validación MP completa en la PDA')] : []),
+        ...(reception.modo_salida_envases ? [fact('SALIDA ENVASES', label(reception.modo_salida_envases)), fact('GUÍA DE SALIDA', reception.numero_guia_salida || 'Sin salida'), fact('ENVASES RETIRADOS', (reception.salida_envases || []).filter((x) => x.cantidad > 0).map((x) => `${x.cantidad} ${label(x.tipo_envase)}`).join(' · ') || 'Ninguno')] : []),
         fact('CAMIÓN', reception.patente_camion), fact('TIPO DE CAMIÓN', reception.tipo_camion ? label(reception.tipo_camion) : 'No informado'), fact('CARRO', reception.patente_carro || 'No informado'), fact('CONDUCTOR', reception.nombre_conductor), fact('RUT', reception.rut_conductor), fact('ENVASES DECLARADOS', envasesLabel(reception)), fact('VALIDACIÓN MP', label(reception.estado_validacion_mp)),
         ...weighingFacts,
         ...outboundTareFacts,
@@ -249,7 +253,7 @@ function renderDetail(reception) {
     elements.detailTimeline.innerHTML = (reception.eventos || []).map((event) => `<article class="timeline-item"><i></i><div><strong>${escapeHtml(label(event.tipo))}</strong><small>${escapeHtml(event.usuario?.nombre || 'Sistema')} · ${escapeHtml(event.estado_anterior ? `${receptionStateLabel(reception, event.estado_anterior)} → ${receptionStateLabel(reception, event.estado_nuevo)}` : receptionStateLabel(reception, event.estado_nuevo))}</small>${event.datos?.motivo ? `<small>Motivo: ${escapeHtml(event.datos.motivo)}</small>` : ''}</div><time>${escapeHtml(formatDate(event.ocurrido_at))}</time></article>`).join('');
     elements.weightBalance.innerHTML = reception.tipo_recepcion === 'solo_envases'
         ? '<div class="net-row"><span>Recepción documental</span><strong>Sin registro de kilos</strong></div>'
-        : `<div><span>Bruto${reception.pesaje_envases ? ' acumulado' : ''}</span><strong>${escapeHtml(formatWeight(reception.peso_bruto))}</strong></div><div><span>Tara ${reception.pesaje_envases ? 'acumulada' : 'camión'}</span><strong>${escapeHtml(formatWeight(reception.peso_tara))}</strong></div>${reception.salida_sin_envases ? `<div><span>Tara de envases</span><strong>${escapeHtml(formatWeight(reception.peso_tara_envases))}</strong></div>` : ''}${reception.pesaje_envases ? `<div><span>Neto promedio por envase</span><strong>${escapeHtml(formatWeight(reception.peso_neto_por_envase))}</strong></div>` : ''}<div class="net-row"><span>Neto legal</span><strong>${escapeHtml(formatWeight(reception.peso_neto))}</strong></div>`;
+        : `<div><span>Bruto${reception.pesaje_envases ? ' acumulado' : ''}</span><strong>${escapeHtml(formatWeight(reception.peso_bruto))}</strong></div><div><span>Tara ${reception.pesaje_envases ? 'acumulada' : 'camión'}</span><strong>${escapeHtml(formatWeight(reception.peso_tara))}</strong></div>${reception.modo_salida_envases && reception.peso_tara_envases !== 0 ? `<div><span>Diferencia tara envases</span><strong>${escapeHtml(formatWeight(reception.peso_tara_envases))}</strong></div>` : ''}${reception.pesaje_envases ? `<div><span>Neto promedio por envase</span><strong>${escapeHtml(formatWeight(reception.peso_neto_por_envase))}</strong></div>` : ''}<div class="net-row"><span>Neto legal</span><strong>${escapeHtml(formatWeight(reception.peso_neto))}</strong></div>`;
     const canOperate = state.identity?.puede_operar_romana === true;
     const canCorrect = state.identity?.puede_corregir_recepciones_romana === true
         && reception.correccion_administrativa_disponible
@@ -262,6 +266,7 @@ function renderDetail(reception) {
         ? 'Cerrar recepción de envases'
         : reception.pesaje_envases ? 'Cerrar pesaje acumulativo' : 'Registrar destare y cerrar';
     elements.closeReception.classList.toggle('is-hidden', !canOperate || !reception.puede_cerrar);
+    elements.correctExit.classList.toggle('is-hidden', !state.identity?.puede_corregir_recepciones_romana || !reception.puede_corregir_salida);
     elements.downloadReceipt.classList.toggle('is-hidden', !reception.aviso_recibo_disponible);
     renderContainerWeighings(reception, canOperate);
     elements.detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -510,66 +515,130 @@ elements.closeReception.addEventListener('click', async () => {
         finally { setBusy(false); }
         return;
     }
-    elements.tareForm.reset(); elements.tareFormError.textContent = ''; elements.containerTarePreview.textContent = '—'; elements.netWeightPreview.textContent = '—'; elements.netPerContainerPreview.textContent = '—';
-    const containerSelect = elements.tareForm.elements.tipo_envase_calculo_neto;
-    containerSelect.innerHTML = state.selected.envases.map((item) => `<option value="${escapeHtml(item.tipo_envase)}">${escapeHtml(label(item.tipo_envase))} · ${item.cantidad_declarada} declarados</option>`).join('');
-    elements.outboundContainerTareList.innerHTML = state.selected.envases.map((item) => `
-        <label>
-            <span>${escapeHtml(label(item.tipo_envase))} · ${item.cantidad_declarada} unidades</span>
-            <div><input data-container-tare="${escapeHtml(item.tipo_envase)}" type="number" min="0.001" max="1000" step="0.001" inputmode="decimal" value="${escapeHtml(item.tara_unitaria_salida ?? '')}"><b>kg/u</b></div>
-        </label>`).join('');
-    elements.outboundContainerTares.classList.remove('is-hidden');
-    elements.containerTarePreviewRow.classList.add('is-hidden');
-    elements.tareDescription.textContent = `${state.selected.patente_camion} · bruto ${formatWeight(state.selected.peso_bruto)}. Captura la lectura del camión vacío.`;
-    elements.tareDialog.showModal(); elements.tareForm.elements.peso_tara.focus();
+    openTareDialog(false);
 });
 
-function calculatedContainerTare() {
-    if (!elements.tareForm.elements.salida_sin_envases.checked) return 0;
-    return (state.selected?.envases || []).reduce((total, item) => {
-        const input = elements.outboundContainerTareList.querySelector(`[data-container-tare="${item.tipo_envase}"]`);
-        return total + (Number(input?.value || 0) * Number(item.cantidad_declarada || 0));
-    }, 0);
+function openTareDialog(correcting) {
+    state.tareCorrection = correcting;
+    elements.tareForm.reset(); elements.tareFormError.textContent = ''; elements.containerTarePreview.textContent = '—'; elements.netWeightPreview.textContent = '—'; elements.netPerContainerPreview.textContent = '—';
+    const containerSelect = elements.tareForm.elements.tipo_envase_calculo_neto;
+    containerSelect.innerHTML = state.selected.envases.filter((item) => item.cantidad_validada > 0).map((item) => `<option value="${escapeHtml(item.tipo_envase)}">${escapeHtml(label(item.tipo_envase))} · ${item.cantidad_validada} validados</option>`).join('');
+    elements.outboundContainerTareList.innerHTML = state.selected.envases.map((item) => exitRow(item.tipo_envase, item.cantidad_validada, item.tara_unitaria_salida)).join('');
+    elements.tareForm.elements.peso_tara.value = correcting ? state.selected.peso_tara : '';
+    elements.tareForm.elements.peso_tara.readOnly = correcting;
+    elements.tareForm.elements.tipo_envase_calculo_neto.disabled = correcting;
+    if (correcting) {
+        elements.tareForm.elements.tipo_envase_calculo_neto.value = state.selected.tipo_envase_calculo_neto;
+        elements.tareForm.elements.modo_salida_envases.value = state.selected.modo_salida_envases;
+        elements.tareForm.elements.numero_guia_salida.value = state.selected.numero_guia_salida || '';
+        (state.selected.salida_envases || []).forEach((item) => {
+            let row = exitTypes().find((r) => r.dataset.exitRow === item.tipo_envase);
+            if (!row) {
+                elements.outboundContainerTareList.insertAdjacentHTML('beforeend', exitRow(item.tipo_envase, 0, item.tara_unitaria, true));
+                row = exitTypes().find((r) => r.dataset.exitRow === item.tipo_envase);
+            }
+            row.querySelector('[data-exit-quantity]').value = item.cantidad;
+            row.querySelector('[data-container-tare]').value = item.tara_unitaria;
+        });
+    }
+    elements.exitCorrectionReasonField.classList.toggle('is-hidden', !correcting);
+    elements.tareForm.elements.motivo_correccion.required = correcting;
+    elements.tareDescription.textContent = `${state.selected.patente_camion} · bruto ${formatWeight(state.selected.peso_bruto)}. Completa la guía y el retiro físico de envases.`;
+    updateExitMode();
+    elements.tareDialog.showModal();
+    if (!correcting) elements.tareForm.elements.peso_tara.focus();
+}
+elements.correctExit.addEventListener('click', () => openTareDialog(true));
+
+function exitRow(type, validated = 0, tare = '', extra = false) {
+    return `<div data-exit-row="${escapeHtml(type)}" data-validated="${validated}">
+        <label class="field"><span>${escapeHtml(label(type))} · entraron ${validated} validados</span><input data-exit-quantity="${escapeHtml(type)}" type="number" min="0" max="100000" step="1" value="${validated}" required></label>
+        <label class="field"><span>Tara unitaria (kg) *</span><input data-container-tare="${escapeHtml(type)}" type="number" min="0.001" max="1000" step="0.001" inputmode="decimal" value="${escapeHtml(tare ?? '')}" required></label>
+        ${extra ? '<button type="button" class="secondary-button" data-remove-exit-type>Quitar tipo</button>' : ''}
+    </div>`;
 }
 
-function toggleOutboundContainerTares() {
-    const enabled = elements.tareForm.elements.salida_sin_envases.checked;
-    elements.containerTarePreviewRow.classList.toggle('is-hidden', !enabled);
-    elements.outboundContainerTareList.querySelectorAll('[data-container-tare]').forEach((input) => {
-        input.required = true;
+function exitTypes() {
+    return [...elements.outboundContainerTareList.querySelectorAll('[data-exit-row]')];
+}
+
+function updateExtraTypes() {
+    const used = new Set(exitTypes().map((row) => row.dataset.exitRow));
+    const available = state.catalogs.tipos_envase.filter((item) => !used.has(item.codigo));
+    elements.outboundExtraType.innerHTML = available.map((item) => `<option value="${escapeHtml(item.codigo)}">${escapeHtml(item.nombre)}</option>`).join('');
+    elements.outboundAddType.disabled = !available.length;
+}
+
+function updateExitMode() {
+    const mode = elements.tareForm.elements.modo_salida_envases.value;
+    const editable = mode === 'diferentes';
+    elements.outboundGuideField.classList.toggle('is-hidden', mode === 'vacio');
+    elements.tareForm.elements.numero_guia_salida.required = mode !== 'vacio';
+    elements.outboundExtraField.classList.toggle('is-hidden', !editable);
+    exitTypes().forEach((row) => {
+        const field = row.querySelector('[data-exit-quantity]');
+        if (mode === 'mismos') field.value = row.dataset.validated;
+        if (mode === 'vacio') field.value = '0';
+        field.readOnly = !editable;
+        if (!editable && Number(row.dataset.validated) === 0) row.remove();
     });
+    updateExtraTypes();
     updateNetPreviews();
+}
+
+function calculatedContainerTare() {
+    return exitTypes().reduce((total, row) => {
+        const tare = Number(row.querySelector('[data-container-tare]').value || 0);
+        const outbound = elements.tareForm.elements.modo_salida_envases.value === 'vacio'
+            ? 0 : Number(row.querySelector('[data-exit-quantity]').value || 0);
+        return total + (Number(row.dataset.validated) - outbound) * tare;
+    }, 0);
 }
 
 function updateNetPreviews() {
     const tare = Number(elements.tareForm.elements.peso_tara.value);
-    const containerTare = calculatedContainerTare();
+    const difference = calculatedContainerTare();
     const gross = Number(state.selected?.peso_bruto || 0);
-    const net = gross - tare - containerTare;
-    elements.containerTarePreview.textContent = containerTare > 0 ? formatWeight(containerTare) : '—';
+    const net = gross - tare - difference;
+    elements.containerTarePreview.textContent = formatWeight(difference);
     elements.netWeightPreview.textContent = tare > 0 && net > 0 ? formatWeight(net) : '—';
     const type = elements.tareForm.elements.tipo_envase_calculo_neto.value;
-    const quantity = Number(state.selected?.envases.find((item) => item.tipo_envase === type)?.cantidad_declarada || 0);
+    const quantity = Number(state.selected?.envases.find((item) => item.tipo_envase === type)?.cantidad_validada || 0);
     elements.netPerContainerPreview.textContent = tare > 0 && net > 0 && quantity > 0 ? `${formatWeight(net / quantity)} / ${label(type)}` : '—';
 }
 elements.tareForm.elements.peso_tara.addEventListener('input', updateNetPreviews);
 elements.tareForm.elements.tipo_envase_calculo_neto.addEventListener('change', updateNetPreviews);
-elements.tareForm.elements.salida_sin_envases.addEventListener('change', toggleOutboundContainerTares);
+elements.tareForm.elements.modo_salida_envases.addEventListener('change', updateExitMode);
 elements.outboundContainerTareList.addEventListener('input', updateNetPreviews);
+elements.outboundContainerTareList.addEventListener('click', (event) => {
+    if (!event.target.closest('[data-remove-exit-type]')) return;
+    event.target.closest('[data-exit-row]').remove(); updateExtraTypes(); updateNetPreviews();
+});
+elements.outboundAddType.addEventListener('click', () => {
+    const type = elements.outboundExtraType.value;
+    if (!type) return;
+    elements.outboundContainerTareList.insertAdjacentHTML('beforeend', exitRow(type, 0, '', true));
+    updateExtraTypes(); updateNetPreviews();
+});
 elements.tareForm.addEventListener('submit', async (event) => {
     if (event.submitter?.value === 'cancel') return;
     event.preventDefault(); if (!state.selected) return; elements.tareFormError.textContent = '';
     const data = Object.fromEntries(new FormData(elements.tareForm));
     data.operacion_id = operationUuid();
-    data.salida_sin_envases = elements.tareForm.elements.salida_sin_envases.checked;
-    data.taras_envases = state.selected.envases.map((item) => ({
-            tipo_envase: item.tipo_envase,
-            tara_unitaria: Number(elements.outboundContainerTareList.querySelector(`[data-container-tare="${item.tipo_envase}"]`)?.value || 0),
-        }));
-    setBusy(true, 'Calculando neto y cerrando recepción…');
+    data.salida_envases = data.modo_salida_envases === 'diferentes' ? exitTypes().map((row) => ({
+        tipo_envase: row.dataset.exitRow, cantidad: Number(row.querySelector('[data-exit-quantity]').value),
+    })) : [];
+    data.taras_envases = exitTypes().map((row) => ({
+        tipo_envase: row.dataset.exitRow, tara_unitaria: Number(row.querySelector('[data-container-tare]').value),
+    }));
+    if (data.modo_salida_envases === 'vacio') data.numero_guia_salida = null;
+    if (state.tareCorrection) data.version_conocida = state.selected.version;
+    setBusy(true, state.tareCorrection ? 'Corrigiendo salida de envases…' : 'Calculando neto y cerrando recepción…');
     try {
-        const payload = await api(`/api/romana/recepciones/${state.selected.id}/cerrar`, { method: 'POST', body: JSON.stringify(data) });
-        elements.tareDialog.close(); await loadReceptions({ silent: true }); renderDetail(payload.data); toast(`${payload.data.numero_recepcion} cerrada correctamente.`);
+        const path = state.tareCorrection ? 'corregir-salida-envases' : 'cerrar';
+        const payload = await api(`/api/romana/recepciones/${state.selected.id}/${path}`, { method: 'POST', body: JSON.stringify(data) });
+        elements.tareDialog.close(); await loadReceptions({ silent: true }); renderDetail(payload.data);
+        toast(`${payload.data.numero_recepcion} ${state.tareCorrection ? 'salida corregida con reversas.' : 'cerrada correctamente.'}`);
     } catch (error) { elements.tareFormError.textContent = error.message; }
     finally { setBusy(false); }
 });

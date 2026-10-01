@@ -80,6 +80,7 @@
                             <button class="primary-button is-hidden" id="confirmEntryButton" type="button">Confirmar ingreso</button>
                             <button class="primary-button is-hidden" id="addContainerWeighingButton" type="button">+ Registrar tanda</button>
                             <button class="primary-button is-hidden" id="closeReceptionButton" type="button">Registrar destare y cerrar</button>
+                            <button class="secondary-button is-hidden" id="correctExitButton" type="button">Corregir salida de envases</button>
                             <button class="secondary-button is-hidden" id="downloadReceiptButton" type="button">↓ Aviso de Recibo PDF</button>
                             <button class="secondary-button" id="closeDetailButton" type="button">Cerrar detalle</button>
                         </div>
@@ -143,10 +144,18 @@
                 <div class="weighbridge-dialog__heading"><div><p class="eyebrow">BÁSCULA DE SALIDA</p><h2>Registrar destare</h2><p id="tareDescription">Captura la lectura del camión vacío.</p></div><button class="dialog-close" value="cancel" type="submit" aria-label="Cerrar">×</button></div>
                 <label class="field weight-field"><span>Peso tara *</span><div><input name="peso_tara" type="number" min="1" max="200000" step="0.01" inputmode="decimal" required><b>kg</b></div></label>
                     <label class="field"><span>Envase contenedor para neto unitario *</span><select name="tipo_envase_calculo_neto" required></select></label>
-                    <label class="tare-option"><input name="salida_sin_envases" type="checkbox" value="1"><span><strong>El camión sale sin los envases</strong><small>Descuenta del neto la tara de los envases que quedaron en planta.</small></span></label>
-                    <fieldset class="outbound-container-tares" id="outboundContainerTares"><legend>Tara de todos los envases declarados *</legend><div id="outboundContainerTareList"></div><small>Se registra por tipo; solo se descuenta del neto cuando el camión sale sin envases.</small></fieldset>
+                    <label class="field"><span>Salida de envases *</span><select name="modo_salida_envases" required>
+                        <option value="mismos">Se va con los mismos envases</option>
+                        <option value="diferentes">Se va con más o menos envases</option>
+                        <option value="vacio">Se va vacío</option>
+                    </select></label>
+                    <label class="field" id="outboundGuideField"><span>N° de guía de salida *</span><input name="numero_guia_salida" maxlength="80" required></label>
+                    <fieldset class="outbound-container-tares" id="outboundContainerTares"><legend>Envases y tara unitaria por tipo</legend><div id="outboundContainerTareList"></div><small>La entrada usa las cantidades validadas en la PDA. La diferencia por tipo ajusta el neto de fruta.</small>
+                        <label class="field is-hidden" id="outboundExtraField"><span>Agregar otro tipo que sale</span><select id="outboundExtraType"></select><button class="secondary-button" type="button" id="outboundAddType">Agregar tipo</button></label>
+                    </fieldset>
+                <label class="field is-hidden" id="exitCorrectionReasonField"><span>Motivo de corrección *</span><textarea name="motivo_correccion" minlength="10" maxlength="1000"></textarea></label>
                 <label class="field"><span>Observación de cierre</span><textarea name="observacion" maxlength="2000"></textarea></label>
-                <div class="net-preview is-hidden" id="containerTarePreviewRow"><span>TARA CALCULADA DE ENVASES</span><strong id="containerTarePreview">—</strong></div>
+                <div class="net-preview" id="containerTarePreviewRow"><span>DIFERENCIA DE TARA DE ENVASES</span><strong id="containerTarePreview">—</strong></div>
                 <div class="net-preview"><span>PESO NETO CALCULADO</span><strong id="netWeightPreview">—</strong></div>
                 <div class="net-preview"><span>NETO POR ENVASE CONTENEDOR</span><strong id="netPerContainerPreview">—</strong></div>
                 <p class="form-error" id="tareFormError" role="alert"></p>
