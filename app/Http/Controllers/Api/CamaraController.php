@@ -10,6 +10,7 @@ use App\Http\Resources\CamaraResumenResource;
 use App\Models\Camara;
 use App\Models\PersonalAccessToken;
 use App\Services\Autorizacion\AlcanceOperacionalUsuario;
+use App\Services\Camaras\EstadoDesocupacionProgramada;
 use App\Services\Camaras\EstadoEvacuacionEmergencia;
 use App\Services\Camaras\ServicioBandasOperacionales;
 use App\Services\Estiba\ServicioReservasTareasMovimiento;
@@ -62,6 +63,7 @@ class CamaraController extends Controller
         ServicioBandasOperacionales $bandasOperacionales,
         ServicioReservasTareasMovimiento $reservasTareas,
         EstadoEvacuacionEmergencia $emergencias,
+        EstadoDesocupacionProgramada $desocupaciones,
     ): Response {
         abort_unless($camara->estado === EstadoCamara::Activa, 404);
         abort_unless($alcance->puedeVerCamara($request->user(), $camara), 403);
@@ -71,6 +73,8 @@ class CamaraController extends Controller
 
         $camara->load('bloqueo.sesionEstiba');
         $camara->setRelation('emergenciaActiva', $emergencias->activa($camara->id));
+        $camara->setRelation('ultimaDesocupacion', $desocupaciones->ultima($camara->id));
+        $camara->setAttribute('desocupacion_habilitada', $desocupaciones->habilitada($camara));
         $etag = $this->etagPlano($request, $camara);
         $respuestaCondicional = $this->configurarCache(response('', 200), $etag);
 
@@ -194,6 +198,9 @@ class CamaraController extends Controller
             'sesion_estado' => $sesion?->estado?->value,
             'sesion_ultima_actividad_at' => $sesion?->ultima_actividad_at?->toAtomString(),
             'revision_reservas' => $camara->revision_reservas,
+            'desocupacion_id' => $camara->getRelation('ultimaDesocupacion')?->id,
+            'desocupacion_version' => $camara->getRelation('ultimaDesocupacion')?->version,
+            'desocupacion_habilitada' => $camara->getAttribute('desocupacion_habilitada'),
             'emergencia_id' => $camara->getRelation('emergenciaActiva')?->id,
             'emergencia_version' => $camara->getRelation('emergenciaActiva')?->version,
             // Al cambiar la temporada activa cambia qué folios son registros sin cerrar.

@@ -93,6 +93,28 @@ generadores conservan ese valor y su unicidad habitual. Si ya existen ciclos
 posteriores, revertir esa migración se rechaza antes de modificar el esquema;
 el rollback operacional mediante `WMS_PLANNER_MODE=off` sigue disponible.
 
+## Desocupación programada desde Cámaras
+
+En **Frigorífico → Cámaras**, selecciona la cámara PT y pulsa **Vaciar cámara**.
+La acción requiere el permiso de supervisión de cámaras de productos, un motivo
+y confirmar el código exacto. El servicio bloquea nuevos ingresos y busca
+posiciones compatibles en otras cámaras automáticamente; los camareros ejecutan
+las maniobras publicadas. Se recalcula después de cada movimiento confirmado.
+
+La pantalla muestra el último ciclo, pallets trasladados y restantes, porcentaje
+y el motivo de espera (por ejemplo, falta de destino compatible, retención o
+inspección SAG). **Actualizar** consulta el avance; leer el plano no crea tareas
+ni recalcula el vaciado. Al completar, muestra que la cámara está lista para apagar.
+**Cancelar vaciado** conserva los traslados realizados y respeta las maniobras
+que ya modificaron la realidad física.
+
+El vaciado dirigido existente requiere `WMS_PLANNER_MODE=guided`,
+`WMS_PLANIFICADOR_AUTOMATICO=true`, `WMS_PLANNER_COMPUTE=tablet` y
+`WMS_PLANNER_HORIZON=rolling`, con la cámara incluida en el rollout si está
+limitado. La pantalla deshabilita el inicio cuando no se cumple esta configuración,
+incluidos `off`, `shadow` y `server/batch`; no presenta una simulación como vaciado
+físico. Este control no modifica la configuración del servidor.
+
 ## Snapshot de salud
 
 `GET /api/administracion/planificador/salud` requiere permiso de consulta de
