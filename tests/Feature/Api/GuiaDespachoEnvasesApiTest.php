@@ -14,10 +14,12 @@ use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Tests\Concerns\PreparaInspeccionesEnvases;
 use Tests\TestCase;
 
 class GuiaDespachoEnvasesApiTest extends TestCase
 {
+    use PreparaInspeccionesEnvases;
     use RefreshDatabase;
 
     public function test_transfiere_envases_arrendados_a_un_cliente_y_anula_con_reversa_sin_mover_la_cuenta_del_arrendador(): void
@@ -48,10 +50,10 @@ class GuiaDespachoEnvasesApiTest extends TestCase
         $validacion = $this->postJson('/api/validacion-mp/recepciones/'.$recepcion['id'].'/tomar', [
             'operacion_id' => (string) Str::uuid(),
         ])->assertOk()->json('data');
-        $this->postJson('/api/validacion-mp/validaciones/'.$validacion['id'].'/confirmar', [
+        $this->postJson('/api/validacion-mp/validaciones/'.$validacion['id'].'/confirmar', $this->payloadConInspeccionRc02('/api/validacion-mp/validaciones/'.$validacion['id'].'/confirmar', [
             'operacion_id' => (string) Str::uuid(),
             'envases' => [['tipo_envase' => 'bins', 'cantidad_validada' => 100]],
-        ])->assertOk();
+        ]))->assertOk();
         $origen = MovimientoEnvase::query()->where('recepcion_romana_id', $recepcion['id'])->firstOrFail();
 
         $this->travelTo(CarbonImmutable::parse('2026-07-21 12:30:00'));

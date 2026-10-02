@@ -16,7 +16,7 @@ class FormatoRegistroApiTest extends TestCase
     {
         $admin = User::factory()->create(['rol' => RolUsuario::Administrador]);
         $this->actingAs($admin, 'sanctum')->getJson('/api/administracion/formatos-registro')
-            ->assertOk()->assertJsonPath('data.0.codigo', 'RPR-01')->assertJsonPath('data.0.version', '1');
+            ->assertOk()->assertJsonFragment(['codigo' => 'RPR-01', 'version' => '1'])->assertJsonFragment(['codigo' => 'RC-02', 'version' => '1']);
         $datos = ['codigo' => 'OTRO-01', 'nombre' => 'Otro registro', 'version' => '1',
             'fecha_vigencia' => '2026-10-02', 'localidad' => 'Rengo', 'activo' => true];
         $creado = $this->postJson('/api/administracion/formatos-registro', $datos)->assertCreated()->json('data');

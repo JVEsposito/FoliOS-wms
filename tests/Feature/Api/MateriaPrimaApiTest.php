@@ -24,11 +24,13 @@ use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Tests\Concerns\PreparaInspeccionesEnvases;
 use Tests\TestCase;
 use ZipArchive;
 
 class MateriaPrimaApiTest extends TestCase
 {
+    use PreparaInspeccionesEnvases;
     use RefreshDatabase;
 
     public function test_borradores_previos_al_destare_se_concilian_en_orden_y_no_se_confirman_antes(): void
@@ -75,7 +77,7 @@ class MateriaPrimaApiTest extends TestCase
         $this->actingAs(User::factory()->create(['rol' => RolUsuario::OperadorRomana]), 'sanctum')
             ->postJson("/api/romana/recepciones/{$contexto['recepcion_id']}/cerrar", $cierre)
             ->assertOk()->assertJsonPath('data.peso_neto', 18000.02);
-        $this->postJson("/api/romana/recepciones/{$contexto['recepcion_id']}/cerrar", $cierre)->assertOk();
+        $this->postJson("/api/romana/recepciones/{$contexto['recepcion_id']}/cerrar", $this->payloadConInspeccionRc02("/api/romana/recepciones/{$contexto['recepcion_id']}/cerrar", $cierre))->assertOk();
 
         $this->assertSame(3, DB::table('salidas_envases_recepcion_romana')
             ->where('recepcion_romana_id', $contexto['recepcion_id'])->count());
@@ -1608,9 +1610,9 @@ class MateriaPrimaApiTest extends TestCase
             ])
             ->assertCreated()
             ->json('data');
-        $this->postJson("/api/romana/recepciones/{$recepcion['id']}/confirmar-ingreso", [
+        $this->postJson("/api/romana/recepciones/{$recepcion['id']}/confirmar-ingreso", $this->payloadConInspeccionRc02("/api/romana/recepciones/{$recepcion['id']}/confirmar-ingreso", [
             'operacion_id' => (string) Str::uuid(),
-        ])->assertOk();
+        ]))->assertOk();
 
         $especie = EspecieValidacion::firstOrCreate([
             'temporada_id' => $temporada->id,
@@ -1647,8 +1649,7 @@ class MateriaPrimaApiTest extends TestCase
                 'envases' => [['tipo_envase' => 'bins', 'cantidad' => 28], ['tipo_envase' => 'totes', 'cantidad' => 6], ['tipo_envase' => 'esponjas', 'cantidad' => 2]]],
         ] : null;
         $respuestaValidacion = $this->postJson(
-            "/api/validacion-mp/validaciones/{$validacion['id']}/confirmar",
-            [
+            "/api/validacion-mp/validaciones/{$validacion['id']}/confirmar", $this->payloadConInspeccionRc02("/api/validacion-mp/validaciones/{$validacion['id']}/confirmar", [
                 'operacion_id' => (string) Str::uuid(),
                 'envases' => [
                     ['tipo_envase' => 'bins', 'cantidad_validada' => 48],
@@ -1660,7 +1661,7 @@ class MateriaPrimaApiTest extends TestCase
                 'segmentos' => $segmentos,
                 'csg_validacion_id' => $csg->id,
                 'variedad_validacion_id' => $variedad->id,
-            ],
+            ]),
         )
             ->assertOk()
             ->assertJsonPath('data.estado', 'validada')->json('data');

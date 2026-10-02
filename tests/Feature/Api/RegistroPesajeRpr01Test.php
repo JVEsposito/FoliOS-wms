@@ -12,10 +12,12 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Tests\Concerns\PreparaInspeccionesEnvases;
 use Tests\TestCase;
 
 class RegistroPesajeRpr01Test extends TestCase
 {
+    use PreparaInspeccionesEnvases;
     use RefreshDatabase;
 
     private const CAMPOS = [
@@ -125,7 +127,7 @@ class RegistroPesajeRpr01Test extends TestCase
             'rut_conductor' => '12.345.678-5', 'nombre_conductor' => 'María González',
             'peso_bruto' => 28540, 'observacion' => 'Carga sellada en origen.',
         ])->assertCreated()->json('data.id');
-        $this->postJson('/api/romana/recepciones/'.$id.'/confirmar-ingreso', ['operacion_id' => (string) Str::uuid()])->assertOk();
+        $this->postJson('/api/romana/recepciones/'.$id.'/confirmar-ingreso', $this->payloadConInspeccionRc02('/api/romana/recepciones/'.$id.'/confirmar-ingreso', ['operacion_id' => (string) Str::uuid()]))->assertOk();
         // Fixture de MP: las reglas del flujo de validación se cubren por su propia API.
         DB::table('detalles_envases_recepcion_romana')->where('recepcion_romana_id', $id)->update(['cantidad_validada' => DB::raw('cantidad_declarada')]);
         DB::table('recepciones_romana')->where('id', $id)->update(['estado_validacion_mp' => 'validada']);

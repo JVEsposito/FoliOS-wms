@@ -43,6 +43,7 @@ use App\Http\Controllers\Api\HidrocoolerMateriaPrimaController;
 use App\Http\Controllers\Api\ImportacionCatalogoMaterialController;
 use App\Http\Controllers\Api\ImportacionProductosRecepcionMaterialController;
 use App\Http\Controllers\Api\ImpresionEtiquetaMaterialController;
+use App\Http\Controllers\Api\InspeccionEnvasesController;
 use App\Http\Controllers\Api\InspeccionSagController;
 use App\Http\Controllers\Api\IntegridadOperacionalController;
 use App\Http\Controllers\Api\MateriaPrimaController;
@@ -121,6 +122,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::middleware('can:consultar-romana')->prefix('romana')->group(function () {
         Route::get('/catalogos', [RecepcionRomanaController::class, 'catalogos']);
+        Route::get('/control-envases/en-blanco', [InspeccionEnvasesController::class, 'enBlanco']);
+        Route::get('/recepciones/{recepcion}/control-envases/{tipo}', [InspeccionEnvasesController::class, 'documento']);
         Route::get('/registro-pesaje/en-blanco', [RecepcionRomanaController::class, 'registroPesajeEnBlanco']);
         Route::get('/recepciones', [RecepcionRomanaController::class, 'index']);
         Route::get('/recepciones/{recepcion}', [RecepcionRomanaController::class, 'show']);
@@ -137,6 +140,7 @@ Route::middleware('auth:sanctum')->group(function () {
         );
         Route::post('/recepciones/{recepcion}/cerrar', [RecepcionRomanaController::class, 'cerrar']);
     });
+    Route::put('/romana/recepciones/{recepcion}/inspecciones-envases/{tipo}', [InspeccionEnvasesController::class, 'corregir'])->middleware('can:corregir-recepciones-romana');
     Route::put('/romana/recepciones/{recepcion}/corregir', [RecepcionRomanaController::class, 'corregir'])
         ->middleware('can:corregir-recepciones-romana');
     Route::post('/romana/recepciones/{recepcion}/corregir-salida-envases', [RecepcionRomanaController::class, 'corregirSalidaEnvases'])

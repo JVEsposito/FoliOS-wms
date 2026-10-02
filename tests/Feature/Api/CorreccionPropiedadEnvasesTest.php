@@ -11,10 +11,12 @@ use App\Models\User;
 use App\Services\Envases\ServicioGuiaDespachoEnvases;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
+use Tests\Concerns\PreparaInspeccionesEnvases;
 use Tests\TestCase;
 
 class CorreccionPropiedadEnvasesTest extends TestCase
 {
+    use PreparaInspeccionesEnvases;
     use RefreshDatabase;
 
     public function test_administrador_corrige_todas_las_lineas_y_conserva_historial_y_existencia(): void
@@ -112,13 +114,13 @@ class CorreccionPropiedadEnvasesTest extends TestCase
             '/api/validacion-mp/recepciones/'.$recepcion['id'].'/tomar',
             ['operacion_id' => (string) Str::uuid()],
         )->assertOk()->json('data');
-        $this->postJson('/api/validacion-mp/validaciones/'.$validacion['id'].'/confirmar', [
+        $this->postJson('/api/validacion-mp/validaciones/'.$validacion['id'].'/confirmar', $this->payloadConInspeccionRc02('/api/validacion-mp/validaciones/'.$validacion['id'].'/confirmar', [
             'operacion_id' => (string) Str::uuid(),
             'envases' => [
                 ['tipo_envase' => 'bins', 'cantidad_validada' => 20],
                 ['tipo_envase' => 'totes', 'cantidad_validada' => 30],
             ],
-        ])->assertOk();
+        ]))->assertOk();
 
         return [$recepcion, MovimientoEnvase::query()->where('recepcion_romana_id', $recepcion['id'])
             ->orderBy('tipo_envase')->get()->all(), $cliente, $temporada];

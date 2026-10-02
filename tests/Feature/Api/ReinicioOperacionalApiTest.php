@@ -19,10 +19,12 @@ use App\Services\Planificador\ServicioRecalculosPendientesPlanificador;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Tests\Concerns\PreparaInspeccionesEnvases;
 use Tests\TestCase;
 
 class ReinicioOperacionalApiTest extends TestCase
 {
+    use PreparaInspeccionesEnvases;
     use RefreshDatabase;
 
     public function test_solo_un_administrador_activo_puede_previsualizar_y_ejecutar_el_reinicio(): void
@@ -300,9 +302,9 @@ class ReinicioOperacionalApiTest extends TestCase
             ])
             ->assertCreated()
             ->json('data');
-        $this->postJson("/api/romana/recepciones/{$recepcion['id']}/confirmar-ingreso", [
+        $this->postJson("/api/romana/recepciones/{$recepcion['id']}/confirmar-ingreso", $this->payloadConInspeccionRc02("/api/romana/recepciones/{$recepcion['id']}/confirmar-ingreso", [
             'operacion_id' => (string) Str::uuid(),
-        ])->assertOk();
+        ]))->assertOk();
 
         $especie = EspecieValidacion::query()->firstOrCreate([
             'temporada_id' => $temporada->id,
@@ -333,8 +335,7 @@ class ReinicioOperacionalApiTest extends TestCase
             ->assertOk()
             ->json('data');
         $segmentoId = $this->postJson(
-            "/api/validacion-mp/validaciones/{$validacion['id']}/confirmar",
-            [
+            "/api/validacion-mp/validaciones/{$validacion['id']}/confirmar", $this->payloadConInspeccionRc02("/api/validacion-mp/validaciones/{$validacion['id']}/confirmar", [
                 'operacion_id' => (string) Str::uuid(),
                 'envases' => [
                     ['tipo_envase' => 'bins', 'cantidad_validada' => 48],
@@ -344,7 +345,7 @@ class ReinicioOperacionalApiTest extends TestCase
                 'requiere_segregacion' => false,
                 'csg_validacion_id' => $csg->id,
                 'variedad_validacion_id' => $variedad->id,
-            ],
+            ]),
         )
             ->assertOk()
             ->json('data.segmentos.0.id');

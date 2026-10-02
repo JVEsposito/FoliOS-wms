@@ -22,10 +22,12 @@ use App\Services\Existencias\ServicioExistencias;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Tests\Concerns\PreparaInspeccionesEnvases;
 use Tests\TestCase;
 
 class BinRetornoPackingApiTest extends TestCase
 {
+    use PreparaInspeccionesEnvases;
     use RefreshDatabase;
 
     public function test_registra_rutas_y_esquema_del_nuevo_modelo_por_bin(): void
@@ -863,9 +865,9 @@ class BinRetornoPackingApiTest extends TestCase
             ])
             ->assertCreated()
             ->json('data');
-        $this->postJson("/api/romana/recepciones/{$recepcion['id']}/confirmar-ingreso", [
+        $this->postJson("/api/romana/recepciones/{$recepcion['id']}/confirmar-ingreso", $this->payloadConInspeccionRc02("/api/romana/recepciones/{$recepcion['id']}/confirmar-ingreso", [
             'operacion_id' => (string) Str::uuid(),
-        ])->assertOk();
+        ]))->assertOk();
 
         $especie = EspecieValidacion::firstOrCreate([
             'temporada_id' => $temporada->id,
@@ -894,8 +896,7 @@ class BinRetornoPackingApiTest extends TestCase
                 'operacion_id' => (string) Str::uuid(),
             ])->assertOk()->json('data');
         $segmentoId = $this->postJson(
-            "/api/validacion-mp/validaciones/{$validacion['id']}/confirmar",
-            [
+            "/api/validacion-mp/validaciones/{$validacion['id']}/confirmar", $this->payloadConInspeccionRc02("/api/validacion-mp/validaciones/{$validacion['id']}/confirmar", [
                 'operacion_id' => (string) Str::uuid(),
                 'envases' => [
                     ['tipo_envase' => 'bins', 'cantidad_validada' => 48],
@@ -905,7 +906,7 @@ class BinRetornoPackingApiTest extends TestCase
                 'requiere_segregacion' => false,
                 'csg_validacion_id' => $csg->id,
                 'variedad_validacion_id' => $variedad->id,
-            ],
+            ]),
         )->assertOk()->json('data.segmentos.0.id');
 
         $this->actingAs($operador, 'sanctum')->postJson("/api/romana/recepciones/{$recepcion['id']}/cerrar", [

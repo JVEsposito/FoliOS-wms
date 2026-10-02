@@ -16,10 +16,12 @@ use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Tests\Concerns\PreparaInspeccionesEnvases;
 use Tests\TestCase;
 
 class RecepcionRomanaApiTest extends TestCase
 {
+    use PreparaInspeccionesEnvases;
     use RefreshDatabase;
 
     public function test_exige_especie_para_fruta_y_permite_leer_recepciones_historicas_sin_ella(): void
@@ -92,21 +94,21 @@ class RecepcionRomanaApiTest extends TestCase
             ->assertJsonPath('data.id', $creada['id']);
 
         $operacionConfirmacion = (string) Str::uuid();
-        $this->postJson('/api/romana/recepciones/'.$creada['id'].'/confirmar-ingreso', [
+        $this->postJson('/api/romana/recepciones/'.$creada['id'].'/confirmar-ingreso', $this->payloadConInspeccionRc02('/api/romana/recepciones/'.$creada['id'].'/confirmar-ingreso', [
             'operacion_id' => $operacionConfirmacion,
-        ])
+        ]))
             ->assertOk()
             ->assertJsonPath('data.estado', EstadoRecepcionRomana::EnBasculaSalida->value)
             ->assertJsonPath('data.puede_cerrar', false)
             ->assertJsonPath('data.destare_pendiente_validacion', true);
 
-        $this->postJson('/api/romana/recepciones/'.$creada['id'].'/confirmar-ingreso', [
+        $this->postJson('/api/romana/recepciones/'.$creada['id'].'/confirmar-ingreso', $this->payloadConInspeccionRc02('/api/romana/recepciones/'.$creada['id'].'/confirmar-ingreso', [
             'operacion_id' => $operacionConfirmacion,
-        ])->assertOk();
+        ]))->assertOk();
 
         $this->marcarEnvasesValidadosParaDestare($creada['id']);
         $this->travelTo(CarbonImmutable::parse('2026-07-21 14:10:00'));
-        $cerrada = $this->postJson('/api/romana/recepciones/'.$creada['id'].'/cerrar', [
+        $cerrada = $this->postJson('/api/romana/recepciones/'.$creada['id'].'/cerrar', $this->payloadConInspeccionRc02('/api/romana/recepciones/'.$creada['id'].'/cerrar', [
             'operacion_id' => (string) Str::uuid(),
             'modo_salida_envases' => 'mismos',
             'numero_guia_salida' => 'GS-PRUEBA',
@@ -114,7 +116,7 @@ class RecepcionRomanaApiTest extends TestCase
             'peso_tara' => 10540,
             'tipo_envase_calculo_neto' => 'bins',
             'observacion' => 'Sellos y guía verificados.',
-        ])
+        ]))
             ->assertOk()
             ->assertJsonPath('data.numero_recepcion', 'REC-2607-0001')
             ->assertJsonPath('data.estado', EstadoRecepcionRomana::Cerrado->value)
@@ -217,13 +219,13 @@ class RecepcionRomanaApiTest extends TestCase
             ->assertJsonPath('data.tipo_camion', 'plano')
             ->assertJsonPath('data.version', 2);
 
-        $this->postJson('/api/romana/recepciones/'.$id.'/cerrar', [
+        $this->postJson('/api/romana/recepciones/'.$id.'/cerrar', $this->payloadConInspeccionRc02('/api/romana/recepciones/'.$id.'/cerrar', [
             'operacion_id' => (string) Str::uuid(),
             'modo_salida_envases' => 'mismos',
             'numero_guia_salida' => 'GS-INVALIDO',
             'taras_envases' => [['tipo_envase' => 'bins', 'tara_unitaria' => 40]],
             'peso_tara' => 10000,
-        ])->assertConflict()->assertJsonPath('codigo', 'conflicto_operacional');
+        ]))->assertConflict()->assertJsonPath('codigo', 'conflicto_operacional');
 
         $duplicado = $this->datosIngreso($cliente);
         $duplicado['operacion_id'] = (string) Str::uuid();
@@ -231,9 +233,9 @@ class RecepcionRomanaApiTest extends TestCase
             ->assertConflict()
             ->assertJsonPath('message', 'La guía de despacho ya fue registrada para este cliente.');
 
-        $this->postJson('/api/romana/recepciones/'.$id.'/confirmar-ingreso', [
+        $this->postJson('/api/romana/recepciones/'.$id.'/confirmar-ingreso', $this->payloadConInspeccionRc02('/api/romana/recepciones/'.$id.'/confirmar-ingreso', [
             'operacion_id' => (string) Str::uuid(),
-        ])->assertOk();
+        ]))->assertOk();
 
         $edicion = $edicionValida;
         $edicion['operacion_id'] = (string) Str::uuid();
@@ -243,13 +245,13 @@ class RecepcionRomanaApiTest extends TestCase
             ->assertJsonPath('message', 'La recepción ya confirmó su ingreso y sus antecedentes no pueden editarse.');
 
         $this->marcarEnvasesValidadosParaDestare($id);
-        $this->postJson('/api/romana/recepciones/'.$id.'/cerrar', [
+        $this->postJson('/api/romana/recepciones/'.$id.'/cerrar', $this->payloadConInspeccionRc02('/api/romana/recepciones/'.$id.'/cerrar', [
             'operacion_id' => (string) Str::uuid(),
             'modo_salida_envases' => 'mismos',
             'numero_guia_salida' => 'GS-INVALIDO-2',
             'taras_envases' => [['tipo_envase' => 'bins', 'tara_unitaria' => 40]],
             'peso_tara' => 29000,
-        ])
+        ]))
             ->assertConflict()
             ->assertJsonPath('message', 'El peso neto de fruta debe ser mayor que cero.');
 
@@ -276,12 +278,12 @@ class RecepcionRomanaApiTest extends TestCase
             ->assertCreated()
             ->json('data');
 
-        $this->postJson("/api/romana/recepciones/{$recepcion['id']}/confirmar-ingreso", [
+        $this->postJson("/api/romana/recepciones/{$recepcion['id']}/confirmar-ingreso", $this->payloadConInspeccionRc02("/api/romana/recepciones/{$recepcion['id']}/confirmar-ingreso", [
             'operacion_id' => (string) Str::uuid(),
-        ])->assertOk();
+        ]))->assertOk();
 
         $this->marcarEnvasesValidadosParaDestare($recepcion['id']);
-        $this->postJson("/api/romana/recepciones/{$recepcion['id']}/cerrar", [
+        $this->postJson("/api/romana/recepciones/{$recepcion['id']}/cerrar", $this->payloadConInspeccionRc02("/api/romana/recepciones/{$recepcion['id']}/cerrar", [
             'operacion_id' => (string) Str::uuid(),
             'peso_tara' => 10000,
             'tipo_envase_calculo_neto' => 'bins',
@@ -289,11 +291,11 @@ class RecepcionRomanaApiTest extends TestCase
             'taras_envases' => [
                 ['tipo_envase' => 'bins', 'tara_unitaria' => 40],
             ],
-        ])
+        ]))
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['taras_envases']);
 
-        $cerrada = $this->postJson("/api/romana/recepciones/{$recepcion['id']}/cerrar", [
+        $cerrada = $this->postJson("/api/romana/recepciones/{$recepcion['id']}/cerrar", $this->payloadConInspeccionRc02("/api/romana/recepciones/{$recepcion['id']}/cerrar", [
             'operacion_id' => (string) Str::uuid(),
             'peso_tara' => 10000,
             'tipo_envase_calculo_neto' => 'bins',
@@ -303,7 +305,7 @@ class RecepcionRomanaApiTest extends TestCase
                 ['tipo_envase' => 'totes', 'tara_unitaria' => 2],
                 ['tipo_envase' => 'esponjas', 'tara_unitaria' => 1],
             ],
-        ])
+        ]))
             ->assertOk()
             ->assertJsonPath('data.estado', EstadoRecepcionRomana::Cerrado->value)
             ->assertJsonPath('data.modo_salida_envases', 'vacio')
@@ -348,9 +350,9 @@ class RecepcionRomanaApiTest extends TestCase
             ->assertCreated()
             ->json('data');
 
-        $this->postJson("/api/romana/recepciones/{$recepcion['id']}/confirmar-ingreso", [
+        $this->postJson("/api/romana/recepciones/{$recepcion['id']}/confirmar-ingreso", $this->payloadConInspeccionRc02("/api/romana/recepciones/{$recepcion['id']}/confirmar-ingreso", [
             'operacion_id' => (string) Str::uuid(),
-        ])->assertOk();
+        ]))->assertOk();
         // Expediente histórico cerrado antes de la validación MP: conserva
         // la corrección administrativa existente y sus pesos.
         DB::table('recepciones_romana')->where('id', $recepcion['id'])->update([
@@ -651,15 +653,15 @@ class RecepcionRomanaApiTest extends TestCase
             ->assertJsonPath('resumen.lineas_pendientes_validacion', 2)
             ->assertJsonPath('pendientes.0.numero_recepcion', 'REC-2607-0001');
 
-        $this->postJson("/api/romana/recepciones/{$recepcion['id']}/confirmar-ingreso", [
+        $this->postJson("/api/romana/recepciones/{$recepcion['id']}/confirmar-ingreso", $this->payloadConInspeccionRc02("/api/romana/recepciones/{$recepcion['id']}/confirmar-ingreso", [
             'operacion_id' => (string) Str::uuid(),
-        ])
+        ]))
             ->assertOk()
             ->assertJsonPath('data.estado', EstadoRecepcionRomana::EnBasculaSalida->value);
 
-        $this->postJson("/api/romana/recepciones/{$recepcion['id']}/cerrar", [
+        $this->postJson("/api/romana/recepciones/{$recepcion['id']}/cerrar", $this->payloadConInspeccionRc02("/api/romana/recepciones/{$recepcion['id']}/cerrar", [
             'operacion_id' => (string) Str::uuid(),
-        ])
+        ]))
             ->assertOk()
             ->assertJsonPath('data.estado', EstadoRecepcionRomana::Cerrado->value)
             ->assertJsonPath('data.peso_bruto', null)
@@ -759,9 +761,9 @@ class RecepcionRomanaApiTest extends TestCase
             ->assertJsonPath('data.puede_cerrar', false)
             ->json('data');
 
-        $this->postJson("/api/romana/recepciones/{$recepcion['id']}/cerrar", [
+        $this->postJson("/api/romana/recepciones/{$recepcion['id']}/cerrar", $this->payloadConInspeccionRc02("/api/romana/recepciones/{$recepcion['id']}/cerrar", [
             'operacion_id' => (string) Str::uuid(),
-        ])
+        ]))
             ->assertConflict()
             ->assertJsonPath('message', 'Faltan 5 envases por pesar antes de cerrar la recepción.');
 
@@ -836,10 +838,10 @@ class RecepcionRomanaApiTest extends TestCase
             ->assertJsonPath('data.puede_cerrar', true)
             ->json('data');
 
-        $cerrada = $this->postJson("/api/romana/recepciones/{$recepcion['id']}/cerrar", [
+        $cerrada = $this->postJson("/api/romana/recepciones/{$recepcion['id']}/cerrar", $this->payloadConInspeccionRc02("/api/romana/recepciones/{$recepcion['id']}/cerrar", [
             'operacion_id' => (string) Str::uuid(),
             'observacion' => 'Pesaje completo de los cinco bins.',
-        ])
+        ]))
             ->assertOk()
             ->assertJsonPath('data.estado', EstadoRecepcionRomana::Cerrado->value)
             ->assertJsonPath('data.peso_neto', 1910)

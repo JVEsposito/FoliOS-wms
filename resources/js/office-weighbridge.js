@@ -1,3 +1,4 @@
+import { dispatchInspectionPayload } from './office-container-inspection.js';
 import { loadContainerCatalog, containerLabel, calculateNetAllocation } from './office-container-catalog.js';
 import { createOperationalPoller } from './shared/operational-poller';
 
@@ -6,6 +7,7 @@ const elements = {
     access: byId('officeAccess'), app: byId('officeApp'), login: byId('officeLoginForm'), loginError: byId('officeLoginError'),
     userName: byId('officeUserName'), userRole: byId('officeUserRole'), initials: byId('officeInitials'), logout: byId('officeLogoutButton'),
     managementNav: byId('officeManagementNav'), rawMaterialNav: byId('officeRawMaterialNav'), containerAccountsNav: byId('officeContainerAccountsNav'), camerasNav: byId('officeCamerasNav'), loadsNav: byId('officeLoadsNav'), materialsNav: byId('officeMaterialsNav'), validationNav: byId('officeValidationNav'), prefrioNav: byId('officePrefrioNav'), accessesNav: byId('officeAccessesNav'),
+    rc02Reception: byId('downloadRc02ReceptionButton'), rc02Dispatch: byId('downloadRc02DispatchButton'), inspectionPanel: byId('dispatchInspectionPanel'), inspectionItems: byId('dispatchInspectionItems'), inspectionObservation: byId('dispatchInspectionObservation'),
     reload: byId('reloadButton'), blankWeighingForm: byId('downloadBlankWeighingFormButton'), newReception: byId('newReceptionButton'), filters: byId('receptionFilters'), tableBody: byId('receptionTableBody'),
     entryCount: byId('entryCount'), containerWeighingCount: byId('containerWeighingCount'), exitCount: byId('exitCount'), closedCount: byId('closedCount'), netWeight: byId('netWeight'),
     paginationSummary: byId('paginationSummary'), previousPage: byId('previousPageButton'), nextPage: byId('nextPageButton'),
@@ -273,6 +275,8 @@ function renderDetail(reception) {
     elements.closeReception.classList.toggle('is-hidden', !canOperate || !reception.puede_cerrar);
     elements.correctExit.classList.toggle('is-hidden', !state.identity?.puede_corregir_recepciones_romana || !reception.puede_corregir_salida);
     elements.downloadReceipt.classList.toggle('is-hidden', !reception.aviso_recibo_disponible);
+    elements.rc02Reception.classList.toggle('is-hidden', !reception.rc02_recepcion_disponible);
+    elements.rc02Dispatch.classList.toggle('is-hidden', !reception.rc02_despacho_disponible);
     renderContainerWeighings(reception, canOperate);
     elements.detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
@@ -525,6 +529,8 @@ elements.closeReception.addEventListener('click', async () => {
 
 function openTareDialog(correcting) {
     state.tareCorrection = correcting;
+    elements.inspectionItems.replaceChildren();
+    elements.inspectionObservation.value = correcting ? (state.selected.inspecciones_envases?.find((i) => i.tipo === 'despacho')?.observacion || '') : '';
     elements.tareForm.reset(); elements.tareFormError.textContent = ''; elements.containerTarePreview.textContent = '—'; elements.netWeightPreview.textContent = '—'; elements.netPerContainerPreview.textContent = '—';
     const containerSelect = elements.tareForm.elements.tipo_envase_calculo_neto;
     containerSelect.innerHTML = state.selected.envases.filter((item) => item.cantidad_validada > 0 && state.catalogs.tipos_envase.find((t) => t.codigo === item.tipo_envase)?.contiene_fruta).map((item) => `<option value="${escapeHtml(item.tipo_envase)}">${escapeHtml(label(item.tipo_envase))} · ${item.cantidad_validada} validados</option>`).join('');
@@ -603,7 +609,23 @@ function calculatedContainerTare() {
     }, 0);
 }
 
+function updateDispatchInspection() {
+    const empty = elements.tareForm.elements.modo_salida_envases.value === 'vacio';
+    elements.inspectionPanel.classList.toggle('is-hidden', empty);
+    const types = empty ? [] : exitTypes().filter((row) => Number(row.querySelector('[data-exit-quantity]').value) > 0).map((row) => row.dataset.exitRow);
+    [...elements.inspectionItems.querySelectorAll('[data-inspection-type]')].forEach((row) => { if (!types.includes(row.dataset.inspectionType)) row.remove(); });
+    types.forEach((type) => {
+        if ([...elements.inspectionItems.querySelectorAll('[data-inspection-type]')].some((row) => row.dataset.inspectionType === type)) return;
+        const previous = state.tareCorrection ? state.selected.inspecciones_envases?.find((i) => i.tipo === 'despacho')?.items.find((i) => i.tipo_envase === type) : null;
+        elements.inspectionItems.insertAdjacentHTML('beforeend', `<div data-inspection-type="${escapeHtml(type)}"><strong>${escapeHtml(label(type))}</strong><label class="field"><span>Limpieza *</span><select data-clean required><option value="">Seleccionar</option><option value="si">Sí</option><option value="no">No</option></select></label><label class="field"><span>Condición *</span><select data-condition required><option value="">Seleccionar</option><option value="buena">Buena</option><option value="regular">Regular</option><option value="mala">Mala</option></select></label><label class="field"><span>Nota opcional</span><input data-note maxlength="500"></label></div>`);
+        const row = [...elements.inspectionItems.querySelectorAll('[data-inspection-type]')].find((r) => r.dataset.inspectionType === type);
+        row.querySelector('[data-clean]').value = previous ? (previous.limpieza ? 'si' : 'no') : '';
+        row.querySelector('[data-condition]').value = previous?.condicion || '';
+        row.querySelector('[data-note]').value = previous?.nota || '';
+    });
+}
 function updateNetPreviews() {
+    updateDispatchInspection();
     const tare = Number(elements.tareForm.elements.peso_tara.value);
     const difference = calculatedContainerTare();
     const gross = Number(state.selected?.peso_bruto || 0);
@@ -650,6 +672,12 @@ elements.tareForm.addEventListener('submit', async (event) => {
     }));
     if (data.modo_salida_envases === 'vacio') data.numero_guia_salida = null;
     if (state.tareCorrection) data.version_conocida = state.selected.version;
+    if (data.modo_salida_envases !== 'vacio') {
+        try {
+            const rows = [...elements.inspectionItems.querySelectorAll('[data-inspection-type]')];
+            data.inspeccion_envases = dispatchInspectionPayload(rows.map((r) => r.dataset.inspectionType), Object.fromEntries(rows.map((r) => [r.dataset.inspectionType, { limpieza: r.querySelector('[data-clean]').value, condicion: r.querySelector('[data-condition]').value, nota: r.querySelector('[data-note]').value }])), elements.inspectionObservation.value);
+        } catch (error) { elements.tareFormError.textContent = error.message; return; }
+    }
     setBusy(true, state.tareCorrection ? 'Corrigiendo salida de envases…' : 'Calculando neto y cerrando recepción…');
     try {
         const path = state.tareCorrection ? 'corregir-salida-envases' : 'cerrar';
@@ -659,6 +687,19 @@ elements.tareForm.addEventListener('submit', async (event) => {
     } catch (error) { elements.tareFormError.textContent = error.message; }
     finally { setBusy(false); }
 });
+
+async function downloadRc02(type) {
+    if (!state.selected) return;
+    setBusy(true, 'Generando RC-02…');
+    try {
+        const response = await fetch(`/api/romana/recepciones/${state.selected.id}/control-envases/${type}`, { headers: { Accept: 'application/pdf', Authorization: `Bearer ${state.token}` } });
+        if (!response.ok) { const detail = await response.json().catch(() => ({})); throw new Error(detail.message || 'No fue posible generar RC-02.'); }
+        const blob = await response.blob(); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = `rc02-${type}-${state.selected.numero_recepcion.toLowerCase()}.pdf`; anchor.click(); window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) { toast(error.message, 'error'); }
+    finally { setBusy(false); }
+}
+elements.rc02Reception.addEventListener('click', () => downloadRc02('recepcion'));
+elements.rc02Dispatch.addEventListener('click', () => downloadRc02('despacho'));
 
 elements.downloadReceipt.addEventListener('click', async () => {
     if (!state.selected?.aviso_recibo_disponible) return; setBusy(true, 'Generando registro de pesaje (RPR-01)…');
