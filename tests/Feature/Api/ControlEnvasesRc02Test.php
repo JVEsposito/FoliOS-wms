@@ -6,6 +6,7 @@ use App\Enums\RolUsuario;
 use App\Enums\TipoEnvaseRomana;
 use App\Models\FormatoRegistro;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\Concerns\PreparaInspeccionesEnvases;
@@ -56,7 +57,7 @@ class ControlEnvasesRc02Test extends TestCase
 
     public function test_dos_documentos_conservan_version_y_cantidades_guia_y_controles_y_siete_filas(): void
     {
-        $this->travelTo(\Carbon\CarbonImmutable::parse('2026-10-02 12:00:00', 'UTC'));
+        $this->travelTo(CarbonImmutable::parse('2026-10-02 12:00:00', 'UTC'));
         $c = $this->preparar(array_fill_keys(array_column(TipoEnvaseRomana::cases(), 'value'), 2));
         $recepcion = $c['recepcion'];
         $formato = FormatoRegistro::where('codigo', 'RC-02')->firstOrFail();
