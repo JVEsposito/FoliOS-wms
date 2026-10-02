@@ -66,8 +66,12 @@ class ControlEnvasesRc02Test extends TestCase
         $this->cerrar($c, 'diferentes', $payload)->assertOk()->assertJsonPath('data.rc02_despacho_disponible', true);
         $this->assertDatabaseCount('inspecciones_envases_recepcion', 2);
         $ruta = '/api/romana/recepciones/'.$recepcion->id.'/control-envases/';
-        $pdfRecepcion = $this->textoPdf($this->get($ruta.'recepcion')->assertOk()->getContent());
-        $pdfDespacho = $this->textoPdf($this->get($ruta.'despacho')->assertOk()->getContent());
+        $documentoRecepcion = $this->get($ruta.'recepcion')->assertOk()->getContent();
+        $documentoDespacho = $this->get($ruta.'despacho')->assertOk()->getContent();
+        $this->assertStringContainsString('/DCTDecode', $documentoRecepcion);
+        $this->assertStringContainsString('/DCTDecode', $documentoDespacho);
+        $pdfRecepcion = $this->textoPdf($documentoRecepcion);
+        $pdfDespacho = $this->textoPdf($documentoDespacho);
         foreach ([$pdfRecepcion, $pdfDespacho] as $texto) {
             $pos = -1;
             foreach (TipoEnvaseRomana::cases() as $tipo) {
@@ -78,7 +82,6 @@ class ControlEnvasesRc02Test extends TestCase
             }
             $this->assertStringContainsString('FIRMA CHOFER', $texto);
             $this->assertStringContainsString('RECEPCIONADO POR', $texto);
-            $this->assertStringContainsString('/DCTDecode', $texto);
         }
         $this->assertStringContainsString('15-09-2025', $pdfRecepcion);
         $this->assertStringNotContainsString('01-10-2026', $pdfRecepcion);
@@ -96,13 +99,13 @@ class ControlEnvasesRc02Test extends TestCase
         $this->assertDatabaseHas('items_inspeccion_envases', ['inspeccion_envases_id' => $inspecciones['despacho']->id, 'tipo_envase' => 'bins', 'cantidad' => 3]);
         $this->assertStringContainsString($c['operador']->name, $pdfDespacho);
         $formato->update(['version' => '3']);
-        $this->get($ruta.'despacho')->assertOk()->assertSee('(2)', false);
+        $this->assertStringContainsString('VERSION2', $this->textoPdf($this->get($ruta.'despacho')->assertOk()->getContent()));
         $pdf = $this->textoPdf($this->get('/api/romana/control-envases/en-blanco')->assertOk()->getContent());
         foreach (TipoEnvaseRomana::cases() as $tipo) {
             $this->assertStringContainsString(mb_strtoupper($tipo->etiqueta()), $pdf);
         }
         $this->assertStringContainsString('CONTROL DE ENVASES', $pdf);
-        $this->assertStringContainsString('(3)', $pdf);
+        $this->assertStringContainsString('VERSION3', $pdf);
         $this->assertStringNotContainsString('GS-1', $pdf);
     }
 
@@ -133,6 +136,8 @@ class ControlEnvasesRc02Test extends TestCase
 
     private function textoPdf(string $pdf): string
     {
-        return iconv('Windows-1252', 'UTF-8//IGNORE', $pdf);
+        preg_match_all('/\(((?:\\\\.|[^\\\\()])*)\) Tj/', $pdf, $coincidencias);
+
+        return implode('', array_map(fn (string $valor): string => iconv('Windows-1252', 'UTF-8', strtr($valor, ['\\(' => '(', '\\)' => ')', '\\\\' => '\\'])), $coincidencias[1]));
     }
 }
