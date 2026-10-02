@@ -10,11 +10,13 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\Concerns\PreparaInspeccionesEnvases;
+use Tests\Concerns\PreparaRecepcionEnvases;
 use Tests\TestCase;
 
 class CatalogoRepartoEnvasesTest extends TestCase
 {
     use PreparaInspeccionesEnvases;
+    use PreparaRecepcionEnvases;
     use RefreshDatabase;
 
     public function test_catalogo_tiene_orden_de_rc02_y_nombres_historicos_sin_cambiar_codigos(): void

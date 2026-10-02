@@ -108,6 +108,7 @@ class ReinicioOperacionalApiTest extends TestCase
             ->assertJsonPath('data.frase_confirmacion', "REINICIAR {$temporada->codigo}")
             ->assertJsonPath('data.resumen.frigorifico.folios', 1)
             ->assertJsonPath('data.resumen.materia_prima.recepciones_romana', 1)
+            ->assertJsonPath('data.resumen.materia_prima.inspecciones_envases', 2)
             ->assertJsonPath('data.resumen.materia_prima.lotes', 1);
         $this->assertContains(
             'todos los catálogos y datos operacionales de Bodega',
@@ -123,7 +124,8 @@ class ReinicioOperacionalApiTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('reutilizado', false)
             ->assertJsonPath('data.resumen_despues.frigorifico.folios', 0)
-            ->assertJsonPath('data.resumen_despues.materia_prima.recepciones_romana', 0);
+            ->assertJsonPath('data.resumen_despues.materia_prima.recepciones_romana', 0)
+            ->assertJsonPath('data.resumen_despues.materia_prima.inspecciones_envases', 0);
 
         $this->assertDatabaseMissing('folios', ['id' => $folioPt->id]);
         $this->assertDatabaseMissing('recepciones_romana', ['id' => $materiaPrima['recepcion_id']]);
@@ -133,6 +135,10 @@ class ReinicioOperacionalApiTest extends TestCase
         $this->assertDatabaseCount('segmentos_validacion_mp', 0);
         $this->assertDatabaseCount('procesos_hidrocooler_materia_prima', 0);
         $this->assertDatabaseCount('salidas_envases_recepcion_romana', 0);
+        $this->assertDatabaseCount('inspecciones_envases_recepcion', 0);
+        $this->assertDatabaseCount('items_inspeccion_envases', 0);
+        $this->assertDatabaseCount('eventos_inspeccion_envases', 0);
+        $this->assertDatabaseHas('formatos_registro', ['codigo' => 'RC-02', 'version' => '1']);
         $this->assertDatabaseCount('movimientos_envases', 0);
         $this->assertDatabaseCount('recalculos_pendientes_planificador', 0);
 

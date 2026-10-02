@@ -60,10 +60,10 @@ trait PreparaRecepcionEnvases
 
     protected function cerrar(array $c, string $modo, array $extras = [])
     {
-        return $this->actingAs($c['operador'], 'sanctum')->postJson('/api/romana/recepciones/'.$c['recepcion']->id.'/cerrar', [
+        return $this->actingAs($c['operador'], 'sanctum')->postJson('/api/romana/recepciones/'.$c['recepcion']->id.'/cerrar', $this->payloadConInspeccionRc02('/api/romana/recepciones/'.$c['recepcion']->id.'/cerrar', [
             'operacion_id' => (string) Str::uuid(), 'peso_tara' => 1000, 'modo_salida_envases' => $modo,
             'numero_guia_salida' => $modo === 'vacio' ? null : 'GS-1',
-            'taras_envases' => array_map(fn ($tipo): array => ['tipo_envase' => $tipo, 'tara_unitaria' => 0.1], array_keys($c['cantidades'])), ...$extras]);
+            'taras_envases' => array_map(fn ($tipo): array => ['tipo_envase' => $tipo, 'tara_unitaria' => 0.1], array_keys($c['cantidades'])), ...$extras]));
     }
 
     protected function lotizar(array $c): array

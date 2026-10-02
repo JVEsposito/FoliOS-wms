@@ -45,6 +45,10 @@ class ServicioReinicioOperacional
         'perfiles_acceso',
         'perfiles_impresion_etiquetas',
         'tipos_resultado_packing',
+        'formatos_registro',
+        'eventos_formato_registro',
+        'pesos_referencia_envases',
+        'preferencias_envase_especie',
     ];
 
     private const TABLAS_BODEGA = [
@@ -262,6 +266,9 @@ class ServicioReinicioOperacional
             ],
             'materia_prima' => [
                 'recepciones_romana' => (clone $recepciones)->count(),
+                'inspecciones_envases' => DB::table('inspecciones_envases_recepcion')
+                    ->whereIn('recepcion_romana_id', clone $recepciones)
+                    ->count(),
                 'pesajes_envases_romana' => DB::table('pesajes_envases_recepcion_romana')
                     ->whereIn('recepcion_romana_id', clone $recepciones)
                     ->count(),
@@ -554,6 +561,18 @@ class ServicioReinicioOperacional
             ->whereIn('recepcion_romana_id', clone $recepciones)
             ->delete();
         $eliminados['detalles_envases_romana'] = DB::table('detalles_envases_recepcion_romana')
+            ->whereIn('recepcion_romana_id', clone $recepciones)
+            ->delete();
+        $inspeccionesEnvases = DB::table('inspecciones_envases_recepcion')
+            ->select('id')
+            ->whereIn('recepcion_romana_id', clone $recepciones);
+        $eliminados['eventos_inspeccion_envases'] = DB::table('eventos_inspeccion_envases')
+            ->whereIn('inspeccion_envases_id', clone $inspeccionesEnvases)
+            ->delete();
+        $eliminados['items_inspeccion_envases'] = DB::table('items_inspeccion_envases')
+            ->whereIn('inspeccion_envases_id', clone $inspeccionesEnvases)
+            ->delete();
+        $eliminados['inspecciones_envases'] = DB::table('inspecciones_envases_recepcion')
             ->whereIn('recepcion_romana_id', clone $recepciones)
             ->delete();
         $eliminados['eventos_romana'] = DB::table('eventos_recepcion_romana')
