@@ -309,6 +309,95 @@ class CargaApiTest extends TestCase
             ->assertJsonPath('errores.0.codigo', 'sin_ubicacion');
     }
 
+    public function test_asigna_pallet_en_tunel_sin_posicion_pero_rechaza_saldo_pendiente_y_reserva_de_otra_carga(): void
+    {
+        $despachador = $this->despachador();
+        $primera = $this->crearCarga($despachador);
+        $segunda = $this->crearCarga($despachador);
+        $pallet = Folio::create([
+            'numero_folio' => 'PAL-TUNEL-SIN-POSICION',
+            'tipo_bulto' => TipoBulto::Pallet,
+            'estado_operacional' => EstadoOperacionalFolio::PendientePrefrio,
+            'fecha_ingreso' => now(),
+            'activo' => true,
+        ]);
+        $saldo = Folio::create([
+            'numero_folio' => 'SALDO-TUNEL',
+            'tipo_bulto' => TipoBulto::Saldo,
+            'estado_operacional' => EstadoOperacionalFolio::PendientePrefrio,
+            'fecha_ingreso' => now(),
+            'activo' => true,
+        ]);
+
+        $this->actingAs($despachador, 'sanctum')
+            ->getJson('/api/cargas/folios-disponibles?q=PAL-TUNEL-SIN-POSICION')
+            ->assertOk()
+            ->assertJsonPath('data.0.ubicacion', null);
+
+        $this->actingAs($despachador, 'sanctum')
+            ->postJson("/api/cargas/{$primera->id}/folios", [
+                'folios' => [$pallet->numero_folio],
+                'version_esperada' => 1,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.folios.0.ubicacion', null);
+
+        $this->actingAs($despachador, 'sanctum')
+            ->postJson("/api/cargas/{$segunda->id}/folios", [
+                'folios' => [$pallet->numero_folio],
+                'version_esperada' => 1,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('errores.0.codigo', 'asignado_otra_carga');
+
+        $this->actingAs($despachador, 'sanctum')
+            ->postJson("/api/cargas/{$segunda->id}/folios", [
+                'folios' => [$saldo->numero_folio],
+                'version_esperada' => 1,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('errores.0.codigo', 'estado_no_disponible');
+    }
+
+    public function test_no_cierra_carga_con_pallet_aun_sin_aprobar_en_tunel(): void
+    {
+        $despachador = $this->despachador();
+        $carga = $this->crearCarga($despachador);
+        $folio = Folio::create([
+            'numero_folio' => 'PAL-PREFRIO-SIN-APROBAR',
+            'tipo_bulto' => TipoBulto::Pallet,
+            'estado_operacional' => EstadoOperacionalFolio::PendientePrefrio,
+            'fecha_ingreso' => now(),
+            'activo' => true,
+        ]);
+
+        $this->actingAs($despachador, 'sanctum')
+            ->postJson("/api/cargas/{$carga->id}/folios", [
+                'folios' => [$folio->numero_folio],
+                'version_esperada' => 1,
+            ])->assertOk();
+        $this->actingAs($despachador, 'sanctum')
+            ->postJson("/api/cargas/{$carga->id}/publicar", ['version_esperada' => 2])
+            ->assertOk();
+
+        $this->actingAs($despachador, 'sanctum')
+            ->postJson("/api/cargas/{$carga->id}/cerrar-despacho", [
+                'operacion_id' => (string) Str::uuid(),
+                'patente' => 'ABCD12',
+                'conductor' => 'María Pérez',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('codigo', 'regla_de_negocio');
+
+        $this->assertSame('pendiente', $carga->refresh()->estado->value);
+        $this->assertDatabaseHas('folios', ['id' => $folio->id, 'activo' => true]);
+        $this->assertDatabaseHas('carga_folios', [
+            'carga_id' => $carga->id,
+            'folio_id' => $folio->id,
+            'estado' => 'pendiente',
+        ]);
+    }
+
     public function test_operador_no_gestiona_cargas_y_el_lote_no_supera_26_folios(): void
     {
         $operador = User::factory()->create([

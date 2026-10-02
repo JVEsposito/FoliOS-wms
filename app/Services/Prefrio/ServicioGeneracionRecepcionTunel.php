@@ -4,7 +4,6 @@ namespace App\Services\Prefrio;
 
 use App\Enums\EstadoFolioProcesoPrefrio;
 use App\Enums\EstadoProcesoPrefrio;
-use App\Enums\ModalidadSalidaCarga;
 use App\Enums\PrioridadOperacional;
 use App\Enums\TipoBulto;
 use App\Enums\TipoMovimiento;
@@ -45,7 +44,7 @@ class ServicioGeneracionRecepcionTunel
                         'posicion:id,tunel_prefrio_id,numero,etiqueta',
                         'folio:id,temporada_id,numero_folio,tipo_bulto,activo,marca,exportadora,variedad,calibre',
                         'folio.ubicacionActual:id,folio_id,camara_id,posicion_id',
-                        'folio.asignacionCargaActual.carga:id,modalidad_salida',
+                        'folio.asignacionCargaActual.carga.presenciaAndenActiva',
                     ]),
             ])
             ->lockForUpdate()
@@ -149,7 +148,7 @@ class ServicioGeneracionRecepcionTunel
 
         $carga = $folio->asignacionCargaActual?->carga;
 
-        return $carga?->modalidad_salida !== ModalidadSalidaCarga::DirectaPrefrio;
+        return $carga?->presenciaAndenActiva === null;
     }
 
     private function planExistente(string $procesoId): ?PlanOperacional

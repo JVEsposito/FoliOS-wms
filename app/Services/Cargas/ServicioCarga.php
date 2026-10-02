@@ -315,7 +315,7 @@ class ServicioCarga
                 CargaFolio::create([
                     'carga_id' => $carga->id,
                     'folio_id' => $folio->id,
-                    'estado' => EstadoCargaFolio::EnAnden,
+                    'estado' => EstadoCargaFolio::Despachado,
                     'anden_id' => $anden->id,
                     'asignado_por_user_id' => $usuario->id,
                     'asignado_at' => $salidaAt,
@@ -349,6 +349,13 @@ class ServicioCarga
                         'sin_movimiento_camara' => true,
                         'salida_ocurrida_at' => $salidaAt->toAtomString(),
                     ],
+                );
+                $this->registrarEvento(
+                    $carga,
+                    TipoEventoCarga::FolioDespachado,
+                    $usuario,
+                    $folio,
+                    ['salida_fisica_at' => $salidaAt->toAtomString()],
                 );
             }
 
@@ -989,10 +996,7 @@ class ServicioCarga
             ];
         }
 
-        if (! in_array($folio->tipo_bulto, [
-            TipoBulto::Pallet,
-            TipoBulto::Saldo,
-        ], true)) {
+        if (! in_array($folio->tipo_bulto, [TipoBulto::Pallet, TipoBulto::Saldo], true)) {
             return [
                 'codigo' => 'tipo_bulto_no_permitido',
                 'mensaje' => "El folio {$folio->numero_folio} corresponde a materiales y no puede incorporarse a una carga CAR-*.",
@@ -1006,7 +1010,12 @@ class ServicioCarga
             ];
         }
 
-        if ($folio->estado_operacional !== EstadoOperacionalFolio::Disponible) {
+        if (! in_array($folio->estado_operacional, [
+            EstadoOperacionalFolio::Disponible,
+            EstadoOperacionalFolio::PendientePrefrio,
+            EstadoOperacionalFolio::PendienteUbicacion,
+        ], true) || ($folio->tipo_bulto === TipoBulto::Saldo
+            && $folio->estado_operacional !== EstadoOperacionalFolio::Disponible)) {
             return [
                 'codigo' => 'estado_no_disponible',
                 'mensaje' => sprintf(
@@ -1017,11 +1026,26 @@ class ServicioCarga
             ];
         }
 
-        if (! $folio->ubicacionActual) {
+        if ($folio->condicion_termica === CondicionTermicaFolio::Retenido
+            || $folio->habilitacion_almacenamiento === HabilitacionAlmacenamientoFolio::Retenido
+            || $folio->retencionOperacionalActiva()->exists()) {
             return [
-                'codigo' => 'sin_ubicacion',
-                'mensaje' => "El folio {$folio->numero_folio} no posee una ubicación actual.",
+                'codigo' => 'retenido',
+                'mensaje' => "El folio {$folio->numero_folio} está retenido.",
             ];
+        }
+
+        // Solo los pallets pueden quedar pendientes en túnel sin posición de cámara.
+        if (! $folio->ubicacionActual) {
+            if ($folio->estado_operacional === EstadoOperacionalFolio::Disponible
+                || $folio->tipo_bulto === TipoBulto::Saldo) {
+                return [
+                    'codigo' => 'sin_ubicacion',
+                    'mensaje' => "El folio {$folio->numero_folio} no posee una ubicación actual ni está en Prefrío.",
+                ];
+            }
+
+            return null;
         }
 
         $camara = $folio->ubicacionActual->posicion?->camara;
@@ -1053,10 +1077,7 @@ class ServicioCarga
             ];
         }
 
-        if (! in_array($folio->tipo_bulto, [
-            TipoBulto::Pallet,
-            TipoBulto::Saldo,
-        ], true)) {
+        if (! in_array($folio->tipo_bulto, [TipoBulto::Pallet, TipoBulto::Saldo], true)) {
             return [
                 'codigo' => 'tipo_bulto_no_permitido',
                 'mensaje' => "El folio {$folio->numero_folio} no corresponde a un pallet o saldo de producto.",

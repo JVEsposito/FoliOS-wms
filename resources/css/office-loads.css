@@ -1084,6 +1084,12 @@ button:disabled {
     color: var(--green);
 }
 
+.folio-state--despachado {
+    border-color: color-mix(in srgb, var(--success-text) 45%, transparent);
+    background: color-mix(in srgb, var(--success-text) 10%, transparent);
+    color: var(--success-text);
+}
+
 .folio-empty-row td {
     padding: 34px;
     color: var(--muted);

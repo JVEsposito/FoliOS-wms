@@ -130,6 +130,11 @@ class RepaletizajeApiTest extends TestCase
             ->json('data.id');
 
         $this->actingAs($despachador, 'sanctum')
+            ->getJson('/api/cargas/folios-disponibles?q=SAL-HEREDADO-PF-NUEVO')
+            ->assertOk()
+            ->assertJsonPath('data.0.numero_folio', $nuevo->numero_folio);
+
+        $this->actingAs($despachador, 'sanctum')
             ->postJson("/api/cargas/{$cargaId}/folios", [
                 'folios' => [$nuevo->numero_folio],
                 'version_esperada' => 1,

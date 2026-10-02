@@ -162,10 +162,7 @@ class CargaController extends Controller
             ->where('activo', true)
             ->whereHas('temporada', fn (Builder $consulta): Builder => $consulta
                 ->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
-            ->whereIn('tipo_bulto', [
-                TipoBulto::Pallet->value,
-                TipoBulto::Saldo->value,
-            ])
+            ->whereIn('tipo_bulto', [TipoBulto::Pallet->value, TipoBulto::Saldo->value])
             ->whereIn('estado_operacional', [
                 EstadoOperacionalFolio::PendientePrefrio->value,
                 EstadoOperacionalFolio::PendienteUbicacion->value,
@@ -236,11 +233,23 @@ class CargaController extends Controller
             ->where('activo', true)
             ->whereHas('temporada', fn (Builder $consulta): Builder => $consulta
                 ->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
-            ->where('estado_operacional', EstadoOperacionalFolio::Disponible->value)
-            ->whereIn('tipo_bulto', [
-                TipoBulto::Pallet->value,
-                TipoBulto::Saldo->value,
+            ->whereIn('estado_operacional', [
+                EstadoOperacionalFolio::Disponible->value,
+                EstadoOperacionalFolio::PendientePrefrio->value,
+                EstadoOperacionalFolio::PendienteUbicacion->value,
             ])
+            ->where(fn (Builder $consulta): Builder => $consulta
+                ->where('tipo_bulto', TipoBulto::Pallet->value)
+                ->orWhere(fn (Builder $saldo): Builder => $saldo
+                    ->where('tipo_bulto', TipoBulto::Saldo->value)
+                    ->where('estado_operacional', EstadoOperacionalFolio::Disponible->value)))
+            ->whereDoesntHave('retencionOperacionalActiva')
+            ->where(fn (Builder $consulta): Builder => $consulta
+                ->whereNull('condicion_termica')
+                ->orWhere('condicion_termica', '!=', CondicionTermicaFolio::Retenido->value))
+            ->where(fn (Builder $consulta): Builder => $consulta
+                ->whereNull('habilitacion_almacenamiento')
+                ->orWhere('habilitacion_almacenamiento', '!=', HabilitacionAlmacenamientoFolio::Retenido->value))
             ->whereDoesntHave('asignacionCargaActual')
             ->when($folioOriginal, function (Builder $consulta, Folio $original): Builder {
                 foreach ([
@@ -257,17 +266,18 @@ class CargaController extends Controller
 
                 return $consulta->where('id', '!=', $original->id);
             })
-            ->whereHas(
-                'ubicacionActual.posicion',
-                fn (Builder $posicion): Builder => $posicion
+            ->where(fn (Builder $consulta): Builder => $consulta
+                ->where(fn (Builder $tunel): Builder => $tunel
+                    ->whereDoesntHave('ubicacionActual')
+                    ->whereIn('estado_operacional', [
+                        EstadoOperacionalFolio::PendientePrefrio->value,
+                        EstadoOperacionalFolio::PendienteUbicacion->value,
+                    ]))
+                ->orWhereHas('ubicacionActual.posicion', fn (Builder $posicion): Builder => $posicion
                     ->where('estado', EstadoPosicion::Activa->value)
-                    ->whereHas(
-                        'camara',
-                        fn (Builder $camara): Builder => $camara
-                            ->where('estado', EstadoCamara::Activa->value)
-                            ->where('contenido', ContenidoCamara::Productos->value),
-                    ),
-            )
+                    ->whereHas('camara', fn (Builder $camara): Builder => $camara
+                        ->where('estado', EstadoCamara::Activa->value)
+                        ->where('contenido', ContenidoCamara::Productos->value))))
             ->when(
                 $busqueda !== '',
                 fn (Builder $consulta): Builder => $consulta->where(
@@ -476,6 +486,7 @@ class CargaController extends Controller
             'asignacionesActuales.asignadoPor:id,name',
             'asignacionesActuales.anden:id,codigo,nombre',
             'asignacionesActuales.folio.ubicacionActual.posicion.camara:id,codigo,nombre',
+            'asignacionesActuales.folio.procesosPrefrio.proceso.tunel:id,codigo,nombre',
             'asignacionesHistoricas.anden:id,codigo,nombre',
             'asignacionesHistoricas.folio.ubicacionActual.posicion.camara:id,codigo,nombre',
             'tareas.camaraOrigen:id,codigo,nombre',
@@ -495,6 +506,7 @@ class CargaController extends Controller
             'embarque.instructivos:id,embarque_id,orden,numero_externo',
             'asignacionesActuales.anden:id,codigo,nombre',
             'asignacionesActuales.folio.ubicacionActual.posicion.camara:id,codigo,nombre',
+            'asignacionesActuales.folio.procesosPrefrio.proceso.tunel:id,codigo,nombre',
         ];
     }
 

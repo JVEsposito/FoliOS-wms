@@ -104,7 +104,7 @@ class RecepcionTunelRollingTest extends TestCase
         });
     }
 
-    public function test_excluye_saldos_folios_inactivos_y_salida_directa_prefrio(): void
+    public function test_excluye_saldos_e_inactivos_pero_ubica_cargas_legacy_sin_camion(): void
     {
         $this->habilitarGeneracion();
         $contexto = $this->crearProcesoAprobado(4, [
@@ -121,8 +121,8 @@ class RecepcionTunelRollingTest extends TestCase
         );
 
         $this->assertNotNull($plan);
-        $this->assertSame(1, $plan->tareas()->count());
-        $this->assertSame($folios[0]->id, $plan->tareas()->firstOrFail()->folio_id);
+        $this->assertSame(2, $plan->tareas()->count());
+        $this->assertEqualsCanonicalizing([$folios[0]->id, $folios[2]->id], $plan->tareas()->pluck('folio_id')->all());
     }
 
     public function test_cierra_recepcion_solo_cuando_todos_los_pallets_se_completan(): void

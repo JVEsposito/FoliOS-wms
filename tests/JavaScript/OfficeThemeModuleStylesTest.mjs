@@ -9,6 +9,7 @@ const migratedStyles = [
     'office-validation-annulments.css',
     'office-inventory-exports.css',
     'office-management.css',
+    'office-queries.css',
 ];
 
 for (const name of migratedStyles) {

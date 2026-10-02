@@ -1,3 +1,5 @@
+import { showOfficeToast } from './office-toast.js';
+
 const byId = (id) => document.getElementById(id);
 
 const elements = {
@@ -286,13 +288,7 @@ function setBusy(active, message = 'Procesando…') {
     elements.app.setAttribute('aria-busy', String(active));
 }
 
-function toast(message, error = false) {
-    const item = document.createElement('div');
-    item.className = `toast${error ? ' toast--error' : ''}`;
-    item.textContent = message;
-    elements.toasts.append(item);
-    window.setTimeout(() => item.remove(), 5000);
-}
+function toast(message, error = false) { showOfficeToast(elements.toasts, message, error); }
 
 function persistSession(payload) {
     state.token = payload.token;
@@ -469,11 +465,11 @@ function priorityClass(priority) {
 }
 
 function distributionText(load) {
-    if (load.modalidad_salida === 'directa_prefrio') return 'Salida directa desde Prefrío';
-    if (!load.distribucion?.length) return 'Sin distribución disponible';
-    return load.distribucion
+    const tunnel = (load.folios || []).filter((folio) => !folio.ubicacion && folio.prefrio && !['en_anden', 'despachado'].includes(folio.estado_carga)).length;
+    const locations = (load.distribucion || [])
         .map((item) => `${item.camara.codigo}: ${item.cantidad}`)
         .join(' · ');
+    return [locations, tunnel ? `Prefrío: ${tunnel}` : ''].filter(Boolean).join(' · ') || 'Sin distribución disponible';
 }
 
 function externalNumbers(load) {
@@ -642,7 +638,7 @@ function renderAvailableFolios() {
     if (!folios.length) {
         elements.availableFolioTableBody.innerHTML = `
             <tr class="available-folios__empty">
-                <td colspan="9">${elements.availableFolioSearch.value.trim() ? 'No hay folios que coincidan con la búsqueda.' : 'No existen folios ubicados y disponibles sin una carga asignada.'}</td>
+                <td colspan="9">${elements.availableFolioSearch.value.trim() ? 'No hay folios que coincidan con la búsqueda.' : 'No existen pallets completos disponibles sin una carga asignada.'}</td>
             </tr>
         `;
         return;
@@ -661,8 +657,8 @@ function renderAvailableFolios() {
                 <td><strong>${escapeHtml(folio.variedad || '—')}</strong><small>${escapeHtml(folio.calibre || 'Sin calibre')}</small></td>
                 <td><strong>${escapeHtml(folio.marca || '—')}</strong><small>${escapeHtml(folio.exportadora || 'Sin exportadora')}</small></td>
                 <td>${escapeHtml(sag)}</td>
-                <td><strong class="location-label">${escapeHtml(folio.ubicacion.camara.codigo)}</strong><small>${escapeHtml(folio.ubicacion.camara.nombre)}</small></td>
-                <td><span class="location-label">${escapeHtml(folio.ubicacion.posicion.etiqueta)}</span></td>
+                <td><strong class="location-label">${escapeHtml(folio.ubicacion?.camara?.codigo || 'Prefrío')}</strong><small>${escapeHtml(folio.ubicacion?.camara?.nombre || 'Sin cámara')}</small></td>
+                <td><span class="location-label">${escapeHtml(folio.ubicacion?.posicion?.etiqueta || 'En túnel')}</span></td>
                 <td>${escapeHtml(formatDate(folio.fecha_ingreso))}</td>
             </tr>
         `;
@@ -705,29 +701,19 @@ function startNew() {
 }
 
 function renderDistribution(load) {
-    if (load.modalidad_salida === 'directa_prefrio') {
-        elements.distribution.innerHTML = `
-            <span class="distribution-chip">
-                <b>PREFRÍO</b>
-                <span>Salida directa a ${escapeHtml(load.anden_previsto?.codigo || 'andén')}</span>
-                <strong>${Number(load.total_folios || 0)}</strong>
-            </span>
-        `;
-        return;
-    }
-
-    if (!load.distribucion?.length) {
+    const tunnel = (load.folios || []).filter((folio) => !folio.ubicacion && folio.prefrio && !['en_anden', 'despachado'].includes(folio.estado_carga)).length;
+    if (!load.distribucion?.length && !tunnel) {
         elements.distribution.innerHTML = '<span class="distribution-empty">Sin folios asignados</span>';
         return;
     }
 
-    elements.distribution.innerHTML = load.distribucion.map((item) => `
+    elements.distribution.innerHTML = (load.distribucion || []).map((item) => `
         <span class="distribution-chip">
             <b>${escapeHtml(item.camara.codigo)}</b>
             <span>${escapeHtml(item.camara.nombre)}</span>
             <strong>${item.cantidad}</strong>
         </span>
-    `).join('');
+    `).join('') + (tunnel ? `<span class="distribution-chip"><b>PREFRÍO</b><span>En túnel</span><strong>${tunnel}</strong></span>` : '');
 }
 
 function renderConcentration(load) {
@@ -808,9 +794,12 @@ function renderFolios(load) {
 
     const editable = canEdit(load);
     elements.folioTableBody.innerHTML = load.folios.map((folio) => {
-        const location = folio.ubicacion
-            ? `${folio.ubicacion.camara.codigo} · ${folio.ubicacion.posicion.etiqueta}`
-            : 'Sin ubicación';
+        const location = folio.estado_carga === 'despachado' ? 'Despachado'
+            : folio.estado_carga === 'en_anden' ? 'En andén'
+                : folio.ubicacion ? `En cámara ${folio.ubicacion.camara.codigo} · ${folio.ubicacion.posicion.etiqueta}`
+                    : folio.prefrio?.estado === 'aprobado' ? `Aprobado en túnel ${folio.prefrio.tunel}`
+                        : folio.prefrio ? `En túnel ${folio.prefrio.tunel} · prefrío en curso`
+                            : 'Pendiente de prefrío';
         return `
             <tr>
                 <td><strong>${escapeHtml(folio.numero_folio)}</strong><small>${escapeHtml(folio.estado_operacional || '—')}</small></td>
@@ -896,9 +885,7 @@ function renderSelected(load) {
     clearFolioErrors();
 
     const editable = canEdit(load);
-    elements.editorEyebrow.textContent = load.modalidad_salida === 'directa_prefrio'
-        ? 'SALIDA DIRECTA DESDE PREFRÍO'
-        : (load.estado === 'borrador' ? 'ORDEN EN PREPARACIÓN' : 'ORDEN DE CARGA');
+    elements.editorEyebrow.textContent = load.estado === 'borrador' ? 'ORDEN EN PREPARACIÓN' : 'ORDEN DE CARGA';
     elements.editorTitle.textContent = load.codigo;
     const linkedShipment = Boolean(load.embarque);
     const linkedExternalNumbers = externalNumbers(load);
@@ -1344,7 +1331,7 @@ elements.headerForm.addEventListener('submit', async (event) => {
         await loadCatalog(creating ? 1 : state.loadPagination.currentPage);
         toast(`${response.data.codigo} fue ${creating ? 'creada' : 'actualizada'} correctamente.`);
     } catch (error) {
-        if (!(await recoverConflict(error))) elements.headerError.textContent = error.message;
+        if (!(await recoverConflict(error))) { elements.headerError.textContent = error.message; toast(error.message, true); }
     } finally {
         setBusy(false);
     }
@@ -1455,7 +1442,7 @@ elements.addFolios.addEventListener('click', async () => {
         ]);
         toast(`${folios.length} ${folios.length === 1 ? 'folio incorporado' : 'folios incorporados'} a ${response.data.codigo}.`);
     } catch (error) {
-        if (!(await recoverConflict(error))) showFolioErrors(error);
+        if (!(await recoverConflict(error))) { showFolioErrors(error); toast(error.message, true); }
     } finally {
         setBusy(false);
     }
@@ -1615,6 +1602,7 @@ elements.incidentForm.addEventListener('submit', async (event) => {
         toast(`Incidencia de ${state.selectedIncident.folio?.numero_folio || 'folio'} resuelta correctamente.`);
     } catch (error) {
         elements.incidentError.textContent = error.message;
+        toast(error.message, true);
     } finally {
         setBusy(false);
     }
@@ -1675,6 +1663,7 @@ elements.truckDockForm.addEventListener('submit', async (event) => {
             elements.truckDockError.textContent = 'La carga cambió en otra sesión. Revisa la información actualizada antes de confirmar.';
         } else {
             elements.truckDockError.textContent = error.message;
+            toast(error.message, true);
         }
     } finally {
         setBusy(false);
@@ -1709,6 +1698,7 @@ elements.releaseDockForm.addEventListener('submit', async (event) => {
             elements.releaseDockError.textContent = 'La carga cambió en otra sesión. Revisa si el camión continúa en andén.';
         } else {
             elements.releaseDockError.textContent = error.message;
+            toast(error.message, true);
         }
     } finally {
         setBusy(false);
@@ -1729,6 +1719,7 @@ elements.directFolioPagination.addEventListener('click', (event) => {
     if (!button || button.disabled) return;
     loadDirectFolios(Number(button.dataset.directPage)).catch((error) => {
         elements.directError.textContent = error.message;
+        toast(error.message, true);
     });
 });
 
@@ -1876,6 +1867,7 @@ elements.closeForm.addEventListener('submit', async (event) => {
         toast(`${response.data.codigo} quedó cerrada con salida de ${plate}.`);
     } catch (error) {
         elements.closeError.textContent = error.message;
+        toast(error.message, true);
     } finally {
         setBusy(false);
     }

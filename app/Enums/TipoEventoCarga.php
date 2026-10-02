@@ -15,6 +15,7 @@ enum TipoEventoCarga: string
     case IncidenciaResuelta = 'incidencia_resuelta';
     case FolioReemplazado = 'folio_reemplazado';
     case FolioEnviadoAnden = 'folio_enviado_anden';
+    case FolioDespachado = 'folio_despachado';
     case CierreDespacho = 'cierre_despacho';
     case DespachoDirectoPrefrio = 'despacho_directo_prefrio';
     case CamionEnAnden = 'camion_en_anden';

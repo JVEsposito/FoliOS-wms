@@ -1,3 +1,5 @@
+import { showOfficeToast } from './office-toast.js';
+
 const keys = {
     token: 'estiba_wms_office_token',
     identity: 'estiba_wms_office_identity',
@@ -32,7 +34,10 @@ const elements = {
     detail: document.getElementById('sagLotDetail'),
     detailError: document.getElementById('detailError'),
     detailActions: document.getElementById('detailActionSelect'),
+    toasts: document.getElementById('officeToasts'),
 };
+
+function toast(message, error = false) { showOfficeToast(elements.toasts, message, error); }
 
 function readJson(key) {
     try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch { return null; }
@@ -354,7 +359,8 @@ async function createLot(event) {
         renderDestinationOptions();
         await openLot(lot.id);
         selectPanel(lot.estado === 'finalizado' ? 'historial' : 'activos');
-    } catch (error) { elements.builderError.textContent = error.message; }
+        toast(`${lot.codigo} creado correctamente.`);
+    } catch (error) { elements.builderError.textContent = error.message; toast(error.message, true); }
 }
 
 function selectPanel(panel) {
@@ -428,7 +434,8 @@ async function executeLotAction(id, action) {
         await api(`/inspeccion-sag/lotes/${id}/${action === 'start' ? 'iniciar' : action === 'finish' ? 'finalizar' : 'cancelar'}`, { method: 'POST' });
         await loadWorkspace();
         await openLot(id);
-    } catch (error) { elements.detailError.textContent = error.message; }
+        toast(action === 'start' ? 'Inspección iniciada.' : action === 'finish' ? 'Lote finalizado.' : 'Lote cancelado.');
+    } catch (error) { elements.detailError.textContent = error.message; toast(error.message, true); }
 }
 
 async function saveResult(button) {
@@ -443,7 +450,8 @@ async function saveResult(button) {
         });
         await loadWorkspace();
         await openLot(state.selectedLot.id);
-    } catch (error) { elements.detailError.textContent = error.message; }
+        toast('Resultado de inspección guardado.');
+    } catch (error) { elements.detailError.textContent = error.message; toast(error.message, true); }
 }
 
 elements.login.addEventListener('submit', async (event) => {
