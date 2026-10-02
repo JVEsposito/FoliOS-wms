@@ -56,10 +56,11 @@ class ControlEnvasesRc02Test extends TestCase
 
     public function test_dos_documentos_conservan_version_y_cantidades_guia_y_controles_y_siete_filas(): void
     {
+        $this->travelTo(\Carbon\CarbonImmutable::parse('2026-10-02 12:00:00', 'UTC'));
         $c = $this->preparar(array_fill_keys(array_column(TipoEnvaseRomana::cases(), 'value'), 2));
         $recepcion = $c['recepcion'];
         $formato = FormatoRegistro::where('codigo', 'RC-02')->firstOrFail();
-        $formato->update(['version' => '2', 'fecha_vigencia' => '2026-10-02']);
+        $formato->update(['version' => '2', 'fecha_vigencia' => '2026-10-01']);
         $payload = ['salida_envases' => array_map(fn ($t) => ['tipo_envase' => $t, 'cantidad' => $t === 'bins' ? 3 : 1], array_keys($c['cantidades']))];
         $this->cerrar($c, 'diferentes', $payload)->assertOk()->assertJsonPath('data.rc02_despacho_disponible', true);
         $this->assertDatabaseCount('inspecciones_envases_recepcion', 2);
@@ -79,10 +80,10 @@ class ControlEnvasesRc02Test extends TestCase
             $this->assertStringContainsString('/DCTDecode', $texto);
         }
         $this->assertStringContainsString('15-09-2025', $pdfRecepcion);
-        $this->assertStringNotContainsString('02-10-2026', $pdfRecepcion);
+        $this->assertStringNotContainsString('01-10-2026', $pdfRecepcion);
         $this->assertStringContainsString($recepcion->numero_guia_despacho, $pdfRecepcion);
         $this->assertStringNotContainsString('GS-1', $pdfRecepcion);
-        $this->assertStringContainsString('02-10-2026', $pdfDespacho);
+        $this->assertStringContainsString('01-10-2026', $pdfDespacho);
         $this->assertStringContainsString('GS-1', $pdfDespacho);
         $this->assertStringNotContainsString($recepcion->numero_guia_despacho, $pdfDespacho);
         $this->assertSame(3, substr_count($pdfDespacho, 'No aplica'));
