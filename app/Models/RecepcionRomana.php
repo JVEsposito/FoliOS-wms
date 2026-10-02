@@ -67,6 +67,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'validacion_tomada_por_user_id',
     'observacion',
     'observacion_cierre',
+    'formato_registro_codigo',
+    'formato_registro_version',
+    'formato_registro_fecha_vigencia',
+    'formato_registro_localidad',
 ])]
 class RecepcionRomana extends Model implements PerteneceATemporada
 {
@@ -165,6 +169,7 @@ class RecepcionRomana extends Model implements PerteneceATemporada
             'salida_at' => 'datetime',
             'validacion_tomada_at' => 'datetime',
             'validado_at' => 'datetime',
+            'formato_registro_fecha_vigencia' => 'immutable_date',
             'version' => 'integer',
         ];
     }

@@ -35,6 +35,7 @@ use App\Http\Controllers\Api\DespachoMaterialController;
 use App\Http\Controllers\Api\EmbarqueController;
 use App\Http\Controllers\Api\EvacuacionEmergenciaController;
 use App\Http\Controllers\Api\FolioPrefrioController;
+use App\Http\Controllers\Api\FormatoRegistroController;
 use App\Http\Controllers\Api\FrutaProcesoController;
 use App\Http\Controllers\Api\GuiaDespachoEnvaseController;
 use App\Http\Controllers\Api\HidrocoolerMateriaPrimaController;
@@ -546,6 +547,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/administracion/usuarios/{usuario}/restablecer-pin', [PinOperacionalController::class, 'restablecer'])
         ->middleware('can:restablecer-pin-operacional,usuario');
     Route::middleware('can:administrar-accesos')->group(function () {
+        Route::get('/administracion/formatos-registro', [FormatoRegistroController::class, 'index']);
+        Route::post('/administracion/formatos-registro', [FormatoRegistroController::class, 'store']);
+        Route::put('/administracion/formatos-registro/{formatoRegistro}', [FormatoRegistroController::class, 'update']);
+        Route::get('/administracion/formatos-registro/{formatoRegistro}/eventos', [FormatoRegistroController::class, 'eventos']);
         Route::get('/administracion/sesiones-acceso', [SesionesAccesoAdministracionController::class, 'index']);
         Route::delete('/administracion/sesiones-acceso/{sesionAcceso}', [SesionesAccesoAdministracionController::class, 'destroy']);
         Route::post('/administracion/perfiles-acceso', [PerfilAccesoController::class, 'store']);

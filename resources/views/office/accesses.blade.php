@@ -9,7 +9,7 @@
         <title>FoliOS · Administración de accesos</title>
 
         @if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
-            @vite(['resources/css/office.css', 'resources/css/office-admin.css', 'resources/js/office-admin.js', 'resources/js/office-access-profiles.js', 'resources/js/office-user-management.js', 'resources/js/office-label-profiles.js'])
+            @vite(['resources/css/office.css', 'resources/css/office-admin.css', 'resources/js/office-admin.js', 'resources/js/office-access-profiles.js', 'resources/js/office-user-management.js', 'resources/js/office-label-profiles.js', 'resources/js/office-record-formats.js'])
         @endif
     </head>
     <body>
@@ -79,12 +79,34 @@
                         'seasons' => ['label' => 'Temporadas', 'icon' => '◷'],
                         'clients' => ['label' => 'Clientes', 'icon' => '◇'],
                         'labels' => ['label' => 'Etiquetas', 'icon' => '▤'],
+                        'formats' => ['label' => 'Formatos de registro', 'icon' => '▤'],
                         'profiles' => ['label' => 'Perfiles', 'icon' => '⚙'],
                         'users' => ['label' => 'Usuarios', 'icon' => '●'],
                         'sessions' => ['label' => 'Sesiones', 'icon' => '◉'],
                         'devices' => ['label' => 'Tablets', 'icon' => '▣'],
                     ]"
                 />
+
+                <section class="admin-panel panel" id="administration-panel-formats" data-office-panel-group="administration" data-office-panel-id="formats" role="tabpanel" aria-labelledby="administration-tab-formats" hidden>
+                    <div class="admin-panel__heading"><div><p class="eyebrow">CONTROL DE DOCUMENTOS</p><h2>Formatos de registro</h2></div><span id="recordFormatsSummary">Sin cargar</span></div>
+                    <p class="admin-form__hint">La versión activa se guarda al cerrar cada recepción. Las reimpresiones conservan su encabezado original. La fecha corresponde a la vigencia documental; la casilla Activo publica el formato para los nuevos cierres.</p>
+                    <form class="admin-form" id="recordFormatForm">
+                        <input name="id" type="hidden">
+                        <input name="actualizado_at_conocido" type="hidden">
+                        <div class="admin-form__grid">
+                            <label class="field"><span>Código *</span><input name="codigo" maxlength="30" placeholder="RPR-01" required></label>
+                            <label class="field"><span>Nombre *</span><input name="nombre" maxlength="150" required></label>
+                            <label class="field"><span>Versión *</span><input name="version" maxlength="20" required></label>
+                            <label class="field"><span>Fecha de vigencia *</span><input name="fecha_vigencia" type="date" required></label>
+                            <label class="field field--wide"><span>Localidad *</span><textarea name="localidad" maxlength="255" rows="2" required></textarea></label>
+                        </div>
+                        <label class="admin-check"><input name="activo" type="checkbox" checked><span>Activo para nuevos documentos</span></label>
+                        <p class="form-error" id="recordFormatError" role="alert"></p>
+                        <div class="admin-form__actions"><button class="secondary-button is-hidden" id="cancelRecordFormatEdit" type="button">Nuevo formato</button><button class="primary-button" type="submit">Guardar formato</button></div>
+                    </form>
+                    <div class="admin-table-scroll"><table class="admin-table"><thead><tr><th>Formato</th><th>Versión y vigencia</th><th>Estado</th><th>Última modificación</th><th>Acciones</th></tr></thead><tbody id="recordFormatsTableBody"></tbody></table></div>
+                    <div class="is-hidden" id="recordFormatHistory"><h3 id="recordFormatHistoryTitle">Historial del formato</h3><div class="admin-table-scroll"><table class="admin-table"><thead><tr><th>Fecha y usuario</th><th>Anterior</th><th>Nuevo</th></tr></thead><tbody id="recordFormatHistoryBody"></tbody></table></div><button class="secondary-button" id="recordFormatHistoryMore" type="button">Ver más cambios</button></div>
+                </section>
 
                 <section class="admin-panel admin-season-panel panel" id="administration-panel-seasons" data-office-panel-group="administration" data-office-panel-id="seasons" role="tabpanel" aria-labelledby="administration-tab-seasons">
                     <div class="admin-panel__heading">
