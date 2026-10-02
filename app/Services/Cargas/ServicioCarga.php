@@ -996,10 +996,10 @@ class ServicioCarga
             ];
         }
 
-        if ($folio->tipo_bulto !== TipoBulto::Pallet) {
+        if (! in_array($folio->tipo_bulto, [TipoBulto::Pallet, TipoBulto::Saldo], true)) {
             return [
                 'codigo' => 'tipo_bulto_no_permitido',
-                'mensaje' => 'Solo un pallet completo puede incorporarse a una carga.',
+                'mensaje' => "El folio {$folio->numero_folio} corresponde a materiales y no puede incorporarse a una carga CAR-*.",
             ];
         }
 
@@ -1014,7 +1014,8 @@ class ServicioCarga
             EstadoOperacionalFolio::Disponible,
             EstadoOperacionalFolio::PendientePrefrio,
             EstadoOperacionalFolio::PendienteUbicacion,
-        ], true)) {
+        ], true) || ($folio->tipo_bulto === TipoBulto::Saldo
+            && $folio->estado_operacional !== EstadoOperacionalFolio::Disponible)) {
             return [
                 'codigo' => 'estado_no_disponible',
                 'mensaje' => sprintf(
@@ -1034,9 +1035,10 @@ class ServicioCarga
             ];
         }
 
-        // En prefrío la ausencia de posición de cámara es esperable.
+        // Solo los pallets pueden quedar pendientes en túnel sin posición de cámara.
         if (! $folio->ubicacionActual) {
-            if ($folio->estado_operacional === EstadoOperacionalFolio::Disponible) {
+            if ($folio->estado_operacional === EstadoOperacionalFolio::Disponible
+                || $folio->tipo_bulto === TipoBulto::Saldo) {
                 return [
                     'codigo' => 'sin_ubicacion',
                     'mensaje' => "El folio {$folio->numero_folio} no posee una ubicación actual ni está en Prefrío.",
@@ -1075,10 +1077,10 @@ class ServicioCarga
             ];
         }
 
-        if ($folio->tipo_bulto !== TipoBulto::Pallet) {
+        if (! in_array($folio->tipo_bulto, [TipoBulto::Pallet, TipoBulto::Saldo], true)) {
             return [
                 'codigo' => 'tipo_bulto_no_permitido',
-                'mensaje' => "El folio {$folio->numero_folio} no corresponde a un pallet completo.",
+                'mensaje' => "El folio {$folio->numero_folio} no corresponde a un pallet o saldo de producto.",
             ];
         }
 

@@ -162,7 +162,7 @@ class CargaController extends Controller
             ->where('activo', true)
             ->whereHas('temporada', fn (Builder $consulta): Builder => $consulta
                 ->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
-            ->where('tipo_bulto', TipoBulto::Pallet->value)
+            ->whereIn('tipo_bulto', [TipoBulto::Pallet->value, TipoBulto::Saldo->value])
             ->whereIn('estado_operacional', [
                 EstadoOperacionalFolio::PendientePrefrio->value,
                 EstadoOperacionalFolio::PendienteUbicacion->value,
@@ -238,7 +238,11 @@ class CargaController extends Controller
                 EstadoOperacionalFolio::PendientePrefrio->value,
                 EstadoOperacionalFolio::PendienteUbicacion->value,
             ])
-            ->where('tipo_bulto', TipoBulto::Pallet->value)
+            ->where(fn (Builder $consulta): Builder => $consulta
+                ->where('tipo_bulto', TipoBulto::Pallet->value)
+                ->orWhere(fn (Builder $saldo): Builder => $saldo
+                    ->where('tipo_bulto', TipoBulto::Saldo->value)
+                    ->where('estado_operacional', EstadoOperacionalFolio::Disponible->value)))
             ->whereDoesntHave('retencionOperacionalActiva')
             ->where(fn (Builder $consulta): Builder => $consulta
                 ->whereNull('condicion_termica')
