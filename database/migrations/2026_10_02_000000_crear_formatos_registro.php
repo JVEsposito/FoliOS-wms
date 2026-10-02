@@ -18,14 +18,14 @@ return new class extends Migration
             $table->date('fecha_vigencia');
             $table->string('localidad', 255);
             $table->boolean('activo')->default(true);
-            $table->foreignUuid('creado_por_user_id')->nullable()->constrained('users')->restrictOnDelete();
-            $table->foreignUuid('actualizado_por_user_id')->nullable()->constrained('users')->restrictOnDelete();
+            $table->foreignId('creado_por_user_id')->nullable()->constrained('users')->restrictOnDelete();
+            $table->foreignId('actualizado_por_user_id')->nullable()->constrained('users')->restrictOnDelete();
             $table->timestamps();
         });
         Schema::create('eventos_formato_registro', function (Blueprint $table): void {
             $table->uuid('id')->primary();
             $table->foreignUuid('formato_registro_id')->constrained('formatos_registro')->restrictOnDelete();
-            $table->foreignUuid('user_id')->constrained('users')->restrictOnDelete();
+            $table->foreignId('user_id')->constrained('users')->restrictOnDelete();
             $table->json('antes')->nullable();
             $table->json('despues');
             $table->timestamps();
