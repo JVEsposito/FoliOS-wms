@@ -23,6 +23,7 @@ use App\Models\SegmentoValidacionMp;
 use App\Models\User;
 use App\Models\ValidacionMp;
 use App\Models\VariedadValidacion;
+use App\Services\Romana\ServicioInspeccionEnvases;
 use App\Services\Romana\ServicioRepartoEnvases;
 use App\Services\Temporadas\GuardiaTemporadaActiva;
 use Illuminate\Support\Facades\DB;
@@ -177,6 +178,8 @@ class ServicioValidacionMp
             foreach ($segmentos as $segmento) {
                 $this->guardarSegmento($validacion, $recepcion, $segmento);
             }
+
+            app(ServicioInspeccionEnvases::class)->guardar($recepcion, 'recepcion', $cantidades->mapWithKeys(fn ($e, $t) => [$t => (int) $e['cantidad_validada']])->all(), $datos['inspeccion_envases'] ?? null, $usuario, $datos['operacion_id']);
 
             $validacion->update([
                 'operacion_confirmacion_id' => $datos['operacion_id'],

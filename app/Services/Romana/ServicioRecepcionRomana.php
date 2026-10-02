@@ -690,6 +690,9 @@ class ServicioRecepcionRomana
             $tara = (float) $payload['peso_tara'];
             $bruto = (float) $recepcion->peso_bruto;
             $tarasEnvases = $this->calcularTaraEnvasesSalida($recepcion, $payload);
+            if ($payload['modo_salida_envases'] !== 'vacio') {
+                app(ServicioInspeccionEnvases::class)->guardar($recepcion, 'despacho', $tarasEnvases['salidas'], $payload['inspeccion_envases'], $usuario, $datos['operacion_id']);
+            }
             $pesoTaraEnvases = $tarasEnvases['peso_tara_envases'];
             $pesoNeto = round($bruto - $tara - $pesoTaraEnvases, 3);
             if ($pesoNeto <= 0) {
@@ -825,6 +828,9 @@ class ServicioRecepcionRomana
             if (! $cambio) {
                 throw new ConflictoOperacion('La salida corregida no presenta cambios.');
             }
+            if ($payload['modo_salida_envases'] !== 'vacio') {
+                app(ServicioInspeccionEnvases::class)->guardar($recepcion, 'despacho', $resultado['salidas'], $payload['inspeccion_envases'], $usuario, $datos['operacion_id'], $datos['motivo_correccion']);
+            }
             $ahora = CarbonImmutable::now();
             $salidasAnteriores = $anteriores->mapWithKeys(
                 fn ($salida): array => [$salida->tipo_envase->value => $salida->cantidad],
@@ -936,6 +942,7 @@ class ServicioRecepcionRomana
     {
         return [
             'accion' => 'cerrar',
+            'inspeccion_envases' => $datos['inspeccion_envases'] ?? null,
             'recepcion_id' => $recepcion->id,
             'peso_tara' => round((float) $datos['peso_tara'], 2),
             'envases_reparto' => isset($datos['envases_reparto']) ? collect($datos['envases_reparto'])->sort()->values()->all() : null,

@@ -5,6 +5,7 @@ namespace App\Http\Requests;
 use App\Enums\TipoEnvaseRomana;
 use App\Enums\TipoRecepcionRomana;
 use App\Models\RecepcionRomana;
+use App\Services\Romana\ServicioInspeccionEnvases;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -70,6 +71,7 @@ class CerrarRecepcionRomanaRequest extends FormRequest
                 'decimal:0,3',
             ],
             'observacion' => ['nullable', 'string', 'max:2000'],
+            ...ServicioInspeccionEnvases::reglas(false, $requiereDestare && $this->input('modo_salida_envases') !== 'vacio'),
         ];
     }
 

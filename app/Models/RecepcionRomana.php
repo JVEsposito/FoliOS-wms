@@ -144,6 +144,11 @@ class RecepcionRomana extends Model implements PerteneceATemporada
         return $this->belongsTo(User::class, 'cerrado_por_user_id');
     }
 
+    public function inspeccionesEnvases(): HasMany
+    {
+        return $this->hasMany(InspeccionEnvases::class, 'recepcion_romana_id');
+    }
+
     protected function casts(): array
     {
         return [

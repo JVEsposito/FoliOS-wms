@@ -25,6 +25,7 @@ use App\Models\PesajeEnvaseRecepcionRomana;
 use App\Models\RecepcionRomana;
 use App\Models\Temporada;
 use App\Services\Romana\GeneradorAvisoReciboPdf;
+use App\Services\Romana\ServicioInspeccionEnvases;
 use App\Services\Romana\ServicioRecepcionRomana;
 use App\Services\Romana\ServicioRepartoEnvases;
 use App\Services\Temporadas\ServicioTemporadaActiva;
@@ -417,6 +418,9 @@ class RecepcionRomanaController extends Controller
                 && ($esSoloEnvases || $esPesajeEnvases || $recepcion->estado_validacion_mp === EstadoValidacionMp::Validada))
                 || ($recepcion->estado === EstadoRecepcionRomana::EnPesajeEnvases && $pesajeCompleto),
             'aviso_recibo_disponible' => true,
+            'rc02_recepcion_disponible' => app(ServicioInspeccionEnvases::class)->disponible($recepcion, 'recepcion'),
+            'rc02_despacho_disponible' => app(ServicioInspeccionEnvases::class)->disponible($recepcion, 'despacho'),
+            'inspecciones_envases' => $recepcion->inspeccionesEnvases->map(fn ($i) => app(ServicioInspeccionEnvases::class)->serializar($i))->values()->all(),
             'creado_por' => $this->usuario($recepcion->creadoPor),
             'ingreso_confirmado_por' => $this->usuario($recepcion->ingresoConfirmadoPor),
             'cerrado_por' => $this->usuario($recepcion->cerradoPor),
