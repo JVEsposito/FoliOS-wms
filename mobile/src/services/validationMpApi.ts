@@ -1,3 +1,4 @@
+import { getContainerCatalog } from './containerCatalog';
 import { ContainerType, MpCatalog, MpHistory, MpReception, MpSegmentDraft, MpValidation } from '../domain/validationMp';
 import { ApiError } from './apiError';
 
@@ -30,7 +31,8 @@ export async function findMpReception(baseUrl: string, token: string, number: st
 }
 
 export async function getMpCatalog(baseUrl: string, token: string, receptionId: string) {
-  return request<MpCatalog>(baseUrl, `/api/validacion-mp/recepciones/${receptionId}/catalogos`, token);
+  const [catalog, envases] = await Promise.all([request<MpCatalog>(baseUrl, `/api/validacion-mp/recepciones/${receptionId}/catalogos`, token), getContainerCatalog(baseUrl, token)]);
+  return { ...catalog, envases };
 }
 
 export async function completeMpSpecies(baseUrl: string, token: string, reception: MpReception, speciesId: string) {

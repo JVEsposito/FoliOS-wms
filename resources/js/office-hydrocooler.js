@@ -1,3 +1,4 @@
+import { loadContainerCatalog, containerLabel } from './office-container-catalog.js';
 import { createOperationalPoller } from './shared/operational-poller';
 
 const byId = (id) => document.getElementById(id);
@@ -50,11 +51,12 @@ function can(capability) {
     return state.identity?.[capability] === true || state.identity?.capacidades?.[capability] === true;
 }
 function label(value) {
+    if (containerLabel(value)) return containerLabel(value);
     const labels = {
         pendiente_hidrocooler: 'Pendiente', hidrocooler_en_curso: 'En curso',
         hidrocooler_retenido: 'Retenido', retenidos: 'retenidos',
         pendiente_asignacion: 'A cámara MP', disponible_proceso: 'Directo a proceso',
-        camara: 'Cámara MP', proceso: 'Directo a proceso', bins: 'bins', totes: 'totes', esponjas: 'esponjas',
+        camara: 'Cámara MP', proceso: 'Directo a proceso',
         conforme: 'Conforme', no_conforme: 'No conforme', sin_novedad: 'Sin novedad',
         filtrado: 'Filtrado', recambio: 'Recambio',
         digitador_materia_prima: 'Digitador de materia prima', supervisor_frio: 'Supervisor de frío',
@@ -220,7 +222,8 @@ async function downloadRegister(action) {
 async function load({ silent = false } = {}) {
     if (!silent) setBusy(true, 'Actualizando Hidrocooler…');
     try {
-        const [summary, lots] = await Promise.all([
+        const [, summary, lots] = await Promise.all([
+            loadContainerCatalog(api),
             api('/api/materia-prima/hidrocooler/resumen'),
             api(`/api/materia-prima/hidrocooler/lotes?${query()}`),
         ]);

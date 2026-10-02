@@ -1,4 +1,5 @@
-export type ContainerType = 'bins' | 'totes' | 'esponjas';
+import { ContainerCode, ContainerOption } from '../services/containerCatalog';
+export type ContainerType = ContainerCode;
 export type ReceptionType = 'fruta_con_envases' | 'fruta_pesaje_envases' | 'solo_envases';
 export type MpValidationState = 'pendiente' | 'en_curso' | 'validada';
 export type SegregationReason = 'csg' | 'cuartel' | 'variedad';
@@ -63,6 +64,7 @@ export type MpValidation = {
 export type MpHistory = { id: string; fecha: string; numero_recepcion: string; cliente: string; estado: string; segmentos: Array<{ csg: string | null; variedad: string | null; envases: Array<{ tipo_envase: ContainerType; cantidad: number }> }> };
 
 export type MpCatalog = {
+  envases: ContainerOption[];
   temporada: { id: string; codigo: string; nombre: string };
   especies: Array<{ id: string; nombre: string }>;
   csg: Array<{ id: string; codigo: string; predio: string | null; variedad_ids: string[] }>;

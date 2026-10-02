@@ -21,6 +21,7 @@ use App\Models\RecepcionRomana;
 use App\Models\SegmentoValidacionMp;
 use App\Models\User;
 use App\Models\VariedadValidacion;
+use App\Services\Romana\ServicioRepartoEnvases;
 use App\Services\Temporadas\GuardiaTemporadaActiva;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -790,9 +791,10 @@ class ServicioLoteMateriaPrima
                 'El segmento todavía no pertenece a una Validación MP confirmada.',
             );
         }
-        $tipoContenedor = $recepcion->tipo_envase_calculo_neto
-            ?? $recepcion->tipo_envase_declarado?->value;
-        if (! $segmento->envases->contains(fn ($envase): bool => $envase->tipo_envase->value === $tipoContenedor && $envase->cantidad > 0)) {
+        $tipos = $recepcion->peso_neto !== null
+            ? app(ServicioRepartoEnvases::class)->tipos($recepcion)
+            : array_column(array_filter(TipoEnvaseRomana::catalogo(), fn ($t): bool => $t['contiene_fruta']), 'codigo');
+        if (! $segmento->envases->contains(fn ($envase): bool => in_array($envase->tipo_envase->value, $tipos, true) && $envase->cantidad > 0)) {
             throw ValidationException::withMessages(['envases' => 'El segmento no contiene envases contenedores para repartir el neto.']);
         }
 
@@ -858,9 +860,10 @@ class ServicioLoteMateriaPrima
         /** @var RecepcionRomana $recepcion */
         $recepcion = $preparados['recepcion'];
         $segmento = $preparados['segmento'];
-        $contenedor = $recepcion->tipo_envase_calculo_neto
-            ?? $recepcion->tipo_envase_declarado?->value;
-        $principal = $segmento->envases->first(fn ($envase): bool => $envase->tipo_envase->value === $contenedor);
+        // El envase físico del lote no depende del envase escogido para repartir kilos.
+        $principal = $segmento->envases->first(fn ($envase): bool => $envase->tipo_envase === $recepcion->tipo_envase_declarado && $envase->tipo_envase->contieneFruta() && $envase->cantidad > 0)
+            ?? $segmento->envases->first(fn ($envase): bool => $envase->tipo_envase->contieneFruta() && $envase->cantidad > 0);
+        $contenedor = $principal->tipo_envase->value;
         $secundario = $segmento->envases->first(fn ($envase): bool => $envase->tipo_envase->value !== $contenedor && $envase->cantidad > 0);
         $destarePendiente = $recepcion->peso_neto === null;
         $calculados = $destarePendiente
@@ -925,98 +928,102 @@ class ServicioLoteMateriaPrima
         }
     }
 
-    /** El redondeo final se asigna al último segmento según contenedores ocupados, nunca según esponjas o totes. */
+    /** El último lote recibe las milésimas restantes cuando cubre todos los tipos de reparto. */
     public function netoEstimado(SegmentoValidacionMp $segmento, RecepcionRomana $recepcion, ?string $ignorarLoteId = null): float
     {
         $segmento->loadMissing('envases');
-        $tipo = $recepcion->tipo_envase_calculo_neto;
-        $cantidad = (int) $segmento->envases->first(fn ($envase): bool => $envase->tipo_envase->value === $tipo)?->cantidad;
-        $total = (int) $recepcion->cantidad_envase_calculo_neto;
-        if ($cantidad < 1 || $total < 1) {
-            throw ValidationException::withMessages(['envases' => 'El segmento necesita al menos un envase contenedor.']);
-        }
-        $anteriores = LoteMateriaPrima::query()
-            ->where('recepcion_romana_id', $recepcion->id)
+        $reparto = app(ServicioRepartoEnvases::class)->snapshot($recepcion);
+        $cantidades = $segmento->envases->mapWithKeys(fn ($e): array => [$e->tipo_envase->value => (int) $e->cantidad])->all();
+        $anteriores = LoteMateriaPrima::query()->where('recepcion_romana_id', $recepcion->id)
             ->where('estado', '!=', EstadoLoteMateriaPrima::Anulado->value)
-            ->when($ignorarLoteId, fn ($consulta) => $consulta->whereKeyNot($ignorarLoteId))
-            ->with('envasesDetalle')->get();
-        $ocupados = $anteriores->sum(fn (LoteMateriaPrima $lote): int => (int) ($lote->envasesDetalle
-            ->first(fn ($envase): bool => $envase->tipo_envase->value === $tipo)?->cantidad
-            ?? ($lote->envase_primario->value === $tipo ? $lote->cantidad_envases_primarios
-                : ($lote->envase_secundario?->value === $tipo ? $lote->cantidad_envases_secundarios : 0))));
-        if ($ocupados + $cantidad > $total) {
-            throw ValidationException::withMessages(['envases' => 'Los contenedores de los lotes superan los declarados en Romana.']);
+            ->when($ignorarLoteId, fn ($q) => $q->whereKeyNot($ignorarLoteId))->with('envasesDetalle')->get();
+        $ocupados = [];
+        foreach ($anteriores as $lote) {
+            foreach ($this->cantidadesLote($lote) as $tipo => $cantidad) {
+                $ocupados[$tipo] = ($ocupados[$tipo] ?? 0) + $cantidad;
+            }
         }
-        $miligramos = (int) round((float) $recepcion->peso_neto * 1000);
+        $completo = $this->sumarReparto($reparto, $ocupados, $cantidades);
         $asignados = (int) round($anteriores->sum('kilos_netos_calculados') * 1000);
-        $calculados = $ocupados + $cantidad === $total
-            ? $miligramos - $asignados
-            : (int) round((float) $recepcion->peso_neto_por_envase * 1000) * $cantidad;
-        if ($calculados <= 0 || $calculados + $asignados > $miligramos) {
+        $neto = (int) round((float) $recepcion->peso_neto * 1000);
+        $kilos = $completo ? $neto - $asignados
+            : app(ServicioRepartoEnvases::class)->miligramos($reparto, $cantidades, (float) $recepcion->peso_neto);
+        if ($kilos <= 0 || $asignados + $kilos > $neto) {
             throw ValidationException::withMessages(['envases' => 'El reparto del neto de Romana no es válido.']);
         }
 
-        return $calculados / 1000;
+        return $kilos / 1000;
     }
 
-    /**
-     * Distribuye el neto entre borradores de una recepción dentro de la transacción del destare.
-     * Los cálculos usan milésimas y el último contenedor completa el remanente exacto.
-     */
+    private function cantidadesLote(LoteMateriaPrima $lote): array
+    {
+        if ($lote->envasesDetalle->isNotEmpty()) {
+            return $lote->envasesDetalle->mapWithKeys(fn ($e): array => [$e->tipo_envase->value => (int) $e->cantidad])->all();
+        }
+
+        return [$lote->envase_primario->value => $lote->cantidad_envases_primarios,
+            $lote->envase_secundario?->value ?? '' => $lote->cantidad_envases_secundarios];
+    }
+
+    private function sumarReparto(array $reparto, array &$ocupados, array $cantidades): bool
+    {
+        $completo = true;
+        $tieneFruta = false;
+        foreach ($reparto as $fila) {
+            $tipo = $fila['tipo_envase'];
+            $cantidad = (int) ($cantidades[$tipo] ?? 0);
+            $tieneFruta = $tieneFruta || $cantidad > 0;
+            $ocupados[$tipo] = ($ocupados[$tipo] ?? 0) + $cantidad;
+            if ($ocupados[$tipo] > $fila['cantidad'] || $fila['cantidad'] < 1) {
+                throw ValidationException::withMessages(['envases' => 'Los envases lotizados superan los validados para el reparto.']);
+            }
+            $completo = $completo && $ocupados[$tipo] === $fila['cantidad'];
+        }
+        if (! $tieneFruta) {
+            throw ValidationException::withMessages(['envases' => 'El segmento necesita al menos un envase de reparto.']);
+        }
+
+        return $completo;
+    }
+
+    /** Distribuye el destare usando la proporción congelada y respeta lotes ya entregados. */
     public function conciliarDestare(RecepcionRomana $recepcion, User $usuario): void
     {
-        if ($recepcion->peso_neto === null || ! $recepcion->tipo_envase_calculo_neto
-            || ! $recepcion->cantidad_envase_calculo_neto) {
+        if ($recepcion->peso_neto === null || ! $recepcion->tipo_envase_calculo_neto) {
             throw new ConflictoOperacion('Romana aún no dispone del neto para conciliar los lotes.');
         }
         $recepcion->load('detallesEnvases');
-        $tipo = $recepcion->tipo_envase_calculo_neto;
-        $total = (int) $recepcion->cantidad_envase_calculo_neto;
+        $reparto = app(ServicioRepartoEnvases::class)->snapshot($recepcion);
         $neto = (int) round((float) $recepcion->peso_neto * 1000);
-        $unitario = (int) round((float) $recepcion->peso_neto_por_envase * 1000);
-        $lotes = LoteMateriaPrima::query()
-            ->where('recepcion_romana_id', $recepcion->id)
-            ->where('estado', '!=', EstadoLoteMateriaPrima::Anulado->value)
-            ->with('envasesDetalle')
-            ->orderBy('secuencia_creacion')->orderBy('created_at')->orderBy('id')
-            ->lockForUpdate()->get();
-        $ocupados = 0;
+        $lotes = LoteMateriaPrima::query()->where('recepcion_romana_id', $recepcion->id)
+            ->where('estado', '!=', EstadoLoteMateriaPrima::Anulado->value)->with('envasesDetalle')
+            ->orderBy('secuencia_creacion')->orderBy('created_at')->orderBy('id')->lockForUpdate()->get();
+        $ocupados = [];
         $asignados = 0;
         foreach ($lotes as $lote) {
-            $cantidad = (int) ($lote->envasesDetalle
-                ->first(fn ($envase): bool => $envase->tipo_envase->value === $tipo)?->cantidad ?? 0);
-            if ($cantidad < 1 || $ocupados + $cantidad > $total) {
-                throw ValidationException::withMessages(['envases' => 'Los contenedores lotizados no coinciden con el destare de Romana.']);
-            }
-            $ocupados += $cantidad;
+            $cantidades = $this->cantidadesLote($lote);
+            $completo = $this->sumarReparto($reparto, $ocupados, $cantidades);
             if ($lote->estado !== EstadoLoteMateriaPrima::Borrador) {
                 $asignados += (int) round((float) $lote->kilos_netos_calculados * 1000);
 
                 continue;
             }
-            $kilos = $ocupados === $total ? $neto - $asignados : $unitario * $cantidad;
+            $kilos = $completo ? $neto - $asignados
+                : app(ServicioRepartoEnvases::class)->miligramos($reparto, $cantidades, (float) $recepcion->peso_neto);
             if ($kilos <= 0 || $asignados + $kilos > $neto) {
                 throw ValidationException::withMessages(['envases' => 'El neto de los lotes no cabe en el destare de Romana.']);
             }
-            $taras = $recepcion->detallesEnvases->keyBy(fn ($detalle): string => $detalle->tipo_envase->value);
+            $taras = $recepcion->detallesEnvases->keyBy(fn ($d): string => $d->tipo_envase->value);
             $taraTotal = 0;
             foreach ($lote->envasesDetalle as $envase) {
                 $tara = $taras->get($envase->tipo_envase->value)?->tara_unitaria_salida;
                 $envase->update(['tara_unitaria' => $tara]);
                 $taraTotal += (int) round((float) $tara * 1000) * $envase->cantidad;
             }
-            $lote->update([
-                'envase_primario' => $tipo,
-                'cantidad_envases_primarios' => $cantidad,
-                'kilos_netos_calculados' => $kilos / 1000,
-                'kilos_netos_confirmados' => $kilos / 1000,
-                'kilos_brutos' => ($kilos + $taraTotal) / 1000,
-                'version' => $lote->version + 1,
-                'actualizado_por_user_id' => $usuario->id,
-            ]);
-            $this->registrarEvento($lote, 'destare_conciliado', $usuario, null,
-                EstadoLoteMateriaPrima::Borrador, EstadoLoteMateriaPrima::Borrador,
-                ['kilos_netos_calculados' => $kilos / 1000, 'version' => $lote->version]);
+            $lote->update(['kilos_netos_calculados' => $kilos / 1000, 'kilos_netos_confirmados' => $kilos / 1000,
+                'kilos_brutos' => ($kilos + $taraTotal) / 1000, 'version' => $lote->version + 1, 'actualizado_por_user_id' => $usuario->id]);
+            $this->registrarEvento($lote, 'destare_conciliado', $usuario, null, EstadoLoteMateriaPrima::Borrador,
+                EstadoLoteMateriaPrima::Borrador, ['kilos_netos_calculados' => $kilos / 1000, 'version' => $lote->version]);
             $asignados += $kilos;
         }
     }

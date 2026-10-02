@@ -1,3 +1,4 @@
+import { loadContainerCatalog, containerLabel } from './office-container-catalog.js';
 const byId = (id) => document.getElementById(id);
 const elements = {
     access: byId('officeAccess'),
@@ -32,7 +33,7 @@ const keys = {
     token: 'estiba_wms_office_token',
     identity: 'estiba_wms_office_identity',
 };
-const types = ['bins', 'totes', 'esponjas'];
+let types = [];
 const state = {
     token: localStorage.getItem(keys.token),
     identity: read(keys.identity),
@@ -59,6 +60,7 @@ function escapeHtml(value) {
 }
 
 function label(value) {
+    if (containerLabel(value)) return containerLabel(value);
     return String(value || '')
         .replaceAll('_', ' ')
         .replace(/^./, (character) => character.toUpperCase());
@@ -263,7 +265,8 @@ function renderGuides(guides) {
 }
 
 async function loadCatalogs() {
-    state.catalog = await api('/api/envases/guias-despacho/catalogos');
+    const [catalog, containers] = await Promise.all([api('/api/envases/guias-despacho/catalogos'), loadContainerCatalog(api)]);
+    state.catalog = catalog; types = containers.map((t) => t.codigo);
     const selected = elements.form.elements.cliente_id.value;
     elements.form.elements.cliente_id.innerHTML = '<option value="">Seleccionar cliente</option>'
         + state.catalog.clientes.map((client) => `<option value="${client.id}">${escapeHtml(client.codigo)} · ${escapeHtml(client.nombre)}</option>`).join('');

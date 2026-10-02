@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\TipoEnvaseRomana;
 use App\Exceptions\ConflictoOperacion;
 use App\Http\Controllers\Controller;
 use App\Models\DefectoRecepcionMp;
@@ -59,7 +60,7 @@ class DefectoRecepcionMpController extends Controller
         $datos = $request->validate([
             'operacion_id' => ['required', 'uuid'],
             'categoria' => ['required', Rule::in(self::CATEGORIAS)],
-            'tipo_envase' => ['nullable', Rule::in(['bins', 'totes', 'esponjas'])],
+            'tipo_envase' => ['nullable', Rule::enum(TipoEnvaseRomana::class)],
             'cantidad_afectada' => ['nullable', 'integer', 'min:1', 'max:100000'],
             'descripcion' => ['required', 'string', 'max:2000'],
             'fotografias' => ['required', 'array', 'min:1', 'max:3'],

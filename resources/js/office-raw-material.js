@@ -1,3 +1,4 @@
+import { loadContainerCatalog, containerLabel } from './office-container-catalog.js';
 import { createOperationalPoller } from './shared/operational-poller';
 
 const byId = (id) => document.getElementById(id);
@@ -99,6 +100,7 @@ function operationUuid() {
 }
 
 function label(value) {
+    if (containerLabel(value)) return containerLabel(value);
     const labels = {
         digitador_materia_prima: 'Digitador de materia prima',
         supervisor_frio: 'Supervisor de frío',
@@ -118,9 +120,6 @@ function label(value) {
         comercial: 'Comercial',
         precalibre: 'Precalibre',
         descarte: 'Descarte',
-        bins: 'Bins',
-        totes: 'Totes',
-        esponjas: 'Esponjas',
     };
 
     return labels[value] || String(value || '')
@@ -234,6 +233,7 @@ async function api(path, options = {}) {
 }
 
 async function loadCatalogs(force = false) {
+    await loadContainerCatalog(api);
     const headers = new Headers({ Accept: 'application/json' });
     if (state.token) headers.set('Authorization', `Bearer ${state.token}`);
     if (state.catalogEtag && !force) headers.set('If-None-Match', state.catalogEtag);
@@ -327,7 +327,8 @@ function renderSegments() {
         ? `<div class="raw-material-empty" role="alert">Catálogos no disponibles: ${escapeHtml(state.panelErrors.catalogs)}</div>`
         : '';
     elements.segmentList.innerHTML = catalogWarning + state.segments.map((segment) => {
-        const base = segment.envases.find((item) => item.tipo_envase === segment.recepcion.tipo_envase_calculo_neto);
+        const types = segment.destare_pendiente ? state.catalogs?.envases_primarios || [] : segment.recepcion.reparto_neto_envases.map((r) => r.tipo_envase);
+        const base = segment.envases.find((item) => types.includes(item.tipo_envase) && item.cantidad_disponible > 0);
         const canCreate = canManage && Boolean(state.catalogs) && !state.panelErrors.catalogs
             && segment.estado === 'pendiente_lote'
             && Number(base?.cantidad_disponible || 0) > 0
@@ -351,7 +352,7 @@ function renderSegments() {
                 </div>
                 <div class="segment-card__net">
                     <div><span>NETO ESTIMADO SEGMENTO</span><strong>${escapeHtml(segment.destare_pendiente ? 'Pendiente de destare' : segment.error_neto || formatWeight(segment.neto_estimado))}</strong></div>
-                    <div><span>NETO / ${escapeHtml(label(segment.recepcion.tipo_envase_calculo_neto))}</span><strong>${escapeHtml(segment.destare_pendiente ? 'Pendiente de destare' : formatWeight(segment.recepcion.peso_neto_por_envase))}</strong></div>
+                    <div><span>NETO / ${escapeHtml((segment.recepcion.reparto_neto_envases || []).map((r) => label(r.tipo_envase)).join(' / '))}</span><strong>${escapeHtml(segment.destare_pendiente ? 'Pendiente de destare' : (segment.recepcion.reparto_neto_envases || []).map((r) => `${label(r.tipo_envase)}: ${formatWeight(r.peso_neto_unitario)}`).join(' · '))}</strong></div>
                 </div>
                 <div class="segment-card__actions">
                     <button class="primary-button" data-create-segment="${escapeHtml(segment.id)}" type="button" ${canCreate ? '' : 'disabled'}>+ Crear lote</button>
@@ -437,7 +438,7 @@ function renderSourceSummary(segment) {
         <div><span>RECEPCIÓN</span><strong>${escapeHtml(segment.recepcion.numero_recepcion)}</strong></div>
         <div><span>EXPORTADORA / CLIENTE</span><strong>${escapeHtml(segment.recepcion.cliente.nombre)}</strong></div>
         <div><span>ENVASES DISPONIBLES</span><strong>${escapeHtml(available || 'Sin envases')}</strong></div>
-        <div><span>NETO UNITARIO ROMANA</span><strong>${escapeHtml(segment.destare_pendiente ? 'Pendiente de destare' : formatWeight(segment.recepcion.peso_neto_por_envase))}</strong></div>`;
+        <div><span>NETO UNITARIO ROMANA</span><strong>${escapeHtml(segment.destare_pendiente ? 'Pendiente de destare' : (segment.recepcion.reparto_neto_envases || []).map((r) => `${label(r.tipo_envase)}: ${formatWeight(r.peso_neto_unitario)}`).join(' · '))}</strong></div>`;
 }
 
 function updateCalculatedNet() {

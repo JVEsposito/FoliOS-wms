@@ -37,6 +37,8 @@ class CerrarRecepcionRomanaRequest extends FormRequest
                 'decimal:0,2',
             ],
             'tipo_envase_calculo_neto' => ['nullable', Rule::enum(TipoEnvaseRomana::class)],
+            'envases_reparto' => ['nullable', 'array', 'min:1', 'max:'.count(TipoEnvaseRomana::cases())],
+            'envases_reparto.*' => ['required', 'distinct', Rule::enum(TipoEnvaseRomana::class)],
             'modo_salida_envases' => [
                 Rule::requiredIf($requiereDestare),
                 Rule::in(['mismos', 'diferentes', 'vacio']),
@@ -45,7 +47,7 @@ class CerrarRecepcionRomanaRequest extends FormRequest
                 Rule::requiredIf($requiereDestare && $this->input('modo_salida_envases') !== 'vacio'),
                 'nullable', 'string', 'max:80',
             ],
-            'salida_envases' => ['nullable', 'array', 'max:3'],
+            'salida_envases' => ['nullable', 'array', 'max:'.count(TipoEnvaseRomana::cases())],
             'salida_envases.*.tipo_envase' => ['required', 'distinct', Rule::enum(TipoEnvaseRomana::class)],
             'salida_envases.*.cantidad' => ['required', 'integer', 'min:0', 'max:100000'],
             'taras_envases' => [
@@ -53,7 +55,7 @@ class CerrarRecepcionRomanaRequest extends FormRequest
                 Rule::requiredIf($requiereDestare),
                 'array',
                 'min:1',
-                'max:3',
+                'max:'.count(TipoEnvaseRomana::cases()),
             ],
             'taras_envases.*.tipo_envase' => [
                 'required',

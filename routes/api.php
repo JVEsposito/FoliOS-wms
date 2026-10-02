@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\BloqueoMaterialController;
 use App\Http\Controllers\Api\CamaraController;
 use App\Http\Controllers\Api\CambioPasswordUsuarioController;
 use App\Http\Controllers\Api\CargaController;
+use App\Http\Controllers\Api\CatalogoEnvaseController;
 use App\Http\Controllers\Api\CatalogoJerarquicoValidacionController;
 use App\Http\Controllers\Api\CatalogoMaterialController;
 use App\Http\Controllers\Api\CatalogoValidacionController;
@@ -80,6 +81,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/usuario/pin', [PinOperacionalController::class, 'show']);
     Route::put('/usuario/pin', [PinOperacionalController::class, 'update'])->middleware('throttle:6,1');
     Route::get('/oficina/contexto', ContextoOficinaController::class);
+    Route::get('/envases/catalogo', [CatalogoEnvaseController::class, 'catalogo']);
+    Route::get('/administracion/reparto-envases', [CatalogoEnvaseController::class, 'referencias']);
+    Route::put('/administracion/reparto-envases/{especieValidacion}', [CatalogoEnvaseController::class, 'guardar']);
     Route::get('/user', fn (Request $request) => $request->user());
     Route::get('/demo/autorizar', [AccesoOficinaController::class, 'autorizarDemo']);
     Route::get('/gerencia/resumen', PanelGerencialController::class)

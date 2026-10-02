@@ -1,5 +1,5 @@
 export type ReceptionDefectCategory = 'envase_danado' | 'envase_sucio' | 'producto_danado' | 'otro';
-export type ReceptionDefectContainer = 'bins' | 'totes' | 'esponjas';
+export type ReceptionDefectContainer = import('../services/containerCatalog').ContainerCode;
 
 export type ReceptionDefectPhoto = {
   uri: string;

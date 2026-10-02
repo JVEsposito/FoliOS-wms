@@ -696,17 +696,12 @@ class ServicioRecepcionRomana
                 throw new ConflictoOperacion('El peso neto de fruta debe ser mayor que cero.');
             }
 
-            $tipoCalculo = $payload['tipo_envase_calculo_neto']
-                ?? $recepcion->tipo_envase_declarado?->value
-                ?? $recepcion->detallesEnvases->first()?->tipo_envase?->value;
-            $detalleCalculo = $recepcion->detallesEnvases
-                ->first(fn ($detalle): bool => $detalle->tipo_envase->value === $tipoCalculo);
-            if (! $detalleCalculo || $detalleCalculo->cantidad_validada < 1) {
-                throw new ConflictoOperacion('Selecciona un envase contenedor validado para calcular el neto individual.');
-            }
-
+            $reparto = app(ServicioRepartoEnvases::class)->preparar($recepcion, $pesoNeto,
+                $payload['envases_reparto'] ?? ($payload['tipo_envase_calculo_neto'] ? [$payload['tipo_envase_calculo_neto']] : null));
+            $tipoCalculo = $reparto[0]['tipo_envase'];
+            $detalleCalculo = $recepcion->detallesEnvases->first(fn ($d): bool => $d->tipo_envase->value === $tipoCalculo);
             $ahora = CarbonImmutable::now();
-            $pesoNetoPorEnvase = round($pesoNeto / $detalleCalculo->cantidad_validada, 3);
+            $pesoNetoPorEnvase = round($reparto[0]['peso_neto_unitario'], 3);
             $recepcion->update([
                 'peso_tara' => $tara,
                 'peso_neto' => $pesoNeto,
@@ -716,6 +711,7 @@ class ServicioRecepcionRomana
                 'peso_tara_envases' => $pesoTaraEnvases,
                 'tipo_envase_calculo_neto' => $tipoCalculo,
                 'cantidad_envase_calculo_neto' => $detalleCalculo->cantidad_validada,
+                'reparto_neto_envases' => $reparto,
                 'peso_neto_por_envase' => $pesoNetoPorEnvase,
                 'estado' => EstadoRecepcionRomana::Cerrado,
                 'salida_at' => $ahora,
@@ -803,6 +799,9 @@ class ServicioRecepcionRomana
             }
             if ($recepcion->lotesMateriaPrima()->exists()) {
                 throw new ConflictoOperacion('El lote ya fue creado. La corrección de pesos y saldos requiere conciliación supervisada.');
+            }
+            if ($payload['envases_reparto'] !== null && $payload['envases_reparto'] !== collect(app(ServicioRepartoEnvases::class)->tipos($recepcion))->sort()->values()->all()) {
+                throw new ConflictoOperacion('La corrección de salida conserva los envases de reparto del destare.');
             }
             if (round((float) $recepcion->peso_tara, 2) !== $payload['peso_tara']
                 || ($payload['tipo_envase_calculo_neto'] !== null
@@ -906,7 +905,11 @@ class ServicioRecepcionRomana
                 'numero_guia_salida' => $payload['numero_guia_salida'],
                 'peso_tara_envases' => $resultado['peso_tara_envases'],
                 'peso_neto' => $nuevoNeto,
-                'peso_neto_por_envase' => round($nuevoNeto / $recepcion->cantidad_envase_calculo_neto, 3),
+                'peso_neto_por_envase' => $recepcion->reparto_neto_envases
+                    ? round($recepcion->reparto_neto_envases[0]['peso_neto_unitario'] * $nuevoNeto / $netoAnterior, 3)
+                    : round($nuevoNeto / $recepcion->cantidad_envase_calculo_neto, 3),
+                'reparto_neto_envases' => $recepcion->reparto_neto_envases ? array_map(fn ($fila): array => [...$fila,
+                    'peso_neto_unitario' => $fila['peso_neto_unitario'] * $nuevoNeto / $netoAnterior], $recepcion->reparto_neto_envases) : null,
                 'version' => $recepcion->version + 1,
             ]);
             $this->registrarEvento(
@@ -935,6 +938,7 @@ class ServicioRecepcionRomana
             'accion' => 'cerrar',
             'recepcion_id' => $recepcion->id,
             'peso_tara' => round((float) $datos['peso_tara'], 2),
+            'envases_reparto' => isset($datos['envases_reparto']) ? collect($datos['envases_reparto'])->sort()->values()->all() : null,
             'tipo_envase_calculo_neto' => $datos['tipo_envase_calculo_neto'] ?? null,
             'modo_salida_envases' => $datos['modo_salida_envases'],
             'numero_guia_salida' => $datos['numero_guia_salida'] ?? null,
@@ -1234,6 +1238,35 @@ class ServicioRecepcionRomana
             throw new ConflictoOperacion(
                 'El peso bruto corregido debe ser mayor que la tara registrada.',
             );
+        }
+
+        if ($recepcion->reparto_neto_envases) {
+            $cantidades = collect($payload['envases'])->mapWithKeys(fn ($e): array => [$e['tipo_envase'] => (int) $e['cantidad']])->all();
+            $salidas = $recepcion->salidasEnvases->keyBy(fn ($e): string => $e->tipo_envase->value);
+            $taraEnvases = 0;
+            $tipos = array_unique([...array_keys($cantidades), ...$salidas->keys()->all()]);
+            foreach ($tipos as $tipo) {
+                $taraTipo = $recepcion->detallesEnvases->first(fn ($e): bool => $e->tipo_envase->value === $tipo)?->tara_unitaria_salida
+                    ?? $salidas->get($tipo)?->tara_unitaria;
+                if (! $taraTipo) {
+                    throw new ConflictoOperacion('Configura la tara del nuevo tipo de envase antes de recalcular esta recepción.');
+                }
+                $taraEnvases += (($cantidades[$tipo] ?? 0) - ($salidas->get($tipo)?->cantidad ?? 0)) * (float) $taraTipo;
+            }
+            $neto = round($bruto - $tara - $taraEnvases, 3);
+            if ($neto <= 0) {
+                throw new ConflictoOperacion('El peso neto de fruta debe ser mayor que cero.');
+            }
+            $seleccion = array_column($recepcion->reparto_neto_envases, 'tipo_envase');
+            if ($payload['tipo_envase_calculo_neto'] && $payload['tipo_envase_calculo_neto'] !== $seleccion[0]) {
+                throw new ConflictoOperacion('La corrección conserva los envases de reparto del destare.');
+            }
+            $referencias = array_column($recepcion->reparto_neto_envases, 'peso_referencia', 'tipo_envase');
+            $reparto = app(ServicioRepartoEnvases::class)->calcular($neto, $cantidades, $seleccion, $referencias);
+
+            return ['peso_tara' => $tara, 'peso_neto' => $neto, 'peso_tara_envases' => round($taraEnvases, 3),
+                'tipo_envase_calculo_neto' => $reparto[0]['tipo_envase'], 'cantidad_envase_calculo_neto' => $reparto[0]['cantidad'],
+                'peso_neto_por_envase' => round($reparto[0]['peso_neto_unitario'], 3), 'reparto_neto_envases' => $reparto];
         }
 
         $pesoTaraEnvases = 0.0;

@@ -164,7 +164,7 @@ class ValidacionMpController extends Controller
             && $validacionMp->recepcion->tipo_recepcion->contieneFruta();
         $datos = $request->validate([
             'operacion_id' => ['required', 'uuid'],
-            'envases' => ['required', 'array', 'min:1', 'max:3'],
+            'envases' => ['required', 'array', 'min:1', 'max:'.count(TipoEnvaseRomana::cases())],
             'envases.*.tipo_envase' => ['required', 'distinct', Rule::enum(TipoEnvaseRomana::class)],
             'envases.*.cantidad_validada' => ['required', 'integer', 'min:0', 'max:100000'],
             'tarjas_verificadas' => ['nullable', 'boolean'],
@@ -177,7 +177,7 @@ class ValidacionMpController extends Controller
             'segmentos.*.csg_validacion_id' => ['required_with:segmentos', 'uuid'],
             'segmentos.*.cuartel' => ['nullable', 'string', 'max:100'],
             'segmentos.*.variedad_validacion_id' => ['required_with:segmentos', 'uuid'],
-            'segmentos.*.envases' => ['required_with:segmentos', 'array', 'min:1', 'max:3'],
+            'segmentos.*.envases' => ['required_with:segmentos', 'array', 'min:1', 'max:'.count(TipoEnvaseRomana::cases())],
             'segmentos.*.envases.*.tipo_envase' => ['required', Rule::enum(TipoEnvaseRomana::class)],
             'segmentos.*.envases.*.cantidad' => ['required', 'integer', 'min:0', 'max:100000'],
             'segmentos.*.observacion' => ['nullable', 'string', 'max:1000'],

@@ -26,6 +26,7 @@ use App\Models\SegmentoValidacionMp;
 use App\Models\Temporada;
 use App\Models\VariedadValidacion;
 use App\Services\MateriaPrima\ServicioLoteMateriaPrima;
+use App\Services\Romana\ServicioRepartoEnvases;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -150,11 +151,8 @@ class MateriaPrimaController extends Controller
                     ->map->only(['id', 'nombre']),
             ]),
             'tipos_producto' => array_column(TipoProductoMateriaPrima::cases(), 'value'),
-            'envases_primarios' => array_column(TipoEnvaseRomana::cases(), 'value'),
-            'envases_secundarios' => [
-                TipoEnvaseRomana::Totes->value,
-                TipoEnvaseRomana::Esponjas->value,
-            ],
+            'envases_primarios' => array_column(array_filter(TipoEnvaseRomana::cases(), fn ($tipo): bool => $tipo->contieneFruta()), 'value'),
+            'envases_secundarios' => array_column(TipoEnvaseRomana::cases(), 'value'),
             'camaras' => $camaras
                 ->map(fn (Camara $camara): array => [
                     'id' => $camara->id,
@@ -251,6 +249,7 @@ class MateriaPrimaController extends Controller
                         'peso_neto' => $recepcion->peso_neto !== null
                             ? (float) $recepcion->peso_neto : null,
                         'tipo_envase_calculo_neto' => $tipoBase,
+                        'reparto_neto_envases' => app(ServicioRepartoEnvases::class)->snapshot($recepcion),
                         'cantidad_envase_calculo_neto' => $recepcion->cantidad_envase_calculo_neto,
                         'peso_neto_por_envase' => $recepcion->peso_neto_por_envase !== null
                             ? (float) $recepcion->peso_neto_por_envase : null,
@@ -465,7 +464,7 @@ class MateriaPrimaController extends Controller
             'temporada_id' => $temporada->id,
             'version_catalogo' => $temporada->version_catalogo,
             'tipos_producto' => array_column(TipoProductoMateriaPrima::cases(), 'value'),
-            'envases_primarios' => array_column(TipoEnvaseRomana::cases(), 'value'),
+            'envases_primarios' => array_column(array_filter(TipoEnvaseRomana::cases(), fn ($tipo): bool => $tipo->contieneFruta()), 'value'),
             'camaras' => $camaras
                 ->map(fn (Camara $camara): array => [
                     'id' => $camara->id,

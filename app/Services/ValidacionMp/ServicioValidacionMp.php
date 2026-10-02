@@ -8,6 +8,7 @@ use App\Enums\EstadoRevisionMovimientoEnvase;
 use App\Enums\EstadoValidacionMp;
 use App\Enums\MotivoSegregacionMp;
 use App\Enums\PropiedadEnvase;
+use App\Enums\TipoEnvaseRomana;
 use App\Enums\TipoEventoRomana;
 use App\Enums\TipoMovimientoEnvase;
 use App\Enums\TipoRecepcionRomana;
@@ -22,6 +23,7 @@ use App\Models\SegmentoValidacionMp;
 use App\Models\User;
 use App\Models\ValidacionMp;
 use App\Models\VariedadValidacion;
+use App\Services\Romana\ServicioRepartoEnvases;
 use App\Services\Temporadas\GuardiaTemporadaActiva;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -157,15 +159,12 @@ class ServicioValidacionMp
             $segmentos = $esFruta
                 ? $this->prepararSegmentos($validacion, $recepcion, $datos, $cantidades, $requiereSegregacion)
                 : [];
-            // En fruta aún abierta, Romana conoce el envase principal aunque no haya calculado el neto.
-            $tipoContenedor = $recepcion->tipo_envase_calculo_neto
-                ?? $recepcion->tipo_envase_declarado?->value;
+            $tiposReparto = $recepcion->peso_neto !== null
+                ? app(ServicioRepartoEnvases::class)->tipos($recepcion)
+                : array_column(array_filter(TipoEnvaseRomana::catalogo(), fn ($tipo): bool => $tipo['contiene_fruta']), 'codigo');
             foreach ($segmentos as $indice => $segmento) {
-                $contenedores = collect($segmento['envases'])->firstWhere('tipo_envase', $tipoContenedor);
-                if ((int) ($contenedores['cantidad'] ?? 0) < 1) {
-                    throw ValidationException::withMessages([
-                        "segmentos.{$indice}.envases" => 'Cada segmento con fruta debe incluir al menos un envase contenedor.',
-                    ]);
+                if (! collect($segmento['envases'])->contains(fn ($e): bool => in_array($e['tipo_envase'], $tiposReparto, true) && $e['cantidad'] > 0)) {
+                    throw ValidationException::withMessages(["segmentos.{$indice}.envases" => 'Cada segmento con fruta debe incluir al menos un envase de reparto.']);
                 }
             }
 

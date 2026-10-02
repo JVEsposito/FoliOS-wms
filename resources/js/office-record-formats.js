@@ -1,3 +1,4 @@
+import './office-container-references.js';
 import { showOfficeToast } from './office-toast.js';
 
 const byId = (id) => document.getElementById(id);
