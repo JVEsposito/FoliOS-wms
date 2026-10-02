@@ -33,7 +33,7 @@ class RegistroPesajeRpr01Test extends TestCase
         $pdf = $this->pdf($recepcion, $operador);
         $textos = $this->textos($pdf);
         $this->assertSame(self::CAMPOS, array_values(array_intersect($textos, self::CAMPOS)));
-        foreach (['RPR-01', '1', '31-08-2026', 'Operador de romana', 'Transportista', 'Jefe Frigorífico', 'Ana Romana', 'María González', '30 Bins · 720 Totes · 10 Esponjas'] as $esperado) {
+        foreach (['RPR-01', '1', '31-08-2026', 'Operador de romana', 'Transportista', 'Jefe Frigorífico', 'Ana Romana', 'María González', '30 Bins plástico · 10 Esponja de bins · 720 Tote'] as $esperado) {
             $this->assertContains($esperado, $textos);
         }
         foreach (['Guía de salida', 'GS-NO-IMPRIMIR', 'Salida de envases', 'Envases de salida', 'Tipo de camión', 'Camión termo', 'Envases validados', 'tara/u'] as $prohibido) {

@@ -26,6 +26,7 @@ use App\Models\RecepcionRomana;
 use App\Models\Temporada;
 use App\Services\Romana\GeneradorAvisoReciboPdf;
 use App\Services\Romana\ServicioRecepcionRomana;
+use App\Services\Romana\ServicioRepartoEnvases;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -80,10 +81,7 @@ class RecepcionRomanaController extends Controller
                 ['codigo' => ConceptoEnvasesRomana::Compra->value, 'nombre' => 'Compra de envases propios'],
                 ['codigo' => ConceptoEnvasesRomana::Arriendo->value, 'nombre' => 'Arriendo de envases'],
             ],
-            'tipos_envase' => array_map(
-                fn (TipoEnvaseRomana $tipo): array => ['codigo' => $tipo->value, 'nombre' => ucfirst($tipo->value)],
-                TipoEnvaseRomana::cases(),
-            ),
+            'tipos_envase' => TipoEnvaseRomana::catalogo(),
         ]);
     }
 
@@ -372,6 +370,8 @@ class RecepcionRomanaController extends Controller
                 )
                 : null,
             'tipo_envase_calculo_neto' => $recepcion->tipo_envase_calculo_neto,
+            'reparto_neto_envases' => $recepcion->reparto_neto_envases,
+            'configuracion_reparto' => app(ServicioRepartoEnvases::class)->configuracion($recepcion->especie_validacion_id),
             'cantidad_envase_calculo_neto' => $recepcion->cantidad_envase_calculo_neto,
             'peso_neto_por_envase' => $recepcion->peso_neto_por_envase !== null
                 ? (float) $recepcion->peso_neto_por_envase

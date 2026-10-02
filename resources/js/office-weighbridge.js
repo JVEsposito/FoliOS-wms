@@ -1,3 +1,4 @@
+import { loadContainerCatalog, containerLabel, calculateNetAllocation } from './office-container-catalog.js';
 import { createOperationalPoller } from './shared/operational-poller';
 
 const byId = (id) => document.getElementById(id);
@@ -55,11 +56,12 @@ function formatWeight(value, fallback = '—') {
     return `${new Intl.NumberFormat('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 3 }).format(Number(value))} kg`;
 }
 function label(value) {
+    if (containerLabel(value)) return containerLabel(value);
     const labels = {
         mismos: 'Se va con los mismos', diferentes: 'Se va con más o menos', vacio: 'Se va vacío',
         en_bascula_ingreso: 'En báscula ingreso', en_pesaje_envases: 'Pesaje acumulativo', en_bascula_salida: 'Pendiente de destare', cerrado: 'Cerrado',
         ingreso_registrado: 'Ingreso registrado', ingreso_actualizado: 'Antecedentes de ingreso actualizados', correccion_administrativa: 'Corrección administrativa', ingreso_confirmado: 'Ingreso confirmado', pesaje_envases_registrado: 'Tanda de envases pesada', pesaje_envases_anulado: 'Tanda de pesaje anulada', recepcion_cerrada: 'Recepción cerrada', salida_envases_corregida: 'Salida de envases corregida',
-        almacenaje: 'Almacenaje', proceso: 'Proceso', prefrio: 'Pre-frío', bins: 'Bins', totes: 'Totes', esponjas: 'Esponjas', fruta_con_envases: 'Fruta con envases', fruta_pesaje_envases: 'Fruta con pesaje acumulativo', solo_envases: 'Solo envases', termo: 'Camión termo', plano: 'Camión plano', compra: 'Compra', arriendo: 'Arriendo', pendiente: 'Pendiente', en_curso: 'En curso', validada: 'Validada',
+        almacenaje: 'Almacenaje', proceso: 'Proceso', prefrio: 'Pre-frío', fruta_con_envases: 'Fruta con envases', fruta_pesaje_envases: 'Fruta con pesaje acumulativo', solo_envases: 'Solo envases', termo: 'Camión termo', plano: 'Camión plano', compra: 'Compra', arriendo: 'Arriendo', pendiente: 'Pendiente', en_curso: 'En curso', validada: 'Validada',
     };
     return labels[value] || String(value || '').replaceAll('_', ' ').replace(/^./, (character) => character.toUpperCase());
 }
@@ -132,6 +134,9 @@ function showApp() {
 
 function fillCatalogs() {
     const form = elements.receptionForm.elements;
+    const quantities = Object.fromEntries(state.catalogs.tipos_envase.map((t) => [t.codigo, form[`cantidad_${t.codigo}`]?.value || '0']));
+    byId('standardContainerLines').innerHTML = '<legend>Envases declarados en la guía *</legend>' + state.catalogs.tipos_envase.map((t) => `<label><span>${escapeHtml(t.nombre)}</span><input name="cantidad_${t.codigo}" type="number" min="0" max="100000" value="${quantities[t.codigo]}"></label>`).join('');
+    form.tipo_envase_pesaje.innerHTML = state.catalogs.tipos_envase.filter((t) => t.contiene_fruta).map((t) => `<option value="${t.codigo}">${escapeHtml(t.nombre)}</option>`).join('');
     const activeSeasons = state.catalogs.temporadas.filter((season) => season.activa);
     form.temporada_id.innerHTML = '<option value="">Seleccionar temporada activa</option>' + activeSeasons.map((season) => `<option value="${escapeHtml(season.id)}">${escapeHtml(season.nombre)} · ${escapeHtml(season.codigo)}</option>`).join('');
     elements.filters.elements.temporada_id.innerHTML = '<option value="">Temporada activa</option>' + state.catalogs.temporadas.map((season) => `<option value="${escapeHtml(season.id)}">${escapeHtml(season.codigo)}${season.activa ? ' (activa)' : ''}</option>`).join('');
@@ -178,7 +183,7 @@ function renderList(payload) {
         </tr>`).join('');
 }
 
-async function loadCatalogs() { state.catalogs = await api('/api/romana/catalogos'); fillCatalogs(); }
+async function loadCatalogs() { const [catalogs, containers] = await Promise.all([api('/api/romana/catalogos'), loadContainerCatalog(api)]); state.catalogs = { ...catalogs, tipos_envase: containers }; fillCatalogs(); }
 async function loadReceptions({ silent = false } = {}) {
     const payload = await api(`/api/romana/recepciones?${filterQuery()}`); renderList(payload);
     if (state.selected) {
@@ -302,7 +307,7 @@ function syncAdministrativeNetContainerOptions(preferredType = null) {
     const form = elements.receptionForm.elements;
     const select = form.tipo_envase_calculo_neto;
     const selected = preferredType || select.value || state.selected.tipo_envase_calculo_neto;
-    const available = ['bins', 'totes', 'esponjas']
+    const available = state.catalogs.tipos_envase.filter((t) => t.contiene_fruta).map((t) => t.codigo)
         .map((type) => ({ type, quantity: Number(form[`cantidad_${type}`].value || 0) }))
         .filter((item) => item.quantity > 0);
     select.innerHTML = available.map((item) => `<option value="${escapeHtml(item.type)}">${escapeHtml(label(item.type))} · ${item.quantity} declarados</option>`).join('');
@@ -335,7 +340,7 @@ function openEditReception() {
     elements.receptionDialogTitle.textContent = canCorrect ? 'Corregir recepción' : 'Editar pesaje de ingreso';
     form.recepcion_id.value = reception.id; form.temporada_id.value = reception.temporada.id; form.cliente_id.value = reception.cliente.id; form.tipo_recepcion.value = reception.tipo_recepcion; form.especie_validacion_id.value = reception.especie_validacion_id || ''; form.fecha_ingreso.value = reception.fecha_ingreso || ''; form.concepto_envases.value = reception.concepto_envases || ''; form.tipo_servicio.value = reception.tipo_servicio;
     form.numero_guia_despacho.value = reception.numero_guia_despacho;
-    ['bins', 'totes', 'esponjas'].forEach((tipo) => { const item = reception.envases.find((envase) => envase.tipo_envase === tipo); form[`cantidad_${tipo}`].value = item?.cantidad_declarada || 0; });
+    state.catalogs.tipos_envase.map((t) => t.codigo).forEach((tipo) => { const item = reception.envases.find((envase) => envase.tipo_envase === tipo); form[`cantidad_${tipo}`].value = item?.cantidad_declarada || 0; });
     if (reception.pesaje_envases) {
         form.tipo_envase_pesaje.value = reception.pesaje_envases.tipo_envase;
         form.cantidad_envases_pesaje.value = reception.pesaje_envases.cantidad_declarada;
@@ -379,8 +384,8 @@ elements.receptionForm.addEventListener('submit', async (event) => {
     const cumulativeWeighing = data.tipo_recepcion === 'fruta_pesaje_envases';
     data.envases = cumulativeWeighing
         ? [{ tipo_envase: data.tipo_envase_pesaje, cantidad: Number(data.cantidad_envases_pesaje || 0) }]
-        : ['bins', 'totes', 'esponjas'].map((tipo) => ({ tipo_envase: tipo, cantidad: Number(data[`cantidad_${tipo}`] || 0) })).filter((item) => item.cantidad > 0);
-    ['bins', 'totes', 'esponjas'].forEach((tipo) => delete data[`cantidad_${tipo}`]);
+        : state.catalogs.tipos_envase.map((t) => t.codigo).map((tipo) => ({ tipo_envase: tipo, cantidad: Number(data[`cantidad_${tipo}`] || 0) })).filter((item) => item.cantidad > 0);
+    state.catalogs.tipos_envase.map((t) => t.codigo).forEach((tipo) => delete data[`cantidad_${tipo}`]);
     delete data.cantidad_envases_pesaje;
     if (cumulativeWeighing || soloEnvases) delete data.peso_bruto;
     else {
@@ -522,13 +527,16 @@ function openTareDialog(correcting) {
     state.tareCorrection = correcting;
     elements.tareForm.reset(); elements.tareFormError.textContent = ''; elements.containerTarePreview.textContent = '—'; elements.netWeightPreview.textContent = '—'; elements.netPerContainerPreview.textContent = '—';
     const containerSelect = elements.tareForm.elements.tipo_envase_calculo_neto;
-    containerSelect.innerHTML = state.selected.envases.filter((item) => item.cantidad_validada > 0).map((item) => `<option value="${escapeHtml(item.tipo_envase)}">${escapeHtml(label(item.tipo_envase))} · ${item.cantidad_validada} validados</option>`).join('');
+    containerSelect.innerHTML = state.selected.envases.filter((item) => item.cantidad_validada > 0 && state.catalogs.tipos_envase.find((t) => t.codigo === item.tipo_envase)?.contiene_fruta).map((item) => `<option value="${escapeHtml(item.tipo_envase)}">${escapeHtml(label(item.tipo_envase))} · ${item.cantidad_validada} validados</option>`).join('');
     elements.outboundContainerTareList.innerHTML = state.selected.envases.map((item) => exitRow(item.tipo_envase, item.cantidad_validada, item.tara_unitaria_salida)).join('');
     elements.tareForm.elements.peso_tara.value = correcting ? state.selected.peso_tara : '';
     elements.tareForm.elements.peso_tara.readOnly = correcting;
     elements.tareForm.elements.tipo_envase_calculo_neto.disabled = correcting;
+    const suggested = state.selected.configuracion_reparto?.sugerido;
+    const selected = correcting ? (state.selected.reparto_neto_envases?.map((r) => r.tipo_envase) || [state.selected.tipo_envase_calculo_neto]) : [suggested || containerSelect.options[0]?.value];
+    [...containerSelect.options].forEach((option) => { option.selected = selected.includes(option.value); });
+    if (![...containerSelect.options].some((o) => o.selected) && containerSelect.options[0]) containerSelect.options[0].selected = true;
     if (correcting) {
-        elements.tareForm.elements.tipo_envase_calculo_neto.value = state.selected.tipo_envase_calculo_neto;
         elements.tareForm.elements.modo_salida_envases.value = state.selected.modo_salida_envases;
         elements.tareForm.elements.numero_guia_salida.value = state.selected.numero_guia_salida || '';
         (state.selected.salida_envases || []).forEach((item) => {
@@ -602,9 +610,16 @@ function updateNetPreviews() {
     const net = gross - tare - difference;
     elements.containerTarePreview.textContent = formatWeight(difference);
     elements.netWeightPreview.textContent = tare > 0 && net > 0 ? formatWeight(net) : '—';
-    const type = elements.tareForm.elements.tipo_envase_calculo_neto.value;
-    const quantity = Number(state.selected?.envases.find((item) => item.tipo_envase === type)?.cantidad_validada || 0);
-    elements.netPerContainerPreview.textContent = tare > 0 && net > 0 && quantity > 0 ? `${formatWeight(net / quantity)} / ${label(type)}` : '—';
+    try {
+        const selection = [...elements.tareForm.elements.tipo_envase_calculo_neto.selectedOptions].map((o) => o.value);
+        const quantities = Object.fromEntries(state.selected.envases.map((i) => [i.tipo_envase, i.cantidad_validada]));
+        const references = state.tareCorrection && state.selected.reparto_neto_envases
+            ? Object.fromEntries(state.selected.reparto_neto_envases.map((r) => [r.tipo_envase, r.peso_referencia]))
+            : state.selected.configuracion_reparto?.referencias || {};
+        const rows = calculateNetAllocation(net, quantities, selection, references);
+        elements.netPerContainerPreview.textContent = tare > 0 && net > 0 ? rows.map((r) => `${formatWeight(r.neto_unitario)} / ${label(r.codigo)}`).join(' · ') + (rows.length > 1 ? '. Reparto proporcional a referencias; el neto total proviene de la báscula.' : '') : '—';
+    } catch (error) { elements.netPerContainerPreview.textContent = error.message; }
+
 }
 elements.tareForm.elements.peso_tara.addEventListener('input', updateNetPreviews);
 elements.tareForm.elements.tipo_envase_calculo_neto.addEventListener('change', updateNetPreviews);
@@ -625,6 +640,8 @@ elements.tareForm.addEventListener('submit', async (event) => {
     event.preventDefault(); if (!state.selected) return; elements.tareFormError.textContent = '';
     const data = Object.fromEntries(new FormData(elements.tareForm));
     data.operacion_id = operationUuid();
+    data.envases_reparto = [...elements.tareForm.elements.tipo_envase_calculo_neto.selectedOptions].map((o) => o.value);
+    delete data.tipo_envase_calculo_neto;
     data.salida_envases = data.modo_salida_envases === 'diferentes' ? exitTypes().map((row) => ({
         tipo_envase: row.dataset.exitRow, cantidad: Number(row.querySelector('[data-exit-quantity]').value),
     })) : [];
@@ -717,7 +734,7 @@ function toggleReceptionType() {
     }
 }
 elements.receptionForm.elements.tipo_recepcion.addEventListener('change', toggleReceptionType);
-['bins', 'totes', 'esponjas'].forEach((type) => elements.receptionForm.elements[`cantidad_${type}`].addEventListener('input', () => syncAdministrativeNetContainerOptions()));
+byId('standardContainerLines').addEventListener('input', () => syncAdministrativeNetContainerOptions());
 ['patente_camion', 'patente_carro'].forEach((name) => elements.receptionForm.elements[name].addEventListener('input', (event) => { event.target.value = event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''); }));
 elements.logout.addEventListener('click', async () => { try { await api('/api/acceso-oficina', { method: 'DELETE' }); } finally { clearSession(); } });
 

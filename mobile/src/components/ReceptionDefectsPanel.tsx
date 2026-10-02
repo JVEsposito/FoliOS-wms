@@ -1,3 +1,4 @@
+import { ContainerOption, containerLabel, getContainerCatalog } from '../services/containerCatalog';
 import * as Crypto from 'expo-crypto';
 import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useState } from 'react';
@@ -15,7 +16,7 @@ const categories: Array<{ value: ReceptionDefectCategory; label: string }> = [
   { value: 'producto_danado', label: 'Producto dañado' },
   { value: 'otro', label: 'Otro defecto' },
 ];
-const containers: ReceptionDefectContainer[] = ['bins', 'totes', 'esponjas'];
+
 const maximumPhotoBytes = 5 * 1024 * 1024;
 
 function blankDraft(): ReceptionDefectDraft {
@@ -35,6 +36,7 @@ function asPhoto(asset: ImagePicker.ImagePickerAsset): ReceptionDefectPhoto {
 }
 
 export function ReceptionDefectsPanel({ baseUrl, token, receptionId, guideNumber }: Props) {
+  const [containers, setContainers] = useState<ContainerOption[]>([]);
   const [records, setRecords] = useState<ReceptionDefect[]>([]);
   const [draft, setDraft] = useState<ReceptionDefectDraft>(blankDraft);
   const [showForm, setShowForm] = useState(false);
@@ -45,6 +47,7 @@ export function ReceptionDefectsPanel({ baseUrl, token, receptionId, guideNumber
 
   useEffect(() => {
     let active = true;
+    void getContainerCatalog(baseUrl, token).then((items) => { if (active) setContainers(items); }).catch((reason) => { if (active) setError(message(reason)); });
     void listReceptionDefects(baseUrl, token, receptionId)
       .then((items) => { if (active) setRecords(items); })
       .catch((reason) => { if (active) setError(message(reason)); })
@@ -109,7 +112,7 @@ export function ReceptionDefectsPanel({ baseUrl, token, receptionId, guideNumber
     </View>
     {loading ? <ActivityIndicator color={colors.cyan}/> : null}
     {records.map((item) => <View key={item.id} style={styles.record}>
-      <Text style={styles.recordTitle}>{categories.find((category) => category.value === item.categoria)?.label ?? item.categoria}{item.tipo_envase ? ` · ${item.tipo_envase}` : ''}</Text>
+      <Text style={styles.recordTitle}>{categories.find((category) => category.value === item.categoria)?.label ?? item.categoria}{item.tipo_envase ? ` · ${containerLabel(item.tipo_envase) ?? item.tipo_envase}` : ''}</Text>
       <Text style={styles.body}>{item.descripcion}</Text>
       <Text style={styles.muted}>{item.cantidad_afectada ? `${item.cantidad_afectada} afectados · ` : ''}{item.evidencias.filter((photo) => photo.tipo === 'defecto').length} foto(s) · {new Date(item.registrado_at).toLocaleString('es-CL')}</Text>
     </View>)}
@@ -119,7 +122,7 @@ export function ReceptionDefectsPanel({ baseUrl, token, receptionId, guideNumber
       <Text style={styles.muted}>Categoría *</Text>
       <View style={styles.options}>{categories.map((category) => <Choice key={category.value} label={category.label} selected={draft.categoria === category.value} onPress={() => change({ categoria: category.value })} disabled={sending || uncertain}/>)}</View>
       <Text style={styles.muted}>Tipo de envase (si corresponde)</Text>
-      <View style={styles.options}><Choice label="No aplica" selected={!draft.tipoEnvase} onPress={() => change({ tipoEnvase: null })} disabled={sending || uncertain}/>{containers.map((container) => <Choice key={container} label={container} selected={draft.tipoEnvase === container} onPress={() => change({ tipoEnvase: container })} disabled={sending || uncertain}/>)}</View>
+      <View style={styles.options}><Choice label="No aplica" selected={!draft.tipoEnvase} onPress={() => change({ tipoEnvase: null })} disabled={sending || uncertain}/>{containers.map((container) => <Choice key={container.codigo} label={container.nombre} selected={draft.tipoEnvase === container.codigo} onPress={() => change({ tipoEnvase: container.codigo })} disabled={sending || uncertain}/>)}</View>
       <Text style={styles.muted}>Cantidad afectada (opcional)</Text>
       <TextInput editable={!sending && !uncertain} keyboardType="number-pad" onChangeText={(value) => change({ cantidadAfectada: value.replace(/\D/g, '') })} placeholder="Ej. 2" placeholderTextColor={colors.muted} style={styles.input} value={draft.cantidadAfectada}/>
       <Text style={styles.muted}>Descripción del defecto *</Text>

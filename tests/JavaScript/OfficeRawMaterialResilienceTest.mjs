@@ -4,7 +4,7 @@ import test from 'node:test';
 import vm from 'node:vm';
 
 const source = readFileSync(new URL('../../resources/js/office-raw-material.js', import.meta.url), 'utf8')
-    .replace(/^import .*;\n/, '')
+    .replace(/^import .*;\n/gm, '')
     .replace(/void boot\(\);\s*$/, '');
 
 function fixture(responses) {
@@ -24,6 +24,7 @@ function fixture(responses) {
         document: { getElementById: node, createElement: () => ({ remove() {} }) },
         localStorage: { getItem: () => null },
         Headers, URLSearchParams, Intl,
+        loadContainerCatalog: async () => [], containerLabel: () => undefined,
         FormData: class { [Symbol.iterator]() { return [][Symbol.iterator](); } },
         window: { setTimeout() {} },
         fetch: async (path, options) => {

@@ -54,7 +54,7 @@ class CrearRecepcionRomanaRequest extends FormRequest
                 Rule::requiredIf($this->input('tipo_recepcion') !== TipoRecepcionRomana::SoloEnvases->value),
                 Rule::enum(TipoServicioRomana::class),
             ],
-            'envases' => ['required', 'array', 'min:1', 'max:3'],
+            'envases' => ['required', 'array', 'min:1', 'max:'.count(TipoEnvaseRomana::cases())],
             'envases.*.tipo_envase' => ['required', 'distinct', Rule::enum(TipoEnvaseRomana::class)],
             'envases.*.cantidad' => ['required', 'integer', 'min:1', 'max:100000'],
             'tipo_envase_pesaje' => [

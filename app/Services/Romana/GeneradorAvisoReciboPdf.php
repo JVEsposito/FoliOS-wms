@@ -25,8 +25,8 @@ class GeneradorAvisoReciboPdf
         $cerrada = $recepcion->estado === EstadoRecepcionRomana::Cerrado;
         // La salida de envases pertenece a otro documento: RPR-01 declara el ingreso.
         $envases = $recepcion->detallesEnvases
-            ->sortBy(fn ($detalle): int => array_search($detalle->tipo_envase->value, ['bins', 'totes', 'esponjas']))
-            ->map(fn ($detalle): string => $detalle->cantidad_declarada.' '.ucfirst($detalle->tipo_envase->value))
+            ->sortBy(fn ($detalle): int => $detalle->tipo_envase->orden())
+            ->map(fn ($detalle): string => $detalle->cantidad_declarada.' '.$detalle->tipo_envase->etiqueta())
             ->implode(' · ');
         $valores = [
             $recepcion->numero_recepcion,

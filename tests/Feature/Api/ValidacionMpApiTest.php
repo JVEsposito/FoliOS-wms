@@ -83,7 +83,7 @@ class ValidacionMpApiTest extends TestCase
         $operador = User::factory()->create(['rol' => RolUsuario::OperadorRomana]);
         $validador = User::factory()->create(['rol' => RolUsuario::ValidadorMp]);
         $recepcion = $this->actingAs($operador, 'sanctum')
-            ->postJson('/api/romana/recepciones', $this->recepcion($temporada, $cliente))
+            ->postJson('/api/romana/recepciones', [...$this->recepcion($temporada, $cliente), 'envases' => [['tipo_envase' => 'bins', 'cantidad' => 48], ['tipo_envase' => 'esponjas', 'cantidad' => 10]]])
             ->assertCreated()->json('data');
         $csg = CsgValidacion::create(['temporada_id' => $temporada->id, 'codigo' => 'CSG-CONTENEDOR', 'activo' => true]);
         $variedad = VariedadValidacion::create(['especie_validacion_id' => $recepcion['especie_validacion_id'], 'nombre' => 'Santina', 'activo' => true]);
@@ -93,13 +93,13 @@ class ValidacionMpApiTest extends TestCase
             ])->assertOk()->json('data');
         $this->postJson("/api/validacion-mp/validaciones/{$validacion['id']}/confirmar", [
             'operacion_id' => (string) Str::uuid(),
-            'envases' => [['tipo_envase' => 'bins', 'cantidad_validada' => 48], ['tipo_envase' => 'totes', 'cantidad_validada' => 10]],
+            'envases' => [['tipo_envase' => 'bins', 'cantidad_validada' => 48], ['tipo_envase' => 'esponjas', 'cantidad_validada' => 10]],
             'tarjas_verificadas' => true, 'requiere_segregacion' => true,
             'segmentos' => [
                 ['motivos' => ['cuartel'], 'cuartel' => 'A', 'csg_validacion_id' => $csg->id, 'variedad_validacion_id' => $variedad->id,
-                    'envases' => [['tipo_envase' => 'bins', 'cantidad' => 48], ['tipo_envase' => 'totes', 'cantidad' => 0]]],
+                    'envases' => [['tipo_envase' => 'bins', 'cantidad' => 48], ['tipo_envase' => 'esponjas', 'cantidad' => 0]]],
                 ['motivos' => ['cuartel'], 'cuartel' => 'B', 'csg_validacion_id' => $csg->id, 'variedad_validacion_id' => $variedad->id,
-                    'envases' => [['tipo_envase' => 'bins', 'cantidad' => 0], ['tipo_envase' => 'totes', 'cantidad' => 10]]],
+                    'envases' => [['tipo_envase' => 'bins', 'cantidad' => 0], ['tipo_envase' => 'esponjas', 'cantidad' => 10]]],
             ],
         ])->assertUnprocessable()->assertJsonValidationErrors('segmentos.1.envases');
         $this->assertDatabaseCount('segmentos_validacion_mp', 0);

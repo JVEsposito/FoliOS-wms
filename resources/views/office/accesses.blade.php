@@ -105,6 +105,13 @@
                         <div class="admin-form__actions"><button class="secondary-button is-hidden" id="cancelRecordFormatEdit" type="button">Nuevo formato</button><button class="primary-button" type="submit">Guardar formato</button></div>
                     </form>
                     <div class="admin-table-scroll"><table class="admin-table"><thead><tr><th>Formato</th><th>Versión y vigencia</th><th>Estado</th><th>Última modificación</th><th>Acciones</th></tr></thead><tbody id="recordFormatsTableBody"></tbody></table></div>
+                    <form class="admin-form" id="containerReferencesForm" hidden>
+                        <h3>Reparto del neto por especie</h3><p>Las referencias definen la proporción entre envases con fruta; el neto total siempre viene de la báscula.</p>
+                        <label class="field"><span>Especie</span><select name="especie_id"></select></label>
+                        <label class="field"><span>Envase sugerido para el reparto</span><select name="sugerido"></select></label>
+                        <div class="admin-form__grid" id="containerReferenceRows"></div>
+                        <p class="form-error" id="containerReferenceError" role="status"></p><button class="primary-button" type="submit">Guardar referencias</button>
+                    </form>
                     <div class="is-hidden" id="recordFormatHistory"><h3 id="recordFormatHistoryTitle">Historial del formato</h3><div class="admin-table-scroll"><table class="admin-table"><thead><tr><th>Fecha y usuario</th><th>Anterior</th><th>Nuevo</th></tr></thead><tbody id="recordFormatHistoryBody"></tbody></table></div><button class="secondary-button" id="recordFormatHistoryMore" type="button">Ver más cambios</button></div>
                 </section>
 

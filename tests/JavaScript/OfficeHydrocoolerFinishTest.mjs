@@ -4,7 +4,7 @@ import test from 'node:test';
 import vm from 'node:vm';
 
 const source = readFileSync(new URL('../../resources/js/office-hydrocooler.js', import.meta.url), 'utf8')
-    .replace(/^import .*;\n/, '')
+    .replace(/^import .*;\n/gm, '')
     .replace(/void boot\(\);\s*$/, '');
 
 function fixture(primario) {
@@ -34,7 +34,7 @@ function fixture(primario) {
         document: { getElementById: node, querySelectorAll: () => [] },
         localStorage: { getItem: () => null },
         crypto: { randomUUID: () => 'operation-id' },
-        window: {},
+        window: {}, containerLabel: () => undefined, loadContainerCatalog: async () => [],
     });
     vm.runInContext(source, context);
     vm.runInContext(`state.lots = [${JSON.stringify({
