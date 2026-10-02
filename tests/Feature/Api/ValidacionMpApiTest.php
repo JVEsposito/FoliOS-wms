@@ -611,7 +611,7 @@ class ValidacionMpApiTest extends TestCase
                     'tipo_movimiento' => 'salida_recepcion_fruta', 'signo_cuenta' => -1, 'signo_existencia' => -1,
                 ]);
                 $pdf = $this->get("/api/romana/recepciones/{$recepcion['id']}/aviso-recibo")->getContent();
-                $this->assertStringContainsString('(GS-'.($indice + 1).')', (string) $pdf);
+                $this->assertStringNotContainsString('(GS-'.($indice + 1).')', (string) $pdf);
             }
         }
     }

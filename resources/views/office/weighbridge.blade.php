@@ -17,7 +17,7 @@
                 <p class="eyebrow">FoliOS · ROMANA</p>
                 <h1 id="officeAccessTitle">Registra exactamente lo que ingresó al frigorífico.</h1>
                 <p>El pesaje inicial es el contrato operacional con el cliente: guía, transporte, envases y kilos quedan trazados desde el primer minuto.</p>
-                <div class="feature-row"><span>Pesaje en dos tiempos</span><span>Correlativo inviolable</span><span>Aviso de Recibo PDF</span></div>
+                <div class="feature-row"><span>Pesaje en dos tiempos</span><span>Correlativo inviolable</span><span>Registro de pesaje RPR-01</span></div>
             </div>
             <form class="office-access__form" id="officeLoginForm" novalidate>
                 <div><p class="eyebrow">ACCESO DE OFICINA</p><h2>Ingresar a Romana</h2><p>Disponible para operador de romana, supervisión, administración y consulta.</p></div>
@@ -81,7 +81,7 @@
                             <button class="primary-button is-hidden" id="addContainerWeighingButton" type="button">+ Registrar tanda</button>
                             <button class="primary-button is-hidden" id="closeReceptionButton" type="button">Registrar destare y cerrar</button>
                             <button class="secondary-button is-hidden" id="correctExitButton" type="button">Corregir salida de envases</button>
-                            <button class="secondary-button is-hidden" id="downloadReceiptButton" type="button">↓ Aviso de Recibo PDF</button>
+                            <button class="secondary-button is-hidden" id="downloadReceiptButton" type="button">↓ Registro de pesaje (RPR-01)</button>
                             <button class="secondary-button" id="closeDetailButton" type="button">Cerrar detalle</button>
                         </div>
                     </div>
@@ -159,7 +159,7 @@
                 <div class="net-preview"><span>PESO NETO CALCULADO</span><strong id="netWeightPreview">—</strong></div>
                 <div class="net-preview"><span>NETO POR ENVASE CONTENEDOR</span><strong id="netPerContainerPreview">—</strong></div>
                 <p class="form-error" id="tareFormError" role="alert"></p>
-                <div class="dialog-actions"><button class="secondary-button" value="cancel" type="submit">Cancelar</button><button class="primary-button" value="default" type="submit">Cerrar y emitir aviso</button></div>
+                <div class="dialog-actions"><button class="secondary-button" value="cancel" type="submit">Cancelar</button><button class="primary-button" value="default" type="submit">Cerrar y emitir RPR-01</button></div>
             </form>
         </dialog>
 

@@ -29,7 +29,7 @@ class InterfazOficinaRomanaTest extends TestCase
             ->assertSee('Fecha de ingreso')
             ->assertSee('containerEntryDateField', false)
             ->assertSee('Peso tara')
-            ->assertSee('Aviso de Recibo PDF')
+            ->assertSee('Registro de pesaje (RPR-01)')
             ->assertSee('Planilla de pesaje en blanco')
             ->assertSee('downloadBlankWeighingFormButton', false)
             ->assertSee('Motivo de la corrección administrativa')

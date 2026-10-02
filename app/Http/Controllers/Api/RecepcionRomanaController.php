@@ -416,7 +416,7 @@ class RecepcionRomanaController extends Controller
             'puede_cerrar' => ($recepcion->estado === EstadoRecepcionRomana::EnBasculaSalida
                 && ($esSoloEnvases || $esPesajeEnvases || $recepcion->estado_validacion_mp === EstadoValidacionMp::Validada))
                 || ($recepcion->estado === EstadoRecepcionRomana::EnPesajeEnvases && $pesajeCompleto),
-            'aviso_recibo_disponible' => $recepcion->estado === EstadoRecepcionRomana::Cerrado,
+            'aviso_recibo_disponible' => true,
             'creado_por' => $this->usuario($recepcion->creadoPor),
             'ingreso_confirmado_por' => $this->usuario($recepcion->ingresoConfirmadoPor),
             'cerrado_por' => $this->usuario($recepcion->cerradoPor),

@@ -152,11 +152,11 @@ class RecepcionRomanaApiTest extends TestCase
         $this->assertStringStartsWith('%PDF-1.4', $contenidoPdf);
         $this->assertStringContainsString('(REGISTRO DE PESAJE)', $contenidoPdf);
         $this->assertStringContainsString('(ROMANA)', $contenidoPdf);
-        $this->assertStringContainsString('(POR DEFINIR)', $contenidoPdf);
+        $this->assertStringContainsString('(RPR-01)', $contenidoPdf);
         $this->assertStringContainsString('(VERSION)', $contenidoPdf);
-        $this->assertStringContainsString('(0)', $contenidoPdf);
-        $this->assertStringContainsString('(21-07-2026)', $contenidoPdf);
-        $this->assertStringContainsString('(Tipo de cami', $contenidoPdf);
+        $this->assertStringContainsString('(1)', $contenidoPdf);
+        $this->assertStringContainsString('(31-08-2026)', $contenidoPdf);
+        $this->assertStringNotContainsString('(Tipo de cami', $contenidoPdf);
         $this->assertStringNotContainsString('(Temporada)', $contenidoPdf);
 
         $gerencia = User::factory()->create(['rol' => RolUsuario::Consulta]);
@@ -189,13 +189,11 @@ class RecepcionRomanaApiTest extends TestCase
         $this->assertStringContainsString('(REGISTRO DE PESAJE)', $contenidoPdf);
         $this->assertStringContainsString('(ROMANA)', $contenidoPdf);
         $this->assertStringContainsString('(Peso bruto)', $contenidoPdf);
-        $this->assertStringContainsString('(Tipo de cam', $contenidoPdf);
+        $this->assertStringNotContainsString('(Tipo de cam', $contenidoPdf);
         $this->assertStringContainsString('(Tara cam', $contenidoPdf);
         $this->assertStringContainsString('(PESO NETO)', $contenidoPdf);
-        $this->assertStringContainsString(
-            '(Formulario en blanco generado por FoliOS para contingencia, trazabilidad y auditor',
-            $contenidoPdf,
-        );
+        $this->assertStringContainsString('(RPR-01)', $contenidoPdf);
+        $this->assertStringContainsString('/DCTDecode', $contenidoPdf);
         $this->assertStringNotContainsString('(REC-', $contenidoPdf);
     }
 

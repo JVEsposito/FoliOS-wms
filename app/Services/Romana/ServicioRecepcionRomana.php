@@ -18,6 +18,7 @@ use App\Models\PesajeEnvaseRecepcionRomana;
 use App\Models\RecepcionRomana;
 use App\Models\Temporada;
 use App\Models\User;
+use App\Services\Documentos\ServicioFormatosRegistro;
 use App\Services\MateriaPrima\ServicioLoteMateriaPrima;
 use App\Services\Notificaciones\ServicioNotificacionesOperacionales;
 use App\Services\Temporadas\ServicioTemporadaActiva;
@@ -719,6 +720,7 @@ class ServicioRecepcionRomana
                 'estado' => EstadoRecepcionRomana::Cerrado,
                 'salida_at' => $ahora,
                 'cerrado_por_user_id' => $usuario->id,
+                ...app(ServicioFormatosRegistro::class)->snapshotRomana(),
                 'observacion_cierre' => $payload['observacion'],
                 'version' => $recepcion->version + 1,
             ]);
@@ -998,6 +1000,7 @@ class ServicioRecepcionRomana
                 'estado' => EstadoRecepcionRomana::Cerrado,
                 'salida_at' => $ahora,
                 'cerrado_por_user_id' => $usuario->id,
+                ...app(ServicioFormatosRegistro::class)->snapshotRomana(),
                 'observacion_cierre' => $payload['observacion'],
                 'version' => $recepcion->version + 1,
             ]);
@@ -1069,6 +1072,7 @@ class ServicioRecepcionRomana
                 'estado' => EstadoRecepcionRomana::Cerrado,
                 'salida_at' => $ahora,
                 'cerrado_por_user_id' => $usuario->id,
+                ...app(ServicioFormatosRegistro::class)->snapshotRomana(),
                 'observacion_cierre' => $payload['observacion'],
                 'version' => $recepcion->version + 1,
             ]);

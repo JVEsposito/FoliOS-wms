@@ -644,7 +644,7 @@ elements.tareForm.addEventListener('submit', async (event) => {
 });
 
 elements.downloadReceipt.addEventListener('click', async () => {
-    if (!state.selected?.aviso_recibo_disponible) return; setBusy(true, 'Generando Aviso de Recibo…');
+    if (!state.selected?.aviso_recibo_disponible) return; setBusy(true, 'Generando registro de pesaje (RPR-01)…');
     try {
         const response = await fetch(`/api/romana/recepciones/${state.selected.id}/aviso-recibo`, { headers: { Accept: 'application/pdf', Authorization: `Bearer ${state.token}` } });
         if (!response.ok) { const data = await response.json().catch(() => ({})); throw new ApiError(errorMessage(data, 'No fue posible generar el PDF.'), response.status); }
