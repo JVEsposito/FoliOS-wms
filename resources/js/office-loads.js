@@ -465,11 +465,11 @@ function priorityClass(priority) {
 }
 
 function distributionText(load) {
-    if (load.modalidad_salida === 'directa_prefrio') return 'Salida directa desde Prefrío';
-    if (!load.distribucion?.length) return 'Sin distribución disponible';
-    return load.distribucion
+    const tunnel = (load.folios || []).filter((folio) => !folio.ubicacion && folio.prefrio && !['en_anden', 'despachado'].includes(folio.estado_carga)).length;
+    const locations = (load.distribucion || [])
         .map((item) => `${item.camara.codigo}: ${item.cantidad}`)
         .join(' · ');
+    return [locations, tunnel ? `Prefrío: ${tunnel}` : ''].filter(Boolean).join(' · ') || 'Sin distribución disponible';
 }
 
 function externalNumbers(load) {
@@ -701,29 +701,19 @@ function startNew() {
 }
 
 function renderDistribution(load) {
-    if (load.modalidad_salida === 'directa_prefrio') {
-        elements.distribution.innerHTML = `
-            <span class="distribution-chip">
-                <b>PREFRÍO</b>
-                <span>Salida directa a ${escapeHtml(load.anden_previsto?.codigo || 'andén')}</span>
-                <strong>${Number(load.total_folios || 0)}</strong>
-            </span>
-        `;
-        return;
-    }
-
-    if (!load.distribucion?.length) {
+    const tunnel = (load.folios || []).filter((folio) => !folio.ubicacion && folio.prefrio && !['en_anden', 'despachado'].includes(folio.estado_carga)).length;
+    if (!load.distribucion?.length && !tunnel) {
         elements.distribution.innerHTML = '<span class="distribution-empty">Sin folios asignados</span>';
         return;
     }
 
-    elements.distribution.innerHTML = load.distribucion.map((item) => `
+    elements.distribution.innerHTML = (load.distribucion || []).map((item) => `
         <span class="distribution-chip">
             <b>${escapeHtml(item.camara.codigo)}</b>
             <span>${escapeHtml(item.camara.nombre)}</span>
             <strong>${item.cantidad}</strong>
         </span>
-    `).join('');
+    `).join('') + (tunnel ? `<span class="distribution-chip"><b>PREFRÍO</b><span>En túnel</span><strong>${tunnel}</strong></span>` : '');
 }
 
 function renderConcentration(load) {
@@ -895,9 +885,7 @@ function renderSelected(load) {
     clearFolioErrors();
 
     const editable = canEdit(load);
-    elements.editorEyebrow.textContent = load.modalidad_salida === 'directa_prefrio'
-        ? 'SALIDA DIRECTA DESDE PREFRÍO'
-        : (load.estado === 'borrador' ? 'ORDEN EN PREPARACIÓN' : 'ORDEN DE CARGA');
+    elements.editorEyebrow.textContent = load.estado === 'borrador' ? 'ORDEN EN PREPARACIÓN' : 'ORDEN DE CARGA';
     elements.editorTitle.textContent = load.codigo;
     const linkedShipment = Boolean(load.embarque);
     const linkedExternalNumbers = externalNumbers(load);
