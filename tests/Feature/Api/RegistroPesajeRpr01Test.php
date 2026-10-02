@@ -127,7 +127,7 @@ class RegistroPesajeRpr01Test extends TestCase
             'rut_conductor' => '12.345.678-5', 'nombre_conductor' => 'María González',
             'peso_bruto' => 28540, 'observacion' => 'Carga sellada en origen.',
         ])->assertCreated()->json('data.id');
-        $this->postJson('/api/romana/recepciones/'.$id.'/confirmar-ingreso', $this->payloadConInspeccionRc02('/api/romana/recepciones/'.$id.'/confirmar-ingreso', ['operacion_id' => (string) Str::uuid()]))->assertOk();
+        $this->postJson('/api/romana/recepciones/'.$id.'/confirmar-ingreso', ['operacion_id' => (string) Str::uuid()])->assertOk();
         // Fixture de MP: las reglas del flujo de validación se cubren por su propia API.
         DB::table('detalles_envases_recepcion_romana')->where('recepcion_romana_id', $id)->update(['cantidad_validada' => DB::raw('cantidad_declarada')]);
         DB::table('recepciones_romana')->where('id', $id)->update(['estado_validacion_mp' => 'validada']);
@@ -138,11 +138,11 @@ class RegistroPesajeRpr01Test extends TestCase
     private function cerrar(RecepcionRomana $recepcion, User $usuario, ?string $operacion = null): string
     {
         $operacion ??= (string) Str::uuid();
-        $this->actingAs($usuario, 'sanctum')->postJson('/api/romana/recepciones/'.$recepcion->id.'/cerrar', [
+        $this->actingAs($usuario, 'sanctum')->postJson('/api/romana/recepciones/'.$recepcion->id.'/cerrar', $this->payloadConInspeccionRc02('/api/romana/recepciones/'.$recepcion->id.'/cerrar', [
             'operacion_id' => $operacion, 'modo_salida_envases' => 'mismos', 'numero_guia_salida' => 'GS-NO-IMPRIMIR',
             'peso_tara' => 10540, 'tipo_envase_calculo_neto' => 'bins',
             'taras_envases' => [['tipo_envase' => 'bins', 'tara_unitaria' => 40], ['tipo_envase' => 'totes', 'tara_unitaria' => 1], ['tipo_envase' => 'esponjas', 'tara_unitaria' => 0.1]],
-        ])->assertOk();
+        ]))->assertOk();
 
         return $operacion;
     }

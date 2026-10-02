@@ -124,13 +124,13 @@ class ControlEnvasesRc02Test extends TestCase
         $this->assertSame('regular', $evento->despues['items'][0]['condicion']);
         $this->assertSame($admin->id, $evento->user_id);
         $payload['operacion_id'] = (string) Str::uuid();
-        $this->putJson($ruta,$payload)->assertConflict();
+        $this->putJson($ruta, $payload)->assertConflict();
         $this->desactivarTemporadasDePrueba();
-        $this->putJson($ruta,$payload)->assertConflict();
+        $this->putJson($ruta, $payload)->assertConflict();
     }
 
     private function textoPdf(string $pdf): string
     {
-        return iconv('Windows-1252','UTF-8//IGNORE',$pdf);
+        return iconv('Windows-1252', 'UTF-8//IGNORE', $pdf);
     }
 }

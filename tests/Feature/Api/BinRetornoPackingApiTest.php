@@ -865,9 +865,9 @@ class BinRetornoPackingApiTest extends TestCase
             ])
             ->assertCreated()
             ->json('data');
-        $this->postJson("/api/romana/recepciones/{$recepcion['id']}/confirmar-ingreso", $this->payloadConInspeccionRc02("/api/romana/recepciones/{$recepcion['id']}/confirmar-ingreso", [
+        $this->postJson("/api/romana/recepciones/{$recepcion['id']}/confirmar-ingreso", [
             'operacion_id' => (string) Str::uuid(),
-        ]))->assertOk();
+        ])->assertOk();
 
         $especie = EspecieValidacion::firstOrCreate([
             'temporada_id' => $temporada->id,
@@ -909,14 +909,14 @@ class BinRetornoPackingApiTest extends TestCase
             ]),
         )->assertOk()->json('data.segmentos.0.id');
 
-        $this->actingAs($operador, 'sanctum')->postJson("/api/romana/recepciones/{$recepcion['id']}/cerrar", [
+        $this->actingAs($operador, 'sanctum')->postJson("/api/romana/recepciones/{$recepcion['id']}/cerrar", $this->payloadConInspeccionRc02("/api/romana/recepciones/{$recepcion['id']}/cerrar", [
             'operacion_id' => (string) Str::uuid(),
             'modo_salida_envases' => 'mismos',
             'numero_guia_salida' => "GS-{$sufijo}",
             'taras_envases' => [['tipo_envase' => 'bins', 'tara_unitaria' => 40], ['tipo_envase' => 'totes', 'tara_unitaria' => 2]],
             'peso_tara' => 10000,
             'tipo_envase_calculo_neto' => 'bins',
-        ])->assertOk();
+        ]))->assertOk();
 
         return [
             'temporada' => $temporada,

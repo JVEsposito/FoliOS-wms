@@ -75,7 +75,7 @@ class MateriaPrimaApiTest extends TestCase
             'tipo_envase_calculo_neto' => 'bins',
         ];
         $this->actingAs(User::factory()->create(['rol' => RolUsuario::OperadorRomana]), 'sanctum')
-            ->postJson("/api/romana/recepciones/{$contexto['recepcion_id']}/cerrar", $cierre)
+            ->postJson("/api/romana/recepciones/{$contexto['recepcion_id']}/cerrar", $this->payloadConInspeccionRc02("/api/romana/recepciones/{$contexto['recepcion_id']}/cerrar", $cierre))
             ->assertOk()->assertJsonPath('data.peso_neto', 18000.02);
         $this->postJson("/api/romana/recepciones/{$contexto['recepcion_id']}/cerrar", $this->payloadConInspeccionRc02("/api/romana/recepciones/{$contexto['recepcion_id']}/cerrar", $cierre))->assertOk();
 
@@ -115,7 +115,7 @@ class MateriaPrimaApiTest extends TestCase
             ->update(['cantidad' => 49]);
 
         $this->actingAs(User::factory()->create(['rol' => RolUsuario::OperadorRomana]), 'sanctum')
-            ->postJson("/api/romana/recepciones/{$contexto['recepcion_id']}/cerrar", [
+            ->postJson("/api/romana/recepciones/{$contexto['recepcion_id']}/cerrar", $this->payloadConInspeccionRc02("/api/romana/recepciones/{$contexto['recepcion_id']}/cerrar", [
                 'operacion_id' => (string) Str::uuid(),
                 'modo_salida_envases' => 'mismos',
                 'numero_guia_salida' => 'GS-DESTARE-INVALIDO',
@@ -125,7 +125,7 @@ class MateriaPrimaApiTest extends TestCase
                 ],
                 'peso_tara' => 10000,
                 'tipo_envase_calculo_neto' => 'bins',
-            ])->assertUnprocessable()->assertJsonValidationErrors('envases');
+            ]))->assertUnprocessable()->assertJsonValidationErrors('envases');
 
         $this->assertDatabaseHas('recepciones_romana', [
             'id' => $contexto['recepcion_id'], 'peso_neto' => null,
@@ -1610,9 +1610,9 @@ class MateriaPrimaApiTest extends TestCase
             ])
             ->assertCreated()
             ->json('data');
-        $this->postJson("/api/romana/recepciones/{$recepcion['id']}/confirmar-ingreso", $this->payloadConInspeccionRc02("/api/romana/recepciones/{$recepcion['id']}/confirmar-ingreso", [
+        $this->postJson("/api/romana/recepciones/{$recepcion['id']}/confirmar-ingreso", [
             'operacion_id' => (string) Str::uuid(),
-        ]))->assertOk();
+        ])->assertOk();
 
         $especie = EspecieValidacion::firstOrCreate([
             'temporada_id' => $temporada->id,
@@ -1666,7 +1666,7 @@ class MateriaPrimaApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.estado', 'validada')->json('data');
         if (! $sinDestare) {
-            $this->actingAs($operador, 'sanctum')->postJson("/api/romana/recepciones/{$recepcion['id']}/cerrar", [
+            $this->actingAs($operador, 'sanctum')->postJson("/api/romana/recepciones/{$recepcion['id']}/cerrar", $this->payloadConInspeccionRc02("/api/romana/recepciones/{$recepcion['id']}/cerrar", [
                 'operacion_id' => (string) Str::uuid(),
                 'modo_salida_envases' => 'mismos',
                 'numero_guia_salida' => 'GS-MP-100',
@@ -1674,7 +1674,7 @@ class MateriaPrimaApiTest extends TestCase
                     ...($tresTipos ? [['tipo_envase' => 'esponjas', 'tara_unitaria' => 1]] : [])],
                 'peso_tara' => 10000,
                 'tipo_envase_calculo_neto' => 'bins',
-            ])
+            ]))
                 ->assertOk()
                 ->assertJsonPath('data.peso_neto', 18000)
                 ->assertJsonPath('data.cantidad_envase_calculo_neto', 48)

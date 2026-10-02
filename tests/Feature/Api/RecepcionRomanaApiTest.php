@@ -94,17 +94,17 @@ class RecepcionRomanaApiTest extends TestCase
             ->assertJsonPath('data.id', $creada['id']);
 
         $operacionConfirmacion = (string) Str::uuid();
-        $this->postJson('/api/romana/recepciones/'.$creada['id'].'/confirmar-ingreso', $this->payloadConInspeccionRc02('/api/romana/recepciones/'.$creada['id'].'/confirmar-ingreso', [
+        $this->postJson('/api/romana/recepciones/'.$creada['id'].'/confirmar-ingreso', [
             'operacion_id' => $operacionConfirmacion,
-        ]))
+        ])
             ->assertOk()
             ->assertJsonPath('data.estado', EstadoRecepcionRomana::EnBasculaSalida->value)
             ->assertJsonPath('data.puede_cerrar', false)
             ->assertJsonPath('data.destare_pendiente_validacion', true);
 
-        $this->postJson('/api/romana/recepciones/'.$creada['id'].'/confirmar-ingreso', $this->payloadConInspeccionRc02('/api/romana/recepciones/'.$creada['id'].'/confirmar-ingreso', [
+        $this->postJson('/api/romana/recepciones/'.$creada['id'].'/confirmar-ingreso', [
             'operacion_id' => $operacionConfirmacion,
-        ]))->assertOk();
+        ])->assertOk();
 
         $this->marcarEnvasesValidadosParaDestare($creada['id']);
         $this->travelTo(CarbonImmutable::parse('2026-07-21 14:10:00'));
@@ -233,9 +233,9 @@ class RecepcionRomanaApiTest extends TestCase
             ->assertConflict()
             ->assertJsonPath('message', 'La guía de despacho ya fue registrada para este cliente.');
 
-        $this->postJson('/api/romana/recepciones/'.$id.'/confirmar-ingreso', $this->payloadConInspeccionRc02('/api/romana/recepciones/'.$id.'/confirmar-ingreso', [
+        $this->postJson('/api/romana/recepciones/'.$id.'/confirmar-ingreso', [
             'operacion_id' => (string) Str::uuid(),
-        ]))->assertOk();
+        ])->assertOk();
 
         $edicion = $edicionValida;
         $edicion['operacion_id'] = (string) Str::uuid();
@@ -278,9 +278,9 @@ class RecepcionRomanaApiTest extends TestCase
             ->assertCreated()
             ->json('data');
 
-        $this->postJson("/api/romana/recepciones/{$recepcion['id']}/confirmar-ingreso", $this->payloadConInspeccionRc02("/api/romana/recepciones/{$recepcion['id']}/confirmar-ingreso", [
+        $this->postJson("/api/romana/recepciones/{$recepcion['id']}/confirmar-ingreso", [
             'operacion_id' => (string) Str::uuid(),
-        ]))->assertOk();
+        ])->assertOk();
 
         $this->marcarEnvasesValidadosParaDestare($recepcion['id']);
         $this->postJson("/api/romana/recepciones/{$recepcion['id']}/cerrar", $this->payloadConInspeccionRc02("/api/romana/recepciones/{$recepcion['id']}/cerrar", [
@@ -350,9 +350,9 @@ class RecepcionRomanaApiTest extends TestCase
             ->assertCreated()
             ->json('data');
 
-        $this->postJson("/api/romana/recepciones/{$recepcion['id']}/confirmar-ingreso", $this->payloadConInspeccionRc02("/api/romana/recepciones/{$recepcion['id']}/confirmar-ingreso", [
+        $this->postJson("/api/romana/recepciones/{$recepcion['id']}/confirmar-ingreso", [
             'operacion_id' => (string) Str::uuid(),
-        ]))->assertOk();
+        ])->assertOk();
         // Expediente histórico cerrado antes de la validación MP: conserva
         // la corrección administrativa existente y sus pesos.
         DB::table('recepciones_romana')->where('id', $recepcion['id'])->update([
@@ -653,9 +653,9 @@ class RecepcionRomanaApiTest extends TestCase
             ->assertJsonPath('resumen.lineas_pendientes_validacion', 2)
             ->assertJsonPath('pendientes.0.numero_recepcion', 'REC-2607-0001');
 
-        $this->postJson("/api/romana/recepciones/{$recepcion['id']}/confirmar-ingreso", $this->payloadConInspeccionRc02("/api/romana/recepciones/{$recepcion['id']}/confirmar-ingreso", [
+        $this->postJson("/api/romana/recepciones/{$recepcion['id']}/confirmar-ingreso", [
             'operacion_id' => (string) Str::uuid(),
-        ]))
+        ])
             ->assertOk()
             ->assertJsonPath('data.estado', EstadoRecepcionRomana::EnBasculaSalida->value);
 
