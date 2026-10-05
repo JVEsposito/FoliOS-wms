@@ -90,9 +90,18 @@
                     <label><span>Temperatura inicial fruta °C *</span><input name="temperatura_inicial_c" type="number" min="-20" max="50" step="0.01" required></label>
                     <label><span>Temperatura objetivo fruta °C *</span><input name="temperatura_objetivo_c" type="number" min="-20" max="50" step="0.01" required></label>
                     <label><span>Temperatura inicial agua °C</span><input name="temperatura_agua_inicial_c" type="number" min="-20" max="50" step="0.01"></label>
+                    <label><span>T° ambiente °C *</span><input name="temperatura_ambiente_c" type="number" min="-50" max="70" step="0.01" required></label>
+                    <label><span>Humedad relativa % *</span><input name="humedad_relativa_pct" type="number" min="0" max="100" step="0.01" required></label>
+                    <label><span>Pozo Accutab mV *</span><input name="pozo_accutab_mv" type="number" min="-9999999" max="9999999" step="0.01" required></label>
+                    <label><span>Recarga de pastilla *</span><select name="recarga_pastilla" required><option value="">Seleccionar</option><option value="1">Sí</option><option value="0">No</option></select></label>
+                    <label><span>Corrección de cloro (lectura después de corregir, ppm)</span><input name="correccion_cloro_ppm" type="number" min="0" max="500" step="0.01"><small id="chlorineRangeHint"></small></label>
+                    <label><span>Aplicación de producto *</span><select name="aplicacion_producto" required><option value="">Seleccionar</option><option value="1">Sí</option><option value="0">No</option></select></label>
+                    <label><span>Producto aplicado</span><select name="producto_hidrocooler_id" disabled><option value="">Seleccionar del catálogo</option></select></label>
+                    <label><span>Dosis aplicada</span><input name="producto_dosis" type="number" min="0.0001" max="99999999" step="0.0001" disabled></label>
+                    <label><span>Unidad de dosis</span><input name="producto_unidad_dosis" maxlength="30" placeholder="ml/L, g/L, ppm" disabled></label>
                     <label><span>Cloro libre ppm *</span><input name="cloro_libre_ppm" type="number" min="0" max="500" step="0.01" required></label>
                     <label><span>pH del agua *</span><input name="ph_agua" type="number" min="0" max="14" step="0.01" required></label>
-                    <label><span>Cloro y pH conformes al procedimiento de planta *</span><select name="control_inicial_conforme" required><option value="">Seleccionar</option><option value="1">Sí, conformes</option><option value="0">No, hay desviación</option></select></label>
+                    <label><span>Cloro después de corregir y pH conformes al procedimiento de planta *</span><select name="control_inicial_conforme" required><option value="">Seleccionar</option><option value="1">Sí, conformes</option><option value="0">No, hay desviación</option></select></label>
                     <label><span>Condición visual del agua *</span><select name="condicion_visual_agua" required><option value="">Seleccionar</option><option value="conforme">Conforme</option><option value="no_conforme">No conforme</option></select></label>
                     <label><span>Dosificador *</span><select name="dosificador_operativo" required><option value="">Seleccionar</option><option value="1">Operativo</option><option value="0">No operativo</option></select></label>
                     <label><span>Control del agua *</span><select name="manejo_agua" required><option value="">Seleccionar</option><option value="sin_novedad">Sin novedad</option><option value="filtrado">Filtrado</option><option value="recambio">Recambio</option></select></label>

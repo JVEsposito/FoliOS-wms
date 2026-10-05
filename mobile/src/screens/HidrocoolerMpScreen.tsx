@@ -3,8 +3,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { AuthSession } from '../domain/estiba';
-import { FinishHydroCycle, HydroFilters, HydroLot, HydroSummary, HydroTray, ReleaseHydroCycle, StartHydroCycle } from '../domain/hidrocoolerMp';
-import { getHydroSummary, listHydroLots, startHydroCycle, finishHydroCycle, releaseHydroCycle, shareHydroRegister } from '../services/hidrocoolerMpApi';
+import { HydroCatalog, FinishHydroCycle, HydroFilters, HydroLot, HydroSummary, HydroTray, ReleaseHydroCycle, StartHydroCycle } from '../domain/hidrocoolerMp';
+import { getHydroCatalog, getHydroSummary, listHydroLots, startHydroCycle, finishHydroCycle, releaseHydroCycle, shareHydroRegister } from '../services/hidrocoolerMpApi';
 import { colors } from '../theme/colors';
 
 type Action = { kind: 'start' | 'finish' | 'release'; lot: HydroLot; operationId: string } | null;
@@ -42,6 +42,11 @@ function toNumber(value: string, name: string, min: number, max: number, integer
   if (parsed < min || parsed > max || (integer && !Number.isInteger(parsed))) throw new Error(`${name}: debe estar entre ${min} y ${max}${integer ? ' y ser entero' : ''}.`);
   return parsed;
 }
+function doseNumber(value: string) {
+  const input = value.trim().replace(',', '.');
+  if (!/^\d+(\.\d{1,4})?$/.test(input) || Number(input) <= 0 || Number(input) > 99999999) throw new Error('Dosis: ingresa un número positivo con hasta cuatro decimales.');
+  return Number(input);
+}
 function optionalNumber(value: string, name: string, min: number, max: number) {
   return value.trim() ? toNumber(value, name, min, max) : null;
 }
@@ -78,6 +83,7 @@ export function HidrocoolerMpScreen({ auth, baseUrl, onLogout }: Props) {
   const [notice, setNotice] = useState('');
   const [action, setAction] = useState<Action>(null);
   const [form, setForm] = useState<Form>({});
+  const [catalog, setCatalog] = useState<HydroCatalog>({ data: [], rango_cloro_ppm: null });
   const [expanded, setExpanded] = useState<string | null>(null);
 
   useEffect(() => { if (canConsult) void load(1); }, [baseUrl, auth.token, tray, appliedFilters, canConsult]);
@@ -88,11 +94,12 @@ export function HidrocoolerMpScreen({ auth, baseUrl, onLogout }: Props) {
   async function load(nextPage = 1) {
     setBusy(true); setError('');
     try {
-      const [nextSummary, result] = await Promise.all([
+      const [nextSummary, nextCatalog, result] = await Promise.all([
         getHydroSummary(baseUrl, auth.token),
+        getHydroCatalog(baseUrl, auth.token),
         listHydroLots(baseUrl, auth.token, tray, appliedFilters, nextPage),
       ]);
-      setSummary(nextSummary);
+      setSummary(nextSummary); setCatalog(nextCatalog);
       setLots((current) => nextPage === 1 ? result.data : [...current, ...result.data]);
       setPage(result.meta.current_page); setLastPage(result.meta.last_page);
     } catch (reason) { setError(errorMessage(reason)); }
@@ -103,7 +110,7 @@ export function HidrocoolerMpScreen({ auth, baseUrl, onLogout }: Props) {
     setError(''); setNotice('');
     setAction({ kind, lot, operationId: Crypto.randomUUID() });
     setForm(kind === 'start'
-      ? { inicio_at: localDateTime(), equipo: '', turno: '', cantidad_bombas_funcionando: '', temperatura_inicial_c: '', temperatura_objetivo_c: '', temperatura_agua_inicial_c: '', cloro_libre_ppm: '', ph_agua: '', control_inicial_conforme: '', condicion_visual_agua: '', dosificador_operativo: '', manejo_agua: '', observacion_inicio: '' }
+      ? { inicio_at: localDateTime(), equipo: '', turno: '', cantidad_bombas_funcionando: '', temperatura_inicial_c: '', temperatura_objetivo_c: '', temperatura_agua_inicial_c: '', cloro_libre_ppm: '', ph_agua: '', temperatura_ambiente_c: '', humedad_relativa_pct: '', pozo_accutab_mv: '', recarga_pastilla: '', correccion_cloro_ppm: '', aplicacion_producto: '', producto_hidrocooler_id: '', producto_dosis: '', producto_unidad_dosis: '', control_inicial_conforme: '', condicion_visual_agua: '', dosificador_operativo: '', manejo_agua: '', observacion_inicio: '' }
       : kind === 'finish'
         ? { termino_at: localDateTime(), temperatura_c: '', temperatura_agua_final_c: '', cloro_libre_final_ppm: '', ph_agua_final: '', control_final_conforme: '', condicion_visual_agua_final: '', dosificador_operativo_final: '', destino_salida: 'camara', observacion: '', accion_correctiva: '' }
         : { temperatura_verificacion_c: '', cloro_libre_verificacion_ppm: '', ph_agua_verificacion: '', control_verificacion_conforme: '', evaluacion_producto: '', verificacion_liberacion: '' });
@@ -128,6 +135,15 @@ export function HidrocoolerMpScreen({ auth, baseUrl, onLogout }: Props) {
           temperatura_objetivo_c: toNumber(value('temperatura_objetivo_c'), 'Temperatura objetivo fruta', -20, 50),
           temperatura_agua_inicial_c: optionalNumber(value('temperatura_agua_inicial_c'), 'Temperatura inicial agua', -20, 50),
           cloro_libre_ppm: toNumber(value('cloro_libre_ppm'), 'Cloro libre inicial', 0, 500),
+          temperatura_ambiente_c: toNumber(value('temperatura_ambiente_c'), 'T° ambiente', -50, 70),
+          humedad_relativa_pct: toNumber(value('humedad_relativa_pct'), 'Humedad relativa', 0, 100),
+          pozo_accutab_mv: toNumber(value('pozo_accutab_mv'), 'Pozo Accutab mV', -9999999, 9999999),
+          recarga_pastilla: required(value('recarga_pastilla'), 'Recarga pastilla') === '1',
+          correccion_cloro_ppm: optionalNumber(value('correccion_cloro_ppm'), 'Corrección de cloro', 0, 500),
+          aplicacion_producto: required(value('aplicacion_producto'), 'Aplicación de producto') === '1',
+          producto_hidrocooler_id: value('aplicacion_producto') === '1' ? required(value('producto_hidrocooler_id'), 'Producto') : null,
+          producto_dosis: value('aplicacion_producto') === '1' ? doseNumber(value('producto_dosis')) : null,
+          producto_unidad_dosis: value('aplicacion_producto') === '1' ? required(value('producto_unidad_dosis'), 'Unidad dosis', 1, 30) : null,
           ph_agua: toNumber(value('ph_agua'), 'pH inicial', 0, 14),
           control_inicial_conforme: required(value('control_inicial_conforme'), 'Control inicial') === '1',
           condicion_visual_agua: required(value('condicion_visual_agua'), 'Condición visual') as StartHydroCycle['condicion_visual_agua'],
@@ -135,6 +151,8 @@ export function HidrocoolerMpScreen({ auth, baseUrl, onLogout }: Props) {
           manejo_agua: required(value('manejo_agua'), 'Control del agua') as StartHydroCycle['manejo_agua'],
           observacion_inicio: optional(value('observacion_inicio')),
         };
+        const range = catalog.rango_cloro_ppm;
+        if (range && (payload.cloro_libre_ppm < range.min || payload.cloro_libre_ppm > range.max) && payload.correccion_cloro_ppm === null) throw new Error('Registra el cloro después de corregir la desviación.');
         if (payload.observacion_inicio && payload.observacion_inicio.length > 2000) throw new Error('Observación: máximo 2000 caracteres.');
         setSaving(true);
         await startHydroCycle(baseUrl, auth.token, action.lot.id, payload);
@@ -261,8 +279,20 @@ export function HidrocoolerMpScreen({ auth, baseUrl, onLogout }: Props) {
             <Field label="Temperatura objetivo fruta °C *" value={value('temperatura_objetivo_c')} onChange={(v) => change('temperatura_objetivo_c', v)} numeric />
             <Field label="Temperatura inicial agua °C" value={value('temperatura_agua_inicial_c')} onChange={(v) => change('temperatura_agua_inicial_c', v)} numeric />
             <Field label="Cloro libre ppm *" value={value('cloro_libre_ppm')} onChange={(v) => change('cloro_libre_ppm', v)} numeric />
+            <Field label="T° ambiente °C *" value={value('temperatura_ambiente_c')} onChange={(v) => change('temperatura_ambiente_c', v)} numeric />
+            <Field label="Humedad relativa % *" value={value('humedad_relativa_pct')} onChange={(v) => change('humedad_relativa_pct', v)} numeric />
+            <Field label="Pozo Accutab mV *" value={value('pozo_accutab_mv')} onChange={(v) => change('pozo_accutab_mv', v)} numeric />
+            <Choice label="Recarga de pastilla *" value={value('recarga_pastilla')} options={YES_NO} onChange={(v) => change('recarga_pastilla', v)} />
+            <Field label="Corrección de cloro: ppm después de corregir" value={value('correccion_cloro_ppm')} onChange={(v) => change('correccion_cloro_ppm', v)} numeric />
+            <Text style={styles.muted}>{catalog.rango_cloro_ppm ? `Rango SOP: ${catalog.rango_cloro_ppm.min}–${catalog.rango_cloro_ppm.max} ppm` : 'Rango numérico pendiente de validación por planta. Declara conformidad según SOP.'}</Text>
+            <Choice label="Aplicación de producto *" value={value('aplicacion_producto')} options={YES_NO} onChange={(v) => change('aplicacion_producto', v)} />
+            {value('aplicacion_producto') === '1' ? <>
+              <Choice label="Producto aplicado *" value={value('producto_hidrocooler_id')} options={catalog.data.map((p) => ({ value: p.id, label: p.nombre }))} onChange={(v) => { change('producto_hidrocooler_id', v); change('producto_unidad_dosis', catalog.data.find((p) => p.id === v)?.unidad_dosis || ''); }} />
+              <Field label="Dosis *" value={value('producto_dosis')} onChange={(v) => change('producto_dosis', v)} numeric />
+              <Field label="Unidad de dosis *" value={value('producto_unidad_dosis')} onChange={(v) => change('producto_unidad_dosis', v)} />
+            </> : null}
             <Field label="pH del agua *" value={value('ph_agua')} onChange={(v) => change('ph_agua', v)} numeric />
-            <Choice label="Cloro y pH conformes *" value={value('control_inicial_conforme')} options={YES_NO} onChange={(v) => change('control_inicial_conforme', v)} />
+            <Choice label="Cloro después de corregir y pH conformes *" value={value('control_inicial_conforme')} options={YES_NO} onChange={(v) => change('control_inicial_conforme', v)} />
             <Choice label="Condición visual del agua *" value={value('condicion_visual_agua')} options={WATER} onChange={(v) => change('condicion_visual_agua', v)} />
             <Choice label="Dosificador operativo *" value={value('dosificador_operativo')} options={YES_NO} onChange={(v) => change('dosificador_operativo', v)} />
             <Choice label="Control del agua *" value={value('manejo_agua')} options={[{ value: 'sin_novedad', label: 'Sin novedad' }, { value: 'filtrado', label: 'Filtrado' }, { value: 'recambio', label: 'Recambio' }]} onChange={(v) => change('manejo_agua', v)} />
@@ -308,6 +338,8 @@ function CycleDetails({ lot }: { lot: HydroLot }) {
   return <View style={styles.details}>
     <Text style={styles.fact}>Operador {cycle.operador} · {cycle.cantidad_bombas_funcionando} bombas · duración {cycle.duracion_minutos ?? '—'} min</Text>
     <Text style={styles.fact}>Inicio: agua {cycle.temperatura_agua_inicial_c ?? '—'} °C · cloro {cycle.cloro_libre_ppm} ppm · pH {cycle.ph_agua} · visual {label(cycle.condicion_visual_agua)} · dosificador {cycle.dosificador_operativo ? 'sí' : 'no'} · control {cycle.control_inicial_conforme ? 'conforme' : 'no conforme'} · {label(cycle.manejo_agua)}</Text>
+    <Text style={styles.fact}>Ambiente {cycle.temperatura_ambiente_c ?? '—'} °C · HR {cycle.humedad_relativa_pct ?? '—'} % · Pozo {cycle.pozo_accutab_mv ?? '—'} mV · Recarga {cycle.recarga_pastilla === null ? '—' : cycle.recarga_pastilla ? 'Sí' : 'No'} · Corrección {cycle.correccion_cloro_ppm ?? '—'} ppm</Text>
+    {cycle.aplicacion_producto ? <Text style={styles.fact}>Aplicación: {cycle.producto_nombre_snapshot} · {cycle.producto_dosis} {cycle.producto_unidad_dosis}</Text> : null}
     {cycle.termino_at ? <Text style={styles.fact}>Término: agua {cycle.temperatura_agua_final_c ?? '—'} °C · cloro {cycle.cloro_libre_final_ppm ?? '—'} ppm · pH {cycle.ph_agua_final ?? '—'} · visual {label(cycle.condicion_visual_agua_final)} · dosificador {cycle.dosificador_operativo_final ? 'sí' : 'no'} · control {cycle.control_final_conforme ? 'conforme' : 'no conforme'}</Text> : null}
     {cycle.observacion_inicio ? <Text style={styles.fact}>Observación inicial: {cycle.observacion_inicio}</Text> : null}
     {cycle.observacion ? <Text style={styles.fact}>Observación final: {cycle.observacion}</Text> : null}

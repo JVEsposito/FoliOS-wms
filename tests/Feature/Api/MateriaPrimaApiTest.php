@@ -12,6 +12,8 @@ use App\Models\Cliente;
 use App\Models\CsgValidacion;
 use App\Models\EntregaFrutaProceso;
 use App\Models\EspecieValidacion;
+use App\Models\FormatoRegistro;
+use App\Models\ProductoHidrocooler;
 use App\Models\Temporada;
 use App\Models\TipoResultadoPacking;
 use App\Models\User;
@@ -348,6 +350,11 @@ class MateriaPrimaApiTest extends TestCase
             'inicio_at' => now()->subMinutes(30)->toAtomString(),
             'temperatura_inicial_c' => 18,
             'temperatura_objetivo_c' => 4,
+            'temperatura_ambiente_c' => 20,
+            'humedad_relativa_pct' => 65,
+            'pozo_accutab_mv' => 700,
+            'recarga_pastilla' => false,
+            'aplicacion_producto' => false,
             'cloro_libre_ppm' => 95,
             'ph_agua' => 6.5,
             'control_inicial_conforme' => true,
@@ -422,17 +429,17 @@ class MateriaPrimaApiTest extends TestCase
         $hoja = $zip->getFromName('xl/worksheets/sheet1.xml');
         $zip->close();
         $this->assertIsString($hoja);
-        $this->assertStringContainsString('REGISTRO DE CONTROL DE HIDROCOOLER', $hoja);
-        $this->assertStringContainsString('Bombas', $hoja);
-        $this->assertStringContainsString('Cloro ppm', $hoja);
+        $this->assertStringContainsString('REGISTRO CONTROL HIDROCOOLER', $hoja);
+        $this->assertStringNotContainsString('Bombas', $hoja);
+        $this->assertStringContainsString('Cloro: ppm', $hoja);
         $this->assertStringContainsString('A17', $hoja);
 
         $pdf = $this->get('/api/materia-prima/hidrocooler/registro/en-blanco?formato=pdf')
             ->assertOk()
             ->assertHeader('content-type', 'application/pdf');
         $this->assertStringStartsWith('%PDF-1.4', $pdf->getContent());
-        $this->assertStringContainsString('REGISTRO DE CONTROL DE HIDROCOOLER', $pdf->getContent());
-        $this->assertStringContainsString('Bombas', $pdf->getContent());
+        $this->assertStringContainsString('REGISTRO CONTROL HIDROCOOLER', $pdf->getContent());
+        $this->assertStringNotContainsString('Bombas', $pdf->getContent());
 
         $this->app['auth']->forgetGuards();
         $this->getJson('/api/materia-prima/hidrocooler/registro/en-blanco')
@@ -647,6 +654,11 @@ class MateriaPrimaApiTest extends TestCase
                 'temperatura_inicial_c' => 18.25,
                 'temperatura_objetivo_c' => 4,
                 'temperatura_agua_inicial_c' => 1.8,
+                'temperatura_ambiente_c' => 20,
+                'humedad_relativa_pct' => 65,
+                'pozo_accutab_mv' => 700,
+                'recarga_pastilla' => false,
+                'aplicacion_producto' => false,
                 'cloro_libre_ppm' => 95,
                 'ph_agua' => 6.5,
                 'control_inicial_conforme' => true,
@@ -702,8 +714,8 @@ class MateriaPrimaApiTest extends TestCase
         $registro = $this->get('/api/materia-prima/hidrocooler/registro?formato=pdf&equipo=HIDRO-02&turno=A')
             ->assertOk()
             ->assertHeader('content-type', 'application/pdf');
-        $this->assertStringContainsString('HIDRO-02', $registro->getContent());
-        $this->assertStringContainsString('Turno A', $registro->getContent());
+        $this->assertStringNotContainsString('HIDRO-02', $registro->getContent());
+        $this->assertStringNotContainsString('Turno A', $registro->getContent());
 
         foreach ([$primerLote['id'], $segundoLote['id']] as $loteId) {
             $this->postJson("/api/materia-prima/lotes/{$loteId}/asignar-camara", [
@@ -755,6 +767,11 @@ class MateriaPrimaApiTest extends TestCase
             'temperatura_inicial_c' => 19.4,
             'temperatura_objetivo_c' => 4,
             'temperatura_agua_inicial_c' => 1.9,
+            'temperatura_ambiente_c' => 20,
+            'humedad_relativa_pct' => 65,
+            'pozo_accutab_mv' => 700,
+            'recarga_pastilla' => false,
+            'aplicacion_producto' => false,
             'cloro_libre_ppm' => 105,
             'ph_agua' => 6.7,
             'control_inicial_conforme' => true,
@@ -874,6 +891,11 @@ class MateriaPrimaApiTest extends TestCase
             'inicio_at' => now()->subMinutes(30)->toAtomString(),
             'temperatura_inicial_c' => 18,
             'temperatura_objetivo_c' => 4,
+            'temperatura_ambiente_c' => 20,
+            'humedad_relativa_pct' => 65,
+            'pozo_accutab_mv' => 700,
+            'recarga_pastilla' => false,
+            'aplicacion_producto' => false,
             'cloro_libre_ppm' => 95,
             'ph_agua' => 6.5,
             'control_inicial_conforme' => true,
@@ -1575,6 +1597,85 @@ class MateriaPrimaApiTest extends TestCase
             ->assertJsonPath('kilos_recuperados', 3000)
             ->assertJsonPath('desglose_resultados.0.tipo.codigo', 'comercial')
             ->assertJsonPath('desglose_resultados.0.bins', 8);
+    }
+
+    public function test_poemp_r3_exige_campos_y_conserva_version_y_producto_al_iniciar(): void
+    {
+        $contexto = $this->prepararRecepcionValidada();
+        $digitador = User::factory()->create(['rol' => RolUsuario::DigitadorMateriaPrima]);
+        $this->actingAs($digitador, 'sanctum');
+        $lote = $this->postJson('/api/materia-prima/lotes', $this->payloadLote($contexto, ['requiere_hidrocooler' => true]))->assertCreated()->json('data');
+        $this->postJson("/api/materia-prima/lotes/{$lote['id']}/confirmar", [
+            'operacion_id' => (string) Str::uuid(), 'version_conocida' => $lote['version'],
+        ])->assertOk();
+        $inicio = $this->inicioPoemp();
+        foreach (['temperatura_ambiente_c', 'humedad_relativa_pct', 'pozo_accutab_mv', 'recarga_pastilla', 'aplicacion_producto'] as $campo) {
+            $datos = $inicio;
+            unset($datos[$campo]);
+            $this->postJson("/api/materia-prima/lotes/{$lote['id']}/hidrocooler/iniciar", $datos)
+                ->assertUnprocessable()->assertJsonValidationErrors($campo);
+        }
+        $this->postJson("/api/materia-prima/lotes/{$lote['id']}/hidrocooler/iniciar", [...$inicio, 'humedad_relativa_pct' => 101])
+            ->assertUnprocessable()->assertJsonValidationErrors('humedad_relativa_pct');
+        $this->postJson("/api/materia-prima/lotes/{$lote['id']}/hidrocooler/iniciar", [...$inicio, 'aplicacion_producto' => true])
+            ->assertUnprocessable()->assertJsonValidationErrors(['producto_hidrocooler_id', 'producto_dosis', 'producto_unidad_dosis']);
+        $producto = ProductoHidrocooler::create(['nombre' => 'Producto ensayo', 'unidad_dosis' => 'ml/L', 'activo' => false]);
+        $conProducto = [...$inicio, 'aplicacion_producto' => true, 'producto_hidrocooler_id' => $producto->id, 'producto_dosis' => 0.1254, 'producto_unidad_dosis' => 'ml/L'];
+        $this->postJson("/api/materia-prima/lotes/{$lote['id']}/hidrocooler/iniciar", $conProducto)
+            ->assertUnprocessable()->assertJsonValidationErrors('producto_hidrocooler_id');
+        $producto->update(['activo' => true]);
+        $this->assertDatabaseCount('procesos_hidrocooler_materia_prima', 0);
+        $this->postJson("/api/materia-prima/lotes/{$lote['id']}/hidrocooler/iniciar", $conProducto)
+            ->assertOk()->assertJsonPath('data.hidrocooler.formato_registro_snapshot.version', '2')
+            ->assertJsonPath('data.hidrocooler.producto_nombre_snapshot', 'Producto ensayo')
+            ->assertJsonPath('data.hidrocooler.producto_dosis', 0.1254)->assertJsonPath('data.hidrocooler.recarga_pastilla', false);
+        $producto->update(['nombre' => 'Nuevo nombre', 'unidad_dosis' => 'ppm', 'activo' => false]);
+        FormatoRegistro::where('codigo', 'POEMP-R3')->firstOrFail()->update(['version' => '3']);
+        $this->postJson("/api/materia-prima/lotes/{$lote['id']}/hidrocooler/iniciar", $conProducto)
+            ->assertOk()->assertJsonPath('data.hidrocooler.formato_registro_snapshot.version', '2')
+            ->assertJsonPath('data.hidrocooler.producto_nombre_snapshot', 'Producto ensayo');
+        $this->postJson("/api/materia-prima/lotes/{$lote['id']}/hidrocooler/iniciar", [...$conProducto, 'pozo_accutab_mv' => 710])
+            ->assertConflict();
+        $registro = $this->get('/api/materia-prima/hidrocooler/registro?formato=pdf&equipo=HIDRO-POEMP')->assertOk()->getContent();
+        $this->assertStringContainsString('(Versi', $registro);
+        $this->assertStringContainsString('ensayo', $registro);
+        $this->assertStringNotContainsString('Nuevo nombre', $registro);
+        $this->assertStringNotContainsString('HIDRO-POEMP', $registro);
+    }
+
+    public function test_poemp_r3_exige_correccion_dentro_del_rango_configurado_sin_limites_supuestos(): void
+    {
+        $contexto = $this->prepararRecepcionValidada();
+        $this->actingAs(User::factory()->create(['rol' => RolUsuario::DigitadorMateriaPrima]), 'sanctum');
+        $lote = $this->postJson('/api/materia-prima/lotes', $this->payloadLote($contexto, ['requiere_hidrocooler' => true]))->assertCreated()->json('data');
+        $this->postJson("/api/materia-prima/lotes/{$lote['id']}/confirmar", ['operacion_id' => (string) Str::uuid(), 'version_conocida' => $lote['version']])->assertOk();
+        $this->getJson('/api/materia-prima/hidrocooler/productos')->assertOk()->assertJsonPath('rango_cloro_ppm', null);
+        // Límites exclusivamente del escenario de prueba, no valores sanitarios publicados.
+        config(['hidrocooler.cloro_min_ppm' => 90, 'hidrocooler.cloro_max_ppm' => 110]);
+        $inicio = [...$this->inicioPoemp(), 'cloro_libre_ppm' => 40];
+        $this->postJson("/api/materia-prima/lotes/{$lote['id']}/hidrocooler/iniciar", $inicio)
+            ->assertUnprocessable()->assertJsonValidationErrors('correccion_cloro_ppm');
+        $this->postJson("/api/materia-prima/lotes/{$lote['id']}/hidrocooler/iniciar", [...$inicio, 'correccion_cloro_ppm' => 50])
+            ->assertUnprocessable()->assertJsonValidationErrors('correccion_cloro_ppm');
+        $this->assertDatabaseCount('procesos_hidrocooler_materia_prima', 0);
+        $this->postJson("/api/materia-prima/lotes/{$lote['id']}/hidrocooler/iniciar", [...$inicio, 'correccion_cloro_ppm' => 100])
+            ->assertOk()->assertJsonPath('data.hidrocooler.cloro_libre_ppm', 40)
+            ->assertJsonPath('data.hidrocooler.correccion_cloro_ppm', 100);
+        $this->assertDatabaseHas('procesos_hidrocooler_materia_prima', ['lote_materia_prima_id' => $lote['id'], 'cloro_min_ppm_snapshot' => 90, 'cloro_max_ppm_snapshot' => 110]);
+    }
+
+    private function inicioPoemp(): array
+    {
+        return [
+            'operacion_id' => (string) Str::uuid(), 'equipo' => 'HIDRO-POEMP', 'turno' => 'A',
+            'cantidad_bombas_funcionando' => 2, 'inicio_at' => now()->subMinutes(5)->toAtomString(),
+            'temperatura_inicial_c' => 18, 'temperatura_objetivo_c' => 4,
+            'temperatura_agua_inicial_c' => 1, 'cloro_libre_ppm' => 95, 'ph_agua' => 6.5,
+            'control_inicial_conforme' => true, 'condicion_visual_agua' => 'conforme',
+            'dosificador_operativo' => true, 'manejo_agua' => 'sin_novedad',
+            'temperatura_ambiente_c' => 20, 'humedad_relativa_pct' => 60,
+            'pozo_accutab_mv' => 700, 'recarga_pastilla' => false, 'aplicacion_producto' => false,
+        ];
     }
 
     /** @return array<string, mixed> */

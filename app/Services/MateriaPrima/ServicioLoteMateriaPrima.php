@@ -17,6 +17,7 @@ use App\Models\EspecieValidacion;
 use App\Models\EventoLoteMateriaPrima;
 use App\Models\LoteMateriaPrima;
 use App\Models\ProcesoHidrocoolerMateriaPrima;
+use App\Models\ProductoHidrocooler;
 use App\Models\RecepcionRomana;
 use App\Models\SegmentoValidacionMp;
 use App\Models\User;
@@ -348,6 +349,33 @@ class ServicioLoteMateriaPrima
                 ]);
             }
 
+            $rangoCloro = app(ControlCloroHidrocooler::class)->validar($datos);
+            $producto = null;
+            if ($datos['aplicacion_producto']) {
+                $producto = ProductoHidrocooler::query()->lockForUpdate()->find($datos['producto_hidrocooler_id']);
+                if (! $producto?->activo) {
+                    throw ValidationException::withMessages(['producto_hidrocooler_id' => 'Selecciona un producto activo del catálogo.']);
+                }
+            } elseif (filled($datos['producto_hidrocooler_id'] ?? null)
+                || filled($datos['producto_dosis'] ?? null) || filled($datos['producto_unidad_dosis'] ?? null)) {
+                throw ValidationException::withMessages(['aplicacion_producto' => 'No registres producto ni dosis si declaras que no hubo aplicación.']);
+            }
+            $datosRegistro = [
+                'temperatura_ambiente_c' => $datos['temperatura_ambiente_c'],
+                'humedad_relativa_pct' => $datos['humedad_relativa_pct'],
+                'pozo_accutab_mv' => $datos['pozo_accutab_mv'],
+                'recarga_pastilla' => $datos['recarga_pastilla'],
+                'correccion_cloro_ppm' => $datos['correccion_cloro_ppm'] ?? null,
+                'aplicacion_producto' => $datos['aplicacion_producto'],
+                'producto_hidrocooler_id' => $producto?->id,
+                'producto_nombre_snapshot' => $producto?->nombre,
+                'producto_dosis' => $producto ? $datos['producto_dosis'] : null,
+                'producto_unidad_dosis' => $producto ? trim($datos['producto_unidad_dosis']) : null,
+                'formato_registro_snapshot' => app(RegistroControlHidrocooler::class)->vigente(bloquear: true),
+                'cloro_min_ppm_snapshot' => $rangoCloro['min'] ?? null,
+                'cloro_max_ppm_snapshot' => $rangoCloro['max'] ?? null,
+            ];
+
             $equipo = trim($datos['equipo']);
             if (ProcesoHidrocoolerMateriaPrima::query()
                 ->where('estado', EstadoHidrocoolerMateriaPrima::EnCurso->value)
@@ -361,6 +389,7 @@ class ServicioLoteMateriaPrima
 
             $inicio = CarbonImmutable::parse($datos['inicio_at']);
             ProcesoHidrocoolerMateriaPrima::create([
+                ...$datosRegistro,
                 'lote_materia_prima_id' => $lote->id,
                 'operacion_inicio_id' => $datos['operacion_id'],
                 'payload_inicio_hash' => $hash,
@@ -403,6 +432,7 @@ class ServicioLoteMateriaPrima
                 EstadoLoteMateriaPrima::PendienteHidrocooler,
                 EstadoLoteMateriaPrima::HidrocoolerEnCurso,
                 [
+                    ...$datosRegistro,
                     'equipo' => $equipo,
                     'turno' => $datos['turno'],
                     'cantidad_bombas_funcionando' => $datos['cantidad_bombas_funcionando'],

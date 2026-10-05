@@ -228,7 +228,7 @@ class HidrocoolerMateriaPrimaController extends Controller
         }
 
         return ProcesoHidrocoolerMateriaPrima::query()
-            ->where('estado', EstadoHidrocoolerMateriaPrima::Completado->value)
+            ->whereIn('estado', [EstadoHidrocoolerMateriaPrima::Completado->value, EstadoHidrocoolerMateriaPrima::EnCurso->value])
             ->whereHas('lote', fn (Builder $lote) => $lote
                 ->where('temporada_id', $temporada->id))
             ->when($request->filled('equipo'), fn (Builder $query) => $query
@@ -264,6 +264,7 @@ class HidrocoolerMateriaPrimaController extends Controller
                 'lote.temporada',
                 'lote.recepcion',
                 'lote.cliente',
+                'lote.csg.productor',
                 'iniciadoPor',
                 'completadoPor',
             ])

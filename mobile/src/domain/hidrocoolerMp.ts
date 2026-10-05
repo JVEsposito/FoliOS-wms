@@ -36,6 +36,17 @@ export type HydroCycle = {
   temperatura_inicial_c: number;
   temperatura_objetivo_c: number;
   temperatura_agua_inicial_c: number | null;
+  temperatura_ambiente_c: number | null;
+  humedad_relativa_pct: number | null;
+  pozo_accutab_mv: number | null;
+  recarga_pastilla: boolean | null;
+  correccion_cloro_ppm: number | null;
+  aplicacion_producto: boolean | null;
+  producto_hidrocooler_id: string | null;
+  producto_dosis: number | null;
+  producto_unidad_dosis: string | null;
+  producto_nombre_snapshot: string | null;
+  formato_registro_snapshot: { codigo: string; version: string; fecha_vigencia: string; localidad: string } | null;
   cloro_libre_ppm: number;
   ph_agua: number;
   control_inicial_conforme: boolean;
@@ -85,6 +96,15 @@ export type StartHydroCycle = {
   temperatura_inicial_c: number;
   temperatura_objetivo_c: number;
   temperatura_agua_inicial_c: number | null;
+  temperatura_ambiente_c: number;
+  humedad_relativa_pct: number;
+  pozo_accutab_mv: number;
+  recarga_pastilla: boolean;
+  correccion_cloro_ppm: number | null;
+  aplicacion_producto: boolean;
+  producto_hidrocooler_id: string | null;
+  producto_dosis: number | null;
+  producto_unidad_dosis: string | null;
   cloro_libre_ppm: number;
   ph_agua: number;
   control_inicial_conforme: boolean;
@@ -118,3 +138,6 @@ export type ReleaseHydroCycle = {
   evaluacion_producto: string;
   verificacion_liberacion: string;
 };
+
+export type HydroProduct = { id: string; nombre: string; unidad_dosis: string };
+export type HydroCatalog = { data: HydroProduct[]; rango_cloro_ppm: { min: number; max: number } | null };

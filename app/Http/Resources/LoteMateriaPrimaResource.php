@@ -110,6 +110,19 @@ class LoteMateriaPrimaResource extends JsonResource
                 'temperatura_agua_inicial_c' => $this->hidrocooler->temperatura_agua_inicial_c !== null
                     ? (float) $this->hidrocooler->temperatura_agua_inicial_c
                     : null,
+                'temperatura_ambiente_c' => $this->hidrocooler->temperatura_ambiente_c !== null ? (float) $this->hidrocooler->temperatura_ambiente_c : null,
+                'humedad_relativa_pct' => $this->hidrocooler->humedad_relativa_pct !== null ? (float) $this->hidrocooler->humedad_relativa_pct : null,
+                'pozo_accutab_mv' => $this->hidrocooler->pozo_accutab_mv !== null ? (float) $this->hidrocooler->pozo_accutab_mv : null,
+                'correccion_cloro_ppm' => $this->hidrocooler->correccion_cloro_ppm !== null ? (float) $this->hidrocooler->correccion_cloro_ppm : null,
+                'producto_dosis' => $this->hidrocooler->producto_dosis !== null ? (float) $this->hidrocooler->producto_dosis : null,
+                'recarga_pastilla' => $this->hidrocooler->recarga_pastilla,
+                'aplicacion_producto' => $this->hidrocooler->aplicacion_producto,
+                'producto_hidrocooler_id' => $this->hidrocooler->producto_hidrocooler_id,
+                'producto_nombre_snapshot' => $this->hidrocooler->producto_nombre_snapshot,
+                'producto_unidad_dosis' => $this->hidrocooler->producto_unidad_dosis,
+                'formato_registro_snapshot' => $this->hidrocooler->formato_registro_snapshot,
+                'cloro_min_ppm_snapshot' => $this->hidrocooler->cloro_min_ppm_snapshot,
+                'cloro_max_ppm_snapshot' => $this->hidrocooler->cloro_max_ppm_snapshot,
                 'cloro_libre_ppm' => $this->hidrocooler->cloro_libre_ppm !== null
                     ? (float) $this->hidrocooler->cloro_libre_ppm
                     : null,

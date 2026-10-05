@@ -58,6 +58,7 @@ use App\Http\Controllers\Api\PinOperacionalController;
 use App\Http\Controllers\Api\PlanOperacionalController;
 use App\Http\Controllers\Api\PlanoPlantaController;
 use App\Http\Controllers\Api\ProcesoPrefrioController;
+use App\Http\Controllers\Api\ProductoHidrocoolerController;
 use App\Http\Controllers\Api\ProveedorMaterialController;
 use App\Http\Controllers\Api\RecepcionMaterialController;
 use App\Http\Controllers\Api\RecepcionRomanaController;
@@ -558,7 +559,12 @@ Route::middleware('auth:sanctum')->group(function () {
         ->middleware('can:gestionar-pines-operadores');
     Route::post('/administracion/usuarios/{usuario}/restablecer-pin', [PinOperacionalController::class, 'restablecer'])
         ->middleware('can:restablecer-pin-operacional,usuario');
+    Route::get('/materia-prima/hidrocooler/productos', [ProductoHidrocoolerController::class, 'catalogo']);
     Route::middleware('can:administrar-accesos')->group(function () {
+        Route::get('/administracion/productos-hidrocooler', [ProductoHidrocoolerController::class, 'index']);
+        Route::post('/administracion/productos-hidrocooler', [ProductoHidrocoolerController::class, 'store']);
+        Route::put('/administracion/productos-hidrocooler/{productoHidrocooler}', [ProductoHidrocoolerController::class, 'update']);
+        Route::get('/administracion/productos-hidrocooler/{productoHidrocooler}/eventos', [ProductoHidrocoolerController::class, 'eventos']);
         Route::get('/administracion/formatos-registro', [FormatoRegistroController::class, 'index']);
         Route::post('/administracion/formatos-registro', [FormatoRegistroController::class, 'store']);
         Route::put('/administracion/formatos-registro/{formatoRegistro}', [FormatoRegistroController::class, 'update']);
