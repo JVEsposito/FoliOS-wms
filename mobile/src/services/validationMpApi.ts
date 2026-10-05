@@ -1,3 +1,4 @@
+import { inspectionPayload } from '../domain/containerInspection';
 import { getContainerCatalog } from './containerCatalog';
 import { ContainerType, MpCatalog, MpHistory, MpReception, MpSegmentDraft, MpValidation } from '../domain/validationMp';
 import { ApiError } from './apiError';
@@ -56,6 +57,7 @@ export async function confirmMpValidation(baseUrl: string, token: string, valida
   varietyId: string | null;
   segments: MpSegmentDraft[];
   observation: string;
+  inspection: ReturnType<typeof inspectionPayload>;
 }) {
   const segmentos = input.segregation ? input.segments.map((segment) => ({
     motivos: segment.motivos,
@@ -78,6 +80,7 @@ export async function confirmMpValidation(baseUrl: string, token: string, valida
       variedad_validacion_id: input.segregation ? null : input.varietyId,
       segmentos,
       observacion: input.observation || null,
+      inspeccion_envases: input.inspection,
     }),
   })).data;
 }

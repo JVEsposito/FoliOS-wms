@@ -82,6 +82,8 @@
                             <button class="primary-button is-hidden" id="closeReceptionButton" type="button">Registrar destare y cerrar</button>
                             <button class="secondary-button is-hidden" id="correctExitButton" type="button">Corregir salida de envases</button>
                             <button class="secondary-button is-hidden" id="downloadReceiptButton" type="button">↓ Registro de pesaje (RPR-01)</button>
+                            <button class="secondary-button is-hidden" id="downloadRc02ReceptionButton" type="button">↓ RC-02 Recepción</button>
+                            <button class="secondary-button is-hidden" id="downloadRc02DispatchButton" type="button">↓ RC-02 Despacho</button>
                             <button class="secondary-button" id="closeDetailButton" type="button">Cerrar detalle</button>
                         </div>
                     </div>
@@ -153,6 +155,7 @@
                     <fieldset class="outbound-container-tares" id="outboundContainerTares"><legend>Envases y tara unitaria por tipo</legend><div id="outboundContainerTareList"></div><small>La entrada usa las cantidades validadas en la PDA. La diferencia por tipo ajusta el neto de fruta.</small>
                         <label class="field is-hidden" id="outboundExtraField"><span>Agregar otro tipo que sale</span><select id="outboundExtraType"></select><button class="secondary-button" type="button" id="outboundAddType">Agregar tipo</button></label>
                     </fieldset>
+                <fieldset class="outbound-container-tares" id="dispatchInspectionPanel"><legend>RC-02 · Inspección de despacho</legend><div id="dispatchInspectionItems"></div><label class="field"><span>Observación de inspección</span><textarea id="dispatchInspectionObservation" maxlength="2000"></textarea></label></fieldset>
                 <label class="field is-hidden" id="exitCorrectionReasonField"><span>Motivo de corrección *</span><textarea name="motivo_correccion" minlength="10" maxlength="1000"></textarea></label>
                 <label class="field"><span>Observación de cierre</span><textarea name="observacion" maxlength="2000"></textarea></label>
                 <div class="net-preview" id="containerTarePreviewRow"><span>DIFERENCIA DE TARA DE ENVASES</span><strong id="containerTarePreview">—</strong></div>

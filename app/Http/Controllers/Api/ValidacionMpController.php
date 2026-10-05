@@ -12,6 +12,7 @@ use App\Models\EspecieValidacion;
 use App\Models\RecepcionRomana;
 use App\Models\ValidacionMp;
 use App\Models\VariedadValidacion;
+use App\Services\Romana\ServicioInspeccionEnvases;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\ValidacionMp\ServicioValidacionMp;
 use Carbon\CarbonImmutable;
@@ -182,6 +183,7 @@ class ValidacionMpController extends Controller
             'segmentos.*.envases.*.cantidad' => ['required', 'integer', 'min:0', 'max:100000'],
             'segmentos.*.observacion' => ['nullable', 'string', 'max:1000'],
             'observacion' => ['nullable', 'string', 'max:2000'],
+            ...ServicioInspeccionEnvases::reglas(true),
         ]);
         $validacion = $servicio->confirmar($validacionMp, $datos, $request->user());
 

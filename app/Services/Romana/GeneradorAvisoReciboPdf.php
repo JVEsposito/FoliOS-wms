@@ -5,6 +5,7 @@ namespace App\Services\Romana;
 use App\Enums\EstadoRecepcionRomana;
 use App\Enums\TipoRecepcionRomana;
 use App\Models\RecepcionRomana;
+use App\Services\Documentos\DocumentoPdfPlanta;
 use App\Services\Documentos\ServicioFormatosRegistro;
 use Carbon\CarbonImmutable;
 
@@ -226,34 +227,6 @@ class GeneradorAvisoReciboPdf
     /** @param array<int, string> $paginas */
     private function documento(array $paginas): string
     {
-        $logo = resource_path('images/logo-agrorosario.jpg');
-        $imagen = file_get_contents($logo);
-        [$ancho, $alto] = getimagesize($logo);
-        $objetos = [
-            '<< /Type /Catalog /Pages 2 0 R >>',
-            '<< /Type /Pages /Kids ['.implode(' ', array_map(fn ($indice): string => (6 + $indice * 2).' 0 R', array_keys($paginas))).'] /Count '.count($paginas).' >>',
-            '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>',
-            '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>',
-            '<< /Type /XObject /Subtype /Image /Width '.$ancho.' /Height '.$alto.' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length '.strlen($imagen)." >>\nstream\n{$imagen}\nendstream",
-        ];
-        foreach ($paginas as $indice => $contenido) {
-            $objetos[] = '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> /XObject << /Logo 5 0 R >> >> /Contents '.(7 + $indice * 2).' 0 R >>';
-            $objetos[] = '<< /Length '.strlen($contenido)." >>\nstream\n{$contenido}endstream";
-        }
-        $pdf = "%PDF-1.4\n%\xE2\xE3\xCF\xD3\n";
-        $offsets = [0];
-        foreach ($objetos as $indice => $objeto) {
-            $offsets[] = strlen($pdf);
-            $numero = $indice + 1;
-            $pdf .= "{$numero} 0 obj\n{$objeto}\nendobj\n";
-        }
-        $xref = strlen($pdf);
-        $pdf .= "xref\n0 ".(count($objetos) + 1)."\n0000000000 65535 f \n";
-        foreach (array_slice($offsets, 1) as $offset) {
-            $pdf .= sprintf("%010d 00000 n \n", $offset);
-        }
-        $pdf .= 'trailer << /Size '.(count($objetos) + 1)." /Root 1 0 R >>\nstartxref\n{$xref}\n%%EOF";
-
-        return $pdf;
+        return app(DocumentoPdfPlanta::class)->generar($paginas);
     }
 }

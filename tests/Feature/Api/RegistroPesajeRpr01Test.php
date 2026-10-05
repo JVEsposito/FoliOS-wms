@@ -12,10 +12,12 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Tests\Concerns\PreparaInspeccionesEnvases;
 use Tests\TestCase;
 
 class RegistroPesajeRpr01Test extends TestCase
 {
+    use PreparaInspeccionesEnvases;
     use RefreshDatabase;
 
     private const CAMPOS = [
@@ -136,11 +138,11 @@ class RegistroPesajeRpr01Test extends TestCase
     private function cerrar(RecepcionRomana $recepcion, User $usuario, ?string $operacion = null): string
     {
         $operacion ??= (string) Str::uuid();
-        $this->actingAs($usuario, 'sanctum')->postJson('/api/romana/recepciones/'.$recepcion->id.'/cerrar', [
+        $this->actingAs($usuario, 'sanctum')->postJson('/api/romana/recepciones/'.$recepcion->id.'/cerrar', $this->payloadConInspeccionRc02('/api/romana/recepciones/'.$recepcion->id.'/cerrar', [
             'operacion_id' => $operacion, 'modo_salida_envases' => 'mismos', 'numero_guia_salida' => 'GS-NO-IMPRIMIR',
             'peso_tara' => 10540, 'tipo_envase_calculo_neto' => 'bins',
             'taras_envases' => [['tipo_envase' => 'bins', 'tara_unitaria' => 40], ['tipo_envase' => 'totes', 'tara_unitaria' => 1], ['tipo_envase' => 'esponjas', 'tara_unitaria' => 0.1]],
-        ])->assertOk();
+        ]))->assertOk();
 
         return $operacion;
     }

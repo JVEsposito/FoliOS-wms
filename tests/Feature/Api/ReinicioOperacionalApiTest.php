@@ -19,10 +19,12 @@ use App\Services\Planificador\ServicioRecalculosPendientesPlanificador;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Tests\Concerns\PreparaInspeccionesEnvases;
 use Tests\TestCase;
 
 class ReinicioOperacionalApiTest extends TestCase
 {
+    use PreparaInspeccionesEnvases;
     use RefreshDatabase;
 
     public function test_solo_un_administrador_activo_puede_previsualizar_y_ejecutar_el_reinicio(): void
@@ -106,6 +108,7 @@ class ReinicioOperacionalApiTest extends TestCase
             ->assertJsonPath('data.frase_confirmacion', "REINICIAR {$temporada->codigo}")
             ->assertJsonPath('data.resumen.frigorifico.folios', 1)
             ->assertJsonPath('data.resumen.materia_prima.recepciones_romana', 1)
+            ->assertJsonPath('data.resumen.materia_prima.inspecciones_envases', 2)
             ->assertJsonPath('data.resumen.materia_prima.lotes', 1);
         $this->assertContains(
             'todos los catálogos y datos operacionales de Bodega',
@@ -121,7 +124,8 @@ class ReinicioOperacionalApiTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('reutilizado', false)
             ->assertJsonPath('data.resumen_despues.frigorifico.folios', 0)
-            ->assertJsonPath('data.resumen_despues.materia_prima.recepciones_romana', 0);
+            ->assertJsonPath('data.resumen_despues.materia_prima.recepciones_romana', 0)
+            ->assertJsonPath('data.resumen_despues.materia_prima.inspecciones_envases', 0);
 
         $this->assertDatabaseMissing('folios', ['id' => $folioPt->id]);
         $this->assertDatabaseMissing('recepciones_romana', ['id' => $materiaPrima['recepcion_id']]);
@@ -131,6 +135,10 @@ class ReinicioOperacionalApiTest extends TestCase
         $this->assertDatabaseCount('segmentos_validacion_mp', 0);
         $this->assertDatabaseCount('procesos_hidrocooler_materia_prima', 0);
         $this->assertDatabaseCount('salidas_envases_recepcion_romana', 0);
+        $this->assertDatabaseCount('inspecciones_envases_recepcion', 0);
+        $this->assertDatabaseCount('items_inspeccion_envases', 0);
+        $this->assertDatabaseCount('eventos_inspeccion_envases', 0);
+        $this->assertDatabaseHas('formatos_registro', ['codigo' => 'RC-02', 'version' => '1']);
         $this->assertDatabaseCount('movimientos_envases', 0);
         $this->assertDatabaseCount('recalculos_pendientes_planificador', 0);
 
@@ -333,8 +341,7 @@ class ReinicioOperacionalApiTest extends TestCase
             ->assertOk()
             ->json('data');
         $segmentoId = $this->postJson(
-            "/api/validacion-mp/validaciones/{$validacion['id']}/confirmar",
-            [
+            "/api/validacion-mp/validaciones/{$validacion['id']}/confirmar", $this->payloadConInspeccionRc02("/api/validacion-mp/validaciones/{$validacion['id']}/confirmar", [
                 'operacion_id' => (string) Str::uuid(),
                 'envases' => [
                     ['tipo_envase' => 'bins', 'cantidad_validada' => 48],
@@ -344,19 +351,19 @@ class ReinicioOperacionalApiTest extends TestCase
                 'requiere_segregacion' => false,
                 'csg_validacion_id' => $csg->id,
                 'variedad_validacion_id' => $variedad->id,
-            ],
+            ]),
         )
             ->assertOk()
             ->json('data.segmentos.0.id');
 
-        $this->actingAs($operador, 'sanctum')->postJson("/api/romana/recepciones/{$recepcion['id']}/cerrar", [
+        $this->actingAs($operador, 'sanctum')->postJson("/api/romana/recepciones/{$recepcion['id']}/cerrar", $this->payloadConInspeccionRc02("/api/romana/recepciones/{$recepcion['id']}/cerrar", [
             'operacion_id' => (string) Str::uuid(),
             'modo_salida_envases' => 'mismos',
             'numero_guia_salida' => 'GS-RESET-MP',
             'taras_envases' => [['tipo_envase' => 'bins', 'tara_unitaria' => 40], ['tipo_envase' => 'totes', 'tara_unitaria' => 2]],
             'peso_tara' => 10000,
             'tipo_envase_calculo_neto' => 'bins',
-        ])->assertOk();
+        ]))->assertOk();
 
         $lote = $this->actingAs($digitador, 'sanctum')
             ->postJson('/api/materia-prima/lotes', [

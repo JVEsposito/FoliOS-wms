@@ -3,6 +3,8 @@ import * as Crypto from 'expo-crypto';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 
+import { ContainerInspectionPanel } from '../components/ContainerInspectionPanel';
+import { emptyContainerInspection, inspectionPayload } from '../domain/containerInspection';
 import { ReceptionDefectsPanel } from '../components/ReceptionDefectsPanel';
 import { AuthSession } from '../domain/estiba';
 import { ContainerType, MpCatalog, MpHistory, MpReception, MpSegmentDraft, SegregationReason } from '../domain/validationMp';
@@ -31,6 +33,7 @@ export function ValidationMpScreen({ auth, baseUrl, onLogout }: Props) {
   const [segregation, setSegregation] = useState(false);
   const [segments, setSegments] = useState<MpSegmentDraft[]>([]);
   const [observation, setObservation] = useState('');
+  const [inspection, setInspection] = useState(() => emptyContainerInspection([]));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const isFruit = reception?.tipo_recepcion !== 'solo_envases';
@@ -66,6 +69,7 @@ export function ValidationMpScreen({ auth, baseUrl, onLogout }: Props) {
       setQuantities(Object.fromEntries(loaded.envases.map((item) => [item.tipo_envase, String(item.cantidad_declarada)])) as Record<ContainerType, string>);
       setCatalog(await getMpCatalog(baseUrl, auth.token, loaded.id));
       setCsgId(null); setVarietyId(null); setSpeciesId(null);
+      setInspection(emptyContainerInspection(loaded.envases.map((i) => i.tipo_envase)));
       setTagsChecked(false); setSegregation(false); setSegments([]); setObservation('');
     } catch (reason) { setError(message(reason)); }
     finally { setBusy(false); }
@@ -110,7 +114,7 @@ export function ValidationMpScreen({ auth, baseUrl, onLogout }: Props) {
     try {
       if (isFruit && !segregation && (!csgId || !varietyId)) { setError('Selecciona CSG y variedad para esta recepción.'); setBusy(false); return; }
       if (isFruit && segregation && segments.some((segment) => !segment.csg_validacion_id || !segment.variedad_validacion_id)) { setError('Cada segmento requiere CSG y variedad.'); setBusy(false); return; }
-      const result = await confirmMpValidation(baseUrl, auth.token, validationId, { containers: actualContainers, tagsChecked, segregation, segments, csgId, varietyId, observation });
+      const result = await confirmMpValidation(baseUrl, auth.token, validationId, { containers: actualContainers, tagsChecked, segregation, segments, csgId, varietyId, observation, inspection: inspectionPayload(inspection, actualContainers) });
       Alert.alert('Recepción validada', `${result.numero_recepcion} quedó lista${result.segmentos.length ? ` con ${result.segmentos.length} segmento(s) pendiente(s) de lote` : ''}.`);
       setValidationId(null);
       setReception(null);
@@ -146,6 +150,7 @@ export function ValidationMpScreen({ auth, baseUrl, onLogout }: Props) {
           {reception.envases.map((item) => { const actual = Number(quantities[item.tipo_envase] || 0); const difference = actual - item.cantidad_declarada; return <View key={item.tipo_envase} style={styles.countRow}><View><Text style={styles.countType}>{label(item.tipo_envase)}</Text><Text style={styles.muted}>Guía: {item.cantidad_declarada} · Diferencia: {difference > 0 ? '+' : ''}{difference}</Text></View><TextInput keyboardType="number-pad" onChangeText={(value) => setQuantities((current) => ({ ...current, [item.tipo_envase]: value.replace(/\D/g, '') }))} style={styles.countInput} value={quantities[item.tipo_envase]}/></View>})}
           {isFruit ? <><Check active={tagsChecked} label="Tarjas de campo verificadas visualmente" onPress={() => setTagsChecked((value) => !value)}/><View style={styles.choiceRow}><Text style={styles.countType}>¿Requiere segregación?</Text><Chip active={!segregation} label="No" onPress={() => { setSegregation(false); setSegments([]); }}/><Chip active={segregation} label="Sí" onPress={() => { setSegregation(true); if (!segments.length) { addSegment(); addSegment(); } }}/></View>{segregation ? <View style={styles.segments}><View style={styles.segmentHeading}><Text style={styles.cardTitle}>Segmentos futuros</Text><Pressable onPress={addSegment} style={styles.secondary}><Text style={styles.secondaryText}>+ Segmento</Text></Pressable></View>{segments.map((segment, index) => <SegmentEditor catalog={catalog} containers={actualContainers.map((item) => item.tipo_envase)} index={index} key={segment.key} onChange={(patch) => updateSegment(segment.key, patch)} onRemove={() => setSegments((current) => current.filter((item) => item.key !== segment.key))} onToggleReason={(reason) => toggleReason(segment, reason)} segment={segment}/>)}</View> : <OriginPicker catalog={catalog} csgId={csgId} varietyId={varietyId} onCsg={(id) => { setCsgId(id); setVarietyId(null); }} onVariety={setVarietyId}/>}</> : <Text style={styles.info}>Recepción solo de envases: no requiere tarjas ni segregación.</Text>}
           {reception.tipo_recepcion === 'fruta_pesaje_envases' && reception.estado_romana !== 'cerrado' ? <Text style={styles.info}>Pesaje acumulativo aún abierto en Romana. Puedes preparar la revisión, pero la confirmación quedará bloqueada hasta que se pesen todos los envases.</Text> : null}
+          <ContainerInspectionPanel value={inspection} quantities={actualContainers} disabled={busy} onChange={setInspection}/>
           <TextInput multiline onChangeText={setObservation} placeholder="Observación opcional" placeholderTextColor={colors.muted} style={styles.observation} value={observation}/><Pressable disabled={reception.tipo_recepcion === 'fruta_pesaje_envases' && reception.estado_romana !== 'cerrado'} onPress={() => void confirm()} style={[styles.primary, reception.tipo_recepcion === 'fruta_pesaje_envases' && reception.estado_romana !== 'cerrado' && styles.disabled]}><Text style={styles.primaryText}>Confirmar Validación MP</Text></Pressable>
         </View>}
         {(validationId || reception.validacion?.validador.id === auth.usuario.id) ? <ReceptionDefectsPanel baseUrl={baseUrl} guideNumber={reception.numero_guia_despacho} key={reception.id} receptionId={reception.id} token={auth.token}/> : null}
