@@ -1,0 +1,26 @@
+.pt-labels-workspace { width: min(1440px, calc(100% - 40px)); margin: 24px auto 60px; display: grid; gap: 18px; }
+.pt-labels-heading { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 24px; }
+.pt-labels-heading h1, .pt-labels-panel h2 { margin: 0 0 10px; }
+.pt-labels-panel { padding: 24px; }
+.pt-labels-panel p, .pt-labels-heading p { color: var(--muted); line-height: 1.5; }
+.pt-labels-filters { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin: 20px 0; }
+.pt-labels-filters label { display: grid; gap: 8px; flex: 1; min-width: 150px; color: var(--text); }
+.pt-labels-filters input, .pt-labels-filters select { min-height: 42px; width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 10px; background: var(--panel); color: var(--text); }
+.pt-labels-reason { flex: 2 !important; }
+.pt-labels-scroll { overflow: auto; }
+.pt-labels-table { border-collapse: collapse; width: 100%; min-width: 780px; }
+.pt-labels-table th, .pt-labels-table td { text-align: left; padding: 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.pt-labels-table th { color: var(--muted); }
+.pt-labels-table td { overflow-wrap: anywhere; }
+.pt-labels-table input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--accent); }
+.pt-labels-actions { display: flex; align-items: center; justify-content: end; gap: 12px; margin-top: 16px; }
+.pt-labels-pdf { width: 100%; height: 600px; border: 1px solid var(--border); margin-top: 20px; }
+.pt-labels-dialog { max-width: 720px; width: calc(100% - 32px); max-height: 85vh; overflow: auto; border: 1px solid var(--border); border-radius: 16px; padding: 24px; background: var(--panel); color: var(--text); }
+.pt-labels-dialog dl { display: grid; grid-template-columns: 160px 1fr; gap: 10px; }
+.pt-labels-dialog dt { color: var(--muted); }
+.pt-labels-dialog dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+@media (max-width: 700px) {
+    .pt-labels-heading { flex-direction: column; align-items: start; }
+    .pt-labels-panel { padding: 16px; }
+    .pt-labels-dialog dl { grid-template-columns: 1fr; }
+}

@@ -42,6 +42,8 @@ export default defineConfig({
                 'resources/js/office-material-warehouses.js',
                 'resources/css/office-validation.css',
                 'resources/js/office-validation.js',
+                'resources/css/office-pt-labels.css',
+                'resources/js/office-pt-labels.js',
                 'resources/css/office-validation-catalog.css',
                 'resources/js/office-validation-catalog.js',
                 'resources/css/office-validation-annulments.css',
