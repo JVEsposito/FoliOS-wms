@@ -42,7 +42,7 @@ class GeneradorEtiquetaMaterialPdf
     }
 
     /** @param array<string, mixed> $etiqueta */
-    private function pagina(array $etiqueta, float $ancho, float $alto): string
+    protected function pagina(array $etiqueta, float $ancho, float $alto): string
     {
         $margen = max(7, $ancho * 0.035);
         $encabezado = max(22, $alto * 0.17);
@@ -111,22 +111,33 @@ class GeneradorEtiquetaMaterialPdf
         return $contenido;
     }
 
-    private function codigoBarras(
+    protected function codigoBarras(
         string $valor,
         float $x,
         float $y,
         float $ancho,
         float $alto,
+        bool $estricto = false,
     ): string {
-        $codigos = [104];
-        foreach (str_split($valor) as $caracter) {
+        if ($estricto && ! preg_match('/^[\x20-\x7E]+$/D', $valor)) {
+            throw new \DomainException('El folio contiene caracteres que Code 128 no puede representar.');
+        }
+        $numerico = $estricto && ctype_digit($valor) && strlen($valor) % 2 === 0;
+        $inicio = $numerico ? 105 : 104;
+        $codigos = [$inicio];
+        foreach (str_split($valor, $numerico ? 2 : 1) as $caracter) {
+            if ($numerico) {
+                $codigos[] = (int) $caracter;
+
+                continue;
+            }
             $ascii = ord($caracter);
             if ($ascii < 32 || $ascii > 126) {
                 continue;
             }
             $codigos[] = $ascii - 32;
         }
-        $checksum = 104;
+        $checksum = $inicio;
         foreach (array_slice($codigos, 1) as $indice => $codigo) {
             $checksum += $codigo * ($indice + 1);
         }
@@ -135,9 +146,12 @@ class GeneradorEtiquetaMaterialPdf
         $unidades = array_sum(array_map(
             fn (int $codigo): int => array_sum(array_map('intval', str_split(self::CODE128[$codigo]))),
             $codigos,
-        )) + 2;
+        )) + ($estricto ? 20 : 2);
         $modulo = $ancho / $unidades;
-        $cursor = $x;
+        if ($estricto && $modulo < (0.19 / 25.4) * 72) {
+            throw new \DomainException('El folio es demasiado largo para un código legible en este tamaño de etiqueta.');
+        }
+        $cursor = $x + ($estricto ? 10 * $modulo : 0);
         $contenido = '0 0 0 rg ';
 
         foreach ($codigos as $codigo) {
@@ -189,7 +203,7 @@ class GeneradorEtiquetaMaterialPdf
         return max(4, min($maximo, floor($calculado)));
     }
 
-    private function texto(
+    protected function texto(
         float $x,
         float $y,
         float $tamano,

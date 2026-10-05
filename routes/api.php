@@ -34,6 +34,7 @@ use App\Http\Controllers\Api\DespachoComercialRetornoController;
 use App\Http\Controllers\Api\DespachoFrigorificoController;
 use App\Http\Controllers\Api\DespachoMaterialController;
 use App\Http\Controllers\Api\EmbarqueController;
+use App\Http\Controllers\Api\EtiquetaPtController;
 use App\Http\Controllers\Api\EvacuacionEmergenciaController;
 use App\Http\Controllers\Api\FolioPrefrioController;
 use App\Http\Controllers\Api\FormatoRegistroController;
@@ -263,6 +264,9 @@ Route::middleware('auth:sanctum')->group(function () {
         [ValidacionPalletController::class, 'corregir'],
     )->middleware('can:corregir-validaciones-pallet');
     Route::middleware('can:consultar-validaciones-pallet')->group(function () {
+        Route::get('/validacion/etiquetas', [EtiquetaPtController::class, 'index']);
+        Route::get('/validacion/etiquetas/historial', [EtiquetaPtController::class, 'historial']);
+        Route::post('/validacion/etiquetas', [EtiquetaPtController::class, 'store']);
         Route::get('/validacion/pallets', [ValidacionPalletController::class, 'index']);
         Route::get('/validacion/registro/resumen', [ValidacionPalletController::class, 'resumen']);
         Route::get('/validacion/registro/opciones', [ValidacionPalletController::class, 'opciones']);

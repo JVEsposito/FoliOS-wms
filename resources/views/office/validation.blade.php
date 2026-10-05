@@ -39,6 +39,7 @@
                     <div class="validation-heading__actions">
                         <label><span>Temporada visible</span><select id="seasonSelector"></select></label>
                         <button class="secondary-button" id="reloadValidationButton" type="button">↻ Actualizar</button>
+                        <a class="secondary-button" href="/oficina/validacion/etiquetas">Etiquetas PT</a>
                     </div>
                 </header>
 
