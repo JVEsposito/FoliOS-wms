@@ -8,6 +8,7 @@ La PDA conserva su flujo de Validación PT. Después de una aprobación, en Ofic
 - **Folio:** 100 × 50 mm, folio grande, código de barras y resumen del artículo, cantidad, cliente, marca, CSG y embalaje.
 - **Ventana:** 100 × 200 mm, los datos anteriores más temporada, estado operativo, validador, jornada y composición completa por CSG, predio, fecha y cantidad. Incluye lote MP y proceso de packing cuando existen en la composición.
 - Código **Code 128**, con el valor exacto del folio, incluidos ceros iniciales. Se admite ASCII imprimible; un folio no representable o demasiado largo se rechaza con un mensaje, nunca se altera silenciosamente.
+- **QR adicional en los tres formatos**, con el mismo número exacto del folio (sin URL ni prefijos). Se imprime como vectores, con corrección de errores M y margen blanco de cuatro módulos. El lector debe tener habilitada la lectura QR; los lectores de códigos lineales pueden seguir usando Code 128. Ambos identifican el mismo pallet o saldo.
 - Una página por etiqueta; hasta 50 folios y 1–10 copias por folio por solicitud. La pantalla selecciona hasta 25 folios de la página actual; cambiar filtros o página limpia la selección.
 - Abrir o descargar el PDF e imprimir al **100 % / tamaño real**, sin ajustar a página, en una impresora con papel del tamaño elegido. Esta primera versión imprime por PDF; no envía comandos ZPL ni archivos NLabel directamente.
 
@@ -50,3 +51,9 @@ En Administración → Catálogo de validación → Envases se configura el peso
 En un folio de validación se usa su fecha de proceso/embalaje registrada. Al confirmar cualquier modalidad de repaletizaje, se guarda la fecha más antigua entre los orígenes. Un repaletizado aporta su fecha persistida a la siguiente repa. La fecha de confirmación nunca sustituye una fecha de proceso desconocida. Si falta la fecha de algún origen o el historial no permite reconstruirla, queda vacía y planta imprime “—”. Anular restaura la fecha anterior con el snapshot del folio.
 
 Para aceptar el cambio: configurar 9 kg y comprobar 77 cajas = 693,00; mezclar variedades/envases y revisar sumas; repaletizar orígenes del 06-02 y 09-02, después agregar uno del 04-02, y comprobar 06-02 y 04-02 respectivamente. Confirmar también cuatro páginas de 107 × 74 mm, lectura del código, aviso por peso faltante, impresión desde Repaletizajes y una sola auditoría al reintentar la misma operación.
+
+## Actualización: QR junto al código de barras
+
+Después de incorporar este cambio, ejecutar `composer install --no-dev --optimize-autoloader`, `npm ci`, `npm run build` y `php artisan optimize:clear`. El QR usa `bacon/bacon-qr-code` y `ext-iconv`, sin servicios externos ni ImageMagick. No agrega migraciones ni requiere OTA o APK nueva. Los PDF ya descargados conservan su diseño; generar una nueva emisión con el motivo de reimpresión correspondiente para obtener ambos códigos.
+
+En la impresora real, probar una etiqueta de cada formato al 100 % con un folio que tenga ceros iniciales. Leer Code 128 y QR por separado: ambos deben devolver exactamente el folio completo. Probar también un folio alfanumérico de repaletizaje, comprobar que los datos y las copias se conservan y que el margen blanco del QR no queda cortado.

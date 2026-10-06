@@ -28,6 +28,7 @@ class GeneradorEtiquetaPtPdfTest extends TestCase
             $this->assertStringContainsString('/Count 2', $pdf);
             $this->assertStringContainsString('(0000000003)', $pdf);
             $this->assertStringContainsString('80 cajas', $pdf);
+            $this->assertSame(2, substr_count($pdf, '% QR folio'));
         }
     }
 
@@ -64,6 +65,7 @@ class GeneradorEtiquetaPtPdfTest extends TestCase
             $this->assertSame(4, substr_count($pdf, '('.$texto.')'));
         }
         $this->assertSame(4, substr_count($pdf, $generador->barcode($datos['numero_folio'])));
+        $this->assertSame(4, substr_count($pdf, '% QR folio'));
         $datos['origen'] = 'validacion';
         $datos['kilos_netos'] = null;
         $datos['fecha_proceso'] = null;
@@ -78,6 +80,39 @@ class GeneradorEtiquetaPtPdfTest extends TestCase
         $datos['numero_folio'] = 'PAL-Ñ';
         $this->expectException(DomainException::class);
         (new GeneradorEtiquetaPtPdf)->generarPt([$datos], 'ventana');
+    }
+
+    public function test_agregar_qr_conserva_el_ancho_del_barcode_para_folios_alfanumericos_largos(): void
+    {
+        $datos = [...$this->etiqueta(), 'numero_folio' => 'REPA-'.str_repeat('A', 33),
+            'envase_codigo' => 'RGEN90BAM', 'origen' => 'repaletizaje',
+            'fecha_proceso' => '2026-02-06', 'kilos_netos' => '693.00'];
+        $generador = new class extends GeneradorEtiquetaPtPdf
+        {
+            public function barcode(string $numero, string $tipo): string
+            {
+                $margen = $tipo === 'planta' ? 9 : 12;
+                $ancho = ($tipo === 'planta' ? 107 : 100) / 25.4 * 72;
+                $y = match ($tipo) {
+                    'planta' => 10,
+                    'ventana' => 200 / 25.4 * 72 - 130,
+                    default => 50 / 25.4 * 72 - 73,
+                };
+                $alto = match ($tipo) {
+                    'planta' => 39,
+                    'ventana' => 55,
+                    default => 24,
+                };
+
+                return $this->codigoBarras($numero, $margen, $y, $ancho - 2 * $margen, $alto, true);
+            }
+        };
+        foreach (['folio', 'ventana', 'planta'] as $tipo) {
+            $pdf = $generador->generarPt([$datos], $tipo, 1);
+            $this->assertStringContainsString($generador->barcode($datos['numero_folio'], $tipo), $pdf);
+            $this->assertStringContainsString('('.$datos['numero_folio'].')', $pdf);
+            $this->assertSame(1, substr_count($pdf, '% QR folio'));
+        }
     }
 
     public function test_rechaza_composicion_demasiado_extensa_sin_recortarla(): void
