@@ -41,6 +41,8 @@ import { ApiError } from '../services/apiError';
 import { EstibaApi } from '../services/estibaApi';
 import { OperationalTasksApi, type StartConfirmation } from '../services/operationalTasksApi';
 import type { FolioConfirmationState } from './operator/OperatorFolioConfirmation';
+import { cameraSessionConflictMessage } from '../domain/operationalTaskErrors';
+import { OperatorErrorDialog } from './operator/OperatorErrorDialog';
 import { OperatorTaskExecution } from './operator/OperatorTaskExecution';
 import { OperatorTaskHome } from './operator/OperatorTaskHome';
 import { TurnVerification } from './operator/TurnVerification';
@@ -139,7 +141,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
 
   useEffect(() => {
     if (!leaseExpired || !activeTask) return;
-    setError('El claim venció antes de iniciar el movimiento. Actualiza la bandeja y vuelve a tomar la tarea.');
+    reportError('El claim venció antes de iniciar el movimiento. Actualiza la bandeja y vuelve a tomar la tarea.');
   }, [leaseExpired, activeTask?.id]);
 
   useOperationalPolling(
@@ -150,10 +152,15 @@ export function OperationalTaskInbox({ api, auth }: Props) {
         || activeTask.maniobra?.estado === 'pausada_discrepancia'
       ),
       intervalMs: OPERATIONAL_POLL_INTERVAL_MS,
-      onError: (reason) => setError(messageFrom(reason)),
+      onError: (reason) => reportError(messageFrom(reason)),
       onResume: () => loadTasks({ quiet: true }),
     },
   );
+
+  function reportError(message: string) {
+    // Conserva el error que el operador está leyendo, incluso durante el polling.
+    setError((current) => current || message);
+  }
 
   async function loadTasks({ quiet = false }: { quiet?: boolean } = {}) {
     if (!taskApi || loadInFlight.current) return;
@@ -169,7 +176,6 @@ export function OperationalTaskInbox({ api, auth }: Props) {
       setMine(nextMine);
       setAvailable(nextAvailable);
       setVerification(nextVerification);
-      setError('');
       void precalculate(nextMine, nextAvailable);
 
       setActiveTask((current) => {
@@ -184,7 +190,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
 
       return { mine: nextMine, available: nextAvailable };
     } catch (reason) {
-      setError(messageFrom(reason));
+      reportError(messageFrom(reason));
     } finally {
       loadInFlight.current = false;
       if (!quiet) setBusy(false);
@@ -203,7 +209,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
           ? 'Ubicación confirmada.'
           : 'Diferencia registrada para revisión en Oficina.');
     } catch (reason) {
-      setError(messageFrom(reason));
+      reportError(messageFrom(reason));
       setVerification(await taskApi.currentVerification(auth.token).catch(() => verification));
     } finally {
       setBusy(false);
@@ -250,7 +256,6 @@ export function OperationalTaskInbox({ api, auth }: Props) {
   async function takeTask(task: OperationalTask) {
     if (!taskApi) return;
     setBusy(true);
-    setError('');
     setNotice('');
     try {
       const taken = await taskApi.take(auth.token, task.id);
@@ -269,7 +274,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
       }
       await loadTasks({ quiet: true });
     } catch (reason) {
-      setError(messageFrom(reason));
+      reportError(messageFrom(reason));
       await loadTasks({ quiet: true });
     } finally {
       setBusy(false);
@@ -278,7 +283,6 @@ export function OperationalTaskInbox({ api, auth }: Props) {
 
   function beginTask(task: OperationalTask) {
     setActiveTask(task);
-    setError('');
     setNotice('');
     if (task.estado === 'en_proceso') {
       setNotice('Movimiento ya iniciado: el destino está fijo hasta completar o registrar una incidencia.');
@@ -312,7 +316,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
       replaceMine([renewed]);
       setClock(Date.now());
     } catch (reason) {
-      setError(messageFrom(reason));
+      reportError(messageFrom(reason));
       await loadTasks({ quiet: true });
     }
   }
@@ -341,7 +345,6 @@ export function OperationalTaskInbox({ api, auth }: Props) {
   async function releaseTask(task: OperationalTask) {
     if (!taskApi || task.estado === 'en_proceso') return;
     setBusy(true);
-    setError('');
     try {
       await taskApi.release(auth.token, task.id);
       if (activeTask?.id === task.id) {
@@ -350,7 +353,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
       setNotice('Tarea liberada y devuelta a la bandeja.');
       await loadTasks({ quiet: true });
     } catch (reason) {
-      setError(messageFrom(reason));
+      reportError(messageFrom(reason));
       await loadTasks({ quiet: true });
     } finally {
       setBusy(false);
@@ -360,7 +363,6 @@ export function OperationalTaskInbox({ api, auth }: Props) {
   async function calculateAndMaterializeFrontier(anchorTask: OperationalTask) {
     if (!taskApi) return;
     setBusy(true);
-    setError('');
 
     try {
       let snapshot = await taskApi.physicalFrontierSnapshot(auth.token);
@@ -434,7 +436,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
         );
       } else {
         const rejected = result.rechazadas.find((item) => item.tarea_id === anchorTask.id);
-        setError(
+        reportError(
           rejected?.motivo
             ?? 'La tarea quedó fuera de la frontera inmediata. Actualiza el estado antes de ejecutarla.',
         );
@@ -447,7 +449,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
         );
       }
     } catch (reason) {
-      setError(messageFrom(reason));
+      reportError(messageFrom(reason));
       await loadTasks({ quiet: true });
     } finally {
       setBusy(false);
@@ -458,7 +460,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
     if (!taskApi || !task || task.estado === 'en_proceso') return false;
     if (task.tipo_movimiento !== 'retiro'
       && (!task.destino?.posicion || task.reserva?.tipo_compromiso !== 'fisica')) {
-      setError('Primero debe existir un destino físico validado por el servidor.');
+      reportError('Primero debe existir un destino físico validado por el servidor.');
       return false;
     }
     return true;
@@ -471,13 +473,12 @@ export function OperationalTaskInbox({ api, auth }: Props) {
       setConfirmation((current) => current ? { ...current, pinStatus } : current);
     } catch (reason) {
       setConfirmation(null);
-      setError(messageFrom(reason));
+      reportError(messageFrom(reason));
     }
   }
 
   function openStartConfirmation() {
     if (!canStartPhysicalTask(activeTask)) return;
-    setError('');
     setConfirmation({ pinStatus: null, error: '' });
     void refreshPinStatus();
   }
@@ -501,7 +502,6 @@ export function OperationalTaskInbox({ api, auth }: Props) {
     if (!canStartPhysicalTask(activeTask)) return;
 
     setBusy(true);
-    setError('');
     setConfirmation((current) => current ? { ...current, error: '' } : current);
     const sessions: OpenSession[] = [];
     try {
@@ -524,7 +524,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
         return;
       }
       setConfirmation(null);
-      setError(messageFrom(reason));
+      reportError(messageFrom(reason));
       await loadTasks({ quiet: true });
     } finally {
       setBusy(false);
@@ -536,12 +536,11 @@ export function OperationalTaskInbox({ api, auth }: Props) {
     const task = activeTask;
     const destination = task.destino;
     if (!destination?.posicion) {
-      setError('La tarea en movimiento no posee una posición física de destino. Registra una incidencia.');
+      reportError('La tarea en movimiento no posee una posición física de destino. Registra una incidencia.');
       return;
     }
 
     setBusy(true);
-    setError('');
     setNotice('');
     const sessions = executionSessions.current.length
       ? executionSessions.current
@@ -587,7 +586,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
       setNotice(`Movimiento completado: ${task.folio.numero_folio} → ${operationalTaskPositionLabel(task.destino)}.`);
       await continueManeuver(task);
     } catch (reason) {
-      setError(messageFrom(reason));
+      reportError(messageFrom(reason));
       await loadTasks({ quiet: true });
     } finally {
       await closeTemporarySessions(sessions);
@@ -610,7 +609,6 @@ export function OperationalTaskInbox({ api, auth }: Props) {
       ? executionSessions.current
       : [];
     setBusy(true);
-    setError('');
     setNotice('');
 
     try {
@@ -644,7 +642,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
       setActiveTask(null);
       await loadTasks({ quiet: true });
     } catch (reason) {
-      setError(messageFrom(reason));
+      reportError(messageFrom(reason));
       await loadTasks({ quiet: true });
     } finally {
       await closeTemporarySessions(sessions);
@@ -662,7 +660,6 @@ export function OperationalTaskInbox({ api, auth }: Props) {
     const task = activeTask;
     const sessions = executionSessions.current.length ? executionSessions.current : [];
     setBusy(true);
-    setError('');
     try {
       if (!sessions.length) await acquireExecutionSessions(task, sessions);
       if (!task.origen?.camara) throw new Error('La extracción no conserva su cámara de origen.');
@@ -686,7 +683,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
       );
       await continueManeuver(task);
     } catch (reason) {
-      setError(messageFrom(reason));
+      reportError(messageFrom(reason));
       await loadTasks({ quiet: true });
     } finally {
       await closeTemporarySessions(sessions);
@@ -700,11 +697,10 @@ export function OperationalTaskInbox({ api, auth }: Props) {
     detail: string,
   ): Promise<ReportedManeuverDiscrepancy | null> {
     if (!taskApi || !activeTask?.maniobra) {
-      setError('La gestión de incidencias está disponible para maniobras físicas del planificador.');
+      reportError('La gestión de incidencias está disponible para maniobras físicas del planificador.');
       return null;
     }
     setBusy(true);
-    setError('');
     try {
       const reported = await taskApi.reportDiscrepancy(auth.token, activeTask.id, type, detail);
       const refreshed = await loadTasks({ quiet: true });
@@ -715,7 +711,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
       );
       return reported;
     } catch (reason) {
-      setError(messageFrom(reason));
+      reportError(messageFrom(reason));
       return null;
     } finally {
       setBusy(false);
@@ -749,23 +745,23 @@ export function OperationalTaskInbox({ api, auth }: Props) {
     if (task.tipo_movimiento === 'retiro') {
       if (task.contexto?.origen_logico === 'tunel_prefrio') return;
       if (!task.origen?.camara) throw new Error('La tarea no posee cámara de origen.');
-      await acquireSession(task.origen.camara.id, sessions);
+      await acquireSession(task.origen.camara.id, sessions, 'origen');
       return;
     }
     if (!task.destino?.camara) throw new Error('La tarea no posee cámara de destino materializada.');
-    await acquireSession(task.destino.camara.id, sessions);
+    await acquireSession(task.destino.camara.id, sessions, 'destino');
     if (task.origen?.camara && task.origen.camara.id !== task.destino.camara.id) {
-      await acquireSession(task.origen.camara.id, sessions);
+      await acquireSession(task.origen.camara.id, sessions, 'origen');
     }
   }
 
-  async function acquireSession(cameraId: string, sessions: OpenSession[]) {
+  async function acquireSession(cameraId: string, sessions: OpenSession[], role: 'origen' | 'destino') {
     const existing = sessions.find((session) => session.cameraId === cameraId);
     if (existing) return existing;
 
     const plan = await api.getPlan(auth.token, cameraId);
     if (plan.acceso.modo === 'solo_lectura') {
-      throw new Error(`${plan.nombre} está siendo operada desde otra sesión.`);
+      throw new Error(cameraSessionConflictMessage(plan, role));
     }
 
     if (plan.acceso.modo === 'edicion' && plan.acceso.sesion?.es_propia) {
@@ -783,7 +779,17 @@ export function OperationalTaskInbox({ api, auth }: Props) {
       throw new Error(`${plan.nombre} no está disponible para ejecutar la tarea.`);
     }
 
-    const opened = await api.openSession(auth.token, cameraId);
+    let opened;
+    try {
+      opened = await api.openSession(auth.token, cameraId);
+    } catch (reason) {
+      // Otro operador puede abrir la cámara entre la lectura del plano y el POST.
+      if (reason instanceof ApiError && reason.status === 409
+        && /cámara.*(?:modificada|sesión|uso)/i.test(reason.message)) {
+        throw new Error(cameraSessionConflictMessage(plan, role));
+      }
+      throw reason;
+    }
     const openedPlan = await api.getPlan(auth.token, cameraId);
     const session: OpenSession = {
       cameraId,
@@ -861,12 +867,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
 
   return (
     <View style={styles.screen}>
-      {error ? (
-        <Pressable onPress={() => setError('')} style={styles.errorBanner}>
-          <Text style={styles.errorText}>{error}</Text>
-          <Text style={styles.bannerClose}>×</Text>
-        </Pressable>
-      ) : null}
+      <OperatorErrorDialog message={error} onAcknowledge={() => setError('')} />
       {notice ? (
         <Pressable onPress={() => setNotice('')} style={styles.noticeBanner}>
           <Text style={styles.noticeText}>{notice}</Text>
@@ -969,8 +970,6 @@ function messageFrom(reason: unknown) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, padding: o.space[4], backgroundColor: o.color.canvas },
-  errorBanner: { flexDirection: 'row', justifyContent: 'space-between', gap: o.space[3], padding: o.space[3], borderRadius: o.radius.control, borderWidth: 1, borderLeftWidth: 5, borderColor: o.color.critical, backgroundColor: o.color.criticalSurface, marginBottom: o.space[2] },
-  errorText: { color: o.color.critical, flex: 1, fontSize: o.type.small, fontWeight: '800' },
   noticeBanner: { flexDirection: 'row', justifyContent: 'space-between', gap: o.space[3], padding: o.space[3], borderRadius: o.radius.control, borderWidth: 1, borderLeftWidth: 5, borderColor: o.color.success, backgroundColor: o.color.successSurface, marginBottom: o.space[2] },
   noticeText: { color: o.color.success, flex: 1, fontSize: o.type.small, fontWeight: '800' },
   bannerClose: { color: o.color.muted, fontSize: 20, fontWeight: '900' },
