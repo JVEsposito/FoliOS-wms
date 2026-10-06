@@ -53,6 +53,9 @@ class Folio extends Model implements PerteneceATemporada
 
     protected static function booted(): void
     {
+        // La columna calculada de integración nunca se escribe al replicar un folio.
+        static::saving(fn (Folio $folio) => $folio->offsetUnset('clave_identificador_integracion'));
+
         // La composición vive en datos_externos; su proyección consultable se mantiene al día.
         static::saved(function (Folio $folio): void {
             if ($folio->wasRecentlyCreated || $folio->wasChanged(['datos_externos', 'temporada_id'])) {

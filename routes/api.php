@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AccesoOficinaController;
 use App\Http\Controllers\Api\AccesoTabletController;
+use App\Http\Controllers\Api\AceptacionFrutaEmbaladaController;
 use App\Http\Controllers\Api\AdministracionAccesoController;
 use App\Http\Controllers\Api\AdministracionTemporadaController;
 use App\Http\Controllers\Api\AdministracionValidacionController;
@@ -252,6 +253,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/administracion/prefrio/tuneles/siguiente-codigo', [TunelPrefrioController::class, 'siguienteCodigo']);
         Route::post('/administracion/prefrio/tuneles', [TunelPrefrioController::class, 'store']);
         Route::put('/administracion/prefrio/tuneles/{tunelPrefrio}', [TunelPrefrioController::class, 'update']);
+    });
+
+    Route::prefix('fruta-embalada/recepciones/{recepcion}')->whereUuid('recepcion')->group(function () {
+        Route::get('/aceptacion', [AceptacionFrutaEmbaladaController::class, 'show']);
+        Route::post('/aceptar', [AceptacionFrutaEmbaladaController::class, 'aceptar']);
+        Route::post('/anular', [AceptacionFrutaEmbaladaController::class, 'anular']);
     });
 
     Route::get('/validacion/catalogos', CatalogoValidacionController::class)
