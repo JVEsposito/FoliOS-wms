@@ -39,6 +39,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Query\JoinClause;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class ServicioOperacionAhora
 {
@@ -178,9 +179,28 @@ class ServicioOperacionAhora
                         ? $incidencia->otraPosicion->camara->codigo.' · '.$incidencia->otraPosicion->etiqueta : null],
             ]);
 
+        $incidenciasRecepcion = DB::table('incidencias_recepcion_embalada as i')
+            ->join('recepcion_fruta_embalada_folios as rf', 'rf.id', '=', 'i.recepcion_folio_id')
+            ->join('aceptaciones_fruta_embalada as a', 'a.id', '=', 'rf.aceptacion_id')
+            ->join('recepciones_fruta_embalada as r', 'r.id', '=', 'a.recepcion_id')
+            ->join('folios as f', 'f.id', '=', 'rf.folio_id')->join('plantas_origen as p', 'p.id', '=', 'r.planta_origen_id')
+            ->join('users as u', 'u.id', '=', 'a.user_id')
+            ->where('a.temporada_id', $temporada->id)->where('a.estado', 'aceptada')->where('i.estado', 'abierta')
+            ->get(['i.*', 'rf.folio_id', 'f.numero_folio', 'r.id as recepcion_id', 'r.numero_guia', 'p.nombre as planta', 'u.id as usuario_id', 'u.name as usuario'])
+            ->map(fn ($i): array => [
+                'id' => $i->id, 'origen' => 'recepcion_embalada', 'tipo' => 'prefrio_origen_fuera_umbral',
+                'detalle' => 'Prefrío declarado en origen: pulpa '.$i->temperatura_pulpa.' °C; umbral '.$i->umbral_prefrio.' °C. Pendiente de prefrío.',
+                'estado' => 'abierta', 'prioridad' => 'alta', 'folio' => ['id' => $i->folio_id, 'numero_folio' => $i->numero_folio],
+                'reportado_por' => ['id' => $i->usuario_id, 'nombre' => $i->usuario], 'dispositivo' => null,
+                'reportada_at' => CarbonImmutable::parse($i->created_at)->toAtomString(),
+                'antiguedad_minutos' => $this->antiguedadMinutos(CarbonImmutable::parse($i->created_at), $ahora),
+                'contexto' => ['recepcion' => ['id' => $i->recepcion_id, 'guia' => $i->numero_guia, 'planta' => $i->planta]],
+            ]);
+
         $abiertas = $incidenciasCarga
             ->concat($discrepanciasManiobra)
             ->concat($incidenciasVerificacion)
+            ->concat($incidenciasRecepcion)
             ->sortByDesc('reportada_at')
             ->values();
 
@@ -190,6 +210,7 @@ class ServicioOperacionAhora
                 'carga' => $incidenciasCarga->count(),
                 'maniobra' => $discrepanciasManiobra->count(),
                 'verificacion' => $incidenciasVerificacion->count(),
+                'recepcion_embalada' => $incidenciasRecepcion->count(),
                 'mas_antigua_at' => $abiertas->min('reportada_at'),
                 'antiguedad_maxima_minutos' => $abiertas->max('antiguedad_minutos'),
             ],

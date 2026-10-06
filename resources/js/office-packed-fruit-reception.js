@@ -1,4 +1,5 @@
 import { byId, escapeHtml as e, message, officeSession } from './shared/packed-fruit-office-session.js';
+import { createReceptionActions } from './shared/recepcion-embalada-actions.js';
 import { indexValidationCatalog, createOriginArticleSelector } from './shared/packed-fruit-catalog-index.js';
 function uuid() {
     const bytes = crypto.getRandomValues(new Uint8Array(16)); bytes[6] = (bytes[6] & 15) | 64; bytes[8] = (bytes[8] & 63) | 128;
@@ -11,6 +12,7 @@ const filter = byId('filterForm');
 let options = null, catalog = null, etag = null, index = null;
 let draft = null, pallets = [], pending = null, page = 1, lastPage = 1, busy = false, dirty = false;
 let selectArticles = () => [];
+let inventory = null;
 const session = officeSession('puede_consultar_recepciones_fruta_embalada', async (isCurrent) => {
     const [o, c] = await Promise.all([session.request(`${root}/opciones`), session.request(`${root}/catalogo-pt`, { headers: etag ? { 'If-None-Match': etag } : {} })]);
     if (!isCurrent()) return;
@@ -27,6 +29,38 @@ const session = officeSession('puede_consultar_recepciones_fruta_embalada', asyn
     if (draft || pallets.length) renderPallets();
     await loadList();
 }, () => { options = catalog = index = etag = draft = pending = null; pallets = []; dirty = false; byId('receptionEditor').classList.add('is-hidden'); byId('receptionList').replaceChildren(); form.reset(); });
+const actions = createReceptionActions((...args) => session.request(...args), uuid);
+async function loadInventory() {
+    inventory = null;
+    renderInventory();
+    if (!draft) return;
+    const id = draft.id;
+    try { const response = await actions.load(id); if (draft?.id !== id) return; inventory = response.data; renderInventory(); }
+    catch (error) { if (draft?.id === id) message(error.message, true); }
+}
+function renderInventory() {
+    byId('receptionState').textContent = draft?.estado === 'aceptada' ? 'Recepción aceptada: sus folios ya están en el inventario.' : draft?.estado === 'anulada' ? 'Recepción anulada.' : 'Borrador: todavía no crea folios ni inventario. Guarda los cambios antes de aceptar.';
+    byId('receptionInventory').innerHTML = (inventory?.folios ?? []).map((f) => `<p>${e(f.numero_folio)}${f.folio_interno ? ` · Folio interno (origen ${e(f.folio_origen)})` : ''} · ${e(f.estado_operacional)}</p>`).join('')
+        + (inventory?.advertencias ?? []).map((a) => `<p class="rfe-warning">${e(a.mensaje)}</p>`).join('')
+        + (inventory?.incidencias ?? []).map((a) => `<p class="rfe-warning">Incidencia de prefrío: ${e(a.temperatura_pulpa)} °C; umbral ${e(a.umbral_prefrio)} °C.</p>`).join('');
+    refreshLocks();
+}
+async function inventoryAction(action) {
+    if (!draft || busy || pending || dirty) return;
+    const id = draft.id;
+    let reason = '';
+    if (action === 'accept' && !window.confirm('¿Aceptar esta recepción e ingresar todos sus pallets al inventario?')) return;
+    if (action === 'annul') { reason = window.prompt('Motivo de anulación (mínimo 5 caracteres):')?.trim() ?? ''; if (reason.length < 5) return; }
+    busy = true; refreshLocks();
+    try {
+        inventory = (action === 'accept' ? await actions.accept(id, inventory.revision.version) : await actions.annul(id, reason)).data;
+        openDraft((await session.request(`${root}/${id}`)).data);
+        message(action === 'accept' ? 'Recepción aceptada.' : 'Recepción anulada.'); await loadList();
+    } catch (error) { message(error.message, true); }
+    finally { busy = false; refreshLocks(); }
+}
+byId('acceptReception').onclick = () => void inventoryAction('accept');
+byId('annulReception').onclick = () => void inventoryAction('annul');
 function fillSelect(control, rows, placeholder) {
     const value = control.value;
     control.innerHTML = `<option value="">${e(placeholder)}</option>${rows.map((r) => `<option value="${e(r.id)}">${e(r.nombre)}</option>`).join('')}`;
@@ -71,6 +105,10 @@ function renderPallets() {
 function editable() { return session.can('puede_gestionar_recepciones_fruta_embalada') && (!draft || draft.editable); }
 function refreshLocks() {
     const locked = !editable() || busy || !!pending;
+    byId('acceptReception').classList.toggle('is-hidden', !draft || draft.estado !== 'borrador' || !session.can('puede_gestionar_recepciones_fruta_embalada'));
+    byId('acceptReception').disabled = busy || !!pending || dirty || !inventory?.revision || !draft?.editable;
+    byId('annulReception').classList.toggle('is-hidden', draft?.estado !== 'aceptada' || !session.can('puede_anular_recepciones_fruta_embalada'));
+    byId('annulReception').disabled = busy || !!pending || draft?.temporada_id !== options?.temporada?.id;
     byId('headerFields').disabled = locked; byId('addPallet').disabled = locked;
     byId('saveReception').disabled = locked; byId('newReception').disabled = busy || !!pending || !options?.temporada || !session.can('puede_gestionar_recepciones_fruta_embalada');
     byId('retrySave').classList.toggle('is-hidden', !pending || busy);
@@ -94,7 +132,7 @@ function openDraft(data = null) {
     if (!data) form.elements.turno.value = 'A';
     byId('editorTitle').textContent = data ? `Guía ${data.numero_guia} · ${data.estado}` : 'Nueva recepción';
     byId('receptionEditor').classList.remove('is-hidden'); byId('guideWarning').classList.add('is-hidden');
-    renderPallets(); byId('receptionEditor').scrollIntoView({ behavior: 'smooth' });
+    renderPallets(); void loadInventory(); byId('receptionEditor').scrollIntoView({ behavior: 'smooth' });
 }
 async function checkGuide() {
     const fields = Object.fromEntries(['cliente_id', 'planta_origen_id', 'numero_guia'].map((key) => [key, form.elements[key].value]));
@@ -104,7 +142,7 @@ async function checkGuide() {
     byId('guideWarning').textContent = data.mensaje ?? ''; byId('guideWarning').classList.toggle('is-hidden', !data.duplicada);
     return data;
 }
-form.addEventListener('input', () => { dirty = true; });
+form.addEventListener('input', () => { dirty = true; refreshLocks(); });
 form.addEventListener('change', (event) => {
     if (event.target === form.elements.cliente_id) { for (const p of pallets) { p.origen_validacion_id = ''; p.articulo_validacion_id = ''; p.especie = p.variedad = p.embalaje = p.calibre = ''; } renderPallets(); }
     if (['cliente_id', 'planta_origen_id', 'numero_guia'].includes(event.target.name)) void checkGuide().catch((error) => message(error.message, true));

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AccesoOficinaController;
 use App\Http\Controllers\Api\AccesoTabletController;
+use App\Http\Controllers\Api\AceptacionFrutaEmbaladaController;
 use App\Http\Controllers\Api\AdministracionAccesoController;
 use App\Http\Controllers\Api\AdministracionTemporadaController;
 use App\Http\Controllers\Api\AdministracionValidacionController;
@@ -262,6 +263,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/catalogo-pt', [RecepcionFrutaEmbaladaController::class, 'catalogoPt']);
         Route::get('/revisar-guia', [RecepcionFrutaEmbaladaController::class, 'revisarGuia']);
         Route::get('/revisar-folio', [RecepcionFrutaEmbaladaController::class, 'revisarFolio']);
+        Route::get('/{recepcion}/aceptacion', [AceptacionFrutaEmbaladaController::class, 'show'])->whereUuid('recepcion');
+        Route::post('/{recepcion}/aceptar', [AceptacionFrutaEmbaladaController::class, 'aceptar'])->whereUuid('recepcion');
+        Route::post('/{recepcion}/anular', [AceptacionFrutaEmbaladaController::class, 'anular'])->whereUuid('recepcion');
         Route::get('/{recepcionFrutaEmbalada}', [RecepcionFrutaEmbaladaController::class, 'show']);
         Route::post('/', [RecepcionFrutaEmbaladaController::class, 'store'])->middleware('can:gestionar-recepciones-fruta-embalada');
         Route::put('/{recepcionFrutaEmbalada}', [RecepcionFrutaEmbaladaController::class, 'update'])->middleware('can:gestionar-recepciones-fruta-embalada');
@@ -272,6 +276,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/plantas/{plantaOrigen}', [CatalogoFrutaEmbaladaController::class, 'updatePlanta']);
         Route::post('/umbrales', [CatalogoFrutaEmbaladaController::class, 'storeUmbral']);
         Route::put('/umbrales/{umbralPrefrioEspecie}', [CatalogoFrutaEmbaladaController::class, 'updateUmbral']);
+
     });
 
     Route::get('/validacion/catalogos', CatalogoValidacionController::class)

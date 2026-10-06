@@ -1,5 +1,7 @@
 import type { Reception, ReceptionOptions, ReceptionPayload } from '../domain/packedFruitReception';
 import type { ValidationCatalog } from '../domain/validation';
+import { recepcionEmbaladaAcciones } from './recepcionEmbaladaAcciones';
+import * as Crypto from 'expo-crypto';
 import { ApiError } from './apiError';
 const root = '/api/recepciones-fruta-embalada';
 export function createPackedFruitReceptionApi(baseUrl: string, token: string) {
@@ -18,6 +20,7 @@ export function createPackedFruitReceptionApi(baseUrl: string, token: string) {
     return data as T;
   }
   return {
+    actions: recepcionEmbaladaAcciones((path, init) => request(path.slice(root.length), init), () => Crypto.randomUUID()),
     options: () => request<ReceptionOptions>('/opciones'),
     async catalog(): Promise<ValidationCatalog> {
       if (!baseUrl) throw new ApiError('Configura el servidor.', 0);
@@ -29,7 +32,7 @@ export function createPackedFruitReceptionApi(baseUrl: string, token: string) {
       if (!response.ok) throw new ApiError(data.message ?? 'No fue posible cargar el catálogo PT.', response.status, data);
       cached = data as ValidationCatalog; etag = response.headers.get('ETag'); return cached;
     },
-    list: (page = 1) => request<{ data: Reception[]; last_page: number; current_page: number }>(`?estado=borrador&page=${page}`),
+    list: (page = 1) => request<{ data: Reception[]; last_page: number; current_page: number }>(`?page=${page}`),
     detail: async (id: string) => (await request<{ data: Reception }>(`/${id}`)).data,
     checkFolio: (folio: string) => request<{ repetido: boolean; mensaje: string | null }>(`/revisar-folio?${new URLSearchParams({ folio_origen: folio })}`),
     reviewGuide: (payload: Pick<ReceptionPayload, 'cliente_id' | 'planta_origen_id' | 'numero_guia'>, id?: string) => request<{ duplicada: boolean; mensaje: string | null }>(`/revisar-guia?${new URLSearchParams({ ...payload, ...(id ? { excluir_id: id } : {}) })}`),

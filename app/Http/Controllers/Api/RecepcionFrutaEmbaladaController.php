@@ -120,7 +120,6 @@ class RecepcionFrutaEmbaladaController extends Controller
 
     private function foliosVigentes(array $numeros)
     {
-        return Folio::query()->whereIn('numero_folio', $numeros)->where('activo', true)
-            ->whereNotIn('estado_operacional', ['despachado', 'retirado_definitivo', 'agotado', 'anulado'])->pluck('numero_folio');
+        return Folio::query()->whereIn('numero_folio', $numeros)->pluck('numero_folio');
     }
 }
