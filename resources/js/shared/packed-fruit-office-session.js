@@ -37,7 +37,7 @@ export function officeSession(permission, load, reset) {
             message();
         },
         load: async (_, isCurrent) => {
-            const context = await request('/api/oficina/contexto');
+            await request('/api/oficina/contexto');
             if (!isCurrent()) return;
             identity = JSON.parse(localStorage.getItem(identityKey) || '{}');
             if (!can(permission)) throw new Error('Tu perfil no tiene acceso a esta pantalla. Si acabas de actualizar el sistema, cierra la sesión e ingresa nuevamente.');
@@ -62,7 +62,6 @@ export function officeSession(permission, load, reset) {
         localStorage.removeItem(tokenKey); localStorage.removeItem(identityKey);
         window.dispatchEvent(new Event('estiba:office-session'));
     });
-    // La navegación compartida administra el cierre de sesión y emite estiba:office-session.
     byId('reloadButton').addEventListener('click', () => sync.reload(true));
     return { request, can, start: () => sync.start(), reload: () => sync.reload(true) };
 }
