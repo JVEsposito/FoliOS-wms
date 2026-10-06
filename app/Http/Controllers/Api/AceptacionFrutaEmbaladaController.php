@@ -12,14 +12,14 @@ class AceptacionFrutaEmbaladaController extends Controller
 {
     public function show(string $recepcion, ServicioAceptacionFrutaEmbalada $servicio): JsonResponse
     {
-        Gate::authorize('consultar-validaciones-pallet');
+        Gate::authorize('consultar-recepciones-fruta-embalada');
 
         return response()->json(['data' => $servicio->estado($recepcion)]);
     }
 
     public function aceptar(string $recepcion, Request $request, ServicioAceptacionFrutaEmbalada $servicio): JsonResponse
     {
-        Gate::authorize('validar-pallets');
+        Gate::authorize('gestionar-recepciones-fruta-embalada');
         $datos = $request->validate(['operacion_id' => ['required', 'uuid'], 'version' => ['required', 'string', 'size:64']]);
 
         return response()->json(['data' => $servicio->aceptar($recepcion, $datos, $request->user())]);
@@ -27,7 +27,7 @@ class AceptacionFrutaEmbaladaController extends Controller
 
     public function anular(string $recepcion, Request $request, ServicioAceptacionFrutaEmbalada $servicio): JsonResponse
     {
-        Gate::authorize('corregir-validaciones-pallet');
+        Gate::authorize('anular-recepciones-fruta-embalada');
         $datos = $request->validate(['operacion_id' => ['required', 'uuid'], 'motivo' => ['required', 'string', 'min:5', 'max:1000']]);
 
         return response()->json(['data' => $servicio->anular($recepcion, $datos, $request->user())]);

@@ -20,8 +20,7 @@ return new class extends Migration
         });
         Schema::create('aceptaciones_fruta_embalada', function (Blueprint $t): void {
             $t->uuid('id')->primary();
-            // El PR 1 es dueño de las tablas de captura; se enlaza por UUID sin alterar su esquema.
-            $t->uuid('recepcion_id')->unique();
+            $t->foreignUuid('recepcion_id')->unique()->constrained('recepciones_fruta_embalada', indexName: 'afe_recepcion_fk');
             $t->foreignUuid('temporada_id')->constrained('temporadas');
             $t->foreignId('user_id')->constrained('users');
             $t->uuid('operacion_id')->unique();
@@ -40,7 +39,7 @@ return new class extends Migration
         Schema::create('recepcion_fruta_embalada_folios', function (Blueprint $t): void {
             $t->uuid('id')->primary();
             $t->foreignUuid('aceptacion_id')->constrained('aceptaciones_fruta_embalada');
-            $t->uuid('recepcion_pallet_id')->unique();
+            $t->foreignUuid('recepcion_pallet_id')->unique()->constrained('recepciones_fruta_embalada_pallets', indexName: 'rfef_pallet_fk');
             $t->foreignUuid('folio_id')->unique()->constrained('folios');
             $t->string('folio_origen', 50);
             $t->boolean('folio_interno');

@@ -12,7 +12,9 @@ use App\Enums\TipoMovimiento;
 use App\Enums\TipoPlanOperacional;
 use App\Exceptions\ConflictoOperacion;
 use App\Models\Folio;
+use App\Models\PersonalAccessToken;
 use App\Models\PlanOperacional;
+use App\Models\RecepcionFrutaEmbalada;
 use App\Models\TareaMovimiento;
 use App\Models\User;
 use App\Services\Estiba\ServicioPlanesOperacionales;
@@ -54,7 +56,7 @@ class ServicioAceptacionFrutaEmbalada
             $hash = hash('sha256', json_encode([$id, $datos['version']], JSON_THROW_ON_ERROR));
             $existente = DB::table('aceptaciones_fruta_embalada')->where('operacion_id', $datos['operacion_id'])->lockForUpdate()->first();
             if ($existente) {
-                if ($existente->user_id !== $usuario->id || $existente->recepcion_id !== $id || ! hash_equals($existente->payload_hash, $hash) || $existente->temporada_id !== $temporada->id) {
+                if ((int) $existente->user_id !== $usuario->id || $existente->recepcion_id !== $id || ! hash_equals($existente->payload_hash, $hash) || $existente->temporada_id !== $temporada->id) {
                     throw new ConflictoOperacion('Esta operación de aceptación ya se utilizó con otros datos.');
                 }
 
@@ -92,7 +94,7 @@ class ServicioAceptacionFrutaEmbalada
                 }
                 $folio = Folio::create([
                     'temporada_id' => $temporada->id, 'numero_folio' => $numero, 'tipo_bulto' => $p['tipo_bulto'],
-                    'condicion_sag_id' => $p['condicion_sag_id'] ?? null, 'activo' => true, 'fecha_ingreso' => $cabecera['recibido_at'],
+                    'condicion_sag_id' => $p['condicion_sag_id'] ?? null, 'activo' => true, 'fecha_ingreso' => $cabecera['recepcion_at'],
                     'origen_sistema' => 'recepcion_externa', 'identificador_externo' => $p['folio_origen'],
                     'variedad' => $p['variedad'], 'calibre' => $p['calibre'], 'exportadora' => $revision['cliente'],
                     'estado_operacional' => EstadoOperacionalFolio::PendientePrefrio,
@@ -130,7 +132,7 @@ class ServicioAceptacionFrutaEmbalada
                 'Recepción externa · '.$cabecera['numero_guia'], $usuario, $tareas, PrioridadOperacional::Alta,
                 referenciaTipo: 'recepcion_fruta_embalada', referenciaId: $id, contexto: ['planner_horizon' => 'rolling', 'origen_logico' => 'recepcion_externa']);
             DB::table('aceptaciones_fruta_embalada')->where('id', $aceptacionId)->update(['advertencias' => json_encode($advertencias, JSON_THROW_ON_ERROR), 'plan_operacional_id' => $plan?->id]);
-            DB::table('recepciones_fruta_embalada')->where('id', $id)->update(['estado' => 'aceptada', 'updated_at' => now()]);
+            $this->registrarEstado($id, 'aceptada', $datos, $usuario);
 
             return $this->estado($id);
         }, attempts: 3);
@@ -146,7 +148,7 @@ class ServicioAceptacionFrutaEmbalada
                 throw new DomainException('Solo se anula una recepción aceptada de la temporada activa.');
             }
             if ($aceptacion->estado === 'anulada') {
-                if ($aceptacion->anulacion_operacion_id !== $datos['operacion_id'] || $aceptacion->anulada_por_user_id !== $usuario->id || $aceptacion->motivo_anulacion !== $datos['motivo']) {
+                if ($aceptacion->anulacion_operacion_id !== $datos['operacion_id'] || (int) $aceptacion->anulada_por_user_id !== $usuario->id || $aceptacion->motivo_anulacion !== $datos['motivo']) {
                     throw new ConflictoOperacion('La recepción ya fue anulada con otra operación.');
                 }
 
@@ -180,10 +182,23 @@ class ServicioAceptacionFrutaEmbalada
             }
             DB::table('aceptaciones_fruta_embalada')->where('id', $aceptacion->id)->update(['estado' => 'anulada', 'anulacion_operacion_id' => $datos['operacion_id'],
                 'anulada_por_user_id' => $usuario->id, 'anulada_at' => now(), 'motivo_anulacion' => $datos['motivo'], 'updated_at' => now()]);
-            DB::table('recepciones_fruta_embalada')->where('id', $id)->update(['estado' => 'anulada', 'updated_at' => now()]);
+            $this->registrarEstado($id, 'anulada', $datos, $usuario);
 
             return $this->estado($id);
         }, attempts: 3);
+    }
+
+    private function registrarEstado(string $id, string $estado, array $datos, User $usuario): void
+    {
+        $recepcion = RecepcionFrutaEmbalada::findOrFail($id)->load('pallets');
+        $antes = $recepcion->toArray();
+        $recepcion->update(['estado' => $estado, 'version' => $recepcion->version + 1, 'actualizado_por_user_id' => $usuario->id]);
+        $token = $usuario->currentAccessToken();
+        $recepcion->eventos()->create([
+            'operacion_id' => $datos['operacion_id'], 'payload_hash' => hash('sha256', json_encode([$estado, $id, $datos], JSON_THROW_ON_ERROR)),
+            'user_id' => $usuario->id, 'dispositivo_id' => $token instanceof PersonalAccessToken ? $token->dispositivo_id : null,
+            'antes' => $antes, 'despues' => $recepcion->refresh()->load('pallets')->toArray(),
+        ]);
     }
 
     private function numeroInterno(): string

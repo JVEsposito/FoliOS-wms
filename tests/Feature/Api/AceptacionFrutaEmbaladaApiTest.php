@@ -3,25 +3,30 @@
 namespace Tests\Feature\Api;
 
 use App\Enums\RolUsuario;
+use App\Models\ArticuloValidacion;
 use App\Models\CalibreValidacion;
+use App\Models\Cliente;
 use App\Models\ClienteValidacion;
 use App\Models\CondicionSag;
 use App\Models\CsgValidacion;
 use App\Models\EnvaseValidacion;
 use App\Models\EspecieValidacion;
 use App\Models\Folio;
+use App\Models\OrigenValidacion;
+use App\Models\RecepcionFrutaEmbalada;
+use App\Models\UmbralPrefrioEspecie;
 use App\Models\User;
 use App\Models\VariedadValidacion;
 use App\Services\Estiba\ServicioPlanesOperacionales;
 use DomainException;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use Tests\Support\ContratoRecepcionEmbaladaPrueba;
 use Tests\TestCase;
 
 class AceptacionFrutaEmbaladaApiTest extends TestCase
 {
-    use ContratoRecepcionEmbaladaPrueba;
+    use RefreshDatabase;
 
     protected User $usuario;
 
@@ -40,9 +45,10 @@ class AceptacionFrutaEmbaladaApiTest extends TestCase
         $temporada = $this->crearTemporadaActivaPrueba(['codigo' => 'EXTERNA', 'nombre' => 'Fruta embalada']);
         $this->usuario = User::factory()->create(['rol' => RolUsuario::Administrador]);
         $this->token = $this->usuario->createToken('oficina', ['oficina'])->plainTextToken;
-        $cliente = ClienteValidacion::create(['temporada_id' => $temporada->id, 'nombre' => 'EXPORTADORA', 'activo' => true]);
+        $global = Cliente::create(['codigo' => 'EXT', 'nombre' => 'EXPORTADORA', 'activo' => true]);
+        $cliente = ClienteValidacion::create(['temporada_id' => $temporada->id, 'cliente_id' => $global->id, 'nombre' => 'EXPORTADORA', 'activo' => true]);
         $this->especie = EspecieValidacion::create(['temporada_id' => $temporada->id, 'nombre' => 'Uva', 'activo' => true]);
-        DB::table('especies_validacion')->where('id', $this->especie->id)->update(['umbral_prefrio' => 2]);
+        UmbralPrefrioEspecie::create(['especie' => 'UVA', 'temperatura_maxima_c' => 2]);
         $variedad = VariedadValidacion::create(['especie_validacion_id' => $this->especie->id, 'nombre' => 'Thompson', 'activo' => true]);
         $envase = EnvaseValidacion::create(['especie_validacion_id' => $this->especie->id, 'cliente_validacion_id' => $cliente->id, 'nombre' => 'Caja 9 kg', 'codigo_externo' => 'RGEN90BAM', 'kilos_netos_por_caja' => 9, 'activo' => true]);
         $calibre = CalibreValidacion::create(['especie_validacion_id' => $this->especie->id, 'nombre' => 'XL', 'activo' => true]);
@@ -51,15 +57,19 @@ class AceptacionFrutaEmbaladaApiTest extends TestCase
         $sag = CondicionSag::create(['codigo' => 'EX-SAG', 'nombre' => 'Aprobado', 'activo' => true]);
         $planta = (string) Str::uuid();
         DB::table('plantas_origen')->insert(['id' => $planta, 'nombre' => 'Planta de origen', 'codigo' => 'PORI', 'activa' => true]);
-        $this->recepcion = (string) Str::uuid();
-        DB::table('recepciones_fruta_embalada')->insert(['id' => $this->recepcion, 'temporada_id' => $temporada->id, 'cliente_validacion_id' => $cliente->id,
-            'planta_origen_id' => $planta, 'numero_guia' => 'GUIA-100', 'servicio' => 'almacenaje', 'estado' => 'borrador', 'llega_con_prefrio' => true,
-            'recibido_at' => now(), 'turno' => 'A', 'validador_id' => $this->usuario->id, 'created_at' => now(), 'updated_at' => now()]);
-        $this->pallet = ['id' => (string) Str::uuid(), 'recepcion_id' => $this->recepcion, 'orden' => 1, 'folio_origen' => 'EXT00001', 'tipo_bulto' => 'pallet',
-            'especie_validacion_id' => $this->especie->id, 'variedad_validacion_id' => $variedad->id, 'envase_validacion_id' => $envase->id,
-            'calibre_validacion_id' => $calibre->id, 'csg_validacion_id' => $csg->id, 'csp' => 'CSP-123', 'cantidad_cajas' => 77,
-            'fecha_proceso_origen' => '2026-02-06', 'temperatura_pulpa' => 1, 'condicion_sag_id' => $sag->id, 'created_at' => now(), 'updated_at' => now()];
-        DB::table('recepciones_fruta_embalada_pallets')->insert($this->pallet);
+        $origen = OrigenValidacion::create(['temporada_id' => $temporada->id, 'cliente_validacion_id' => $cliente->id, 'csg_validacion_id' => $csg->id, 'cliente' => $cliente->nombre, 'marca' => 'EXTERNO', 'csg' => $csg->codigo, 'activo' => true]);
+        $articulo = ArticuloValidacion::create(['temporada_id' => $temporada->id, 'cliente_validacion_id' => $cliente->id, 'especie_validacion_id' => $this->especie->id, 'variedad_validacion_id' => $variedad->id, 'envase_validacion_id' => $envase->id, 'calibre_validacion_id' => $calibre->id, 'especie' => 'Uva', 'variedad' => 'Thompson', 'envase' => 'Caja 9 kg', 'calibre' => 'XL', 'activo' => true]);
+        DB::table('combinaciones_validacion')->insert(['id' => (string) Str::uuid(), 'temporada_id' => $temporada->id, 'articulo_validacion_id' => $articulo->id, 'origen_validacion_id' => $origen->id, 'activo' => true]);
+        $pallet = ['folio_origen' => 'EXT00001', 'tipo_bulto' => 'pallet', 'articulo_validacion_id' => $articulo->id, 'origen_validacion_id' => $origen->id,
+            'csp' => 'CSP-123', 'cantidad_cajas' => 77, 'fecha_proceso_origen' => '2026-02-06', 'temperatura_pulpa_c' => 1, 'condicion_sag_personalizada' => true, 'condicion_sag_id' => $sag->id];
+        $this->recepcion = $this->withToken($this->token)->postJson('/api/recepciones-fruta-embalada', [
+            'operacion_id' => (string) Str::uuid(), 'temporada_id' => $temporada->id, 'cliente_id' => $global->id, 'planta_origen_id' => $planta,
+            'numero_guia' => 'GUIA-100', 'servicio' => 'almacenaje', 'turno' => 'A', 'validador_id' => $this->usuario->id,
+            'recepcion_at' => now()->toISOString(), 'salida_at' => null, 'chofer' => 'Chofer externo', 'rut_chofer' => null,
+            'patente_delantera' => 'ABCD12', 'patente_carro' => null, 'llega_con_prefrio' => true, 'condicion_sag_id' => null,
+            'pallets' => [$pallet],
+        ])->assertCreated()->json('data.id');
+        $this->pallet = (array) DB::table('recepciones_fruta_embalada_pallets')->where('recepcion_fruta_embalada_id', $this->recepcion)->first();
     }
 
     public function test_acepta_con_numero_origen_sag_habilitacion_prioridad_y_trazabilidad(): void
@@ -76,6 +86,8 @@ class AceptacionFrutaEmbaladaApiTest extends TestCase
         $this->withToken($this->token)->postJson($this->ruta('aceptar'), $payload)->assertOk();
         $this->assertDatabaseCount('recepcion_fruta_embalada_folios', 1);
         $this->assertDatabaseCount('aceptaciones_fruta_embalada', 1);
+        $this->assertDatabaseCount('eventos_recepcion_fruta_embalada', 2);
+        $this->assertSame(2, RecepcionFrutaEmbalada::findOrFail($this->recepcion)->version);
         $this->withToken($this->token)->getJson('/api/consultas/folios/'.$folio->id)->assertOk()
             ->assertJsonPath('folio.especificaciones.guia', 'GUIA-100')->assertJsonPath('folio.especificaciones.referencia_externa', 'EXT00001');
     }
@@ -102,7 +114,7 @@ class AceptacionFrutaEmbaladaApiTest extends TestCase
 
     public function test_prefrio_declarado_fuera_de_umbral_abre_incidencia_y_no_habilita(): void
     {
-        DB::table('recepciones_fruta_embalada_pallets')->where('id', $this->pallet['id'])->update(['temperatura_pulpa' => 4.2]);
+        DB::table('recepciones_fruta_embalada_pallets')->where('id', $this->pallet['id'])->update(['temperatura_pulpa_c' => 4.2]);
         $this->withToken($this->token)->postJson($this->ruta('aceptar'), $this->payload())->assertOk()
             ->assertJsonPath('data.folios.0.habilitacion_almacenamiento', 'no_habilitado')->assertJsonCount(1, 'data.incidencias');
         $this->assertDatabaseHas('incidencias_recepcion_embalada', ['temperatura_pulpa' => 4.2, 'umbral_prefrio' => 2, 'estado' => 'abierta']);
@@ -110,8 +122,8 @@ class AceptacionFrutaEmbaladaApiTest extends TestCase
 
     public function test_sin_umbral_respeta_declaracion_con_advertencia_y_saldo_no_entra_al_planificador(): void
     {
-        DB::table('especies_validacion')->where('id', $this->especie->id)->update(['umbral_prefrio' => null]);
-        DB::table('recepciones_fruta_embalada_pallets')->where('id', $this->pallet['id'])->update(['tipo_bulto' => 'saldo', 'temperatura_pulpa' => 8]);
+        DB::table('umbrales_prefrio_especies')->delete();
+        DB::table('recepciones_fruta_embalada_pallets')->where('id', $this->pallet['id'])->update(['tipo_bulto' => 'saldo', 'temperatura_pulpa_c' => 8]);
         $this->withToken($this->token)->postJson($this->ruta('aceptar'), $this->payload())->assertOk()
             ->assertJsonPath('data.folios.0.habilitacion_almacenamiento', 'habilitado')
             ->assertJsonPath('data.advertencias.0.tipo', 'sin_umbral_prefrio')->assertJsonPath('data.plan_operacional_id', null);
@@ -131,7 +143,7 @@ class AceptacionFrutaEmbaladaApiTest extends TestCase
     public function test_catalogo_cambiado_o_recepcion_de_otra_temporada_no_se_acepta(): void
     {
         $payload = $this->payload();
-        DB::table('especies_validacion')->where('id', $this->especie->id)->update(['umbral_prefrio' => 0]);
+        DB::table('umbrales_prefrio_especies')->update(['temperatura_maxima_c' => 0]);
         $this->withToken($this->token)->postJson($this->ruta('aceptar'), $payload)->assertConflict();
         DB::table('csg_variedades_validacion')->delete();
         $this->withToken($this->token)->postJson($this->ruta('aceptar'), $payload)->assertUnprocessable();
@@ -177,6 +189,6 @@ class AceptacionFrutaEmbaladaApiTest extends TestCase
 
     protected function ruta(string $accion): string
     {
-        return '/api/fruta-embalada/recepciones/'.$this->recepcion.'/'.$accion;
+        return '/api/recepciones-fruta-embalada/'.$this->recepcion.'/'.$accion;
     }
 }
