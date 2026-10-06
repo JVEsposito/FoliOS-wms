@@ -39,6 +39,7 @@ export type ValidationCategory = {
 };
 
 export type ValidationOrigin = {
+  cliente_validacion_id?: string | null;
   id: string;
   temporada_id: string;
   csg_validacion_id: string | null;

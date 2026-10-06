@@ -19,6 +19,10 @@ class CatalogoModulosAcceso
 
     public const TABLET_VALIDACION_PT = 'validacion';
 
+    public const OFICINA_RECEPCION_FRUTA_EMBALADA = 'frigorifico.recepcion-fruta-embalada';
+
+    public const TABLET_RECEPCION_FRUTA_EMBALADA = 'recepcion_fruta_embalada';
+
     public const TABLET_REPALETIZAJE = 'repaletizaje';
 
     public const OFICINA_REPALETIZAJE = 'frigorifico.repaletizaje';
@@ -65,6 +69,7 @@ class CatalogoModulosAcceso
                 'descripcion' => 'Validación, prefrío, cámaras y despacho de producto terminado.',
                 'modulos' => [
                     $this->modulo('frigorifico.validacion', 'Validación PT', 'Validación y observación de pallets.'),
+                    $this->modulo(self::OFICINA_RECEPCION_FRUTA_EMBALADA, 'Recepción de fruta embalada', 'Captura de recepciones externas y sus pallets en borrador.'),
                     $this->modulo(self::OFICINA_REPALETIZAJE, 'Repaletizaje', 'Repas desde cámaras y registro RRPL-01.'),
                     $this->modulo('frigorifico.inspeccion-sag', 'Inspección SAG', 'Muestreos, inspecciones, fumigaciones y cambios de mercado.'),
                     $this->modulo('frigorifico.prefrio', 'Prefrío', 'Túneles, procesos y verificaciones de prefrío.'),
@@ -183,6 +188,7 @@ class CatalogoModulosAcceso
                         'Validación y observación de pallets.',
                         ['frigorifico.validacion'],
                     ),
+                    $this->moduloTablet(self::TABLET_RECEPCION_FRUTA_EMBALADA, 'Recepción de fruta embalada', 'Captura de camiones y pallets externos en borrador.', [self::OFICINA_RECEPCION_FRUTA_EMBALADA]),
                     $this->moduloTablet(
                         self::TABLET_REPALETIZAJE,
                         'Repaletizaje',
@@ -315,6 +321,7 @@ class CatalogoModulosAcceso
                 'materia-prima.fruta-proceso',
                 'materia-prima.despacho-comercial',
                 'frigorifico.validacion',
+                self::OFICINA_RECEPCION_FRUTA_EMBALADA,
                 self::OFICINA_REPALETIZAJE,
                 'frigorifico.inspeccion-sag',
                 'frigorifico.prefrio',
@@ -386,6 +393,7 @@ class CatalogoModulosAcceso
             ],
             RolUsuario::Validador => [
                 'frigorifico.validacion',
+                self::OFICINA_RECEPCION_FRUTA_EMBALADA,
             ],
             RolUsuario::ValidadorMp => [
                 'materia-prima.validacion-mp',
@@ -394,6 +402,7 @@ class CatalogoModulosAcceso
                 self::OFICINA_REPALETIZAJE,
             ],
             RolUsuario::Consulta => [
+                self::OFICINA_RECEPCION_FRUTA_EMBALADA,
                 'gerencia.panel',
                 'materia-prima.romana',
                 'materia-prima.digitacion',

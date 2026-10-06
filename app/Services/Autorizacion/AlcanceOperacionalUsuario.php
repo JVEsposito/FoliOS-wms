@@ -521,6 +521,18 @@ class AlcanceOperacionalUsuario
         return $this->puedeCorregirItemsEstibadosMateriales($usuario);
     }
 
+    public function puedeConsultarRecepcionesFrutaEmbalada(User $usuario): bool
+    {
+        return $this->permiteModuloTablet($usuario, CatalogoModulosAcceso::TABLET_RECEPCION_FRUTA_EMBALADA)
+            && $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador, RolUsuario::SupervisorFrio, RolUsuario::Validador, RolUsuario::Consulta], CatalogoModulosAcceso::OFICINA_RECEPCION_FRUTA_EMBALADA);
+    }
+
+    public function puedeGestionarRecepcionesFrutaEmbalada(User $usuario): bool
+    {
+        return $this->permiteModuloTablet($usuario, CatalogoModulosAcceso::TABLET_RECEPCION_FRUTA_EMBALADA)
+            && $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador, RolUsuario::SupervisorFrio, RolUsuario::Validador], CatalogoModulosAcceso::OFICINA_RECEPCION_FRUTA_EMBALADA);
+    }
+
     public function puedeValidarPallets(User $usuario): bool
     {
         return $this->rolActivoEnModulo($usuario, [
@@ -1004,6 +1016,8 @@ class AlcanceOperacionalUsuario
             'puede_operar_transformaciones_materiales' => $this->puedeOperarTransformacionesMateriales($usuario),
             'puede_revertir_transformaciones_materiales' => $this->puedeRevertirTransformacionesMateriales($usuario),
             'puede_administrar_recetas_materiales' => $this->puedeAdministrarRecetasMateriales($usuario),
+            'puede_consultar_recepciones_fruta_embalada' => $this->puedeConsultarRecepcionesFrutaEmbalada($usuario),
+            'puede_gestionar_recepciones_fruta_embalada' => $this->puedeGestionarRecepcionesFrutaEmbalada($usuario),
             'puede_validar_pallets' => $this->puedeValidarPallets($usuario),
             'puede_rechazar_pallets' => $this->puedeRechazarPallets($usuario),
             'puede_consultar_validaciones_pallet' => $this->puedeConsultarValidacionesPallet($usuario),

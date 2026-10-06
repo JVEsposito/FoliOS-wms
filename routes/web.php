@@ -143,3 +143,6 @@ Route::view('/oficina/materia-prima/hidrocooler', 'office.raw-material-hydrocool
 Route::view('/oficina/materia-prima/fruta-a-proceso', 'office.raw-material-process');
 Route::redirect('/oficina/materia-prima/romana', '/oficina/romana');
 Route::redirect('/oficina/materia-prima/envases', '/oficina/envases/cuenta-corriente');
+
+Route::view('/oficina/recepcion-fruta-embalada', 'office.packed-fruit-reception');
+Route::view('/oficina/administracion/fruta-embalada', 'office.packed-fruit-catalogs');
