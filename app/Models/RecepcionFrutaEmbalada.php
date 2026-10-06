@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['operacion_id', 'temporada_id', 'cliente_id', 'planta_origen_id', 'numero_guia', 'servicio', 'turno', 'validador_id', 'recepcion_at', 'salida_at', 'chofer', 'rut_chofer', 'patente_delantera', 'patente_carro', 'llega_con_prefrio', 'condicion_sag_id', 'observacion', 'estado', 'version', 'creado_por_user_id', 'actualizado_por_user_id'])]
+#[Fillable(['operacion_id', 'temporada_id', 'cliente_id', 'planta_origen_id', 'numero_guia', 'servicio', 'turno', 'validador_id', 'recepcion_at', 'salida_at', 'chofer', 'rut_chofer', 'patente_delantera', 'patente_carro', 'llega_con_prefrio', 'condicion_sag_id', 'observacion', 'estado', 'version', 'creado_por_user_id', 'actualizado_por_user_id', 'formato_rrfe_snapshot'])]
 class RecepcionFrutaEmbalada extends Model implements PerteneceATemporada
 {
     use HasUuids, ImpideEliminacionFisica, TemporadaPorColumna;
@@ -46,6 +46,6 @@ class RecepcionFrutaEmbalada extends Model implements PerteneceATemporada
 
     protected function casts(): array
     {
-        return ['estado' => EstadoRecepcionFrutaEmbalada::class, 'llega_con_prefrio' => 'boolean', 'recepcion_at' => 'immutable_datetime', 'salida_at' => 'immutable_datetime', 'version' => 'integer'];
+        return ['formato_rrfe_snapshot' => 'array', 'estado' => EstadoRecepcionFrutaEmbalada::class, 'llega_con_prefrio' => 'boolean', 'recepcion_at' => 'immutable_datetime', 'salida_at' => 'immutable_datetime', 'version' => 'integer'];
     }
 }

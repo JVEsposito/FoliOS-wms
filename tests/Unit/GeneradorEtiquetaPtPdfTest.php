@@ -64,6 +64,8 @@ class GeneradorEtiquetaPtPdfTest extends TestCase
             $this->assertSame(4, substr_count($pdf, '('.$texto.')'));
         }
         $this->assertSame(4, substr_count($pdf, $generador->barcode($datos['numero_folio'])));
+        $datos['origen'] = 'externo';
+        $this->assertStringContainsString('(EXTERNO)', $generador->generarPt([$datos], 'planta', 1));
         $datos['origen'] = 'validacion';
         $datos['kilos_netos'] = null;
         $datos['fecha_proceso'] = null;

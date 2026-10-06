@@ -39,6 +39,9 @@ export function PackedFruitReceptionScreen({ auth, baseUrl, onLogout }: { auth: 
   const api = useMemo(() => createPackedFruitReceptionApi(baseUrl, auth.token), [baseUrl, auth.token]);
   const storageKey = `rfe.pending:${baseUrl}:${auth.usuario.id}:${auth.dispositivo.id}`;
   const [inventory, setInventory] = useState<EstadoRecepcionEmbalada | null>(null);
+  const pendingLabel = useRef<{ signature: string; payload: unknown } | null>(null);
+  const [labelCopies, setLabelCopies] = useState('4');
+  const [reprintReason, setReprintReason] = useState('');
   const [annulReason, setAnnulReason] = useState('');
   const [options, setOptions] = useState<ReceptionOptions | null>(null);
   const [catalog, setCatalog] = useState<ValidationCatalog | null>(null);
@@ -177,6 +180,19 @@ export function PackedFruitReceptionScreen({ auth, baseUrl, onLogout }: { auth: 
       setNotice(action === 'accept' ? 'Recepción aceptada.' : 'Recepción anulada.');
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
+  async function printLabel(f: EstadoRecepcionEmbalada['folios'][number]) {
+    if (!document || busy || !f.version_etiqueta) return;
+    const copies = Number(labelCopies);
+    if (!Number.isInteger(copies) || copies < 1 || copies > 10) { setError('Las copias deben estar entre 1 y 10.'); return; }
+    if (f.etiqueta_impresa && reprintReason.trim().length < 5) { setError('Indica un motivo de reimpresión (mínimo 5 caracteres).'); return; }
+    if (f.etiqueta?.envases_sin_kilos?.length && !await confirm('Kilos sin configurar', `Faltan kilos por caja en: ${f.etiqueta.envases_sin_kilos.map((p) => p.nombre).join(', ')}. Se imprimirán como —. ¿Continuar?`)) return;
+    const data = { temporada_id: document.temporada_id, tipo: 'planta', copias: copies, motivo_reimpresion: f.etiqueta_impresa ? reprintReason.trim() : null, folios: [{ id: f.folio_id, version: f.version_etiqueta }] };
+    const signature = JSON.stringify(data);
+    if (pendingLabel.current?.signature !== signature) pendingLabel.current = { signature, payload: { ...data, operacion_id: Crypto.randomUUID() } };
+    setBusy(true); setError('');
+    try { await api.sharePdf(`/${document.id}/etiquetas`, pendingLabel.current.payload); pendingLabel.current = null; setInventory(await api.actions.load(document.id)); setNotice('Etiquetas generadas y registradas en el historial.'); }
+    catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  }
   function chooseField(label: string, value: string, rows: Choice[], choose: (id: string) => void, disabled = locked) {
     return <View style={styles.field}><Text style={styles.label}>{label}</Text><Pressable accessibilityRole="button" accessibilityLabel={label} disabled={disabled} onPress={() => pick(label, rows, choose)} style={[styles.input, disabled && styles.disabled]}><Text style={styles.text}>{rows.find((r) => r.id === value)?.label ?? (value || 'Seleccionar')}</Text></Pressable></View>;
   }
@@ -184,7 +200,8 @@ export function PackedFruitReceptionScreen({ auth, baseUrl, onLogout }: { auth: 
     <Text style={styles.title}>{document ? `Guía ${document.numero_guia} · ${document.estado}` : 'Nueva recepción'}</Text>
     <Text style={styles.note}>Temporada: {options?.temporada?.nombre ?? 'Sin temporada activa'}</Text>
     <Text style={styles.warning}>{document?.estado === 'aceptada' ? 'Aceptada: los folios ya están en el inventario.' : document?.estado === 'anulada' ? 'Recepción anulada.' : 'Borrador: todavía no crea folios ni inventario.'}</Text>
-    {inventory?.folios.map((f) => <Text key={f.folio_id} style={styles.note}>{f.numero_folio}{f.folio_interno ? ` · Folio interno (origen ${f.folio_origen})` : ''} · {f.estado_operacional}</Text>)}
+    {document?.estado === 'aceptada' && <View><Field label="Copias de etiquetas (1 a 10)" value={labelCopies} onChange={setLabelCopies} numeric disabled={busy} /><Field label="Motivo si es reimpresión" value={reprintReason} onChange={setReprintReason} disabled={busy} /></View>}
+    {inventory?.folios.map((f) => <View key={f.folio_id}><Text style={styles.note}>{f.numero_folio}{f.folio_interno ? ` · Folio interno (origen ${f.folio_origen})` : ''} · {f.estado_operacional}</Text>{f.etiqueta_pendiente && <Text style={styles.warning}>Etiqueta pendiente (obligatoria)</Text>}{document?.estado === 'aceptada' && f.version_etiqueta && <Button label={`Imprimir etiquetas ${f.numero_folio}`} disabled={busy || !auth.usuario.capacidades.puede_gestionar_recepciones_fruta_embalada || document.temporada_id !== options?.temporada?.id} onPress={() => void printLabel(f)} />}</View>)}
     {inventory?.advertencias?.map((a) => <Text key={a.pallet_id} style={styles.warning}>{a.mensaje}</Text>)}
     {inventory?.incidencias?.map((a, i) => <Text key={i} style={styles.warning}>Incidencia de prefrío: {a.temperatura_pulpa} °C; umbral {a.umbral_prefrio} °C.</Text>)}
     {chooseField('Cliente *', header.cliente_id, asChoices(options?.clientes ?? []), (id) => {

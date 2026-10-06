@@ -98,7 +98,9 @@ class GeneradorEtiquetaPtPdf extends GeneradorEtiquetaMaterialPdf
         $margen = 9;
         $util = $ancho - 2 * $margen;
         $contenido = $this->textoAjustado($margen, $alto - 18, $util - 88, 11, (string) $etiqueta['cliente'], true);
-        $contenido .= $this->texto($ancho - 90, $alto - 18, 9, $etiqueta['origen'] === 'repaletizaje' ? 'REPALETIZADO' : 'PROCESO', true);
+        $contenido .= $this->texto($ancho - 90, $alto - 18, 9, match ($etiqueta['origen']) {
+            'repaletizaje' => 'REPALETIZADO', 'externo' => 'EXTERNO', default => 'PROCESO'
+        }, true);
         $contenido .= $this->textoAjustado($margen, $alto - 48, $util, 25, (string) $etiqueta['envase_codigo'], true);
         $contenido .= $this->textoAjustado($margen, $alto - 64, $util, 12, (string) $etiqueta['envase'], true);
         $fecha = $etiqueta['fecha_proceso'] ? implode('-', array_reverse(explode('-', $etiqueta['fecha_proceso']))) : '—';

@@ -109,7 +109,9 @@ class ServicioEtiquetasPt
 
         return [
             ...$etiqueta, ...$composicion->resumen($folio, $lineas), 'composicion' => $lineas,
-            'origen' => $folio->origen_sistema === 'repaletizaje' ? 'repaletizaje' : 'validacion',
+            'origen' => match ($folio->origen_sistema) {
+                'repaletizaje' => 'repaletizaje', 'recepcion_externa' => 'externo', default => 'validacion'
+            },
             'fecha_proceso' => $this->fechas->deFolio($folio),
         ];
     }

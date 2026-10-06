@@ -35,6 +35,7 @@ use App\Http\Controllers\Api\DesocupacionCamaraController;
 use App\Http\Controllers\Api\DespachoComercialRetornoController;
 use App\Http\Controllers\Api\DespachoFrigorificoController;
 use App\Http\Controllers\Api\DespachoMaterialController;
+use App\Http\Controllers\Api\DocumentoRecepcionEmbaladaController;
 use App\Http\Controllers\Api\EmbarqueController;
 use App\Http\Controllers\Api\EtiquetaPtController;
 use App\Http\Controllers\Api\EvacuacionEmergenciaController;
@@ -263,6 +264,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/catalogo-pt', [RecepcionFrutaEmbaladaController::class, 'catalogoPt']);
         Route::get('/revisar-guia', [RecepcionFrutaEmbaladaController::class, 'revisarGuia']);
         Route::get('/revisar-folio', [RecepcionFrutaEmbaladaController::class, 'revisarFolio']);
+        Route::get('/rrfe-01/blanco', [DocumentoRecepcionEmbaladaController::class, 'blanco']);
+        Route::post('/{recepcion}/rrfe-01', [DocumentoRecepcionEmbaladaController::class, 'emitir'])->whereUuid('recepcion');
+        Route::post('/{recepcion}/etiquetas', [DocumentoRecepcionEmbaladaController::class, 'etiquetas'])->whereUuid('recepcion');
         Route::get('/{recepcion}/aceptacion', [AceptacionFrutaEmbaladaController::class, 'show'])->whereUuid('recepcion');
         Route::post('/{recepcion}/aceptar', [AceptacionFrutaEmbaladaController::class, 'aceptar'])->whereUuid('recepcion');
         Route::post('/{recepcion}/anular', [AceptacionFrutaEmbaladaController::class, 'anular'])->whereUuid('recepcion');

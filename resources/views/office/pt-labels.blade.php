@@ -38,7 +38,7 @@
                 <p>Se muestran folios activos de la temporada activa. Revisa sus datos antes de seleccionar. Los datos corresponden al inventario actual.</p>
                 <form id="ptFilters" class="pt-labels-filters">
                     <label>Folio exacto<input name="folio" maxlength="50" placeholder="Incluye los ceros iniciales"></label>
-                    <label>Origen<select name="origen"><option value="">Todos</option><option value="validacion">Validación</option><option value="repaletizaje">Repaletizaje</option></select></label>
+                    <label>Origen<select name="origen"><option value="">Todos</option><option value="validacion">Validación</option><option value="repaletizaje">Repaletizaje</option><option value="externo">Externo</option></select></label>
                     <label>Fecha de validación / repa<input name="fecha" type="date"></label>
                     <label>Línea<select name="linea_proceso"><option value="">Todas</option><option>1</option><option>2</option><option>3</option></select></label>
                     <label>Turno<select name="turno"><option value="">Todos</option><option>A</option><option>B</option></select></label>

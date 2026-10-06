@@ -4,7 +4,7 @@ export type EstadoRecepcionEmbalada = {
     revision?: { version: string };
     advertencias?: { mensaje: string; pallet_id: string }[];
     incidencias?: { temperatura_pulpa: string; umbral_prefrio: string }[];
-    folios: { folio_id: string; numero_folio: string; folio_interno: boolean; folio_origen: string; estado_operacional: string }[];
+    folios: { folio_id: string; numero_folio: string; folio_interno: boolean; folio_origen: string; estado_operacional: string; etiqueta_pendiente?: boolean; etiqueta_impresa?: boolean; version_etiqueta?: string; etiqueta?: { envases_sin_kilos: { nombre: string }[] } }[];
 };
 
 type Request = (path: string, options?: { method: string; body: string }) => Promise<{ data: EstadoRecepcionEmbalada }>;

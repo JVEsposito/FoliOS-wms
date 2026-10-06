@@ -14,7 +14,8 @@ const require = createRequire(import.meta.url);
 const sourceRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../src');
 function harness({ failAfterCommit = false, duplicateGuide = false } = {}) {
   const storage = new Map(); let renderer; let committed = null; let sequence = 0;
-  const calls = { saves: [], scans: [], alerts: [] };
+  const calls = { saves: [], scans: [], alerts: [], accepts: [], prints: [] };
+  let printed = false;
   const catalog = {
     articulos: [{ id: 'article', especie: 'UVA', variedad: 'THOMPSON', variedad_validacion_id: 'variety', envase: '8.2 KG', calibre: 'L', activo: true }],
     origenes: [{ id: 'origin', cliente_validacion_id: 'catalog-client', csg: '12345', predio: 'Rengo', marca: 'Marca', variedad_ids: ['variety'], activo: true }, { id: 'other-origin', cliente_validacion_id: 'other-client', csg: '99999', marca: 'Otro', variedad_ids: ['variety'], activo: true }],
@@ -45,7 +46,11 @@ function harness({ failAfterCommit = false, duplicateGuide = false } = {}) {
     return module.exports;
   }
   const { ApiError } = load(resolve(sourceRoot, 'services/apiError.ts'));
+  const inventory = () => ({ estado: committed?.estado ?? 'borrador', ...(committed?.estado !== 'aceptada' ? { revision: { version: 'revision-1' } } : {}),
+    folios: committed?.estado === 'aceptada' ? [{ folio_id: 'internal-id', numero_folio: 'INT0000000001', folio_origen: 'EX-3', folio_interno: true, estado_operacional: 'pendiente_ubicacion', etiqueta_pendiente: !printed, etiqueta_impresa: printed, version_etiqueta: 'a'.repeat(64), etiqueta: { envases_sin_kilos: [] } }] : [] });
   const api = {
+    actions: { load: async () => inventory(), accept: async (id, version) => { calls.accepts.push({ id, version }); committed.estado = 'aceptada'; committed.editable = false; return inventory(); } },
+    sharePdf: async (path, payload) => { calls.prints.push({ path, payload }); printed = true; },
     options: async () => options, catalog: async () => catalog, list: async () => ({ data: committed ? [committed] : [], current_page: 1, last_page: 1 }), detail: async () => committed,
     checkFolio: async (value) => { calls.scans.push(value); return { repetido: value === 'EX-3', mensaje: value === 'EX-3' ? 'Se asignará folio interno al aceptar' : null }; },
     reviewGuide: async () => ({ duplicada: duplicateGuide, mensaje: duplicateGuide ? 'Esta guía ya se recibió del mismo cliente y planta de origen.' : null }),
@@ -106,5 +111,22 @@ test('respuesta perdida conserva operación y payload incluso al reiniciar la pa
     assert.equal(h.storage.size, 1); assert.match(h.message(), /respuesta se perdió/);
     await h.unmount(); await h.mount(); await h.press('Reintentar el mismo guardado');
     assert.deepEqual(h.calls.saves[0], h.calls.saves[1]); assert.equal(h.storage.size, 0);
+  } finally { await h.unmount(); }
+});
+
+
+test('PDA acepta el borrador y destaca la etiqueta interna hasta generar cuatro copias', async () => {
+  const h = harness();
+  try {
+    await h.mount(); await h.truck(); await h.pallet(3); await h.press('Guardar borrador');
+    await h.press('Aceptar e ingresar al inventario');
+    assert.deepEqual(h.calls.accepts, [{ id: 'reception', version: 'revision-1' }]);
+    assert.match(h.message(), /Etiqueta pendiente \(obligatoria\)/);
+    await h.press('Imprimir etiquetas INT0000000001');
+    assert.equal(h.calls.prints.length, 1);
+    assert.equal(h.calls.prints[0].payload.copias, 4);
+    assert.equal(h.calls.prints[0].payload.tipo, 'planta');
+    assert.equal(h.calls.prints[0].payload.folios[0].id, 'internal-id');
+    assert.doesNotMatch(h.message(), /Etiqueta pendiente \(obligatoria\)/);
   } finally { await h.unmount(); }
 });
