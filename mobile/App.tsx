@@ -11,6 +11,7 @@ import { DemoDataScreen } from './src/screens/DemoDataScreen';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { FirstPasswordChangeScreen } from './src/screens/FirstPasswordChangeScreen';
 import { MaterialReceptionScreen } from './src/screens/MaterialReceptionScreen';
+import { PackedFruitReceptionScreen } from './src/screens/PackedFruitReceptionScreen';
 import { FrutaProcesoScreen } from './src/screens/FrutaProcesoScreen';
 import { HidrocoolerMpScreen } from './src/screens/HidrocoolerMpScreen';
 import { OperationalWorkspaceScreen } from './src/screens/OperationalWorkspaceScreen';
@@ -51,7 +52,7 @@ export default function App() {
 
   useEffect(() => {
     // La PDA es un equipo de mano: siempre vertical, incluso en el login.
-    const orientation = isPdaBuild || activeModule === 'validacion' || activeModule === 'validacion_mp' || activeModule === 'repaletizaje' || activeModule === 'fruta_proceso'
+    const orientation = isPdaBuild || activeModule === 'validacion' || activeModule === 'validacion_mp' || activeModule === 'repaletizaje' || activeModule === 'fruta_proceso' || activeModule === 'recepcion_fruta_embalada'
       ? ScreenOrientation.OrientationLock.PORTRAIT_UP
       : activeModule
         ? ScreenOrientation.OrientationLock.LANDSCAPE
@@ -156,6 +157,8 @@ export default function App() {
                   <Text style={styles.bootText}>Repaletizaje requiere conexión con el servidor.</Text>
                 </View>
               )
+            ) : activeModule === 'recepcion_fruta_embalada' ? (
+              <PackedFruitReceptionScreen auth={auth} baseUrl={api.baseUrl ?? ''} onLogout={() => void logoutPersistentModule()} />
             ) : activeModule === 'fruta_proceso' ? (
               <FrutaProcesoScreen auth={auth} baseUrl={api.baseUrl ?? ''} onLogout={() => void logoutPersistentModule()} />
             ) : activeModule === 'hidrocooler_mp' ? (
@@ -193,6 +196,7 @@ function availableModules(auth: AuthSession): MobileModule[] {
     'validacion',
     'validacion_mp',
     'repaletizaje',
+    'recepcion_fruta_embalada',
     'fruta_proceso',
     'hidrocooler_mp',
     'prefrio',
@@ -217,6 +221,8 @@ function moduleLabel(module: MobileModule) {
       ? 'Validación MP'
       : module === 'repaletizaje'
         ? 'Repaletizaje'
+      : module === 'recepcion_fruta_embalada'
+        ? 'Recepción de fruta embalada'
       : module === 'fruta_proceso'
         ? 'Fruta a proceso'
       : module === 'hidrocooler_mp'
@@ -263,6 +269,13 @@ function ModuleSelection({ modules, onSelect, userName }: { modules: MobileModul
             <Text style={styles.selectorIcon}>⇄</Text>
             <Text style={styles.selectorCardTitle}>Repaletizaje</Text>
             <Text style={styles.selectorCardCopy}>Consolidar saldos en cámara; cada repa llena el registro RRPL-01.</Text>
+          </Pressable>
+        ) : null}
+        {modules.includes('recepcion_fruta_embalada') ? (
+          <Pressable onPress={() => onSelect('recepcion_fruta_embalada')} style={[styles.selectorCard, isPdaBuild && styles.selectorCardPda]}>
+            <Text style={styles.selectorIcon}>↘</Text>
+            <Text style={styles.selectorCardTitle}>Recepción de fruta embalada</Text>
+            <Text style={styles.selectorCardCopy}>Capturar camiones y pallets externos en borrador.</Text>
           </Pressable>
         ) : null}
         {modules.includes('fruta_proceso') ? (

@@ -26,6 +26,8 @@ class TemporadaActivaRutasTest extends TestCase
         Models\BandaOperacional::class => 'infraestructura física',
         Models\Camara::class => 'infraestructura física',
         Models\TunelPrefrio::class => 'infraestructura física',
+        Models\PlantaOrigen::class => 'catálogo global de plantas de origen',
+        Models\UmbralPrefrioEspecie::class => 'parámetro térmico global por especie',
         Models\Cliente::class => 'maestro global',
         Models\ProductorCsg::class => 'maestro global',
         Models\ProductoHidrocooler::class => 'catálogo global; cada ciclo conserva los datos del producto aplicado por temporada',

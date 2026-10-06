@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\CamaraController;
 use App\Http\Controllers\Api\CambioPasswordUsuarioController;
 use App\Http\Controllers\Api\CargaController;
 use App\Http\Controllers\Api\CatalogoEnvaseController;
+use App\Http\Controllers\Api\CatalogoFrutaEmbaladaController;
 use App\Http\Controllers\Api\CatalogoJerarquicoValidacionController;
 use App\Http\Controllers\Api\CatalogoMaterialController;
 use App\Http\Controllers\Api\CatalogoValidacionController;
@@ -60,6 +61,7 @@ use App\Http\Controllers\Api\PlanoPlantaController;
 use App\Http\Controllers\Api\ProcesoPrefrioController;
 use App\Http\Controllers\Api\ProductoHidrocoolerController;
 use App\Http\Controllers\Api\ProveedorMaterialController;
+use App\Http\Controllers\Api\RecepcionFrutaEmbaladaController;
 use App\Http\Controllers\Api\RecepcionMaterialController;
 use App\Http\Controllers\Api\RecepcionRomanaController;
 use App\Http\Controllers\Api\ReinicioOperacionalController;
@@ -252,6 +254,24 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/administracion/prefrio/tuneles/siguiente-codigo', [TunelPrefrioController::class, 'siguienteCodigo']);
         Route::post('/administracion/prefrio/tuneles', [TunelPrefrioController::class, 'store']);
         Route::put('/administracion/prefrio/tuneles/{tunelPrefrio}', [TunelPrefrioController::class, 'update']);
+    });
+
+    Route::middleware('can:consultar-recepciones-fruta-embalada')->prefix('recepciones-fruta-embalada')->group(function () {
+        Route::get('/', [RecepcionFrutaEmbaladaController::class, 'index']);
+        Route::get('/opciones', [RecepcionFrutaEmbaladaController::class, 'opciones']);
+        Route::get('/catalogo-pt', [RecepcionFrutaEmbaladaController::class, 'catalogoPt']);
+        Route::get('/revisar-guia', [RecepcionFrutaEmbaladaController::class, 'revisarGuia']);
+        Route::get('/revisar-folio', [RecepcionFrutaEmbaladaController::class, 'revisarFolio']);
+        Route::get('/{recepcionFrutaEmbalada}', [RecepcionFrutaEmbaladaController::class, 'show']);
+        Route::post('/', [RecepcionFrutaEmbaladaController::class, 'store'])->middleware('can:gestionar-recepciones-fruta-embalada');
+        Route::put('/{recepcionFrutaEmbalada}', [RecepcionFrutaEmbaladaController::class, 'update'])->middleware('can:gestionar-recepciones-fruta-embalada');
+    });
+    Route::middleware('can:administrar-accesos')->prefix('administracion/fruta-embalada')->group(function () {
+        Route::get('/', [CatalogoFrutaEmbaladaController::class, 'index']);
+        Route::post('/plantas', [CatalogoFrutaEmbaladaController::class, 'storePlanta']);
+        Route::put('/plantas/{plantaOrigen}', [CatalogoFrutaEmbaladaController::class, 'updatePlanta']);
+        Route::post('/umbrales', [CatalogoFrutaEmbaladaController::class, 'storeUmbral']);
+        Route::put('/umbrales/{umbralPrefrioEspecie}', [CatalogoFrutaEmbaladaController::class, 'updateUmbral']);
     });
 
     Route::get('/validacion/catalogos', CatalogoValidacionController::class)

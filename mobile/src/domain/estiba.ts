@@ -13,6 +13,7 @@ export type TabletModule =
   | 'recepcion_materiales'
   | 'validacion'
   | 'validacion_mp'
+  | 'recepcion_fruta_embalada'
   | 'repaletizaje'
   | 'fruta_proceso'
   | 'hidrocooler_mp'
@@ -58,6 +59,8 @@ export type UserCapabilities = {
   puede_operar_transformaciones_materiales?: boolean;
   puede_revertir_transformaciones_materiales?: boolean;
   puede_administrar_recetas_materiales?: boolean;
+  puede_consultar_recepciones_fruta_embalada?: boolean;
+  puede_gestionar_recepciones_fruta_embalada?: boolean;
   puede_validar_pallets: boolean;
   puede_validar_mp?: boolean;
   puede_rechazar_pallets: boolean;

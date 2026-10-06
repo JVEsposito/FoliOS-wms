@@ -35,6 +35,6 @@ export const appVariant: AppVariant = resolveAppVariant(appChannel, process.env.
 export const isPdaBuild = appVariant === 'pda';
 
 /** Módulos que la PDA puede abrir; el resto del perfil se ignora en ese equipo. */
-export const PDA_MODULES = ['validacion', 'validacion_mp', 'repaletizaje'] as const;
+export const PDA_MODULES = ['validacion', 'validacion_mp', 'repaletizaje', 'recepcion_fruta_embalada'] as const;
 
 export const deviceNoun = isPdaBuild ? 'PDA' : 'tablet';
