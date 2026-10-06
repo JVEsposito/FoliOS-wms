@@ -10,8 +10,7 @@
       "env": {
         "ESTIBA_APP_VARIANT": "demo",
         "EXPO_PUBLIC_DEMO_MODE": "true",
-        "EXPO_PUBLIC_DEMO_ONLY": "true",
-        "EXPO_PUBLIC_API_URL": ""
+        "EXPO_PUBLIC_DEMO_ONLY": "true"
       },
       "android": {
         "buildType": "apk"

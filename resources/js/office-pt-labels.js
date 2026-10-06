@@ -97,7 +97,7 @@ function renderRows() {
         cell(row, `${data.numero_folio} · ${data.tipo_bulto} · ${data.cantidad_cajas} cajas`);
         cell(row, `${data.especie} · ${data.variedad} · ${data.calibre} · ${data.envase} · ${data.categoria}`);
         cell(row, `${data.cliente} · ${data.marca} · CSG ${data.csg || 'Ver composición'}`);
-        cell(row, data.origen === 'repaletizaje' ? `REPALETIZADO · F. proceso ${data.fecha_proceso || '—'}` : `PROCESO · ${data.validador || '—'} · ${date(data.validado_at)}`);
+        cell(row, data.origen === 'externo' ? `EXTERNO · F. proceso ${data.fecha_proceso || '—'}` : data.origen === 'repaletizaje' ? `REPALETIZADO · F. proceso ${data.fecha_proceso || '—'}` : `PROCESO · ${data.validador || '—'} · ${date(data.validado_at)}`);
         const review = document.createElement('button'); review.type = 'button'; review.className = 'secondary-button'; review.textContent = 'Ver datos'; review.addEventListener('click', () => showReview(data)); cell(row, '').append(review);
         body.append(row);
     }
@@ -109,7 +109,7 @@ function showReview(data) {
     byId('ptReviewTitle').textContent = `Folio ${data.numero_folio}`;
     const details = byId('ptDetails'); details.replaceChildren();
     for (const [label, value] of [
-        ['Origen', data.origen === 'repaletizaje' ? 'REPALETIZADO' : 'PROCESO'], ['F. proceso', data.fecha_proceso], ['Kilos netos', data.kilos_netos?.replace('.', ',')], ['Código envase', data.envase_codigo], ['Temporada', data.temporada], ['Bulto / cajas', `${data.tipo_bulto} / ${data.cantidad_cajas}`],
+        ['Origen', data.origen === 'externo' ? 'EXTERNO' : data.origen === 'repaletizaje' ? 'REPALETIZADO' : 'PROCESO'], ['F. proceso', data.fecha_proceso], ['Kilos netos', data.kilos_netos?.replace('.', ',')], ['Código envase', data.envase_codigo], ['Temporada', data.temporada], ['Bulto / cajas', `${data.tipo_bulto} / ${data.cantidad_cajas}`],
         ['Especie', data.especie], ['Variedad', data.variedad], ['Calibre', data.calibre], ['Envase', data.envase], ['Categoría', data.categoria],
         ['Cliente', data.cliente], ['Marca', data.marca], ['CSG', data.csg], ['Predio', data.predio], ['Embalaje', data.fecha_embalaje],
         ['Estado', data.estado_operacional.replaceAll('_', ' ')], ['Validador', data.validador], ['Validado', date(data.validado_at)], ['Jornada', `Línea ${data.linea_proceso} / Turno ${data.turno}`],

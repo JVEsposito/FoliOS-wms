@@ -334,6 +334,7 @@ function traceTimeline(events = []) {
 function specificationGrid(specifications = {}) {
     const labels = {
         cliente: 'Cliente', especie: 'Especie', marca: 'Marca', variedad: 'Variedad', calibre: 'Calibre',
+        planta_origen: 'Planta de origen', guia: 'Guía', csp: 'CSP', referencia_externa: 'Referencia externa',
         envase: 'Envase', categoria: 'Categoría', csg: 'CSG', predio: 'Predio', cuartel: 'Cuartel',
     };
     return Object.entries(labels).map(([key, title]) => `<div><span>${title}</span><strong>${escapeHtml(specifications[key] || '—')}</strong></div>`).join('');

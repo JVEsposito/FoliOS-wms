@@ -106,7 +106,9 @@ class GeneradorEtiquetaPtPdf extends GeneradorEtiquetaMaterialPdf
         $contenido = $this->textoAjustado($margen, $alto - 18, $util - 88, 11, (string) $etiqueta['cliente'], true);
         $ladoQr = 56;
         $anchoJuntoQr = $util - $ladoQr - 8;
-        $contenido .= $this->texto($margen, $alto - 31, 9, $etiqueta['origen'] === 'repaletizaje' ? 'REPALETIZADO' : 'PROCESO', true);
+        $contenido .= $this->texto($margen, $alto - 31, 9, match ($etiqueta['origen']) {
+            'repaletizaje' => 'REPALETIZADO', 'externo' => 'EXTERNO', default => 'PROCESO'
+        }, true);
         $contenido .= $this->textoAjustado($margen, $alto - 51, $anchoJuntoQr, 22, (string) $etiqueta['envase_codigo'], true);
         $contenido .= $this->textoAjustado($margen, $alto - 67, $anchoJuntoQr, 12, (string) $etiqueta['envase'], true);
         $contenido .= (new CodigoQrPdf)->generar((string) $etiqueta['numero_folio'], $ancho - $margen - $ladoQr, $alto - $margen - $ladoQr, $ladoQr);

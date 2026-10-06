@@ -61,6 +61,7 @@ export type UserCapabilities = {
   puede_administrar_recetas_materiales?: boolean;
   puede_consultar_recepciones_fruta_embalada?: boolean;
   puede_gestionar_recepciones_fruta_embalada?: boolean;
+  puede_anular_recepciones_fruta_embalada?: boolean;
   puede_validar_pallets: boolean;
   puede_validar_mp?: boolean;
   puede_rechazar_pallets: boolean;

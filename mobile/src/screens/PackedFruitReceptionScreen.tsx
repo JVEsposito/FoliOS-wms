@@ -9,6 +9,7 @@ import type { ValidationCatalog } from '../domain/validation';
 import { createOriginArticleSelector, indexValidationCatalog } from '../domain/validationCatalogIndex';
 import { ApiError } from '../services/apiError';
 import { createPackedFruitReceptionApi } from '../services/packedFruitReceptionApi';
+import type { EstadoRecepcionEmbalada } from '../services/recepcionEmbaladaAcciones';
 import { colors } from '../theme/colors';
 
 type Choice = { id: string; label: string };
@@ -37,6 +38,11 @@ function Button({ label, onPress, disabled = false }: { label: string; onPress: 
 export function PackedFruitReceptionScreen({ auth, baseUrl, onLogout }: { auth: AuthSession; baseUrl: string; onLogout: () => void }) {
   const api = useMemo(() => createPackedFruitReceptionApi(baseUrl, auth.token), [baseUrl, auth.token]);
   const storageKey = `rfe.pending:${baseUrl}:${auth.usuario.id}:${auth.dispositivo.id}`;
+  const [inventory, setInventory] = useState<EstadoRecepcionEmbalada | null>(null);
+  const pendingLabel = useRef<{ signature: string; payload: unknown } | null>(null);
+  const [labelCopies, setLabelCopies] = useState('4');
+  const [reprintReason, setReprintReason] = useState('');
+  const [annulReason, setAnnulReason] = useState('');
   const [options, setOptions] = useState<ReceptionOptions | null>(null);
   const [catalog, setCatalog] = useState<ValidationCatalog | null>(null);
   const [list, setList] = useState<Reception[]>([]);
@@ -105,7 +111,8 @@ export function PackedFruitReceptionScreen({ auth, baseUrl, onLogout }: { auth: 
     try {
       const d = id ? await api.detail(id) : null;
       setDocument(d); setHeader(d ? toHeaderForm(d) : blankHeader(options?.temporada?.id ?? '', Number(auth.usuario.id)));
-      setPallets(d?.pallets ?? []); setPallet(null); setPalletIndex(null); setEditing(true); setDirty(false); setError(''); setNotice(''); scanVersion.current++;
+      setPallets(d?.pallets ?? []); setPallet(null); setPalletIndex(null); setEditing(true); setDirty(false); setError(''); setNotice(''); setInventory(null); scanVersion.current++;
+      if (d && d.pallets.length) setInventory(await api.actions.load(d.id));
     } catch (e) { setError((e as Error).message); }
   }
   async function scanFolio() {
@@ -141,6 +148,7 @@ export function PackedFruitReceptionScreen({ auth, baseUrl, onLogout }: { auth: 
       // Si falla limpiar el respaldo local, se conserva el envío para repetirlo idempotentemente.
       await AsyncStorage.removeItem(storageKey);
       setPending(null); setDocument(result); setHeader(toHeaderForm(result)); setPallets(result.pallets); setDirty(false); setNotice('Borrador guardado.');
+      setInventory(result.pallets.length ? await api.actions.load(result.id) : null);
     } catch (e) {
       if (e instanceof ApiError && e.status >= 400 && e.status < 500) { await AsyncStorage.removeItem(storageKey); setPending(null); }
       setError((e as Error).message);
@@ -159,13 +167,43 @@ export function PackedFruitReceptionScreen({ auth, baseUrl, onLogout }: { auth: 
       const p = { id: document?.id, payload }; await AsyncStorage.setItem(storageKey, JSON.stringify(p)); setPending(p); await send(p);
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
+  async function inventoryAction(action: 'accept' | 'annul') {
+    if (!document || busy || pending || dirty || pallet) return;
+    if (action === 'accept' && !inventory?.revision) return;
+    if (action === 'annul' && annulReason.trim().length < 5) { setError('Indica el motivo de anulación (mínimo 5 caracteres).'); return; }
+    if (!await confirm(action === 'accept' ? 'Aceptar recepción' : 'Anular recepción', action === 'accept' ? '¿Ingresar todos los pallets de esta recepción al inventario?' : '¿Anular esta recepción e inactivar sus folios?')) return;
+    setBusy(true); setError('');
+    try {
+      const state = action === 'accept' ? await api.actions.accept(document.id, inventory!.revision!.version) : await api.actions.annul(document.id, annulReason);
+      setInventory(state);
+      const d = await api.detail(document.id); setDocument(d); setPallets(d.pallets); setHeader(toHeaderForm(d)); setDirty(false);
+      setNotice(action === 'accept' ? 'Recepción aceptada.' : 'Recepción anulada.');
+    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  }
+  async function printLabel(f: EstadoRecepcionEmbalada['folios'][number]) {
+    if (!document || busy || !f.version_etiqueta) return;
+    const copies = Number(labelCopies);
+    if (!Number.isInteger(copies) || copies < 1 || copies > 10) { setError('Las copias deben estar entre 1 y 10.'); return; }
+    if (f.etiqueta_impresa && reprintReason.trim().length < 5) { setError('Indica un motivo de reimpresión (mínimo 5 caracteres).'); return; }
+    if (f.etiqueta?.envases_sin_kilos?.length && !await confirm('Kilos sin configurar', `Faltan kilos por caja en: ${f.etiqueta.envases_sin_kilos.map((p) => p.nombre).join(', ')}. Se imprimirán como —. ¿Continuar?`)) return;
+    const data = { temporada_id: document.temporada_id, tipo: 'planta', copias: copies, motivo_reimpresion: f.etiqueta_impresa ? reprintReason.trim() : null, folios: [{ id: f.folio_id, version: f.version_etiqueta }] };
+    const signature = JSON.stringify(data);
+    if (pendingLabel.current?.signature !== signature) pendingLabel.current = { signature, payload: { ...data, operacion_id: Crypto.randomUUID() } };
+    setBusy(true); setError('');
+    try { await api.sharePdf(`/${document.id}/etiquetas`, pendingLabel.current.payload); pendingLabel.current = null; setInventory(await api.actions.load(document.id)); setNotice('Etiquetas generadas y registradas en el historial.'); }
+    catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  }
   function chooseField(label: string, value: string, rows: Choice[], choose: (id: string) => void, disabled = locked) {
     return <View style={styles.field}><Text style={styles.label}>{label}</Text><Pressable accessibilityRole="button" accessibilityLabel={label} disabled={disabled} onPress={() => pick(label, rows, choose)} style={[styles.input, disabled && styles.disabled]}><Text style={styles.text}>{rows.find((r) => r.id === value)?.label ?? (value || 'Seleccionar')}</Text></Pressable></View>;
   }
   const headerView = editing ? <View>
     <Text style={styles.title}>{document ? `Guía ${document.numero_guia} · ${document.estado}` : 'Nueva recepción'}</Text>
     <Text style={styles.note}>Temporada: {options?.temporada?.nombre ?? 'Sin temporada activa'}</Text>
-    <Text style={styles.warning}>Borrador: todavía no crea folios ni inventario.</Text>
+    <Text style={styles.warning}>{document?.estado === 'aceptada' ? 'Aceptada: los folios ya están en el inventario.' : document?.estado === 'anulada' ? 'Recepción anulada.' : 'Borrador: todavía no crea folios ni inventario.'}</Text>
+    {document?.estado === 'aceptada' && <View><Field label="Copias de etiquetas (1 a 10)" value={labelCopies} onChange={setLabelCopies} numeric disabled={busy} /><Field label="Motivo si es reimpresión" value={reprintReason} onChange={setReprintReason} disabled={busy} /></View>}
+    {inventory?.folios.map((f) => <View key={f.folio_id}><Text style={styles.note}>{f.numero_folio}{f.folio_interno ? ` · Folio interno (origen ${f.folio_origen})` : ''} · {f.estado_operacional}</Text>{f.etiqueta_pendiente && <Text style={styles.warning}>Etiqueta pendiente (obligatoria)</Text>}{document?.estado === 'aceptada' && f.version_etiqueta && <Button label={`Imprimir etiquetas ${f.numero_folio}`} disabled={busy || !auth.usuario.capacidades.puede_gestionar_recepciones_fruta_embalada || document.temporada_id !== options?.temporada?.id} onPress={() => void printLabel(f)} />}</View>)}
+    {inventory?.advertencias?.map((a) => <Text key={a.pallet_id} style={styles.warning}>{a.mensaje}</Text>)}
+    {inventory?.incidencias?.map((a, i) => <Text key={i} style={styles.warning}>Incidencia de prefrío: {a.temperatura_pulpa} °C; umbral {a.umbral_prefrio} °C.</Text>)}
     {chooseField('Cliente *', header.cliente_id, asChoices(options?.clientes ?? []), (id) => {
       if (pallets.length || pallet) { Alert.alert('Cliente de la recepción', 'Quita los pallets antes de cambiar el cliente.'); return; } headerField('cliente_id', id);
     })}
@@ -202,7 +240,7 @@ export function PackedFruitReceptionScreen({ auth, baseUrl, onLogout }: { auth: 
       <Button label="Agregar a la captura" onPress={() => void addPallet()} disabled={locked} />
       <Button label="Cancelar captura del pallet" disabled={locked} onPress={() => { scanVersion.current++; setPallet(null); setPalletIndex(null); }} />
     </View>}
-  </View> : <View><Text style={styles.title}>Recepción de fruta embalada</Text><Text style={styles.note}>Borradores de la temporada activa.</Text><Button label="Nueva recepción" disabled={busy || !options?.temporada || !editable} onPress={() => void start()} /><Button label="Actualizar" disabled={busy} onPress={() => void load()} /></View>;
+  </View> : <View><Text style={styles.title}>Recepción de fruta embalada</Text><Text style={styles.note}>Recepciones de la temporada activa.</Text><Button label="Nueva recepción" disabled={busy || !options?.temporada || !editable} onPress={() => void start()} /><Button label="Actualizar" disabled={busy} onPress={() => void load()} /></View>;
 
   return <View style={styles.screen}>
     <View style={styles.toolbar}><Text style={styles.text}>Frío · Fruta embalada</Text><Button label="Salir" disabled={busy} onPress={() => { if (dirty && !pending) Alert.alert('Cambios sin guardar', '¿Cerrar sesión y descartar la captura?', [{ text: 'Volver', style: 'cancel' }, { text: 'Salir', onPress: onLogout }]); else onLogout(); }} /></View>
@@ -211,10 +249,12 @@ export function PackedFruitReceptionScreen({ auth, baseUrl, onLogout }: { auth: 
     {!!error && <Text style={styles.error} accessibilityRole="alert">{error}</Text>}
     <FlatList<ReceptionPallet | Reception> data={editing ? pallets : list} keyExtractor={(item, i) => item.id ?? `pallet-${i}`} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content} ListHeaderComponent={headerView} renderItem={({ item, index: i }) => editing ? <View style={styles.card}>
       <Text style={styles.title}>{i + 1}. {(item as ReceptionPallet).folio_origen}</Text><Text style={styles.text}>{(item as ReceptionPallet).csg} · {(item as ReceptionPallet).especie} · {(item as ReceptionPallet).variedad}</Text><Text style={styles.note}>{(item as ReceptionPallet).embalaje} · {(item as ReceptionPallet).calibre} · {(item as ReceptionPallet).cantidad_cajas} cajas · {(item as ReceptionPallet).temperatura_pulpa_c} °C</Text>
-      {(item as ReceptionPallet).folio_repetido && <Text style={styles.warning}>Se asignará folio interno al aceptar</Text>}
+      {(!document || document.estado === 'borrador') && (item as ReceptionPallet).folio_repetido && <Text style={styles.warning}>Se asignará folio interno al aceptar</Text>}
       <Text style={styles.note}>SAG: {(item as ReceptionPallet).condicion_sag_personalizada ? sagChoices.find((s) => s.id === ((item as ReceptionPallet).condicion_sag_id ?? ''))?.label : sagChoices.find((s) => s.id === header.condicion_sag_id)?.label}</Text>
       <Button label="Editar pallet" disabled={locked || !!pallet} onPress={() => editPallet(item as ReceptionPallet, i)} /><Button label="Quitar pallet" disabled={locked || !!pallet} onPress={() => { setPallets((p) => p.filter((_, n) => n !== i)); setDirty(true); }} />
     </View> : <View style={styles.card}><Text style={styles.title}>Guía {(item as Reception).numero_guia}</Text><Text style={styles.text}>{(item as Reception).cliente?.nombre} · {(item as Reception).planta_origen?.nombre}</Text><Text style={styles.note}>{(item as Reception).pallets_count} pallets · {new Date((item as Reception).recepcion_at).toLocaleString()}</Text><Button label="Abrir recepción" disabled={busy} onPress={() => void start(item.id)} /></View>} ListFooterComponent={editing ? <View>
+      {document?.estado === 'borrador' && <Button label="Aceptar e ingresar al inventario" disabled={locked || dirty || !!pallet || !inventory?.revision} onPress={() => void inventoryAction('accept')} />}
+      {document?.estado === 'aceptada' && auth.usuario.capacidades.puede_anular_recepciones_fruta_embalada && <View><Field label="Motivo de anulación" value={annulReason} onChange={setAnnulReason} disabled={busy} /><Button label="Anular recepción" disabled={busy || document.temporada_id !== options?.temporada?.id} onPress={() => void inventoryAction('annul')} /></View>}
       {pending ? <Button label="Reintentar el mismo guardado" disabled={busy} onPress={() => void send(pending)} /> : <Button label="Guardar borrador" disabled={locked || !!pallet} onPress={() => void save()} />}
       <Button label="Volver al listado" disabled={busy || !!pending} onPress={() => { void (async () => { if (dirty && !await confirm('Cambios sin guardar', '¿Descartar los cambios y volver al listado?')) return; setEditing(false); setDirty(false); setDocument(null); setPallet(null); await load(1); })(); }} />
     </View> : <View style={styles.toolbar}><Button label="Anterior" disabled={busy || page <= 1} onPress={() => void load(page - 1)} /><Text style={styles.text}>{page} / {lastPage}</Text><Button label="Siguiente" disabled={busy || page >= lastPage} onPress={() => void load(page + 1)} /></View>} />
