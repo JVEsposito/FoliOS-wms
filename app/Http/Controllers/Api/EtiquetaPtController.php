@@ -30,14 +30,16 @@ class EtiquetaPtController extends Controller
             }
         }
         if ($filtros['origen'] ?? null) {
-            $filtros['origen'] === 'repaletizaje'
-                ? $consulta->where('origen_sistema', 'repaletizaje')
-                : $consulta->where(fn ($q) => $q->whereNull('origen_sistema')->orWhere('origen_sistema', '!=', 'repaletizaje'));
+            match ($filtros['origen']) {
+                'repaletizaje' => $consulta->where('origen_sistema', 'repaletizaje'),
+                'externo' => $consulta->where('origen_sistema', 'recepcion_externa'),
+                default => $consulta->where(fn ($q) => $q->whereNull('origen_sistema')->orWhereNotIn('origen_sistema', ['repaletizaje', 'recepcion_externa'])),
+            };
         }
         if ($rango = $request->rangoFechaUtc()) {
             $consulta->where(function ($q) use ($rango): void {
                 $q->whereHas('validacionPallet', fn ($v) => $v->where('generado_dispositivo_at', '>=', $rango[0])->where('generado_dispositivo_at', '<', $rango[1]))
-                    ->orWhere(fn ($f) => $f->where('origen_sistema', 'repaletizaje')->where('created_at', '>=', $rango[0])->where('created_at', '<', $rango[1]));
+                    ->orWhere(fn ($f) => $f->whereIn('origen_sistema', ['repaletizaje', 'recepcion_externa'])->where('created_at', '>=', $rango[0])->where('created_at', '<', $rango[1]));
             });
         }
         $pagina = $consulta->orderByDesc('created_at')->orderBy('id')->paginate($filtros['per_page'] ?? 25);

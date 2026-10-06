@@ -20,6 +20,7 @@ use App\Models\User;
 use App\Services\Estiba\ServicioPlanesOperacionales;
 use App\Services\Folios\ServicioHabilitacionAlmacenamiento;
 use App\Services\Temporadas\ServicioTemporadaActiva;
+use App\Services\Validacion\ServicioEtiquetasPt;
 use DomainException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -41,6 +42,20 @@ class ServicioAceptacionFrutaEmbalada
         $folios = DB::table('recepcion_fruta_embalada_folios as rf')->join('folios as f', 'f.id', '=', 'rf.folio_id')
             ->where('rf.aceptacion_id', $aceptacion->id)->orderBy('rf.recepcion_pallet_id')
             ->get(['rf.*', 'f.numero_folio', 'f.estado_operacional', 'f.condicion_termica', 'f.habilitacion_almacenamiento', 'f.activo']);
+
+        $impresos = DB::table('impresion_etiqueta_pt_folios as pf')->join('impresiones_etiquetas_pt as p', 'p.id', '=', 'pf.impresion_id')
+            ->where('p.tipo', 'planta')->whereIn('pf.folio_id', $folios->pluck('folio_id'))->pluck('pf.folio_id');
+        $servicioEtiquetas = app(ServicioEtiquetasPt::class);
+        $disponibles = $servicioEtiquetas->consulta()->whereIn('id', $folios->pluck('folio_id'))->get()->keyBy('id');
+        $folios->transform(function ($f) use ($impresos, $disponibles, $servicioEtiquetas) {
+            $f->etiqueta_impresa = $impresos->contains($f->folio_id);
+            $f->etiqueta_pendiente = (bool) $f->folio_interno && ! $f->etiqueta_impresa && (bool) $f->activo;
+            $folio = $disponibles->get($f->folio_id);
+            $f->etiqueta = $folio ? $servicioEtiquetas->etiqueta($folio) : null;
+            $f->version_etiqueta = $folio ? $servicioEtiquetas->version($folio) : null;
+
+            return $f;
+        });
 
         return ['id' => $aceptacion->id, 'recepcion_id' => $id, 'estado' => $aceptacion->estado,
             'advertencias' => json_decode($aceptacion->advertencias, true), 'snapshot' => json_decode($aceptacion->snapshot, true),

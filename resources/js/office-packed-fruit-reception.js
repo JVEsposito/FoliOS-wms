@@ -40,7 +40,7 @@ async function loadInventory() {
 }
 function renderInventory() {
     byId('receptionState').textContent = draft?.estado === 'aceptada' ? 'Recepción aceptada: sus folios ya están en el inventario.' : draft?.estado === 'anulada' ? 'Recepción anulada.' : 'Borrador: todavía no crea folios ni inventario. Guarda los cambios antes de aceptar.';
-    byId('receptionInventory').innerHTML = (inventory?.folios ?? []).map((f) => `<p>${e(f.numero_folio)}${f.folio_interno ? ` · Folio interno (origen ${e(f.folio_origen)})` : ''} · ${e(f.estado_operacional)}</p>`).join('')
+    byId('receptionInventory').innerHTML = (inventory?.folios ?? []).map((f) => `<p>${e(f.numero_folio)}${f.folio_interno ? ` · Folio interno (origen ${e(f.folio_origen)})` : ''} · ${e(f.estado_operacional)}${f.etiqueta_pendiente ? ' · <strong>Etiqueta pendiente (obligatoria)</strong>' : ''}${f.version_etiqueta ? ` <button type="button" class="secondary-button" data-print-external="${e(f.folio_id)}">Imprimir etiqueta</button>` : ''}</p>`).join('')
         + (inventory?.advertencias ?? []).map((a) => `<p class="rfe-warning">${e(a.mensaje)}</p>`).join('')
         + (inventory?.incidencias ?? []).map((a) => `<p class="rfe-warning">Incidencia de prefrío: ${e(a.temperatura_pulpa)} °C; umbral ${e(a.umbral_prefrio)} °C.</p>`).join('');
     refreshLocks();
@@ -61,6 +61,35 @@ async function inventoryAction(action) {
 }
 byId('acceptReception').onclick = () => void inventoryAction('accept');
 byId('annulReception').onclick = () => void inventoryAction('annul');
+let pendingLabel = null;
+async function openPdf(path, init = {}) {
+    const blob = await session.request(path, { ...init, pdf: true });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a'); link.href = url; link.download = path.includes('etiquetas') ? 'etiquetas-externas.pdf' : 'rrfe-01.pdf'; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+byId('blankRrfe').onclick = () => void openPdf(`${root}/rrfe-01/blanco`).catch((error) => message(error.message, true));
+byId('rrfeReception').onclick = async () => {
+    if (!draft || busy) return; busy = true; refreshLocks();
+    try { await openPdf(`${root}/${draft.id}/rrfe-01`, { method: 'POST' }); message('RRFE-01 descargado.'); }
+    catch (error) { message(error.message, true); } finally { busy = false; refreshLocks(); }
+};
+byId('receptionInventory').onclick = async (event) => {
+    const id = event.target.closest('[data-print-external]')?.dataset.printExternal;
+    const f = inventory?.folios.find((folio) => folio.folio_id === id);
+    if (!f || busy || !draft) return;
+    const copies = Number(byId('externalLabelCopies').value);
+    if (!Number.isInteger(copies) || copies < 1 || copies > 10) { message('Las copias deben estar entre 1 y 10.', true); return; }
+    if (f.etiqueta?.envases_sin_kilos?.length && !window.confirm(`Faltan kilos por caja en: ${f.etiqueta.envases_sin_kilos.map((p) => p.nombre).join(', ')}. Los kilos se imprimirán como —. ¿Continuar?`)) return;
+    let motivo = null;
+    if (f.etiqueta_impresa) { motivo = window.prompt('Motivo de reimpresión (mínimo 5 caracteres):')?.trim(); if (!motivo || motivo.length < 5) return; }
+    const selection = { temporada_id: draft.temporada_id, tipo: 'planta', copias: copies, motivo_reimpresion: motivo, folios: [{ id, version: f.version_etiqueta }] };
+    const signature = JSON.stringify(selection);
+    if (pendingLabel?.signature !== signature) pendingLabel = { signature, payload: { ...selection, operacion_id: uuid() } };
+    busy = true; refreshLocks();
+    try { await openPdf(`${root}/${draft.id}/etiquetas`, { method: 'POST', body: JSON.stringify(pendingLabel.payload) }); pendingLabel = null; await loadInventory(); message('Etiquetas descargadas y registradas en el historial.'); }
+    catch (error) { message(error.message, true); } finally { busy = false; refreshLocks(); }
+};
 function fillSelect(control, rows, placeholder) {
     const value = control.value;
     control.innerHTML = `<option value="">${e(placeholder)}</option>${rows.map((r) => `<option value="${e(r.id)}">${e(r.nombre)}</option>`).join('')}`;
@@ -97,7 +126,7 @@ function renderPallets() {
         ${field('T° de pulpa (°C) *', 'temperatura_pulpa_c', 'number', p.temperatura_pulpa_c, 'required min="-50" max="80" step="0.01"')}
         ${field('CSP', 'csp', 'text', p.csp, 'maxlength="50"')}
         ${select('Condición SAG', 'sag', [['heredar', 'Aplicar condición del encabezado'], ['sin', 'Sin condición SAG'], ...options.condiciones_sag.map((s) => [s.id, s.nombre])], p.condicion_sag_personalizada ? p.condicion_sag_id ?? 'sin' : 'heredar')}
-        </div>${p.folio_repetido ? '<p class="rfe-warning" data-folio-warning>Se asignará folio interno al aceptar</p>' : ''}<button class="secondary-button" type="button" data-remove="${i}">Quitar pallet</button></fieldset>`;
+        </div>${(!draft || draft.estado === 'borrador') && p.folio_repetido ? '<p class="rfe-warning" data-folio-warning>Se asignará folio interno al aceptar</p>' : ''}<button class="secondary-button" type="button" data-remove="${i}">Quitar pallet</button></fieldset>`;
     }).join('');
     byId('totals').textContent = `${pallets.length} bultos · ${pallets.reduce((sum, p) => sum + Number(p.cantidad_cajas || 0), 0)} cajas`;
     refreshLocks();
@@ -105,6 +134,11 @@ function renderPallets() {
 function editable() { return session.can('puede_gestionar_recepciones_fruta_embalada') && (!draft || draft.editable); }
 function refreshLocks() {
     const locked = !editable() || busy || !!pending;
+    byId('rrfeReception').classList.toggle('is-hidden', draft?.estado !== 'aceptada' || !session.can('puede_gestionar_recepciones_fruta_embalada'));
+    byId('rrfeReception').disabled = busy || draft?.temporada_id !== options?.temporada?.id;
+    byId('blankRrfe').disabled = busy;
+    byId('externalLabelCopies').disabled = busy;
+    byId('receptionInventory').querySelectorAll('button').forEach((button) => { button.disabled = busy || draft?.estado !== 'aceptada' || draft?.temporada_id !== options?.temporada?.id || !session.can('puede_gestionar_recepciones_fruta_embalada'); });
     byId('acceptReception').classList.toggle('is-hidden', !draft || draft.estado !== 'borrador' || !session.can('puede_gestionar_recepciones_fruta_embalada'));
     byId('acceptReception').disabled = busy || !!pending || dirty || !inventory?.revision || !draft?.editable;
     byId('annulReception').classList.toggle('is-hidden', draft?.estado !== 'aceptada' || !session.can('puede_anular_recepciones_fruta_embalada'));
