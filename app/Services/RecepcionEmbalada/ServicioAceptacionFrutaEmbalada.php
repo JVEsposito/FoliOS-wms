@@ -172,6 +172,7 @@ class ServicioAceptacionFrutaEmbalada
                     throw new ConflictoOperacion('Una tarea ya tiene actividad física y no se puede cancelar.');
                 }
             }
+            DB::table('incidencias_recepcion_embalada')->whereIn('recepcion_folio_id', DB::table('recepcion_fruta_embalada_folios')->where('aceptacion_id', $aceptacion->id)->pluck('id'))->update(['estado' => 'cancelada', 'updated_at' => now()]);
             foreach ($folios as $folio) {
                 $folio->update(['activo' => false, 'estado_operacional' => EstadoOperacionalFolio::Anulado]);
             }

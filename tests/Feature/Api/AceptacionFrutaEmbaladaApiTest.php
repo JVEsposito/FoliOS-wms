@@ -118,6 +118,8 @@ class AceptacionFrutaEmbaladaApiTest extends TestCase
         $this->withToken($this->token)->postJson($this->ruta('aceptar'), $this->payload())->assertOk()
             ->assertJsonPath('data.folios.0.habilitacion_almacenamiento', 'no_habilitado')->assertJsonCount(1, 'data.incidencias');
         $this->assertDatabaseHas('incidencias_recepcion_embalada', ['temperatura_pulpa' => 4.2, 'umbral_prefrio' => 2, 'estado' => 'abierta']);
+        $this->withToken($this->token)->getJson('/api/operacion-ahora')->assertOk()->assertJsonPath('data.incidencias.resumen.recepcion_embalada', 1)
+            ->assertJsonPath('data.incidencias.abiertas.0.origen', 'recepcion_embalada')->assertJsonPath('data.incidencias.abiertas.0.folio.numero_folio', 'EXT00001');
     }
 
     public function test_sin_umbral_respeta_declaracion_con_advertencia_y_saldo_no_entra_al_planificador(): void
