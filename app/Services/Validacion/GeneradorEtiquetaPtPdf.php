@@ -8,22 +8,27 @@ use DomainException;
 
 class GeneradorEtiquetaPtPdf extends GeneradorEtiquetaMaterialPdf
 {
-    public function generarPt(array $etiquetas, string $tipo, int $copias = 1): string
+    public function generarPt(array $etiquetas, string $tipo, ?int $copias = null): string
     {
-        if (! in_array($tipo, ['folio', 'ventana'], true) || $etiquetas === [] || $copias < 1 || $copias > 10) {
+        $copias ??= $tipo === 'planta' ? 4 : 1;
+        if (! in_array($tipo, ['folio', 'ventana', 'planta'], true) || $etiquetas === [] || $copias < 1 || $copias > 10) {
             throw new DomainException('Selecciona etiquetas, formato y cantidad de copias válidos.');
         }
 
         return $this->generar(
             array_map(fn ($etiqueta) => [...$etiqueta, 'tipo_etiqueta' => $tipo], $etiquetas),
-            ['ancho_mm' => 100, 'alto_mm' => $tipo === 'folio' ? 50 : 200,
-                'orientacion' => $tipo === 'folio' ? 'horizontal' : 'vertical'],
+            ['ancho_mm' => $tipo === 'planta' ? 107 : 100,
+                'alto_mm' => $tipo === 'planta' ? 74 : ($tipo === 'folio' ? 50 : 200),
+                'orientacion' => $tipo === 'ventana' ? 'vertical' : 'horizontal'],
             $copias,
         );
     }
 
     protected function pagina(array $etiqueta, float $ancho, float $alto): string
     {
+        if ($etiqueta['tipo_etiqueta'] === 'planta') {
+            return $this->paginaPlanta($etiqueta, $ancho, $alto);
+        }
         $ventana = $etiqueta['tipo_etiqueta'] === 'ventana';
         $margen = 12;
         $util = $ancho - 2 * $margen;
@@ -86,5 +91,41 @@ class GeneradorEtiquetaPtPdf extends GeneradorEtiquetaMaterialPdf
         }
 
         return $contenido;
+    }
+
+    private function paginaPlanta(array $etiqueta, float $ancho, float $alto): string
+    {
+        $margen = 9;
+        $util = $ancho - 2 * $margen;
+        $contenido = $this->textoAjustado($margen, $alto - 18, $util - 88, 11, (string) $etiqueta['cliente'], true);
+        $contenido .= $this->texto($ancho - 90, $alto - 18, 9, $etiqueta['origen'] === 'repaletizaje' ? 'REPALETIZADO' : 'PROCESO', true);
+        $contenido .= $this->textoAjustado($margen, $alto - 48, $util, 25, (string) $etiqueta['envase_codigo'], true);
+        $contenido .= $this->textoAjustado($margen, $alto - 64, $util, 12, (string) $etiqueta['envase'], true);
+        $fecha = $etiqueta['fecha_proceso'] ? implode('-', array_reverse(explode('-', $etiqueta['fecha_proceso']))) : '—';
+        foreach ([
+            [$margen, $alto - 80, 'ESPECIE', $etiqueta['especie'], 167],
+            [$margen + 177, $alto - 80, 'F. PROCESO', $fecha, $util - 177],
+            [$margen, $alto - 108, 'VARIEDAD', $etiqueta['variedad'], 131],
+            [$margen + 141, $alto - 108, 'KILOS NETOS', $etiqueta['kilos_netos'] === null ? '—' : number_format((float) $etiqueta['kilos_netos'], 2, ',', ''), 79],
+            [$margen + 230, $alto - 108, 'CAJAS', (string) $etiqueta['cantidad_cajas'], $util - 230],
+        ] as [$x, $y, $titulo, $valor, $espacio]) {
+            $contenido .= $this->texto($x, $y, 7, $titulo);
+            $contenido .= $this->textoAjustado($x, $y - 14, $espacio, 12, (string) $valor, true);
+        }
+        $contenido .= $this->texto($margen, 61, 8, 'PALLET', true);
+        $contenido .= $this->textoAjustado($margen + 41, 59, $util - 41, 21, (string) $etiqueta['numero_folio'], true);
+        $contenido .= $this->codigoBarras((string) $etiqueta['numero_folio'], $margen, 10, $util, 39, true);
+
+        return $contenido;
+    }
+
+    private function textoAjustado(float $x, float $y, float $ancho, float $tamano, string $texto, bool $negrita): string
+    {
+        $tamano = min($tamano, $ancho / max(1, mb_strlen($texto)) / 0.67);
+        if ($tamano < 6) {
+            throw new DomainException('La información no cabe legiblemente en la etiqueta de planta. Revisa el nombre o código del envase.');
+        }
+
+        return $this->texto($x, $y, $tamano, $texto, $negrita);
     }
 }

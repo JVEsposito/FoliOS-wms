@@ -238,6 +238,7 @@ class CatalogoJerarquicoValidacionController extends Controller
             ],
             'nombre' => ['required', 'string', 'max:100'],
             'codigo_externo' => ['nullable', 'string', 'max:100'],
+            'kilos_netos_por_caja' => ['nullable', 'numeric', 'gt:0', 'max:999999', 'decimal:0,4'],
             'activo' => ['required', 'boolean'],
         ], [
             'cliente_validacion_id.required' => 'Selecciona el cliente propietario del envase.',

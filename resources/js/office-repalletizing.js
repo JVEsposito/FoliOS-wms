@@ -549,6 +549,7 @@ function renderHistory() {
                 ${repa.origenes.map((origin) => `<div class="repa-origin"><span>${escapeHtml(origin.folio.numero_folio)}</span><strong>${origin.cajas_aportadas} cajas</strong></div>`).join('')}
                 ${(repa.folio_resultante?.composicion || []).map((line) => `<div class="repa-origin"><span>CSG ${escapeHtml(line.csg)} · ${escapeHtml(line.fecha_embalaje || 'Sin fecha')}</span><strong>${line.cantidad_cajas} cajas</strong></div>`).join('')}
             </details>
+            ${repa.estado === 'confirmado' && (can('puede_imprimir_etiquetas_pt') || can('puede_consultar_repaletizajes')) ? (repa.resultados || []).map((result) => result.folio?.activo ? `<a class="secondary-button" href="/oficina/validacion/etiquetas?folio=${encodeURIComponent(result.folio.numero_folio)}&tipo=planta&copias=4">Imprimir etiquetas · ${escapeHtml(result.folio.numero_folio)}</a>` : '').join('') : ''}
             ${can('puede_anular_repaletizajes') && repa.puede_anular ? `<button data-annul="${escapeHtml(repa.id)}" type="button">Anular repa</button>` : ''}
         </article>`
     )).join('') : '<p class="empty-copy">No existen repaletizajes para esta selección.</p>';

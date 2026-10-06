@@ -264,10 +264,12 @@ Route::middleware('auth:sanctum')->group(function () {
         '/validacion/pallets/{validacionPallet}/corregir',
         [ValidacionPalletController::class, 'corregir'],
     )->middleware('can:corregir-validaciones-pallet');
-    Route::middleware('can:consultar-validaciones-pallet')->group(function () {
+    Route::middleware('can:imprimir-etiquetas-pt')->group(function () {
         Route::get('/validacion/etiquetas', [EtiquetaPtController::class, 'index']);
         Route::get('/validacion/etiquetas/historial', [EtiquetaPtController::class, 'historial']);
         Route::post('/validacion/etiquetas', [EtiquetaPtController::class, 'store']);
+    });
+    Route::middleware('can:consultar-validaciones-pallet')->group(function () {
         Route::get('/validacion/pallets', [ValidacionPalletController::class, 'index']);
         Route::get('/validacion/registro/resumen', [ValidacionPalletController::class, 'resumen']);
         Route::get('/validacion/registro/opciones', [ValidacionPalletController::class, 'opciones']);

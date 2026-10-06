@@ -15,6 +15,7 @@ use App\Models\Posicion;
 use App\Models\Repaletizaje;
 use App\Models\Temporada;
 use App\Models\User;
+use App\Services\Validacion\ServicioEtiquetasPt;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -848,6 +849,75 @@ class RepaletizajeApiTest extends TestCase
             'activo' => false,
             'estado_operacional' => 'agotado',
         ]);
+    }
+
+    public function test_etiqueta_conservada_usa_composicion_actual_y_fecha_mas_antigua_en_toda_la_cadena(): void
+    {
+        [$token, $temporada] = $this->contexto();
+        $primero = $this->folio($temporada, 'FECHA-06', 20);
+        $segundo = $this->folio($temporada, 'FECHA-09', 30);
+        $tercero = $this->folio($temporada, 'FECHA-04', 10);
+        foreach ([[$primero, '2026-02-06'], [$segundo, '2026-02-09'], [$tercero, '2026-02-04']] as [$folio, $fecha]) {
+            $folio->update(['datos_externos' => [...$folio->datos_externos, 'fecha_embalaje' => $fecha]]);
+        }
+        $segundo->update(['variedad' => 'Lapins']);
+        $primeraRepa = $this->conToken($token)->postJson('/api/validacion/repaletizajes', [
+            'turno' => 'A', 'operacion_id' => (string) Str::uuid(), 'tipo_resultado' => 'saldo',
+            'estrategia_folio' => 'conservar', 'numero_folio_resultante' => $primero->numero_folio,
+            'folio_conservado_id' => $primero->id, 'cantidad_objetivo' => 120,
+            'origenes' => [['folio_id' => $primero->id, 'cantidad_aportada' => 20], ['folio_id' => $segundo->id, 'cantidad_aportada' => 30]],
+        ])->assertOk()->json('data.id');
+        $primero->refresh();
+        $this->assertSame('2026-02-06', $primero->fecha_proceso_pt->toDateString());
+        $etiqueta = app(ServicioEtiquetasPt::class)->etiqueta($primero);
+        $this->assertSame('repaletizaje', $etiqueta['origen']);
+        $this->assertSame(50, $etiqueta['cantidad_cajas']);
+        $this->assertSame('MIXTA', $etiqueta['variedad']);
+        $this->assertSame('2026-02-06', $etiqueta['fecha_proceso']);
+        $this->travel(1)->seconds();
+        $this->conToken($token)->postJson('/api/validacion/repaletizajes', [
+            'turno' => 'A', 'operacion_id' => (string) Str::uuid(), 'tipo_resultado' => 'saldo',
+            'estrategia_folio' => 'nuevo', 'numero_folio_resultante' => 'CADENA-04', 'cantidad_objetivo' => 120,
+            'origenes' => [['folio_id' => $primero->id, 'cantidad_aportada' => 50], ['folio_id' => $tercero->id, 'cantidad_aportada' => 10]],
+        ])->assertOk();
+        $nuevo = Folio::where('numero_folio', 'CADENA-04')->firstOrFail();
+        $this->assertSame('2026-02-04', $nuevo->fecha_proceso_pt->toDateString());
+        $this->assertSame('2026-02-04', app(ServicioEtiquetasPt::class)->etiqueta($nuevo)['fecha_proceso']);
+
+        // Simula snapshots del esquema anterior: la primera repa no tenía fecha persistida.
+        DB::table('repaletizaje_detalles')->where('repaletizaje_id', '!=', $primeraRepa)->get()->each(function ($detalle): void {
+            $snapshot = json_decode($detalle->snapshot_antes, true);
+            unset($snapshot['atributos']['fecha_proceso_pt']);
+            DB::table('repaletizaje_detalles')->where('id', $detalle->id)->update(['snapshot_antes' => json_encode($snapshot)]);
+        });
+        DB::table('folios')->where('origen_sistema', 'repaletizaje')->update(['fecha_proceso_pt' => null]);
+        $sinHistorial = $this->folio($temporada, 'REPA-SIN-HISTORIAL', 10);
+        $sinHistorial->update(['origen_sistema' => 'repaletizaje']);
+        $migracion = require database_path('migrations/2026_10_06_120000_etiquetas_pt_planta.php');
+        $migracion->completarFechasHistoricas();
+        $this->assertSame('2026-02-06', $primero->refresh()->fecha_proceso_pt->toDateString());
+        $this->assertSame('2026-02-04', $nuevo->refresh()->fecha_proceso_pt->toDateString());
+        $this->assertNull($sinHistorial->refresh()->fecha_proceso_pt);
+    }
+
+    public function test_cambio_folio_conserva_fecha_original_y_anulacion_restaura_fecha_anterior(): void
+    {
+        [$token, $temporada] = $this->contexto();
+        $origen = $this->folio($temporada, 'UNICO-06', 60);
+        $origen->update(['datos_externos' => [...$origen->datos_externos, 'fecha_embalaje' => '2026-02-06']]);
+        $respuesta = $this->conToken($token)->postJson('/api/validacion/repaletizajes', [
+            'turno' => 'A', 'operacion_id' => (string) Str::uuid(), 'modalidad' => 'cambio_folio',
+            'origenes' => [['folio_id' => $origen->id, 'cantidad_aportada' => 60]],
+            'resultados' => [['numero_folio' => 'UNICO-REPA', 'tipo_resultado' => 'saldo', 'cantidad_objetivo' => 120, 'cantidad_resultante' => 60]],
+        ])->assertOk();
+        $nuevo = Folio::where('numero_folio', 'UNICO-REPA')->firstOrFail();
+        $this->assertSame('2026-02-06', $nuevo->fecha_proceso_pt->toDateString());
+        $supervisor = $this->token(RolUsuario::SupervisorFrio, 'FECHA-ANULACION');
+        $this->conToken($supervisor)->postJson('/api/validacion/repaletizajes/'.$respuesta->json('data.id').'/anular', [
+            'operacion_id' => (string) Str::uuid(), 'motivo' => 'Restaurar folio de origen y sus datos.',
+        ])->assertOk();
+        $this->assertNull($origen->refresh()->fecha_proceso_pt);
+        $this->assertSame('2026-02-06', app(ServicioEtiquetasPt::class)->etiqueta($origen)['fecha_proceso']);
     }
 
     /** @param array<string, mixed> $cambio */

@@ -14,8 +14,8 @@
         <div class="office-access__brand">
             <div class="office-logo" aria-hidden="true">▥</div>
             <p class="eyebrow">FRIGORÍFICO · PRODUCTO TERMINADO</p>
-            <h1 id="officeAccessTitle">Del pallet validado a su etiqueta.</h1>
-            <p>Revisa la información aprobada en terreno y prepara folios y ventanas para impresión.</p>
+            <h1 id="officeAccessTitle">Cada pallet con su etiqueta.</h1>
+            <p>Imprime etiquetas de planta, folios y ventanas de pallets y saldos vigentes.</p>
         </div>
         <form class="office-access__form" id="officeLoginForm">
             <h2>Ingresar a Etiquetas PT</h2>
@@ -34,17 +34,18 @@
             </header>
             <p id="ptMessage" role="status" aria-live="polite"></p>
             <section class="panel pt-labels-panel" aria-labelledby="ptListTitle">
-                <h2 id="ptListTitle">Pallets y saldos aprobados</h2>
+                <h2 id="ptListTitle">Pallets y saldos vigentes</h2>
                 <p>Se muestran folios activos de la temporada activa. Revisa sus datos antes de seleccionar. Los datos corresponden al inventario actual.</p>
                 <form id="ptFilters" class="pt-labels-filters">
                     <label>Folio exacto<input name="folio" maxlength="50" placeholder="Incluye los ceros iniciales"></label>
-                    <label>Fecha de validación<input name="fecha" type="date"></label>
+                    <label>Origen<select name="origen"><option value="">Todos</option><option value="validacion">Validación</option><option value="repaletizaje">Repaletizaje</option></select></label>
+                    <label>Fecha de validación / repa<input name="fecha" type="date"></label>
                     <label>Línea<select name="linea_proceso"><option value="">Todas</option><option>1</option><option>2</option><option>3</option></select></label>
                     <label>Turno<select name="turno"><option value="">Todos</option><option>A</option><option>B</option></select></label>
                     <button class="secondary-button" type="submit">Buscar / actualizar</button>
                 </form>
                 <div class="pt-labels-scroll"><table class="pt-labels-table">
-                    <thead><tr><th><input id="ptSelectAll" type="checkbox" aria-label="Seleccionar todos los folios de esta página"></th><th>Folio / cajas</th><th>Artículo</th><th>Cliente / CSG</th><th>Validación</th><th>Revisar</th></tr></thead>
+                    <thead><tr><th><input id="ptSelectAll" type="checkbox" aria-label="Seleccionar todos los folios de esta página"></th><th>Folio / cajas</th><th>Artículo</th><th>Cliente / CSG</th><th>Origen</th><th>Revisar</th></tr></thead>
                     <tbody id="ptRows"></tbody>
                 </table></div>
                 <div class="pt-labels-actions"><button class="secondary-button" id="ptPrevious" type="button">Anterior</button><span id="ptPage"></span><button class="secondary-button" id="ptNext" type="button">Siguiente</button></div>
@@ -52,9 +53,10 @@
             <section class="panel pt-labels-panel" aria-labelledby="ptPrintTitle">
                 <h2 id="ptPrintTitle">Preparar etiquetas</h2>
                 <p id="ptSelection">0 folios seleccionados</p>
+                <p id="ptMissingWeights" class="form-error is-hidden" role="alert"></p>
                 <form id="ptPrintForm" class="pt-labels-filters">
-                    <label>Formato<select name="tipo"><option value="ventana">Ventana · 100 × 200 mm</option><option value="folio">Folio · 100 × 50 mm</option></select></label>
-                    <label>Copias por folio<input name="copias" type="number" min="1" max="10" value="1" required></label>
+                    <label>Formato<select name="tipo"><option value="planta">Planta · 107 × 74 mm</option><option value="ventana">Ventana · 100 × 200 mm</option><option value="folio">Folio · 100 × 50 mm</option></select></label>
+                    <label>Copias por folio<input name="copias" type="number" min="1" max="10" value="4" required></label>
                     <label class="pt-labels-reason">Motivo de reimpresión<input name="motivo_reimpresion" minlength="5" maxlength="1000" placeholder="Obligatorio si ya generaste este formato"></label>
                     <button class="primary-button" id="ptGenerate" type="submit" disabled>Generar PDF</button>
                 </form>

@@ -196,6 +196,9 @@ class ServicioRepaletizaje
             $composicionResultado = $this->agruparComposicion(
                 $origenes->flatMap(fn (array $origen): array => $origen['composicion_aportada']),
             );
+            $fechaProceso = app(FechaProcesoEtiquetaPt::class)->masAntigua(
+                $origenes->map(fn (array $origen) => app(FechaProcesoEtiquetaPt::class)->deFolio($origen['folio']))->all(),
+            );
             $especificaciones = $this->especificacionesResultado($origenes->pluck('folio'));
             $especificaciones['csg'] = $this->valorComun($composicionResultado->pluck('csg'));
             $especificaciones['predio'] = $this->valorComun($composicionResultado->pluck('predio'));
@@ -244,6 +247,7 @@ class ServicioRepaletizaje
 
             $folioResultado = $folioConservado ?? Folio::create([
                 'temporada_id' => $primero->temporada_id,
+                'fecha_proceso_pt' => $fechaProceso,
                 'numero_folio' => $payload['numero_folio_resultante'],
                 'tipo_bulto' => TipoBulto::from($payload['tipo_resultado']),
                 'estado_operacional' => $estadoResultado,
@@ -319,6 +323,7 @@ class ServicioRepaletizaje
                 $esConservado = $folioConservado?->id === $folio->id;
 
                 if ($esConservado) {
+                    $folio->fecha_proceso_pt = $fechaProceso;
                     $this->actualizarFolioResultado(
                         $folio,
                         $payload['tipo_resultado'],
@@ -525,6 +530,7 @@ class ServicioRepaletizaje
                 'habilitado_almacenamiento_at' => $folio->habilitado_almacenamiento_at,
                 'habilitado_almacenamiento_por_user_id' => $folio->habilitado_almacenamiento_por_user_id,
                 'fecha_ingreso' => $folio->fecha_ingreso,
+                'fecha_proceso_pt' => app(FechaProcesoEtiquetaPt::class)->deFolio($folio),
                 'activo' => true,
                 'variedad' => $folio->variedad,
                 'calibre' => $folio->calibre,
@@ -728,7 +734,7 @@ class ServicioRepaletizaje
                 /** @var Folio $folio */
                 $folio = $folios->get($detalle->folio_origen_id);
                 $snapshot = $detalle->snapshot_antes;
-                $folio->update($snapshot['atributos']);
+                $folio->update([...$snapshot['atributos'], 'fecha_proceso_pt' => $snapshot['atributos']['fecha_proceso_pt'] ?? null]);
                 $this->restaurarUbicacion($folio, $snapshot['ubicacion'] ?? null);
             }
 
@@ -1149,7 +1155,7 @@ class ServicioRepaletizaje
         $fechaPredeterminada = filled($datos['fecha_embalaje'] ?? null)
             ? (string) $datos['fecha_embalaje']
             : $this->fechaValidacionFolio($folio);
-        $lineas = collect($datos['composicion'] ?? [])
+        $lineas = collect(app(ComposicionEtiquetaPt::class)->lineas($folio))
             ->filter(fn (mixed $linea): bool => is_array($linea)
                 && array_key_exists('cantidad_cajas', $linea)
                 && array_key_exists('csg', $linea))
@@ -1200,7 +1206,7 @@ class ServicioRepaletizaje
         ];
         // El lote de materia prima y el proceso de packing viajan con sus cajas a los
         // folios resultantes; sin ellos la trazabilidad se cortaría en el repaletizaje.
-        foreach (['lote_materia_prima', 'proceso_packing'] as $campo) {
+        foreach (['lote_materia_prima', 'proceso_packing', 'combinacion_validacion_id', 'articulo_validacion_id', 'envase_validacion_id', 'especie', 'variedad', 'envase', 'envase_codigo', 'cliente'] as $campo) {
             if (filled($linea[$campo] ?? null)) {
                 $normalizada[$campo] = (string) $linea[$campo];
             }
@@ -1238,6 +1244,11 @@ class ServicioRepaletizaje
         if (filled($linea['lote_materia_prima'] ?? null) || filled($linea['proceso_packing'] ?? null)) {
             $partes[] = mb_strtoupper(trim((string) ($linea['lote_materia_prima'] ?? '')));
             $partes[] = mb_strtoupper(trim((string) ($linea['proceso_packing'] ?? '')));
+        }
+
+        if (filled($linea['variedad'] ?? null) || filled($linea['envase'] ?? null)) {
+            $partes[] = mb_strtoupper((string) ($linea['variedad'] ?? ''));
+            $partes[] = (string) ($linea['envase_validacion_id'] ?? $linea['envase'] ?? '');
         }
 
         return hash('sha256', implode('|', $partes));
@@ -1390,6 +1401,7 @@ class ServicioRepaletizaje
                 'origen_sistema' => $folio->origen_sistema,
                 'identificador_externo' => $folio->identificador_externo,
                 'datos_externos' => $folio->datos_externos,
+                'fecha_proceso_pt' => $folio->fecha_proceso_pt?->toDateString(),
             ],
             'especificaciones' => $this->especificaciones($folio),
             'ubicacion' => $folio->ubicacionActual ? [

@@ -181,6 +181,7 @@ class ServicioCatalogoJerarquicoValidacion
             'cliente_validacion_id' => $cliente->id,
             'nombre' => $nombre,
             'codigo_externo' => $this->codigo($datos['codigo_externo'] ?? null),
+            'kilos_netos_por_caja' => array_key_exists('kilos_netos_por_caja', $datos) ? $datos['kilos_netos_por_caja'] : $modelo?->kilos_netos_por_caja,
             'activo' => (bool) ($datos['activo'] ?? true),
         ], $especie->temporada_id);
 

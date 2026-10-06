@@ -117,6 +117,7 @@ class ServicioCopiaCatalogoValidacion
                             ? ($clientes[$envase->cliente_validacion_id] ?? null)
                             : null,
                         'nombre' => $envase->nombre,
+                        'kilos_netos_por_caja' => $envase->kilos_netos_por_caja,
                         'codigo_externo' => $envase->codigo_externo,
                         'activo' => $envase->activo,
                     ]);

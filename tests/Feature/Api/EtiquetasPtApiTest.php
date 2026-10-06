@@ -3,8 +3,12 @@
 namespace Tests\Feature\Api;
 
 use App\Enums\RolUsuario;
+use App\Models\ClienteValidacion;
 use App\Models\Dispositivo;
+use App\Models\EnvaseValidacion;
+use App\Models\EspecieValidacion;
 use App\Models\Folio;
+use App\Models\ImpresionEtiquetaPt;
 use App\Models\User;
 use App\Models\ValidacionPallet;
 use App\Services\Temporadas\ServicioTemporadaActiva;
@@ -118,7 +122,8 @@ class EtiquetasPtApiTest extends TestCase
     {
         $payload = $this->payload();
         $folio = $this->validacion->folio;
-        $folio->update(['datos_externos' => [...$folio->datos_externos, 'cantidad_cajas' => 70]]);
+        $folio->update(['datos_externos' => [...$folio->datos_externos, 'cantidad_cajas' => 70,
+            'composicion' => [[...$folio->datos_externos['composicion'][0], 'cantidad_cajas' => 70]]]]);
         $this->sesion()->postJson('/api/validacion/etiquetas', $payload)->assertConflict();
         $this->assertDatabaseCount('impresiones_etiquetas_pt', 0);
         $this->sesion()->getJson('/api/validacion/etiquetas')->assertOk()->assertJsonPath('data.0.cantidad_cajas', 70);
@@ -172,6 +177,111 @@ class EtiquetasPtApiTest extends TestCase
     public function test_vista_en_oficina_tiene_navegacion_y_revisar_datos(): void
     {
         $this->get('/oficina/validacion/etiquetas')->assertOk()->assertSee('Etiquetas PT')->assertSee('ptReview', false);
+    }
+
+    public function test_planta_calcula_kilos_de_composicion_y_registra_el_estado_impreso_idempotentemente(): void
+    {
+        $envase = $this->envasePlanta(9);
+        $folio = $this->validacion->folio;
+        $folio->update(['datos_externos' => [...$folio->datos_externos, 'cantidad_cajas' => 77,
+            'composicion' => [[...$folio->datos_externos['composicion'][0], 'cantidad_cajas' => 77, 'envase_validacion_id' => $envase->id]]]]);
+        $item = $this->sesion()->getJson('/api/validacion/etiquetas?origen=validacion')->assertOk()
+            ->assertJsonPath('data.0.kilos_netos', '693.00')->assertJsonPath('data.0.envase_codigo', 'RGEN90BAM')
+            ->assertJsonPath('data.0.origen', 'validacion')->json('data.0');
+        $payload = $this->payloadPlanta($item);
+        $response = $this->sesion()->postJson('/api/validacion/etiquetas', $payload)->assertOk();
+        $this->assertStringContainsString('/Count 4', $response->getContent());
+        $this->assertStringContainsString('(693,00)', $response->getContent());
+        $this->assertStringContainsString('(PROCESO)', $response->getContent());
+        $envase->update(['kilos_netos_por_caja' => 10]);
+        $this->sesion()->postJson('/api/validacion/etiquetas', $payload)->assertOk()
+            ->assertHeader('X-Impresion-Id', $response->headers->get('X-Impresion-Id'));
+        $this->assertDatabaseCount('impresiones_etiquetas_pt', 1);
+        $snapshot = ImpresionEtiquetaPt::firstOrFail();
+        $this->assertSame(4, $snapshot->copias);
+        $this->assertSame($this->usuario->id, $snapshot->user_id);
+        $this->assertSame('693.00', $snapshot->etiquetas_snapshot[0]['kilos_netos']);
+        $this->sesion()->postJson('/api/validacion/etiquetas', [...$payload, 'operacion_id' => (string) Str::uuid()])->assertConflict();
+    }
+
+    public function test_planta_informa_envase_sin_kilos_y_lo_imprime_desconocido(): void
+    {
+        $this->envasePlanta(null);
+        $item = $this->sesion()->getJson('/api/validacion/etiquetas')->assertOk()
+            ->assertJsonPath('data.0.kilos_netos', null)
+            ->assertJsonPath('data.0.envases_sin_kilos.0.nombre', '5 kg')->json('data.0');
+        $response = $this->sesion()->postJson('/api/validacion/etiquetas', $this->payloadPlanta($item))->assertOk();
+        $this->assertStringContainsString("(\x97)", $response->getContent());
+    }
+
+    public function test_repaletizado_aparece_sin_validacion_y_suma_composicion_mixta(): void
+    {
+        $envase = $this->envasePlanta(9);
+        $folio = $this->validacion->folio->replicate();
+        $folio->numero_folio = 'REPA-0001';
+        $folio->origen_sistema = 'repaletizaje';
+        $folio->fecha_proceso_pt = '2026-02-06';
+        $folio->datos_externos = [...$folio->datos_externos, 'cantidad_cajas' => 77, 'composicion' => [
+            ['csg' => '105410', 'variedad' => 'Santina', 'envase_validacion_id' => $envase->id, 'cantidad_cajas' => 40],
+            ['csg' => '105411', 'variedad' => 'Lapins', 'envase_validacion_id' => $envase->id, 'cantidad_cajas' => 37],
+        ]];
+        $folio->save();
+        $item = $this->sesion()->getJson('/api/validacion/etiquetas?origen=repaletizaje')->assertOk()->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.validacion_id', null)->assertJsonPath('data.0.variedad', 'MIXTA')
+            ->assertJsonPath('data.0.kilos_netos', '693.00')->assertJsonPath('data.0.cantidad_cajas', 77)->json('data.0');
+        $response = $this->sesion()->postJson('/api/validacion/etiquetas', $this->payloadPlanta($item))->assertOk();
+        $this->assertStringContainsString('(REPALETIZADO)', $response->getContent());
+        $this->assertStringContainsString('(MIXTA)', $response->getContent());
+        $this->assertStringContainsString('(06-02-2026)', $response->getContent());
+        $envase2 = $envase->replicate();
+        $envase2->nombre = 'Caja 5 kg';
+        $envase2->codigo_externo = 'CAJA5';
+        $envase2->kilos_netos_por_caja = 5;
+        $envase2->save();
+        $datos = $folio->datos_externos;
+        $datos['composicion'][1]['envase_validacion_id'] = $envase2->id;
+        $datos['composicion'][1]['envase'] = $envase2->nombre;
+        $folio->update(['datos_externos' => $datos, 'fecha_proceso_pt' => null]);
+        $this->sesion()->getJson('/api/validacion/etiquetas?origen=repaletizaje')->assertOk()
+            ->assertJsonPath('data.0.envase', 'MIXTO')->assertJsonPath('data.0.envase_codigo', 'MIXTO')
+            ->assertJsonPath('data.0.kilos_netos', '545.00')->assertJsonPath('data.0.fecha_proceso', null);
+    }
+
+    public function test_tarjador_imprime_desde_oficina_sin_acceso_a_consultar_validaciones(): void
+    {
+        $tarjador = User::factory()->create(['rol' => RolUsuario::Tarjador]);
+        $token = $tarjador->createToken('oficina', ['oficina'])->plainTextToken;
+        $item = $this->sesion($token)->getJson('/api/validacion/etiquetas')->assertOk()->json('data.0');
+        $this->sesion($token)->postJson('/api/validacion/etiquetas', $this->payloadPlanta($item))->assertOk();
+        $this->sesion($token)->getJson('/api/validacion/pallets')->assertForbidden();
+    }
+
+    public function test_administracion_guarda_y_limpia_kilos_por_caja_con_validacion_decimal(): void
+    {
+        $envase = $this->envasePlanta(null);
+        $datos = ['especie_validacion_id' => $envase->especie_validacion_id, 'cliente_validacion_id' => $envase->cliente_validacion_id,
+            'nombre' => $envase->nombre, 'codigo_externo' => $envase->codigo_externo, 'activo' => true, 'kilos_netos_por_caja' => '9.1250'];
+        $ruta = '/api/administracion/validacion/envases/'.$envase->id;
+        $this->sesion()->putJson($ruta, $datos)->assertOk();
+        $this->assertSame('9.1250', $envase->refresh()->kilos_netos_por_caja);
+        $this->sesion()->putJson($ruta, [...$datos, 'kilos_netos_por_caja' => -1])->assertUnprocessable();
+        $this->sesion()->putJson($ruta, [...$datos, 'kilos_netos_por_caja' => null])->assertOk();
+        $this->assertNull($envase->refresh()->kilos_netos_por_caja);
+    }
+
+    private function envasePlanta(?float $kilos): EnvaseValidacion
+    {
+        $cliente = ClienteValidacion::create(['temporada_id' => $this->validacion->temporada_id, 'nombre' => 'DIS', 'activo' => true]);
+        $especie = EspecieValidacion::create(['temporada_id' => $this->validacion->temporada_id, 'nombre' => 'Cereza', 'activo' => true]);
+
+        return EnvaseValidacion::create(['especie_validacion_id' => $especie->id, 'cliente_validacion_id' => $cliente->id,
+            'nombre' => '5 kg', 'codigo_externo' => 'RGEN90BAM', 'kilos_netos_por_caja' => $kilos, 'activo' => true]);
+    }
+
+    private function payloadPlanta(array $item): array
+    {
+        return ['operacion_id' => (string) Str::uuid(), 'temporada_id' => $this->validacion->temporada_id,
+            'tipo' => 'planta', 'folios' => [['id' => $item['folio_id'], 'version' => $item['version']]]];
     }
 
     private function payload(): array

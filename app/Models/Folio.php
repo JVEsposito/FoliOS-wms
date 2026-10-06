@@ -45,6 +45,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
     'estado_integracion',
     'sincronizado_at',
     'datos_externos',
+    'fecha_proceso_pt',
 ])]
 class Folio extends Model implements PerteneceATemporada
 {
@@ -179,6 +180,7 @@ class Folio extends Model implements PerteneceATemporada
             'activo' => 'boolean',
             'sincronizado_at' => 'datetime',
             'datos_externos' => 'array',
+            'fecha_proceso_pt' => 'date',
             'estado_integracion' => EstadoIntegracionFolio::class,
         ];
     }

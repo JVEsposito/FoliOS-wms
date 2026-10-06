@@ -11,6 +11,7 @@ use App\Models\PersonalAccessToken;
 use App\Models\Repaletizaje;
 use App\Models\RepaletizajeDetalle;
 use App\Services\Temporadas\ServicioTemporadaActiva;
+use App\Services\Validacion\ComposicionEtiquetaPt;
 use App\Services\Validacion\ServicioRegistroRepaletizaje;
 use App\Services\Validacion\ServicioRepaletizaje;
 use Illuminate\Http\JsonResponse;
@@ -297,6 +298,8 @@ class RepaletizajeController extends Controller
                     'id' => $resultado->folio->id,
                     'numero_folio' => $resultado->folio->numero_folio,
                     'tipo_bulto' => $resultado->folio->tipo_bulto?->value,
+                    'activo' => $resultado->folio->activo,
+                    'fecha_proceso' => $resultado->folio->fecha_proceso_pt?->toDateString(),
                     'cantidad_cajas' => (int) ($resultado->folio->datos_externos['cantidad_cajas'] ?? 0),
                     'composicion' => $this->composicionFolio($resultado->folio),
                 ] : null,
@@ -348,7 +351,7 @@ class RepaletizajeController extends Controller
         $fechaPredeterminada = filled($datos['fecha_embalaje'] ?? null)
             ? (string) $datos['fecha_embalaje']
             : $this->fechaValidacionFolio($folio);
-        $lineas = collect($datos['composicion'] ?? [])
+        $lineas = collect(app(ComposicionEtiquetaPt::class)->lineas($folio))
             ->filter(fn (mixed $linea): bool => is_array($linea)
                 && array_key_exists('cantidad_cajas', $linea)
                 && array_key_exists('csg', $linea))

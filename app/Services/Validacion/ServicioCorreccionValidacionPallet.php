@@ -170,6 +170,12 @@ class ServicioCorreccionValidacionPallet
                         ->only(['lote_materia_prima', 'proceso_packing'])
                         ->all(),
                 ]]);
+            $composicion = $composicion->map(fn (array $linea): array => [
+                ...$linea, 'articulo_validacion_id' => $articulo->id,
+                'envase_validacion_id' => $articulo->envase_validacion_id,
+                'especie' => $articulo->especie, 'variedad' => $articulo->variedad, 'envase' => $articulo->envase,
+                'cliente' => $origen->cliente,
+            ]);
             $csgResumen = $composicion->pluck('csg')->unique()->count() === 1
                 ? $composicion->first()['csg']
                 : 'MIX';

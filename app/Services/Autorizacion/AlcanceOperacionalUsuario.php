@@ -549,6 +549,11 @@ class AlcanceOperacionalUsuario
         ], 'frigorifico.validacion');
     }
 
+    public function puedeImprimirEtiquetasPt(User $usuario): bool
+    {
+        return $this->puedeConsultarValidacionesPallet($usuario) || $this->puedeConsultarRepaletizajes($usuario);
+    }
+
     /**
      * Repaletizaje: se conserva el acceso histórico desde Validación PT y se suma
      * el módulo propio del tarjador. Desde una PDA o tablet, el token debe traer
@@ -1002,6 +1007,7 @@ class AlcanceOperacionalUsuario
             'puede_validar_pallets' => $this->puedeValidarPallets($usuario),
             'puede_rechazar_pallets' => $this->puedeRechazarPallets($usuario),
             'puede_consultar_validaciones_pallet' => $this->puedeConsultarValidacionesPallet($usuario),
+            'puede_imprimir_etiquetas_pt' => $this->puedeImprimirEtiquetasPt($usuario),
             'puede_registrar_repaletizajes' => $this->puedeRegistrarRepaletizajes($usuario),
             'puede_anular_repaletizajes' => $this->puedeAnularRepaletizajes($usuario),
             'puede_consultar_repaletizajes' => $this->puedeConsultarRepaletizajes($usuario),
