@@ -34,7 +34,8 @@ return new class extends Migration
             $table->boolean('recarga_pastilla')->nullable();
             $table->decimal('correccion_cloro_ppm', 7, 2)->nullable();
             $table->boolean('aplicacion_producto')->nullable();
-            $table->foreignUuid('producto_hidrocooler_id')->nullable()->constrained('productos_hidrocooler')->restrictOnDelete();
+            $table->foreignUuid('producto_hidrocooler_id')->nullable()
+                ->constrained('productos_hidrocooler', indexName: 'hidro_mp_producto_fk')->restrictOnDelete();
             $table->string('producto_nombre_snapshot', 150)->nullable();
             $table->decimal('producto_dosis', 12, 4)->nullable();
             $table->string('producto_unidad_dosis', 30)->nullable();
@@ -59,7 +60,7 @@ return new class extends Migration
             DB::table('formatos_registro')->where('id', $formato->id)->delete();
         }
         Schema::table('procesos_hidrocooler_materia_prima', function (Blueprint $table): void {
-            $table->dropForeign(['producto_hidrocooler_id']);
+            $table->dropForeign('hidro_mp_producto_fk');
             $table->dropColumn([
                 'temperatura_ambiente_c', 'humedad_relativa_pct', 'pozo_accutab_mv', 'recarga_pastilla',
                 'correccion_cloro_ppm', 'aplicacion_producto', 'producto_hidrocooler_id', 'producto_nombre_snapshot',
