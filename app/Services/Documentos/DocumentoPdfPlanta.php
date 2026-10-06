@@ -57,7 +57,7 @@ class DocumentoPdfPlanta
     }
 
     /** @param array<int, string> $paginas */
-    public function generar(array $paginas): string
+    public function generar(array $paginas, array $tamanoPagina = [595, 842]): string
     {
         $logo = resource_path('images/logo-agrorosario.jpg');
         $imagen = file_get_contents($logo);
@@ -70,7 +70,7 @@ class DocumentoPdfPlanta
             '<< /Type /XObject /Subtype /Image /Width '.$ancho.' /Height '.$alto.' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length '.strlen($imagen)." >>\nstream\n{$imagen}\nendstream",
         ];
         foreach ($paginas as $indice => $contenido) {
-            $objetos[] = '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> /XObject << /Logo 5 0 R >> >> /Contents '.(7 + $indice * 2).' 0 R >>';
+            $objetos[] = '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 '.implode(' ', $tamanoPagina).'] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> /XObject << /Logo 5 0 R >> >> /Contents '.(7 + $indice * 2).' 0 R >>';
             $objetos[] = '<< /Length '.strlen($contenido)." >>\nstream\n{$contenido}endstream";
         }
         $pdf = "%PDF-1.4\n%\xE2\xE3\xCF\xD3\n";

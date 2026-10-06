@@ -47,6 +47,8 @@ class ServicioReinicioOperacional
         'tipos_resultado_packing',
         'formatos_registro',
         'eventos_formato_registro',
+        'productos_hidrocooler',
+        'eventos_producto_hidrocooler',
         'pesos_referencia_envases',
         'preferencias_envase_especie',
     ];

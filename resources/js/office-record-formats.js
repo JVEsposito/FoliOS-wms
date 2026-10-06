@@ -1,3 +1,4 @@
+import './office-hydro-products.js';
 import './office-container-references.js';
 import { showOfficeToast } from './office-toast.js';
 

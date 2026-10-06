@@ -1,7 +1,7 @@
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 
-import { FinishHydroCycle, HydroFilters, HydroLot, HydroSummary, HydroTray, ReleaseHydroCycle, StartHydroCycle } from '../domain/hidrocoolerMp';
+import { HydroCatalog, FinishHydroCycle, HydroFilters, HydroLot, HydroSummary, HydroTray, ReleaseHydroCycle, StartHydroCycle } from '../domain/hidrocoolerMp';
 import { ApiError } from './apiError';
 import { fetchWithTimeout } from './httpClient';
 
@@ -86,4 +86,8 @@ export async function shareHydroRegister(baseUrl: string, token: string, format:
     dialogTitle: 'Guardar registro de Hidrocooler',
     mimeType: expectedType,
   });
+}
+
+export function getHydroCatalog(baseUrl: string, token: string) {
+  return request<HydroCatalog>(baseUrl, '/api/materia-prima/hidrocooler/productos', token);
 }

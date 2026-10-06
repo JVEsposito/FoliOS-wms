@@ -80,6 +80,7 @@
                         'clients' => ['label' => 'Clientes', 'icon' => '◇'],
                         'labels' => ['label' => 'Etiquetas', 'icon' => '▤'],
                         'formats' => ['label' => 'Formatos de registro', 'icon' => '▤'],
+                        'hydro-products' => ['label' => 'Productos hidrocooler', 'icon' => '◇'],
                         'profiles' => ['label' => 'Perfiles', 'icon' => '⚙'],
                         'users' => ['label' => 'Usuarios', 'icon' => '●'],
                         'sessions' => ['label' => 'Sesiones', 'icon' => '◉'],
@@ -89,7 +90,7 @@
 
                 <section class="admin-panel panel" id="administration-panel-formats" data-office-panel-group="administration" data-office-panel-id="formats" role="tabpanel" aria-labelledby="administration-tab-formats" hidden>
                     <div class="admin-panel__heading"><div><p class="eyebrow">CONTROL DE DOCUMENTOS</p><h2>Formatos de registro</h2></div><span id="recordFormatsSummary">Sin cargar</span></div>
-                    <p class="admin-form__hint">La versión activa se guarda al cerrar cada recepción. Las reimpresiones conservan su encabezado original. La fecha corresponde a la vigencia documental; la casilla Activo publica el formato para los nuevos cierres.</p>
+                    <p class="admin-form__hint">La versión activa se guarda al emitir cada registro; en hidrocooler, al iniciar el ciclo. Las reimpresiones conservan su encabezado original. La fecha corresponde a la vigencia documental; la casilla Activo publica el formato para los nuevos cierres.</p>
                     <form class="admin-form" id="recordFormatForm">
                         <input name="id" type="hidden">
                         <input name="actualizado_at_conocido" type="hidden">
@@ -113,6 +114,19 @@
                         <p class="form-error" id="containerReferenceError" role="status"></p><button class="primary-button" type="submit">Guardar referencias</button>
                     </form>
                     <div class="is-hidden" id="recordFormatHistory"><h3 id="recordFormatHistoryTitle">Historial del formato</h3><div class="admin-table-scroll"><table class="admin-table"><thead><tr><th>Fecha y usuario</th><th>Anterior</th><th>Nuevo</th></tr></thead><tbody id="recordFormatHistoryBody"></tbody></table></div><button class="secondary-button" id="recordFormatHistoryMore" type="button">Ver más cambios</button></div>
+                </section>
+
+                <section class="admin-panel panel" id="administration-panel-hydro-products" data-office-panel-group="administration" data-office-panel-id="hydro-products" role="tabpanel" aria-labelledby="administration-tab-hydro-products" hidden>
+                    <div class="admin-panel__heading"><div><p class="eyebrow">HIDROCOOLER</p><h2>Productos para aplicación</h2></div></div>
+                    <p>La unidad se sugiere al iniciar el ciclo. Cada aplicación conserva el nombre, dosis y unidad registrados.</p>
+                    <form class="admin-form" id="hydroProductForm" hidden>
+                        <input name="id" type="hidden"><input name="version_conocida" type="hidden">
+                        <div class="admin-form__grid"><label class="field"><span>Nombre *</span><input name="nombre" maxlength="150" required></label><label class="field"><span>Unidad de dosis por defecto *</span><input name="unidad_dosis" maxlength="30" placeholder="ml/L, g/L, ppm" required></label></div>
+                        <label class="admin-check"><input name="activo" type="checkbox" checked><span>Activo para nuevos ciclos</span></label>
+                        <p class="form-error" id="hydroProductError" role="alert"></p><div class="admin-form__actions"><button class="secondary-button" id="hydroProductNew" type="button">Nuevo producto</button><button class="primary-button" type="submit">Guardar producto</button></div>
+                    </form>
+                    <div class="admin-table-scroll"><table class="admin-table"><thead><tr><th>Producto</th><th>Unidad</th><th>Estado</th><th>Modificado por</th><th>Acciones</th></tr></thead><tbody id="hydroProductsBody"></tbody></table></div>
+                    <div id="hydroProductHistory" class="is-hidden"><h3>Historial de modificaciones</h3><div id="hydroProductHistoryBody"></div><button class="secondary-button" type="button" id="hydroProductHistoryMore">Ver más cambios</button></div>
                 </section>
 
                 <section class="admin-panel admin-season-panel panel" id="administration-panel-seasons" data-office-panel-group="administration" data-office-panel-id="seasons" role="tabpanel" aria-labelledby="administration-tab-seasons">

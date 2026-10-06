@@ -11,6 +11,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
     'codigo',
+    'temperatura_ambiente_c', 'humedad_relativa_pct', 'pozo_accutab_mv', 'recarga_pastilla',
+    'correccion_cloro_ppm', 'aplicacion_producto', 'producto_hidrocooler_id', 'producto_nombre_snapshot',
+    'producto_dosis', 'producto_unidad_dosis', 'formato_registro_snapshot',
+    'cloro_min_ppm_snapshot', 'cloro_max_ppm_snapshot',
     'lote_materia_prima_id',
     'operacion_inicio_id',
     'payload_inicio_hash',
@@ -89,6 +93,11 @@ class ProcesoHidrocoolerMateriaPrima extends Model
     protected function casts(): array
     {
         return [
+            'temperatura_ambiente_c' => 'decimal:2', 'humedad_relativa_pct' => 'decimal:2',
+            'pozo_accutab_mv' => 'decimal:2', 'recarga_pastilla' => 'boolean',
+            'correccion_cloro_ppm' => 'decimal:2', 'aplicacion_producto' => 'boolean',
+            'producto_dosis' => 'decimal:4', 'formato_registro_snapshot' => 'array',
+            'cloro_min_ppm_snapshot' => 'decimal:2', 'cloro_max_ppm_snapshot' => 'decimal:2',
             'estado' => EstadoHidrocoolerMateriaPrima::class,
             'inicio_at' => 'datetime',
             'termino_at' => 'datetime',
