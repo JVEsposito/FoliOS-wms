@@ -83,6 +83,7 @@ class EtiquetasPtApiTest extends TestCase
         $this->assertStringContainsString('/Count 2', $response->getContent());
         $this->assertStringContainsString('(0000000003)', $response->getContent());
         $this->assertStringContainsString('105411', $response->getContent());
+        $this->assertSame(2, substr_count($response->getContent(), '% QR folio'));
         $this->sesion()->postJson('/api/validacion/etiquetas', $payload)->assertOk()->assertHeader('X-Impresion-Id', $response->headers->get('X-Impresion-Id'));
         $this->assertDatabaseCount('impresiones_etiquetas_pt', 1);
         $this->assertDatabaseCount('impresion_etiqueta_pt_folios', 1);
@@ -193,6 +194,7 @@ class EtiquetasPtApiTest extends TestCase
         $this->assertStringContainsString('/Count 4', $response->getContent());
         $this->assertStringContainsString('(693,00)', $response->getContent());
         $this->assertStringContainsString('(PROCESO)', $response->getContent());
+        $this->assertSame(4, substr_count($response->getContent(), '% QR folio'));
         $envase->update(['kilos_netos_por_caja' => 10]);
         $this->sesion()->postJson('/api/validacion/etiquetas', $payload)->assertOk()
             ->assertHeader('X-Impresion-Id', $response->headers->get('X-Impresion-Id'));

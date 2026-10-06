@@ -60,7 +60,7 @@
                     <label class="pt-labels-reason">Motivo de reimpresión<input name="motivo_reimpresion" minlength="5" maxlength="1000" placeholder="Obligatorio si ya generaste este formato"></label>
                     <button class="primary-button" id="ptGenerate" type="submit" disabled>Generar PDF</button>
                 </form>
-                <p>Imprime el PDF al 100 % / tamaño real, sin ajustar a página. La ventana incluye composición y trazabilidad; el folio muestra un resumen. La generación queda registrada y no confirma que la impresora haya terminado.</p>
+                <p>Todos los formatos incluyen código de barras y QR con el mismo folio, incluidos sus ceros iniciales. Imprime el PDF al 100 % / tamaño real, sin ajustar a página. La ventana incluye composición y trazabilidad; el folio muestra un resumen. La generación queda registrada y no confirma que la impresora haya terminado.</p>
                 <div id="ptPdfResult" class="is-hidden">
                     <a id="ptPdfOpen" class="primary-button" target="_blank" rel="noopener">Abrir PDF para imprimir</a>
                     <a id="ptPdfDownload" class="secondary-button" download="etiquetas-pt.pdf">Descargar PDF</a>

@@ -2,6 +2,7 @@
 
 namespace App\Services\Validacion;
 
+use App\Services\Documentos\CodigoQrPdf;
 use App\Services\Documentos\DocumentoPdfPlanta;
 use App\Services\Materiales\GeneradorEtiquetaMaterialPdf;
 use DomainException;
@@ -33,6 +34,8 @@ class GeneradorEtiquetaPtPdf extends GeneradorEtiquetaMaterialPdf
         $margen = 12;
         $util = $ancho - 2 * $margen;
         $numero = (string) $etiqueta['numero_folio'];
+        $ladoQr = $ventana ? 72 : 56;
+        $anchoJuntoQr = $util - $ladoQr - 8;
         $tamanoFolio = min($ventana ? 30 : 22, $util / max(1, strlen($numero)) / 0.67);
         if ($tamanoFolio < 8) {
             throw new DomainException('El folio es demasiado largo para imprimirlo legiblemente.');
@@ -45,6 +48,8 @@ class GeneradorEtiquetaPtPdf extends GeneradorEtiquetaMaterialPdf
         $contenido .= $this->texto($margen, $alto - ($ventana ? 53 : 40), $tamanoFolio, $numero, true);
         $barcodeY = $alto - ($ventana ? 130 : 73);
         $contenido .= $this->codigoBarras($numero, $margen, $barcodeY, $util, $ventana ? 55 : 24, true);
+        $qrY = $barcodeY - $ladoQr;
+        $contenido .= (new CodigoQrPdf)->generar($numero, $ancho - $margen - $ladoQr, $qrY, $ladoQr);
         $y = $barcodeY - ($ventana ? 22 : 14);
         $tamanoDetalle = $ventana ? 12 : 8;
         $lineas = [
@@ -78,7 +83,8 @@ class GeneradorEtiquetaPtPdf extends GeneradorEtiquetaMaterialPdf
         }
         $envolver = new DocumentoPdfPlanta;
         foreach ($lineas as $indice => $linea) {
-            foreach ($envolver->envolver($linea, $util, $tamanoDetalle) as $parte) {
+            $anchoDetalle = $y + $tamanoDetalle > $qrY ? $anchoJuntoQr : $util;
+            foreach ($envolver->envolver($linea, $anchoDetalle, $tamanoDetalle) as $parte) {
                 if ($y < $margen) {
                     throw new DomainException('La información no cabe en la etiqueta. Selecciona ventana o revisa la composición del pallet.');
                 }
@@ -98,9 +104,12 @@ class GeneradorEtiquetaPtPdf extends GeneradorEtiquetaMaterialPdf
         $margen = 9;
         $util = $ancho - 2 * $margen;
         $contenido = $this->textoAjustado($margen, $alto - 18, $util - 88, 11, (string) $etiqueta['cliente'], true);
-        $contenido .= $this->texto($ancho - 90, $alto - 18, 9, $etiqueta['origen'] === 'repaletizaje' ? 'REPALETIZADO' : 'PROCESO', true);
-        $contenido .= $this->textoAjustado($margen, $alto - 48, $util, 25, (string) $etiqueta['envase_codigo'], true);
-        $contenido .= $this->textoAjustado($margen, $alto - 64, $util, 12, (string) $etiqueta['envase'], true);
+        $ladoQr = 56;
+        $anchoJuntoQr = $util - $ladoQr - 8;
+        $contenido .= $this->texto($margen, $alto - 31, 9, $etiqueta['origen'] === 'repaletizaje' ? 'REPALETIZADO' : 'PROCESO', true);
+        $contenido .= $this->textoAjustado($margen, $alto - 51, $anchoJuntoQr, 22, (string) $etiqueta['envase_codigo'], true);
+        $contenido .= $this->textoAjustado($margen, $alto - 67, $anchoJuntoQr, 12, (string) $etiqueta['envase'], true);
+        $contenido .= (new CodigoQrPdf)->generar((string) $etiqueta['numero_folio'], $ancho - $margen - $ladoQr, $alto - $margen - $ladoQr, $ladoQr);
         $fecha = $etiqueta['fecha_proceso'] ? implode('-', array_reverse(explode('-', $etiqueta['fecha_proceso']))) : '—';
         foreach ([
             [$margen, $alto - 80, 'ESPECIE', $etiqueta['especie'], 167],
