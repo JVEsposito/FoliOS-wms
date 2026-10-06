@@ -126,7 +126,7 @@ function renderPallets() {
         ${field('T° de pulpa (°C) *', 'temperatura_pulpa_c', 'number', p.temperatura_pulpa_c, 'required min="-50" max="80" step="0.01"')}
         ${field('CSP', 'csp', 'text', p.csp, 'maxlength="50"')}
         ${select('Condición SAG', 'sag', [['heredar', 'Aplicar condición del encabezado'], ['sin', 'Sin condición SAG'], ...options.condiciones_sag.map((s) => [s.id, s.nombre])], p.condicion_sag_personalizada ? p.condicion_sag_id ?? 'sin' : 'heredar')}
-        </div>${p.folio_repetido ? '<p class="rfe-warning" data-folio-warning>Se asignará folio interno al aceptar</p>' : ''}<button class="secondary-button" type="button" data-remove="${i}">Quitar pallet</button></fieldset>`;
+        </div>${(!draft || draft.estado === 'borrador') && p.folio_repetido ? '<p class="rfe-warning" data-folio-warning>Se asignará folio interno al aceptar</p>' : ''}<button class="secondary-button" type="button" data-remove="${i}">Quitar pallet</button></fieldset>`;
     }).join('');
     byId('totals').textContent = `${pallets.length} bultos · ${pallets.reduce((sum, p) => sum + Number(p.cantidad_cajas || 0), 0)} cajas`;
     refreshLocks();
