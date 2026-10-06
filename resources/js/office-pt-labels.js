@@ -42,6 +42,12 @@ function showApp() {
     window.dispatchEvent(new CustomEvent('estiba:office-session'));
 }
 function refreshControls() {
+    const missing = state.rows.filter((row) => state.selected.has(row.folio_id))
+        .flatMap((row) => row.envases_sin_kilos || []).map((envase) => envase.nombre);
+    const warning = byId('ptMissingWeights');
+    warning.textContent = missing.length && byId('ptPrintForm').elements.tipo.value === 'planta'
+        ? `Falta configurar los kilos por caja de: ${[...new Set(missing)].join(', ')}. La etiqueta imprimirá “—” en kilos netos.` : '';
+    warning.classList.toggle('is-hidden', !warning.textContent);
     byId('ptGenerate').disabled = state.busy || state.selected.size === 0;
     byId('ptPrevious').disabled = state.busy || state.page <= 1;
     byId('ptNext').disabled = state.busy || state.page >= state.lastPage;
@@ -80,22 +86,22 @@ function renderRows() {
     const body = byId('ptRows'); body.replaceChildren();
     for (const data of state.rows) {
         const row = document.createElement('tr');
-        const check = document.createElement('input'); check.type = 'checkbox'; check.checked = state.selected.has(data.validacion_id); check.setAttribute('aria-label', `Seleccionar folio ${data.numero_folio}`);
+        const check = document.createElement('input'); check.type = 'checkbox'; check.checked = state.selected.has(data.folio_id); check.setAttribute('aria-label', `Seleccionar folio ${data.numero_folio}`);
         check.disabled = state.busy;
         check.addEventListener('change', () => {
             if (state.busy) return;
-            check.checked ? state.selected.add(data.validacion_id) : state.selected.delete(data.validacion_id);
+            check.checked ? state.selected.add(data.folio_id) : state.selected.delete(data.folio_id);
             clearPdf(); refreshControls();
         });
         cell(row, '').append(check);
         cell(row, `${data.numero_folio} · ${data.tipo_bulto} · ${data.cantidad_cajas} cajas`);
         cell(row, `${data.especie} · ${data.variedad} · ${data.calibre} · ${data.envase} · ${data.categoria}`);
         cell(row, `${data.cliente} · ${data.marca} · CSG ${data.csg || 'Ver composición'}`);
-        cell(row, `${data.validador || '—'} · ${date(data.validado_at)} · Línea ${data.linea_proceso} / ${data.turno}`);
+        cell(row, data.origen === 'repaletizaje' ? `REPALETIZADO · F. proceso ${data.fecha_proceso || '—'}` : `PROCESO · ${data.validador || '—'} · ${date(data.validado_at)}`);
         const review = document.createElement('button'); review.type = 'button'; review.className = 'secondary-button'; review.textContent = 'Ver datos'; review.addEventListener('click', () => showReview(data)); cell(row, '').append(review);
         body.append(row);
     }
-    if (!state.rows.length) { const row = document.createElement('tr'); cell(row, 'No hay aprobaciones vigentes con estos filtros.').colSpan = 6; body.append(row); }
+    if (!state.rows.length) { const row = document.createElement('tr'); cell(row, 'No hay folios vigentes con estos filtros.').colSpan = 6; body.append(row); }
     byId('ptPage').textContent = `Página ${state.page} de ${state.lastPage}`;
     refreshControls();
 }
@@ -103,7 +109,7 @@ function showReview(data) {
     byId('ptReviewTitle').textContent = `Folio ${data.numero_folio}`;
     const details = byId('ptDetails'); details.replaceChildren();
     for (const [label, value] of [
-        ['Temporada', data.temporada], ['Bulto / cajas', `${data.tipo_bulto} / ${data.cantidad_cajas}`],
+        ['Origen', data.origen === 'repaletizaje' ? 'REPALETIZADO' : 'PROCESO'], ['F. proceso', data.fecha_proceso], ['Kilos netos', data.kilos_netos?.replace('.', ',')], ['Código envase', data.envase_codigo], ['Temporada', data.temporada], ['Bulto / cajas', `${data.tipo_bulto} / ${data.cantidad_cajas}`],
         ['Especie', data.especie], ['Variedad', data.variedad], ['Calibre', data.calibre], ['Envase', data.envase], ['Categoría', data.categoria],
         ['Cliente', data.cliente], ['Marca', data.marca], ['CSG', data.csg], ['Predio', data.predio], ['Embalaje', data.fecha_embalaje],
         ['Estado', data.estado_operacional.replaceAll('_', ' ')], ['Validador', data.validador], ['Validado', date(data.validado_at)], ['Jornada', `Línea ${data.linea_proceso} / Turno ${data.turno}`],
@@ -146,7 +152,13 @@ async function run(action) {
 }
 async function initialize() {
     showApp();
+    const initial = new URLSearchParams(window.location.search);
+    if (initial.get('folio')) byId('ptFilters').elements.folio.value = initial.get('folio');
     await loadRows();
+    if (initial.get('folio')) {
+        state.selected = new Set(state.rows.filter((row) => row.numero_folio === initial.get('folio')).map((row) => row.folio_id));
+        renderRows();
+    }
     await loadHistory(); message('Selecciona los folios que vas a etiquetar.');
 }
 byId('officeLoginForm').addEventListener('submit', (event) => {
@@ -157,7 +169,7 @@ byId('officeLoginForm').addEventListener('submit', (event) => {
         byId('officeLoginError').textContent = '';
         try {
             const data = await (await request('/api/acceso-oficina', { method: 'POST', body: JSON.stringify(credentials) })).json();
-            if (!data.usuario.puede_consultar_validaciones_pallet) throw new Error('Tu cuenta no tiene acceso a Validación PT.');
+            if (!data.usuario.puede_imprimir_etiquetas_pt) throw new Error('Tu cuenta no tiene acceso a Validación PT.');
             state.token = data.token; state.identity = data.usuario;
             localStorage.setItem(tokenKey, state.token); localStorage.setItem(identityKey, JSON.stringify(state.identity));
             await initialize();
@@ -171,16 +183,20 @@ byId('officeLogoutButton').addEventListener('click', () => {
 byId('ptFilters').addEventListener('submit', (event) => { event.preventDefault(); void run(async () => { await loadRows(); await loadHistory(); message('Listado actualizado.'); }); });
 byId('ptPrevious').addEventListener('click', () => { void run(async () => { await loadRows(state.page - 1); message('Listado actualizado.'); }); });
 byId('ptNext').addEventListener('click', () => { void run(async () => { await loadRows(state.page + 1); message('Listado actualizado.'); }); });
-byId('ptSelectAll').addEventListener('change', (event) => { state.selected = new Set(event.target.checked ? state.rows.map((row) => row.validacion_id) : []); clearPdf(); renderRows(); });
+byId('ptSelectAll').addEventListener('change', (event) => { state.selected = new Set(event.target.checked ? state.rows.map((row) => row.folio_id) : []); clearPdf(); renderRows(); });
 byId('ptReviewClose').addEventListener('click', () => byId('ptReview').close());
-byId('ptPrintForm').addEventListener('input', clearPdf);
+byId('ptPrintForm').addEventListener('input', () => { clearPdf(); refreshControls(); });
+byId('ptPrintForm').elements.tipo.addEventListener('change', (event) => {
+    byId('ptPrintForm').elements.copias.value = event.target.value === 'planta' ? 4 : 1;
+    refreshControls();
+});
 byId('ptPrintForm').addEventListener('submit', (event) => {
     event.preventDefault();
     if (state.busy || !state.selected.size || !state.season) return;
     const values = Object.fromEntries(new FormData(event.currentTarget));
     const payload = operation.prepare({
         temporada_id: state.season.id, tipo: values.tipo, copias: Number(values.copias), motivo_reimpresion: values.motivo_reimpresion.trim() || null,
-        validaciones: state.rows.filter((row) => state.selected.has(row.validacion_id)).map((row) => ({ id: row.validacion_id, version: row.version })),
+        folios: state.rows.filter((row) => state.selected.has(row.folio_id)).map((row) => ({ id: row.folio_id, version: row.version })),
     });
     const generation = state.generation;
     void run(async () => {
@@ -202,4 +218,4 @@ byId('ptPrintForm').addEventListener('submit', (event) => {
 });
 window.addEventListener('storage', (event) => { if (event.key === tokenKey && event.newValue !== state.token) clearSession(); });
 window.addEventListener('beforeunload', clearPdf);
-if (state.token && state.identity?.puede_consultar_validaciones_pallet) void run(initialize);
+if (state.token && (state.identity?.puede_imprimir_etiquetas_pt || state.identity?.puede_consultar_validaciones_pallet)) void run(initialize);

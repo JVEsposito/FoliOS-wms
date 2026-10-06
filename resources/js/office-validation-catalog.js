@@ -201,7 +201,8 @@ function renderChildren(type, countId, listId, relation) {
         const client = type === 'package'
             ? ` · Cliente: ${clientLabel}`
             : '';
-        return row(item.nombre, `Especie: ${item.species}${client}`, type, item);
+        const kilos = type === 'package' ? ` · ${item.kilos_netos_por_caja ?? 'Sin configurar'} kg/caja` : '';
+        return row(item.nombre, `Especie: ${item.species}${client}${kilos}`, type, item);
     }).join('') || '<p class="empty-validation">Sin registros.</p>';
 }
 
@@ -230,7 +231,7 @@ function edit(type, id) {
     const item = itemFor(type, id);
     if (!item) return;
     resetForm(form);
-    for (const field of ['id', 'nombre', 'codigo_externo', 'codigo', 'predio', 'cliente_validacion_id', 'especie_validacion_id']) {
+    for (const field of ['id', 'nombre', 'codigo_externo', 'kilos_netos_por_caja', 'codigo', 'predio', 'cliente_validacion_id', 'especie_validacion_id']) {
         if (form.elements[field]) form.elements[field].value = item[field] ?? '';
     }
     if (form.elements.activo) form.elements.activo.checked = Boolean(item.activo);
@@ -252,6 +253,7 @@ async function save(type) {
     const id = data.id; delete data.id;
     if (['category', 'species', 'csg'].includes(type)) data.temporada_id = state.season.id;
     data.activo = form.elements.activo.checked;
+    if (type === 'package') data.kilos_netos_por_caja = data.kilos_netos_por_caja || null;
     if (type === 'csg') data.variedad_ids = [...form.querySelectorAll('input[name="variedad_ids"]:checked')].map((input) => input.value);
 
     setBusy(true, 'Actualizando catálogo…');

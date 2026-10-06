@@ -19,15 +19,22 @@ use Illuminate\Support\Facades\DB;
 
 class ServicioEtiquetasPt
 {
-    public function __construct(private readonly GeneradorEtiquetaPtPdf $pdf) {}
+    public function __construct(
+        private readonly GeneradorEtiquetaPtPdf $pdf,
+        private readonly ComposicionEtiquetaPt $composicion,
+        private readonly FechaProcesoEtiquetaPt $fechas,
+    ) {}
 
     public function consulta(): Builder
     {
-        return ValidacionPallet::query()
-            ->where('estado', EstadoValidacionPallet::Aceptada)
-            ->where('resultado', ResultadoValidacionPallet::Aprobado)
-            ->whereHas('folio', fn (Builder $query) => $this->foliosVigentes($query)
-                ->whereColumn('folios.temporada_id', 'validaciones_pallet.temporada_id'));
+        return $this->foliosVigentes(Folio::query())->with(['validacionPallet.usuario', 'temporada'])
+            ->where(function (Builder $q): void {
+                $q->where('origen_sistema', 'repaletizaje')
+                    ->orWhereHas('validacionPallet')
+                    ->orWhereNotExists(function ($sub): void {
+                        $sub->selectRaw('1')->from('validaciones_pallet')->whereColumn('validaciones_pallet.folio_id', 'folios.id');
+                    });
+            });
     }
 
     private function foliosVigentes(Builder $query): Builder
@@ -41,7 +48,7 @@ class ServicioEtiquetasPt
     }
 
     /** Los datos actuales del inventario prevalecen tras una corrección o repaletizaje. */
-    public function etiqueta(ValidacionPallet $validacion): array
+    private function etiquetaValidada(ValidacionPallet $validacion): array
     {
         $folio = $validacion->folio;
         $snapshot = $validacion->snapshot ?? [];
@@ -75,16 +82,51 @@ class ServicioEtiquetasPt
         ];
     }
 
-    public function version(ValidacionPallet $validacion): string
+    public function etiqueta(Folio|ValidacionPallet $registro): array
     {
-        return $this->hash($this->etiqueta($validacion));
+        $folio = $registro instanceof Folio ? $registro : $registro->folio;
+        $validacion = $registro instanceof ValidacionPallet ? $registro : $folio->validacionPallet;
+        if ($validacion) {
+            $validacion->setRelation('folio', $folio);
+            $etiqueta = $this->etiquetaValidada($validacion);
+        } else {
+            $datos = $folio->datos_externos ?? [];
+            $etiqueta = [
+                'validacion_id' => null, 'folio_id' => $folio->id, 'numero_folio' => (string) $folio->numero_folio,
+                'temporada' => $folio->temporada?->codigo, 'tipo_bulto' => $folio->tipo_bulto->value,
+                'cantidad_cajas' => (int) ($datos['cantidad_cajas'] ?? 0), 'especie' => $datos['especie'] ?? '',
+                'variedad' => $folio->variedad ?? '', 'calibre' => $folio->calibre ?? '',
+                'envase' => $datos['envase'] ?? '', 'categoria' => $datos['categoria'] ?? '',
+                'cliente' => $folio->exportadora ?? '', 'marca' => $folio->marca ?? '',
+                'csg' => $datos['csg'] ?? '', 'predio' => $datos['predio'] ?? '',
+                'fecha_embalaje' => $datos['fecha_embalaje'] ?? null, 'composicion' => $datos['composicion'] ?? [],
+                'linea_proceso' => null, 'turno' => null, 'validador' => null, 'validado_at' => null,
+                'estado_operacional' => $folio->estado_operacional->value,
+            ];
+        }
+        $composicion = $this->composicion;
+        $lineas = $composicion->lineas($folio);
+
+        return [
+            ...$etiqueta, ...$composicion->resumen($folio, $lineas), 'composicion' => $lineas,
+            'origen' => $folio->origen_sistema === 'repaletizaje' ? 'repaletizaje' : 'validacion',
+            'fecha_proceso' => $this->fechas->deFolio($folio),
+        ];
+    }
+
+    public function version(Folio|ValidacionPallet $registro): string
+    {
+        $folio = $registro instanceof Folio ? $registro : $registro->folio;
+
+        return $this->hash([$this->etiqueta($registro), $folio->datos_externos]);
     }
 
     public function generar(array $datos, User $usuario): ImpresionEtiquetaPt
     {
         $payload = $datos;
         unset($payload['operacion_id']);
-        usort($payload['validaciones'], fn ($a, $b) => strcmp($a['id'], $b['id']));
+        $seleccion = isset($payload['folios']) ? 'folios' : 'validaciones';
+        usort($payload[$seleccion], fn ($a, $b) => strcmp($a['id'], $b['id']));
         $hash = $this->hash($payload);
         try {
             return DB::transaction(function () use ($datos, $payload, $hash, $usuario): ImpresionEtiquetaPt {
@@ -97,25 +139,27 @@ class ServicioEtiquetasPt
                     return $this->repetir($existente, $hash, $usuario);
                 }
 
-                $validaciones = $this->consulta()->where('temporada_id', $temporada->id)
-                    ->whereIn('id', array_column($payload['validaciones'], 'id'))
-                    ->orderBy('id')->lockForUpdate()->get();
-                if ($validaciones->count() !== count($payload['validaciones'])) {
-                    throw new DomainException('Selecciona únicamente aprobaciones vigentes de esta temporada. Actualiza el listado.');
+                $seleccion = $payload['folios'] ?? $payload['validaciones'];
+                $versiones = collect($seleccion)->keyBy('id');
+                $ids = array_column($seleccion, 'id');
+                // Compatibilidad con los clientes anteriores que seleccionaban validaciones.
+                if (! isset($payload['folios'])) {
+                    $validaciones = ValidacionPallet::query()->whereIn('id', $ids)
+                        ->where('temporada_id', $temporada->id)->where('estado', EstadoValidacionPallet::Aceptada)
+                        ->where('resultado', ResultadoValidacionPallet::Aprobado)->get();
+                    if ($validaciones->count() !== count($ids)) {
+                        throw new DomainException('Selecciona únicamente aprobaciones vigentes de esta temporada.');
+                    }
+                    $versiones = $validaciones->mapWithKeys(fn ($v) => [$v->folio_id => $versiones[$v->id]]);
+                    $ids = $validaciones->pluck('folio_id')->all();
                 }
-                // Serializa con correcciones y movimientos del folio; vuelve a verificar su vigencia bajo bloqueo.
-                $folios = $this->foliosVigentes(Folio::query())
-                    ->where('temporada_id', $temporada->id)
-                    ->whereIn('id', $validaciones->pluck('folio_id'))
-                    ->orderBy('id')->lockForUpdate()->get()->keyBy('id');
-                if ($folios->count() !== $validaciones->count()) {
+                $folios = $this->consulta()->where('temporada_id', $temporada->id)
+                    ->whereIn('id', $ids)->orderBy('id')->lockForUpdate()->get()->keyBy('id');
+                if ($folios->count() !== count($ids)) {
                     throw new DomainException('Uno de los folios ya no está disponible para etiquetar.');
                 }
-                $validaciones->load(['temporada', 'usuario']);
-                $versiones = collect($payload['validaciones'])->keyBy('id');
-                foreach ($validaciones as $validacion) {
-                    $validacion->setRelation('folio', $folios->get($validacion->folio_id));
-                    if (! hash_equals($this->version($validacion), $versiones[$validacion->id]['version'])) {
+                foreach ($folios as $folio) {
+                    if (! hash_equals($this->version($folio), $versiones[$folio->id]['version'])) {
                         throw new ConflictoOperacion('Los datos del pallet cambiaron. Actualiza y revisa la etiqueta antes de imprimir.');
                     }
                 }
@@ -126,7 +170,7 @@ class ServicioEtiquetasPt
                 if ($yaGenerados && blank($datos['motivo_reimpresion'] ?? null)) {
                     throw new DomainException('Indica un motivo para volver a generar este formato de etiqueta.');
                 }
-                $etiquetas = $validaciones->map(fn ($validacion) => $this->etiqueta($validacion))->all();
+                $etiquetas = $folios->map(fn ($folio) => $this->etiqueta($folio))->values()->all();
                 // Un fallo de composición o tamaño no debe registrar una generación que no entregó PDF.
                 $this->pdf->generarPt($etiquetas, $datos['tipo'], $datos['copias']);
                 $impresion = ImpresionEtiquetaPt::create([

@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'cliente_validacion_id',
     'nombre',
     'codigo_externo',
+    'kilos_netos_por_caja',
     'activo',
 ])]
 class EnvaseValidacion extends Model
@@ -33,6 +34,6 @@ class EnvaseValidacion extends Model
 
     protected function casts(): array
     {
-        return ['activo' => 'boolean'];
+        return ['activo' => 'boolean', 'kilos_netos_por_caja' => 'decimal:4'];
     }
 }

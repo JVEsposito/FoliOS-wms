@@ -21,3 +21,12 @@ test('cambiar datos, copias o completar la descarga crea una nueva operación', 
     operations.clear();
     assert.equal(operations.prepare(data).operacion_id, 'id-4');
 });
+
+test('folios repaletizados conservan la operación al reintentar y cambian al revisar nuevos datos', () => {
+    let calls = 0;
+    const operations = createLabelOperation(() => `id-${++calls}`);
+    const data = { tipo: 'planta', copias: 4, folios: [{ id: 'b', version: '2' }, { id: 'a', version: '1' }] };
+    assert.equal(operations.prepare(data).operacion_id, 'id-1');
+    assert.equal(operations.prepare({ ...data, folios: [...data.folios].reverse() }).operacion_id, 'id-1');
+    assert.equal(operations.prepare({ ...data, folios: [{ id: 'a', version: '3' }] }).operacion_id, 'id-2');
+});

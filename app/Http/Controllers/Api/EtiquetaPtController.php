@@ -18,7 +18,7 @@ class EtiquetaPtController extends Controller
     {
         $temporada = app(ServicioTemporadaActiva::class)->buscar();
         $filtros = $request->validated();
-        $consulta = $servicio->consulta()->with(['folio', 'usuario', 'temporada'])
+        $consulta = $servicio->consulta()->with(['validacionPallet.usuario', 'temporada'])
             ->where('temporada_id', $temporada?->id ?? 'sin-temporada');
         if ($filtros['folio'] ?? null) {
             // El folio admite caracteres literales %, _ y barras; no son comodines de búsqueda.
@@ -26,13 +26,21 @@ class EtiquetaPtController extends Controller
         }
         foreach (['linea_proceso', 'turno', 'user_id'] as $campo) {
             if ($filtros[$campo] ?? null) {
-                $consulta->where($campo, $filtros[$campo]);
+                $consulta->whereHas('validacionPallet', fn ($q) => $q->where($campo, $filtros[$campo]));
             }
         }
-        if ($rango = $request->rangoFechaUtc()) {
-            $consulta->where('generado_dispositivo_at', '>=', $rango[0])->where('generado_dispositivo_at', '<', $rango[1]);
+        if ($filtros['origen'] ?? null) {
+            $filtros['origen'] === 'repaletizaje'
+                ? $consulta->where('origen_sistema', 'repaletizaje')
+                : $consulta->where(fn ($q) => $q->whereNull('origen_sistema')->orWhere('origen_sistema', '!=', 'repaletizaje'));
         }
-        $pagina = $consulta->orderByDesc('recibido_servidor_at')->orderBy('id')->paginate($filtros['per_page'] ?? 25);
+        if ($rango = $request->rangoFechaUtc()) {
+            $consulta->where(function ($q) use ($rango): void {
+                $q->whereHas('validacionPallet', fn ($v) => $v->where('generado_dispositivo_at', '>=', $rango[0])->where('generado_dispositivo_at', '<', $rango[1]))
+                    ->orWhere(fn ($f) => $f->where('origen_sistema', 'repaletizaje')->where('created_at', '>=', $rango[0])->where('created_at', '<', $rango[1]));
+            });
+        }
+        $pagina = $consulta->orderByDesc('created_at')->orderBy('id')->paginate($filtros['per_page'] ?? 25);
 
         return response()->json([
             'temporada' => $temporada ? ['id' => $temporada->id, 'codigo' => $temporada->codigo, 'nombre' => $temporada->nombre] : null,

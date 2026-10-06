@@ -44,6 +44,34 @@ class GeneradorEtiquetaPtPdfTest extends TestCase
         $this->assertStringContainsString('2026-10-04', $pdf);
     }
 
+    public function test_planta_imprime_cuatro_paginas_de_107_por_74_con_datos_y_barcode_del_folio(): void
+    {
+        $datos = [...$this->etiqueta(), 'cliente' => 'FRUTOS LA AGUADA S.A',
+            'envase_codigo' => 'RGEN90BAM', 'envase' => 'REJILLA 9KG CIRUELA BA',
+            'origen' => 'repaletizaje', 'fecha_proceso' => '2026-02-06',
+            'kilos_netos' => '693.00', 'cantidad_cajas' => 77];
+        $generador = new class extends GeneradorEtiquetaPtPdf
+        {
+            public function barcode(string $numero): string
+            {
+                return $this->codigoBarras($numero, 9, 10, 107 / 25.4 * 72 - 18, 39, true);
+            }
+        };
+        $pdf = $generador->generarPt([$datos], 'planta');
+        $this->assertStringContainsString('/MediaBox [0 0 303.31 209.76]', $pdf);
+        $this->assertStringContainsString('/Count 4', $pdf);
+        foreach (['FRUTOS LA AGUADA S.A', 'REPALETIZADO', 'RGEN90BAM', 'REJILLA 9KG CIRUELA BA', '06-02-2026', '693,00', 'PALLET', '0000000003'] as $texto) {
+            $this->assertSame(4, substr_count($pdf, '('.$texto.')'));
+        }
+        $this->assertSame(4, substr_count($pdf, $generador->barcode($datos['numero_folio'])));
+        $datos['origen'] = 'validacion';
+        $datos['kilos_netos'] = null;
+        $datos['fecha_proceso'] = null;
+        $pdf = $generador->generarPt([$datos], 'planta', 1);
+        $this->assertStringContainsString('(PROCESO)', $pdf);
+        $this->assertSame(2, substr_count($pdf, "(\x97)"));
+    }
+
     public function test_no_descarta_caracteres_del_folio_al_generar_codigo_de_barras(): void
     {
         $datos = $this->etiqueta();
