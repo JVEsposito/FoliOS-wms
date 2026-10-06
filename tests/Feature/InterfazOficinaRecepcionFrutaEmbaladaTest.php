@@ -12,7 +12,8 @@ class InterfazOficinaRecepcionFrutaEmbaladaTest extends TestCase
             ->assertSee('Recepción de fruta embalada')->assertSee('receptionForm')->assertSee('palletList')
             ->assertSee('name="numero_guia"', false)->assertSee('name="desde"', false)->assertSee('name="hasta"', false)
             ->assertSee('name="cliente_id"', false)->assertSee('name="planta_origen_id"', false)->assertSee('name="estado"', false)
-            ->assertSee('Los pallets todavía no ingresan al inventario.')->assertSee('Guardar borrador');
+            ->assertSee('Los pallets todavía no ingresan al inventario.')->assertSee('Guardar borrador')
+            ->assertSee('RRFE-01 en blanco')->assertSee('id="rrfeReception"', false)->assertSee('id="externalLabelCopies"', false);
     }
 
     public function test_administracion_expone_plantas_y_umbrales_sin_inventar_una_temperatura(): void

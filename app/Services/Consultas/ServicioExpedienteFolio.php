@@ -94,6 +94,10 @@ class ServicioExpedienteFolio
                 'temporada' => $folio->temporada?->codigo,
                 'fecha_ingreso' => $folio->fecha_ingreso?->toIso8601String(),
                 'especificaciones' => [
+                    'planta_origen' => $datosExternos['planta_origen']['nombre'] ?? null,
+                    'guia' => $datosExternos['guia'] ?? null,
+                    'csp' => $datosExternos['csp'] ?? null,
+                    'referencia_externa' => $folio->identificador_externo,
                     'cliente' => $folio->exportadora,
                     'especie' => $datosExternos['especie'] ?? null,
                     'marca' => $folio->marca,

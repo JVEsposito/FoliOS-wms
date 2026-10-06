@@ -12,7 +12,7 @@ export function officeSession(permission, load, reset) {
     const request = async (path, init = {}) => {
         const startedToken = token;
         const headers = new Headers(init.headers);
-        headers.set('Accept', 'application/json');
+        headers.set('Accept', init.pdf ? 'application/pdf' : 'application/json');
         if (startedToken) headers.set('Authorization', `Bearer ${startedToken}`);
         if (init.body) headers.set('Content-Type', 'application/json');
         let response;
@@ -20,6 +20,7 @@ export function officeSession(permission, load, reset) {
         catch { throw new ApiError('No hay conexión. Reintenta el guardado cuando vuelva la red.', 0); }
         if (startedToken !== token) throw new ApiError('La sesión cambió. Vuelve a abrir la recepción.', 409);
         if (response.status === 304) return { notModified: true };
+        if (response.ok && init.pdf) return response.blob();
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
             if (response.status === 401) { localStorage.removeItem(tokenKey); localStorage.removeItem(identityKey); sync.reload(false, true); }

@@ -8,7 +8,7 @@ class FechaProcesoEtiquetaPt
 {
     public function deFolio(Folio $folio): ?string
     {
-        if ($folio->origen_sistema === 'repaletizaje') {
+        if (in_array($folio->origen_sistema, ['repaletizaje', 'recepcion_externa'], true)) {
             return $folio->fecha_proceso_pt?->toDateString();
         }
 

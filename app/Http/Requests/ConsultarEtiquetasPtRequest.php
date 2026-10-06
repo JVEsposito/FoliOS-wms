@@ -9,7 +9,7 @@ class ConsultarEtiquetasPtRequest extends ConsultarValidacionesPalletRequest
 {
     public function rules(): array
     {
-        return [...parent::rules(), 'origen' => ['nullable', Rule::in(['validacion', 'repaletizaje'])]];
+        return [...parent::rules(), 'origen' => ['nullable', Rule::in(['validacion', 'repaletizaje', 'externo'])]];
     }
 
     public function authorize(): bool

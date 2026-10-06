@@ -939,6 +939,9 @@ function renderTunnels(tunnels = []) {
 }
 
 function incidentContext(incident) {
+    if (incident.origen === 'recepcion_embalada') {
+        return [incident.contexto?.recepcion?.planta, incident.contexto?.recepcion?.guia].filter(Boolean).join(' · ');
+    }
     if (incident.origen === 'verificacion') {
         return [incident.contexto?.camara, incident.contexto?.posicion].filter(Boolean).join(' · ');
     }
@@ -960,7 +963,7 @@ function renderIncidents(incidents = []) {
 
     elements.incidentRows.innerHTML = incidents.map((incident) => `<tr>
         <td><span class="operation-now-code">${escapeHtml(duration(incident.antiguedad_minutos))}</span><span class="operation-now-subtext">${escapeHtml(dateTime(incident.reportada_at))}</span></td>
-        <td>${signal(incident.origen === 'verificacion' ? 'Verificación' : incident.origen === 'maniobra' ? 'Maniobra' : 'Carga', incident.origen === 'carga' ? 'info' : 'warning')}</td>
+        <td>${signal(incident.origen === 'recepcion_embalada' ? 'Recepción externa' : incident.origen === 'verificacion' ? 'Verificación' : incident.origen === 'maniobra' ? 'Maniobra' : 'Carga', incident.origen === 'carga' ? 'info' : 'warning')}</td>
         <td>${signal(humanize(incident.prioridad), toneForPriority(incident.prioridad))}</td>
         <td><span class="operation-now-code">${escapeHtml(incident.folio?.numero_folio || 'Sin folio')}</span><span class="operation-now-subtext">${escapeHtml(incidentContext(incident) || 'Sin contexto adicional')}</span></td>
         <td><strong>${escapeHtml(humanize(incident.tipo))}</strong><span class="operation-now-subtext">${escapeHtml(incident.detalle || 'Sin detalle')} · ${escapeHtml(incident.reportado_por?.nombre || 'Sin reportante')} · ${escapeHtml(incident.dispositivo?.codigo || 'Sin dispositivo')}</span></td>
