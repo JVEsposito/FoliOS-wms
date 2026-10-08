@@ -48,7 +48,6 @@ class ServicioVerificacionMateriales
     public function snapshot(Posicion $posicion, string $temporada, bool $bloquear = false): array
     {
         $saldos = $this->saldos($posicion, $temporada)->orderBy('folio_id')->when($bloquear, fn ($q) => $q->lockForUpdate())->get();
-        $ids = $saldos->pluck('folio_id')->all();
 
         return [
             'saldos' => $saldos->map(fn ($s) => [
@@ -57,7 +56,6 @@ class ServicioVerificacionMateriales
             ])->all(),
             'movimientos' => DB::table('movimientos')->where(fn ($q) => $q
                 ->where('posicion_origen_id', $posicion->id)->orWhere('posicion_destino_id', $posicion->id))->when($bloquear, fn ($q) => $q->lockForUpdate())->count(),
-            'movimientos_materiales' => DB::table('movimientos_almacenes_materiales')->whereIn('folio_id', $ids)->when($bloquear, fn ($q) => $q->lockForUpdate())->count(),
             'retiros' => DB::table('retiros_materiales')->where('posicion_id', $posicion->id)->when($bloquear, fn ($q) => $q->lockForUpdate())->count(),
         ];
     }
@@ -124,7 +122,11 @@ class ServicioVerificacionMateriales
             Posicion::query()->lockForUpdate()->findOrFail($posicion->id);
             $snapshot = $this->snapshot($posicion, $temporada->id, bloquear: true);
             // MySQL normaliza el orden de claves de objetos JSON; no es un movimiento.
-            $cambio = $snapshot != $item->snapshot_materiales;
+            $asignada = $item->snapshot_materiales;
+            // Compatibilidad con rondas pendientes asignadas antes de retirar el
+            // contador global: consumos en otros almacenes no cambian esta posición.
+            unset($asignada['movimientos_materiales']);
+            $cambio = $snapshot != $asignada;
             $resultado = 'no_aplica';
             if (! $cambio) {
                 $resultados = [];

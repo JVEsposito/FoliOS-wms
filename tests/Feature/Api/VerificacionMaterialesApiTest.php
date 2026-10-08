@@ -306,6 +306,31 @@ class VerificacionMaterialesApiTest extends TestCase
         $this->assertSame(150.0, (float) DB::table('folios_materiales')->where('folio_id', $a)->value('cantidad_actual'));
     }
 
+    public function test_consumo_en_packing_no_invalida_la_posicion_en_bodega_incluso_con_foto_anterior(): void
+    {
+        $posicion = $this->posicion();
+        $folio = $this->folioEn($posicion, 'DISTRIBUIDO', 100);
+        $packing = (string) Str::uuid();
+        DB::table('folios_materiales')->where('folio_id', $folio)->update(['cantidad_actual' => 150]);
+        DB::table('saldos_materiales_almacenes')->insert(['id' => $packing, 'folio_id' => $folio,
+            'almacen_material_id' => (string) Str::uuid(), 'cantidad_actual' => 50, 'version' => 1]);
+        $item = $this->itemEn($posicion);
+        $foto = $item->snapshot_materiales;
+        $this->assertArrayNotHasKey('movimientos_materiales', $foto);
+        // Una ronda pendiente de la versión anterior también sigue siendo válida.
+        $item->update(['snapshot_materiales' => $foto + ['movimientos_materiales' => 0]]);
+        DB::table('movimientos_almacenes_materiales')->insert(['id' => (string) Str::uuid(),
+            'folio_id' => $folio, 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('saldos_materiales_almacenes')->where('id', $packing)->update(['cantidad_actual' => 45, 'version' => 2]);
+        DB::table('folios_materiales')->where('folio_id', $folio)->update(['cantidad_actual' => 145]);
+        [$ronda, $resultado] = $this->confirmar($item, [['numero_folio' => 'DISTRIBUIDO', 'cantidad_contada' => 100]]);
+        $this->assertSame('coincide', $resultado->resultado);
+        $this->assertSame('completada', $ronda->estado);
+        $this->assertCount(1, $ronda->items);
+        $this->assertDatabaseCount('incidencias_verificacion_ubicacion', 0);
+        $this->assertDatabaseHas('saldos_materiales_almacenes', ['folio_id' => $folio, 'posicion_id' => $posicion->id, 'cantidad_actual' => 100, 'version' => 1]);
+    }
+
     public function test_retiro_posterior_invalida_la_posicion_y_la_reemplaza_sin_incidencia(): void
     {
         $posicion = $this->posicion();
