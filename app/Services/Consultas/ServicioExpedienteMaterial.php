@@ -144,6 +144,7 @@ class ServicioExpedienteMaterial
                 'repaletizaje_agotamiento' => null,
             ],
             'material' => [
+                'vencimiento' => $material->informacionVencimiento(),
                 'identidad' => [
                     'cliente' => $clienteMaterial?->cliente?->nombre ?? $clienteMaterial?->nombre,
                     'codigo' => $material->item?->codigo,
@@ -159,7 +160,7 @@ class ServicioExpedienteMaterial
                     'inicial' => (float) $material->cantidad_inicial,
                     'actual' => $cantidadActual,
                     'reservada' => $cantidadReservada,
-                    'disponible' => max(0, round($cantidadActual - $cantidadReservada, 3)),
+                    'disponible' => $material->estaVencido() || $material->motivo_bloqueo !== null ? 0 : max(0, round($cantidadActual - $cantidadReservada, 3)),
                     'unidad_medida' => $material->unidad_medida,
                 ],
                 'origen' => $this->origen($material),
@@ -395,9 +396,11 @@ class ServicioExpedienteMaterial
         return $bloqueos->map(fn (EventoBloqueoMaterial $evento): array => [
             'tipo' => 'bloqueo_material',
             'fecha' => $this->fecha($evento->ocurrido_at ?? $evento->created_at),
-            'titulo' => $this->valor($evento->tipo) === 'bloqueo'
-                ? 'Material bloqueado'
-                : 'Material desbloqueado',
+            'titulo' => match ($this->valor($evento->tipo)) {
+                'bloqueado' => 'Material bloqueado',
+                'fecha_corregida' => 'Fecha de vencimiento corregida',
+                default => 'Material desbloqueado',
+            },
             'descripcion' => sprintf(
                 '%s → %s',
                 $this->valor($evento->estado_anterior),
@@ -405,7 +408,9 @@ class ServicioExpedienteMaterial
             ),
             'meta' => array_filter([
                 'Motivo' => $evento->motivo,
-                'Registrado por' => $evento->usuario?->name,
+                'Registrado por' => $evento->usuario?->name ?? 'Sistema',
+                'Fecha anterior' => data_get($evento->metadatos, 'fecha_anterior'),
+                'Fecha nueva' => data_get($evento->metadatos, 'fecha_nueva'),
             ], $this->conValor(...)),
         ])->all();
     }

@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'cantidad_solicitada',
     'cantidad_despachada',
     'unidad_medida',
+    'cantidad_sin_reserva_por_vencimiento',
 ])]
 class DetalleDespachoMaterial extends Model
 {
@@ -51,6 +52,7 @@ class DetalleDespachoMaterial extends Model
     protected function casts(): array
     {
         return [
+            'cantidad_sin_reserva_por_vencimiento' => 'decimal:3',
             'cantidad_solicitada' => 'decimal:3',
             'cantidad_despachada' => 'decimal:3',
         ];

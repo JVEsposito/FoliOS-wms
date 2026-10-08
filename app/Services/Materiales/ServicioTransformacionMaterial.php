@@ -756,6 +756,9 @@ class ServicioTransformacionMaterial
             }
 
             $lineas = collect($datos['consumos']);
+            foreach (FolioMaterial::query()->whereIn('folio_id', $lineas->pluck('folio_id'))->lockForUpdate()->get() as $materialConsumido) {
+                $materialConsumido->asegurarVigente();
+            }
             $idsComponentes = $componentes
                 ->pluck('item_id')
                 ->filter()
@@ -866,6 +869,8 @@ class ServicioTransformacionMaterial
                     'categoria_operacional',
                     '',
                 );
+
+                $folioMaterial->asegurarVigente();
 
                 if (! $folio->activo
                     || $folio->estado_operacional !== EstadoOperacionalFolio::Disponible

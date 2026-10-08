@@ -76,6 +76,7 @@ use App\Http\Controllers\Api\TransformacionMaterialController;
 use App\Http\Controllers\Api\TunelPrefrioController;
 use App\Http\Controllers\Api\ValidacionMpController;
 use App\Http\Controllers\Api\ValidacionPalletController;
+use App\Http\Controllers\Api\VencimientoMaterialController;
 use App\Http\Controllers\Api\VerificacionUbicacionController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -423,6 +424,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/notificaciones-operacionales/{notificacionOperacional}/confirmar', [NotificacionOperacionalController::class, 'confirmar']);
 
     Route::middleware('can:consultar-despachos-materiales')->group(function () {
+        Route::get('/materiales/vencimientos', [VencimientoMaterialController::class, 'index']);
+        Route::get('/materiales/vencimientos/exportar', [VencimientoMaterialController::class, 'exportar']);
         Route::get('/materiales/catalogo', [CatalogoMaterialController::class, 'catalogo']);
         Route::get('/materiales/inventario', [DespachoMaterialController::class, 'inventario']);
         Route::get('/materiales/despachos', [DespachoMaterialController::class, 'index']);
@@ -435,6 +438,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/materiales/inventario/{folioMaterial}/corregir-item', [CorreccionItemMaterialController::class, 'store'])
         ->middleware('can:corregir-items-estibados-materiales');
     Route::middleware('can:gestionar-bloqueos-materiales')->group(function () {
+        Route::post('/materiales/inventario/{folioMaterial}/corregir-vencimiento', [VencimientoMaterialController::class, 'corregir']);
         Route::post('/materiales/inventario/{folioMaterial}/bloquear', [BloqueoMaterialController::class, 'bloquear']);
         Route::post('/materiales/inventario/{folioMaterial}/liberar-bloqueo', [BloqueoMaterialController::class, 'liberar']);
     });

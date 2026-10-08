@@ -365,7 +365,7 @@ function materialSpecificationGrid(material = {}) {
         ['Proveedor', identity.proveedor],
         ['Lote', identity.lote],
         ['Fabricación', formatDateOnly(identity.fecha_fabricacion)],
-        ['Vencimiento', formatDateOnly(identity.fecha_vencimiento)],
+        ['Vencimiento', `${formatDateOnly(identity.fecha_vencimiento)}${material.vencimiento?.etiqueta ? ` · ${material.vencimiento.etiqueta}` : ''}`],
     ];
     return specifications.map(([title, value]) => `<div><span>${escapeHtml(title)}</span><strong>${escapeHtml(value || '—')}</strong></div>`).join('');
 }

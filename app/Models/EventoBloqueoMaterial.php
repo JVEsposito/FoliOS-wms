@@ -19,6 +19,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'motivo',
     'user_id',
     'ocurrido_at',
+    'metadatos',
 ])]
 class EventoBloqueoMaterial extends Model
 {
@@ -43,6 +44,7 @@ class EventoBloqueoMaterial extends Model
             'estado_anterior' => EstadoOperacionalFolio::class,
             'estado_resultante' => EstadoOperacionalFolio::class,
             'ocurrido_at' => 'datetime',
+            'metadatos' => 'array',
         ];
     }
 }

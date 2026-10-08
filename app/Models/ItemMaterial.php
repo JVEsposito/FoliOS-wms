@@ -22,6 +22,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
     'origen_sistema',
     'sincronizado_at',
     'activo',
+    'dias_alerta_vencimiento',
     'creado_por_user_id',
     'actualizado_por_user_id',
 ])]
@@ -71,6 +72,7 @@ class ItemMaterial extends Model
         return [
             'categoria_operacional' => CategoriaOperacionalMaterial::class,
             'activo' => 'boolean',
+            'dias_alerta_vencimiento' => 'integer',
             'sincronizado_at' => 'datetime',
         ];
     }

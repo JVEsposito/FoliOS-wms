@@ -136,6 +136,7 @@ class MovimientoController extends Controller
                 'habilitacion_almacenamiento' => $folio->habilitacion_almacenamiento?->value,
                 'disponible_ubicacion' => $disponible,
                 'mensaje_disponibilidad' => $mensaje,
+                'mensaje_vencimiento' => $material?->estaVencido() ? $material->mensajeVencimiento() : null,
                 'origen_sistema' => $folio->origen_sistema,
                 'condicion_sag' => $folio->condicionSag ? [
                     'id' => $folio->condicionSag->id,
@@ -352,6 +353,9 @@ class MovimientoController extends Controller
         Folio $folio,
         ServicioHabilitacionAlmacenamiento $habilitacion,
     ): array {
+        if ($folio->material?->estaVencido()) {
+            return [false, $folio->material->mensajeVencimiento()];
+        }
         if ($folio->ubicacionActual) {
             $ubicacion = $folio->ubicacionActual;
             $posicion = $ubicacion->posicion;

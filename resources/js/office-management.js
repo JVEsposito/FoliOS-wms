@@ -573,6 +573,11 @@ function renderMaterialsOperation(materials) {
     elements.materialPartialDispatches.textContent = formatInteger(materials.despachos_parciales);
     elements.materialReceptionsToday.textContent = formatInteger(materials.recepciones_confirmadas_hoy);
     elements.materialReceptionDrafts.textContent = formatInteger(materials.recepciones_borrador);
+    for (const [key, id] of [['por_vencer', 'materialNearExpiry'], ['vencido', 'materialExpired']]) {
+        const group = materials.vencimientos?.[key];
+        const target = byId(id);
+        if (target) target.textContent = `${formatInteger(group?.folios || 0)} folios · ${(group?.cantidades || []).map((unit) => `${formatQuantity(unit.cantidad)} ${unit.unidad_medida}`).join(' · ') || 'Sin stock'}`;
+    }
 }
 
 function renderMaterialUnitOptions(units) {

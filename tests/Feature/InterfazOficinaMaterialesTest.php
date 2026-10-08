@@ -282,7 +282,7 @@ class InterfazOficinaMaterialesTest extends TestCase
 
         $this->assertIsString($office);
         $this->assertStringContainsString(
-            "new Set(['resumen', 'catalogos', 'inventario', 'despachos'])",
+            "new Set(['resumen', 'catalogos', 'inventario', 'despachos', 'vencimientos'])",
             $office,
         );
         $this->assertStringContainsString(

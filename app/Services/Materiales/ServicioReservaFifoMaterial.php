@@ -84,6 +84,7 @@ class ServicioReservaFifoMaterial
                 '>',
                 'folios_materiales.cantidad_reservada',
             )
+            ->tap(fn ($consulta) => ServicioVencimientoMaterial::filtrarVigentes($consulta, 'folios_materiales.fecha_vencimiento'))
             ->whereNull('folios_materiales.motivo_bloqueo')
             ->where('folios.activo', true)
             ->where('folios.estado_operacional', EstadoOperacionalFolio::Disponible->value)
@@ -95,6 +96,8 @@ class ServicioReservaFifoMaterial
                     ->whereNull('posicion_id')
                     ->orWhereHas('posicion', fn ($posiciones) => $posiciones
                         ->where('estado', EstadoPosicion::Activa->value))))
+            ->orderByRaw('folios_materiales.fecha_vencimiento IS NULL')
+            ->orderBy('folios_materiales.fecha_vencimiento')
             ->orderBy('folios.fecha_ingreso')
             ->orderBy('folios.numero_folio')
             ->orderBy('folios_materiales.folio_id')

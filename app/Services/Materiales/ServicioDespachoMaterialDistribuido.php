@@ -248,6 +248,8 @@ class ServicioDespachoMaterialDistribuido extends ServicioDespachoMaterial
                     ->lockForUpdate()
                     ->findOrFail($datosRetiro['folio_id']);
 
+                $folioMaterial->asegurarVigente();
+
                 if (! $folioMaterial->folio?->activo
                     || $folioMaterial->motivo_bloqueo !== null
                     || $folioMaterial->folio->estado_operacional !== EstadoOperacionalFolio::Disponible) {
@@ -502,10 +504,12 @@ class ServicioDespachoMaterialDistribuido extends ServicioDespachoMaterial
         );
 
         if ($pendiente <= 0) {
+            $detalle->update(['cantidad_sin_reserva_por_vencimiento' => 0]);
+
             return;
         }
 
-        app(ServicioReservaFifoMaterial::class)->reservar(
+        $faltante = app(ServicioReservaFifoMaterial::class)->reservar(
             $detalle->item_material_id,
             $pendiente,
             function (FolioMaterial $folio, float $cantidad, int $orden) use ($detalle): void {
@@ -519,6 +523,9 @@ class ServicioDespachoMaterialDistribuido extends ServicioDespachoMaterial
                 ]);
             },
         );
+        if ((float) $detalle->cantidad_sin_reserva_por_vencimiento > 0) {
+            $detalle->update(['cantidad_sin_reserva_por_vencimiento' => $faltante]);
+        }
     }
 
     private function validarSesion(

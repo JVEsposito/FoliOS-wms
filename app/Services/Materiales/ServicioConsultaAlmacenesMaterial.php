@@ -458,6 +458,7 @@ class ServicioConsultaAlmacenesMaterial
                 'etiqueta' => $saldo->posicion->etiqueta,
             ] : null,
             'bloqueado' => $material->motivo_bloqueo !== null,
+            'vencimiento' => $material->informacionVencimiento(),
         ];
     }
 
@@ -498,7 +499,8 @@ class ServicioConsultaAlmacenesMaterial
     {
         $material = $saldo->folioMaterial;
 
-        if ($material->motivo_bloqueo !== null
+        if ($material->estaVencido()
+            || $material->motivo_bloqueo !== null
             || $material->folio->estado_operacional !== EstadoOperacionalFolio::Disponible
             || ! $saldo->almacen->activo) {
             return 0;

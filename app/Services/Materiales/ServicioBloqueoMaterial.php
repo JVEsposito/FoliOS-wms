@@ -45,12 +45,17 @@ class ServicioBloqueoMaterial
         );
     }
 
+    public function bloquearPorVencimiento(FolioMaterial $material, string $operacionId): EventoBloqueoMaterial
+    {
+        return $this->cambiar($material, $operacionId, TipoEventoBloqueoMaterial::Bloqueado, 'Vencido', null);
+    }
+
     private function cambiar(
         FolioMaterial $folioMaterial,
         string $operacionId,
         TipoEventoBloqueoMaterial $tipo,
         string $motivo,
-        User $usuario,
+        ?User $usuario,
     ): EventoBloqueoMaterial {
         try {
             return DB::transaction(function () use (
@@ -86,9 +91,22 @@ class ServicioBloqueoMaterial
                 }
 
                 $estadoAnterior = $folio->estado_operacional;
+                $sistema = $usuario === null;
+                if ($sistema && $material->bloqueado_por_vencimiento) {
+                    return $this->cargar($material->eventosBloqueo()->where('tipo', TipoEventoBloqueoMaterial::Bloqueado->value)->where('motivo', 'Vencido')->latest('ocurrido_at')->firstOrFail());
+                }
+                if ($sistema && ! $material->estaVencido()) {
+                    throw new DomainException('El bloqueo automático requiere un folio vencido.');
+                }
+                if ($tipo === TipoEventoBloqueoMaterial::Liberado) {
+                    $material->asegurarVigente();
+                    if ($material->bloqueado_por_vencimiento) {
+                        throw new DomainException('Corrige la fecha de vencimiento mediante la acción supervisada.');
+                    }
+                }
 
                 if ($tipo === TipoEventoBloqueoMaterial::Bloqueado) {
-                    if (! in_array($estadoAnterior, [
+                    if (! ($sistema && $estadoAnterior === EstadoOperacionalFolio::Bloqueado) && ! in_array($estadoAnterior, [
                         EstadoOperacionalFolio::Disponible,
                         EstadoOperacionalFolio::PendienteUbicacion,
                     ], true)) {
@@ -97,7 +115,13 @@ class ServicioBloqueoMaterial
 
                     $this->asegurarSinReservas($material);
                     $estadoResultante = EstadoOperacionalFolio::Bloqueado;
-                    $material->update(['motivo_bloqueo' => $motivo]);
+                    $material->update([
+                        'motivo_bloqueo' => $motivo,
+                        ...($sistema ? [
+                            'bloqueado_por_vencimiento' => true,
+                            'motivo_bloqueo_previo_vencimiento' => $material->motivo_bloqueo,
+                        ] : []),
+                    ]);
                 } else {
                     if ($estadoAnterior !== EstadoOperacionalFolio::Bloqueado) {
                         throw new DomainException('El folio no se encuentra bloqueado.');
@@ -117,7 +141,7 @@ class ServicioBloqueoMaterial
                     'estado_anterior' => $estadoAnterior,
                     'estado_resultante' => $estadoResultante,
                     'motivo' => $motivo,
-                    'user_id' => $usuario->id,
+                    'user_id' => $usuario?->id,
                     'ocurrido_at' => now(),
                 ]);
 
@@ -150,11 +174,11 @@ class ServicioBloqueoMaterial
         FolioMaterial $folioMaterial,
         TipoEventoBloqueoMaterial $tipo,
         string $motivo,
-        User $usuario,
+        ?User $usuario,
     ): EventoBloqueoMaterial {
         if ($evento->folio_id !== $folioMaterial->folio_id
             || $evento->tipo !== $tipo
-            || $evento->user_id !== $usuario->id
+            || $evento->user_id !== $usuario?->id
             || $evento->motivo !== $motivo) {
             throw new ConflictoOperacion(
                 'El UUID del cambio de bloqueo ya fue utilizado con otros datos.',

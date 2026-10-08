@@ -196,6 +196,7 @@ export type FolioLookup = {
   habilitacion_almacenamiento: Folio['habilitacion_almacenamiento'];
   disponible_ubicacion: boolean;
   mensaje_disponibilidad: string;
+  mensaje_vencimiento?: string | null;
   origen_sistema: string | null;
   condicion_sag: SagCondition | null;
   variedad: string | null;
