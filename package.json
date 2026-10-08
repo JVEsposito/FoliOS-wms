@@ -6,6 +6,7 @@
         "build": "vite build",
         "dev": "vite",
         "test:js": "node --test tests/JavaScript/*.mjs",
+        "test:browser": "node --test tests/Browser/*.mjs",
         "design:tokens": "node scripts/build-design-tokens.mjs",
         "design:check": "node scripts/build-design-tokens.mjs --check",
         "ui:catalog": "php artisan ui:catalogo"
@@ -14,6 +15,7 @@
         "@tailwindcss/vite": "^4.0.0",
         "concurrently": "^9.0.1",
         "laravel-vite-plugin": "^3.1",
+        "playwright": "^1.64.0",
         "tailwindcss": "^4.0.0",
         "vite": "^8.0.0"
     },
