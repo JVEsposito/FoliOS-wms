@@ -13,6 +13,7 @@ use App\Models\DestinoMaterial;
 use App\Models\Dispositivo;
 use App\Models\Folio;
 use App\Models\FolioMaterial;
+use App\Models\IncidenciaVerificacionUbicacion;
 use App\Models\ItemMaterial;
 use App\Models\MovimientoAlmacenMaterial;
 use App\Models\Posicion;
@@ -643,6 +644,46 @@ class CustodiaDistribuidaMaterialesTest extends TestCase
         $this->assertTrue(
             Schema::hasColumn('saldos_materiales_almacenes', 'version'),
         );
+    }
+
+    public function test_verificacion_materiales_autenticada_no_ajusta_y_supervision_enlaza_el_ajuste_idempotente(): void
+    {
+        config(['verificaciones.habilitada' => true, 'verificaciones.materiales.habilitada' => true,
+            'verificaciones.materiales.posiciones_por_ronda' => 1]);
+        [$admin, $tokenOficina] = $this->crearAdministrador();
+        [$camarero, , $tokenTablet] = $this->crearCamarero();
+        $item = $this->crearItem($admin, ClienteMaterial::query()->where('codigo', 'GENERAL')->firstOrFail());
+        [$camara, $posicion] = $this->crearCamara();
+        $folio = $this->crearFolio($item, 100);
+        $sesion = $this->conToken($tokenTablet)->postJson("/api/camaras/{$camara->id}/sesiones")->assertCreated()->json('data.id');
+        $this->ubicar($tokenTablet, $folio, $camara, $posicion, $sesion);
+        $ronda = $this->conToken($tokenTablet)->getJson('/api/verificaciones-ubicacion/actual')->assertOk()
+            ->assertJsonPath('data.contenido', 'materiales')->json('data');
+        $this->assertStringNotContainsString($folio->numero_folio, json_encode($ronda));
+        $this->conToken($tokenTablet)->postJson("/api/verificaciones-ubicacion/items/{$ronda['items'][0]['id']}/resultado", [
+            'operacion_id' => (string) Str::uuid(), 'version' => 1, 'respuesta' => 'folios',
+            'folios' => [['numero_folio' => $folio->numero_folio, 'cantidad_contada' => 95]],
+        ])->assertOk()->assertJsonPath('resultado', 'diferencia_cantidad');
+        $this->assertProyeccion($folio->id, 100, 0);
+        $incidencia = IncidenciaVerificacionUbicacion::query()->sole();
+        $this->conToken($tokenOficina)->getJson('/api/operacion-ahora')->assertOk()
+            ->assertJsonPath('data.verificaciones.por_contenido.materiales.completadas', 1);
+        $this->conToken($tokenOficina)->getJson('/api/gerencia/resumen')->assertOk()
+            ->assertJsonPath('data.materiales.verificaciones.periodos.7.camaras.0.ubicacion.porcentaje', 100)
+            ->assertJsonPath('data.materiales.verificaciones.periodos.7.camaras.0.cantidad.porcentaje', 0);
+        $payload = ['operacion_id' => (string) Str::uuid(), 'tipo' => 'ajuste', 'folio_id' => $folio->id,
+            'almacen_origen_id' => AlmacenMaterial::query()->where('codigo', AlmacenMaterial::CODIGO_BODEGA_CENTRAL)->value('id'),
+            'cantidad' => -5, 'motivo' => 'Conteo físico revisado y aprobado.', 'incidencia_verificacion_id' => $incidencia->id];
+        $this->conToken($tokenTablet)->postJson('/api/materiales/almacenes/movimientos', $payload)->assertForbidden();
+        $this->conToken($tokenOficina)->postJson('/api/materiales/almacenes/movimientos', $payload)->assertCreated()
+            ->assertJsonPath('data.incidencia_verificacion_id', $incidencia->id);
+        $this->conToken($tokenOficina)->postJson('/api/materiales/almacenes/movimientos', $payload)->assertCreated();
+        $this->assertProyeccion($folio->id, 95, 0);
+        $this->assertSame('resuelta', $incidencia->refresh()->estado);
+        $this->assertSame($admin->id, $incidencia->resuelto_por_user_id);
+        $this->assertSame(1, MovimientoAlmacenMaterial::query()->where('incidencia_verificacion_id', $incidencia->id)->count());
+        $payload['operacion_id'] = (string) Str::uuid();
+        $this->conToken($tokenOficina)->postJson('/api/materiales/almacenes/movimientos', $payload)->assertUnprocessable();
     }
 
     private function crearAdministrador(): array

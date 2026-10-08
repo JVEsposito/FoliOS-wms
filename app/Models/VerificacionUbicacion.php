@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['temporada_id', 'user_id', 'dispositivo_id', 'turno_inicio_at', 'turno_fin_at', 'vence_at', 'estado', 'objetivo', 'version'])]
+#[Fillable(['contenido', 'verificar_cantidad', 'tolerancia_cantidad_pct', 'temporada_id', 'user_id', 'dispositivo_id', 'turno_inicio_at', 'turno_fin_at', 'vence_at', 'estado', 'objetivo', 'version'])]
 class VerificacionUbicacion extends Model implements PerteneceATemporada
 {
     use HasUuids, ImpideEliminacionFisica, TemporadaPorColumna;
@@ -26,6 +26,7 @@ class VerificacionUbicacion extends Model implements PerteneceATemporada
     {
         return [
             'turno_inicio_at' => 'datetime', 'turno_fin_at' => 'datetime',
+            'contenido' => 'string', 'verificar_cantidad' => 'boolean', 'tolerancia_cantidad_pct' => 'decimal:3',
             'vence_at' => 'datetime', 'version' => 'integer', 'objetivo' => 'integer',
         ];
     }

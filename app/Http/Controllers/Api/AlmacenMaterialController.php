@@ -154,6 +154,7 @@ class AlmacenMaterialController extends Controller
         $datos = $request->validate([
             'operacion_id' => ['required', 'uuid'],
             'tipo' => ['required', Rule::enum(TipoMovimientoAlmacenMaterial::class)],
+            'incidencia_verificacion_id' => ['nullable', 'uuid', 'exists:incidencias_verificacion_ubicacion,id'],
             'folio_id' => ['required', 'uuid', 'exists:folios_materiales,folio_id'],
             'almacen_origen_id' => ['nullable', 'uuid', 'exists:destinos_materiales,id'],
             'almacen_destino_id' => ['nullable', 'uuid', 'exists:destinos_materiales,id'],
@@ -198,6 +199,7 @@ class AlmacenMaterialController extends Controller
         return [
             'id' => $movimiento->id,
             'operacion_id' => $movimiento->operacion_id,
+            'incidencia_verificacion_id' => $movimiento->incidencia_verificacion_id,
             'tipo' => $movimiento->tipo->value,
             'folio' => [
                 'id' => $movimiento->folio_id,

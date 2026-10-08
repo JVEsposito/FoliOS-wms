@@ -74,6 +74,8 @@
                 <h2>Registrar movimiento</h2>
                 <p>Consumir descuenta inventario; devolver y transferir conservan el total; ajustar exige supervisión.</p>
                 <form class="custody-form" id="custodyMovementForm">
+                    <input type="hidden" name="incidencia_verificacion_id">
+                    <p id="custodyIncidentContext" class="is-hidden"></p>
                     <label>Acción
                         <select name="tipo" required>
                             <option value="consumo">Consumir</option>

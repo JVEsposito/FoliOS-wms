@@ -966,18 +966,18 @@ function renderIncidents(incidents = []) {
         <td>${signal(incident.origen === 'recepcion_embalada' ? 'Recepción externa' : incident.origen === 'verificacion' ? 'Verificación' : incident.origen === 'maniobra' ? 'Maniobra' : 'Carga', incident.origen === 'carga' ? 'info' : 'warning')}</td>
         <td>${signal(humanize(incident.prioridad), toneForPriority(incident.prioridad))}</td>
         <td><span class="operation-now-code">${escapeHtml(incident.folio?.numero_folio || 'Sin folio')}</span><span class="operation-now-subtext">${escapeHtml(incidentContext(incident) || 'Sin contexto adicional')}</span></td>
-        <td><strong>${escapeHtml(humanize(incident.tipo))}</strong><span class="operation-now-subtext">${escapeHtml(incident.detalle || 'Sin detalle')} · ${escapeHtml(incident.reportado_por?.nombre || 'Sin reportante')} · ${escapeHtml(incident.dispositivo?.codigo || 'Sin dispositivo')}</span></td>
+        <td><strong>${escapeHtml(humanize(incident.tipo))}</strong><span class="operation-now-subtext">${escapeHtml(incident.detalle || 'Sin detalle')}${incident.ajustable_materiales ? ` <a href="/oficina/materiales/almacenes?incidencia=${encodeURIComponent(incident.id)}&folio=${encodeURIComponent(incident.folio.id)}&camara=${encodeURIComponent(incident.contexto.camara_id)}">Revisar ajuste</a>` : ''} · ${escapeHtml(incident.reportado_por?.nombre || 'Sin reportante')} · ${escapeHtml(incident.dispositivo?.codigo || 'Sin dispositivo')}</span></td>
     </tr>`).join('');
 }
 
 function renderVerifications(data = {}) {
     const summary = data.resumen || {};
     elements.verificationSummary.textContent = data.habilitada
-        ? `${number(summary.pendientes)} pendientes · ${number(summary.completadas)} completadas · ${number(summary.vencidas)} vencidas`
+        ? ['productos', 'materiales'].map((tipo) => { const s = data.por_contenido?.[tipo] || {}; return `${tipo === 'materiales' ? 'Materiales' : 'Frío'}: ${number(s.pendientes)} pendientes · ${number(s.completadas)} completadas · ${number(s.vencidas)} vencidas`; }).join(' | ')
         : 'Desactivada';
-    const rounds = data.rondas || [];
+    const rounds = [...(data.rondas || [])].sort((a, b) => String(a.contenido).localeCompare(String(b.contenido)) || a.camarero.localeCompare(b.camarero));
     elements.verificationRows.innerHTML = rounds.length ? rounds.map((round) => `<tr>
-        <td><strong>${escapeHtml(round.camarero)}</strong><span class="operation-now-subtext">Turno ${escapeHtml(round.turno)}</span></td>
+        <td><strong>${escapeHtml(round.camarero)}</strong><span class="operation-now-subtext">${round.contenido === 'materiales' ? 'Materiales' : 'Frío'} · Turno ${escapeHtml(round.turno)}</span></td>
         <td>${number(round.completadas)} de ${number(round.objetivo)} · ${number(round.pendientes)} pendientes</td>
         <td>${signal(humanize(round.estado), round.estado === 'vencida' ? 'critical' : round.estado === 'completada' ? 'success' : 'warning')}</td>
         <td>${escapeHtml(dateTime(round.vence_at))}</td>

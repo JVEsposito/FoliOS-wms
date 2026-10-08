@@ -378,6 +378,7 @@ class ServicioConsultaAlmacenesMaterial
     {
         return [
             'id' => $movimiento->id,
+            'incidencia_verificacion_id' => $movimiento->incidencia_verificacion_id,
             'operacion_id' => $movimiento->operacion_id,
             'tipo' => $movimiento->tipo->value,
             'folio' => [

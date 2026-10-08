@@ -265,3 +265,57 @@ incluye también los recién vencidos antes del procesamiento nocturno.
 Siguen pendientes las siguientes entregas: verificaciones específicas de
 Materiales, conteo e inventario físico, mínimos de stock, ampliación del panel
 gerencial y valorización por costo.
+
+## Verificación ciega de ubicación en materiales
+
+El camarero de materiales recibe una ronda por turno, separada de frío. Los
+turnos y días sin repetir son compartidos; por defecto se asignan cinco
+posiciones y se compara cantidad con tolerancia del 2 %. En `config/verificaciones.php`
+cada contenido tiene su configuración. Las rondas conservan el contenido, la
+verificación de cantidad y la tolerancia vigentes al asignarse.
+
+Se eligen posiciones activas en cámaras de materiales activas, repartiendo
+entre cámaras y combinando ocupadas con algunas vacías. Se excluyen posiciones
+recientes y posiciones que contengan cualquier folio reservado para despacho,
+transformación o con una tarea/retiro en curso. Los bloqueados y vencidos se
+incluyen porque su existencia física también debe comprobarse.
+
+En **Labores** de la tablet/PDA, el camarero ve cámara, banda y posición;
+escanea todos los folios y cuenta en la unidad del ítem. **Confirmar posición**
+registra todo junto; marcar vacía también requiere confirmar. La API ciega no
+publica folios ni cantidades esperadas, ni antes ni después de registrar. La
+consulta de un código escaneado devuelve solo su unidad, nunca su ubicación o
+saldo. Los reintentos conservan `operacion_id` y se controlan por versión.
+
+La comparación transaccional bloquea folios y saldos y usa la custodia del
+almacén **en esa cámara**, nunca el total empresa. Guarda cada comparación en
+`verificaciones_ubicacion_folios`: `coincide`, `diferencia_cantidad`,
+`folio_faltante` o `folio_sobrante`, con la otra posición cuando se conoce. Un
+movimiento/retiro posterior a la asignación deja el ítem `no_aplica` y lo
+reemplaza; no registra una discrepancia sobre datos que ya cambiaron.
+
+Cada diferencia abre una incidencia de origen **verificación** en Operación
+ahora, con ubicación y cantidades. **La verificación no ajusta inventario.**
+Supervisor de Materiales/Administrador puede usar **Revisar ajuste** para
+registrar una diferencia aprobada en el flujo de almacén, con motivo. El ajuste
+queda enlazado a la incidencia y la resuelve, con usuario y fecha. Se rechazan
+incidencias de otra temporada, folio o cámara y los reintentos no duplican ajustes.
+
+Operación ahora separa rondas de frío y materiales. Gerencia → Materiales muestra
+por cámara los últimos 7 y 30 días: exactitud de ubicación (posiciones sin folios
+faltantes/sobrantes), exactitud de cantidad (folios presentes con cantidad dentro
+de tolerancia) y cumplimiento de rondas completadas/generadas. `no_aplica` no se
+cuenta como una diferencia; las posiciones vacías verificadas sí cuentan en
+exactitud de ubicación. Si no hay muestras, se muestra **Sin datos**.
+
+### Activación y actualización
+
+Desplegar primero las migraciones y el backend, después la actualización OTA de
+la tablet/PDA. Activar `VERIFICACIONES_HABILITADAS=true` y
+`VERIFICACIONES_MATERIALES_HABILITADAS=true`. Opciones específicas:
+`VERIFICACIONES_MATERIALES_POSICIONES_POR_RONDA=5`,
+`VERIFICACIONES_MATERIALES_VERIFICAR_CANTIDAD=true` y
+`VERIFICACIONES_MATERIALES_TOLERANCIA_CANTIDAD_PCT=2`.
+Los datos históricos de frío conservan contenido `productos`; sus folios únicos
+siguen en el esquema original. La verificación de materiales queda desactivada
+hasta habilitarla expresamente.

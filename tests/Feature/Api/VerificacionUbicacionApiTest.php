@@ -38,7 +38,7 @@ class VerificacionUbicacionApiTest extends TestCase
         // sus tablas y para probar exactamente las consultas del servicio.
         config(['database.default' => 'sqlite', 'database.connections.sqlite.database' => ':memory:']);
         DB::purge('sqlite');
-        config(['verificaciones.habilitada' => true, 'verificaciones.posiciones_por_ronda' => 1]);
+        config(['verificaciones.habilitada' => true, 'verificaciones.posiciones_por_ronda' => 1, 'verificaciones.productos.posiciones_por_ronda' => 1]);
         Schema::create('temporadas', function (Blueprint $t): void {
             $t->uuid('id')->primary();
             $t->boolean('activa');
@@ -130,6 +130,12 @@ class VerificacionUbicacionApiTest extends TestCase
             $t->timestamps();
         });
         (require database_path('migrations/2026_09_29_150000_crear_verificaciones_ubicacion.php'))->up();
+
+        Schema::table('verificaciones_ubicacion', function (Blueprint $t): void {
+            $t->string('contenido')->default('productos');
+            $t->boolean('verificar_cantidad')->default(false);
+            $t->decimal('tolerancia_cantidad_pct', 6, 3)->default(2);
+        });
 
         $this->temporadaId = (string) Str::uuid();
         DB::table('temporadas')->insert(['id' => $this->temporadaId, 'activa' => true,
@@ -317,7 +323,7 @@ class VerificacionUbicacionApiTest extends TestCase
         $primera = $this->posicion();
         $segunda = $this->posicion(2);
         $this->folioEn($primera, 'PT-001');
-        config(['verificaciones.posiciones_por_ronda' => 2]);
+        config(['verificaciones.posiciones_por_ronda' => 2, 'verificaciones.productos.posiciones_por_ronda' => 2]);
         $servicio = app(ServicioVerificacionesUbicacion::class);
         $ronda = $servicio->actual($this->camarero, $this->tablet);
         $item = $ronda->items->firstWhere('posicion_id', $primera->id);
