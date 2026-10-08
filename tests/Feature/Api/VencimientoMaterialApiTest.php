@@ -54,12 +54,14 @@ class VencimientoMaterialApiTest extends TestCase
             'codigo' => 'VENCE-01', 'nombre' => 'Material con vencimiento', 'categoria' => 'Cajas',
             'categoria_operacional' => CategoriaOperacionalMaterial::MaterialMp, 'unidad_medida' => 'unidad',
             'activo' => true, 'creado_por_user_id' => $this->administrador->id,
+            'actualizado_por_user_id' => $this->administrador->id,
         ]);
         $this->camara = Camara::create(['codigo' => 'MAT-VENCE', 'nombre' => 'Materiales',
             'contenido' => ContenidoCamara::Materiales, 'cantidad_bandas' => 1,
             'posiciones_por_banda' => 1, 'cantidad_niveles' => 1]);
         $this->destino = AlmacenMaterial::create(['codigo' => 'PACK-VENCE', 'nombre' => 'Packing',
-            'tipo' => 'virtual', 'centro_costo' => 'PACK', 'activo' => true, 'requiere_ubicacion_fisica' => false]);
+            'tipo' => 'virtual', 'centro_costo' => 'PACK', 'activo' => true, 'requiere_ubicacion_fisica' => false,
+            'creado_por_user_id' => $this->administrador->id, 'actualizado_por_user_id' => $this->administrador->id]);
     }
 
     public function test_fefo_no_reserva_el_vencido_y_conserva_el_que_vence_hoy_y_sin_fecha(): void

@@ -92,6 +92,9 @@ class ServicioBloqueoMaterial
 
                 $estadoAnterior = $folio->estado_operacional;
                 $sistema = $usuario === null;
+                if ($sistema && $material->bloqueado_por_vencimiento) {
+                    return $this->cargar($material->eventosBloqueo()->where('tipo', TipoEventoBloqueoMaterial::Bloqueado->value)->where('motivo', 'Vencido')->latest('ocurrido_at')->firstOrFail());
+                }
                 if ($sistema && ! $material->estaVencido()) {
                     throw new DomainException('El bloqueo automático requiere un folio vencido.');
                 }

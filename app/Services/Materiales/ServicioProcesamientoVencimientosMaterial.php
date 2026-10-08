@@ -47,7 +47,8 @@ class ServicioProcesamientoVencimientosMaterial
                 ->orderBy('id')->lockForUpdate()->get()->keyBy('id');
             $materiales = FolioMaterial::query()->with('folio')->whereIn('folio_id', $ids)
                 ->orderBy('folio_id')->lockForUpdate()->get()
-                ->filter(fn ($m) => ! $m->bloqueado_por_vencimiento && $m->estaVencido());
+                ->filter(fn ($m) => ! $m->bloqueado_por_vencimiento && $m->estaVencido()
+                    && (float) $m->cantidad_actual > 0 && $m->folio?->activo);
             $ids = $materiales->pluck('folio_id');
             $despachosLiberados = [];
             $transformacionesLiberadas = [];

@@ -617,7 +617,7 @@ class ServicioPanelGerencial
             ->values();
 
         return [
-            'vencimientos' => app(ServicioConsultaVencimientosMaterial::class)->resumen(),
+            'vencimientos' => app(ServicioConsultaVencimientosMaterial::class)->resumen(['temporada_id' => $temporadaId]),
             'items_con_stock' => $filas->pluck('item_id')->unique()->count(),
             'folios_con_stock' => (int) $filas->sum('folios'),
             'despachos_abiertos' => DespachoMaterial::query()

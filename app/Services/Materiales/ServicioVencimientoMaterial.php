@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\Gerencia\ServicioPanelGerencial;
 use DomainException;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -60,47 +61,60 @@ class ServicioVencimientoMaterial
             throw new DomainException('Indica una fecha de vencimiento válida.');
         }
 
-        return DB::transaction(function () use ($material, $operacionId, $fecha, $motivo, $usuario): EventoBloqueoMaterial {
-            $material = FolioMaterial::query()->with('folio.ubicacionActual')->lockForUpdate()->findOrFail($material->folio_id);
+        try {
+            return DB::transaction(function () use ($material, $operacionId, $fecha, $motivo, $usuario): EventoBloqueoMaterial {
+                $material = FolioMaterial::query()->with('folio.ubicacionActual')->lockForUpdate()->findOrFail($material->folio_id);
+                $existente = EventoBloqueoMaterial::query()->where('operacion_id', $operacionId)->first();
+                if ($existente) {
+                    return $this->validarReintento($existente, $material, $fecha, $motivo, $usuario);
+                }
+                if (! $material->folio?->activo || (float) $material->cantidad_actual <= 0) {
+                    throw new DomainException('Solo se puede corregir el vencimiento de un folio con existencia activa.');
+                }
+                $anterior = $material->fecha_vencimiento?->toDateString();
+                $estadoAnterior = $material->folio->estado_operacional;
+                $material->fecha_vencimiento = $fecha;
+                if (! $material->estaVencido() && $material->bloqueado_por_vencimiento) {
+                    $material->motivo_bloqueo = $material->motivo_bloqueo_previo_vencimiento;
+                    $material->motivo_bloqueo_previo_vencimiento = null;
+                    $material->bloqueado_por_vencimiento = false;
+                }
+                $material->save();
+                app(ServicioAlmacenMaterial::class)->sincronizarProyeccion($material);
+                $material->folio->refresh();
+                app(ServicioPanelGerencial::class)->invalidar();
+
+                return EventoBloqueoMaterial::create([
+                    'operacion_id' => $operacionId,
+                    'folio_id' => $material->folio_id,
+                    'tipo' => TipoEventoBloqueoMaterial::FechaCorregida,
+                    'estado_anterior' => $estadoAnterior,
+                    'estado_resultante' => $material->folio->estado_operacional,
+                    'motivo' => $motivo,
+                    'user_id' => $usuario->id,
+                    'metadatos' => ['fecha_anterior' => $anterior, 'fecha_nueva' => $fecha],
+                    'ocurrido_at' => now(),
+                ]);
+            }, attempts: 3);
+        } catch (UniqueConstraintViolationException $exception) {
             $existente = EventoBloqueoMaterial::query()->where('operacion_id', $operacionId)->first();
             if ($existente) {
-                if ($existente->folio_id !== $material->folio_id
-                    || $existente->tipo !== TipoEventoBloqueoMaterial::FechaCorregida
-                    || $existente->user_id !== $usuario->id
-                    || $existente->motivo !== $motivo
-                    || data_get($existente->metadatos, 'fecha_nueva') !== $fecha) {
-                    throw new ConflictoOperacion('El UUID de corrección ya fue utilizado con otros datos.');
-                }
+                return $this->validarReintento($existente, $material, $fecha, $motivo, $usuario);
+            }
+            throw new ConflictoOperacion('La corrección entró en conflicto con otra operación.', previous: $exception);
+        }
+    }
 
-                return $existente;
-            }
-            if (! $material->folio?->activo || (float) $material->cantidad_actual <= 0) {
-                throw new DomainException('Solo se puede corregir el vencimiento de un folio con existencia activa.');
-            }
-            $anterior = $material->fecha_vencimiento?->toDateString();
-            $estadoAnterior = $material->folio->estado_operacional;
-            $material->fecha_vencimiento = $fecha;
-            if (! $material->estaVencido() && $material->bloqueado_por_vencimiento) {
-                $material->motivo_bloqueo = $material->motivo_bloqueo_previo_vencimiento;
-                $material->motivo_bloqueo_previo_vencimiento = null;
-                $material->bloqueado_por_vencimiento = false;
-            }
-            $material->save();
-            app(ServicioAlmacenMaterial::class)->sincronizarProyeccion($material);
-            $material->folio->refresh();
-            app(ServicioPanelGerencial::class)->invalidar();
+    private function validarReintento(EventoBloqueoMaterial $evento, FolioMaterial $material, string $fecha, string $motivo, User $usuario): EventoBloqueoMaterial
+    {
+        if ($evento->folio_id !== $material->folio_id
+            || $evento->tipo !== TipoEventoBloqueoMaterial::FechaCorregida
+            || $evento->user_id !== $usuario->id
+            || $evento->motivo !== $motivo
+            || data_get($evento->metadatos, 'fecha_nueva') !== $fecha) {
+            throw new ConflictoOperacion('El UUID de corrección ya fue utilizado con otros datos.');
+        }
 
-            return EventoBloqueoMaterial::create([
-                'operacion_id' => $operacionId,
-                'folio_id' => $material->folio_id,
-                'tipo' => TipoEventoBloqueoMaterial::FechaCorregida,
-                'estado_anterior' => $estadoAnterior,
-                'estado_resultante' => $material->folio->estado_operacional,
-                'motivo' => $motivo,
-                'user_id' => $usuario->id,
-                'metadatos' => ['fecha_anterior' => $anterior, 'fecha_nueva' => $fecha],
-                'ocurrido_at' => now(),
-            ]);
-        }, attempts: 3);
+        return $evento;
     }
 }
