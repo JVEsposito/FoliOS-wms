@@ -204,6 +204,64 @@ ni descuentos.
 ## Fuera de esta entrega
 
 - sincronización efectiva con ERP;
-- ajustes de inventario y devoluciones desde interfaz;
 - cola offline persistente;
 - equivalencias o conversiones entre unidades de medida.
+
+
+## Custodia, movimientos y vencimiento
+
+La custodia se distribuye por almacén: Bodega Central, almacenes físicos y
+centros de costo virtuales. Entregar material transfiere custodia; consumirlo
+reduce la existencia total. Oficina permite ajustes supervisados con motivo,
+devoluciones y consumo directo de insumos imputado a un centro de costo.
+Las reservas de despachos y transformación se toman de Bodega Central por
+FEFO (primero la fecha de vencimiento, luego fabricación e ingreso; los folios
+sin fecha quedan después de los fechados).
+
+Un folio con fecha de vencimiento permanece vigente durante toda esa fecha
+calendario en `America/Santiago`. Vence a las 00:00 del día siguiente, incluso
+si el procesamiento programado todavía no se ejecutó. Sin fecha, no vence.
+La regla central está en `FolioMaterial::estaVencido` y se aplica en el servidor
+al reservar, retirar/entregar, transferir y consumir, incluido el cierre de un
+lote de transformación. Una justificación de excepción FIFO no habilita un
+folio vencido. El mensaje identifica su número y fecha.
+
+`materiales:procesar-vencimientos` se programa diariamente a las **00:15 de
+Chile**, sin ejecuciones superpuestas. En una transacción libera las reservas
+activas de los folios recién vencidos, conserva lo ya consumido y reasigna la
+cantidad pendiente a otros folios válidos por FEFO. Si faltan cantidades, la
+línea queda parcialmente reservada y expone **Reserva insuficiente por
+vencimiento** en Oficina y en la API. No modifica cantidades físicas ni
+ubicaciones. El bloqueo usa motivo **Vencido** y registra un evento en
+`eventos_bloqueos_materiales` con `user_id = null` (Sistema). Cada ejecución
+registra sus cantidades procesadas y líneas insuficientes en
+`procesamientos_vencimientos_materiales`. Repetirla no duplica bloques ni
+reservas. El procesamiento alcanza folios activos de la temporada vigente.
+
+Una devolución desde un centro de costo virtual a un almacén físico puede
+retornar material vencido; conserva su bloqueo. Otros bloqueos manuales
+continúan impidiendo operaciones. El descarte se registra mediante un ajuste
+negativo supervisado con motivo, sin alterar el historial.
+
+La liberación normal rechaza los vencidos. Un Supervisor de Materiales o
+Administrador puede **Corregir vencimiento**, indicando nueva fecha y motivo
+obligatorios (por ejemplo, reanálisis). Se auditan las fechas anterior/nueva,
+el usuario y el motivo; `operacion_id` asegura reintentos idempotentes. Una
+fecha vigente retira el bloqueo automático y deja el folio disponible si
+está ubicado, o pendiente de ubicación en otro caso. Si antes había un
+bloqueo manual, se conserva. La corrección no borra movimientos ni recupera
+reservas históricas automáticamente.
+
+**Oficina → Materiales → Vencimientos** muestra Por vencer y Vencidos, por
+fecha, con filtros de cliente, categoría y almacén, cantidades, ubicación y
+exportación Excel. La alerta se configura en `config/materiales.php` mediante
+`MATERIALES_DIAS_ALERTA_VENCIMIENTO` (30 días por defecto) y admite una
+excepción nullable por ítem (`dias_alerta_vencimiento`, editable en Catálogos;
+0 avisa solo el mismo día). Inventario, Consultas y la PDA identifican el
+vencimiento; el panel gerencial cuenta folios y suma cantidades **por unidad
+de medida**, sin mezclar unidades incompatibles. El listado de Vencidos
+incluye también los recién vencidos antes del procesamiento nocturno.
+
+Siguen pendientes las siguientes entregas: verificaciones específicas de
+Materiales, conteo e inventario físico, mínimos de stock, ampliación del panel
+gerencial y valorización por costo.

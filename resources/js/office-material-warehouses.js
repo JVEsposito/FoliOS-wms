@@ -351,7 +351,7 @@ function renderTable() {
         <td><strong>${escapeHtml(row.almacen.nombre)}</strong><br>${escapeHtml(row.almacen.centro_costo || row.almacen.codigo || '—')}</td>
         <td>${escapeHtml(row.cliente.codigo)} · ${escapeHtml(row.cliente.nombre)}</td>
         <td><strong>${escapeHtml(row.item.codigo)}</strong><br>${escapeHtml(row.item.nombre)}</td>
-        <td>${escapeHtml(row.numero_folio)}<br>${escapeHtml(row.lote || 'Sin lote')}</td>
+        <td>${escapeHtml(row.numero_folio)}${row.vencimiento?.etiqueta ? `<br><strong>${escapeHtml(row.vencimiento.etiqueta)}</strong>` : ''}<br>${escapeHtml(row.lote || 'Sin lote')}</td>
         <td>${qty(row.cantidad_actual)} ${escapeHtml(row.unidad_medida)}</td>
         <td>${qty(row.cantidad_reservada)}</td>
         <td><strong>${qty(row.cantidad_disponible)}</strong></td>

@@ -333,6 +333,7 @@
                             <article class="is-positive"><span>RECEPCIONES HOY</span><strong id="materialReceptionsTodayMetric">0</strong><small>confirmadas</small></article>
                             <article><span>BORRADORES</span><strong id="materialReceptionDraftsMetric">0</strong><small>sin confirmar</small></article>
                         </div>
+                        <div class="chart-summary"><a href="/oficina/materiales/vencimientos">Por vencer: <strong id="materialNearExpiry">0 folios</strong></a><br><a href="/oficina/materiales/vencimientos">Vencidos: <strong id="materialExpired">0 folios</strong></a></div>
                         <div class="chart-container chart-container--bar"><canvas id="materialStockChart" aria-label="Gráfico de stock de materiales" role="img"></canvas></div>
                         <div class="chart-summary" id="materialChartSummary"></div>
                     </article>

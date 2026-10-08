@@ -2,6 +2,7 @@ const bodySelector = '#materialsInventoryBody';
 const actionSelector = [
     '[data-direct-dispatch]',
     '[data-correct-material]',
+    '[data-correct-expiry]',
     '[data-block-material]',
     '[data-release-material]',
 ].join(', ');
@@ -12,6 +13,7 @@ let inventoryObserver = null;
 
 function actionPresentation(button) {
     if (button.matches('[data-direct-dispatch]')) return ['↗', 'Despachar directo', 'primary'];
+    if (button.matches('[data-correct-expiry]')) return ['✎', 'Corregir vencimiento', 'neutral'];
     if (button.matches('[data-correct-material]')) return ['✎', 'Corregir código', 'neutral'];
     if (button.matches('[data-release-material]')) return ['✓', 'Liberar material', 'success'];
     return ['⊘', 'Bloquear material', 'danger'];

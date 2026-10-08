@@ -50,6 +50,7 @@ class GuardarItemMaterialRequest extends FormRequest
                     ->ignore($itemId),
             ],
             'activo' => ['sometimes', 'boolean'],
+            'dias_alerta_vencimiento' => ['nullable', 'integer', 'min:0', 'max:3650'],
         ];
     }
 

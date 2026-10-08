@@ -60,6 +60,10 @@ class ServicioMovimientoAlmacenMaterial
                     ->lockForUpdate()
                     ->findOrFail($datos['folio_id']);
 
+                if (in_array($tipo, [TipoMovimientoAlmacenMaterial::Consumo, TipoMovimientoAlmacenMaterial::Transferencia, TipoMovimientoAlmacenMaterial::Entrega], true)) {
+                    $folio->asegurarVigente();
+                }
+
                 return match ($tipo) {
                     TipoMovimientoAlmacenMaterial::Consumo => $this->consumir(
                         $folio,
@@ -280,7 +284,7 @@ class ServicioMovimientoAlmacenMaterial
         }
 
         $saldoOrigen->loadMissing(['camara', 'posicion']);
-        $this->validarDisponible($folio, $saldoOrigen, $origen);
+        $this->validarDisponible($folio, $saldoOrigen, $origen, $tipo === TipoMovimientoAlmacenMaterial::Devolucion);
 
         if ($cantidad > $saldoOrigen->cantidadDisponible() + 0.0001) {
             throw new DomainException('La transferencia supera el saldo disponible de origen.');
@@ -508,10 +512,16 @@ class ServicioMovimientoAlmacenMaterial
         FolioMaterial $folio,
         SaldoMaterialAlmacen $saldo,
         AlmacenMaterial $almacen,
+        bool $devolucion = false,
     ): void {
+        if (! $devolucion) {
+            $folio->asegurarVigente();
+        }
         if (! $folio->folio?->activo
             || $folio->folio->estado_operacional === EstadoOperacionalFolio::Agotado
-            || $folio->motivo_bloqueo !== null) {
+            || ($folio->motivo_bloqueo !== null
+                && ! ($devolucion && $folio->bloqueado_por_vencimiento
+                    && $folio->motivo_bloqueo_previo_vencimiento === null))) {
             throw new DomainException('El folio se encuentra agotado o bloqueado globalmente.');
         }
 
@@ -607,6 +617,7 @@ class ServicioMovimientoAlmacenMaterial
                 '>',
                 'saldos_materiales_almacenes.cantidad_reservada',
             )
+            ->tap(fn ($consulta) => ServicioVencimientoMaterial::filtrarVigentes($consulta, 'fm.fecha_vencimiento'))
             ->whereNull('fm.motivo_bloqueo')
             ->where('f.activo', true);
         $this->filtrarUbicacionFifo($consulta, $almacen);

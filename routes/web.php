@@ -146,3 +146,8 @@ Route::redirect('/oficina/materia-prima/envases', '/oficina/envases/cuenta-corri
 
 Route::view('/oficina/recepcion-fruta-embalada', 'office.packed-fruit-reception');
 Route::view('/oficina/administracion/fruta-embalada', 'office.packed-fruit-catalogs');
+
+Route::view('/oficina/materiales/vencimientos', 'office.materials', [
+    'navigationOffice' => 'vencimientos',
+    'materialsSection' => 'vencimientos',
+]);

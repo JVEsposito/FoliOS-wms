@@ -221,6 +221,7 @@ class ServicioConsultaInventarioMaterialDistribuido extends ServicioConsultaInve
                 : ($saldo->posicion_id ? 'ubicado' : 'solo_camara'),
             'reservable' => $this->reservable($saldo),
             'motivo_bloqueo' => $material->motivo_bloqueo,
+            'vencimiento' => $material->informacionVencimiento(),
             'item' => [
                 'id' => $material->item->id,
                 'cliente' => $this->cliente($material->item->cliente),
@@ -270,6 +271,7 @@ class ServicioConsultaInventarioMaterialDistribuido extends ServicioConsultaInve
             && $saldo->camara?->estado === EstadoCamara::Activa
             && (! $saldo->posicion || $saldo->posicion->estado === EstadoPosicion::Activa)
             && $saldo->folioMaterial->folio->estado_operacional === EstadoOperacionalFolio::Disponible
+            && ! $saldo->folioMaterial->estaVencido()
             && $saldo->folioMaterial->motivo_bloqueo === null;
     }
 

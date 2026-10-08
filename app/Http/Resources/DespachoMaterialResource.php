@@ -58,6 +58,8 @@ class DespachoMaterialResource extends JsonResource
 
                     return [
                         'detalle_id' => $detalle->id,
+                        'alerta_vencimiento' => (float) $detalle->cantidad_sin_reserva_por_vencimiento > 0 ? 'Reserva insuficiente por vencimiento' : null,
+                        'cantidad_sin_reserva_por_vencimiento' => $detalle->cantidad_sin_reserva_por_vencimiento,
                         'item' => [
                             'id' => $detalle->item->id,
                             'cliente' => [

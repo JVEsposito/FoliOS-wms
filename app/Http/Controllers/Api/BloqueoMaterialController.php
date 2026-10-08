@@ -69,10 +69,10 @@ class BloqueoMaterialController extends Controller
             'estado_anterior' => $evento->estado_anterior->value,
             'estado_resultante' => $evento->estado_resultante->value,
             'motivo' => $evento->motivo,
-            'usuario' => [
+            'usuario' => $evento->usuario ? [
                 'id' => $evento->usuario->id,
                 'nombre' => $evento->usuario->name,
-            ],
+            ] : null,
             'ocurrido_at' => $evento->ocurrido_at?->toAtomString(),
         ];
     }

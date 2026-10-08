@@ -23,6 +23,11 @@
                 'title' => 'Recepciones de materiales',
                 'description' => 'Registra, consulta y controla los ingresos de materiales por guía y folio.',
             ],
+            'vencimientos' => [
+                'eyebrow' => 'CONTROL DE VENCIMIENTO',
+                'title' => 'Vencimientos de materiales',
+                'description' => 'Revisa fechas, existencias y ubicación en todos los almacenes.',
+            ],
             'inventario' => [
                 'eyebrow' => 'INVENTARIO BC · BODEGA CENTRAL',
                 'title' => 'Inventario físico por folio y cliente',
@@ -142,6 +147,24 @@
                     </a>
                 </section>
 
+                <section class="panel materials-panel" data-materials-view="vencimientos">
+                    <div class="materials-panel__heading">
+                        <div><h2>Control por folio</h2><p id="materialExpirySummary" aria-live="polite"></p></div>
+                        <button class="secondary-button" id="exportMaterialExpiry" type="button">Exportar Excel</button>
+                    </div>
+                    <div class="materials-actions" role="group" aria-label="Estado del vencimiento">
+                        <button class="primary-button" data-expiry-tab="por_vencer" aria-pressed="true" type="button">Por vencer</button>
+                        <button class="secondary-button" data-expiry-tab="vencido" aria-pressed="false" type="button">Vencidos</button>
+                    </div>
+                    <div class="materials-form__grid">
+                        <label><span>Cliente</span><select id="materialExpiryClient"><option value="">Todos</option></select></label>
+                        <label><span>Categoría</span><select id="materialExpiryCategory"><option value="">Todas</option></select></label>
+                        <label><span>Almacén</span><select id="materialExpiryWarehouse"><option value="">Todos</option></select></label>
+                    </div>
+                    <p class="form-error" id="materialExpiryError" role="alert"></p>
+                    <div class="materials-table-scroll"><table class="materials-table"><thead><tr><th>Folio</th><th>Cliente / ítem</th><th>Vencimiento</th><th>Estado</th><th>Cantidad</th><th>Ubicación</th><th>Acciones</th></tr></thead><tbody id="materialExpiryBody"></tbody></table></div>
+                    <div class="materials-actions"><button class="secondary-button" id="materialExpiryPrevious" type="button">Anterior</button><span id="materialExpiryPage"></span><button class="secondary-button" id="materialExpiryNext" type="button">Siguiente</button></div>
+                </section>
                 @if ($activeMaterialsSection === 'catalogos')
                     <x-office.panel-switcher
                         id="materials-catalog"
@@ -208,6 +231,7 @@
                                 <label><span>Tipo de ítem *</span><select name="categoria_operacional" required><option value="">Selecciona un tipo</option><option value="insumo">Insumo</option><option value="material_mp">Material MP · sin preparar</option><option value="material_pt">Material PT · preparado para línea</option></select></label>
                                 <label><span>Unidad *</span><input name="unidad_medida" maxlength="40" placeholder="unidades" required></label>
                                 <label><span>Código ERP futuro</span><input name="codigo_externo" maxlength="150"></label>
+                                <label><span>Alerta de vencimiento (días)</span><input name="dias_alerta_vencimiento" type="number" min="0" max="3650" placeholder="Predeterminado: {{ config('materiales.dias_alerta_vencimiento', 30) }}"></label>
                                 <label class="materials-check"><input name="activo" type="checkbox" checked><span>Ítem activo</span></label>
                                 <p class="materials-help materials-wide">El tipo determina si el ítem puede recibirse como insumo o Material MP, o generarse como Material PT mediante una receta. Los ítems sin tipo permanecen fuera de Recepción y Transformación.</p>
                             </div>
@@ -507,6 +531,17 @@
                 <p class="materials-import__help">Solo se muestran ítems activos del mismo cliente y con la misma unidad. La corrección quedará registrada en el kardex.</p>
                 <p class="form-error" id="materialCorrectionError" role="alert"></p>
                 <div class="materials-import__actions"><button class="secondary-button" id="cancelMaterialCorrection" type="button">Cancelar</button><button class="primary-button" type="submit">Confirmar corrección</button></div>
+            </form>
+        </dialog>
+        <dialog class="materials-import" id="materialExpiryCorrectionDialog">
+            <div class="materials-import__header"><div><p class="eyebrow">CORRECCIÓN SUPERVISADA</p><h2>Corregir vencimiento</h2><p id="materialExpiryCorrectionContext"></p></div><button id="closeMaterialExpiryCorrection" type="button" aria-label="Cerrar">×</button></div>
+            <form class="materials-import__form" id="materialExpiryCorrectionForm">
+                <input name="folio_id" type="hidden">
+                <label><span>Nueva fecha de vencimiento *</span><input name="fecha_vencimiento" type="date" required></label>
+                <label><span>Motivo (reanálisis o extensión) *</span><textarea name="motivo" minlength="5" maxlength="2000" required></textarea></label>
+                <p>Una fecha vigente libera el bloqueo por vencimiento. Los otros bloqueos se conservan.</p>
+                <p class="form-error" id="materialExpiryCorrectionError" role="alert"></p>
+                <div class="materials-import__actions"><button class="secondary-button" id="cancelMaterialExpiryCorrection" type="button">Cancelar</button><button class="primary-button" type="submit">Guardar corrección</button></div>
             </form>
         </dialog>
         <div class="loading is-hidden" id="officeLoading" role="status" aria-live="assertive" aria-hidden="true"><span aria-hidden="true"></span><strong id="officeLoadingText">Procesando…</strong></div>

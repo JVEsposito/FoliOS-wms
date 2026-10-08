@@ -4,10 +4,12 @@ namespace App\Models;
 
 use App\Enums\CategoriaOperacionalMaterial;
 use App\Models\Concerns\ImpideEliminacionFisica;
+use App\Services\Materiales\ServicioVencimientoMaterial;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 
 #[Fillable([
     'folio_id',
@@ -26,6 +28,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'proveedor',
     'observacion',
     'motivo_bloqueo',
+    'bloqueado_por_vencimiento',
+    'motivo_bloqueo_previo_vencimiento',
 ])]
 class FolioMaterial extends Model
 {
@@ -38,6 +42,32 @@ class FolioMaterial extends Model
     public $incrementing = false;
 
     protected $keyType = 'string';
+
+    public function estaVencido(?Carbon $fecha = null): bool
+    {
+        return $this->fecha_vencimiento !== null
+            && $this->fecha_vencimiento->toDateString() < ServicioVencimientoMaterial::hoyChile($fecha);
+    }
+
+    public function asegurarVigente(): void
+    {
+        if ($this->estaVencido()) {
+            throw new \DomainException($this->mensajeVencimiento());
+        }
+    }
+
+    public function mensajeVencimiento(): string
+    {
+        return sprintf('El folio %s venció el %s y no puede utilizarse.',
+            $this->folio?->numero_folio ?? $this->folio_id,
+            $this->fecha_vencimiento?->format('d-m-Y'),
+        );
+    }
+
+    public function informacionVencimiento(): array
+    {
+        return app(ServicioVencimientoMaterial::class)->informacion($this);
+    }
 
     public function folio(): BelongsTo
     {
@@ -101,6 +131,7 @@ class FolioMaterial extends Model
             'cantidad_inicial' => 'decimal:3',
             'cantidad_actual' => 'decimal:3',
             'cantidad_reservada' => 'decimal:3',
+            'bloqueado_por_vencimiento' => 'boolean',
             'fecha_fabricacion' => 'date',
             'fecha_vencimiento' => 'date',
         ];

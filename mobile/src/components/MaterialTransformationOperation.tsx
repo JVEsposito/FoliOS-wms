@@ -244,8 +244,19 @@ export function MaterialTransformationOperation({
     }
   }
 
-  function addScannedFolio(reservation?: MaterialTransformationReservation) {
-    const normalized = scan.trim().toUpperCase();
+  async function addScannedFolio(reservation?: MaterialTransformationReservation) {
+    const normalized = reservation?.folio?.numero_folio ?? scan.trim().toUpperCase();
+    if (!normalized) return;
+    try {
+      const lookup = await api.lookupFolio(auth.token, normalized);
+      if (lookup.existe && lookup.mensaje_vencimiento) {
+        setError(lookup.mensaje_vencimiento);
+        return;
+      }
+    } catch (reason) {
+      fail(reason, 'No fue posible verificar el vencimiento del folio.');
+      return;
+    }
     const matched = reservation ?? activeReservations.find(
       (candidate) => candidate.folio?.numero_folio.toUpperCase() === normalized,
     );

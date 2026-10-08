@@ -550,6 +550,7 @@ function renderOrders() {
                     <span>${orderReservationCount(order)} reservas</span>
                     <span>${orderLotCount(order)} lotes</span>
                 </div>
+                ${order.alerta_vencimiento ? `<p class="form-error">${orderEscape(order.alerta_vencimiento)}</p>` : ''}
                 ${order.observacion ? `<p class="materials-help">${orderEscape(order.observacion)}</p>` : ''}
                 ${cancelledDetail}
                 ${historicalWarning}

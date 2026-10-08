@@ -60,7 +60,7 @@ const state = {
     operationalPoller: null,
 };
 const operationalRefreshIntervalMs = 30000;
-const mainDataSections = new Set(['resumen', 'catalogos', 'inventario', 'despachos']);
+const mainDataSections = new Set(['resumen', 'catalogos', 'inventario', 'despachos', 'vencimientos']);
 const operationalDataSections = new Set(['resumen', 'inventario', 'despachos']);
 const materialDispatchSummaryPath = '/api/materiales/despachos?vista=resumen';
 const materialInventorySummaryPath = '/api/materiales/inventario?vista=resumen';
@@ -293,7 +293,7 @@ function renderDispatches() {
         const detail = dispatch.items.map((item) => `${item.item.cliente?.temporada?.codigo || ''}/${item.item.cliente?.codigo || ''}/${item.item.codigo}: ${quantity(item.cantidad_despachada)}/${quantity(item.cantidad_solicitada)} ${item.unidad_medida}`).join(' · ');
         const shortage = dispatch.items.some((item) => Number(item.cantidad_reservada) + Number(item.cantidad_despachada) < Number(item.cantidad_solicitada));
         const canCancel = state.identity?.puede_cancelar_despachos_materiales === true;
-        return `<article class="dispatch-row"><div><strong>${escapeHtml(dispatch.codigo)} · ${escapeHtml(dispatch.destino.nombre)}</strong><small>${escapeHtml(dispatch.destino.centro_costo)} · ${escapeHtml(dispatch.modalidad === 'directo' ? 'Directo desde bodega' : 'Delegado a tablet')} · ${escapeHtml(detail)}${shortage ? ' · Falta existencia por reservar' : ''}</small></div><div class="dispatch-row__state"><span>${escapeHtml(statusText(dispatch.estado))}</span><button data-trace-dispatch="${dispatch.id}" type="button">Ver trazabilidad</button>${canCancel && ['pendiente', 'parcial'].includes(dispatch.estado) ? `<button data-cancel-dispatch="${dispatch.id}" type="button">Cancelar</button>` : ''}</div></article>`;
+        return `<article class="dispatch-row"><div><strong>${escapeHtml(dispatch.codigo)} · ${escapeHtml(dispatch.destino.nombre)}</strong><small>${escapeHtml(dispatch.destino.centro_costo)} · ${escapeHtml(dispatch.modalidad === 'directo' ? 'Directo desde bodega' : 'Delegado a tablet')} · ${escapeHtml(detail)}${dispatch.items.some((item) => item.alerta_vencimiento) ? ' · Reserva insuficiente por vencimiento' : shortage ? ' · Falta existencia por reservar' : ''}</small></div><div class="dispatch-row__state"><span>${escapeHtml(statusText(dispatch.estado))}</span><button data-trace-dispatch="${dispatch.id}" type="button">Ver trazabilidad</button>${canCancel && ['pendiente', 'parcial'].includes(dispatch.estado) ? `<button data-cancel-dispatch="${dispatch.id}" type="button">Cancelar</button>` : ''}</div></article>`;
     }).join('') || '<p class="empty-state">No existen despachos de materiales.</p>';
 }
 function renderInventory() {
@@ -338,14 +338,15 @@ function renderInventory() {
             canConsumeDirect ? `<button data-direct-consumption="${folio.folio_id}" type="button">Consumir insumo</button>` : '',
             canDirect ? `<button data-direct-dispatch="${folio.folio_id}" type="button">Despachar directo</button>` : '',
             canCorrect ? `<button data-correct-material="${folio.folio_id}" type="button">Corregir código</button>` : '',
-            canManageBlock && blocked
+            canManageBlock ? `<button data-correct-expiry="${folio.folio_id}" type="button">Corregir vencimiento</button>` : '',
+            canManageBlock && blocked && folio.vencimiento?.estado !== 'vencido' && !folio.vencimiento?.bloqueado_por_vencimiento
                 ? `<button data-release-material="${folio.folio_id}" type="button">Liberar</button>`
                 : canBlock
                     ? `<button data-block-material="${folio.folio_id}" type="button">Bloquear</button>`
                     : '',
         ].filter(Boolean).join(' ');
 
-        return `<tr><td><strong>${escapeHtml(folio.numero_folio)}</strong><small>${escapeHtml(folio.lote || 'Sin lote')}</small></td><td><strong>${escapeHtml(folio.item.cliente?.codigo || '—')} · ${escapeHtml(folio.item.cliente?.nombre || '—')}</strong><small>${escapeHtml(folio.item.cliente?.temporada?.codigo || '—')}</small></td><td><strong>${escapeHtml(folio.item.codigo)}</strong><small>${escapeHtml(folio.item.nombre)} · ${escapeHtml(itemTypeLabel(folio.categoria_operacional))}</small></td><td>${quantity(folio.cantidad_actual)} ${escapeHtml(folio.unidad_medida)}</td><td>${quantity(folio.cantidad_reservada)}</td><td>${quantity(folio.cantidad_disponible)}</td><td>${status}</td><td><strong>${escapeHtml(folio.camara?.codigo || 'Sin cámara')}</strong><small>${escapeHtml(folio.posicion?.etiqueta || 'Sin posición')}</small></td><td>${actions || '—'}</td></tr>`;
+        return `<tr><td><strong>${escapeHtml(folio.numero_folio)}</strong><small>${escapeHtml(folio.lote || 'Sin lote')}</small>${expiryBadge(folio.vencimiento)}</td><td><strong>${escapeHtml(folio.item.cliente?.codigo || '—')} · ${escapeHtml(folio.item.cliente?.nombre || '—')}</strong><small>${escapeHtml(folio.item.cliente?.temporada?.codigo || '—')}</small></td><td><strong>${escapeHtml(folio.item.codigo)}</strong><small>${escapeHtml(folio.item.nombre)} · ${escapeHtml(itemTypeLabel(folio.categoria_operacional))}</small></td><td>${quantity(folio.cantidad_actual)} ${escapeHtml(folio.unidad_medida)}</td><td>${quantity(folio.cantidad_reservada)}</td><td>${quantity(folio.cantidad_disponible)}</td><td>${status}</td><td><strong>${escapeHtml(folio.camara?.codigo || 'Sin cámara')}</strong><small>${escapeHtml(folio.posicion?.etiqueta || 'Sin posición')}</small></td><td>${actions || '—'}</td></tr>`;
     }).join('') || '<tr><td colspan="9">No existen folios coincidentes.</td></tr>';
     const currentPage = Number(state.inventoryMeta?.current_page || 1);
     const lastPage = Math.max(1, Number(state.inventoryMeta?.last_page || 1));
@@ -423,6 +424,7 @@ async function loadInventoryPage(page = 1) {
 
 async function loadAll() {
     const section = activeMaterialsSection();
+    if (section === 'vencimientos') return loadExpiryPage();
     if (!mainDataSections.has(section)) return;
 
     const catalogAdmin = state.identity?.puede_administrar_catalogos_materiales === true
@@ -674,7 +676,7 @@ elements.providerList.addEventListener('click', (event) => {
     renderProviderCategories(categoryKeys);
     elements.providerCancel.classList.remove('is-hidden');
 });
-elements.itemList.addEventListener('click', (event) => { const button = event.target.closest('[data-edit-item]'); if (!button) return; const item = state.items.find((candidate) => candidate.id === button.dataset.editItem); if (!item) return; for (const field of ['id', 'codigo', 'nombre', 'categoria', 'categoria_operacional', 'unidad_medida', 'codigo_externo']) elements.itemForm.elements[field].value = item[field] || ''; elements.itemForm.elements.cliente_material_id.value = item.cliente?.id || ''; elements.itemForm.elements.activo.checked = item.activo; elements.itemCancel.classList.remove('is-hidden'); });
+elements.itemList.addEventListener('click', (event) => { const button = event.target.closest('[data-edit-item]'); if (!button) return; const item = state.items.find((candidate) => candidate.id === button.dataset.editItem); if (!item) return; for (const field of ['id', 'codigo', 'nombre', 'categoria', 'categoria_operacional', 'unidad_medida', 'codigo_externo', 'dias_alerta_vencimiento']) elements.itemForm.elements[field].value = item[field] ?? ''; elements.itemForm.elements.cliente_material_id.value = item.cliente?.id || ''; elements.itemForm.elements.activo.checked = item.activo; elements.itemCancel.classList.remove('is-hidden'); });
 elements.itemList.addEventListener('click', (event) => {
     const button = event.target.closest('[data-regularize-item]');
     if (!button || !elements.regularizationDialog) return;
@@ -1108,6 +1110,85 @@ elements.reload.addEventListener('click', async () => {
 });
 window.addEventListener('estiba:materials-updated', () => void refreshOperationalData());
 elements.logout.addEventListener('click', async () => { try { await api('/api/acceso-oficina', { method: 'DELETE' }); } finally { clearSession(); } });
+
+const expiryState = { estado: 'por_vencer', page: 1, lastPage: 1, rows: [], sequence: 0, correctionId: null };
+function expiryBadge(info) {
+    return info?.etiqueta ? `<span class="material-expiry-badge${info.estado === 'vencido' ? ' material-expiry-badge--expired' : ''}">${escapeHtml(info.etiqueta)}</span>` : '';
+}
+function expiryQuery() {
+    const query = new URLSearchParams({ estado: expiryState.estado, page: String(expiryState.page) });
+    for (const [key, id] of [['cliente_id', 'materialExpiryClient'], ['categoria', 'materialExpiryCategory'], ['almacen_id', 'materialExpiryWarehouse']]) {
+        const value = byId(id)?.value;
+        if (value) query.set(key, value);
+    }
+    return query;
+}
+async function loadExpiryPage() {
+    const sequence = ++expiryState.sequence;
+    const response = await api(`/api/materiales/vencimientos?${expiryQuery()}`);
+    if (sequence !== expiryState.sequence) return;
+    expiryState.rows = response.data;
+    expiryState.lastPage = response.meta.last_page;
+    for (const [id, values, categorical] of [['materialExpiryClient', response.filtros.clientes], ['materialExpiryCategory', response.filtros.categorias, true], ['materialExpiryWarehouse', response.filtros.almacenes]]) {
+        const select = byId(id); const previous = select.value;
+        select.innerHTML = '<option value="">Todos</option>' + values.map((value) => `<option value="${escapeHtml(categorical ? value : value.id)}">${escapeHtml(categorical ? value : value.nombre)}</option>`).join('');
+        select.value = previous;
+    }
+    byId('materialExpirySummary').textContent = ['por_vencer', 'vencido'].map((key) => `${key === 'vencido' ? 'Vencidos' : 'Por vencer'}: ${response.resumen[key].folios} folios · ${response.resumen[key].cantidades.map((unit) => `${quantity(unit.cantidad)} ${unit.unidad_medida}`).join(' · ') || 'Sin stock'}`).join(' / ');
+    byId('materialExpiryBody').innerHTML = response.data.map((row) => `<tr><td><strong>${escapeHtml(row.numero_folio)}</strong></td><td>${escapeHtml(row.cliente)}<br>${escapeHtml(row.codigo_item)} · ${escapeHtml(row.item)}</td><td>${escapeHtml(row.vencimiento.fecha?.split('-').reverse().join('-'))}</td><td>${expiryBadge(row.vencimiento)}<small>${escapeHtml(row.motivo_bloqueo || '')}</small></td><td>${quantity(row.cantidad)} ${escapeHtml(row.unidad_medida)}</td><td>${escapeHtml(row.almacen)}<br>${escapeHtml(row.camara || 'Sin cámara')} · ${escapeHtml(row.posicion || 'Sin posición')}</td><td>${state.identity?.puede_gestionar_bloqueos_materiales ? `<button type="button" data-correct-expiry="${row.folio_id}">Corregir vencimiento</button>` : '—'}</td></tr>`).join('') || '<tr><td colspan="7">Sin folios para estos filtros.</td></tr>';
+    byId('materialExpiryPage').textContent = `${response.meta.current_page} / ${response.meta.last_page} · ${response.meta.total} saldos`;
+    byId('materialExpiryPrevious').disabled = expiryState.page <= 1;
+    byId('materialExpiryNext').disabled = expiryState.page >= expiryState.lastPage;
+}
+async function refreshExpiry() {
+    byId('materialExpiryError').textContent = '';
+    try { await loadExpiryPage(); } catch (error) { byId('materialExpiryError').textContent = error.message; }
+}
+for (const id of ['materialExpiryClient', 'materialExpiryCategory', 'materialExpiryWarehouse']) {
+    byId(id)?.addEventListener('change', () => { expiryState.page = 1; void refreshExpiry(); });
+}
+document.querySelectorAll('[data-expiry-tab]').forEach((button) => button.addEventListener('click', () => {
+    expiryState.estado = button.dataset.expiryTab; expiryState.page = 1;
+    document.querySelectorAll('[data-expiry-tab]').forEach((tab) => {
+        const active = tab === button;
+        tab.setAttribute('aria-pressed', String(active));
+        tab.classList.toggle('primary-button', active); tab.classList.toggle('secondary-button', !active);
+    });
+    void refreshExpiry();
+}));
+byId('materialExpiryPrevious')?.addEventListener('click', () => { expiryState.page = Math.max(1, expiryState.page - 1); void refreshExpiry(); });
+byId('materialExpiryNext')?.addEventListener('click', () => { expiryState.page = Math.min(expiryState.lastPage, expiryState.page + 1); void refreshExpiry(); });
+byId('exportMaterialExpiry')?.addEventListener('click', async () => {
+    const button = byId('exportMaterialExpiry'); button.disabled = true;
+    try {
+        const response = await fetch(`/api/materiales/vencimientos/exportar?${expiryQuery()}`, { headers: { Authorization: `Bearer ${state.token}` } });
+        if (!response.ok) throw new Error(errorMessage(await response.json(), 'No se pudo exportar.'));
+        const url = URL.createObjectURL(await response.blob());
+        const link = document.createElement('a'); link.href = url; link.download = 'vencimientos_materiales.xlsx'; link.click(); URL.revokeObjectURL(url);
+    } catch (error) { byId('materialExpiryError').textContent = error.message; }
+    finally { button.disabled = false; }
+});
+document.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-correct-expiry]');
+    if (!button || state.identity?.puede_gestionar_bloqueos_materiales !== true) return;
+    const row = [...state.inventory, ...expiryState.rows].find((folio) => folio.folio_id === button.dataset.correctExpiry);
+    if (!row) return;
+    const form = byId('materialExpiryCorrectionForm'); form.reset();
+    form.elements.folio_id.value = row.folio_id; form.elements.fecha_vencimiento.value = row.vencimiento?.fecha || '';
+    expiryState.correctionId = operationUuid(); byId('materialExpiryCorrectionError').textContent = '';
+    byId('materialExpiryCorrectionContext').textContent = row.numero_folio;
+    byId('materialExpiryCorrectionDialog').showModal();
+});
+for (const id of ['closeMaterialExpiryCorrection', 'cancelMaterialExpiryCorrection']) byId(id)?.addEventListener('click', () => byId('materialExpiryCorrectionDialog').close());
+byId('materialExpiryCorrectionForm')?.addEventListener('submit', async (event) => {
+    event.preventDefault(); const form = event.currentTarget; const button = form.querySelector('[type="submit"]'); button.disabled = true;
+    try {
+        const data = Object.fromEntries(new FormData(form));
+        await api(`/api/materiales/inventario/${data.folio_id}/corregir-vencimiento`, { method: 'POST', body: JSON.stringify({ ...data, operacion_id: expiryState.correctionId }) });
+        byId('materialExpiryCorrectionDialog').close(); await loadAll(); toast('Vencimiento corregido y auditado.');
+    } catch (error) { byId('materialExpiryCorrectionError').textContent = error.message; }
+    finally { button.disabled = false; }
+});
 
 async function boot() {
     if (activeMaterialsSection() === 'despachos') addDispatchLine();

@@ -166,6 +166,7 @@ class ServicioReservaFifoMaterialDistribuido extends ServicioReservaFifoMaterial
                 '>',
                 'saldos_materiales_almacenes.cantidad_reservada',
             )
+            ->tap(fn ($consulta) => ServicioVencimientoMaterial::filtrarVigentes($consulta, 'fm.fecha_vencimiento'))
             ->whereNull('fm.motivo_bloqueo')
             ->where('f.activo', true)
             ->where('f.estado_operacional', EstadoOperacionalFolio::Disponible->value)
@@ -195,6 +196,7 @@ class ServicioReservaFifoMaterialDistribuido extends ServicioReservaFifoMaterial
         return $saldo->almacen?->codigo === AlmacenMaterial::CODIGO_BODEGA_CENTRAL
             && $saldo->almacen?->activo
             && $saldo->cantidadDisponible() > 0
+            && ! $folio->estaVencido()
             && $folio->motivo_bloqueo === null
             && $folio->folio?->activo
             && $folio->folio?->estado_operacional === EstadoOperacionalFolio::Disponible

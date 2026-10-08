@@ -43,3 +43,8 @@ Schedule::call(function (): void {
 })->everyMinute()->name('verificaciones-ubicacion-vencer')->withoutOverlapping(2);
 
 Schedule::command('salud:latido-scheduler')->everyMinute();
+
+Schedule::command('materiales:procesar-vencimientos')
+    ->dailyAt('00:15')
+    ->timezone('America/Santiago')
+    ->withoutOverlapping();

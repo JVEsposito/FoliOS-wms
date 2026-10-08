@@ -248,6 +248,8 @@ class ServicioDespachoMaterialDistribuido extends ServicioDespachoMaterial
                     ->lockForUpdate()
                     ->findOrFail($datosRetiro['folio_id']);
 
+                $folioMaterial->asegurarVigente();
+
                 if (! $folioMaterial->folio?->activo
                     || $folioMaterial->motivo_bloqueo !== null
                     || $folioMaterial->folio->estado_operacional !== EstadoOperacionalFolio::Disponible) {

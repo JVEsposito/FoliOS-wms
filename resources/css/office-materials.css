@@ -402,3 +402,7 @@
     .materials-recipe-component { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .materials-recipe-component > label:first-child { grid-column: 1 / -1; }
 }
+
+[data-materials-section="vencimientos"] [data-materials-view="vencimientos"]:not(.is-hidden){display:block!important}
+.material-expiry-badge{display:inline-block;padding:3px 7px;margin-top:4px;border-radius:6px;background:var(--warning-bg);color:var(--warning-text);font-size:.8rem}
+.material-expiry-badge--expired{background:var(--danger-bg);color:var(--danger-text)}
