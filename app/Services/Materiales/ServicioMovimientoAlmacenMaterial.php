@@ -418,6 +418,7 @@ class ServicioMovimientoAlmacenMaterial
             'payload_hash' => $hash,
             'tipo' => TipoMovimientoAlmacenMaterial::Ajuste,
             'incidencia_verificacion_id' => $incidencia?->id,
+            'toma_inventario_id' => $datos['toma_inventario_id'] ?? null,
             'folio_id' => $folio->folio_id,
             'item_material_id' => $folio->item_material_id,
             'almacen_origen_id' => $cantidad < 0 ? $almacen->id : null,

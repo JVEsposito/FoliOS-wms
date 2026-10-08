@@ -28,6 +28,16 @@ export type OperatorPinStatus = {
 export class OperationalTasksApi {
   constructor(private readonly baseUrl: string) {}
 
+  async inventoryCounts(token: string): Promise<ShiftVerification[]> {
+    return (await this.request<{ data: ShiftVerification[] }>('/api/materiales/tomas/conteo', token)).data;
+  }
+
+  async countInventoryPosition(token: string, itemId: string, version: number, operationId: string, readings: MaterialVerificationReading[]): Promise<ShiftVerification> {
+    return (await this.request<{ data: ShiftVerification }>(`/api/materiales/tomas/posiciones/${encodeURIComponent(itemId)}/contar`, token, {
+      method: 'POST', body: JSON.stringify({ operacion_id: operationId, posicion_version: version, vacia: readings.length === 0, folios: readings }),
+    })).data;
+  }
+
   async currentVerification(token: string) {
     return (await this.request<{ data: ShiftVerification | null }>(
       '/api/verificaciones-ubicacion/actual', token,

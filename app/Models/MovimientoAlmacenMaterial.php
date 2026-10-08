@@ -12,6 +12,7 @@ use LogicException;
 
 #[Fillable([
     'incidencia_verificacion_id',
+    'toma_inventario_id',
     'operacion_id',
     'secuencia',
     'payload_hash',
