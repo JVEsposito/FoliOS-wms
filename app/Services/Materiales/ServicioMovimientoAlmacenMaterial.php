@@ -15,11 +15,13 @@ use App\Models\AlmacenMaterial;
 use App\Models\Camara;
 use App\Models\Dispositivo;
 use App\Models\FolioMaterial;
+use App\Models\IncidenciaVerificacionUbicacion;
 use App\Models\MovimientoAlmacenMaterial;
 use App\Models\Posicion;
 use App\Models\SaldoMaterialAlmacen;
 use App\Models\User;
 use App\Services\Autorizacion\AlcanceOperacionalUsuario;
+use App\Services\Gerencia\ServicioPanelGerencial;
 use DomainException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -41,6 +43,9 @@ class ServicioMovimientoAlmacenMaterial
     ): MovimientoAlmacenMaterial {
         $tipo = TipoMovimientoAlmacenMaterial::from($datos['tipo']);
         $this->autorizar($tipo, $usuario);
+        if (! empty($datos['incidencia_verificacion_id']) && $tipo !== TipoMovimientoAlmacenMaterial::Ajuste) {
+            throw new DomainException('Solo un ajuste supervisado puede enlazarse a una incidencia de verificación.');
+        }
         $hash = $this->payloadHash($datos);
 
         try {
@@ -364,8 +369,20 @@ class ServicioMovimientoAlmacenMaterial
         $almacen = $this->almacenBloqueado(
             $datos['almacen_origen_id'] ?? $datos['almacen_destino_id'] ?? null,
         );
+        $incidencia = null;
+        if (! empty($datos['incidencia_verificacion_id'])) {
+            $incidencia = IncidenciaVerificacionUbicacion::query()->lockForUpdate()->findOrFail($datos['incidencia_verificacion_id']);
+            if ($incidencia->estado !== 'abierta' || ! $incidencia->verificacion_ubicacion_folio_id
+                || $incidencia->temporada_id !== $folio->folio->temporada_id
+                || ! in_array($folio->folio_id, [$incidencia->folio_esperado_id, $incidencia->folio_encontrado_id], true)) {
+                throw new DomainException('La incidencia no está abierta o no corresponde al folio y almacén del ajuste.');
+            }
+        }
         $this->almacenes->asegurarSaldo($folio, $almacen);
         $saldo = $this->saldoBloqueado($folio, $almacen);
+        if ($incidencia && $saldo->camara_id !== $incidencia->camara_id) {
+            throw new DomainException('El saldo ya no corresponde a la cámara de la incidencia.');
+        }
         $anterior = (float) $saldo->cantidad_actual;
         $resultante = round($anterior + $cantidad, 3);
 
@@ -396,10 +413,11 @@ class ServicioMovimientoAlmacenMaterial
             $cantidad > 0 && $camaraAnterior !== $camara?->id ? $camara?->id : null,
         ]);
 
-        return $this->crearMovimiento([
+        $movimiento = $this->crearMovimiento([
             'operacion_id' => $datos['operacion_id'],
             'payload_hash' => $hash,
             'tipo' => TipoMovimientoAlmacenMaterial::Ajuste,
+            'incidencia_verificacion_id' => $incidencia?->id,
             'folio_id' => $folio->folio_id,
             'item_material_id' => $folio->item_material_id,
             'almacen_origen_id' => $cantidad < 0 ? $almacen->id : null,
@@ -421,6 +439,11 @@ class ServicioMovimientoAlmacenMaterial
                 'saldo_version_resultante' => $version,
             ],
         ]);
+        $incidencia?->update(['estado' => 'resuelta', 'resuelta_at' => now(),
+            'resuelto_por_user_id' => $usuario->id, 'resolucion' => trim($datos['motivo'])]);
+        app(ServicioPanelGerencial::class)->invalidar();
+
+        return $movimiento;
     }
 
     /** @param array<string, mixed> $atributos */

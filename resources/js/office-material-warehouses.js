@@ -143,6 +143,7 @@ async function load() {
     state.kardex = movements.data || [];
     renderFilterOptions();
     render();
+    prepareIncidentAdjustment();
 }
 
 function render() {
@@ -483,6 +484,7 @@ function movementRows() {
             || !warehouse?.requiere_ubicacion_fisica
             || Boolean(row.camara?.id);
 
+        if ($('custodyMovementForm').elements.tipo.value === 'ajuste') return Number(row.cantidad_actual) > 0 && hasOperationalLocation;
         return Number(row.cantidad_disponible) > 0
             && row.bloqueado !== true
             && hasOperationalLocation;
@@ -564,9 +566,9 @@ function renderFoliosForOrigin() {
     }
 
     const selected = rows.find((row) => row.folio_id === form.elements.folio_id.value);
-    form.elements.cantidad.max = selected ? Number(selected.cantidad_disponible) : '';
+    form.elements.cantidad.max = form.elements.tipo.value === 'ajuste' ? '' : (selected ? Number(selected.cantidad_disponible) : '');
     form.elements.cantidad.placeholder = selected
-        ? `Máximo disponible: ${qty(selected.cantidad_disponible)}`
+        ? (form.elements.tipo.value === 'ajuste' ? 'Diferencia aprobada (+ / −)' : `Máximo disponible: ${qty(selected.cantidad_disponible)}`)
         : 'Seleccione un folio';
 
     $('custodyOriginSummary').textContent = originId
@@ -646,7 +648,8 @@ $('custodyMovementForm').addEventListener('submit', async (event) => {
         ?? movementForm.querySelector('button[type="submit"]');
     const form = new FormData(movementForm);
     const payload = Object.fromEntries(form.entries());
-    payload.operacion_id = uuid();
+    payload.operacion_id = movementForm.dataset.operationId || uuid();
+    movementForm.dataset.operationId = payload.operacion_id;
     Object.keys(payload).forEach((key) => {
         if (payload[key] === '') delete payload[key];
     });
@@ -656,6 +659,10 @@ $('custodyMovementForm').addEventListener('submit', async (event) => {
             method: 'POST',
             body: JSON.stringify(payload),
         });
+        delete movementForm.dataset.operationId;
+        movementForm.elements.incidencia_verificacion_id.value = '';
+        state.incidentHandled = true;
+        $('custodyIncidentContext').classList.add('is-hidden');
         movementForm.elements.cantidad.value = '';
         movementForm.elements.motivo.value = '';
         await load();
@@ -683,3 +690,25 @@ async function boot() {
 }
 
 void boot();
+
+function prepareIncidentAdjustment() {
+    const params = new URLSearchParams(window.location.search);
+    const incident = params.get('incidencia');
+    if (!incident || state.incidentHandled || !can('puede_gestionar_bloqueos_materiales')) return;
+    const form = $('custodyMovementForm');
+    form.elements.tipo.value = 'ajuste';
+    renderSelectors();
+    const row = movementRows().find((r) => r.folio_id === params.get('folio') && r.camara?.id === params.get('camara'));
+    if (!row) {
+        $('custodyMovementError').textContent = 'El folio ya no tiene saldo en la cámara indicada. Revisa la incidencia antes de ajustar.';
+        return;
+    }
+    form.elements.almacen_origen_id.value = row.almacen.id;
+    renderFoliosForOrigin();
+    form.elements.folio_id.value = row.folio_id;
+    form.elements.incidencia_verificacion_id.value = incident;
+    $('custodyIncidentContext').textContent = `Ajuste enlazado a verificación ${incident}. Revisa físicamente el folio ${row.numero_folio} y registra solo la diferencia aprobada.`;
+    $('custodyIncidentContext').classList.remove('is-hidden');
+    state.incidentHandled = true;
+    form.scrollIntoView({ block: 'center' });
+}

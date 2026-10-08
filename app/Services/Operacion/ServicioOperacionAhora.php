@@ -72,6 +72,11 @@ class ServicioOperacionAhora
                 'hora' => $horaOperacional->format('H:i:s'),
                 'zona_horaria' => $horaOperacional->getTimezone()->getName(),
                 'turno' => $ventana['nombre'],
+                'por_contenido' => collect(['productos', 'materiales'])->mapWithKeys(fn ($tipo) => [$tipo => [
+                    'pendientes' => $rondas->where('contenido', $tipo)->where('estado', 'pendiente')->count(),
+                    'completadas' => $rondas->where('contenido', $tipo)->where('estado', 'completada')->count(),
+                    'vencidas' => $rondas->where('contenido', $tipo)->where('estado', 'vencida')->count(),
+                ]])->all(),
             ],
             'temporada' => [
                 'id' => $temporada->id,
@@ -165,14 +170,20 @@ class ServicioOperacionAhora
                 'detalle' => "Ubicación {$incidencia->camara->codigo} · {$incidencia->posicion->etiqueta}: esperado "
                     .($incidencia->folioEsperado?->numero_folio ?? 'vacío').', encontrado '
                     .($incidencia->folio_encontrado_numero ?? 'vacío')
+                    .($incidencia->cantidad_esperada !== null ? '; cantidad esperada '.$incidencia->cantidad_esperada.' '.$incidencia->unidad_medida : '')
+                    .($incidencia->cantidad_contada !== null ? '; contada '.$incidencia->cantidad_contada.' '.$incidencia->unidad_medida : '')
                     .($incidencia->otraPosicion ? "; figura en {$incidencia->otraPosicion->camara->codigo} · {$incidencia->otraPosicion->etiqueta}" : ''),
                 'estado' => 'abierta', 'prioridad' => 'alta',
-                'folio' => $incidencia->folioEsperado ? ['numero_folio' => $incidencia->folioEsperado->numero_folio] : null,
+                'folio' => ($f = $incidencia->folioEsperado ?? $incidencia->folioEncontrado) ? ['id' => $f->id, 'numero_folio' => $f->numero_folio] : null,
+                'ajustable_materiales' => $incidencia->verificacion_ubicacion_folio_id !== null && $f !== null,
                 'reportado_por' => ['id' => $incidencia->reportadaPor->id, 'nombre' => $incidencia->reportadaPor->name],
                 'dispositivo' => ['id' => $incidencia->dispositivo->id, 'codigo' => $incidencia->dispositivo->codigo],
                 'reportada_at' => $incidencia->reportada_at->toAtomString(),
                 'antiguedad_minutos' => $this->antiguedadMinutos($incidencia->reportada_at, $ahora),
                 'contexto' => ['camara' => $incidencia->camara->codigo, 'posicion' => $incidencia->posicion->etiqueta,
+                    'camara_id' => $incidencia->camara_id,
+                    'cantidad_esperada' => $incidencia->cantidad_esperada, 'cantidad_contada' => $incidencia->cantidad_contada,
+                    'unidad_medida' => $incidencia->unidad_medida,
                     'esperado' => $incidencia->folioEsperado?->numero_folio,
                     'encontrado' => $incidencia->folio_encontrado_numero,
                     'otra_posicion' => $incidencia->otraPosicion
@@ -237,17 +248,22 @@ class ServicioOperacionAhora
         return [
             'habilitada' => (bool) config('verificaciones.habilitada'),
             'turno' => $ventana['nombre'],
+            'por_contenido' => collect(['productos', 'materiales'])->mapWithKeys(fn ($tipo) => [$tipo => [
+                'pendientes' => $rondas->where('contenido', $tipo)->where('estado', 'pendiente')->count(),
+                'completadas' => $rondas->where('contenido', $tipo)->where('estado', 'completada')->count(),
+                'vencidas' => $rondas->where('contenido', $tipo)->where('estado', 'vencida')->count(),
+            ]])->all(),
             'resumen' => [
                 'pendientes' => $rondas->where('estado', 'pendiente')->count(),
                 'completadas' => $rondas->where('estado', 'completada')->count(),
                 'vencidas' => $rondas->where('estado', 'vencida')->count(),
             ],
             'rondas' => $rondas->map(fn (VerificacionUbicacion $ronda): array => [
-                'id' => $ronda->id, 'camarero' => $usuarios[$ronda->user_id] ?? 'Sin nombre',
+                'id' => $ronda->id, 'contenido' => $ronda->contenido, 'camarero' => $usuarios[$ronda->user_id] ?? 'Sin nombre',
                 'estado' => $ronda->estado, 'objetivo' => $ronda->objetivo,
                 'turno' => $ronda->turno_inicio_at->setTimezone(config('app.operational_timezone'))->format('H:i')
                     .'–'.$ronda->turno_fin_at->setTimezone(config('app.operational_timezone'))->format('H:i'),
-                'completadas' => $ronda->items->whereIn('resultado', ['coincide', 'otro_folio', 'posicion_vacia'])->count(),
+                'completadas' => $ronda->items->filter(fn ($i) => $i->resultado !== null && $i->resultado !== 'no_aplica')->count(),
                 'pendientes' => $ronda->items->whereNull('resultado')->count(),
                 'vence_at' => $ronda->vence_at->toAtomString(),
             ])->all(),

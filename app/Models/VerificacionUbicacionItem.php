@@ -8,9 +8,10 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
-#[Fillable(['verificacion_ubicacion_id', 'posicion_id', 'folio_esperado_id', 'ubicacion_asignada_id', 'folio_encontrado_id', 'folio_encontrado_numero', 'resultado', 'verificada_at', 'dispositivo_id', 'operacion_id', 'respuesta_payload_hash', 'version'])]
+#[Fillable(['snapshot_materiales', 'verificacion_ubicacion_id', 'posicion_id', 'folio_esperado_id', 'ubicacion_asignada_id', 'folio_encontrado_id', 'folio_encontrado_numero', 'resultado', 'verificada_at', 'dispositivo_id', 'operacion_id', 'respuesta_payload_hash', 'version'])]
 class VerificacionUbicacionItem extends Model implements PerteneceATemporada
 {
     use HasUuids, ImpideEliminacionFisica;
@@ -32,6 +33,16 @@ class VerificacionUbicacionItem extends Model implements PerteneceATemporada
         return $this->belongsTo(Posicion::class);
     }
 
+    public function folios(): HasMany
+    {
+        return $this->hasMany(VerificacionUbicacionFolio::class);
+    }
+
+    public function incidencias(): HasMany
+    {
+        return $this->hasMany(IncidenciaVerificacionUbicacion::class);
+    }
+
     public function incidencia(): HasOne
     {
         return $this->hasOne(IncidenciaVerificacionUbicacion::class);
@@ -39,6 +50,6 @@ class VerificacionUbicacionItem extends Model implements PerteneceATemporada
 
     protected function casts(): array
     {
-        return ['verificada_at' => 'datetime', 'version' => 'integer'];
+        return ['snapshot_materiales' => 'array', 'verificada_at' => 'datetime', 'version' => 'integer'];
     }
 }

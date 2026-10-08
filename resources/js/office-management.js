@@ -411,6 +411,7 @@ function renderDashboard(data) {
     renderMaterialUnitOptions(materials.unidades_medida);
     renderMaterialChart();
     renderMaterialsOperation(materials);
+    renderMaterialVerifications(materials.verificaciones);
     renderPrecoolingChart(precooling);
     renderPrecoolingOperation(precooling);
     renderWeighbridgeChart(weighbridge);
@@ -957,3 +958,11 @@ async function boot() {
 }
 
 void boot();
+
+function renderMaterialVerifications(data = {}) {
+    byId('materialVerificationSummary').textContent = data.habilitada ? 'La verificación registra diferencias sin ajustar existencias.' : 'Verificación de materiales desactivada.';
+    const pct = (value) => value?.porcentaje == null ? 'Sin datos' : `${value.porcentaje} %`;
+    byId('materialVerificationRows').innerHTML = [7, 30].flatMap((days) => (data.periodos?.[days]?.camaras || []).map((camera) => `<tr>
+        <td>${escapeHtml(camera.codigo)}</td><td>${days} días</td><td>${pct(camera.ubicacion)}</td><td>${pct(camera.cantidad)}</td><td>${pct(camera.cumplimiento)} (${camera.cumplimiento.completadas}/${camera.cumplimiento.generadas})</td>
+    </tr>`)).join('') || '<tr><td colspan="5">Sin cámaras de materiales.</td></tr>';
+}

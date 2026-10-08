@@ -33,7 +33,8 @@ final class ServicioVerificacionesUbicacion
 
     public function actual(User $usuario, Dispositivo $dispositivo): ?VerificacionUbicacion
     {
-        if (! config('verificaciones.habilitada') || $usuario->rol !== RolUsuario::CamareroFrio) {
+        if (! config('verificaciones.habilitada') || ! in_array($usuario->rol, [RolUsuario::CamareroFrio, RolUsuario::CamareroMateriales], true)
+            || ! config('verificaciones.'.($usuario->rol === RolUsuario::CamareroMateriales ? 'materiales' : 'productos').'.habilitada', true)) {
             return null;
         }
 
@@ -79,7 +80,11 @@ final class ServicioVerificacionesUbicacion
                 'turno_fin_at' => $ventana['fin'],
                 'vence_at' => $ventana['fin'],
                 'estado' => 'pendiente',
-                'objetivo' => max(1, (int) config('verificaciones.posiciones_por_ronda', 5)),
+                'contenido' => $usuario->rol === RolUsuario::CamareroMateriales ? 'materiales' : 'productos',
+                'verificar_cantidad' => $usuario->rol === RolUsuario::CamareroMateriales && config('verificaciones.materiales.verificar_cantidad', true),
+                'tolerancia_cantidad_pct' => max(0, min(100, (float) config('verificaciones.materiales.tolerancia_cantidad_pct', 2))),
+                'objetivo' => max(1, (int) ($usuario->rol === RolUsuario::CamareroMateriales
+                    ? config('verificaciones.materiales.posiciones_por_ronda', 5) : config('verificaciones.productos.posiciones_por_ronda', config('verificaciones.posiciones_por_ronda', 5)))),
             ]);
             $this->asignar($ronda, $ronda->objetivo);
             DB::afterCommit(fn () => app(ServicioPanelGerencial::class)->invalidar());
@@ -96,8 +101,14 @@ final class ServicioVerificacionesUbicacion
         string $operacionId,
         int $version,
         ?string $numeroFolio,
+        ?array $folios = null,
+        bool $vacia = false,
     ): array {
-        if (! config('verificaciones.habilitada')) {
+        if ($item->ronda->contenido === 'materiales') {
+            return app(ServicioVerificacionMateriales::class)->registrar($item, $usuario, $dispositivo,
+                $operacionId, $version, $folios ?? [], $vacia, fn ($ronda) => $this->asignar($ronda, 1));
+        }
+        if (! config('verificaciones.habilitada') || ! config('verificaciones.productos.habilitada', true)) {
             throw new ConflictoOperacion('La verificación de ubicaciones está desactivada.');
         }
         if ($usuario->rol !== RolUsuario::CamareroFrio) {
@@ -210,6 +221,11 @@ final class ServicioVerificacionesUbicacion
 
     private function asignar(VerificacionUbicacion $ronda, int $cantidad): void
     {
+        if ($ronda->contenido === 'materiales') {
+            $this->asignarMateriales($ronda, $cantidad);
+
+            return;
+        }
         $excluir = $ronda->items()->pluck('posicion_id')->all();
         $desde = now()->subDays(max(0, (int) config('verificaciones.dias_sin_repetir', 7)));
         $candidatas = Posicion::query()->select('posiciones.*')
@@ -268,6 +284,48 @@ final class ServicioVerificacionesUbicacion
                 'folio_esperado_id' => $posicion->ubicacionActual?->folio_id,
                 'ubicacion_asignada_id' => $posicion->ubicacionActual?->id,
             ]);
+        }
+    }
+
+    private function asignarMateriales(VerificacionUbicacion $ronda, int $cantidad): void
+    {
+        $servicio = app(ServicioVerificacionMateriales::class);
+        $desde = now()->subDays(max(0, (int) config('verificaciones.dias_sin_repetir', 7)));
+        $candidatas = $servicio->candidatas($ronda)
+            ->whereNotIn('posiciones.id', $ronda->items()->pluck('posicion_id'))
+            ->whereNotIn('posiciones.id', DB::table('verificaciones_ubicacion_items')
+                ->whereNotNull('verificada_at')->where('resultado', '!=', 'no_aplica')
+                ->where('verificada_at', '>=', $desde)->select('posicion_id'))
+            ->inRandomOrder()->limit(1000)->get();
+        $ocupadas = $candidatas->filter(fn ($p) => $p->ubicaciones_actuales_count > 0);
+        $vacias = $candidatas->filter(fn ($p) => $p->ubicaciones_actuales_count === 0);
+        $elegidas = collect();
+        $cupoOcupadas = $ocupadas->isEmpty() ? 0 : max(1, $cantidad - ($cantidad > 1 && $vacias->isNotEmpty() ? 1 : 0));
+        foreach ($ocupadas->groupBy('camara_id') as $grupo) {
+            if ($elegidas->count() >= $cupoOcupadas) {
+                break;
+            }
+            $elegidas->push($grupo->first());
+        }
+        foreach ($ocupadas as $posicion) {
+            if ($elegidas->count() >= $cupoOcupadas) {
+                break;
+            }
+            if (! $elegidas->contains('id', $posicion->id)) {
+                $elegidas->push($posicion);
+            }
+        }
+        foreach ($vacias->concat($ocupadas) as $posicion) {
+            if ($elegidas->count() >= $cantidad) {
+                break;
+            }
+            if (! $elegidas->contains('id', $posicion->id)) {
+                $elegidas->push($posicion);
+            }
+        }
+        foreach ($elegidas as $posicion) {
+            $ronda->items()->create(['posicion_id' => $posicion->id,
+                'snapshot_materiales' => $servicio->snapshot($posicion, $ronda->temporada_id)]);
         }
     }
 }

@@ -34,6 +34,7 @@ use App\Models\Temporada;
 use App\Models\TunelPrefrio;
 use App\Models\ValidacionPallet;
 use App\Services\Materiales\ServicioConsultaVencimientosMaterial;
+use App\Services\Verificaciones\ServicioIndicadoresVerificacionMateriales;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Database\Eloquent\Builder;
@@ -159,12 +160,12 @@ class ServicioPanelGerencial
             $items = DB::table('verificaciones_ubicacion_items as item')
                 ->join('verificaciones_ubicacion as ronda', 'ronda.id', '=', 'item.verificacion_ubicacion_id')
                 ->join('posiciones', 'posiciones.id', '=', 'item.posicion_id')
-                ->where('ronda.temporada_id', $temporadaId)
+                ->where('ronda.temporada_id', $temporadaId)->where('ronda.contenido', 'productos')
                 ->where('item.verificada_at', '>=', $desde)
                 ->whereIn('item.resultado', ['coincide', 'otro_folio', 'posicion_vacia'])
                 ->selectRaw("posiciones.camara_id, COUNT(*) as total, SUM(CASE WHEN item.resultado = 'coincide' THEN 1 ELSE 0 END) as correctas")
                 ->groupBy('posiciones.camara_id')->get();
-            $rondas = DB::table('verificaciones_ubicacion')->where('temporada_id', $temporadaId)
+            $rondas = DB::table('verificaciones_ubicacion')->where('temporada_id', $temporadaId)->where('contenido', 'productos')
                 ->where('turno_inicio_at', '>=', $desde);
             $generadas = (clone $rondas)->count();
             $completadas = (clone $rondas)->where('estado', 'completada')->count();
@@ -618,6 +619,7 @@ class ServicioPanelGerencial
 
         return [
             'vencimientos' => app(ServicioConsultaVencimientosMaterial::class)->resumen(['temporada_id' => $temporadaId]),
+            'verificaciones' => app(ServicioIndicadoresVerificacionMateriales::class)->resumen($temporadaId),
             'items_con_stock' => $filas->pluck('item_id')->unique()->count(),
             'folios_con_stock' => (int) $filas->sum('folios'),
             'despachos_abiertos' => DespachoMaterial::query()

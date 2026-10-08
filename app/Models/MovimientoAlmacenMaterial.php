@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use LogicException;
 
 #[Fillable([
+    'incidencia_verificacion_id',
     'operacion_id',
     'secuencia',
     'payload_hash',

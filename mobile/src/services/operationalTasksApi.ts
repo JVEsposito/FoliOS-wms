@@ -11,7 +11,7 @@ import {
 } from '../domain/operationalTasks';
 import { ApiError } from './apiError';
 import { fetchWithTimeout } from './httpClient';
-import type { ShiftVerification } from '../domain/verification';
+import type { ShiftVerification, MaterialVerificationReading } from '../domain/verification';
 
 export const TABLET_PLANNER_VERSION = 'rolling-global-2';
 
@@ -44,6 +44,22 @@ export class OperationalTasksApi {
           respuesta: number === null ? 'vacia' : 'folio',
           numero_folio: number,
         }),
+      },
+    );
+  }
+
+  async verificationMaterialUnit(token: string, number: string): Promise<string | null> {
+    const response = await this.request<{ data: { unidad_medida: string | null } }>(
+      `/api/verificaciones-ubicacion/material?numero_folio=${encodeURIComponent(number)}`, token,
+    );
+    return response.data.unidad_medida;
+  }
+
+  async recordMaterialVerification(token: string, itemId: string, version: number, operationId: string, readings: MaterialVerificationReading[]) {
+    return this.request<{ data: ShiftVerification; resultado: string }>(
+      `/api/verificaciones-ubicacion/items/${encodeURIComponent(itemId)}/resultado`, token, {
+        method: 'POST', body: JSON.stringify({ operacion_id: operationId, version,
+          respuesta: readings.length ? 'folios' : 'vacia', folios: readings }),
       },
     );
   }

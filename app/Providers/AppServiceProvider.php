@@ -175,6 +175,11 @@ class AppServiceProvider extends ServiceProvider
             ),
         );
         Gate::define(
+            'operar-verificaciones-ubicacion',
+            fn (User $usuario): bool => $alcance->puedeOperarCamara($usuario, ContenidoCamara::Productos)
+                || $alcance->puedeOperarCamara($usuario, ContenidoCamara::Materiales),
+        );
+        Gate::define(
             'operar-camaras-productos',
             fn (User $usuario): bool => $alcance->puedeOperarCamara(
                 $usuario,
