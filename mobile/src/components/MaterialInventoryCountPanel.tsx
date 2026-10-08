@@ -19,7 +19,7 @@ export function MaterialInventoryCountPanel({ baseUrl, auth }: Props) {
     catch (e) { setNotice(e instanceof Error ? e.message : 'No se pudo cargar la toma.'); }
   }
   useEffect(() => { void load(); }, [api, auth.token]);
-  useOperationalPolling(() => load(), { intervalMs: 60_000 });
+  useOperationalPolling(() => load(), { intervalMs: 60_000, enabled: !busy });
   async function confirm(item: VerificationItem, readings: MaterialVerificationReading[]) {
     if (busy) return;
     const key = JSON.stringify({ item: item.id, version: item.version, readings });

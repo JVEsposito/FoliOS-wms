@@ -25,9 +25,11 @@ async function run(work) {
 }
 function options(rows, label, blank = '') { return blank + rows.map((r) => `<option value="${escape(r.id)}">${escape(r[label])}</option>`).join(''); }
 async function load() {
+    const assigned = [...$('create').elements.camarero_ids.selectedOptions].map((o) => o.value);
     const body = await api('/api/materiales/tomas'); catalogs = body.catalogos;
     $('create').elements.camara_ids.innerHTML = options(catalogs.camaras, 'codigo');
     $('create').elements.camarero_ids.innerHTML = options(catalogs.camareros, 'name');
+    [...$('create').elements.camarero_ids.options].forEach((o) => { o.selected = assigned.includes(o.value); });
     $('create').elements.categoria.innerHTML = '<option value="">Todas</option>' + catalogs.categorias.map((c) => `<option>${escape(c)}</option>`).join('');
     $('takes').innerHTML = '<option value="">Selecciona una toma</option>' + body.data.map((t) => `<option value="${escape(t.id)}">${escape(t.created_at)} · ${escape(t.estado)} · ${escape(t.id.slice(0, 8))}</option>`).join('');
     if (take) { $('takes').value = take.id; await select(take.id); }

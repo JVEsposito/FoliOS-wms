@@ -39,7 +39,7 @@ class ServicioTomaInventarioMaterial
             $temporada = app(ServicioTemporadaActiva::class)->obtener(bloquear: true);
             $previa = TomaInventarioMaterial::where('operacion_id', $datos['operacion_id'])->lockForUpdate()->first();
             if ($previa) {
-                if ($previa->payload_hash !== $hash || $previa->abierta_por_user_id !== $user->id) {
+                if ($previa->payload_hash !== $hash || $previa->creada_por_user_id !== $user->id) {
                     throw new ConflictoOperacion('La operación ya existe con otros datos o responsable.');
                 }
 
@@ -52,7 +52,7 @@ class ServicioTomaInventarioMaterial
 
             return TomaInventarioMaterial::create(['temporada_id' => $temporada->id, 'camara_ids' => $datos['camara_ids'],
                 'categoria' => $datos['categoria'] ?? null, 'operacion_id' => $datos['operacion_id'], 'payload_hash' => $hash,
-                'abierta_por_user_id' => $user->id, 'estado' => 'borrador', 'version' => 1, 'operaciones' => []]);
+                'creada_por_user_id' => $user->id, 'abierta_por_user_id' => $user->id, 'estado' => 'borrador', 'version' => 1, 'operaciones' => []]);
         }, 3);
     }
 
@@ -62,7 +62,7 @@ class ServicioTomaInventarioMaterial
 
         return $this->mutar($toma, $accion, $datos, $user, function ($toma) use ($accion, $datos, $user) {
             if ($accion === 'abrir') {
-                $this->abrir($toma, $datos['camarero_ids']);
+                $this->abrir($toma, $datos['camarero_ids'], $user);
             } elseif ($accion === 'revisar') {
                 $this->exigirEstado($toma, ['en_conteo']);
                 if ($toma->posiciones()->where('estado', 'pendiente')->exists()) {
@@ -80,7 +80,7 @@ class ServicioTomaInventarioMaterial
         });
     }
 
-    private function abrir(TomaInventarioMaterial $toma, array $usuarios): void
+    private function abrir(TomaInventarioMaterial $toma, array $usuarios, User $user): void
     {
         $this->exigirEstado($toma, ['borrador']);
         $usuarios = collect($usuarios)->unique()->sort()->values();
@@ -111,7 +111,7 @@ class ServicioTomaInventarioMaterial
         foreach ($posiciones as $indice => $posicion) {
             $toma->posiciones()->create(['posicion_id' => $posicion->id, 'user_id' => $usuarios[$indice % $usuarios->count()], 'estado' => 'pendiente', 'version' => 1]);
         }
-        $toma->fill(['estado' => 'en_conteo', 'abierta_at' => now(), 'foto' => $saldos->map(fn ($s) => [
+        $toma->fill(['estado' => 'en_conteo', 'abierta_por_user_id' => $user->id, 'abierta_at' => now(), 'foto' => $saldos->map(fn ($s) => [
             'saldo_id' => $s->id, 'folio_id' => $s->folio_id, 'almacen_id' => $s->almacen_material_id,
             'camara_id' => $s->camara_id, 'posicion_id' => $s->posicion_id,
             'cantidad' => $s->cantidad_actual, 'version' => $s->version,

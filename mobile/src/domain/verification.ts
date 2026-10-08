@@ -12,8 +12,8 @@ export type ShiftVerification = {
   categoria?: string | null;
   verificar_cantidad?: boolean;
   estado: 'pendiente' | 'completada' | 'vencida';
-  inicio_at: string;
-  vence_at: string;
+  inicio_at?: string;
+  vence_at?: string;
   objetivo: number;
   completadas: number;
   items: VerificationItem[];

@@ -17,6 +17,7 @@ return new class extends Migration
             $t->uuid('operacion_id')->unique();
             $t->string('payload_hash', 64);
             $t->unsignedInteger('version')->default(1);
+            $t->foreignId('creada_por_user_id')->constrained('users');
             $t->foreignId('abierta_por_user_id')->constrained('users');
             $t->foreignId('revisada_por_user_id')->nullable()->constrained('users');
             $t->foreignId('aprobada_por_user_id')->nullable()->constrained('users');
