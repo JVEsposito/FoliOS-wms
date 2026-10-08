@@ -409,7 +409,7 @@
 
 .item-photo-thumb { width: 56px; height: 56px; object-fit: contain; flex-shrink: 0; }
 .item-photo-dialog { width: min(900px, 92vw); max-height: 90vh; border: 1px solid var(--line); border-radius: 12px; padding: 24px; background: var(--raised); color: var(--text); }
-.item-photo-dialog::backdrop { background: #0009; }
+.item-photo-dialog::backdrop { background: var(--overlay); }
 .item-photo-dialog header, .item-photo-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .item-photo-gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 16px; margin-top: 20px; }
 .item-photo-preview { width: 160px; height: 160px; object-fit: contain; }

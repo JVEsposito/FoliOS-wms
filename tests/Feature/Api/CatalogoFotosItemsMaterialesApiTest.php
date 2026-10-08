@@ -92,8 +92,9 @@ class CatalogoFotosItemsMaterialesApiTest extends TestCase
         $this->putJson('/api/materiales/items/'.$item->id.'/fotos', ['orden' => $ids, 'principal_id' => $ids[0], 'version_conocida' => 1])->assertOk()->assertJsonPath('data.0.id', $ids[0])->assertJsonPath('data.0.principal', true);
         $this->putJson('/api/materiales/items/'.$item->id.'/fotos', ['orden' => $ids, 'principal_id' => $ids[1], 'version_conocida' => 1])->assertConflict();
         $this->putJson('/api/materiales/items/'.$item->id.'/fotos', ['orden' => [$ids[0]], 'principal_id' => $ids[0]])->assertUnprocessable();
+        $this->putJson('/api/materiales/items/'.$item->id.'/fotos', ['orden' => $ids, 'principal_id' => $ids[0], 'version_conocida' => 2])->assertOk()->assertJsonPath('data.0.principal', true);
         $this->assertSame(1, $item->fotos()->where('principal', true)->count());
-        $this->deleteJson('/api/materiales/items/'.$item->id.'/fotos/'.$ids[0], ['version_conocida' => 2])->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $ids[1])->assertJsonPath('data.0.principal', true);
+        $this->deleteJson('/api/materiales/items/'.$item->id.'/fotos/'.$ids[0], ['version_conocida' => 3])->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $ids[1])->assertJsonPath('data.0.principal', true);
         $eliminada = FotoItemMaterial::withTrashed()->findOrFail($ids[0]);
         $this->assertNotNull($eliminada->deleted_at);
         $this->assertSame($admin->id, $eliminada->eliminada_por_user_id);

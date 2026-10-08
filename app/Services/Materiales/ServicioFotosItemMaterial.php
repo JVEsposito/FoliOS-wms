@@ -64,6 +64,10 @@ class ServicioFotosItemMaterial
                 throw ValidationException::withMessages(['orden' => 'Incluye todas las fotos activas del ítem, sin repetirlas.']);
             }
             $item->fotos()->update(['principal' => false]);
+            foreach ($fotos as $foto) {
+                // Sincronizar la foto en memoria: el UPDATE masivo ya liberó la principal.
+                $foto->setAttribute('principal', false)->syncOriginalAttribute('principal');
+            }
             foreach ($ids as $i => $id) {
                 $fotos[$id]->update(['orden' => $i + 1, 'principal' => $id === $principal]);
             }

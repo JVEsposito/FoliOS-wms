@@ -11,7 +11,7 @@ class EstructuraOficinaTest extends TestCase
 {
     public function test_cabecera_conserva_identidad_y_navegacion_en_los_cinco_dominios(): void
     {
-        foreach (['/oficina/materia-prima', '/oficina/frigorifico', '/oficina/materiales', '/oficina/administracion', '/oficina/consultas'] as $path) {
+        foreach (['/oficina/materia-prima', '/oficina/frigorifico', '/oficina/materiales', '/oficina/materiales/items', '/oficina/administracion', '/oficina/consultas'] as $path) {
             $html = $this->get($path)->assertOk()->getContent();
             if (getenv('ESTIBA_EXPORTAR_UI_TESTS') === '1') {
                 File::ensureDirectoryExists(storage_path('app/ui/oficina'));
