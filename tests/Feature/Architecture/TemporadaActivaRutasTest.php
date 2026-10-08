@@ -58,6 +58,7 @@ class TemporadaActivaRutasTest extends TestCase
         Models\FolioMaterial::class => 'Materiales',
         Models\ImportacionCatalogoMaterial::class => 'Materiales',
         Models\ItemMaterial::class => 'Materiales',
+        Models\FotoItemMaterial::class => 'metadatos del catálogo de ítems; edición independiente por temporada, sin modificar inventario',
         Models\LoteTransformacionMaterial::class => 'Materiales',
         Models\OrdenTransformacionMaterial::class => 'Materiales',
         Models\PerfilImpresionEtiqueta::class => 'Materiales',
