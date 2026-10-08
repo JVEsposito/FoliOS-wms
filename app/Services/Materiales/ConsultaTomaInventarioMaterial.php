@@ -12,8 +12,10 @@ class ConsultaTomaInventarioMaterial
 {
     public function detalle(TomaInventarioMaterial $toma, array $filtros = []): array
     {
-        $resultados = TomaInventarioMaterialResultado::with('item')->where('vigente', true)
+        $resultados = TomaInventarioMaterialResultado::with(['item', 'tarea.posicion.camara'])->where('vigente', true)
             ->whereHas('tarea', fn ($q) => $q->where('toma_id', $toma->id))->orderBy('numero_folio')->get();
+        $posiciones = $toma->posiciones()->with('posicion.camara')->get();
+        $usuarios = User::whereIn('id', $posiciones->pluck('user_id')->merge([$toma->abierta_por_user_id, $toma->revisada_por_user_id, $toma->aprobada_por_user_id])->filter())->pluck('name', 'id');
         $filas = $resultados->map(function ($r) {
             $posicion = $r->tarea->posicion;
 
@@ -37,8 +39,8 @@ class ConsultaTomaInventarioMaterial
         return ['id' => $toma->id, 'estado' => $toma->estado, 'version' => $toma->version,
             'categoria' => $toma->categoria, 'camaras' => Camara::whereIn('id', $toma->camara_ids)->pluck('codigo')->all(),
             'abierta_at' => $toma->abierta_at?->toAtomString(), 'revisada_at' => $toma->revisada_at?->toAtomString(), 'aprobada_at' => $toma->aprobada_at?->toAtomString(),
-            'abierta_por' => User::find($toma->abierta_por_user_id)?->name, 'revisada_por' => User::find($toma->revisada_por_user_id)?->name, 'aprobada_por' => User::find($toma->aprobada_por_user_id)?->name,
-            'posiciones' => $toma->posiciones()->with('posicion.camara')->get()->map(fn ($p) => ['id' => $p->id, 'posicion_id' => $p->posicion_id, 'estado' => $p->estado, 'camarero' => User::find($p->user_id)?->name, 'camara' => $p->posicion->camara->codigo, 'posicion' => "B{$p->posicion->banda} P{$p->posicion->posicion}", 'contada_at' => $p->contada_at?->toAtomString()])->all(),
+            'abierta_por' => $usuarios[$toma->abierta_por_user_id] ?? null, 'revisada_por' => $usuarios[$toma->revisada_por_user_id] ?? null, 'aprobada_por' => $usuarios[$toma->aprobada_por_user_id] ?? null,
+            'posiciones' => $posiciones->map(fn ($p) => ['id' => $p->id, 'posicion_id' => $p->posicion_id, 'estado' => $p->estado, 'camarero' => $usuarios[$p->user_id] ?? null, 'camara' => $p->posicion->camara->codigo, 'posicion' => "B{$p->posicion->banda} P{$p->posicion->posicion}", 'contada_at' => $p->contada_at?->toAtomString()])->all(),
             'exactitud_presencia_pct' => $total ? round($presenciaCorrecta / $total * 100, 2) : null,
             'exactitud_cantidad_pct' => $total ? round($cantidadCorrecta / $total * 100, 2) : null,
             'totales_items' => $totales($filas->groupBy('item_id')),

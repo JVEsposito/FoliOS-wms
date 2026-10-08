@@ -8,17 +8,18 @@ class ActaTomaInventarioMaterialPdf
 
     public function generar(array $datos): string
     {
+        $bloques = [];
         $lineas = [];
         foreach ($datos['diferencias'] as $fila) {
-            $texto = $fila['folio'].' · '.$fila['camara'].' '.$fila['posicion'].' · '.$fila['item'].' · Esperado '.$fila['esperado'].' / contado '.$fila['contado'].' '.$fila['unidad'].' · '.$fila['tipo'];
-            $lineas = array_merge($lineas, $this->pdf->envolver($texto, 535, 8));
+            $texto = $fila['folio'].' · '.$fila['camara'].' '.$fila['posicion'].' · '.$fila['item'].' · Esperado '.$fila['esperado'].' / contado '.$fila['contado'].' '.$fila['unidad'].' · '.str_replace('_', ' ', $fila['tipo']);
+            $lineas = $this->pdf->envolver($texto, 535, 8);
             if ($fila['accion']) {
-                $lineas = array_merge($lineas, $this->pdf->envolver('Acción: '.$fila['accion'].' · '.$fila['motivo'].($fila['ajuste_id'] ? ' · Ajuste aplicado: '.$fila['ajuste_id'] : '').($fila['posicion_destino_id'] ? ' · Posición destino: '.$fila['posicion_destino_id'] : ''), 535, 8));
+                $lineas = array_merge($lineas, $this->pdf->envolver('Acción: '.str_replace('_', ' ', $fila['accion']).' · '.$fila['motivo'].($fila['ajuste_id'] ? ' · Ajuste aplicado: '.$fila['ajuste_id'] : '').($fila['posicion_destino_id'] ? ' · Posición destino: '.$fila['posicion_destino_id'] : ''), 535, 8));
             }
-            $lineas[] = '';
+            $bloques[] = [...$lineas, ''];
         }
         foreach ($datos['totales_categorias'] as $total) {
-            $lineas = array_merge($lineas, $this->pdf->envolver('Total '.$total['categoria'].' ('.$total['unidad'].'): esperado '.$total['esperado'].'; contado '.$total['contado'].'; diferencia '.$total['diferencia'], 535, 8));
+            $bloques[] = $this->pdf->envolver('Total '.$total['categoria'].' ('.$total['unidad'].'): esperado '.$total['esperado'].'; contado '.$total['contado'].'; diferencia '.$total['diferencia'], 535, 8);
         }
         $resumen = ['Toma: '.$datos['id'].' · '.$datos['estado'], 'Alcance: '.implode(', ', $datos['camaras']).' · Categoría: '.($datos['categoria'] ?: 'Todas'),
             'Abierta: '.($datos['abierta_at'] ?? '—').' · '.$datos['abierta_por'], 'Revisada: '.($datos['revisada_at'] ?? '—').' · '.($datos['revisada_por'] ?? '—'),
@@ -28,7 +29,18 @@ class ActaTomaInventarioMaterialPdf
         foreach ($resumen as $texto) {
             $cabecera = array_merge($cabecera, $this->pdf->envolver($texto, 535, 8));
         }
-        $hojas = array_chunk([...$cabecera, '', ...$lineas], 53) ?: [[]];
+        $hojas = [];
+        $pagina = [];
+        foreach ([[...$cabecera, ''], ...$bloques] as $bloque) {
+            foreach (array_chunk($bloque, 53) as $parte) {
+                if ($pagina && count($pagina) + count($parte) > 53) {
+                    $hojas[] = $pagina;
+                    $pagina = [];
+                }
+                $pagina = [...$pagina, ...$parte];
+            }
+        }
+        $hojas[] = $pagina;
         $paginas = [];
         foreach ($hojas as $indice => $filas) {
             $contenido = "q 60 0 0 30 30 790 cm /Logo Do Q\n".$this->pdf->texto(105, 805, 13, 'ACTA DE TOMA DE INVENTARIO DE MATERIALES', true);

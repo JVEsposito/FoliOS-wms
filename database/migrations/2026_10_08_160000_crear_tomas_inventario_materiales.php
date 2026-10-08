@@ -61,7 +61,7 @@ return new class extends Migration
             $t->json('saldo_confirmado')->nullable();
             $t->string('accion')->nullable();
             $t->text('motivo')->nullable();
-            $t->foreignUuid('posicion_destino_id')->nullable()->constrained('posiciones');
+            $t->foreignUuid('posicion_destino_id')->nullable()->constrained('posiciones', indexName: 'toma_resultado_destino_fk');
             $t->foreignUuid('movimiento_almacen_id')->nullable()->constrained('movimientos_almacenes_materiales', indexName: 'toma_resultado_ajuste_fk');
             $t->timestamps();
             $t->index(['toma_posicion_id', 'vigente'], 'toma_resultado_actual');

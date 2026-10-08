@@ -33,7 +33,7 @@ export function MaterialInventoryCountPanel({ baseUrl, auth }: Props) {
     finally { setBusy(false); }
   }
   return <View>
-    {takes.map((take) => <TurnVerification key={take.id} round={take} busy={busy} title={`Toma de inventario ${take.id.slice(0, 8)}`} hideDeadline
+    {takes.map((take) => <TurnVerification key={take.id} round={take} busy={busy} title={`Toma de inventario ${take.id.slice(0, 8)}${take.categoria ? ` · ${take.categoria}` : ''}`} hideDeadline
       onVerify={() => {}} onVerifyMaterials={(item, readings) => void confirm(item, readings)} lookupUnit={(number) => api.verificationMaterialUnit(auth.token, number)} />)}
     {notice ? <Text accessibilityRole="alert">{notice}</Text> : null}
   </View>;

@@ -9,6 +9,7 @@ export type VerificationItem = {
 export type ShiftVerification = {
   id: string;
   contenido?: 'productos' | 'materiales';
+  categoria?: string | null;
   verificar_cantidad?: boolean;
   estado: 'pendiente' | 'completada' | 'vencida';
   inicio_at: string;

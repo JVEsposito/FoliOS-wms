@@ -729,8 +729,17 @@ class CustodiaDistribuidaMaterialesTest extends TestCase
         $this->assertSame(-5.0, (float) $ajuste->cantidad);
         $this->assertSame($admin->id, $ajuste->user_id);
         $this->conToken($office)->postJson($ruta.'/anular', ['operacion_id' => (string) Str::uuid(), 'version' => $toma['version'] + 1, 'motivo' => 'No permitido'])->assertConflict();
-        $this->conToken($office)->get($ruta.'/acta')->assertOk()->assertHeader('Content-Type', 'application/pdf');
-        $this->conToken($office)->get($ruta.'/excel')->assertOk();
+        $pdf = $this->conToken($office)->get($ruta.'/acta')->assertOk()->assertHeader('Content-Type', 'application/pdf')->getContent();
+        $this->assertStringContainsString('Esperado 90 / contado 85', $pdf);
+        $this->assertStringContainsString($ajuste->id, $pdf);
+        $excel = $this->conToken($office)->get($ruta.'/excel')->assertOk();
+        $zip = new \ZipArchive;
+        $this->assertTrue($zip->open($excel->baseResponse->getFile()->getPathname()) === true);
+        $hoja = $zip->getFromName('xl/worksheets/sheet1.xml');
+        foreach (['<v>90</v>', '<v>85</v>', '<v>-5</v>'] as $valor) {
+            $this->assertStringContainsString($valor, $hoja);
+        }
+        $zip->close();
     }
 
     public function test_toma_reubica_sin_cambiar_saldo_y_registra_origen_destino_y_aprobador(): void

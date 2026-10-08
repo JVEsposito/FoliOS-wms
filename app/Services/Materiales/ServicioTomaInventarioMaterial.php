@@ -93,12 +93,20 @@ class ServicioTomaInventarioMaterial
             ->get()->contains(fn ($otra) => count(array_intersect($otra->camara_ids, $toma->camara_ids)) > 0)) {
             throw new ConflictoOperacion('Una cámara seleccionada ya tiene una toma abierta.');
         }
+        if (Camara::whereIn('id', $toma->camara_ids)->where('estado', 'activa')->where('contenido', 'materiales')->count() !== count($toma->camara_ids)) {
+            throw new ConflictoOperacion('Una cámara del borrador ya no está activa para materiales.');
+        }
         $saldos = $this->saldosAlcance($toma)->get();
         $this->bloquearFolios($saldos->pluck('folio_id')->all());
         $saldos = $this->saldosAlcance($toma)->orderBy('folio_id')->lockForUpdate()->get();
-        $posiciones = Posicion::whereIn('camara_id', $toma->camara_ids)->where('estado', 'activa')->orderBy('id')->lockForUpdate()->get();
+        $posiciones = Posicion::whereIn('camara_id', $toma->camara_ids)->where('estado', 'activa')
+            ->whereHas('camara', fn ($q) => $q->whereColumn('posiciones.banda', '<=', 'camaras.cantidad_bandas')->whereColumn('posiciones.posicion', '<=', 'camaras.posiciones_por_banda')->whereColumn('posiciones.nivel', '<=', 'camaras.cantidad_niveles'))
+            ->orderBy('id')->lockForUpdate()->get();
         if ($posiciones->isEmpty()) {
             throw new ConflictoOperacion('El alcance no contiene posiciones activas.');
+        }
+        if ($saldos->contains(fn ($s) => ! $posiciones->contains('id', $s->posicion_id))) {
+            throw new ConflictoOperacion('Hay saldos sin una posición activa dentro del plano. Regulariza su ubicación antes de abrir la toma.');
         }
         foreach ($posiciones as $indice => $posicion) {
             $toma->posiciones()->create(['posicion_id' => $posicion->id, 'user_id' => $usuarios[$indice % $usuarios->count()], 'estado' => 'pendiente', 'version' => 1]);
