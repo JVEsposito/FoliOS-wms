@@ -6,6 +6,7 @@ import { EstibaApi } from '../services/estibaApi';
 import { getEnvironmentalControlState } from '../services/environmentalControlApi';
 import { OperatorHeader } from '../components/operator/OperatorHeader';
 import { operatorTheme as o } from '../theme/operatorTheme';
+import { MaterialInventoryCountPanel } from '../components/MaterialInventoryCountPanel';
 import { MaterialVerificationPanel } from '../components/MaterialVerificationPanel';
 import { OperationalTaskInbox } from '../components/OperationalTaskInbox';
 import { EnvironmentalControlScreen } from './EnvironmentalControlScreen';
@@ -111,7 +112,7 @@ export function OperationalWorkspaceScreen({ api, auth, onLogout }: Props) {
       <View style={styles.content}>
         {view === 'labores' ? (
           auth.usuario.rol === 'camarero_materiales' && api.baseUrl
-            ? <ScrollView contentContainerStyle={{ padding: 16 }}><MaterialVerificationPanel baseUrl={api.baseUrl} auth={auth} /></ScrollView>
+            ? <ScrollView contentContainerStyle={{ padding: 16 }}><MaterialVerificationPanel baseUrl={api.baseUrl} auth={auth} /><MaterialInventoryCountPanel baseUrl={api.baseUrl} auth={auth} /></ScrollView>
             : <OperationalTaskInbox api={api} auth={auth} />
         ) : view === 'ambiente' && api.baseUrl ? (
           <EnvironmentalControlScreen auth={auth} baseUrl={api.baseUrl} onDueChange={updateEnvironmentalDue} />

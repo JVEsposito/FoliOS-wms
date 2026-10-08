@@ -21,12 +21,14 @@ use App\Models\ReservaMaterial;
 use App\Models\SaldoMaterialAlmacen;
 use App\Models\User;
 use App\Services\Existencias\ServicioExistencias;
+use App\Services\Materiales\ServicioAlmacenMaterial;
 use App\Services\Materiales\ServicioConsultaAlmacenesMaterial;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use LogicException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class CustodiaDistribuidaMaterialesTest extends TestCase
@@ -684,6 +686,131 @@ class CustodiaDistribuidaMaterialesTest extends TestCase
         $this->assertSame(1, MovimientoAlmacenMaterial::query()->where('incidencia_verificacion_id', $incidencia->id)->count());
         $payload['operacion_id'] = (string) Str::uuid();
         $this->conToken($tokenOficina)->postJson('/api/materiales/almacenes/movimientos', $payload)->assertUnprocessable();
+    }
+
+    public function test_toma_autenticada_aplica_diferencia_aprobada_y_conserva_movimientos_posteriores_al_conteo(): void
+    {
+        [$admin, $office] = $this->crearAdministrador();
+        [$camarero, , $tablet] = $this->crearCamarero();
+        $item = $this->crearItem($admin, ClienteMaterial::where('codigo', 'GENERAL')->firstOrFail());
+        [$camara, $posicion] = $this->crearCamara();
+        $folio = $this->crearFolio($item, 100);
+        $sesion = $this->conToken($tablet)->postJson("/api/camaras/{$camara->id}/sesiones")->assertCreated()->json('data.id');
+        $this->ubicar($tablet, $folio, $camara, $posicion, $sesion);
+        $bodega = AlmacenMaterial::where('codigo', AlmacenMaterial::CODIGO_BODEGA_CENTRAL)->firstOrFail();
+        $destino = $this->crearDestino($admin, 'Packing', 'PACK-01');
+        $almacenPacking = app(ServicioAlmacenMaterial::class)->almacenDesdeDestino($destino, $admin);
+        $toma = $this->conToken($office)->postJson('/api/materiales/tomas', ['operacion_id' => (string) Str::uuid(), 'camara_ids' => [$camara->id]])->assertCreated()->json('data');
+        $ruta = '/api/materiales/tomas/'.$toma['id'];
+        $toma = $this->conToken($office)->postJson($ruta.'/abrir', ['operacion_id' => (string) Str::uuid(), 'version' => $toma['version'], 'camarero_ids' => [$camarero->id]])->assertOk()->json('data');
+        $transferir = function () use ($office, $folio, $bodega, $almacenPacking) {
+            $this->conToken($office)->postJson('/api/materiales/almacenes/movimientos', ['operacion_id' => (string) Str::uuid(), 'tipo' => 'transferencia',
+                'folio_id' => $folio->id, 'almacen_origen_id' => $bodega->id, 'almacen_destino_id' => $almacenPacking->id, 'cantidad' => 10, 'motivo' => 'Operación durante conteo'])->assertCreated();
+        };
+        $transferir(); // Foto 100, saldo local 90, total empresa 100.
+        $ciego = $this->conToken($tablet)->getJson('/api/materiales/tomas/conteo')->assertOk()->json('data.0');
+        $count = ['operacion_id' => (string) Str::uuid(), 'posicion_version' => $ciego['items'][0]['version'], 'vacia' => false,
+            'folios' => [['numero_folio' => $folio->numero_folio, 'cantidad_contada' => 85]]];
+        $countRuta = '/api/materiales/tomas/posiciones/'.$ciego['items'][0]['id'].'/contar';
+        $this->conToken($tablet)->postJson($countRuta, $count)->assertOk();
+        $this->conToken($tablet)->postJson($countRuta, $count)->assertOk();
+        $transferir(); // No se pierde esta salida posterior: el ajuste es -5, no +5.
+        $toma = $this->conToken($office)->getJson($ruta)->assertOk()->json('data');
+        $this->assertSame(90, $toma['diferencias'][0]['esperado']);
+        $toma = $this->conToken($office)->postJson($ruta.'/revisar', ['operacion_id' => (string) Str::uuid(), 'version' => $toma['version']])->assertOk()->json('data');
+        $toma = $this->conToken($office)->postJson('/api/materiales/tomas/resultados/'.$toma['diferencias'][0]['id'].'/decidir', ['operacion_id' => (string) Str::uuid(), 'version' => $toma['version'], 'accion' => 'ajustar', 'motivo' => 'Diferencia física revisada'])->assertOk()->json('data');
+        $approve = ['operacion_id' => (string) Str::uuid(), 'version' => $toma['version']];
+        $this->conToken($tablet)->postJson($ruta.'/aprobar', $approve)->assertForbidden();
+        $this->conToken($office)->postJson($ruta.'/aprobar', $approve)->assertOk()->assertJsonPath('data.estado', 'aprobada');
+        $this->conToken($office)->postJson($ruta.'/aprobar', $approve)->assertOk();
+        $this->assertDatabaseHas('saldos_materiales_almacenes', ['folio_id' => $folio->id, 'almacen_material_id' => $bodega->id, 'cantidad_actual' => 75]);
+        $this->assertDatabaseHas('saldos_materiales_almacenes', ['folio_id' => $folio->id, 'almacen_material_id' => $almacenPacking->id, 'cantidad_actual' => 20]);
+        $this->assertProyeccion($folio->id, 95, 0);
+        $ajuste = MovimientoAlmacenMaterial::where('toma_inventario_id', $toma['id'])->sole();
+        $this->assertSame(-5.0, (float) $ajuste->cantidad);
+        $this->assertSame($admin->id, $ajuste->user_id);
+        $this->conToken($office)->postJson($ruta.'/anular', ['operacion_id' => (string) Str::uuid(), 'version' => $toma['version'] + 1, 'motivo' => 'No permitido'])->assertConflict();
+        $pdf = $this->conToken($office)->get($ruta.'/acta')->assertOk()->assertHeader('Content-Type', 'application/pdf')->getContent();
+        $this->assertStringContainsString('Esperado 90 / contado 85', $pdf);
+        $this->assertStringContainsString($ajuste->id, $pdf);
+        $excel = $this->conToken($office)->get($ruta.'/excel')->assertOk();
+        $zip = new \ZipArchive;
+        $this->assertTrue($zip->open($excel->baseResponse->getFile()->getPathname()) === true);
+        $hoja = $zip->getFromName('xl/worksheets/sheet1.xml');
+        foreach (['<v>90</v>', '<v>85</v>', '<v>-5</v>'] as $valor) {
+            $this->assertStringContainsString($valor, $hoja);
+        }
+        $zip->close();
+    }
+
+    #[DataProvider('casosReubicacionToma')]
+    public function test_toma_reubica_y_ajusta_segun_decision_con_auditoria_e_idempotencia(string $accion, float $contada, float $retiro, float $esperado, float $delta): void
+    {
+        [$admin, $office] = $this->crearAdministrador();
+        [$camarero, , $tablet] = $this->crearCamarero();
+        $item = $this->crearItem($admin, ClienteMaterial::where('codigo', 'GENERAL')->firstOrFail());
+        [$camara, $original] = $this->crearCamara();
+        $camara->update(['posiciones_por_banda' => 2]);
+        $encontrada = Posicion::create(['camara_id' => $camara->id, 'banda' => 1, 'posicion' => 2, 'nivel' => 1, 'etiqueta' => 'B01-P02-N1']);
+        $folio = $this->crearFolio($item, 100);
+        $sesion = $this->conToken($tablet)->postJson("/api/camaras/{$camara->id}/sesiones")->assertCreated()->json('data.id');
+        $this->ubicar($tablet, $folio, $camara, $original, $sesion);
+        $toma = $this->conToken($office)->postJson('/api/materiales/tomas', ['operacion_id' => (string) Str::uuid(), 'camara_ids' => [$camara->id]])->assertCreated()->json('data');
+        $ruta = '/api/materiales/tomas/'.$toma['id'];
+        $toma = $this->conToken($office)->postJson($ruta.'/abrir', ['operacion_id' => (string) Str::uuid(), 'version' => $toma['version'], 'camarero_ids' => [$camarero->id]])->assertOk()->json('data');
+        foreach ($toma['posiciones'] as $p) {
+            $lecturas = $p['posicion_id'] === $encontrada->id ? [['numero_folio' => $folio->numero_folio, 'cantidad_contada' => $contada]] : [];
+            $this->conToken($tablet)->postJson('/api/materiales/tomas/posiciones/'.$p['id'].'/contar', ['operacion_id' => (string) Str::uuid(), 'posicion_version' => 1, 'vacia' => ! $lecturas, 'folios' => $lecturas])->assertOk();
+        }
+        $bodega = AlmacenMaterial::where('codigo', AlmacenMaterial::CODIGO_BODEGA_CENTRAL)->firstOrFail();
+        if ($retiro > 0) {
+            $packing = app(ServicioAlmacenMaterial::class)->almacenDesdeDestino($this->crearDestino($admin, 'Packing', 'PACK-01'), $admin);
+            $this->conToken($office)->postJson('/api/materiales/almacenes/movimientos', ['operacion_id' => (string) Str::uuid(), 'tipo' => 'transferencia',
+                'folio_id' => $folio->id, 'almacen_origen_id' => $bodega->id, 'almacen_destino_id' => $packing->id,
+                'cantidad' => $retiro, 'motivo' => 'Salida legítima posterior al conteo'])->assertCreated();
+        }
+        $toma = $this->conToken($office)->getJson($ruta)->assertOk()->json('data');
+        $sobrante = collect($toma['diferencias'])->firstWhere('tipo', 'sobrante');
+        $faltante = collect($toma['diferencias'])->firstWhere('tipo', 'faltante');
+        $this->assertSame($folio->id, $faltante['folio_id']);
+        $this->assertSame($folio->id, $sobrante['folio_id']);
+        $this->assertSame(100.0, (float) $sobrante['cantidad_saldo_al_contar']);
+        $this->assertSame($delta, (float) $sobrante['diferencia_reubicacion']);
+        $toma = $this->conToken($office)->postJson($ruta.'/revisar', ['operacion_id' => (string) Str::uuid(), 'version' => $toma['version']])->assertOk()->json('data');
+        foreach ($toma['diferencias'] as $r) {
+            $toma = $this->conToken($office)->postJson('/api/materiales/tomas/resultados/'.$r['id'].'/decidir', ['operacion_id' => (string) Str::uuid(), 'version' => $toma['version'],
+                'accion' => $r['tipo'] === 'sobrante' ? $accion : 'aceptar_sin_ajuste', 'motivo' => 'Folio localizado en otra posición',
+                ...($r['tipo'] === 'sobrante' ? ['posicion_destino_id' => $encontrada->id] : [])])->assertOk()->json('data');
+        }
+        $aprobar = ['operacion_id' => (string) Str::uuid(), 'version' => $toma['version']];
+        $this->conToken($tablet)->postJson($ruta.'/aprobar', $aprobar)->assertForbidden();
+        $this->conToken($office)->postJson($ruta.'/aprobar', $aprobar)->assertOk()->assertJsonPath('data.estado', 'aprobada');
+        $this->conToken($office)->postJson($ruta.'/aprobar', $aprobar)->assertOk();
+        $this->assertDatabaseHas('saldos_materiales_almacenes', ['folio_id' => $folio->id, 'posicion_id' => $encontrada->id, 'cantidad_actual' => $esperado, 'almacen_material_id' => $bodega->id]);
+        $this->assertDatabaseHas('ubicaciones_actuales', ['folio_id' => $folio->id, 'posicion_id' => $encontrada->id]);
+        $this->assertDatabaseHas('reubicaciones_toma_inventario_materiales', ['posicion_origen_id' => $original->id, 'posicion_destino_id' => $encontrada->id, 'user_id' => $admin->id, 'cantidad' => 100 - $retiro, 'resultado_id' => $sobrante['id']]);
+        $this->assertSame(1, DB::table('reubicaciones_toma_inventario_materiales')->where('resultado_id', $sobrante['id'])->count());
+        $this->assertSame($delta !== 0.0 ? 1 : 0, MovimientoAlmacenMaterial::where('toma_inventario_id', $toma['id'])->count());
+        if ($delta !== 0.0) {
+            $movimiento = MovimientoAlmacenMaterial::where('toma_inventario_id', $toma['id'])->sole();
+            $this->assertSame($delta, (float) $movimiento->cantidad);
+            $this->assertSame($admin->id, $movimiento->user_id);
+            $this->assertDatabaseHas('tomas_inventario_materiales_resultados', ['id' => $sobrante['id'], 'movimiento_almacen_id' => $movimiento->id, 'accion' => $accion]);
+            $this->assertDatabaseHas('saldos_materiales_almacenes', ['folio_id' => $folio->id, 'almacen_material_id' => $packing->id, 'cantidad_actual' => $retiro]);
+            $pdf = $this->conToken($office)->get($ruta.'/acta')->assertOk()->getContent();
+            $this->assertStringContainsString('reubicar y ajustar', $pdf);
+            $this->assertStringContainsString($movimiento->id, $pdf);
+        }
+        $this->assertProyeccion($folio->id, 100 + $delta, 0);
+    }
+
+    public static function casosReubicacionToma(): array
+    {
+        return [
+            'reubicar sin ajuste' => ['reubicar', 100, 0, 100, 0],
+            'reubicar y descontar con salida posterior' => ['reubicar_y_ajustar', 95, 10, 85, -5],
+            'reubicar y agregar con salida posterior' => ['reubicar_y_ajustar', 105, 10, 95, 5],
+        ];
     }
 
     private function crearAdministrador(): array

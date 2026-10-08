@@ -68,10 +68,12 @@ use App\Http\Controllers\Api\RecepcionMaterialController;
 use App\Http\Controllers\Api\RecepcionRomanaController;
 use App\Http\Controllers\Api\ReinicioOperacionalController;
 use App\Http\Controllers\Api\ReplayCicloPlanificadorController;
+use App\Http\Controllers\Api\ResolverIncidenciaVerificacionController;
 use App\Http\Controllers\Api\RetornoPackingController;
 use App\Http\Controllers\Api\SaludPlanificadorController;
 use App\Http\Controllers\Api\SesionesAccesoAdministracionController;
 use App\Http\Controllers\Api\SesionEstibaController;
+use App\Http\Controllers\Api\TomaInventarioMaterialController;
 use App\Http\Controllers\Api\TransformacionMaterialController;
 use App\Http\Controllers\Api\TunelPrefrioController;
 use App\Http\Controllers\Api\ValidacionMpController;
@@ -657,6 +659,21 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/movimientos/folios-materiales-disponibles', [MovimientoController::class, 'buscarFoliosMateriales']);
     Route::post('/movimientos/ubicar', [MovimientoController::class, 'ubicar']);
     Route::post('/movimientos/mover', [MovimientoController::class, 'mover']);
+
+    Route::middleware('can:operar-camaras-materiales')->group(function () {
+        Route::get('/materiales/tomas/conteo', [TomaInventarioMaterialController::class, 'conteo']);
+        Route::post('/materiales/tomas/posiciones/{tarea}/contar', [TomaInventarioMaterialController::class, 'contar']);
+    });
+    Route::middleware('can:supervisar-camaras-materiales')->group(function () {
+        Route::get('/materiales/tomas', [TomaInventarioMaterialController::class, 'index']);
+        Route::post('/materiales/tomas', [TomaInventarioMaterialController::class, 'store']);
+        Route::get('/materiales/tomas/{toma}', [TomaInventarioMaterialController::class, 'show']);
+        Route::get('/materiales/tomas/{toma}/excel', [TomaInventarioMaterialController::class, 'excel']);
+        Route::get('/materiales/tomas/{toma}/acta', [TomaInventarioMaterialController::class, 'pdf']);
+        Route::post('/materiales/tomas/{toma}/{accion}', [TomaInventarioMaterialController::class, 'operar'])->whereIn('accion', ['abrir', 'revisar', 'aprobar', 'anular']);
+        Route::post('/materiales/tomas/resultados/{resultado}/decidir', [TomaInventarioMaterialController::class, 'decidir']);
+    });
+    Route::post('/verificaciones-ubicacion/incidencias/{incidencia}/resolver', ResolverIncidenciaVerificacionController::class);
 
     Route::get('/verificaciones-ubicacion/actual', [VerificacionUbicacionController::class, 'actual'])->middleware('can:operar-verificaciones-ubicacion');
     Route::get('/verificaciones-ubicacion/material', [VerificacionUbicacionController::class, 'material'])->middleware('can:operar-verificaciones-ubicacion');
