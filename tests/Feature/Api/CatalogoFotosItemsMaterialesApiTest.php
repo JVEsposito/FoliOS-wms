@@ -14,7 +14,9 @@ use App\Services\Materiales\ServicioCatalogoItemsMateriales;
 use App\Services\Temporadas\ServicioMigracionTemporada;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 use ZipArchive;
 
@@ -26,7 +28,7 @@ class CatalogoFotosItemsMaterialesApiTest extends TestCase
     {
         $admin = User::factory()->create(['rol' => RolUsuario::Administrador]);
         $item = $this->item($admin, ['stock_minimo' => 1.125, 'punto_reorden' => 2.250, 'stock_maximo' => 10]);
-        $this->item($admin, ['codigo' => 'ANTIGUO', 'activo' => false, 'categoria_operacional' => null]);
+        $this->item($admin, ['codigo' => 'ANTIGUO', 'activo' => false, 'categoria_operacional' => null, 'unidad_medida' => 'KG']);
         $cliente = ClienteMaterial::create(['temporada_material_id' => $item->cliente->temporada_material_id, 'codigo' => 'ANTERIOR', 'nombre' => 'Cliente inactivo', 'activo' => false]);
         $this->item($admin, ['codigo' => 'INACTIVO', 'cliente_material_id' => $cliente->id]);
         $respuesta = $this->actingAs($admin, 'sanctum')->get('/api/materiales/items/catalogo/exportar/xlsx')->assertOk();
@@ -75,6 +77,39 @@ class CatalogoFotosItemsMaterialesApiTest extends TestCase
         $sinPermiso = User::factory()->create(['rol' => RolUsuario::OperadorRomana]);
         $this->actingAs($sinPermiso, 'sanctum')->getJson('/api/materiales/items/catalogo')->assertForbidden();
         $this->get('/api/materiales/items/catalogo/exportar/xlsx')->assertForbidden();
+    }
+
+    public function test_exportacion_incluye_todo_el_filtro_mas_alla_de_pagina_y_bloque(): void
+    {
+        $admin = User::factory()->create(['rol' => RolUsuario::Administrador]);
+        $item = $this->item($admin);
+        $filas = [];
+        for ($i = 0; $i < 501; $i++) {
+            $filas[] = [...$item->getAttributes(), 'id' => (string) Str::uuid(), 'codigo' => 'OTRO-'.$i];
+        }
+        DB::table('items_materiales')->insert($filas);
+        $this->actingAs($admin, 'sanctum')->getJson('/api/materiales/items/catalogo')->assertOk()->assertJsonPath('total', 502)->assertJsonCount(50, 'data');
+        $respuesta = $this->get('/api/materiales/items/catalogo/exportar/xlsx')->assertOk();
+        $ruta = $respuesta->baseResponse->getFile()->getPathname();
+        try {
+            $filas = app(LectorPlanillaMaterial::class)->leer(new UploadedFile($ruta, 'catalogo.xlsx', null, null, true));
+            $this->assertCount(502, $filas);
+            $this->assertCount(502, array_unique(array_column($filas, 'codigo')));
+        } finally {
+            @unlink($ruta);
+        }
+    }
+
+    public function test_csv_protege_textos_de_formulas_y_se_reimporta_sin_cambios(): void
+    {
+        $admin = User::factory()->create(['rol' => RolUsuario::Administrador]);
+        $item = $this->item($admin, ['nombre' => '=SUM(1,2)']);
+        $csv = $this->actingAs($admin, 'sanctum')->get('/api/materiales/items/catalogo/exportar/csv')->assertOk()->streamedContent();
+        $this->assertStringContainsString("\t=SUM(1,2)", $csv);
+        $id = $this->post('/api/administracion/materiales/importaciones/previsualizar', ['archivo' => UploadedFile::fake()->createWithContent('catalogo.csv', $csv)], ['Accept' => 'application/json'])
+            ->assertCreated()->assertJsonPath('data.resumen.filas_con_error', 0)->assertJsonPath('data.resumen.sin_cambios_estimados', 1)->json('data.id');
+        $this->postJson("/api/administracion/materiales/importaciones/{$id}/confirmar")->assertOk()->assertJsonPath('data.resumen.creados', 0)->assertJsonPath('data.resumen.actualizados', 0);
+        $this->assertSame('=SUM(1,2)', $item->refresh()->nombre);
     }
 
     public function test_fotos_multiples_principal_orden_version_y_borrado_auditado(): void

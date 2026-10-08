@@ -37,9 +37,9 @@ export async function openItemPhotoPanel(item, onChanged = () => {}) {
     const dialog = document.createElement('dialog'); dialog.className = 'item-photo-dialog'; document.body.append(dialog); dialogs.add(dialog);
     let identity = null; try { identity = JSON.parse(localStorage.getItem('estiba_wms_office_identity') || 'null'); } catch { /* Se conservan los permisos del servidor. */ }
     const editor = identity?.puede_editar_fotos_items_materiales === true || ['administrador', 'supervisor_materiales'].includes(identity?.rol);
-    let data = []; let version = 0; let busy = false; let closed = false; let enlarged = null;
+    let data = []; let version = 0; let busy = true; let closed = false; let enlarged = null;
     const auth = token();
-    dialog.innerHTML = `<header><h2>${esc(item.codigo)} · ${esc(item.nombre)}</h2><button type="button" data-close>Cerrar</button></header><p>Fotos opcionales · máximo 10 · JPG, PNG o WebP · hasta 5 MiB por archivo</p><p role="alert" data-error></p><form data-upload ${editor ? '' : 'hidden'}><input type="file" name="fotos" multiple accept="image/jpeg,image/png,image/webp" required><button type="submit">Subir fotos</button></form><div class="item-photo-gallery" data-gallery></div>`;
+    dialog.innerHTML = `<header><h2>${esc(item.codigo)} · ${esc(item.nombre)}</h2><button type="button" data-close>Cerrar</button></header><p>Fotos opcionales · máximo 10 · JPG, PNG o WebP · hasta 5 MiB por archivo</p><p role="alert" data-error></p><form data-upload ${editor ? '' : 'hidden'}><input type="file" name="fotos" multiple accept="image/jpeg,image/png,image/webp" required disabled><button type="submit" disabled>Subir fotos</button></form><div class="item-photo-gallery" data-gallery></div>`;
     const error = dialog.querySelector('[data-error]'); const gallery = dialog.querySelector('[data-gallery]');
     function render() {
         if (closed) return;
@@ -86,7 +86,7 @@ export async function openItemPhotoPanel(item, onChanged = () => {}) {
         void action(() => request(`/api/materiales/items/${item.id}/fotos`, { method: 'PUT', body: JSON.stringify({ orden: ids, principal_id: button.dataset.primary ? id : data.find((p) => p.principal).id, version_conocida: version }) }));
     });
     dialog.showModal();
-    try { apply(await request(`/api/materiales/items/${item.id}/fotos`)); } catch (e) { if (!closed) error.textContent = e.message; }
+    try { apply(await request(`/api/materiales/items/${item.id}/fotos`)); busy = false; if (!closed) dialog.querySelectorAll('input, form button').forEach((n) => { n.disabled = false; }); } catch (e) { if (!closed) error.textContent = e.message; }
 }
 
 function clear() { for (const dialog of dialogs) dialog.close(); for (const c of controllers.values()) c.abort(); controllers.clear(); for (const [node, url] of images) { URL.revokeObjectURL(url); node.removeAttribute('src'); } images.clear(); }

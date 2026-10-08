@@ -42,7 +42,7 @@ class CatalogoItemsMaterialesController extends Controller
                         $columnas = [...ServicioCatalogoItemsMateriales::COLUMNAS_IMPORTACION, ...ServicioCatalogoItemsMateriales::COLUMNAS_INFORMATIVAS];
                         fputcsv($salida, $columnas, ';', '"', '');
                         foreach ($servicio->filas($filtros) as $fila) {
-                            fputcsv($salida, array_map(fn ($c) => $fila[$c] ?? '', $columnas), ';', '"', '');
+                            fputcsv($salida, array_map(fn ($c) => $this->valorCsv($fila[$c] ?? ''), $columnas), ';', '"', '');
                         }
                     } finally {
                         fclose($salida);
@@ -53,6 +53,13 @@ class CatalogoItemsMaterialesController extends Controller
         $ruta = DB::transaction(fn () => $excel->generar('Catálogo de ítems de materiales', $servicio->columnas(), $servicio->filas($filtros), ['usuario' => $r->user()->name, 'fecha_corte' => now()->toAtomString()], 'Items'));
 
         return response()->download($ruta, 'catalogo-items-materiales.xlsx', $cabeceras)->deleteFileAfterSend();
+    }
+
+    private function valorCsv(mixed $valor): mixed
+    {
+        // Excel debe tratar los textos como datos. El lector de importación retira
+        // el tabulador con trim(), preservando el ciclo de descarga/reimportación.
+        return is_string($valor) && preg_match('/^[\s\x00-\x1F]*[=+@-]/u', $valor) === 1 ? "\t".$valor : $valor;
     }
 
     private function filtros(Request $r): array

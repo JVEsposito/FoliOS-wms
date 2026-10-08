@@ -192,7 +192,8 @@ columnas de la plantilla y volver a importar. Descargar y reimportar sin
 cambios produce **0 creaciones y 0 actualizaciones**, incluso para ítems
 inactivos o antiguos sin tipo. Los campos opcionales vacíos conservan su valor.
 Las columnas desconocidas, incluidas las informativas del archivo exportado,
-se ignoran y se enumeran en la vista previa. Para reimportar catálogos de más
+se ignoran y se enumeran en la vista previa. El CSV protege textos que puedan
+interpretarse como fórmulas en Excel, conservando el valor al reimportar. Para reimportar catálogos de más
 de 5.000 filas, dividir la descarga en archivos o usar filtros.
 
 La carga se ejecuta en dos etapas:

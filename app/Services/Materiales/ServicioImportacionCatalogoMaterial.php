@@ -128,6 +128,10 @@ class ServicioImportacionCatalogoMaterial
 
             /** @var ItemMaterial|null $existente */
             $existente = $claveCodigo === '' ? null : $existentesPorCodigo->get($claveCodigo);
+            if ($existente && mb_strtolower($this->texto($existente->unidad_medida)) === $fila['unidad_medida']) {
+                // Conservar la representación histórica al descargar y reimportar.
+                $fila['unidad_medida'] = $existente->unidad_medida;
+            }
             if ($existente && $fila['categoria_operacional_original'] === '') {
                 $fila['categoria_operacional'] = $existente->categoria_operacional?->value;
                 $mensajes = array_values(array_diff($mensajes, ['Falta el tipo de ítem.']));
