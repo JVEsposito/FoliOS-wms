@@ -48,3 +48,5 @@ Schedule::command('materiales:procesar-vencimientos')
     ->dailyAt('00:15')
     ->timezone('America/Santiago')
     ->withoutOverlapping();
+
+Schedule::command('materiales:recalcular-reposicion')->dailyAt('06:00')->timezone('America/Santiago')->withoutOverlapping();

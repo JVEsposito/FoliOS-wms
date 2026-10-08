@@ -51,6 +51,9 @@ class GuardarItemMaterialRequest extends FormRequest
             ],
             'activo' => ['sometimes', 'boolean'],
             'dias_alerta_vencimiento' => ['nullable', 'integer', 'min:0', 'max:3650'],
+            'stock_minimo' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:99999999999.999', 'decimal:0,3'],
+            'punto_reorden' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:99999999999.999', 'decimal:0,3'],
+            'stock_maximo' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:99999999999.999', 'decimal:0,3'],
         ];
     }
 

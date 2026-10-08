@@ -23,6 +23,9 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
     'sincronizado_at',
     'activo',
     'dias_alerta_vencimiento',
+    'stock_minimo',
+    'punto_reorden',
+    'stock_maximo',
     'creado_por_user_id',
     'actualizado_por_user_id',
 ])]
@@ -73,6 +76,11 @@ class ItemMaterial extends Model
             'categoria_operacional' => CategoriaOperacionalMaterial::class,
             'activo' => 'boolean',
             'dias_alerta_vencimiento' => 'integer',
+            'stock_minimo' => 'decimal:3',
+            'punto_reorden' => 'decimal:3',
+            'stock_maximo' => 'decimal:3',
+            'reposicion_revision' => 'integer',
+            'reposicion_calculada_at' => 'datetime',
             'sincronizado_at' => 'datetime',
         ];
     }

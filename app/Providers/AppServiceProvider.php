@@ -269,6 +269,10 @@ class AppServiceProvider extends ServiceProvider
             fn (User $usuario): bool => $alcance->puedeAdministrarCatalogosMateriales($usuario),
         );
         Gate::define(
+            'editar-niveles-stock-materiales',
+            fn (User $usuario): bool => $alcance->puedeEditarNivelesStockMateriales($usuario),
+        );
+        Gate::define(
             'gestionar-despachos-materiales',
             fn (User $usuario): bool => $alcance->puedeGestionarDespachosMateriales($usuario),
         );

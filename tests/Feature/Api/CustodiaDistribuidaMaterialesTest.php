@@ -16,6 +16,7 @@ use App\Models\FolioMaterial;
 use App\Models\IncidenciaVerificacionUbicacion;
 use App\Models\ItemMaterial;
 use App\Models\MovimientoAlmacenMaterial;
+use App\Models\NotificacionOperacional;
 use App\Models\Posicion;
 use App\Models\ReservaMaterial;
 use App\Models\SaldoMaterialAlmacen;
@@ -812,6 +813,56 @@ class CustodiaDistribuidaMaterialesTest extends TestCase
             'reubicar y descontar con salida posterior' => ['reubicar_y_ajustar', 95, 10, 85, -5],
             'reubicar y agregar con salida posterior' => ['reubicar_y_ajustar', 105, 10, 95, 5],
         ];
+    }
+
+    public function test_reposicion_recalcula_movimiento_real_notifica_transiciones_y_exporta_mismas_filas(): void
+    {
+        [$admin, $office] = $this->crearAdministrador();
+        [$camarero, , $tablet] = $this->crearCamarero();
+        $item = $this->crearItem($admin, ClienteMaterial::where('codigo', 'GENERAL')->firstOrFail());
+        $item->update(['stock_minimo' => 50, 'punto_reorden' => 60, 'stock_maximo' => 120]);
+        [$camara, $posicion] = $this->crearCamara();
+        $folio = $this->crearFolio($item, 100);
+        $sesion = $this->conToken($tablet)->postJson('/api/camaras/'.$camara->id.'/sesiones')->assertCreated()->json('data.id');
+        $this->ubicar($tablet, $folio, $camara, $posicion, $sesion);
+        $this->assertSame('normal', $item->fresh()->estado_reposicion);
+        $bodega = AlmacenMaterial::where('codigo', AlmacenMaterial::CODIGO_BODEGA_CENTRAL)->sole();
+        $packing = app(ServicioAlmacenMaterial::class)->almacenDesdeDestino($this->crearDestino($admin, 'Packing', 'PACK-01'), $admin);
+        $iniciales = NotificacionOperacional::where('tipo', 'reposicion_material')->count();
+        $consumir = fn ($cantidad) => ['operacion_id' => (string) Str::uuid(), 'tipo' => 'consumo', 'folio_id' => $folio->id,
+            'almacen_origen_id' => $bodega->id, 'centro_costo_id' => $packing->id, 'cantidad' => $cantidad, 'motivo' => 'Consumo de prueba de reposición'];
+        $datos = $consumir(60);
+        $this->conToken($office)->postJson('/api/materiales/almacenes/movimientos', $datos)->assertCreated();
+        $this->conToken($office)->postJson('/api/materiales/almacenes/movimientos', $datos)->assertCreated();
+        $this->assertSame('bajo_minimo', $item->fresh()->estado_reposicion);
+        $this->assertSame($iniciales + 1, NotificacionOperacional::where('tipo', 'reposicion_material')->count());
+        $this->conToken($office)->postJson('/api/materiales/almacenes/movimientos', $consumir(10))->assertCreated();
+        $this->assertSame($iniciales + 1, NotificacionOperacional::where('tipo', 'reposicion_material')->count());
+        $this->conToken($office)->postJson('/api/materiales/almacenes/movimientos', ['operacion_id' => (string) Str::uuid(), 'tipo' => 'ajuste', 'folio_id' => $folio->id,
+            'almacen_origen_id' => $bodega->id, 'cantidad' => 50, 'motivo' => 'Recuperación del disponible'])->assertCreated();
+        $this->assertSame('normal', $item->fresh()->estado_reposicion);
+        $this->conToken($office)->postJson('/api/materiales/almacenes/movimientos', $consumir(40))->assertCreated();
+        $this->assertSame($iniciales + 2, NotificacionOperacional::where('tipo', 'reposicion_material')->count());
+        $filtro = '?cliente_id='.$item->cliente_material_id.'&estado=bajo_minimo&dias=30';
+        $filas = $this->conToken($office)->getJson('/api/materiales/reposicion'.$filtro)->assertOk()->json('data');
+        $this->assertCount(1, $filas);
+        $this->assertSame(40.0, (float) $filas[0]['disponible']);
+        $this->assertSame(110.0, (float) $filas[0]['consumo_periodo']);
+        $this->assertSame(80.0, (float) $filas[0]['cantidad_sugerida']);
+        $excel = $this->conToken($office)->get('/api/materiales/reposicion/excel'.$filtro)->assertOk();
+        $zip = new \ZipArchive;
+        $this->assertTrue($zip->open($excel->baseResponse->getFile()->getPathname()) === true);
+        $xml = $zip->getFromName('xl/worksheets/sheet1.xml');
+        foreach ([$item->codigo, '<v>40</v>', '<v>110</v>', '<v>80</v>'] as $valor) {
+            $this->assertStringContainsString($valor, $xml);
+        }
+        $this->assertSame(1, substr_count($xml, $item->codigo));
+        $zip->close();
+        $this->conToken($office)->getJson('/api/materiales/reposicion/items/'.$item->id.'?dias=30')->assertOk()->assertJsonPath('data.movimientos.total', 3);
+        $this->conToken($office)->getJson('/api/gerencia/resumen')->assertOk()->assertJsonPath('data.materiales.reposicion.bajo_minimo', 1);
+        $supervisor = User::factory()->create(['rol' => RolUsuario::SupervisorMateriales, 'activo' => true]);
+        $tokenSupervisor = $supervisor->createToken('oficina', ['oficina'])->plainTextToken;
+        $this->conToken($tokenSupervisor)->getJson('/api/oficina/contexto')->assertOk()->assertJsonCount($iniciales + 2, 'data.avisos_materiales');
     }
 
     private function crearAdministrador(): array
