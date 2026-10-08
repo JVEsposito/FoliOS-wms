@@ -319,3 +319,21 @@ la tablet/PDA. Activar `VERIFICACIONES_HABILITADAS=true` y
 Los datos históricos de frío conservan contenido `productos`; sus folios únicos
 siguen en el esquema original. La verificación de materiales queda desactivada
 hasta habilitarla expresamente.
+
+### Toma ocasional de inventario por cámara
+
+Oficina → Materiales → **Tomas de inventario**. El supervisor de materiales o administrador crea un borrador con cámaras activas y categoría opcional, y abre la toma asignando camareros. Se congelan los saldos locales y sus posiciones; no se bloquea la operación durante el conteo. Una cámara no puede participar en dos tomas abiertas simultáneamente.
+
+En PDA → Labores aparece la toma asignada. Usa la misma captura ciega de la verificación: escanear cada folio, indicar cantidad en su unidad o marcar posición vacía, y confirmar la posición. La API del camarero publica exclusivamente posiciones asignadas y progreso, antes y después del conteo. No publica la foto, folios esperados, cantidades, diferencias ni lecturas anteriores. Cada posición tiene su versión e idempotencia, permitiendo conteos simultáneos de camareros diferentes.
+
+El esperado se fija al confirmar cada posición, bajo bloqueo de folios y saldos. Es el saldo local vigente, equivalente a la foto inicial más la variación operativa de ese saldo. Se conservan la cantidad inicial, esperado al conteo y referencias a movimientos de ese almacén; nunca se usa el total distribuido del folio. Una transferencia a Packing durante el conteo reduce el esperado de bodega. Las entradas nuevas también se incluyen. Los materiales de otra categoría quedan fuera de la comparación. Los recontroles conservan el historial y sustituyen los resultados vigentes de la posición.
+
+Cuando termina el conteo, el supervisor envía la toma a revisión y decide por diferencia: ajustar, reubicar, aceptar sin ajuste o recontar. La revisión muestra diferencias absolutas y porcentuales, filtros, totales por ítem/categoría separados por unidad, exactitud por folio y exportación Excel. Un folio desconocido exige identificarlo mediante el flujo normal, recontar o aceptar sin ajuste; no crea inventario ficticio. Un sobrante localizado en otra posición se reubica, evitando duplicar su saldo.
+
+**Aprobar y aplicar** ejecuta todo en una sola transacción. Los ajustes usan el flujo de almacenes y quedan enlazados a la toma, con motivo y aprobador. Se aplica el delta detectado al saldo vigente; movimientos legítimos posteriores al conteo se conservan. Si el folio cambió de posición, se exige recontar. Las reubicaciones conservan saldo y custodia, registran origen/destino/aprobador y no permiten reservas o maniobras activas. Un saldo no puede recibir dos correcciones. La toma aprobada es inmutable; una anulación previa no modifica inventario. El acta PDF incluye alcance, fechas, responsables, resultados, ajustes aplicados, decisiones y firmas del supervisor y administrador.
+
+**Resolver sin ajuste** está disponible en Operación ahora para incidencias de verificación, tanto frío como materiales. Exige el supervisor del contenido o administrador, motivo obligatorio y tipo `reubicado`, `error_de_conteo` u `otro`. Registra responsable, fecha y operación idempotente. Nunca altera saldos.
+
+Despliegue: aplicar `php artisan migrate --force` después de #400, publicar la interfaz de Oficina y luego la OTA de tablet/PDA. No hay calendario automático ni nueva bandera de activación para las tomas ocasionales. Las banderas de verificación solo controlan las rondas de turno.
+
+Prueba operativa: abrir una toma pequeña, realizar una salida durante el conteo, revisar una diferencia y una reubicación, aprobar, verificar saldos/kardex, descargar Excel/acta y contrastar el PDF impreso con los responsables de planta.

@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['verificacion_ubicacion_folio_id', 'cantidad_esperada', 'cantidad_contada', 'unidad_medida', 'resuelto_por_user_id', 'resuelta_at', 'resolucion', 'verificacion_ubicacion_item_id', 'temporada_id', 'camara_id', 'posicion_id', 'folio_esperado_id', 'folio_encontrado_id', 'folio_encontrado_numero', 'otra_posicion_id', 'reportado_por_user_id', 'dispositivo_id', 'tipo', 'estado', 'reportada_at'])]
+#[Fillable(['tipo_resolucion', 'resolucion_operacion_id', 'resolucion_payload_hash', 'verificacion_ubicacion_folio_id', 'cantidad_esperada', 'cantidad_contada', 'unidad_medida', 'resuelto_por_user_id', 'resuelta_at', 'resolucion', 'verificacion_ubicacion_item_id', 'temporada_id', 'camara_id', 'posicion_id', 'folio_esperado_id', 'folio_encontrado_id', 'folio_encontrado_numero', 'otra_posicion_id', 'reportado_por_user_id', 'dispositivo_id', 'tipo', 'estado', 'reportada_at'])]
 class IncidenciaVerificacionUbicacion extends Model implements PerteneceATemporada
 {
     use HasUuids, ImpideEliminacionFisica, TemporadaPorColumna;

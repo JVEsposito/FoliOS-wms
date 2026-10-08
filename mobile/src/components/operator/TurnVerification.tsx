@@ -6,13 +6,15 @@ import { ScanInput } from '../ui/ScanInput';
 
 type Props = {
   round: ShiftVerification | null;
+  title?: string;
+  hideDeadline?: boolean;
   busy: boolean;
   onVerify: (item: VerificationItem, number: string | null) => void;
   onVerifyMaterials?: (item: VerificationItem, readings: MaterialVerificationReading[]) => void;
   lookupUnit?: (number: string) => Promise<string | null>;
 };
 
-export function TurnVerification({ round, busy, onVerify, onVerifyMaterials, lookupUnit }: Props) {
+export function TurnVerification({ round, busy, onVerify, onVerifyMaterials, lookupUnit, title, hideDeadline }: Props) {
   const [selected, setSelected] = useState<string | null>(null);
   const [number, setNumber] = useState('');
   useEffect(() => { setNumber(''); }, [selected, round?.completadas]);
@@ -52,8 +54,8 @@ export function TurnVerification({ round, busy, onVerify, onVerifyMaterials, loo
   return (
     <View style={styles.card}>
       <Text style={styles.eyebrow}>{materials ? 'VERIFICACIÓN CIEGA · MATERIALES' : 'CONTEO CÍCLICO · SIN DATOS PREVIOS DEL PALLET'}</Text>
-      <Text style={styles.title}>Revisión de turno · {round.completadas} de {round.objetivo}</Text>
-      <Text style={styles.detail}>Plazo: {new Date(round.vence_at).toLocaleString('es-CL')} · {round.estado === 'vencida' ? 'Vencida' : round.estado === 'completada' ? 'Completada' : 'Pendiente'}</Text>
+      <Text style={styles.title}>{title ?? 'Revisión de turno'} · {round.completadas} de {round.objetivo}</Text>
+      {!hideDeadline ? <Text style={styles.detail}>Plazo: {new Date(round.vence_at).toLocaleString('es-CL')} · {round.estado === 'vencida' ? 'Vencida' : round.estado === 'completada' ? 'Completada' : 'Pendiente'}</Text> : null}
       {pending.map((item) => (
         <Pressable key={item.id} disabled={busy || scanning} onPress={() => setSelected(item.id)} style={[styles.position, current?.id === item.id && styles.selected]}>
           <Text style={styles.positionText}>{item.posicion.camara} · B{String(item.posicion.banda).padStart(2, '0')} · P{String(item.posicion.posicion).padStart(2, '0')} · N{item.posicion.nivel}</Text>
