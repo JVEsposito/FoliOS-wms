@@ -966,7 +966,7 @@ function renderIncidents(incidents = []) {
         <td>${signal(incident.origen === 'recepcion_embalada' ? 'Recepción externa' : incident.origen === 'verificacion' ? 'Verificación' : incident.origen === 'maniobra' ? 'Maniobra' : 'Carga', incident.origen === 'carga' ? 'info' : 'warning')}</td>
         <td>${signal(humanize(incident.prioridad), toneForPriority(incident.prioridad))}</td>
         <td><span class="operation-now-code">${escapeHtml(incident.folio?.numero_folio || 'Sin folio')}</span><span class="operation-now-subtext">${escapeHtml(incidentContext(incident) || 'Sin contexto adicional')}</span></td>
-        <td><strong>${escapeHtml(humanize(incident.tipo))}</strong><span class="operation-now-subtext">${escapeHtml(incident.detalle || 'Sin detalle')}${incident.ajustable_materiales ? ` <a href="/oficina/materiales/almacenes?incidencia=${encodeURIComponent(incident.id)}&folio=${encodeURIComponent(incident.folio.id)}&camara=${encodeURIComponent(incident.contexto.camara_id)}">Revisar ajuste</a>` : ''} · ${escapeHtml(incident.reportado_por?.nombre || 'Sin reportante')} · ${escapeHtml(incident.dispositivo?.codigo || 'Sin dispositivo')}</span></td>
+        <td><strong>${escapeHtml(humanize(incident.tipo))}</strong><span class="operation-now-subtext">${escapeHtml(incident.detalle || 'Sin detalle')}${incident.origen === 'verificacion' && (state.identity?.rol === 'administrador' || state.identity?.rol === (incident.contenido === 'materiales' ? 'supervisor_materiales' : 'supervisor_frio')) ? ` <button type="button" data-resolve-verification="${escapeHtml(incident.id)}">Resolver sin ajuste</button>` : ''}${incident.ajustable_materiales ? ` <a href="/oficina/materiales/almacenes?incidencia=${encodeURIComponent(incident.id)}&folio=${encodeURIComponent(incident.folio.id)}&camara=${encodeURIComponent(incident.contexto.camara_id)}">Revisar ajuste</a>` : ''} · ${escapeHtml(incident.reportado_por?.nombre || 'Sin reportante')} · ${escapeHtml(incident.dispositivo?.codigo || 'Sin dispositivo')}</span></td>
     </tr>`).join('');
 }
 
@@ -1452,3 +1452,22 @@ async function boot() {
 }
 
 void boot();
+
+const verificationResolutionDialog = document.createElement('dialog');
+verificationResolutionDialog.innerHTML = '<form><h2>Resolver sin ajuste</h2><p>Esta resolución no cambia el inventario.</p><label>Tipo de resolución<select name="tipo_resolucion" required><option value="reubicado">Reubicado</option><option value="error_de_conteo">Error de conteo</option><option value="otro">Otro</option></select></label><label>Motivo<textarea name="motivo" required maxlength="2000"></textarea></label><p role="alert"></p><button type="submit">Resolver incidencia</button><button type="button" data-cancel-resolution>Cancelar</button></form>';
+document.body.append(verificationResolutionDialog);
+let verificationResolution = null;
+elements.incidentRows.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-resolve-verification]'); if (!button) return;
+    verificationResolution = { id: button.dataset.resolveVerification, operation: crypto.randomUUID() };
+    verificationResolutionDialog.querySelector('form').reset(); verificationResolutionDialog.querySelector('[role="alert"]').textContent = ''; verificationResolutionDialog.showModal();
+});
+verificationResolutionDialog.querySelector('[data-cancel-resolution]').addEventListener('click', () => verificationResolutionDialog.close());
+verificationResolutionDialog.querySelector('form').addEventListener('submit', async (event) => {
+    event.preventDefault(); const form = event.target; const button = form.querySelector('[type="submit"]'); button.disabled = true;
+    try {
+        await api(`/api/verificaciones-ubicacion/incidencias/${verificationResolution.id}/resolver`, { method: 'POST', body: JSON.stringify({ operacion_id: verificationResolution.operation, tipo_resolucion: form.elements.tipo_resolucion.value, motivo: form.elements.motivo.value }) });
+        verificationResolutionDialog.close(); await load({ blocking: false });
+    } catch (error) { form.querySelector('[role="alert"]').textContent = error.message; }
+    finally { button.disabled = false; }
+});

@@ -153,7 +153,7 @@ class ServicioOperacionAhora
 
         $incidenciasVerificacion = IncidenciaVerificacionUbicacion::query()
             ->where('temporada_id', $temporada->id)->where('estado', 'abierta')
-            ->with(['camara:id,codigo,nombre', 'posicion:id,camara_id,etiqueta,banda,posicion,nivel',
+            ->with(['camara:id,codigo,nombre,contenido', 'posicion:id,camara_id,etiqueta,banda,posicion,nivel',
                 'folioEsperado:id,numero_folio', 'folioEncontrado:id,numero_folio',
                 'otraPosicion:id,camara_id,etiqueta,banda,posicion,nivel',
                 'otraPosicion.camara:id,codigo,nombre',
@@ -170,6 +170,7 @@ class ServicioOperacionAhora
                     .($incidencia->otraPosicion ? "; figura en {$incidencia->otraPosicion->camara->codigo} · {$incidencia->otraPosicion->etiqueta}" : ''),
                 'estado' => 'abierta', 'prioridad' => 'alta',
                 'folio' => ($f = $incidencia->folioEsperado ?? $incidencia->folioEncontrado) ? ['id' => $f->id, 'numero_folio' => $f->numero_folio] : null,
+                'contenido' => $incidencia->camara->contenido->value,
                 'ajustable_materiales' => $incidencia->verificacion_ubicacion_folio_id !== null && $f !== null,
                 'reportado_por' => ['id' => $incidencia->reportadaPor->id, 'nombre' => $incidencia->reportadaPor->name],
                 'dispositivo' => ['id' => $incidencia->dispositivo->id, 'codigo' => $incidencia->dispositivo->codigo],

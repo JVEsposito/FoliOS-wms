@@ -71,3 +71,16 @@ test('frío mantiene la confirmación de un solo folio', async () => {
   assert.equal(renderer.root.findAllByType('TextInput').length, 0);
   await act(async () => renderer.unmount());
 });
+
+test('toma ocasional reutiliza el conteo ciego sin plazo de turno', async () => {
+  const Component = loadComponent(); const calls = []; let renderer;
+  await act(async () => { renderer = create(React.createElement(Component, { round: { ...round, vence_at: undefined, inicio_at: undefined }, title: 'Toma de inventario INV001', hideDeadline: true,
+    busy: false, onVerify: () => assert.fail('Flujo de frío'), lookupUnit: async () => 'kg', onVerifyMaterials: (item, readings) => calls.push({ item, readings }) })); });
+  assert.match(text(renderer.root), /Toma de inventario INV001/);
+  assert.doesNotMatch(text(renderer.root), /Plazo:|Invalid Date|esperad/i);
+  await act(async () => { await renderer.root.findByType('ScanInput').props.onSubmit('INV-A'); });
+  await act(async () => renderer.root.findByType('TextInput').props.onChangeText('7'));
+  await act(async () => button(renderer.root, 'Confirmar posición').props.onPress());
+  assert.equal(calls.length, 1); assert.equal(calls[0].readings[0].cantidad_contada, 7);
+  await act(async () => renderer.unmount());
+});

@@ -57,6 +57,7 @@ Route::view('/oficina/materiales/inventario', 'office.materials', [
     'materialsSection' => 'inventario',
 ]);
 Route::view('/oficina/materiales/almacenes', 'office.material-warehouses');
+Route::view('/oficina/materiales/tomas', 'office.material-inventory-counts');
 Route::view('/oficina/materiales/despachos', 'office.materials', [
     'navigationOffice' => 'despachos',
     'materialsSection' => 'despachos',
