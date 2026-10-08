@@ -212,7 +212,7 @@ class VencimientoMaterialApiTest extends TestCase
         $respaldo = $this->material('2026-10-10', 3);
         $reserva = ReservaTransformacionMaterial::query()->where('folio_id', $vence->folio_id)->sole();
         // Dos unidades ya consumidas; el saldo y su reserva quedan en seis.
-        $vence->update(['cantidad_actual' => 8, 'cantidad_reservada' => 6]);
+        $vence->refresh()->update(['cantidad_actual' => 8, 'cantidad_reservada' => 6]);
         $reserva->update(['cantidad_consumida' => 2]);
         $this->travelTo(Carbon::parse('2026-10-06 12:00', 'America/Santiago'));
         app(ServicioProcesamientoVencimientosMaterial::class)->procesar();
