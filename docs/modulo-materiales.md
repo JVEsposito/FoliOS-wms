@@ -39,6 +39,51 @@ Los registros se activan o desactivan; no se eliminan físicamente. Los campos
 de integración permiten que una futura sincronización con ERP mantenga la
 identidad interna del registro.
 
+### Catálogo descargable y fotos de ítems
+
+En **Oficina → Materiales → Ítems** (`/oficina/materiales/items`) se puede
+consultar el catálogo, paginado, y **Descargar catálogo** completo en XLSX o CSV.
+Ambos respetan los filtros de temporada, cliente, categoría, tipo y estado;
+por defecto incluyen activos e inactivos. Los permisos de consulta son los
+mismos del catálogo usado en recepción y despacho. La descarga incluye todos
+los resultados del filtro, no solo la página visible, y se genera por bloques
+con el generador XLSX en streaming.
+
+Las doce columnas editables aparecen primero, en el orden de la plantilla:
+`temporada_codigo`, `cliente_codigo`, `codigo`, `nombre`, `categoria`,
+`tipo_item`, `unidad_medida`, `codigo_externo`, `activo`, `stock_minimo`,
+`punto_reorden`, `stock_maximo`. Después aparecen los datos informativos:
+nombre del cliente, días de alerta de vencimiento, stock y disponible en
+Bodega Central, estado de reposición, cantidad de fotos y fecha y usuario de
+la última modificación. Sus encabezados XLSX son grises. Esas columnas son
+solo de consulta: no se importan.
+
+Cada ítem admite **hasta diez fotos opcionales**, JPG/PNG/WebP de hasta **5 MiB**
+por archivo. Administrador y supervisor de materiales pueden subir varias a
+la vez, ordenar, elegir la principal y eliminar desde **Fotos**. Los demás
+perfiles autorizados solo pueden verlas y abrirlas en grande. La primera es
+principal; al eliminarla se promueve la siguiente según el orden. Los cambios
+quedan auditados y la ficha usa una versión para rechazar ediciones concurrentes.
+
+Los originales están en el disco privado `local`. Se genera una miniatura
+JPEG de hasta 300 px de lado mayor, orientada según EXIF, para el catálogo,
+recepción y despacho en tablet/PDA y la ficha del folio en Consultas. Ambas
+variantes requieren sesión y permisos, se descargan con autenticación por
+cabecera y envían `Cache-Control: no-store, private` y
+`X-Content-Type-Options: nosniff`. No se publican rutas del disco ni tokens en
+URLs. Las fotos no forman parte del Excel; solo su cantidad.
+
+Al copiar el catálogo a una nueva temporada, se copian los registros de fotos
+con su orden y principal, compartiendo los mismos archivos. El borrado lógico
+registra usuario y fecha. Original y miniatura se eliminan físicamente solo
+cuando no queda ninguna referencia activa en ninguna temporada.
+
+Despliegue: aplicar `php artisan migrate --force`, compilar los assets con
+`npm run build` y después publicar la OTA de tablet y PDA
+(`npm --prefix mobile run update:production` / `update:pda`), para que las
+miniaturas usen los endpoints del backend ya actualizado. PHP requiere GD y
+EXIF; no se necesita enlazar estos archivos al disco público.
+
 ## Recepción y conciliación física
 
 Recepción de Materiales distingue cuatro cantidades por ítem:
@@ -135,10 +180,20 @@ migraciones de temporada.
 
 El administrador puede cargar ítems desde `/oficina/materiales` usando una
 planilla CSV o XLSX. La plantilla admite las columnas `temporada_codigo`,
-`cliente_codigo`, `codigo`, `nombre`, `categoria`, `unidad_medida`,
-`codigo_externo` y `activo`, con un máximo de 5.000 filas de datos por archivo.
+`cliente_codigo`, `codigo`, `nombre`, `categoria`, `tipo_item`, `unidad_medida`,
+`codigo_externo`, `activo`, `stock_minimo`, `punto_reorden` y `stock_maximo`, con un máximo de 5.000 filas de datos por archivo.
 La temporada debe existir y `cliente_codigo` debe corresponder a un cliente
-activo creado previamente en Accesos.
+activo creado previamente en Accesos. Una fila existente sin cambios también
+puede reimportarse cuando su cliente está inactivo; no habilita creaciones ni
+modificaciones para ese cliente.
+
+Para actualizar un catálogo existente, descargarlo, editar únicamente las
+columnas de la plantilla y volver a importar. Descargar y reimportar sin
+cambios produce **0 creaciones y 0 actualizaciones**, incluso para ítems
+inactivos o antiguos sin tipo. Los campos opcionales vacíos conservan su valor.
+Las columnas desconocidas, incluidas las informativas del archivo exportado,
+se ignoran y se enumeran en la vista previa. Para reimportar catálogos de más
+de 5.000 filas, dividir la descarga en archivos o usar filtros.
 
 La carga se ejecuta en dos etapas:
 

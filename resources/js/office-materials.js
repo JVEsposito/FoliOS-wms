@@ -1,3 +1,4 @@
+import { openItemPhotoPanel, loadPrivateItemImages, releasePrivateItemImages } from './shared/private-item-photos';
 import { createOperationalPoller } from './shared/operational-poller';
 
 const byId = (id) => document.getElementById(id);
@@ -270,6 +271,7 @@ function renderItems() {
         && state.identity?.puede_administrar_recetas_materiales === true;
     const items = seasonItems();
     elements.itemsSummary.textContent = `${items.length} registrados`;
+    releasePrivateItemImages(elements.itemList);
     elements.itemList.innerHTML = items.map((item) => {
         const consolidated = item.regularizacion?.item_canonico;
         const detail = consolidated
@@ -278,8 +280,9 @@ function renderItems() {
         const actions = canAdminister && !consolidated
             ? `<div class="material-row__actions"><button data-edit-item="${item.id}" type="button">Editar</button>${canRegularize && item.activo && item.categoria_operacional === 'material_pt' ? `<button data-regularize-item="${item.id}" type="button">Consolidar con MP</button>` : ''}</div>`
             : '';
-        return `<article class="material-row${item.activo ? '' : ' is-inactive'}"><div><strong>${escapeHtml(item.cliente?.codigo || 'SIN CLIENTE')} · ${escapeHtml(item.codigo)} · ${escapeHtml(item.nombre)}</strong><small>${escapeHtml(detail)}</small></div>${actions}</article>`;
+        return `<article class="material-row${item.activo ? '' : ' is-inactive'}">${item.foto_principal ? `<img class="item-photo-thumb" alt="${escapeHtml(item.nombre)}" data-private-item-photo="${escapeHtml(item.foto_principal.miniatura_url)}">` : ''}<div><strong>${escapeHtml(item.cliente?.codigo || 'SIN CLIENTE')} · ${escapeHtml(item.codigo)} · ${escapeHtml(item.nombre)}</strong><small>${escapeHtml(detail)}</small></div><button data-item-photos="${item.id}" type="button">Fotos (${item.cantidad_fotos ?? 0})</button>${actions}</article>`;
     }).join('') || '<p class="empty-state">No existen ítems en esta temporada.</p>';
+    void loadPrivateItemImages(elements.itemList);
     refreshDispatchLines();
 }
 function renderDestinations() {
@@ -374,6 +377,8 @@ function renderImportPreview() {
     elements.importErrors.classList.toggle('is-hidden', errors.length === 0);
     elements.importErrors.innerHTML = errors.map((error) => `<p><strong>Fila ${Number(error.fila || 0)}${error.codigo ? ` · ${escapeHtml(error.codigo)}` : ''}:</strong> ${escapeHtml(error.mensaje)}</p>`).join('');
     elements.importRows.innerHTML = (preview.filas || []).slice(0, 100).map((row) => `<tr><td>${Number(row.fila)}</td><td><strong>${escapeHtml(row.temporada_codigo)}</strong><small>${escapeHtml(row.temporada_nombre || '')}</small></td><td><strong>${escapeHtml(row.cliente_codigo)}</strong><small>${escapeHtml(row.cliente_nombre || '')}</small></td><td><strong>${escapeHtml(row.codigo)}</strong></td><td>${escapeHtml(row.nombre)}<small>Mínimo: ${row.stock_minimo == null ? 'sin cambio' : quantity(row.stock_minimo)} · Reorden: ${row.punto_reorden == null ? 'sin cambio' : quantity(row.punto_reorden)} · Máximo: ${row.stock_maximo == null ? 'sin cambio' : quantity(row.stock_maximo)}</small></td><td>${escapeHtml(itemTypeLabel(row.categoria_operacional))}</td><td>${escapeHtml(row.unidad_medida)}</td><td><span class="material-import-action">${escapeHtml(statusText(row.accion))}</span></td></tr>`).join('') || '<tr><td colspan="8">No existen filas válidas para mostrar.</td></tr>';
+    const omitted = preview.resumen?.columnas_omitidas || [];
+    byId('materialImportOmitted').textContent = omitted.length ? `Columnas informativas o desconocidas omitidas: ${omitted.join(', ')}` : '';
     const confirmed = preview.estado === 'confirmada';
     elements.importConfirm.disabled = errors.length > 0 || confirmed;
     elements.importConfirmationHelp.textContent = confirmed
@@ -1210,3 +1215,17 @@ if (operationalDataIsRequired()) {
     state.operationalPoller.start();
 }
 void boot();
+
+elements.itemList.addEventListener('click', (e) => {
+    const id = e.target.closest('[data-item-photos]')?.dataset.itemPhotos;
+    if (id) void openItemPhotoPanel(state.items.find((item) => item.id === id), loadAll);
+});
+byId('downloadFullMaterialCatalog').addEventListener('click', async () => {
+    const button = byId('downloadFullMaterialCatalog'); button.disabled = true;
+    try {
+        const query = new URLSearchParams(); if (state.selectedSeasonId) query.set('temporada_id', state.selectedSeasonId);
+        const r = await fetch(`/api/materiales/items/catalogo/exportar/xlsx?${query}`, { headers: { Authorization: `Bearer ${state.token}` } });
+        if (!r.ok) throw new Error('No se pudo descargar el catálogo.');
+        const url = URL.createObjectURL(await r.blob()); const link = document.createElement('a'); link.href = url; link.download = 'catalogo-items-materiales.xlsx'; link.click(); URL.revokeObjectURL(url);
+    } catch (e) { toast(e.message, true); } finally { button.disabled = false; }
+});

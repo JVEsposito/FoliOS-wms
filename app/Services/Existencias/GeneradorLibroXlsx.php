@@ -187,18 +187,19 @@ XML;
         <font><b/><sz val="16"/><color rgb="FFF2F0E9"/><name val="Calibri"/><family val="2"/></font>
         <font><b/><sz val="11"/><color rgb="FF241D10"/><name val="Calibri"/><family val="2"/></font>
     </fonts>
-    <fills count="4">
+    <fills count="5">
         <fill><patternFill patternType="none"/></fill>
         <fill><patternFill patternType="gray125"/></fill>
         <fill><patternFill patternType="solid"><fgColor rgb="FF141B22"/><bgColor indexed="64"/></patternFill></fill>
         <fill><patternFill patternType="solid"><fgColor rgb="FFC9AA68"/><bgColor indexed="64"/></patternFill></fill>
+        <fill><patternFill patternType="solid"><fgColor rgb="FFD9DDE2"/><bgColor indexed="64"/></patternFill></fill>
     </fills>
     <borders count="2">
         <border><left/><right/><top/><bottom/><diagonal/></border>
         <border><left style="thin"><color rgb="FF303A43"/></left><right style="thin"><color rgb="FF303A43"/></right><top style="thin"><color rgb="FF303A43"/></top><bottom style="thin"><color rgb="FF303A43"/></bottom><diagonal/></border>
     </borders>
     <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-    <cellXfs count="7">
+    <cellXfs count="8">
         <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
         <xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/>
         <xf numFmtId="0" fontId="2" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
@@ -206,6 +207,7 @@ XML;
         <xf numFmtId="4" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"/>
         <xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"/>
         <xf numFmtId="165" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"/>
+        <xf numFmtId="0" fontId="2" fillId="4" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
     </cellXfs>
     <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
 </styleSheet>
@@ -288,7 +290,7 @@ XML;
                 $encabezados[] = $this->celdaTexto(
                     $this->nombreColumna($indice + 1).$filaEncabezados,
                     $columna['titulo'],
-                    2,
+                    ($columna['informativa'] ?? false) ? 7 : 2,
                 );
             }
             $this->escribir($archivo, $this->fila($filaEncabezados, $encabezados, 32));

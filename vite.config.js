@@ -35,6 +35,7 @@ export default defineConfig({
                 'resources/js/office-record-formats.js',
                 'resources/css/office-materials.css',
                 'resources/js/office-materials.js',
+                'resources/js/office-material-items.js',
                 'resources/js/office-material-recipes.js',
                 'resources/js/office-material-orders.js',
                 'resources/js/office-material-labels.js',

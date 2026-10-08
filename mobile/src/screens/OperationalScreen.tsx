@@ -867,6 +867,8 @@ export function OperationalScreen({ api, auth, onLogout }: OperationalScreenProp
         visible={moveVisible}
       />
       <MaterialDispatchModal
+        baseUrl={api.baseUrl}
+        token={auth.token}
         busy={busy}
         dispatches={materialDispatches}
         error={modalError}

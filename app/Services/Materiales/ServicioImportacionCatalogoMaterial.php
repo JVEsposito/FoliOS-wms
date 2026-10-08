@@ -101,8 +101,6 @@ class ServicioImportacionCatalogoMaterial
             }
             if ($temporada && $fila['cliente_codigo'] !== '' && ! $cliente) {
                 $mensajes[] = 'El cliente no existe dentro de la temporada indicada.';
-            } elseif ($cliente && ! $cliente->activo) {
-                $mensajes[] = 'El cliente se encuentra inactivo.';
             }
 
             $fila['temporada_material_id'] = $temporada?->id;
@@ -130,6 +128,14 @@ class ServicioImportacionCatalogoMaterial
 
             /** @var ItemMaterial|null $existente */
             $existente = $claveCodigo === '' ? null : $existentesPorCodigo->get($claveCodigo);
+            if ($existente && $fila['categoria_operacional_original'] === '') {
+                $fila['categoria_operacional'] = $existente->categoria_operacional?->value;
+                $mensajes = array_values(array_diff($mensajes, ['Falta el tipo de ítem.']));
+            }
+            if ($cliente && ! $cliente->activo && (! $existente || $this->accionEstimada($fila, $existente) !== 'sin_cambios')) {
+                $mensajes[] = 'El cliente se encuentra inactivo.';
+            }
+
             /** @var ItemMaterial|null $duenoCodigoExterno */
             $duenoCodigoExterno = $claveExterno === '' ? null : $existentesPorExterno->get($claveExterno);
 
@@ -169,6 +175,8 @@ class ServicioImportacionCatalogoMaterial
         }
 
         $resumen = $this->resumen($filasLeidas, $filas, $errores);
+        $conocidas = ['fila', ...array_diff(ServicioCatalogoItemsMateriales::COLUMNAS_IMPORTACION, ['tipo_item']), 'categoria_operacional'];
+        $resumen['columnas_omitidas'] = collect($filasLeidas)->flatMap(fn ($f) => array_keys($f))->unique()->diff($conocidas)->values()->all();
 
         return ImportacionCatalogoMaterial::create([
             'nombre_archivo' => $archivo->getClientOriginalName(),
@@ -220,7 +228,6 @@ class ServicioImportacionCatalogoMaterial
                     ->whereKey($fila['cliente_material_id'])
                     ->where('temporada_material_id', $temporada->id)
                     ->where('codigo', $fila['cliente_codigo'])
-                    ->where('activo', true)
                     ->lockForUpdate()
                     ->first();
 
@@ -237,6 +244,9 @@ class ServicioImportacionCatalogoMaterial
                     ->first();
 
                 $this->validarHuellaCatalogo($fila, $item);
+                if (! $cliente->activo && (! $item || $this->accionEstimada($fila, $item) !== 'sin_cambios')) {
+                    throw new DomainException('No puede modificarse el catálogo de un cliente inactivo.');
+                }
 
                 if ($item
                     && $item->unidad_medida !== $fila['unidad_medida']

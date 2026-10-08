@@ -29,6 +29,7 @@ class ServicioExpedienteMaterial
             ->with([
                 'folio',
                 'item.cliente.cliente',
+                'item.fotoPrincipal',
                 'proveedorMaterial',
                 'bultoRecepcion.detalle.recepcion.cliente',
                 'bultoRecepcion.detalle.recepcion.proveedor',
@@ -145,6 +146,7 @@ class ServicioExpedienteMaterial
             ],
             'material' => [
                 'vencimiento' => $material->informacionVencimiento(),
+                'foto_principal' => $material->item?->fotoPrincipal?->representar(),
                 'identidad' => [
                     'cliente' => $clienteMaterial?->cliente?->nombre ?? $clienteMaterial?->nombre,
                     'codigo' => $material->item?->codigo,

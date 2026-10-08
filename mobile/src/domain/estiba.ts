@@ -240,6 +240,7 @@ export type MaterialClient = {
 };
 
 export type MaterialItem = {
+  foto_principal?: { id: string; miniatura_url: string; url?: string } | null;
   id: string;
   cliente: MaterialClient;
   codigo: string;

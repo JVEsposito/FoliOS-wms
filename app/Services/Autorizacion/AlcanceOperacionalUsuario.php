@@ -171,6 +171,11 @@ class AlcanceOperacionalUsuario
         return $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador, RolUsuario::SupervisorMateriales], ['materiales.catalogos', 'materiales.inventario']);
     }
 
+    public function puedeConsultarCatalogoItemsMateriales(User $usuario): bool
+    {
+        return $this->puedeAdministrarCatalogosMateriales($usuario) || $this->puedeConsultarDespachosMateriales($usuario) || $this->puedeConsultarRecepcionesMateriales($usuario);
+    }
+
     public function puedeConsultarAccesos(User $usuario): bool
     {
         return $this->rolActivoEnModulo(

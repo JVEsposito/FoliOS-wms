@@ -1,3 +1,4 @@
+import { loadPrivateItemImages, releasePrivateItemImages } from './shared/private-item-photos';
 const byId = (id) => document.getElementById(id);
 const elements = {
     access: byId('officeAccess'),
@@ -473,7 +474,9 @@ async function openFolio(id) {
             : '';
 
         elements.folioDialogTitle.textContent = folio.numero;
+        releasePrivateItemImages(elements.folioDialogBody);
         elements.folioDialogBody.innerHTML = `
+            ${materialProfile && payload.material.foto_principal ? `<img width="120" height="120" style="object-fit:contain" alt="Foto de ${escapeHtml(payload.material.identidad.item)}" data-private-item-photo="${escapeHtml(payload.material.foto_principal.miniatura_url)}">` : ''}
             ${exhaustion}
             <section class="folio-dossier-hero">
                 <div><span>ESTADO ACTUAL</span><strong>${escapeHtml(label(folio.estado_explicado))}</strong><small>${escapeHtml(stateDetail)}</small></div>
@@ -490,6 +493,7 @@ async function openFolio(id) {
                 <div class="folio-dossier-heading"><div><p class="eyebrow">HISTORIA OPERACIONAL</p><h3>Línea de tiempo</h3></div><div class="trace-counts">${traceCounts(payload, materialProfile)}</div></div>
                 ${traceTimeline(payload.timeline)}
             </section>`;
+        void loadPrivateItemImages(elements.folioDialogBody);
         elements.folioDialog.showModal();
     } catch (error) {
         toast(error.message, true);
@@ -701,3 +705,5 @@ async function boot() {
 }
 
 void boot();
+
+elements.folioDialog.addEventListener('close', () => releasePrivateItemImages(elements.folioDialogBody));

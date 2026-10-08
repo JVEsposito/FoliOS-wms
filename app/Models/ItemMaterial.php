@@ -40,6 +40,16 @@ class ItemMaterial extends Model
         return $this->belongsTo(ClienteMaterial::class, 'cliente_material_id');
     }
 
+    public function fotos(): HasMany
+    {
+        return $this->hasMany(FotoItemMaterial::class, 'item_material_id');
+    }
+
+    public function fotoPrincipal(): HasOne
+    {
+        return $this->hasOne(FotoItemMaterial::class, 'item_material_id')->where('principal', true);
+    }
+
     public function foliosMateriales(): HasMany
     {
         return $this->hasMany(FolioMaterial::class, 'item_material_id');
@@ -80,6 +90,7 @@ class ItemMaterial extends Model
             'punto_reorden' => 'decimal:3',
             'stock_maximo' => 'decimal:3',
             'reposicion_revision' => 'integer',
+            'fotos_version' => 'integer',
             'reposicion_calculada_at' => 'datetime',
             'sincronizado_at' => 'datetime',
         ];
