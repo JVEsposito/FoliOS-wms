@@ -53,7 +53,7 @@ async function loadContext() {
         if (currentGeneration !== generation || currentToken !== token()) return;
         text('plant', data.planta || 'Sin configurar');
         text('season', data.temporada?.codigo || 'Sin temporada activa');
-        renderNotices(Array.isArray(data.avisos_cierre) ? data.avisos_cierre : []);
+        renderNotices([...(Array.isArray(data.avisos_cierre) ? data.avisos_cierre : []), ...(Array.isArray(data.avisos_materiales) ? data.avisos_materiales : [])]);
         contextState(
             'Contexto verificado',
             `Actualizado ${new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}`,

@@ -231,6 +231,9 @@
                                 <label><span>Tipo de ítem *</span><select name="categoria_operacional" required><option value="">Selecciona un tipo</option><option value="insumo">Insumo</option><option value="material_mp">Material MP · sin preparar</option><option value="material_pt">Material PT · preparado para línea</option></select></label>
                                 <label><span>Unidad *</span><input name="unidad_medida" maxlength="40" placeholder="unidades" required></label>
                                 <label><span>Código ERP futuro</span><input name="codigo_externo" maxlength="150"></label>
+                                <label><span>Stock mínimo</span><input name="stock_minimo" type="number" min="0" step="0.001" placeholder="Sin nivel"></label>
+                                <label><span>Punto de reorden</span><input name="punto_reorden" type="number" min="0" step="0.001" placeholder="Sin nivel"></label>
+                                <label><span>Stock máximo</span><input name="stock_maximo" type="number" min="0" step="0.001" placeholder="Sin nivel"></label>
                                 <label><span>Alerta de vencimiento (días)</span><input name="dias_alerta_vencimiento" type="number" min="0" max="3650" placeholder="Predeterminado: {{ config('materiales.dias_alerta_vencimiento', 30) }}"></label>
                                 <label class="materials-check"><input name="activo" type="checkbox" checked><span>Ítem activo</span></label>
                                 <p class="materials-help materials-wide">El tipo determina si el ítem puede recibirse como insumo o Material MP, o generarse como Material PT mediante una receta. Los ítems sin tipo permanecen fuera de Recepción y Transformación.</p>
@@ -460,7 +463,7 @@
             <form class="materials-import__form" id="materialImportForm">
                 <label><span>Planilla CSV o XLSX *</span><input name="archivo" type="file" accept=".csv,.txt,.xlsx" required></label>
                 <div class="materials-import__actions"><button class="secondary-button" id="downloadMaterialTemplate" type="button">Descargar plantilla CSV</button><button class="primary-button" type="submit">Previsualizar</button></div>
-                <p class="materials-import__help">Columnas: temporada_codigo, cliente_codigo, código, nombre, categoría, tipo_item, unidad_medida, código_externo y activo. La temporada debe existir y el cliente debe estar creado previamente en Accesos. Máximo 5.000 filas.</p>
+                <p class="materials-import__help">Columnas: temporada_codigo, cliente_codigo, código, nombre, categoría, tipo_item, unidad_medida, código_externo, activo, stock_minimo, punto_reorden y stock_maximo. Los niveles vacíos conservan su valor anterior. La temporada debe existir y el cliente debe estar creado previamente en Accesos. Máximo 5.000 filas.</p>
                 <p class="form-error" id="materialImportError" role="alert"></p>
             </form>
             <section class="materials-import__preview is-hidden" id="materialImportPreview">

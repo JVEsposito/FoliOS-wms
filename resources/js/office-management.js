@@ -412,6 +412,9 @@ function renderDashboard(data) {
     renderMaterialChart();
     renderMaterialsOperation(materials);
     renderMaterialVerifications(materials.verificaciones);
+    const replenishment = materials.reposicion;
+    byId('materialReplenishmentSummary').textContent = replenishment ? `${replenishment.quiebre} en quiebre · ${replenishment.bajo_minimo} bajo mínimo · ${replenishment.sobre_maximo} sobre máximo · Cobertura media: ${replenishment.cobertura_media === null ? 'sin consumo' : replenishment.cobertura_media + ' días'} · ${replenishment.dias_periodo} días de consumo` : 'Sin datos de reposición';
+    byId('materialReplenishmentRows').innerHTML = (replenishment?.menor_cobertura || []).map((r) => `<tr><td>${escapeHtml(r.cliente)}</td><td>${escapeHtml(r.codigo)} · ${escapeHtml(r.item)}</td><td>${r.disponible} ${escapeHtml(r.unidad)}</td><td>${r.dias_cobertura} días</td><td>${escapeHtml(r.estado.replaceAll('_', ' '))}</td></tr>`).join('') || '<tr><td colspan="5">Sin ítems con consumo.</td></tr>';
     renderPrecoolingChart(precooling);
     renderPrecoolingOperation(precooling);
     renderWeighbridgeChart(weighbridge);

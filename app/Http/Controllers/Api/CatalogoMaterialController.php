@@ -18,6 +18,7 @@ use App\Services\Materiales\ServicioRegularizacionItemMaterial;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -129,49 +130,54 @@ class CatalogoMaterialController extends Controller
 
     public function storeItem(GuardarItemMaterialRequest $request): JsonResponse
     {
-        $this->validarClienteActivo($request->validated('cliente_material_id'));
-        $item = ItemMaterial::create([
-            ...$request->validated(),
-            'activo' => true,
-            'origen_sistema' => 'manual',
-            'creado_por_user_id' => $request->user()->id,
-            'actualizado_por_user_id' => $request->user()->id,
-        ]);
+        return DB::transaction(function () use ($request) {
+            $this->validarClienteActivo($request->validated('cliente_material_id'));
+            $item = ItemMaterial::create([
+                ...$request->validated(),
+                'activo' => true,
+                'origen_sistema' => 'manual',
+                'creado_por_user_id' => $request->user()->id,
+                'actualizado_por_user_id' => $request->user()->id,
+            ]);
 
-        return (new ItemMaterialResource($item->load('cliente.temporada')))
-            ->response()
-            ->setStatusCode(Response::HTTP_CREATED);
+            return (new ItemMaterialResource($item->load('cliente.temporada')))
+                ->response()
+                ->setStatusCode(Response::HTTP_CREATED);
+        }, 3);
     }
 
     public function updateItem(
         GuardarItemMaterialRequest $request,
         ItemMaterial $itemMaterial,
     ): ItemMaterialResource {
-        $datos = $request->validated();
-        $this->validarClienteActivo($datos['cliente_material_id']);
+        return DB::transaction(function () use ($request, $itemMaterial) {
+            $itemMaterial = ItemMaterial::whereKey($itemMaterial->id)->lockForUpdate()->firstOrFail();
+            $datos = $request->validated();
+            $this->validarClienteActivo($datos['cliente_material_id']);
 
-        if ($itemMaterial->regularizacionComoDuplicado()->exists()) {
-            throw new DomainException('Un ítem ya consolidado conserva sus datos históricos y no puede editarse ni reactivarse.');
-        }
-        if (($datos['activo'] ?? true) === false
-            && $itemMaterial->regularizacionesComoCanonico()->exists()) {
-            throw new DomainException('El ítem es canónico para uno o más códigos consolidados y no puede desactivarse.');
-        }
-
-        if ($itemMaterial->foliosMateriales()->exists()) {
-            unset($datos['unidad_medida']);
-            if ($itemMaterial->cliente_material_id !== $datos['cliente_material_id']
-                && $itemMaterial->cliente()->value('codigo') !== 'GENERAL') {
-                abort(Response::HTTP_UNPROCESSABLE_ENTITY, 'El cliente no puede cambiar porque el ítem ya posee folios asociados.');
+            if ($itemMaterial->regularizacionComoDuplicado()->exists()) {
+                throw new DomainException('Un ítem ya consolidado conserva sus datos históricos y no puede editarse ni reactivarse.');
             }
-        }
+            if (($datos['activo'] ?? true) === false
+                && $itemMaterial->regularizacionesComoCanonico()->exists()) {
+                throw new DomainException('El ítem es canónico para uno o más códigos consolidados y no puede desactivarse.');
+            }
 
-        $itemMaterial->update([
-            ...$datos,
-            'actualizado_por_user_id' => $request->user()->id,
-        ]);
+            if ($itemMaterial->foliosMateriales()->exists()) {
+                unset($datos['unidad_medida']);
+                if ($itemMaterial->cliente_material_id !== $datos['cliente_material_id']
+                    && $itemMaterial->cliente()->value('codigo') !== 'GENERAL') {
+                    abort(Response::HTTP_UNPROCESSABLE_ENTITY, 'El cliente no puede cambiar porque el ítem ya posee folios asociados.');
+                }
+            }
 
-        return new ItemMaterialResource($itemMaterial->refresh()->load('cliente.temporada'));
+            $itemMaterial->update([
+                ...$datos,
+                'actualizado_por_user_id' => $request->user()->id,
+            ]);
+
+            return new ItemMaterialResource($itemMaterial->refresh()->load('cliente.temporada'));
+        }, 3);
     }
 
     public function regularizarItem(

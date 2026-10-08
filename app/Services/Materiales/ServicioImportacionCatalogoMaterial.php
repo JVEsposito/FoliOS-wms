@@ -143,6 +143,8 @@ class ServicioImportacionCatalogoMaterial
                 $mensajes[] = 'La unidad de medida no puede cambiar porque el ítem ya posee folios asociados.';
             }
 
+            $niveles = [...($existente?->only(NivelesStockMaterial::CAMPOS) ?? []), ...array_filter(array_intersect_key($fila, array_flip(NivelesStockMaterial::CAMPOS)), fn ($v) => $v !== null)];
+            $mensajes = [...$mensajes, ...array_values(NivelesStockMaterial::errores($niveles))];
             if ($mensajes !== []) {
                 $errores[] = [
                     'fila' => $fila['fila'],
@@ -280,6 +282,11 @@ class ServicioImportacionCatalogoMaterial
                     $datos['activo'] = $fila['activo'] ?? true;
                 }
 
+                foreach (NivelesStockMaterial::CAMPOS as $campo) {
+                    if (($fila[$campo] ?? null) !== null) {
+                        $datos[$campo] = $fila[$campo];
+                    }
+                }
                 $item->fill($datos);
                 $cambio = $nuevo || $item->isDirty();
 
@@ -337,6 +344,7 @@ class ServicioImportacionCatalogoMaterial
             'codigo_externo' => $this->opcional($fila['codigo_externo'] ?? ''),
             'activo' => $this->activo($fila['activo'] ?? ''),
             'activo_original' => $this->texto($fila['activo'] ?? ''),
+            ...collect(NivelesStockMaterial::CAMPOS)->mapWithKeys(fn ($c) => [$c => ($v = $this->opcional($fila[$c] ?? '')) === null ? null : str_replace(',', '.', $v)])->all(),
         ];
     }
 
@@ -346,7 +354,7 @@ class ServicioImportacionCatalogoMaterial
      */
     private function validarFila(array $fila): array
     {
-        $errores = [];
+        $errores = array_values(NivelesStockMaterial::errores($fila));
 
         if ($fila['temporada_codigo'] === '') {
             $errores[] = 'Falta el código de la temporada.';
@@ -406,6 +414,8 @@ class ServicioImportacionCatalogoMaterial
             || (($fila['codigo_externo'] ?? null) !== null && $existente->codigo_externo !== $fila['codigo_externo'])
             || (($fila['activo'] ?? null) !== null && $existente->activo !== $fila['activo']);
 
+        $cambio = $cambio || collect(NivelesStockMaterial::CAMPOS)->contains(fn ($c) => ($fila[$c] ?? null) !== null && (float) $fila[$c] !== ($existente->$c === null ? null : (float) $existente->$c));
+
         return $cambio ? 'actualizar' : 'sin_cambios';
     }
 
@@ -448,6 +458,7 @@ class ServicioImportacionCatalogoMaterial
             'unidad_medida' => $item->unidad_medida,
             'codigo_externo' => $item->codigo_externo,
             'activo' => (bool) $item->activo,
+            ...$item->only(NivelesStockMaterial::CAMPOS),
         ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
     }
 

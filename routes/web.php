@@ -152,3 +152,5 @@ Route::view('/oficina/materiales/vencimientos', 'office.materials', [
     'navigationOffice' => 'vencimientos',
     'materialsSection' => 'vencimientos',
 ]);
+
+Route::view('/oficina/materiales/reposicion', 'office.material-replenishment');

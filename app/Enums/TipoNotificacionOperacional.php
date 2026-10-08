@@ -4,6 +4,7 @@ namespace App\Enums;
 
 enum TipoNotificacionOperacional: string
 {
+    case ReposicionMaterial = 'reposicion_material';
     case CargaPublicada = 'carga_publicada';
     case DespachoMaterialCreado = 'despacho_material_creado';
     case PrioridadCargaCambiada = 'prioridad_carga_cambiada';

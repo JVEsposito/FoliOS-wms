@@ -8,6 +8,7 @@ use App\Enums\RolUsuario;
 use App\Enums\SeveridadNotificacionOperacional;
 use App\Enums\TipoNotificacionOperacional;
 use App\Models\DespachoMaterial;
+use App\Models\ItemMaterial;
 use App\Models\LecturaNotificacionOperacional;
 use App\Models\NotificacionOperacional;
 use App\Models\RecepcionRomana;
@@ -48,7 +49,9 @@ class ServicioNotificacionesOperacionales
                             ->whereNull('despacho_material_id')
                             ->whereNull('recepcion_romana_id')
                             ->whereNull('folio_id')
-                            ->whereNull('incidencia_carga_folio_id');
+                            ->whereNull('incidencia_carga_folio_id')
+                            ->where(fn ($n) => $n->where('tipo', '!=', TipoNotificacionOperacional::ReposicionMaterial->value)
+                                ->orWhere('datos->temporada_id', app(ServicioTemporadaActiva::class)->buscar()?->id));
                     });
             })
             ->where(function (Builder $consulta) use ($usuario, $areas): void {
@@ -83,6 +86,20 @@ class ServicioNotificacionesOperacionales
                     ->whereNotNull('leida_at'),
             )
             ->count();
+    }
+
+    public function notificarReposicionMaterial(ItemMaterial $item, array $fila, int $revision): NotificacionOperacional
+    {
+        return NotificacionOperacional::firstOrCreate(['clave' => "reposicion:{$item->id}:{$revision}"], [
+            'tipo' => TipoNotificacionOperacional::ReposicionMaterial,
+            'audiencia_tipo' => AudienciaNotificacionOperacional::Rol,
+            'audiencia_valor' => RolUsuario::SupervisorMateriales->value,
+            'severidad' => $fila['estado'] === 'quiebre' ? SeveridadNotificacionOperacional::Critica : SeveridadNotificacionOperacional::Advertencia,
+            'titulo' => ($fila['estado'] === 'quiebre' ? 'Quiebre' : 'Bajo mínimo').' · '.$item->codigo,
+            'mensaje' => $item->nombre.': '.$fila['disponible'].' '.$item->unidad_medida.' disponibles en Bodega Central.',
+            'datos' => ['item_id' => $item->id, 'temporada_id' => app(ServicioTemporadaActiva::class)->buscar()?->id,
+                'estado' => $fila['estado'], 'disponible' => $fila['disponible'], 'href' => '/oficina/materiales/reposicion'],
+        ]);
     }
 
     public function notificarDespachoMaterialCreado(

@@ -37,6 +37,9 @@ class ItemMaterialResource extends JsonResource
             'sincronizado_at' => $this->sincronizado_at?->toAtomString(),
             'activo' => $this->activo,
             'dias_alerta_vencimiento' => $this->dias_alerta_vencimiento,
+            'stock_minimo' => $this->stock_minimo,
+            'punto_reorden' => $this->punto_reorden,
+            'stock_maximo' => $this->stock_maximo,
             'folios_activos' => (int) ($this->folios_activos_count ?? 0),
             'regularizacion' => $this->whenLoaded(
                 'regularizacionComoDuplicado',

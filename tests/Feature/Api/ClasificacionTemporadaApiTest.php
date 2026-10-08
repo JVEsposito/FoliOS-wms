@@ -4,6 +4,8 @@ namespace Tests\Feature\Api;
 
 use App\Enums\RolUsuario;
 use App\Models\ClasificacionTemporada;
+use App\Models\ClienteMaterial;
+use App\Models\ItemMaterial;
 use App\Models\Temporada;
 use App\Models\User;
 use App\Services\Temporadas\ServicioMigracionTemporada;
@@ -20,6 +22,19 @@ class ClasificacionTemporadaApiTest extends TestCase
 
     /** Tablas que la clasificación puede tocar: la temporada misma y su historial. */
     private const TABLAS_DE_LA_CLASIFICACION = ['temporadas', 'clasificaciones_temporada'];
+
+    public function test_migracion_copia_niveles_de_stock_de_los_items(): void
+    {
+        $admin = $this->administrador();
+        $cliente = ClienteMaterial::where('codigo', 'GENERAL')->firstOrFail();
+        $item = ItemMaterial::create(['cliente_material_id' => $cliente->id, 'codigo' => 'CON-NIVELES', 'nombre' => 'Film con niveles',
+            'categoria_operacional' => 'insumo', 'unidad_medida' => 'kg', 'activo' => true, 'stock_minimo' => 10, 'punto_reorden' => 25, 'stock_maximo' => 100,
+            'creado_por_user_id' => $admin->id, 'actualizado_por_user_id' => $admin->id]);
+        $destino = $this->temporada('SIGUIENTE-01');
+        app(ServicioMigracionTemporada::class)->migrar(Temporada::where('activa', true)->firstOrFail(), $destino, ['copiar_catalogo_materiales' => true], $admin);
+        $copia = ItemMaterial::where('codigo', $item->codigo)->whereHas('cliente.temporada', fn ($q) => $q->where('temporada_id', $destino->id))->sole();
+        $this->assertSame($item->only(['stock_minimo', 'punto_reorden', 'stock_maximo']), $copia->only(['stock_minimo', 'punto_reorden', 'stock_maximo']));
+    }
 
     public function test_declarar_prueba_solo_cambia_el_tipo_y_deja_intactos_la_activa_y_materiales(): void
     {

@@ -34,6 +34,7 @@ use App\Models\Temporada;
 use App\Models\TunelPrefrio;
 use App\Models\ValidacionPallet;
 use App\Services\Materiales\ServicioConsultaVencimientosMaterial;
+use App\Services\Materiales\ServicioReposicionMaterial;
 use App\Services\Verificaciones\ServicioIndicadoresVerificacionMateriales;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Cache\LockTimeoutException;
@@ -618,6 +619,7 @@ class ServicioPanelGerencial
             ->values();
 
         return [
+            'reposicion' => app(ServicioReposicionMaterial::class)->resumen($temporadaId),
             'vencimientos' => app(ServicioConsultaVencimientosMaterial::class)->resumen(['temporada_id' => $temporadaId]),
             'verificaciones' => app(ServicioIndicadoresVerificacionMateriales::class)->resumen($temporadaId),
             'items_con_stock' => $filas->pluck('item_id')->unique()->count(),

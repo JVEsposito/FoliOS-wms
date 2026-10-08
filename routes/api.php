@@ -68,6 +68,7 @@ use App\Http\Controllers\Api\RecepcionMaterialController;
 use App\Http\Controllers\Api\RecepcionRomanaController;
 use App\Http\Controllers\Api\ReinicioOperacionalController;
 use App\Http\Controllers\Api\ReplayCicloPlanificadorController;
+use App\Http\Controllers\Api\ReposicionMaterialController;
 use App\Http\Controllers\Api\ResolverIncidenciaVerificacionController;
 use App\Http\Controllers\Api\RetornoPackingController;
 use App\Http\Controllers\Api\SaludPlanificadorController;
@@ -426,6 +427,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/notificaciones-operacionales/{notificacionOperacional}/confirmar', [NotificacionOperacionalController::class, 'confirmar']);
 
     Route::middleware('can:consultar-despachos-materiales')->group(function () {
+        Route::get('/materiales/reposicion', [ReposicionMaterialController::class, 'index']);
+        Route::get('/materiales/reposicion/resumen', [ReposicionMaterialController::class, 'resumen']);
+        Route::get('/materiales/reposicion/excel', [ReposicionMaterialController::class, 'excel']);
+        Route::get('/materiales/reposicion/items/{item}', [ReposicionMaterialController::class, 'show']);
         Route::get('/materiales/vencimientos', [VencimientoMaterialController::class, 'index']);
         Route::get('/materiales/vencimientos/exportar', [VencimientoMaterialController::class, 'exportar']);
         Route::get('/materiales/catalogo', [CatalogoMaterialController::class, 'catalogo']);

@@ -336,6 +336,7 @@
                         <div class="chart-summary"><a href="/oficina/materiales/vencimientos">Por vencer: <strong id="materialNearExpiry">0 folios</strong></a><br><a href="/oficina/materiales/vencimientos">Vencidos: <strong id="materialExpired">0 folios</strong></a></div>
                         <div class="chart-container chart-container--bar"><canvas id="materialStockChart" aria-label="Gráfico de stock de materiales" role="img"></canvas></div>
                         <div class="chart-summary" id="materialChartSummary"></div>
+                        <h3>Niveles y cobertura de materiales</h3><p id="materialReplenishmentSummary"></p><div class="table-scroll"><table><thead><tr><th>Cliente</th><th>Ítem</th><th>Disponible</th><th>Cobertura</th><th>Estado</th></tr></thead><tbody id="materialReplenishmentRows"></tbody></table></div>
                         <h3>Verificación ciega de materiales · últimos 7 y 30 días</h3>
                         <p id="materialVerificationSummary"></p>
                         <div class="table-scroll"><table><thead><tr><th>Cámara</th><th>Período</th><th>Exactitud ubicación</th><th>Exactitud cantidad</th><th>Cumplimiento rondas</th></tr></thead><tbody id="materialVerificationRows"></tbody></table></div>

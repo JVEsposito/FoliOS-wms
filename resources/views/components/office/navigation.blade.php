@@ -42,6 +42,7 @@
             ['key' => 'recepcion', 'module' => 'materiales.etiquetas', 'label' => 'Etiquetas', 'href' => '/oficina/materiales/recepcion', 'permissions' => ['puede_consultar_recepciones_materiales', 'puede_imprimir_etiquetas_materiales']],
             ['key' => 'inventario', 'module' => 'materiales.inventario', 'label' => 'Inventario BC', 'href' => '/oficina/materiales/inventario', 'permissions' => ['puede_consultar_despachos_materiales']],
             ['key' => 'vencimientos', 'module' => 'materiales.inventario', 'label' => 'Vencimientos', 'href' => '/oficina/materiales/vencimientos', 'permissions' => ['puede_consultar_despachos_materiales']],
+            ['key' => 'reposicion', 'module' => 'materiales.inventario', 'label' => 'Reposición', 'href' => '/oficina/materiales/reposicion', 'permissions' => ['puede_consultar_despachos_materiales']],
             ['key' => 'tomas', 'module' => 'materiales.inventario', 'label' => 'Tomas de inventario', 'href' => '/oficina/materiales/tomas', 'permissions' => ['puede_gestionar_bloqueos_materiales']],
             ['key' => 'custodia', 'module' => 'materiales.inventario', 'label' => 'Inventario CC', 'href' => '/oficina/materiales/almacenes', 'permissions' => ['puede_consultar_despachos_materiales']],
             ['key' => 'despachos', 'module' => 'materiales.despachos', 'label' => 'Despachos', 'href' => '/oficina/materiales/despachos', 'permissions' => ['puede_consultar_despachos_materiales']],
@@ -117,6 +118,9 @@
             <span><strong data-office-context-label>Verificando contexto</strong><small data-office-context-status>Temporada y planta</small></span>
             <x-estiba.icon name="refresh" />
         </button>
+        @if ($domain === 'materiales')
+            <a href="/oficina/materiales/reposicion" class="secondary-button" data-material-replenishment-indicator hidden>Reposición</a>
+        @endif
         <div class="estiba-office-identity">
             <button type="button" class="estiba-office-theme-toggle" data-office-theme-toggle aria-pressed="false" aria-label="Activar modo oscuro" title="Activar modo oscuro">
                 <span class="estiba-office-theme-icon" aria-hidden="true"></span>

@@ -1,3 +1,4 @@
+import './office-material-replenishment-indicator';
 import './office-material-inventory-actions.js';
 import { installOfficeUnexpectedErrorNotice } from './shared/office-unexpected-error.js';
 import { initializeOfficeShell, refreshOfficeShell } from './office-shell.js';

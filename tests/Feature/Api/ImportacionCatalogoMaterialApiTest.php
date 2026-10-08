@@ -305,6 +305,9 @@ class ImportacionCatalogoMaterialApiTest extends TestCase
       <c r="F1" t="inlineStr"><is><t>estado</t></is></c>
       <c r="G1" t="inlineStr"><is><t>cliente_codigo</t></is></c>
       <c r="H1" t="inlineStr"><is><t>temporada_codigo</t></is></c>
+      <c r="I1" t="inlineStr"><is><t>stock_minimo</t></is></c>
+      <c r="J1" t="inlineStr"><is><t>punto_reorden</t></is></c>
+      <c r="K1" t="inlineStr"><is><t>stock_maximo</t></is></c>
     </row>
     <row r="2">
       <c r="A2" t="inlineStr"><is><t>ETQ-01</t></is></c>
@@ -315,6 +318,9 @@ class ImportacionCatalogoMaterialApiTest extends TestCase
       <c r="F2" t="inlineStr"><is><t>activo</t></is></c>
       <c r="G2" t="inlineStr"><is><t>GENERAL</t></is></c>
       <c r="H2" t="inlineStr"><is><t>GENERAL</t></is></c>
+      <c r="I2"><v>10.5</v></c>
+      <c r="J2"><v>20</v></c>
+      <c r="K2"><v>100</v></c>
     </row>
   </sheetData>
 </worksheet>
@@ -330,6 +336,9 @@ XML);
         unlink($ruta);
 
         $this->assertSame('ETQ-01', $filas[0]['codigo']);
+        $this->assertSame('10.5', (string) $filas[0]['stock_minimo']);
+        $this->assertSame('20', (string) $filas[0]['punto_reorden']);
+        $this->assertSame('100', (string) $filas[0]['stock_maximo']);
         $this->assertSame('GENERAL', $filas[0]['temporada_codigo']);
         $this->assertSame('GENERAL', $filas[0]['cliente_codigo']);
         $this->assertSame('Etiqueta caja 5 kg', $filas[0]['nombre']);
@@ -342,6 +351,36 @@ XML);
     /**
      * @param  array<string, mixed>  $datos
      */
+    public function test_importacion_carga_niveles_preserva_vacios_y_valida_contra_valores_existentes(): void
+    {
+        $admin = User::factory()->create(['rol' => RolUsuario::Administrador]);
+        $item = $this->crearItem($admin, ['stock_minimo' => 10, 'punto_reorden' => 20, 'stock_maximo' => 50]);
+        $archivo = UploadedFile::fake()->createWithContent('niveles.csv', "temporada_codigo;cliente_codigo;codigo;nombre;tipo_item;unidad_medida;stock_minimo;punto_reorden;stock_maximo\nGENERAL;GENERAL;FILM-01;Film stretch;insumo;rollos;;25;60\n");
+        $id = $this->actingAs($admin, 'sanctum')->post('/api/administracion/materiales/importaciones/previsualizar', ['archivo' => $archivo], ['Accept' => 'application/json'])
+            ->assertCreated()->assertJsonPath('data.estado', 'borrador')->assertJsonPath('data.resumen.actualizaciones_estimadas', 1)->json('data.id');
+        $this->postJson('/api/administracion/materiales/importaciones/'.$id.'/confirmar')->assertOk();
+        $this->assertSame('10.000', $item->fresh()->stock_minimo);
+        $this->assertSame('25.000', $item->fresh()->punto_reorden);
+        $this->assertSame('60.000', $item->fresh()->stock_maximo);
+        $archivo = UploadedFile::fake()->createWithContent('invalidos.csv', "temporada_codigo;cliente_codigo;codigo;nombre;tipo_item;unidad_medida;stock_minimo;punto_reorden;stock_maximo\nGENERAL;GENERAL;FILM-01;Film stretch;insumo;rollos;30;;\n");
+        $this->post('/api/administracion/materiales/importaciones/previsualizar', ['archivo' => $archivo], ['Accept' => 'application/json'])->assertCreated()->assertJsonPath('data.estado', 'con_errores');
+    }
+
+    public function test_api_niveles_rechaza_orden_invalido_y_guarda_historial_con_actor(): void
+    {
+        $admin = User::factory()->create(['rol' => RolUsuario::Administrador]);
+        $item = $this->crearItem($admin);
+        $datos = ['cliente_material_id' => $item->cliente_material_id, 'codigo' => $item->codigo, 'nombre' => $item->nombre, 'categoria_operacional' => 'insumo', 'unidad_medida' => 'rollos', 'stock_minimo' => 30, 'punto_reorden' => 20, 'stock_maximo' => 50];
+        $ruta = '/api/administracion/materiales/items/'.$item->id;
+        $this->actingAs($admin, 'sanctum')->putJson($ruta, $datos)->assertUnprocessable()->assertJsonValidationErrors('stock_minimo');
+        $this->assertNull($item->fresh()->stock_minimo);
+        $supervisor = User::factory()->create(['rol' => RolUsuario::SupervisorMateriales, 'activo' => true]);
+        $this->actingAs($supervisor, 'sanctum')->putJson($ruta, [...$datos, 'stock_minimo' => 10])->assertOk()->assertJsonPath('data.stock_minimo', '10.000');
+        $this->assertDatabaseHas('cambios_niveles_stock_materiales', ['item_material_id' => $item->id, 'user_id' => $supervisor->id]);
+        $camarero = User::factory()->create(['rol' => RolUsuario::CamareroMateriales]);
+        $this->actingAs($camarero, 'sanctum')->putJson($ruta, [...$datos, 'stock_minimo' => 5])->assertForbidden();
+    }
+
     private function crearItem(User $usuario, array $datos = []): ItemMaterial
     {
         return ItemMaterial::create([

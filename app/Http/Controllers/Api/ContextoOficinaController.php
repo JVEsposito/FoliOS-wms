@@ -29,6 +29,9 @@ class ContextoOficinaController extends Controller
                 'codigo' => $temporada->codigo,
                 'nombre' => $temporada->nombre,
             ] : null,
+            'avisos_materiales' => $notificaciones->consultaVisibles($request->user())->where('tipo', TipoNotificacionOperacional::ReposicionMaterial->value)
+                ->whereDoesntHave('lecturas', fn ($l) => $l->where('user_id', $request->user()->id)->whereNotNull('leida_at'))
+                ->latest()->limit(10)->get(['id', 'titulo', 'mensaje', 'created_at'])->toArray(),
             // Avisos de cierre de temporada sin leer, dirigidos a este usuario.
             'avisos_cierre' => $notificaciones->consultaVisibles($request->user())
                 ->where('tipo', TipoNotificacionOperacional::CierreTemporadaPendiente->value)

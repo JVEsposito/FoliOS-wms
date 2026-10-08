@@ -3,13 +3,16 @@
 namespace App\Providers;
 
 use App\Models\FolioMaterial;
+use App\Models\ItemMaterial;
 use App\Models\MovimientoAlmacenMaterial;
+use App\Models\MovimientoInventarioMaterial;
 use App\Models\ReservaMaterial;
 use App\Models\ReservaTransformacionMaterial;
 use App\Models\SaldoMaterialAlmacen;
 use App\Models\UbicacionActual;
 use App\Observers\FolioMaterialAlmacenObserver;
 use App\Observers\MovimientoAlmacenMaterialObserver;
+use App\Observers\ReposicionMaterialObserver;
 use App\Observers\ReservaMaterialAlmacenObserver;
 use App\Observers\ReservaTransformacionMaterialAlmacenObserver;
 use App\Observers\SaldoMaterialAlmacenObserver;
@@ -44,6 +47,9 @@ class CustodiaDistribuidaMaterialesServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        foreach ([ItemMaterial::class, FolioMaterial::class, SaldoMaterialAlmacen::class, MovimientoAlmacenMaterial::class, MovimientoInventarioMaterial::class] as $modelo) {
+            $modelo::observe(ReposicionMaterialObserver::class);
+        }
         FolioMaterial::observe(FolioMaterialAlmacenObserver::class);
         ReservaMaterial::observe(ReservaMaterialAlmacenObserver::class);
         ReservaTransformacionMaterial::observe(

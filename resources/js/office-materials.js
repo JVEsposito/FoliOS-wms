@@ -373,7 +373,7 @@ function renderImportPreview() {
     const errors = preview.errores || [];
     elements.importErrors.classList.toggle('is-hidden', errors.length === 0);
     elements.importErrors.innerHTML = errors.map((error) => `<p><strong>Fila ${Number(error.fila || 0)}${error.codigo ? ` · ${escapeHtml(error.codigo)}` : ''}:</strong> ${escapeHtml(error.mensaje)}</p>`).join('');
-    elements.importRows.innerHTML = (preview.filas || []).slice(0, 100).map((row) => `<tr><td>${Number(row.fila)}</td><td><strong>${escapeHtml(row.temporada_codigo)}</strong><small>${escapeHtml(row.temporada_nombre || '')}</small></td><td><strong>${escapeHtml(row.cliente_codigo)}</strong><small>${escapeHtml(row.cliente_nombre || '')}</small></td><td><strong>${escapeHtml(row.codigo)}</strong></td><td>${escapeHtml(row.nombre)}</td><td>${escapeHtml(itemTypeLabel(row.categoria_operacional))}</td><td>${escapeHtml(row.unidad_medida)}</td><td><span class="material-import-action">${escapeHtml(statusText(row.accion))}</span></td></tr>`).join('') || '<tr><td colspan="8">No existen filas válidas para mostrar.</td></tr>';
+    elements.importRows.innerHTML = (preview.filas || []).slice(0, 100).map((row) => `<tr><td>${Number(row.fila)}</td><td><strong>${escapeHtml(row.temporada_codigo)}</strong><small>${escapeHtml(row.temporada_nombre || '')}</small></td><td><strong>${escapeHtml(row.cliente_codigo)}</strong><small>${escapeHtml(row.cliente_nombre || '')}</small></td><td><strong>${escapeHtml(row.codigo)}</strong></td><td>${escapeHtml(row.nombre)}<small>Mínimo: ${row.stock_minimo == null ? 'sin cambio' : quantity(row.stock_minimo)} · Reorden: ${row.punto_reorden == null ? 'sin cambio' : quantity(row.punto_reorden)} · Máximo: ${row.stock_maximo == null ? 'sin cambio' : quantity(row.stock_maximo)}</small></td><td>${escapeHtml(itemTypeLabel(row.categoria_operacional))}</td><td>${escapeHtml(row.unidad_medida)}</td><td><span class="material-import-action">${escapeHtml(statusText(row.accion))}</span></td></tr>`).join('') || '<tr><td colspan="8">No existen filas válidas para mostrar.</td></tr>';
     const confirmed = preview.estado === 'confirmada';
     elements.importConfirm.disabled = errors.length > 0 || confirmed;
     elements.importConfirmationHelp.textContent = confirmed
@@ -423,6 +423,7 @@ async function loadInventoryPage(page = 1) {
 }
 
 async function loadAll() {
+    window.dispatchEvent(new Event('materiales:reposicion-actualizada'));
     const section = activeMaterialsSection();
     if (section === 'vencimientos') return loadExpiryPage();
     if (!mainDataSections.has(section)) return;
@@ -676,7 +677,7 @@ elements.providerList.addEventListener('click', (event) => {
     renderProviderCategories(categoryKeys);
     elements.providerCancel.classList.remove('is-hidden');
 });
-elements.itemList.addEventListener('click', (event) => { const button = event.target.closest('[data-edit-item]'); if (!button) return; const item = state.items.find((candidate) => candidate.id === button.dataset.editItem); if (!item) return; for (const field of ['id', 'codigo', 'nombre', 'categoria', 'categoria_operacional', 'unidad_medida', 'codigo_externo', 'dias_alerta_vencimiento']) elements.itemForm.elements[field].value = item[field] ?? ''; elements.itemForm.elements.cliente_material_id.value = item.cliente?.id || ''; elements.itemForm.elements.activo.checked = item.activo; elements.itemCancel.classList.remove('is-hidden'); });
+elements.itemList.addEventListener('click', (event) => { const button = event.target.closest('[data-edit-item]'); if (!button) return; const item = state.items.find((candidate) => candidate.id === button.dataset.editItem); if (!item) return; for (const field of ['id', 'codigo', 'nombre', 'categoria', 'categoria_operacional', 'unidad_medida', 'codigo_externo', 'dias_alerta_vencimiento', 'stock_minimo', 'punto_reorden', 'stock_maximo']) elements.itemForm.elements[field].value = item[field] ?? ''; elements.itemForm.elements.cliente_material_id.value = item.cliente?.id || ''; elements.itemForm.elements.activo.checked = item.activo; elements.itemCancel.classList.remove('is-hidden'); });
 elements.itemList.addEventListener('click', (event) => {
     const button = event.target.closest('[data-regularize-item]');
     if (!button || !elements.regularizationDialog) return;
@@ -724,7 +725,7 @@ elements.providerCancel.addEventListener('click', resetProviderForm); elements.i
 elements.importOpen.addEventListener('click', () => elements.importDialog.showModal());
 elements.importClose.addEventListener('click', () => elements.importDialog.close());
 elements.importTemplate.addEventListener('click', () => {
-    const content = '\uFEFFtemporada_codigo;cliente_codigo;codigo;nombre;categoria;tipo_item;unidad_medida;codigo_externo;activo\n2026-2027;AG-001;CAJ-5KG;Caja cartón 5 kg;Cajas;material_mp;unidad;ERP-1054;si\n';
+    const content = '\uFEFFtemporada_codigo;cliente_codigo;codigo;nombre;categoria;tipo_item;unidad_medida;codigo_externo;activo;stock_minimo;punto_reorden;stock_maximo\n2026-2027;AG-001;CAJ-5KG;Caja cartón 5 kg;Cajas;material_mp;unidad;ERP-1054;si;100;200;500\n';
     const url = URL.createObjectURL(new Blob([content], { type: 'text/csv;charset=utf-8' }));
     const link = document.createElement('a'); link.href = url; link.download = 'plantilla_catalogo_materiales.csv'; link.click();
     URL.revokeObjectURL(url);

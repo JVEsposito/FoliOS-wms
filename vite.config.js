@@ -41,6 +41,7 @@ export default defineConfig({
                 'resources/js/office-material-receptions.js',
                 'resources/js/office-material-warehouses.js',
                 'resources/js/office-material-inventory-counts.js',
+                'resources/js/office-material-replenishment.js',
                 'resources/css/office-validation.css',
                 'resources/js/office-validation.js',
                 'resources/css/office-pt-labels.css',
