@@ -72,11 +72,6 @@ class ServicioOperacionAhora
                 'hora' => $horaOperacional->format('H:i:s'),
                 'zona_horaria' => $horaOperacional->getTimezone()->getName(),
                 'turno' => $ventana['nombre'],
-                'por_contenido' => collect(['productos', 'materiales'])->mapWithKeys(fn ($tipo) => [$tipo => [
-                    'pendientes' => $rondas->where('contenido', $tipo)->where('estado', 'pendiente')->count(),
-                    'completadas' => $rondas->where('contenido', $tipo)->where('estado', 'completada')->count(),
-                    'vencidas' => $rondas->where('contenido', $tipo)->where('estado', 'vencida')->count(),
-                ]])->all(),
             ],
             'temporada' => [
                 'id' => $temporada->id,
