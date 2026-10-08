@@ -25,6 +25,7 @@ use App\Services\Materiales\ServicioAlmacenMaterial;
 use App\Services\Materiales\ServicioConsultaAlmacenesMaterial;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use LogicException;
