@@ -45,9 +45,9 @@ class ServicioVerificacionMateriales
             ->withCount('ubicacionesActuales');
     }
 
-    public function snapshot(Posicion $posicion, string $temporada): array
+    public function snapshot(Posicion $posicion, string $temporada, bool $bloquear = false): array
     {
-        $saldos = $this->saldos($posicion, $temporada)->orderBy('folio_id')->get();
+        $saldos = $this->saldos($posicion, $temporada)->orderBy('folio_id')->when($bloquear, fn ($q) => $q->lockForUpdate())->get();
         $ids = $saldos->pluck('folio_id')->all();
 
         return [
@@ -56,9 +56,9 @@ class ServicioVerificacionMateriales
                 'cantidad' => $s->cantidad_actual, 'version' => $s->version,
             ])->all(),
             'movimientos' => DB::table('movimientos')->where(fn ($q) => $q
-                ->where('posicion_origen_id', $posicion->id)->orWhere('posicion_destino_id', $posicion->id))->count(),
-            'movimientos_materiales' => DB::table('movimientos_almacenes_materiales')->whereIn('folio_id', $ids)->count(),
-            'retiros' => DB::table('retiros_materiales')->where('posicion_id', $posicion->id)->count(),
+                ->where('posicion_origen_id', $posicion->id)->orWhere('posicion_destino_id', $posicion->id))->when($bloquear, fn ($q) => $q->lockForUpdate())->count(),
+            'movimientos_materiales' => DB::table('movimientos_almacenes_materiales')->whereIn('folio_id', $ids)->when($bloquear, fn ($q) => $q->lockForUpdate())->count(),
+            'retiros' => DB::table('retiros_materiales')->where('posicion_id', $posicion->id)->when($bloquear, fn ($q) => $q->lockForUpdate())->count(),
         ];
     }
 
@@ -122,8 +122,9 @@ class ServicioVerificacionMateriales
             Folio::query()->whereIn('id', $ids)->orderBy('id')->lockForUpdate()->get();
             $esperados = $this->saldos($posicion, $temporada->id)->orderBy('folio_id')->lockForUpdate()->get()->keyBy('folio_id');
             Posicion::query()->lockForUpdate()->findOrFail($posicion->id);
-            $snapshot = $this->snapshot($posicion, $temporada->id);
-            $cambio = $snapshot !== $item->snapshot_materiales;
+            $snapshot = $this->snapshot($posicion, $temporada->id, bloquear: true);
+            // MySQL normaliza el orden de claves de objetos JSON; no es un movimiento.
+            $cambio = $snapshot != $item->snapshot_materiales;
             $resultado = 'no_aplica';
             if (! $cambio) {
                 $resultados = [];
@@ -145,7 +146,7 @@ class ServicioVerificacionMateriales
                 foreach ($porNumero as $numero => $lectura) {
                     $folio = $encontrados->get($numero);
                     $otra = $folio ? SaldoMaterialAlmacen::query()->where('folio_id', $folio->id)
-                        ->where('cantidad_actual', '>', 0)->whereNotNull('posicion_id')->where('posicion_id', '!=', $posicion->id)->value('posicion_id') : null;
+                        ->where('cantidad_actual', '>', 0)->whereNotNull('posicion_id')->where('posicion_id', '!=', $posicion->id)->lockForUpdate()->value('posicion_id') : null;
                     $resultados[] = $this->guardarFolio($item, $ronda, $posicion, $usuario, $dispositivo, [
                         'folio_encontrado_id' => $folio?->id, 'folio_encontrado_numero' => $numero,
                         'cantidad_contada' => $lectura['cantidad_contada'], 'otra_posicion_id' => $otra,

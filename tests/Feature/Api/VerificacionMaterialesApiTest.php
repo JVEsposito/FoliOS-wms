@@ -278,6 +278,18 @@ class VerificacionMaterialesApiTest extends TestCase
         $this->assertSame('completada', $ronda->estado);
     }
 
+    public function test_el_orden_de_claves_json_no_invalida_una_posicion_sin_movimientos(): void
+    {
+        $posicion = $this->posicion();
+        $this->folioEn($posicion, 'MAT-A');
+        $item = $this->itemEn($posicion);
+        $snapshot = array_reverse($item->snapshot_materiales, true);
+        $snapshot['saldos'] = array_map(fn ($s) => array_reverse($s, true), $snapshot['saldos']);
+        $item->update(['snapshot_materiales' => $snapshot]);
+        [, $registrado] = $this->confirmar($item, [['numero_folio' => 'MAT-A', 'cantidad_contada' => 10]]);
+        $this->assertSame('coincide', $registrado->resultado);
+    }
+
     public function test_cantidad_se_compara_con_custodia_local_y_tolerancia_uno_y_cinco_por_ciento(): void
     {
         $posicion = $this->posicion();
