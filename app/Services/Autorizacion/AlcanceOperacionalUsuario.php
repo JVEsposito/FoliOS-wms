@@ -166,6 +166,11 @@ class AlcanceOperacionalUsuario
         );
     }
 
+    public function puedeEditarNivelesStockMateriales(User $usuario): bool
+    {
+        return $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador, RolUsuario::SupervisorMateriales], ['materiales.catalogos', 'materiales.inventario']);
+    }
+
     public function puedeConsultarAccesos(User $usuario): bool
     {
         return $this->rolActivoEnModulo(

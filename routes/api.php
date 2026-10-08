@@ -426,6 +426,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/notificaciones-operacionales/{notificacionOperacional}/leer', [NotificacionOperacionalController::class, 'marcarLeida']);
     Route::post('/notificaciones-operacionales/{notificacionOperacional}/confirmar', [NotificacionOperacionalController::class, 'confirmar']);
 
+    Route::middleware('can:editar-niveles-stock-materiales')->group(function () {
+        Route::get('/materiales/items/niveles', [ReposicionMaterialController::class, 'niveles']);
+        Route::get('/materiales/items/{item}/niveles', [ReposicionMaterialController::class, 'show']);
+        Route::put('/materiales/items/{item}/niveles', [ReposicionMaterialController::class, 'guardarNiveles']);
+    });
+
     Route::middleware('can:consultar-despachos-materiales')->group(function () {
         Route::get('/materiales/reposicion', [ReposicionMaterialController::class, 'index']);
         Route::get('/materiales/reposicion/resumen', [ReposicionMaterialController::class, 'resumen']);

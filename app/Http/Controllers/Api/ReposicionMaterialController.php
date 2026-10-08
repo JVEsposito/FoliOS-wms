@@ -6,20 +6,47 @@ use App\Http\Controllers\Controller;
 use App\Models\ItemMaterial;
 use App\Services\Existencias\GeneradorLibroXlsx;
 use App\Services\Materiales\ServicioReposicionMaterial;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class ReposicionMaterialController extends Controller
 {
     public function index(Request $r, ServicioReposicionMaterial $servicio)
     {
+        return $this->listado($r, $servicio);
+    }
+
+    public function niveles(Request $r, ServicioReposicionMaterial $servicio)
+    {
+        return $this->listado($r, $servicio, true);
+    }
+
+    private function listado(Request $r, ServicioReposicionMaterial $servicio, bool $todos = false)
+    {
         $filtros = $this->filtros($r);
         $todas = $servicio->filas(['dias' => $filtros['dias'] ?? null], false);
 
-        return response()->json(['data' => $servicio->filas($filtros), 'dias' => $servicio->dias($filtros['dias'] ?? null),
+        return response()->json(['data' => $servicio->filas($filtros, ! $todos), 'dias' => $servicio->dias($filtros['dias'] ?? null),
             'catalogos' => ['clientes' => $todas->map(fn ($f) => ['id' => $f['cliente_id'], 'nombre' => $f['cliente']])->unique('id')->values(),
                 'categorias' => $todas->pluck('categoria')->filter()->unique()->sort()->values()],
             'indicador' => ['quiebre' => $todas->where('estado', 'quiebre')->count(), 'bajo_minimo' => $todas->where('estado', 'bajo_minimo')->count()]])->header('Cache-Control', 'no-store');
+    }
+
+    public function guardarNiveles(Request $r, ItemMaterial $item)
+    {
+        $reglas = ['present', 'nullable', 'numeric', 'min:0', 'max:99999999999.999', 'decimal:0,3'];
+        $datos = $r->validate(array_fill_keys(['stock_minimo', 'punto_reorden', 'stock_maximo'], $reglas));
+
+        return DB::transaction(function () use ($r, $item, $datos) {
+            $temporada = app(ServicioTemporadaActiva::class)->obtener(bloquear: true);
+            $item = ItemMaterial::whereKey($item->id)->lockForUpdate()->firstOrFail();
+            abort_unless($item->activo && $item->cliente?->activo && $item->cliente->temporada?->temporada_id === $temporada->id, 422, 'El ítem debe pertenecer a la temporada activa.');
+            $item->update([...$datos, 'actualizado_por_user_id' => $r->user()->id]);
+
+            return response()->json(['data' => $item->only(['id', 'stock_minimo', 'punto_reorden', 'stock_maximo'])]);
+        }, 3);
     }
 
     public function resumen(ServicioReposicionMaterial $servicio)

@@ -375,10 +375,16 @@ XML);
         $this->actingAs($admin, 'sanctum')->putJson($ruta, $datos)->assertUnprocessable()->assertJsonValidationErrors('stock_minimo');
         $this->assertNull($item->fresh()->stock_minimo);
         $supervisor = User::factory()->create(['rol' => RolUsuario::SupervisorMateriales, 'activo' => true]);
-        $this->actingAs($supervisor, 'sanctum')->putJson($ruta, [...$datos, 'stock_minimo' => 10])->assertOk()->assertJsonPath('data.stock_minimo', '10.000');
+        $this->actingAs($supervisor, 'sanctum')->putJson($ruta, [...$datos, 'stock_minimo' => 10])->assertForbidden();
+        $this->get('/oficina/materiales/items/niveles')->assertOk()->assertSee('Ítems · niveles de stock');
+        $this->actingAs($supervisor, 'sanctum')->getJson('/api/materiales/items/niveles')->assertOk()->assertJsonFragment(['codigo' => $item->codigo, 'stock_minimo' => null]);
+        $nivelesRuta = '/api/materiales/items/'.$item->id.'/niveles';
+        $this->actingAs($supervisor, 'sanctum')->putJson($nivelesRuta, ['stock_minimo' => 10, 'punto_reorden' => 20, 'stock_maximo' => 50, 'nombre' => 'No debe cambiar'])->assertOk()->assertJsonPath('data.stock_minimo', '10.000');
+        $this->assertSame($item->nombre, $item->fresh()->nombre);
+        $this->actingAs($supervisor, 'sanctum')->getJson('/api/materiales/items/niveles')->assertOk()->assertJsonFragment(['codigo' => $item->codigo]);
         $this->assertDatabaseHas('cambios_niveles_stock_materiales', ['item_material_id' => $item->id, 'user_id' => $supervisor->id]);
         $camarero = User::factory()->create(['rol' => RolUsuario::CamareroMateriales]);
-        $this->actingAs($camarero, 'sanctum')->putJson($ruta, [...$datos, 'stock_minimo' => 5])->assertForbidden();
+        $this->actingAs($camarero, 'sanctum')->putJson($nivelesRuta, ['stock_minimo' => 5, 'punto_reorden' => 20, 'stock_maximo' => 50])->assertForbidden();
     }
 
     private function crearItem(User $usuario, array $datos = []): ItemMaterial

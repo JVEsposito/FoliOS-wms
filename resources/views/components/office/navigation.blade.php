@@ -38,6 +38,7 @@
         'materiales' => [
             ['key' => 'resumen', 'module' => 'materiales.resumen', 'label' => 'Resumen', 'href' => '/oficina/materiales', 'permissions' => ['puede_consultar_despachos_materiales']],
             ['key' => 'catalogos', 'module' => 'materiales.catalogos', 'label' => 'Catálogos', 'href' => '/oficina/materiales/catalogos', 'permissions' => ['puede_consultar_despachos_materiales']],
+            ['key' => 'niveles-stock', 'module' => 'materiales.catalogos', 'label' => 'Ítems · niveles de stock', 'href' => '/oficina/materiales/items/niveles', 'permissions' => ['puede_editar_niveles_stock_materiales']],
             ['key' => 'recepciones', 'module' => 'materiales.etiquetas', 'label' => 'Recepciones', 'href' => '/oficina/materiales/recepciones', 'permissions' => ['puede_consultar_recepciones_materiales']],
             ['key' => 'recepcion', 'module' => 'materiales.etiquetas', 'label' => 'Etiquetas', 'href' => '/oficina/materiales/recepcion', 'permissions' => ['puede_consultar_recepciones_materiales', 'puede_imprimir_etiquetas_materiales']],
             ['key' => 'inventario', 'module' => 'materiales.inventario', 'label' => 'Inventario BC', 'href' => '/oficina/materiales/inventario', 'permissions' => ['puede_consultar_despachos_materiales']],
