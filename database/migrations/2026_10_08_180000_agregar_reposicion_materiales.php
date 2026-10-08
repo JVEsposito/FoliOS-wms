@@ -25,7 +25,7 @@ return new class extends Migration
             $t->json('anteriores');
             $t->json('nuevos');
             $t->timestamp('ocurrido_at');
-            $t->index(['item_material_id', 'ocurrido_at']);
+            $t->index(['item_material_id', 'ocurrido_at'], 'niveles_material_item_fecha');
         });
     }
 
