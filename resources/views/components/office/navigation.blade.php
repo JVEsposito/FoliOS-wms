@@ -119,9 +119,6 @@
             <span><strong data-office-context-label>Verificando contexto</strong><small data-office-context-status>Temporada y planta</small></span>
             <x-estiba.icon name="refresh" />
         </button>
-        @if ($domain === 'materiales')
-            <a href="/oficina/materiales/reposicion" class="secondary-button" data-material-replenishment-indicator hidden>Reposición</a>
-        @endif
         <div class="estiba-office-identity">
             <button type="button" class="estiba-office-theme-toggle" data-office-theme-toggle aria-pressed="false" aria-label="Activar modo oscuro" title="Activar modo oscuro">
                 <span class="estiba-office-theme-icon" aria-hidden="true"></span>
@@ -131,6 +128,9 @@
             <span class="estiba-office-user"><strong id="officeUserName">Usuario</strong><small id="officeUserRole">Oficina</small><small data-office-readonly hidden>Solo consulta</small></span>
             <button id="officeLogoutButton" type="button">Cerrar sesión</button>
         </div>
+        @if ($domain === 'materiales')
+            <a href="/oficina/materiales/reposicion" class="estiba-office-replenishment" data-material-replenishment-indicator hidden>Reposición</a>
+        @endif
     </header>
     {{-- Avisos de cierre de temporada dirigidos al usuario (office-shell.js). --}}
     <div class="estiba-office-notices" data-office-notices role="status" aria-live="polite" hidden></div>

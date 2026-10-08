@@ -189,7 +189,10 @@ export function initializeOfficeShell() {
     }
     const size = () => {
         const height = header.getBoundingClientRect().height;
-        if (height > 0) root.parentElement.style.setProperty('--office-header-height', `${Math.ceil(height)}px`);
+        const value = `${Math.ceil(height)}px`;
+        if (height > 0 && root.parentElement.style.getPropertyValue('--office-header-height') !== value) {
+            root.parentElement.style.setProperty('--office-header-height', value);
+        }
     };
     new ResizeObserver(size).observe(header);
     size();

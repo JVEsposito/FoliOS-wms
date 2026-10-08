@@ -35,11 +35,26 @@
     display: grid;
     grid-template-columns: var(--office-brand-width) minmax(190px, 245px) minmax(272px, 1fr) minmax(200px, 235px) auto;
     align-items: stretch;
-    min-height: var(--office-header-height);
+    /* La altura medida posiciona el menú; no debe realimentar la cabecera. */
+    min-height: 62px;
     background: #102f43;
     border-bottom: 3px solid var(--eui-shell-frost);
     box-shadow: 0 1px 3px rgba(3, 18, 28, .3);
 }
+
+.estiba-office-replenishment {
+    grid-column: 1 / -1;
+    min-width: 0;
+    padding: 6px 16px;
+    border-top: 1px solid #49677a;
+    background: #14394f;
+    color: #fff;
+    font-size: 12px;
+    text-align: right;
+    overflow-wrap: anywhere;
+}
+.estiba-office-replenishment:hover,
+.estiba-office-replenishment:focus-visible { background: var(--eui-shell-frost); }
 
 .estiba-office-brand,
 .estiba-office-system,
@@ -391,7 +406,7 @@
     .estiba-office-brand { border-right: 0; }
     .estiba-office-system,
     .estiba-office-status,
-    .estiba-office-context { display: none; }
+    .estiba-office-context { display: none !important; }
     .estiba-office-sidebar {
         position: fixed;
         top: var(--office-header-height);
@@ -412,9 +427,13 @@
     .estiba-office-header { grid-template-columns: 1fr; }
     .estiba-office-brand { width: 100%; }
     .estiba-office-brand .folios-logo--office { width: 116px; }
-    .estiba-office-identity { justify-content: flex-start; border-top: 1px solid #49677a; border-left: 0; }
-    .estiba-office-user { flex: 1; }
-    .estiba-office-theme-toggle { margin-left: auto; }
+    .estiba-office-identity {
+        display: grid;
+        grid-template-columns: 34px minmax(0, 1fr) auto;
+        border-top: 1px solid #49677a;
+        border-left: 0;
+    }
+    .estiba-office-theme-toggle { grid-column: 1 / -1; justify-self: end; }
 }
 
 @media (pointer: coarse) {
