@@ -152,7 +152,11 @@ class TransferenciaClienteMaterialApiTest extends TestCase
         $ronda = VerificacionUbicacion::create(['temporada_id' => $this->origen->folio->temporada_id, 'user_id' => $this->admin->id, 'contenido' => 'materiales', 'turno_inicio_at' => now(), 'turno_fin_at' => now()->addHours(8), 'vence_at' => now()->addHours(8), 'estado' => 'pendiente', 'objetivo' => 1, 'version' => 1]);
         VerificacionUbicacionItem::create(['verificacion_ubicacion_id' => $ronda->id, 'posicion_id' => $this->posicion->id, 'resultado' => 'pendiente', 'version' => 1]);
         $this->postJson($this->rutaTransferencia(), $this->datosTransferencia(10))->assertUnprocessable()->assertJsonPath('message', 'El folio o su posición participa en una verificación abierta. Finaliza la ronda antes de transferir.');
+        $ronda->items()->update(['resultado' => 'coincide']);
+        $this->postJson($this->rutaTransferencia(), $this->datosTransferencia(10))->assertUnprocessable();
         $this->assertDatabaseCount('transferencias_clientes_materiales', 0);
+        $ronda->update(['estado' => 'completada']);
+        $this->postJson($this->rutaTransferencia(), $this->datosTransferencia(10))->assertOk();
     }
 
     public function test_opciones_sugiere_codigo_compatible_y_permisos_de_listado_csv_y_escritura(): void
