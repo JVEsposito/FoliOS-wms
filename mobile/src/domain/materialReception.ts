@@ -1,3 +1,11 @@
+export type TipoFotoRecepcion = 'documento' | 'referencial';
+export type FotoRecepcion = { id: string; tipo: TipoFotoRecepcion; orden: number; sha256: string; bytes: number; url: string; miniatura_url: string };
+
+/** Solo las fotos aceptadas por el servidor habilitan la confirmación. */
+export function puedeConfirmarPorFotos(fotos: readonly FotoRecepcion[]): boolean {
+  return fotos.some((foto) => foto.tipo === 'documento' && Boolean(foto.id));
+}
+
 export type MaterialReceptionState = 'borrador' | 'confirmada' | 'anulada';
 
 export type ReceptionSeason = {
@@ -91,6 +99,10 @@ export type MaterialReception = {
   transportista: string | null;
   estado: MaterialReceptionState;
   version: number;
+  fotos_documento?: number;
+  fotos_referenciales?: number;
+  puede_confirmar_por_fotos?: boolean;
+  fotos?: FotoRecepcion[];
   observacion: string | null;
   detalles?: ReceptionDetail[];
   confirmado_at: string | null;

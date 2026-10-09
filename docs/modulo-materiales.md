@@ -425,3 +425,18 @@ Oficina → Materiales → **Reposición** muestra por defecto quiebres, bajos m
 Después de confirmar cambios de saldo, reservas, bloqueos, vencimientos, catálogo o movimientos se recalcula el ítem. El aviso operacional se dirige al supervisor de materiales solo al pasar a quiebre o bajo mínimo; se muestra también en los avisos de Oficina y puede marcarse leído. La revisión persistida y bloqueada del ítem evita avisos duplicados; recuperarse y caer nuevamente genera uno nuevo. No se modifica inventario. El cálculo diario idempotente `materiales:recalcular-reposicion` corre a las **06:00 de Chile**; requiere scheduler activo. `MATERIALES_REPOSICION_DIAS_CONSUMO=30` configura el período por defecto (1–365 días). Despliegue: migración, assets de Oficina y ejecución inicial del comando. No se requiere OTA nueva para esta vista.
 
 El supervisor de materiales y el administrador pueden editar únicamente mínimo, reorden y máximo desde **Materiales → Ítems · niveles de stock**, incluso en ítems sin niveles previos. El resto del catálogo conserva sus permisos existentes.
+
+
+### Fotos de documentos y evidencia de recepción
+
+Para una recepción nueva, guarda el borrador, agrega al menos una foto de la guía de despacho o factura y luego confirma. Solo cuenta una foto subida correctamente. Las recepciones confirmadas antes de esta regla mantienen su validez y pueden localizarse con el filtro **Sin foto de documento**.
+
+Cada recepción admite hasta cinco fotos de documento y cinco referenciales opcionales: JPG, PNG o WebP, máximo 5 MiB y 25 MP, sujetos al presupuesto de memoria del servidor. El original conserva sus bytes y metadatos como evidencia; la miniatura privada de 300 px se genera sin metadatos, reduciendo antes de orientar. El generador admite JPEG sin EXIF con orientación normal y advertencia en el log, como las fotos del catálogo.
+
+La tablet/PDA ofrece cámara y galería, subida inmediata y reintento manual con el mismo `operacion_id`. La confirmación queda deshabilitada mientras falte documento. Oficina permite subir varias fotos, abrir originales autenticados y descargar un ZIP. Las fotos no cambian la versión del borrador.
+
+En borrador, gestionar recepciones permite subir o quitar fotos; quitar elimina la fila y los archivos después del commit. En confirmada, agregar sigue disponible, pero quitar requiere administrar recepciones y motivo; es un borrado lógico y siempre debe quedar al menos un documento activo. Al anular se conserva toda la evidencia, en solo lectura.
+
+La eliminación administrativa conserva originales y miniaturas, incluso de fotos retiradas lógicamente, en `materiales/recepciones-eliminadas/{eliminacion_id}/`. El snapshot auditado incluye tipo, orden, SHA-256, tamaño y rutas. El traslado se realiza después del commit; si falla se registra un error y la descarga administrativa utiliza la ruta de origen, sin perder evidencia. La descarga `GET /api/materiales/recepciones/eliminaciones/{eliminacion}/fotos/{indice}` requiere administrar recepciones. Todas las descargas requieren sesión y usan `Cache-Control: no-store, private` y `nosniff`.
+
+Despliegue: aplicar migraciones y compilar assets de Oficina antes de publicar la OTA para tablet/PDA. No se agregan dependencias nativas ni se modifica `runtimeVersion`; se reutiliza `expo-image-picker`, por lo que este cambio no exige una APK nueva. Las tablets con la versión anterior deberán actualizarse para confirmar nuevas recepciones con documento.

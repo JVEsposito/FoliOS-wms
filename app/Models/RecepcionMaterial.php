@@ -62,6 +62,11 @@ class RecepcionMaterial extends Model
         return $this->hasMany(DetalleRecepcionMaterial::class, 'recepcion_material_id');
     }
 
+    public function fotos(): HasMany
+    {
+        return $this->hasMany(FotoRecepcionMaterial::class, 'recepcion_material_id');
+    }
+
     public function eventos(): HasMany
     {
         return $this->hasMany(EventoRecepcionMaterial::class, 'recepcion_material_id');

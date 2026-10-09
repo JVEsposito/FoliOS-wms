@@ -304,6 +304,7 @@
                     </div>
 
                     <form class="material-receptions-filters" id="materialReceptionsFilters">
+                        <label><span>Documento</span><select name="sin_foto_documento"><option value="">Todas</option><option value="1">Sin foto de documento</option></select></label>
                         <label><span>Buscar guía</span><input name="guia" maxlength="50" placeholder="Número de guía"></label>
                         <label><span>Estado</span><select name="estado"><option value="">Todos</option><option value="borrador">Borrador</option><option value="confirmada">Confirmada</option><option value="anulada">Anulada</option></select></label>
                         <button class="secondary-button" type="submit">Buscar</button>
@@ -344,6 +345,7 @@
                                     <button class="secondary-button" id="addMaterialReceptionLine" type="button">+ Agregar producto</button>
                                 </div>
                                 <div class="material-reception-lines" id="materialReceptionLines"></div>
+                                <section id="materialReceptionPhotos" class="material-reception-photos"></section>
 
                                 <label class="material-admin-reason is-hidden" id="materialReceptionCorrectionReason">
                                     <span>Motivo de la corrección administrativa *</span>
