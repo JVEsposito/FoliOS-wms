@@ -1,5 +1,5 @@
 /** Evidencia privada: las URLs temporales no llevan tokens y se liberan al cerrar. */
-export function createReceptionPhotosPanel(root, { getReception, token, canManage, canAdminister, onChange, onConfirm }) {
+export function createReceptionPhotosPanel(root, { getReception, token, uuid, canManage, canAdminister, onChange, onConfirm }) {
     let urls = [];
     let generation = 0;
     let busy = false;
@@ -70,7 +70,7 @@ export function createReceptionPhotosPanel(root, { getReception, token, canManag
         busy = true;
         try {
             for (const file of event.target.files) {
-                const op = crypto.randomUUID(); pending.set(op, { file, tipo, receptionId: getReception().id }); renderPending(); await upload(op);
+                const op = uuid(); pending.set(op, { file, tipo, receptionId: getReception().id }); renderPending(); await upload(op);
             }
         } finally { busy = false; }
     });

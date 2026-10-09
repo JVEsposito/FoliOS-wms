@@ -37,13 +37,13 @@ class FotosRecepcionMaterialApiTest extends TestCase
         $this->admin = User::factory()->create(['rol' => RolUsuario::Administrador, 'activo' => true]);
         $catalogo = ClienteMaterial::where('codigo', 'GENERAL')->whereHas('temporada', fn ($q) => $q->where('activa', true))->firstOrFail();
         $catalogo->cliente->update(['codigo_folio_materiales' => 'GE']);
-        $proveedor = ProveedorMaterial::create(['codigo' => 'FOTOS', 'nombre' => 'Proveedor fotos', 'activo' => true]);
+        $proveedor = ProveedorMaterial::create(['codigo' => 'FOTOS', 'nombre' => 'Proveedor fotos', 'activo' => true, 'creado_por_user_id' => $this->admin->id, 'actualizado_por_user_id' => $this->admin->id]);
         DB::table('clientes_proveedores_materiales')->insert([
             'id' => (string) Str::uuid(), 'cliente_id' => $catalogo->cliente_id, 'proveedor_material_id' => $proveedor->id,
-            'activo' => true, 'categorias' => json_encode(['Embalaje']), 'created_at' => now(), 'updated_at' => now(),
+            'activo' => true, 'categorias' => json_encode(['Embalaje']), 'creado_por_user_id' => $this->admin->id, 'actualizado_por_user_id' => $this->admin->id, 'created_at' => now(), 'updated_at' => now(),
         ]);
         $item = ItemMaterial::create(['cliente_material_id' => $catalogo->id, 'codigo' => 'FOTO', 'nombre' => 'Film',
-            'categoria' => 'Embalaje', 'categoria_operacional' => CategoriaOperacionalMaterial::Insumo, 'unidad_medida' => 'rollos', 'activo' => true]);
+            'categoria' => 'Embalaje', 'categoria_operacional' => CategoriaOperacionalMaterial::Insumo, 'unidad_medida' => 'rollos', 'activo' => true, 'origen_sistema' => 'manual', 'creado_por_user_id' => $this->admin->id, 'actualizado_por_user_id' => $this->admin->id]);
         $this->recepcion = app(ServicioRecepcionMaterial::class)->crear([
             'operacion_id' => (string) Str::uuid(), 'cliente_id' => $catalogo->cliente_id, 'proveedor_material_id' => $proveedor->id,
             'numero_guia_despacho' => 'GUIA-123', 'detalles' => [['item_material_id' => $item->id, 'cantidad_documental' => 10,

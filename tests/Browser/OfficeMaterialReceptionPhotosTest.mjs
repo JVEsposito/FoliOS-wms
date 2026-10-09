@@ -26,7 +26,7 @@ test('recepción exige documento aceptado, sube multipart autenticado y confirma
             window.reception = { id: 'reception', version: 1, estado: 'borrador', fotos: [] };
             window.confirmed = false;
             window.photosPanel = createReceptionPhotosPanel(document.getElementById('photos'), {
-                getReception: () => window.reception, token: () => 'private-token', canManage: () => true, canAdminister: () => false,
+                getReception: () => window.reception, token: () => 'private-token', uuid: () => '00000000-0000-4000-8000-000000000001', canManage: () => true, canAdminister: () => false,
                 onChange: (fotos) => { window.reception.fotos = fotos; }, onConfirm: async () => { window.confirmed = true; },
             });
             await window.photosPanel.render();
@@ -39,6 +39,7 @@ test('recepción exige documento aceptado, sube multipart autenticado y confirma
         const upload = calls.find((c) => c.body);
         assert.match(upload.headers['content-type'], /^multipart\/form-data; boundary=/);
         assert.match(upload.body, /name="operacion_id"/);
+        assert.match(upload.body, /00000000-0000-4000-8000-000000000001/);
         assert.match(upload.body, /name="archivo"/);
         assert.ok(calls.every((c) => c.headers.authorization === 'Bearer private-token' && !c.path.includes('private-token')));
         await page.getByRole('button', { name: 'Confirmar recepción' }).click();

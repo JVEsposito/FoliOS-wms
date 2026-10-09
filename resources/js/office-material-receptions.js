@@ -54,7 +54,7 @@ const receptionState = {
 };
 
 const photosPanel = receptionElements.photos ? createReceptionPhotosPanel(receptionElements.photos, {
-    getReception: () => receptionState.current, token: receptionToken, canManage: receptionCanManage, canAdminister: receptionCanAdminister,
+    getReception: () => receptionState.current, token: receptionToken, uuid: receptionUuid, canManage: receptionCanManage, canAdminister: receptionCanAdminister,
     onChange: (fotos) => {
         if (!receptionState.current) return;
         receptionState.current.fotos = fotos;
