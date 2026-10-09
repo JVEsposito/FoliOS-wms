@@ -67,6 +67,11 @@ test('transferencia de Oficina sugiere ítem, explica posición, conserva UUID a
         assert.equal(posts[2].perfil_id, 'profile');
         assert.equal(posts[2].formato, 'zpl');
         assert.equal(await page.evaluate(() => window.refreshes), 1);
+        await page.locator('[data-transfer-close]').click();
+        options.disponible_bodega = 70; options.en_centros_costo = 30;
+        await page.getByRole('button', { name: 'Transferir a otro cliente' }).click();
+        await page.locator('#materialClientTransferDialog').waitFor({ state: 'visible' });
+        assert.match(await page.locator('[data-transfer-mode]').textContent(), /libera la posición vacía de Bodega/);
         assert.deepEqual(errors, []);
         await context.close();
     } finally { await browser.close(); }

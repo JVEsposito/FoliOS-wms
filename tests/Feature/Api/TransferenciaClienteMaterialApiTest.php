@@ -101,6 +101,22 @@ class TransferenciaClienteMaterialApiTest extends TestCase
         $this->assertSame('70.000', $this->origen->fresh()->cantidad_actual);
     }
 
+    public function test_transferir_toda_la_bodega_con_saldo_en_centro_de_costo_libera_la_posicion_sin_tocar_el_centro(): void
+    {
+        $bodega = app(ServicioAlmacenMaterial::class)->bodegaCentral();
+        $otro = AlmacenMaterial::create(['codigo' => 'PACK-TOTAL', 'nombre' => 'Packing', 'tipo' => 'virtual', 'centro_costo' => 'PACKING', 'activo' => true, 'requiere_ubicacion_fisica' => false, 'creado_por_user_id' => $this->admin->id, 'actualizado_por_user_id' => $this->admin->id]);
+        SaldoMaterialAlmacen::where('folio_id', $this->origen->folio_id)->where('almacen_material_id', $bodega->id)->firstOrFail()->update(['cantidad_actual' => 70]);
+        SaldoMaterialAlmacen::create(['folio_id' => $this->origen->folio_id, 'almacen_material_id' => $otro->id, 'cantidad_actual' => 30, 'cantidad_reservada' => 0]);
+        app(ServicioAlmacenMaterial::class)->sincronizarProyeccion($this->origen);
+        $t = $this->postJson($this->rutaTransferencia(), $this->datosTransferencia(70))->assertOk()->assertJsonPath('data.modalidad', 'parcial')->assertJsonPath('data.folio_destino.estado_operacional', 'pendiente_ubicacion')->json('data');
+        $this->assertSame('30.000', $this->origen->fresh()->cantidad_actual);
+        $this->assertTrue($this->origen->folio->fresh()->activo);
+        $this->assertSame('30.000', SaldoMaterialAlmacen::where('folio_id', $this->origen->folio_id)->where('almacen_material_id', $otro->id)->value('cantidad_actual'));
+        $this->assertDatabaseMissing('ubicaciones_actuales', ['folio_id' => $this->origen->folio_id]);
+        $this->assertDatabaseMissing('ubicaciones_actuales', ['folio_id' => $t['folio_destino']['id']]);
+        $this->postJson($this->rutaTransferencia(), $this->datosTransferencia(1))->assertUnprocessable()->assertSee('Solo se transfiere stock en Bodega Central');
+    }
+
     public static function rechazos(): array
     {
         return array_map(fn ($c) => [$c], ['mismo_cliente', 'item_otro_cliente', 'unidad', 'bloqueo', 'vencimiento', 'cantidad', 'reserva', 'codigo', 'cliente_inactivo', 'item_inactivo']);

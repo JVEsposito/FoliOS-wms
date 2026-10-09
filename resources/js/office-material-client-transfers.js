@@ -44,7 +44,8 @@ export function createClientTransfers({ api, getIdentity, getClients, getToken, 
     }
     function describeMode() {
         const total = options && Math.abs(Number(form.elements.cantidad.value) - Number(options.cantidad_actual)) < 0.0001 && !options.tiene_reservas_activas && Number(options.en_centros_costo) === 0 && Number(options.reservado_bodega) === 0;
-        dialog.querySelector('[data-transfer-mode]').textContent = total ? 'Transferencia total: el folio origen se retira y el nuevo toma su ubicación. Reemplaza la etiqueta.' : 'Transferencia parcial: el origen conserva su ubicación y etiqueta. Separa el bulto transferido, imprime su nueva etiqueta y ubícalo desde la tablet.';
+        const vaciaBodega = options && Number(options.en_centros_costo) > 0 && Number(options.reservado_bodega) === 0 && Math.abs(Number(form.elements.cantidad.value) - Number(options.disponible_bodega)) < 0.0001;
+        dialog.querySelector('[data-transfer-mode]').textContent = total ? 'Transferencia total: el folio origen se retira y el nuevo toma su ubicación. Reemplaza la etiqueta.' : vaciaBodega ? 'Transferencia parcial: el origen conserva sus saldos en centros de costo y libera la posición vacía de Bodega. Separa el bulto transferido, imprime su nueva etiqueta y ubícalo desde la tablet.' : 'Transferencia parcial: el origen conserva su ubicación y etiqueta. Separa el bulto transferido, imprime su nueva etiqueta y ubícalo desde la tablet.';
     }
     async function open(folioId) {
         const ticket = generation;
@@ -63,7 +64,8 @@ export function createClientTransfers({ api, getIdentity, getClients, getToken, 
     async function showResult(t) {
         const ticket = generation;
         dialog.querySelector('[data-transfer-context]').textContent = `${t.folio_origen.numero_folio} → ${t.folio_destino.numero_folio} · ${t.cliente_origen.codigo} → ${t.cliente_destino.codigo}`;
-        form.hidden = true; result.innerHTML = `<h3>Folio nuevo: ${escape(t.folio_destino.numero_folio)}</h3><p>${t.modalidad === 'parcial' ? 'El bulto separado queda pendiente de ubicación. Conserva la etiqueta del folio origen.' : 'El folio nuevo conserva la ubicación del origen. Reemplaza la etiqueta antigua.'}</p>`;
+        const liberaPosicion = t.modalidad === 'parcial' && t.snapshot?.ubicacion_origen?.posicion_id && !t.snapshot.origen_despues?.saldos?.some((s) => s.posicion_id);
+        form.hidden = true; result.innerHTML = `<h3>Folio nuevo: ${escape(t.folio_destino.numero_folio)}</h3><p>${liberaPosicion ? 'El origen conserva sus saldos en centros de costo y libera la posición de Bodega. El bulto separado queda pendiente de ubicación.' : t.modalidad === 'parcial' ? 'El bulto separado queda pendiente de ubicación. Conserva la etiqueta del folio origen.' : 'El folio nuevo conserva la ubicación del origen. Reemplaza la etiqueta antigua.'}</p>`;
         if (!getIdentity()?.puede_imprimir_etiquetas_materiales) return;
         const profiles = (await api('/api/materiales/recepciones/perfiles-impresion')).data;
         if (ticket !== generation) return;
