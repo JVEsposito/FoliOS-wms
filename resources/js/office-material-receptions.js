@@ -17,6 +17,8 @@ const receptionElements = {
     confirmedCount: document.getElementById('materialReceptionConfirmedCount'),
     cancelledCount: document.getElementById('materialReceptionCancelledCount'),
     folioCount: document.getElementById('materialReceptionFolioCount'),
+    eliminations: document.getElementById('materialReceptionEliminations'),
+    showEliminations: document.getElementById('showMaterialReceptionEliminations'),
     photos: document.getElementById('materialReceptionPhotos'),
     dialog: document.getElementById('materialReceptionDialog'),
     form: document.getElementById('materialReceptionForm'),
@@ -71,6 +73,31 @@ const photosPanel = receptionElements.photos ? createReceptionPhotosPanel(recept
     },
 }) : null;
 receptionElements.dialog?.addEventListener('close', () => photosPanel?.clear());
+
+let eliminationsPage = 1;
+async function loadEliminationEvidence(page = 1) {
+    const response = await receptionApi(`/api/materiales/recepciones/eliminaciones?page=${page}`);
+    eliminationsPage = response.current_page;
+    const root = receptionElements.eliminations;
+    root.classList.remove('is-hidden');
+    root.innerHTML = '<h3>Evidencia de recepciones eliminadas</h3>' + response.data.map((record) => `<article><strong>Guía ${receptionEscape(record.numero_guia_despacho)}</strong><p>${receptionEscape(record.motivo)} · ${receptionEscape(record.eliminado_at)}</p>${record.fotos.map((foto) => `<button type="button" data-archived-photo="${receptionEscape(foto.url)}">${foto.tipo === 'documento' ? 'Documento' : 'Referencial'} ${foto.orden}</button>`).join('') || '<p>Sin fotos conservadas</p>'}</article>`).join('') + `<button type="button" data-archive-page="${page - 1}" ${page <= 1 ? 'disabled' : ''}>Anterior</button><button type="button" data-archive-page="${page + 1}" ${page >= response.last_page ? 'disabled' : ''}>Siguiente</button>`;
+}
+receptionElements.showEliminations?.addEventListener('click', () => { void loadEliminationEvidence(eliminationsPage).catch((error) => { receptionElements.error.textContent = error.message; }); });
+receptionElements.eliminations?.addEventListener('click', async (event) => {
+    const button = event.target.closest('button'); if (!button || button.disabled) return;
+    try {
+        if (button.dataset.archivePage) { await loadEliminationEvidence(Number(button.dataset.archivePage)); return; }
+        const path = button.dataset.archivedPhoto; if (!path) return;
+        const opened = window.open('about:blank', '_blank');
+        try {
+            const response = await fetch(path, { headers: { Authorization: `Bearer ${receptionToken()}` }, cache: 'no-store' });
+            if (!response.ok) throw new Error('No fue posible descargar la evidencia.');
+            const url = URL.createObjectURL(await response.blob());
+            if (opened) { opened.opener = null; opened.location.href = url; }
+            setTimeout(() => URL.revokeObjectURL(url), 120000);
+        } catch (error) { opened?.close(); throw error; }
+    } catch (error) { receptionElements.error.textContent = error.message; }
+});
 
 function receptionIsActive() {
     return receptionElements.workspace
@@ -190,6 +217,7 @@ function receptionFolioCount(record) {
 
 function renderReceptionList() {
     const admin = receptionCanAdminister();
+    receptionElements.showEliminations?.classList.toggle('is-hidden', !admin);
     const counts = receptionState.records.reduce((result, record) => {
         result[record.estado] = (result[record.estado] || 0) + 1;
         return result;

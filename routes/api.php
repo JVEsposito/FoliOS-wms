@@ -493,6 +493,7 @@ Route::middleware('auth:sanctum')->group(function () {
         ->middleware('can:consultar-kardex-materiales');
     Route::post('/materiales/almacenes/movimientos', [AlmacenMaterialController::class, 'store']);
 
+    Route::get('/materiales/recepciones/eliminaciones', [FotoRecepcionMaterialController::class, 'eliminaciones'])->middleware('can:administrar-recepciones-materiales');
     Route::get('/materiales/recepciones/eliminaciones/{eliminacion}/fotos/{indice}', [FotoRecepcionMaterialController::class, 'eliminada'])->middleware('can:administrar-recepciones-materiales');
     Route::prefix('materiales/recepciones')->group(function () {
         Route::middleware('can:consultar-recepciones-materiales')->group(function () {

@@ -56,3 +56,14 @@ test('una foto ausente o una URL externa no dispara descargas autenticadas', asy
   assert.equal(renderer.root.findAllByType('Image').length, 0);
   await act(async () => renderer.unmount());
 });
+
+test('miniatura de evidencia de recepción usa autenticación privada sin token en URL', async () => {
+  const calls = []; const Component = harness(async (...args) => { calls.push(args); return response; }); let renderer;
+  const evidence = { id: 'photo', miniatura_url: '/api/materiales/recepciones/reception/fotos/photo/miniatura' };
+  await act(async () => { renderer = create(React.createElement(Component, { ...props, photo: evidence })); });
+  assert.equal(calls[0][1].headers.Authorization, 'Bearer private-token');
+  assert.equal(calls[0][1].cache, 'no-store');
+  assert.doesNotMatch(calls[0][0], /private-token/);
+  assert.equal(renderer.root.findByType('Image').props.source.uri, 'data:image/jpeg;base64,YQ==');
+  await act(async () => renderer.unmount());
+});

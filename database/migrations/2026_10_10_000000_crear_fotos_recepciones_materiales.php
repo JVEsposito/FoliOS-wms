@@ -21,10 +21,10 @@ return new class extends Migration
             $table->unsignedInteger('alto');
             $table->char('sha256', 64);
             $table->uuid('operacion_id')->unique();
-            $table->foreignUuid('subida_por_user_id')->constrained('users')->restrictOnDelete();
+            $table->foreignId('subida_por_user_id')->constrained('users')->restrictOnDelete();
             $table->timestamps();
             $table->softDeletes('eliminada_at');
-            $table->foreignUuid('eliminada_por_user_id')->nullable()->constrained('users')->restrictOnDelete();
+            $table->foreignId('eliminada_por_user_id')->nullable()->constrained('users')->restrictOnDelete();
             $table->text('motivo_eliminacion')->nullable();
             $table->index(['recepcion_material_id', 'tipo', 'eliminada_at'], 'fotos_recepcion_tipo_activas');
         });

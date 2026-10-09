@@ -310,6 +310,8 @@
                         <button class="secondary-button" type="submit">Buscar</button>
                     </form>
 
+                    <button class="secondary-button is-hidden" id="showMaterialReceptionEliminations" type="button">Evidencia de recepciones eliminadas</button>
+                    <section id="materialReceptionEliminations" class="is-hidden" aria-label="Recepciones eliminadas"></section>
                     <p class="form-error" id="materialReceptionsError" role="alert"></p>
                     <div class="material-receptions-table-wrap">
                         <table class="materials-table material-receptions-table">

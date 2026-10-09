@@ -91,6 +91,23 @@ class FotoRecepcionMaterialController extends Controller
         return $respuesta;
     }
 
+    public function eliminaciones(Request $request)
+    {
+        $registros = EliminacionRecepcionMaterial::query()
+            ->when($request->query('guia'), fn ($q, $guia) => $q->where('numero_guia_despacho', 'like', '%'.trim($guia).'%'))
+            ->latest('eliminado_at')->paginate(25);
+        $registros->through(fn ($eliminacion) => [
+            'id' => $eliminacion->id, 'numero_guia_despacho' => $eliminacion->numero_guia_despacho,
+            'motivo' => $eliminacion->motivo, 'eliminado_at' => $eliminacion->eliminado_at?->toAtomString(),
+            'fotos' => collect($eliminacion->snapshot['fotos'] ?? [])->map(fn ($foto, $indice) => [
+                'tipo' => $foto['tipo'], 'orden' => $foto['orden'], 'sha256' => $foto['sha256'], 'bytes' => $foto['bytes'],
+                'url' => '/api/materiales/recepciones/eliminaciones/'.$eliminacion->id.'/fotos/'.$indice,
+            ])->values()->all(),
+        ]);
+
+        return response()->json($registros)->header('Cache-Control', 'no-store, private');
+    }
+
     public function eliminada(EliminacionRecepcionMaterial $eliminacion, string $indice)
     {
         abort_unless(ctype_digit($indice), 404);

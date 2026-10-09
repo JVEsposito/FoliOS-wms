@@ -47,7 +47,7 @@ class FotosRecepcionMaterialApiTest extends TestCase
         $this->recepcion = app(ServicioRecepcionMaterial::class)->crear([
             'operacion_id' => (string) Str::uuid(), 'cliente_id' => $catalogo->cliente_id, 'proveedor_material_id' => $proveedor->id,
             'numero_guia_despacho' => 'GUIA-123', 'detalles' => [['item_material_id' => $item->id, 'cantidad_documental' => 10,
-                'cantidad_contada' => 10, 'cantidad_recibida' => 10, 'cantidad_rechazada' => 0, 'bultos' => [['cantidad' => 10]]]],
+                'cantidad_contada' => 10, 'cantidad_aceptada' => 10, 'cantidad_recibida' => 10, 'cantidad_rechazada' => 0, 'bultos' => [['cantidad' => 10]]]],
         ], $this->admin);
         $this->actingAs($this->admin, 'sanctum');
     }
@@ -182,7 +182,9 @@ class FotosRecepcionMaterialApiTest extends TestCase
         Storage::disk('local')->assertMissing($original);
         $url = '/api/materiales/recepciones/eliminaciones/'.$eliminacion->id.'/fotos/0';
         $this->get($url)->assertOk()->assertHeader('X-Content-Type-Options', 'nosniff');
+        $this->getJson('/api/materiales/recepciones/eliminaciones')->assertOk()->assertJsonPath('data.0.fotos.0.url', $url);
         $this->actingAs(User::factory()->create(['rol' => RolUsuario::CamareroMateriales]), 'sanctum')->getJson($url)->assertForbidden();
+        $this->getJson('/api/materiales/recepciones/eliminaciones')->assertForbidden();
     }
 
     public function test_fallo_de_traslado_se_registra_y_la_evidencia_original_sigue_descargable(): void
