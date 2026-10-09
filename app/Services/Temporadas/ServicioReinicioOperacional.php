@@ -76,6 +76,7 @@ class ServicioReinicioOperacional
         'operaciones_retiro_materiales',
         'retiros_materiales',
         'movimientos_inventario_materiales',
+        'transferencias_clientes_materiales',
         'conexiones_existencias',
         'eventos_bloqueos_materiales',
         'correlativos_materiales_clientes',

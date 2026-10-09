@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
+    'transferencia_cliente_material_id',
     'folio_id',
     'item_material_id',
     'tipo',

@@ -11,6 +11,7 @@ use App\Models\Movimiento;
 use App\Models\MovimientoAlmacenMaterial;
 use App\Models\MovimientoInventarioMaterial;
 use App\Models\SaldoMaterialAlmacen;
+use App\Models\TransferenciaClienteMaterial;
 use BackedEnum;
 use Illuminate\Support\Collection;
 
@@ -274,6 +275,7 @@ class ServicioExpedienteMaterial
             ) && $this->tieneMovimientoAlmacen($movimiento, $movimientosAlmacen))
             ->map(fn (MovimientoInventarioMaterial $movimiento): array => [
                 'tipo' => 'inventario_material',
+                'folio_relacionado' => $movimiento->metadatos['otro_folio'] ?? null,
                 'fecha' => $this->fecha($movimiento->ocurrido_at ?? $movimiento->created_at),
                 'titulo' => $this->tituloMovimientoInventario($movimiento),
                 'descripcion' => sprintf(
@@ -284,6 +286,7 @@ class ServicioExpedienteMaterial
                 ),
                 'meta' => array_filter([
                     'Ítem' => $movimiento->item?->codigo,
+                    'Folio relacionado' => $movimiento->metadatos['otro_folio'] ?? null,
                     'Destino' => $movimiento->destino_nombre,
                     'Centro de costo' => $movimiento->destino_centro_costo,
                     'Despacho' => $movimiento->despacho?->codigo,
@@ -420,6 +423,10 @@ class ServicioExpedienteMaterial
     /** @return array<string, mixed> */
     private function origen(FolioMaterial $material): array
     {
+        $transferencia = TransferenciaClienteMaterial::with('folioOrigen.folio')->where('folio_destino_id', $material->folio_id)->first();
+        if ($transferencia) {
+            return ['tipo' => 'transferencia_cliente', 'titulo' => 'Transferencia entre clientes', 'referencia' => 'Desde '.$transferencia->folioOrigen->folio->numero_folio, 'fecha' => $this->fecha($transferencia->ocurrido_at)];
+        }
         $recepcion = $material->bultoRecepcion?->detalle?->recepcion;
 
         if ($recepcion) {
@@ -452,6 +459,8 @@ class ServicioExpedienteMaterial
     private function tituloMovimientoInventario(MovimientoInventarioMaterial $movimiento): string
     {
         return match ($movimiento->tipo) {
+            TipoMovimientoInventarioMaterial::TransferenciaClienteSalida => 'Transferencia a otro cliente',
+            TipoMovimientoInventarioMaterial::TransferenciaClienteEntrada => 'Transferencia recibida de otro cliente',
             TipoMovimientoInventarioMaterial::Ingreso => 'Ingreso de material',
             TipoMovimientoInventarioMaterial::IngresoRecepcion => 'Recepción de material',
             TipoMovimientoInventarioMaterial::AnulacionRecepcion => 'Recepción anulada',

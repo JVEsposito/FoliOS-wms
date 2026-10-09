@@ -78,6 +78,7 @@ use App\Http\Controllers\Api\SaludPlanificadorController;
 use App\Http\Controllers\Api\SesionesAccesoAdministracionController;
 use App\Http\Controllers\Api\SesionEstibaController;
 use App\Http\Controllers\Api\TomaInventarioMaterialController;
+use App\Http\Controllers\Api\TransferenciaClienteMaterialController;
 use App\Http\Controllers\Api\TransformacionMaterialController;
 use App\Http\Controllers\Api\TunelPrefrioController;
 use App\Http\Controllers\Api\ValidacionMpController;
@@ -465,6 +466,11 @@ Route::middleware('auth:sanctum')->group(function () {
     });
     Route::get('/materiales/kardex', [DespachoMaterialController::class, 'kardex'])
         ->middleware('can:consultar-kardex-materiales');
+    Route::post('/materiales/inventario/{folioMaterial}/transferir-cliente', [TransferenciaClienteMaterialController::class, 'store'])->middleware('can:transferir-folios-materiales-clientes');
+    Route::get('/materiales/transferencias-clientes/opciones', [TransferenciaClienteMaterialController::class, 'opciones'])->middleware('can:transferir-folios-materiales-clientes');
+    Route::get('/materiales/transferencias-clientes/exportar.csv', [TransferenciaClienteMaterialController::class, 'csv']);
+    Route::get('/materiales/transferencias-clientes', [TransferenciaClienteMaterialController::class, 'index']);
+    Route::post('/materiales/transferencias-clientes/{transferenciaClienteMaterial}/etiquetas', [ImpresionEtiquetaMaterialController::class, 'storeTransferencia'])->middleware('can:imprimir-etiquetas-materiales');
     Route::post('/materiales/inventario/{folioMaterial}/corregir-item', [CorreccionItemMaterialController::class, 'store'])
         ->middleware('can:corregir-items-estibados-materiales');
     Route::middleware('can:gestionar-bloqueos-materiales')->group(function () {

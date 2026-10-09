@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
+    'transferencia_cliente_material_id',
     'operacion_id',
     'payload_hash',
     'origen',

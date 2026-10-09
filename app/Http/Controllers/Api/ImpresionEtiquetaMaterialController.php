@@ -10,6 +10,7 @@ use App\Models\OrdenTransformacionMaterial;
 use App\Models\PersonalAccessToken;
 use App\Models\RecepcionMaterial;
 use App\Models\TrabajoImpresionMaterial;
+use App\Models\TransferenciaClienteMaterial;
 use App\Services\Materiales\ServicioImpresionEtiquetaMaterial;
 use DomainException;
 use Illuminate\Http\JsonResponse;
@@ -102,6 +103,17 @@ class ImpresionEtiquetaMaterialController extends Controller
         );
 
         return $this->respuestaArchivo($resultado);
+    }
+
+    public function storeTransferencia(GenerarEtiquetasMaterialRequest $request, TransferenciaClienteMaterial $transferenciaClienteMaterial, ServicioImpresionEtiquetaMaterial $servicio): Response
+    {
+        $dispositivoId = $this->dispositivoId($request);
+        $datos = $request->validated();
+        if ($datos['canal'] === 'pda_directa' && $dispositivoId === null) {
+            throw new DomainException('La impresión directa solo puede iniciarse desde una PDA o tablet registrada.');
+        }
+
+        return $this->respuestaArchivo($servicio->generarTransferencia($transferenciaClienteMaterial, $datos, $request->user(), $dispositivoId));
     }
 
     public function resultado(
