@@ -192,6 +192,15 @@ class TransferenciaClienteMaterialApiTest extends TestCase
         $this->postJson($ruta, $datos)->assertOk();
         $this->assertDatabaseCount('trabajos_impresion_materiales', 2);
         $this->assertSame(1, FolioTrabajoImpresionMaterial::where('es_reimpresion', true)->count());
+        foreach (['pdf' => '%PDF-', 'nlbl' => 'PK'] as $formato => $cabecera) {
+            $datos['operacion_id'] = (string) Str::uuid();
+            $datos['formato'] = $formato;
+            $archivo = $this->postJson($ruta, $datos)->assertOk();
+            $this->assertStringStartsWith($cabecera, $archivo->getContent());
+            $trabajo = TrabajoImpresionMaterial::findOrFail($archivo->headers->get('X-Estiba-Print-Job'));
+            $this->assertSame($t['id'], $trabajo->transferencia_cliente_material_id);
+            $this->assertSame([$t['folio_destino']['id']], $trabajo->folios->pluck('folio_id')->all());
+        }
     }
 
     public function test_correlativo_reutiliza_folio_liberado_del_cliente_destino(): void
