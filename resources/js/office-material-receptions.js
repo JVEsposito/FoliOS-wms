@@ -819,7 +819,11 @@ if (receptionElements.workspace) {
     });
     [receptionElements.deleteClose, receptionElements.deleteCancel].forEach((button) =>
         button.addEventListener('click', () => receptionElements.deleteDialog.close()));
-    window.addEventListener('estiba:office-session', () => loadReceptions(1));
+    window.addEventListener('estiba:office-session', () => {
+        photosPanel?.reset(); receptionElements.dialog.close(); receptionState.current = null;
+        receptionElements.eliminations?.replaceChildren(); receptionElements.eliminations?.classList.add('is-hidden');
+        void loadReceptions(1);
+    });
     document.addEventListener('click', (event) => {
         if (!event.target.closest('.material-reception-item-picker')) closeReceptionItemResults();
     });

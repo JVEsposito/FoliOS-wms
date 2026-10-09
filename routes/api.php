@@ -504,7 +504,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('/registro-muestreo/en-blanco', [RecepcionMaterialController::class, 'registroMuestreoEnBlanco']);
             Route::get('/{recepcionMaterial}/fotos', [FotoRecepcionMaterialController::class, 'index']);
             Route::get('/{recepcionMaterial}/fotos.zip', [FotoRecepcionMaterialController::class, 'zip']);
-            Route::get('/{recepcionMaterial}/fotos/{foto}/{variante}', [FotoRecepcionMaterialController::class, 'archivo']);
+            Route::get('/{recepcionMaterial}/fotos/{foto}/{variante}', [FotoRecepcionMaterialController::class, 'archivo'])->scopeBindings();
             Route::get('/{recepcionMaterial}/registro-muestreo', [RecepcionMaterialController::class, 'registroMuestreo']);
             Route::get('/{recepcionMaterial}/impresiones', [ImpresionEtiquetaMaterialController::class, 'index']);
             Route::get('/{recepcionMaterial}', [RecepcionMaterialController::class, 'show']);
@@ -515,7 +515,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('/', [RecepcionMaterialController::class, 'store']);
             Route::put('/{recepcionMaterial}', [RecepcionMaterialController::class, 'update']);
             Route::post('/{recepcionMaterial}/fotos', [FotoRecepcionMaterialController::class, 'store']);
-            Route::delete('/{recepcionMaterial}/fotos/{foto}', [FotoRecepcionMaterialController::class, 'destroy']);
+            Route::delete('/{recepcionMaterial}/fotos/{foto}', [FotoRecepcionMaterialController::class, 'destroy'])->scopeBindings();
             Route::post('/{recepcionMaterial}/confirmar', [RecepcionMaterialController::class, 'confirmar']);
         });
         Route::post('/{recepcionMaterial}/etiquetas', [ImpresionEtiquetaMaterialController::class, 'store'])

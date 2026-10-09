@@ -97,5 +97,5 @@ export function createReceptionPhotosPanel(root, { getReception, token, canManag
         } catch (error) { report(error); }
         finally { busy = false; button.disabled = false; }
     });
-    return { render, clear };
+    return { render, clear, reset: () => { clear(); pending.clear(); } };
 }
