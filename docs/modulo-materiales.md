@@ -81,8 +81,23 @@ cuando no queda ninguna referencia activa en ninguna temporada.
 Despliegue: aplicar `php artisan migrate --force`, compilar los assets con
 `npm run build` y después publicar la OTA de tablet y PDA
 (`npm --prefix mobile run update:production` / `update:pda`), para que las
-miniaturas usen los endpoints del backend ya actualizado. PHP requiere GD y
-EXIF; no se necesita enlazar estos archivos al disco público.
+miniaturas usen los endpoints del backend ya actualizado. PHP requiere GD;
+EXIF permite orientar correctamente los JPEG. Si EXIF falta, se acepta la foto
+con orientación normal y se registra una advertencia, sin causar un error 500.
+No se necesita enlazar estos archivos al disco público.
+
+En **ambos servidores Laragon para Windows**, habilitar `extension=gd` y
+`extension=exif` en el `php.ini` de la versión de PHP que sirve la aplicación.
+Usar `php --ini` y `php -m` con ese mismo ejecutable para comprobar el archivo
+cargado y que aparecen `gd` y `exif`. Reiniciar Laragon y también los workers o
+scheduler que ejecuten tareas de Windows. Si CLI y web usan versiones o
+configuraciones diferentes, comprobar ambas.
+
+Antes de decodificar se verifica un máximo de **25 MP** y un presupuesto
+conservador contra el `memory_limit` disponible del proceso. Si no cabe, se
+rechaza con validación y se pide reducir la resolución. El generador reduce
+primero a 300 px, libera el original y después aplica la orientación sobre la
+miniatura; así no duplica la imagen completa al rotarla.
 
 ## Recepción y conciliación física
 
