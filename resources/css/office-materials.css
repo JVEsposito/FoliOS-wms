@@ -418,3 +418,16 @@
 .item-photo-large img { display: block; width: 100%; height: 75vh; object-fit: contain; }
 
 .item-photo-dialog [hidden] { display: none !important; }
+
+.material-reception-photos { padding: 16px; border: 1px solid var(--line); border-radius: 12px; }
+.material-reception-photo-grid { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }
+.material-reception-photo-grid article { display: grid; gap: 6px; }
+.material-reception-photo-grid img { object-fit: contain; }
+.material-reception-photos section { margin-bottom: 16px; }
+.material-reception-photos button:disabled { opacity: .45; cursor: not-allowed; }
+
+.material-reception-readonly .material-reception-photos input,
+.material-reception-readonly .material-reception-photos textarea { pointer-events: auto; }
+.material-reception-photos { opacity: 1; }
+.material-receptions-filters { grid-template-columns: minmax(150px, 220px) minmax(220px, 1fr) minmax(150px, 240px) auto; }
+@media (max-width: 700px) { .material-receptions-filters { grid-template-columns: 1fr; } }

@@ -41,6 +41,10 @@ class RecepcionMaterialResource extends JsonResource
             'transportista' => $this->transportista,
             'estado' => $this->estado->value,
             'version' => $this->version,
+            'fotos_documento' => (int) ($this->resource->getAttribute('fotos_documento') ?? $this->fotos->where('tipo', 'documento')->count()),
+            'fotos_referenciales' => (int) ($this->resource->getAttribute('fotos_referenciales') ?? $this->fotos->where('tipo', 'referencial')->count()),
+            'puede_confirmar_por_fotos' => (int) ($this->resource->getAttribute('fotos_documento') ?? $this->fotos->where('tipo', 'documento')->count()) > 0,
+            'fotos' => $this->whenLoaded('fotos', fn () => $this->fotos->map->representar()->values()),
             'observacion' => $this->observacion,
             'detalles_count' => $this->whenCounted('detalles'),
             'detalles' => $this->whenLoaded('detalles', fn () => $this->detalles

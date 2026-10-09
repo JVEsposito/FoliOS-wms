@@ -16,8 +16,12 @@ import {
 
 import { AuthSession } from '../domain/estiba';
 import { PrivateMaterialThumbnail, MaterialItemPhoto } from '../components/PrivateMaterialThumbnail';
+import { MaterialReceptionPhotosPanel } from '../components/MaterialReceptionPhotosPanel';
+import { ApiError } from '../services/apiError';
 import { MaterialLabelPrintPanel } from '../components/MaterialLabelPrintPanel';
 import {
+  puedeConfirmarPorFotos,
+  FotoRecepcion,
   CreateMaterialReceptionPayload,
   MaterialReception,
   MaterialReceptionCatalog,
@@ -72,6 +76,7 @@ export function MaterialReceptionScreen({ auth, baseUrl, onLogout }: Props) {
   const [receptions, setReceptions] = useState<MaterialReception[]>([]);
   const [pending, setPending] = useState<PendingReceptionFolio[]>([]);
   const [selected, setSelected] = useState<MaterialReception | null>(null);
+  const [photosAttention, setPhotosAttention] = useState(0);
   const [filter, setFilter] = useState<HistoryFilter>('todas');
   const [form, setForm] = useState<Form>(() => emptyForm());
   const [operationId, setOperationId] = useState(() => Crypto.randomUUID());
@@ -270,7 +275,7 @@ export function MaterialReceptionScreen({ auth, baseUrl, onLogout }: Props) {
           version_conocida: editingDraft.version,
         })
         : await api.create(payload);
-      if (confirmImmediately && reception.estado === 'borrador') {
+      if (confirmImmediately && reception.estado === 'borrador' && puedeConfirmarPorFotos(reception.fotos ?? [])) {
         reception = await api.confirm(
           reception.id,
           confirmationOperationId(reception.id),
@@ -291,11 +296,11 @@ export function MaterialReceptionScreen({ auth, baseUrl, onLogout }: Props) {
       setOperationId(Crypto.randomUUID());
       setFilter('todas');
       setTab('historial');
-      setMessage(confirmImmediately
+      setMessage(reception.estado === 'confirmada'
         ? 'Recepción confirmada. Los folios quedaron disponibles para ubicación.'
-        : editingDraft
-          ? 'Borrador actualizado correctamente.'
-          : 'Borrador guardado correctamente.');
+        : 'Borrador guardado. Agrega la foto de la guía o factura y luego confirma.'
+      );
+
     } catch (reason) {
       if (reception) {
         const [historyResult, pendingResult, detailResult] = await Promise.allSettled([
@@ -397,6 +402,10 @@ export function MaterialReceptionScreen({ auth, baseUrl, onLogout }: Props) {
       setPending(await api.pendingFolios());
       setMessage('Recepción confirmada y folios generados.');
     } catch (reason) {
+      if (reason instanceof ApiError && (reason.data as { codigo?: string })?.codigo === 'recepcion_sin_foto_documento') {
+        setSelected(await api.show(reception.id).catch(() => reception));
+        setPhotosAttention((current) => current + 1);
+      }
       setError(errorMessage(reason));
     } finally {
       setActionBusy(false);
@@ -648,7 +657,7 @@ export function MaterialReceptionScreen({ auth, baseUrl, onLogout }: Props) {
                 </View>
                 <View style={styles.row}>
                   <Button label={editingDraft ? 'Actualizar borrador' : 'Guardar borrador'} onPress={() => void submit(false)} secondary />
-                  <Button label={editingDraft ? 'Actualizar y confirmar' : 'Crear y confirmar'} onPress={() => void submit(true)} />
+                  <Text style={styles.muted}>Guarda el borrador para agregar las fotos antes de confirmar.</Text>
                 </View>
               </View>
             </>
@@ -657,7 +666,12 @@ export function MaterialReceptionScreen({ auth, baseUrl, onLogout }: Props) {
       ) : tab === 'historial' ? (
         selected ? (
           <ReceptionDetail
+            key={`${selected.id}:${photosAttention}`}
             reception={selected}
+            baseUrl={baseUrl}
+            token={auth.token}
+            canAdminister={capabilities.puede_administrar_recepciones_materiales === true}
+            onPhotosChange={(fotos) => setSelected((current) => current?.id === selected.id ? { ...current, fotos, fotos_documento: fotos.filter((f) => f.tipo === 'documento').length } : current)}
             canManage={canManage}
             canAnnul={canAnnul}
             canPrint={capabilities.puede_imprimir_etiquetas_materiales === true}
@@ -733,7 +747,7 @@ export function MaterialReceptionScreen({ auth, baseUrl, onLogout }: Props) {
 }
 
 function ReceptionDetail({
-  reception,
+  reception, baseUrl, token, canAdminister, onPhotosChange,
   canManage,
   canAnnul,
   canPrint,
@@ -747,6 +761,7 @@ function ReceptionDetail({
   onAnnul,
 }: {
   reception: MaterialReception;
+  baseUrl: string; token: string; canAdminister: boolean; onPhotosChange: (fotos: FotoRecepcion[]) => void;
   canManage: boolean;
   canAnnul: boolean;
   canPrint: boolean;
@@ -779,6 +794,8 @@ function ReceptionDetail({
           <Summary label="Transportista" value={reception.transportista ?? '—'} />
         </View>
       </View>
+
+      <MaterialReceptionPhotosPanel receptionId={reception.id} state={reception.estado} api={api} baseUrl={baseUrl} token={token} canManage={canManage} canAdminister={canAdminister} onChange={onPhotosChange}/>
 
       {(reception.detalles ?? []).map((detail, index) => (
         <View key={detail.id} style={styles.card}>
@@ -821,7 +838,8 @@ function ReceptionDetail({
       {reception.estado === 'borrador' && canManage ? (
         <View style={styles.row}>
           <Button label="Editar borrador" onPress={onEdit} secondary />
-          <Button label="Confirmar y generar folios" onPress={onConfirm} />
+          <Button label="Confirmar y generar folios" disabled={!puedeConfirmarPorFotos(reception.fotos ?? [])} onPress={onConfirm} />
+          {!puedeConfirmarPorFotos(reception.fotos ?? []) ? <Text style={styles.muted}>Falta la foto de la guía de despacho o factura. Agrégala antes de confirmar.</Text> : null}
         </View>
       ) : null}
       {reception.estado === 'confirmada' && canAnnul ? (
@@ -1035,16 +1053,18 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   return <View style={styles.section}><Text style={styles.sectionTitle}>{title}</Text>{children}</View>;
 }
 
-function Button({ label, onPress, secondary = false, danger = false, small = false }: {
+function Button({ label, onPress, secondary = false, danger = false, small = false, disabled = false }: {
   label: string;
   onPress: () => void;
   secondary?: boolean;
   danger?: boolean;
   small?: boolean;
+  disabled?: boolean;
 }) {
   return (
-    <Pressable onPress={onPress} style={[
+    <Pressable disabled={disabled} accessibilityState={{ disabled }} onPress={onPress} style={[
       styles.button,
+      disabled && { opacity: 0.45 },
       secondary && styles.buttonSecondary,
       danger && styles.buttonDanger,
       small && styles.buttonSmall,

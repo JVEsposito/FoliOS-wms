@@ -1,4 +1,7 @@
+import { ApiError } from './apiError';
 import {
+  FotoRecepcion,
+  TipoFotoRecepcion,
   CreateMaterialReceptionPayload,
   GenerateMaterialLabelsPayload,
   LabelPrintProfile,
@@ -22,7 +25,7 @@ export function createMaterialReceptionApi(baseUrl: string, token: string) {
     const headers = new Headers(init.headers);
     headers.set('Accept', 'application/json');
     headers.set('Authorization', `Bearer ${token}`);
-    if (init.body) headers.set('Content-Type', 'application/json');
+    if (init.body && !(init.body instanceof FormData)) headers.set('Content-Type', 'application/json');
 
     let response: Response;
     try {
@@ -36,13 +39,25 @@ export function createMaterialReceptionApi(baseUrl: string, token: string) {
       : await response.json().catch(() => ({}));
 
     if (!response.ok) {
-      throw new Error(validationMessage(data, 'La operación no pudo completarse.'));
+      throw new ApiError(validationMessage(data, 'La operación no pudo completarse.'), response.status, data);
     }
 
     return data as T;
   }
 
   return {
+    async listarFotos(id: string): Promise<FotoRecepcion[]> {
+      return (await request<ApiList<FotoRecepcion>>(`/api/materiales/recepciones/${encodeURIComponent(id)}/fotos`)).data;
+    },
+    async subirFoto(id: string, tipo: TipoFotoRecepcion, operacionId: string, archivo: { uri: string; name: string; type: string }): Promise<FotoRecepcion> {
+      const body = new FormData();
+      body.append('tipo', tipo); body.append('operacion_id', operacionId);
+      body.append('archivo', archivo as unknown as Blob);
+      return (await request<ApiItem<FotoRecepcion>>(`/api/materiales/recepciones/${encodeURIComponent(id)}/fotos`, { method: 'POST', body })).data;
+    },
+    async eliminarFoto(id: string, fotoId: string, motivo?: string): Promise<void> {
+      await request(`/api/materiales/recepciones/${encodeURIComponent(id)}/fotos/${encodeURIComponent(fotoId)}`, { method: 'DELETE', body: JSON.stringify({ motivo }) });
+    },
     async catalog(): Promise<MaterialReceptionCatalog> {
       return request<MaterialReceptionCatalog>('/api/materiales/recepciones/catalogos');
     },

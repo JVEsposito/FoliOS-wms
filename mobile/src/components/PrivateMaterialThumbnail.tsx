@@ -12,7 +12,7 @@ export function PrivateMaterialThumbnail({ photo, baseUrl, token }: {
   const key = `${baseUrl}:${photo?.miniatura_url}:${token}`;
   const [loaded, setLoaded] = useState<{ key: string; uri: string } | null>(null);
   useEffect(() => {
-    if (!baseUrl || !photo?.miniatura_url.startsWith('/api/materiales/fotos-items/')) return;
+    if (!baseUrl || !photo || !/^\/api\/materiales\/(fotos-items\/|recepciones\/[a-zA-Z0-9-]+\/fotos\/)/.test(photo.miniatura_url)) return;
     const controller = new AbortController(); let active = true;
     void (async () => {
       try {

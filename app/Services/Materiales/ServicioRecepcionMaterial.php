@@ -9,6 +9,7 @@ use App\Enums\TipoBulto;
 use App\Enums\TipoEventoRecepcionMaterial;
 use App\Enums\TipoMovimientoInventarioMaterial;
 use App\Exceptions\ConflictoOperacion;
+use App\Exceptions\FotoDocumentoRecepcionRequerida;
 use App\Models\BultoRecepcionMaterial;
 use App\Models\Cliente;
 use App\Models\ClienteProveedorMaterial;
@@ -324,6 +325,11 @@ class ServicioRecepcionMaterial
                 return $this->cargar($recepcion);
             }
 
+            $fotos = $recepcion->fotos()->orderBy('tipo')->orderBy('orden')->lockForUpdate()->get();
+            if (! $fotos->contains('tipo', 'documento')) {
+                throw new FotoDocumentoRecepcionRequerida;
+            }
+
             if ($recepcion->estado !== EstadoRecepcionMaterial::Borrador) {
                 throw new DomainException('La recepción ya no se encuentra en borrador.');
             }
@@ -475,6 +481,7 @@ class ServicioRecepcionMaterial
                 ],
                 'numero_guia_despacho' => $recepcion->numero_guia_despacho,
                 'folios' => $foliosGenerados,
+                'fotos' => $fotos->map(fn ($foto) => $foto->only(['id', 'tipo', 'orden', 'sha256', 'bytes']))->values()->all(),
             ];
             $recepcion->update([
                 'estado' => EstadoRecepcionMaterial::Confirmada,
@@ -836,7 +843,7 @@ class ServicioRecepcionMaterial
                 );
             }
 
-            EliminacionRecepcionMaterial::create([
+            $eliminacion = EliminacionRecepcionMaterial::create([
                 'operacion_id' => $operacionId,
                 'recepcion_material_id_original' => $recepcion->id,
                 'temporada_id' => $recepcion->temporada_id,
@@ -849,6 +856,8 @@ class ServicioRecepcionMaterial
                 'eliminado_por_user_id' => $usuario->id,
                 'eliminado_at' => now(),
             ]);
+
+            app(ServicioFotosRecepcionMaterial::class)->archivar($recepcion, $eliminacion);
 
             $detalleIds = DB::table('detalles_recepciones_materiales')
                 ->where('recepcion_material_id', $recepcion->id)
@@ -880,6 +889,7 @@ class ServicioRecepcionMaterial
     public function cargar(RecepcionMaterial $recepcion): RecepcionMaterial
     {
         return $recepcion->load([
+            'fotos' => fn ($consulta) => $consulta->orderBy('tipo')->orderBy('orden'),
             'temporada:id,codigo,nombre,activa',
             'cliente:id,codigo,nombre,codigo_folio_materiales,activo',
             'proveedor:id,codigo,nombre,activo',

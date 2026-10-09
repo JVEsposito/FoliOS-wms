@@ -43,6 +43,7 @@ use App\Http\Controllers\Api\EvacuacionEmergenciaController;
 use App\Http\Controllers\Api\FolioPrefrioController;
 use App\Http\Controllers\Api\FormatoRegistroController;
 use App\Http\Controllers\Api\FotoItemMaterialController;
+use App\Http\Controllers\Api\FotoRecepcionMaterialController;
 use App\Http\Controllers\Api\FrutaProcesoController;
 use App\Http\Controllers\Api\GuiaDespachoEnvaseController;
 use App\Http\Controllers\Api\HidrocoolerMateriaPrimaController;
@@ -492,6 +493,8 @@ Route::middleware('auth:sanctum')->group(function () {
         ->middleware('can:consultar-kardex-materiales');
     Route::post('/materiales/almacenes/movimientos', [AlmacenMaterialController::class, 'store']);
 
+    Route::get('/materiales/recepciones/eliminaciones', [FotoRecepcionMaterialController::class, 'eliminaciones'])->middleware('can:administrar-recepciones-materiales');
+    Route::get('/materiales/recepciones/eliminaciones/{eliminacion}/fotos/{indice}', [FotoRecepcionMaterialController::class, 'eliminada'])->middleware('can:administrar-recepciones-materiales');
     Route::prefix('materiales/recepciones')->group(function () {
         Route::middleware('can:consultar-recepciones-materiales')->group(function () {
             Route::get('/catalogos', [RecepcionMaterialController::class, 'catalogos']);
@@ -499,6 +502,9 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('/perfiles-impresion', [PerfilImpresionEtiquetaController::class, 'index']);
             Route::get('/', [RecepcionMaterialController::class, 'index']);
             Route::get('/registro-muestreo/en-blanco', [RecepcionMaterialController::class, 'registroMuestreoEnBlanco']);
+            Route::get('/{recepcionMaterial}/fotos', [FotoRecepcionMaterialController::class, 'index']);
+            Route::get('/{recepcionMaterial}/fotos.zip', [FotoRecepcionMaterialController::class, 'zip']);
+            Route::get('/{recepcionMaterial}/fotos/{foto}/{variante}', [FotoRecepcionMaterialController::class, 'archivo'])->scopeBindings();
             Route::get('/{recepcionMaterial}/registro-muestreo', [RecepcionMaterialController::class, 'registroMuestreo']);
             Route::get('/{recepcionMaterial}/impresiones', [ImpresionEtiquetaMaterialController::class, 'index']);
             Route::get('/{recepcionMaterial}', [RecepcionMaterialController::class, 'show']);
@@ -508,6 +514,8 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('/importaciones/previsualizar', ImportacionProductosRecepcionMaterialController::class);
             Route::post('/', [RecepcionMaterialController::class, 'store']);
             Route::put('/{recepcionMaterial}', [RecepcionMaterialController::class, 'update']);
+            Route::post('/{recepcionMaterial}/fotos', [FotoRecepcionMaterialController::class, 'store']);
+            Route::delete('/{recepcionMaterial}/fotos/{foto}', [FotoRecepcionMaterialController::class, 'destroy'])->scopeBindings();
             Route::post('/{recepcionMaterial}/confirmar', [RecepcionMaterialController::class, 'confirmar']);
         });
         Route::post('/{recepcionMaterial}/etiquetas', [ImpresionEtiquetaMaterialController::class, 'store'])

@@ -65,7 +65,7 @@ function receptionImportMarkup() {
                 <div>
                     <p class="eyebrow">CARGA MASIVA</p>
                     <h2>Importar productos de la recepción</h2>
-                    <p>La planilla se previsualiza y luego carga sus productos en el formulario abierto. Nada se guarda hasta usar Guardar borrador o Guardar y confirmar.</p>
+                    <p>La planilla se previsualiza y luego carga sus productos en el formulario abierto. Guarda el borrador, agrega la foto de la guía o factura y luego confirma.</p>
                 </div>
                 <button id="closeMaterialReceptionImport" type="button" aria-label="Cerrar">×</button>
             </div>

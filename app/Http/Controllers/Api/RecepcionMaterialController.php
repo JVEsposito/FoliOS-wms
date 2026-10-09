@@ -153,6 +153,7 @@ class RecepcionMaterialController extends Controller
         Gate::authorize('consultar-recepciones-materiales');
         $filtros = $request->validate([
             'temporada_id' => ['nullable', 'uuid', 'exists:temporadas,id'],
+            'sin_foto_documento' => ['nullable', 'boolean'],
         ]);
         $temporadaId = $filtros['temporada_id'] ?? app(ServicioTemporadaActiva::class)->buscar()?->id;
         $usuario = $request->user();
@@ -160,7 +161,8 @@ class RecepcionMaterialController extends Controller
             ->when($temporadaId, fn ($query) => $query->where('temporada_id', $temporadaId))
             ->when(! $temporadaId, fn ($query) => $query->whereRaw('1 = 0'))
             ->with(['temporada', 'cliente', 'proveedor', 'creadoPor', 'confirmadoPor', 'anuladoPor'])
-            ->withCount('detalles')
+            ->withCount(['detalles', 'fotos as fotos_documento' => fn ($q) => $q->where('tipo', 'documento'), 'fotos as fotos_referenciales' => fn ($q) => $q->where('tipo', 'referencial')])
+            ->when($request->boolean('sin_foto_documento'), fn ($q) => $q->whereDoesntHave('fotos', fn ($f) => $f->where('tipo', 'documento')))
             ->when($request->query('estado'), fn ($query, $estado) => $query->where('estado', $estado))
             ->when($request->query('cliente_id'), fn ($query, $cliente) => $query->where('cliente_id', $cliente))
             ->when($request->query('proveedor_material_id'), fn ($query, $proveedor) => $query

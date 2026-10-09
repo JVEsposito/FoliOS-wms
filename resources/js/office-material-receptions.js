@@ -1,3 +1,4 @@
+import { createReceptionPhotosPanel } from './office-material-reception-photos.js';
 import './office-material-reception-import.js';
 
 const receptionElements = {
@@ -16,6 +17,9 @@ const receptionElements = {
     confirmedCount: document.getElementById('materialReceptionConfirmedCount'),
     cancelledCount: document.getElementById('materialReceptionCancelledCount'),
     folioCount: document.getElementById('materialReceptionFolioCount'),
+    eliminations: document.getElementById('materialReceptionEliminations'),
+    showEliminations: document.getElementById('showMaterialReceptionEliminations'),
+    photos: document.getElementById('materialReceptionPhotos'),
     dialog: document.getElementById('materialReceptionDialog'),
     form: document.getElementById('materialReceptionForm'),
     formError: document.getElementById('materialReceptionFormError'),
@@ -48,6 +52,52 @@ const receptionState = {
     lines: [],
     loading: false,
 };
+
+const photosPanel = receptionElements.photos ? createReceptionPhotosPanel(receptionElements.photos, {
+    getReception: () => receptionState.current, token: receptionToken, uuid: receptionUuid, canManage: receptionCanManage, canAdminister: receptionCanAdminister,
+    onChange: (fotos) => {
+        if (!receptionState.current) return;
+        receptionState.current.fotos = fotos;
+        receptionState.current.fotos_documento = fotos.filter((f) => f.tipo === 'documento').length;
+        configureReceptionDialog();
+    },
+    onConfirm: async () => {
+        const current = receptionState.current;
+        current.photoConfirmationOperation ||= receptionUuid();
+        try {
+            const response = await receptionApi(`/api/materiales/recepciones/${current.id}/confirmar`, {
+                method: 'POST', body: JSON.stringify({ operacion_id: current.photoConfirmationOperation, version_conocida: current.version }),
+            });
+            populateReceptionForm(response.data); configureReceptionDialog(); await photosPanel.render(); await loadReceptions();
+        } catch (error) { receptionElements.photos.scrollIntoView({ block: 'center' }); throw error; }
+    },
+}) : null;
+receptionElements.dialog?.addEventListener('close', () => photosPanel?.clear());
+
+let eliminationsPage = 1;
+async function loadEliminationEvidence(page = 1) {
+    const response = await receptionApi(`/api/materiales/recepciones/eliminaciones?page=${page}`);
+    eliminationsPage = response.current_page;
+    const root = receptionElements.eliminations;
+    root.classList.remove('is-hidden');
+    root.innerHTML = '<h3>Evidencia de recepciones eliminadas</h3>' + response.data.map((record) => `<article><strong>Guía ${receptionEscape(record.numero_guia_despacho)}</strong><p>${receptionEscape(record.motivo)} · ${receptionEscape(record.eliminado_at)}</p>${record.fotos.map((foto) => `<button type="button" data-archived-photo="${receptionEscape(foto.url)}">${foto.tipo === 'documento' ? 'Documento' : 'Referencial'} ${foto.orden}</button>`).join('') || '<p>Sin fotos conservadas</p>'}</article>`).join('') + `<button type="button" data-archive-page="${page - 1}" ${page <= 1 ? 'disabled' : ''}>Anterior</button><button type="button" data-archive-page="${page + 1}" ${page >= response.last_page ? 'disabled' : ''}>Siguiente</button>`;
+}
+receptionElements.showEliminations?.addEventListener('click', () => { void loadEliminationEvidence(eliminationsPage).catch((error) => { receptionElements.error.textContent = error.message; }); });
+receptionElements.eliminations?.addEventListener('click', async (event) => {
+    const button = event.target.closest('button'); if (!button || button.disabled) return;
+    try {
+        if (button.dataset.archivePage) { await loadEliminationEvidence(Number(button.dataset.archivePage)); return; }
+        const path = button.dataset.archivedPhoto; if (!path) return;
+        const opened = window.open('about:blank', '_blank');
+        try {
+            const response = await fetch(path, { headers: { Authorization: `Bearer ${receptionToken()}` }, cache: 'no-store' });
+            if (!response.ok) throw new Error('No fue posible descargar la evidencia.');
+            const url = URL.createObjectURL(await response.blob());
+            if (opened) { opened.opener = null; opened.location.href = url; }
+            setTimeout(() => URL.revokeObjectURL(url), 120000);
+        } catch (error) { opened?.close(); throw error; }
+    } catch (error) { receptionElements.error.textContent = error.message; }
+});
 
 function receptionIsActive() {
     return receptionElements.workspace
@@ -167,6 +217,7 @@ function receptionFolioCount(record) {
 
 function renderReceptionList() {
     const admin = receptionCanAdminister();
+    receptionElements.showEliminations?.classList.toggle('is-hidden', !admin);
     const counts = receptionState.records.reduce((result, record) => {
         result[record.estado] = (result[record.estado] || 0) + 1;
         return result;
@@ -193,7 +244,7 @@ function renderReceptionList() {
                 <td><strong>${receptionEscape(record.numero_guia_despacho)}</strong><small>${receptionEscape(record.orden_compra || 'Sin OC')}</small></td>
                 <td><strong>${receptionEscape(record.cliente?.codigo)} · ${receptionEscape(record.cliente?.nombre)}</strong><small>${receptionEscape(record.proveedor?.codigo)} · ${receptionEscape(record.proveedor?.nombre)}</small></td>
                 <td>${receptionEscape(receptionDate(record.fecha_documento))}</td>
-                <td><span class="material-reception-state material-reception-state--${receptionEscape(record.estado)}">${receptionEscape(receptionStatus(record.estado))}</span></td>
+                <td><span class="material-reception-state material-reception-state--${receptionEscape(record.estado)}">${receptionEscape(receptionStatus(record.estado))}</span>${!record.fotos_documento ? '<small>Sin foto de documento</small>' : ''}</td>
                 <td>${receptionEscape(record.detalles_count ?? '—')} ítems · ${receptionFolioCount(record)} folios</td>
                 <td><div class="material-reception-actions"><button data-action="view" data-id="${record.id}" type="button">Ver expediente</button>${samplingAction}${adminActions}</div></td>
             </tr>
@@ -425,6 +476,7 @@ function configureReceptionDialog() {
     receptionElements.saveDraft.classList.toggle('is-hidden', readonly || confirmed);
     receptionElements.saveConfirm.classList.toggle('is-hidden', readonly);
     receptionElements.saveConfirm.textContent = confirmed ? 'Guardar corrección' : 'Guardar y confirmar';
+    receptionElements.saveConfirm.disabled = !confirmed && !receptionState.current?.fotos?.some((f) => f.tipo === 'documento');
 }
 
 async function openReception(id = null, mode = 'view') {
@@ -435,6 +487,7 @@ async function openReception(id = null, mode = 'view') {
         receptionState.mode = mode;
         populateReceptionForm(response?.data || null);
         configureReceptionDialog();
+        void photosPanel?.render();
         receptionElements.dialog.showModal();
     } catch (error) {
         receptionElements.error.textContent = error.message;
@@ -548,7 +601,11 @@ async function saveReception(confirm) {
         );
     }
 
-    receptionElements.dialog.close();
+    if (response.data.estado === 'borrador') {
+        receptionState.mode = 'view';
+        populateReceptionForm(response.data); configureReceptionDialog(); await photosPanel?.render();
+        receptionElements.photos?.scrollIntoView({ block: 'center' });
+    } else { receptionElements.dialog.close(); }
     await loadReceptions(receptionState.page);
 }
 
@@ -762,7 +819,11 @@ if (receptionElements.workspace) {
     });
     [receptionElements.deleteClose, receptionElements.deleteCancel].forEach((button) =>
         button.addEventListener('click', () => receptionElements.deleteDialog.close()));
-    window.addEventListener('estiba:office-session', () => loadReceptions(1));
+    window.addEventListener('estiba:office-session', () => {
+        photosPanel?.reset(); receptionElements.dialog.close(); receptionState.current = null;
+        receptionElements.eliminations?.replaceChildren(); receptionElements.eliminations?.classList.add('is-hidden');
+        void loadReceptions(1);
+    });
     document.addEventListener('click', (event) => {
         if (!event.target.closest('.material-reception-item-picker')) closeReceptionItemResults();
     });

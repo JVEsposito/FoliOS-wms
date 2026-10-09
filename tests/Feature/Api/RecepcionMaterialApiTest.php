@@ -34,7 +34,7 @@ use ZipArchive;
 
 class RecepcionMaterialApiTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, \Tests\Concerns\PreparaFotoDocumentoRecepcionMaterial;
 
     public function test_busqueda_de_folios_para_camat_respeta_prefijo_temporada_y_ubicacion(): void
     {
@@ -168,7 +168,7 @@ class RecepcionMaterialApiTest extends TestCase
 
         $operacionConfirmacion = (string) Str::uuid();
         $confirmada = $this->conToken($tokenOficina)
-            ->postJson("/api/materiales/recepciones/{$recepcion['id']}/confirmar", [
+            ->postJsonConDocumento("/api/materiales/recepciones/{$recepcion['id']}/confirmar", [
                 'operacion_id' => $operacionConfirmacion,
                 'version_conocida' => 1,
             ])
@@ -183,7 +183,7 @@ class RecepcionMaterialApiTest extends TestCase
             ->json('data');
 
         $this->conToken($tokenOficina)
-            ->postJson("/api/materiales/recepciones/{$recepcion['id']}/confirmar", [
+            ->postJsonConDocumento("/api/materiales/recepciones/{$recepcion['id']}/confirmar", [
                 'operacion_id' => $operacionConfirmacion,
                 'version_conocida' => 1,
             ])
@@ -336,7 +336,7 @@ class RecepcionMaterialApiTest extends TestCase
             ->assertConflict();
 
         $this->conToken($token)
-            ->postJson("/api/materiales/recepciones/{$creada['id']}/confirmar", [
+            ->postJsonConDocumento("/api/materiales/recepciones/{$creada['id']}/confirmar", [
                 'operacion_id' => (string) Str::uuid(),
                 'version_conocida' => $editada['version'],
             ])
@@ -390,7 +390,7 @@ class RecepcionMaterialApiTest extends TestCase
             ->json('data');
 
         $this->conToken($token)
-            ->postJson("/api/materiales/recepciones/{$recepcion['id']}/confirmar", [
+            ->postJsonConDocumento("/api/materiales/recepciones/{$recepcion['id']}/confirmar", [
                 'operacion_id' => (string) Str::uuid(),
                 'version_conocida' => 1,
             ])
@@ -420,7 +420,7 @@ class RecepcionMaterialApiTest extends TestCase
             ->assertCreated()
             ->json('data');
         $this->conToken($tokenOficina)
-            ->postJson("/api/materiales/recepciones/{$recepcion['id']}/confirmar", [
+            ->postJsonConDocumento("/api/materiales/recepciones/{$recepcion['id']}/confirmar", [
                 'operacion_id' => (string) Str::uuid(),
                 'version_conocida' => 1,
             ])
@@ -484,7 +484,7 @@ class RecepcionMaterialApiTest extends TestCase
             ->getJson("/api/materiales/recepciones/{$recepcion['id']}")
             ->assertOk();
         $this->conToken($tokenCamarero)
-            ->postJson("/api/materiales/recepciones/{$recepcion['id']}/confirmar", [
+            ->postJsonConDocumento("/api/materiales/recepciones/{$recepcion['id']}/confirmar", [
                 'operacion_id' => (string) Str::uuid(),
                 'version_conocida' => 1,
             ])
@@ -527,7 +527,7 @@ class RecepcionMaterialApiTest extends TestCase
             ->json('data');
 
         $this->conToken($token)
-            ->postJson("/api/materiales/recepciones/{$recepcion['id']}/confirmar", [
+            ->postJsonConDocumento("/api/materiales/recepciones/{$recepcion['id']}/confirmar", [
                 'operacion_id' => (string) Str::uuid(),
                 'version_conocida' => 1,
             ])
@@ -581,7 +581,7 @@ class RecepcionMaterialApiTest extends TestCase
             ->json('data');
         $foliosAntes = Folio::query()->where('tipo_bulto', 'material')->count();
         $this->conToken($token)
-            ->postJson("/api/materiales/recepciones/{$rechazada['id']}/confirmar", [
+            ->postJsonConDocumento("/api/materiales/recepciones/{$rechazada['id']}/confirmar", [
                 'operacion_id' => (string) Str::uuid(),
                 'version_conocida' => 1,
             ])
@@ -660,7 +660,7 @@ class RecepcionMaterialApiTest extends TestCase
             ]);
 
         $this->conToken($token)
-            ->postJson("/api/materiales/recepciones/{$recepcion['id']}/confirmar", [
+            ->postJsonConDocumento("/api/materiales/recepciones/{$recepcion['id']}/confirmar", [
                 'operacion_id' => (string) Str::uuid(),
                 'version_conocida' => 1,
             ])
@@ -691,7 +691,7 @@ class RecepcionMaterialApiTest extends TestCase
             ->assertCreated()
             ->json('data');
         $confirmada = $this->conToken($token)
-            ->postJson("/api/materiales/recepciones/{$recepcion['id']}/confirmar", [
+            ->postJsonConDocumento("/api/materiales/recepciones/{$recepcion['id']}/confirmar", [
                 'operacion_id' => (string) Str::uuid(),
                 'version_conocida' => 1,
             ])
@@ -807,7 +807,7 @@ class RecepcionMaterialApiTest extends TestCase
         $confirmada = $this->travelTo(
             Carbon::parse('2026-07-29 13:14:00'),
             fn () => $this->conToken($token)
-                ->postJson("/api/materiales/recepciones/{$recepcion['id']}/confirmar", [
+                ->postJsonConDocumento("/api/materiales/recepciones/{$recepcion['id']}/confirmar", [
                     'operacion_id' => (string) Str::uuid(),
                     'version_conocida' => 1,
                 ])
@@ -944,7 +944,7 @@ class RecepcionMaterialApiTest extends TestCase
             ->assertCreated()
             ->json('data');
         $confirmada = $this->conToken($token)
-            ->postJson("/api/materiales/recepciones/{$recepcion['id']}/confirmar", [
+            ->postJsonConDocumento("/api/materiales/recepciones/{$recepcion['id']}/confirmar", [
                 'operacion_id' => (string) Str::uuid(),
                 'version_conocida' => 1,
             ])
@@ -984,7 +984,7 @@ class RecepcionMaterialApiTest extends TestCase
             ->assertCreated()
             ->json('data');
         $confirmada = $this->conToken($tokenOficina)
-            ->postJson("/api/materiales/recepciones/{$recepcion['id']}/confirmar", [
+            ->postJsonConDocumento("/api/materiales/recepciones/{$recepcion['id']}/confirmar", [
                 'operacion_id' => (string) Str::uuid(),
                 'version_conocida' => 1,
             ])
@@ -1100,7 +1100,7 @@ class RecepcionMaterialApiTest extends TestCase
             ->assertCreated()
             ->json('data');
         $confirmada = $this->conToken($token)
-            ->postJson("/api/materiales/recepciones/{$creada['id']}/confirmar", [
+            ->postJsonConDocumento("/api/materiales/recepciones/{$creada['id']}/confirmar", [
                 'operacion_id' => (string) Str::uuid(),
                 'version_conocida' => 1,
             ])
@@ -1153,7 +1153,7 @@ class RecepcionMaterialApiTest extends TestCase
             ->assertCreated()
             ->json('data');
         $this->conToken($token)
-            ->postJson("/api/materiales/recepciones/{$nueva['id']}/confirmar", [
+            ->postJsonConDocumento("/api/materiales/recepciones/{$nueva['id']}/confirmar", [
                 'operacion_id' => (string) Str::uuid(),
                 'version_conocida' => 1,
             ])
@@ -1179,7 +1179,7 @@ class RecepcionMaterialApiTest extends TestCase
             ->assertCreated()
             ->json('data');
         $confirmada = $this->conToken($token)
-            ->postJson("/api/materiales/recepciones/{$creada['id']}/confirmar", [
+            ->postJsonConDocumento("/api/materiales/recepciones/{$creada['id']}/confirmar", [
                 'operacion_id' => (string) Str::uuid(),
                 'version_conocida' => 1,
             ])
@@ -1220,7 +1220,7 @@ class RecepcionMaterialApiTest extends TestCase
             ->assertCreated()
             ->json('data');
         $this->conToken($token)
-            ->postJson("/api/materiales/recepciones/{$nueva['id']}/confirmar", [
+            ->postJsonConDocumento("/api/materiales/recepciones/{$nueva['id']}/confirmar", [
                 'operacion_id' => (string) Str::uuid(),
                 'version_conocida' => 1,
             ])
@@ -1268,7 +1268,7 @@ class RecepcionMaterialApiTest extends TestCase
             ->assertCreated()
             ->json('data');
         $confirmada = $this->conToken($token)
-            ->postJson("/api/materiales/recepciones/{$creada['id']}/confirmar", [
+            ->postJsonConDocumento("/api/materiales/recepciones/{$creada['id']}/confirmar", [
                 'operacion_id' => (string) Str::uuid(),
                 'version_conocida' => 1,
             ])
@@ -1328,7 +1328,7 @@ class RecepcionMaterialApiTest extends TestCase
             );
 
         $this->conToken($token)
-            ->postJson("/api/materiales/recepciones/{$recepcion['id']}/confirmar", [
+            ->postJsonConDocumento("/api/materiales/recepciones/{$recepcion['id']}/confirmar", [
                 'operacion_id' => (string) Str::uuid(),
                 'version_conocida' => 1,
             ])
