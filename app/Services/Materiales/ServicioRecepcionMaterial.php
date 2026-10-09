@@ -292,6 +292,7 @@ class ServicioRecepcionMaterial
         string $operacionId,
         int $versionConocida,
         User $usuario,
+        bool $exigirFotoDocumento = true,
     ): RecepcionMaterial {
         $payload = [
             'recepcion_material_id' => $recepcion->id,
@@ -305,6 +306,7 @@ class ServicioRecepcionMaterial
             $versionConocida,
             $usuario,
             $payloadHash,
+            $exigirFotoDocumento,
         ): RecepcionMaterial {
             $recepcion = RecepcionMaterial::query()
                 ->with(['detalles.bultos', 'cliente', 'proveedor'])
@@ -325,17 +327,17 @@ class ServicioRecepcionMaterial
                 return $this->cargar($recepcion);
             }
 
-            $fotos = $recepcion->fotos()->orderBy('tipo')->orderBy('orden')->lockForUpdate()->get();
-            if (! $fotos->contains('tipo', 'documento')) {
-                throw new FotoDocumentoRecepcionRequerida;
-            }
-
             if ($recepcion->estado !== EstadoRecepcionMaterial::Borrador) {
                 throw new DomainException('La recepción ya no se encuentra en borrador.');
             }
 
             if ($recepcion->version !== $versionConocida) {
                 throw new ConflictoOperacion('La recepción cambió desde la última lectura.');
+            }
+
+            $fotos = $recepcion->fotos()->orderBy('tipo')->orderBy('orden')->lockForUpdate()->get();
+            if ($exigirFotoDocumento && ! $fotos->contains('tipo', 'documento')) {
+                throw new FotoDocumentoRecepcionRequerida;
             }
 
             $temporada = $this->temporadaActiva->obtener(bloquear: true);
@@ -483,6 +485,9 @@ class ServicioRecepcionMaterial
                 'folios' => $foliosGenerados,
                 'fotos' => $fotos->map(fn ($foto) => $foto->only(['id', 'tipo', 'orden', 'sha256', 'bytes']))->values()->all(),
             ];
+            if (! $exigirFotoDocumento && ! $fotos->contains('tipo', 'documento')) {
+                $snapshot['sin_foto_documento'] = true;
+            }
             $recepcion->update([
                 'estado' => EstadoRecepcionMaterial::Confirmada,
                 'version' => $recepcion->version + 1,
@@ -747,6 +752,7 @@ class ServicioRecepcionMaterial
                     (string) $datos['confirmacion_operacion_id'],
                     $actualizada->version,
                     $usuario,
+                    exigirFotoDocumento: false,
                 );
             }
 

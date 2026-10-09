@@ -62,10 +62,72 @@ class FotosRecepcionMaterialApiTest extends TestCase
         $this->assertSame(1, $this->recepcion->fresh()->version);
         $op = (string) Str::uuid();
         $confirmada = $this->confirmar($op)->assertOk()->json('data');
+        $this->assertArrayNotHasKey('sin_foto_documento', $confirmada['snapshot_confirmacion']);
         $this->assertSame($foto['sha256'], collect($confirmada['snapshot_confirmacion']['fotos'])->firstWhere('id', $foto['id'])['sha256']);
         // Simula evidencia retirada por una vía externa: el reintento histórico no vuelve a validar fotos.
         FotoRecepcionMaterial::where('recepcion_material_id', $this->recepcion->id)->delete();
         $this->confirmar($op)->assertOk()->assertJsonPath('data.snapshot_confirmacion', $confirmada['snapshot_confirmacion']);
+    }
+
+    public function test_corregir_confirmada_legada_sin_fotos_reutiliza_folios_y_registra_ausencia_de_documento(): void
+    {
+        $this->subir()->assertCreated();
+        $confirmada = $this->confirmar()->assertOk()->json('data');
+        // Una recepción anterior al requisito no conserva fotos ni sus referencias en el snapshot.
+        FotoRecepcionMaterial::where('recepcion_material_id', $this->recepcion->id)->delete();
+        $snapshot = $confirmada['snapshot_confirmacion'];
+        unset($snapshot['fotos']);
+        $this->recepcion->update(['snapshot_confirmacion' => $snapshot]);
+        $datos = [
+            'operacion_id' => (string) Str::uuid(),
+            'confirmacion_operacion_id' => (string) Str::uuid(),
+            'version_conocida' => $confirmada['version'],
+            'motivo_correccion' => 'Se corrige el número de guía de una recepción legada.',
+            'cliente_id' => $this->recepcion->cliente_id,
+            'proveedor_material_id' => $this->recepcion->proveedor_material_id,
+            'numero_guia_despacho' => 'GUIA-CORREGIDA',
+            'detalles' => [[
+                'item_material_id' => $this->recepcion->detalles->first()->item_material_id,
+                'cantidad_documental' => 10, 'cantidad_contada' => 10,
+                'cantidad_aceptada' => 10, 'cantidad_recibida' => 10, 'cantidad_rechazada' => 0,
+                'bultos' => [['cantidad' => 10]],
+            ]],
+        ];
+
+        $corregida = $this->putJson($this->base().'/administrar', $datos)
+            ->assertOk()
+            ->assertJsonPath('data.estado', 'confirmada')
+            ->assertJsonPath('data.numero_guia_despacho', 'GUIA-CORREGIDA')
+            ->assertJsonPath('data.snapshot_confirmacion.sin_foto_documento', true)
+            ->assertJsonCount(0, 'data.snapshot_confirmacion.fotos')
+            ->json('data');
+
+        $this->assertSame(
+            array_column($confirmada['snapshot_confirmacion']['folios'], 'numero_folio'),
+            array_column($corregida['snapshot_confirmacion']['folios'], 'numero_folio'),
+        );
+        $this->assertDatabaseCount('folios_materiales', 1);
+        $this->putJson($this->base().'/administrar', $datos)->assertOk()
+            ->assertJsonPath('data.snapshot_confirmacion', $corregida['snapshot_confirmacion']);
+        $this->assertDatabaseCount('folios_materiales', 1);
+    }
+
+    public function test_confirmar_anulada_sin_fotos_prioriza_el_error_de_estado(): void
+    {
+        $this->recepcion->update(['estado' => EstadoRecepcionMaterial::Anulada]);
+
+        $this->confirmar()->assertUnprocessable()
+            ->assertJsonPath('codigo', 'regla_de_negocio')
+            ->assertJsonPath('message', 'La recepción ya no se encuentra en borrador.');
+    }
+
+    public function test_confirmar_sin_fotos_con_version_obsoleta_prioriza_el_conflicto(): void
+    {
+        $this->recepcion->update(['version' => 2]);
+
+        $this->confirmar()->assertConflict()
+            ->assertJsonPath('codigo', 'conflicto_operacional')
+            ->assertJsonPath('message', 'La recepción cambió desde la última lectura.');
     }
 
     public function test_limites_por_tipo_y_operacion_id_no_duplica_y_rechaza_otro_archivo(): void

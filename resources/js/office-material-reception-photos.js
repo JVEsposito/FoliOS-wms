@@ -67,11 +67,19 @@ export function createReceptionPhotosPanel(root, { getReception, token, uuid, ca
     }
     root.addEventListener('change', async (event) => {
         const tipo = event.target.dataset.upload; if (!tipo || busy) return;
+        const reception = getReception(); if (!reception) return;
+        const files = Array.from(event.target.files);
+        const saved = (reception.fotos || []).filter((foto) => foto.tipo === tipo).length;
+        const waiting = [...pending.values()].filter((photo) => photo.receptionId === reception.id && photo.tipo === tipo).length;
+        const accepted = files.slice(0, Math.max(0, 5 - saved - waiting));
+        const omitted = files.length - accepted.length;
         busy = true;
         try {
-            for (const file of event.target.files) {
-                const op = uuid(); pending.set(op, { file, tipo, receptionId: getReception().id }); renderPending(); await upload(op);
+            for (const file of accepted) {
+                const op = uuid(); pending.set(op, { file, tipo, receptionId: reception.id }); renderPending(); await upload(op);
             }
+            if (omitted && getReception()?.id === reception.id) report(new Error(`Se omitieron ${omitted} fotos: el máximo es 5 por tipo`));
+            event.target.value = '';
         } finally { busy = false; }
     });
     root.addEventListener('click', async (event) => {
