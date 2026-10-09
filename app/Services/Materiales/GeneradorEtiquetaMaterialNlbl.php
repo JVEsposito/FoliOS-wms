@@ -564,6 +564,11 @@ XML;
     /** @param array<string, mixed> $etiqueta */
     private function lineasOrigen(array $etiqueta): array
     {
+        if (($etiqueta['origen'] ?? 'recepcion') === 'transferencia_cliente') {
+            return ['Transferencia desde: '.$etiqueta['folio_origen'],
+                'Proveedor: '.($etiqueta['proveedor_nombre'] ?: '—').' · Lote: '.($etiqueta['lote_proveedor'] ?: '—'),
+                'Ingreso original: '.($etiqueta['fecha_recepcion'] ?: '—')];
+        }
         if (($etiqueta['origen'] ?? 'recepcion') === 'transformacion') {
             return [
                 'Transformación: '.$etiqueta['orden_transformacion']

@@ -11,6 +11,7 @@ use App\Models\PerfilImpresionEtiqueta;
 use App\Models\RecepcionMaterial;
 use App\Models\SalidaTransformacionMaterial;
 use App\Models\TrabajoImpresionMaterial;
+use App\Models\TransferenciaClienteMaterial;
 use App\Models\User;
 use Closure;
 use DomainException;
@@ -161,6 +162,34 @@ class ServicioImpresionEtiquetaMaterial
         );
     }
 
+    /** @return array{trabajo: TrabajoImpresionMaterial, contenido: string, mime: string, nombre: string} */
+    public function generarTransferencia(TransferenciaClienteMaterial $transferencia, array $datos, User $usuario, ?string $dispositivoId = null): array
+    {
+        $payload = ['origen' => 'transferencia_cliente', 'transferencia_cliente_material_id' => $transferencia->id,
+            'perfil_id' => $datos['perfil_id'], 'formato' => $datos['formato'], 'simbologia' => $datos['simbologia'], 'canal' => $datos['canal'],
+            'folio_ids' => collect($datos['folio_ids'])->sort()->values()->all(), 'copias' => (int) $datos['copias'], 'motivo_reimpresion' => $datos['motivo_reimpresion'] ?? null];
+
+        return $this->generarTrabajo($payload, $datos, $usuario, $dispositivoId, function (array $ids) use ($transferencia): array {
+            $transferencia = TransferenciaClienteMaterial::with('folioOrigen.folio')->lockForUpdate()->findOrFail($transferencia->id);
+            if ($ids !== [$transferencia->folio_destino_id]) {
+                throw new DomainException('Solo se imprime el folio destino de esta transferencia.');
+            }
+            $material = FolioMaterial::with(['folio', 'item.cliente.cliente', 'proveedorMaterial'])->findOrFail($transferencia->folio_destino_id);
+            $etiqueta = $this->etiquetaSnapshot($material);
+            $etiqueta = array_replace($etiqueta, ['origen' => 'transferencia_cliente',
+                'folio_origen' => $transferencia->folioOrigen->folio->numero_folio,
+                'cantidad' => number_format((float) $material->cantidad_inicial, 3, ',', '.'),
+                'fecha_recepcion' => $material->folio->fecha_ingreso?->format('d/m/Y H:i'),
+                'proveedor_codigo' => $material->proveedorMaterial?->codigo, 'proveedor_nombre' => $material->proveedorMaterial?->nombre ?? $material->proveedor,
+                'lote_proveedor' => $material->lote, 'fecha_fabricacion' => $material->fecha_fabricacion?->toDateString(),
+                'fecha_vencimiento' => $material->fecha_vencimiento?->toDateString(), 'bloqueado' => $material->motivo_bloqueo !== null,
+                'motivo_bloqueo' => $material->motivo_bloqueo]);
+
+            return ['recepcion_material_id' => null, 'orden_transformacion_material_id' => null, 'lote_transformacion_material_id' => null,
+                'transferencia_cliente_material_id' => $transferencia->id, 'etiquetas' => [$etiqueta]];
+        });
+    }
+
     /**
      * @param  array<string, mixed>  $payload
      * @param  array<string, mixed>  $datos
@@ -230,6 +259,7 @@ class ServicioImpresionEtiquetaMaterial
                     'operacion_id' => $datos['operacion_id'],
                     'payload_hash' => $payloadHash,
                     'origen' => $payload['origen'],
+                    'transferencia_cliente_material_id' => $contexto['transferencia_cliente_material_id'] ?? null,
                     'recepcion_material_id' => $contexto['recepcion_material_id'],
                     'orden_transformacion_material_id' => $contexto['orden_transformacion_material_id'],
                     'lote_transformacion_material_id' => $contexto['lote_transformacion_material_id'],
@@ -279,9 +309,11 @@ class ServicioImpresionEtiquetaMaterial
             'nlbl' => 'nlbl',
             default => 'zpl',
         };
-        $referencia = $trabajo->origen === 'transformacion'
+        $referencia = $trabajo->origen === 'transferencia_cliente'
+            ? 'transferencia-'.mb_substr((string) $trabajo->transferencia_cliente_material_id, 0, 8)
+            : ($trabajo->origen === 'transformacion'
             ? 'transformacion-'.mb_substr((string) $trabajo->orden_transformacion_material_id, 0, 8)
-            : $this->referenciaRecepcion($trabajo);
+            : $this->referenciaRecepcion($trabajo));
 
         return [
             'trabajo' => $trabajo,

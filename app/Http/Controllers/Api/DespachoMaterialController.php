@@ -244,6 +244,8 @@ class DespachoMaterialController extends Controller
                     'nombre' => $movimiento->item->nombre,
                 ],
                 'tipo' => $movimiento->tipo->value,
+                'transferencia_cliente_material_id' => $movimiento->transferencia_cliente_material_id,
+                'metadatos' => $movimiento->metadatos,
                 'cantidad' => $movimiento->cantidad,
                 'cantidad_anterior' => $movimiento->cantidad_anterior,
                 'cantidad_resultante' => $movimiento->cantidad_resultante,

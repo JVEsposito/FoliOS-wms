@@ -4,6 +4,8 @@ namespace App\Enums;
 
 enum TipoMovimientoInventarioMaterial: string
 {
+    case TransferenciaClienteSalida = 'transferencia_cliente_salida';
+    case TransferenciaClienteEntrada = 'transferencia_cliente_entrada';
     case Ingreso = 'ingreso';
     case IngresoRecepcion = 'ingreso_recepcion';
     case AnulacionRecepcion = 'anulacion_recepcion';

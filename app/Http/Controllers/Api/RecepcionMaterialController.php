@@ -345,8 +345,9 @@ class RecepcionMaterialController extends Controller
                     EstadoOperacionalFolio::Bloqueado->value,
                 ])
                 ->whereDoesntHave('ubicacionActual'))
-            ->whereHas('bultoRecepcion.detalle.recepcion', fn ($consulta) => $consulta
-                ->where('estado', EstadoRecepcionMaterial::Confirmada->value))
+            ->where(fn ($consulta) => $consulta
+                ->whereHas('bultoRecepcion.detalle.recepcion', fn ($recepciones) => $recepciones->where('estado', EstadoRecepcionMaterial::Confirmada->value))
+                ->orWhereHas('folio', fn ($folios) => $folios->where('origen_sistema', 'transferencia_cliente_materiales')->where('temporada_id', app(ServicioTemporadaActiva::class)->subconsultaId())))
             ->when($request->query('cliente_id'), fn ($consulta, $cliente) => $consulta
                 ->whereHas('item.cliente', fn ($catalogo) => $catalogo->where('cliente_id', $cliente)))
             ->orderBy('created_at')

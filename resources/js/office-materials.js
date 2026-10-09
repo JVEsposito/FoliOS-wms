@@ -1,3 +1,4 @@
+import { createClientTransfers } from './office-material-client-transfers.js';
 import { openItemPhotoPanel, loadPrivateItemImages, releasePrivateItemImages } from './shared/private-item-photos';
 import { createOperationalPoller } from './shared/operational-poller';
 
@@ -340,6 +341,7 @@ function renderInventory() {
         const actions = [
             canConsumeDirect ? `<button data-direct-consumption="${folio.folio_id}" type="button">Consumir insumo</button>` : '',
             canDirect ? `<button data-direct-dispatch="${folio.folio_id}" type="button">Despachar directo</button>` : '',
+            state.identity?.puede_transferir_folios_materiales_clientes === true ? `<button data-transfer-client="${folio.folio_id}" type="button">Transferir a otro cliente</button>` : '',
             canCorrect ? `<button data-correct-material="${folio.folio_id}" type="button">Corregir código</button>` : '',
             canManageBlock ? `<button data-correct-expiry="${folio.folio_id}" type="button">Corregir vencimiento</button>` : '',
             canManageBlock && blocked && folio.vencimiento?.estado !== 'vencido' && !folio.vencimiento?.bloqueado_por_vencimiento
@@ -427,6 +429,8 @@ async function loadInventoryPage(page = 1) {
     renderInventory();
 }
 
+const clientTransfers = createClientTransfers({ api, getIdentity: () => state.identity, getClients: seasonClients, getToken: () => state.token, uuid: operationUuid, onRefresh: loadAll });
+
 async function loadAll() {
     window.dispatchEvent(new Event('materiales:reposicion-actualizada'));
     const section = activeMaterialsSection();
@@ -472,6 +476,7 @@ async function loadAll() {
         applyInventoryResponse(inventory);
     }
     renderAll();
+    if (section === 'inventario') await clientTransfers.refresh();
     if (section === 'despachos') await loadDispatchAssignees();
 }
 

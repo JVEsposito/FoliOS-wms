@@ -456,9 +456,19 @@
                             <div><button id="materialsInventoryPrevious" type="button">← Anterior</button><span id="materialsInventoryPage">Página 1 de 1</span><button id="materialsInventoryNext" type="button">Siguiente →</button></div>
                         </div>
                     </section>
+                    <section class="panel materials-panel" id="materialClientTransfers" data-materials-view="inventario" hidden>
+                        <h2>Transferencias entre clientes</h2>
+                        <form class="materials-panel__tools"><select name="cliente_id" aria-label="Cliente de transferencia"><option value="">Todos los clientes</option></select><label>Desde<input type="date" name="desde"></label><label>Hasta<input type="date" name="hasta"></label><input name="folio" placeholder="Número de folio" aria-label="Folio de transferencia"><button type="submit">Filtrar</button><button type="button" data-transfer-csv>Descargar CSV</button></form>
+                        <div class="materials-table-scroll"><table class="materials-table"><thead><tr><th>Fecha</th><th>Folios</th><th>Clientes</th><th>Ítems</th><th>Cantidad</th><th>Motivo / respaldo</th><th>Usuario</th><th>Etiqueta</th></tr></thead><tbody></tbody></table></div>
+                        <div class="materials-pagination"><button type="button" data-transfer-previous>Anterior</button><span data-transfer-page></span><button type="button" data-transfer-next>Siguiente</button></div><p class="form-error" data-transfer-list-error role="alert"></p>
+                    </section>
                 </div>
             </section>
         </main>
+        <dialog class="materials-import" id="materialClientTransferDialog">
+            <div class="materials-import__header"><div><p class="eyebrow">TRANSFERENCIA SUPERVISADA</p><h2>Transferir a otro cliente</h2><p data-transfer-context></p></div><button type="button" data-transfer-close aria-label="Cerrar">×</button></div>
+            <form class="materials-import__form"><label>Cliente destino<select name="cliente_destino_id" required></select></label><label>Ítem destino<select name="item_destino_id" required></select></label><label>Cantidad<input name="cantidad" type="number" min="0.001" step="0.001" required></label><label>Motivo<textarea name="motivo" required minlength="10" maxlength="2000"></textarea></label><label>Documento de respaldo (opcional)<input name="documento_respaldo" maxlength="150"></label><p class="materials-import__help" data-transfer-mode></p><button type="submit" class="primary-button">Confirmar transferencia</button></form><p class="form-error" data-transfer-error role="alert"></p><div data-transfer-result></div>
+        </dialog>
         <dialog class="materials-import" id="materialImportDialog">
             <div class="materials-import__header">
                 <div><p class="eyebrow">CARGA MASIVA</p><h2>Importar catálogo de materiales</h2><p>Previsualiza los cambios antes de incorporarlos. Esta operación no crea folios ni existencias.</p></div>

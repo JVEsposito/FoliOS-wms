@@ -326,6 +326,7 @@ function traceTimeline(events = []) {
                 <time>${escapeHtml(formatDate(event.fecha))}</time>
                 <h4>${escapeHtml(event.titulo)}</h4>
                 <p>${escapeHtml(event.descripcion)}</p>
+                ${event.folio_relacionado ? `<a href="/oficina/consultas?q=${encodeURIComponent(event.folio_relacionado)}">Ver folio ${escapeHtml(event.folio_relacionado)}</a>` : ''}
                 ${traceMeta(event.meta)}
                 ${traceOrigins(event.origenes)}
             </div>

@@ -22,6 +22,7 @@ use App\Services\Autorizacion\AlcanceOperacionalUsuario;
 use App\Services\Estiba\ServicioMovimientoEstiba;
 use App\Services\Estiba\ServicioRecomendacionUbicacion;
 use App\Services\Folios\ServicioHabilitacionAlmacenamiento;
+use App\Services\Materiales\ServicioTransferenciaClienteMaterial;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Carbon\CarbonImmutable;
 use DomainException;
@@ -41,6 +42,10 @@ class MovimientoController extends Controller
         abort_unless($camara->contenido === ContenidoCamara::Materiales, 404);
 
         $prefijo = mb_strtoupper(trim($datos['prefijo']));
+        $transferido = ServicioTransferenciaClienteMaterial::mensajeEtiquetaAntigua((string) Folio::where('numero_folio', $prefijo)->where('estado_operacional', EstadoOperacionalFolio::RetiradoDefinitivo)->value('id'));
+        if ($transferido) {
+            throw new DomainException($transferido);
+        }
         // Escapar comodines para que el usuario solo busque un prefijo literal.
         $patron = str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $prefijo).'%';
         $folios = Folio::query()
@@ -353,6 +358,12 @@ class MovimientoController extends Controller
         Folio $folio,
         ServicioHabilitacionAlmacenamiento $habilitacion,
     ): array {
+        if ($folio->tipo_bulto === TipoBulto::Material && $folio->estado_operacional === EstadoOperacionalFolio::RetiradoDefinitivo) {
+            $mensaje = ServicioTransferenciaClienteMaterial::mensajeEtiquetaAntigua($folio->id);
+            if ($mensaje) {
+                return [false, $mensaje];
+            }
+        }
         if ($folio->material?->estaVencido()) {
             return [false, $folio->material->mensajeVencimiento()];
         }

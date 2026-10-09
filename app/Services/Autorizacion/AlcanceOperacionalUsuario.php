@@ -1020,6 +1020,7 @@ class AlcanceOperacionalUsuario
             'puede_retirar_materiales' => $this->puedeRetirarMateriales($usuario),
             'puede_cancelar_despachos_materiales' => $this->puedeCancelarDespachosMateriales($usuario),
             'puede_consultar_kardex_materiales' => $this->puedeConsultarKardexMateriales($usuario),
+            'puede_transferir_folios_materiales_clientes' => $this->puedeCorregirItemsEstibadosMateriales($usuario),
             'puede_corregir_items_estibados_materiales' => $this->puedeCorregirItemsEstibadosMateriales($usuario),
             'puede_gestionar_bloqueos_materiales' => $this->puedeGestionarBloqueosMateriales($usuario),
             'puede_consultar_recepciones_materiales' => $this->puedeConsultarRecepcionesMateriales($usuario),
