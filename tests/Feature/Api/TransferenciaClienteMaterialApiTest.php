@@ -146,7 +146,7 @@ class TransferenciaClienteMaterialApiTest extends TestCase
     public function test_toma_y_verificacion_abiertas_impiden_renumerar(): void
     {
         $toma = TomaInventarioMaterial::create(['temporada_id' => $this->origen->folio->temporada_id, 'operacion_id' => (string) Str::uuid(), 'payload_hash' => str_repeat('a', 64),
-            'camara_ids' => [$this->camara->id], 'estado' => 'en_conteo', 'creada_por_user_id' => $this->admin->id, 'version' => 1, 'foto' => [['folio_id' => $this->origen->folio_id]]]);
+            'camara_ids' => [$this->camara->id], 'estado' => 'en_conteo', 'abierta_por_user_id' => $this->admin->id, 'abierta_at' => now(), 'version' => 1, 'foto' => [['folio_id' => $this->origen->folio_id]]]);
         $this->postJson($this->rutaTransferencia(), $this->datosTransferencia(10))->assertUnprocessable()->assertSee('toma de inventario abierta');
         $toma->update(['estado' => 'anulada']);
         $ronda = VerificacionUbicacion::create(['temporada_id' => $this->origen->folio->temporada_id, 'user_id' => $this->admin->id, 'contenido' => 'materiales', 'turno_inicio_at' => now(), 'turno_fin_at' => now()->addHours(8), 'vence_at' => now()->addHours(8), 'estado' => 'pendiente', 'objetivo' => 1, 'version' => 1]);

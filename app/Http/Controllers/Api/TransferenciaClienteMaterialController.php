@@ -24,7 +24,7 @@ class TransferenciaClienteMaterialController extends Controller
         $token = $request->user()->currentAccessToken();
         $dispositivoId = $token instanceof PersonalAccessToken ? $token->dispositivo_id : null;
 
-        return (new TransferenciaClienteMaterialResource($servicio->transferir($folioMaterial, $request->validated(), $request->user(), $dispositivoId)))->response();
+        return (new TransferenciaClienteMaterialResource($servicio->transferir($folioMaterial, $request->validated(), $request->user(), $dispositivoId)))->response()->setStatusCode(200);
     }
 
     public function index(Request $request)

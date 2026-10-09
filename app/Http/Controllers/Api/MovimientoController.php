@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Enums\ContenidoCamara;
+use App\Enums\EstadoOperacionalFolio;
 use App\Enums\TipoBulto;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\BuscarFoliosMaterialUbicacionRequest;

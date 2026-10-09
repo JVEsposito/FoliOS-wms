@@ -3,6 +3,7 @@
 namespace Tests\Feature\Api;
 
 use Illuminate\Foundation\Testing\DatabaseMigrations;
+use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\Process\Process;
 use Tests\Support\TransferenciaClienteMaterialFixture;
@@ -11,6 +12,19 @@ use Tests\TestCase;
 class TransferenciaClienteMaterialConcurrenciaTest extends TestCase
 {
     use DatabaseMigrations, TransferenciaClienteMaterialFixture;
+
+    public function runDatabaseMigrations(): void
+    {
+        $this->refreshTestDatabase();
+        $this->beforeApplicationDestroyed(function (): void {
+            // Restaurar el esquema completo sin ejecutar down() históricos: MySQL reutiliza índices para sus FK.
+            try {
+                $this->refreshTestDatabase();
+            } finally {
+                RefreshDatabaseState::$migrated = false;
+            }
+        });
+    }
 
     public function test_dos_transacciones_concurrentes_no_transfieren_mas_que_el_disponible(): void
     {
