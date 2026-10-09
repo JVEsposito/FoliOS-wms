@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\CambioPasswordUsuarioController;
 use App\Http\Controllers\Api\CargaController;
 use App\Http\Controllers\Api\CatalogoEnvaseController;
 use App\Http\Controllers\Api\CatalogoFrutaEmbaladaController;
+use App\Http\Controllers\Api\CatalogoItemsMaterialesController;
 use App\Http\Controllers\Api\CatalogoJerarquicoValidacionController;
 use App\Http\Controllers\Api\CatalogoMaterialController;
 use App\Http\Controllers\Api\CatalogoValidacionController;
@@ -41,6 +42,7 @@ use App\Http\Controllers\Api\EtiquetaPtController;
 use App\Http\Controllers\Api\EvacuacionEmergenciaController;
 use App\Http\Controllers\Api\FolioPrefrioController;
 use App\Http\Controllers\Api\FormatoRegistroController;
+use App\Http\Controllers\Api\FotoItemMaterialController;
 use App\Http\Controllers\Api\FrutaProcesoController;
 use App\Http\Controllers\Api\GuiaDespachoEnvaseController;
 use App\Http\Controllers\Api\HidrocoolerMateriaPrimaController;
@@ -425,6 +427,20 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/notificaciones-operacionales/resumen', [NotificacionOperacionalController::class, 'resumen']);
     Route::post('/notificaciones-operacionales/{notificacionOperacional}/leer', [NotificacionOperacionalController::class, 'marcarLeida']);
     Route::post('/notificaciones-operacionales/{notificacionOperacional}/confirmar', [NotificacionOperacionalController::class, 'confirmar']);
+
+    Route::middleware('can:consultar-catalogo-items-materiales')->group(function () {
+        Route::get('/materiales/items/catalogo', [CatalogoItemsMaterialesController::class, 'index']);
+        Route::get('/materiales/items/catalogo/exportar/{formato}', [CatalogoItemsMaterialesController::class, 'exportar']);
+    });
+    Route::middleware('can:ver-fotos-items-materiales')->group(function () {
+        Route::get('/materiales/items/{item}/fotos', [FotoItemMaterialController::class, 'index']);
+        Route::get('/materiales/fotos-items/{foto}/{variante}', [FotoItemMaterialController::class, 'archivo']);
+    });
+    Route::middleware('can:editar-fotos-items-materiales')->group(function () {
+        Route::post('/materiales/items/{item}/fotos', [FotoItemMaterialController::class, 'store']);
+        Route::put('/materiales/items/{item}/fotos', [FotoItemMaterialController::class, 'update']);
+        Route::delete('/materiales/items/{item}/fotos/{foto}', [FotoItemMaterialController::class, 'destroy']);
+    });
 
     Route::middleware('can:editar-niveles-stock-materiales')->group(function () {
         Route::get('/materiales/items/niveles', [ReposicionMaterialController::class, 'niveles']);

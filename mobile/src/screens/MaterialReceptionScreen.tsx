@@ -2,6 +2,7 @@ import * as Crypto from 'expo-crypto';
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  FlatList,
   Alert,
   Modal,
   Pressable,
@@ -14,6 +15,7 @@ import {
 } from 'react-native';
 
 import { AuthSession } from '../domain/estiba';
+import { PrivateMaterialThumbnail, MaterialItemPhoto } from '../components/PrivateMaterialThumbnail';
 import { MaterialLabelPrintPanel } from '../components/MaterialLabelPrintPanel';
 import {
   CreateMaterialReceptionPayload,
@@ -46,7 +48,7 @@ type Form = {
   observacion: string;
   detalles: ReceptionDraftDetail[];
 };
-type Option = { id: string; label: string; description?: string };
+type Option = { id: string; label: string; description?: string; photo?: MaterialItemPhoto | null };
 const MAX_PACKAGES_PER_DETAIL = 500;
 
 const EMPTY_CATALOG: MaterialReceptionCatalog = {
@@ -452,6 +454,7 @@ export function MaterialReceptionScreen({ auth, baseUrl, onLogout }: Props) {
     .map((item) => ({
       id: item.id,
       label: `${item.codigo} · ${item.nombre}`,
+      photo: item.foto_principal,
       description: `${item.categoria ?? 'Sin categoría'} · ${item.categoria_operacional_etiqueta} · ${item.unidad_medida}`,
     }));
 
@@ -554,6 +557,7 @@ export function MaterialReceptionScreen({ auth, baseUrl, onLogout }: Props) {
                             value={detail.item_material_id}
                             placeholder={form.proveedor_material_id ? 'Seleccionar ítem' : 'Selecciona primero el proveedor'}
                             options={itemOptions}
+                            photoAuth={{ baseUrl, token: auth.token }}
                             disabled={!form.proveedor_material_id}
                             onChange={(value) => updateDetail(detail.local_id, { item_material_id: value })}
                           />
@@ -832,11 +836,12 @@ function ReceptionDetail({
   );
 }
 
-function Choice({ label, value, placeholder, options, onChange, disabled = false }: {
+function Choice({ label, value, placeholder, options, onChange, disabled = false, photoAuth }: {
   label: string;
   value: string;
   placeholder: string;
   options: Option[];
+  photoAuth?: { baseUrl: string; token: string };
   onChange: (id: string) => void;
   disabled?: boolean;
 }) {
@@ -851,7 +856,8 @@ function Choice({ label, value, placeholder, options, onChange, disabled = false
     <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>
       <Pressable disabled={disabled} onPress={() => setVisible(true)} style={[styles.input, styles.choice, disabled && styles.disabled]}>
-        <Text numberOfLines={1} style={selected ? styles.inputText : styles.placeholder}>{selected?.label ?? placeholder}</Text>
+        {photoAuth ? <PrivateMaterialThumbnail photo={selected?.photo} {...photoAuth} /> : null}
+        <Text numberOfLines={1} style={[selected ? styles.inputText : styles.placeholder, { flex: 1 }]}>{selected?.label ?? placeholder}</Text>
         <Text style={styles.linkText}>⌄</Text>
       </Pressable>
       <Modal visible={visible} transparent animationType="fade" onRequestClose={() => setVisible(false)}>
@@ -862,19 +868,19 @@ function Choice({ label, value, placeholder, options, onChange, disabled = false
               <Button label="Cerrar" onPress={() => setVisible(false)} danger small />
             </View>
             <TextInput value={query} onChangeText={setQuery} placeholder="Buscar por código o nombre" placeholderTextColor={colors.muted} style={styles.search} autoFocus />
-            <ScrollView keyboardShouldPersistTaps="handled">
-              {filtered.map((option) => (
+            <FlatList data={filtered} keyExtractor={(option) => option.id} initialNumToRender={10} maxToRenderPerBatch={10} windowSize={5} keyboardShouldPersistTaps="handled" renderItem={({ item: option }) => (
                 <Pressable key={option.id} onPress={() => {
                   onChange(option.id);
                   setVisible(false);
                   setQuery('');
                 }} style={[styles.option, option.id === value && styles.optionActive]}>
-                  <Text style={styles.cardTitle}>{option.label}</Text>
-                  {option.description ? <Text style={styles.muted}>{option.description}</Text> : null}
+                  <View style={styles.row}>
+                    {photoAuth ? <PrivateMaterialThumbnail photo={option.photo} {...photoAuth} /> : null}
+                    <View style={{ flex: 1 }}><Text style={styles.cardTitle}>{option.label}</Text>
+                    {option.description ? <Text style={styles.muted}>{option.description}</Text> : null}</View>
+                  </View>
                 </Pressable>
-              ))}
-              {!filtered.length ? <Text style={styles.muted}>No se encontraron opciones.</Text> : null}
-            </ScrollView>
+              )} ListEmptyComponent={<Text style={styles.muted}>No se encontraron opciones.</Text>} />
           </View>
         </View>
       </Modal>

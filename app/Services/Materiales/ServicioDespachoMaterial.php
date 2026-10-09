@@ -586,6 +586,7 @@ class ServicioDespachoMaterial
                 'cantidad',
             ),
             'detalles.item.cliente.temporada',
+            'detalles.item.fotoPrincipal',
         ]);
 
         return $despachos;
@@ -600,6 +601,7 @@ class ServicioDespachoMaterial
         $despachos->load([
             'temporada:id,codigo,nombre,activa',
             'detalles.item.cliente.temporada',
+            'detalles.item.fotoPrincipal',
             'detalles.reservas' => fn ($consulta) => $consulta
                 ->where('estado', EstadoReservaMaterial::Activa->value)
                 ->orderBy('orden_fifo'),
@@ -624,6 +626,7 @@ class ServicioDespachoMaterial
             'canceladoPor:id,name',
             'dispositivoCancelacion:id,codigo,nombre',
             'detalles.item.cliente.temporada',
+            'detalles.item.fotoPrincipal',
             'detalles.reservas' => fn ($consulta) => $consulta
                 ->where('estado', EstadoReservaMaterial::Activa->value)
                 ->orderBy('orden_fifo'),

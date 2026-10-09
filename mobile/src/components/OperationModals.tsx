@@ -23,6 +23,7 @@ import {
   Position,
   SagCondition,
 } from '../domain/estiba';
+import { PrivateMaterialThumbnail } from './PrivateMaterialThumbnail';
 import { colors } from '../theme/colors';
 
 export type LocateFormValue = {
@@ -650,6 +651,8 @@ export type MaterialDispatchFormValue = {
 
 export function MaterialDispatchModal({
   busy,
+  baseUrl,
+  token,
   dispatches,
   error,
   onCancel,
@@ -659,6 +662,8 @@ export function MaterialDispatchModal({
   visible,
 }: {
   busy: boolean;
+  baseUrl: string | null;
+  token: string;
   dispatches: MaterialDispatch[];
   error: string;
   onCancel: () => void;
@@ -731,6 +736,7 @@ export function MaterialDispatchModal({
               title={material ? `${material.item.cliente.temporada.codigo} · ${material.item.cliente.codigo} · ${material.item.nombre}` : 'Retirar material'}
             />
 
+            <PrivateMaterialThumbnail photo={selectedDetail?.item.foto_principal} baseUrl={baseUrl} token={token} />
             <View style={styles.materialBalance}>
               <View><Text style={styles.label}>SALDO ACTUAL</Text><Text style={styles.materialBalanceValue}>{material?.cantidad_actual ?? '0'} {material?.unidad_medida}</Text></View>
               <View><Text style={styles.label}>DISPONIBLE LIBRE</Text><Text style={styles.materialBalanceValue}>{material?.cantidad_disponible ?? '0'} {material?.unidad_medida}</Text></View>

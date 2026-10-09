@@ -12,6 +12,7 @@ use App\Models\MigracionTemporadaFolio;
 use App\Models\Temporada;
 use App\Models\TemporadaMaterial;
 use App\Models\User;
+use App\Services\Materiales\ServicioFotosItemMaterial;
 use App\Services\Temporadas\Cierre\ServicioDiagnosticoCierreTemporada;
 use App\Services\Validacion\ServicioCopiaCatalogoValidacion;
 use App\Services\Validacion\ServicioProyeccionCatalogoValidacion;
@@ -181,7 +182,7 @@ class ServicioMigracionTemporada
             $clientes++;
 
             foreach ($cliente->items as $item) {
-                ItemMaterial::create([
+                $nuevo = ItemMaterial::create([
                     'cliente_material_id' => $clienteNuevo->id,
                     'codigo' => $item->codigo,
                     'nombre' => $item->nombre,
@@ -198,6 +199,7 @@ class ServicioMigracionTemporada
                     'creado_por_user_id' => $usuario->id,
                     'actualizado_por_user_id' => $usuario->id,
                 ]);
+                app(ServicioFotosItemMaterial::class)->copiar($item, $nuevo);
                 $items++;
             }
         }

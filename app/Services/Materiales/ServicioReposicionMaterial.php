@@ -47,6 +47,21 @@ class ServicioReposicionMaterial
         });
     }
 
+    /** Saldos por lote de catálogo, sin excluir ítems inactivos ni temporadas históricas. */
+    public function datosCatalogo(Collection $items): Collection
+    {
+        return $items->groupBy(fn ($i) => $i->cliente->temporada->temporada_id)->flatMap(function ($grupo, $temporada) {
+            $saldos = $this->saldos($grupo->pluck('id')->all(), $temporada);
+
+            return $grupo->mapWithKeys(function ($i) use ($saldos) {
+                $saldo = $saldos[$i->id] ?? null;
+                $fila = $this->fila($i, $saldo, 0, $this->dias());
+
+                return [$i->id => ['stock_bodega' => round((float) ($saldo->bodega ?? 0), 3), 'disponible_bodega' => $fila['disponible'], 'estado_reposicion' => $fila['estado']]];
+            });
+        });
+    }
+
     private function saldos(array $items, ?string $temporada): Collection
     {
         $bloqueado = '(fm.motivo_bloqueo IS NOT NULL OR (fm.fecha_vencimiento IS NOT NULL AND fm.fecha_vencimiento < ?) OR f.estado_operacional = ?)';

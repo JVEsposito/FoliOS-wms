@@ -220,7 +220,7 @@
                     </section>
 
                     <section class="panel materials-panel" id="materials-catalog-panel-items" data-office-panel-group="materials-catalog" data-office-panel-id="items" role="tabpanel" aria-labelledby="materials-catalog-tab-items">
-                        <div class="materials-panel__heading"><div><p class="eyebrow">CATÁLOGO</p><h2>Ítems seleccionables</h2></div><div class="materials-panel__tools"><span id="itemsSummary">0 registrados</span><button class="secondary-button" id="openMaterialImport" type="button">Importar catálogo</button></div></div>
+                        <div class="materials-panel__heading"><div><p class="eyebrow">CATÁLOGO</p><h2>Ítems seleccionables</h2></div><div class="materials-panel__tools"><span id="itemsSummary">0 registrados</span><a class="secondary-button" href="/oficina/materiales/items">Ver ítems y filtros</a><button class="secondary-button" id="downloadFullMaterialCatalog" type="button">Descargar catálogo</button><button class="secondary-button" id="openMaterialImport" type="button">Importar catálogo</button></div></div>
                         <form class="materials-form" id="itemMaterialForm" novalidate>
                             <input name="id" type="hidden">
                             <div class="materials-form__grid">
@@ -467,6 +467,7 @@
                 <p class="form-error" id="materialImportError" role="alert"></p>
             </form>
             <section class="materials-import__preview is-hidden" id="materialImportPreview">
+                <p id="materialImportOmitted" class="materials-help"></p>
                 <div class="materials-import__metrics" id="materialImportMetrics"></div>
                 <div class="materials-import__errors is-hidden" id="materialImportErrors"></div>
                 <div class="materials-table-scroll"><table class="materials-table"><thead><tr><th>Fila</th><th>Temporada</th><th>Cliente</th><th>Código</th><th>Nombre</th><th>Tipo</th><th>Unidad</th><th>Acción</th></tr></thead><tbody id="materialImportRows"></tbody></table></div>

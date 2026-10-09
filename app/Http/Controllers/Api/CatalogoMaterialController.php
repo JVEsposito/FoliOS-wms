@@ -53,7 +53,7 @@ class CatalogoMaterialController extends Controller
             ),
             'items' => ItemMaterialResource::collection(
                 ItemMaterial::query()
-                    ->with('cliente.temporada')
+                    ->with(['cliente.temporada', 'fotoPrincipal'])->withCount('fotos')
                     ->where('activo', true)
                     ->whereHas('cliente', fn ($consulta) => $consulta
                         ->where('temporada_material_id', $temporada->id)
@@ -75,7 +75,7 @@ class CatalogoMaterialController extends Controller
         Gate::authorize('administrar-catalogos-materiales');
 
         $items = ItemMaterial::query()
-            ->with(['cliente.temporada', 'regularizacionComoDuplicado.itemCanonico'])
+            ->with(['cliente.temporada', 'regularizacionComoDuplicado.itemCanonico', 'fotoPrincipal'])->withCount('fotos')
             ->withCount([
                 'foliosMateriales as folios_activos_count' => fn ($consulta) => $consulta
                     ->whereHas('folio', fn ($folios) => $folios->where('activo', true)),

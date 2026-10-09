@@ -131,6 +131,18 @@ class ReposicionMaterialCalculoTest extends TestCase
         $this->assertCount(0, app(ServicioReposicionMaterial::class)->filas());
     }
 
+    public function test_columnas_informativas_del_catalogo_usan_stock_central_incluso_para_items_inactivos(): void
+    {
+        $this->stock(100, 20);
+        $this->stock(30, bloqueo: 'Calidad');
+        $this->stock(20, vence: '2026-10-07');
+        $this->stock(500, almacen: (string) Str::uuid());
+        DB::table('items_materiales')->where('id', $this->item)->update(['activo' => false, 'stock_minimo' => 90]);
+        $item = ItemMaterial::with('cliente.temporada')->findOrFail($this->item);
+        $datos = app(ServicioReposicionMaterial::class)->datosCatalogo(collect([$item]));
+        $this->assertSame(['stock_bodega' => 150.0, 'disponible_bodega' => 80.0, 'estado_reposicion' => 'bajo_minimo'], $datos[$item->id]);
+    }
+
     public function test_consumo_suma_fuentes_resta_devoluciones_y_no_duplica_espejos_ni_cuenta_regresos(): void
     {
         $folio = $this->stock(60);

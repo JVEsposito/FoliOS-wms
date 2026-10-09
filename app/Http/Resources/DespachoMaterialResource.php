@@ -62,6 +62,7 @@ class DespachoMaterialResource extends JsonResource
                         'cantidad_sin_reserva_por_vencimiento' => $detalle->cantidad_sin_reserva_por_vencimiento,
                         'item' => [
                             'id' => $detalle->item->id,
+                            'foto_principal' => $detalle->item->relationLoaded('fotoPrincipal') ? $detalle->item->fotoPrincipal?->representar() : null,
                             'cliente' => [
                                 'id' => $detalle->item->cliente->id,
                                 'temporada' => [

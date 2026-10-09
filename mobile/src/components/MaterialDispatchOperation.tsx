@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 
+import { PrivateMaterialThumbnail } from './PrivateMaterialThumbnail';
 import { OPERATIONAL_POLL_INTERVAL_MS } from '../config/polling';
 import { cameraDisplayName } from '../domain/cameras';
 import { AuthSession, MaterialDispatch, MaterialDispatchSummary } from '../domain/estiba';
@@ -232,6 +233,7 @@ export function MaterialDispatchOperation({
                 {selected.items.map((item) => (
                   <View key={item.detalle_id} style={styles.itemCard}>
                     <View style={styles.itemHeader}>
+                      <PrivateMaterialThumbnail photo={item.item.foto_principal} baseUrl={api.baseUrl} token={auth.token} />
                       <View style={styles.itemCopy}>
                         <Text style={styles.itemName}>{item.item.cliente.temporada.codigo} · {item.item.cliente.codigo} · {item.item.codigo} · {item.item.nombre}</Text>
                         <Text style={styles.itemAmounts}>

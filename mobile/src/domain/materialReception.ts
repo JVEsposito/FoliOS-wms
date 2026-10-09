@@ -24,6 +24,7 @@ export type ReceptionSupplier = {
 };
 
 export type ReceptionCatalogItem = {
+  foto_principal?: { id: string; miniatura_url: string; url?: string } | null;
   id: string;
   cliente_id: string;
   cliente_material_id: string;

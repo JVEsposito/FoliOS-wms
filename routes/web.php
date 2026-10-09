@@ -156,3 +156,5 @@ Route::view('/oficina/materiales/vencimientos', 'office.materials', [
 Route::view('/oficina/materiales/reposicion', 'office.material-replenishment');
 
 Route::view('/oficina/materiales/items/niveles', 'office.material-replenishment', ['niveles' => true]);
+
+Route::view('/oficina/materiales/items', 'office.material-items');
