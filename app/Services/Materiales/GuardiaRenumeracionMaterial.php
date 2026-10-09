@@ -23,7 +23,7 @@ class GuardiaRenumeracionMaterial
             }
         }
         $items = VerificacionUbicacionItem::whereHas('ronda', fn ($q) => $q->where('temporada_id', $temporadaId)->where('estado', 'pendiente'))
-            ->where('resultado', '!=', 'no_aplica')->get();
+            ->where(fn ($q) => $q->whereNull('resultado')->orWhere('resultado', '!=', 'no_aplica'))->get();
         foreach ($items as $item) {
             if (($posicionId && $item->posicion_id === $posicionId)
                 || collect($item->snapshot_materiales['saldos'] ?? [])->contains(fn ($s) => ($s['folio_id'] ?? null) === $folio->folio_id)) {
