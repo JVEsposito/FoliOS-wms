@@ -50,3 +50,46 @@ test('recepción exige documento aceptado, sube multipart autenticado y confirma
         await context.close();
     } finally { await browser.close(); }
 });
+
+for (const tipo of ['documento', 'referencial']) {
+    test(`fotos ${tipo}: solo sube hasta cinco y avisa las omitidas sin crear reintentos imposibles`, async () => {
+        const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined, args: ['--no-sandbox', '--disable-gpu'] });
+        try {
+            const context = await browser.newContext(); const page = await context.newPage(); const uploads = []; const errors = [];
+            page.on('pageerror', (error) => errors.push(error.message));
+            await context.route('http://localhost/**', async (route) => {
+                const request = route.request(); const url = new URL(request.url());
+                if (url.pathname === '/photos.js') return route.fulfill({ body: module, contentType: 'text/javascript' });
+                if (url.pathname === '/test') return route.fulfill({ body: '<section id="photos"></section>', contentType: 'text/html' });
+                if (request.method() === 'POST') {
+                    uploads.push(request.postData());
+                    const orden = 3 + uploads.length;
+                    return route.fulfill({ status: 201, json: { data: { id: `photo-${orden}`, tipo, orden, miniatura_url: `/miniatura/${orden}/miniatura` } } });
+                }
+                if (url.pathname.endsWith('/miniatura')) return route.fulfill({ body: image, contentType: 'image/png' });
+                return route.fulfill({ status: 404 });
+            });
+            await page.goto('http://localhost/test');
+            await page.evaluate(async (tipo) => {
+                const { createReceptionPhotosPanel } = await import('/photos.js');
+                window.reception = { id: 'reception', version: 1, estado: 'borrador', fotos: [1, 2, 3].map((orden) => ({ id: `photo-${orden}`, tipo, orden, miniatura_url: `/miniatura/${orden}/miniatura` })) };
+                window.photosPanel = createReceptionPhotosPanel(document.getElementById('photos'), {
+                    getReception: () => window.reception, token: () => 'private-token', uuid: () => crypto.randomUUID(), canManage: () => true, canAdminister: () => false,
+                    onChange: (fotos) => { window.reception.fotos = fotos; }, onConfirm: async () => {},
+                });
+                await window.photosPanel.render();
+            }, tipo);
+            await page.locator(`[data-upload="${tipo}"]`).setInputFiles([1, 2, 3, 4].map((n) => ({ name: `foto-${n}.png`, mimeType: 'image/png', buffer: image })));
+            await page.waitForFunction(() => document.querySelector('[data-photo-error]')?.textContent === 'Se omitieron 2 fotos: el máximo es 5 por tipo');
+            assert.equal(uploads.length, 2);
+            assert.match(uploads[0], /filename="foto-1.png"/);
+            assert.match(uploads[1], /filename="foto-2.png"/);
+            assert.equal(await page.evaluate(() => window.reception.fotos.length), 5);
+            assert.equal(await page.evaluate(() => window.reception.version), 1);
+            assert.equal(await page.locator('[data-retry]').count(), 0);
+            assert.equal(await page.locator(`[data-upload="${tipo}"]`).count(), 0);
+            assert.deepEqual(errors, []);
+            await context.close();
+        } finally { await browser.close(); }
+    });
+}

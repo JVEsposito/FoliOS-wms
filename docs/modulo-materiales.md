@@ -429,11 +429,11 @@ El supervisor de materiales y el administrador pueden editar únicamente mínimo
 
 ### Fotos de documentos y evidencia de recepción
 
-Para una recepción nueva, guarda el borrador, agrega al menos una foto de la guía de despacho o factura y luego confirma. Solo cuenta una foto subida correctamente. Las recepciones confirmadas antes de esta regla mantienen su validez y pueden localizarse con el filtro **Sin foto de documento**.
+Para una recepción nueva, guarda el borrador, agrega al menos una foto de la guía de despacho o factura y luego confirma. Solo cuenta una foto subida correctamente. Las recepciones confirmadas antes de esta regla mantienen su validez y pueden localizarse con el filtro **Sin foto de documento**. La corrección administrativa de una recepción ya confirmada permite reconfirmarla sin exigir una foto retroactiva; si falta el documento, el snapshot de confirmación registra `sin_foto_documento: true`. Los borradores siguen requiriendo documento para su primera confirmación.
 
 Cada recepción admite hasta cinco fotos de documento y cinco referenciales opcionales: JPG, PNG o WebP, máximo 5 MiB y 25 MP, sujetos al presupuesto de memoria del servidor. El original conserva sus bytes y metadatos como evidencia; la miniatura privada de 300 px se genera sin metadatos, reduciendo antes de orientar. El generador admite JPEG sin EXIF con orientación normal y advertencia en el log, como las fotos del catálogo.
 
-La tablet/PDA ofrece cámara y galería, subida inmediata y reintento manual con el mismo `operacion_id`. La confirmación queda deshabilitada mientras falte documento. Oficina permite subir varias fotos, abrir originales autenticados y descargar un ZIP. Las fotos no cambian la versión del borrador.
+La tablet/PDA ofrece cámara y galería, subida inmediata y reintento manual con el mismo `operacion_id`. La confirmación queda deshabilitada mientras falte documento. Oficina permite subir varias fotos, abrir originales autenticados y descargar un ZIP. Al seleccionar fotos, Oficina envía solo las que caben en los cinco cupos de ese tipo, considerando también los envíos pendientes, e informa cuántas omitió. Las fotos no cambian la versión del borrador.
 
 En borrador, gestionar recepciones permite subir o quitar fotos; quitar elimina la fila y los archivos después del commit. En confirmada, agregar sigue disponible, pero quitar requiere administrar recepciones y motivo; es un borrado lógico y siempre debe quedar al menos un documento activo. Al anular se conserva toda la evidencia, en solo lectura.
 
