@@ -221,26 +221,34 @@
 
                     <section class="panel materials-panel" id="materials-catalog-panel-items" data-office-panel-group="materials-catalog" data-office-panel-id="items" role="tabpanel" aria-labelledby="materials-catalog-tab-items">
                         <div class="materials-panel__heading"><div><p class="eyebrow">CATÁLOGO</p><h2>Ítems seleccionables</h2></div><div class="materials-panel__tools"><span id="itemsSummary">0 registrados</span><a class="secondary-button" href="/oficina/materiales/items">Ver ítems y filtros</a><button class="secondary-button" id="downloadFullMaterialCatalog" type="button">Descargar catálogo</button><button class="secondary-button" id="openMaterialImport" type="button">Importar catálogo</button></div></div>
-                        <form class="materials-form" id="itemMaterialForm" novalidate>
-                            <input name="id" type="hidden">
-                            <div class="materials-form__grid">
-                                <label><span>Cliente *</span><select name="cliente_material_id" required></select></label>
-                                <label><span>Código *</span><input name="codigo" maxlength="80" placeholder="MAT-CAJ-010" required></label>
-                                <label><span>Descripción *</span><input name="nombre" maxlength="180" placeholder="Caja cartón 10 kg" required></label>
-                                <label><span>Categoría comercial</span><input name="categoria" maxlength="100" placeholder="Cajas"></label>
-                                <label><span>Tipo de ítem *</span><select name="categoria_operacional" required><option value="">Selecciona un tipo</option><option value="insumo">Insumo</option><option value="material_mp">Material MP · sin preparar</option><option value="material_pt">Material PT · preparado para línea</option></select></label>
-                                <label><span>Unidad *</span><input name="unidad_medida" maxlength="40" placeholder="unidades" required></label>
-                                <label><span>Código ERP futuro</span><input name="codigo_externo" maxlength="150"></label>
-                                <label><span>Stock mínimo</span><input name="stock_minimo" type="number" min="0" step="0.001" placeholder="Sin nivel"></label>
-                                <label><span>Punto de reorden</span><input name="punto_reorden" type="number" min="0" step="0.001" placeholder="Sin nivel"></label>
-                                <label><span>Stock máximo</span><input name="stock_maximo" type="number" min="0" step="0.001" placeholder="Sin nivel"></label>
-                                <label><span>Alerta de vencimiento (días)</span><input name="dias_alerta_vencimiento" type="number" min="0" max="3650" placeholder="Predeterminado: {{ config('materiales.dias_alerta_vencimiento', 30) }}"></label>
-                                <label class="materials-check"><input name="activo" type="checkbox" checked><span>Ítem activo</span></label>
-                                <p class="materials-help materials-wide">El tipo determina si el ítem puede recibirse como insumo o Material MP, o generarse como Material PT mediante una receta. Los ítems sin tipo permanecen fuera de Recepción y Transformación.</p>
-                            </div>
-                            <p class="form-error" id="itemMaterialError" role="alert"></p>
-                            <div class="materials-actions"><button class="secondary-button is-hidden" id="cancelItemEdit" type="button">Cancelar</button><button class="primary-button" type="submit">Guardar ítem</button></div>
-                        </form>
+                        <div class="materials-item-search" role="search" aria-label="Buscar en el catálogo de ítems">
+                            <label class="materials-item-search__query"><span>Buscar ítem</span><input id="itemsMaterialSearch" type="search" autocomplete="off" placeholder="Código, descripción, categoría, código ERP o cliente"></label>
+                            <label><span>Tipo</span><select id="itemsMaterialTypeFilter"><option value="">Todos los tipos</option><option value="insumo">Insumo</option><option value="material_mp">Material MP</option><option value="material_pt">Material PT</option><option value="sin_tipo">Sin tipo operacional</option></select></label>
+                            <label class="materials-check"><input id="itemsMaterialShowInactive" type="checkbox" checked><span>Incluir inactivos</span></label>
+                        </div>
+                        <details class="materials-item-editor" id="itemMaterialEditor">
+                            <summary><span id="itemMaterialEditorTitle">Nuevo ítem</span><small>Abre el formulario para crear un ítem; «Editar» lo abre con los datos del ítem.</small></summary>
+                            <form class="materials-form" id="itemMaterialForm" novalidate>
+                                <input name="id" type="hidden">
+                                <div class="materials-form__grid">
+                                    <label><span>Cliente *</span><select name="cliente_material_id" required></select></label>
+                                    <label><span>Código *</span><input name="codigo" maxlength="80" placeholder="MAT-CAJ-010" required></label>
+                                    <label><span>Descripción *</span><input name="nombre" maxlength="180" placeholder="Caja cartón 10 kg" required></label>
+                                    <label><span>Categoría comercial</span><input name="categoria" maxlength="100" placeholder="Cajas"></label>
+                                    <label><span>Tipo de ítem *</span><select name="categoria_operacional" required><option value="">Selecciona un tipo</option><option value="insumo">Insumo</option><option value="material_mp">Material MP · sin preparar</option><option value="material_pt">Material PT · preparado para línea</option></select></label>
+                                    <label><span>Unidad *</span><input name="unidad_medida" maxlength="40" placeholder="unidades" required></label>
+                                    <label><span>Código ERP futuro</span><input name="codigo_externo" maxlength="150"></label>
+                                    <label><span>Stock mínimo</span><input name="stock_minimo" type="number" min="0" step="0.001" placeholder="Sin nivel"></label>
+                                    <label><span>Punto de reorden</span><input name="punto_reorden" type="number" min="0" step="0.001" placeholder="Sin nivel"></label>
+                                    <label><span>Stock máximo</span><input name="stock_maximo" type="number" min="0" step="0.001" placeholder="Sin nivel"></label>
+                                    <label><span>Alerta de vencimiento (días)</span><input name="dias_alerta_vencimiento" type="number" min="0" max="3650" placeholder="Predeterminado: {{ config('materiales.dias_alerta_vencimiento', 30) }}"></label>
+                                    <label class="materials-check"><input name="activo" type="checkbox" checked><span>Ítem activo</span></label>
+                                    <p class="materials-help materials-wide">El tipo determina si el ítem puede recibirse como insumo o Material MP, o generarse como Material PT mediante una receta. Los ítems sin tipo permanecen fuera de Recepción y Transformación.</p>
+                                </div>
+                                <p class="form-error" id="itemMaterialError" role="alert"></p>
+                                <div class="materials-actions"><button class="secondary-button is-hidden" id="cancelItemEdit" type="button">Cancelar</button><button class="primary-button" type="submit">Guardar ítem</button></div>
+                            </form>
+                        </details>
                         <div class="materials-list" id="itemsMaterialList"></div>
                     </section>
 

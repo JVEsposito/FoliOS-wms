@@ -53,6 +53,19 @@ class InterfazOficinaMaterialesTest extends TestCase
             ->assertRedirect('/oficina/materiales/recetas');
     }
 
+    public function test_el_catalogo_de_items_tiene_busqueda_directa(): void
+    {
+        $this->get('/oficina/materiales/catalogos')
+            ->assertOk()
+            ->assertSee('id="itemsMaterialSearch" type="search"', false)
+            ->assertSee('Código, descripción, categoría, código ERP o cliente')
+            ->assertSee('id="itemsMaterialTypeFilter"', false)
+            ->assertSee('<option value="sin_tipo">Sin tipo operacional</option>', false)
+            ->assertSee('id="itemsMaterialShowInactive"', false)
+            ->assertSee('<details class="materials-item-editor" id="itemMaterialEditor">', false)
+            ->assertSeeInOrder(['id="itemsMaterialSearch"', 'id="itemMaterialEditor"', 'id="itemsMaterialList"'], false);
+    }
+
     public function test_cada_bloque_principal_de_materiales_pertenece_a_una_sola_vista(): void
     {
         $this->get('/oficina/materiales')
