@@ -174,3 +174,114 @@ body {
     .weighbridge-kpis { grid-template-columns: repeat(2, 1fr); }
 }
 .container-lines{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;border:1px solid var(--border);border-radius:12px;padding:12px}.container-lines legend{padding:0 6px;color:var(--muted);font-size:11px;font-weight:900}.container-lines label span{display:block;margin-bottom:6px}.container-lines small{grid-column:1/-1;color:var(--muted)}
+
+/*
+ * FoliOS v2 · Romana (PR 4, docs/diseno/folios-v2/pr-04-romana.md).
+ * Lista de recepciones como filas de etiqueta con su avance en pasos. Selectores con
+ * .office-app para ganar a la capa transversal (office-folios.css se carga después).
+ */
+.office-app .weighbridge-workspace { min-width: 0; }
+.office-app .weighbridge-heading { flex-wrap: wrap; }
+.office-app .weighbridge-heading > div:first-child { flex: 1 1 460px; min-width: 0; }
+.office-app .weighbridge-heading__actions { flex: 0 1 auto; flex-wrap: wrap; justify-content: flex-end; }
+.office-app .weighbridge-kpis { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)) !important; }
+
+.office-app .weighbridge-kpis > article.has-attention { background: var(--seal-bg) !important; }
+.office-app .weighbridge-kpis > article.has-attention > strong { color: var(--seal) !important; }
+.office-app .weighbridge-kpis .kpi-unit { color: var(--text-subtle); font-size: .56em; font-stretch: 100%; font-weight: 700; }
+
+.office-app .weighbridge-list-panel > .weighbridge-panel-heading {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+    align-items: end !important;
+    border-bottom: 1px solid var(--line-soft) !important;
+}
+.office-app .weighbridge-filters {
+    display: grid;
+    grid-template-columns: minmax(200px, 2fr) repeat(4, minmax(132px, 1fr)) auto;
+    gap: 8px;
+    width: 100%;
+}
+.office-app .weighbridge-filters :is(input, select) { min-height: 40px !important; height: 40px; font-size: .9375rem; }
+.office-app .weighbridge-filters .secondary-button { min-height: 40px !important; }
+
+.office-app .weighbridge-table-scroll { border: 0 !important; border-radius: 0 !important; }
+.office-app .weighbridge-table { width: 100%; table-layout: fixed; }
+.office-app .weighbridge-table thead th:nth-child(1) { width: 19%; }
+.office-app .weighbridge-table thead th:nth-child(2) { width: 29%; }
+.office-app .weighbridge-table thead th.rec-weight { width: 17%; text-align: right; }
+/* Cada fila lleva sus rótulos (como la etiqueta); el encabezado queda para lectores de pantalla. */
+.office-app .weighbridge-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+.office-app .weighbridge-table tr.rec-row > td {
+    padding: 14px 18px 8px !important;
+    border-bottom: 0 !important;
+    background: var(--corporate-card) !important;
+    vertical-align: top;
+    cursor: pointer;
+}
+.office-app .weighbridge-table tr.rec-track > td {
+    padding: 0 18px 14px !important;
+    border-bottom: 1px solid var(--line-soft) !important;
+    background: var(--corporate-card) !important;
+    cursor: pointer;
+}
+.office-app .weighbridge-table tr.rec-row:hover > td,
+.office-app .weighbridge-table tr.rec-row:hover + tr.rec-track > td { background: var(--row-hover) !important; }
+.office-app .weighbridge-table tr.rec-row:focus-visible { outline: 2px solid var(--frost); outline-offset: -2px; }
+
+/* Recepción abierta en el expediente: tinte y contorno del área (Materia Prima). */
+.office-app .weighbridge-table tbody tr[data-reception-id].is-selected > td { background: var(--area-tint) !important; }
+.office-app .weighbridge-table tbody tr.rec-row.is-selected > td:first-child { box-shadow: inset 3px 0 var(--area-ink); }
+.office-app .weighbridge-table tbody tr.rec-track.is-selected > td:first-child { box-shadow: inset 3px 0 var(--area-ink); }
+
+.office-app .weighbridge-table .rec-k { display: block; margin-bottom: 3px; color: var(--text-subtle); font-size: .75rem; font-weight: 500; }
+.office-app .weighbridge-table tr.rec-row strong { display: block; color: var(--text-strong); font-size: .9375rem; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
+.office-app .weighbridge-table tr.rec-row small { display: block; margin-top: 2px; color: var(--text-subtle); font-size: .8125rem; line-height: 1.35; }
+.office-app .weighbridge-table .rec-code { font-family: var(--font-mono) !important; font-size: 1.0625rem !important; letter-spacing: -.03em; white-space: nowrap; }
+.office-app .weighbridge-table .rec-mono { font-family: var(--font-mono); letter-spacing: -.03em; }
+.office-app .weighbridge-table .rec-weight { text-align: right; }
+
+.rec-steps {
+    display: grid;
+    grid-template-columns: repeat(var(--rec-steps, 4), minmax(0, 1fr));
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.rec-step {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    height: 26px;
+    padding: 0 8px;
+    border-radius: 3px;
+    font-size: .78125rem;
+    font-weight: 600;
+    line-height: 1;
+}
+.rec-step > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rec-step::before { flex: 0 0 auto; content: ""; }
+.rec-step--done { background: var(--success-bg); color: var(--success-text); }
+.rec-step--done::before { width: 9px; height: 5px; margin-top: -3px; border-bottom: 2px solid currentColor; border-left: 2px solid currentColor; transform: rotate(-45deg); }
+.rec-step--now { background: var(--corporate-card); box-shadow: inset 0 0 0 1.5px var(--area-ink); color: var(--area-text); }
+.rec-step--now::before { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.rec-step--next { background: var(--surface-muted); color: var(--text-subtle); }
+.rec-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+@media (max-width: 1399px) {
+    .office-app .weighbridge-filters { grid-template-columns: minmax(180px, 2fr) repeat(2, minmax(132px, 1fr)); }
+}
+
+/* Con el expediente abierto, el listado cede ancho: filtros en dos filas. */
+body.has-reception-drawer .office-app .weighbridge-filters { grid-template-columns: minmax(180px, 2fr) repeat(2, minmax(132px, 1fr)); }

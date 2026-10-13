@@ -46,7 +46,7 @@
                 <div class="weighbridge-kpis">
                     <article><span>EN ROMANA · INGRESO</span><strong id="entryCount">0</strong><small>Pendientes de confirmar ingreso</small></article>
                     <article><span>PESAJE DE ENVASES</span><strong id="containerWeighingCount">0</strong><small>Recepciones con pesaje acumulativo abierto</small></article>
-                    <article><span>PENDIENTES DE CIERRE</span><strong id="exitCount">0</strong><small>Destare o cierre documental pendiente</small></article>
+                    <article class="weighbridge-kpi--attention" data-weighbridge-attention="exit"><span>PENDIENTES DE CIERRE</span><strong id="exitCount">0</strong><small>Destare o cierre documental pendiente</small></article>
                     <article><span>RECEPCIONES CERRADAS</span><strong id="closedCount">0</strong><small>Según los filtros aplicados</small></article>
                     <article class="weighbridge-kpi--weight"><span>PESO NETO RECEPCIONADO</span><strong id="netWeight">0 kg</strong><small>Bruto menos tara total documentada</small></article>
                 </div>
@@ -65,7 +65,7 @@
                     </div>
                     <div class="weighbridge-table-scroll">
                         <table class="weighbridge-table">
-                            <thead><tr><th>Recepción</th><th>Cliente / guía</th><th>Transporte</th><th>Declaración</th><th>Pesos</th><th>Estado</th></tr></thead>
+                            <thead><tr><th scope="col">Recepción</th><th scope="col">Cliente y guía</th><th scope="col">Transporte y declaración</th><th scope="col" class="rec-weight">Peso</th></tr></thead>
                             <tbody id="receptionTableBody"></tbody>
                         </table>
                     </div>

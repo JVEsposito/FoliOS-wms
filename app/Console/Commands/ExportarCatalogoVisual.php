@@ -26,7 +26,7 @@ class ExportarCatalogoVisual extends Command
             File::get(resource_path('css/estiba-ui.css')),
         );
         $html = view('design.catalog', [
-            'styles' => $styles."\n".File::get(resource_path('css/estiba-catalog.css')),
+            'styles' => $styles."\n".File::get(resource_path('css/folios-components.css'))."\n".File::get(resource_path('css/estiba-catalog.css')),
             'script' => File::get(resource_path('js/estiba-catalog.js')),
             'tokens' => json_decode(File::get(base_path('design/estiba.tokens.json')), true, 512, JSON_THROW_ON_ERROR),
         ])->render();

@@ -17,7 +17,7 @@
     </head>
     <body>
         <main class="office-app operation-now-app is-hidden" id="operationNowApp">
-            <x-office.navigation domain="administracion" office="operacion-ahora" context="CENTRO DE CONTROL" icon="OA" />
+            <x-office.navigation domain="gerencia" office="operacion-ahora" context="CENTRO DE CONTROL" icon="OA" />
 
             <div class="operation-now estiba-ui" id="officeContent" data-density="compact">
                 <header class="operation-now-command">

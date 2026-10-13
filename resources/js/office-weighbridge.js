@@ -1,4 +1,5 @@
 import { dispatchInspectionPayload } from './office-container-inspection.js';
+import { receptionSteps } from './shared/weighbridge-steps.js';
 import { loadContainerCatalog, containerLabel, calculateNetAllocation } from './office-container-catalog.js';
 import { createOperationalPoller } from './shared/operational-poller';
 
@@ -76,6 +77,23 @@ function receptionStateLabel(reception, status) {
     if (status === 'en_bascula_ingreso') return 'Ingreso documental';
     if (status === 'en_bascula_salida') return 'Listo para cerrar';
     return label(status);
+}
+function receptionTrack(reception) {
+    const steps = receptionSteps(reception);
+    const spoken = { done: 'hecho', now: 'en curso', next: 'pendiente' };
+    return `<ol class="rec-steps" style="--rec-steps: ${steps.length}" aria-label="Avance de la recepción">${steps.map((step) => `<li class="rec-step rec-step--${step.state}"${step.state === 'now' ? ' aria-current="step"' : ''}><span>${escapeHtml(step.label)}</span><span class="rec-sr">, ${spoken[step.state]}</span></li>`).join('')}</ol>`;
+}
+// Hoy se muestra solo la hora; otro día, fecha corta y hora (misma zona que formatDate).
+function formatTime(value) {
+    if (!value) return 'pendiente';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'pendiente';
+    const today = new Date().toDateString() === date.toDateString();
+    return new Intl.DateTimeFormat('es-CL', today ? { timeStyle: 'short' } : { dateStyle: 'short', timeStyle: 'short' }).format(date);
+}
+function formatKpiWeight(value) {
+    const number = new Intl.NumberFormat('es-CL', { maximumFractionDigits: 0 }).format(Number(value || 0));
+    return `${escapeHtml(number)} <span class="kpi-unit">kg</span>`;
 }
 function receptionStateBadge(reception) {
     if (reception.tipo_recepcion !== 'solo_envases') return stateBadge(reception.estado);
@@ -163,26 +181,36 @@ function renderList(payload) {
     elements.entryCount.textContent = String(payload.resumen.en_bascula_ingreso);
     elements.containerWeighingCount.textContent = String(payload.resumen.en_pesaje_envases);
     elements.exitCount.textContent = String(payload.resumen.en_bascula_salida);
+    elements.exitCount.closest('article')?.classList.toggle('has-attention', Number(payload.resumen.en_bascula_salida) > 0);
     elements.closedCount.textContent = String(payload.resumen.cerradas);
-    elements.netWeight.textContent = formatWeight(payload.resumen.peso_neto);
+    elements.netWeight.innerHTML = formatKpiWeight(payload.resumen.peso_neto);
     elements.paginationSummary.textContent = `${payload.meta.total} ${payload.meta.total === 1 ? 'recepción' : 'recepciones'} · página ${payload.meta.pagina_actual} de ${payload.meta.ultima_pagina}`;
     elements.previousPage.disabled = payload.meta.pagina_actual <= 1;
     elements.nextPage.disabled = payload.meta.pagina_actual >= payload.meta.ultima_pagina;
 
     if (!state.receptions.length) {
-        elements.tableBody.innerHTML = '<tr class="weighbridge-empty"><td colspan="6">No existen recepciones para los filtros seleccionados.</td></tr>';
+        elements.tableBody.innerHTML = '<tr class="weighbridge-empty"><td colspan="4">No existen recepciones para los filtros seleccionados.</td></tr>';
         return;
     }
 
-    elements.tableBody.innerHTML = state.receptions.map((reception) => `
-        <tr data-reception-id="${escapeHtml(reception.id)}" tabindex="0">
-            <td><strong>${escapeHtml(reception.numero_recepcion || 'Ingreso abierto')}</strong><small>${escapeHtml(formatDate(reception.ingreso_at))}</small></td>
-            <td><strong>${escapeHtml(reception.cliente.nombre)}</strong><small>Guía ${escapeHtml(reception.numero_guia_despacho)}</small></td>
-            <td><strong>${escapeHtml(reception.patente_camion)}</strong><small>${escapeHtml(reception.nombre_conductor)}</small></td>
-            <td><strong>${escapeHtml(envasesLabel(reception))}</strong><small>${escapeHtml(label(reception.tipo_recepcion))}</small></td>
-            <td class="weight-cell"><strong>${escapeHtml(reception.tipo_recepcion === 'solo_envases' ? 'Sin pesaje' : reception.pesaje_envases ? formatWeight(reception.peso_neto) : formatWeight(reception.peso_neto, formatWeight(reception.peso_bruto)))}</strong><small>${reception.tipo_recepcion === 'solo_envases' ? 'Recepción documental' : reception.pesaje_envases ? `${reception.pesaje_envases.cantidad_pesada}/${reception.pesaje_envases.cantidad_declarada} pesados` : reception.peso_neto === null ? 'Peso bruto' : 'Peso neto'}</small></td>
-            <td>${receptionStateBadge(reception)}</td>
-        </tr>`).join('');
+    elements.tableBody.innerHTML = state.receptions.map((reception) => {
+        const onlyContainers = reception.tipo_recepcion === 'solo_envases';
+        const weightLabel = onlyContainers ? 'Sin pesaje' : reception.pesaje_envases ? 'Tandas' : reception.peso_neto === null ? 'Bruto' : 'Neto';
+        const weightValue = onlyContainers
+            ? 'Documental'
+            : reception.pesaje_envases
+                ? `${reception.pesaje_envases.cantidad_pesada} de ${reception.pesaje_envases.cantidad_declarada}`
+                : formatWeight(reception.peso_neto, formatWeight(reception.peso_bruto));
+        const truck = [reception.patente_camion, reception.tipo_camion ? label(reception.tipo_camion).toLowerCase() : null].filter(Boolean).join(', ');
+        return `
+        <tr class="rec-row" data-reception-id="${escapeHtml(reception.id)}" tabindex="0">
+            <td><span class="rec-k">Recepción</span><strong class="rec-code">${escapeHtml(reception.numero_recepcion || 'Ingreso abierto')}</strong><small>Ingreso ${escapeHtml(formatTime(reception.ingreso_at))}</small></td>
+            <td><span class="rec-k">Cliente y guía</span><strong>${escapeHtml(reception.cliente.nombre)}</strong><small>Guía <span class="rec-mono">${escapeHtml(reception.numero_guia_despacho)}</span></small></td>
+            <td><span class="rec-k">Transporte y declaración</span><strong>${escapeHtml(truck)}</strong><small>${escapeHtml(envasesLabel(reception))} · ${escapeHtml(reception.nombre_conductor)}</small></td>
+            <td class="rec-weight"><span class="rec-k">${escapeHtml(weightLabel)}</span><strong class="rec-code">${escapeHtml(weightValue)}</strong></td>
+        </tr>
+        <tr class="rec-track" data-reception-id="${escapeHtml(reception.id)}"><td colspan="4">${receptionTrack(reception)}</td></tr>`;
+    }).join('');
 }
 
 async function loadCatalogs() { const [catalogs, containers] = await Promise.all([api('/api/romana/catalogos'), loadContainerCatalog(api)]); state.catalogs = { ...catalogs, tipos_envase: containers }; fillCatalogs(); }

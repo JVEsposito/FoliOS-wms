@@ -22,6 +22,7 @@
         <aside class="catalog-sidebar">
             <p class="catalog-nav-label">FUNDACIONES</p>
             <nav aria-label="Secciones del catálogo">
+                <a href="#areas"><span>00</span> Áreas del gajo</a>
                 <a href="#identidad"><span>01</span> Identidad</a>
                 <a href="#lectura"><span>02</span> Lectura operacional</a>
                 <a href="#acciones"><span>03</span> Acciones y entradas</a>
@@ -35,10 +36,23 @@
             <x-estiba.heading title="Fundaciones visuales" eyebrow="FoliOS OPERACIONAL" description="Una misma lectura para Oficina, tablet y PDA." />
             <p class="catalog-disclosure">Ejemplos ficticios · Este catálogo no consulta ni modifica datos de planta.</p>
 
+            <section id="areas" class="catalog-section" aria-labelledby="areasTitle">
+                <div class="catalog-section-heading"><span>00</span><h2 id="areasTitle">Áreas del gajo</h2></div>
+                <p class="catalog-note">Cada hoja del símbolo es un área. Su color marca el menú, la etiqueta sobre el título y la regla de la barra de contexto. Los estados nunca usan el color de un área.</p>
+                <div class="catalog-areas">
+                    @foreach(['materia-prima' => 'Materia Prima', 'frigorifico' => 'Frigorífico', 'materiales' => 'Materiales', 'consultas' => 'Consultas', 'gerencia' => 'Gerencia', 'administracion' => 'Administración', 'operacion' => 'Operación ahora'] as $area => $label)
+                        <div class="catalog-area" data-catalog-area="{{ $area }}">
+                            <span class="catalog-area__mark"><x-folios.gajo :area="$area" :size="40" /></span>
+                            <x-folios.area-tag :area="$area">{{ $label }}</x-folios.area-tag>
+                        </div>
+                    @endforeach
+                </div>
+            </section>
+
             <section id="identidad" class="catalog-section" aria-labelledby="identityTitle">
                 <div class="catalog-section-heading"><span>01</span><h2 id="identityTitle">Identidad y significado</h2></div>
                 <div class="catalog-swatches">
-                    @foreach(['navy' => 'Estructura', 'primary' => 'Acción', 'canvas' => 'Área de trabajo', 'surface' => 'Superficie', 'text' => 'Texto'] as $key => $label)
+                    @foreach(['canvas' => 'Papel', 'surface' => 'Etiqueta', 'text' => 'Tinta', 'navy' => 'Navy', 'frost' => 'Frost: marca y acción', 'seal' => 'Sello'] as $key => $label)
                         <div class="catalog-swatch"><span style="background: {{ $tokens['color'][$key] }}"></span><strong>{{ $label }}</strong><code>{{ $tokens['color'][$key] }}</code></div>
                     @endforeach
                 </div>
