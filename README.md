@@ -125,7 +125,7 @@ El repositorio es un monorepo: Laravel y las oficinas web viven en la raíz; la 
 
 ## Oficinas web
 
-La entrada única es `/FoliOS` (por ejemplo, `http://192.168.1.20:8000/FoliOS`; `/folios` y `/oficina` llevan a ella). Tras iniciar sesión, cada usuario llega a su pantalla de inicio: la preferida de su rol si su perfil la habilita o, si no, la primera oficina habilitada en el orden del menú. La regla vive en `App\Services\Autorizacion\InicioOficina` y el servidor la entrega en `usuario.inicio`; el logo de Oficina lleva a esa misma pantalla.
+La entrada única es `/FoliOS` (por ejemplo, `http://192.168.1.20:8000/FoliOS`; la raíz `/`, `/folios` y `/oficina` llevan a ella). Tras iniciar sesión, cada usuario llega a su pantalla de inicio: la preferida de su rol si su perfil la habilita o, si no, la primera oficina habilitada en el orden del menú. La regla vive en `App\Services\Autorizacion\InicioOficina` y el servidor la entrega en `usuario.inicio`; el logo de Oficina lleva a esa misma pantalla.
 
 | Ruta | Función |
 |---|---|
