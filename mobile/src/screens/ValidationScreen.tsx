@@ -4,6 +4,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -48,6 +49,8 @@ import {
   saveValidationWorkContext,
 } from '../services/validationOfflineStore';
 import { colors } from '../theme/colors';
+import { areas } from '../theme/areas';
+import { operatorTheme as o } from '../theme/operatorTheme';
 import { isPdaBuild } from '../config/appVariant';
 import { ScanInput, ScanInputHandle } from '../components/ui/ScanInput';
 import { createOriginArticleSelector, indexValidationCatalog, productCompatibleWithOrigins } from '../domain/validationCatalogIndex';
@@ -686,9 +689,15 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={[styles.page, compact && styles.pageCompact]} keyboardShouldPersistTaps="handled">
         <View style={[styles.topbar, compact && styles.topbarCompact, tight && styles.topbarTight]}>
-          <View>{tight ? null : <Text style={styles.eyebrow}>FoliOS · TERRENO</Text>}<Text style={[styles.title, compact && styles.titleCompact, tight && styles.titleTight]}>{tight ? 'Validación PT' : 'Validación de pallets'}</Text></View>
+          <View style={styles.headerIdentity}>
+            <Image source={areas.frigorifico.gajo} style={styles.headerGajo} accessibilityLabel="Frigorífico" />
+            <View style={styles.headerCopy}>
+              <Text style={styles.title}>Validación PT</Text>
+              <Text style={styles.headerContext}>{line && shift ? 'Línea ' + line + ', turno ' + shift : 'Jornada sin configurar'}</Text>
+            </View>
+          </View>
           <View style={[styles.topbarRight, compact && styles.topbarRightCompact, tight && styles.topbarRightTight]}>
-            <View style={[styles.connection, online ? styles.connectionOnline : styles.connectionOffline]}><Text style={styles.connectionText}>{online ? 'API conectada' : 'Modo desconectado'}</Text></View>
+            <View accessibilityLabel={'Estado de conexión: ' + (online ? 'En línea' : 'Sin conexión')} style={[styles.connection, online ? styles.connectionOnline : styles.connectionOffline]}><Text style={[styles.connectionText, online ? styles.connectionTextOnline : styles.connectionTextOffline]}>{online ? '✓ En línea' : '◆ Sin conexión'}</Text></View>
             <Pressable onPress={logout} style={styles.logout}><Text style={styles.logoutText}>Salir</Text></Pressable>
           </View>
         </View>
@@ -787,7 +796,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
 
             <View style={styles.compositionHeader}>
               <View style={styles.compositionHeaderCopy}><Text style={styles.label}>Composición por CSG *</Text><Text style={styles.fieldHint}>La suma debe coincidir con las cajas del bulto.</Text></View>
-              <Text style={[styles.compositionTotal, compositionBoxes === Number(boxes) ? styles.compositionTotalOk : styles.compositionTotalPending]}>{compositionBoxes}/{boxes || 0} cajas</Text>
+              <Text style={[styles.compositionTotal, compositionBoxes === Number(boxes) ? styles.compositionTotalOk : styles.compositionTotalPending]}>{compositionBoxes === Number(boxes) ? '✓ ' : '◆ '}{compositionBoxes}/{boxes || 0} cajas</Text>
             </View>
             {originDrafts.map((draft, index) => (
               <View key={draft.key} style={[styles.originCompositionRow, compact && styles.originCompositionRowCompact]}>
@@ -822,9 +831,9 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
             </View>
 
             <View style={[styles.resultActions, compact && styles.resultActionsCompact]}>
-              <Pressable disabled={busy || terminalDecision} onPress={() => void submit('aprobado')} style={[styles.resultButton, compact && styles.resultButtonCompact, styles.approveButton, (busy || terminalDecision) && styles.disabled]}><Text style={styles.resultIcon}>✓</Text><Text style={styles.resultButtonText}>{observedAttempt ? 'APROBAR CORRECCIÓN' : 'APROBAR'}</Text></Pressable>
-              <Pressable disabled={busy || terminalDecision} onPress={() => openObservation('observado')} style={[styles.resultButton, compact && styles.resultButtonCompact, styles.observeButton, (busy || terminalDecision) && styles.disabled]}><Text style={styles.resultIcon}>!</Text><Text style={styles.resultButtonText}>{observedAttempt ? 'MANTENER OBSERVADO' : 'OBSERVAR'}</Text></Pressable>
-              {canReject ? <Pressable disabled={busy || terminalDecision} onPress={() => openObservation('rechazado')} style={[styles.resultButton, compact && styles.resultButtonCompact, styles.rejectButton, (busy || terminalDecision) && styles.disabled]}><Text style={styles.resultIcon}>×</Text><Text style={styles.resultButtonText}>RECHAZAR</Text></Pressable> : null}
+              <Pressable disabled={busy || terminalDecision} onPress={() => void submit('aprobado')} style={[styles.resultButton, compact && styles.resultButtonCompact, styles.approveButton, (busy || terminalDecision) && styles.resultButtonDisabled]}><Text style={[styles.resultIcon, styles.approveText, (busy || terminalDecision) && styles.resultTextDisabled]}>✓</Text><Text style={[styles.resultButtonText, styles.approveText, (busy || terminalDecision) && styles.resultTextDisabled]}>{observedAttempt ? 'APROBAR CORRECCIÓN' : 'APROBAR'}</Text></Pressable>
+              <Pressable disabled={busy || terminalDecision} onPress={() => openObservation('observado')} style={[styles.resultButton, compact && styles.resultButtonCompact, styles.observeButton, (busy || terminalDecision) && styles.resultButtonDisabled]}><Text style={[styles.resultIcon, styles.observeText, (busy || terminalDecision) && styles.resultTextDisabled]}>!</Text><Text style={[styles.resultButtonText, styles.observeText, (busy || terminalDecision) && styles.resultTextDisabled]}>{observedAttempt ? 'MANTENER OBSERVADO' : 'OBSERVAR'}</Text></Pressable>
+              {canReject ? <Pressable disabled={busy || terminalDecision} onPress={() => openObservation('rechazado')} style={[styles.resultButton, compact && styles.resultButtonCompact, styles.rejectButton, (busy || terminalDecision) && styles.resultButtonDisabled]}><Text style={[styles.resultIcon, styles.rejectText, (busy || terminalDecision) && styles.resultTextDisabled]}>×</Text><Text style={[styles.resultButtonText, styles.rejectText, (busy || terminalDecision) && styles.resultTextDisabled]}>RECHAZAR</Text></Pressable> : null}
             </View>
           </View>
 
@@ -879,7 +888,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
                 </View>
                 <View style={styles.sessionItemActions}>
                   <Text style={[styles.resultBadge, item.status === 'pendiente' ? styles.badgeObserved : styles.badgeRejected]}>
-                    {statusLabel(item.status)}
+                    {item.status === 'pendiente' ? '◆ ' : '■ '}{statusLabel(item.status)}
                   </Text>
                   {item.status !== 'pendiente' ? <Pressable onPress={() => void retryItem(item)} style={styles.retryButton}><Text style={styles.retryText}>Reintentar</Text></Pressable> : null}
                 </View>
@@ -909,7 +918,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
                       ? styles.badgeObserved
                       : styles.badgeRejected,
                 ]}>
-                  {item.estado === 'conflicto' ? 'conflicto' : item.resultado}
+                  {item.estado === 'conflicto' ? '■ ' : item.resultado === 'aprobado' ? '✓ ' : item.resultado === 'observado' ? '◆ ' : '■ '}{item.estado === 'conflicto' ? 'conflicto' : item.resultado}
                 </Text>
               </Pressable>
             ))}
@@ -1057,40 +1066,51 @@ function statusLabel(status: ValidationOutboxItem['status']) { return status ===
 function reasonLabel(value: string) { return value.replaceAll('_', ' ').replace(/^./, (letter) => letter.toUpperCase()); }
 
 const styles = StyleSheet.create({
+  headerIdentity: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  headerGajo: { width: 30, height: 30 },
+  headerCopy: { flex: 1, minWidth: 0 },
+  headerContext: { color: colors.muted, fontSize: 13 },
+  connectionTextOnline: { color: colors.green },
+  connectionTextOffline: { color: colors.amber },
+  approveText: { color: colors.accentText },
+  observeText: { color: colors.amber, fontSize: 16, fontWeight: '700' },
+  rejectText: { color: colors.red, fontSize: 15, fontWeight: '700' },
+  resultButtonDisabled: { backgroundColor: o.color.disabled, borderColor: o.color.disabled, opacity: 1 },
+  resultTextDisabled: { color: o.color.disabledText },
   screen: { flex: 1, backgroundColor: colors.background },
   page: { padding: 18, gap: 14, paddingBottom: 46 },
   pageCompact: { padding: 10, gap: 10, paddingBottom: 32 },
   boot: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, backgroundColor: colors.background },
   muted: { color: colors.muted, fontWeight: '700' },
-  topbar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: 16, borderWidth: 1, borderColor: colors.border, borderRadius: 16, backgroundColor: colors.panel },
-  topbarCompact: { flexDirection: 'column', alignItems: 'stretch', padding: 13 },
-  topbarRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  topbar: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: 16, borderBottomWidth: 3, borderBottomColor: areas.frigorifico.bright, backgroundColor: o.color.navy },
+  topbarCompact: { flexDirection: 'row', padding: 10, gap: 8 },
+  topbarRight: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 },
   topbarRightCompact: { justifyContent: 'space-between' },
   eyebrow: { color: colors.cyan, fontSize: 14, fontWeight: '900', letterSpacing: 1.3 },
-  title: { color: colors.text, fontSize: 23, fontWeight: '900', marginTop: 3 },
+  title: { color: colors.text, fontFamily: o.font.condensed, fontSize: 20, fontWeight: '800' },
   titleCompact: { fontSize: 20 },
-  connection: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, borderWidth: 1 },
-  connectionOnline: { borderColor: colors.green, backgroundColor: colors.greenDark },
-  connectionOffline: { borderColor: colors.red, backgroundColor: colors.blocked },
-  connectionText: { color: colors.text, fontSize: 14, fontWeight: '900' },
-  logout: { paddingHorizontal: 13, paddingVertical: 9, borderRadius: 10, borderWidth: 1, borderColor: colors.border },
-  logoutText: { color: colors.muted, fontWeight: '800' },
+  connection: { minHeight: 28, paddingHorizontal: 8, paddingVertical: 4, alignItems: 'center', justifyContent: 'center', borderRadius: 999, borderWidth: 1 },
+  connectionOnline: { borderColor: o.color.successBorder, backgroundColor: colors.greenDark },
+  connectionOffline: { borderColor: o.color.warningBorder, backgroundColor: colors.amberDark },
+  connectionText: { fontSize: 13, fontWeight: '700' },
+  logout: { minHeight: 44, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center' },
+  logoutText: { color: colors.text, fontSize: 13, fontWeight: '700' },
   statusStrip: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', paddingHorizontal: 8 },
   statusStripCompact: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4 },
   statusCopy: { flex: 1, gap: 3 },
   statusText: { color: colors.muted, fontSize: 14, fontWeight: '800' },
-  errorBanner: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, padding: 13, borderRadius: 12, borderWidth: 1, borderColor: colors.red, backgroundColor: colors.blocked },
+  errorBanner: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, padding: 13, borderRadius: 12, borderWidth: 1, borderColor: colors.red, backgroundColor: colors.redDark },
   errorBannerText: { flex: 1, color: colors.text, fontWeight: '800' },
   noticeBanner: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, padding: 13, borderRadius: 12, borderWidth: 1, borderColor: colors.green, backgroundColor: colors.greenDark },
   noticeBannerText: { flex: 1, color: colors.text, fontWeight: '800' },
-  close: { color: colors.text, fontSize: 20, fontWeight: '900' },
+  close: { minHeight: 44, minWidth: 44, textAlign: 'center', textAlignVertical: 'center', color: colors.text, fontSize: 20, fontWeight: '900' },
   mainGrid: { flexDirection: 'row', alignItems: 'flex-start', gap: 16 },
   mainGridCompact: { flexDirection: 'column', gap: 10 },
-  formPanel: { flex: 1.65, padding: 20, borderRadius: 17, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panel },
-  sidePanel: { flex: 1, padding: 18, borderRadius: 17, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panel },
+  formPanel: { flex: 1.65, padding: 18, borderRadius: 16, borderWidth: 0, backgroundColor: colors.panel },
+  sidePanel: { flex: 1, padding: 18, borderRadius: 16, borderWidth: 0, backgroundColor: colors.panel },
   panelCompact: { width: '100%', flexGrow: 0, flexBasis: 'auto', padding: 14 },
-  sectionEyebrow: { color: colors.cyan, fontSize: 14, fontWeight: '900', letterSpacing: 1.2 },
-  sectionTitle: { color: colors.text, fontSize: 22, fontWeight: '900', marginTop: 4, marginBottom: 17 },
+  sectionEyebrow: { color: colors.muted, fontSize: 13, fontWeight: '600' },
+  sectionTitle: { color: colors.text, fontFamily: o.font.condensed, fontSize: 22, fontWeight: '800', marginTop: 4, marginBottom: 17 },
   workContext: { marginBottom: 18, padding: 14, borderRadius: 13, borderWidth: 1, borderColor: colors.cyanDark, backgroundColor: colors.selected },
   workContextHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 12 },
   workContextTitle: { color: colors.text, fontSize: 14, fontWeight: '900', marginTop: 3 },
@@ -1103,30 +1123,30 @@ const styles = StyleSheet.create({
   contextButtonActive: { borderColor: colors.cyan, backgroundColor: colors.cyan },
   contextButtonText: { color: colors.muted, fontSize: 14, fontWeight: '900' },
   contextButtonTextActive: { color: colors.backgroundDeep },
-  label: { color: colors.muted, fontSize: 14, fontWeight: '900', letterSpacing: .7, textTransform: 'uppercase', marginBottom: 6 },
+  label: { color: colors.muted, fontSize: 13, fontWeight: '600', marginBottom: 6 },
   folioRow: { flexDirection: 'row', alignItems: 'stretch', gap: 9 },
   folioRowCompact: { flexDirection: 'column' },
-  folioInput: { flex: 1, minHeight: 60, paddingHorizontal: 16, borderRadius: 13, borderWidth: 2, borderColor: colors.cyan, color: colors.text, backgroundColor: colors.backgroundDeep, fontSize: 23, fontWeight: '900', letterSpacing: 1.2 },
-  lookupButton: { minWidth: 126, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, borderRadius: 13, borderWidth: 1, borderColor: colors.cyan, backgroundColor: colors.selected },
-  lookupButtonText: { color: colors.cyan, fontSize: 14, fontWeight: '900' },
+  folioInput: { flex: 1, minHeight: 56, paddingHorizontal: 16, borderRadius: 10, borderWidth: 1.5, borderColor: o.color.borderStrong, color: colors.text, backgroundColor: colors.background, fontFamily: o.font.mono, fontSize: 22, fontWeight: '600', letterSpacing: -0.5 },
+  lookupButton: { minWidth: 126, minHeight: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, borderColor: colors.cyan, backgroundColor: colors.cyan },
+  lookupButtonText: { color: colors.accentText, fontSize: 15, fontWeight: '800' },
   reviewCard: { marginTop: 12, padding: 13, borderRadius: 12, borderWidth: 1, borderColor: colors.cyanDark, backgroundColor: colors.selected },
   reviewObserved: { borderColor: colors.amber, backgroundColor: colors.amberDark },
   reviewApproved: { borderColor: colors.green, backgroundColor: colors.greenDark },
-  reviewRejected: { borderColor: colors.red, backgroundColor: colors.blocked },
+  reviewRejected: { borderColor: colors.red, backgroundColor: colors.redDark },
   reviewTitle: { color: colors.text, fontSize: 13, fontWeight: '900' },
   reviewMeta: { color: colors.muted, fontSize: 14, fontWeight: '800', marginTop: 4 },
   reviewText: { color: colors.text, fontSize: 12, marginTop: 5 },
   reviewDetail: { color: colors.text, fontSize: 14, fontWeight: '700', marginTop: 8 },
   typeRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 9, marginTop: 12 },
   typeRowCompact: { flexWrap: 'wrap' },
-  typeButton: { minHeight: 49, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 11, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.backgroundDeep },
+  typeButton: { minHeight: 46, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 10, borderWidth: 1.5, borderColor: '#3F6B7C', backgroundColor: 'transparent' },
   typeButtonCompact: { flexGrow: 1, flexBasis: '46%', alignItems: 'center', paddingHorizontal: 8 },
-  typeButtonActive: { borderColor: colors.cyan, backgroundColor: colors.selected },
-  typeButtonText: { color: colors.muted, fontSize: 14, fontWeight: '900' },
-  typeButtonTextActive: { color: colors.cyan },
+  typeButtonActive: { borderColor: colors.cyan, backgroundColor: colors.cyan },
+  typeButtonText: { color: colors.textSecondary, fontSize: 15, fontWeight: '700' },
+  typeButtonTextActive: { color: colors.accentText },
   boxField: { flex: 1, minWidth: 110 },
   boxFieldCompact: { flexBasis: '100%' },
-  boxInput: { minHeight: 49, paddingHorizontal: 13, borderRadius: 11, borderWidth: 1, borderColor: colors.border, color: colors.text, backgroundColor: colors.backgroundDeep, fontSize: 18, fontWeight: '900' },
+  boxInput: { minHeight: 48, paddingHorizontal: 13, borderRadius: 10, borderWidth: 1.5, borderColor: o.color.borderStrong, color: colors.text, backgroundColor: colors.background, fontFamily: o.font.mono, fontSize: 22, fontWeight: '700' },
   groupTitle: { color: colors.text, fontSize: 15, fontWeight: '900', marginTop: 20, marginBottom: 9 },
   fieldHint: { color: colors.muted, fontSize: 13, marginTop: 4 },
   packingDateField: { flex: 1, minWidth: 190 },
@@ -1134,24 +1154,24 @@ const styles = StyleSheet.create({
   compositionHeaderCopy: { flexShrink: 1, flexBasis: 180, flexGrow: 1 },
   compositionTotal: { flexShrink: 0, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, overflow: 'hidden', fontSize: 14, fontWeight: '900' },
   titleTight: { fontSize: 18, marginTop: 0 },
-  topbarTight: { flexDirection: 'row', alignItems: 'center', padding: 10, borderRadius: 12 },
+  topbarTight: { flexDirection: 'row', alignItems: 'center', padding: 10 },
   topbarRightTight: { gap: 6 },
   statusTextTight: { fontSize: 11 },
   workContextTight: { marginBottom: 12, padding: 10 },
   workContextSummary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 10, borderWidth: 1, borderColor: colors.cyanDark, backgroundColor: colors.selected },
   workContextSummaryText: { color: colors.text, fontSize: 14, fontWeight: '900' },
-  workContextSummaryAction: { color: colors.cyan, fontSize: 12, fontWeight: '900' },
+  workContextSummaryAction: { minHeight: 44, minWidth: 44, textAlign: 'center', textAlignVertical: 'center', color: colors.cyan, fontSize: 12, fontWeight: '900' },
   compositionTotalOk: { color: colors.green, backgroundColor: colors.greenDark },
   compositionTotalPending: { color: colors.amber, backgroundColor: colors.amberDark },
-  originCompositionRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end', gap: 9, marginBottom: 8, padding: 9, borderWidth: 1, borderColor: colors.border, borderRadius: 11, backgroundColor: colors.backgroundDeep },
+  originCompositionRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end', gap: 9, marginBottom: 8, padding: 9, borderWidth: 0, borderRadius: 10, backgroundColor: colors.panel },
   originCompositionRowCompact: { flexWrap: 'wrap' },
   originCompositionSelect: { flex: 1, minWidth: 220 },
   originBoxes: { width: 105 },
   traceField: { flex: 1, minWidth: 150 },
-  traceInput: { minHeight: 48, borderWidth: 1, borderColor: colors.border, borderRadius: 9, backgroundColor: colors.backgroundDeep, color: colors.text, paddingHorizontal: 11, fontSize: 15 },
+  traceInput: { minHeight: 48, borderWidth: 1.5, borderColor: o.color.borderStrong, borderRadius: 10, backgroundColor: colors.background, color: colors.text, paddingHorizontal: 11, fontSize: 15 },
   removeOrigin: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 10 },
   removeOriginText: { color: colors.red, fontSize: 14, fontWeight: '900' },
-  addOrigin: { alignItems: 'center', padding: 11, borderWidth: 1, borderColor: colors.cyanDark, borderRadius: 10, borderStyle: 'dashed' },
+  addOrigin: { minHeight: 44, justifyContent: 'center', alignItems: 'center', padding: 11, borderWidth: 1, borderColor: colors.cyanDark, borderRadius: 10, borderStyle: 'dashed' },
   addOriginText: { color: colors.cyan, fontSize: 14, fontWeight: '900' },
   fieldGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 9 },
   fieldGridCompact: { flexDirection: 'column', flexWrap: 'nowrap' },
@@ -1160,7 +1180,7 @@ const styles = StyleSheet.create({
   selectFieldHalf: { width: 'auto', flexGrow: 1, flexBasis: '45%', minWidth: 0 },
   fieldGridPair: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   wideField: { flexBasis: '100%' },
-  selectButton: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingHorizontal: 12, borderRadius: 11, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.backgroundDeep },
+  selectButton: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1.5, borderColor: o.color.borderStrong, backgroundColor: colors.background },
   selectText: { flex: 1, color: colors.text, fontWeight: '800' },
   placeholder: { color: colors.muted },
   chevron: { color: colors.cyan, fontSize: 19, fontWeight: '900' },
@@ -1170,59 +1190,59 @@ const styles = StyleSheet.create({
   selectionSummaryText: { color: colors.text, fontSize: 12, marginTop: 4 },
   resultActions: { flexDirection: 'row', gap: 10, marginTop: 18 },
   resultActionsCompact: { flexDirection: 'column' },
-  resultButton: { flex: 1, minHeight: 68, alignItems: 'center', justifyContent: 'center', borderRadius: 13, borderWidth: 1 },
-  resultButtonCompact: { width: '100%', flexGrow: 0, flexBasis: 'auto', minHeight: 58, flexDirection: 'row', gap: 9 },
-  approveButton: { borderColor: colors.green, backgroundColor: colors.greenDark },
-  observeButton: { borderColor: colors.amber, backgroundColor: colors.amberDark },
-  rejectButton: { borderColor: colors.red, backgroundColor: colors.blocked },
+  resultButton: { flex: 1, minHeight: 60, alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderWidth: 2 },
+  resultButtonCompact: { width: '100%', flexGrow: 0, flexBasis: 'auto', minHeight: 60, flexDirection: 'row', gap: 9 },
+  approveButton: { borderColor: colors.cyan, backgroundColor: colors.cyan },
+  observeButton: { borderColor: o.color.warningBorder, backgroundColor: colors.amberDark },
+  rejectButton: { borderColor: o.color.criticalBorder, backgroundColor: 'transparent' },
   resultIcon: { color: colors.text, fontSize: 21, fontWeight: '900' },
-  resultButtonText: { color: colors.text, fontSize: 12, fontWeight: '900', textTransform: 'uppercase' },
+  resultButtonText: { color: colors.text, fontSize: 16, fontWeight: '800', textTransform: 'uppercase' },
   sideHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 13 },
-  sideTitle: { color: colors.text, fontSize: 18, fontWeight: '900', marginTop: 3 },
+  sideTitle: { color: colors.text, fontFamily: o.font.condensed, fontSize: 22, fontWeight: '800', marginTop: 3 },
   sessionHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, marginBottom: 13 },
   sessionStarted: { color: colors.muted, fontSize: 14, fontWeight: '700', marginTop: 4 },
-  sessionToggle: { paddingHorizontal: 10, paddingVertical: 7, borderRadius: 9, borderWidth: 1, borderColor: colors.cyanDark },
+  sessionToggle: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 10, paddingVertical: 7, borderRadius: 9, borderWidth: 1, borderColor: colors.cyanDark },
   sessionToggleText: { color: colors.cyan, fontSize: 14, fontWeight: '900' },
   sessionMetrics: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
-  sessionMetric: { flexGrow: 1, flexBasis: '29%', minWidth: 88, padding: 10, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.backgroundDeep },
+  sessionMetric: { flexGrow: 1, flexBasis: '29%', minWidth: 88, padding: 10, borderRadius: 10, borderWidth: 0, backgroundColor: colors.background },
   sessionMetricTight: { flexBasis: '46%', minWidth: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 7, paddingHorizontal: 9 },
   sessionMetricLabelTight: { flexShrink: 1, fontSize: 11, letterSpacing: .2, marginRight: 6 },
-  sessionMetricValueTight: { fontSize: 17, marginTop: 0 },
-  sessionMetricPositive: { borderColor: colors.green, backgroundColor: colors.greenDark },
-  sessionMetricWarning: { borderColor: colors.amber, backgroundColor: colors.amberDark },
-  sessionMetricCritical: { borderColor: colors.red, backgroundColor: colors.blocked },
+  sessionMetricValueTight: { fontSize: 20, marginTop: 0 },
+  sessionMetricPositive: { borderWidth: 1, borderColor: o.color.successBorder, backgroundColor: colors.greenDark },
+  sessionMetricWarning: { borderWidth: 1, borderColor: o.color.warningBorder, backgroundColor: colors.amberDark },
+  sessionMetricCritical: { borderWidth: 1, borderColor: o.color.criticalBorder, backgroundColor: colors.redDark },
   sessionMetricLabel: { color: colors.muted, fontSize: 12, fontWeight: '900', letterSpacing: .5, textTransform: 'uppercase' },
-  sessionMetricValue: { color: colors.text, fontSize: 20, fontWeight: '900', marginTop: 3 },
+  sessionMetricValue: { color: colors.text, fontFamily: o.font.condensed, fontSize: 20, fontWeight: '800', marginTop: 3 },
   sessionBalance: { marginTop: 9, padding: 11, borderRadius: 10, borderWidth: 1, borderColor: colors.cyanDark, backgroundColor: colors.selected },
   sessionBalanceText: { color: colors.muted, fontSize: 14, fontWeight: '800' },
   sessionTotal: { color: colors.cyan, fontSize: 13, fontWeight: '900', marginTop: 3 },
   sessionListHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 20, marginBottom: 5 },
   sessionListCount: { color: colors.muted, fontSize: 13, fontWeight: '800', textAlign: 'right' },
-  sessionItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: colors.borderSoft },
-  sessionItemLocal: { paddingHorizontal: 9, borderRadius: 9, borderWidth: 1, borderColor: colors.amber, backgroundColor: colors.amberDark, marginBottom: 5 },
+  sessionItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingHorizontal: 12, paddingVertical: 11, borderRadius: 10, borderBottomWidth: 0, backgroundColor: colors.panel, marginBottom: 6 },
+  sessionItemLocal: { borderRadius: 12, borderWidth: 1, borderColor: o.color.warningBorder, backgroundColor: colors.amberDark },
   sessionItemActions: { alignItems: 'flex-end', gap: 6 },
-  loadMoreButton: { alignItems: 'center', marginTop: 10, padding: 11, borderRadius: 9, borderWidth: 1, borderColor: colors.cyanDark },
+  loadMoreButton: { minHeight: 44, justifyContent: 'center', alignItems: 'center', marginTop: 10, padding: 11, borderRadius: 9, borderWidth: 1, borderColor: colors.cyanDark },
   loadMoreText: { color: colors.cyan, fontSize: 14, fontWeight: '900' },
-  previousQueue: { marginTop: 18, padding: 11, borderRadius: 10, borderWidth: 1, borderColor: colors.amber, backgroundColor: colors.amberDark },
+  previousQueue: { marginTop: 18, padding: 11, borderRadius: 12, borderWidth: 1, borderColor: o.color.warningBorder, backgroundColor: colors.amberDark },
   previousQueueTitle: { color: colors.amber, fontSize: 13, fontWeight: '900', letterSpacing: .6 },
   previousQueueText: { color: colors.text, fontSize: 14, marginTop: 4, marginBottom: 4 },
-  syncButton: { paddingHorizontal: 11, paddingVertical: 8, borderRadius: 9, borderWidth: 1, borderColor: colors.cyanDark },
+  syncButton: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 11, paddingVertical: 8, borderRadius: 9, borderWidth: 1, borderColor: colors.cyanDark },
   syncButtonTop: { alignSelf: 'center' },
   syncButtonText: { color: colors.cyan, fontSize: 14, fontWeight: '900' },
-  queueItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: colors.borderSoft },
+  queueItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingHorizontal: 12, paddingVertical: 11, borderRadius: 10, borderBottomWidth: 0, backgroundColor: colors.panel, marginBottom: 6 },
   queueContent: { flex: 1 },
-  queueFolio: { color: colors.text, fontSize: 14, fontWeight: '900' },
+  queueFolio: { color: colors.text, fontFamily: o.font.mono, fontSize: 17, fontWeight: '700', letterSpacing: -0.5 },
   queueDetail: { color: colors.muted, fontSize: 14, marginTop: 3 },
   queueError: { maxWidth: 260, color: colors.red, fontSize: 14, marginTop: 4 },
-  retryButton: { paddingHorizontal: 9, paddingVertical: 7, borderRadius: 8, borderWidth: 1, borderColor: colors.amber },
+  retryButton: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 9, paddingVertical: 7, borderRadius: 8, borderWidth: 1, borderColor: colors.amber },
   retryText: { color: colors.amber, fontSize: 14, fontWeight: '900' },
   empty: { color: colors.muted, paddingVertical: 18, textAlign: 'center' },
   recentEyebrow: { marginTop: 25, marginBottom: 8 },
   recentItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.borderSoft },
-  resultBadge: { paddingHorizontal: 8, paddingVertical: 5, borderRadius: 999, overflow: 'hidden', color: colors.text, fontSize: 13, fontWeight: '900', textTransform: 'uppercase' },
-  badgeApproved: { backgroundColor: colors.greenDark },
-  badgeObserved: { backgroundColor: colors.amberDark },
-  badgeRejected: { backgroundColor: colors.blocked },
+  resultBadge: { minHeight: 28, paddingHorizontal: 8, paddingVertical: 5, borderWidth: 1, borderRadius: 999, overflow: 'hidden', fontSize: 13, fontWeight: '700', textTransform: 'uppercase' },
+  badgeApproved: { color: colors.green, borderColor: o.color.successBorder, backgroundColor: colors.greenDark },
+  badgeObserved: { color: colors.amber, borderColor: o.color.warningBorder, backgroundColor: colors.amberDark },
+  badgeRejected: { color: colors.red, borderColor: o.color.criticalBorder, backgroundColor: colors.redDark },
   busy: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: 'rgba(8,12,16,.72)' },
   busyText: { color: colors.text, fontWeight: '900' },
   modalBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20, backgroundColor: 'rgba(0,0,0,.72)' },
@@ -1233,7 +1253,7 @@ const styles = StyleSheet.create({
   observationContent: { flexGrow: 1 },
   modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 13 },
   modalTitle: { color: colors.text, fontSize: 20, fontWeight: '900' },
-  modalClose: { color: colors.text, fontSize: 28, fontWeight: '900', paddingHorizontal: 7 },
+  modalClose: { minHeight: 44, minWidth: 44, textAlign: 'center', textAlignVertical: 'center', color: colors.text, fontSize: 28, fontWeight: '900', paddingHorizontal: 7 },
   searchInput: { minHeight: 46, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.border, color: colors.text, backgroundColor: colors.backgroundDeep, marginBottom: 10 },
   optionList: { maxHeight: 420 },
   option: { padding: 14, borderBottomWidth: 1, borderBottomColor: colors.borderSoft },
