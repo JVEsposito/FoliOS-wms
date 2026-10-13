@@ -6,19 +6,14 @@ use Tests\TestCase;
 
 class NavegacionOficinasPorDominioTest extends TestCase
 {
-    public function test_oficina_es_la_entrada_unica_que_lleva_al_inicio_de_cada_rol(): void
+    public function test_oficina_lleva_a_la_entrada_unica_de_folios(): void
     {
-        $this->get('/oficina')
-            ->assertOk()
-            ->assertSee('data-office-home-redirect', false)
-            ->assertSee('id="officeLoginForm"', false);
+        $this->get('/oficina')->assertRedirect('/FoliOS');
 
         $script = file_get_contents(resource_path('js/office-navigation.js'));
         $this->assertIsString($script);
-        $this->assertStringContainsString("operador_romana: '/oficina/romana'", $script);
-        $this->assertStringContainsString("digitador_materia_prima: '/oficina/materia-prima/lotes'", $script);
-        $this->assertStringContainsString("despachador: '/oficina/frigorifico/despacho/cargas'", $script);
-        $this->assertStringContainsString('[data-office-home-redirect]', $script);
+        $this->assertStringContainsString('officeHomeHref(identity)', $script);
+        $this->assertStringNotContainsString('roleHomes', $script);
     }
 
     public function test_toda_oficina_ofrece_busqueda_global_y_logo_hacia_el_inicio(): void

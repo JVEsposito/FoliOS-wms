@@ -1,0 +1,35 @@
+/* Entrada única de FoliOS web (/FoliOS). Reutiliza el acceso de Oficina. */
+
+.folios-inicio [hidden] {
+    display: none !important;
+}
+
+.folios-inicio__logo {
+    width: min(300px, 70%);
+    height: auto;
+    margin-bottom: 36px;
+}
+
+.folios-inicio .office-access__form {
+    justify-content: center;
+}
+
+.folios-inicio__terreno {
+    margin: 0;
+    padding-top: 18px;
+    border-top: 1px solid var(--corporate-border, var(--line));
+    font-size: .82rem;
+    line-height: 1.55;
+}
+
+.folios-inicio .office-access__form > button {
+    align-self: flex-start;
+    min-width: 200px;
+}
+
+@media (max-width: 850px) {
+    .folios-inicio .office-access__form {
+        min-height: 100vh;
+        padding: 40px 24px;
+    }
+}
