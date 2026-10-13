@@ -132,7 +132,7 @@
                     </a>
                     <a class="materials-module-card" href="/oficina/materiales/recetas" data-navigation-module="materiales.recetas" data-navigation-permissions="puede_consultar_transformaciones_materiales">
                         <span aria-hidden="true">◇</span>
-                        <div><p class="eyebrow">TRANSFORMACIÓN</p><h2>Recetas</h2><p>Componentes, factores, merma y versiones activas.</p></div>
+                        <div><p class="eyebrow">TRANSFORMACIÓN</p><h2>Recetas</h2><p>Componentes, factores, tolerancias y versiones activas.</p></div>
                         <strong aria-hidden="true">→</strong>
                     </a>
                     <a class="materials-module-card" href="/oficina/materiales/ordenes" data-navigation-module="materiales.ordenes" data-navigation-permissions="puede_consultar_transformaciones_materiales">

@@ -76,7 +76,8 @@ Cada versión conserva:
 - unidad de medida de cada componente;
 - componente principal;
 - factor de conversión;
-- merma estándar;
+- merma estándar (heredada: Oficina ya no la pide y guarda 0, porque la merma
+  se cuadra al cerrar la orden);
 - tolerancia operacional;
 - snapshot histórico.
 
@@ -208,6 +209,32 @@ corresponder exactamente a esa capacidad o al remanente final de la orden. Por
 ejemplo, 12.000 unidades con 120 por folio producen 100 lotes y, al cerrar cada
 uno, 100 folios. Las versiones históricas sin esta regla conservan sus lotes
 parciales libres.
+
+### Folios de salida reservados
+
+Si la versión define `unidades_por_folio_salida`, al planificar la orden se
+reservan del correlativo los números de todos sus folios teóricos
+(`folios_salida_reservados_transformacion`): uno por cada folio completo y el
+último con el remanente. Por ejemplo, 80 unidades con 30 por folio reservan
+tres números con 30, 30 y 20.
+
+- Oficina puede imprimir esas etiquetas antes de producir, con la cantidad
+  teórica (`reserva_ids` en `POST …/ordenes/{orden}/etiquetas`). El número aún
+  no existe en inventario.
+- Al cerrar un lote, el folio de salida se crea con el número pistoleado
+  (`folio_salida`), que debe estar reservado para la orden y sin usar. Si no
+  viene, toma el primero en secuencia con la misma cantidad teórica del lote,
+  o el primero disponible. Si ya no quedan reservados, usa el correlativo.
+- Si la etiqueta anticipada ya se imprimió y la cantidad real difiere de la
+  teórica, el folio queda marcado para reimpresión. Reimprimir la etiqueta del
+  folio producido no exige motivo en ese caso: se registra «La cantidad real
+  difiere de la cantidad teórica impresa».
+- Revertir un lote anula su número reservado y reserva uno nuevo con la misma
+  cantidad teórica. Cerrar o cancelar la orden anula los números no usados.
+  Los números anulados no se reutilizan, porque su etiqueta puede estar
+  impresa.
+- Las órdenes planificadas antes de este cambio, o sin unidades por folio,
+  conservan el flujo anterior: el número se asigna al cerrar el lote.
 
 El origen de los materiales se remonta a Recepción de Materiales y sus guías de
 proveedor. `REC-*` pertenece a Romana y no forma parte de esta genealogía.

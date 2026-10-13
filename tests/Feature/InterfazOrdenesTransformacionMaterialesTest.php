@@ -56,4 +56,21 @@ class InterfazOrdenesTransformacionMaterialesTest extends TestCase
         $this->assertStringContainsString('estiba:materials-updated', $script);
         $this->assertStringContainsString('Temporada histórica', $script);
     }
+
+    public function test_las_ordenes_muestran_e_imprimen_los_folios_de_salida_reservados(): void
+    {
+        $ordenes = file_get_contents(resource_path('js/office-material-orders.js'));
+        $etiquetas = file_get_contents(resource_path('js/office-material-labels.js'));
+
+        $this->assertIsString($ordenes);
+        $this->assertIsString($etiquetas);
+        $this->assertStringContainsString('order.folios_salida_resumen', $ordenes);
+        $this->assertStringContainsString('Folios de salida reservados', $ordenes);
+        $this->assertStringContainsString('Imprimir folios reservados', $ordenes);
+        $this->assertStringContainsString('reimprime su etiqueta', $ordenes);
+        $this->assertStringContainsString('order.folios_salida_resumen?.reservados || 0) > 0', $etiquetas);
+        $this->assertStringContainsString("reservation.estado === 'reservado'", $etiquetas);
+        $this->assertStringContainsString('reserva_ids: reservationIds', $etiquetas);
+        $this->assertStringContainsString('reimprimir: cambió la cantidad', $etiquetas);
+    }
 }

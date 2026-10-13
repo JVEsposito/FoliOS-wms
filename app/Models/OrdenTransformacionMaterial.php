@@ -61,6 +61,12 @@ class OrdenTransformacionMaterial extends Model
         return $this->hasMany(ReservaTransformacionMaterial::class, 'orden_transformacion_material_id');
     }
 
+    public function foliosSalidaReservados(): HasMany
+    {
+        return $this->hasMany(FolioSalidaReservadoTransformacion::class, 'orden_transformacion_material_id')
+            ->orderBy('secuencia');
+    }
+
     public function lotes(): HasMany
     {
         return $this->hasMany(LoteTransformacionMaterial::class, 'orden_transformacion_material_id');

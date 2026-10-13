@@ -26,4 +26,15 @@ class InterfazRecetasMaterialesTest extends TestCase
         $this->assertStringContainsString('Selecciona exactamente un componente principal.', $script);
         $this->assertStringContainsString('recipe.versiones_count', $script);
     }
+
+    public function test_la_receta_no_pide_merma_porque_se_cuadra_al_cerrar_la_orden(): void
+    {
+        $script = file_get_contents(resource_path('js/office-material-recipes.js'));
+
+        $this->assertIsString($script);
+        $this->assertStringNotContainsString('<span>Merma %</span>', $script);
+        $this->assertStringNotContainsString('name="merma_estandar_porcentaje"', $script);
+        $this->assertStringContainsString('merma_estandar_porcentaje: 0,', $script);
+        $this->assertStringContainsString('el camarero la declara al cerrar la orden de trabajo', $script);
+    }
 }

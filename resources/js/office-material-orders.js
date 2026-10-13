@@ -462,6 +462,51 @@ function orderLotsTable(order) {
     `;
 }
 
+const outputFolioStates = {
+    reservado: 'Reservado',
+    usado: 'Producido',
+    anulado: 'Anulado',
+};
+
+function orderOutputFolioPrint(folio) {
+    if (folio.requiere_reimpresion) return 'Reimprimir: cambió la cantidad';
+    if (folio.estado === 'anulado') return folio.impresiones > 0 ? 'Etiqueta impresa: retirarla' : '—';
+    return folio.impresiones > 0
+        ? `Impresa ${folio.impresiones} ${folio.impresiones === 1 ? 'vez' : 'veces'}`
+        : 'Sin imprimir';
+}
+
+function orderOutputFoliosTable(order) {
+    const unit = order.version_receta?.receta?.item_salida?.unidad_medida || '';
+    return `
+        <div class="materials-order-table-wrap">
+            <table class="materials-order-table">
+                <thead><tr><th>Folio</th><th>Estado</th><th>Teórica / real</th><th>Etiqueta</th></tr></thead>
+                <tbody>${order.folios_salida.map((folio) => `<tr>
+                    <td><strong>${orderEscape(folio.numero_folio)}</strong><small>Folio ${folio.secuencia}</small></td>
+                    <td>${orderEscape(outputFolioStates[folio.estado] || folio.estado)}${folio.motivo_anulacion ? `<small>${orderEscape(folio.motivo_anulacion)}</small>` : ''}</td>
+                    <td>${orderQuantity(folio.cantidad_teorica)} / ${folio.cantidad_real === null ? '—' : orderQuantity(folio.cantidad_real)} ${orderEscape(unit)}</td>
+                    <td>${orderEscape(orderOutputFolioPrint(folio))}</td>
+                </tr>`).join('')}</tbody>
+            </table>
+        </div>
+    `;
+}
+
+/** Aviso de etiquetas: folios reservados sin imprimir o con cantidad real distinta. */
+function orderOutputFolioNotice(order) {
+    const summary = order.folios_salida_resumen;
+    if (!summary || ['cerrada', 'cancelada'].includes(order.estado)) return '';
+    const notices = [];
+    if (summary.sin_imprimir > 0) {
+        notices.push(`${summary.sin_imprimir} ${summary.sin_imprimir === 1 ? 'folio reservado sin imprimir' : 'folios reservados sin imprimir'}: imprime las etiquetas antes de producir.`);
+    }
+    if (summary.por_reimprimir > 0) {
+        notices.push(`${summary.por_reimprimir} ${summary.por_reimprimir === 1 ? 'folio cambió' : 'folios cambiaron'} de cantidad al producirse: reimprime su etiqueta.`);
+    }
+    return notices.map((notice) => `<p class="materials-order-notice">${orderEscape(notice)}</p>`).join('');
+}
+
 function orderAudit(order) {
     const events = [...(order.eventos || [])].slice(-6).reverse();
     return events.map((event) => `
@@ -472,6 +517,7 @@ function orderAudit(order) {
 function orderDetailContent(order) {
     return `
         ${orderRequirementTable(order)}
+        ${(order.folios_salida || []).length ? `<h4>Folios de salida reservados</h4>${orderOutputFoliosTable(order)}` : ''}
         <h4>Lotes operacionales</h4>
         ${orderLotsTable(order)}
         <div class="materials-order-audit">${orderAudit(order)}</div>
@@ -519,6 +565,8 @@ function renderOrders() {
         const activeSeason = order.temporada?.activa === true;
         const canPlan = canManageOrders() && order.estado === 'borrador' && activeSeason;
         const hasOutputs = orderHasOutputs(order);
+        const outputFolios = order.folios_salida_resumen || null;
+        const hasPrintableReservations = (outputFolios?.reservados || 0) > 0;
         const canCancel = canManageOrders() && (
             ['borrador', 'planificada'].includes(order.estado)
             || (order.estado === 'en_proceso' && !hasOutputs)
@@ -549,7 +597,9 @@ function renderOrders() {
                     <span>Versión operacional ${order.version}</span>
                     <span>${orderReservationCount(order)} reservas</span>
                     <span>${orderLotCount(order)} lotes</span>
+                    ${outputFolios ? `<span>${outputFolios.usados} de ${outputFolios.reservados + outputFolios.usados} folios de salida producidos</span>` : ''}
                 </div>
+                ${orderOutputFolioNotice(order)}
                 ${order.alerta_vencimiento ? `<p class="form-error">${orderEscape(order.alerta_vencimiento)}</p>` : ''}
                 ${order.observacion ? `<p class="materials-help">${orderEscape(order.observacion)}</p>` : ''}
                 ${cancelledDetail}
@@ -564,7 +614,7 @@ function renderOrders() {
                 <div class="materials-order-actions">
                     ${canPlan ? `<button class="primary-button" data-plan-material-order="${orderEscape(order.id)}" type="button">Planificar y reservar FIFO</button>` : ''}
                     ${canCancel ? `<button class="secondary-button" data-cancel-material-order="${orderEscape(order.id)}" type="button">Cancelar orden</button>` : ''}
-                    ${hasOutputs ? `<button class="secondary-button" data-label-material-order="${orderEscape(order.id)}" type="button">Abrir etiquetas</button>` : ''}
+                    ${hasOutputs || hasPrintableReservations ? `<button class="secondary-button" data-label-material-order="${orderEscape(order.id)}" type="button">${hasOutputs ? 'Abrir etiquetas' : 'Imprimir folios reservados'}</button>` : ''}
                 </div>
             </article>
         `;
@@ -649,7 +699,7 @@ async function planOrder(order) {
     orderState.planningOperations.set(order.id, operation);
 
     try {
-        await orderApi(`/api/materiales/transformaciones/ordenes/${order.id}/planificar`, {
+        const planned = await orderApi(`/api/materiales/transformaciones/ordenes/${order.id}/planificar`, {
             method: 'POST',
             body: JSON.stringify({
                 operacion_id: operation.id,
@@ -659,7 +709,10 @@ async function planOrder(order) {
         orderState.planningOperations.delete(order.id);
         await loadOrdersOffice(true);
         window.dispatchEvent(new CustomEvent('estiba:materials-updated'));
-        orderToast(`${orderCode(order)} quedó planificada y disponible en PDA.`);
+        const reservedOutputs = planned?.data?.folios_salida_resumen?.reservados || 0;
+        orderToast(reservedOutputs
+            ? `${orderCode(order)} quedó planificada y disponible en PDA. Sus ${reservedOutputs} folios de salida quedaron reservados para imprimir.`
+            : `${orderCode(order)} quedó planificada y disponible en PDA.`);
     } catch (error) {
         orderToast(error.message, true);
     }
@@ -667,9 +720,13 @@ async function planOrder(order) {
 
 async function cancelOrder(order) {
     const previous = orderState.cancellationOperations.get(order.id);
+    const reservedOutputs = order.folios_salida_resumen?.reservados || 0;
+    const voidedOutputs = reservedOutputs
+        ? ` Se anularán ${reservedOutputs} ${reservedOutputs === 1 ? 'folio de salida reservado' : 'folios de salida reservados'}; retira sus etiquetas si ya se imprimieron.`
+        : '';
     const cancellationEffect = order.estado === 'en_proceso'
-        ? ' Se descartará cualquier lote abierto y se liberarán sus reservas activas:'
-        : ' Sus reservas activas serán liberadas:';
+        ? `${voidedOutputs} Se descartará cualquier lote abierto y se liberarán sus reservas activas:`
+        : `${voidedOutputs} Sus reservas activas serán liberadas:`;
     const reason = window.prompt(
         `Indica el motivo para cancelar ${orderCode(order)}.${cancellationEffect}`,
         previous?.reason || '',

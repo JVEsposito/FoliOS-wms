@@ -83,16 +83,42 @@ function receiptFolios(receipt) {
 }
 
 function transformationFolios(order) {
-    return (order?.lotes || []).filter((lot) => lot.estado === 'cerrado')
-        .flatMap((lot) => (lot.salidas || []).map((output) => ({
-            id: output.folio_id,
-            numero_folio: output.numero_folio,
-            cantidad: output.cantidad_producida,
-            lote_proveedor: `Lote ${lot.numero_lote}`,
-            item: output.item,
-            unidad_medida: output.item?.unidad_medida,
+    // Folio reservado del que proviene cada salida: cuando la cantidad real difiere de la
+    // teórica ya impresa, la etiqueta se debe reimprimir.
+    const reservations = order?.folios_salida || [];
+    const reservationByFolio = new Map(reservations.filter((reservation) => reservation.folio_id)
+        .map((reservation) => [reservation.folio_id, reservation]));
+    const outputItem = order?.version_receta?.receta?.item_salida || null;
+    const produced = (order?.lotes || []).filter((lot) => lot.estado === 'cerrado')
+        .flatMap((lot) => (lot.salidas || []).map((output) => {
+            const reservation = reservationByFolio.get(output.folio_id);
+            return {
+                kind: 'folio',
+                id: output.folio_id,
+                numero_folio: output.numero_folio,
+                cantidad: output.cantidad_producida,
+                lote_proveedor: String(reservation?.secuencia ?? lot.numero_lote),
+                item: output.item,
+                unidad_medida: output.item?.unidad_medida,
+                bloqueado: false,
+                requiere_reimpresion: reservation?.requiere_reimpresion === true,
+                impreso_anticipado: (reservation?.impresiones || 0) > 0,
+            };
+        }));
+    const reserved = reservations.filter((reservation) => reservation.estado === 'reservado')
+        .map((reservation) => ({
+            kind: 'reserva',
+            id: reservation.id,
+            numero_folio: reservation.numero_folio,
+            cantidad: reservation.cantidad_teorica,
+            lote_proveedor: String(reservation.secuencia),
+            item: outputItem,
+            unidad_medida: outputItem?.unidad_medida,
             bloqueado: false,
-        })));
+            impresiones: reservation.impresiones || 0,
+        }));
+
+    return [...reserved, ...produced];
 }
 
 function selectedFolios() {
@@ -126,19 +152,28 @@ function renderProfileOptions() {
     `).join('') || '<option value="">No existen perfiles activos</option>';
 }
 
+function labelFolioStatus(folio, generated) {
+    if (folio.kind === 'reserva') {
+        return folio.impresiones > 0 ? ' · reservado · reimpresión' : ' · reservado';
+    }
+    if (folio.requiere_reimpresion) return ' · reimprimir: cambió la cantidad';
+    return generated.has(folio.id) || folio.impreso_anticipado ? ' · reimpresión' : '';
+}
+
 function renderFolios() {
     const folios = selectedFolios();
-    const generated = new Set(labelState.history.flatMap((job) => job.folios.map((folio) => folio.id)));
+    const generated = new Set(labelState.history.flatMap((job) => job.folios.map((folio) => folio.id).filter(Boolean)));
     const reference = labelState.source === 'transformacion'
         ? `OT-${labelState.selected?.id?.slice(0, 8).toUpperCase() || ''}`
         : labelState.selected?.numero_guia_despacho;
+    const reservedCount = folios.filter((folio) => folio.kind === 'reserva').length;
     labelElements.summary.textContent = labelState.selected
-        ? `${reference} · ${folios.length} folios disponibles`
-        : 'Selecciona una recepción confirmada u orden con lotes cerrados';
+        ? `${reference} · ${folios.length} folios disponibles${reservedCount ? ` · ${reservedCount} reservados con cantidad teórica` : ''}`
+        : 'Selecciona una recepción confirmada u orden con folios reservados o lotes cerrados';
     labelElements.folios.innerHTML = folios.map((folio) => `
-        <label class="material-label-folio">
-            <input name="folio_ids[]" type="checkbox" value="${folio.id}">
-            <span><strong>${labelEscape(folio.numero_folio)}${generated.has(folio.id) ? ' · reimpresión' : ''}</strong><small>${labelEscape(folio.item?.codigo)} · ${labelEscape(folio.item?.nombre)}</small><small>${labelEscape(folio.cantidad)} ${labelEscape(folio.unidad_medida)} · lote ${labelEscape(folio.lote_proveedor || '—')}${folio.bloqueado ? ' · BLOQUEADO' : ''}</small></span>
+        <label class="material-label-folio${folio.kind === 'reserva' ? ' is-reserved' : ''}${folio.requiere_reimpresion ? ' needs-reprint' : ''}">
+            <input name="folio_ids[]" type="checkbox" value="${labelEscape(folio.id)}" data-label-kind="${folio.kind || 'folio'}">
+            <span><strong>${labelEscape(folio.numero_folio)}${labelEscape(labelFolioStatus(folio, generated))}</strong><small>${labelEscape(folio.item?.codigo)} · ${labelEscape(folio.item?.nombre)}</small><small>${labelEscape(folio.cantidad)} ${labelEscape(folio.unidad_medida)}${folio.kind === 'reserva' ? ' teórica' : ''} · lote ${labelEscape(folio.lote_proveedor || '—')}${folio.bloqueado ? ' · BLOQUEADO' : ''}</small></span>
         </label>
     `).join('') || '<p class="empty-state">El origen seleccionado no posee folios etiquetables.</p>';
     labelElements.selectAll.checked = false;
@@ -189,7 +224,8 @@ async function loadLabels() {
             labelApi('/api/materiales/recepciones/perfiles-impresion'),
         ]);
         labelState.receptions = receptions.data || [];
-        labelState.orders = (orders.data || []).filter((order) => order.tiene_salidas === true);
+        labelState.orders = (orders.data || []).filter((order) => order.tiene_salidas === true
+            || (order.folios_salida_resumen?.reservados || 0) > 0);
         labelState.profiles = profiles.data || [];
         renderSourceOptions();
         renderProfileOptions();
@@ -245,9 +281,12 @@ labelElements.form?.addEventListener('submit', async (event) => {
     event.preventDefault();
     labelElements.error.textContent = '';
     const form = new FormData(labelElements.form);
-    const folioIds = [...labelElements.folios.querySelectorAll('input[type="checkbox"]:checked')]
+    const checked = [...labelElements.folios.querySelectorAll('input[type="checkbox"]:checked')];
+    const folioIds = checked.filter((checkbox) => checkbox.dataset.labelKind !== 'reserva')
         .map((checkbox) => checkbox.value);
-    if (!labelState.selected || folioIds.length === 0) {
+    const reservationIds = checked.filter((checkbox) => checkbox.dataset.labelKind === 'reserva')
+        .map((checkbox) => checkbox.value);
+    if (!labelState.selected || checked.length === 0) {
         labelElements.error.textContent = 'Selecciona un origen y al menos un folio.';
         return;
     }
@@ -257,7 +296,8 @@ labelElements.form?.addEventListener('submit', async (event) => {
         formato: form.get('formato'),
         simbologia: form.get('simbologia'),
         canal: 'oficina_descarga',
-        folio_ids: folioIds,
+        ...(folioIds.length ? { folio_ids: folioIds } : {}),
+        ...(reservationIds.length ? { reserva_ids: reservationIds } : {}),
         copias: Number(form.get('copias')),
         motivo_reimpresion: String(form.get('motivo_reimpresion') || '').trim() || null,
     };

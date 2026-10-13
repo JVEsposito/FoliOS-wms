@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\EstadoFolioSalidaReservado;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\AbrirLoteTransformacionMaterialRequest;
 use App\Http\Requests\CancelarOrdenTransformacionMaterialRequest;
@@ -87,7 +88,22 @@ class TransformacionMaterialController extends Controller
         Gate::authorize('consultar-transformaciones-materiales');
         $ordenes = OrdenTransformacionMaterial::query()
             ->where('temporada_id', '=', $this->consultaTemporadaActiva())
-            ->withCount(['reservas', 'lotes'])
+            ->withCount([
+                'reservas',
+                'lotes',
+                'foliosSalidaReservados as folios_salida_total_count',
+                'foliosSalidaReservados as folios_salida_reservados_count' => fn ($consulta) => $consulta
+                    ->where('estado', EstadoFolioSalidaReservado::Reservado->value),
+                'foliosSalidaReservados as folios_salida_sin_imprimir_count' => fn ($consulta) => $consulta
+                    ->where('estado', EstadoFolioSalidaReservado::Reservado->value)
+                    ->where('impresiones', 0),
+                'foliosSalidaReservados as folios_salida_por_reimprimir_count' => fn ($consulta) => $consulta
+                    ->where('requiere_reimpresion', true),
+                'foliosSalidaReservados as folios_salida_usados_count' => fn ($consulta) => $consulta
+                    ->where('estado', EstadoFolioSalidaReservado::Usado->value),
+                'foliosSalidaReservados as folios_salida_anulados_count' => fn ($consulta) => $consulta
+                    ->where('estado', EstadoFolioSalidaReservado::Anulado->value),
+            ])
             ->withExists([
                 'lotes as tiene_salidas' => fn ($consulta) => $consulta
                     ->where('estado', 'cerrado')
