@@ -27,6 +27,7 @@ test('catálogo muestra miniaturas autenticadas y un lector puede ver la foto si
             const request = route.request(); const url = new URL(request.url()); const path = url.pathname;
             if (path.startsWith('/build/')) return route.fulfill({ body: readFileSync(resolve(root, `public${path}`)), contentType: path.endsWith('.js') ? 'text/javascript' : 'text/css' });
             if (path === '/oficina/materiales/items') return route.fulfill({ body: html, contentType: 'text/html' });
+            if (path === '/FoliOS') return route.fulfill({ body: '<!doctype html><title>FoliOS</title>', contentType: 'text/html' });
             calls.push({ path, auth: request.headers().authorization, url: request.url() });
             if (path === '/api/materiales/items/catalogo') return route.fulfill({ json: { data: [item], pagina: 1, paginas: 1, total: 1,
                 catalogos: { temporadas: [{ id: 'season-1', codigo: '2026' }], clientes: [{ id: 'client-1', nombre: 'Cliente', temporada_material_id: 'season-1' }], categorias: ['Embalaje'] } } });
@@ -50,8 +51,10 @@ test('catálogo muestra miniaturas autenticadas y un lector puede ver la foto si
         await page.waitForFunction(() => document.querySelector('.item-photo-large img')?.src.startsWith('blob:'));
         assert.equal(calls.some(c => c.path.endsWith('/archivo')), true);
         assert.ok(calls.filter(c => c.path.startsWith('/api/materiales/fotos-items/')).every(c => c.auth === 'Bearer private-token' && !c.url.includes('private-token')));
+        // Sin sesión, la oficina (y la foto privada abierta) se reemplaza por la entrada única.
         await page.evaluate(() => { localStorage.removeItem('estiba_wms_office_token'); window.dispatchEvent(new Event('estiba:office-session')); });
-        await page.waitForFunction(() => !document.querySelector('dialog'));
+        await page.waitForURL('http://localhost/FoliOS?volver=%2Foficina%2Fmateriales%2Fitems');
+        assert.equal(await page.locator('dialog').count(), 0);
         assert.deepEqual(errors, []);
         await context.close();
     } finally { await browser.close(); }

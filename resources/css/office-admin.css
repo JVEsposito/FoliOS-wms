@@ -826,3 +826,22 @@
 
 .admin-closing-select-all { display: inline-flex; align-items: center; gap: 8px; font-size: .78rem; font-weight: 800; cursor: pointer; }
 .admin-closing-select-all input { width: 18px; height: 18px; margin: 0; padding: 0; accent-color: var(--corporate-blue); }
+
+/* Pantalla de inicio del perfil de acceso */
+.access-home-field {
+    display: grid;
+    grid-template-columns: minmax(240px, 420px) minmax(0, 1fr);
+    align-items: end;
+    gap: 14px;
+    margin: 4px 0 14px;
+}
+
+.access-home-field .admin-form__hint {
+    margin: 0 0 6px;
+}
+
+@media (max-width: 900px) {
+    .access-home-field {
+        grid-template-columns: 1fr;
+    }
+}
