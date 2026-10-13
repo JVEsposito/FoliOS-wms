@@ -215,6 +215,6 @@
 
 @once
     @if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
-        @vite(['resources/css/office-corporate.css', 'resources/css/office-shell.css', 'resources/js/office-navigation.js'])
+        @vite(['resources/css/office-corporate.css', 'resources/css/office-shell.css', 'resources/css/office-folios.css', 'resources/js/office-navigation.js'])
     @endif
 @endonce

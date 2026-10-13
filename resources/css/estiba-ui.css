@@ -16,7 +16,7 @@
     color-scheme: light;
     background: var(--eui-color-canvas);
     color: var(--eui-color-text);
-    font: var(--eui-font-weight-regular) var(--eui-font-size-body) / var(--eui-line-height-body) "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font: var(--eui-font-weight-regular) var(--eui-font-size-body) / var(--eui-line-height-body) var(--eui-font-family-sans);
 }
 :root[data-office-theme="dark-industrial"] .estiba-ui { color-scheme: dark; }
 .estiba-ui[data-density="compact"] {
@@ -98,7 +98,7 @@
        ya diferencia un código de texto corrido sin ese riesgo. El subrayado frost queda
        solo en --large, donde el tamaño de título ya lo aleja de una lectura como enlace
        y funciona como acento de "unidad de verdad del sistema" bajo el masthead. */
-    font-family: ui-monospace, Consolas, monospace; font-size: 1em; font-weight: var(--eui-font-weight-strong);
+    font-family: var(--eui-font-family-mono); font-size: 1em; font-weight: var(--eui-font-weight-strong); letter-spacing: -.03em;
     font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
 }
 .estiba-ui .eui-code--large {

@@ -1,0 +1,708 @@
+/*
+ * FoliOS v2 · capa transversal de Oficina.
+ * Especificación: docs/diseno/folios-v2/README.md (PR 1 de la serie).
+ *
+ * Se carga AL FINAL, después de office-corporate.css y office-shell.css, desde
+ * <x-office.navigation>. Por eso gana la cascada con la misma especificidad que las
+ * capas anteriores ("Lenguaje operacional", "Temas operacionales", "Manifiesto") sin
+ * editarlas. Solo consume variables de tema: los valores viven en los bloques
+ * :root[data-office-theme] de office-corporate.css.
+ *
+ * Contenido:
+ *   1. Tipografía (Archivo + Azeret Mono autoalojadas).
+ *   2. Área activa: el color del gajo según la oficina abierta.
+ *   3. Tarjetas y paneles tipo etiqueta (blancos, borde fino, radio 8).
+ *   4. Encabezado de página: etiqueta de área y título angosto.
+ *   5. Indicadores en celdas.
+ *   6. Tablas, campos, botones, sellos y foco.
+ */
+@import './folios-fonts.css';
+
+/* 1. Tipografía ------------------------------------------------------------------ */
+
+body,
+.office-app {
+    font-family: var(--font-sans) !important;
+    font-stretch: 100%;
+    font-optical-sizing: auto;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* El shell actual se diseñó para Arial Narrow: hasta el PR 2 usa Archivo semiangosta. */
+.estiba-office-shell {
+    font-family: var(--font-sans);
+    font-stretch: 85%;
+}
+
+.office-app :is(code, kbd, samp, .operation-now-code, .next-code) {
+    font-family: var(--font-mono) !important;
+    letter-spacing: -.03em;
+}
+
+/* Familias condensadas existentes: el ancho lo da el eje wdth de Archivo. */
+.office-app :is(
+    .operation-now-eyebrow,
+    .operation-now-command__title h1,
+    .operation-now-table thead,
+    .operation-now-operator__label,
+    .operation-now-tunnel__label,
+    .operation-now-panel__heading h2,
+    .plant-node .plant-node__code
+),
+.estiba-ui :is(.eui-heading__eyebrow, .eui-heading__title, .eui-panel__title, .eui-table th) {
+    font-stretch: var(--font-condensed-stretch);
+}
+
+/* 2. Área activa ----------------------------------------------------------------- */
+/* El shell marca la oficina abierta con data-active-domain / data-active-office. Cada
+   área fija --area-* (ver bloques de tema) y --area-gajo, el gajo de 6 hojas con la
+   hoja del área en su color. Sin coincidencia, rige Operación (frost). */
+
+:root {
+    --area-gajo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16,16 L16,2 L26.97,7.3 Z' fill='%239cc3cc'/%3E%3Cpath d='M16,16 L28.12,9 L29.02,21.15 Z' fill='%239cc3cc'/%3E%3Cpath d='M16,16 L28.12,23 L18.05,29.85 Z' fill='%239cc3cc'/%3E%3Cpath d='M16,16 L16,30 L5.03,24.7 Z' fill='%239cc3cc'/%3E%3Cpath d='M16,16 L3.88,23 L2.98,10.85 Z' fill='%239cc3cc'/%3E%3Cpath d='M16,16 L3.88,9 L13.95,2.15 Z' fill='%239cc3cc'/%3E%3Ccircle cx='16' cy='16' r='4.4' fill='%230f5c6e'/%3E%3C/svg%3E");
+}
+
+:root[data-office-theme="dark-industrial"] {
+    --area-gajo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16,16 L16,2 L26.97,7.3 Z' fill='%232f6f80'/%3E%3Cpath d='M16,16 L28.12,9 L29.02,21.15 Z' fill='%232f6f80'/%3E%3Cpath d='M16,16 L28.12,23 L18.05,29.85 Z' fill='%232f6f80'/%3E%3Cpath d='M16,16 L16,30 L5.03,24.7 Z' fill='%232f6f80'/%3E%3Cpath d='M16,16 L3.88,23 L2.98,10.85 Z' fill='%232f6f80'/%3E%3Cpath d='M16,16 L3.88,9 L13.95,2.15 Z' fill='%232f6f80'/%3E%3Ccircle cx='16' cy='16' r='4.4' fill='%235fd3e6'/%3E%3C/svg%3E");
+}
+
+:root:has([data-active-domain="materia-prima"]) {
+    --area-ink: var(--area-materia-prima-ink);
+    --area-text: var(--area-materia-prima-text);
+    --area-tint: var(--area-materia-prima-tint);
+    --area-line: var(--area-materia-prima-line);
+    --area-bright: var(--area-materia-prima-bright);
+    --area-gajo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16,16 L16,2 L26.97,7.3 Z' fill='%238c1d40'/%3E%3Cpath d='M16,16 L28.12,9 L29.02,21.15 Z' fill='%23e3b3c2'/%3E%3Cpath d='M16,16 L28.12,23 L18.05,29.85 Z' fill='%23e3b3c2'/%3E%3Cpath d='M16,16 L16,30 L5.03,24.7 Z' fill='%23e3b3c2'/%3E%3Cpath d='M16,16 L3.88,23 L2.98,10.85 Z' fill='%23e3b3c2'/%3E%3Cpath d='M16,16 L3.88,9 L13.95,2.15 Z' fill='%23e3b3c2'/%3E%3Ccircle cx='16' cy='16' r='2.6' fill='%23ffffff'/%3E%3C/svg%3E");
+}
+
+:root:has([data-active-domain="frigorifico"]) {
+    --area-ink: var(--area-frigorifico-ink);
+    --area-text: var(--area-frigorifico-text);
+    --area-tint: var(--area-frigorifico-tint);
+    --area-line: var(--area-frigorifico-line);
+    --area-bright: var(--area-frigorifico-bright);
+    --area-gajo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16,16 L16,2 L26.97,7.3 Z' fill='%23a9cbe6'/%3E%3Cpath d='M16,16 L28.12,9 L29.02,21.15 Z' fill='%231d6fa8'/%3E%3Cpath d='M16,16 L28.12,23 L18.05,29.85 Z' fill='%23a9cbe6'/%3E%3Cpath d='M16,16 L16,30 L5.03,24.7 Z' fill='%23a9cbe6'/%3E%3Cpath d='M16,16 L3.88,23 L2.98,10.85 Z' fill='%23a9cbe6'/%3E%3Cpath d='M16,16 L3.88,9 L13.95,2.15 Z' fill='%23a9cbe6'/%3E%3Ccircle cx='16' cy='16' r='2.6' fill='%23ffffff'/%3E%3C/svg%3E");
+}
+
+:root:has([data-active-domain="materiales"]) {
+    --area-ink: var(--area-materiales-ink);
+    --area-text: var(--area-materiales-text);
+    --area-tint: var(--area-materiales-tint);
+    --area-line: var(--area-materiales-line);
+    --area-bright: var(--area-materiales-bright);
+    --area-gajo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16,16 L16,2 L26.97,7.3 Z' fill='%23dcc0a0'/%3E%3Cpath d='M16,16 L28.12,9 L29.02,21.15 Z' fill='%23dcc0a0'/%3E%3Cpath d='M16,16 L28.12,23 L18.05,29.85 Z' fill='%238c5a22'/%3E%3Cpath d='M16,16 L16,30 L5.03,24.7 Z' fill='%23dcc0a0'/%3E%3Cpath d='M16,16 L3.88,23 L2.98,10.85 Z' fill='%23dcc0a0'/%3E%3Cpath d='M16,16 L3.88,9 L13.95,2.15 Z' fill='%23dcc0a0'/%3E%3Ccircle cx='16' cy='16' r='2.6' fill='%23ffffff'/%3E%3C/svg%3E");
+}
+
+:root:has([data-active-domain="consultas"]) {
+    --area-ink: var(--area-consultas-ink);
+    --area-text: var(--area-consultas-text);
+    --area-tint: var(--area-consultas-tint);
+    --area-line: var(--area-consultas-line);
+    --area-bright: var(--area-consultas-bright);
+    --area-gajo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16,16 L16,2 L26.97,7.3 Z' fill='%23cdbde8'/%3E%3Cpath d='M16,16 L28.12,9 L29.02,21.15 Z' fill='%23cdbde8'/%3E%3Cpath d='M16,16 L28.12,23 L18.05,29.85 Z' fill='%23cdbde8'/%3E%3Cpath d='M16,16 L16,30 L5.03,24.7 Z' fill='%235e3f91'/%3E%3Cpath d='M16,16 L3.88,23 L2.98,10.85 Z' fill='%23cdbde8'/%3E%3Cpath d='M16,16 L3.88,9 L13.95,2.15 Z' fill='%23cdbde8'/%3E%3Ccircle cx='16' cy='16' r='2.6' fill='%23ffffff'/%3E%3C/svg%3E");
+}
+
+:root:has([data-active-domain="gerencia"]),
+:root:has([data-active-domain="administracion"][data-active-office="panel"]) {
+    --area-ink: var(--area-gerencia-ink);
+    --area-text: var(--area-gerencia-text);
+    --area-tint: var(--area-gerencia-tint);
+    --area-line: var(--area-gerencia-line);
+    --area-bright: var(--area-gerencia-bright);
+    --area-gajo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16,16 L16,2 L26.97,7.3 Z' fill='%23c3d9a6'/%3E%3Cpath d='M16,16 L28.12,9 L29.02,21.15 Z' fill='%23c3d9a6'/%3E%3Cpath d='M16,16 L28.12,23 L18.05,29.85 Z' fill='%23c3d9a6'/%3E%3Cpath d='M16,16 L16,30 L5.03,24.7 Z' fill='%23c3d9a6'/%3E%3Cpath d='M16,16 L3.88,23 L2.98,10.85 Z' fill='%234c7a1c'/%3E%3Cpath d='M16,16 L3.88,9 L13.95,2.15 Z' fill='%23c3d9a6'/%3E%3Ccircle cx='16' cy='16' r='2.6' fill='%23ffffff'/%3E%3C/svg%3E");
+}
+
+:root:has([data-active-domain="administracion"]:not([data-active-office="panel"]):not([data-active-office="operacion-ahora"])) {
+    --area-ink: var(--area-administracion-ink);
+    --area-text: var(--area-administracion-text);
+    --area-tint: var(--area-administracion-tint);
+    --area-line: var(--area-administracion-line);
+    --area-bright: var(--area-administracion-bright);
+    --area-gajo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16,16 L16,2 L26.97,7.3 Z' fill='%23bfc8ce'/%3E%3Cpath d='M16,16 L28.12,9 L29.02,21.15 Z' fill='%23bfc8ce'/%3E%3Cpath d='M16,16 L28.12,23 L18.05,29.85 Z' fill='%23bfc8ce'/%3E%3Cpath d='M16,16 L16,30 L5.03,24.7 Z' fill='%23bfc8ce'/%3E%3Cpath d='M16,16 L3.88,23 L2.98,10.85 Z' fill='%23bfc8ce'/%3E%3Cpath d='M16,16 L3.88,9 L13.95,2.15 Z' fill='%234b5862'/%3E%3Ccircle cx='16' cy='16' r='2.6' fill='%23ffffff'/%3E%3C/svg%3E");
+}
+
+:root:has([data-active-office="operacion-ahora"]) {
+    --area-ink: var(--area-operacion-ink);
+    --area-text: var(--area-operacion-text);
+    --area-tint: var(--area-operacion-tint);
+    --area-line: var(--area-operacion-line);
+    --area-bright: var(--area-operacion-bright);
+    --area-gajo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16,16 L16,2 L26.97,7.3 Z' fill='%239cc3cc'/%3E%3Cpath d='M16,16 L28.12,9 L29.02,21.15 Z' fill='%239cc3cc'/%3E%3Cpath d='M16,16 L28.12,23 L18.05,29.85 Z' fill='%239cc3cc'/%3E%3Cpath d='M16,16 L16,30 L5.03,24.7 Z' fill='%239cc3cc'/%3E%3Cpath d='M16,16 L3.88,23 L2.98,10.85 Z' fill='%239cc3cc'/%3E%3Cpath d='M16,16 L3.88,9 L13.95,2.15 Z' fill='%239cc3cc'/%3E%3Ccircle cx='16' cy='16' r='4.4' fill='%230f5c6e'/%3E%3C/svg%3E");
+}
+
+:root[data-office-theme="dark-industrial"]:has([data-active-domain="materia-prima"]) {
+    --area-gajo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16,16 L16,2 L26.97,7.3 Z' fill='%23f2879f'/%3E%3Cpath d='M16,16 L28.12,9 L29.02,21.15 Z' fill='%237a3a4a'/%3E%3Cpath d='M16,16 L28.12,23 L18.05,29.85 Z' fill='%237a3a4a'/%3E%3Cpath d='M16,16 L16,30 L5.03,24.7 Z' fill='%237a3a4a'/%3E%3Cpath d='M16,16 L3.88,23 L2.98,10.85 Z' fill='%237a3a4a'/%3E%3Cpath d='M16,16 L3.88,9 L13.95,2.15 Z' fill='%237a3a4a'/%3E%3Ccircle cx='16' cy='16' r='2.6' fill='%2315303c'/%3E%3C/svg%3E");
+}
+
+:root[data-office-theme="dark-industrial"]:has([data-active-domain="frigorifico"]) {
+    --area-gajo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16,16 L16,2 L26.97,7.3 Z' fill='%233f6f93'/%3E%3Cpath d='M16,16 L28.12,9 L29.02,21.15 Z' fill='%237dbceb'/%3E%3Cpath d='M16,16 L28.12,23 L18.05,29.85 Z' fill='%233f6f93'/%3E%3Cpath d='M16,16 L16,30 L5.03,24.7 Z' fill='%233f6f93'/%3E%3Cpath d='M16,16 L3.88,23 L2.98,10.85 Z' fill='%233f6f93'/%3E%3Cpath d='M16,16 L3.88,9 L13.95,2.15 Z' fill='%233f6f93'/%3E%3Ccircle cx='16' cy='16' r='2.6' fill='%2315303c'/%3E%3C/svg%3E");
+}
+
+:root[data-office-theme="dark-industrial"]:has([data-active-domain="materiales"]) {
+    --area-gajo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16,16 L16,2 L26.97,7.3 Z' fill='%237a5a35'/%3E%3Cpath d='M16,16 L28.12,9 L29.02,21.15 Z' fill='%237a5a35'/%3E%3Cpath d='M16,16 L28.12,23 L18.05,29.85 Z' fill='%23e0aa6c'/%3E%3Cpath d='M16,16 L16,30 L5.03,24.7 Z' fill='%237a5a35'/%3E%3Cpath d='M16,16 L3.88,23 L2.98,10.85 Z' fill='%237a5a35'/%3E%3Cpath d='M16,16 L3.88,9 L13.95,2.15 Z' fill='%237a5a35'/%3E%3Ccircle cx='16' cy='16' r='2.6' fill='%2315303c'/%3E%3C/svg%3E");
+}
+
+:root[data-office-theme="dark-industrial"]:has([data-active-domain="consultas"]) {
+    --area-gajo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16,16 L16,2 L26.97,7.3 Z' fill='%235d4b84'/%3E%3Cpath d='M16,16 L28.12,9 L29.02,21.15 Z' fill='%235d4b84'/%3E%3Cpath d='M16,16 L28.12,23 L18.05,29.85 Z' fill='%235d4b84'/%3E%3Cpath d='M16,16 L16,30 L5.03,24.7 Z' fill='%23bba2ea'/%3E%3Cpath d='M16,16 L3.88,23 L2.98,10.85 Z' fill='%235d4b84'/%3E%3Cpath d='M16,16 L3.88,9 L13.95,2.15 Z' fill='%235d4b84'/%3E%3Ccircle cx='16' cy='16' r='2.6' fill='%2315303c'/%3E%3C/svg%3E");
+}
+
+:root[data-office-theme="dark-industrial"]:has([data-active-domain="gerencia"]),
+:root[data-office-theme="dark-industrial"]:has([data-active-domain="administracion"][data-active-office="panel"]) {
+    --area-gajo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16,16 L16,2 L26.97,7.3 Z' fill='%234f6d2e'/%3E%3Cpath d='M16,16 L28.12,9 L29.02,21.15 Z' fill='%234f6d2e'/%3E%3Cpath d='M16,16 L28.12,23 L18.05,29.85 Z' fill='%234f6d2e'/%3E%3Cpath d='M16,16 L16,30 L5.03,24.7 Z' fill='%234f6d2e'/%3E%3Cpath d='M16,16 L3.88,23 L2.98,10.85 Z' fill='%23a6d16e'/%3E%3Cpath d='M16,16 L3.88,9 L13.95,2.15 Z' fill='%234f6d2e'/%3E%3Ccircle cx='16' cy='16' r='2.6' fill='%2315303c'/%3E%3C/svg%3E");
+}
+
+:root[data-office-theme="dark-industrial"]:has([data-active-domain="administracion"]:not([data-active-office="panel"]):not([data-active-office="operacion-ahora"])) {
+    --area-gajo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16,16 L16,2 L26.97,7.3 Z' fill='%234f5f69'/%3E%3Cpath d='M16,16 L28.12,9 L29.02,21.15 Z' fill='%234f5f69'/%3E%3Cpath d='M16,16 L28.12,23 L18.05,29.85 Z' fill='%234f5f69'/%3E%3Cpath d='M16,16 L16,30 L5.03,24.7 Z' fill='%234f5f69'/%3E%3Cpath d='M16,16 L3.88,23 L2.98,10.85 Z' fill='%234f5f69'/%3E%3Cpath d='M16,16 L3.88,9 L13.95,2.15 Z' fill='%23b7c4cc'/%3E%3Ccircle cx='16' cy='16' r='2.6' fill='%2315303c'/%3E%3C/svg%3E");
+}
+
+:root[data-office-theme="dark-industrial"]:has([data-active-office="operacion-ahora"]) {
+    --area-gajo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16,16 L16,2 L26.97,7.3 Z' fill='%232f6f80'/%3E%3Cpath d='M16,16 L28.12,9 L29.02,21.15 Z' fill='%232f6f80'/%3E%3Cpath d='M16,16 L28.12,23 L18.05,29.85 Z' fill='%232f6f80'/%3E%3Cpath d='M16,16 L16,30 L5.03,24.7 Z' fill='%232f6f80'/%3E%3Cpath d='M16,16 L3.88,23 L2.98,10.85 Z' fill='%232f6f80'/%3E%3Cpath d='M16,16 L3.88,9 L13.95,2.15 Z' fill='%232f6f80'/%3E%3Ccircle cx='16' cy='16' r='4.4' fill='%235fd3e6'/%3E%3C/svg%3E");
+}
+
+
+/* 3. Tarjetas y paneles ------------------------------------------------------------ */
+
+.office-app .panel,
+.office-app [class$="-panel"],
+.office-app [class*="-panel "],
+.office-app [class$="__panel"],
+.office-app [class*="__panel "] {
+    border: 1px solid var(--corporate-border) !important;
+    border-radius: var(--radius-card) !important;
+    background: var(--corporate-card) !important;
+    box-shadow: none !important;
+}
+
+.office-app [class$="-card"],
+.office-app [class*="-card "],
+.office-app [class$="__card"],
+.office-app [class*="__card "],
+.office-app :is(.camera-item, .material-row, .dispatch-row, .validation-row, .tunnel-card, .result-card, .producer-card) {
+    border-radius: var(--radius-card) !important;
+    box-shadow: none !important;
+}
+
+/* La cabecera de panel deja de ser una franja navy: es el título de la etiqueta. */
+.office-app :is(
+    .panel > .panel-heading,
+    .management-panel > header,
+    .inventory-connections-panel > header,
+    .demo-card > header,
+    .validation-panel__heading,
+    .materials-panel__heading,
+    .prefrio-panel__heading,
+    .process-panel__heading,
+    .sag-panel-heading,
+    .list-heading,
+    .return-panel__heading,
+    .repa-panel-heading,
+    .admin-panel__heading,
+    .weighbridge-panel-heading,
+    .raw-material-panel-heading,
+    .annulment-panel-heading,
+    .integrity-panel__heading,
+    .discrepancies-panel__heading
+) {
+    min-height: 0;
+    padding: 16px 18px 12px !important;
+    border-bottom: 1px solid var(--line-soft) !important;
+    border-radius: var(--radius-card) var(--radius-card) 0 0;
+    background: transparent !important;
+    color: var(--text-strong) !important;
+}
+
+.office-app :is(
+    .panel > .panel-heading,
+    .management-panel > header,
+    .inventory-connections-panel > header,
+    .demo-card > header,
+    .validation-panel__heading,
+    .materials-panel__heading,
+    .prefrio-panel__heading,
+    .process-panel__heading,
+    .sag-panel-heading,
+    .list-heading,
+    .return-panel__heading,
+    .repa-panel-heading,
+    .admin-panel__heading,
+    .weighbridge-panel-heading,
+    .raw-material-panel-heading,
+    .annulment-panel-heading,
+    .integrity-panel__heading,
+    .discrepancies-panel__heading
+) :is(h2, h3) {
+    margin: 0;
+    color: var(--text-strong) !important;
+    font-family: var(--font-sans) !important;
+    font-size: 1.625rem;
+    font-stretch: var(--font-condensed-stretch);
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: 0;
+    text-transform: none !important;
+}
+
+.office-app :is(
+    .panel > .panel-heading,
+    .management-panel > header,
+    .inventory-connections-panel > header,
+    .demo-card > header,
+    .validation-panel__heading,
+    .materials-panel__heading,
+    .prefrio-panel__heading,
+    .process-panel__heading,
+    .sag-panel-heading,
+    .list-heading,
+    .return-panel__heading,
+    .repa-panel-heading,
+    .admin-panel__heading,
+    .weighbridge-panel-heading,
+    .raw-material-panel-heading,
+    .annulment-panel-heading,
+    .integrity-panel__heading,
+    .discrepancies-panel__heading
+) strong {
+    color: var(--text-strong) !important;
+    font-family: var(--font-sans) !important;
+    text-transform: none !important;
+    letter-spacing: 0;
+}
+
+.office-app :is(
+    .panel > .panel-heading,
+    .management-panel > header,
+    .inventory-connections-panel > header,
+    .demo-card > header,
+    .validation-panel__heading,
+    .materials-panel__heading,
+    .prefrio-panel__heading,
+    .process-panel__heading,
+    .sag-panel-heading,
+    .list-heading,
+    .return-panel__heading,
+    .repa-panel-heading,
+    .admin-panel__heading,
+    .weighbridge-panel-heading,
+    .raw-material-panel-heading,
+    .annulment-panel-heading,
+    .integrity-panel__heading,
+    .discrepancies-panel__heading
+) :is(p, span):not(.eyebrow) {
+    color: var(--text-subtle) !important;
+}
+
+.office-app :is(
+    .panel > .panel-heading,
+    .management-panel > header,
+    .inventory-connections-panel > header,
+    .demo-card > header,
+    .validation-panel__heading,
+    .materials-panel__heading,
+    .prefrio-panel__heading,
+    .process-panel__heading,
+    .sag-panel-heading,
+    .list-heading,
+    .return-panel__heading,
+    .repa-panel-heading,
+    .admin-panel__heading,
+    .weighbridge-panel-heading,
+    .raw-material-panel-heading,
+    .annulment-panel-heading,
+    .integrity-panel__heading,
+    .discrepancies-panel__heading
+) .eyebrow {
+    margin: 0 0 4px;
+    color: var(--text-subtle) !important;
+}
+
+/* Superficies que declaran contraste navy: con cabecera clara pasan a tinta. */
+.office-app [data-estiba-contrast="navy"]:is(.prefrio-panel__heading) {
+    color: var(--text-strong) !important;
+}
+
+.office-app [data-estiba-contrast="navy"]:is(.prefrio-panel__heading) :is(h1, h2, h3, h4, strong) {
+    color: var(--text-strong) !important;
+}
+
+.office-app [data-estiba-contrast="navy"]:is(.prefrio-panel__heading) :is(p, small, span) {
+    color: var(--text-subtle) !important;
+}
+
+/* 4. Encabezado de página ---------------------------------------------------------- */
+
+.office-app :is(
+    .management-heading, .admin-heading, .accounts-heading, .dispatch-heading,
+    .weighbridge-heading, .validation-heading, .materials-heading, .prefrio-heading,
+    .hydrocooler-heading, .sag-heading, .shipment-heading, .raw-material-heading,
+    .return-heading, .repa-heading, .annulment-heading, .process-heading,
+    .queries-heading, .integrity-heading, .inventory-heading, .custody-heading,
+    .discrepancies-heading, .domain-lobby-heading
+):not([class*="panel__heading"]) {
+    min-height: 0 !important;
+    padding-top: 22px !important;
+    padding-bottom: 18px !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    align-items: flex-end;
+    gap: 16px 32px;
+}
+
+.office-app :is(
+    .management-heading, .admin-heading, .accounts-heading, .dispatch-heading,
+    .weighbridge-heading, .validation-heading, .materials-heading, .prefrio-heading,
+    .hydrocooler-heading, .sag-heading, .shipment-heading, .raw-material-heading,
+    .return-heading, .repa-heading, .annulment-heading, .process-heading,
+    .queries-heading, .integrity-heading, .inventory-heading, .custody-heading,
+    .discrepancies-heading, .domain-lobby-heading
+):not([class*="panel__heading"]) .eyebrow {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 7px;
+    width: max-content;
+    max-width: 100%;
+    height: 28px;
+    margin: 0 0 10px !important;
+    padding: 0 10px;
+    border: 1.5px solid var(--area-line);
+    border-radius: var(--radius-seal);
+    background: var(--area-tint);
+    color: var(--area-text) !important;
+    font: 700 .8125rem/1 var(--font-sans) !important;
+    letter-spacing: .02em !important;
+    text-transform: none;
+    white-space: nowrap;
+}
+
+.office-app :is(
+    .management-heading, .admin-heading, .accounts-heading, .dispatch-heading,
+    .weighbridge-heading, .validation-heading, .materials-heading, .prefrio-heading,
+    .hydrocooler-heading, .sag-heading, .shipment-heading, .raw-material-heading,
+    .return-heading, .repa-heading, .annulment-heading, .process-heading,
+    .queries-heading, .integrity-heading, .inventory-heading, .custody-heading,
+    .discrepancies-heading, .domain-lobby-heading
+):not([class*="panel__heading"]) .eyebrow::before {
+    content: "";
+    flex: 0 0 16px;
+    width: 16px;
+    height: 16px;
+    background: var(--area-gajo) center / 16px 16px no-repeat;
+}
+
+.office-app h1:not([data-office-shell] *) {
+    margin: 0;
+    padding-bottom: 0 !important;
+    border-bottom: 0 !important;
+    color: var(--text-strong) !important;
+    font-family: var(--font-sans) !important;
+    font-size: clamp(2rem, 2.6vw, 2.75rem) !important;
+    font-stretch: var(--font-masthead-stretch);
+    font-weight: 800 !important;
+    line-height: .92 !important;
+    letter-spacing: -.01em !important;
+    text-transform: none !important;
+}
+
+.office-app :is(
+    .management-heading, .admin-heading, .accounts-heading, .dispatch-heading,
+    .weighbridge-heading, .validation-heading, .materials-heading, .prefrio-heading,
+    .hydrocooler-heading, .sag-heading, .shipment-heading, .raw-material-heading,
+    .return-heading, .repa-heading, .annulment-heading, .process-heading,
+    .queries-heading, .integrity-heading, .inventory-heading, .custody-heading,
+    .discrepancies-heading, .domain-lobby-heading
+) h1 + p {
+    max-width: 68ch;
+    margin-top: 10px !important;
+    color: var(--text-secondary) !important;
+    font-size: 1rem !important;
+    line-height: 1.5 !important;
+}
+
+/* Solo el título de la página es masthead (40–64 px); otros h1 (estados vacíos) se quedan en 32–44 px. */
+.office-app :is(
+    .management-heading, .admin-heading, .accounts-heading, .dispatch-heading,
+    .weighbridge-heading, .validation-heading, .materials-heading, .prefrio-heading,
+    .hydrocooler-heading, .sag-heading, .shipment-heading, .raw-material-heading,
+    .return-heading, .repa-heading, .annulment-heading, .process-heading,
+    .queries-heading, .integrity-heading, .inventory-heading, .custody-heading,
+    .discrepancies-heading, .domain-lobby-heading
+) h1:not([data-office-shell] *) {
+    font-size: clamp(2.5rem, 3.4vw, 4rem) !important;
+}
+
+/* Dentro de un área de trabajo con margen propio, el título se alinea con las tarjetas. */
+.office-app :is(
+    .loads-workspace, .prefrio-workspace, .materials-workspace, .validation-workspace,
+    .admin-workspace, .accounts-workspace, .dispatch-workspace, .annulment-workspace,
+    .catalog-workspace, .hydrocooler-workspace, .inventory-workspace, .process-workspace,
+    .repa-workspace, .sag-workspace, .shipment-workspace, .raw-material-workspace,
+    .return-workspace, .weighbridge-workspace, .integrity-shell, .custody-shell,
+    .discrepancies-shell, .office-workspace, .domain-lobby-workspace
+) > :is(
+    .management-heading, .admin-heading, .accounts-heading, .dispatch-heading,
+    .weighbridge-heading, .validation-heading, .materials-heading, .prefrio-heading,
+    .hydrocooler-heading, .sag-heading, .shipment-heading, .raw-material-heading,
+    .return-heading, .repa-heading, .annulment-heading, .process-heading,
+    .queries-heading, .integrity-heading, .inventory-heading, .custody-heading,
+    .discrepancies-heading, .domain-lobby-heading
+):not([class*="panel__heading"]) {
+    padding-inline: 0 !important;
+}
+
+/* Panel gerencial y Consultas no tienen área de trabajo: el margen lo dan sus módulos. */
+.office-app .management-heading { padding-inline: 28px !important; }
+.office-app .queries-heading { padding-inline: 34px !important; }
+
+/* Eyebrows fuera del encabezado de página (paneles, diálogos, secciones): rótulo sobrio. */
+.office-app .eyebrow,
+dialog .eyebrow {
+    color: var(--text-subtle) !important;
+    font-family: var(--font-sans) !important;
+    font-size: .75rem !important;
+    font-weight: 700 !important;
+    letter-spacing: .04em !important;
+}
+
+/* 5. Indicadores en celdas ------------------------------------------------------------ */
+/* La fila de indicadores es una sola etiqueta dividida en celdas; la cifra manda. */
+
+.office-app :is(
+    [class$="-metrics"],
+    [class*="-metrics "],
+    [class$="-kpis"],
+    [class*="-kpis "],
+    [class*="kpi-grid"]
+) {
+    gap: 0 !important;
+    overflow: hidden;
+    border: 1px solid var(--corporate-border);
+    border-radius: var(--radius-card);
+    background: var(--kpi-surface);
+}
+
+.office-app :is(
+    [class$="-metrics"],
+    [class*="-metrics "],
+    [class$="-kpis"],
+    [class*="-kpis "],
+    [class*="kpi-grid"]
+) > article,
+.office-app .management-kpi {
+    display: flex !important;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+    margin: -1px 0 0 -1px !important;
+    padding: 14px 18px !important;
+    border: 0 !important;
+    border-top: 1px solid var(--line-soft) !important;
+    border-left: 1px solid var(--line-soft) !important;
+    border-radius: 0 !important;
+    background: var(--kpi-surface) !important;
+    box-shadow: none !important;
+}
+
+.office-app :is(
+    [class$="-metrics"],
+    [class*="-metrics "],
+    [class$="-kpis"],
+    [class*="-kpis "],
+    [class*="kpi-grid"]
+) > article::before {
+    display: none !important;
+}
+
+.office-app :is(
+    [class$="-metrics"],
+    [class*="-metrics "],
+    [class$="-kpis"],
+    [class*="-kpis "],
+    [class*="kpi-grid"]
+) > article > strong,
+.office-app .management-kpi > strong {
+    order: -1;
+    margin: 0 !important;
+    color: var(--text-strong) !important;
+    font-family: var(--font-sans) !important;
+    font-size: 2.25rem !important;
+    font-stretch: var(--font-figure-stretch);
+    font-weight: 800 !important;
+    line-height: 1 !important;
+    font-variant-numeric: tabular-nums;
+}
+
+.office-app :is(
+    [class$="-metrics"],
+    [class*="-metrics "],
+    [class$="-kpis"],
+    [class*="-kpis "],
+    [class*="kpi-grid"]
+) > article > :is(span, small, p, h2, h3) {
+    margin: 0 !important;
+    color: var(--text-subtle) !important;
+    font-family: var(--font-sans) !important;
+    font-size: .875rem !important;
+    font-weight: 500 !important;
+    line-height: 1.3 !important;
+    letter-spacing: 0 !important;
+    text-transform: none !important;
+}
+
+.office-app :is(
+    [class$="-metrics"],
+    [class*="-metrics "],
+    [class$="-kpis"],
+    [class*="-kpis "],
+    [class*="kpi-grid"]
+) > article > :is(span, h2, h3):first-child {
+    color: var(--text-subtle) !important;
+    font-size: .75rem !important;
+    font-weight: 700 !important;
+    letter-spacing: .03em !important;
+}
+
+/* Estas dos filas tenían relleno propio como margen de página: pasa a margen externo. */
+.office-app .management-kpis {
+    padding: 0 !important;
+    margin: 0 28px 16px !important;
+}
+
+.office-app .query-kpis {
+    padding: 0 !important;
+    margin: 0 34px 18px !important;
+}
+
+/* 6. Tablas ---------------------------------------------------------------------- */
+
+.office-app table :where(th, td) {
+    border-right: 0 !important;
+    border-left: 0 !important;
+}
+
+.office-app table th {
+    padding: 10px 12px !important;
+    border-bottom: 2px solid var(--text-strong) !important;
+    background: var(--table-head) !important;
+    color: var(--text-subtle) !important;
+    font-family: var(--font-sans) !important;
+    font-size: .75rem !important;
+    font-weight: 600 !important;
+    letter-spacing: 0 !important;
+    text-transform: none !important;
+}
+
+.office-app table td {
+    padding: 11px 12px !important;
+    border-bottom: 1px solid var(--line-soft) !important;
+    font-size: .90625rem;
+}
+
+/* Campos ---------------------------------------------------------------------------- */
+
+.office-app :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea):not([data-office-shell] *),
+dialog[class*="dialog"] :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+    border: 1.5px solid var(--input-border) !important;
+    border-radius: var(--radius-control) !important;
+    background: var(--input-bg) !important;
+    color: var(--text) !important;
+    font-family: var(--font-sans);
+}
+
+.office-app :is(input, select, textarea):disabled {
+    border-color: var(--corporate-border) !important;
+    background: var(--surface-muted) !important;
+    color: var(--text-subtle) !important;
+}
+
+/* Botones ---------------------------------------------------------------------------- */
+
+/* :is(button, a) iguala la especificidad de las reglas heredadas "button.primary-button". */
+.office-app :is(button, a):is(.primary-button, .secondary-button, .danger-button, .refresh-button) {
+    min-height: 44px !important;
+    border-radius: var(--radius-control) !important;
+    font-family: var(--font-sans) !important;
+    font-weight: 700 !important;
+    letter-spacing: 0 !important;
+    text-transform: none !important;
+}
+
+.office-app :is(button, a).primary-button {
+    border: 2px solid var(--primary) !important;
+    background: var(--primary) !important;
+    color: var(--on-primary) !important;
+}
+
+.office-app :is(button, a).primary-button:hover:not(:disabled) {
+    border-color: var(--primary-hover) !important;
+    background: var(--primary-hover) !important;
+}
+
+.office-app :is(button, a, select):is(.secondary-button, .refresh-button, .icon-button, .office-action-select) {
+    border: 2px solid var(--input-border) !important;
+    border-radius: var(--radius-control) !important;
+    background: var(--button-secondary) !important;
+    color: var(--text-strong) !important;
+}
+
+.office-app :is(button, a, select):is(.secondary-button, .refresh-button, .icon-button, .office-action-select):hover:not(:disabled) {
+    border-color: var(--text-strong) !important;
+    background: var(--button-secondary-hover) !important;
+}
+
+.office-app :is(button, a).danger-button {
+    border: 2px solid var(--danger-text) !important;
+    background: var(--corporate-card) !important;
+    color: var(--danger-text) !important;
+}
+
+.office-app :is(button, a).danger-button:hover:not(:disabled) {
+    background: var(--danger-bg) !important;
+}
+
+.office-app :is(button, a):is(.primary-button, .secondary-button, .danger-button, .refresh-button, .icon-button):disabled {
+    border-color: var(--line-soft) !important;
+    background: var(--soft) !important;
+    color: var(--text-subtle) !important;
+    cursor: not-allowed;
+}
+
+/* Sellos de estado -------------------------------------------------------------- */
+/* Forma y texto propios; nunca el color de un área. */
+
+.office-app :is(
+    .status-pill,
+    .validation-result,
+    .area-chip,
+    .usage-chip,
+    .state-badge,
+    [class*="status-chip"],
+    [class*="state-chip"],
+    [class*="badge"]
+) {
+    border-radius: var(--radius-seal) !important;
+    font-family: var(--font-sans) !important;
+    font-weight: 700;
+    letter-spacing: 0;
+}
+
+/* Foco visible ------------------------------------------------------------------------ */
+
+.office-app :is(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+    outline: 2px solid var(--frost) !important;
+    outline-offset: 2px;
+}
+
+/* Diálogos ------------------------------------------------------------------------------ */
+
+.office-app dialog,
+dialog[class*="dialog"] {
+    border-radius: var(--radius-card) !important;
+}
+
+dialog[class*="dialog"] :is(h2, h3) {
+    font-family: var(--font-sans) !important;
+    font-stretch: var(--font-condensed-stretch);
+    font-weight: 800;
+    text-transform: none;
+}

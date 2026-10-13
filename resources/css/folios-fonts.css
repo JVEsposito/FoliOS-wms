@@ -1,0 +1,9 @@
+/*
+ * Tipografías FoliOS v2, autoalojadas: la planta debe verse igual sin acceso a internet.
+ * - Archivo (variable, ejes de peso 100–900 y ancho 62–125 %): toda la interfaz.
+ *   Títulos y cifras usan el eje de ancho (font-stretch), no una familia aparte.
+ * - Azeret Mono (variable, peso 100–900): folios, posiciones, guías y pesos.
+ * Familias resultantes: "Archivo Variable" y "Azeret Mono Variable".
+ */
+@import '@fontsource-variable/archivo/standard.css';
+@import '@fontsource-variable/azeret-mono/wght.css';

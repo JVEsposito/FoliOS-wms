@@ -753,7 +753,7 @@ button:disabled {
 
 .folio-add__controls textarea {
     min-height: 118px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-family: var(--font-mono, ui-monospace, Consolas, monospace);
     font-size: .8rem;
 }
 
@@ -1037,7 +1037,7 @@ button:disabled {
 
 .location-label {
     color: var(--cyan-light);
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-family: var(--font-mono, ui-monospace, Consolas, monospace);
     font-size: .7rem;
 }
 

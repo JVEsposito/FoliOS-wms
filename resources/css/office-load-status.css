@@ -44,7 +44,7 @@
 .load-status-card:hover { background: var(--row-hover); }
 .load-status-card.is-selected { border-color: var(--corporate-blue); border-left-color: #f0aa34; background: var(--info-bg); box-shadow: inset 0 0 0 1px var(--corporate-blue); }
 .load-status-card > span { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.load-status-card strong { color: var(--text-strong); font: 900 .93rem/1 ui-monospace, Consolas, monospace; }
+.load-status-card strong { color: var(--text-strong); font: 900 .93rem/1 var(--font-mono, ui-monospace, Consolas, monospace); }
 .load-status-card i { padding: 2px 5px; border-radius: 2px; background: var(--surface-muted); color: var(--text-subtle); font-size: .65rem; font-style: normal; font-weight: 900; text-transform: uppercase; }
 .load-status-card i[data-priority="urgente"] { background: var(--danger-bg); color: var(--danger-text); }
 .load-status-card i[data-priority="alta"] { background: var(--warning-bg); color: var(--warning-text); }
@@ -60,7 +60,7 @@
 .load-status-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 13px 15px 10px; border-bottom: 1px solid var(--corporate-border); }
 .load-status-heading p { margin: 0 0 5px; color: var(--text-subtle); font-size: .78rem; }
 .load-status-heading > div > div { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.load-status-heading h2 { margin: 0; color: var(--text-strong); font: 900 clamp(1.7rem, 2.3vw, 2.4rem)/1 ui-monospace, Consolas, monospace; }
+.load-status-heading h2 { margin: 0; color: var(--text-strong); font: 900 clamp(1.7rem, 2.3vw, 2.4rem)/1 var(--font-mono, ui-monospace, Consolas, monospace); }
 .load-status-heading span { padding: 4px 8px; border: 1px solid var(--corporate-border); border-radius: 2px; background: var(--surface-muted); color: var(--text-secondary); font-size: .72rem; font-weight: 900; text-transform: uppercase; }
 .load-status-heading span[data-tone="success"] { border-color: var(--success-text); background: var(--success-bg); color: var(--success-text); }
 .load-status-heading span[data-priority="urgente"] { border-color: var(--danger-text); background: var(--danger-bg); color: var(--danger-text); }
@@ -112,7 +112,7 @@
 .load-status-table-scroll th { position: sticky; top: 0; z-index: 1; background: var(--table-head); color: var(--text-secondary); }
 .load-status-table-scroll tbody tr:nth-child(even) { background: var(--row-alt); }
 .load-status-table-scroll td strong, .load-status-table-scroll td small { display: block; }
-.load-status-table-scroll td strong { color: var(--text-strong); font-family: ui-monospace, Consolas, monospace; }
+.load-status-table-scroll td strong { color: var(--text-strong); font-family: var(--font-mono, ui-monospace, Consolas, monospace); }
 .load-status-table-scroll td small { margin-top: 2px; color: var(--text-subtle); }
 .load-status-table-scroll td span { text-transform: capitalize; }
 .load-status-table-scroll td span[data-state="en_anden"] { color: var(--success-text); font-weight: 800; }

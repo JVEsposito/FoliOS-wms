@@ -422,7 +422,7 @@
 .camera-ops__band:has([data-tone="critical"]) { border-top-color: var(--danger-text); }
 
 .camera-ops__band-heading { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
-.camera-ops__band-heading strong { color: var(--text-strong) !important; font: 800 .9rem/1 ui-monospace, Consolas, monospace; }
+.camera-ops__band-heading strong { color: var(--text-strong) !important; font: 800 .9rem/1 var(--font-mono, ui-monospace, Consolas, monospace); }
 .camera-ops__band-heading i { font-size: .68rem; font-style: normal; font-weight: 800; }
 .camera-ops__band-capacity,
 .camera-ops__band-foot { color: var(--muted); font-size: .67rem; }
@@ -447,7 +447,7 @@
 .camera-ops__environment { padding: 11px; }
 .camera-ops__temperature { padding-bottom: 9px; border-bottom: 1px solid var(--corporate-border); }
 .camera-ops__temperature span { color: var(--muted); font-size: .68rem; font-weight: 800; }
-.camera-ops__temperature strong { display: block; margin-top: 2px; color: var(--text-strong) !important; font: 800 1.45rem/1.1 ui-monospace, Consolas, monospace; }
+.camera-ops__temperature strong { display: block; margin-top: 2px; color: var(--text-strong) !important; font: 800 1.45rem/1.1 var(--font-mono, ui-monospace, Consolas, monospace); }
 .camera-ops__environment dl { display: grid; grid-template-columns: repeat(3, 1fr); margin: 9px 0; }
 .camera-ops__environment dl div { padding: 0 8px; border-left: 1px solid var(--corporate-border); }
 .camera-ops__environment dl div:first-child { padding-left: 0; border-left: 0; }
@@ -458,7 +458,7 @@
 .camera-ops__band-detail { padding: 11px; }
 .camera-ops__band-detail-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .camera-ops__band-detail-heading > div span { display: block; color: var(--muted); font-size: .66rem; font-weight: 800; }
-.camera-ops__band-detail-heading > div strong { color: var(--text-strong) !important; font: 800 1.35rem/1 ui-monospace, Consolas, monospace; }
+.camera-ops__band-detail-heading > div strong { color: var(--text-strong) !important; font: 800 1.35rem/1 var(--font-mono, ui-monospace, Consolas, monospace); }
 .camera-ops__band-facts { display: grid; gap: 0; margin: 9px 0 0; }
 .camera-ops__band-facts div { display: grid; grid-template-columns: 95px minmax(0, 1fr); gap: 8px; padding: 6px 0; border-top: 1px solid var(--corporate-border); }
 .camera-ops__band-facts dt { color: var(--muted); font-size: .7rem; font-weight: 800; }
@@ -475,7 +475,7 @@
 .camera-ops__table tbody tr:nth-child(even) td { background: var(--surface-muted); }
 .camera-ops__table tbody tr:hover td,
 .camera-ops__table tbody tr.is-selected td { background: var(--surface-selected) !important; }
-.camera-ops__table td button { min-height: 30px; border: 1px solid var(--corporate-border); background: var(--button-secondary); color: var(--corporate-blue); font: 800 .78rem/1 ui-monospace, Consolas, monospace; }
+.camera-ops__table td button { min-height: 30px; border: 1px solid var(--corporate-border); background: var(--button-secondary); color: var(--corporate-blue); font: 800 .78rem/1 var(--font-mono, ui-monospace, Consolas, monospace); }
 .camera-ops__table td strong { color: var(--text-strong) !important; }
 .camera-ops__table td small { display: block; margin-top: 2px; color: var(--muted); font-size: .66rem; }
 

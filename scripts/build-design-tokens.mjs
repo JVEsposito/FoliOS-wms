@@ -7,8 +7,8 @@ const kebab = (value) => value.replace(/[A-Z]/g, (letter) => `-${letter.toLowerC
 
 // Claves de nivel superior que son overrides de modo oscuro, no tokens propios:
 // se excluyen del árbol claro y se aplanan aparte, reutilizando el nombre de su
-// contraparte clara (colorDark -> color, signalDark -> signal).
-const DARK_KEYS = { colorDark: 'color', signalDark: 'signal' };
+// contraparte clara (colorDark -> color, signalDark -> signal, areaDark -> area).
+const DARK_KEYS = { colorDark: 'color', signalDark: 'signal', areaDark: 'area' };
 
 function flatten(value, path, entries) {
     for (const [key, item] of Object.entries(value)) {
