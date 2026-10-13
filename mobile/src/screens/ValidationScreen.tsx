@@ -1139,7 +1139,7 @@ const styles = StyleSheet.create({
   reviewDetail: { color: colors.text, fontSize: 14, fontWeight: '700', marginTop: 8 },
   typeRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 9, marginTop: 12 },
   typeRowCompact: { flexWrap: 'wrap' },
-  typeButton: { minHeight: 46, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 10, borderWidth: 1.5, borderColor: '#3F6B7C', backgroundColor: 'transparent' },
+  typeButton: { minHeight: 46, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 10, borderWidth: 1.5, borderColor: o.color.borderStrong, backgroundColor: 'transparent' },
   typeButtonCompact: { flexGrow: 1, flexBasis: '46%', alignItems: 'center', paddingHorizontal: 8 },
   typeButtonActive: { borderColor: colors.cyan, backgroundColor: colors.cyan },
   typeButtonText: { color: colors.textSecondary, fontSize: 15, fontWeight: '700' },
