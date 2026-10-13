@@ -27,6 +27,8 @@ class InterfazOficinaAccesosTest extends TestCase
             ->assertSee('Perfiles de acceso')
             ->assertSee('accessProfileForm', false)
             ->assertSee('accessModuleSelector', false)
+            ->assertSee('<select name="pantalla_inicio" id="accessProfileHome">', false)
+            ->assertSee('Según el nivel operacional base')
             ->assertSee('accessTabletModuleSelector', false)
             ->assertSee('PDA / TABLET')
             ->assertSee('Módulos operacionales móviles')

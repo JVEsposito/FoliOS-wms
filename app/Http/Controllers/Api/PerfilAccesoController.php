@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\GuardarPerfilAccesoRequest;
 use App\Models\PerfilAcceso;
 use App\Services\Autorizacion\CatalogoModulosAcceso;
+use App\Services\Autorizacion\CatalogoOficinas;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -17,6 +18,7 @@ class PerfilAccesoController extends Controller
 {
     public function __construct(
         private readonly CatalogoModulosAcceso $catalogo,
+        private readonly CatalogoOficinas $oficinas,
     ) {}
 
     public function index(): JsonResponse
@@ -32,6 +34,15 @@ class PerfilAccesoController extends Controller
                 ->map(fn (PerfilAcceso $perfil): array => $this->perfil($perfil)),
             'catalogo' => $this->catalogo->macromodulos(),
             'catalogo_tablet' => $this->catalogo->macromodulosTablet(),
+            'pantallas_inicio' => array_map(
+                fn (array $oficina): array => [
+                    'ruta' => $oficina['ruta'],
+                    'nombre' => $oficina['nombre'],
+                    'area' => $oficina['area_nombre'],
+                    'modulos_relacionados' => $this->oficinas->modulosRelacionados($oficina, $this->catalogo->claves()),
+                ],
+                $this->oficinas->opcionesInicio(),
+            ),
             'roles_base' => collect(RolUsuario::cases())
                 ->sortBy(fn (RolUsuario $rol): int => $rol === RolUsuario::Administrador ? 1 : 0)
                 ->map(fn (RolUsuario $rol): array => [
@@ -130,6 +141,7 @@ class PerfilAccesoController extends Controller
             'solo_consulta' => $perfil->rol_base === RolUsuario::Consulta,
             'modulos' => $perfil->modulos,
             'modulos_tablet' => $perfil->modulos_tablet ?? [],
+            'pantalla_inicio' => $perfil->pantalla_inicio,
             'activo' => $perfil->activo,
             'predeterminado' => $perfil->predeterminado,
             'protegido' => $perfil->protegido,
