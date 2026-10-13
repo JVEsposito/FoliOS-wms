@@ -71,7 +71,34 @@ test('frost (identidad) pasa contraste de texto en ambos temas, sobre canvas y s
     assert.ok(contrast(tokens.color.frost, tokens.color.surface) >= 4.5, 'frost claro / surface claro');
     assert.ok(contrast(tokens.colorDark.frost, tokens.colorDark.canvas) >= 4.5, 'frost oscuro / canvas oscuro');
     assert.ok(contrast(tokens.colorDark.frost, tokens.colorDark.surface) >= 4.5, 'frost oscuro / surface oscuro');
-    // frost es identidad, no acción: no puede repetir el valor de primary en ningún tema.
-    assert.notEqual(tokens.color.frost, tokens.color.primary);
-    assert.notEqual(tokens.colorDark.frost, tokens.colorDark.primary);
+    // FoliOS v2: frost es la marca y también la acción principal (una sola luz de acción).
+    assert.equal(tokens.color.frost, tokens.color.primary);
+    assert.equal(tokens.colorDark.frost, tokens.colorDark.primary);
+});
+
+test('FoliOS v2: las siete áreas del gajo son legibles en etiqueta, sobre blanco y sobre navy', () => {
+    const areas = ['operacion', 'materiaPrima', 'frigorifico', 'materiales', 'consultas', 'gerencia', 'administracion'];
+    assert.deepEqual(Object.keys(tokens.area), areas);
+    assert.deepEqual(Object.keys(tokens.areaDark), areas);
+    for (const name of areas) {
+        const light = tokens.area[name];
+        const dark = tokens.areaDark[name];
+        assert.ok(contrast(light.text, light.tint) >= 4.5, `${name}: texto / tinte`);
+        assert.ok(contrast(light.text, tokens.color.surface) >= 4.5, `${name}: texto / etiqueta`);
+        assert.ok(contrast(light.ink, tokens.color.surface) >= 3, `${name}: gajo / etiqueta`);
+        assert.ok(contrast(light.bright, tokens.color.navy) >= 4.5, `${name}: gajo claro / navy`);
+        for (const surface of [dark.tint, tokens.colorDark.surface, tokens.colorDark.canvas]) {
+            assert.ok(contrast(dark.text, surface) >= 4.5, `${name} (oscuro): texto / ${surface}`);
+        }
+    }
+});
+
+test('FoliOS v2: sello y relleno crítico conservan contraste en ambos temas', () => {
+    assert.ok(contrast(tokens.color.seal, tokens.color.sealSurface) >= 4.5);
+    assert.ok(contrast(tokens.color.seal, tokens.color.surface) >= 4.5);
+    assert.ok(contrast(tokens.colorDark.seal, tokens.colorDark.sealSurface) >= 4.5);
+    assert.ok(contrast(tokens.color.onCriticalFill, tokens.color.criticalFill) >= 4.5);
+    assert.ok(contrast(tokens.colorDark.onCriticalFill, tokens.colorDark.criticalFill) >= 4.5);
+    assert.ok(contrast(tokens.color.onNavyMuted, tokens.color.navy) >= 4.5);
+    assert.ok(contrast(tokens.color.onNavyMuted, tokens.color.navyHover) >= 4.5);
 });

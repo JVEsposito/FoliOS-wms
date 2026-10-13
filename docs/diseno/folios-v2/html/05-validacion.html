@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FoliOS v2 · Oficina: Validación de pallets (lámina de referencia)</title>
+<!-- Lámina de referencia, no código de producción. Las cifras, nombres y folios son de ejemplo.
+     En la aplicación las fuentes vienen autoalojadas (resources/css/folios-fonts.css). -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..900&amp;family=Azeret+Mono:wght@400..800&amp;family=Roboto+Condensed:wght@600;800&amp;display=swap">
+<style>
+body{margin:0;background:#eef2f1}
+a{color:#0f5c6e}a:hover{color:#0a4250}
+.nav{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:6px;color:#dbe6ea;font:500 16px/1.2 'Archivo',sans-serif;text-decoration:none}
+.nav:hover{background:#21455a;color:#ffffff}
+.sub{display:block;padding:7px 12px 7px 48px;border-radius:6px;color:#c5d4db;font:500 14.5px/1.2 'Archivo',sans-serif;text-decoration:none}
+.k{font:500 12px/1.2 'Archivo',sans-serif;color:#4c616c}
+.card{background:#ffffff;border:1px solid #c8d3d7;border-radius:8px;min-width:0}
+.h2{margin:0;font:800 28px/1 'Archivo',sans-serif;font-stretch:72%;color:#10212b}
+.cell{display:flex;flex-direction:column;gap:6px;padding:14px 18px;border-left:1px solid #e1e8eb;min-width:0}
+.cell b{font:800 36px/1 'Archivo',sans-serif;font-stretch:70%;color:#10212b}
+.cell span{font:500 14px/1.3 'Archivo',sans-serif;color:#4c616c}
+.tag{display:inline-flex;align-items:center;gap:7px;height:28px;padding:0 10px;border-radius:4px;border:1.5px solid;font:700 13px/1 'Archivo',sans-serif;white-space:nowrap}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 18px;border-radius:6px;font:700 15px/1 'Archivo',sans-serif;border:2px solid transparent;cursor:pointer;white-space:nowrap}
+.sel{display:flex;flex-direction:column;gap:5px;font:600 13px/1.2 'Archivo',sans-serif;color:#4c616c}
+.sel select,.sel input{height:40px;box-sizing:border-box;padding:0 10px;border-radius:6px;border:1.5px solid #7a8d95;background:#ffffff;color:#10212b;font:500 15px/1 'Archivo',sans-serif}
+table{border-collapse:collapse;width:100%;min-width:720px}
+th{font:600 12px/1.2 'Archivo',sans-serif;color:#4c616c;text-align:left;padding:10px 12px;border-bottom:2px solid #10212b}
+td{font:400 14.5px/1.35 'Archivo',sans-serif;color:#10212b;padding:12px;border-bottom:1px solid #e1e8eb;vertical-align:top}
+.code{font:700 15px/1.2 'Azeret Mono',monospace;letter-spacing:-.03em;white-space:nowrap}
+td small{display:block;font:500 12.5px/1.35 'Archivo',sans-serif;color:#4c616c}
+.ln{display:flex;flex-direction:column;gap:8px;padding:14px 16px;border-top:1px solid #e1e8eb}
+.ln b.n{font:800 30px/1 'Archivo',sans-serif;font-stretch:70%}
+.mini{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}
+.mini span{display:flex;flex-direction:column;gap:2px;padding:6px 8px;border-radius:4px;background:#f3f6f7;font:500 12px/1.2 'Archivo',sans-serif;color:#4c616c}
+.mini b{font:800 18px/1 'Archivo',sans-serif;font-stretch:72%;color:#10212b}
+</style>
+</head>
+<body>
+<div style="min-height: 1000px; display: flex; flex-wrap: wrap; background: #eef2f1; color: #10212b; font-family: 'Archivo', sans-serif;">
+
+  <nav aria-label="Áreas de FoliOS" style="flex: 1 1 248px; max-width: 100%; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px; padding: 22px 16px; background: #183442; color: #ffffff;">
+    <div style="display: flex; align-items: flex-end; gap: 10px; padding: 0 8px;">
+      <svg viewBox="0 0 32 32" width="32" height="32" aria-hidden="true"><path d="M16,16 L16,2 L26.97,7.3 Z" fill="#5fd3e6"></path><path d="M16,16 L28.12,9 L29.02,21.15 Z" fill="#ffffff"></path><path d="M16,16 L28.12,23 L18.05,29.85 Z" fill="#5fd3e6"></path><path d="M16,16 L16,30 L5.03,24.7 Z" fill="#ffffff"></path><path d="M16,16 L3.88,23 L2.98,10.85 Z" fill="#5fd3e6"></path><path d="M16,16 L3.88,9 L13.95,2.15 Z" fill="#ffffff"></path><circle cx="16" cy="16" r="2.6" fill="#183442"></circle></svg>
+      <span style="display: inline-block; font-family: 'Roboto Condensed', 'Arial Narrow', sans-serif; font-size: 28px; line-height: 1; padding-bottom: 4px; border-bottom: 3px solid #5fd3e6;"><span style="font-weight: 600;">Foli</span><span style="font-weight: 800; color: #5fd3e6;">OS</span></span>
+    </div>
+    <label style="display: flex; flex-direction: column; gap: 6px; padding: 0 8px; font-size: 13px; font-weight: 600; color: #c5d4db;">Buscar folio o carga
+      <input type="search" placeholder="2610045871" style="height: 42px; box-sizing: border-box; padding: 0 12px; border-radius: 6px; border: 1px solid #5d7a88; background: #ffffff; color: #10212b; font: 500 14px/1 'Azeret Mono', monospace;">
+    </label>
+    <div style="display: flex; flex-direction: column; gap: 2px;">
+      <a href="#" class="nav"><svg viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><g fill="#3d5c6b"><path d="M16,16 L16,2 L26.97,7.3 Z"></path><path d="M16,16 L28.12,9 L29.02,21.15 Z"></path><path d="M16,16 L28.12,23 L18.05,29.85 Z"></path><path d="M16,16 L16,30 L5.03,24.7 Z"></path><path d="M16,16 L3.88,23 L2.98,10.85 Z"></path><path d="M16,16 L3.88,9 L13.95,2.15 Z"></path></g><circle cx="16" cy="16" r="4.4" fill="#5fd3e6"></circle></svg>Operación ahora</a>
+      <a href="#" class="nav"><svg viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><g fill="#3d5c6b"><path d="M16,16 L28.12,9 L29.02,21.15 Z"></path><path d="M16,16 L28.12,23 L18.05,29.85 Z"></path><path d="M16,16 L16,30 L5.03,24.7 Z"></path><path d="M16,16 L3.88,23 L2.98,10.85 Z"></path><path d="M16,16 L3.88,9 L13.95,2.15 Z"></path></g><path d="M16,16 L16,2 L26.97,7.3 Z" fill="#f2879f"></path></svg>Materia Prima</a>
+      <a href="#" class="nav" style="background: #ffffff; color: #10212b; font-weight: 700;"><svg viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><g fill="#d5dee2"><path d="M16,16 L16,2 L26.97,7.3 Z"></path><path d="M16,16 L28.12,23 L18.05,29.85 Z"></path><path d="M16,16 L16,30 L5.03,24.7 Z"></path><path d="M16,16 L3.88,23 L2.98,10.85 Z"></path><path d="M16,16 L3.88,9 L13.95,2.15 Z"></path></g><path d="M16,16 L28.12,9 L29.02,21.15 Z" fill="#1d6fa8"></path></svg>Frigorífico</a>
+      <div style="display: flex; flex-direction: column; gap: 1px; padding: 4px 0 8px;">
+        <a href="#" class="sub">Resumen</a>
+        <a href="#" class="sub" aria-current="page" style="color: #ffffff; font-weight: 700; box-shadow: inset 3px 0 0 #7dbceb; border-radius: 0 6px 6px 0; background: #21455a;">Validación</a>
+        <a href="#" class="sub">Etiquetas PT</a>
+        <a href="#" class="sub">Repaletizajes</a>
+        <a href="#" class="sub">Anulaciones</a>
+        <a href="#" class="sub">Prefrío</a>
+        <a href="#" class="sub">Cámaras</a>
+        <a href="#" class="sub">Cargas</a>
+      </div>
+      <a href="#" class="nav"><svg viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><g fill="#3d5c6b"><path d="M16,16 L16,2 L26.97,7.3 Z"></path><path d="M16,16 L28.12,9 L29.02,21.15 Z"></path><path d="M16,16 L16,30 L5.03,24.7 Z"></path><path d="M16,16 L3.88,23 L2.98,10.85 Z"></path><path d="M16,16 L3.88,9 L13.95,2.15 Z"></path></g><path d="M16,16 L28.12,23 L18.05,29.85 Z" fill="#e0aa6c"></path></svg>Materiales</a>
+      <a href="#" class="nav"><svg viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><g fill="#3d5c6b"><path d="M16,16 L16,2 L26.97,7.3 Z"></path><path d="M16,16 L28.12,9 L29.02,21.15 Z"></path><path d="M16,16 L28.12,23 L18.05,29.85 Z"></path><path d="M16,16 L3.88,23 L2.98,10.85 Z"></path><path d="M16,16 L3.88,9 L13.95,2.15 Z"></path></g><path d="M16,16 L16,30 L5.03,24.7 Z" fill="#bba2ea"></path></svg>Consultas</a>
+      <a href="#" class="nav"><svg viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><g fill="#3d5c6b"><path d="M16,16 L16,2 L26.97,7.3 Z"></path><path d="M16,16 L28.12,9 L29.02,21.15 Z"></path><path d="M16,16 L28.12,23 L18.05,29.85 Z"></path><path d="M16,16 L16,30 L5.03,24.7 Z"></path><path d="M16,16 L3.88,9 L13.95,2.15 Z"></path></g><path d="M16,16 L3.88,23 L2.98,10.85 Z" fill="#a6d16e"></path></svg>Gerencia</a>
+      <a href="#" class="nav"><svg viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><g fill="#3d5c6b"><path d="M16,16 L16,2 L26.97,7.3 Z"></path><path d="M16,16 L28.12,9 L29.02,21.15 Z"></path><path d="M16,16 L28.12,23 L18.05,29.85 Z"></path><path d="M16,16 L16,30 L5.03,24.7 Z"></path><path d="M16,16 L3.88,23 L2.98,10.85 Z"></path></g><path d="M16,16 L3.88,9 L13.95,2.15 Z" fill="#b7c4cc"></path></svg>Administración</a>
+    </div>
+    <div style="margin-top: auto; display: flex; flex-direction: column; gap: 2px; padding: 12px; border-radius: 6px; border: 1px dashed #5d7a88;"><b style="font-size: 15px;">Marcela Rojas</b><small style="font-size: 13px; color: #c5d4db;">Supervisión de frío</small></div>
+  </nav>
+
+  <main style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column;">
+    <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px 28px; padding: 14px 28px; background: #ffffff; border-bottom: 3px solid #1d6fa8;">
+      <div style="display: flex; flex-direction: column; gap: 2px;"><span class="k">Temporada</span><b style="font-size: 15px;">2026-2027</b></div>
+      <div style="display: flex; flex-direction: column; gap: 2px;"><span class="k">Planta</span><b style="font-size: 15px;">Rengo</b></div>
+      <div style="display: flex; flex-direction: column; gap: 2px;"><span class="k">Turno</span><b style="font-size: 15px;">Mañana, 06:00 a 14:00</b></div>
+      <div style="display: flex; flex-direction: column; gap: 2px;"><span class="k">Datos</span><b style="font-size: 15px; color: #1e6b45;">Al día, 08:14:30</b></div>
+      <span class="tag" style="margin-left: auto; color: #1e6b45; border-color: #1e6b45;">Servidor oficial</span>
+    </header>
+
+    <div style="display: flex; flex-direction: column; gap: 22px; padding: 24px 28px 34px;">
+      <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 16px 32px;">
+        <div style="display: flex; flex-direction: column; gap: 10px; max-width: 680px;">
+          <span class="tag" style="align-self: flex-start; color: #15588a; border-color: #a9cbe6; background: #e5f0f8;"><svg viewBox="0 0 32 32" width="16" height="16" aria-hidden="true"><g fill="#a9cbe6"><path d="M16,16 L16,2 L26.97,7.3 Z"></path><path d="M16,16 L28.12,23 L18.05,29.85 Z"></path><path d="M16,16 L16,30 L5.03,24.7 Z"></path><path d="M16,16 L3.88,23 L2.98,10.85 Z"></path><path d="M16,16 L3.88,9 L13.95,2.15 Z"></path></g><path d="M16,16 L28.12,9 L29.02,21.15 Z" fill="#1d6fa8"></path></svg>Frigorífico</span>
+          <h1 style="margin: 0; font-weight: 800; font-stretch: 66%; font-size: 64px; line-height: 0.92; letter-spacing: -0.01em;">Validación de pallets</h1>
+          <p style="margin: 0; font-size: 16px; line-height: 1.5; color: #344b57;">El punto de nacimiento trazable de cada pallet. Cada intento queda registrado y no se puede borrar.</p>
+        </div>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+          <button type="button" class="btn" style="background: #ffffff; color: #10212b; border-color: #7a8d95;">Etiquetas PT</button>
+          <button type="button" class="btn" style="background: #ffffff; color: #10212b; border-color: #7a8d95;">Descargar RRPP-01</button>
+        </div>
+      </div>
+
+      <div class="card" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));">
+        <div class="cell" style="border-left: 0;"><b>186</b><span>Pallets validados hoy</span></div>
+        <div class="cell"><b style="color: #1e6b45;">171</b><span>Aprobados</span></div>
+        <div class="cell" style="background: #fdf3ec;"><b style="color: #b4500b;">12</b><span>Observados, corrección pendiente</span></div>
+        <div class="cell"><b style="color: #b3261e;">3</b><span>Rechazo definitivo</span></div>
+        <div class="cell"><b>v14</b><span>Catálogo: 38 artículos, 212 orígenes</span></div>
+      </div>
+
+      <div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start;">
+        <aside class="card" style="flex: 1 1 100%; display: grid; grid-template-columns: auto repeat(3, minmax(0, 1fr)); align-items: stretch;">
+          <div style="padding: 16px 20px; display: flex; align-items: center;"><h2 class="h2">Por línea,<br>hoy</h2></div>
+          <div class="ln" style="border-top: 0; border-left: 1px solid #e1e8eb;">
+            <div style="display: flex; justify-content: space-between; align-items: baseline;"><b style="font: 800 22px/1 'Archivo', sans-serif; font-stretch: 72%;">Línea 1</b><span style="font-size: 13px; color: #4c616c;">Jorge Valdés, PDA 04</span></div>
+            <div class="mini"><span><b>62</b>validados</span><span><b style="color: #b4500b;">3</b>observados</span><span><b style="color: #b3261e;">2</b>rechazos</span></div>
+          </div>
+          <div class="ln" style="border-top: 0; border-left: 1px solid #e1e8eb;">
+            <div style="display: flex; justify-content: space-between; align-items: baseline;"><b style="font: 800 22px/1 'Archivo', sans-serif; font-stretch: 72%;">Línea 2</b><span style="font-size: 13px; color: #4c616c;">Daniela Fuentes, PDA 02</span></div>
+            <div class="mini"><span><b>71</b>validados</span><span style="background: #fdf3ec;"><b style="color: #b4500b;">7</b>observados</span><span><b>0</b>rechazos</span></div>
+          </div>
+          <div class="ln" style="border-top: 0; border-left: 1px solid #e1e8eb;">
+            <div style="display: flex; justify-content: space-between; align-items: baseline;"><b style="font: 800 22px/1 'Archivo', sans-serif; font-stretch: 72%;">Línea 3</b><span style="font-size: 13px; color: #4c616c;">Pablo Ortiz, PDA 07</span></div>
+            <div class="mini"><span><b>53</b>validados</span><span><b style="color: #b4500b;">2</b>observados</span><span><b style="color: #b3261e;">1</b>rechazo</span></div>
+            <span style="font-size: 13px; color: #4c616c;">4 validaciones por sincronizar en la PDA</span>
+          </div>
+        </aside>
+        <section class="card" style="flex: 1 1 100%;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; padding: 18px 18px 14px;">
+            <h2 class="h2">Validaciones recientes</h2>
+            <form style="display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end;">
+              <label class="sel">Fecha<input type="date" value="2026-10-13"></label>
+              <label class="sel">Línea<select><option>Todas</option></select></label>
+              <label class="sel">Turno<select><option>Todos</option></select></label>
+              <label class="sel">Resultado<select><option>Todos</option></select></label>
+            </form>
+          </div>
+          <div style="overflow-x: auto; padding: 0 8px 8px;">
+            <table>
+              <thead><tr><th>Folio</th><th>Artículo</th><th>Origen</th><th>Resultado</th><th>Validador y jornada</th><th></th></tr></thead>
+              <tbody>
+                <tr><td><span class="code">2610045987</span><small>Pallet completo, 84 cajas</small></td><td>Cereza Santina 2J<small>Caja 5 kg</small></td><td>CSG 1802<small>Lote MP 2231</small></td><td><span class="tag" style="color: #1e6b45; border-color: #1e6b45;"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M1 5.5 L4 8.5 L9 1.5" stroke="#1e6b45" stroke-width="2" fill="none"></path></svg>Aprobado</span></td><td>Daniela Fuentes<small>Línea 2, turno A, 08:12</small></td><td><a href="#" style="font-weight: 700; font-size: 14px;">Ver</a></td></tr>
+                <tr style="background: #fdf6f0;"><td><span class="code">2610045986</span><small>Saldo, 37 cajas</small></td><td>Cereza Santina 3J<small>Caja 5 kg</small></td><td>CSG 1802 y CSG 0977<small>Dos orígenes en el bulto</small></td><td><span class="tag" style="color: #b4500b; border-color: #b4500b;"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M5 0 L10 5 L5 10 L0 5 Z" fill="#b4500b"></path></svg>Observado</span></td><td>Daniela Fuentes<small>Línea 2, turno A, 08:09</small></td><td><a href="#" style="font-weight: 700; font-size: 14px;">Corregir</a></td></tr>
+                <tr><td><span class="code">2610045985</span><small>Pallet completo, 84 cajas</small></td><td>Cereza Lapins 2J<small>Caja 5 kg</small></td><td>CSG 2410<small>Lote MP 2229</small></td><td><span class="tag" style="color: #1e6b45; border-color: #1e6b45;"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M1 5.5 L4 8.5 L9 1.5" stroke="#1e6b45" stroke-width="2" fill="none"></path></svg>Aprobado</span></td><td>Jorge Valdés<small>Línea 1, turno A, 08:07</small></td><td><a href="#" style="font-weight: 700; font-size: 14px;">Ver</a></td></tr>
+                <tr><td><span class="code">2610045979</span><small>Pallet completo, 120 cajas</small></td><td>Cereza Regina 2J<small>Caja 2,5 kg</small></td><td>CSG 0551<small>Lote MP 2218</small></td><td><span class="tag" style="color: #ffffff; background: #b3261e; border-color: #b3261e;"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect width="10" height="10" fill="#ffffff"></rect></svg>Rechazo definitivo</span></td><td>Jorge Valdés<small>Línea 1, turno A, 07:58</small></td><td><a href="#" style="font-weight: 700; font-size: 14px;">Ver</a></td></tr>
+                <tr><td><span class="code">2610045978</span><small>Pallet completo, 84 cajas</small></td><td>Cereza Santina 2J<small>Caja 5 kg</small></td><td>CSG 1802<small>Lote MP 2231</small></td><td><span class="tag" style="color: #1e6b45; border-color: #1e6b45;"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M1 5.5 L4 8.5 L9 1.5" stroke="#1e6b45" stroke-width="2" fill="none"></path></svg>Aprobado</span></td><td>Pablo Ortiz<small>Línea 3, turno A, 07:55</small></td><td><a href="#" style="font-weight: 700; font-size: 14px;">Ver</a></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+      </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>

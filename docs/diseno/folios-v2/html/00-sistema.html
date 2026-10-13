@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FoliOS v2 · Sistema FoliOS (lámina de referencia)</title>
+<!-- Lámina de referencia, no código de producción. Las cifras, nombres y folios son de ejemplo.
+     En la aplicación las fuentes vienen autoalojadas (resources/css/folios-fonts.css). -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..900&amp;family=Azeret+Mono:wght@400..800&amp;family=Roboto+Condensed:wght@600;800&amp;display=swap">
+<style>
+body{margin:0}
+.lbl{margin:0 0 10px;font:600 13px/1.2 'Archivo',sans-serif}
+.sw{display:flex;flex-direction:column;gap:5px;min-width:0}
+.sw i{display:block;height:40px;border-radius:6px}
+.sw b{font:700 13.5px/1.2 'Archivo',sans-serif}
+.sw code{font:500 11.5px/1 'Azeret Mono',monospace}
+.ar{display:flex;align-items:center;gap:9px;font:600 14px/1.2 'Archivo',sans-serif}
+.tag{display:inline-flex;align-items:center;gap:7px;height:28px;padding:0 10px;border-radius:4px;border:1.5px solid;font:700 13px/1 'Archivo',sans-serif;white-space:nowrap}
+</style>
+</head>
+<body>
+<div style="width: 1440px; height: 900px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); font-family: 'Archivo', sans-serif;">
+
+  <section style="box-sizing: border-box; padding: 48px 52px; background: #eef2f1; color: #10212b; display: flex; flex-direction: column; gap: 24px;">
+    <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 20px;">
+      <div style="display: flex; align-items: flex-end; gap: 12px;">
+        <svg viewBox="0 0 32 32" width="46" height="46" aria-hidden="true">
+          <path d="M16,16 L16,2 L26.97,7.3 Z" fill="#0f5c6e"></path>
+          <path d="M16,16 L28.12,9 L29.02,21.15 Z" fill="#183442"></path>
+          <path d="M16,16 L28.12,23 L18.05,29.85 Z" fill="#0f5c6e"></path>
+          <path d="M16,16 L16,30 L5.03,24.7 Z" fill="#183442"></path>
+          <path d="M16,16 L3.88,23 L2.98,10.85 Z" fill="#0f5c6e"></path>
+          <path d="M16,16 L3.88,9 L13.95,2.15 Z" fill="#183442"></path>
+          <circle cx="16" cy="16" r="2.6" fill="#eef2f1"></circle>
+        </svg>
+        <span style="display: inline-block; font-family: 'Roboto Condensed', 'Arial Narrow', sans-serif; font-size: 42px; line-height: 1; padding-bottom: 5px; border-bottom: 4px solid #0f5c6e;"><span style="font-weight: 600; color: #183442;">Foli</span><span style="font-weight: 800; color: #0f5c6e;">OS</span></span>
+      </div>
+      <span style="font-size: 14px; color: #4c616c;">Logo oficial, sin cambios</span>
+    </div>
+
+    <div>
+      <h1 style="margin: 0; font-weight: 800; font-stretch: 66%; font-size: 64px; line-height: 0.92; letter-spacing: -0.01em;">Oficina, clara</h1>
+      <p style="margin: 10px 0 0; max-width: 560px; font-size: 16px; line-height: 1.5; color: #344b57;">Lenguaje de etiqueta: el folio manda, los datos van en celdas y el estado se estampa. La regla bajo la barra de contexto toma el color del área en que estás.</p>
+    </div>
+
+    <div>
+      <p class="lbl" style="color: #4c616c;">Base</p>
+      <div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px;">
+        <div class="sw"><i style="background: #eef2f1; box-shadow: inset 0 0 0 1px #c8d3d7;"></i><b>Papel</b><code style="color: #4c616c;">#EEF2F1</code></div>
+        <div class="sw"><i style="background: #ffffff; box-shadow: inset 0 0 0 1px #c8d3d7;"></i><b>Etiqueta</b><code style="color: #4c616c;">#FFFFFF</code></div>
+        <div class="sw"><i style="background: #10212b;"></i><b>Tinta</b><code style="color: #4c616c;">#10212B</code></div>
+        <div class="sw"><i style="background: #183442;"></i><b>Navy</b><code style="color: #4c616c;">#183442</code></div>
+        <div class="sw"><i style="background: #0f5c6e;"></i><b>Frost</b><code style="color: #4c616c;">#0F5C6E</code></div>
+        <div class="sw"><i style="background: #b4500b;"></i><b>Sello</b><code style="color: #4c616c;">#B4500B</code></div>
+      </div>
+    </div>
+
+    <div>
+      <p class="lbl" style="color: #4c616c;">Áreas en Oficina: gajo, etiqueta de área y regla superior</p>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 20px;">
+        <span class="ar"><svg viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><g fill="#d5dee2"><path d="M16,16 L28.12,9 L29.02,21.15 Z"></path><path d="M16,16 L28.12,23 L18.05,29.85 Z"></path><path d="M16,16 L16,30 L5.03,24.7 Z"></path><path d="M16,16 L3.88,23 L2.98,10.85 Z"></path><path d="M16,16 L3.88,9 L13.95,2.15 Z"></path></g><path d="M16,16 L16,2 L26.97,7.3 Z" fill="#8c1d40"></path></svg>Materia Prima <code style="font: 500 11.5px/1 'Azeret Mono', monospace; color: #4c616c;">#8C1D40</code></span>
+        <span class="ar"><svg viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><g fill="#d5dee2"><path d="M16,16 L16,2 L26.97,7.3 Z"></path><path d="M16,16 L28.12,23 L18.05,29.85 Z"></path><path d="M16,16 L16,30 L5.03,24.7 Z"></path><path d="M16,16 L3.88,23 L2.98,10.85 Z"></path><path d="M16,16 L3.88,9 L13.95,2.15 Z"></path></g><path d="M16,16 L28.12,9 L29.02,21.15 Z" fill="#1d6fa8"></path></svg>Frigorífico <code style="font: 500 11.5px/1 'Azeret Mono', monospace; color: #4c616c;">#1D6FA8</code></span>
+        <span class="ar"><svg viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><g fill="#d5dee2"><path d="M16,16 L16,2 L26.97,7.3 Z"></path><path d="M16,16 L28.12,9 L29.02,21.15 Z"></path><path d="M16,16 L16,30 L5.03,24.7 Z"></path><path d="M16,16 L3.88,23 L2.98,10.85 Z"></path><path d="M16,16 L3.88,9 L13.95,2.15 Z"></path></g><path d="M16,16 L28.12,23 L18.05,29.85 Z" fill="#8c5a22"></path></svg>Materiales <code style="font: 500 11.5px/1 'Azeret Mono', monospace; color: #4c616c;">#8C5A22</code></span>
+        <span class="ar"><svg viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><g fill="#d5dee2"><path d="M16,16 L16,2 L26.97,7.3 Z"></path><path d="M16,16 L28.12,9 L29.02,21.15 Z"></path><path d="M16,16 L28.12,23 L18.05,29.85 Z"></path><path d="M16,16 L3.88,23 L2.98,10.85 Z"></path><path d="M16,16 L3.88,9 L13.95,2.15 Z"></path></g><path d="M16,16 L16,30 L5.03,24.7 Z" fill="#5e3f91"></path></svg>Consultas <code style="font: 500 11.5px/1 'Azeret Mono', monospace; color: #4c616c;">#5E3F91</code></span>
+        <span class="ar"><svg viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><g fill="#d5dee2"><path d="M16,16 L16,2 L26.97,7.3 Z"></path><path d="M16,16 L28.12,9 L29.02,21.15 Z"></path><path d="M16,16 L28.12,23 L18.05,29.85 Z"></path><path d="M16,16 L16,30 L5.03,24.7 Z"></path><path d="M16,16 L3.88,9 L13.95,2.15 Z"></path></g><path d="M16,16 L3.88,23 L2.98,10.85 Z" fill="#4c7a1c"></path></svg>Gerencia <code style="font: 500 11.5px/1 'Azeret Mono', monospace; color: #4c616c;">#4C7A1C</code></span>
+        <span class="ar"><svg viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><g fill="#d5dee2"><path d="M16,16 L16,2 L26.97,7.3 Z"></path><path d="M16,16 L28.12,9 L29.02,21.15 Z"></path><path d="M16,16 L28.12,23 L18.05,29.85 Z"></path><path d="M16,16 L16,30 L5.03,24.7 Z"></path><path d="M16,16 L3.88,23 L2.98,10.85 Z"></path></g><path d="M16,16 L3.88,9 L13.95,2.15 Z" fill="#4b5862"></path></svg>Administración <code style="font: 500 11.5px/1 'Azeret Mono', monospace; color: #4c616c;">#4B5862</code></span>
+      </div>
+    </div>
+
+    <div>
+      <p class="lbl" style="color: #4c616c;">Menú lateral: el gajo del área en su color, sobre navy</p>
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 8px; border-radius: 8px; background: #183442;">
+        <span style="display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 6px; background: #ffffff; color: #10212b; font-weight: 700; font-size: 15px;"><svg viewBox="0 0 32 32" width="22" height="22" aria-hidden="true"><g fill="#d5dee2"><path d="M16,16 L16,2 L26.97,7.3 Z"></path><path d="M16,16 L28.12,23 L18.05,29.85 Z"></path><path d="M16,16 L16,30 L5.03,24.7 Z"></path><path d="M16,16 L3.88,23 L2.98,10.85 Z"></path><path d="M16,16 L3.88,9 L13.95,2.15 Z"></path></g><path d="M16,16 L28.12,9 L29.02,21.15 Z" fill="#1d6fa8"></path></svg>Frigorífico</span>
+        <span style="display: flex; align-items: center; gap: 10px; padding: 9px 10px; color: #dbe6ea; font-size: 15px;"><svg viewBox="0 0 32 32" width="22" height="22" aria-hidden="true"><g fill="#3d5c6b"><path d="M16,16 L16,2 L26.97,7.3 Z"></path><path d="M16,16 L28.12,9 L29.02,21.15 Z"></path><path d="M16,16 L16,30 L5.03,24.7 Z"></path><path d="M16,16 L3.88,23 L2.98,10.85 Z"></path><path d="M16,16 L3.88,9 L13.95,2.15 Z"></path></g><path d="M16,16 L28.12,23 L18.05,29.85 Z" fill="#e0aa6c"></path></svg>Materiales</span>
+        <span style="display: flex; align-items: center; gap: 10px; padding: 9px 10px; color: #dbe6ea; font-size: 15px;"><svg viewBox="0 0 32 32" width="22" height="22" aria-hidden="true"><g fill="#3d5c6b"><path d="M16,16 L28.12,9 L29.02,21.15 Z"></path><path d="M16,16 L28.12,23 L18.05,29.85 Z"></path><path d="M16,16 L16,30 L5.03,24.7 Z"></path><path d="M16,16 L3.88,23 L2.98,10.85 Z"></path><path d="M16,16 L3.88,9 L13.95,2.15 Z"></path></g><path d="M16,16 L16,2 L26.97,7.3 Z" fill="#f2879f"></path></svg>Materia Prima</span>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px; margin-top: auto;">
+      <p class="lbl" style="color: #4c616c; margin: 0;">Una sola tipografía en Oficina, tablet y PDA</p>
+      <span style="font-weight: 800; font-stretch: 66%; font-size: 40px; line-height: 1;">Archivo angosta para títulos y cifras</span>
+      <span style="font-size: 16px; color: #344b57;">Archivo normal para leer. Azeret Mono para folios: <span style="font: 700 16px/1 'Azeret Mono', monospace; color: #10212b;">2610045871</span></span>
+    </div>
+  </section>
+
+  <section style="box-sizing: border-box; padding: 48px 52px; background: #0f212b; color: #e8f3f6; display: flex; flex-direction: column; gap: 24px;">
+    <div style="display: flex; align-items: center; gap: 20px;">
+      <svg viewBox="0 0 32 32" width="120" height="120" role="img" aria-label="Gajo de áreas en colores para fondo oscuro">
+        <path d="M16,16 L16,2 L26.97,7.3 Z" fill="#f2879f"></path>
+        <path d="M16,16 L28.12,9 L29.02,21.15 Z" fill="#7dbceb"></path>
+        <path d="M16,16 L28.12,23 L18.05,29.85 Z" fill="#e0aa6c"></path>
+        <path d="M16,16 L16,30 L5.03,24.7 Z" fill="#bba2ea"></path>
+        <path d="M16,16 L3.88,23 L2.98,10.85 Z" fill="#a6d16e"></path>
+        <path d="M16,16 L3.88,9 L13.95,2.15 Z" fill="#b7c4cc"></path>
+        <circle cx="16" cy="16" r="2.6" fill="#5fd3e6"></circle>
+      </svg>
+      <p style="margin: 0; font-size: 15px; line-height: 1.5; color: #9fbcc6;">Cada área tiene una versión clara de su color para que se distinga sobre fondo oscuro. El centro, en frost, es la operación en vivo.</p>
+    </div>
+
+    <div>
+      <h2 style="margin: 0; font-weight: 800; font-stretch: 66%; font-size: 64px; line-height: 0.92; letter-spacing: -0.01em;">Tablet y PDA, oscuras</h2>
+      <p style="margin: 10px 0 0; max-width: 560px; font-size: 16px; line-height: 1.5; color: #9fbcc6;">En cámara se trabaja con luz artificial y poca luminosidad. Fondo noche, texto hielo y una sola luz de acción. Controles de 56 px o más, para usar con guantes.</p>
+    </div>
+
+    <div>
+      <p class="lbl" style="color: #9fbcc6;">Base</p>
+      <div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px;">
+        <div class="sw"><i style="background: #0f212b; box-shadow: inset 0 0 0 1px #2a4d5c;"></i><b>Noche</b><code style="color: #9fbcc6;">#0F212B</code></div>
+        <div class="sw"><i style="background: #15303c; box-shadow: inset 0 0 0 1px #2a4d5c;"></i><b>Muro</b><code style="color: #9fbcc6;">#15303C</code></div>
+        <div class="sw"><i style="background: #e8f3f6;"></i><b>Hielo</b><code style="color: #9fbcc6;">#E8F3F6</code></div>
+        <div class="sw"><i style="background: #9fbcc6;"></i><b>Niebla</b><code style="color: #9fbcc6;">#9FBCC6</code></div>
+        <div class="sw"><i style="background: #5fd3e6;"></i><b>Frost</b><code style="color: #9fbcc6;">#5FD3E6</code></div>
+        <div class="sw"><i style="background: #f3b94f;"></i><b>Ámbar</b><code style="color: #9fbcc6;">#F3B94F</code></div>
+      </div>
+    </div>
+
+    <div>
+      <p class="lbl" style="color: #9fbcc6;">Áreas sobre fondo oscuro</p>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+        <span class="tag" style="color: #f2879f; border-color: #7a3a4a; background: #2b1b24;">Materia Prima</span>
+        <span class="tag" style="color: #7dbceb; border-color: #3f6f93; background: #132a3b;">Frigorífico</span>
+        <span class="tag" style="color: #e0aa6c; border-color: #7a5a35; background: #2a2318;">Materiales</span>
+        <span class="tag" style="color: #bba2ea; border-color: #5d4b84; background: #221d34;">Consultas</span>
+        <span class="tag" style="color: #a6d16e; border-color: #4f6d2e; background: #1b2a18;">Gerencia</span>
+        <span class="tag" style="color: #b7c4cc; border-color: #4f5f69; background: #1b2a32;">Administración</span>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px; margin-top: auto;">
+      <p class="lbl" style="color: #9fbcc6; margin: 0;">Así se ve una tarea en la tablet</p>
+      <div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px 14px; padding: 16px 18px; border-radius: 12px; background: #15303c;">
+        <span style="font: 700 26px/1 'Azeret Mono', monospace; letter-spacing: -0.04em; color: #e8f3f6;">2610045902</span>
+        <span class="tag" style="color: #7dbceb; border-color: #3f6f93; background: #132a3b;"><svg width="16" height="16" viewBox="0 0 32 32" aria-hidden="true"><g fill="#33536a"><path d="M16,16 L16,2 L26.97,7.3 Z"></path><path d="M16,16 L28.12,23 L18.05,29.85 Z"></path><path d="M16,16 L16,30 L5.03,24.7 Z"></path><path d="M16,16 L3.88,23 L2.98,10.85 Z"></path><path d="M16,16 L3.88,9 L13.95,2.15 Z"></path></g><path d="M16,16 L28.12,9 L29.02,21.15 Z" fill="#7dbceb"></path></svg>Frigorífico</span>
+        <span style="font-size: 15px; color: #c5d9df;">C5 P11 N1 a C3 P04 N1</span>
+        <span class="tag" style="color: #5fd3e6; border-color: #2f6f80; background: #12313d;"><svg width="9" height="9" viewBox="0 0 10 10" aria-hidden="true"><circle cx="5" cy="5" r="5" fill="#5fd3e6"></circle></svg>Lista para tomar</span>
+      </div>
+      <button type="button" style="height: 64px; border: 0; border-radius: 10px; background: #5fd3e6; color: #062530; font: 800 22px/1 'Archivo', sans-serif; cursor: pointer;">Tomar maniobra</button>
+    </div>
+  </section>
+</div>
+</body>
+</html>
