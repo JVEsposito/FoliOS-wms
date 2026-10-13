@@ -67,7 +67,6 @@ class ValidacionPalletApiTest extends TestCase
             ->assertOk()->assertJsonPath('observados', 0);
     }
 
-
     public function test_resumen_diario_cuenta_el_ultimo_intento_y_no_cambia_al_filtrar_resultado_o_estado(): void
     {
         $this->travelTo(CarbonImmutable::parse('2026-10-13T15:00:00Z'));
