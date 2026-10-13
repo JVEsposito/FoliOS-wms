@@ -65,3 +65,53 @@
 .empty-validation { padding: 22px; color: var(--muted); text-align: center; }
 @media (max-width: 1180px) { .validation-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); } .validation-admin-grid, .validation-catalog-grid { grid-template-columns: 1fr; } .validation-combination-form { grid-template-columns: repeat(2, minmax(0, 1fr)); } .validation-filters { grid-template-columns: repeat(2, minmax(150px, 1fr)); width: 100%; } }
 @media (max-width: 760px) { .validation-workspace { width: min(100% - 20px, 1540px); } .validation-heading { align-items: stretch; flex-direction: column; } .validation-heading__actions { min-width: 0; } .validation-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } .validation-form__grid, .validation-combination-form, .validation-combination-list { grid-template-columns: 1fr; } .validation-panel__heading { flex-direction: column; } .validation-filters { grid-template-columns: 1fr; } }
+
+/* FoliOS v2 · Validación (PR 5). */
+.office-app .validation-workspace { padding-inline: 12px !important; }
+.office-app .validation-heading__actions { flex-wrap: wrap; align-items: flex-end; gap: 10px; }
+
+.office-app .validation-metrics > article.validation-metric--success > strong { color: var(--success-text) !important; }
+.office-app .validation-metrics > article.validation-metric--critical > strong { color: var(--danger-text) !important; }
+.office-app .validation-metrics > article.has-attention { background: var(--seal-bg) !important; }
+.office-app .validation-metrics > article.has-attention > strong { color: var(--seal) !important; }
+
+.office-app .validation-lines { display: grid !important; grid-template-columns: 140px minmax(0, 1fr); overflow: hidden; }
+.office-app .validation-lines > h2 { margin: 0; padding: 18px; border-right: 1px solid var(--line-soft); font-size: 1.625rem !important; font-stretch: var(--font-condensed-stretch); line-height: 1.05; }
+.office-app .validation-lines__grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.office-app .validation-line { display: grid; gap: 8px; padding: 14px 16px; border-left: 1px solid var(--line-soft); }
+.office-app .validation-line:first-child { border-left: 0; }
+.office-app .validation-line > header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
+.office-app .validation-line h3 { margin: 0; font-size: 1.25rem !important; font-stretch: var(--font-condensed-stretch); font-weight: 800; }
+.office-app .validation-line > header > span { color: var(--text-subtle); font-size: .8125rem; }
+.office-app .validation-line__cells { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+.office-app .validation-line__cells > span { display: grid; gap: 2px; padding: 6px 8px; border-radius: 4px; background: var(--surface-muted); color: var(--text-subtle); font-size: .75rem; }
+.office-app .validation-line__cells b { color: var(--text-strong); font-size: 1.125rem; font-stretch: var(--font-condensed-stretch); font-weight: 800; }
+.office-app .validation-line__cells > .is-attention { background: var(--seal-bg); }
+.office-app .validation-line__cells > .is-attention b { color: var(--seal); }
+.office-app .validation-line__cells > .is-critical b { color: var(--danger-text); }
+
+.office-app .validation-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; padding: 0 18px 12px; }
+.office-app .validation-link { padding: 0; border: 0; background: none; color: var(--frost); font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; }
+
+.office-app .validation-table tr.validation-row > td { padding: 12px !important; vertical-align: top; }
+.office-app .validation-table tr.validation-row--observado > td { background: var(--seal-bg) !important; }
+.office-app .validation-table .validation-code { font-family: var(--font-mono) !important; font-size: 1rem; letter-spacing: -.03em; white-space: nowrap; }
+.office-app .validation-table td strong { display: block; color: var(--text-strong); font-size: .90625rem; font-weight: 600; }
+.office-app .validation-table td small { display: block; margin-top: 2px; color: var(--text-subtle); font-size: .78125rem; }
+.office-app .validation-result { display: inline-flex !important; align-items: center; gap: 7px; height: 28px; padding: 0 10px !important; border: 1.5px solid currentColor !important; border-radius: 4px !important; background: var(--corporate-card) !important; font-size: .8125rem !important; font-weight: 700 !important; text-transform: none !important; white-space: nowrap; }
+.office-app .validation-result > i { width: 8px; height: 8px; flex: 0 0 8px; background: currentColor; }
+.office-app .validation-result--aprobado { color: var(--success-text) !important; }
+.office-app .validation-result--aprobado > i { width: 9px; height: 5px; margin-top: -3px; border-bottom: 2px solid currentColor; border-left: 2px solid currentColor; background: none; transform: rotate(-45deg); }
+.office-app .validation-result--observado { color: var(--seal) !important; }
+.office-app .validation-result--observado > i { transform: rotate(45deg); }
+.office-app .validation-result--rechazado { border-color: var(--critical-fill) !important; background: var(--critical-fill) !important; color: var(--on-critical-fill) !important; }
+.office-app .validation-result--conflicto { color: var(--danger-text) !important; }
+.office-app .validation-row__action { text-align: right; white-space: nowrap; }
+.office-app .validation-correction-button { padding: 0 !important; border: 0 !important; background: none !important; color: var(--frost) !important; font-weight: 700; text-decoration: underline; min-height: 0 !important; }
+
+@media (max-width: 1199px) {
+  .office-app .validation-lines { grid-template-columns: 1fr; }
+  .office-app .validation-lines > h2 { border-right: 0; border-bottom: 1px solid var(--line-soft); }
+  .office-app .validation-lines__grid { grid-template-columns: 1fr; }
+  .office-app .validation-line { border-left: 0; border-top: 1px solid var(--line-soft); }
+}

@@ -8,6 +8,7 @@ use App\Models\Folio;
 use App\Models\Temporada;
 use App\Models\User;
 use App\Services\Temporadas\ServicioTemporadaGlobal;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -64,6 +65,129 @@ class ValidacionPalletApiTest extends TestCase
             ->assertOk()->assertJsonPath('observados', 1);
         $this->conToken($token)->getJson('/api/validacion/registro/resumen?resultado=aprobado')
             ->assertOk()->assertJsonPath('observados', 0);
+    }
+
+
+    public function test_resumen_diario_cuenta_el_ultimo_intento_y_no_cambia_al_filtrar_resultado_o_estado(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-10-13T15:00:00Z'));
+        [$catalogo, $token] = $this->contexto(RolUsuario::Administrador, 'VAL-DIA');
+        $this->insertarIntentoResumen($catalogo, 'PAL-DIA-01', ['resultado' => 'aprobado']);
+        $this->insertarIntentoResumen($catalogo, 'PAL-DIA-01', ['numero_intento' => 2, 'resultado' => 'observado']);
+        $this->insertarIntentoResumen($catalogo, 'PAL-DIA-02', ['resultado' => 'rechazado', 'linea_proceso' => 2]);
+        $this->insertarIntentoResumen($catalogo, 'PAL-DIA-03', ['estado' => 'conflicto', 'linea_proceso' => 2]);
+
+        $dia = $this->conToken($token)->getJson('/api/validacion/registro/resumen')
+            ->assertOk()
+            ->assertJsonPath('dia.fecha', '2026-10-13')
+            ->assertJsonPath('dia.validados', 2)
+            ->assertJsonPath('dia.aprobados', 0)
+            ->assertJsonPath('dia.observados', 1)
+            ->assertJsonPath('dia.rechazados', 1)
+            ->assertJsonPath('dia.conflictos', 1)
+            ->assertJsonPath('dia.por_linea.0.linea', 1)
+            ->assertJsonPath('dia.por_linea.0.validados', 1)
+            ->assertJsonPath('dia.por_linea.0.observados', 1)
+            ->assertJsonPath('dia.por_linea.1.rechazados', 1)
+            ->assertJsonPath('dia.por_linea.2.linea', 3)
+            ->assertJsonPath('dia.por_linea.2.validados', 0)
+            ->assertJsonCount(0, 'dia.por_linea.2.validadores')
+            ->json('dia');
+
+        $filtrado = $this->conToken($token)->getJson('/api/validacion/registro/resumen?resultado=aprobado&estado=aceptada')
+            ->assertOk()->assertJsonPath('observados', 0)->json('dia');
+        $this->assertSame($dia, $filtrado);
+        $this->conToken($token)->getJson('/api/validacion/registro/resumen?linea_proceso=2&turno=A')
+            ->assertOk()->assertJsonPath('dia.validados', 1)->assertJsonPath('dia.observados', 0);
+    }
+
+    public function test_resumen_sin_fecha_usa_solo_el_dia_de_santiago_y_respeta_las_2330_y_el_limite_exclusivo(): void
+    {
+        config(['app.operational_timezone' => 'America/Santiago']);
+        $this->travelTo(CarbonImmutable::parse('2026-07-30T03:45:00Z'));
+        [$catalogo, $token] = $this->contexto(RolUsuario::Administrador, 'VAL-MEDIANOCHE');
+        foreach ([
+            'PAL-AYER' => '2026-07-28T23:30:00-04:00',
+            'PAL-HOY' => '2026-07-29T23:30:00-04:00',
+            'PAL-MANANA' => '2026-07-30T00:00:00-04:00',
+        ] as $folio => $fecha) {
+            $this->insertarIntentoResumen($catalogo, $folio, [
+                'resultado' => 'observado',
+                'generado_dispositivo_at' => CarbonImmutable::parse($fecha)->utc(),
+            ]);
+        }
+
+        $this->conToken($token)->getJson('/api/validacion/registro/resumen')
+            ->assertOk()->assertJsonPath('observados', 3)
+            ->assertJsonPath('dia.fecha', '2026-07-29')
+            ->assertJsonPath('dia.validados', 1)->assertJsonPath('dia.observados', 1);
+        $this->conToken($token)->getJson('/api/validacion/registro/resumen?fecha=2026-07-30&folio=PAL-HOY')
+            ->assertOk()->assertJsonPath('dia.fecha', '2026-07-30')->assertJsonPath('dia.validados', 0);
+        $this->conToken($token)->getJson('/api/validacion/registro/resumen?fecha=2026-07-29&folio=PAL-HOY')
+            ->assertOk()->assertJsonPath('dia.validados', 1);
+        $this->conToken($token)->getJson('/api/validacion/registro/resumen?fecha=2026-07-30&folio=PAL-MANANA')
+            ->assertOk()->assertJsonPath('dia.validados', 1);
+    }
+
+    public function test_resumen_diario_no_incluye_la_primera_hora_del_dia_siguiente_al_iniciar_el_horario_de_verano(): void
+    {
+        config(['app.operational_timezone' => 'America/Santiago']);
+        $this->travelTo(CarbonImmutable::parse('2026-09-06T15:00:00Z'));
+        [$catalogo, $token] = $this->contexto(RolUsuario::Administrador, 'VAL-HORARIO-VERANO');
+        foreach ([
+            'PAL-FIN-DIA' => '2026-09-06T23:30:00-03:00',
+            'PAL-SIGUIENTE' => '2026-09-07T00:30:00-03:00',
+        ] as $folio => $fecha) {
+            $this->insertarIntentoResumen($catalogo, $folio, [
+                'generado_dispositivo_at' => CarbonImmutable::parse($fecha)->utc(),
+            ]);
+        }
+
+        $this->conToken($token)->getJson('/api/validacion/registro/resumen?fecha=2026-09-06')
+            ->assertOk()->assertJsonPath('dia.fecha', '2026-09-06')->assertJsonPath('dia.validados', 1);
+        $this->conToken($token)->getJson('/api/validacion/registro/resumen?fecha=2026-09-07')
+            ->assertOk()->assertJsonPath('dia.fecha', '2026-09-07')->assertJsonPath('dia.validados', 1);
+    }
+
+    public function test_resumen_por_linea_muestra_validadores_distintos_ordenados_con_su_dispositivo_mas_reciente(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-10-13T15:00:00Z'));
+        [$catalogo, $token] = $this->contexto(RolUsuario::Administrador, 'VAL-LINEA');
+        $zoe = User::query()->where('rol', RolUsuario::Administrador->value)->latest('id')->firstOrFail();
+        $zoe->update(['name' => 'Zoe']);
+        [$ana] = $this->acceso(RolUsuario::Validador, 'PDA-ANA');
+        $ana->update(['name' => 'Ana']);
+        $nuevo = Dispositivo::create(['codigo' => 'PDA-NUEVA', 'nombre' => 'PDA nueva', 'plataforma' => 'android', 'activo' => true]);
+        $this->insertarIntentoResumen($catalogo, 'PAL-ZOE-01', ['user_id' => $zoe->id]);
+        $this->insertarIntentoResumen($catalogo, 'PAL-ANA-01', ['user_id' => $ana->id]);
+        $this->insertarIntentoResumen($catalogo, 'PAL-ZOE-02', [
+            'user_id' => $zoe->id, 'dispositivo_id' => $nuevo->id,
+            'recibido_servidor_at' => now()->addMinute(),
+        ]);
+
+        $this->conToken($token)->getJson('/api/validacion/registro/resumen')
+            ->assertOk()->assertJsonCount(2, 'dia.por_linea.0.validadores')
+            ->assertJsonPath('dia.por_linea.0.validadores.0.nombre', 'Ana')
+            ->assertJsonPath('dia.por_linea.0.validadores.1.nombre', 'Zoe')
+            ->assertJsonPath('dia.por_linea.0.validadores.1.dispositivo', 'PDA-NUEVA');
+    }
+
+    private function insertarIntentoResumen(array $catalogo, string $folio, array $atributos = []): void
+    {
+        DB::table('validaciones_pallet')->insert([
+            'id' => (string) Str::uuid(), 'operacion_id' => (string) Str::uuid(),
+            'payload_hash' => str_repeat('a', 64), 'numero_folio' => $folio, 'numero_intento' => 1,
+            'tipo_bulto' => 'pallet', 'cantidad_cajas' => 100, 'linea_proceso' => 1, 'turno' => 'A',
+            'temporada_id' => $catalogo['temporada_id'],
+            'articulo_validacion_id' => $catalogo['articulo_validacion_id'],
+            'origen_validacion_id' => $catalogo['origen_validacion_id'],
+            'resultado' => 'aprobado', 'estado' => 'aceptada',
+            'catalogo_version_dispositivo' => 1, 'catalogo_version_servidor' => 1, 'snapshot' => '{}',
+            'user_id' => User::query()->where('rol', RolUsuario::Administrador->value)->latest('id')->value('id'),
+            'dispositivo_id' => Dispositivo::query()->latest('created_at')->value('id'),
+            'generado_dispositivo_at' => now(), 'recibido_servidor_at' => now(),
+            'created_at' => now(), 'updated_at' => now(), ...$atributos,
+        ]);
     }
 
     public function test_aprueba_y_crea_folio_pendiente_de_prefrio_de_forma_idempotente(): void

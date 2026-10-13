@@ -1,4 +1,5 @@
 import { catalogCacheMatches, loadIndependentSections } from './office-validation-loading.js';
+import { validationDayContext, validationJourneyLabel, validationOriginLabel } from './shared/validation-row.js';
 
 const byId = (id) => document.getElementById(id);
 const elements = {
@@ -7,6 +8,7 @@ const elements = {
     camerasNav: byId('officeCamerasNav'), loadsNav: byId('officeLoadsNav'), materialsNav: byId('officeMaterialsNav'), prefrioNav: byId('officePrefrioNav'), accessesNav: byId('officeAccessesNav'), managementNav: byId('officeManagementNav'), romanaNav: byId('officeRomanaNav'),
     reload: byId('reloadValidationButton'), seasonSelector: byId('seasonSelector'), filters: byId('validationFilters'), history: byId('validationHistoryBody'), userFilter: byId('validationUserFilter'), blankRegister: byId('downloadBlankValidationRegisterButton'), exportRegister: byId('exportValidationRegisterButton'),
     catalogVersion: byId('catalogVersion'), articleCount: byId('activeArticleCount'), originCount: byId('activeOriginCount'), combinationCount: byId('activeCombinationCount'), observedCount: byId('observedCount'),
+    dayValidated: byId('dayValidatedCount'), dayValidatedLabel: byId('dayValidatedLabel'), dayApproved: byId('dayApprovedCount'), dayRejected: byId('dayRejectedCount'), lines: byId('validationLines'), linesTitle: byId('validationLinesTitle'),
     correctionDialog: byId('validationCorrectionDialog'), correctionForm: byId('validationCorrectionForm'), correctionError: byId('validationCorrectionError'), correctionCancel: byId('cancelValidationCorrection'), correctionTitle: byId('validationCorrectionTitle'), correctionState: byId('validationCorrectionState'),
     loading: byId('officeLoading'), loadingText: byId('officeLoadingText'), toasts: byId('officeToasts'),
 };
@@ -140,7 +142,24 @@ function renderMetrics() {
     elements.articleCount.textContent = String(state.summary?.articulos_activos ?? 0);
     elements.originCount.textContent = String(state.summary?.origenes_activos ?? 0);
     elements.combinationCount.textContent = String(state.summary?.combinaciones_activas ?? 0);
-    elements.observedCount.textContent = String(state.summary?.observados ?? 0);
+    const day = state.summary?.dia || {};
+    elements.observedCount.textContent = String(day.observados ?? 0);
+    elements.dayValidated.textContent = String(day.validados ?? 0);
+    elements.dayApproved.textContent = String(day.aprobados ?? 0);
+    elements.dayRejected.textContent = String(day.rechazados ?? 0);
+    elements.observedCount.closest('article').classList.toggle('has-attention', day.observados > 0);
+    const context = validationDayContext(day.fecha, validationTimeZone());
+    elements.dayValidatedLabel.textContent = context.label;
+    elements.linesTitle.textContent = context.title;
+    elements.lines.innerHTML = (day.por_linea || []).map((line) => {
+        const validators = (line.validadores || []).map((user) =>
+            `${user.nombre || '—'}${user.dispositivo ? `, ${user.dispositivo}` : ''}`).join(' · ') || 'Sin validaciones';
+        return `<article class="validation-line"><header><h3>Línea ${escapeHtml(line.linea)}</h3><span>${escapeHtml(validators)}</span></header><div class="validation-line__cells"><span><b>${escapeHtml(line.validados)}</b>validados</span><span class="${line.observados > 0 ? 'is-attention' : ''}"><b>${escapeHtml(line.observados)}</b>observados</span><span class="${line.rechazados > 0 ? 'is-critical' : ''}"><b>${escapeHtml(line.rechazados)}</b>${line.rechazados === 1 ? 'rechazo' : 'rechazos'}</span></div></article>`;
+    }).join('');
+}
+
+function validationTimeZone() {
+    return document.querySelector('[data-validation-timezone]')?.dataset.validationTimezone || 'America/Santiago';
 }
 
 function renderHistory() {
@@ -150,10 +169,10 @@ function renderHistory() {
         const category = item.catalogo?.categoria || {};
         const lastCorrection = item.correcciones?.[0];
         const correction = item.puede_corregir === true
-            ? `<button class="validation-correction-button" data-correct-validation="${item.id}" type="button">Corregir</button>`
-            : '<span class="validation-action-unavailable">No disponible</span>';
-        return `<tr><td><strong>${escapeHtml(item.numero_folio)}</strong><small>Intento ${item.numero_intento} · ${escapeHtml(statusText(item.tipo_bulto))}</small></td><td><strong>${escapeHtml(article.especie || 'Sin artículo')} · ${escapeHtml(article.variedad || '')}</strong><small>${escapeHtml(category.nombre || 'Sin categoría')} · ${escapeHtml(article.calibre || '')} · ${escapeHtml(article.envase || '')}</small></td><td><strong>${escapeHtml(origin.cliente || 'Sin origen')}</strong><small>${escapeHtml(origin.marca || '')} · CSG ${escapeHtml(origin.csg || '—')}</small></td><td><span class="validation-result validation-result--${escapeHtml(resultClass)}">${escapeHtml(item.estado === 'conflicto' ? 'Conflicto' : item.resultado)}</span>${item.motivo ? `<small>${escapeHtml(statusText(item.motivo))}</small>` : ''}</td><td><strong>${escapeHtml(item.usuario?.nombre || '—')}</strong><small>${escapeHtml(item.dispositivo?.codigo || '')}</small></td><td>${escapeHtml(formatDate(item.generado_dispositivo_at))}<small>${item.linea_proceso && item.turno ? `Línea ${escapeHtml(item.linea_proceso)} · Turno ${escapeHtml(item.turno)}` : 'Sin jornada histórica'}</small>${lastCorrection ? `<small>Corregido ${escapeHtml(formatDate(lastCorrection.corregido_at))}</small>` : ''}</td><td>${correction}</td></tr>`;
-    }).join('') || '<tr><td class="empty-validation" colspan="7">No existen validaciones coincidentes.</td></tr>';
+            ? `<button class="validation-correction-button" data-correct-validation="${escapeHtml(item.id)}" type="button">Corregir</button>` : '';
+        const resultLabel = { aprobado: 'Aprobado', observado: 'Observado', rechazado: 'Rechazo definitivo', conflicto: 'Conflicto' }[resultClass] || statusText(resultClass);
+        return `<tr class="validation-row validation-row--${escapeHtml(resultClass)}"><td><strong class="validation-code">${escapeHtml(item.numero_folio)}</strong><small>${item.tipo_bulto === 'pallet' ? 'Pallet completo' : 'Saldo'}, ${escapeHtml(item.cantidad_cajas)} cajas${item.numero_intento > 1 ? ` · intento ${escapeHtml(item.numero_intento)}` : ''}</small></td><td><strong>${escapeHtml([article.especie || 'Sin artículo', article.variedad, article.calibre].filter(Boolean).join(' '))}</strong><small>${escapeHtml(article.envase || '—')} · ${escapeHtml(category.nombre || 'Sin categoría')}</small></td><td><strong>${escapeHtml(validationOriginLabel(item.catalogo))}</strong><small>${escapeHtml(origin.cliente || 'Sin origen')} · ${escapeHtml(origin.marca || '')}</small></td><td><span class="validation-result validation-result--${escapeHtml(resultClass)}"><i aria-hidden="true"></i>${escapeHtml(resultLabel)}</span>${item.motivo ? `<small>${escapeHtml(statusText(item.motivo))}</small>` : ''}</td><td><strong>${escapeHtml(item.usuario?.nombre || '—')}</strong><small>${escapeHtml(validationJourneyLabel(item, validationTimeZone()))}</small>${lastCorrection ? `<small>Corregido ${escapeHtml(formatDate(lastCorrection.corregido_at))}</small>` : ''}</td><td class="validation-row__action">${correction}</td></tr>`;
+    }).join('') || '<tr><td class="empty-validation" colspan="6">No existen validaciones coincidentes.</td></tr>';
 }
 
 function renderCorrectionOrigins(selectedId = '') {
