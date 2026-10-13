@@ -2,22 +2,12 @@
 
 namespace Tests\Feature;
 
-// use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class ExampleTest extends TestCase
 {
-    /**
-     * A basic test example.
-     */
-    public function test_the_application_returns_a_successful_response(): void
+    public function test_la_raiz_lleva_a_la_entrada_unica_de_folios(): void
     {
-        $response = $this->get('/');
-
-        $response
-            ->assertStatus(200)
-            ->assertSee('FoliOS')
-            ->assertSee('Iniciar turno')
-            ->assertSee('Acciones rápidas');
+        $this->get('/')->assertRedirect('/FoliOS');
     }
 }
