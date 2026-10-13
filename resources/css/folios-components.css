@@ -1,0 +1,52 @@
+/*
+ * Componentes de marca FoliOS v2 compartidos por Oficina (office-folios.css) y por el
+ * catálogo visual (ui:catalogo los incorpora en línea). Solo consumen variables: los
+ * colores de cada área viven en los temas de office-corporate.css y en estiba-tokens.css.
+ */
+
+/* Gajo: <x-folios.gajo area="…" /> ----------------------------------------------------- */
+
+.folios-gajo { display: block; flex: 0 0 auto; }
+.folios-gajo { --gajo-bright: var(--area-operacion-bright, var(--eui-area-operacion-bright, #5fd3e6)); --gajo-ink: var(--area-operacion-ink, var(--eui-area-operacion-ink, #0f5c6e)); }
+.folios-gajo[data-area="materia-prima"] { --gajo-bright: var(--area-materia-prima-bright, var(--eui-area-materia-prima-bright)); --gajo-ink: var(--area-materia-prima-ink, var(--eui-area-materia-prima-ink)); }
+.folios-gajo[data-area="frigorifico"] { --gajo-bright: var(--area-frigorifico-bright, var(--eui-area-frigorifico-bright)); --gajo-ink: var(--area-frigorifico-ink, var(--eui-area-frigorifico-ink)); }
+.folios-gajo[data-area="materiales"] { --gajo-bright: var(--area-materiales-bright, var(--eui-area-materiales-bright)); --gajo-ink: var(--area-materiales-ink, var(--eui-area-materiales-ink)); }
+.folios-gajo[data-area="consultas"] { --gajo-bright: var(--area-consultas-bright, var(--eui-area-consultas-bright)); --gajo-ink: var(--area-consultas-ink, var(--eui-area-consultas-ink)); }
+.folios-gajo[data-area="gerencia"] { --gajo-bright: var(--area-gerencia-bright, var(--eui-area-gerencia-bright)); --gajo-ink: var(--area-gerencia-ink, var(--eui-area-gerencia-ink)); }
+.folios-gajo[data-area="administracion"] { --gajo-bright: var(--area-administracion-bright, var(--eui-area-administracion-bright)); --gajo-ink: var(--area-administracion-ink, var(--eui-area-administracion-ink)); }
+.folios-gajo__leaf { fill: var(--gajo-rest, var(--shell-gajo, #3d5c6b)); }
+.folios-gajo__leaf.is-area { fill: var(--gajo-area, var(--gajo-bright)); }
+.folios-gajo__hub { fill: var(--gajo-hub, var(--shell-navy, #183442)); }
+.folios-gajo--center .folios-gajo__hub { fill: var(--gajo-area, var(--gajo-bright)); }
+
+/* Sobre etiqueta clara: hojas en reposo con la línea del área y la hoja en tinta. */
+.folios-gajo--light { --gajo-rest: var(--tag-line, #c8d3d7); --gajo-area: var(--gajo-ink); --gajo-hub: var(--tag-tint, #ffffff); }
+
+/* Etiqueta de área: <x-folios.area-tag area="…">Texto</x-folios.area-tag> ------------- */
+
+.folios-area-tag {
+    --tag-text: var(--area-operacion-text, var(--eui-area-operacion-text, #0f5c6e));
+    --tag-tint: var(--area-operacion-tint, var(--eui-area-operacion-tint, #e3f1f4));
+    --tag-line: var(--area-operacion-line, var(--eui-area-operacion-line, #9cc3cc));
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    max-width: 100%;
+    height: 28px;
+    padding: 0 10px;
+    border: 1.5px solid var(--tag-line);
+    border-radius: 4px;
+    background: var(--tag-tint);
+    color: var(--tag-text);
+    font: 700 .8125rem/1 var(--font-sans, var(--eui-font-family-sans, sans-serif));
+    letter-spacing: .02em;
+    white-space: nowrap;
+}
+
+.folios-area-tag > span { overflow: hidden; text-overflow: ellipsis; }
+.folios-area-tag[data-area="materia-prima"] { --tag-text: var(--area-materia-prima-text, var(--eui-area-materia-prima-text)); --tag-tint: var(--area-materia-prima-tint, var(--eui-area-materia-prima-tint)); --tag-line: var(--area-materia-prima-line, var(--eui-area-materia-prima-line)); }
+.folios-area-tag[data-area="frigorifico"] { --tag-text: var(--area-frigorifico-text, var(--eui-area-frigorifico-text)); --tag-tint: var(--area-frigorifico-tint, var(--eui-area-frigorifico-tint)); --tag-line: var(--area-frigorifico-line, var(--eui-area-frigorifico-line)); }
+.folios-area-tag[data-area="materiales"] { --tag-text: var(--area-materiales-text, var(--eui-area-materiales-text)); --tag-tint: var(--area-materiales-tint, var(--eui-area-materiales-tint)); --tag-line: var(--area-materiales-line, var(--eui-area-materiales-line)); }
+.folios-area-tag[data-area="consultas"] { --tag-text: var(--area-consultas-text, var(--eui-area-consultas-text)); --tag-tint: var(--area-consultas-tint, var(--eui-area-consultas-tint)); --tag-line: var(--area-consultas-line, var(--eui-area-consultas-line)); }
+.folios-area-tag[data-area="gerencia"] { --tag-text: var(--area-gerencia-text, var(--eui-area-gerencia-text)); --tag-tint: var(--area-gerencia-tint, var(--eui-area-gerencia-tint)); --tag-line: var(--area-gerencia-line, var(--eui-area-gerencia-line)); }
+.folios-area-tag[data-area="administracion"] { --tag-text: var(--area-administracion-text, var(--eui-area-administracion-text)); --tag-tint: var(--area-administracion-tint, var(--eui-area-administracion-tint)); --tag-line: var(--area-administracion-line, var(--eui-area-administracion-line)); }

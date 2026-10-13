@@ -4,6 +4,7 @@ import test from 'node:test';
 
 const shell = readFileSync(new URL('../../resources/css/office-shell.css', import.meta.url), 'utf8');
 const gajo = readFileSync(new URL('../../resources/views/components/folios/gajo.blade.php', import.meta.url), 'utf8');
+const components = readFileSync(new URL('../../resources/css/folios-components.css', import.meta.url), 'utf8');
 
 test('FoliOS v2: la barra de contexto lleva la regla de 3 px del área activa', () => {
     assert.match(shell, /\.estiba-office-header::after\s*\{[^}]*height:\s*3px;[^}]*background:\s*var\(--area-ink/);
@@ -12,7 +13,7 @@ test('FoliOS v2: la barra de contexto lleva la regla de 3 px del área activa', 
 
 test('FoliOS v2: cada hoja del gajo toma el color de su área', () => {
     for (const area of ['materia-prima', 'frigorifico', 'materiales', 'consultas', 'gerencia', 'administracion']) {
-        assert.match(shell, new RegExp(`\\.folios-gajo\\[data-area="${area}"\\]\\s*\\{\\s*--gajo-bright:\\s*var\\(--area-${area}-bright\\);\\s*--gajo-ink:\\s*var\\(--area-${area}-ink\\);`));
+        assert.match(components, new RegExp(`\\.folios-gajo\\[data-area="${area}"\\]\\s*\\{\\s*--gajo-bright:\\s*var\\(--area-${area}-bright\\b[^;]*;\\s*--gajo-ink:\\s*var\\(--area-${area}-ink\\b`));
         assert.match(gajo, new RegExp(`'${area}' => 'M16,16 `));
     }
 });
