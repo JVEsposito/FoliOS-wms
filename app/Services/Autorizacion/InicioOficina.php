@@ -8,9 +8,10 @@ use App\Enums\RolUsuario;
  * Pantalla de inicio de cada usuario en FoliOS web.
  *
  * Regla única, usada por /FoliOS y por el logo de Oficina:
- * 1. La pantalla preferida del rol, si el perfil la habilita.
- * 2. Si no, la primera oficina habilitada en el orden del menú.
- * 3. Si el perfil no habilita ninguna oficina, null.
+ * 1. La pantalla de inicio del perfil de acceso, si está definida y habilitada.
+ * 2. Si no, la pantalla preferida del rol, si el perfil la habilita.
+ * 3. Si no, la primera oficina habilitada en el orden del menú.
+ * 4. Si el perfil no habilita ninguna oficina, null.
  *
  * Evalúa la misma identidad que recibe Oficina al iniciar sesión (IdentidadOficina),
  * con las mismas reglas que el menú (resources/js/office-navigation.js): el
@@ -52,10 +53,12 @@ class InicioOficina
 
     /**
      * @param  array<string, mixed>  $identidad
+     * @param  string|null  $inicioPerfil  Pantalla de inicio fijada en el perfil de acceso.
      */
-    public function resolver(array $identidad): ?string
+    public function resolver(array $identidad, ?string $inicioPerfil = null): ?string
     {
-        $preferida = self::PREFERIDAS[$identidad['rol'] ?? ''] ?? null;
+        $preferidaRol = self::PREFERIDAS[$identidad['rol'] ?? ''] ?? null;
+        $rol = null;
         $primera = null;
 
         foreach ($this->catalogo->oficinas() as $oficina) {
@@ -63,14 +66,18 @@ class InicioOficina
                 continue;
             }
 
-            if ($oficina['ruta'] === $preferida) {
-                return $preferida;
+            if ($inicioPerfil !== null && $oficina['ruta'] === $inicioPerfil) {
+                return $inicioPerfil;
+            }
+
+            if ($oficina['ruta'] === $preferidaRol) {
+                $rol = $preferidaRol;
             }
 
             $primera ??= $oficina['ruta'];
         }
 
-        return $primera;
+        return $rol ?? $primera;
     }
 
     /**

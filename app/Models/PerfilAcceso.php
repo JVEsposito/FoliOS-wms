@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'rol_base',
     'modulos',
     'modulos_tablet',
+    'pantalla_inicio',
     'activo',
     'predeterminado',
     'protegido',

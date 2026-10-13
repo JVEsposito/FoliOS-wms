@@ -13,6 +13,31 @@ export function officeHomePath(value) {
     return typeof value === 'string' && OFFICE_PATH.test(value) ? value : null;
 }
 
+/**
+ * Oficina a la que volver después de iniciar sesión (parámetro `volver` de /FoliOS):
+ * ruta interna de Oficina, con su consulta y ancla si las trae.
+ */
+export function officeReturnPath(value) {
+    if (typeof value !== 'string' || !value.startsWith('/oficina')) return null;
+
+    try {
+        const base = 'http://folios.invalid';
+        const url = new URL(value, base);
+        if (url.origin !== base || !officeHomePath(url.pathname)) return null;
+
+        return `${url.pathname}${url.search}${url.hash}`;
+    } catch {
+        return null;
+    }
+}
+
+/** Entrada única para una oficina sin sesión: vuelve a ella después de iniciar sesión. */
+export function officeEntryHref(location) {
+    const back = officeReturnPath(`${location?.pathname || ''}${location?.search || ''}${location?.hash || ''}`);
+
+    return back ? `${FOLIOS_ENTRY_PATH}?volver=${encodeURIComponent(back)}` : FOLIOS_ENTRY_PATH;
+}
+
 /** Destino del logo «Ir a mi inicio»: el inicio del usuario o la entrada única. */
 export function officeHomeHref(identity) {
     return officeHomePath(identity?.inicio) || FOLIOS_ENTRY_PATH;

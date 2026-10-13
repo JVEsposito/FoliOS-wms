@@ -2,14 +2,11 @@
 
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', function () {
-    return view('welcome');
-});
-
 // Entrada única de FoliOS web (http://servidor:puerto/FoliOS): inicia sesión y lleva a
 // cada usuario a su pantalla de inicio (App\Services\Autorizacion\InicioOficina).
 Route::view('/FoliOS', 'folios.inicio')->name('folios.inicio');
 Route::get('/{entrada}', fn () => redirect('/FoliOS', 301))->where('entrada', '(?i:folios)(?<!FoliOS)');
+Route::redirect('/', '/FoliOS');
 Route::redirect('/oficina', '/FoliOS');
 Route::redirect('/oficina/camaras', '/oficina/frigorifico/camaras');
 Route::view('/oficina/frigorifico', 'office.domain-lobby', [
