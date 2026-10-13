@@ -64,21 +64,6 @@
     white-space: nowrap;
 }
 
-/* Gajo ---------------------------------------------------------------------------- */
-
-.folios-gajo { display: block; flex: 0 0 auto; }
-.folios-gajo { --gajo-bright: var(--area-operacion-bright, #5fd3e6); --gajo-ink: var(--area-operacion-ink, #0f5c6e); }
-.folios-gajo[data-area="materia-prima"] { --gajo-bright: var(--area-materia-prima-bright); --gajo-ink: var(--area-materia-prima-ink); }
-.folios-gajo[data-area="frigorifico"] { --gajo-bright: var(--area-frigorifico-bright); --gajo-ink: var(--area-frigorifico-ink); }
-.folios-gajo[data-area="materiales"] { --gajo-bright: var(--area-materiales-bright); --gajo-ink: var(--area-materiales-ink); }
-.folios-gajo[data-area="consultas"] { --gajo-bright: var(--area-consultas-bright); --gajo-ink: var(--area-consultas-ink); }
-.folios-gajo[data-area="gerencia"] { --gajo-bright: var(--area-gerencia-bright); --gajo-ink: var(--area-gerencia-ink); }
-.folios-gajo[data-area="administracion"] { --gajo-bright: var(--area-administracion-bright); --gajo-ink: var(--area-administracion-ink); }
-.folios-gajo__leaf { fill: var(--gajo-rest, var(--shell-gajo, #3d5c6b)); }
-.folios-gajo__leaf.is-area { fill: var(--gajo-area, var(--gajo-bright)); }
-.folios-gajo__hub { fill: var(--gajo-hub, var(--shell-navy, #183442)); }
-.folios-gajo--center .folios-gajo__hub { fill: var(--gajo-area, var(--gajo-bright)); }
-
 /* Barra de contexto ------------------------------------------------------------------ */
 
 .estiba-office-header {
