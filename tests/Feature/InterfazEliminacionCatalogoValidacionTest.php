@@ -37,7 +37,7 @@ class InterfazEliminacionCatalogoValidacionTest extends TestCase
 
         $this->get('/oficina/administracion/maestros-temporada')
             ->assertOk()
-            ->assertSee('Gerencia &amp; Administración', false)
+            ->assertSee('aria-label="Oficinas de Administración"', false)
             ->assertSee('Importar planilla de temporada')
             ->assertSee('id="importForm"', false);
     }

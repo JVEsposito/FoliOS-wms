@@ -9,7 +9,7 @@ use Tests\TestCase;
 
 class EstructuraOficinaTest extends TestCase
 {
-    public function test_cabecera_conserva_identidad_y_navegacion_en_los_cinco_dominios(): void
+    public function test_cabecera_conserva_identidad_y_navegacion_en_las_seis_areas(): void
     {
         foreach (['/oficina/materia-prima', '/oficina/frigorifico', '/oficina/materiales', '/oficina/materiales/items', '/oficina/administracion', '/oficina/consultas'] as $path) {
             $html = $this->get($path)->assertOk()->getContent();
@@ -20,7 +20,7 @@ class EstructuraOficinaTest extends TestCase
             $dom = new DOMDocument;
             $dom->loadHTML($html, LIBXML_NOERROR | LIBXML_NOWARNING);
             $xpath = new DOMXPath($dom);
-            $this->assertSame(5, $xpath->query('//*[@data-domain-key]')->length, $path);
+            $this->assertSame(6, $xpath->query('//*[@data-domain-key]')->length, $path);
             foreach (['officeUserName', 'officeUserRole', 'officeInitials', 'officeLogoutButton', 'officeSidebar'] as $id) {
                 $this->assertSame(1, $xpath->query('//*[@id="'.$id.'"]')->length, $path.' '.$id);
             }
