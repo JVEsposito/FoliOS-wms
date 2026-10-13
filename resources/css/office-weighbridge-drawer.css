@@ -439,3 +439,82 @@ body.has-reception-drawer {
         display: block !important;
     }
 }
+
+/*
+ * FoliOS v2 · expediente de recepción (PR 4). Etiqueta blanca a la derecha del listado:
+ * código en Azeret Mono, hechos en filas de etiqueta y balance con guiones.
+ */
+:root { --weighbridge-drawer-width: clamp(360px, 27vw, 460px); }
+
+.office-app .reception-drawer > :is(.reception-drawer__heading, .reception-drawer__tabs, .reception-drawer__actions) { flex-shrink: 0; }
+
+.office-app .reception-drawer__heading {
+    min-height: 0 !important;
+    padding: 18px 56px 14px 20px !important;
+    border-bottom: 2px dashed var(--corporate-border) !important;
+    background: var(--corporate-card) !important;
+}
+.office-app .reception-drawer__heading .eyebrow { margin: 0 0 4px !important; color: var(--text-subtle) !important; font-size: .75rem !important; font-weight: 500 !important; letter-spacing: 0 !important; text-transform: none; }
+.office-app .reception-drawer__heading h2 {
+    font-family: var(--font-mono) !important;
+    font-size: 1.625rem !important;
+    font-stretch: 100% !important;
+    font-weight: 700 !important;
+    letter-spacing: -.04em !important;
+    white-space: nowrap;
+}
+.office-app .reception-drawer__heading p:not(.eyebrow) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+    max-width: none;
+    margin-top: 8px !important;
+    color: var(--text-secondary) !important;
+    font-size: .875rem;
+    line-height: 1.4;
+}
+.office-app .reception-drawer__tabs { padding: 0 12px; background: var(--corporate-card); border-bottom-color: var(--line-soft); }
+.office-app .reception-drawer__tabs button { font-size: .875rem !important; font-weight: 700 !important; }
+.office-app .reception-drawer__tabs button.is-active { color: var(--text-strong) !important; }
+.office-app .reception-drawer__tabs button.is-active::after { height: 3px; background: var(--area-ink); }
+
+.office-app .reception-drawer .reception-detail__grid { display: block !important; padding: 6px 20px 4px !important; }
+.office-app .reception-drawer .detail-fact {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+    gap: 12px;
+    min-height: 0 !important;
+    padding: 9px 0 !important;
+    border: 0 !important;
+    border-bottom: 1px solid var(--line-soft) !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+}
+.office-app .reception-drawer .detail-fact > span { color: var(--text-subtle) !important; font-size: .8125rem !important; font-weight: 500 !important; letter-spacing: 0 !important; text-transform: none !important; }
+.office-app .reception-drawer .detail-fact > strong { color: var(--text-strong) !important; font-size: .875rem !important; font-weight: 600 !important; text-align: right; overflow-wrap: anywhere; }
+.office-app .reception-drawer .detail-fact--weight > strong { font-family: var(--font-mono) !important; letter-spacing: -.03em; }
+
+.office-app .reception-drawer .weight-balance { display: block !important; }
+.office-app .reception-drawer .weight-balance > div {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 16px;
+    padding: 10px 0 !important;
+    border: 0 !important;
+    border-bottom: 1px dashed var(--corporate-border) !important;
+    background: transparent !important;
+}
+.office-app .reception-drawer .weight-balance > div > span { color: var(--text-strong); font-size: .9375rem; }
+.office-app .reception-drawer .weight-balance > div > strong { font-family: var(--font-mono) !important; font-size: 1rem; letter-spacing: -.03em; text-align: right; }
+.office-app .reception-drawer .weight-balance > .net-row { border-bottom: 0 !important; }
+.office-app .reception-drawer .weight-balance > .net-row > span { font-weight: 700; }
+
+.office-app .reception-drawer__actions {
+    gap: 8px !important;
+    padding: 14px 20px 18px !important;
+    border-top: 1px solid var(--line-soft) !important;
+    background: var(--corporate-card) !important;
+}
+.office-app .reception-drawer__actions .primary-button { flex: 1 1 100%; min-height: 50px !important; font-size: 1rem !important; }
+.office-app .reception-drawer__actions .secondary-button { flex: 1 1 auto; min-height: 40px !important; font-size: .875rem !important; }
