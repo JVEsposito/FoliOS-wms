@@ -28,12 +28,6 @@ body,
     -webkit-font-smoothing: antialiased;
 }
 
-/* El shell actual se diseñó para Arial Narrow: hasta el PR 2 usa Archivo semiangosta. */
-.estiba-office-shell {
-    font-family: var(--font-sans);
-    font-stretch: 85%;
-}
-
 .office-app :is(code, kbd, samp, .operation-now-code, .next-code) {
     font-family: var(--font-mono) !important;
     letter-spacing: -.03em;
