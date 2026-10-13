@@ -206,8 +206,10 @@ class ServicioExpedienteMaterial
                 'recepciones_material' => $recepcion ? 1 : 0,
                 'movimientos_material' => count($eventosInventario) + count($eventosAlmacen),
                 'consumos_material' => $this->contarConsumos($movimientosInventario, $movimientosAlmacen),
+                // En modo cuadratura el retiro y la devolución son de la orden, sin lote.
                 'transformaciones_material' => $movimientosInventario
-                    ->pluck('lote_transformacion_material_id')
+                    ->map(fn (MovimientoInventarioMaterial $movimiento): ?string => $movimiento->lote_transformacion_material_id
+                        ?? $movimiento->orden_transformacion_material_id)
                     ->filter()
                     ->unique()
                     ->count(),

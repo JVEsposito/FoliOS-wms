@@ -1953,8 +1953,8 @@ class ServicioTransformacionMaterial
 
         $componentes = collect(data_get($orden->snapshot_receta, 'componentes', []));
         $cantidadBase = round((float) data_get($orden->snapshot_receta, 'salida.cantidad_base'), 3);
-        $declarados = collect($cuadratura)->keyBy(fn (array $linea): string => (string) ($linea['item_id'] ?? ''));
-        $idsComponentes = $componentes->pluck('item_id')->map(fn ($id): string => (string) $id)->sort()->values()->all();
+        $declarados = collect($cuadratura)->keyBy(fn (array $linea): string => mb_strtolower((string) ($linea['item_id'] ?? '')));
+        $idsComponentes = $componentes->pluck('item_id')->map(fn ($id): string => mb_strtolower((string) $id))->sort()->values()->all();
         if ($cantidadBase <= 0 || $declarados->keys()->sort()->values()->all() !== $idsComponentes) {
             throw new DomainException('Declara la merma y lo sin armar de cada componente de la receta.');
         }
@@ -1973,7 +1973,7 @@ class ServicioTransformacionMaterial
 
         foreach ($componentes as $componente) {
             $itemId = (string) $componente['item_id'];
-            $linea = $declarados->get($itemId);
+            $linea = $declarados->get(mb_strtolower($itemId));
             $reservasItem = $reservas->where('item_material_id', $itemId)->values();
             $retirado = round($reservasItem->sum(fn (ReservaTransformacionMaterial $reserva): float => (float) $reserva->cantidad_consumida), 3);
             $merma = $this->cantidadNoNegativa($linea['cantidad_merma'] ?? null);
