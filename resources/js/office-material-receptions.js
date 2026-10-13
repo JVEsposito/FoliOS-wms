@@ -15,8 +15,18 @@ const receptionElements = {
     pageSummary: document.getElementById('materialReceptionsPageSummary'),
     draftCount: document.getElementById('materialReceptionDraftCount'),
     confirmedCount: document.getElementById('materialReceptionConfirmedCount'),
-    cancelledCount: document.getElementById('materialReceptionCancelledCount'),
+    noPhotoCount: document.getElementById('materialReceptionNoPhotoCount'),
     folioCount: document.getElementById('materialReceptionFolioCount'),
+    detail: document.getElementById('materialReceptionDetail'),
+    detailEmpty: document.getElementById('materialReceptionDetailEmpty'),
+    detailBody: document.getElementById('materialReceptionDetailBody'),
+    detailState: document.getElementById('materialReceptionDetailState'),
+    detailTitle: document.getElementById('materialReceptionDetailTitle'),
+    detailMeta: document.getElementById('materialReceptionDetailMeta'),
+    detailActions: document.getElementById('materialReceptionDetailActions'),
+    detailPhotos: document.getElementById('materialReceptionDetailPhotos'),
+    detailLines: document.getElementById('materialReceptionDetailLines'),
+    detailFoot: document.getElementById('materialReceptionDetailFoot'),
     eliminations: document.getElementById('materialReceptionEliminations'),
     showEliminations: document.getElementById('showMaterialReceptionEliminations'),
     photos: document.getElementById('materialReceptionPhotos'),
@@ -48,31 +58,83 @@ const receptionState = {
     meta: null,
     page: 1,
     current: null,
+    selectedId: null,
+    selected: null,
+    selectionRequest: 0,
+    confirmations: new Map(),
     mode: 'view',
     lines: [],
     loading: false,
+    loadingPromise: null,
 };
 
 const photosPanel = receptionElements.photos ? createReceptionPhotosPanel(receptionElements.photos, {
     getReception: () => receptionState.current, token: receptionToken, uuid: receptionUuid, canManage: receptionCanManage, canAdminister: receptionCanAdminister,
-    onChange: (fotos) => {
-        if (!receptionState.current) return;
-        receptionState.current.fotos = fotos;
-        receptionState.current.fotos_documento = fotos.filter((f) => f.tipo === 'documento').length;
-        configureReceptionDialog();
-    },
+    onChange: refreshReceptionPhotos,
     onConfirm: async () => {
         const current = receptionState.current;
-        current.photoConfirmationOperation ||= receptionUuid();
         try {
-            const response = await receptionApi(`/api/materiales/recepciones/${current.id}/confirmar`, {
-                method: 'POST', body: JSON.stringify({ operacion_id: current.photoConfirmationOperation, version_conocida: current.version }),
-            });
-            populateReceptionForm(response.data); configureReceptionDialog(); await photosPanel.render(); await loadReceptions();
+            const response = await confirmReception(current);
+            if (receptionState.current?.id === current.id && receptionElements.dialog.open) {
+                populateReceptionForm(response.data); configureReceptionDialog();
+            }
+            await refreshReceptionViews();
         } catch (error) { receptionElements.photos.scrollIntoView({ block: 'center' }); throw error; }
     },
 }) : null;
-receptionElements.dialog?.addEventListener('close', () => photosPanel?.clear());
+const detailPhotosPanel = receptionElements.detailPhotos ? createReceptionPhotosPanel(receptionElements.detailPhotos, {
+    getReception: () => receptionState.selected, token: receptionToken, uuid: receptionUuid, canManage: receptionCanManage, canAdminister: receptionCanAdminister,
+    onChange: refreshReceptionPhotos,
+    onConfirm: async () => {
+        const selected = receptionState.selected;
+        if (!selected) return;
+        await confirmReception(selected);
+        await refreshReceptionViews();
+    },
+}) : null;
+receptionElements.dialog?.addEventListener('close', () => {
+    photosPanel?.clear();
+    if (receptionState.selectedId === receptionState.current?.id) void selectReception(receptionState.selectedId);
+});
+
+async function confirmReception(record) {
+    if (receptionState.selected?.id === record.id && Number(receptionState.selected.version) > Number(record.version)) record = receptionState.selected;
+    let confirmation = receptionState.confirmations.get(record.id);
+    if (!confirmation || confirmation.version !== record.version) {
+        confirmation = { operationId: receptionUuid(), version: record.version, pending: null };
+        receptionState.confirmations.set(record.id, confirmation);
+    }
+    if (confirmation.pending) return confirmation.pending;
+    confirmation.pending = receptionApi(`/api/materiales/recepciones/${record.id}/confirmar`, {
+        method: 'POST', body: JSON.stringify({ operacion_id: confirmation.operationId, version_conocida: record.version }),
+    });
+    try { return await confirmation.pending; }
+    finally { confirmation.pending = null; }
+}
+
+async function refreshReceptionPhotos(fotos, receptionId) {
+    for (const record of [receptionState.current, receptionState.selected]) {
+        if (record?.id !== receptionId || !fotos) continue;
+        record.fotos = fotos;
+        record.fotos_documento = fotos.filter((foto) => foto.tipo === 'documento').length;
+    }
+    if (receptionElements.dialog.open && receptionState.current?.id === receptionId) configureReceptionDialog();
+    await refreshReceptionViews();
+}
+
+async function refreshReceptionViews() {
+    await loadReceptions(receptionState.page);
+    if (receptionState.selectedId) await selectReception(receptionState.selectedId);
+    const currentId = receptionState.current?.id;
+    if (!receptionElements.dialog.open || !currentId) return;
+    const record = receptionState.selected?.id === currentId
+        ? receptionState.selected : (await receptionApi(`/api/materiales/recepciones/${currentId}`)).data;
+    if (receptionElements.dialog.open && receptionState.current?.id === currentId) {
+        receptionState.current = record;
+        configureReceptionDialog();
+        await photosPanel?.render();
+    }
+}
 
 let eliminationsPage = 1;
 async function loadEliminationEvidence(page = 1) {
@@ -219,38 +281,22 @@ function renderReceptionList() {
     const admin = receptionCanAdminister();
     receptionElements.showEliminations?.classList.toggle('is-hidden', !admin);
     const counts = receptionState.records.reduce((result, record) => {
-        result[record.estado] = (result[record.estado] || 0) + 1;
-        return result;
+        result[record.estado] = (result[record.estado] || 0) + 1; return result;
     }, {});
-    const folios = receptionState.records.reduce(
-        (total, record) => total + receptionFolioCount(record),
-        0,
-    );
-
+    const folios = receptionState.records.reduce((total, record) => total + receptionFolioCount(record), 0);
     receptionElements.draftCount.textContent = counts.borrador || 0;
     receptionElements.confirmedCount.textContent = counts.confirmada || 0;
-    receptionElements.cancelledCount.textContent = counts.anulada || 0;
+    const noPhoto = receptionState.records.filter((record) => record.estado === 'borrador' && !Number(record.fotos_documento)).length;
+    receptionElements.noPhotoCount.textContent = noPhoto;
+    receptionElements.noPhotoCount.closest('article').classList.toggle('has-attention', noPhoto > 0);
     receptionElements.folioCount.textContent = folios;
     receptionElements.summary.textContent = `${receptionState.meta?.total || receptionState.records.length} recepciones encontradas`;
     receptionElements.list.innerHTML = receptionState.records.map((record) => {
-        const adminActions = admin
-            ? `${record.estado !== 'anulada' ? `<button data-action="edit" data-id="${record.id}" type="button">Editar</button>` : ''}<button data-action="delete" data-id="${record.id}" type="button">Eliminar</button>`
-            : '';
-        const samplingAction = record.estado === 'confirmada'
-            ? `<button data-action="sampling" data-id="${record.id}" type="button">Registro de muestreo</button>`
-            : '';
-        return `
-            <tr>
-                <td><strong>${receptionEscape(record.numero_guia_despacho)}</strong><small>${receptionEscape(record.orden_compra || 'Sin OC')}</small></td>
-                <td><strong>${receptionEscape(record.cliente?.codigo)} · ${receptionEscape(record.cliente?.nombre)}</strong><small>${receptionEscape(record.proveedor?.codigo)} · ${receptionEscape(record.proveedor?.nombre)}</small></td>
-                <td>${receptionEscape(receptionDate(record.fecha_documento))}</td>
-                <td><span class="material-reception-state material-reception-state--${receptionEscape(record.estado)}">${receptionEscape(receptionStatus(record.estado))}</span>${!record.fotos_documento ? '<small>Sin foto de documento</small>' : ''}</td>
-                <td>${receptionEscape(record.detalles_count ?? '—')} ítems · ${receptionFolioCount(record)} folios</td>
-                <td><div class="material-reception-actions"><button data-action="view" data-id="${record.id}" type="button">Ver expediente</button>${samplingAction}${adminActions}</div></td>
-            </tr>
-        `;
-    }).join('') || '<tr><td colspan="6"><p class="empty-state">No existen recepciones para los filtros seleccionados.</p></td></tr>';
-
+        const selected = record.id === receptionState.selectedId;
+        const status = record.estado === 'borrador' && !Number(record.fotos_documento) ? 'sin-foto' : record.estado;
+        return `<article class="material-reception-card${selected ? ' is-selected' : ''}" role="listitem"><button type="button" class="material-reception-card__open" data-action="select" data-id="${receptionEscape(record.id)}" aria-pressed="${selected}"><span class="material-reception-card__k">Guía</span><strong class="material-reception-card__code">${receptionEscape(record.numero_guia_despacho)}</strong><span class="material-reception-card__who">${receptionEscape(record.cliente?.nombre)}, ${receptionEscape(record.proveedor?.nombre)}</span><small>${receptionEscape(receptionDate(record.fecha_documento))} · ${receptionEscape(record.detalles_count ?? '—')} ítems · ${receptionFolioCount(record)} folios</small></button><span class="material-reception-state material-reception-state--${receptionEscape(status)}">${status === 'sin-foto' ? 'Sin foto' : receptionEscape(receptionStatus(record.estado))}</span></article>`;
+    }).join('') || '<p class="empty-state">No existen recepciones para los filtros seleccionados.</p>';
+    if (receptionState.selectedId && !receptionState.records.some((record) => record.id === receptionState.selectedId)) clearReceptionDetail();
     const current = receptionState.meta?.current_page || receptionState.page;
     const last = receptionState.meta?.last_page || 1;
     receptionElements.pageSummary.textContent = `Página ${current} de ${last}`;
@@ -259,10 +305,62 @@ function renderReceptionList() {
     receptionElements.create.classList.toggle('is-hidden', !receptionCanManage());
 }
 
+function clearReceptionDetail() {
+    receptionState.selectionRequest++; receptionState.selectedId = null; receptionState.selected = null;
+    detailPhotosPanel?.clear(); renderReceptionDetail();
+}
+
+async function selectReception(id) {
+    const request = ++receptionState.selectionRequest;
+    receptionState.selectedId = id; receptionState.selected = null;
+    detailPhotosPanel?.clear(); renderReceptionList(); renderReceptionDetail();
+    try {
+        const response = await receptionApi(`/api/materiales/recepciones/${encodeURIComponent(id)}`);
+        if (request !== receptionState.selectionRequest || receptionState.selectedId !== id) return;
+        receptionState.selected = response.data; renderReceptionDetail(); await detailPhotosPanel?.render();
+    } catch (error) {
+        if (request === receptionState.selectionRequest) receptionElements.error.textContent = error.message;
+    }
+}
+
+function receptionPackageSummary(detail) {
+    const packages = detail.bultos || []; const sizes = new Map();
+    for (const pack of packages) sizes.set(Number(pack.cantidad), (sizes.get(Number(pack.cantidad)) || 0) + 1);
+    const groups = [...sizes].sort(([a], [b]) => b - a).map(([size, count]) => `${count} de ${receptionQuantity(size)}`);
+    const summary = groups.length === 1 ? `${packages.length} bultos de ${receptionQuantity([...sizes.keys()][0])}`
+        : groups.length ? `${packages.length} bultos: ${groups.join(' y ')}` : 'Sin bultos';
+    const expiry = packages.find((pack) => pack.fecha_vencimiento)?.fecha_vencimiento;
+    const lot = packages.find((pack) => pack.lote_proveedor)?.lote_proveedor;
+    return `${summary}${expiry ? `, vence ${expiry.slice(0, 7).split('-').reverse().join('-')}` : ', sin vencimiento'}${lot ? `, lote del proveedor ${lot}` : ''}`;
+}
+
+function renderReceptionDetail() {
+    const record = receptionState.selected;
+    receptionElements.detailEmpty.classList.toggle('is-hidden', Boolean(record));
+    receptionElements.detailBody.classList.toggle('is-hidden', !record);
+    receptionElements.detail.setAttribute('aria-busy', String(Boolean(receptionState.selectedId && !record)));
+    if (!record) return;
+    receptionElements.detailState.textContent = { borrador: 'Recepción en borrador', confirmada: 'Recepción confirmada', anulada: 'Recepción anulada' }[record.estado];
+    receptionElements.detailTitle.textContent = `Guía ${record.numero_guia_despacho}`;
+    receptionElements.detailMeta.textContent = `Cliente ${record.cliente?.nombre || '—'} (${record.cliente?.codigo || '—'}), proveedor ${record.proveedor?.nombre || '—'}${record.orden_compra ? `, OC ${record.orden_compra}` : ''}`;
+    const action = (name, text) => `<button type="button" class="secondary-button" data-action="${name}" data-id="${receptionEscape(record.id)}">${text}</button>`;
+    receptionElements.detailActions.innerHTML = action('view', 'Ver formulario')
+        + (record.estado === 'confirmada' ? action('sampling', 'Registro de muestreo') : '')
+        + (receptionCanAdminister() ? (record.estado !== 'anulada' ? action('edit', 'Editar') : '') + action('delete', 'Eliminar') : '');
+    receptionElements.detailLines.innerHTML = (record.detalles || []).map((detail) => `<article class="material-reception-line"><strong>${receptionEscape(detail.item?.nombre || '—')}</strong><code>${receptionEscape(detail.item?.codigo || '—')}</code><b>${receptionEscape(receptionQuantity(detail.cantidad_aceptada ?? detail.cantidad_recibida))} ${receptionEscape(detail.unidad_medida || '')}</b><small>${receptionEscape(receptionPackageSummary(detail))}</small></article>`).join('');
+    const folios = record.snapshot_confirmacion?.folios || [];
+    receptionElements.detailFoot.textContent = record.estado === 'borrador'
+        ? `Al confirmar se generan ${(record.detalles || []).reduce((total, detail) => total + (detail.bultos || []).length, 0)} folios.`
+        : record.estado === 'anulada' ? 'Recepción anulada.'
+            : `Generó ${folios.length} folios${folios.length ? `: ${folios[0].numero_folio} a ${folios.at(-1).numero_folio}` : ''}.`;
+}
+
 async function loadReceptions(page = receptionState.page) {
-    if (!receptionIsActive() || !receptionToken() || receptionState.loading) return;
+    if (!receptionIsActive() || !receptionToken()) return;
+    if (receptionState.loading) { await receptionState.loadingPromise; return loadReceptions(page); }
     receptionState.loading = true;
     receptionElements.error.textContent = '';
+    receptionState.loadingPromise = (async () => {
     try {
         const data = new FormData(receptionElements.filters);
         const params = new URLSearchParams({ page: String(page), per_page: '25' });
@@ -278,6 +376,8 @@ async function loadReceptions(page = receptionState.page) {
     } finally {
         receptionState.loading = false;
     }
+    })();
+    return receptionState.loadingPromise;
 }
 
 async function loadReceptionCatalogs() {
@@ -589,16 +689,7 @@ async function saveReception(confirm) {
     }
 
     if (confirm && response.data.estado === 'borrador') {
-        response = await receptionApi(
-            `/api/materiales/recepciones/${response.data.id}/confirmar`,
-            {
-                method: 'POST',
-                body: JSON.stringify({
-                    operacion_id: receptionUuid(),
-                    version_conocida: response.data.version,
-                }),
-            },
-        );
+        response = await confirmReception(response.data);
     }
 
     if (response.data.estado === 'borrador') {
@@ -606,7 +697,7 @@ async function saveReception(confirm) {
         populateReceptionForm(response.data); configureReceptionDialog(); await photosPanel?.render();
         receptionElements.photos?.scrollIntoView({ block: 'center' });
     } else { receptionElements.dialog.close(); }
-    await loadReceptions(receptionState.page);
+    await refreshReceptionViews();
 }
 
 function openReceptionDelete(record) {
@@ -679,10 +770,12 @@ if (receptionElements.workspace) {
     });
     receptionElements.previous.addEventListener('click', () => loadReceptions(receptionState.page - 1));
     receptionElements.next.addEventListener('click', () => loadReceptions(receptionState.page + 1));
-    receptionElements.list.addEventListener('click', async (event) => {
+    async function handleReceptionAction(event) {
         const button = event.target.closest('button[data-action]');
         if (!button) return;
+        if (button.dataset.action === 'select') { await selectReception(button.dataset.id); return; }
         const record = receptionState.records.find((item) => item.id === button.dataset.id);
+        if (!record) return;
         if (button.dataset.action === 'view') openReception(record.id, 'view');
         if (button.dataset.action === 'sampling') {
             try {
@@ -692,8 +785,10 @@ if (receptionElements.workspace) {
             }
         }
         if (button.dataset.action === 'edit' && receptionCanAdminister()) openReception(record.id, 'edit');
-        if (button.dataset.action === 'delete' && receptionCanAdminister()) openReceptionDelete(record);
-    });
+        if (button.dataset.action === 'delete' && receptionCanAdminister()) openReceptionDelete(receptionState.selected?.id === record.id ? receptionState.selected : record);
+    }
+    receptionElements.list.addEventListener('click', handleReceptionAction);
+    receptionElements.detailActions.addEventListener('click', handleReceptionAction);
     receptionElements.form.elements.cliente_id.addEventListener('change', () => {
         renderReceptionHeaderOptions();
         receptionState.lines.forEach((line) => {
@@ -821,6 +916,7 @@ if (receptionElements.workspace) {
         button.addEventListener('click', () => receptionElements.deleteDialog.close()));
     window.addEventListener('estiba:office-session', () => {
         photosPanel?.reset(); receptionElements.dialog.close(); receptionState.current = null;
+        clearReceptionDetail(); detailPhotosPanel?.reset(); receptionState.confirmations.clear();
         receptionElements.eliminations?.replaceChildren(); receptionElements.eliminations?.classList.add('is-hidden');
         void loadReceptions(1);
     });

@@ -431,3 +431,63 @@
 .material-reception-photos { opacity: 1; }
 .material-receptions-filters { grid-template-columns: minmax(150px, 220px) minmax(220px, 1fr) minmax(150px, 240px) auto; }
 @media (max-width: 700px) { .material-receptions-filters { grid-template-columns: 1fr; } }
+
+/* FoliOS v2 · Recepciones de materiales (PR 6). */
+.office-app .material-receptions-workspace { min-width: 0 !important; }
+.office-app .material-receptions-metrics > article.has-attention { background: var(--seal-bg) !important; }
+.office-app .material-receptions-metrics > article.has-attention > strong { color: var(--seal) !important; }
+
+.office-app .material-receptions-layout { display: grid; grid-template-columns: minmax(300px, 1fr) minmax(0, 2fr); gap: 20px; align-items: start; }
+.office-app .material-receptions-list { overflow: hidden; border: 1px solid var(--corporate-border); border-radius: var(--radius-card); background: var(--corporate-card); }
+.office-app .material-receptions-list > h3 { margin: 0; padding: 18px 20px 12px; font-size: 1.625rem !important; font-stretch: var(--font-condensed-stretch); font-weight: 800; }
+.office-app .material-reception-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 14px 20px; border-top: 1px solid var(--line-soft); }
+.office-app .material-reception-card.is-selected { background: var(--area-tint); box-shadow: inset 0 0 0 2px var(--area-ink); }
+.office-app .material-reception-card__open { display: grid; gap: 2px; min-width: 0; padding: 0 !important; border: 0 !important; background: none !important; color: var(--text-strong) !important; text-align: left; cursor: pointer; min-height: 0 !important; }
+.office-app .material-reception-card__k { color: var(--text-subtle); font-size: .75rem; font-weight: 500; }
+.office-app .material-reception-card__code { font-family: var(--font-mono) !important; font-size: 1.0625rem; letter-spacing: -.03em; }
+.office-app .material-reception-card__who { font-size: .875rem; }
+.office-app .material-reception-card small { color: var(--text-subtle); font-size: .78125rem; }
+
+.office-app .material-reception-state { display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 10px; border: 1.5px solid currentColor; border-radius: 4px; background: var(--corporate-card); font-size: .8125rem; font-weight: 700; white-space: nowrap; }
+.office-app .material-reception-state::before { width: 8px; height: 8px; content: ""; background: currentColor; }
+.office-app .material-reception-state--borrador { border-style: dashed; color: var(--text-strong); }
+.office-app .material-reception-state--borrador::before { display: none; }
+.office-app .material-reception-state--sin-foto { color: var(--seal); }
+.office-app .material-reception-state--sin-foto::before { transform: rotate(45deg); }
+.office-app .material-reception-state--confirmada { color: var(--success-text); }
+.office-app .material-reception-state--confirmada::before { width: 9px; height: 5px; margin-top: -3px; border-bottom: 2px solid currentColor; border-left: 2px solid currentColor; background: none; transform: rotate(-45deg); }
+.office-app .material-reception-state--anulada { color: var(--text-subtle); text-decoration: line-through; }
+
+.office-app .material-reception-detail { border: 1px solid var(--corporate-border); border-radius: var(--radius-card); background: var(--corporate-card); }
+.office-app .material-reception-detail__empty { display: grid; gap: 6px; padding: 48px 24px; color: var(--text-subtle); text-align: center; }
+.office-app .material-reception-detail__empty strong { color: var(--text-strong); font-size: 1.125rem; }
+.office-app .material-reception-detail__head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 20px; padding: 18px 22px; border-bottom: 2px dashed var(--corporate-border); }
+.office-app .material-reception-detail__head span { color: var(--text-subtle); font-size: .75rem; }
+.office-app .material-reception-detail__head h3 { margin: 4px 0; font-family: var(--font-mono) !important; font-size: 1.875rem !important; font-stretch: 100% !important; font-weight: 700; letter-spacing: -.04em; }
+.office-app .material-reception-detail__head p { margin: 0; color: var(--text-secondary); font-size: .875rem; }
+.office-app .material-reception-detail__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.office-app .material-reception-photos--inline { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-bottom: 1px solid var(--line-soft); }
+.office-app .material-reception-photos--inline > h3 { display: none; }
+.office-app .material-reception-photos--inline > section { display: grid; gap: 12px; padding: 18px 22px; }
+.office-app .material-reception-photos--inline > section + section { border-left: 1px solid var(--line-soft); }
+.office-app .material-reception-photos h4 { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0; }
+.office-app .material-reception-photos h4 > span { font-size: 1.25rem; font-stretch: var(--font-condensed-stretch); font-weight: 800; }
+.office-app .material-reception-photos h4 > em { height: 24px; padding: 0 8px; border: 1.5px dashed var(--input-border); border-radius: 4px; color: var(--text-subtle); font-size: .75rem; font-style: normal; font-weight: 700; line-height: 21px; }
+.office-app .material-reception-photos h4 > em.is-required { border-style: solid; border-color: var(--success-text); color: var(--success-text); }
+.office-app .material-reception-photo-grid img { width: 116px; height: 140px; border-radius: 6px; object-fit: cover; }
+.office-app .material-reception-photos label { display: grid; place-items: center; min-height: 140px; border: 2px dashed var(--input-border); border-radius: 6px; color: var(--frost); font-weight: 700; cursor: pointer; }
+.office-app .material-reception-photos label input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+
+.office-app .material-reception-detail__lines { padding: 6px 22px; }
+.office-app .material-reception-line { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 4px 18px; align-items: baseline; padding: 12px 0; border-bottom: 1px solid var(--line-soft); }
+.office-app .material-reception-line:last-child { border-bottom: 0; }
+.office-app .material-reception-line strong { font-size: 1rem; }
+.office-app .material-reception-line code { color: var(--text-subtle); font-size: .8125rem; font-weight: 700; }
+.office-app .material-reception-line b { font-size: 1rem; }
+.office-app .material-reception-line small { grid-column: 1 / -1; color: var(--text-subtle); font-size: .8125rem; }
+.office-app .material-reception-detail__foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 22px; border-top: 1px solid var(--line-soft); background: var(--surface-muted); border-radius: 0 0 var(--radius-card) var(--radius-card); }
+
+@media (max-width: 1279px) {
+  .office-app .material-receptions-layout { grid-template-columns: 1fr; }
+}

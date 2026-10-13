@@ -28,13 +28,13 @@ export function createReceptionPhotosPanel(root, { getReception, token, uuid, ca
         const editable = canManage() && reception.estado !== 'anulada';
         root.innerHTML = `<h3>Fotos</h3>${['documento', 'referencial'].map((tipo) => {
             const group = fotos.filter((f) => f.tipo === tipo);
-            return `<section><h4>${tipo === 'documento' ? 'Guía / factura (obligatoria)' : 'Foto de la recepción (opcional)'} · ${group.length}/5</h4>
+            return `<section><h4><span>${tipo === 'documento' ? 'Guía o factura' : 'Foto de la carga'}</span><em class="${tipo === 'documento' ? 'is-required' : ''}">${tipo === 'documento' ? 'Obligatoria' : 'Opcional'}, ${group.length} de 5</em></h4>
                 <div class="material-reception-photo-grid">${group.map((f) => `<article><button type="button" data-original="${f.id}" aria-label="Abrir foto ${f.orden}"><img data-thumbnail="${f.id}" alt="${tipo} ${f.orden}" width="120" height="120"></button>${editable && (reception.estado === 'borrador' || canAdminister()) ? `<button type="button" data-delete="${f.id}">Eliminar</button>` : ''}</article>`).join('')}</div>
-                ${editable && group.length < 5 ? `<label>Subir fotos<input type="file" data-upload="${tipo}" accept="image/jpeg,image/png,image/webp" multiple></label>` : ''}
+                ${editable && group.length < 5 ? `<label>${tipo === 'documento' ? 'Agregar foto' : 'Subir fotos de referencia'}<input type="file" data-upload="${tipo}" accept="image/jpeg,image/png,image/webp" multiple></label>` : ''}
             </section>`;
         }).join('')}
         ${fotos.length ? '<button type="button" data-zip>Descargar fotos (ZIP)</button>' : ''}
-        ${reception.estado === 'borrador' && canManage() ? `<p>${fotos.some((f) => f.tipo === 'documento') ? 'Documento recibido. Puedes confirmar la recepción.' : 'Falta la foto de la guía de despacho o factura. Agrégala antes de confirmar.'}</p><button type="button" data-confirm ${fotos.some((f) => f.tipo === 'documento') ? '' : 'disabled'}>Confirmar recepción</button>` : ''}
+        ${reception.estado === 'borrador' && canManage() ? `<p>${fotos.some((f) => f.tipo === 'documento') ? 'Documento recibido. Puedes confirmar la recepción.' : 'Falta la foto de la guía de despacho o factura. Agrégala antes de confirmar.'}</p><button type="button" class="primary-button" data-confirm ${fotos.some((f) => f.tipo === 'documento') ? '' : 'disabled'}>Confirmar recepción</button>` : ''}
         <div data-pending></div><p role="alert" data-photo-error></p>`;
         renderPending();
         await Promise.all(fotos.map(async (foto) => {
@@ -58,11 +58,10 @@ export function createReceptionPhotosPanel(root, { getReception, token, uuid, ca
         try {
             const response = await request(path(photo.receptionId), { method: 'POST', body });
             pending.delete(op);
-            if (getReception()?.id === photo.receptionId) {
-                const reception = getReception();
-                onChange([...(reception.fotos || []).filter((f) => f.id !== response.data.id), response.data]);
-                await render();
-            }
+            const reception = getReception();
+            await onChange(reception?.id === photo.receptionId
+                ? [...(reception.fotos || []).filter((f) => f.id !== response.data.id), response.data] : null, photo.receptionId);
+            if (getReception()?.id === photo.receptionId) await render();
         } catch (error) { photo.error = error.message; renderPending(); }
     }
     root.addEventListener('change', async (event) => {
@@ -92,7 +91,9 @@ export function createReceptionPhotosPanel(root, { getReception, token, uuid, ca
                 const motivo = reception.estado === 'confirmada' ? window.prompt('Motivo obligatorio de eliminación') : null;
                 if (reception.estado === 'confirmada' && !motivo?.trim()) return;
                 await request(`${path(reception.id)}/${button.dataset.delete}`, { method: 'DELETE', body: JSON.stringify({ motivo }) });
-                onChange((reception.fotos || []).filter((f) => f.id !== button.dataset.delete)); await render();
+                await onChange(getReception()?.id === reception.id
+                    ? (getReception().fotos || []).filter((f) => f.id !== button.dataset.delete) : null, reception.id);
+                if (getReception()?.id === reception.id) await render();
             } else if (button.dataset.original) {
                 const foto = reception.fotos.find((f) => f.id === button.dataset.original);
                 const opened = window.open('about:blank', '_blank');
