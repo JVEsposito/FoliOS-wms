@@ -7,7 +7,7 @@ use App\Models\User;
 
 /**
  * Identidad que recibe FoliOS web: datos del usuario, permisos para el menú y la
- * pantalla de inicio que le corresponde (InicioOficina).
+ * pantalla de inicio que le corresponde según su perfil y su rol (InicioOficina).
  */
 class IdentidadOficina
 {
@@ -113,7 +113,10 @@ class IdentidadOficina
             'puede_anular_despacho_envases' => $capacidades['puede_anular_despacho_envases'],
         ];
 
-        $identidad['inicio'] = $this->inicio->resolver($identidad);
+        $identidad['inicio'] = $this->inicio->resolver(
+            $identidad,
+            $usuario->perfilAcceso?->activo ? $usuario->perfilAcceso->pantalla_inicio : null,
+        );
 
         return $identidad;
     }
