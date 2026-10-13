@@ -20,6 +20,7 @@ const summary = { reservados: 2, sin_imprimir: 1, por_reimprimir: 1, usados: 1, 
 const order = {
     id: 'a1b2c3d4-0000-4000-8000-000000000001',
     estado: 'en_proceso',
+    modo_operacion: 'cuadratura_cierre',
     version: 5,
     cantidad_planificada_salida: '80.000',
     cantidad_real_salida: '28.000',
@@ -44,6 +45,11 @@ const detail = {
         salidas: [{ id: 'out-1', folio_id: 'folio-1', numero_folio: 'FGE0000101', item: outputItem, cantidad_producida: '28.000', es_salida_principal: true }],
     }],
     eventos: [],
+    cuadratura: [{
+        item: { id: 'item-mp', codigo: 'CAJ-PL', nombre: 'Caja plana', unidad_medida: 'UN' },
+        es_componente_principal: true, cantidad_retirada: '80.000', cantidad_teorica: '58.000',
+        cantidad_merma: '2.000', cantidad_sin_armar: '20.000', cantidad_utilizada: '58.000', desviacion: '0.000',
+    }],
 };
 
 async function openMaterials(browser, section, theme, search = '') {
@@ -118,6 +124,7 @@ test('las órdenes avisan e imprimen los folios de salida reservados antes de pr
             await card.waitFor();
             const text = await card.textContent();
             assert.match(text, /1 de 3 folios de salida producidos/);
+            assert.match(text, /Cuadratura al cierre/);
             assert.match(text, /1 folio reservado sin imprimir: imprime las etiquetas antes de producir\./);
             assert.match(text, /1 folio cambió de cantidad al producirse: reimprime su etiqueta\./);
             await card.locator('summary').click();
@@ -127,6 +134,8 @@ test('las órdenes avisan e imprimen los folios de salida reservados antes de pr
             assert.equal(rows.length, 3);
             assert.match(rows[0], /FGE0000101[\s\S]*Producido[\s\S]*30 \/ 28 UN[\s\S]*Reimprimir: cambió la cantidad/);
             assert.match(rows[2], /FGE0000103[\s\S]*Reservado[\s\S]*Sin imprimir/);
+            const reconciliation = card.locator('.materials-order-table', { hasText: 'Sin armar' });
+            assert.match(await reconciliation.locator('tbody tr').first().textContent(), /CAJ-PL[\s\S]*80[\s\S]*58[\s\S]*2[\s\S]*20/);
             if (process.env.ESTIBA_CAPTURAS) {
                 await card.screenshot({ path: `${process.env.ESTIBA_CAPTURAS}/orden-${theme}.png` });
             }

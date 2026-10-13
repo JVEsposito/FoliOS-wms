@@ -73,4 +73,15 @@ class InterfazOrdenesTransformacionMaterialesTest extends TestCase
         $this->assertStringContainsString('reserva_ids: reservationIds', $etiquetas);
         $this->assertStringContainsString('reimprimir: cambió la cantidad', $etiquetas);
     }
+
+    public function test_las_ordenes_en_cuadratura_muestran_lo_retirado_la_merma_y_lo_sin_armar(): void
+    {
+        $ordenes = file_get_contents(resource_path('js/office-material-orders.js'));
+
+        $this->assertIsString($ordenes);
+        $this->assertStringContainsString("order.modo_operacion === 'cuadratura_cierre'", $ordenes);
+        $this->assertStringContainsString('Cuadratura de cierre', $ordenes);
+        $this->assertStringContainsString('<th>Sin armar</th>', $ordenes);
+        $this->assertStringContainsString('row.cantidad_retirada', $ordenes);
+    }
 }
