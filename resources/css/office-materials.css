@@ -434,6 +434,8 @@
 
 /* FoliOS v2 · Recepciones de materiales (PR 6). */
 .office-app .material-receptions-workspace { min-width: 0 !important; }
+/* En Recepciones la grilla de operación no muestra sus dos paneles: una sola pista evita el desborde a 1280 px. */
+[data-materials-section="recepciones"] .materials-operation-grid { grid-template-columns: minmax(0, 1fr); }
 .office-app .material-receptions-metrics > article.has-attention { background: var(--seal-bg) !important; }
 .office-app .material-receptions-metrics > article.has-attention > strong { color: var(--seal) !important; }
 
@@ -467,7 +469,7 @@
 .office-app .material-reception-detail__head p { margin: 0; color: var(--text-secondary); font-size: .875rem; }
 .office-app .material-reception-detail__actions { display: flex; flex-wrap: wrap; gap: 8px; }
 
-.office-app .material-reception-photos--inline { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-bottom: 1px solid var(--line-soft); }
+.office-app .material-reception-photos--inline { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; padding: 0; border-width: 0 0 1px; border-style: solid; border-color: var(--line-soft); border-radius: 0; background: none; box-shadow: none; }
 .office-app .material-reception-photos--inline > h3 { display: none; }
 .office-app .material-reception-photos--inline > section { display: grid; gap: 12px; padding: 18px 22px; }
 .office-app .material-reception-photos--inline > section + section { border-left: 1px solid var(--line-soft); }
@@ -477,15 +479,22 @@
 .office-app .material-reception-photos h4 > em.is-required { border-style: solid; border-color: var(--success-text); color: var(--success-text); }
 .office-app .material-reception-photo-grid img { width: 116px; height: 140px; border-radius: 6px; object-fit: cover; }
 .office-app .material-reception-photos label { display: grid; place-items: center; min-height: 140px; border: 2px dashed var(--input-border); border-radius: 6px; color: var(--frost); font-weight: 700; cursor: pointer; }
+.office-app .material-reception-photos label { position: relative; }
 .office-app .material-reception-photos label input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+/* Descarga, aviso y «Confirmar recepción» van bajo las dos columnas de fotos. */
+.office-app .material-reception-photos--inline > :not(section, h3) { grid-column: 1 / -1; margin-inline: 22px; }
+.office-app .material-reception-photos--inline > [data-zip] { justify-self: start; margin-top: 12px; }
+.office-app .material-reception-photos--inline > p { margin-block: 12px 0; color: var(--text-secondary); }
+.office-app .material-reception-photos--inline > [data-confirm] { justify-self: start; margin-block: 10px 18px; }
+.office-app .material-reception-photos--inline > p:empty, .office-app .material-reception-photos--inline > [data-pending]:empty { display: none; }
 
 .office-app .material-reception-detail__lines { padding: 6px 22px; }
-.office-app .material-reception-line { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 4px 18px; align-items: baseline; padding: 12px 0; border-bottom: 1px solid var(--line-soft); }
-.office-app .material-reception-line:last-child { border-bottom: 0; }
-.office-app .material-reception-line strong { font-size: 1rem; }
-.office-app .material-reception-line code { color: var(--text-subtle); font-size: .8125rem; font-weight: 700; }
-.office-app .material-reception-line b { font-size: 1rem; }
-.office-app .material-reception-line small { grid-column: 1 / -1; color: var(--text-subtle); font-size: .8125rem; }
+.office-app .material-reception-detail-line { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 4px 18px; align-items: baseline; padding: 12px 0; border-bottom: 1px solid var(--line-soft); }
+.office-app .material-reception-detail-line:last-child { border-bottom: 0; }
+.office-app .material-reception-detail-line strong { font-size: 1rem; }
+.office-app .material-reception-detail-line code { color: var(--text-subtle); font-size: .8125rem; font-weight: 700; }
+.office-app .material-reception-detail-line b { font-size: 1rem; }
+.office-app .material-reception-detail-line small { grid-column: 1 / -1; color: var(--text-subtle); font-size: .8125rem; }
 .office-app .material-reception-detail__foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 22px; border-top: 1px solid var(--line-soft); background: var(--surface-muted); border-radius: 0 0 var(--radius-card) var(--radius-card); }
 
 @media (max-width: 1279px) {

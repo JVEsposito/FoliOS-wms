@@ -347,7 +347,7 @@ function renderReceptionDetail() {
     receptionElements.detailActions.innerHTML = action('view', 'Ver formulario')
         + (record.estado === 'confirmada' ? action('sampling', 'Registro de muestreo') : '')
         + (receptionCanAdminister() ? (record.estado !== 'anulada' ? action('edit', 'Editar') : '') + action('delete', 'Eliminar') : '');
-    receptionElements.detailLines.innerHTML = (record.detalles || []).map((detail) => `<article class="material-reception-line"><strong>${receptionEscape(detail.item?.nombre || '—')}</strong><code>${receptionEscape(detail.item?.codigo || '—')}</code><b>${receptionEscape(receptionQuantity(detail.cantidad_aceptada ?? detail.cantidad_recibida))} ${receptionEscape(detail.unidad_medida || '')}</b><small>${receptionEscape(receptionPackageSummary(detail))}</small></article>`).join('');
+    receptionElements.detailLines.innerHTML = (record.detalles || []).map((detail) => `<article class="material-reception-detail-line"><strong>${receptionEscape(detail.item?.nombre || '—')}</strong><code>${receptionEscape(detail.item?.codigo || '—')}</code><b>${receptionEscape(receptionQuantity(detail.cantidad_aceptada ?? detail.cantidad_recibida))} ${receptionEscape(detail.unidad_medida || '')}</b><small>${receptionEscape(receptionPackageSummary(detail))}</small></article>`).join('');
     const folios = record.snapshot_confirmacion?.folios || [];
     receptionElements.detailFoot.textContent = record.estado === 'borrador'
         ? `Al confirmar se generan ${(record.detalles || []).reduce((total, detail) => total + (detail.bultos || []).length, 0)} folios.`
