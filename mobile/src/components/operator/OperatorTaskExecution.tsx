@@ -261,7 +261,7 @@ export function OperatorTaskExecution({
             <Text style={styles.progressNext}>{action.instruction}</Text>
           </View>
 
-          <View style={[styles.instructionGrid, styles.instructionGridCompact]}>
+          <View style={[styles.instructionGrid, compact && styles.instructionGridCompact]}>
             <View style={styles.actionColumn}>
               <View style={[
                 styles.actionPanel,
