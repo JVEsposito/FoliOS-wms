@@ -68,7 +68,58 @@ class ValidacionPalletController extends Controller
             'origenes_activos' => $temporada ? OrigenValidacion::query()->where('temporada_id', $temporada->id)->where('activo', true)->count() : 0,
             'combinaciones_activas' => $temporada ? CombinacionValidacion::query()->where('temporada_id', $temporada->id)->where('activo', true)->count() : 0,
             'observados' => $observados,
+            'dia' => $this->resumenDia($filtros),
         ]);
+    }
+
+    /** @param array<string, mixed> $filtros */
+    private function resumenDia(array $filtros): array
+    {
+        $zona = config('app.operational_timezone');
+        $fecha = $filtros['fecha'] ?? CarbonImmutable::now($zona)->format('Y-m-d');
+        $inicio = CarbonImmutable::createFromFormat('!Y-m-d', $fecha, $zona);
+        unset($filtros['resultado'], $filtros['estado']);
+
+        $vigentes = $this->aplicarFiltros(
+            ValidacionPallet::query()->with(['usuario:id,name', 'dispositivo:id,codigo']),
+            $filtros,
+            [$inicio->utc(), $inicio->addDay()->startOfDay()->utc()],
+        )
+            ->orderByDesc('recibido_servidor_at')
+            ->orderByDesc('numero_intento')
+            ->get([
+                'id', 'numero_folio', 'numero_intento', 'resultado', 'estado',
+                'linea_proceso', 'user_id', 'dispositivo_id', 'recibido_servidor_at',
+            ])
+            ->unique('numero_folio')
+            ->values();
+        $aceptadas = $vigentes->where('estado', EstadoValidacionPallet::Aceptada);
+
+        return [
+            'fecha' => $inicio->format('Y-m-d'),
+            'validados' => $aceptadas->count(),
+            'aprobados' => $aceptadas->where('resultado', ResultadoValidacionPallet::Aprobado)->count(),
+            'observados' => $aceptadas->where('resultado', ResultadoValidacionPallet::Observado)->count(),
+            'rechazados' => $aceptadas->where('resultado', ResultadoValidacionPallet::Rechazado)->count(),
+            'conflictos' => $vigentes->where('estado', EstadoValidacionPallet::Conflicto)->count(),
+            'por_linea' => collect([1, 2, 3])->map(function (int $linea) use ($vigentes): array {
+                $registros = $vigentes->where('linea_proceso', $linea);
+                $aceptadas = $registros->where('estado', EstadoValidacionPallet::Aceptada);
+
+                return [
+                    'linea' => $linea,
+                    'validados' => $aceptadas->count(),
+                    'observados' => $aceptadas->where('resultado', ResultadoValidacionPallet::Observado)->count(),
+                    'rechazados' => $aceptadas->where('resultado', ResultadoValidacionPallet::Rechazado)->count(),
+                    'validadores' => $registros->unique('user_id')
+                        ->sortBy(fn (ValidacionPallet $registro): string => $registro->usuario?->name ?? '')
+                        ->map(fn (ValidacionPallet $registro): array => [
+                            'nombre' => $registro->usuario?->name,
+                            'dispositivo' => $registro->dispositivo?->codigo,
+                        ])->values()->all(),
+                ];
+            })->all(),
+        ];
     }
 
     public function miSesion(
