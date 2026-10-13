@@ -75,9 +75,11 @@ test('Materiales conserva una cabecera legible y sin errores al mostrar reposici
                     const user = document.getElementById('officeUserName').getBoundingClientRect();
                     const badge = document.querySelector('[data-material-replenishment-indicator]').getBoundingClientRect();
                     const identity = document.querySelector('.estiba-office-identity').getBoundingClientRect();
+                    const officeContext = document.querySelector('.estiba-office-context').getBoundingClientRect();
                     return {
                         headerHeight: header.height, userWidth: user.width, userHeight: user.height,
-                        badgeTop: badge.top, identityBottom: identity.bottom,
+                        badgeTop: badge.top, contextBottom: officeContext.bottom,
+                        identityInSidebar: document.getElementById('officeSidebar').contains(document.querySelector('.estiba-office-identity')),
                         headerWidth: header.width,
                         measuredHeight: parseFloat(document.getElementById('officeApp').style.getPropertyValue('--office-header-height')),
                         errors: window.layoutErrors,
@@ -87,7 +89,8 @@ test('Materiales conserva una cabecera legible y sin errores al mostrar reposici
                 assert.ok(layout.headerHeight < (width >= 600 ? 140 : 220), `${theme} ${width}px: altura ${layout.headerHeight}`);
                 assert.ok(Math.abs(layout.measuredHeight - layout.headerHeight) < 1, `${theme} ${width}px: medición desactualizada`);
                 assert.ok(layout.headerWidth <= width, `${theme} ${width}px: cabecera fuera de pantalla`);
-                assert.ok(layout.badgeTop >= layout.identityBottom - 1, `${theme} ${width}px: reposición desplaza al usuario`);
+                assert.ok(layout.badgeTop >= layout.contextBottom - 1, `${theme} ${width}px: reposición se superpone al contexto`);
+                assert.equal(layout.identityInSidebar, true, `${theme} ${width}px: identidad fuera del menú`);
                 if (width >= 1400) {
                     assert.ok(layout.userWidth > 100, `${theme} ${width}px: nombre comprimido`);
                     assert.ok(layout.userHeight < 60, `${theme} ${width}px: nombre en una columna vertical`);
