@@ -20,9 +20,23 @@ import {
   MaterialTransformationLot,
   MaterialTransformationOrder,
   MaterialTransformationOrderSummary,
+  MaterialTransformationOutputFolio,
   MaterialTransformationReservation,
   MaterialTransformationState,
 } from '../domain/materialTransformation';
+import {
+  closeReconciliationLines,
+  closeRequiresReason,
+  isReconciliationOrder,
+  matchOutputScan,
+  matchWithdrawalScan,
+  producedQuantity,
+  ReconciliationDraft,
+  ReconciliationDraftLine,
+  reconciliationRows,
+  startsWithReconciliation,
+  withdrawalLines,
+} from '../domain/materialTransformationReconciliation';
 import { EstibaApi } from '../services/estibaApi';
 import { colors } from '../theme/colors';
 
@@ -65,6 +79,13 @@ export function MaterialTransformationOperation({
   const [reverseCandidateId, setReverseCandidateId] = useState<string | null>(null);
   const [reverseReason, setReverseReason] = useState('');
   const [draft, setDraft] = useState<Record<string, DraftConsumption>>({});
+  // Modo cuadratura: retiro confirmado, etiqueta de salida pistoleada y cuadratura de cierre.
+  const [withdrawn, setWithdrawn] = useState<string[]>([]);
+  const [withdrawScan, setWithdrawScan] = useState('');
+  const [outputScan, setOutputScan] = useState('');
+  const [outputCandidate, setOutputCandidate] = useState<MaterialTransformationOutputFolio | null>(null);
+  const [outputQuantity, setOutputQuantity] = useState('');
+  const [reconciliation, setReconciliation] = useState<ReconciliationDraft>({});
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -105,6 +126,21 @@ export function MaterialTransformationOperation({
     : 0;
   const lastLot = [...(selected?.lotes ?? [])]
     .sort((a, b) => b.numero_lote - a.numero_lote)[0] ?? null;
+  const reconciliationMode = isReconciliationOrder(selected);
+  const startsReconciled = startsWithReconciliation(selected);
+  const toWithdraw = useMemo(
+    () => (selected && startsReconciled ? withdrawalLines(selected) : []),
+    [selected, startsReconciled],
+  );
+  const outputFolios = selected?.folios_salida ?? [];
+  const pendingOutputFolios = outputFolios.filter((folio) => folio.estado === 'reservado');
+  const reconciliationLines = useMemo(
+    () => (selected && reconciliationMode ? reconciliationRows(selected, reconciliation) : []),
+    [selected, reconciliationMode, reconciliation],
+  );
+  const reconciliationNeedsReason = selected && reconciliationMode
+    ? closeRequiresReason(selected, reconciliationLines)
+    : false;
 
   useEffect(() => {
     void refresh(false);
@@ -140,6 +176,12 @@ export function MaterialTransformationOperation({
 
   useEffect(() => {
     setDraft({});
+    setWithdrawn([]);
+    setWithdrawScan('');
+    setOutputScan('');
+    setOutputCandidate(null);
+    setOutputQuantity('');
+    setReconciliation({});
     setActualQuantity('');
     setScan('');
     setCloseReason('');
@@ -216,6 +258,138 @@ export function MaterialTransformationOperation({
       applyOrder(order, 'Orden iniciada. Ya puedes abrir el primer lote parcial.');
     } catch (reason) {
       fail(reason, 'No fue posible iniciar la orden.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function confirmWithdrawal(folioId: string) {
+    setWithdrawn((current) => current.includes(folioId) ? current : [...current, folioId]);
+    setError('');
+  }
+
+  function scanWithdrawal() {
+    if (!withdrawScan.trim()) return;
+    const result = matchWithdrawalScan(toWithdraw, withdrawScan);
+    setWithdrawScan('');
+    if ('error' in result) {
+      setError(result.error);
+      return;
+    }
+    confirmWithdrawal(result.line.folioId);
+  }
+
+  async function startReconciledOrder() {
+    if (!selected || !canOperate) return;
+    if (withdrawn.length !== toWithdraw.length) {
+      setError('Pistolea cada folio reservado al retirarlo antes de iniciar.');
+      return;
+    }
+    const folios = toWithdraw.map((line) => line.folioId).sort();
+    const key = `start-reconciled:${selected.id}:${selected.version}:${folios.join(',')}`;
+    setBusy(true);
+    try {
+      const order = await api.startMaterialTransformation(auth.token, selected.id, {
+        operacion_id: operationId(key),
+        version_conocida: selected.version,
+        modo_operacion: 'cuadratura_cierre',
+        folios_retirados: folios,
+      });
+      applyOrder(order, 'Componentes retirados. Pistolea la etiqueta de cada folio de salida al completarlo.');
+    } catch (reason) {
+      fail(reason, 'No fue posible retirar los componentes e iniciar la orden.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function scanOutput() {
+    if (!selected || !outputScan.trim()) return;
+    const result = matchOutputScan(selected, outputScan);
+    setOutputScan('');
+    if ('error' in result) {
+      setError(result.error);
+      return;
+    }
+    setOutputCandidate(result.folio);
+    setOutputQuantity(formatInputQuantity(Number(result.folio.cantidad_teorica)));
+    setError('');
+  }
+
+  async function confirmOutput() {
+    if (!selected || !outputCandidate || !canOperate) return;
+    const quantity = parseQuantity(outputQuantity);
+    if (!quantity) {
+      setError('Ingresa la cantidad real del folio.');
+      return;
+    }
+    const key = `confirm-output:${selected.id}:${selected.version}:${outputCandidate.numero_folio}:${quantity}`;
+    setBusy(true);
+    try {
+      const order = await api.confirmMaterialTransformationOutput(auth.token, selected.id, {
+        operacion_id: operationId(key),
+        version_conocida: selected.version,
+        folio_salida: outputCandidate.numero_folio,
+        cantidad_real_salida: quantity,
+      });
+      const confirmed = order.folios_salida?.find((folio) => folio.id === outputCandidate.id);
+      applyOrder(
+        order,
+        confirmed?.requiere_reimpresion
+          ? `Folio ${outputCandidate.numero_folio} confirmado con ${formatInputQuantity(quantity)}. Su etiqueta dice otra cantidad: pide reimprimirla en Oficina.`
+          : `Folio ${outputCandidate.numero_folio} confirmado y listo para ubicar.`,
+      );
+    } catch (reason) {
+      fail(reason, 'No fue posible confirmar el folio de salida.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function updateReconciliation(itemId: string, patch: Partial<ReconciliationDraftLine>) {
+    setReconciliation((current) => ({
+      ...current,
+      [itemId]: {
+        sinArmar: current[itemId]?.sinArmar ?? '',
+        merma: current[itemId]?.merma ?? '',
+        mermaEditada: current[itemId]?.mermaEditada ?? false,
+        ...patch,
+      },
+    }));
+  }
+
+  async function closeReconciledOrder() {
+    if (!selected || !canOperate) return;
+    const invalid = reconciliationLines.find((row) => row.error);
+    if (invalid) {
+      setError(`${invalid.codigo}: ${invalid.error}`);
+      return;
+    }
+    const reason = closeReason.trim();
+    if (reconciliationNeedsReason && reason.length < 5) {
+      setError('Indica el motivo de la diferencia (al menos 5 caracteres).');
+      return;
+    }
+    const lines = closeReconciliationLines(reconciliationLines);
+    const key = `close-reconciled:${selected.id}:${selected.version}:${reason}:${JSON.stringify(lines)}`;
+    setBusy(true);
+    try {
+      const order = await api.closeMaterialTransformationOrder(auth.token, selected.id, {
+        operacion_id: operationId(key),
+        version_conocida: selected.version,
+        folios_creados: closedLots.length,
+        cuadratura: lines,
+        ...(reason ? { motivo_desviacion: reason } : {}),
+      });
+      const returns = reconciliationLines.flatMap((row) => row.devoluciones);
+      applyOrder(
+        order,
+        returns.length
+          ? `Orden cuadrada y cerrada. Devuelve lo sin armar a ${returns.map((line) => line.numeroFolio).join(', ')}.`
+          : 'Orden cuadrada y cerrada.',
+      );
+    } catch (reasonCaught) {
+      fail(reasonCaught, 'No fue posible cuadrar y cerrar la orden.');
     } finally {
       setBusy(false);
     }
@@ -510,7 +684,64 @@ export function MaterialTransformationOperation({
                   : String(closedLots.length)} />
               </View>
 
-              {selected.estado === 'planificada' ? (
+              {selected.estado === 'planificada' && startsReconciled ? (
+                <ActionCard
+                  title="Retirar componentes e iniciar"
+                  description="Pistolea cada folio reservado al llevarlo a la línea. Lo que no se arme vuelve a su folio al cerrar la orden."
+                >
+                  <View style={styles.scanRow}>
+                    <TextInput
+                      autoCapitalize="characters"
+                      autoCorrect={false}
+                      blurOnSubmit={false}
+                      onChangeText={setWithdrawScan}
+                      onSubmitEditing={scanWithdrawal}
+                      placeholder="Pistolear folio retirado"
+                      placeholderTextColor={colors.muted}
+                      style={[styles.input, styles.flex]}
+                      value={withdrawScan}
+                    />
+                    <Pressable onPress={scanWithdrawal} style={styles.secondaryButton}>
+                      <Text style={styles.secondaryButtonText}>Confirmar</Text>
+                    </Pressable>
+                  </View>
+                  <Text style={styles.meta}>{withdrawn.length} de {toWithdraw.length} folios retirados</Text>
+                  <View style={styles.reservationList}>
+                    {toWithdraw.map((line) => {
+                      const done = withdrawn.includes(line.folioId);
+                      return (
+                        <Pressable
+                          disabled={!line.ubicacion}
+                          key={line.reservationId}
+                          onPress={() => confirmWithdrawal(line.folioId)}
+                          style={[styles.reservation, styles.reservationHeader, done && styles.reservationSelected]}
+                        >
+                          <View style={styles.flex}>
+                            <Text style={styles.folio}>{line.numeroFolio}</Text>
+                            <Text style={styles.meta}>
+                              {line.codigo} · {line.ubicacion ?? 'sin ubicación'}
+                            </Text>
+                          </View>
+                          <Text style={done ? styles.done : styles.pending}>
+                            {done
+                              ? 'RETIRADO'
+                              : line.ubicacion
+                                ? `${formatQuantity(String(line.cantidad))} ${line.unidad}`
+                                : 'UBICAR ANTES DE RETIRAR'}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                  <PrimaryButton
+                    disabled={!canOperate || withdrawn.length !== toWithdraw.length}
+                    label="Retirar e iniciar orden"
+                    onPress={() => void startReconciledOrder()}
+                  />
+                </ActionCard>
+              ) : null}
+
+              {selected.estado === 'planificada' && !startsReconciled ? (
                 <ActionCard
                   title="Iniciar ejecución"
                   description="Confirma que la orden pasa desde planificación a operación PDA."
@@ -519,7 +750,7 @@ export function MaterialTransformationOperation({
                 </ActionCard>
               ) : null}
 
-              {(selected.estado === 'en_proceso' || selected.estado === 'pendiente_cierre') && !openLot ? (
+              {(selected.estado === 'en_proceso' || selected.estado === 'pendiente_cierre') && !openLot && !reconciliationMode ? (
                 <ActionCard
                   title={unitsPerOutputFolio > 0 ? 'Abrir siguiente folio / pallet' : 'Abrir lote parcial'}
                   description={unitsPerOutputFolio > 0
@@ -630,6 +861,7 @@ export function MaterialTransformationOperation({
 
               {(selected.estado === 'en_proceso' || selected.estado === 'pendiente_cierre')
                 && !openLot
+                && !reconciliationMode
                 && closedLots.length > 0 ? (
                   <ActionCard
                     title="Cerrar orden"
@@ -644,6 +876,145 @@ export function MaterialTransformationOperation({
                   </ActionCard>
                 ) : null}
 
+              {reconciliationMode && (selected.estado === 'en_proceso' || selected.estado === 'pendiente_cierre') ? (
+                <ActionCard
+                  title="Confirmar folio de salida"
+                  description="Al completar un pallet, pistolea su etiqueta impresa y confirma la cantidad real."
+                >
+                  <View style={styles.scanRow}>
+                    <TextInput
+                      autoCapitalize="characters"
+                      autoCorrect={false}
+                      blurOnSubmit={false}
+                      editable={pendingOutputFolios.length > 0}
+                      onChangeText={setOutputScan}
+                      onSubmitEditing={scanOutput}
+                      placeholder={pendingOutputFolios.length ? 'Pistolear etiqueta del folio' : 'No quedan folios reservados'}
+                      placeholderTextColor={colors.muted}
+                      style={[styles.input, styles.flex]}
+                      value={outputScan}
+                    />
+                    <Pressable onPress={scanOutput} style={styles.secondaryButton}>
+                      <Text style={styles.secondaryButtonText}>Buscar</Text>
+                    </Pressable>
+                  </View>
+                  {outputCandidate ? (
+                    <View style={[styles.reservation, styles.reservationSelected, styles.candidate]}>
+                      <Text style={styles.folio}>{outputCandidate.numero_folio}</Text>
+                      <Text style={styles.meta}>
+                        Folio {outputCandidate.secuencia} · etiqueta con {formatQuantity(outputCandidate.cantidad_teorica)} {selected.receta_snapshot.salida.unidad_medida}
+                        {outputCandidate.impresiones > 0 ? '' : ' · etiqueta aún sin imprimir'}
+                      </Text>
+                      <Field
+                        keyboardType="decimal-pad"
+                        label="Cantidad real del folio"
+                        onChangeText={setOutputQuantity}
+                        value={outputQuantity}
+                      />
+                      {outputCandidate.impresiones > 0
+                        && parseQuantity(outputQuantity) > 0
+                        && Math.abs(parseQuantity(outputQuantity) - Number(outputCandidate.cantidad_teorica)) > 0.0001 ? (
+                          <Text style={styles.warning}>
+                            La etiqueta impresa dice {formatQuantity(outputCandidate.cantidad_teorica)}: se marcará para reimprimir.
+                          </Text>
+                        ) : null}
+                      <View style={styles.reverseActions}>
+                        <PrimaryButton disabled={!canOperate} label="Confirmar folio" onPress={() => void confirmOutput()} />
+                        <Pressable onPress={() => setOutputCandidate(null)} style={styles.secondaryButton}>
+                          <Text style={styles.secondaryButtonText}>Cancelar</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  ) : null}
+                  <View style={styles.outputGrid}>
+                    {outputFolios.map((folio) => (
+                      <View key={folio.id} style={[styles.outputChip, folio.estado === 'usado' && styles.outputChipDone, folio.estado === 'anulado' && styles.outputChipVoid]}>
+                        <Text style={styles.outputChipNumber}>{folio.numero_folio}</Text>
+                        <Text style={styles.meta}>
+                          {folio.estado === 'usado'
+                            ? `${formatQuantity(folio.cantidad_real ?? '0')} · confirmado${folio.requiere_reimpresion ? ' · reimprimir' : ''}`
+                            : folio.estado === 'anulado'
+                              ? 'anulado · retirar etiqueta'
+                              : `${formatQuantity(folio.cantidad_teorica)} · pendiente`}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </ActionCard>
+              ) : null}
+
+              {reconciliationMode
+                && (selected.estado === 'en_proceso' || selected.estado === 'pendiente_cierre')
+                && !outputCandidate
+                && closedLots.length > 0 ? (
+                  <ActionCard
+                    title="Cuadrar y cerrar orden"
+                    description="Indica por componente lo que quedó sin armar y la merma. Lo sin armar vuelve a su folio de origen."
+                  >
+                    <Text style={styles.meta}>
+                      {closedLots.length} {closedLots.length === 1 ? 'folio creado' : 'folios creados'} · {formatQuantity(String(producedQuantity(selected)))} de {formatQuantity(selected.cantidad_planificada_salida)} {selected.receta_snapshot.salida.unidad_medida}
+                      {pendingOutputFolios.length === 1 ? ' · 1 folio reservado sin usar se anulará' : ''}
+                      {pendingOutputFolios.length > 1 ? ` · ${pendingOutputFolios.length} folios reservados sin usar se anularán` : ''}
+                    </Text>
+                    {reconciliationLines.map((row) => (
+                      <View key={row.itemId} style={[styles.reservation, styles.reconciliation, row.error || row.fueraDeTolerancia ? styles.reconciliationAlert : null]}>
+                        <Text style={styles.folio}>{row.codigo}{row.principal ? ' · principal' : ''}</Text>
+                        <Text style={styles.meta}>
+                          Retirado {formatQuantity(String(row.retirado))} · según receta {formatQuantity(String(row.teorico))} {row.unidad}
+                        </Text>
+                        <View style={styles.reconciliationFields}>
+                          <Field
+                            keyboardType="decimal-pad"
+                            label="Sin armar"
+                            onChangeText={(value) => updateReconciliation(row.itemId, { sinArmar: value })}
+                            value={reconciliation[row.itemId]?.sinArmar ?? ''}
+                          />
+                          <Field
+                            keyboardType="decimal-pad"
+                            label={`Merma (cuadra con ${formatQuantity(String(row.mermaSugerida))})`}
+                            onChangeText={(value) => updateReconciliation(row.itemId, { merma: value, mermaEditada: true })}
+                            value={reconciliation[row.itemId]?.mermaEditada
+                              ? reconciliation[row.itemId].merma
+                              : formatInputQuantity(row.mermaSugerida)}
+                          />
+                        </View>
+                        <Text style={row.error || row.fueraDeTolerancia ? styles.warning : styles.meta}>
+                          {row.error ?? `Utilizado ${formatQuantity(String(row.utilizado))} · diferencia ${formatQuantity(String(row.desviacion))} ${row.unidad}${row.fueraDeTolerancia ? ' · fuera de tolerancia' : ''}`}
+                        </Text>
+                        {row.devoluciones.map((line) => (
+                          <Text key={line.numeroFolio} style={styles.trace}>
+                            ↩ {formatQuantity(String(line.cantidad))} {row.unidad} vuelven a {line.numeroFolio}
+                            {line.requiereUbicacion ? ' · ubicarlo en Cámaras' : ''}
+                          </Text>
+                        ))}
+                      </View>
+                    ))}
+                    <Field
+                      label={reconciliationNeedsReason ? 'Motivo de la diferencia (obligatorio)' : 'Observación (opcional)'}
+                      onChangeText={setCloseReason}
+                      value={closeReason}
+                    />
+                    <PrimaryButton
+                      disabled={!canOperate || (reconciliationNeedsReason && closeReason.trim().length < 5)}
+                      label="Cuadrar y cerrar orden"
+                      onPress={() => void closeReconciledOrder()}
+                    />
+                  </ActionCard>
+                ) : null}
+
+              {selected.cuadratura?.length ? (
+                <ActionCard
+                  title="Cuadratura de cierre"
+                  description="Retirado = utilizado + merma + sin armar. La diferencia compara lo utilizado con la receta."
+                >
+                  {selected.cuadratura.map((row) => (
+                    <Text key={row.item.id} style={styles.trace}>
+                      {row.item.codigo} · retirado {formatQuantity(row.cantidad_retirada)} · merma {formatQuantity(row.cantidad_merma)} · sin armar {formatQuantity(row.cantidad_sin_armar)} · diferencia {formatQuantity(row.desviacion)} {row.item.unidad_medida}
+                    </Text>
+                  ))}
+                </ActionCard>
+              ) : null}
+
               <Text style={styles.sectionTitle}>Genealogía de lotes</Text>
               {selected.lotes.map((lot) => (
                 <View key={lot.id} style={styles.lotCard}>
@@ -653,8 +1024,8 @@ export function MaterialTransformationOperation({
                   </View>
                   <Text style={styles.meta}>
                     Plan {formatQuantity(lot.cantidad_planificada_salida)} ·
-                    real {formatQuantity(lot.cantidad_real_salida ?? '0')} ·
-                    merma {formatQuantity(lot.merma_real ?? '0')}
+                    real {formatQuantity(lot.cantidad_real_salida ?? '0')}
+                    {lot.merma_real !== null ? ` · merma ${formatQuantity(lot.merma_real)}` : ''}
                   </Text>
                   {lot.consumos.map((consumption) => (
                     <Text key={consumption.id} style={styles.trace}>
@@ -684,7 +1055,9 @@ export function MaterialTransformationOperation({
                         {reverseCandidateId === lot.id ? (
                           <>
                             <Text style={styles.reverseWarning}>
-                              La salida quedará anulada y los consumos se compensarán. El motivo será permanente.
+                              {reconciliationMode
+                                ? 'El folio de salida quedará anulado y se reservará un número nuevo para esa cantidad. El motivo será permanente.'
+                                : 'La salida quedará anulada y los consumos se compensarán. El motivo será permanente.'}
                             </Text>
                             <Field
                               label="Motivo obligatorio de la reversa"
@@ -718,7 +1091,9 @@ export function MaterialTransformationOperation({
                             onPress={() => setReverseCandidateId(lot.id)}
                             style={styles.secondaryButton}
                           >
-                            <Text style={styles.secondaryButtonText}>Revertir último lote</Text>
+                            <Text style={styles.secondaryButtonText}>
+                              {reconciliationMode ? 'Revertir último folio' : 'Revertir último lote'}
+                            </Text>
                           </Pressable>
                         )}
                       </View>
@@ -945,6 +1320,17 @@ const styles = StyleSheet.create({
   reservationHeader: { padding: 10, flexDirection: 'row', alignItems: 'center', gap: 8 },
   folio: { color: colors.text, fontSize: 14, fontWeight: '900' },
   pending: { color: colors.amber, fontSize: 12, fontWeight: '900' },
+  done: { color: colors.green, fontSize: 12, fontWeight: '900' },
+  warning: { marginTop: 4, color: colors.amber, fontSize: 12, lineHeight: 16, fontWeight: '800' },
+  candidate: { padding: 10, gap: 8 },
+  outputGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
+  outputChip: { minWidth: 150, flexGrow: 1, padding: 9, borderRadius: 9, borderWidth: 1, borderStyle: 'dashed', borderColor: colors.border, backgroundColor: colors.panel },
+  outputChipDone: { borderStyle: 'solid', borderColor: colors.green },
+  outputChipVoid: { opacity: 0.55 },
+  outputChipNumber: { color: colors.text, fontSize: 13, fontWeight: '900' },
+  reconciliation: { padding: 10, gap: 4 },
+  reconciliationFields: { marginTop: 6, flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  reconciliationAlert: { borderColor: colors.amber },
   consumptionFields: { padding: 10, paddingTop: 0, flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   sectionTitle: { marginTop: 6, color: colors.text, fontSize: 12, fontWeight: '900' },
   lotCard: { padding: 11, borderRadius: 9, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background },

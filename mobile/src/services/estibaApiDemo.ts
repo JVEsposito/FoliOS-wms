@@ -17,6 +17,7 @@ import {
 import {
   CloseMaterialTransformationLotPayload,
   CloseMaterialTransformationOrderPayload,
+  ConfirmMaterialTransformationOutputPayload,
   MaterialTransformationOrder,
   MaterialTransformationOrderSummary,
   OpenMaterialTransformationLotPayload,
@@ -243,6 +244,14 @@ export class DemoEstibaApi implements EstibaApi {
     _token: string,
     _lotId: string,
     _payload: CloseMaterialTransformationLotPayload,
+  ): Promise<MaterialTransformationOrder> {
+    throw new ApiError('La transformación de materiales no está disponible en modo demo.', 422);
+  }
+
+  async confirmMaterialTransformationOutput(
+    _token: string,
+    _orderId: string,
+    _payload: ConfirmMaterialTransformationOutputPayload,
   ): Promise<MaterialTransformationOrder> {
     throw new ApiError('La transformación de materiales no está disponible en modo demo.', 422);
   }
