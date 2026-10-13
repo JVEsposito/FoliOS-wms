@@ -19,3 +19,15 @@ test('el indicador usa el día operacional y no cambia una fecha histórica al c
     assert.deepEqual(validationDayContext('2026-07-29', 'America/Santiago', now), { label: 'hoy', title: 'Por línea, hoy' });
     assert.deepEqual(validationDayContext('2026-07-28', 'America/Santiago', now), { label: 'el 28-07-2026', title: 'Por línea, 28-07-2026' });
 });
+
+test('el registro usa su propia clase de fila, distinta de las tarjetas del catálogo', async () => {
+    const { readFileSync } = await import('node:fs');
+    const script = readFileSync(new URL('../../resources/js/office-validation.js', import.meta.url), 'utf8');
+    const styles = readFileSync(new URL('../../resources/css/office-validation.css', import.meta.url), 'utf8');
+
+    // `.validation-row` es la tarjeta flexible del catálogo y un anfitrión de acciones de Oficina.
+    assert.match(script, /<tr class="validation-record validation-record--\$\{escapeHtml\(resultClass\)\}">/);
+    assert.doesNotMatch(script, /<tr class="validation-row/);
+    assert.match(styles, /tr\.validation-record--observado > td/);
+    assert.match(styles, /\.validation-workspace \{ grid-template-columns: minmax\(0, 1fr\) !important; \}/);
+});

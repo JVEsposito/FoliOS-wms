@@ -68,12 +68,16 @@
 
 /* FoliOS v2 · Validación (PR 5). */
 .office-app .validation-workspace { padding-inline: 12px !important; }
+/* Una sola pista flexible: la tabla se desplaza dentro de su contenedor y no ensancha la página. */
+.office-app .validation-workspace { grid-template-columns: minmax(0, 1fr) !important; }
 .office-app .validation-heading__actions { flex-wrap: wrap; align-items: flex-end; gap: 10px; }
 
 .office-app .validation-metrics > article.validation-metric--success > strong { color: var(--success-text) !important; }
 .office-app .validation-metrics > article.validation-metric--critical > strong { color: var(--danger-text) !important; }
 .office-app .validation-metrics > article.has-attention { background: var(--seal-bg) !important; }
 .office-app .validation-metrics > article.has-attention > strong { color: var(--seal) !important; }
+/* Las cifras del catálogo van dentro de la cifra y la nota: no son rótulos del indicador. */
+.office-app .validation-metrics > article > :is(strong, small) span { display: inline !important; margin: 0 !important; color: inherit !important; font: inherit !important; letter-spacing: inherit !important; text-transform: none !important; }
 
 .office-app .validation-lines { display: grid !important; grid-template-columns: 140px minmax(0, 1fr); overflow: hidden; }
 .office-app .validation-lines > h2 { margin: 0; padding: 18px; border-right: 1px solid var(--line-soft); font-size: 1.625rem !important; font-stretch: var(--font-condensed-stretch); line-height: 1.05; }
@@ -93,8 +97,8 @@
 .office-app .validation-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; padding: 0 18px 12px; }
 .office-app .validation-link { padding: 0; border: 0; background: none; color: var(--frost); font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; }
 
-.office-app .validation-table tr.validation-row > td { padding: 12px !important; vertical-align: top; }
-.office-app .validation-table tr.validation-row--observado > td { background: var(--seal-bg) !important; }
+.office-app .validation-table tr.validation-record > td { padding: 12px !important; vertical-align: top; }
+.office-app .validation-table tr.validation-record--observado > td { background: var(--seal-bg) !important; }
 .office-app .validation-table .validation-code { font-family: var(--font-mono) !important; font-size: 1rem; letter-spacing: -.03em; white-space: nowrap; }
 .office-app .validation-table td strong { display: block; color: var(--text-strong); font-size: .90625rem; font-weight: 600; }
 .office-app .validation-table td small { display: block; margin-top: 2px; color: var(--text-subtle); font-size: .78125rem; }
@@ -106,7 +110,11 @@
 .office-app .validation-result--observado > i { transform: rotate(45deg); }
 .office-app .validation-result--rechazado { border-color: var(--critical-fill) !important; background: var(--critical-fill) !important; color: var(--on-critical-fill) !important; }
 .office-app .validation-result--conflicto { color: var(--danger-text) !important; }
-.office-app .validation-row__action { text-align: right; white-space: nowrap; }
+.office-app .validation-record__action { text-align: right; white-space: nowrap; }
+/* Seis columnas caben en 1280 × 800 sin desplazar la tabla. */
+.office-app .validation-table { min-width: 860px !important; }
+/* El menú «Seleccionar acción» de Oficina ocupa la última columna: se reserva su ancho. */
+.office-app .validation-table :is(td.validation-record__action, thead th:last-child) { width: 184px; min-width: 184px; }
 .office-app .validation-correction-button { padding: 0 !important; border: 0 !important; background: none !important; color: var(--frost) !important; font-weight: 700; text-decoration: underline; min-height: 0 !important; }
 
 @media (max-width: 1199px) {
