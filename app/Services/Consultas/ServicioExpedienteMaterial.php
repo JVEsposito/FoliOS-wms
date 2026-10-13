@@ -474,6 +474,7 @@ class ServicioExpedienteMaterial
             TipoMovimientoInventarioMaterial::ProduccionTransformacion => 'Producción por transformación',
             TipoMovimientoInventarioMaterial::MermaTransformacion => 'Merma de transformación',
             TipoMovimientoInventarioMaterial::ReversaTransformacion => 'Reversa de transformación',
+            TipoMovimientoInventarioMaterial::DevolucionTransformacion => 'Devolución sin armar de transformación',
             default => 'Movimiento de inventario',
         };
     }

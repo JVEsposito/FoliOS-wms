@@ -170,6 +170,15 @@ class ReposicionMaterialCalculoTest extends TestCase
         $this->assertSame(60.0, $f['disponible']);
     }
 
+    public function test_lo_retirado_a_transformacion_que_vuelve_sin_armar_resta_del_consumo(): void
+    {
+        $folio = $this->stock(60);
+        $this->movimiento($folio, 'consumo_transformacion', -10, null, fuente: 'inventario');
+        $this->movimiento($folio, 'devolucion_transformacion', 4, null, fuente: 'inventario');
+
+        $this->assertSame(6.0, $this->fila()['consumo_periodo']);
+    }
+
     public function test_periodos_folios_agotados_y_detalle_semanal_incluyen_todo_el_consumo_valido(): void
     {
         $folio = $this->stock(0);
