@@ -12,6 +12,10 @@ test('pda y pda-pruebas conservan la variante PDA del binario', () => {
   assert.equal(resolveAppVariant(null, 'pda'), 'pda');
 });
 
+test('camaras-pruebas conserva la variante tablet del binario', () => {
+  assert.equal(resolveAppVariant('camaras-pruebas', 'pda'), 'tablet');
+});
+
 test('variedades de CSG con 2.000 artículos y 20.000 combinaciones en menos de 50 ms', () => {
   const articles = Array.from({ length: 2000 }, (_, n) => ({
     id: `art-${n}`, especie: 'Cereza', variedad: `Variedad-${n % 50}`,
