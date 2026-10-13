@@ -89,10 +89,12 @@ La PDA de referencia es la **Unitech EA520** (5", 1280×720, Android 11, lector 
 
 ```bash
 npm run build:apk        # tablet (perfil apk-camaras)
+npm run build:apk:pruebas      # tablet de pruebas (canal camaras-pruebas)
 npm run build:apk:pda    # PDA (perfil apk-pda)
 npm run build:apk:pda:pruebas  # PDA de pruebas (canal pda-pruebas)
 
 npm run update:production -- --message "..."   # solo tablets
+npm run update:pruebas -- --message "..."      # solo tablet de pruebas
 npm run update:pda -- --message "..."          # solo PDA
 npm run update:pda:pruebas -- --message "..."  # solo PDA de pruebas
 
@@ -102,6 +104,8 @@ npm run start:pda        # Metro con la variante PDA para probar en Expo Go o en
 La variante se decide por el canal grabado en la APK instalada. Por eso una actualización publicada en el canal equivocado no convierte una tablet en PDA ni al revés. Sin canal (Expo Go, `expo start`) se usa `EXPO_PUBLIC_APP_VARIANT`. Un cambio que deba llegar a ambos equipos se publica en los dos canales. Cambios nativos requieren generar e instalar las dos APK.
 
 Para probar una OTA en `pda-pruebas`, la PDA de pruebas debe tener instalada la APK creada con `apk-pda-pruebas`. La APK habitual `apk-pda` escucha el canal `pda` y no recibe esas actualizaciones. Ambos perfiles usan el mismo paquete Android; instalar la APK de pruebas sustituye la habitual en ese dispositivo. Tras publicar la OTA, cierra y abre la aplicación para que compruebe la actualización.
+
+La tablet sigue la misma regla con `camaras-pruebas`: instala una vez en la tablet de pruebas la APK creada con `npm run build:apk:pruebas` y publica en ese canal con `npm run update:pruebas`. La APK habitual `apk-camaras` escucha `production`, de modo que una OTA publicada ahí llega a todas las tablets. Ambos perfiles usan el paquete `cl.estiba.wms.camaras`: la APK de pruebas sustituye la habitual en ese equipo, así que la tablet de pruebas debe ser un equipo dedicado y, antes de instalarla, sincronizar sus operaciones pendientes. La pantalla de ingreso muestra `Variante: TABLET · Canal: camaras-pruebas` cuando la instalación es la correcta. El nombre del canal no debe empezar por `pda`, porque ese prefijo convierte el equipo en PDA.
 
 ### Lector integrado de la PDA
 

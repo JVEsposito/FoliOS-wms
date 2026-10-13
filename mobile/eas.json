@@ -23,6 +23,13 @@
         "buildType": "apk"
       }
     },
+    "apk-camaras-pruebas": {
+      "distribution": "internal",
+      "channel": "camaras-pruebas",
+      "android": {
+        "buildType": "apk"
+      }
+    },
     "production": {
       "channel": "production",
       "android": {

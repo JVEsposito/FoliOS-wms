@@ -13,8 +13,9 @@ export const isDemoRuntime = isDemoOnlyBuild || enabled(process.env.EXPO_PUBLIC_
  * - `tablet`: operación de cámaras, Prefrío, Materiales y validaciones.
  * - `pda`: equipo de mano (Unitech EA520) para Validación PT, MP y Repaletizaje.
  *
- * Cada variante tiene su propio canal EAS (`production` y `pda`), de modo que
- * una actualización publicada para la tablet nunca llega a la PDA.
+ * Cada variante tiene su propio canal EAS (`production` y `pda`, y para los
+ * equipos de prueba `camaras-pruebas` y `pda-pruebas`), de modo que una
+ * actualización publicada para la tablet nunca llega a la PDA.
  */
 export type { AppVariant } from './resolveAppVariant';
 
