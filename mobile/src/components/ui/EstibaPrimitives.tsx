@@ -4,7 +4,14 @@ import {
   type PressableProps, type StyleProp, type TextInputProps, type ViewStyle,
 } from 'react-native';
 
-import { estibaTokens as t, type EstibaTone } from '../../theme/estibaTokens';
+import { estibaTokens, type EstibaTone } from '../../theme/estibaTokens';
+
+// Terreno siempre oscuro (FoliOS v2): colores de colorDark/signalDark sobre los claros.
+const t = {
+  ...estibaTokens,
+  color: { ...estibaTokens.color, ...estibaTokens.colorDark },
+  signal: estibaTokens.signalDark,
+} as const;
 
 // Adopción explícita: este kit no sustituye el tema de las pantallas existentes.
 type SurfaceProps = { children: ReactNode; style?: StyleProp<ViewStyle> };

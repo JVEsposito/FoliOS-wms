@@ -154,9 +154,9 @@ function Metric({ label, value }: { label: string; value: string }) {
 const styles = StyleSheet.create({
   shell: { overflow: 'hidden', borderWidth: 1, borderColor: o.color.borderStrong, borderRadius: o.radius.panel, backgroundColor: o.color.surface },
   header: { minHeight: 68, paddingHorizontal: o.space[4], paddingVertical: o.space[3], flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: o.space[3], backgroundColor: o.color.navy },
-  eyebrow: { color: '#C9D8DF', fontSize: o.type.caption, fontWeight: '900', letterSpacing: 1 },
+  eyebrow: { color: o.color.textSecondary, fontSize: o.type.caption, fontWeight: '900', letterSpacing: 1 },
   title: { color: o.color.onNavy, fontSize: o.type.heading, fontWeight: '900', marginTop: o.space[1] },
-  location: { color: '#D9E5EA', fontSize: o.type.small, fontWeight: '800' },
+  location: { color: o.color.textSecondary, fontSize: o.type.small, fontWeight: '800' },
   body: { flexDirection: 'row', flexWrap: 'wrap' },
   factsPanel: { flex: 0.9, minWidth: 280, padding: o.space[4], gap: o.space[3], borderRightWidth: 1, borderRightColor: o.color.border, backgroundColor: o.color.surface },
   sectionEyebrow: { color: o.color.primaryPressed, fontSize: o.type.caption, fontWeight: '900', letterSpacing: 0.8 },
