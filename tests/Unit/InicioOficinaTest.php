@@ -89,6 +89,30 @@ class InicioOficinaTest extends TestCase
         ]));
     }
 
+    public function test_la_pantalla_del_perfil_gana_a_la_del_rol(): void
+    {
+        $identidad = [
+            'rol' => 'operador_romana',
+            'modulos_acceso' => ['materia-prima.romana', 'materia-prima.digitacion'],
+            'puede_consultar_romana' => true,
+            'puede_consultar_materia_prima' => true,
+        ];
+
+        $this->assertSame('/oficina/materia-prima/lotes', $this->inicio->resolver($identidad, '/oficina/materia-prima/lotes'));
+    }
+
+    public function test_si_el_perfil_no_habilita_su_pantalla_se_usa_la_del_rol(): void
+    {
+        $identidad = [
+            'rol' => 'operador_romana',
+            'modulos_acceso' => ['materia-prima.romana'],
+            'puede_consultar_romana' => true,
+        ];
+
+        $this->assertSame('/oficina/romana', $this->inicio->resolver($identidad, '/oficina/materia-prima/lotes'));
+        $this->assertSame('/oficina/romana', $this->inicio->resolver($identidad, '/oficina/no-existe'));
+    }
+
     public function test_sin_oficinas_habilitadas_no_hay_inicio(): void
     {
         $this->assertNull($this->inicio->resolver([

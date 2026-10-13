@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Enums\RolUsuario;
 use App\Services\Autorizacion\CatalogoModulosAcceso;
+use App\Services\Autorizacion\CatalogoOficinas;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
@@ -48,6 +49,11 @@ class GuardarPerfilAccesoRequest extends FormRequest
                 'distinct',
                 Rule::in($catalogo->clavesTablet()),
             ],
+            'pantalla_inicio' => [
+                'nullable',
+                'string',
+                Rule::in(array_column(app(CatalogoOficinas::class)->opcionesInicio(), 'ruta')),
+            ],
             'activo' => ['required', 'boolean'],
         ];
     }
@@ -77,6 +83,17 @@ class GuardarPerfilAccesoRequest extends FormRequest
                     'Cada módulo PDA/tablet necesita al menos una de sus oficinas relacionadas habilitada.',
                 );
             }
+
+            $inicio = $this->input('pantalla_inicio');
+            $oficinas = app(CatalogoOficinas::class);
+            $oficina = is_string($inicio) ? $oficinas->oficina($inicio) : null;
+            $relacionados = $oficina ? $oficinas->modulosRelacionados($oficina, $catalogo->claves()) : [];
+            if ($oficina && array_intersect($relacionados, (array) $this->input('modulos', [])) === []) {
+                $validator->errors()->add(
+                    'pantalla_inicio',
+                    "La pantalla de inicio «{$oficina['nombre']}» no corresponde a los módulos de oficina del perfil.",
+                );
+            }
         }];
     }
 
@@ -97,6 +114,7 @@ class GuardarPerfilAccesoRequest extends FormRequest
             'modulos.*.in' => 'Uno de los módulos seleccionados no existe en el catálogo de accesos.',
             'modulos_tablet.present' => 'Indica los módulos PDA/tablet del perfil, aunque no habilites ninguno.',
             'modulos_tablet.*.in' => 'Uno de los módulos PDA/tablet seleccionados no existe o todavía no está implementado.',
+            'pantalla_inicio.in' => 'La pantalla de inicio seleccionada no es una oficina de FoliOS.',
             'activo.required' => 'Indica si el perfil se encuentra activo.',
         ];
     }
@@ -120,6 +138,9 @@ class GuardarPerfilAccesoRequest extends FormRequest
                 (array) $this->input('modulos', []),
                 fn (mixed $modulo): bool => is_string($modulo) && $modulo !== '',
             ))),
+            'pantalla_inicio' => filled($this->input('pantalla_inicio'))
+                ? (string) $this->input('pantalla_inicio')
+                : null,
             'modulos_tablet' => $soloConsulta
                 ? []
                 : array_values(array_unique(array_filter(
