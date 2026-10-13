@@ -730,5 +730,6 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::delete('/acceso-tablet', [AccesoTabletController::class, 'destroy']);
+    Route::get('/acceso-oficina', [AccesoOficinaController::class, 'show']);
     Route::delete('/acceso-oficina', [AccesoOficinaController::class, 'destroy']);
 });

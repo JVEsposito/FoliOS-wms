@@ -8,6 +8,7 @@ import {
     OFFICE_THEME_KEY,
     OFFICE_THEMES,
 } from './shared/office-preferences.js';
+import { FOLIOS_ENTRY_PATH, officeHomeHref } from './shared/folios-entry.js';
 
 const tokenKey = 'estiba_wms_office_token';
 installOfficeUnexpectedErrorNotice();
@@ -160,44 +161,13 @@ function redirectFromUnavailableOffice(identity) {
     window.location.replace(destination.href);
 }
 
-// Pantalla de inicio de cada rol. Los perfiles son configurables: si el perfil no
-// habilita esa oficina, se usa la primera oficina accesible.
-const roleHomes = {
-    administrador: '/oficina/operacion-ahora',
-    supervisor_frio: '/oficina/operacion-ahora',
-    despachador: '/oficina/frigorifico/despacho/cargas',
-    operador_prefrio: '/oficina/prefrio',
-    operador_romana: '/oficina/romana',
-    digitador_materia_prima: '/oficina/materia-prima/lotes',
-    validador_mp: '/oficina/materia-prima',
-    supervisor_materiales: '/oficina/materiales',
-    camarero_materiales: '/oficina/materiales',
-    validador: '/oficina/validacion',
-    camarero_frio: '/oficina/frigorifico/camaras',
-    tarjador: '/oficina/validacion/repaletizajes',
-    consulta: '/oficina/consultas',
-};
-
-export function officeHomeFor(identity, domainLinks = [...document.querySelectorAll('[data-domain-key]')]) {
-    if (!identity) return null;
-    const targets = domainLinks.flatMap((link) => domainTargets(link));
-    const accessible = (target) => hasModule(identity, target.module)
-        && hasAnyPermission(identity, target.permissions || []);
-    const preferred = roleHomes[identity.rol];
-    const home = targets.find((target) => target.href === preferred && accessible(target))
-        || domainLinks.map((link) => firstAccessibleTarget(identity, domainTargets(link))).find(Boolean);
-
-    return home?.href || null;
-}
-
+// Pantalla de inicio: la decide el servidor al iniciar sesión (usuario.inicio). Sin ella
+// (sesión anterior a /FoliOS), el logo lleva a /FoliOS, que la obtiene y la guarda.
 function refreshHome(identity, hasSession) {
-    const home = hasSession ? officeHomeFor(identity) : null;
+    const href = hasSession ? officeHomeHref(identity) : FOLIOS_ENTRY_PATH;
     document.querySelectorAll('[data-office-home]').forEach((link) => {
-        link.href = home || '/oficina';
+        link.href = href;
     });
-    if (!home || !document.querySelector('[data-office-home-redirect]')) return;
-    const destination = new URL(home, window.location.origin);
-    if (destination.pathname !== window.location.pathname) window.location.replace(destination.href);
 }
 
 function refreshNavigation() {

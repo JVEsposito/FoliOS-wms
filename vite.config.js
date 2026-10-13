@@ -88,6 +88,8 @@ export default defineConfig({
                 'resources/css/office-raw-material-commercial-dispatch.css',
                 'resources/js/office-raw-material-commercial-dispatch.js',
                 'resources/js/office-queries.js',
+                'resources/css/folios-inicio.css',
+                'resources/js/folios-inicio.js',
             ],
             refresh: true,
         }),
