@@ -44,17 +44,19 @@ function contrast(a, b) {
     return (values[0] + 0.05) / (values[1] + 0.05);
 }
 
-test('el tema del camarero conserva contraste AA en superficies operativas', () => {
+test('el tema del camarero (siempre oscuro, FoliOS v2) conserva contraste AA', () => {
     const pairs = [
-        ['#102B3A', '#E7EEF2'],
-        ['#526A78', '#E7EEF2'],
-        ['#FFFFFF', '#123342'],
-        ['#0B5688', '#D9EAF5'],
-        ['#147A4D', '#DDF2E7'],
-        ['#855600', '#FFF0CF'],
-        ['#A92535', '#FBE4E7'],
-        ['#FFFFFF', '#147A4D'],
-        ['#FFFFFF', '#0F6EAD'],
+        ['#E8F3F6', '#0F212B'],
+        ['#9FBCC6', '#0F212B'],
+        ['#9FBCC6', '#15303C'],
+        ['#C5D9DF', '#1C3B49'],
+        ['#E8F3F6', '#0B1A22'],
+        ['#062530', '#5FD3E6'],
+        ['#5FD3E6', '#12313D'],
+        ['#6FD6A0', '#11302A'],
+        ['#F3B94F', '#2C2716'],
+        ['#FF8B7B', '#2E1B1C'],
+        ['#9FBCC6', '#24414F'],
     ];
 
     for (const [foreground, background] of pairs) {
