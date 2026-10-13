@@ -52,10 +52,12 @@
             ['key' => 'ordenes', 'module' => 'materiales.ordenes', 'label' => 'Órdenes', 'href' => '/oficina/materiales/ordenes', 'permissions' => ['puede_consultar_transformaciones_materiales']],
             ['key' => 'exportaciones', 'module' => 'materiales.exportaciones', 'label' => 'Existencias', 'href' => '/oficina/materiales/exportaciones', 'permissions' => ['puede_consultar_despachos_materiales']],
         ],
+        'gerencia' => [
+            ['key' => 'panel', 'module' => 'gerencia.panel', 'label' => 'Panel gerencial', 'href' => '/oficina/gerencia', 'permissions' => ['puede_consultar_panel_gerencial']],
+            ['key' => 'operacion-ahora', 'module' => 'gerencia.panel', 'label' => 'Operación ahora', 'href' => '/oficina/operacion-ahora', 'permissions' => ['puede_consultar_panel_gerencial']],
+        ],
         'administracion' => [
             ['key' => 'resumen', 'module' => '', 'label' => 'Resumen', 'href' => '/oficina/administracion', 'permissions' => ['puede_consultar_panel_gerencial', 'puede_consultar_accesos', 'puede_administrar_catalogos_validacion', 'puede_consultar_configuracion_camaras', 'puede_consultar_integridad_operacional']],
-            ['key' => 'operacion-ahora', 'module' => 'gerencia.panel', 'label' => 'Operación ahora', 'href' => '/oficina/operacion-ahora', 'permissions' => ['puede_consultar_panel_gerencial']],
-            ['key' => 'panel', 'module' => 'gerencia.panel', 'label' => 'Panel Gerencial', 'href' => '/oficina/gerencia', 'permissions' => ['puede_consultar_panel_gerencial']],
             ['key' => 'accesos', 'module' => 'administracion.accesos', 'label' => 'Accesos & Temporadas', 'href' => '/oficina/accesos', 'permissions' => ['puede_consultar_accesos']],
             ['key' => 'fruta-embalada', 'module' => 'administracion.accesos', 'label' => 'Plantas y umbrales de prefrío', 'href' => '/oficina/administracion/fruta-embalada', 'permissions' => ['puede_administrar_accesos']],
             ['key' => 'maestros-temporada', 'module' => 'administracion.maestros-temporada', 'label' => 'Maestros de temporada', 'href' => '/oficina/administracion/maestros-temporada', 'permissions' => ['puede_administrar_catalogos_validacion']],
@@ -72,12 +74,15 @@
         ],
     ];
 
+    // Las seis áreas del gajo, en el orden de sus hojas (horario desde las 12). El centro
+    // del gajo es Operación ahora. Ver docs/diseno/folios-v2/README.md § Áreas.
     $domains = [
-        'materia-prima' => ['label' => 'Materia Prima', 'icon' => 'warehouse'],
-        'frigorifico' => ['label' => 'Frigorífico (PT)', 'icon' => 'snowflake'],
-        'materiales' => ['label' => 'Materiales', 'icon' => 'boxes'],
-        'administracion' => ['label' => 'Gerencia & Administración', 'icon' => 'settings'],
-        'consultas' => ['label' => 'Consultas', 'icon' => 'search'],
+        'materia-prima' => ['label' => 'Materia Prima'],
+        'frigorifico' => ['label' => 'Frigorífico'],
+        'materiales' => ['label' => 'Materiales'],
+        'consultas' => ['label' => 'Consultas'],
+        'gerencia' => ['label' => 'Gerencia'],
+        'administracion' => ['label' => 'Administración'],
     ];
 
     foreach ($domains as $domainKey => &$definition) {
@@ -93,23 +98,31 @@
     }
     unset($definition);
 
+    // Compatibilidad: una vista que aún declare domain="administracion" para el panel
+    // gerencial u Operación ahora se muestra en Gerencia.
+    if ($domain === 'administracion' && in_array($office, ['panel', 'operacion-ahora'], true)) {
+        $domain = 'gerencia';
+    }
     $activeDomain = $domains[$domain] ?? $domains['materia-prima'];
     $activeOffices = $offices[$domain] ?? [];
+    $area = $office === 'operacion-ahora' ? 'operacion' : (array_key_exists($domain, $domains) ? $domain : 'materia-prima');
+    $officeLabel = collect($activeOffices)->firstWhere('key', $office)['label'] ?? 'Oficina';
+    $serverLabel = config('app.server_label');
 @endphp
 
-<div class="estiba-ui estiba-office-shell" data-office-shell>
+<div class="estiba-ui estiba-office-shell" data-office-shell data-folios-area="{{ $area }}">
     <a class="estiba-office-skip" href="#officeContent" data-office-skip>Saltar al contenido</a>
     <header class="estiba-office-header" data-office-shell-header data-active-domain="{{ $domain }}" data-active-office="{{ $office }}">
         <div class="estiba-office-brand">
+            <a class="estiba-office-home" href="/oficina" data-office-home title="Ir a mi inicio"><x-folios-logo surface="dark" class="folios-logo--office" /></a>
             <button type="button" class="estiba-office-menu" data-office-menu aria-controls="officeSidebar" aria-expanded="true" aria-label="Ocultar menú lateral" title="Ocultar menú lateral">
                 <span class="estiba-office-menu-icon" aria-hidden="true"></span>
-                <span data-office-menu-label>Menú</span>
+                <span class="estiba-office-menu-text" data-office-menu-label>Menú</span>
             </button>
-            <a class="estiba-office-home" href="/oficina" data-office-home title="Ir a mi inicio"><x-folios-logo surface="dark" class="folios-logo--office" /></a>
         </div>
-        <div class="estiba-office-system">
+        <div class="estiba-office-system estiba-office-sr">
             <span>SISTEMA DE GESTIÓN</span>
-            <small>{{ $context }} · {{ collect($activeOffices)->firstWhere('key', $office)['label'] ?? 'Oficina' }}</small>
+            <small>{{ $context }} · {{ $officeLabel }}</small>
         </div>
         <div class="estiba-office-context">
             <span>Temporada<strong data-office-season>Sin consultar</strong></span>
@@ -117,17 +130,17 @@
         </div>
         <button class="estiba-office-status" type="button" data-office-context-refresh aria-label="Actualizar temporada y planta">
             <i aria-hidden="true"></i>
-            <span><strong data-office-context-label>Verificando contexto</strong><small data-office-context-status>Temporada y planta</small></span>
+            <span><small class="estiba-office-status__caption">Datos</small><strong data-office-context-label>Verificando contexto</strong><small data-office-context-status>Temporada y planta</small></span>
             <x-estiba.icon name="refresh" />
         </button>
-        <div class="estiba-office-identity">
+        <div class="estiba-office-tools">
+            @if (filled($serverLabel))
+                <span class="estiba-office-server" data-office-server>{{ $serverLabel }}</span>
+            @endif
             <button type="button" class="estiba-office-theme-toggle" data-office-theme-toggle aria-pressed="false" aria-label="Activar modo oscuro" title="Activar modo oscuro">
                 <span class="estiba-office-theme-icon" aria-hidden="true"></span>
                 <span data-office-theme-label>Modo oscuro</span>
             </button>
-            <span class="estiba-office-avatar" id="officeInitials" aria-hidden="true">OF</span>
-            <span class="estiba-office-user"><strong id="officeUserName">Usuario</strong><small id="officeUserRole">Oficina</small><small data-office-readonly hidden>Solo consulta</small></span>
-            <button id="officeLogoutButton" type="button">Cerrar sesión</button>
         </div>
         @if ($domain === 'materiales')
             <a href="/oficina/materiales/reposicion" class="estiba-office-replenishment" data-material-replenishment-indicator hidden>Reposición</a>
@@ -141,61 +154,66 @@
         <form class="estiba-office-search" action="/oficina/consultas/busqueda" method="get" role="search"
             data-navigation-permissions="puede_consultar_oficina_consultas"
             data-navigation-module="consultas.busqueda">
-            <label class="estiba-office-nav-label" for="officeGlobalSearch">BUSCAR</label>
+            <label class="estiba-office-nav-label" for="officeGlobalSearch">Buscar folio, lote o guía</label>
             <div>
                 <input id="officeGlobalSearch" name="q" type="search" minlength="2" maxlength="100" placeholder="Folio, lote, REC, CSG…" autocomplete="off" required>
-                <button type="submit" aria-label="Buscar">⌕</button>
+                <button type="submit" aria-label="Buscar"><x-estiba.icon name="search" /></button>
             </div>
         </form>
-        @php($operationNowDefinition = collect($offices['administracion'])->firstWhere('key', 'operacion-ahora'))
+        @php($operationNowDefinition = collect($offices['gerencia'])->firstWhere('key', 'operacion-ahora'))
         <nav class="estiba-office-primary" aria-label="Operación en tiempo real">
-            <p class="estiba-office-nav-label">OPERACIÓN</p>
-            <a class="{{ $office === 'operacion-ahora' ? 'is-active' : '' }}"
+            <a @class(['estiba-office-area', 'is-active' => $office === 'operacion-ahora'])
                 data-office-key="operacion-ahora"
-                data-office-domain="administracion"
+                data-office-domain="gerencia"
                 data-navigation-permissions="{{ implode(',', $operationNowDefinition['permissions']) }}"
                 data-navigation-module="{{ $operationNowDefinition['module'] }}"
                 href="{{ $operationNowDefinition['href'] }}"
                 @if ($office === 'operacion-ahora') aria-current="page" @endif
-            ><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5M5.5 10v10h13V10M9.5 20v-6h5v6" /></svg><strong>Operación ahora</strong></a>
+            ><x-folios.gajo area="operacion" /><strong>Operación ahora</strong></a>
         </nav>
-        <nav aria-label="Áreas del sistema">
-            <p class="estiba-office-nav-label">MÓDULOS</p>
+        <nav class="estiba-office-areas" aria-label="Áreas del sistema">
             @foreach ($domains as $domainKey => $definition)
-                <a class="estiba-office-domain {{ $domain === $domainKey && $office !== 'operacion-ahora' ? 'is-active' : '' }}"
+                @php($isActiveDomain = $domain === $domainKey && $office !== 'operacion-ahora')
+                <a @class(['estiba-office-domain', 'estiba-office-area', 'is-active' => $isActiveDomain])
                     data-domain-key="{{ $domainKey }}"
                     data-navigation-targets="{{ json_encode($definition['targets'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) }}"
                     href="{{ $definition['href'] }}"
-                    @if ($domain === $domainKey && $office !== 'operacion-ahora') aria-current="true" @endif
-                ><span aria-hidden="true"><x-estiba.icon :name="$definition['icon']" /></span><strong>{{ $definition['label'] }}</strong></a>
-            @endforeach
-        </nav>
-        <nav class="estiba-office-offices" aria-label="Oficinas de {{ $activeDomain['label'] }}" @if ($office === 'operacion-ahora') hidden @endif>
-            <p class="estiba-office-nav-label">{{ $activeDomain['label'] }}</p>
-            @php($currentSection = null)
-            @foreach ($activeOffices as $definition)
-                @continue($definition['key'] === 'operacion-ahora')
-                @if (($definition['section'] ?? null) !== $currentSection)
-                    @php($currentSection = $definition['section'] ?? null)
-                    @if ($currentSection)
-                        <p class="estiba-office-subgroup">{{ $currentSection }}</p>
-                    @endif
+                    @if ($isActiveDomain) aria-current="true" @endif
+                ><x-folios.gajo :area="$domainKey" /><strong>{{ $definition['label'] }}</strong></a>
+                @if ($isActiveDomain)
+                    <nav class="estiba-office-offices" aria-label="Oficinas de {{ $activeDomain['label'] }}">
+                        @php($currentSection = null)
+                        @foreach ($activeOffices as $officeDefinition)
+                            @continue($officeDefinition['key'] === 'operacion-ahora')
+                            @if (($officeDefinition['section'] ?? null) !== $currentSection)
+                                @php($currentSection = $officeDefinition['section'] ?? null)
+                                @if ($currentSection)
+                                    <p class="estiba-office-subgroup">{{ $currentSection }}</p>
+                                @endif
+                            @endif
+                            <a @class([
+                                    'is-active' => $office === $officeDefinition['key'],
+                                    'is-subgroup-item' => isset($officeDefinition['section']),
+                                ])
+                                data-office-key="{{ $officeDefinition['key'] }}"
+                                data-office-domain="{{ $domain }}"
+                                data-navigation-permissions="{{ implode(',', $officeDefinition['permissions']) }}"
+                                data-navigation-module="{{ $officeDefinition['module'] }}"
+                                href="{{ $officeDefinition['href'] }}"
+                                @if ($office === $officeDefinition['key']) aria-current="page" @endif
+                            >{{ $officeDefinition['label'] }}</a>
+                        @endforeach
+                    </nav>
                 @endif
-                <a @class([
-                        'is-active' => $office === $definition['key'],
-                        'is-subgroup-item' => isset($definition['section']),
-                    ])
-                    data-office-key="{{ $definition['key'] }}"
-                    data-office-domain="{{ $domain }}"
-                    data-navigation-permissions="{{ implode(',', $definition['permissions']) }}"
-                    data-navigation-module="{{ $definition['module'] }}"
-                    href="{{ $definition['href'] }}"
-                    @if ($office === $definition['key']) aria-current="page" @endif
-                >{{ $definition['label'] }}</a>
             @endforeach
         </nav>
+        <div class="estiba-office-identity">
+            <span class="estiba-office-avatar" id="officeInitials" aria-hidden="true">OF</span>
+            <span class="estiba-office-user"><strong id="officeUserName">Usuario</strong><small id="officeUserRole">Oficina</small><small data-office-readonly hidden>Solo consulta</small></span>
+            <button id="officeLogoutButton" type="button">Cerrar sesión</button>
+        </div>
         <div class="estiba-office-signature">
-            <span aria-hidden="true"></span><div><strong>FRÍO QUE<br>MANTIENE VALOR</strong><small>Versión {{ config('app.product_version') }}</small></div>
+            <strong>FRÍO QUE<br>MANTIENE VALOR</strong><small>Versión {{ config('app.product_version') }}</small>
         </div>
     </aside>
 

@@ -305,10 +305,10 @@
                     </div>
 
                     <div class="material-receptions-metrics">
-                        <article><span>BORRADORES</span><strong id="materialReceptionDraftCount">0</strong></article>
-                        <article><span>CONFIRMADAS</span><strong id="materialReceptionConfirmedCount">0</strong></article>
-                        <article><span>ANULADAS</span><strong id="materialReceptionCancelledCount">0</strong></article>
-                        <article><span>FOLIOS VISIBLES</span><strong id="materialReceptionFolioCount">0</strong></article>
+                        <article><span>BORRADORES</span><strong id="materialReceptionDraftCount">0</strong><small>abiertos</small></article>
+                        <article data-material-reception-attention><span>SIN FOTO DE DOCUMENTO</span><strong id="materialReceptionNoPhotoCount">0</strong><small>no se pueden confirmar</small></article>
+                        <article><span>CONFIRMADAS</span><strong id="materialReceptionConfirmedCount">0</strong><small>en esta página</small></article>
+                        <article><span>FOLIOS VISIBLES</span><strong id="materialReceptionFolioCount">0</strong><small>en esta página</small></article>
                     </div>
 
                     <form class="material-receptions-filters" id="materialReceptionsFilters">
@@ -321,15 +321,31 @@
                     <button class="secondary-button is-hidden" id="showMaterialReceptionEliminations" type="button">Evidencia de recepciones eliminadas</button>
                     <section id="materialReceptionEliminations" class="is-hidden" aria-label="Recepciones eliminadas"></section>
                     <p class="form-error" id="materialReceptionsError" role="alert"></p>
-                    <div class="material-receptions-table-wrap">
-                        <table class="materials-table material-receptions-table">
-                            <thead><tr><th>Guía</th><th>Cliente / proveedor</th><th>Fecha</th><th>Estado</th><th>Ítems / folios</th><th>Acciones</th></tr></thead>
-                            <tbody id="materialReceptionsList"></tbody>
-                        </table>
-                    </div>
-                    <div class="materials-pagination">
-                        <span id="materialReceptionsPageSummary">Página 1</span>
-                        <div><button id="materialReceptionsPrevious" type="button">← Anterior</button><button id="materialReceptionsNext" type="button">Siguiente →</button></div>
+                    <div class="material-receptions-layout">
+                        <section class="material-receptions-list" aria-labelledby="materialReceptionsListTitle">
+                            <h3 id="materialReceptionsListTitle">Recepciones</h3>
+                            <div id="materialReceptionsList" role="list"></div>
+                            <div class="materials-pagination">
+                                <span id="materialReceptionsPageSummary">Página 1</span>
+                                <div><button id="materialReceptionsPrevious" type="button">← Anterior</button><button id="materialReceptionsNext" type="button">Siguiente →</button></div>
+                            </div>
+                        </section>
+                        <section class="material-reception-detail" id="materialReceptionDetail" aria-live="polite">
+                            <div class="material-reception-detail__empty" id="materialReceptionDetailEmpty">
+                                <strong>Selecciona una recepción</strong><span>Verás la foto del documento, los ítems y la acción pendiente.</span>
+                            </div>
+                            <div class="is-hidden" id="materialReceptionDetailBody">
+                                <header class="material-reception-detail__head">
+                                    <div><span id="materialReceptionDetailState">Recepción en borrador</span>
+                                        <h3 id="materialReceptionDetailTitle">Guía —</h3>
+                                        <p id="materialReceptionDetailMeta"></p></div>
+                                    <div class="material-reception-detail__actions" id="materialReceptionDetailActions"></div>
+                                </header>
+                                <section class="material-reception-photos material-reception-photos--inline" id="materialReceptionDetailPhotos"></section>
+                                <div class="material-reception-detail__lines" id="materialReceptionDetailLines"></div>
+                                <footer class="material-reception-detail__foot" id="materialReceptionDetailFoot"></footer>
+                            </div>
+                        </section>
                     </div>
 
                     <dialog class="materials-import material-reception-dialog" id="materialReceptionDialog">

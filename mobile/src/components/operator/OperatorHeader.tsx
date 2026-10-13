@@ -1,51 +1,49 @@
 import type { ReactNode } from 'react';
 import { Image, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
+import { areas, type AreaKey } from '../../theme/areas';
 import { operatorTheme as o } from '../../theme/operatorTheme';
 
 type Props = {
+  area?: AreaKey;
   connected: boolean;
   deviceName: string;
   modeLabel: string;
   navigation?: ReactNode;
   role: string;
+  title?: string;
   userName: string;
 };
 
-export function OperatorHeader({ connected, deviceName, modeLabel, navigation, role, userName }: Props) {
+/**
+ * Encabezado de terreno FoliOS v2: gajo del área, título angosto, persona y estado de
+ * conexión; regla inferior de 3 px con el color del área. Ver
+ * docs/diseno/folios-v2/pr-07-movil-tema.md.
+ */
+export function OperatorHeader({ area = 'frigorifico', connected, deviceName, modeLabel, navigation, role, title, userName }: Props) {
   const { width } = useWindowDimensions();
   const compact = width < o.breakpoint.compact;
+  const definition = areas[area];
 
   return (
-    <View style={[styles.header, compact && styles.headerCompact]}>
+    <View style={[styles.header, { borderBottomColor: definition.bright }, compact && styles.headerCompact]}>
       <View style={styles.brandBlock}>
-        <Image
-          accessibilityLabel="FoliOS"
+        <Image accessibilityLabel={`FoliOS, ${definition.label}`} accessible resizeMode="contain" source={definition.gajo} style={styles.gajo} />
+        <View style={styles.titleBlock}>
+          <Text numberOfLines={1} style={styles.title}>{title ?? definition.label}</Text>
+          <Text numberOfLines={1} style={styles.subtitle}>{userName}, {humanRole(role).toLowerCase()}</Text>
+        </View>
+        <View
+          accessibilityLabel={`Estado de conexión: ${modeLabel}`}
           accessible
-          resizeMode="contain"
-          source={require('../../../assets/folios-lockup-horizontal-on-dark.png')}
-          style={styles.brandLogo}
-        />
-        <View style={styles.divider} />
-        <View style={styles.productCopy}>
-          <Text style={styles.product}>OPERACIÓN FRIGORÍFICO</Text>
-          <Text style={styles.device}>{deviceName}</Text>
+          style={[styles.pill, connected ? styles.pillOnline : styles.pillOffline]}
+        >
+          <Text style={[styles.pillMark, { color: connected ? o.color.success : o.color.warning }]}>{connected ? '✓' : '◆'}</Text>
+          <Text style={[styles.pillText, { color: connected ? o.color.success : o.color.warning }]}>{modeLabel}</Text>
         </View>
       </View>
-
       {navigation ? <View style={styles.navigation}>{navigation}</View> : null}
-
-      <View style={[styles.contextBlock, compact && styles.contextBlockCompact]}>
-        <View accessibilityLabel={`Estado de conexión: ${modeLabel}`} style={styles.connection}>
-          <View style={[styles.connectionDot, !connected && styles.connectionDotInactive]} />
-          <Text style={styles.connectionText}>{modeLabel}</Text>
-        </View>
-        <View style={styles.contextDivider} />
-        <View style={styles.identity}>
-          <Text numberOfLines={1} style={styles.userName}>{userName}</Text>
-          <Text numberOfLines={1} style={styles.role}>{humanRole(role)}</Text>
-        </View>
-      </View>
+      <Text numberOfLines={1} style={[styles.device, compact && styles.deviceCompact]}>{deviceName}</Text>
     </View>
   );
 }
@@ -57,12 +55,11 @@ function humanRole(role: string) {
 
 const styles = StyleSheet.create({
   header: {
-    minHeight: 78,
+    minHeight: 76,
     paddingHorizontal: o.space[4],
-    paddingVertical: o.space[3],
+    paddingVertical: o.space[2],
     backgroundColor: o.color.navy,
-    borderBottomColor: o.color.borderStrong,
-    borderBottomWidth: 1,
+    borderBottomWidth: 3,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -72,79 +69,42 @@ const styles = StyleSheet.create({
   headerCompact: {
     alignItems: 'stretch',
     flexDirection: 'column',
+    gap: o.space[2],
   },
   brandBlock: {
     minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: o.space[3],
+    flexShrink: 1,
   },
-  brandLogo: { width: 128, height: 31 },
-  divider: {
-    width: 1,
-    alignSelf: 'stretch',
-    backgroundColor: '#78909C',
-  },
-  productCopy: { minWidth: 0 },
-  navigation: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', flexGrow: 1, gap: 8 },
-  product: {
-    color: o.color.onNavy,
-    fontSize: o.type.small,
+  gajo: { width: 38, height: 38 },
+  titleBlock: { minWidth: 0, flexShrink: 1 },
+  title: {
+    color: o.color.text,
+    fontFamily: o.font.condensed,
+    fontSize: o.type.heading,
     fontWeight: '800',
-    letterSpacing: 0.4,
   },
-  device: {
-    color: '#C9D8DF',
-    fontSize: o.type.caption,
+  subtitle: {
+    color: o.color.muted,
+    fontSize: o.type.small,
     marginTop: 2,
   },
-  contextBlock: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: o.space[4],
-    minWidth: 0,
-  },
-  contextBlockCompact: { justifyContent: 'space-between' },
-  connection: {
-    minHeight: 44,
+  pill: {
+    minHeight: 36,
+    paddingHorizontal: o.space[3],
+    borderRadius: o.radius.pill,
+    borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: o.space[2],
   },
-  connectionDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#38D47B',
-    borderColor: '#A7F0C5',
-    borderWidth: 1,
-  },
-  connectionDotInactive: {
-    backgroundColor: '#F2B84B',
-    borderColor: '#FFE0A1',
-  },
-  connectionText: {
-    color: '#D8F6E5',
-    fontSize: o.type.small,
-    fontWeight: '800',
-  },
-  contextDivider: {
-    width: 1,
-    height: 42,
-    backgroundColor: '#526E7B',
-  },
-  identity: { minWidth: 0, maxWidth: 220 },
-  userName: {
-    color: o.color.onNavy,
-    fontSize: o.type.small,
-    fontWeight: '800',
-    textAlign: 'right',
-  },
-  role: {
-    color: '#C9D8DF',
-    fontSize: o.type.caption,
-    marginTop: 2,
-    textAlign: 'right',
-  },
+  pillOnline: { backgroundColor: o.color.successSurface, borderColor: o.color.successBorder },
+  pillOffline: { backgroundColor: o.color.warningSurface, borderColor: o.color.warningBorder },
+  pillMark: { fontSize: o.type.caption, fontWeight: '900' },
+  pillText: { fontSize: o.type.small, fontWeight: '700' },
+  navigation: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', flexGrow: 1, gap: 8 },
+  device: { maxWidth: 220, color: o.color.muted, fontSize: o.type.caption, textAlign: 'right' },
+  deviceCompact: { maxWidth: undefined, textAlign: 'left' },
 });

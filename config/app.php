@@ -18,6 +18,10 @@ return [
     // La versión visible en Oficina sigue la versión del producto FoliOS.
     'product_version' => json_decode(file_get_contents(base_path('mobile/app.json')), true)['expo']['version'] ?? '—',
 
+    // Rótulo opcional del servidor en la barra de contexto de Oficina (p. ej. "Servidor
+    // oficial", "Demo comercial", "Pruebas"). Vacío: no se muestra.
+    'server_label' => env('FOLIOS_SERVER_LABEL'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Environment

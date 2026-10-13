@@ -1,49 +1,66 @@
+import { Platform } from 'react-native';
+
 import { estibaTokens as t } from './estibaTokens';
 
 /**
- * Tema de trabajo para camareros.
+ * Tema de terreno FoliOS v2 (tablet del camarero y PDA): siempre oscuro.
  *
- * Mantiene la identidad de Oficina, pero aumenta contraste, jerarquía y áreas
- * táctiles para el uso continuo en PDA y tablets dentro del frigorífico.
+ * En cámara se trabaja con luz artificial y poca luminosidad. Los valores son los de
+ * `colorDark`/`signalDark` de design/estiba.tokens.json (verificados en
+ * tests/JavaScript/OperatorTabletVisualTest.mjs) y se escriben aquí en literal para que
+ * la prueba de contraste los lea. Ver docs/diseno/folios-v2/README.md § 1.2 y § 5.
  */
 export const operatorTheme = {
   color: {
-    canvas: '#E7EEF2',
-    surface: '#FFFFFF',
-    surfaceMuted: '#F0F4F6',
-    navy: '#123342',
-    navyRaised: '#1C4658',
-    onNavy: '#FFFFFF',
-    text: '#102B3A',
-    muted: '#526A78',
-    border: '#A9BBC6',
-    borderStrong: '#718A99',
-    primary: '#0F6EAD',
-    primaryPressed: '#0B5688',
-    onPrimary: '#FFFFFF',
-    selected: '#D9EAF5',
-    success: '#147A4D',
-    successSurface: '#DDF2E7',
-    warning: '#855600',
-    warningSurface: '#FFF0CF',
-    critical: '#A92535',
-    criticalSurface: '#FBE4E7',
-    disabled: '#D8E1E6',
-    disabledText: '#657985',
-    shadow: '#071821',
+    canvas: '#0F212B',
+    surface: '#15303C',
+    surfaceMuted: '#1C3B49',
+    navy: '#0B1A22',
+    navyRaised: '#1C3B49',
+    onNavy: '#E8F3F6',
+    text: '#E8F3F6',
+    textSecondary: '#C5D9DF',
+    muted: '#9FBCC6',
+    border: '#2A4D5C',
+    borderStrong: '#648D9D',
+    primary: '#5FD3E6',
+    primaryPressed: '#8DE3F0',
+    onPrimary: '#062530',
+    selected: '#12313D',
+    success: '#6FD6A0',
+    successSurface: '#11302A',
+    successBorder: '#2F6B52',
+    warning: '#F3B94F',
+    warningSurface: '#2C2716',
+    warningBorder: '#7A5F22',
+    critical: '#FF8B7B',
+    criticalSurface: '#2E1B1C',
+    criticalBorder: '#7D3F38',
+    infoBorder: '#2F6F80',
+    disabled: '#24414F',
+    disabledText: '#9FBCC6',
+    shadow: '#000000',
   },
   space: t.space,
   radius: {
-    control: 8,
-    panel: 10,
+    control: 10,
+    panel: 14,
+    pill: 999,
   },
   type: {
-    caption: 12,
-    small: 14,
+    caption: 13,
+    small: 15,
     body: 16,
     heading: 22,
     title: 28,
-    folio: 26,
+    folio: 30,
+    display: 36,
+  },
+  font: {
+    // Fuentes del sistema hasta el PR 10: no exigen APK nueva (OTA seguro).
+    // Platform?. tolera los dobles de react-native de las pruebas de mobile/tests.
+    condensed: Platform?.OS === 'ios' ? 'AvenirNextCondensed-Bold' : Platform?.OS === 'android' ? 'sans-serif-condensed' : undefined,
+    mono: Platform?.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   touch: {
     minimum: t.density.touch.control,

@@ -72,6 +72,7 @@ export function OperatorTaskExecution({
   const { width } = useWindowDimensions();
   const [exceptionKind, setExceptionKind] = useState<OperatorExceptionKind | null>(null);
   const compact = width < o.breakpoint.compact;
+  const wide = width >= 1000;
   const action = buildOperatorManeuverAction(task);
   const sequence = buildOperatorManeuverSequence(task);
   const moving = task.estado === 'en_proceso';
@@ -128,138 +129,215 @@ export function OperatorTaskExecution({
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.content} style={styles.screen}>
-      <View style={[styles.header, compact && styles.headerCompact]}>
-        <Pressable disabled={busy} onPress={onBack} style={styles.backButton}>
-          <Text style={styles.backIcon}>‹</Text>
-          <View>
-            <Text style={styles.headerTitle}>Mi maniobra</Text>
-            <Text style={styles.headerCopy}>Ejecución paso a paso</Text>
+    <ScrollView contentContainerStyle={[styles.content, wide && styles.wideContent]} style={styles.screen}>
+      {wide ? (
+        <>
+          <View style={styles.wideHeader}>
+            <Pressable accessibilityLabel="Volver a maniobras" disabled={busy} onPress={onBack} style={styles.wideBack}>
+              <Text style={styles.wideBackText}>‹</Text>
+            </Pressable>
+            <Text style={styles.wideTitle}>{task.maniobra?.titulo ?? operationalTaskLabel(task.plan.tipo)}</Text>
+            <OperatorStatusBadge label={moving ? 'EN EJECUCIÓN' : 'PREPARADA'} tone={moving ? 'success' : 'info'} />
           </View>
-        </Pressable>
-        <View style={styles.headerStatus}>
-          <OperatorStatusBadge
-            label={moving ? 'EN EJECUCIÓN' : 'PREPARADA'}
-            tone={moving ? 'success' : 'info'}
-          />
-          <Text style={styles.headerManeuver}>{task.maniobra?.titulo ?? operationalTaskLabel(task.plan.tipo)}</Text>
-        </View>
-      </View>
-
-      <View style={[styles.summary, compact && styles.summaryCompact]}>
-        <SummaryCell label="Folio / pallet"><OperatorEntityCode prominent value={task.folio.numero_folio} /></SummaryCell>
-        <SummaryCell label="Labor" value={operationalTaskLabel(task.plan.tipo)} />
-        {maneuverObjectiveCount(task) > 1 ? (
-          <SummaryCell label="Objetivos" value={String(maneuverObjectiveCount(task))} />
-        ) : null}
-        <SummaryCell label="Ubicación actual" value={operationalTaskPositionLabel(task.origen)} />
-        <SummaryCell label="Operador" value={task.responsable?.nombre ?? operatorName} />
-        <SummaryCell label="Dispositivo" value={task.dispositivo?.nombre ?? deviceName} />
-      </View>
-
-      <View style={styles.progressPanel}>
-        <Text style={styles.progressTitle}>PASO {currentStep} / {totalSteps}</Text>
-        <View style={styles.progressRail}>
-          {Array.from({ length: totalSteps }, (_, index) => {
-            const number = index + 1;
-            const state = number < currentStep ? 'complete' : number === currentStep ? 'current' : 'pending';
-            return (
-              <View key={number} style={styles.progressItem}>
-                <View style={[
-                  styles.progressDot,
-                  state === 'complete' && styles.progressDotComplete,
-                  state === 'current' && styles.progressDotCurrent,
-                ]}>
-                  <Text style={[
-                    styles.progressDotText,
-                    state !== 'pending' && styles.progressDotTextActive,
-                  ]}>{state === 'complete' ? '✓' : number}</Text>
-                </View>
-                {number < totalSteps ? <View style={[
-                  styles.progressLine,
-                  number < currentStep && styles.progressLineComplete,
-                ]} /> : null}
+          <View testID="maneuver-wide-columns" style={styles.wideColumns}>
+            <View style={styles.wideLeft}>
+              <View style={styles.wideSummary}>
+                <Text style={styles.wideLabel}>Mi maniobra</Text>
+                <Text style={styles.wideFolio}>{task.folio.numero_folio}</Text>
+                <Text style={styles.wideLabor}>
+                  {operationalTaskLabel(task.plan.tipo)}{maneuverObjectiveCount(task) > 1 ? ' · ' + maneuverObjectiveCount(task) + ' objetivos' : ''}
+                </Text>
+                <Text style={styles.wideRoute}>{operationalTaskPositionLabel(task.origen)} → {action.destination}</Text>
               </View>
-            );
-          })}
-        </View>
-        <Text style={styles.progressNext}>{action.instruction}</Text>
-      </View>
-
-      <View style={[styles.instructionGrid, compact && styles.instructionGridCompact]}>
-        <View style={styles.actionColumn}>
-          <View style={[
-            styles.actionPanel,
-            action.tone === 'critical' ? styles.actionPanelCritical : styles.actionPanelSuccess,
-          ]}>
-            <Text style={styles.actionKicker}>{moving ? 'ACCIÓN ACTUAL' : 'SIGUIENTE ACCIÓN'}</Text>
-            <Text style={styles.actionVerb}>{action.verb}</Text>
-            <Text style={styles.actionCopy}>{action.instruction}</Text>
-            <OperatorEntityCode prominent value={task.folio.numero_folio} />
+              <View style={styles.wideSteps}>
+                <Text style={styles.wideLabel}>PASO {currentStep} / {totalSteps}</Text>
+                {Array.from({ length: totalSteps }, (_, index) => {
+                  const number = index + 1;
+                  const complete = number < currentStep;
+                  const current = number === currentStep;
+                  const step = sequence.find((item) => item.number === number);
+                  return (
+                    <View key={number} style={[styles.wideStep, complete && styles.wideStepComplete, current && styles.wideStepCurrent]}>
+                      <View style={[styles.wideStepCircle, complete && styles.wideStepCircleComplete, current && styles.wideStepCircleCurrent]}>
+                        <Text style={[styles.wideStepNumber, (complete || current) && styles.wideStepNumberActive]}>{complete ? '✓' : number}</Text>
+                      </View>
+                      <View style={styles.wideStepCopy}>
+                        <Text style={styles.wideStepInstruction}>{current ? action.instruction : step?.action ?? 'Paso ' + number}</Text>
+                        <Text style={styles.wideStepState}>{complete ? 'Completado' : current ? 'Ahora' : 'Pendiente'}</Text>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+              <View style={styles.wideExceptions}>
+                {task.maniobra ? (
+                  <View style={styles.wideExceptionRow}>
+                    <Pressable disabled={busy} onPress={() => setExceptionKind('mismatch')} style={styles.wideExceptionButton}><Text style={styles.wideExceptionText}>NO COINCIDE</Text></Pressable>
+                    <Pressable disabled={busy} onPress={() => setExceptionKind('impossible')} style={styles.wideExceptionButton}><Text style={styles.wideExceptionText}>NO ES POSIBLE</Text></Pressable>
+                  </View>
+                ) : null}
+                {!moving ? <Pressable disabled={busy} onPress={onRelease} style={styles.wideRelease}><Text style={styles.wideReleaseText}>Liberar antes de iniciar</Text></Pressable> : null}
+              </View>
+            </View>
+            <View style={styles.wideRight}>
+              <Text style={styles.wideDestinationLabel}>{action.verb === 'RETIRAR' ? 'Retira el pallet de' : action.verb === 'UBICAR' ? 'Lleva el pallet a' : 'Entrega el pallet en'}</Text>
+              <View style={styles.wideDestinationRow}>
+                <Text style={[styles.wideDestination, (action.verb === 'RETIRAR' ? operationalTaskPositionLabel(task.origen) : action.destination).length > 14 && styles.wideDestinationLong]}>
+                  {action.verb === 'RETIRAR' ? operationalTaskPositionLabel(task.origen) : action.destination}
+                </Text>
+                <Text style={styles.wideReason}>{operationalTaskReason(task)}</Text>
+              </View>
+              <PhysicalPattern dense task={task} />
+              {!moving && task.tipo_movimiento !== 'retiro' && !hasPhysicalDestination ? (
+                <View style={styles.destinationWarning}>
+                  <View style={styles.destinationWarningCopy}><Text style={styles.destinationWarningTitle}>Destino físico pendiente</Text><Text style={styles.destinationWarningText}>El servidor debe validar una posición antes de retirar el pallet.</Text></View>
+                  <Pressable disabled={busy || leaseExpired} onPress={onRecalculate} style={styles.recalculateButton}><Text style={styles.recalculateText}>Recalcular destino</Text></Pressable>
+                </View>
+              ) : null}
+              {leaseExpired ? <View style={styles.leaseExpired}><Text style={styles.leaseExpiredTitle}>La reserva venció antes de iniciar</Text><Text style={styles.leaseExpiredCopy}>Vuelve a la bandeja y toma nuevamente la tarea.</Text></View> : null}
+              <Pressable testID="maneuver-primary" disabled={primaryDisabled} onPress={runPrimary} style={[styles.widePrimary, primaryDisabled && styles.widePrimaryDisabled]}>
+                <Text style={[styles.widePrimaryText, primaryDisabled && styles.widePrimaryTextDisabled]}>{action.primaryLabel}</Text>
+              </Pressable>
+              <Text style={styles.wideHelp}>{action.instruction}</Text>
+            </View>
           </View>
-
-          <View style={styles.locationCard}>
-            <LocationLine label="Origen" value={operationalTaskPositionLabel(task.origen)} />
-            <LocationLine label="Destino" value={action.destination} strong />
-            <LocationLine label="Motivo" value={operationalTaskReason(task)} />
-          </View>
-        </View>
-
-        <PhysicalPattern task={task} />
-      </View>
-
-      <OperatorPhysicalContextPanel task={task} />
-
-      {!moving && task.tipo_movimiento !== 'retiro' && !hasPhysicalDestination ? (
-        <View style={styles.destinationWarning}>
-          <View style={styles.destinationWarningCopy}>
-            <Text style={styles.destinationWarningTitle}>Destino físico pendiente</Text>
-            <Text style={styles.destinationWarningText}>El servidor debe validar una posición antes de retirar el pallet.</Text>
-          </View>
-          <Pressable disabled={busy || leaseExpired} onPress={onRecalculate} style={styles.recalculateButton}>
-            <Text style={styles.recalculateText}>Recalcular destino</Text>
-          </Pressable>
-        </View>
-      ) : null}
-
-      {leaseExpired ? (
-        <View style={styles.leaseExpired}>
-          <Text style={styles.leaseExpiredTitle}>La reserva venció antes de iniciar</Text>
-          <Text style={styles.leaseExpiredCopy}>Vuelve a la bandeja y toma nuevamente la tarea.</Text>
-        </View>
-      ) : null}
-
-      <Pressable
-        disabled={primaryDisabled}
-        onPress={runPrimary}
-        style={[styles.primaryButton, primaryDisabled && styles.disabled]}
-      >
-        <Text style={styles.primaryButtonText}>{action.primaryLabel}</Text>
-        <Text style={styles.primaryArrow}>›</Text>
-      </Pressable>
-
-      <View style={styles.secondaryActions}>
-        {task.maniobra ? (
-          <>
-            <Pressable disabled={busy} onPress={() => setExceptionKind('mismatch')} style={styles.secondaryButton}>
-              <Text style={styles.secondarySymbol}>×</Text>
-              <Text style={styles.secondaryText}>NO COINCIDE</Text>
+        </>
+      ) : (
+        <>
+          <View style={[styles.header, compact && styles.headerCompact]}>
+            <Pressable disabled={busy} onPress={onBack} style={styles.backButton}>
+              <Text style={styles.backIcon}>‹</Text>
+              <View>
+                <Text style={styles.headerTitle}>Mi maniobra</Text>
+                <Text style={styles.headerCopy}>Ejecución paso a paso</Text>
+              </View>
             </Pressable>
-            <Pressable disabled={busy} onPress={() => setExceptionKind('impossible')} style={styles.secondaryButton}>
-              <Text style={styles.secondarySymbol}>!</Text>
-              <Text style={styles.secondaryText}>NO ES POSIBLE</Text>
-            </Pressable>
-          </>
-        ) : null}
-        {!moving ? (
-          <Pressable disabled={busy} onPress={onRelease} style={styles.releaseButton}>
-            <Text style={styles.releaseText}>Liberar antes de iniciar</Text>
-          </Pressable>
-        ) : null}
-      </View>
+            <View style={styles.headerStatus}>
+              <OperatorStatusBadge
+                label={moving ? 'EN EJECUCIÓN' : 'PREPARADA'}
+                tone={moving ? 'success' : 'info'}
+              />
+              <Text style={styles.headerManeuver}>{task.maniobra?.titulo ?? operationalTaskLabel(task.plan.tipo)}</Text>
+            </View>
+          </View>
 
+          <View style={[styles.summary, compact && styles.summaryCompact]}>
+            <SummaryCell label="Folio / pallet"><OperatorEntityCode prominent value={task.folio.numero_folio} /></SummaryCell>
+            <SummaryCell label="Labor" value={operationalTaskLabel(task.plan.tipo)} />
+            {maneuverObjectiveCount(task) > 1 ? (
+              <SummaryCell label="Objetivos" value={String(maneuverObjectiveCount(task))} />
+            ) : null}
+            <SummaryCell label="Ubicación actual" value={operationalTaskPositionLabel(task.origen)} />
+            <SummaryCell label="Operador" value={task.responsable?.nombre ?? operatorName} />
+            <SummaryCell label="Dispositivo" value={task.dispositivo?.nombre ?? deviceName} />
+          </View>
+
+          <View style={styles.progressPanel}>
+            <Text style={styles.progressTitle}>PASO {currentStep} / {totalSteps}</Text>
+            <View style={styles.progressRail}>
+              {Array.from({ length: totalSteps }, (_, index) => {
+                const number = index + 1;
+                const state = number < currentStep ? 'complete' : number === currentStep ? 'current' : 'pending';
+                return (
+                  <View key={number} style={styles.progressItem}>
+                    <View style={[
+                      styles.progressDot,
+                      state === 'complete' && styles.progressDotComplete,
+                      state === 'current' && styles.progressDotCurrent,
+                    ]}>
+                      <Text style={[
+                        styles.progressDotText,
+                        state !== 'pending' && styles.progressDotTextActive,
+                      ]}>{state === 'complete' ? '✓' : number}</Text>
+                    </View>
+                    {number < totalSteps ? <View style={[
+                      styles.progressLine,
+                      number < currentStep && styles.progressLineComplete,
+                    ]} /> : null}
+                  </View>
+                );
+              })}
+            </View>
+            <Text style={styles.progressNext}>{action.instruction}</Text>
+          </View>
+
+          <View style={[styles.instructionGrid, compact && styles.instructionGridCompact]}>
+            <View style={styles.actionColumn}>
+              <View style={[
+                styles.actionPanel,
+                action.tone === 'critical' ? styles.actionPanelCritical : styles.actionPanelSuccess,
+              ]}>
+                <Text style={styles.actionKicker}>{moving ? 'ACCIÓN ACTUAL' : 'SIGUIENTE ACCIÓN'}</Text>
+                <Text style={styles.actionVerb}>{action.verb}</Text>
+                <Text style={styles.actionCopy}>{action.instruction}</Text>
+                <OperatorEntityCode prominent value={task.folio.numero_folio} />
+              </View>
+
+              <View style={styles.locationCard}>
+                <LocationLine label="Origen" value={operationalTaskPositionLabel(task.origen)} />
+                <LocationLine label="Destino" value={action.destination} strong />
+                <LocationLine label="Motivo" value={operationalTaskReason(task)} />
+              </View>
+            </View>
+
+            <PhysicalPattern task={task} />
+          </View>
+
+          <OperatorPhysicalContextPanel task={task} />
+
+          {!moving && task.tipo_movimiento !== 'retiro' && !hasPhysicalDestination ? (
+            <View style={styles.destinationWarning}>
+              <View style={styles.destinationWarningCopy}>
+                <Text style={styles.destinationWarningTitle}>Destino físico pendiente</Text>
+                <Text style={styles.destinationWarningText}>El servidor debe validar una posición antes de retirar el pallet.</Text>
+              </View>
+              <Pressable disabled={busy || leaseExpired} onPress={onRecalculate} style={styles.recalculateButton}>
+                <Text style={styles.recalculateText}>Recalcular destino</Text>
+              </Pressable>
+            </View>
+          ) : null}
+
+          {leaseExpired ? (
+            <View style={styles.leaseExpired}>
+              <Text style={styles.leaseExpiredTitle}>La reserva venció antes de iniciar</Text>
+              <Text style={styles.leaseExpiredCopy}>Vuelve a la bandeja y toma nuevamente la tarea.</Text>
+            </View>
+          ) : null}
+
+          <Pressable
+            disabled={primaryDisabled}
+            onPress={runPrimary}
+            style={[styles.primaryButton, primaryDisabled && styles.disabled]}
+          >
+            <Text style={styles.primaryButtonText}>{action.primaryLabel}</Text>
+            <Text style={styles.primaryArrow}>›</Text>
+          </Pressable>
+
+          <View style={styles.secondaryActions}>
+            {task.maniobra ? (
+              <>
+                <Pressable disabled={busy} onPress={() => setExceptionKind('mismatch')} style={styles.secondaryButton}>
+                  <Text style={styles.secondarySymbol}>×</Text>
+                  <Text style={styles.secondaryText}>NO COINCIDE</Text>
+                </Pressable>
+                <Pressable disabled={busy} onPress={() => setExceptionKind('impossible')} style={styles.secondaryButton}>
+                  <Text style={styles.secondarySymbol}>!</Text>
+                  <Text style={styles.secondaryText}>NO ES POSIBLE</Text>
+                </Pressable>
+              </>
+            ) : null}
+            {!moving ? (
+              <Pressable disabled={busy} onPress={onRelease} style={styles.releaseButton}>
+                <Text style={styles.releaseText}>Liberar antes de iniciar</Text>
+              </Pressable>
+            ) : null}
+          </View>
+
+        </>
+      )}
       <SequencePanel currentStep={currentStep} items={sequence} />
       <CustodyPanel task={task} />
+      {wide ? <OperatorPhysicalContextPanel task={task} /> : null}
 
       <View style={styles.footerActions}>
         <Pressable disabled={busy} onPress={onBack} style={styles.footerBack}>
@@ -336,32 +414,32 @@ function LocationLine({ label, strong = false, value }: { label: string; strong?
   );
 }
 
-function PhysicalPattern({ task }: { task: OperationalTask }) {
+function PhysicalPattern({ task, dense = false }: { task: OperationalTask; dense?: boolean }) {
   const endpoint = task.estado === 'en_proceso' && task.destino?.posicion ? task.destino : task.origen;
   const position = endpoint?.posicion;
   const camera = endpoint?.camara.nombre ?? 'Origen externo';
   return (
-    <View style={styles.patternCard}>
+    <View style={[styles.patternCard, dense && styles.widePattern]}>
       <View style={styles.patternHeader}>
         <Text style={styles.patternTitle}>Patrón físico</Text>
         <Text style={styles.patternCamera}>{camera}</Text>
       </View>
       {position ? (
-        <View style={styles.patternBody}>
+        <View style={[styles.patternBody, dense && styles.widePatternBody]}>
           <Text style={styles.patternDepth}>↑ FONDO</Text>
           <View style={styles.rack}>
-            <View style={styles.rackRail} />
-            <View style={styles.positionBox}>
+            <View style={[styles.rackRail, dense && styles.wideRackRail]} />
+            <View style={[styles.positionBox, dense && styles.widePositionBox]}>
               <Text style={styles.positionBand}>BANDA {String(position.banda).padStart(2, '0')}</Text>
               <Text style={styles.positionCode}>{position.etiqueta ?? `P${String(position.posicion).padStart(2, '0')} · N${position.nivel}`}</Text>
               <Text style={styles.positionStatus}>{task.estado === 'en_proceso' ? 'DESTINO' : 'ACTUAL'}</Text>
             </View>
-            <View style={styles.rackRail} />
+            <View style={[styles.rackRail, dense && styles.wideRackRail]} />
           </View>
           <Text style={styles.patternDepth}>ENTRADA ↓</Text>
         </View>
       ) : (
-        <View style={styles.patternEmpty}>
+        <View style={[styles.patternEmpty, dense && styles.widePatternEmpty]}>
           <Text style={styles.patternEmptyTitle}>Sin posición permanente</Text>
           <Text style={styles.patternEmptyCopy}>El WMS mantiene el pallet bajo control de la maniobra.</Text>
         </View>
@@ -451,6 +529,52 @@ function formatDuration(seconds: number) {
 }
 
 const styles = StyleSheet.create({
+  wideContent: { padding: 20, gap: 20 },
+  wideHeader: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  wideBack: { width: 48, minHeight: 48, borderWidth: 1.5, borderColor: o.color.borderStrong, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  wideBackText: { color: o.color.text, fontSize: 36 },
+  wideTitle: { flex: 1, color: o.color.text, fontFamily: o.font.condensed, fontSize: 22, fontWeight: '800' },
+  wideColumns: { flexDirection: 'row', alignItems: 'flex-start', gap: 20 },
+  wideLeft: { width: 340, gap: 16 },
+  wideSummary: { backgroundColor: o.color.surface, borderRadius: 14, padding: 18, gap: 8 },
+  wideLabel: { color: o.color.muted, fontSize: 14, fontWeight: '600' },
+  wideFolio: { color: o.color.primary, fontFamily: o.font.mono, fontSize: 34, fontWeight: '800' },
+  wideLabor: { color: o.color.textSecondary, fontSize: 15 },
+  wideRoute: { color: o.color.text, fontFamily: o.font.mono, fontSize: 15, fontWeight: '600' },
+  wideSteps: { gap: 8 },
+  wideStep: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 8, borderRadius: 14, borderWidth: 2, borderColor: 'transparent', backgroundColor: o.color.surface },
+  wideStepComplete: { backgroundColor: o.color.successSurface },
+  wideStepCurrent: { backgroundColor: o.color.selected, borderColor: o.color.primary },
+  wideStepCircle: { width: 40, height: 40, borderRadius: o.radius.pill, borderWidth: 2, borderColor: o.color.borderStrong, alignItems: 'center', justifyContent: 'center' },
+  wideStepCircleComplete: { backgroundColor: o.color.success, borderColor: o.color.success },
+  wideStepCircleCurrent: { backgroundColor: o.color.primary, borderColor: o.color.primary },
+  wideStepNumber: { color: o.color.text, fontSize: 18, fontWeight: '700' },
+  wideStepNumberActive: { color: o.color.onPrimary },
+  wideStepCopy: { flex: 1, gap: 8 },
+  wideStepInstruction: { color: o.color.text, fontSize: 15, fontWeight: '600' },
+  wideStepState: { color: o.color.muted, fontSize: 13 },
+  wideExceptions: { gap: 8 },
+  wideExceptionRow: { flexDirection: 'row', gap: 8 },
+  wideExceptionButton: { flex: 1, minHeight: 60, borderRadius: 12, borderWidth: 2, borderColor: o.color.criticalBorder, alignItems: 'center', justifyContent: 'center', padding: 8 },
+  wideExceptionText: { color: o.color.critical, fontSize: 18, fontWeight: '700', textAlign: 'center' },
+  wideRelease: { minHeight: 60, borderRadius: 12, borderWidth: 2, borderColor: o.color.borderStrong, alignItems: 'center', justifyContent: 'center', padding: 8 },
+  wideReleaseText: { color: o.color.text, fontSize: 15, fontWeight: '700' },
+  wideRight: { flex: 1, minWidth: 0, backgroundColor: o.color.surface, borderRadius: 18, paddingHorizontal: 24, paddingVertical: 26, gap: 16 },
+  wideDestinationLabel: { color: o.color.muted, fontSize: 16, fontWeight: '600' },
+  wideDestinationRow: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  wideDestination: { flex: 1, minWidth: 0, color: o.color.primary, fontFamily: o.font.mono, fontSize: 76, fontWeight: '700', letterSpacing: -3 },
+  wideDestinationLong: { fontSize: 56 },
+  wideReason: { flexShrink: 1, maxWidth: 260, color: o.color.textSecondary, fontSize: 16, textAlign: 'right' },
+  widePattern: { flex: 0, minWidth: 0, backgroundColor: o.color.canvas, borderRadius: 12 },
+  widePatternBody: { flex: 0, minHeight: 0, padding: 16, gap: 8 },
+  wideRackRail: { minHeight: 76 },
+  widePositionBox: { minHeight: 76 },
+  widePatternEmpty: { flex: 0, minHeight: 0, padding: 16 },
+  widePrimary: { minHeight: 76, borderRadius: 14, backgroundColor: o.color.primary, paddingHorizontal: 16, paddingVertical: 8, alignItems: 'center', justifyContent: 'center' },
+  widePrimaryDisabled: { backgroundColor: o.color.disabled },
+  widePrimaryText: { color: o.color.onPrimary, fontSize: 24, fontWeight: '800', textAlign: 'center' },
+  widePrimaryTextDisabled: { color: o.color.disabledText },
+  wideHelp: { color: o.color.muted, fontSize: 15, marginTop: -6 },
   screen: { flex: 1, backgroundColor: o.color.canvas },
   content: { gap: o.space[3], paddingBottom: o.space[8] },
   pausedContent: { gap: o.space[3], paddingBottom: o.space[8] },
@@ -504,7 +628,7 @@ const styles = StyleSheet.create({
   patternCard: { flex: 1, minWidth: 250, overflow: 'hidden', borderWidth: 1, borderColor: o.color.borderStrong, borderRadius: o.radius.panel, backgroundColor: o.color.surface },
   patternHeader: { minHeight: 52, paddingHorizontal: o.space[3], flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: o.space[2], backgroundColor: o.color.navy },
   patternTitle: { color: o.color.onNavy, fontSize: o.type.body, fontWeight: '900' },
-  patternCamera: { flex: 1, color: '#D9E5EA', fontSize: o.type.small, textAlign: 'right' },
+  patternCamera: { flex: 1, color: o.color.textSecondary, fontSize: o.type.small, textAlign: 'right' },
   patternBody: { flex: 1, minHeight: 300, padding: o.space[4], alignItems: 'center', justifyContent: 'space-between' },
   patternDepth: { color: o.color.muted, fontSize: o.type.caption, fontWeight: '900', letterSpacing: 0.8 },
   rack: { width: '84%', flexDirection: 'row', alignItems: 'stretch', justifyContent: 'center' },
@@ -538,7 +662,7 @@ const styles = StyleSheet.create({
   sequencePanel: { overflow: 'hidden', borderWidth: 1, borderColor: o.color.border, borderRadius: o.radius.panel, backgroundColor: o.color.surface },
   panelHeader: { minHeight: 52, paddingHorizontal: o.space[3], flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: o.space[3], backgroundColor: o.color.navy },
   panelTitle: { color: o.color.onNavy, fontSize: o.type.body, fontWeight: '900' },
-  panelMeta: { color: '#D9E5EA', fontSize: o.type.small },
+  panelMeta: { color: o.color.textSecondary, fontSize: o.type.small },
   sequenceRow: { flexDirection: 'row' },
   sequenceItem: { width: 260, minHeight: 150, padding: o.space[3], gap: o.space[2], borderRightWidth: 1, borderRightColor: o.color.border, backgroundColor: o.color.surfaceMuted },
   sequenceItemCurrent: { borderTopWidth: 5, borderTopColor: o.color.primary, backgroundColor: o.color.selected },

@@ -44,4 +44,18 @@ class InterfazOficinaRomanaTest extends TestCase
             ->assertSee('/oficina/gerencia', false)
             ->assertSee('/oficina/prefrio', false);
     }
+
+    public function test_folios_v2_lista_recepciones_con_avance_y_marca_pendientes(): void
+    {
+        $html = $this->get('/oficina/romana')->assertOk()->getContent();
+
+        $this->assertStringContainsString('<th scope="col">Recepción</th><th scope="col">Cliente y guía</th><th scope="col">Transporte y declaración</th><th scope="col" class="rec-weight">Peso</th>', $html);
+        $this->assertStringContainsString('data-weighbridge-attention="exit"', $html);
+
+        $script = file_get_contents(resource_path('js/office-weighbridge.js'));
+        $this->assertIsString($script);
+        $this->assertStringContainsString("import { receptionSteps } from './shared/weighbridge-steps.js';", $script);
+        $this->assertStringContainsString('class="rec-track" data-reception-id=', $script);
+        $this->assertStringContainsString('aria-current="step"', $script);
+    }
 }

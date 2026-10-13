@@ -17,6 +17,7 @@
  *   6. Tablas, campos, botones, sellos y foco.
  */
 @import './folios-fonts.css';
+@import './folios-components.css';
 
 /* 1. Tipografía ------------------------------------------------------------------ */
 
@@ -26,12 +27,6 @@ body,
     font-stretch: 100%;
     font-optical-sizing: auto;
     -webkit-font-smoothing: antialiased;
-}
-
-/* El shell actual se diseñó para Arial Narrow: hasta el PR 2 usa Archivo semiangosta. */
-.estiba-office-shell {
-    font-family: var(--font-sans);
-    font-stretch: 85%;
 }
 
 .office-app :is(code, kbd, samp, .operation-now-code, .next-code) {
@@ -48,8 +43,7 @@ body,
     .operation-now-tunnel__label,
     .operation-now-panel__heading h2,
     .plant-node .plant-node__code
-),
-.estiba-ui :is(.eui-heading__eyebrow, .eui-heading__title, .eui-panel__title, .eui-table th) {
+) {
     font-stretch: var(--font-condensed-stretch);
 }
 

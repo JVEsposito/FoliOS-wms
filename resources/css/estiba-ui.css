@@ -1,12 +1,10 @@
 @import './estiba-tokens.css';
 
-/* Identidad "Manifiesto" (2026-09-21): color de identidad (frost) separado del color de
-   acción (primary); tipografía condensada en mayúsculas para eyebrow/título de panel y
-   tabla/masthead; esquinas a escuadra (ver radius en estiba-tokens.css); reglas más
-   pesadas en los cambios de registro vía --eui-rule-*; iconos de trazo cuadrado. Modo
-   oscuro: valores propios por token bajo :root[data-office-theme="dark-industrial"], no
-   una inversión — ver design/estiba.tokens.json (colorDark/signalDark) y
-   scripts/build-design-tokens.mjs. */
+/* FoliOS v2 (2026-10-13, docs/diseno/folios-v2): lenguaje de etiqueta. Frost es la marca
+   y la acción principal; Archivo angosta (eje de ancho) para títulos y cifras, sin
+   mayúsculas forzadas; etiqueta de área sobre el título; tarjetas de radio 8, controles
+   de radio 6 y sellos de radio 4; tablas sin líneas verticales. Modo oscuro: valores
+   propios por token (colorDark/signalDark/areaDark), no una inversión. */
 
 /* Adopción explícita por pantalla. No modifica :root, body ni componentes legacy. */
 .estiba-ui {
@@ -37,37 +35,42 @@
 }
 .estiba-ui :where(a) { color: var(--eui-color-primary); text-underline-offset: 3px; }
 .estiba-ui .eui-heading {
-    display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--eui-space-4);
-    padding-bottom: var(--eui-space-3); border-bottom: var(--eui-rule-heavy) solid var(--eui-color-frost);
+    display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--eui-space-4) var(--eui-space-8);
+    padding-bottom: var(--eui-space-4);
 }
 .estiba-ui .eui-heading__copy { min-width: 0; }
+/* El eyebrow es la etiqueta del área activa (mismo aspecto que <x-folios.area-tag>). */
 .estiba-ui .eui-heading__eyebrow {
-    margin: 0 0 var(--eui-space-2); color: var(--eui-color-frost);
-    font-family: var(--eui-font-family-condensed); font-size: var(--eui-manifest-eyebrow-font-size);
-    font-weight: var(--eui-manifest-eyebrow-font-weight); letter-spacing: var(--eui-manifest-eyebrow-letter-spacing); text-transform: uppercase;
+    display: inline-flex; align-items: center; gap: 7px; width: max-content; max-width: 100%; height: 28px;
+    margin: 0 0 10px; padding: 0 10px; border: 1.5px solid var(--area-line, var(--eui-area-operacion-line)); border-radius: var(--eui-radius-seal);
+    background: var(--area-tint, var(--eui-area-operacion-tint)); color: var(--area-text, var(--eui-area-operacion-text));
+    font: var(--eui-font-weight-bold) .8125rem/1 var(--eui-font-family-sans); letter-spacing: .02em; white-space: nowrap;
+}
+.estiba-ui .eui-heading__eyebrow::before {
+    content: ""; flex: 0 0 16px; width: 16px; height: 16px; background: var(--area-gajo, none) center / 16px 16px no-repeat;
 }
 .estiba-ui .eui-heading__title {
-    margin: 0; font-family: var(--eui-font-family-condensed); font-size: var(--eui-manifest-masthead-font-size);
-    line-height: var(--eui-manifest-masthead-line-height); font-weight: var(--eui-manifest-masthead-font-weight);
-    letter-spacing: var(--eui-manifest-masthead-letter-spacing); text-transform: uppercase; overflow-wrap: anywhere;
+    margin: 0; color: var(--eui-color-text); font-family: var(--eui-font-family-sans); font-size: clamp(2.5rem, 3.4vw, 4rem);
+    font-stretch: var(--eui-font-stretch-masthead); font-weight: var(--eui-font-weight-black);
+    line-height: var(--eui-line-height-masthead); letter-spacing: -.01em; text-transform: none; overflow-wrap: anywhere;
 }
-.estiba-ui .eui-heading__description { margin: var(--eui-space-2) 0 0; color: var(--eui-color-muted); max-width: 70ch; text-transform: none; letter-spacing: normal; font-family: inherit; }
+.estiba-ui .eui-heading__description { margin: 10px 0 0; color: var(--eui-color-text-secondary); max-width: 68ch; text-transform: none; letter-spacing: normal; font-family: inherit; }
 .estiba-ui .eui-panel { min-width: 0; border: var(--eui-rule-hairline) solid var(--eui-color-border); border-radius: var(--eui-radius-panel); background: var(--eui-color-surface); }
-.estiba-ui .eui-panel__header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--eui-space-3); padding: var(--eui-space-3) var(--eui-space-4); border-bottom: var(--eui-rule-strong) solid var(--eui-color-border); }
+.estiba-ui .eui-panel__header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--eui-space-3); padding: 16px 18px 12px; border-bottom: var(--eui-rule-hairline) solid var(--eui-color-border-soft); }
 .estiba-ui .eui-panel__title {
-    margin: 0; font-family: var(--eui-font-family-condensed); font-size: var(--eui-manifest-panel-title-font-size);
-    font-weight: var(--eui-manifest-panel-title-font-weight); letter-spacing: var(--eui-manifest-panel-title-letter-spacing); text-transform: uppercase;
+    margin: 0; font-family: var(--eui-font-family-sans); font-size: 1.625rem; font-stretch: var(--eui-font-stretch-condensed);
+    font-weight: var(--eui-font-weight-black); line-height: 1; letter-spacing: 0; text-transform: none;
 }
-.estiba-ui .eui-panel__body { padding: var(--eui-space-4); }
+.estiba-ui .eui-panel__body { padding: 16px 18px; }
 .estiba-ui .eui-panel__body > :first-child { margin-top: 0; }
 .estiba-ui .eui-panel__body > :last-child { margin-bottom: 0; }
 .estiba-ui .eui-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--eui-space-3); }
 .estiba-ui .eui-button {
     display: inline-flex; align-items: center; justify-content: center; gap: var(--eui-space-2);
-    min-height: var(--eui-control-height); max-width: 100%; padding: var(--eui-space-1) var(--eui-space-4);
-    border: 1px solid var(--eui-color-primary); border-radius: var(--eui-radius-control);
+    min-height: var(--eui-control-height); max-width: 100%; padding: var(--eui-space-1) 18px;
+    border: 2px solid var(--eui-color-primary); border-radius: var(--eui-radius-control);
     background: var(--eui-color-primary); color: var(--eui-color-on-primary);
-    font-weight: var(--eui-font-weight-strong); font-size: inherit; line-height: var(--eui-line-height-body);
+    font-weight: var(--eui-font-weight-bold); font-size: .9375rem; line-height: 1.2;
     cursor: pointer; text-align: center; text-decoration: none; overflow-wrap: anywhere;
 }
 .estiba-ui .eui-button:hover:enabled { background: var(--eui-color-primary-hover); border-color: var(--eui-color-primary-hover); }
@@ -87,7 +90,12 @@
 .estiba-ui .eui-tone-reserved { --eui-signal-text: var(--eui-signal-reserved-text); --eui-signal-surface: var(--eui-signal-reserved-surface); --eui-signal-border: var(--eui-signal-reserved-border); }
 .estiba-ui .eui-tone-temporary { --eui-signal-text: var(--eui-signal-temporary-text); --eui-signal-surface: var(--eui-signal-temporary-surface); --eui-signal-border: var(--eui-signal-temporary-border); }
 .estiba-ui .eui-tone-blocked { --eui-signal-text: var(--eui-signal-blocked-text); --eui-signal-surface: var(--eui-signal-blocked-surface); --eui-signal-border: var(--eui-signal-blocked-border); }
-.estiba-ui .eui-signal { display: inline-flex; gap: var(--eui-space-2); align-items: center; color: var(--eui-signal-text); font-size: var(--eui-font-size-small); font-weight: var(--eui-font-weight-strong); }
+/* Sello de estado: forma + texto propios; nunca el color de un área. */
+.estiba-ui .eui-signal {
+    display: inline-flex; gap: 7px; align-items: center; min-height: 28px; padding: 0 10px;
+    border: 1.5px solid var(--eui-signal-border); border-radius: var(--eui-radius-seal); background: var(--eui-signal-surface);
+    color: var(--eui-signal-text); font-size: .8125rem; font-weight: var(--eui-font-weight-bold); line-height: 1.15; white-space: nowrap;
+}
 .estiba-ui .eui-signal__marker { width: 8px; height: 8px; flex: 0 0 8px; border: 1px solid currentColor; background: currentColor; border-radius: 50%; }
 .estiba-ui .eui-tone-neutral .eui-signal__marker { background: transparent; }
 .estiba-ui :is(.eui-tone-blocked, .eui-tone-critical) .eui-signal__marker { border-radius: 0; }
@@ -102,37 +110,34 @@
     font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
 }
 .estiba-ui .eui-code--large {
-    font-size: var(--eui-font-size-title); line-height: var(--eui-line-height-heading);
-    border-bottom: var(--eui-rule-strong) solid var(--eui-color-frost); padding-bottom: 1px;
+    font-size: var(--eui-font-size-title); line-height: var(--eui-line-height-heading); letter-spacing: -.04em;
 }
 .estiba-ui .eui-table-scroll { max-width: 100%; overflow-x: auto; }
 .estiba-ui .eui-table { width: 100%; border-collapse: collapse; text-align: left; font-size: var(--eui-font-size-small); }
 .estiba-ui .eui-table caption { padding: var(--eui-space-3) var(--eui-space-4); color: var(--eui-color-muted); text-align: left; }
 .estiba-ui .eui-table :where(th, td) {
-    height: var(--eui-row-height); padding: var(--eui-cell-padding) var(--eui-space-4);
-    border-bottom: var(--eui-rule-hairline) solid var(--eui-color-border);
-    border-right: var(--eui-rule-hairline) solid var(--eui-color-border);
+    height: var(--eui-row-height); padding: var(--eui-cell-padding) var(--eui-space-3);
+    border-bottom: var(--eui-rule-hairline) solid var(--eui-color-border-soft);
     vertical-align: middle;
 }
-.estiba-ui .eui-table :where(th, td):last-child { border-right: 0; }
 .estiba-ui .eui-table th {
-    color: var(--eui-color-muted); background: var(--eui-color-subtle); font-weight: var(--eui-font-weight-bold);
-    font-family: var(--eui-font-family-condensed); letter-spacing: var(--eui-manifest-panel-title-letter-spacing); text-transform: uppercase;
-    white-space: nowrap; border-bottom: var(--eui-rule-strong) solid var(--eui-color-border);
+    color: var(--eui-color-muted); background: transparent; font-size: .75rem; font-weight: var(--eui-font-weight-strong);
+    font-family: var(--eui-font-family-sans); letter-spacing: 0; text-transform: none;
+    white-space: nowrap; border-bottom: var(--eui-rule-strong) solid var(--eui-color-text);
 }
 .estiba-ui .eui-table tbody tr:last-child td { border-bottom: 0; }
 .estiba-ui .eui-table .eui-code { white-space: nowrap; }
 .estiba-ui .eui-table .eui-numeric { text-align: right; font-variant-numeric: tabular-nums; }
 .estiba-ui .eui-field { display: grid; gap: var(--eui-space-2); color: var(--eui-color-text); font-weight: var(--eui-font-weight-strong); }
-.estiba-ui .eui-input { width: 100%; min-width: 0; min-height: var(--eui-control-height); border: 1px solid var(--eui-color-input-border); border-radius: var(--eui-radius-control); background: var(--eui-color-surface); color: var(--eui-color-text); padding: var(--eui-space-1) var(--eui-space-3); }
+.estiba-ui .eui-input { width: 100%; min-width: 0; min-height: var(--eui-control-height); border: 1.5px solid var(--eui-color-input-border); border-radius: var(--eui-radius-control); background: var(--eui-color-surface); color: var(--eui-color-text); padding: var(--eui-space-1) var(--eui-space-3); }
 .estiba-ui .eui-input[aria-invalid="true"] { border-color: var(--eui-signal-critical-text); }
 .estiba-ui .eui-input:disabled { color: var(--eui-color-disabled-text); background: var(--eui-color-disabled-surface); }
 .estiba-ui .eui-field__hint { color: var(--eui-color-muted); font-size: var(--eui-font-size-small); font-weight: var(--eui-font-weight-regular); }
 .estiba-ui .eui-field__error { color: var(--eui-signal-critical-text); font-size: var(--eui-font-size-small); font-weight: var(--eui-font-weight-strong); }
 .estiba-ui .eui-metric { min-width: 0; }
 .estiba-ui .eui-metric__heading { display: flex; align-items: baseline; justify-content: space-between; gap: var(--eui-space-3); margin-bottom: var(--eui-space-2); }
-.estiba-ui .eui-metric__value { color: var(--eui-color-text); font-variant-numeric: tabular-nums; font-weight: var(--eui-font-weight-bold); }
-.estiba-ui .eui-meter { height: 8px; overflow: hidden; background: var(--eui-color-disabled-surface); }
+.estiba-ui .eui-metric__value { color: var(--eui-color-text); font-size: 1.375rem; font-stretch: var(--eui-font-stretch-figure); font-variant-numeric: tabular-nums; font-weight: var(--eui-font-weight-black); line-height: 1; }
+.estiba-ui .eui-meter { height: 8px; overflow: hidden; border-radius: 4px; background: var(--eui-color-border-soft); }
 .estiba-ui .eui-meter__fill { height: 100%; background: var(--eui-signal-text); }
 .estiba-ui .eui-metric__detail { margin: var(--eui-space-2) 0 0; color: var(--eui-color-muted); font-size: var(--eui-font-size-small); }
 .estiba-ui .eui-alert { display: flex; align-items: flex-start; gap: var(--eui-space-3); padding: var(--eui-space-4); border: 1px solid var(--eui-signal-border); border-left: 4px solid var(--eui-signal-text); border-radius: var(--eui-radius-control); background: var(--eui-signal-surface); color: var(--eui-signal-text); }
