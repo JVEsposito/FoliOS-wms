@@ -8,7 +8,7 @@ import {
     OFFICE_THEME_KEY,
     OFFICE_THEMES,
 } from './shared/office-preferences.js';
-import { FOLIOS_ENTRY_PATH, officeHomeHref } from './shared/folios-entry.js';
+import { FOLIOS_ENTRY_PATH, officeEntryHref, officeHomeHref } from './shared/folios-entry.js';
 
 const tokenKey = 'estiba_wms_office_token';
 installOfficeUnexpectedErrorNotice();
@@ -170,9 +170,62 @@ function refreshHome(identity, hasSession) {
     });
 }
 
+// Sin sesión, toda oficina lleva a la entrada única /FoliOS, que vuelve a ella al iniciar sesión.
+let leavingOffice = false;
+
+function goToEntry(href) {
+    if (leavingOffice) return;
+    leavingOffice = true;
+    window.location.replace(href);
+}
+
+function storedToken() {
+    try {
+        return localStorage.getItem(tokenKey);
+    } catch {
+        return null;
+    }
+}
+
+// Cerrar sesión, desde cualquier oficina, revoca el token y vuelve a /FoliOS. Se atiende
+// aquí, antes que el cierre propio de cada pantalla, para que todas terminen igual.
+async function logoutToEntry(event) {
+    const button = event.target instanceof Element ? event.target.closest('#officeLogoutButton') : null;
+    if (!button) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (leavingOffice) return;
+    button.disabled = true;
+
+    const token = storedToken();
+    if (token) {
+        const revoke = fetch('/api/acceso-oficina', {
+            method: 'DELETE',
+            headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+            keepalive: true,
+        }).catch(() => null);
+        await Promise.race([revoke, new Promise((resolve) => window.setTimeout(resolve, 1500))]);
+    }
+
+    try {
+        localStorage.removeItem(tokenKey);
+        localStorage.removeItem(identityKey);
+        sessionStorage.clear();
+    } catch {
+        // El almacenamiento puede no estar disponible; igual se vuelve a la entrada.
+    }
+    goToEntry(FOLIOS_ENTRY_PATH);
+}
+
+window.addEventListener('click', logoutToEntry, true);
+
 function refreshNavigation() {
     const identity = readIdentity();
-    const hasSession = Boolean(localStorage.getItem(tokenKey) && identity);
+    const hasSession = Boolean(storedToken() && identity);
+    if (!hasSession) {
+        goToEntry(officeEntryHref(window.location));
+        return;
+    }
     const profileName = identity?.perfil_acceso?.nombre
         || identity?.capacidades?.perfil_acceso?.nombre;
     const roleLabel = document.getElementById('officeUserRole');

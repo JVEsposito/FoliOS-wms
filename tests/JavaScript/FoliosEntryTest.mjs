@@ -6,8 +6,10 @@ import {
     entryFromResponse,
     FOLIOS_ENTRY_PATH,
     loginErrorMessage,
+    officeEntryHref,
     officeHomeHref,
     officeHomePath,
+    officeReturnPath,
 } from '../../resources/js/shared/folios-entry.js';
 
 test('solo acepta rutas internas de Oficina como inicio', () => {
@@ -17,6 +19,27 @@ test('solo acepta rutas internas de Oficina como inicio', () => {
     for (const value of ['https://ejemplo.cl/oficina', '//ejemplo.cl/oficina', '/oficina/../api', '/oficina?x=1', '/api/camaras', '', null, 42]) {
         assert.equal(officeHomePath(value), null, String(value));
     }
+});
+
+test('solo retoma oficinas internas después de iniciar sesión', () => {
+    assert.equal(officeReturnPath('/oficina/materiales'), '/oficina/materiales');
+    assert.equal(officeReturnPath('/oficina/consultas/busqueda?q=F-001#resultados'), '/oficina/consultas/busqueda?q=F-001#resultados');
+
+    for (const value of ['//ejemplo.cl/oficina', '/oficinas-falsas', '/oficina/../api/camaras', '/oficina\\@ejemplo.cl', 'https://ejemplo.cl/oficina', '/FoliOS', null]) {
+        assert.equal(officeReturnPath(value), null, String(value));
+    }
+});
+
+test('una oficina sin sesión lleva a /FoliOS con el regreso a esa oficina', () => {
+    assert.equal(
+        officeEntryHref({ pathname: '/oficina/materiales', search: '', hash: '' }),
+        '/FoliOS?volver=%2Foficina%2Fmateriales',
+    );
+    assert.equal(
+        officeEntryHref({ pathname: '/oficina/consultas/busqueda', search: '?q=F-001', hash: '' }),
+        '/FoliOS?volver=%2Foficina%2Fconsultas%2Fbusqueda%3Fq%3DF-001',
+    );
+    assert.equal(officeEntryHref({ pathname: '/otra', search: '', hash: '' }), '/FoliOS');
 });
 
 test('el logo lleva al inicio del usuario o a la entrada única', () => {
@@ -79,5 +102,17 @@ test('la página de inicio y el menú usan la misma sesión de Oficina', () => {
     assert.match(navigation, /const tokenKey = 'estiba_wms_office_token'/);
     assert.match(navigation, /const identityKey = 'estiba_wms_office_identity'/);
     assert.match(page, /request\('\/api\/acceso-oficina', \{ token \}\)/);
-    assert.match(page, /window\.location\.replace\(entry\.destination\)/);
+    assert.match(page, /window\.location\.replace\(returnPath \|\| entry\.destination\)/);
+    assert.match(page, /officeReturnPath\(new URLSearchParams\(window\.location\.search\)\.get\('volver'\)\)/);
+});
+
+test('cerrar sesión desde cualquier oficina vuelve a /FoliOS', () => {
+    const navigation = readFileSync(new URL('../../resources/js/office-navigation.js', import.meta.url), 'utf8');
+
+    assert.match(navigation, /window\.addEventListener\('click', logoutToEntry, true\)/);
+    assert.match(navigation, /closest\('#officeLogoutButton'\)/);
+    assert.match(navigation, /event\.stopImmediatePropagation\(\)/);
+    assert.match(navigation, /method: 'DELETE'[\s\S]*keepalive: true/);
+    assert.match(navigation, /goToEntry\(FOLIOS_ENTRY_PATH\)/);
+    assert.match(navigation, /if \(!hasSession\) \{\s*goToEntry\(officeEntryHref\(window\.location\)\);/);
 });

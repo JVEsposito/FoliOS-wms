@@ -7,6 +7,7 @@ if (profileForm && profileTable) {
         profiles: [],
         macros: [],
         tabletMacros: [],
+        homes: [],
         roles: [],
     };
 
@@ -89,6 +90,37 @@ if (profileForm && profileTable) {
         profileForm.querySelectorAll('[data-access-tablet-macro]').forEach((fieldset) => {
             updateMacroState(fieldset, 'modulos_tablet[]');
         });
+        applyHomeAvailability();
+    }
+
+    function renderHomeOptions() {
+        const groups = new Map();
+        state.homes.forEach((home) => {
+            if (!groups.has(home.area)) groups.set(home.area, []);
+            groups.get(home.area).push(home);
+        });
+        profileForm.elements.pantalla_inicio.innerHTML = '<option value="">Según el nivel operacional base</option>'
+            + [...groups].map(([area, homes]) => `
+                <optgroup label="${escapeHtml(area)}">
+                    ${homes.map((home) => `<option value="${escapeHtml(home.ruta)}" data-home-modules="${escapeHtml((home.modulos_relacionados || []).join(' '))}">${escapeHtml(home.nombre)}</option>`).join('')}
+                </optgroup>
+            `).join('');
+    }
+
+    function applyHomeAvailability() {
+        const modules = new Set(selectedModules());
+        const select = profileForm.elements.pantalla_inicio;
+        [...select.options].forEach((option) => {
+            if (!option.value) return;
+            const related = (option.dataset.homeModules || '').split(' ').filter(Boolean);
+            option.disabled = !related.some((module) => modules.has(module));
+        });
+        if (select.selectedOptions[0]?.disabled) select.value = '';
+    }
+
+    function homeName(route) {
+        const home = state.homes.find((candidate) => candidate.ruta === route);
+        return home ? `${home.area} · ${home.nombre}` : 'según nivel base';
     }
 
     function applyRoleAvailability(selectDefaults = false) {
@@ -192,7 +224,7 @@ if (profileForm && profileTable) {
             <tr>
                 <td><strong>${escapeHtml(profile.codigo)} · ${escapeHtml(profile.nombre)}</strong><small>${profile.predeterminado ? 'Perfil inicial · ' : ''}${escapeHtml(profile.descripcion || 'Sin descripción')}</small></td>
                 <td><span class="role-badge">${escapeHtml(profile.solo_consulta ? 'Solo consulta' : profile.rol_base_nombre)}</span></td>
-                <td><strong>${profile.modulos.length} PC · ${(profile.modulos_tablet || []).length} PDA</strong><small>oficinas y módulos móviles</small></td>
+                <td><strong>${profile.modulos.length} PC · ${(profile.modulos_tablet || []).length} PDA</strong><small>Inicio: ${escapeHtml(homeName(profile.pantalla_inicio))}</small></td>
                 <td>${profile.usuarios_count}</td>
                 <td><span class="access-status access-status--${profile.activo ? 'active' : 'inactive'}">${profile.activo ? 'Activo' : 'Inactivo'}</span></td>
                 <td>${profile.protegido
@@ -241,6 +273,8 @@ if (profileForm && profileTable) {
         profileForm.querySelectorAll('[data-access-tablet-macro]').forEach((fieldset) => {
             updateMacroState(fieldset, 'modulos_tablet[]');
         });
+        profileForm.elements.pantalla_inicio.value = profile.pantalla_inicio || '';
+        applyHomeAvailability();
         document.getElementById('cancelAccessProfileEdit').classList.remove('is-hidden');
         profileForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
         profileForm.elements.nombre.focus();
@@ -252,11 +286,13 @@ if (profileForm && profileTable) {
         state.profiles = response.data || [];
         state.macros = response.catalogo || [];
         state.tabletMacros = response.catalogo_tablet || [];
+        state.homes = response.pantallas_inicio || [];
         state.roles = response.roles_base || [];
         profileForm.elements.rol_base.innerHTML = state.roles.map((role) =>
             `<option value="${escapeHtml(role.clave)}">${escapeHtml(role.nombre)}</option>`,
         ).join('');
         renderSelector();
+        renderHomeOptions();
         renderProfiles();
         resetForm();
         window.dispatchEvent(new CustomEvent('estiba:access-profiles', {
@@ -291,6 +327,7 @@ if (profileForm && profileTable) {
             rol_base: profileForm.elements.rol_base.value,
             modulos: selectedModules(),
             modulos_tablet: selectedTabletModules(),
+            pantalla_inicio: profileForm.elements.pantalla_inicio.value || null,
             activo: profileForm.elements.activo.checked,
         };
         if (!payload.modulos.length) {
