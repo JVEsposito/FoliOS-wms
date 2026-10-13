@@ -3,6 +3,7 @@ import {
     loginErrorMessage,
     OFFICE_IDENTITY_KEY,
     OFFICE_TOKEN_KEY,
+    officeReturnPath,
 } from './shared/folios-entry.js';
 import { normalizeOfficeTheme, OFFICE_THEME_KEY } from './shared/office-preferences.js';
 
@@ -16,6 +17,8 @@ const elements = {
     logout: byId('foliosLogoutButton'),
     noOfficesName: byId('foliosSinOficinasNombre'),
 };
+// Oficina pedida sin sesión (/FoliOS?volver=/oficina/...): se retoma al iniciar sesión.
+const returnPath = officeReturnPath(new URLSearchParams(window.location.search).get('volver'));
 
 function storage(action) {
     try {
@@ -80,7 +83,7 @@ function apply(entry, token) {
 
     if (entry.view === 'redirect') {
         show('cargando');
-        window.location.replace(entry.destination);
+        window.location.replace(returnPath || entry.destination);
         return;
     }
 

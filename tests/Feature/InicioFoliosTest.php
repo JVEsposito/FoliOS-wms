@@ -31,6 +31,7 @@ class InicioFoliosTest extends TestCase
             $this->get($ruta)->assertStatus(301)->assertRedirect('/FoliOS');
         }
 
+        $this->get('/')->assertRedirect('/FoliOS');
         $this->get('/oficina')->assertRedirect('/FoliOS');
     }
 
