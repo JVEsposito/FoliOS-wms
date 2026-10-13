@@ -21,6 +21,7 @@ class InterfazOficinaValidacionTest extends TestCase
             ->assertSee('Descargar planilla en blanco')
             ->assertSee('id="validationLines"', false)
             ->assertSee('id="dayValidatedCount"', false)
+            ->assertSee('<th scope="col"><span class="office-visually-hidden">Acciones</span></th>', false)
             ->assertSee('data-validation-attention', false)
             ->assertSee('Validador y jornada')
             ->assertSee('downloadBlankValidationRegisterButton', false)

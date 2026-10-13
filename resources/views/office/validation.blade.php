@@ -72,7 +72,7 @@
                             <button class="secondary-button" type="submit">Filtrar</button>
                     </form>
                     <p class="validation-help">El registro RRPP-01 utiliza la fecha real de terreno y agrupa automáticamente cada hoja por encargado, línea y turno. La versión en blanco conserva el formato oficial para contingencia, trazabilidad y auditoría. <button class="validation-link" id="downloadBlankValidationRegisterButton" type="button">Descargar planilla en blanco</button></p>
-                    <div class="validation-table-scroll"><table class="validation-table"><thead><tr><th>Folio</th><th>Artículo</th><th>Origen</th><th>Resultado</th><th>Validador y jornada</th><th><span class="sr-only">Acciones</span></th></tr></thead><tbody id="validationHistoryBody"></tbody></table></div>
+                    <div class="validation-table-scroll"><table class="validation-table"><thead><tr><th>Folio</th><th>Artículo</th><th>Origen</th><th>Resultado</th><th>Validador y jornada</th><th scope="col"><span class="office-visually-hidden">Acciones</span></th></tr></thead><tbody id="validationHistoryBody"></tbody></table></div>
                 </section>
 
                 <dialog class="validation-correction-dialog" id="validationCorrectionDialog">
