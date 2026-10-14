@@ -1,9 +1,9 @@
 @php($niveles = $niveles ?? false)
 <!DOCTYPE html>
-<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>FoliOS · {{ $niveles ? 'Niveles de stock' : 'Reposición de materiales' }}</title>
-@if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>FoliOS · {{ $niveles ? 'Niveles de stock' : 'Reposición de materiales' }}</title>@if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
 @vite(['resources/css/office.css', 'resources/css/office-materials.css', 'resources/js/office-material-replenishment.js'])
 @endif
+    @include('office.partials.arranque')
 </head><body><main class="office-app" id="materialReplenishmentApp" data-levels-mode="{{ $niveles ? 'true' : 'false' }}">
 <x-office.navigation domain="materiales" :office="$niveles ? 'niveles-stock' : 'reposicion'" context="REPOSICIÓN" icon="▦" />
 <div class="custody-shell"><header class="custody-heading"><div><p class="eyebrow">MATERIALES · BODEGA CENTRAL</p><h1>{{ $niveles ? 'Ítems · niveles de stock' : 'Reposición' }}</h1><p>Prioriza compras según el disponible para entregar y las salidas reales de bodega.</p></div><button id="reload" class="secondary-button">Actualizar</button></header>

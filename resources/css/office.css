@@ -26,6 +26,17 @@ button, input, select { font: inherit; }
 button { cursor: pointer; }
 button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid rgba(85, 229, 223, .55); outline-offset: 2px; }
 .is-hidden { display: none !important; }
+/*
+ * Arranque (resources/js/office-arranque.js, en línea en <head>): con sesión en el equipo la
+ * oficina se pinta directamente, sin su acceso propio; sin sesión no se pinta nada mientras
+ * va a /FoliOS. Así cambiar de pestaña no muestra un instante la pantalla de ingreso.
+ */
+html[data-office-session="activa"] .office-access { display: none !important; }
+html[data-office-session="activa"] .office-app.is-hidden { display: block !important; }
+html[data-office-session="ausente"] body { visibility: hidden; }
+/* El velo de carga solo aparece si la operación tarda: una carga rápida no hace parpadear la pantalla. */
+:is(.loading, .loading-overlay):not(.is-hidden) { animation: office-loading-in 160ms ease-out 350ms both; }
+@keyframes office-loading-in { from { opacity: 0; } to { opacity: 1; } }
 .eyebrow { margin: 0 0 6px; color: var(--cyan); font-size: .7rem; font-weight: 900; letter-spacing: .14em; }
 
 .office-access { display: grid; grid-template-columns: minmax(500px, 1.1fr) minmax(420px, .9fr); min-height: 100vh; }

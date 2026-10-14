@@ -19,6 +19,7 @@
         @if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
             @vite(['resources/css/office.css', 'resources/css/office-inventory-exports.css', 'resources/js/office-inventory-exports.js'])
         @endif
+        @include('office.partials.arranque')
     </head>
     <body>
         <section class="office-access" id="officeAccess" aria-labelledby="officeAccessTitle">

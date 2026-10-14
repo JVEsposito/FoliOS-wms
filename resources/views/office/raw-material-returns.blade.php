@@ -13,6 +13,7 @@
                 'resources/js/office-raw-material-returns.js',
             ])
         @endif
+        @include('office.partials.arranque')
     </head>
     <body>
         <section class="office-access" id="officeAccess" aria-labelledby="officeAccessTitle">

@@ -12,6 +12,7 @@
         @if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
             @vite(['resources/css/office.css', 'resources/css/office-corporate.css', 'resources/css/folios-inicio.css', 'resources/js/folios-inicio.js'])
         @endif
+        @include('office.partials.arranque', ['soloTema' => true])
     </head>
     <body>
         <section class="office-access folios-inicio" id="foliosInicio" data-inicio-estado="cargando" aria-labelledby="foliosInicioTitle">

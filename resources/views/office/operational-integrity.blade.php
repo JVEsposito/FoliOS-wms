@@ -14,6 +14,7 @@
                 'resources/js/office-operational-integrity.js',
             ])
         @endif
+        @include('office.partials.arranque')
     </head>
     <body>
         <main class="office-app integrity-app is-hidden" id="integrityApp">

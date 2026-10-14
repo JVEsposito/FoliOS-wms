@@ -9,6 +9,7 @@
         @if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
             @vite(['resources/css/office.css', 'resources/css/office-validation.css', 'resources/css/office-validation-catalog.css', 'resources/js/office-validation-catalog.js'])
         @endif
+        @include('office.partials.arranque')
     </head>
     <body>
         <main class="office-app" id="catalogApp">

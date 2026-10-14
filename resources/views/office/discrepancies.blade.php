@@ -15,6 +15,7 @@
                 'resources/js/office-discrepancies.js',
             ])
         @endif
+        @include('office.partials.arranque')
     </head>
     <body>
         <main class="office-app discrepancies-app is-hidden" id="discrepanciesApp">

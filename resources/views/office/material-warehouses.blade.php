@@ -9,6 +9,7 @@
     @if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
         @vite(['resources/css/office.css', 'resources/css/office-materials.css', 'resources/js/office-material-warehouses.js'])
     @endif
+    @include('office.partials.arranque')
 </head>
 <body>
 <main id="custodyApp" class="office-app is-hidden">

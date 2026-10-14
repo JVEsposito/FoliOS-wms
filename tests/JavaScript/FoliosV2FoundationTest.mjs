@@ -39,8 +39,12 @@ test('FoliOS v2: los temas de Oficina usan exactamente los valores de los tokens
 });
 
 test('FoliOS v2: la capa transversal se carga al final y con fuentes autoalojadas', () => {
-    const navigation = read('resources/views/components/office/navigation.blade.php');
-    assert.match(navigation, /'resources\/css\/office-corporate\.css', 'resources\/css\/office-shell\.css', 'resources\/css\/office-folios\.css'/);
+    // Va al final de <head> (office/partials/arranque), después de los estilos de cada página.
+    const boot = read('resources/views/office/partials/arranque.blade.php');
+    assert.match(boot, /'resources\/css\/office-corporate\.css', 'resources\/css\/office-shell\.css', 'resources\/css\/office-folios\.css'/);
+    const validation = read('resources/views/office/validation.blade.php');
+    assert.ok(validation.indexOf("resources/css/office-validation.css") < validation.indexOf("@include('office.partials.arranque')"));
+    assert.ok(validation.indexOf("@include('office.partials.arranque')") < validation.indexOf('</head>'));
     assert.match(read('vite.config.js'), /'resources\/css\/office-folios\.css'/);
     assert.match(folios, /^@import '\.\/folios-fonts\.css';/m);
     const fonts = read('resources/css/folios-fonts.css');

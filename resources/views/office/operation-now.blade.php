@@ -14,6 +14,7 @@
                 'resources/js/office-operation-now.js',
             ])
         @endif
+        @include('office.partials.arranque')
     </head>
     <body>
         <main class="office-app operation-now-app is-hidden" id="operationNowApp">
