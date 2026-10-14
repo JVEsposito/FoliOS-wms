@@ -97,6 +97,8 @@ class ServicioReposicionMaterial
             ->whereIn('m.item_material_id', $items)->where('f.temporada_id', $temporada)->whereBetween('m.ocurrido_at', [$inicio, $fin])
             ->where(fn ($q) => $q->where('m.tipo', 'consumo_transformacion')
                 ->orWhere(fn ($r) => $r->where('m.tipo', 'reversa_transformacion')->where('m.metadatos->sentido', 'restauracion_entrada'))
+                // Lo retirado a la línea que vuelve sin armar resta del consumo.
+                ->orWhere('m.tipo', 'devolucion_transformacion')
                 ->orWhere(fn ($d) => $d->where('m.tipo', 'despacho')->whereNotExists(fn ($a) => $a->selectRaw('1')->from('movimientos_almacenes_materiales as a')->whereColumn('a.retiro_material_id', 'm.retiro_material_id'))))
             ->select('m.id', 'm.item_material_id', 'f.numero_folio as folio', 'm.tipo', 'm.ocurrido_at', 'm.motivo')
             ->selectRaw('-m.cantidad AS cantidad')->selectRaw("'inventario' AS fuente");

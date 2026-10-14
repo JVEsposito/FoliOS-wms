@@ -21,4 +21,6 @@ enum TipoMovimientoInventarioMaterial: string
     case ProduccionTransformacion = 'produccion_transformacion';
     case MermaTransformacion = 'merma_transformacion';
     case ReversaTransformacion = 'reversa_transformacion';
+    // Material retirado a la línea que vuelve a su folio de origen (sin armar o cancelación).
+    case DevolucionTransformacion = 'devolucion_transformacion';
 }

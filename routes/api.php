@@ -562,6 +562,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('/ordenes/{ordenTransformacionMaterial}/iniciar', [TransformacionMaterialController::class, 'iniciar']);
             Route::post('/ordenes/{ordenTransformacionMaterial}/lotes', [TransformacionMaterialController::class, 'abrirLote']);
             Route::post('/lotes/{loteTransformacionMaterial}/cerrar', [TransformacionMaterialController::class, 'cerrarLote']);
+            Route::post('/ordenes/{ordenTransformacionMaterial}/folios-salida/confirmar', [TransformacionMaterialController::class, 'confirmarFolioSalida']);
             Route::post('/ordenes/{ordenTransformacionMaterial}/cerrar', [TransformacionMaterialController::class, 'cerrarOrden']);
             Route::post('/ordenes/{ordenTransformacionMaterial}/etiquetas', [ImpresionEtiquetaMaterialController::class, 'storeTransformacion']);
             Route::post('/trabajos-impresion/{trabajoImpresionMaterial}/resultado', [ImpresionEtiquetaMaterialController::class, 'resultado']);

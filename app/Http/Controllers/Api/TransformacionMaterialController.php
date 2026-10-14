@@ -3,11 +3,13 @@
 namespace App\Http\Controllers\Api;
 
 use App\Enums\EstadoFolioSalidaReservado;
+use App\Enums\ModoOperacionTransformacion;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\AbrirLoteTransformacionMaterialRequest;
 use App\Http\Requests\CancelarOrdenTransformacionMaterialRequest;
 use App\Http\Requests\CerrarLoteTransformacionMaterialRequest;
 use App\Http\Requests\CerrarOrdenTransformacionMaterialRequest;
+use App\Http\Requests\ConfirmarFolioSalidaTransformacionMaterialRequest;
 use App\Http\Requests\CrearOrdenTransformacionMaterialRequest;
 use App\Http\Requests\CrearRecetaMaterialRequest;
 use App\Http\Requests\CrearVersionRecetaMaterialRequest;
@@ -184,6 +186,22 @@ class TransformacionMaterialController extends Controller
             $request->integer('version_conocida'),
             $request->user(),
             $this->dispositivo($request),
+            ModoOperacionTransformacion::tryFrom((string) $request->validated('modo_operacion'))
+                ?? ModoOperacionTransformacion::PorLote,
+            $request->validated('folios_retirados') ?? [],
+        ));
+    }
+
+    public function confirmarFolioSalida(
+        ConfirmarFolioSalidaTransformacionMaterialRequest $request,
+        OrdenTransformacionMaterial $ordenTransformacionMaterial,
+        ServicioTransformacionMaterial $servicio,
+    ): OrdenTransformacionMaterialResource {
+        return new OrdenTransformacionMaterialResource($servicio->confirmarFolioSalida(
+            $ordenTransformacionMaterial,
+            $request->validated(),
+            $request->user(),
+            $this->dispositivo($request),
         ));
     }
 
@@ -227,6 +245,8 @@ class TransformacionMaterialController extends Controller
             $request->validated('motivo_desviacion'),
             $request->user(),
             $this->dispositivo($request),
+            $request->validated('cuadratura') ?? [],
+            $request->filled('folios_creados') ? $request->integer('folios_creados') : null,
         ));
     }
 

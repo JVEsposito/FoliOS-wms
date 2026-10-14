@@ -1877,6 +1877,306 @@ class TransformacionMaterialApiTest extends TestCase
             );
     }
 
+    public function test_modo_cuadratura_retira_al_iniciar_confirma_folios_y_cuadra_al_cierre(): void
+    {
+        [$tokenOficina, $tokenTablet, $folioPrincipal, $folioAuxiliar, $orden] =
+            $this->prepararOrdenOperacional(80, 30, iniciar: false);
+        $numeros = array_column($orden['folios_salida'], 'numero_folio');
+        $iniciar = "/api/materiales/transformaciones/ordenes/{$orden['id']}/iniciar";
+
+        $this->conToken($tokenTablet)
+            ->postJson($iniciar, [
+                'operacion_id' => (string) Str::uuid(),
+                'version_conocida' => 2,
+                'modo_operacion' => 'cuadratura_cierre',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('folios_retirados');
+        $this->conToken($tokenTablet)
+            ->postJson($iniciar, [
+                'operacion_id' => (string) Str::uuid(),
+                'version_conocida' => 2,
+                'modo_operacion' => 'cuadratura_cierre',
+                'folios_retirados' => [$folioPrincipal['id']],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Confirma el retiro de cada folio reservado de la orden antes de iniciar.');
+
+        $orden = $this->conToken($tokenTablet)
+            ->postJson($iniciar, [
+                'operacion_id' => (string) Str::uuid(),
+                'version_conocida' => 2,
+                'modo_operacion' => 'cuadratura_cierre',
+                'folios_retirados' => [mb_strtoupper($folioPrincipal['id']), $folioAuxiliar['id']],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.estado', 'en_proceso')
+            ->assertJsonPath('data.modo_operacion', 'cuadratura_cierre')
+            ->json('data');
+
+        // Lo reservado sale del inventario: el principal queda vacío y el auxiliar conserva 2.
+        $principal = FolioMaterial::query()->with('folio')->findOrFail($folioPrincipal['id']);
+        $this->assertSame('0.000', $principal->cantidad_actual);
+        $this->assertSame('retirado_definitivo', $principal->folio->estado_operacional->value);
+        $this->assertDatabaseMissing('ubicaciones_actuales', ['folio_id' => $folioPrincipal['id']]);
+        $auxiliar = FolioMaterial::query()->with('folio')->findOrFail($folioAuxiliar['id']);
+        $this->assertSame('2.000', $auxiliar->cantidad_actual);
+        $this->assertSame('0.000', $auxiliar->cantidad_reservada);
+        $this->assertSame('disponible', $auxiliar->folio->estado_operacional->value);
+        $this->assertSame(['consumida', 'consumida'], array_column($orden['reservas'], 'estado'));
+        $this->assertSame(2, MovimientoInventarioMaterial::query()
+            ->where('orden_transformacion_material_id', $orden['id'])
+            ->where('tipo', 'consumo_transformacion')
+            ->where('metadatos->sentido', 'retiro_linea')
+            ->count());
+        $iniciada = collect($orden['eventos'])->firstWhere('tipo', 'iniciada');
+        $this->assertSame('cuadratura_cierre', $iniciada['datos']['modo_operacion']);
+        $this->assertCount(2, $iniciada['datos']['componentes_retirados']);
+
+        $this->conToken($tokenTablet)
+            ->postJson("/api/materiales/transformaciones/ordenes/{$orden['id']}/lotes", [
+                'operacion_id' => (string) Str::uuid(),
+                'version_conocida' => 3,
+                'cantidad_planificada_salida' => 30,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath(
+                'message',
+                'Esta orden se cuadra al cierre: confirma cada folio de salida pistoleando su etiqueta.',
+            );
+
+        $orden = $this->confirmarFolioSalida($tokenTablet, $orden['id'], 3, $numeros[0], 30);
+        $this->assertSame('cerrado', $orden['lotes'][0]['estado']);
+        $this->assertSame([], $orden['lotes'][0]['consumos']);
+        $this->assertSame($numeros[0], $orden['lotes'][0]['salidas'][0]['numero_folio']);
+        $this->assertSame('usado', $orden['folios_salida'][0]['estado']);
+        $orden = $this->confirmarFolioSalida($tokenTablet, $orden['id'], 4, mb_strtolower($numeros[1]), 28);
+        $this->assertSame('58.000', $orden['cantidad_real_salida']);
+        $this->assertSame('en_proceso', $orden['estado']);
+        $this->conToken($tokenTablet)
+            ->postJson("/api/materiales/transformaciones/ordenes/{$orden['id']}/folios-salida/confirmar", [
+                'operacion_id' => (string) Str::uuid(),
+                'version_conocida' => 5,
+                'folio_salida' => $numeros[2],
+                'cantidad_real_salida' => 31,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Un folio de salida no puede superar 30.000 unidades.');
+
+        $cerrar = "/api/materiales/transformaciones/ordenes/{$orden['id']}/cerrar";
+        $componentes = collect($orden['receta_snapshot']['componentes'])->keyBy('es_componente_principal');
+        $cuadratura = [
+            ['item_id' => $componentes[true]['item_id'], 'cantidad_merma' => 2, 'cantidad_sin_armar' => 20],
+            ['item_id' => $componentes[false]['item_id'], 'cantidad_merma' => 0, 'cantidad_sin_armar' => 2],
+        ];
+        $base = [
+            'version_conocida' => 5,
+            'motivo_desviacion' => 'La línea se detuvo antes de terminar el último pallet.',
+        ];
+        $this->conToken($tokenTablet)
+            ->postJson($cerrar, [...$base, 'operacion_id' => (string) Str::uuid(), 'folios_creados' => 1, 'cuadratura' => $cuadratura])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'La orden registra 2 folios creados. Actualiza la orden y vuelve a confirmar el cierre.');
+        $this->conToken($tokenTablet)
+            ->postJson($cerrar, [...$base, 'operacion_id' => (string) Str::uuid(), 'folios_creados' => 2, 'cuadratura' => [$cuadratura[0]]])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Declara la merma y lo sin armar de cada componente de la receta.');
+
+        $cerrada = $this->conToken($tokenTablet)
+            ->postJson($cerrar, [...$base, 'operacion_id' => (string) Str::uuid(), 'folios_creados' => 2, 'cuadratura' => $cuadratura])
+            ->assertOk()
+            ->assertJsonPath('data.estado', 'cerrada')
+            ->json('data');
+
+        $filas = collect($cerrada['cuadratura'])->keyBy('es_componente_principal');
+        $this->assertSame(
+            ['80.000', '58.000', '2.000', '20.000', '58.000', '0.000'],
+            [$filas[true]['cantidad_retirada'], $filas[true]['cantidad_teorica'], $filas[true]['cantidad_merma'], $filas[true]['cantidad_sin_armar'], $filas[true]['cantidad_utilizada'], $filas[true]['desviacion']],
+        );
+        $this->assertSame(
+            ['8.000', '5.800', '0.000', '2.000', '6.000', '0.200'],
+            [$filas[false]['cantidad_retirada'], $filas[false]['cantidad_teorica'], $filas[false]['cantidad_merma'], $filas[false]['cantidad_sin_armar'], $filas[false]['cantidad_utilizada'], $filas[false]['desviacion']],
+        );
+
+        // Lo sin armar vuelve a su folio: el principal, vacío, queda para ubicar.
+        $principal = FolioMaterial::query()->with('folio')->findOrFail($folioPrincipal['id']);
+        $this->assertSame('20.000', $principal->cantidad_actual);
+        $this->assertSame('pendiente_ubicacion', $principal->folio->estado_operacional->value);
+        $this->assertTrue($principal->folio->activo);
+        $auxiliar = FolioMaterial::query()->with('folio')->findOrFail($folioAuxiliar['id']);
+        $this->assertSame('4.000', $auxiliar->cantidad_actual);
+        $this->assertSame('disponible', $auxiliar->folio->estado_operacional->value);
+        $reservas = collect($cerrada['reservas'])->keyBy('folio.id');
+        $this->assertSame(['60.000', '20.000'], [
+            $reservas[$folioPrincipal['id']]['cantidad_consumida'],
+            $reservas[$folioPrincipal['id']]['cantidad_devuelta'],
+        ]);
+        $this->assertSame(2, MovimientoInventarioMaterial::query()
+            ->where('orden_transformacion_material_id', $orden['id'])
+            ->where('tipo', 'devolucion_transformacion')
+            ->where('metadatos->sentido', 'sin_armar')
+            ->count());
+        $this->assertSame(['usado', 'usado', 'anulado'], array_column($cerrada['folios_salida'], 'estado'));
+        $evento = collect($cerrada['eventos'])->firstWhere('tipo', 'cerrada');
+        $this->assertSame(2, $evento['datos']['folios_creados']);
+        $this->assertCount(2, $evento['datos']['devoluciones_sin_armar']);
+        $this->assertTrue($evento['datos']['devoluciones_sin_armar'][0]['requiere_ubicacion']);
+    }
+
+    public function test_modo_cuadratura_exige_motivo_si_lo_utilizado_no_cuadra_con_la_receta(): void
+    {
+        [, $tokenTablet, $folioPrincipal, $folioAuxiliar, $orden] =
+            $this->prepararOrdenOperacional(80, 30, iniciar: false);
+        $numeros = array_column($orden['folios_salida'], 'numero_folio');
+        $this->iniciarEnCuadratura($tokenTablet, $orden['id'], [$folioPrincipal['id'], $folioAuxiliar['id']]);
+        $orden = $this->confirmarFolioSalida($tokenTablet, $orden['id'], 3, $numeros[0], 30);
+        $orden = $this->confirmarFolioSalida($tokenTablet, $orden['id'], 4, $numeros[1], 30);
+        $orden = $this->confirmarFolioSalida($tokenTablet, $orden['id'], 5, $numeros[2], 20);
+        $this->assertSame('pendiente_cierre', $orden['estado']);
+
+        $componentes = collect($orden['receta_snapshot']['componentes'])->keyBy('es_componente_principal');
+        $principal = $componentes[true];
+        $cerrar = fn (array $principalDeclarado, ?string $motivo = null) => $this->conToken($tokenTablet)
+            ->postJson("/api/materiales/transformaciones/ordenes/{$orden['id']}/cerrar", [
+                'operacion_id' => (string) Str::uuid(),
+                'version_conocida' => 6,
+                'folios_creados' => 3,
+                ...($motivo ? ['motivo_desviacion' => $motivo] : []),
+                'cuadratura' => [
+                    ['item_id' => $principal['item_id'], ...$principalDeclarado],
+                    ['item_id' => $componentes[false]['item_id'], 'cantidad_merma' => 0, 'cantidad_sin_armar' => 0],
+                ],
+            ]);
+
+        $cerrar(['cantidad_merma' => 50, 'cantidad_sin_armar' => 40])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', "La merma y lo sin armar de {$principal['codigo']} superan lo retirado (80,000 {$principal['unidad_medida']}).");
+        $cerrar(['cantidad_merma' => 0, 'cantidad_sin_armar' => 5])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', "Lo utilizado de {$principal['codigo']} no cuadra con la receta: indica el motivo de la diferencia.");
+        $this->assertSame('0.000', FolioMaterial::query()->findOrFail($folioPrincipal['id'])->cantidad_actual);
+
+        $cerrada = $cerrar(['cantidad_merma' => 0, 'cantidad_sin_armar' => 5], 'Se encontraron cinco cajas sin armar en la línea.')
+            ->assertOk()
+            ->json('data');
+        $this->assertSame('-5.000', collect($cerrada['cuadratura'])->firstWhere('es_componente_principal', true)['desviacion']);
+        $this->assertSame('5.000', FolioMaterial::query()->findOrFail($folioPrincipal['id'])->cantidad_actual);
+        $this->assertSame([], collect($cerrada['folios_salida'])->where('estado', 'anulado')->values()->all());
+    }
+
+    public function test_modo_cuadratura_revierte_folios_y_cancelar_devuelve_lo_retirado(): void
+    {
+        [$tokenOficina, $tokenTablet, $folioPrincipal, $folioAuxiliar, $orden] =
+            $this->prepararOrdenOperacional(80, 30, iniciar: false);
+        $numeros = array_column($orden['folios_salida'], 'numero_folio');
+        $this->iniciarEnCuadratura($tokenTablet, $orden['id'], [$folioPrincipal['id'], $folioAuxiliar['id']]);
+        $orden = $this->confirmarFolioSalida($tokenTablet, $orden['id'], 3, $numeros[0], 30);
+        $cancelar = fn () => $this->conToken($tokenOficina)
+            ->postJson("/api/materiales/transformaciones/ordenes/{$orden['id']}/cancelar", [
+                'operacion_id' => (string) Str::uuid(),
+                'motivo' => 'Se reprograma la orden para el turno siguiente.',
+            ]);
+
+        $cancelar()->assertUnprocessable();
+
+        $orden = $this->conToken($tokenOficina)
+            ->postJson("/api/materiales/transformaciones/lotes/{$orden['lotes'][0]['id']}/revertir", [
+                'operacion_id' => (string) Str::uuid(),
+                'version_conocida' => 4,
+                'motivo' => 'Se pistoleó la etiqueta equivocada.',
+            ])
+            ->assertOk()
+            ->json('data');
+        $this->assertSame('anulado', $orden['lotes'][0]['estado']);
+        $this->assertSame('anulado', $orden['folios_salida'][0]['estado']);
+        $this->assertSame('reservado', $orden['folios_salida'][3]['estado']);
+        $this->assertSame('anulado', Folio::query()
+            ->where('numero_folio', $numeros[0])
+            ->firstOrFail()
+            ->estado_operacional
+            ->value);
+
+        $cancelada = $cancelar()->assertOk()->json('data');
+
+        $principal = FolioMaterial::query()->with('folio')->findOrFail($folioPrincipal['id']);
+        $this->assertSame('80.000', $principal->cantidad_actual);
+        $this->assertSame('pendiente_ubicacion', $principal->folio->estado_operacional->value);
+        $this->assertSame('10.000', FolioMaterial::query()->findOrFail($folioAuxiliar['id'])->cantidad_actual);
+        $this->assertSame(['liberada', 'liberada'], array_column($cancelada['reservas'], 'estado'));
+        $this->assertEqualsCanonicalizing(['80.000', '8.000'], array_column($cancelada['reservas'], 'cantidad_devuelta'));
+        $this->assertSame(2, MovimientoInventarioMaterial::query()
+            ->where('orden_transformacion_material_id', $orden['id'])
+            ->where('tipo', 'devolucion_transformacion')
+            ->where('metadatos->sentido', 'cancelacion')
+            ->count());
+        $this->assertCount(2, collect($cancelada['eventos'])->firstWhere('tipo', 'cancelada')['datos']['componentes_devueltos']);
+    }
+
+    public function test_cada_modo_rechaza_las_acciones_del_otro(): void
+    {
+        // Orden por lote: no acepta confirmar folios pistoleados.
+        [, $tokenTablet, , , $orden] = $this->prepararOrdenOperacional(80, 30);
+        $this->assertSame('por_lote', $orden['modo_operacion']);
+        $this->conToken($tokenTablet)
+            ->postJson("/api/materiales/transformaciones/ordenes/{$orden['id']}/folios-salida/confirmar", [
+                'operacion_id' => (string) Str::uuid(),
+                'version_conocida' => 3,
+                'folio_salida' => $orden['folios_salida'][0]['numero_folio'],
+                'cantidad_real_salida' => 30,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Esta orden se opera por lotes: abre un lote y pistolea sus consumos.');
+    }
+
+    public function test_sin_folios_de_salida_reservados_no_se_puede_iniciar_en_cuadratura(): void
+    {
+        [, $tokenTablet, $folioPrincipal, $folioAuxiliar, $orden] =
+            $this->prepararOrdenOperacional(20, iniciar: false);
+
+        $this->conToken($tokenTablet)
+            ->postJson("/api/materiales/transformaciones/ordenes/{$orden['id']}/iniciar", [
+                'operacion_id' => (string) Str::uuid(),
+                'version_conocida' => 2,
+                'modo_operacion' => 'cuadratura_cierre',
+                'folios_retirados' => [$folioPrincipal['id'], $folioAuxiliar['id']],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'La orden no tiene folios de salida reservados: iníciala con el flujo por lote.');
+        $this->assertSame('80.000', FolioMaterial::query()->findOrFail($folioPrincipal['id'])->cantidad_actual);
+    }
+
+    /** @param list<string> $folios */
+    private function iniciarEnCuadratura(string $tokenTablet, string $ordenId, array $folios): array
+    {
+        return $this->conToken($tokenTablet)
+            ->postJson("/api/materiales/transformaciones/ordenes/{$ordenId}/iniciar", [
+                'operacion_id' => (string) Str::uuid(),
+                'version_conocida' => 2,
+                'modo_operacion' => 'cuadratura_cierre',
+                'folios_retirados' => $folios,
+            ])
+            ->assertOk()
+            ->json('data');
+    }
+
+    private function confirmarFolioSalida(
+        string $tokenTablet,
+        string $ordenId,
+        int $version,
+        string $numeroFolio,
+        float $cantidad,
+    ): array {
+        return $this->conToken($tokenTablet)
+            ->postJson("/api/materiales/transformaciones/ordenes/{$ordenId}/folios-salida/confirmar", [
+                'operacion_id' => (string) Str::uuid(),
+                'version_conocida' => $version,
+                'folio_salida' => $numeroFolio,
+                'cantidad_real_salida' => $cantidad,
+            ])
+            ->assertOk()
+            ->json('data');
+    }
+
     /**
      * Abre un lote con la cantidad planificada y lo cierra con los datos indicados.
      *
@@ -2129,6 +2429,7 @@ class TransformacionMaterialApiTest extends TestCase
     private function prepararOrdenOperacional(
         float $cantidadPlanificada,
         ?float $unidadesPorFolio = null,
+        bool $iniciar = true,
     ): array {
         [, $tokenOficina, $cliente, $proveedor, $entradaPrincipal, $entradaAuxiliar, $salida] =
             $this->prepararCatalogo();
@@ -2212,13 +2513,15 @@ class TransformacionMaterialApiTest extends TestCase
             ])
             ->assertOk()
             ->json('data');
-        $orden = $this->conToken($tokenTablet)
-            ->postJson("/api/materiales/transformaciones/ordenes/{$orden['id']}/iniciar", [
-                'operacion_id' => (string) Str::uuid(),
-                'version_conocida' => 2,
-            ])
-            ->assertOk()
-            ->json('data');
+        if ($iniciar) {
+            $orden = $this->conToken($tokenTablet)
+                ->postJson("/api/materiales/transformaciones/ordenes/{$orden['id']}/iniciar", [
+                    'operacion_id' => (string) Str::uuid(),
+                    'version_conocida' => 2,
+                ])
+                ->assertOk()
+                ->json('data');
+        }
 
         return [
             $tokenOficina,

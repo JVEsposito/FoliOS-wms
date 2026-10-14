@@ -493,6 +493,26 @@ function orderOutputFoliosTable(order) {
     `;
 }
 
+/** Modo cuadratura: retirado = utilizado + merma + sin armar, por componente. */
+function orderReconciliationTable(order) {
+    return `
+        <div class="materials-order-table-wrap">
+            <table class="materials-order-table">
+                <thead><tr><th>Componente</th><th>Retirado</th><th>Según receta</th><th>Merma</th><th>Sin armar</th><th>Utilizado</th><th>Diferencia</th></tr></thead>
+                <tbody>${order.cuadratura.map((row) => `<tr>
+                    <td><strong>${orderEscape(row.item?.codigo)}</strong><small>${orderEscape(row.item?.nombre)}${row.es_componente_principal ? ' · principal' : ''}</small></td>
+                    <td>${orderQuantity(row.cantidad_retirada)}</td>
+                    <td>${orderQuantity(row.cantidad_teorica)}</td>
+                    <td>${orderQuantity(row.cantidad_merma)}</td>
+                    <td>${orderQuantity(row.cantidad_sin_armar)}</td>
+                    <td>${orderQuantity(row.cantidad_utilizada)}</td>
+                    <td>${orderQuantity(row.desviacion)} ${orderEscape(row.item?.unidad_medida)}</td>
+                </tr>`).join('')}</tbody>
+            </table>
+        </div>
+    `;
+}
+
 /** Aviso de etiquetas: folios reservados sin imprimir o con cantidad real distinta. */
 function orderOutputFolioNotice(order) {
     const summary = order.folios_salida_resumen;
@@ -518,6 +538,7 @@ function orderDetailContent(order) {
     return `
         ${orderRequirementTable(order)}
         ${(order.folios_salida || []).length ? `<h4>Folios de salida reservados</h4>${orderOutputFoliosTable(order)}` : ''}
+        ${(order.cuadratura || []).length ? `<h4>Cuadratura de cierre</h4>${orderReconciliationTable(order)}` : ''}
         <h4>Lotes operacionales</h4>
         ${orderLotsTable(order)}
         <div class="materials-order-audit">${orderAudit(order)}</div>
@@ -598,6 +619,7 @@ function renderOrders() {
                     <span>${orderReservationCount(order)} reservas</span>
                     <span>${orderLotCount(order)} lotes</span>
                     ${outputFolios ? `<span>${outputFolios.usados} de ${outputFolios.reservados + outputFolios.usados} folios de salida producidos</span>` : ''}
+                    ${order.modo_operacion === 'cuadratura_cierre' ? '<span>Cuadratura al cierre</span>' : ''}
                 </div>
                 ${orderOutputFolioNotice(order)}
                 ${order.alerta_vencimiento ? `<p class="form-error">${orderEscape(order.alerta_vencimiento)}</p>` : ''}
