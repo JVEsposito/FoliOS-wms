@@ -1,6 +1,7 @@
 import { createClientTransfers } from './office-material-client-transfers.js';
 import { openItemPhotoPanel, loadPrivateItemImages, releasePrivateItemImages } from './shared/private-item-photos';
 import { createOperationalPoller } from './shared/operational-poller';
+import { filterMaterialItems, materialItemsSummary, normalizeSearchText } from './shared/material-item-search.js';
 
 const byId = (id) => document.getElementById(id);
 const elements = {
@@ -10,6 +11,8 @@ const elements = {
     loadsNav: byId('officeLoadsNav'), prefrioNav: byId('officePrefrioNav'), accessesNav: byId('officeAccessesNav'), managementNav: byId('officeManagementNav'), romanaNav: byId('officeRomanaNav'),
     reload: byId('reloadMaterialsButton'), admin: byId('materialsAdminCatalogs'), itemForm: byId('itemMaterialForm'),
     itemError: byId('itemMaterialError'), itemCancel: byId('cancelItemEdit'), itemList: byId('itemsMaterialList'),
+    itemEditor: byId('itemMaterialEditor'), itemEditorTitle: byId('itemMaterialEditorTitle'),
+    itemSearch: byId('itemsMaterialSearch'), itemTypeFilter: byId('itemsMaterialTypeFilter'), itemShowInactive: byId('itemsMaterialShowInactive'),
     seasonList: byId('seasonsMaterialList'),
     seasonSelector: byId('materialSeasonSelector'), seasonActive: byId('materialsSeasonActive'),
     clientList: byId('clientsMaterialList'),
@@ -270,8 +273,14 @@ function renderItems() {
     const canAdminister = state.identity?.puede_administrar_catalogos_materiales === true;
     const canRegularize = canAdminister
         && state.identity?.puede_administrar_recetas_materiales === true;
-    const items = seasonItems();
-    elements.itemsSummary.textContent = `${items.length} registrados`;
+    const allItems = seasonItems();
+    const query = elements.itemSearch?.value || '';
+    const items = filterMaterialItems(allItems, {
+        query,
+        type: elements.itemTypeFilter?.value || '',
+        includeInactive: elements.itemShowInactive?.checked !== false,
+    });
+    elements.itemsSummary.textContent = materialItemsSummary(items.length, allItems.length);
     releasePrivateItemImages(elements.itemList);
     elements.itemList.innerHTML = items.map((item) => {
         const consolidated = item.regularizacion?.item_canonico;
@@ -282,7 +291,9 @@ function renderItems() {
             ? `<div class="material-row__actions"><button data-edit-item="${item.id}" type="button">Editar</button>${canRegularize && item.activo && item.categoria_operacional === 'material_pt' ? `<button data-regularize-item="${item.id}" type="button">Consolidar con MP</button>` : ''}</div>`
             : '';
         return `<article class="material-row${item.activo ? '' : ' is-inactive'}">${item.foto_principal ? `<img class="item-photo-thumb" alt="${escapeHtml(item.nombre)}" data-private-item-photo="${escapeHtml(item.foto_principal.miniatura_url)}">` : ''}<div><strong>${escapeHtml(item.cliente?.codigo || 'SIN CLIENTE')} · ${escapeHtml(item.codigo)} · ${escapeHtml(item.nombre)}</strong><small>${escapeHtml(detail)}</small></div><button data-item-photos="${item.id}" type="button">Fotos (${item.cantidad_fotos ?? 0})</button>${actions}</article>`;
-    }).join('') || '<p class="empty-state">No existen ítems en esta temporada.</p>';
+    }).join('') || (allItems.length
+        ? `<p class="empty-state">Ningún ítem coincide${normalizeSearchText(query) ? ` con «${escapeHtml(query.trim())}»` : ''} con los filtros actuales.</p>`
+        : '<p class="empty-state">No existen ítems en esta temporada.</p>');
     void loadPrivateItemImages(elements.itemList);
     refreshDispatchLines();
 }
@@ -653,7 +664,7 @@ async function openDispatchTrace(dispatchId) {
         elements.dispatchReassignForm.elements.asignado_a_user_id.value = dispatch.asignado_a?.id || '';
     } catch (error) { elements.dispatchTraceBody.textContent = error.message; }
 }
-function resetItemForm() { elements.itemForm.reset(); elements.itemForm.elements.id.value = ''; elements.itemForm.elements.activo.checked = true; elements.itemCancel.classList.add('is-hidden'); elements.itemError.textContent = ''; }
+function resetItemForm() { elements.itemForm.reset(); elements.itemForm.elements.id.value = ''; elements.itemForm.elements.activo.checked = true; elements.itemCancel.classList.add('is-hidden'); elements.itemError.textContent = ''; if (elements.itemEditorTitle) elements.itemEditorTitle.textContent = 'Nuevo ítem'; if (elements.itemEditor) elements.itemEditor.open = false; }
 function resetProviderForm() { elements.providerForm.reset(); elements.providerForm.elements.id.value = ''; elements.providerForm.elements.activo.checked = true; elements.providerCancel.classList.add('is-hidden'); elements.providerError.textContent = ''; renderProviders(); }
 function resetDestinationForm() { elements.destinationForm.reset(); elements.destinationForm.elements.id.value = ''; elements.destinationForm.elements.activo.checked = true; elements.destinationCancel.classList.add('is-hidden'); elements.destinationError.textContent = ''; }
 function resetImportPreview() { state.importPreview = null; elements.importError.textContent = ''; renderImportPreview(); }
@@ -687,7 +698,7 @@ elements.providerList.addEventListener('click', (event) => {
     renderProviderCategories(categoryKeys);
     elements.providerCancel.classList.remove('is-hidden');
 });
-elements.itemList.addEventListener('click', (event) => { const button = event.target.closest('[data-edit-item]'); if (!button) return; const item = state.items.find((candidate) => candidate.id === button.dataset.editItem); if (!item) return; for (const field of ['id', 'codigo', 'nombre', 'categoria', 'categoria_operacional', 'unidad_medida', 'codigo_externo', 'dias_alerta_vencimiento', 'stock_minimo', 'punto_reorden', 'stock_maximo']) elements.itemForm.elements[field].value = item[field] ?? ''; elements.itemForm.elements.cliente_material_id.value = item.cliente?.id || ''; elements.itemForm.elements.activo.checked = item.activo; elements.itemCancel.classList.remove('is-hidden'); });
+elements.itemList.addEventListener('click', (event) => { const button = event.target.closest('[data-edit-item]'); if (!button) return; const item = state.items.find((candidate) => candidate.id === button.dataset.editItem); if (!item) return; for (const field of ['id', 'codigo', 'nombre', 'categoria', 'categoria_operacional', 'unidad_medida', 'codigo_externo', 'dias_alerta_vencimiento', 'stock_minimo', 'punto_reorden', 'stock_maximo']) elements.itemForm.elements[field].value = item[field] ?? ''; elements.itemForm.elements.cliente_material_id.value = item.cliente?.id || ''; elements.itemForm.elements.activo.checked = item.activo; elements.itemCancel.classList.remove('is-hidden'); if (elements.itemEditorTitle) elements.itemEditorTitle.textContent = `Editar ítem ${item.codigo}`; if (elements.itemEditor) elements.itemEditor.open = true; (elements.itemEditor || elements.itemForm).scrollIntoView({ block: 'start', behavior: 'smooth' }); elements.itemForm.elements.nombre.focus({ preventScroll: true }); });
 elements.itemList.addEventListener('click', (event) => {
     const button = event.target.closest('[data-regularize-item]');
     if (!button || !elements.regularizationDialog) return;
@@ -731,7 +742,21 @@ elements.regularizationForm?.addEventListener('submit', async (event) => {
     button.addEventListener('click', () => elements.regularizationDialog.close()));
 elements.destinationList.addEventListener('click', (event) => { const button = event.target.closest('[data-edit-destination]'); if (!button) return; const destination = state.destinations.find((candidate) => candidate.id === button.dataset.editDestination); if (!destination) return; for (const field of ['id', 'nombre', 'centro_costo', 'descripcion', 'codigo_externo']) elements.destinationForm.elements[field].value = destination[field] || ''; elements.destinationForm.elements.activo.checked = destination.activo; elements.destinationCancel.classList.remove('is-hidden'); });
 elements.providerClientOptions.addEventListener('change', () => renderProviderCategories());
-elements.providerCancel.addEventListener('click', resetProviderForm); elements.itemCancel.addEventListener('click', resetItemForm); elements.destinationCancel.addEventListener('click', resetDestinationForm);
+elements.providerCancel.addEventListener('click', resetProviderForm); elements.itemCancel.addEventListener('click', resetItemForm);
+let itemSearchTimer = null;
+function scheduleItemSearch() {
+    window.clearTimeout(itemSearchTimer);
+    itemSearchTimer = window.setTimeout(renderItems, 150);
+}
+elements.itemSearch?.addEventListener('input', scheduleItemSearch);
+elements.itemSearch?.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape' || !elements.itemSearch.value) return;
+    event.preventDefault();
+    elements.itemSearch.value = '';
+    renderItems();
+});
+elements.itemTypeFilter?.addEventListener('change', renderItems);
+elements.itemShowInactive?.addEventListener('change', renderItems); elements.destinationCancel.addEventListener('click', resetDestinationForm);
 elements.importOpen.addEventListener('click', () => elements.importDialog.showModal());
 elements.importClose.addEventListener('click', () => elements.importDialog.close());
 elements.importTemplate.addEventListener('click', () => {
