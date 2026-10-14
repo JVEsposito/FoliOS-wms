@@ -89,6 +89,7 @@ class ServicioReinicioOperacional
         'reservas_transformacion_materiales',
         'consumos_transformacion_materiales',
         'salidas_transformacion_materiales',
+        'folios_salida_reservados_transformacion',
         'trabajos_impresion_materiales',
         'folios_trabajos_impresion_materiales',
     ];

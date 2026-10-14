@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Exceptions\ConflictoOperacion;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\GenerarEtiquetasMaterialRequest;
+use App\Http\Requests\GenerarEtiquetasTransformacionMaterialRequest;
 use App\Http\Requests\RegistrarResultadoImpresionMaterialRequest;
 use App\Models\OrdenTransformacionMaterial;
 use App\Models\PersonalAccessToken;
@@ -84,7 +85,7 @@ class ImpresionEtiquetaMaterialController extends Controller
     }
 
     public function storeTransformacion(
-        GenerarEtiquetasMaterialRequest $request,
+        GenerarEtiquetasTransformacionMaterialRequest $request,
         OrdenTransformacionMaterial $ordenTransformacionMaterial,
         ServicioImpresionEtiquetaMaterial $servicio,
     ): Response {
@@ -228,6 +229,7 @@ class ImpresionEtiquetaMaterialController extends Controller
             'perfil' => $trabajo->perfil_snapshot,
             'folios' => $trabajo->folios->map(fn ($folio): array => [
                 'id' => $folio->folio_id,
+                'folio_salida_reservado_id' => $folio->folio_salida_reservado_id,
                 'numero_folio' => $folio->numero_folio_snapshot,
                 'es_reimpresion' => $folio->es_reimpresion,
             ])->values(),

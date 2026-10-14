@@ -2,9 +2,11 @@
 
 namespace App\Services\Materiales;
 
+use App\Enums\EstadoFolioSalidaReservado;
 use App\Enums\EstadoRecepcionMaterial;
 use App\Exceptions\ConflictoOperacion;
 use App\Models\FolioMaterial;
+use App\Models\FolioSalidaReservadoTransformacion;
 use App\Models\FolioTrabajoImpresionMaterial;
 use App\Models\OrdenTransformacionMaterial;
 use App\Models\PerfilImpresionEtiqueta;
@@ -16,6 +18,7 @@ use App\Models\User;
 use Closure;
 use DomainException;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class ServicioImpresionEtiquetaMaterial
@@ -103,6 +106,7 @@ class ServicioImpresionEtiquetaMaterial
         User $usuario,
         ?string $dispositivoId = null,
     ): array {
+        $reservaIds = collect($datos['reserva_ids'] ?? [])->sort()->values()->all();
         $payload = [
             'origen' => 'transformacion',
             'orden_transformacion_material_id' => $orden->id,
@@ -110,17 +114,20 @@ class ServicioImpresionEtiquetaMaterial
             'formato' => $datos['formato'],
             'simbologia' => $datos['simbologia'],
             'canal' => $datos['canal'],
-            'folio_ids' => collect($datos['folio_ids'])->sort()->values()->all(),
+            'folio_ids' => collect($datos['folio_ids'] ?? [])->sort()->values()->all(),
             'copias' => (int) $datos['copias'],
             'motivo_reimpresion' => $datos['motivo_reimpresion'] ?? null,
         ];
+        if ($reservaIds !== []) {
+            $payload['reserva_ids'] = $reservaIds;
+        }
 
         return $this->generarTrabajo(
             $payload,
             $datos,
             $usuario,
             $dispositivoId,
-            function (array $folioIds) use ($orden): array {
+            function (array $folioIds) use ($orden, $reservaIds): array {
                 $orden = OrdenTransformacionMaterial::query()
                     ->with('cliente:id,codigo,nombre')
                     ->lockForUpdate()
@@ -143,23 +150,82 @@ class ServicioImpresionEtiquetaMaterial
                         'Uno o más folios no son salidas cerradas de la orden seleccionada.',
                     );
                 }
+                // Folio producido desde un folio reservado: conserva la secuencia de su etiqueta.
+                $reservasProducidas = FolioSalidaReservadoTransformacion::query()
+                    ->whereIn('folio_id', $folioIds)
+                    ->get()
+                    ->keyBy('folio_id');
+                $reservas = $this->foliosReservadosImprimibles($orden, $reservaIds);
                 $lotes = $salidas->pluck('lote_transformacion_material_id')->unique()->values();
 
                 return [
                     'recepcion_material_id' => null,
                     'orden_transformacion_material_id' => $orden->id,
-                    'lote_transformacion_material_id' => $lotes->count() === 1
+                    'lote_transformacion_material_id' => $lotes->count() === 1 && $reservas->isEmpty()
                         ? $lotes->first()
                         : null,
-                    'etiquetas' => collect($folioIds)
-                        ->map(fn (string $folioId): array => $this->etiquetaTransformacionSnapshot(
-                            $salidas->get($folioId),
-                            $orden,
-                        ))
-                        ->all(),
+                    'etiquetas' => [
+                        ...collect($folioIds)
+                            ->map(fn (string $folioId): array => $this->etiquetaTransformacionSnapshot(
+                                $salidas->get($folioId),
+                                $orden,
+                                $reservasProducidas->get($folioId),
+                            ))
+                            ->all(),
+                        ...$reservas
+                            ->map(fn (FolioSalidaReservadoTransformacion $reserva): array => $this->etiquetaFolioReservadoSnapshot(
+                                $reserva,
+                                $orden,
+                            ))
+                            ->all(),
+                    ],
                 ];
             },
         );
+    }
+
+    /**
+     * Folios reservados de la orden que aún no se producen, en orden de secuencia.
+     *
+     * @param  array<int, string>  $reservaIds
+     * @return Collection<int, FolioSalidaReservadoTransformacion>
+     */
+    private function foliosReservadosImprimibles(
+        OrdenTransformacionMaterial $orden,
+        array $reservaIds,
+    ): Collection {
+        if ($reservaIds === []) {
+            return collect();
+        }
+
+        $reservas = FolioSalidaReservadoTransformacion::query()
+            ->whereIn('id', $reservaIds)
+            ->where('orden_transformacion_material_id', $orden->id)
+            ->orderBy('secuencia')
+            ->lockForUpdate()
+            ->get();
+        if ($reservas->count() !== count($reservaIds)) {
+            throw new DomainException(
+                'Uno o más folios reservados no pertenecen a la orden seleccionada.',
+            );
+        }
+
+        foreach ($reservas as $reserva) {
+            if ($reserva->estado === EstadoFolioSalidaReservado::Usado) {
+                throw new DomainException(sprintf(
+                    'El folio %s ya fue producido: imprime su etiqueta desde los folios generados.',
+                    $reserva->numero_folio,
+                ));
+            }
+            if ($reserva->estado !== EstadoFolioSalidaReservado::Reservado) {
+                throw new DomainException(sprintf(
+                    'El folio %s fue anulado y no puede etiquetarse.',
+                    $reserva->numero_folio,
+                ));
+            }
+        }
+
+        return $reservas;
     }
 
     /** @return array{trabajo: TrabajoImpresionMaterial, contenido: string, mime: string, nombre: string} */
@@ -236,15 +302,21 @@ class ServicioImpresionEtiquetaMaterial
                     ->where('activo', true)
                     ->lockForUpdate()
                     ->firstOrFail();
-                $reimpresos = FolioTrabajoImpresionMaterial::query()
-                    ->whereIn('folio_id', $payload['folio_ids'])
-                    ->distinct()
-                    ->pluck('folio_id')
-                    ->all();
-                if ($reimpresos !== [] && blank($datos['motivo_reimpresion'] ?? null)) {
-                    throw new DomainException(
-                        'Debes indicar el motivo para volver a generar una etiqueta.',
+                $etiquetas = collect($contexto['etiquetas']);
+                $reservasEtiquetadas = $this->reservasEtiquetadas($etiquetas);
+                $reimpresos = $this->etiquetasReimpresas($etiquetas, $reservasEtiquetadas);
+                $motivoReimpresion = $datos['motivo_reimpresion'] ?? null;
+                if ($reimpresos !== [] && blank($motivoReimpresion)) {
+                    // La cantidad real de un folio reservado difiere de la teórica ya impresa.
+                    $soloCambioCantidad = collect($reimpresos)->every(
+                        fn (string $clave): bool => (bool) $reservasEtiquetadas->get($clave)?->requiere_reimpresion,
                     );
+                    if (! $soloCambioCantidad) {
+                        throw new DomainException(
+                            'Debes indicar el motivo para volver a generar una etiqueta.',
+                        );
+                    }
+                    $motivoReimpresion = 'La cantidad real difiere de la cantidad teórica impresa.';
                 }
 
                 $perfilSnapshot = $this->perfilSnapshot($perfil);
@@ -269,7 +341,7 @@ class ServicioImpresionEtiquetaMaterial
                     'canal' => $datos['canal'],
                     'estado' => 'generado',
                     'copias' => $payload['copias'],
-                    'motivo_reimpresion' => $datos['motivo_reimpresion'] ?? null,
+                    'motivo_reimpresion' => $motivoReimpresion,
                     'perfil_snapshot' => $perfilSnapshot,
                     'contenido_snapshot' => $contenidoSnapshot,
                     'contenido_hash' => $contenidoHash,
@@ -279,12 +351,25 @@ class ServicioImpresionEtiquetaMaterial
                 ]);
 
                 foreach ($contenidoSnapshot as $etiqueta) {
+                    $clave = $this->claveEtiqueta($etiqueta);
+                    $reserva = $reservasEtiquetadas->get($clave);
                     FolioTrabajoImpresionMaterial::create([
                         'trabajo_impresion_material_id' => $trabajo->id,
                         'folio_id' => $etiqueta['folio_id'],
+                        'folio_salida_reservado_id' => $reserva?->id,
                         'numero_folio_snapshot' => $etiqueta['numero_folio'],
-                        'es_reimpresion' => in_array($etiqueta['folio_id'], $reimpresos, true),
+                        'es_reimpresion' => in_array($clave, $reimpresos, true),
                     ]);
+                    if ($reserva) {
+                        $reserva->update([
+                            'impresiones' => $reserva->impresiones + 1,
+                            'ultima_impresion_at' => now(),
+                            // La etiqueta del folio producido ya lleva la cantidad real.
+                            'requiere_reimpresion' => $etiqueta['folio_id'] !== null
+                                ? false
+                                : $reserva->requiere_reimpresion,
+                        ]);
+                    }
                 }
 
                 return $trabajo->load('folios');
@@ -350,6 +435,66 @@ class ServicioImpresionEtiquetaMaterial
         };
     }
 
+    /**
+     * Folio reservado al que corresponde cada etiqueta: el reservado que se imprime antes de
+     * producir o el que dio origen al folio producido. Indexado por claveEtiqueta().
+     *
+     * @param  Collection<int, array<string, mixed>>  $etiquetas
+     * @return Collection<string, FolioSalidaReservadoTransformacion>
+     */
+    private function reservasEtiquetadas(Collection $etiquetas): Collection
+    {
+        if ($etiquetas->every(fn (array $etiqueta): bool => ($etiqueta['origen'] ?? null) !== 'transformacion')) {
+            return collect();
+        }
+
+        $porId = $etiquetas->pluck('folio_salida_reservado_id')->filter()->values();
+        $porFolio = $etiquetas->pluck('folio_id')->filter()->values();
+
+        return FolioSalidaReservadoTransformacion::query()
+            ->where(fn ($consulta) => $consulta
+                ->whereIn('id', $porId)
+                ->orWhereIn('folio_id', $porFolio))
+            ->lockForUpdate()
+            ->get()
+            ->flatMap(fn (FolioSalidaReservadoTransformacion $reserva): array => array_filter([
+                'reserva:'.$reserva->id => $porId->contains($reserva->id) ? $reserva : null,
+                'folio:'.$reserva->folio_id => $reserva->folio_id !== null ? $reserva : null,
+            ]));
+    }
+
+    /**
+     * Claves de las etiquetas que ya se habían impreso: el mismo folio, el folio reservado
+     * que le dio origen, o el mismo folio reservado.
+     *
+     * @param  Collection<int, array<string, mixed>>  $etiquetas
+     * @param  Collection<string, FolioSalidaReservadoTransformacion>  $reservas
+     * @return array<int, string>
+     */
+    private function etiquetasReimpresas(Collection $etiquetas, Collection $reservas): array
+    {
+        $foliosImpresos = FolioTrabajoImpresionMaterial::query()
+            ->whereIn('folio_id', $etiquetas->pluck('folio_id')->filter()->values()->all())
+            ->distinct()
+            ->pluck('folio_id')
+            ->all();
+
+        return $etiquetas
+            ->filter(fn (array $etiqueta): bool => in_array($etiqueta['folio_id'], $foliosImpresos, true)
+                || (int) $reservas->get($this->claveEtiqueta($etiqueta))?->impresiones > 0)
+            ->map(fn (array $etiqueta): string => $this->claveEtiqueta($etiqueta))
+            ->values()
+            ->all();
+    }
+
+    /** @param array<string, mixed> $etiqueta */
+    private function claveEtiqueta(array $etiqueta): string
+    {
+        return $etiqueta['folio_id'] !== null
+            ? 'folio:'.$etiqueta['folio_id']
+            : 'reserva:'.$etiqueta['folio_salida_reservado_id'];
+    }
+
     /** @return array<string, mixed> */
     private function perfilSnapshot(PerfilImpresionEtiqueta $perfil): array
     {
@@ -404,6 +549,7 @@ class ServicioImpresionEtiquetaMaterial
     private function etiquetaTransformacionSnapshot(
         SalidaTransformacionMaterial $salida,
         OrdenTransformacionMaterial $orden,
+        ?FolioSalidaReservadoTransformacion $reserva = null,
     ): array {
         $material = $salida->folioMaterial;
         $lote = $salida->lote;
@@ -428,8 +574,51 @@ class ServicioImpresionEtiquetaMaterial
             'bloqueado' => false,
             'motivo_bloqueo' => null,
             'orden_transformacion' => 'OT-'.mb_strtoupper(mb_substr($orden->id, 0, 8)),
-            'numero_lote_transformacion' => $lote?->numero_lote,
+            // Si vino de un folio reservado, repite la secuencia de la etiqueta anticipada.
+            'numero_lote_transformacion' => $reserva?->secuencia ?? $lote?->numero_lote,
             'fecha_transformacion' => $lote?->cerrado_at?->toAtomString(),
+        ];
+    }
+
+    /**
+     * Etiqueta anticipada de un folio reservado: lleva la cantidad teórica y se imprime antes
+     * de producir. Al cerrar el lote el folio se crea con este mismo número.
+     *
+     * @return array<string, mixed>
+     */
+    private function etiquetaFolioReservadoSnapshot(
+        FolioSalidaReservadoTransformacion $reserva,
+        OrdenTransformacionMaterial $orden,
+    ): array {
+        $salida = (array) data_get($orden->snapshot_receta, 'salida', []);
+
+        return [
+            'origen' => 'transformacion',
+            'folio_id' => null,
+            'folio_salida_reservado_id' => $reserva->id,
+            'numero_folio' => $reserva->numero_folio,
+            'fecha_recepcion' => null,
+            'cliente_codigo' => $orden->cliente?->codigo,
+            'cliente_nombre' => $orden->cliente?->nombre,
+            'item_codigo' => $salida['codigo'] ?? null,
+            'item_nombre' => $salida['nombre'] ?? null,
+            'cantidad' => number_format((float) $reserva->cantidad_teorica, 3, ',', '.'),
+            'unidad_medida' => $salida['unidad_medida'] ?? null,
+            'numero_guia' => null,
+            'proveedor_codigo' => null,
+            'proveedor_nombre' => null,
+            'lote_proveedor' => sprintf(
+                'TR-%s-%03d',
+                $orden->fecha_operacional->format('ymd'),
+                $reserva->secuencia,
+            ),
+            'fecha_fabricacion' => null,
+            'fecha_vencimiento' => null,
+            'bloqueado' => false,
+            'motivo_bloqueo' => null,
+            'orden_transformacion' => 'OT-'.mb_strtoupper(mb_substr($orden->id, 0, 8)),
+            'numero_lote_transformacion' => $reserva->secuencia,
+            'fecha_transformacion' => null,
         ];
     }
 

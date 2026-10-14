@@ -3,6 +3,7 @@
 namespace App\Services\Materiales;
 
 use App\Enums\CategoriaOperacionalMaterial;
+use App\Enums\EstadoFolioSalidaReservado;
 use App\Enums\EstadoLoteTransformacionMaterial;
 use App\Enums\EstadoOperacionalFolio;
 use App\Enums\EstadoOrdenTransformacionMaterial;
@@ -19,6 +20,7 @@ use App\Models\Dispositivo;
 use App\Models\EventoTransformacionMaterial;
 use App\Models\Folio;
 use App\Models\FolioMaterial;
+use App\Models\FolioSalidaReservadoTransformacion;
 use App\Models\ItemMaterial;
 use App\Models\LoteTransformacionMaterial;
 use App\Models\MovimientoInventarioMaterial;
@@ -369,6 +371,7 @@ class ServicioTransformacionMaterial
                 ];
             }
 
+            $foliosSalida = $this->reservarFoliosSalida($orden);
             $orden->update([
                 'estado' => EstadoOrdenTransformacionMaterial::Planificada,
                 'version' => $orden->version + 1,
@@ -381,6 +384,7 @@ class ServicioTransformacionMaterial
                 [
                     'version_conocida' => $versionConocida,
                     'requerimientos' => $requerimientos,
+                    'folios_salida_reservados' => $foliosSalida,
                 ],
             );
 
@@ -474,6 +478,7 @@ class ServicioTransformacionMaterial
                 $reserva->update(['estado' => EstadoReservaMaterial::Liberada]);
             }
 
+            $foliosSalidaAnulados = $this->anularFoliosSalidaReservados($orden, 'Orden cancelada.');
             $orden->update([
                 'estado' => EstadoOrdenTransformacionMaterial::Cancelada,
                 'version' => $orden->version + 1,
@@ -489,6 +494,7 @@ class ServicioTransformacionMaterial
                 [
                     'estado_anterior' => $estadoAnterior->value,
                     'reservas_liberadas' => $reservas->count(),
+                    'folios_salida_anulados' => $foliosSalidaAnulados,
                     'lotes_abiertos_descartados' => $lotesAbiertos->count(),
                 ],
                 $motivo,
@@ -979,7 +985,12 @@ class ServicioTransformacionMaterial
             $itemSalida = ItemMaterial::query()
                 ->lockForUpdate()
                 ->findOrFail((string) data_get($orden->snapshot_receta, 'salida.item_id'));
-            $codigoFolio = $this->correlativoFolio->siguiente($cliente);
+            $reservaSalida = $this->tomarFolioSalidaReservado(
+                $orden,
+                isset($datos['folio_salida']) ? (string) $datos['folio_salida'] : null,
+                (float) $lote->cantidad_planificada_salida,
+            );
+            $codigoFolio = $reservaSalida?->numero_folio ?? $this->correlativoFolio->siguiente($cliente);
             $folioSalida = Folio::create([
                 'temporada_id' => $orden->temporada_id,
                 'numero_folio' => $codigoFolio,
@@ -1009,8 +1020,20 @@ class ServicioTransformacionMaterial
                 'cantidad_actual' => $cantidadRealSalida,
                 'cantidad_reservada' => 0,
                 'unidad_medida' => $itemSalida->unidad_medida,
-                'lote' => sprintf('TR-%s-%03d', $orden->fecha_operacional->format('ymd'), $lote->numero_lote),
+                'lote' => sprintf(
+                    'TR-%s-%03d',
+                    $orden->fecha_operacional->format('ymd'),
+                    $reservaSalida?->secuencia ?? $lote->numero_lote,
+                ),
                 'observacion' => 'Salida generada por transformación de materiales.',
+            ]);
+            $reservaSalida?->update([
+                'estado' => EstadoFolioSalidaReservado::Usado,
+                'lote_transformacion_material_id' => $lote->id,
+                'folio_id' => $folioSalida->id,
+                'cantidad_real' => $cantidadRealSalida,
+                'requiere_reimpresion' => $reservaSalida->impresiones > 0
+                    && abs($cantidadRealSalida - (float) $reservaSalida->cantidad_teorica) > 0.0001,
             ]);
             SalidaTransformacionMaterial::create([
                 'lote_transformacion_material_id' => $lote->id,
@@ -1075,6 +1098,8 @@ class ServicioTransformacionMaterial
                     'lote_id' => $lote->id,
                     'numero_lote' => $lote->numero_lote,
                     'folio_salida' => $codigoFolio,
+                    'folio_salida_reservado' => $reservaSalida !== null,
+                    'requiere_reimpresion' => (bool) $reservaSalida?->requiere_reimpresion,
                     'cantidad_real_salida' => $cantidadRealSalida,
                     'salida_teorica' => $salidaTeorica,
                     'merma_estandar' => $mermaEstandar,
@@ -1425,6 +1450,7 @@ class ServicioTransformacionMaterial
                 'reversado_at' => $ahora,
                 'motivo_reversa' => $motivo,
             ]);
+            $folioReemplazo = $this->reemplazarFolioSalidaReservado($orden, $lote);
             $cantidadRealOrden = round(LoteTransformacionMaterial::query()
                 ->where('orden_transformacion_material_id', $orden->id)
                 ->where('estado', EstadoLoteTransformacionMaterial::Cerrado->value)
@@ -1447,6 +1473,7 @@ class ServicioTransformacionMaterial
                     'lote_id' => $lote->id,
                     'numero_lote' => $lote->numero_lote,
                     'folios_salida_anulados' => $foliosSalida,
+                    'folio_salida_reservado_reemplazo' => $folioReemplazo,
                     'folios_entrada_requieren_ubicacion' => $foliosReubicacion,
                 ],
                 observacion: $motivo,
@@ -1557,6 +1584,10 @@ class ServicioTransformacionMaterial
                 $reservasLiberadas += $restante > 0.0001 ? 1 : 0;
             }
 
+            $foliosSalidaAnulados = $this->anularFoliosSalidaReservados(
+                $orden,
+                'No utilizado al cerrar la orden.',
+            );
             $orden->update([
                 'estado' => EstadoOrdenTransformacionMaterial::Cerrada,
                 'cantidad_real_salida' => $cantidadReal,
@@ -1576,6 +1607,7 @@ class ServicioTransformacionMaterial
                     'cantidad_real_salida' => $cantidadReal,
                     'desviacion' => $desviacion,
                     'reservas_liberadas' => $reservasLiberadas,
+                    'folios_salida_anulados' => $foliosSalidaAnulados,
                 ],
                 $motivoDesviacion,
                 $dispositivo,
@@ -1583,6 +1615,144 @@ class ServicioTransformacionMaterial
 
             return $this->cargarOrden($orden->refresh());
         }, attempts: 3);
+    }
+
+    /**
+     * Reserva los folios de salida teóricos de la orden: uno cada `unidades_por_folio`
+     * y el último con el remanente. Sin unidades por folio, la orden no reserva folios y
+     * cada lote toma su número al cerrarse.
+     *
+     * @return list<string>
+     */
+    private function reservarFoliosSalida(OrdenTransformacionMaterial $orden): array
+    {
+        $unidadesPorFolio = data_get($orden->snapshot_receta, 'salida.unidades_por_folio');
+        if ($unidadesPorFolio === null || (float) $unidadesPorFolio <= 0) {
+            return [];
+        }
+
+        $unidadesPorFolio = $this->cantidad($unidadesPorFolio);
+        $planificado = round((float) $orden->cantidad_planificada_salida, 3);
+        $cliente = Cliente::query()->lockForUpdate()->findOrFail($orden->cliente_id);
+        $numeros = [];
+        $secuencia = 0;
+
+        for ($restante = $planificado; $restante > 0.0001; $restante = round($restante - $unidadesPorFolio, 3)) {
+            $secuencia++;
+            $numero = $this->correlativoFolio->siguiente($cliente);
+            FolioSalidaReservadoTransformacion::create([
+                'orden_transformacion_material_id' => $orden->id,
+                'secuencia' => $secuencia,
+                'numero_folio' => $numero,
+                'cantidad_teorica' => min($unidadesPorFolio, $restante),
+                'estado' => EstadoFolioSalidaReservado::Reservado,
+            ]);
+            $numeros[] = $numero;
+        }
+
+        return $numeros;
+    }
+
+    /**
+     * Folio reservado que tomará el lote al cerrarse: el pistoleado, si viene; si no, el
+     * primero en secuencia cuya cantidad teórica coincide con la del lote, o el primero
+     * disponible. Null si la orden no reservó folios (flujo anterior).
+     */
+    private function tomarFolioSalidaReservado(
+        OrdenTransformacionMaterial $orden,
+        ?string $numeroFolio,
+        float $cantidadLote,
+    ): ?FolioSalidaReservadoTransformacion {
+        $numeroFolio = $numeroFolio !== null ? mb_strtoupper(trim($numeroFolio)) : null;
+        $consulta = FolioSalidaReservadoTransformacion::query()
+            ->where('orden_transformacion_material_id', $orden->id)
+            ->lockForUpdate();
+
+        if ($numeroFolio === null || $numeroFolio === '') {
+            $disponibles = $consulta
+                ->where('estado', EstadoFolioSalidaReservado::Reservado->value)
+                ->orderBy('secuencia')
+                ->get();
+
+            return $disponibles->first(
+                fn (FolioSalidaReservadoTransformacion $reserva): bool => abs((float) $reserva->cantidad_teorica - $cantidadLote) <= 0.0001,
+            ) ?? $disponibles->first();
+        }
+
+        $reserva = $consulta->where('numero_folio', $numeroFolio)->first();
+        if (! $reserva) {
+            throw new DomainException(sprintf(
+                'El folio %s no está reservado para esta orden.',
+                $numeroFolio,
+            ));
+        }
+        if ($reserva->estado !== EstadoFolioSalidaReservado::Reservado) {
+            throw new DomainException(sprintf(
+                'El folio %s ya fue %s.',
+                $numeroFolio,
+                $reserva->estado === EstadoFolioSalidaReservado::Usado ? 'usado en otro lote' : 'anulado',
+            ));
+        }
+
+        return $reserva;
+    }
+
+    /**
+     * Al revertir un lote, su folio reservado queda anulado (la etiqueta impresa se
+     * descarta) y se reserva un número nuevo para volver a producir esa cantidad.
+     */
+    private function reemplazarFolioSalidaReservado(
+        OrdenTransformacionMaterial $orden,
+        LoteTransformacionMaterial $lote,
+    ): ?string {
+        $reserva = FolioSalidaReservadoTransformacion::query()
+            ->where('orden_transformacion_material_id', $orden->id)
+            ->where('lote_transformacion_material_id', $lote->id)
+            ->lockForUpdate()
+            ->first();
+        if (! $reserva) {
+            return null;
+        }
+
+        $reserva->update([
+            'estado' => EstadoFolioSalidaReservado::Anulado,
+            'requiere_reimpresion' => false,
+            'motivo_anulacion' => sprintf('Lote %d revertido.', $lote->numero_lote),
+            'anulado_at' => now(),
+        ]);
+        $cliente = Cliente::query()->lockForUpdate()->findOrFail($orden->cliente_id);
+        $numero = $this->correlativoFolio->siguiente($cliente);
+        FolioSalidaReservadoTransformacion::create([
+            'orden_transformacion_material_id' => $orden->id,
+            'secuencia' => ((int) FolioSalidaReservadoTransformacion::query()
+                ->where('orden_transformacion_material_id', $orden->id)
+                ->max('secuencia')) + 1,
+            'numero_folio' => $numero,
+            'cantidad_teorica' => $reserva->cantidad_teorica,
+            'estado' => EstadoFolioSalidaReservado::Reservado,
+        ]);
+
+        return $numero;
+    }
+
+    /** @return list<string> */
+    private function anularFoliosSalidaReservados(OrdenTransformacionMaterial $orden, string $motivo): array
+    {
+        $reservas = FolioSalidaReservadoTransformacion::query()
+            ->where('orden_transformacion_material_id', $orden->id)
+            ->where('estado', EstadoFolioSalidaReservado::Reservado->value)
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($reservas as $reserva) {
+            $reserva->update([
+                'estado' => EstadoFolioSalidaReservado::Anulado,
+                'motivo_anulacion' => $motivo,
+                'anulado_at' => now(),
+            ]);
+        }
+
+        return $reservas->pluck('numero_folio')->values()->all();
     }
 
     public function cargarReceta(RecetaMaterial $receta): RecetaMaterial
@@ -1608,6 +1778,7 @@ class ServicioTransformacionMaterial
             'reservas' => fn ($consulta) => $consulta->orderBy('item_material_id')->orderBy('orden_fifo'),
             'reservas.folioMaterial.folio.ubicacionActual.posicion.camara',
             'lotes' => fn ($consulta) => $consulta->orderBy('numero_lote'),
+            'foliosSalidaReservados',
             'lotes.consumos.folioMaterial.folio',
             'lotes.consumos.item',
             'lotes.salidas.folioMaterial.folio',

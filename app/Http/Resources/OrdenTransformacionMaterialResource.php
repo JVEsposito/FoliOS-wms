@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Enums\EstadoFolioSalidaReservado;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -17,6 +18,7 @@ class OrdenTransformacionMaterialResource extends JsonResource
         $foliosPlanificados = $unidadesPorFolio !== null && $unidadesPorFolio > 0
             ? (int) ceil((float) $this->cantidad_planificada_salida / $unidadesPorFolio)
             : null;
+        $foliosSalidaResumen = $this->foliosSalidaResumen();
         $foliosGenerados = $this->relationLoaded('lotes')
             ? $this->lotes->filter(
                 fn ($lote): bool => $lote->estado?->value === 'cerrado',
@@ -43,6 +45,28 @@ class OrdenTransformacionMaterialResource extends JsonResource
                 $foliosGenerados !== null && $foliosPlanificados !== null,
                 fn (): int => max(0, $foliosPlanificados - $foliosGenerados),
             ),
+            // Folios de salida reservados al planificar (imprimibles antes de producir).
+            'folios_salida_resumen' => $this->when(
+                $foliosSalidaResumen !== null,
+                fn (): ?array => $foliosSalidaResumen,
+            ),
+            'folios_salida' => $this->whenLoaded('foliosSalidaReservados', fn () => $this->foliosSalidaReservados->map(
+                fn ($reserva): array => [
+                    'id' => $reserva->id,
+                    'secuencia' => $reserva->secuencia,
+                    'numero_folio' => $reserva->numero_folio,
+                    'estado' => $reserva->estado->value,
+                    'cantidad_teorica' => $reserva->cantidad_teorica,
+                    'cantidad_real' => $reserva->cantidad_real,
+                    'folio_id' => $reserva->folio_id,
+                    'lote_id' => $reserva->lote_transformacion_material_id,
+                    'impresiones' => $reserva->impresiones,
+                    'ultima_impresion_at' => $reserva->ultima_impresion_at?->toAtomString(),
+                    'requiere_reimpresion' => $reserva->requiere_reimpresion,
+                    'motivo_anulacion' => $reserva->motivo_anulacion,
+                    'anulado_at' => $reserva->anulado_at?->toAtomString(),
+                ],
+            )->values()),
             'linea' => $this->linea,
             'turno' => $this->turno,
             'fecha_operacional' => $this->fecha_operacional?->toDateString(),
@@ -188,6 +212,45 @@ class OrdenTransformacionMaterialResource extends JsonResource
             'cancelado_at' => $this->cancelado_at?->toAtomString(),
             'created_at' => $this->created_at?->toAtomString(),
             'updated_at' => $this->updated_at?->toAtomString(),
+        ];
+    }
+
+    /**
+     * Conteo de folios de salida reservados: desde la relación cargada (detalle) o desde
+     * los conteos de la consulta (listado). Null si la orden no se cargó con ninguno.
+     *
+     * @return array{reservados: int, sin_imprimir: int, por_reimprimir: int, usados: int, anulados: int}|null
+     */
+    private function foliosSalidaResumen(): ?array
+    {
+        if ($this->relationLoaded('foliosSalidaReservados')) {
+            $folios = $this->foliosSalidaReservados;
+            if ($folios->isEmpty()) {
+                return null;
+            }
+            $reservados = $folios->filter(fn ($reserva): bool => $reserva->estado === EstadoFolioSalidaReservado::Reservado);
+
+            return [
+                'reservados' => $reservados->count(),
+                'sin_imprimir' => $reservados->where('impresiones', 0)->count(),
+                'por_reimprimir' => $folios->where('requiere_reimpresion', true)->count(),
+                'usados' => $folios->filter(fn ($reserva): bool => $reserva->estado === EstadoFolioSalidaReservado::Usado)->count(),
+                'anulados' => $folios->filter(fn ($reserva): bool => $reserva->estado === EstadoFolioSalidaReservado::Anulado)->count(),
+            ];
+        }
+
+        $atributos = $this->resource->getAttributes();
+        if (! array_key_exists('folios_salida_total_count', $atributos)
+            || (int) $atributos['folios_salida_total_count'] === 0) {
+            return null;
+        }
+
+        return [
+            'reservados' => (int) ($atributos['folios_salida_reservados_count'] ?? 0),
+            'sin_imprimir' => (int) ($atributos['folios_salida_sin_imprimir_count'] ?? 0),
+            'por_reimprimir' => (int) ($atributos['folios_salida_por_reimprimir_count'] ?? 0),
+            'usados' => (int) ($atributos['folios_salida_usados_count'] ?? 0),
+            'anulados' => (int) ($atributos['folios_salida_anulados_count'] ?? 0),
         ];
     }
 }

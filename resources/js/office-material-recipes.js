@@ -143,7 +143,7 @@ function injectRecipePanel() {
                     <div><p class="eyebrow">COMPONENTES</p><h3>Entradas de la receta</h3></div>
                     <button class="secondary-button" id="addMaterialRecipeComponent" type="button">+ Agregar componente</button>
                 </div>
-                <p class="materials-help">Debe existir exactamente un componente principal. La merma se calcula sobre ese componente; los demás registran variación de consumo.</p>
+                <p class="materials-help">Debe existir exactamente un componente principal. La merma no se define en la receta: el camarero la declara al cerrar la orden de trabajo.</p>
                 <div class="materials-recipe-components" id="materialRecipeComponents"></div>
                 <p class="form-error" id="materialRecipeError" role="alert"></p>
                 <div class="materials-actions"><button class="primary-button" type="submit" id="saveMaterialRecipe">Crear receta</button></div>
@@ -273,7 +273,6 @@ function addRecipeComponent(component = {}) {
         <label><span>Ítem de entrada *</span><select name="item_entrada_id" required>${recipeInputOptions(globalClientId, component.item?.id || component.item_entrada_id || '')}</select></label>
         <label><span>Cantidad *</span><input name="cantidad_estandar" type="number" min="0.001" step="0.001" value="${recipeEscape(component.cantidad_estandar ?? 1)}" required></label>
         <label><span>Factor</span><input name="factor_conversion" type="number" min="0.000001" step="0.000001" value="${recipeEscape(component.factor_conversion ?? 1)}"></label>
-        <label><span>Merma %</span><input name="merma_estandar_porcentaje" type="number" min="0" max="100" step="0.0001" value="${recipeEscape(component.merma_estandar_porcentaje ?? 0)}"></label>
         <label><span>Tolerancia %</span><input name="tolerancia_porcentaje" type="number" min="0" max="100" step="0.0001" value="${recipeEscape(component.tolerancia_porcentaje ?? 0)}"></label>
         <div><label class="recipe-principal"><input name="recipe_principal" type="radio" value="${recipeEscape(rowId)}"${component.es_componente_principal ? ' checked' : ''}><span>Principal</span></label><button class="secondary-button" data-remove-recipe-component type="button" aria-label="Quitar componente">×</button></div>
     `;
@@ -347,14 +346,13 @@ function recipeComponentsPayload() {
         const itemId = row.querySelector('[name="item_entrada_id"]').value;
         const amount = Number(row.querySelector('[name="cantidad_estandar"]').value);
         const factor = Number(row.querySelector('[name="factor_conversion"]').value || 1);
-        const waste = Number(row.querySelector('[name="merma_estandar_porcentaje"]').value || 0);
         const tolerance = Number(row.querySelector('[name="tolerancia_porcentaje"]').value || 0);
 
         if (!itemId) throw new RecipeApiError(`Selecciona el ítem de entrada de la línea ${index + 1}.`, 422);
         if (seen.has(itemId)) throw new RecipeApiError('Un mismo ítem no puede repetirse dentro de la receta.', 422);
         if (!Number.isFinite(amount) || amount <= 0) throw new RecipeApiError(`La cantidad de la línea ${index + 1} debe ser mayor que cero.`, 422);
         if (!Number.isFinite(factor) || factor <= 0) throw new RecipeApiError(`El factor de la línea ${index + 1} debe ser mayor que cero.`, 422);
-        if (waste < 0 || waste > 100 || tolerance < 0 || tolerance > 100) throw new RecipeApiError('Merma y tolerancia deben estar entre 0 y 100%.', 422);
+        if (tolerance < 0 || tolerance > 100) throw new RecipeApiError('La tolerancia debe estar entre 0 y 100%.', 422);
         seen.add(itemId);
 
         return {
@@ -362,7 +360,8 @@ function recipeComponentsPayload() {
             cantidad_estandar: amount,
             es_componente_principal: row.dataset.componentRow === principal,
             factor_conversion: factor,
-            merma_estandar_porcentaje: waste,
+            // La merma se cuadra al cierre de la orden, no en la receta.
+            merma_estandar_porcentaje: 0,
             tolerancia_porcentaje: tolerance,
         };
     });
@@ -439,11 +438,11 @@ function renderRecipes() {
                     <span>Salida base: ${recipeQuantity(version?.cantidad_base_salida)} ${recipeEscape(version?.unidad_medida_salida || recipe.item_salida?.unidad_medida || '')}</span>
                     <span>Por folio: ${version?.unidades_por_folio_salida ? `${recipeQuantity(version.unidades_por_folio_salida)} ${recipeEscape(version.unidad_medida_salida || recipe.item_salida?.unidad_medida || '')}` : 'Sin regla'}</span>
                     <span>Principal: ${recipeEscape(principal?.item?.codigo || 'No definido')}</span>
-                    <span>Merma estándar: ${recipeQuantity(principal?.merma_estandar_porcentaje, 4)}%</span>
+                    ${Number(principal?.merma_estandar_porcentaje || 0) > 0 ? `<span>Merma de versión anterior: ${recipeQuantity(principal.merma_estandar_porcentaje, 4)}%</span>` : ''}
                 </div>
                 <table class="materials-recipe-table">
-                    <thead><tr><th>Componente</th><th>Cantidad</th><th>Factor</th><th>Merma</th><th>Tolerancia</th></tr></thead>
-                    <tbody>${components.map((component) => `<tr><td><strong>${recipeEscape(component.item?.codigo)}</strong><br><small>${recipeEscape(component.item?.nombre)}${component.es_componente_principal ? ' · principal' : ''}</small></td><td>${recipeQuantity(component.cantidad_estandar)} ${recipeEscape(component.unidad_medida)}</td><td>${recipeQuantity(component.factor_conversion, 6)}</td><td>${recipeQuantity(component.merma_estandar_porcentaje, 4)}%</td><td>${recipeQuantity(component.tolerancia_porcentaje, 4)}%</td></tr>`).join('')}</tbody>
+                    <thead><tr><th>Componente</th><th>Cantidad</th><th>Factor</th><th>Tolerancia</th></tr></thead>
+                    <tbody>${components.map((component) => `<tr><td><strong>${recipeEscape(component.item?.codigo)}</strong><br><small>${recipeEscape(component.item?.nombre)}${component.es_componente_principal ? ' · principal' : ''}</small></td><td>${recipeQuantity(component.cantidad_estandar)} ${recipeEscape(component.unidad_medida)}</td><td>${recipeQuantity(component.factor_conversion, 6)}</td><td>${recipeQuantity(component.tolerancia_porcentaje, 4)}%</td></tr>`).join('')}</tbody>
                 </table>
             </article>
         `;

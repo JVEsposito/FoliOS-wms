@@ -15,6 +15,8 @@ use App\Models\ClienteMaterial;
 use App\Models\Dispositivo;
 use App\Models\Folio;
 use App\Models\FolioMaterial;
+use App\Models\FolioSalidaReservadoTransformacion;
+use App\Models\FolioTrabajoImpresionMaterial;
 use App\Models\ItemMaterial;
 use App\Models\MovimientoInventarioMaterial;
 use App\Models\PerfilImpresionEtiqueta;
@@ -1552,6 +1554,379 @@ class TransformacionMaterialApiTest extends TestCase
             ->assertJsonCount(1, 'data.lotes.2.salidas');
     }
 
+    public function test_planificar_reserva_los_folios_de_salida_y_cada_lote_usa_el_siguiente(): void
+    {
+        [$tokenOficina, $tokenTablet, $folioPrincipal, $folioAuxiliar, $orden] =
+            $this->prepararOrdenOperacional(80, 30);
+
+        $this->assertSame([1, 2, 3], array_column($orden['folios_salida'], 'secuencia'));
+        $this->assertSame(['30.000', '30.000', '20.000'], array_column($orden['folios_salida'], 'cantidad_teorica'));
+        $this->assertSame(['reservado', 'reservado', 'reservado'], array_column($orden['folios_salida'], 'estado'));
+        $numeros = array_column($orden['folios_salida'], 'numero_folio');
+        $this->assertCount(3, array_unique($numeros));
+        foreach ($numeros as $numero) {
+            $this->assertMatchesRegularExpression('/^F[A-Z]{2}\d{7}$/', $numero);
+        }
+        $this->assertSame([
+            'reservados' => 3,
+            'sin_imprimir' => 3,
+            'por_reimprimir' => 0,
+            'usados' => 0,
+            'anulados' => 0,
+        ], $orden['folios_salida_resumen']);
+        $planificada = collect($orden['eventos'])->firstWhere('tipo', 'planificada');
+        $this->assertSame($numeros, $planificada['datos']['folios_salida_reservados']);
+        // Los folios reservados todavía no existen en inventario.
+        $this->assertSame(0, Folio::query()->whereIn('numero_folio', $numeros)->count());
+
+        $listado = collect($this->conToken($tokenOficina)
+            ->getJson('/api/materiales/transformaciones/ordenes')
+            ->assertOk()
+            ->json('data'))
+            ->firstWhere('id', $orden['id']);
+        $this->assertSame(3, $listado['folios_salida_resumen']['reservados']);
+        $this->assertSame(3, $listado['folios_salida_resumen']['sin_imprimir']);
+        $this->assertArrayNotHasKey('folios_salida', $listado);
+
+        $orden = $this->abrirYCerrarLote($tokenTablet, $orden['id'], 3, 30, [
+            'cantidad_real_salida' => 30,
+            'consumos' => [
+                ['folio_id' => $folioPrincipal['id'], 'cantidad' => 30],
+                ['folio_id' => $folioAuxiliar['id'], 'cantidad' => 3],
+            ],
+        ]);
+
+        $salida = $orden['lotes'][0]['salidas'][0];
+        $this->assertSame($numeros[0], $salida['numero_folio']);
+        $this->assertSame('usado', $orden['folios_salida'][0]['estado']);
+        $this->assertSame($salida['folio_id'], $orden['folios_salida'][0]['folio_id']);
+        $this->assertSame($orden['lotes'][0]['id'], $orden['folios_salida'][0]['lote_id']);
+        $this->assertSame('30.000', $orden['folios_salida'][0]['cantidad_real']);
+        $this->assertFalse($orden['folios_salida'][0]['requiere_reimpresion']);
+        $this->assertSame(2, $orden['folios_salida_resumen']['reservados']);
+        $this->assertSame(1, $orden['folios_salida_resumen']['usados']);
+        $this->assertSame('TR-260726-001', FolioMaterial::query()->findOrFail($salida['folio_id'])->lote);
+        $cerrado = collect($orden['eventos'])->firstWhere('tipo', 'lote_cerrado');
+        $this->assertSame($numeros[0], $cerrado['datos']['folio_salida']);
+        $this->assertTrue($cerrado['datos']['folio_salida_reservado']);
+    }
+
+    public function test_imprime_los_folios_reservados_con_la_cantidad_teorica_y_pide_reimprimir_si_cambia(): void
+    {
+        [$tokenOficina, $tokenTablet, $folioPrincipal, $folioAuxiliar, $orden] =
+            $this->prepararOrdenOperacional(80, 30);
+        $numeros = array_column($orden['folios_salida'], 'numero_folio');
+        $reservaIds = array_column($orden['folios_salida'], 'id');
+        $url = "/api/materiales/transformaciones/ordenes/{$orden['id']}/etiquetas";
+
+        $respuesta = $this->conToken($tokenOficina)
+            ->post($url, $this->payloadEtiquetas(['reserva_ids' => $reservaIds]), ['Accept' => 'application/zpl'])
+            ->assertOk();
+        $trabajo = TrabajoImpresionMaterial::query()->findOrFail($respuesta->headers->get('X-Estiba-Print-Job'));
+        $etiquetas = $trabajo->contenido_snapshot;
+        $this->assertSame($numeros, array_column($etiquetas, 'numero_folio'));
+        $this->assertSame(['30,000', '30,000', '20,000'], array_column($etiquetas, 'cantidad'));
+        $this->assertSame([null, null, null], array_column($etiquetas, 'folio_id'));
+        $this->assertSame([1, 2, 3], array_column($etiquetas, 'numero_lote_transformacion'));
+        $this->assertSame('TR-260726-002', $etiquetas[1]['lote_proveedor']);
+        $this->assertNull($trabajo->lote_transformacion_material_id);
+        $this->assertStringContainsString($numeros[2], $respuesta->getContent());
+        $this->assertEqualsCanonicalizing($reservaIds, FolioTrabajoImpresionMaterial::query()
+            ->where('trabajo_impresion_material_id', $trabajo->id)
+            ->pluck('folio_salida_reservado_id')
+            ->all());
+        $this->assertSame(3, FolioSalidaReservadoTransformacion::query()
+            ->whereIn('id', $reservaIds)
+            ->where('impresiones', 1)
+            ->count());
+
+        $this->conToken($tokenOficina)
+            ->post($url, $this->payloadEtiquetas(['reserva_ids' => [$reservaIds[0]]]), ['Accept' => 'application/zpl'])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Debes indicar el motivo para volver a generar una etiqueta.');
+        $this->conToken($tokenOficina)
+            ->post($url, $this->payloadEtiquetas([
+                'reserva_ids' => [$reservaIds[0]],
+                'motivo_reimpresion' => 'Etiqueta dañada en la línea.',
+            ]), ['Accept' => 'application/zpl'])
+            ->assertOk();
+        $this->assertSame(2, FolioSalidaReservadoTransformacion::query()->findOrFail($reservaIds[0])->impresiones);
+
+        // La línea produce 28 en vez de los 30 impresos.
+        $orden = $this->abrirYCerrarLote($tokenTablet, $orden['id'], 3, 30, [
+            'cantidad_real_salida' => 28,
+            'consumos' => [
+                ['folio_id' => $folioPrincipal['id'], 'cantidad' => 30],
+                ['folio_id' => $folioAuxiliar['id'], 'cantidad' => 3],
+            ],
+        ]);
+        $salida = $orden['lotes'][0]['salidas'][0];
+        $this->assertSame($numeros[0], $salida['numero_folio']);
+        $this->assertTrue($orden['folios_salida'][0]['requiere_reimpresion']);
+        $this->assertSame(1, $orden['folios_salida_resumen']['por_reimprimir']);
+        $this->assertTrue(collect($orden['eventos'])->firstWhere('tipo', 'lote_cerrado')['datos']['requiere_reimpresion']);
+
+        $this->conToken($tokenOficina)
+            ->post($url, $this->payloadEtiquetas(['reserva_ids' => [$reservaIds[0]]]), ['Accept' => 'application/zpl'])
+            ->assertUnprocessable()
+            ->assertJsonPath(
+                'message',
+                "El folio {$numeros[0]} ya fue producido: imprime su etiqueta desde los folios generados.",
+            );
+
+        // La reimpresión por cambio de cantidad no exige motivo: el sistema lo registra.
+        $respuesta = $this->conToken($tokenOficina)
+            ->post($url, $this->payloadEtiquetas(['folio_ids' => [$salida['folio_id']]]), ['Accept' => 'application/zpl'])
+            ->assertOk();
+        $trabajo = TrabajoImpresionMaterial::query()->findOrFail($respuesta->headers->get('X-Estiba-Print-Job'));
+        $this->assertSame('La cantidad real difiere de la cantidad teórica impresa.', $trabajo->motivo_reimpresion);
+        $this->assertSame('28,000', $trabajo->contenido_snapshot[0]['cantidad']);
+        $this->assertSame(1, $trabajo->contenido_snapshot[0]['numero_lote_transformacion']);
+        $this->assertDatabaseHas('folios_trabajos_impresion_materiales', [
+            'trabajo_impresion_material_id' => $trabajo->id,
+            'folio_id' => $salida['folio_id'],
+            'folio_salida_reservado_id' => $reservaIds[0],
+            'es_reimpresion' => true,
+        ]);
+        $reserva = FolioSalidaReservadoTransformacion::query()->findOrFail($reservaIds[0]);
+        $this->assertFalse($reserva->requiere_reimpresion);
+        $this->assertSame(3, $reserva->impresiones);
+
+        // Ya con la cantidad real impresa, otra copia vuelve a exigir motivo.
+        $this->conToken($tokenOficina)
+            ->post($url, $this->payloadEtiquetas(['folio_ids' => [$salida['folio_id']]]), ['Accept' => 'application/zpl'])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Debes indicar el motivo para volver a generar una etiqueta.');
+
+        $historial = $this->conToken($tokenOficina)
+            ->getJson("/api/materiales/transformaciones/ordenes/{$orden['id']}/impresiones")
+            ->assertOk()
+            ->json('data');
+        $this->assertCount(3, $historial);
+        $this->assertSame($reservaIds[0], $historial[0]['folios'][0]['folio_salida_reservado_id']);
+    }
+
+    public function test_valida_el_folio_reservado_pistoleado_al_cerrar_el_lote(): void
+    {
+        [, $tokenTablet, $folioPrincipal, $folioAuxiliar, $orden] =
+            $this->prepararOrdenOperacional(80, 30);
+        $numeros = array_column($orden['folios_salida'], 'numero_folio');
+        $consumos = [
+            ['folio_id' => $folioPrincipal['id'], 'cantidad' => 30],
+            ['folio_id' => $folioAuxiliar['id'], 'cantidad' => 3],
+        ];
+        $lote = $this->conToken($tokenTablet)
+            ->postJson("/api/materiales/transformaciones/ordenes/{$orden['id']}/lotes", [
+                'operacion_id' => (string) Str::uuid(),
+                'version_conocida' => 3,
+                'cantidad_planificada_salida' => 30,
+            ])
+            ->assertOk()
+            ->json('data.lotes.0');
+
+        $this->conToken($tokenTablet)
+            ->postJson("/api/materiales/transformaciones/lotes/{$lote['id']}/cerrar", [
+                'operacion_id' => (string) Str::uuid(),
+                'version_conocida' => 4,
+                'cantidad_real_salida' => 30,
+                'folio_salida' => 'FZZ0000999',
+                'consumos' => $consumos,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'El folio FZZ0000999 no está reservado para esta orden.');
+
+        // El camarero pistolea la segunda etiqueta: el lote toma ese número.
+        $orden = $this->conToken($tokenTablet)
+            ->postJson("/api/materiales/transformaciones/lotes/{$lote['id']}/cerrar", [
+                'operacion_id' => (string) Str::uuid(),
+                'version_conocida' => 4,
+                'cantidad_real_salida' => 30,
+                'folio_salida' => mb_strtolower($numeros[1]),
+                'consumos' => $consumos,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.lotes.0.salidas.0.numero_folio', $numeros[1])
+            ->assertJsonPath('data.folios_salida.0.estado', 'reservado')
+            ->assertJsonPath('data.folios_salida.1.estado', 'usado')
+            ->json('data');
+
+        $lote = $this->conToken($tokenTablet)
+            ->postJson("/api/materiales/transformaciones/ordenes/{$orden['id']}/lotes", [
+                'operacion_id' => (string) Str::uuid(),
+                'version_conocida' => 5,
+                'cantidad_planificada_salida' => 30,
+            ])
+            ->assertOk()
+            ->json('data.lotes.1');
+        $this->conToken($tokenTablet)
+            ->postJson("/api/materiales/transformaciones/lotes/{$lote['id']}/cerrar", [
+                'operacion_id' => (string) Str::uuid(),
+                'version_conocida' => 6,
+                'cantidad_real_salida' => 30,
+                'folio_salida' => $numeros[1],
+                'consumos' => $consumos,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', "El folio {$numeros[1]} ya fue usado en otro lote.");
+        $this->conToken($tokenTablet)
+            ->postJson("/api/materiales/transformaciones/lotes/{$lote['id']}/cerrar", [
+                'operacion_id' => (string) Str::uuid(),
+                'version_conocida' => 6,
+                'cantidad_real_salida' => 30,
+                'consumos' => $consumos,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.lotes.1.salidas.0.numero_folio', $numeros[0]);
+    }
+
+    public function test_revertir_anula_el_folio_reservado_y_cerrar_la_orden_anula_los_no_usados(): void
+    {
+        [$tokenOficina, $tokenTablet, $folioPrincipal, $folioAuxiliar, $orden] =
+            $this->prepararOrdenOperacional(80, 30);
+        $numeros = array_column($orden['folios_salida'], 'numero_folio');
+        $consumos = [
+            ['folio_id' => $folioPrincipal['id'], 'cantidad' => 30],
+            ['folio_id' => $folioAuxiliar['id'], 'cantidad' => 3],
+        ];
+        $orden = $this->abrirYCerrarLote($tokenTablet, $orden['id'], 3, 30, [
+            'cantidad_real_salida' => 30,
+            'consumos' => $consumos,
+        ]);
+
+        $orden = $this->conToken($tokenOficina)
+            ->postJson("/api/materiales/transformaciones/lotes/{$orden['lotes'][0]['id']}/revertir", [
+                'operacion_id' => (string) Str::uuid(),
+                'version_conocida' => 5,
+                'motivo' => 'La cantidad real del lote fue digitada incorrectamente.',
+            ])
+            ->assertOk()
+            ->json('data');
+
+        $this->assertSame([1, 2, 3, 4], array_column($orden['folios_salida'], 'secuencia'));
+        $this->assertSame('anulado', $orden['folios_salida'][0]['estado']);
+        $this->assertSame('Lote 1 revertido.', $orden['folios_salida'][0]['motivo_anulacion']);
+        $reemplazo = $orden['folios_salida'][3];
+        $this->assertSame('reservado', $reemplazo['estado']);
+        $this->assertSame('30.000', $reemplazo['cantidad_teorica']);
+        $this->assertNotContains($reemplazo['numero_folio'], $numeros);
+        $this->assertSame(
+            $reemplazo['numero_folio'],
+            collect($orden['eventos'])->firstWhere('tipo', 'lote_reversado')['datos']['folio_salida_reservado_reemplazo'],
+        );
+        $this->assertSame(3, $orden['folios_salida_resumen']['reservados']);
+        $this->assertSame(1, $orden['folios_salida_resumen']['anulados']);
+
+        // El siguiente lote de 30 toma el primer reservado de 30 en secuencia.
+        $orden = $this->abrirYCerrarLote($tokenTablet, $orden['id'], 6, 30, [
+            'cantidad_real_salida' => 30,
+            'consumos' => $consumos,
+        ]);
+        $this->assertSame($numeros[1], $orden['lotes'][1]['salidas'][0]['numero_folio']);
+
+        $cerrada = $this->conToken($tokenTablet)
+            ->postJson("/api/materiales/transformaciones/ordenes/{$orden['id']}/cerrar", [
+                'operacion_id' => (string) Str::uuid(),
+                'version_conocida' => 8,
+                'motivo_desviacion' => 'Se suspende la producción por cambio de programa.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.estado', 'cerrada')
+            ->json('data');
+
+        $this->assertSame(
+            ['anulado', 'usado', 'anulado', 'anulado'],
+            array_column($cerrada['folios_salida'], 'estado'),
+        );
+        $this->assertSame('No utilizado al cerrar la orden.', $cerrada['folios_salida'][2]['motivo_anulacion']);
+        $this->assertSame(
+            [$numeros[2], $reemplazo['numero_folio']],
+            collect($cerrada['eventos'])->firstWhere('tipo', 'cerrada')['datos']['folios_salida_anulados'],
+        );
+    }
+
+    public function test_cancelar_anula_los_folios_reservados_y_una_receta_sin_unidades_por_folio_no_reserva(): void
+    {
+        [$tokenOficina, , , , $orden] = $this->prepararOrdenOperacional(80, 30);
+
+        $cancelada = $this->conToken($tokenOficina)
+            ->postJson("/api/materiales/transformaciones/ordenes/{$orden['id']}/cancelar", [
+                'operacion_id' => (string) Str::uuid(),
+                'motivo' => 'Cambio de programación de la línea.',
+            ])
+            ->assertOk()
+            ->json('data');
+
+        $this->assertSame(['anulado', 'anulado', 'anulado'], array_column($cancelada['folios_salida'], 'estado'));
+        $this->assertSame(['Orden cancelada.'], array_values(array_unique(array_column($cancelada['folios_salida'], 'motivo_anulacion'))));
+        $this->assertSame(0, $cancelada['folios_salida_resumen']['reservados']);
+        $this->assertSame(
+            array_column($cancelada['folios_salida'], 'numero_folio'),
+            collect($cancelada['eventos'])->firstWhere('tipo', 'cancelada')['datos']['folios_salida_anulados'],
+        );
+
+        $this->conToken($tokenOficina)
+            ->post(
+                "/api/materiales/transformaciones/ordenes/{$orden['id']}/etiquetas",
+                $this->payloadEtiquetas(['reserva_ids' => [$cancelada['folios_salida'][0]['id']]]),
+                ['Accept' => 'application/zpl'],
+            )
+            ->assertUnprocessable()
+            ->assertJsonPath(
+                'message',
+                "El folio {$cancelada['folios_salida'][0]['numero_folio']} fue anulado y no puede etiquetarse.",
+            );
+    }
+
+    /**
+     * Abre un lote con la cantidad planificada y lo cierra con los datos indicados.
+     *
+     * @param  array<string, mixed>  $cierre
+     * @return array<string, mixed>
+     */
+    private function abrirYCerrarLote(
+        string $tokenTablet,
+        string $ordenId,
+        int $version,
+        float $cantidadPlanificada,
+        array $cierre,
+    ): array {
+        $orden = $this->conToken($tokenTablet)
+            ->postJson("/api/materiales/transformaciones/ordenes/{$ordenId}/lotes", [
+                'operacion_id' => (string) Str::uuid(),
+                'version_conocida' => $version,
+                'cantidad_planificada_salida' => $cantidadPlanificada,
+            ])
+            ->assertOk()
+            ->json('data');
+        $lote = collect($orden['lotes'])->firstWhere('estado', 'abierto');
+
+        return $this->conToken($tokenTablet)
+            ->postJson("/api/materiales/transformaciones/lotes/{$lote['id']}/cerrar", [
+                'operacion_id' => (string) Str::uuid(),
+                'version_conocida' => $version + 1,
+                ...$cierre,
+            ])
+            ->assertOk()
+            ->json('data');
+    }
+
+    /**
+     * @param  array<string, mixed>  $datos
+     * @return array<string, mixed>
+     */
+    private function payloadEtiquetas(array $datos): array
+    {
+        return [
+            'operacion_id' => (string) Str::uuid(),
+            'perfil_id' => PerfilImpresionEtiqueta::query()->firstOrFail()->id,
+            'formato' => 'zpl',
+            'simbologia' => 'code128',
+            'canal' => 'oficina_descarga',
+            'copias' => 1,
+            ...$datos,
+        ];
+    }
+
     private function prepararLoteCerradoParaImpresion(): array
     {
         [$tokenOficina, $tokenTablet, $folioPrincipal, $folioAuxiliar, $orden] =
@@ -1626,6 +2001,9 @@ class TransformacionMaterialApiTest extends TestCase
         ] = $this->prepararOrdenOperacional(20);
 
         $this->assertSame('en_proceso', $orden['estado']);
+        // Sin unidades por folio en la receta, la orden sigue el flujo anterior.
+        $this->assertSame([], $orden['folios_salida']);
+        $this->assertArrayNotHasKey('folios_salida_resumen', $orden);
         $cancelada = $this->conToken($tokenOficina)
             ->postJson("/api/materiales/transformaciones/ordenes/{$orden['id']}/cancelar", [
                 'operacion_id' => (string) Str::uuid(),

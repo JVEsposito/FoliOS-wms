@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable([
     'trabajo_impresion_material_id',
     'folio_id',
+    'folio_salida_reservado_id',
     'numero_folio_snapshot',
     'es_reimpresion',
 ])]
@@ -28,6 +29,11 @@ class FolioTrabajoImpresionMaterial extends Model
     public function folio(): BelongsTo
     {
         return $this->belongsTo(Folio::class);
+    }
+
+    public function folioSalidaReservado(): BelongsTo
+    {
+        return $this->belongsTo(FolioSalidaReservadoTransformacion::class, 'folio_salida_reservado_id');
     }
 
     protected function casts(): array
