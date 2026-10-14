@@ -9,12 +9,14 @@ use App\Enums\EstadoOperacionalFolio;
 use App\Enums\EstadoOrdenTransformacionMaterial;
 use App\Enums\EstadoReservaMaterial;
 use App\Enums\EstadoVersionRecetaMaterial;
+use App\Enums\ModoOperacionTransformacion;
 use App\Enums\TipoBulto;
 use App\Enums\TipoEventoTransformacionMaterial;
 use App\Enums\TipoMovimientoInventarioMaterial;
 use App\Exceptions\ConflictoOperacion;
 use App\Models\Cliente;
 use App\Models\ConsumoTransformacionMaterial;
+use App\Models\CuadraturaTransformacionMaterial;
 use App\Models\DetalleVersionRecetaMaterial;
 use App\Models\Dispositivo;
 use App\Models\EventoTransformacionMaterial;
@@ -36,6 +38,7 @@ use App\Services\Temporadas\ServicioTemporadaActiva;
 use BackedEnum;
 use DateTimeInterface;
 use DomainException;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use JsonException;
 
@@ -478,6 +481,32 @@ class ServicioTransformacionMaterial
                 $reserva->update(['estado' => EstadoReservaMaterial::Liberada]);
             }
 
+            // En modo cuadratura los componentes ya se retiraron: vuelven completos a su folio.
+            $componentesDevueltos = [];
+            if ($orden->seCuadraAlCierre()) {
+                $retirados = ReservaTransformacionMaterial::query()
+                    ->where('orden_transformacion_material_id', $orden->id)
+                    ->where('estado', EstadoReservaMaterial::Consumida->value)
+                    ->orderBy('item_material_id')
+                    ->orderBy('orden_fifo')
+                    ->lockForUpdate()
+                    ->get();
+                foreach ($retirados->filter(
+                    fn (ReservaTransformacionMaterial $reserva): bool => (float) $reserva->cantidad_consumida > 0.0001,
+                ) as $reserva) {
+                    $componentesDevueltos[] = $this->devolverAlFolioDeOrigen(
+                        $orden,
+                        $reserva,
+                        round((float) $reserva->cantidad_consumida, 3),
+                        'cancelacion',
+                        "Cancelación de orden: {$motivo}",
+                        $usuario,
+                        null,
+                        $ahora,
+                    );
+                }
+            }
+
             $foliosSalidaAnulados = $this->anularFoliosSalidaReservados($orden, 'Orden cancelada.');
             $orden->update([
                 'estado' => EstadoOrdenTransformacionMaterial::Cancelada,
@@ -495,6 +524,7 @@ class ServicioTransformacionMaterial
                     'estado_anterior' => $estadoAnterior->value,
                     'reservas_liberadas' => $reservas->count(),
                     'folios_salida_anulados' => $foliosSalidaAnulados,
+                    'componentes_devueltos' => $componentesDevueltos,
                     'lotes_abiertos_descartados' => $lotesAbiertos->count(),
                 ],
                 $motivo,
@@ -504,17 +534,27 @@ class ServicioTransformacionMaterial
         }, attempts: 3);
     }
 
+    /**
+     * @param  list<string>  $foliosRetirados  Folios de componentes que el camarero
+     *                                         confirmó retirar (solo modo cuadratura).
+     */
     public function iniciar(
         OrdenTransformacionMaterial $orden,
         string $operacionId,
         int $versionConocida,
         User $usuario,
         ?Dispositivo $dispositivo,
+        ModoOperacionTransformacion $modo = ModoOperacionTransformacion::PorLote,
+        array $foliosRetirados = [],
     ): OrdenTransformacionMaterial {
         $datosOperacion = [
             'operacion_id' => $operacionId,
             'version_conocida' => $versionConocida,
         ];
+        if ($modo === ModoOperacionTransformacion::CuadraturaCierre) {
+            $datosOperacion['modo_operacion'] = $modo->value;
+            $datosOperacion['folios_retirados'] = collect($foliosRetirados)->sort()->values()->all();
+        }
         $payloadHash = $this->payloadHash($datosOperacion);
 
         return DB::transaction(function () use (
@@ -524,6 +564,8 @@ class ServicioTransformacionMaterial
             $usuario,
             $dispositivo,
             $payloadHash,
+            $modo,
+            $foliosRetirados,
         ): OrdenTransformacionMaterial {
             if ($this->eventoYaProcesado(
                 $orden,
@@ -552,8 +594,12 @@ class ServicioTransformacionMaterial
                 throw new DomainException('La orden no posee reservas activas para iniciar.');
             }
 
+            $componentesRetirados = $modo === ModoOperacionTransformacion::CuadraturaCierre
+                ? $this->retirarComponentes($orden, $foliosRetirados, $usuario, $dispositivo)
+                : [];
             $orden->update([
                 'estado' => EstadoOrdenTransformacionMaterial::EnProceso,
+                'modo_operacion' => $modo,
                 'version' => $orden->version + 1,
                 'iniciado_por_user_id' => $usuario->id,
                 'iniciado_at' => now(),
@@ -566,6 +612,8 @@ class ServicioTransformacionMaterial
                 [
                     'version_conocida' => $versionConocida,
                     'payload_hash' => $payloadHash,
+                    'modo_operacion' => $modo->value,
+                    'componentes_retirados' => $componentesRetirados,
                 ],
                 dispositivo: $dispositivo,
             );
@@ -618,6 +666,8 @@ class ServicioTransformacionMaterial
             if ($orden->estado !== EstadoOrdenTransformacionMaterial::EnProceso) {
                 throw new DomainException('La orden no se encuentra disponible para abrir un lote.');
             }
+
+            $this->asegurarOperacionPorLote($orden);
 
             $lotes = LoteTransformacionMaterial::query()
                 ->where('orden_transformacion_material_id', $orden->id)
@@ -732,6 +782,7 @@ class ServicioTransformacionMaterial
             }
 
             $this->validarVersion($orden, $versionConocida);
+            $this->asegurarOperacionPorLote($orden);
 
             if ($orden->estado !== EstadoOrdenTransformacionMaterial::EnProceso
                 || $lote->estado !== EstadoLoteTransformacionMaterial::Abierto) {
@@ -981,90 +1032,26 @@ class ServicioTransformacionMaterial
             $mermaEstandar = round($salidaTeorica * $porcentajeMerma / 100, 3);
             $mermaReal = round($salidaTeorica - $cantidadRealSalida, 3);
             $desviacionMerma = round($mermaReal - $mermaEstandar, 3);
-            $cliente = Cliente::query()->lockForUpdate()->findOrFail($orden->cliente_id);
-            $itemSalida = ItemMaterial::query()
-                ->lockForUpdate()
-                ->findOrFail((string) data_get($orden->snapshot_receta, 'salida.item_id'));
             $reservaSalida = $this->tomarFolioSalidaReservado(
                 $orden,
                 isset($datos['folio_salida']) ? (string) $datos['folio_salida'] : null,
                 (float) $lote->cantidad_planificada_salida,
             );
-            $codigoFolio = $reservaSalida?->numero_folio ?? $this->correlativoFolio->siguiente($cliente);
-            $folioSalida = Folio::create([
-                'temporada_id' => $orden->temporada_id,
-                'numero_folio' => $codigoFolio,
-                'tipo_bulto' => TipoBulto::Material,
-                'estado_operacional' => EstadoOperacionalFolio::PendienteUbicacion,
-                'fecha_ingreso' => $ahora,
-                'activo' => true,
-                'origen_sistema' => 'transformacion_materiales',
-                'identificador_externo' => $lote->id,
-                'datos_externos' => [
-                    'orden_transformacion_material_id' => $orden->id,
-                    'lote_transformacion_material_id' => $lote->id,
-                    'numero_lote' => $lote->numero_lote,
-                    'cliente' => [
-                        'id' => $cliente->id,
-                        'codigo' => $cliente->codigo,
-                        'nombre' => $cliente->nombre,
-                    ],
-                ],
-            ]);
-            FolioMaterial::create([
-                'folio_id' => $folioSalida->id,
-                'item_material_id' => $itemSalida->id,
-                'lote_transformacion_origen_id' => $lote->id,
-                'categoria_operacional' => CategoriaOperacionalMaterial::MaterialPt,
-                'cantidad_inicial' => $cantidadRealSalida,
-                'cantidad_actual' => $cantidadRealSalida,
-                'cantidad_reservada' => 0,
-                'unidad_medida' => $itemSalida->unidad_medida,
-                'lote' => sprintf(
-                    'TR-%s-%03d',
-                    $orden->fecha_operacional->format('ymd'),
-                    $reservaSalida?->secuencia ?? $lote->numero_lote,
-                ),
-                'observacion' => 'Salida generada por transformación de materiales.',
-            ]);
-            $reservaSalida?->update([
-                'estado' => EstadoFolioSalidaReservado::Usado,
-                'lote_transformacion_material_id' => $lote->id,
-                'folio_id' => $folioSalida->id,
-                'cantidad_real' => $cantidadRealSalida,
-                'requiere_reimpresion' => $reservaSalida->impresiones > 0
-                    && abs($cantidadRealSalida - (float) $reservaSalida->cantidad_teorica) > 0.0001,
-            ]);
-            SalidaTransformacionMaterial::create([
-                'lote_transformacion_material_id' => $lote->id,
-                'folio_id' => $folioSalida->id,
-                'item_material_id' => $itemSalida->id,
-                'cantidad_producida' => $cantidadRealSalida,
-                'es_salida_principal' => true,
-            ]);
-            MovimientoInventarioMaterial::create([
-                'folio_id' => $folioSalida->id,
-                'item_material_id' => $itemSalida->id,
-                'tipo' => TipoMovimientoInventarioMaterial::ProduccionTransformacion,
-                'cantidad' => $cantidadRealSalida,
-                'cantidad_anterior' => 0,
-                'cantidad_resultante' => $cantidadRealSalida,
-                'orden_transformacion_material_id' => $orden->id,
-                'lote_transformacion_material_id' => $lote->id,
-                'user_id' => $usuario->id,
-                'dispositivo_id' => $dispositivo?->id,
-                'motivo' => 'Salida producida por transformación de materiales.',
-                'metadatos' => [
-                    'numero_lote' => $lote->numero_lote,
-                    'categoria_operacional' => CategoriaOperacionalMaterial::MaterialPt->value,
-                    'estado_ubicacion' => 'pendiente_ubicacion',
+            $codigoFolio = $this->crearFolioSalida(
+                $orden,
+                $lote,
+                $reservaSalida,
+                $cantidadRealSalida,
+                $usuario,
+                $dispositivo,
+                $ahora,
+                [
                     'salida_teorica' => $salidaTeorica,
                     'merma_estandar' => $mermaEstandar,
                     'merma_real' => $mermaReal,
                     'desviacion_merma' => $desviacionMerma,
                 ],
-                'ocurrido_at' => $ahora,
-            ]);
+            );
 
             $lote->update([
                 'estado' => EstadoLoteTransformacionMaterial::Cerrado,
@@ -1105,6 +1092,140 @@ class ServicioTransformacionMaterial
                     'merma_estandar' => $mermaEstandar,
                     'merma_real' => $mermaReal,
                     'desviacion_merma' => $desviacionMerma,
+                ],
+                dispositivo: $dispositivo,
+            );
+
+            return $this->cargarOrden($orden->refresh());
+        }, attempts: 3);
+    }
+
+    /**
+     * Modo cuadratura: el camarero pistolea la etiqueta reservada de un folio de salida y
+     * confirma su cantidad real. Crea el lote ya cerrado con su folio, sin consumos: los
+     * componentes se retiraron al iniciar y se cuadran al cerrar la orden.
+     *
+     * @param  array<string, mixed>  $datos
+     */
+    public function confirmarFolioSalida(
+        OrdenTransformacionMaterial $orden,
+        array $datos,
+        User $usuario,
+        ?Dispositivo $dispositivo,
+    ): OrdenTransformacionMaterial {
+        $payloadHash = $this->payloadHash($datos);
+        $operacionId = (string) $datos['operacion_id'];
+        $versionConocida = (int) $datos['version_conocida'];
+        $cantidadRealSalida = $this->cantidad($datos['cantidad_real_salida']);
+        $numeroFolio = (string) $datos['folio_salida'];
+
+        return DB::transaction(function () use (
+            $orden,
+            $usuario,
+            $dispositivo,
+            $payloadHash,
+            $operacionId,
+            $versionConocida,
+            $cantidadRealSalida,
+            $numeroFolio,
+        ): OrdenTransformacionMaterial {
+            $orden = OrdenTransformacionMaterial::query()
+                ->lockForUpdate()
+                ->findOrFail($orden->id);
+
+            if ($this->eventoYaProcesado(
+                $orden,
+                $operacionId,
+                TipoEventoTransformacionMaterial::LoteCerrado,
+                $usuario,
+                $dispositivo,
+                $payloadHash,
+            )) {
+                return $this->cargarOrden($orden->refresh());
+            }
+
+            $this->validarVersion($orden, $versionConocida);
+
+            if (! $orden->seCuadraAlCierre()) {
+                throw new DomainException(
+                    'Esta orden se opera por lotes: abre un lote y pistolea sus consumos.',
+                );
+            }
+
+            if (! in_array($orden->estado, [
+                EstadoOrdenTransformacionMaterial::EnProceso,
+                EstadoOrdenTransformacionMaterial::PendienteCierre,
+            ], true)) {
+                throw new DomainException('La orden no se encuentra en ejecución.');
+            }
+
+            $unidadesPorFolio = data_get($orden->snapshot_receta, 'salida.unidades_por_folio');
+            if ($unidadesPorFolio !== null
+                && $cantidadRealSalida - $this->cantidad($unidadesPorFolio) > 0.0001) {
+                throw new DomainException(sprintf(
+                    'Un folio de salida no puede superar %.3f unidades.',
+                    $this->cantidad($unidadesPorFolio),
+                ));
+            }
+
+            $reservaSalida = $this->tomarFolioSalidaReservado($orden, $numeroFolio, $cantidadRealSalida);
+            if (! $reservaSalida) {
+                throw new DomainException('La orden ya no tiene folios de salida reservados.');
+            }
+
+            $ahora = now();
+            $numeroLote = ((int) LoteTransformacionMaterial::query()
+                ->where('orden_transformacion_material_id', $orden->id)
+                ->lockForUpdate()
+                ->max('numero_lote')) + 1;
+            $lote = LoteTransformacionMaterial::create([
+                'orden_transformacion_material_id' => $orden->id,
+                'numero_lote' => $numeroLote,
+                'estado' => EstadoLoteTransformacionMaterial::Cerrado,
+                'cantidad_planificada_salida' => $reservaSalida->cantidad_teorica,
+                'cantidad_real_salida' => $cantidadRealSalida,
+                'iniciado_por_user_id' => $usuario->id,
+                'cerrado_por_user_id' => $usuario->id,
+                'iniciado_at' => $ahora,
+                'cerrado_at' => $ahora,
+            ]);
+            $codigoFolio = $this->crearFolioSalida(
+                $orden,
+                $lote,
+                $reservaSalida,
+                $cantidadRealSalida,
+                $usuario,
+                $dispositivo,
+                $ahora,
+                ['cantidad_teorica' => $reservaSalida->cantidad_teorica, 'modo' => 'cuadratura_cierre'],
+            );
+            $cantidadRealOrden = round(LoteTransformacionMaterial::query()
+                ->where('orden_transformacion_material_id', $orden->id)
+                ->where('estado', EstadoLoteTransformacionMaterial::Cerrado->value)
+                ->sum('cantidad_real_salida'), 3);
+            $orden->update([
+                'cantidad_real_salida' => $cantidadRealOrden,
+                'estado' => $cantidadRealOrden + 0.0001 >= (float) $orden->cantidad_planificada_salida
+                    ? EstadoOrdenTransformacionMaterial::PendienteCierre
+                    : EstadoOrdenTransformacionMaterial::EnProceso,
+                'version' => $orden->version + 1,
+            ]);
+            $this->registrarEvento(
+                $orden,
+                TipoEventoTransformacionMaterial::LoteCerrado,
+                $usuario,
+                $operacionId,
+                [
+                    'version_conocida' => $versionConocida,
+                    'payload_hash' => $payloadHash,
+                    'modo_operacion' => ModoOperacionTransformacion::CuadraturaCierre->value,
+                    'lote_id' => $lote->id,
+                    'numero_lote' => $numeroLote,
+                    'folio_salida' => $codigoFolio,
+                    'folio_salida_reservado' => true,
+                    'requiere_reimpresion' => (bool) $reservaSalida->requiere_reimpresion,
+                    'cantidad_teorica' => $reservaSalida->cantidad_teorica,
+                    'cantidad_real_salida' => $cantidadRealSalida,
                 ],
                 dispositivo: $dispositivo,
             );
@@ -1229,7 +1350,8 @@ class ServicioTransformacionMaterial
                 ->lockForUpdate()
                 ->get();
 
-            if ($consumos->isEmpty() || $salidas->isEmpty()) {
+            // En modo cuadratura el lote solo crea la salida: los componentes se cuadran al cierre.
+            if ($salidas->isEmpty() || ($consumos->isEmpty() && ! $orden->seCuadraAlCierre())) {
                 throw new DomainException(
                     'El lote no posee la genealogía necesaria para una reversa compensatoria.',
                 );
@@ -1484,6 +1606,10 @@ class ServicioTransformacionMaterial
         }, attempts: 3);
     }
 
+    /**
+     * @param  list<array{item_id: string, cantidad_merma: mixed, cantidad_sin_armar: mixed}>  $cuadratura
+     *                                                                                                      Merma y sin armar por componente (solo modo cuadratura).
+     */
     public function cerrarOrden(
         OrdenTransformacionMaterial $orden,
         string $operacionId,
@@ -1491,6 +1617,8 @@ class ServicioTransformacionMaterial
         ?string $motivoDesviacion,
         User $usuario,
         ?Dispositivo $dispositivo,
+        array $cuadratura = [],
+        ?int $foliosCreados = null,
     ): OrdenTransformacionMaterial {
         $motivoDesviacion = $this->textoOpcional($motivoDesviacion);
         $datosOperacion = [
@@ -1498,6 +1626,13 @@ class ServicioTransformacionMaterial
             'version_conocida' => $versionConocida,
             'motivo_desviacion' => $motivoDesviacion,
         ];
+        if ($cuadratura !== [] || $foliosCreados !== null) {
+            $datosOperacion['folios_creados'] = $foliosCreados;
+            $datosOperacion['cuadratura'] = collect($cuadratura)
+                ->sortBy(fn (array $linea): string => (string) ($linea['item_id'] ?? ''))
+                ->values()
+                ->all();
+        }
         $payloadHash = $this->payloadHash($datosOperacion);
 
         return DB::transaction(function () use (
@@ -1508,6 +1643,8 @@ class ServicioTransformacionMaterial
             $usuario,
             $dispositivo,
             $payloadHash,
+            $cuadratura,
+            $foliosCreados,
         ): OrdenTransformacionMaterial {
             if ($this->eventoYaProcesado(
                 $orden,
@@ -1556,6 +1693,19 @@ class ServicioTransformacionMaterial
                     'Debe justificar la diferencia entre la salida planificada y la salida real.',
                 );
             }
+
+            $cuadraturaCierre = $orden->seCuadraAlCierre()
+                ? $this->cuadrarComponentes(
+                    $orden,
+                    $lotes,
+                    $cuadratura,
+                    $foliosCreados,
+                    $cantidadReal,
+                    $motivoDesviacion,
+                    $usuario,
+                    $dispositivo,
+                )
+                : null;
 
             $reservas = ReservaTransformacionMaterial::query()
                 ->where('orden_transformacion_material_id', $orden->id)
@@ -1608,6 +1758,11 @@ class ServicioTransformacionMaterial
                     'desviacion' => $desviacion,
                     'reservas_liberadas' => $reservasLiberadas,
                     'folios_salida_anulados' => $foliosSalidaAnulados,
+                    ...($cuadraturaCierre !== null ? [
+                        'folios_creados' => $foliosCreados,
+                        'cuadratura' => $cuadraturaCierre['componentes'],
+                        'devoluciones_sin_armar' => $cuadraturaCierre['devoluciones'],
+                    ] : []),
                 ],
                 $motivoDesviacion,
                 $dispositivo,
@@ -1615,6 +1770,448 @@ class ServicioTransformacionMaterial
 
             return $this->cargarOrden($orden->refresh());
         }, attempts: 3);
+    }
+
+    private function asegurarOperacionPorLote(OrdenTransformacionMaterial $orden): void
+    {
+        if ($orden->seCuadraAlCierre()) {
+            throw new DomainException(
+                'Esta orden se cuadra al cierre: confirma cada folio de salida pistoleando su etiqueta.',
+            );
+        }
+    }
+
+    /**
+     * Modo cuadratura: retira a la línea todo lo reservado para la orden. El camarero debe
+     * haber confirmado cada folio. Lo que no se arme vuelve a su folio al cerrar la orden.
+     *
+     * @param  list<string>  $foliosRetirados
+     * @return list<array{folio: string, item_material_id: string, cantidad: float}>
+     */
+    private function retirarComponentes(
+        OrdenTransformacionMaterial $orden,
+        array $foliosRetirados,
+        User $usuario,
+        ?Dispositivo $dispositivo,
+    ): array {
+        if (! FolioSalidaReservadoTransformacion::query()
+            ->where('orden_transformacion_material_id', $orden->id)
+            ->where('estado', EstadoFolioSalidaReservado::Reservado->value)
+            ->exists()) {
+            throw new DomainException(
+                'La orden no tiene folios de salida reservados: iníciala con el flujo por lote.',
+            );
+        }
+
+        $reservas = ReservaTransformacionMaterial::query()
+            ->where('orden_transformacion_material_id', $orden->id)
+            ->where('estado', EstadoReservaMaterial::Activa->value)
+            ->orderBy('item_material_id')
+            ->orderBy('orden_fifo')
+            ->lockForUpdate()
+            ->get();
+        $esperados = $reservas->pluck('folio_id')->unique()->sort()->values()->all();
+        $confirmados = collect($foliosRetirados)
+            ->map(fn (string $folioId): string => mb_strtolower($folioId))
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+        if ($esperados !== $confirmados) {
+            throw new DomainException('Confirma el retiro de cada folio reservado de la orden antes de iniciar.');
+        }
+
+        $categorias = collect(data_get($orden->snapshot_receta, 'componentes', []))
+            ->mapWithKeys(fn (array $componente): array => [
+                (string) ($componente['item_id'] ?? '') => (string) ($componente['categoria_operacional'] ?? ''),
+            ]);
+        $ahora = now();
+        $retirados = [];
+
+        foreach ($reservas as $reserva) {
+            $folioMaterial = FolioMaterial::query()
+                ->with('folio.ubicacionActual.camara', 'folio.ubicacionActual.posicion')
+                ->lockForUpdate()
+                ->findOrFail($reserva->folio_id);
+            $folio = $folioMaterial->folio;
+            $folioMaterial->asegurarVigente();
+
+            if (! $folio->activo
+                || $folio->estado_operacional !== EstadoOperacionalFolio::Disponible
+                || $folioMaterial->motivo_bloqueo !== null) {
+                throw new DomainException(sprintf(
+                    'El folio %s ya no está disponible para transformación.',
+                    $folio->numero_folio,
+                ));
+            }
+
+            $categoria = $categorias->get((string) $reserva->item_material_id, '');
+            if ($categoria !== '' && $folioMaterial->categoria_operacional?->value !== $categoria) {
+                throw new DomainException(sprintf(
+                    'El folio %s no conserva la condición MP o insumo exigida por la receta.',
+                    $folio->numero_folio,
+                ));
+            }
+
+            $cantidad = round((float) $reserva->cantidad - (float) $reserva->cantidad_consumida, 3);
+            if ($cantidad <= 0.0001) {
+                continue;
+            }
+
+            $cantidadAnterior = round((float) $folioMaterial->cantidad_actual, 3);
+            $cantidadReservada = round((float) $folioMaterial->cantidad_reservada, 3);
+            if ($cantidad - $cantidadAnterior > 0.0001 || $cantidad - $cantidadReservada > 0.0001) {
+                throw new DomainException(sprintf(
+                    'El folio %s no posee saldo suficiente para el retiro.',
+                    $folio->numero_folio,
+                ));
+            }
+
+            $cantidadResultante = max(0, round($cantidadAnterior - $cantidad, 3));
+            $ubicacion = $folio->ubicacionActual;
+            $camara = $ubicacion?->camara ?? $ubicacion?->posicion?->camara;
+
+            $folioMaterial->update([
+                'cantidad_actual' => $cantidadResultante,
+                'cantidad_reservada' => max(0, round($cantidadReservada - $cantidad, 3)),
+            ]);
+            $reserva->update([
+                'cantidad_consumida' => round((float) $reserva->cantidad_consumida + $cantidad, 3),
+                'estado' => EstadoReservaMaterial::Consumida,
+            ]);
+            MovimientoInventarioMaterial::create([
+                'folio_id' => $folio->id,
+                'item_material_id' => $folioMaterial->item_material_id,
+                'tipo' => TipoMovimientoInventarioMaterial::ConsumoTransformacion,
+                'cantidad' => -$cantidad,
+                'cantidad_anterior' => $cantidadAnterior,
+                'cantidad_resultante' => $cantidadResultante,
+                'orden_transformacion_material_id' => $orden->id,
+                'user_id' => $usuario->id,
+                'dispositivo_id' => $dispositivo?->id,
+                'motivo' => 'Retiro de componentes a la línea de transformación.',
+                'metadatos' => [
+                    'sentido' => 'retiro_linea',
+                    ...($camara ? [
+                        'camara' => $camara->codigo,
+                        'posicion' => $ubicacion?->posicion?->etiqueta,
+                    ] : []),
+                ],
+                'ocurrido_at' => $ahora,
+            ]);
+
+            if ($cantidadResultante <= 0.0001) {
+                if ($ubicacion) {
+                    UbicacionActual::query()->whereKey($ubicacion->id)->delete();
+                    $camara?->increment('version_plano');
+                }
+                $folio->update([
+                    'estado_operacional' => EstadoOperacionalFolio::RetiradoDefinitivo,
+                    'activo' => false,
+                ]);
+            }
+
+            $retirados[] = [
+                'folio' => $folio->numero_folio,
+                'item_material_id' => (string) $reserva->item_material_id,
+                'cantidad' => $cantidad,
+            ];
+        }
+
+        return $retirados;
+    }
+
+    /**
+     * Modo cuadratura: por cada componente, retirado = utilizado + merma + sin armar.
+     * Lo sin armar vuelve a los folios de origen, empezando por el último retirado (FIFO
+     * inverso). Exige motivo si lo utilizado se aleja de la receta más que su tolerancia.
+     *
+     * @param  Collection<int, LoteTransformacionMaterial>  $lotes
+     * @param  list<array<string, mixed>>  $cuadratura
+     * @return array{componentes: list<array<string, mixed>>, devoluciones: list<array<string, mixed>>}
+     */
+    private function cuadrarComponentes(
+        OrdenTransformacionMaterial $orden,
+        Collection $lotes,
+        array $cuadratura,
+        ?int $foliosCreados,
+        float $cantidadReal,
+        ?string $motivoDesviacion,
+        User $usuario,
+        ?Dispositivo $dispositivo,
+    ): array {
+        $foliosCerrados = $lotes->filter(
+            fn (LoteTransformacionMaterial $lote): bool => $lote->estado === EstadoLoteTransformacionMaterial::Cerrado,
+        )->count();
+        if ($foliosCreados !== $foliosCerrados) {
+            throw new DomainException(sprintf(
+                'La orden registra %d %s. Actualiza la orden y vuelve a confirmar el cierre.',
+                $foliosCerrados,
+                $foliosCerrados === 1 ? 'folio creado' : 'folios creados',
+            ));
+        }
+
+        $componentes = collect(data_get($orden->snapshot_receta, 'componentes', []));
+        $cantidadBase = round((float) data_get($orden->snapshot_receta, 'salida.cantidad_base'), 3);
+        $declarados = collect($cuadratura)->keyBy(fn (array $linea): string => mb_strtolower((string) ($linea['item_id'] ?? '')));
+        $idsComponentes = $componentes->pluck('item_id')->map(fn ($id): string => mb_strtolower((string) $id))->sort()->values()->all();
+        if ($cantidadBase <= 0 || $declarados->keys()->sort()->values()->all() !== $idsComponentes) {
+            throw new DomainException('Declara la merma y lo sin armar de cada componente de la receta.');
+        }
+
+        $reservas = ReservaTransformacionMaterial::query()
+            ->where('orden_transformacion_material_id', $orden->id)
+            ->where('estado', EstadoReservaMaterial::Consumida->value)
+            ->orderBy('item_material_id')
+            ->orderByDesc('orden_fifo')
+            ->lockForUpdate()
+            ->get();
+        $ahora = now();
+        $filas = [];
+        $devoluciones = [];
+        $fueraDeTolerancia = [];
+
+        foreach ($componentes as $componente) {
+            $itemId = (string) $componente['item_id'];
+            $linea = $declarados->get(mb_strtolower($itemId));
+            $reservasItem = $reservas->where('item_material_id', $itemId)->values();
+            $retirado = round($reservasItem->sum(fn (ReservaTransformacionMaterial $reserva): float => (float) $reserva->cantidad_consumida), 3);
+            $merma = $this->cantidadNoNegativa($linea['cantidad_merma'] ?? null);
+            $sinArmar = $this->cantidadNoNegativa($linea['cantidad_sin_armar'] ?? null);
+            $unidad = (string) ($componente['unidad_medida'] ?? '');
+
+            if ($merma + $sinArmar - $retirado > 0.0001) {
+                throw new DomainException(sprintf(
+                    'La merma y lo sin armar de %s superan lo retirado (%s %s).',
+                    $componente['codigo'] ?? 'un componente',
+                    number_format($retirado, 3, ',', '.'),
+                    $unidad,
+                ));
+            }
+
+            $teorico = round((float) $componente['cantidad_estandar'] * $cantidadReal / $cantidadBase, 3);
+            $utilizado = round($retirado - $merma - $sinArmar, 3);
+            $desviacion = round($utilizado - $teorico, 3);
+            $tolerancia = round($teorico * (float) ($componente['tolerancia_porcentaje'] ?? 0) / 100, 3);
+            if (abs($desviacion) - $tolerancia > 0.0005) {
+                $fueraDeTolerancia[] = (string) ($componente['codigo'] ?? $itemId);
+            }
+
+            $pendiente = $sinArmar;
+            foreach ($reservasItem as $reserva) {
+                if ($pendiente <= 0.0001) {
+                    break;
+                }
+                $devolver = round(min($pendiente, (float) $reserva->cantidad_consumida), 3);
+                if ($devolver <= 0.0001) {
+                    continue;
+                }
+                $devoluciones[] = $this->devolverAlFolioDeOrigen(
+                    $orden,
+                    $reserva,
+                    $devolver,
+                    'sin_armar',
+                    'Material sin armar devuelto al cerrar la orden de transformación.',
+                    $usuario,
+                    $dispositivo,
+                    $ahora,
+                );
+                $pendiente = round($pendiente - $devolver, 3);
+            }
+
+            $fila = [
+                'item_material_id' => $itemId,
+                'es_componente_principal' => (bool) ($componente['es_componente_principal'] ?? false),
+                'cantidad_retirada' => $retirado,
+                'cantidad_teorica' => $teorico,
+                'cantidad_merma' => $merma,
+                'cantidad_sin_armar' => $sinArmar,
+                'cantidad_utilizada' => $utilizado,
+                'desviacion' => $desviacion,
+            ];
+            CuadraturaTransformacionMaterial::create([
+                'orden_transformacion_material_id' => $orden->id,
+                ...$fila,
+            ]);
+            $filas[] = ['codigo' => $componente['codigo'] ?? null, ...$fila];
+        }
+
+        if ($fueraDeTolerancia !== [] && mb_strlen((string) $motivoDesviacion) < 5) {
+            throw new DomainException(sprintf(
+                'Lo utilizado de %s no cuadra con la receta: indica el motivo de la diferencia.',
+                implode(', ', $fueraDeTolerancia),
+            ));
+        }
+
+        return ['componentes' => $filas, 'devoluciones' => $devoluciones];
+    }
+
+    /**
+     * Devuelve parte de un retiro a su folio de origen. Si el folio había quedado vacío,
+     * vuelve como pendiente de ubicación para guardarlo desde Cámaras.
+     *
+     * @return array{folio: string, item_material_id: string, cantidad: float, requiere_ubicacion: bool}
+     */
+    private function devolverAlFolioDeOrigen(
+        OrdenTransformacionMaterial $orden,
+        ReservaTransformacionMaterial $reserva,
+        float $cantidad,
+        string $sentido,
+        string $motivo,
+        User $usuario,
+        ?Dispositivo $dispositivo,
+        DateTimeInterface $ahora,
+    ): array {
+        $material = FolioMaterial::query()->with('folio')->lockForUpdate()->findOrFail($reserva->folio_id);
+        $folio = Folio::query()->lockForUpdate()->findOrFail($material->folio_id);
+        $cantidadAnterior = round((float) $material->cantidad_actual, 3);
+        $cantidadResultante = round($cantidadAnterior + $cantidad, 3);
+        $estabaVacio = $cantidadAnterior <= 0.0001;
+
+        $material->update(['cantidad_actual' => $cantidadResultante]);
+        if ($estabaVacio) {
+            $folio->refresh()->update([
+                'estado_operacional' => EstadoOperacionalFolio::PendienteUbicacion,
+                'activo' => true,
+            ]);
+        }
+        $consumida = max(0, round((float) $reserva->cantidad_consumida - $cantidad, 3));
+        $reserva->update([
+            'cantidad_consumida' => $consumida,
+            'cantidad_devuelta' => round((float) $reserva->cantidad_devuelta + $cantidad, 3),
+            'estado' => $consumida > 0.0001
+                ? EstadoReservaMaterial::Consumida
+                : EstadoReservaMaterial::Liberada,
+        ]);
+        MovimientoInventarioMaterial::create([
+            'folio_id' => $folio->id,
+            'item_material_id' => $material->item_material_id,
+            'tipo' => TipoMovimientoInventarioMaterial::DevolucionTransformacion,
+            'cantidad' => $cantidad,
+            'cantidad_anterior' => $cantidadAnterior,
+            'cantidad_resultante' => $cantidadResultante,
+            'orden_transformacion_material_id' => $orden->id,
+            'user_id' => $usuario->id,
+            'dispositivo_id' => $dispositivo?->id,
+            'motivo' => $motivo,
+            'metadatos' => [
+                'sentido' => $sentido,
+                'requiere_ubicacion' => $estabaVacio,
+            ],
+            'ocurrido_at' => $ahora,
+        ]);
+
+        return [
+            'folio' => $folio->numero_folio,
+            'item_material_id' => (string) $reserva->item_material_id,
+            'cantidad' => $cantidad,
+            'requiere_ubicacion' => $estabaVacio,
+        ];
+    }
+
+    private function cantidadNoNegativa(mixed $valor): float
+    {
+        if (! is_numeric($valor) || (float) $valor < 0) {
+            throw new DomainException('La merma y lo sin armar deben ser cantidades iguales o mayores que cero.');
+        }
+
+        return round((float) $valor, 3);
+    }
+
+    /**
+     * Crea el folio de material de salida de un lote cerrado, con el número reservado si
+     * existe o con el siguiente del correlativo, y registra su producción.
+     *
+     * @param  array<string, mixed>  $metadatos
+     */
+    private function crearFolioSalida(
+        OrdenTransformacionMaterial $orden,
+        LoteTransformacionMaterial $lote,
+        ?FolioSalidaReservadoTransformacion $reservaSalida,
+        float $cantidadRealSalida,
+        User $usuario,
+        ?Dispositivo $dispositivo,
+        DateTimeInterface $ahora,
+        array $metadatos,
+    ): string {
+        $cliente = Cliente::query()->lockForUpdate()->findOrFail($orden->cliente_id);
+        $itemSalida = ItemMaterial::query()
+            ->lockForUpdate()
+            ->findOrFail((string) data_get($orden->snapshot_receta, 'salida.item_id'));
+        $codigoFolio = $reservaSalida?->numero_folio ?? $this->correlativoFolio->siguiente($cliente);
+        $folioSalida = Folio::create([
+            'temporada_id' => $orden->temporada_id,
+            'numero_folio' => $codigoFolio,
+            'tipo_bulto' => TipoBulto::Material,
+            'estado_operacional' => EstadoOperacionalFolio::PendienteUbicacion,
+            'fecha_ingreso' => $ahora,
+            'activo' => true,
+            'origen_sistema' => 'transformacion_materiales',
+            'identificador_externo' => $lote->id,
+            'datos_externos' => [
+                'orden_transformacion_material_id' => $orden->id,
+                'lote_transformacion_material_id' => $lote->id,
+                'numero_lote' => $lote->numero_lote,
+                'cliente' => [
+                    'id' => $cliente->id,
+                    'codigo' => $cliente->codigo,
+                    'nombre' => $cliente->nombre,
+                ],
+            ],
+        ]);
+        FolioMaterial::create([
+            'folio_id' => $folioSalida->id,
+            'item_material_id' => $itemSalida->id,
+            'lote_transformacion_origen_id' => $lote->id,
+            'categoria_operacional' => CategoriaOperacionalMaterial::MaterialPt,
+            'cantidad_inicial' => $cantidadRealSalida,
+            'cantidad_actual' => $cantidadRealSalida,
+            'cantidad_reservada' => 0,
+            'unidad_medida' => $itemSalida->unidad_medida,
+            'lote' => sprintf(
+                'TR-%s-%03d',
+                $orden->fecha_operacional->format('ymd'),
+                $reservaSalida?->secuencia ?? $lote->numero_lote,
+            ),
+            'observacion' => 'Salida generada por transformación de materiales.',
+        ]);
+        $reservaSalida?->update([
+            'estado' => EstadoFolioSalidaReservado::Usado,
+            'lote_transformacion_material_id' => $lote->id,
+            'folio_id' => $folioSalida->id,
+            'cantidad_real' => $cantidadRealSalida,
+            'requiere_reimpresion' => $reservaSalida->impresiones > 0
+                && abs($cantidadRealSalida - (float) $reservaSalida->cantidad_teorica) > 0.0001,
+        ]);
+        SalidaTransformacionMaterial::create([
+            'lote_transformacion_material_id' => $lote->id,
+            'folio_id' => $folioSalida->id,
+            'item_material_id' => $itemSalida->id,
+            'cantidad_producida' => $cantidadRealSalida,
+            'es_salida_principal' => true,
+        ]);
+        MovimientoInventarioMaterial::create([
+            'folio_id' => $folioSalida->id,
+            'item_material_id' => $itemSalida->id,
+            'tipo' => TipoMovimientoInventarioMaterial::ProduccionTransformacion,
+            'cantidad' => $cantidadRealSalida,
+            'cantidad_anterior' => 0,
+            'cantidad_resultante' => $cantidadRealSalida,
+            'orden_transformacion_material_id' => $orden->id,
+            'lote_transformacion_material_id' => $lote->id,
+            'user_id' => $usuario->id,
+            'dispositivo_id' => $dispositivo?->id,
+            'motivo' => 'Salida producida por transformación de materiales.',
+            'metadatos' => [
+                'numero_lote' => $lote->numero_lote,
+                'categoria_operacional' => CategoriaOperacionalMaterial::MaterialPt->value,
+                'estado_ubicacion' => 'pendiente_ubicacion',
+                ...$metadatos,
+            ],
+            'ocurrido_at' => $ahora,
+        ]);
+
+        return $codigoFolio;
     }
 
     /**
@@ -1779,6 +2376,8 @@ class ServicioTransformacionMaterial
             'reservas.folioMaterial.folio.ubicacionActual.posicion.camara',
             'lotes' => fn ($consulta) => $consulta->orderBy('numero_lote'),
             'foliosSalidaReservados',
+            'cuadraturas' => fn ($consulta) => $consulta->orderByDesc('es_componente_principal'),
+            'cuadraturas.item',
             'lotes.consumos.folioMaterial.folio',
             'lotes.consumos.item',
             'lotes.salidas.folioMaterial.folio',

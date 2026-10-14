@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\EstadoOrdenTransformacionMaterial;
+use App\Enums\ModoOperacionTransformacion;
 use App\Models\Concerns\ImpideEliminacionFisica;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -17,6 +18,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'cliente_id',
     'version_receta_material_id',
     'estado',
+    'modo_operacion',
     'cantidad_planificada_salida',
     'cantidad_real_salida',
     'linea',
@@ -67,6 +69,11 @@ class OrdenTransformacionMaterial extends Model
             ->orderBy('secuencia');
     }
 
+    public function cuadraturas(): HasMany
+    {
+        return $this->hasMany(CuadraturaTransformacionMaterial::class, 'orden_transformacion_material_id');
+    }
+
     public function lotes(): HasMany
     {
         return $this->hasMany(LoteTransformacionMaterial::class, 'orden_transformacion_material_id');
@@ -75,6 +82,11 @@ class OrdenTransformacionMaterial extends Model
     public function eventos(): HasMany
     {
         return $this->hasMany(EventoTransformacionMaterial::class, 'orden_transformacion_material_id');
+    }
+
+    public function seCuadraAlCierre(): bool
+    {
+        return $this->modo_operacion === ModoOperacionTransformacion::CuadraturaCierre;
     }
 
     public function creadoPor(): BelongsTo
@@ -86,6 +98,7 @@ class OrdenTransformacionMaterial extends Model
     {
         return [
             'estado' => EstadoOrdenTransformacionMaterial::class,
+            'modo_operacion' => ModoOperacionTransformacion::class,
             'cantidad_planificada_salida' => 'decimal:3',
             'cantidad_real_salida' => 'decimal:3',
             'fecha_operacional' => 'date',

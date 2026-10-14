@@ -263,6 +263,39 @@ El cierre de lote es una sola transacción:
 Si se selecciona un folio posterior mientras un folio FIFO anterior conserva
 saldo, el motivo de excepción es obligatorio.
 
+## Modo cuadratura al cierre
+
+Una orden con folios de salida reservados se inicia desde la tablet en modo
+`cuadratura_cierre` (`modo_operacion`). Las órdenes ya iniciadas, o iniciadas
+por una tablet que no envía el modo, siguen por lote.
+
+1. **Retiro al iniciar.** El camarero pistolea cada folio reservado al llevarlo
+   a la línea (`folios_retirados` en `POST …/ordenes/{orden}/iniciar`). Todo lo
+   reservado sale del inventario con un movimiento `consumo_transformacion`
+   (`sentido: retiro_linea`). Un folio que queda vacío se retira de su
+   posición.
+2. **Confirmación de folios.** Al completar un pallet, el camarero pistolea su
+   etiqueta reservada y confirma la cantidad real
+   (`POST …/ordenes/{orden}/folios-salida/confirmar`). Se crea el lote ya
+   cerrado con su folio de salida, sin consumos. Abrir y cerrar lotes queda
+   bloqueado en este modo.
+3. **Cuadratura al cerrar.** Por cada componente se declaran la merma y lo sin
+   armar (`cuadratura` y `folios_creados` en `POST …/ordenes/{orden}/cerrar`):
+
+   ```text
+   retirado = utilizado + merma + sin armar
+   teórico  = cantidad estándar × salida real / cantidad base
+   diferencia = utilizado − teórico
+   ```
+
+   Lo sin armar vuelve a sus folios de origen, empezando por el último retirado,
+   con un movimiento `devolucion_transformacion`. Un folio que había quedado
+   vacío vuelve como `pendiente_ubicacion` para guardarlo desde Cámaras. Si la
+   diferencia supera la tolerancia del componente, el motivo es obligatorio. La
+   cuadratura queda en `cuadraturas_transformacion_materiales`.
+4. **Cancelar** una orden en este modo devuelve todo lo retirado a sus folios.
+   Revertir un folio confirmado anula su salida y reserva un número nuevo.
+
 ## Merma
 
 La merma global se calculará únicamente sobre el componente principal, evitando

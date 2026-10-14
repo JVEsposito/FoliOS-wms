@@ -28,6 +28,7 @@ class OrdenTransformacionMaterialResource extends JsonResource
         return [
             'id' => $this->id,
             'estado' => $this->estado->value,
+            'modo_operacion' => $this->modo_operacion?->value ?? 'por_lote',
             'version' => $this->version,
             'faltantes_por_vencimiento' => $this->faltantes_por_vencimiento,
             'alerta_vencimiento' => $this->faltantes_por_vencimiento ? 'Reserva insuficiente por vencimiento' : null,
@@ -65,6 +66,24 @@ class OrdenTransformacionMaterialResource extends JsonResource
                     'requiere_reimpresion' => $reserva->requiere_reimpresion,
                     'motivo_anulacion' => $reserva->motivo_anulacion,
                     'anulado_at' => $reserva->anulado_at?->toAtomString(),
+                ],
+            )->values()),
+            // Modo cuadratura: retirado, merma, sin armar y desviación por componente al cierre.
+            'cuadratura' => $this->whenLoaded('cuadraturas', fn () => $this->cuadraturas->map(
+                fn ($fila): array => [
+                    'item' => [
+                        'id' => $fila->item->id,
+                        'codigo' => $fila->item->codigo,
+                        'nombre' => $fila->item->nombre,
+                        'unidad_medida' => $fila->item->unidad_medida,
+                    ],
+                    'es_componente_principal' => $fila->es_componente_principal,
+                    'cantidad_retirada' => $fila->cantidad_retirada,
+                    'cantidad_teorica' => $fila->cantidad_teorica,
+                    'cantidad_merma' => $fila->cantidad_merma,
+                    'cantidad_sin_armar' => $fila->cantidad_sin_armar,
+                    'cantidad_utilizada' => $fila->cantidad_utilizada,
+                    'desviacion' => $fila->desviacion,
                 ],
             )->values()),
             'linea' => $this->linea,
@@ -116,6 +135,7 @@ class OrdenTransformacionMaterialResource extends JsonResource
                     'estado' => $reserva->estado->value,
                     'cantidad' => $reserva->cantidad,
                     'cantidad_consumida' => $reserva->cantidad_consumida,
+                    'cantidad_devuelta' => $reserva->cantidad_devuelta ?? '0.000',
                     'cantidad_pendiente' => number_format(max(
                         0,
                         round((float) $reserva->cantidad - (float) $reserva->cantidad_consumida, 3),
