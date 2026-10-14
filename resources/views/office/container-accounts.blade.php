@@ -31,6 +31,7 @@
                     default="balances"
                     :panels="[
                         'balances' => ['label' => 'Saldos', 'icon' => '∑'],
+                        'stock' => ['label' => 'Existencia', 'icon' => '▦'],
                         'pending' => ['label' => 'Pendientes', 'icon' => '◷'],
                         'reservations' => ['label' => 'Reservas', 'icon' => '◇'],
                         'movements' => ['label' => 'Movimientos', 'icon' => '⇄'],
@@ -38,11 +39,24 @@
                 />
 
                 <div class="accounts-grid office-panel-workspace">
-                    <section class="panel" id="container-accounts-panel-balances" data-office-panel-group="container-accounts" data-office-panel-id="balances" role="tabpanel" aria-labelledby="container-accounts-tab-balances"><div class="panel-heading"><div><p class="eyebrow">SALDOS</p><h2>Por cliente y tipo</h2></div></div><div class="balance-list" id="balanceList"></div></section>
+                    <section class="panel" id="container-accounts-panel-balances" data-office-panel-group="container-accounts" data-office-panel-id="balances" role="tabpanel" aria-labelledby="container-accounts-tab-balances">
+                        <div class="panel-heading"><div><p class="eyebrow">SALDOS</p><h2>Por cliente y tipo</h2></div><small>El estado de cuenta toma la temporada y las fechas del filtro.</small></div>
+                        <p class="balance-legend"><b class="positive">+</b> envases del cliente a cargo de la planta · <b class="negative">−</b> envases entregados al cliente, pendientes de devolución. La compra de envases propios no mueve la cuenta de ningún cliente: se ve en Existencia.</p>
+                        <div class="balance-list" id="balanceList"></div>
+                    </section>
+                    <section class="panel" id="container-accounts-panel-stock" data-office-panel-group="container-accounts" data-office-panel-id="stock" role="tabpanel" aria-labelledby="container-accounts-tab-stock">
+                        <div class="panel-heading"><div><p class="eyebrow">EXISTENCIA FÍSICA</p><h2>Envases en planta por propiedad</h2></div><small>Toda la planta en la temporada seleccionada. No depende del cliente ni de las fechas.</small></div>
+                        <div class="stock-list" id="stockList"></div>
+                        <div class="stock-delivered">
+                            <h3>Envases propios entregados a clientes</h3>
+                            <p class="stock-note">Despachados en la temporada, netos de anulaciones. Las recepciones no distinguen si vuelven envases propios o del cliente, por eso se informa lo entregado.</p>
+                            <div class="stock-delivered__list" id="ownDeliveredList"></div>
+                        </div>
+                    </section>
                     <section class="panel" id="container-accounts-panel-pending" data-office-panel-group="container-accounts" data-office-panel-id="pending" role="tabpanel" aria-labelledby="container-accounts-tab-pending"><div class="panel-heading"><div><p class="eyebrow">EN VERDE</p><h2>Pendiente de Validación MP</h2></div></div><div class="pending-list" id="pendingList"></div></section>
                 </div>
                 <section class="panel" id="container-accounts-panel-reservations" data-office-panel-group="container-accounts" data-office-panel-id="reservations" role="tabpanel" aria-labelledby="container-accounts-tab-reservations"><div class="panel-heading"><div><p class="eyebrow">RESERVAS OPERACIONALES</p><h2>Borradores de despacho</h2></div><small>No modifican el saldo hasta confirmar la salida.</small></div><div class="reservation-list" id="reservationList"></div></section>
-                <section class="panel movements-panel" id="container-accounts-panel-movements" data-office-panel-group="container-accounts" data-office-panel-id="movements" role="tabpanel" aria-labelledby="container-accounts-tab-movements"><div class="panel-heading"><div><p class="eyebrow">KARDEX DOCUMENTAL</p><h2>Movimientos confirmados</h2></div><small>Ingreso y salida conservan fecha y hora exactas.</small></div><div class="accounts-table-scroll"><table><thead><tr><th>Fecha y hora</th><th>Cliente / documento</th><th>Envase</th><th>Cuenta</th><th>Propiedad</th><th>Revisión</th><th>Acción</th></tr></thead><tbody id="movementsBody"></tbody></table></div></section>
+                <section class="panel movements-panel" id="container-accounts-panel-movements" data-office-panel-group="container-accounts" data-office-panel-id="movements" role="tabpanel" aria-labelledby="container-accounts-tab-movements"><div class="panel-heading"><div><p class="eyebrow">KARDEX DOCUMENTAL</p><h2>Movimientos confirmados</h2></div><div class="movements-heading__side"><small id="movementsNote">Ingreso y salida conservan fecha y hora exactas.</small><button class="secondary-button" id="movementsExcelButton" type="button">↓ Excel</button></div></div><div class="accounts-table-scroll"><table><thead><tr><th>Fecha y hora</th><th>Cliente / documento</th><th>Envase</th><th>Cuenta</th><th>Existencia</th><th>Propiedad</th><th>Revisión</th><th>Acción</th></tr></thead><tbody id="movementsBody"></tbody></table></div></section>
             </section>
         </main>
         <dialog class="review-dialog" id="reviewDialog" aria-labelledby="reviewDialogTitle">

@@ -73,6 +73,30 @@ Cada movimiento conserva, según corresponda:
 
 Un saldo nunca se corrige eliminando un movimiento anterior. Las anulaciones y correcciones se realizan mediante nuevos asientos compensatorios.
 
+Cada movimiento tiene dos efectos:
+
+- **En la cuenta del cliente** (`signo_cuenta`): `+1` deja envases del cliente a cargo de la planta y `-1` los entrega al cliente. La compra de envases propios usa `0`, porque no le debe nada a ningún cliente.
+- **En la existencia física** (`signo_existencia`): `+1` entra a la planta y `-1` sale.
+
+Por eso los envases propios no aparecen en los saldos de clientes. Se ven en **Existencia** y en lo entregado a cada cliente.
+
+### Vistas de la oficina
+
+- **Saldos:** agrupados por cliente y tipo de envase. No muestran filas en 0 de la compra de envases propios. Si al cliente se le entregaron envases propios en la temporada, la línea lo indica.
+- **Existencia:** envases en planta por tipo y propiedad (propios, arrendados y de clientes), reservados en guías borrador y disponibles. Para los propios muestra lo ingresado, lo entregado a clientes y lo que queda en planta, y lista los propios entregados a cada cliente. Es de toda la planta en la temporada seleccionada; no depende del cliente ni de las fechas.
+- **Movimientos:** cada fila muestra el tipo de movimiento, el efecto en la cuenta (`—` si no la mueve) y el efecto en la existencia. Se ven los 300 más recientes.
+
+Las recepciones no distinguen si vuelven envases propios o del cliente. Por eso de los propios se informa lo entregado (despachado, neto de anulaciones) y no lo que el cliente tiene hoy.
+
+Las fechas **desde** y **hasta** de los filtros son días de planta (`app.operational_timezone`). Un movimiento a las 23:30 del día 7 cuenta en el 7, aunque en UTC ya sea el 8.
+
+### Exportaciones y reportes a clientes
+
+- **Excel de movimientos** (botón `↓ Excel` en Movimientos): trae todos los movimientos de los filtros aplicados, sin el límite de 300. Incluye documento, tipo de movimiento, propiedad, efecto en cuenta, **saldo de cuenta acumulado**, efecto en existencia, revisión y correcciones. El saldo acumulado es el de la cuenta del cliente en la temporada, aunque el filtro muestre un período: la primera fila de un período parte del saldo que traía.
+- **Estado de cuenta** (acción de cada cliente en Saldos), en PDF o Excel, para enviarlo al cliente. Toma la temporada y las fechas aplicadas. El resumen por tipo de envase muestra saldo inicial, recibidos, entregados y saldo final, y separa los entregados en propios de la planta, arrendados y del cliente. El detalle trae cada movimiento con su saldo. Las anulaciones de despacho descuentan de los entregados (aparecen en la columna de salida con signo negativo) y las correcciones de un ingreso descuentan de lo recibido. Así se cumple saldo inicial + recibidos − entregados = saldo final. El documento es informativo, no tributario.
+
+El envío por correo no está implementado: requiere configurar un servidor de correo y registrar el correo de cada cliente. Por ahora el estado de cuenta se descarga y se envía por fuera.
+
 ## Orígenes de movimientos
 
 Pueden existir movimientos asociados a:
@@ -192,6 +216,8 @@ La oficina incorpora un fallback UUID v4 basado en `crypto.getRandomValues()` pa
 ```http
 GET  /api/envases/cuenta-corriente/catalogos
 GET  /api/envases/cuenta-corriente/movimientos
+GET  /api/envases/cuenta-corriente/movimientos/excel
+GET  /api/envases/cuenta-corriente/estado-cuenta?cliente_id=…&formato=pdf|xlsx
 POST /api/envases/cuenta-corriente/movimientos/{movimiento}/revisar
 POST /api/envases/cuenta-corriente/movimientos/{movimiento}/corregir-propiedad
 POST /api/envases/cuenta-corriente/movimientos/{movimiento}/corregir-cantidad
@@ -256,6 +282,7 @@ Los movimientos, eventos y guías no se eliminan físicamente. Las guías confir
 
 - integración documental o tributaria cuando corresponda;
 - conciliaciones y cierres periódicos;
+- envío del estado de cuenta por correo (requiere servidor de correo y correo por cliente);
 - reportes históricos avanzados;
 - recuperación auditada de diferencias operacionales;
 - integración ERP;

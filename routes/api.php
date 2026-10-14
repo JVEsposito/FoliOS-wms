@@ -162,6 +162,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('can:consultar-cuenta-envases')->prefix('envases/cuenta-corriente')->group(function () {
         Route::get('/catalogos', [CuentaCorrienteEnvaseController::class, 'catalogos']);
         Route::get('/movimientos', [CuentaCorrienteEnvaseController::class, 'index']);
+        Route::get('/movimientos/excel', [CuentaCorrienteEnvaseController::class, 'excel']);
+        Route::get('/estado-cuenta', [CuentaCorrienteEnvaseController::class, 'estadoCuenta']);
     });
     Route::post('/envases/cuenta-corriente/movimientos/{movimientoEnvase}/revisar', [CuentaCorrienteEnvaseController::class, 'revisar'])
         ->middleware('can:revisar-cuenta-envases');

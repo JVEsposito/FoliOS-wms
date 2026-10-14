@@ -16,15 +16,22 @@ use App\Models\DetalleGuiaDespachoEnvase;
 use App\Models\MovimientoEnvase;
 use App\Models\RevisionMovimientoEnvase;
 use App\Models\Temporada;
+use App\Services\Envases\GeneradorEstadoCuentaEnvasesPdf;
 use App\Services\Envases\ServicioCorreccionCantidadEnvases;
 use App\Services\Envases\ServicioCorreccionPropiedadEnvases;
+use App\Services\Envases\ServicioCuentaCorrienteEnvases;
+use App\Services\Existencias\GeneradorLibroXlsx;
 use App\Services\Temporadas\ServicioTemporadaActiva;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class CuentaCorrienteEnvaseController extends Controller
 {
@@ -46,22 +53,14 @@ class CuentaCorrienteEnvaseController extends Controller
     public function index(
         Request $request,
         ServicioTemporadaActiva $temporadaActiva,
+        ServicioCuentaCorrienteEnvases $cuenta,
     ): JsonResponse {
         Gate::authorize('consultar-cuenta-envases');
-        $filtros = $request->validate([
-            'cliente_id' => ['nullable', 'uuid', 'exists:clientes,id'],
-            'temporada_id' => ['nullable', 'uuid', 'exists:temporadas,id'],
-            'tipo_envase' => ['nullable', Rule::enum(TipoEnvaseRomana::class)],
-            'estado_revision' => ['nullable', Rule::enum(EstadoRevisionMovimientoEnvase::class)],
-            'desde' => ['nullable', 'date'],
-            'hasta' => ['nullable', 'date', 'after_or_equal:desde'],
-            'buscar' => ['nullable', 'string', 'max:100'],
-        ]);
-        $filtros['temporada_id'] ??= $temporadaActiva->obtener()->id;
+        $filtros = $this->filtros($request, $temporadaActiva);
 
         $consulta = MovimientoEnvase::query()
             ->with(['cliente:id,codigo,nombre', 'temporada:id,codigo,nombre,activa', 'creadoPor:id,name', 'revisiones.usuario:id,name', 'recepcion:id,tipo_recepcion']);
-        $this->aplicarFiltros($consulta, $filtros);
+        $cuenta->aplicarFiltros($consulta, $filtros);
         $movimientos = $consulta->orderByDesc('ocurrido_at')->limit(300)->get();
         $corregidos = MovimientoEnvase::query()
             ->where('tipo_movimiento', TipoMovimientoEnvase::CorreccionPropiedad->value)
@@ -80,7 +79,7 @@ class CuentaCorrienteEnvaseController extends Controller
 
         $pendientes = DetalleEnvaseRecepcionRomana::query()
             ->with('recepcion')
-            ->whereHas('recepcion', function (Builder $recepcion) use ($filtros): void {
+            ->whereHas('recepcion', function (Builder $recepcion) use ($filtros, $cuenta): void {
                 $recepcion->where('estado_validacion_mp', '!=', EstadoValidacionMp::Validada->value);
                 if (! empty($filtros['cliente_id'])) {
                     $recepcion->where('cliente_id', $filtros['cliente_id']);
@@ -88,19 +87,18 @@ class CuentaCorrienteEnvaseController extends Controller
                 if (! empty($filtros['temporada_id'])) {
                     $recepcion->where('temporada_id', $filtros['temporada_id']);
                 }
-                if (! empty($filtros['desde'])) {
-                    $recepcion->whereDate('ingreso_at', '>=', $filtros['desde']);
-                }
-                if (! empty($filtros['hasta'])) {
-                    $recepcion->whereDate('ingreso_at', '<=', $filtros['hasta']);
-                }
+                $cuenta->filtrarDiasOperacionales($recepcion, 'ingreso_at', $filtros['desde'] ?? null, $filtros['hasta'] ?? null);
             })
             ->when(! empty($filtros['tipo_envase']), fn (Builder $q) => $q->where('tipo_envase', $filtros['tipo_envase']))
             ->get();
 
+        $propiosEntregados = collect($cuenta->propiosEntregados($filtros['temporada_id'], $filtros['cliente_id'] ?? null))
+            ->keyBy(fn (array $fila): string => $fila['cliente_id'].'|'.$fila['tipo_envase']);
+        // Las compras de envases propios no mueven la cuenta de nadie (signo 0): se ven en Existencia.
         $balances = MovimientoEnvase::query()
             ->selectRaw('cliente_id, tipo_envase, SUM(CAST(cantidad AS SIGNED) * signo_cuenta) as saldo')
             ->where('temporada_id', $filtros['temporada_id'])
+            ->where('signo_cuenta', '!=', 0)
             ->when(
                 ! empty($filtros['cliente_id']),
                 fn (Builder $consulta): Builder => $consulta->where('cliente_id', $filtros['cliente_id']),
@@ -116,27 +114,19 @@ class CuentaCorrienteEnvaseController extends Controller
                 'cliente' => ['id' => $movimiento->cliente->id, 'codigo' => $movimiento->cliente->codigo, 'nombre' => $movimiento->cliente->nombre],
                 'tipo_envase' => $movimiento->tipo_envase->value,
                 'saldo' => (int) $movimiento->getAttribute('saldo'),
+                'propios_entregados' => (int) ($propiosEntregados->get($movimiento->cliente_id.'|'.$movimiento->tipo_envase->value)['cantidad'] ?? 0),
             ])->values();
 
         $reservas = DetalleGuiaDespachoEnvase::query()
             ->with('guia.cliente:id,codigo,nombre')
-            ->whereHas('guia', function (Builder $guia) use ($filtros): void {
+            ->whereHas('guia', function (Builder $guia) use ($filtros, $cuenta): void {
+                $cuenta->filtrarDiasOperacionales($guia, 'salida_at', $filtros['desde'] ?? null, $filtros['hasta'] ?? null);
                 $guia->where('temporada_id', $filtros['temporada_id'])
                     ->where('estado', EstadoGuiaDespachoEnvase::Borrador->value)
                     ->when(
                         ! empty($filtros['cliente_id']),
                         fn (Builder $consulta): Builder => $consulta
                             ->where('cliente_id', $filtros['cliente_id']),
-                    )
-                    ->when(
-                        ! empty($filtros['desde']),
-                        fn (Builder $consulta): Builder => $consulta
-                            ->whereDate('salida_at', '>=', $filtros['desde']),
-                    )
-                    ->when(
-                        ! empty($filtros['hasta']),
-                        fn (Builder $consulta): Builder => $consulta
-                            ->whereDate('salida_at', '<=', $filtros['hasta']),
                     )
                     ->when(
                         ! empty($filtros['buscar']),
@@ -220,6 +210,7 @@ class CuentaCorrienteEnvaseController extends Controller
                 'ingreso_at' => $detalle->recepcion->ingreso_at?->toAtomString(),
             ])->values(),
             'balances' => $balances,
+            'existencia' => $cuenta->existencia($filtros['temporada_id']),
             'reservas' => $reservas,
             'resumen' => [
                 'movimientos_confirmados' => $movimientos->count(),
@@ -305,27 +296,121 @@ class CuentaCorrienteEnvaseController extends Controller
         return response()->json(['message' => 'Cantidad corregida. El ingreso original y el ajuste permanecen visibles para auditoría.']);
     }
 
-    /** @param array<string, mixed> $filtros */
-    private function aplicarFiltros(Builder $consulta, array $filtros): void
+    /** Kardex de movimientos con los filtros de la oficina y saldo acumulado de la cuenta. */
+    public function excel(
+        Request $request,
+        ServicioTemporadaActiva $temporadaActiva,
+        ServicioCuentaCorrienteEnvases $cuenta,
+        GeneradorLibroXlsx $excel,
+    ): BinaryFileResponse {
+        Gate::authorize('consultar-cuenta-envases');
+        $filtros = $this->filtros($request, $temporadaActiva);
+        $temporada = Temporada::query()->findOrFail($filtros['temporada_id']);
+        $cliente = ! empty($filtros['cliente_id']) ? Cliente::query()->find($filtros['cliente_id']) : null;
+        $columnas = [
+            ['clave' => 'fecha_hora', 'titulo' => 'Fecha y hora', 'tipo' => 'fecha_hora'],
+            ['clave' => 'cliente_codigo', 'titulo' => 'Código cliente'],
+            ['clave' => 'cliente', 'titulo' => 'Cliente'],
+            ['clave' => 'documento', 'titulo' => 'Documento'],
+            ['clave' => 'movimiento', 'titulo' => 'Movimiento'],
+            ['clave' => 'tipo_envase', 'titulo' => 'Envase'],
+            ['clave' => 'propiedad', 'titulo' => 'Propiedad'],
+            ['clave' => 'cantidad', 'titulo' => 'Cantidad', 'tipo' => 'numero'],
+            ['clave' => 'impacto_cuenta', 'titulo' => 'Efecto en cuenta', 'tipo' => 'numero'],
+            ['clave' => 'saldo_cuenta', 'titulo' => 'Saldo de cuenta', 'tipo' => 'numero'],
+            ['clave' => 'impacto_existencia', 'titulo' => 'Efecto en existencia', 'tipo' => 'numero'],
+            ['clave' => 'revision', 'titulo' => 'Revisión'],
+            ['clave' => 'revisado_por', 'titulo' => 'Revisado por'],
+            ['clave' => 'nota_revision', 'titulo' => 'Nota de revisión'],
+            ['clave' => 'registrado_por', 'titulo' => 'Registrado por'],
+            ['clave' => 'motivo_correccion', 'titulo' => 'Motivo de corrección'],
+        ];
+        $ruta = $excel->generar('Cuenta corriente de envases', $columnas, $cuenta->kardex($filtros), [
+            'fecha_corte' => now(config('app.operational_timezone'))->format('d-m-Y H:i'),
+            'usuario' => $request->user()->name,
+            'temporada' => $temporada->codigo.' · '.$temporada->nombre,
+            'cliente' => $cliente ? $cliente->codigo.' · '.$cliente->nombre : null,
+            'periodo' => $this->periodo($filtros),
+        ], 'Movimientos');
+
+        return response()->download($ruta, 'cuenta-envases-'.$temporada->codigo.'.xlsx')->deleteFileAfterSend();
+    }
+
+    /** Estado de cuenta de un cliente para enviarle, en PDF o Excel. */
+    public function estadoCuenta(
+        Request $request,
+        ServicioTemporadaActiva $temporadaActiva,
+        ServicioCuentaCorrienteEnvases $cuenta,
+        GeneradorEstadoCuentaEnvasesPdf $pdf,
+        GeneradorLibroXlsx $excel,
+    ): Response|BinaryFileResponse {
+        Gate::authorize('consultar-cuenta-envases');
+        $request->validate([
+            'cliente_id' => ['required', 'uuid', 'exists:clientes,id'],
+            'formato' => ['nullable', Rule::in(['pdf', 'xlsx'])],
+        ]);
+        $filtros = $this->filtros($request, $temporadaActiva);
+        $cliente = Cliente::query()->findOrFail($filtros['cliente_id']);
+        $temporada = Temporada::query()->findOrFail($filtros['temporada_id']);
+        $estado = $cuenta->estadoCuenta($cliente, $temporada, $filtros['desde'] ?? null, $filtros['hasta'] ?? null);
+        $nombre = 'estado-cuenta-envases-'.Str::slug($cliente->codigo ?: $cliente->nombre).'-'.$temporada->codigo;
+
+        if ($request->input('formato') === 'xlsx') {
+            $ruta = $excel->generar('Estado de cuenta de envases', [
+                ['clave' => 'fecha', 'titulo' => 'Fecha y hora', 'tipo' => 'fecha_hora'],
+                ['clave' => 'documento', 'titulo' => 'Documento'],
+                ['clave' => 'movimiento', 'titulo' => 'Movimiento'],
+                ['clave' => 'tipo_envase', 'titulo' => 'Envase'],
+                ['clave' => 'propiedad', 'titulo' => 'Propiedad'],
+                ['clave' => 'entrada', 'titulo' => 'Recibidos', 'tipo' => 'numero'],
+                ['clave' => 'salida', 'titulo' => 'Entregados', 'tipo' => 'numero'],
+                ['clave' => 'saldo', 'titulo' => 'Saldo', 'tipo' => 'numero'],
+            ], $estado['movimientos'], [
+                'fecha_corte' => now(config('app.operational_timezone'))->format('d-m-Y H:i'),
+                'usuario' => $request->user()->name,
+                'temporada' => $temporada->codigo.' · '.$temporada->nombre,
+                'cliente' => $cliente->codigo.' · '.$cliente->nombre,
+                'periodo' => $this->periodo($filtros) ?? 'Toda la temporada',
+            ], 'Estado de cuenta');
+
+            return response()->download($ruta, $nombre.'.xlsx')->deleteFileAfterSend();
+        }
+
+        return response($pdf->generar($estado), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="'.$nombre.'.pdf"',
+            'Cache-Control' => 'no-store, private',
+        ]);
+    }
+
+    /** @return array<string, mixed> */
+    private function filtros(Request $request, ServicioTemporadaActiva $temporadaActiva): array
     {
-        foreach (['cliente_id', 'temporada_id', 'tipo_envase', 'estado_revision'] as $campo) {
-            if (! empty($filtros[$campo])) {
-                $consulta->where($campo, $filtros[$campo]);
-            }
-        }
-        if (! empty($filtros['desde'])) {
-            $consulta->whereDate('ocurrido_at', '>=', $filtros['desde']);
-        }
-        if (! empty($filtros['hasta'])) {
-            $consulta->whereDate('ocurrido_at', '<=', $filtros['hasta']);
-        }
-        if (! empty($filtros['buscar'])) {
-            $buscar = '%'.str_replace(['%', '_'], ['\\%', '\\_'], trim($filtros['buscar'])).'%';
-            $consulta->where(function (Builder $q) use ($buscar): void {
-                $q->where('numero_documento', 'like', $buscar)
-                    ->orWhereHas('cliente', fn (Builder $cliente) => $cliente->where('nombre', 'like', $buscar));
-            });
-        }
+        $filtros = $request->validate([
+            'cliente_id' => ['nullable', 'uuid', 'exists:clientes,id'],
+            'temporada_id' => ['nullable', 'uuid', 'exists:temporadas,id'],
+            'tipo_envase' => ['nullable', Rule::enum(TipoEnvaseRomana::class)],
+            'estado_revision' => ['nullable', Rule::enum(EstadoRevisionMovimientoEnvase::class)],
+            'desde' => ['nullable', 'date'],
+            'hasta' => ['nullable', 'date', 'after_or_equal:desde'],
+            'buscar' => ['nullable', 'string', 'max:100'],
+        ]);
+        $filtros['temporada_id'] ??= $temporadaActiva->obtener()->id;
+
+        return $filtros;
+    }
+
+    /** @param array<string, mixed> $filtros */
+    private function periodo(array $filtros): ?string
+    {
+        $dia = fn (string $fecha): string => CarbonImmutable::parse($fecha)->format('d-m-Y');
+
+        return match (true) {
+            ! empty($filtros['desde']) && ! empty($filtros['hasta']) => $dia($filtros['desde']).' a '.$dia($filtros['hasta']),
+            ! empty($filtros['desde']) => 'Desde '.$dia($filtros['desde']),
+            ! empty($filtros['hasta']) => 'Hasta '.$dia($filtros['hasta']),
+            default => null,
+        };
     }
 
     /** @return array<string, mixed> */
@@ -334,6 +419,7 @@ class CuentaCorrienteEnvaseController extends Controller
         return [
             'id' => $movimiento->id,
             'tipo_movimiento' => $movimiento->tipo_movimiento->value,
+            'movimiento' => ServicioCuentaCorrienteEnvases::etiquetaMovimiento($movimiento->tipo_movimiento),
             'tipo_envase' => $movimiento->tipo_envase->value,
             'cantidad' => $movimiento->cantidad,
             'impacto_cuenta' => $movimiento->cantidad * $movimiento->signo_cuenta,

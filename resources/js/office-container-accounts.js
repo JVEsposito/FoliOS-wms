@@ -17,9 +17,13 @@ const elements = {
     observed: byId('observedCount'),
     sync: byId('syncTime'),
     balances: byId('balanceList'),
+    stock: byId('stockList'),
+    ownDelivered: byId('ownDeliveredList'),
     pendingList: byId('pendingList'),
     reservations: byId('reservationList'),
     body: byId('movementsBody'),
+    movementsNote: byId('movementsNote'),
+    movementsExcel: byId('movementsExcelButton'),
     reviewDialog: byId('reviewDialog'),
     reviewForm: byId('reviewForm'),
     reviewError: byId('reviewError'),
@@ -46,7 +50,9 @@ const state = {
     identity: read(keys.identity),
     catalogs: null,
     movements: [],
+    parameters: new URLSearchParams(),
 };
+const MOVEMENTS_LIMIT = 300;
 
 function read(key) {
     try {
@@ -107,20 +113,42 @@ async function api(path, options = {}) {
     return data;
 }
 
-async function downloadGuide(guideId, number) {
-    const response = await fetch(`/api/envases/guias-despacho/${guideId}/documento`, {
+async function download(path, fallbackName, errorMessage) {
+    const response = await fetch(path, {
         headers: {
-            Accept: 'application/pdf',
+            Accept: 'application/pdf, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/json',
             Authorization: `Bearer ${state.token}`,
         },
     });
-    if (!response.ok) throw new Error('No fue posible descargar el respaldo de la guía.');
+    if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(Object.values(data?.errors || {}).flat()[0] || data?.message || errorMessage);
+    }
+    const disposition = response.headers.get('Content-Disposition') || '';
+    const name = disposition.match(/filename="?([^";]+)"?/)?.[1] || fallbackName;
     const url = URL.createObjectURL(await response.blob());
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = `guia-envases-${number.toLowerCase()}.pdf`;
+    anchor.download = name;
     anchor.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function downloadGuide(guideId, number) {
+    return download(
+        `/api/envases/guias-despacho/${guideId}/documento`,
+        `guia-envases-${number.toLowerCase()}.pdf`,
+        'No fue posible descargar el respaldo de la guía.',
+    );
+}
+
+/** Temporada y fechas aplicadas: el estado de cuenta es de un cliente, sin los demás filtros. */
+function statementPath(clientId, format) {
+    const parameters = new URLSearchParams({ cliente_id: clientId, formato: format });
+    ['temporada_id', 'desde', 'hasta'].forEach((key) => {
+        if (state.parameters.get(key)) parameters.set(key, state.parameters.get(key));
+    });
+    return `/api/envases/cuenta-corriente/estado-cuenta?${parameters}`;
 }
 
 function showOffice() {
@@ -160,6 +188,47 @@ async function loadCatalogs() {
     addOptions(elements.filters.elements.tipo_envase, state.catalogs.tipos_envase, (item) => item.nombre);
 }
 
+function typeName(code) {
+    return state.catalogs?.tipos_envase?.find((item) => item.codigo === code)?.nombre || label(code);
+}
+
+function signed(value) {
+    return `${value > 0 ? '+' : ''}${value}`;
+}
+
+function renderBalances(balances) {
+    if (!balances.length) return '<p>Sin saldos de cuenta en la temporada.</p>';
+    const clients = new Map();
+    balances.forEach((balance) => {
+        const client = clients.get(balance.cliente.id) || { cliente: balance.cliente, lines: [] };
+        client.lines.push(balance);
+        clients.set(balance.cliente.id, client);
+    });
+    return [...clients.values()].map(({ cliente, lines }) => `<article class="balance-client">
+        <header class="balance-client__header"><div><b>${escapeHtml(cliente.nombre)}</b><small>${escapeHtml(cliente.codigo)}</small></div><div class="balance-actions" data-office-action-menu><button type="button" data-statement="${escapeHtml(cliente.id)}" data-format="pdf" data-action-label="Estado de cuenta en PDF">↓ Estado de cuenta PDF</button><button type="button" data-statement="${escapeHtml(cliente.id)}" data-format="xlsx" data-action-label="Estado de cuenta en Excel">↓ Estado de cuenta Excel</button></div></header>
+        ${lines.map((line) => `<div class="balance-line"><div><b>${escapeHtml(typeName(line.tipo_envase))}</b>${line.propios_entregados ? `<small>${line.propios_entregados} envases propios de la planta entregados en la temporada</small>` : ''}</div><strong class="${line.saldo < 0 ? 'negative' : 'positive'}">${signed(line.saldo)}</strong></div>`).join('')}
+    </article>`).join('');
+}
+
+function renderStock(stock) {
+    elements.stock.innerHTML = stock.tipos.length
+        ? stock.tipos.map((type) => `<article class="stock-card">
+            <header><b>${escapeHtml(type.nombre)}</b><span>En planta <strong>${type.en_planta.total}</strong></span></header>
+            <div class="stock-card__split">
+                <div class="stock-card__own"><span>Propios</span><strong>${type.en_planta.propia}</strong></div>
+                <div><span>Arrendados</span><strong>${type.en_planta.arrendada}</strong></div>
+                <div><span>De clientes</span><strong>${type.en_planta.cliente}</strong></div>
+                <div><span>Reservados</span><strong>${type.reservado.total}</strong></div>
+                <div><span>Disponibles</span><strong>${type.disponible}</strong></div>
+            </div>
+            <p>Propios: ${type.propios.ingresados} ingresados · ${type.propios.despachados} entregados a clientes · ${type.propios.en_planta} en planta${type.reservado.propia ? ` (${type.reservado.propia} reservados en borradores)` : ''}</p>
+        </article>`).join('')
+        : '<p>Sin envases en planta en la temporada.</p>';
+    elements.ownDelivered.innerHTML = stock.propios_entregados.length
+        ? stock.propios_entregados.map((line) => `<div class="balance-item"><div><b>${escapeHtml(line.cliente.nombre)}</b><small>${escapeHtml(line.cliente.codigo)} · ${escapeHtml(typeName(line.tipo_envase))}</small></div><strong>${line.cantidad}</strong></div>`).join('')
+        : '<p>No se han entregado envases propios en la temporada.</p>';
+}
+
 function render(data) {
     state.movements = data.data;
     elements.confirmed.textContent = data.resumen.movimientos_confirmados;
@@ -167,9 +236,11 @@ function render(data) {
     elements.pending.textContent = data.resumen.lineas_pendientes_validacion;
     elements.observed.textContent = data.resumen.observados;
     elements.sync.textContent = formatDate(data.resumen.sincronizado_at);
-    elements.balances.innerHTML = data.balances.length
-        ? data.balances.map((balance) => `<article class="balance-item"><div><b>${escapeHtml(balance.cliente.nombre)}</b><small>${escapeHtml(label(balance.tipo_envase))}</small></div><strong class="${balance.saldo < 0 ? 'negative' : 'positive'}">${balance.saldo > 0 ? '+' : ''}${balance.saldo}</strong></article>`).join('')
-        : '<p>Sin saldos confirmados.</p>';
+    elements.balances.innerHTML = renderBalances(data.balances);
+    renderStock(data.existencia);
+    elements.movementsNote.textContent = data.data.length >= MOVEMENTS_LIMIT
+        ? `Se muestran los ${MOVEMENTS_LIMIT} más recientes; el Excel trae todos los del filtro.`
+        : 'Ingreso y salida conservan fecha y hora exactas.';
     elements.pendingList.innerHTML = data.pendientes.length
         ? data.pendientes.map((pending) => `<article class="pending-item"><div><b>${escapeHtml(pending.numero_recepcion)} · ${escapeHtml(pending.cliente.nombre)}</b><small>${escapeHtml(pending.numero_guia)} · ${formatDate(pending.ingreso_at)}</small></div><strong>${pending.cantidad_declarada} ${escapeHtml(label(pending.tipo_envase))}</strong></article>`).join('')
         : '<p>No hay recepciones en verde.</p>';
@@ -195,9 +266,12 @@ function render(data) {
             const trace = correction
                 ? `<br><small>Motivo: ${escapeHtml(correction.motivo)} · ${formatDate(correction.corregido_at)} · ${escapeHtml(movement.creado_por?.nombre || '')}</small>`
                 : '';
-            return `<tr><td>${formatDate(movement.ocurrido_at)}</td><td><b>${escapeHtml(movement.cliente?.nombre)}</b><br><small>${escapeHtml(movement.numero_documento)}${documentNote}</small>${trace}</td><td>${escapeHtml(label(movement.tipo_envase))} · ${movement.cantidad}</td><td class="${movement.impacto_cuenta < 0 ? 'impact-negative' : 'impact-positive'}">${movement.impacto_cuenta > 0 ? '+' : ''}${movement.impacto_cuenta}</td><td>${escapeHtml(label(movement.propiedad))}</td><td>${escapeHtml(label(movement.estado_revision))}</td><td><div class="table-actions">${guideButton}${reviewButton}${propertyButton}${quantityButton}${!guideButton && !reviewButton && !propertyButton && !quantityButton ? '—' : ''}</div></td></tr>`;
+            const account = movement.impacto_cuenta === 0
+                ? '<td class="impact-none" title="No mueve la cuenta de ningún cliente">—</td>'
+                : `<td class="${movement.impacto_cuenta < 0 ? 'impact-negative' : 'impact-positive'}">${signed(movement.impacto_cuenta)}</td>`;
+            return `<tr><td>${formatDate(movement.ocurrido_at)}</td><td><b>${escapeHtml(movement.cliente?.nombre)}</b><br><small>${escapeHtml(movement.movimiento)} · ${escapeHtml(movement.numero_documento)}${documentNote}</small>${trace}</td><td>${escapeHtml(typeName(movement.tipo_envase))} · ${movement.cantidad}</td>${account}<td class="impact-stock">${signed(movement.impacto_existencia)}</td><td>${escapeHtml(label(movement.propiedad))}</td><td>${escapeHtml(label(movement.estado_revision))}</td><td><div class="table-actions">${guideButton}${reviewButton}${propertyButton}${quantityButton}${!guideButton && !reviewButton && !propertyButton && !quantityButton ? '—' : ''}</div></td></tr>`;
         }).join('')
-        : '<tr><td colspan="7">Aún no hay movimientos confirmados.</td></tr>';
+        : '<tr><td colspan="8">Aún no hay movimientos confirmados.</td></tr>';
 }
 
 async function load() {
@@ -208,6 +282,7 @@ async function load() {
             if (!value) parameters.delete(key);
         }
         render(await api(`/api/envases/cuenta-corriente/movimientos?${parameters}`));
+        state.parameters = parameters;
     } catch (error) {
         toast(error.message, true);
     } finally {
@@ -241,6 +316,20 @@ elements.logout.addEventListener('click', () => {
     location.reload();
 });
 elements.reload.addEventListener('click', load);
+elements.movementsExcel.addEventListener('click', async () => {
+    busy(true, 'Generando Excel de movimientos…');
+    try {
+        await download(
+            `/api/envases/cuenta-corriente/movimientos/excel?${state.parameters}`,
+            'cuenta-envases.xlsx',
+            'No fue posible generar el Excel de movimientos.',
+        );
+    } catch (error) {
+        toast(error.message, true);
+    } finally {
+        busy(false);
+    }
+});
 elements.filters.addEventListener('submit', (event) => {
     event.preventDefault();
     load();
@@ -250,6 +339,22 @@ document.addEventListener('click', async (event) => {
     const propertyButton = event.target.closest('[data-correct-property]');
     const quantityButton = event.target.closest('[data-correct-quantity]');
     const documentButton = event.target.closest('[data-guide-document]');
+    const statementButton = event.target.closest('[data-statement]');
+    if (statementButton) {
+        const format = statementButton.dataset.format;
+        busy(true, 'Generando estado de cuenta…');
+        try {
+            await download(
+                statementPath(statementButton.dataset.statement, format),
+                `estado-cuenta-envases.${format}`,
+                'No fue posible generar el estado de cuenta.',
+            );
+        } catch (error) {
+            toast(error.message, true);
+        } finally {
+            busy(false);
+        }
+    }
     if (reviewButton) {
         elements.reviewForm.reset();
         elements.reviewForm.elements.movimiento_id.value = reviewButton.dataset.review;

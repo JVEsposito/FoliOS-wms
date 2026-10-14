@@ -27,7 +27,7 @@ class OfficePanelSwitcherTest extends TestCase
             ],
             '/oficina/envases/cuenta-corriente' => [
                 'group' => 'container-accounts',
-                'panels' => ['balances', 'pending', 'reservations', 'movements'],
+                'panels' => ['balances', 'stock', 'pending', 'reservations', 'movements'],
             ],
         ];
 
