@@ -325,3 +325,218 @@
         padding: 10px;
     }
 }
+
+/* Saldos agrupados por cliente, con su estado de cuenta. */
+#balanceList {
+    max-height: none;
+    overflow: visible;
+}
+
+.balance-legend {
+    margin: 10px 0 0;
+    color: var(--muted);
+    font-size: .82rem;
+    line-height: 1.5;
+}
+
+.balance-legend .positive {
+    color: var(--green);
+}
+
+.balance-legend .negative {
+    color: var(--red);
+}
+
+.balance-client {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--deep);
+}
+
+.balance-client__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 11px;
+    border-bottom: 1px solid var(--line);
+}
+
+.balance-client__header small {
+    margin-left: 8px;
+    color: var(--muted);
+}
+
+.balance-actions {
+    display: flex;
+    gap: 6px;
+    min-width: 220px;
+}
+
+.balance-actions .office-action-select {
+    width: 100%;
+}
+
+.balance-actions button {
+    min-height: 34px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--raised);
+    color: var(--text);
+    padding: 0 10px;
+}
+
+.balance-line {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 9px 11px;
+}
+
+.balance-line + .balance-line {
+    border-top: 1px dashed var(--line);
+}
+
+.balance-line small {
+    display: block;
+    margin-top: 3px;
+    color: var(--muted);
+}
+
+.balance-line strong {
+    font-size: 1.05rem;
+}
+
+.balance-line strong.negative {
+    color: var(--red);
+}
+
+.balance-line strong.positive {
+    color: var(--green);
+}
+
+/* Existencia física por propiedad: aquí se ven los envases propios. */
+.stock-list {
+    display: grid;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.stock-card {
+    display: grid;
+    gap: 10px;
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--deep);
+}
+
+.stock-card header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.stock-card header span {
+    color: var(--muted);
+    font-size: .8rem;
+}
+
+.stock-card header strong {
+    color: var(--text);
+    font-size: 1.25rem;
+}
+
+.stock-card__split {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 6px;
+}
+
+.stock-card__split div {
+    padding: 8px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel);
+}
+
+.stock-card__split span {
+    display: block;
+    color: var(--muted);
+    font-size: .75rem;
+    font-weight: 800;
+}
+
+.stock-card__split .stock-card__own {
+    border-color: var(--corporate-blue, #36aeea);
+    box-shadow: inset 3px 0 0 var(--corporate-blue, #36aeea);
+}
+
+.stock-card__split strong {
+    display: block;
+    margin-top: 4px;
+    font-size: 1.05rem;
+}
+
+.stock-card p,
+.stock-note {
+    margin: 0;
+    color: var(--muted);
+    font-size: .8rem;
+    line-height: 1.5;
+}
+
+.stock-delivered {
+    margin-top: 18px;
+}
+
+.stock-delivered h3 {
+    margin: 0 0 4px;
+    font-size: 1rem;
+}
+
+.stock-delivered__list {
+    display: grid;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.movements-heading__side {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.impact-none {
+    color: var(--muted);
+}
+
+.impact-stock {
+    color: var(--text-secondary, var(--muted));
+    font-weight: 700;
+}
+
+@media (max-width: 640px) {
+    .accounts-workspace .panel-heading {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .stock-card__split {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .balance-client__header,
+    .movements-heading__side {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .balance-actions {
+        width: 100%;
+        min-width: 0;
+    }
+}

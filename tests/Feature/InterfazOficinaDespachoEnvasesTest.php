@@ -25,4 +25,22 @@ class InterfazOficinaDespachoEnvasesTest extends TestCase
             ->assertSee('Borradores de despacho')
             ->assertSee('No modifican el saldo hasta confirmar la salida.');
     }
+
+    public function test_cuenta_corriente_muestra_existencia_propia_y_ofrece_reportes(): void
+    {
+        $this->get('/oficina/envases/cuenta-corriente')
+            ->assertOk()
+            ->assertSee('id="container-accounts-panel-stock"', false)
+            ->assertSee('Envases en planta por propiedad')
+            ->assertSee('Envases propios entregados a clientes')
+            ->assertSee('La compra de envases propios no mueve la cuenta de ningún cliente')
+            ->assertSee('El estado de cuenta toma la temporada y las fechas del filtro.')
+            ->assertSee('id="movementsExcelButton"', false)
+            ->assertSeeInOrder(['<th>Cuenta</th>', '<th>Existencia</th>'], false);
+
+        $script = file_get_contents(resource_path('js/office-container-accounts.js'));
+        $this->assertStringContainsString('/api/envases/cuenta-corriente/estado-cuenta?', $script);
+        $this->assertStringContainsString('/api/envases/cuenta-corriente/movimientos/excel?', $script);
+        $this->assertStringContainsString('data-office-action-menu', $script);
+    }
 }
