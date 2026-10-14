@@ -212,6 +212,21 @@
             <span class="estiba-office-user"><strong id="officeUserName">Usuario</strong><small id="officeUserRole">Oficina</small><small data-office-readonly hidden>Solo consulta</small></span>
             <button id="officeLogoutButton" type="button">Cerrar sesión</button>
         </div>
+        {{-- Nombre e iniciales desde la sesión del equipo, antes de pintar; cada oficina los confirma al cargar. --}}
+        <script>
+            (function () {
+                try {
+                    var identity = JSON.parse(localStorage.getItem('estiba_wms_office_identity') || 'null');
+                    var name = identity && typeof identity.nombre === 'string' ? identity.nombre.trim() : '';
+                    if (!name) return;
+                    document.getElementById('officeUserName').textContent = name;
+                    document.getElementById('officeInitials').textContent = name.split(/\s+/).slice(0, 2)
+                        .map(function (part) { return part.charAt(0); }).join('').toUpperCase();
+                } catch (error) {
+                    // Sin almacenamiento, la oficina los completa al cargar.
+                }
+            }());
+        </script>
         <div class="estiba-office-signature">
             <strong>FRÍO QUE<br>MANTIENE VALOR</strong><small>Versión {{ config('app.product_version') }}</small>
         </div>
@@ -231,8 +246,4 @@
     </div>
 </div>
 
-@once
-    @if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
-        @vite(['resources/css/office-corporate.css', 'resources/css/office-shell.css', 'resources/css/office-folios.css', 'resources/js/office-navigation.js'])
-    @endif
-@endonce
+{{-- Estilos y script del menú: van en <head> (office/partials/arranque) para no pintar el menú sin estilo. --}}

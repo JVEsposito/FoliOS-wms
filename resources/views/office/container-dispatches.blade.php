@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="es">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#07151e"><meta name="color-scheme" content="light dark"><title>FoliOS · Guías de envases</title>@if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))@vite(['resources/css/office.css','resources/css/office-container-dispatches.css','resources/js/office-container-dispatches.js'])@endif</head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#07151e"><meta name="color-scheme" content="light dark"><title>FoliOS · Guías de envases</title>@if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))@vite(['resources/css/office.css','resources/css/office-container-dispatches.css','resources/js/office-container-dispatches.js'])@endif
+@include('office.partials.arranque')
+</head>
 <body>
 <section class="office-access" id="officeAccess"><div class="office-access__brand"><div class="office-logo">↗</div><p class="eyebrow">FoliOS · ENVASES</p><h1>Despacha envases con impacto inmediato y reversible.</h1><p>Esta primera versión emite una guía operacional interna. Confirmar descuenta existencia y carga la cuenta del cliente; anular crea los movimientos de reversa.</p></div><form class="office-access__form" id="officeLoginForm"><div><p class="eyebrow">ACCESO DE OFICINA</p><h2>Ingresar a despacho de envases</h2></div><label><span>Correo</span><input name="email" type="email" required></label><label><span>Contraseña</span><input name="password" type="password" required></label><p class="form-error" id="officeLoginError"></p><button class="primary-button">Ingresar <span>→</span></button></form></section>
 <main class="office-app is-hidden" id="officeApp">

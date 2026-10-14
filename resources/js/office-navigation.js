@@ -9,6 +9,7 @@ import {
     OFFICE_THEMES,
 } from './shared/office-preferences.js';
 import { FOLIOS_ENTRY_PATH, officeEntryHref, officeHomeHref } from './shared/folios-entry.js';
+import { MENU_ATTRIBUTES, MENU_MEMORY_KEY, menuMemory } from './shared/office-menu-memory.js';
 
 const tokenKey = 'estiba_wms_office_token';
 installOfficeUnexpectedErrorNotice();
@@ -264,6 +265,23 @@ function refreshNavigation() {
     if (hasSession) redirectFromUnavailableOffice(identity);
     refreshHome(identity, hasSession);
     refreshOfficeShell(identity, hasSession);
+    rememberHiddenMenu();
+}
+
+// Lo que el perfil no habilita se recuerda en la pestaña: office-arranque.js lo oculta en la
+// próxima oficina antes de pintar. Ya calculado aquí, se quita ese ocultamiento anticipado.
+function rememberHiddenMenu() {
+    const token = storedToken();
+    if (token) {
+        const hidden = [...document.querySelectorAll(MENU_ATTRIBUTES.map((name) => `[${name}]`).join(','))]
+            .filter((element) => element.classList.contains('is-hidden'));
+        try {
+            sessionStorage.setItem(MENU_MEMORY_KEY, JSON.stringify(menuMemory(token, hidden)));
+        } catch {
+            // Sin almacenamiento de pestaña, el menú se ajusta al cargar como antes.
+        }
+    }
+    document.getElementById('officeMenuRemembered')?.remove();
 }
 
 const panelStoragePrefix = 'estiba_wms_office_panel:';

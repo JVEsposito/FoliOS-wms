@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>FoliOS · Toma de inventario</title>
-@if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>FoliOS · Toma de inventario</title>@if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
 @vite(['resources/css/office.css', 'resources/css/office-materials.css', 'resources/js/office-material-inventory-counts.js'])
 @endif
+    @include('office.partials.arranque')
 </head><body><main class="office-app" id="inventoryCountApp">
 <x-office.navigation domain="materiales" office="tomas" context="TOMA DE INVENTARIO" icon="⌖" />
 <div class="custody-shell"><header class="custody-heading"><div><p class="eyebrow">MATERIALES</p><h1>Toma de inventario</h1><p>Conteo ciego por cámara. La operación continúa durante la toma.</p></div><button id="reload" class="secondary-button">Actualizar</button></header>

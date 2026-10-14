@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>FoliOS · Ítems de materiales</title>
-@if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>FoliOS · Ítems de materiales</title>@if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
 @vite(['resources/css/office.css', 'resources/css/office-materials.css', 'resources/js/office-material-items.js'])
 @endif
+    @include('office.partials.arranque')
 </head><body><main class="office-app" id="officeApp">
 <x-office.navigation domain="materiales" office="items" context="CATÁLOGO DE ÍTEMS" icon="▦" />
 <div class="custody-shell"><header class="custody-heading"><div><p class="eyebrow">MATERIALES</p><h1>Ítems</h1><p>Descarga el catálogo, edita sus columnas y vuelve a importarlo desde Catálogos. Los encabezados grises del Excel son informativos.</p></div><button type="button" id="itemReload" class="secondary-button">Actualizar</button></header>

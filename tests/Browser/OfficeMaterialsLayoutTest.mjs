@@ -66,6 +66,14 @@ test('Materiales conserva una cabecera legible y sin errores al mostrar reposici
             await page.goto('http://localhost/oficina/materiales');
             await page.waitForFunction(() => document.querySelector('[data-material-replenishment-indicator]')?.textContent.includes('0 en quiebre'));
             await page.waitForFunction(() => document.getElementById('materialsFolioCount').textContent === '9');
+            // El menú queda recordado para la próxima oficina y se quita el ocultamiento anticipado.
+            const menu = await page.evaluate(() => ({
+                remembered: JSON.parse(sessionStorage.getItem('estiba_wms_office_menu') || 'null'),
+                earlyStyle: Boolean(document.getElementById('officeMenuRemembered')),
+            }));
+            assert.equal(menu.remembered?.sesion, 'test-token');
+            assert.ok(Array.isArray(menu.remembered?.ocultos));
+            assert.equal(menu.earlyStyle, false);
 
             for (const width of [1920, 1440, 1366, 1200, 1024, 768, 390, 1920]) {
                 await page.setViewportSize({ width, height: 1080 });
