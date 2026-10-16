@@ -52,6 +52,8 @@ export default defineConfig({
                 'resources/js/office-validation-catalog.js',
                 'resources/css/office-validation-annulments.css',
                 'resources/js/office-validation-annulments.js',
+                'resources/css/office-validation-pending.css',
+                'resources/js/office-validation-pending.js',
                 'resources/css/office-packed-fruit.css',
                 'resources/js/office-packed-fruit-reception.js',
                 'resources/js/office-packed-fruit-catalogs.js',

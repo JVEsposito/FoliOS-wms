@@ -22,6 +22,7 @@
         'frigorifico' => [
             ['key' => 'resumen', 'module' => '', 'label' => 'Resumen', 'href' => '/oficina/frigorifico', 'permissions' => ['puede_consultar_validaciones_pallet', 'puede_consultar_inspeccion_sag', 'puede_consultar_prefrio', 'ambito_camaras_productos', 'puede_consultar_catalogo_cargas', 'puede_consultar_cargas']],
             ['key' => 'validacion', 'module' => 'frigorifico.validacion', 'label' => 'Validación', 'href' => '/oficina/validacion', 'permissions' => ['puede_consultar_validaciones_pallet']],
+            ['key' => 'pendientes-validacion', 'module' => 'frigorifico.validacion', 'label' => 'Pendientes por validar', 'href' => '/oficina/validacion/pendientes', 'permissions' => ['puede_consultar_validaciones_pallet']],
             ['key' => 'etiquetas-pt', 'module' => 'frigorifico.validacion', 'label' => 'Etiquetas PT', 'href' => '/oficina/validacion/etiquetas', 'permissions' => ['puede_imprimir_etiquetas_pt']],
             ['key' => 'recepcion-fruta-embalada', 'module' => 'frigorifico.recepcion-fruta-embalada', 'label' => 'Recepción de fruta embalada', 'href' => '/oficina/recepcion-fruta-embalada', 'permissions' => ['puede_consultar_recepciones_fruta_embalada']],
             ['key' => 'repaletizajes', 'module' => '', 'label' => 'Repaletizajes', 'href' => '/oficina/validacion/repaletizajes', 'permissions' => ['puede_consultar_repaletizajes']],

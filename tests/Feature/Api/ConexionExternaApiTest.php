@@ -117,7 +117,9 @@ class ConexionExternaApiTest extends TestCase
             $mock->shouldReceive('probar')->once()->andThrow(new PDOException('dsn_privado_fixture clave_solo_fixture lector_fixture'));
         });
         $respuesta = $this->postJson(self::URL.'/'.$datos['id'].'/probar', ['version_conocida' => 1]);
-        $respuesta->assertUnprocessable()->assertJsonPath('data.ultima_prueba_estado', 'fallida');
+        $respuesta->assertUnprocessable()
+            ->assertJsonPath('data.ultima_prueba_estado', 'fallida')
+            ->assertJsonPath('causa', 'error_desconocido');
         foreach (['dsn_privado_fixture', 'clave_solo_fixture', 'PDOException'] as $secreto) {
             $this->assertStringNotContainsString($secreto, $respuesta->getContent());
         }

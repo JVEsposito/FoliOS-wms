@@ -17,7 +17,8 @@ class GrafoTablas
     /** @param array<int, string> $excluidas */
     public function __construct(array $excluidas)
     {
-        foreach (Schema::getTables() as $tabla) {
+        // Solo la base de FoliOS: sin esquema, MySQL lista las tablas de todas las bases del servidor.
+        foreach (Schema::getTables(Schema::getCurrentSchemaName()) as $tabla) {
             $nombre = $tabla['name'];
             if (in_array($nombre, $excluidas, true) || str_starts_with($nombre, 'bench_')) {
                 continue;

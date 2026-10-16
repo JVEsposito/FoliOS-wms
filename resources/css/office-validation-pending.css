@@ -1,0 +1,253 @@
+/* Pendientes por validar: stock del sistema de origen frente a lo validado en FoliOS. */
+.pending-workspace {
+    display: grid;
+    gap: 16px;
+    padding: 16px;
+}
+
+/* Sin esto, la tabla ancha estira la grilla y aparece scroll horizontal en celular. */
+.pending-workspace > * {
+    min-width: 0;
+}
+
+.pending-heading {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.pending-heading h1 {
+    margin: 4px 0;
+}
+
+.pending-heading p {
+    max-width: 760px;
+    margin: 0;
+    color: var(--text-secondary);
+}
+
+.pending-heading__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.pending-source {
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--green);
+    border-radius: 10px;
+    background: var(--panel);
+    color: var(--text);
+    line-height: 1.5;
+}
+
+.pending-source small {
+    display: block;
+    margin-top: 2px;
+    color: var(--muted);
+}
+
+.pending-source--warning {
+    border-left-color: var(--amber);
+    background: var(--warning-bg, var(--surface-muted));
+}
+
+.pending-source--error {
+    border-left-color: var(--danger-text);
+    background: var(--danger-bg);
+}
+
+.pending-kpis {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.pending-kpis article {
+    padding: 14px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--panel);
+}
+
+.pending-kpis span {
+    display: block;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.pending-kpis strong {
+    display: block;
+    margin-top: 6px;
+    font-size: 26px;
+}
+
+.pending-kpis small {
+    color: var(--muted);
+}
+
+.pending-kpi--ok strong {
+    color: var(--success-text);
+}
+
+.pending-kpi--attention strong {
+    color: var(--warning-text);
+}
+
+.pending-kpi--critical strong {
+    color: var(--danger-text);
+}
+
+.pending-search input {
+    width: 100%;
+    max-width: 520px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: var(--panel);
+    color: var(--text);
+    padding: 10px 12px;
+}
+
+.pending-panel {
+    padding: 16px;
+}
+
+.pending-panel__heading {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.pending-panel__heading h2 {
+    margin: 4px 0 0;
+    font-size: 1.15rem;
+}
+
+.pending-panel__heading small {
+    color: var(--muted);
+}
+
+.pending-table-scroll {
+    overflow: auto;
+    margin-top: 12px;
+}
+
+.pending-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.pending-table th,
+.pending-table td {
+    padding: 10px;
+    border-bottom: 1px solid var(--line);
+    text-align: left;
+    vertical-align: top;
+}
+
+.pending-table th {
+    color: var(--muted);
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+.pending-table td small {
+    display: block;
+    margin-top: 3px;
+    color: var(--muted);
+}
+
+.pending-table .pending-num {
+    font-weight: 800;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.pending-number {
+    display: block;
+    font-variant-numeric: tabular-nums;
+}
+
+.pending-empty td {
+    padding: 22px 10px;
+    color: var(--muted);
+    text-align: center;
+}
+
+.pending-chip {
+    display: inline-block;
+    margin-top: 4px;
+    padding: 2px 8px;
+    border: 1px solid var(--line);
+    border-radius: 99px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.pending-chip--saldo,
+.pending-chip--observado {
+    border-color: var(--amber);
+    color: var(--warning-text);
+}
+
+.pending-chip--rechazado,
+.pending-chip--conflicto,
+.pending-chip--anulado {
+    border-color: var(--danger-text);
+    color: var(--danger-text);
+}
+
+.pending-table td .pending-warning {
+    color: var(--warning-text);
+    font-weight: 700;
+}
+
+.pending-differences {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.pending-differences li {
+    display: grid;
+    grid-template-columns: 120px 1fr 1fr;
+    gap: 8px;
+}
+
+.pending-differences span {
+    color: var(--text-secondary);
+}
+
+@media (max-width: 1200px) {
+    .pending-kpis {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 720px) {
+    .pending-workspace {
+        padding: 10px;
+    }
+
+    .pending-heading,
+    .pending-panel__heading {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .pending-kpis {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .pending-differences li {
+        grid-template-columns: 1fr;
+        gap: 2px;
+    }
+}

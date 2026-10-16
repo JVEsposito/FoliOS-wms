@@ -44,6 +44,11 @@ Schedule::call(function (): void {
 
 Schedule::command('salud:latido-scheduler')->everyMinute();
 
+// Stock del sistema de origen para «Pendientes por validar»: solo lectura, sin crear folios.
+Schedule::command('integraciones:leer-stock-origen')
+    ->everyFiveMinutes()
+    ->withoutOverlapping(10);
+
 Schedule::command('materiales:procesar-vencimientos')
     ->dailyAt('00:15')
     ->timezone('America/Santiago')

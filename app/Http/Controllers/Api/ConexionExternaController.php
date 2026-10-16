@@ -42,11 +42,14 @@ class ConexionExternaController extends Controller
         }
 
         $correcta = false;
+        $diagnostico = null;
         try {
             $conector->probar($conexionExterna->credenciales);
             $correcta = true;
-        } catch (Throwable) {
-            // Los errores del controlador contienen servidor, usuario y DSN: no registrar ni devolver.
+        } catch (Throwable $error) {
+            // Los errores del controlador contienen servidor, usuario y DSN: no se registran ni
+            // se devuelven; solo su causa (red, credenciales, base, controlador).
+            $diagnostico = ConectorMySqlLectura::diagnosticar($error);
         }
 
         $conexion = DB::transaction(function () use ($conexionExterna, $datos, $correcta, $request): ConexionExterna {
@@ -69,7 +72,8 @@ class ConexionExternaController extends Controller
             'data' => $this->recurso($conexion),
             'message' => $correcta
                 ? 'Conexión comprobada desde el servidor de FoliOS. La consulta de lectura respondió correctamente.'
-                : 'No se pudo comprobar la conexión. Revisa los datos, el acceso de red del servidor y el controlador pdo_mysql.',
+                : 'No se pudo comprobar la conexión. '.$diagnostico['mensaje'],
+            'causa' => $diagnostico['causa'] ?? null,
         ], $correcta ? 200 : 422);
     }
 

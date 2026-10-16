@@ -19,8 +19,10 @@ editor de consultas SQL.
    y guardar. El puerto se completa manualmente, igual que los demás datos.
 4. Pulsar «Probar conexión». Se prueba la configuración **guardada**, desde el
    servidor FoliOS; el PC del usuario no se conecta directamente al origen.
-5. Si falla, revisar los datos, la conectividad de red desde ese servidor y que
-   PHP tenga pdo_mysql. La respuesta no incluye el error técnico del controlador.
+5. Si falla, el mensaje indica la causa sin mostrar servidor, usuario ni clave:
+   falta pdo_mysql, el servidor no llega a la base (IP, puerto o firewall), usuario
+   o clave rechazados, sin permiso sobre la base, o base inexistente. La respuesta
+   no incluye el error técnico del controlador.
 
 Dejar la contraseña vacía al editar conserva la clave guardada. Escribir una
 nueva la reemplaza. Puede desactivarse el perfil sin eliminarlo. Una edición
@@ -59,3 +61,9 @@ Este paso no importa datos ni decide correspondencias entre sistemas. Para
 preparar la importación hacen falta las tablas o vistas autorizadas, sus campos,
 claves y la frecuencia de actualización. Los secretos se completan solamente
 en la instalación de destino; no se incorporan a commits ni descripciones de PR.
+
+## Stock de origen y pendientes por validar
+
+El primer uso de la conexión es **Frigorífico → Pendientes por validar**
+(`/oficina/validacion/pendientes`). Se documenta en
+[PENDIENTES_VALIDACION_ORIGEN.md](PENDIENTES_VALIDACION_ORIGEN.md).
