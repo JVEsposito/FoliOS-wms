@@ -3,7 +3,7 @@ const form = byId('externalConnectionForm');
 const table = byId('externalConnectionsBody');
 const tab = byId('administration-tab-external-connections');
 const panel = byId('administration-panel-external-connections');
-const state = { items: [], generation: 0, busy: false };
+const state = { items: [], generation: 0, busy: false, session: null, allowed: null };
 const token = () => localStorage.getItem('estiba_wms_office_token') || '';
 const escapeHtml = (value) => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
 
@@ -30,6 +30,8 @@ function setBusy(busy) {
 
 function clearPrivateData() {
     state.generation += 1;
+    state.session = null;
+    state.allowed = null;
     state.items = [];
     resetForm();
     table.replaceChildren();
@@ -41,13 +43,14 @@ function clearPrivateData() {
 }
 
 async function api(path, options = {}) {
+    const requestToken = token();
     const response = await fetch(`/api/administracion/conexiones-externas${path}`, {
         ...options,
         cache: 'no-store',
-        headers: { Accept: 'application/json', Authorization: `Bearer ${token()}`, ...(options.body ? { 'Content-Type': 'application/json' } : {}) },
+        headers: { Accept: 'application/json', Authorization: `Bearer ${requestToken}`, ...(options.body ? { 'Content-Type': 'application/json' } : {}) },
     });
     const data = await response.json().catch(() => ({}));
-    if (response.status === 401 || response.status === 403) clearPrivateData();
+    if ((response.status === 401 || response.status === 403) && requestToken === token()) clearPrivateData();
     if (!response.ok) {
         const message = response.status >= 500 ? 'No fue posible completar la operación.' : Object.values(data.errors || {}).flat()[0] || data.message || 'No fue posible completar la operación.';
         throw new Error(message);
@@ -86,8 +89,12 @@ async function load() {
 
 function syncSession() {
     if (!form) return;
-    clearPrivateData();
     const allowed = authorized();
+    const session = token();
+    if (state.session === session && state.allowed === allowed) return;
+    clearPrivateData();
+    state.session = session;
+    state.allowed = allowed;
     form.hidden = !allowed;
     tab.classList.toggle('is-hidden', !allowed);
     if (!allowed && tab.getAttribute('aria-selected') === 'true') byId('administration-tab-seasons').click();

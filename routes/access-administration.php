@@ -11,7 +11,7 @@ Route::middleware(['auth:sanctum', 'can:administrar-accesos'])->group(function (
     );
 });
 
-Route::middleware(['auth:sanctum', 'can:administrar-accesos', 'cache.headers:no_store;private'])
+Route::middleware(['auth:sanctum', 'can:administrar-accesos'])
     ->prefix('/administracion/conexiones-externas')
     ->group(function (): void {
         Route::get('/', [ConexionExternaController::class, 'index']);

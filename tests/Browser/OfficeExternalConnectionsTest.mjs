@@ -64,6 +64,8 @@ test('formulario vacío, guardado, edición sin clave y prueba de la versión gu
         for (const field of ['nombre', 'host', 'puerto', 'usuario', 'base_datos', 'password']) assert.equal(await page.locator(`#externalConnectionForm [name="${field}"]`).inputValue(), '');
         for (const field of ['nombre', 'host', 'puerto', 'usuario', 'base_datos']) await page.locator(`#externalConnectionForm [name="${field}"]`).fill(String(fixture[field]));
         await page.locator('#externalConnectionForm [name="password"]').fill('clave_solo_fixture');
+        await page.evaluate(() => window.dispatchEvent(new Event('estiba:office-session')));
+        assert.equal(await page.locator('#externalConnectionForm [name="password"]').inputValue(), 'clave_solo_fixture', 'refrescar la misma sesión conserva la edición');
         await page.locator('#externalConnectionForm [type="submit"]').click();
         await page.locator('[data-edit-connection]').waitFor();
         assert.equal(await page.locator('#externalConnectionForm [name="password"]').inputValue(), '');

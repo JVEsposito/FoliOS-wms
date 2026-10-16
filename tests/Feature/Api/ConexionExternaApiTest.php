@@ -4,11 +4,13 @@ namespace Tests\Feature\Api;
 
 use App\Enums\RolUsuario;
 use App\Models\ConexionExterna;
+use App\Models\Temporada;
 use App\Models\User;
 use App\Services\Integraciones\ConectorMySqlLectura;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Mockery\MockInterface;
 use PDOException;
 use Tests\TestCase;
@@ -31,7 +33,7 @@ class ConexionExternaApiTest extends TestCase
 
     private function crear(): array
     {
-        return $this->postJson(self::URL, $this->datos())->assertCreated()->json('data');
+        return $this->postJson(self::URL, $this->datos())->assertCreated()->assertHeader('Cache-Control', 'no-store, private')->json('data');
     }
 
     public function test_las_credenciales_se_cifran_y_la_clave_no_se_devuelve_ni_se_audita(): void
@@ -144,5 +146,23 @@ class ConexionExternaApiTest extends TestCase
         });
         $this->postJson(self::URL.'/'.$datos['id'].'/probar', ['version_conocida' => 1])->assertConflict();
         $this->assertNull(ConexionExterna::find($datos['id'])->ultima_prueba_estado);
+    }
+
+    public function test_el_reinicio_de_temporada_conserva_el_perfil_y_su_auditoria(): void
+    {
+        $this->administrador();
+        $datos = $this->crear();
+        $antes = DB::table('conexiones_externas')->where('id', $datos['id'])->value('credenciales');
+        $temporada = Temporada::query()->where('activa', true)->firstOrFail();
+        $this->postJson('/api/administracion/temporadas/'.$temporada->id.'/reinicio-operacional', [
+            'operacion_id' => (string) Str::uuid(),
+            'motivo' => 'Verificar que se conserva la configuración global.',
+            'password' => 'password',
+            'confirmacion' => 'REINICIAR '.$temporada->codigo,
+            'confirmar_exclusion_bodega' => true,
+            'confirmar_preservar_configuracion' => true,
+        ])->assertCreated();
+        $this->assertSame($antes, DB::table('conexiones_externas')->where('id', $datos['id'])->value('credenciales'));
+        $this->assertDatabaseCount('eventos_conexion_externa', 1);
     }
 }

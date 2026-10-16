@@ -18,19 +18,19 @@ class ConexionExternaController extends Controller
 {
     public function index(): JsonResponse
     {
-        return response()->json(['data' => ConexionExterna::query()
+        return $this->responder(['data' => ConexionExterna::query()
             ->with('actualizadoPor:id,name')->orderBy('nombre')->get()
             ->map(fn (ConexionExterna $conexion): array => $this->recurso($conexion))]);
     }
 
     public function store(GuardarConexionExternaRequest $request): JsonResponse
     {
-        return response()->json(['data' => $this->recurso($this->guardar($request))], 201);
+        return $this->responder(['data' => $this->recurso($this->guardar($request))], 201);
     }
 
     public function update(GuardarConexionExternaRequest $request, ConexionExterna $conexionExterna): JsonResponse
     {
-        return response()->json(['data' => $this->recurso($this->guardar($request, $conexionExterna))]);
+        return $this->responder(['data' => $this->recurso($this->guardar($request, $conexionExterna))]);
     }
 
     public function probar(Request $request, ConexionExterna $conexionExterna, ConectorMySqlLectura $conector): JsonResponse
@@ -65,7 +65,7 @@ class ConexionExternaController extends Controller
             return $conexion->load('actualizadoPor:id,name');
         });
 
-        return response()->json([
+        return $this->responder([
             'data' => $this->recurso($conexion),
             'message' => $correcta
                 ? 'Conexión comprobada desde el servidor de FoliOS. La consulta de lectura respondió correctamente.'
@@ -127,6 +127,11 @@ class ConexionExternaController extends Controller
         if ($conexion->version !== $version) {
             throw new ConflictoOperacion('La conexión cambió. Actualiza el listado antes de continuar.');
         }
+    }
+
+    private function responder(array $datos, int $estado = 200): JsonResponse
+    {
+        return response()->json($datos, $estado, ['Cache-Control' => 'private, no-store']);
     }
 
     private function recurso(#[SensitiveParameter] ConexionExterna $conexion): array
