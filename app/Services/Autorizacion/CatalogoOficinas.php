@@ -56,6 +56,7 @@ class CatalogoOficinas
         ['materia-prima', 'Despacho Envases', '/oficina/envases/despachos', 'materia-prima.despacho-envases', ['puede_consultar_cuenta_envases', 'puede_gestionar_despacho_envases', 'puede_anular_despacho_envases']],
         ['frigorifico', 'Resumen', '/oficina/frigorifico', '', ['puede_consultar_validaciones_pallet', 'puede_consultar_inspeccion_sag', 'puede_consultar_prefrio', 'ambito_camaras_productos', 'puede_consultar_catalogo_cargas', 'puede_consultar_cargas']],
         ['frigorifico', 'Validación', '/oficina/validacion', 'frigorifico.validacion', ['puede_consultar_validaciones_pallet']],
+        ['frigorifico', 'Pendientes por validar', '/oficina/validacion/pendientes', 'frigorifico.validacion', ['puede_consultar_validaciones_pallet']],
         ['frigorifico', 'Etiquetas PT', '/oficina/validacion/etiquetas', 'frigorifico.validacion', ['puede_imprimir_etiquetas_pt']],
         ['frigorifico', 'Recepción de fruta embalada', '/oficina/recepcion-fruta-embalada', 'frigorifico.recepcion-fruta-embalada', ['puede_consultar_recepciones_fruta_embalada']],
         ['frigorifico', 'Repaletizajes', '/oficina/validacion/repaletizajes', '', ['puede_consultar_repaletizajes']],

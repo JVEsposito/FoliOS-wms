@@ -39,6 +39,7 @@
                     <div><p class="eyebrow">CONTROL DE INGRESO</p><h1>Validación de pallets</h1><p>La aprobación crea el folio pendiente de prefrío; observar conserva la posibilidad de corregir y volver a validar.</p></div>
                     <div class="validation-heading__actions">
                         <label><span>Temporada visible</span><select id="seasonSelector"></select></label>
+                        <a class="secondary-button" href="/oficina/validacion/pendientes">Pendientes por validar</a>
                         <a class="secondary-button" href="/oficina/validacion/etiquetas">Etiquetas PT</a>
                         <button class="primary-button" id="exportValidationRegisterButton" type="button">Descargar RRPP-01</button>
                     </div>

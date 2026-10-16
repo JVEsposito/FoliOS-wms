@@ -58,6 +58,7 @@ use App\Http\Controllers\Api\MovimientoController;
 use App\Http\Controllers\Api\NotificacionOperacionalController;
 use App\Http\Controllers\Api\OperacionAhoraController;
 use App\Http\Controllers\Api\PanelGerencialController;
+use App\Http\Controllers\Api\PendientesValidacionOrigenController;
 use App\Http\Controllers\Api\PerfilAccesoController;
 use App\Http\Controllers\Api\PerfilImpresionEtiquetaController;
 use App\Http\Controllers\Api\PinOperacionalController;
@@ -310,6 +311,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/validacion/etiquetas', [EtiquetaPtController::class, 'index']);
         Route::get('/validacion/etiquetas/historial', [EtiquetaPtController::class, 'historial']);
         Route::post('/validacion/etiquetas', [EtiquetaPtController::class, 'store']);
+    });
+    Route::middleware('can:consultar-validaciones-pallet')->prefix('validacion/pendientes-origen')->group(function () {
+        Route::get('/', [PendientesValidacionOrigenController::class, 'index']);
+        Route::get('/excel', [PendientesValidacionOrigenController::class, 'excel']);
+        Route::post('/leer', [PendientesValidacionOrigenController::class, 'leer'])->middleware('throttle:4,1');
     });
     Route::middleware('can:consultar-validaciones-pallet')->group(function () {
         Route::get('/validacion/pallets', [ValidacionPalletController::class, 'index']);

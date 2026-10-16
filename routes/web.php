@@ -71,6 +71,7 @@ Route::redirect('/oficina/materiales/transformacion', '/oficina/materiales/recet
 Route::redirect('/oficina/materiales/existencias', '/oficina/existencias');
 Route::view('/oficina/validacion', 'office.validation');
 Route::view('/oficina/validacion/etiquetas', 'office.pt-labels');
+Route::view('/oficina/validacion/pendientes', 'office.validation-pending');
 Route::redirect('/oficina/validacion/catalogo', '/oficina/administracion/maestros-temporada', 301);
 Route::view('/oficina/administracion/maestros-temporada', 'office.validation-catalog');
 Route::view('/oficina/administracion/integridad-operacional', 'office.operational-integrity');
