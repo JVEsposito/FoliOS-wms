@@ -48,6 +48,8 @@ class ServicioReinicioOperacional
         'tipos_resultado_packing',
         'formatos_registro',
         'eventos_formato_registro',
+        'conexiones_externas',
+        'eventos_conexion_externa',
         'productos_hidrocooler',
         'eventos_producto_hidrocooler',
         'pesos_referencia_envases',

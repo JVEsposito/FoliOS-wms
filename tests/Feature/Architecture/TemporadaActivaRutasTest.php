@@ -35,6 +35,7 @@ class TemporadaActivaRutasTest extends TestCase
         Models\PerfilAcceso::class => 'accesos',
         Models\User::class => 'accesos',
         Models\ConexionExistencia::class => 'accesos a existencias Excel',
+        Models\ConexionExterna::class => 'configuración global de acceso a sistemas externos, independiente de la temporada',
         Models\Temporada::class => 'administración de temporadas',
         Models\RegistroControlAmbiental::class => 'se registra por cámara y hora, sin temporada',
         Models\NotificacionOperacional::class => 'leer o confirmar no modifica la operación; ya filtra por temporada',
