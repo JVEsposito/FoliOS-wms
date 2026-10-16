@@ -198,3 +198,20 @@ test('PDA mantiene opciones aunque se elijan los CSG antes del producto y permit
     assert.doesNotMatch(h.message(), /no tienen un producto habilitado en común/);
   } finally { await h.unmount(); }
 });
+
+test('PDA exige resolver el CSG incompatible antes de aprobar una composición anterior', async () => {
+  const h = harness();
+  try {
+    await h.mount(); await h.product(); await h.press(addLine); await h.select('CSG / Predio 2', '22222');
+    await h.capture(); await h.select('CSG / Predio 2', '33333');
+    assertProduct(h);
+    assert.equal(h.field('CSG / Predio 2').props.value, 'csg-2');
+    await h.press('APROBAR');
+    assert.equal(h.queued.length, 0);
+    assert.match(h.message(), /no tienen un producto habilitado en común/);
+    await h.select('CSG / Predio 2', '22222');
+    assert.doesNotMatch(h.message(), /no tienen un producto habilitado en común/);
+    await h.press('APROBAR');
+    assert.equal(h.queued.length, 1);
+  } finally { await h.unmount(); }
+});

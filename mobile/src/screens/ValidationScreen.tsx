@@ -234,6 +234,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
       setOriginError(`Los CSG ${csgs.join(' + ')} no tienen un producto habilitado en común. Selecciona otro CSG o revisa sus variedades y combinaciones en el catálogo.`);
       return;
     }
+    if (originError && error === originError) setError('');
     setOriginError('');
     setOriginDrafts(nextDrafts);
     if (catalogIndex && !productCompatibleWithOrigins(
@@ -555,6 +556,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
     if (!line || !shift) return 'Selecciona la línea de proceso y el turno antes de validar.';
     if (!folio.trim()) return 'Escanea o ingresa el folio.';
     if (terminalDecision) return 'El folio ya posee una decisión final y no admite una nueva validación.';
+    if (originError) return originError;
     if (!Number.isInteger(Number(boxes)) || Number(boxes) < 1) return 'Ingresa una cantidad válida de cajas.';
     if (!selectedCategory) return 'Selecciona una categoría.';
     if (!selectedArticle) return 'Completa especie, variedad, calibre y envase.';
