@@ -9,7 +9,7 @@ siendo la única puerta a Frigorífico** y nada de lo leído crea, modifica ni b
 
 - La conexión se configura en Administración → Accesos → Conexiones externas
   ([CONEXIONES_EXTERNAS.md](CONEXIONES_EXTERNAS.md)).
-- FoliOS lee la tabla o vista `obdc_stock` del origen: el stock actual de producto
+- FoliOS lee la tabla o vista `odbc_stock` del origen: el stock actual de producto
   terminado, una fila por línea de pallet. Solo trae las filas de la bodega de la
   planta (`cod_bodega`, por defecto `AR01`) y de tipo `PT`, y solo las columnas que usa.
 - Lee cada cinco minutos (programador de Laravel, `integraciones:leer-stock-origen`) y
@@ -19,7 +19,7 @@ siendo la única puerta a Frigorífico** y nada de lo leído crea, modifica ni b
 | Variable | Por defecto | Uso |
 |---|---|---|
 | `WMS_STOCK_ORIGEN_CONEXION` | vacío | Nombre del perfil. Vacío: el único perfil activo. |
-| `WMS_STOCK_ORIGEN_TABLA` | `obdc_stock` | Tabla o vista del origen (letras, números y `_`). |
+| `WMS_STOCK_ORIGEN_TABLA` | `odbc_stock` | Tabla o vista del origen (letras, números y `_`). |
 | `WMS_STOCK_ORIGEN_BODEGA` | `AR01` | Bodega del origen que corresponde a la planta. |
 | `WMS_STOCK_ORIGEN_TEMPORADA` | vacío | `cod_temporada` a leer. Vacío: todo el stock. |
 | `WMS_STOCK_ORIGEN_HABILITADA` | `true` | Apaga la lectura sin borrar la conexión. |
