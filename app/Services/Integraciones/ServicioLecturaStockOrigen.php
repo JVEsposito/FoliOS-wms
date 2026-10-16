@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\DB;
 use Throwable;
 
 /**
- * Lee el stock de producto terminado del sistema de origen (tabla obdc_stock) y guarda una
+ * Lee el stock de producto terminado del sistema de origen (tabla odbc_stock) y guarda una
  * copia por pallet. Solo SELECT, desde el servidor de FoliOS; nada de lo leído crea folios.
  *
  * El origen trae una fila por línea de pallet. Aquí se agrupan por número de pallet: un

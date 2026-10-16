@@ -80,7 +80,7 @@ class StockOrigenTest extends TestCase
             ->assertSuccessful();
 
         $this->assertSame(['AR01'], $this->consultas[0]['parametros']);
-        $this->assertStringContainsString('FROM `obdc_stock` WHERE `cod_bodega` = ? AND `cod_tipo_articulo` = \'PT\'', $this->consultas[0]['sql']);
+        $this->assertStringContainsString('FROM `odbc_stock` WHERE `cod_bodega` = ? AND `cod_tipo_articulo` = \'PT\'', $this->consultas[0]['sql']);
         $this->assertStringContainsString('`Pallet`, `cod_bodega`', $this->consultas[0]['sql']);
 
         $pallet = PalletStockOrigen::query()->where('numero_pallet', '1000000001')->sole();
@@ -132,11 +132,11 @@ class StockOrigenTest extends TestCase
         $this->respuesta = [$this->fila('A1', ['cantidad' => 120])];
         $this->artisan('integraciones:leer-stock-origen')->assertSuccessful();
 
-        $error = new PDOException("SQLSTATE[42S02]: Base table or view not found: 1146 Table 'origen.obdc_stock' doesn't exist");
-        $error->errorInfo = ['42S02', 1146, "Table 'origen.obdc_stock' doesn't exist"];
+        $error = new PDOException("SQLSTATE[42S02]: Base table or view not found: 1146 Table 'origen.odbc_stock' doesn't exist");
+        $error->errorInfo = ['42S02', 1146, "Table 'origen.odbc_stock' doesn't exist"];
         $this->respuesta = $error;
         $this->artisan('integraciones:leer-stock-origen')
-            ->expectsOutput('Lectura fallida (tabla_inexistente): No existe la tabla o vista obdc_stock en la base de origen. Revisa WMS_STOCK_ORIGEN_TABLA.')
+            ->expectsOutput('Lectura fallida (tabla_inexistente): No existe la tabla o vista odbc_stock en la base de origen. Revisa WMS_STOCK_ORIGEN_TABLA.')
             ->assertFailed();
 
         $acceso = new PDOException("SQLSTATE[HY000] [1045] Access denied for user 'lector'@'10.0.0.5' (using password: YES)");
@@ -163,12 +163,12 @@ class StockOrigenTest extends TestCase
         $this->artisan('integraciones:leer-stock-origen')->assertSuccessful();
         $this->assertSame([], $this->consultas);
 
-        config(['integraciones.stock_pt.conexion' => 'SE', 'integraciones.stock_pt.tabla' => 'obdc_stock; DROP TABLE x']);
+        config(['integraciones.stock_pt.conexion' => 'SE', 'integraciones.stock_pt.tabla' => 'odbc_stock; DROP TABLE x']);
         $this->artisan('integraciones:leer-stock-origen')->assertFailed();
         $this->assertSame([], $this->consultas);
         $this->assertSame('tabla_invalida', LecturaStockOrigen::query()->sole()->causa);
 
-        config(['integraciones.stock_pt.tabla' => 'obdc_stock', 'integraciones.stock_pt.temporada' => '00']);
+        config(['integraciones.stock_pt.tabla' => 'odbc_stock', 'integraciones.stock_pt.temporada' => '00']);
         $this->respuesta = [$this->fila('A1')];
         $this->artisan('integraciones:leer-stock-origen')->assertSuccessful();
         $this->assertSame(['AR01', '00'], $this->consultas[0]['parametros']);
@@ -296,7 +296,7 @@ class StockOrigenTest extends TestCase
         ]);
     }
 
-    /** Una fila con la forma de obdc_stock (los nombres de columna respetan sus mayúsculas). */
+    /** Una fila con la forma de odbc_stock (los nombres de columna respetan sus mayúsculas). */
     private function fila(string $pallet, array $cambios = []): array
     {
         return [
