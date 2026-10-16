@@ -53,7 +53,7 @@ import { areas } from '../theme/areas';
 import { operatorTheme as o } from '../theme/operatorTheme';
 import { isPdaBuild } from '../config/appVariant';
 import { ScanInput, ScanInputHandle } from '../components/ui/ScanInput';
-import { createOriginArticleSelector, indexValidationCatalog, productCompatibleWithOrigins } from '../domain/validationCatalogIndex';
+import { articlesForOrigins, createOriginArticleSelector, indexValidationCatalog, productCompatibleWithOrigins } from '../domain/validationCatalogIndex';
 
 type ValidationScreenProps = {
   auth: AuthSession;
@@ -115,6 +115,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
   const [brand, setBrand] = useState('');
   const [packingDate, setPackingDate] = useState(todayLocal());
   const [originDrafts, setOriginDrafts] = useState<OriginDraft[]>([newOriginDraft()]);
+  const [originError, setOriginError] = useState('');
   const [observation, setObservation] = useState<ObservationDraft | null>(null);
 
   const userId = auth.usuario.id;
@@ -218,13 +219,27 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
 
   function resetProduct() {
     setSpecies(''); setVariety(''); setCaliber(''); setPackageName(''); setCategoryId('');
+    setOriginError('');
   }
 
   function updateOriginDrafts(nextDrafts: OriginDraft[]) {
+    const nextOriginIds = nextDrafts.map((draft) => draft.originId).filter(Boolean);
+    const choosingOrigin = nextDrafts.some((draft) => draft.originId
+      && !originDrafts.some((current) => current.key === draft.key && current.originId === draft.originId));
+    // Comprueba el conjunto antes de reemplazar la captura: una intersección
+    // vacía dejaría sin opciones todos los selectores de producto.
+    if (choosingOrigin && catalogIndex && nextOriginIds.length > 1
+      && !articlesForOrigins(catalogIndex, nextOriginIds).length) {
+      const csgs = [...new Set(nextOriginIds.map((id) => catalogIndex.originById.get(id)?.csg ?? id))];
+      setOriginError(`Los CSG ${csgs.join(' + ')} no tienen un producto habilitado en común. Selecciona otro CSG o revisa sus variedades y combinaciones en el catálogo.`);
+      return;
+    }
+    if (originError && error === originError) setError('');
+    setOriginError('');
     setOriginDrafts(nextDrafts);
     if (catalogIndex && !productCompatibleWithOrigins(
       catalogIndex,
-      nextDrafts.map((draft) => draft.originId).filter(Boolean),
+      nextOriginIds,
       { especie: species, variedad: variety, calibre: caliber, envase: packageName },
     )) resetProduct();
   }
@@ -452,6 +467,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
       lot: 'lote_materia_prima' in line ? line.lote_materia_prima ?? '' : '',
       process: 'proceso_packing' in line ? line.proceso_packing ?? '' : '',
     })));
+    setOriginError('');
     setPackingDate(attempt.catalogo.fecha_embalaje ?? todayLocal());
     setObservation(null);
     setFolioReview({
@@ -540,6 +556,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
     if (!line || !shift) return 'Selecciona la línea de proceso y el turno antes de validar.';
     if (!folio.trim()) return 'Escanea o ingresa el folio.';
     if (terminalDecision) return 'El folio ya posee una decisión final y no admite una nueva validación.';
+    if (originError) return originError;
     if (!Number.isInteger(Number(boxes)) || Number(boxes) < 1) return 'Ingresa una cantidad válida de cajas.';
     if (!selectedCategory) return 'Selecciona una categoría.';
     if (!selectedArticle) return 'Completa especie, variedad, calibre y envase.';
@@ -634,6 +651,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
       setBoxes('');
       setPackingDate(todayLocal());
       setOriginDrafts([newOriginDraft()]);
+      setOriginError('');
       setObservation(null);
       setTimeout(() => folioInput.current?.focus(), 180);
     } finally {
@@ -808,6 +826,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
               </View>
             ))}
             <Pressable disabled={terminalDecision || !brand} onPress={() => updateOriginDrafts([...originDrafts, newOriginDraft()])} style={[styles.addOrigin, (terminalDecision || !brand) && styles.disabled]}><Text style={styles.addOriginText}>+ Agregar línea (otro CSG, lote o proceso)</Text></Pressable>
+            {originError ? <Text accessibilityRole="alert" style={styles.originError}>{originError}</Text> : null}
 
             <Text style={styles.groupTitle}>Producto</Text>
             {!originDrafts.some((draft) => draft.originId) ? <Text style={styles.label}>Selecciona el CSG en Origen comercial para filtrar las variedades.</Text> : null}
@@ -1173,6 +1192,7 @@ const styles = StyleSheet.create({
   removeOriginText: { color: colors.red, fontSize: 14, fontWeight: '900' },
   addOrigin: { minHeight: 44, justifyContent: 'center', alignItems: 'center', padding: 11, borderWidth: 1, borderColor: colors.cyanDark, borderRadius: 10, borderStyle: 'dashed' },
   addOriginText: { color: colors.cyan, fontSize: 14, fontWeight: '900' },
+  originError: { color: colors.red, fontSize: 14, fontWeight: '700' },
   fieldGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 9 },
   fieldGridCompact: { flexDirection: 'column', flexWrap: 'nowrap' },
   selectField: { flex: 1, minWidth: 145 },
