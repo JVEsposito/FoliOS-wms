@@ -196,6 +196,7 @@ class ServicioCuentaCorrienteEnvases
         $tipos = [];
         $lineas = [];
         $indices = [];
+        $documentos = [];
         $saldos = [];
         foreach ($this->vistaCliente($movimientos) as ['movimiento' => $movimiento, 'impacto' => $impacto]) {
             $tipo = $movimiento->tipo_envase->value;
@@ -230,15 +231,16 @@ class ServicioCuentaCorrienteEnvases
             $documento = $movimiento->documento_tipo === self::DOCUMENTO_GUIA
                 ? ($guiasEmitidas[$movimiento->documento_id] ?? null) ?: $movimiento->numero_documento
                 : $movimiento->numero_documento;
-            $clave = implode('|', [
+            // Una línea por guía y tipo de envase, como en la guía: los orígenes internos de
+            // un mismo envase (FIFO, varias recepciones) no se le muestran al cliente.
+            $claveDocumento = implode('|', [
                 $movimiento->ocurrido_at->getTimestamp(),
                 $movimiento->documento_id ?? $movimiento->numero_documento,
                 $movimiento->tipo_movimiento->value,
-                $tipo,
-                $movimiento->propiedad->value,
             ]);
+            $clave = $claveDocumento.'|'.$tipo.'|'.$movimiento->propiedad->value;
+            $documentos[$claveDocumento] ??= count($documentos);
             if (isset($indices[$clave])) {
-                // Una guía con varios orígenes del mismo envase es una sola entrega para el cliente.
                 $lineas[$indices[$clave]][$esSalida ? 'salida' : 'entrada'] += $esSalida ? -$impacto : $impacto;
                 $lineas[$indices[$clave]]['saldo'] = $saldos[$tipo];
 
@@ -246,6 +248,7 @@ class ServicioCuentaCorrienteEnvases
             }
             $indices[$clave] = count($lineas);
             $lineas[] = [
+                'orden' => [$documentos[$claveDocumento], $movimiento->tipo_envase->orden(), $movimiento->propiedad->value],
                 'fecha' => $this->local($movimiento->ocurrido_at),
                 'documento' => $documento,
                 'movimiento' => self::etiquetaMovimiento($movimiento->tipo_movimiento),
@@ -259,6 +262,13 @@ class ServicioCuentaCorrienteEnvases
         foreach ($tipos as $tipo => $resumen) {
             $tipos[$tipo]['saldo_final'] = $resumen['saldo_inicial'] + $resumen['entradas'] - $resumen['salidas'];
         }
+        // Dentro de una guía con varios envases, las líneas van en el orden del catálogo.
+        usort($lineas, fn (array $a, array $b): int => $a['orden'] <=> $b['orden']);
+        $lineas = array_map(function (array $linea): array {
+            unset($linea['orden']);
+
+            return $linea;
+        }, $lineas);
         $pendientes = DetalleEnvaseRecepcionRomana::query()
             ->whereHas('recepcion', fn (Builder $recepcion) => $recepcion
                 ->where('cliente_id', $cliente->id)

@@ -163,17 +163,21 @@ class CuentaCorrienteEnvaseReportesTest extends TestCase
     {
         $this->actingAs($this->administrador, 'sanctum');
         $compra2 = $this->movimiento($this->planta, 'recepcion_compra', 10, 0, 1, 'propia', '2026-10-03 10:00', 'COMPRA-2');
-        // Dos orígenes en la misma guía: para el cliente es una sola entrega.
+        $this->movimiento($this->planta, 'recepcion_compra', 20, 0, 1, 'propia', '2026-10-03 11:00', 'COMPRA-TOTES', null, 'totes');
+        // Bins desde dos orígenes internos y totes: en la guía son dos líneas, una por envase.
         $entregada = $this->postJson('/api/envases/guias-despacho', [
             'operacion_id' => (string) Str::uuid(),
             'cliente_id' => $this->productor->id,
             'salida_at' => '2026-10-14T10:00:00-03:00',
             'detalles' => [
+                ['tipo_envase' => 'totes', 'cantidad' => 5, 'propiedad' => 'propia'],
                 ['tipo_envase' => 'bins', 'cantidad' => 6, 'propiedad' => 'propia', 'movimiento_origen_id' => $this->compra->id],
                 ['tipo_envase' => 'bins', 'cantidad' => 4, 'propiedad' => 'propia', 'movimiento_origen_id' => $compra2->id],
             ],
         ])->assertCreated()->json('data');
         $this->postJson("/api/envases/guias-despacho/{$entregada['id']}/confirmar", ['numero_guia_despacho' => '5501'])->assertOk();
+        // Internamente son tres movimientos (uno por origen); el cliente verá dos líneas.
+        $this->assertSame(3, MovimientoEnvase::query()->where('documento_id', $entregada['id'])->count());
         $anulada = $this->postJson('/api/envases/guias-despacho', [
             'operacion_id' => (string) Str::uuid(),
             'cliente_id' => $this->productor->id,
@@ -194,11 +198,21 @@ class CuentaCorrienteEnvaseReportesTest extends TestCase
             'entrada' => null,
             'salida' => 10,
             'saldo' => 150,
+        ], [
+            'fecha' => '2026-10-14 10:00:00',
+            'documento' => '5501',
+            'movimiento' => 'Despacho',
+            'tipo_envase' => 'Tote',
+            'propiedad' => 'Propia',
+            'entrada' => null,
+            'salida' => 5,
+            'saldo' => -5,
         ]], $estado['movimientos']);
         $this->assertSame(160, $estado['tipos'][0]['saldo_inicial']);
         $this->assertSame(['cliente' => 0, 'propia' => 10, 'arrendada' => 0], $estado['tipos'][0]['salidas_por_propiedad']);
         $this->assertSame(150, $estado['tipos'][0]['saldo_final']);
-        $this->assertSame(150, $this->getJson('/api/envases/cuenta-corriente/movimientos')->json('balances.0.saldo'));
+        $this->assertSame(-5, $estado['tipos'][1]['saldo_final']);
+        $this->assertSame(150, collect($this->getJson('/api/envases/cuenta-corriente/movimientos')->json('balances'))->firstWhere('tipo_envase', 'bins')['saldo']);
 
         $pdf = $this->get('/api/envases/cuenta-corriente/estado-cuenta?desde=2026-10-14&cliente_id='.$this->productor->id)->assertOk()->getContent();
         $this->assertStringContainsString('(5501) Tj', $pdf);
@@ -208,8 +222,8 @@ class CuentaCorrienteEnvaseReportesTest extends TestCase
         // La trazabilidad interna conserva todo: despacho, anulación y número emitido.
         $kardex = $this->get('/api/envases/cuenta-corriente/movimientos/excel?cliente_id='.$this->productor->id.'&desde=2026-10-14')->assertOk();
         $filas = array_slice($this->filasExcel($kardex->baseResponse->getFile()->getPathname()), 1);
-        $this->assertSame(['5501', '5501', '5502', '5502'], array_column($filas, 4));
-        $this->assertSame(['Despacho', 'Despacho', 'Despacho', 'Anulación de despacho'], array_column($filas, 5));
+        $this->assertSame(['5501', '5501', '5501', '5502', '5502'], array_column($filas, 4));
+        $this->assertSame(['Despacho', 'Despacho', 'Despacho', 'Despacho', 'Anulación de despacho'], array_column($filas, 5));
 
         $movimientos = collect($this->getJson('/api/envases/cuenta-corriente/movimientos?desde=2026-10-14')->json('data'));
         $this->assertSame(
@@ -228,6 +242,7 @@ class CuentaCorrienteEnvaseReportesTest extends TestCase
         string $fechaLocal,
         string $documento,
         ?MovimientoEnvase $origen = null,
+        string $envase = 'bins',
     ): MovimientoEnvase {
         return MovimientoEnvase::create([
             'operacion_id' => (string) Str::uuid(),
@@ -236,7 +251,7 @@ class CuentaCorrienteEnvaseReportesTest extends TestCase
             'documento_tipo' => 'prueba',
             'numero_documento' => $documento,
             'tipo_movimiento' => $tipo,
-            'tipo_envase' => 'bins',
+            'tipo_envase' => $envase,
             'cantidad' => $cantidad,
             'signo_cuenta' => $signoCuenta,
             'signo_existencia' => $signoExistencia,
