@@ -132,7 +132,7 @@ class GeneradorEstadoCuentaEnvasesPdf
     private function encabezadoDetalle(float $y): string
     {
         $contenido = $this->fondo($y - 4, 16);
-        foreach ([['Fecha', self::MARGEN + 2], ['Documento', 106], ['Movimiento', 190], ['Envase', 318], ['Propiedad', 392]] as [$titulo, $x]) {
+        foreach ([['Fecha', self::MARGEN + 2], ['Guía N°', 106], ['Movimiento', 190], ['Envase', 318], ['Propiedad', 392]] as [$titulo, $x]) {
             $contenido .= $this->pdf->texto($x, $y, 7.5, $titulo, true);
         }
         foreach ([['Entrada', 480], ['Salida', 522], ['Saldo', 560]] as [$titulo, $x]) {

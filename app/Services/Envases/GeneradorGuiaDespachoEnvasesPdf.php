@@ -47,7 +47,9 @@ class GeneradorGuiaDespachoEnvasesPdf
         }
         $contenido .= "0.15 0.72 0.70 RG 38 728 m 557 728 l S\n";
 
+        $guiaEmitida = $guia->numero_guia_despacho ?? ($snapshot['numero_guia_despacho'] ?? null);
         $lineas = [
+            ['Guía de despacho', $guiaEmitida ? 'N° '.$guiaEmitida.' (sistema de facturación)' : ($esBorrador ? 'Se registra al confirmar la salida' : 'No registrada')],
             ['Temporada', $snapshot['temporada']['codigo'].' · '.$snapshot['temporada']['nombre']],
             ['Cliente destino', $snapshot['cliente']['codigo'].' · '.$snapshot['cliente']['nombre']],
             ['Salida física', $this->fecha($snapshot['salida_at'] ?? null)],
@@ -60,7 +62,7 @@ class GeneradorGuiaDespachoEnvasesPdf
         foreach ($lineas as [$etiqueta, $valor]) {
             $contenido .= $this->texto(42, $y, 9, (string) $etiqueta, true);
             $contenido .= $this->texto(190, $y, 9, $this->cortar((string) $valor, 70));
-            $y -= 24;
+            $y -= 22;
         }
 
         $contenido .= '0.92 0.96 0.97 rg 38 495 519 28 re f'."\n";
@@ -210,7 +212,10 @@ class GeneradorGuiaDespachoEnvasesPdf
 
     private function fecha(?string $fecha): string
     {
-        return $fecha ? CarbonImmutable::parse($fecha)->format('d-m-Y H:i') : 'Pendiente';
+        // Las fechas se guardan en UTC; el documento muestra la hora de planta.
+        return $fecha
+            ? CarbonImmutable::parse($fecha)->setTimezone(config('app.operational_timezone'))->format('d-m-Y H:i')
+            : 'Pendiente';
     }
 
     private function cortar(string $texto, int $maximo): string

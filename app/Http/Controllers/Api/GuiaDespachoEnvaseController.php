@@ -10,6 +10,7 @@ use App\Models\Cliente;
 use App\Models\GuiaDespachoEnvase;
 use App\Services\Envases\GeneradorGuiaDespachoEnvasesPdf;
 use App\Services\Envases\ServicioGuiaDespachoEnvases;
+use App\Services\Envases\ServicioGuiaEmitidaEnvases;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -17,6 +18,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class GuiaDespachoEnvaseController extends Controller
 {
@@ -60,6 +62,7 @@ class GuiaDespachoEnvaseController extends Controller
                 'cliente',
                 'temporada',
                 'detalles.movimientoOrigen.cliente',
+                'archivoVigente.subidoPor',
                 'creadoPor',
                 'confirmadoPor',
                 'canceladoPor',
@@ -86,6 +89,7 @@ class GuiaDespachoEnvaseController extends Controller
             'cliente',
             'temporada',
             'detalles.movimientoOrigen.cliente',
+            'archivoVigente.subidoPor',
             'creadoPor',
             'confirmadoPor',
             'canceladoPor',
@@ -132,6 +136,9 @@ class GuiaDespachoEnvaseController extends Controller
         $datos = $request->validate([
             'version' => ['nullable', 'integer', 'min:1'],
             'salida_at' => ['nullable', 'date'],
+            'numero_guia_despacho' => ['required', 'string', 'max:30'],
+        ], [
+            'numero_guia_despacho.required' => 'Ingresa el N° de la guía de despacho emitida en el sistema de facturación.',
         ]);
 
         return response()->json([
@@ -177,6 +184,58 @@ class GuiaDespachoEnvaseController extends Controller
         ]);
     }
 
+    /** Registra el N° de guía emitida en una salida ya confirmada, o lo corrige con motivo. */
+    public function numeroGuia(
+        GuiaDespachoEnvase $guiaDespachoEnvase,
+        Request $request,
+        ServicioGuiaEmitidaEnvases $guiasEmitidas,
+    ): JsonResponse {
+        Gate::authorize('gestionar-despacho-envases');
+        $datos = $request->validate([
+            'numero_guia_despacho' => ['required', 'string', 'max:30'],
+            'motivo' => ['nullable', 'string', 'max:1000'],
+        ]);
+        $guia = $guiasEmitidas->registrarNumero(
+            $guiaDespachoEnvase,
+            $datos['numero_guia_despacho'],
+            $datos['motivo'] ?? null,
+            $request->user(),
+        );
+
+        return response()->json(['data' => $this->guia($this->cargar($guia))]);
+    }
+
+    public function subirArchivoGuia(
+        GuiaDespachoEnvase $guiaDespachoEnvase,
+        Request $request,
+        ServicioGuiaEmitidaEnvases $guiasEmitidas,
+    ): JsonResponse {
+        Gate::authorize('gestionar-despacho-envases');
+        $request->validate([
+            'archivo' => [
+                'required',
+                'file',
+                'max:'.intdiv(ServicioGuiaEmitidaEnvases::BYTES_MAXIMOS, 1024),
+                'mimetypes:application/pdf,image/jpeg,image/png,image/webp',
+            ],
+        ], [
+            'archivo.max' => 'El archivo de la guía puede pesar hasta 10 MB.',
+            'archivo.mimetypes' => 'Sube la guía en PDF, JPG, PNG o WebP.',
+        ]);
+        $guiasEmitidas->subirArchivo($guiaDespachoEnvase, $request->file('archivo'), $request->user());
+
+        return response()->json(['data' => $this->guia($this->cargar($guiaDespachoEnvase))], Response::HTTP_CREATED);
+    }
+
+    public function archivoGuia(
+        GuiaDespachoEnvase $guiaDespachoEnvase,
+        ServicioGuiaEmitidaEnvases $guiasEmitidas,
+    ): StreamedResponse {
+        Gate::authorize('consultar-cuenta-envases');
+
+        return $guiasEmitidas->descargarArchivo($guiaDespachoEnvase);
+    }
+
     public function documento(
         GuiaDespachoEnvase $guiaDespachoEnvase,
         GeneradorGuiaDespachoEnvasesPdf $generador,
@@ -204,6 +263,20 @@ class GuiaDespachoEnvaseController extends Controller
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'attachment; filename="'.$nombre.'"',
             'Cache-Control' => 'no-store, private',
+        ]);
+    }
+
+    private function cargar(GuiaDespachoEnvase $guia): GuiaDespachoEnvase
+    {
+        return $guia->refresh()->load([
+            'temporada',
+            'cliente',
+            'detalles.movimientoOrigen.cliente',
+            'archivoVigente.subidoPor',
+            'creadoPor',
+            'confirmadoPor',
+            'canceladoPor',
+            'anuladoPor',
         ]);
     }
 
@@ -272,9 +345,21 @@ class GuiaDespachoEnvaseController extends Controller
             })
             ->values();
 
+        $salidaConfirmada = in_array($guia->estado, [EstadoGuiaDespachoEnvase::Confirmada, EstadoGuiaDespachoEnvase::Anulada], true);
+        $archivo = $guia->archivoVigente;
         $datos = [
             'id' => $guia->id,
             'numero' => $guia->numero,
+            'numero_guia_despacho' => $guia->numero_guia_despacho,
+            'falta_numero_guia' => $salidaConfirmada && $guia->numero_guia_despacho === null,
+            'archivo_guia' => $archivo ? [
+                'nombre' => $archivo->nombre_original,
+                'mime' => $archivo->mime,
+                'bytes' => $archivo->bytes,
+                'subido_at' => $archivo->subido_at?->toAtomString(),
+                'subido_por' => $archivo->subidoPor?->name,
+            ] : null,
+            'puede_registrar_guia' => $salidaConfirmada,
             'estado' => $guia->estado->value,
             'temporada' => [
                 'id' => $guia->temporada_id,

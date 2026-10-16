@@ -177,12 +177,15 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{guiaDespachoEnvase}', [GuiaDespachoEnvaseController::class, 'show']);
         Route::get('/{guiaDespachoEnvase}/documento', [GuiaDespachoEnvaseController::class, 'documento']);
         Route::get('/{guiaDespachoEnvase}/comprobante-anulacion', [GuiaDespachoEnvaseController::class, 'comprobanteAnulacion']);
+        Route::get('/{guiaDespachoEnvase}/archivo-guia', [GuiaDespachoEnvaseController::class, 'archivoGuia']);
     });
     Route::middleware('can:gestionar-despacho-envases')->prefix('envases/guias-despacho')->group(function () {
         Route::post('/', [GuiaDespachoEnvaseController::class, 'store']);
         Route::put('/{guiaDespachoEnvase}', [GuiaDespachoEnvaseController::class, 'update']);
         Route::post('/{guiaDespachoEnvase}/confirmar', [GuiaDespachoEnvaseController::class, 'confirmar']);
         Route::post('/{guiaDespachoEnvase}/cancelar', [GuiaDespachoEnvaseController::class, 'cancelar']);
+        Route::put('/{guiaDespachoEnvase}/numero-guia', [GuiaDespachoEnvaseController::class, 'numeroGuia']);
+        Route::post('/{guiaDespachoEnvase}/archivo-guia', [GuiaDespachoEnvaseController::class, 'subirArchivoGuia']);
     });
     Route::post('/envases/guias-despacho/{guiaDespachoEnvase}/anular', [GuiaDespachoEnvaseController::class, 'anular'])
         ->middleware('can:anular-despacho-envases');

@@ -93,7 +93,14 @@ Las fechas **desde** y **hasta** de los filtros son días de planta (`app.operat
 ### Exportaciones y reportes a clientes
 
 - **Excel de movimientos** (botón `↓ Excel` en Movimientos): trae todos los movimientos de los filtros aplicados, sin el límite de 300. Incluye documento, tipo de movimiento, propiedad, efecto en cuenta, **saldo de cuenta acumulado**, efecto en existencia, revisión y correcciones. El saldo acumulado es el de la cuenta del cliente en la temporada, aunque el filtro muestre un período: la primera fila de un período parte del saldo que traía.
-- **Estado de cuenta** (acción de cada cliente en Saldos), en PDF o Excel, para enviarlo al cliente. Toma la temporada y las fechas aplicadas. El resumen por tipo de envase muestra saldo inicial, recibidos, entregados y saldo final, y separa los entregados en propios de la planta, arrendados y del cliente. El detalle trae cada movimiento con su saldo. Las anulaciones de despacho descuentan de los entregados (aparecen en la columna de salida con signo negativo) y las correcciones de un ingreso descuentan de lo recibido. Así se cumple saldo inicial + recibidos − entregados = saldo final. El documento es informativo, no tributario.
+- **Estado de cuenta** (acción de cada cliente en Saldos), en PDF o Excel, para enviarlo al cliente. Toma la temporada y las fechas aplicadas. El resumen por tipo de envase muestra saldo inicial, recibidos, entregados y saldo final, y separa los entregados en propios de la planta, arrendados y del cliente. El detalle trae cada movimiento con su saldo. Se cumple saldo inicial + recibidos − entregados = saldo final. El documento es informativo, no tributario.
+
+El estado de cuenta es la vista del cliente; la trazabilidad interna completa está en el Excel de movimientos:
+
+- **Anulaciones y correcciones.** Una guía anulada no aparece: ni el despacho ni su anulación. Una corrección (de cantidad, de propiedad o de la devolución en recepción) se aplica sobre el movimiento que corrige y no sale como línea propia. Lo que queda en 0 desaparece. Una anulación histórica sin referencia al despacho se informa como descuento de lo entregado (salida con signo negativo).
+- **Una línea por guía.** Las líneas de un mismo documento, envase y propiedad se suman (una guía con varios orígenes es una sola entrega).
+- **Número de guía.** En los despachos se informa el N° de la guía emitida en el sistema de facturación. Si una guía antigua no lo tiene registrado, se muestra el GDE-… interno.
+- Como las anulaciones se aplican sobre el movimiento original, un estado de cuenta de un período ya enviado puede cambiar si después se anula una guía de ese período.
 
 El envío por correo no está implementado: requiere configurar un servidor de correo y registrar el correo de cada cliente. Por ahora el estado de cuenta se descarga y se envía por fuera.
 
@@ -144,6 +151,18 @@ La guía registra:
 - usuarios responsables.
 
 La guía es un documento operacional interno. No debe presentarse como factura, guía tributaria o DTE legal.
+
+### Guía de despacho emitida
+
+La guía de despacho tributaria se emite en el sistema de facturación, fuera de FoliOS. El GDE-… sigue siendo la referencia interna de la reserva y la trazabilidad; el número que ve el cliente es el de la guía emitida.
+
+- **Al confirmar la salida** FoliOS pide el N° de la guía emitida (obligatorio) y permite subir su archivo (PDF, JPG, PNG o WebP, hasta 10 MB). El archivo también se puede subir después.
+- **Formato.** Se quitan espacios, puntos de miles y ceros a la izquierda: «0012.345» queda como 12345. Se aceptan letras y guion, hasta 20 caracteres.
+- **Único.** Un mismo número no puede quedar en dos guías de FoliOS.
+- **Guías confirmadas antes de este cambio** muestran «Falta registrar el N° de la guía emitida» y la acción **Registrar N° de guía**. Corregir un número ya registrado exige motivo. Cada registro y corrección queda en los eventos de la guía.
+- **Archivo.** Reemplazar el archivo no borra el anterior: queda en el historial de la guía con su huella SHA-256. Se descarga desde la guía (Despacho Envases) y desde el movimiento (Cuenta Envases, «↓ Guía emitida»).
+- El PDF interno muestra el N° de la guía emitida.
+- Los archivos se guardan en el disco `local`, en `envases/guias-despacho/{guia}`. El reinicio operacional de la temporada los borra junto con las guías. El archivo de temporada no los incluye; se respaldan con el resto de `storage/app/private` del servidor.
 
 ## Estados de la guía
 
@@ -231,10 +250,13 @@ GET  /api/envases/guias-despacho
 GET  /api/envases/guias-despacho/{guia}
 GET  /api/envases/guias-despacho/{guia}/documento
 GET  /api/envases/guias-despacho/{guia}/comprobante-anulacion
+GET  /api/envases/guias-despacho/{guia}/archivo-guia
 POST /api/envases/guias-despacho
 PUT  /api/envases/guias-despacho/{guia}
-POST /api/envases/guias-despacho/{guia}/confirmar
+POST /api/envases/guias-despacho/{guia}/confirmar        (numero_guia_despacho obligatorio)
 POST /api/envases/guias-despacho/{guia}/cancelar
+PUT  /api/envases/guias-despacho/{guia}/numero-guia      (numero_guia_despacho, motivo al corregir)
+POST /api/envases/guias-despacho/{guia}/archivo-guia     (multipart: archivo)
 POST /api/envases/guias-despacho/{guia}/anular
 ```
 

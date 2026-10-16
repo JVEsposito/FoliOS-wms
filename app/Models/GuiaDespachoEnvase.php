@@ -11,9 +11,10 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable([
-    'operacion_id', 'payload_hash', 'numero', 'temporada_id',
+    'operacion_id', 'payload_hash', 'numero', 'numero_guia_despacho', 'temporada_id',
     'temporada_codigo_snapshot', 'temporada_nombre_snapshot',
     'cliente_id', 'cliente_codigo_snapshot', 'cliente_nombre_snapshot', 'estado', 'salida_at',
     'patente_camion', 'rut_conductor', 'nombre_conductor', 'observacion', 'version',
@@ -60,6 +61,17 @@ class GuiaDespachoEnvase extends Model implements PerteneceATemporada
     public function canceladoPor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'cancelado_por_user_id');
+    }
+
+    public function archivos(): HasMany
+    {
+        return $this->hasMany(ArchivoGuiaDespachoEnvase::class)->orderByDesc('subido_at');
+    }
+
+    /** Archivo de la guía emitida que está vigente; los reemplazados quedan en archivos(). */
+    public function archivoVigente(): HasOne
+    {
+        return $this->hasOne(ArchivoGuiaDespachoEnvase::class)->whereNull('reemplazado_at');
     }
 
     public function eventos(): HasMany
