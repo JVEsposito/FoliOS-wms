@@ -81,6 +81,7 @@
                         'clients' => ['label' => 'Clientes', 'icon' => '◇'],
                         'labels' => ['label' => 'Etiquetas', 'icon' => '▤'],
                         'formats' => ['label' => 'Formatos de registro', 'icon' => '▤'],
+                        'external-connections' => ['label' => 'Conexiones externas', 'icon' => '⇄'],
                         'hydro-products' => ['label' => 'Productos hidrocooler', 'icon' => '◇'],
                         'profiles' => ['label' => 'Perfiles', 'icon' => '⚙'],
                         'users' => ['label' => 'Usuarios', 'icon' => '●'],
@@ -88,6 +89,8 @@
                         'devices' => ['label' => 'Tablets', 'icon' => '▣'],
                     ]"
                 />
+
+                @include('office.partials.external-connections')
 
                 <section class="admin-panel panel" id="administration-panel-formats" data-office-panel-group="administration" data-office-panel-id="formats" role="tabpanel" aria-labelledby="administration-tab-formats" hidden>
                     <div class="admin-panel__heading"><div><p class="eyebrow">CONTROL DE DOCUMENTOS</p><h2>Formatos de registro</h2></div><span id="recordFormatsSummary">Sin cargar</span></div>

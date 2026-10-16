@@ -1,3 +1,5 @@
+import './office-external-connections.js';
+
 const byId = (id) => document.getElementById(id);
 
 const elements = {
