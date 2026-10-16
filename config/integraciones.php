@@ -9,7 +9,7 @@ return [
     'stock_pt' => [
         // Nombre del perfil de conexión. Vacío: se usa el único perfil activo, si hay uno.
         'conexion' => env('WMS_STOCK_ORIGEN_CONEXION'),
-        'tabla' => env('WMS_STOCK_ORIGEN_TABLA', 'obdc_stock'),
+        'tabla' => env('WMS_STOCK_ORIGEN_TABLA', 'odbc_stock'),
         // Bodega del sistema de origen que corresponde a esta planta.
         'bodega' => env('WMS_STOCK_ORIGEN_BODEGA', 'AR01'),
         // Código de temporada del origen (cod_temporada). Vacío: todas las del stock.
