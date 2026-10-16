@@ -45,6 +45,7 @@
                 </header>
 
                 <div class="pending-source" id="pendingSource" role="status">Cargando estado de la lectura…</div>
+                <div class="pending-catalog-note" id="pendingCatalogNote" role="status" hidden></div>
 
                 <div class="pending-kpis">
                     <article><span>EN STOCK DE ORIGEN</span><strong id="kpiOrigin">—</strong><small>pallets y saldos en bodega</small></article>
@@ -64,10 +65,11 @@
                         'unresolved' => ['label' => 'Por resolver', 'icon' => '!', 'badge_id' => 'tabUnresolvedCount'],
                         'differences' => ['label' => 'Con diferencias', 'icon' => '≠', 'badge_id' => 'tabDifferencesCount'],
                         'only-folios' => ['label' => 'Solo en FoliOS', 'icon' => '▣', 'badge_id' => 'tabOnlyFoliosCount'],
+                        'catalog' => ['label' => 'Catálogo', 'icon' => '⌗', 'badge_id' => 'tabCatalogCount'],
                     ]"
                 />
 
-                <label class="pending-search"><span class="office-visually-hidden">Buscar</span><input id="pendingSearch" type="search" maxlength="60" placeholder="Buscar pallet, variedad, calibre, CSG, proceso o lote"></label>
+                <label class="pending-search"><span class="office-visually-hidden">Buscar</span><input id="pendingSearch" type="search" maxlength="60" placeholder="Buscar pallet, cliente, marca, variedad, calibre, embalaje, CSG, proceso o lote"></label>
 
                 <section class="panel pending-panel" id="pending-validation-panel-pending" data-office-panel-group="pending-validation" data-office-panel-id="pending" role="tabpanel" aria-labelledby="pending-validation-tab-pending">
                     <div class="pending-panel__heading"><div><p class="eyebrow">SIN VALIDAR</p><h2>En bodega y sin ningún intento de validación</h2></div><small>Los más antiguos primero.</small></div>
@@ -78,12 +80,17 @@
                     <div class="pending-table-scroll"><table class="pending-table"><thead><tr><th>N° pallet</th><th>Situación</th><th>Motivo u observación</th><th>Último intento</th><th>Cajas</th><th>Artículo</th></tr></thead><tbody id="unresolvedBody"></tbody></table></div>
                 </section>
                 <section class="panel pending-panel" id="pending-validation-panel-differences" data-office-panel-group="pending-validation" data-office-panel-id="differences" role="tabpanel" aria-labelledby="pending-validation-tab-differences" hidden>
-                    <div class="pending-panel__heading"><div><p class="eyebrow">VALIDADOS QUE NO COINCIDEN</p><h2>Diferencias entre el origen y FoliOS</h2></div><small>Se comparan tipo, cajas, calibre, cajas por CSG y si el folio sigue en planta.</small></div>
+                    <div class="pending-panel__heading"><div><p class="eyebrow">VALIDADOS QUE NO COINCIDEN</p><h2>Diferencias entre el origen y FoliOS</h2></div><small>Se comparan tipo, cajas, cliente, marca, especie, variedad, calibre, embalaje, cajas por CSG y si el folio sigue en planta. La categoría solo se sugiere.</small></div>
                     <div class="pending-table-scroll"><table class="pending-table"><thead><tr><th>N° pallet</th><th>Estado en FoliOS</th><th>Diferencias</th><th>Artículo</th></tr></thead><tbody id="differencesBody"></tbody></table></div>
                 </section>
                 <section class="panel pending-panel" id="pending-validation-panel-only-folios" data-office-panel-group="pending-validation" data-office-panel-id="only-folios" role="tabpanel" aria-labelledby="pending-validation-tab-only-folios" hidden>
                     <div class="pending-panel__heading"><div><p class="eyebrow">SIN STOCK EN ORIGEN</p><h2>Validados en FoliOS, en planta, que el origen no tiene en bodega</h2></div><small>Puede ser un número mal digitado o un traspaso aún no registrado en el origen.</small></div>
                     <div class="pending-table-scroll"><table class="pending-table"><thead><tr><th>N° folio</th><th>Estado en FoliOS</th><th>Validado</th><th>Cajas</th><th>Artículo</th><th>CSG</th></tr></thead><tbody id="onlyFoliosBody"></tbody></table></div>
+                </section>
+                <section class="panel pending-panel" id="pending-validation-panel-catalog" data-office-panel-group="pending-validation" data-office-panel-id="catalog" role="tabpanel" aria-labelledby="pending-validation-tab-catalog" hidden>
+                    <div class="pending-panel__heading"><div><p class="eyebrow">CATÁLOGO DE LA TEMPORADA</p><h2>Datos del origen que el catálogo todavía no reconoce</h2></div><small>El cliente se reconoce por cód. empresa y el embalaje por cód. artículo. Marca, variedad y calibre, tal cual. La categoría solo se sugiere.</small></div>
+                    <p class="pending-catalog-help" id="catalogHelp"></p>
+                    <div class="pending-table-scroll"><table class="pending-table pending-table--catalog"><thead><tr><th>Dato</th><th>Valor en origen</th><th>Contexto</th><th>Pallets</th><th>Qué hacer</th></tr></thead><tbody id="catalogBody"></tbody></table></div>
                 </section>
             </section>
         </main>
