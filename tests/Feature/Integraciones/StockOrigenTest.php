@@ -3,19 +3,29 @@
 namespace Tests\Feature\Integraciones;
 
 use App\Enums\RolUsuario;
+use App\Models\AliasCliente;
+use App\Models\CalibreValidacion;
+use App\Models\ClienteValidacion;
 use App\Models\ConexionExterna;
+use App\Models\CsgValidacion;
 use App\Models\Dispositivo;
 use App\Models\Folio;
+use App\Models\HomologacionStockOrigen;
 use App\Models\LecturaStockOrigen;
+use App\Models\MarcaValidacion;
 use App\Models\PalletStockOrigen;
 use App\Models\Temporada;
 use App\Models\User;
+use App\Models\VariedadValidacion;
+use App\Services\Clientes\ServicioCliente;
 use App\Services\Integraciones\ConectorMySqlLectura;
+use App\Services\Validacion\ServicioCatalogoJerarquicoValidacion;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Testing\TestResponse;
 use PDOException;
 use Tests\TestCase;
 use ZipArchive;
@@ -88,10 +98,11 @@ class StockOrigenTest extends TestCase
         $this->assertSame(120, $pallet->cajas);
         $this->assertSame('600.00', $pallet->kilos);
         $this->assertSame(['SANTINA', 'JD', 'C1', 'CJ5KG', 'CAJA GRANEL 5KG', 'MARCA PRUEBA'], [$pallet->variedad, $pallet->calibre, $pallet->categoria, $pallet->envase_codigo, $pallet->envase, $pallet->marca]);
+        $this->assertSame(['EMP', 'CER', 'CEREZAS', 'SAN', '5.000'], [$pallet->empresa, $pallet->especie_codigo, $pallet->especie, $pallet->variedad_codigo, $pallet->envase_kilos]);
         $this->assertSame([], $pallet->mezclados);
         $this->assertEquals([
-            ['csg' => '100001', 'lote' => '11462', 'proceso' => 'AR01STD10000', 'productor_codigo' => '11111111-1P', 'productor' => 'PRODUCTOR DE PRUEBA SPA', 'cajas' => 100, 'kilos' => 500],
-            ['csg' => '100002', 'lote' => '11463', 'proceso' => 'AR01STD10001', 'productor_codigo' => '11111111-1P', 'productor' => 'PRODUCTOR DE PRUEBA SPA', 'cajas' => 20, 'kilos' => 100],
+            ['csg' => '100001', 'predio' => 'PREDIO DE PRUEBA', 'variedad' => 'SANTINA', 'lote' => '11462', 'proceso' => 'AR01STD10000', 'productor_codigo' => '11111111-1P', 'productor' => 'PRODUCTOR DE PRUEBA SPA', 'cajas' => 100, 'kilos' => 500],
+            ['csg' => '100002', 'predio' => 'PREDIO DE PRUEBA', 'variedad' => 'SANTINA', 'lote' => '11463', 'proceso' => 'AR01STD10001', 'productor_codigo' => '11111111-1P', 'productor' => 'PRODUCTOR DE PRUEBA SPA', 'cajas' => 20, 'kilos' => 100],
         ], array_map(fn (array $linea): array => [...$linea, 'kilos' => (int) $linea['kilos']], $pallet->composicion));
         // 11:59 en planta es 14:59 UTC.
         $this->assertSame('2026-10-05 14:59:00', $pallet->recibido_origen_at->format('Y-m-d H:i:s'));
@@ -219,6 +230,9 @@ class StockOrigenTest extends TestCase
                 'por_resolver' => 2,
                 'con_diferencias' => 2,
                 'solo_en_folios' => 1,
+                // Catálogo vacío: cliente, marca, especie, variedad, calibre, embalaje, categoría y dos CSG.
+                'catalogo_pendiente' => 9,
+                'pallets_sin_catalogo' => 6,
             ]);
         $this->assertSame('P-PENDIENTE', $respuesta->json('pendientes.0.numero'));
         $this->assertSame(['100001'], $respuesta->json('pendientes.0.csgs'));
@@ -228,10 +242,12 @@ class StockOrigenTest extends TestCase
         );
         $this->assertSame('cantidad_cajas_incorrecta', collect($respuesta->json('por_resolver'))->firstWhere('numero', 'P-OBSERVADO')['validacion']['motivo']);
         $diferencias = collect($respuesta->json('diferencias'))->keyBy('numero');
+        // Sin equivalencias en el catálogo, el artículo no se compara (salvo el calibre, tal cual).
         $this->assertSame([
-            ['campo' => 'cajas', 'origen' => 120, 'folios' => 112],
-            ['campo' => 'csg', 'origen' => '100001: 120', 'folios' => '100001: 112'],
+            ['campo' => 'cajas', 'etiqueta' => 'Cajas', 'origen' => 120, 'catalogo' => null, 'folios' => 112],
+            ['campo' => 'csg', 'etiqueta' => 'Cajas por CSG', 'origen' => '100001: 120', 'catalogo' => null, 'folios' => '100001: 112'],
         ], $diferencias['P-CAJAS']['diferencias']);
+        $this->assertSame(['Cliente', 'Marca', 'Especie', 'Variedad', 'Calibre', 'Embalaje', 'CSG'], $respuesta->json('pendientes.0.sin_catalogo'));
         $this->assertSame('estado', $diferencias['P-DESPACHADO']['diferencias'][0]['campo']);
         $this->assertSame('SOLO-FOLIOS', $respuesta->json('solo_en_folios.0.numero'));
 
@@ -250,6 +266,112 @@ class StockOrigenTest extends TestCase
 
         $this->actingAs(User::factory()->create(['rol' => RolUsuario::CamareroMateriales]), 'sanctum')
             ->getJson('/api/validacion/pendientes-origen')
+            ->assertForbidden();
+    }
+
+    public function test_lo_que_trae_el_origen_se_vincula_o_se_agrega_al_catalogo_y_se_compara(): void
+    {
+        $temporada = Temporada::query()->where('activa', true)->firstOrFail();
+        $cliente = app(ServicioCliente::class)->guardarMaestro(['codigo' => 'EXP', 'nombre' => 'Exportadora Prueba'], $this->administrador);
+        $clienteValidacion = ClienteValidacion::query()->where('temporada_id', $temporada->id)->where('cliente_id', $cliente->id)->sole();
+        $catalogo = app(ServicioCatalogoJerarquicoValidacion::class);
+        $cereza = $catalogo->guardarEspecie(['temporada_id' => $temporada->id, 'nombre' => 'Cereza']);
+        $santina = $catalogo->guardarVariedad(['especie_validacion_id' => $cereza->id, 'nombre' => 'Santina']);
+        $catalogo->guardarCalibre(['especie_validacion_id' => $cereza->id, 'nombre' => 'JD']);
+        $categoria = $catalogo->guardarCategoria(['temporada_id' => $temporada->id, 'nombre' => 'CAT1']);
+        $catalogo->guardarCsg(['temporada_id' => $temporada->id, 'codigo' => '100001', 'variedad_ids' => [$santina->id]]);
+        $catalogo->guardarEnvase([
+            'especie_validacion_id' => $cereza->id, 'cliente_validacion_id' => $clienteValidacion->id,
+            'nombre' => 'Caja granel 5 kg', 'codigo_externo' => 'CJ5KG', 'kilos_netos_por_caja' => 5,
+        ]);
+
+        $this->perfil();
+        $this->respuesta = [
+            $this->fila('P-SANTINA', ['cantidad' => 120]),
+            // Pallet con dos variedades: Santina del CSG 100001 y Lapins de un CSG que el catálogo no tiene.
+            $this->fila('P-MEZCLA', ['cantidad' => 50, 'cod_calibre' => 'XL']),
+            $this->fila('P-MEZCLA', ['cantidad' => 30, 'cod_calibre' => 'XL', 'variedad' => 'LAPINS', 'codigo_variedad' => 'LAP', 'codigo_csg_predio' => '100002', 'descripcion_predio' => 'PREDIO DOS']),
+        ];
+        $this->artisan('integraciones:leer-stock-origen')->assertSuccessful();
+
+        $respuesta = $this->actingAs($this->administrador, 'sanctum')->getJson('/api/validacion/pendientes-origen')->assertOk()
+            ->assertJsonPath('puede_administrar_catalogo', true)
+            ->assertJsonPath('resumen.catalogo_pendiente', 7)
+            ->assertJsonPath('resumen.pallets_sin_catalogo', 2);
+        // «CEREZAS» del origen es la especie Cereza del catálogo; el resto falta o depende del cliente.
+        $this->assertSame(
+            ['cliente:EMP', 'marca:MARCA PRUEBA', 'variedad:LAPINS', 'calibre:XL', 'envase:CJ5KG', 'categoria:C1', 'csg:100002'],
+            collect($respuesta->json('catalogo'))->map(fn (array $item): string => "{$item['dimension']}:{$item['valor']}")->all(),
+        );
+        $marca = $this->itemCatalogo($respuesta, 'marca', 'MARCA PRUEBA');
+        $this->assertSame(['cliente', [], 2, 200], [$marca['requiere'], $marca['acciones'], $marca['pallets_total'], $marca['cajas']]);
+        $this->assertSame(['incorporar'], $this->itemCatalogo($respuesta, 'csg', '100002')['acciones']);
+        $this->assertSame(['vincular'], $this->itemCatalogo($respuesta, 'categoria', 'C1')['acciones']);
+        $this->assertSame(['Cliente', 'Marca', 'Embalaje'], collect($respuesta->json('pendientes'))->firstWhere('numero', 'P-SANTINA')['sin_catalogo']);
+        $this->assertNotNull($respuesta->json('opciones_catalogo.marcas.'.$clienteValidacion->id));
+
+        $this->postJson('/api/validacion/pendientes-origen/catalogo', ['clave' => $marca['clave'], 'accion' => 'incorporar'])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Primero vincula el cliente EMP.');
+        $this->postJson('/api/validacion/pendientes-origen/catalogo', ['clave' => $this->itemCatalogo($respuesta, 'cliente', 'EMP')['clave'], 'accion' => 'vincular'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['entidad_id' => 'Elige el elemento del catálogo al que corresponde.']);
+
+        // cliente = cod_empresa: queda como alias del cliente y el embalaje se reconoce por cod_articulo.
+        $respuesta = $this->aplicarCatalogo($respuesta, 'cliente', 'EMP', 'vincular', $cliente->id)
+            ->assertJsonPath('message', '«EMP» ahora se reconoce como «Exportadora Prueba».');
+        $this->assertTrue(AliasCliente::query()->where(['cliente_id' => $cliente->id, 'origen' => 'stock_origen', 'codigo' => 'EMP'])->exists());
+        $this->assertSame(
+            ['marca:MARCA PRUEBA', 'variedad:LAPINS', 'calibre:XL', 'categoria:C1', 'csg:100002'],
+            collect($respuesta->json('catalogo'))->map(fn (array $item): string => "{$item['dimension']}:{$item['valor']}")->all(),
+        );
+        $this->assertSame(['vincular', 'incorporar'], $this->itemCatalogo($respuesta, 'marca', 'MARCA PRUEBA')['acciones']);
+
+        $respuesta = $this->aplicarCatalogo($respuesta, 'marca', 'MARCA PRUEBA', 'incorporar')
+            ->assertJsonPath('message', '«MARCA PRUEBA» se agregó al catálogo de la temporada.');
+        // La categoría solo se vincula: C1 del origen corresponde a CAT1 del catálogo.
+        $respuesta = $this->aplicarCatalogo($respuesta, 'categoria', 'C1', 'vincular', $categoria->id)
+            ->assertJsonPath('message', '«C1» ahora se reconoce como «CAT1».');
+        $respuesta = $this->aplicarCatalogo($respuesta, 'variedad', 'LAPINS', 'incorporar');
+        $respuesta = $this->aplicarCatalogo($respuesta, 'calibre', 'XL', 'incorporar');
+        $respuesta = $this->aplicarCatalogo($respuesta, 'csg', '100002', 'incorporar')
+            ->assertJsonPath('catalogo', [])
+            ->assertJsonPath('resumen.catalogo_pendiente', 0)
+            ->assertJsonPath('resumen.pallets_sin_catalogo', 0);
+
+        $this->assertSame('MARCA PRUEBA', MarcaValidacion::query()->where('cliente_validacion_id', $clienteValidacion->id)->sole()->nombre);
+        $lapins = VariedadValidacion::query()->where('especie_validacion_id', $cereza->id)->where('nombre', 'Lapins')->sole();
+        $this->assertTrue(CalibreValidacion::query()->where('especie_validacion_id', $cereza->id)->where('nombre', 'XL')->exists());
+        $csg = CsgValidacion::query()->where('temporada_id', $temporada->id)->where('codigo', '100002')->with('variedades')->sole();
+        $this->assertSame(['PREDIO DOS', [$lapins->id]], [$csg->predio, $csg->variedades->pluck('id')->all()]);
+        $this->assertSame(
+            ['calibre' => 'incorporado', 'categoria' => 'vinculado', 'cliente' => 'vinculado', 'csg' => 'incorporado', 'marca' => 'incorporado', 'variedad' => 'incorporado'],
+            HomologacionStockOrigen::query()->orderBy('dimension')->pluck('accion', 'dimension')->all(),
+        );
+        $pendiente = collect($respuesta->json('pendientes'))->firstWhere('numero', 'P-SANTINA');
+        $this->assertSame(['Exportadora Prueba', 'CAT1', []], [$pendiente['cliente'], $pendiente['categoria_sugerida'], $pendiente['sin_catalogo']]);
+
+        // Validado con otra variedad y otra categoría: la variedad es diferencia; la categoría, sugerencia.
+        $this->folio('P-SANTINA', 120, [['csg' => '100001', 'cantidad_cajas' => 120]], [
+            'exportadora' => 'Exportadora Prueba', 'marca' => 'MARCA PRUEBA', 'variedad' => 'Lapins', 'calibre' => 'JD',
+            'datos_externos' => [
+                'cantidad_cajas' => 120, 'especie' => 'Cereza', 'envase' => 'Caja granel 5 kg', 'categoria' => 'CAT2',
+                'composicion' => [['csg' => '100001', 'cantidad_cajas' => 120]],
+            ],
+        ]);
+        $respuesta = $this->getJson('/api/validacion/pendientes-origen')->assertOk()->assertJsonPath('resumen.con_diferencias', 1);
+        $this->assertSame([
+            ['campo' => 'variedad', 'etiqueta' => 'Variedad', 'origen' => 'SANTINA', 'catalogo' => 'Santina', 'folios' => 'Lapins'],
+        ], $respuesta->json('diferencias.0.diferencias'));
+        $this->assertSame([
+            ['campo' => 'categoria', 'etiqueta' => 'Categoría', 'origen' => 'C1', 'catalogo' => 'CAT1', 'folios' => 'CAT2'],
+        ], $respuesta->json('diferencias.0.sugerencias'));
+
+        $this->postJson('/api/validacion/pendientes-origen/catalogo', ['clave' => $marca['clave'], 'accion' => 'incorporar'])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Ese valor ya no está pendiente. Actualiza la lista.');
+        $this->actingAs(User::factory()->create(['rol' => RolUsuario::Validador]), 'sanctum')
+            ->postJson('/api/validacion/pendientes-origen/catalogo', ['clave' => $marca['clave'], 'accion' => 'incorporar'])
             ->assertForbidden();
     }
 
@@ -284,6 +406,22 @@ class StockOrigenTest extends TestCase
             ->assertSee('/oficina/validacion/pendientes', false);
     }
 
+    /** @return array<string, mixed> */
+    private function itemCatalogo(TestResponse $respuesta, string $dimension, string $valor): array
+    {
+        return collect($respuesta->json('catalogo'))->first(fn (array $item): bool => $item['dimension'] === $dimension && $item['valor'] === $valor)
+            ?? $this->fail("No está pendiente en el catálogo: {$dimension} {$valor}.");
+    }
+
+    private function aplicarCatalogo(TestResponse $respuesta, string $dimension, string $valor, string $accion, ?string $entidad = null): TestResponse
+    {
+        return $this->postJson('/api/validacion/pendientes-origen/catalogo', [
+            'clave' => $this->itemCatalogo($respuesta, $dimension, $valor)['clave'],
+            'accion' => $accion,
+            'entidad_id' => $entidad,
+        ])->assertOk();
+    }
+
     private function perfil(string $nombre = 'SE'): ConexionExterna
     {
         return ConexionExterna::query()->create([
@@ -301,9 +439,10 @@ class StockOrigenTest extends TestCase
     {
         return [
             'cod_empresa' => 'EMP', 'cod_temporada' => '00', 'temporada' => 'TEMPORADA CAPACITACION',
-            'cod_articulo' => 'CJ5KG', 'descripcion_articulo' => 'CAJA GRANEL 5KG', 'descripcion_especie' => 'CEREZAS',
-            'codigo_entidad' => '11111111-1P', 'razon_social_entidad' => 'PRODUCTOR DE PRUEBA SPA', 'variedad' => 'SANTINA',
-            'lote_recepcion' => '11462', 'cod_calibre' => 'JD', 'cod_categoria' => 'C1', 'codigo_csg_predio' => '100001',
+            'cod_articulo' => 'CJ5KG', 'descripcion_articulo' => 'CAJA GRANEL 5KG', 'peso_neto_articulo' => '5.000',
+            'cod_especie' => 'CER', 'descripcion_especie' => 'CEREZAS',
+            'codigo_entidad' => '11111111-1P', 'razon_social_entidad' => 'PRODUCTOR DE PRUEBA SPA', 'variedad' => 'SANTINA', 'codigo_variedad' => 'SAN',
+            'lote_recepcion' => '11462', 'cod_calibre' => 'JD', 'cod_categoria' => 'C1', 'codigo_csg_predio' => '100001', 'descripcion_predio' => 'PREDIO DE PRUEBA',
             'fecha_embalaje' => '2026-10-07 00:00:00', 'cantidad' => 120, 'kilos_netos' => 600, 'Pallet' => $pallet,
             'cod_bodega' => 'AR01', 'origen_i' => 'Proceso', 'cod_estado_stock_paletizado' => 'PC', 'marca' => 'MARCA PRUEBA',
             'Proceso' => 'AR01STD10000', 'fecha_recepcion' => '2026-10-05 11:59:00',

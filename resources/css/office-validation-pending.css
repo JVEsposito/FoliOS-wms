@@ -225,6 +225,67 @@
     color: var(--text-secondary);
 }
 
+.pending-catalog-note {
+    padding: 10px 14px;
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--amber);
+    border-radius: 10px;
+    background: var(--warning-bg, var(--surface-muted));
+    color: var(--text);
+    line-height: 1.5;
+}
+
+.pending-catalog-note[hidden] {
+    display: none;
+}
+
+.pending-catalog-help {
+    margin: 8px 0 0;
+    color: var(--text-secondary);
+}
+
+.pending-differences li.pending-suggestion b,
+.pending-differences li.pending-suggestion span {
+    color: var(--muted);
+}
+
+.pending-catalog-actions {
+    display: grid;
+    gap: 8px;
+    min-width: 220px;
+}
+
+.pending-link {
+    display: flex;
+    gap: 6px;
+}
+
+.pending-link select {
+    flex: 1;
+    min-width: 0;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel);
+    color: var(--text);
+    padding: 7px 8px;
+}
+
+/* En celular la tabla se desplaza; estas columnas no se aprietan a una palabra por línea. */
+.pending-table--catalog td:nth-child(3) {
+    min-width: 170px;
+}
+
+.pending-table--catalog td:nth-child(4) {
+    min-width: 150px;
+}
+
+.pending-table td .pending-catalog-pallets {
+    max-width: 220px;
+    font-weight: 400;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
 @media (max-width: 1200px) {
     .pending-kpis {
         grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -249,5 +310,13 @@
     .pending-differences li {
         grid-template-columns: 1fr;
         gap: 2px;
+    }
+
+    .pending-catalog-actions {
+        min-width: 180px;
+    }
+
+    .pending-link {
+        flex-direction: column;
     }
 }

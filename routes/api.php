@@ -316,6 +316,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/', [PendientesValidacionOrigenController::class, 'index']);
         Route::get('/excel', [PendientesValidacionOrigenController::class, 'excel']);
         Route::post('/leer', [PendientesValidacionOrigenController::class, 'leer'])->middleware('throttle:4,1');
+        Route::post('/catalogo', [PendientesValidacionOrigenController::class, 'catalogo'])->middleware('can:administrar-catalogos-validacion');
     });
     Route::middleware('can:consultar-validaciones-pallet')->group(function () {
         Route::get('/validacion/pallets', [ValidacionPalletController::class, 'index']);

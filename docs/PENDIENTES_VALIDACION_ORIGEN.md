@@ -34,8 +34,10 @@ mismo número del folio en FoliOS:
 | `Pallet` | N° de folio |
 | `cod_estado_stock_paletizado` PC / PI | pallet / saldo (si un pallet mezcla ambos, manda la mayoría de cajas) |
 | suma de `cantidad` y `kilos_netos` | cajas y kilos |
-| `descripcion_especie`, `variedad`, `cod_calibre` (código, no rango), `cod_articulo` / `descripcion_articulo`, `cod_categoria`, `marca` | artículo |
-| `codigo_csg_predio` + `lote_recepcion` + `Proceso` (código del sistema) + productor | una línea de composición |
+| `cod_empresa` | cliente (exportadora) |
+| `cod_especie` / `descripcion_especie`, `variedad` / `codigo_variedad`, `cod_calibre` (código, no rango), `cod_categoria`, `marca` | artículo |
+| `cod_articulo` / `descripcion_articulo` / `peso_neto_articulo` | embalaje (envase) y kilos netos por caja |
+| `codigo_csg_predio` / `descripcion_predio` + `lote_recepcion` + `Proceso` (código del sistema) + productor + variedad | una línea de composición |
 | `fecha_embalaje`, `fecha_recepcion` (hora de planta) | embalaje y «en bodega desde» |
 
 En la bodega de la planta cada pallet tiene un solo artículo y mezcla solo CSG, lote,
@@ -49,18 +51,59 @@ calibre, variedad u otro dato del artículo mezclado, se marca como «mezcla en 
   por antigüedad en bodega.
 - **Por resolver:** hubo intento, pero no quedó un folio vigente: observado, rechazo
   definitivo, conflicto o validación anulada. Manda el último intento.
-- **Con diferencias:** validado, pero no coincide en tipo (pallet/saldo), cajas, calibre
-  o cajas por CSG, o el folio ya no está en planta (despachado, agotado, retirado)
-  mientras el origen lo sigue mostrando en bodega.
+- **Con diferencias:** validado, pero no coincide en tipo (pallet/saldo), cajas, cliente,
+  marca, especie, variedad, calibre, embalaje o cajas por CSG, o el folio ya no está en
+  planta (despachado, agotado, retirado) mientras el origen lo sigue mostrando en bodega.
+  La categoría no cuenta como diferencia: se muestra como sugerencia.
 - **Solo en FoliOS:** folios nacidos en Validación, todavía en planta, que el origen no
   tiene en bodega: un número mal digitado o un traspaso que el origen aún no registra.
   Solo se calcula cuando ya existe una lectura correcta.
+- **Catálogo:** datos del origen que el catálogo de validación de la temporada activa
+  todavía no reconoce (ver abajo).
 
-Variedad, envase y categoría se muestran pero no se comparan todavía: los catálogos usan
-textos y códigos distintos (por ejemplo, «C1» y «CAT1»). Se podrán comparar cuando los
-maestros de temporada tengan cargado su `codigo_externo`.
+**Excel** descarga las cuatro listas de pallets en una hoja, con la situación de cada
+pallet, la categoría sugerida y lo que falta en el catálogo.
 
-**Excel** descarga las cuatro listas en una hoja, con la situación de cada pallet.
+## Catálogo: el origen alimenta los maestros de temporada
+
+Igual que las consultas SAG traen CSG, especies y variedades, el stock del origen trae
+clientes, marcas, especies, variedades, calibres, embalajes, categorías y CSG. Para
+comparar, cada dato del origen tiene que corresponder a un elemento del catálogo de
+validación de la temporada activa. FoliOS lo busca en este orden:
+
+1. **Un vínculo guardado** (alguien ya dijo «C1 del origen es CAT1»).
+2. **El código externo** del catálogo: el embalaje por `cod_articulo`, la especie por
+   `cod_especie`, el cliente por `cod_empresa` (código, código externo o alias del
+   maestro de clientes).
+3. **El mismo nombre escrito tal cual**, sin distinguir mayúsculas, tildes ni espacios
+   (marca, variedad, calibre). La especie acepta singular y plural («CEREZAS» = Cereza).
+
+Lo que no se reconoce aparece en la pestaña **Catálogo**, una vez por valor, con los
+pallets y cajas que dependen de él. Mientras no se resuelva, ese dato no se compara y la
+pantalla lo marca como «falta en catálogo» en cada pallet. Nada se agrega solo: quien
+administra el catálogo de validación decide.
+
+| Dato | Se reconoce por | Vincular | Agregar al catálogo |
+|---|---|---|---|
+| Cliente | `cod_empresa` | Sí: queda como alias del cliente (origen `stock_origen`), también para las próximas temporadas | No: el cliente se crea en Clientes |
+| Marca | nombre, dentro del cliente | Sí | Sí, tal cual, en el cliente |
+| Especie | `cod_especie` o nombre | Sí | Sí, con mayúscula inicial y su código externo |
+| Variedad | nombre, dentro de la especie | Sí | Sí, con mayúscula inicial y su código externo |
+| Calibre | código, dentro de la especie | Sí | Sí |
+| Embalaje | `cod_articulo`, dentro de especie y cliente | Sí | Sí: nombre = descripción, código externo = `cod_articulo`, kilos netos = `peso_neto_articulo` |
+| Categoría | código o vínculo | Sí: varias nomenclaturas pueden ir a la misma categoría | No: solo se sugiere |
+| CSG | código | — | Sí, con su predio y las variedades que trae |
+| Variedad en CSG | CSG + variedad | — | Sí: autoriza la variedad en el CSG |
+
+La marca y el embalaje dependen del cliente, y variedad, calibre y embalaje dependen de
+la especie: primero se resuelve el cliente o la especie. Lo agregado queda en Maestros de
+temporada como cualquier otro elemento, sube la versión del catálogo y llega a las PDA en
+la siguiente sincronización. Cada vínculo e incorporación queda registrado con quién lo
+hizo (tabla `homologaciones_stock_origen`, por temporada).
+
+Si un pallet mezcla variedades o calibres, cada valor se revisa por separado. Cliente,
+especie y embalaje mezclados no se pueden separar sin perder el par de código y
+descripción, así que no se proponen.
 
 ## Lecturas y fallas
 
@@ -80,9 +123,11 @@ maestros de temporada tengan cargado su `codigo_externo`.
 
 Consulta, lectura inmediata y Excel: `consultar-validaciones-pallet`, los mismos perfiles
 que ven Validación. «Leer ahora» admite cuatro solicitudes por minuto por usuario.
+Vincular o agregar al catálogo: además, `administrar-catalogos-validacion`. Quien solo
+consulta ve lo que falta, sin las acciones.
 
 ## Pendiente
 
-- Precargar la validación en la PDA con los datos del origen.
-- Comparar variedad, envase y categoría con `codigo_externo` de los maestros.
-- Procesos de packing y catálogo de validación desde el origen.
+- Precargar la validación en la PDA con los datos del origen, incluida la categoría
+  sugerida.
+- Procesos de packing desde el origen.

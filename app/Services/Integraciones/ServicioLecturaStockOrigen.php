@@ -19,22 +19,25 @@ use Throwable;
  *
  * El origen trae una fila por línea de pallet. Aquí se agrupan por número de pallet: un
  * artículo (especie, variedad, calibre, envase, categoría, marca) y una composición por CSG,
- * lote, proceso y productor, igual que la Validación de FoliOS.
+ * lote, proceso, productor y variedad, igual que la Validación de FoliOS.
  */
 class ServicioLecturaStockOrigen
 {
     /** Columnas leídas del origen; ninguna otra sale de su servidor. */
     public const COLUMNAS = [
-        'cod_empresa', 'cod_temporada', 'temporada', 'cod_articulo', 'descripcion_articulo',
-        'descripcion_especie', 'codigo_entidad', 'razon_social_entidad', 'variedad', 'lote_recepcion',
-        'cod_calibre', 'cod_categoria', 'codigo_csg_predio', 'fecha_embalaje', 'cantidad', 'kilos_netos',
-        'Pallet', 'cod_bodega', 'origen_i', 'cod_estado_stock_paletizado', 'marca', 'Proceso', 'fecha_recepcion',
+        'cod_empresa', 'cod_temporada', 'temporada', 'cod_articulo', 'descripcion_articulo', 'peso_neto_articulo',
+        'cod_especie', 'descripcion_especie', 'codigo_entidad', 'razon_social_entidad', 'variedad', 'codigo_variedad',
+        'lote_recepcion', 'cod_calibre', 'cod_categoria', 'codigo_csg_predio', 'descripcion_predio', 'fecha_embalaje',
+        'cantidad', 'kilos_netos', 'Pallet', 'cod_bodega', 'origen_i', 'cod_estado_stock_paletizado', 'marca', 'Proceso',
+        'fecha_recepcion',
     ];
 
     private const CAMPOS_ARTICULO = [
         'empresa' => 'cod_empresa',
         'especie' => 'descripcion_especie',
+        'especie_codigo' => 'cod_especie',
         'variedad' => 'variedad',
+        'variedad_codigo' => 'codigo_variedad',
         'calibre' => 'cod_calibre',
         'categoria' => 'cod_categoria',
         'envase_codigo' => 'cod_articulo',
@@ -180,9 +183,12 @@ class ServicioLecturaStockOrigen
                         $this->codigo($fila['lote_recepcion'] ?? null),
                         $this->codigo($fila['proceso'] ?? null),
                         $this->texto($fila['codigo_entidad'] ?? null),
+                        $this->texto($fila['variedad'] ?? null),
                     ]))
                     ->map(fn (Collection $grupo): array => [
                         'csg' => $this->texto($grupo->first()['codigo_csg_predio'] ?? null),
+                        'predio' => $this->texto($grupo->first()['descripcion_predio'] ?? null),
+                        'variedad' => $this->texto($grupo->first()['variedad'] ?? null),
                         'lote' => $this->codigo($grupo->first()['lote_recepcion'] ?? null),
                         'proceso' => $this->codigo($grupo->first()['proceso'] ?? null),
                         'productor_codigo' => $this->texto($grupo->first()['codigo_entidad'] ?? null),
@@ -190,7 +196,7 @@ class ServicioLecturaStockOrigen
                         'cajas' => (int) $grupo->sum(fn (array $fila): int => (int) ($fila['cantidad'] ?? 0)),
                         'kilos' => round((float) $grupo->sum(fn (array $fila): float => (float) ($fila['kilos_netos'] ?? 0)), 2),
                     ])
-                    ->sortBy(fn (array $linea): string => implode('|', [$linea['csg'], $linea['lote'], $linea['proceso'], $linea['productor_codigo']]))
+                    ->sortBy(fn (array $linea): string => implode('|', [$linea['csg'], $linea['lote'], $linea['proceso'], $linea['productor_codigo'], $linea['variedad']]))
                     ->values()
                     ->all();
                 $embalajes = $lineas->map(fn (array $fila): ?string => $this->fecha($fila['fecha_embalaje'] ?? null, $zona)?->toDateString())->filter()->sort()->values();
@@ -205,6 +211,7 @@ class ServicioLecturaStockOrigen
                     'mezclados' => $mezclados,
                     'cajas' => $cajas,
                     'kilos' => round((float) $lineas->sum(fn (array $fila): float => (float) ($fila['kilos_netos'] ?? 0)), 2),
+                    'envase_kilos' => is_numeric($lineas->first()['peso_neto_articulo'] ?? null) ? round((float) $lineas->first()['peso_neto_articulo'], 3) : null,
                     'fecha_embalaje' => $embalajes->first(),
                     'recibido_origen_at' => $recepciones->first()?->utc()->toDateTimeString(),
                     'composicion' => $composicion,

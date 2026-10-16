@@ -9,6 +9,7 @@ const elements = {
     initials: byId('officeInitials'),
     logout: byId('officeLogoutButton'),
     source: byId('pendingSource'),
+    catalogNote: byId('pendingCatalogNote'),
     read: byId('pendingReadButton'),
     excel: byId('pendingExcelButton'),
     search: byId('pendingSearch'),
@@ -23,10 +24,13 @@ const elements = {
     tabUnresolved: byId('tabUnresolvedCount'),
     tabDifferences: byId('tabDifferencesCount'),
     tabOnlyFolios: byId('tabOnlyFoliosCount'),
+    tabCatalog: byId('tabCatalogCount'),
     pendingBody: byId('pendingBody'),
     unresolvedBody: byId('unresolvedBody'),
     differencesBody: byId('differencesBody'),
     onlyFoliosBody: byId('onlyFoliosBody'),
+    catalogBody: byId('catalogBody'),
+    catalogHelp: byId('catalogHelp'),
     loading: byId('officeLoading'),
     loadingText: byId('officeLoadingText'),
     toasts: byId('officeToasts'),
@@ -41,6 +45,10 @@ const situations = {
     sin_folio: 'Sin folio',
 };
 const fieldLabels = { estado: 'Estado', tipo: 'Tipo', cajas: 'Cajas', calibre: 'Calibre', csg: 'Cajas por CSG' };
+const requirements = {
+    cliente: (item) => `Primero vincula el cliente ${item.cliente}.`,
+    especie: (item) => `Primero vincula o agrega la especie ${item.especie}.`,
+};
 const causes = {
     sin_controlador: 'Falta pdo_mysql',
     servidor_inaccesible: 'Sin acceso al servidor',
@@ -124,10 +132,35 @@ async function api(path, options = {}) {
     return { ok: response.ok, status: response.status, data };
 }
 
-function article(item) {
-    const parts = [item.variedad, item.calibre].filter(Boolean).join(' · ');
+/** Mismo criterio que el servidor: sin distinguir mayúsculas, tildes ni espacios. */
+function sameText(first, second) {
+    const key = (value) => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
+    return key(first) === key(second);
+}
+
+/** Artículo del pallet. En un folio no hay sugerencias: la categoría es la que quedó validada. */
+function article(item, { folio = false } = {}) {
+    const main = [item.variedad, item.calibre].filter(Boolean).join(' · ');
+    const detail = [item.especie, item.envase].filter(Boolean).join(' · ');
+    const owner = [item.cliente || item.empresa, item.marca].filter(Boolean).join(' · ');
+    let category = '';
+    if (folio) {
+        category = item.categoria ? `<small>Categoría ${escapeHtml(item.categoria)}</small>` : '';
+    } else if (item.categoria_sugerida) {
+        const original = item.categoria && !sameText(item.categoria, item.categoria_sugerida) ? ` (${item.categoria} en origen)` : '';
+        category = `<small>Categoría sugerida: <b>${escapeHtml(item.categoria_sugerida)}</b>${escapeHtml(original)}</small>`;
+    } else if (item.categoria) {
+        category = `<small>Categoría en origen: ${escapeHtml(item.categoria)}</small>`;
+    }
     const mixed = item.mezclados?.length ? `<small class="pending-warning">Mezcla en origen: ${escapeHtml(item.mezclados.join(', '))}</small>` : '';
-    return `<b>${escapeHtml(parts || '—')}</b><small>${escapeHtml(item.envase || '')}</small>${mixed}`;
+    const missing = item.sin_catalogo?.length ? `<small class="pending-warning">Falta en catálogo: ${escapeHtml(item.sin_catalogo.join(', '))}</small>` : '';
+    return `<b>${escapeHtml(main || '—')}</b><small>${escapeHtml(detail)}</small>${owner ? `<small>${escapeHtml(owner)}</small>` : ''}${category}${mixed}${missing}`;
+}
+
+function differenceItem(difference, suggestion = false) {
+    const label = difference.etiqueta || fieldLabels[difference.campo] || difference.campo;
+    const catalog = difference.catalogo && !sameText(difference.catalogo, difference.origen) ? ` → ${difference.catalogo}` : '';
+    return `<li${suggestion ? ' class="pending-suggestion"' : ''}><b>${escapeHtml(label)}${suggestion ? ' · sugerida' : ''}</b><span>origen ${escapeHtml(difference.origen)}${escapeHtml(catalog)}</span><span>FoliOS ${escapeHtml(difference.folios ?? '—')}</span></li>`;
 }
 
 function bulkType(item) {
@@ -138,9 +171,12 @@ function bulkType(item) {
 function matches(item, term) {
     if (!term) return true;
     const text = [
-        item.numero, item.variedad, item.calibre, item.envase, item.marca,
+        item.numero, item.empresa, item.cliente, item.especie, item.variedad, item.calibre, item.categoria,
+        item.categoria_sugerida, item.envase_codigo, item.envase, item.marca,
         ...(item.csgs || []), ...(item.procesos || []), ...(item.lotes || []),
         item.validacion?.situacion, item.folio?.estado_etiqueta,
+        // Catálogo: el dato, su valor y en qué pallets está.
+        item.dimension_etiqueta, item.etiqueta, item.csg, ...(item.pallets || []),
     ].join(' ').toLowerCase();
     return text.includes(term);
 }
@@ -194,6 +230,8 @@ function render() {
     elements.tabUnresolved.textContent = summary.por_resolver;
     elements.tabDifferences.textContent = summary.con_diferencias;
     elements.tabOnlyFolios.textContent = summary.solo_en_folios;
+    elements.tabCatalog.textContent = summary.catalogo_pendiente;
+    renderCatalogNote(data);
 
     elements.pendingBody.innerHTML = rows(data.pendientes, (item) => `<tr>
         <td><b class="pending-number">${escapeHtml(item.numero)}</b>${bulkType(item)}</td>
@@ -216,7 +254,7 @@ function render() {
     elements.differencesBody.innerHTML = rows(data.diferencias, (item) => `<tr>
         <td><b class="pending-number">${escapeHtml(item.numero)}</b>${bulkType(item)}</td>
         <td>${escapeHtml(item.folio.estado_etiqueta)}<small>validado ${formatDate(item.folio.validado_at)}</small></td>
-        <td><ul class="pending-differences">${item.diferencias.map((difference) => `<li><b>${escapeHtml(fieldLabels[difference.campo] || difference.campo)}</b><span>origen ${escapeHtml(difference.origen)}</span><span>FoliOS ${escapeHtml(difference.folios ?? '—')}</span></li>`).join('')}</ul></td>
+        <td><ul class="pending-differences">${item.diferencias.map((difference) => differenceItem(difference)).join('')}${(item.sugerencias || []).map((difference) => differenceItem(difference, true)).join('')}</ul></td>
         <td>${article(item)}</td>
     </tr>`, 'Lo validado coincide con el origen.', 4);
 
@@ -225,12 +263,134 @@ function render() {
         <td>${escapeHtml(item.estado_etiqueta)}</td>
         <td>${formatDate(item.validado_at)}<small>${age(item.validado_at)}</small></td>
         <td class="pending-num">${number(item.cajas)}</td>
-        <td>${article({ ...item, mezclados: [] })}</td>
+        <td>${article(item, { folio: true })}</td>
         <td>${escapeHtml(item.csgs.join(', ') || '—')}</td>
     </tr>`, 'Todo lo validado que sigue en planta figura en el stock del origen.', 6);
+
+    renderCatalog(data);
+}
+
+function renderCatalogNote(data) {
+    const summary = data.resumen;
+    if (!data.fuente.temporada_catalogo) {
+        elements.catalogNote.hidden = false;
+        elements.catalogNote.innerHTML = '<b>No hay temporada activa.</b> Sin catálogo de validación no se comparan cliente, marca, especie, variedad ni embalaje.';
+        return;
+    }
+    elements.catalogNote.hidden = !summary.catalogo_pendiente;
+    elements.catalogNote.innerHTML = summary.catalogo_pendiente
+        ? `<b>El catálogo de ${escapeHtml(data.fuente.temporada_catalogo)} no reconoce ${number(summary.catalogo_pendiente)} ${summary.catalogo_pendiente === 1 ? 'dato' : 'datos'} del origen</b> (${number(summary.pallets_sin_catalogo)} ${summary.pallets_sin_catalogo === 1 ? 'pallet' : 'pallets'}). Esos datos no se comparan ni se podrán validar hasta vincularlos o agregarlos en la pestaña «Catálogo».`
+        : '';
+}
+
+function catalogContext(item) {
+    const parts = [];
+    if (item.dimension === 'categoria') parts.push('Cada cliente usa su nomenclatura: vincúlala a la categoría que corresponde. En la validación solo se sugiere.');
+    if (item.dimension === 'cliente') parts.push('Código de empresa del origen. Queda como alias del cliente.');
+    if (['marca', 'envase'].includes(item.dimension) && item.cliente) parts.push(`Cliente ${item.cliente}`);
+    if (['variedad', 'calibre', 'envase'].includes(item.dimension) && item.especie) parts.push(`Especie ${item.especie}`);
+    if (item.dimension === 'especie' && item.codigo) parts.push(`Código ${item.codigo}`);
+    if (item.dimension === 'variedad' && item.codigo) parts.push(`Código ${item.codigo}`);
+    if (item.dimension === 'envase' && item.kilos) parts.push(`${number(item.kilos)} kg netos por caja`);
+    if (item.dimension === 'csg') {
+        if (item.predio) parts.push(`Predio ${item.predio}`);
+        if (item.variedades?.length) parts.push(`Variedades: ${item.variedades.join(', ')}`);
+    }
+    if (item.dimension === 'csg_variedad') parts.push(`La variedad ${item.variedad} no está autorizada en el CSG ${item.csg}.`);
+    return parts.map((part) => `<small>${escapeHtml(part)}</small>`).join('') || '<small>—</small>';
+}
+
+function catalogOptions(item) {
+    const options = state.data?.opciones_catalogo || {};
+    switch (item.dimension) {
+    case 'cliente': return options.clientes || [];
+    case 'marca': return options.marcas?.[item.cliente_validacion_id] || [];
+    case 'especie': return options.especies || [];
+    case 'variedad': return options.variedades?.[item.especie_validacion_id] || [];
+    case 'calibre': return options.calibres?.[item.especie_validacion_id] || [];
+    case 'envase': return options.envases?.[`${item.especie_validacion_id}|${item.cliente_validacion_id}`] || [];
+    case 'categoria': return options.categorias || [];
+    default: return [];
+    }
+}
+
+function catalogActions(item) {
+    if (item.requiere) return `<small class="pending-warning">${escapeHtml(requirements[item.requiere]?.(item) || 'Falta un dato previo.')}</small>`;
+    if (!state.data.puede_administrar_catalogo) return '<small>Lo resuelve quien administra el catálogo de validación.</small>';
+    const key = escapeHtml(item.clave);
+    const parts = [];
+    if (item.acciones.includes('vincular')) {
+        const options = catalogOptions(item);
+        if (options.length) {
+            parts.push(`<div class="pending-link"><select data-catalog-entity="${key}" aria-label="${escapeHtml(`${item.dimension_etiqueta} del catálogo para ${item.etiqueta}`)}"><option value="">Corresponde a…</option>${options.map((option) => `<option value="${escapeHtml(option.id)}">${escapeHtml(option.nombre)}${option.codigo_externo ? ` · ${escapeHtml(option.codigo_externo)}` : ''}</option>`).join('')}</select><button class="secondary-button" type="button" data-catalog-action="vincular" data-catalog-key="${key}">Vincular</button></div>`);
+        } else {
+            parts.push(`<small>${item.dimension === 'cliente' ? 'No hay clientes activos. Créalo en Clientes y vuelve a vincularlo aquí.' : 'No hay elementos del catálogo para vincular.'}</small>`);
+        }
+    }
+    if (item.acciones.includes('incorporar')) {
+        parts.push(`<button class="primary-button" type="button" data-catalog-action="incorporar" data-catalog-key="${key}">${item.dimension === 'csg_variedad' ? 'Autorizar en el CSG' : 'Agregar al catálogo'}</button>`);
+    }
+    return `<div class="pending-catalog-actions">${parts.join('')}</div>`;
+}
+
+function renderCatalog(data) {
+    // Una recarga no borra lo que alguien estaba eligiendo.
+    const chosen = new Map([...elements.catalogBody.querySelectorAll('select[data-catalog-entity]')].map((select) => [select.dataset.catalogEntity, select.value]));
+    elements.catalogHelp.textContent = data.puede_administrar_catalogo
+        ? 'Vincula un dato a un elemento que ya existe, o agrégalo al catálogo de la temporada. Lo que se agrega queda en Maestros de temporada.'
+        : 'Puedes ver qué falta. Vincular o agregar al catálogo lo hace quien administra el catálogo de validación.';
+    elements.catalogBody.innerHTML = rows(data.catalogo || [], (item) => `<tr>
+        <td><b>${escapeHtml(item.dimension_etiqueta)}</b></td>
+        <td><b class="pending-number">${escapeHtml(item.etiqueta)}</b></td>
+        <td>${catalogContext(item)}</td>
+        <td class="pending-num">${number(item.pallets_total)}<small>${number(item.cajas)} cajas</small><small class="pending-catalog-pallets">${escapeHtml(item.pallets.join(', '))}${item.pallets_total > item.pallets.length ? '…' : ''}</small></td>
+        <td>${catalogActions(item)}</td>
+    </tr>`, data.fuente.temporada_catalogo ? 'El catálogo de la temporada reconoce todo lo que trae el origen.' : 'No hay temporada activa.', 5);
+    elements.catalogBody.querySelectorAll('select[data-catalog-entity]').forEach((select) => {
+        const value = chosen.get(select.dataset.catalogEntity);
+        if (value && [...select.options].some((option) => option.value === value)) select.value = value;
+    });
+}
+
+async function applyCatalog(button) {
+    const key = button.dataset.catalogKey;
+    const action = button.dataset.catalogAction;
+    let entity = null;
+    if (action === 'vincular') {
+        const select = [...elements.catalogBody.querySelectorAll('select[data-catalog-entity]')].find((node) => node.dataset.catalogEntity === key);
+        entity = select?.value || null;
+        if (!entity) {
+            toast('Elige a qué elemento del catálogo corresponde.', true);
+            select?.focus();
+            return;
+        }
+    }
+    busy(true, action === 'vincular' ? 'Vinculando con el catálogo…' : 'Agregando al catálogo…');
+    try {
+        const response = await api('/api/validacion/pendientes-origen/catalogo', {
+            method: 'POST',
+            body: JSON.stringify({ clave: key, accion: action, entidad_id: entity }),
+        });
+        if (response.data?.resumen) {
+            state.data = response.data;
+            render();
+        }
+        toast(response.data?.message || (response.ok ? 'Catálogo actualizado.' : 'No fue posible actualizar el catálogo.'), !response.ok);
+        if (!response.ok && !response.data?.resumen) {
+            // Quizá otra persona ya lo resolvió: se vuelve a comparar.
+            button.blur();
+            load({ quiet: true });
+        }
+    } catch {
+        toast('No fue posible actualizar el catálogo.', true);
+    } finally {
+        busy(false);
+    }
 }
 
 async function load({ quiet = false } = {}) {
+    // No recargar mientras alguien elige en el catálogo.
+    if (quiet && elements.catalogBody.contains(document.activeElement)) return;
     if (!quiet) busy(true, 'Comparando con el sistema de origen…');
     try {
         const response = await api('/api/validacion/pendientes-origen');
@@ -324,5 +484,9 @@ elements.logout?.addEventListener('click', clearSession);
 elements.read.addEventListener('click', readNow);
 elements.excel.addEventListener('click', downloadExcel);
 elements.search.addEventListener('input', render);
+elements.catalogBody.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-catalog-action]');
+    if (button) applyCatalog(button);
+});
 
 if (state.token && showApp()) start();
