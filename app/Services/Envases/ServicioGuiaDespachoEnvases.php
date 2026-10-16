@@ -141,10 +141,17 @@ class ServicioGuiaDespachoEnvases
         }, attempts: 3);
     }
 
-    /** @param array<string, mixed> $datos */
+    /**
+     * Confirma la salida. Pide el N° de la guía de despacho emitida en el sistema de
+     * facturación: es el número que ve el cliente; el GDE-… queda como referencia interna.
+     *
+     * @param  array<string, mixed>  $datos
+     */
     public function confirmar(GuiaDespachoEnvase $guia, User $usuario, array $datos = []): GuiaDespachoEnvase
     {
-        return DB::transaction(function () use ($guia, $usuario, $datos): GuiaDespachoEnvase {
+        $guiasEmitidas = app(ServicioGuiaEmitidaEnvases::class);
+
+        return DB::transaction(function () use ($guia, $usuario, $datos, $guiasEmitidas): GuiaDespachoEnvase {
             $guia = GuiaDespachoEnvase::query()
                 ->whereHas('temporada', fn ($temporada) => $temporada->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
                 ->with(['detalles.movimientoOrigen.cliente', 'temporada', 'cliente', 'creadoPor'])
@@ -160,6 +167,9 @@ class ServicioGuiaDespachoEnvases
                 throw new ConflictoOperacion('La guía cambió desde la última lectura. Actualiza antes de confirmar.');
             }
 
+            $numeroGuia = $guiasEmitidas->exigir($datos['numero_guia_despacho'] ?? null);
+            $guiasEmitidas->asegurarDisponible($numeroGuia, $guia->id);
+            $guia->numero_guia_despacho = $numeroGuia;
             if (! empty($datos['salida_at'])) {
                 $guia->salida_at = CarbonImmutable::parse($datos['salida_at']);
             }
@@ -197,6 +207,7 @@ class ServicioGuiaDespachoEnvases
             $snapshot = $this->snapshotDocumento($guia, $usuario, $ahora);
             $guia->update([
                 'salida_at' => $guia->salida_at,
+                'numero_guia_despacho' => $numeroGuia,
                 'estado' => EstadoGuiaDespachoEnvase::Confirmada,
                 'confirmado_por_user_id' => $usuario->id,
                 'confirmado_at' => $ahora,
@@ -214,6 +225,7 @@ class ServicioGuiaDespachoEnvases
                 [
                     'movimientos' => collect($movimientos)->pluck('id')->all(),
                     'documento_hash' => $guia->documento_hash,
+                    'numero_guia_despacho' => $numeroGuia,
                 ],
             );
 
@@ -711,7 +723,7 @@ class ServicioGuiaDespachoEnvases
             'origen_snapshot' => implode(' · ', array_filter([
                 $origen->numero_documento,
                 $origen->cliente?->nombre,
-                $origen->ocurrido_at?->format('d-m-Y H:i'),
+                $origen->ocurrido_at?->copy()->setTimezone(config('app.operational_timezone'))->format('d-m-Y H:i'),
             ])),
         ];
     }
@@ -754,6 +766,7 @@ class ServicioGuiaDespachoEnvases
     {
         return [
             'numero' => $guia->numero,
+            'numero_guia_despacho' => $guia->numero_guia_despacho,
             'estado' => EstadoGuiaDespachoEnvase::Confirmada->value,
             'temporada' => [
                 'id' => $guia->temporada_id,
@@ -977,6 +990,7 @@ class ServicioGuiaDespachoEnvases
         return $guia->refresh()->load([
             'temporada',
             'cliente',
+            'archivoVigente.subidoPor',
             'detalles.movimientoOrigen.cliente',
             'creadoPor',
             'confirmadoPor',

@@ -10,6 +10,7 @@ use App\Enums\TipoMovimientoEnvase;
 use App\Models\Cliente;
 use App\Models\DetalleEnvaseRecepcionRomana;
 use App\Models\DetalleGuiaDespachoEnvase;
+use App\Models\GuiaDespachoEnvase;
 use App\Models\MovimientoEnvase;
 use App\Models\Temporada;
 use Carbon\CarbonImmutable;
@@ -38,6 +39,8 @@ class ServicioCuentaCorrienteEnvases
         'correccion_propiedad' => 'Corrección de propiedad',
         'correccion_cantidad' => 'Corrección de cantidad',
     ];
+
+    private const DOCUMENTO_GUIA = 'guia_despacho_envases';
 
     /** Entregas al cliente y sus anulaciones; lo demás (recepciones y correcciones) es recibido. */
     private const SALIDAS = [
@@ -127,6 +130,7 @@ class ServicioCuentaCorrienteEnvases
         $visibles = MovimientoEnvase::query()->select('id');
         $this->aplicarFiltros($visibles, $filtros);
         $idsVisibles = $visibles->pluck('id')->flip();
+        $guiasEmitidas = $this->numerosGuiaEmitida(null, $filtros['temporada_id']);
         $saldos = [];
 
         foreach ($todos->lazy(500) as $movimiento) {
@@ -145,6 +149,9 @@ class ServicioCuentaCorrienteEnvases
                 'cliente_codigo' => $movimiento->cliente?->codigo,
                 'cliente' => $movimiento->cliente?->nombre,
                 'documento' => $movimiento->numero_documento,
+                'guia_emitida' => $movimiento->documento_tipo === self::DOCUMENTO_GUIA
+                    ? ($guiasEmitidas[$movimiento->documento_id] ?? null)
+                    : null,
                 'movimiento' => self::etiquetaMovimiento($movimiento->tipo_movimiento),
                 'tipo_envase' => $movimiento->tipo_envase->etiqueta(),
                 'propiedad' => self::etiquetaPropiedad($movimiento->propiedad),
@@ -166,6 +173,12 @@ class ServicioCuentaCorrienteEnvases
      * Estado de cuenta de un cliente para enviarle: saldo inicial, entradas, salidas y
      * saldo final por tipo de envase, con el detalle de movimientos y su saldo.
      *
+     * Es la vista del cliente, no la trazabilidad interna (esa es el kardex):
+     * - una guía anulada y su anulación no aparecen; una corrección se aplica sobre el
+     *   movimiento que corrige y no sale como línea propia;
+     * - las líneas de un mismo documento, envase y propiedad se suman en una;
+     * - en los despachos se informa el N° de la guía emitida en el sistema de facturación.
+     *
      * @return array<string, mixed>
      */
     public function estadoCuenta(Cliente $cliente, Temporada $temporada, ?string $desde, ?string $hasta): array
@@ -177,17 +190,16 @@ class ServicioCuentaCorrienteEnvases
             ->orderBy('ocurrido_at')
             ->orderBy('id')
             ->get();
+        $guiasEmitidas = $this->numerosGuiaEmitida($movimientos);
         [$inicio, $fin] = $this->rangoOperacional($desde, $hasta);
-        $antes = fn (MovimientoEnvase $movimiento): bool => $inicio !== null && $movimiento->ocurrido_at->lt($inicio);
-        $enPeriodo = fn (MovimientoEnvase $movimiento): bool => ! $antes($movimiento)
-            && ($fin === null || $movimiento->ocurrido_at->lt($fin));
 
         $tipos = [];
         $lineas = [];
+        $indices = [];
+        $documentos = [];
         $saldos = [];
-        foreach ($movimientos as $movimiento) {
+        foreach ($this->vistaCliente($movimientos) as ['movimiento' => $movimiento, 'impacto' => $impacto]) {
             $tipo = $movimiento->tipo_envase->value;
-            $impacto = $movimiento->cantidad * $movimiento->signo_cuenta;
             $tipos[$tipo] ??= [
                 'tipo_envase' => $tipo,
                 'nombre' => $movimiento->tipo_envase->etiqueta(),
@@ -200,14 +212,14 @@ class ServicioCuentaCorrienteEnvases
             ];
             $saldos[$tipo] = ($saldos[$tipo] ?? 0) + $impacto;
 
-            if ($antes($movimiento)) {
+            if ($inicio !== null && $movimiento->ocurrido_at->lt($inicio)) {
                 $tipos[$tipo]['saldo_inicial'] += $impacto;
-            }
-            if (! $enPeriodo($movimiento)) {
+
                 continue;
             }
-            // Una anulación descuenta de lo entregado y una corrección de lo recibido: así el
-            // resumen cuadra con lo que el cliente tiene y con los propios entregados de la oficina.
+            if ($fin !== null && $movimiento->ocurrido_at->gte($fin)) {
+                continue;
+            }
             $esSalida = in_array($movimiento->tipo_movimiento, self::SALIDAS, true);
             if ($esSalida) {
                 $tipos[$tipo]['salidas'] -= $impacto;
@@ -215,10 +227,30 @@ class ServicioCuentaCorrienteEnvases
             } else {
                 $tipos[$tipo]['entradas'] += $impacto;
             }
-            $tipos[$tipo]['saldo_final'] = $saldos[$tipo];
+
+            $documento = $movimiento->documento_tipo === self::DOCUMENTO_GUIA
+                ? ($guiasEmitidas[$movimiento->documento_id] ?? null) ?: $movimiento->numero_documento
+                : $movimiento->numero_documento;
+            // Una línea por guía y tipo de envase, como en la guía: los orígenes internos de
+            // un mismo envase (FIFO, varias recepciones) no se le muestran al cliente.
+            $claveDocumento = implode('|', [
+                $movimiento->ocurrido_at->getTimestamp(),
+                $movimiento->documento_id ?? $movimiento->numero_documento,
+                $movimiento->tipo_movimiento->value,
+            ]);
+            $clave = $claveDocumento.'|'.$tipo.'|'.$movimiento->propiedad->value;
+            $documentos[$claveDocumento] ??= count($documentos);
+            if (isset($indices[$clave])) {
+                $lineas[$indices[$clave]][$esSalida ? 'salida' : 'entrada'] += $esSalida ? -$impacto : $impacto;
+                $lineas[$indices[$clave]]['saldo'] = $saldos[$tipo];
+
+                continue;
+            }
+            $indices[$clave] = count($lineas);
             $lineas[] = [
+                'orden' => [$documentos[$claveDocumento], $movimiento->tipo_envase->orden(), $movimiento->propiedad->value],
                 'fecha' => $this->local($movimiento->ocurrido_at),
-                'documento' => $movimiento->numero_documento,
+                'documento' => $documento,
                 'movimiento' => self::etiquetaMovimiento($movimiento->tipo_movimiento),
                 'tipo_envase' => $movimiento->tipo_envase->etiqueta(),
                 'propiedad' => self::etiquetaPropiedad($movimiento->propiedad),
@@ -228,10 +260,15 @@ class ServicioCuentaCorrienteEnvases
             ];
         }
         foreach ($tipos as $tipo => $resumen) {
-            // Sin movimientos en el período, el saldo final es el inicial.
             $tipos[$tipo]['saldo_final'] = $resumen['saldo_inicial'] + $resumen['entradas'] - $resumen['salidas'];
         }
+        // Dentro de una guía con varios envases, las líneas van en el orden del catálogo.
+        usort($lineas, fn (array $a, array $b): int => $a['orden'] <=> $b['orden']);
+        $lineas = array_map(function (array $linea): array {
+            unset($linea['orden']);
 
+            return $linea;
+        }, $lineas);
         $pendientes = DetalleEnvaseRecepcionRomana::query()
             ->whereHas('recepcion', fn (Builder $recepcion) => $recepcion
                 ->where('cliente_id', $cliente->id)
@@ -343,6 +380,61 @@ class ServicioCuentaCorrienteEnvases
             ])
             ->sortBy(fn (array $fila): string => $fila['cliente']['nombre'].'|'.$fila['tipo_envase'])
             ->values()
+            ->all();
+    }
+
+    /**
+     * Movimientos como los ve el cliente: cada anulación o corrección se suma al
+     * movimiento que corrige y no queda como línea. Lo que termina en 0 (una guía anulada,
+     * un ingreso corregido por completo) desaparece. El saldo final no cambia.
+     *
+     * @param  Collection<int, MovimientoEnvase>  $movimientos  en orden cronológico
+     * @return list<array{movimiento: MovimientoEnvase, impacto: int}>
+     */
+    private function vistaCliente(Collection $movimientos): array
+    {
+        $netos = [];
+        $porId = $movimientos->keyBy('id');
+        foreach ($movimientos as $movimiento) {
+            $corrige = match ($movimiento->tipo_movimiento) {
+                TipoMovimientoEnvase::ReversionDespacho => $movimiento->datos['reversa_de_movimiento_id'] ?? null,
+                TipoMovimientoEnvase::ReversionSalidaRecepcionFruta,
+                TipoMovimientoEnvase::CorreccionCantidad,
+                TipoMovimientoEnvase::CorreccionPropiedad => $movimiento->movimiento_origen_id,
+                default => null,
+            };
+            $impacto = $movimiento->cantidad * $movimiento->signo_cuenta;
+            if ($corrige !== null && isset($netos[$corrige])) {
+                $netos[$corrige] += $impacto;
+
+                continue;
+            }
+            $netos[$movimiento->id] = $impacto;
+        }
+
+        return collect($netos)
+            ->filter(fn (int $impacto): bool => $impacto !== 0)
+            ->map(fn (int $impacto, string $id): array => ['movimiento' => $porId[$id], 'impacto' => $impacto])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * N° de la guía emitida en el sistema de facturación por cada guía de FoliOS.
+     *
+     * @param  iterable<MovimientoEnvase>|null  $movimientos  null: todas las de la temporada
+     * @return array<string, string|null>
+     */
+    private function numerosGuiaEmitida(?iterable $movimientos, ?string $temporadaId = null): array
+    {
+        $ids = $movimientos === null
+            ? null
+            : collect($movimientos)->where('documento_tipo', self::DOCUMENTO_GUIA)->pluck('documento_id')->filter()->unique()->values();
+
+        return GuiaDespachoEnvase::query()
+            ->when($ids !== null, fn (Builder $q) => $q->whereKey($ids))
+            ->when($temporadaId !== null, fn (Builder $q) => $q->where('temporada_id', $temporadaId))
+            ->pluck('numero_guia_despacho', 'id')
             ->all();
     }
 

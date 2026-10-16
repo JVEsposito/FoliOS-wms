@@ -13,6 +13,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Cliente;
 use App\Models\DetalleEnvaseRecepcionRomana;
 use App\Models\DetalleGuiaDespachoEnvase;
+use App\Models\GuiaDespachoEnvase;
 use App\Models\MovimientoEnvase;
 use App\Models\RevisionMovimientoEnvase;
 use App\Models\Temporada;
@@ -76,6 +77,11 @@ class CuentaCorrienteEnvaseController extends Controller
         $conMovimientos = MovimientoEnvase::query()
             ->whereIn('movimiento_origen_id', $movimientos->pluck('id'))
             ->pluck('movimiento_origen_id')->all();
+        $guiasEmitidas = GuiaDespachoEnvase::query()
+            ->whereKey($movimientos->where('documento_tipo', 'guia_despacho_envases')->pluck('documento_id')->filter()->unique()->values())
+            ->withExists('archivoVigente')
+            ->get(['id', 'numero_guia_despacho'])
+            ->keyBy('id');
 
         $pendientes = DetalleEnvaseRecepcionRomana::query()
             ->with('recepcion')
@@ -184,12 +190,25 @@ class CuentaCorrienteEnvaseController extends Controller
             ->values();
 
         return response()->json([
-            'data' => $movimientos->map(fn (MovimientoEnvase $movimiento): array => $this->movimiento(
-                $movimiento,
-                in_array($movimiento->id, $corregidos, true),
-                in_array($movimiento->id, $cantidadesCorregidas, true),
-                in_array($movimiento->id, $conGuias, true) || in_array($movimiento->id, $conMovimientos, true),
-            )),
+            'data' => $movimientos->map(function (MovimientoEnvase $movimiento) use ($corregidos, $cantidadesCorregidas, $conGuias, $conMovimientos, $guiasEmitidas): array {
+                $guia = $movimiento->documento_tipo === 'guia_despacho_envases'
+                    ? $guiasEmitidas->get($movimiento->documento_id)
+                    : null;
+
+                return [
+                    ...$this->movimiento(
+                        $movimiento,
+                        in_array($movimiento->id, $corregidos, true),
+                        in_array($movimiento->id, $cantidadesCorregidas, true),
+                        in_array($movimiento->id, $conGuias, true) || in_array($movimiento->id, $conMovimientos, true),
+                    ),
+                    // N° de la guía emitida en el sistema de facturación y si su archivo está subido.
+                    'guia_emitida' => $guia ? [
+                        'numero' => $guia->numero_guia_despacho,
+                        'archivo' => (bool) $guia->archivo_vigente_exists,
+                    ] : null,
+                ];
+            }),
             'pendientes' => $pendientes->map(fn (DetalleEnvaseRecepcionRomana $detalle): array => [
                 'id' => $detalle->id,
                 'estado' => 'pendiente_validacion',
@@ -312,6 +331,7 @@ class CuentaCorrienteEnvaseController extends Controller
             ['clave' => 'cliente_codigo', 'titulo' => 'Código cliente'],
             ['clave' => 'cliente', 'titulo' => 'Cliente'],
             ['clave' => 'documento', 'titulo' => 'Documento'],
+            ['clave' => 'guia_emitida', 'titulo' => 'Guía de despacho emitida'],
             ['clave' => 'movimiento', 'titulo' => 'Movimiento'],
             ['clave' => 'tipo_envase', 'titulo' => 'Envase'],
             ['clave' => 'propiedad', 'titulo' => 'Propiedad'],
@@ -358,7 +378,7 @@ class CuentaCorrienteEnvaseController extends Controller
         if ($request->input('formato') === 'xlsx') {
             $ruta = $excel->generar('Estado de cuenta de envases', [
                 ['clave' => 'fecha', 'titulo' => 'Fecha y hora', 'tipo' => 'fecha_hora'],
-                ['clave' => 'documento', 'titulo' => 'Documento'],
+                ['clave' => 'documento', 'titulo' => 'Guía N°'],
                 ['clave' => 'movimiento', 'titulo' => 'Movimiento'],
                 ['clave' => 'tipo_envase', 'titulo' => 'Envase'],
                 ['clave' => 'propiedad', 'titulo' => 'Propiedad'],
