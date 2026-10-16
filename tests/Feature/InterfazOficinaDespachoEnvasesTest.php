@@ -14,7 +14,15 @@ class InterfazOficinaDespachoEnvasesTest extends TestCase
             ->assertSee('RESERVADO EN BORRADORES')
             ->assertSee('Crear borrador y reservar')
             ->assertSee('HISTORIAL Y RESPALDOS')
-            ->assertSee('Fecha y hora efectiva de salida');
+            ->assertSee('Fecha y hora efectiva de salida')
+            ->assertSee('id="guideDialog"', false)
+            ->assertSee('N° de la guía de despacho emitida *')
+            ->assertSee('accept="application/pdf,image/jpeg,image/png,image/webp"', false);
+
+        $script = file_get_contents(resource_path('js/office-container-dispatches.js'));
+        $this->assertStringContainsString('numero_guia_despacho: number', $script);
+        $this->assertStringContainsString('/archivo-guia', $script);
+        $this->assertStringContainsString('/numero-guia', $script);
     }
 
     public function test_cuenta_corriente_distingue_reservas_de_movimientos_confirmados(): void

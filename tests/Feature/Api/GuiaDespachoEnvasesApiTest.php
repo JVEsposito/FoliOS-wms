@@ -91,7 +91,7 @@ class GuiaDespachoEnvasesApiTest extends TestCase
                 'El comprobante de anulación solo existe para una guía anulada.',
             );
 
-        $this->postJson('/api/envases/guias-despacho/'.$guia['id'].'/confirmar')
+        $this->postJson('/api/envases/guias-despacho/'.$guia['id'].'/confirmar', ['numero_guia_despacho' => '1001'])
             ->assertOk()
             ->assertJsonPath('data.estado', 'confirmada')
             ->assertJsonPath('data.puede_anular', true)
@@ -232,7 +232,7 @@ class GuiaDespachoEnvasesApiTest extends TestCase
             ->assertOk()
             ->assertJsonCount(0, 'data');
         // Escribir sobre otra temporada responde 409 con el control central.
-        $this->postJson("/api/envases/guias-despacho/{$guiaAnterior['id']}/confirmar")
+        $this->postJson("/api/envases/guias-despacho/{$guiaAnterior['id']}/confirmar", ['numero_guia_despacho' => '1002'])
             ->assertConflict()
             ->assertJsonPath('codigo', 'temporada_no_activa');
         $this->getJson("/api/envases/guias-despacho?temporada_id={$temporadaAnterior->id}")
@@ -293,7 +293,7 @@ class GuiaDespachoEnvasesApiTest extends TestCase
             ->assertJsonPath('inventario.0.disponible', 100);
         $this->assertDatabaseCount('movimientos_envases', 1);
         $this->assertDatabaseCount('eventos_guias_despacho_envases', 3);
-        $this->postJson('/api/envases/guias-despacho/'.$actualizada['id'].'/confirmar')
+        $this->postJson('/api/envases/guias-despacho/'.$actualizada['id'].'/confirmar', ['numero_guia_despacho' => '1003'])
             ->assertConflict();
     }
 
@@ -321,6 +321,7 @@ class GuiaDespachoEnvasesApiTest extends TestCase
 
         $this->postJson('/api/envases/guias-despacho/'.$guia['id'].'/confirmar', [
             'version' => $guia['version'],
+            'numero_guia_despacho' => '1004',
         ])->assertOk();
         $this->assertDatabaseHas('movimientos_envases', [
             'documento_id' => $guia['id'],
@@ -420,7 +421,7 @@ class GuiaDespachoEnvasesApiTest extends TestCase
             (string) Str::uuid(),
             [['tipo_envase' => 'bins', 'cantidad' => 5, 'propiedad' => 'propia', 'movimiento_origen_id' => $origen->id]],
         ))->assertCreated()->json('data');
-        $this->postJson('/api/envases/guias-despacho/'.$guia['id'].'/confirmar')
+        $this->postJson('/api/envases/guias-despacho/'.$guia['id'].'/confirmar', ['numero_guia_despacho' => '1001'])
             ->assertOk();
 
         DB::table('eventos_guias_despacho_envases')

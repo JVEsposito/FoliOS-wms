@@ -116,7 +116,7 @@ async function api(path, options = {}) {
 async function download(path, fallbackName, errorMessage) {
     const response = await fetch(path, {
         headers: {
-            Accept: 'application/pdf, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/json',
+            Accept: 'application/pdf, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, image/*, application/json',
             Authorization: `Bearer ${state.token}`,
         },
     });
@@ -250,7 +250,13 @@ function render(data) {
     elements.body.innerHTML = data.data.length
         ? data.data.map((movement) => {
             const guideButton = movement.documento_tipo === 'guia_despacho_envases' && movement.documento_id
-                ? `<button class="document-button" data-guide-document="${movement.documento_id}" data-guide-number="${escapeHtml(movement.numero_documento)}">↓ Respaldo</button>`
+                ? `<button class="document-button" data-guide-document="${movement.documento_id}" data-guide-number="${escapeHtml(movement.numero_documento)}">↓ PDF interno</button>`
+                : '';
+            const emittedButton = movement.guia_emitida?.archivo
+                ? `<button class="document-button" data-emitted-guide="${movement.documento_id}" data-emitted-number="${escapeHtml(movement.guia_emitida.numero || movement.numero_documento)}">↓ Guía emitida</button>`
+                : '';
+            const emittedNote = movement.guia_emitida
+                ? (movement.guia_emitida.numero ? ` · Guía N° ${escapeHtml(movement.guia_emitida.numero)}` : ' · sin N° de guía emitida')
                 : '';
             const reviewButton = state.identity?.puede_revisar_cuenta_envases
                 ? `<button class="review-button" data-review="${movement.id}">Revisar</button>`
@@ -269,7 +275,7 @@ function render(data) {
             const account = movement.impacto_cuenta === 0
                 ? '<td class="impact-none" title="No mueve la cuenta de ningún cliente">—</td>'
                 : `<td class="${movement.impacto_cuenta < 0 ? 'impact-negative' : 'impact-positive'}">${signed(movement.impacto_cuenta)}</td>`;
-            return `<tr><td>${formatDate(movement.ocurrido_at)}</td><td><b>${escapeHtml(movement.cliente?.nombre)}</b><br><small>${escapeHtml(movement.movimiento)} · ${escapeHtml(movement.numero_documento)}${documentNote}</small>${trace}</td><td>${escapeHtml(typeName(movement.tipo_envase))} · ${movement.cantidad}</td>${account}<td class="impact-stock">${signed(movement.impacto_existencia)}</td><td>${escapeHtml(label(movement.propiedad))}</td><td>${escapeHtml(label(movement.estado_revision))}</td><td><div class="table-actions">${guideButton}${reviewButton}${propertyButton}${quantityButton}${!guideButton && !reviewButton && !propertyButton && !quantityButton ? '—' : ''}</div></td></tr>`;
+            return `<tr><td>${formatDate(movement.ocurrido_at)}</td><td><b>${escapeHtml(movement.cliente?.nombre)}</b><br><small>${escapeHtml(movement.movimiento)} · ${escapeHtml(movement.numero_documento)}${emittedNote}${documentNote}</small>${trace}</td><td>${escapeHtml(typeName(movement.tipo_envase))} · ${movement.cantidad}</td>${account}<td class="impact-stock">${signed(movement.impacto_existencia)}</td><td>${escapeHtml(label(movement.propiedad))}</td><td>${escapeHtml(label(movement.estado_revision))}</td><td><div class="table-actions">${guideButton}${emittedButton}${reviewButton}${propertyButton}${quantityButton}${!guideButton && !reviewButton && !propertyButton && !quantityButton ? '—' : ''}</div></td></tr>`;
         }).join('')
         : '<tr><td colspan="8">Aún no hay movimientos confirmados.</td></tr>';
 }
@@ -340,6 +346,18 @@ document.addEventListener('click', async (event) => {
     const quantityButton = event.target.closest('[data-correct-quantity]');
     const documentButton = event.target.closest('[data-guide-document]');
     const statementButton = event.target.closest('[data-statement]');
+    const emittedButton = event.target.closest('[data-emitted-guide]');
+    if (emittedButton) {
+        try {
+            await download(
+                `/api/envases/guias-despacho/${emittedButton.dataset.emittedGuide}/archivo-guia`,
+                `guia-despacho-${emittedButton.dataset.emittedNumber.toLowerCase()}`,
+                'No fue posible descargar la guía emitida.',
+            );
+        } catch (error) {
+            toast(error.message, true);
+        }
+    }
     if (statementButton) {
         const format = statementButton.dataset.format;
         busy(true, 'Generando estado de cuenta…');

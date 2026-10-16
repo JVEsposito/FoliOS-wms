@@ -13,6 +13,7 @@ use DomainException;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class ServicioReinicioOperacional
 {
@@ -505,6 +506,15 @@ class ServicioReinicioOperacional
             ->where('contenido', ContenidoCamara::Productos->value)
             ->increment('version_plano');
 
+        // Los archivos de guías emitidas se borran del disco solo si el reinicio se confirma.
+        $rutasArchivosGuias = DB::table('archivos_guias_despacho_envases')
+            ->whereIn('guia_despacho_envase_id', clone $guias)
+            ->pluck('ruta')
+            ->all();
+        $eliminados['archivos_guias_envases'] = DB::table('archivos_guias_despacho_envases')
+            ->whereIn('guia_despacho_envase_id', clone $guias)
+            ->delete();
+        DB::afterCommit(fn () => Storage::disk('local')->delete($rutasArchivosGuias));
         $eliminados['eventos_guias_envases'] = DB::table('eventos_guias_despacho_envases')
             ->whereIn('guia_despacho_envase_id', clone $guias)
             ->delete();

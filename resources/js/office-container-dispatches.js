@@ -25,6 +25,16 @@ const elements = {
     saveDraft: byId('saveDraftButton'),
     cancelEdit: byId('cancelEditButton'),
     statusFilter: byId('guideStatusFilter'),
+    guideDialog: byId('guideDialog'),
+    guideForm: byId('guideDialogForm'),
+    guideEyebrow: byId('guideDialogEyebrow'),
+    guideTitle: byId('guideDialogTitle'),
+    guideSummary: byId('guideDialogSummary'),
+    guideFileLabel: byId('guideFileLabel'),
+    guideFileNote: byId('guideFileNote'),
+    guideError: byId('guideDialogError'),
+    guideSubmit: byId('guideDialogSubmit'),
+    guideCancel: byId('guideDialogCancel'),
     loading: byId('officeLoading'),
     loadingText: byId('officeLoadingText'),
     toasts: byId('officeToasts'),
@@ -40,7 +50,9 @@ const state = {
     catalog: null,
     guides: [],
     editing: null,
+    dialog: null,
 };
+const MAX_GUIDE_FILE_BYTES = 10 * 1024 * 1024;
 
 function read(key) {
     try {
@@ -123,7 +135,7 @@ async function api(path, options = {}) {
 async function download(path, fallbackName) {
     const response = await fetch(path, {
         headers: {
-            Accept: 'application/pdf',
+            Accept: 'application/pdf, image/*, application/json',
             Authorization: `Bearer ${state.token}`,
         },
     });
@@ -132,13 +144,32 @@ async function download(path, fallbackName) {
         throw new Error(data?.message || 'No fue posible descargar el respaldo.');
     }
     const disposition = response.headers.get('Content-Disposition') || '';
-    const match = disposition.match(/filename="([^"]+)"/);
+    const match = disposition.match(/filename="?([^";]+)"?/);
     const blobUrl = URL.createObjectURL(await response.blob());
     const anchor = document.createElement('a');
     anchor.href = blobUrl;
     anchor.download = match?.[1] || fallbackName;
     anchor.click();
     setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+}
+
+async function uploadGuideFile(guideId, file) {
+    const body = new FormData();
+    body.append('archivo', file);
+    const response = await fetch(`/api/envases/guias-despacho/${guideId}/archivo-guia`, {
+        method: 'POST',
+        headers: { Accept: 'application/json', Authorization: `Bearer ${state.token}` },
+        body,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        throw new Error(
+            Object.values(data?.errors || {}).flat()[0]
+            || data?.message
+            || 'No fue posible subir el archivo de la guía.',
+        );
+    }
+    return data;
 }
 
 function showOffice() {
@@ -237,6 +268,102 @@ function guideEffect(guide) {
     return '<div class="guide-impact guide-impact--cancelled"><b>Sin impacto</b><span>Reserva liberada sin modificar cuenta corriente</span></div>';
 }
 
+function fileSize(bytes) {
+    return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+/** Guía emitida en el sistema de facturación: número y archivo de respaldo. */
+function emittedGuide(guide) {
+    if (!guide.puede_registrar_guia) return '';
+    // El número ya va en el título de la tarjeta; aquí se avisa si falta y se muestra el archivo.
+    const number = guide.falta_numero_guia
+        ? '<b class="guide-emitted__missing">Falta registrar el N° de la guía emitida</b>'
+        : '<b>Guía emitida</b>';
+    const prefix = guide.falta_numero_guia ? 'Archivo: ' : '';
+    const file = guide.archivo_guia
+        ? `<span>${prefix}${escapeHtml(guide.archivo_guia.nombre)} · ${fileSize(guide.archivo_guia.bytes)} · subido por ${escapeHtml(guide.archivo_guia.subido_por || '—')} el ${formatDate(guide.archivo_guia.subido_at)}</span>`
+        : `<span>${prefix || 'Archivo: '}pendiente de subir</span>`;
+    return `<div class="guide-emitted${guide.falta_numero_guia ? ' guide-emitted--missing' : ''}">${number}${file}</div>`;
+}
+
+function openGuideDialog(mode, guide) {
+    state.dialog = { mode, guide };
+    elements.guideForm.reset();
+    elements.guideError.textContent = '';
+    const total = guide.resumen.reduce((sum, line) => sum + Number(line.cantidad), 0);
+    const show = { numero: mode !== 'file', motivo: mode === 'number' && Boolean(guide.numero_guia_despacho), archivo: mode !== 'number' };
+    Object.entries(show).forEach(([field, visible]) => {
+        elements.guideForm.querySelector(`[data-guide-field="${field}"]`).classList.toggle('is-hidden', !visible);
+    });
+    const titles = {
+        confirm: ['CONFIRMAR SALIDA', `Confirmar salida ${guide.numero}`, 'Confirmar salida'],
+        number: ['GUÍA DE DESPACHO EMITIDA', guide.numero_guia_despacho ? 'Corregir N° de guía' : 'Registrar N° de guía', 'Guardar N° de guía'],
+        file: ['GUÍA DE DESPACHO EMITIDA', guide.archivo_guia ? 'Reemplazar archivo de la guía' : 'Subir guía emitida', 'Subir archivo'],
+    }[mode];
+    [elements.guideEyebrow.textContent, elements.guideTitle.textContent, elements.guideSubmit.textContent] = titles;
+    elements.guideSummary.textContent = mode === 'confirm'
+        ? `${guide.cliente.nombre} · ${total} envases · salida ${formatDate(guide.salida_at)}. Se descontará la existencia y la cuenta corriente del cliente recibirá el movimiento.`
+        : `${guide.numero_guia_despacho ? `Guía N° ${guide.numero_guia_despacho} · ` : ''}${guide.numero} · ${guide.cliente.nombre} · ${total} envases`;
+    elements.guideFileNote.textContent = mode === 'confirm'
+        ? 'Opcional: también se puede subir después. PDF, JPG, PNG o WebP de hasta 10 MB.'
+        : `PDF, JPG, PNG o WebP de hasta 10 MB.${guide.archivo_guia ? ' El archivo anterior queda en el historial.' : ''}`;
+    elements.guideForm.elements.numero_guia_despacho.value = mode === 'number' ? guide.numero_guia_despacho || '' : '';
+    elements.guideDialog.showModal();
+    (mode === 'file' ? elements.guideForm.elements.archivo : elements.guideForm.elements.numero_guia_despacho).focus();
+}
+
+function chosenFile() {
+    const file = elements.guideForm.elements.archivo.files[0] || null;
+    if (file && file.size > MAX_GUIDE_FILE_BYTES) throw new Error('El archivo de la guía puede pesar hasta 10 MB.');
+    return file;
+}
+
+async function submitGuideDialog() {
+    const { mode, guide } = state.dialog;
+    const number = elements.guideForm.elements.numero_guia_despacho.value.trim();
+    const reason = elements.guideForm.elements.motivo.value.trim();
+    const file = chosenFile();
+    if (mode !== 'file' && !number) throw new Error('Ingresa el N° de la guía de despacho emitida.');
+    if (mode === 'file' && !file) throw new Error('Selecciona el archivo de la guía.');
+
+    if (mode === 'confirm') {
+        busy(true, 'Confirmando salida y generando respaldo…');
+        const data = await api(`/api/envases/guias-despacho/${guide.id}/confirmar`, {
+            method: 'POST',
+            body: JSON.stringify({ version: guide.version, salida_at: guide.salida_at, numero_guia_despacho: number }),
+        });
+        elements.guideDialog.close();
+        toast(`Guía N° ${data.data.numero_guia_despacho} confirmada: existencia y cuenta corriente actualizadas.`);
+        if (file) {
+            busy(true, 'Subiendo archivo de la guía…');
+            try {
+                await uploadGuideFile(guide.id, file);
+            } catch (error) {
+                toast(`La salida quedó confirmada, pero el archivo no se subió: ${error.message} Súbelo desde la guía.`, true);
+            }
+        }
+        return;
+    }
+    if (mode === 'number') {
+        if (number === guide.numero_guia_despacho) {
+            elements.guideDialog.close();
+            return;
+        }
+        busy(true, 'Guardando N° de guía…');
+        const data = await api(`/api/envases/guias-despacho/${guide.id}/numero-guia`, {
+            method: 'PUT',
+            body: JSON.stringify({ numero_guia_despacho: number, motivo: reason || null }),
+        });
+        elements.guideDialog.close();
+        toast(`${guide.numero}: guía de despacho N° ${data.data.numero_guia_despacho} registrada.`);
+        return;
+    }
+    busy(true, 'Subiendo archivo de la guía…');
+    await uploadGuideFile(guide.id, file);
+    elements.guideDialog.close();
+    toast(`${guide.numero}: archivo de la guía emitida guardado.`);
+}
+
 function renderGuides(guides) {
     state.guides = guides;
     elements.count.textContent = `${guides.length} guía${guides.length === 1 ? '' : 's'}`;
@@ -246,13 +373,20 @@ function renderGuides(guides) {
         const lines = guide.resumen.map((line) => `<span>${line.cantidad} ${label(line.tipo_envase)} · ${label(line.propiedad)}</span>`).join('');
         const origins = guide.detalles.map((line) => `<li>${line.cantidad} ${label(line.tipo_envase)} · ${escapeHtml(line.origen || 'Sin origen')}</li>`).join('');
         const statusReason = guide.motivo_cancelacion || guide.motivo_anulacion;
+        const title = guide.numero_guia_despacho
+            ? `<strong>Guía N° ${escapeHtml(guide.numero_guia_despacho)}</strong><small> · ${escapeHtml(guide.numero)}`
+            : `<strong>${escapeHtml(guide.numero)}</strong><small>`;
         return `<article class="guide-card">
-            <div class="guide-card__head"><div><strong>${escapeHtml(guide.numero)}</strong><small> · ${escapeHtml(guide.cliente.nombre)} · ${formatDate(guide.salida_at)}</small></div><span class="guide-state guide-state--${guide.estado}">${label(guide.estado)}</span></div>
+            <div class="guide-card__head"><div>${title} · ${escapeHtml(guide.cliente.nombre)} · ${formatDate(guide.salida_at)}</small></div><span class="guide-state guide-state--${guide.estado}">${label(guide.estado)}</span></div>
             <div class="guide-lines">${lines}</div>
             ${guideEffect(guide)}
+            ${emittedGuide(guide)}
             <details class="guide-trace"><summary>Ver trazabilidad y responsables</summary><ul>${origins}</ul><p>Preparó: ${escapeHtml(guide.creado_por || '—')} · Confirmó: ${escapeHtml(guide.confirmado_por || '—')}</p>${guide.documento_hash ? `<p>Integridad: <code>${escapeHtml(guide.documento_hash)}</code></p>` : ''}${statusReason ? `<p>Motivo: ${escapeHtml(statusReason)}</p>` : ''}</details>
             <div class="guide-card__foot"><small>${escapeHtml(guide.patente_camion || 'Sin transporte informado')} · temporada ${escapeHtml(guide.temporada.codigo)}</small><div class="guide-actions">
-                <button data-document="${guide.id}">↓ ${guide.estado === 'borrador' ? 'PDF borrador' : 'PDF respaldo'}</button>
+                <button data-document="${guide.id}">↓ ${guide.estado === 'borrador' ? 'PDF borrador' : 'PDF interno'}</button>
+                ${guide.archivo_guia ? `<button data-emitted-file="${guide.id}">↓ Guía emitida</button>` : ''}
+                ${guide.puede_registrar_guia && canManage ? `<button data-guide-number="${guide.id}">${guide.numero_guia_despacho ? 'Corregir N° de guía' : 'Registrar N° de guía'}</button>` : ''}
+                ${guide.puede_registrar_guia && canManage ? `<button data-guide-file="${guide.id}">${guide.archivo_guia ? 'Reemplazar archivo de la guía' : 'Subir guía emitida'}</button>` : ''}
                 ${guide.puede_editar && canManage ? `<button data-edit="${guide.id}">Editar</button>` : ''}
                 ${guide.puede_cancelar && canManage ? `<button class="danger" data-cancel="${guide.id}">Cancelar borrador</button>` : ''}
                 ${guide.puede_confirmar && canManage ? `<button class="primary-button compact" data-confirm="${guide.id}">Confirmar salida</button>` : ''}
@@ -431,7 +565,13 @@ elements.list.addEventListener('click', async (event) => {
     const reverse = event.target.closest('[data-reverse]');
     const documentButton = event.target.closest('[data-document]');
     const reversalDocument = event.target.closest('[data-reversal-document]');
-    const id = edit?.dataset.edit
+    const emittedFile = event.target.closest('[data-emitted-file]');
+    const guideNumber = event.target.closest('[data-guide-number]');
+    const guideFile = event.target.closest('[data-guide-file]');
+    const id = emittedFile?.dataset.emittedFile
+        || guideNumber?.dataset.guideNumber
+        || guideFile?.dataset.guideFile
+        || edit?.dataset.edit
         || confirm?.dataset.confirm
         || cancel?.dataset.cancel
         || reverse?.dataset.reverse
@@ -452,26 +592,31 @@ elements.list.addEventListener('click', async (event) => {
             );
             return;
         }
+        if (emittedFile) {
+            await download(
+                `/api/envases/guias-despacho/${guide.id}/archivo-guia`,
+                `guia-despacho-${(guide.numero_guia_despacho || guide.numero).toLowerCase()}`,
+            );
+            return;
+        }
+        if (guideNumber) {
+            openGuideDialog('number', guide);
+            return;
+        }
+        if (guideFile) {
+            openGuideDialog('file', guide);
+            return;
+        }
+        if (confirm) {
+            openGuideDialog('confirm', guide);
+            return;
+        }
         if (reversalDocument) {
             await download(
                 `/api/envases/guias-despacho/${guide.id}/comprobante-anulacion`,
                 `anulacion-${guide.numero.toLowerCase()}.pdf`,
             );
             return;
-        }
-        if (confirm && window.confirm(
-            `¿Confirmar la salida ${guide.numero}?\n\nSe descontará la existencia, se liberará la reserva y la cuenta corriente del cliente recibirá el movimiento. El respaldo final quedará inmutable.`,
-        )) {
-            busy(true, 'Confirmando salida y generando respaldo…');
-            await api(`/api/envases/guias-despacho/${guide.id}/confirmar`, {
-                method: 'POST',
-                body: JSON.stringify({
-                    version: guide.version,
-                    salida_at: guide.salida_at,
-                }),
-            });
-            toast(`${guide.numero} confirmada: existencia y cuenta corriente actualizadas.`);
-            await reloadAll();
         }
         if (cancel) {
             const reason = window.prompt('Motivo de cancelación del borrador:');
@@ -502,6 +647,22 @@ elements.list.addEventListener('click', async (event) => {
     } catch (error) {
         toast(error.message, true);
     } finally {
+        busy(false);
+    }
+});
+
+elements.guideCancel.addEventListener('click', () => elements.guideDialog.close());
+elements.guideForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    elements.guideError.textContent = '';
+    elements.guideSubmit.disabled = true;
+    try {
+        await submitGuideDialog();
+        await reloadAll();
+    } catch (error) {
+        elements.guideError.textContent = error.message;
+    } finally {
+        elements.guideSubmit.disabled = false;
         busy(false);
     }
 });

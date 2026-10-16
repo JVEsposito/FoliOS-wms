@@ -305,3 +305,137 @@
         padding: 10px;
     }
 }
+
+/* Guía de despacho emitida en el sistema de facturación: número y archivo. */
+.guide-emitted {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 14px;
+    margin: 10px 0;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--cyan, #36aeea);
+    border-radius: 10px;
+}
+
+.guide-emitted span {
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.guide-emitted--missing {
+    border-left-color: var(--amber);
+    background: rgba(243, 185, 79, .08);
+}
+
+.guide-emitted__missing {
+    color: var(--amber);
+}
+
+.guide-dialog {
+    position: fixed;
+    inset: 0;
+    width: min(540px, calc(100vw - 32px));
+    max-width: none;
+    max-height: calc(100dvh - 32px);
+    margin: auto;
+    padding: 0;
+    overflow-y: auto;
+    border: 1px solid var(--line);
+    border-radius: var(--radius, 14px);
+    background: var(--panel);
+    color: var(--text);
+}
+
+.guide-dialog form {
+    display: grid;
+    gap: 16px;
+    padding: clamp(20px, 3vw, 28px);
+}
+
+.guide-dialog__header {
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--line);
+}
+
+.guide-dialog__header h2 {
+    margin: 4px 0 6px;
+    font-size: clamp(1.2rem, 3vw, 1.45rem);
+}
+
+.guide-dialog__header p:last-child {
+    margin: 0;
+    color: var(--muted);
+    font-size: .85rem;
+    line-height: 1.5;
+}
+
+.guide-dialog label {
+    display: grid;
+    gap: 7px;
+}
+
+.guide-dialog label > span {
+    color: var(--text-secondary, var(--muted));
+    font-size: .85rem;
+    font-weight: 800;
+}
+
+.guide-dialog label small {
+    color: var(--muted);
+    font-size: .78rem;
+    line-height: 1.45;
+}
+
+.guide-dialog input,
+.guide-dialog textarea {
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: var(--deep);
+    color: var(--text);
+    padding: 10px;
+}
+
+.guide-dialog input[name="numero_guia_despacho"] {
+    font-size: 1.15rem;
+    font-weight: 800;
+    letter-spacing: .02em;
+}
+
+.guide-dialog textarea {
+    min-height: 84px;
+    resize: vertical;
+}
+
+.guide-dialog .form-error:empty {
+    display: none;
+}
+
+.guide-dialog__actions {
+    display: flex;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+}
+
+.guide-dialog__actions button {
+    min-height: 44px;
+}
+
+@media (max-width: 560px) {
+    .guide-dialog {
+        width: calc(100vw - 24px);
+    }
+
+    .guide-dialog__actions {
+        flex-direction: column-reverse;
+    }
+
+    .guide-dialog__actions button {
+        width: 100%;
+    }
+}
