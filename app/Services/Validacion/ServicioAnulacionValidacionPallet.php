@@ -10,12 +10,18 @@ use App\Enums\HabilitacionAlmacenamientoFolio;
 use App\Enums\ResultadoValidacionPallet;
 use App\Exceptions\ConflictoOperacion;
 use App\Models\AnulacionValidacionPallet;
+use App\Models\CargaFolio;
 use App\Models\Folio;
+use App\Models\Movimiento;
+use App\Models\ProcesoPrefrioFolio;
+use App\Models\ReservaCargaFolio;
+use App\Models\UbicacionActual;
 use App\Models\User;
 use App\Models\ValidacionPallet;
 use App\Services\Transiciones\ComandoTransicionOperacional;
 use App\Services\Transiciones\MotorTransicionesOperacionales;
 use DomainException;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use JsonException;
 
@@ -189,10 +195,49 @@ class ServicioAnulacionValidacionPallet
         return $this->motivoNoAnulable($validacion, $folio) === null;
     }
 
+    /**
+     * Las anulables entre muchas validaciones (con su folio cargado), con una consulta por
+     * tipo de actividad posterior en vez de siete por pallet. Mismas reglas que
+     * motivoNoAnulable().
+     *
+     * @param  Collection<int, ValidacionPallet>  $validaciones
+     * @return Collection<int, ValidacionPallet>
+     */
+    public function anulables(Collection $validaciones): Collection
+    {
+        $porEstado = $validaciones
+            ->filter(fn (ValidacionPallet $validacion): bool => $this->motivoPorEstado($validacion, $validacion->folio) === null)
+            ->values();
+        $folioIds = $porEstado->pluck('folio_id')->unique()->values()->all();
+        if ($folioIds === []) {
+            return collect();
+        }
+        $conActividad = collect([
+            UbicacionActual::query()->whereIn('folio_id', $folioIds)->pluck('folio_id'),
+            CargaFolio::query()->whereIn('folio_id', $folioIds)->pluck('folio_id'),
+            ReservaCargaFolio::query()->whereIn('folio_id', $folioIds)->pluck('folio_id'),
+            Movimiento::query()->whereIn('folio_id', $folioIds)->distinct()->pluck('folio_id'),
+            ProcesoPrefrioFolio::query()->whereIn('folio_id', $folioIds)->distinct()->pluck('folio_id'),
+            DB::table('repaletizaje_detalles')->whereIn('folio_origen_id', $folioIds)->pluck('folio_origen_id'),
+            DB::table('repaletizajes')->whereIn('folio_resultante_id', $folioIds)->pluck('folio_resultante_id'),
+            DB::table('repaletizajes')->whereIn('folio_conservado_id', $folioIds)->pluck('folio_conservado_id'),
+        ])->flatten()->filter()->flip();
+
+        return $porEstado
+            ->reject(fn (ValidacionPallet $validacion): bool => $conActividad->has($validacion->folio_id))
+            ->values();
+    }
+
     public function motivoNoAnulable(
         ValidacionPallet $validacion,
         ?Folio $folio = null,
     ): ?string {
+        return $this->motivoPorEstado($validacion, $folio) ?? $this->motivoPorActividad($folio);
+    }
+
+    /** Lo que se decide con la validación y el folio, sin consultar su actividad. */
+    private function motivoPorEstado(ValidacionPallet $validacion, ?Folio $folio): ?string
+    {
         if ($validacion->estado !== EstadoValidacionPallet::Aceptada
             || $validacion->resultado !== ResultadoValidacionPallet::Aprobado) {
             return 'Solo se pueden anular validaciones aprobadas y vigentes.';
@@ -217,6 +262,12 @@ class ServicioAnulacionValidacionPallet
             return 'El pallet ya avanzó desde el estado pendiente de prefrío y no puede anularse.';
         }
 
+        return null;
+    }
+
+    /** Actividad posterior a la validación: ubicación, carga, movimientos, prefrío o repaletizaje. */
+    private function motivoPorActividad(Folio $folio): ?string
+    {
         if ($folio->ubicacionActual()->exists()) {
             return 'El pallet ya posee o poseyó una ubicación incompatible con la anulación.';
         }

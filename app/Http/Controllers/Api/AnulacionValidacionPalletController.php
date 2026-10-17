@@ -2,7 +2,10 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\CondicionTermicaFolio;
+use App\Enums\EstadoOperacionalFolio;
 use App\Enums\EstadoValidacionPallet;
+use App\Enums\HabilitacionAlmacenamientoFolio;
 use App\Enums\ResultadoValidacionPallet;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\AnularValidacionPalletRequest;
@@ -33,13 +36,22 @@ class AnulacionValidacionPalletController extends Controller
         $folio = mb_strtoupper(trim((string) ($filtros['folio'] ?? '')));
         $categoria = trim((string) ($filtros['motivo_categoria'] ?? ''));
 
-        $candidatas = ValidacionPallet::query()
+        // El historial y los contadores muestran solo la temporada activa. Sin
+        // temporada activa no se mezclan temporadas: la lista queda vacía.
+        $temporadaId = $temporadaActiva->buscar()?->id;
+
+        // Solo pallets que siguen pendientes de prefrío: el filtro va en la consulta, y la
+        // actividad posterior se revisa para todos juntos (una consulta por tipo).
+        $candidatas = $temporadaId === null ? collect() : $servicio->anulables(ValidacionPallet::query()
+            ->where('temporada_id', $temporadaId)
             ->where('estado', EstadoValidacionPallet::Aceptada->value)
             ->where('resultado', ResultadoValidacionPallet::Aprobado->value)
-            ->whereHas('temporada', fn (Builder $consulta): Builder => $consulta
-                ->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
             ->whereHas('folio', fn (Builder $consulta): Builder => $consulta
-                ->where('activo', true))
+                ->where('activo', true)
+                ->where('origen_sistema', 'validacion')
+                ->where('estado_operacional', EstadoOperacionalFolio::PendientePrefrio->value)
+                ->where('condicion_termica', CondicionTermicaFolio::PendientePrefrio->value)
+                ->where('habilitacion_almacenamiento', HabilitacionAlmacenamientoFolio::NoHabilitado->value))
             ->when($folio !== '', fn (Builder $consulta): Builder => $consulta
                 ->where('numero_folio', 'like', "%{$folio}%"))
             ->with([
@@ -49,14 +61,9 @@ class AnulacionValidacionPalletController extends Controller
             ])
             ->latest('recibido_servidor_at')
             ->limit(100)
-            ->get()
-            ->filter(fn (ValidacionPallet $validacion): bool => $servicio->puedeAnular($validacion))
+            ->get())
             ->map(fn (ValidacionPallet $validacion): array => $this->recursoCandidata($validacion))
             ->values();
-
-        // El historial y los contadores muestran solo la temporada activa. Sin
-        // temporada activa no se mezclan temporadas: la lista queda vacía.
-        $temporadaId = $temporadaActiva->buscar()?->id;
         $deLaTemporada = fn (): Builder => AnulacionValidacionPallet::query()
             ->whereHas('validacion', fn (Builder $consulta): Builder => $temporadaId === null
                 ? $consulta->whereRaw('1 = 0')

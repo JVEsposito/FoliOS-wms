@@ -153,3 +153,16 @@ test('la revisión muestra solo lo que cambia frente a lo validado', () => {
         { label: 'Categoría', before: 'CAT1', after: 'CAT2' },
     ]);
 });
+
+test('el catálogo compacto por cliente (artículos por origen) da los mismos productos', () => {
+    const compact = indexCatalog({
+        ...catalog,
+        combinaciones: [],
+        articulos_por_origen: {
+            o1: ['santina-2j-5', 'santina-2j-10', 'lapins-2j-5', 'no-existe'],
+            o2: ['santina-2j-10', 'lapins-2j-5'],
+        },
+    });
+    assert.deepEqual(articlesForOrigins(compact, ['o1', 'o2']).map((item) => item.id), ['santina-2j-10']);
+    assert.deepEqual(articlesForOrigins(compact, ['o1']).map((item) => item.id), ['santina-2j-5', 'santina-2j-10', 'lapins-2j-5']);
+});

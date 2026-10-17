@@ -10,6 +10,7 @@ use App\Services\Temporadas\ServicioTemporadaGlobal;
 use DomainException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -241,6 +242,43 @@ class AnulacionValidacionPalletApiTest extends TestCase
             ->assertJsonCount(1, 'anulaciones')
             ->assertJsonPath('anulaciones.0.numero_folio', 'PAL-ANU-0006')
             ->assertJsonPath('anulaciones.0.folio.estado_operacional', 'anulado');
+    }
+
+    public function test_la_lista_de_anulables_revisa_todos_los_pallets_con_pocas_consultas(): void
+    {
+        [$catalogo, $tokenValidador] = $this->contexto(RolUsuario::Validador, 'VAL-ANU-20');
+        [, $tokenSupervisor] = $this->acceso(RolUsuario::SupervisorFrio, 'SUP-ANU-20');
+        foreach (range(1, 12) as $numero) {
+            $this->crearValidacion($tokenValidador, $catalogo, sprintf('PAL-ANU-1%03d', $numero));
+        }
+        // Uno ya avanzó desde pendiente de prefrío y otro participó en un repaletizaje.
+        Folio::query()->where('numero_folio', 'PAL-ANU-1001')->update([
+            'estado_operacional' => 'disponible',
+            'condicion_termica' => 'prefrio_aprobado',
+            'habilitacion_almacenamiento' => 'habilitado',
+        ]);
+        Schema::disableForeignKeyConstraints();
+        DB::table('repaletizaje_detalles')->insert([
+            'id' => (string) Str::uuid(), 'repaletizaje_id' => (string) Str::uuid(),
+            'folio_origen_id' => Folio::query()->where('numero_folio', 'PAL-ANU-1002')->value('id'),
+            'orden' => 1, 'cajas_antes' => 120, 'cajas_aportadas' => 20, 'cajas_despues' => 100, 'tipo_bulto_antes' => 'pallet',
+            'estado_antes' => 'pendiente_prefrio', 'estado_despues' => 'pendiente_prefrio', 'snapshot_antes' => '{}', 'snapshot_despues' => '{}',
+        ]);
+        Schema::enableForeignKeyConstraints();
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $candidatas = $this->conToken($tokenSupervisor)
+            ->getJson('/api/validacion/anulaciones')
+            ->assertOk()
+            ->assertJsonCount(10, 'candidatas')
+            ->json('candidatas.*.numero_folio');
+        $consultas = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        $this->assertEmpty(array_intersect(['PAL-ANU-1001', 'PAL-ANU-1002'], $candidatas));
+        // Antes eran siete consultas por pallet: con cien pallets, unas 700.
+        $this->assertLessThan(30, $consultas, "La lista hizo {$consultas} consultas.");
     }
 
     public function test_no_anula_una_validacion_de_una_temporada_inactiva(): void
