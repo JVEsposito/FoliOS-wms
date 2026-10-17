@@ -100,6 +100,19 @@ export async function registerValidation(
   return response.data;
 }
 
+export type ValidationOperationStatus = {
+  operacion_id: string;
+  estado: 'sin_registro' | 'procesando' | 'aplicada' | 'rechazada' | 'fallida';
+  mensaje: string | null;
+  validacion: ValidationAttempt | null;
+};
+
+export function getValidationOperation(baseUrl: string, token: string, operationId: string) {
+  return request<ValidationOperationStatus>(
+    baseUrl, `/api/validacion/pallets/operaciones/${encodeURIComponent(operationId)}`, token,
+  );
+}
+
 export function getMyValidationSession(
   baseUrl: string,
   token: string,

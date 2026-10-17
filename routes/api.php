@@ -301,6 +301,8 @@ Route::middleware('auth:sanctum')->group(function () {
         ->middleware('can:validar-pallets');
     Route::get('/validacion/pallets/mi-sesion', [ValidacionPalletController::class, 'miSesion'])
         ->middleware('can:validar-pallets');
+    Route::get('/validacion/pallets/operaciones/{operacionId}', [ValidacionPalletController::class, 'estadoOperacion'])
+        ->whereUuid('operacionId')->middleware('can:validar-pallets');
     Route::post('/validacion/pallets', [ValidacionPalletController::class, 'store'])
         ->middleware('can:validar-pallets');
     Route::get(

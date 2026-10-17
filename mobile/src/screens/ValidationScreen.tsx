@@ -31,6 +31,7 @@ import { ApiError } from '../services/apiError';
 import {
   getMyValidationSession,
   getValidationCatalog,
+  getValidationOperation,
   listRecentValidations,
   listValidationsByFolio,
   registerValidation,
@@ -43,7 +44,7 @@ import {
   loadValidationWorkContext,
   markValidationOutboxItem,
   removeValidationFromOutbox,
-  retryValidationOutboxItem,
+  replaceValidationOutboxItem,
   saveValidationCatalog,
   saveValidationSession,
   saveValidationWorkContext,
@@ -88,6 +89,8 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
   const folioInput = useRef<ScanInputHandle>(null);
   const flushing = useRef(false);
   const synchronizing = useRef(false);
+  const resuming = useRef(false);
+  const recoveryWorkContext = useRef<{ line: ValidationLine | null; shift: ValidationShift | null } | null>(null);
   const [catalog, setCatalog] = useState<ValidationCatalog | null>(null);
   const [outbox, setOutbox] = useState<ValidationOutboxItem[]>([]);
   const [recent, setRecent] = useState<ValidationAttempt[]>([]);
@@ -116,6 +119,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
   const [packingDate, setPackingDate] = useState(todayLocal());
   const [originDrafts, setOriginDrafts] = useState<OriginDraft[]>([newOriginDraft()]);
   const [originError, setOriginError] = useState('');
+  const [editingOutbox, setEditingOutbox] = useState<ValidationOutboxItem | null>(null);
   const [observation, setObservation] = useState<ObservationDraft | null>(null);
 
   const userId = auth.usuario.id;
@@ -409,6 +413,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
   }
 
   function handleFolioChange(value: string) {
+    if (editingOutbox) return;
     setFolio(value);
     if (folioReview && normalizeFolio(value) !== folioReview.numero_folio) {
       setFolioReview(null);
@@ -479,6 +484,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
   }
 
   async function inspectFolio(requestedFolio?: string) {
+    if (editingOutbox) return;
     const normalized = normalizeFolio(requestedFolio ?? folio);
     if (!normalized) {
       setError('Escanea o ingresa el folio.');
@@ -491,6 +497,10 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
 
     const localItem = outbox.find((item) => normalizeFolio(item.payload.numero_folio) === normalized);
     if (localItem) {
+      if (localItem.status !== 'pendiente') {
+        await resumeItem(localItem);
+        return;
+      }
       setFolioReview(null);
       setError(`El folio ${normalized} posee una validación local ${statusLabel(localItem.status).toLowerCase()}. Sincronízala antes de registrar otro intento.`);
       return;
@@ -570,7 +580,8 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
       return 'Ingresa el lote MP y el proceso de packing de cada línea, según la etiqueta.';
     }
     if (compositionBoxes !== Number(boxes)) return `La composición por CSG suma ${compositionBoxes} cajas y el bulto declara ${boxes}.`;
-    if (outbox.some((item) => normalizeFolio(item.payload.numero_folio) === normalizeFolio(folio))) {
+    if (outbox.some((item) => item.id !== editingOutbox?.id
+      && normalizeFolio(item.payload.numero_folio) === normalizeFolio(folio))) {
       return 'El folio posee una validación local pendiente o con error. Sincronízala antes de registrar otro intento.';
     }
     return null;
@@ -614,8 +625,11 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
     setError('');
     setNotice('');
     try {
-      let items = await enqueueValidation(userId, deviceId, payload);
+      let items = editingOutbox
+        ? await replaceValidationOutboxItem(userId, deviceId, editingOutbox.id, payload)
+        : await enqueueValidation(userId, deviceId, payload);
       setOutbox(items);
+      finishRecovery();
       if (!baseUrl) {
         setNotice(`${payload.numero_folio} quedó en la bandeja de salida.`);
       } else {
@@ -654,21 +668,126 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
       setOriginError('');
       setObservation(null);
       setTimeout(() => folioInput.current?.focus(), 180);
+    } catch (reasonCaught) {
+      setError(messageFrom(reasonCaught));
     } finally {
       setBusy(false);
     }
   }
 
-  async function retryItem(item: ValidationOutboxItem) {
-    setOutbox(await retryValidationOutboxItem(userId, deviceId, item.id));
-    await flushOutbox();
+  async function resumeItem(item: ValidationOutboxItem) {
+    if (resuming.current || editingOutbox) return;
+    if (!baseUrl) {
+      setError('Conecta la PDA para comprobar el envío antes de corregirlo. La captura sigue guardada.');
+      return;
+    }
+    resuming.current = true;
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      const items = await loadValidationOutbox(userId, deviceId);
+      const current = items.find((candidate) => candidate.id === item.id);
+      setOutbox(items);
+      if (!current || current.status === 'pendiente') {
+        setError('La captura cambió. Espera la sincronización y vuelve a revisar la bandeja.');
+        return;
+      }
+      const operation = await getValidationOperation(baseUrl, auth.token, current.id);
+      if (operation.operacion_id !== current.id) throw new Error('El servidor no pudo comprobar este envío. La captura sigue guardada.');
+      if (operation.validacion) {
+        const attempt = operation.validacion;
+        if (normalizeFolio(attempt.numero_folio) !== normalizeFolio(current.payload.numero_folio)) {
+          throw new Error('El identificador corresponde a otro folio. Requiere revisión de supervisión.');
+        }
+        setOutbox(await removeValidationFromOutbox(userId, deviceId, current.id));
+        setRecent((previous) => [attempt, ...previous.filter((candidate) => candidate.id !== attempt.id)].slice(0, 10));
+        setFolio(attempt.numero_folio);
+        if (attempt.estado === 'aceptada') applyAttempt(attempt);
+        else setError('El envío quedó registrado como conflicto en el servidor. Consulta el historial con supervisión.');
+        try { await refreshSession(); } catch { /* el registro ya fue confirmado */ }
+        setNotice(`${attempt.numero_folio}: el envío ya estaba registrado en el servidor. Se actualizó la bandeja local.`);
+        return;
+      }
+      if (!['sin_registro', 'rechazada', 'fallida'].includes(operation.estado)) {
+        throw new Error('El servidor todavía no confirma que el envío pueda corregirse. La captura sigue guardada.');
+      }
+      const payload = current.payload;
+      if (!catalog || payload.temporada_id !== catalog.temporada.id) {
+        throw new Error('La captura pertenece a otra temporada o falta sincronizar el catálogo. Requiere revisión de supervisión.');
+      }
+      const attempts = await listValidationsByFolio(baseUrl, auth.token, payload.numero_folio);
+      const final = attempts.find((attempt) => attempt.estado === 'aceptada'
+        && (attempt.resultado === 'aprobado' || attempt.resultado === 'rechazado'));
+      if (final) {
+        const message = `El folio ${payload.numero_folio} ya tiene una decisión final en el servidor. Requiere revisión de supervisión.`;
+        setOutbox(await markValidationOutboxItem(userId, deviceId, current.id, 'conflicto', message));
+        setFolio(final.numero_folio);
+        applyAttempt(final);
+        setError(message);
+        return;
+      }
+      const article = catalog.articulos.find((candidate) => candidate.id === payload.articulo_validacion_id);
+      const origin = catalog.origenes.find((candidate) => candidate.id === payload.origen_validacion_id);
+      const composition = payload.composicion?.length ? payload.composicion : [{
+        origen_validacion_id: payload.origen_validacion_id, cantidad_cajas: payload.cantidad_cajas,
+      }];
+      setFolio(payload.numero_folio);
+      setFolioReview({ numero_folio: payload.numero_folio, status: 'nuevo', attempt: null });
+      setPackageType(payload.tipo_bulto);
+      setBoxes(String(payload.cantidad_cajas));
+      recoveryWorkContext.current = { line, shift };
+      setLine(payload.linea_proceso);
+      setShift(payload.turno);
+      setClient(origin?.cliente ?? '');
+      setBrand(origin?.marca ?? '');
+      setSpecies(article?.especie ?? ''); setVariety(article?.variedad ?? '');
+      setCaliber(article?.calibre ?? ''); setPackageName(article?.envase ?? '');
+      setCategoryId(payload.categoria_validacion_id);
+      setPackingDate(payload.fecha_embalaje ?? payload.generado_dispositivo_at.slice(0, 10));
+      setOriginDrafts(composition.map((entry) => ({
+        key: newOriginDraft().key, originId: entry.origen_validacion_id,
+        boxes: String(entry.cantidad_cajas),
+        lot: 'lote_materia_prima' in entry ? entry.lote_materia_prima ?? '' : '',
+        process: 'proceso_packing' in entry ? entry.proceso_packing ?? '' : '',
+      })));
+      setOriginError('');
+      setObservation(null);
+      setEditingOutbox(current);
+      setError(operation.mensaje ?? current.message ?? '');
+      setNotice(`${payload.numero_folio} recuperado. Revisa los datos y registra la decisión para enviarlo de nuevo.`);
+    } catch (reasonCaught) {
+      setError(messageFrom(reasonCaught));
+    } finally {
+      resuming.current = false;
+      setBusy(false);
+    }
+  }
+
+  function finishRecovery() {
+    if (recoveryWorkContext.current) {
+      setLine(recoveryWorkContext.current.line);
+      setShift(recoveryWorkContext.current.shift);
+      recoveryWorkContext.current = null;
+    }
+    setEditingOutbox(null);
+  }
+
+  function cancelRecovery() {
+    finishRecovery();
+    setFolio(''); setFolioReview(null); setBoxes('');
+    setPackingDate(todayLocal());
+    setClient(''); setBrand(''); resetProduct();
+    setOriginDrafts([newOriginDraft()]); setObservation(null);
+    setError('');
+    setNotice('La captura original sigue guardada en la bandeja. Puedes retomarla más adelante.');
   }
 
   function openObservation(result: Exclude<ValidationResult, 'aprobado'>) {
     setObservation({
       result,
-      reason: observedAttempt?.motivo ?? '',
-      note: observedAttempt?.observacion ?? '',
+      reason: observedAttempt?.motivo ?? editingOutbox?.payload.motivo ?? '',
+      note: observedAttempt?.observacion ?? editingOutbox?.payload.observacion ?? '',
     });
   }
 
@@ -676,7 +795,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
     setLine(nextLine);
     setShift(nextShift);
     if (nextLine && nextShift) setEditingContext(false);
-    if (nextLine && nextShift) {
+    if (nextLine && nextShift && !editingOutbox) {
       await saveValidationWorkContext(userId, deviceId, {
         linea_proceso: nextLine,
         turno: nextShift,
@@ -775,7 +894,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
             <ScanInput
               ref={folioInput}
               autoFocus={isPdaBuild}
-              disabled={busy}
+              disabled={busy || Boolean(editingOutbox)}
               onChangeText={handleFolioChange}
               onSubmit={(code) => void inspectFolio(code)}
               placeholder={tight ? 'Pistolea el folio' : 'Escanear código de barras'}
@@ -784,6 +903,13 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
             />
 
             {folioReview ? <FolioReviewCard review={folioReview} /> : null}
+            {editingOutbox ? (
+              <View style={styles.selectionSummary}>
+                <Text style={styles.selectionSummaryTitle}>CORRIGIENDO ENVÍO · {editingOutbox.payload.numero_folio}</Text>
+                <Text style={styles.selectionSummaryText}>La captura original sigue guardada hasta que registres la corrección.</Text>
+                <Pressable disabled={busy} onPress={cancelRecovery} style={styles.retryButton}><Text style={styles.retryText}>Cancelar corrección</Text></Pressable>
+              </View>
+            ) : null}
 
             <View style={[styles.typeRow, compact && styles.typeRowCompact]}>
               {(['pallet', 'saldo'] as const).map((type) => (
@@ -909,7 +1035,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
                   <Text style={[styles.resultBadge, item.status === 'pendiente' ? styles.badgeObserved : styles.badgeRejected]}>
                     {item.status === 'pendiente' ? '◆ ' : '■ '}{statusLabel(item.status)}
                   </Text>
-                  {item.status !== 'pendiente' ? <Pressable onPress={() => void retryItem(item)} style={styles.retryButton}><Text style={styles.retryText}>Reintentar</Text></Pressable> : null}
+                  {item.status !== 'pendiente' ? <Pressable disabled={busy || syncing || Boolean(editingOutbox)} onPress={() => void resumeItem(item)} style={styles.retryButton}><Text style={styles.retryText}>Retomar</Text></Pressable> : null}
                 </View>
               </View>
             ))}
@@ -917,6 +1043,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
             {visibleSessionAttempts.map((item) => (
               <Pressable
                 key={item.id}
+                disabled={busy || Boolean(editingOutbox)}
                 onPress={() => { setFolio(item.numero_folio); void inspectFolio(item.numero_folio); }}
                 style={styles.sessionItem}
               >
@@ -965,8 +1092,9 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
                     <View style={styles.queueContent}>
                       <Text style={styles.queueFolio}>{item.payload.numero_folio}</Text>
                       <Text style={styles.queueDetail}>{statusLabel(item.status)} · {formatTime(item.payload.generado_dispositivo_at)}</Text>
+                      {item.message ? <Text style={styles.queueError}>{item.message}</Text> : null}
                     </View>
-                    {item.status !== 'pendiente' ? <Pressable onPress={() => void retryItem(item)} style={styles.retryButton}><Text style={styles.retryText}>Reintentar</Text></Pressable> : null}
+                    {item.status !== 'pendiente' ? <Pressable disabled={busy || syncing || Boolean(editingOutbox)} onPress={() => void resumeItem(item)} style={styles.retryButton}><Text style={styles.retryText}>Retomar</Text></Pressable> : null}
                   </View>
                 ))}
               </View>

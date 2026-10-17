@@ -357,25 +357,66 @@ async function saveOutbox(
   await AsyncStorage.setItem(outboxKey(userId, deviceId), JSON.stringify(items));
 }
 
+const outboxWrites = new Map<string, Promise<void>>();
+
+async function updateOutbox(
+  userId: string,
+  deviceId: string,
+  update: (items: ValidationOutboxItem[]) => ValidationOutboxItem[],
+): Promise<ValidationOutboxItem[]> {
+  const key = outboxKey(userId, deviceId);
+  const write = (outboxWrites.get(key) ?? Promise.resolve()).then(async () => {
+    const items = update(await loadValidationOutbox(userId, deviceId));
+    await saveOutbox(userId, deviceId, items);
+    return items;
+  });
+  const settled = write.then(() => {}, () => {});
+  outboxWrites.set(key, settled);
+  try {
+    return await write;
+  } finally {
+    if (outboxWrites.get(key) === settled) outboxWrites.delete(key);
+  }
+}
+
 export async function enqueueValidation(
   userId: string,
   deviceId: string,
   payload: RegisterValidationPayload,
 ): Promise<ValidationOutboxItem[]> {
-  const items = await loadValidationOutbox(userId, deviceId);
-  if (items.some((item) => item.id === payload.operacion_id)) return items;
-
-  items.push({
-    id: payload.operacion_id,
-    payload,
-    status: 'pendiente',
-    attempts: 0,
-    created_at: new Date().toISOString(),
-    last_attempt_at: null,
-    message: null,
+  return updateOutbox(userId, deviceId, (items) => {
+    if (items.some((item) => item.id === payload.operacion_id)) return items;
+    return [...items, pendingValidation(payload)];
   });
-  await saveOutbox(userId, deviceId, items);
-  return items;
+}
+
+function pendingValidation(payload: RegisterValidationPayload): ValidationOutboxItem {
+  return {
+    id: payload.operacion_id, payload, status: 'pendiente', attempts: 0,
+    created_at: new Date().toISOString(), last_attempt_at: null, message: null,
+  };
+}
+
+// La captura original se reemplaza en una sola escritura, después de comprobar
+// en el servidor que no creó una validación. No se retira al abrir el editor.
+export async function replaceValidationOutboxItem(
+  userId: string,
+  deviceId: string,
+  operationId: string,
+  payload: RegisterValidationPayload,
+): Promise<ValidationOutboxItem[]> {
+  return updateOutbox(userId, deviceId, (items) => {
+    const original = items.find((item) => item.id === operationId);
+    if (!original || original.status === 'pendiente') {
+      throw new Error('La captura cambió mientras la corregías. Vuelve a retomarla desde la bandeja.');
+    }
+    if (original.payload.numero_folio.trim().toUpperCase() !== payload.numero_folio.trim().toUpperCase()
+      || original.payload.temporada_id !== payload.temporada_id
+      || items.some((item) => item.id === payload.operacion_id)) {
+      throw new Error('La corrección debe conservar el folio y la temporada y utilizar un envío nuevo.');
+    }
+    return items.map((item) => item.id === operationId ? pendingValidation(payload) : item);
+  });
 }
 
 export async function removeValidationFromOutbox(
@@ -383,10 +424,7 @@ export async function removeValidationFromOutbox(
   deviceId: string,
   operationId: string,
 ): Promise<ValidationOutboxItem[]> {
-  const items = (await loadValidationOutbox(userId, deviceId))
-    .filter((item) => item.id !== operationId);
-  await saveOutbox(userId, deviceId, items);
-  return items;
+  return updateOutbox(userId, deviceId, (items) => items.filter((item) => item.id !== operationId));
 }
 
 export async function markValidationOutboxItem(
@@ -396,8 +434,7 @@ export async function markValidationOutboxItem(
   status: ValidationOutboxStatus,
   message: string | null,
 ): Promise<ValidationOutboxItem[]> {
-  const items = await loadValidationOutbox(userId, deviceId);
-  const updated = items.map((item) => item.id === operationId
+  return updateOutbox(userId, deviceId, (items) => items.map((item) => item.id === operationId
     ? {
       ...item,
       status,
@@ -405,9 +442,7 @@ export async function markValidationOutboxItem(
       last_attempt_at: new Date().toISOString(),
       message,
     }
-    : item);
-  await saveOutbox(userId, deviceId, updated);
-  return updated;
+    : item));
 }
 
 export async function retryValidationOutboxItem(
@@ -415,10 +450,7 @@ export async function retryValidationOutboxItem(
   deviceId: string,
   operationId: string,
 ): Promise<ValidationOutboxItem[]> {
-  const items = await loadValidationOutbox(userId, deviceId);
-  const updated = items.map((item) => item.id === operationId
+  return updateOutbox(userId, deviceId, (items) => items.map((item) => item.id === operationId
     ? { ...item, status: 'pendiente' as const, message: null }
-    : item);
-  await saveOutbox(userId, deviceId, updated);
-  return updated;
+    : item));
 }

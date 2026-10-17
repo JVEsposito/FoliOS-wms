@@ -130,6 +130,18 @@ bandeja de operaciones.
 
 La bandeja se separa por usuario y dispositivo. Cada captura se persiste antes de transmitirse y conserva el mismo UUID durante los reintentos.
 
+Los envíos con error, incluso de sesiones anteriores, muestran el mensaje y permiten
+**Retomar**. La PDA consulta el estado del UUID antes de abrir la corrección: si el
+envío ya creó una validación, concilia la bandeja con el servidor; si fue rechazado
+o falló, recupera la captura completa. Una decisión final registrada por otro envío
+requiere revisión de supervisión y no se sustituye desde este flujo.
+
+La captura original permanece guardada al abrir, cancelar o reiniciar el editor.
+Al registrar la corrección se reemplaza en una sola escritura por un envío con UUID
+nuevo, antes de transmitirlo. Si la respuesta se pierde, los reintentos de ese
+envío conservan su UUID y contenido. Una transición rechazada nunca se reabre ni
+se modifica para forzar un reintento.
+
 ## Intentos e idempotencia
 
 Cada envío utiliza `operacion_id` UUID y hash del payload.
