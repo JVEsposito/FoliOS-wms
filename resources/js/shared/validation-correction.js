@@ -67,16 +67,18 @@ export function createValidationCorrection({ api, setBusy = () => {}, toast = ()
     let draft = null;
     let operationId = null;
     let notice = '';
+    const loadedClients = new Set();
     const linePickers = new Map();
     const pickers = {};
 
     const picker = (name, label, placeholder, onChange) => {
         pickers[name] = createSearchSelect(dialog.querySelector(`[data-vc-picker="${name}"]`), { label, placeholder, onChange });
     };
-    picker('cliente', 'Cliente', 'Buscar cliente', (value) => {
+    picker('cliente', 'Cliente', 'Buscar cliente', async (value) => {
         draft.cliente = value;
         draft.marca = '';
         clearForeignOrigins();
+        await loadClient(value);
         renderLines();
         refresh();
     });
@@ -91,6 +93,24 @@ export function createValidationCorrection({ api, setBusy = () => {}, toast = ()
     picker('calibre', 'Calibre', 'Buscar calibre', (value) => { Object.assign(draft, { calibre: value, envase: '' }); refresh(); });
     picker('envase', 'Embalaje', 'Buscar por nombre o código', (value) => { draft.envase = value; refresh(); });
     picker('categoria', 'Categoría', 'Buscar categoría', (value) => { draft.categoriaId = value; refresh(); });
+
+    /** Los artículos llegan por cliente: al elegir otro cliente se piden los suyos una vez. */
+    async function loadClient(client) {
+        if (!client || loadedClients.has(client)) return;
+        setBusy(true, `Cargando el catálogo de ${client}…`);
+        try {
+            const data = await api(`/api/validacion/pallets/${encodeURIComponent(context.validacion.id)}/correccion?cliente=${encodeURIComponent(client)}`);
+            const known = new Set(context.catalogo.articulos.map((article) => article.id));
+            context.catalogo.articulos = [...context.catalogo.articulos, ...data.catalogo.articulos.filter((article) => !known.has(article.id))];
+            context.catalogo.articulos_por_origen = { ...context.catalogo.articulos_por_origen, ...data.catalogo.articulos_por_origen };
+            loadedClients.add(client);
+            index = indexCatalog(context.catalogo);
+        } catch (error) {
+            toast(error.message || 'No fue posible cargar el catálogo del cliente.', true);
+        } finally {
+            setBusy(false);
+        }
+    }
 
     function clearForeignOrigins() {
         draft.lines = draft.lines.map((line) => {
@@ -233,6 +253,8 @@ export function createValidationCorrection({ api, setBusy = () => {}, toast = ()
             setBusy(false);
         }
         index = indexCatalog(context.catalogo);
+        loadedClients.clear();
+        loadedClients.add(context.catalogo.cliente);
         draft = draftFromValidation(context.validacion, index);
         operationId = randomUuid();
         notice = '';

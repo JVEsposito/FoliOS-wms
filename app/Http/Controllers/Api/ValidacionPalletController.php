@@ -288,9 +288,11 @@ class ValidacionPalletController extends Controller
      * composición por CSG, y el catálogo activo de su temporada con la forma de la PDA.
      */
     public function contextoCorreccion(
+        Request $request,
         ValidacionPallet $validacionPallet,
         CatalogoOperativoValidacion $catalogo,
     ): JsonResponse {
+        $request->validate(['cliente' => ['nullable', 'string', 'max:150']]);
         $validacionPallet->loadMissing(['temporada:id,codigo,nombre,activa', 'folio:id,numero_folio,estado_operacional,condicion_termica,activo']);
         if ($validacionPallet->estado !== EstadoValidacionPallet::Aceptada
             || $validacionPallet->resultado !== ResultadoValidacionPallet::Aprobado
@@ -344,12 +346,22 @@ class ValidacionPalletController extends Controller
                     'activo' => $validacionPallet->folio->activo,
                 ],
             ],
+            // Artículos y combinaciones solo del cliente (el del bulto o el que se elija al corregir).
             'catalogo' => [
                 'temporada' => $validacionPallet->temporada?->only(['id', 'codigo', 'nombre', 'activa']),
-                ...$catalogo->datos($validacionPallet->temporada_id),
+                ...$catalogo->paraCorreccion(
+                    $validacionPallet->temporada_id,
+                    $request->string('cliente')->trim()->toString() ?: $this->clienteDeLaValidacion($validacionPallet),
+                ),
             ],
             'exige_lote_proceso' => (bool) config('validacion.exigir_lote_proceso'),
         ])->header('Cache-Control', 'no-store, private');
+    }
+
+    private function clienteDeLaValidacion(ValidacionPallet $validacion): string
+    {
+        return (string) (DB::table('origenes_validacion')->where('id', $validacion->origen_validacion_id)->value('cliente')
+            ?? ($validacion->snapshot['origen']['cliente'] ?? ''));
     }
 
     public function corregir(

@@ -87,6 +87,12 @@ La oficina presenta:
 - motivo más frecuente;
 - historial auditable con validador original, supervisor que anuló, fecha y motivo.
 
+La lista de anulables trae hasta 100 pallets de la temporada activa que siguen pendientes de
+prefrío (el filtro va en la consulta) y revisa su actividad posterior para todos juntos, con
+una consulta por tipo (ubicación, carga, movimientos, prefrío, repaletizaje). El catálogo
+para **Corregir datos** no se descarga al cargar la pantalla: se pide al abrir la corrección,
+solo con los artículos del cliente del bulto (y de otro cliente si se cambia).
+
 ## API
 
 Consulta:
