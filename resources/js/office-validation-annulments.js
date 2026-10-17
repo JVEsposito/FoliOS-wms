@@ -1,3 +1,5 @@
+import { createValidationCorrection } from './shared/validation-correction.js';
+
 const byId = (id) => document.getElementById(id);
 const elements = {
     access: byId('officeAccess'), app: byId('officeApp'), login: byId('officeLoginForm'), loginError: byId('officeLoginError'),
@@ -7,7 +9,6 @@ const elements = {
     total: byId('totalAnnulled'), today: byId('todayAnnulled'), candidateCount: byId('candidateCount'), topReason: byId('topReason'),
     dialog: byId('annulmentDialog'), form: byId('annulmentForm'), dialogTitle: byId('annulmentDialogTitle'), error: byId('annulmentError'),
     cancel: byId('cancelAnnulment'), cancelBottom: byId('cancelAnnulmentBottom'),
-    correctionDialog: byId('annulmentCorrectionDialog'), correctionForm: byId('annulmentCorrectionForm'), correctionTitle: byId('annulmentCorrectionTitle'), correctionState: byId('annulmentCorrectionState'), correctionError: byId('annulmentCorrectionError'), correctionCancel: byId('cancelAnnulmentCorrection'), correctionCancelBottom: byId('cancelAnnulmentCorrectionBottom'),
     loading: byId('officeLoading'), loadingText: byId('officeLoadingText'), toasts: byId('officeToasts'),
 };
 const keys = { token: 'estiba_wms_office_token', identity: 'estiba_wms_office_identity' };
@@ -17,14 +18,8 @@ const state = {
     candidates: [],
     history: [],
     summary: {},
-    articles: [],
-    origins: [],
-    categories: [],
-    combinations: [],
     target: null,
     operationId: null,
-    correctionTarget: null,
-    correctionOperationId: null,
 };
 const reasonLabels = {
     folio_incorrecto: 'Folio incorrecto',
@@ -86,19 +81,11 @@ async function loadData() {
     const filter = Object.fromEntries(new FormData(elements.filter));
     if (String(filter.folio || '').trim()) params.set('folio', String(filter.folio).trim());
     if (elements.categoryFilter.value) params.set('motivo_categoria', elements.categoryFilter.value);
-    const [response, catalog] = await Promise.all([
-        api(`/api/validacion/anulaciones?${params}`),
-        state.identity?.puede_corregir_validaciones_pallet === true
-            ? api('/api/administracion/validacion')
-            : Promise.resolve(null),
-    ]);
+    // El catálogo para corregir se pide al abrir la corrección, solo para ese bulto.
+    const response = await api(`/api/validacion/anulaciones?${params}`);
     state.candidates = response.candidatas || [];
     state.history = response.anulaciones || [];
     state.summary = response.resumen || {};
-    state.articles = catalog?.articulos || [];
-    state.origins = catalog?.origenes || [];
-    state.categories = catalog?.categorias || [];
-    state.combinations = catalog?.combinaciones || [];
     render();
 }
 
@@ -135,71 +122,10 @@ function render() {
     `).join('') : '<p class="annulment-empty">Todavía no existen anulaciones para esta selección.</p>';
 }
 
-function renderCorrectionOrigins(selectedId = '') {
-    const articleId = elements.correctionForm.elements.articulo_validacion_id.value;
-    const allowed = new Set(state.combinations
-        .filter((item) => item.activo && item.articulo_validacion_id === articleId)
-        .map((item) => item.origen_validacion_id));
-    const origins = state.origins.filter((item) => item.activo && allowed.has(item.id));
-    elements.correctionForm.elements.origen_validacion_id.innerHTML = `<option value="">Selecciona un origen autorizado</option>${origins.map((item) => `<option value="${item.id}">${escapeHtml(item.cliente)} · ${escapeHtml(item.marca)} · CSG ${escapeHtml(item.csg)}</option>`).join('')}`;
-    if (origins.some((item) => item.id === selectedId)) elements.correctionForm.elements.origen_validacion_id.value = selectedId;
-}
-
 function openCorrection(id) {
     if (state.identity?.puede_corregir_validaciones_pallet !== true) return;
     const target = state.candidates.find((item) => item.id === id);
-    if (!target) return;
-    state.correctionTarget = target;
-    state.correctionOperationId = uuid();
-    elements.correctionTitle.textContent = `Corregir ${target.numero_folio}`;
-    elements.correctionState.textContent = 'Se actualizarán la validación y el folio, sin cambiar su estado pendiente de prefrío.';
-    const form = elements.correctionForm;
-    const activeArticles = state.articles.filter((item) => item.activo);
-    const activeCategories = state.categories.filter((item) => item.activo);
-    form.elements.articulo_validacion_id.innerHTML = `<option value="">Selecciona un artículo</option>${activeArticles.map((item) => `<option value="${item.id}">${escapeHtml(item.especie)} · ${escapeHtml(item.variedad)} · ${escapeHtml(item.calibre)} · ${escapeHtml(item.envase)}</option>`).join('')}`;
-    form.elements.categoria_validacion_id.innerHTML = `<option value="">Selecciona una categoría</option>${activeCategories.map((item) => `<option value="${item.id}">${escapeHtml(item.nombre)}</option>`).join('')}`;
-    form.elements.tipo_bulto.value = target.tipo_bulto || 'pallet';
-    form.elements.cantidad_cajas.value = target.cantidad_cajas || 1;
-    form.elements.linea_proceso.value = target.linea_proceso || 1;
-    form.elements.turno.value = target.turno || 'A';
-    form.elements.articulo_validacion_id.value = target.articulo_validacion_id || '';
-    form.elements.categoria_validacion_id.value = target.categoria_validacion_id || '';
-    renderCorrectionOrigins(target.origen_validacion_id || '');
-    form.elements.motivo_correccion.value = '';
-    elements.correctionError.textContent = '';
-    elements.correctionDialog.showModal();
-}
-
-function closeCorrection() {
-    if (elements.correctionDialog.open) elements.correctionDialog.close();
-    elements.correctionForm.reset();
-    elements.correctionError.textContent = '';
-    state.correctionTarget = null;
-    state.correctionOperationId = null;
-}
-
-async function submitCorrection(event) {
-    event.preventDefault();
-    if (!state.correctionTarget || !state.correctionOperationId) return;
-    const payload = Object.fromEntries(new FormData(elements.correctionForm));
-    payload.operacion_id = state.correctionOperationId;
-    payload.cantidad_cajas = Number(payload.cantidad_cajas);
-    payload.linea_proceso = Number(payload.linea_proceso);
-    elements.correctionError.textContent = '';
-    setBusy(true, `Corrigiendo ${state.correctionTarget.numero_folio}…`);
-    try {
-        const response = await api(`/api/validacion/pallets/${state.correctionTarget.id}/corregir`, {
-            method: 'PUT',
-            body: JSON.stringify(payload),
-        });
-        closeCorrection();
-        await loadData();
-        toast(response.message || 'Validación y folio corregidos correctamente.');
-    } catch (error) {
-        elements.correctionError.textContent = error.message;
-    } finally {
-        setBusy(false);
-    }
+    if (target) void correction.open(target.id, target.numero_folio);
 }
 
 function openAnnulment(id) {
@@ -276,9 +202,13 @@ elements.logout?.addEventListener('click', async () => { try { await api('/api/a
 elements.reload.addEventListener('click', () => { setBusy(true, 'Actualizando anulaciones…'); void loadData().catch((error) => toast(error.message, true)).finally(() => setBusy(false)); });
 elements.filter.addEventListener('submit', (event) => { event.preventDefault(); setBusy(true, 'Buscando pallets…'); void loadData().catch((error) => toast(error.message, true)).finally(() => setBusy(false)); });
 elements.categoryFilter.addEventListener('change', () => { setBusy(true, 'Filtrando auditoría…'); void loadData().catch((error) => toast(error.message, true)).finally(() => setBusy(false)); });
+const correction = createValidationCorrection({
+    api, setBusy, toast,
+    onSaved: () => loadData(),
+});
 elements.candidates.addEventListener('click', (event) => {
-    const correction = event.target.closest('[data-correct]');
-    if (correction) { openCorrection(correction.dataset.correct); return; }
+    const correctButton = event.target.closest('[data-correct]');
+    if (correctButton) { openCorrection(correctButton.dataset.correct); return; }
     const annulment = event.target.closest('[data-annul]');
     if (annulment) openAnnulment(annulment.dataset.annul);
 });
@@ -286,11 +216,6 @@ elements.form.addEventListener('submit', (event) => { void submitAnnulment(event
 elements.cancel.addEventListener('click', closeAnnulment);
 elements.cancelBottom.addEventListener('click', closeAnnulment);
 elements.dialog.addEventListener('cancel', (event) => { event.preventDefault(); closeAnnulment(); });
-elements.correctionForm.addEventListener('submit', (event) => { void submitCorrection(event); });
-elements.correctionForm.elements.articulo_validacion_id.addEventListener('change', () => renderCorrectionOrigins());
-elements.correctionCancel.addEventListener('click', closeCorrection);
-elements.correctionCancelBottom.addEventListener('click', closeCorrection);
-elements.correctionDialog.addEventListener('cancel', (event) => { event.preventDefault(); closeCorrection(); });
 
 if (state.token && state.identity?.puede_consultar_validaciones_pallet === true) {
     showApp();

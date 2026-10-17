@@ -18,6 +18,7 @@ use App\Models\Temporada;
 use App\Models\ValidacionPallet;
 use App\Services\Autenticacion\ContextoOperacional;
 use App\Services\Temporadas\ServicioTemporadaActiva;
+use App\Services\Validacion\CatalogoOperativoValidacion;
 use App\Services\Validacion\ServicioCorreccionValidacionPallet;
 use App\Services\Validacion\ServicioExportacionRegistroValidacion;
 use App\Services\Validacion\ServicioValidacionPallet;
@@ -280,6 +281,75 @@ class ValidacionPalletController extends Controller
         return new ValidacionPalletResource(
             $validacionPallet->load($this->relaciones()),
         );
+    }
+
+    /**
+     * Lo que necesita el diálogo de corrección: los datos actuales del bulto, con su
+     * composición por CSG, y el catálogo activo de su temporada con la forma de la PDA.
+     */
+    public function contextoCorreccion(
+        ValidacionPallet $validacionPallet,
+        CatalogoOperativoValidacion $catalogo,
+    ): JsonResponse {
+        $validacionPallet->loadMissing(['temporada:id,codigo,nombre,activa', 'folio:id,numero_folio,estado_operacional,condicion_termica,activo']);
+        if ($validacionPallet->estado !== EstadoValidacionPallet::Aceptada
+            || $validacionPallet->resultado !== ResultadoValidacionPallet::Aprobado
+            || ! $validacionPallet->folio) {
+            return response()->json([
+                'message' => 'Solo se pueden corregir validaciones aprobadas que conserven su folio asociado.',
+            ], Response::HTTP_CONFLICT);
+        }
+        $snapshot = $validacionPallet->snapshot ?? [];
+        $composicion = collect($snapshot['composicion'] ?? [])
+            ->filter(fn (mixed $linea): bool => is_array($linea) && filled($linea['origen_validacion_id'] ?? null))
+            ->map(fn (array $linea): array => [
+                'origen_validacion_id' => $linea['origen_validacion_id'],
+                'csg' => $linea['csg'] ?? null,
+                'predio' => $linea['predio'] ?? null,
+                'cantidad_cajas' => (int) ($linea['cantidad_cajas'] ?? 0),
+                'lote_materia_prima' => $linea['lote_materia_prima'] ?? null,
+                'proceso_packing' => $linea['proceso_packing'] ?? null,
+            ])
+            ->values();
+        if ($composicion->isEmpty()) {
+            // Validaciones antiguas, anteriores a la composición por CSG.
+            $composicion = collect([[
+                'origen_validacion_id' => $validacionPallet->origen_validacion_id,
+                'csg' => $snapshot['origen']['csg'] ?? null,
+                'predio' => $snapshot['origen']['predio'] ?? null,
+                'cantidad_cajas' => (int) $validacionPallet->cantidad_cajas,
+                'lote_materia_prima' => null,
+                'proceso_packing' => null,
+            ]]);
+        }
+
+        return response()->json([
+            'validacion' => [
+                'id' => $validacionPallet->id,
+                'numero_folio' => $validacionPallet->numero_folio,
+                'tipo_bulto' => $validacionPallet->tipo_bulto,
+                'cantidad_cajas' => (int) $validacionPallet->cantidad_cajas,
+                'linea_proceso' => $validacionPallet->linea_proceso,
+                'turno' => $validacionPallet->turno,
+                'articulo_validacion_id' => $validacionPallet->articulo_validacion_id,
+                'categoria_validacion_id' => $validacionPallet->categoria_validacion_id,
+                'fecha_embalaje' => $snapshot['fecha_embalaje'] ?? null,
+                'articulo' => $snapshot['articulo'] ?? null,
+                'origen' => $snapshot['origen'] ?? null,
+                'categoria' => $snapshot['categoria']['nombre'] ?? null,
+                'composicion' => $composicion->all(),
+                'folio' => [
+                    'estado_operacional' => $validacionPallet->folio->estado_operacional->value,
+                    'condicion_termica' => $validacionPallet->folio->condicion_termica->value,
+                    'activo' => $validacionPallet->folio->activo,
+                ],
+            ],
+            'catalogo' => [
+                'temporada' => $validacionPallet->temporada?->only(['id', 'codigo', 'nombre', 'activa']),
+                ...$catalogo->datos($validacionPallet->temporada_id),
+            ],
+            'exige_lote_proceso' => (bool) config('validacion.exigir_lote_proceso'),
+        ])->header('Cache-Control', 'no-store, private');
     }
 
     public function corregir(
