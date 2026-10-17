@@ -51,13 +51,13 @@ class ConectorMySqlLecturaTest extends TestCase
             return 0;
         });
         $pdo->expects($this->once())->method('beginTransaction')->willReturn(true);
-        $pdo->expects($this->once())->method('prepare')->with('SELECT `Pallet` FROM `obdc_stock` WHERE `cod_bodega` = ?')->willReturn($statement);
+        $pdo->expects($this->once())->method('prepare')->with('SELECT `Pallet` FROM `odbc_stock` WHERE `cod_bodega` = ?')->willReturn($statement);
         $pdo->method('inTransaction')->willReturn(true);
         $pdo->expects($this->once())->method('rollBack')->willReturn(true);
         $conector = $this->getMockBuilder(ConectorMySqlLectura::class)->onlyMethods(['abrir'])->getMock();
         $conector->method('abrir')->willReturn($pdo);
 
-        $this->assertSame([['Pallet' => '1']], $conector->consultar([], 'SELECT `Pallet` FROM `obdc_stock` WHERE `cod_bodega` = ?', ['AR01']));
+        $this->assertSame([['Pallet' => '1']], $conector->consultar([], 'SELECT `Pallet` FROM `odbc_stock` WHERE `cod_bodega` = ?', ['AR01']));
     }
 
     public function test_diagnostica_la_causa_sin_exponer_servidor_ni_usuario(): void
@@ -67,7 +67,7 @@ class ConectorMySqlLecturaTest extends TestCase
             [2002, 'SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for srv-privado failed', 'servidor_inaccesible'],
             [1045, "SQLSTATE[HY000] [1045] Access denied for user 'lector_privado'@'10.0.0.5'", 'acceso_denegado'],
             [1049, "SQLSTATE[HY000] [1049] Unknown database 'base_privada'", 'base_inexistente'],
-            [1146, "SQLSTATE[42S02]: Table 'base_privada.obdc_stock' doesn't exist", 'tabla_inexistente'],
+            [1146, "SQLSTATE[42S02]: Table 'base_privada.odbc_stock' doesn't exist", 'tabla_inexistente'],
             [1142, "SQLSTATE[42000]: SELECT command denied to user 'lector_privado'", 'sin_permiso_tabla'],
             [9999, 'otro error con srv-privado', 'error_desconocido'],
         ];
