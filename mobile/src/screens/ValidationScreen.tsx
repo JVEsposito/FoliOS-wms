@@ -90,6 +90,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
   const flushing = useRef(false);
   const synchronizing = useRef(false);
   const resuming = useRef(false);
+  const recoveryWorkContext = useRef<{ line: ValidationLine | null; shift: ValidationShift | null } | null>(null);
   const [catalog, setCatalog] = useState<ValidationCatalog | null>(null);
   const [outbox, setOutbox] = useState<ValidationOutboxItem[]>([]);
   const [recent, setRecent] = useState<ValidationAttempt[]>([]);
@@ -628,7 +629,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
         ? await replaceValidationOutboxItem(userId, deviceId, editingOutbox.id, payload)
         : await enqueueValidation(userId, deviceId, payload);
       setOutbox(items);
-      setEditingOutbox(null);
+      finishRecovery();
       if (!baseUrl) {
         setNotice(`${payload.numero_folio} quedó en la bandeja de salida.`);
       } else {
@@ -735,6 +736,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
       setFolioReview({ numero_folio: payload.numero_folio, status: 'nuevo', attempt: null });
       setPackageType(payload.tipo_bulto);
       setBoxes(String(payload.cantidad_cajas));
+      recoveryWorkContext.current = { line, shift };
       setLine(payload.linea_proceso);
       setShift(payload.turno);
       setClient(origin?.cliente ?? '');
@@ -762,9 +764,19 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
     }
   }
 
-  function cancelRecovery() {
+  function finishRecovery() {
+    if (recoveryWorkContext.current) {
+      setLine(recoveryWorkContext.current.line);
+      setShift(recoveryWorkContext.current.shift);
+      recoveryWorkContext.current = null;
+    }
     setEditingOutbox(null);
+  }
+
+  function cancelRecovery() {
+    finishRecovery();
     setFolio(''); setFolioReview(null); setBoxes('');
+    setPackingDate(todayLocal());
     setClient(''); setBrand(''); resetProduct();
     setOriginDrafts([newOriginDraft()]); setObservation(null);
     setError('');
@@ -783,7 +795,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
     setLine(nextLine);
     setShift(nextShift);
     if (nextLine && nextShift) setEditingContext(false);
-    if (nextLine && nextShift) {
+    if (nextLine && nextShift && !editingOutbox) {
       await saveValidationWorkContext(userId, deviceId, {
         linea_proceso: nextLine,
         turno: nextShift,

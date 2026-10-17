@@ -145,6 +145,7 @@ function harness({ item = pending(), statusError = false, record = null, finalRe
     message() { return renderer.root.findAllByType('Text').map((node) => flatten(node.props.children)).join('\n'); },
     field(label) { return renderer.root.find((node) => typeof node.type === 'function' && node.props.label === label).props.value; },
     scan() { return renderer.root.findByType('ScanInput').props; },
+    date() { return renderer.root.findAllByType('TextInput').find((node) => node.props.placeholder === 'AAAA-MM-DD').props.value; },
     trace() { return renderer.root.findAllByType('TextInput').filter((node) => node.props.placeholder === 'Según etiqueta').map((node) => node.props.value); },
     async lot(value) { await flush(() => renderer.root.findAllByType('TextInput').find((node) => node.props.placeholder === 'Según etiqueta').props.onChangeText(value)); },
   };
@@ -168,15 +169,18 @@ test('tablet retoma la bandeja anterior, conserva la captura y envía la correcc
     assert.equal(h.calls.posts[0].linea_proceso, 2); assert.equal(h.calls.posts[0].turno, 'B');
     assert.deepEqual(h.calls.posts[0].composicion.map((entry) => entry.cantidad_cajas), [70, 50]);
     assert.equal(h.records.length, 1); assert.deepEqual(h.outbox(), []);
+    assert.match(h.message(), /Línea 1, turno A/);
   } finally { await h.unmount(); }
 });
 
 test('cancelar o reiniciar durante la corrección conserva intacta la captura original', async () => {
   const h = harness({ width: 360 });
   try {
-    await h.mount(); const original = h.outbox();
+    await h.mount(); const original = h.outbox(); const originalDate = h.date();
     await h.press('Retomar'); await h.lot('CAMBIO SIN ENVIAR'); await h.press('Cancelar corrección');
     assert.deepEqual(h.outbox(), original);
+    assert.match(h.message(), /Línea 1, turno A/);
+    assert.equal(h.date(), originalDate);
     await h.press('Retomar'); await h.lot('OTRO CAMBIO SIN ENVIAR');
     await h.unmount(); await h.mount();
     assert.deepEqual(h.outbox(), original); await h.press('Retomar');
