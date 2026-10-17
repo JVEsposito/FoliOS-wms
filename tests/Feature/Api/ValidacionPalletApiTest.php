@@ -219,6 +219,63 @@ class ValidacionPalletApiTest extends TestCase
         $this->assertDatabaseCount('validaciones_pallet', 1);
     }
 
+    public function test_consulta_el_envio_confirmado_sin_repetirlo_y_solo_desde_su_usuario_y_dispositivo(): void
+    {
+        [$catalogo, $token] = $this->contexto(RolUsuario::Validador, 'VAL-RECUPERAR');
+        $payload = $this->payload($catalogo, 'PAL-RECUPERAR');
+        $id = $this->conToken($token)->postJson('/api/validacion/pallets', $payload)
+            ->assertCreated()->json('data.id');
+        $url = '/api/validacion/pallets/operaciones/'.$payload['operacion_id'];
+        $this->conToken($token)->getJson($url)->assertOk()
+            ->assertJsonPath('operacion_id', $payload['operacion_id'])
+            ->assertJsonPath('estado', 'aplicada')
+            ->assertJsonPath('validacion.id', $id);
+        $this->assertDatabaseCount('validaciones_pallet', 1);
+
+        [, $otroToken] = $this->acceso(RolUsuario::Validador, 'VAL-OTRO-USUARIO');
+        $this->conToken($otroToken)->getJson($url)->assertForbidden();
+        $otroDispositivo = Dispositivo::query()->where('codigo', 'VAL-OTRO-USUARIO')->firstOrFail();
+        $usuario = User::query()->findOrFail(DB::table('validaciones_pallet')->where('id', $id)->value('user_id'));
+        $otraTablet = $usuario->crearTokenParaDispositivo($otroDispositivo, 'otra-tablet')->plainTextToken;
+        $this->conToken($otraTablet)->getJson($url)->assertForbidden();
+    }
+
+    public function test_un_envio_rechazado_se_recupera_con_uuid_nuevo_y_conserva_su_rechazo_original(): void
+    {
+        [$catalogo, $token] = $this->contexto(RolUsuario::Validador, 'VAL-RECHAZO-LOCAL');
+        $payload = $this->payload($catalogo, 'PAL-RECHAZO-LOCAL');
+        DB::table('combinaciones_validacion')->where('articulo_validacion_id', $catalogo['articulo_validacion_id'])
+            ->update(['activo' => false]);
+        $this->conToken($token)->postJson('/api/validacion/pallets', $payload)->assertUnprocessable();
+        $url = '/api/validacion/pallets/operaciones/'.$payload['operacion_id'];
+        $this->conToken($token)->getJson($url)->assertOk()
+            ->assertJsonPath('estado', 'rechazada')->assertJsonPath('validacion', null)
+            ->assertJsonPath('mensaje', 'Una de las combinaciones de artículo y CSG no se encuentra habilitada.');
+
+        DB::table('combinaciones_validacion')->where('articulo_validacion_id', $catalogo['articulo_validacion_id'])
+            ->update(['activo' => true]);
+        $this->conToken($token)->postJson('/api/validacion/pallets', $payload)->assertConflict();
+        $nuevo = [...$payload, 'operacion_id' => (string) Str::uuid()];
+        $this->conToken($token)->postJson('/api/validacion/pallets', $nuevo)->assertCreated();
+        $this->conToken($token)->getJson($url)->assertOk()->assertJsonPath('estado', 'rechazada');
+        $this->conToken($token)->getJson('/api/validacion/pallets/operaciones/'.$nuevo['operacion_id'])
+            ->assertOk()->assertJsonPath('estado', 'aplicada');
+        $this->assertDatabaseCount('validaciones_pallet', 1);
+        $this->assertSame(1, Folio::query()->where('numero_folio', 'PAL-RECHAZO-LOCAL')->count());
+    }
+
+    public function test_un_uuid_sin_envio_no_se_confunde_con_una_operacion_rechazada_o_aplicada(): void
+    {
+        [, $token] = $this->contexto(RolUsuario::Validador, 'VAL-SIN-ENVIO');
+        $operacion = (string) Str::uuid();
+        $this->conToken($token)->getJson('/api/validacion/pallets/operaciones/'.$operacion)
+            ->assertOk()->assertJsonPath('operacion_id', $operacion)
+            ->assertJsonPath('estado', 'sin_registro')->assertJsonPath('validacion', null)
+            ->assertJsonPath('mensaje', null);
+        $this->conToken($token)->getJson('/api/validacion/pallets/operaciones/no-es-un-uuid')->assertNotFound();
+        $this->assertDatabaseCount('validaciones_pallet', 0);
+    }
+
     public function test_usa_la_fecha_de_validacion_si_el_folio_no_informa_fecha_de_embalaje(): void
     {
         [$catalogo, $token] = $this->contexto(RolUsuario::Validador, 'VAL-FECHA');
