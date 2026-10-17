@@ -303,6 +303,10 @@ Route::middleware('auth:sanctum')->group(function () {
         ->middleware('can:validar-pallets');
     Route::post('/validacion/pallets', [ValidacionPalletController::class, 'store'])
         ->middleware('can:validar-pallets');
+    Route::get(
+        '/validacion/pallets/{validacionPallet}/correccion',
+        [ValidacionPalletController::class, 'contextoCorreccion'],
+    )->middleware('can:corregir-validaciones-pallet');
     Route::put(
         '/validacion/pallets/{validacionPallet}/corregir',
         [ValidacionPalletController::class, 'corregir'],

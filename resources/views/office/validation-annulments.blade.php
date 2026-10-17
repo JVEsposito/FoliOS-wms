@@ -7,7 +7,7 @@
         <meta name="color-scheme" content="light dark">
         <title>FoliOS · Anulaciones de pallets</title>
         @if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
-            @vite(['resources/css/office.css', 'resources/css/office-validation-annulments.css', 'resources/js/office-validation-annulments.js'])
+            @vite(['resources/css/office.css', 'resources/css/office-validation-annulments.css', 'resources/css/office-validation-correction.css', 'resources/js/office-validation-annulments.js'])
         @endif
         @include('office.partials.arranque')
     </head>
@@ -108,33 +108,7 @@
             </form>
         </dialog>
 
-        <dialog class="annulment-dialog annulment-correction-dialog" id="annulmentCorrectionDialog">
-            <form id="annulmentCorrectionForm" novalidate>
-                <div class="annulment-dialog-heading">
-                    <div>
-                        <p class="eyebrow">CORRECCIÓN ADMINISTRATIVA</p>
-                        <h2 id="annulmentCorrectionTitle">Corregir validación</h2>
-                    </div>
-                    <button class="annulment-close" id="cancelAnnulmentCorrection" type="button" aria-label="Cerrar">×</button>
-                </div>
-                <p class="annulment-correction-state" id="annulmentCorrectionState"></p>
-                <div class="annulment-correction-grid">
-                    <label><span>Tipo de bulto *</span><select name="tipo_bulto" required><option value="pallet">Pallet completo</option><option value="saldo">Saldo</option></select></label>
-                    <label><span>Cantidad de cajas *</span><input name="cantidad_cajas" type="number" min="1" required></label>
-                    <label><span>Línea *</span><select name="linea_proceso" required><option value="1">Línea 1</option><option value="2">Línea 2</option><option value="3">Línea 3</option></select></label>
-                    <label><span>Turno *</span><select name="turno" required><option value="A">Turno A</option><option value="B">Turno B</option></select></label>
-                </div>
-                <label><span>Artículo / embalaje *</span><select name="articulo_validacion_id" required></select></label>
-                <label><span>Origen autorizado *</span><select name="origen_validacion_id" required></select></label>
-                <label><span>Categoría *</span><select name="categoria_validacion_id" required></select></label>
-                <label><span>Motivo de la corrección *</span><textarea name="motivo_correccion" rows="3" maxlength="1000" placeholder="Ej.: se ingresaron 129 cajas y físicamente corresponden 120" required></textarea></label>
-                <p class="form-error" id="annulmentCorrectionError" role="alert"></p>
-                <div class="annulment-actions">
-                    <button class="secondary-button" id="cancelAnnulmentCorrectionBottom" type="button">Cancelar</button>
-                    <button class="primary-button" type="submit">Guardar corrección</button>
-                </div>
-            </form>
-        </dialog>
+        @include('office.partials.validation-correction-dialog')
 
         <div class="loading is-hidden" id="officeLoading" aria-hidden="true"><span></span><strong id="officeLoadingText">Procesando…</strong></div>
         <div class="toast-region" id="officeToasts" aria-live="polite"></div>

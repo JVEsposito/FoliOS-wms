@@ -7,6 +7,7 @@ const migratedStyles = [
     'office-materials.css',
     'office-raw-material-returns.css',
     'office-validation-annulments.css',
+    'office-validation-correction.css',
     'office-validation-pending.css',
     'office-inventory-exports.css',
     'office-management.css',

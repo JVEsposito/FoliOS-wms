@@ -13,6 +13,7 @@ use App\Models\RecepcionFrutaEmbalada;
 use App\Models\User;
 use App\Services\RecepcionFrutaEmbalada\ServicioBorradorRecepcionFrutaEmbalada;
 use App\Services\Temporadas\ServicioTemporadaActiva;
+use App\Services\Validacion\CatalogoOperativoValidacion;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -60,9 +61,9 @@ class RecepcionFrutaEmbaladaController extends Controller
         ]);
     }
 
-    public function catalogoPt(Request $request, ServicioTemporadaActiva $temporadas): Response
+    public function catalogoPt(Request $request, ServicioTemporadaActiva $temporadas, CatalogoOperativoValidacion $operativo): Response
     {
-        return app(CatalogoValidacionController::class)($request, $temporadas);
+        return app(CatalogoValidacionController::class)($request, $temporadas, $operativo);
     }
 
     public function revisarGuia(Request $request, ServicioBorradorRecepcionFrutaEmbalada $servicio): JsonResponse

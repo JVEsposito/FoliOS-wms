@@ -1,4 +1,5 @@
-import { catalogCacheMatches, loadIndependentSections } from './office-validation-loading.js';
+import { loadIndependentSections } from './office-validation-loading.js';
+import { createValidationCorrection } from './shared/validation-correction.js';
 import { validationDayContext, validationJourneyLabel, validationOriginLabel } from './shared/validation-row.js';
 
 const byId = (id) => document.getElementById(id);
@@ -9,14 +10,12 @@ const elements = {
     reload: byId('reloadValidationButton'), seasonSelector: byId('seasonSelector'), filters: byId('validationFilters'), history: byId('validationHistoryBody'), userFilter: byId('validationUserFilter'), blankRegister: byId('downloadBlankValidationRegisterButton'), exportRegister: byId('exportValidationRegisterButton'),
     catalogVersion: byId('catalogVersion'), articleCount: byId('activeArticleCount'), originCount: byId('activeOriginCount'), combinationCount: byId('activeCombinationCount'), observedCount: byId('observedCount'),
     dayValidated: byId('dayValidatedCount'), dayValidatedLabel: byId('dayValidatedLabel'), dayApproved: byId('dayApprovedCount'), dayRejected: byId('dayRejectedCount'), lines: byId('validationLines'), linesTitle: byId('validationLinesTitle'),
-    correctionDialog: byId('validationCorrectionDialog'), correctionForm: byId('validationCorrectionForm'), correctionError: byId('validationCorrectionError'), correctionCancel: byId('cancelValidationCorrection'), correctionTitle: byId('validationCorrectionTitle'), correctionState: byId('validationCorrectionState'),
     loading: byId('officeLoading'), loadingText: byId('officeLoadingText'), toasts: byId('officeToasts'),
 };
 const keys = { token: 'estiba_wms_office_token', identity: 'estiba_wms_office_identity' };
 const state = {
     token: localStorage.getItem(keys.token), identity: readJson(keys.identity), seasons: [], season: null,
-    filterSeasons: [], filterSeason: null, validators: [], articles: [], origins: [], categories: [], combinations: [], history: [],
-    correctionTarget: null, correctionOperationId: null, summary: null, catalogCache: null,
+    filterSeasons: [], filterSeason: null, validators: [], history: [], summary: null,
 };
 
 class ApiError extends Error {
@@ -31,7 +30,6 @@ function setBusy(active, message = 'Procesando…') { elements.loadingText.textC
 function toast(message, error = false) { const node = document.createElement('div'); node.className = `toast${error ? ' toast--error' : ''}`; node.textContent = message; elements.toasts.append(node); window.setTimeout(() => node.remove(), 4500); }
 function persist(payload) { state.token = payload.token; state.identity = payload.usuario; localStorage.setItem(keys.token, payload.token); localStorage.setItem(keys.identity, JSON.stringify(payload.usuario)); }
 function clearSession() { state.token = null; state.identity = null; localStorage.removeItem(keys.token); localStorage.removeItem(keys.identity); elements.app.classList.add('is-hidden'); elements.access.classList.remove('is-hidden'); }
-function operationUuid() { if (typeof crypto.randomUUID === 'function') return crypto.randomUUID(); const bytes = crypto.getRandomValues(new Uint8Array(16)); bytes[6] = (bytes[6] & 0x0f) | 0x40; bytes[8] = (bytes[8] & 0x3f) | 0x80; const hex = [...bytes].map((value) => value.toString(16).padStart(2, '0')).join(''); return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`; }
 
 async function api(path, options = {}) {
     const headers = new Headers(options.headers || {}); headers.set('Accept', 'application/json');
@@ -111,23 +109,8 @@ function historyParams(seasonId = state.filterSeason?.id || null) {
 
 async function loadSummary(seasonId = null) {
     const response = await api(`/api/validacion/registro/resumen?${historyParams(seasonId)}`);
-    if (state.catalogCache && (state.catalogCache.seasonId !== response.temporada?.id || state.catalogCache.version !== response.temporada?.version_catalogo)) {
-        state.catalogCache = null;
-        state.articles = []; state.origins = []; state.categories = []; state.combinations = [];
-    }
     state.summary = response;
     renderMetrics();
-}
-
-async function loadCatalogContext(seasonId = null) {
-    if (state.identity?.puede_consultar_catalogos_validacion !== true) return;
-    const currentSeason = state.summary?.temporada;
-    if (catalogCacheMatches(state.catalogCache, currentSeason, seasonId)) return;
-    const suffix = seasonId ? `?temporada_id=${encodeURIComponent(seasonId)}` : '';
-    const response = await api(`/api/administracion/validacion${suffix}`);
-    state.seasons = response.temporadas || []; state.season = response.temporada || null; state.articles = response.articulos || [];
-    state.origins = response.origenes || []; state.categories = response.categorias || []; state.combinations = response.combinaciones || [];
-    state.catalogCache = { seasonId: state.season?.id, version: state.season?.version_catalogo };
 }
 
 async function loadAll(seasonId = null) {
@@ -175,84 +158,20 @@ function renderHistory() {
     }).join('') || '<tr><td class="empty-validation" colspan="6">No existen validaciones coincidentes.</td></tr>';
 }
 
-function renderCorrectionOrigins(selectedId = '') {
-    const articleId = elements.correctionForm.elements.articulo_validacion_id.value;
-    const allowed = new Set(state.combinations
-        .filter((item) => item.activo && item.articulo_validacion_id === articleId)
-        .map((item) => item.origen_validacion_id));
-    const origins = state.origins.filter((item) => item.activo && allowed.has(item.id));
-    elements.correctionForm.elements.origen_validacion_id.innerHTML = `<option value="">Selecciona un origen autorizado</option>${origins.map((item) => `<option value="${item.id}">${escapeHtml(item.cliente)} · ${escapeHtml(item.marca)} · CSG ${escapeHtml(item.csg)}</option>`).join('')}`;
-    if (origins.some((item) => item.id === selectedId)) elements.correctionForm.elements.origen_validacion_id.value = selectedId;
-}
-
-function openCorrection(item) {
-    state.correctionTarget = item;
-    state.correctionOperationId = operationUuid();
-    elements.correctionTitle.textContent = `Corregir ${item.numero_folio}`;
-    const operationalState = statusText(item.folio?.estado_operacional || 'sin estado');
-    const thermalCondition = statusText(item.folio?.condicion_termica || 'sin condición térmica');
-    elements.correctionState.textContent = `Estado actual: ${operationalState} · ${thermalCondition}. Estos estados no serán modificados.`;
-    const form = elements.correctionForm;
-    const activeArticles = state.articles.filter((article) => article.activo);
-    const activeCategories = state.categories.filter((category) => category.activo);
-    form.elements.articulo_validacion_id.innerHTML = `<option value="">Selecciona un artículo</option>${activeArticles.map((article) => `<option value="${article.id}">${escapeHtml(article.especie)} · ${escapeHtml(article.variedad)} · ${escapeHtml(article.calibre)} · ${escapeHtml(article.envase)}</option>`).join('')}`;
-    form.elements.categoria_validacion_id.innerHTML = `<option value="">Selecciona una categoría</option>${activeCategories.map((category) => `<option value="${category.id}">${escapeHtml(category.nombre)}</option>`).join('')}`;
-    form.elements.tipo_bulto.value = item.tipo_bulto || 'pallet';
-    form.elements.cantidad_cajas.value = item.cantidad_cajas || 1;
-    form.elements.linea_proceso.value = item.linea_proceso || 1;
-    form.elements.turno.value = item.turno || 'A';
-    form.elements.articulo_validacion_id.value = item.articulo_validacion_id || '';
-    form.elements.categoria_validacion_id.value = item.categoria_validacion_id || '';
-    renderCorrectionOrigins(item.origen_validacion_id || '');
-    form.elements.motivo_correccion.value = '';
-    elements.correctionError.textContent = '';
-    elements.correctionDialog.showModal();
-}
-
-function closeCorrection() {
-    elements.correctionDialog.close();
-    elements.correctionForm.reset();
-    elements.correctionError.textContent = '';
-    state.correctionTarget = null;
-    state.correctionOperationId = null;
-}
-
-async function submitCorrection(event) {
-    event.preventDefault();
-    if (!state.correctionTarget || !state.correctionOperationId) return;
-    const submitButton = event.submitter ?? elements.correctionForm.querySelector('button[type="submit"]');
-    const payload = Object.fromEntries(new FormData(elements.correctionForm));
-    payload.operacion_id = state.correctionOperationId;
-    payload.cantidad_cajas = Number(payload.cantidad_cajas);
-    payload.linea_proceso = Number(payload.linea_proceso);
-    elements.correctionError.textContent = '';
-    if (submitButton) submitButton.disabled = true;
-    setBusy(true, 'Corrigiendo validación y folio…');
-    try {
-        const response = await api(`/api/validacion/pallets/${state.correctionTarget.id}/corregir`, {
-            method: 'PUT',
-            body: JSON.stringify(payload),
-        });
-        closeCorrection();
-        await Promise.all([loadHistory(state.filterSeason?.id), loadSummary(state.filterSeason?.id)]);
-        toast(response.message || 'Validación corregida y auditada.');
-    } catch (error) {
-        elements.correctionError.textContent = error.message;
-    } finally {
-        if (submitButton) submitButton.disabled = false;
-        setBusy(false);
-    }
-}
-
 elements.login.addEventListener('submit', async (event) => { event.preventDefault(); elements.loginError.textContent = ''; setBusy(true, 'Validando acceso…'); try { const payload = await api('/api/acceso-oficina', { method: 'POST', body: JSON.stringify(Object.fromEntries(new FormData(elements.login))) }); if (payload.usuario.puede_consultar_validaciones_pallet !== true) throw new ApiError('Tu perfil no puede consultar validaciones.', 403); persist(payload); showApp(); await loadAll(); } catch (error) { elements.loginError.textContent = error.message; } finally { setBusy(false); } });
 elements.logout.addEventListener('click', async () => { try { await api('/api/acceso-oficina', { method: 'DELETE' }); } catch {} clearSession(); });
 elements.reload.addEventListener('click', () => { setBusy(true, 'Actualizando validación…'); void loadAll(state.filterSeason?.id).catch((error) => toast(error.message, true)).finally(() => setBusy(false)); });
 elements.filters.addEventListener('submit', (event) => { event.preventDefault(); setBusy(true, 'Consultando historial…'); void Promise.all([loadHistory(state.filterSeason?.id), loadSummary(state.filterSeason?.id)]).catch((error) => toast(error.message, true)).finally(() => setBusy(false)); });
-elements.history.addEventListener('click', (event) => { const button = event.target.closest('[data-correct-validation]'); if (!button) return; const item = state.history.find((candidate) => candidate.id === button.dataset.correctValidation); if (!item) return; setBusy(true, 'Cargando catálogo de corrección…'); void loadCatalogContext(state.filterSeason?.id).then(() => openCorrection(item)).catch((error) => toast(error.message, true)).finally(() => setBusy(false)); });
-elements.correctionForm.addEventListener('submit', (event) => { void submitCorrection(event); });
-elements.correctionForm.elements.articulo_validacion_id.addEventListener('change', () => renderCorrectionOrigins());
-elements.correctionCancel.addEventListener('click', closeCorrection);
-elements.correctionDialog.addEventListener('cancel', (event) => { event.preventDefault(); closeCorrection(); });
+const correction = createValidationCorrection({
+    api, setBusy, toast,
+    onSaved: () => Promise.all([loadHistory(state.filterSeason?.id), loadSummary(state.filterSeason?.id)]),
+});
+elements.history.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-correct-validation]');
+    if (!button) return;
+    const item = state.history.find((candidate) => candidate.id === button.dataset.correctValidation);
+    if (item) void correction.open(item.id, item.numero_folio);
+});
 elements.seasonSelector.addEventListener('change', () => { setBusy(true, 'Cambiando temporada…'); void loadAll(elements.seasonSelector.value || null).catch((error) => toast(error.message, true)).finally(() => setBusy(false)); });
 elements.blankRegister.addEventListener('click', () => {
     setBusy(true, 'Preparando formulario RRPP-01 en blanco…');

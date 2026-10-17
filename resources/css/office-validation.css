@@ -55,13 +55,6 @@
 .import-errors { max-height: 170px; overflow: auto; margin: 10px 0; color: #ffb0b4; font-size: 12px; }
 .validation-correction-button { padding: 8px 12px; color: #071013; font-weight: 900; border: 0; border-radius: 9px; background: var(--accent); cursor: pointer; }
 .validation-action-unavailable { color: var(--muted); font-size: 12px; }
-.validation-correction-dialog { width: min(720px, calc(100% - 28px)); max-height: calc(100vh - 40px); padding: 0; color: var(--text); border: 1px solid var(--border); border-radius: 18px; background: #0c151b; box-shadow: 0 30px 90px rgba(0, 0, 0, .6); }
-.validation-correction-dialog::backdrop { background: rgba(0, 7, 11, .82); backdrop-filter: blur(5px); }
-.validation-correction-form { gap: 16px; padding: 24px; border: 0; background: transparent; }
-.validation-correction-heading { display: flex; align-items: start; justify-content: space-between; gap: 18px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
-.validation-correction-heading h2 { margin: 4px 0 6px; }
-.validation-correction-heading p:last-child { margin: 0; color: var(--muted); line-height: 1.5; }
-.validation-dialog-close { flex: 0 0 auto; width: 40px; height: 40px; color: var(--text); font-size: 24px; border: 1px solid var(--border); border-radius: 10px; background: rgba(255, 255, 255, .03); cursor: pointer; }
 .empty-validation { padding: 22px; color: var(--muted); text-align: center; }
 @media (max-width: 1180px) { .validation-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); } .validation-admin-grid, .validation-catalog-grid { grid-template-columns: 1fr; } .validation-combination-form { grid-template-columns: repeat(2, minmax(0, 1fr)); } .validation-filters { grid-template-columns: repeat(2, minmax(150px, 1fr)); width: 100%; } }
 @media (max-width: 760px) { .validation-workspace { width: min(100% - 20px, 1540px); } .validation-heading { align-items: stretch; flex-direction: column; } .validation-heading__actions { min-width: 0; } .validation-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } .validation-form__grid, .validation-combination-form, .validation-combination-list { grid-template-columns: 1fr; } .validation-panel__heading { flex-direction: column; } .validation-filters { grid-template-columns: 1fr; } }

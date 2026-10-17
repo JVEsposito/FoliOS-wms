@@ -225,6 +225,35 @@ GET  /api/validacion/pallets/{id}
 POST /api/validacion/pallets
 ```
 
+### Corrección administrativa
+
+```http
+GET /api/validacion/pallets/{id}/correccion
+PUT /api/validacion/pallets/{id}/corregir
+```
+
+Requieren `corregir-validaciones-pallet` y solo aplican a validaciones aprobadas que
+conservan su folio. `GET …/correccion` entrega el bulto con su composición por CSG y el
+catálogo activo de la temporada de esa validación, con la misma forma que usa la PDA.
+
+`PUT …/corregir` acepta `composicion` (CSG, cajas, lote MP y proceso por línea). Con ella
+reemplaza todas las líneas con las mismas reglas que la PDA:
+
+- todos los CSG del catálogo activo, de un mismo cliente y marca;
+- el artículo habilitado y la variedad autorizada en cada CSG;
+- la suma de las líneas igual a `cantidad_cajas`;
+- sin repetir CSG + lote + proceso;
+- lote y proceso obligatorios cuando `WMS_VALIDACION_EXIGE_LOTE_PROCESO=true`.
+
+El origen principal es el CSG de la primera línea y la fecha de embalaje se conserva. Sin
+`composicion`, sigue funcionando la corrección de un solo CSG (`origen_validacion_id`).
+
+En Oficina (Validación y Anulaciones) el diálogo sigue el orden de la PDA: bulto, cliente y
+marca, líneas por CSG (se agregan o quitan; las cajas del bulto son la suma), producto
+habilitado en esos CSG (especie → variedad → calibre → embalaje) y categoría. Cada lista se
+filtra escribiendo: el CSG también por predio y el embalaje también por su código. Antes de
+guardar muestra qué cambia frente a lo validado.
+
 ### Administración
 
 Las rutas bajo `/api/administracion/validacion/*` permiten consultar el catálogo, mantener sus entidades, importar archivos y confirmar importaciones. Todas requieren la capacidad administrativa correspondiente.
@@ -303,8 +332,9 @@ Cada línea de la composición del bulto puede informar, además del CSG y sus c
   con la advertencia «recepción MP no verificada» y no atribuye ninguna recepción.
 - Si el lote se digita después de validar el pallet, o cambia su número, cliente o estado
   (por ejemplo, se anula), los vínculos afectados se concilian automáticamente.
-- Correcciones simples y repaletizajes conservan lote y proceso en cada línea; la clave de
-  composición del repaletizaje los incluye para no fusionar lotes distintos.
+- La corrección de un solo CSG y los repaletizajes conservan lote y proceso en cada línea;
+  la clave de composición del repaletizaje los incluye para no fusionar lotes distintos. La
+  corrección con composición reemplaza lote y proceso con lo que indique cada línea.
 
 La tabla `trazabilidad_folio_origenes` proyecta esa composición (una fila por línea) y se
 reconstruye automáticamente cada vez que cambia `folios.datos_externos`. La oficina

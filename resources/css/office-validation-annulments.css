@@ -41,9 +41,6 @@
 .annulment-dialog label { display: grid; gap: 7px; }
 .annulment-dialog label span { color: var(--text-secondary); font-size: 12px; font-weight: 900; }
 .annulment-actions { display: flex; justify-content: flex-end; gap: 10px; }
-.annulment-correction-dialog { width: min(720px, calc(100vw - 32px)); border-color: var(--info-text); }
-.annulment-correction-state { margin: 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--info-bg); color: var(--info-text); }
-.annulment-correction-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .annulment-dialog input, .annulment-dialog select, .annulment-dialog textarea { width: 100%; min-height: 42px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--header-bg); color: var(--text); }
 .annulment-dialog textarea { resize: vertical; }
 
@@ -53,7 +50,6 @@
     .annulment-card { grid-template-columns: 1fr; }
     .annulment-state { text-align: left; }
     .annulment-filter { min-width: 0; width: 100%; }
-    .annulment-correction-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 560px) {
