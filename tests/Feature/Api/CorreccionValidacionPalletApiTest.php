@@ -182,8 +182,21 @@ class CorreccionValidacionPalletApiTest extends TestCase
             ->assertJsonPath('validacion.composicion.0.cantidad_cajas', 120)
             ->assertJsonPath('catalogo.temporada.id', $catalogo['temporada_id'])
             ->assertJsonPath('exige_lote_proceso', false);
+        // Orígenes de toda la temporada, pero artículos y combinaciones solo del cliente del bulto.
         $this->assertCount(3, $contexto->json('catalogo.origenes'));
-        $this->assertCount(4, $contexto->json('catalogo.combinaciones'));
+        $this->assertSame('MACE', $contexto->json('catalogo.cliente'));
+        $this->assertEqualsCanonicalizing(
+            [$catalogo['articulo_original_id'], $catalogo['articulo_corregido_id']],
+            $contexto->json('catalogo.articulos_por_origen.'.$catalogo['origen_id']),
+        );
+        $this->assertSame([$catalogo['articulo_corregido_id']], $contexto->json('catalogo.articulos_por_origen.'.$catalogo['origen_dos_id']));
+        $this->assertArrayNotHasKey($catalogo['origen_otro_cliente_id'], $contexto->json('catalogo.articulos_por_origen'));
+        $this->assertCount(2, $contexto->json('catalogo.articulos'));
+        $otroCliente = $this->conToken($tokenOficina)
+            ->getJson("/api/validacion/pallets/{$validacionId}/correccion?cliente=OTRO")
+            ->assertOk()
+            ->assertJsonPath('catalogo.cliente', 'OTRO');
+        $this->assertSame([$catalogo['origen_otro_cliente_id']], array_keys($otroCliente->json('catalogo.articulos_por_origen')));
 
         // Se agrega un segundo CSG: 80 + 40 cajas, cada línea con su lote y proceso.
         $this->conToken($tokenOficina)

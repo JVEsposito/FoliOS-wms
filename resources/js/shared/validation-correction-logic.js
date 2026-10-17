@@ -48,10 +48,15 @@ export function indexCatalog(catalog) {
     const articleById = new Map(articles.map((article) => [article.id, article]));
     const originById = new Map(origins.map((origin) => [origin.id, origin]));
     const articlesByOrigin = new Map();
-    for (const combination of catalog?.combinaciones || []) {
-        if (!originById.has(combination.origen_validacion_id) || !articleById.has(combination.articulo_validacion_id)) continue;
-        if (!articlesByOrigin.has(combination.origen_validacion_id)) articlesByOrigin.set(combination.origen_validacion_id, new Set());
-        articlesByOrigin.get(combination.origen_validacion_id).add(combination.articulo_validacion_id);
+    const add = (originId, articleId) => {
+        if (!originById.has(originId) || !articleById.has(articleId)) return;
+        if (!articlesByOrigin.has(originId)) articlesByOrigin.set(originId, new Set());
+        articlesByOrigin.get(originId).add(articleId);
+    };
+    // Forma de la PDA (una fila por combinación) o compacta (artículos por origen, por cliente).
+    for (const combination of catalog?.combinaciones || []) add(combination.origen_validacion_id, combination.articulo_validacion_id);
+    for (const [originId, articleIds] of Object.entries(catalog?.articulos_por_origen || {})) {
+        for (const articleId of articleIds) add(originId, articleId);
     }
     return {
         articleById,
