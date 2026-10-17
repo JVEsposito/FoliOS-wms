@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\DominioTransicionOperacional;
+use App\Enums\EstadoTransicionOperacional;
 use App\Enums\EstadoValidacionPallet;
 use App\Enums\ResultadoValidacionPallet;
 use App\Http\Controllers\Controller;
@@ -15,6 +17,7 @@ use App\Models\ArticuloValidacion;
 use App\Models\CombinacionValidacion;
 use App\Models\OrigenValidacion;
 use App\Models\Temporada;
+use App\Models\TransicionOperacional;
 use App\Models\ValidacionPallet;
 use App\Services\Autenticacion\ContextoOperacional;
 use App\Services\Temporadas\ServicioTemporadaActiva;
@@ -33,6 +36,32 @@ use Symfony\Component\HttpFoundation\Response;
 
 class ValidacionPalletController extends Controller
 {
+    public function estadoOperacion(Request $request, ContextoOperacional $contexto, string $operacionId): JsonResponse
+    {
+        [$usuario, $dispositivo] = $contexto->obtener($request);
+        $validacion = ValidacionPallet::query()
+            ->with($this->relaciones())
+            ->where('operacion_id', $operacionId)->first();
+        $transicion = TransicionOperacional::query()
+            ->where('dominio', DominioTransicionOperacional::Validacion)
+            ->where('tipo', 'pallet.registrar')
+            ->where('operacion_id', $operacionId)->first();
+
+        foreach ([$validacion, $transicion] as $registro) {
+            abort_if($registro && ($registro->user_id !== $usuario->id
+                || $registro->dispositivo_id !== $dispositivo->id), 403,
+                'La operación pertenece a otro usuario o dispositivo.');
+        }
+
+        return response()->json([
+            'operacion_id' => $operacionId,
+            'estado' => $transicion?->estado->value ?? ($validacion ? 'aplicada' : 'sin_registro'),
+            'mensaje' => $transicion?->estado === EstadoTransicionOperacional::Rechazada
+                ? $transicion->error_mensaje : null,
+            'validacion' => $validacion ? (new ValidacionPalletResource($validacion))->resolve($request) : null,
+        ]);
+    }
+
     public function index(ConsultarValidacionesPalletRequest $request): AnonymousResourceCollection
     {
         $filtros = $request->validated();
