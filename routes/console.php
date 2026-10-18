@@ -55,3 +55,8 @@ Schedule::command('materiales:procesar-vencimientos')
     ->withoutOverlapping();
 
 Schedule::command('materiales:recalcular-reposicion')->dailyAt('06:00')->timezone('America/Santiago')->withoutOverlapping();
+
+// Finanzas: lee la operación (solo lectura) y registra los hechos valorizables en su base.
+Schedule::command('finanzas:capturar-hechos --programada')
+    ->everyTenMinutes()
+    ->withoutOverlapping(30);

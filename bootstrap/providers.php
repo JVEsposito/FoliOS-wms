@@ -1,5 +1,6 @@
 <?php
 
+use App\Finanzas\FinanzasServiceProvider;
 use App\Providers\AdministracionUsuarioServiceProvider;
 use App\Providers\AnulacionValidacionPalletServiceProvider;
 use App\Providers\AppServiceProvider;
@@ -15,4 +16,5 @@ return [
     RepaletizajeServiceProvider::class,
     AnulacionValidacionPalletServiceProvider::class,
     BinRetornoPackingServiceProvider::class,
+    FinanzasServiceProvider::class,
 ];

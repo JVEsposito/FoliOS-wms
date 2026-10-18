@@ -36,7 +36,7 @@ class CatalogoOficinas
         'frigorifico' => ['frigorifico.'],
         'materiales' => ['materiales.'],
         'gerencia' => ['gerencia.'],
-        'administracion' => ['administracion.', 'gerencia.'],
+        'administracion' => ['administracion.', 'gerencia.', 'finanzas.'],
         'consultas' => ['consultas.'],
     ];
 
@@ -84,7 +84,7 @@ class CatalogoOficinas
         ['materiales', 'Recetas', '/oficina/materiales/recetas', 'materiales.recetas', ['puede_consultar_transformaciones_materiales']],
         ['materiales', 'Órdenes', '/oficina/materiales/ordenes', 'materiales.ordenes', ['puede_consultar_transformaciones_materiales']],
         ['materiales', 'Existencias', '/oficina/materiales/exportaciones', 'materiales.exportaciones', ['puede_consultar_despachos_materiales']],
-        ['administracion', 'Resumen', '/oficina/administracion', '', ['puede_consultar_panel_gerencial', 'puede_consultar_accesos', 'puede_administrar_catalogos_validacion', 'puede_consultar_configuracion_camaras', 'puede_consultar_integridad_operacional']],
+        ['administracion', 'Resumen', '/oficina/administracion', '', ['puede_consultar_panel_gerencial', 'puede_consultar_accesos', 'puede_administrar_catalogos_validacion', 'puede_consultar_configuracion_camaras', 'puede_consultar_integridad_operacional', 'puede_consultar_finanzas']],
         ['gerencia', 'Operación ahora', '/oficina/operacion-ahora', 'gerencia.panel', ['puede_consultar_panel_gerencial']],
         ['gerencia', 'Panel Gerencial', '/oficina/gerencia', 'gerencia.panel', ['puede_consultar_panel_gerencial']],
         ['administracion', 'Accesos & Temporadas', '/oficina/accesos', 'administracion.accesos', ['puede_consultar_accesos']],
@@ -93,6 +93,7 @@ class CatalogoOficinas
         ['administracion', 'Configuración de cámaras', '/oficina/administracion/camaras', 'administracion.camaras', ['puede_consultar_configuracion_camaras']],
         ['administracion', 'Salud operacional', '/oficina/administracion/integridad-operacional', 'administracion.integridad-operacional', ['puede_consultar_integridad_operacional']],
         ['administracion', 'Demo comercial', '/oficina/demo', '', ['puede_habilitar_demo']],
+        ['administracion', 'Hechos valorizables', '/oficina/finanzas/hechos', 'finanzas.prefactura', ['puede_consultar_finanzas']],
         ['consultas', 'Resumen', '/oficina/consultas', '', ['puede_consultar_oficina_consultas', 'puede_consultar_sag']],
         ['consultas', 'Búsqueda Operacional', '/oficina/consultas/busqueda', 'consultas.busqueda', ['puede_consultar_oficina_consultas']],
         ['consultas', 'Trazabilidad de lotes', '/oficina/consultas/trazabilidad', 'consultas.busqueda', ['puede_consultar_oficina_consultas']],

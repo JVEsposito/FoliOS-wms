@@ -11,6 +11,8 @@ class CatalogoModulosAcceso
 
     public const OFICINA_MAESTROS_TEMPORADA = 'administracion.maestros-temporada';
 
+    public const OFICINA_FINANZAS_PREFACTURA = 'finanzas.prefactura';
+
     public const OFICINA_CATALOGOS_VALIDACION_LEGADO = 'frigorifico.catalogos';
 
     public const TABLET_OPERACION_FRIGORIFICO = 'operacion';
@@ -112,6 +114,14 @@ class CatalogoModulosAcceso
                     $this->modulo(self::OFICINA_MAESTROS_TEMPORADA, 'Maestros de temporada', 'Base transversal consumida por los módulos operacionales.'),
                     $this->modulo('administracion.camaras', 'Configuración de cámaras', 'Creación y estructura física de cámaras.'),
                     $this->modulo(self::OFICINA_INTEGRIDAD_OPERACIONAL, 'Salud operacional', 'Auditoría de contradicciones entre folios, procesos, ubicaciones y reservas.'),
+                ],
+            ],
+            [
+                'clave' => 'finanzas',
+                'nombre' => 'Finanzas',
+                'descripcion' => 'Valorización de lo que registra la operación, sin modificarla.',
+                'modulos' => [
+                    $this->modulo(self::OFICINA_FINANZAS_PREFACTURA, 'Hechos y prefactura', 'Hechos valorizables leídos de la operación y prefactura por cliente.'),
                 ],
             ],
         ];
