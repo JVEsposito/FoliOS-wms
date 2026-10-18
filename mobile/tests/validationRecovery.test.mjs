@@ -170,6 +170,7 @@ test('tablet retoma la bandeja anterior, conserva la captura y envía la correcc
     assert.deepEqual(h.calls.posts[0].composicion.map((entry) => entry.cantidad_cajas), [70, 50]);
     assert.equal(h.records.length, 1); assert.deepEqual(h.outbox(), []);
     assert.match(h.message(), /Línea 1 · Turno A/);
+    assert.match(h.message(), /PEND-001[\s\S]*Confirmado por el servidor · queda pendiente de prefrío/);
   } finally { await h.unmount(); }
 });
 
@@ -248,6 +249,7 @@ test('respuesta perdida reenvía el mismo UUID y payload al reiniciar y confirma
   try {
     await h.mount(); await h.press('Retomar'); await h.lot('L-CORREGIDO'); await h.press('Aprobar');
     assert.equal(h.outbox()[0].status, 'pendiente'); assert.equal(h.records.length, 1);
+    assert.match(h.message(), /Guardado en la tablet · se enviará al sincronizar/);
     await h.unmount(); await h.mount();
     assert.equal(h.calls.posts.length, 2); assert.deepEqual(h.calls.posts[0], h.calls.posts[1]);
     assert.equal(h.records.length, 1); assert.deepEqual(h.outbox(), []);

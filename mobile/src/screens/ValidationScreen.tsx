@@ -53,7 +53,7 @@ import { areas } from '../theme/areas';
 import { operatorTheme as o } from '../theme/operatorTheme';
 import { isPdaBuild } from '../config/appVariant';
 import { ScanInput, ScanInputHandle } from '../components/ui/ScanInput';
-import { LabelCell, LabelCounters, LabelRow, LabelSection, SignalMark, StatusChip, TalonRow, type LabelTone } from '../components/validation/ValidationLabel';
+import { LabelCell, LabelCounters, LabelRow, LabelSection, ResultTalon, SignalMark, StatusChip, TalonRow, type LabelTone } from '../components/validation/ValidationLabel';
 import { articlesForOrigins, createOriginArticleSelector, indexValidationCatalog, productCompatibleWithOrigins } from '../domain/validationCatalogIndex';
 
 type ValidationScreenProps = {
@@ -79,6 +79,19 @@ type FolioReview = {
 // Cada línea del bulto: CSG, cajas y, cuando la etiqueta los trae, lote MP y proceso de packing.
 type OriginDraft = { key: string; originId: string; boxes: string; lot: string; process: string };
 
+// Último pallet registrado: se muestra como talón junto al folio hasta la siguiente lectura.
+type LastResult = {
+  folio: string;
+  result: ValidationResult;
+  boxes: number;
+  packageType: 'pallet' | 'saldo';
+  client: string;
+  brand: string;
+  csgs: string[];
+  at: string;
+  delivery: 'confirmado' | 'en-equipo';
+};
+
 export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenProps) {
   const { height, width } = useWindowDimensions();
   const compact = width < 700 || width < height;
@@ -87,6 +100,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
   const tight = isPdaBuild || width < 420;
   const [editingContext, setEditingContext] = useState(false);
   const folioInput = useRef<ScanInputHandle>(null);
+  const page = useRef<ScrollView>(null);
   const flushing = useRef(false);
   const synchronizing = useRef(false);
   const resuming = useRef(false);
@@ -121,6 +135,9 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
   const [originError, setOriginError] = useState('');
   const [editingOutbox, setEditingOutbox] = useState<ValidationOutboxItem | null>(null);
   const [observation, setObservation] = useState<ObservationDraft | null>(null);
+  const [lastResult, setLastResult] = useState<LastResult | null>(null);
+  // Un problema al decidir se muestra junto a los botones, donde está el operador.
+  const [decisionError, setDecisionError] = useState('');
 
   const userId = auth.usuario.id;
   const deviceId = auth.dispositivo.id;
@@ -494,6 +511,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
     setFolio(normalized);
     setError('');
     setNotice('');
+    setLastResult(null);
 
     const localItem = outbox.find((item) => normalizeFolio(item.payload.numero_folio) === normalized);
     if (localItem) {
@@ -591,6 +609,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
     const problem = validateForm(result);
     if (problem) {
       setError(problem);
+      setDecisionError(problem);
       return;
     }
     const primaryOrigin = selectedOrigins[0];
@@ -621,9 +640,21 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
       generado_dispositivo_at: new Date().toISOString(),
     };
 
+    const registered: Omit<LastResult, 'delivery'> = {
+      folio: payload.numero_folio,
+      result,
+      boxes: payload.cantidad_cajas,
+      packageType,
+      client,
+      brand,
+      csgs: selectedOrigins.flatMap((origin) => origin ? [origin.csg] : []),
+      at: payload.generado_dispositivo_at,
+    };
+
     setBusy(true);
     setError('');
     setNotice('');
+    setLastResult(null);
     try {
       let items = editingOutbox
         ? await replaceValidationOutboxItem(userId, deviceId, editingOutbox.id, payload)
@@ -631,7 +662,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
       setOutbox(items);
       finishRecovery();
       if (!baseUrl) {
-        setNotice(`${payload.numero_folio} quedó en la bandeja de salida.`);
+        setLastResult({ ...registered, delivery: 'en-equipo' });
       } else {
         try {
           const attempt = await registerValidation(baseUrl, auth.token, payload);
@@ -640,13 +671,11 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
           setRecent((current) => [attempt, ...current.filter((item) => item.id !== attempt.id)].slice(0, 10));
           try { await refreshSession(); } catch { /* conserva actualización optimista */ }
           setOnline(true);
-          setNotice(result === 'aprobado'
-            ? `${payload.numero_folio} aprobado y creado como pendiente de prefrío.`
-            : `${payload.numero_folio} registrado como ${result}.`);
+          setLastResult({ ...registered, delivery: 'confirmado' });
         } catch (reasonCaught) {
           if (reasonCaught instanceof ApiError && reasonCaught.status === 0) {
             setOnline(false);
-            setNotice(`${payload.numero_folio} quedó guardado localmente para envío automático.`);
+            setLastResult({ ...registered, delivery: 'en-equipo' });
           } else if (reasonCaught instanceof ApiError && reasonCaught.status === 409) {
             items = await markValidationOutboxItem(userId, deviceId, payload.operacion_id, 'conflicto', reasonCaught.message);
             setOutbox(items);
@@ -667,6 +696,8 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
       setOriginDrafts([newOriginDraft()]);
       setOriginError('');
       setObservation(null);
+      // Vuelve arriba: el talón queda junto al folio y el lector, listo para el siguiente.
+      page.current?.scrollTo({ y: 0, animated: true });
       setTimeout(() => folioInput.current?.focus(), 180);
     } catch (reasonCaught) {
       setError(messageFrom(reasonCaught));
@@ -685,6 +716,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
     setBusy(true);
     setError('');
     setNotice('');
+    setLastResult(null);
     try {
       const items = await loadValidationOutbox(userId, deviceId);
       const current = items.find((candidate) => candidate.id === item.id);
@@ -1116,6 +1148,13 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
 
   const decision = (
     <View style={styles.decision}>
+      {error && error === decisionError ? (
+        <Pressable accessibilityRole="alert" onPress={() => setError('')} style={[styles.banner, styles.bannerError]}>
+          <SignalMark size={12} tone="critical" />
+          <Text style={styles.bannerText}>{error}</Text>
+          <Text style={styles.close}>×</Text>
+        </Pressable>
+      ) : null}
       <View style={styles.decisionSummary}>
         <StatusChip label={ready ? 'Combinación habilitada' : 'Faltan datos obligatorios'} tone={ready ? 'success' : 'neutral'} />
         <View style={styles.decisionSummaryCopy}>
@@ -1128,6 +1167,26 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
       </View>
     </View>
   );
+
+  const resultTalon = lastResult ? (
+    <ResultTalon
+      footer={lastResult.delivery === 'confirmado'
+        ? `Confirmado por el servidor${lastResult.result === 'aprobado' ? ' · queda pendiente de prefrío' : ''}`
+        : `Guardado en la ${device} · se enviará al sincronizar`}
+      footerTone={lastResult.delivery === 'confirmado' ? 'success' : 'warning'}
+      folio={lastResult.folio}
+      onDismiss={() => setLastResult(null)}
+      rows={[
+        { label: 'Cliente', value: lastResult.client },
+        { label: 'Marca', value: lastResult.brand },
+        { label: 'Bulto', value: `${lastResult.boxes} cj · ${packageLabel(lastResult.packageType)}` },
+        { label: 'CSG', value: lastResult.csgs.join(' · '), mono: true },
+      ]}
+      time={formatTime(lastResult.at)}
+      title={resultLabel(lastResult.result)}
+      tone={resultTone(lastResult.result)}
+    />
+  ) : null;
 
   const pendingTray = previousSessionOutbox.length ? (
     <View style={styles.tray}>
@@ -1241,7 +1300,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
 
   return (
     <View style={styles.screen}>
-      <ScrollView contentContainerStyle={[styles.page, compact && styles.pageCompact]} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={page} contentContainerStyle={[styles.page, compact && styles.pageCompact]} keyboardShouldPersistTaps="handled">
         <View style={[styles.header, compact && styles.headerCompact]}>
           <Image accessibilityLabel="Frigorífico" source={areas.frigorifico.gajo} style={[styles.headerGajo, compact && styles.headerGajoCompact]} />
           <View style={styles.headerCopy}>
@@ -1259,7 +1318,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
           </View>
         ) : null}
 
-        {error ? (
+        {error && error !== decisionError ? (
           <Pressable accessibilityRole="alert" onPress={() => setError('')} style={[styles.banner, styles.bannerError]}>
             <SignalMark size={12} tone="critical" />
             <Text style={styles.bannerText}>{error}</Text>
@@ -1276,12 +1335,14 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
 
         <View style={[styles.columns, compact && styles.columnsCompact]}>
           <View style={[styles.mainColumn, compact && styles.columnCompact]}>
+            {compact ? resultTalon : null}
             {compact ? pendingTray : null}
             {workContext}
             {label}
             {decision}
           </View>
           <View style={[styles.sideColumn, compact && styles.columnCompact]}>
+            {compact ? null : resultTalon}
             {compact ? null : pendingTray}
             {session}
           </View>

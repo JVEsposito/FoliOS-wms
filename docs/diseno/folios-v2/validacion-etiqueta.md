@@ -55,6 +55,24 @@ cambio de flujo aparte (ver `pr-09-pda-validacion.md`).
 
 Colores solo desde `operatorTheme` y `areas` (sin hexadecimales en los componentes).
 
+## PR 2 · Talón del último resultado
+
+Al registrar una decisión, el aviso de texto («… aprobado y creado como pendiente de prefrío»)
+se reemplaza por un **talón**: sello con el resultado (forma y color del tono), folio grande,
+cliente, marca, bulto y CSG, y bajo la línea de corte el estado del envío:
+
+- «Confirmado por el servidor · queda pendiente de prefrío» (aprobado) o «Confirmado por el
+  servidor» (observado o rechazado).
+- «Guardado en la tablet/PDA · se enviará al sincronizar» cuando no hay red o no hay servidor.
+
+El talón aparece en la PDA arriba de todo y en la tablet encabezando la columna de sesión. La
+pantalla vuelve arriba al registrar, para dejar a la vista el resultado y el lector listo. Se
+cierra con ×, al consultar otro folio o al retomar una captura. Los conflictos y errores del
+servidor siguen como aviso arriba, con la captura en la bandeja para *Retomar*.
+
+Un problema al decidir (falta un dato, la suma no cuadra) se muestra **junto a los botones**,
+donde está el operador, y no arriba de la pantalla.
+
 ## Capturas
 
 Renderizadas con React Native Web a 1280 × 756 (tablet sin la franja de módulo) y 360 × 740
@@ -62,3 +80,4 @@ Renderizadas con React Native Web a 1280 × 756 (tablet sin la franja de módulo
 
 - `capturas/validacion-etiqueta-tablet.png`, `-tablet-correccion.png`, `-tablet-sin-conexion.png`
 - `capturas/validacion-etiqueta-pda.png`, `-pda-correccion.png`
+- `capturas/validacion-talon-tablet.png`, `-tablet-en-equipo.png`, `validacion-talon-pda.png`
