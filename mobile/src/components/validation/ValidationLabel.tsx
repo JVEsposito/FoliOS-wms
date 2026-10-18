@@ -175,6 +175,51 @@ export function TalonRow({ time, folio, detail, message, aside, onPress, disable
     : <View style={style}>{body}</View>;
 }
 
+/**
+ * Talón del último pallet registrado: sello con el resultado, folio grande, datos de la
+ * etiqueta y, bajo la línea de corte, si quedó confirmado o guardado en el equipo.
+ */
+export function ResultTalon({ tone, title, time, folio, rows, footer, footerTone, onDismiss }: {
+  tone: LabelTone;
+  title: string;
+  time: string;
+  folio: string;
+  rows: { label: string; value: string; mono?: boolean }[];
+  footer: string;
+  footerTone: LabelTone;
+  onDismiss?: () => void;
+}) {
+  return (
+    <View accessibilityLabel={`Último resultado: ${folio} ${title.toLowerCase()}`} style={[styles.result, { borderColor: toneBorder[tone] }]}>
+      <View style={[styles.resultBand, { backgroundColor: toneSurface[tone], borderBottomColor: toneBorder[tone] }]}>
+        <SignalMark size={16} tone={tone} />
+        <Text style={[styles.resultTitle, { color: toneText[tone] }]}>{title}</Text>
+        <Text numberOfLines={1} style={styles.resultTime}>Registrado · {time}</Text>
+        {onDismiss ? (
+          <Pressable accessibilityLabel="Cerrar el último resultado" onPress={onDismiss} style={styles.resultClose}>
+            <Text style={styles.resultCloseText}>×</Text>
+          </Pressable>
+        ) : null}
+      </View>
+      <View style={styles.resultBody}>
+        <Text numberOfLines={1} style={styles.resultFolio}>{folio}</Text>
+        <View style={styles.resultGrid}>
+          {rows.map((row) => (
+            <View key={row.label} style={styles.resultItem}>
+              <Text style={styles.cellLabel}>{row.label}</Text>
+              <Text numberOfLines={2} style={[styles.resultValue, row.mono && styles.resultValueMono]}>{row.value}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+      <View style={styles.resultFoot}>
+        <SignalMark size={10} tone={footerTone} />
+        <Text style={[styles.resultFootText, { color: footerTone === 'neutral' ? o.color.textSecondary : toneText[footerTone] }]}>{footer}</Text>
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   mark: { alignItems: 'center', justifyContent: 'center' },
   chip: {
@@ -239,4 +284,18 @@ const styles = StyleSheet.create({
   talonDetail: { color: o.color.muted, fontSize: 13 },
   talonMessage: { color: o.color.critical, fontSize: 13, marginTop: 2 },
   talonAside: { alignItems: 'flex-end', justifyContent: 'center', gap: 6, paddingRight: 12, paddingVertical: 8 },
+  result: { overflow: 'hidden', borderRadius: 12, borderWidth: 2, backgroundColor: o.color.surface },
+  resultBand: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 10, paddingLeft: 14, borderBottomWidth: 1 },
+  resultTitle: { fontSize: 19, fontWeight: '800' },
+  resultTime: { flex: 1, color: o.color.textSecondary, fontSize: 13, textAlign: 'right' },
+  resultClose: { minHeight: 48, minWidth: 48, alignItems: 'center', justifyContent: 'center' },
+  resultCloseText: { color: o.color.textSecondary, fontSize: 22, fontWeight: '700' },
+  resultBody: { gap: 12, paddingHorizontal: 14, paddingVertical: 12 },
+  resultFolio: { color: o.color.text, fontFamily: o.font.mono, fontSize: 30, fontWeight: '700', letterSpacing: -1 },
+  resultGrid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 10 },
+  resultItem: { width: '50%', minWidth: 0, gap: 3, paddingRight: 10 },
+  resultValue: { color: o.color.text, fontSize: 15, fontWeight: '600' },
+  resultValueMono: { fontFamily: o.font.mono, fontWeight: '700', letterSpacing: -0.5 },
+  resultFoot: { minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 8, borderTopWidth: 1, borderTopColor: o.color.borderStrong },
+  resultFootText: { flex: 1, fontSize: 14, fontWeight: '600' },
 });
