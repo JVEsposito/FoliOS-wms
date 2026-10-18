@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AuthSession } from '../domain/estiba';
-import { colors } from '../theme/colors';
+import { areas } from '../theme/areas';
+import { operatorTheme as o } from '../theme/operatorTheme';
 import { RepalletizingScreen } from './RepalletizingScreen';
 import { ValidationScreen } from './ValidationScreen';
 
@@ -14,13 +15,19 @@ type Props = {
 
 type Section = 'validacion' | 'repaletizaje';
 
+/**
+ * Pestañas de Validación PT: subrayado con el color de Frigorífico en la activa, como las
+ * pestañas de Oficina. Sin cajas rellenas.
+ */
 export function ValidationWorkspaceScreen({ auth, baseUrl, onLogout }: Props) {
   const [section, setSection] = useState<Section>('validacion');
 
   return (
     <View style={styles.screen}>
-      <View style={styles.tabs}>
+      <View accessibilityRole="tablist" style={styles.tabs}>
         <Pressable
+          accessibilityRole="tab"
+          accessibilityState={{ selected: section === 'validacion' }}
           onPress={() => setSection('validacion')}
           style={[styles.tab, section === 'validacion' && styles.tabActive]}
         >
@@ -29,6 +36,8 @@ export function ValidationWorkspaceScreen({ auth, baseUrl, onLogout }: Props) {
           </Text>
         </Pressable>
         <Pressable
+          accessibilityRole="tab"
+          accessibilityState={{ selected: section === 'repaletizaje', disabled: !baseUrl }}
           disabled={!baseUrl}
           onPress={() => setSection('repaletizaje')}
           style={[
@@ -55,30 +64,25 @@ export function ValidationWorkspaceScreen({ auth, baseUrl, onLogout }: Props) {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.backgroundDeep },
+  screen: { flex: 1, backgroundColor: o.color.canvas },
   tabs: {
     flexDirection: 'row',
-    gap: 8,
     paddingHorizontal: 12,
-    paddingTop: 10,
-    paddingBottom: 8,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.backgroundDeep,
+    borderBottomColor: o.color.disabled,
+    backgroundColor: o.color.navy,
   },
   tab: {
     flex: 1,
-    minHeight: 42,
+    minHeight: 52,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    backgroundColor: colors.panel,
+    borderBottomWidth: 3,
+    borderBottomColor: 'transparent',
   },
-  tabActive: { borderColor: colors.cyan, backgroundColor: colors.cyanDark },
+  tabActive: { borderBottomColor: areas.frigorifico.bright },
   tabDisabled: { opacity: 0.45 },
-  tabText: { color: colors.muted, fontWeight: '900' },
-  tabTextActive: { color: colors.text },
+  tabText: { color: o.color.muted, fontSize: 16, fontWeight: '600' },
+  tabTextActive: { color: o.color.text, fontWeight: '800' },
   content: { flex: 1 },
 });

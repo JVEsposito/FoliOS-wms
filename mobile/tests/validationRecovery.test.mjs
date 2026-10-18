@@ -154,7 +154,7 @@ function harness({ item = pending(), statusError = false, record = null, finalRe
 test('tablet retoma la bandeja anterior, conserva la captura y envía la corrección con UUID nuevo', async () => {
   const h = harness();
   try {
-    await h.mount(); assert.match(h.message(), /BANDEJA DE UNA SESIÓN ANTERIOR/);
+    await h.mount(); assert.match(h.message(), /Pendiente de una sesión anterior/);
     assert.match(h.message(), /La combinación de artículo y CSG/);
     const original = h.outbox();
     await h.press('Retomar');
@@ -162,14 +162,14 @@ test('tablet retoma la bandeja anterior, conserva la captura y envía la correcc
     for (const [label, value] of [['Cliente', 'Cliente'], ['Marca', 'Marca'], ['Especie', 'Cereza'], ['Variedad', 'Santina'], ['Calibre', '2J'], ['Envase', '5 kg'], ['Categoría', 'category'], ['CSG / Predio 2', 'origin-2']]) assert.equal(h.field(label), value);
     assert.deepEqual(h.trace(), ['L-1', 'P-1', 'L-2', 'P-2']);
     assert.deepEqual(h.outbox(), original);
-    await h.lot('L-CORREGIDO'); await h.press('APROBAR');
+    await h.lot('L-CORREGIDO'); await h.press('Aprobar');
     assert.equal(h.calls.posts.length, 1); assert.notEqual(h.calls.posts[0].operacion_id, original[0].id);
     assert.equal(h.calls.posts[0].composicion[0].lote_materia_prima, 'L-CORREGIDO');
     assert.equal(h.calls.posts[0].fecha_embalaje, '2026-10-16');
     assert.equal(h.calls.posts[0].linea_proceso, 2); assert.equal(h.calls.posts[0].turno, 'B');
     assert.deepEqual(h.calls.posts[0].composicion.map((entry) => entry.cantidad_cajas), [70, 50]);
     assert.equal(h.records.length, 1); assert.deepEqual(h.outbox(), []);
-    assert.match(h.message(), /Línea 1, turno A/);
+    assert.match(h.message(), /Línea 1 · Turno A/);
   } finally { await h.unmount(); }
 });
 
@@ -179,7 +179,7 @@ test('cancelar o reiniciar durante la corrección conserva intacta la captura or
     await h.mount(); const original = h.outbox(); const originalDate = h.date();
     await h.press('Retomar'); await h.lot('CAMBIO SIN ENVIAR'); await h.press('Cancelar corrección');
     assert.deepEqual(h.outbox(), original);
-    assert.match(h.message(), /Línea 1, turno A/);
+    assert.match(h.message(), /Línea 1 · Turno A/);
     assert.equal(h.date(), originalDate);
     await h.press('Retomar'); await h.lot('OTRO CAMBIO SIN ENVIAR');
     await h.unmount(); await h.mount();
@@ -202,7 +202,7 @@ test('si falla comprobar el servidor no se libera ni se borra la captura', async
 test('un rechazo que terminó marcado como conflicto se puede corregir con un UUID nuevo', async () => {
   const h = harness({ item: pending({ status: 'conflicto' }) });
   try {
-    await h.mount(); await h.press('Retomar'); await h.press('APROBAR');
+    await h.mount(); await h.press('Retomar'); await h.press('Aprobar');
     assert.equal(h.calls.posts.length, 1); assert.notEqual(h.calls.posts[0].operacion_id, payload().operacion_id);
     assert.equal(h.records.length, 1); assert.deepEqual(h.outbox(), []);
   } finally { await h.unmount(); }
@@ -215,7 +215,7 @@ test('un envío que ya llegó al servidor se confirma y sale de la bandeja sin v
     await h.mount(); await h.press('Retomar');
     assert.deepEqual(h.outbox(), []); assert.equal(h.calls.posts.length, 0);
     assert.match(h.message(), /el envío ya estaba registrado en el servidor/);
-    assert.equal(h.button('APROBAR').props.disabled, true); assert.equal(h.records.length, 1);
+    assert.equal(h.button('Aprobar').props.disabled, true); assert.equal(h.records.length, 1);
   } finally { await h.unmount(); }
 });
 
@@ -233,11 +233,11 @@ test('una corrección rechazada sigue siendo recuperable y una escritura fallida
   const h = harness({ failPost: 'reject-once' });
   try {
     await h.mount(); await h.press('Retomar'); const original = h.outbox();
-    await h.lot('L-CORREGIDO'); h.failNextWrite(); await h.press('APROBAR');
+    await h.lot('L-CORREGIDO'); h.failNextWrite(); await h.press('Aprobar');
     assert.match(h.message(), /No se pudo guardar la corrección/);
     assert.deepEqual(h.outbox(), original); assert.equal(h.calls.posts.length, 0);
-    await h.press('APROBAR'); assert.equal(h.outbox()[0].status, 'error');
-    await h.press('Retomar'); assert.equal(h.trace()[0], 'L-CORREGIDO'); await h.press('APROBAR');
+    await h.press('Aprobar'); assert.equal(h.outbox()[0].status, 'error');
+    await h.press('Retomar'); assert.equal(h.trace()[0], 'L-CORREGIDO'); await h.press('Aprobar');
     assert.equal(h.calls.posts.length, 2); assert.notEqual(h.calls.posts[0].operacion_id, h.calls.posts[1].operacion_id);
     assert.deepEqual(h.outbox(), []); assert.equal(h.records.length, 1);
   } finally { await h.unmount(); }
@@ -246,7 +246,7 @@ test('una corrección rechazada sigue siendo recuperable y una escritura fallida
 test('respuesta perdida reenvía el mismo UUID y payload al reiniciar y confirma un único pallet', async () => {
   const h = harness({ failPost: 'lost-response' });
   try {
-    await h.mount(); await h.press('Retomar'); await h.lot('L-CORREGIDO'); await h.press('APROBAR');
+    await h.mount(); await h.press('Retomar'); await h.lot('L-CORREGIDO'); await h.press('Aprobar');
     assert.equal(h.outbox()[0].status, 'pendiente'); assert.equal(h.records.length, 1);
     await h.unmount(); await h.mount();
     assert.equal(h.calls.posts.length, 2); assert.deepEqual(h.calls.posts[0], h.calls.posts[1]);

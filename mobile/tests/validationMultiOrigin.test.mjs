@@ -136,7 +136,7 @@ test('PDA conserva producto y categoría con una fila vacía y con dos CSG compa
   try {
     await h.mount(); await h.product(); await h.press(addLine); assertProduct(h);
     await h.select('CSG / Predio 2', '22222'); assertProduct(h);
-    await h.capture(); await h.press('APROBAR');
+    await h.capture(); await h.press('Aprobar');
     assert.equal(h.queued.length, 1);
     assert.equal(h.queued[0].articulo_validacion_id, 'santina');
     assert.deepEqual(h.queued[0].composicion, [
@@ -158,7 +158,7 @@ test('PDA avisa al elegir CSG sin producto común y conserva la captura para cor
     assert.match(h.message(), /11111.*33333.*no tienen un producto habilitado en común/);
     await h.select('CSG / Predio 2', '22222'); assertProduct(h);
     assert.doesNotMatch(h.message(), /no tienen un producto habilitado en común/);
-    await h.press('APROBAR');
+    await h.press('Aprobar');
     assert.equal(h.queued.length, 1);
   } finally { await h.unmount(); }
 });
@@ -176,7 +176,7 @@ test('PDA admite tres líneas y repetir CSG para otro lote, sin vaciar el produc
     assert.equal(h.field('CSG / Predio 1').props.value, 'csg-2');
     assert.equal(h.field('CSG / Predio 2').props.value, 'csg-1');
     assert.doesNotMatch(h.message(), /no tienen un producto habilitado en común/);
-    await h.capture(); await h.press('APROBAR');
+    await h.capture(); await h.press('Aprobar');
     assert.equal(h.queued.length, 1);
     assert.deepEqual(h.queued[0].composicion.map((line) => line.origen_validacion_id), ['csg-2', 'csg-1']);
   } finally { await h.unmount(); }
@@ -206,12 +206,12 @@ test('PDA exige resolver el CSG incompatible antes de aprobar una composición a
     await h.capture(); await h.select('CSG / Predio 2', '33333');
     assertProduct(h);
     assert.equal(h.field('CSG / Predio 2').props.value, 'csg-2');
-    await h.press('APROBAR');
+    await h.press('Aprobar');
     assert.equal(h.queued.length, 0);
     assert.match(h.message(), /no tienen un producto habilitado en común/);
     await h.select('CSG / Predio 2', '22222');
     assert.doesNotMatch(h.message(), /no tienen un producto habilitado en común/);
-    await h.press('APROBAR');
+    await h.press('Aprobar');
     assert.equal(h.queued.length, 1);
   } finally { await h.unmount(); }
 });

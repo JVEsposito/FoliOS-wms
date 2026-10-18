@@ -49,11 +49,11 @@ import {
   saveValidationSession,
   saveValidationWorkContext,
 } from '../services/validationOfflineStore';
-import { colors } from '../theme/colors';
 import { areas } from '../theme/areas';
 import { operatorTheme as o } from '../theme/operatorTheme';
 import { isPdaBuild } from '../config/appVariant';
 import { ScanInput, ScanInputHandle } from '../components/ui/ScanInput';
+import { LabelCell, LabelCounters, LabelRow, LabelSection, SignalMark, StatusChip, TalonRow, type LabelTone } from '../components/validation/ValidationLabel';
 import { articlesForOrigins, createOriginArticleSelector, indexValidationCatalog, productCompatibleWithOrigins } from '../domain/validationCatalogIndex';
 
 type ValidationScreenProps = {
@@ -819,330 +819,493 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
   }
 
   if (!catalog && busy) {
-    return <View style={styles.boot}><ActivityIndicator color={colors.cyan} size="large" /><Text style={styles.muted}>Preparando catálogo de validación…</Text></View>;
+    return <View style={styles.boot}><ActivityIndicator color={o.color.primary} size="large" /><Text style={styles.bootText}>Preparando catálogo de validación…</Text></View>;
   }
+
+  const device = isPdaBuild ? 'PDA' : 'tablet';
+  const wide = !compact;
+  const pendingOutbox = outbox.filter((item) => item.status === 'pendiente');
+  const declaredBoxes = Number(boxes || 0);
+  const sumTone: LabelTone = !declaredBoxes && !compositionBoxes
+    ? 'neutral'
+    : compositionBoxes === declaredBoxes ? 'success' : 'warning';
+  const sumLabel = !declaredBoxes && !compositionBoxes
+    ? 'Sin cajas ingresadas'
+    : `${compositionBoxes} de ${declaredBoxes} cajas`;
+  const syncTone: LabelTone = syncing ? 'neutral' : !online || pendingOutbox.length ? 'warning' : 'success';
+  const syncLabel = syncing
+    ? 'Sincronizando…'
+    : !online
+      ? (pendingOutbox.length ? `Sin conexión · ${pendingOutbox.length} en la ${device}` : 'Sin conexión')
+      : pendingOutbox.length ? `En línea · ${pendingOutbox.length} por enviar` : 'En línea · al día';
+  const headerMeta = [
+    auth.dispositivo.codigo,
+    wide ? `sesión desde ${formatDateTime(sessionStartedAt)}` : null,
+    catalog ? `catálogo v${catalog.temporada.version_catalogo}` : 'sin catálogo',
+    lastSync ? `sincronizado ${formatTime(lastSync)}` : null,
+  ].filter(Boolean).join(' · ');
+  const ready = Boolean(selectedCombination && selectedCategory);
+  const decisionDisabled = busy || terminalDecision;
+  const serverRecords = validationSession?.resumen.registros_realizados ?? 0;
+  const noCsgYet = !originDrafts.some((draft) => draft.originId);
+
+  const approveButton = (
+    <Pressable
+      key="aprobar"
+      disabled={decisionDisabled}
+      onPress={() => void submit('aprobado')}
+      style={[styles.decisionButton, styles.approveButton, wide && styles.approveButtonWide, decisionDisabled && styles.decisionButtonDisabled]}
+    >
+      <Text style={[styles.decisionMark, styles.approveText, decisionDisabled && styles.decisionTextDisabled]}>✓</Text>
+      <Text style={[styles.decisionText, styles.approveText, decisionDisabled && styles.decisionTextDisabled]}>{observedAttempt ? 'Aprobar corrección' : 'Aprobar'}</Text>
+    </Pressable>
+  );
+  const observeButton = (
+    <Pressable
+      key="observar"
+      disabled={decisionDisabled}
+      onPress={() => openObservation('observado')}
+      style={[styles.decisionButton, styles.observeButton, decisionDisabled && styles.decisionButtonDisabled]}
+    >
+      <SignalMark size={12} tone={decisionDisabled ? 'neutral' : 'warning'} />
+      <Text style={[styles.decisionText, styles.observeText, decisionDisabled && styles.decisionTextDisabled]}>{observedAttempt ? 'Mantener observado' : 'Observar'}</Text>
+    </Pressable>
+  );
+  const rejectButton = canReject ? (
+    <Pressable
+      key="rechazar"
+      disabled={decisionDisabled}
+      onPress={() => openObservation('rechazado')}
+      style={[styles.decisionButton, styles.rejectButton, decisionDisabled && styles.decisionButtonDisabled]}
+    >
+      <SignalMark size={12} tone={decisionDisabled ? 'neutral' : 'critical'} />
+      <Text style={[styles.decisionText, styles.rejectText, decisionDisabled && styles.decisionTextDisabled]}>Rechazar</Text>
+    </Pressable>
+  ) : null;
+
+  const workContext = line && shift && !editingContext ? (
+    <Pressable accessibilityLabel="Cambiar línea y turno" onPress={() => setEditingContext(true)} style={styles.jornada}>
+      <View style={styles.jornadaCopy}>
+        <Text style={styles.jornadaLabel}>Jornada · se conserva entre pallets</Text>
+        <Text style={styles.jornadaValue}>Línea {line} · Turno {shift}</Text>
+      </View>
+      <Text style={styles.linkText}>Cambiar</Text>
+    </Pressable>
+  ) : (
+    <View style={styles.jornadaEditor}>
+      <View style={styles.jornadaEditorHead}>
+        <Text style={styles.jornadaEditorTitle}>Selecciona dónde estás validando</Text>
+        <Text style={styles.jornadaLabel}>Se conserva para los siguientes pallets</Text>
+      </View>
+      <View style={[styles.jornadaGroups, compact && styles.jornadaGroupsCompact]}>
+        <View style={styles.jornadaGroup}>
+          <Text style={styles.cellLabel}>Línea de proceso</Text>
+          <View style={styles.segmented}>
+            {([1, 2, 3] as ValidationLine[]).map((value) => (
+              <Pressable accessibilityLabel={`Línea ${value}`} key={value} onPress={() => void updateWorkContext(value, shift)} style={[styles.segment, line === value && styles.segmentActive]}>
+                <Text style={[styles.segmentText, line === value && styles.segmentTextActive]}>{value}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+        <View style={styles.jornadaGroup}>
+          <Text style={styles.cellLabel}>Turno</Text>
+          <View style={styles.segmented}>
+            {(['A', 'B'] as ValidationShift[]).map((value) => (
+              <Pressable accessibilityLabel={`Turno ${value}`} key={value} onPress={() => void updateWorkContext(line, value)} style={[styles.segment, shift === value && styles.segmentActive]}>
+                <Text style={[styles.segmentText, shift === value && styles.segmentTextActive]}>{value}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+
+  const boxesCell = (
+    <LabelCell label="Cajas del bulto">
+      <TextInput
+        accessibilityLabel="Cajas del bulto"
+        editable={!terminalDecision}
+        keyboardType="number-pad"
+        onChangeText={(value) => { const clean = value.replace(/[^0-9]/g, ''); setBoxes(clean); setOriginDrafts((current) => current.length === 1 ? [{ ...current[0], boxes: clean }] : current); }}
+        placeholder="0"
+        placeholderTextColor={o.color.muted}
+        style={[styles.cellInput, styles.cellInputNumber, terminalDecision && styles.disabled]}
+        value={boxes}
+      />
+    </LabelCell>
+  );
+
+  const label = (
+    <View style={styles.label}>
+      <View style={styles.folioStrip}>
+        <Text style={styles.cellLabel}>Folio</Text>
+        <ScanInput
+          ref={folioInput}
+          autoFocus={isPdaBuild}
+          disabled={busy || Boolean(editingOutbox)}
+          inputStyle={[styles.folioInput, compact && styles.folioInputCompact]}
+          onChangeText={handleFolioChange}
+          onSubmit={(code) => void inspectFolio(code)}
+          placeholder={tight ? 'Pistolea el folio' : 'Pistolea la etiqueta'}
+          submitLabel={tight ? 'OK' : 'Consultar'}
+          value={folio}
+        />
+        {folioReview ? <FolioReviewCard review={folioReview} /> : null}
+        {editingOutbox ? (
+          <View style={styles.correction}>
+            <View style={styles.correctionCopy}>
+              <Text style={styles.correctionTitle}>Corrigiendo envío · {editingOutbox.payload.numero_folio}</Text>
+              <Text style={styles.correctionText}>La captura original sigue guardada hasta que registres la corrección.</Text>
+            </View>
+            <Pressable disabled={busy} onPress={cancelRecovery} style={styles.secondaryButton}><Text style={styles.secondaryButtonText}>Cancelar corrección</Text></Pressable>
+          </View>
+        ) : null}
+      </View>
+
+      <LabelSection index={1} title="Bulto">
+        <LabelRow last={wide}>
+          <LabelCell divider={wide} flex={1.6} label="Tipo de bulto">
+            <View style={styles.segmented}>
+              {(['pallet', 'saldo'] as const).map((type) => (
+                <Pressable
+                  accessibilityState={{ selected: packageType === type }}
+                  disabled={terminalDecision}
+                  key={type}
+                  onPress={() => setPackageType(type)}
+                  style={[styles.segment, type === 'pallet' && styles.segmentWide, packageType === type && styles.segmentActive, terminalDecision && styles.disabled]}
+                >
+                  <Text numberOfLines={1} style={[styles.segmentText, packageType === type && styles.segmentTextActive]}>{packageType === type ? '✓ ' : ''}{type === 'pallet' ? 'Pallet completo' : 'Saldo'}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </LabelCell>
+          {wide ? boxesCell : null}
+        </LabelRow>
+        {wide ? null : <LabelRow last>{boxesCell}</LabelRow>}
+      </LabelSection>
+
+      <LabelSection index={2} title="Origen comercial" hint={wide ? 'Una sola fecha por bulto validado en línea' : undefined}>
+        {wide ? (
+          <LabelRow last>
+            <SelectField divider disabled={terminalDecision} label="Cliente" options={clientOptions} value={client} onChange={(value) => { setClient(value); setBrand(''); setOriginDrafts([newOriginDraft()]); resetProduct(); }} />
+            <SelectField divider disabled={terminalDecision || !client} emptyLabel={client ? 'Seleccionar' : 'Primero el cliente'} label="Marca" options={brandOptions} value={brand} onChange={(value) => { setBrand(value); setOriginDrafts([newOriginDraft()]); resetProduct(); }} />
+            <LabelCell label="Fecha de embalaje">
+              <TextInput accessibilityLabel="Fecha de embalaje" editable={!terminalDecision} onChangeText={setPackingDate} placeholder="AAAA-MM-DD" placeholderTextColor={o.color.muted} style={[styles.cellInput, styles.cellInputCode, terminalDecision && styles.disabled]} value={packingDate} />
+            </LabelCell>
+          </LabelRow>
+        ) : (
+          <>
+            <LabelRow>
+              <SelectField disabled={terminalDecision} label="Cliente" options={clientOptions} value={client} onChange={(value) => { setClient(value); setBrand(''); setOriginDrafts([newOriginDraft()]); resetProduct(); }} />
+            </LabelRow>
+            <LabelRow last>
+              <SelectField divider disabled={terminalDecision || !client} emptyLabel={client ? 'Seleccionar' : 'Primero el cliente'} label="Marca" options={brandOptions} value={brand} onChange={(value) => { setBrand(value); setOriginDrafts([newOriginDraft()]); resetProduct(); }} />
+              <LabelCell hint="Una por bulto" label="Fecha de embalaje">
+                <TextInput accessibilityLabel="Fecha de embalaje" editable={!terminalDecision} onChangeText={setPackingDate} placeholder="AAAA-MM-DD" placeholderTextColor={o.color.muted} style={[styles.cellInput, styles.cellInputCode, terminalDecision && styles.disabled]} value={packingDate} />
+              </LabelCell>
+            </LabelRow>
+          </>
+        )}
+      </LabelSection>
+
+      <LabelSection
+        aside={<StatusChip small label={sumLabel} tone={sumTone} />}
+        hint={wide ? 'La suma debe coincidir con las cajas del bulto' : undefined}
+        index={3}
+        title="Composición por CSG"
+      >
+        {wide ? (
+          <View style={styles.compositionHead}>
+            <Text style={[styles.compositionHeadText, { flex: 1.5 }]}>CSG / Predio</Text>
+            <Text style={[styles.compositionHeadText, { flex: 0.6 }]}>Cajas</Text>
+            <Text style={[styles.compositionHeadText, { flex: 1.1 }]}>Lote MP</Text>
+            <Text style={[styles.compositionHeadText, { flex: 1.1 }]}>Proceso packing</Text>
+            <View style={styles.compositionAction} />
+          </View>
+        ) : null}
+        {originDrafts.map((draft, index) => {
+          const csg = (
+            <SelectField
+              disabled={terminalDecision || !brand}
+              divider={wide}
+              emptyLabel={brand ? 'Seleccionar' : 'Primero la marca'}
+              flex={wide ? 1.5 : 1}
+              hideLabel={wide}
+              label={`CSG / Predio ${index + 1}`}
+              options={csgOptions}
+              searchable
+              value={draft.originId}
+              onChange={(value) => updateOriginDrafts(originDrafts.map((item) => item.key === draft.key ? { ...item, originId: value } : item))}
+            />
+          );
+          const remove = originDrafts.length > 1 ? (
+            <Pressable
+              accessibilityLabel={`Quitar la línea ${index + 1}`}
+              disabled={terminalDecision}
+              onPress={() => updateOriginDrafts(originDrafts.filter((item) => item.key !== draft.key))}
+              style={styles.removeButton}
+            >
+              <Text style={styles.removeText}>Quitar</Text>
+            </Pressable>
+          ) : null;
+          const boxesInput = <TextInput accessibilityLabel={`Cajas de la línea ${index + 1}`} editable={!terminalDecision} keyboardType="number-pad" onChangeText={(value) => setOriginDrafts((current) => current.map((item) => item.key === draft.key ? { ...item, boxes: value.replace(/[^0-9]/g, '') } : item))} placeholder="0" placeholderTextColor={o.color.muted} style={[styles.cellInput, styles.cellInputNumberSmall]} value={draft.boxes} />;
+          const lotInput = <TextInput accessibilityLabel={`Lote MP de la línea ${index + 1}`} autoCapitalize="characters" autoCorrect={false} editable={!terminalDecision} onChangeText={(value) => setOriginDrafts((current) => current.map((item) => item.key === draft.key ? { ...item, lot: value } : item))} placeholder="Según etiqueta" placeholderTextColor={o.color.muted} style={[styles.cellInput, styles.cellInputCode, compact && styles.cellInputCodeCompact]} value={draft.lot} />;
+          const processInput = <TextInput accessibilityLabel={`Proceso packing de la línea ${index + 1}`} autoCapitalize="characters" autoCorrect={false} editable={!terminalDecision} onChangeText={(value) => setOriginDrafts((current) => current.map((item) => item.key === draft.key ? { ...item, process: value } : item))} placeholder="Según etiqueta" placeholderTextColor={o.color.muted} style={[styles.cellInput, styles.cellInputCode, compact && styles.cellInputCodeCompact]} value={draft.process} />;
+          return wide ? (
+            <View key={draft.key} style={styles.compositionRow}>
+              {csg}
+              <View style={[styles.compositionCell, { flex: 0.6 }]}>{boxesInput}</View>
+              <View style={[styles.compositionCell, { flex: 1.1 }]}>{lotInput}</View>
+              <View style={[styles.compositionCell, { flex: 1.1 }]}>{processInput}</View>
+              <View style={styles.compositionAction}>{remove}</View>
+            </View>
+          ) : (
+            <View key={draft.key} style={styles.compositionBlock}>
+              <View style={styles.compositionBlockTop}>
+                {csg}
+                <LabelCell label="Cajas" width={86}>{boxesInput}</LabelCell>
+                {remove}
+              </View>
+              <View style={styles.compositionBlockBottom}>
+                <LabelCell divider label="Lote MP">{lotInput}</LabelCell>
+                <LabelCell label="Proceso packing">{processInput}</LabelCell>
+              </View>
+            </View>
+          );
+        })}
+        <View style={styles.compositionFoot}>
+          <Pressable disabled={terminalDecision || !brand} onPress={() => updateOriginDrafts([...originDrafts, newOriginDraft()])} style={[styles.addButton, (terminalDecision || !brand) && styles.disabled]}>
+            <Text style={styles.linkText}>+ Agregar línea (otro CSG, lote o proceso)</Text>
+          </Pressable>
+          {originError ? <Text accessibilityRole="alert" style={styles.originError}>{originError}</Text> : null}
+        </View>
+      </LabelSection>
+
+      <LabelSection hint={noCsgYet && wide ? 'Elige el CSG para filtrar las variedades' : undefined} index={4} title="Producto">
+        {noCsgYet && !wide ? <Text style={styles.sectionNote}>Elige el CSG para filtrar las variedades.</Text> : null}
+        {wide ? (
+          <LabelRow last>
+            <SelectField divider disabled={terminalDecision || !selectedOriginIds.length} label="Especie" options={speciesOptions} value={species} onChange={(value) => { setSpecies(value); setVariety(''); setCaliber(''); setPackageName(''); }} />
+            <SelectField divider disabled={terminalDecision || !species || noCsgYet} label="Variedad" options={varietyOptions} value={variety} onChange={(value) => { setVariety(value); setCaliber(''); setPackageName(''); }} />
+            <SelectField divider disabled={terminalDecision || !variety} label="Calibre" options={caliberOptions} value={caliber} onChange={(value) => { setCaliber(value); setPackageName(''); }} />
+            <SelectField disabled={terminalDecision || !caliber} label="Envase" options={packageOptions} value={packageName} onChange={setPackageName} />
+          </LabelRow>
+        ) : (
+          <>
+            <LabelRow>
+              <SelectField divider disabled={terminalDecision || !selectedOriginIds.length} label="Especie" options={speciesOptions} value={species} onChange={(value) => { setSpecies(value); setVariety(''); setCaliber(''); setPackageName(''); }} />
+              <SelectField disabled={terminalDecision || !species || noCsgYet} label="Variedad" options={varietyOptions} value={variety} onChange={(value) => { setVariety(value); setCaliber(''); setPackageName(''); }} />
+            </LabelRow>
+            <LabelRow last>
+              <SelectField divider disabled={terminalDecision || !variety} label="Calibre" options={caliberOptions} value={caliber} onChange={(value) => { setCaliber(value); setPackageName(''); }} />
+              <SelectField disabled={terminalDecision || !caliber} label="Envase" options={packageOptions} value={packageName} onChange={setPackageName} />
+            </LabelRow>
+          </>
+        )}
+      </LabelSection>
+
+      <LabelSection index={5} title="Categoría">
+        <LabelRow last>
+          <SelectField disabled={terminalDecision || !packageName} label="Categoría" options={categoryOptions} searchable value={categoryId} onChange={setCategoryId} />
+        </LabelRow>
+      </LabelSection>
+    </View>
+  );
+
+  const decision = (
+    <View style={styles.decision}>
+      <View style={styles.decisionSummary}>
+        <StatusChip label={ready ? 'Combinación habilitada' : 'Faltan datos obligatorios'} tone={ready ? 'success' : 'neutral'} />
+        <View style={styles.decisionSummaryCopy}>
+          <Text style={styles.summaryText}>{selectedCategory ? `Categoría ${selectedCategory.nombre}` : 'Categoría pendiente'} · {selectedArticle ? `${selectedArticle.especie} ${selectedArticle.variedad} · ${selectedArticle.calibre} · ${selectedArticle.envase}` : 'artículo pendiente'}</Text>
+          <Text style={styles.summaryText}>{selectedOrigins.every(Boolean) ? `${client} · ${brand} · ${selectedOrigins.map((origin) => `CSG ${origin?.csg}`).join(' + ')} · ${packingDate}` : 'Origen pendiente'}</Text>
+        </View>
+      </View>
+      <View style={[styles.decisionButtons, compact && styles.decisionButtonsCompact]}>
+        {compact ? [approveButton, observeButton, rejectButton] : [observeButton, rejectButton, approveButton]}
+      </View>
+    </View>
+  );
+
+  const pendingTray = previousSessionOutbox.length ? (
+    <View style={styles.tray}>
+      <View style={styles.trayHead}>
+        <SignalMark size={12} tone="warning" />
+        <Text style={styles.trayTitle}>{previousSessionOutbox.length === 1 ? 'Pendiente de una sesión anterior' : 'Pendientes de una sesión anterior'}</Text>
+      </View>
+      <Text style={styles.trayText}>
+        {previousSessionOutbox.length === 1
+          ? `1 operación quedó guardada en esta ${device} y no se suma a la sesión actual.`
+          : `${previousSessionOutbox.length} operaciones quedaron guardadas en esta ${device} y no se suman a la sesión actual.`}
+      </Text>
+      {previousSessionOutbox.map((item) => (
+        <View key={item.id} style={styles.trayItem}>
+          <View style={styles.trayItemCopy}>
+            <Text style={styles.trayFolio}>{item.payload.numero_folio}</Text>
+            <Text style={styles.trayDetail}>{statusLabel(item.status)} · {formatTime(item.payload.generado_dispositivo_at)}</Text>
+            {item.message ? <Text style={styles.trayMessage}>{item.message}</Text> : null}
+          </View>
+          {item.status !== 'pendiente' ? (
+            <Pressable disabled={busy || syncing || Boolean(editingOutbox)} onPress={() => void resumeItem(item)} style={styles.trayAction}>
+              <Text style={styles.trayActionText}>Retomar</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ))}
+    </View>
+  ) : null;
+
+  const session = (
+    <View style={styles.session}>
+      <View style={styles.sessionHead}>
+        <View style={styles.sessionHeadCopy}>
+          <Text style={styles.sessionTitle}>Esta sesión</Text>
+          <Text numberOfLines={1} style={styles.sessionMeta}>{compact ? `${validationSession?.resumen.folios_trabajados ?? 0} folios · ` : ''}{auth.usuario.nombre} · desde {formatDateTime(sessionStartedAt)}</Text>
+        </View>
+        <Pressable onPress={() => setSessionExpanded((current) => !current)} style={styles.linkButton}>
+          <Text style={styles.linkText}>{sessionExpanded ? 'Contraer' : 'Ver todos'}</Text>
+        </Pressable>
+      </View>
+      <LabelCounters compact={compact} items={[
+        ...(compact ? [] : [{ label: 'Folios', value: validationSession?.resumen.folios_trabajados ?? 0, tone: 'neutral' as const }]),
+        { label: 'Aprobados', value: validationSession?.resumen.aprobados ?? 0, tone: 'success' },
+        { label: 'Observados', value: validationSession?.resumen.observados ?? 0, tone: 'warning' },
+        { label: 'Rechazados', value: validationSession?.resumen.rechazados ?? 0, tone: 'critical' },
+        { label: 'Conflictos', value: validationSession?.resumen.conflictos ?? 0, tone: 'critical' },
+      ]} />
+      <Text style={styles.sessionBalance}>
+        Intentos {serverRecords} · por enviar {pendingSessionOutbox.length} · sin confirmar {unconfirmedSessionOutbox.length} · total capturado {serverRecords + unconfirmedSessionOutbox.length}
+      </Text>
+      <View style={styles.sessionListHead}>
+        <Text style={styles.sessionListTitle}>Pallets trabajados</Text>
+        <Text style={styles.sessionListCount}>{validationSession?.meta.total ?? 0} en servidor · {currentSessionOutbox.length} {currentSessionOutbox.length === 1 ? 'local' : 'locales'}</Text>
+      </View>
+
+      {currentSessionOutbox.map((item) => (
+        <TalonRow
+          aside={(
+            <>
+              <StatusChip small label={statusLabel(item.status)} tone={item.status === 'pendiente' ? 'warning' : 'critical'} />
+              {item.status !== 'pendiente' ? (
+                <Pressable disabled={busy || syncing || Boolean(editingOutbox)} onPress={() => void resumeItem(item)} style={styles.trayAction}>
+                  <Text style={styles.trayActionText}>Retomar</Text>
+                </Pressable>
+              ) : null}
+            </>
+          )}
+          detail={`${item.payload.cantidad_cajas} cj · ${packageLabel(item.payload.tipo_bulto)} · línea ${item.payload.linea_proceso}, turno ${item.payload.turno} · guardado en la ${device}`}
+          folio={item.payload.numero_folio}
+          key={item.id}
+          message={item.message}
+          time={formatTime(item.payload.generado_dispositivo_at)}
+          tone="warning"
+        />
+      ))}
+
+      {visibleSessionAttempts.map((item) => (
+        <TalonRow
+          aside={<StatusChip small label={item.estado === 'conflicto' ? 'Conflicto' : resultLabel(item.resultado)} tone={item.estado === 'conflicto' ? 'critical' : resultTone(item.resultado)} />}
+          detail={`${item.cantidad_cajas} cj · ${packageLabel(item.tipo_bulto)} · línea ${item.linea_proceso ?? '—'}, turno ${item.turno ?? '—'}${item.numero_intento > 1 ? ` · intento ${item.numero_intento}` : ''}`}
+          disabled={busy || Boolean(editingOutbox)}
+          folio={item.numero_folio}
+          key={item.id}
+          onPress={() => { setFolio(item.numero_folio); void inspectFolio(item.numero_folio); }}
+          time={formatTime(item.recibido_servidor_at)}
+        />
+      ))}
+
+      {!currentSessionOutbox.length && !visibleSessionAttempts.length
+        ? <Text style={styles.empty}>Todavía no hay pallets validados en esta sesión.</Text>
+        : null}
+
+      {sessionExpanded && validationSession && validationSession.meta.current_page < validationSession.meta.last_page ? (
+        <Pressable disabled={loadingMoreSession} onPress={() => void loadMoreSession()} style={[styles.linkButton, styles.loadMore, loadingMoreSession && styles.disabled]}>
+          <Text style={styles.linkText}>{loadingMoreSession ? 'Cargando…' : 'Cargar más registros'}</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+
+  const syncButton = (
+    <Pressable
+      accessibilityLabel={`Sincronizar. Estado: ${syncLabel}`}
+      disabled={syncing}
+      onPress={() => void synchronize({ notify: true })}
+      style={styles.syncButton}
+    >
+      <StatusChip label={syncLabel} small={compact} tone={syncTone} />
+    </Pressable>
+  );
 
   return (
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={[styles.page, compact && styles.pageCompact]} keyboardShouldPersistTaps="handled">
-        <View style={[styles.topbar, compact && styles.topbarCompact, tight && styles.topbarTight]}>
-          <View style={styles.headerIdentity}>
-            <Image source={areas.frigorifico.gajo} style={styles.headerGajo} accessibilityLabel="Frigorífico" />
-            <View style={styles.headerCopy}>
-              <Text style={styles.title}>Validación PT</Text>
-              <Text style={styles.headerContext}>{line && shift ? 'Línea ' + line + ', turno ' + shift : 'Jornada sin configurar'}</Text>
-            </View>
+        <View style={[styles.header, compact && styles.headerCompact]}>
+          <Image accessibilityLabel="Frigorífico" source={areas.frigorifico.gajo} style={[styles.headerGajo, compact && styles.headerGajoCompact]} />
+          <View style={styles.headerCopy}>
+            <Text style={styles.headerArea}>Frigorífico</Text>
+            <Text numberOfLines={1} style={[styles.headerTitle, compact && styles.headerTitleCompact]}>Validación PT</Text>
+            {wide ? <Text numberOfLines={1} style={styles.headerMeta}>{headerMeta}</Text> : null}
           </View>
-          <View style={[styles.topbarRight, compact && styles.topbarRightCompact, tight && styles.topbarRightTight]}>
-            <View accessibilityLabel={'Estado de conexión: ' + (online ? 'En línea' : 'Sin conexión')} style={[styles.connection, online ? styles.connectionOnline : styles.connectionOffline]}><Text style={[styles.connectionText, online ? styles.connectionTextOnline : styles.connectionTextOffline]}>{online ? '✓ En línea' : '◆ Sin conexión'}</Text></View>
-            <Pressable onPress={logout} style={styles.logout}><Text style={styles.logoutText}>Salir</Text></Pressable>
-          </View>
+          {wide ? syncButton : null}
+          <Pressable onPress={logout} style={styles.logout}><Text style={styles.logoutText}>Salir</Text></Pressable>
         </View>
-
-        <View style={[styles.statusStrip, compact && styles.statusStripCompact]}>
-          <View style={styles.statusCopy}>
-            <Text numberOfLines={tight ? 1 : undefined} style={[styles.statusText, tight && styles.statusTextTight]}>{catalog ? `${catalog.temporada.nombre} · catálogo v${catalog.temporada.version_catalogo}` : 'Sin catálogo'}</Text>
-            <Text numberOfLines={tight ? 2 : undefined} style={[styles.statusText, tight && styles.statusTextTight]}>{line && shift ? `Línea ${line} · Turno ${shift}` : 'Jornada sin configurar'} · {pendingSessionOutbox.length} {tight ? 'pendientes' : 'pendientes de esta sesión'} · {lastSync ? `${tight ? 'sync' : 'última sincronización'} ${formatTime(lastSync)}` : (tight ? 'sin sync' : 'sin sincronización reciente')}</Text>
+        {compact ? (
+          <View style={styles.headerMetaRow}>
+            <Text numberOfLines={2} style={styles.headerMetaCompact}>{headerMeta}</Text>
+            {syncButton}
           </View>
-          <Pressable
-            disabled={syncing}
-            onPress={() => void synchronize({ notify: true })}
-            style={[styles.syncButton, styles.syncButtonTop, syncing && styles.disabled]}
-          >
-            <Text style={styles.syncButtonText}>{syncing ? 'Sincronizando…' : '↻ Sincronizar'}</Text>
+        ) : null}
+
+        {error ? (
+          <Pressable accessibilityRole="alert" onPress={() => setError('')} style={[styles.banner, styles.bannerError]}>
+            <SignalMark size={12} tone="critical" />
+            <Text style={styles.bannerText}>{error}</Text>
+            <Text style={styles.close}>×</Text>
           </Pressable>
-        </View>
+        ) : null}
+        {notice ? (
+          <Pressable onPress={() => setNotice('')} style={[styles.banner, styles.bannerNotice]}>
+            <SignalMark size={12} tone="success" />
+            <Text style={styles.bannerText}>{notice}</Text>
+            <Text style={styles.close}>×</Text>
+          </Pressable>
+        ) : null}
 
-        {error ? <Pressable onPress={() => setError('')} style={styles.errorBanner}><Text style={styles.errorBannerText}>{error}</Text><Text style={styles.close}>×</Text></Pressable> : null}
-        {notice ? <Pressable onPress={() => setNotice('')} style={styles.noticeBanner}><Text style={styles.noticeBannerText}>{notice}</Text><Text style={styles.close}>×</Text></Pressable> : null}
-
-        <View style={[styles.mainGrid, compact && styles.mainGridCompact]}>
-          <View style={[styles.formPanel, compact && styles.panelCompact]}>
-            {tight ? null : <><Text style={styles.sectionEyebrow}>CAPTURA RÁPIDA</Text>
-            <Text style={styles.sectionTitle}>Escanea y valida</Text></>}
-
-            {tight && line && shift && !editingContext ? (
-              <Pressable accessibilityLabel="Cambiar línea y turno" onPress={() => setEditingContext(true)} style={styles.workContextSummary}>
-                <Text style={styles.workContextSummaryText}>Línea {line} · Turno {shift}</Text>
-                <Text style={styles.workContextSummaryAction}>Cambiar</Text>
-              </Pressable>
-            ) : (
-            <View style={[styles.workContext, tight && styles.workContextTight]}>
-              <View style={styles.workContextHeader}>
-                <View><Text style={styles.sectionEyebrow}>CONTEXTO DE JORNADA</Text><Text style={styles.workContextTitle}>Selecciona dónde estás validando</Text></View>
-                {tight ? null : <Text style={styles.workContextHint}>Se conserva para los siguientes pallets</Text>}
-              </View>
-              <View style={[styles.workContextGrid, compact && styles.workContextGridCompact]}>
-                <View style={styles.workContextGroup}>
-                  <Text style={styles.label}>Línea de proceso *</Text>
-                  <View style={styles.contextOptions}>
-                    {([1, 2, 3] as ValidationLine[]).map((value) => <Pressable key={value} onPress={() => void updateWorkContext(value, shift)} style={[styles.contextButton, line === value && styles.contextButtonActive]}><Text style={[styles.contextButtonText, line === value && styles.contextButtonTextActive]}>{value}</Text></Pressable>)}
-                  </View>
-                </View>
-                <View style={styles.workContextGroup}>
-                  <Text style={styles.label}>Turno *</Text>
-                  <View style={styles.contextOptions}>
-                    {(['A', 'B'] as ValidationShift[]).map((value) => <Pressable key={value} onPress={() => void updateWorkContext(line, value)} style={[styles.contextButton, shift === value && styles.contextButtonActive]}><Text style={[styles.contextButtonText, shift === value && styles.contextButtonTextActive]}>{value}</Text></Pressable>)}
-                  </View>
-                </View>
-              </View>
-            </View>
-
-            )}
-
-            <Text style={styles.label}>Folio *</Text>
-            <ScanInput
-              ref={folioInput}
-              autoFocus={isPdaBuild}
-              disabled={busy || Boolean(editingOutbox)}
-              onChangeText={handleFolioChange}
-              onSubmit={(code) => void inspectFolio(code)}
-              placeholder={tight ? 'Pistolea el folio' : 'Escanear código de barras'}
-              submitLabel={tight ? 'OK' : 'CONSULTAR'}
-              value={folio}
-            />
-
-            {folioReview ? <FolioReviewCard review={folioReview} /> : null}
-            {editingOutbox ? (
-              <View style={styles.selectionSummary}>
-                <Text style={styles.selectionSummaryTitle}>CORRIGIENDO ENVÍO · {editingOutbox.payload.numero_folio}</Text>
-                <Text style={styles.selectionSummaryText}>La captura original sigue guardada hasta que registres la corrección.</Text>
-                <Pressable disabled={busy} onPress={cancelRecovery} style={styles.retryButton}><Text style={styles.retryText}>Cancelar corrección</Text></Pressable>
-              </View>
-            ) : null}
-
-            <View style={[styles.typeRow, compact && styles.typeRowCompact]}>
-              {(['pallet', 'saldo'] as const).map((type) => (
-                <Pressable disabled={terminalDecision} key={type} onPress={() => setPackageType(type)} style={[styles.typeButton, compact && styles.typeButtonCompact, packageType === type && styles.typeButtonActive, terminalDecision && styles.disabled]}>
-                  <Text style={[styles.typeButtonText, packageType === type && styles.typeButtonTextActive]}>{type === 'pallet' ? 'PALLET COMPLETO' : 'SALDO'}</Text>
-                </Pressable>
-              ))}
-              <View style={[styles.boxField, compact && styles.boxFieldCompact]}><Text style={styles.label}>Cajas *</Text><TextInput editable={!terminalDecision} keyboardType="number-pad" onChangeText={(value) => { const clean = value.replace(/[^0-9]/g, ''); setBoxes(clean); setOriginDrafts((current) => current.length === 1 ? [{ ...current[0], boxes: clean }] : current); }} placeholder="0" placeholderTextColor={colors.muted} style={[styles.boxInput, terminalDecision && styles.disabled]} value={boxes} /></View>
-            </View>
-
-            <Text style={styles.groupTitle}>Origen comercial</Text>
-            <View style={[styles.fieldGrid, compact && styles.fieldGridCompact, tight && styles.fieldGridPair]}>
-              <SelectField compact={compact} half={tight} disabled={terminalDecision} label="Cliente" options={clientOptions} value={client} onChange={(value) => { setClient(value); setBrand(''); setOriginDrafts([newOriginDraft()]); resetProduct(); }} />
-              <SelectField compact={compact} half={tight} disabled={terminalDecision || !client} label="Marca" options={brandOptions} value={brand} onChange={(value) => { setBrand(value); setOriginDrafts([newOriginDraft()]); resetProduct(); }} />
-              <View style={styles.packingDateField}>
-                <Text style={styles.label}>Fecha de embalaje *</Text>
-                <TextInput
-                  editable={!terminalDecision}
-                  onChangeText={setPackingDate}
-                  placeholder="AAAA-MM-DD"
-                  placeholderTextColor={colors.muted}
-                  style={[styles.boxInput, terminalDecision && styles.disabled]}
-                  value={packingDate}
-                />
-                <Text style={styles.fieldHint}>Una sola fecha por bulto validado en línea.</Text>
-              </View>
-            </View>
-
-            <View style={styles.compositionHeader}>
-              <View style={styles.compositionHeaderCopy}><Text style={styles.label}>Composición por CSG *</Text><Text style={styles.fieldHint}>La suma debe coincidir con las cajas del bulto.</Text></View>
-              <Text style={[styles.compositionTotal, compositionBoxes === Number(boxes) ? styles.compositionTotalOk : styles.compositionTotalPending]}>{compositionBoxes === Number(boxes) ? '✓ ' : '◆ '}{compositionBoxes}/{boxes || 0} cajas</Text>
-            </View>
-            {originDrafts.map((draft, index) => (
-              <View key={draft.key} style={[styles.originCompositionRow, compact && styles.originCompositionRowCompact]}>
-                <View style={styles.originCompositionSelect}><SelectField compact={compact} disabled={terminalDecision || !brand} label={`CSG / Predio ${index + 1}`} options={csgOptions} searchable value={draft.originId} onChange={(value) => updateOriginDrafts(originDrafts.map((item) => item.key === draft.key ? { ...item, originId: value } : item))} /></View>
-                <View style={styles.originBoxes}><Text style={styles.label}>Cajas *</Text><TextInput editable={!terminalDecision} keyboardType="number-pad" onChangeText={(value) => setOriginDrafts((current) => current.map((item) => item.key === draft.key ? { ...item, boxes: value.replace(/[^0-9]/g, '') } : item))} placeholder="0" placeholderTextColor={colors.muted} style={styles.boxInput} value={draft.boxes} /></View>
-                {originDrafts.length > 1 ? <Pressable disabled={terminalDecision} onPress={() => updateOriginDrafts(originDrafts.filter((item) => item.key !== draft.key))} style={styles.removeOrigin}><Text style={styles.removeOriginText}>Quitar</Text></Pressable> : null}
-                <View style={styles.traceField}><Text style={styles.label}>Lote MP *</Text><TextInput autoCapitalize="characters" autoCorrect={false} editable={!terminalDecision} onChangeText={(value) => setOriginDrafts((current) => current.map((item) => item.key === draft.key ? { ...item, lot: value } : item))} placeholder="Según etiqueta" placeholderTextColor={colors.muted} style={styles.traceInput} value={draft.lot} /></View>
-                <View style={styles.traceField}><Text style={styles.label}>Proceso packing *</Text><TextInput autoCapitalize="characters" autoCorrect={false} editable={!terminalDecision} onChangeText={(value) => setOriginDrafts((current) => current.map((item) => item.key === draft.key ? { ...item, process: value } : item))} placeholder="Según etiqueta" placeholderTextColor={colors.muted} style={styles.traceInput} value={draft.process} /></View>
-              </View>
-            ))}
-            <Pressable disabled={terminalDecision || !brand} onPress={() => updateOriginDrafts([...originDrafts, newOriginDraft()])} style={[styles.addOrigin, (terminalDecision || !brand) && styles.disabled]}><Text style={styles.addOriginText}>+ Agregar línea (otro CSG, lote o proceso)</Text></Pressable>
-            {originError ? <Text accessibilityRole="alert" style={styles.originError}>{originError}</Text> : null}
-
-            <Text style={styles.groupTitle}>Producto</Text>
-            {!originDrafts.some((draft) => draft.originId) ? <Text style={styles.label}>Selecciona el CSG en Origen comercial para filtrar las variedades.</Text> : null}
-            <View style={[styles.fieldGrid, compact && styles.fieldGridCompact, tight && styles.fieldGridPair]}>
-              <SelectField compact={compact} half={tight} disabled={terminalDecision || !selectedOriginIds.length} label="Especie" options={speciesOptions} value={species} onChange={(value) => { setSpecies(value); setVariety(''); setCaliber(''); setPackageName(''); }} />
-              <SelectField compact={compact} half={tight} disabled={terminalDecision || !species || !originDrafts.some((draft) => draft.originId)} label="Variedad" options={varietyOptions} value={variety} onChange={(value) => { setVariety(value); setCaliber(''); setPackageName(''); }} />
-              <SelectField compact={compact} half={tight} disabled={terminalDecision || !variety} label="Calibre" options={caliberOptions} value={caliber} onChange={(value) => { setCaliber(value); setPackageName(''); }} />
-              <SelectField compact={compact} half={tight} disabled={terminalDecision || !caliber} label="Envase" options={packageOptions} value={packageName} onChange={setPackageName} />
-            </View>
-
-            <Text style={styles.groupTitle}>Categoría</Text>
-            <View style={[styles.fieldGrid, compact && styles.fieldGridCompact]}>
-              <View style={styles.wideField}><SelectField compact={compact} disabled={terminalDecision || !packageName} label="Categoría" options={categoryOptions} searchable value={categoryId} onChange={setCategoryId} /></View>
-            </View>
-
-            <View style={styles.selectionSummary}>
-              <Text style={styles.selectionSummaryTitle}>{selectedCombination && selectedCategory ? 'Combinación habilitada' : 'Completa los datos obligatorios'}</Text>
-              <Text style={styles.selectionSummaryText}>{selectedCategory ? `Categoría: ${selectedCategory.nombre}` : 'Categoría pendiente'}</Text>
-              <Text style={styles.selectionSummaryText}>{selectedArticle ? `${selectedArticle.especie} · ${selectedArticle.variedad} · ${selectedArticle.calibre} · ${selectedArticle.envase}` : 'Artículo pendiente'}</Text>
-              <Text style={styles.selectionSummaryText}>{selectedOrigins.every(Boolean) ? `${client} · ${brand} · ${selectedOrigins.map((origin) => `CSG ${origin?.csg}`).join(' + ')} · fecha ${packingDate}` : 'Origen pendiente'}</Text>
-            </View>
-
-            <View style={[styles.resultActions, compact && styles.resultActionsCompact]}>
-              <Pressable disabled={busy || terminalDecision} onPress={() => void submit('aprobado')} style={[styles.resultButton, compact && styles.resultButtonCompact, styles.approveButton, (busy || terminalDecision) && styles.resultButtonDisabled]}><Text style={[styles.resultIcon, styles.approveText, (busy || terminalDecision) && styles.resultTextDisabled]}>✓</Text><Text style={[styles.resultButtonText, styles.approveText, (busy || terminalDecision) && styles.resultTextDisabled]}>{observedAttempt ? 'APROBAR CORRECCIÓN' : 'APROBAR'}</Text></Pressable>
-              <Pressable disabled={busy || terminalDecision} onPress={() => openObservation('observado')} style={[styles.resultButton, compact && styles.resultButtonCompact, styles.observeButton, (busy || terminalDecision) && styles.resultButtonDisabled]}><Text style={[styles.resultIcon, styles.observeText, (busy || terminalDecision) && styles.resultTextDisabled]}>!</Text><Text style={[styles.resultButtonText, styles.observeText, (busy || terminalDecision) && styles.resultTextDisabled]}>{observedAttempt ? 'MANTENER OBSERVADO' : 'OBSERVAR'}</Text></Pressable>
-              {canReject ? <Pressable disabled={busy || terminalDecision} onPress={() => openObservation('rechazado')} style={[styles.resultButton, compact && styles.resultButtonCompact, styles.rejectButton, (busy || terminalDecision) && styles.resultButtonDisabled]}><Text style={[styles.resultIcon, styles.rejectText, (busy || terminalDecision) && styles.resultTextDisabled]}>×</Text><Text style={[styles.resultButtonText, styles.rejectText, (busy || terminalDecision) && styles.resultTextDisabled]}>RECHAZAR</Text></Pressable> : null}
-            </View>
+        <View style={[styles.columns, compact && styles.columnsCompact]}>
+          <View style={[styles.mainColumn, compact && styles.columnCompact]}>
+            {compact ? pendingTray : null}
+            {workContext}
+            {label}
+            {decision}
           </View>
-
-          <View style={[styles.sidePanel, compact && styles.panelCompact]}>
-            <View style={styles.sessionHeader}>
-              <View>
-                <Text style={styles.sectionEyebrow}>MI SESIÓN DE VALIDACIÓN</Text>
-                <Text style={styles.sideTitle}>{auth.usuario.nombre}</Text>
-                <Text style={styles.sessionStarted}>
-                  Desde {formatDateTime(sessionStartedAt)} · {auth.dispositivo.codigo}
-                </Text>
-              </View>
-              <Pressable onPress={() => setSessionExpanded((current) => !current)} style={styles.sessionToggle}>
-                <Text style={styles.sessionToggleText}>{sessionExpanded ? 'Contraer' : 'Ver todos'}</Text>
-              </Pressable>
-            </View>
-
-            <View style={styles.sessionMetrics}>
-              <SessionMetric label="Folios" value={validationSession?.resumen.folios_trabajados ?? 0} tight={tight} />
-              <SessionMetric label="Intentos" value={validationSession?.resumen.registros_realizados ?? 0} tight={tight} />
-              <SessionMetric label="Aprobados" value={validationSession?.resumen.aprobados ?? 0} tone="positive" tight={tight} />
-              <SessionMetric label="Observados" value={validationSession?.resumen.observados ?? 0} tone="warning" tight={tight} />
-              <SessionMetric label="Rechazados" value={validationSession?.resumen.rechazados ?? 0} tone="critical" tight={tight} />
-              <SessionMetric label="Conflictos" value={validationSession?.resumen.conflictos ?? 0} tone="critical" tight={tight} />
-              <SessionMetric label="Pendientes PDA" value={pendingSessionOutbox.length} tone="warning" tight={tight} />
-            </View>
-
-            <View style={styles.sessionBalance}>
-              <Text style={styles.sessionBalanceText}>
-                Servidor: {validationSession?.resumen.registros_realizados ?? 0} · Sin confirmar: {unconfirmedSessionOutbox.length}
-              </Text>
-              <Text style={styles.sessionTotal}>
-                Total capturado: {(validationSession?.resumen.registros_realizados ?? 0) + unconfirmedSessionOutbox.length}
-              </Text>
-            </View>
-
-            <View style={styles.sessionListHeader}>
-              <Text style={styles.sectionEyebrow}>PALLETS TRABAJADOS</Text>
-              <Text style={styles.sessionListCount}>
-                {validationSession?.meta.total ?? 0} en servidor · {currentSessionOutbox.length} locales
-              </Text>
-            </View>
-
-            {currentSessionOutbox.map((item) => (
-              <View key={item.id} style={[styles.sessionItem, styles.sessionItemLocal]}>
-                <View style={styles.queueContent}>
-                  <Text style={styles.queueFolio}>{item.payload.numero_folio}</Text>
-                  <Text style={styles.queueDetail}>
-                    {formatTime(item.payload.generado_dispositivo_at)} · {item.payload.tipo_bulto} · {item.payload.cantidad_cajas} cajas · Línea {item.payload.linea_proceso} · Turno {item.payload.turno}
-                  </Text>
-                  {item.message ? <Text style={styles.queueError}>{item.message}</Text> : null}
-                </View>
-                <View style={styles.sessionItemActions}>
-                  <Text style={[styles.resultBadge, item.status === 'pendiente' ? styles.badgeObserved : styles.badgeRejected]}>
-                    {item.status === 'pendiente' ? '◆ ' : '■ '}{statusLabel(item.status)}
-                  </Text>
-                  {item.status !== 'pendiente' ? <Pressable disabled={busy || syncing || Boolean(editingOutbox)} onPress={() => void resumeItem(item)} style={styles.retryButton}><Text style={styles.retryText}>Retomar</Text></Pressable> : null}
-                </View>
-              </View>
-            ))}
-
-            {visibleSessionAttempts.map((item) => (
-              <Pressable
-                key={item.id}
-                disabled={busy || Boolean(editingOutbox)}
-                onPress={() => { setFolio(item.numero_folio); void inspectFolio(item.numero_folio); }}
-                style={styles.sessionItem}
-              >
-                <View style={styles.queueContent}>
-                  <Text style={styles.queueFolio}>{item.numero_folio}</Text>
-                  <Text style={styles.queueDetail}>
-                    {formatTime(item.recibido_servidor_at)} · intento {item.numero_intento} · {item.tipo_bulto} · {item.cantidad_cajas} cajas
-                  </Text>
-                  <Text style={styles.queueDetail}>
-                    Línea {item.linea_proceso ?? '—'} · Turno {item.turno ?? '—'} · confirmado en servidor
-                  </Text>
-                </View>
-                <Text style={[
-                  styles.resultBadge,
-                  item.resultado === 'aprobado'
-                    ? styles.badgeApproved
-                    : item.resultado === 'observado'
-                      ? styles.badgeObserved
-                      : styles.badgeRejected,
-                ]}>
-                  {item.estado === 'conflicto' ? '■ ' : item.resultado === 'aprobado' ? '✓ ' : item.resultado === 'observado' ? '◆ ' : '■ '}{item.estado === 'conflicto' ? 'conflicto' : item.resultado}
-                </Text>
-              </Pressable>
-            ))}
-
-            {!currentSessionOutbox.length && !visibleSessionAttempts.length
-              ? <Text style={styles.empty}>Aún no existen pallets trabajados en esta sesión.</Text>
-              : null}
-
-            {sessionExpanded && validationSession && validationSession.meta.current_page < validationSession.meta.last_page
-              ? (
-                <Pressable disabled={loadingMoreSession} onPress={() => void loadMoreSession()} style={[styles.loadMoreButton, loadingMoreSession && styles.disabled]}>
-                  <Text style={styles.loadMoreText}>{loadingMoreSession ? 'Cargando…' : 'Cargar más registros'}</Text>
-                </Pressable>
-              )
-              : null}
-
-            {previousSessionOutbox.length ? (
-              <View style={styles.previousQueue}>
-                <Text style={styles.previousQueueTitle}>BANDEJA DE UNA SESIÓN ANTERIOR</Text>
-                <Text style={styles.previousQueueText}>
-                  {previousSessionOutbox.length} operaciones siguen guardadas en esta PDA y no se suman a la sesión actual.
-                </Text>
-                {previousSessionOutbox.map((item) => (
-                  <View key={item.id} style={styles.queueItem}>
-                    <View style={styles.queueContent}>
-                      <Text style={styles.queueFolio}>{item.payload.numero_folio}</Text>
-                      <Text style={styles.queueDetail}>{statusLabel(item.status)} · {formatTime(item.payload.generado_dispositivo_at)}</Text>
-                      {item.message ? <Text style={styles.queueError}>{item.message}</Text> : null}
-                    </View>
-                    {item.status !== 'pendiente' ? <Pressable disabled={busy || syncing || Boolean(editingOutbox)} onPress={() => void resumeItem(item)} style={styles.retryButton}><Text style={styles.retryText}>Retomar</Text></Pressable> : null}
-                  </View>
-                ))}
-              </View>
-            ) : null}
+          <View style={[styles.sideColumn, compact && styles.columnCompact]}>
+            {compact ? null : pendingTray}
+            {session}
           </View>
         </View>
       </ScrollView>
 
-      {busy ? <View pointerEvents="none" style={styles.busy}><ActivityIndicator color={colors.cyan} size="large" /><Text style={styles.busyText}>Procesando…</Text></View> : null}
+      {busy ? <View pointerEvents="none" style={styles.busy}><ActivityIndicator color={o.color.primary} size="large" /><Text style={styles.busyText}>Procesando…</Text></View> : null}
       <ObservationModal catalog={catalog} draft={observation} onCancel={() => setObservation(null)} onConfirm={(draft) => void submit(draft.result, draft.reason, draft.note)} />
-    </View>
-  );
-}
-
-function SessionMetric({
-  label,
-  value,
-  tone = 'neutral',
-  tight = false,
-}: {
-  label: string;
-  value: number;
-  tone?: 'neutral' | 'positive' | 'warning' | 'critical';
-  tight?: boolean;
-}) {
-  return (
-    <View style={[
-      styles.sessionMetric,
-      tight && styles.sessionMetricTight,
-      tone === 'positive' && styles.sessionMetricPositive,
-      tone === 'warning' && styles.sessionMetricWarning,
-      tone === 'critical' && styles.sessionMetricCritical,
-    ]}>
-      <Text numberOfLines={1} style={[styles.sessionMetricLabel, tight && styles.sessionMetricLabelTight]}>{label}</Text>
-      <Text style={[styles.sessionMetricValue, tight && styles.sessionMetricValueTight]}>{value}</Text>
     </View>
   );
 }
 
 function FolioReviewCard({ review }: { review: FolioReview }) {
   const attempt = review.attempt;
+  const tone: LabelTone = review.status === 'nuevo'
+    ? 'neutral'
+    : review.status === 'observado' ? 'warning' : review.status === 'aprobado' ? 'success' : 'critical';
   const title = review.status === 'nuevo'
-    ? 'FOLIO SIN VALIDACIONES PREVIAS'
+    ? 'Folio sin validaciones previas'
     : review.status === 'observado'
-      ? 'FOLIO OBSERVADO · CORRECCIÓN PENDIENTE'
+      ? 'Folio observado · corrección pendiente'
       : review.status === 'aprobado'
-        ? 'FOLIO YA APROBADO'
-        : 'FOLIO RECHAZADO DEFINITIVAMENTE';
+        ? 'Folio ya aprobado'
+        : 'Folio rechazado definitivamente';
   const detail = review.status === 'nuevo'
     ? 'Puedes completar y registrar su primera validación.'
     : review.status === 'observado'
@@ -1150,13 +1313,8 @@ function FolioReviewCard({ review }: { review: FolioReview }) {
       : 'Los datos se muestran como consulta y no admiten una nueva decisión desde esta pantalla.';
 
   return (
-    <View style={[
-      styles.reviewCard,
-      review.status === 'observado' && styles.reviewObserved,
-      review.status === 'aprobado' && styles.reviewApproved,
-      review.status === 'rechazado' && styles.reviewRejected,
-    ]}>
-      <Text style={styles.reviewTitle}>{title}</Text>
+    <View style={styles.review}>
+      <StatusChip label={title} tone={tone} />
       {attempt ? <Text style={styles.reviewMeta}>Intento {attempt.numero_intento} · {attempt.usuario.nombre} · {formatTime(attempt.recibido_servidor_at)}</Text> : null}
       {attempt?.motivo ? <Text style={styles.reviewText}>Motivo: {reasonLabel(attempt.motivo)}</Text> : null}
       {attempt?.observacion ? <Text style={styles.reviewText}>Observación: {attempt.observacion}</Text> : null}
@@ -1165,7 +1323,23 @@ function FolioReviewCard({ review }: { review: FolioReview }) {
   );
 }
 
-function SelectField({ label, options, value, onChange, compact = false, half = false, disabled = false, searchable = false }: { label: string; options: Option[]; value: string; onChange: (value: string) => void; compact?: boolean; half?: boolean; disabled?: boolean; searchable?: boolean }) {
+/**
+ * Selector con forma de celda de etiqueta: rótulo arriba, valor grande y ⌄. `boxed` lo
+ * dibuja con borde para usarlo fuera de la etiqueta (diálogo de motivo).
+ */
+function SelectField({ label, options, value, onChange, disabled = false, searchable = false, divider = false, flex = 1, hideLabel = false, boxed = false, emptyLabel = 'Seleccionar' }: {
+  label: string;
+  options: Option[];
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  searchable?: boolean;
+  divider?: boolean;
+  flex?: number;
+  hideLabel?: boolean;
+  boxed?: boolean;
+  emptyLabel?: string;
+}) {
   const [visible, setVisible] = useState(false);
   const [query, setQuery] = useState('');
   const selected = options.find((option) => option.value === value);
@@ -1174,9 +1348,43 @@ function SelectField({ label, options, value, onChange, compact = false, half = 
     : [], [visible, options, query]);
 
   return <>
-    <View style={[styles.selectField, compact && styles.selectFieldCompact, half && styles.selectFieldHalf]}><Text numberOfLines={1} style={styles.label}>{label} *</Text><Pressable disabled={disabled} onPress={() => setVisible(true)} style={[styles.selectButton, disabled && styles.disabled]}><Text numberOfLines={1} style={[styles.selectText, !selected && styles.placeholder]}>{selected?.label ?? 'Seleccionar'}</Text><Text style={styles.chevron}>⌄</Text></Pressable></View>
+    <View style={[boxed ? styles.selectBoxed : styles.selectCell, !boxed && { flex }, divider && styles.selectDivider]}>
+      {hideLabel ? null : <Text numberOfLines={1} style={styles.cellLabel}>{label}</Text>}
+      <Pressable
+        accessibilityLabel={`${label}: ${selected?.label ?? emptyLabel}`}
+        disabled={disabled}
+        onPress={() => setVisible(true)}
+        style={[styles.selectButton, boxed && styles.selectButtonBoxed, disabled && styles.disabled]}
+      >
+        <Text numberOfLines={1} style={[styles.selectText, !selected && styles.selectPlaceholder]}>{selected?.label ?? emptyLabel}</Text>
+        <Text style={styles.chevron}>⌄</Text>
+      </Pressable>
+    </View>
     <Modal animationType="fade" transparent visible={visible} onRequestClose={() => setVisible(false)}>
-      <View style={styles.modalBackdrop}><View style={styles.selectorModal}><View style={styles.modalHeader}><Text style={styles.modalTitle}>{label}</Text><Pressable onPress={() => setVisible(false)}><Text style={styles.modalClose}>×</Text></Pressable></View>{searchable || options.length > 8 ? <TextInput autoFocus onChangeText={setQuery} placeholder={`Buscar ${label.toLowerCase()}`} placeholderTextColor={colors.muted} style={styles.searchInput} value={query} /> : null}<FlatList data={filtered} keyExtractor={(option) => option.value} keyboardShouldPersistTaps="handled" style={styles.optionList} initialNumToRender={16} maxToRenderPerBatch={24} windowSize={5} renderItem={({ item: option }) => <Pressable onPress={() => { onChange(option.value); setQuery(''); setVisible(false); }} style={[styles.option, option.value === value && styles.optionSelected]}><Text style={styles.optionText}>{option.label}</Text></Pressable>} ListEmptyComponent={<Text style={styles.empty}>Sin opciones coincidentes.</Text>} /></View></View>
+      <View style={styles.modalBackdrop}>
+        <View style={styles.selectorModal}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{label}</Text>
+            <Pressable accessibilityLabel="Cerrar" onPress={() => setVisible(false)}><Text style={styles.modalClose}>×</Text></Pressable>
+          </View>
+          {searchable || options.length > 8 ? <TextInput autoFocus onChangeText={setQuery} placeholder={`Buscar ${label.toLowerCase()}`} placeholderTextColor={o.color.muted} style={styles.searchInput} value={query} /> : null}
+          <FlatList
+            data={filtered}
+            initialNumToRender={16}
+            keyExtractor={(option) => option.value}
+            keyboardShouldPersistTaps="handled"
+            ListEmptyComponent={<Text style={styles.empty}>Sin opciones coincidentes.</Text>}
+            maxToRenderPerBatch={24}
+            renderItem={({ item: option }) => (
+              <Pressable onPress={() => { onChange(option.value); setQuery(''); setVisible(false); }} style={[styles.option, option.value === value && styles.optionSelected]}>
+                <Text style={styles.optionText}>{option.label}</Text>
+              </Pressable>
+            )}
+            style={styles.optionList}
+            windowSize={5}
+          />
+        </View>
+      </View>
     </Modal>
   </>;
 }
@@ -1190,8 +1398,34 @@ function ObservationModal({ catalog, draft, onCancel, onConfirm }: { catalog: Va
   if (!draft) return null;
   const reasonOptions = (catalog?.motivos ?? []).map((item) => ({ value: item, label: reasonLabel(item) }));
   const invalid = !reason || (reason === 'otro' && !note.trim());
+  const rejecting = draft.result === 'rechazado';
 
-  return <Modal animationType="slide" transparent visible onRequestClose={onCancel}><View style={[styles.modalBackdrop, compact && styles.modalBackdropCompact]}><View style={[styles.observationModal, compact && styles.observationModalCompact]}><ScrollView contentContainerStyle={styles.observationContent} keyboardShouldPersistTaps="handled"><View style={styles.modalHeader}><View><Text style={styles.sectionEyebrow}>{draft.result === 'rechazado' ? 'RECHAZO DEFINITIVO' : 'PALLET OBSERVADO'}</Text><Text style={styles.modalTitle}>Registra el motivo</Text></View><Pressable onPress={onCancel}><Text style={styles.modalClose}>×</Text></Pressable></View><SelectField compact={compact} label="Motivo" options={reasonOptions} searchable value={reason} onChange={setReason} /><Text style={styles.label}>Observación {reason === 'otro' ? '*' : ''}</Text><TextInput multiline onChangeText={setNote} placeholder="Describe el problema detectado o la corrección requerida" placeholderTextColor={colors.muted} style={styles.noteInput} value={note} /><View style={[styles.modalActions, compact && styles.modalActionsCompact]}><Pressable onPress={onCancel} style={[styles.cancelButton, compact && styles.modalButtonCompact]}><Text style={styles.cancelText}>Cancelar</Text></Pressable><Pressable disabled={invalid} onPress={() => onConfirm({ ...draft, reason, note })} style={[styles.confirmObservation, compact && styles.modalButtonCompact, draft.result === 'rechazado' && styles.rejectButton, invalid && styles.disabled]}><Text style={styles.resultButtonText}>Confirmar {draft.result}</Text></Pressable></View></ScrollView></View></View></Modal>;
+  return (
+    <Modal animationType="slide" transparent visible onRequestClose={onCancel}>
+      <View style={[styles.modalBackdrop, compact && styles.modalBackdropCompact]}>
+        <View style={[styles.observationModal, compact && styles.observationModalCompact]}>
+          <ScrollView contentContainerStyle={styles.observationContent} keyboardShouldPersistTaps="handled">
+            <View style={styles.modalHeader}>
+              <View style={styles.observationHead}>
+                <StatusChip label={rejecting ? 'Rechazo definitivo' : 'Pallet observado'} tone={rejecting ? 'critical' : 'warning'} />
+                <Text style={styles.modalTitle}>Registra el motivo</Text>
+              </View>
+              <Pressable accessibilityLabel="Cerrar" onPress={onCancel}><Text style={styles.modalClose}>×</Text></Pressable>
+            </View>
+            <SelectField boxed label="Motivo" options={reasonOptions} searchable value={reason} onChange={setReason} />
+            <Text style={[styles.cellLabel, styles.noteLabel]}>{reason === 'otro' ? 'Observación (obligatoria)' : 'Observación'}</Text>
+            <TextInput multiline onChangeText={setNote} placeholder="Describe el problema detectado o la corrección requerida" placeholderTextColor={o.color.muted} style={styles.noteInput} value={note} />
+            <View style={[styles.modalActions, compact && styles.modalActionsCompact]}>
+              <Pressable onPress={onCancel} style={[styles.secondaryButton, compact && styles.modalButtonCompact]}><Text style={styles.secondaryButtonText}>Cancelar</Text></Pressable>
+              <Pressable disabled={invalid} onPress={() => onConfirm({ ...draft, reason, note })} style={[styles.confirmButton, rejecting ? styles.confirmReject : styles.confirmObserve, compact && styles.modalButtonCompact, invalid && styles.disabled]}>
+                <Text style={[styles.decisionText, rejecting ? styles.rejectText : styles.observeText]}>Confirmar {draft.result}</Text>
+              </Pressable>
+            </View>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
 }
 
 function uniqueOptions(values: string[]): Option[] {
@@ -1206,212 +1440,197 @@ function todayLocal(): string {
   return new Date(now.getTime() - offset).toISOString().slice(0, 10);
 }
 function normalizeFolio(value: string) { return value.trim().toUpperCase(); }
-function formatTime(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('es-CL', { hour: '2-digit', minute: '2-digit' }).format(date); }
-function formatDateTime(value: string | null) { const date = value ? new Date(value) : null; return !date || Number.isNaN(date.getTime()) ? 'sin hora registrada' : new Intl.DateTimeFormat('es-CL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(date); }
+// Hora de 24 h armada a mano: cabe en el talón (14:05, no 2:05 p. m.) y no depende de
+// cómo resuelva Intl cada motor (Hermes en el equipo, V8 en las pruebas).
+function twoDigits(value: number) { return String(value).padStart(2, '0'); }
+function formatTime(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? '—' : `${twoDigits(date.getHours())}:${twoDigits(date.getMinutes())}`; }
+function formatDateTime(value: string | null) { const date = value ? new Date(value) : null; return !date || Number.isNaN(date.getTime()) ? 'sin hora registrada' : `${twoDigits(date.getDate())}/${twoDigits(date.getMonth() + 1)} ${formatTime(value as string)}`; }
 function messageFrom(reason: unknown) { return reason instanceof Error ? reason.message : 'Ocurrió un error inesperado.'; }
 function statusLabel(status: ValidationOutboxItem['status']) { return status === 'pendiente' ? 'Pendiente' : status === 'conflicto' ? 'Conflicto' : 'Requiere revisión'; }
 function reasonLabel(value: string) { return value.replaceAll('_', ' ').replace(/^./, (letter) => letter.toUpperCase()); }
+function packageLabel(value: 'pallet' | 'saldo') { return value === 'saldo' ? 'saldo' : 'pallet completo'; }
+function resultLabel(value: ValidationResult) { return value === 'aprobado' ? 'Aprobado' : value === 'observado' ? 'Observado' : 'Rechazado'; }
+function resultTone(value: ValidationResult): LabelTone { return value === 'aprobado' ? 'success' : value === 'observado' ? 'warning' : 'critical'; }
 
 const styles = StyleSheet.create({
-  headerIdentity: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  headerGajo: { width: 30, height: 30 },
-  headerCopy: { flex: 1, minWidth: 0 },
-  headerContext: { color: colors.muted, fontSize: 13 },
-  connectionTextOnline: { color: colors.green },
-  connectionTextOffline: { color: colors.amber },
-  approveText: { color: colors.accentText },
-  observeText: { color: colors.amber, fontSize: 16, fontWeight: '700' },
-  rejectText: { color: colors.red, fontSize: 15, fontWeight: '700' },
-  resultButtonDisabled: { backgroundColor: o.color.disabled, borderColor: o.color.disabled, opacity: 1 },
-  resultTextDisabled: { color: o.color.disabledText },
-  screen: { flex: 1, backgroundColor: colors.background },
-  page: { padding: 18, gap: 14, paddingBottom: 46 },
+  screen: { flex: 1, backgroundColor: o.color.canvas },
+  boot: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, backgroundColor: o.color.canvas },
+  bootText: { color: o.color.muted, fontSize: 15, fontWeight: '700' },
+  page: { padding: 20, gap: 16, paddingBottom: 48 },
   pageCompact: { padding: 10, gap: 10, paddingBottom: 32 },
-  boot: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, backgroundColor: colors.background },
-  muted: { color: colors.muted, fontWeight: '700' },
-  topbar: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: 16, borderBottomWidth: 3, borderBottomColor: areas.frigorifico.bright, backgroundColor: o.color.navy },
-  topbarCompact: { flexDirection: 'row', padding: 10, gap: 8 },
-  topbarRight: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 },
-  topbarRightCompact: { justifyContent: 'space-between' },
-  eyebrow: { color: colors.cyan, fontSize: 14, fontWeight: '900', letterSpacing: 1.3 },
-  title: { color: colors.text, fontFamily: o.font.condensed, fontSize: 20, fontWeight: '800' },
-  titleCompact: { fontSize: 20 },
-  connection: { minHeight: 28, paddingHorizontal: 8, paddingVertical: 4, alignItems: 'center', justifyContent: 'center', borderRadius: 999, borderWidth: 1 },
-  connectionOnline: { borderColor: o.color.successBorder, backgroundColor: colors.greenDark },
-  connectionOffline: { borderColor: o.color.warningBorder, backgroundColor: colors.amberDark },
-  connectionText: { fontSize: 13, fontWeight: '700' },
-  logout: { minHeight: 44, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center' },
-  logoutText: { color: colors.text, fontSize: 13, fontWeight: '700' },
-  statusStrip: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', paddingHorizontal: 8 },
-  statusStripCompact: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4 },
-  statusCopy: { flex: 1, gap: 3 },
-  statusText: { color: colors.muted, fontSize: 14, fontWeight: '800' },
-  errorBanner: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, padding: 13, borderRadius: 12, borderWidth: 1, borderColor: colors.red, backgroundColor: colors.redDark },
-  errorBannerText: { flex: 1, color: colors.text, fontWeight: '800' },
-  noticeBanner: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, padding: 13, borderRadius: 12, borderWidth: 1, borderColor: colors.green, backgroundColor: colors.greenDark },
-  noticeBannerText: { flex: 1, color: colors.text, fontWeight: '800' },
-  close: { minHeight: 44, minWidth: 44, textAlign: 'center', textAlignVertical: 'center', color: colors.text, fontSize: 20, fontWeight: '900' },
-  mainGrid: { flexDirection: 'row', alignItems: 'flex-start', gap: 16 },
-  mainGridCompact: { flexDirection: 'column', gap: 10 },
-  formPanel: { flex: 1.65, padding: 18, borderRadius: 16, borderWidth: 0, backgroundColor: colors.panel },
-  sidePanel: { flex: 1, padding: 18, borderRadius: 16, borderWidth: 0, backgroundColor: colors.panel },
-  panelCompact: { width: '100%', flexGrow: 0, flexBasis: 'auto', padding: 14 },
-  sectionEyebrow: { color: colors.muted, fontSize: 13, fontWeight: '600' },
-  sectionTitle: { color: colors.text, fontFamily: o.font.condensed, fontSize: 22, fontWeight: '800', marginTop: 4, marginBottom: 17 },
-  workContext: { marginBottom: 18, padding: 14, borderRadius: 13, borderWidth: 1, borderColor: colors.cyanDark, backgroundColor: colors.selected },
-  workContextHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 12 },
-  workContextTitle: { color: colors.text, fontSize: 14, fontWeight: '900', marginTop: 3 },
-  workContextHint: { maxWidth: 210, color: colors.muted, fontSize: 14, fontWeight: '700', textAlign: 'right' },
-  workContextGrid: { flexDirection: 'row', gap: 14 },
-  workContextGridCompact: { flexDirection: 'column', gap: 10 },
-  workContextGroup: { flex: 1 },
-  contextOptions: { flexDirection: 'row', gap: 8 },
-  contextButton: { flex: 1, minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.backgroundDeep },
-  contextButtonActive: { borderColor: colors.cyan, backgroundColor: colors.cyan },
-  contextButtonText: { color: colors.muted, fontSize: 14, fontWeight: '900' },
-  contextButtonTextActive: { color: colors.backgroundDeep },
-  label: { color: colors.muted, fontSize: 13, fontWeight: '600', marginBottom: 6 },
-  folioRow: { flexDirection: 'row', alignItems: 'stretch', gap: 9 },
-  folioRowCompact: { flexDirection: 'column' },
-  folioInput: { flex: 1, minHeight: 56, paddingHorizontal: 16, borderRadius: 10, borderWidth: 1.5, borderColor: o.color.borderStrong, color: colors.text, backgroundColor: colors.background, fontFamily: o.font.mono, fontSize: 22, fontWeight: '600', letterSpacing: -0.5 },
-  lookupButton: { minWidth: 126, minHeight: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, borderColor: colors.cyan, backgroundColor: colors.cyan },
-  lookupButtonText: { color: colors.accentText, fontSize: 15, fontWeight: '800' },
-  reviewCard: { marginTop: 12, padding: 13, borderRadius: 12, borderWidth: 1, borderColor: colors.cyanDark, backgroundColor: colors.selected },
-  reviewObserved: { borderColor: colors.amber, backgroundColor: colors.amberDark },
-  reviewApproved: { borderColor: colors.green, backgroundColor: colors.greenDark },
-  reviewRejected: { borderColor: colors.red, backgroundColor: colors.redDark },
-  reviewTitle: { color: colors.text, fontSize: 13, fontWeight: '900' },
-  reviewMeta: { color: colors.muted, fontSize: 14, fontWeight: '800', marginTop: 4 },
-  reviewText: { color: colors.text, fontSize: 12, marginTop: 5 },
-  reviewDetail: { color: colors.text, fontSize: 14, fontWeight: '700', marginTop: 8 },
-  typeRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 9, marginTop: 12 },
-  typeRowCompact: { flexWrap: 'wrap' },
-  typeButton: { minHeight: 46, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 10, borderWidth: 1.5, borderColor: o.color.borderStrong, backgroundColor: 'transparent' },
-  typeButtonCompact: { flexGrow: 1, flexBasis: '46%', alignItems: 'center', paddingHorizontal: 8 },
-  typeButtonActive: { borderColor: colors.cyan, backgroundColor: colors.cyan },
-  typeButtonText: { color: colors.textSecondary, fontSize: 15, fontWeight: '700' },
-  typeButtonTextActive: { color: colors.accentText },
-  boxField: { flex: 1, minWidth: 110 },
-  boxFieldCompact: { flexBasis: '100%' },
-  boxInput: { minHeight: 48, paddingHorizontal: 13, borderRadius: 10, borderWidth: 1.5, borderColor: o.color.borderStrong, color: colors.text, backgroundColor: colors.background, fontFamily: o.font.mono, fontSize: 22, fontWeight: '700' },
-  groupTitle: { color: colors.text, fontSize: 15, fontWeight: '900', marginTop: 20, marginBottom: 9 },
-  fieldHint: { color: colors.muted, fontSize: 13, marginTop: 4 },
-  packingDateField: { flex: 1, minWidth: 190 },
-  compositionHeader: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 14, marginBottom: 8 },
-  compositionHeaderCopy: { flexShrink: 1, flexBasis: 180, flexGrow: 1 },
-  compositionTotal: { flexShrink: 0, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, overflow: 'hidden', fontSize: 14, fontWeight: '900' },
-  titleTight: { fontSize: 18, marginTop: 0 },
-  topbarTight: { flexDirection: 'row', alignItems: 'center', padding: 10 },
-  topbarRightTight: { gap: 6 },
-  statusTextTight: { fontSize: 11 },
-  workContextTight: { marginBottom: 12, padding: 10 },
-  workContextSummary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 10, borderWidth: 1, borderColor: colors.cyanDark, backgroundColor: colors.selected },
-  workContextSummaryText: { color: colors.text, fontSize: 14, fontWeight: '900' },
-  workContextSummaryAction: { minHeight: 44, minWidth: 44, textAlign: 'center', textAlignVertical: 'center', color: colors.cyan, fontSize: 12, fontWeight: '900' },
-  compositionTotalOk: { color: colors.green, backgroundColor: colors.greenDark },
-  compositionTotalPending: { color: colors.amber, backgroundColor: colors.amberDark },
-  originCompositionRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end', gap: 9, marginBottom: 8, padding: 9, borderWidth: 0, borderRadius: 10, backgroundColor: colors.panel },
-  originCompositionRowCompact: { flexWrap: 'wrap' },
-  originCompositionSelect: { flex: 1, minWidth: 220 },
-  originBoxes: { width: 105 },
-  traceField: { flex: 1, minWidth: 150 },
-  traceInput: { minHeight: 48, borderWidth: 1.5, borderColor: o.color.borderStrong, borderRadius: 10, backgroundColor: colors.background, color: colors.text, paddingHorizontal: 11, fontSize: 15 },
-  removeOrigin: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 10 },
-  removeOriginText: { color: colors.red, fontSize: 14, fontWeight: '900' },
-  addOrigin: { minHeight: 44, justifyContent: 'center', alignItems: 'center', padding: 11, borderWidth: 1, borderColor: colors.cyanDark, borderRadius: 10, borderStyle: 'dashed' },
-  addOriginText: { color: colors.cyan, fontSize: 14, fontWeight: '900' },
-  originError: { color: colors.red, fontSize: 14, fontWeight: '700' },
-  fieldGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 9 },
-  fieldGridCompact: { flexDirection: 'column', flexWrap: 'nowrap' },
-  selectField: { flex: 1, minWidth: 145 },
-  selectFieldCompact: { width: '100%', flexGrow: 0, flexBasis: 'auto' },
-  selectFieldHalf: { width: 'auto', flexGrow: 1, flexBasis: '45%', minWidth: 0 },
-  fieldGridPair: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  wideField: { flexBasis: '100%' },
-  selectButton: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1.5, borderColor: o.color.borderStrong, backgroundColor: colors.background },
-  selectText: { flex: 1, color: colors.text, fontWeight: '800' },
-  placeholder: { color: colors.muted },
-  chevron: { color: colors.cyan, fontSize: 19, fontWeight: '900' },
-  disabled: { opacity: .38 },
-  selectionSummary: { marginTop: 17, padding: 13, borderRadius: 12, borderWidth: 1, borderColor: colors.cyanDark, backgroundColor: colors.selected },
-  selectionSummaryTitle: { color: colors.cyan, fontWeight: '900' },
-  selectionSummaryText: { color: colors.text, fontSize: 12, marginTop: 4 },
-  resultActions: { flexDirection: 'row', gap: 10, marginTop: 18 },
-  resultActionsCompact: { flexDirection: 'column' },
-  resultButton: { flex: 1, minHeight: 60, alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderWidth: 2 },
-  resultButtonCompact: { width: '100%', flexGrow: 0, flexBasis: 'auto', minHeight: 60, flexDirection: 'row', gap: 9 },
-  approveButton: { borderColor: colors.cyan, backgroundColor: colors.cyan },
-  observeButton: { borderColor: o.color.warningBorder, backgroundColor: colors.amberDark },
+  disabled: { opacity: 0.38 },
+
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    marginHorizontal: -20,
+    marginTop: -20,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: o.color.navy,
+    borderBottomWidth: 3,
+    borderBottomColor: areas.frigorifico.bright,
+  },
+  headerCompact: { gap: 8, marginHorizontal: -10, marginTop: -10, paddingHorizontal: 10, paddingVertical: 8 },
+  headerGajo: { width: 36, height: 36 },
+  headerGajoCompact: { width: 28, height: 28 },
+  headerCopy: { flex: 1, minWidth: 0, gap: 2 },
+  headerArea: { color: areas.frigorifico.bright, fontSize: 12, fontWeight: '700' },
+  headerTitle: { color: o.color.text, fontFamily: o.font.condensed, fontSize: 26, fontWeight: '800' },
+  headerTitleCompact: { fontSize: 20 },
+  headerMeta: { color: o.color.muted, fontSize: 14 },
+  headerMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 2 },
+  headerMetaCompact: { flex: 1, color: o.color.muted, fontSize: 12 },
+  syncButton: { minHeight: 44, justifyContent: 'center' },
+  logout: { minHeight: 44, minWidth: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12, borderRadius: o.radius.control, borderWidth: 1.5, borderColor: o.color.borderStrong },
+  logoutText: { color: o.color.text, fontSize: 14, fontWeight: '700' },
+
+  banner: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingLeft: 14, borderRadius: 12, borderWidth: 1 },
+  bannerError: { borderColor: o.color.criticalBorder, backgroundColor: o.color.criticalSurface },
+  bannerNotice: { borderColor: o.color.successBorder, backgroundColor: o.color.successSurface },
+  bannerText: { flex: 1, paddingVertical: 12, color: o.color.text, fontSize: 15, fontWeight: '600' },
+  close: { minHeight: 44, minWidth: 44, textAlign: 'center', textAlignVertical: 'center', color: o.color.text, fontSize: 22, fontWeight: '700' },
+
+  columns: { flexDirection: 'row', alignItems: 'flex-start', gap: 20 },
+  columnsCompact: { flexDirection: 'column', alignItems: 'stretch', gap: 12 },
+  mainColumn: { flex: 1.65, minWidth: 0, gap: 14 },
+  sideColumn: { flex: 1, minWidth: 0, gap: 14 },
+  columnCompact: { flexGrow: 0, flexBasis: 'auto', width: '100%' },
+
+  jornada: { minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, borderRadius: 12, borderWidth: 1, borderColor: o.color.border, backgroundColor: o.color.surface },
+  jornadaCopy: { flex: 1, gap: 4 },
+  jornadaLabel: { color: o.color.muted, fontSize: 13 },
+  jornadaValue: { color: o.color.text, fontSize: 18, fontWeight: '800' },
+  jornadaEditor: { gap: 12, padding: 16, borderRadius: 12, borderWidth: 1.5, borderColor: o.color.primary, backgroundColor: o.color.surface },
+  jornadaEditorHead: { gap: 3 },
+  jornadaEditorTitle: { color: o.color.text, fontSize: 17, fontWeight: '800' },
+  jornadaGroups: { flexDirection: 'row', gap: 16 },
+  jornadaGroupsCompact: { flexDirection: 'column', gap: 10 },
+  jornadaGroup: { flex: 1, gap: 6 },
+
+  segmented: { flexDirection: 'row', gap: 8 },
+  segment: { flex: 1, minHeight: 50, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8, borderRadius: 12, borderWidth: 1, borderColor: o.color.borderStrong, backgroundColor: 'transparent' },
+  segmentWide: { flex: 1.6 },
+  segmentActive: { borderWidth: 2, borderColor: o.color.primary, backgroundColor: o.color.selected },
+  segmentText: { color: o.color.textSecondary, fontSize: 16, fontWeight: '600' },
+  segmentTextActive: { color: o.color.text, fontWeight: '800' },
+
+  label: { overflow: 'hidden', borderRadius: 12, borderWidth: 1, borderColor: o.color.border, backgroundColor: o.color.surface },
+  folioStrip: { gap: 8, padding: 14, borderBottomWidth: 2, borderBottomColor: o.color.border },
+  folioInput: { minHeight: 64, borderWidth: 2, borderColor: o.color.primary, backgroundColor: o.color.canvas, fontFamily: o.font.mono, fontSize: 26, fontWeight: '700', letterSpacing: -0.5 },
+  folioInputCompact: { minHeight: 54, fontSize: 17, letterSpacing: -0.3 },
+  cellLabel: { color: o.color.muted, fontSize: 13, fontWeight: '600' },
+  cellInput: { minHeight: 44, paddingHorizontal: 0, paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: o.color.border, color: o.color.text, fontSize: 16 },
+  cellInputNumber: { fontFamily: o.font.mono, fontSize: 28, fontWeight: '700', letterSpacing: -1 },
+  cellInputNumberSmall: { fontFamily: o.font.mono, fontSize: 20, fontWeight: '700' },
+  cellInputCode: { fontFamily: o.font.mono, fontSize: 18, fontWeight: '700', letterSpacing: -0.5 },
+  cellInputCodeCompact: { fontSize: 15, letterSpacing: -0.3 },
+  sectionNote: { paddingHorizontal: 16, paddingTop: 10, color: o.color.muted, fontSize: 13 },
+
+  selectCell: { minWidth: 0, gap: 6, paddingHorizontal: 16, paddingVertical: 10 },
+  selectDivider: { borderRightWidth: 1, borderRightColor: o.color.disabled },
+  selectBoxed: { gap: 6 },
+  selectButton: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, borderBottomWidth: 1, borderBottomColor: o.color.border },
+  selectButtonBoxed: { minHeight: 52, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1.5, borderColor: o.color.borderStrong, backgroundColor: o.color.canvas },
+  selectText: { flex: 1, color: o.color.text, fontSize: 17, fontWeight: '700' },
+  selectPlaceholder: { color: o.color.muted, fontWeight: '600' },
+  chevron: { color: o.color.muted, fontSize: 20, fontWeight: '700' },
+
+  compositionHead: { minHeight: 34, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 2, borderBottomColor: o.color.borderStrong },
+  compositionHeadText: { paddingHorizontal: 12, color: o.color.muted, fontSize: 12, fontWeight: '600' },
+  compositionRow: { flexDirection: 'row', alignItems: 'stretch', borderBottomWidth: 1, borderBottomColor: o.color.disabled },
+  compositionCell: { minWidth: 0, justifyContent: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRightWidth: 1, borderRightColor: o.color.disabled },
+  compositionAction: { width: 72, alignItems: 'center', justifyContent: 'center' },
+  compositionBlock: { borderBottomWidth: 1, borderBottomColor: o.color.disabled },
+  compositionBlockTop: { flexDirection: 'row', alignItems: 'stretch' },
+  compositionBlockBottom: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: o.color.disabled },
+  compositionFoot: { gap: 8, paddingHorizontal: 8, paddingVertical: 6 },
+  removeButton: { minHeight: 44, minWidth: 64, alignSelf: 'center', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 },
+  removeText: { color: o.color.critical, fontSize: 14, fontWeight: '700' },
+  addButton: { minHeight: 44, alignSelf: 'flex-start', justifyContent: 'center', paddingHorizontal: 8 },
+  originError: { paddingHorizontal: 8, paddingBottom: 6, color: o.color.critical, fontSize: 14, fontWeight: '700' },
+
+  review: { gap: 6, paddingTop: 4 },
+  reviewMeta: { color: o.color.muted, fontSize: 14, fontWeight: '600' },
+  reviewText: { color: o.color.text, fontSize: 14 },
+  reviewDetail: { color: o.color.textSecondary, fontSize: 14 },
+  correction: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: o.color.warningBorder, backgroundColor: o.color.warningSurface },
+  correctionCopy: { flex: 1, minWidth: 200, gap: 3 },
+  correctionTitle: { color: o.color.warning, fontSize: 15, fontWeight: '800' },
+  correctionText: { color: o.color.text, fontSize: 14 },
+
+  decision: { gap: 12 },
+  decisionSummary: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 10 },
+  decisionSummaryCopy: { flex: 1, minWidth: 220, gap: 2 },
+  summaryText: { color: o.color.muted, fontSize: 13 },
+  decisionButtons: { flexDirection: 'row', gap: 12 },
+  decisionButtonsCompact: { flexDirection: 'column', gap: 10 },
+  decisionButton: { flex: 1, minHeight: 60, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingHorizontal: 16, borderRadius: 14, borderWidth: 2 },
+  decisionButtonDisabled: { borderColor: o.color.disabled, backgroundColor: o.color.disabled },
+  decisionMark: { fontSize: 20, fontWeight: '900' },
+  decisionText: { fontSize: 18, fontWeight: '800' },
+  decisionTextDisabled: { color: o.color.disabledText },
+  approveButton: { minHeight: 68, borderColor: o.color.primary, backgroundColor: o.color.primary },
+  approveButtonWide: { flex: 1.7 },
+  approveText: { color: o.color.onPrimary },
+  observeButton: { borderColor: o.color.warningBorder, backgroundColor: o.color.warningSurface },
+  observeText: { color: o.color.warning },
   rejectButton: { borderColor: o.color.criticalBorder, backgroundColor: 'transparent' },
-  resultIcon: { color: colors.text, fontSize: 21, fontWeight: '900' },
-  resultButtonText: { color: colors.text, fontSize: 16, fontWeight: '800', textTransform: 'uppercase' },
-  sideHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 13 },
-  sideTitle: { color: colors.text, fontFamily: o.font.condensed, fontSize: 22, fontWeight: '800', marginTop: 3 },
-  sessionHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, marginBottom: 13 },
-  sessionStarted: { color: colors.muted, fontSize: 14, fontWeight: '700', marginTop: 4 },
-  sessionToggle: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 10, paddingVertical: 7, borderRadius: 9, borderWidth: 1, borderColor: colors.cyanDark },
-  sessionToggleText: { color: colors.cyan, fontSize: 14, fontWeight: '900' },
-  sessionMetrics: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
-  sessionMetric: { flexGrow: 1, flexBasis: '29%', minWidth: 88, padding: 10, borderRadius: 10, borderWidth: 0, backgroundColor: colors.background },
-  sessionMetricTight: { flexBasis: '46%', minWidth: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 7, paddingHorizontal: 9 },
-  sessionMetricLabelTight: { flexShrink: 1, fontSize: 11, letterSpacing: .2, marginRight: 6 },
-  sessionMetricValueTight: { fontSize: 20, marginTop: 0 },
-  sessionMetricPositive: { borderWidth: 1, borderColor: o.color.successBorder, backgroundColor: colors.greenDark },
-  sessionMetricWarning: { borderWidth: 1, borderColor: o.color.warningBorder, backgroundColor: colors.amberDark },
-  sessionMetricCritical: { borderWidth: 1, borderColor: o.color.criticalBorder, backgroundColor: colors.redDark },
-  sessionMetricLabel: { color: colors.muted, fontSize: 12, fontWeight: '900', letterSpacing: .5, textTransform: 'uppercase' },
-  sessionMetricValue: { color: colors.text, fontFamily: o.font.condensed, fontSize: 20, fontWeight: '800', marginTop: 3 },
-  sessionBalance: { marginTop: 9, padding: 11, borderRadius: 10, borderWidth: 1, borderColor: colors.cyanDark, backgroundColor: colors.selected },
-  sessionBalanceText: { color: colors.muted, fontSize: 14, fontWeight: '800' },
-  sessionTotal: { color: colors.cyan, fontSize: 13, fontWeight: '900', marginTop: 3 },
-  sessionListHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 20, marginBottom: 5 },
-  sessionListCount: { color: colors.muted, fontSize: 13, fontWeight: '800', textAlign: 'right' },
-  sessionItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingHorizontal: 12, paddingVertical: 11, borderRadius: 10, borderBottomWidth: 0, backgroundColor: colors.panel, marginBottom: 6 },
-  sessionItemLocal: { borderRadius: 12, borderWidth: 1, borderColor: o.color.warningBorder, backgroundColor: colors.amberDark },
-  sessionItemActions: { alignItems: 'flex-end', gap: 6 },
-  loadMoreButton: { minHeight: 44, justifyContent: 'center', alignItems: 'center', marginTop: 10, padding: 11, borderRadius: 9, borderWidth: 1, borderColor: colors.cyanDark },
-  loadMoreText: { color: colors.cyan, fontSize: 14, fontWeight: '900' },
-  previousQueue: { marginTop: 18, padding: 11, borderRadius: 12, borderWidth: 1, borderColor: o.color.warningBorder, backgroundColor: colors.amberDark },
-  previousQueueTitle: { color: colors.amber, fontSize: 13, fontWeight: '900', letterSpacing: .6 },
-  previousQueueText: { color: colors.text, fontSize: 14, marginTop: 4, marginBottom: 4 },
-  syncButton: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 11, paddingVertical: 8, borderRadius: 9, borderWidth: 1, borderColor: colors.cyanDark },
-  syncButtonTop: { alignSelf: 'center' },
-  syncButtonText: { color: colors.cyan, fontSize: 14, fontWeight: '900' },
-  queueItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingHorizontal: 12, paddingVertical: 11, borderRadius: 10, borderBottomWidth: 0, backgroundColor: colors.panel, marginBottom: 6 },
-  queueContent: { flex: 1 },
-  queueFolio: { color: colors.text, fontFamily: o.font.mono, fontSize: 17, fontWeight: '700', letterSpacing: -0.5 },
-  queueDetail: { color: colors.muted, fontSize: 14, marginTop: 3 },
-  queueError: { maxWidth: 260, color: colors.red, fontSize: 14, marginTop: 4 },
-  retryButton: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 9, paddingVertical: 7, borderRadius: 8, borderWidth: 1, borderColor: colors.amber },
-  retryText: { color: colors.amber, fontSize: 14, fontWeight: '900' },
-  empty: { color: colors.muted, paddingVertical: 18, textAlign: 'center' },
-  recentEyebrow: { marginTop: 25, marginBottom: 8 },
-  recentItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.borderSoft },
-  resultBadge: { minHeight: 28, paddingHorizontal: 8, paddingVertical: 5, borderWidth: 1, borderRadius: 999, overflow: 'hidden', fontSize: 13, fontWeight: '700', textTransform: 'uppercase' },
-  badgeApproved: { color: colors.green, borderColor: o.color.successBorder, backgroundColor: colors.greenDark },
-  badgeObserved: { color: colors.amber, borderColor: o.color.warningBorder, backgroundColor: colors.amberDark },
-  badgeRejected: { color: colors.red, borderColor: o.color.criticalBorder, backgroundColor: colors.redDark },
+  rejectText: { color: o.color.critical },
+
+  tray: { gap: 10, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: o.color.warningBorder, backgroundColor: o.color.warningSurface },
+  trayHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  trayTitle: { flex: 1, color: o.color.warning, fontSize: 16, fontWeight: '800' },
+  trayText: { color: o.color.text, fontSize: 14 },
+  trayItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8, paddingLeft: 14, paddingRight: 8, borderRadius: 10, borderWidth: 1, borderColor: o.color.warningBorder, backgroundColor: o.color.canvas },
+  trayItemCopy: { flex: 1, minWidth: 0, gap: 3 },
+  trayFolio: { color: o.color.text, fontFamily: o.font.mono, fontSize: 20, fontWeight: '700', letterSpacing: -0.5 },
+  trayDetail: { color: o.color.textSecondary, fontSize: 13 },
+  trayMessage: { color: o.color.critical, fontSize: 13 },
+  trayAction: { minHeight: 48, minWidth: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, borderRadius: 12, borderWidth: 2, borderColor: o.color.warning },
+  trayActionText: { color: o.color.warning, fontSize: 15, fontWeight: '800' },
+
+  session: { overflow: 'hidden', borderRadius: 12, borderWidth: 1, borderColor: o.color.border, backgroundColor: o.color.surface },
+  sessionHead: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 16, paddingRight: 6, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: o.color.disabled },
+  sessionHeadCopy: { flex: 1, minWidth: 0, gap: 3 },
+  sessionTitle: { color: o.color.text, fontFamily: o.font.condensed, fontSize: 22, fontWeight: '800' },
+  sessionMeta: { color: o.color.muted, fontSize: 13 },
+  sessionBalance: { paddingHorizontal: 16, paddingVertical: 8, color: o.color.muted, fontSize: 13, borderTopWidth: 1, borderTopColor: o.color.disabled, borderBottomWidth: 2, borderBottomColor: o.color.border },
+  sessionListHead: { minHeight: 36, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: o.color.disabled },
+  sessionListTitle: { color: o.color.textSecondary, fontSize: 13, fontWeight: '700' },
+  sessionListCount: { flexShrink: 1, color: o.color.muted, fontSize: 13, textAlign: 'right' },
+  linkButton: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 10 },
+  linkText: { color: o.color.primary, fontSize: 15, fontWeight: '700' },
+  loadMore: { alignSelf: 'center' },
+  empty: { paddingHorizontal: 16, paddingVertical: 28, color: o.color.muted, fontSize: 15, textAlign: 'center' },
+
+  secondaryButton: { minHeight: 48, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16, borderRadius: 12, borderWidth: 2, borderColor: o.color.borderStrong },
+  secondaryButtonText: { color: o.color.text, fontSize: 15, fontWeight: '700' },
+
   busy: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: 'rgba(8,12,16,.72)' },
-  busyText: { color: colors.text, fontWeight: '900' },
+  busyText: { color: o.color.text, fontSize: 15, fontWeight: '800' },
   modalBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20, backgroundColor: 'rgba(0,0,0,.72)' },
   modalBackdropCompact: { padding: 10 },
-  selectorModal: { width: '100%', maxWidth: 620, maxHeight: '78%', padding: 18, borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panelStrong },
-  observationModal: { width: '100%', maxWidth: 680, padding: 20, borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panelStrong },
+  selectorModal: { width: '100%', maxWidth: 620, maxHeight: '78%', padding: 18, borderRadius: 16, borderWidth: 1, borderColor: o.color.border, backgroundColor: o.color.surfaceMuted },
+  observationModal: { width: '100%', maxWidth: 680, padding: 20, borderRadius: 16, borderWidth: 1, borderColor: o.color.border, backgroundColor: o.color.surfaceMuted },
   observationModalCompact: { maxHeight: '94%', padding: 14 },
   observationContent: { flexGrow: 1 },
-  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 13 },
-  modalTitle: { color: colors.text, fontSize: 20, fontWeight: '900' },
-  modalClose: { minHeight: 44, minWidth: 44, textAlign: 'center', textAlignVertical: 'center', color: colors.text, fontSize: 28, fontWeight: '900', paddingHorizontal: 7 },
-  searchInput: { minHeight: 46, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.border, color: colors.text, backgroundColor: colors.backgroundDeep, marginBottom: 10 },
+  observationHead: { flex: 1, gap: 8 },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 14 },
+  modalTitle: { color: o.color.text, fontSize: 20, fontWeight: '800' },
+  modalClose: { minHeight: 44, minWidth: 44, textAlign: 'center', textAlignVertical: 'center', color: o.color.text, fontSize: 28, fontWeight: '700', paddingHorizontal: 7 },
+  searchInput: { minHeight: 48, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1.5, borderColor: o.color.borderStrong, color: o.color.text, backgroundColor: o.color.canvas, fontSize: 16, marginBottom: 10 },
   optionList: { maxHeight: 420 },
-  option: { padding: 14, borderBottomWidth: 1, borderBottomColor: colors.borderSoft },
-  optionSelected: { backgroundColor: colors.selected },
-  optionText: { color: colors.text, fontWeight: '800' },
-  noteInput: { minHeight: 110, padding: 13, borderRadius: 11, borderWidth: 1, borderColor: colors.border, color: colors.text, backgroundColor: colors.backgroundDeep, textAlignVertical: 'top' },
+  option: { minHeight: 52, justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: o.color.disabled },
+  optionSelected: { backgroundColor: o.color.selected },
+  optionText: { color: o.color.text, fontSize: 16, fontWeight: '700' },
+  noteLabel: { marginTop: 14, marginBottom: 6 },
+  noteInput: { minHeight: 110, padding: 13, borderRadius: 12, borderWidth: 1.5, borderColor: o.color.borderStrong, color: o.color.text, backgroundColor: o.color.canvas, fontSize: 16, textAlignVertical: 'top' },
   modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 16 },
   modalActionsCompact: { flexDirection: 'column-reverse' },
-  modalButtonCompact: { width: '100%', alignItems: 'center' },
-  cancelButton: { paddingHorizontal: 17, paddingVertical: 13, borderRadius: 10, borderWidth: 1, borderColor: colors.border },
-  cancelText: { color: colors.muted, fontWeight: '900' },
-  confirmObservation: { paddingHorizontal: 18, paddingVertical: 13, borderRadius: 10, borderWidth: 1, borderColor: colors.amber, backgroundColor: colors.amberDark },
+  modalButtonCompact: { width: '100%' },
+  confirmButton: { minHeight: 52, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18, borderRadius: 12, borderWidth: 2 },
+  confirmObserve: { borderColor: o.color.warningBorder, backgroundColor: o.color.warningSurface },
+  confirmReject: { borderColor: o.color.criticalBorder, backgroundColor: o.color.criticalSurface },
 });

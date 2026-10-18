@@ -10,7 +10,7 @@ const MINIMUM_FONT = 11;
 
 async function sources() {
     const files = [];
-    for (const directory of ['components', 'components/operator', 'screens']) {
+    for (const directory of ['components', 'components/operator', 'components/validation', 'screens']) {
         const url = new URL(`../../mobile/src/${directory}/`, import.meta.url);
         for (const name of await readdir(url)) {
             if (name.endsWith('.tsx') && !EXCLUDED.has(name)) files.push({ name: `${directory}/${name}`, url: new URL(name, url) });
