@@ -13,6 +13,9 @@
 
 return [
 
+    // Identidad estable: Migrator cambia temporalmente database.default al usar --database.
+    'conexion_operacion' => env('DB_CONNECTION', 'mysql'),
+
     // Conexión por la que Finanzas lee la operación. En producción es una sesión
     // de solo lectura (y, idealmente, un usuario con permiso SELECT y nada más).
     'conexion_lectura' => env('FINANZAS_CONEXION_LECTURA', 'operacion_lectura'),

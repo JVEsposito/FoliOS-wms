@@ -94,11 +94,13 @@ reglas del tarifario (días libres, mínimo, corte), no la captura.
   y también a pedido con **Leer ahora** (requiere rol Administrador con el módulo).
 - Cada fuente lee lo que cambió desde su última marca, repasando 15 minutos hacia atrás.
   Releer un registro sin cambios no crea versiones.
-- Una vez al día la lectura es **completa**: recorre toda la operación, recoge lo que una
+- Cada fuente tiene una conciliación **completa** cada 24 horas: recorre toda la operación, recoge lo que una
   lectura incremental no alcanzó a ver y anula como *Ya no existe en la operación* lo que
   ya no está.
 - Si una fuente falla, las demás se capturan igual y la lectura queda *con errores*; la
-  fuente que falló se vuelve a leer en la próxima.
+  fuente que falló se vuelve a leer en la próxima. Su conciliación solo se marca exitosa
+  después de terminar la lectura y anular los hechos desaparecidos. Una captura parcial
+  no pospone las conciliaciones de las fuentes que no leyó.
 - Nunca corren dos capturas a la vez.
 
 Comando manual:
@@ -147,8 +149,21 @@ Variables de entorno (todas opcionales):
    usuarios, asígnelo desde Accesos (rol base Administrador para capturar a pedido; un perfil
    de solo consulta puede ver los hechos).
 
-`php artisan migrate:fresh` y `db:wipe` borran también las tablas de Finanzas, porque su
-registro de migraciones desaparece con la base operativa. El reinicio controlado de datos
+`php artisan migrate:fresh` confirmado sobre la conexión operativa reinicia también las
+tablas de Finanzas, cuando su registro de migraciones ya está vacío. Cancelar el comando
+no borra ninguna tabla financiera. Un `db:wipe` suelto conserva Finanzas; el siguiente
+`migrate` se detiene si quedaron datos financieros sin su registro de migraciones.
+
+La migración correctiva recrea la estructura si el proveedor anterior ya borró todas las
+tablas financieras y sus migraciones siguen registradas. No recupera los datos perdidos:
+para ellos se necesita el respaldo. Si solo falta parte del esquema, se detiene y conserva
+las tablas restantes para su recuperación.
+
+`FINANZAS_DB_URL` determina la base efectiva, también al crearla. Si la operación usa
+`DB_URL`, Finanzas hereda el servidor y las credenciales de esa URL; las credenciales
+`FINANZAS_LECTURA_DB_*` se aplican después y prevalecen para la conexión de solo lectura.
+
+El reinicio controlado de datos
 de prueba (Accesos y temporadas) no toca Finanzas: en la siguiente lectura completa, los
 hechos de los registros borrados quedan como *Ya no existe en la operación*.
 

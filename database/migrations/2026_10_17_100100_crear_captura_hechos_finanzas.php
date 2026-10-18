@@ -15,7 +15,7 @@ return new class extends Migration
 
     public function up(): void
     {
-        Schema::create('fin_lecturas', function (Blueprint $table): void {
+        Schema::connection($this->connection)->create('fin_lecturas', function (Blueprint $table): void {
             $table->id();
             $table->string('origen', 20);
             $table->boolean('conciliacion')->default(false);
@@ -30,14 +30,14 @@ return new class extends Migration
             $table->index('iniciada_at');
         });
 
-        Schema::create('fin_cursores', function (Blueprint $table): void {
+        Schema::connection($this->connection)->create('fin_cursores', function (Blueprint $table): void {
             $table->string('fuente', 40)->primary();
             $table->dateTime('marca_at')->nullable();
             $table->foreignId('lectura_id')->nullable()->constrained('fin_lecturas')->nullOnDelete();
             $table->dateTime('actualizado_at');
         });
 
-        Schema::create('fin_hechos', function (Blueprint $table): void {
+        Schema::connection($this->connection)->create('fin_hechos', function (Blueprint $table): void {
             $table->id();
             $table->string('fuente', 40);
             $table->string('origen_id', 100);
@@ -70,8 +70,8 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('fin_hechos');
-        Schema::dropIfExists('fin_cursores');
-        Schema::dropIfExists('fin_lecturas');
+        Schema::connection($this->connection)->dropIfExists('fin_hechos');
+        Schema::connection($this->connection)->dropIfExists('fin_cursores');
+        Schema::connection($this->connection)->dropIfExists('fin_lecturas');
     }
 };

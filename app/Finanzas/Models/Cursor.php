@@ -11,6 +11,7 @@ use Illuminate\Support\Carbon;
  *
  * @property string $fuente
  * @property ?Carbon $marca_at
+ * @property ?Carbon $conciliada_at
  * @property ?int $lectura_id
  * @property Carbon $actualizado_at
  */
@@ -34,6 +35,7 @@ class Cursor extends Model
     {
         return [
             'marca_at' => 'datetime',
+            'conciliada_at' => 'datetime',
             'actualizado_at' => 'datetime',
         ];
     }

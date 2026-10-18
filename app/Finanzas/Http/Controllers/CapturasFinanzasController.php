@@ -32,6 +32,7 @@ class CapturasFinanzasController extends Controller
             'fuentes' => collect($fuentes->descripcion())->map(fn (array $fuente): array => [
                 ...$fuente,
                 'leida_hasta' => $cursores->get($fuente['clave'])?->marca_at?->toIso8601String(),
+                'conciliada_at' => $cursores->get($fuente['clave'])?->conciliada_at?->toIso8601String(),
             ])->values(),
             'configuracion' => [
                 'programada' => (bool) config('finanzas.captura.habilitada'),

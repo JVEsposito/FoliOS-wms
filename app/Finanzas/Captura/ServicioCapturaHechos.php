@@ -58,23 +58,26 @@ final class ServicioCapturaHechos
         }
 
         $inicio = microtime(true);
-        $conciliar = $conciliar || $this->tocaConciliar();
-        $lectura = Lectura::query()->create([
-            'origen' => $origen,
-            'conciliacion' => $conciliar,
-            'estado' => Lectura::ESTADO_EN_CURSO,
-            'solicitada_por_user_id' => $usuario?->id,
-            'solicitada_por_nombre' => $usuario?->name,
-            'iniciada_at' => now(),
-        ]);
-
+        $lectura = null;
         try {
+            $conciliaciones = [];
+            foreach ($seleccion as $clave => $fuente) {
+                $conciliaciones[$clave] = $conciliar || $this->tocaConciliar($clave);
+            }
+            $lectura = Lectura::query()->create([
+                'origen' => $origen,
+                'conciliacion' => in_array(true, $conciliaciones, true),
+                'estado' => Lectura::ESTADO_EN_CURSO,
+                'solicitada_por_user_id' => $usuario?->id,
+                'solicitada_por_nombre' => $usuario?->name,
+                'iniciada_at' => now(),
+            ]);
             $contexto = new ContextoCaptura($this->lector, fn (string $fuente): array => $this->abiertos($fuente));
             $resumen = [];
             $fallidas = [];
             foreach ($seleccion as $clave => $fuente) {
                 try {
-                    $resumen[$clave] = $this->capturarFuente($fuente, $contexto, $lectura, $conciliar);
+                    $resumen[$clave] = $this->capturarFuente($fuente, $contexto, $lectura, $conciliaciones[$clave]);
                 } catch (Throwable $error) {
                     report($error);
                     $resumen[$clave] = ['error' => Str::limit($error->getMessage(), 300)];
@@ -90,7 +93,7 @@ final class ServicioCapturaHechos
                 'duracion_ms' => $this->milisegundos($inicio),
             ]);
         } catch (Throwable $error) {
-            $lectura->update([
+            $lectura?->update([
                 'estado' => Lectura::ESTADO_FALLIDA,
                 'error' => Str::limit($error->getMessage(), 500),
                 'terminada_at' => now(),
@@ -105,7 +108,7 @@ final class ServicioCapturaHechos
         return $lectura->refresh();
     }
 
-    /** @return array<string, int> */
+    /** @return array<string, int|bool> */
     private function capturarFuente(FuenteHechos $fuente, ContextoCaptura $contexto, Lectura $lectura, bool $conciliar): array
     {
         $inicio = microtime(true);
@@ -142,10 +145,11 @@ final class ServicioCapturaHechos
 
         Cursor::query()->updateOrCreate(
             ['fuente' => $clave],
-            ['marca_at' => $marca, 'lectura_id' => $lectura->id, 'actualizado_at' => now()],
+            ['marca_at' => $marca, 'lectura_id' => $lectura->id, 'actualizado_at' => now(),
+                'conciliada_at' => $conciliar ? $marca : $cursor?->conciliada_at],
         );
 
-        return [...$conteo, 'duracion_ms' => $this->milisegundos($inicio)];
+        return [...$conteo, 'conciliacion' => $conciliar, 'duracion_ms' => $this->milisegundos($inicio)];
     }
 
     /**
@@ -342,13 +346,11 @@ final class ServicioCapturaHechos
             ->all();
     }
 
-    private function tocaConciliar(): bool
+    private function tocaConciliar(string $fuente): bool
     {
-        return ! Lectura::query()
-            ->where('conciliacion', true)
-            ->whereIn('estado', [Lectura::ESTADO_COMPLETADA, Lectura::ESTADO_CON_ERRORES])
-            ->where('iniciada_at', '>=', now()->subHours(self::HORAS_ENTRE_CONCILIACIONES))
-            ->exists();
+        $ultima = Cursor::query()->find($fuente)?->conciliada_at;
+
+        return $ultima === null || $ultima->lt(now()->subHours(self::HORAS_ENTRE_CONCILIACIONES));
     }
 
     private function milisegundos(float $inicio): int

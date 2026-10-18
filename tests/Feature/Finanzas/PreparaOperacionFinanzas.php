@@ -46,6 +46,7 @@ trait PreparaOperacionFinanzas
         try {
             $mientras();
         } finally {
+            $otra->scalar('SELECT RELEASE_LOCK(?)', [app(EsquemaFinanzas::class)->nombreCandado('captura-hechos')]);
             $otra->disconnect();
             DB::purge('finanzas_otra_sesion');
         }
