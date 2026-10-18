@@ -132,7 +132,8 @@ class TransferenciaClienteMaterialApiTest extends TestCase
             'item_otro_cliente' => $datos['item_destino_id'] = $this->itemA->id,
             'unidad' => $this->itemB->update(['unidad_medida' => 'kg']),
             'bloqueo' => $this->origen->update(['motivo_bloqueo' => 'Retenido']),
-            'vencimiento' => $this->origen->update(['fecha_vencimiento' => now()->subDays(1)->toDateString()]),
+            // Ayer en hora de planta: el vencimiento se compara con la fecha de Chile, no con la de UTC.
+            'vencimiento' => $this->origen->update(['fecha_vencimiento' => now('America/Santiago')->subDay()->toDateString()]),
             'cantidad' => $datos['cantidad'] = 101,
             'reserva' => $this->origen->update(['cantidad_reservada' => 1]),
             'codigo' => $this->clienteB->update(['codigo_folio_materiales' => null]),
