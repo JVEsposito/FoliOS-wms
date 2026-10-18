@@ -47,6 +47,8 @@ class IdentidadOficina
             'puede_consultar_configuracion_camaras' => $capacidades['puede_consultar_configuracion_camaras'],
             'puede_consultar_integridad_operacional' => $capacidades['puede_consultar_integridad_operacional'],
             'puede_ejecutar_integridad_operacional' => $capacidades['puede_ejecutar_integridad_operacional'],
+            'puede_consultar_finanzas' => $capacidades['puede_consultar_finanzas'],
+            'puede_capturar_hechos_finanzas' => $capacidades['puede_capturar_hechos_finanzas'],
             'puede_gestionar_cargas' => $capacidades['puede_gestionar_cargas'],
             'puede_autorizar_sobrecupo_embarques' => $capacidades['puede_autorizar_sobrecupo_embarques'],
             'puede_consultar_cargas' => $capacidades['puede_consultar_cargas'],
