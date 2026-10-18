@@ -138,6 +138,7 @@ test('PDA conserva producto y categoría con una fila vacía y con dos CSG compa
     await h.select('CSG / Predio 2', '22222'); assertProduct(h);
     await h.capture(); await h.press('Aprobar');
     assert.equal(h.queued.length, 1);
+    assert.match(h.message(), /2610160001[\s\S]*Guardado en la PDA · se enviará al sincronizar/);
     assert.equal(h.queued[0].articulo_validacion_id, 'santina');
     assert.deepEqual(h.queued[0].composicion, [
       { origen_validacion_id: 'csg-1', cantidad_cajas: 70, lote_materia_prima: 'L-1', proceso_packing: 'P-1' },
