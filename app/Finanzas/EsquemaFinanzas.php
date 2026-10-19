@@ -4,6 +4,7 @@ namespace App\Finanzas;
 
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\ConfigurationUrlParser;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -36,7 +37,13 @@ final class EsquemaFinanzas
 
     public function nombreBase(): string
     {
-        return (string) config('database.connections.'.self::CONEXION.'.database');
+        return (string) $this->configuracion()['database'];
+    }
+
+    /** La URL tiene la misma precedencia que al abrir una conexión con Laravel. */
+    private function configuracion(): array
+    {
+        return (new ConfigurationUrlParser)->parseConfiguration(config('database.connections.'.self::CONEXION));
     }
 
     /**
@@ -45,7 +52,7 @@ final class EsquemaFinanzas
      */
     public function asegurarBase(): void
     {
-        $config = config('database.connections.'.self::CONEXION);
+        $config = $this->configuracion();
         if (! in_array($config['driver'] ?? null, ['mysql', 'mariadb'], true)) {
             return;
         }
@@ -149,7 +156,7 @@ final class EsquemaFinanzas
     private function tablas(): array
     {
         try {
-            $tablas = array_column($this->conexion()->getSchemaBuilder()->getTables(), 'name');
+            $tablas = array_column($this->conexion()->getSchemaBuilder()->getTables($this->nombreBase()), 'name');
         } catch (QueryException $error) {
             // 1049: la base de Finanzas todavía no existe; no hay tablas.
             if ((int) ($error->errorInfo[1] ?? 0) === 1049) {

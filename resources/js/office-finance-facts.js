@@ -243,7 +243,7 @@ function renderReads(payload) {
 
         return '<tr>'
             + `<td>${escapeHtml(formatDate(read.iniciada_at))}${read.solicitada_por ? `<small>${escapeHtml(read.solicitada_por)}</small>` : ''}</td>`
-            + `<td>${escapeHtml(READ_ORIGINS[read.origen] || read.origen)}${read.conciliacion ? '<small>Lectura completa</small>' : ''}</td>`
+            + `<td>${escapeHtml(READ_ORIGINS[read.origen] || read.origen)}${read.conciliacion ? '<small>Con conciliación</small>' : ''}</td>`
             + `<td><span class="fin-chip fin-chip--${escapeHtml(read.estado)}">${escapeHtml(READ_STATES[read.estado] || read.estado)}</span></td>`
             + `<td class="fin-num">${read.duracion_ms === null ? '—' : `${(read.duracion_ms / 1000).toLocaleString('es-CL', { maximumFractionDigits: 1 })} s`}</td>`
             + `<td>${found ? `<ul class="fin-found">${found}</ul>` : '<small>Sin cambios</small>'}</td>`

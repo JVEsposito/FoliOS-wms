@@ -6,12 +6,14 @@ use App\Finanzas\Captura\CapturaEnCurso;
 use App\Finanzas\Captura\ContextoCaptura;
 use App\Finanzas\Captura\FuenteHechos;
 use App\Finanzas\Captura\Fuentes\Prefrio;
+use App\Finanzas\Captura\Fuentes\RecepcionRomana;
 use App\Finanzas\Models\Cursor;
 use App\Finanzas\Models\Hecho;
 use App\Finanzas\Models\Lectura;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Mockery;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -218,5 +220,49 @@ class CapturaHechosTest extends TestCase
 
         // Liberada por la otra sesión, la captura vuelve a correr.
         $this->assertSame(Lectura::ESTADO_COMPLETADA, $this->capturar()->estado);
+    }
+
+    public function test_conciliar_una_fuente_no_pospone_a_las_demas(): void
+    {
+        $this->capturar(['romana_recepcion']);
+        $lectura = $this->capturar(['romana_recepcion', 'validacion_pt']);
+        $this->assertFalse($lectura->resumen['romana_recepcion']['conciliacion']);
+        $this->assertTrue($lectura->resumen['validacion_pt']['conciliacion']);
+        $this->assertNotNull(Cursor::query()->find('validacion_pt')->conciliada_at);
+    }
+
+    public function test_una_fuente_fallida_reintenta_su_conciliacion_sin_posponerla_24_horas(): void
+    {
+        $cliente = $this->clienteGlobal('PRODUCTOR PRUEBA');
+        $borrada = $this->recepcionRomana($cliente, 'R-0040', 500, '2026-11-03 09:00');
+        $otra = $this->recepcionRomana($cliente, 'R-0041', 700, '2026-11-03 10:00');
+        $this->capturar(['romana_recepcion', 'validacion_pt']);
+        $anterior = Cursor::query()->find('romana_recepcion')->conciliada_at->toDateTimeString();
+        $this->travel(25)->hours();
+        DB::table('recepciones_romana')->where('id', $borrada)->delete();
+        DB::table('recepciones_romana')->where('id', $otra)->update(['peso_neto' => 800, 'updated_at' => now()]);
+
+        $original = new RecepcionRomana;
+        $fuente = Mockery::mock(FuenteHechos::class);
+        $fuente->shouldReceive('clave')->andReturn('romana_recepcion');
+        $fuente->shouldReceive('nombre')->andReturn('Recepciones en romana');
+        $fuente->shouldReceive('cambios')->andReturnUsing(function ($contexto, $desde) use ($original): iterable {
+            yield from $original->cambios($contexto, $desde);
+            throw new RuntimeException('Fallo después de leer y escribir un lote.');
+        });
+        $this->app->bind(RecepcionRomana::class, fn () => $fuente);
+        config(['finanzas.captura.lote' => 1]);
+        $fallida = $this->capturar(['romana_recepcion', 'validacion_pt']);
+        $this->assertSame(Lectura::ESTADO_CON_ERRORES, $fallida->estado);
+        $this->assertSame($anterior, Cursor::query()->find('romana_recepcion')->conciliada_at->toDateTimeString());
+        $this->assertSame(800.0, $this->hechos('romana_recepcion')->firstWhere('origen_id', $otra)->medidas['kilos_netos']);
+
+        $this->app->bind(RecepcionRomana::class, fn () => new RecepcionRomana);
+        $this->travel(10)->minutes();
+        $lectura = $this->capturar(['romana_recepcion', 'validacion_pt']);
+        $this->assertTrue($lectura->resumen['romana_recepcion']['conciliacion']);
+        $this->assertFalse($lectura->resumen['validacion_pt']['conciliacion']);
+        $this->assertSame(Hecho::ESTADO_ANULADO, $this->hechos('romana_recepcion')->firstWhere('origen_id', $borrada)->estado);
+        $this->assertSame(2, $this->hechos('romana_recepcion')->firstWhere('origen_id', $otra)->version);
     }
 }
