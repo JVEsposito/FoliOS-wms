@@ -61,7 +61,11 @@ class OperacionAhoraOfficeTest extends TestCase
             ->assertSee('id="operationPinsOpen" hidden', false)
             ->assertSee('data-active-office="operacion-ahora"', false)
             ->assertDontSee('class="operation-now-metrics"', false)
-            ->assertSee('id="operationMapZoneForm"', false);
+            ->assertSee('id="operationMapZoneForm"', false)
+            ->assertSee('Cargar plano base')
+            ->assertSee('id="operationMapProportion"', false)
+            ->assertSee('<option value="0.8">Vertical 4:5</option>', false)
+            ->assertSee('id="operationMapReference"', false);
     }
 
     public function test_organiza_operacion_ahora_en_pestanas_enfocadas(): void
@@ -154,6 +158,9 @@ class OperacionAhoraOfficeTest extends TestCase
         $this->assertStringContainsString('buildOperationTabBadges', $script);
         $this->assertStringContainsString('createOperationTabs', $script);
         $this->assertStringContainsString('renderPlantSheet', $script);
+        $this->assertStringContainsString("from './shared/plant-templates'", $script);
+        $this->assertStringContainsString('proporcion: Math.round(state.mapProportion', $script);
+        $this->assertStringContainsString('unassignedPlaces(state.mapDraft)', $script);
         $this->assertStringContainsString('data-resolve-verification', $script);
         $this->assertStringContainsString('proceso_activo', $script);
         $this->assertStringContainsString('process?.productos', $script);
@@ -198,7 +205,9 @@ class OperacionAhoraOfficeTest extends TestCase
         $this->assertStringContainsString('container-type: size', $styles);
         $this->assertStringContainsString('@container plant-node', $styles);
         $this->assertStringContainsString(':root[data-office-theme="dark-industrial"] :is(.plant-view, .operation-map-dialog)', $styles);
-        $this->assertStringContainsString('grid-template-columns: 148px minmax(0, 1fr) minmax(220px, 280px)', $styles);
+        $this->assertStringContainsString('grid-template-areas: "map sheet" "legend sheet"', $styles);
+        $this->assertStringContainsString('aspect-ratio: var(--plant-aspect, 16 / 9)', $styles);
+        $this->assertStringContainsString('@container plant-node (max-width: 2.75rem) and (orientation: portrait)', $styles);
         $this->assertStringContainsString('.operation-now-plant-sheet', $styles);
         $this->assertStringNotContainsString('operation-now-shortcuts', $styles);
         $this->assertStringContainsString('operation-now-panel--planner', $styles);

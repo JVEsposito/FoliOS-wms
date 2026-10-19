@@ -23,6 +23,13 @@ class ServicioPlanoPlanta
 {
     public const CODIGO_PRINCIPAL = 'principal';
 
+    /**
+     * Proporción ancho/alto con que se dibuja un plano sin proporción guardada. Las
+     * coordenadas 0..10000 son relativas a cada eje, así que la proporción decide si el
+     * dibujo conserva la forma real de la planta.
+     */
+    public const PROPORCION_PREDETERMINADA = 1.7778;
+
     /** Categorías de áreas dibujadas; repa y recepcion_mp muestran indicadores vivos. */
     public const CATEGORIAS_ZONA = [
         'no_operativo',
@@ -61,6 +68,7 @@ class ServicioPlanoPlanta
         return [
             'configurado' => $plano !== null,
             'nombre' => $plano?->nombre ?? 'Planta principal',
+            'proporcion' => $this->proporcion($plano),
             'version' => $plano?->version ?? 0,
             'actualizado_at' => $plano?->updated_at?->toAtomString(),
             'puede_editar' => $puedeEditar,
@@ -133,6 +141,10 @@ class ServicioPlanoPlanta
 
             $atributos = [
                 'nombre' => trim($datos['nombre']),
+                // Sin proporción en la solicitud se conserva la vigente.
+                'proporcion' => array_key_exists('proporcion', $datos)
+                    ? ($datos['proporcion'] === null ? null : round((float) $datos['proporcion'], 4))
+                    : $plano?->proporcion,
                 'version' => $versionActual + 1,
                 'elementos' => array_values($datos['elementos']),
                 'conexiones' => $conexiones,
@@ -150,6 +162,11 @@ class ServicioPlanoPlanta
                 ...$atributos,
             ]);
         });
+    }
+
+    public function proporcion(?PlanoPlanta $plano): float
+    {
+        return round((float) ($plano?->proporcion ?? self::PROPORCION_PREDETERMINADA), 4);
     }
 
     /**
@@ -231,6 +248,7 @@ class ServicioPlanoPlanta
             'id' => $camara['id'],
             'codigo' => $camara['codigo'],
             'nombre' => $camara['nombre'],
+            'contenido' => $camara['contenido'] ?? null,
             'detalle' => ($camara['ocupacion_porcentaje'] ?? 0).'% ocupado',
             'tono' => match ($camara['nivel_ocupacion'] ?? null) {
                 'critica' => 'critical',
@@ -247,12 +265,13 @@ class ServicioPlanoPlanta
             ->where('estado', EstadoCamara::Inactiva->value)
             ->whereKeyNot($activas)
             ->orderBy('codigo')
-            ->get(['id', 'codigo', 'nombre'])
+            ->get(['id', 'codigo', 'nombre', 'contenido'])
             ->map(fn (Camara $camara): array => [
                 'tipo' => 'camara',
                 'id' => $camara->id,
                 'codigo' => $camara->codigo,
                 'nombre' => $camara->nombre,
+                'contenido' => $camara->contenido?->value,
                 'detalle' => 'Fuera de servicio',
                 'tono' => 'neutral',
                 'estado' => 'fuera_servicio',

@@ -23,6 +23,7 @@ import {
     resizeElement,
     unconnectedPlaces,
 } from './shared/plant-layout';
+import { AGROROSARIO_PLANT, buildPlantFromTemplate, unassignedPlaces } from './shared/plant-templates';
 import {
     buildPlantIndex,
     plantNodeLabel,
@@ -94,6 +95,11 @@ const elements = {
     mapNetworkSummary: byId('operationMapNetworkSummary'),
     editorStage: byId('operationEditorStage'),
     editorZoomLabel: byId('operationEditorZoomLabel'),
+    mapTemplate: byId('operationMapTemplate'),
+    mapTemplateReport: byId('operationMapTemplateReport'),
+    mapProportion: byId('operationMapProportion'),
+    mapReferenceField: byId('operationMapReferenceField'),
+    mapReference: byId('operationMapReference'),
     alertsPanel: byId('operationAlertsPanel'),
     alertRows: byId('operationAlertRows'),
     alertCount: byId('operationAlertCount'),
@@ -115,6 +121,7 @@ const state = {
     clockOffsetMs: 0,
     mapZoom: 1,
     editorZoom: 1,
+    mapProportion: 16 / 9,
     mapEditing: false,
     mapDraft: [],
     mapConnections: [],
@@ -821,7 +828,7 @@ function mapNodeMarkup(item, editable = false, index = buildPlantIndex(state.sna
         ? `<span class="plant-node__alert" title="${escapeHtml(model.alerts.join(' · '))}">${PLANT_GLYPHS.alert}</span>`
         : '';
 
-    return `<article class="operation-map-node plant-node${selected ? ' is-selected' : ''}${connecting ? ' is-connecting' : ''}${unconnected ? ' is-unconnected' : ''}${model.fill ? ' is-filled' : ''}" data-id="${escapeHtml(item.id)}" data-type="${escapeHtml(item.tipo)}" data-zone="${escapeHtml(model.zone || '')}" data-state="${escapeHtml(model.state)}" data-tone="${escapeHtml(model.tone)}" data-rotation="${Number(item.rotacion) || 0}"${selection} style="left:${item.x / 100}%;top:${item.y / 100}%;width:${item.ancho / 100}%;height:${item.alto / 100}%" aria-label="${escapeHtml(plantNodeLabel(model))}" title="${escapeHtml(plantNodeLabel(model))}">
+    return `<article class="operation-map-node plant-node${selected ? ' is-selected' : ''}${connecting ? ' is-connecting' : ''}${unconnected ? ' is-unconnected' : ''}${model.fill ? ' is-filled' : ''}" data-id="${escapeHtml(item.id)}" data-type="${escapeHtml(item.tipo)}" data-zone="${escapeHtml(model.zone || '')}" data-state="${escapeHtml(model.state)}" data-tone="${escapeHtml(model.tone)}" data-rotation="${Number(item.rotacion) || 0}"${selection} style="left:${item.x / 100}%;top:${item.y / 100}%;width:${item.ancho / 100}%;height:${item.alto / 100}%;--node-w:${item.ancho / 100};--node-h:${item.alto / 100}" aria-label="${escapeHtml(plantNodeLabel(model))}" title="${escapeHtml(plantNodeLabel(model))}">
         <span class="plant-node__tag">${escapeHtml(model.tag)}</span>
         ${alerts}
         ${model.glyph ? `<span class="plant-node__glyph" data-glyph="${escapeHtml(model.glyph)}">${PLANT_GLYPHS[model.glyph] || ''}</span>` : ''}
@@ -865,7 +872,7 @@ function renderMapStage(target, items, editable = false, connections = [], selec
 }
 
 function setMapZoom(kind, value) {
-    const normalized = Math.max(.6, Math.min(1.8, Math.round(value * 10) / 10));
+    const normalized = Math.max(.6, Math.min(3, Math.round(value * 10) / 10));
     const stage = kind === 'editor' ? elements.editorStage : elements.facilityMap;
     const label = kind === 'editor' ? elements.editorZoomLabel : elements.mapZoomLabel;
     state[kind === 'editor' ? 'editorZoom' : 'mapZoom'] = normalized;
@@ -873,9 +880,17 @@ function setMapZoom(kind, value) {
     label.textContent = `${Math.round(normalized * 100)} %`;
 }
 
+// Ancho/alto del dibujo. Las coordenadas son relativas a cada eje: sin la proporción
+// real, una planta más alta que ancha se vería estirada a lo ancho.
+function plantAspect(plant) {
+    const value = Number(plant?.proporcion);
+    return Number.isFinite(value) && value > 0 ? value : 16 / 9;
+}
+
 function renderFacility(data) {
     const plant = data.planta;
     const items = currentMapElements(plant);
+    elements.facilityMap.style.setProperty('--plant-aspect', String(plantAspect(plant)));
     renderMapStage(elements.facilityMap, items, false, plant.configurado ? (plant.conexiones || []) : [], true);
     elements.facilityStatus.textContent = plant.configurado ? `Plano v${plant.version}` : 'Distribución automática';
     elements.facilityStatus.dataset.tone = plant.configurado ? 'success' : 'warning';
@@ -1273,12 +1288,45 @@ function renderNetworkSummary() {
         ${invalid ? `<span>${number(invalid)} conexiones quedaron sin borde compartido; acerca los elementos o quítalas antes de guardar.</span>` : ''}`;
 }
 
+const RECINTO_TYPES = ['camara', 'tunel', 'anden', 'almacen'];
+
+function renderProportionField() {
+    const value = String(Math.round(state.mapProportion * 10_000) / 10_000);
+    const select = elements.mapProportion;
+    if (![...select.options].some((option) => Math.abs(Number(option.value) - state.mapProportion) < .0001)) {
+        select.querySelector('[data-custom]')?.remove();
+        select.insertAdjacentHTML('beforeend', `<option value="${value}" data-custom>Proporción guardada (${escapeHtml(number(state.mapProportion, 2))})</option>`);
+    }
+    select.value = [...select.options].find((option) => Math.abs(Number(option.value) - state.mapProportion) < .0001)?.value || value;
+}
+
+// Un recinto del dibujo puede apuntar a otro del catálogo sin perder su forma ni sus
+// conexiones; así se resuelve lo que el plano base no pudo enlazar solo.
+function renderReferenceField(selected) {
+    const isPlace = Boolean(selected && RECINTO_TYPES.includes(selected.tipo));
+    elements.mapReferenceField.hidden = !isPlace;
+    if (!isPlace) return;
+    const catalog = state.snapshot?.planta?.catalogo || [];
+    const current = catalog.find((item) => item.tipo === selected.tipo && item.id === selected.referencia_id);
+    const options = [
+        ...(current ? [current] : []),
+        ...availableCatalog(catalog, state.mapDraft).filter((item) => item.tipo === selected.tipo),
+    ];
+    elements.mapReference.innerHTML = `${current ? '' : '<option value="">Sin asignar</option>'}${options
+        .map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml([item.codigo, item.nombre].filter(Boolean).join(' · '))}</option>`)
+        .join('')}`;
+    elements.mapReference.value = current?.id || '';
+}
+
 function renderEditor() {
+    elements.editorStage.style.setProperty('--plant-aspect', String(state.mapProportion));
     renderMapStage(elements.editorStage, state.mapDraft, state.mapEditing, state.mapConnections);
     renderMapCatalog();
+    renderProportionField();
     const selected = state.mapDraft.find((item) => item.id === state.mapSelectedId);
     elements.mapInspector.hidden = !state.mapEditing || !selected;
     elements.mapSelectionName.textContent = selected?.nombre || 'Ninguno';
+    renderReferenceField(selected);
     elements.mapConnect.textContent = state.mapConnecting ? 'Cancelar conexión' : 'Conectar con…';
     elements.mapConnect.setAttribute('aria-pressed', String(Boolean(state.mapConnecting)));
     elements.editorStage.classList.toggle('is-connecting', Boolean(state.mapConnecting));
@@ -1295,6 +1343,8 @@ function openMapDialog(editing) {
     state.mapConnections = JSON.parse(JSON.stringify(plant.configurado ? (plant.conexiones || []) : []));
     state.mapConnecting = null;
     state.mapSelectedId = null;
+    state.mapProportion = plantAspect(plant);
+    elements.mapTemplateReport.hidden = true;
     elements.mapDialogTitle.textContent = state.mapEditing ? 'Editar plano operacional' : plant.nombre;
     elements.mapDialogHint.textContent = state.mapEditing
         ? 'Mueve, redimensiona y organiza la representación real de la planta'
@@ -1334,6 +1384,13 @@ function selectedMapElement() {
 }
 
 async function saveMap() {
+    const pending = unassignedPlaces(state.mapDraft);
+    if (pending.length) {
+        toast(`Asigna un recinto de FoliOS a ${pending.map((item) => item.nombre).join(', ')} o quítalos antes de guardar.`, true);
+        state.mapSelectedId = pending[0].id;
+        renderEditor();
+        return;
+    }
     state.mapSaving = true;
     elements.mapSave.disabled = true;
     elements.mapSave.textContent = 'Guardando…';
@@ -1344,6 +1401,7 @@ async function saveMap() {
             body: JSON.stringify({
                 version_esperada: state.snapshot.planta.version,
                 nombre: state.snapshot.planta.nombre || 'Planta principal',
+                proporcion: Math.round(state.mapProportion * 10_000) / 10_000,
                 elementos: state.mapDraft,
                 conexiones: state.mapConnections,
             }),
@@ -1430,6 +1488,49 @@ elements.mapCatalogItems.addEventListener('click', (event) => {
     const button = event.target.closest('[data-map-add]');
     if (button) addCatalogItem(button.dataset.mapAdd);
 });
+function templateReport(result) {
+    const lines = [`<strong>${escapeHtml(number(result.asignados.length))} recintos enlazados por número.</strong>`];
+    if (result.faltantes.length) {
+        lines.push(`<span>Por asignar: ${result.faltantes.map((item) => escapeHtml(item.nombre)).join(', ')}. Selecciónalos y elige su recinto, o quítalos.</span>`);
+    }
+    if (result.sinUbicar.length) {
+        lines.push(`<span>En FoliOS pero no en el dibujo: ${result.sinUbicar.map((item) => escapeHtml(item.codigo || item.nombre)).join(', ')}.</span>`);
+    }
+    return lines.join('');
+}
+
+elements.mapTemplate.addEventListener('click', () => {
+    if (!state.mapEditing) return;
+    if (state.mapDraft.length && !window.confirm('El plano base reemplaza el borrador actual del editor. Nada se guarda hasta pulsar «Guardar plano». ¿Continuar?')) return;
+    const result = buildPlantFromTemplate(AGROROSARIO_PLANT, state.snapshot?.planta?.catalogo || []);
+    state.mapDraft = result.elementos;
+    state.mapConnections = result.conexiones;
+    state.mapProportion = result.proporcion;
+    state.mapSelectedId = unassignedPlaces(result.elementos)[0]?.id || null;
+    state.mapConnecting = null;
+    elements.mapTemplateReport.innerHTML = templateReport(result);
+    elements.mapTemplateReport.dataset.tone = result.faltantes.length ? 'warning' : 'success';
+    elements.mapTemplateReport.hidden = false;
+    renderEditor();
+});
+
+elements.mapProportion.addEventListener('change', () => {
+    const value = Number(elements.mapProportion.value);
+    if (!Number.isFinite(value) || value <= 0) return;
+    state.mapProportion = value;
+    renderEditor();
+});
+
+elements.mapReference.addEventListener('change', () => {
+    const selected = selectedMapElement();
+    if (!selected) return;
+    const item = (state.snapshot?.planta?.catalogo || [])
+        .find((candidate) => candidate.tipo === selected.tipo && candidate.id === elements.mapReference.value);
+    selected.referencia_id = item?.id || null;
+    if (item) selected.nombre = item.nombre || item.codigo || selected.nombre;
+    renderEditor();
+});
+
 byId('operationMapZoneForm').addEventListener('submit', (event) => {
     event.preventDefault();
     const name = byId('operationMapZoneName').value.trim();

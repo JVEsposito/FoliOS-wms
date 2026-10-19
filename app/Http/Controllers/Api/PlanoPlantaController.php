@@ -22,6 +22,7 @@ class PlanoPlantaController extends Controller
         return response()->json([
             'data' => [
                 'nombre' => $plano->nombre,
+                'proporcion' => $servicio->proporcion($plano),
                 'version' => $plano->version,
                 'elementos' => $plano->elementos,
                 'conexiones' => $plano->conexiones ?? [],

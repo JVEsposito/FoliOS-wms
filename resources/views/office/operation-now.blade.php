@@ -322,6 +322,21 @@
                     </header>
                     <div class="operation-map-editor" id="operationMapEditor">
                         <aside class="operation-map-catalog" id="operationMapCatalog" hidden>
+                            <div class="operation-map-template">
+                                <strong>PLANO BASE</strong>
+                                <span>Plano de instalaciones Agrorosario 2026-2027, norte arriba. Reemplaza el borrador; nada se guarda hasta pulsar «Guardar plano».</span>
+                                <button type="button" id="operationMapTemplate">Cargar plano base</button>
+                                <div class="operation-map-template__report" id="operationMapTemplateReport" role="status" hidden></div>
+                            </div>
+                            <label class="operation-map-format">FORMATO DEL PLANO
+                                <select id="operationMapProportion">
+                                    <option value="1.7778">Apaisado 16:9</option>
+                                    <option value="1.3333">Apaisado 4:3</option>
+                                    <option value="1">Cuadrado</option>
+                                    <option value="0.8">Vertical 4:5</option>
+                                    <option value="0.75">Vertical 3:4</option>
+                                </select>
+                            </label>
                             <div class="operation-map-catalog__heading"><strong>RECINTOS DISPONIBLES</strong><span>Selecciona para incorporar</span></div>
                             <div class="operation-map-catalog__items" id="operationMapCatalogItems"></div>
                             <form class="operation-map-zone-form" id="operationMapZoneForm">
@@ -339,6 +354,9 @@
                         <aside class="operation-map-inspector" id="operationMapInspector" hidden>
                             <strong>ELEMENTO SELECCIONADO</strong>
                             <span id="operationMapSelectionName">Ninguno</span>
+                            <label class="operation-map-inspector__reference" id="operationMapReferenceField" hidden>Recinto en FoliOS
+                                <select id="operationMapReference"></select>
+                            </label>
                             <div><button id="operationMapRotate" type="button">Rotar 90°</button><button id="operationMapRemove" type="button">Quitar</button></div>
                             <button class="operation-map-inspector__connect" id="operationMapConnect" type="button" aria-pressed="false">Conectar con…</button>
                             <strong>CONEXIONES</strong>
