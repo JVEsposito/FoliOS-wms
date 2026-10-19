@@ -22,6 +22,7 @@ async function setup(browser, { romana = false, handler, width = 390 } = {}) {
     await context.route('http://localhost/**', async (route) => {
         const url = new URL(route.request().url()); const path = url.pathname;
         if (path === '/oficina/porteria') return route.fulfill({ body: html, contentType: 'text/html' });
+        if (path.startsWith('/brand/folios/')) return route.fulfill({ body: readFileSync(resolve(root, `public${path}`)), contentType: 'image/svg+xml' });
         if (path.startsWith('/build/')) {
             try { return route.fulfill({ body: readFileSync(resolve(root, `public${path}`)), contentType: ({ '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2' })[extname(path)] || 'application/octet-stream' }); }
             catch { return route.fulfill({ status: 404, body: '' }); }
@@ -60,6 +61,7 @@ test('PDA: varias guías y reintento tras recargar conservan el mismo ingreso', 
         await page.locator('#gateGuideRows input').fill('000123');
         await page.locator('#gateAddGuide').click(); await page.locator('#gateGuideRows input').last().fill('000124');
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
+        await page.evaluate(() => { document.activeElement?.blur(); window.scrollTo(0, 0); });
         await page.screenshot({ path: resolve(root, 'storage/app/ui/oficina/porteria-mobile.png'), fullPage: true });
         await page.locator('#gateSubmit').click();
         await page.waitForFunction(() => document.getElementById('gateFormError').textContent.includes('Sin conexión'));
@@ -110,6 +112,8 @@ test('Romana: revisa pendientes y descarga el PDF de la fecha seleccionada', asy
         } });
         assert.equal(await page.locator('#gateCapture').isHidden(), true);
         assert.equal(await page.locator('#gatePending').isChecked(), true);
+        assert.ok((await page.locator('.gate-columns > .gate-panel').last().boundingBox()).width > 800);
+        assert.ok((await page.locator('#gatePending').boundingBox()).width <= 32);
         await page.screenshot({ path: resolve(root, 'storage/app/ui/oficina/porteria-romana.png'), fullPage: true });
         await page.locator('[data-review="1"]').click();
         await page.waitForFunction(() => document.getElementById('gateCount').textContent.startsWith('0 '));

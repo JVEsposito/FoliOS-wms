@@ -2,6 +2,9 @@
 .gate-workspace h1 { margin: 4px 0; }
 .gate-workspace header p, .gate-workspace small, #gateClock { color: var(--muted); }
 .gate-columns { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(320px, 1.3fr); gap: 16px; align-items: start; }
+.gate-columns > #gateCapture[hidden] + .gate-panel { grid-column: 1 / -1; }
+#gatePendingRow { display: flex; align-items: center; gap: 8px; min-height: 48px; }
+#gatePending { width: 24px; height: 24px; min-height: 24px; flex: 0 0 24px; padding: 0; }
 .gate-panel { padding: 16px; min-width: 0; }
 .gate-panel h2 { margin-top: 0; }
 .gate-fields { border: 0; padding: 0; margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; min-width: 0; }
@@ -27,4 +30,7 @@
 #gateHistory pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 .gate-fields [hidden], .gate-workspace [hidden] { display: none !important; }
 @media (max-width: 1050px) { .gate-columns { grid-template-columns: 1fr; } }
-@media (max-width: 480px) { .gate-fields { grid-template-columns: 1fr; } .gate-workspace { padding: 10px; } .gate-panel { padding: 12px; } .gate-filters { align-items: stretch; flex-direction: column; } }
+@media (max-width: 480px) { .gate-fields { grid-template-columns: 1fr; } .gate-workspace { padding: 10px; } .gate-columns > #gateCapture[hidden] + .gate-panel { grid-column: 1 / -1; }
+#gatePendingRow { display: flex; align-items: center; gap: 8px; min-height: 48px; }
+#gatePending { width: 24px; height: 24px; min-height: 24px; flex: 0 0 24px; padding: 0; }
+.gate-panel { padding: 12px; } .gate-filters { align-items: stretch; flex-direction: column; } }
