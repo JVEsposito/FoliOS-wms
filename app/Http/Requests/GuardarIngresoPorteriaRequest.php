@@ -37,7 +37,7 @@ class GuardarIngresoPorteriaRequest extends FormRequest
         return [
             ...($this->isMethod('post') ? ['operacion_id' => ['required', 'uuid']] : ['version' => ['required', 'integer', 'min:1'], 'motivo_correccion' => ['required', 'string', 'min:5', 'max:500']]),
             'cliente_id' => ['nullable', 'uuid', Rule::exists(Cliente::class, 'id')->where('activo', true)],
-            'cliente_otro' => ['nullable', 'required_without:cliente_id', 'prohibited_with:cliente_id', 'string', 'max:180'],
+            'cliente_otro' => ['nullable', 'required_without:cliente_id', Rule::prohibitedIf($this->filled('cliente_id')), 'string', 'max:180'],
             'motivo' => ['required', Rule::in(['carga', 'vacio', 'servicio'])],
             'patente' => ['required', 'string', 'regex:/^[A-Z0-9]{4,12}$/'],
             'patente_carro' => ['nullable', 'string', 'regex:/^[A-Z0-9]{4,12}$/'],
@@ -55,7 +55,7 @@ class GuardarIngresoPorteriaRequest extends FormRequest
     {
         return [
             'required' => 'Complete :attribute.', 'required_without' => 'Seleccione un cliente o escriba el cliente/servicio en Otro.',
-            'prohibited_with' => 'Seleccione un cliente del catálogo o complete Otro.',
+            'prohibited' => 'Seleccione un cliente del catálogo o complete Otro.',
             'guias.min' => 'Para un camión con carga, agregue al menos una guía.',
             'guias.*.distinct' => 'Una guía se repite dentro de este ingreso; agréguela una sola vez.',
             'patente.regex' => 'Ingrese una patente válida, con 4 a 12 letras y números.',
