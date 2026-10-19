@@ -1489,7 +1489,11 @@ elements.mapCatalogItems.addEventListener('click', (event) => {
     if (button) addCatalogItem(button.dataset.mapAdd);
 });
 function templateReport(result) {
-    const lines = [`<strong>${escapeHtml(number(result.asignados.length))} recintos enlazados por número.</strong>`];
+    // Cada enlace queda a la vista: es lo que hay que revisar antes de guardar.
+    const lines = [
+        `<strong>${escapeHtml(number(result.asignados.length))} recintos enlazados. Revísalos antes de guardar:</strong>`,
+        `<ul>${result.asignados.map((link) => `<li>${escapeHtml(link.plano)} <span aria-hidden="true">→</span> ${escapeHtml(link.recinto)}</li>`).join('')}</ul>`,
+    ];
     if (result.faltantes.length) {
         lines.push(`<span>Por asignar: ${result.faltantes.map((item) => escapeHtml(item.nombre)).join(', ')}. Selecciónalos y elige su recinto, o quítalos.</span>`);
     }

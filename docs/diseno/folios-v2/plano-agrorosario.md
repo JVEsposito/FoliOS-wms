@@ -13,11 +13,14 @@ permite que el dibujo conserve la forma real de la planta.
    ancho/alto entre 0,5 y 2,5; sin valor sigue en 16:9) y la vista, la ampliación y el editor la
    respetan. En el editor se elige en *Formato del plano*.
 2. **Plano base.** En *Editar plano* aparece *Cargar plano base*. Reemplaza el borrador con los
-   44 elementos del dibujo y sus 43 conexiones (las puertas amarillas y las aberturas sin muro) y
-   enlaza cada cámara, túnel y andén con el recinto de FoliOS que tenga su número (`CAM-07`,
-   «Cámara 7», `T7`…). Una cámara de materiales con el mismo número no reemplaza a la de
-   producto, y si dos recintos tienen el mismo número no se adivina. Nada se guarda hasta pulsar
-   *Guardar plano*, con el control de versión de siempre.
+   44 elementos del dibujo y sus 43 conexiones (las puertas amarillas y las aberturas sin muro).
+   Cada cámara, túnel y andén se enlaza con el recinto de FoliOS cuyo **nombre** o código termine
+   en su número, y **el nombre manda**: en la planta, la cámara 4 del dibujo es la «Cámara de
+   tránsito 04», con código `CAM-10`. Si nombre y código coinciden, mejor aún. Una cámara de
+   materiales no reemplaza a la de producto, y si dos recintos empatan no se adivina. Un área del
+   dibujo con el mismo nombre que un recinto de FoliOS pasa a ser ese recinto: el «Altillo» del
+   dibujo es la cámara `CAM-08 · Altillo`. El editor lista cada enlace para revisarlo. Nada se
+   guarda hasta pulsar *Guardar plano*, con el control de versión de siempre.
 3. **Recintos por asignar.** Lo que el plano base no pudo enlazar queda marcado. Al
    seleccionarlo, el inspector muestra *Recinto en FoliOS* para elegirlo sin perder forma ni
    conexiones. El editor no guarda mientras quede un recinto sin asignar. Esto también sirve
@@ -48,6 +51,16 @@ pt (proporción 4:5) que incluye la romana y la portería. Ajustes deliberados:
 **Palletizaje no es REPA** (repaletizaje): queda como área de packing. Si el buffer de
 repaletizaje tiene un lugar físico, se dibuja en el editor como área REPA. «Frío», «sadema»,
 las casetas y el altillo quedan como áreas sin indicador.
+
+## Al desplegar
+
+1. `git pull --ff-only origin main`
+2. `php artisan migrate --force` (agrega `planos_planta.proporcion`, nullable).
+3. `npm ci` y `npm run build`: sin compilar, Oficina sigue mostrando el editor anterior, sin
+   *Cargar plano base*.
+4. `php artisan optimize:clear` y recargar la página sin caché (Ctrl+F5).
+5. En *Operación ahora → Plano → Editar plano*: *Cargar plano base*, revisar los enlaces, asignar
+   la cámara 0 (el dibujo no le da un recinto con ese número) y *Guardar plano*.
 
 El plano base está en `resources/js/shared/plant-templates.js`. Su prueba
 (`tests/JavaScript/plant-templates.test.mjs`) verifica tamaños, límites, superposiciones y que
