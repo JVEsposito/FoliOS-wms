@@ -24,6 +24,9 @@ class IdentidadOficina
         $capacidades = $this->alcance->capacidadesApi($usuario);
 
         $identidad = [
+            'puede_consultar_porteria' => $capacidades['puede_consultar_porteria'],
+            'puede_registrar_porteria' => $capacidades['puede_registrar_porteria'],
+            'puede_administrar_porteria' => $capacidades['puede_administrar_porteria'],
             'id' => $usuario->id,
             'nombre' => $usuario->name,
             'email' => $usuario->email,

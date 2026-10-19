@@ -39,6 +39,7 @@ class TemporadaActivaRutasTest extends TestCase
         Models\ConexionExistencia::class => 'accesos a existencias Excel',
         Models\ConexionExterna::class => 'configuración global de acceso a sistemas externos, independiente de la temporada',
         Models\Temporada::class => 'administración de temporadas',
+        Models\IngresoPorteria::class => 'bitácora de accesos por fecha de planta, disponible entre temporadas; no modifica inventario',
         Models\RegistroControlAmbiental::class => 'se registra por cámara y hora, sin temporada',
         Models\NotificacionOperacional::class => 'leer o confirmar no modifica la operación; ya filtra por temporada',
         // Cerrar sesiones de estiba debe seguir siendo posible después de un cambio de temporada.

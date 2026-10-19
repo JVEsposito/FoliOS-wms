@@ -32,6 +32,7 @@ class AlcanceOperacionalUsuario
             RolUsuario::Administrador,
             RolUsuario::Despachador,
             RolUsuario::Consulta => ContenidoCamara::cases(),
+            RolUsuario::GuardiaPorteria,
             RolUsuario::OperadorPrefrio,
             RolUsuario::OperadorRomana,
             RolUsuario::Validador,
@@ -984,9 +985,26 @@ class AlcanceOperacionalUsuario
         ], 'materia-prima.despacho-envases');
     }
 
+    public function puedeConsultarPorteria(User $usuario): bool
+    {
+        return $this->puedeConsultarRomana($usuario)
+            || $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador, RolUsuario::GuardiaPorteria], CatalogoModulosAcceso::OFICINA_PORTERIA);
+    }
+
+    public function puedeRegistrarPorteria(User $usuario): bool
+    {
+        return $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador, RolUsuario::GuardiaPorteria], CatalogoModulosAcceso::OFICINA_PORTERIA);
+    }
+
+    public function puedeAdministrarPorteria(User $usuario): bool
+    {
+        return $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador], CatalogoModulosAcceso::OFICINA_PORTERIA);
+    }
+
     public function puedeAccederOficina(User $usuario): bool
     {
         return $this->rolActivoEnModulo($usuario, [
+            RolUsuario::GuardiaPorteria,
             RolUsuario::Administrador,
             RolUsuario::SupervisorFrio,
             RolUsuario::SupervisorMateriales,
@@ -1004,6 +1022,9 @@ class AlcanceOperacionalUsuario
     public function capacidadesApi(User $usuario): array
     {
         return [
+            'puede_consultar_porteria' => $this->puedeConsultarPorteria($usuario),
+            'puede_registrar_porteria' => $this->puedeRegistrarPorteria($usuario),
+            'puede_administrar_porteria' => $this->puedeAdministrarPorteria($usuario),
             'solo_consulta' => $this->esSoloConsulta($usuario),
             'modulos_acceso' => $this->catalogoModulos->modulosUsuario($usuario),
             'modulos_tablet' => $this->catalogoModulos->modulosTabletUsuario($usuario),

@@ -112,6 +112,7 @@ Route::view('/oficina/materia-prima/existencias', 'office.inventory-exports', [
     'inventoryDescription' => 'Lotes vigentes, condición de hidrocooler, cámara asignada y continuidad hacia proceso.',
     'inventoryIcon' => '⌁',
 ]);
+Route::view('/oficina/porteria', 'office.gatehouse');
 Route::view('/oficina/romana', 'office.weighbridge');
 Route::view('/oficina/envases/cuenta-corriente', 'office.container-accounts');
 Route::view('/oficina/envases/despachos', 'office.container-dispatches');

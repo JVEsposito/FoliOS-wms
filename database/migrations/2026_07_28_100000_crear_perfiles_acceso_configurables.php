@@ -43,6 +43,7 @@ return new class extends Migration
             'validador_mp' => 'Validador MP',
             // Roles incorporados después de esta migración: permiten migrar una base nueva.
             'tarjador' => 'Tarjador',
+            'guardia_porteria' => 'Guardia de portería',
             'consulta' => 'Solo consulta',
         ];
         $ahora = now();

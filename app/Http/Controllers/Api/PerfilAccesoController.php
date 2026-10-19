@@ -158,6 +158,7 @@ class PerfilAccesoController extends Controller
             RolUsuario::SupervisorMateriales => 'Supervisor de materiales',
             RolUsuario::Despachador => 'Despachador',
             RolUsuario::OperadorPrefrio => 'Operador de prefrío',
+            RolUsuario::GuardiaPorteria => 'Guardia de portería',
             RolUsuario::OperadorRomana => 'Operador de romana',
             RolUsuario::DigitadorMateriaPrima => 'Digitador de materia prima',
             RolUsuario::CamareroFrio => 'Camarero de frío',

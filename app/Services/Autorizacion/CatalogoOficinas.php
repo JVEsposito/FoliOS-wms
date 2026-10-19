@@ -45,6 +45,7 @@ class CatalogoOficinas
      */
     private const OFICINAS = [
         ['materia-prima', 'Resumen', '/oficina/materia-prima', '', ['puede_consultar_romana', 'puede_consultar_materia_prima', 'puede_consultar_hidrocooler_materia_prima', 'puede_consultar_fruta_proceso', 'puede_consultar_despacho_comercial', 'puede_consultar_cuenta_envases', 'puede_gestionar_despacho_envases', 'puede_anular_despacho_envases']],
+        ['materia-prima', 'Ingresos Portería', '/oficina/porteria', '', ['puede_consultar_porteria']],
         ['materia-prima', 'Romana', '/oficina/romana', 'materia-prima.romana', ['puede_consultar_romana']],
         ['materia-prima', 'Defectos de recepción', '/oficina/materia-prima/defectos-recepcion', '', ['puede_auditar_defectos_recepcion_mp']],
         ['materia-prima', 'Digitación de Lotes', '/oficina/materia-prima/lotes', 'materia-prima.digitacion', ['puede_consultar_materia_prima']],
