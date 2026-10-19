@@ -12,6 +12,8 @@ class GuardarPlanoPlantaRequest extends FormRequest
         return [
             'version_esperada' => ['required', 'integer', 'min:0'],
             'nombre' => ['required', 'string', 'max:120'],
+            // Ancho/alto del dibujo: 0,5 es un plano el doble de alto que ancho; 2,5, muy apaisado.
+            'proporcion' => ['sometimes', 'nullable', 'numeric', 'between:0.5,2.5'],
             'elementos' => ['present', 'array', 'max:150'],
             'elementos.*.id' => ['required', 'uuid', 'distinct'],
             'elementos.*.tipo' => ['required', Rule::in(['camara', 'tunel', 'anden', 'almacen', 'zona', 'pasillo'])],
@@ -34,6 +36,7 @@ class GuardarPlanoPlantaRequest extends FormRequest
     {
         return [
             'elementos.max' => 'El plano admite hasta 150 elementos.',
+            'proporcion.between' => 'La proporción del plano debe estar entre 0,5 (vertical) y 2,5 (apaisado).',
             'elementos.*.id.distinct' => 'Cada elemento del plano debe tener un identificador único.',
             'conexiones.max' => 'El plano admite hasta 400 conexiones.',
             'conexiones.*.id.distinct' => 'Cada conexión debe tener un identificador único.',

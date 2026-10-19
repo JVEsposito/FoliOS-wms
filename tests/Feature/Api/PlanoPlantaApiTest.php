@@ -92,6 +92,62 @@ class PlanoPlantaApiTest extends TestCase
         ]);
     }
 
+    public function test_guarda_la_proporcion_real_del_plano_y_la_conserva_al_editar(): void
+    {
+        $this->crearTemporadaActivaPrueba([
+            'codigo' => 'ACTUAL',
+            'nombre' => 'Temporada actual',
+            'fecha_inicio' => '2026-08-01',
+            'fecha_fin' => '2027-03-31',
+            'activa' => true,
+        ]);
+        $administrador = User::factory()->create(['rol' => RolUsuario::Administrador]);
+        $camara = $this->crearCamara();
+
+        // Sin plano guardado se dibuja apaisado 16:9, como antes.
+        $this->actingAs($administrador, 'sanctum')
+            ->getJson('/api/operacion-ahora')
+            ->assertOk()
+            ->assertJsonPath('data.planta.proporcion', 1.7778)
+            ->assertJsonFragment(['tipo' => 'camara', 'id' => $camara->id, 'contenido' => 'productos']);
+
+        $this->actingAs($administrador, 'sanctum')
+            ->putJson('/api/administracion/operacion-ahora/plano', [
+                'version_esperada' => 0,
+                'nombre' => 'Planta Agrorosario',
+                'proporcion' => 0.8,
+                'elementos' => [$this->elemento('camara', $camara->id, 'Cámara uno', 200, 200)],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.proporcion', 0.8);
+
+        // Una edición que no envía proporción conserva la vigente.
+        $this->actingAs($administrador, 'sanctum')
+            ->putJson('/api/administracion/operacion-ahora/plano', [
+                'version_esperada' => 1,
+                'nombre' => 'Planta Agrorosario',
+                'elementos' => [$this->elemento('camara', $camara->id, 'Cámara uno', 400, 400)],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.proporcion', 0.8)
+            ->assertJsonPath('data.version', 2);
+
+        $this->actingAs($administrador, 'sanctum')
+            ->getJson('/api/operacion-ahora')
+            ->assertOk()
+            ->assertJsonPath('data.planta.proporcion', 0.8);
+
+        $this->actingAs($administrador, 'sanctum')
+            ->putJson('/api/administracion/operacion-ahora/plano', [
+                'version_esperada' => 2,
+                'nombre' => 'Planta Agrorosario',
+                'proporcion' => 3,
+                'elementos' => [],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['proporcion']);
+    }
+
     public function test_rechaza_sobrescrituras_con_una_version_antigua(): void
     {
         $administrador = User::factory()->create(['rol' => RolUsuario::Administrador]);
