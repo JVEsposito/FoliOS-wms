@@ -23,7 +23,7 @@ class IngresoPorteriaController extends Controller
         $filtros = $request->validate(['fecha' => ['nullable', 'date_format:Y-m-d'], 'buscar' => ['nullable', 'string', 'max:100'], 'pendientes' => ['nullable', 'boolean']]);
         $fecha = $filtros['fecha'] ?? CarbonImmutable::now('America/Santiago')->toDateString();
         $desde = CarbonImmutable::parse($fecha, 'America/Santiago')->startOfDay()->utc();
-        $hasta = $desde->setTimezone('America/Santiago')->addDay()->utc();
+        $hasta = $desde->setTimezone('America/Santiago')->addDay()->startOfDay()->utc();
         $consulta = IngresoPorteria::query();
         if ($request->boolean('pendientes')) {
             $consulta->whereNull('anulado_at')->whereNull('revisado_at');

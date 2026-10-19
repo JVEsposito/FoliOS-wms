@@ -84,6 +84,11 @@ class RomanaPorteriaApiTest extends TestCase
         }
         $this->assertStringNotContainsString('FUERA-DEL-DIA', $pdf);
         $this->getJson('/api/romana/porteria/diario.pdf?fecha=incorrecta')->assertUnprocessable();
+        $this->ingreso(['ingreso_at' => CarbonImmutable::parse('2026-09-06 04:30:00', 'UTC'), 'cliente_nombre' => 'DENTRO-DST']);
+        $this->ingreso(['ingreso_at' => CarbonImmutable::parse('2026-09-07 03:30:00', 'UTC'), 'cliente_nombre' => 'FUERA-DST']);
+        $pdfCambioHora = $this->get('/api/romana/porteria/diario.pdf?fecha=2026-09-06')->assertOk()->getContent();
+        $this->assertStringContainsString('DENTRO-DST', $pdfCambioHora);
+        $this->assertStringNotContainsString('FUERA-DST', $pdfCambioHora);
     }
 
     public function test_pdf_vacio_y_registro_con_muchas_guias_paginan_sin_perder_el_final(): void

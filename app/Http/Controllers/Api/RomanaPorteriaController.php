@@ -37,7 +37,7 @@ class RomanaPorteriaController extends Controller
     {
         $datos = $request->validate(['fecha' => ['required', 'date_format:Y-m-d']]);
         $desde = CarbonImmutable::parse($datos['fecha'], 'America/Santiago')->startOfDay();
-        $hasta = $desde->addDay();
+        $hasta = $desde->addDay()->startOfDay();
         $ingresos = IngresoPorteria::query()->where('ingreso_at', '>=', $desde->utc())->where('ingreso_at', '<', $hasta->utc())->orderBy('ingreso_at')->orderBy('id')->get();
 
         return response($pdf->generar($datos['fecha'], $ingresos))
