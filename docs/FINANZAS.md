@@ -90,6 +90,23 @@ reglas del tarifario (días libres, mínimo, corte), no la captura.
 
 ## Captura
 
+Las cajas y el tipo de bulto del prefrío corresponden al momento del servicio. Se
+reconstruyen desde el antes del primer repaletizaje confirmado posterior, incluso si la
+primera captura financiera ocurre después de varios repaletizajes. Los anulados no
+participan en esa reconstrucción.
+
+La estadía mantiene una sola custodia cuando un origen aporta cajas y conserva un saldo.
+Sus medidas principales describen el bulto al ingreso; `datos.tramos` guarda las cantidades
+y el tipo de bulto de cada intervalo `[desde_at, hasta_at)`, con la referencia al
+repaletizaje que inicia cada cambio. El último término es nulo mientras la custodia esté
+abierta. También se consideran los aumentos de un folio conservado. Los cambios simultáneos
+no generan tramos de duración cero. Oficina muestra estos tramos en el historial.
+
+Al desplegar la corrección histórica, la migración deja pendientes las conciliaciones de
+Prefrío y Estadía. La próxima captura programada reconstruye ambas fuentes y anula las
+estadías duplicadas anteriores, conservando sus versiones. Se puede adelantar con
+`php artisan finanzas:capturar-hechos --conciliar`; repetirlo sin cambios no agrega versiones.
+
 - Corre cada 10 minutos (`finanzas:capturar-hechos --programada` en `routes/console.php`)
   y también a pedido con **Leer ahora** (requiere rol Administrador con el módulo).
 - Cada fuente lee lo que cambió desde su última marca, repasando 15 minutos hacia atrás.
