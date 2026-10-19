@@ -134,11 +134,11 @@ final class EsquemaFinanzas
 
     /**
      * Candado de la base de Finanzas (GET_LOCK de MySQL): no escribe en ninguna tabla y se
-     * libera solo si el proceso termina.
+     * libera solo si el proceso termina. Sin espera, falla si otro proceso lo tiene.
      */
-    public function tomarCandado(string $nombre): bool
+    public function tomarCandado(string $nombre, int $esperaSegundos = 0): bool
     {
-        return (int) $this->conexion()->scalar('SELECT GET_LOCK(?, 0)', [$this->nombreCandado($nombre)]) === 1;
+        return (int) $this->conexion()->scalar('SELECT GET_LOCK(?, ?)', [$this->nombreCandado($nombre), max(0, $esperaSegundos)]) === 1;
     }
 
     public function liberarCandado(string $nombre): void

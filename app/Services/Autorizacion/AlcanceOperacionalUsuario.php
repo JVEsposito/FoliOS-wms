@@ -241,6 +241,22 @@ class AlcanceOperacionalUsuario
         );
     }
 
+    /** Cerrar un mes de la prefactura y decidir sus diferencias: quien administra el tarifario. */
+    public function puedeCerrarPrefacturaFinanzas(User $usuario): bool
+    {
+        return $this->rolActivoEnModulo(
+            $usuario,
+            [RolUsuario::Administrador],
+            CatalogoModulosAcceso::OFICINA_FINANZAS_PREFACTURA,
+        );
+    }
+
+    /** Reabrir el último mes cerrado: solo un Administrador, aunque un perfil le dé el módulo a otro rol. */
+    public function puedeReabrirPrefacturaFinanzas(User $usuario): bool
+    {
+        return $usuario->rol === RolUsuario::Administrador && $this->puedeCerrarPrefacturaFinanzas($usuario);
+    }
+
     public function contenidoForzadoCreacion(User $usuario): ?ContenidoCamara
     {
         return match ($usuario->rol) {
@@ -1082,6 +1098,8 @@ class AlcanceOperacionalUsuario
             'puede_consultar_finanzas' => $this->puedeConsultarFinanzas($usuario),
             'puede_capturar_hechos_finanzas' => $this->puedeCapturarHechosFinanzas($usuario),
             'puede_gestionar_tarifas_finanzas' => $this->puedeGestionarTarifasFinanzas($usuario),
+            'puede_cerrar_prefactura_finanzas' => $this->puedeCerrarPrefacturaFinanzas($usuario),
+            'puede_reabrir_prefactura_finanzas' => $this->puedeReabrirPrefacturaFinanzas($usuario),
             'puede_consultar_prefrio' => $this->puedeConsultarPrefrio($usuario),
             'puede_consultar_inspeccion_sag' => $this->puedeConsultarInspeccionSag($usuario),
             'puede_gestionar_inspeccion_sag' => $this->puedeGestionarInspeccionSag($usuario),

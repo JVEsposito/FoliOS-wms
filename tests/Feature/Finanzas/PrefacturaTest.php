@@ -7,20 +7,17 @@ use App\Finanzas\Models\Hecho;
 use App\Finanzas\Models\Moneda;
 use App\Finanzas\Periodo;
 use App\Finanzas\Prefactura\CalculadoraPrefactura;
-use App\Finanzas\Tarifario\GestorTarifas;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /** Reglas de la prefactura en paralelo: qué se cobra, cuántos días y con qué precio. */
 class PrefacturaTest extends TestCase
 {
+    use HechosDePrueba;
     use PreparaOperacionFinanzas;
     use RefreshDatabase;
-
-    private User $administrador;
 
     protected function setUp(): void
     {
@@ -202,56 +199,5 @@ class PrefacturaTest extends TestCase
     private function lineas(array $cliente): array
     {
         return array_map(fn (array $linea): array => [$linea['servicio'], $linea['unidad'], $linea['origen'], $linea['precio'], $linea['cantidad'], $linea['monto']], $cliente['lineas']);
-    }
-
-    private function precio(?string $cliente, string $servicio, string $unidad, string $precio, string $desde, bool $cerrarAnterior = false, string $moneda = 'CLP'): void
-    {
-        app(GestorTarifas::class)->crear([
-            'cliente_id' => $cliente, 'servicio' => $servicio, 'unidad' => $unidad, 'moneda' => $moneda,
-            'precio' => $precio, 'vigente_desde' => $desde, 'cerrar_anterior' => $cerrarAnterior,
-        ], $this->administrador);
-    }
-
-    /**
-     * @param  array<string, int|float>  $medidas
-     * @param  array<string, mixed>  $datos
-     */
-    private function hecho(string $fuente, ?string $cliente, string $ocurrido, array $medidas, ?string $termina = null, array $datos = [], ?string $origen = null, string $estado = Hecho::ESTADO_VIGENTE): Hecho
-    {
-        $inicio = CarbonImmutable::parse($ocurrido, 'America/Santiago');
-
-        return Hecho::query()->create([
-            'fuente' => $fuente,
-            'origen_id' => $origen ?? (string) Str::uuid(),
-            'version' => 1,
-            'vigente' => true,
-            'estado' => $estado,
-            'motivo_version' => Hecho::MOTIVO_CAPTURA,
-            'cliente_id' => $cliente,
-            'cliente_nombre' => $cliente === null ? 'EXPORTADORA SIN VINCULAR' : null,
-            'referencia' => 'REF-'.Str::upper(Str::random(5)),
-            'ocurrido_at' => $inicio->utc(),
-            'termina_at' => $termina === null ? null : CarbonImmutable::parse($termina, 'America/Santiago')->utc(),
-            'fecha_operacional' => $inicio->toDateString(),
-            'medidas' => $medidas,
-            'datos' => $datos,
-            'huella' => str_repeat('0', 64),
-            'capturado_at' => now(),
-        ]);
-    }
-
-    /**
-     * @param  array<string, int>  $medidas
-     * @param  array<string, mixed>  $datos
-     * @param  list<array{0: array<string, int>, 1: string, 2: ?string}>  $tramos  [medidas, desde, hasta]
-     */
-    private function estadia(string $cliente, string $origen, string $ingreso, ?string $salida, array $medidas, array $datos = [], array $tramos = []): void
-    {
-        $iso = fn (?string $hora): ?string => $hora === null ? null : CarbonImmutable::parse($hora, 'America/Santiago')->utc()->toIso8601String();
-        $tramos = $tramos === [] ? [[$medidas, $ingreso, $salida]] : $tramos;
-        $this->hecho('estadia', $cliente, $ingreso, $medidas, $salida, [
-            ...$datos,
-            'tramos' => array_map(fn (array $tramo): array => ['desde_at' => $iso($tramo[1]), 'hasta_at' => $iso($tramo[2]), 'medidas' => $tramo[0], 'repaletizaje_inicio' => null], $tramos),
-        ], $origen);
     }
 }

@@ -102,7 +102,7 @@ class PrefacturaApiTest extends TestCase
         $zip->close();
         $this->assertStringContainsString('PRODUCTOR DE PRUEBA SPA', $hoja.$corte);
         $this->assertStringContainsString('por kilo neto', $hoja.$corte);
-        $this->assertStringContainsString('valorizado hasta el 30-11-2026 (mes completo)', $hoja.$corte);
+        $this->assertStringContainsString('valorizado hasta el 30-11-2026 (mes completo, sin cerrar)', $hoja.$corte);
     }
 
     public function test_la_oficina_de_prefactura_esta_en_finanzas(): void
@@ -112,5 +112,9 @@ class PrefacturaApiTest extends TestCase
         $this->assertStringContainsString('<h1>Prefactura</h1>', $html);
         $this->assertStringContainsString('data-office-key="finanzas-prefactura"', $html);
         $this->assertStringContainsString('href="/oficina/finanzas/tarifario"', $html);
+        // Cierre mensual: estado del mes, diferencias por revisar y sus diálogos.
+        foreach (['prebillingClosure', 'prebillingReview', 'prebillingDifferences', 'prebillingCloseDialog', 'prebillingReasonDialog'] as $id) {
+            $this->assertStringContainsString('id="'.$id.'"', $html);
+        }
     }
 }

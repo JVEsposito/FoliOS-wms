@@ -22,7 +22,8 @@ use Throwable;
  */
 final class ServicioCapturaHechos
 {
-    private const CANDADO = 'captura-hechos';
+    /** Mientras una lectura lo tiene, nadie más registra hechos: el cierre lo toma para congelar el mes. */
+    public const CANDADO = 'captura-hechos';
 
     /** Una vez al día se revisa que los hechos vigentes sigan existiendo en la operación. */
     private const HORAS_ENTRE_CONCILIACIONES = 24;

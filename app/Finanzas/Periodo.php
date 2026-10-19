@@ -10,6 +10,8 @@ use Carbon\CarbonImmutable;
  */
 final class Periodo
 {
+    private const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
     private function __construct(
         public readonly CarbonImmutable $inicio,
         public readonly CarbonImmutable $fin,
@@ -34,6 +36,23 @@ final class Periodo
     public function clave(): string
     {
         return $this->inicio->format('Y-m');
+    }
+
+    /** «noviembre de 2026». */
+    public function nombre(): string
+    {
+        return self::MESES[$this->inicio->month - 1].' de '.$this->inicio->year;
+    }
+
+    public function siguiente(): self
+    {
+        return self::mes($this->inicio->addMonthNoOverflow()->format('Y-m'));
+    }
+
+    /** ¿Terminó? En hora de planta, desde el primer día del mes siguiente. */
+    public function terminado(): bool
+    {
+        return $this->fin->toDateString() < self::hoy();
     }
 
     /** Primer instante del mes, en UTC. */

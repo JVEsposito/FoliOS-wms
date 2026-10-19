@@ -57,6 +57,9 @@ final class CalculadoraPrefactura
 
     private bool $conDetalle = false;
 
+    /** @var (callable(array<string, mixed>): void)|null recibe lo que aporta cada hecho a cada línea */
+    private $alAportar = null;
+
     private DateTimeZone $zona;
 
     public function __construct(
@@ -67,11 +70,17 @@ final class CalculadoraPrefactura
     ) {}
 
     /**
+     * Con $alAportar, cada hecho valorizado se informa una vez por línea, con su cantidad y sus
+     * días: así se congela un mes al cerrarlo, o se compara con lo congelado, sin acumular en
+     * memoria el detalle de todo el mes.
+     *
+     * @param  (callable(array{cliente_id: string, tarifa_id: int, moneda: string, hecho_id: int, fuente: string, origen_id: string, version: int, referencia: ?string, desde: string, hasta: string, dias: int, cantidad: string}): void)|null  $alAportar
      * @return array{periodo: array{mes: string, inicio: string, fin: string}, corte: ?string, a_la_fecha: bool, clientes: list<array<string, mixed>>, totales: list<array<string, mixed>>, sin_cliente: list<array<string, mixed>>, resumen: array<string, int>}
      */
-    public function calcular(Periodo $periodo, ?string $cliente = null, bool $conDetalle = false): array
+    public function calcular(Periodo $periodo, ?string $cliente = null, bool $conDetalle = false, ?callable $alAportar = null): array
     {
         $this->reiniciar($conDetalle);
+        $this->alAportar = $alAportar;
         $this->zona = new DateTimeZone((string) config('app.operational_timezone'));
         $hoy = Periodo::hoy();
         $inicio = $periodo->inicio->toDateString();
@@ -88,7 +97,7 @@ final class CalculadoraPrefactura
                 ->where('estado', Hecho::ESTADO_VIGENTE)
                 ->when($cliente !== null, fn ($consulta) => $consulta->where('cliente_id', $cliente))
                 ->toBase()
-                ->select(['id', 'fuente', 'origen_id', 'cliente_id', 'cliente_nombre', 'referencia', 'ocurrido_at', 'termina_at', 'fecha_operacional', 'medidas', 'datos']);
+                ->select(['id', 'fuente', 'origen_id', 'version', 'cliente_id', 'cliente_nombre', 'referencia', 'ocurrido_at', 'termina_at', 'fecha_operacional', 'medidas', 'datos']);
 
             foreach ($hechos->lazyById(1000, 'id') as $fila) {
                 if ($fila->cliente_id === null) {
@@ -321,6 +330,23 @@ final class CalculadoraPrefactura
         $linea['cantidad'] = $linea['cantidad']->plus($cantidad);
         $linea['dias'] += $dias;
         $linea['hechos'][$fila->id] = true;
+
+        if ($this->alAportar !== null) {
+            ($this->alAportar)([
+                'cliente_id' => (string) $fila->cliente_id,
+                'tarifa_id' => (int) $tarifa->id,
+                'moneda' => (string) $tarifa->moneda,
+                'hecho_id' => (int) $fila->id,
+                'fuente' => (string) $fila->fuente,
+                'origen_id' => (string) $fila->origen_id,
+                'version' => (int) $fila->version,
+                'referencia' => $fila->referencia,
+                'desde' => $desde,
+                'hasta' => $hasta ?? $desde,
+                'dias' => $dias,
+                'cantidad' => (string) $cantidad,
+            ]);
+        }
 
         if ($this->conDetalle) {
             $linea['detalle'][$fila->id] ??= [

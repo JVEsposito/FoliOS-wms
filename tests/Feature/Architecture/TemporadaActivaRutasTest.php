@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Architecture;
 
+use App\Finanzas\Models\Diferencia;
 use App\Finanzas\Models\Moneda;
 use App\Finanzas\Models\Tarifa;
 use App\Http\Middleware\AsegurarTemporadaActivaDelRegistro;
@@ -72,6 +73,7 @@ class TemporadaActivaRutasTest extends TestCase
         // Finanzas no escribe registros operacionales: un precio rige por sus propias fechas.
         Tarifa::class => 'precio con vigencia por fechas; un contrato de temporada se carga con sus fechas',
         Moneda::class => 'configuración global de monedas de Finanzas',
+        Diferencia::class => 'decisión sobre un mes cerrado de la prefactura: se rige por el mes calendario, no por la temporada',
     ];
 
     public function test_cada_modelo_en_una_ruta_de_escritura_decide_su_temporada(): void

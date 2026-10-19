@@ -2,10 +2,9 @@
 
 namespace App\Finanzas\Http\Controllers;
 
-use App\Finanzas\Http\PresentadorHechos;
-use App\Finanzas\Models\Lectura;
+use App\Finanzas\Http\RespuestaPrefactura;
 use App\Finanzas\Periodo;
-use App\Finanzas\Prefactura\CalculadoraPrefactura;
+use App\Finanzas\Prefactura\LibroPrefactura;
 use App\Http\Controllers\Controller;
 use App\Services\Existencias\GeneradorLibroXlsx;
 use Carbon\CarbonImmutable;
@@ -13,23 +12,20 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
-/** Prefactura en paralelo: el mes valorizado por cliente, para compararlo con la facturación. */
+/**
+ * Prefactura en paralelo: el mes valorizado por cliente, para compararlo con la facturación. Un
+ * mes cerrado se lee congelado; uno abierto se calcula al consultarlo.
+ */
 class PrefacturaFinanzasController extends Controller
 {
     public function __construct(
-        private readonly CalculadoraPrefactura $calculadora,
-        private readonly PresentadorHechos $presentador,
+        private readonly LibroPrefactura $libro,
+        private readonly RespuestaPrefactura $respuesta,
     ) {}
 
     public function index(Request $request): JsonResponse
     {
-        $prefactura = $this->calculadora->calcular($this->periodo($request));
-        $ultima = Lectura::query()->latest('iniciada_at')->latest('id')->first();
-
-        return response()->json([
-            ...$prefactura,
-            'ultima_captura' => $ultima ? $this->presentador->lectura($ultima) : null,
-        ]);
+        return response()->json($this->respuesta->mes($request, $this->periodo($request)));
     }
 
     /**
@@ -47,35 +43,32 @@ class PrefacturaFinanzasController extends Controller
             'tarifa.integer' => 'La línea indicada no es válida.',
             'tarifa.min' => 'La línea indicada no es válida.',
         ])->validate();
-        $prefactura = $this->calculadora->calcular($this->periodo($request), (string) $datos['cliente'], conDetalle: true);
-        $cliente = $prefactura['clientes'][0] ?? null;
-        if ($cliente !== null && isset($datos['tarifa'])) {
-            $cliente['lineas'] = array_map(
-                fn (array $linea): array => $linea['tarifa_id'] === (int) $datos['tarifa'] ? $linea : [...$linea, 'detalle' => []],
-                $cliente['lineas'],
-            );
-        }
+        $periodo = $this->periodo($request);
+        $cliente = $this->libro->detalle($periodo, (string) $datos['cliente'], isset($datos['tarifa']) ? (int) $datos['tarifa'] : null);
 
         return response()->json([
-            'periodo' => $prefactura['periodo'],
-            'corte' => $prefactura['corte'],
+            'periodo' => $periodo->aArreglo(),
             'data' => $cliente,
         ]);
     }
 
-    /** Una fila por línea valorizada y por pendiente, para comparar en una planilla. */
+    /** Una fila por línea valorizada, por ajuste y por pendiente, para comparar en una planilla. */
     public function exportar(Request $request, GeneradorLibroXlsx $excel): BinaryFileResponse
     {
         $periodo = $this->periodo($request);
-        $prefactura = $this->calculadora->calcular($periodo);
-        $corte = $prefactura['corte'] === null
-            ? 'mes futuro, sin valorizar'
-            : 'valorizado hasta el '.CarbonImmutable::parse($prefactura['corte'])->format('d-m-Y').($prefactura['a_la_fecha'] ? ' (a la fecha)' : ' (mes completo)');
+        $prefactura = $this->libro->mes($periodo);
+        $cierre = $prefactura['cierre'];
+        $corte = match (true) {
+            $cierre !== null => 'mes cerrado el '.CarbonImmutable::parse($cierre['cerrado_at'])->setTimezone((string) config('app.operational_timezone'))->format('d-m-Y H:i')
+                .' por '.($cierre['cerrado_por'] ?? 'usuario sin nombre').' (versión '.$cierre['version'].')',
+            $prefactura['corte'] === null => 'mes futuro, sin valorizar',
+            default => 'valorizado hasta el '.CarbonImmutable::parse($prefactura['corte'])->format('d-m-Y').($prefactura['a_la_fecha'] ? ' (a la fecha)' : ' (mes completo, sin cerrar)'),
+        };
         $ruta = $excel->generar('Prefactura en paralelo '.$periodo->clave(), [
             ['clave' => 'cliente', 'titulo' => 'Cliente', 'ancho' => 34],
             ['clave' => 'servicio', 'titulo' => 'Servicio', 'ancho' => 26],
             ['clave' => 'unidad', 'titulo' => 'Unidad de cobro', 'ancho' => 22],
-            ['clave' => 'origen', 'titulo' => 'Precio', 'ancho' => 16],
+            ['clave' => 'origen', 'titulo' => 'Precio', 'ancho' => 26],
             ['clave' => 'moneda', 'titulo' => 'Moneda', 'ancho' => 9],
             ['clave' => 'precio', 'titulo' => 'Precio unitario', 'ancho' => 15, 'tipo' => 'numero'],
             ['clave' => 'cantidad', 'titulo' => 'Cantidad', 'ancho' => 14, 'tipo' => 'numero'],
@@ -95,11 +88,7 @@ class PrefacturaFinanzasController extends Controller
 
     private function periodo(Request $request): Periodo
     {
-        $datos = validator($request->query(), ['mes' => ['nullable', 'date_format:Y-m']], [
-            'mes.date_format' => 'El mes debe tener el formato AAAA-MM.',
-        ])->validate();
-
-        return Periodo::mes($datos['mes'] ?? null);
+        return $this->respuesta->periodo($request->query());
     }
 
     /**
@@ -122,6 +111,21 @@ class PrefacturaFinanzasController extends Controller
                     'hechos' => $linea['hechos'],
                     'monto' => $linea['monto'],
                     'observacion' => null,
+                ];
+            }
+            foreach ($cliente['ajustes'] as $ajuste) {
+                yield [
+                    'cliente' => $cliente['cliente_nombre'],
+                    'servicio' => $ajuste['servicio_nombre'],
+                    'unidad' => $ajuste['unidad_nombre'],
+                    'origen' => 'Ajuste de '.Periodo::mes($ajuste['mes_origen'])->nombre(),
+                    'moneda' => $ajuste['moneda'],
+                    'precio' => $ajuste['precio'],
+                    'cantidad' => $ajuste['cantidad'],
+                    'dias' => $ajuste['dias'] ?: null,
+                    'hechos' => null,
+                    'monto' => $ajuste['monto'],
+                    'observacion' => 'Diferencia aceptada después del cierre'.($ajuste['motivo'] ? ': '.$ajuste['motivo'] : '.'),
                 ];
             }
             foreach ($cliente['sin_precio'] as $pendiente) {
