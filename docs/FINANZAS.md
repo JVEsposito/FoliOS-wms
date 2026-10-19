@@ -4,8 +4,8 @@ Finanzas valoriza lo que registra la operación **sin modificarla**. La regla es
 la operación no conoce a Finanzas y las áreas operativas no manejan costos; Finanzas
 «bebe» de lo que ya funciona.
 
-Este documento cubre el primer paso: la base propia de Finanzas y la **captura de hechos
-valorizables**. El tarifario y la prefactura en paralelo se construyen sobre estos hechos.
+Este documento cubre la base propia de Finanzas, la **captura de hechos valorizables** y el
+**tarifario**. La prefactura en paralelo se construye sobre ambos.
 
 ## Cómo se separa de la operación
 
@@ -15,7 +15,7 @@ valorizables**. El tarifario y la prefactura en paralelo se construyen sobre est
 | Lectura de la operación | Conexión `operacion_lectura` | Sesión `READ ONLY`: la base rechaza cualquier escritura. |
 | Código | `app/Finanzas` | Nada fuera de `app/Finanzas` lo referencia. |
 | Rutas | `routes/finanzas.php` (`/api/finanzas/...`) | Leen la operación y escriben solo en la base de Finanzas. |
-| Oficina | Administración → Finanzas → *Hechos valorizables* | Módulo de acceso `finanzas.prefactura`. |
+| Oficina | Administración → Finanzas → *Hechos valorizables* y *Tarifario* | Módulo de acceso `finanzas.prefactura`. |
 
 Las tablas de Finanzas no tienen llaves foráneas hacia la operación: guardan el
 identificador del registro operativo y una copia de lo leído (cliente, temporada,
@@ -138,6 +138,60 @@ Variables de entorno (todas opcionales):
 | `FINANZAS_CAPTURA_HABILITADA` | `true` | Pausa la captura programada (la manual sigue disponible). |
 | `FINANZAS_CAPTURA_MARGEN_MINUTOS` | `15` | Repaso hacia atrás de cada lectura. |
 
+## Tarifario
+
+Precios por **servicio** y **unidad de cobro**, para un cliente o como **tarifa general**,
+con vigencia. Vive en la base de Finanzas (`fin_monedas`, `fin_tarifas` y
+`fin_tarifas_eventos`): definir un precio no modifica la operación. Oficina:
+Administración → Finanzas → *Tarifario*.
+
+| Concepto | Regla |
+| --- | --- |
+| Servicio | Cada fuente de hechos: recepción en romana, validación, fruta embalada, prefrío, estadía en cámara, repaletizaje y despacho. |
+| Unidad de cobro | Una medida de esa fuente: kilo neto, envase, recepción, bulto, pallet, saldo, caja, repaletizaje o folio. En la estadía es por día («por pallet y día»). Cada cliente puede tener su propia unidad. |
+| Precio | Decimal exacto, hasta 12 enteros y 6 decimales, en una moneda configurada. |
+| Vigencia | Desde y, opcionalmente, hasta: fechas de planta, ambas inclusivas. |
+
+- **Precio propio o tarifa general.** En un día y un servicio, un cliente con algún precio
+  propio usa solo los suyos; si no tiene, usa la tarifa general de ese servicio. Si la
+  tarifa general cobra el almacenaje por bulto y día y un cliente tiene precio propio por
+  caja y día, a ese cliente se le cobra solo por caja (`ResolutorTarifas`).
+- **Sin cruces.** Los precios de un mismo cliente (o de la tarifa general), servicio y
+  unidad no se superponen.
+- **Sin doble cobro.** En un servicio no conviven el cobro por bulto y el cobro por pallet
+  o saldo, porque un bulto es un pallet o un saldo. Pallet y saldo juntos sí: se cobran por
+  separado.
+- **Reemplazo.** Al crear un precio se puede terminar el día anterior el que regía: el de
+  la misma unidad o, al pasar de bulto a pallet y saldo, el de bulto. Un precio nuevo con
+  término no corta lo que el anterior cubría después: en ese caso se informa el cruce.
+- **Historial.** Crear, editar, cerrar al reemplazar y anular quedan en
+  `fin_tarifas_eventos`, con usuario y fecha. Un precio no se borra: se anula con motivo y
+  deja de cobrarse. El cliente, el servicio y la unidad no se editan: se anula y se crea
+  otro precio.
+- **Monedas configurables**: código, nombre, símbolo, decimales de los montos y si está
+  activa. No se precargan, porque los datos de Finanzas que el registro de migraciones no
+  conoce detienen `migrate` (ver *Instalación en el servidor*); la oficina ofrece CLP, UF y
+  USD para agregarlas con un clic. Una moneda inactiva conserva sus precios, pero no se
+  ofrece para precios nuevos.
+- **Almacenaje**: se cobra por día o fracción (cada día calendario de planta en que el
+  bulto estuvo en cámara, aunque sea una parte) y sin días libres. Lo aplica la prefactura,
+  día a día y según los tramos de la estadía.
+- Mientras la prefactura no tenga cierre, editar un precio cambia la valorización de los
+  meses en que rige.
+
+Lo consulta quien ve Finanzas (`consultar-finanzas`); lo edita solo un Administrador con el
+módulo (`gestionar-tarifas-finanzas`).
+
+| Método | Ruta (`/api/finanzas`) | Uso |
+| --- | --- | --- |
+| GET | `/tarifas?cliente=&servicio=&estado=` | Precios, resumen, servicios, monedas y clientes. `cliente=general` filtra la tarifa general; `estado`: `actuales` (por omisión), `vigente`, `futura`, `vencida`, `anulada` o `todas`. |
+| GET | `/tarifas/efectiva?cliente=&fecha=` | Lo que se cobra a un cliente (o con la tarifa general) en cada servicio, un día. |
+| GET | `/tarifas/{id}` | Precio con su historial. |
+| POST | `/tarifas` | Crea un precio; `cerrar_anterior` reemplaza al que regía. |
+| PUT | `/tarifas/{id}` | Edita moneda, precio, vigencia y nota. |
+| POST | `/tarifas/{id}/anular` | Anula con motivo. |
+| POST / PUT | `/monedas`, `/monedas/{codigo}` | Crea o edita una moneda. |
+
 ## Instalación en el servidor
 
 1. `php artisan migrate --force` crea la base de Finanzas si el usuario de la conexión
@@ -163,8 +217,10 @@ Variables de entorno (todas opcionales):
    operativa: restaure las dos del mismo momento.
 
 4. El perfil inicial de Administrador recibe el módulo *Hechos y prefactura*. Para otros
-   usuarios, asígnelo desde Accesos (rol base Administrador para capturar a pedido; un perfil
-   de solo consulta puede ver los hechos).
+   usuarios, asígnelo desde Accesos (rol base Administrador para capturar a pedido y editar
+   el tarifario; un perfil de solo consulta puede ver los hechos y los precios).
+
+5. Antes de cargar precios, agregue las monedas en *Tarifario → Monedas*.
 
 `php artisan migrate:fresh` confirmado sobre la conexión operativa reinicia también las
 tablas de Finanzas, cuando su registro de migraciones ya está vacío. Cancelar el comando
@@ -186,8 +242,7 @@ hechos de los registros borrados quedan como *Ya no existe en la operación*.
 
 ## Próximos pasos
 
-1. Tarifario: servicios facturables por fuente y medida, precios por cliente y temporada.
-2. Prefactura en paralelo: valorización mensual por cliente para compararla con la
-   facturación actual, sin reemplazarla todavía.
-3. Cierre de prefactura y ajustes: lo que cambie después de cerrar un mes se refleja como
+1. Prefactura en paralelo: valorización mensual por cliente con los hechos del mes y el
+   tarifario, para compararla con la facturación actual sin reemplazarla todavía.
+2. Cierre de prefactura y ajustes: lo que cambie después de cerrar un mes se refleja como
    ajuste del mes siguiente, nunca editando lo cerrado.

@@ -72,6 +72,7 @@ export default defineConfig({
                 'resources/js/office-operational-integrity.js',
                 'resources/css/office-finance.css',
                 'resources/js/office-finance-facts.js',
+                'resources/js/office-finance-tariffs.js',
                 'resources/css/office-inventory-exports.css',
                 'resources/js/office-inventory-exports.js',
                 'resources/css/office-weighbridge.css',

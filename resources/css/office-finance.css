@@ -1,4 +1,4 @@
-/* Finanzas: hechos valorizables leídos de la operación (y, más adelante, tarifario y prefactura).
+/* Finanzas: hechos valorizables leídos de la operación, tarifario y, más adelante, prefactura.
    Sin «warning», «danger» ni «error» en los nombres: office-corporate.css los colorea por subcadena. */
 .fin-workspace {
     display: grid;
@@ -369,6 +369,238 @@
     color: var(--muted);
 }
 
+/* Tarifario: acciones de fila, estados de un precio, tarifa efectiva y formularios. */
+.fin-acciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+/* En la tabla de precios el cliente puede ocupar dos líneas; la vigencia y las acciones, no. */
+.fin-table--tarifas td.fin-c-cliente {
+    min-width: 160px;
+    white-space: normal;
+}
+
+.fin-table--tarifas .fin-c-vigencia {
+    white-space: nowrap;
+}
+
+.fin-table--tarifas .fin-acciones {
+    flex-wrap: nowrap;
+}
+
+.fin-table tr.is-inactiva td {
+    color: var(--muted);
+}
+
+.fin-boton {
+    margin: 0;
+    padding: 4px 10px;
+    border: 1px solid var(--line);
+    border-radius: 99px;
+    background: transparent;
+    color: var(--info-text);
+    font-size: 12px;
+    font-weight: 800;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.fin-boton:hover,
+.fin-boton:focus-visible {
+    border-color: var(--info-text);
+}
+
+.fin-boton--anular {
+    color: var(--danger-text);
+}
+
+.fin-boton--anular:hover,
+.fin-boton--anular:focus-visible {
+    border-color: var(--danger-text);
+}
+
+.fin-chip--vigente {
+    border-color: var(--success-text);
+    color: var(--success-text);
+}
+
+.fin-chip--futura {
+    border-color: var(--info-text);
+    color: var(--info-text);
+}
+
+.fin-chip--vencida {
+    color: var(--muted);
+}
+
+.fin-chip--anulada {
+    border-color: var(--danger-text);
+    color: var(--danger-text);
+}
+
+.fin-effective {
+    margin-top: 14px;
+    padding: 14px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--surface-muted, var(--panel));
+}
+
+.fin-effective__list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 10px;
+    margin: 12px 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.fin-effective__list li {
+    display: grid;
+    align-content: start;
+    gap: 4px;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--panel);
+}
+
+.fin-effective__list li > span {
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.fin-effective__list strong {
+    font-variant-numeric: tabular-nums;
+}
+
+.fin-effective__list li.is-empty strong {
+    color: var(--muted);
+}
+
+.fin-origen {
+    color: var(--muted);
+    font-size: 12px;
+    font-style: normal;
+    font-weight: 700;
+}
+
+.fin-origen--propio {
+    color: var(--info-text);
+}
+
+.fin-presets {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.fin-presets > span {
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.fin-dialog {
+    width: min(680px, calc(100vw - 32px));
+}
+
+.fin-form {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    padding: 16px;
+}
+
+.fin-form > p {
+    margin: 0;
+}
+
+.fin-form label {
+    display: grid;
+    align-content: start;
+    gap: 4px;
+}
+
+.fin-form label > span {
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.fin-form label small {
+    font-weight: 600;
+}
+
+.fin-form :is(input:not([type="checkbox"]), select, textarea) {
+    min-width: 0;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: var(--panel);
+    color: var(--text);
+    font: inherit;
+    padding: 9px 10px;
+}
+
+.fin-form textarea {
+    resize: vertical;
+}
+
+.fin-form :is(input, select):disabled {
+    opacity: .65;
+}
+
+.fin-form__wide {
+    grid-column: 1 / -1;
+}
+
+.fin-form label.fin-form__check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* office.css da a todo input ancho completo y 52 px de alto: la casilla vuelve a su tamaño. */
+.fin-form input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    min-height: 18px;
+    flex: 0 0 18px;
+    margin: 0;
+    padding: 0;
+}
+
+/* office.css colorea .form-error con una variable del tema oscuro; aquí, la del tema activo. */
+.fin-form .form-error {
+    color: var(--danger-text) !important;
+}
+
+.fin-form .form-error:empty,
+.fin-form__preview:empty {
+    display: none;
+}
+
+.fin-form label.fin-form__check > span {
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.fin-form__preview {
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.fin-form__preview.is-invalid {
+    color: var(--warning-text);
+    font-weight: 700;
+}
+
 @media (max-width: 1280px) {
     .fin-kpis {
         grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -396,12 +628,83 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
-    .fin-filters {
+    .fin-filters,
+    .fin-form,
+    .fin-effective__list {
         grid-template-columns: minmax(0, 1fr);
     }
 
     /* En celular la tabla se desplaza dentro de su contenedor, con columnas legibles. */
     .fin-table {
         min-width: 920px;
+    }
+
+    /* Los precios, en cambio, se leen como tarjetas: cliente y estado, servicio y precio. */
+    .fin-table.fin-table--tarifas {
+        min-width: 0;
+    }
+
+    .fin-table--tarifas thead {
+        display: none;
+    }
+
+    .fin-table--tarifas tbody {
+        display: grid;
+        gap: 10px;
+    }
+
+    .fin-table--tarifas tr {
+        display: grid;
+        grid-template-areas:
+            "cliente estado"
+            "servicio precio"
+            "vigencia vigencia"
+            "acciones acciones";
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 6px 12px;
+        padding: 12px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+    }
+
+    .fin-table--tarifas tr.fin-empty {
+        display: block;
+    }
+
+    /* office-folios.css fija relleno y borde de toda celda con !important. */
+    .office-app .fin-table--tarifas td {
+        padding: 0 !important;
+        border: 0 !important;
+    }
+
+    .fin-table--tarifas td.fin-c-cliente {
+        grid-area: cliente;
+        min-width: 0;
+    }
+
+    .fin-table--tarifas .fin-c-estado {
+        grid-area: estado;
+    }
+
+    .fin-table--tarifas .fin-c-servicio {
+        grid-area: servicio;
+    }
+
+    .fin-table--tarifas .fin-c-precio {
+        grid-area: precio;
+    }
+
+    .fin-table--tarifas .fin-c-vigencia {
+        grid-area: vigencia;
+        color: var(--text-secondary);
+        white-space: normal;
+    }
+
+    .fin-table--tarifas .fin-c-acciones {
+        grid-area: acciones;
+    }
+
+    .fin-table--tarifas .fin-acciones {
+        flex-wrap: wrap;
     }
 }

@@ -2,10 +2,12 @@
 
 namespace Tests\Feature\Finanzas;
 
+use App\Enums\RolUsuario;
 use App\Finanzas\Captura\ServicioCapturaHechos;
 use App\Finanzas\EsquemaFinanzas;
 use App\Finanzas\Models\Hecho;
 use App\Finanzas\Models\Lectura;
+use App\Models\PerfilAcceso;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
@@ -29,6 +31,23 @@ trait PreparaOperacionFinanzas
     {
         // En pruebas, Finanzas lee por la conexión de la prueba para ver sus datos sin confirmar.
         config(['finanzas.conexion_lectura' => config('database.default')]);
+    }
+
+    /** @param  list<string>  $modulos */
+    protected function conPerfil(RolUsuario $rol, array $modulos): User
+    {
+        $perfil = PerfilAcceso::create([
+            'codigo' => 'PERFIL_'.strtoupper(bin2hex(random_bytes(3))),
+            'nombre' => 'Perfil de prueba',
+            'rol_base' => $rol,
+            'modulos' => $modulos,
+            'modulos_tablet' => [],
+            'activo' => true,
+            'predeterminado' => false,
+            'protegido' => false,
+        ]);
+
+        return User::factory()->create(['rol' => $rol, 'perfil_acceso_id' => $perfil->id, 'activo' => true]);
     }
 
     protected function capturar(?array $fuentes = null, bool $conciliar = false): Lectura

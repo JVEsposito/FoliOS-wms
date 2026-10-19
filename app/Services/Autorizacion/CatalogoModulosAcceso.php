@@ -121,7 +121,7 @@ class CatalogoModulosAcceso
                 'nombre' => 'Finanzas',
                 'descripcion' => 'Valorización de lo que registra la operación, sin modificarla.',
                 'modulos' => [
-                    $this->modulo(self::OFICINA_FINANZAS_PREFACTURA, 'Hechos y prefactura', 'Hechos valorizables leídos de la operación y prefactura por cliente.'),
+                    $this->modulo(self::OFICINA_FINANZAS_PREFACTURA, 'Hechos y prefactura', 'Hechos valorizables leídos de la operación, tarifario y prefactura por cliente.'),
                 ],
             ],
         ];
