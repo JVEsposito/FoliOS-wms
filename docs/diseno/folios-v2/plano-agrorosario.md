@@ -49,8 +49,9 @@ pt (proporción 4:5) que incluye la romana y la portería. Ajustes deliberados:
 
 Áreas confirmadas: la **zona de resguardo** lleva el indicador en vivo de **Recepción MP**.
 **Palletizaje no es REPA** (repaletizaje): queda como área de packing. Si el buffer de
-repaletizaje tiene un lugar físico, se dibuja en el editor como área REPA. «Frío», «sadema»,
-las casetas y el altillo quedan como áreas sin indicador.
+repaletizaje tiene un lugar físico, se dibuja en el editor como área REPA. «Frío», «sadema» y
+las casetas quedan como áreas sin indicador; el altillo pasa a ser la cámara «Altillo» cuando
+existe en FoliOS.
 
 ## Al desplegar
 
