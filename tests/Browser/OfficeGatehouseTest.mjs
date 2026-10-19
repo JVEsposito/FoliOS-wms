@@ -40,7 +40,7 @@ async function setup(browser, { romana = false, handler, width = 390 } = {}) {
     });
     const page = await context.newPage();
     await page.goto(`http://localhost/oficina/porteria${romana ? '?romana=1' : ''}`);
-    await page.waitForFunction(() => document.getElementById('gateCount').textContent.includes('ingresos'));
+    await page.waitForFunction(() => document.getElementById('gateCount')?.textContent.includes('ingresos'));
     return { context, page };
 }
 
@@ -60,6 +60,7 @@ test('PDA: varias guías y reintento tras recargar conservan el mismo ingreso', 
         await page.locator('#gateGuideRows input').fill('000123');
         await page.locator('#gateAddGuide').click(); await page.locator('#gateGuideRows input').last().fill('000124');
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
+        await page.screenshot({ path: resolve(root, 'storage/app/ui/oficina/porteria-mobile.png'), fullPage: true });
         await page.locator('#gateSubmit').click();
         await page.waitForFunction(() => document.getElementById('gateFormError').textContent.includes('Sin conexión'));
         await page.reload();
@@ -109,6 +110,7 @@ test('Romana: revisa pendientes y descarga el PDF de la fecha seleccionada', asy
         } });
         assert.equal(await page.locator('#gateCapture').isHidden(), true);
         assert.equal(await page.locator('#gatePending').isChecked(), true);
+        await page.screenshot({ path: resolve(root, 'storage/app/ui/oficina/porteria-romana.png'), fullPage: true });
         await page.locator('[data-review="1"]').click();
         await page.waitForFunction(() => document.getElementById('gateCount').textContent.startsWith('0 '));
         await page.locator('#gateDate').fill('2026-10-18');
