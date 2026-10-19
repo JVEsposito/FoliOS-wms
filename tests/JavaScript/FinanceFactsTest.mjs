@@ -8,6 +8,7 @@ import {
     kpiValue,
     measuresText,
     quantity,
+    tranchesText,
     versionChanges,
 } from '../../resources/js/shared/finance-facts-logic.js';
 
@@ -68,4 +69,22 @@ test('la tarjeta de cada fuente muestra su medida principal y qué cuenta', () =
     assert.equal(kpiLabel({ fuente: 'recepcion_embalada', hechos: 1, medidas: { bultos: 3 } }), 'pallets y saldos · 1 recepción');
     assert.equal(kpiValue({ fuente: 'repaletizaje', hechos: 12, medidas: { operaciones: 12 } }), '12');
     assert.equal(kpiLabel({ fuente: 'otra', hechos: 2, medidas: {} }), '2 hechos');
+});
+
+test('los tramos muestran cantidades y cambios comprensibles en el historial', () => {
+    const antes = [{ desde_at: '2026-11-01T13:00:00Z', hasta_at: null, medidas: { cajas: 120, pallets: 1 } }];
+    const despues = [
+        { ...antes[0], hasta_at: '2026-11-05T13:00:00Z' },
+        { desde_at: '2026-11-05T13:00:00Z', hasta_at: null, medidas: { cajas: 80, saldos: 1 }, repaletizaje_inicio: 'RP-1' },
+    ];
+    const text = tranchesText(despues);
+    assert.match(text, /120 cajas · 1 pallet/);
+    assert.match(text, /80 cajas · 1 saldo/);
+    assert.match(text, /abierto · RP-1/);
+    const changes = versionChanges({ datos: { tramos: antes } }, { datos: { tramos: despues } });
+    assert.equal(changes.length, 1);
+    assert.equal(changes[0].label, 'tramos');
+    assert.match(changes[0].after, /80 cajas/);
+    assert.doesNotMatch(changes[0].after, /object Object/);
+    assert.deepEqual(versionChanges({ datos: { tramos: despues } }, { datos: { tramos: despues } }), []);
 });

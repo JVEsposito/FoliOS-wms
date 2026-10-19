@@ -6,6 +6,7 @@ use App\Finanzas\Captura\ContextoCaptura;
 use App\Finanzas\Captura\FolioLeido;
 use App\Finanzas\Captura\FuenteTabla;
 use App\Finanzas\Captura\HechoCapturado;
+use App\Finanzas\Captura\HistorialBultos;
 use App\Finanzas\Models\Hecho;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
@@ -66,6 +67,7 @@ final class Prefrio extends FuenteTabla
     protected function mapear(ContextoCaptura $contexto, Collection $filas): iterable
     {
         $folios = FolioLeido::leer($contexto, $filas->pluck('folio_id')->all());
+        $historial = HistorialBultos::leer($contexto, array_keys($folios));
 
         foreach ($filas as $fila) {
             $folio = $folios[$fila->folio_id] ?? null;
@@ -76,6 +78,7 @@ final class Prefrio extends FuenteTabla
             $iniciado = ContextoCaptura::fecha($fila->iniciado_at);
             $enfriado = ContextoCaptura::fecha($fila->pendiente_verificacion_at);
             $ocurrido = ContextoCaptura::fecha($fila->finalizado_at) ?? $enfriado ?? ContextoCaptura::fecha($fila->updated_at);
+            $medidas = $historial->delServicio($folio, $ocurrido);
 
             yield new HechoCapturado(
                 origenId: $fila->id,
@@ -86,9 +89,10 @@ final class Prefrio extends FuenteTabla
                 temporadaId: $fila->temporada_id ?? $folio->temporadaId,
                 temporadaCodigo: $contexto->temporadaCodigo($fila->temporada_id ?? $folio->temporadaId),
                 referencia: $folio->numero,
-                medidas: $folio->medidas(),
+                medidas: $medidas,
                 datos: [
                     ...$folio->datos(),
+                    'tipo_bulto' => $medidas['pallets'] ? 'pallet' : 'saldo',
                     'proceso' => $fila->codigo,
                     'tunel' => $fila->tunel,
                     'minutos_enfriado' => $iniciado && $enfriado ? (int) $iniciado->diffInMinutes($enfriado) : null,

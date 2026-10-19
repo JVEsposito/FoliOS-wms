@@ -6,6 +6,7 @@ use App\Finanzas\Captura\ContextoCaptura;
 use App\Finanzas\Captura\FolioLeido;
 use App\Finanzas\Captura\FuenteHechos;
 use App\Finanzas\Captura\HechoCapturado;
+use App\Finanzas\Captura\HistorialBultos;
 use App\Finanzas\Models\Hecho;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
@@ -159,6 +160,7 @@ final class EstadiaCamara implements FuenteHechos
         }
 
         $ids = array_keys($folios);
+        $historial = HistorialBultos::leer($contexto, $ids);
         $lector = $contexto->lector;
         $movimientos = $lector->tabla('movimientos')
             ->whereIn('folio_id', $ids)
@@ -180,6 +182,7 @@ final class EstadiaCamara implements FuenteHechos
             ->whereIn('d.folio_origen_id', $ids)
             ->where('r.estado', 'confirmado')
             ->where('d.es_folio_conservado', false)
+            ->where('d.cajas_despues', 0)
             ->get(['d.folio_origen_id as folio_id', 'd.cajas_antes', 'r.confirmado_at', 'r.codigo'])
             ->groupBy('folio_id');
         // El folio conservado ya venía con su estadía; solo los folios nuevos nacen aquí.
@@ -219,7 +222,7 @@ final class EstadiaCamara implements FuenteHechos
             );
 
             foreach ($this->recorrer($contexto, $folio, $eventos, $ubicaciones->get($id)) as $numero => $estadia) {
-                yield $this->hecho($contexto, $folio, $numero + 1, $estadia);
+                yield $this->hecho($contexto, $folio, $numero + 1, $estadia, $historial);
             }
         }
     }
@@ -382,20 +385,19 @@ final class EstadiaCamara implements FuenteHechos
     }
 
     /** @param  array<string, mixed>  $estadia */
-    private function hecho(ContextoCaptura $contexto, FolioLeido $folio, int $numero, array $estadia): HechoCapturado
+    private function hecho(ContextoCaptura $contexto, FolioLeido $folio, int $numero, array $estadia, HistorialBultos $historial): HechoCapturado
     {
-        $medidas = $folio->medidas();
-        if (($estadia['cajas'] ?? null) !== null && $medidas['cajas'] === 0) {
-            $medidas['cajas'] = $estadia['cajas'];
-        }
         $salida = $estadia['salida'];
+        $salida = $salida !== null && $salida->lessThan($estadia['ingreso']) ? $estadia['ingreso'] : $salida;
+        $tramos = $historial->tramos($folio, $estadia['ingreso'], $salida);
+        $medidas = $tramos[0]['medidas'] ?? $historial->delServicio($folio, $estadia['ingreso']);
 
         return new HechoCapturado(
             origenId: "{$folio->id}#{$numero}",
             // Un folio que nació en un repaletizaje anulado nunca estuvo en la planta.
             estado: $estadia['anulada'] ? Hecho::ESTADO_ANULADO : Hecho::ESTADO_VIGENTE,
             ocurridoAt: $estadia['ingreso'],
-            terminaAt: $salida !== null && $salida->lessThan($estadia['ingreso']) ? $estadia['ingreso'] : $salida,
+            terminaAt: $salida,
             clienteId: $folio->clienteId,
             clienteNombre: $folio->clienteNombre,
             temporadaId: $folio->temporadaId,
@@ -404,6 +406,8 @@ final class EstadiaCamara implements FuenteHechos
             medidas: $medidas,
             datos: [
                 ...$folio->datos(),
+                'tipo_bulto' => $medidas['pallets'] ? 'pallet' : 'saldo',
+                'tramos' => $tramos,
                 'estadia' => $numero,
                 'camara_ingreso' => $estadia['camara'],
                 'ingreso_estimado' => $estadia['ingreso_estimado'],
