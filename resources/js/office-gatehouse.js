@@ -18,8 +18,10 @@ function message(text) { byId('gateStatus').textContent = text; }
 function errorText(error) { return Object.values(error.data?.errors || {}).flat()[0] || error.message || 'No fue posible completar la operación.'; }
 async function api(path, options = {}) {
     let response;
-    try { response = await fetch(path, { ...options, headers: { Accept: 'application/json', Authorization: `Bearer ${token}`, ...(options.body ? { 'Content-Type': 'application/json' } : {}) }, cache: 'no-store' }); }
+    const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 15000);
+    try { response = await fetch(path, { ...options, signal: controller.signal, headers: { Accept: 'application/json', Authorization: `Bearer ${token}`, ...(options.body ? { 'Content-Type': 'application/json' } : {}) }, cache: 'no-store' }); }
     catch { throw new Error('Sin conexión. El ingreso aún no está confirmado; puede reintentar sin duplicarlo.'); }
+    finally { clearTimeout(timeout); }
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
         if (response.status === 401) { byId('officeAccess').classList.remove('is-hidden'); byId('officeApp').classList.add('is-hidden'); }
@@ -85,6 +87,10 @@ async function load() {
 }
 async function start(user) {
     identity = user;
+    pending = null; editing = null; form.reset(); byId('gateFields').disabled = false;
+    byId('gateGuideRows').replaceChildren(); addGuide(); toggleFields();
+    byId('gateFormTitle').textContent = 'Nuevo ingreso'; byId('gateSubmit').textContent = 'Registrar ingreso'; byId('gateCancelEdit').hidden = true;
+    byId('gateCorrectionRow').hidden = true; fields.motivo_correccion.disabled = true; fields.motivo_correccion.required = false;
     if (!identity?.capacidades?.puede_consultar_porteria) throw new Error('Su perfil no tiene acceso a Portería.');
     byId('officeAccess').classList.add('is-hidden'); byId('officeApp').classList.remove('is-hidden');
     byId('officeUserName').textContent = identity.nombre; byId('officeUserRole').textContent = identity.rol.replaceAll('_', ' ');
@@ -94,7 +100,7 @@ async function start(user) {
     byId('gateDate').value = gatehouseDay(new Date(catalogs.ahora));
     await load();
     let saved; try { saved = JSON.parse(sessionStorage.getItem(draftKey()) || 'null'); } catch { saved = null; }
-    if (saved?.operacion_id) { fill(saved); savePending(saved); message('Hay un intento sin confirmar. Reintente el mismo ingreso para comprobar si ya quedó registrado.'); }
+    if (saved?.operacion_id && Array.isArray(saved.guias) && typeof saved.patente === 'string') { fill(saved); savePending(saved); message('Hay un intento sin confirmar. Reintente el mismo ingreso para comprobar si ya quedó registrado.'); }
 }
 byId('officeLoginForm').addEventListener('submit', async (event) => {
     event.preventDefault(); byId('officeLoginError').textContent = '';

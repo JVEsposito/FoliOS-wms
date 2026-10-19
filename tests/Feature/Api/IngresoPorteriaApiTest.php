@@ -7,6 +7,8 @@ use App\Models\Cliente;
 use App\Models\IngresoPorteria;
 use App\Models\PerfilAcceso;
 use App\Models\User;
+use App\Services\Autorizacion\IdentidadOficina;
+use App\Services\Autorizacion\InicioOficina;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -139,7 +141,10 @@ class IngresoPorteriaApiTest extends TestCase
         $this->postJson('/api/porteria/ingresos', $this->datos())->assertForbidden();
         $this->actingAs(User::factory()->create(['rol' => RolUsuario::GuardiaPorteria, 'activo' => false]), 'sanctum');
         $this->getJson('/api/porteria/ingresos')->assertForbidden();
-        $this->actingAs(User::factory()->create(['rol' => RolUsuario::OperadorRomana]), 'sanctum');
+        $romana = User::factory()->create(['rol' => RolUsuario::OperadorRomana]);
+        $this->actingAs($romana, 'sanctum');
+        $identidad = app(IdentidadOficina::class)->para($romana);
+        $this->assertSame('/oficina/porteria', app(InicioOficina::class)->resolver($identidad, '/oficina/porteria'));
         $this->getJson('/api/porteria/ingresos')->assertOk();
         $this->postJson('/api/porteria/ingresos', $this->datos())->assertForbidden();
     }
