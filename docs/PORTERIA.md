@@ -33,3 +33,20 @@ El alta no crea recepciones, movimientos ni hechos financieros.
 Respaldar la base operativa y desplegar normalmente: `php artisan migrate --force`,
 `npm run build`, reiniciar el worker si corresponde. No hay cambios en mobile/.
 La bitácora diaria usa fecha de Chile, incluidos los cortes de medianoche.
+
+## Romana, avisos y PDF diario
+
+Romana muestra una tarjeta con los ingresos pendientes y las últimas llegadas. La consulta
+ligera corre cada 10 segundos con la ventana visible y conectada; muestra cuándo se actualizó
+y conserva la bandeja si se pierde la conexión. El aviso queda disponible aunque cambie el
+turno o llegue la medianoche: los pendientes se consultan sin limitarse al día actual.
+
+Desde «Ver ingresos y PDF diario» se revisa la bitácora. Marcar revisado guarda responsable
+y hora; no genera una recepción ni modifica pesos. Un perfil de consulta puede leer y
+exportar; no marcar revisado. Portería registra y consulta, sin permisos de Romana.
+Una corrección administrativa devuelve el ingreso a pendientes para que Romana la revise.
+
+El PDF usa la fecha de Chile seleccionada, incluye cada llegada y sus guías, responsable,
+observación y estado. Incluye los anulados señalados y los excluye de los totales; suma
+bins y bultos por separado. Repite cabeceras y divide registros largos entre páginas.
+Ambos PR apuntan a main: primero registro, luego esta integración. Desplegar ambos juntos.

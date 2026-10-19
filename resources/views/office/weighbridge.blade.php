@@ -44,6 +44,12 @@
                     </div>
                 </header>
 
+                <section class="panel weighbridge-gatehouse" id="romanaGatehouse" aria-live="polite" hidden>
+                    <div><p class="eyebrow">INGRESOS PORTERÍA</p><h2 id="romanaGatehouseCount">Consultando llegadas…</h2><p id="romanaGatehouseStatus"></p></div>
+                    <a class="secondary-button" href="/oficina/porteria?romana=1">Ver ingresos y PDF diario →</a>
+                    <ul id="romanaGatehouseRecent"></ul>
+                </section>
+
                 <div class="weighbridge-kpis">
                     <article><span>EN ROMANA · INGRESO</span><strong id="entryCount">0</strong><small>Pendientes de confirmar ingreso</small></article>
                     <article><span>PESAJE DE ENVASES</span><strong id="containerWeighingCount">0</strong><small>Recepciones con pesaje acumulativo abierto</small></article>

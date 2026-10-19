@@ -59,7 +59,7 @@ class ServicioIngresosPorteria
             $antes = $this->presentar($ingreso);
             $payload = $this->campos($datos);
             $cliente = $this->cliente($payload);
-            $ingreso->fill([...$payload, ...$cliente, 'version' => $ingreso->version + 1])->save();
+            $ingreso->fill([...$payload, ...$cliente, 'version' => $ingreso->version + 1, 'revisado_at' => null, 'revisado_por_user_id' => null, 'revisado_por_nombre' => null])->save();
             $this->evento($ingreso, 'corregido', ['antes' => $antes, 'despues' => $this->presentar($ingreso), 'motivo' => $datos['motivo_correccion']], $usuario);
 
             return $ingreso;
@@ -73,6 +73,21 @@ class ServicioIngresosPorteria
             $this->exigirVersion($ingreso, $version);
             $ingreso->forceFill(['anulado_at' => now(), 'motivo_anulacion' => $motivo, 'version' => $ingreso->version + 1])->save();
             $this->evento($ingreso, 'anulado', ['motivo' => $motivo], $usuario);
+
+            return $ingreso;
+        }, attempts: 3);
+    }
+
+    public function revisar(IngresoPorteria $ingreso, int $version, User $usuario): IngresoPorteria
+    {
+        return DB::transaction(function () use ($ingreso, $version, $usuario): IngresoPorteria {
+            $ingreso = IngresoPorteria::query()->lockForUpdate()->findOrFail($ingreso->id);
+            if ($ingreso->revisado_at !== null && $ingreso->anulado_at === null) {
+                return $ingreso;
+            }
+            $this->exigirVersion($ingreso, $version);
+            $ingreso->forceFill(['revisado_at' => now(), 'revisado_por_user_id' => $usuario->id, 'revisado_por_nombre' => $usuario->name, 'version' => $ingreso->version + 1])->save();
+            $this->evento($ingreso, 'revisado', [], $usuario);
 
             return $ingreso;
         }, attempts: 3);

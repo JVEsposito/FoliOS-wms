@@ -52,6 +52,7 @@
             <section class="panel gate-panel">
                 <h2>Bitácora diaria</h2>
                 <form id="gateFilters" class="gate-filters"><label>Fecha<input id="gateDate" name="fecha" type="date" required></label><label>Buscar<input name="buscar" type="search" placeholder="Patente, cliente, conductor o guía" maxlength="100"></label><button class="secondary-button" type="submit">Consultar</button></form>
+                <div class="gate-actions"><label id="gatePendingRow" hidden><input id="gatePending" type="checkbox"> Pendientes de cualquier fecha</label><button class="secondary-button" id="gatePdf" type="button" hidden>Descargar PDF diario</button><a class="secondary-button" id="gateBackRomana" href="/oficina/romana" hidden>Volver a Romana</a></div>
                 <p id="gateCount" aria-live="polite"></p><div id="gateEntries" class="gate-entries"></div>
                 <div class="gate-actions"><button class="secondary-button" id="gatePrev" type="button">Anterior</button><span id="gatePage"></span><button class="secondary-button" id="gateNext" type="button">Siguiente</button></div>
             </section>

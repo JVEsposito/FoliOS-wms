@@ -285,3 +285,9 @@ body {
 
 /* Con el expediente abierto, el listado cede ancho: filtros en dos filas. */
 body.has-reception-drawer .office-app .weighbridge-filters { grid-template-columns: minmax(180px, 2fr) repeat(2, minmax(132px, 1fr)); }
+
+.weighbridge-gatehouse { padding: 16px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; border-left: 4px solid var(--cyan); }
+.weighbridge-gatehouse[hidden] { display: none; }
+.weighbridge-gatehouse h2, .weighbridge-gatehouse p { margin: 4px 0; }
+.weighbridge-gatehouse ul { flex-basis: 100%; margin: 0; padding-left: 20px; }
+.weighbridge-gatehouse.gatehouse-arrival { outline: 2px solid var(--cyan); }

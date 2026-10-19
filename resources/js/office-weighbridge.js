@@ -1,3 +1,4 @@
+import { createGatehouseRomana } from './office-weighbridge-porteria';
 import { dispatchInspectionPayload } from './office-container-inspection.js';
 import { receptionSteps } from './shared/weighbridge-steps.js';
 import { loadContainerCatalog, containerLabel, calculateNetAllocation } from './office-container-catalog.js';
@@ -35,6 +36,8 @@ const state = {
     administrativeCorrection: false,
     tareCorrection: false,
 };
+
+const gatehouseRomana = createGatehouseRomana({ getToken: () => state.token });
 
 class ApiError extends Error {
     constructor(message, status, data = {}) { super(message); this.name = 'ApiError'; this.status = status; this.data = data; }
@@ -114,6 +117,7 @@ function persist(payload) {
     localStorage.setItem(keys.token, payload.token); localStorage.setItem(keys.identity, JSON.stringify(payload.usuario));
 }
 function clearSession() {
+    gatehouseRomana.stop();
     state.token = null; state.identity = null; state.receptions = []; state.selected = null;
     localStorage.removeItem(keys.token); localStorage.removeItem(keys.identity); state.poller?.stop(); state.poller = null;
     elements.app.classList.add('is-hidden'); elements.access.classList.remove('is-hidden');
@@ -808,6 +812,7 @@ byId('standardContainerLines').addEventListener('input', () => syncAdministrativ
 elements.logout.addEventListener('click', async () => { try { await api('/api/acceso-oficina', { method: 'DELETE' }); } finally { clearSession(); } });
 
 function startRefresh() {
+    gatehouseRomana.start();
     state.poller?.stop();
     state.poller = createOperationalPoller(
         () => loadReceptions({ silent: true }),

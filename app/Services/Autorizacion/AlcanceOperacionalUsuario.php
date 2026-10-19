@@ -991,6 +991,11 @@ class AlcanceOperacionalUsuario
             || $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador, RolUsuario::GuardiaPorteria], CatalogoModulosAcceso::OFICINA_PORTERIA);
     }
 
+    public function puedeRevisarPorteria(User $usuario): bool
+    {
+        return $this->puedeConsultarRomana($usuario) && ! $this->esSoloConsulta($usuario);
+    }
+
     public function puedeRegistrarPorteria(User $usuario): bool
     {
         return $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador, RolUsuario::GuardiaPorteria], CatalogoModulosAcceso::OFICINA_PORTERIA);
@@ -1022,6 +1027,7 @@ class AlcanceOperacionalUsuario
     public function capacidadesApi(User $usuario): array
     {
         return [
+            'puede_revisar_porteria' => $this->puedeRevisarPorteria($usuario),
             'puede_consultar_porteria' => $this->puedeConsultarPorteria($usuario),
             'puede_registrar_porteria' => $this->puedeRegistrarPorteria($usuario),
             'puede_administrar_porteria' => $this->puedeAdministrarPorteria($usuario),
