@@ -25,6 +25,12 @@ final class Periodo
         return new self($inicio, $inicio->endOfMonth()->startOfDay());
     }
 
+    /** Fecha de hoy en hora de planta, «Y-m-d». */
+    public static function hoy(): string
+    {
+        return CarbonImmutable::now((string) config('app.operational_timezone'))->toDateString();
+    }
+
     public function clave(): string
     {
         return $this->inicio->format('Y-m');

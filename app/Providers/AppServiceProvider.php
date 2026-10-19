@@ -248,6 +248,10 @@ class AppServiceProvider extends ServiceProvider
             fn (User $usuario): bool => $alcance->puedeCapturarHechosFinanzas($usuario),
         );
         Gate::define(
+            'gestionar-tarifas-finanzas',
+            fn (User $usuario): bool => $alcance->puedeGestionarTarifasFinanzas($usuario),
+        );
+        Gate::define(
             'reiniciar-datos-operacionales',
             fn (User $usuario): bool => $usuario->activo
                 && $usuario->rol === RolUsuario::Administrador,
