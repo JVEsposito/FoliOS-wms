@@ -41,6 +41,11 @@ test('construye alertas solo con evidencia operacional disponible', () => {
         'critical', 'critical', 'critical', 'warning', 'warning',
     ]);
     assert.ok(alerts.every((alert) => alert.evidence && alert.href && alert.action));
+    assert.deepEqual(
+        alerts.map((alert) => `${alert.source}/${alert.tab}`).sort(),
+        ['Ambiente/camaras', 'Ocupación/camaras', 'Prefrío/prefrio', 'Sincronización/personal', 'Sincronización/personal'],
+        'cada alerta declara su fuente y la pestaña donde se ve el detalle',
+    );
     assert.ok(alerts.some((alert) => alert.area === 'C3' && alert.condition === 'Ocupación crítica de cámara'));
     assert.ok(!alerts.some((alert) => alert.area === 'MAT-01'));
 });

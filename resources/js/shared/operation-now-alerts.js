@@ -18,6 +18,8 @@ function cameraAlerts(cameras = []) {
         if (camera.nivel_ocupacion === 'critica') {
             alerts.push({
                 area: camera.codigo,
+                source: 'Ocupación',
+                tab: 'camaras',
                 severity: 'critical',
                 condition: 'Ocupación crítica de cámara',
                 evidence,
@@ -27,6 +29,8 @@ function cameraAlerts(cameras = []) {
         } else if (camera.nivel_ocupacion === 'advertencia') {
             alerts.push({
                 area: camera.codigo,
+                source: 'Ocupación',
+                tab: 'camaras',
                 severity: 'warning',
                 condition: 'Ocupación alta de cámara',
                 evidence,
@@ -39,6 +43,8 @@ function cameraAlerts(cameras = []) {
         if (environment?.estado === 'vencido' || environment?.estado === 'pendiente') {
             alerts.push({
                 area: camera.codigo,
+                source: 'Ambiente',
+                tab: 'camaras',
                 severity: environment.estado === 'vencido' ? 'critical' : 'warning',
                 condition: environment.estado === 'vencido'
                     ? 'Control ambiental vencido'
@@ -63,6 +69,8 @@ function tunnelAlerts(tunnels = []) {
         if (!tunnel.operable) {
             alerts.push({
                 area: tunnel.codigo,
+                source: 'Prefrío',
+                tab: 'prefrio',
                 severity: 'warning',
                 condition: 'Túnel no operable',
                 evidence: String(tunnel.estado_operacional || 'Estado no informado').replaceAll('_', ' '),
@@ -75,6 +83,8 @@ function tunnelAlerts(tunnels = []) {
             const foreign = tunnel.proceso_otra_temporada;
             alerts.push({
                 area: tunnel.codigo,
+                source: 'Prefrío',
+                tab: 'prefrio',
                 severity: 'critical',
                 condition: 'Túnel bloqueado por proceso anterior',
                 evidence: foreign
@@ -87,9 +97,12 @@ function tunnelAlerts(tunnels = []) {
         if (process?.objetivo_excedido) {
             alerts.push({
                 area: tunnel.codigo,
+                source: 'Prefrío',
+                tab: 'prefrio',
                 severity: 'critical',
                 condition: 'Proceso fuera de tiempo objetivo',
                 evidence: `${formatNumber(process.minutos_sobre_objetivo)} min sobre el objetivo`,
+                minutes: numeric(process.minutos_sobre_objetivo),
                 href: '/oficina/prefrio',
                 action: 'Revisar proceso',
             });
@@ -108,6 +121,8 @@ function synchronizationAlerts(synchronization = {}) {
     if (conflicts > 0) {
         alerts.push({
             area: 'Sincronización',
+            source: 'Sincronización',
+            tab: 'personal',
             severity: 'critical',
             condition: 'Operaciones con conflicto',
             evidence: `${formatNumber(conflicts)} durante la jornada`,
@@ -119,6 +134,8 @@ function synchronizationAlerts(synchronization = {}) {
     if (rejected > 0) {
         alerts.push({
             area: 'Sincronización',
+            source: 'Sincronización',
+            tab: 'personal',
             severity: 'warning',
             condition: 'Operaciones rechazadas',
             evidence: `${formatNumber(rejected)} durante la jornada`,
@@ -136,6 +153,8 @@ export function buildOperationalAlerts(snapshot = {}) {
     const alerts = [
         ...(snapshot.emergencias || []).map((emergencia) => ({
             area: emergencia.camara_codigo || 'Cámara',
+            source: 'Emergencias',
+            tab: 'plano',
             severity: 'critical',
             condition: `Evacuación de emergencia activa en ${emergencia.camara_codigo || 'cámara'}`,
             evidence: emergencia.motivo || 'Evacuación declarada',
