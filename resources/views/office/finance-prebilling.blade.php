@@ -46,7 +46,23 @@
 
                 <div class="fin-status" id="prebillingStatus" role="status">Cargando…</div>
 
+                <div class="fin-cierre" id="prebillingClosure" hidden></div>
+
+                <div class="fin-revision" id="prebillingReview" hidden></div>
+
                 <div class="fin-kpis fin-kpis--datos" id="prebillingKpis" aria-label="Resumen de la prefactura"></div>
+
+                <section class="panel fin-panel" id="prebillingDifferences" aria-labelledby="prebillingDifferencesTitle" hidden>
+                    <div class="fin-panel__heading">
+                        <div><p class="eyebrow">DESPUÉS DEL CIERRE</p><h2 id="prebillingDifferencesTitle">Diferencias por revisar</h2></div>
+                        <small id="prebillingDifferencesNote">Lo que cambió en la operación o en el tarifario después de cerrar el mes. Se decide una por una.</small>
+                    </div>
+                    <div class="fin-diferencias" id="prebillingDifferencesList"></div>
+                    <details class="fin-decisiones" id="prebillingDecisions" hidden>
+                        <summary id="prebillingDecisionsTitle">Decisiones tomadas</summary>
+                        <ol class="fin-history__list" id="prebillingDecisionsList"></ol>
+                    </details>
+                </section>
 
                 <section class="panel fin-panel" aria-labelledby="prebillingClientsTitle">
                     <div class="fin-panel__heading">
@@ -78,6 +94,48 @@
             <p class="fin-detalle__resumen" id="prebillingDetailSummary"></p>
             <ol class="fin-history__list fin-detalle" id="prebillingDetailList"></ol>
             <footer class="fin-history__actions"><button class="secondary-button" data-fin-close type="button">Cerrar</button></footer>
+        </dialog>
+
+        <dialog class="fin-history fin-dialog" id="prebillingCloseDialog" aria-labelledby="prebillingCloseTitle">
+            <form id="prebillingCloseForm" novalidate>
+                <header class="fin-history__heading">
+                    <div><p class="eyebrow">CIERRE MENSUAL</p><h2 id="prebillingCloseTitle">Cerrar el mes</h2></div>
+                    <button class="fin-history__close" data-fin-close type="button" aria-label="Cerrar">×</button>
+                </header>
+                <div class="fin-form">
+                    <p class="fin-form__wide" id="prebillingCloseSummary"></p>
+                    <p class="fin-form__preview fin-form__wide" id="prebillingCloseCapture"></p>
+                    <div class="fin-form__wide fin-cierre__pendientes" id="prebillingClosePending" hidden>
+                        <p class="fin-alerta" id="prebillingClosePendingText"></p>
+                        <label class="fin-form__check"><input type="checkbox" name="confirmar_pendientes" id="prebillingCloseConfirm"> <span>Cerrar igual: esos hechos no se cobrarán en este cierre.</span></label>
+                    </div>
+                    <p class="fin-form__preview fin-form__wide">Al cerrar, el mes queda congelado. Lo que cambie después en la operación o en el tarifario aparecerá como diferencia por revisar.</p>
+                    <p class="form-error fin-form__wide" id="prebillingCloseMessage" role="alert"></p>
+                </div>
+                <footer class="fin-history__actions">
+                    <button class="secondary-button" data-fin-close type="button">Cancelar</button>
+                    <button class="primary-button" id="prebillingCloseSubmit" type="submit">Cerrar el mes</button>
+                </footer>
+            </form>
+        </dialog>
+
+        <dialog class="fin-history fin-dialog" id="prebillingReasonDialog" aria-labelledby="prebillingReasonTitle">
+            <form id="prebillingReasonForm" novalidate>
+                <header class="fin-history__heading">
+                    <div><p class="eyebrow" id="prebillingReasonEyebrow">DIFERENCIA</p><h2 id="prebillingReasonTitle">Decidir</h2></div>
+                    <button class="fin-history__close" data-fin-close type="button" aria-label="Cerrar">×</button>
+                </header>
+                <div class="fin-form">
+                    <p class="fin-form__wide" id="prebillingReasonSummary"></p>
+                    <label class="fin-form__wide"><span id="prebillingReasonLabel">Motivo</span><textarea name="motivo" id="prebillingReasonText" rows="3" maxlength="500"></textarea></label>
+                    <p class="fin-form__preview fin-form__wide" id="prebillingReasonNote"></p>
+                    <p class="form-error fin-form__wide" id="prebillingReasonMessage" role="alert"></p>
+                </div>
+                <footer class="fin-history__actions">
+                    <button class="secondary-button" data-fin-close type="button">Cancelar</button>
+                    <button class="primary-button" id="prebillingReasonSubmit" type="submit">Confirmar</button>
+                </footer>
+            </form>
         </dialog>
 
         <div class="loading is-hidden" id="officeLoading" role="status" aria-live="assertive" aria-hidden="true"><span aria-hidden="true"></span><strong id="officeLoadingText">Procesando…</strong></div>

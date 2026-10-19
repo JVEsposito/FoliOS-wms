@@ -1,4 +1,4 @@
-/* Finanzas: hechos valorizables leídos de la operación, tarifario y, más adelante, prefactura.
+/* Finanzas: hechos valorizables leídos de la operación, tarifario, prefactura y su cierre mensual.
    Sin «warning», «danger» ni «error» en los nombres: office-corporate.css los colorea por subcadena. */
 .fin-workspace {
     display: grid;
@@ -713,6 +713,238 @@
     color: var(--text-secondary);
 }
 
+/* Cierre mensual: estado del mes, meses con diferencias por revisar y cada diferencia. */
+.fin-cierre {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px 16px;
+    flex-wrap: wrap;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--info-text);
+    border-radius: 10px;
+    background: var(--panel);
+}
+
+.fin-cierre.is-cerrado {
+    border-left-color: var(--success-text);
+}
+
+.fin-cierre__estado {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    min-width: 0;
+}
+
+.fin-cierre__estado > div {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+
+.fin-cierre__estado small {
+    color: var(--muted);
+}
+
+.fin-cierre__acciones {
+    display: flex;
+    gap: 8px;
+}
+
+.fin-chip--cerrado {
+    border-color: var(--success-text);
+    color: var(--success-text);
+}
+
+.fin-chip--abierto {
+    border-color: var(--info-text);
+    color: var(--info-text);
+}
+
+.fin-revision {
+    display: flex;
+    align-items: center;
+    gap: 8px 12px;
+    flex-wrap: wrap;
+    padding: 10px 14px;
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--amber);
+    border-radius: 10px;
+    background: var(--panel);
+}
+
+.fin-revision__meses {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.fin-revision .fin-boton[aria-current="true"] {
+    border-color: var(--amber);
+}
+
+.fin-diferencias {
+    display: grid;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.fin-diferencia {
+    display: grid;
+    gap: 10px;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--panel);
+}
+
+.fin-diferencia__titulo {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.fin-diferencia__titulo > div {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+
+.fin-diferencia__titulo small {
+    color: var(--muted);
+}
+
+.fin-diferencia__monto {
+    font-size: 18px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.fin-diferencia__monto.is-abono {
+    color: var(--warning-text);
+}
+
+.fin-diferencia__cifras {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin: 0;
+}
+
+.fin-diferencia__cifras dt {
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.fin-diferencia__cifras dd {
+    margin: 2px 0 0;
+    font-variant-numeric: tabular-nums;
+}
+
+.fin-diferencia__precio,
+.fin-diferencia__nota {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.fin-diferencia__precio {
+    color: var(--info-text);
+    font-weight: 700;
+}
+
+.fin-diferencia__hechos {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: 13px;
+}
+
+.fin-diferencia__hechos li {
+    padding-left: 10px;
+    border-left: 2px solid var(--line);
+}
+
+.fin-diferencia__hechos small {
+    display: block;
+    color: var(--muted);
+}
+
+.fin-diferencia__mas > summary {
+    color: var(--info-text);
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.fin-diferencia__mas > .fin-diferencia__hechos {
+    margin-top: 6px;
+}
+
+.fin-diferencia .fin-acciones {
+    flex-wrap: wrap;
+}
+
+.fin-boton--principal {
+    border-color: var(--info-text);
+    background: var(--info-text);
+    color: var(--panel);
+}
+
+.fin-boton--principal:hover,
+.fin-boton--principal:focus-visible {
+    opacity: .9;
+}
+
+.fin-decisiones {
+    margin-top: 14px;
+}
+
+.fin-decisiones > summary {
+    color: var(--text-secondary);
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.fin-decisiones .fin-history__list {
+    margin-top: 8px;
+}
+
+.fin-decisiones li {
+    display: grid;
+    justify-items: start;
+    gap: 4px;
+}
+
+.fin-decisiones li.is-anulada {
+    color: var(--muted);
+}
+
+.fin-ajustes {
+    margin: 0 14px 14px;
+}
+
+.fin-ajustes__titulo {
+    margin: 0 0 6px;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+/* office-corporate.css da a todo <p> de un diálogo el color secundario con !important. */
+.fin-form p.fin-alerta {
+    margin: 0 0 6px;
+    color: var(--warning-text) !important;
+    font-weight: 700;
+}
+
 @media (max-width: 1280px) {
     .fin-kpis {
         grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -884,6 +1116,15 @@
 
     .fin-cliente > summary {
         grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .fin-cierre {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .fin-diferencia__cifras {
+        grid-template-columns: minmax(0, 1fr);
     }
 
     .fin-cliente__total {

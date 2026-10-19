@@ -256,6 +256,14 @@ class AppServiceProvider extends ServiceProvider
             fn (User $usuario): bool => $alcance->puedeGestionarTarifasFinanzas($usuario),
         );
         Gate::define(
+            'cerrar-prefactura-finanzas',
+            fn (User $usuario): bool => $alcance->puedeCerrarPrefacturaFinanzas($usuario),
+        );
+        Gate::define(
+            'reabrir-prefactura-finanzas',
+            fn (User $usuario): bool => $alcance->puedeReabrirPrefacturaFinanzas($usuario),
+        );
+        Gate::define(
             'reiniciar-datos-operacionales',
             fn (User $usuario): bool => $usuario->activo
                 && $usuario->rol === RolUsuario::Administrador,

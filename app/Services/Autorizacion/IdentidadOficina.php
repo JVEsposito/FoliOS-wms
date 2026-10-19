@@ -54,6 +54,8 @@ class IdentidadOficina
             'puede_consultar_finanzas' => $capacidades['puede_consultar_finanzas'],
             'puede_capturar_hechos_finanzas' => $capacidades['puede_capturar_hechos_finanzas'],
             'puede_gestionar_tarifas_finanzas' => $capacidades['puede_gestionar_tarifas_finanzas'],
+            'puede_cerrar_prefactura_finanzas' => $capacidades['puede_cerrar_prefactura_finanzas'],
+            'puede_reabrir_prefactura_finanzas' => $capacidades['puede_reabrir_prefactura_finanzas'],
             'puede_gestionar_cargas' => $capacidades['puede_gestionar_cargas'],
             'puede_autorizar_sobrecupo_embarques' => $capacidades['puede_autorizar_sobrecupo_embarques'],
             'puede_consultar_cargas' => $capacidades['puede_consultar_cargas'],

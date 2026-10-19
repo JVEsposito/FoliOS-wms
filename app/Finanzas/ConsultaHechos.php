@@ -4,6 +4,7 @@ namespace App\Finanzas;
 
 use App\Finanzas\Captura\CatalogoFuentes;
 use App\Finanzas\Models\Hecho;
+use Illuminate\Contracts\Database\Query\Builder as QueryBuilder;
 use Illuminate\Database\Eloquent\Builder;
 
 /** Consultas sobre los hechos capturados (nunca sobre la operación). */
@@ -19,18 +20,29 @@ final class ConsultaHechos
      */
     public function delPeriodo(Periodo $periodo): Builder
     {
-        $intervalos = $this->fuentes->intervalos();
+        $consulta = Hecho::query()->vigentes();
+        $this->cruzaPeriodo($consulta, $periodo);
 
-        return Hecho::query()->vigentes()->where(function (Builder $consulta) use ($periodo, $intervalos): void {
-            $consulta
-                ->where(fn (Builder $puntuales) => $puntuales
-                    ->whereNotIn('fuente', $intervalos)
-                    ->whereBetween('fecha_operacional', [$periodo->inicio->toDateString(), $periodo->fin->toDateString()]))
-                ->orWhere(fn (Builder $duraderos) => $duraderos
-                    ->whereIn('fuente', $intervalos)
-                    ->where('ocurrido_at', '<', $periodo->hastaUtc())
-                    ->where(fn (Builder $termino) => $termino->whereNull('termina_at')->orWhere('termina_at', '>=', $periodo->desdeUtc())));
-        });
+        return $consulta;
+    }
+
+    /**
+     * Agrega la condición «el hecho cae en el mes» a una consulta, sin filtrar versiones. Con
+     * $tabla, las columnas llevan ese alias (para subconsultas sobre otra versión del hecho).
+     */
+    public function cruzaPeriodo(QueryBuilder $consulta, Periodo $periodo, string $tabla = ''): void
+    {
+        $intervalos = $this->fuentes->intervalos();
+        $columna = fn (string $nombre): string => $tabla === '' ? $nombre : "{$tabla}.{$nombre}";
+
+        $consulta->where(fn (QueryBuilder $alguno) => $alguno
+            ->where(fn (QueryBuilder $puntuales) => $puntuales
+                ->whereNotIn($columna('fuente'), $intervalos)
+                ->whereBetween($columna('fecha_operacional'), [$periodo->inicio->toDateString(), $periodo->fin->toDateString()]))
+            ->orWhere(fn (QueryBuilder $duraderos) => $duraderos
+                ->whereIn($columna('fuente'), $intervalos)
+                ->where($columna('ocurrido_at'), '<', $periodo->hastaUtc())
+                ->where(fn (QueryBuilder $termino) => $termino->whereNull($columna('termina_at'))->orWhere($columna('termina_at'), '>=', $periodo->desdeUtc()))));
     }
 
     /**

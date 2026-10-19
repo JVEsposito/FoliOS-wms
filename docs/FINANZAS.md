@@ -15,7 +15,7 @@ Este documento cubre la base propia de Finanzas, la **captura de hechos valoriza
 | Lectura de la operación | Conexión `operacion_lectura` | Sesión `READ ONLY`: la base rechaza cualquier escritura. |
 | Código | `app/Finanzas` | Nada fuera de `app/Finanzas` lo referencia. |
 | Rutas | `routes/finanzas.php` (`/api/finanzas/...`) | Leen la operación y escriben solo en la base de Finanzas. |
-| Oficina | Administración → Finanzas → *Hechos valorizables*, *Tarifario* y *Prefactura* | Módulo de acceso `finanzas.prefactura`. |
+| Oficina | Administración → Finanzas → *Hechos valorizables*, *Tarifario* y *Prefactura* (con su cierre mensual) | Módulo de acceso `finanzas.prefactura`. |
 
 Las tablas de Finanzas no tienen llaves foráneas hacia la operación: guardan el
 identificador del registro operativo y una copia de lo leído (cliente, temporada,
@@ -194,10 +194,11 @@ módulo (`gestionar-tarifas-finanzas`).
 
 ## Prefactura
 
-Valoriza los hechos vigentes de un mes con el tarifario, por cliente. Se calcula al
-consultarla, no guarda documentos y no reemplaza la facturación: sirve para compararla.
-Oficina: Administración → Finanzas → *Prefactura*, con descarga a Excel (una fila por
-línea y por pendiente).
+Valoriza los hechos vigentes de un mes con el tarifario, por cliente. Un mes abierto se
+calcula al consultarlo; uno cerrado se lee tal como quedó (ver *Cierre mensual*). No emite
+documentos y no reemplaza la facturación: sirve para compararla. Oficina: Administración →
+Finanzas → *Prefactura*, con descarga a Excel (una fila por línea, por ajuste y por
+pendiente).
 
 Reglas (`CalculadoraPrefactura`):
 
@@ -225,11 +226,67 @@ Reglas (`CalculadoraPrefactura`):
 Con 20.000 estadías, 20.000 validaciones y 10.000 despachos, un mes completo se calcula en
 cerca de 2 segundos.
 
+## Cierre mensual
+
+Cerrar un mes congela lo que se cobra: las líneas por cliente, lo que aportó cada hecho a cada
+línea, quién cerró, cuándo y con qué lectura de la operación. Desde ese momento el mes no
+cambia, aunque cambien la operación o el tarifario.
+
+| Regla | Detalle |
+| --- | --- |
+| Qué se cierra | Un mes terminado, con todos sus clientes. El mes en curso no se cierra. |
+| Orden | El primer cierre marca el inicio; desde ahí se cierra el mes siguiente al último cerrado. |
+| Pendientes | Si quedan hechos sin precio o sin cliente, el cierre los lista y pide confirmarlos: no se cobran en ese cierre. |
+| Lecturas | No se cierra mientras una lectura de la operación registra hechos: el último hecho registrado separa lo cerrado de lo posterior. |
+| Reapertura | Solo el último mes cerrado, por un Administrador y con motivo. La versión queda reabierta; al cerrar de nuevo se guarda otra versión. |
+| Permisos | Cierra y decide diferencias quien administra el tarifario. Consultar es de quien ve Finanzas. |
+
+### Diferencias después del cierre
+
+Lo que cambia después de cerrar no toca el mes cerrado: aparece como **diferencia**. Para
+encontrarlas, el mes se recalcula con los hechos y precios de hoy y se compara, línea por
+línea (cliente, precio y moneda), con lo cobrado: lo congelado más lo ya decidido. Cada
+diferencia trae cantidad, días y monto, y los hechos que la explican:
+
+| Hecho | Qué pasó |
+| --- | --- |
+| Nuevo | Llegó después del cierre, o ahora se cobra con este precio. |
+| Corregido | Cambió su cantidad o sus días (por ejemplo, la estadía salió otro día). |
+| Retirado | Dejó de cobrarse en esa línea: se anuló, cambió de cliente o ahora se cobra con otro precio. |
+
+Un cambio de precio que afecta un mes cerrado también es una diferencia, sin hechos: muestra el
+precio cobrado y el de hoy.
+
+Las diferencias se deciden **una por una**:
+
+- **Aceptar**: se cobra (o se abona, si es negativa) en el **primer mes abierto**, como un
+  ajuste del cliente con el mes de origen. Se puede deshacer mientras ese mes siga abierto; al
+  cerrarlo, el ajuste queda en su cierre.
+- **Descartar**: exige motivo y queda registrada (por ejemplo, ya se cobró con una nota de
+  débito).
+
+Antes de registrar una decisión, la diferencia se recalcula: si cambió desde que se revisó,
+se pide revisarla de nuevo. Al reabrir un mes, sus decisiones quedan sin efecto, porque al
+cerrarlo otra vez el mes ya incluye esos cambios.
+
+La oficina avisa qué meses cerrados tienen diferencias por revisar. Para no recalcular un mes
+en el que nada cambió, cada cierre guarda su última revisión y solo se recalcula si llegaron
+versiones de hechos de ese mes, cambió algún precio o moneda, o se tomó una decisión.
+
+Con 32.000 hechos en el mes, cerrar tarda cerca de 3 segundos y recalcular las diferencias,
+1,5 segundos. Sin cambios, la revisión responde en milisegundos.
+
 | Método | Ruta (`/api/finanzas`) | Uso |
 | --- | --- | --- |
-| GET | `/prefactura?mes=AAAA-MM` | El mes por cliente: líneas, totales por moneda y pendientes. |
-| GET | `/prefactura/detalle?mes=&cliente=&tarifa=` | Los hechos que forman las líneas de un cliente; con `tarifa`, solo los de esa línea. |
+| GET | `/prefactura?mes=AAAA-MM` | El mes por cliente: líneas, ajustes, totales por moneda, pendientes y estado del cierre. |
+| GET | `/prefactura/detalle?mes=&cliente=&tarifa=` | Los hechos que forman las líneas de un cliente; con `tarifa`, solo los de esa línea. En un mes cerrado, los congelados. |
 | GET | `/prefactura/exportar?mes=` | Excel del mes. |
+| POST | `/prefactura/cierres` | Cierra el mes (`mes`, `confirmar_pendientes`). |
+| POST | `/prefactura/cierres/{mes}/reabrir` | Reabre el último mes cerrado, con `motivo`. |
+| GET | `/prefactura/diferencias?mes=` | Diferencias pendientes de un mes cerrado y decisiones tomadas. |
+| GET | `/prefactura/diferencias/resumen` | Meses cerrados con diferencias por revisar. |
+| POST | `/prefactura/diferencias` | Acepta o descarta una diferencia, con los valores revisados. |
+| POST | `/prefactura/diferencias/{id}/anular` | Deshace una decisión, con `motivo`. |
 
 ## Instalación en el servidor
 
@@ -281,7 +338,6 @@ hechos de los registros borrados quedan como *Ya no existe en la operación*.
 
 ## Próximos pasos
 
-1. Cierre de prefactura y ajustes: lo que cambie después de cerrar un mes se refleja como
-   ajuste del mes siguiente, nunca editando lo cerrado.
+1. Ajustes manuales por cliente (descuentos o cargos con glosa), que se congelan con el cierre.
 2. Comparación con la facturación emitida: diferencias por cliente y servicio entre la
-   prefactura y lo que efectivamente se facturó.
+   prefactura cerrada y lo que efectivamente se facturó.
