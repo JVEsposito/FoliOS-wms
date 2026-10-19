@@ -1,5 +1,6 @@
 import { createOperationalPoller } from './shared/operational-poller';
-import { buildOperationalAlerts } from './shared/operation-now-alerts';
+import { buildAttention, buildOperationTabBadges } from './shared/operation-now-attention';
+import { createOperationTabs } from './shared/operation-now-tabs';
 import { buildCycleComparison, renderCycleComparison } from './shared/operation-cycle-comparison';
 import { buildCycleReplay, renderCycleReplay } from './shared/operation-cycle-replay';
 import { plannerProcessCause, plannerProcessWarnings } from './shared/planner-process-health';
@@ -36,6 +37,8 @@ const byId = (id) => document.getElementById(id);
 
 const elements = {
     app: byId('operationNowApp'),
+    content: byId('officeContent'),
+    tabsNav: document.querySelector('.operation-now-tabs'),
     workspace: byId('operationWorkspace'),
     refresh: byId('operationRefresh'),
     loading: byId('operationLoading'),
@@ -55,7 +58,6 @@ const elements = {
     cameraRows: byId('operationCameraRows'),
     operatorList: byId('operationOperatorList'),
     tunnelList: byId('operationTunnelList'),
-    incidentRows: byId('operationIncidentRows'),
     verificationRows: byId('operationVerificationRows'),
     verificationSummary: byId('operationVerificationSummary'),
     plannerPanel: byId('operationPlannerPanel'),
@@ -94,6 +96,13 @@ const elements = {
     editorZoomLabel: byId('operationEditorZoomLabel'),
     alertsPanel: byId('operationAlertsPanel'),
     alertRows: byId('operationAlertRows'),
+    alertCount: byId('operationAlertCount'),
+    alertNoun: byId('operationAlertNoun'),
+    alertBreakdown: byId('operationAlertBreakdown'),
+    attentionFilter: document.querySelector('.operation-now-filter'),
+    sourceRows: byId('operationSourceRows'),
+    sourcesTime: byId('operationSourcesTime'),
+    plantSheetBody: byId('operationPlantSheetBody'),
 };
 
 const state = {
@@ -119,6 +128,10 @@ const state = {
     comparisonLoading: false,
     comparisonModel: null,
     replayLoading: false,
+    attention: null,
+    attentionFilter: 'all',
+    attentionExpanded: new Set(),
+    plantSelectedId: null,
 };
 
 const supervisionDrawer = createManeuverSupervisionDrawer({
@@ -448,12 +461,10 @@ function renderMetrics(data) {
     const operators = data.camareros || [];
     const activeTasks = operators.filter((operator) => operator.tarea_actual).length;
     const precooling = data.prefrio?.resumen || {};
-    const incidents = data.incidencias?.resumen || {};
 
-    setText('cameraPanelSummary', `${number(productCameras.length)} · ${percent(occupancy)} · ${number(environmentalDue)} control`);
+    setText('cameraPanelSummary', `${number(productCameras.length)} ${productCameras.length === 1 ? 'cámara' : 'cámaras'} · ${percent(occupancy)} ocupado · ${number(environmentalDue)} con control pendiente`);
     setText('operatorPanelCount', number(operators.length));
-    setText('precoolingPanelSummary', `${number(precooling.procesos_activos)} activos · ${number(precooling.procesos_fuera_objetivo)} fuera`);
-    setText('incidentPanelSummary', `${number(incidents.total_abiertas)} abiertas`);
+    setText('precoolingPanelSummary', `${number(precooling.procesos_activos)} en proceso · ${number(precooling.procesos_fuera_objetivo)} fuera de objetivo`);
 
     const cameraSummary = byId('cameraPanelSummary');
     if (cameraSummary) {
@@ -464,18 +475,42 @@ function renderMetrics(data) {
     if (operatorCount) operatorCount.title = `${number(activeTasks)} con tarea vigente`;
 }
 
-function renderSync(sync = {}) {
+// Minutos entre un registro y la lectura vigente: la edad se mide contra el servidor,
+// no contra el reloj del equipo que mira.
+function minutesBefore(value, reference) {
+    const moment = new Date(value).getTime();
+    const base = new Date(reference).getTime();
+    if (!Number.isFinite(moment) || !Number.isFinite(base)) return null;
+    return Math.max(0, Math.round((base - moment) / 60_000));
+}
+
+function ago(minutes) {
+    if (minutes === null || minutes === undefined) return '';
+    return minutes < 1 ? 'hace menos de 1 min' : `hace ${duration(minutes)}`;
+}
+
+function renderSync(sync = {}, generatedAt = null) {
     const latest = sync.ultima_operacion;
     setText('syncLatestOperation', latest ? `${humanize(latest.tipo)} · ${humanize(latest.estado)}` : 'Sin actividad registrada');
+    const age = latest ? ago(minutesBefore(latest.recibida_servidor_at, generatedAt)) : '';
     setText('syncLatestContext', latest
-        ? `${latest.usuario?.nombre || 'Usuario no informado'} · ${latest.dispositivo?.codigo || 'Sin dispositivo'} · ${dateTime(latest.recibida_servidor_at)}`
+        ? [latest.usuario?.nombre || 'Usuario no informado', latest.dispositivo?.codigo || 'Sin dispositivo', dateTime(latest.recibida_servidor_at), age].filter(Boolean).join(' · ')
         : 'Esperando evidencia de dispositivos');
     const counts = sync.operaciones_hoy || {};
-    setText('syncAccepted', number(counts.aceptada));
-    setText('syncPending', number(counts.pendiente));
-    setText('syncProcessing', number(counts.procesando));
-    setText('syncRejected', number(counts.rechazada));
-    setText('syncConflict', number(counts.conflicto));
+    // Los ceros quedan neutros: el color se reserva para lo que exige mirar.
+    const tones = { aceptada: 'success', pendiente: 'warning', procesando: 'info', rechazada: 'critical', conflicto: 'critical' };
+    Object.entries({
+        aceptada: 'syncAccepted',
+        pendiente: 'syncPending',
+        procesando: 'syncProcessing',
+        rechazada: 'syncRejected',
+        conflicto: 'syncConflict',
+    }).forEach(([status, id]) => {
+        const value = Number(counts[status] || 0);
+        setText(id, number(value));
+        const cell = byId(id)?.parentElement;
+        if (cell) cell.dataset.tone = value > 0 ? tones[status] : 'neutral';
+    });
 }
 
 function plannerModeLabel(mode) {
@@ -493,10 +528,10 @@ function plannerModeStatus(mode) {
 
 function plannerHealthStatus(status) {
     return {
-        saludable: 'Sin alertas',
-        advertencia: 'Con advertencias',
-        critico: 'Alertas críticas',
-    }[status] || 'Sin lectura de alertas';
+        saludable: 'Sin advertencias del planificador',
+        advertencia: 'Planificador con advertencias',
+        critico: 'Planificador con alertas críticas',
+    }[status] || 'Sin lectura del planificador';
 }
 
 // «Fuera de frontera» agrupa causas distintas; el factor decisivo evita atribuir una
@@ -618,7 +653,7 @@ function renderPlanner(planner = {}) {
     ];
     elements.plannerRiskRows.innerHTML = riskDefinitions.map(([key, label, warningTone]) => {
         const value = Number(risks[key] || 0);
-        return `<span data-tone="${value ? warningTone : 'success'}"><strong>${escapeHtml(number(value))}</strong>${escapeHtml(label)}</span>`;
+        return `<span data-tone="${value ? warningTone : 'neutral'}"><strong>${escapeHtml(number(value))}</strong>${escapeHtml(label)}</span>`;
     }).join('');
 
     if (!cycle) {
@@ -773,9 +808,10 @@ function plantCrewMarkup(crew) {
     return `<span class="plant-node__crew">${people}${devices}</span>`;
 }
 
-function mapNodeMarkup(item, editable = false, index = buildPlantIndex(state.snapshot || {}), unconnected = false) {
+function mapNodeMarkup(item, editable = false, index = buildPlantIndex(state.snapshot || {}), unconnected = false, selectable = false) {
     const model = plantNodeModel(item, index);
-    const selected = editable && state.mapSelectedId === item.id;
+    const selected = editable ? state.mapSelectedId === item.id : selectable && state.plantSelectedId === item.id;
+    const selection = selectable ? ` tabindex="0" role="button" aria-pressed="${selected}"` : '';
     const connecting = editable && state.mapConnecting === item.id;
     const showName = model.name && model.name !== model.code;
     const meter = model.meter
@@ -785,7 +821,7 @@ function mapNodeMarkup(item, editable = false, index = buildPlantIndex(state.sna
         ? `<span class="plant-node__alert" title="${escapeHtml(model.alerts.join(' · '))}">${PLANT_GLYPHS.alert}</span>`
         : '';
 
-    return `<article class="operation-map-node plant-node${selected ? ' is-selected' : ''}${connecting ? ' is-connecting' : ''}${unconnected ? ' is-unconnected' : ''}${model.fill ? ' is-filled' : ''}" data-id="${escapeHtml(item.id)}" data-type="${escapeHtml(item.tipo)}" data-zone="${escapeHtml(model.zone || '')}" data-state="${escapeHtml(model.state)}" data-tone="${escapeHtml(model.tone)}" data-rotation="${Number(item.rotacion) || 0}" style="left:${item.x / 100}%;top:${item.y / 100}%;width:${item.ancho / 100}%;height:${item.alto / 100}%" aria-label="${escapeHtml(plantNodeLabel(model))}" title="${escapeHtml(plantNodeLabel(model))}">
+    return `<article class="operation-map-node plant-node${selected ? ' is-selected' : ''}${connecting ? ' is-connecting' : ''}${unconnected ? ' is-unconnected' : ''}${model.fill ? ' is-filled' : ''}" data-id="${escapeHtml(item.id)}" data-type="${escapeHtml(item.tipo)}" data-zone="${escapeHtml(model.zone || '')}" data-state="${escapeHtml(model.state)}" data-tone="${escapeHtml(model.tone)}" data-rotation="${Number(item.rotacion) || 0}"${selection} style="left:${item.x / 100}%;top:${item.y / 100}%;width:${item.ancho / 100}%;height:${item.alto / 100}%" aria-label="${escapeHtml(plantNodeLabel(model))}" title="${escapeHtml(plantNodeLabel(model))}">
         <span class="plant-node__tag">${escapeHtml(model.tag)}</span>
         ${alerts}
         ${model.glyph ? `<span class="plant-node__glyph" data-glyph="${escapeHtml(model.glyph)}">${PLANT_GLYPHS[model.glyph] || ''}</span>` : ''}
@@ -814,7 +850,7 @@ function mapDoorMarkup(connection, byId) {
     return `<span class="plant-door${connection.valid ? '' : ' is-invalid'}" data-connection="${escapeHtml(connection.id)}" style="left:${point.x / 100}%;top:${point.y / 100}%" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}"></span>`;
 }
 
-function renderMapStage(target, items, editable = false, connections = []) {
+function renderMapStage(target, items, editable = false, connections = [], selectable = false) {
     if (!items.length) {
         target.innerHTML = empty('Plano sin recintos', editable ? 'Agrega recintos desde el catálogo o dibuja una nueva área.' : 'Administración aún no ha configurado la planta.');
         return;
@@ -823,7 +859,7 @@ function renderMapStage(target, items, editable = false, connections = []) {
     const ordered = [...items].sort((left, right) => (MAP_LAYER[left.tipo] ?? 2) - (MAP_LAYER[right.tipo] ?? 2));
     const byId = new Map(items.map((item) => [item.id, item]));
     const unconnected = editable ? new Set(unconnectedPlaces(items, connections)) : new Set();
-    const nodes = ordered.map((item) => mapNodeMarkup(item, editable, index, unconnected.has(item.id))).join('');
+    const nodes = ordered.map((item) => mapNodeMarkup(item, editable, index, unconnected.has(item.id), selectable)).join('');
     const doors = describeConnections(items, connections).map((connection) => mapDoorMarkup(connection, byId)).join('');
     target.innerHTML = nodes + doors;
 }
@@ -840,7 +876,7 @@ function setMapZoom(kind, value) {
 function renderFacility(data) {
     const plant = data.planta;
     const items = currentMapElements(plant);
-    renderMapStage(elements.facilityMap, items, false, plant.configurado ? (plant.conexiones || []) : []);
+    renderMapStage(elements.facilityMap, items, false, plant.configurado ? (plant.conexiones || []) : [], true);
     elements.facilityStatus.textContent = plant.configurado ? `Plano v${plant.version}` : 'Distribución automática';
     elements.facilityStatus.dataset.tone = plant.configurado ? 'success' : 'warning';
     elements.facilitySubtitle.textContent = plant.configurado
@@ -848,28 +884,184 @@ function renderFacility(data) {
         : 'Borrador automático: falta guardar la distribución física';
     elements.mapEdit.hidden = !plant.puede_editar;
     setMapZoom('map', state.mapZoom);
+    renderPlantSheet(items);
 }
 
-function renderAlerts(data) {
-    const alerts = buildOperationalAlerts(data);
-    setText('operationAlertCount', number(alerts.length));
-    elements.alertsPanel.dataset.tone = alerts.some((alert) => alert.severity === 'critical')
-        ? 'critical'
-        : (alerts.length ? 'warning' : 'neutral');
+const PLANT_STATE_LABELS = {
+    operativo: 'Operativo',
+    mantencion: 'En mantención',
+    sin_referencia: 'Sin referencia vigente',
+    circulacion: 'Circulación',
+    no_operativo: 'No operativo',
+};
 
-    if (!alerts.length) {
-        elements.alertRows.innerHTML = empty('Sin alertas operacionales', 'Ocupación, ambiente, prefrío y sincronización no presentan condiciones de alerta.');
+const PLANT_SHEET_LINKS = {
+    camara: ['/oficina/frigorifico/camaras', 'Ver cámaras'],
+    tunel: ['/oficina/prefrio', 'Ver prefrío'],
+    anden: ['/oficina/frigorifico/despacho/estatus', 'Ver despacho'],
+};
+
+// Ficha lateral del plano: el recinto elegido se lee completo sin abrir otro módulo y se
+// mantiene seleccionado entre refrescos mientras exista en la planta.
+function renderPlantSheet(items = currentMapElements(state.snapshot?.planta)) {
+    const item = items.find((candidate) => candidate.id === state.plantSelectedId);
+    if (!item) {
+        state.plantSelectedId = null;
+        elements.plantSheetBody.innerHTML = '<p class="operation-now-plant-sheet__hint">Selecciona un recinto en el plano para ver su estado, sus alertas y quién trabaja ahí.</p>';
         return;
     }
 
-    elements.alertRows.innerHTML = alerts.map((alert) => `<article class="operation-now-alert">
-        <div class="operation-now-alert__heading"><span class="operation-now-code">${escapeHtml(alert.area)}</span>${signal(alert.severity === 'critical' ? 'Alta' : 'Media', alert.severity)}</div>
-        <strong>${escapeHtml(alert.condition)}</strong>
-        <p>${escapeHtml(alert.evidence)}</p>
-        ${alert.href
-            ? `<a class="operation-now-action" href="${escapeHtml(alert.href)}">${escapeHtml(alert.action)} <span aria-hidden="true">→</span></a>`
-            : `<span class="operation-now-alert__guidance">${escapeHtml(alert.action)}</span>`}
-    </article>`).join('');
+    const model = plantNodeModel(item, buildPlantIndex(state.snapshot || {}));
+    // Las condiciones del recinto salen de la misma lista de Atención: la ficha nunca dice
+    // «sin alertas» de un recinto que Atención sí muestra.
+    const conditions = state.attention
+        ? state.attention.rows
+            .filter((row) => row.items.some((entry) => entry.code === model.code))
+            .map((row) => ({ text: row.condition, tone: row.severity }))
+        : model.alerts.map((text) => ({ text, tone: 'warning' }));
+    const people = model.crew?.personas || [];
+    const devices = model.crew?.equipos || [];
+    const link = PLANT_SHEET_LINKS[model.kind];
+    const facts = [
+        model.value ? [humanize(model.valueLabel || 'valor'), model.value, model.tone] : null,
+        model.detail ? ['Detalle', model.detail] : null,
+        ['Personal', people.length ? people.join(', ') : 'Sin personal registrado'],
+        ['Equipos', devices.length ? devices.join(', ') : 'Sin equipos registrados'],
+    ].filter(Boolean);
+    const stateTone = model.state === 'operativo' ? 'success' : model.tone;
+
+    elements.plantSheetBody.innerHTML = `<p class="operation-now-plant-sheet__tag">${escapeHtml(model.tag)}</p>
+        <strong class="operation-now-plant-sheet__code">${escapeHtml(model.code)}</strong>
+        ${model.name && model.name !== model.code ? `<p class="operation-now-plant-sheet__name">${escapeHtml(model.name)}</p>` : ''}
+        ${signal(PLANT_STATE_LABELS[model.state] || humanize(model.state), stateTone)}
+        <dl class="operation-now-plant-sheet__facts">${facts.map(([term, value, tone]) => `<div><dt>${escapeHtml(term)}</dt><dd${tone ? ` data-tone="${escapeHtml(tone)}"` : ''}>${escapeHtml(value)}</dd></div>`).join('')}</dl>
+        ${conditions.length
+            ? `<ul class="operation-now-plant-sheet__alerts" aria-label="Condiciones abiertas del recinto">${conditions.map((condition) => `<li>${signal(condition.text, condition.tone)}</li>`).join('')}</ul>`
+            : '<p class="operation-now-plant-sheet__calm">Sin condiciones abiertas en este recinto.</p>'}
+        ${link ? `<a class="operation-now-action" href="${link[0]}">${escapeHtml(link[1])} <span aria-hidden="true">→</span></a>` : ''}`;
+}
+
+function selectPlantNode(node) {
+    if (!node?.dataset.id) return;
+    state.plantSelectedId = state.plantSelectedId === node.dataset.id ? null : node.dataset.id;
+    elements.facilityMap.querySelectorAll('.plant-node[data-id]').forEach((candidate) => {
+        const selected = candidate.dataset.id === state.plantSelectedId;
+        candidate.classList.toggle('is-selected', selected);
+        candidate.setAttribute('aria-pressed', String(selected));
+    });
+    renderPlantSheet();
+}
+
+const ATTENTION_ITEM_LIMIT = 6;
+const ATTENTION_LEVELS = { critical: 'Alta', warning: 'Media' };
+
+function canResolveVerification(incident) {
+    return incident.origen === 'verificacion'
+        && (state.identity?.rol === 'administrador'
+            || state.identity?.rol === (incident.contenido === 'materiales' ? 'supervisor_materiales' : 'supervisor_frio'));
+}
+
+function incidentNote(incident) {
+    return [incidentContext(incident), incident.reportado_por?.nombre, ago(incident.antiguedad_minutos)].filter(Boolean).join(' · ');
+}
+
+function incidentActions(incident) {
+    const actions = [];
+    if (canResolveVerification(incident)) {
+        actions.push(`<button type="button" data-resolve-verification="${escapeHtml(incident.id)}">Resolver sin ajuste</button>`);
+    }
+    if (incident.ajustable_materiales) {
+        actions.push(`<a href="/oficina/materiales/almacenes?incidencia=${encodeURIComponent(incident.id)}&folio=${encodeURIComponent(incident.folio.id)}&camara=${encodeURIComponent(incident.contexto.camara_id)}">Revisar ajuste</a>`);
+    }
+    return actions.length ? `<span class="operation-now-alert__item-actions">${actions.join('')}</span>` : '';
+}
+
+function attentionItemMarkup(item) {
+    const title = item.incident?.detalle ? ` title="${escapeHtml(item.incident.detalle)}"` : '';
+    return `<li${title}><span class="operation-now-code">${escapeHtml(item.code)}</span>${item.note ? `<small>${escapeHtml(item.note)}</small>` : ''}${item.incident ? incidentActions(item.incident) : ''}</li>`;
+}
+
+function attentionRowMarkup(row) {
+    const expanded = state.attentionExpanded.has(row.key);
+    const visible = expanded ? row.items : row.items.slice(0, ATTENTION_ITEM_LIMIT);
+    const hidden = row.items.length - visible.length;
+    const toggle = row.items.length > ATTENTION_ITEM_LIMIT
+        ? `<li class="operation-now-alert__more"><button type="button" data-attention-expand="${escapeHtml(row.key)}" aria-expanded="${expanded}">${expanded ? 'Ver menos' : `Ver ${number(hidden)} más`}</button></li>`
+        : '';
+    const items = visible.length ? `<ul class="operation-now-alert__items">${visible.map(attentionItemMarkup).join('')}${toggle}</ul>` : '';
+    const action = row.href
+        ? `<a class="operation-now-action" href="${escapeHtml(row.href)}">${escapeHtml(row.action)} <span aria-hidden="true">→</span></a>`
+        : `<span class="operation-now-alert__guidance">${escapeHtml(row.action)}</span>`;
+
+    return `<article class="operation-now-alert" data-severity="${row.severity}">
+        <span class="operation-now-alert__level operation-now-signal" data-tone="${row.severity}">${ATTENTION_LEVELS[row.severity]}</span>
+        <div class="operation-now-alert__main">
+            <strong class="operation-now-alert__condition">${escapeHtml(row.condition)}</strong>
+            ${row.detail ? `<p>${escapeHtml(row.detail)}</p>` : ''}
+            ${items}
+        </div>
+        <div class="operation-now-alert__origin"><span>${escapeHtml(row.source)}</span>${row.ageMinutes !== null ? `<small>${escapeHtml(`Abierta ${ago(row.ageMinutes)}`)}</small>` : ''}</div>
+        ${action}
+    </article>`;
+}
+
+function renderAttentionRows() {
+    const attention = state.attention;
+    if (!attention) return;
+    document.querySelectorAll('[data-attention-filter]').forEach((button) => {
+        button.setAttribute('aria-pressed', String(button.dataset.attentionFilter === state.attentionFilter));
+    });
+
+    if (!attention.total) {
+        elements.alertRows.innerHTML = '<p class="operation-now-alert-list__calm">Emergencias, ambiente, ocupación, prefrío, planificador, incidencias y sincronización no presentan observaciones.</p>';
+        return;
+    }
+
+    const rows = attention.rows.filter((row) => state.attentionFilter === 'all' || row.severity === state.attentionFilter);
+    elements.alertRows.innerHTML = rows.length
+        ? rows.map(attentionRowMarkup).join('')
+        : empty(
+            state.attentionFilter === 'critical' ? 'Sin condiciones de severidad alta' : 'Sin condiciones de severidad media',
+            'Las demás condiciones siguen en «Todas».',
+        );
+}
+
+function renderAttention(data) {
+    const attention = buildAttention(data, { describeIncident: incidentNote });
+    state.attention = attention;
+    const keys = new Set(attention.rows.map((row) => row.key));
+    state.attentionExpanded.forEach((key) => {
+        if (!keys.has(key)) state.attentionExpanded.delete(key);
+    });
+
+    elements.alertsPanel.dataset.tone = attention.critical ? 'critical' : (attention.total ? 'warning' : 'neutral');
+    elements.attentionFilter.hidden = attention.total === 0;
+    elements.alertCount.hidden = attention.total === 0;
+    elements.alertCount.textContent = number(attention.total);
+    elements.alertNoun.textContent = attention.total === 0
+        ? 'Sin condiciones abiertas'
+        : (attention.total === 1 ? 'condición abierta' : 'condiciones abiertas');
+    elements.alertBreakdown.textContent = attention.total
+        ? `${number(attention.critical)} ${attention.critical === 1 ? 'alta' : 'altas'} · ${number(attention.warning)} ${attention.warning === 1 ? 'media' : 'medias'} · ordenadas por severidad y antigüedad`
+        : `Fuentes revisadas a las ${dateTime(data.generado_at, { timeOnly: true })}`;
+    elements.sourcesTime.textContent = `Lectura ${dateTime(data.generado_at, { timeOnly: true })}`;
+    elements.sourceRows.innerHTML = attention.sources.map((source) => `<li data-tone="${source.severity || 'neutral'}">
+        <i aria-hidden="true"></i><span>${escapeHtml(source.name)}</span><strong>${escapeHtml(number(source.count))}</strong>
+    </li>`).join('');
+
+    renderAttentionRows();
+    renderTabBadges(buildOperationTabBadges(data, attention));
+}
+
+function renderTabBadges(badges) {
+    document.querySelectorAll('[data-tab-badge]').forEach((node) => {
+        const badge = badges[node.dataset.tabBadge];
+        node.hidden = !badge;
+        node.textContent = badge?.text || '';
+        node.dataset.tone = badge?.tone || 'neutral';
+        if (badge?.label) node.title = badge.label;
+        else node.removeAttribute('title');
+    });
 }
 
 function tunnelProgress(tunnel) {
@@ -955,21 +1147,6 @@ function incidentContext(incident) {
     return [maneuver?.titulo, taskLocation(task?.origen), taskLocation(task?.destino)].filter(Boolean).join(' · ');
 }
 
-function renderIncidents(incidents = []) {
-    if (!incidents.length) {
-        elements.incidentRows.innerHTML = `<tr><td colspan="5">${empty('Sin incidencias abiertas', 'No existen excepciones vigentes en la temporada activa.')}</td></tr>`;
-        return;
-    }
-
-    elements.incidentRows.innerHTML = incidents.map((incident) => `<tr>
-        <td><span class="operation-now-code">${escapeHtml(duration(incident.antiguedad_minutos))}</span><span class="operation-now-subtext">${escapeHtml(dateTime(incident.reportada_at))}</span></td>
-        <td>${signal(incident.origen === 'recepcion_embalada' ? 'Recepción externa' : incident.origen === 'verificacion' ? 'Verificación' : incident.origen === 'maniobra' ? 'Maniobra' : 'Carga', incident.origen === 'carga' ? 'info' : 'warning')}</td>
-        <td>${signal(humanize(incident.prioridad), toneForPriority(incident.prioridad))}</td>
-        <td><span class="operation-now-code">${escapeHtml(incident.folio?.numero_folio || 'Sin folio')}</span><span class="operation-now-subtext">${escapeHtml(incidentContext(incident) || 'Sin contexto adicional')}</span></td>
-        <td><strong>${escapeHtml(humanize(incident.tipo))}</strong><span class="operation-now-subtext">${escapeHtml(incident.detalle || 'Sin detalle')}${incident.origen === 'verificacion' && (state.identity?.rol === 'administrador' || state.identity?.rol === (incident.contenido === 'materiales' ? 'supervisor_materiales' : 'supervisor_frio')) ? ` <button type="button" data-resolve-verification="${escapeHtml(incident.id)}">Resolver sin ajuste</button>` : ''}${incident.ajustable_materiales ? ` <a href="/oficina/materiales/almacenes?incidencia=${encodeURIComponent(incident.id)}&folio=${encodeURIComponent(incident.folio.id)}&camara=${encodeURIComponent(incident.contexto.camara_id)}">Revisar ajuste</a>` : ''} · ${escapeHtml(incident.reportado_por?.nombre || 'Sin reportante')} · ${escapeHtml(incident.dispositivo?.codigo || 'Sin dispositivo')}</span></td>
-    </tr>`).join('');
-}
-
 function renderVerifications(data = {}) {
     const summary = data.resumen || {};
     elements.verificationSummary.textContent = data.habilitada
@@ -988,15 +1165,17 @@ function render(data) {
     state.snapshot = data;
     renderHeader(data);
     renderMetrics(data);
-    renderSync(data.sincronizacion);
+    renderSync(data.sincronizacion, data.generado_at);
     renderPlanner(data.planificador);
     renderCameras(data.camaras);
     renderOperators(data.camareros);
     renderTunnels(data.prefrio?.tuneles);
-    renderIncidents(data.incidencias?.abiertas);
     renderVerifications(data.verificaciones);
+    // La lista de atención y las insignias se recalculan en cada lectura; la pestaña
+    // visible no cambia aunque aparezca una condición nueva. Va antes del plano porque
+    // la ficha del recinto lee sus condiciones.
+    renderAttention(data);
     renderFacility(data);
-    renderAlerts(data);
     elements.workspace.setAttribute('aria-busy', 'false');
 }
 
@@ -1378,6 +1557,46 @@ elements.comparisonDialog.addEventListener('click', (event) => {
     if (event.target === elements.comparisonDialog) elements.comparisonDialog.close();
 });
 
+// Pestañas: solo la persona cambia de vista. Al cambiar, el contenido parte bajo la barra.
+let tabsReady = false;
+createOperationTabs({
+    root: elements.content,
+    onChange: () => {
+        if (!tabsReady) return;
+        const stuck = Number.parseFloat(getComputedStyle(elements.tabsNav).top);
+        if (!Number.isFinite(stuck)) return;
+        const offset = elements.workspace.getBoundingClientRect().top - stuck - elements.tabsNav.offsetHeight;
+        if (offset < 0) window.scrollBy({ top: offset - 8 });
+    },
+});
+tabsReady = true;
+
+document.querySelectorAll('[data-attention-filter]').forEach((button) => {
+    button.addEventListener('click', () => {
+        state.attentionFilter = button.dataset.attentionFilter;
+        renderAttentionRows();
+    });
+});
+
+elements.alertRows.addEventListener('click', (event) => {
+    const toggle = event.target.closest('[data-attention-expand]');
+    if (!toggle) return;
+    const key = toggle.dataset.attentionExpand;
+    if (state.attentionExpanded.has(key)) state.attentionExpanded.delete(key);
+    else state.attentionExpanded.add(key);
+    renderAttentionRows();
+    elements.alertRows.querySelector(`[data-attention-expand="${CSS.escape(key)}"]`)?.focus();
+});
+
+elements.facilityMap.addEventListener('click', (event) => selectPlantNode(event.target.closest('.plant-node')));
+elements.facilityMap.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    const node = event.target.closest('.plant-node');
+    if (!node) return;
+    event.preventDefault();
+    selectPlantNode(node);
+});
+
 elements.refresh.addEventListener('click', async () => {
     const success = await load();
     if (success && !state.poller) startPolling();
@@ -1457,7 +1676,7 @@ const verificationResolutionDialog = document.createElement('dialog');
 verificationResolutionDialog.innerHTML = '<form><h2>Resolver sin ajuste</h2><p>Esta resolución no cambia el inventario.</p><label>Tipo de resolución<select name="tipo_resolucion" required><option value="reubicado">Reubicado</option><option value="error_de_conteo">Error de conteo</option><option value="otro">Otro</option></select></label><label>Motivo<textarea name="motivo" required maxlength="2000"></textarea></label><p role="alert"></p><button type="submit">Resolver incidencia</button><button type="button" data-cancel-resolution>Cancelar</button></form>';
 document.body.append(verificationResolutionDialog);
 let verificationResolution = null;
-elements.incidentRows.addEventListener('click', (event) => {
+elements.alertRows.addEventListener('click', (event) => {
     const button = event.target.closest('[data-resolve-verification]'); if (!button) return;
     verificationResolution = { id: button.dataset.resolveVerification, operation: crypto.randomUUID() };
     verificationResolutionDialog.querySelector('form').reset(); verificationResolutionDialog.querySelector('[role="alert"]').textContent = ''; verificationResolutionDialog.showModal();

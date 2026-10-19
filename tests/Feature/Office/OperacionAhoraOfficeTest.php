@@ -42,20 +42,60 @@ class OperacionAhoraOfficeTest extends TestCase
             ->assertSee('<th scope="col">Estado</th>', false)
             ->assertSee('<th scope="col">Progreso</th>', false)
             ->assertSee('<th scope="col">Producto</th>', false)
-            ->assertSee('Incidencias abiertas')
-            ->assertSee('Alertas operacionales')
-            ->assertSee('ACCESOS RÁPIDOS')
+            ->assertSee('Fuentes revisadas')
+            ->assertSee('Equipos hoy')
+            ->assertSee('Revisión de turno')
+            ->assertDontSee('ACCESOS RÁPIDOS')
+            ->assertDontSee('Alertas operacionales')
             ->assertSee('id="operationCameraRows"', false)
             ->assertSee('id="operationOperatorList"', false)
             ->assertSee('id="operationTunnelList"', false)
-            ->assertSee('id="operationIncidentRows"', false)
+            ->assertDontSee('id="operationIncidentRows"', false)
             ->assertSee('id="operationFacilityMap"', false)
+            ->assertSee('id="operationPlantSheet"', false)
             ->assertSee('id="operationAlertRows"', false)
-            ->assertSee('class="operation-now-syncbar"', false)
+            ->assertSee('id="operationSourceRows"', false)
+            ->assertSee('data-attention-filter="critical"', false)
+            ->assertSee('class="operation-now-panel operation-now-syncbar"', false)
             ->assertSee('class="operation-now-syncbar__metrics"', false)
+            ->assertSee('id="operationPinsOpen" hidden', false)
             ->assertSee('data-active-office="operacion-ahora"', false)
             ->assertDontSee('class="operation-now-metrics"', false)
             ->assertSee('id="operationMapZoneForm"', false);
+    }
+
+    public function test_organiza_operacion_ahora_en_pestanas_enfocadas(): void
+    {
+        $response = $this->get('/oficina/operacion-ahora')
+            ->assertOk()
+            ->assertSee('role="tablist"', false)
+            ->assertSee('Personal y equipos')
+            ->assertDontSee('operation-now-dashboard', false);
+
+        foreach (['atencion', 'maniobras', 'plano', 'camaras', 'prefrio', 'personal'] as $pestana) {
+            $response
+                ->assertSee('data-operation-tab="'.$pestana.'"', false)
+                ->assertSee('id="operationTab-'.$pestana.'" aria-controls="operationPanel-'.$pestana.'"', false)
+                ->assertSee('data-tab-badge="'.$pestana.'"', false)
+                ->assertSee('data-operation-panel="'.$pestana.'"', false);
+        }
+
+        // Atención abre por defecto; el resto espera su turno sin pintarse.
+        $response
+            ->assertSee('aria-controls="operationPanel-atencion" aria-selected="true"', false)
+            ->assertSee('data-operation-panel="plano" tabindex="0" hidden', false);
+
+        $tabs = file_get_contents(resource_path('js/shared/operation-now-tabs.js'));
+        $this->assertIsString($tabs);
+        $this->assertStringContainsString('replaceState', $tabs);
+        $this->assertStringContainsString('hashchange', $tabs);
+        $this->assertStringContainsString('OPERATION_TAB_STORAGE_KEY', $tabs);
+
+        $attention = file_get_contents(resource_path('js/shared/operation-now-attention.js'));
+        $this->assertIsString($attention);
+        $this->assertStringContainsString('buildOperationalAlerts', $attention);
+        $this->assertStringContainsString('incidencias?.abiertas', $attention);
+        $this->assertStringContainsString('salud?.riesgos', $attention);
     }
 
     public function test_navegacion_y_resumen_exponen_operacion_ahora_con_permiso_gerencial(): void
@@ -110,7 +150,11 @@ class OperacionAhoraOfficeTest extends TestCase
         $this->assertStringContainsString('reconcilePlantSnapshot', $script);
         $this->assertStringContainsString("cache: 'no-store'", $script);
         $this->assertStringContainsString('!state.mapSaving', $script);
-        $this->assertStringContainsString('buildOperationalAlerts', $script);
+        $this->assertStringContainsString('buildAttention', $script);
+        $this->assertStringContainsString('buildOperationTabBadges', $script);
+        $this->assertStringContainsString('createOperationTabs', $script);
+        $this->assertStringContainsString('renderPlantSheet', $script);
+        $this->assertStringContainsString('data-resolve-verification', $script);
         $this->assertStringContainsString('proceso_activo', $script);
         $this->assertStringContainsString('process?.productos', $script);
         $this->assertStringContainsString('tunnelProgress', $script);
@@ -145,15 +189,18 @@ class OperacionAhoraOfficeTest extends TestCase
         $this->assertStringContainsString('@media (prefers-reduced-motion: reduce)', $styles);
         $this->assertStringContainsString('background: #17394b', $styles);
         $this->assertStringContainsString('operation-now-facility__grid', $styles);
-        $this->assertStringContainsString('grid-template-columns: repeat(12, minmax(0, 1fr))', $styles);
-        $this->assertStringContainsString('max-height: 196px', $styles);
+        $this->assertStringContainsString('.operation-now-tab[aria-selected="true"]', $styles);
+        $this->assertStringContainsString('.operation-now-tabpanel[hidden] { display: none; }', $styles);
+        $this->assertStringContainsString('top: var(--office-header-height, 72px)', $styles);
         $this->assertStringContainsString('repeating-linear-gradient', $styles);
         $this->assertStringContainsString('color: var(--plant-ink) !important', $styles);
         $this->assertStringContainsString('color: var(--plant-muted) !important', $styles);
         $this->assertStringContainsString('container-type: size', $styles);
         $this->assertStringContainsString('@container plant-node', $styles);
         $this->assertStringContainsString(':root[data-office-theme="dark-industrial"] :is(.plant-view, .operation-map-dialog)', $styles);
-        $this->assertStringContainsString('.operation-now-panel--facility { grid-column: 1 / -1; grid-row: 2; }', $styles);
+        $this->assertStringContainsString('grid-template-columns: 148px minmax(0, 1fr) minmax(220px, 280px)', $styles);
+        $this->assertStringContainsString('.operation-now-plant-sheet', $styles);
+        $this->assertStringNotContainsString('operation-now-shortcuts', $styles);
         $this->assertStringContainsString('operation-now-panel--planner', $styles);
         $this->assertStringContainsString('operation-now-table--planner', $styles);
         $this->assertStringContainsString('operation-supervision__surface', $styles);
