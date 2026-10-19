@@ -68,6 +68,7 @@
             ['key' => 'demo', 'module' => '', 'label' => 'Demo comercial', 'href' => '/oficina/demo', 'permissions' => ['puede_habilitar_demo']],
             ['key' => 'finanzas-hechos', 'module' => 'finanzas.prefactura', 'section' => 'Finanzas', 'label' => 'Hechos valorizables', 'href' => '/oficina/finanzas/hechos', 'permissions' => ['puede_consultar_finanzas']],
             ['key' => 'finanzas-tarifario', 'module' => 'finanzas.prefactura', 'section' => 'Finanzas', 'label' => 'Tarifario', 'href' => '/oficina/finanzas/tarifario', 'permissions' => ['puede_consultar_finanzas']],
+            ['key' => 'finanzas-prefactura', 'module' => 'finanzas.prefactura', 'section' => 'Finanzas', 'label' => 'Prefactura', 'href' => '/oficina/finanzas/prefactura', 'permissions' => ['puede_consultar_finanzas']],
         ],
         'consultas' => [
             ['key' => 'resumen', 'module' => '', 'label' => 'Resumen', 'href' => '/oficina/consultas', 'permissions' => ['puede_consultar_oficina_consultas', 'puede_consultar_sag']],

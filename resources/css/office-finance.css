@@ -601,9 +601,125 @@
     font-weight: 700;
 }
 
+/* Prefactura: totales del mes, un cliente por tarjeta desplegable y sus pendientes. */
+.fin-kpis--datos {
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.fin-kpi--dato {
+    cursor: default;
+}
+
+.fin-kpi--dato.is-pendiente strong {
+    color: var(--warning-text);
+}
+
+.fin-filters--una {
+    grid-template-columns: minmax(200px, 420px);
+    margin-top: 12px;
+}
+
+.fin-clientes {
+    display: grid;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.fin-cliente {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--panel);
+}
+
+.fin-cliente > summary {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 2px 12px;
+    padding: 12px 14px;
+    cursor: pointer;
+    list-style: none;
+}
+
+.fin-cliente > summary::-webkit-details-marker {
+    display: none;
+}
+
+.fin-cliente > summary::before {
+    content: "▸";
+    grid-row: span 2;
+    color: var(--muted);
+    transition: transform .15s ease;
+}
+
+.fin-cliente[open] > summary::before {
+    transform: rotate(90deg);
+}
+
+.fin-cliente__nombre {
+    font-weight: 800;
+}
+
+.fin-cliente__total {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+}
+
+.fin-cliente > summary small {
+    grid-column: 2;
+    color: var(--muted);
+}
+
+/* Más específico que «.office-app small:not(...)» de office-corporate.css. */
+.fin-cliente > summary small.fin-alerta,
+.fin-pendientes li.fin-alerta {
+    color: var(--warning-text);
+    font-weight: 700;
+}
+
+.fin-cliente > :is(.fin-table-scroll, .fin-pendientes, .fin-boton--enlace) {
+    margin: 0 14px 14px;
+}
+
+.fin-cliente > .fin-table-scroll {
+    margin-top: 0;
+}
+
+.fin-pendientes {
+    display: grid;
+    gap: 4px;
+    margin: 8px 0;
+    padding: 0;
+    list-style: none;
+    font-size: 14px;
+}
+
+.fin-boton--enlace {
+    display: inline-block;
+    text-decoration: none;
+}
+
+.fin-vacio {
+    margin: 0;
+    padding: 16px 4px;
+    color: var(--muted);
+}
+
+.fin-detalle__resumen {
+    margin: 0;
+    padding: 12px 16px 0;
+    color: var(--text-secondary);
+}
+
 @media (max-width: 1280px) {
     .fin-kpis {
         grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .fin-kpis.fin-kpis--datos {
+        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
     }
 }
 
@@ -706,5 +822,73 @@
 
     .fin-table--tarifas .fin-acciones {
         flex-wrap: wrap;
+    }
+
+    /* Un total de nueve cifras cabe en una línea de la tarjeta. */
+    .fin-kpis--datos .fin-kpi strong {
+        font-size: 19px;
+        white-space: nowrap;
+    }
+
+    /* Las líneas de la prefactura también se leen como tarjetas en celular. */
+    .fin-table.fin-table--prefactura {
+        min-width: 0;
+    }
+
+    .fin-table--prefactura thead {
+        display: none;
+    }
+
+    .fin-table--prefactura tbody {
+        display: grid;
+        gap: 8px;
+    }
+
+    .fin-table--prefactura tr {
+        display: grid;
+        grid-template-areas:
+            "servicio monto"
+            "precio cantidad"
+            "acciones acciones";
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 4px 12px;
+        padding: 10px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+    }
+
+    .office-app .fin-table--prefactura td {
+        padding: 0 !important;
+        border: 0 !important;
+    }
+
+    .fin-table--prefactura .fin-c-servicio {
+        grid-area: servicio;
+    }
+
+    .fin-table--prefactura .fin-c-monto {
+        grid-area: monto;
+    }
+
+    .fin-table--prefactura .fin-c-precio-aplicado {
+        grid-area: precio;
+    }
+
+    .fin-table--prefactura .fin-c-cantidad {
+        grid-area: cantidad;
+    }
+
+    .fin-table--prefactura .fin-c-acciones {
+        grid-area: acciones;
+    }
+
+    .fin-cliente > summary {
+        grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .fin-cliente__total {
+        grid-column: 2;
+        grid-row: auto;
+        text-align: left;
     }
 }
