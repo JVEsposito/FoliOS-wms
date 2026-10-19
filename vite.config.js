@@ -77,6 +77,8 @@ export default defineConfig({
                 'resources/js/office-inventory-exports.js',
                 'resources/css/office-weighbridge.css',
                 'resources/js/office-weighbridge.js',
+                'resources/css/office-gatehouse.css',
+                'resources/js/office-gatehouse.js',
                 'resources/css/office-container-accounts.css',
                 'resources/js/office-container-accounts.js',
                 'resources/css/office-container-dispatches.css',

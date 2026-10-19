@@ -50,6 +50,7 @@ use App\Http\Controllers\Api\HidrocoolerMateriaPrimaController;
 use App\Http\Controllers\Api\ImportacionCatalogoMaterialController;
 use App\Http\Controllers\Api\ImportacionProductosRecepcionMaterialController;
 use App\Http\Controllers\Api\ImpresionEtiquetaMaterialController;
+use App\Http\Controllers\Api\IngresoPorteriaController;
 use App\Http\Controllers\Api\InspeccionEnvasesController;
 use App\Http\Controllers\Api\InspeccionSagController;
 use App\Http\Controllers\Api\IntegridadOperacionalController;
@@ -96,6 +97,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/usuario/password', CambioPasswordUsuarioController::class)->middleware('throttle:6,1');
     Route::get('/usuario/pin', [PinOperacionalController::class, 'show']);
     Route::put('/usuario/pin', [PinOperacionalController::class, 'update'])->middleware('throttle:6,1');
+    Route::prefix('porteria')->group(function (): void {
+        Route::get('/catalogos', [IngresoPorteriaController::class, 'catalogos'])->middleware('can:consultar-porteria');
+        Route::get('/ingresos', [IngresoPorteriaController::class, 'index'])->middleware('can:consultar-porteria');
+        Route::get('/ingresos/{ingresoPorteria}', [IngresoPorteriaController::class, 'show'])->middleware('can:consultar-porteria');
+        Route::post('/ingresos', [IngresoPorteriaController::class, 'store'])->middleware('can:registrar-porteria');
+        Route::put('/ingresos/{ingresoPorteria}', [IngresoPorteriaController::class, 'update'])->middleware('can:administrar-porteria');
+        Route::post('/ingresos/{ingresoPorteria}/anular', [IngresoPorteriaController::class, 'anular'])->middleware('can:administrar-porteria');
+    });
     Route::get('/oficina/contexto', ContextoOficinaController::class);
     Route::get('/envases/catalogo', [CatalogoEnvaseController::class, 'catalogo']);
     Route::get('/administracion/reparto-envases', [CatalogoEnvaseController::class, 'referencias']);

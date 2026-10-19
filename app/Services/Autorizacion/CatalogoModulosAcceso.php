@@ -11,6 +11,8 @@ class CatalogoModulosAcceso
 
     public const OFICINA_MAESTROS_TEMPORADA = 'administracion.maestros-temporada';
 
+    public const OFICINA_PORTERIA = 'materia-prima.porteria';
+
     public const OFICINA_FINANZAS_PREFACTURA = 'finanzas.prefactura';
 
     public const OFICINA_CATALOGOS_VALIDACION_LEGADO = 'frigorifico.catalogos';
@@ -55,6 +57,7 @@ class CatalogoModulosAcceso
                 'nombre' => 'Materia Prima',
                 'descripcion' => 'Recepción, lotización, envases y validación de materia prima.',
                 'modulos' => [
+                    $this->modulo(self::OFICINA_PORTERIA, 'Ingresos Portería', 'Registro móvil de llegadas de camiones y bitácora diaria.'),
                     $this->modulo('materia-prima.romana', 'Romana', 'Ingreso, pesaje y seguimiento de recepciones.'),
                     $this->modulo('materia-prima.digitacion', 'Digitación de lotes', 'Creación y gestión de lotes posteriores a validación.'),
                     $this->modulo('materia-prima.hidrocooler', 'Hidrocooler', 'Ciclos individuales por lote, temperaturas y destino de salida.'),
@@ -323,6 +326,7 @@ class CatalogoModulosAcceso
         }
 
         return match ($rol) {
+            RolUsuario::GuardiaPorteria => [self::OFICINA_PORTERIA],
             RolUsuario::SupervisorFrio => [
                 'gerencia.panel',
                 'materia-prima.romana',

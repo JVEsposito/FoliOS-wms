@@ -9,6 +9,7 @@
     $offices = [
         'materia-prima' => [
             ['key' => 'resumen', 'module' => '', 'label' => 'Resumen', 'href' => '/oficina/materia-prima', 'permissions' => ['puede_consultar_romana', 'puede_consultar_materia_prima', 'puede_consultar_hidrocooler_materia_prima', 'puede_consultar_fruta_proceso', 'puede_consultar_despacho_comercial', 'puede_consultar_cuenta_envases', 'puede_gestionar_despacho_envases', 'puede_anular_despacho_envases']],
+            ['key' => 'porteria', 'module' => 'materia-prima.porteria', 'label' => 'Ingresos Portería', 'href' => '/oficina/porteria', 'permissions' => ['puede_consultar_porteria']],
             ['key' => 'romana', 'module' => 'materia-prima.romana', 'label' => 'Romana', 'href' => '/oficina/romana', 'permissions' => ['puede_consultar_romana']],
             ['key' => 'defectos-recepcion', 'module' => '', 'label' => 'Defectos de recepción', 'href' => '/oficina/materia-prima/defectos-recepcion', 'permissions' => ['puede_auditar_defectos_recepcion_mp']],
             ['key' => 'digitacion', 'module' => 'materia-prima.digitacion', 'label' => 'Digitación de Lotes', 'href' => '/oficina/materia-prima/lotes', 'permissions' => ['puede_consultar_materia_prima']],

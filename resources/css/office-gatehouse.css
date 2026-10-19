@@ -1,0 +1,30 @@
+.gate-workspace { display: grid; gap: 16px; padding: 16px; min-width: 0; }
+.gate-workspace h1 { margin: 4px 0; }
+.gate-workspace header p, .gate-workspace small, #gateClock { color: var(--muted); }
+.gate-columns { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(320px, 1.3fr); gap: 16px; align-items: start; }
+.gate-panel { padding: 16px; min-width: 0; }
+.gate-panel h2 { margin-top: 0; }
+.gate-fields { border: 0; padding: 0; margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; min-width: 0; }
+.gate-fields label, .gate-filters label { display: grid; gap: 5px; min-width: 0; }
+.gate-fields :is(input, select, textarea), .gate-filters input { width: 100%; min-width: 0; min-height: 48px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); box-sizing: border-box; font-size: 16px; }
+.gate-wide { grid-column: 1 / -1; }
+.gate-guide, .gate-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.gate-guide { margin: 6px 0; flex-wrap: nowrap; }
+.gate-guide input { flex: 1; }
+.gate-workspace button { min-height: 48px; }
+.gate-filters { display: flex; align-items: end; gap: 10px; flex-wrap: wrap; }
+.gate-filters label { flex: 1; }
+.gate-entries { display: grid; gap: 12px; margin: 12px 0; }
+.gate-entry { border: 1px solid var(--line); border-radius: 10px; padding: 12px; overflow-wrap: anywhere; }
+.gate-entry h3 { margin: 0 0 8px; }
+.gate-entry p { margin: 6px 0; }
+.gate-entry dl { display: grid; grid-template-columns: auto 1fr; gap: 5px 12px; margin: 12px 0; }
+.gate-entry dt { color: var(--muted); }
+.gate-entry dd { margin: 0; }
+#gateFormError, #officeLoginError { color: var(--red); }
+#gateStatus { padding: 8px 0; margin: 0; }
+#gateHistory { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 12px; max-width: min(640px, 90vw); }
+#gateHistory pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.gate-fields [hidden], .gate-workspace [hidden] { display: none !important; }
+@media (max-width: 1050px) { .gate-columns { grid-template-columns: 1fr; } }
+@media (max-width: 480px) { .gate-fields { grid-template-columns: 1fr; } .gate-workspace { padding: 10px; } .gate-panel { padding: 12px; } .gate-filters { align-items: stretch; flex-direction: column; } }

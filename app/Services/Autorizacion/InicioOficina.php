@@ -27,6 +27,7 @@ class InicioOficina
         'supervisor_frio' => '/oficina/operacion-ahora',
         'despachador' => '/oficina/frigorifico/despacho/cargas',
         'operador_prefrio' => '/oficina/prefrio',
+        'guardia_porteria' => '/oficina/porteria',
         'operador_romana' => '/oficina/romana',
         'digitador_materia_prima' => '/oficina/materia-prima/lotes',
         'validador_mp' => '/oficina/materia-prima',
