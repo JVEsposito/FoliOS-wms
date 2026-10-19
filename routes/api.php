@@ -76,6 +76,7 @@ use App\Http\Controllers\Api\ReplayCicloPlanificadorController;
 use App\Http\Controllers\Api\ReposicionMaterialController;
 use App\Http\Controllers\Api\ResolverIncidenciaVerificacionController;
 use App\Http\Controllers\Api\RetornoPackingController;
+use App\Http\Controllers\Api\RomanaPorteriaController;
 use App\Http\Controllers\Api\SaludPlanificadorController;
 use App\Http\Controllers\Api\SesionesAccesoAdministracionController;
 use App\Http\Controllers\Api\SesionEstibaController;
@@ -103,6 +104,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/ingresos/{ingresoPorteria}', [IngresoPorteriaController::class, 'show'])->middleware('can:consultar-porteria');
         Route::post('/ingresos', [IngresoPorteriaController::class, 'store'])->middleware('can:registrar-porteria');
         Route::put('/ingresos/{ingresoPorteria}', [IngresoPorteriaController::class, 'update'])->middleware('can:administrar-porteria');
+        Route::post('/ingresos/{ingresoPorteria}/revisar', [RomanaPorteriaController::class, 'revisar'])->middleware('can:revisar-porteria');
         Route::post('/ingresos/{ingresoPorteria}/anular', [IngresoPorteriaController::class, 'anular'])->middleware('can:administrar-porteria');
     });
     Route::get('/oficina/contexto', ContextoOficinaController::class);
@@ -145,6 +147,8 @@ Route::middleware('auth:sanctum')->group(function () {
         ->middleware('can:asociar-productores-csg');
 
     Route::middleware('can:consultar-romana')->prefix('romana')->group(function () {
+        Route::get('/porteria/resumen', [RomanaPorteriaController::class, 'resumen']);
+        Route::get('/porteria/diario.pdf', [RomanaPorteriaController::class, 'diario']);
         Route::get('/catalogos', [RecepcionRomanaController::class, 'catalogos']);
         Route::get('/control-envases/en-blanco', [InspeccionEnvasesController::class, 'enBlanco']);
         Route::get('/recepciones/{recepcion}/control-envases/{tipo}', [InspeccionEnvasesController::class, 'documento']);

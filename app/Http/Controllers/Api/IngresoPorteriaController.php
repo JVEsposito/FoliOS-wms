@@ -20,11 +20,16 @@ class IngresoPorteriaController extends Controller
 
     public function index(Request $request, ServicioIngresosPorteria $servicio): JsonResponse
     {
-        $filtros = $request->validate(['fecha' => ['nullable', 'date_format:Y-m-d'], 'buscar' => ['nullable', 'string', 'max:100']]);
+        $filtros = $request->validate(['fecha' => ['nullable', 'date_format:Y-m-d'], 'buscar' => ['nullable', 'string', 'max:100'], 'pendientes' => ['nullable', 'boolean']]);
         $fecha = $filtros['fecha'] ?? CarbonImmutable::now('America/Santiago')->toDateString();
         $desde = CarbonImmutable::parse($fecha, 'America/Santiago')->startOfDay()->utc();
         $hasta = $desde->setTimezone('America/Santiago')->addDay()->utc();
-        $consulta = IngresoPorteria::query()->where('ingreso_at', '>=', $desde)->where('ingreso_at', '<', $hasta);
+        $consulta = IngresoPorteria::query();
+        if ($request->boolean('pendientes')) {
+            $consulta->whereNull('anulado_at')->whereNull('revisado_at');
+        } else {
+            $consulta->where('ingreso_at', '>=', $desde)->where('ingreso_at', '<', $hasta);
+        }
         if ($buscar = $filtros['buscar'] ?? null) {
             $consulta->where(fn ($q) => $q->where('patente', 'like', '%'.$buscar.'%')->orWhere('cliente_nombre', 'like', '%'.$buscar.'%')->orWhere('nombre_conductor', 'like', '%'.$buscar.'%')->orWhereJsonContains('guias', $buscar));
         }
@@ -33,6 +38,7 @@ class IngresoPorteriaController extends Controller
         return response()->json([
             'data' => $ingresos->getCollection()->map(fn (IngresoPorteria $ingreso): array => $servicio->presentar($ingreso)),
             'pagina' => $ingresos->currentPage(), 'ultima_pagina' => $ingresos->lastPage(), 'total' => $ingresos->total(), 'fecha' => $fecha,
+            'puede_revisar' => $request->user()->can('revisar-porteria'), 'puede_descargar_pdf' => $request->user()->can('consultar-romana'),
             'puede_registrar' => $request->user()->can('registrar-porteria'), 'puede_administrar' => $request->user()->can('administrar-porteria'),
         ])->header('Cache-Control', 'no-store, private');
     }

@@ -239,6 +239,7 @@ class AppServiceProvider extends ServiceProvider
             'ejecutar-integridad-operacional',
             fn (User $usuario): bool => $alcance->puedeEjecutarIntegridadOperacional($usuario),
         );
+        Gate::define('revisar-porteria', fn (User $usuario): bool => $alcance->puedeRevisarPorteria($usuario));
         Gate::define('consultar-porteria', fn (User $usuario): bool => $alcance->puedeConsultarPorteria($usuario));
         Gate::define('registrar-porteria', fn (User $usuario): bool => $alcance->puedeRegistrarPorteria($usuario));
         Gate::define('administrar-porteria', fn (User $usuario): bool => $alcance->puedeAdministrarPorteria($usuario));

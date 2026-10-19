@@ -1,3 +1,4 @@
+import { createOperationalPoller } from './shared/operational-poller';
 import { escapeGatehouse as esc, gatehouseDay, gatehouseDate, gatehouseGuides, gatehouseOperationId, gatehouseStatus, gatehouseEventLines, GATEHOUSE_MOTIVES } from './shared/gatehouse-logic';
 const byId = (id) => document.getElementById(id);
 const form = byId('gateForm');
@@ -13,6 +14,9 @@ let page = 1;
 let generation = 0;
 let canManage = false;
 let canRegister = false;
+let canReview = false;
+let listPoller = null;
+const romanaMode = new URLSearchParams(location.search).get('romana') === '1';
 const draftKey = () => `folios_porteria_intento_${identity?.id}`;
 function message(text) { byId('gateStatus').textContent = text; }
 function errorText(error) { return Object.values(error.data?.errors || {}).flat()[0] || error.message || 'No fue posible completar la operación.'; }
@@ -72,15 +76,17 @@ function resetForm() {
 async function load() {
     const current = ++generation;
     const query = new URLSearchParams(new FormData(byId('gateFilters'))); query.set('page', String(page));
+    if (byId('gatePending').checked) query.set('pendientes', '1');
     try {
         const data = await api(`/api/porteria/ingresos?${query}`);
         if (current !== generation) return;
-        entries = data.data; canManage = data.puede_administrar; canRegister = data.puede_registrar;
+        entries = data.data; canManage = data.puede_administrar; canRegister = data.puede_registrar; canReview = data.puede_revisar;
+        byId('gatePdf').hidden = !data.puede_descargar_pdf; byId('gatePendingRow').hidden = !data.puede_descargar_pdf; byId('gateBackRomana').hidden = !romanaMode;
         byId('gateCapture').hidden = !canRegister && !editing;
-        byId('gateCount').textContent = `${data.total} ingresos en la fecha consultada`;
+        byId('gateCount').textContent = `${data.total} ${byId('gatePending').checked ? 'ingresos pendientes de cualquier fecha' : 'ingresos en la fecha consultada'}`;
         byId('gatePage').textContent = `${data.pagina} / ${data.ultima_pagina}`;
         byId('gatePrev').disabled = data.pagina <= 1; byId('gateNext').disabled = data.pagina >= data.ultima_pagina;
-        byId('gateEntries').innerHTML = entries.length ? entries.map((entry) => `<article class="gate-entry"><h3>${esc(entry.patente)} · ${esc(entry.codigo)}</h3><p>${esc(gatehouseStatus(entry))} · ${esc(gatehouseDate(entry.ingreso_at))}</p><dl><dt>Cliente / servicio</dt><dd>${esc(entry.cliente_nombre)}</dd><dt>Conductor</dt><dd>${esc(entry.nombre_conductor)}</dd><dt>Camión</dt><dd>${esc(entry.tipo_camion)}${entry.patente_carro ? ` · carro ${esc(entry.patente_carro)}` : ''}</dd><dt>Motivo</dt><dd>${esc(GATEHOUSE_MOTIVES[entry.motivo])}</dd><dt>Guías</dt><dd>${esc(entry.guias.join(' · ') || 'Sin guía')}</dd><dt>Cantidad</dt><dd>${entry.cantidad === null ? 'No informada' : `${esc(entry.cantidad)} ${esc(entry.unidad)}`}</dd><dt>Registrado por</dt><dd>${esc(entry.creado_por_nombre)}</dd></dl>${entry.observacion ? `<p>${esc(entry.observacion)}</p>` : ''}${entry.motivo_anulacion ? `<p>Anulación: ${esc(entry.motivo_anulacion)}</p>` : ''}<div class="gate-actions"><button class="secondary-button" type="button" data-history="${entry.id}">Historial</button>${canManage && !entry.anulado_at ? `<button class="secondary-button" type="button" data-edit="${entry.id}">Corregir</button><button class="secondary-button" type="button" data-annul="${entry.id}">Anular</button>` : ''}</div></article>`).join('') : '<p>Sin ingresos para esta consulta.</p>';
+        byId('gateEntries').innerHTML = entries.length ? entries.map((entry) => `<article class="gate-entry"><h3>${esc(entry.patente)} · ${esc(entry.codigo)}</h3><p>${esc(gatehouseStatus(entry))} · ${esc(gatehouseDate(entry.ingreso_at))}</p><dl><dt>Cliente / servicio</dt><dd>${esc(entry.cliente_nombre)}</dd><dt>Conductor</dt><dd>${esc(entry.nombre_conductor)}</dd><dt>Camión</dt><dd>${esc(entry.tipo_camion)}${entry.patente_carro ? ` · carro ${esc(entry.patente_carro)}` : ''}</dd><dt>Motivo</dt><dd>${esc(GATEHOUSE_MOTIVES[entry.motivo])}</dd><dt>Guías</dt><dd>${esc(entry.guias.join(' · ') || 'Sin guía')}</dd><dt>Cantidad</dt><dd>${entry.cantidad === null ? 'No informada' : `${esc(entry.cantidad)} ${esc(entry.unidad)}`}</dd><dt>Registrado por</dt><dd>${esc(entry.creado_por_nombre)}</dd></dl>${entry.observacion ? `<p>${esc(entry.observacion)}</p>` : ''}${entry.motivo_anulacion ? `<p>Anulación: ${esc(entry.motivo_anulacion)}</p>` : ''}<div class="gate-actions"><button class="secondary-button" type="button" data-history="${entry.id}">Historial</button>${canReview && !entry.anulado_at && !entry.revisado_at ? `<button class="primary-button" type="button" data-review="${entry.id}">Marcar revisado</button>` : ''}${canManage && !entry.anulado_at ? `<button class="secondary-button" type="button" data-edit="${entry.id}">Corregir</button><button class="secondary-button" type="button" data-annul="${entry.id}">Anular</button>` : ''}</div></article>`).join('') : '<p>Sin ingresos para esta consulta.</p>';
     } catch (error) { if (current === generation) message(errorText(error)); }
 }
 async function start(user) {
@@ -92,7 +98,10 @@ async function start(user) {
     fields.cliente_id.innerHTML = '<option value="">Seleccione cliente</option>' + catalogs.clientes.map((client) => `<option value="${esc(client.id)}">${esc(client.nombre)}</option>`).join('') + '<option value="otro">Otro cliente / servicio</option>';
     byId('gateClock').textContent = `Hora del servidor: ${gatehouseDate(catalogs.ahora)} · fecha y hora automáticas al registrar`;
     byId('gateDate').value = gatehouseDay(new Date(catalogs.ahora));
+    byId('gatePending').checked = romanaMode;
     await load();
+    listPoller?.stop();
+    if (romanaMode) { listPoller = createOperationalPoller(load, { intervalMs: 10000, canRun: () => Boolean(token) && !editing && !pending && !byId('gateHistory').open }); listPoller.start(); }
     let saved; try { saved = JSON.parse(sessionStorage.getItem(draftKey()) || 'null'); } catch { saved = null; }
     if (saved?.operacion_id) { fill(saved); savePending(saved); message('Hay un intento sin confirmar. Reintente el mismo ingreso para comprobar si ya quedó registrado.'); }
 }
@@ -105,7 +114,7 @@ byId('officeLoginForm').addEventListener('submit', async (event) => {
 });
 byId('officeLogoutButton').addEventListener('click', async () => {
     try { await api('/api/acceso-oficina', { method: 'DELETE' }); } catch { /* Se cierra la sesión local. */ }
-    localStorage.removeItem(tokenKey); localStorage.removeItem(identityKey); location.reload();
+    listPoller?.stop(); token = null; localStorage.removeItem(tokenKey); localStorage.removeItem(identityKey); location.reload();
 });
 form.addEventListener('submit', async (event) => {
     event.preventDefault(); byId('gateFormError').textContent = '';
@@ -127,6 +136,7 @@ byId('gateCancelEdit').addEventListener('click', resetForm);
 byId('gateFilters').addEventListener('submit', (event) => { event.preventDefault(); page = 1; void load(); });
 byId('gatePrev').addEventListener('click', () => { page--; void load(); }); byId('gateNext').addEventListener('click', () => { page++; void load(); });
 byId('gateEntries').addEventListener('click', async (event) => {
+    const review = event.target.closest('[data-review]');
     const edit = event.target.closest('[data-edit]'); const annul = event.target.closest('[data-annul]'); const history = event.target.closest('[data-history]');
     if (edit) {
         if (pending) { message('Primero confirme el intento pendiente de registro.'); return; }
@@ -135,6 +145,11 @@ byId('gateEntries').addEventListener('click', async (event) => {
         byId('gateFormTitle').textContent = `Corregir ${editing.codigo}`; byId('gateSubmit').textContent = 'Guardar corrección'; byId('gateCancelEdit').hidden = false; byId('gateCapture').scrollIntoView({ block: 'start' });
     }
     try {
+        if (review) {
+            const entry = entries.find((row) => String(row.id) === review.dataset.review); review.disabled = true;
+            await api(`/api/porteria/ingresos/${entry.id}/revisar`, { method: 'POST', body: JSON.stringify({ version: entry.version }) });
+            message(`${entry.codigo} revisado. El ingreso queda en la bitácora.`); await load();
+        }
         if (annul) {
             const entry = entries.find((row) => String(row.id) === annul.dataset.annul); const reason = prompt(`Motivo para anular ${entry.codigo} (mínimo 5 caracteres):`);
             if (!reason) return;
@@ -144,8 +159,21 @@ byId('gateEntries').addEventListener('click', async (event) => {
             const data = await api(`/api/porteria/ingresos/${history.dataset.history}`);
             byId('gateHistoryBody').innerHTML = data.eventos.map((entry) => `<article><h3>${esc(entry.accion)} · ${esc(gatehouseDate(entry.created_at))}</h3><p>${esc(entry.user_nombre)}</p>${entry.datos?.motivo ? `<p>${esc(entry.datos.motivo)}</p>` : ''}<ul>${gatehouseEventLines(entry).map((line) => `<li>${esc(line)}</li>`).join('')}</ul></article>`).join(''); byId('gateHistory').showModal();
         }
-    } catch (error) { message(errorText(error)); }
+    } catch (error) { if (review) review.disabled = false; message(errorText(error)); }
 });
 byId('gateHistoryClose').addEventListener('click', () => byId('gateHistory').close());
 addGuide(); toggleFields();
 if (token) api('/api/acceso-oficina').then((data) => start(data.usuario)).catch((error) => { byId('officeLoginError').textContent = errorText(error); });
+
+byId('gatePending').addEventListener('change', () => { page = 1; void load(); });
+byId('gatePdf').addEventListener('click', async () => {
+    const fecha = byId('gateDate').value;
+    if (!fecha) { message('Seleccione la fecha del PDF diario.'); return; }
+    const button = byId('gatePdf'); button.disabled = true;
+    try {
+        const response = await fetch(`/api/romana/porteria/diario.pdf?fecha=${encodeURIComponent(fecha)}`, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/pdf' }, cache: 'no-store' });
+        if (!response.ok) throw new Error('No fue posible descargar el PDF. Revise su sesión y permisos.');
+        const url = URL.createObjectURL(await response.blob()); const a = document.createElement('a');
+        a.href = url; a.download = `ingresos-porteria-${fecha}.pdf`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch (error) { message(errorText(error)); } finally { button.disabled = false; }
+});
