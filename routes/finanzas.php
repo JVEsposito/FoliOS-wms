@@ -3,6 +3,7 @@
 use App\Finanzas\Http\Controllers\CapturasFinanzasController;
 use App\Finanzas\Http\Controllers\HechosFinanzasController;
 use App\Finanzas\Http\Controllers\MonedasFinanzasController;
+use App\Finanzas\Http\Controllers\PrefacturaFinanzasController;
 use App\Finanzas\Http\Controllers\TarifasFinanzasController;
 use Illuminate\Support\Facades\Route;
 
@@ -42,4 +43,12 @@ Route::middleware('auth:sanctum')->prefix('finanzas')->group(function (): void {
     Route::put('/monedas/{moneda}', [MonedasFinanzasController::class, 'update'])
         ->where('moneda', '[A-Za-z0-9]{2,10}')
         ->middleware('can:gestionar-tarifas-finanzas');
+
+    // Prefactura en paralelo: se calcula al consultarla; no emite ni guarda documentos.
+    Route::get('/prefactura', [PrefacturaFinanzasController::class, 'index'])
+        ->middleware('can:consultar-finanzas');
+    Route::get('/prefactura/detalle', [PrefacturaFinanzasController::class, 'detalle'])
+        ->middleware('can:consultar-finanzas');
+    Route::get('/prefactura/exportar', [PrefacturaFinanzasController::class, 'exportar'])
+        ->middleware(['can:consultar-finanzas', 'throttle:12,1']);
 });

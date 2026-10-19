@@ -4,8 +4,8 @@ Finanzas valoriza lo que registra la operación **sin modificarla**. La regla es
 la operación no conoce a Finanzas y las áreas operativas no manejan costos; Finanzas
 «bebe» de lo que ya funciona.
 
-Este documento cubre la base propia de Finanzas, la **captura de hechos valorizables** y el
-**tarifario**. La prefactura en paralelo se construye sobre ambos.
+Este documento cubre la base propia de Finanzas, la **captura de hechos valorizables**, el
+**tarifario** y la **prefactura en paralelo**, que valoriza los hechos con el tarifario.
 
 ## Cómo se separa de la operación
 
@@ -15,7 +15,7 @@ Este documento cubre la base propia de Finanzas, la **captura de hechos valoriza
 | Lectura de la operación | Conexión `operacion_lectura` | Sesión `READ ONLY`: la base rechaza cualquier escritura. |
 | Código | `app/Finanzas` | Nada fuera de `app/Finanzas` lo referencia. |
 | Rutas | `routes/finanzas.php` (`/api/finanzas/...`) | Leen la operación y escriben solo en la base de Finanzas. |
-| Oficina | Administración → Finanzas → *Hechos valorizables* y *Tarifario* | Módulo de acceso `finanzas.prefactura`. |
+| Oficina | Administración → Finanzas → *Hechos valorizables*, *Tarifario* y *Prefactura* | Módulo de acceso `finanzas.prefactura`. |
 
 Las tablas de Finanzas no tienen llaves foráneas hacia la operación: guardan el
 identificador del registro operativo y una copia de lo leído (cliente, temporada,
@@ -192,6 +192,45 @@ módulo (`gestionar-tarifas-finanzas`).
 | POST | `/tarifas/{id}/anular` | Anula con motivo. |
 | POST / PUT | `/monedas`, `/monedas/{codigo}` | Crea o edita una moneda. |
 
+## Prefactura
+
+Valoriza los hechos vigentes de un mes con el tarifario, por cliente. Se calcula al
+consultarla, no guarda documentos y no reemplaza la facturación: sirve para compararla.
+Oficina: Administración → Finanzas → *Prefactura*, con descarga a Excel (una fila por
+línea y por pendiente).
+
+Reglas (`CalculadoraPrefactura`):
+
+- **Hechos puntuales** (recepción, validación, fruta embalada, prefrío, repaletizaje y
+  despacho): se cobran con los precios que rigen su fecha operacional. Si el cliente tiene
+  precio propio en ese servicio ese día, se usan los suyos; si no, la tarifa general.
+- **Almacenaje por día o fracción, sin días libres**: cuenta cada día calendario de planta
+  en que el bulto estuvo en cámara, aunque sea una parte. Una salida justo a medianoche no
+  cobra el día que empieza en ese instante.
+- **Cada día se cobra con lo que había al empezar el día**; el primer día, con lo del
+  ingreso. Si un pallet pasa a saldo a mitad del día, ese día se cobra como pallet y desde el
+  siguiente como saldo.
+- **Repaletizaje**: un folio que nace en un repaletizaje y hereda la custodia de sus orígenes
+  empieza a pagar al día siguiente, porque ese día ya lo pagan los orígenes.
+- **Un folio no paga dos veces el mismo día**, aunque salga de la cámara y vuelva a entrar.
+- **Cambio de precio a mitad de mes**: cada precio es una línea distinta.
+- **Montos**: cantidad por precio, redondeado por línea a los decimales de la moneda (la
+  mitad hacia arriba). Los totales suman las líneas de cada moneda; no se convierte entre
+  monedas.
+- **Pendientes**: un hecho sin cliente vinculado, o sin precio ese día, no se valoriza. La
+  oficina y el Excel los muestran para completarlos en los maestros o en el tarifario.
+- **Mes en curso**: se valoriza hasta hoy (a la fecha); las estadías abiertas cuentan hasta
+  hoy. Lo anulado no se cobra.
+
+Con 20.000 estadías, 20.000 validaciones y 10.000 despachos, un mes completo se calcula en
+cerca de 2 segundos.
+
+| Método | Ruta (`/api/finanzas`) | Uso |
+| --- | --- | --- |
+| GET | `/prefactura?mes=AAAA-MM` | El mes por cliente: líneas, totales por moneda y pendientes. |
+| GET | `/prefactura/detalle?mes=&cliente=&tarifa=` | Los hechos que forman las líneas de un cliente; con `tarifa`, solo los de esa línea. |
+| GET | `/prefactura/exportar?mes=` | Excel del mes. |
+
 ## Instalación en el servidor
 
 1. `php artisan migrate --force` crea la base de Finanzas si el usuario de la conexión
@@ -242,7 +281,7 @@ hechos de los registros borrados quedan como *Ya no existe en la operación*.
 
 ## Próximos pasos
 
-1. Prefactura en paralelo: valorización mensual por cliente con los hechos del mes y el
-   tarifario, para compararla con la facturación actual sin reemplazarla todavía.
-2. Cierre de prefactura y ajustes: lo que cambie después de cerrar un mes se refleja como
+1. Cierre de prefactura y ajustes: lo que cambie después de cerrar un mes se refleja como
    ajuste del mes siguiente, nunca editando lo cerrado.
+2. Comparación con la facturación emitida: diferencias por cliente y servicio entre la
+   prefactura y lo que efectivamente se facturó.

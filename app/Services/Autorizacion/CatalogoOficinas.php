@@ -95,6 +95,7 @@ class CatalogoOficinas
         ['administracion', 'Demo comercial', '/oficina/demo', '', ['puede_habilitar_demo']],
         ['administracion', 'Hechos valorizables', '/oficina/finanzas/hechos', 'finanzas.prefactura', ['puede_consultar_finanzas']],
         ['administracion', 'Tarifario', '/oficina/finanzas/tarifario', 'finanzas.prefactura', ['puede_consultar_finanzas']],
+        ['administracion', 'Prefactura', '/oficina/finanzas/prefactura', 'finanzas.prefactura', ['puede_consultar_finanzas']],
         ['consultas', 'Resumen', '/oficina/consultas', '', ['puede_consultar_oficina_consultas', 'puede_consultar_sag']],
         ['consultas', 'Búsqueda Operacional', '/oficina/consultas/busqueda', 'consultas.busqueda', ['puede_consultar_oficina_consultas']],
         ['consultas', 'Trazabilidad de lotes', '/oficina/consultas/trazabilidad', 'consultas.busqueda', ['puede_consultar_oficina_consultas']],
