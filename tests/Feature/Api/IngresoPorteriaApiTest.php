@@ -132,6 +132,13 @@ class IngresoPorteriaApiTest extends TestCase
         $this->postJson('/api/porteria/ingresos', $this->datos())->assertCreated();
         $this->getJson('/api/porteria/ingresos?fecha=2026-10-19')->assertOk()->assertJsonPath('total', 1);
         $this->getJson('/api/porteria/ingresos?fecha=2026-10-20')->assertOk()->assertJsonPath('total', 1);
+        // El 6 de septiembre empieza a las 01:00: el día siguiente debe cortar a las 00:00.
+        $this->travelTo(CarbonImmutable::parse('2026-09-06 04:30:00', 'UTC'));
+        $this->postJson('/api/porteria/ingresos', $this->datos())->assertCreated();
+        $this->travelTo(CarbonImmutable::parse('2026-09-07 03:30:00', 'UTC'));
+        $this->postJson('/api/porteria/ingresos', $this->datos())->assertCreated();
+        $this->getJson('/api/porteria/ingresos?fecha=2026-09-06')->assertOk()->assertJsonPath('total', 1);
+        $this->getJson('/api/porteria/ingresos?fecha=2026-09-07')->assertOk()->assertJsonPath('total', 1);
     }
 
     public function test_un_perfil_restringido_o_inactivo_no_registra_y_romana_consulta_sin_registrar(): void

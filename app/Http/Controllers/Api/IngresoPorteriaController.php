@@ -23,7 +23,7 @@ class IngresoPorteriaController extends Controller
         $filtros = $request->validate(['fecha' => ['nullable', 'date_format:Y-m-d'], 'buscar' => ['nullable', 'string', 'max:100']]);
         $fecha = $filtros['fecha'] ?? CarbonImmutable::now('America/Santiago')->toDateString();
         $desde = CarbonImmutable::parse($fecha, 'America/Santiago')->startOfDay()->utc();
-        $hasta = $desde->setTimezone('America/Santiago')->addDay()->utc();
+        $hasta = $desde->setTimezone('America/Santiago')->addDay()->startOfDay()->utc();
         $consulta = IngresoPorteria::query()->where('ingreso_at', '>=', $desde)->where('ingreso_at', '<', $hasta);
         if ($buscar = $filtros['buscar'] ?? null) {
             $consulta->where(fn ($q) => $q->where('patente', 'like', '%'.$buscar.'%')->orWhere('cliente_nombre', 'like', '%'.$buscar.'%')->orWhere('nombre_conductor', 'like', '%'.$buscar.'%')->orWhereJsonContains('guias', $buscar));
