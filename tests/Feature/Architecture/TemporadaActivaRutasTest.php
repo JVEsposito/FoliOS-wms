@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Architecture;
 
+use App\Finanzas\Models\Moneda;
+use App\Finanzas\Models\Tarifa;
 use App\Http\Middleware\AsegurarTemporadaActivaDelRegistro;
 use App\Models;
 use App\Models\Contracts\PerteneceATemporada;
@@ -67,6 +69,9 @@ class TemporadaActivaRutasTest extends TestCase
         Models\RecepcionMaterial::class => 'Materiales',
         Models\RecetaMaterial::class => 'Materiales',
         Models\TrabajoImpresionMaterial::class => 'Materiales',
+        // Finanzas no escribe registros operacionales: un precio rige por sus propias fechas.
+        Tarifa::class => 'precio con vigencia por fechas; un contrato de temporada se carga con sus fechas',
+        Moneda::class => 'configuración global de monedas de Finanzas',
     ];
 
     public function test_cada_modelo_en_una_ruta_de_escritura_decide_su_temporada(): void

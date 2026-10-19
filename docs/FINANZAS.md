@@ -150,7 +150,7 @@ Administración → Finanzas → *Tarifario*.
 | Servicio | Cada fuente de hechos: recepción en romana, validación, fruta embalada, prefrío, estadía en cámara, repaletizaje y despacho. |
 | Unidad de cobro | Una medida de esa fuente: kilo neto, envase, recepción, bulto, pallet, saldo, caja, repaletizaje o folio. En la estadía es por día («por pallet y día»). Cada cliente puede tener su propia unidad. |
 | Precio | Decimal exacto, hasta 12 enteros y 6 decimales, en una moneda configurada. |
-| Vigencia | Desde y, opcionalmente, hasta: fechas de planta, ambas inclusivas. |
+| Vigencia | Desde y, opcionalmente, hasta: fechas de planta, ambas inclusivas. Un precio no pertenece a una temporada: un contrato de temporada se carga con las fechas de la temporada. |
 
 - **Precio propio o tarifa general.** En un día y un servicio, un cliente con algún precio
   propio usa solo los suyos; si no tiene, usa la tarifa general de ese servicio. Si la
