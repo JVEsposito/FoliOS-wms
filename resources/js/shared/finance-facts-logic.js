@@ -72,6 +72,14 @@ export function measuresText(fact) {
     }
 }
 
+/** Cantidades y vigencia de cada tramo de la misma custodia, sin calcular precios. */
+export function tranchesText(tramos) {
+    if (!Array.isArray(tramos)) return '—';
+    const date = (value) => new Intl.DateTimeFormat('es-CL', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
+
+    return tramos.map((tramo) => `${measuresText({ fuente: 'estadia', medidas: tramo.medidas })} · ${date(tramo.desde_at)} → ${tramo.hasta_at ? date(tramo.hasta_at) : 'abierto'}${tramo.repaletizaje_inicio ? ` · ${tramo.repaletizaje_inicio}` : ''}`).join('; ');
+}
+
 /** Duración exacta entre dos instantes, en días y horas: «4 d 6 h», «3 h». */
 export function duration(fromIso, toIso) {
     const hours = Math.max(0, Math.floor((new Date(toIso) - new Date(fromIso)) / 3_600_000));
@@ -107,6 +115,7 @@ export function factDetail(fact, now = new Date()) {
                 data.carga ? `${exit} en ${data.carga}` : exit,
                 data.salida_estimada ? 'salida estimada' : null,
                 data.fuera_de_camara_desde ? 'fuera de cámara' : null,
+                data.tramos?.length > 1 ? `${data.tramos.length} tramos de cantidades` : null,
             ]);
         }
         case 'repaletizaje':
@@ -143,8 +152,8 @@ export function versionChanges(previous, next) {
     for (const group of ['medidas', 'datos']) {
         const keys = new Set([...Object.keys(previous[group] || {}), ...Object.keys(next[group] || {})]);
         for (const key of [...keys].sort()) {
-            const before = shown(previous[group]?.[key]);
-            const after = shown(next[group]?.[key]);
+            const before = key === 'tramos' ? tranchesText(previous[group]?.[key]) : shown(previous[group]?.[key]);
+            const after = key === 'tramos' ? tranchesText(next[group]?.[key]) : shown(next[group]?.[key]);
             if (before !== after) changes.push({ label: key.replaceAll('_', ' '), before, after });
         }
     }

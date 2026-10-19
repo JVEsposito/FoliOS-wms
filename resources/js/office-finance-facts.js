@@ -6,6 +6,7 @@ import {
     kpiLabel,
     kpiValue,
     measuresText,
+    tranchesText,
     versionChanges,
 } from './shared/finance-facts-logic';
 
@@ -196,7 +197,7 @@ function factRow(fact) {
         + `<td>${escapeHtml(fact.fuente_nombre)}</td>`
         + `<td><strong>${escapeHtml(fact.referencia || '—')}</strong>${fact.temporada_codigo ? `<small>${escapeHtml(fact.temporada_codigo)}</small>` : ''}</td>`
         + `<td>${client}</td>`
-        + `<td class="fin-num">${escapeHtml(measuresText(fact))}</td>`
+        + `<td class="fin-num">${escapeHtml(measuresText(fact))}${fact.fuente === 'estadia' && fact.datos?.tramos?.length ? '<small>Al ingreso · tramos en historial</small>' : ''}</td>`
         + `<td>${escapeHtml(factDetail(fact))}</td>`
         + `<td><button class="fin-version${annulled ? ' fin-version--annulled' : ''}" type="button" data-fin-history="${fact.id}">v${fact.version}${annulled ? ' · anulado' : ''}</button></td>`
         + '</tr>';
@@ -303,6 +304,7 @@ async function openHistory(id) {
                 + `<div><strong>v${version.version} · ${escapeHtml(VERSION_REASONS[version.motivo_version] || version.motivo_version)}</strong>`
                 + `<small>Capturada ${escapeHtml(formatDate(version.capturado_at))}${version.vigente ? ' · vigente' : ''}</small></div>`
                 + `<p>${escapeHtml(measuresText(version))}${factDetail(version) ? ` · ${escapeHtml(factDetail(version))}` : ''}</p>`
+                + (version.datos?.tramos?.length ? `<ul>${version.datos.tramos.map((tramo) => `<li>${escapeHtml(tranchesText([tramo]))}</li>`).join('')}</ul>` : '')
                 + (changes.length ? `<ul>${changes.map((change) => `<li><span>${escapeHtml(change.label)}</span> ${escapeHtml(change.before)} → <strong>${escapeHtml(change.after)}</strong></li>`).join('')}</ul>` : '')
                 + '</li>';
         }).join('');
