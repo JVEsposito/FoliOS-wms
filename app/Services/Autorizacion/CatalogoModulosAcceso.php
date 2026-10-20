@@ -15,6 +15,10 @@ class CatalogoModulosAcceso
 
     public const OFICINA_FINANZAS_PREFACTURA = 'finanzas.prefactura';
 
+    public const OFICINA_RRHH_PERSONAL = 'rrhh.personal';
+
+    public const OFICINA_RRHH_MARCAJE = 'rrhh.marcaje';
+
     public const OFICINA_COMEX_EXPEDIENTES = 'comex.expedientes';
 
     public const OFICINA_COMEX_CONFIGURACION = 'comex.configuracion';
@@ -131,6 +135,15 @@ class CatalogoModulosAcceso
                 'descripcion' => 'Conceptos operativos, acuerdos comerciales y valorización por cliente.',
                 'modulos' => [
                     $this->modulo(self::OFICINA_FINANZAS_PREFACTURA, 'Hechos y prefactura', 'Hechos, cargos acordados aunque no se ejecuten, tarifario y prefactura por cliente.'),
+                ],
+            ],
+            [
+                'clave' => 'rrhh',
+                'nombre' => 'Recursos humanos',
+                'descripcion' => 'Personal, dotación por turno y asistencia operativa.',
+                'modulos' => [
+                    $this->modulo(self::OFICINA_RRHH_PERSONAL, 'Personal y dotación', 'Personas, turnos asignados, asistencia e integraciones de marcaje.'),
+                    $this->modulo(self::OFICINA_RRHH_MARCAJE, 'Puesto de marcaje', 'Registrar entrada y salida con código y PIN sin consultar fichas personales.'),
                 ],
             ],
             [

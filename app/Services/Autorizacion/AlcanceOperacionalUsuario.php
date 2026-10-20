@@ -258,6 +258,21 @@ class AlcanceOperacionalUsuario
         return $usuario->rol === RolUsuario::Administrador && $this->puedeCerrarPrefacturaFinanzas($usuario);
     }
 
+    public function puedeConsultarRrhh(User $usuario): bool
+    {
+        return $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador, RolUsuario::Consulta], CatalogoModulosAcceso::OFICINA_RRHH_PERSONAL);
+    }
+
+    public function puedeGestionarRrhh(User $usuario): bool
+    {
+        return $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador], CatalogoModulosAcceso::OFICINA_RRHH_PERSONAL);
+    }
+
+    public function puedeMarcarRrhh(User $usuario): bool
+    {
+        return $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador], CatalogoModulosAcceso::OFICINA_RRHH_MARCAJE);
+    }
+
     /** Comex no es parte de ningún rol operativo: solo administración o un perfil que lo incluya. */
     public function puedeConsultarComex(User $usuario): bool
     {
@@ -1162,6 +1177,9 @@ class AlcanceOperacionalUsuario
             'puede_gestionar_tarifas_finanzas' => $this->puedeGestionarTarifasFinanzas($usuario),
             'puede_cerrar_prefactura_finanzas' => $this->puedeCerrarPrefacturaFinanzas($usuario),
             'puede_reabrir_prefactura_finanzas' => $this->puedeReabrirPrefacturaFinanzas($usuario),
+            'puede_consultar_rrhh' => $this->puedeConsultarRrhh($usuario),
+            'puede_gestionar_rrhh' => $this->puedeGestionarRrhh($usuario),
+            'puede_marcar_rrhh' => $this->puedeMarcarRrhh($usuario),
             'puede_consultar_comex' => $this->puedeConsultarComex($usuario),
             'puede_gestionar_documentos_comex' => $this->puedeGestionarDocumentosComex($usuario),
             'puede_configurar_comex' => $this->puedeConfigurarComex($usuario),

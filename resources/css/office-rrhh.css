@@ -1,0 +1,23 @@
+.rh-workspace { display: grid; gap: 1.25rem; padding: clamp(1rem, 3vw, 2rem); min-width: 0; }
+.rh-heading, .rh-toolbar, .rh-actions, .rh-tabs { display: flex; flex-wrap: wrap; gap: .75rem; align-items: end; justify-content: space-between; }
+.rh-toolbar, .rh-actions, .rh-tabs { justify-content: start; margin-block: 1rem; }
+.rh-workspace .panel { padding: 1.25rem; min-width: 0; }
+.rh-form { display: grid; gap: 1rem; }
+.rh-form label, .rh-toolbar label { display: grid; gap: .4rem; }
+.rh-form input, .rh-form select, .rh-form textarea, .rh-toolbar input { width: 100%; min-height: 44px; padding: .6rem; border: 1px solid var(--line, #8899a6); border-radius: .5rem; color: inherit; background: var(--panel); }
+.rh-dialog { width: min(95vw, 44rem); max-height: 90vh; overflow: auto; padding: 1.5rem; border: 1px solid var(--line, #8899a6); border-radius: 1rem; background: var(--panel); color: var(--text); }
+.rh-dialog::backdrop { background: #07151ea8; }
+.rh-table-scroll { overflow-x: auto; }
+.rh-table-scroll table { width: 100%; border-collapse: collapse; text-align: left; }
+.rh-table-scroll th, .rh-table-scroll td { padding: .75rem; border-bottom: 1px solid var(--line, #b1bdc5); vertical-align: top; }
+.rh-table-scroll small { display: block; margin-top: .3rem; }
+.rh-table-scroll button, .rh-tabs button, .rh-source button { min-height: 44px; padding: .5rem .75rem; margin: .15rem; cursor: pointer; }
+.rh-tabs [aria-pressed="true"] { background: #115d45; color: white; border-color: #115d45; }
+.rh-source { padding: 1rem 0; border-bottom: 1px solid var(--line, #b1bdc5); }
+.rh-source strong { display: block; }
+.rh-clock { width: min(100%, 40rem); margin-inline: auto; }
+.rh-clock h2 { margin-bottom: 1rem; }
+.rh-receipt { font-size: 1.25rem; font-weight: 650; margin-block: 1.25rem; }
+.rh-history { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 55vh; overflow-y: auto; }
+[hidden] { display: none !important; }
+@media (max-width: 600px) { .rh-workspace { padding: .75rem; } .rh-heading { align-items: stretch; } .rh-toolbar label { flex: 1 1 10rem; } }

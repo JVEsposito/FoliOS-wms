@@ -263,6 +263,9 @@ class AppServiceProvider extends ServiceProvider
             'reabrir-prefactura-finanzas',
             fn (User $usuario): bool => $alcance->puedeReabrirPrefacturaFinanzas($usuario),
         );
+        Gate::define('consultar-rrhh', fn (User $usuario): bool => $alcance->puedeConsultarRrhh($usuario));
+        Gate::define('gestionar-rrhh', fn (User $usuario): bool => $alcance->puedeGestionarRrhh($usuario));
+        Gate::define('marcar-rrhh', fn (User $usuario): bool => $alcance->puedeMarcarRrhh($usuario));
         Gate::define('consultar-comex', fn (User $usuario): bool => $alcance->puedeConsultarComex($usuario));
         Gate::define('gestionar-documentos-comex', fn (User $usuario): bool => $alcance->puedeGestionarDocumentosComex($usuario));
         Gate::define('configurar-comex', fn (User $usuario): bool => $alcance->puedeConfigurarComex($usuario));

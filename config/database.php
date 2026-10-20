@@ -114,6 +114,27 @@ return [
             ]) : [],
         ],
 
+        // RRHH mantiene sus personas y asistencia en un esquema propio.
+        'rrhh' => [
+            'driver' => 'mysql',
+            'url' => env('RRHH_DB_URL'),
+            'host' => env('RRHH_DB_HOST', $operacion['host']),
+            'port' => env('RRHH_DB_PORT', $operacion['port']),
+            'database' => env('RRHH_DB_DATABASE', $operacion['database'].'_rrhh'),
+            'username' => env('RRHH_DB_USERNAME', $operacion['username']),
+            'password' => env('RRHH_DB_PASSWORD', $operacion['password']),
+            'unix_socket' => env('RRHH_DB_SOCKET', $operacion['unix_socket']),
+            'charset' => env('DB_CHARSET', 'utf8mb4'),
+            'collation' => env('DB_COLLATION', 'utf8mb4_unicode_ci'),
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'strict' => true,
+            'engine' => null,
+            'options' => extension_loaded('pdo_mysql') ? array_filter([
+                Mysql::ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+            ]) : [],
+        ],
+
         // Lectura de la operación para Finanzas y Comex: la misma base operativa en una sesión de
         // solo lectura. En producción conviene un usuario propio con permiso SELECT.
         'operacion_lectura' => [

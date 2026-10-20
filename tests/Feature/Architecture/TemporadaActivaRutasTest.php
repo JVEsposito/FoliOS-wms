@@ -11,6 +11,10 @@ use App\Finanzas\Models\Tarifa;
 use App\Http\Middleware\AsegurarTemporadaActivaDelRegistro;
 use App\Models;
 use App\Models\Contracts\PerteneceATemporada;
+use App\Rrhh\Models\AsignacionPersonal;
+use App\Rrhh\Models\FuenteMarcaje;
+use App\Rrhh\Models\Marcaje;
+use App\Rrhh\Models\Persona;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Routing\Route as RutaLaravel;
@@ -27,6 +31,10 @@ class TemporadaActivaRutasTest extends TestCase
 {
     /** @var array<class-string<Model>, string> */
     private const EXENTOS = [
+        Persona::class => 'maestro laboral global, independiente de temporada',
+        AsignacionPersonal::class => 'dotación por fechas y turnos en base propia',
+        Marcaje::class => 'asistencia por instante en base propia, sin modificar operación',
+        FuenteMarcaje::class => 'configuración global de integración de asistencia',
         // Configuración física y maestros: no pertenecen a una temporada.
         Models\Anden::class => 'infraestructura física',
         Models\BandaOperacional::class => 'infraestructura física',
