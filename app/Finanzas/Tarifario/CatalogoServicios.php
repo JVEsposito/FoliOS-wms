@@ -5,6 +5,7 @@ namespace App\Finanzas\Tarifario;
 use App\Finanzas\Captura\CatalogoFuentes;
 use App\Finanzas\Captura\FuenteHechos;
 use App\Finanzas\Models\ConceptoServicio;
+use Illuminate\Http\Request;
 
 /**
  * Conceptos comerciales y el proceso que los respalda. Conserva las siete claves originales
@@ -32,6 +33,8 @@ final class CatalogoServicios
 
     private ?array $catalogo = null;
 
+    private ?Request $solicitud = null;
+
     public function recargar(): void
     {
         $this->catalogo = null;
@@ -40,6 +43,12 @@ final class CatalogoServicios
     /** Conceptos originales más las definiciones inmutables creadas en Oficina. */
     public function descripcion(): array
     {
+        // Los controladores pueden sobrevivir a una petición (workers persistentes o pruebas).
+        // Se conserva la memoización dentro de cada lectura, nunca entre solicitudes.
+        if ($this->solicitud !== request()) {
+            $this->catalogo = null;
+            $this->solicitud = request();
+        }
         if ($this->catalogo === null) {
             $this->catalogo = [];
             foreach ($this->fuentes->todas() as $fuente) {

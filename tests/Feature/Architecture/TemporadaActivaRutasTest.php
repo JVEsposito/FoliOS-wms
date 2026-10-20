@@ -3,6 +3,7 @@
 namespace Tests\Feature\Architecture;
 
 use App\Comex\Models\TipoDocumento;
+use App\Finanzas\Models\ConceptoServicio;
 use App\Finanzas\Models\Diferencia;
 use App\Finanzas\Models\Moneda;
 use App\Finanzas\Models\Tarifa;
@@ -75,6 +76,7 @@ class TemporadaActivaRutasTest extends TestCase
         // Finanzas no escribe registros operacionales: un precio rige por sus propias fechas.
         Tarifa::class => 'precio con vigencia por fechas; un contrato de temporada se carga con sus fechas',
         Moneda::class => 'configuración global de monedas de Finanzas',
+        ConceptoServicio::class => 'catálogo comercial de Finanzas con vigencia por fechas; no modifica la operación ni pertenece a una temporada',
         Diferencia::class => 'decisión sobre un mes cerrado de la prefactura: se rige por el mes calendario, no por la temporada',
         // Comex escribe solo en su base; los documentos de un embarque llegan semanas después de la salida.
         TipoDocumento::class => 'configuración de Comex: los documentos de un embarque se completan aunque la temporada haya cambiado',
