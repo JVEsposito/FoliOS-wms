@@ -2,7 +2,9 @@
 
 namespace App\Services\InspeccionSag;
 
+use App\Enums\EstadoCargaFolio;
 use App\Enums\EstadoFolioProcesoPrefrio;
+use App\Enums\EstadoOperacionalFolio;
 use App\Enums\EstadoProcesoPrefrio;
 use App\Enums\EstadoTareaMovimiento;
 use App\Enums\HabilitacionAlmacenamientoFolio;
@@ -54,7 +56,7 @@ class ServicioTrasladosPreparacionSag
 
         $folios = Folio::query()
             ->whereIn('id', $lote->folios->pluck('folio_id'))
-            ->with('ubicacionActual.posicion')
+            ->with(['ubicacionActual.posicion', 'asignacionCargaActual'])
             ->orderBy('id')
             ->lockForUpdate()
             ->get();
@@ -89,7 +91,17 @@ class ServicioTrasladosPreparacionSag
 
             if (! $folio->activo
                 || $folio->tipo_bulto !== TipoBulto::Pallet
-                || $folio->habilitacion_almacenamiento !== HabilitacionAlmacenamientoFolio::Habilitado) {
+                || $folio->habilitacion_almacenamiento !== HabilitacionAlmacenamientoFolio::Habilitado
+                || in_array($folio->estado_operacional, [
+                    EstadoOperacionalFolio::Anulado,
+                    EstadoOperacionalFolio::RetiradoDefinitivo,
+                    EstadoOperacionalFolio::Despachado,
+                    EstadoOperacionalFolio::Agotado,
+                ], true)
+                || in_array($folio->asignacionCargaActual?->estado, [
+                    EstadoCargaFolio::EnAnden,
+                    EstadoCargaFolio::Despachado,
+                ], true)) {
                 continue;
             }
 

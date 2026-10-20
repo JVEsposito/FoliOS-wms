@@ -121,7 +121,7 @@ jobs:
           retention-days: 14
 
       - name: Validar estilo
-        run: vendor/bin/pint --test -v
+        run: vendor/bin/pint --test
 
       - name: Crear esquema limpio
         run: php artisan migrate:fresh --force

@@ -16,6 +16,8 @@ use App\Models\ArticuloValidacion;
 use App\Models\BandaOperacional;
 use App\Models\BloqueMercado;
 use App\Models\Camara;
+use App\Models\Carga;
+use App\Models\CargaFolio;
 use App\Models\CategoriaValidacion;
 use App\Models\Cliente;
 use App\Models\ClienteValidacion;
@@ -33,6 +35,7 @@ use App\Models\Posicion;
 use App\Models\PosicionTunelPrefrio;
 use App\Models\ProcesoPrefrio;
 use App\Models\ProcesoPrefrioFolio;
+use App\Models\ReservaCargaFolio;
 use App\Models\ReservaPosicionInspeccionSag;
 use App\Models\TareaMovimiento;
 use App\Models\TunelPrefrio;
@@ -812,6 +815,52 @@ class InspeccionSagApiTest extends TestCase
         $this->assertSame(1, $segunda->posicionDestino->posicion);
         $this->assertSame($primera->posicion_destino_id, $primera->refresh()->posicion_destino_id);
         $this->assertDatabaseCount('tareas_movimiento', 2);
+    }
+
+    public function test_reconciliacion_no_reinventa_origen_de_tunel_para_pallets_ya_en_anden_o_despachados(): void
+    {
+        $this->activarPlanificadorDirigido();
+        $usuario = $this->administradorConTemporada();
+        $this->crearZonaInspeccion($usuario, posiciones: 3);
+        $anden = $this->crearFolioUbicado('SAG-YA-ANDEN-001');
+        $despachado = $this->crearFolioUbicado('SAG-YA-DESPACHADO-002');
+        $proceso = $this->crearPrefrioSag($usuario, [$anden, $despachado]);
+        $this->crearLoteEnPreparacion(
+            $usuario,
+            [$anden, $despachado],
+            Pais::query()->where('iso_alpha2', 'CL')->firstOrFail(),
+        );
+        $proceso->update(['estado' => 'aprobado']);
+        $proceso->folios()->update(['estado' => 'aprobado']);
+        foreach ([$anden, $despachado] as $folio) {
+            $folio->update([
+                'condicion_termica' => 'prefrio_aprobado',
+                'habilitacion_almacenamiento' => 'habilitado',
+                'estado_operacional' => $folio->id === $despachado->id ? 'despachado' : 'pendiente_ubicacion',
+            ]);
+        }
+        $carga = Carga::create([
+            'temporada_id' => $anden->temporada_id,
+            'codigo' => 'CAR-SAG-ANDEN',
+            'estado' => 'pendiente',
+            'prioridad' => 'alta',
+            'creada_por_user_id' => $usuario->id,
+            'actualizada_por_user_id' => $usuario->id,
+        ]);
+        $asignacion = CargaFolio::create([
+            'carga_id' => $carga->id,
+            'folio_id' => $anden->id,
+            'estado' => 'en_anden',
+            'asignado_por_user_id' => $usuario->id,
+            'asignado_at' => now(),
+        ]);
+        ReservaCargaFolio::create([
+            'folio_id' => $anden->id,
+            'carga_folio_id' => $asignacion->id,
+        ]);
+        $this->artisan('sag:preparar-traslados')->assertSuccessful();
+        $this->assertDatabaseCount('tareas_movimiento', 0);
+        $this->assertDatabaseCount('ubicaciones_actuales', 0);
     }
 
     /** @param array<int, Folio> $folios */

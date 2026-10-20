@@ -8,7 +8,7 @@ Se ocupa primero el espacio libre más profundo. Si los pallets salen de túnele
 
 El camarero toma la maniobra desde su bandeja habitual. Su destino se reserva automáticamente al asumirla y no puede cambiarse por otra posición. El registro del movimiento confirma la llegada; iniciar la inspección sigue exigiendo que todos sus pallets estén físicamente en el sector reservado.
 
-Si una recepción ya comenzó, conserva su recorrido. El sistema vuelve a evaluar el pallet después de que termine y, si corresponde, publica el traslado desde la cámara hacia SAG. Las demás labores activas no se interrumpen.
+Si una recepción ya comenzó, conserva su recorrido. El sistema vuelve a evaluar el pallet después de que termine y, si corresponde, publica el traslado desde la cámara hacia SAG. Las demás labores activas no se interrumpen. Los pallets ya entregados en andén o con un estado operacional terminal no reciben nuevos traslados desde un túnel anterior.
 
 ## Recuperación
 
