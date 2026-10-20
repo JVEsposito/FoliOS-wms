@@ -12,6 +12,8 @@ import {
     AGROROSARIO_PLANT,
     PLANT_TEMPLATES,
     buildPlantFromTemplate,
+    keepElementAsArea,
+    linkElementToPlace,
     recintoNumber,
     unassignedPlaces,
 } from '../../resources/js/shared/plant-templates.js';
@@ -155,4 +157,27 @@ test('con el catálogo real de la planta, el nombre manda sobre el código', () 
     assert.equal(altillo.tipo, 'camara');
     assert.equal(altillo.categoria, null);
     assert.ok(describeConnections(result.elementos, result.conexiones).every((connection) => connection.valid));
+});
+
+test('una cámara nueva queda como área y se enlaza cuando exista, sin perder forma ni puertas', () => {
+    const result = buildPlantFromTemplate(AGROROSARIO_PLANT, catalog, { uuid: sequentialIds() });
+    const pending = unassignedPlaces(result.elementos).find((element) => element.nombre === 'Cámara 0');
+    const area = keepElementAsArea(pending);
+
+    assert.deepEqual(
+        { tipo: area.tipo, referencia_id: area.referencia_id, categoria: area.categoria, nombre: area.nombre },
+        { tipo: 'zona', referencia_id: null, categoria: 'otro', nombre: 'Cámara 0' },
+    );
+    assert.deepEqual([area.x, area.y, area.ancho, area.alto], [pending.x, pending.y, pending.ancho, pending.alto]);
+
+    const created = { tipo: 'camara', id: 'c0', codigo: 'CAM-13', nombre: 'Cámara de tránsito 00' };
+    const linked = linkElementToPlace(area, created);
+    assert.deepEqual(
+        { tipo: linked.tipo, referencia_id: linked.referencia_id, categoria: linked.categoria, nombre: linked.nombre, id: linked.id },
+        { tipo: 'camara', referencia_id: 'c0', categoria: null, nombre: 'Cámara de tránsito 00', id: pending.id },
+    );
+
+    const elements = result.elementos.map((element) => (element.id === linked.id ? linked : element));
+    assert.deepEqual(unassignedPlaces(elements).map((element) => element.nombre), ['Túnel 6']);
+    assert.ok(describeConnections(elements, result.conexiones).every((connection) => connection.valid), 'las puertas siguen válidas');
 });

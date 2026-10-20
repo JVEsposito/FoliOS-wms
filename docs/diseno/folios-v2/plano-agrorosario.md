@@ -24,7 +24,9 @@ permite que el dibujo conserve la forma real de la planta.
 3. **Recintos por asignar.** Lo que el plano base no pudo enlazar queda marcado. Al
    seleccionarlo, el inspector muestra *Recinto en FoliOS* para elegirlo sin perder forma ni
    conexiones. El editor no guarda mientras quede un recinto sin asignar. Esto también sirve
-   para reasignar cualquier recinto.
+   para reasignar cualquier recinto. Si el recinto todavía no existe en FoliOS (la cámara 0 es
+   nueva), se elige *Dejar como área*: queda en su lugar, con su nombre y sus puertas. Cuando se
+   cree en FoliOS, se selecciona esa área y se elige el recinto en el mismo campo.
 4. **Recintos angostos legibles.** Los túneles y andenes son franjas delgadas. El relleno de
    cada recinto se ajusta a su tamaño y, cuando es angosto y alto, el código va vertical, como en
    el plano impreso. Si es bajo, queda solo el código. Los andenes ocupados marcan el borde. El
@@ -60,8 +62,9 @@ existe en FoliOS.
 3. `npm ci` y `npm run build`: sin compilar, Oficina sigue mostrando el editor anterior, sin
    *Cargar plano base*.
 4. `php artisan optimize:clear` y recargar la página sin caché (Ctrl+F5).
-5. En *Operación ahora → Plano → Editar plano*: *Cargar plano base*, revisar los enlaces, asignar
-   la cámara 0 (el dibujo no le da un recinto con ese número) y *Guardar plano*.
+5. En *Operación ahora → Plano → Editar plano*: *Cargar plano base*, revisar los enlaces, dejar la
+   cámara 0 como área (es nueva y aún no existe en FoliOS) y *Guardar plano*. Las cámaras 1 a 7
+   del dibujo son las «Cámara de tránsito» 01 a 07.
 
 El plano base está en `resources/js/shared/plant-templates.js`. Su prueba
 (`tests/JavaScript/plant-templates.test.mjs`) verifica tamaños, límites, superposiciones y que

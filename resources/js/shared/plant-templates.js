@@ -194,6 +194,29 @@ export function buildPlantFromTemplate(template, catalog = [], { uuid = () => gl
     return { proporcion: template.proporcion, elementos, conexiones, asignados: assigned, faltantes: missing, sinUbicar: unplaced };
 }
 
+/**
+ * Enlaza un elemento del dibujo con un recinto de FoliOS sin tocar su forma ni sus
+ * conexiones. Sirve para asignar lo que el plano base no enlazó y para convertir un área
+ * en recinto cuando el recinto se crea después (una cámara nueva).
+ */
+export function linkElementToPlace(element, item) {
+    return {
+        ...element,
+        tipo: item.tipo,
+        referencia_id: item.id,
+        nombre: item.nombre || item.codigo || element.nombre,
+        categoria: null,
+    };
+}
+
+/**
+ * Deja un recinto como área del dibujo, con su nombre y en el mismo lugar. Así se guarda
+ * el plano aunque el recinto todavía no exista en FoliOS.
+ */
+export function keepElementAsArea(element) {
+    return { ...element, tipo: 'zona', referencia_id: null, categoria: 'otro' };
+}
+
 /** Recintos del borrador que todavía no apuntan a uno del catálogo. */
 export function unassignedPlaces(elements = []) {
     return elements.filter((element) => RECINTO_TYPES.includes(element.tipo) && !element.referencia_id);
