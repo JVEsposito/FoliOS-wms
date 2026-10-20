@@ -263,6 +263,7 @@ class ServicioTrasladosPreparacionSag
                 $usadas[$anterior] = true;
             }
         }
+
         return $destinos;
     }
 
