@@ -20,6 +20,7 @@ use App\Models\PlanOperacional;
 use App\Models\Posicion;
 use App\Models\PresenciaCargaAnden;
 use App\Models\ProcesoPrefrio;
+use App\Models\ProcesoPrefrioFolio;
 use App\Models\ReservaPosicionInspeccionSag;
 use App\Models\ReservaTareaMovimiento;
 use App\Models\UbicacionActual;
@@ -242,10 +243,17 @@ class ServicioPreparacionFisicaSag
     private function restaurarRecepciones(LoteInspeccionSag $lote, User $usuario): void
     {
         $folioIds = $lote->folios()->pluck('folio_id');
+        $procesoIds = ProcesoPrefrioFolio::query()
+            ->whereIn('folio_id', $folioIds)
+            ->latest('created_at')
+            ->orderByDesc('id')
+            ->get()
+            ->unique('folio_id')
+            ->pluck('proceso_prefrio_id');
         $procesos = ProcesoPrefrio::query()
             ->where('temporada_id', $lote->temporada_id)
             ->where('estado', 'aprobado')
-            ->whereHas('folios', fn ($consulta) => $consulta->whereIn('folio_id', $folioIds))
+            ->whereIn('id', $procesoIds)
             ->orderBy('id')
             ->get();
 

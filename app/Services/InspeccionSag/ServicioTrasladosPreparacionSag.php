@@ -58,16 +58,11 @@ class ServicioTrasladosPreparacionSag
             ->orderBy('id')
             ->lockForUpdate()
             ->get();
-        $posiciones = $reservas->pluck('posicion')->keyBy('id');
+        $posiciones = $reservas->pluck('posicion')->sortByDesc('posicion')->keyBy('id');
         $destinos = $this->asignarDestinos($folios, $posiciones, $plan);
         $preparados = 0;
 
         foreach ($folios as $folio) {
-            $destino = $posiciones->get($destinos[$folio->id] ?? '');
-            if (! $destino) {
-                continue;
-            }
-
             $actual = $folio->ubicacionActual;
             $tarea = TareaMovimiento::query()
                 ->where('folio_id', $folio->id)
@@ -79,7 +74,7 @@ class ServicioTrasladosPreparacionSag
                 ->lockForUpdate()
                 ->first();
 
-            if ($actual?->posicion_id === $destino->id) {
+            if ($actual && $posiciones->has($actual->posicion_id)) {
                 $preparados++;
                 if ($tarea?->plan_operacional_id === $plan->id) {
                     $this->planes->cancelarPorReplanificacion(
@@ -94,11 +89,7 @@ class ServicioTrasladosPreparacionSag
 
             if (! $folio->activo
                 || $folio->tipo_bulto !== TipoBulto::Pallet
-                || $folio->habilitacion_almacenamiento !== HabilitacionAlmacenamientoFolio::Habilitado
-                || ! $this->despliegue->dirige(array_filter([
-                    $actual?->camara_id,
-                    $destino->camara_id,
-                ]))) {
+                || $folio->habilitacion_almacenamiento !== HabilitacionAlmacenamientoFolio::Habilitado) {
                 continue;
             }
 
@@ -107,6 +98,18 @@ class ServicioTrasladosPreparacionSag
                 continue;
             }
             if ($tarea?->plan_operacional_id === $plan->id) {
+                continue;
+            }
+
+            // El pallet que está listo ocupa el espacio libre más profundo.
+            // No se fija destino para pallets que todavía esperan prefrío.
+            $destino = $posiciones->first(
+                fn (Posicion $posicion): bool => ! in_array($posicion->id, $destinos, true),
+            );
+            if (! $destino || ! $this->despliegue->dirige(array_filter([
+                $actual?->camara_id,
+                $destino->camara_id,
+            ]))) {
                 continue;
             }
 
@@ -166,6 +169,7 @@ class ServicioTrasladosPreparacionSag
                     'marca' => $folio->marca,
                 ], static fn (mixed $valor): bool => $valor !== null && $valor !== ''),
             ]);
+            $destinos[$folio->id] = $destino->id;
             $anterior?->update(['reemplazada_por_tarea_id' => $nueva->id]);
         }
 
@@ -207,8 +211,8 @@ class ServicioTrasladosPreparacionSag
     }
 
     /**
-     * Conserva el destino entre aprobaciones parciales y reintentos. Las
-     * posiciones de separación nunca forman parte de esta asignación.
+     * Conserva el destino de las tareas activas y los pallets ya presentes.
+     * Las posiciones de separación nunca forman parte de esta asignación.
      *
      * @param  Collection<int, Folio>  $folios
      * @param  Collection<string, Posicion>  $posiciones
@@ -237,29 +241,16 @@ class ServicioTrasladosPreparacionSag
             ->lockForUpdate()
             ->get()
             ->keyBy('folio_id');
-        $previos = $plan->contexto['destinos_por_folio'] ?? [];
         foreach ($folios as $folio) {
             if (isset($destinos[$folio->id])) {
                 continue;
             }
-            $anterior = $tareas->get($folio->id)?->posicion_destino_id
-                ?? ($previos[$folio->id] ?? null);
+            $anterior = $tareas->get($folio->id)?->posicion_destino_id;
             if ($anterior && $posiciones->has($anterior) && ! isset($usadas[$anterior])) {
                 $destinos[$folio->id] = $anterior;
                 $usadas[$anterior] = true;
             }
         }
-        foreach ($folios as $folio) {
-            if (isset($destinos[$folio->id])) {
-                continue;
-            }
-            $libre = $posiciones->first(fn (Posicion $posicion): bool => ! isset($usadas[$posicion->id]));
-            if ($libre) {
-                $destinos[$folio->id] = $libre->id;
-                $usadas[$libre->id] = true;
-            }
-        }
-
         return $destinos;
     }
 

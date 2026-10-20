@@ -573,6 +573,13 @@ class InspeccionSagApiTest extends TestCase
         $planes = app(ServicioPlanesOperacionales::class);
         $tarea = $planes->asumir($tarea, $operador, $dispositivo);
         $this->assertSame($tarea->posicion_destino_id, $tarea->reservaActiva->bloqueo_posicion_id);
+        $otroOperador = User::factory()->create(['rol' => RolUsuario::CamareroFrio, 'activo' => true]);
+        try {
+            $planes->asumir($tarea, $otroOperador, $dispositivo);
+            $this->fail('La maniobra SAG no debe poder ser asumida por dos camareros.');
+        } catch (ConflictoOperacion $error) {
+            $this->assertNotEmpty($error->getMessage());
+        }
         $separacion = ReservaPosicionInspeccionSag::query()->where('tipo_espacio', 'separacion')->sole();
         try {
             $planes->materializarDestino(
@@ -739,11 +746,42 @@ class InspeccionSagApiTest extends TestCase
         $this->assertSame($zona->id, $nueva->camara_destino_id);
     }
 
+    public function test_aprobaciones_de_tuneles_distintos_preparan_desde_el_fondo_sin_apartar_destino_para_el_pendiente(): void
+    {
+        $this->activarPlanificadorDirigido();
+        $usuario = $this->administradorConTemporada();
+        $this->crearZonaInspeccion($usuario, posiciones: 3);
+        $pendiente = $this->crearFolioUbicado('SAG-PARCIAL-001');
+        $listo = $this->crearFolioUbicado('SAG-PARCIAL-002');
+        $procesoPendiente = $this->crearPrefrioSag($usuario, [$pendiente], sufijo: '-PENDIENTE');
+        $this->crearPrefrioSag($usuario, [$listo], aprobado: true, sufijo: '-LISTO');
+        $lote = $this->crearLoteEnPreparacion(
+            $usuario,
+            [$pendiente, $listo],
+            Pais::query()->where('iso_alpha2', 'CL')->firstOrFail(),
+        );
+        $primera = TareaMovimiento::query()->with('posicionDestino')->sole();
+        $this->assertSame($listo->id, $primera->folio_id);
+        $this->assertSame(2, $primera->posicionDestino->posicion);
+        $this->actingAs($usuario, 'sanctum')
+            ->postJson("/api/prefrio/procesos/{$procesoPendiente->id}/aprobar", [
+                'operacion_id' => (string) Str::uuid(),
+                'version_conocida' => $procesoPendiente->version,
+                'ocurrido_at' => now()->toAtomString(),
+            ])
+            ->assertOk();
+        $segunda = TareaMovimiento::query()->where('folio_id', $pendiente->id)->sole();
+        $this->assertSame($lote['preparacion_fisica']['plan_id'], $segunda->plan_operacional_id);
+        $this->assertSame(1, $segunda->posicionDestino->posicion);
+        $this->assertSame($primera->posicion_destino_id, $primera->refresh()->posicion_destino_id);
+        $this->assertDatabaseCount('tareas_movimiento', 2);
+    }
+
     /** @param array<int, Folio> $folios */
-    private function crearPrefrioSag(User $usuario, array $folios, bool $aprobado = false): ProcesoPrefrio
+    private function crearPrefrioSag(User $usuario, array $folios, bool $aprobado = false, string $sufijo = ''): ProcesoPrefrio
     {
         $tunel = TunelPrefrio::create([
-            'codigo' => 'TUN-SAG',
+            'codigo' => 'TUN-SAG'.$sufijo,
             'nombre' => 'Túnel SAG',
             'capacidad_posiciones' => max(2, count($folios)),
             'setpoint_habitual' => -1.5,
@@ -754,7 +792,7 @@ class InspeccionSagApiTest extends TestCase
         ]);
         $proceso = ProcesoPrefrio::create([
             'temporada_id' => $folios[0]->temporada_id,
-            'codigo' => 'PFR-SAG',
+            'codigo' => 'PFR-SAG'.$sufijo,
             'operacion_id' => (string) Str::uuid(),
             'payload_hash' => hash('sha256', 'prefrio-sag'),
             'tunel_prefrio_id' => $tunel->id,
