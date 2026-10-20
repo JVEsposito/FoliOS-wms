@@ -38,7 +38,7 @@ return new class extends Migration
             $t->id();
             $t->uuid('fuente_id');
             $t->uuid('persona_id');
-            $t->string('identificador_externo', 100);
+            $t->string('identificador_externo', 100)->collation('utf8mb4_bin');
             $t->timestamps();
             $t->foreign('fuente_id')->references('id')->on('rh_fuentes');
             $t->foreign('persona_id')->references('id')->on('rh_personas');
@@ -73,7 +73,7 @@ return new class extends Migration
             $t->uuid('id')->primary();
             $t->uuid('persona_id');
             $t->string('fuente_codigo', 60);
-            $t->string('id_externo', 150);
+            $t->string('id_externo', 150)->collation('utf8mb4_bin');
             $t->string('payload_hash', 64);
             $t->string('tipo', 10);
             $t->dateTime('instante_at', 6);
