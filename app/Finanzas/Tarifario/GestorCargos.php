@@ -10,7 +10,6 @@ use App\Finanzas\Models\CargoAcordado;
 use App\Finanzas\Models\EventoCargo;
 use App\Finanzas\Models\Lectura;
 use App\Models\User;
-use Brick\Math\BigDecimal;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -34,7 +33,7 @@ final class GestorCargos
         if ($datos['base_cobro'] === 'ejecucion' && $datos['estado_ejecucion'] !== 'realizado') {
             throw ValidationException::withMessages(['base_cobro' => 'Para cobrar sin ejecución, indique acuerdo, compromiso o disponibilidad como base del cobro.']);
         }
-        $datos['cantidad'] = (string) BigDecimal::of($datos['cantidad'])->stripTrailingZeros();
+        $datos['cantidad'] = Precio::normalizar($datos['cantidad']);
         ksort($datos);
         $hash = hash('sha256', json_encode($datos, JSON_THROW_ON_ERROR));
         $candado = 'cargo-'.$datos['operacion_id'];
