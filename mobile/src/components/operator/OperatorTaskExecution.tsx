@@ -20,6 +20,7 @@ import type { StartConfirmation } from '../../services/operationalTasksApi';
 import { OperatorExceptionReport } from './OperatorExceptionReport';
 import { OperatorFolioConfirmation, type FolioConfirmationState } from './OperatorFolioConfirmation';
 import { OperatorPhysicalContextPanel } from './OperatorPhysicalContextPanel';
+import { OperatorTaskPurpose } from './OperatorTaskPurpose';
 import { OperatorEntityCode, OperatorPriorityBadge, OperatorStatusBadge } from './OperatorPrimitives';
 
 type Props = {
@@ -130,6 +131,7 @@ export function OperatorTaskExecution({
 
   return (
     <ScrollView contentContainerStyle={[styles.content, wide && styles.wideContent]} style={styles.screen}>
+      <OperatorTaskPurpose task={task} />
       {wide ? (
         <>
           <View style={styles.wideHeader}>

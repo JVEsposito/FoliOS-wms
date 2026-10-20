@@ -12,6 +12,7 @@ import {
 import { ApiError } from './apiError';
 import { fetchWithTimeout } from './httpClient';
 import type { ShiftVerification, MaterialVerificationReading } from '../domain/verification';
+import type { OperatorLoadFeed } from '../domain/operatorLoads';
 
 export const TABLET_PLANNER_VERSION = 'rolling-global-2';
 
@@ -26,7 +27,16 @@ export type OperatorPinStatus = {
 };
 
 export class OperationalTasksApi {
+  private loadsEtag: { token: string; value: string | null } | null = null;
+
   constructor(private readonly baseUrl: string) {}
+
+  async loadStatus(token: string, conditional = false): Promise<OperatorLoadFeed | null> {
+    const etag = conditional && this.loadsEtag?.token === token ? this.loadsEtag.value : null;
+    return this.request<OperatorLoadFeed | null>('/api/cargas/operacion-turno', token,
+      { headers: etag ? { 'If-None-Match': etag } : {} },
+      (response) => { this.loadsEtag = { token, value: response.headers.get('ETag') }; });
+  }
 
   async inventoryCounts(token: string): Promise<ShiftVerification[]> {
     return (await this.request<{ data: ShiftVerification[] }>('/api/materiales/tomas/conteo', token)).data;
@@ -220,7 +230,7 @@ export class OperationalTasksApi {
     )).data;
   }
 
-  private async request<T>(path: string, token: string, init: RequestInit = {}): Promise<T> {
+  private async request<T>(path: string, token: string, init: RequestInit = {}, onResponse?: (response: Response) => void): Promise<T> {
     const headers = new Headers(init.headers);
     headers.set('Accept', 'application/json');
     headers.set('Authorization', `Bearer ${token}`);
@@ -236,6 +246,8 @@ export class OperationalTasksApi {
       );
     }
 
+    if (response.status === 304 && onResponse) return null as T;
+
     const data = response.status === 204
       ? null
       : await response.json().catch(() => ({}));
@@ -243,6 +255,8 @@ export class OperationalTasksApi {
     if (!response.ok) {
       throw new ApiError(validationMessage(data), response.status, data);
     }
+
+    onResponse?.(response);
 
     return data as T;
   }

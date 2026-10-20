@@ -21,6 +21,7 @@ class TareaMovimientoResource extends JsonResource
                 'estado' => $this->planOperacional->estado->value,
                 'prioridad' => $this->planOperacional->prioridad->value,
                 'titulo' => $this->planOperacional->titulo,
+                'motivo' => $this->planOperacional->motivo,
                 'version' => $this->planOperacional->version,
                 'horizon' => ($this->planOperacional->contexto ?? [])['planner_horizon']
                     ?? config('planificador.horizon'),
@@ -59,6 +60,7 @@ class TareaMovimientoResource extends JsonResource
                             'estado' => $objetivo->estado->value,
                             'prioridad' => $objetivo->prioridad->value,
                             'titulo' => $objetivo->titulo,
+                            'motivo' => $objetivo->motivo,
                             'es_principal' => (bool) $objetivo->pivot->es_principal,
                             'beneficio_estimado' => (int) $objetivo->pivot->beneficio_estimado,
                         ])->values()->all()

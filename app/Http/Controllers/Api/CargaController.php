@@ -30,6 +30,7 @@ use App\Services\Cargas\RevisionCargaOperacional;
 use App\Services\Cargas\ServicioCarga;
 use App\Services\Cargas\ServicioPresenciaCargaAnden;
 use App\Services\Temporadas\ServicioTemporadaActiva;
+use App\Services\Verificaciones\VentanasVerificacion;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -145,6 +146,59 @@ class CargaController extends Controller
             CargaResource::collection($cargas)->response(),
             $etag,
         );
+    }
+
+    public function operacionTurno(
+        Request $request,
+        RevisionCargaOperacional $revision,
+        VentanasVerificacion $ventanas,
+    ): Response {
+        Gate::authorize('consultar-cargas-operacion');
+
+        $turno = $ventanas->actual();
+        $temporada = app(ServicioTemporadaActiva::class)->buscar();
+        // El cambio de turno invalida la bandeja aunque no haya cambiado ninguna carga.
+        $etag = 'cargas-turno-'.$temporada?->id.'-'.$turno['inicio']->timestamp.'-'.$revision->calcular();
+        $condicional = $this->configurarCacheOperacion(response('', 200), $etag);
+        if ($condicional->isNotModified($request)) {
+            return $condicional;
+        }
+
+        $inicio = $turno['inicio']->format('Y-m-d H:i:s');
+        $fin = $turno['fin']->format('Y-m-d H:i:s');
+        $cargas = Carga::query()
+            ->whereHas('temporada', fn (Builder $consulta): Builder => $consulta->whereKey($temporada?->id))
+            ->where(function (Builder $consulta) use ($inicio, $fin): void {
+                $consulta->whereIn('estado', array_map(fn (EstadoCarga $estado): string => $estado->value, EstadoCarga::visiblesEnOperacion()))
+                    ->orWhere(fn (Builder $cerradas): Builder => $cerradas->where('estado', EstadoCarga::Cerrada)
+                        ->where('cerrada_at', '>=', $inicio)->where('cerrada_at', '<', $fin))
+                    ->orWhere(fn (Builder $canceladas): Builder => $canceladas->where('estado', EstadoCarga::Cancelada)
+                        ->whereNotNull('publicada_at')->where('cancelada_at', '>=', $inicio)->where('cancelada_at', '<', $fin))
+                    // El estado legado «despachada» no tiene una fecha propia de término.
+                    ->orWhere(fn (Builder $despachadas): Builder => $despachadas->where('estado', EstadoCarga::Despachada)
+                        ->where('updated_at', '>=', $inicio)->where('updated_at', '<', $fin));
+            })
+            ->with($this->relacionesOperacion())
+            ->withCount(['incidencias as incidencias_abiertas' => fn (Builder $consulta): Builder => $consulta
+                ->where('incidencias_carga_folio.estado', EstadoIncidenciaCarga::Abierta->value)])
+            ->orderByRaw("CASE prioridad WHEN 'urgente' THEN 1 WHEN 'alta' THEN 2 ELSE 3 END")
+            ->orderByDesc('publicada_at')
+            ->get();
+
+        // Al cerrar se liberan las reservas: conservar el detalle despachado del turno.
+        $cargas->whereIn('estado', [EstadoCarga::Cerrada, EstadoCarga::Despachada])->load([
+            'asignacionesHistoricas.anden:id,codigo,nombre',
+            'asignacionesHistoricas.folio.ubicacionActual.posicion.camara:id,codigo,nombre',
+        ]);
+
+        return $this->configurarCacheOperacion(CargaResource::collection($cargas)->additional([
+            'meta' => ['turno' => [
+                'nombre' => $turno['nombre'],
+                'inicio_at' => $turno['inicio']->toAtomString(),
+                'fin_at' => $turno['fin']->toAtomString(),
+                'zona_horaria' => config('app.operational_timezone', 'America/Santiago'),
+            ]],
+        ])->response(), $etag);
     }
 
     public function foliosSalidaDirectaPrefrio(Request $request): AnonymousResourceCollection
