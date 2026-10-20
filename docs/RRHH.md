@@ -44,7 +44,7 @@ El estado operativo **no elimina cantidades programadas ni obligaciones comercia
 ## Integraciones y GeoVictoria
 
 1. Crear fuente (`normalizado` o `geovictoria`) y guardar su configuración privada en pantalla.
-2. Vincular explícitamente persona con identificador externo. No se adivina por nombre ni se reasigna un identificador histórico. El vínculo se agrega desde Personal → Vincular fuente.
+2. Vincular explícitamente persona con identificador externo. Los identificadores externos se comparan exactamente, incluidas mayúsculas y minúsculas. No se adivina por nombre ni se reasigna un identificador histórico. El vínculo se agrega desde Personal → Vincular fuente.
 3. Asignar esa fuente a la ficha personal **antes** de programar las asignaciones que deben usarla. Cada asignación guarda la fuente elegida en ese momento. El sistema propio no mezcla sus marcas con una fuente externa.
 4. Recibir lotes por JSON desde Integraciones o `POST /api/rrhh/fuentes/{uuid}/importar`. Hasta 1.000 objetos por solicitud. La importación conserva cantidades aceptadas/repetidas y errores por fila; los registros válidos permanecen aunque otra fila falle. Reenviar solo repite los ya recibidos. Mismo identificador con diferente contenido exige revisión y corrección.
 

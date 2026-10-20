@@ -88,12 +88,13 @@ class AsistenciaRrhhTest extends TestCase
         $this->postJson('/api/rrhh/fuentes/'.$fuente.'/vinculos', ['persona_id' => $persona, 'identificador_externo' => 'EXT-1'])->assertCreated();
         $filas = [
             ['id_externo' => 'p1', 'identificador' => 'EXT-1', 'tipo' => 'entrada', 'instante' => '2026-11-01T22:00:00-03:00'],
-            ['id_externo' => 'p2', 'identificador' => 'EXT-1', 'tipo' => 'salida', 'instante' => '2026-11-02T06:00:00-03:00'],
+            ['id_externo' => 'P1', 'identificador' => 'EXT-1', 'tipo' => 'salida', 'instante' => '2026-11-02T06:00:00-03:00'],
+            ['id_externo' => 'p-caso', 'identificador' => 'ext-1', 'tipo' => 'entrada', 'instante' => '2026-11-01T22:00:00-03:00'],
             ['id_externo' => 'p3', 'identificador' => 'SIN-VINCULO', 'tipo' => 'entrada', 'instante' => '2026-11-01T22:00:00-03:00'],
             ['id_externo' => 'p4', 'identificador' => 'EXT-1', 'tipo' => 'entrada', 'instante' => '2026-11-01 22:00:00'],
         ];
         $url = '/api/rrhh/fuentes/'.$fuente.'/importar';
-        $this->postJson($url, ['marcajes' => $filas])->assertCreated()->assertJsonPath('data.aceptadas', 2)->assertJsonCount(2, 'data.errores');
+        $this->postJson($url, ['marcajes' => $filas])->assertCreated()->assertJsonPath('data.aceptadas', 2)->assertJsonCount(3, 'data.errores');
         $this->postJson($url, ['marcajes' => $filas])->assertCreated()->assertJsonPath('data.repetidas', 2)->assertJsonPath('data.aceptadas', 0);
         $this->postJson($url, ['marcajes' => [[...$filas[0], 'instante' => '2026-11-01T23:00:00-03:00']]])->assertCreated()->assertJsonCount(1, 'data.errores');
         $this->assertSame(2, Marcaje::query()->count());
