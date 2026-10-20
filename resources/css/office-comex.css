@@ -1,0 +1,1011 @@
+/* Comex: expedientes de embarque y su configuración.
+   Sin «warning», «danger» ni «error» en los nombres: office-corporate.css los colorea por subcadena. */
+.cx-workspace {
+    display: grid;
+    gap: 16px;
+    padding: 16px;
+}
+
+.cx-workspace > * {
+    min-width: 0;
+}
+
+.cx-heading {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.cx-heading h1 {
+    margin: 4px 0;
+}
+
+.cx-heading p {
+    max-width: 760px;
+    margin: 0;
+    color: var(--text-secondary);
+}
+
+.cx-range {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: flex-end;
+    gap: 8px;
+}
+
+.cx-range label,
+.cx-filters label {
+    display: grid;
+    gap: 4px;
+}
+
+.cx-range label > span,
+.cx-filters label > span {
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 800;
+}
+
+/* office.css da a todo input ancho completo y 52 px de alto: aquí, controles compactos. */
+.cx-range input,
+.cx-filters :is(input:not([type="checkbox"]), select) {
+    width: 100%;
+    min-width: 0;
+    min-height: 40px;
+    height: 40px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: var(--panel);
+    color: var(--text);
+    font: inherit;
+    padding: 0 10px;
+}
+
+.cx-range input {
+    width: 150px;
+}
+
+.cx-range .secondary-button {
+    min-height: 40px;
+}
+
+.cx-status {
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--success-text);
+    border-radius: 10px;
+    background: var(--panel);
+    color: var(--text);
+    line-height: 1.5;
+}
+
+.cx-status small {
+    display: block;
+    margin-top: 2px;
+    color: var(--muted);
+}
+
+.cx-status--alerta {
+    border-left-color: var(--danger-text);
+}
+
+.cx-panel {
+    padding: 16px;
+}
+
+.cx-panel__heading {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 12px;
+}
+
+.cx-panel__heading h2 {
+    margin: 4px 0 0;
+    font-size: 1.15rem;
+}
+
+.cx-panel__heading small {
+    max-width: 520px;
+    color: var(--muted);
+}
+
+.cx-empty-config {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    border-left: 4px solid var(--info-text);
+}
+
+.cx-empty-config h2 {
+    margin: 4px 0;
+    font-size: 1.15rem;
+}
+
+.cx-empty-config p {
+    margin: 0;
+    color: var(--text-secondary);
+}
+
+.cx-acciones {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.cx-kpis {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.cx-kpis:empty {
+    display: none;
+}
+
+.cx-kpi {
+    display: grid;
+    align-content: start;
+    gap: 4px;
+    margin: 0;
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--panel);
+    color: var(--text);
+    font: inherit;
+    text-align: left;
+}
+
+button.cx-kpi {
+    cursor: pointer;
+}
+
+button.cx-kpi:hover,
+button.cx-kpi:focus-visible,
+.cx-kpi.is-active {
+    border-color: var(--info-text);
+}
+
+.cx-kpi.is-active {
+    box-shadow: inset 0 0 0 1px var(--info-text);
+}
+
+.cx-kpi span {
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.cx-kpi strong {
+    font-size: 24px;
+    font-variant-numeric: tabular-nums;
+}
+
+.cx-kpi small {
+    color: var(--muted);
+}
+
+.cx-kpi--critico strong {
+    color: var(--danger-text);
+}
+
+.cx-kpi--atencion strong {
+    color: var(--warning-text);
+}
+
+.cx-kpi--ok strong {
+    color: var(--success-text);
+}
+
+.cx-filters {
+    display: grid;
+    grid-template-columns: minmax(220px, 1fr) minmax(160px, 240px) minmax(150px, 200px) auto;
+    align-items: end;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.cx-filters--una {
+    grid-template-columns: minmax(220px, 1fr) minmax(160px, 220px);
+}
+
+.cx-check {
+    display: flex !important;
+    align-items: center;
+    gap: 8px;
+    min-height: 40px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.cx-check > span {
+    color: var(--text-secondary) !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+}
+
+.cx-workspace input[type="checkbox"],
+.cx-dialog input:is([type="checkbox"], [type="radio"]) {
+    width: 18px;
+    height: 18px;
+    min-height: 18px;
+    flex: 0 0 18px;
+    margin: 0;
+    padding: 0;
+    accent-color: var(--info-text);
+}
+
+/* Expedientes: una fila por embarque, ordenadas por gravedad. */
+.cx-embarques {
+    display: grid;
+    gap: 8px;
+}
+
+.cx-embarque {
+    display: grid;
+    grid-template-columns: 110px minmax(0, 1.6fr) minmax(130px, .7fr) minmax(0, 1.4fr) auto;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    margin: 0;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--line);
+    border-radius: 10px;
+    background: var(--panel);
+    color: var(--text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.cx-embarque:hover,
+.cx-embarque:focus-visible {
+    border-color: var(--info-text);
+    background: var(--surface-hover, var(--panel));
+}
+
+.cx-embarque--critico {
+    border-left-color: var(--danger-text);
+}
+
+.cx-embarque--atencion {
+    border-left-color: var(--warning-text);
+}
+
+.cx-embarque--ok {
+    border-left-color: var(--success-text);
+}
+
+.cx-embarque--neutro {
+    opacity: .78;
+}
+
+.cx-embarque > span {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+}
+
+.cx-embarque small {
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.cx-embarque__datos strong,
+.cx-embarque__datos small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cx-embarque__falta {
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.cx-embarque__alerta {
+    justify-items: end;
+}
+
+.cx-barra {
+    display: block;
+    height: 6px;
+    overflow: hidden;
+    border-radius: 99px;
+    background: var(--surface-muted);
+}
+
+.cx-barra > span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--success-text);
+}
+
+.cx-chip {
+    display: inline-block;
+    padding: 2px 8px;
+    border: 1px solid var(--line);
+    border-radius: 99px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.cx-chip--critico {
+    border-color: var(--danger-text);
+    background: var(--danger-bg);
+    color: var(--danger-text);
+}
+
+.cx-chip--atencion {
+    border-color: var(--warning-text);
+    background: var(--warning-bg);
+    color: var(--warning-text);
+}
+
+.cx-chip--ok {
+    border-color: var(--success-text);
+    background: var(--success-bg);
+    color: var(--success-text);
+}
+
+.cx-chip--info {
+    border-color: var(--info-text);
+    background: var(--info-bg);
+    color: var(--info-text);
+}
+
+.cx-vacio {
+    margin: 0;
+    padding: 18px;
+    border: 1px dashed var(--line);
+    border-radius: 10px;
+    color: var(--muted);
+    text-align: center;
+}
+
+.cx-boton {
+    display: inline-flex;
+    align-items: center;
+    margin: 0;
+    padding: 4px 10px;
+    border: 1px solid var(--line);
+    border-radius: 99px;
+    background: transparent;
+    color: var(--info-text);
+    font-size: 12px;
+    font-weight: 800;
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.cx-boton:hover,
+.cx-boton:focus-visible {
+    border-color: var(--info-text);
+}
+
+.cx-boton--principal {
+    border-color: var(--info-text);
+    background: var(--info-bg);
+}
+
+/* Diálogos. El reinicio global deja margin: 0 en los diálogos. */
+.cx-dialog {
+    width: min(680px, calc(100vw - 32px));
+    max-height: calc(100vh - 48px);
+    margin: auto;
+    padding: 0;
+    overflow: auto;
+}
+
+.cx-dialog--ancho {
+    width: min(960px, calc(100vw - 32px));
+}
+
+.cx-dialog__heading,
+.cx-dialog__actions {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px;
+}
+
+.cx-dialog__heading {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    border-bottom: 1px solid var(--line);
+    background: var(--panel);
+}
+
+.cx-dialog__heading h2 {
+    margin: 4px 0 0;
+    font-size: 1.1rem;
+}
+
+.cx-dialog .cx-dialog__sub {
+    margin: 4px 0 0;
+    color: var(--muted) !important;
+    font-size: 13px;
+}
+
+.cx-dialog__close {
+    border: 0;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 24px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.cx-dialog__actions {
+    justify-content: flex-end;
+    border-top: 1px solid var(--line);
+}
+
+.cx-dialog__body {
+    display: grid;
+    gap: 14px;
+    padding: 16px;
+}
+
+/* office-corporate.css da a todo <p> de un diálogo el color secundario con !important. */
+.cx-dialog p.cx-detalle__alerta {
+    margin: 0;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: var(--surface-muted);
+    color: var(--text) !important;
+}
+
+.cx-dialog p.cx-detalle__alerta--critico {
+    background: var(--danger-bg);
+    color: var(--danger-text) !important;
+}
+
+.cx-dialog p.cx-detalle__alerta--atencion {
+    background: var(--warning-bg);
+    color: var(--warning-text) !important;
+}
+
+.cx-dialog p.cx-detalle__alerta--ok {
+    background: var(--success-bg);
+    color: var(--success-text) !important;
+}
+
+.cx-datos {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin: 0;
+}
+
+.cx-datos div {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+
+.cx-datos dt {
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.cx-datos dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.cx-detalle__nota {
+    margin: 0;
+    font-size: 13px;
+}
+
+.cx-detalle__instructivos,
+.cx-historial,
+.cx-documento__versiones {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+}
+
+.cx-detalle__instructivos > summary,
+.cx-historial > summary {
+    padding: 10px 12px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.cx-detalle__instructivos ul,
+.cx-historial ol {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0 12px 12px;
+    list-style: none;
+}
+
+.cx-detalle__instructivos li,
+.cx-historial li {
+    display: grid;
+    gap: 2px;
+}
+
+.cx-detalle__instructivos small,
+.cx-historial small {
+    color: var(--muted);
+}
+
+.cx-grupo h3 {
+    margin: 0;
+    font-size: 1rem;
+}
+
+.cx-dialog .cx-grupo > p {
+    margin: 2px 0 8px;
+    color: var(--muted) !important;
+    font-size: 13px;
+}
+
+.cx-documentos {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.cx-documento {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--line);
+    border-radius: 10px;
+}
+
+.cx-documento.is-resuelto {
+    border-left-color: var(--success-text);
+}
+
+.cx-documento.is-falta-antes {
+    border-left-color: var(--danger-text);
+}
+
+.cx-documento.is-falta-despues {
+    border-left-color: var(--warning-text);
+}
+
+.cx-documento__nombre {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+}
+
+.cx-documento__nombre > strong {
+    margin-right: 8px;
+}
+
+.cx-documento__nombre > .cx-chip {
+    justify-self: start;
+}
+
+.cx-documento small {
+    color: var(--muted);
+    font-size: 12px;
+    overflow-wrap: anywhere;
+}
+
+.cx-documento .cx-documento__ref {
+    color: var(--info-text);
+    font-weight: 700;
+}
+
+.cx-documento__versiones {
+    margin-top: 4px;
+    padding: 4px 8px;
+    font-size: 12px;
+}
+
+.cx-documento__versiones summary {
+    cursor: pointer;
+}
+
+.cx-documento__versiones ul {
+    display: grid;
+    gap: 4px;
+    margin: 6px 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.cx-documento__versiones a {
+    color: var(--info-text);
+}
+
+/* Formularios de los diálogos. */
+.cx-form {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    padding: 16px;
+}
+
+.cx-form label {
+    display: grid;
+    align-content: start;
+    gap: 4px;
+}
+
+.cx-form label > span,
+.cx-form legend {
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.cx-form :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+    width: 100%;
+    min-width: 0;
+    min-height: 42px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: var(--panel);
+    color: var(--text);
+    font: inherit;
+    padding: 9px 10px;
+}
+
+.cx-form input[type="file"] {
+    padding: 8px;
+}
+
+.cx-form textarea {
+    min-height: 0;
+    resize: vertical;
+}
+
+.cx-form__wide {
+    grid-column: 1 / -1;
+}
+
+.cx-dialog p.cx-form__nota {
+    margin: 0;
+    color: var(--text-secondary) !important;
+    font-size: 13px;
+}
+
+.cx-dialog p.cx-form__referencia {
+    margin: 0;
+    padding: 8px 10px;
+    border-radius: 9px;
+    background: var(--info-bg);
+    color: var(--info-text) !important;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.cx-form p.cx-form__nota:empty {
+    display: none;
+}
+
+/* office.css colorea .form-error con una variable del tema oscuro; aquí, la del tema activo. */
+.cx-form .form-error {
+    margin: 0;
+    color: var(--danger-text) !important;
+}
+
+.cx-form .form-error:empty {
+    display: none;
+}
+
+.cx-form fieldset {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.cx-estados,
+.cx-casillas {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+}
+
+.cx-estados legend,
+.cx-casillas legend {
+    width: 100%;
+    margin-bottom: 6px;
+}
+
+.cx-form .cx-estados label,
+.cx-form .cx-casillas label,
+.cx-form .cx-paises__lista label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.cx-form .cx-estados label > span,
+.cx-form .cx-casillas label > span,
+.cx-form .cx-paises__lista label > span {
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.cx-estados label {
+    padding: 8px 12px;
+    border: 1px solid var(--line);
+    border-radius: 99px;
+}
+
+.cx-estados label:has(input:checked) {
+    border-color: var(--info-text);
+    background: var(--info-bg);
+}
+
+.cx-paises {
+    display: grid;
+    gap: 8px;
+}
+
+.cx-paises__lista {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px 12px;
+    max-height: 220px;
+    overflow: auto;
+    padding: 8px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+}
+
+/* Configuración: tabla de documentos y lista de clientes. */
+.cx-table-scroll {
+    overflow: auto;
+}
+
+.cx-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.cx-table th,
+.cx-table td {
+    padding: 10px;
+    border-bottom: 1px solid var(--line);
+    text-align: left;
+    vertical-align: top;
+}
+
+.cx-table th {
+    color: var(--muted);
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+.cx-table td small {
+    display: block;
+    margin-top: 3px;
+    color: var(--muted);
+}
+
+.cx-table tr.is-inactivo td {
+    color: var(--muted);
+}
+
+.cx-table .cx-c-nombre {
+    min-width: 220px;
+}
+
+.cx-table .cx-c-momento,
+.cx-table .cx-c-estado,
+.cx-table .cx-c-acciones {
+    white-space: nowrap;
+}
+
+.cx-lista-clientes {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.cx-lista-clientes li {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+}
+
+.cx-lista-clientes li > div {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+
+.cx-lista-clientes small {
+    color: var(--muted);
+    font-size: 12px;
+}
+
+@media (max-width: 1280px) {
+    .cx-kpis {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .cx-embarque {
+        grid-template-columns: 100px minmax(0, 1fr) minmax(120px, .6fr) auto;
+    }
+
+    .cx-embarque__falta {
+        grid-column: 2 / -1;
+        grid-row: 2;
+    }
+}
+
+@media (max-width: 900px) {
+    .cx-filters {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .cx-datos {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 720px) {
+    .cx-workspace {
+        padding: 10px;
+    }
+
+    .cx-heading,
+    .cx-panel__heading,
+    .cx-empty-config {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .cx-range {
+        flex-wrap: wrap;
+        width: 100%;
+    }
+
+    .cx-range label {
+        flex: 1 1 130px;
+    }
+
+    .cx-range input {
+        width: 100%;
+    }
+
+    .cx-kpis {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .cx-filters,
+    .cx-filters--una,
+    .cx-form {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    /* En celular cada embarque es una tarjeta: fecha y alerta arriba, lo demás debajo. */
+    .cx-embarque {
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 8px;
+    }
+
+    .cx-embarque__fecha {
+        grid-column: 1;
+        grid-row: 1;
+    }
+
+    .cx-embarque__alerta {
+        grid-column: 2;
+        grid-row: 1;
+    }
+
+    .cx-embarque__datos,
+    .cx-embarque__avance,
+    .cx-embarque__falta {
+        grid-column: 1 / -1;
+        grid-row: auto;
+    }
+
+    .cx-embarque__datos strong,
+    .cx-embarque__datos small {
+        white-space: normal;
+    }
+
+    .cx-dialog,
+    .cx-dialog--ancho {
+        width: 100vw;
+        max-width: 100vw;
+        max-height: 100dvh;
+        height: 100dvh;
+        border-radius: 0;
+    }
+
+    .cx-documento {
+        flex-direction: column;
+    }
+
+    .cx-paises__lista {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    /* La tabla de documentos se lee como tarjetas. */
+    .cx-table--tipos thead {
+        display: none;
+    }
+
+    .cx-table--tipos tbody {
+        display: grid;
+        gap: 8px;
+    }
+
+    .cx-table--tipos tr {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 4px 12px;
+        padding: 10px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+    }
+
+    /* office-folios.css fija relleno y borde de toda celda con !important. */
+    .office-app .cx-table--tipos td {
+        padding: 0 !important;
+        border: 0 !important;
+    }
+
+    .cx-table--tipos .cx-c-nombre {
+        grid-column: 1;
+        min-width: 0;
+    }
+
+    .cx-table--tipos .cx-c-estado {
+        grid-column: 2;
+        grid-row: 1;
+    }
+
+    .cx-table--tipos :is(.cx-c-momento, .cx-c-exige, .cx-c-aplica, .cx-c-pide, .cx-c-acciones) {
+        grid-column: 1 / -1;
+        color: var(--text-secondary);
+        font-size: 13px;
+    }
+
+    .cx-table--tipos td[data-etiqueta]::before {
+        content: attr(data-etiqueta) ": ";
+        color: var(--muted);
+        font-weight: 800;
+    }
+
+    .cx-lista-clientes li {
+        grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    .cx-lista-clientes li > .cx-boton {
+        grid-column: 1 / -1;
+        justify-self: start;
+    }
+}
