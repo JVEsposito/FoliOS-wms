@@ -995,13 +995,14 @@ class ServicioReservasTareasMovimiento
             return;
         }
 
-        // En rolling el destino pertenece al claim vencido o liberado. En batch
-        // es parte del plan y debe permanecer visible en la bandeja.
+        // Solo el destino dinámico pertenece al claim. Un destino inmutable
+        // (por ejemplo, el sector SAG) pertenece al objetivo y debe conservarse.
         $rolling = ($tarea->planOperacional?->contexto['planner_horizon']
             ?? config('planificador.horizon')) === 'rolling';
+        $destinoInmutable = ($tarea->contexto['destino_precalculado_inmutable'] ?? false) === true;
         $tarea->update([
             'estado' => EstadoTareaMovimiento::Pendiente,
-            ...($rolling ? ['camara_destino_id' => null, 'posicion_destino_id' => null] : []),
+            ...($rolling && ! $destinoInmutable ? ['camara_destino_id' => null, 'posicion_destino_id' => null] : []),
             'responsable_user_id' => null,
             'dispositivo_id' => null,
             'asumida_at' => null,

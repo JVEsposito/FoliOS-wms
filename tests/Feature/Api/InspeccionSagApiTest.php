@@ -16,6 +16,8 @@ use App\Models\ArticuloValidacion;
 use App\Models\BandaOperacional;
 use App\Models\BloqueMercado;
 use App\Models\Camara;
+use App\Models\Carga;
+use App\Models\CargaFolio;
 use App\Models\CategoriaValidacion;
 use App\Models\Cliente;
 use App\Models\ClienteValidacion;
@@ -25,18 +27,29 @@ use App\Models\CsgValidacion;
 use App\Models\Dispositivo;
 use App\Models\EspecieValidacion;
 use App\Models\Folio;
+use App\Models\LoteInspeccionSag;
 use App\Models\OrigenValidacion;
 use App\Models\Pais;
 use App\Models\PlanOperacional;
 use App\Models\Posicion;
+use App\Models\PosicionTunelPrefrio;
+use App\Models\ProcesoPrefrio;
+use App\Models\ProcesoPrefrioFolio;
+use App\Models\ReservaCargaFolio;
 use App\Models\ReservaPosicionInspeccionSag;
+use App\Models\TareaMovimiento;
+use App\Models\TunelPrefrio;
 use App\Models\UbicacionActual;
 use App\Models\User;
 use App\Models\ValidacionPallet;
 use App\Models\VariedadValidacion;
 use App\Services\Camaras\ServicioBandasOperacionales;
+use App\Services\Estiba\ServicioMovimientoEstiba;
+use App\Services\Estiba\ServicioPlanesOperacionales;
 use App\Services\Estiba\ServicioReservasTareasMovimiento;
+use App\Services\Estiba\ServicioSesionEstiba;
 use App\Services\Existencias\ServicioExistencias;
+use App\Services\Prefrio\ServicioGeneracionRecepcionTunel;
 use App\Services\Temporadas\ServicioTemporadaGlobal;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -509,6 +522,441 @@ class InspeccionSagApiTest extends TestCase
             'pais_id' => $chile->id,
             'activa' => true,
         ]);
+    }
+
+    public function test_aprobar_prefrio_publica_una_maniobra_sag_tomable_con_destino_fijo_y_sin_recepcion_duplicada(): void
+    {
+        $this->activarPlanificadorDirigido();
+        $usuario = $this->administradorConTemporada();
+        $zona = $this->crearZonaInspeccion($usuario, posiciones: 2);
+        $folio = $this->crearFolioUbicado('SAG-TUNEL-001');
+        $proceso = $this->crearPrefrioSag($usuario, [$folio]);
+        $lote = $this->crearLoteEnPreparacion(
+            $usuario,
+            [$folio],
+            Pais::query()->where('iso_alpha2', 'CL')->firstOrFail(),
+        );
+        $this->assertDatabaseCount('tareas_movimiento', 0);
+        $this->artisan('sag:preparar-traslados')->assertSuccessful();
+        $this->assertDatabaseCount('tareas_movimiento', 0);
+
+        $payload = [
+            'operacion_id' => (string) Str::uuid(),
+            'version_conocida' => $proceso->version,
+            'ocurrido_at' => now()->toAtomString(),
+        ];
+        $this->actingAs($usuario, 'sanctum')
+            ->postJson("/api/prefrio/procesos/{$proceso->id}/aprobar", $payload)
+            ->assertOk();
+        $this->actingAs($usuario, 'sanctum')
+            ->postJson("/api/prefrio/procesos/{$proceso->id}/aprobar", $payload)
+            ->assertOk();
+        $this->artisan('sag:preparar-traslados')->assertSuccessful();
+
+        $tarea = TareaMovimiento::query()->sole();
+        $this->assertSame($lote['preparacion_fisica']['plan_id'], $tarea->plan_operacional_id);
+        $this->assertSame('ubicacion_inicial', $tarea->tipo_movimiento->value);
+        $this->assertSame('tunel_prefrio', $tarea->contexto['origen_logico']);
+        $this->assertSame($proceso->id, $tarea->contexto['proceso_prefrio_id']);
+        $this->assertSame('inspeccion', $tarea->contexto['uso_banda_destino']);
+        $this->assertTrue($tarea->contexto['destino_precalculado_inmutable']);
+        $this->assertSame($zona->id, $tarea->camara_destino_id);
+        $this->assertNull($tarea->posicion_origen_id);
+        $this->assertSame('pendiente', $tarea->maniobraOperacional->estado->value);
+        $this->assertDatabaseHas('reservas_posiciones_inspeccion_sag', [
+            'posicion_id' => $tarea->posicion_destino_id,
+            'tipo_espacio' => 'pallet',
+        ]);
+        $this->assertDatabaseMissing('planes_operacionales', ['tipo' => 'recepcion_tunel']);
+        $this->assertDatabaseMissing('ubicaciones_actuales', ['folio_id' => $folio->id]);
+
+        $operador = User::factory()->create(['rol' => RolUsuario::CamareroFrio, 'activo' => true]);
+        $dispositivo = Dispositivo::create(['codigo' => 'TABLET-SAG-TUNEL', 'nombre' => 'Tablet SAG']);
+        $sesion = app(ServicioSesionEstiba::class)->abrir($zona, $operador, $dispositivo);
+        $planes = app(ServicioPlanesOperacionales::class);
+        $tarea = $planes->asumir($tarea, $operador, $dispositivo);
+        $this->assertSame($tarea->posicion_destino_id, $tarea->reservaActiva->bloqueo_posicion_id);
+        $otroOperador = User::factory()->create(['rol' => RolUsuario::CamareroFrio, 'activo' => true]);
+        try {
+            $planes->asumir($tarea, $otroOperador, $dispositivo);
+            $this->fail('La maniobra SAG no debe poder ser asumida por dos camareros.');
+        } catch (ConflictoOperacion $error) {
+            $this->assertNotEmpty($error->getMessage());
+        }
+        $separacion = ReservaPosicionInspeccionSag::query()->where('tipo_espacio', 'separacion')->sole();
+        try {
+            $planes->materializarDestino(
+                $tarea,
+                $separacion->posicion,
+                $operador,
+                $dispositivo,
+            );
+            $this->fail('El destino SAG no debe poder cambiarse por un espacio de separación.');
+        } catch (ConflictoOperacion $error) {
+            $this->assertStringContainsString('no puede sustituirse', $error->getMessage());
+        }
+        $planes->iniciar($tarea, $operador, $dispositivo);
+        app(ServicioMovimientoEstiba::class)->ubicar(
+            operacionId: (string) Str::uuid(),
+            numeroFolio: $folio->numero_folio,
+            tipoBulto: TipoBulto::Pallet,
+            posicionDestino: $tarea->posicionDestino,
+            sesionDestino: $sesion,
+            usuario: $operador,
+            dispositivo: $dispositivo,
+            versionDestinoConocida: $zona->refresh()->version_plano,
+            generadoDispositivoAt: now(),
+            tareaMovimiento: $tarea->refresh(),
+        );
+        $this->assertSame('completada', $tarea->refresh()->estado->value);
+        $this->assertSame($tarea->posicion_destino_id, $folio->refresh()->ubicacionActual->posicion_id);
+        $this->actingAs($usuario, 'sanctum')
+            ->postJson("/api/inspeccion-sag/lotes/{$lote['id']}/iniciar")
+            ->assertOk()
+            ->assertJsonPath('preparacion_fisica.estado', 'completado');
+    }
+
+    public function test_sag_reemplaza_recepcion_reversible_y_cancelar_restaura_la_recepcion(): void
+    {
+        $this->activarPlanificadorDirigido();
+        $usuario = $this->administradorConTemporada();
+        $this->crearZonaInspeccion($usuario, posiciones: 3);
+        $folio = $this->crearFolioUbicado('SAG-REEMPLAZO-001');
+        $otro = $this->crearFolioUbicado('SAG-RECEPCION-002');
+        $proceso = $this->crearPrefrioSag($usuario, [$folio, $otro], aprobado: true);
+        $recepcion = app(ServicioGeneracionRecepcionTunel::class)->generar($proceso, $usuario);
+        $anterior = $recepcion->tareas()->where('folio_id', $folio->id)->sole();
+        $lote = $this->crearLoteEnPreparacion(
+            $usuario,
+            [$folio],
+            Pais::query()->where('iso_alpha2', 'CL')->firstOrFail(),
+        );
+        $sag = TareaMovimiento::query()->where('plan_operacional_id', $lote['preparacion_fisica']['plan_id'])->sole();
+
+        $this->assertSame('cancelada', $anterior->refresh()->estado->value);
+        $this->assertSame($sag->id, $anterior->reemplazada_por_tarea_id);
+        $this->assertSame(2, TareaMovimiento::query()->where('estado', 'pendiente')->count());
+        $this->actingAs($usuario, 'sanctum')
+            ->postJson("/api/inspeccion-sag/lotes/{$lote['id']}/cancelar")
+            ->assertOk();
+        $restaurada = $recepcion->tareas()->where('folio_id', $folio->id)->where('estado', 'pendiente')->sole();
+        $this->assertSame('cancelada', $sag->refresh()->estado->value);
+        $this->assertSame($restaurada->id, $sag->reemplazada_por_tarea_id);
+        $this->assertNull($restaurada->posicion_destino_id);
+        $this->assertSame(0, ReservaPosicionInspeccionSag::query()->whereNotNull('clave_bloqueo')->count());
+        $this->assertSame($recepcion->id, app(ServicioGeneracionRecepcionTunel::class)->generar($proceso, $usuario)->id);
+        $this->assertSame(2, TareaMovimiento::query()->where('estado', 'pendiente')->count());
+    }
+
+    public function test_cancelar_sag_reabre_recepcion_terminada_solo_para_el_pallet_que_seguia_en_tunel(): void
+    {
+        $this->activarPlanificadorDirigido();
+        $usuario = $this->administradorConTemporada();
+        $this->crearZonaInspeccion($usuario, posiciones: 2);
+        $sag = $this->crearFolioUbicado('SAG-REABRIR-001');
+        $normal = $this->crearFolioUbicado('SAG-REABRIR-002');
+        $proceso = $this->crearPrefrioSag($usuario, [$sag, $normal], aprobado: true);
+        $lote = $this->crearLoteEnPreparacion(
+            $usuario,
+            [$sag],
+            Pais::query()->where('iso_alpha2', 'CL')->firstOrFail(),
+        );
+        $recepcion = app(ServicioGeneracionRecepcionTunel::class)->generar($proceso, $usuario);
+        $this->assertSame(1, $recepcion->contexto['total_pallets_planificados']);
+        $tareaNormal = $recepcion->tareas()->sole();
+        $tareaNormal->update([
+            'estado' => 'completada',
+            'responsable_user_id' => $usuario->id,
+            'completada_at' => now(),
+        ]);
+        $this->assertSame('completado', $recepcion->refresh()->estado->value);
+
+        $this->actingAs($usuario, 'sanctum')
+            ->postJson("/api/inspeccion-sag/lotes/{$lote['id']}/cancelar")
+            ->assertOk();
+        $recepcion->refresh();
+        $this->assertSame('programado', $recepcion->estado->value);
+        $this->assertNull($recepcion->completado_at);
+        $this->assertSame(2, $recepcion->contexto['total_pallets_planificados']);
+        $restaurada = $recepcion->tareas()->where('estado', 'pendiente')->sole();
+        $this->assertSame($sag->id, $restaurada->folio_id);
+        $this->assertSame('completada', $tareaNormal->refresh()->estado->value);
+        app(ServicioGeneracionRecepcionTunel::class)->generar($proceso, $usuario);
+        $this->assertSame(2, $recepcion->tareas()->count());
+    }
+
+    public function test_cancelar_sag_no_libera_el_sector_si_hay_un_traslado_iniciado(): void
+    {
+        $this->activarPlanificadorDirigido();
+        $usuario = $this->administradorConTemporada();
+        $this->crearZonaInspeccion($usuario, posiciones: 2);
+        $folio = $this->crearFolioUbicado('SAG-INICIADO-001');
+        $this->crearPrefrioSag($usuario, [$folio], aprobado: true);
+        $lote = $this->crearLoteEnPreparacion(
+            $usuario,
+            [$folio],
+            Pais::query()->where('iso_alpha2', 'CL')->firstOrFail(),
+        );
+        $tarea = TareaMovimiento::query()->sole();
+        $operador = User::factory()->create(['rol' => RolUsuario::CamareroFrio, 'activo' => true]);
+        $dispositivo = Dispositivo::create(['codigo' => 'TABLET-SAG-INICIADO', 'nombre' => 'Tablet SAG']);
+        $planes = app(ServicioPlanesOperacionales::class);
+        $planes->asumir($tarea, $operador, $dispositivo);
+        $planes->iniciar($tarea, $operador, $dispositivo);
+
+        $this->actingAs($usuario, 'sanctum')
+            ->postJson("/api/inspeccion-sag/lotes/{$lote['id']}/cancelar")
+            ->assertUnprocessable();
+        $this->assertSame('preparacion', LoteInspeccionSag::query()->findOrFail($lote['id'])->estado->value);
+        $this->assertSame('en_proceso', $tarea->refresh()->estado->value);
+        $this->assertSame(2, ReservaPosicionInspeccionSag::query()->whereNotNull('clave_bloqueo')->count());
+        $this->assertNotNull($tarea->reservaActiva);
+    }
+
+    public function test_reconciliacion_recupera_capacidad_y_mantiene_destinos_distintos_para_cada_pallet(): void
+    {
+        $this->activarPlanificadorDirigido();
+        $usuario = $this->administradorConTemporada();
+        $folios = [
+            $this->crearFolioUbicado('SAG-RECUPERAR-001'),
+            $this->crearFolioUbicado('SAG-RECUPERAR-002'),
+        ];
+        $this->crearPrefrioSag($usuario, $folios, aprobado: true);
+        $lote = $this->crearLoteEnPreparacion(
+            $usuario,
+            $folios,
+            Pais::query()->where('iso_alpha2', 'CL')->firstOrFail(),
+        );
+        $this->assertSame('pendiente', $lote['preparacion_fisica']['capacidad']['capacidad_estado']);
+        $this->assertDatabaseCount('tareas_movimiento', 0);
+        $this->crearZonaInspeccion($usuario, posiciones: 3);
+        $this->artisan('sag:preparar-traslados')->assertSuccessful();
+        $destinos = TareaMovimiento::query()->orderBy('folio_id')->pluck('posicion_destino_id')->all();
+        $this->assertCount(2, array_unique($destinos));
+        $this->artisan('sag:preparar-traslados')->assertSuccessful();
+        $this->assertSame($destinos, TareaMovimiento::query()->orderBy('folio_id')->pluck('posicion_destino_id')->all());
+        $this->assertSame(2, ReservaPosicionInspeccionSag::query()
+            ->whereIn('posicion_id', $destinos)->where('tipo_espacio', 'pallet')->count());
+        $this->assertDatabaseCount('tareas_movimiento', 2);
+    }
+
+    public function test_reconciliacion_no_interrumpe_recepcion_iniciada_y_prepara_desde_camara_al_terminar(): void
+    {
+        $this->activarPlanificadorDirigido();
+        $usuario = $this->administradorConTemporada();
+        $zona = $this->crearZonaInspeccion($usuario, posiciones: 2);
+        $folio = $this->crearFolioUbicado('SAG-DIFERIDO-001');
+        $origen = $folio->ubicacionActual->posicion;
+        $proceso = $this->crearPrefrioSag($usuario, [$folio], aprobado: true);
+        $recepcion = app(ServicioGeneracionRecepcionTunel::class)->generar($proceso, $usuario);
+        $anterior = $recepcion->tareas()->sole();
+        $operador = User::factory()->create(['rol' => RolUsuario::CamareroFrio, 'activo' => true]);
+        $dispositivo = Dispositivo::create(['codigo' => 'TABLET-SAG-DIFERIDO', 'nombre' => 'Tablet SAG']);
+        $planes = app(ServicioPlanesOperacionales::class);
+        $planes->asumir($anterior, $operador, $dispositivo);
+        $planes->materializarDestino($anterior, $origen, $operador, $dispositivo);
+        $planes->iniciar($anterior, $operador, $dispositivo);
+        $lote = $this->crearLoteEnPreparacion(
+            $usuario,
+            [$folio],
+            Pais::query()->where('iso_alpha2', 'CL')->firstOrFail(),
+        );
+        $this->artisan('sag:preparar-traslados')->assertSuccessful();
+        $this->assertDatabaseCount('tareas_movimiento', 1);
+        $sesion = app(ServicioSesionEstiba::class)->abrir($origen->camara, $operador, $dispositivo);
+        app(ServicioMovimientoEstiba::class)->ubicar(
+            operacionId: (string) Str::uuid(),
+            numeroFolio: $folio->numero_folio,
+            tipoBulto: TipoBulto::Pallet,
+            posicionDestino: $origen,
+            sesionDestino: $sesion,
+            usuario: $operador,
+            dispositivo: $dispositivo,
+            versionDestinoConocida: $origen->camara->refresh()->version_plano,
+            generadoDispositivoAt: now(),
+            tareaMovimiento: $anterior->refresh(),
+        );
+        $this->artisan('sag:preparar-traslados')->assertSuccessful();
+        $nueva = TareaMovimiento::query()
+            ->where('plan_operacional_id', $lote['preparacion_fisica']['plan_id'])
+            ->sole();
+        $this->assertSame('completada', $anterior->refresh()->estado->value);
+        $this->assertSame('traslado_entre_camaras', $nueva->tipo_movimiento->value);
+        $this->assertSame($origen->id, $nueva->posicion_origen_id);
+        $this->assertSame($zona->id, $nueva->camara_destino_id);
+    }
+
+    public function test_aprobaciones_de_tuneles_distintos_preparan_desde_el_fondo_sin_apartar_destino_para_el_pendiente(): void
+    {
+        $this->activarPlanificadorDirigido();
+        $usuario = $this->administradorConTemporada();
+        $this->crearZonaInspeccion($usuario, posiciones: 3);
+        $pendiente = $this->crearFolioUbicado('SAG-PARCIAL-001');
+        $listo = $this->crearFolioUbicado('SAG-PARCIAL-002');
+        $procesoPendiente = $this->crearPrefrioSag($usuario, [$pendiente], sufijo: '-PENDIENTE');
+        $this->crearPrefrioSag($usuario, [$listo], aprobado: true, sufijo: '-LISTO');
+        $lote = $this->crearLoteEnPreparacion(
+            $usuario,
+            [$pendiente, $listo],
+            Pais::query()->where('iso_alpha2', 'CL')->firstOrFail(),
+        );
+        $primera = TareaMovimiento::query()->with('posicionDestino')->sole();
+        $this->assertSame($listo->id, $primera->folio_id);
+        $this->assertSame(2, $primera->posicionDestino->posicion);
+        $this->actingAs($usuario, 'sanctum')
+            ->postJson("/api/prefrio/procesos/{$procesoPendiente->id}/aprobar", [
+                'operacion_id' => (string) Str::uuid(),
+                'version_conocida' => $procesoPendiente->version,
+                'ocurrido_at' => now()->toAtomString(),
+            ])
+            ->assertOk();
+        $segunda = TareaMovimiento::query()->where('folio_id', $pendiente->id)->sole();
+        $this->assertSame($lote['preparacion_fisica']['plan_id'], $segunda->plan_operacional_id);
+        $this->assertSame(1, $segunda->posicionDestino->posicion);
+        $this->assertSame($primera->posicion_destino_id, $primera->refresh()->posicion_destino_id);
+        $this->assertDatabaseCount('tareas_movimiento', 2);
+    }
+
+    public function test_reconciliacion_no_reinventa_origen_de_tunel_para_pallets_ya_en_anden_o_despachados(): void
+    {
+        $this->activarPlanificadorDirigido();
+        $usuario = $this->administradorConTemporada();
+        $this->crearZonaInspeccion($usuario, posiciones: 3);
+        $anden = $this->crearFolioUbicado('SAG-YA-ANDEN-001');
+        $despachado = $this->crearFolioUbicado('SAG-YA-DESPACHADO-002');
+        $proceso = $this->crearPrefrioSag($usuario, [$anden, $despachado]);
+        $this->crearLoteEnPreparacion(
+            $usuario,
+            [$anden, $despachado],
+            Pais::query()->where('iso_alpha2', 'CL')->firstOrFail(),
+        );
+        $proceso->update(['estado' => 'aprobado']);
+        $proceso->folios()->update(['estado' => 'aprobado']);
+        foreach ([$anden, $despachado] as $folio) {
+            $folio->update([
+                'condicion_termica' => 'prefrio_aprobado',
+                'habilitacion_almacenamiento' => 'habilitado',
+                'estado_operacional' => $folio->id === $despachado->id ? 'despachado' : 'pendiente_ubicacion',
+            ]);
+        }
+        $carga = Carga::create([
+            'temporada_id' => $anden->temporada_id,
+            'codigo' => 'CAR-SAG-ANDEN',
+            'estado' => 'pendiente',
+            'prioridad' => 'alta',
+            'creada_por_user_id' => $usuario->id,
+            'actualizada_por_user_id' => $usuario->id,
+        ]);
+        $asignacion = CargaFolio::create([
+            'carga_id' => $carga->id,
+            'folio_id' => $anden->id,
+            'estado' => 'en_anden',
+            'asignado_por_user_id' => $usuario->id,
+            'asignado_at' => now(),
+        ]);
+        ReservaCargaFolio::create([
+            'folio_id' => $anden->id,
+            'carga_folio_id' => $asignacion->id,
+        ]);
+        $this->artisan('sag:preparar-traslados')->assertSuccessful();
+        $this->assertDatabaseCount('tareas_movimiento', 0);
+        $this->assertDatabaseCount('ubicaciones_actuales', 0);
+    }
+
+    public function test_liberar_y_vencer_claim_sag_conserva_su_destino_para_otro_camarero(): void
+    {
+        $this->activarPlanificadorDirigido();
+        $usuario = $this->administradorConTemporada();
+        $this->crearZonaInspeccion($usuario, posiciones: 2);
+        $folio = $this->crearFolioUbicado('SAG-LEASE-001');
+        $this->crearPrefrioSag($usuario, [$folio], aprobado: true);
+        $this->crearLoteEnPreparacion(
+            $usuario,
+            [$folio],
+            Pais::query()->where('iso_alpha2', 'CL')->firstOrFail(),
+        );
+        $tarea = TareaMovimiento::query()->sole();
+        $destinoId = $tarea->posicion_destino_id;
+        $primero = User::factory()->create(['rol' => RolUsuario::CamareroFrio, 'activo' => true]);
+        $segundo = User::factory()->create(['rol' => RolUsuario::CamareroFrio, 'activo' => true]);
+        $dispositivo = Dispositivo::create(['codigo' => 'TABLET-SAG-LEASE', 'nombre' => 'Tablet SAG']);
+        $planes = app(ServicioPlanesOperacionales::class);
+        $reservas = app(ServicioReservasTareasMovimiento::class);
+
+        $planes->asumir($tarea, $primero, $dispositivo);
+        $reservas->liberar($tarea, $primero, $dispositivo);
+        $this->assertSame('pendiente', $tarea->refresh()->estado->value);
+        $this->assertSame($destinoId, $tarea->posicion_destino_id);
+        $this->assertNull($tarea->reservaActiva);
+
+        $asumida = $planes->asumir($tarea, $segundo, $dispositivo);
+        $this->assertSame($destinoId, $asumida->reservaActiva->bloqueo_posicion_id);
+        $asumida->reservaActiva->update(['vence_at' => now()->subMinute()]);
+        $this->assertSame(1, $reservas->expirarVencidas());
+        $this->assertSame('pendiente', $tarea->refresh()->estado->value);
+        $this->assertSame($destinoId, $tarea->posicion_destino_id);
+        $this->assertSame(2, ReservaPosicionInspeccionSag::query()->whereNotNull('clave_bloqueo')->count());
+        $retomada = $planes->asumir($tarea, $primero, $dispositivo);
+        $this->assertSame($destinoId, $retomada->reservaActiva->bloqueo_posicion_id);
+    }
+
+    /** @param array<int, Folio> $folios */
+    private function crearPrefrioSag(User $usuario, array $folios, bool $aprobado = false, string $sufijo = ''): ProcesoPrefrio
+    {
+        $tunel = TunelPrefrio::create([
+            'codigo' => 'TUN-SAG'.$sufijo,
+            'nombre' => 'Túnel SAG',
+            'capacidad_posiciones' => max(2, count($folios)),
+            'setpoint_habitual' => -1.5,
+            'estado_administrativo' => 'activo',
+            'estado_tecnico' => 'operativo',
+            'version_configuracion' => 1,
+            'creado_por_user_id' => $usuario->id,
+        ]);
+        $proceso = ProcesoPrefrio::create([
+            'temporada_id' => $folios[0]->temporada_id,
+            'codigo' => 'PFR-SAG'.$sufijo,
+            'operacion_id' => (string) Str::uuid(),
+            'payload_hash' => hash('sha256', 'prefrio-sag'),
+            'tunel_prefrio_id' => $tunel->id,
+            'estado' => $aprobado ? 'aprobado' : 'pendiente_verificacion',
+            'setpoint' => -1.5,
+            'formato_referencia' => 'granel',
+            'version' => 5,
+            'creado_por_user_id' => $usuario->id,
+            'iniciado_por_user_id' => $usuario->id,
+            'iniciado_at' => now()->subHours(8),
+            'pendiente_verificacion_at' => now()->subMinutes(5),
+            'finalizado_por_user_id' => $aprobado ? $usuario->id : null,
+            'finalizado_at' => $aprobado ? now() : null,
+        ]);
+        foreach ($folios as $indice => $folio) {
+            $folio->ubicacionActual()->delete();
+            $folio->update([
+                'estado_operacional' => $aprobado ? 'pendiente_ubicacion' : 'pendiente_prefrio',
+                'condicion_termica' => $aprobado ? 'prefrio_aprobado' : 'pendiente_prefrio',
+                'habilitacion_almacenamiento' => $aprobado ? 'habilitado' : 'no_habilitado',
+            ]);
+            $folio->unsetRelation('ubicacionActual');
+            $posicion = PosicionTunelPrefrio::create([
+                'tunel_prefrio_id' => $tunel->id,
+                'numero' => $indice + 1,
+                'etiqueta' => 'TUN-SAG-P'.($indice + 1),
+                'activa' => true,
+            ]);
+            ProcesoPrefrioFolio::create([
+                'proceso_prefrio_id' => $proceso->id,
+                'folio_id' => $folio->id,
+                'posicion_tunel_prefrio_id' => $posicion->id,
+                'estado' => $aprobado ? 'aprobado' : 'en_proceso',
+                'temperatura_inicial' => 8,
+                'temperatura_final' => $aprobado ? -0.5 : null,
+                'cargado_at' => now()->subHours(8),
+                'cargado_por_user_id' => $usuario->id,
+            ]);
+        }
+
+        return $proceso;
     }
 
     private function activarPlanificadorDirigido(): void

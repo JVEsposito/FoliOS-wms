@@ -45,9 +45,11 @@ con el planificador dirigido cuando está habilitado.
 
 Muestreo USDA e Inspección Origen requieren preparación física y generan un
 plan `preparacion_inspeccion` con su reserva de sector cuando el despliegue está activo.
-La integración actual crea el objetivo y las reservas, pero no genera automáticamente
-las tareas ni maniobras para trasladar los pallets al sector. Esa generación física
-queda pendiente; este PR incorpora información y consulta de cargas en tablet.
+Al aprobar el prefrío se generan maniobras para trasladar los pallets habilitados
+desde el túnel a su posición SAG reservada. La recepción reversible se reemplaza sin
+duplicarla; los traslados iniciados conservan su recorrido y luego se reevalúan desde
+cámara. El scheduler recupera pendientes mediante `sag:preparar-traslados`.
+El detalle del flujo y su prueba física está en [Traslados SAG desde prefrío](operacion/traslados-sag-desde-prefrio.md).
 Inspección en línea, fumigación y cambio de mercado no requieren esa preparación.
 Si falta capacidad, el objetivo informa ese estado sin reservar un tramo incompleto.
 Si el despliegue dirigido está desactivado, no se crea esta preparación física.

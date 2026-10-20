@@ -42,6 +42,10 @@ Schedule::call(function (): void {
     }
 })->everyMinute()->name('verificaciones-ubicacion-vencer')->withoutOverlapping(2);
 
+Schedule::command('sag:preparar-traslados')
+    ->everyMinute()
+    ->withoutOverlapping(5);
+
 Schedule::command('salud:latido-scheduler')->everyMinute();
 
 // Stock del sistema de origen para «Pendientes por validar»: solo lectura, sin crear folios.

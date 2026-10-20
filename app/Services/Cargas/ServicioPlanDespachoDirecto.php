@@ -669,7 +669,10 @@ class ServicioPlanDespachoDirecto
             }
             if ($anterior
                 && $anterior->plan_operacional_id !== $plan->id
-                && $anterior->planOperacional?->tipo === TipoPlanOperacional::DespachoDirecto) {
+                && in_array($anterior->planOperacional?->tipo, [
+                    TipoPlanOperacional::DespachoDirecto,
+                    TipoPlanOperacional::PreparacionInspeccion,
+                ], true)) {
                 continue;
             }
 
