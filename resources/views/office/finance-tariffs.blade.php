@@ -11,7 +11,7 @@
         @endif
         @include('office.partials.arranque')
     </head>
-    <body>
+    <body data-finance-zone="{{ config('app.operational_timezone') }}">
         <section class="office-access" id="officeAccess" aria-labelledby="officeAccessTitle">
             <div class="office-access__brand">
                 <div class="office-logo" aria-hidden="true">$</div>
@@ -95,7 +95,7 @@
                 </section>
 
                 <section class="panel fin-panel" id="finance-tariffs-panel-charges" data-office-panel-group="finance-tariffs" data-office-panel-id="charges" role="tabpanel" aria-labelledby="finance-tariffs-tab-charges" hidden>
-                    <div class="fin-panel__heading"><div><p class="eyebrow">CARGOS ACORDADOS</p><h2>Lo que se cobra por acuerdo o declaración</h2></div><button class="secondary-button" id="chargeNew" type="button" hidden>+ Nuevo cargo</button></div>
+                    <div class="fin-panel__heading"><div><p class="eyebrow">CARGOS ACORDADOS</p><h2>Lo que se cobra por acuerdo o declaración</h2></div><div class="fin-acciones"><button class="secondary-button" id="chargeNew" type="button" hidden>+ Nuevo cargo</button><button class="secondary-button" id="chargeFromRrhh" type="button" hidden>Desde dotación RRHH</button></div></div>
                     <p>Puede cobrar cualquier concepto operativo por ejecución, compromiso o disponibilidad. El estado real del servicio se conserva; un servicio cancelado puede seguir siendo cobrable según su acuerdo.</p>
                     <label><span>Mes del cargo</span><input id="chargeMonth" type="month"></label>
                     <p id="chargeStatus" role="status"></p>
@@ -215,6 +215,26 @@
             </form>
         </dialog>
 
+        <dialog class="fin-history fin-dialog" id="dotacionChargeDialog" aria-labelledby="dotacionChargeTitle">
+            <form id="dotacionChargeForm"><header class="fin-history__heading"><h2 id="dotacionChargeTitle">Cargo desde dotación RRHH</h2><button type="button" class="fin-history__close" data-dotacion-close aria-label="Cerrar">×</button></header>
+                <div class="fin-form">
+                    <label class="fin-form__wide"><span>Concepto acordado/manual</span><select name="servicio" required></select></label>
+                    <label><span>Mes de las asignaciones</span><input id="dotacionChargeMonth" type="month" required></label>
+                    <p class="fin-form__preview fin-form__wide">La programación permite cobrar compromisos o disponibilidad aunque no haya asistencia. La cantidad y el cliente se leen desde RRHH. Se muestra la dotación sin nombres ni documentos personales.</p>
+                    <div class="fin-table-scroll fin-form__wide"><table class="fin-table"><thead><tr><th>Asignación</th><th>Programado</th><th>Asistido</th><th>Elegir</th></tr></thead><tbody id="dotacionChargeRows"></tbody></table></div>
+                    <div class="fin-acciones fin-form__wide"><button type="button" class="fin-boton" id="dotacionChargePrev">Anterior</button><span id="dotacionChargePage"></span><button type="button" class="fin-boton" id="dotacionChargeNext">Siguiente</button></div>
+                    <label><span>Cantidad que se cobrará</span><select name="medida"><option value="horas_programadas">Horas persona programadas</option><option value="horas_asistidas">Horas persona asistidas</option><option value="jornadas_programadas">Jornadas persona programadas</option><option value="jornadas_asistidas">Jornadas persona asistidas</option></select></label>
+                    <p class="fin-form__preview fin-form__wide" id="dotacionChargeQuantity"></p>
+                    <p class="fin-form__preview fin-form__wide" id="dotacionChargeUnit"></p>
+                    <label class="fin-form__wide"><input type="checkbox" name="confirmar_unidad" required> Confirmo que la unidad del concepto y su tarifa corresponden a esta medida.</label>
+                    <label class="fin-form__wide" id="dotacionChargeReplacement" hidden><input type="checkbox" name="confirmar_reemplazo"> Confirmo crear una nueva revisión que reemplaza el cargo anulado. Su historial se conserva.</label>
+                    <label><span>Fecha del cobro</span><input name="fecha" type="date" required></label>
+                    <label><span>Base económica</span><select name="base_cobro"><option value="acuerdo">Acuerdo comercial</option><option value="disponibilidad">Disponibilidad o reserva</option><option value="compromiso">Compromiso contratado</option><option value="ejecucion">Prestación realizada</option></select></label>
+                    <label class="fin-form__wide"><span>Contrato, orden o respaldo del cobro</span><textarea name="respaldo" minlength="5" maxlength="500" rows="3" required></textarea></label>
+                    <p class="fin-form__preview fin-form__wide" id="dotacionChargeNotice"></p><p class="form-error fin-form__wide" id="dotacionChargeError" role="alert"></p>
+                </div><footer class="fin-history__actions"><button type="button" class="secondary-button" data-dotacion-close>Cancelar</button><button type="submit" class="primary-button" id="dotacionChargeSubmit" disabled>Guardar borrador</button></footer>
+            </form>
+        </dialog>
         <dialog class="fin-history fin-dialog" id="chargeDialog" aria-labelledby="chargeTitle">
             <form id="chargeForm"><header class="fin-history__heading"><div><p class="eyebrow">CARGO ACORDADO</p><h2 id="chargeTitle">Nuevo cargo</h2></div><button class="fin-history__close" data-charge-close type="button" aria-label="Cerrar">×</button></header>
                 <div class="fin-form">

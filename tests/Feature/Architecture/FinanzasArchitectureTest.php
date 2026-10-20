@@ -43,7 +43,7 @@ class FinanzasArchitectureTest extends TestCase
 
     public function test_finanzas_lee_la_operacion_solo_por_el_lector(): void
     {
-        $permitidos = ['Captura/LectorOperacion.php', 'EsquemaFinanzas.php'];
+        $permitidos = ['Captura/LectorOperacion.php', 'Dotacion/LectorRrhh.php', 'EsquemaFinanzas.php'];
         $infracciones = [];
 
         foreach (File::allFiles(app_path('Finanzas')) as $archivo) {

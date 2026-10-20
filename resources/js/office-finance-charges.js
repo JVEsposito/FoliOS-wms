@@ -1,5 +1,8 @@
+import { mountDotacionCharges } from './office-finance-dotacion';
+
 export function mountCharges({ api, data, canManage, escapeHtml: esc, toast }) {
     const $ = (id) => document.getElementById(id);
+    const dotacion = mountDotacionCharges({ api, data, canManage, escapeHtml: esc, toast, onSaved: load });
     const form = $('chargeForm');
     const dialog = $('chargeDialog');
     let page = 1;
@@ -30,11 +33,12 @@ export function mountCharges({ api, data, canManage, escapeHtml: esc, toast }) {
             const state = cargo.anulado_at ? 'Anulado' : cargo.aprobado_at ? 'Aprobado' : 'Borrador';
             const actions = `<button class="fin-boton" data-charge-history="${esc(cargo.id)}" type="button">Historial</button>`
                 + (canManage() && !cargo.anulado_at ? `${cargo.aprobado_at ? '' : `<button class="fin-boton" data-charge-action="aprobar" data-charge-id="${esc(cargo.id)}" type="button">Aprobar cargo</button>`}<button class="fin-boton" data-charge-action="anular" data-charge-id="${esc(cargo.id)}" type="button">Anular</button>` : '');
-            return `<tr><td>${esc(cargo.cliente_nombre)}<small>${esc(service(cargo.servicio)?.nombre || cargo.servicio)}</small></td><td>${esc(cargo.cantidad)} ${esc(service(cargo.servicio)?.unidad_libre)}<small>${esc(cargo.fecha.slice(0, 10))}</small></td><td>${esc(names[cargo.base_cobro])}<small>Ejecución: ${esc(names[cargo.estado_ejecucion])}</small><small>${esc(cargo.respaldo)}</small></td><td>${state}<div class="fin-acciones">${actions}</div></td></tr>`;
+            return `<tr><td>${esc(cargo.cliente_nombre)}<small>${esc(service(cargo.servicio)?.nombre || cargo.servicio)}</small></td><td>${esc(cargo.cantidad)} ${esc(service(cargo.servicio)?.unidad_libre)}<small>${esc(cargo.fecha.slice(0, 10))}</small></td><td>${esc(names[cargo.base_cobro])}<small>Ejecución: ${esc(names[cargo.estado_ejecucion])}</small><small>${esc(cargo.respaldo)}</small>${cargo.contexto?.rrhh ? `<small>RRHH · ${esc(cargo.contexto.rrhh.medida)} · asignación ${esc(cargo.contexto.rrhh.asignacion_id.slice(0, 8))} · revisión ${esc(cargo.contexto.rrhh.revision)}</small>` : ''}</td><td>${state}<div class="fin-acciones">${actions}</div></td></tr>`;
         }).join('') || '<tr><td colspan="4">No hay cargos en este mes.</td></tr>';
     }
     function render() {
         $('chargeNew').hidden = !canManage();
+        dotacion.render();
         if (!$('chargeMonth').value) $('chargeMonth').value = data().hoy.slice(0, 7);
         load();
     }
