@@ -12,7 +12,7 @@ use Carbon\CarbonImmutable;
 final class HechoCapturado
 {
     /**
-     * @param  array<string, int|float>  $medidas
+     * @param  array<string, int|float|string>  $medidas
      * @param  array<string, mixed>  $datos
      */
     public function __construct(

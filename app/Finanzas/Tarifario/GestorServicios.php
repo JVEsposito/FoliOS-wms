@@ -3,6 +3,7 @@
 namespace App\Finanzas\Tarifario;
 
 use App\Finanzas\Captura\CatalogoFuentes;
+use App\Finanzas\Captura\Fuentes\CargosDeclarados;
 use App\Finanzas\EsquemaFinanzas;
 use App\Finanzas\Models\ConceptoServicio;
 use App\Finanzas\Models\EventoServicio;
@@ -20,6 +21,12 @@ final class GestorServicios
         $fuente = $this->fuentes->todas()[$datos['fuente']] ?? null;
         if ($fuente === null) {
             throw ValidationException::withMessages(['fuente' => 'El proceso no está disponible para Finanzas.']);
+        }
+        if (($datos['fuente'] === CargosDeclarados::CLAVE) !== ($datos['aplicacion'] === 'declarado')) {
+            throw ValidationException::withMessages(['aplicacion' => 'La modalidad acordada/manual requiere la fuente de cargos declarados.']);
+        }
+        if ($datos['fuente'] === CargosDeclarados::CLAVE && trim((string) ($datos['unidad_libre'] ?? '')) === '') {
+            throw ValidationException::withMessages(['unidad_libre' => 'Indique la unidad de cobro del concepto.']);
         }
         if (! $fuente->intervalo() && ($datos['dia_desde'] !== 1 || $datos['dia_hasta'] !== null)) {
             throw ValidationException::withMessages(['dia_desde' => 'Los rangos de días solo corresponden a una estadía.']);

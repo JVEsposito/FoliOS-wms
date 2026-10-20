@@ -35,6 +35,12 @@ export function mountServiceCatalog({ api, data, canManage, reload, openPrice, e
 
     function syncProcess() {
         const process = data()?.procesos.find((item) => item.clave === form.elements.fuente.value);
+        const declared = process?.clave === 'declarado';
+        byId('serviceManualFields').hidden = !declared;
+        form.elements.unidad_libre.disabled = !declared;
+        form.elements.unidad_libre.required = declared;
+        form.elements.proceso_referencia.disabled = !declared;
+        form.elements.aplicacion.innerHTML = declared ? '<option value="declarado">Cargo por acuerdo o declaración</option>' : '<option value="">Seleccione</option><option value="reemplaza_base">Reemplaza al concepto base</option><option value="adicional">Suma un cobro adicional</option>';
         byId('serviceDays').hidden = !process?.intervalo;
         for (const field of ['dia_desde', 'dia_hasta']) form.elements[field].disabled = !process?.intervalo;
         if (!process?.intervalo) {

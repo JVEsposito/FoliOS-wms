@@ -4,6 +4,7 @@ namespace App\Finanzas\Tarifario;
 
 use App\Finanzas\Captura\CatalogoFuentes;
 use App\Finanzas\Captura\FuenteHechos;
+use App\Finanzas\Captura\Fuentes\CargosDeclarados;
 use App\Finanzas\Models\ConceptoServicio;
 use Illuminate\Http\Request;
 
@@ -52,6 +53,9 @@ final class CatalogoServicios
         if ($this->catalogo === null) {
             $this->catalogo = [];
             foreach ($this->fuentes->todas() as $fuente) {
+                if ($fuente->clave() === CargosDeclarados::CLAVE) {
+                    continue;
+                }
                 $this->catalogo[$fuente->clave()] = $this->describir($fuente, [
                     'clave' => $fuente->clave(), 'nombre' => $fuente->nombre(), 'base' => true,
                     'descripcion' => $fuente->descripcion(), 'aplicacion' => 'base',
@@ -67,6 +71,7 @@ final class CatalogoServicios
                         'vigente_desde' => $servicio->vigente_desde->toDateString(),
                         'vigente_hasta' => $servicio->vigente_hasta?->toDateString(),
                         'dia_desde' => $servicio->dia_desde, 'dia_hasta' => $servicio->dia_hasta,
+                        'unidad_libre' => $servicio->unidad_libre, 'proceso_referencia' => $servicio->proceso_referencia,
                     ]);
                 }
             }
@@ -81,7 +86,7 @@ final class CatalogoServicios
             ...$datos, 'fuente' => $fuente->clave(), 'fuente_nombre' => $fuente->nombre(),
             'por_dia' => $fuente->intervalo(),
             'unidades' => array_map(fn (string $unidad): array => [
-                'clave' => $unidad, 'nombre' => $this->etiquetaUnidad($fuente, $unidad),
+                'clave' => $unidad, 'nombre' => $fuente->clave() === CargosDeclarados::CLAVE ? 'por '.($datos['unidad_libre'] ?? 'unidad') : $this->etiquetaUnidad($fuente, $unidad),
             ], array_keys($fuente->medidas())),
         ];
     }
@@ -118,8 +123,15 @@ final class CatalogoServicios
      *
      * @return list<string>
      */
-    public function paraHecho(string $fuente, string $fecha, int $diaEstadia = 1): array
+    public function paraHecho(string $fuente, string $fecha, int $diaEstadia = 1, ?string $conceptoDeclarado = null): array
     {
+        if ($fuente === CargosDeclarados::CLAVE) {
+            $concepto = $conceptoDeclarado === null ? null : $this->buscar($conceptoDeclarado);
+
+            // La vigencia se verifica al aprobar el acuerdo. Finalizar el catálogo no
+            // revoca compromisos ya aprobados: eso requiere anular el cargo explícitamente.
+            return $concepto !== null && $concepto['fuente'] === CargosDeclarados::CLAVE ? [$conceptoDeclarado] : [];
+        }
         $adicionales = [];
         $reemplaza = false;
         foreach ($this->descripcion() as $servicio) {
@@ -140,7 +152,11 @@ final class CatalogoServicios
     /** «por caja», «por pallet y día»… */
     public function nombreUnidad(string $servicio, string $unidad): string
     {
-        $claveFuente = $this->buscar($servicio)['fuente'] ?? $servicio;
+        $concepto = $this->buscar($servicio);
+        if (($concepto['fuente'] ?? null) === CargosDeclarados::CLAVE) {
+            return 'por '.($concepto['unidad_libre'] ?? 'unidad');
+        }
+        $claveFuente = $concepto['fuente'] ?? $servicio;
         $fuente = $this->fuentes->todas()[$claveFuente] ?? null;
 
         return $fuente === null ? $unidad : $this->etiquetaUnidad($fuente, $unidad);

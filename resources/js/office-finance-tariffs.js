@@ -1,3 +1,4 @@
+import { mountCharges } from './office-finance-charges';
 import { mountServiceCatalog } from './office-finance-services';
 import { serviceRules, serviceValidity, servicesForPrice } from './shared/finance-services-logic';
 import {
@@ -73,6 +74,7 @@ const elements = {
     toasts: byId('officeToasts'),
 };
 const serviceCatalog = mountServiceCatalog({ api, data: () => state.data, canManage, reload: load, openPrice: openPriceForm, escapeHtml, toast, formatDateTime });
+const charges = mountCharges({ api, data: () => state.data, canManage, escapeHtml, toast });
 const keys = { token: 'estiba_wms_office_token', identity: 'estiba_wms_office_identity' };
 const state = {
     token: localStorage.getItem(keys.token),
@@ -248,6 +250,7 @@ function renderCurrencies(data) {
 
 function render() {
     serviceCatalog.render();
+    charges.render();
     const data = state.data;
     elements.newPrice.hidden = !canManage();
     elements.newCurrency.hidden = !canManage();

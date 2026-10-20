@@ -226,9 +226,12 @@ Ejemplo configurable (no se precarga): *Frío normal* reemplaza Estadía en los 
 *Permanencia adicional* la reemplaza desde el día 16. Otra opción es conservar la tarifa base
 y crear solo un recargo adicional desde el día 16. La elección depende del contrato.
 
-Solo se ofrecen las siete fuentes con captura implementada. **SAG/USDA, adhesivos, sellado,
-tratamientos, arriendo de bins y servicios manuales no se crean como capturas ficticias**:
-requieren su propio registro de ejecución, cantidades y adaptador financiero. Tampoco se
+**Todo concepto operativo es cobrable por acuerdo, compromiso o disponibilidad, aunque no se
+ejecute.** La modalidad *Cargos acordados y manuales* permite nombre y unidad libres, y una
+referencia al proceso (RRHH, SAG, materiales, etc.). No depende de que exista una captura
+automática. La ejecución declarada se guarda por separado y no decide la validez económica.
+Para automatizar cantidades efectivamente ejecutadas de un proceso nuevo sigue siendo
+necesario su adaptador de captura. Tampoco se
 incluyen cobros por mes, paquetes, mínimos, horas fuera de jornada ni filtros comerciales por
 tipo de vehículo, especie o condición de fruta. La lista de referencia no incorpora importes.
 
@@ -243,6 +246,38 @@ API adicional (`/api/finanzas`):
 `GET /tarifas` incluye conceptos y procesos disponibles; la tarifa efectiva muestra precios
 solo dentro de las fechas del concepto. El catálogo inicial sigue siendo virtual: la migración
 no cambia claves, precios, hechos ni cierres existentes, ni precarga tarifas de referencia.
+
+### Cargos acordados y manuales
+
+En *Tarifario → Cargos acordados* se registra cliente, concepto libre, cantidad decimal
+exacta, fecha de cobro, base económica (ejecución, acuerdo, compromiso o disponibilidad),
+ejecución al registrar y respaldo comercial. Un borrador no se cobra. Aprobarlo registra el
+hecho económico en la misma transacción; una captura ocupada o fallida revierte la aprobación.
+La consulta tiene los permisos de Finanzas y crear/aprobar/anular requiere gestionar tarifas.
+
+Un servicio cancelado o no realizado puede tener cargo aprobado por compromiso o reserva.
+No se registra una ejecución ficticia en los módulos operativos. Las cantidades de un
+concepto manual solo provienen de sus cargos: no se multiplican sobre otras operaciones ni
+sobre otros conceptos. Los conceptos automáticos conservan su captura; para otro acuerdo
+comercial se crea su concepto manual, con la unidad y referencia que correspondan.
+
+Cada alta lleva un `operacion_id` UUID: repetirlo con los mismos datos devuelve el mismo
+cargo; con otros datos se rechaza. La cantidad se normaliza sin usar flotantes. Una vez
+aprobado es inmutable; una corrección económica exige anularlo con motivo y registrar otro.
+La anulación crea otra versión del hecho; un mes cerrado se conserva y la diferencia sigue
+el circuito existente. Finalizar el concepto no revoca cargos aprobados; la vigencia se
+vuelve a verificar al aprobar un borrador. Los precios se resuelven en la fecha del cargo.
+
+| Método | Ruta (`/api/finanzas`) | Uso |
+| --- | --- | --- |
+| GET | `/cargos?mes=&page=` | Cargos del mes, paginados. |
+| POST | `/cargos` | Borrador con identificador de operación, cliente, servicio, fecha, cantidad, base y respaldo. |
+| POST | `/cargos/{id}/aprobar` | Aprueba y captura atómicamente. |
+| POST | `/cargos/{id}/anular` | Anulación económica con motivo. |
+| GET | `/cargos/{id}/historial` | Quién creó, aprobó o anuló el cargo. |
+
+Las tablas `fin_cargos` y `fin_cargos_eventos` viven en Finanzas. La fuente `declarado` lee
+exclusivamente estos registros; conserva conciliación e historial, sin escribir en la operación.
 
 ## Prefactura
 
