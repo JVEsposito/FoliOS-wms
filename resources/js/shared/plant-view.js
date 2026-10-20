@@ -3,6 +3,8 @@
 // color de estado (verde, ámbar, rojo) se reserva para valores; el tipo de
 // recinto se distingue por forma, etiqueta e icono.
 
+import { cameraDisplayName } from './camera-display.js';
+
 export const TUNNEL_STATE_LABELS = {
     borrador: 'Borrador',
     cargando: 'Cargando',
@@ -261,10 +263,14 @@ export function plantNodeModel(element, index) {
     }
 }
 
+export function plantNodeTitle(model) {
+    return model.kind === 'camara' ? cameraDisplayName({ nombre: model.name }) : model.code;
+}
+
 export function plantNodeLabel(model) {
     return [
-        `${model.tag} ${model.code}`,
-        model.name !== model.code ? model.name : null,
+        model.kind === 'camara' ? plantNodeTitle(model) : `${model.tag} ${model.code}`,
+        model.kind !== 'camara' && model.name !== model.code ? model.name : null,
         model.value ? `${model.value}${model.valueLabel ? ` ${model.valueLabel}` : ''}` : null,
         model.detail,
         model.crew?.personas?.length ? `${model.crew.personas.length} personas` : null,
