@@ -5,7 +5,6 @@ import {
   OperationalTask,
   type ManeuverDiscrepancyType,
   type ReportedManeuverDiscrepancy,
-  operationalTaskLabel,
   operationalTaskPositionLabel,
   operationalTaskReason,
 } from '../../domain/operationalTasks';
@@ -15,6 +14,7 @@ import {
   type OperatorManeuverSequenceItem,
 } from '../../domain/operatorManeuver';
 import { operatorTheme as o } from '../../theme/operatorTheme';
+import { operatorTaskPurpose } from '../../domain/operatorTaskPurpose';
 import type { OperatorExceptionKind } from '../../domain/operatorManeuverException';
 import type { StartConfirmation } from '../../services/operationalTasksApi';
 import { OperatorExceptionReport } from './OperatorExceptionReport';
@@ -75,6 +75,7 @@ export function OperatorTaskExecution({
   const compact = width < o.breakpoint.compact;
   const wide = width >= 1000;
   const action = buildOperatorManeuverAction(task);
+  const purpose = operatorTaskPurpose(task);
   const sequence = buildOperatorManeuverSequence(task);
   const moving = task.estado === 'en_proceso';
   const currentStep = task.secuencia_maniobra ?? task.maniobra?.secuencia_actual ?? 1;
@@ -138,7 +139,7 @@ export function OperatorTaskExecution({
             <Pressable accessibilityLabel="Volver a maniobras" disabled={busy} onPress={onBack} style={styles.wideBack}>
               <Text style={styles.wideBackText}>‹</Text>
             </Pressable>
-            <Text style={styles.wideTitle}>{task.maniobra?.titulo ?? operationalTaskLabel(task.plan.tipo)}</Text>
+            <Text style={styles.wideTitle}>{task.maniobra?.titulo ?? purpose.goal}</Text>
             <OperatorStatusBadge label={moving ? 'EN EJECUCIÓN' : 'PREPARADA'} tone={moving ? 'success' : 'info'} />
           </View>
           <View testID="maneuver-wide-columns" style={styles.wideColumns}>
@@ -147,7 +148,7 @@ export function OperatorTaskExecution({
                 <Text style={styles.wideLabel}>Mi maniobra</Text>
                 <Text style={styles.wideFolio}>{task.folio.numero_folio}</Text>
                 <Text style={styles.wideLabor}>
-                  {operationalTaskLabel(task.plan.tipo)}{maneuverObjectiveCount(task) > 1 ? ' · ' + maneuverObjectiveCount(task) + ' objetivos' : ''}
+                  {purpose.label}{maneuverObjectiveCount(task) > 1 ? ' · ' + maneuverObjectiveCount(task) + ' objetivos' : ''}
                 </Text>
                 <Text style={styles.wideRoute}>{operationalTaskPositionLabel(task.origen)} → {action.destination}</Text>
               </View>
@@ -219,13 +220,13 @@ export function OperatorTaskExecution({
                 label={moving ? 'EN EJECUCIÓN' : 'PREPARADA'}
                 tone={moving ? 'success' : 'info'}
               />
-              <Text style={styles.headerManeuver}>{task.maniobra?.titulo ?? operationalTaskLabel(task.plan.tipo)}</Text>
+              <Text style={styles.headerManeuver}>{task.maniobra?.titulo ?? purpose.goal}</Text>
             </View>
           </View>
 
           <View style={[styles.summary, compact && styles.summaryCompact]}>
             <SummaryCell label="Folio / pallet"><OperatorEntityCode prominent value={task.folio.numero_folio} /></SummaryCell>
-            <SummaryCell label="Labor" value={operationalTaskLabel(task.plan.tipo)} />
+            <SummaryCell label="Labor" value={purpose.label} />
             {maneuverObjectiveCount(task) > 1 ? (
               <SummaryCell label="Objetivos" value={String(maneuverObjectiveCount(task))} />
             ) : null}
@@ -278,7 +279,7 @@ export function OperatorTaskExecution({
               <View style={styles.locationCard}>
                 <LocationLine label="Origen" value={operationalTaskPositionLabel(task.origen)} />
                 <LocationLine label="Destino" value={action.destination} strong />
-                <LocationLine label="Motivo" value={operationalTaskReason(task)} />
+                <LocationLine label="Instrucción" value={operationalTaskReason(task)} />
               </View>
             </View>
 

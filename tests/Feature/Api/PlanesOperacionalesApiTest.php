@@ -106,6 +106,7 @@ class PlanesOperacionalesApiTest extends TestCase
     {
         $contexto = $this->crearContexto();
         $plan = $this->crearPlan($contexto);
+        $plan->update(['motivo' => 'Dejar accesible el producto para la operación del turno.']);
         $tarea = $plan->tareas->firstOrFail();
 
         $this->conToken($contexto['token'])
@@ -113,6 +114,8 @@ class PlanesOperacionalesApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('meta.total', 1)
             ->assertJsonPath('data.0.id', $tarea->id)
+            ->assertJsonPath('data.0.plan.motivo', $plan->motivo)
+            ->assertJsonPath('data.0.maniobra.objetivos.0.motivo', $plan->motivo)
             ->assertJsonPath('data.0.folio.numero_folio', 'PALLET-001')
             ->assertJsonPath('data.0.destino.camara.nombre', 'Cámara tránsito');
         $planoLibre = $this->conToken($contexto['token'])
@@ -126,6 +129,8 @@ class PlanesOperacionalesApiTest extends TestCase
             ->postJson("/api/tareas-movimiento/{$tarea->id}/asumir")
             ->assertOk()
             ->assertJsonPath('data.estado', 'asumida')
+            ->assertJsonPath('data.plan.motivo', $plan->motivo)
+            ->assertJsonPath('data.maniobra.objetivos.0.motivo', $plan->motivo)
             ->assertJsonPath('data.responsable.id', $contexto['camarero']->id)
             ->assertJsonPath('data.dispositivo.id', $contexto['dispositivo']->id)
             ->assertJsonPath('data.reserva.destino_reservado', true)

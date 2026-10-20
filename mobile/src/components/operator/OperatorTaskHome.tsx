@@ -4,7 +4,6 @@ import type { ReactNode } from 'react';
 import {
   OperationalTask,
   operationalTaskDestinationLabel,
-  operationalTaskLabel,
   operationalTaskPositionLabel,
   operationalTaskReason,
 } from '../../domain/operationalTasks';
@@ -125,6 +124,7 @@ function NextTaskCard({ busy, compact, item, onOpen, suggestion }: {
   suggestion?: string;
 }) {
   const { task } = item;
+  const purpose = operatorTaskPurpose(task);
   const paused = task.maniobra?.estado === 'pausada_discrepancia';
   const alternative = isArbitrationAlternative(task);
   const state = paused
@@ -164,7 +164,7 @@ function NextTaskCard({ busy, compact, item, onOpen, suggestion }: {
               <OperatorStatusBadge label={`${maneuverObjectiveCount(task)} OBJETIVOS`} tone="info" />
             ) : null}
           </View>
-          <Text style={styles.heroTitle}>{operationalTaskLabel(task.plan.tipo)}</Text>
+          <Text style={styles.heroTitle}>{purpose.label}</Text>
           <Text style={styles.folioLabel}>Folio / pallet</Text>
           <OperatorEntityCode prominent value={task.folio.numero_folio} />
         </View>
@@ -172,7 +172,7 @@ function NextTaskCard({ busy, compact, item, onOpen, suggestion }: {
         <View style={[styles.heroRoute, compact && styles.heroRouteCompact]}>
           <OperatorRouteLine label="Origen" value={operationalTaskPositionLabel(task.origen)} />
           <OperatorRouteLine label="Destino" value={suggestion ? `${suggestion} · sugerido` : operationalTaskDestinationLabel(task)} strong />
-          <OperatorRouteLine label="Motivo" value={operationalTaskReason(task)} />
+          <OperatorRouteLine label="Instrucción" value={operationalTaskReason(task)} />
         </View>
       </View>
 
@@ -203,6 +203,7 @@ function QueueRow({ busy, compact, index, item, onOpen, suggestion }: {
   suggestion?: string;
 }) {
   const task = item.task;
+  const purpose = operatorTaskPurpose(task);
   const paused = task.maniobra?.estado === 'pausada_discrepancia';
   const alternative = isArbitrationAlternative(task);
   return (
@@ -214,8 +215,8 @@ function QueueRow({ busy, compact, index, item, onOpen, suggestion }: {
         <OperatorEntityCode value={task.folio.numero_folio} />
       </View>
       <View style={[styles.queueContext, compact && styles.queueRouteCompact]}>
-        <Text style={styles.queuePurpose}>{operatorTaskPurpose(task).label}</Text>
-        <Text style={styles.queueGoal}>{operatorTaskPurpose(task).goal}</Text>
+        <Text style={styles.queuePurpose}>{purpose.label}</Text>
+        <Text style={styles.queueGoal}>{purpose.goal}</Text>
         <View style={styles.queueRoute}>
           <Text numberOfLines={1} style={styles.queueRouteText}>{operationalTaskPositionLabel(task.origen)}</Text>
           <Text style={styles.queueArrow}>→</Text>
