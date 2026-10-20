@@ -100,7 +100,7 @@ class PlanOperacionalController extends Controller
             'tareas.dispositivo:id,codigo,nombre',
             'tareas.reservaActiva:id,tarea_movimiento_id,bloqueo_tarea_id,bloqueo_posicion_id,estado,reservada_at,renovada_at,vence_at,version',
             'tareas.maniobraOperacional:id,plan_operacional_id,estado,prioridad,candidate_key,titulo,secuencia_actual,costo_movimientos,beneficio_estimado,riesgo_operacional,responsable_user_id,dispositivo_id,version,contexto',
-            'tareas.maniobraOperacional.objetivos:id,tipo,estado,prioridad,titulo',
+            'tareas.maniobraOperacional.objetivos:id,tipo,estado,prioridad,titulo,motivo',
             'tareas.maniobraOperacional.ultimaDecisionArbitraje',
             'tareas.maniobraOperacional.ultimaDecisionArbitraje.ciclo:id,snapshot_version,created_at',
             ...$this->relacionesDetalleManiobra('tareas.maniobraOperacional'),
@@ -551,7 +551,7 @@ class PlanOperacionalController extends Controller
     private function relacionesTarea(): array
     {
         return [
-            'planOperacional:id,temporada_id,tipo,estado,prioridad,titulo,version,contexto',
+            'planOperacional:id,temporada_id,tipo,estado,prioridad,titulo,motivo,version,contexto',
             'folio:id,numero_folio,tipo_bulto,variedad,calibre,marca,exportadora,fecha_ingreso',
             'camaraOrigen:id,nombre',
             'posicionOrigen:id,camara_id,etiqueta,banda,posicion,nivel',
@@ -561,7 +561,7 @@ class PlanOperacionalController extends Controller
             'dispositivo:id,codigo,nombre',
             'reservaActiva:id,tarea_movimiento_id,bloqueo_tarea_id,bloqueo_posicion_id,estado,reservada_at,renovada_at,vence_at,version',
             'maniobraOperacional:id,plan_operacional_id,estado,prioridad,candidate_key,titulo,secuencia_actual,costo_movimientos,beneficio_estimado,riesgo_operacional,responsable_user_id,dispositivo_id,version,contexto',
-            'maniobraOperacional.objetivos:id,tipo,estado,prioridad,titulo',
+            'maniobraOperacional.objetivos:id,tipo,estado,prioridad,titulo,motivo',
             'maniobraOperacional.ultimaDecisionArbitraje',
             'maniobraOperacional.ultimaDecisionArbitraje.ciclo:id,snapshot_version,created_at',
             ...$this->relacionesDetalleManiobra('maniobraOperacional'),

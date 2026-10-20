@@ -145,6 +145,19 @@ test('maniobra: confirmación folio/PIN y pausa siguen sustituyendo la ejecució
   } finally { await h.unmount(); }
 });
 
+test('el propósito de separación y la carga son visibles en ejecución vertical y horizontal', async () => {
+  for (const width of [760, 1000, 1280]) {
+    const h = harness(width, { task: task({ plan: { id: 'load-plan', tipo: 'concentracion_carga', titulo: 'Concentrar CAR-000042', motivo: 'Preparar la carga para su despacho.' } }) });
+    try {
+      await h.mount();
+      assert.match(h.message(), /Separación y preparación de carga/);
+      assert.match(h.message(), /CAR-000042/);
+      assert.match(h.message(), /Preparar la carga para su despacho/);
+      assert.match(h.message(), /Este paso:/);
+    } finally { await h.unmount(); }
+  }
+});
+
 test('maniobra: excepciones abren el mismo formulario y liberar conserva su callback', async () => {
   const h = harness(1280);
   try {

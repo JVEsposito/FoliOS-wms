@@ -140,7 +140,7 @@ class CargaResource extends JsonResource
      */
     private function asignacionesVisibles(Collection $actuales): Collection
     {
-        if ($actuales->isNotEmpty() || $this->estado !== EstadoCarga::Cerrada) {
+        if ($actuales->isNotEmpty() || ! in_array($this->estado, [EstadoCarga::Cerrada, EstadoCarga::Despachada], true)) {
             return $actuales;
         }
 
