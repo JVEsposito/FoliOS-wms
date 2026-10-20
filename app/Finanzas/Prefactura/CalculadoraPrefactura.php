@@ -80,6 +80,7 @@ final class CalculadoraPrefactura
     public function calcular(Periodo $periodo, ?string $cliente = null, bool $conDetalle = false, ?callable $alAportar = null): array
     {
         $this->reiniciar($conDetalle);
+        $this->servicios->recargar();
         $this->alAportar = $alAportar;
         $this->zona = new DateTimeZone((string) config('app.operational_timezone'));
         $hoy = Periodo::hoy();
@@ -148,15 +149,16 @@ final class CalculadoraPrefactura
     private function puntual(object $fila, array $medidas): void
     {
         $fecha = substr((string) $fila->fecha_operacional, 0, 10);
-        $precios = $this->aplicables($fila->cliente_id, $fila->fuente, $fecha);
-        if ($precios === []) {
-            $this->sinPrecio[$fila->cliente_id][$fila->fuente][$fila->id] = true;
+        foreach ($this->servicios->paraHecho($fila->fuente, $fecha) as $servicio) {
+            $precios = $this->aplicables($fila->cliente_id, $servicio, $fecha);
+            if ($precios === []) {
+                $this->sinPrecio[$fila->cliente_id][$servicio][$fila->id] = true;
 
-            return;
-        }
-
-        foreach ($precios as [, $unidad, $tarifa]) {
-            $this->sumar($fila, $tarifa, $medidas[$unidad] ?? 0, 0, $fecha);
+                continue;
+            }
+            foreach ($precios as [, $unidad, $tarifa]) {
+                $this->sumar($fila, $tarifa, $medidas[$unidad] ?? 0, 0, $fecha);
+            }
         }
     }
 
@@ -184,6 +186,7 @@ final class CalculadoraPrefactura
             return;
         }
 
+        $ingresoCivil = strtotime($this->fechaLocal($ingreso).' UTC');
         $tramos = $this->tramos($datos['tramos'] ?? [], $medidas, $ingreso);
         $unTramo = count($tramos) === 1 ? $tramos[0][2] : null;
         $folio = (string) strtok((string) $fila->origen_id, '#');
@@ -211,30 +214,33 @@ final class CalculadoraPrefactura
             }
             $cobrados |= $bit;
 
-            $precios = $this->aplicables($cliente, $servicio, $dia);
-            if ($precios === []) {
-                $this->sinPrecio[$cliente][$servicio][$fila->id] = true;
-
-                continue;
-            }
-
+            // Diferencia de fechas civiles, sin dividir segundos por 24 h (cambio de hora).
+            $diaEstadia = (int) ((strtotime($dia.' UTC') - $ingresoCivil) / 86400) + 1;
             $delDia = $unTramo ?? $this->medidasAl($tramos, max($inicioDia, $ingreso));
-            foreach ($precios as [$id, $unidad, $tarifa]) {
-                $valor = $delDia[$unidad] ?? 0;
-                if (! is_numeric($valor) || $valor == 0) {
+            foreach ($this->servicios->paraHecho($servicio, $dia, $diaEstadia) as $concepto) {
+                $precios = $this->aplicables($cliente, $concepto, $dia);
+                if ($precios === []) {
+                    $this->sinPrecio[$cliente][$concepto][$fila->id] = true;
+
                     continue;
                 }
-                if (! isset($tarifas[$id])) {
-                    $tarifas[$id] = $tarifa;
-                    $cantidades[$id] = 0;
-                    $diasPorPrecio[$id] = 0;
-                    $desdes[$id] = $dia;
+                foreach ($precios as [$id, $unidad, $tarifa]) {
+                    $valor = $delDia[$unidad] ?? 0;
+                    if (! is_numeric($valor) || $valor == 0) {
+                        continue;
+                    }
+                    if (! isset($tarifas[$id])) {
+                        $tarifas[$id] = $tarifa;
+                        $cantidades[$id] = 0;
+                        $diasPorPrecio[$id] = 0;
+                        $desdes[$id] = $dia;
+                    }
+                    $cantidades[$id] = is_int($valor) && is_int($cantidades[$id])
+                        ? $cantidades[$id] + $valor
+                        : BigDecimal::of((string) $cantidades[$id])->plus((string) $valor);
+                    $diasPorPrecio[$id]++;
+                    $hastas[$id] = $dia;
                 }
-                $cantidades[$id] = is_int($valor) && is_int($cantidades[$id])
-                    ? $cantidades[$id] + $valor
-                    : BigDecimal::of((string) $cantidades[$id])->plus((string) $valor);
-                $diasPorPrecio[$id]++;
-                $hastas[$id] = $dia;
             }
         }
         $this->diasCobrados[$folio] = $cobrados;
@@ -426,6 +432,13 @@ final class CalculadoraPrefactura
             $valorizados += $linea['hechos'];
         }
 
+        $sinPrecio = [];
+        foreach ($this->sinPrecio as $servicios) {
+            foreach ($servicios as $hechos) {
+                $sinPrecio += $hechos;
+            }
+        }
+
         return [
             'periodo' => $periodo->aArreglo(),
             'corte' => $corte,
@@ -440,7 +453,7 @@ final class CalculadoraPrefactura
             'resumen' => [
                 'clientes' => count(array_filter($clientes, fn (array $cliente): bool => $cliente['lineas'] !== [])),
                 'hechos_valorizados' => count($valorizados),
-                'hechos_sin_precio' => array_sum(array_map(fn (array $servicios): int => array_sum(array_map('count', $servicios)), $this->sinPrecio)),
+                'hechos_sin_precio' => count($sinPrecio),
                 'hechos_sin_cliente' => array_sum($this->sinCliente),
             ],
         ];

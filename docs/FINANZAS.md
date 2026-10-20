@@ -147,7 +147,7 @@ Administración → Finanzas → *Tarifario*.
 
 | Concepto | Regla |
 | --- | --- |
-| Servicio | Cada fuente de hechos: recepción en romana, validación, fruta embalada, prefrío, estadía en cámara, repaletizaje y despacho. |
+| Servicio | Concepto comercial respaldado por una fuente de hechos. Se conservan los siete conceptos base; Oficina permite crear otros sobre esos procesos. |
 | Unidad de cobro | Una medida de esa fuente: kilo neto, envase, recepción, bulto, pallet, saldo, caja, repaletizaje o folio. En la estadía es por día («por pallet y día»). Cada cliente puede tener su propia unidad. |
 | Precio | Decimal exacto, hasta 12 enteros y 6 decimales, en una moneda configurada. |
 | Vigencia | Desde y, opcionalmente, hasta: fechas de planta, ambas inclusivas. Un precio no pertenece a una temporada: un contrato de temporada se carga con las fechas de la temporada. |
@@ -191,6 +191,58 @@ módulo (`gestionar-tarifas-finanzas`).
 | PUT | `/tarifas/{id}` | Edita moneda, precio, vigencia y nota. |
 | POST | `/tarifas/{id}/anular` | Anula con motivo. |
 | POST / PUT | `/monedas`, `/monedas/{codigo}` | Crea o edita una moneda. |
+
+### Conceptos de servicio
+
+En *Tarifario → Conceptos de servicio*, Administración crea un nombre comercial, lo asocia
+al proceso que ya captura Finanzas y define fechas de aplicación inclusivas. Después asigna
+un precio en *Precios*, con la unidad disponible en ese proceso, moneda y cliente o tarifa
+general. Crear un concepto no duplica el hecho: varias líneas conservan el mismo identificador
+y versión de respaldo. La captura y la operación no se modifican.
+
+- **Reemplaza al base**: el concepto original no se valoriza en los hechos y fechas que
+  coinciden. No pueden existir dos reemplazos del mismo proceso con fechas y días cruzados;
+  las altas se serializan con un candado. Fuera de esos rangos vuelve a aplicar el base.
+- **Adicional**: suma una prestación al base (y a los demás conceptos adicionales que
+  correspondan). Esta elección es explícita; no se presupone que todos los nombres de una
+  lista de tarifas son servicios efectivamente prestados.
+- **Sin precio**: el concepto queda pendiente; un reemplazo sin precio no recupera el precio
+  del base silenciosamente. El precio propio o general se resuelve por concepto.
+- **Días de estadía**: desde/hasta son ordinales inclusivos desde el inicio de **esa custodia
+  del folio**, contando el ingreso como día 1 en hora de planta; no se reinician al cambiar
+  de mes y respetan los tramos históricos de cantidades. Un folio nuevo de repaletizaje inicia
+  otra custodia y no cobra el día de su creación, como antes. Esta regla no representa edad
+  de cosecha ni antigüedad heredada de otros folios. No se ofrece en procesos puntuales.
+- **Definición inmutable**: nombre, fuente y reglas no se editan ni borran. Para cambiarlos
+  se finaliza el concepto y se crea otro con su vigencia. Se puede adelantar su término desde
+  hoy, con motivo; no extenderlo ni finalizarlo antes de que comience. Historial con usuario,
+  fecha y definición en `fin_servicios_eventos`; conceptos en `fin_servicios`. Un concepto
+  finalizado permite asignar un precio histórico desde su fila para completar pendientes.
+- **Cierres**: no se reescriben. Un concepto creado con fechas anteriores puede cambiar la
+  comparación del mes cerrado; crear/finalizar invalida esa revisión, incluso sin tocar un
+  precio. Las diferencias siguen el circuito de revisión y decisión existente.
+
+Ejemplo configurable (no se precarga): *Frío normal* reemplaza Estadía en los días 1–15;
+*Permanencia adicional* la reemplaza desde el día 16. Otra opción es conservar la tarifa base
+y crear solo un recargo adicional desde el día 16. La elección depende del contrato.
+
+Solo se ofrecen las siete fuentes con captura implementada. **SAG/USDA, adhesivos, sellado,
+tratamientos, arriendo de bins y servicios manuales no se crean como capturas ficticias**:
+requieren su propio registro de ejecución, cantidades y adaptador financiero. Tampoco se
+incluyen cobros por mes, paquetes, mínimos, horas fuera de jornada ni filtros comerciales por
+tipo de vehículo, especie o condición de fruta. La lista de referencia no incorpora importes.
+
+API adicional (`/api/finanzas`):
+
+| Método | Ruta | Uso |
+| --- | --- | --- |
+| POST | `/servicios` | Crea definición: nombre, descripción, fuente, aplicación (`adicional` o `reemplaza_base`), vigencias y `dia_desde`/`dia_hasta`. |
+| POST | `/servicios/{clave}/finalizar` | Adelanta término con `vigente_hasta` y `motivo`, desde hoy. |
+| GET | `/servicios/{clave}/historial` | Definición y eventos; consulta con el permiso de Finanzas. |
+
+`GET /tarifas` incluye conceptos y procesos disponibles; la tarifa efectiva muestra precios
+solo dentro de las fechas del concepto. El catálogo inicial sigue siendo virtual: la migración
+no cambia claves, precios, hechos ni cierres existentes, ni precarga tarifas de referencia.
 
 ## Prefactura
 

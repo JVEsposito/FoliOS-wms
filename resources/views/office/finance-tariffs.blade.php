@@ -51,6 +51,7 @@
                     default="prices"
                     :panels="[
                         'prices' => ['label' => 'Precios', 'icon' => '$', 'badge_id' => 'tariffPricesCount'],
+                        'services' => ['label' => 'Conceptos de servicio', 'icon' => '≡', 'badge_id' => 'tariffServicesCount'],
                         'currencies' => ['label' => 'Monedas', 'icon' => '¤', 'badge_id' => 'tariffCurrenciesCount'],
                     ]"
                 />
@@ -92,6 +93,21 @@
                     </div>
                 </section>
 
+                <section class="panel fin-panel" id="finance-tariffs-panel-services" data-office-panel-group="finance-tariffs" data-office-panel-id="services" role="tabpanel" aria-labelledby="finance-tariffs-tab-services" hidden>
+                    <div class="fin-panel__heading">
+                        <div><p class="eyebrow">CONCEPTOS DE SERVICIO</p><h2>Qué se cobra y qué proceso lo respalda</h2></div>
+                        <button class="secondary-button fin-heading__button" id="serviceNewButton" type="button" hidden>+ Nuevo concepto</button>
+                    </div>
+                    <p>Cree el concepto, asócielo a un proceso y asígnele un precio general o por cliente. Se aplica a todos los hechos que cumplan sus fechas y reglas.</p>
+                    <div class="fin-table-scroll">
+                        <table class="fin-table">
+                            <thead><tr><th>Concepto</th><th>Proceso y aplicación</th><th>Vigencia y días</th><th>Acciones</th></tr></thead>
+                            <tbody id="serviceRows"></tbody>
+                        </table>
+                    </div>
+                    <p>Solo se ofrecen procesos con registros disponibles para Finanzas. Inspecciones SAG y servicios adicionales como adhesivos o sellado requieren incorporar su registro antes de automatizar el cobro.</p>
+                </section>
+
                 <section class="panel fin-panel" id="finance-tariffs-panel-currencies" data-office-panel-group="finance-tariffs" data-office-panel-id="currencies" role="tabpanel" aria-labelledby="finance-tariffs-tab-currencies" hidden>
                     <div class="fin-panel__heading">
                         <div><p class="eyebrow">MONEDAS</p><h2>En qué se expresan los precios</h2></div>
@@ -116,8 +132,10 @@
                 </header>
                 <div class="fin-form">
                     <label class="fin-form__wide"><span>Cliente</span><select name="cliente_id" id="tariffFormClient"></select></label>
-                    <label><span>Servicio</span><select name="servicio" id="tariffFormService" required></select></label>
+                    <label><span>Concepto de servicio</span><select name="servicio" id="tariffFormService" required></select></label>
                     <label><span>Unidad de cobro</span><select name="unidad" id="tariffFormUnit" required></select></label>
+                    <p class="fin-form__preview fin-form__wide" id="tariffFormServiceRules"></p>
+                    <button class="fin-boton fin-form__wide" id="tariffFormCreateService" type="button">+ Crear un concepto de servicio</button>
                     <label><span>Moneda</span><select name="moneda" id="tariffFormCurrency" required></select></label>
                     <label><span>Precio unitario</span><input name="precio" id="tariffFormPrice" inputmode="decimal" autocomplete="off" placeholder="Por ejemplo, 0,35" required></label>
                     <label><span>Vigente desde</span><input name="vigente_desde" id="tariffFormFrom" type="date" required></label>
@@ -185,6 +203,52 @@
                     <button class="primary-button" type="submit">Guardar moneda</button>
                 </footer>
             </form>
+        </dialog>
+
+        <dialog class="fin-history fin-dialog" id="serviceDialog" aria-labelledby="serviceDialogTitle">
+            <form id="serviceForm">
+                <header class="fin-history__heading">
+                    <div><p class="eyebrow">CONCEPTO DE SERVICIO</p><h2 id="serviceDialogTitle">Nuevo concepto</h2></div>
+                    <button class="fin-history__close" data-service-close type="button" aria-label="Cerrar">×</button>
+                </header>
+                <div class="fin-form">
+                    <label class="fin-form__wide"><span>Nombre que aparecerá en la prefactura</span><input name="nombre" maxlength="120" required placeholder="Por ejemplo, Frío normal"></label>
+                    <label class="fin-form__wide"><span>Proceso que respalda el servicio</span><select name="fuente" required></select></label>
+                    <p class="fin-form__preview fin-form__wide" id="serviceProcessHelp"></p>
+                    <label class="fin-form__wide"><span>Cómo se aplica</span><select name="aplicacion" required><option value="">Seleccione</option><option value="reemplaza_base">Reemplaza al concepto base en los hechos que correspondan</option><option value="adicional">Suma un cobro adicional al concepto base</option></select></label>
+                    <label><span>Vigente desde</span><input name="vigente_desde" type="date" required></label>
+                    <label><span>Vigente hasta <small>(opcional)</small></span><input name="vigente_hasta" type="date"></label>
+                    <fieldset class="fin-form__wide fin-service-days" id="serviceDays" hidden>
+                        <legend>Días de esta estadía del folio</legend>
+                        <label><span>Desde el día</span><input name="dia_desde" type="number" min="1" max="65535" step="1" value="1" required></label>
+                        <label><span>Hasta el día <small>(vacío: sin límite)</small></span><input name="dia_hasta" type="number" min="1" max="65535" step="1"></label>
+                        <p>El ingreso es el día 1, en hora de planta. Se cuenta desde el inicio de esta custodia; un folio nuevo de repaletizaje comienza otra. No representa la antigüedad de la fruta de sus orígenes.</p>
+                    </fieldset>
+                    <label class="fin-form__wide"><span>Descripción <small>(opcional)</small></span><textarea name="descripcion" maxlength="500" rows="2"></textarea></label>
+                    <p class="fin-form__preview fin-form__wide">Sin precio, los hechos del concepto quedan pendientes de valorizar. La unidad de cobro se elige al asignar el precio, entre las cantidades registradas por el proceso. El proceso y las reglas del concepto se conservan: para cambiarlos se finaliza y se crea otro concepto.</p>
+                    <p class="form-error fin-form__wide" id="serviceFormError" role="alert"></p>
+                </div>
+                <footer class="fin-history__actions"><button class="secondary-button" data-service-close type="button">Cancelar</button><button class="primary-button" type="submit">Guardar concepto y asignar precio</button></footer>
+            </form>
+        </dialog>
+
+        <dialog class="fin-history fin-dialog" id="serviceEndDialog" aria-labelledby="serviceEndTitle">
+            <form id="serviceEndForm">
+                <header class="fin-history__heading"><div><p class="eyebrow">FINALIZAR CONCEPTO</p><h2 id="serviceEndTitle"></h2></div><button class="fin-history__close" data-service-close type="button" aria-label="Cerrar">×</button></header>
+                <div class="fin-form">
+                    <label class="fin-form__wide"><span>Último día de aplicación</span><input name="vigente_hasta" type="date" required></label>
+                    <label class="fin-form__wide"><span>Motivo</span><textarea name="motivo" minlength="5" maxlength="500" required rows="2"></textarea></label>
+                    <p class="fin-form__preview fin-form__wide">Después de esa fecha deja de aplicarse. Sus precios, hechos y cierres anteriores se conservan.</p>
+                    <p class="form-error fin-form__wide" id="serviceEndError" role="alert"></p>
+                </div>
+                <footer class="fin-history__actions"><button class="secondary-button" data-service-close type="button">Cancelar</button><button class="primary-button" type="submit">Finalizar concepto</button></footer>
+            </form>
+        </dialog>
+
+        <dialog class="fin-history" id="serviceHistory" aria-labelledby="serviceHistoryTitle">
+            <header class="fin-history__heading"><div><p class="eyebrow">HISTORIAL DEL CONCEPTO</p><h2 id="serviceHistoryTitle"></h2></div><button class="fin-history__close" data-service-close type="button" aria-label="Cerrar">×</button></header>
+            <ol class="fin-history__list" id="serviceHistoryList"></ol>
+            <footer class="fin-history__actions"><button class="secondary-button" data-service-close type="button">Cerrar</button></footer>
         </dialog>
 
         <div class="loading is-hidden" id="officeLoading" role="status" aria-live="assertive" aria-hidden="true"><span aria-hidden="true"></span><strong id="officeLoadingText">Procesando…</strong></div>
