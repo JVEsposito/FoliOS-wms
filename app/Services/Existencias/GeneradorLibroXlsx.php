@@ -14,7 +14,7 @@ class GeneradorLibroXlsx
     /**
      * @param  array<int, array{clave:string,titulo:string,ancho?:int,tipo?:string}>  $columnas
      * @param  iterable<int, array<string, mixed>>  $filas
-     * @param  array<string, string|null>  $metadatos
+     * @param  array<string, string|null|list<array{0: string, 1: ?string}>>  $metadatos  «adicionales»: filas extra de la hoja Corte
      */
     public function generar(
         string $titulo,
@@ -246,6 +246,10 @@ XML;
             if (filled($metadatos[$clave] ?? null)) {
                 $filas[] = [$etiqueta, $metadatos[$clave]];
             }
+        }
+        // Datos propios del reporte (por ejemplo, los del embarque de un packing list).
+        foreach ($metadatos['adicionales'] ?? [] as [$etiqueta, $valor]) {
+            $filas[] = [(string) $etiqueta, $valor === null ? null : (string) $valor];
         }
         $xml = '';
         foreach ($filas as $indice => [$etiqueta, $valor]) {

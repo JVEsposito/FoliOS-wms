@@ -59,7 +59,7 @@
             ['key' => 'operacion-ahora', 'module' => 'gerencia.panel', 'label' => 'Operación ahora', 'href' => '/oficina/operacion-ahora', 'permissions' => ['puede_consultar_panel_gerencial']],
         ],
         'administracion' => [
-            ['key' => 'resumen', 'module' => '', 'label' => 'Resumen', 'href' => '/oficina/administracion', 'permissions' => ['puede_consultar_panel_gerencial', 'puede_consultar_accesos', 'puede_administrar_catalogos_validacion', 'puede_consultar_configuracion_camaras', 'puede_consultar_integridad_operacional', 'puede_consultar_finanzas']],
+            ['key' => 'resumen', 'module' => '', 'label' => 'Resumen', 'href' => '/oficina/administracion', 'permissions' => ['puede_consultar_panel_gerencial', 'puede_consultar_accesos', 'puede_administrar_catalogos_validacion', 'puede_consultar_configuracion_camaras', 'puede_consultar_integridad_operacional', 'puede_consultar_finanzas', 'puede_consultar_comex']],
             ['key' => 'accesos', 'module' => 'administracion.accesos', 'label' => 'Accesos & Temporadas', 'href' => '/oficina/accesos', 'permissions' => ['puede_consultar_accesos']],
             ['key' => 'fruta-embalada', 'module' => 'administracion.accesos', 'label' => 'Plantas y umbrales de prefrío', 'href' => '/oficina/administracion/fruta-embalada', 'permissions' => ['puede_administrar_accesos']],
             ['key' => 'maestros-temporada', 'module' => 'administracion.maestros-temporada', 'label' => 'Maestros de temporada', 'href' => '/oficina/administracion/maestros-temporada', 'permissions' => ['puede_administrar_catalogos_validacion']],
@@ -69,6 +69,8 @@
             ['key' => 'finanzas-hechos', 'module' => 'finanzas.prefactura', 'section' => 'Finanzas', 'label' => 'Hechos valorizables', 'href' => '/oficina/finanzas/hechos', 'permissions' => ['puede_consultar_finanzas']],
             ['key' => 'finanzas-tarifario', 'module' => 'finanzas.prefactura', 'section' => 'Finanzas', 'label' => 'Tarifario', 'href' => '/oficina/finanzas/tarifario', 'permissions' => ['puede_consultar_finanzas']],
             ['key' => 'finanzas-prefactura', 'module' => 'finanzas.prefactura', 'section' => 'Finanzas', 'label' => 'Prefactura', 'href' => '/oficina/finanzas/prefactura', 'permissions' => ['puede_consultar_finanzas']],
+            ['key' => 'comex-expedientes', 'module' => 'comex.expedientes', 'section' => 'Comercio exterior', 'label' => 'Expedientes de embarque', 'href' => '/oficina/comex/expedientes', 'permissions' => ['puede_consultar_comex']],
+            ['key' => 'comex-configuracion', 'module' => 'comex.configuracion', 'section' => 'Comercio exterior', 'label' => 'Configuración Comex', 'href' => '/oficina/comex/configuracion', 'permissions' => ['puede_consultar_comex']],
         ],
         'consultas' => [
             ['key' => 'resumen', 'module' => '', 'label' => 'Resumen', 'href' => '/oficina/consultas', 'permissions' => ['puede_consultar_oficina_consultas', 'puede_consultar_sag']],

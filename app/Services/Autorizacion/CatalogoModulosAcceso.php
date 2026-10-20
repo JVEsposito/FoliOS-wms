@@ -15,6 +15,10 @@ class CatalogoModulosAcceso
 
     public const OFICINA_FINANZAS_PREFACTURA = 'finanzas.prefactura';
 
+    public const OFICINA_COMEX_EXPEDIENTES = 'comex.expedientes';
+
+    public const OFICINA_COMEX_CONFIGURACION = 'comex.configuracion';
+
     public const OFICINA_CATALOGOS_VALIDACION_LEGADO = 'frigorifico.catalogos';
 
     public const TABLET_OPERACION_FRIGORIFICO = 'operacion';
@@ -125,6 +129,15 @@ class CatalogoModulosAcceso
                 'descripcion' => 'Valorización de lo que registra la operación, sin modificarla.',
                 'modulos' => [
                     $this->modulo(self::OFICINA_FINANZAS_PREFACTURA, 'Hechos y prefactura', 'Hechos valorizables leídos de la operación, tarifario y prefactura por cliente.'),
+                ],
+            ],
+            [
+                'clave' => 'comex',
+                'nombre' => 'Comercio exterior',
+                'descripcion' => 'Documentación de los embarques, leída de la operación sin modificarla.',
+                'modulos' => [
+                    $this->modulo(self::OFICINA_COMEX_EXPEDIENTES, 'Expedientes de embarque', 'Documentos de cada embarque, respaldos y packing list.'),
+                    $this->modulo(self::OFICINA_COMEX_CONFIGURACION, 'Configuración Comex', 'Documentos que se exigen por destino, transporte y cliente.'),
                 ],
             ],
         ];

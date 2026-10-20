@@ -1,0 +1,51 @@
+<?php
+
+use App\Comex\Http\Controllers\ConfiguracionComexController;
+use App\Comex\Http\Controllers\DocumentosComexController;
+use App\Comex\Http\Controllers\ExpedientesComexController;
+use Illuminate\Support\Facades\Route;
+
+/*
+ * Comex. Estas rutas leen la operación y escriben solo en la base de Comex; ninguna modifica
+ * registros operativos. Ver docs/COMEX.md.
+ */
+Route::middleware('auth:sanctum')->prefix('comex')->group(function (): void {
+    $uuid = '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}';
+
+    // Expedientes de embarque: el panel y el detalle los ve quien consulta Comex.
+    Route::get('/expedientes', [ExpedientesComexController::class, 'index'])
+        ->middleware('can:consultar-comex');
+    Route::get('/expedientes/{embarque}', [ExpedientesComexController::class, 'show'])
+        ->where('embarque', $uuid)
+        ->middleware('can:consultar-comex');
+    Route::get('/expedientes/{embarque}/packing-list', [ExpedientesComexController::class, 'packingList'])
+        ->where('embarque', $uuid)
+        ->middleware(['can:consultar-comex', 'throttle:comex-exportaciones']);
+
+    // Documentos: se registran con su respaldo; reemplazar uno deja el anterior en el historial.
+    Route::post('/expedientes/{embarque}/documentos/{tipo}', [DocumentosComexController::class, 'store'])
+        ->where('embarque', $uuid)
+        ->whereNumber('tipo')
+        ->middleware(['can:gestionar-documentos-comex', 'throttle:comex-documentos']);
+    Route::get('/expedientes/{embarque}/documentos/{tipo}/archivo', [DocumentosComexController::class, 'archivoVigente'])
+        ->where('embarque', $uuid)
+        ->whereNumber('tipo')
+        ->middleware(['can:consultar-comex', 'throttle:comex-archivos']);
+    Route::get('/archivos/{archivo}', [DocumentosComexController::class, 'archivo'])
+        ->where('archivo', $uuid)
+        ->middleware(['can:consultar-comex', 'throttle:comex-archivos']);
+
+    // Configuración: la ve quien consulta Comex; la cambia quien tiene el módulo de configuración.
+    Route::get('/configuracion', [ConfiguracionComexController::class, 'index'])
+        ->middleware('can:consultar-comex');
+    Route::post('/configuracion/tipos', [ConfiguracionComexController::class, 'storeTipo'])
+        ->middleware(['can:configurar-comex', 'throttle:comex-configuracion']);
+    Route::post('/configuracion/sugeridos', [ConfiguracionComexController::class, 'storeSugeridos'])
+        ->middleware(['can:configurar-comex', 'throttle:comex-configuracion']);
+    Route::put('/configuracion/tipos/{tipo}', [ConfiguracionComexController::class, 'updateTipo'])
+        ->whereNumber('tipo')
+        ->middleware(['can:configurar-comex', 'throttle:comex-configuracion']);
+    Route::put('/configuracion/clientes/{cliente}', [ConfiguracionComexController::class, 'updateCliente'])
+        ->where('cliente', $uuid)
+        ->middleware(['can:configurar-comex', 'throttle:comex-configuracion']);
+});
