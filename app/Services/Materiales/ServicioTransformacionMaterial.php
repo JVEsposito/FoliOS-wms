@@ -48,6 +48,7 @@ class ServicioTransformacionMaterial
         private readonly ServicioTemporadaActiva $temporadaActiva,
         private readonly ServicioCorrelativoFolioMaterial $correlativoFolio,
         private readonly ServicioReservaFifoMaterial $reservaFifo,
+        private readonly ServicioArmadoMaterial $armado,
     ) {}
 
     /**
@@ -233,7 +234,10 @@ class ServicioTransformacionMaterial
                 'version_receta_material_id' => $version->id,
                 'estado' => EstadoOrdenTransformacionMaterial::Borrador,
                 'cantidad_planificada_salida' => $this->cantidad($datos['cantidad_planificada_salida']),
-                'linea' => $this->textoOpcional($datos['linea'] ?? null),
+                // Con tarja de armado, la línea es el número de máquina (2 dígitos).
+                'linea' => $this->armado->activo()
+                    ? ($this->armado->maquina($datos['linea'] ?? null) ?? $this->textoOpcional($datos['linea'] ?? null))
+                    : $this->textoOpcional($datos['linea'] ?? null),
                 'turno' => $this->textoOpcional($datos['turno'] ?? null),
                 'fecha_operacional' => $datos['fecha_operacional'],
                 'version' => 1,
@@ -374,10 +378,13 @@ class ServicioTransformacionMaterial
                 ];
             }
 
+            // La tarja de armado fija guía, proveedor y lote antes de numerar los pallets.
+            $orden->datos_armado = $this->armado->activo() ? $this->armado->datosOrden($orden) : null;
             $foliosSalida = $this->reservarFoliosSalida($orden);
             $orden->update([
                 'estado' => EstadoOrdenTransformacionMaterial::Planificada,
                 'version' => $orden->version + 1,
+                'datos_armado' => $orden->datos_armado,
             ]);
             $this->registrarEvento(
                 $orden,
@@ -2138,7 +2145,7 @@ class ServicioTransformacionMaterial
         $itemSalida = ItemMaterial::query()
             ->lockForUpdate()
             ->findOrFail((string) data_get($orden->snapshot_receta, 'salida.item_id'));
-        $codigoFolio = $reservaSalida?->numero_folio ?? $this->correlativoFolio->siguiente($cliente);
+        $codigoFolio = $reservaSalida?->numero_folio ?? $this->siguienteFolioSalida($orden, $cliente);
         $folioSalida = Folio::create([
             'temporada_id' => $orden->temporada_id,
             'numero_folio' => $codigoFolio,
@@ -2168,11 +2175,14 @@ class ServicioTransformacionMaterial
             'cantidad_actual' => $cantidadRealSalida,
             'cantidad_reservada' => 0,
             'unidad_medida' => $itemSalida->unidad_medida,
-            'lote' => sprintf(
+            'lote' => data_get($orden->datos_armado, 'lote') ?? sprintf(
                 'TR-%s-%03d',
                 $orden->fecha_operacional->format('ymd'),
                 $reservaSalida?->secuencia ?? $lote->numero_lote,
             ),
+            // En armado, el pallet conserva el proveedor de las cajas de su lote.
+            'proveedor_material_id' => data_get($orden->datos_armado, 'proveedor_material_id'),
+            'proveedor' => data_get($orden->datos_armado, 'proveedor_nombre'),
             'observacion' => 'Salida generada por transformación de materiales.',
         ]);
         $reservaSalida?->update([
@@ -2215,6 +2225,17 @@ class ServicioTransformacionMaterial
     }
 
     /**
+     * Folio de un pallet de salida: el único de armado si la orden se planificó con tarja de
+     * armado, o el siguiente del correlativo del cliente.
+     */
+    private function siguienteFolioSalida(OrdenTransformacionMaterial $orden, Cliente $cliente): string
+    {
+        return $orden->datos_armado
+            ? $this->armado->siguienteFolio((string) data_get($orden->snapshot_receta, 'salida.codigo'))
+            : $this->correlativoFolio->siguiente($cliente);
+    }
+
+    /**
      * Reserva los folios de salida teóricos de la orden: uno cada `unidades_por_folio`
      * y el último con el remanente. Sin unidades por folio, la orden no reserva folios y
      * cada lote toma su número al cerrarse.
@@ -2236,7 +2257,7 @@ class ServicioTransformacionMaterial
 
         for ($restante = $planificado; $restante > 0.0001; $restante = round($restante - $unidadesPorFolio, 3)) {
             $secuencia++;
-            $numero = $this->correlativoFolio->siguiente($cliente);
+            $numero = $this->siguienteFolioSalida($orden, $cliente);
             FolioSalidaReservadoTransformacion::create([
                 'orden_transformacion_material_id' => $orden->id,
                 'secuencia' => $secuencia,
@@ -2318,7 +2339,7 @@ class ServicioTransformacionMaterial
             'anulado_at' => now(),
         ]);
         $cliente = Cliente::query()->lockForUpdate()->findOrFail($orden->cliente_id);
-        $numero = $this->correlativoFolio->siguiente($cliente);
+        $numero = $this->siguienteFolioSalida($orden, $cliente);
         FolioSalidaReservadoTransformacion::create([
             'orden_transformacion_material_id' => $orden->id,
             'secuencia' => ((int) FolioSalidaReservadoTransformacion::query()

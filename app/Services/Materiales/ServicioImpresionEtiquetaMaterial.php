@@ -18,6 +18,7 @@ use App\Models\User;
 use Closure;
 use DomainException;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -577,6 +578,13 @@ class ServicioImpresionEtiquetaMaterial
             // Si vino de un folio reservado, repite la secuencia de la etiqueta anticipada.
             'numero_lote_transformacion' => $reserva?->secuencia ?? $lote?->numero_lote,
             'fecha_transformacion' => $lote?->cerrado_at?->toAtomString(),
+            'armado' => $this->tarjaArmado(
+                $orden,
+                (string) $material?->folio?->numero_folio,
+                (float) $salida->cantidad_producida,
+                $salida->item?->codigo,
+                $salida->item?->nombre,
+            ),
         ];
     }
 
@@ -591,6 +599,13 @@ class ServicioImpresionEtiquetaMaterial
         OrdenTransformacionMaterial $orden,
     ): array {
         $salida = (array) data_get($orden->snapshot_receta, 'salida', []);
+        $tarja = $this->tarjaArmado(
+            $orden,
+            $reserva->numero_folio,
+            (float) $reserva->cantidad_teorica,
+            $salida['codigo'] ?? null,
+            $salida['nombre'] ?? null,
+        );
 
         return [
             'origen' => 'transformacion',
@@ -607,7 +622,7 @@ class ServicioImpresionEtiquetaMaterial
             'numero_guia' => null,
             'proveedor_codigo' => null,
             'proveedor_nombre' => null,
-            'lote_proveedor' => sprintf(
+            'lote_proveedor' => $tarja['lote'] ?? sprintf(
                 'TR-%s-%03d',
                 $orden->fecha_operacional->format('ymd'),
                 $reserva->secuencia,
@@ -619,6 +634,45 @@ class ServicioImpresionEtiquetaMaterial
             'orden_transformacion' => 'OT-'.mb_strtoupper(mb_substr($orden->id, 0, 8)),
             'numero_lote_transformacion' => $reserva->secuencia,
             'fecha_transformacion' => null,
+            'armado' => $tarja,
+        ];
+    }
+
+    /**
+     * Datos de la tarja de armado del pallet, si la orden se planificó con tarja: proveedor
+     * de la caja, cliente dueño, bodega, ítem, fecha del armado, cajas, lote y folio único.
+     *
+     * @return array<string, string>|null
+     */
+    private function tarjaArmado(
+        OrdenTransformacionMaterial $orden,
+        string $numeroFolio,
+        float $cantidad,
+        ?string $codigoItem,
+        ?string $nombreItem,
+    ): ?array {
+        $datos = $orden->datos_armado;
+        if (! is_array($datos) || ! isset($datos['lote'])) {
+            return null;
+        }
+        $entera = abs($cantidad - round($cantidad)) < 0.0005;
+
+        return [
+            'proveedor' => (string) (($datos['proveedor_codigo'] ?? null) ?: ($datos['proveedor_nombre'] ?? '')),
+            'proveedor_nombre' => (string) ($datos['proveedor_nombre'] ?? ''),
+            'cliente' => mb_strtoupper((string) $orden->cliente?->nombre),
+            'bodega' => mb_strtoupper((string) ($datos['nombre_bodega'] ?? '')),
+            'codigo' => (string) $codigoItem,
+            'descripcion' => (string) $nombreItem,
+            'fecha' => Carbon::parse((string) $datos['fecha'])->format('d-m-Y'),
+            'cantidad' => $entera
+                ? number_format($cantidad, 0, ',', '.')
+                : rtrim(rtrim(number_format($cantidad, 3, ',', '.'), '0'), ','),
+            'lote' => (string) $datos['lote'],
+            'guia' => (string) ($datos['guia'] ?? ''),
+            'turno' => (string) ($datos['turno'] ?? ''),
+            'maquina' => (string) ($datos['maquina'] ?? ''),
+            'folio' => $numeroFolio,
         ];
     }
 

@@ -9,6 +9,8 @@ const orderState = {
     identity: null,
     recipes: [],
     orders: [],
+    // Tarja de armado: si la bodega tiene código, la línea es la máquina y el turno es 01 o 02.
+    armado: null,
     inventory: [],
     loadedToken: null,
     loading: false,
@@ -191,8 +193,11 @@ function injectOrderPanel() {
                 <div class="materials-form__grid">
                     <label><span>Cantidad planificada de salida *</span><input name="cantidad_planificada_salida" type="number" min="0.001" step="0.001" required></label>
                     <label><span>Fecha operacional *</span><input name="fecha_operacional" type="date" required></label>
-                    <label><span>Línea</span><input name="linea" maxlength="100" placeholder="Línea 1"></label>
-                    <label><span>Turno</span><input name="turno" maxlength="80" placeholder="Día / Noche"></label>
+                    <label data-order-free-field><span>Línea</span><input name="linea" maxlength="100" placeholder="Línea 1"></label>
+                    <label data-order-free-field><span>Turno</span><input name="turno" maxlength="80" placeholder="Día / Noche"></label>
+                    <label data-order-armado-field hidden><span>Máquina de armado *</span><input name="maquina" type="number" min="1" max="99" step="1" inputmode="numeric" placeholder="3" disabled></label>
+                    <label data-order-armado-field hidden><span>Turno de armado *</span><select name="turno_armado" disabled></select></label>
+                    <p class="materials-help materials-wide" data-order-armado-field hidden id="materialOrderArmadoHelp"></p>
                     <label class="materials-wide"><span>Observación</span><textarea name="observacion" maxlength="2000" rows="2"></textarea></label>
                 </div>
                 <div class="materials-order-requirements" id="materialOrderRequirements"></div>
@@ -250,6 +255,58 @@ function injectOrderPanel() {
     orderElements.clientFilter.addEventListener('change', renderOrders);
     orderElements.search.addEventListener('input', renderOrders);
     orderElements.list.addEventListener('click', handleOrderAction);
+}
+
+const orderArmadoShifts = { '01': 'Día', '02': 'Tarde' };
+
+function orderArmadoShiftName(code) {
+    return orderState.armado?.turnos?.find((shift) => shift.codigo === code)?.nombre
+        || orderArmadoShifts[code]
+        || null;
+}
+
+function orderLineLabel(order) {
+    const machine = order.armado?.maquina || (orderState.armado && /^\d{2}$/.test(order.linea || '') ? order.linea : null);
+    if (machine) return `Máquina ${machine}`;
+    return order.linea || 'Sin línea';
+}
+
+function orderShiftLabel(order) {
+    const code = order.armado?.turno || order.turno;
+    const name = (order.armado || orderState.armado) ? orderArmadoShiftName(code) : null;
+    if (name) return `Turno ${code} · ${name}`;
+    return order.turno || 'Sin turno';
+}
+
+function orderArmadoNotice(order) {
+    const armado = order.armado;
+    if (!armado?.lote) return '';
+    const provider = armado.proveedor_codigo || armado.proveedor_nombre || 'sin proveedor';
+    return `<p class="materials-help">Tarja de armado · lote <strong>${orderEscape(armado.lote)}</strong> · guía ${orderEscape(armado.guia)} · proveedor ${orderEscape(provider)}</p>`;
+}
+
+/** Con tarja de armado, el formulario pide máquina y turno 01/02 en vez de línea y turno libres. */
+function applyOrderArmadoFields() {
+    const form = orderElements.form;
+    if (!form) return;
+    const armado = orderState.armado;
+    form.querySelectorAll('[data-order-free-field]').forEach((field) => {
+        field.hidden = Boolean(armado);
+        field.querySelectorAll('input').forEach((input) => { input.disabled = Boolean(armado); });
+    });
+    form.querySelectorAll('[data-order-armado-field]').forEach((field) => {
+        field.hidden = !armado;
+        field.querySelectorAll('input, select').forEach((input) => { input.disabled = !armado; });
+    });
+    if (!armado) return;
+
+    const select = form.elements.turno_armado;
+    const selected = select.value;
+    select.innerHTML = (armado.turnos || [])
+        .map((shift) => `<option value="${orderEscape(shift.codigo)}">${orderEscape(shift.codigo)} · ${orderEscape(shift.nombre)}</option>`)
+        .join('');
+    if (selected) select.value = selected;
+    document.getElementById('materialOrderArmadoHelp').textContent = `Cada pallet sale con folio único AR + código del ítem + ${armado.codigo_bodega} + correlativo, y lote ${armado.codigo_bodega} + guía + fecha + turno + máquina. La guía es la que aporta más cajas al planificar.`;
 }
 
 function latestActiveRecipeVersion(recipe) {
@@ -575,6 +632,9 @@ function renderOrders() {
             order.version_receta?.receta?.item_salida?.codigo,
             order.linea,
             order.turno,
+            orderLineLabel(order),
+            order.armado?.lote,
+            order.armado?.guia,
         ].join(' '));
         return matchesState && matchesClient && (!search || haystack.includes(search));
     });
@@ -613,14 +673,15 @@ function renderOrders() {
                 <div class="materials-order-meta">
                     <span>${orderEscape(orderDate(order.fecha_operacional))}</span>
                     <span>Receta v${orderEscape(order.version_receta?.numero_version)}</span>
-                    <span>${orderEscape(order.linea || 'Sin línea')}</span>
-                    <span>${orderEscape(order.turno || 'Sin turno')}</span>
+                    <span>${orderEscape(orderLineLabel(order))}</span>
+                    <span>${orderEscape(orderShiftLabel(order))}</span>
                     <span>Versión operacional ${order.version}</span>
                     <span>${orderReservationCount(order)} reservas</span>
                     <span>${orderLotCount(order)} lotes</span>
                     ${outputFolios ? `<span>${outputFolios.usados} de ${outputFolios.reservados + outputFolios.usados} folios de salida producidos</span>` : ''}
                     ${order.modo_operacion === 'cuadratura_cierre' ? '<span>Cuadratura al cierre</span>' : ''}
                 </div>
+                ${orderArmadoNotice(order)}
                 ${orderOutputFolioNotice(order)}
                 ${order.alerta_vencimiento ? `<p class="form-error">${orderEscape(order.alerta_vencimiento)}</p>` : ''}
                 ${order.observacion ? `<p class="materials-help">${orderEscape(order.observacion)}</p>` : ''}
@@ -674,12 +735,23 @@ async function submitOrderForm(event) {
         return;
     }
 
+    const armado = Boolean(orderState.armado);
+    const machine = Number(data.maquina);
+    if (armado && (!Number.isInteger(machine) || machine < 1 || machine > 99)) {
+        orderElements.error.textContent = 'Indica la máquina de armado: un número de 1 a 99.';
+        return;
+    }
+    if (armado && !data.turno_armado) {
+        orderElements.error.textContent = 'Indica el turno de armado.';
+        return;
+    }
+
     const payloadWithoutOperation = {
         version_receta_material_id: data.version_receta_material_id,
         cantidad_planificada_salida: plannedOutput,
         fecha_operacional: data.fecha_operacional,
-        linea: String(data.linea || '').trim() || null,
-        turno: String(data.turno || '').trim() || null,
+        linea: armado ? String(machine).padStart(2, '0') : (String(data.linea || '').trim() || null),
+        turno: armado ? data.turno_armado : (String(data.turno || '').trim() || null),
         observacion: String(data.observacion || '').trim() || null,
     };
     const payloadKey = JSON.stringify(payloadWithoutOperation);
@@ -874,6 +946,8 @@ async function loadOrdersForToken(token, isCurrent, showErrors = false) {
         if (!isCurrent()) return;
         orderState.recipes = recipes.data || [];
         orderState.orders = orders.data || [];
+        orderState.armado = orders.armado?.activo ? orders.armado : null;
+        applyOrderArmadoFields();
         orderState.inventory = inventory.resumen_items || [];
         renderOrderSelectors();
         renderOrderMetrics();

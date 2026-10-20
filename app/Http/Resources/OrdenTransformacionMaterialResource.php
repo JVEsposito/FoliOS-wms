@@ -88,6 +88,8 @@ class OrdenTransformacionMaterialResource extends JsonResource
             )->values()),
             'linea' => $this->linea,
             'turno' => $this->turno,
+            // Tarja de armado fijada al planificar: guía y proveedor de las cajas, turno, máquina y lote.
+            'armado' => $this->datos_armado,
             'fecha_operacional' => $this->fecha_operacional?->toDateString(),
             'observacion' => $this->observacion,
             'motivo_cancelacion' => $this->motivo_cancelacion,

@@ -120,6 +120,14 @@ pendiente, fue enviada o terminó con resultado indeterminado. Los trabajos se
 bloquean dentro de la misma transacción para impedir que una reversa invalide
 folios cuya impresión ya comenzó.
 
+### Tarja de armado
+
+Con `MATERIALES_ARMADO_CODIGO_BODEGA` configurado, cada pallet de salida lleva folio único de
+armado (`AR` + código del ítem + bodega + correlativo de 5 dígitos) en vez del correlativo del
+cliente, y lote de bodega (bodega + guía + fecha + turno + máquina). La orden pide máquina y
+turno 01/02, y guía, proveedor y lote se fijan al planificar. Detalle en
+[`docs/diseno/folios-v2/tarja-armado.md`](diseno/folios-v2/tarja-armado.md).
+
 ## Reservas FIFO
 
 Al planificar una orden, el sistema calcula cada requerimiento en proporción a la
