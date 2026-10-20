@@ -21,6 +21,8 @@ class CatalogoModulosAcceso
 
     public const OFICINA_CATALOGOS_VALIDACION_LEGADO = 'frigorifico.catalogos';
 
+    public const TABLET_PORTERIA = 'porteria';
+
     public const TABLET_OPERACION_FRIGORIFICO = 'operacion';
 
     public const TABLET_RECEPCION_MATERIALES = 'recepcion_materiales';
@@ -177,6 +179,12 @@ class CatalogoModulosAcceso
                 'nombre' => 'Materia Prima',
                 'descripcion' => 'Espacios de trabajo móviles para la recepción de fruta.',
                 'modulos' => [
+                    $this->moduloTablet(
+                        self::TABLET_PORTERIA,
+                        'Portería',
+                        'Registrar llegadas de camiones y consultar la bitácora desde PDA, tablet o celular.',
+                        [self::OFICINA_PORTERIA],
+                    ),
                     $this->moduloTablet(
                         self::TABLET_VALIDACION_MP,
                         'Validación MP',

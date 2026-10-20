@@ -12,6 +12,7 @@ import { LoginScreen } from './src/screens/LoginScreen';
 import { FirstPasswordChangeScreen } from './src/screens/FirstPasswordChangeScreen';
 import { MaterialReceptionScreen } from './src/screens/MaterialReceptionScreen';
 import { PackedFruitReceptionScreen } from './src/screens/PackedFruitReceptionScreen';
+import { GatehouseScreen } from './src/screens/GatehouseScreen';
 import { FrutaProcesoScreen } from './src/screens/FrutaProcesoScreen';
 import { HidrocoolerMpScreen } from './src/screens/HidrocoolerMpScreen';
 import { OperationalWorkspaceScreen } from './src/screens/OperationalWorkspaceScreen';
@@ -52,7 +53,7 @@ export default function App() {
 
   useEffect(() => {
     // La PDA es un equipo de mano: siempre vertical, incluso en el login.
-    const orientation = isPdaBuild || activeModule === 'validacion' || activeModule === 'validacion_mp' || activeModule === 'repaletizaje' || activeModule === 'fruta_proceso' || activeModule === 'recepcion_fruta_embalada'
+    const orientation = isPdaBuild || activeModule === 'validacion' || activeModule === 'validacion_mp' || activeModule === 'repaletizaje' || activeModule === 'fruta_proceso' || activeModule === 'recepcion_fruta_embalada' || activeModule === 'porteria'
       ? ScreenOrientation.OrientationLock.PORTRAIT_UP
       : activeModule
         ? ScreenOrientation.OrientationLock.LANDSCAPE
@@ -157,6 +158,8 @@ export default function App() {
                   <Text style={styles.bootText}>Repaletizaje requiere conexión con el servidor.</Text>
                 </View>
               )
+            ) : activeModule === 'porteria' ? (
+              <GatehouseScreen auth={auth} baseUrl={api.baseUrl ?? ''} onLogout={() => void logoutPersistentModule()} />
             ) : activeModule === 'recepcion_fruta_embalada' ? (
               <PackedFruitReceptionScreen auth={auth} baseUrl={api.baseUrl ?? ''} onLogout={() => void logoutPersistentModule()} />
             ) : activeModule === 'fruta_proceso' ? (
@@ -189,6 +192,7 @@ export default function App() {
 
 function availableModules(auth: AuthSession): MobileModule[] {
   const supported: MobileModule[] = [
+    'porteria',
     'demo_administracion',
     'operacion',
     'operacion_materiales',
@@ -213,7 +217,9 @@ function defaultModule(auth: AuthSession): MobileModule | null {
 }
 
 function moduleLabel(module: MobileModule) {
-  return module === 'demo_administracion'
+  return module === 'porteria'
+    ? 'Portería'
+    : module === 'demo_administracion'
     ? 'Administración Demo'
     : module === 'validacion'
     ? 'Validación'
@@ -243,6 +249,13 @@ function ModuleSelection({ modules, onSelect, userName }: { modules: MobileModul
       <Text style={[styles.selectorTitle, isPdaBuild && styles.selectorTitlePda]}>Selecciona el área de trabajo</Text>
       <Text style={styles.selectorCopy}>{userName}, tu perfil posee acceso a más de un módulo.</Text>
       <View style={[styles.selectorCards, isPdaBuild && styles.selectorCardsPda]}>
+        {modules.includes('porteria') ? (
+          <Pressable onPress={() => onSelect('porteria')} style={[styles.selectorCard, isPdaBuild && styles.selectorCardPda]}>
+            <Text style={styles.selectorIcon}>↘</Text>
+            <Text style={styles.selectorCardTitle}>Portería</Text>
+            <Text style={styles.selectorCardCopy}>Registrar llegadas de camiones, sus guías y consultar la bitácora.</Text>
+          </Pressable>
+        ) : null}
         {modules.includes('demo_administracion') ? (
           <Pressable onPress={() => onSelect('demo_administracion')} style={[styles.selectorCard, isPdaBuild && styles.selectorCardPda]}>
             <Text style={styles.selectorIcon}>◎</Text>
@@ -324,7 +337,7 @@ function ModuleSelection({ modules, onSelect, userName }: { modules: MobileModul
       {!modules.length ? (
         <Text style={styles.noModule}>
           {isPdaBuild
-            ? 'Esta PDA solo opera Validación PT, Validación MP y Repaletizaje, y tu perfil no tiene ninguno de ellos. Usa la tablet para los demás módulos.'
+            ? 'Tu perfil no tiene un módulo habilitado para esta PDA. Solicita revisar los accesos del equipo.'
             : 'El perfil no posee un módulo móvil habilitado.'}
         </Text>
       ) : null}

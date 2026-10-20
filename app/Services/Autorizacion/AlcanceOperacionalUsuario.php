@@ -1033,23 +1033,28 @@ class AlcanceOperacionalUsuario
 
     public function puedeConsultarPorteria(User $usuario): bool
     {
-        return $this->puedeConsultarRomana($usuario)
-            || $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador, RolUsuario::GuardiaPorteria], CatalogoModulosAcceso::OFICINA_PORTERIA);
+        return $this->permiteModuloTablet($usuario, CatalogoModulosAcceso::TABLET_PORTERIA)
+            && ($this->puedeConsultarRomana($usuario)
+                || $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador, RolUsuario::GuardiaPorteria], CatalogoModulosAcceso::OFICINA_PORTERIA));
     }
 
     public function puedeRevisarPorteria(User $usuario): bool
     {
-        return $this->puedeConsultarRomana($usuario) && ! $this->esSoloConsulta($usuario);
+        return $this->permiteModuloTablet($usuario, CatalogoModulosAcceso::TABLET_PORTERIA)
+            && $this->puedeConsultarRomana($usuario) && ! $this->esSoloConsulta($usuario);
     }
 
     public function puedeRegistrarPorteria(User $usuario): bool
     {
-        return $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador, RolUsuario::GuardiaPorteria], CatalogoModulosAcceso::OFICINA_PORTERIA);
+        return $this->permiteModuloTablet($usuario, CatalogoModulosAcceso::TABLET_PORTERIA)
+            && $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador, RolUsuario::GuardiaPorteria], CatalogoModulosAcceso::OFICINA_PORTERIA);
     }
 
     public function puedeAdministrarPorteria(User $usuario): bool
     {
-        return $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador], CatalogoModulosAcceso::OFICINA_PORTERIA);
+        return $usuario->rol === RolUsuario::Administrador
+            && $this->permiteModuloTablet($usuario, CatalogoModulosAcceso::TABLET_PORTERIA)
+            && $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador], CatalogoModulosAcceso::OFICINA_PORTERIA);
     }
 
     public function puedeAccederOficina(User $usuario): bool
