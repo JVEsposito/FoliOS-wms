@@ -1,3 +1,5 @@
+import { mountServiceCatalog } from './office-finance-services';
+import { serviceRules, serviceValidity, servicesForPrice } from './shared/finance-services-logic';
 import {
     CURRENCY_PRESETS,
     TARIFF_EVENTS,
@@ -70,6 +72,7 @@ const elements = {
     loadingText: byId('officeLoadingText'),
     toasts: byId('officeToasts'),
 };
+const serviceCatalog = mountServiceCatalog({ api, data: () => state.data, canManage, reload: load, openPrice: openPriceForm, escapeHtml, toast, formatDateTime });
 const keys = { token: 'estiba_wms_office_token', identity: 'estiba_wms_office_identity' };
 const state = {
     token: localStorage.getItem(keys.token),
@@ -173,7 +176,7 @@ function renderStatus(data) {
     }
     elements.status.className = 'fin-status';
     elements.status.innerHTML = `<strong>${escapeHtml(summaryText(summary, (data.servicios || []).length))}</strong>`
-        + `<small>Hoy ${escapeHtml(formatDay(data.hoy))}. La prefactura aplicará estos precios a los hechos valorizables; el almacenaje se cobra por día o fracción, sin días libres.</small>`;
+        + `<small>Hoy ${escapeHtml(formatDay(data.hoy))}. La prefactura aplica los precios a los hechos que cumplen las reglas de cada concepto.</small>`;
 }
 
 function renderFilters(data) {
@@ -203,7 +206,7 @@ function priceRow(tariff) {
     // Las clases de celda ordenan la fila como tarjeta en celular.
     return `<tr class="${annulled ? 'is-annulled' : ''}">`
         + `<td class="fin-c-cliente"><strong>${escapeHtml(tariff.general ? 'Tarifa general' : tariff.cliente_nombre)}</strong></td>`
-        + `<td class="fin-c-servicio">${escapeHtml(tariff.servicio_nombre)}${tariff.nota ? `<small>${escapeHtml(tariff.nota)}</small>` : ''}</td>`
+        + `<td class="fin-c-servicio">${escapeHtml(tariff.servicio_nombre)}${tariff.concepto && !tariff.concepto.base ? `<small>${escapeHtml(serviceRules(tariff.concepto))}</small>` : ''}${tariff.nota ? `<small>${escapeHtml(tariff.nota)}</small>` : ''}</td>`
         + `<td class="fin-num fin-c-precio"><strong>${escapeHtml(formatPrice(tariff))}</strong><small>${escapeHtml(tariff.moneda)} · ${escapeHtml(tariff.unidad_nombre)}</small></td>`
         + `<td class="fin-c-vigencia">${escapeHtml(validityText(tariff.vigente_desde, tariff.vigente_hasta))}${annulled && tariff.motivo_anulacion ? `<small>${escapeHtml(tariff.motivo_anulacion)}</small>` : ''}</td>`
         + `<td class="fin-c-estado"><span class="fin-chip fin-chip--${escapeHtml(tariff.estado)}">${escapeHtml(TARIFF_STATES[tariff.estado] || tariff.estado)}</span></td>`
@@ -244,6 +247,7 @@ function renderCurrencies(data) {
 }
 
 function render() {
+    serviceCatalog.render();
     const data = state.data;
     elements.newPrice.hidden = !canManage();
     elements.newCurrency.hidden = !canManage();
@@ -274,7 +278,7 @@ async function loadEffective() {
             ? '<em class="fin-origen fin-origen--propio">Precio propio</em>'
             : (service.origen === 'general' ? '<em class="fin-origen">Tarifa general</em>' : '<em class="fin-origen">Sin precio</em>');
 
-        return `<li class="${service.origen ? '' : 'is-empty'}"><span>${escapeHtml(service.nombre)}</span><strong>${escapeHtml(prices || '—')}</strong>${origin}</li>`;
+        return `<li class="${service.origen ? '' : 'is-empty'}"><span>${escapeHtml(service.nombre)}${service.concepto && !service.concepto.base ? `<small>${escapeHtml(serviceRules(service.concepto))}</small>` : ''}</span><strong>${escapeHtml(prices || '—')}</strong>${origin}</li>`;
     }).join('');
 }
 
@@ -299,6 +303,8 @@ function tariffById(id) {
 }
 
 function syncUnits(selected) {
+    const service = state.data?.servicios.find((item) => item.clave === elements.formService.value);
+    byId('tariffFormServiceRules').textContent = service ? `${service.fuente_nombre} · ${serviceRules(service)} · ${serviceValidity(service)}` : '';
     const units = unitsFor(state.data?.servicios, elements.formService.value);
     fillSelect(elements.formUnit, units.map((unit) => ({ value: unit.clave, label: unit.nombre })), selected || units[0]?.clave);
 }
@@ -319,7 +325,7 @@ function updatePreview() {
         : parsed.message;
 }
 
-function openPriceForm(tariff = null) {
+function openPriceForm(tariff = null, serviceKey = null) {
     const data = state.data;
     const currencies = (data?.monedas || []).filter((currency) => currency.activa || currency.codigo === tariff?.moneda);
     if (!currencies.length) {
@@ -342,17 +348,20 @@ function openPriceForm(tariff = null) {
     ], tariff ? (tariff.cliente_id || '') : filterClient);
     fillSelect(
         elements.formService,
-        data.servicios.map((service) => ({ value: service.clave, label: service.nombre })),
-        tariff?.servicio || elements.service.value || data.servicios[0]?.clave,
+        servicesForPrice(data.servicios, data.hoy, tariff?.servicio || serviceKey).map((service) => ({ value: service.clave, label: service.nombre })),
+        tariff?.servicio || serviceKey || elements.service.value || data.servicios[0]?.clave,
     );
     syncUnits(tariff?.unidad);
     fillSelect(elements.formCurrency, currencies.map((currency) => ({ value: currency.codigo, label: `${currency.codigo} · ${currency.nombre}` })), tariff?.moneda || currencies[0].codigo);
     elements.formPrice.value = tariff ? tariff.precio.replace('.', ',') : '';
-    elements.formFrom.value = tariff?.vigente_desde || data.hoy;
-    elements.formTo.value = tariff?.vigente_hasta || '';
+    const selectedService = data.servicios.find((item) => item.clave === elements.formService.value);
+    const historical = selectedService?.vigente_hasta && selectedService.vigente_hasta < data.hoy;
+    elements.formFrom.value = tariff?.vigente_desde || (historical ? selectedService.vigente_desde : [data.hoy, selectedService?.vigente_desde || data.hoy].sort().at(-1));
+    elements.formTo.value = tariff ? (tariff.vigente_hasta || '') : (selectedService?.vigente_hasta || '');
     elements.formNote.value = tariff?.nota || '';
     for (const field of [elements.formClient, elements.formService, elements.formUnit]) field.disabled = Boolean(tariff);
     elements.formReplaceRow.hidden = Boolean(tariff);
+    byId('tariffFormCreateService').hidden = Boolean(tariff);
     elements.formReplace.checked = true;
     elements.formSubmit.textContent = tariff ? 'Guardar cambios' : 'Guardar precio';
     updatePreview();

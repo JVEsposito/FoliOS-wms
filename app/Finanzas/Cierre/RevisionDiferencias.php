@@ -6,6 +6,7 @@ use App\Finanzas\ConsultaHechos;
 use App\Finanzas\EsquemaFinanzas;
 use App\Finanzas\Models\Cierre;
 use App\Finanzas\Models\Diferencia;
+use App\Finanzas\Models\EventoServicio;
 use App\Finanzas\Models\EventoTarifa;
 use App\Finanzas\Models\Hecho;
 use App\Finanzas\Models\Moneda;
@@ -92,6 +93,7 @@ final class RevisionDiferencias
         return [
             'hechos_id' => $hechosHasta,
             'eventos_id' => (int) EventoTarifa::query()->max('id'),
+            'servicios_eventos_id' => (int) EventoServicio::query()->max('id'),
             'monedas_at' => ($monedas = Moneda::query()->max('updated_at')) === null ? null : (string) $monedas,
             'decisiones' => (clone $decisiones)->count().'|'.(int) (clone $decisiones)->max('id').'|'.(string) (clone $decisiones)->max('updated_at'),
         ];
@@ -105,6 +107,7 @@ final class RevisionDiferencias
     {
         return isset($revision['hechos_id'], $revision['resumen'])
             && ($revision['eventos_id'] ?? null) === $huella['eventos_id']
+            && ($revision['servicios_eventos_id'] ?? null) === $huella['servicios_eventos_id']
             && ($revision['monedas_at'] ?? null) === $huella['monedas_at']
             && ($revision['decisiones'] ?? null) === $huella['decisiones']
             && ! $this->cambiaronHechos($cierre, (int) $revision['hechos_id']);

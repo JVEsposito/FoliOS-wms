@@ -2,6 +2,7 @@
 
 namespace App\Finanzas\Http\Controllers;
 
+use App\Finanzas\Captura\CatalogoFuentes;
 use App\Finanzas\Http\PresentadorTarifas;
 use App\Finanzas\Http\Requests\GuardarTarifaRequest;
 use App\Finanzas\Models\Moneda;
@@ -74,6 +75,7 @@ class TarifasFinanzasController extends Controller
             ],
             'hoy' => $hoy,
             'servicios' => $this->servicios->descripcion(),
+            'procesos' => app(CatalogoFuentes::class)->descripcion(),
             'monedas' => array_values(array_map(fn (Moneda $moneda): array => $this->presentador->moneda($moneda), $monedas)),
             'clientes' => $this->clientesConPrecio($todas),
             'puede_gestionar' => $request->user()->can('gestionar-tarifas-finanzas'),
@@ -139,11 +141,14 @@ class TarifasFinanzasController extends Controller
                 'nombre' => $this->clientes->buscar($clienteId)['nombre'] ?? $clienteId,
             ],
             'servicios' => array_map(function (array $servicio) use ($resolutor, $clienteId, $fecha, $monedas, $hoy): array {
-                $precios = $resolutor->aplicables($clienteId, $servicio['clave'], $fecha);
+                $vigente = ($servicio['vigente_desde'] === null || $servicio['vigente_desde'] <= $fecha)
+                    && ($servicio['vigente_hasta'] === null || $servicio['vigente_hasta'] >= $fecha);
+                $precios = $vigente ? $resolutor->aplicables($clienteId, $servicio['clave'], $fecha) : [];
 
                 return [
                     'servicio' => $servicio['clave'],
                     'nombre' => $servicio['nombre'],
+                    'concepto' => $servicio,
                     'origen' => $precios === [] ? null : ($precios[0]->general() ? 'general' : 'propio'),
                     'precios' => array_map(fn (Tarifa $tarifa): array => $this->presentador->tarifa($tarifa, $monedas, $hoy), $precios),
                 ];

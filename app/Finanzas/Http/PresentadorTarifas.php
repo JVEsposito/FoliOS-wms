@@ -32,6 +32,7 @@ final class PresentadorTarifas
             'cliente_nombre' => $this->nombreCliente($tarifa),
             'servicio' => $tarifa->servicio,
             'servicio_nombre' => $this->servicios->nombreServicio($tarifa->servicio),
+            'concepto' => $this->servicios->buscar($tarifa->servicio),
             'unidad' => $tarifa->unidad,
             'unidad_nombre' => $this->servicios->nombreUnidad($tarifa->servicio, $tarifa->unidad),
             'moneda' => $tarifa->moneda,

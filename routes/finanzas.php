@@ -6,6 +6,7 @@ use App\Finanzas\Http\Controllers\DiferenciasPrefacturaController;
 use App\Finanzas\Http\Controllers\HechosFinanzasController;
 use App\Finanzas\Http\Controllers\MonedasFinanzasController;
 use App\Finanzas\Http\Controllers\PrefacturaFinanzasController;
+use App\Finanzas\Http\Controllers\ServiciosFinanzasController;
 use App\Finanzas\Http\Controllers\TarifasFinanzasController;
 use Illuminate\Support\Facades\Route;
 
@@ -23,6 +24,13 @@ Route::middleware('auth:sanctum')->prefix('finanzas')->group(function (): void {
         ->middleware('can:consultar-finanzas');
     Route::post('/capturas', [CapturasFinanzasController::class, 'store'])
         ->middleware(['can:capturar-hechos-finanzas', 'throttle:6,1']);
+
+    Route::post('/servicios', [ServiciosFinanzasController::class, 'store'])
+        ->middleware('can:gestionar-tarifas-finanzas');
+    Route::get('/servicios/{servicio}/historial', [ServiciosFinanzasController::class, 'historial'])
+        ->middleware('can:consultar-finanzas');
+    Route::post('/servicios/{servicio}/finalizar', [ServiciosFinanzasController::class, 'finalizar'])
+        ->middleware('can:gestionar-tarifas-finanzas');
 
     // Tarifario: lo consulta quien ve Finanzas; lo edita solo Administración.
     Route::get('/tarifas', [TarifasFinanzasController::class, 'index'])
