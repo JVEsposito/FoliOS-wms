@@ -10,6 +10,7 @@ use App\Enums\EstadoPosicion;
 use App\Enums\ModoBandaOperacional;
 use App\Enums\PrioridadOperacional;
 use App\Enums\TipoEspacioPreparacionSag;
+use App\Enums\TipoLoteInspeccionSag;
 use App\Enums\TipoPlanOperacional;
 use App\Enums\UsoBandaOperacional;
 use App\Models\BandaOperacional;
@@ -17,11 +18,15 @@ use App\Models\Camara;
 use App\Models\LoteInspeccionSag;
 use App\Models\PlanOperacional;
 use App\Models\Posicion;
+use App\Models\PresenciaCargaAnden;
+use App\Models\ProcesoPrefrio;
 use App\Models\ReservaPosicionInspeccionSag;
 use App\Models\ReservaTareaMovimiento;
 use App\Models\UbicacionActual;
 use App\Models\User;
+use App\Services\Cargas\ServicioPlanDespachoDirecto;
 use App\Services\Planificador\ServicioDesplieguePlanificador;
+use App\Services\Prefrio\ServicioGeneracionRecepcionTunel;
 use DomainException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -38,6 +43,7 @@ class ServicioPreparacionFisicaSag
 
     public function __construct(
         private readonly ServicioDesplieguePlanificador $despliegue,
+        private readonly ServicioTrasladosPreparacionSag $traslados,
     ) {}
 
     public function sincronizar(
@@ -87,9 +93,34 @@ class ServicioPreparacionFisicaSag
             }
 
             $this->actualizarContexto($plan, $lote, $reservas);
+            $this->traslados->sincronizar($lote, $plan, $usuario);
 
             return $plan->refresh();
         }, attempts: 3);
+    }
+
+    public function sincronizarDesdePrefrio(ProcesoPrefrio $proceso, User $usuario): void
+    {
+        $lotes = $this->lotesPendientes()
+            ->where('temporada_id', $proceso->temporada_id)
+            ->whereHas('folios', fn ($consulta) => $consulta
+                ->whereIn('folio_id', $proceso->folios()->pluck('folio_id')))
+            ->orderBy('id')
+            ->get();
+
+        foreach ($lotes as $lote) {
+            $this->sincronizar($lote, $usuario);
+        }
+    }
+
+    public function lotesPendientes(): Builder
+    {
+        return LoteInspeccionSag::query()
+            ->where('estado', EstadoLoteInspeccionSag::Preparacion->value)
+            ->whereIn('tipo', collect(TipoLoteInspeccionSag::cases())
+                ->filter->requierePreparacionFisica()
+                ->map->value)
+            ->whereHas('temporada', fn ($consulta) => $consulta->where('activa', true));
     }
 
     public function completar(LoteInspeccionSag $lote, User $usuario): void
@@ -121,6 +152,8 @@ class ServicioPreparacionFisicaSag
                 );
             }
 
+            $this->traslados->cancelarPendientes($plan, $usuario);
+            $plan->refresh();
             $ahora = now();
             $plan->update([
                 'estado' => EstadoPlanOperacional::Completado,
@@ -150,6 +183,11 @@ class ServicioPreparacionFisicaSag
             $motivo,
             $cancelarObjetivo,
         ): void {
+            $plan = $this->planExistente($lote->id, bloquear: true);
+            if ($plan) {
+                $this->traslados->cancelarPendientes($plan, $usuario);
+                $plan->refresh();
+            }
             $motivo = Str::limit(trim($motivo), 255, '');
             $reservas = $this->reservasActivas($lote->id, bloquear: true);
             $camaraIds = $reservas
@@ -170,7 +208,6 @@ class ServicioPreparacionFisicaSag
             }
             $this->incrementarRevisionReservas($camaraIds);
 
-            $plan = $this->planExistente($lote->id, bloquear: true);
             if (! $plan) {
                 return;
             }
@@ -195,7 +232,34 @@ class ServicioPreparacionFisicaSag
                 ];
             }
             $plan->update($atributos);
+
+            if ($cancelarObjetivo) {
+                $this->restaurarRecepciones($lote, $usuario);
+            }
         }, attempts: 3);
+    }
+
+    private function restaurarRecepciones(LoteInspeccionSag $lote, User $usuario): void
+    {
+        $folioIds = $lote->folios()->pluck('folio_id');
+        $procesos = ProcesoPrefrio::query()
+            ->where('temporada_id', $lote->temporada_id)
+            ->where('estado', 'aprobado')
+            ->whereHas('folios', fn ($consulta) => $consulta->whereIn('folio_id', $folioIds))
+            ->orderBy('id')
+            ->get();
+
+        // Resolución diferida: recepción utiliza este servicio para priorizar SAG.
+        foreach ($procesos as $proceso) {
+            app(ServicioGeneracionRecepcionTunel::class)->generar($proceso, $usuario);
+        }
+        $presencias = PresenciaCargaAnden::query()
+            ->whereNotNull('bloqueo_carga_id')
+            ->whereHas('carga.folios', fn ($consulta) => $consulta->whereIn('folio_id', $folioIds))
+            ->get();
+        foreach ($presencias as $presencia) {
+            app(ServicioPlanDespachoDirecto::class)->sincronizar($presencia, $usuario);
+        }
     }
 
     public function espaciosRequeridos(int $pallets): int

@@ -3,7 +3,9 @@
 namespace App\Services\Prefrio;
 
 use App\Enums\EstadoFolioProcesoPrefrio;
+use App\Enums\EstadoPlanOperacional;
 use App\Enums\EstadoProcesoPrefrio;
+use App\Enums\EstadoTareaMovimiento;
 use App\Enums\PrioridadOperacional;
 use App\Enums\TipoBulto;
 use App\Enums\TipoMovimiento;
@@ -11,10 +13,13 @@ use App\Enums\TipoPlanOperacional;
 use App\Models\PlanOperacional;
 use App\Models\ProcesoPrefrio;
 use App\Models\ProcesoPrefrioFolio;
+use App\Models\TareaMovimiento;
 use App\Models\User;
 use App\Services\Estiba\ServicioPlanesOperacionales;
+use App\Services\InspeccionSag\ServicioPreparacionFisicaSag;
 use DomainException;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Support\Facades\DB;
 
 class ServicioGeneracionRecepcionTunel
 {
@@ -22,9 +27,20 @@ class ServicioGeneracionRecepcionTunel
 
     public function __construct(
         private readonly ServicioPlanesOperacionales $planes,
+        private readonly ServicioPreparacionFisicaSag $preparacionSag,
     ) {}
 
     public function generar(
+        ProcesoPrefrio $proceso,
+        User $usuario,
+    ): ?PlanOperacional {
+        return DB::transaction(
+            fn (): ?PlanOperacional => $this->generarBloqueado($proceso, $usuario),
+            attempts: 3,
+        );
+    }
+
+    private function generarBloqueado(
         ProcesoPrefrio $proceso,
         User $usuario,
     ): ?PlanOperacional {
@@ -56,17 +72,18 @@ class ServicioGeneracionRecepcionTunel
             );
         }
 
+        $this->preparacionSag->sincronizarDesdePrefrio($proceso, $usuario);
         $existente = $this->planExistente($proceso->id);
-        if ($existente) {
+        if ($existente?->estado === EstadoPlanOperacional::Cancelado) {
             return $existente;
         }
 
         $asignaciones = $proceso->folios
-            ->filter(fn (ProcesoPrefrioFolio $asignacion): bool => $this->requiereAlmacenamiento($asignacion))
+            ->filter(fn (ProcesoPrefrioFolio $asignacion): bool => $this->requiereAlmacenamiento($asignacion, $existente))
             ->values();
 
         if ($asignaciones->isEmpty()) {
-            return null;
+            return $existente;
         }
 
         $tunel = $proceso->tunel;
@@ -101,8 +118,25 @@ class ServicioGeneracionRecepcionTunel
             })
             ->all();
 
+        if ($existente) {
+            if ($existente->estado === EstadoPlanOperacional::Completado) {
+                $existente->update([
+                    'estado' => EstadoPlanOperacional::Programado,
+                    'completado_at' => null,
+                    'completado_por_user_id' => null,
+                    'version' => $existente->version + 1,
+                ]);
+            }
+            foreach ($tareas as $datos) {
+                $nueva = $this->planes->agregarTareaRolling($existente, $datos);
+                $this->vincularRestauracionSag($nueva);
+            }
+
+            return $existente->refresh();
+        }
+
         try {
-            return $this->planes->crear(
+            $plan = $this->planes->crear(
                 temporada: $proceso->temporada,
                 tipo: TipoPlanOperacional::RecepcionTunel,
                 titulo: sprintf(
@@ -128,6 +162,11 @@ class ServicioGeneracionRecepcionTunel
                     'total_pallets_planificados' => count($tareas),
                 ],
             );
+            foreach ($plan->tareas()->get() as $nueva) {
+                $this->vincularRestauracionSag($nueva);
+            }
+
+            return $plan;
         } catch (UniqueConstraintViolationException) {
             return $this->planExistente($proceso->id)
                 ?? throw new DomainException(
@@ -136,8 +175,10 @@ class ServicioGeneracionRecepcionTunel
         }
     }
 
-    private function requiereAlmacenamiento(ProcesoPrefrioFolio $asignacion): bool
-    {
+    private function requiereAlmacenamiento(
+        ProcesoPrefrioFolio $asignacion,
+        ?PlanOperacional $existente,
+    ): bool {
         $folio = $asignacion->folio;
         if (! $folio
             || ! $folio->activo
@@ -146,9 +187,35 @@ class ServicioGeneracionRecepcionTunel
             return false;
         }
 
+        if (TareaMovimiento::query()
+            ->where('folio_id', $folio->id)
+            ->whereNotIn('estado', [
+                EstadoTareaMovimiento::Completada->value,
+                EstadoTareaMovimiento::Cancelada->value,
+            ])
+            ->lockForUpdate()
+            ->exists()
+            || $existente?->tareas()
+                ->where('folio_id', $folio->id)
+                ->where('estado', EstadoTareaMovimiento::Completada->value)
+                ->exists()) {
+            return false;
+        }
+
         $carga = $folio->asignacionCargaActual?->carga;
 
         return $carga?->presenciaAndenActiva === null;
+    }
+
+    private function vincularRestauracionSag(TareaMovimiento $nueva): void
+    {
+        TareaMovimiento::query()
+            ->where('folio_id', $nueva->folio_id)
+            ->where('estado', EstadoTareaMovimiento::Cancelada->value)
+            ->whereNull('reemplazada_por_tarea_id')
+            ->whereHas('planOperacional', fn ($consulta) => $consulta
+                ->where('referencia_tipo', ServicioPreparacionFisicaSag::REFERENCIA_PLAN))
+            ->update(['reemplazada_por_tarea_id' => $nueva->id]);
     }
 
     private function planExistente(string $procesoId): ?PlanOperacional
