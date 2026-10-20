@@ -6,7 +6,7 @@ Al aprobar el proceso de prefrío, cada pallet habilitado recibe una maniobra pa
 
 Se ocupa primero el espacio libre más profundo. Si los pallets salen de túneles distintos, el que está listo se planifica sin apartar el fondo para uno que aún espera prefrío.
 
-El camarero toma la maniobra desde su bandeja habitual. Su destino se reserva automáticamente al asumirla y no puede cambiarse por otra posición. El registro del movimiento confirma la llegada; iniciar la inspección sigue exigiendo que todos sus pallets estén físicamente en el sector reservado.
+El camarero toma la maniobra desde su bandeja habitual. Su destino se reserva automáticamente al asumirla y no puede cambiarse por otra posición. Al liberar la maniobra o vencer el claim antes del retiro, vuelve a la bandeja conservando ese destino para poder retomarla. El registro del movimiento confirma la llegada; iniciar la inspección sigue exigiendo que todos sus pallets estén físicamente en el sector reservado.
 
 Si una recepción ya comenzó, conserva su recorrido. El sistema vuelve a evaluar el pallet después de que termine y, si corresponde, publica el traslado desde la cámara hacia SAG. Las demás labores activas no se interrumpen. Los pallets ya entregados en andén o con un estado operacional terminal no reciben nuevos traslados desde un túnel anterior.
 

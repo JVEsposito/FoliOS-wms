@@ -863,6 +863,43 @@ class InspeccionSagApiTest extends TestCase
         $this->assertDatabaseCount('ubicaciones_actuales', 0);
     }
 
+    public function test_liberar_y_vencer_claim_sag_conserva_su_destino_para_otro_camarero(): void
+    {
+        $this->activarPlanificadorDirigido();
+        $usuario = $this->administradorConTemporada();
+        $this->crearZonaInspeccion($usuario, posiciones: 2);
+        $folio = $this->crearFolioUbicado('SAG-LEASE-001');
+        $this->crearPrefrioSag($usuario, [$folio], aprobado: true);
+        $this->crearLoteEnPreparacion(
+            $usuario,
+            [$folio],
+            Pais::query()->where('iso_alpha2', 'CL')->firstOrFail(),
+        );
+        $tarea = TareaMovimiento::query()->sole();
+        $destinoId = $tarea->posicion_destino_id;
+        $primero = User::factory()->create(['rol' => RolUsuario::CamareroFrio, 'activo' => true]);
+        $segundo = User::factory()->create(['rol' => RolUsuario::CamareroFrio, 'activo' => true]);
+        $dispositivo = Dispositivo::create(['codigo' => 'TABLET-SAG-LEASE', 'nombre' => 'Tablet SAG']);
+        $planes = app(ServicioPlanesOperacionales::class);
+        $reservas = app(ServicioReservasTareasMovimiento::class);
+
+        $planes->asumir($tarea, $primero, $dispositivo);
+        $reservas->liberar($tarea, $primero, $dispositivo);
+        $this->assertSame('pendiente', $tarea->refresh()->estado->value);
+        $this->assertSame($destinoId, $tarea->posicion_destino_id);
+        $this->assertNull($tarea->reservaActiva);
+
+        $asumida = $planes->asumir($tarea, $segundo, $dispositivo);
+        $this->assertSame($destinoId, $asumida->reservaActiva->bloqueo_posicion_id);
+        $asumida->reservaActiva->update(['vence_at' => now()->subMinute()]);
+        $this->assertSame(1, $reservas->expirarVencidas());
+        $this->assertSame('pendiente', $tarea->refresh()->estado->value);
+        $this->assertSame($destinoId, $tarea->posicion_destino_id);
+        $this->assertSame(2, ReservaPosicionInspeccionSag::query()->whereNotNull('clave_bloqueo')->count());
+        $retomada = $planes->asumir($tarea, $primero, $dispositivo);
+        $this->assertSame($destinoId, $retomada->reservaActiva->bloqueo_posicion_id);
+    }
+
     /** @param array<int, Folio> $folios */
     private function crearPrefrioSag(User $usuario, array $folios, bool $aprobado = false, string $sufijo = ''): ProcesoPrefrio
     {
