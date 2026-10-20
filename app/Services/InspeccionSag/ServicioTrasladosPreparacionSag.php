@@ -104,12 +104,12 @@ class ServicioTrasladosPreparacionSag
             // El pallet que está listo ocupa el espacio libre más profundo.
             // No se fija destino para pallets que todavía esperan prefrío.
             $destino = $posiciones->first(
-                fn (Posicion $posicion): bool => ! in_array($posicion->id, $destinos, true),
+                fn (Posicion $posicion): bool => in_array($posicion->id, $destinos, true) === false,
             );
-            if (! $destino || ! $this->despliegue->dirige(array_filter([
+            if ($destino === null || $this->despliegue->dirige(array_filter([
                 $actual?->camara_id,
                 $destino->camara_id,
-            ]))) {
+            ])) === false) {
                 continue;
             }
 

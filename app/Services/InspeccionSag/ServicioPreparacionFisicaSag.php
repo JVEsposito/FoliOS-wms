@@ -263,7 +263,7 @@ class ServicioPreparacionFisicaSag
         }
         $presencias = PresenciaCargaAnden::query()
             ->whereNotNull('bloqueo_carga_id')
-            ->whereHas('carga.folios', fn ($consulta) => $consulta->whereIn('folio_id', $folioIds))
+            ->whereHas('carga.asignacionesActuales', fn ($consulta) => $consulta->whereIn('folio_id', $folioIds))
             ->get();
         foreach ($presencias as $presencia) {
             app(ServicioPlanDespachoDirecto::class)->sincronizar($presencia, $usuario);
