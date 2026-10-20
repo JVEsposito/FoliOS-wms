@@ -52,7 +52,7 @@ export function OperatorLoadStatus({ api, token, onBack }: { api: OperationalTas
         <Pressable accessibilityRole="button" disabled={busy} onPress={() => void refresh()} style={styles.button}><Text style={styles.buttonText}>{busy ? 'Actualizando…' : '↻ Actualizar'}</Text></Pressable>
       </View>
       <Text accessibilityRole="header" style={styles.title}>Cargas de la operación</Text>
-      <Text style={styles.copy}>Cargas activas y terminadas durante el turno. Toca una carga para ver sus pallets y ubicación.</Text>
+      <Text style={styles.copy}>Cargas activas y terminadas durante el turno. Toca una carga para ver sus pallets, saldos y ubicación.</Text>
       {feed ? <Text style={styles.turn}>Turno {feed.meta.turno.nombre} · {operatorLoadDate(feed.meta.turno.inicio_at, zone)} a {operatorLoadDate(feed.meta.turno.fin_at, zone)}</Text> : null}
       {checkedAt ? <Text style={styles.copy}>Última actualización: {operatorLoadDate(checkedAt, zone)}{error ? ' · información sin actualizar' : ' · actualización automática'}</Text> : null}
       {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
@@ -82,7 +82,7 @@ function LoadStatusCard({ load, zone, expanded, onToggle }: { load: OperatorLoad
       {load.numero_orden_externa ? <Text style={styles.copy}>Orden: {load.numero_orden_externa}</Text> : null}
       {load.estado === 'cancelada'
         ? <Text style={styles.summary}>Carga cancelada · sin asignaciones vigentes</Text>
-        : <Text style={styles.summary}>{counts.total} pallets · {counts.dock} en andén · {counts.shipped} despachados · {counts.pending} pendientes</Text>}
+        : <Text style={styles.summary}>{counts.total} bultos · {counts.dock} en andén · {counts.shipped} despachados · {counts.pending} pendientes</Text>}
       {!finished ? <Text style={styles.copy}>Separación: {load.progreso.porcentaje}% de concentración · {load.progreso.concentrados} concentrados · {load.progreso.faltantes} faltantes</Text> : null}
       <Text style={styles.copy}>{dock ? `Andén: ${dock}` : 'Andén sin asignar'}{plate ? ` · Camión ${plate}` : ''}</Text>
       {load.camara_objetivo ? <Text style={styles.copy}>Cámara objetivo: {load.camara_objetivo.nombre}</Text> : null}
@@ -93,7 +93,7 @@ function LoadStatusCard({ load, zone, expanded, onToggle }: { load: OperatorLoad
         {load.embarque ? <Text style={styles.copy}>Embarque {load.embarque.codigo}{load.embarque.fecha_programada ? ` · ${load.embarque.fecha_programada} ${load.embarque.hora_programada ?? ''}` : ''}{load.embarque.numeros_externos.length ? ` · Instructivos ${load.embarque.numeros_externos.join(', ')}` : ''}</Text> : null}
         {load.observacion ? <Text style={styles.copy}>Observación: {load.observacion}</Text> : null}
         {load.folios.map((folio) => <View key={folio.asignacion_id} style={styles.folio}>
-          <Text style={styles.folioCode}>{folio.numero_folio} · {operatorLoadState(folio.estado_carga)}</Text>
+          <Text style={styles.folioCode}>{folio.numero_folio} · {folio.tipo_bulto === 'saldo' ? 'Saldo' : 'Pallet'} · {operatorLoadState(folio.estado_carga)}</Text>
           <Text style={styles.copy}>{folio.estado_carga === 'despachado' ? 'Despachado de la planta' : folio.ubicacion ? `${folio.ubicacion.camara.nombre} · ${folio.ubicacion.posicion.etiqueta ?? `B${folio.ubicacion.posicion.banda}-P${folio.ubicacion.posicion.posicion}-N${folio.ubicacion.posicion.nivel}`}` : folio.anden ? `En ${folio.anden.nombre}` : 'Sin ubicación de cámara'}</Text>
         </View>)}
       </View> : null}

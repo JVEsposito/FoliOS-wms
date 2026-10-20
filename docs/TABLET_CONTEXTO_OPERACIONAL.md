@@ -22,7 +22,7 @@ y las cerradas, despachadas o canceladas durante el turno actual. No expone borr
 ni cancelaciones de cargas nunca publicadas. Las cerradas y despachadas conservan el
 detalle de sus asignaciones históricas aunque ya se hayan liberado sus reservas.
 
-Se muestra el estado, prioridad, orden, progreso de separación, pallets pendientes,
+Se muestra el estado, prioridad, orden, progreso de separación, bultos pendientes,
 en andén y despachados, incidencias, cámara objetivo, andén, patente, embarque,
 instructivos y observación. El detalle permite consultar cada pallet y su ubicación.
 La vista solo consulta información y se actualiza automáticamente; si la conexión
@@ -43,8 +43,11 @@ seleccionando los pallets y destinos. No se ingresan como movimientos manuales d
 tablet. `ServicioInspeccionSag::crear` sincroniza la preparación física del lote
 con el planificador dirigido cuando está habilitado.
 
-Muestreo USDA e Inspección Origen requieren preparación física y pueden generar un
-plan `preparacion_inspeccion`, con su reserva de sector y movimientos correspondientes.
+Muestreo USDA e Inspección Origen requieren preparación física y generan un
+plan `preparacion_inspeccion` con su reserva de sector cuando el despliegue está activo.
+La integración actual crea el objetivo y las reservas, pero no genera automáticamente
+las tareas ni maniobras para trasladar los pallets al sector. Esa generación física
+queda pendiente; este PR incorpora información y consulta de cargas en tablet.
 Inspección en línea, fumigación y cambio de mercado no requieren esa preparación.
-Si falta capacidad o el despliegue dirigido no está activo, crear la solicitud no
-garantiza que aparezca inmediatamente una maniobra ejecutable en la tablet.
+Si falta capacidad, el objetivo informa ese estado sin reservar un tramo incompleto.
+Si el despliegue dirigido está desactivado, no se crea esta preparación física.
