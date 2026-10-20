@@ -201,6 +201,8 @@ Ocultar una acción en la interfaz nunca reemplaza la autorización del backend.
 - [Materia prima y lotización](docs/MODULO_MATERIA_PRIMA.md)
 - [Cuenta corriente y despacho de envases](docs/MODULO_ENVASES.md)
 - [Confirmación antes de retirar un pallet](docs/CONFIRMACION_INICIO_TAREA.md)
+- [Finanzas: hechos, tarifario y prefactura](docs/FINANZAS.md)
+- [Comex: expedientes de embarque](docs/COMEX.md)
 
 ## Puesta en marcha local
 

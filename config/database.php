@@ -92,7 +92,29 @@ return [
             ]) : [],
         ],
 
-        // Lectura de la operación para Finanzas: la misma base operativa en una sesión de
+        // Comex: esquema propio, separado de la operación. Solo Comex escribe aquí.
+        // Por omisión usa el mismo servidor y usuario, con la base «<DB_DATABASE>_comex».
+        'comex' => [
+            'driver' => 'mysql',
+            'url' => env('COMEX_DB_URL'),
+            'host' => env('COMEX_DB_HOST', $operacion['host']),
+            'port' => env('COMEX_DB_PORT', $operacion['port']),
+            'database' => env('COMEX_DB_DATABASE', $operacion['database'].'_comex'),
+            'username' => env('COMEX_DB_USERNAME', $operacion['username']),
+            'password' => env('COMEX_DB_PASSWORD', $operacion['password']),
+            'unix_socket' => env('COMEX_DB_SOCKET', $operacion['unix_socket']),
+            'charset' => env('DB_CHARSET', 'utf8mb4'),
+            'collation' => env('DB_COLLATION', 'utf8mb4_unicode_ci'),
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'strict' => true,
+            'engine' => null,
+            'options' => extension_loaded('pdo_mysql') ? array_filter([
+                Mysql::ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+            ]) : [],
+        ],
+
+        // Lectura de la operación para Finanzas y Comex: la misma base operativa en una sesión de
         // solo lectura. En producción conviene un usuario propio con permiso SELECT.
         'operacion_lectura' => [
             ...$operacion,

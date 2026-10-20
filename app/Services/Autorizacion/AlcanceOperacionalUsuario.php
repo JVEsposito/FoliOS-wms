@@ -258,6 +258,36 @@ class AlcanceOperacionalUsuario
         return $usuario->rol === RolUsuario::Administrador && $this->puedeCerrarPrefacturaFinanzas($usuario);
     }
 
+    /** Comex no es parte de ningún rol operativo: solo administración o un perfil que lo incluya. */
+    public function puedeConsultarComex(User $usuario): bool
+    {
+        return $this->rolActivoEnModulo(
+            $usuario,
+            [RolUsuario::Administrador, RolUsuario::Consulta],
+            [CatalogoModulosAcceso::OFICINA_COMEX_EXPEDIENTES, CatalogoModulosAcceso::OFICINA_COMEX_CONFIGURACION],
+        );
+    }
+
+    /** Registrar documentos y respaldos de los embarques. */
+    public function puedeGestionarDocumentosComex(User $usuario): bool
+    {
+        return $this->rolActivoEnModulo(
+            $usuario,
+            [RolUsuario::Administrador],
+            CatalogoModulosAcceso::OFICINA_COMEX_EXPEDIENTES,
+        );
+    }
+
+    /** Definir qué documentos se exigen y cómo se gestiona cada cliente. */
+    public function puedeConfigurarComex(User $usuario): bool
+    {
+        return $this->rolActivoEnModulo(
+            $usuario,
+            [RolUsuario::Administrador],
+            CatalogoModulosAcceso::OFICINA_COMEX_CONFIGURACION,
+        );
+    }
+
     public function contenidoForzadoCreacion(User $usuario): ?ContenidoCamara
     {
         return match ($usuario->rol) {
@@ -1127,6 +1157,9 @@ class AlcanceOperacionalUsuario
             'puede_gestionar_tarifas_finanzas' => $this->puedeGestionarTarifasFinanzas($usuario),
             'puede_cerrar_prefactura_finanzas' => $this->puedeCerrarPrefacturaFinanzas($usuario),
             'puede_reabrir_prefactura_finanzas' => $this->puedeReabrirPrefacturaFinanzas($usuario),
+            'puede_consultar_comex' => $this->puedeConsultarComex($usuario),
+            'puede_gestionar_documentos_comex' => $this->puedeGestionarDocumentosComex($usuario),
+            'puede_configurar_comex' => $this->puedeConfigurarComex($usuario),
             'puede_consultar_prefrio' => $this->puedeConsultarPrefrio($usuario),
             'puede_consultar_inspeccion_sag' => $this->puedeConsultarInspeccionSag($usuario),
             'puede_gestionar_inspeccion_sag' => $this->puedeGestionarInspeccionSag($usuario),
