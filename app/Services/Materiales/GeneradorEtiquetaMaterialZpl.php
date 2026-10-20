@@ -23,6 +23,11 @@ class GeneradorEtiquetaMaterialZpl
 
         foreach ($etiquetas as $etiqueta) {
             for ($copia = 0; $copia < $copias; $copia++) {
+                if (is_array($etiqueta['armado'] ?? null)) {
+                    $contenido .= $this->tarjaArmado($etiqueta['armado'], $ancho, $alto, $dpi, $simbologia);
+
+                    continue;
+                }
                 $contenido .= "^XA\n";
                 $contenido .= "^CI28\n";
                 $contenido .= "^PW{$ancho}\n^LL{$alto}\n^LH0,0\n";
@@ -116,6 +121,74 @@ class GeneradorEtiquetaMaterialZpl
         }
 
         return $contenido;
+    }
+
+    /**
+     * Tarja de armado: celdas con los datos de bodega y el folio único con su código.
+     *
+     * @param  array<string, mixed>  $tarja
+     */
+    private function tarjaArmado(array $tarja, int $ancho, int $alto, int $dpi, string $simbologia): string
+    {
+        $diseno = DisenoTarjaArmado::disponer($tarja, $ancho, $alto);
+        $grosor = max(2, (int) round($diseno['grosor']));
+        $zpl = "^XA\n^CI28\n^PW{$ancho}\n^LL{$alto}\n^LH0,0\n";
+
+        foreach ($diseno['lineas'] as $linea) {
+            $zpl .= sprintf(
+                "^FO%d,%d^GB%d,%d,%d^FS\n",
+                (int) round(min($linea['x1'], $linea['x2'])),
+                (int) round(min($linea['y1'], $linea['y2'])),
+                max($grosor, (int) round(abs($linea['x2'] - $linea['x1']))),
+                max($grosor, (int) round(abs($linea['y2'] - $linea['y1']))),
+                $grosor,
+            );
+        }
+
+        $codigo = $diseno['codigo'];
+        $valor = $this->campo($codigo['valor']);
+        if ($simbologia === 'qr') {
+            $magnificacion = max(2, min(10, (int) floor($codigo['alto'] / 29)));
+            $zpl .= sprintf(
+                "^FO%d,%d^BQN,2,%d^FH\\^FDLA,%s^FS\n",
+                (int) round($codigo['x'] + (($codigo['ancho'] - (25 * $magnificacion)) / 2)),
+                (int) round($codigo['y']),
+                $magnificacion,
+                $valor,
+            );
+        } else {
+            // Subconjunto B: 11 módulos por carácter más inicio, control y fin; hasta 0,5 mm.
+            $modulos = (11 * (strlen($codigo['valor']) + 3)) + 13;
+            $modulo = max(1, min(
+                (int) round((0.5 / 25.4) * $dpi),
+                (int) floor($codigo['ancho'] / ($modulos + 20)),
+            ));
+            $zpl .= sprintf(
+                "^BY%d,2,%d^FO%d,%d^BCN,%d,N,N,N^FH\\^FD%s^FS\n",
+                $modulo,
+                (int) round($codigo['alto']),
+                (int) round($codigo['x'] + max(0, ($codigo['ancho'] - ($modulos * $modulo)) / 2)),
+                (int) round($codigo['y']),
+                (int) round($codigo['alto']),
+                $valor,
+            );
+        }
+
+        foreach ($diseno['textos'] as $texto) {
+            $tamano = max(10, (int) round($texto['tamano']));
+            $zpl .= sprintf(
+                "^FO%d,%d^A0N,%d,%d^FB%d,1,0,%s,0^FH\\^FD%s^FS\n",
+                (int) round($texto['x']),
+                (int) round($texto['y'] + max(0, ($texto['alto'] - $tamano) / 2)),
+                $tamano,
+                $tamano,
+                max(1, (int) round($texto['ancho'])),
+                $texto['centrado'] ? 'C' : 'L',
+                $this->campo($texto['texto']),
+            );
+        }
+
+        return $zpl."^PQ1,0,1,N\n^XZ\n";
     }
 
     private function puntos(float $milimetros, int $dpi): int

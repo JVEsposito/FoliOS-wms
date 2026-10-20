@@ -44,6 +44,10 @@ class GeneradorEtiquetaMaterialPdf
     /** @param array<string, mixed> $etiqueta */
     protected function pagina(array $etiqueta, float $ancho, float $alto): string
     {
+        if (is_array($etiqueta['armado'] ?? null)) {
+            return $this->paginaArmado($etiqueta['armado'], $ancho, $alto);
+        }
+
         $margen = max(7, $ancho * 0.035);
         $encabezado = max(22, $alto * 0.17);
         $contenido = sprintf("0 0 0 rg 0 %.2F %.2F %.2F re f\n", $alto - $encabezado, $ancho, $encabezado);
@@ -106,6 +110,55 @@ class GeneradorEtiquetaMaterialPdf
                 $negrita,
             );
             $y -= $salto;
+        }
+
+        return $contenido;
+    }
+
+    /**
+     * Tarja de armado: los datos de bodega en celdas y el folio único con su código de barras.
+     *
+     * @param  array<string, mixed>  $tarja
+     */
+    private function paginaArmado(array $tarja, float $ancho, float $alto): string
+    {
+        $diseno = DisenoTarjaArmado::disponer($tarja, $ancho, $alto);
+        $contenido = sprintf("0 0 0 RG %.2F w\n", max(0.6, $diseno['grosor']));
+        foreach ($diseno['lineas'] as $linea) {
+            $contenido .= sprintf(
+                "%.2F %.2F m %.2F %.2F l S\n",
+                $linea['x1'],
+                $alto - $linea['y1'],
+                $linea['x2'],
+                $alto - $linea['y2'],
+            );
+        }
+
+        $codigo = $diseno['codigo'];
+        // Módulo de hasta 0,5 mm: en etiquetas anchas el código no se estira de más.
+        $modulos = (11 * (strlen($codigo['valor']) + 3)) + 13 + 20;
+        $anchoCodigo = min($codigo['ancho'], $modulos * $this->puntos(0.5));
+        $contenido .= $this->codigoBarras(
+            $codigo['valor'],
+            $codigo['x'] + (($codigo['ancho'] - $anchoCodigo) / 2),
+            $alto - ($codigo['y'] + $codigo['alto']),
+            $anchoCodigo,
+            $codigo['alto'],
+            true,
+        );
+
+        foreach ($diseno['textos'] as $texto) {
+            $tamano = max(4, $texto['tamano']);
+            $x = $texto['centrado']
+                ? $texto['x'] + max(0, ($texto['ancho'] - DisenoTarjaArmado::anchoRelativo($texto['texto'], $texto['negrita']) * $tamano) / 2)
+                : $texto['x'];
+            $contenido .= $this->texto(
+                $x,
+                $alto - ($texto['y'] + (($texto['alto'] + ($tamano * 0.7)) / 2)),
+                $tamano,
+                $texto['texto'],
+                $texto['negrita'],
+            );
         }
 
         return $contenido;

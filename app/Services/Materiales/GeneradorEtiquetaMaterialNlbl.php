@@ -56,6 +56,95 @@ class GeneradorEtiquetaMaterialNlbl
         string $nombre,
     ): string {
         [$ancho, $alto] = $this->dimensiones($perfil);
+        $items = is_array($etiqueta['armado'] ?? null)
+            ? $this->itemsArmado($etiqueta['armado'], $ancho, $alto, $simbologia)
+            : $this->itemsEstandar($etiqueta, $ancho, $alto, $simbologia);
+
+        $impresora = $this->impresora($perfil);
+        $idFormato = $this->uuid("formato|{$nombre}|{$ancho}|{$alto}");
+        $idDiseno = $this->uuid("diseno|{$nombre}");
+        $idEscenario = $this->uuid("impresora|{$impresora['driver']}");
+        $idFondo = $this->uuid("fondo|{$nombre}");
+        $nombreXml = $this->xml($nombre);
+        $itemsXml = $this->sangrar(implode("\n", $items), 8);
+        $impresoraNombre = $this->xml($impresora['nombre']);
+        $impresoraDriver = $this->xml($impresora['driver']);
+        $impresoraBuffer = $impresora['buffer'];
+
+        return $this->bom().'<?xml version="1.0" encoding="utf-8"?>'."\r\n".<<<XML
+<EuroPlus.NiceLabel Type="Format">
+  <Id>{$idFormato}</Id>
+  <Name>{$nombreXml}</Name>
+  <SampleValue Type="StringContents" />
+  <BackgroundDocumentItem Type="BackgroundDocumentItem">
+    <Id>{$idFondo}</Id>
+    <Name>Fondo</Name>
+    <Color>FFFFFFFF</Color>
+    <SampleValue Type="StringContents" />
+    <PrintAsGraphics>False</PrintAsGraphics>
+    <Geometry Type="RectGeometry"><Width>0</Width><Height>0</Height><Left>0</Left><Top>0</Top><AnchoringPoint>4</AnchoringPoint></Geometry>
+    <CropVariableGraphics>False</CropVariableGraphics>
+    <ZOrder>0</ZOrder>
+    <MergeName>Fondo</MergeName>
+  </BackgroundDocumentItem>
+  <Media Type="FormatMedia">
+    <PaperFormat>256</PaperFormat>
+    <PaperDetails Type="PaperDetails"><Id>256</Id><Name>USER</Name><IsCustomEpsonPaper>True</IsCustomEpsonPaper></PaperDetails>
+    <Width>{$ancho}</Width>
+    <Height>{$alto}</Height>
+    <RfidTag Type="RfidTagDefinition"><RfidSecurity Type="RfidTagSecurity"><Version>0</Version></RfidSecurity></RfidTag>
+    <EpsonMediaTypeId>0</EpsonMediaTypeId>
+    <IsEpsonBorderlessPrintingEnabled>False</IsEpsonBorderlessPrintingEnabled>
+  </Media>
+  <PageLayout Type="SingleFormatLayout">
+    <ElementWidth>{$ancho}</ElementWidth>
+    <ElementHeight>{$alto}</ElementHeight>
+    <HorizontalRadius>1000</HorizontalRadius>
+    <VerticalRadius>1000</VerticalRadius>
+  </PageLayout>
+  <DocumentDesigns>
+    <DocumentDesign Type="FormatDocumentDesign">
+      <Id>{$idDiseno}</Id>
+      <Name>Etiqueta FoliOS</Name>
+      <SampleValue Type="StringContents" />
+      <Type>0</Type>
+      <Items>
+{$itemsXml}
+      </Items>
+      <Height>{$alto}</Height>
+      <Width>{$ancho}</Width>
+      <MergeName>Etiqueta FoliOS</MergeName>
+    </DocumentDesign>
+  </DocumentDesigns>
+  <PrintScenarioCollection>
+    <PrintScenarioCollection Type="PrintScenario">
+      <Id>{$idEscenario}</Id>
+      <Name>Escenario de impresora</Name>
+      <SampleValue Type="StringContents" />
+      <Printer Type="Printer">
+        <UseAdvancedInterface>False</UseAdvancedInterface>
+        <DevModeBuffer>{$impresoraBuffer}</DevModeBuffer>
+        <Name>{$impresoraNombre}</Name>
+        <DriverName>{$impresoraDriver}</DriverName>
+      </Printer>
+      <OptimizeSameCopies>False</OptimizeSameCopies>
+      <CutterDefinition Type="CutterDefinition"><CutterProcessingType>0</CutterProcessingType></CutterDefinition>
+      <PrintRotation>1</PrintRotation>
+      <MergeName>Escenario de impresora</MergeName>
+    </PrintScenarioCollection>
+  </PrintScenarioCollection>
+  <DocumentProperties Type="DocumentProperties" />
+  <MergeName>{$nombreXml}</MergeName>
+</EuroPlus.NiceLabel>
+XML;
+    }
+
+    /**
+     * @param  array<string, mixed>  $etiqueta
+     * @return array<int, string>
+     */
+    private function itemsEstandar(array $etiqueta, int $ancho, int $alto, string $simbologia): array
+    {
         $margen = max(2500, (int) round($ancho * 0.04));
         $esQrVerticalLargo = $simbologia === 'qr'
             && $alto >= 150000
@@ -186,83 +275,62 @@ class GeneradorEtiquetaMaterialNlbl
             );
         }
 
-        $impresora = $this->impresora($perfil);
-        $idFormato = $this->uuid("formato|{$nombre}|{$ancho}|{$alto}");
-        $idDiseno = $this->uuid("diseno|{$nombre}");
-        $idEscenario = $this->uuid("impresora|{$impresora['driver']}");
-        $idFondo = $this->uuid("fondo|{$nombre}");
-        $nombreXml = $this->xml($nombre);
-        $itemsXml = $this->sangrar(implode("\n", $items), 8);
-        $impresoraNombre = $this->xml($impresora['nombre']);
-        $impresoraDriver = $this->xml($impresora['driver']);
-        $impresoraBuffer = $impresora['buffer'];
+        return $items;
+    }
 
-        return $this->bom().'<?xml version="1.0" encoding="utf-8"?>'."\r\n".<<<XML
-<EuroPlus.NiceLabel Type="Format">
-  <Id>{$idFormato}</Id>
-  <Name>{$nombreXml}</Name>
-  <SampleValue Type="StringContents" />
-  <BackgroundDocumentItem Type="BackgroundDocumentItem">
-    <Id>{$idFondo}</Id>
-    <Name>Fondo</Name>
-    <Color>FFFFFFFF</Color>
-    <SampleValue Type="StringContents" />
-    <PrintAsGraphics>False</PrintAsGraphics>
-    <Geometry Type="RectGeometry"><Width>0</Width><Height>0</Height><Left>0</Left><Top>0</Top><AnchoringPoint>4</AnchoringPoint></Geometry>
-    <CropVariableGraphics>False</CropVariableGraphics>
-    <ZOrder>0</ZOrder>
-    <MergeName>Fondo</MergeName>
-  </BackgroundDocumentItem>
-  <Media Type="FormatMedia">
-    <PaperFormat>256</PaperFormat>
-    <PaperDetails Type="PaperDetails"><Id>256</Id><Name>USER</Name><IsCustomEpsonPaper>True</IsCustomEpsonPaper></PaperDetails>
-    <Width>{$ancho}</Width>
-    <Height>{$alto}</Height>
-    <RfidTag Type="RfidTagDefinition"><RfidSecurity Type="RfidTagSecurity"><Version>0</Version></RfidSecurity></RfidTag>
-    <EpsonMediaTypeId>0</EpsonMediaTypeId>
-    <IsEpsonBorderlessPrintingEnabled>False</IsEpsonBorderlessPrintingEnabled>
-  </Media>
-  <PageLayout Type="SingleFormatLayout">
-    <ElementWidth>{$ancho}</ElementWidth>
-    <ElementHeight>{$alto}</ElementHeight>
-    <HorizontalRadius>1000</HorizontalRadius>
-    <VerticalRadius>1000</VerticalRadius>
-  </PageLayout>
-  <DocumentDesigns>
-    <DocumentDesign Type="FormatDocumentDesign">
-      <Id>{$idDiseno}</Id>
-      <Name>Etiqueta FoliOS</Name>
-      <SampleValue Type="StringContents" />
-      <Type>0</Type>
-      <Items>
-{$itemsXml}
-      </Items>
-      <Height>{$alto}</Height>
-      <Width>{$ancho}</Width>
-      <MergeName>Etiqueta FoliOS</MergeName>
-    </DocumentDesign>
-  </DocumentDesigns>
-  <PrintScenarioCollection>
-    <PrintScenarioCollection Type="PrintScenario">
-      <Id>{$idEscenario}</Id>
-      <Name>Escenario de impresora</Name>
-      <SampleValue Type="StringContents" />
-      <Printer Type="Printer">
-        <UseAdvancedInterface>False</UseAdvancedInterface>
-        <DevModeBuffer>{$impresoraBuffer}</DevModeBuffer>
-        <Name>{$impresoraNombre}</Name>
-        <DriverName>{$impresoraDriver}</DriverName>
-      </Printer>
-      <OptimizeSameCopies>False</OptimizeSameCopies>
-      <CutterDefinition Type="CutterDefinition"><CutterProcessingType>0</CutterProcessingType></CutterDefinition>
-      <PrintRotation>1</PrintRotation>
-      <MergeName>Escenario de impresora</MergeName>
-    </PrintScenarioCollection>
-  </PrintScenarioCollection>
-  <DocumentProperties Type="DocumentProperties" />
-  <MergeName>{$nombreXml}</MergeName>
-</EuroPlus.NiceLabel>
-XML;
+    /**
+     * Tarja de armado: los datos de bodega en el orden de la tarja y el folio único con su
+     * código. Las celdas no llevan bordes, para que el diseño se ajuste en ZebraDesigner.
+     *
+     * @param  array<string, mixed>  $tarja
+     * @return array<int, string>
+     */
+    private function itemsArmado(array $tarja, int $ancho, int $alto, string $simbologia): array
+    {
+        $diseno = DisenoTarjaArmado::disponer($tarja, $ancho, $alto);
+        $items = [];
+        $z = 1;
+        $codigo = $diseno['codigo'];
+        if ($simbologia === 'qr') {
+            $lado = (int) round(min($codigo['ancho'], $codigo['alto']));
+            $items[] = $this->qr(
+                $codigo['valor'],
+                (int) round($codigo['x'] + (($codigo['ancho'] - $lado) / 2)),
+                (int) round($codigo['y']),
+                max(300, (int) floor($lado / 25)),
+                $z++,
+            );
+        } else {
+            // Ancho del código: módulo de hasta 0,5 mm, centrado en su celda.
+            $modulos = (11 * (mb_strlen($codigo['valor']) + 3)) + 13;
+            $anchoCodigo = (int) min($codigo['ancho'], $modulos * 500);
+            $items[] = $this->code128(
+                $codigo['valor'],
+                (int) round($codigo['x'] + (($codigo['ancho'] - $anchoCodigo) / 2)),
+                (int) round($codigo['y']),
+                $anchoCodigo,
+                (int) round($codigo['alto']),
+                $z++,
+            );
+        }
+
+        foreach ($diseno['textos'] as $texto) {
+            // Micrómetros a puntos tipográficos.
+            $tamano = max(4, (int) floor($texto['tamano'] / 1000 / 25.4 * 72));
+            $items[] = $this->texto(
+                $texto['texto'],
+                (int) round($texto['x']),
+                (int) round($texto['y']),
+                (int) round($texto['ancho']),
+                (int) round($texto['alto']),
+                $tamano,
+                $texto['negrita'],
+                $z++,
+                'Tarja · '.$texto['nombre'],
+            );
+        }
+
+        return $items;
     }
 
     private function code128(

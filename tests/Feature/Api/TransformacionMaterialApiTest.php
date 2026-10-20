@@ -1611,6 +1611,211 @@ class TransformacionMaterialApiTest extends TestCase
         $this->assertTrue($cerrado['datos']['folio_salida_reservado']);
     }
 
+    public function test_tarja_de_armado_numera_los_pallets_con_folio_unico_y_lote_de_bodega(): void
+    {
+        config(['materiales.armado.codigo_bodega' => '100']);
+        [$tokenOficina, $tokenTablet, $folioCsf, $folioAuxiliar, $recetaVersionId, $proveedorCsf, $salida] =
+            $this->prepararArmado();
+
+        // Con tarja de armado, la línea es la máquina y el turno es 01 (día) o 02 (tarde).
+        $this->conToken($tokenOficina)
+            ->postJson('/api/materiales/transformaciones/ordenes', [
+                'operacion_id' => (string) Str::uuid(),
+                'version_receta_material_id' => $recetaVersionId,
+                'cantidad_planificada_salida' => 100,
+                'fecha_operacional' => '2026-07-26',
+                'linea' => 'Línea 1',
+                'turno' => 'Día',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['linea', 'turno']);
+        $this->assertSame(
+            'El turno de armado es 01 (día) o 02 (tarde).',
+            $this->conToken($tokenOficina)
+                ->postJson('/api/materiales/transformaciones/ordenes', [
+                    'operacion_id' => (string) Str::uuid(),
+                    'version_receta_material_id' => $recetaVersionId,
+                    'cantidad_planificada_salida' => 100,
+                    'fecha_operacional' => '2026-07-26',
+                    'linea' => '3',
+                    'turno' => '03',
+                ])
+                ->assertUnprocessable()
+                ->json('errors.turno.0'),
+        );
+
+        $orden = $this->conToken($tokenOficina)
+            ->postJson('/api/materiales/transformaciones/ordenes', [
+                'operacion_id' => (string) Str::uuid(),
+                'version_receta_material_id' => $recetaVersionId,
+                'cantidad_planificada_salida' => 100,
+                'fecha_operacional' => '2026-07-26',
+                'linea' => '3',
+                'turno' => '01',
+            ])
+            ->assertCreated()
+            ->json('data');
+        $this->assertSame('03', $orden['linea']);
+        $this->assertNull($orden['armado']);
+
+        // Un folio de armado ya ocupado no se repite: el correlativo lo salta.
+        Folio::create([
+            'temporada_id' => Temporada::query()->where('activa', true)->value('id'),
+            'numero_folio' => 'ARCAJA-PREP-1010000002',
+            'tipo_bulto' => 'material',
+            'estado_operacional' => 'pendiente_ubicacion',
+            'fecha_ingreso' => now(),
+            'activo' => true,
+        ]);
+
+        $orden = $this->conToken($tokenOficina)
+            ->postJson("/api/materiales/transformaciones/ordenes/{$orden['id']}/planificar", [
+                'operacion_id' => (string) Str::uuid(),
+                'version_conocida' => 1,
+            ])
+            ->assertOk()
+            ->json('data');
+
+        // La guía GD 247010 aporta más cajas que la 247003, aunque esa traiga también el insumo.
+        // MySQL reordena las claves del JSON: se compara sin orden.
+        $this->assertEquals([
+            'codigo_bodega' => '100',
+            'nombre_bodega' => 'BODEGA AGROROSARIO',
+            'guia' => '247010',
+            'proveedor_material_id' => $proveedorCsf->id,
+            'proveedor_codigo' => 'CSF',
+            'proveedor_nombre' => 'Cartones San Fernando',
+            'turno' => '01',
+            'maquina' => '03',
+            'fecha' => '2026-07-26',
+            'lote' => '1002470102607260103',
+        ], $orden['armado']);
+        $numeros = array_column($orden['folios_salida'], 'numero_folio');
+        $this->assertSame([
+            'ARCAJA-PREP-1010000001',
+            'ARCAJA-PREP-1010000003',
+            'ARCAJA-PREP-1010000004',
+        ], $numeros);
+
+        $listado = $this->conToken($tokenOficina)
+            ->getJson('/api/materiales/transformaciones/ordenes')
+            ->assertOk();
+        $this->assertTrue($listado->json('armado.activo'));
+        $this->assertSame('100', $listado->json('armado.codigo_bodega'));
+        $this->assertSame(['01', '02'], array_column($listado->json('armado.turnos'), 'codigo'));
+        $this->assertSame(
+            '1002470102607260103',
+            collect($listado->json('data'))->firstWhere('id', $orden['id'])['armado']['lote'],
+        );
+
+        // La tarja anticipada lleva los datos de bodega y el folio único con su código.
+        $respuesta = $this->conToken($tokenOficina)
+            ->post(
+                "/api/materiales/transformaciones/ordenes/{$orden['id']}/etiquetas",
+                $this->payloadEtiquetas(['reserva_ids' => [$orden['folios_salida'][0]['id']]]),
+                ['Accept' => 'application/zpl'],
+            )
+            ->assertOk();
+        $trabajo = TrabajoImpresionMaterial::query()->findOrFail($respuesta->headers->get('X-Estiba-Print-Job'));
+        $etiqueta = $trabajo->contenido_snapshot[0];
+        $this->assertSame('1002470102607260103', $etiqueta['lote_proveedor']);
+        $this->assertEquals([
+            'proveedor' => 'CSF',
+            'proveedor_nombre' => 'Cartones San Fernando',
+            'cliente' => mb_strtoupper(Cliente::query()->findOrFail($orden['cliente']['id'])->nombre),
+            'bodega' => 'BODEGA AGROROSARIO',
+            'codigo' => 'CAJA-PREP-10',
+            'descripcion' => 'Caja preparada 10 kg',
+            'fecha' => '26-07-2026',
+            'cantidad' => '40',
+            'lote' => '1002470102607260103',
+            'guia' => '247010',
+            'turno' => '01',
+            'maquina' => '03',
+            'folio' => 'ARCAJA-PREP-1010000001',
+        ], $etiqueta['armado']);
+        $zpl = $respuesta->getContent();
+        $this->assertStringContainsString('^FDARCAJA-PREP-1010000001^FS', $zpl);
+        $this->assertStringContainsString('FOLIO ÚNICO DE ARMADO', $zpl);
+        $this->assertStringContainsString('^FD1002470102607260103^FS', $zpl);
+
+        // El pallet producido conserva el folio, el lote de la tarja y el proveedor de la caja.
+        $orden = $this->conToken($tokenTablet)
+            ->postJson("/api/materiales/transformaciones/ordenes/{$orden['id']}/iniciar", [
+                'operacion_id' => (string) Str::uuid(),
+                'version_conocida' => 2,
+            ])
+            ->assertOk()
+            ->json('data');
+        // Consume las cajas en el orden FIFO de la reserva.
+        $pendiente = 40.0;
+        $consumos = [];
+        foreach (ReservaTransformacionMaterial::query()
+            ->where('orden_transformacion_material_id', $orden['id'])
+            ->where('item_material_id', FolioMaterial::query()->findOrFail($folioCsf['id'])->item_material_id)
+            ->orderBy('orden_fifo')
+            ->get() as $reserva) {
+            $cantidad = min($pendiente, (float) $reserva->cantidad);
+            if ($cantidad > 0) {
+                $consumos[] = ['folio_id' => $reserva->folio_id, 'cantidad' => $cantidad];
+                $pendiente -= $cantidad;
+            }
+        }
+        $orden = $this->abrirYCerrarLote($tokenTablet, $orden['id'], 3, 40, [
+            'cantidad_real_salida' => 40,
+            'consumos' => [
+                ...$consumos,
+                ['folio_id' => $folioAuxiliar['id'], 'cantidad' => 4],
+            ],
+        ]);
+        $producido = $orden['lotes'][0]['salidas'][0];
+        $this->assertSame('ARCAJA-PREP-1010000001', $producido['numero_folio']);
+        $material = FolioMaterial::query()->findOrFail($producido['folio_id']);
+        $this->assertSame('1002470102607260103', $material->lote);
+        $this->assertSame($proveedorCsf->id, $material->proveedor_material_id);
+        $this->assertSame('Cartones San Fernando', $material->proveedor);
+        $this->assertSame($salida->id, $material->item_material_id);
+    }
+
+    public function test_tarja_de_armado_exige_turno_y_maquina_validos_al_planificar(): void
+    {
+        [$tokenOficina, , , , $recetaVersionId] = $this->prepararArmado();
+        // Borrador creado antes de configurar la bodega de armado, con turno libre.
+        $orden = $this->conToken($tokenOficina)
+            ->postJson('/api/materiales/transformaciones/ordenes', [
+                'operacion_id' => (string) Str::uuid(),
+                'version_receta_material_id' => $recetaVersionId,
+                'cantidad_planificada_salida' => 100,
+                'fecha_operacional' => '2026-07-26',
+                'linea' => 'Línea 1',
+                'turno' => 'Noche',
+            ])
+            ->assertCreated()
+            ->json('data');
+        $this->assertNull($this->conToken($tokenOficina)
+            ->getJson('/api/materiales/transformaciones/ordenes')
+            ->assertOk()
+            ->json('armado.codigo_bodega'));
+
+        config(['materiales.armado.codigo_bodega' => '100']);
+        $this->conToken($tokenOficina)
+            ->postJson("/api/materiales/transformaciones/ordenes/{$orden['id']}/planificar", [
+                'operacion_id' => (string) Str::uuid(),
+                'version_conocida' => 1,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath(
+                'message',
+                'La orden necesita turno 01 (día) o 02 (tarde) para el lote de la tarja de armado.',
+            );
+        $this->assertSame(0, FolioSalidaReservadoTransformacion::query()
+            ->where('orden_transformacion_material_id', $orden['id'])
+            ->count());
+        $this->assertSame(0, ReservaTransformacionMaterial::query()
+            ->where('orden_transformacion_material_id', $orden['id'])
+            ->count());
+    }
+
     public function test_imprime_los_folios_reservados_con_la_cantidad_teorica_y_pide_reimprimir_si_cambia(): void
     {
         [$tokenOficina, $tokenTablet, $folioPrincipal, $folioAuxiliar, $orden] =
@@ -2531,6 +2736,111 @@ class TransformacionMaterialApiTest extends TestCase
             $orden,
             $posicionTres,
             $sesion,
+            $salida,
+        ];
+    }
+
+    /**
+     * Dos guías de cajas desarmadas (247003 con 30 cajas y el insumo, 247010 con 90 cajas de
+     * otro proveedor), ubicadas, y una receta de 40 cajas armadas por pallet.
+     *
+     * @return array{0: string, 1: string, 2: array<string, mixed>, 3: array<string, mixed>, 4: string, 5: ProveedorMaterial, 6: ItemMaterial}
+     */
+    private function prepararArmado(): array
+    {
+        [$administrador, $tokenOficina, $cliente, $proveedor, $entradaPrincipal, $entradaAuxiliar, $salida] =
+            $this->prepararCatalogo();
+        $proveedorCsf = ProveedorMaterial::create([
+            'codigo' => 'CSF',
+            'nombre' => 'Cartones San Fernando',
+            'activo' => true,
+            'creado_por_user_id' => $administrador->id,
+            'actualizado_por_user_id' => $administrador->id,
+        ]);
+        DB::table('clientes_proveedores_materiales')->insert([
+            'id' => (string) Str::uuid(),
+            'cliente_id' => $cliente->id,
+            'proveedor_material_id' => $proveedorCsf->id,
+            'activo' => true,
+            'categorias' => json_encode(['Embalaje'], JSON_UNESCAPED_UNICODE),
+            'creado_por_user_id' => $administrador->id,
+            'actualizado_por_user_id' => $administrador->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        [, , $tokenTablet] = $this->crearOperador();
+        [$camara, $posicionUno, $posicionDos, $posicionTres] = $this->crearCamaraMateriales();
+
+        $primera = $this->payloadRecepcion($cliente, $proveedor, $entradaPrincipal, $entradaAuxiliar);
+        $primera['numero_guia_despacho'] = '247003';
+        $primera['detalles'][0] = [
+            ...$primera['detalles'][0],
+            'cantidad_documental' => 30,
+            'cantidad_recibida' => 30,
+            'bultos' => [['cantidad' => 30, 'lote_proveedor' => 'MP-003']],
+        ];
+        $segunda = $this->payloadRecepcion($cliente, $proveedorCsf, $entradaPrincipal, $entradaAuxiliar);
+        $segunda['numero_guia_despacho'] = ' 247010 ';
+        $segunda['detalles'] = [[
+            ...$segunda['detalles'][0],
+            'cantidad_documental' => 90,
+            'cantidad_recibida' => 90,
+            'bultos' => [['cantidad' => 90, 'lote_proveedor' => 'MP-010']],
+        ]];
+        $folios = [];
+        foreach ([$primera, $segunda] as $payload) {
+            $recepcion = $this->conToken($tokenOficina)
+                ->postJson('/api/materiales/recepciones', $payload)
+                ->assertCreated()
+                ->json('data');
+            $confirmada = $this->conToken($tokenOficina)
+                ->postJsonConDocumento("/api/materiales/recepciones/{$recepcion['id']}/confirmar", [
+                    'operacion_id' => (string) Str::uuid(),
+                    'version_conocida' => 1,
+                ])
+                ->assertOk()
+                ->json('data');
+            foreach ($confirmada['detalles'] as $detalle) {
+                $folios[] = $detalle['bultos'][0]['folio'];
+            }
+        }
+        [$folioPrimera, $folioAuxiliar, $folioCsf] = $folios;
+        $sesion = $this->conToken($tokenTablet)
+            ->postJson("/api/camaras/{$camara->id}/sesiones")
+            ->assertCreated()
+            ->json('data.id');
+        foreach ([
+            [$folioPrimera['numero_folio'], $posicionUno, $entradaPrincipal, 0],
+            [$folioAuxiliar['numero_folio'], $posicionDos, $entradaAuxiliar, 1],
+            [$folioCsf['numero_folio'], $posicionTres, $entradaPrincipal, 2],
+        ] as [$folio, $posicion, $item, $version]) {
+            $this->conToken($tokenTablet)
+                ->postJson('/api/movimientos/ubicar', $this->payloadUbicacion($folio, $posicion, $sesion, $item, $version))
+                ->assertOk();
+        }
+
+        $receta = $this->conToken($tokenOficina)
+            ->postJson('/api/materiales/transformaciones/recetas', [
+                'cliente_id' => $cliente->id,
+                'item_salida_id' => $salida->id,
+                'nombre' => 'Armado de caja 10 kg',
+                'cantidad_base_salida' => 100,
+                'unidades_por_folio_salida' => 40,
+                'componentes' => [
+                    ['item_entrada_id' => $entradaPrincipal->id, 'cantidad_estandar' => 100, 'es_componente_principal' => true],
+                    ['item_entrada_id' => $entradaAuxiliar->id, 'cantidad_estandar' => 10, 'es_componente_principal' => false],
+                ],
+            ])
+            ->assertCreated()
+            ->json('data');
+
+        return [
+            $tokenOficina,
+            $tokenTablet,
+            $folioCsf,
+            $folioAuxiliar,
+            $receta['versiones'][0]['id'],
+            $proveedorCsf,
             $salida,
         ];
     }

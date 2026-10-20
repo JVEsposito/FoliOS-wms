@@ -23,6 +23,7 @@ use App\Models\LoteTransformacionMaterial;
 use App\Models\OrdenTransformacionMaterial;
 use App\Models\PersonalAccessToken;
 use App\Models\RecetaMaterial;
+use App\Services\Materiales\ServicioArmadoMaterial;
 use App\Services\Materiales\ServicioTransformacionMaterial;
 use App\Services\Materiales\ServicioVersionRecetaMaterial;
 use App\Services\Temporadas\ServicioTemporadaActiva;
@@ -85,7 +86,7 @@ class TransformacionMaterialController extends Controller
             ->setStatusCode(Response::HTTP_CREATED);
     }
 
-    public function ordenes(Request $request): AnonymousResourceCollection
+    public function ordenes(Request $request, ServicioArmadoMaterial $armado): AnonymousResourceCollection
     {
         Gate::authorize('consultar-transformaciones-materiales');
         $ordenes = OrdenTransformacionMaterial::query()
@@ -124,7 +125,8 @@ class TransformacionMaterialController extends Controller
             ->latest()
             ->paginate(min(100, max(10, (int) $request->query('per_page', 25))));
 
-        return OrdenTransformacionMaterialResource::collection($ordenes);
+        return OrdenTransformacionMaterialResource::collection($ordenes)
+            ->additional(['armado' => $armado->configuracion()]);
     }
 
     public function mostrarOrden(
