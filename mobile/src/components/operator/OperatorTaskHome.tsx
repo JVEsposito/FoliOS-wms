@@ -4,11 +4,12 @@ import type { ReactNode } from 'react';
 import {
   OperationalTask,
   operationalTaskDestinationLabel,
-  operationalTaskLabel,
   operationalTaskPositionLabel,
   operationalTaskReason,
 } from '../../domain/operationalTasks';
 import type { OperatorQueueItem, OperatorQueueSource } from '../../domain/operatorTaskQueue';
+import { operatorTaskPurpose } from '../../domain/operatorTaskPurpose';
+import { OperatorTaskPurpose } from './OperatorTaskPurpose';
 import { operatorTheme as o } from '../../theme/operatorTheme';
 import {
   OperatorEntityCode,
@@ -123,6 +124,7 @@ function NextTaskCard({ busy, compact, item, onOpen, suggestion }: {
   suggestion?: string;
 }) {
   const { task } = item;
+  const purpose = operatorTaskPurpose(task);
   const paused = task.maniobra?.estado === 'pausada_discrepancia';
   const alternative = isArbitrationAlternative(task);
   const state = paused
@@ -162,7 +164,7 @@ function NextTaskCard({ busy, compact, item, onOpen, suggestion }: {
               <OperatorStatusBadge label={`${maneuverObjectiveCount(task)} OBJETIVOS`} tone="info" />
             ) : null}
           </View>
-          <Text style={styles.heroTitle}>{operationalTaskLabel(task.plan.tipo)}</Text>
+          <Text style={styles.heroTitle}>{purpose.label}</Text>
           <Text style={styles.folioLabel}>Folio / pallet</Text>
           <OperatorEntityCode prominent value={task.folio.numero_folio} />
         </View>
@@ -170,7 +172,7 @@ function NextTaskCard({ busy, compact, item, onOpen, suggestion }: {
         <View style={[styles.heroRoute, compact && styles.heroRouteCompact]}>
           <OperatorRouteLine label="Origen" value={operationalTaskPositionLabel(task.origen)} />
           <OperatorRouteLine label="Destino" value={suggestion ? `${suggestion} · sugerido` : operationalTaskDestinationLabel(task)} strong />
-          <OperatorRouteLine label="Motivo" value={operationalTaskReason(task)} />
+          <OperatorRouteLine label="Instrucción" value={operationalTaskReason(task)} />
         </View>
       </View>
 
@@ -179,6 +181,7 @@ function NextTaskCard({ busy, compact, item, onOpen, suggestion }: {
         <Metric label="Paso" value={maneuverStep(task)} />
         <Metric label="Compromiso" value={commitmentLabel(task)} />
       </View>
+      <OperatorTaskPurpose task={task} />
     </View>
   );
 }
@@ -200,6 +203,7 @@ function QueueRow({ busy, compact, index, item, onOpen, suggestion }: {
   suggestion?: string;
 }) {
   const task = item.task;
+  const purpose = operatorTaskPurpose(task);
   const paused = task.maniobra?.estado === 'pausada_discrepancia';
   const alternative = isArbitrationAlternative(task);
   return (
@@ -210,10 +214,14 @@ function QueueRow({ busy, compact, index, item, onOpen, suggestion }: {
         <Text style={styles.queueMeta}>{paused ? 'EN ESPERA' : alternative ? 'ALTERNATIVA' : item.source === 'mine' ? 'ASIGNADA' : 'DISPONIBLE'}</Text>
         <OperatorEntityCode value={task.folio.numero_folio} />
       </View>
-      <View style={[styles.queueRoute, compact && styles.queueRouteCompact]}>
-        <Text numberOfLines={1} style={styles.queueRouteText}>{operationalTaskPositionLabel(task.origen)}</Text>
-        <Text style={styles.queueArrow}>→</Text>
-        <Text numberOfLines={1} style={styles.queueRouteDestination}>{suggestion ? `${suggestion} · sugerido` : operationalTaskDestinationLabel(task)}</Text>
+      <View style={[styles.queueContext, compact && styles.queueRouteCompact]}>
+        <Text style={styles.queuePurpose}>{purpose.label}</Text>
+        <Text style={styles.queueGoal}>{purpose.goal}</Text>
+        <View style={styles.queueRoute}>
+          <Text numberOfLines={1} style={styles.queueRouteText}>{operationalTaskPositionLabel(task.origen)}</Text>
+          <Text style={styles.queueArrow}>→</Text>
+          <Text numberOfLines={1} style={styles.queueRouteDestination}>{suggestion ? `${suggestion} · sugerido` : operationalTaskDestinationLabel(task)}</Text>
+        </View>
       </View>
       <View style={styles.queueSteps}>
         <Text style={styles.queueStepsValue}>{task.maniobra?.pasos_totales ?? 1}</Text>
@@ -312,6 +320,9 @@ const styles = StyleSheet.create({
   queueIdentityCompact: { flex: 1, width: 'auto' },
   queueMeta: { color: o.color.muted, fontSize: o.type.caption, fontWeight: '800' },
   queueRoute: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: o.space[2] },
+  queueContext: { flex: 1, minWidth: 0, gap: 6 },
+  queuePurpose: { color: o.color.primaryPressed, fontSize: o.type.body, fontWeight: '800' },
+  queueGoal: { color: o.color.text, fontSize: o.type.small },
   queueRouteCompact: { flexBasis: '100%', width: '100%' },
   queueRouteText: { flex: 1, color: o.color.text, fontSize: o.type.small },
   queueArrow: { color: o.color.primary, fontSize: o.type.heading, fontWeight: '900' },

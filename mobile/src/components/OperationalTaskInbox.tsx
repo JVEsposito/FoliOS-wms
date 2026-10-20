@@ -45,6 +45,7 @@ import { cameraSessionConflictMessage } from '../domain/operationalTaskErrors';
 import { OperatorErrorDialog } from './operator/OperatorErrorDialog';
 import { OperatorTaskExecution } from './operator/OperatorTaskExecution';
 import { OperatorTaskHome } from './operator/OperatorTaskHome';
+import { OperatorLoadStatus } from './operator/OperatorLoadStatus';
 import { TurnVerification } from './operator/TurnVerification';
 import { operatorTheme as o } from '../theme/operatorTheme';
 
@@ -76,6 +77,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
   const [available, setAvailable] = useState<OperationalTask[]>([]);
   const [mine, setMine] = useState<OperationalTask[]>([]);
   const [tab, setTab] = useState<TaskTab>('mias');
+  const [showLoads, setShowLoads] = useState(false);
   const [activeTask, setActiveTask] = useState<OperationalTask | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -875,7 +877,15 @@ export function OperationalTaskInbox({ api, auth }: Props) {
         </Pressable>
       ) : null}
 
-      {activeTask ? (
+      {auth.usuario.capacidades?.puede_consultar_cargas && !showLoads ? (
+        <Pressable accessibilityRole="button" onPress={() => setShowLoads(true)} style={styles.loadsButton}>
+          <Text style={styles.loadsButtonText}>Cargas activas y terminadas del turno →</Text>
+        </Pressable>
+      ) : null}
+
+      {showLoads ? (
+        <OperatorLoadStatus api={taskApi} token={auth.token} onBack={() => setShowLoads(false)} />
+      ) : activeTask ? (
         <OperatorTaskExecution
           busy={busy}
           confirmation={confirmation}
@@ -969,6 +979,8 @@ function messageFrom(reason: unknown) {
 }
 
 const styles = StyleSheet.create({
+  loadsButton: { minHeight: o.touch.minimum, justifyContent: 'center', padding: 14, marginBottom: 12, borderWidth: 1, borderColor: o.color.primary, borderRadius: o.radius.control, backgroundColor: o.color.surface },
+  loadsButtonText: { color: o.color.primaryPressed, fontSize: o.type.body, fontWeight: '800' },
   screen: { flex: 1, padding: o.space[4], backgroundColor: o.color.canvas },
   noticeBanner: { flexDirection: 'row', justifyContent: 'space-between', gap: o.space[3], padding: o.space[3], borderRadius: o.radius.control, borderWidth: 1, borderLeftWidth: 5, borderColor: o.color.success, backgroundColor: o.color.successSurface, marginBottom: o.space[2] },
   noticeText: { color: o.color.success, flex: 1, fontSize: o.type.small, fontWeight: '800' },

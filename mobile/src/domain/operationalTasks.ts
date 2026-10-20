@@ -47,6 +47,7 @@ export type OperationalManeuverObjective = {
   estado: string;
   prioridad: OperationalTaskPriority;
   titulo: string;
+  motivo?: string | null;
   es_principal: boolean;
   beneficio_estimado: number;
 };
@@ -98,6 +99,7 @@ export type OperationalTask = {
     estado: string;
     prioridad: OperationalTaskPriority;
     titulo: string;
+    motivo?: string | null;
     version: number;
     horizon?: 'batch' | 'rolling';
   };

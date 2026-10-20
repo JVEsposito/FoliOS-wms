@@ -15,7 +15,7 @@ const sourceRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../src');
 
 // Ejecuta el componente real con hooks de React; solo sustituye las APIs,
 // superficies nativas y pantallas hijas ajenas al comportamiento probado.
-function harness({ cameraBusy = true, openConflict = false, completionError = '', rejectPin = false } = {}) {
+function harness({ cameraBusy = true, openConflict = false, completionError = '', rejectPin = false, withLoads = false } = {}) {
   let polling;
   let renderer;
   let listError = '';
@@ -64,7 +64,7 @@ function harness({ cameraBusy = true, openConflict = false, completionError = ''
       if (id.endsWith('/hooks/useOperationalPolling')) return { useOperationalPolling: (task, options) => { polling = { task, options }; } };
       if (id.endsWith('/services/operationalTasksApi')) return { OperationalTasksApi: class { constructor() { return taskApi; } } };
       if (id.endsWith('/domain/operatorTaskQueue')) return { buildOperatorTaskHome: (mine, available) => ({ mine, available, next: null }) };
-      for (const name of ['OperatorTaskHome', 'OperatorTaskExecution', 'TurnVerification']) {
+      for (const name of ['OperatorTaskHome', 'OperatorTaskExecution', 'TurnVerification', 'OperatorLoadStatus']) {
         if (id.endsWith(`/${name}`)) return { [name]: name };
       }
       if (id.startsWith('.')) {
@@ -113,7 +113,7 @@ function harness({ cameraBusy = true, openConflict = false, completionError = ''
   return {
     calls,
     async mount() {
-      await flush(() => { renderer = create(React.createElement(OperationalTaskInbox, { api, auth: { token: 'token', dispositivo: { nombre: 'TABLET-02' }, usuario: { nombre: 'Camarero' } } })); });
+      await flush(() => { renderer = create(React.createElement(OperationalTaskInbox, { api, auth: { token: 'token', dispositivo: { nombre: 'TABLET-02' }, usuario: { nombre: 'Camarero', capacidades: { puede_consultar_cargas: withLoads } } } })); });
     },
     async start() {
       await flush(() => view('OperatorTaskHome').props.onOpen({ source: 'mine', task: nextTask }));
@@ -125,6 +125,8 @@ function harness({ cameraBusy = true, openConflict = false, completionError = ''
     },
     async complete() { await flush(() => view('OperatorTaskExecution').props.onComplete()); },
     async refresh() { await flush(() => polling.task()); },
+    async openLoads() { await flush(() => renderer.root.findAllByType('Pressable').find((button) => button.findAllByType('Text').some((text) => String(text.props.children).includes('Cargas activas'))).props.onPress()); },
+    async closeLoads() { await flush(() => view('OperatorLoadStatus').props.onBack()); },
     async backgroundFailure(message) { listError = message; await this.refresh(); },
     async dismiss() { await flush(() => view('Pressable').props.onPress()); },
     async back() { await flush(() => view('Modal').props.onRequestClose()); },
@@ -138,6 +140,22 @@ function harness({ cameraBusy = true, openConflict = false, completionError = ''
     async unmount() { if (renderer) await flush(() => renderer.unmount()); },
   };
 }
+
+test('consultar las cargas del turno conserva el movimiento y la sesión de cámara en curso', async () => {
+  const h = harness({ cameraBusy: false, withLoads: true });
+  try {
+    await h.mount();
+    await h.start();
+    assert.equal(h.state(), 'en_proceso');
+    const opened = h.calls.open;
+    await h.openLoads();
+    await h.closeLoads();
+    assert.equal(h.state(), 'en_proceso');
+    assert.equal(h.calls.open, opened);
+    assert.equal(h.calls.start, 1);
+    assert.deepEqual(h.calls.close, []);
+  } finally { await h.unmount(); }
+});
 
 test('cámara destino ocupada: el error sobrevive al refresco y solo se cierra con Entendido', async () => {
   const h = harness();
