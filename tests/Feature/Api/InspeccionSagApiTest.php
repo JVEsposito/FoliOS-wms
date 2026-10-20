@@ -645,6 +645,43 @@ class InspeccionSagApiTest extends TestCase
         $this->assertSame(2, TareaMovimiento::query()->where('estado', 'pendiente')->count());
     }
 
+    public function test_cancelar_sag_reabre_recepcion_terminada_solo_para_el_pallet_que_seguia_en_tunel(): void
+    {
+        $this->activarPlanificadorDirigido();
+        $usuario = $this->administradorConTemporada();
+        $this->crearZonaInspeccion($usuario, posiciones: 2);
+        $sag = $this->crearFolioUbicado('SAG-REABRIR-001');
+        $normal = $this->crearFolioUbicado('SAG-REABRIR-002');
+        $proceso = $this->crearPrefrioSag($usuario, [$sag, $normal], aprobado: true);
+        $lote = $this->crearLoteEnPreparacion(
+            $usuario,
+            [$sag],
+            Pais::query()->where('iso_alpha2', 'CL')->firstOrFail(),
+        );
+        $recepcion = app(ServicioGeneracionRecepcionTunel::class)->generar($proceso, $usuario);
+        $this->assertSame(1, $recepcion->contexto['total_pallets_planificados']);
+        $tareaNormal = $recepcion->tareas()->sole();
+        $tareaNormal->update([
+            'estado' => 'completada',
+            'responsable_user_id' => $usuario->id,
+            'completada_at' => now(),
+        ]);
+        $this->assertSame('completado', $recepcion->refresh()->estado->value);
+
+        $this->actingAs($usuario, 'sanctum')
+            ->postJson("/api/inspeccion-sag/lotes/{$lote['id']}/cancelar")
+            ->assertOk();
+        $recepcion->refresh();
+        $this->assertSame('programado', $recepcion->estado->value);
+        $this->assertNull($recepcion->completado_at);
+        $this->assertSame(2, $recepcion->contexto['total_pallets_planificados']);
+        $restaurada = $recepcion->tareas()->where('estado', 'pendiente')->sole();
+        $this->assertSame($sag->id, $restaurada->folio_id);
+        $this->assertSame('completada', $tareaNormal->refresh()->estado->value);
+        app(ServicioGeneracionRecepcionTunel::class)->generar($proceso, $usuario);
+        $this->assertSame(2, $recepcion->tareas()->count());
+    }
+
     public function test_cancelar_sag_no_libera_el_sector_si_hay_un_traslado_iniciado(): void
     {
         $this->activarPlanificadorDirigido();

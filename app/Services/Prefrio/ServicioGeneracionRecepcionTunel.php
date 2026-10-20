@@ -131,6 +131,13 @@ class ServicioGeneracionRecepcionTunel
                 $nueva = $this->planes->agregarTareaRolling($existente, $datos);
                 $this->vincularRestauracionSag($nueva);
             }
+            $existente->refresh()->update([
+                'contexto' => [
+                    ...($existente->contexto ?? []),
+                    'total_pallets_planificados' => $existente->tareas()->distinct()->count('folio_id'),
+                ],
+                'version' => $existente->version + 1,
+            ]);
 
             return $existente->refresh();
         }

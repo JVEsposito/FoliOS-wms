@@ -76,6 +76,9 @@ jobs:
           COMPOSER_MAX_PARALLEL_HTTP: 4
         run: composer install --no-interaction --prefer-dist --no-progress
 
+      - name: Probar preparación SAG
+        run: php artisan test --filter=InspeccionSagApiTest --fail-on-warning
+
       - name: Validar archivos de Composer
         run: composer validate --strict --no-check-publish
 
@@ -121,7 +124,7 @@ jobs:
           retention-days: 14
 
       - name: Validar estilo
-        run: vendor/bin/pint --test
+        run: vendor/bin/pint --test -v
 
       - name: Crear esquema limpio
         run: php artisan migrate:fresh --force
