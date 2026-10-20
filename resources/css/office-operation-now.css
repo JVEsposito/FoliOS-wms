@@ -1188,6 +1188,15 @@
     white-space: nowrap;
 }
 
+.office-app .plant-node[data-type="camara"] .plant-node__code {
+    flex-shrink: 0;
+    font-size: clamp(.6rem, min(8cqw, 12cqh), 1.1rem);
+    line-height: 1.1;
+    overflow-wrap: anywhere;
+    text-wrap: balance;
+    white-space: normal;
+}
+
 .office-app .plant-node .plant-node__value {
     color: var(--plant-tone, var(--plant-ink)) !important;
     font: 800 clamp(.72rem, min(20cqw, 22cqh), 2.3rem)/1 var(--eui-font-family-condensed, "Roboto Condensed", "Arial Narrow", sans-serif);

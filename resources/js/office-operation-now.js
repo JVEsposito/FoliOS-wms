@@ -34,6 +34,7 @@ import {
     buildPlantIndex,
     plantNodeLabel,
     plantNodeModel,
+    plantNodeTitle,
     tunnelStateLabel,
     tunnelStateTone,
 } from './shared/plant-view';
@@ -826,7 +827,7 @@ function mapNodeMarkup(item, editable = false, index = buildPlantIndex(state.sna
     const selected = editable ? state.mapSelectedId === item.id : selectable && state.plantSelectedId === item.id;
     const selection = selectable ? ` tabindex="0" role="button" aria-pressed="${selected}"` : '';
     const connecting = editable && state.mapConnecting === item.id;
-    const showName = model.name && model.name !== model.code;
+    const showName = model.kind !== 'camara' && model.name && model.name !== model.code;
     const meter = model.meter
         ? `<span class="plant-node__meter" data-tone="${escapeHtml(model.meter.tone)}"${model.meter.label ? ` title="${escapeHtml(`${model.meter.value}% ${model.meter.label}`)}"` : ''}><i style="--plant-meter:${model.meter.value}%"></i></span>`
         : '';
@@ -838,7 +839,7 @@ function mapNodeMarkup(item, editable = false, index = buildPlantIndex(state.sna
         <span class="plant-node__tag">${escapeHtml(model.tag)}</span>
         ${alerts}
         ${model.glyph ? `<span class="plant-node__glyph" data-glyph="${escapeHtml(model.glyph)}">${PLANT_GLYPHS[model.glyph] || ''}</span>` : ''}
-        <strong class="plant-node__code">${escapeHtml(model.code)}</strong>
+        <strong class="plant-node__code">${escapeHtml(plantNodeTitle(model))}</strong>
         ${model.value ? `<span class="plant-node__value">${escapeHtml(model.value)}</span>` : ''}
         ${meter}
         ${model.detail ? `<small class="plant-node__detail">${escapeHtml(model.detail)}</small>` : ''}
@@ -952,8 +953,8 @@ function renderPlantSheet(items = currentMapElements(state.snapshot?.planta)) {
     const stateTone = model.state === 'operativo' ? 'success' : model.tone;
 
     elements.plantSheetBody.innerHTML = `<p class="operation-now-plant-sheet__tag">${escapeHtml(model.tag)}</p>
-        <strong class="operation-now-plant-sheet__code">${escapeHtml(model.code)}</strong>
-        ${model.name && model.name !== model.code ? `<p class="operation-now-plant-sheet__name">${escapeHtml(model.name)}</p>` : ''}
+        <strong class="operation-now-plant-sheet__code">${escapeHtml(plantNodeTitle(model))}</strong>
+        ${model.kind !== 'camara' && model.name && model.name !== model.code ? `<p class="operation-now-plant-sheet__name">${escapeHtml(model.name)}</p>` : ''}
         ${signal(PLANT_STATE_LABELS[model.state] || humanize(model.state), stateTone)}
         <dl class="operation-now-plant-sheet__facts">${facts.map(([term, value, tone]) => `<div><dt>${escapeHtml(term)}</dt><dd${tone ? ` data-tone="${escapeHtml(tone)}"` : ''}>${escapeHtml(value)}</dd></div>`).join('')}</dl>
         ${conditions.length
