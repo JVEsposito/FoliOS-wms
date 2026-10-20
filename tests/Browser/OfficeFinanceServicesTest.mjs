@@ -146,7 +146,7 @@ test('RRHH permite cobrar programación cancelada por acuerdo y bloquea asistenc
         await page.locator('#dotacionChargeForm [name=medida]').selectOption('horas_asistidas');
         assert.equal(await page.locator('#dotacionChargeSubmit').isDisabled(), true);
         await page.locator('#dotacionChargeForm [name=medida]').selectOption('horas_programadas');
-        assert.equal(await page.locator('#dotacionChargeForm [name=base_cobro] [value=ejecucion]').isDisabled(), true);
+        assert.equal(await page.locator('#dotacionChargeForm [name=base_cobro] [value=ejecucion]').evaluate((option) => option.disabled), true);
         await page.locator('#dotacionChargeForm [name=confirmar_unidad]').check();
         await page.locator('#dotacionChargeForm [name=respaldo]').fill('Reserva de cuadrilla según contrato.');
         await page.locator('#dotacionChargeSubmit').click();
