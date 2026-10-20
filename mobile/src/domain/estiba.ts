@@ -8,6 +8,7 @@ export type MovementType =
   | 'reversion';
 
 export type TabletModule =
+  | 'porteria'
   | 'demo_administracion'
   | 'operacion'
   | 'recepcion_materiales'
@@ -32,6 +33,8 @@ export type UserIdentity = {
 };
 
 export type UserCapabilities = {
+  puede_consultar_porteria?: boolean;
+  puede_registrar_porteria?: boolean;
   modulos_tablet?: TabletModule[];
   ambito_camaras: 'productos' | 'materiales' | 'materia_prima' | 'ambos' | 'ninguno';
   puede_supervisar: boolean;
