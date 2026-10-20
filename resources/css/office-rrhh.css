@@ -5,7 +5,9 @@
 .rh-form { display: grid; gap: 1rem; }
 .rh-form label, .rh-toolbar label { display: grid; gap: .4rem; }
 .rh-form input, .rh-form select, .rh-form textarea, .rh-toolbar input { width: 100%; min-height: 44px; padding: .6rem; border: 1px solid var(--line, #8899a6); border-radius: .5rem; color: inherit; background: var(--panel); }
-.rh-dialog { width: min(95vw, 44rem); max-height: 90vh; overflow: auto; padding: 1.5rem; border: 1px solid var(--line, #8899a6); border-radius: 1rem; background: var(--panel); color: var(--text); }
+.rh-dialog { width: min(95vw, 44rem); max-height: 90vh; overflow: auto; margin: auto; padding: 1.5rem; border: 1px solid var(--line, #8899a6); border-radius: 1rem; background: var(--panel); color: var(--text); }
+.rh-dialog .rh-heading { align-items: center; }
+.rh-dialog .rh-heading button { min-width: 44px; min-height: 44px; }
 .rh-dialog::backdrop { background: #07151ea8; }
 .rh-table-scroll { overflow-x: auto; }
 .rh-table-scroll table { width: 100%; border-collapse: collapse; text-align: left; }

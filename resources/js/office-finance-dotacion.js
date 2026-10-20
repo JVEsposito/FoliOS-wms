@@ -1,3 +1,5 @@
+import { attendanceIssueText } from './shared/rrhh-logic';
+
 export function mountDotacionCharges({ api, data, canManage, escapeHtml: esc, toast, onSaved }) {
     const $ = (id) => document.getElementById(id);
     const dialog = $('dotacionChargeDialog'); const form = $('dotacionChargeForm');
@@ -24,7 +26,7 @@ export function mountDotacionCharges({ api, data, canManage, escapeHtml: esc, to
         if (request !== generation) return;
         if (!r.ok || !Array.isArray(r.data?.data?.data)) { $('dotacionChargeError').textContent = errorText(r); return; }
         rows = r.data.data.data;
-        $('dotacionChargeRows').innerHTML = rows.map((a) => `<tr><td>${esc(a.cliente_nombre || 'Sin cliente')}<small>${esc(a.cargo)} · ${esc(a.area)} · ${esc(a.ceco)}</small><small>Asignación ${esc(a.id.slice(0, 8))} · ${esc(a.estado)}</small><small>${esc(time(a.desde_at))} → ${esc(time(a.hasta_at))}</small></td><td>${esc(a.horas_programadas)} h / ${esc(a.jornadas_programadas)} jornada</td><td>${esc(a.horas_asistidas)} h / ${esc(a.jornadas_asistidas)} jornada<small>${a.asistencia_valida && a.turno_finalizado ? 'Marcajes completos' : esc(a.incidencias.join(', ') || 'Turno en curso')}</small></td><td>`
+        $('dotacionChargeRows').innerHTML = rows.map((a) => `<tr><td>${esc(a.cliente_nombre || 'Sin cliente')}<small>${esc(a.cargo)} · ${esc(a.area)} · ${esc(a.ceco)}</small><small>Asignación ${esc(a.id.slice(0, 8))} · ${esc(a.estado)}</small><small>${esc(time(a.desde_at))} → ${esc(time(a.hasta_at))}</small></td><td>${esc(a.horas_programadas)} h / ${esc(a.jornadas_programadas)} jornada</td><td>${esc(a.horas_asistidas)} h / ${esc(a.jornadas_asistidas)} jornada<small>${a.asistencia_valida && a.turno_finalizado ? 'Marcajes completos' : esc(attendanceIssueText(a.incidencias) || 'Turno en curso')}</small></td><td>`
             + (a.cargo_actual && !a.cargo_actual.anulado ? `Ya tiene cargo ${esc(a.cargo_actual.id.slice(0, 8))}` : `<button type="button" class="fin-boton" data-dotacion-choose="${esc(a.id)}" ${a.cliente_id ? '' : 'disabled'}>${a.cargo_actual?.anulado ? 'Reemplazar cargo anulado' : 'Elegir'}</button>`)
             + '</td></tr>').join('') || '<tr><td colspan="4">Sin asignaciones en este mes.</td></tr>';
         $('dotacionChargePage').textContent = `${r.data.data.current_page} / ${r.data.data.last_page}`;
