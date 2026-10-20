@@ -23,7 +23,13 @@ import {
     resizeElement,
     unconnectedPlaces,
 } from './shared/plant-layout';
-import { AGROROSARIO_PLANT, buildPlantFromTemplate, unassignedPlaces } from './shared/plant-templates';
+import {
+    AGROROSARIO_PLANT,
+    buildPlantFromTemplate,
+    keepElementAsArea,
+    linkElementToPlace,
+    unassignedPlaces,
+} from './shared/plant-templates';
 import {
     buildPlantIndex,
     plantNodeLabel,
@@ -1301,21 +1307,42 @@ function renderProportionField() {
 }
 
 // Un recinto del dibujo puede apuntar a otro del catálogo sin perder su forma ni sus
-// conexiones; así se resuelve lo que el plano base no pudo enlazar solo.
+// conexiones; así se resuelve lo que el plano base no pudo enlazar solo. Un recinto que
+// todavía no existe en FoliOS (una cámara nueva) puede quedar como área y enlazarse
+// después, cuando se cree.
+const KEEP_AS_AREA = 'area';
+const PLACE_GROUPS = [['camara', 'Cámaras'], ['tunel', 'Túneles'], ['anden', 'Andenes'], ['almacen', 'Bodegas']];
+
+function placeOption(item) {
+    return `<option value="${escapeHtml(catalogKey(item.tipo, item.id))}">${escapeHtml([item.codigo, item.nombre].filter(Boolean).join(' · '))}</option>`;
+}
+
 function renderReferenceField(selected) {
     const isPlace = Boolean(selected && RECINTO_TYPES.includes(selected.tipo));
-    elements.mapReferenceField.hidden = !isPlace;
-    if (!isPlace) return;
+    const isZone = selected?.tipo === 'zona';
+    elements.mapReferenceField.hidden = !isPlace && !isZone;
+    if (!isPlace && !isZone) return;
     const catalog = state.snapshot?.planta?.catalogo || [];
+    const available = availableCatalog(catalog, state.mapDraft);
+
+    if (isZone) {
+        elements.mapReference.innerHTML = `<option value="">Área del dibujo, sin recinto</option>${PLACE_GROUPS
+            .map(([type, label]) => {
+                const items = available.filter((item) => item.tipo === type);
+                return items.length ? `<optgroup label="${escapeHtml(label)}">${items.map(placeOption).join('')}</optgroup>` : '';
+            })
+            .join('')}`;
+        elements.mapReference.value = '';
+        return;
+    }
+
     const current = catalog.find((item) => item.tipo === selected.tipo && item.id === selected.referencia_id);
-    const options = [
-        ...(current ? [current] : []),
-        ...availableCatalog(catalog, state.mapDraft).filter((item) => item.tipo === selected.tipo),
-    ];
-    elements.mapReference.innerHTML = `${current ? '' : '<option value="">Sin asignar</option>'}${options
-        .map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml([item.codigo, item.nombre].filter(Boolean).join(' · '))}</option>`)
-        .join('')}`;
-    elements.mapReference.value = current?.id || '';
+    elements.mapReference.innerHTML = [
+        current ? '' : '<option value="">Sin asignar</option>',
+        ...[...(current ? [current] : []), ...available.filter((item) => item.tipo === selected.tipo)].map(placeOption),
+        `<option value="${KEEP_AS_AREA}">Dejar como área (aún no existe en FoliOS)</option>`,
+    ].join('');
+    elements.mapReference.value = current ? catalogKey(current.tipo, current.id) : '';
 }
 
 function renderEditor() {
@@ -1386,7 +1413,7 @@ function selectedMapElement() {
 async function saveMap() {
     const pending = unassignedPlaces(state.mapDraft);
     if (pending.length) {
-        toast(`Asigna un recinto de FoliOS a ${pending.map((item) => item.nombre).join(', ')} o quítalos antes de guardar.`, true);
+        toast(`Asigna un recinto de FoliOS a ${pending.map((item) => item.nombre).join(', ')}, déjalo como área o quítalo antes de guardar.`, true);
         state.mapSelectedId = pending[0].id;
         renderEditor();
         return;
@@ -1489,9 +1516,13 @@ elements.mapCatalogItems.addEventListener('click', (event) => {
     if (button) addCatalogItem(button.dataset.mapAdd);
 });
 function templateReport(result) {
-    const lines = [`<strong>${escapeHtml(number(result.asignados.length))} recintos enlazados por número.</strong>`];
+    // Cada enlace queda a la vista: es lo que hay que revisar antes de guardar.
+    const lines = [
+        `<strong>${escapeHtml(number(result.asignados.length))} recintos enlazados. Revísalos antes de guardar:</strong>`,
+        `<ul>${result.asignados.map((link) => `<li>${escapeHtml(link.plano)} <span aria-hidden="true">→</span> ${escapeHtml(link.recinto)}</li>`).join('')}</ul>`,
+    ];
     if (result.faltantes.length) {
-        lines.push(`<span>Por asignar: ${result.faltantes.map((item) => escapeHtml(item.nombre)).join(', ')}. Selecciónalos y elige su recinto, o quítalos.</span>`);
+        lines.push(`<span>Por asignar: ${result.faltantes.map((item) => escapeHtml(item.nombre)).join(', ')}. Selecciónalos y elige su recinto; si todavía no existe en FoliOS, déjalo como área y enlázalo cuando se cree.</span>`);
     }
     if (result.sinUbicar.length) {
         lines.push(`<span>En FoliOS pero no en el dibujo: ${result.sinUbicar.map((item) => escapeHtml(item.codigo || item.nombre)).join(', ')}.</span>`);
@@ -1522,12 +1553,19 @@ elements.mapProportion.addEventListener('change', () => {
 });
 
 elements.mapReference.addEventListener('change', () => {
-    const selected = selectedMapElement();
-    if (!selected) return;
-    const item = (state.snapshot?.planta?.catalogo || [])
-        .find((candidate) => candidate.tipo === selected.tipo && candidate.id === elements.mapReference.value);
-    selected.referencia_id = item?.id || null;
-    if (item) selected.nombre = item.nombre || item.codigo || selected.nombre;
+    const index = state.mapDraft.findIndex((item) => item.id === state.mapSelectedId);
+    if (index < 0) return;
+    const selected = state.mapDraft[index];
+    const value = elements.mapReference.value;
+    if (value === KEEP_AS_AREA) {
+        state.mapDraft[index] = keepElementAsArea(selected);
+    } else if (value) {
+        const item = (state.snapshot?.planta?.catalogo || [])
+            .find((candidate) => catalogKey(candidate.tipo, candidate.id) === value);
+        if (item) state.mapDraft[index] = linkElementToPlace(selected, item);
+    } else if (selected.tipo !== 'zona') {
+        state.mapDraft[index] = { ...selected, referencia_id: null };
+    }
     renderEditor();
 });
 

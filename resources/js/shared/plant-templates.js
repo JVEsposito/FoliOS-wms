@@ -1,8 +1,8 @@
 // Planos base: la geometría real de una planta para no dibujarla a mano en el editor.
 // Las coordenadas van de 0 a 10000 en cada eje y la proporción (ancho/alto) conserva la
 // forma del dibujo. Cada recinto declara tipo y número; al cargarlo se enlaza con el
-// recinto del catálogo que tenga ese número (CAM-07, «Cámara 7», T7…). Lo que no calce
-// queda marcado para asignarlo a mano antes de guardar.
+// recinto del catálogo cuyo nombre o código termine en ese número, prefiriendo el nombre.
+// Lo que no calce queda marcado para asignarlo a mano antes de guardar.
 
 const RECINTO_TYPES = ['camara', 'tunel', 'anden', 'almacen'];
 
@@ -80,64 +80,106 @@ export const AGROROSARIO_PLANT = Object.freeze({
 
 export const PLANT_TEMPLATES = Object.freeze([AGROROSARIO_PLANT]);
 
-/** Número final del código o del nombre: «CAM-07», «Cámara 7» y «T7» dan 7. */
-export function recintoNumber(item) {
-    for (const text of [item?.codigo, item?.nombre]) {
-        const match = String(text ?? '').trim().match(/(\d+)$/);
-        if (match) return Number(match[1]);
-    }
-    return null;
+function trailingNumber(text) {
+    const match = String(text ?? '').trim().match(/(\d+)$/);
+    return match ? Number(match[1]) : null;
 }
 
-function candidatesFor(catalog, element, used) {
-    const own = catalog.filter((item) => item.tipo === element.tipo
-        && !used.has(`${item.tipo}:${item.id}`)
-        && recintoNumber(item) === element.numero);
-    // Una cámara de materiales con el mismo número no reemplaza a la de producto.
-    if (element.tipo !== 'camara') return own;
-    const product = own.filter((item) => item.contenido !== 'materiales');
-    return product.length ? product : own;
+/** Número final del código o del nombre: «CAM-07», «Cámara 7» y «T7» dan 7. */
+export function recintoNumber(item) {
+    return trailingNumber(item?.codigo) ?? trailingNumber(item?.nombre);
 }
 
 /**
- * Elementos y conexiones listos para el editor a partir de un plano base. Devuelve también
- * qué recintos quedaron enlazados, cuáles no tienen un único recinto con su número y qué
- * recintos del catálogo no aparecen en el dibujo.
+ * Qué tan bien calza un recinto con un número del dibujo: nombre y código a la vez, solo
+ * el nombre o solo el código. El nombre pesa más porque es como se conoce el recinto en la
+ * planta: «Cámara de tránsito 04» puede tener el código CAM-10.
+ */
+function matchRank(item, numero) {
+    const byName = trailingNumber(item.nombre) === numero;
+    const byCode = trailingNumber(item.codigo) === numero;
+    if (byName && byCode) return 1;
+    if (byName) return 2;
+    if (byCode) return 3;
+    return null;
+}
+
+function catalogKey(item) {
+    return `${item.tipo}:${item.id}`;
+}
+
+function candidatesFor(catalog, element, used) {
+    const ranked = catalog
+        .filter((item) => item.tipo === element.tipo && !used.has(catalogKey(item)))
+        .map((item) => ({ item, rank: matchRank(item, element.numero) }))
+        .filter((candidate) => candidate.rank !== null);
+    if (!ranked.length) return [];
+    const best = Math.min(...ranked.map((candidate) => candidate.rank));
+    const top = ranked.filter((candidate) => candidate.rank === best).map((candidate) => candidate.item);
+    // Una cámara de materiales con el mismo número no reemplaza a la de producto.
+    if (element.tipo !== 'camara' || top.length < 2) return top;
+    const product = top.filter((item) => item.contenido !== 'materiales');
+    return product.length ? product : top;
+}
+
+function normalizedName(text) {
+    return String(text ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+}
+
+function linkLabel(item) {
+    return [item.codigo, item.nombre].filter(Boolean).join(' · ');
+}
+
+/**
+ * Elementos y conexiones listos para el editor a partir de un plano base. Primero enlaza
+ * cámaras, túneles y andenes por número; después, un área del dibujo con el mismo nombre
+ * que un recinto de FoliOS (el «Altillo», por ejemplo) pasa a ser ese recinto. Devuelve
+ * cada enlace para revisarlo, lo que quedó por asignar y lo que FoliOS tiene y el dibujo no.
  */
 export function buildPlantFromTemplate(template, catalog = [], { uuid = () => globalThis.crypto.randomUUID() } = {}) {
     const used = new Set();
-    const ids = new Map();
+    const links = new Map();
     const assigned = [];
     const missing = [];
 
+    for (const element of template.elementos.filter((candidate) => RECINTO_TYPES.includes(candidate.tipo))) {
+        const candidates = candidatesFor(catalog, element, used);
+        if (candidates.length === 1) {
+            const [item] = candidates;
+            used.add(catalogKey(item));
+            links.set(element.clave, item);
+            assigned.push({ plano: element.nombre, recinto: linkLabel(item) });
+        } else {
+            missing.push({
+                nombre: element.nombre,
+                motivo: candidates.length ? 'Hay más de un recinto con ese número' : 'Sin recinto con ese número',
+            });
+        }
+    }
+
+    for (const element of template.elementos.filter((candidate) => candidate.tipo === 'zona')) {
+        const item = catalog.find((candidate) => RECINTO_TYPES.includes(candidate.tipo)
+            && !used.has(catalogKey(candidate))
+            && normalizedName(candidate.nombre) === normalizedName(element.nombre));
+        if (!item) continue;
+        used.add(catalogKey(item));
+        links.set(element.clave, item);
+        assigned.push({ plano: element.nombre, recinto: linkLabel(item) });
+    }
+
+    const ids = new Map();
     const elementos = template.elementos.map((element) => {
         const id = uuid();
         ids.set(element.clave, id);
-        let referencia = null;
-        let nombre = element.nombre;
-
-        if (RECINTO_TYPES.includes(element.tipo)) {
-            const candidates = candidatesFor(catalog, element, used);
-            if (candidates.length === 1) {
-                const [item] = candidates;
-                used.add(`${item.tipo}:${item.id}`);
-                referencia = item.id;
-                nombre = item.nombre || item.codigo || element.nombre;
-                assigned.push({ plano: element.nombre, recinto: item.codigo || item.nombre });
-            } else {
-                missing.push({
-                    nombre: element.nombre,
-                    motivo: candidates.length ? 'Hay más de un recinto con ese número' : 'Sin recinto con ese número',
-                });
-            }
-        }
+        const item = links.get(element.clave);
+        const tipo = item ? item.tipo : element.tipo;
 
         return {
             id,
-            tipo: element.tipo,
-            referencia_id: referencia,
-            nombre,
-            categoria: element.tipo === 'zona' ? element.categoria : null,
+            tipo,
+            referencia_id: item?.id ?? null,
+            nombre: item ? (item.nombre || item.codigo || element.nombre) : element.nombre,
+            categoria: tipo === 'zona' ? element.categoria : null,
             x: element.x,
             y: element.y,
             ancho: element.ancho,
@@ -147,11 +189,32 @@ export function buildPlantFromTemplate(template, catalog = [], { uuid = () => gl
     });
 
     const conexiones = template.conexiones.map(([from, to]) => ({ id: uuid(), desde: ids.get(from), hacia: ids.get(to) }));
-    const unplaced = catalog
-        .filter((item) => RECINTO_TYPES.includes(item.tipo) && !used.has(`${item.tipo}:${item.id}`))
-        .filter((item) => !(item.tipo === 'camara' && item.contenido === 'materiales'));
+    const unplaced = catalog.filter((item) => RECINTO_TYPES.includes(item.tipo) && !used.has(catalogKey(item)));
 
     return { proporcion: template.proporcion, elementos, conexiones, asignados: assigned, faltantes: missing, sinUbicar: unplaced };
+}
+
+/**
+ * Enlaza un elemento del dibujo con un recinto de FoliOS sin tocar su forma ni sus
+ * conexiones. Sirve para asignar lo que el plano base no enlazó y para convertir un área
+ * en recinto cuando el recinto se crea después (una cámara nueva).
+ */
+export function linkElementToPlace(element, item) {
+    return {
+        ...element,
+        tipo: item.tipo,
+        referencia_id: item.id,
+        nombre: item.nombre || item.codigo || element.nombre,
+        categoria: null,
+    };
+}
+
+/**
+ * Deja un recinto como área del dibujo, con su nombre y en el mismo lugar. Así se guarda
+ * el plano aunque el recinto todavía no exista en FoliOS.
+ */
+export function keepElementAsArea(element) {
+    return { ...element, tipo: 'zona', referencia_id: null, categoria: 'otro' };
 }
 
 /** Recintos del borrador que todavía no apuntan a uno del catálogo. */

@@ -12,6 +12,8 @@ import {
     AGROROSARIO_PLANT,
     PLANT_TEMPLATES,
     buildPlantFromTemplate,
+    keepElementAsArea,
+    linkElementToPlace,
     recintoNumber,
     unassignedPlaces,
 } from '../../resources/js/shared/plant-templates.js';
@@ -92,7 +94,7 @@ test('enlaza por número, prefiere cámaras de producto y reporta lo que falta',
     assert.equal(byName.get('Túnel 3').referencia_id, 't3');
     assert.equal(byName.get('Andén 4').referencia_id, 'a4');
     assert.deepEqual(result.faltantes.map((item) => item.nombre).sort(), ['Cámara 0', 'Túnel 6']);
-    assert.deepEqual(result.sinUbicar.map((item) => item.codigo), ['AND-05'], 'la cámara de materiales no se reclama');
+    assert.deepEqual(result.sinUbicar.map((item) => item.codigo), ['MAT-01', 'AND-05'], 'la cámara de materiales queda disponible para ubicarla');
     assert.deepEqual(unassignedPlaces(result.elementos).map((item) => item.nombre).sort(), ['Cámara 0', 'Túnel 6']);
     assert.ok(describeConnections(result.elementos, result.conexiones).every((connection) => connection.valid));
     assert.ok(result.elementos.filter((element) => element.tipo === 'zona').every((element) => element.categoria));
@@ -100,7 +102,7 @@ test('enlaza por número, prefiere cámaras de producto y reporta lo que falta',
 });
 
 test('dos recintos con el mismo número quedan por asignar, sin adivinar', () => {
-    const duplicated = [...catalog, { tipo: 'camara', id: 'c7b', codigo: 'C7', nombre: 'Cámara 7 antigua', contenido: 'productos' }];
+    const duplicated = [...catalog, { tipo: 'camara', id: 'c7b', codigo: 'C-07', nombre: 'Cámara 7', contenido: 'productos' }];
     const result = buildPlantFromTemplate(AGROROSARIO_PLANT, duplicated, { uuid: sequentialIds() });
 
     assert.equal(result.elementos.find((element) => element.nombre === 'Cámara 7').referencia_id, null);
@@ -112,4 +114,70 @@ test('las áreas confirmadas llevan su indicador: recepción MP en la zona de re
     assert.equal(zones.get('resguardo').categoria, 'recepcion_mp');
     assert.notEqual(zones.get('palletizaje').categoria, 'repa', 'palletizaje no es repaletizaje');
     assert.ok(!AGROROSARIO_PLANT.elementos.some((element) => element.categoria === 'repa'));
+});
+
+test('con el catálogo real de la planta, el nombre manda sobre el código', () => {
+    // Catálogo de Agrorosario: las cámaras físicas se conocen como «Cámara de tránsito NN»
+    // y sus códigos no siguen ese número (la de tránsito 04 es CAM-10).
+    const real = [
+        ['CAM-01', 'Cámara de tránsito 01', 'productos'],
+        ['CAM-02', 'Cámara de tránsito 02', 'productos'],
+        ['CAM-03', 'Cámara de tránsito 03', 'productos'],
+        ['CAM-04', 'Bodega Principal', 'materiales'],
+        ['CAM-05', 'BODEGA JAULA', 'materiales'],
+        ['CAM-06', 'rack jaula', 'materiales'],
+        ['CAM-07', 'Camara de MP 1', 'productos'],
+        ['CAM-08', 'Altillo', 'materiales'],
+        ['CAM-09', 'Camara de tránsito 07', 'productos'],
+        ['CAM-10', 'Camara de tránsito 04', 'productos'],
+        ['CAM-11', 'Cámara de tránsito 05', 'productos'],
+        ['CAM-12', 'Cámara de tránsito 06', 'productos'],
+        ['DES-01', 'Zona de despacho', 'productos'],
+    ].map(([codigo, nombre, contenido]) => ({ tipo: 'camara', id: codigo, codigo, nombre, contenido }));
+    const tunnels = [1, 2, 3, 4, 5, 6].map((n) => ({ tipo: 'tunel', id: `TUN-0${n}`, codigo: `TUN-0${n}`, nombre: `TUNEL ${n}` }));
+    const docks = [1, 2, 3, 4].map((n) => ({ tipo: 'anden', id: `AND-0${n}`, codigo: `AND-0${n}`, nombre: `ANDEN ${n}` }));
+    const warehouse = { tipo: 'almacen', id: 'BOD-CENTRAL', codigo: 'BOD-CENTRAL', nombre: 'Bodega Central de Materiales' };
+    const result = buildPlantFromTemplate(AGROROSARIO_PLANT, [...real, ...tunnels, ...docks, warehouse], { uuid: sequentialIds() });
+    const linked = Object.fromEntries(result.asignados.map((link) => [link.plano, link.recinto.split(' · ')[0]]));
+
+    assert.deepEqual(
+        ['Cámara 1', 'Cámara 2', 'Cámara 3', 'Cámara 4', 'Cámara 5', 'Cámara 6', 'Cámara 7'].map((name) => linked[name]),
+        ['CAM-01', 'CAM-02', 'CAM-03', 'CAM-10', 'CAM-11', 'CAM-12', 'CAM-09'],
+    );
+    assert.equal(linked['Túnel 4'], 'TUN-04');
+    assert.equal(linked['Andén 2'], 'AND-02');
+    assert.equal(linked.Altillo, 'CAM-08', 'el área del dibujo con el mismo nombre pasa a ser el recinto');
+    assert.deepEqual(result.faltantes.map((item) => item.nombre), ['Cámara 0']);
+    assert.deepEqual(
+        result.sinUbicar.map((item) => item.codigo).sort(),
+        ['BOD-CENTRAL', 'CAM-04', 'CAM-05', 'CAM-06', 'CAM-07', 'DES-01'],
+    );
+
+    const altillo = result.elementos.find((element) => element.referencia_id === 'CAM-08');
+    assert.equal(altillo.tipo, 'camara');
+    assert.equal(altillo.categoria, null);
+    assert.ok(describeConnections(result.elementos, result.conexiones).every((connection) => connection.valid));
+});
+
+test('una cámara nueva queda como área y se enlaza cuando exista, sin perder forma ni puertas', () => {
+    const result = buildPlantFromTemplate(AGROROSARIO_PLANT, catalog, { uuid: sequentialIds() });
+    const pending = unassignedPlaces(result.elementos).find((element) => element.nombre === 'Cámara 0');
+    const area = keepElementAsArea(pending);
+
+    assert.deepEqual(
+        { tipo: area.tipo, referencia_id: area.referencia_id, categoria: area.categoria, nombre: area.nombre },
+        { tipo: 'zona', referencia_id: null, categoria: 'otro', nombre: 'Cámara 0' },
+    );
+    assert.deepEqual([area.x, area.y, area.ancho, area.alto], [pending.x, pending.y, pending.ancho, pending.alto]);
+
+    const created = { tipo: 'camara', id: 'c0', codigo: 'CAM-13', nombre: 'Cámara de tránsito 00' };
+    const linked = linkElementToPlace(area, created);
+    assert.deepEqual(
+        { tipo: linked.tipo, referencia_id: linked.referencia_id, categoria: linked.categoria, nombre: linked.nombre, id: linked.id },
+        { tipo: 'camara', referencia_id: 'c0', categoria: null, nombre: 'Cámara de tránsito 00', id: pending.id },
+    );
+
+    const elements = result.elementos.map((element) => (element.id === linked.id ? linked : element));
+    assert.deepEqual(unassignedPlaces(elements).map((element) => element.nombre), ['Túnel 6']);
+    assert.ok(describeConnections(elements, result.conexiones).every((connection) => connection.valid), 'las puertas siguen válidas');
 });

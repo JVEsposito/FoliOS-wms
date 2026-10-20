@@ -1526,6 +1526,8 @@
 .operation-map-template > button { min-height: 36px; padding: 6px 8px; border: 1px solid var(--primary, var(--corporate-blue)); border-radius: var(--eui-radius-control); background: var(--primary, var(--corporate-blue)); color: var(--on-primary, #fff); cursor: pointer; font: inherit; font-weight: 800; }
 .operation-map-template__report { display: grid; gap: 4px; padding: 8px; border-left: 4px solid var(--success-text); background: var(--corporate-card); color: var(--text); font-size: .72rem; line-height: 1.35; }
 .operation-map-template__report[hidden] { display: none; }
+.operation-map-template__report ul { display: grid; gap: 2px; margin: 0; padding: 0 0 4px; list-style: none; }
+.operation-map-template__report li { overflow-wrap: anywhere; }
 .operation-map-template__report[data-tone="warning"] { border-left-color: var(--warning-text); background: var(--warning-bg); }
 .operation-map-format { display: grid; gap: 4px; padding: 12px; border-bottom: 1px solid var(--corporate-border); font-weight: 800; }
 .operation-map-format select,
