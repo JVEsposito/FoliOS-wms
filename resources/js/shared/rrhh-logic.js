@@ -17,3 +17,8 @@ export function importRows(value) {
 export function sourceConfiguration(values) {
     return Object.fromEntries(['base_url', 'usuario', 'password', 'api_key', 'api_secret'].filter((k) => values[k]?.trim()).map((k) => [k, values[k]]));
 }
+
+export function attendanceIssueText(issues) {
+    const labels = { sin_marcajes: 'Sin marcajes', entrada_sin_salida: 'Entrada sin salida', salida_sin_entrada: 'Salida sin entrada', entradas_consecutivas: 'Entradas consecutivas', marcajes_simultaneos: 'Marcajes a la misma hora' };
+    return issues.map((key) => labels[key] || 'Incidencia por revisar').join(', ');
+}

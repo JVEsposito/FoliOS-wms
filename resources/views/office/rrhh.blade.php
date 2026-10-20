@@ -57,7 +57,7 @@
     </section>
 </main>
 @unless($clock)
-<dialog id="rhPersonDialog" class="rh-dialog"><form id="rhPersonForm" class="rh-form"><h2 id="rhPersonTitle">Agregar persona</h2>
+<dialog id="rhPersonDialog" class="rh-dialog"><form id="rhPersonForm" class="rh-form"><div class="rh-heading"><h2 id="rhPersonTitle">Agregar persona</h2><button type="button" class="secondary-button" data-rh-close aria-label="Cerrar">×</button></div>
     <label><span>Código permanente</span><input name="codigo" maxlength="40" pattern="[A-Za-z0-9_-]+" required></label>
     <label><span>Nombre</span><input name="nombre" maxlength="180" required></label>
     <label><span>Documento / RUT</span><input name="documento" maxlength="40"></label><label><span>Empleador</span><input name="empleador" maxlength="180"></label>
@@ -67,7 +67,7 @@
     <label><span>Estado</span><select name="activa"><option value="1">Activa</option><option value="0">Inactiva</option></select></label>
     <div class="rh-actions"><button type="button" class="secondary-button" data-rh-close>Cancelar</button><button type="submit" class="primary-button">Guardar</button></div><p class="form-error" role="alert" data-rh-error></p>
 </form></dialog>
-<dialog id="rhAssignmentDialog" class="rh-dialog"><form id="rhAssignmentForm" class="rh-form"><h2 id="rhAssignmentTitle">Programar asignación</h2><p id="rhDeviceZone"></p>
+<dialog id="rhAssignmentDialog" class="rh-dialog"><form id="rhAssignmentForm" class="rh-form"><div class="rh-heading"><h2 id="rhAssignmentTitle">Programar asignación</h2><button type="button" class="secondary-button" data-rh-close aria-label="Cerrar">×</button></div><p id="rhDeviceZone"></p>
     <label><span>Cliente</span><select name="cliente_id"><option value="">Sin cliente (uso interno)</option></select></label>
     <label><span>Cargo</span><input name="cargo" maxlength="120" required></label><label><span>Área</span><input name="area" maxlength="120" required></label><label><span>CECO</span><input name="ceco" maxlength="60"></label>
     <label><span>Inicio</span><input name="desde" type="datetime-local" step="60" required></label><label><span>Término</span><input name="hasta" type="datetime-local" step="60" required></label>
@@ -76,7 +76,7 @@
     <label><span>Observación</span><textarea name="observacion" maxlength="500"></textarea></label>
     <div class="rh-actions"><button type="button" class="secondary-button" data-rh-close>Cancelar</button><button type="submit" class="primary-button">Programar</button></div><p class="form-error" role="alert" data-rh-error></p>
 </form></dialog>
-<dialog id="rhSourceDialog" class="rh-dialog"><form id="rhSourceForm" class="rh-form"><h2>Fuente externa</h2>
+<dialog id="rhSourceDialog" class="rh-dialog"><form id="rhSourceForm" class="rh-form"><div class="rh-heading"><h2>Fuente externa</h2><button type="button" class="secondary-button" data-rh-close aria-label="Cerrar">×</button></div>
     <label><span>Código permanente</span><input name="codigo" pattern="[a-z][a-z0-9_-]+" maxlength="60" required></label><label><span>Nombre</span><input name="nombre" maxlength="120" required></label>
     <label><span>Formato</span><select name="tipo"><option value="normalizado">Marcajes normalizados</option><option value="geovictoria">GeoVictoria · Punch</option></select></label>
     <label><span>Estado</span><select name="activa"><option value="1">Activa</option><option value="0">Inactiva</option></select></label>
@@ -85,14 +85,14 @@
     <label><span>Contraseña</span><input name="password" type="password" autocomplete="new-password" maxlength="500"></label><label><span>API key</span><input name="api_key" type="password" autocomplete="off" maxlength="500"></label><label><span>API secret</span><input name="api_secret" type="password" autocomplete="off" maxlength="500"></label>
     <div class="rh-actions"><button type="button" class="secondary-button" data-rh-close>Cancelar</button><button type="submit" class="primary-button">Guardar fuente</button></div><p class="form-error" role="alert" data-rh-error></p>
 </form></dialog>
-<dialog id="rhLinkDialog" class="rh-dialog"><form id="rhLinkForm" class="rh-form"><h2>Vincular persona con fuente externa</h2><p id="rhLinkPerson"></p>
+<dialog id="rhLinkDialog" class="rh-dialog"><form id="rhLinkForm" class="rh-form"><div class="rh-heading"><h2>Vincular persona con fuente externa</h2><button type="button" class="secondary-button" data-rh-close aria-label="Cerrar">×</button></div><p id="rhLinkPerson"></p>
     <label><span>Fuente</span><select name="fuente_id" required></select></label><label><span>Identificador en el proveedor</span><input name="identificador_externo" maxlength="100" required></label>
     <div class="rh-actions"><button type="button" class="secondary-button" data-rh-close>Cancelar</button><button type="submit" class="primary-button">Vincular</button></div><p class="form-error" role="alert" data-rh-error></p>
 </form></dialog>
-<dialog id="rhImportDialog" class="rh-dialog"><form id="rhImportForm" class="rh-form"><h2>Recibir lote de marcajes</h2><p>Elija un archivo JSON con un arreglo de marcajes o un objeto que contenga «marcajes». Hasta 1.000 registros por lote. Cada instante debe incluir su zona horaria.</p>
+<dialog id="rhImportDialog" class="rh-dialog"><form id="rhImportForm" class="rh-form"><div class="rh-heading"><h2>Recibir lote de marcajes</h2><button type="button" class="secondary-button" data-rh-close aria-label="Cerrar">×</button></div><p>Elija un archivo JSON con un arreglo de marcajes o un objeto que contenga «marcajes». Hasta 1.000 registros por lote. Cada instante debe incluir su zona horaria.</p>
     <label><span>Fuente</span><select name="fuente_id" required></select></label><label><span>Archivo JSON</span><input name="archivo" type="file" accept=".json,application/json" required></label>
     <div class="rh-actions"><button type="button" class="secondary-button" data-rh-close>Cancelar</button><button type="submit" class="primary-button">Importar</button></div><p class="form-error" role="alert" data-rh-error></p>
 </form></dialog>
-<dialog id="rhDetailDialog" class="rh-dialog"><h2 id="rhDetailTitle">Detalle</h2><div id="rhDetail"></div><button type="button" class="secondary-button" data-rh-close>Cerrar</button></dialog>
+<dialog id="rhDetailDialog" class="rh-dialog"><div class="rh-heading"><h2 id="rhDetailTitle">Detalle</h2><button type="button" class="secondary-button" data-rh-close aria-label="Cerrar">×</button></div><div id="rhDetail"></div><button type="button" class="secondary-button" data-rh-close>Cerrar</button></dialog>
 @endunless
 </body></html>

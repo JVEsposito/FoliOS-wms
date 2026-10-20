@@ -52,7 +52,7 @@ test('consulta distingue horas programadas y asistencia de una asignación cance
         await page.waitForFunction(() => document.getElementById('rhPeople').textContent.includes('Camarero Prueba'));
         assert.equal(await page.locator('#rhNewPerson').isVisible(), false); assert.equal(await page.locator('[data-action=editar]').count(), 0);
         await page.locator('[data-rh-tab=dotacion]').click(); await page.waitForFunction(() => document.getElementById('rhAssignments').textContent.includes('7.5'));
-        assert.match(await page.locator('#rhAssignments').textContent(), /cancelada/); assert.match(await page.locator('#rhAssignments').textContent(), /sin_marcajes/);
+        assert.match(await page.locator('#rhAssignments').textContent(), /cancelada/); assert.match(await page.locator('#rhAssignments').textContent(), /Sin marcajes/);
         assert.equal(await page.locator('[data-rh-assignment][data-action=cancelada]').count(), 0); assert.deepEqual(errors, []); await context.close();
     } finally { await browser.close(); }
 });

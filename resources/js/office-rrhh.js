@@ -1,4 +1,4 @@
-import { importRows, newOperationId, sourceConfiguration } from './shared/rrhh-logic';
+import { attendanceIssueText, importRows, newOperationId, sourceConfiguration } from './shared/rrhh-logic';
 
 const $ = (id) => document.getElementById(id);
 const escape = (s) => String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
@@ -110,7 +110,7 @@ async function loadPeople() {
 async function loadAssignments() {
     const data = await api(`/api/rrhh/asignaciones?${new URLSearchParams({ ...Object.fromEntries(new FormData($('rhDatesForm'))), page: state.assignmentPage })}`);
     state.assignments = data.data.data;
-    $('rhAssignments').innerHTML = table(['Turno / persona', 'Destino', 'Programación', 'Asistencia', 'Acciones'], state.assignments.map((a) => `<tr><td><strong>${escape(a.persona_nombre)}</strong><small>${time(a.desde_at)} → ${time(a.hasta_at)}</small><small>${escape(a.estado)}</small></td><td>${escape(a.cliente_nombre || 'Uso interno')}<small>${escape(a.cargo)} · ${escape(a.area)} · ${escape(a.ceco)}</small></td><td>${escape(a.horas_programadas)} h<small>${a.costo_programado === null ? '' : `Costo: ${escape(a.costo_programado)} ${escape(a.moneda_costo)}`}</small></td><td>${escape(a.horas_asistidas)} h${a.asistencia_valida ? '' : `<small>Revisar: ${escape(a.incidencias.join(', '))}</small>`}</td><td>`
+    $('rhAssignments').innerHTML = table(['Turno / persona', 'Destino', 'Programación', 'Asistencia', 'Acciones'], state.assignments.map((a) => `<tr><td><strong>${escape(a.persona_nombre)}</strong><small>${time(a.desde_at)} → ${time(a.hasta_at)}</small><small>${escape(a.estado)}</small></td><td>${escape(a.cliente_nombre || 'Uso interno')}<small>${escape(a.cargo)} · ${escape(a.area)} · ${escape(a.ceco)}</small></td><td>${escape(a.horas_programadas)} h<small>${a.costo_programado === null ? '' : `Costo: ${escape(a.costo_programado)} ${escape(a.moneda_costo)}`}</small></td><td>${escape(a.horas_asistidas)} h${a.asistencia_valida ? '' : `<small>Revisar: ${escape(attendanceIssueText(a.incidencias))}</small>`}</td><td>`
         + (state.manage && a.estado !== 'cancelada' ? `<button type="button" data-rh-assignment="${a.id}" data-action="completada">Completar</button><button type="button" data-rh-assignment="${a.id}" data-action="cancelada">Cancelar</button>` : '')
         + `<button type="button" data-rh-assignment="${a.id}" data-action="historial">Historial</button></td></tr>`).join(''));
     pages('rhAssignmentPages', data.data, async (page) => { state.assignmentPage = page; await loadAssignments(); });
