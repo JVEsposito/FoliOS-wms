@@ -21,7 +21,7 @@ final class GestorPersonal
         return $this->esquema->transaccion(function () use ($datos, $persona, $actor): Persona {
             $existente = $persona !== null;
             $persona = $existente ? Persona::query()->lockForUpdate()->findOrFail($persona->id) : new Persona(['id' => (string) Str::uuid()]);
-            if ($existente && $persona->version !== $datos['version']) {
+            if ($existente && $persona->version !== (int) $datos['version']) {
                 throw ValidationException::withMessages(['version' => 'La persona cambió. Recargue antes de guardar.']);
             }
             if ($datos['fuente_marcaje'] !== 'folios' && ! FuenteMarcaje::query()->where('codigo', $datos['fuente_marcaje'])->where('activa', true)->exists()) {
@@ -106,7 +106,7 @@ final class GestorPersonal
         try {
             return $this->esquema->transaccion(function () use ($asignacion, $datos, $actor): AsignacionPersonal {
                 $fila = AsignacionPersonal::query()->lockForUpdate()->findOrFail($asignacion->id);
-                if ($fila->version !== $datos['version']) {
+                if ($fila->version !== (int) $datos['version']) {
                     throw ValidationException::withMessages(['version' => 'La asignación cambió. Recargue.']);
                 }
                 if ($fila->estado === 'cancelada' && $datos['estado'] !== 'cancelada') {

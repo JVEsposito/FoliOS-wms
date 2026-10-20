@@ -40,7 +40,7 @@ class AsistenciaRrhhTest extends TestCase
         $respuesta = $this->getJson('/api/rrhh/personas')->assertOk()->assertJsonPath('data.data.0.codigo', 'OP01');
         $this->assertStringNotContainsString('pin_hash', $respuesta->getContent());
         $this->assertStringNotContainsString('345678', json_encode(EventoRrhh::query()->get()));
-        $this->putJson('/api/rrhh/personas/'.$id, [...$this->datosPersona(), 'nombre' => 'Nombre nuevo', 'version' => 1])->assertOk()->assertJsonPath('data.version', 2);
+        $this->putJson('/api/rrhh/personas/'.$id, [...$this->datosPersona(), 'nombre' => 'Nombre nuevo', 'version' => '1'])->assertOk()->assertJsonPath('data.version', 2);
         $this->putJson('/api/rrhh/personas/'.$id, [...$this->datosPersona(), 'version' => 1])->assertUnprocessable()->assertJsonValidationErrors('version');
     }
 
