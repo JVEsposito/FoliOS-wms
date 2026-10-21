@@ -65,6 +65,7 @@ class TemporadaActivaRutasTest extends TestCase
         Models\Cliente::class => 'maestro global',
         Models\ProductorCsg::class => 'maestro global',
         Models\ProductoHidrocooler::class => 'catálogo global; cada ciclo conserva los datos del producto aplicado por temporada',
+        Models\ResponsableContraparteSag::class => 'responsable autorizado del establecimiento; maestro global con snapshot documental por temporada',
         Models\FormatoRegistro::class => 'maestro documental global; la recepción conserva su versión por temporada',
         Models\PerfilAcceso::class => 'accesos',
         Models\User::class => 'accesos',

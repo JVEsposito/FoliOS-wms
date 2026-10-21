@@ -646,7 +646,8 @@ class AdministracionAccesoApiTest extends TestCase
                 'nombre' => 'Administrador',
             ]);
 
-        $this->assertCount(count(RolUsuario::cases()), $respuestaCatalogo->json('data'));
+        $this->assertCount(count(RolUsuario::cases()) + 1, $respuestaCatalogo->json('data'));
+        $respuestaCatalogo->assertJsonFragment(['codigo' => 'CONTRAPARTE_SAG']);
         $this->assertCount(count(RolUsuario::cases()), $respuestaCatalogo->json('roles_base'));
         foreach ($respuestaCatalogo->json('roles_base') as $rolBase) {
             $this->assertContains('administracion.accesos', $rolBase['modulos_disponibles']);

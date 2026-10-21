@@ -104,8 +104,8 @@ class ContraparteSagController extends Controller
         if (! empty($datos['hasta'])) {
             $movimientos->whereDate('created_at', '<=', $datos['hasta']);
         }
-        $totalCajas = (clone $base)->sum('cajas');
-        $totalUnidades = (clone $base)->sum('unidades');
+        $totalCajas = (int) (clone $base)->sum('cajas');
+        $totalUnidades = (int) (clone $base)->sum('unidades');
         $pagina = $base->orderBy('folio_id')->paginate($datos['per_page'] ?? 50);
         $pagina->through(fn ($r) => [...(array) $r, 'snapshot' => json_decode($r->snapshot, true)]);
 
