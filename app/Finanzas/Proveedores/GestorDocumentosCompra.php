@@ -35,6 +35,7 @@ final class GestorDocumentosCompra
         $datos['guias'] = array_values(array_unique($datos['guias'] ?? []));
         sort($datos['guias']);
         $datos['referencia_id'] ??= null;
+        $datos['reemplaza_id'] = $documento?->reemplaza_id ?? ($datos['reemplaza_id'] ?? null);
         $datos['operacion_id'] ??= $documento?->operacion_id;
         $hash = $this->registro->hash(collect($datos)->except(['version'])->all());
 
@@ -57,11 +58,23 @@ final class GestorDocumentosCompra
             if (! $proveedor->activo && ! in_array($datos['tipo'], ['56', '61'], true)) {
                 throw ValidationException::withMessages(['proveedor_id' => 'La ficha está inactiva. Actívela para registrar nuevas compras.']);
             }
-            if (DocumentoCompra::query()->where('proveedor_id', $proveedor->id)->where('tipo', $datos['tipo'])->where('folio', $datos['folio'])->when($actual, fn ($q) => $q->whereKeyNot($actual->id))->exists()) {
-                throw ValidationException::withMessages(['folio' => 'El documento ya está ingresado para este proveedor y tipo. Corrija su borrador o consulte el original.']);
+            $anterior = DocumentoCompra::query()->where('proveedor_id', $proveedor->id)->where('tipo', $datos['tipo'])->where('folio', $datos['folio'])->when($actual, fn ($q) => $q->whereKeyNot($actual->id))->orderByDesc('revision')->first();
+            if ($actual && $actual->reemplaza_id && ($actual->tipo !== $datos['tipo'] || $actual->folio !== $datos['folio'])) {
+                throw ValidationException::withMessages(['folio' => 'La corrección conserva la identidad del documento original.']);
+            }
+            $revision = $actual?->revision ?? 1;
+            if ($anterior !== null) {
+                $esCorreccion = $anterior->anulado_at !== null && $datos['reemplaza_id'] === $anterior->id;
+                if (! $esCorreccion || ($actual && $actual->revision <= $anterior->revision)) {
+                    throw ValidationException::withMessages(['folio' => 'El documento ya está ingresado. Corrija su borrador o use la corrección explícita del último registro revertido.']);
+                }
+                $revision = $actual?->revision ?? ($anterior->revision + 1);
+            } elseif ($datos['reemplaza_id'] !== null) {
+                throw ValidationException::withMessages(['reemplaza_id' => 'La corrección debe referenciar el último registro revertido con el mismo proveedor, tipo y folio.']);
             }
             $campos = $this->comprobar($datos);
             $campos['proveedor_snapshot'] = collect($proveedor->toArray())->only(['id', 'rut', 'razon_social', 'giro', 'direccion', 'proveedor_material_id'])->all();
+            $campos['revision'] = $revision;
             $campos['version'] = ($actual?->version ?? 0) + 1;
             if ($actual) {
                 $actual->update($campos);
@@ -109,6 +122,9 @@ final class GestorDocumentosCompra
             if ($original === null || $original->proveedor_id !== $datos['proveedor_id'] || ! in_array($original->tipo, ['33', '34'], true) || ! $original->registrado_at || $original->anulado_at) {
                 throw ValidationException::withMessages(['referencia_id' => 'La nota debe referenciar una factura registrada y vigente del mismo proveedor.']);
             }
+            if ($original->tipo === '34' && (BigDecimal::of($datos['neto'])->isPositive() || BigDecimal::of($datos['iva'])->isPositive())) {
+                throw ValidationException::withMessages(['iva' => 'Una nota referida a una factura exenta debe conservar el tratamiento exento.']);
+            }
             if ($datos['fecha_emision'] < $original->fecha_emision->toDateString()) {
                 throw ValidationException::withMessages(['fecha_emision' => 'La nota no puede preceder a su factura.']);
             }
@@ -135,7 +151,7 @@ final class GestorDocumentosCompra
     public function registrar(DocumentoCompra $documento, string $fecha, int $version, User $usuario): DocumentoCompra
     {
         return $this->registro->exclusivo('proveedor-'.$documento->proveedor_id, function () use ($documento, $fecha, $version, $usuario): DocumentoCompra {
-            ProveedorFinanciero::query()->lockForUpdate()->findOrFail($documento->proveedor_id);
+            $proveedor = ProveedorFinanciero::query()->lockForUpdate()->findOrFail($documento->proveedor_id);
             $documento = DocumentoCompra::query()->lockForUpdate()->findOrFail($documento->id);
             if ($documento->anulado_at) {
                 throw ValidationException::withMessages(['documento' => 'El documento está anulado internamente.']);
@@ -147,11 +163,20 @@ final class GestorDocumentosCompra
 
                 return $documento;
             }
+            if (! $proveedor->activo && ! in_array($documento->tipo, ['56', '61'], true)) {
+                throw ValidationException::withMessages(['proveedor_id' => 'La ficha está inactiva. Revísela antes de contabilizar nuevas compras.']);
+            }
             if ($documento->version !== $version) {
                 throw ValidationException::withMessages(['version' => 'El borrador cambió. Vuelva a consultarlo antes de registrar.']);
             }
             if ($fecha < $documento->fecha_emision->toDateString()) {
                 throw ValidationException::withMessages(['fecha_contable' => 'La fecha contable no puede preceder a la emisión.']);
+            }
+            if ($documento->reemplaza_id !== null) {
+                $anterior = DocumentoCompra::query()->findOrFail($documento->reemplaza_id);
+                if ($anterior->fecha_anulacion && $fecha < $anterior->fecha_anulacion->toDateString()) {
+                    throw ValidationException::withMessages(['fecha_contable' => 'La corrección no puede preceder al reverso del registro anterior.']);
+                }
             }
             // Revalida referencias y distribución; una ficha posterior no altera el snapshot histórico.
             $this->comprobar([...$documento->toArray(), 'fecha_emision' => $documento->fecha_emision->toDateString(), 'fecha_recepcion' => $documento->fecha_recepcion->toDateString(), 'vencimiento' => $documento->vencimiento->toDateString()]);
@@ -161,6 +186,16 @@ final class GestorDocumentosCompra
                     throw ValidationException::withMessages(['fecha_contable' => 'La nota no puede contabilizarse antes que su factura.']);
                 }
                 if ($documento->tipo === '61') {
+                    $ultima = DocumentoCompra::query()->where('referencia_id', $original->id)->where('tipo', '61')->max('fecha_anulacion');
+                    if ($ultima && $fecha < $ultima) {
+                        throw ValidationException::withMessages(['fecha_contable' => 'La nueva nota no puede preceder al último reverso de las notas de esa factura.']);
+                    }
+                    foreach (['neto', 'exento', 'iva', 'otros'] as $campo) {
+                        $abonado = DocumentoCompra::query()->where('referencia_id', $original->id)->where('tipo', '61')->whereNotNull('registrado_at')->whereNull('anulado_at')->sum($campo);
+                        if (BigDecimal::of($abonado)->plus($documento->{$campo})->isGreaterThan($original->{$campo})) {
+                            throw ValidationException::withMessages(['total' => 'Las notas de crédito excederían un componente de la factura referenciada.']);
+                        }
+                    }
                     $acumulado = BigDecimal::of(DocumentoCompra::query()->where('referencia_id', $original->id)->where('tipo', '61')->whereNotNull('registrado_at')->whereNull('anulado_at')->sum('total'));
                     if ($acumulado->plus($documento->total)->isGreaterThan($original->total)) {
                         throw ValidationException::withMessages(['total' => 'Las notas de crédito excederían el total de la factura referenciada.']);
@@ -182,6 +217,16 @@ final class GestorDocumentosCompra
                 }
                 $lineas[] = ['cuenta' => $pasivo->codigo, 'cuenta_nombre' => $pasivo->nombre, 'cuenta_tipo' => 'pasivo', 'descripcion' => self::TIPOS[$documento->tipo].' '.$documento->folio, 'ceco' => null, 'debe' => '0', 'haber' => $documento->total];
                 if ($documento->tipo === '61') {
+                    $ultima = DocumentoCompra::query()->where('referencia_id', $original->id)->where('tipo', '61')->max('fecha_anulacion');
+                    if ($ultima && $fecha < $ultima) {
+                        throw ValidationException::withMessages(['fecha_contable' => 'La nueva nota no puede preceder al último reverso de las notas de esa factura.']);
+                    }
+                    foreach (['neto', 'exento', 'iva', 'otros'] as $campo) {
+                        $abonado = DocumentoCompra::query()->where('referencia_id', $original->id)->where('tipo', '61')->whereNotNull('registrado_at')->whereNull('anulado_at')->sum($campo);
+                        if (BigDecimal::of($abonado)->plus($documento->{$campo})->isGreaterThan($original->{$campo})) {
+                            throw ValidationException::withMessages(['total' => 'Las notas de crédito excederían un componente de la factura referenciada.']);
+                        }
+                    }
                     foreach ($lineas as &$linea) {
                         [$linea['debe'], $linea['haber']] = [$linea['haber'], $linea['debe']];
                     }
@@ -205,6 +250,10 @@ final class GestorDocumentosCompra
                 return $documento;
             }
             if ($documento->registrado_at) {
+                $ultimoReverso = DocumentoCompra::query()->whereNotNull('registrado_at')->where(fn ($q) => $q->where('referencia_id', $documento->id)->orWhereJsonContains('guias', $documento->id))->max('fecha_anulacion');
+                if ($ultimoReverso && $fecha < $ultimoReverso) {
+                    throw ValidationException::withMessages(['fecha_contable' => 'La fecha debe ser posterior o igual a los reversos de los documentos vinculados.']);
+                }
                 $vinculados = DocumentoCompra::query()->whereNotNull('registrado_at')->whereNull('anulado_at')->where(fn ($q) => $q->where('referencia_id', $documento->id)->orWhereJsonContains('guias', $documento->id))->exists();
                 if ($vinculados) {
                     throw ValidationException::withMessages(['documento' => 'Hay notas o facturas vinculadas vigentes. Revíselas antes de revertir el documento.']);

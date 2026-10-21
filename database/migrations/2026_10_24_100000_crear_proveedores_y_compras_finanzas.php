@@ -43,6 +43,9 @@ return new class extends Migration
             $t->json('proveedor_snapshot');
             $t->string('tipo', 20);
             $t->string('folio', 40);
+            $t->unsignedInteger('revision')->default(1);
+            $t->uuid('reemplaza_id')->nullable()->unique();
+            $t->foreign('reemplaza_id')->references('id')->on('fin_documentos_compra');
             $t->date('fecha_emision');
             $t->date('fecha_recepcion');
             $t->date('vencimiento');
@@ -63,7 +66,7 @@ return new class extends Migration
             $t->date('fecha_anulacion')->nullable();
             $t->string('motivo_anulacion', 500)->nullable();
             $t->timestamps();
-            $t->unique(['proveedor_id', 'tipo', 'folio'], 'fin_compra_identidad_unique');
+            $t->unique(['proveedor_id', 'tipo', 'folio', 'revision'], 'fin_compra_identidad_unique');
             $t->index(['fecha_contable', 'proveedor_id']);
         });
         $schema->create('fin_asientos_compra', function (Blueprint $t): void {

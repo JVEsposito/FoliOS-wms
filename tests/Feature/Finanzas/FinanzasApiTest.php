@@ -138,6 +138,6 @@ class FinanzasApiTest extends TestCase
         $this->assertStringContainsString('Hechos valorizables', $html);
         $this->assertStringContainsString('data-office-key="finanzas-hechos"', $html);
         // El título del grupo se oculta junto con sus oficinas si el perfil no habilita ninguna.
-        $this->assertMatchesRegularExpression('/<p data-navigation-permissions="puede_consultar_finanzas"\s+data-navigation-module="finanzas.prefactura"\s+class="estiba-office-subgroup">Finanzas<\/p>/', $html);
+        $this->assertMatchesRegularExpression('/<p data-navigation-permissions="puede_consultar_finanzas,puede_consultar_proveedores_finanzas"\s+data-navigation-module=""\s+class="estiba-office-subgroup">Finanzas<\/p>/', $html);
     }
 }

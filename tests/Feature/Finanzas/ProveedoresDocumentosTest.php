@@ -166,6 +166,38 @@ class ProveedoresDocumentosTest extends TestCase
         $this->getJson($this->base.'/asientos?desde=2026-11-01&hasta=2026-11-30')->assertOk()->assertJsonCount(1, 'data.data');
     }
 
+    public function test_los_reversos_no_permiten_reutilizar_notas_en_una_fecha_anterior_ni_cambiar_sus_impuestos(): void
+    {
+        $factura = $this->crear();
+        $this->registrar($factura);
+        $nota = $this->crear(['tipo' => '61', 'folio' => '10', 'referencia_id' => $factura['id']]);
+        $this->registrar($nota);
+        $this->postJson($this->base.'/documentos/'.$nota['id'].'/anular', ['fecha_contable' => '2026-11-05', 'motivo' => 'Reverso de nota en noviembre.'])->assertOk();
+        $otra = $this->crear(['tipo' => '61', 'folio' => '11', 'referencia_id' => $factura['id']]);
+        $this->postJson($this->base.'/documentos/'.$otra['id'].'/registrar', ['version' => 1, 'fecha_contable' => '2026-10-10'])->assertUnprocessable()->assertJsonValidationErrors('fecha_contable');
+        $this->postJson($this->base.'/documentos/'.$factura['id'].'/anular', ['fecha_contable' => '2026-10-30', 'motivo' => 'No puede preceder a su nota.'])->assertUnprocessable()->assertJsonValidationErrors('fecha_contable');
+        $mal = $this->crear(['tipo' => '61', 'folio' => '12', 'referencia_id' => $factura['id'], 'neto' => '0', 'exento' => '100000', 'observacion_iva' => 'Se prueba la validación de componentes.']);
+        $this->postJson($this->base.'/documentos/'.$mal['id'].'/registrar', ['version' => 1, 'fecha_contable' => '2026-11-06'])->assertUnprocessable()->assertJsonValidationErrors('total');
+        $this->registrar($otra, '2026-11-06');
+        $octubre = $this->getJson($this->base.'/asientos?desde=2026-10-01&hasta=2026-10-31')->assertOk();
+        $octubre->assertJsonCount(2, 'data.data');
+    }
+
+    public function test_un_error_de_digitacion_contabilizado_se_corrige_sin_perder_la_factura_ni_el_corte_anterior(): void
+    {
+        $original = $this->crear();
+        $this->registrar($original);
+        $this->postJson($this->base.'/documentos/'.$original['id'].'/anular', ['fecha_contable' => '2026-11-02', 'motivo' => 'Se digitó un monto incorrecto.'])->assertOk();
+        $correccion = $this->crear(['reemplaza_id' => $original['id'], 'neto' => '90000', 'iva' => '17100', 'lineas' => [['cuenta' => '5101', 'descripcion' => 'Monto correcto según factura', 'ceco' => 'FRIO', 'monto' => '90000']]]);
+        $this->assertSame(2, $correccion['revision']);
+        $this->postJson($this->base.'/documentos/'.$correccion['id'].'/registrar', ['version' => 1, 'fecha_contable' => '2026-10-10'])->assertUnprocessable()->assertJsonValidationErrors('fecha_contable');
+        $this->registrar($correccion, '2026-11-02');
+        $this->assertSame('119000', DocumentoCompra::query()->findOrFail($original['id'])->total);
+        $this->assertSame('107100', DocumentoCompra::query()->findOrFail($correccion['id'])->total);
+        $this->assertSame(3, AsientoCompra::query()->count());
+        $this->postJson($this->base.'/documentos', $this->datos(['reemplaza_id' => $original['id']]))->assertUnprocessable()->assertJsonValidationErrors('folio');
+    }
+
     public function test_el_acceso_a_costos_se_asigna_aparte_del_tarifario_y_consulta_no_escribe(): void
     {
         $comercial = $this->conPerfil(RolUsuario::Consulta, [CatalogoModulosAcceso::OFICINA_FINANZAS_PREFACTURA]);

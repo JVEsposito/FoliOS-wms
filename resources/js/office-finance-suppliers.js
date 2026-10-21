@@ -47,7 +47,7 @@ async function loadDocuments(page = state.documentPage) {
     if (!state.selected) { $('cpDocuments').textContent = 'Seleccione un proveedor en el directorio.'; return; }
     const selected = state.selected.id; const d = await api(`${url}/documentos?${new URLSearchParams({ proveedor_id: selected, page })}`); if (state.selected.id !== selected) return;
     state.documentPage = page; state.documents = d.data.data; $('cpSelected').textContent = `${state.selected.razon_social} · ${state.selected.rut}`;
-    $('cpDocuments').innerHTML = table(['Documento', 'Fechas', 'Total CLP', 'Estado', 'Acciones'], state.documents.map((v) => `<tr><td>${escape(state.types[v.tipo])}<br><strong>${escape(v.folio)}</strong></td><td>Emisión: ${escape(v.fecha_emision)}<br>Vence: ${escape(v.vencimiento)}</td><td>${money(v.total)}</td><td>${v.anulado_at ? 'Anulado internamente' : v.registrado_at ? (v.tipo === '52' ? 'Guía registrada · sin deuda' : 'Contabilizado') : 'Borrador'}</td><td>${button('Ver detalle', 'detail', v.id)}${state.manage && !v.anulado_at ? `${!v.registrado_at ? button('Corregir', 'edit-document', v.id) + button('Registrar', 'post', v.id) : ''}${button(v.registrado_at ? 'Revertir' : 'Anular borrador', 'reverse', v.id)}` : ''}</td></tr>`).join(''));
+    $('cpDocuments').innerHTML = table(['Documento', 'Fechas', 'Total CLP', 'Estado', 'Acciones'], state.documents.map((v) => `<tr><td>${escape(state.types[v.tipo])}<br><strong>${escape(v.folio)}</strong></td><td>Emisión: ${escape(v.fecha_emision)}<br>Vence: ${escape(v.vencimiento)}</td><td>${money(v.total)}</td><td>${v.anulado_at ? 'Anulado internamente' : v.registrado_at ? (v.tipo === '52' ? 'Guía registrada · sin deuda' : 'Contabilizado') : 'Borrador'}</td><td>${button('Ver detalle', 'detail', v.id)}${state.manage && v.anulado_at ? button('Crear corrección', 'correct-document', v.id) : ''}${state.manage && !v.anulado_at ? `${!v.registrado_at ? button('Corregir', 'edit-document', v.id) + button('Registrar', 'post', v.id) : ''}${button(v.registrado_at ? 'Revertir' : 'Anular borrador', 'reverse', v.id)}` : ''}</td></tr>`).join(''));
     pages('cpDocumentPages', d.data, loadDocuments);
 }
 function journalMarkup(entries) { return entries.map((v) => `<article class="cp-journal-entry"><h3>${escape(v.fecha)} · ${escape(v.glosa)}</h3><p>${v.reversa_de_id ? 'Reverso · ' : ''}${escape(v.user_nombre)}</p><div class="cp-table">${table(['Cuenta', 'Detalle / CECO', 'Debe CLP', 'Haber CLP'], v.lineas.map((l) => `<tr><td>${escape(l.cuenta)} · ${escape(l.cuenta_nombre)}</td><td>${escape(l.descripcion)}<br>${escape(l.ceco)}</td><td>${money(l.debe)}</td><td>${money(l.haber)}</td></tr>`).join(''))}</div></article>`).join('') || '<p>Sin asientos en este período.</p>'; }
@@ -98,8 +98,10 @@ $('cpDocumentForm').elements.fecha_recepcion.addEventListener('change', (e) => {
 $('cpDocumentForm').addEventListener('submit', (e) => { e.preventDefault(); submit(e.target, async () => {
     const f = e.target; const data = Object.fromEntries(new FormData(f)); data.proveedor_id = state.selected.id; data.guias = [...$('cpGuideReferences').selectedOptions].map((o) => o.value); data.referencia_id ||= null;
     data.lineas = [...$('cpCostLines').children].map((row) => Object.fromEntries([...row.querySelectorAll('[data-line]')].map((input) => [input.dataset.line, input.value])));
-    if (state.document) data.version = state.document.version; else { f.dataset.operation ||= crypto.randomUUID(); data.operacion_id = f.dataset.operation; }
-    await api(state.document ? `${url}/documentos/${state.document.id}` : `${url}/documentos`, state.document ? 'PUT' : 'POST', data); await loadDocuments(1); message('Borrador guardado. Revíselo antes de contabilizar.');
+    if (state.document && !state.document.correction) data.version = state.document.version; else { f.dataset.operation ||= crypto.randomUUID(); data.operacion_id = f.dataset.operation; }
+    if (state.document?.correction) data.reemplaza_id = state.document.id;
+    const editing = state.document && !state.document.correction;
+    await api(editing ? `${url}/documentos/${state.document.id}` : `${url}/documentos`, editing ? 'PUT' : 'POST', data); await loadDocuments(1); message('Borrador guardado. Revíselo antes de contabilizar.');
 }); });
 $('cpActionForm').addEventListener('submit', (e) => { e.preventDefault(); submit(e.target, async () => { const data = Object.fromEntries(new FormData(e.target)); data.version = state.action.doc.version; await api(`${url}/documentos/${state.action.doc.id}/${state.action.action === 'post' ? 'registrar' : 'anular'}`, 'POST', data); await loadDocuments(); message('Registro guardado con trazabilidad.'); }); });
 document.addEventListener('click', (e) => {
@@ -115,6 +117,7 @@ document.addEventListener('click', (e) => {
         if (a === 'detail') return detail(id);
         if (a === 'account') { state.account = state.accounts.find((c) => c.codigo === id); const f = $('cpAccountForm'); fill(f, state.account); f.elements.codigo.readOnly = true; f.elements.tipo.disabled = true; open('cpAccountDialog'); return; }
         const doc = state.documents.find((d) => d.id === id);
+        if (a === 'correct-document') return documentForm({ ...doc, correction: true });
         if (a === 'edit-document') return documentForm(doc);
         if (['post', 'reverse'].includes(a)) { state.action = { action: a, doc }; const f = $('cpActionForm'); f.reset(); f.elements.fecha_contable.value = today(); f.elements.motivo.required = a === 'reverse'; $('cpActionReason').hidden = a !== 'reverse'; $('cpActionTitle').textContent = a === 'post' ? (doc.tipo === '52' ? 'Registrar guía sin deuda' : 'Contabilizar documento') : 'Anular registro internamente'; $('cpActionDescription').textContent = `${state.types[doc.tipo]} ${doc.folio} · ${money(doc.total)}`; open('cpActionDialog'); }
     });

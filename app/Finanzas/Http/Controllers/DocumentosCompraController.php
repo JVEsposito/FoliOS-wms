@@ -55,6 +55,7 @@ class DocumentosCompraController extends Controller
             'lineas' => ['required', 'array', 'min:1', 'max:100'], 'lineas.*' => ['array:cuenta,descripcion,ceco,monto'],
             'lineas.*.cuenta' => ['required', 'string', 'max:30'], 'lineas.*.descripcion' => ['required', 'string', 'max:250'],
             'lineas.*.ceco' => ['nullable', 'string', 'max:80'], 'lineas.*.monto' => $monto,
+            'reemplaza_id' => [$editar ? 'prohibited' : 'nullable', 'uuid'],
             'referencia_id' => ['nullable', 'uuid'], 'guias' => ['present', 'array', 'max:100'], 'guias.*' => ['required', 'uuid', 'distinct'],
             'respaldo' => ['required', 'string', 'min:5', 'max:1000'], 'observacion_iva' => ['nullable', 'string', 'min:5', 'max:500'],
         ]);

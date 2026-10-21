@@ -29,7 +29,7 @@ El diario auxiliar conserva debe/haber, cuenta y nombre al contabilizar, CECO, u
 ### Controles técnicos
 
 - UUID de operación y huella canónica para reintentos de documentos; el mismo UUID con otro contenido se rechaza.
-- Identidad única proveedor + tipo + folio (normaliza ceros iniciales); incluso un documento anulado conserva su identidad. El borrador admite correcciones con versión, no requiere borrarlo y volver a ingresarlo.
+- Identidad única proveedor + tipo + folio (normaliza ceros iniciales); incluso un documento anulado conserva su identidad. El borrador admite correcciones con versión. Tras un reverso, «Crear corrección» conserva el mismo proveedor/tipo/folio en una revisión nueva vinculada a la anterior; su fecha contable no precede al reverso. No altera el original ni sus cortes históricos.
 - Transacción única de Finanzas para asiento, líneas, estado y auditoría; debe = haber y solo montos positivos por lado. No usa flotantes para importes.
 - Exclusión por proveedor y bloqueo de filas para notas, registros y reversos. Los períodos se bloquean en la misma transacción, preparados para cierre.
 - Sin claves foráneas a bases operativas y sin emisión, aceptación, reclamo o modificación automática ante SII.
