@@ -4,6 +4,7 @@ namespace Tests\Feature\Rrhh;
 
 use App\Enums\RolUsuario;
 use App\Models\User;
+use App\Rrhh\Models\ContratoLaboral;
 use App\Rrhh\Models\EntregaNomina;
 use App\Rrhh\Models\MandatoDescuento;
 use App\Rrhh\Models\Persona;
@@ -108,6 +109,18 @@ class DescuentosInstitucionTest extends TestCase
         $c = $this->postJson('/api/rrhh/prevision/contratos', ['persona_id' => $this->persona, 'empleador_id' => $e, 'referencia' => 'EXTERNO', 'tipo' => 'plazo_fijo', 'desde' => '2026-10-01', 'hasta' => '2026-12-31', 'respaldo' => 'Contrato de la empresa contratista'])->assertCreated()->json('data.id');
         $this->postJson('/api/rrhh/nomina/mandatos', [...$this->datosMandato(), 'empleador_id' => $e])->assertUnprocessable()->assertJsonValidationErrors('empleador_id');
         $this->postJson('/api/rrhh/nomina/simular', ['persona_id' => $this->persona, 'concepto_id' => $this->concepto, 'contrato_id' => $c, 'fecha' => '2026-10-01', 'cantidad' => '1', 'valor' => '1000', 'respaldo' => 'Intento de usar contrato ajeno'])->assertUnprocessable()->assertJsonValidationErrors('contrato_id');
+    }
+
+    public function test_cerrar_contrato_no_invalida_cuotas_ya_aprobadas(): void
+    {
+        $m = $this->mandato();
+        $id = $this->postJson('/api/rrhh/nomina/movimientos', $this->entrada($m))->assertCreated()->json('data.id');
+        $this->aprobar($id)->assertOk();
+        $contrato = ContratoLaboral::query()->where('persona_id', $this->persona)->firstOrFail();
+        $cierre = ['hasta_actual' => '9999-12-31', 'hasta' => '2026-09-30', 'motivo' => 'Rectificación documentada de la fecha de término'];
+        $this->patchJson('/api/rrhh/prevision/vigencias/contrato/'.$contrato->id, $cierre)->assertUnprocessable()->assertJsonValidationErrors('hasta');
+        $this->patchJson('/api/rrhh/nomina/movimientos/'.$id, ['estado' => 'anulado', 'motivo' => 'Se rectifica antes de cerrar el contrato'])->assertOk();
+        $this->patchJson('/api/rrhh/prevision/vigencias/contrato/'.$contrato->id, $cierre)->assertOk();
     }
 
     public function test_ccaf_acumula_por_sistema_y_aplica_tramos_sin_usar_el_tope_voluntario(): void

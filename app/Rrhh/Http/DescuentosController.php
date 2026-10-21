@@ -59,7 +59,7 @@ final class DescuentosController extends Controller
     {
         $d = $r->validate(['institucion_id' => ['required', 'uuid'], 'empleador_id' => ['nullable', 'uuid'], 'mes' => ['required', 'date_format:Y-m'], 'page' => ['nullable', 'integer', 'min:1']]);
         $mes = CarbonImmutable::parse($d['mes'].'-01');
-        $q = MovimientoNomina::query()->where('institucion_id', $d['institucion_id'])->when($d['empleador_id'] ?? null, fn ($q, $id) => $q->where('empleador_id', $id))->whereBetween('fecha', [$mes->toDateString(), $mes->endOfMonth()->toDateString()]);
+        $q = MovimientoNomina::query()->where('rh_movimientos_nomina.institucion_id', $d['institucion_id'])->when($d['empleador_id'] ?? null, fn ($q, $id) => $q->where('rh_movimientos_nomina.empleador_id', $id))->whereBetween('fecha', [$mes->toDateString(), $mes->endOfMonth()->toDateString()]);
         $totales = (clone $q)->where('estado', 'aprobado')->join('rh_conceptos_nomina as c', 'c.id', '=', 'rh_movimientos_nomina.concepto_id')->selectRaw('c.tipo, SUM(rh_movimientos_nomina.total) as total')->groupBy('c.tipo')->pluck('total', 'tipo')->map(fn ($v) => (string) $v)->all();
 
         return response()->json(['data' => $q->leftJoin('rh_personas as p', 'p.id', '=', 'rh_movimientos_nomina.persona_id')->select(['rh_movimientos_nomina.*', 'p.nombre as persona_nombre'])->orderBy('fecha')->orderBy('rh_movimientos_nomina.id')->paginate(50), 'totales_aprobados' => $totales]);

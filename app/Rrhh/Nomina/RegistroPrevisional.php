@@ -9,6 +9,7 @@ use App\Rrhh\Models\Afiliacion;
 use App\Rrhh\Models\ContratoLaboral;
 use App\Rrhh\Models\Empleador;
 use App\Rrhh\Models\Institucion;
+use App\Rrhh\Models\MovimientoNomina;
 use App\Rrhh\Models\Persona;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -134,6 +135,9 @@ final class RegistroPrevisional
             }
             if ($tipo === 'contrato' && ContratoLaboral::query()->where('prorroga_de', $id)->exists()) {
                 $this->error('hasta', 'El contrato ya tiene una prórroga. Conserve la continuidad de sus antecedentes.');
+            }
+            if ($tipo === 'contrato' && MovimientoNomina::query()->where('contrato_id', $id)->where('estado', 'aprobado')->where('fecha', '>', $d['hasta'])->exists()) {
+                $this->error('hasta', 'Hay novedades aprobadas posteriores que usan este contrato. Anúlelas y rectifique antes de acortarlo.');
             }
             $fila->update(['hasta' => $d['hasta']]);
             $this->auditoria->registrar($tipo, $fila->id, 'terminado', $d, $actor);
