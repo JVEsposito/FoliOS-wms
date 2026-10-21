@@ -55,3 +55,23 @@ Confirmar requiere permiso de aprobaciones y asignaciones activas. Mientras haya
 Un booking confirmado vincula cada contenedor a un embarque operativo existente del mismo cliente, modalidad y número de contenedor. Un embarque y un contenedor solo tienen un vínculo vigente. Se conserva la evidencia, hash y fecha de captura, y se muestra por separado el estado actual y si cambió. Retirar el vínculo conserva el historial y exige que la carga no haya salido; la falta de evidencia bloquea el retiro. El cierre exige salida operativa de todos los contenedores asignados. Volver a borrador o anular requiere retirar antes los vínculos.
 
 Esta reserva comercial no certifica cantidades cargadas: los pallets, los instructivos y los documentos oficiales siguen en la operación y el expediente existente. El vínculo no modifica ni crea embarques, cargas, inventario o documentos tributarios.
+
+## Costos COMEX en Finanzas
+
+Administración → Finanzas → Costos COMEX es un control auxiliar por booking completo o contenedor, con concepto, fecha, respaldo y tratamiento económico expreso (propio, reembolsable o pendiente). Requiere simultáneamente acceso a Proveedores y COMEX comercial; Consulta solo lee. Las escrituras requieren gestión de proveedores. Se reutilizan los permisos actuales, sin habilitar pagos.
+
+Se conservan previsto y comprometido en moneda original; un compromiso vacío sigue pendiente. Una conversión manual de referencia requiere tasa CLP por unidad, fecha y fuente, con HALF_UP a pesos. CLP usa tasa nominal uno. El control respeta los decimales monetarios y no convierte automáticamente por una cotización posterior. La previsión no es gasto contabilizado ni cuenta por pagar. Reembolsable no genera por sí solo un cargo, ingreso, prefactura o DTE.
+
+El costo real es la distribución de líneas de gasto de compras ya registradas en CLP (factura, débito, crédito o comprobante interno). Guías, borradores, documentos anulados y líneas de activo se excluyen. La suma distribuida entre todos los controles no puede superar cada línea de compra. El IVA queda fuera de esta distribución: conserva el tratamiento del módulo de Compras. No se crean nuevos documentos, asientos o pagos.
+
+Los créditos restan y solo se distribuyen contra el importe de su factura de origen asignado al mismo control. Antes de retirar esa factura se retiran sus créditos. Retirar una distribución conserva el registro y libera su importe, sin revertir Compras. El aplicado al documento es una consulta del módulo de cuentas corrientes, sin prorratearlo como pago del costo.
+
+La captura contiene UUID de booking/contenedor, versión, hash, fecha y copia mínima; no copia precios de venta ni datos personales operativos. Los cambios de COMEX o compras muestran diferencias. El cierre exige al menos una distribución y fuentes coincidentes, y congela el real de ese momento. Un reverso posterior cambia el real vigente y genera aviso, sin reescribir el real cerrado. Reabrir requiere motivo; el historial conserva el cierre anterior aunque se vuelva a cerrar. Los controles abiertos se actualizan con versión y motivo, sin cambiar su booking o contenedor.
+
+### Configuración de lectura
+
+La conexión `comex_lectura` resuelve primero `COMEX_DB_URL` y después aplica `COMEX_LECTURA_DB_USERNAME` / `COMEX_LECTURA_DB_PASSWORD`; abre la sesión MySQL READ ONLY. `FINANZAS_CONEXION_COMEX` usa esa conexión por defecto. Configure estas variables solo en el sistema y use un usuario con SELECT sobre COMEX. No publique direcciones, usuarios reales ni claves en GitHub. La migración de Finanzas crea solo tablas `fin_`, sin llaves hacia COMEX. El lector consulta por SQL y no importa sus modelos.
+
+### Alcance siguiente
+
+El siguiente trabajo es acordar la política de prorrateo entre notas, kilos y contenedores; conciliar el costo con el despacho real y el expediente oficial; y desarrollar CxC, tesorería y liquidaciones. Este piloto conserva distribuciones manuales respaldadas. No presume devengo, IVA recuperable, aceptación externa ni una integración tributaria autorizada.

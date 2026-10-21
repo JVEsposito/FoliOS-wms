@@ -70,6 +70,7 @@
             ['key' => 'finanzas-hechos', 'module' => 'finanzas.prefactura', 'section' => 'Finanzas', 'label' => 'Hechos valorizables', 'href' => '/oficina/finanzas/hechos', 'permissions' => ['puede_consultar_finanzas']],
             ['key' => 'finanzas-tarifario', 'module' => 'finanzas.prefactura', 'section' => 'Finanzas', 'label' => 'Tarifario', 'href' => '/oficina/finanzas/tarifario', 'permissions' => ['puede_consultar_finanzas']],
             ['key' => 'finanzas-proveedores', 'module' => 'finanzas.proveedores', 'section' => 'Finanzas', 'label' => 'Proveedores', 'href' => '/oficina/finanzas/proveedores', 'permissions' => ['puede_consultar_proveedores_finanzas']],
+            ['key' => 'finanzas-costos-comex', 'module' => 'finanzas.proveedores', 'section' => 'Finanzas', 'label' => 'Costos COMEX', 'href' => '/oficina/finanzas/costos-comex', 'permissions' => ['puede_consultar_costos_comex']],
             ['key' => 'finanzas-prefactura', 'module' => 'finanzas.prefactura', 'section' => 'Finanzas', 'label' => 'Prefactura', 'href' => '/oficina/finanzas/prefactura', 'permissions' => ['puede_consultar_finanzas']],
             ['key' => 'rrhh', 'module' => 'rrhh.personal', 'section' => 'Recursos humanos', 'label' => 'Personal y dotación', 'href' => '/oficina/rrhh', 'permissions' => ['puede_consultar_rrhh']],
             ['key' => 'rrhh-marcaje', 'module' => 'rrhh.marcaje', 'section' => 'Recursos humanos', 'label' => 'Puesto de marcaje', 'href' => '/oficina/rrhh/marcaje', 'permissions' => ['puede_marcar_rrhh']],

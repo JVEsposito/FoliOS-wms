@@ -98,6 +98,7 @@ class CatalogoOficinas
         ['administracion', 'Hechos valorizables', '/oficina/finanzas/hechos', 'finanzas.prefactura', ['puede_consultar_finanzas']],
         ['administracion', 'Tarifario', '/oficina/finanzas/tarifario', 'finanzas.prefactura', ['puede_consultar_finanzas']],
         ['administracion', 'Proveedores', '/oficina/finanzas/proveedores', 'finanzas.proveedores', ['puede_consultar_proveedores_finanzas']],
+        ['administracion', 'Costos COMEX', '/oficina/finanzas/costos-comex', 'finanzas.proveedores', ['puede_consultar_costos_comex']],
         ['administracion', 'Prefactura', '/oficina/finanzas/prefactura', 'finanzas.prefactura', ['puede_consultar_finanzas']],
         ['administracion', 'Personal y dotación', '/oficina/rrhh', 'rrhh.personal', ['puede_consultar_rrhh']],
         ['administracion', 'Puesto de marcaje', '/oficina/rrhh/marcaje', 'rrhh.marcaje', ['puede_marcar_rrhh']],

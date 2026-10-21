@@ -10,6 +10,7 @@ use App\Finanzas\Models\DocumentoCompra;
 use App\Finanzas\Models\Hecho;
 use App\Finanzas\Models\ImputacionComex;
 use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -156,5 +157,16 @@ class CostosComexTest extends TestCase
         $this->actingAs($this->conPerfil(RolUsuario::Consulta, ['comex.comercial', 'finanzas.proveedores']));
         $this->getJson('/api/finanzas/costos-comex')->assertOk()->assertJsonPath('puede_gestionar', false);
         $this->postJson('/api/finanzas/costos-comex', $this->datos)->assertForbidden();
+    }
+
+    public function test_sesion_lectora_comex_rechaza_escritura_incluso_sin_filas_afectadas(): void
+    {
+        $lector = DB::connection('comex_lectura');
+        try {
+            $lector->transaction(fn () => $lector->statement('UPDATE cx_bookings SET version = version WHERE 1 = 0'));
+            $this->fail('La sesión lectora no debe permitir UPDATE.');
+        } catch (QueryException $e) {
+            $this->assertSame(1792, $e->errorInfo[1]);
+        }
     }
 }

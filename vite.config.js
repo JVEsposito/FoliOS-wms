@@ -86,6 +86,7 @@ export default defineConfig({
                 'resources/js/office-comex-commercial.js',
                 'resources/js/office-comex-notes.js',
                 'resources/js/office-comex-bookings.js',
+                'resources/js/office-finance-comex-costs.js',
                 'resources/css/comex-commercial-print.css',
                 'resources/css/office-inventory-exports.css',
                 'resources/js/office-inventory-exports.js',
