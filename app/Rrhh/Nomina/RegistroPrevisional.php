@@ -9,6 +9,7 @@ use App\Rrhh\Models\Afiliacion;
 use App\Rrhh\Models\ContratoLaboral;
 use App\Rrhh\Models\Empleador;
 use App\Rrhh\Models\Institucion;
+use App\Rrhh\Models\MovimientoNomina;
 use App\Rrhh\Models\Persona;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -96,13 +97,16 @@ final class RegistroPrevisional
                 $this->vigente($titular, $d);
             }
             $i = Institucion::query()->lockForUpdate()->findOrFail($d['institucion_id']);
+            if (($d['regimen'] === 'apv' && empty($d['regimen_apv'])) || ($d['regimen'] !== 'apv' && ! empty($d['regimen_apv']))) {
+                $this->error('regimen_apv', 'La afiliación APV requiere identificar régimen tributario A o B; los otros regímenes no llevan esa selección.');
+            }
             $this->vigente($i, $d);
             if (! in_array($i->tipo, self::REGIMENES[$d['regimen']], true)) {
                 $this->error('institucion_id', 'El tipo de institución no corresponde al régimen de afiliación.');
             }
             $q = Afiliacion::query()->where($campo, $d[$campo])->where('regimen', $d['regimen'])->where('desde', '<=', $d['hasta'])->where('hasta', '>=', $d['desde']);
             if ($d['regimen'] === 'apv') {
-                $q->where('institucion_id', $i->id);
+                $q->where('institucion_id', $i->id)->where('regimen_apv', $d['regimen_apv']);
             }
             if ($q->exists()) {
                 $this->error('desde', 'Ya existe una afiliación del mismo régimen para esas fechas. Cierre la anterior antes de registrar el cambio.');
@@ -134,6 +138,9 @@ final class RegistroPrevisional
             }
             if ($tipo === 'contrato' && ContratoLaboral::query()->where('prorroga_de', $id)->exists()) {
                 $this->error('hasta', 'El contrato ya tiene una prórroga. Conserve la continuidad de sus antecedentes.');
+            }
+            if ($tipo === 'contrato' && MovimientoNomina::query()->where('contrato_id', $id)->where('estado', 'aprobado')->where('fecha', '>', $d['hasta'])->exists()) {
+                $this->error('hasta', 'Hay novedades aprobadas posteriores que usan este contrato. Anúlelas y rectifique antes de acortarlo.');
             }
             $fila->update(['hasta' => $d['hasta']]);
             $this->auditoria->registrar($tipo, $fila->id, 'terminado', $d, $actor);

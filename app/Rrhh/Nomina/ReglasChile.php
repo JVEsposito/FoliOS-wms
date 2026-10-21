@@ -10,7 +10,7 @@ use Illuminate\Validation\ValidationException;
 /** Régimen general. No interpreta jornadas excepcionales, art. 22 bis ni estatutos especiales. */
 final class ReglasChile
 {
-    public const VERSION = 'CL-2026-10-21-v1';
+    public const VERSION = 'CL-2026-10-21-v2';
 
     public static function jornadaMaxima(string $fecha): int
     {
@@ -84,5 +84,16 @@ final class ReglasChile
         }
 
         return $incidencias;
+    }
+
+    public function topeCcaf(string $fecha, string $liquido, bool $excepcion): int
+    {
+        $p = collect(self::parametros())->first(fn (array $p): bool => $p['desde'] <= $fecha && $p['hasta'] >= $fecha);
+        if (! $p || empty($p['imm_no_remuneracional']) || ! self::decimal($liquido)->isGreaterThan(0)) {
+            throw ValidationException::withMessages(['liquido_legal' => 'CCAF requiere base líquida positiva documentada y ambos ingresos mínimos vigentes.']);
+        }
+        $base = self::decimal($liquido);
+
+        return $base->isLessThanOrEqualTo($p['imm_no_remuneracional']) ? 15 : ($base->isLessThan($p['imm_general']) ? 20 : ($excepcion && $fecha >= '2026-10-02' ? 35 : 25));
     }
 }

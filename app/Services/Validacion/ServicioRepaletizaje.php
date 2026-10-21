@@ -18,6 +18,7 @@ use App\Models\RepaletizajeDetalle;
 use App\Models\RepaletizajeResultado;
 use App\Models\UbicacionActual;
 use App\Models\User;
+use App\Services\InspeccionSag\ServicioExistenciasSag;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\Transiciones\ComandoTransicionOperacional;
 use App\Services\Transiciones\MotorTransicionesOperacionales;
@@ -402,7 +403,13 @@ class ServicioRepaletizaje
             return $this->cargar($repa->refresh());
         };
 
-        return $this->motorTransiciones->ejecutar($comando, $accion);
+        return $this->motorTransiciones->ejecutar($comando, function () use ($accion): Repaletizaje {
+            $repa = $accion();
+            $ids = $repa->detalles()->pluck('folio_origen_id')->merge($repa->resultados()->pluck('folio_id'))->push($repa->folio_resultante_id)->filter()->unique()->all();
+            app(ServicioExistenciasSag::class)->sincronizar($ids, $repa->estado === 'anulado' ? 'anulacion_repa' : 'repaletizaje', $repa->codigo);
+
+            return $repa;
+        });
     }
 
     /**
@@ -775,7 +782,13 @@ class ServicioRepaletizaje
             return $this->cargar($repa->refresh());
         };
 
-        return $this->motorTransiciones->ejecutar($comando, $accion);
+        return $this->motorTransiciones->ejecutar($comando, function () use ($accion): Repaletizaje {
+            $repa = $accion();
+            $ids = $repa->detalles()->pluck('folio_origen_id')->merge($repa->resultados()->pluck('folio_id'))->push($repa->folio_resultante_id)->filter()->unique()->all();
+            app(ServicioExistenciasSag::class)->sincronizar($ids, $repa->estado === 'anulado' ? 'anulacion_repa' : 'repaletizaje', $repa->codigo);
+
+            return $repa;
+        });
     }
 
     public function cargar(Repaletizaje $repaletizaje): Repaletizaje

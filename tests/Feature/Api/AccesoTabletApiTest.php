@@ -18,6 +18,20 @@ class AccesoTabletApiTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_contraparte_sag_inicia_sesion_con_su_modulo_en_una_pda_autorizada(): void
+    {
+        $perfil = PerfilAcceso::where('codigo', 'CONTRAPARTE_SAG')->firstOrFail();
+        $usuario = User::factory()->create(['rol' => RolUsuario::SupervisorFrio, 'perfil_acceso_id' => $perfil->id,
+            'email' => 'sag@example.com', 'password' => Hash::make('clave-segura'), 'activo' => true]);
+        Dispositivo::create(['codigo' => 'SAG-PDA-01', 'nombre' => 'PDA SAG', 'plataforma' => 'android', 'activo' => true]);
+        $token = $this->postJson('/api/acceso-tablet', ['email' => $usuario->email, 'password' => 'clave-segura', 'codigo_dispositivo' => 'SAG-PDA-01'])
+            ->assertOk()->assertJsonCount(1, 'usuario.modulos_tablet')->assertJsonPath('usuario.modulos_tablet.0', 'contraparte_sag')
+            ->assertJsonPath('usuario.capacidades.puede_consultar_contraparte_sag', true)->assertJsonPath('usuario.capacidades.puede_gestionar_contraparte_sag', true)->json('token');
+        auth()->forgetGuards();
+        $this->withToken($token)->getJson('/api/contraparte-sag/documentos')->assertOk();
+        $this->withToken($token)->getJson('/api/porteria/ingresos')->assertForbidden();
+    }
+
     public function test_un_operador_accede_con_credenciales_y_tablet_autorizada(): void
     {
         [$usuario, $dispositivo] = $this->crearIdentidad();

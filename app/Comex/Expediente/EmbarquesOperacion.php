@@ -47,6 +47,14 @@ final class EmbarquesOperacion
         return $fila === null ? null : $this->conDetalle(collect([$fila]))[0];
     }
 
+    public function documentosSag(string $embarqueId): array
+    {
+        return $this->lector->tabla('documentos_sag')->where('embarque_id', $embarqueId)
+            ->orderByDesc('fecha_actividad')->orderByDesc('id')->limit(100)
+            ->get(['id', 'tipo', 'estado', 'numero', 'fecha_actividad'])
+            ->map(fn ($d) => [...(array) $d, 'url' => '/oficina/frigorifico/contraparte-sag?documento='.rawurlencode($d->id)])->all();
+    }
+
     /**
      * Clientes de la operación, para configurar cómo los sigue Comex.
      *

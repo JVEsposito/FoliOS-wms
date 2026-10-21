@@ -42,7 +42,9 @@ final class GestorNovedades
                 }
                 $m = MovimientoNomina::query()->create(['id' => (string) Str::uuid(), 'operacion_id' => $d['operacion_id'], 'payload_hash' => $hash,
                     'persona_id' => $d['persona_id'], 'concepto_id' => $d['concepto_id'], 'pacto_id' => $d['pacto_id'] ?? null, 'fecha' => $d['fecha'],
-                    'entrada' => $d, 'calculo' => $calculo, 'total' => $calculo['total'], 'estado' => 'borrador']);
+                    'institucion_id' => $calculo['institucion']['id'] ?? null, 'mandato_id' => $d['mandato_id'] ?? null,
+                    'empleador_id' => $calculo['contrato']['empleador_id'] ?? null, 'contrato_id' => $calculo['contrato']['id'] ?? null,
+                    'entrada' => [...$d, ...($calculo['entrada_mandato'] ?? [])], 'calculo' => $calculo, 'total' => $calculo['total'], 'estado' => 'borrador']);
                 $this->auditoria->registrar('movimiento_nomina', $m->id, 'creado', $m->toArray(), $actor);
 
                 return $m;
@@ -70,6 +72,9 @@ final class GestorNovedades
                 }
                 if ($m->pacto_id && MovimientoNomina::query()->where('pacto_id', $m->pacto_id)->where('estado', 'aprobado')->whereBetween('fecha', $this->mes($m->fecha))->exists()) {
                     $this->error('pacto_id', 'Esta asignación mensual ya tiene un movimiento aprobado en el mes.');
+                }
+                if ($m->mandato_id && MovimientoNomina::query()->where('mandato_id', $m->mandato_id)->where('estado', 'aprobado')->whereBetween('fecha', $this->mes($m->fecha))->exists()) {
+                    $this->error('mandato_id', 'Este mandato ya tiene una cuota aprobada en el mes.');
                 }
                 $incidencias = $m->calculo['incidencias'];
                 if (($m->calculo['concepto']['calculo'] ?? '') === 'horas_extra') {
@@ -106,6 +111,31 @@ final class GestorNovedades
         if ($grupo === 'vivienda' && ! ($m->entrada['pago_directo_institucion'] ?? false)) {
             $this->error('pago_directo_institucion', 'El régimen de crédito vivienda/educación requiere pago directo a la institución y cumplimiento del artículo 58.');
         }
+        if ($grupo === 'ccaf') {
+            $liquido = $m->entrada['liquido_legal'] ?? '0';
+            $ordinario = ReglasChile::decimal(empty($m->entrada['excepcion_ccaf']) ? $m->total : '0');
+            $total = ReglasChile::decimal($m->total);
+            $otros = MovimientoNomina::query()->where('persona_id', $m->persona_id)->where('empleador_id', $m->empleador_id)->where('estado', 'aprobado')->whereBetween('fecha', $this->mes($m->fecha))->get();
+            foreach ($otros as $otro) {
+                if (($otro->calculo['concepto']['grupo_descuento'] ?? null) !== 'ccaf') {
+                    continue;
+                }
+                if (! ReglasChile::decimal($liquido)->isEqualTo($otro->entrada['liquido_legal'] ?? '0')) {
+                    $this->error('liquido_legal', 'Use la misma base líquida documentada para todos los créditos CCAF del mes.');
+                }
+                $total = $total->plus($otro->total);
+                if (empty($otro->entrada['excepcion_ccaf'])) {
+                    $ordinario = $ordinario->plus($otro->total);
+                }
+            }
+            $normal = $this->reglas->topeCcaf($m->fecha, $liquido, false);
+            $especial = $this->reglas->topeCcaf($m->fecha, $liquido, true);
+            if ($ordinario->multipliedBy(100)->isGreaterThan(ReglasChile::decimal($liquido)->multipliedBy($normal)) || $total->multipliedBy(100)->isGreaterThan(ReglasChile::decimal($liquido)->multipliedBy($especial))) {
+                $this->error('total', 'Los créditos CCAF acumulados superan el límite de su base líquida o de su excepción respaldada.');
+            }
+
+            return;
+        }
         if (! in_array($grupo, ['voluntario', 'vivienda', 'cooperativa'], true)) {
             return;
         }
@@ -118,6 +148,12 @@ final class GestorNovedades
         foreach ($otros as $otro) {
             $g = $otro->calculo['concepto']['grupo_descuento'] ?? null;
             if (! in_array($g, ['voluntario', 'vivienda', 'cooperativa'], true)) {
+                continue;
+            }
+            if (($otro->empleador_id === null) !== ($m->empleador_id === null)) {
+                $this->error('contrato_id', 'Hay descuentos facultativos del mes sin empleador identificado. Rectifique esos antecedentes antes de combinar registros.');
+            }
+            if ($otro->empleador_id !== $m->empleador_id) {
                 continue;
             }
             if (! ReglasChile::decimal($bruta)->isEqualTo($otro->entrada['remuneracion_bruta'])) {

@@ -796,12 +796,14 @@ class AlcanceOperacionalUsuario
 
     public function puedeConsultarContraparteSag(User $usuario): bool
     {
-        return $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador, RolUsuario::SupervisorFrio, RolUsuario::Consulta], CatalogoModulosAcceso::OFICINA_CONTRAPARTE_SAG);
+        return $this->permiteModuloTablet($usuario, CatalogoModulosAcceso::TABLET_CONTRAPARTE_SAG)
+            && $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador, RolUsuario::SupervisorFrio, RolUsuario::Consulta], CatalogoModulosAcceso::OFICINA_CONTRAPARTE_SAG);
     }
 
     public function puedeGestionarContraparteSag(User $usuario): bool
     {
-        return $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador, RolUsuario::SupervisorFrio], CatalogoModulosAcceso::OFICINA_CONTRAPARTE_SAG);
+        return $this->permiteModuloTablet($usuario, CatalogoModulosAcceso::TABLET_CONTRAPARTE_SAG)
+            && $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador, RolUsuario::SupervisorFrio], CatalogoModulosAcceso::OFICINA_CONTRAPARTE_SAG);
     }
 
     public function puedeConsultarInspeccionSag(User $usuario): bool

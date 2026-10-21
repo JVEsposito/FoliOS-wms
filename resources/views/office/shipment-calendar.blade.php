@@ -68,6 +68,7 @@
                     <button class="shipment-dialog__close" id="closeShipmentDialog" type="button" aria-label="Cerrar">×</button>
                 </header>
                 <input name="id" type="hidden"><input name="version_esperada" type="hidden">
+                <a id="shipmentSagLink" class="secondary-button is-hidden">Preparar despacho SAG</a>
                 <div class="shipment-form-grid">
                     <label class="field"><span>Cliente / exportadora *</span><select name="cliente_id" required></select></label>
                     <label class="field"><span>Modalidad *</span><select name="modalidad" required><option value="maritimo">Marítimo</option><option value="aereo">Aéreo</option><option value="terrestre">Terrestre</option><option value="por_confirmar">Por confirmar</option></select></label>
