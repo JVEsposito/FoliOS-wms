@@ -1,5 +1,6 @@
 <?php
 
+use App\Comex\Http\Controllers\BookingsController as Bookings;
 use App\Comex\Http\Controllers\CatalogoComercialController as Catalogo;
 use App\Comex\Http\Controllers\ConfiguracionComexController;
 use App\Comex\Http\Controllers\DocumentosComexController;
@@ -13,6 +14,11 @@ use Illuminate\Support\Facades\Route;
  */
 Route::middleware('auth:sanctum')->prefix('comex')->group(function (): void {
     Route::middleware('can:consultar-comercial-comex')->prefix('comercial')->group(function (): void {
+        Route::get('/bookings', [Bookings::class, 'index']);
+        Route::get('/bookings/{booking}', [Bookings::class, 'show'])->whereUuid('booking');
+        Route::get('/bookings/{booking}/notas', [Bookings::class, 'notas'])->whereUuid('booking');
+        Route::get('/bookings/{booking}/embarques', [Bookings::class, 'embarques'])->whereUuid('booking');
+        Route::get('/bookings/{booking}/historial', [Bookings::class, 'historial'])->whereUuid('booking');
         Route::get('/notas', [Notas::class, 'index']);
         Route::get('/notas/{nota}', [Notas::class, 'show'])->whereUuid('nota');
         Route::get('/notas/{nota}/revisiones', [Notas::class, 'revisiones'])->whereUuid('nota');
@@ -23,6 +29,9 @@ Route::middleware('auth:sanctum')->prefix('comex')->group(function (): void {
         Route::get('/clientes-operacion', [Catalogo::class, 'clientes']);
         Route::get('/historial', [Catalogo::class, 'historial']);
         Route::middleware(['can:gestionar-comercial-comex', 'throttle:comex-comercial'])->group(function (): void {
+            Route::post('/bookings', [Bookings::class, 'guardar']);
+            Route::put('/bookings/{booking}/borrador', [Bookings::class, 'guardar'])->whereUuid('booking');
+            Route::post('/bookings/{booking}/transiciones', [Bookings::class, 'transicion'])->whereUuid('booking');
             Route::post('/notas', [Notas::class, 'guardar']);
             Route::put('/notas/{nota}/borrador', [Notas::class, 'guardar'])->whereUuid('nota');
             Route::post('/notas/{nota}/transiciones', [Notas::class, 'transicion'])->whereUuid('nota');
