@@ -7,7 +7,7 @@ import { chromium } from 'playwright';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const launch = () => chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined, args: ['--no-sandbox', '--disable-gpu'] });
-async function setup(browser, { clock = false, manage = true, payroll = false, geo = false, discounts = false } = {}) {
+async function setup(browser, { clock = false, manage = true, payroll = false, geo = false, discounts = false, contractors = false } = {}) {
     const context = await browser.newContext({ viewport: { width: 390, height: 900 }, timezoneId: 'America/Santiago' });
     const identity = { nombre: 'RRHH Prueba', rol: manage ? 'administrador' : 'consulta', puede_consultar_rrhh: !clock, puede_consultar_remuneraciones_rrhh: payroll, puede_gestionar_remuneraciones_rrhh: payroll && manage, puede_marcar_rrhh: clock, modulos_acceso: [clock ? 'rrhh.marcaje' : 'rrhh.personal'] };
     const writes = []; const errors = [];
@@ -28,6 +28,12 @@ async function setup(browser, { clock = false, manage = true, payroll = false, g
         if (path === '/api/rrhh/nomina/conceptos') return route.fulfill({ json: { data: { data: [{ id: 'he-1', codigo: 'HE', nombre: 'Horas extraordinarias', tipo: 'haber', calculo: 'horas_extra', remuneracion: true, imponible: true, tributable: true, activo: true }], current_page: 1, last_page: 1 }, parametros: [], permisos: { gestionar: manage } } });
         if (path === '/api/rrhh/nomina/personas/persona-1') return route.fulfill({ json: { data: { persona: { id: 'persona-1', codigo: 'OP01', nombre: 'Camarero Prueba' }, condiciones: { data: [], current_page: 1, last_page: 1 }, pactos: { data: [], current_page: 1, last_page: 1 } } } });
         if (path === '/api/rrhh/prevision/directorio/institucion' && request.method() === 'GET') return route.fulfill({ json: { data: { data: [{ id: 'isapre-1', codigo: 'ISAPRE_TEST', rut: '76000002-7', razon_social: 'Isapre de prueba', tipo: 'isapre', activo: true, desde: '2026-01-01', hasta: '9999-12-31', version: 1 }], current_page: 1, last_page: 1 }, tipos: ['afp', 'fonasa', 'isapre'] } });
+        if (contractors && path === '/api/rrhh/prevision/directorio/empleador') return route.fulfill({ json: { data: { data: [{ id: 'empresa-1', codigo: 'EXTERNO', rut: '76000010-8', razon_social: 'Contratista de prueba', tipo: 'contratista', activo: true, desde: '2020-01-01', hasta: '9999-12-31' }], current_page: 1, last_page: 1 }, tipos: ['propio', 'contratista', 'subcontratista', 'est'] } });
+        if (contractors && path === '/api/rrhh/contratistas/expedientes') return route.fulfill({ json: { data: { data: [{ id: 'exp-1', faena: 'PLANTA_1', mes: '2026-09', personas_count: 1, estado: 'pendiente', referencia_contrato: 'Comercial 2026' }], current_page: 1, last_page: 1 }, empleador: { razon_social: 'Contratista de prueba' } } });
+        if (contractors && path === '/api/rrhh/contratistas/expedientes/exp-1') return route.fulfill({ json: { data: { id: 'exp-1', faena: 'PLANTA_1', mes: '2026-09', personas_count: 1, estado: 'pendiente', version: 1, personal: [{ id: 'persona-1', codigo: 'EX01', nombre: 'Persona contratista' }] }, faltantes: ['f301: 1 persona(s) sin cobertura conforme'], saldo_retenido: '100000' } });
+        if (contractors && path === '/api/rrhh/contratistas/expedientes/exp-1/antecedentes' && request.method() === 'POST') { writes.push({ path, ...request.postDataJSON() }); return route.fulfill({ status: 201, json: { data: { id: 'doc-1', estado: 'pendiente' } } }); }
+        if (contractors && path === '/api/rrhh/contratistas/expedientes/exp-1/retenciones' && request.method() === 'POST') { writes.push({ path, ...request.postDataJSON() }); if (writes.length === 1) return route.fulfill({ status: 503, json: { message: 'Reintente la misma anotación.' } }); return route.fulfill({ status: 201, json: { data: { id: 'anotacion-1' } } }); }
+        if (contractors && ['/api/rrhh/contratistas/expedientes/exp-1/antecedentes', '/api/rrhh/contratistas/expedientes/exp-1/retenciones'].includes(path)) return route.fulfill({ json: { data: { data: [], current_page: 1, last_page: 1 }, saldo_retenido: '100000' } });
         if (path === '/api/rrhh/prevision/directorio/institucion' && request.method() === 'POST') { writes.push({ path, ...request.postDataJSON() }); return route.fulfill({ status: 201, json: { data: { id: 'isapre-2' } } }); }
         if (['/api/rrhh/prevision/contratos', '/api/rrhh/prevision/afiliaciones'].includes(path) && request.method() === 'GET') return route.fulfill({ json: { data: { data: [], current_page: 1, last_page: 1 } } });
         if (path === '/api/rrhh/prevision/afiliaciones' && request.method() === 'POST') { writes.push({ path, ...request.postDataJSON() }); return route.fulfill({ status: 201, json: { data: { id: 'afiliacion-1' } } }); }
@@ -160,5 +166,40 @@ test('calcula un anticipo legal con base y tope visibles y guarda preparación s
         assert.match(await page.locator('#rlPreview').textContent(), /Tope mensual de referencia/); assert.equal(writes.length, 0);
         await f.locator('button[type=submit]').click(); await page.waitForFunction(() => !document.getElementById('rlDialog').open);
         assert.equal(writes.length, 1); assert.equal(writes[0].path, '/api/rrhh/nomina/legal/calculos'); assert.equal(writes[0].tipo, 'anticipo50'); assert.equal(writes[0].datos.base_computable, '800000'); assert.equal(writes[0].datos.base_imponible, undefined); assert.equal(writes[0].parametro_id, undefined); assert.deepEqual(errors, []); await context.close();
+    } finally { await browser.close(); }
+});
+
+async function openContractorFile(page) {
+    await page.locator('#rpTab').click(); await page.locator('#rpSearch [name=directorio]').selectOption('empleador');
+    await page.locator('#rpSearch button').click(); await page.locator('[data-rc-company=empresa-1]').click();
+    await page.locator('[data-rc-action=detail]').click(); await page.waitForFunction(() => document.getElementById('rcFileDialog').open);
+}
+
+test('contratistas registra cobertura explícita pendiente sin declarar conformidad automáticamente', async () => {
+    const browser = await launch();
+    try {
+        const { page, context, writes, errors } = await setup(browser, { payroll: true, contractors: true });
+        await openContractorFile(page); assert.match(await page.locator('#rcMissing').textContent(), /F30-1/);
+        await page.locator('[data-rc-action=evidence]').click(); const f = page.locator('#rcEvidenceForm');
+        await f.locator('[name=fecha_documento]').fill('2026-10-10'); await f.locator('[name=referencia]').fill('F30-1 privado, folio 1234');
+        await f.locator('[name=cubre_todos]').selectOption('1'); await f.locator('button[type=submit]').click();
+        await page.waitForFunction(() => !document.getElementById('rcEvidenceDialog').open);
+        assert.equal(writes.length, 1); assert.equal(writes[0].tipo, 'f301'); assert.equal(writes[0].cubre_todos, true);
+        assert.equal(writes[0].version_expediente, 1); assert.equal(writes[0].estado, undefined); assert.equal(writes[0].desde, '2026-09-01'); assert.equal(writes[0].hasta, '2026-09-30');
+        assert.match(await page.locator('#rcSummary').textContent(), /Pendiente/); assert.deepEqual(errors, []); await context.close();
+    } finally { await browser.close(); }
+});
+
+test('contratistas reintenta una anotación con el mismo UUID y mantiene separado el saldo comercial', async () => {
+    const browser = await launch();
+    try {
+        const { page, context, writes, errors } = await setup(browser, { payroll: true, contractors: true });
+        await openContractorFile(page); assert.match(await page.locator('#rcBalance').textContent(), /100.000 CLP/);
+        await page.locator('[data-rc-action=retention]').click(); const f = page.locator('#rcRetentionForm');
+        for (const [name, value] of Object.entries({ monto: '20000', fecha: '2026-10-10', referencia: 'RET-12345', respaldo: 'Retención documentada en comprobante privado' })) await f.locator(`[name=${name}]`).fill(value);
+        await f.locator('button[type=submit]').click(); await page.waitForFunction(() => document.querySelector('#rcRetentionForm [data-rh-error]').textContent.includes('Reintente'));
+        await f.locator('button[type=submit]').click(); await page.waitForFunction(() => !document.getElementById('rcRetentionDialog').open);
+        assert.equal(writes.length, 2); assert.equal(writes[0].operacion_id, writes[1].operacion_id); assert.equal(writes[0].tipo, 'retencion');
+        assert.equal(writes[0].persona_id, undefined); assert.equal(writes[0].institucion_id, undefined); assert.deepEqual(errors, []); await context.close();
     } finally { await browser.close(); }
 });
