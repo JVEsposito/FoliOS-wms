@@ -28,8 +28,35 @@
             <p id="scStatus" role="status"></p>
             <nav class="sc-tabs" aria-label="Secciones SAG">
                 <button class="secondary-button" data-panel="existencias">Existencias</button>
+                <button class="secondary-button" data-panel="documentos">Documentos SAG</button>
                 <button class="secondary-button" data-panel="configuracion">Planta y responsables</button>
             </nav>
+            <section class="panel sc-panel is-hidden" data-section="documentos">
+                <h2>Documentos SAG</h2>
+                <div class="sc-actions"><button class="primary-button" id="scNewDocument" data-manage>Nuevo documento</button><button class="secondary-button" id="scReloadDocuments">Actualizar</button></div>
+                <div class="sc-actions"><label>Formulario en blanco<select id="scBlankType"><option value="repaletizaje">Repaletizaje</option><option value="anulacion">Anulación / devolución</option><option value="cambio_mercado">Cambio de mercado</option><option value="despacho">Despacho / Multipuerto</option></select></label><button class="secondary-button" data-blank="pdf">PDF en blanco</button><button class="secondary-button" data-blank="xlsx">Excel en blanco</button></div>
+                <form id="scDocumentFilters" class="sc-grid"><label>Tipo<select name="tipo"><option value="">Todos</option><option value="repaletizaje">Repaletizaje</option><option value="anulacion">Anulación / devolución</option><option value="cambio_mercado">Cambio de mercado</option><option value="despacho">Despacho / Multipuerto</option></select></label><label>Estado<select name="estado"><option value="">Todos</option>@foreach (['borrador', 'emitido', 'enviado', 'aprobado', 'rechazado', 'cancelado'] as $estado)<option value="{{ $estado }}">{{ ucfirst($estado) }}</option>@endforeach</select></label><label>Desde<input type="date" name="desde"></label><label>Hasta<input type="date" name="hasta"></label><button class="secondary-button">Filtrar</button></form>
+                <div id="scDocuments"></div><div class="sc-actions" id="scDocumentPages"></div>
+                <form id="scDocumentForm" class="sc-document-form is-hidden">
+                    <h3 id="scDocumentTitle">Nuevo documento</h3>
+                    <div class="sc-grid">
+                        <label>Tipo<select name="tipo"><option value="repaletizaje">Repaletizaje SAG</option><option value="anulacion">Anulación / devolución</option><option value="cambio_mercado">Cambio de mercado</option><option value="despacho">Despacho / Multipuerto</option></select></label>
+                        <label>Fecha actividad<input type="date" name="fecha_actividad" required></label>
+                        <label>Responsable<select name="responsable_id" required></select></label>
+                        <label data-market hidden>Programa<input name="programa" maxlength="100"></label><label data-market hidden>Motivo<input name="motivo" maxlength="250"></label>
+                        <label>Certificados que anula o devuelve<input type="number" name="certificados" min="0" max="10000" value="0"></label>
+                        <label>Certificados devueltos<input type="number" name="certificados_devueltos" min="0" max="10000" value="0"></label>
+                        <label>Certificados asignados<input type="number" name="certificados_asignados" min="0" max="10000" value="0"></label>
+                    </div>
+                    <div class="sc-grid" id="scRepaSource"><label><span id="scSourceLabel">Número REPA</span><input id="scRepaReference" maxlength="100" placeholder="REPA-…"></label><button type="button" class="secondary-button" id="scLoadRepa">Cargar repa</button></div>
+                    <div class="sc-grid is-hidden" id="scFolioSource"><label>Folio<input id="scAddFolioNumber" maxlength="100" inputmode="text" autocomplete="off" placeholder="Escribir o escanear"></label><button type="button" class="secondary-button" id="scAddFolio">Agregar folio</button></div>
+                    <div id="scDispatchFields" class="is-hidden"></div><div class="sc-scroll" id="scDocumentLines"></div>
+                    <label>Observaciones<textarea name="observaciones" maxlength="2000" rows="3"></textarea></label>
+                    <p>Los datos se completan desde la operación. La emisión conserva la versión del documento y su detalle.</p>
+                    <button class="primary-button" data-manage>Guardar borrador</button>
+                </form>
+                <article class="sc-detail is-hidden" id="scDocumentDetail"></article>
+            </section>
             <section class="panel sc-panel" data-section="existencias">
                 <h2>Existencia de productos aprobados</h2>
                 <form id="scFilters" class="sc-grid">

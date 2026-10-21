@@ -35,6 +35,8 @@ class CatalogoModulosAcceso
 
     public const TABLET_PORTERIA = 'porteria';
 
+    public const TABLET_CONTRAPARTE_SAG = 'contraparte_sag';
+
     public const TABLET_OPERACION_FRIGORIFICO = 'operacion';
 
     public const TABLET_RECEPCION_MATERIALES = 'recepcion_materiales';
@@ -248,6 +250,7 @@ class CatalogoModulosAcceso
                         ['frigorifico.validacion'],
                     ),
                     $this->moduloTablet(self::TABLET_RECEPCION_FRUTA_EMBALADA, 'Recepción de fruta embalada', 'Captura de camiones y pallets externos en borrador.', [self::OFICINA_RECEPCION_FRUTA_EMBALADA]),
+                    $this->moduloTablet(self::TABLET_CONTRAPARTE_SAG, 'Contraparte SAG', 'Captura, seguimiento y documentos SAG desde PDA, tablet o celular.', [self::OFICINA_CONTRAPARTE_SAG]),
                     $this->moduloTablet(
                         self::TABLET_REPALETIZAJE,
                         'Repaletizaje',

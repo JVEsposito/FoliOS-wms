@@ -19,6 +19,8 @@ final class CalculadorNovedad
         if (! $concepto->activo) {
             $this->error('concepto_id', 'El concepto está inactivo.');
         }
+        $destino = app(DestinosNomina::class)->preparar($d, $concepto);
+        $d = $destino['entrada'];
         $pacto = null;
         if (! empty($d['pacto_id'])) {
             $pacto = PactoConcepto::query()->findOrFail($d['pacto_id']);
@@ -29,6 +31,23 @@ final class CalculadorNovedad
             $d['valor'] = $pacto->valor;
         }
         $resultado = ['regla' => ReglasChile::VERSION, 'concepto' => $concepto->toArray(), 'pacto' => $pacto?->toArray(), 'incidencias' => []];
+        if ($destino['institucion']) {
+            $resultado['institucion'] = $destino['institucion'];
+            $resultado['contrato'] = $destino['contrato'];
+        }
+        if ($concepto->grupo_descuento === 'apv') {
+            $resultado['regimen_apv'] = $d['regimen_apv'];
+        }
+        if ($concepto->grupo_descuento === 'ccaf') {
+            $liquido = $d['liquido_legal'] ?? '0';
+            $resultado['limite_ccaf'] = ['base_liquida' => $liquido, 'porcentaje_ordinario' => $this->reglas->topeCcaf($d['fecha'], $liquido, false),
+                'porcentaje_excepcional' => $this->reglas->topeCcaf($d['fecha'], $liquido, true),
+                'parametro' => collect(ReglasChile::parametros())->first(fn ($p) => $p['desde'] <= $d['fecha'] && $p['hasta'] >= $d['fecha'])];
+        }
+        if ($destino['mandato']) {
+            $resultado['mandato'] = $destino['mandato'];
+            $resultado['entrada_mandato'] = array_intersect_key($d, array_flip(['cantidad', 'valor', 'institucion_id', 'autorizacion', 'pago_directo_institucion', 'excepcion_ccaf', 'regimen_apv']));
+        }
         if ($concepto->calculo !== 'horas_extra') {
             $cantidad = $d['cantidad'] ?? null;
             $valor = $d['valor'] ?? null;

@@ -34,6 +34,7 @@
     <label><span>Desde</span><input name="desde" type="date" required></label><label><span>Hasta inclusive</span><input name="hasta" type="date" value="9999-12-31" required></label>
     <label><span>Referencia de afiliación, FUN o contrato</span><input name="referencia" maxlength="100" required></label>
     <fieldset id="rpPlan" hidden><legend>Plan Isapre según FUN</legend><label><span>Moneda</span><select name="moneda_plan" disabled><option value="UF">UF</option><option value="CLP">CLP</option></select></label><label><span>Precio mensual pactado</span><input name="precio_plan" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?" disabled></label></fieldset>
+    <label id="rpApv" hidden><span>Régimen tributario APV según elección respaldada</span><select name="regimen_apv" disabled><option value="">Seleccione</option><option value="A">A · sin rebaja mensual de la base tributaria</option><option value="B">B · revisar beneficio tributario y límites legales</option></select></label>
     <label><span>Documento y respaldo</span><textarea name="respaldo" minlength="10" maxlength="1000" required></textarea></label>
     <div class="rh-actions"><button type="button" data-rh-close>Cancelar</button><button type="submit" class="primary-button">Guardar afiliación</button></div><p role="alert" class="form-error" data-rh-error></p>
 </form></dialog>

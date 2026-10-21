@@ -235,7 +235,7 @@ function renumberInstructions() {
 }
 
 function resetDialog() {
-    elements.form.reset(); state.selected = null; elements.formError.textContent = ''; elements.instructionList.innerHTML = '';
+    elements.form.reset(); byId('shipmentSagLink').classList.add('is-hidden'); state.selected = null; elements.formError.textContent = ''; elements.instructionList.innerHTML = '';
     elements.form.elements.id.value = ''; elements.form.elements.version_esperada.value = '';
     elements.cancel.classList.add('is-hidden'); elements.confirm.classList.add('is-hidden'); elements.loadConfirmation.classList.add('is-hidden');
     elements.save.classList.remove('is-hidden'); elements.overbook.classList.add('is-hidden'); elements.overbookReason.classList.add('is-hidden');
@@ -257,6 +257,8 @@ async function openExisting(id, focusConfirmation = false) {
     try {
         const response = await api(`/api/embarques/${id}`); const shipment = response.data;
         resetDialog(); state.selected = shipment;
+        byId('shipmentSagLink').classList.toggle('is-hidden', !(state.identity?.puede_consultar_contraparte_sag || state.identity?.capacidades?.puede_consultar_contraparte_sag));
+        byId('shipmentSagLink').href = `/oficina/frigorifico/contraparte-sag?embarque=${encodeURIComponent(shipment.id)}`;
         elements.dialogTitle.textContent = shipment.codigo; elements.dialogEyebrow.textContent = statusText(shipment.estado);
         elements.dialogHelp.textContent = `${shipment.cliente.codigo} · ${shipment.intervalo_minutos} minutos reservados`;
         const form = elements.form.elements;
