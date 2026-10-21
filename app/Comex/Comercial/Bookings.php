@@ -194,12 +194,19 @@ final class Bookings
                     if ($conAsignacion->diff($puentes->pluck('contenedor_id'))->isNotEmpty()) {
                         $this->registro->error('estado', 'Hay contenedores asignados sin despacho vinculado.');
                     }
+                    $cierre = ['captured_at' => now()->toIso8601String(), 'despachos' => []];
                     foreach ($puentes as $p) {
                         $e = $this->operacion->uno($p->embarque_id);
+                        $contenedor = BookingContenedor::query()->findOrFail($p->contenedor_id);
+                        if ($e && ($e['cliente_id'] !== $b->cliente_operacion_id || $e['modalidad'] !== 'maritimo' || strtoupper(trim($e['contenedor'] ?? '')) !== $contenedor->numero)) {
+                            $this->registro->error('estado', 'Cambió el cliente, modalidad o contenedor del despacho. Revise el vínculo antes de cerrar.');
+                        }
                         if (! $e || ! ($e['carga']['salio'] ?? false) || $e['estado'] === 'cancelado') {
                             $this->registro->error('estado', 'Todos los despachos vinculados deben haber salido.');
                         }
+                        $cierre['despachos'][] = ['vinculo_id' => $p->id, 'evidencia' => $e, 'source_version' => $this->registro->hash($e)];
                     }
+                    $b->datos = [...$b->datos, 'cierre_despachos' => $cierre];
                     $b->estado = 'cerrado';
                     break;
             }
@@ -213,10 +220,10 @@ final class Bookings
 
     public function detalle(Booking $b): array
     {
-        return ['booking' => $b->toArray(), 'contenedores' => BookingContenedor::query()->where('booking_id', $b->id)->where('activo', true)->orderBy('referencia')->get()->toArray(), 'asignaciones' => BookingAsignacion::query()->where('booking_id', $b->id)->orderBy('created_at')->get()->toArray(), 'vinculos' => BookingDespacho::query()->where('booking_id', $b->id)->get()->map(function ($p) {
+        return ['booking' => $b->toArray(), 'contenedores' => BookingContenedor::query()->where('booking_id', $b->id)->where('activo', true)->orderBy('referencia')->get()->toArray(), 'asignaciones' => BookingAsignacion::query()->where('booking_id', $b->id)->orderBy('created_at')->get()->toArray(), 'vinculos' => BookingDespacho::query()->where('booking_id', $b->id)->get()->map(function ($p) use ($b) {
             $actual = $this->operacion->uno($p->embarque_id);
 
-            return [...$p->toArray(), 'actual' => $actual, 'cambio_operacion' => $actual === null || $this->registro->hash($actual) !== $p->source_version];
+            return [...$p->toArray(), 'actual' => $actual, 'cambio_operacion' => $actual === null || $this->registro->hash($actual) !== $p->source_version, 'al_cierre' => collect($b->datos['cierre_despachos']['despachos'] ?? [])->firstWhere('vinculo_id', $p->id)];
         })->all()];
     }
 
