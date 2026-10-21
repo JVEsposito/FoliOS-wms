@@ -53,7 +53,7 @@ class IntegracionDirectaRrhhTest extends TestCase
             ['id_punch' => $idLargo, 'identifier' => 'EXT-1', 'type' => 'entry', 'Date' => '20261020080000', 'gps_latitude' => 'GPS_NO_CONSERVAR'],
             ['id_punch' => 'p2', 'identifier' => 'EXT-2', 'type' => 'exit', 'Date' => '20261020170000'],
         ])]);
-        $respuesta = $this->consultar()->assertCreated()->assertJsonPath('data.estado', 'con_incidencias')->assertJsonPath('data.resultado.aceptadas', 1)->assertJsonCount(1, 'data.resultado.errores');
+        $respuesta = $this->consultar()->assertCreated()->assertJsonPath('data.estado', 'con_incidencias')->assertJsonPath('data.resultado.aceptadas', 1)->assertJsonCount(1, 'data.resultado.errores')->assertJsonPath('data.resultado.errores.0.referencia.identificador', 'EXT-2');
         $id = $respuesta->json('data.id');
         $this->assertSame(1, Marcaje::query()->count());
         $this->assertSame('2026-10-20 11:00:00', Marcaje::query()->first()->instante_at->format('Y-m-d H:i:s'));

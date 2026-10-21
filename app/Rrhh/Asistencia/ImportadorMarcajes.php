@@ -47,7 +47,16 @@ final class ImportadorMarcajes
                     $resultado['repetido'] ? $repetidas++ : $aceptadas++;
                 } catch (ValidationException $error) {
                     // No se descarta el lote completo ni se guardan credenciales o contenido libre del proveedor.
-                    $errores[] = ['fila' => $indice + 1, 'errores' => $error->errors()];
+                    $referencia = [];
+                    foreach (['id_externo' => ['id_externo', 'id_punch'], 'identificador' => ['identificador', 'identifier', 'UserIdentifier']] as $destino => $claves) {
+                        foreach ($claves as $clave) {
+                            if (is_string($fila[$clave] ?? null)) {
+                                $referencia[$destino] = mb_substr($fila[$clave], 0, $destino === 'id_externo' ? 256 : 100);
+                                break;
+                            }
+                        }
+                    }
+                    $errores[] = ['fila' => $indice + 1, 'referencia' => $referencia, 'errores' => $error->errors()];
                 }
             }
 
