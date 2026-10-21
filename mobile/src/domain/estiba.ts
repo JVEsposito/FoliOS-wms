@@ -9,6 +9,7 @@ export type MovementType =
 
 export type TabletModule =
   | 'porteria'
+  | 'contraparte_sag'
   | 'demo_administracion'
   | 'operacion'
   | 'recepcion_materiales'
@@ -33,6 +34,8 @@ export type UserIdentity = {
 };
 
 export type UserCapabilities = {
+  puede_consultar_contraparte_sag?: boolean;
+  puede_gestionar_contraparte_sag?: boolean;
   puede_consultar_porteria?: boolean;
   puede_registrar_porteria?: boolean;
   modulos_tablet?: TabletModule[];

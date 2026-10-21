@@ -322,6 +322,7 @@ function documentRow(item) {
 function renderDetail(detail) {
     state.detail = detail;
     const shipment = detail.embarque;
+    const sagAccess = state.identity?.puede_consultar_contraparte_sag === true || state.identity?.capacidades?.puede_consultar_contraparte_sag === true;
     const info = alertInfo(detail.alerta);
     elements.detailEyebrow.textContent = `EXPEDIENTE · ${info.label.toLocaleUpperCase('es')}`;
     elements.detailTitle.textContent = `${shipment.codigo} · ${shipment.cliente_nombre}`;
@@ -349,6 +350,7 @@ function renderDetail(detail) {
         + infoItem('Patentes', shipment.patentes)
         + infoItem('Carga', load)
         + '</dl>'
+        + `<section class="cx-grupo"><h3>Documentos SAG de la planta</h3>${(detail.documentos_sag || []).map((d) => `<p>${sagAccess ? `<a class="secondary-button" href="${escapeHtml(d.url)}">` : ''}${escapeHtml(d.tipo)} ${escapeHtml(d.numero ?? 'Borrador')} · ${escapeHtml(d.estado)}${sagAccess ? '</a>' : ''}</p>`).join('') || '<p>Sin documentos SAG vinculados.</p>'}${sagAccess ? `<a class="secondary-button" href="/oficina/frigorifico/contraparte-sag?embarque=${encodeURIComponent(shipment.id)}">Preparar despacho SAG</a>` : ''}</section>`
         + (shipment.documentos_operacion ? `<p class="cx-detalle__nota"><strong>Documentos anotados en el calendario:</strong> ${escapeHtml(shipment.documentos_operacion)}</p>` : '')
         + (instructions ? `<details class="cx-detalle__instructivos"${shipment.instructivos.length <= 2 ? ' open' : ''}><summary>${escapeHtml(countText(shipment.instructivos.length, 'instructivo'))}</summary><ul>${instructions}</ul></details>` : '<p class="cx-detalle__nota">El embarque todavía no tiene instructivos: sin destino no se sabe qué documentos exige el país.</p>')
         + (groups.length ? groups.map((group) => `<section class="cx-grupo"><h3>${escapeHtml(group.title)}</h3><p>${escapeHtml(group.note)}</p><ul class="cx-documentos">${group.items.map(documentRow).join('')}</ul></section>`).join('')

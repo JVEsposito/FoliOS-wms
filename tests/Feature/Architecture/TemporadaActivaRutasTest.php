@@ -20,15 +20,19 @@ use App\Finanzas\Models\Tarifa;
 use App\Http\Middleware\AsegurarTemporadaActivaDelRegistro;
 use App\Models;
 use App\Models\Contracts\PerteneceATemporada;
+use App\Rrhh\Models\AntecedenteContratista;
 use App\Rrhh\Models\AsignacionPersonal;
 use App\Rrhh\Models\CargoLaboral;
 use App\Rrhh\Models\ConceptoNomina;
 use App\Rrhh\Models\EntregaNomina;
+use App\Rrhh\Models\ExpedienteContratista;
 use App\Rrhh\Models\FuenteMarcaje;
 use App\Rrhh\Models\LoteIntegracion;
+use App\Rrhh\Models\MandatoDescuento;
 use App\Rrhh\Models\Marcaje;
 use App\Rrhh\Models\MovimientoNomina;
 use App\Rrhh\Models\Persona;
+use App\Rrhh\Models\RetencionContratista;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Routing\Route as RutaLaravel;
@@ -49,6 +53,10 @@ class TemporadaActivaRutasTest extends TestCase
         NotaVenta::class => 'acuerdo comercial con vigencia y revisiones propias; continúa entre temporadas sin modificar stock',
         ParteComercial::class => 'identidad comercial global; documentos vigentes entre temporadas',
         LugarComercial::class => 'catálogo logístico global en base Comex, sin inventario físico',
+        ExpedienteContratista::class => 'control de empresa, faena y mes; las obligaciones laborales continúan después de cerrar una temporada',
+        AntecedenteContratista::class => 'antecedente laboral/previsional de RRHH por período, con revisión documental independiente de temporada',
+        RetencionContratista::class => 'anotación de retención comercial respaldada por fecha; no modifica existencias ni ejecución operacional',
+        MandatoDescuento::class => 'autorización de descuento de RRHH por empleador, persona y vigencia; no modifica operación ni pertenece a una temporada',
         PagoProveedor::class => 'registro de desembolso por fecha en base financiera propia',
         AplicacionProveedor::class => 'aplicación de créditos por fecha contable, sin temporada',
         EvaluacionProveedor::class => 'evaluación de proveedor por período en base financiera propia',

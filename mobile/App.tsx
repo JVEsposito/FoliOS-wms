@@ -12,6 +12,7 @@ import { LoginScreen } from './src/screens/LoginScreen';
 import { FirstPasswordChangeScreen } from './src/screens/FirstPasswordChangeScreen';
 import { MaterialReceptionScreen } from './src/screens/MaterialReceptionScreen';
 import { PackedFruitReceptionScreen } from './src/screens/PackedFruitReceptionScreen';
+import { SagCounterpartScreen } from './src/screens/SagCounterpartScreen';
 import { GatehouseScreen } from './src/screens/GatehouseScreen';
 import { FrutaProcesoScreen } from './src/screens/FrutaProcesoScreen';
 import { HidrocoolerMpScreen } from './src/screens/HidrocoolerMpScreen';
@@ -53,7 +54,7 @@ export default function App() {
 
   useEffect(() => {
     // La PDA es un equipo de mano: siempre vertical, incluso en el login.
-    const orientation = isPdaBuild || activeModule === 'validacion' || activeModule === 'validacion_mp' || activeModule === 'repaletizaje' || activeModule === 'fruta_proceso' || activeModule === 'recepcion_fruta_embalada' || activeModule === 'porteria'
+    const orientation = isPdaBuild || activeModule === 'validacion' || activeModule === 'validacion_mp' || activeModule === 'repaletizaje' || activeModule === 'fruta_proceso' || activeModule === 'recepcion_fruta_embalada' || activeModule === 'porteria' || activeModule === 'contraparte_sag'
       ? ScreenOrientation.OrientationLock.PORTRAIT_UP
       : activeModule
         ? ScreenOrientation.OrientationLock.LANDSCAPE
@@ -158,6 +159,8 @@ export default function App() {
                   <Text style={styles.bootText}>Repaletizaje requiere conexión con el servidor.</Text>
                 </View>
               )
+            ) : activeModule === 'contraparte_sag' ? (
+              <SagCounterpartScreen auth={auth} baseUrl={api.baseUrl ?? ''} onLogout={() => void logoutPersistentModule()} />
             ) : activeModule === 'porteria' ? (
               <GatehouseScreen auth={auth} baseUrl={api.baseUrl ?? ''} onLogout={() => void logoutPersistentModule()} />
             ) : activeModule === 'recepcion_fruta_embalada' ? (
@@ -192,6 +195,7 @@ export default function App() {
 
 function availableModules(auth: AuthSession): MobileModule[] {
   const supported: MobileModule[] = [
+    'contraparte_sag',
     'porteria',
     'demo_administracion',
     'operacion',
@@ -217,7 +221,7 @@ function defaultModule(auth: AuthSession): MobileModule | null {
 }
 
 function moduleLabel(module: MobileModule) {
-  return module === 'porteria'
+  return module === 'contraparte_sag' ? 'Contraparte SAG' : module === 'porteria'
     ? 'Portería'
     : module === 'demo_administracion'
     ? 'Administración Demo'
@@ -249,6 +253,12 @@ function ModuleSelection({ modules, onSelect, userName }: { modules: MobileModul
       <Text style={[styles.selectorTitle, isPdaBuild && styles.selectorTitlePda]}>Selecciona el área de trabajo</Text>
       <Text style={styles.selectorCopy}>{userName}, tu perfil posee acceso a más de un módulo.</Text>
       <View style={[styles.selectorCards, isPdaBuild && styles.selectorCardsPda]}>
+        {modules.includes('contraparte_sag') ? (
+          <Pressable onPress={() => onSelect('contraparte_sag')} style={[styles.selectorCard, isPdaBuild && styles.selectorCardPda]}>
+            <Text style={styles.selectorCardTitle}>Contraparte SAG</Text>
+            <Text style={styles.selectorCardCopy}>Captura, seguimiento y documentos SAG.</Text>
+          </Pressable>
+        ) : null}
         {modules.includes('porteria') ? (
           <Pressable onPress={() => onSelect('porteria')} style={[styles.selectorCard, isPdaBuild && styles.selectorCardPda]}>
             <Text style={styles.selectorIcon}>↘</Text>
