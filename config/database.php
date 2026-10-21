@@ -48,6 +48,27 @@ $rrhh = (new ConfigurationUrlParser)->parseConfiguration([
     ]) : [],
 ]);
 
+// Resolver COMEX_DB_URL antes de reemplazar credenciales por las de solo lectura.
+$comex = (new ConfigurationUrlParser)->parseConfiguration([
+    'driver' => 'mysql',
+    'url' => env('COMEX_DB_URL'),
+    'host' => env('COMEX_DB_HOST', $operacion['host']),
+    'port' => env('COMEX_DB_PORT', $operacion['port']),
+    'database' => env('COMEX_DB_DATABASE', $operacion['database'].'_comex'),
+    'username' => env('COMEX_DB_USERNAME', $operacion['username']),
+    'password' => env('COMEX_DB_PASSWORD', $operacion['password']),
+    'unix_socket' => env('COMEX_DB_SOCKET', $operacion['unix_socket']),
+    'charset' => env('DB_CHARSET', 'utf8mb4'),
+    'collation' => env('DB_COLLATION', 'utf8mb4_unicode_ci'),
+    'prefix' => '',
+    'prefix_indexes' => true,
+    'strict' => true,
+    'engine' => null,
+    'options' => extension_loaded('pdo_mysql') ? array_filter([
+        Mysql::ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+    ]) : [],
+]);
+
 return [
 
     /*
@@ -115,23 +136,14 @@ return [
 
         // Comex: esquema propio, separado de la operación. Solo Comex escribe aquí.
         // Por omisión usa el mismo servidor y usuario, con la base «<DB_DATABASE>_comex».
-        'comex' => [
-            'driver' => 'mysql',
-            'url' => env('COMEX_DB_URL'),
-            'host' => env('COMEX_DB_HOST', $operacion['host']),
-            'port' => env('COMEX_DB_PORT', $operacion['port']),
-            'database' => env('COMEX_DB_DATABASE', $operacion['database'].'_comex'),
-            'username' => env('COMEX_DB_USERNAME', $operacion['username']),
-            'password' => env('COMEX_DB_PASSWORD', $operacion['password']),
-            'unix_socket' => env('COMEX_DB_SOCKET', $operacion['unix_socket']),
-            'charset' => env('DB_CHARSET', 'utf8mb4'),
-            'collation' => env('DB_COLLATION', 'utf8mb4_unicode_ci'),
-            'prefix' => '',
-            'prefix_indexes' => true,
-            'strict' => true,
-            'engine' => null,
-            'options' => extension_loaded('pdo_mysql') ? array_filter([
-                Mysql::ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+        'comex' => $comex,
+
+        'comex_lectura' => [
+            ...$comex,
+            'username' => env('COMEX_LECTURA_DB_USERNAME', $comex['username']),
+            'password' => env('COMEX_LECTURA_DB_PASSWORD', $comex['password']),
+            'options' => extension_loaded('pdo_mysql') ? array_replace($comex['options'] ?? [], [
+                Mysql::ATTR_INIT_COMMAND => 'SET SESSION TRANSACTION READ ONLY',
             ]) : [],
         ],
 

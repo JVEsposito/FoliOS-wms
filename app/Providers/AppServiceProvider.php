@@ -244,6 +244,8 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('registrar-porteria', fn (User $usuario): bool => $alcance->puedeRegistrarPorteria($usuario));
         Gate::define('administrar-porteria', fn (User $usuario): bool => $alcance->puedeAdministrarPorteria($usuario));
         Gate::define('registrar-pagos-proveedores', fn (User $usuario): bool => $alcance->puedeRegistrarPagosProveedores($usuario));
+        Gate::define('consultar-costos-comex', fn (User $usuario): bool => $alcance->puedeConsultarCostosComex($usuario));
+        Gate::define('gestionar-costos-comex', fn (User $usuario): bool => $alcance->puedeGestionarCostosComex($usuario));
         Gate::define('consultar-proveedores-finanzas', fn (User $usuario): bool => $alcance->puedeConsultarProveedoresFinanzas($usuario));
         Gate::define('gestionar-proveedores-finanzas', fn (User $usuario): bool => $alcance->puedeGestionarProveedoresFinanzas($usuario));
         Gate::define(

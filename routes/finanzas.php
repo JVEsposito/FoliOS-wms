@@ -3,6 +3,7 @@
 use App\Finanzas\Http\Controllers\CapturasFinanzasController;
 use App\Finanzas\Http\Controllers\CargosFinanzasController;
 use App\Finanzas\Http\Controllers\CierresPrefacturaController;
+use App\Finanzas\Http\Controllers\CostosComexController as CostosComex;
 use App\Finanzas\Http\Controllers\CuentasProveedorController;
 use App\Finanzas\Http\Controllers\DiferenciasPrefacturaController;
 use App\Finanzas\Http\Controllers\DocumentosCompraController;
@@ -21,6 +22,20 @@ use Illuminate\Support\Facades\Route;
  * ninguna modifica registros operativos. Ver docs/FINANZAS.md.
  */
 Route::middleware('auth:sanctum')->prefix('finanzas')->group(function (): void {
+    Route::prefix('costos-comex')->middleware('can:consultar-costos-comex')->group(function (): void {
+        Route::get('/', [CostosComex::class, 'index']);
+        Route::get('/bookings', [CostosComex::class, 'bookings']);
+        Route::get('/bookings/{booking}', [CostosComex::class, 'booking'])->whereUuid('booking');
+        Route::get('/documentos', [CostosComex::class, 'documentos']);
+        Route::get('/{costo}', [CostosComex::class, 'show'])->whereUuid('costo');
+        Route::get('/{costo}/historial', [CostosComex::class, 'historial'])->whereUuid('costo');
+        Route::middleware(['can:gestionar-costos-comex', 'throttle:60,1'])->group(function (): void {
+            Route::post('/', [CostosComex::class, 'guardar']);
+            Route::put('/{costo}', [CostosComex::class, 'guardar'])->whereUuid('costo');
+            Route::post('/{costo}/transiciones', [CostosComex::class, 'transicion'])->whereUuid('costo');
+        });
+    });
+
     Route::prefix('proveedores')->middleware('can:consultar-proveedores-finanzas')->group(function (): void {
         Route::get('/', [ProveedoresFinanzasController::class, 'index']);
         Route::get('/cuenta-corriente', [CuentasProveedorController::class, 'cuenta']);

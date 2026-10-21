@@ -219,6 +219,16 @@ class AlcanceOperacionalUsuario
         return $this->puedeConsultarProveedoresFinanzas($usuario) && $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador], CatalogoModulosAcceso::FINANZAS_PAGOS_PROVEEDORES);
     }
 
+    public function puedeConsultarCostosComex(User $usuario): bool
+    {
+        return $this->puedeConsultarProveedoresFinanzas($usuario) && $this->puedeConsultarComercialComex($usuario);
+    }
+
+    public function puedeGestionarCostosComex(User $usuario): bool
+    {
+        return $this->puedeConsultarCostosComex($usuario) && $this->puedeGestionarProveedoresFinanzas($usuario);
+    }
+
     public function puedeConsultarProveedoresFinanzas(User $usuario): bool
     {
         return $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador, RolUsuario::Consulta], CatalogoModulosAcceso::OFICINA_FINANZAS_PROVEEDORES);
@@ -1223,6 +1233,8 @@ class AlcanceOperacionalUsuario
             'puede_consultar_integridad_operacional' => $this->puedeConsultarIntegridadOperacional($usuario),
             'puede_ejecutar_integridad_operacional' => $this->puedeEjecutarIntegridadOperacional($usuario),
             'puede_registrar_pagos_proveedores' => $this->puedeRegistrarPagosProveedores($usuario),
+            'puede_consultar_costos_comex' => $this->puedeConsultarCostosComex($usuario),
+            'puede_gestionar_costos_comex' => $this->puedeGestionarCostosComex($usuario),
             'puede_consultar_proveedores_finanzas' => $this->puedeConsultarProveedoresFinanzas($usuario),
             'puede_gestionar_proveedores_finanzas' => $this->puedeGestionarProveedoresFinanzas($usuario),
             'puede_consultar_finanzas' => $this->puedeConsultarFinanzas($usuario),
