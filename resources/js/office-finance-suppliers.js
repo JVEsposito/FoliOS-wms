@@ -1,3 +1,4 @@
+import { initSupplierAccounts } from './office-finance-supplier-accounts';
 const $ = (id) => document.getElementById(id);
 const escape = (value) => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
 const url = '/api/finanzas/proveedores'; const tokenKey = 'estiba_wms_office_token'; const identityKey = 'estiba_wms_office_identity';
@@ -5,6 +6,7 @@ let token = localStorage.getItem(tokenKey); let identity;
 try { identity = JSON.parse(localStorage.getItem(identityKey) || 'null'); } catch { identity = null; }
 const state = { suppliers: [], accounts: [], types: {}, selected: null, documents: [], manage: false, supplier: null, document: null, action: null, references: [], materials: [], page: 1, documentPage: 1, journalPage: 1, generation: 0 };
 const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: document.body.dataset.comprasZone || 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+const accounts = initSupplierAccounts({ api, can: (name) => can(name), escape, table: (...a) => table(...a), options: (...a) => options(...a), button: (...a) => button(...a), message: (s) => message(s), open, pages, money: (v) => money(v), today, state, token: () => token, tab, submit, safely });
 const money = (v) => { try { return `$${BigInt(v || '0').toLocaleString('es-CL')}`; } catch { return '—'; } };
 const table = (heads, rows) => `<table><thead><tr>${heads.map((h) => `<th>${escape(h)}</th>`).join('')}</tr></thead><tbody>${rows || `<tr><td colspan="${heads.length}">Sin registros.</td></tr>`}</tbody></table>`;
 const options = (items, empty = '') => (empty ? `<option value="">${escape(empty)}</option>` : '') + items.map(([v, n]) => `<option value="${escape(v)}">${escape(n)}</option>`).join('');
@@ -28,7 +30,7 @@ function show() {
     $('officeAccess').classList.add('is-hidden'); $('officeApp').classList.remove('is-hidden');
     $('officeUserName').textContent = identity.nombre || 'Usuario'; $('officeUserRole').textContent = identity.rol || ''; $('officeInitials').textContent = (identity.nombre || 'U').split(/\s+/).slice(0, 2).map((s) => s[0]).join('');
 }
-function tab(name) { for (const b of document.querySelectorAll('[data-cp-tab]')) b.setAttribute('aria-pressed', String(b.dataset.cpTab === name)); for (const p of document.querySelectorAll('[data-cp-panel]')) p.hidden = p.dataset.cpPanel !== name; }
+function tab(name) { for (const b of document.querySelectorAll('[data-cp-tab]')) b.setAttribute('aria-pressed', String(b.dataset.cpTab === name)); for (const p of document.querySelectorAll('[data-cp-panel]')) p.hidden = p.dataset.cpPanel !== name; accounts.select(name); }
 function pages(id, p, load) {
     $(id).replaceChildren(); for (const [label, n] of [['Anterior', p.current_page - 1], ['Siguiente', p.current_page + 1]]) { const b = document.createElement('button'); b.type = 'button'; b.className = 'secondary-button'; b.textContent = label; b.disabled = n < 1 || n > p.last_page; b.onclick = () => safely(() => load(n)); $(id).append(b); } $(id).append(document.createTextNode(`Página ${p.current_page} de ${p.last_page}`));
 }
@@ -36,11 +38,11 @@ function fill(form, data) { for (const [k, v] of Object.entries(data)) if (form.
 async function loadSuppliers(page = state.page) {
     const generation = ++state.generation;
     const d = await api(`${url}?${new URLSearchParams({ buscar: $('cpSearch').elements.buscar.value, page })}`); if (generation !== state.generation) return;
-    state.page = page; state.suppliers = d.data.data; state.accounts = d.cuentas; state.types = d.tipos; state.manage = d.puede_gestionar;
+    state.page = page; state.suppliers = d.data.data; state.accounts = d.cuentas; state.controls = d.cuentas_control || { anticipos: '1205' }; state.types = d.tipos; state.manage = d.puede_gestionar;
     for (const b of document.querySelectorAll('[data-cp-manage]')) b.hidden = !state.manage;
     if (state.selected) state.selected = state.suppliers.find((p) => p.id === state.selected.id) || state.selected;
-    $('cpSuppliers').innerHTML = table(['Proveedor', 'Contacto', 'Control', 'Acciones'], state.suppliers.map((p) => `<tr><td><strong>${escape(p.razon_social)}</strong><br>${escape(p.rut)}<br>${escape(p.categoria)}</td><td>${escape(p.contacto)}<br>${escape(p.email)}<br>${escape(p.telefono)}</td><td>${p.activo ? 'Activo' : 'Inactivo'}<br>${p.pagos_bloqueados ? 'Pagos bloqueados' : 'Pagos habilitados'}<br>${p.proveedor_material_id ? 'Vinculado a Materiales' : 'Ficha financiera'}</td><td>${button('Documentos', 'select', p.id)}${state.manage ? button('Editar ficha', 'supplier', p.id) : ''}${button('Historial', 'supplier-history', p.id)}</td></tr>`).join(''));
-    pages('cpSupplierPages', d.data, loadSuppliers); renderAccounts(); message('Directorio actualizado.');
+    $('cpSuppliers').innerHTML = table(['Proveedor', 'Contacto', 'Control', 'Acciones'], state.suppliers.map((p) => `<tr><td><strong>${escape(p.razon_social)}</strong><br>${escape(p.rut)}<br>${escape(p.categoria)}</td><td>${escape(p.contacto)}<br>${escape(p.email)}<br>${escape(p.telefono)}</td><td>${p.activo ? 'Activo' : 'Inactivo'}<br>${p.pagos_bloqueados ? 'Pagos bloqueados' : 'Pagos habilitados'}<br>${p.proveedor_material_id ? 'Vinculado a Materiales' : 'Ficha financiera'}</td><td>${button('Documentos', 'select', p.id)}${button('Cuenta corriente', 'select-account', p.id)}${state.manage ? button('Editar ficha', 'supplier', p.id) : ''}${button('Historial', 'supplier-history', p.id)}</td></tr>`).join(''));
+    pages('cpSupplierPages', d.data, loadSuppliers); renderAccounts(); accounts.access(); message('Directorio actualizado.');
 }
 function renderAccounts() { $('cpAccounts').innerHTML = table(['Cuenta', 'Tipo', 'Estado', 'Acciones'], state.accounts.map((c) => `<tr><td>${escape(c.codigo)} · ${escape(c.nombre)}</td><td>${escape(c.tipo)}</td><td>${c.activa ? 'Activa' : 'Inactiva'}</td><td>${state.manage ? button('Editar', 'account', c.codigo) : ''}</td></tr>`).join('')); }
 async function loadDocuments(page = state.documentPage) {
@@ -50,13 +52,13 @@ async function loadDocuments(page = state.documentPage) {
     $('cpDocuments').innerHTML = table(['Documento', 'Fechas', 'Total CLP', 'Estado', 'Acciones'], state.documents.map((v) => `<tr><td>${escape(state.types[v.tipo])}<br><strong>${escape(v.folio)}</strong></td><td>Emisión: ${escape(v.fecha_emision)}<br>Vence: ${escape(v.vencimiento)}</td><td>${money(v.total)}</td><td>${v.anulado_at ? 'Anulado internamente' : v.registrado_at ? (v.tipo === '52' ? 'Guía registrada · sin deuda' : 'Contabilizado') : 'Borrador'}</td><td>${button('Ver detalle', 'detail', v.id)}${state.manage && v.anulado_at ? button('Crear corrección', 'correct-document', v.id) : ''}${state.manage && !v.anulado_at ? `${!v.registrado_at ? button('Corregir', 'edit-document', v.id) + button('Registrar', 'post', v.id) : ''}${button(v.registrado_at ? 'Revertir' : 'Anular borrador', 'reverse', v.id)}` : ''}</td></tr>`).join(''));
     pages('cpDocumentPages', d.data, loadDocuments);
 }
-function journalMarkup(entries) { return entries.map((v) => `<article class="cp-journal-entry"><h3>${escape(v.fecha)} · ${escape(v.glosa)}</h3><p>${v.reversa_de_id ? 'Reverso · ' : ''}${escape(v.user_nombre)}</p><div class="cp-table">${table(['Cuenta', 'Detalle / CECO', 'Debe CLP', 'Haber CLP'], v.lineas.map((l) => `<tr><td>${escape(l.cuenta)} · ${escape(l.cuenta_nombre)}</td><td>${escape(l.descripcion)}<br>${escape(l.ceco)}</td><td>${money(l.debe)}</td><td>${money(l.haber)}</td></tr>`).join(''))}</div></article>`).join('') || '<p>Sin asientos en este período.</p>'; }
+function journalMarkup(entries) { return entries.map((v) => `<article class="cp-journal-entry"><h3>${escape(v.fecha)} · ${escape(v.glosa)}</h3><p>${escape(v.proveedor?.razon_social || '')} ${escape(v.proveedor?.rut || '')}<br>${v.reversa_de_id ? 'Reverso · ' : ''}${escape(v.user_nombre)}</p><div class="cp-table">${table(['Cuenta', 'Detalle / CECO', 'Debe CLP', 'Haber CLP'], v.lineas.map((l) => `<tr><td>${escape(l.cuenta)} · ${escape(l.cuenta_nombre)}</td><td>${escape(l.descripcion)}<br>${escape(l.ceco)}</td><td>${money(l.debe)}</td><td>${money(l.haber)}</td></tr>`).join(''))}</div></article>`).join('') || '<p>Sin asientos en este período.</p>'; }
 async function loadJournal(page = 1) { const q = new URLSearchParams(new FormData($('cpJournalFilters'))); q.set('page', page); const d = await api(`${url}/asientos?${q}`); $('cpJournal').innerHTML = journalMarkup(d.data.data); pages('cpJournalPages', d.data, loadJournal); }
 async function materials() { const d = await api(`${url}/materiales?${new URLSearchParams({ buscar: $('cpMaterialSearch').value })}`); state.materials = d.data; const current = $('cpMaterial').value || state.supplier?.proveedor_material_id; $('cpMaterial').innerHTML = options(d.data.map((p) => [p.id, `${p.codigo} · ${p.nombre}`]), 'Sin vínculo con Materiales'); if (current && !d.data.some((p) => p.id === current)) $('cpMaterial').add(new Option('Proveedor vinculado previamente', current)); $('cpMaterial').value = current || ''; }
 async function supplierForm(p = null) { state.supplier = p; const f = $('cpSupplierForm'); f.reset(); $('cpSupplierReason').hidden = !p; f.elements.motivo.required = !!p; if (p) fill(f, p); f.elements.rut.readOnly = !!p; $('cpMaterialSearch').value = ''; await materials(); $('cpMaterial').disabled = !!p?.proveedor_material_id; open('cpSupplierDialog'); }
 function addLine(line = {}) {
     const row = document.createElement('div'); row.className = 'cp-line';
-    row.innerHTML = `<label>Cuenta<select data-line="cuenta" required>${options(state.accounts.filter((c) => c.activa && ['gasto', 'activo'].includes(c.tipo)).map((c) => [c.codigo, `${c.codigo} · ${c.nombre}`]))}</select></label><label>Descripción<input data-line="descripcion" required maxlength="250"></label><label>CECO<input data-line="ceco" maxlength="80"></label><label>Importe CLP<input data-line="monto" inputmode="numeric" pattern="[0-9]{1,15}" required value="0"></label><button class="secondary-button" type="button" data-cp-remove>Quitar</button>`;
+    row.innerHTML = `<label>Cuenta<select data-line="cuenta" required>${options(state.accounts.filter((c) => c.activa && ['gasto', 'activo'].includes(c.tipo) && c.codigo !== state.controls?.anticipos).map((c) => [c.codigo, `${c.codigo} · ${c.nombre}`]))}</select></label><label>Descripción<input data-line="descripcion" required maxlength="250"></label><label>CECO<input data-line="ceco" maxlength="80"></label><label>Importe CLP<input data-line="monto" inputmode="numeric" pattern="[0-9]{1,15}" required value="0"></label><button class="secondary-button" type="button" data-cp-remove>Quitar</button>`;
     for (const [k, v] of Object.entries(line)) if (row.querySelector(`[data-line="${k}"]`)) row.querySelector(`[data-line="${k}"]`).value = v ?? '';
     $('cpCostLines').append(row);
 }
@@ -112,6 +114,7 @@ document.addEventListener('click', (e) => {
     const b = e.target.closest('[data-cp-action]'); if (!b) return;
     safely(async () => {
         const { cpAction: a, id } = b.dataset;
+        if (a === 'select-account') { state.selected = state.suppliers.find((p) => p.id === id); tab('corriente'); return; }
         if (a === 'supplier') return supplierForm(state.suppliers.find((p) => p.id === id));
         if (a === 'select') { state.selected = state.suppliers.find((p) => p.id === id); tab('documentos'); return loadDocuments(1); }
         if (a === 'supplier-history') return history('proveedor', id);

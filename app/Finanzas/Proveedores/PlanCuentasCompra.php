@@ -27,8 +27,8 @@ final class PlanCuentasCompra
             if ($cuenta !== null && $cuenta->tipo !== $datos['tipo']) {
                 throw ValidationException::withMessages(['tipo' => 'El tipo de una cuenta existente no se puede cambiar.']);
             }
-            foreach (['iva', 'pasivo'] as $rol) {
-                if ($datos['codigo'] === config('finanzas-compras.'.$rol) && ($datos['tipo'] !== $rol || ! $datos['activa'])) {
+            foreach (['iva', 'pasivo', 'anticipos'] as $rol) {
+                if ($datos['codigo'] === config('finanzas-compras.'.$rol) && ($datos['tipo'] !== ($rol === 'anticipos' ? 'activo' : $rol) || ! $datos['activa'])) {
                     throw ValidationException::withMessages(['codigo' => 'La cuenta de control debe conservar su tipo y permanecer activa.']);
                 }
             }

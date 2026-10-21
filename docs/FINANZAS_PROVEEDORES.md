@@ -42,3 +42,34 @@ El diario auxiliar conserva debe/haber, cuenta y nombre al contabilizar, CECO, u
 - [Ley 19.983 vigente, artículos 2 y 3](https://www.bcn.cl/leychile/navegar?idNorma=233421): plazo general de 30 días corridos desde recepción, excepciones con requisitos y reclamo dentro de ocho días. Registrar un documento internamente no realiza aceptación/reclamo ante SII ni verifica cesiones/factoring.
 
 Honorarios y sus retenciones, documentos de importación, cambios de sujeto, IVA de uso común, intereses automáticos, cesiones/factoring, depreciación, consumo de existencias y declaraciones requieren sus reglas específicas; no se simulan con una factura estándar. La etapa de cuentas corrientes agrega pagos registrados, aplicaciones, evaluación y reportes sin ejecutar pagos bancarios.
+
+## Cuentas corrientes, pagos y evaluación
+
+La pestaña Cuenta corriente puede mostrar todos los proveedores o el seleccionado, a una fecha de corte. Las deudas, notas por aplicar y anticipos están separados. La antigüedad muestra importes sin vencer, 1–30, 31–60, 61–90 y más de 90 días. Un saldo a favor de un proveedor no se aplica a otro. Las notas disponibles se muestran antes de interpretar la deuda vencida; no hay imputación automática.
+
+### Pagos y aplicaciones
+
+`finanzas.pagos-proveedores` es un permiso adicional al acceso a Proveedores. Solo Administración con ambos módulos registra pagos, anticipos, aplicaciones y reversos. Los perfiles de consulta no adquieren escritura por marcar el módulo. El bloqueo de pagos en la ficha requiere revisión explícita antes de registrar otro desembolso; inactivar nuevas compras no impide saldar deudas existentes.
+
+- Registrar pago es ingresar los datos de un desembolso ya realizado, con confirmación y respaldo. No conecta al banco ni ordena transferencias. Tesorería debe identificar sus cuentas reales en el plan.
+- El pago carga el activo de anticipos/pagos por aplicar (1205 por defecto) y abona tesorería. Una aplicación a factura carga proveedores y abona anticipos. Puede aplicar una parte al crear el pago y distribuir el resto posteriormente, sin reconocer un gasto de nuevo.
+- La nota de crédito ya reduce proveedores al contabilizarla. Su aplicación solo vincula el ajuste a la factura que referencia y no repite el asiento.
+- La referencia del comprobante, normalizada, es única entre pagos vigentes de la misma cuenta de tesorería. UUID y huella impiden duplicar solicitudes y rechazan la reutilización del identificador con otros datos.
+- No se aplican importes superiores al saldo del crédito ni de la deuda. Se serializa por proveedor y se verifica dentro de la transacción, incluyendo aplicaciones iniciales: si una falla, no queda pago ni asiento parcial.
+- Para revertir un pago, factura o nota aplicada se desaplican primero sus abonos. El reverso conserva su asiento original y crea el contrario. Una referencia de pago puede corregirse después de revertir su ingreso anterior, con fecha posterior o igual al reverso.
+- Una nueva aplicación no precede a la deuda, al crédito ni a sus últimas desaplicaciones. La corrección de una factura no precede al reverso anterior. Estos límites evitan reutilizar un importe en una fecha en que todavía estaba ocupado.
+- Los cortes anteriores conservan las aplicaciones y documentos que estaban vigentes en esa fecha, aunque se hayan revertido después. Un anticipo no se presenta como gasto ni como pasivo negativo: se muestra como activo disponible y se informa también el saldo neto económico.
+
+La consulta filtra en SQL las partidas saldadas antes de cargar resultados; un historial extenso de facturas pagadas no consume el límite. Si una consulta supera 5.000 partidas pendientes por tipo, pide acotar por proveedor y no muestra totales parciales. Los comprobantes y aplicaciones históricos tienen paginación.
+
+### Contabilidad y cierres
+
+Balance y gastos consulta el diario auxiliar con saldo inicial, debe, haber y saldo final por cuenta. Incluye mayor con saldo acumulado, reporte de gastos netos por cuenta y CECO y exportación CSV. El CSV protege los textos que podrían interpretarse como fórmulas. Las compras clasificadas como activo no se convierten en gasto por pagarlas. Los nombres de cuenta en el balance son los actuales; los asientos conservan sus nombres históricos.
+
+Los períodos se cierran explícitamente con motivo. Si hay borradores emitidos en el mes, deben revisarse primero. El cierre bloquea nuevos asientos, aplicaciones y reversos en ese mes, compartiendo el bloqueo de la fila del período con las escrituras. Se puede usar un período posterior abierto para corregir, o reabrir con historial el último mes cerrado. El cierre de compras es independiente de la prefactura a clientes; no sustituye conciliación bancaria ni validación tributaria.
+
+### Evaluación
+
+Cada evaluación conserva período, evaluador, criterios, pesos, notas de 1 a 5, conclusión y respaldo. Los pesos deben sumar 100%; la nota final se calcula con aritmética decimal exacta. Puede agregar criterios propios. La evaluación es inmutable; una equivocación se anula con motivo y se registra otra. La conclusión es una decisión explícita y no bloquea automáticamente pagos ni altera Materiales.
+
+Esta etapa no incorpora devoluciones bancarias de anticipos/saldos a favor, documentos en moneda extranjera, reconocimiento de diferencia de cambio, compensaciones entre clientes/proveedores, conciliación bancaria, declaraciones SII ni libros oficiales. Los saldos a favor permanecen identificados hasta gestionar su aplicación o un flujo específico de devolución. El diario auxiliar alimenta una futura integración contable; no se presenta como una contabilidad completa de toda la empresa.

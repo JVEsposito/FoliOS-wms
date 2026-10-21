@@ -13,6 +13,6 @@ class LibroComprasController extends Controller
     {
         $d = $request->validate(['desde' => ['required', 'date_format:Y-m-d'], 'hasta' => ['required', 'date_format:Y-m-d', 'after_or_equal:desde'], 'proveedor_id' => ['nullable', 'uuid']]);
 
-        return response()->json(['data' => AsientoCompra::query()->with('lineas')->whereBetween('fecha', [$d['desde'], $d['hasta']])->when($d['proveedor_id'] ?? null, fn ($q, $id) => $q->where('proveedor_id', $id))->orderBy('fecha')->orderBy('created_at')->orderBy('id')->paginate(30)]);
+        return response()->json(['data' => AsientoCompra::query()->with(['lineas', 'proveedor:id,rut,razon_social'])->whereBetween('fecha', [$d['desde'], $d['hasta']])->when($d['proveedor_id'] ?? null, fn ($q, $id) => $q->where('proveedor_id', $id))->orderBy('fecha')->orderBy('created_at')->orderBy('id')->paginate(30)]);
     }
 }

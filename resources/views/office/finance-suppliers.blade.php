@@ -20,6 +20,7 @@
         <p id="cpMessage" class="fin-status" role="status" aria-live="polite">Cargando…</p>
         <nav class="cp-tabs" aria-label="Vistas de proveedores">
             <button type="button" data-cp-tab="proveedores" aria-pressed="true">Directorio</button><button type="button" data-cp-tab="documentos" aria-pressed="false">Documentos recibidos</button><button type="button" data-cp-tab="diario" aria-pressed="false">Diario contable</button><button type="button" data-cp-tab="cuentas" aria-pressed="false">Plan de cuentas</button>
+            <button type="button" data-cp-tab="corriente" aria-pressed="false">Cuenta corriente</button><button type="button" data-cp-tab="reportes" aria-pressed="false">Balance y gastos</button><button type="button" data-cp-tab="evaluaciones" aria-pressed="false">Evaluación</button>
         </nav>
         <section class="panel cp-panel" data-cp-panel="proveedores">
             <form id="cpSearch" class="cp-toolbar"><label>Buscar proveedor<input name="buscar" type="search" maxlength="100" placeholder="Razón social o RUT"></label><button type="submit" class="secondary-button">Buscar</button><button id="cpNewSupplier" type="button" class="primary-button" data-cp-manage hidden>Nuevo proveedor</button></form>
@@ -37,6 +38,7 @@
         <section class="panel cp-panel" data-cp-panel="cuentas" hidden>
             <div class="cp-toolbar"><button id="cpInitPlan" type="button" class="secondary-button" data-cp-manage hidden>Instalar plan inicial</button><button id="cpNewAccount" type="button" class="primary-button" data-cp-manage hidden>Crear cuenta</button></div><p>Revise la clasificación con contabilidad. Las compras de existencias y de activo fijo se asignan a cuentas de activo; los servicios consumidos, a gastos. La cuenta de control de proveedores es 2101; el IVA por revisar, 1108.</p><div class="cp-table" id="cpAccounts"></div>
         </section>
+        @include('office.partials.finance-supplier-accounts')
     </section>
 </main>
 <dialog class="cp-dialog" id="cpSupplierDialog"><form id="cpSupplierForm">
@@ -69,4 +71,5 @@
 <dialog class="cp-dialog" id="cpActionDialog"><form id="cpActionForm"><h2 id="cpActionTitle"></h2><p id="cpActionDescription"></p><label>Fecha contable<input name="fecha_contable" type="date" required></label><label id="cpActionReason">Motivo del reverso interno<textarea name="motivo" minlength="5" maxlength="500"></textarea></label><p>Este registro no modifica documentos tributarios ante el SII. La anulación interna conserva el original y su reverso.</p><p data-cp-error role="alert"></p><footer><button type="button" class="secondary-button" data-cp-close>Cancelar</button><button type="submit" class="primary-button">Confirmar</button></footer></form></dialog>
 <dialog class="cp-dialog" id="cpAccountDialog"><form id="cpAccountForm"><h2>Cuenta contable</h2><label>Código<input name="codigo" required maxlength="30" pattern="[A-Za-z0-9._\-]+"></label><label>Nombre<input name="nombre" required maxlength="180"></label><label>Tipo<select name="tipo"><option value="gasto">Gasto</option><option value="activo">Activo</option><option value="tesoreria">Tesorería</option><option value="iva">IVA por revisar</option><option value="pasivo">Pasivo</option></select></label><label>Estado<select name="activa"><option value="1">Activa</option><option value="0">Inactiva</option></select></label><p data-cp-error role="alert"></p><footer><button type="button" class="secondary-button" data-cp-close>Cancelar</button><button type="submit" class="primary-button">Guardar cuenta</button></footer></form></dialog>
 <dialog class="cp-dialog cp-dialog--wide" id="cpDetailDialog"><h2>Detalle y trazabilidad</h2><div id="cpDetail"></div><footer><button type="button" class="secondary-button" data-cp-close>Cerrar</button></footer></dialog>
+@include('office.partials.finance-supplier-account-dialogs')
 </body></html>

@@ -2,6 +2,7 @@
 
 namespace App\Finanzas\Proveedores;
 
+use App\Finanzas\Models\AplicacionProveedor;
 use App\Finanzas\Models\AsientoCompra;
 use App\Finanzas\Models\DocumentoCompra;
 use App\Finanzas\Models\ProveedorFinanciero;
@@ -109,6 +110,9 @@ final class GestorDocumentosCompra
         $distribuido = BigDecimal::zero();
         $lineas = [];
         foreach ($datos['lineas'] as $linea) {
+            if ($linea['cuenta'] === config('finanzas-compras.anticipos')) {
+                throw ValidationException::withMessages(['cuenta' => 'Los anticipos se registran desde pagos, no como costo de un documento.']);
+            }
             $cuenta = $this->plan->buscar($linea['cuenta'], ['gasto', 'activo']);
             $distribuido = $distribuido->plus($linea['monto']);
             $lineas[] = [...$linea, 'cuenta_nombre' => $cuenta->nombre, 'cuenta_tipo' => $cuenta->tipo];
@@ -250,6 +254,13 @@ final class GestorDocumentosCompra
                 return $documento;
             }
             if ($documento->registrado_at) {
+                if (AplicacionProveedor::query()->whereNull('anulado_at')->where(fn ($q) => $q->where('documento_id', $documento->id)->orWhere(fn ($q) => $q->where('credito_tipo', 'nota_credito')->where('credito_id', $documento->id)))->exists()) {
+                    throw ValidationException::withMessages(['documento' => 'Desaplique sus pagos y notas antes de revertir el documento.']);
+                }
+                $ultima = AplicacionProveedor::query()->where(fn ($q) => $q->where('documento_id', $documento->id)->orWhere(fn ($q) => $q->where('credito_tipo', 'nota_credito')->where('credito_id', $documento->id)))->max('fecha_anulacion');
+                if ($ultima && $fecha < $ultima) {
+                    throw ValidationException::withMessages(['fecha_contable' => 'La reversión debe ser posterior o igual a sus desaplicaciones.']);
+                }
                 $ultimoReverso = DocumentoCompra::query()->whereNotNull('registrado_at')->where(fn ($q) => $q->where('referencia_id', $documento->id)->orWhereJsonContains('guias', $documento->id))->max('fecha_anulacion');
                 if ($ultimoReverso && $fecha < $ultimoReverso) {
                     throw ValidationException::withMessages(['fecha_contable' => 'La fecha debe ser posterior o igual a los reversos de los documentos vinculados.']);
