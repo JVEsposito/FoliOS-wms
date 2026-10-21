@@ -14,7 +14,7 @@ use Illuminate\Support\Str;
 
 class ServicioDocumentosSag
 {
-    public const FORMATOS = ['repaletizaje' => 'F-PA-CFT-DR-010', 'anulacion' => 'F-PA-CFT-DR-011', 'cambio_mercado' => 'F-CER-PPS-PA-002'];
+    public const FORMATOS = ['repaletizaje' => 'F-PA-CFT-DR-010', 'anulacion' => 'F-PA-CFT-DR-011', 'cambio_mercado' => 'F-CER-PPS-PA-002', 'despacho' => 'F-CER-PPS-PA-001'];
 
     public function __construct(private readonly DatosDocumentoSag $datos) {}
 
@@ -51,7 +51,7 @@ class ServicioDocumentosSag
                 'encabezado' => $entrada['encabezado'] ?? [], 'entrada' => $entrada, 'detalle' => $detalle,
                 'creado_por_user_id' => $registro->creado_por_user_id ?? $usuario->id,
             ]);
-            if (! $registro->exists && $registro->repaletizaje_id && DocumentoSag::where('repaletizaje_id', $registro->repaletizaje_id)->exists()) {
+            if ($registro->repaletizaje_id && DocumentoSag::where('repaletizaje_id', $registro->repaletizaje_id)->when($registro->exists, fn ($q) => $q->whereKeyNot($registro->id))->exists()) {
                 throw new ConflictoOperacion('La repa ya tiene un documento SAG. Ábrelo desde el listado.');
             }
             if ($registro->lote_inspeccion_sag_id && DocumentoSag::where('lote_inspeccion_sag_id', $registro->lote_inspeccion_sag_id)->when($registro->exists, fn ($q) => $q->whereKeyNot($registro->id))->exists()) {
@@ -93,6 +93,9 @@ class ServicioDocumentosSag
                     throw new DomainException('El responsable está inactivo. Corrige el borrador.');
                 }
                 $detalle = $this->datos->preparar($registro->tipo, $registro->entrada);
+                if ($registro->tipo === 'despacho') {
+                    app(DatosDespachoSag::class)->validarEmision($detalle);
+                }
                 if ($registro->tipo === 'cambio_mercado') {
                     if (blank($registro->encabezado['programa'] ?? null) || blank($registro->encabezado['motivo'] ?? null) || empty($detalle['lineas'])) {
                         throw new DomainException('Completa el programa, motivo y folios del cambio de mercado.');
@@ -103,7 +106,7 @@ class ServicioDocumentosSag
                         }
                     }
                 }
-                foreach ($detalle['originales'] ?? $detalle['lineas'] ?? [] as $linea) {
+                foreach ($registro->tipo === 'despacho' ? [] : ($detalle['originales'] ?? $detalle['lineas'] ?? []) as $linea) {
                     if (blank($linea['tipo_actividad'] ?? null) || blank($linea['numero_actividad'] ?? null)) {
                         throw new DomainException('Completa la última actividad y su número para cada folio antes de emitir.');
                     }

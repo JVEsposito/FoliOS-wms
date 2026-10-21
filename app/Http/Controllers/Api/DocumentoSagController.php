@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\DocumentoSag;
+use App\Services\InspeccionSag\DatosDespachoSag;
 use App\Services\InspeccionSag\DatosDocumentoSag;
+use App\Services\InspeccionSag\GeneradorDespachoSag;
 use App\Services\InspeccionSag\GeneradorDocumentoSag;
 use App\Services\InspeccionSag\ServicioDocumentosSag;
 use App\Services\Temporadas\ServicioTemporadaActiva;
@@ -52,9 +54,11 @@ class DocumentoSagController extends Controller
 
     public function fuente(string $tipo, string $referencia, DatosDocumentoSag $datos)
     {
-        abort_unless(in_array($tipo, ['repaletizaje', 'cambio_mercado'], true), 404);
+        abort_unless(in_array($tipo, ['repaletizaje', 'cambio_mercado', 'despacho'], true), 404);
 
-        return response()->json($tipo === 'repaletizaje' ? $datos->repaletizaje($referencia) : $datos->cambioMercado($referencia));
+        return response()->json(match ($tipo) {
+            'repaletizaje' => $datos->repaletizaje($referencia), 'despacho' => app(DatosDespachoSag::class)->fuente($referencia), default => $datos->cambioMercado($referencia)
+        });
     }
 
     public function folio(string $numero, DatosDocumentoSag $datos)
@@ -96,6 +100,9 @@ class DocumentoSagController extends Controller
 
     private function descarga(?DocumentoSag $documento, string $tipo, string $formato, GeneradorDocumentoSag $generador)
     {
+        if ($tipo === 'despacho') {
+            $generador = app(GeneradorDespachoSag::class);
+        }
         abort_unless(in_array($formato, ['pdf', 'xlsx'], true), 404);
         $nombre = 'sag-'.$tipo.'-'.($documento?->numero ?? ($documento ? 'borrador' : 'blanco')).'.'.$formato;
         if ($formato === 'xlsx') {
@@ -159,9 +166,39 @@ class DocumentoSagController extends Controller
             'fecha_actividad' => ['required', 'date'],
             'repaletizaje_id' => ['required_if:tipo,repaletizaje', 'nullable', 'uuid'],
             'lote_inspeccion_sag_id' => ['required_if:tipo,cambio_mercado', 'nullable', 'uuid'],
+            'embarque_id' => ['required_if:tipo,despacho', 'nullable', 'uuid'], 'instructivo_id' => ['nullable', 'uuid'],
+            'seleccion_folios' => ['nullable', 'array', 'max:500'], 'seleccion_folios.*' => ['required', 'uuid', 'distinct'],
+            'origenes' => ['nullable', 'array', 'max:500'], 'origenes.*' => ['array:provincia,comuna,csg,csp'],
+            'origenes.*.*' => ['nullable', 'string', 'max:150'],
             'kilos' => ['nullable', 'array', 'max:500'], 'kilos.*' => ['nullable', 'numeric', 'gt:0', 'max:10000000'],
             'mercados_anteriores' => ['nullable', 'array', 'max:500'], 'mercados_anteriores.*' => ['nullable', 'string', 'max:1000'],
-            'encabezado' => ['present', 'array:observaciones,solicitud,certificados,certificados_devueltos,certificados_asignados,nota,programa,motivo'],
+            'encabezado' => ['present', 'array:observaciones,solicitud,certificados,certificados_devueltos,certificados_asignados,nota,programa,motivo,despacho'],
+            'encabezado.despacho' => ['nullable', 'array:exportador,rut_exportador,agente,rut_agente,nave_vuelo,puerto_embarque,oficina_sag_puerto,destino_pais,destino_ciudad,consignatario,contenedor,sello,ubicacion_sello,patente,patente_trasera,modalidad,guias,tipo_produccion,transgenico,tratamiento,detalle_tratamiento,modo,motivo_contingencia,referencia_multipuerto,nimf15,inspeccionado'],
+            'encabezado.despacho.exportador' => ['nullable', 'string', 'max:1000'],
+            'encabezado.despacho.rut_exportador' => ['nullable', 'string', 'max:1000'],
+            'encabezado.despacho.agente' => ['nullable', 'string', 'max:1000'],
+            'encabezado.despacho.rut_agente' => ['nullable', 'string', 'max:1000'],
+            'encabezado.despacho.nave_vuelo' => ['nullable', 'string', 'max:1000'],
+            'encabezado.despacho.puerto_embarque' => ['nullable', 'string', 'max:1000'],
+            'encabezado.despacho.oficina_sag_puerto' => ['nullable', 'string', 'max:1000'],
+            'encabezado.despacho.destino_pais' => ['nullable', 'string', 'max:1000'],
+            'encabezado.despacho.destino_ciudad' => ['nullable', 'string', 'max:1000'],
+            'encabezado.despacho.consignatario' => ['nullable', 'string', 'max:1000'],
+            'encabezado.despacho.contenedor' => ['nullable', 'string', 'max:1000'],
+            'encabezado.despacho.sello' => ['nullable', 'string', 'max:1000'],
+            'encabezado.despacho.ubicacion_sello' => ['nullable', 'string', 'max:1000'],
+            'encabezado.despacho.patente' => ['nullable', 'string', 'max:1000'],
+            'encabezado.despacho.patente_trasera' => ['nullable', 'string', 'max:1000'],
+            'encabezado.despacho.modalidad' => ['nullable', 'string', 'max:1000'],
+            'encabezado.despacho.guias' => ['nullable', 'string', 'max:1000'],
+            'encabezado.despacho.detalle_tratamiento' => ['nullable', 'string', 'max:1000'],
+            'encabezado.despacho.motivo_contingencia' => ['nullable', 'string', 'max:1000'],
+            'encabezado.despacho.referencia_multipuerto' => ['nullable', 'string', 'max:1000'],
+            'encabezado.despacho.nimf15' => ['nullable', 'boolean'], 'encabezado.despacho.inspeccionado' => ['nullable', 'boolean'],
+            'encabezado.despacho.modo' => ['nullable', Rule::in(['multipuerto', 'contingencia'])],
+            'encabezado.despacho.tipo_produccion' => ['nullable', Rule::in(['CONVENCIONAL', 'ORGÁNICO', 'EN CONVERSIÓN'])],
+            'encabezado.despacho.transgenico' => ['nullable', Rule::in(['SI', 'NO', 'NO APLICA'])],
+            'encabezado.despacho.tratamiento' => ['nullable', Rule::in(['sin_tratamiento', 'tratado', 'tratamiento_destino'])],
             'encabezado.programa' => ['nullable', 'string', 'max:100'], 'encabezado.motivo' => ['nullable', 'string', 'max:250'],
             'encabezado.observaciones' => ['nullable', 'string', 'max:2000'],
             'encabezado.solicitud' => ['nullable', 'string', 'max:250'], 'encabezado.nota' => ['nullable', 'string', 'max:500'],

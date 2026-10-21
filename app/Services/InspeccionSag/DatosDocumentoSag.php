@@ -84,6 +84,9 @@ class DatosDocumentoSag
 
     public function preparar(string $tipo, array $datos): array
     {
+        if ($tipo === 'despacho') {
+            return app(DatosDespachoSag::class)->preparar($datos);
+        }
         if ($tipo === 'cambio_mercado') {
             $fuente = $this->cambioMercado($datos['lote_inspeccion_sag_id']);
             foreach ($fuente['lineas'] as &$linea) {

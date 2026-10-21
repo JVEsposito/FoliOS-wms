@@ -29,6 +29,7 @@ async function setup(browser, { consulta = false, width = 390 } = {}) {
         if (path === '/api/contraparte-sag/existencias') return route.fulfill({ json: { cajas: 0, unidades: 0, folios: { data: [], current_page: 1, last_page: 1 }, movimientos: { data: [], current_page: 1, last_page: 1 } } });
         if (path === '/api/contraparte-sag/folios/00000123') return route.fulfill({ json: { folio_id: folioId, folio: '00000123', cantidad: 180, especie: 'UVA', tipo_actividad: 'INSPECCIÓN', numero_actividad: '1513', con_condicion: true } });
         if (path === '/api/contraparte-sag/fuentes/cambio_mercado/CM-1') return route.fulfill({ json: { lote_inspeccion_sag_id: docId, fecha_actividad: '2026-10-21', lineas: [{ folio_id: folioId, folio: '00000123', cantidad: 168, especie: 'CEREZAS', kilos: 840, mercados_anteriores: 'CHINA - TAIWAN', nuevo_destino: 'VIETNAM', tipo_actividad: 'INSPECCIÓN', numero_actividad: '1513' }] } });
+        if (path === '/api/contraparte-sag/fuentes/despacho/EMB-1') return route.fulfill({ json: { embarque_id: docId, fecha_actividad: '2026-10-21', transporte: { exportador: 'Exportador prueba' }, instructivos: [{ id: personId, numero: 'I-1', destino_pais: 'HOLANDA' }, { id: docId, numero: 'I-2', destino_pais: 'CHINA' }], lineas: [{ folio_id: folioId, linea_id: `${folioId}:1`, folio: '00000123', cantidad: 240, especie: 'CEREZA', variedad: 'SANTINA', kilos: 600, provincia: 'Colchagua', comuna: 'Placilla', csg: '00102778', csp: '3176555' }] } });
         if (path === '/api/contraparte-sag/documentos' && route.request().method() === 'POST') {
             saved = route.request().postDataJSON(); const d = { ...saved, id: docId, version: 1, estado: 'borrador', numero: null, detalle: { lineas: [{ folio: '00000123', cantidad: 4, tipo_actividad: 'INSPECCIÓN', numero_actividad: '1513' }] } }; records = [d]; return route.fulfill({ status: 201, json: d });
         }
@@ -84,5 +85,24 @@ test('cambio de mercado permite revisar pesos y conserva los mercados del lote',
         assert.equal(saved().lote_inspeccion_sag_id, docId); assert.equal(saved().kilos[folioId], 840);
         assert.equal(saved().mercados_anteriores[folioId], 'CHINA - TAIWAN'); assert.equal('folios' in saved(), false);
         await context.close();
+    } finally { await browser.close(); }
+});
+
+test('despacho exige selección explícita con varios instructivos y conserva el anexo', async () => {
+    const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined, args: ['--no-sandbox', '--disable-gpu'] });
+    try {
+        const { page, context, saved } = await setup(browser);
+        await page.locator('[data-panel="documentos"]').click(); await page.locator('#scNewDocument').click();
+        await page.locator('#scDocumentForm [name="tipo"]').selectOption('despacho');
+        await page.locator('#scDocumentForm [name="responsable_id"]').selectOption(personId);
+        await page.locator('#scRepaReference').fill('EMB-1'); await page.locator('#scLoadRepa').click();
+        await page.locator('[data-select-folio]').waitFor();
+        assert.equal(await page.locator('[data-select-folio]').isChecked(), false);
+        await page.locator('#scDispatchInstruction').selectOption(personId); await page.locator('[data-select-folio]').check();
+        await page.locator('[data-dispatch="agente"]').fill('Agente prueba');
+        await page.locator('#scDocumentForm button.primary-button').click(); await page.waitForSelector('#scDocumentDetail:not(.is-hidden)');
+        assert.equal(saved().instructivo_id, personId); assert.deepEqual(saved().seleccion_folios, [folioId]);
+        assert.equal(saved().origenes[`${folioId}:1`].csg, '00102778'); assert.equal(saved().kilos[`${folioId}:1`], 600);
+        assert.equal(saved().encabezado.despacho.agente, 'Agente prueba'); await context.close();
     } finally { await browser.close(); }
 });
