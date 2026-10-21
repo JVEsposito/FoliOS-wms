@@ -28,6 +28,7 @@ use App\Models\TareaMovimiento;
 use App\Models\User;
 use App\Services\Autorizacion\AlcanceOperacionalUsuario;
 use App\Services\Estiba\ServicioMovimientoEstiba;
+use App\Services\InspeccionSag\ServicioExistenciasSag;
 use App\Services\Transiciones\ComandoTransicionOperacional;
 use App\Services\Transiciones\MotorTransicionesOperacionales;
 use BackedEnum;
@@ -659,6 +660,8 @@ class ServicioDespachoFrigorifico
                     ['salida_fisica_at' => $salidaAt->toAtomString()],
                 );
             }
+
+            app(ServicioExistenciasSag::class)->sincronizar($asignaciones->pluck('folio_id')->all(), 'despacho', $cargaBloqueada->codigo);
 
             $cargaBloqueada->update([
                 'estado' => EstadoCarga::Cerrada,

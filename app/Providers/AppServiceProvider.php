@@ -427,6 +427,8 @@ class AppServiceProvider extends ServiceProvider
             'consultar-prefrio',
             fn (User $usuario): bool => $alcance->puedeConsultarPrefrio($usuario),
         );
+        Gate::define('consultar-contraparte-sag', fn (User $usuario): bool => $alcance->puedeConsultarContraparteSag($usuario));
+        Gate::define('gestionar-contraparte-sag', fn (User $usuario): bool => $alcance->puedeGestionarContraparteSag($usuario));
         Gate::define(
             'consultar-inspeccion-sag',
             fn (User $usuario): bool => $alcance->puedeConsultarInspeccionSag($usuario),

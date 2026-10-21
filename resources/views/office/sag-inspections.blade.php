@@ -39,6 +39,7 @@
                         <h1>Inspección SAG</h1>
                         <p>SI significa sin resolución SAG activa. AO, AU y AF se conservan y los destinos aprobados se acumulan.</p>
                     </div>
+                    <a class="secondary-button" href="/oficina/frigorifico/contraparte-sag">Contraparte SAG</a>
                     <button class="secondary-button" id="reloadSagButton" type="button">↻ Actualizar</button>
                 </header>
 

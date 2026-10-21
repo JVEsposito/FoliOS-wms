@@ -28,6 +28,7 @@
             ['key' => 'recepcion-fruta-embalada', 'module' => 'frigorifico.recepcion-fruta-embalada', 'label' => 'Recepción de fruta embalada', 'href' => '/oficina/recepcion-fruta-embalada', 'permissions' => ['puede_consultar_recepciones_fruta_embalada']],
             ['key' => 'repaletizajes', 'module' => '', 'label' => 'Repaletizajes', 'href' => '/oficina/validacion/repaletizajes', 'permissions' => ['puede_consultar_repaletizajes']],
             ['key' => 'anulaciones-validacion', 'module' => 'frigorifico.validacion', 'label' => 'Anulaciones', 'href' => '/oficina/validacion/anulaciones', 'permissions' => ['puede_consultar_validaciones_pallet']],
+            ['key' => 'contraparte-sag', 'module' => 'frigorifico.contraparte-sag', 'label' => 'Contraparte SAG', 'href' => '/oficina/frigorifico/contraparte-sag', 'permissions' => ['puede_consultar_contraparte_sag']],
             ['key' => 'inspeccion-sag', 'module' => 'frigorifico.inspeccion-sag', 'label' => 'Inspección SAG', 'href' => '/oficina/frigorifico/inspeccion-sag', 'permissions' => ['puede_consultar_inspeccion_sag']],
             ['key' => 'prefrio', 'module' => 'frigorifico.prefrio', 'label' => 'Prefrío', 'href' => '/oficina/prefrio', 'permissions' => ['puede_consultar_prefrio']],
             ['key' => 'camaras', 'module' => 'frigorifico.camaras', 'label' => 'Cámaras', 'href' => '/oficina/frigorifico/camaras', 'permissions' => ['ambito_camaras_productos']],

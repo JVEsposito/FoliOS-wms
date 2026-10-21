@@ -64,6 +64,8 @@ export default defineConfig({
                 'resources/js/office-prefrio.js',
                 'resources/css/office-sag-inspections.css',
                 'resources/js/office-sag-inspections.js',
+                'resources/css/office-sag-counterpart.css',
+                'resources/js/office-sag-counterpart.js',
                 'resources/css/office-management.css',
                 'resources/js/office-management.js',
                 'resources/css/office-operation-now.css',
