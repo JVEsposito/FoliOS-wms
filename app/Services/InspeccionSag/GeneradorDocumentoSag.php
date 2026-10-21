@@ -21,7 +21,7 @@ class GeneradorDocumentoSag
     public function datos(?DocumentoSag $documento, string $tipo): array
     {
         $formato = $documento?->formato_snapshot ?? app(ServicioFormatosRegistro::class)->vigente(ServicioDocumentosSag::FORMATOS[$tipo]);
-        $configuracion = DB::table('configuracion_contraparte_sag')->where('id', 'planta')->first();
+        $configuracion = $documento?->planta_snapshot !== null ? null : DB::table('configuracion_contraparte_sag')->where('id', 'planta')->first();
         $planta = $documento?->planta_snapshot ?? ($configuracion ? json_decode($configuracion->datos, true) : []);
         $responsable = $documento?->responsable_snapshot ?? ($documento ? ResponsableContraparteSag::find($documento->responsable_id)?->toArray() : []);
         $detalle = $documento?->detalle ?? [];
@@ -45,6 +45,10 @@ class GeneradorDocumentoSag
             }
             $total = collect($detalle['lineas'] ?? [])->sum('cantidad');
             $capacidad = 20;
+        } elseif ($tipo === 'despacho') {
+            $columnas = [];
+            $total = collect($detalle['lineas'] ?? [])->sum('cantidad');
+            $capacidad = 10;
         } else {
             $columnas = ['Tipo actividad', 'N° actividad', 'Folio', 'Especie', 'Condición', 'Producto', 'Cantidad envases', 'Tipo envase', 'Causal de anulación'];
             foreach ($detalle['lineas'] ?? [] as $l) {
@@ -59,9 +63,10 @@ class GeneradorDocumentoSag
             'campos' => [
                 'codigo' => $formato['codigo'], 'version' => $formato['version'], 'vigencia' => $formato['fecha_vigencia'],
                 'numero' => $documento?->numero ?? '', 'fecha' => $documento?->fecha_actividad->format('d-m-Y') ?? '',
-                'estado' => $documento ? ($documento->estado === 'borrador' ? 'BORRADOR' : 'EMITIDO') : 'EN BLANCO',
+                'estado' => $documento ? ($documento->numero === null ? mb_strtoupper($documento->estado) : 'EMITIDO') : 'EN BLANCO',
                 'establecimiento' => $planta['nombre_establecimiento'] ?? '', 'csp' => $planta['csp'] ?? '',
                 'oficina_sag' => $planta['oficina_sag'] ?? '',
+                'region' => $planta['region'] ?? '', 'provincia_planta' => $planta['provincia'] ?? '', 'comuna_planta' => $planta['comuna'] ?? '',
                 'especie' => collect($detalle['originales'] ?? $detalle['lineas'] ?? [])->pluck('especie')->filter()->unique()->implode(', '),
                 'solicitud' => $detalle['solicitud'] ?? $encabezado['solicitud'] ?? '',
                 'certificados' => $encabezado['certificados'] ?? '', 'devueltos' => $encabezado['certificados_devueltos'] ?? '',
@@ -86,8 +91,13 @@ class GeneradorDocumentoSag
             if ($zip->open($ruta) !== true) {
                 throw new RuntimeException('No se pudo abrir la plantilla SAG.');
             }
-            $plantilla = $zip->getFromName('xl/worksheets/sheet1.xml');
-            $paginas = array_chunk($datos['filas'], $datos['capacidad']) ?: [[]];
+            $paginas = [];
+            foreach ($datos['secciones'] ?? [$datos] as $seccion) {
+                $plantilla = $zip->getFromName('xl/worksheets/sheet'.($seccion['plantilla'] ?? 1).'.xml');
+                foreach (array_chunk($seccion['filas'], $seccion['capacidad']) ?: [[]] as $filas) {
+                    $paginas[] = ['plantilla' => $plantilla, 'datos' => $seccion, 'filas' => $filas];
+                }
+            }
             $libro = $this->xml($zip->getFromName('xl/workbook.xml'));
             $xp = new DOMXPath($libro);
             $sheets = $xp->query('//*[local-name()="sheets"]')->item(0);
@@ -104,15 +114,16 @@ class GeneradorDocumentoSag
             foreach (iterator_to_array((new DOMXPath($tipos))->query('//*[local-name()="Override" and contains(@PartName,"/xl/worksheets/")]')) as $nodo) {
                 $nodo->parentNode->removeChild($nodo);
             }
-            foreach ($paginas as $i => $filas) {
+            foreach ($paginas as $i => $pagina) {
                 $n = $i + 1;
-                $zip->addFromString('xl/worksheets/sheet'.$n.'.xml', $this->llenar($plantilla, $datos, $filas, $n, count($paginas)));
+                $seccion = $pagina['datos'];
+                $zip->addFromString('xl/worksheets/sheet'.$n.'.xml', $this->llenar($pagina['plantilla'], $seccion, $pagina['filas'], $n, count($paginas)));
                 $sheet = $libro->createElementNS(self::NS, 'sheet');
                 $sheet->setAttribute('name', 'Página '.$n);
                 $sheet->setAttribute('sheetId', (string) $n);
                 $sheet->setAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'r:id', 'sheet'.$n);
                 $sheets->appendChild($sheet);
-                $area = $libro->createElementNS(self::NS, 'definedName', "'Página {$n}'!\$A\$1:\$".chr(64 + count($datos['columnas'])).'$'.(14 + $datos['capacidad'] + 12));
+                $area = $libro->createElementNS(self::NS, 'definedName', "'Página {$n}'!\$A\$1:\$".chr(64 + count($seccion['columnas'])).'$'.($seccion['fin_impresion'] ?? (14 + $seccion['capacidad'] + 12)));
                 $area->setAttribute('name', '_xlnm.Print_Area');
                 $area->setAttribute('localSheetId', (string) $i);
                 $areas->appendChild($area);
@@ -153,7 +164,7 @@ class GeneradorDocumentoSag
         }
         foreach ($filas as $i => $fila) {
             foreach ($fila as $j => $valor) {
-                $direccion = chr(65 + $j).(14 + $i);
+                $direccion = chr(65 + $j).(($datos['inicio_filas'] ?? 14) + $i);
                 $celda = $xp->query('//*[local-name()="c" and @r="'.$direccion.'"]')->item(0);
                 $this->valor($xml, $celda, $valor);
             }

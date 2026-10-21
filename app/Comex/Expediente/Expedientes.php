@@ -84,6 +84,7 @@ final class Expedientes
 
         return [
             'embarque' => $embarque,
+            'documentos_sag' => $this->embarques->documentosSag($embarqueId),
             'gestion' => $expediente['gestion'],
             'gestion_configurada' => ClienteComex::query()->whereKey($embarque['cliente_id'])->exists(),
             'alerta' => $expediente['alerta'],

@@ -1,5 +1,9 @@
 import { sagApi, sagEscape as esc, sagNotice, sagState } from './office-sag-counterpart.js';
 
+import { dispatchFields, dispatchRows } from './office-sag-dispatch.js';
+
+let dispatchHeader = {};
+let dispatchInstruction = '';
 const $ = (id) => document.getElementById(id);
 let initialized = false;
 let draft = null;
@@ -7,7 +11,7 @@ let source = null;
 let selected = [];
 let selectedDocument = null;
 let pendingOperation = null;
-const labels = { repaletizaje: 'Repaletizaje', anulacion: 'Anulación / devolución', cambio_mercado: 'Cambio de mercado' };
+const labels = { repaletizaje: 'Repaletizaje', anulacion: 'Anulación / devolución', cambio_mercado: 'Cambio de mercado', despacho: 'Despacho / Multipuerto' };
 const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 async function run(action) { try { await action(); } catch (error) { sagNotice(error.message, true); } }
 
@@ -27,20 +31,25 @@ async function list(page = 1) {
 
 function lines() {
     const type = $('scDocumentForm').elements.tipo.value;
-    const isRepa = type === 'repaletizaje'; const isMarket = type === 'cambio_mercado';
-    $('scRepaSource').classList.toggle('is-hidden', !isRepa && !isMarket);
-    $('scFolioSource').classList.toggle('is-hidden', isRepa || isMarket);
-    $('scSourceLabel').textContent = isMarket ? 'Número de lote de cambio de mercado' : 'Número REPA';
-    $('scLoadRepa').textContent = isMarket ? 'Cargar lote' : 'Cargar repa';
+    const isRepa = type === 'repaletizaje'; const isMarket = type === 'cambio_mercado'; const isDispatch = type === 'despacho';
+    $('scRepaSource').classList.toggle('is-hidden', !isRepa && !isMarket && !isDispatch);
+    $('scFolioSource').classList.toggle('is-hidden', isRepa || isMarket || isDispatch);
+    $('scSourceLabel').textContent = isDispatch ? 'Código de embarque' : isMarket ? 'Número de lote de cambio de mercado' : 'Número REPA';
+    $('scLoadRepa').textContent = isDispatch ? 'Cargar embarque' : isMarket ? 'Cargar lote' : 'Cargar repa';
     document.querySelectorAll('[data-market]').forEach((el) => { el.hidden = !isMarket; });
+    $('scDispatchFields').classList.toggle('is-hidden', !isDispatch);
+    if (isDispatch) { $('scDocumentLines').innerHTML = dispatchRows(selected); return; }
     const rows = isRepa ? source?.originales || [] : selected;
     const input = (l, i, field, label, extra = '') => `<input aria-label="${label} ${esc(l.folio)}" data-line="${i}" data-field="${field}" value="${esc(l[field] ?? '')}" ${extra}>`;
     $('scDocumentLines').innerHTML = `<table><thead><tr><th>Folio</th><th>Especie</th><th>Cajas</th><th>Última actividad</th><th>N° actividad</th>${isMarket ? '<th>Kilos</th><th>Destino aprobado</th><th>Nuevo destino</th>' : isRepa ? '' : '<th>Causal</th><th></th>'}</tr></thead><tbody>${rows.map((l, i) => `<tr><td>${esc(l.folio)}</td><td>${esc(l.especie)}</td><td>${isRepa || isMarket ? esc(l.cantidad) : input(l, i, 'cantidad', 'Cajas', `type="number" min="1" max="${esc(l.maximo || l.cantidad)}"`)}</td><td>${input(l, i, 'tipo_actividad', 'Actividad', 'maxlength="100"')}</td><td>${input(l, i, 'numero_actividad', 'Número actividad', 'maxlength="100"')}</td>${isMarket ? `<td>${input(l, i, 'kilos', 'Kilos', 'type="number" min="0.0001" step="0.0001"')}</td><td>${input(l, i, 'mercados_anteriores', 'Destino aprobado', 'maxlength="1000"')}</td><td>${esc(l.nuevo_destino)}</td>` : isRepa ? '' : `<td>${input(l, i, 'causal', 'Causal', 'maxlength="250" required')}</td><td><button type="button" data-remove="${i}">Quitar</button></td>`}</tr>`).join('')}</tbody></table>${isRepa && source ? `<p>Resultado: ${source.resultados.map((r) => `${esc(r.folio)} (${esc(r.cantidad)} cajas)`).join(', ')}</p>` : ''}`;
 }
 
 function edit(document = null, type = 'repaletizaje') {
-    draft = document; source = ['repaletizaje', 'cambio_mercado'].includes(document?.tipo) ? structuredClone(document.detalle) : null;
-    selected = ['anulacion', 'cambio_mercado'].includes(document?.tipo) ? structuredClone(document.detalle.lineas) : [];
+    draft = document; source = ['repaletizaje', 'cambio_mercado', 'despacho'].includes(document?.tipo) ? structuredClone(document.detalle) : null;
+    selected = ['anulacion', 'cambio_mercado', 'despacho'].includes(document?.tipo) ? structuredClone(document.detalle.lineas) : [];
+    dispatchHeader = structuredClone(document?.detalle?.transporte || {}); dispatchInstruction = document?.detalle?.instructivo_id || '';
+    if (document?.tipo === 'despacho') selected.forEach((l) => { l.incluido = true; });
+    $('scDispatchFields').innerHTML = dispatchFields(source, dispatchHeader, dispatchInstruction);
     const form = $('scDocumentForm'); form.reset(); people();
     form.elements.tipo.value = document?.tipo || type; form.elements.tipo.disabled = Boolean(document);
     form.elements.fecha_actividad.value = document?.fecha_actividad.slice(0, 10) || today();
@@ -53,11 +62,12 @@ function edit(document = null, type = 'repaletizaje') {
 
 async function save() {
     const form = $('scDocumentForm'); const type = form.elements.tipo.value;
-    if (['repaletizaje', 'cambio_mercado'].includes(type) && !source) throw new Error('Carga primero la repa.');
+    if (['repaletizaje', 'cambio_mercado', 'despacho'].includes(type) && !source) throw new Error('Carga primero la repa.');
     const data = { tipo: type, version: draft?.version || 0, responsable_id: form.elements.responsable_id.value, fecha_actividad: form.elements.fecha_actividad.value,
         encabezado: { observaciones: form.elements.observaciones.value, programa: form.elements.programa.value, motivo: form.elements.motivo.value, certificados: Number(form.elements.certificados.value), certificados_devueltos: Number(form.elements.certificados_devueltos.value), certificados_asignados: Number(form.elements.certificados_asignados.value) } };
     if (type === 'repaletizaje') { data.repaletizaje_id = source.repaletizaje_id; data.actividades = Object.fromEntries(source.originales.map((l) => [l.folio_id, { tipo: l.tipo_actividad, numero: l.numero_actividad }])); }
     else if (type === 'cambio_mercado') { data.lote_inspeccion_sag_id = source.lote_inspeccion_sag_id; data.kilos = Object.fromEntries(selected.filter((l) => l.kilos !== null && l.kilos !== '').map((l) => [l.folio_id, Number(l.kilos)])); data.mercados_anteriores = Object.fromEntries(selected.map((l) => [l.folio_id, l.mercados_anteriores])); data.actividades = Object.fromEntries(selected.map((l) => [l.folio_id, { tipo: l.tipo_actividad, numero: l.numero_actividad }])); }
+    else if (type === 'despacho') { const included = selected.filter((l) => l.incluido); if (!included.length) throw new Error('Selecciona los pallets del documento.'); data.embarque_id = source.embarque_id; data.instructivo_id = dispatchInstruction || null; data.seleccion_folios = [...new Set(included.map((l) => l.folio_id))]; data.encabezado.despacho = dispatchHeader; data.kilos = Object.fromEntries(included.filter((l) => l.kilos !== null && l.kilos !== '').map((l) => [l.linea_id, Number(l.kilos)])); data.origenes = Object.fromEntries(included.map((l) => [l.linea_id, Object.fromEntries(['provincia', 'comuna', 'csg', 'csp'].map((k) => [k, l[k]]))])); }
     else data.folios = selected.map((l) => ({ folio_id: l.folio_id, cantidad: Number(l.cantidad), causal: l.causal, tipo_actividad: l.tipo_actividad, numero_actividad: l.numero_actividad }));
     const signature = JSON.stringify(data); if (!pendingOperation || pendingOperation.signature !== signature) pendingOperation = { signature, id: crypto.randomUUID() };
     data.operacion_id = pendingOperation.id;
@@ -89,11 +99,12 @@ export async function init() {
         $('scDocumentFilters').onsubmit = (e) => { e.preventDefault(); run(list); };
         $('scDocuments').onclick = (e) => { const b = e.target.closest('[data-document]'); if (b) run(() => open(b.dataset.document)); };
         $('scDocumentPages').onclick = (e) => { const b = e.target.closest('[data-page]'); if (b) run(() => list(Number(b.dataset.page))); };
-        $('scDocumentForm').elements.tipo.onchange = () => { source = null; selected = []; lines(); };
-        $('scLoadRepa').onclick = () => run(async () => { source = await sagApi(`/fuentes/${$('scDocumentForm').elements.tipo.value}/${encodeURIComponent($('scRepaReference').value.trim())}`); selected = source.lineas ? structuredClone(source.lineas) : []; $('scDocumentForm').elements.fecha_actividad.value = source.fecha_actividad; lines(); });
+        $('scDocumentForm').elements.tipo.onchange = () => { source = null; selected = []; dispatchHeader = {}; dispatchInstruction = ''; $('scDispatchFields').innerHTML = dispatchFields(null, {}); lines(); };
+        $('scLoadRepa').onclick = () => run(async () => { source = await sagApi(`/fuentes/${$('scDocumentForm').elements.tipo.value}/${encodeURIComponent($('scRepaReference').value.trim())}`); selected = source.lineas ? structuredClone(source.lineas) : []; if ($('scDocumentForm').elements.tipo.value === 'despacho') { dispatchHeader = { ...source.transporte, modo: 'multipuerto' }; dispatchInstruction = source.instructivos.length === 1 ? source.instructivos[0].id : ''; selected.forEach((l) => { l.incluido = source.instructivos.length === 1; }); const i = source.instructivos.find((r) => r.id === dispatchInstruction); if (i) dispatchHeader = { ...dispatchHeader, destino_pais: i.destino_pais, destino_ciudad: i.destino_ciudad, consignatario: i.recibidor, referencia_multipuerto: i.planilla_sag || '' }; $('scDispatchFields').innerHTML = dispatchFields(source, dispatchHeader, dispatchInstruction); } $('scDocumentForm').elements.fecha_actividad.value = source.fecha_actividad; lines(); });
         $('scAddFolio').onclick = () => run(async () => { const l = await sagApi(`/folios/${encodeURIComponent($('scAddFolioNumber').value.trim())}`); if (selected.some((r) => r.folio_id === l.folio_id)) throw new Error('El folio ya está agregado.'); selected.push({ ...l, maximo: l.cantidad, causal: '' }); $('scAddFolioNumber').value = ''; lines(); });
         $('scAddFolioNumber').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); $('scAddFolio').click(); } };
-        $('scDocumentLines').oninput = (e) => { const input = e.target.closest('[data-line]'); if (input) { const rows = $('scDocumentForm').elements.tipo.value === 'repaletizaje' ? source.originales : selected; rows[Number(input.dataset.line)][input.dataset.field] = input.value; } };
+        $('scDispatchFields').onchange = (e) => { const input = e.target.closest('[data-dispatch]'); if (input) { const k = input.dataset.dispatch; dispatchHeader[k] = ['nimf15', 'inspeccionado'].includes(k) ? (input.value === '' ? null : input.value === 'true') : input.value; } if (e.target.id === 'scDispatchInstruction') { dispatchInstruction = e.target.value; const i = source?.instructivos.find((r) => r.id === dispatchInstruction); if (i) { dispatchHeader = { ...dispatchHeader, destino_pais: i.destino_pais, destino_ciudad: i.destino_ciudad, consignatario: i.recibidor, referencia_multipuerto: i.planilla_sag || '' }; $('scDispatchFields').innerHTML = dispatchFields(source, dispatchHeader, dispatchInstruction); } } };
+        $('scDocumentLines').oninput = (e) => { const checkbox = e.target.closest('[data-select-folio]'); if (checkbox) { selected.filter((l) => l.folio_id === checkbox.dataset.selectFolio).forEach((l) => { l.incluido = checkbox.checked; }); lines(); return; } const input = e.target.closest('[data-line]'); if (input) { const rows = $('scDocumentForm').elements.tipo.value === 'repaletizaje' ? source.originales : selected; rows[Number(input.dataset.line)][input.dataset.field] = input.value; } };
         $('scDocumentLines').onclick = (e) => { const b = e.target.closest('[data-remove]'); if (b) { selected.splice(Number(b.dataset.remove), 1); lines(); } };
         $('scDocumentForm').onsubmit = (e) => { e.preventDefault(); run(save); };
         $('scDocumentDetail').onclick = (e) => {
@@ -110,6 +121,8 @@ export async function init() {
     }
     people(); await list();
     const params = new URLSearchParams(location.search);
+    if (params.get('documento')) { document.querySelector('[data-panel="documentos"]').click(); await open(params.get('documento')); }
+    if (params.get('embarque')) { document.querySelector('[data-panel="documentos"]').click(); edit(null, 'despacho'); $('scRepaReference').value = params.get('embarque'); $('scLoadRepa').click(); }
     if (params.get('lote')) { document.querySelector('[data-panel="documentos"]').click(); edit(null, 'cambio_mercado'); $('scRepaReference').value = params.get('lote'); $('scLoadRepa').click(); }
     if (params.get('repa')) { document.querySelector('[data-panel="documentos"]').click(); edit(); $('scRepaReference').value = params.get('repa'); $('scLoadRepa').click(); }
 }
