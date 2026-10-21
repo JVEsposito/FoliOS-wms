@@ -114,7 +114,7 @@ final class RrhhController extends Controller
     public function guardarFuente(Request $r, EsquemaRrhh $esquema, Auditoria $auditoria): JsonResponse
     {
         $datos = $r->validate(['codigo' => ['required', 'string', 'max:60', 'regex:/^[a-z][a-z0-9_-]+$/', 'not_in:folios'], 'nombre' => ['required', 'string', 'max:120'], 'tipo' => ['required', 'in:normalizado,geovictoria'], 'activa' => ['required', 'boolean'],
-            'configuracion' => ['nullable', 'array:base_url,usuario,password,api_key,api_secret'], 'configuracion.*' => ['nullable', 'string', 'max:500']]);
+            'configuracion' => ['nullable', 'array:base_url,usuario,password,api_key,api_secret,zona_origen,contrato_checkpoint'], 'configuracion.*' => ['nullable', 'string', 'max:500']]);
         $fuente = $esquema->transaccion(function () use ($datos, $r, $auditoria) {
             if (FuenteMarcaje::query()->where('codigo', $datos['codigo'])->exists()) {
                 throw ValidationException::withMessages(['codigo' => 'El código ya está registrado.']);
@@ -130,7 +130,7 @@ final class RrhhController extends Controller
 
     public function configurarFuente(Request $r, FuenteMarcaje $fuente, EsquemaRrhh $esquema, Auditoria $auditoria): JsonResponse
     {
-        $datos = $r->validate(['activa' => ['required', 'boolean'], 'configuracion' => ['sometimes', 'nullable', 'array:base_url,usuario,password,api_key,api_secret'], 'configuracion.*' => ['nullable', 'string', 'max:500']]);
+        $datos = $r->validate(['activa' => ['required', 'boolean'], 'configuracion' => ['sometimes', 'nullable', 'array:base_url,usuario,password,api_key,api_secret,zona_origen,contrato_checkpoint'], 'configuracion.*' => ['nullable', 'string', 'max:500']]);
         $esquema->transaccion(function () use ($fuente, $datos, $r, $auditoria): void {
             $fuente = FuenteMarcaje::query()->lockForUpdate()->findOrFail($fuente->id);
             $modificaCredenciales = array_key_exists('configuracion', $datos);

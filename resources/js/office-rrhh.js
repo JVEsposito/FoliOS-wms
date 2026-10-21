@@ -107,7 +107,7 @@ async function loadPeople() {
     pages('rhPeoplePages', data.data, async (page) => { state.page = page; await loadPeople(); });
     $('rhSources').innerHTML = state.sources.map((s) => `<div class="rh-source"><strong>${escape(s.nombre)}</strong><small>${escape(s.tipo)} · ${s.activa ? 'Activa' : 'Inactiva'} · ${s.configurada ? 'Credenciales guardadas' : 'Sin credenciales'}</small>`
         + `<button type="button" data-rh-source="${s.id}" data-action="consultar">Vínculos e importaciones</button>`
-        + (state.manage ? `<button type="button" data-rh-source="${s.id}" data-action="configurar">Configurar</button><button type="button" data-rh-source="${s.id}" data-action="importar">Recibir lote</button>` : '') + '</div>').join('') || '<p>Agregue una fuente para recibir marcajes externos.</p>';
+        + (state.manage ? `<button type="button" data-rh-source="${s.id}" data-action="configurar">Configurar</button><button type="button" data-rh-source="${s.id}" data-action="importar">Recibir lote</button>${s.tipo === 'geovictoria' ? `<button type="button" data-rh-source="${s.id}" data-action="geo">Consultar GeoVictoria</button><button type="button" data-rh-source="${s.id}" data-action="lotes">Lotes recibidos</button>` : ''}` : '') + '</div>').join('') || '<p>Agregue una fuente para recibir marcajes externos.</p>';
 }
 async function loadAssignments() {
     const data = await api(`/api/rrhh/asignaciones?${new URLSearchParams({ ...Object.fromEntries(new FormData($('rhDatesForm'))), page: state.assignmentPage })}`);
@@ -168,9 +168,19 @@ async function assignmentActionClick(button) {
 }
 async function sourceActionClick(button) {
     const source = state.sources.find((s) => s.id === button.dataset.rhSource); if (!source) return;
+    if (button.dataset.action === 'geo') { state.source = source; $('rhGeoForm').reset(); return open('rhGeoDialog'); }
+    if (button.dataset.action === 'lotes') return showLots(source.id);
     if (button.dataset.action === 'configurar') return openSource(source);
     if (button.dataset.action === 'importar') { const form = $('rhImportForm'); form.reset(); form.elements.fuente_id.innerHTML = choices(sourceChoices()); form.elements.fuente_id.value = source.id; return open('rhImportDialog'); }
     $('rhIntegrationResult').textContent = JSON.stringify((await api(`/api/rrhh/fuentes/${source.id}`)).data, null, 2);
+}
+async function showLots(sourceId, page = 1) {
+    const data = await api(`/api/rrhh/fuentes/${sourceId}/lotes?page=${page}`);
+    $('rhDetailTitle').textContent = 'Lotes recibidos de GeoVictoria';
+    $('rhDetail').innerHTML = table(['Lote / estado', 'Resultado', 'Acciones'], data.data.data.map((l) => `<tr><td>${escape(l.id)}<small>${escape(l.estado)} · ${l.intentos} intentos</small></td><td>${l.resultado ? `${l.resultado.aceptadas} aceptadas · ${l.resultado.repetidas} repetidas<small>${escape(JSON.stringify(l.resultado.errores))}</small>` : 'Recepción conservada, pendiente de procesar'}</td><td>${l.estado !== 'procesado' ? `<button type="button" data-retry-lot="${l.id}">Reintentar lote conservado</button>` : 'Completo'}</td></tr>`).join('')) + '<div id="rhLotPages" class="rh-toolbar"></div>';
+    pages('rhLotPages', data.data, (n) => showLots(sourceId,n));
+    for (const b of $('rhDetail').querySelectorAll('[data-retry-lot]')) b.addEventListener('click', () => safely(async () => { b.disabled = true; try { await api(`/api/rrhh/lotes/${b.dataset.retryLot}/reintentar`,'POST',{}); await showLots(sourceId,page); } finally { b.disabled = false; } }));
+    if (!$('rhDetailDialog').open) $('rhDetailDialog').showModal();
 }
 async function history(entidad, registro_id) {
     const data = await api(`/api/rrhh/historial?${new URLSearchParams({ entidad, registro_id })}`);
@@ -195,6 +205,8 @@ async function submitDialog(event) {
             await api(state.source ? `/api/rrhh/fuentes/${state.source.id}` : '/api/rrhh/fuentes', state.source ? 'PUT' : 'POST', {
                 ...(state.source ? {} : { codigo: values.codigo, nombre: values.nombre, tipo: values.tipo }), activa: values.activa === '1', ...(Object.keys(config).length ? { configuracion: config } : {}) });
             form.reset(); await loadPeople();
+        } else if (form.id === 'rhGeoForm') {
+            await api(`/api/rrhh/fuentes/${state.source.id}/consultar-geovictoria`, 'POST', { desde: values.desde, identificadores: values.identificadores.split(',').map((s) => s.trim()).filter(Boolean) }); await showLots(state.source.id);
         } else if (form.id === 'rhLinkForm') {
             await api(`/api/rrhh/fuentes/${values.fuente_id}/vinculos`, 'POST', { persona_id: state.person.id, identificador_externo: values.identificador_externo });
         } else if (form.id === 'rhImportForm') {

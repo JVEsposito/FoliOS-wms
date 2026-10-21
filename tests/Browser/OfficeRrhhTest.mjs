@@ -7,7 +7,7 @@ import { chromium } from 'playwright';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const launch = () => chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined, args: ['--no-sandbox', '--disable-gpu'] });
-async function setup(browser, { clock = false, manage = true, payroll = false } = {}) {
+async function setup(browser, { clock = false, manage = true, payroll = false, geo = false } = {}) {
     const context = await browser.newContext({ viewport: { width: 390, height: 900 }, timezoneId: 'America/Santiago' });
     const identity = { nombre: 'RRHH Prueba', rol: manage ? 'administrador' : 'consulta', puede_consultar_rrhh: !clock, puede_consultar_remuneraciones_rrhh: payroll, puede_gestionar_remuneraciones_rrhh: payroll && manage, puede_marcar_rrhh: clock, modulos_acceso: [clock ? 'rrhh.marcaje' : 'rrhh.personal'] };
     const writes = []; const errors = [];
@@ -21,7 +21,10 @@ async function setup(browser, { clock = false, manage = true, payroll = false } 
         }
         if (path === '/api/acceso-oficina') return route.fulfill({ json: { usuario: identity } });
         if (path === '/api/oficina/contexto') return route.fulfill({ json: { data: { planta: 'Prueba', temporada: { nombre: '2026-2027' } } } });
-        if (path === '/api/rrhh/personas') return route.fulfill({ json: { data: { data: [{ id: 'persona-1', codigo: 'OP01', nombre: 'Camarero Prueba', cargo: 'Camarero', area: 'Frigorífico', activa: true, fuente_marcaje: 'folios' }], current_page: 1, last_page: 1 }, clientes: [], fuentes: [], permisos: { gestionar: manage } } });
+        if (path === '/api/rrhh/personas') return route.fulfill({ json: { data: { data: [{ id: 'persona-1', codigo: 'OP01', nombre: 'Camarero Prueba', cargo: 'Camarero', area: 'Frigorífico', activa: true, fuente_marcaje: 'folios' }], current_page: 1, last_page: 1 }, clientes: [], fuentes: geo ? [{ id: 'fuente-geo', codigo: 'geo', nombre: 'GeoVictoria prueba', tipo: 'geovictoria', activa: true, configurada: true }] : [], permisos: { gestionar: manage } } });
+        if (path === '/api/rrhh/fuentes/fuente-geo/consultar-geovictoria') { writes.push({ path, ...request.postDataJSON() }); return route.fulfill({ status: 201, json: { data: { id: 'lote-1', estado: 'con_incidencias' } } }); }
+        if (path === '/api/rrhh/fuentes/fuente-geo/lotes') return route.fulfill({ json: { data: { data: [{ id: 'lote-1', estado: writes.length > 1 ? 'procesado' : 'con_incidencias', intentos: writes.length, resultado: { aceptadas: 1, repetidas: 0, errores: writes.length > 1 ? [] : [{ fila: 2, errores: { identificador: ['Falta vínculo explícito'] } }] } }], current_page: 1, last_page: 1 } } });
+        if (path === '/api/rrhh/lotes/lote-1/reintentar') { writes.push({ path }); return route.fulfill({ json: { data: { estado: 'procesado' } } }); }
         if (path === '/api/rrhh/nomina/conceptos') return route.fulfill({ json: { data: { data: [{ id: 'he-1', codigo: 'HE', nombre: 'Horas extraordinarias', tipo: 'haber', calculo: 'horas_extra', remuneracion: true, imponible: true, tributable: true, activo: true }], current_page: 1, last_page: 1 }, parametros: [], permisos: { gestionar: manage } } });
         if (path === '/api/rrhh/nomina/personas/persona-1') return route.fulfill({ json: { data: { persona: { id: 'persona-1', codigo: 'OP01', nombre: 'Camarero Prueba' }, condiciones: { data: [], current_page: 1, last_page: 1 }, pactos: { data: [], current_page: 1, last_page: 1 } } } });
         if (path === '/api/rrhh/nomina/movimientos' && request.method() === 'GET') return route.fulfill({ json: { data: { data: [], current_page: 1, last_page: 1 } } });
@@ -76,5 +79,18 @@ test('remuneraciones calcula minutos verificados antes de guardar un borrador si
         await page.locator('#rnMovementForm button[type=submit]').click(); await page.waitForFunction(() => !document.getElementById('rnMovementDialog').open);
         assert.equal(writes.length, 1); assert.equal(writes[0].minutos, 60); assert.equal(writes[0].valor, undefined); assert.equal(writes[0].estado, undefined); assert.ok(writes[0].operacion_id); assert.deepEqual(errors, []);
         await context.close();
+    } finally { await browser.close(); }
+});
+
+test('GeoVictoria conserva la consulta y reintenta el lote desde pantalla sin repetir la solicitud al proveedor', async () => {
+    const browser = await launch();
+    try {
+        const { page, context, writes, errors } = await setup(browser, { geo: true });
+        await page.locator('[data-rh-tab=fuentes]').click(); await page.locator('[data-rh-source][data-action=geo]').click();
+        await page.locator('#rhGeoForm [name=desde]').fill('20261001000000'); await page.locator('#rhGeoForm [name=identificadores]').fill('EXT-1, EXT-2');
+        await page.locator('#rhGeoForm button[type=submit]').click(); await page.waitForFunction(() => !document.getElementById('rhGeoDialog').open);
+        assert.equal(writes.length, 1); assert.deepEqual(writes[0].identificadores, ['EXT-1','EXT-2']); assert.match(await page.locator('#rhDetail').textContent(), /Falta vínculo/);
+        await page.locator('[data-retry-lot=lote-1]').click(); await page.waitForFunction(() => document.getElementById('rhDetail').textContent.includes('procesado'));
+        assert.equal(writes.length, 2); assert.equal(writes[1].path, '/api/rrhh/lotes/lote-1/reintentar'); assert.deepEqual(errors, []); await context.close();
     } finally { await browser.close(); }
 });

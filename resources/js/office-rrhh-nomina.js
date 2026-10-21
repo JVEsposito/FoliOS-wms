@@ -34,6 +34,12 @@ export function initNomina({ api, capability, escape, table, choices, open, page
     $('rnNewPact').addEventListener('click', () => safe(async () => { $('rnPactForm').reset(); await conceptPicker($('rnPactForm')); open('rnPactDialog'); }));
     $('rnNewMovement').addEventListener('click', () => safe(() => openMovement()));
     $('rnSimulate').addEventListener('click', () => safe(async () => { const data = await api('/api/rrhh/nomina/simular', 'POST', movementData()); showCalculation(data.data); }));
+    $('rnRefreshOutbox').addEventListener('click', () => safe(() => loadOutbox()));
+    async function loadOutbox(page = 1) {
+        const data = await api(`/api/rrhh/nomina/entregas?page=${page}`);
+        $('rnOutbox').innerHTML = table(['Evento / secuencia', 'Acción y movimiento', 'Contenido'], data.data.data.map((e) => `<tr><td>${escape(e.id)}<small>Secuencia ${e.secuencia}</small></td><td>${escape(e.contenido.accion)}<small>${escape(e.movimiento_id)}</small></td><td><details><summary>Ver datos y huella</summary><pre class="rh-history">${escape(JSON.stringify({ contenido: e.contenido, huella: e.huella },null,2))}</pre></details></td></tr>`).join(''));
+        pages('rnOutboxPages',data.data,loadOutbox);
+    }
     for (const form of document.querySelectorAll('[data-nomina-form]')) form.addEventListener('submit', async (e) => {
         e.preventDefault(); if (e.submitter.disabled) return; e.submitter.disabled = true; form.querySelector('[data-rh-error]').textContent = '';
         try { await save(form); form.closest('dialog').close(); message('Registro guardado con historial.'); }

@@ -51,7 +51,7 @@
             </section>
             @include('office.partials.rrhh-nomina')
             <section class="panel" data-rh-panel="fuentes" hidden><div class="rh-heading"><h2>Integraciones de marcaje</h2><button type="button" class="primary-button" id="rhNewSource" data-rh-manage>Agregar fuente</button></div>
-                <p>Recepción por lotes con vínculo explícito de personas. GeoVictoria admite registros Punch normalizados; la conexión automática requiere validar el contrato de la cuenta.</p>
+                <p>Reciba lotes o consulte directamente el método Checkpoint de GeoVictoria, habilitado y confirmado para su cuenta. Los lotes quedan conservados para revisar incidencias y reintentar.</p>
                 <div id="rhSources"></div><pre id="rhIntegrationResult" class="rh-history" aria-live="polite"></pre>
             </section>
         @endif
@@ -81,9 +81,11 @@
     <label><span>Código permanente</span><input name="codigo" pattern="[a-z][a-z0-9_-]+" maxlength="60" required></label><label><span>Nombre</span><input name="nombre" maxlength="120" required></label>
     <label><span>Formato</span><select name="tipo"><option value="normalizado">Marcajes normalizados</option><option value="geovictoria">GeoVictoria · Punch</option></select></label>
     <label><span>Estado</span><select name="activa"><option value="1">Activa</option><option value="0">Inactiva</option></select></label>
-    <p>Credenciales opcionales para preparar la conexión. Se guardan cifradas; no se devuelven al navegador. Vacío conserva las actuales al editar.</p>
+    <p>Credenciales de la cuenta para la conexión. Se guardan cifradas; no se devuelven al navegador. Vacío conserva las actuales al editar.</p>
     <label><span>Dirección del servicio</span><input name="base_url" type="url" maxlength="500"></label><label><span>Usuario del servicio</span><input name="usuario" autocomplete="off" maxlength="500"></label>
     <label><span>Contraseña</span><input name="password" type="password" autocomplete="new-password" maxlength="500"></label><label><span>API key</span><input name="api_key" type="password" autocomplete="off" maxlength="500"></label><label><span>API secret</span><input name="api_secret" type="password" autocomplete="off" maxlength="500"></label>
+    <label><span>Zona de las fechas del proveedor (confirmar con soporte; vacío conserva)</span><input name="zona_origen" maxlength="100" placeholder="America/Santiago"></label>
+    <label><span>Método OAuth Checkpoint confirmado para esta cuenta</span><select name="contrato_checkpoint"><option value="">Conservar configuración / sin confirmar</option><option value="validado">Confirmado con GeoVictoria</option><option value="deshabilitado">Deshabilitar consulta directa</option></select></label>
     <div class="rh-actions"><button type="button" class="secondary-button" data-rh-close>Cancelar</button><button type="submit" class="primary-button">Guardar fuente</button></div><p class="form-error" role="alert" data-rh-error></p>
 </form></dialog>
 <dialog id="rhLinkDialog" class="rh-dialog"><form id="rhLinkForm" class="rh-form"><div class="rh-heading"><h2>Vincular persona con fuente externa</h2><button type="button" class="secondary-button" data-rh-close aria-label="Cerrar">×</button></div><p id="rhLinkPerson"></p>
@@ -95,5 +97,10 @@
     <div class="rh-actions"><button type="button" class="secondary-button" data-rh-close>Cancelar</button><button type="submit" class="primary-button">Importar</button></div><p class="form-error" role="alert" data-rh-error></p>
 </form></dialog>
 <dialog id="rhDetailDialog" class="rh-dialog"><div class="rh-heading"><h2 id="rhDetailTitle">Detalle</h2><button type="button" class="secondary-button" data-rh-close aria-label="Cerrar">×</button></div><div id="rhDetail"></div><button type="button" class="secondary-button" data-rh-close>Cerrar</button></dialog>
+<dialog id="rhGeoDialog" class="rh-dialog"><form id="rhGeoForm" class="rh-form"><div class="rh-heading"><h2>Consultar GeoVictoria</h2><button type="button" class="secondary-button" data-rh-close aria-label="Cerrar">×</button></div>
+    <label><span>Checkpoint confirmado (AAAAMMDDhhmmss en la zona configurada)</span><input name="desde" pattern="[0-9]{14}" minlength="14" maxlength="14" required></label>
+    <label><span>Identificadores de personas en GeoVictoria, separados por coma (hasta 20)</span><textarea name="identificadores" maxlength="2100" required></textarea></label>
+    <p>Este método recupera registros desde el checkpoint indicado. No avanza un cursor automáticamente ni declara completa una conciliación. Para reintentar incidencias se utiliza el lote ya recibido.</p><div class="rh-actions"><button type="button" class="secondary-button" data-rh-close>Cancelar</button><button type="submit" class="primary-button">Consultar y conservar lote</button></div><p class="form-error" role="alert" data-rh-error></p>
+</form></dialog>
 @endunless
 </body></html>
