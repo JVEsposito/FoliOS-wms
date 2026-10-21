@@ -62,11 +62,11 @@ export function validityText(from, to) {
 export function parsePriceInput(text) {
     const value = String(text ?? '').replace(/\s+/g, '');
     if (value === '') return { ok: false, message: 'Indique el precio.' };
-    if (/^[1-9]\d{0,2}\.\d{3}$/.test(value)) {
+    if (/^-?[1-9]\d{0,2}\.\d{3}$/.test(value)) {
         return { ok: false, message: 'Escriba el precio sin puntos de miles; use coma para los decimales (por ejemplo, 1500 o 1500,5).' };
     }
 
-    const match = value.match(/^(\d+)(?:[.,](\d+))?$/);
+    const match = value.match(/^-?(\d+)(?:[.,](\d+))?$/);
     if (!match) return { ok: false, message: 'Use solo dígitos y una coma decimal (por ejemplo, 0,35).' };
 
     const integer = match[1].replace(/^0+(?=\d)/, '');
@@ -74,7 +74,8 @@ export function parsePriceInput(text) {
     if (integer.length > 12) return { ok: false, message: 'El precio no puede tener más de 12 dígitos enteros.' };
     if ((match[2] || '').length > 6) return { ok: false, message: 'El precio admite hasta 6 decimales.' };
 
-    return { ok: true, value: decimals ? `${integer}.${decimals}` : integer };
+    const normalized = decimals ? `${integer}.${decimals}` : integer;
+    return { ok: true, value: normalized === '0' ? '0' : `${value.startsWith('-') ? '-' : ''}${normalized}` };
 }
 
 /** Unidades de cobro de un servicio, desde el catálogo que entrega la API. */

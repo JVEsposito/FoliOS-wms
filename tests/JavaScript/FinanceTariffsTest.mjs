@@ -33,7 +33,10 @@ test('el precio escrito se lee sin dudas', () => {
     assert.equal(parsePriceInput('1.500').ok, false);
     assert.match(parsePriceInput('12.000').message, /sin puntos de miles/);
     assert.equal(parsePriceInput('1.234,5').ok, false);
-    assert.equal(parsePriceInput('-5').ok, false);
+    assert.deepEqual(parsePriceInput('-5'), { ok: true, value: '-5' });
+    assert.deepEqual(parsePriceInput('-0003,500'), { ok: true, value: '-3.5' });
+    assert.deepEqual(parsePriceInput('-0,000'), { ok: true, value: '0' });
+    assert.equal(parsePriceInput('-1.500').ok, false);
     assert.equal(parsePriceInput('abc').ok, false);
     assert.equal(parsePriceInput('0,1234567').message, 'El precio admite hasta 6 decimales.');
     assert.equal(parsePriceInput('').message, 'Indique el precio.');

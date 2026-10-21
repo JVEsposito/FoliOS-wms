@@ -34,16 +34,17 @@ async function setup(browser, { manage = true, reject = false, width = 1280, hr 
         if (path === '/api/oficina/contexto') return route.fulfill({ json: { data: { planta: 'Planta Prueba', temporada: { nombre: '2026-2027' } } } });
         if (path === '/api/finanzas/tarifas' && request.method() === 'GET') return route.fulfill({ json: {
             data: [], resumen: {}, hoy: '2026-11-01', servicios: services, puede_gestionar: manage, puede_usar_rrhh: hr, clientes: [],
-            procesos: [{ clave: 'estadia', nombre: 'Estadía en cámara', descripcion: 'Custodia del folio.', intervalo: true, medidas: { cajas: { nombre: 'Cajas' } } }, { clave: 'declarado', nombre: 'Cargos acordados y manuales', descripcion: 'Base comercial independiente de ejecución.', intervalo: false, medidas: { cantidad: { nombre: 'Cantidad acordada' } } }],
+            procesos: [{ clave: 'estadia', nombre: 'Estadía en cámara', descripcion: 'Custodia del folio.', intervalo: true, medidas: { cajas: { nombre: 'Cajas' } } }, { clave: 'declarado', nombre: 'Cargos acordados y manuales', descripcion: 'Base comercial independiente de ejecución.', intervalo: false, medidas: { cantidad: { nombre: 'Cantidad acordada' } } }, { clave: 'romana_recepcion', nombre: 'Recepciones', area: 'recepcion', intervalo: false, dimensiones: { tipo_servicio: 'Servicio' }, medidas: { kilos_netos: { nombre: 'Kilos netos', unidad: 'kg' } } }, { clave: 'calculado', nombre: 'Cálculo entre medidas operativas', intervalo: false, medidas: { cantidad: { nombre: 'Cantidad calculada', unidad: 'unidad' } } }],
             monedas: [{ codigo: 'CLP', nombre: 'Peso chileno', simbolo: '$', decimales: 0, activa: true }],
         } });
         if (path === '/api/finanzas/servicios' && request.method() === 'POST') {
             const body = request.postDataJSON(); writes.push(body);
             if (reject) return route.fulfill({ status: 422, json: { errors: { aplicacion: ['Ya hay un concepto que reemplaza al base en esas fechas y días. Ajuste sus rangos.'] } } });
-            const service = { ...base, ...body, base: false, clave: 'svc_numeral', ...(body.fuente === 'declarado' ? { por_dia: false, unidades: [{ clave: 'cantidad', nombre: `por ${body.unidad_libre}` }] } : {}) };
+            const service = { ...base, ...body, base: false, clave: 'svc_numeral', ...(['declarado', 'calculado'].includes(body.fuente) ? { por_dia: false, unidades: [{ clave: 'cantidad', nombre: `por ${body.unidad_libre}` }] } : {}) };
             services = [...services, service];
             return route.fulfill({ status: 201, json: { data: service } });
         }
+        if (path === '/api/finanzas/servicios/simular') return route.fulfill({ json: { data: { unidad: 'kg', grupos: 1, incompletos: 0, aviso: 'Simulación de hechos capturados', muestra: [{ cliente_nombre: 'Cliente prueba', fecha: '2026-11-01', cantidad: '8500', completo: true, dimensiones: { fecha_operacional: '2026-11-01' }, aportes: [{ hecho_id: 1, fuente: 'romana_recepcion', version: 1, valor: '10000', factor: '1', cantidad: '10000' }] }] } } });
         if (path.startsWith('/api/')) return route.fulfill({ json: {} });
         return route.fulfill({ status: 404, body: '' });
     });
@@ -55,6 +56,39 @@ async function setup(browser, { manage = true, reject = false, width = 1280, hr 
     await page.locator('#finance-tariffs-tab-services').click();
     return { context, page, writes, errors };
 }
+
+test('construye y simula una cantidad compuesta desde la oficina sin escribir código', async () => {
+    const browser = await launch();
+    try {
+        for (const width of [390, 1280]) {
+            const { context, page, writes, errors } = await setup(browser, { width });
+            await page.locator('#serviceNewButton').click();
+            await page.locator('#serviceForm [name="nombre"]').fill('Servicio neto');
+            await page.locator('#serviceForm [name="area"]').fill('packing');
+            await page.locator('#serviceForm [name="fuente"]').selectOption('calculado');
+            await page.locator('#serviceForm [name="unidad_libre"]').fill('kg');
+            await page.locator('[data-rule-add]').click();
+            await page.locator('[data-rule-group][value="origen_id"]').uncheck();
+            await page.locator('[data-rule-group][value="fecha_operacional"]').check();
+            const terms = page.locator('[data-rule-term]');
+            await terms.nth(0).locator('[data-rule-filter]').selectOption('tipo_servicio');
+            await terms.nth(0).locator('[data-rule-filter-value]').fill('proceso');
+            await terms.nth(1).locator('[data-rule-factor]').fill('-1');
+            await terms.nth(1).locator('[data-rule-filter]').selectOption('tipo_servicio');
+            await terms.nth(1).locator('[data-rule-filter-value]').fill('almacenaje');
+            await page.locator('#serviceRulePreviewButton').click();
+            await page.waitForFunction(() => document.querySelector('[data-rule-preview]')?.textContent.includes('8500'));
+            assert.equal(writes.length, 0);
+            await page.locator('#serviceForm [type="submit"]').click();
+            await page.waitForFunction(() => document.getElementById('tariffDialog').open);
+            assert.equal(writes[0].area, 'packing');
+            assert.equal(writes[0].regla.terminos[1].factor, '-1');
+            assert.deepEqual(writes[0].regla.agrupar, ['fecha_operacional']);
+            assert.deepEqual(errors, []);
+            await context.close();
+        }
+    } finally { await browser.close(); }
+});
 
 async function fillConcept(page) {
     await page.locator('#serviceNewButton').click();

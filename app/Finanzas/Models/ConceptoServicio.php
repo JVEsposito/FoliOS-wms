@@ -26,7 +26,7 @@ class ConceptoServicio extends Model
 
     protected function casts(): array
     {
-        return ['vigente_desde' => 'date', 'vigente_hasta' => 'date', 'dia_desde' => 'integer', 'dia_hasta' => 'integer'];
+        return ['vigente_desde' => 'date', 'vigente_hasta' => 'date', 'dia_desde' => 'integer', 'dia_hasta' => 'integer', 'regla' => 'array'];
     }
 
     public function eventos(): HasMany

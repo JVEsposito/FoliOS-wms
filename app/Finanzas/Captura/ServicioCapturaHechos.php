@@ -3,9 +3,11 @@
 namespace App\Finanzas\Captura;
 
 use App\Finanzas\EsquemaFinanzas;
+use App\Finanzas\Models\ConceptoServicio;
 use App\Finanzas\Models\Cursor;
 use App\Finanzas\Models\Hecho;
 use App\Finanzas\Models\Lectura;
+use App\Finanzas\Valorizacion\ReglaValorizacion;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
@@ -54,6 +56,13 @@ final class ServicioCapturaHechos
     private function ejecutar(string $origen, ?User $usuario, ?array $fuentes, bool $conciliar): Lectura
     {
         $seleccion = $this->fuentes->seleccion($fuentes);
+        // Una selección parcial también actualiza los cálculos que dependen de ella.
+        // Si se solicita solo el cálculo, primero se releen todas sus entradas.
+        $dependencias = ConceptoServicio::query()->where('fuente', ReglaValorizacion::FUENTE)->pluck('regla')
+            ->flatMap(fn (array $regla): array => array_column($regla['terminos'], 'fuente'))->unique()->all();
+        if ($dependencias !== [] && (isset($seleccion[ReglaValorizacion::FUENTE]) || array_intersect(array_keys($seleccion), $dependencias) !== [])) {
+            $seleccion = $this->fuentes->seleccion(array_unique([...array_keys($seleccion), ...$dependencias, ReglaValorizacion::FUENTE]));
+        }
         if (! $this->esquema->tomarCandado(self::CANDADO)) {
             throw new CapturaEnCurso;
         }
@@ -63,7 +72,7 @@ final class ServicioCapturaHechos
         try {
             $conciliaciones = [];
             foreach ($seleccion as $clave => $fuente) {
-                $conciliaciones[$clave] = $conciliar || $this->tocaConciliar($clave);
+                $conciliaciones[$clave] = $clave === ReglaValorizacion::FUENTE || $conciliar || $this->tocaConciliar($clave);
             }
             $lectura = Lectura::query()->create([
                 'origen' => $origen,
@@ -78,6 +87,9 @@ final class ServicioCapturaHechos
             $fallidas = [];
             foreach ($seleccion as $clave => $fuente) {
                 try {
+                    if ($clave === ReglaValorizacion::FUENTE && $fallidas !== []) {
+                        throw new \RuntimeException('Cálculos pendientes: primero corrija las fuentes que no se pudieron leer.');
+                    }
                     $resumen[$clave] = $this->capturarFuente($fuente, $contexto, $lectura, $conciliaciones[$clave]);
                 } catch (Throwable $error) {
                     report($error);

@@ -2,6 +2,7 @@
 
 namespace App\Finanzas\Captura;
 
+use App\Finanzas\Captura\Fuentes\CalculosConcepto;
 use App\Finanzas\Captura\Fuentes\CargosDeclarados;
 use App\Finanzas\Captura\Fuentes\Despacho;
 use App\Finanzas\Captura\Fuentes\EstadiaCamara;
@@ -24,6 +25,7 @@ final class CatalogoFuentes
         Repaletizaje::class,
         Despacho::class,
         CargosDeclarados::class,
+        CalculosConcepto::class,
     ];
 
     /** @var array<string, FuenteHechos>|null */
@@ -76,6 +78,22 @@ final class CatalogoFuentes
             'descripcion' => $fuente->descripcion(),
             'intervalo' => $fuente->intervalo(),
             'medidas' => $fuente->medidas(),
+            ...$this->contexto($fuente->clave()),
         ], $this->todas()));
+    }
+
+    /** Dimensiones públicas para filtrar y relacionar hechos, sin exponer tablas ni SQL. */
+    public function contexto(string $clave): array
+    {
+        $fuente = $this->todas()[$clave] ?? null;
+        if ($fuente !== null && method_exists($fuente, 'contexto')) {
+            return $fuente->contexto();
+        }
+        $dimensiones = match ($clave) {
+            'romana_recepcion' => ['tipo_recepcion' => 'Tipo de recepción', 'tipo_servicio' => 'Servicio', 'especie' => 'Especie', 'tipo_envase' => 'Tipo de envase'],
+            default => [],
+        };
+
+        return ['area' => $clave === 'romana_recepcion' ? 'recepcion' : (in_array($clave, ['declarado', 'calculado'], true) ? 'general' : 'frigorifico'), 'dimensiones' => $dimensiones];
     }
 }

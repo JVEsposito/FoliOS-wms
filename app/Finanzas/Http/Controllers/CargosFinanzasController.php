@@ -24,7 +24,7 @@ class CargosFinanzasController extends Controller
     {
         $datos = $request->validate([
             'operacion_id' => ['required', 'uuid'], 'servicio' => ['required', 'string', 'max:40'], 'cliente_id' => ['required', 'uuid'],
-            'fecha' => ['required', 'date_format:Y-m-d'], 'cantidad' => ['required', 'regex:/^\d{1,18}(?:\.\d{1,6})?$/', 'gt:0'],
+            'fecha' => ['required', 'date_format:Y-m-d'], 'cantidad' => ['required', 'regex:/^-?\d{1,18}(?:\.\d{1,6})?$/'],
             'base_cobro' => ['required', Rule::in(['ejecucion', 'acuerdo', 'disponibilidad', 'compromiso'])],
             'estado_ejecucion' => ['required', Rule::in(['realizado', 'programado', 'no_realizado', 'cancelado', 'no_aplica'])],
             'respaldo' => ['required', 'string', 'min:5', 'max:500'],
