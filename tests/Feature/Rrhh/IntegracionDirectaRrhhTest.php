@@ -185,6 +185,6 @@ class IntegracionDirectaRrhhTest extends TestCase
     {
         $c = $this->postJson('/api/rrhh/nomina/conceptos', ['codigo' => 'BONO', 'nombre' => 'Bono de turno', 'tipo' => 'haber', 'calculo' => 'monto', 'remuneracion' => true, 'imponible' => true, 'tributable' => true, 'base_he' => false, 'activo' => true, 'fundamento' => 'Tratamiento remuneracional revisado', 'codigo_externo' => 'BONO_DESTINO'])->assertCreated()->json('data.id');
 
-        return $this->postJson('/api/rrhh/nomina/movimientos',['operacion_id' => (string) Str::uuid(), 'persona_id' => $this->persona, 'concepto_id' => $c, 'fecha' => '2026-10-21', 'cantidad' => '1', 'valor' => '50000', 'respaldo' => 'Bono respaldado por acuerdo escrito'])->assertCreated()->json('data.id');
+        return $this->postJson('/api/rrhh/nomina/movimientos', ['operacion_id' => (string) Str::uuid(), 'persona_id' => $this->persona, 'concepto_id' => $c, 'fecha' => '2026-10-21', 'cantidad' => '1', 'valor' => '50000', 'respaldo' => 'Bono respaldado por acuerdo escrito'])->assertCreated()->json('data.id');
     }
 }
