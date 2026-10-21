@@ -93,6 +93,8 @@ Route::middleware('auth:sanctum')->prefix('finanzas')->group(function (): void {
 
     Route::post('/servicios/simular', [ServiciosFinanzasController::class, 'simular'])
         ->middleware(['can:gestionar-tarifas-finanzas', 'throttle:12,1']);
+    Route::get('/servicios/referencias', [ServiciosFinanzasController::class, 'referencias'])
+        ->middleware('can:consultar-finanzas');
     Route::post('/servicios', [ServiciosFinanzasController::class, 'store'])
         ->middleware('can:gestionar-tarifas-finanzas');
     Route::get('/servicios/{servicio}/historial', [ServiciosFinanzasController::class, 'historial'])

@@ -51,3 +51,62 @@ Los precios y las cantidades acordadas admiten signo negativo. Se conserva la mu
 La cantidad acordada debe ser distinta de cero y conserva respaldo, aprobación e historial.
 La prefactura, los totales por moneda, cierres y diferencias conservan saldos negativos.
 Esto no emite documentos tributarios.
+
+## Procesos conectados
+
+Además de las fuentes originales de frigorífico y romana, el catálogo ofrece:
+
+| Área | Fuente | Medidas |
+| --- | --- | --- |
+| Packing | Entregas a proceso | Entregas, kilos y envases |
+| Packing | Retornos regularizados por origen | Orígenes y kilos definitivos |
+| Materiales | Lotes producidos de recetas | Lotes y unidades reales de salida |
+| Materiales | Kardex de inventario | Movimientos y cantidades por unidad |
+| Materiales | Operaciones entre almacenes | Movimientos |
+| Recepción MP | Hidrocooler completado | Procesos, kilos y envases históricos |
+| Logística | Lotes SAG finalizados | Inspecciones |
+| Logística | Pasos del planificador completados | Pasos, con tipo de movimiento y maniobra |
+| Envases | Movimientos de cuenta | Movimientos, cantidades y efectos firmados |
+| COMEX | Reservas confirmadas/cerradas | Gestiones de reserva |
+| RRHH | Dotación programada | Horas y jornadas de disponibilidad, sin datos personales |
+
+Las fuentes publican dimensiones que permiten crear servicios por tipo de movimiento,
+receta, versión, unidad, centro de costo, propiedad u otras referencias. El formulario
+admite varios filtros por término y ofrece catálogos, incluidos recetas y versiones aunque
+todavía no tengan ejecución. Si un catálogo supera 500 opciones, se puede ingresar el valor
+exacto. Cada nueva fuente se registra mediante su contrato de lectura; el motor no conoce
+sus tablas y la operación no depende de Finanzas.
+
+### Kilos de packing
+
+Elija **Cálculo entre medidas operativas**. Primer término: `Entregas a packing`, medida
+`Kilos entregados`, coeficiente `1`. Segundo: `Retornos packing regularizados`, medida
+`Kilos retornados definitivos`, coeficiente `-1`. Agrupe por **Proceso**. Puede filtrar el
+tipo de resultado que deba descontarse conforme al servicio pactado. Cada bin multiorigen
+aporta solamente sus kilos distribuidos al proceso correspondiente. Un retorno posterior
+ajusta el servicio original y no origina otro cobro de procesamiento.
+
+Los bins pendientes y retornos antiguos sin regularización no aportan kilos definitivos.
+Con **Exigir todos los términos**, el proceso queda pendiente hasta contar con ambos lados.
+Desactivar esa opción cobra las entregas con los retornos definitivos conocidos, sujeto a
+diferencias posteriores. La definición de qué resultados se descuentan pertenece al acuerdo
+comercial; el nombre del concepto debe reflejarla.
+
+### Recetas valorizables
+
+Para un precio por caja producida cree un concepto calculado con un término de
+**Producción de recetas de materiales → Cantidad real producida**. Filtre **Receta** y
+**Unidad de salida**, y agrupe por **Cada registro de origen**. Para cobrar una versión
+específica, use también **Versión de receta**. El precio se asigna al concepto, por cliente
+o como tarifa general. Solo los lotes cerrados aportan producción; su reversión la retira
+mediante una versión financiera. La receta y la unidad de la versión utilizada se conservan.
+
+Las cantidades de materiales de distintas unidades no son sumables. Por eso las unidades
+variables solo pueden valorizarse con un filtro explícito de unidad en un cálculo. Los
+conceptos directos de estas fuentes ofrecen lotes o movimientos. Los costos de insumos y
+los precios de venta del servicio permanecen independientes.
+
+Las gestiones COMEX se fechan con la primera confirmación registrada (en registros antiguos
+sin evento se conserva su creación). La dotación programada se identifica como disponibilidad;
+no acredita asistencia ni genera remuneraciones. Los compromisos que deben seguir cobrándose
+después de una cancelación se registran mediante cargos acordados, con aprobación económica.

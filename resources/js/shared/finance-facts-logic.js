@@ -5,6 +5,7 @@
 
 const integer = new Intl.NumberFormat('es-CL', { maximumFractionDigits: 0 });
 const decimal = new Intl.NumberFormat('es-CL', { maximumFractionDigits: 1 });
+const exactDecimal = new Intl.NumberFormat('es-CL', { maximumFractionDigits: 6 });
 
 export const VERSION_REASONS = Object.freeze({
     captura: 'Captura',
@@ -68,6 +69,13 @@ export function measuresText(fact) {
                 quantity(measures.cajas, 'caja'),
             ].join(' · ');
         default:
+            if (fact.medidas_info && !['validacion_pt', 'recepcion_embalada', 'prefrio', 'estadia', 'despacho'].includes(fact.fuente)) {
+                return Object.entries(measures).map(([key, value]) => {
+                    const info = fact.medidas_info[key];
+                    const unit = info?.dimension_unidad ? fact.datos?.[info.dimension_unidad] : fact.datos?.regla?.unidad || info?.unidad;
+                    return `${info?.nombre || key}: ${exactDecimal.format(Number(value))}${unit ? ` ${unit}` : ''}`;
+                }).join(' · ');
+            }
             return [quantity(measures.cajas, 'caja'), ...packages(measures)].join(' · ');
     }
 }
@@ -123,7 +131,8 @@ export function factDetail(fact, now = new Date()) {
         case 'despacho':
             return join([data.carga && `Carga ${data.carga}`, data.orden_externa && `Orden ${data.orden_externa}`, data.patente]);
         default:
-            return '';
+            if (fact.fuente === 'calculado') return `${data.aportes?.length || 0} aportes versionados · ${Object.values(data.dimensiones || {}).join(' · ')}`;
+            return join(Object.entries(fact.dimensiones_info || {}).map(([key, label]) => data[key] ? `${label}: ${data[key]}` : null));
     }
 }
 
@@ -138,6 +147,7 @@ const FIELD_LABELS = Object.freeze({
 function shown(value) {
     if (value === null || value === undefined || value === '') return '—';
     if (typeof value === 'boolean') return value ? 'sí' : 'no';
+    if (typeof value === 'object') return JSON.stringify(value);
 
     return String(value);
 }

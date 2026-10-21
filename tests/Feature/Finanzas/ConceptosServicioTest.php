@@ -40,13 +40,15 @@ class ConceptosServicioTest extends TestCase
     public function test_catalogo_permisos_asociacion_unidades_e_historial(): void
     {
         $consulta = $this->conPerfil(RolUsuario::Consulta, [CatalogoModulosAcceso::OFICINA_FINANZAS_PREFACTURA]);
-        $this->actingAs($consulta, 'sanctum')->getJson('/api/finanzas/tarifas')->assertOk()->assertJsonCount(7, 'servicios')->assertJsonCount(9, 'procesos');
+        $antes = $this->actingAs($consulta, 'sanctum')->getJson('/api/finanzas/tarifas')->assertOk();
+        $cantidad = count($antes->json('servicios'));
+        $this->assertContains('material_transformacion', array_column($antes->json('procesos'), 'clave'));
         $this->postJson('/api/finanzas/servicios', $this->definicion())->assertForbidden();
         $this->actingAs($this->administrador, 'sanctum');
         $servicio = $this->postJson('/api/finanzas/servicios', $this->definicion())->assertCreated()
             ->assertJsonPath('data.nombre', 'Servicio especial')->assertJsonPath('data.fuente', 'repaletizaje')
             ->assertJsonPath('data.base', false)->assertJsonPath('data.unidades.3.nombre', 'por caja resultante')->json('data.clave');
-        $this->getJson('/api/finanzas/tarifas')->assertJsonCount(8, 'servicios');
+        $this->getJson('/api/finanzas/tarifas')->assertJsonCount($cantidad + 1, 'servicios');
         $this->postJson('/api/finanzas/tarifas', ['servicio' => $servicio, 'unidad' => 'kilos_netos', 'moneda' => 'CLP', 'precio' => '10', 'vigente_desde' => '2026-11-01'])
             ->assertUnprocessable()->assertJsonValidationErrors('unidad');
         $this->postJson('/api/finanzas/tarifas', ['servicio' => $servicio, 'unidad' => 'cajas', 'moneda' => 'CLP', 'precio' => '10', 'vigente_desde' => '2026-11-01'])

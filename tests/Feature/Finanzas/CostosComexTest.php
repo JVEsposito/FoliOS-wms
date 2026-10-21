@@ -5,10 +5,12 @@ namespace Tests\Feature\Finanzas;
 use App\Comex\Models\Booking;
 use App\Comex\Models\ParteComercial;
 use App\Enums\RolUsuario;
+use App\Finanzas\Captura\ServicioCapturaHechos;
 use App\Finanzas\Models\AsientoCompra;
 use App\Finanzas\Models\DocumentoCompra;
 use App\Finanzas\Models\Hecho;
 use App\Finanzas\Models\ImputacionComex;
+use App\Finanzas\Models\Lectura;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -50,6 +52,18 @@ class CostosComexTest extends TestCase
         $this->postJson('/api/finanzas/proveedores/plan/inicializar')->assertOk();
         $this->proveedor = $this->postJson('/api/finanzas/proveedores', ['rut' => '76.123.456-0', 'razon_social' => 'Proveedor de prueba', 'activo' => true, 'pagos_bloqueados' => false])->assertCreated()->json('data.id');
         $this->datos = ['operacion_id' => (string) Str::uuid(), 'version' => 0, 'booking_id' => $this->booking, 'concepto' => 'Flete marítimo de prueba', 'tratamiento' => 'por_definir', 'fecha' => '2026-10-01', 'moneda' => 'USD', 'previsto' => '100.50', 'comprometido' => '90', 'tasa_clp' => '900', 'fecha_cambio' => '2026-10-01', 'fuente_cambio' => 'Tipo acordado con respaldo', 'respaldo' => 'Cotización comercial de prueba'];
+    }
+
+    public function test_la_gestion_comex_se_puede_valorizar_sin_crear_un_gasto_ni_un_embarque(): void
+    {
+        config(['finanzas.conexion_lectura' => config('database.default')]);
+        $lectura = app(ServicioCapturaHechos::class)->capturar(Lectura::ORIGEN_MANUAL, null, ['comex_reserva']);
+        $this->assertSame('completada', $lectura->estado, $lectura->error ?? '');
+        $hecho = Hecho::query()->vigentes()->where('fuente', 'comex_reserva')->sole();
+        $this->assertSame($this->booking, $hecho->origen_id);
+        $this->assertSame(1, $hecho->medidas['reservas']);
+        $this->assertSame(0, AsientoCompra::query()->count());
+        $this->assertSame(0, DocumentoCompra::query()->count());
     }
 
     private function costo(): array

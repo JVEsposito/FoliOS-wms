@@ -12,6 +12,12 @@ import {
     versionChanges,
 } from '../../resources/js/shared/finance-facts-logic.js';
 
+test('las fuentes transversales muestran sus unidades y los resultados calculados con signo', () => {
+    assert.equal(measuresText({ fuente: 'material_transformacion', medidas: { unidades: '120.125' }, medidas_info: { unidades: { nombre: 'Producción', dimension_unidad: 'unidad_medida' } }, datos: { unidad_medida: 'caja' } }), 'Producción: 120,125 caja');
+    assert.equal(measuresText({ fuente: 'calculado', medidas: { cantidad: '-0.125' }, medidas_info: { cantidad: { nombre: 'Cantidad' } }, datos: { regla: { unidad: 'kg' } } }), 'Cantidad: -0,125 kg');
+    assert.equal(factDetail({ fuente: 'calculado', datos: { aportes: [{}, {}], dimensiones: { proceso_id: 'P1' } } }), '2 aportes versionados · P1');
+});
+
 test('las cantidades van en singular o plural', () => {
     assert.equal(quantity(1, 'caja'), '1 caja');
     assert.equal(quantity(120, 'caja'), '120 cajas');

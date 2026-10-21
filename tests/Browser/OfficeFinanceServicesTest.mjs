@@ -97,6 +97,28 @@ async function fillConcept(page) {
     await page.locator('#serviceForm [name="dia_desde"]').fill('16');
 }
 
+test('los filtros repetidos se explican en el formulario y no se guardan silenciosamente', async () => {
+    const browser = await launch();
+    try {
+        const { context, page, writes, errors } = await setup(browser, { width: 390 });
+        await page.locator('#serviceNewButton').click();
+        await page.locator('#serviceForm [name="nombre"]').fill('Servicio filtrado');
+        await page.locator('#serviceForm [name="fuente"]').selectOption('calculado');
+        await page.locator('#serviceForm [name="unidad_libre"]').fill('kg');
+        await page.locator('[data-rule-filter-add]').click();
+        const filters = page.locator('[data-rule-filter]');
+        await filters.nth(0).selectOption('tipo_servicio');
+        await filters.nth(1).selectOption('tipo_servicio');
+        await page.locator('[data-rule-filter-value]').nth(0).fill('proceso');
+        await page.locator('[data-rule-filter-value]').nth(1).fill('almacenaje');
+        await page.locator('#serviceForm [type="submit"]').click();
+        assert.match(await page.locator('#serviceFormError').textContent(), /una sola vez/);
+        assert.equal(writes.length, 0);
+        assert.deepEqual(errors, []);
+        await context.close();
+    } finally { await browser.close(); }
+});
+
 test('crear un concepto abre su precio con las unidades del proceso y muestra sus reglas', async () => {
     const browser = await launch();
     try {
