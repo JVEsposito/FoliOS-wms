@@ -2,8 +2,23 @@
 
 use App\Rrhh\Http\IntegracionController;
 use App\Rrhh\Http\NominaController as N;
+use App\Rrhh\Http\PrevisionController as P;
 use App\Rrhh\Http\RrhhController as R;
 use Illuminate\Support\Facades\Route;
+
+Route::middleware(['auth:sanctum', 'can:consultar-rrhh', 'can:consultar-remuneraciones-rrhh'])->prefix('rrhh/prevision')->group(function (): void {
+    Route::get('/directorio/{tipo}', [P::class, 'directorio'])->whereIn('tipo', ['institucion', 'empleador']);
+    Route::get('/contratos', [P::class, 'contratos']);
+    Route::get('/afiliaciones', [P::class, 'afiliaciones']);
+    Route::get('/historial', [P::class, 'historial']);
+    Route::middleware(['can:gestionar-remuneraciones-rrhh', 'throttle:rrhh-gestion'])->group(function (): void {
+        Route::post('/directorio/{tipo}', [P::class, 'guardar'])->whereIn('tipo', ['institucion', 'empleador']);
+        Route::put('/directorio/{tipo}/{id}', [P::class, 'guardar'])->whereIn('tipo', ['institucion', 'empleador'])->whereUuid('id');
+        Route::post('/contratos', [P::class, 'contrato']);
+        Route::post('/afiliaciones', [P::class, 'afiliacion']);
+        Route::patch('/vigencias/{tipo}/{id}', [P::class, 'terminar'])->whereIn('tipo', ['contrato', 'afiliacion'])->whereUuid('id');
+    });
+});
 
 Route::middleware('auth:sanctum')->prefix('rrhh')->group(function (): void {
     Route::post('/marcajes', [R::class, 'marcar'])->middleware(['can:marcar-rrhh', 'throttle:rrhh-marcaje']);
