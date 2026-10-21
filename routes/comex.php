@@ -1,6 +1,7 @@
 <?php
 
 use App\Comex\Http\Controllers\ConfiguracionComexController;
+use App\Comex\Http\Controllers\CatalogoComercialController as Catalogo;
 use App\Comex\Http\Controllers\DocumentosComexController;
 use App\Comex\Http\Controllers\ExpedientesComexController;
 use Illuminate\Support\Facades\Route;
@@ -10,6 +11,20 @@ use Illuminate\Support\Facades\Route;
  * registros operativos. Ver docs/COMEX.md.
  */
 Route::middleware('auth:sanctum')->prefix('comex')->group(function (): void {
+    Route::middleware('can:consultar-comercial-comex')->prefix('comercial')->group(function (): void {
+        Route::get('/contexto', [Catalogo::class, 'contexto']);
+        Route::get('/partes', [Catalogo::class, 'partes']);
+        Route::get('/lugares', [Catalogo::class, 'lugares']);
+        Route::get('/clientes-operacion', [Catalogo::class, 'clientes']);
+        Route::get('/historial', [Catalogo::class, 'historial']);
+        Route::middleware(['can:gestionar-comercial-comex', 'throttle:comex-comercial'])->group(function (): void {
+            Route::post('/partes', [Catalogo::class, 'guardarParte']);
+            Route::put('/partes/{parte}', [Catalogo::class, 'guardarParte'])->whereUuid('parte');
+            Route::post('/lugares', [Catalogo::class, 'guardarLugar']);
+            Route::put('/lugares/{lugar}', [Catalogo::class, 'guardarLugar'])->whereUuid('lugar');
+        });
+    });
+
     $uuid = '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}';
 
     // Expedientes de embarque: el panel y el detalle los ve quien consulta Comex.

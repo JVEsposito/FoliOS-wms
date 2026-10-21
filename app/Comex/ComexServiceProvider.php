@@ -29,5 +29,6 @@ class ComexServiceProvider extends ServiceProvider
         RateLimiter::for('comex-archivos', fn (Request $request): Limit => Limit::perMinute(60)->by($clave('archivos', $request)));
         RateLimiter::for('comex-exportaciones', fn (Request $request): Limit => Limit::perMinute(20)->by($clave('exportaciones', $request)));
         RateLimiter::for('comex-configuracion', fn (Request $request): Limit => Limit::perMinute(30)->by($clave('configuracion', $request)));
+        RateLimiter::for('comex-comercial', fn (Request $request): Limit => Limit::perMinute(60)->by($clave('comercial', $request)));
     }
 }

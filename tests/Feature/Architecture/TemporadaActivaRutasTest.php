@@ -3,6 +3,8 @@
 namespace Tests\Feature\Architecture;
 
 use App\Comex\Models\TipoDocumento;
+use App\Comex\Models\ParteComercial;
+use App\Comex\Models\LugarComercial;
 use App\Finanzas\Models\AplicacionProveedor;
 use App\Finanzas\Models\CargoAcordado;
 use App\Finanzas\Models\ConceptoServicio;
@@ -41,6 +43,8 @@ class TemporadaActivaRutasTest extends TestCase
 {
     /** @var array<class-string<Model>, string> */
     private const EXENTOS = [
+        ParteComercial::class => 'identidad comercial global; documentos vigentes entre temporadas',
+        LugarComercial::class => 'catálogo logístico global en base Comex, sin inventario físico',
         PagoProveedor::class => 'registro de desembolso por fecha en base financiera propia',
         AplicacionProveedor::class => 'aplicación de créditos por fecha contable, sin temporada',
         EvaluacionProveedor::class => 'evaluación de proveedor por período en base financiera propia',
