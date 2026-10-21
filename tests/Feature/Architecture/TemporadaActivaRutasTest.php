@@ -2,12 +2,15 @@
 
 namespace Tests\Feature\Architecture;
 
+use App\Comex\Models\Booking;
 use App\Comex\Models\LugarComercial;
+use App\Comex\Models\NotaVenta;
 use App\Comex\Models\ParteComercial;
 use App\Comex\Models\TipoDocumento;
 use App\Finanzas\Models\AplicacionProveedor;
 use App\Finanzas\Models\CargoAcordado;
 use App\Finanzas\Models\ConceptoServicio;
+use App\Finanzas\Models\CostoComex;
 use App\Finanzas\Models\Diferencia;
 use App\Finanzas\Models\DocumentoCompra;
 use App\Finanzas\Models\EvaluacionProveedor;
@@ -47,6 +50,8 @@ class TemporadaActivaRutasTest extends TestCase
 {
     /** @var array<class-string<Model>, string> */
     private const EXENTOS = [
+        Booking::class => 'reserva comercial con viaje y fechas propios; solo lee el despacho de la temporada referenciada',
+        NotaVenta::class => 'acuerdo comercial con vigencia y revisiones propias; continúa entre temporadas sin modificar stock',
         ParteComercial::class => 'identidad comercial global; documentos vigentes entre temporadas',
         LugarComercial::class => 'catálogo logístico global en base Comex, sin inventario físico',
         ExpedienteContratista::class => 'control de empresa, faena y mes; las obligaciones laborales continúan después de cerrar una temporada',
@@ -119,6 +124,7 @@ class TemporadaActivaRutasTest extends TestCase
         Tarifa::class => 'precio con vigencia por fechas; un contrato de temporada se carga con sus fechas',
         CargoAcordado::class => 'cargo económico por fecha y acuerdo, independiente de la ejecución y temporada',
         Moneda::class => 'configuración global de monedas de Finanzas',
+        CostoComex::class => 'control económico por booking, con fechas y cierre propios; solo lee otras bases',
         ConceptoServicio::class => 'catálogo comercial de Finanzas con vigencia por fechas; no modifica la operación ni pertenece a una temporada',
         Diferencia::class => 'decisión sobre un mes cerrado de la prefactura: se rige por el mes calendario, no por la temporada',
         // Comex escribe solo en su base; los documentos de un embarque llegan semanas después de la salida.

@@ -14,6 +14,8 @@
 
 return [
 
+    'aprobador_distinto' => env('COMEX_APROBADOR_DISTINTO', true),
+
     // Identidad estable: Migrator cambia temporalmente database.default al usar --database.
     'conexion_operacion' => env('DB_CONNECTION', 'mysql'),
 

@@ -8,6 +8,25 @@ use Tests\TestCase;
 
 class ConexionFinanzasTest extends TestCase
 {
+    public function test_comex_url_se_resuelve_antes_de_aplicar_el_usuario_lector(): void
+    {
+        $proceso = new Process([PHP_BINARY, '-r', <<<'PHP'
+            require 'vendor/autoload.php';
+            $app = require 'bootstrap/app.php';
+            $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+            echo json_encode($app['config']->get('database.connections.comex_lectura'));
+            PHP,
+        ], base_path(), ['COMEX_DB_URL' => 'mysql://editor:ejemplo@comex.invalid:3355/comercial_url', 'COMEX_LECTURA_DB_USERNAME' => 'lector_comercial', 'COMEX_LECTURA_DB_PASSWORD' => 'ejemplo_lectura']);
+        $proceso->mustRun();
+        $c = json_decode($proceso->getOutput(), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame('comercial_url', $c['database']);
+        $this->assertSame('comex.invalid', $c['host']);
+        $this->assertSame('lector_comercial', $c['username']);
+        $this->assertSame('ejemplo_lectura', $c['password']);
+        $this->assertArrayNotHasKey('url', $c);
+        $this->assertSame('SET SESSION TRANSACTION READ ONLY', $c['options'][Mysql::ATTR_INIT_COMMAND]);
+    }
+
     public function test_rrhh_db_url_no_reemplaza_credenciales_de_lectura(): void
     {
         $proceso = new Process([PHP_BINARY, '-r', <<<'PHP'

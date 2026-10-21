@@ -42,9 +42,11 @@ final class EmbarquesOperacion
     /** @return array<string, mixed>|null */
     public function uno(string $embarqueId): ?array
     {
-        $fila = $this->consulta()->where('e.id', $embarqueId)->first();
+        return $this->lector->conexion()->transaction(function () use ($embarqueId) {
+            $fila = $this->consulta()->where('e.id', $embarqueId)->first();
 
-        return $fila === null ? null : $this->conDetalle(collect([$fila]))[0];
+            return $fila === null ? null : $this->conDetalle(collect([$fila]))[0];
+        });
     }
 
     public function documentosSag(string $embarqueId): array
@@ -69,12 +71,12 @@ final class EmbarquesOperacion
             ->all();
     }
 
-    /** @return array{id: string, nombre: string}|null */
+    /** @return array{id: string, nombre: string, activo: bool}|null */
     public function cliente(string $clienteId): ?array
     {
-        $cliente = $this->lector->tabla('clientes')->where('id', $clienteId)->first(['id', 'nombre']);
+        $cliente = $this->lector->tabla('clientes')->where('id', $clienteId)->first(['id', 'nombre', 'activo']);
 
-        return $cliente === null ? null : ['id' => (string) $cliente->id, 'nombre' => (string) $cliente->nombre];
+        return $cliente === null ? null : ['id' => (string) $cliente->id, 'nombre' => (string) $cliente->nombre, 'activo' => (bool) $cliente->activo];
     }
 
     /**

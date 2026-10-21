@@ -1,0 +1,18 @@
+.cx-picker { display: grid; align-content: start; gap: 6px; min-width: 0; }
+.cx-commercial-sheet { display: none; }
+.cx-commercial-document { overflow-wrap: anywhere; }
+.cx-commercial-document table { width: 100%; border-collapse: collapse; margin-block: 12px; }
+.cx-commercial-document th, .cx-commercial-document td { border: 1px solid var(--line, #bbb); padding: 8px; text-align: left; vertical-align: top; }
+.cx-commercial-document small { display: block; }
+.cx-commercial-line { border-block: 1px solid var(--line); margin-block: 12px; }
+@media print {
+    @page { size: A4; margin: 14mm; }
+    body > :not(#cnPrintSheet) { display: none !important; }
+    body, #cnPrintSheet { background: white !important; color: black !important; font: 10pt sans-serif; }
+    #cnPrintSheet { display: block !important; }
+    #cnPrintSheet table { font-size: 9pt; }
+    #cnPrintSheet tr { break-inside: avoid; }
+    #cnPrintSheet thead { display: table-header-group; }
+    #cnPrintSheet h2, #cnPrintSheet h3 { break-after: avoid; }
+    #cnPrintSheet th, #cnPrintSheet td { border-color: #bbb; }
+}

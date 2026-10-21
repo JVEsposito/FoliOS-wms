@@ -43,7 +43,7 @@ class FinanzasArchitectureTest extends TestCase
 
     public function test_finanzas_lee_la_operacion_solo_por_el_lector(): void
     {
-        $permitidos = ['Captura/LectorOperacion.php', 'Dotacion/LectorRrhh.php', 'EsquemaFinanzas.php'];
+        $permitidos = ['Captura/LectorOperacion.php', 'Dotacion/LectorRrhh.php', 'Comex/LectorComex.php', 'EsquemaFinanzas.php'];
         $infracciones = [];
 
         foreach (File::allFiles(app_path('Finanzas')) as $archivo) {
@@ -70,6 +70,7 @@ class FinanzasArchitectureTest extends TestCase
             ->reject(fn (SplFileInfo $archivo): bool => $archivo->getFilename() === 'ServicioCapturaHechos.php');
         $escrituras = '/->(insert|insertOrIgnore|insertGetId|insertUsing|update|updateOrInsert|upsert|delete|truncate|increment|decrement|incrementEach|decrementEach)\(/';
 
+        $archivos->push(new SplFileInfo(app_path('Finanzas/Comex/LectorComex.php'), '', 'Comex/LectorComex.php'));
         foreach ($archivos as $archivo) {
             $this->assertDoesNotMatchRegularExpression($escrituras, $archivo->getContents(), $archivo->getRelativePathname());
         }
