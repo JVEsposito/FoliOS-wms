@@ -121,7 +121,7 @@ final class ConfiguracionNomina
         }
         try {
             return $this->esquema->transaccion(function () use ($d, $actor) {
-                if (ParametroLegal::query()->where('desde', '<=', $d['hasta'])->where('hasta', '>=', $d['desde'])->exists()) {
+                if (collect(ReglasChile::parametros())->contains(fn (array $p): bool => $p['desde'] <= $d['hasta'] && $p['hasta'] >= $d['desde'])) {
                     $this->error('desde', 'Ya existen parámetros para estas fechas. Las versiones históricas no se sobrescriben.');
                 }
                 $p = ParametroLegal::query()->create(['id' => (string) Str::uuid(), ...$d]);

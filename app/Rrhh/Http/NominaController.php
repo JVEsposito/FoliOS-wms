@@ -11,7 +11,6 @@ use App\Rrhh\Models\CondicionLaboral;
 use App\Rrhh\Models\EventoRrhh;
 use App\Rrhh\Models\MovimientoNomina;
 use App\Rrhh\Models\PactoConcepto;
-use App\Rrhh\Models\ParametroLegal;
 use App\Rrhh\Models\Persona;
 use App\Rrhh\Nomina\CalculadorNovedad;
 use App\Rrhh\Nomina\ConfiguracionNomina;
@@ -51,7 +50,7 @@ final class NominaController extends Controller
     {
         $f = $r->validate(['page' => ['nullable', 'integer', 'min:1'], 'buscar' => ['nullable', 'string', 'max:100']]);
 
-        return response()->json(['data' => ConceptoNomina::query()->when($f['buscar'] ?? null, fn ($q, $s) => $q->where(fn ($q) => $q->where('nombre', 'like', '%'.$s.'%')->orWhere('codigo', 'like', '%'.$s.'%')))->orderBy('nombre')->paginate(50), 'parametros' => ParametroLegal::query()->orderByDesc('desde')->limit(50)->get(), 'regla' => ReglasChile::VERSION, 'permisos' => ['gestionar' => $r->user()->can('gestionar-remuneraciones-rrhh')]]);
+        return response()->json(['data' => ConceptoNomina::query()->when($f['buscar'] ?? null, fn ($q, $s) => $q->where(fn ($q) => $q->where('nombre', 'like', '%'.$s.'%')->orWhere('codigo', 'like', '%'.$s.'%')))->orderBy('nombre')->paginate(50), 'parametros' => array_reverse(ReglasChile::parametros()), 'regla' => ReglasChile::VERSION, 'permisos' => ['gestionar' => $r->user()->can('gestionar-remuneraciones-rrhh')]]);
     }
 
     public function concepto(Request $r, ConfiguracionNomina $g): JsonResponse

@@ -32,19 +32,24 @@ final class ReglasChile
         return (string) $valor->toScale(0, RoundingMode::HalfUp);
     }
 
+    public static function parametros(): array
+    {
+        return [...config('rrhh-legales', []), ...ParametroLegal::query()->orderBy('desde')->get()->toArray()];
+    }
+
     public function minimo(string $fecha, string $tramo, string $horas): array
     {
-        $parametro = ParametroLegal::query()->where('desde', '<=', $fecha)->where('hasta', '>=', $fecha)->first();
+        $parametro = collect(self::parametros())->first(fn (array $p): bool => $p['desde'] <= $fecha && $p['hasta'] >= $fecha);
         if (! $parametro) {
             throw ValidationException::withMessages(['fecha' => 'Falta el ingreso mínimo vigente. Registre el parámetro y su respaldo antes de calcular.']);
         }
-        $minimo = self::decimal($tramo === 'general' ? $parametro->imm_general : $parametro->imm_menor_mayor);
+        $minimo = self::decimal($tramo === 'general' ? $parametro['imm_general'] : $parametro['imm_menor_mayor']);
         // La proporcionalidad corresponde a jornada parcial de hasta 30 horas, no a cualquier jornada inferior al máximo.
         if (self::decimal($horas)->isLessThanOrEqualTo(30)) {
             $minimo = $minimo->multipliedBy($horas)->dividedBy(self::jornadaMaxima($fecha), 12, RoundingMode::HalfUp);
         }
 
-        return ['monto' => self::texto($minimo), 'parametro' => $parametro->toArray()];
+        return ['monto' => self::texto($minimo), 'parametro' => $parametro];
     }
 
     public function horasExtra(string $base, string $horasSemanales, int $minutos, string $recargo): array

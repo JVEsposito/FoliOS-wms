@@ -2,9 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Str;
 
 return new class extends Migration
 {
@@ -54,10 +52,6 @@ return new class extends Migration
             $t->timestamps();
             $t->index(['desde', 'hasta']);
         });
-        foreach ([['2026-01-01', '2026-04-30', 539000, 402082, 'Ley 21.751 · https://www.bcn.cl/leychile/navegar?idNorma=1214530'],
-            ['2026-05-01', '2026-12-31', 553553, 412938, 'Ley 21.830 · https://www.bcn.cl/leychile/navegar?idNorma=1225354']] as [$desde,$hasta,$general,$especial,$respaldo]) {
-            DB::connection($this->connection)->table('rh_parametros_legales')->insert(['id' => (string) Str::uuid(), 'desde' => $desde, 'hasta' => $hasta, 'imm_general' => $general, 'imm_menor_mayor' => $especial, 'respaldo' => $respaldo, 'created_at' => now(), 'updated_at' => now()]);
-        }
         $s->create('rh_condiciones_laborales', function (Blueprint $t): void {
             $t->uuid('id')->primary();
             $t->uuid('persona_id');
