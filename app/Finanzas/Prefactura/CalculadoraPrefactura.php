@@ -101,6 +101,9 @@ final class CalculadoraPrefactura
                 ->select(['id', 'fuente', 'origen_id', 'version', 'cliente_id', 'cliente_nombre', 'referencia', 'ocurrido_at', 'termina_at', 'fecha_operacional', 'medidas', 'datos']);
 
             foreach ($hechos->lazyById(1000, 'id') as $fila) {
+                if (! in_array($fila->fuente, $intervalos, true) && substr((string) $fila->fecha_operacional, 0, 10) > $corte) {
+                    continue;
+                }
                 if ($fila->cliente_id === null) {
                     $this->sinCliente[$fila->fuente] = ($this->sinCliente[$fila->fuente] ?? 0) + 1;
 
@@ -149,7 +152,7 @@ final class CalculadoraPrefactura
     private function puntual(object $fila, array $medidas): void
     {
         $fecha = substr((string) $fila->fecha_operacional, 0, 10);
-        foreach ($this->servicios->paraHecho($fila->fuente, $fecha) as $servicio) {
+        foreach ($this->servicios->paraHecho($fila->fuente, $fecha, conceptoDeclarado: (json_decode((string) $fila->datos, true) ?: [])['concepto_declarado'] ?? null) as $servicio) {
             $precios = $this->aplicables($fila->cliente_id, $servicio, $fecha);
             if ($precios === []) {
                 $this->sinPrecio[$fila->cliente_id][$servicio][$fila->id] = true;

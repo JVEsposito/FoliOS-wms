@@ -2,6 +2,7 @@
 
 namespace App\Finanzas\Captura;
 
+use App\Finanzas\Captura\Fuentes\CargosDeclarados;
 use App\Finanzas\Captura\Fuentes\Despacho;
 use App\Finanzas\Captura\Fuentes\EstadiaCamara;
 use App\Finanzas\Captura\Fuentes\Prefrio;
@@ -22,6 +23,7 @@ final class CatalogoFuentes
         EstadiaCamara::class,
         Repaletizaje::class,
         Despacho::class,
+        CargosDeclarados::class,
     ];
 
     /** @var array<string, FuenteHechos>|null */

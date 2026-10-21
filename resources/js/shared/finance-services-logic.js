@@ -2,7 +2,7 @@ import { formatDay, validityText } from './finance-tariffs-logic.js';
 
 export function serviceRules(service) {
     if (!service) return '';
-    const application = service.base ? 'Concepto base del proceso'
+    const application = service.aplicacion === 'declarado' ? 'Cargo por acuerdo o declaración' : service.base ? 'Concepto base del proceso'
         : (service.aplicacion === 'reemplaza_base' ? 'Reemplaza al concepto base' : 'Cobro adicional al concepto base');
     const days = service.por_dia
         ? ` · días ${service.dia_desde || 1} a ${service.dia_hasta || 'sin límite'} de esta estadía del folio`

@@ -1,6 +1,7 @@
 <?php
 
 use App\Finanzas\Http\Controllers\CapturasFinanzasController;
+use App\Finanzas\Http\Controllers\CargosFinanzasController;
 use App\Finanzas\Http\Controllers\CierresPrefacturaController;
 use App\Finanzas\Http\Controllers\DiferenciasPrefacturaController;
 use App\Finanzas\Http\Controllers\HechosFinanzasController;
@@ -24,6 +25,12 @@ Route::middleware('auth:sanctum')->prefix('finanzas')->group(function (): void {
         ->middleware('can:consultar-finanzas');
     Route::post('/capturas', [CapturasFinanzasController::class, 'store'])
         ->middleware(['can:capturar-hechos-finanzas', 'throttle:6,1']);
+
+    Route::get('/cargos', [CargosFinanzasController::class, 'index'])->middleware('can:consultar-finanzas');
+    Route::post('/cargos', [CargosFinanzasController::class, 'store'])->middleware('can:gestionar-tarifas-finanzas');
+    Route::get('/cargos/{cargo}/historial', [CargosFinanzasController::class, 'historial'])->middleware('can:consultar-finanzas');
+    Route::post('/cargos/{cargo}/aprobar', [CargosFinanzasController::class, 'aprobar'])->middleware('can:gestionar-tarifas-finanzas');
+    Route::post('/cargos/{cargo}/anular', [CargosFinanzasController::class, 'anular'])->middleware('can:gestionar-tarifas-finanzas');
 
     Route::post('/servicios', [ServiciosFinanzasController::class, 'store'])
         ->middleware('can:gestionar-tarifas-finanzas');

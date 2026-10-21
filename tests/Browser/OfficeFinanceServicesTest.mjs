@@ -27,17 +27,18 @@ async function setup(browser, { manage = true, reject = false, width = 1280 } = 
             try { return route.fulfill({ body: readFileSync(resolve(root, `public${path}`)), contentType: ({ '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.svg': 'image/svg+xml' })[extname(path)] || 'application/octet-stream' }); }
             catch { return route.fulfill({ status: 404, body: '' }); }
         }
+        if (path === '/api/finanzas/cargos') return route.fulfill({ json: { data: { data: [], current_page: 1, last_page: 1, prev_page_url: null, next_page_url: null } } });
         if (path === '/api/acceso-oficina') return route.fulfill({ json: { usuario: identity } });
         if (path === '/api/oficina/contexto') return route.fulfill({ json: { data: { planta: 'Planta Prueba', temporada: { nombre: '2026-2027' } } } });
         if (path === '/api/finanzas/tarifas' && request.method() === 'GET') return route.fulfill({ json: {
             data: [], resumen: {}, hoy: '2026-11-01', servicios: services, puede_gestionar: manage, clientes: [],
-            procesos: [{ clave: 'estadia', nombre: 'Estadía en cámara', descripcion: 'Custodia del folio.', intervalo: true, medidas: { cajas: { nombre: 'Cajas' } } }],
+            procesos: [{ clave: 'estadia', nombre: 'Estadía en cámara', descripcion: 'Custodia del folio.', intervalo: true, medidas: { cajas: { nombre: 'Cajas' } } }, { clave: 'declarado', nombre: 'Cargos acordados y manuales', descripcion: 'Base comercial independiente de ejecución.', intervalo: false, medidas: { cantidad: { nombre: 'Cantidad acordada' } } }],
             monedas: [{ codigo: 'CLP', nombre: 'Peso chileno', simbolo: '$', decimales: 0, activa: true }],
         } });
         if (path === '/api/finanzas/servicios' && request.method() === 'POST') {
             const body = request.postDataJSON(); writes.push(body);
             if (reject) return route.fulfill({ status: 422, json: { errors: { aplicacion: ['Ya hay un concepto que reemplaza al base en esas fechas y días. Ajuste sus rangos.'] } } });
-            const service = { ...base, ...body, base: false, clave: 'svc_numeral' };
+            const service = { ...base, ...body, base: false, clave: 'svc_numeral', ...(body.fuente === 'declarado' ? { por_dia: false, unidades: [{ clave: 'cantidad', nombre: `por ${body.unidad_libre}` }] } : {}) };
             services = [...services, service];
             return route.fulfill({ status: 201, json: { data: service } });
         }
@@ -103,6 +104,28 @@ test('el perfil de consulta ve conceptos y no tiene acciones de gestión', async
         assert.equal(await page.locator('#serviceRows [data-service-price]').count(), 0);
         assert.match(await page.locator('#serviceRows').textContent(), /Estadía en cámara/);
         assert.deepEqual(writes, []);
+        assert.deepEqual(errors, []);
+        await context.close();
+    } finally { await browser.close(); }
+});
+
+
+test('un concepto acordado permite unidad y proceso libres sin exigir ejecución', async () => {
+    const browser = await launch();
+    try {
+        const { context, page, writes, errors } = await setup(browser);
+        await page.locator('#serviceNewButton').click();
+        await page.locator('#serviceForm [name="nombre"]').fill('Cuadrilla reservada');
+        await page.locator('#serviceForm [name="fuente"]').selectOption('declarado');
+        await page.locator('#serviceForm [name="unidad_libre"]').fill('hora persona');
+        await page.locator('#serviceForm [name="proceso_referencia"]').fill('RRHH');
+        await page.locator('#serviceForm [type="submit"]').click();
+        await page.waitForFunction(() => document.getElementById('tariffDialog').open);
+        assert.equal(writes[0].aplicacion, 'declarado');
+        assert.equal(writes[0].unidad_libre, 'hora persona');
+        assert.equal(writes[0].proceso_referencia, 'RRHH');
+        assert.deepEqual(await page.locator('#tariffFormUnit option').allTextContents(), ['por hora persona']);
+        assert.match(await page.locator('#tariffFormServiceRules').textContent(), /acuerdo o declaración/);
         assert.deepEqual(errors, []);
         await context.close();
     } finally { await browser.close(); }

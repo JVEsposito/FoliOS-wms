@@ -23,3 +23,8 @@ test('el historial conserva las reglas de creación y el motivo se muestra apart
     assert.match(serviceEventText({ accion: 'creado', datos: numeral }), /Numeral · Reemplaza al concepto base/);
     assert.equal(serviceEventText({ accion: 'finalizado', datos: { antes: null, despues: '2027-01-05' } }), 'Término: sin término → 05-01-2027');
 });
+
+
+test('los conceptos libres expresan su base económica sin exigir un proceso realizado', () => {
+    assert.equal(serviceRules({ aplicacion: 'declarado', por_dia: false }), 'Cargo por acuerdo o declaración');
+});

@@ -40,7 +40,7 @@ class ConceptosServicioTest extends TestCase
     public function test_catalogo_permisos_asociacion_unidades_e_historial(): void
     {
         $consulta = $this->conPerfil(RolUsuario::Consulta, [CatalogoModulosAcceso::OFICINA_FINANZAS_PREFACTURA]);
-        $this->actingAs($consulta, 'sanctum')->getJson('/api/finanzas/tarifas')->assertOk()->assertJsonCount(7, 'servicios')->assertJsonCount(7, 'procesos');
+        $this->actingAs($consulta, 'sanctum')->getJson('/api/finanzas/tarifas')->assertOk()->assertJsonCount(7, 'servicios')->assertJsonCount(8, 'procesos');
         $this->postJson('/api/finanzas/servicios', $this->definicion())->assertForbidden();
         $this->actingAs($this->administrador, 'sanctum');
         $servicio = $this->postJson('/api/finanzas/servicios', $this->definicion())->assertCreated()

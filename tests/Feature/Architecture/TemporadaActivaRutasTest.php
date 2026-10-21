@@ -3,6 +3,7 @@
 namespace Tests\Feature\Architecture;
 
 use App\Comex\Models\TipoDocumento;
+use App\Finanzas\Models\CargoAcordado;
 use App\Finanzas\Models\ConceptoServicio;
 use App\Finanzas\Models\Diferencia;
 use App\Finanzas\Models\Moneda;
@@ -75,6 +76,7 @@ class TemporadaActivaRutasTest extends TestCase
         Models\TrabajoImpresionMaterial::class => 'Materiales',
         // Finanzas no escribe registros operacionales: un precio rige por sus propias fechas.
         Tarifa::class => 'precio con vigencia por fechas; un contrato de temporada se carga con sus fechas',
+        CargoAcordado::class => 'cargo económico por fecha y acuerdo, independiente de la ejecución y temporada',
         Moneda::class => 'configuración global de monedas de Finanzas',
         ConceptoServicio::class => 'catálogo comercial de Finanzas con vigencia por fechas; no modifica la operación ni pertenece a una temporada',
         Diferencia::class => 'decisión sobre un mes cerrado de la prefactura: se rige por el mes calendario, no por la temporada',

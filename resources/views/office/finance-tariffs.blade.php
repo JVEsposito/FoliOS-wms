@@ -51,6 +51,7 @@
                     default="prices"
                     :panels="[
                         'prices' => ['label' => 'Precios', 'icon' => '$', 'badge_id' => 'tariffPricesCount'],
+                        'charges' => ['label' => 'Cargos acordados', 'icon' => '+'],
                         'services' => ['label' => 'Conceptos de servicio', 'icon' => '≡', 'badge_id' => 'tariffServicesCount'],
                         'currencies' => ['label' => 'Monedas', 'icon' => '¤', 'badge_id' => 'tariffCurrenciesCount'],
                     ]"
@@ -93,19 +94,28 @@
                     </div>
                 </section>
 
+                <section class="panel fin-panel" id="finance-tariffs-panel-charges" data-office-panel-group="finance-tariffs" data-office-panel-id="charges" role="tabpanel" aria-labelledby="finance-tariffs-tab-charges" hidden>
+                    <div class="fin-panel__heading"><div><p class="eyebrow">CARGOS ACORDADOS</p><h2>Lo que se cobra por acuerdo o declaración</h2></div><button class="secondary-button" id="chargeNew" type="button" hidden>+ Nuevo cargo</button></div>
+                    <p>Puede cobrar cualquier concepto operativo por ejecución, compromiso o disponibilidad. El estado real del servicio se conserva; un servicio cancelado puede seguir siendo cobrable según su acuerdo.</p>
+                    <label><span>Mes del cargo</span><input id="chargeMonth" type="month"></label>
+                    <p id="chargeStatus" role="status"></p>
+                    <div class="fin-table-scroll"><table class="fin-table"><thead><tr><th>Cliente y concepto</th><th>Cantidad y fecha</th><th>Acuerdo y ejecución</th><th>Estado y acciones</th></tr></thead><tbody id="chargeRows"></tbody></table></div>
+                    <div class="fin-acciones"><button class="fin-boton" id="chargePrev" type="button">Anterior</button><span id="chargePage"></span><button class="fin-boton" id="chargeNext" type="button">Siguiente</button></div>
+                </section>
+
                 <section class="panel fin-panel" id="finance-tariffs-panel-services" data-office-panel-group="finance-tariffs" data-office-panel-id="services" role="tabpanel" aria-labelledby="finance-tariffs-tab-services" hidden>
                     <div class="fin-panel__heading">
                         <div><p class="eyebrow">CONCEPTOS DE SERVICIO</p><h2>Qué se cobra y qué proceso lo respalda</h2></div>
                         <button class="secondary-button fin-heading__button" id="serviceNewButton" type="button" hidden>+ Nuevo concepto</button>
                     </div>
-                    <p>Cree el concepto, asócielo a un proceso y asígnele un precio general o por cliente. Se aplica a todos los hechos que cumplan sus fechas y reglas.</p>
+                    <p>Cree conceptos automáticos o acordados/manuales y asígneles precios generales o por cliente. La base económica del cobro se conserva separada del estado de ejecución.</p>
                     <div class="fin-table-scroll">
                         <table class="fin-table">
                             <thead><tr><th>Concepto</th><th>Proceso y aplicación</th><th>Vigencia y días</th><th>Acciones</th></tr></thead>
                             <tbody id="serviceRows"></tbody>
                         </table>
                     </div>
-                    <p>Solo se ofrecen procesos con registros disponibles para Finanzas. Inspecciones SAG y servicios adicionales como adhesivos o sellado requieren incorporar su registro antes de automatizar el cobro.</p>
+                    <p>Todo concepto operativo puede cobrarse por acuerdo, compromiso o disponibilidad, aunque no se ejecute. Use la modalidad acordada/manual para registrar sus cantidades y respaldo; la captura automática usa los procesos realizados.</p>
                 </section>
 
                 <section class="panel fin-panel" id="finance-tariffs-panel-currencies" data-office-panel-group="finance-tariffs" data-office-panel-id="currencies" role="tabpanel" aria-labelledby="finance-tariffs-tab-currencies" hidden>
@@ -205,6 +215,23 @@
             </form>
         </dialog>
 
+        <dialog class="fin-history fin-dialog" id="chargeDialog" aria-labelledby="chargeTitle">
+            <form id="chargeForm"><header class="fin-history__heading"><div><p class="eyebrow">CARGO ACORDADO</p><h2 id="chargeTitle">Nuevo cargo</h2></div><button class="fin-history__close" data-charge-close type="button" aria-label="Cerrar">×</button></header>
+                <div class="fin-form">
+                    <label class="fin-form__wide"><span>Concepto acordado/manual</span><select name="servicio" required></select></label>
+                    <label class="fin-form__wide"><span>Cliente</span><select name="cliente_id" required></select></label>
+                    <label><span>Cantidad</span><input name="cantidad" inputmode="decimal" required></label><label><span>Fecha del cobro</span><input name="fecha" type="date" required></label>
+                    <p class="fin-form__preview fin-form__wide" id="chargeUnit"></p>
+                    <label><span>Base económica del cobro</span><select name="base_cobro" required><option value="acuerdo">Acuerdo comercial</option><option value="compromiso">Compromiso contratado</option><option value="disponibilidad">Disponibilidad o reserva</option><option value="ejecucion">Prestación realizada</option></select></label>
+                    <label><span>Ejecución al registrar el cargo</span><select name="estado_ejecucion" required><option value="no_aplica">No aplica</option><option value="programado">Programado</option><option value="realizado">Realizado</option><option value="no_realizado">No realizado</option><option value="cancelado">Cancelado</option></select></label>
+                    <label class="fin-form__wide"><span>Respaldo del cobro (acuerdo, orden, contrato o explicación)</span><textarea name="respaldo" minlength="5" maxlength="500" required rows="3"></textarea></label>
+                    <p class="fin-form__preview fin-form__wide">Se guarda como borrador. Al aprobarlo pasa a la prefactura con el precio del concepto, sin registrar una ejecución ficticia. La anulación económica se decide por separado.</p>
+                    <p id="chargeError" class="form-error fin-form__wide" role="alert"></p>
+                </div><footer class="fin-history__actions"><button class="secondary-button" data-charge-close type="button">Cancelar</button><button class="primary-button" type="submit">Guardar borrador</button></footer>
+            </form>
+        </dialog>
+        <dialog class="fin-history" id="chargeHistory" aria-labelledby="chargeHistoryTitle"><header class="fin-history__heading"><h2 id="chargeHistoryTitle">Historial del cargo</h2><button class="fin-history__close" data-charge-close type="button" aria-label="Cerrar">×</button></header><div class="fin-form" id="chargeHistoryBody"></div></dialog>
+
         <dialog class="fin-history fin-dialog" id="serviceDialog" aria-labelledby="serviceDialogTitle">
             <form id="serviceForm">
                 <header class="fin-history__heading">
@@ -213,8 +240,14 @@
                 </header>
                 <div class="fin-form">
                     <label class="fin-form__wide"><span>Nombre que aparecerá en la prefactura</span><input name="nombre" maxlength="120" required placeholder="Por ejemplo, Frío normal"></label>
-                    <label class="fin-form__wide"><span>Proceso que respalda el servicio</span><select name="fuente" required></select></label>
+                    <label class="fin-form__wide"><span>Cómo se registran las cantidades</span><select name="fuente" required></select></label>
                     <p class="fin-form__preview fin-form__wide" id="serviceProcessHelp"></p>
+                    <fieldset class="fin-form__wide fin-service-days" id="serviceManualFields" hidden>
+                        <legend>Concepto acordado/manual</legend>
+                        <label><span>Unidad de cobro</span><input name="unidad_libre" maxlength="60" placeholder="hora persona, jornada, bin, documento…"></label>
+                        <label><span>Proceso asociado (opcional)</span><input name="proceso_referencia" maxlength="120" placeholder="RRHH, inspección, embalaje…"></label>
+                        <p>Nombre y unidad libres. El cobro se aprueba con su cantidad y acuerdo, incluso si el proceso no se ejecuta.</p>
+                    </fieldset>
                     <label class="fin-form__wide"><span>Cómo se aplica</span><select name="aplicacion" required><option value="">Seleccione</option><option value="reemplaza_base">Reemplaza al concepto base en los hechos que correspondan</option><option value="adicional">Suma un cobro adicional al concepto base</option></select></label>
                     <label><span>Vigente desde</span><input name="vigente_desde" type="date" required></label>
                     <label><span>Vigente hasta <small>(opcional)</small></span><input name="vigente_hasta" type="date"></label>

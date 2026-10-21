@@ -18,9 +18,11 @@ class ServiciosFinanzasController extends Controller
     {
         $datos = $request->validate([
             'nombre' => ['required', 'string', 'max:120'],
+            'unidad_libre' => ['required_if:fuente,declarado', 'nullable', 'string', 'max:60'],
+            'proceso_referencia' => ['nullable', 'string', 'max:120'],
             'descripcion' => ['nullable', 'string', 'max:500'],
             'fuente' => ['required', Rule::in(array_keys($fuentes->todas()))],
-            'aplicacion' => ['required', Rule::in([ConceptoServicio::ADICIONAL, ConceptoServicio::REEMPLAZA_BASE])],
+            'aplicacion' => ['required', Rule::in([ConceptoServicio::ADICIONAL, ConceptoServicio::REEMPLAZA_BASE, 'declarado'])],
             'vigente_desde' => ['required', 'date_format:Y-m-d'],
             'vigente_hasta' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:vigente_desde'],
             'dia_desde' => ['required', 'integer', 'between:1,65535'],
