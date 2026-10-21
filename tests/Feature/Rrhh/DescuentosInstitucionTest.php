@@ -51,7 +51,7 @@ class DescuentosInstitucionTest extends TestCase
         $this->aprobar($id)->assertOk();
         $this->saldo($m, '25000', 1);
         $otro = $this->postJson('/api/rrhh/nomina/movimientos', $this->entrada($m))->assertCreated()->json('data.id');
-        $this->aprobar($otro)->assertUnprocessable()->assertJsonValidationErrors('estado');
+        $this->aprobar($otro)->assertUnprocessable()->assertJsonValidationErrors('mandato_id');
         $this->getJson('/api/rrhh/nomina/por-institucion?institucion_id='.$this->institucion.'&mes=2026-10')->assertOk()->assertJsonPath('totales_aprobados.descuento', '20000')->assertJsonPath('data.data.0.persona_nombre', 'Persona de prueba');
         $entrega = EntregaNomina::query()->where('movimiento_id', $id)->firstOrFail();
         $this->assertSame('folios.rrhh.novedad.v2', $entrega->contenido['contrato']);
@@ -127,7 +127,8 @@ class DescuentosInstitucionTest extends TestCase
         $this->assertSame(15, $r->topeCcaf('2026-10-01', '356815', true));
         $this->assertSame(20, $r->topeCcaf('2026-10-01', '553552', true));
         $this->assertSame(25, $r->topeCcaf('2026-10-01', '553553', false));
-        $this->assertSame(35, $r->topeCcaf('2026-10-01', '553553', true));
+        $this->assertSame(25, $r->topeCcaf('2026-10-01', '553553', true));
+        $this->assertSame(35, $r->topeCcaf('2026-10-02', '553553', true));
     }
 
     private function nuevoConcepto(array $cambios = []): string

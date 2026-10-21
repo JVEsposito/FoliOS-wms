@@ -22,6 +22,7 @@ use App\Rrhh\Models\ConceptoNomina;
 use App\Rrhh\Models\EntregaNomina;
 use App\Rrhh\Models\FuenteMarcaje;
 use App\Rrhh\Models\LoteIntegracion;
+use App\Rrhh\Models\MandatoDescuento;
 use App\Rrhh\Models\Marcaje;
 use App\Rrhh\Models\MovimientoNomina;
 use App\Rrhh\Models\Persona;
@@ -41,6 +42,7 @@ class TemporadaActivaRutasTest extends TestCase
 {
     /** @var array<class-string<Model>, string> */
     private const EXENTOS = [
+        MandatoDescuento::class => 'autorización de descuento de RRHH por empleador, persona y vigencia; no modifica operación ni pertenece a una temporada',
         PagoProveedor::class => 'registro de desembolso por fecha en base financiera propia',
         AplicacionProveedor::class => 'aplicación de créditos por fecha contable, sin temporada',
         EvaluacionProveedor::class => 'evaluación de proveedor por período en base financiera propia',
