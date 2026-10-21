@@ -372,6 +372,9 @@ async function openLot(id) {
     elements.detailError.textContent = '';
     state.selectedLot = await api(`/inspeccion-sag/lotes/${id}`);
     const lot = state.selectedLot;
+    const link = document.getElementById('sagDocumentLink');
+    link.classList.toggle('is-hidden', lot.tipo !== 'cambio_mercado' || capabilities().puede_consultar_contraparte_sag !== true);
+    link.href = `/oficina/frigorifico/contraparte-sag?lote=${encodeURIComponent(lot.id)}`;
     document.getElementById('sagDetailTitle').textContent = `${lot.codigo} · ${humanize(lot.tipo)}`;
     document.getElementById('sagDetailSubtitle').textContent = `${humanize(lot.estado)} · ${lot.cantidad_folios} pallets · SAG ${lot.numero_inspeccion_sag || 'sin número'} · creado ${dateTime(lot.creado_at)}`;
     document.getElementById('sagDetailDestinations').innerHTML = destinationPills(lot.destinos);

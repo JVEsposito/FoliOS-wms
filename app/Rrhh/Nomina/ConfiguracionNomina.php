@@ -44,6 +44,9 @@ final class ConfiguracionNomina
 
     public function concepto(array $d, User $actor): ConceptoNomina
     {
+        if (! empty($d['institucion_id'])) {
+            app(DestinosNomina::class)->institucion($d['institucion_id'], new ConceptoNomina($d));
+        }
         if ($d['tipo'] !== 'haber' && ($d['remuneracion'] || $d['imponible'] || $d['tributable'] || $d['base_he'])) {
             $this->error('tipo', 'Los atributos de haber solo corresponden a haberes.');
         }
