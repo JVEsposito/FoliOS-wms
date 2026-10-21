@@ -26,6 +26,13 @@ final class IntercambioNomina
             'cantidad' => $m->calculo['cantidad'] ?? null, 'valor' => $m->calculo['valor'] ?? null, 'minutos' => $m->calculo['minutos'] ?? null,
             'base_he' => $m->calculo['base_he'] ?? null, 'recargo' => $m->calculo['recargo'] ?? null, 'regla' => $m->calculo['regla']];
         $contenido = $this->ordenar($contenido);
+        if (isset($m->calculo['institucion'])) {
+            $contenido['contrato'] = 'folios.rrhh.novedad.v2';
+            $contenido['institucion'] = array_intersect_key($m->calculo['institucion'], array_flip(['id', 'codigo', 'rut', 'razon_social', 'tipo', 'codigo_oficial', 'codigo_externo']));
+            $contenido['mandato_id'] = $m->mandato_id;
+            $contenido['empleador'] = array_intersect_key($m->calculo['contrato']['empleador'], array_flip(['id', 'codigo', 'rut', 'razon_social', 'codigo_externo']));
+            $contenido = $this->ordenar($contenido);
+        }
         $json = json_encode($contenido, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         EntregaNomina::query()->create(['id' => $contenido['evento_id'], 'movimiento_id' => $m->id, 'secuencia' => $m->estado === 'aprobado' ? 1 : 2, 'contenido' => $contenido, 'huella' => hash('sha256', $json)]);
     }

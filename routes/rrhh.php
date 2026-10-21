@@ -1,10 +1,20 @@
 <?php
 
+use App\Rrhh\Http\DescuentosController as D;
 use App\Rrhh\Http\IntegracionController;
 use App\Rrhh\Http\NominaController as N;
 use App\Rrhh\Http\PrevisionController as P;
 use App\Rrhh\Http\RrhhController as R;
 use Illuminate\Support\Facades\Route;
+
+Route::middleware(['auth:sanctum', 'can:consultar-rrhh', 'can:consultar-remuneraciones-rrhh'])->prefix('rrhh/nomina')->group(function (): void {
+    Route::get('/mandatos', [D::class, 'mandatos']);
+    Route::get('/por-institucion', [D::class, 'institucion']);
+    Route::middleware(['can:gestionar-remuneraciones-rrhh', 'throttle:rrhh-gestion'])->group(function (): void {
+        Route::post('/mandatos', [D::class, 'guardar']);
+        Route::patch('/mandatos/{mandato}', [D::class, 'terminar'])->whereUuid('mandato');
+    });
+});
 
 Route::middleware(['auth:sanctum', 'can:consultar-rrhh', 'can:consultar-remuneraciones-rrhh'])->prefix('rrhh/prevision')->group(function (): void {
     Route::get('/directorio/{tipo}', [P::class, 'directorio'])->whereIn('tipo', ['institucion', 'empleador']);
