@@ -46,6 +46,7 @@ final class DestinosNomina
             if (! empty($d['excepcion_ccaf']) && $c->grupo_descuento !== 'ccaf') {
                 $this->error('excepcion_ccaf', 'La excepción documentada solo corresponde a créditos CCAF.');
             }
+            $this->regimenApv($c, $d['regimen_apv'] ?? null);
             if (MandatoDescuento::query()->where('persona_id', $d['persona_id'])->where('institucion_id', $d['institucion_id'])->where('referencia', $d['referencia'])->exists()) {
                 $this->error('referencia', 'Esta referencia ya tiene mandato para la persona y la institución.');
             }
@@ -97,10 +98,14 @@ final class DestinosNomina
             $d['autorizacion'] = $m->respaldo;
             $d['pago_directo_institucion'] = $m->pago_directo_institucion;
             $d['excepcion_ccaf'] = $m->excepcion_ccaf;
+            if ($m->regimen_apv) {
+                $d['regimen_apv'] = $m->regimen_apv;
+            }
             $empleador = $m->empleador_id;
             $mandato = [...$m->toArray(), ...$saldo];
         }
         $id = $d['institucion_id'] ?? $c->institucion_id;
+        $this->regimenApv($c, $d['regimen_apv'] ?? null);
         $institucion = $id ? $this->institucion($id, $c, $d['fecha']) : null;
         if (in_array($c->grupo_descuento, ['ccaf', 'sindical', 'apv'], true) && ! $institucion) {
             $this->error('institucion_id', 'Este régimen necesita identificar la institución destinataria.');
@@ -133,5 +138,12 @@ final class DestinosNomina
     private function error(string $campo, string $mensaje): never
     {
         throw ValidationException::withMessages([$campo => $mensaje]);
+    }
+
+    private function regimenApv(ConceptoNomina $c, ?string $regimen): void
+    {
+        if (($c->grupo_descuento === 'apv' && ! in_array($regimen, ['A', 'B'], true)) || ($c->grupo_descuento !== 'apv' && $regimen !== null)) {
+            $this->error('regimen_apv', 'El APV requiere régimen tributario A o B. No aplique esa selección a otros descuentos.');
+        }
     }
 }

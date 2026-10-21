@@ -35,9 +35,18 @@ final class CalculadorNovedad
             $resultado['institucion'] = $destino['institucion'];
             $resultado['contrato'] = $destino['contrato'];
         }
+        if ($concepto->grupo_descuento === 'apv') {
+            $resultado['regimen_apv'] = $d['regimen_apv'];
+        }
+        if ($concepto->grupo_descuento === 'ccaf') {
+            $liquido = $d['liquido_legal'] ?? '0';
+            $resultado['limite_ccaf'] = ['base_liquida' => $liquido, 'porcentaje_ordinario' => $this->reglas->topeCcaf($d['fecha'], $liquido, false),
+                'porcentaje_excepcional' => $this->reglas->topeCcaf($d['fecha'], $liquido, true),
+                'parametro' => collect(ReglasChile::parametros())->first(fn ($p) => $p['desde'] <= $d['fecha'] && $p['hasta'] >= $d['fecha'])];
+        }
         if ($destino['mandato']) {
             $resultado['mandato'] = $destino['mandato'];
-            $resultado['entrada_mandato'] = array_intersect_key($d, array_flip(['cantidad', 'valor', 'institucion_id', 'autorizacion', 'pago_directo_institucion', 'excepcion_ccaf']));
+            $resultado['entrada_mandato'] = array_intersect_key($d, array_flip(['cantidad', 'valor', 'institucion_id', 'autorizacion', 'pago_directo_institucion', 'excepcion_ccaf', 'regimen_apv']));
         }
         if ($concepto->calculo !== 'horas_extra') {
             $cantidad = $d['cantidad'] ?? null;

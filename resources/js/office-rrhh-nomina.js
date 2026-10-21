@@ -96,6 +96,7 @@ export function initNomina({ api, capability, escape, table, choices, open, page
     function movementFields() {
         const form = $('rnMovementForm'); const concept = form._concepts?.find((c) => c.id === form.elements.concepto_id.value); const extra = concept?.calculo === 'horas_extra'; const deduction = concept?.tipo === 'descuento';
         for (const [selector, show] of [['[data-rn-amount]', !extra], ['[data-rn-extra]', extra], ['[data-rn-deduction]', deduction]]) { const block = form.querySelector(selector); block.hidden = !show; for (const input of block.querySelectorAll('input,select')) { input.disabled = !show; if (input.name === 'cantidad' || input.name === 'valor' || input.name === 'minutos') input.required = show; } }
+        const apv = deduction && concept?.grupo_descuento === 'apv'; form.querySelector('[data-rn-apv]').hidden = !apv; form.elements.regimen_apv.disabled = !apv; form.elements.regimen_apv.required = apv;
         form.elements.remuneracion_bruta.required = deduction && ['voluntario', 'vivienda', 'cooperativa'].includes(concept?.grupo_descuento);
     }
     function movementData() { const form = $('rnMovementForm'); const d = { ...values(form), persona_id: state.person.id, operacion_id: state.operation }; if (state.pact) { d.pacto_id = state.pact.id; d.concepto_id = state.pact.concepto_id; } if (d.minutos) d.minutos = Number(d.minutos); if (d.pago_directo_institucion !== undefined) d.pago_directo_institucion = d.pago_directo_institucion === '1'; for (const k of Object.keys(d)) if (d[k] === '') delete d[k]; return d; }
