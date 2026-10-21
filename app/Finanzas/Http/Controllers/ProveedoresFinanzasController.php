@@ -20,7 +20,7 @@ class ProveedoresFinanzasController extends Controller
     {
         $datos = $request->validate(['buscar' => ['nullable', 'string', 'max:100']]);
 
-        return response()->json(['data' => ProveedorFinanciero::query()->when(filled($datos['buscar'] ?? null), fn ($q) => $q->where(fn ($q) => $q->where('razon_social', 'like', '%'.$datos['buscar'].'%')->orWhere('rut', 'like', '%'.$datos['buscar'].'%')))->orderBy('razon_social')->paginate(30), 'cuentas' => CuentaCompra::query()->orderBy('codigo')->get(), 'tipos' => GestorDocumentosCompra::TIPOS, 'puede_gestionar' => $request->user()->can('gestionar-proveedores-finanzas')]);
+        return response()->json(['data' => ProveedorFinanciero::query()->when(filled($datos['buscar'] ?? null), fn ($q) => $q->where(fn ($q) => $q->where('razon_social', 'like', '%'.$datos['buscar'].'%')->orWhere('rut', 'like', '%'.$datos['buscar'].'%')))->orderBy('razon_social')->paginate(30), 'cuentas' => CuentaCompra::query()->orderBy('codigo')->get(), 'tipos' => GestorDocumentosCompra::TIPOS, 'cuentas_control' => ['anticipos' => config('finanzas-compras.anticipos')], 'puede_gestionar' => $request->user()->can('gestionar-proveedores-finanzas')]);
     }
 
     public function materiales(Request $request, DirectorioProveedores $directorio): JsonResponse

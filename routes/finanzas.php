@@ -3,6 +3,7 @@
 use App\Finanzas\Http\Controllers\CapturasFinanzasController;
 use App\Finanzas\Http\Controllers\CargosFinanzasController;
 use App\Finanzas\Http\Controllers\CierresPrefacturaController;
+use App\Finanzas\Http\Controllers\CuentasProveedorController;
 use App\Finanzas\Http\Controllers\DiferenciasPrefacturaController;
 use App\Finanzas\Http\Controllers\DocumentosCompraController;
 use App\Finanzas\Http\Controllers\DotacionFinanzasController;
@@ -22,6 +23,19 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('auth:sanctum')->prefix('finanzas')->group(function (): void {
     Route::prefix('proveedores')->middleware('can:consultar-proveedores-finanzas')->group(function (): void {
         Route::get('/', [ProveedoresFinanzasController::class, 'index']);
+        Route::get('/cuenta-corriente', [CuentasProveedorController::class, 'cuenta']);
+        Route::get('/pagos', [CuentasProveedorController::class, 'pagos']);
+        Route::get('/aplicaciones', [CuentasProveedorController::class, 'aplicaciones']);
+        Route::get('/mayor', [CuentasProveedorController::class, 'mayor']);
+        Route::get('/balance', [CuentasProveedorController::class, 'balance']);
+        Route::get('/exportar', [CuentasProveedorController::class, 'exportar'])->middleware('throttle:finanzas-exportaciones');
+        Route::get('/evaluaciones', [CuentasProveedorController::class, 'evaluaciones']);
+        Route::middleware('can:registrar-pagos-proveedores')->group(function (): void {
+            Route::post('/pagos', [CuentasProveedorController::class, 'pagar']);
+            Route::post('/pagos/{pago}/anular', [CuentasProveedorController::class, 'anularPago']);
+            Route::post('/aplicaciones', [CuentasProveedorController::class, 'aplicar']);
+            Route::post('/aplicaciones/{aplicacion}/anular', [CuentasProveedorController::class, 'desaplicar']);
+        });
         Route::get('/materiales', [ProveedoresFinanzasController::class, 'materiales']);
         Route::get('/referencias', [DocumentosCompraController::class, 'referencias']);
         Route::get('/asientos', [LibroComprasController::class, 'asientos']);
@@ -32,6 +46,9 @@ Route::middleware('auth:sanctum')->prefix('finanzas')->group(function (): void {
             Route::post('/', [ProveedoresFinanzasController::class, 'store']);
             Route::put('/fichas/{proveedor}', [ProveedoresFinanzasController::class, 'update']);
             Route::post('/plan/inicializar', [ProveedoresFinanzasController::class, 'plan']);
+            Route::post('/evaluaciones', [CuentasProveedorController::class, 'evaluar']);
+            Route::post('/evaluaciones/{evaluacion}/anular', [CuentasProveedorController::class, 'anularEvaluacion']);
+            Route::post('/periodos', [CuentasProveedorController::class, 'periodo']);
             Route::post('/cuentas', [ProveedoresFinanzasController::class, 'cuenta']);
             Route::post('/documentos', [DocumentosCompraController::class, 'store']);
             Route::put('/documentos/{documento}', [DocumentosCompraController::class, 'update']);

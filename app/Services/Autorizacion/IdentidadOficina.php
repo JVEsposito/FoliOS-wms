@@ -51,6 +51,7 @@ class IdentidadOficina
             'puede_consultar_configuracion_camaras' => $capacidades['puede_consultar_configuracion_camaras'],
             'puede_consultar_integridad_operacional' => $capacidades['puede_consultar_integridad_operacional'],
             'puede_ejecutar_integridad_operacional' => $capacidades['puede_ejecutar_integridad_operacional'],
+            'puede_registrar_pagos_proveedores' => $capacidades['puede_registrar_pagos_proveedores'],
             'puede_consultar_proveedores_finanzas' => $capacidades['puede_consultar_proveedores_finanzas'],
             'puede_gestionar_proveedores_finanzas' => $capacidades['puede_gestionar_proveedores_finanzas'],
             'puede_consultar_finanzas' => $capacidades['puede_consultar_finanzas'],
