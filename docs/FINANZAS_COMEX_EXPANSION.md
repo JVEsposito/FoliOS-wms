@@ -31,3 +31,15 @@ La primera etapa comprende actores/lugares, notas de venta versionadas, bookings
 Un documento comercial interno no es DTE, DUS ni certificado. Registrar un número o adjunto no acredita validación externa. Los Incoterms se registran con lugar y versión contractual; no se infiere de ellos quién paga el flete ni el devengo contable.
 
 Referencias verificadas al 21-10-2026: [SII exportación electrónica](https://www.sii.cl/portales/factura_expo_electronica/preguntas_frecuentes_fee.htm), [ICC Incoterms 2020](https://academy.iccwbo.org/incoterms/e-books/incoterms-2020-spanish-english/), [BIC identificación de contenedores](https://www.bic-code.org/check-digit-calculator/). El estudio suministrado por la planta orienta la secuencia; se contrasta cada entrega con el código vigente.
+
+## Notas de venta
+
+Administración → Comercio exterior → Notas de venta registra un folio único por vendedor, cliente de la planta, gestión, referencia del pedido, temporada de referencia y vigencia propia. La exportación propia exige que ese cliente esté configurado expresamente como propia en COMEX. La gestión de una nota existente se conserva aunque cambie la configuración global.
+
+Cada borrador identifica operador, vendedor, exportador legal, propietario, comprador, recibidor, consignatario, pagador y contratante del flete; notify es opcional y múltiple. Las funciones deben estar habilitadas en actores activos. Una misma identidad puede ocupar varias funciones por selección expresa. Al enviar o aprobar se exige actualizar el borrador si cambió alguna identidad desde su captura.
+
+El acuerdo contiene productos, variedad, calibre, categoría, embalaje, cantidades, kilos opcionales, unidad, precio, moneda, condición de pago, Incoterm 2020 y lugar nombrado. FOB/FAS/CFR/CIF requieren modalidad marítima. Se admiten CLP, USD, EUR, CNY, JPY y GBP, sin conversión de moneda: multiplicación decimal exacta, redondeo HALF_UP por línea y suma de importes redondeados. CLP/JPY usan cero decimales; las demás, dos. En consignación o precio abierto, un precio faltante produce total pendiente y un subtotal conocido claramente distinto. No se genera ingreso, factura ni existencia física.
+
+El flujo es borrador → en revisión → aprobada o rechazada. Se puede retirar a borrador. La aprobación/rechazo exige acceso comercial y aprobaciones. Por defecto quien preparó la última edición no puede decidir (`COMEX_APROBADOR_DISTINTO=true`); la excepción es configurable y queda documentada aquí. Una nueva revisión conserva el acuerdo anterior hasta aprobar el reemplazo; las versiones anteriores siguen consultables. Vendedor, folio, cliente y gestión son permanentes. Cerrar exige un acuerdo aprobado y ninguna propuesta pendiente; anular conserva las revisiones y los motivos.
+
+La impresión del navegador permite guardar PDF de la revisión seleccionada, conserva Unicode y muestra estado, revisión, responsables y el rótulo “Documento comercial interno · No tributario”. Para clientes de servicio se identifica como referencia comercial del cliente. No representa aceptación externa del comprador ni emite DTE.

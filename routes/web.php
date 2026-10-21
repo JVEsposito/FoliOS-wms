@@ -82,6 +82,7 @@ Route::view('/oficina/finanzas/prefactura', 'office.finance-prebilling');
 Route::view('/oficina/comex/expedientes', 'office.comex-files');
 Route::view('/oficina/comex/configuracion', 'office.comex-settings');
 Route::view('/oficina/comex/comercial', 'office.comex-commercial');
+Route::view('/oficina/comex/notas', 'office.comex-notes');
 Route::view('/oficina/prefrio', 'office.precooling');
 Route::view('/oficina/frigorifico/inspeccion-sag', 'office.sag-inspections');
 Route::view('/oficina/operacion-ahora', 'office.operation-now');

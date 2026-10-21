@@ -95,6 +95,7 @@
                     ['module' => 'comex.expedientes', 'permissions' => ['puede_consultar_comex'], 'href' => '/oficina/comex/expedientes', 'icon' => '⚓', 'eyebrow' => 'COMEX', 'title' => 'Expedientes de embarque', 'description' => 'Documentos de cada embarque, lo que falta antes de la salida y el packing list.'],
                     ['module' => 'comex.configuracion', 'permissions' => ['puede_consultar_comex'], 'href' => '/oficina/comex/configuracion', 'icon' => '☰', 'eyebrow' => 'COMEX', 'title' => 'Configuración Comex', 'description' => 'Qué documentos se exigen según destino, transporte y cliente.'],
                     ['module' => 'comex.comercial', 'permissions' => ['puede_consultar_comercial_comex'], 'href' => '/oficina/comex/comercial', 'icon' => '⚓', 'eyebrow' => 'COMEX', 'title' => 'Actores y lugares', 'description' => 'Identidades comerciales, navieras, agentes, puertos y terminales con historial.'],
+                    ['module' => 'comex.comercial', 'permissions' => ['puede_consultar_comercial_comex'], 'href' => '/oficina/comex/notas', 'icon' => '⚓', 'eyebrow' => 'COMEX', 'title' => 'Notas de venta', 'description' => 'Acuerdos versionados, revisión, aprobación e impresión comercial.'],
                     ['module' => '', 'permissions' => ['puede_habilitar_demo'], 'href' => '/oficina/demo', 'icon' => '▶', 'eyebrow' => 'PRESENTACIÓN', 'title' => 'Demo comercial', 'description' => 'Habilita un escenario ficticio y aislado para gerencia, compradores e inversionistas.'],
                 ],
             ],
