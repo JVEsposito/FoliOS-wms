@@ -18,12 +18,11 @@ class ServicioExistenciasSag
             if (! $temporada) {
                 throw new DomainException('Activa una temporada para registrar existencias SAG.');
             }
-            $folios = Folio::query()->whereIn('id', $ids)->orderBy('id')->lockForUpdate()->get();
+            $folios = Folio::query()->whereIn('id', $ids)->orderBy('id')->with(['autorizacionesSagActivas', 'condicionSag'])->lockForUpdate()->get();
             foreach ($folios as $folio) {
                 if ($folio->temporada_id !== $temporada->id) {
                     throw new DomainException('El folio no pertenece a la temporada activa.');
                 }
-                $folio->load(['autorizacionesSagActivas', 'condicionSag']);
                 $datos = $folio->datos_externos ?? [];
                 $aprobado = $folio->condicion_sag_id !== null || $folio->autorizacionesSagActivas->isNotEmpty();
                 $enPlanta = $folio->activo && ! in_array($folio->estado_operacional->value, ['despachado', 'anulado', 'agotado', 'retirado_definitivo'], true);
