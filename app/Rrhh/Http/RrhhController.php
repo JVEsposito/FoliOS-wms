@@ -49,7 +49,7 @@ final class RrhhController extends Controller
     private function datosPersona(Request $r, bool $editar = false): array
     {
         return $r->validate(['codigo' => ['required', 'string', 'max:40', 'regex:/^[A-Za-z0-9_-]+$/'], 'nombre' => ['required', 'string', 'max:180'],
-            'documento' => ['nullable', 'string', 'max:40'], 'empleador' => ['nullable', 'string', 'max:180'], 'cargo' => ['nullable', 'string', 'max:120'],
+            'cargo_id' => ['nullable', 'uuid', Rule::exists('rrhh.rh_cargos', 'id')], 'documento' => ['nullable', 'string', 'max:40'], 'empleador' => ['nullable', 'string', 'max:180'], 'cargo' => ['nullable', 'string', 'max:120'],
             'area' => ['nullable', 'string', 'max:120'], 'ceco' => ['nullable', 'string', 'max:60'], 'activa' => ['required', 'boolean'],
             'fuente_marcaje' => ['required', 'string', 'max:60'], 'pin' => ['nullable', 'string', 'regex:/^\d{6,12}$/'],
             'version' => [$editar ? 'required' : 'nullable', 'integer', 'min:1']]);

@@ -58,6 +58,8 @@ class IdentidadOficina
             'puede_reabrir_prefactura_finanzas' => $capacidades['puede_reabrir_prefactura_finanzas'],
             'puede_consultar_rrhh' => $capacidades['puede_consultar_rrhh'],
             'puede_gestionar_rrhh' => $capacidades['puede_gestionar_rrhh'],
+            'puede_consultar_remuneraciones_rrhh' => $capacidades['puede_consultar_remuneraciones_rrhh'],
+            'puede_gestionar_remuneraciones_rrhh' => $capacidades['puede_gestionar_remuneraciones_rrhh'],
             'puede_marcar_rrhh' => $capacidades['puede_marcar_rrhh'],
             'puede_consultar_comex' => $capacidades['puede_consultar_comex'],
             'puede_gestionar_documentos_comex' => $capacidades['puede_gestionar_documentos_comex'],

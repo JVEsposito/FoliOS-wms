@@ -12,8 +12,11 @@ use App\Http\Middleware\AsegurarTemporadaActivaDelRegistro;
 use App\Models;
 use App\Models\Contracts\PerteneceATemporada;
 use App\Rrhh\Models\AsignacionPersonal;
+use App\Rrhh\Models\CargoLaboral;
+use App\Rrhh\Models\ConceptoNomina;
 use App\Rrhh\Models\FuenteMarcaje;
 use App\Rrhh\Models\Marcaje;
+use App\Rrhh\Models\MovimientoNomina;
 use App\Rrhh\Models\Persona;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Routing\Middleware\SubstituteBindings;
@@ -31,6 +34,9 @@ class TemporadaActivaRutasTest extends TestCase
 {
     /** @var array<class-string<Model>, string> */
     private const EXENTOS = [
+        CargoLaboral::class => 'catálogo laboral global, independiente de temporada',
+        ConceptoNomina::class => 'configuración laboral global con tratamiento histórico conservado',
+        MovimientoNomina::class => 'novedad laboral por fecha en base propia',
         Persona::class => 'maestro laboral global, independiente de temporada',
         AsignacionPersonal::class => 'dotación por fechas y turnos en base propia',
         Marcaje::class => 'asistencia por instante en base propia, sin modificar operación',

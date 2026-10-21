@@ -5,6 +5,7 @@ namespace App\Rrhh;
 use App\Models\User;
 use App\Rrhh\Asistencia\FechaMarcaje;
 use App\Rrhh\Models\AsignacionPersonal;
+use App\Rrhh\Models\CargoLaboral;
 use App\Rrhh\Models\FuenteMarcaje;
 use App\Rrhh\Models\Persona;
 use Brick\Math\BigDecimal;
@@ -18,6 +19,14 @@ final class GestorPersonal
 
     public function persona(array $datos, ?Persona $persona, User $actor): Persona
     {
+        if (! empty($datos['cargo_id'])) {
+            $cargo = CargoLaboral::query()->findOrFail($datos['cargo_id']);
+            if (! $cargo->activo && $persona?->cargo_id !== $cargo->id) {
+                throw ValidationException::withMessages(['cargo_id' => 'El cargo está inactivo.']);
+            }
+            $datos['cargo'] = $cargo->nombre;
+        }
+
         return $this->esquema->transaccion(function () use ($datos, $persona, $actor): Persona {
             $existente = $persona !== null;
             $persona = $existente ? Persona::query()->lockForUpdate()->findOrFail($persona->id) : new Persona(['id' => (string) Str::uuid()]);
