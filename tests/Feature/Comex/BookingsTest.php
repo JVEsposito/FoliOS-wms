@@ -112,11 +112,21 @@ class BookingsTest extends TestCase
         $this->assertFalse($b['vinculos'][0]['cambio_operacion']);
         $this->postJson('/api/comex/comercial/bookings/'.$b['booking']['id'].'/transiciones', $this->solicitud($b, 'cerrar'))->assertUnprocessable();
         DB::table('cargas')->where('id', $carga)->update(['estado' => 'despachada']);
+        DB::table('embarques')->where('id', $e)->update(['contenedor' => 'OTRU7654321']);
+        $this->postJson('/api/comex/comercial/bookings/'.$b['booking']['id'].'/transiciones', $this->solicitud($b, 'cerrar'))->assertUnprocessable()->assertJsonValidationErrors('estado');
+        DB::table('embarques')->where('id', $e)->update(['contenedor' => 'MSKU1234567']);
+        $otroCliente = $this->clienteOperacion('Otro titular del despacho');
+        DB::table('embarques')->where('id', $e)->update(['cliente_id' => $otroCliente]);
+        $this->postJson('/api/comex/comercial/bookings/'.$b['booking']['id'].'/transiciones', $this->solicitud($b, 'cerrar'))->assertUnprocessable()->assertJsonValidationErrors('estado');
+        DB::table('embarques')->where('id', $e)->update(['cliente_id' => $this->datos['cliente_operacion_id']]);
         $b = $this->paso($b, 'cerrar');
         $this->assertSame('cerrado', $b['booking']['estado']);
         $this->assertTrue($b['vinculos'][0]['cambio_operacion']);
         $this->assertFalse($b['vinculos'][0]['evidencia']['carga']['salio']);
         $this->assertTrue($b['vinculos'][0]['actual']['carga']['salio']);
+        $this->assertTrue($b['vinculos'][0]['al_cierre']['evidencia']['carga']['salio']);
+        DB::table('cargas')->where('id', $carga)->update(['estado' => 'en_preparacion']);
+        $this->getJson('/api/comex/comercial/bookings/'.$b['booking']['id'])->assertOk()->assertJsonPath('data.vinculos.0.al_cierre.evidencia.carga.salio', true)->assertJsonPath('data.vinculos.0.actual.carga.salio', false);
     }
 
     public function test_no_repite_embarque_y_no_retira_despacho_que_salio(): void
