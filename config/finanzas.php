@@ -20,6 +20,8 @@ return [
     // de solo lectura (y, idealmente, un usuario con permiso SELECT y nada más).
     'conexion_lectura' => env('FINANZAS_CONEXION_LECTURA', 'operacion_lectura'),
 
+    'conexion_comex' => env('FINANZAS_CONEXION_COMEX', 'comex_lectura'),
+
     'conexion_rrhh' => env('FINANZAS_CONEXION_RRHH', 'rrhh_lectura'),
 
     'captura' => [

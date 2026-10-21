@@ -171,3 +171,5 @@ Route::view('/oficina/rrhh', 'office.rrhh');
 Route::view('/oficina/rrhh/marcaje', 'office.rrhh-clock');
 
 Route::view('/oficina/frigorifico/contraparte-sag', 'office.sag-counterpart');
+
+Route::view('/oficina/finanzas/costos-comex', 'office.finance-comex-costs');
