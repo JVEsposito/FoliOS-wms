@@ -37,9 +37,9 @@ final class PrevisionController extends Controller
 
     public function contratos(Request $r): JsonResponse
     {
-        $d = $r->validate(['persona_id' => ['required', 'uuid'], 'page' => ['nullable', 'integer', 'min:1']]);
+        $d = $r->validate(['persona_id' => ['required', 'uuid'], 'vigente_en' => ['nullable', 'date_format:Y-m-d'], 'buscar' => ['nullable', 'string', 'max:100'], 'page' => ['nullable', 'integer', 'min:1']]);
 
-        return response()->json(['data' => ContratoLaboral::query()->where('persona_id', $d['persona_id'])->orderByDesc('desde')->orderBy('id')->paginate(25)]);
+        return response()->json(['data' => ContratoLaboral::query()->where('persona_id', $d['persona_id'])->when($d['vigente_en'] ?? null, fn ($q, $f) => $q->where('desde', '<=', $f)->where('hasta', '>=', $f))->when($d['buscar'] ?? null, fn ($q, $s) => $q->where('referencia', 'like', '%'.$s.'%'))->orderByDesc('desde')->orderBy('id')->paginate(25)]);
     }
 
     public function contrato(Request $r, RegistroPrevisional $g): JsonResponse
@@ -61,7 +61,7 @@ final class PrevisionController extends Controller
     {
         $d = $r->validate([...$this->vigencia(), 'persona_id' => ['nullable', 'uuid', Rule::exists('rrhh.rh_personas', 'id')], 'empleador_id' => ['nullable', 'uuid', Rule::exists('rrhh.rh_empleadores', 'id')],
             'institucion_id' => ['required', 'uuid', Rule::exists('rrhh.rh_instituciones', 'id')], 'regimen' => ['required', Rule::in(array_keys(RegistroPrevisional::REGIMENES))],
-            'referencia' => ['required', 'string', 'max:100'], 'moneda_plan' => ['nullable', 'in:CLP,UF'], 'precio_plan' => ['nullable', 'string', 'regex:/^\d{1,10}(?:\.\d{1,6})?$/']]);
+            'referencia' => ['required', 'string', 'max:100'], 'moneda_plan' => ['nullable', 'in:CLP,UF'], 'precio_plan' => ['nullable', 'string', 'regex:/^\d{1,10}(?:\.\d{1,6})?$/'], 'regimen_apv' => ['nullable', 'in:A,B']]);
 
         return response()->json(['data' => $g->afiliacion($d, $r->user())], 201);
     }

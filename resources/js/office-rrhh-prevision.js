@@ -32,7 +32,7 @@ export function initPrevision({ api, capability, escape, table, choices, open, p
         const data = await api(`${path}/directorio/${kind}?${new URLSearchParams({ page, buscar: f.elements.buscar.value })}`);
         if (kind !== f.elements.directorio.value) return;
         state.directory = kind; state.rows = data.data.data; state.types = data.tipos;
-        $('rpDirectory').innerHTML = table(['Entidad', 'Vigencia / estado', 'Acciones'], state.rows.map((r) => `<tr><td><strong>${escape(r.razon_social)}</strong><small>${escape(r.rut)} · ${escape(labels[r.tipo])} · ${escape(r.codigo)}</small></td><td>${r.desde} → ${r.hasta}<small>${r.activo ? 'Activo' : 'Inactivo'}</small></td><td>${links(kind, r)}${canWrite() ? `<button type="button" data-rp-action="edit" data-id="${r.id}">Editar</button>` : ''}${kind === 'empleador' ? `<button type="button" data-rp-action="employer" data-id="${r.id}">Afiliaciones</button>` : ''}</td></tr>`).join(''));
+        $('rpDirectory').innerHTML = table(['Entidad', 'Vigencia / estado', 'Acciones'], state.rows.map((r) => `<tr><td><strong>${escape(r.razon_social)}</strong><small>${escape(r.rut)} · ${escape(labels[r.tipo])} · ${escape(r.codigo)}</small></td><td>${r.desde} → ${r.hasta}<small>${r.activo ? 'Activo' : 'Inactivo'}</small></td><td>${links(kind, r)}${kind === 'institucion' ? `<button type="button" data-rd-action="account" data-id="${r.id}">Movimientos</button>` : ''}${canWrite() ? `<button type="button" data-rp-action="edit" data-id="${r.id}">Editar</button>` : ''}${kind === 'empleador' ? `<button type="button" data-rp-action="employer" data-id="${r.id}">Afiliaciones</button>` : ''}${kind === 'empleador' && r.tipo !== 'propio' ? `<button type="button" data-rc-company="${r.id}">Cumplimiento</button>` : ''}</td></tr>`).join(''));
         pages('rpPages', data.data, directory);
     }
     function edit(row = null) {
@@ -76,6 +76,7 @@ export function initPrevision({ api, capability, escape, table, choices, open, p
     function plan() {
         const f = $('rpAffiliationForm'); const show = f._institutions?.find((r) => r.id === f.elements.institucion_id.value)?.tipo === 'isapre'; $('rpPlan').hidden = !show;
         for (const k of ['moneda_plan', 'precio_plan']) { f.elements[k].disabled = !show; f.elements[k].required = show; }
+        const apv = f.elements.regimen.value === 'apv'; $('rpApv').hidden = !apv; f.elements.regimen_apv.disabled = !apv; f.elements.regimen_apv.required = apv;
     }
     async function save(form) {
         const d = values(form);

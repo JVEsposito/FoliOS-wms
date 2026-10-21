@@ -114,7 +114,7 @@
                 </section>
 
                 <section class="panel sag-detail is-hidden" id="sagLotDetail">
-                    <div class="sag-panel-heading"><div><p class="eyebrow">DETALLE DEL LOTE</p><h2 id="sagDetailTitle">Lote</h2><p id="sagDetailSubtitle"></p></div><div class="sag-detail-actions"><select id="detailActionSelect" aria-label="Acciones del lote"><option value="">Seleccionar acción</option></select><button class="secondary-button" id="closeSagDetailButton" type="button">Cerrar</button></div></div>
+                    <div class="sag-panel-heading"><div><p class="eyebrow">DETALLE DEL LOTE</p><h2 id="sagDetailTitle">Lote</h2><p id="sagDetailSubtitle"></p></div><div class="sag-detail-actions"><select id="detailActionSelect" aria-label="Acciones del lote"><option value="">Seleccionar acción</option></select><a class="secondary-button is-hidden" id="sagDocumentLink">Formulario cambio de mercado</a><button class="secondary-button" id="closeSagDetailButton" type="button">Cerrar</button></div></div>
                     <div class="sag-detail-destinations" id="sagDetailDestinations"></div>
                     <div class="sag-result-list" id="sagResultList"></div>
                     <p class="form-error" id="detailError" role="alert"></p>
