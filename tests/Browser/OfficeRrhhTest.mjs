@@ -27,6 +27,10 @@ async function setup(browser, { clock = false, manage = true, payroll = false, g
         if (path === '/api/rrhh/lotes/lote-1/reintentar') { writes.push({ path }); return route.fulfill({ json: { data: { estado: 'procesado' } } }); }
         if (path === '/api/rrhh/nomina/conceptos') return route.fulfill({ json: { data: { data: [{ id: 'he-1', codigo: 'HE', nombre: 'Horas extraordinarias', tipo: 'haber', calculo: 'horas_extra', remuneracion: true, imponible: true, tributable: true, activo: true }], current_page: 1, last_page: 1 }, parametros: [], permisos: { gestionar: manage } } });
         if (path === '/api/rrhh/nomina/personas/persona-1') return route.fulfill({ json: { data: { persona: { id: 'persona-1', codigo: 'OP01', nombre: 'Camarero Prueba' }, condiciones: { data: [], current_page: 1, last_page: 1 }, pactos: { data: [], current_page: 1, last_page: 1 } } } });
+        if (path === '/api/rrhh/prevision/directorio/institucion' && request.method() === 'GET') return route.fulfill({ json: { data: { data: [{ id: 'isapre-1', codigo: 'ISAPRE_TEST', rut: '76000002-7', razon_social: 'Isapre de prueba', tipo: 'isapre', activo: true, desde: '2026-01-01', hasta: '9999-12-31', version: 1 }], current_page: 1, last_page: 1 }, tipos: ['afp', 'fonasa', 'isapre'] } });
+        if (path === '/api/rrhh/prevision/directorio/institucion' && request.method() === 'POST') { writes.push({ path, ...request.postDataJSON() }); return route.fulfill({ status: 201, json: { data: { id: 'isapre-2' } } }); }
+        if (['/api/rrhh/prevision/contratos', '/api/rrhh/prevision/afiliaciones'].includes(path) && request.method() === 'GET') return route.fulfill({ json: { data: { data: [], current_page: 1, last_page: 1 } } });
+        if (path === '/api/rrhh/prevision/afiliaciones' && request.method() === 'POST') { writes.push({ path, ...request.postDataJSON() }); return route.fulfill({ status: 201, json: { data: { id: 'afiliacion-1' } } }); }
         if (path === '/api/rrhh/nomina/movimientos' && request.method() === 'GET') return route.fulfill({ json: { data: { data: [], current_page: 1, last_page: 1 } } });
         if (path === '/api/rrhh/nomina/simular') return route.fulfill({ json: { data: { total: '6667', base_he: '800000', valor_hora_ordinaria: '4444.444444', valor_hora_extra: '6666.666666', minutos: 60, incidencias: [] } } });
         if (path === '/api/rrhh/nomina/movimientos' && request.method() === 'POST') { writes.push(request.postDataJSON()); return route.fulfill({ status: 201, json: { data: { id: 'novedad-1' } } }); }
@@ -92,5 +96,33 @@ test('GeoVictoria conserva la consulta y reintenta el lote desde pantalla sin re
         assert.equal(writes.length, 1); assert.deepEqual(writes[0].identificadores, ['EXT-1','EXT-2']); assert.match(await page.locator('#rhDetail').textContent(), /Falta vínculo/);
         await page.locator('[data-retry-lot=lote-1]').click(); await page.waitForFunction(() => document.getElementById('rhDetail').textContent.includes('procesado'));
         assert.equal(writes.length, 2); assert.equal(writes[1].path, '/api/rrhh/lotes/lote-1/reintentar'); assert.deepEqual(errors, []); await context.close();
+    } finally { await browser.close(); }
+});
+
+test('crea una institución desde RRHH con RUT y fuente sin asignarla automáticamente a personas', async () => {
+    const browser = await launch();
+    try {
+        const { page, context, writes, errors } = await setup(browser, { payroll: true });
+        await page.locator('#rpTab').click(); await page.waitForFunction(() => document.getElementById('rpDirectory').textContent.includes('Isapre de prueba'));
+        await page.locator('#rpNew').click(); const f = page.locator('#rpDirectoryForm');
+        for (const [name, value] of Object.entries({ codigo: 'ISAPRE_NUEVA', rut: '76000003-5', razon_social: 'Institución nueva', desde: '2026-01-01', verificado_en: '2026-10-21', respaldo: 'Fuente oficial revisada por RRHH' })) await f.locator(`[name=${name}]`).fill(value);
+        await f.locator('[name=tipo]').selectOption('isapre'); await f.locator('button[type=submit]').click();
+        await page.waitForFunction(() => !document.getElementById('rpDirectoryDialog').open);
+        assert.equal(writes.length, 1); assert.equal(writes[0].activo, true); assert.equal(writes[0].tipo, 'isapre'); assert.equal(writes[0].persona_id, undefined); assert.deepEqual(errors, []); await context.close();
+    } finally { await browser.close(); }
+});
+
+test('afilia a salud con FUN y precio de plan Isapre y mantiene separado al empleador', async () => {
+    const browser = await launch();
+    try {
+        const { page, context, writes, errors } = await setup(browser, { payroll: true });
+        await page.locator('#rnTab').click(); await page.waitForFunction(() => document.getElementById('rnPerson').options.length > 1);
+        await page.selectOption('#rnPerson', 'persona-1'); await page.locator('#rnLoad').click(); await page.locator('#rpNewAffiliation').click();
+        const f = page.locator('#rpAffiliationForm'); await f.locator('[name=regimen]').selectOption('salud');
+        await f.locator('[name=institucion_id]').selectOption('isapre-1');
+        assert.equal(await page.locator('#rpPlan').isVisible(), true);
+        for (const [name, value] of Object.entries({ desde: '2026-10-01', referencia: 'FUN-2026-001', precio_plan: '3.45', respaldo: 'FUN firmado y precio mensual revisado' })) await f.locator(`[name=${name}]`).fill(value);
+        await f.locator('button[type=submit]').click(); await page.waitForFunction(() => !document.getElementById('rpAffiliationDialog').open);
+        assert.equal(writes.length, 1); assert.equal(writes[0].persona_id, 'persona-1'); assert.equal(writes[0].empleador_id, undefined); assert.equal(writes[0].moneda_plan, 'UF'); assert.equal(writes[0].precio_plan, '3.45'); assert.deepEqual(errors, []); await context.close();
     } finally { await browser.close(); }
 });
