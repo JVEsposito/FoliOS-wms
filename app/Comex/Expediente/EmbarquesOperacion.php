@@ -61,12 +61,12 @@ final class EmbarquesOperacion
             ->all();
     }
 
-    /** @return array{id: string, nombre: string}|null */
+    /** @return array{id: string, nombre: string, activo: bool}|null */
     public function cliente(string $clienteId): ?array
     {
-        $cliente = $this->lector->tabla('clientes')->where('id', $clienteId)->first(['id', 'nombre']);
+        $cliente = $this->lector->tabla('clientes')->where('id', $clienteId)->first(['id', 'nombre', 'activo']);
 
-        return $cliente === null ? null : ['id' => (string) $cliente->id, 'nombre' => (string) $cliente->nombre];
+        return $cliente === null ? null : ['id' => (string) $cliente->id, 'nombre' => (string) $cliente->nombre, 'activo' => (bool) $cliente->activo];
     }
 
     /**
