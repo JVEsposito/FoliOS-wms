@@ -2,9 +2,9 @@
 
 namespace Tests\Feature\Architecture;
 
-use App\Comex\Models\TipoDocumento;
-use App\Comex\Models\ParteComercial;
 use App\Comex\Models\LugarComercial;
+use App\Comex\Models\ParteComercial;
+use App\Comex\Models\TipoDocumento;
 use App\Finanzas\Models\AplicacionProveedor;
 use App\Finanzas\Models\CargoAcordado;
 use App\Finanzas\Models\ConceptoServicio;

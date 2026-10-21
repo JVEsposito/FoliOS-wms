@@ -1,7 +1,7 @@
 <?php
 
-use App\Comex\Http\Controllers\ConfiguracionComexController;
 use App\Comex\Http\Controllers\CatalogoComercialController as Catalogo;
+use App\Comex\Http\Controllers\ConfiguracionComexController;
 use App\Comex\Http\Controllers\DocumentosComexController;
 use App\Comex\Http\Controllers\ExpedientesComexController;
 use Illuminate\Support\Facades\Route;
