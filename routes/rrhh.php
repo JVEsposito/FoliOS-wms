@@ -1,12 +1,31 @@
 <?php
 
 use App\Rrhh\Http\CalculosLegalesController as L;
+use App\Rrhh\Http\ContratistasController as C;
 use App\Rrhh\Http\DescuentosController as D;
 use App\Rrhh\Http\IntegracionController;
 use App\Rrhh\Http\NominaController as N;
 use App\Rrhh\Http\PrevisionController as P;
 use App\Rrhh\Http\RrhhController as R;
 use Illuminate\Support\Facades\Route;
+
+Route::middleware(['auth:sanctum', 'can:consultar-rrhh', 'can:consultar-remuneraciones-rrhh'])->prefix('rrhh/contratistas')->group(function (): void {
+    Route::get('/dotacion', [C::class, 'dotacion']);
+    Route::get('/expedientes', [C::class, 'expedientes']);
+    Route::get('/expedientes/{expediente}', [C::class, 'detalle'])->whereUuid('expediente');
+    Route::get('/expedientes/{expediente}/antecedentes', [C::class, 'antecedentes'])->whereUuid('expediente');
+    Route::get('/expedientes/{expediente}/retenciones', [C::class, 'retenciones'])->whereUuid('expediente');
+    Route::get('/historial', [C::class, 'historial']);
+    Route::middleware(['can:gestionar-remuneraciones-rrhh', 'throttle:rrhh-gestion'])->group(function (): void {
+        Route::post('/expedientes', [C::class, 'crear']);
+        Route::patch('/expedientes/{expediente}/personal', [C::class, 'personal'])->whereUuid('expediente');
+        Route::patch('/expedientes/{expediente}/revision', [C::class, 'revisar'])->whereUuid('expediente');
+        Route::post('/expedientes/{expediente}/antecedentes', [C::class, 'antecedente'])->whereUuid('expediente');
+        Route::patch('/antecedentes/{antecedente}/revision', [C::class, 'revisarAntecedente'])->whereUuid('antecedente');
+        Route::post('/expedientes/{expediente}/retenciones', [C::class, 'retencion'])->whereUuid('expediente');
+        Route::patch('/retenciones/{retencion}/anular', [C::class, 'anularRetencion'])->whereUuid('retencion');
+    });
+});
 
 Route::middleware(['auth:sanctum', 'can:consultar-rrhh', 'can:consultar-remuneraciones-rrhh'])->prefix('rrhh/nomina/legal')->group(function (): void {
     Route::get('/indices', [L::class, 'indices']);
