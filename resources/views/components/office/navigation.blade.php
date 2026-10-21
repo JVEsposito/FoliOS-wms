@@ -76,6 +76,7 @@
             ['key' => 'comex-expedientes', 'module' => 'comex.expedientes', 'section' => 'Comercio exterior', 'label' => 'Expedientes de embarque', 'href' => '/oficina/comex/expedientes', 'permissions' => ['puede_consultar_comex']],
             ['key' => 'comex-configuracion', 'module' => 'comex.configuracion', 'section' => 'Comercio exterior', 'label' => 'Configuración Comex', 'href' => '/oficina/comex/configuracion', 'permissions' => ['puede_consultar_comex']],
             ['key' => 'comex-comercial', 'module' => 'comex.comercial', 'section' => 'Comercio exterior', 'label' => 'Actores y lugares', 'href' => '/oficina/comex/comercial', 'permissions' => ['puede_consultar_comercial_comex']],
+            ['key' => 'comex-notas', 'module' => 'comex.comercial', 'section' => 'Comercio exterior', 'label' => 'Notas de venta', 'href' => '/oficina/comex/notas', 'permissions' => ['puede_consultar_comercial_comex']],
         ],
         'consultas' => [
             ['key' => 'resumen', 'module' => '', 'label' => 'Resumen', 'href' => '/oficina/consultas', 'permissions' => ['puede_consultar_oficina_consultas', 'puede_consultar_sag']],

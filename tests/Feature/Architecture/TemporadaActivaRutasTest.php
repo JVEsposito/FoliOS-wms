@@ -3,6 +3,7 @@
 namespace Tests\Feature\Architecture;
 
 use App\Comex\Models\LugarComercial;
+use App\Comex\Models\NotaVenta;
 use App\Comex\Models\ParteComercial;
 use App\Comex\Models\TipoDocumento;
 use App\Finanzas\Models\AplicacionProveedor;
@@ -47,6 +48,7 @@ class TemporadaActivaRutasTest extends TestCase
 {
     /** @var array<class-string<Model>, string> */
     private const EXENTOS = [
+        NotaVenta::class => 'acuerdo comercial con vigencia y revisiones propias; continúa entre temporadas sin modificar stock',
         ParteComercial::class => 'identidad comercial global; documentos vigentes entre temporadas',
         LugarComercial::class => 'catálogo logístico global en base Comex, sin inventario físico',
         ExpedienteContratista::class => 'control de empresa, faena y mes; las obligaciones laborales continúan después de cerrar una temporada',

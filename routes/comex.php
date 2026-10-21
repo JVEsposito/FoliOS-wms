@@ -4,6 +4,7 @@ use App\Comex\Http\Controllers\CatalogoComercialController as Catalogo;
 use App\Comex\Http\Controllers\ConfiguracionComexController;
 use App\Comex\Http\Controllers\DocumentosComexController;
 use App\Comex\Http\Controllers\ExpedientesComexController;
+use App\Comex\Http\Controllers\NotasVentaController as Notas;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -12,12 +13,19 @@ use Illuminate\Support\Facades\Route;
  */
 Route::middleware('auth:sanctum')->prefix('comex')->group(function (): void {
     Route::middleware('can:consultar-comercial-comex')->prefix('comercial')->group(function (): void {
+        Route::get('/notas', [Notas::class, 'index']);
+        Route::get('/notas/{nota}', [Notas::class, 'show'])->whereUuid('nota');
+        Route::get('/notas/{nota}/revisiones', [Notas::class, 'revisiones'])->whereUuid('nota');
+        Route::get('/notas/{nota}/historial', [Notas::class, 'historial'])->whereUuid('nota');
         Route::get('/contexto', [Catalogo::class, 'contexto']);
         Route::get('/partes', [Catalogo::class, 'partes']);
         Route::get('/lugares', [Catalogo::class, 'lugares']);
         Route::get('/clientes-operacion', [Catalogo::class, 'clientes']);
         Route::get('/historial', [Catalogo::class, 'historial']);
         Route::middleware(['can:gestionar-comercial-comex', 'throttle:comex-comercial'])->group(function (): void {
+            Route::post('/notas', [Notas::class, 'guardar']);
+            Route::put('/notas/{nota}/borrador', [Notas::class, 'guardar'])->whereUuid('nota');
+            Route::post('/notas/{nota}/transiciones', [Notas::class, 'transicion'])->whereUuid('nota');
             Route::post('/partes', [Catalogo::class, 'guardarParte']);
             Route::put('/partes/{parte}', [Catalogo::class, 'guardarParte'])->whereUuid('parte');
             Route::post('/lugares', [Catalogo::class, 'guardarLugar']);
