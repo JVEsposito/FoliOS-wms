@@ -8,6 +8,25 @@ use Tests\TestCase;
 
 class ConexionFinanzasTest extends TestCase
 {
+    public function test_rrhh_db_url_no_reemplaza_credenciales_de_lectura(): void
+    {
+        $proceso = new Process([PHP_BINARY, '-r', <<<'PHP'
+            require 'vendor/autoload.php';
+            $app = require 'bootstrap/app.php';
+            $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+            echo json_encode($app['config']->get('database.connections.rrhh_lectura'));
+            PHP,
+        ], base_path(), ['RRHH_DB_URL' => 'mysql://editor:clave%40url@rrhh.invalid:3350/personal_url', 'RRHH_LECTURA_DB_USERNAME' => 'lector_rrhh', 'RRHH_LECTURA_DB_PASSWORD' => 'clave_lectura']);
+        $proceso->mustRun();
+        $c = json_decode($proceso->getOutput(), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame('personal_url', $c['database']);
+        $this->assertSame('rrhh.invalid', $c['host']);
+        $this->assertSame('lector_rrhh', $c['username']);
+        $this->assertSame('clave_lectura', $c['password']);
+        $this->assertArrayNotHasKey('url', $c);
+        $this->assertSame('SET SESSION TRANSACTION READ ONLY', $c['options'][Mysql::ATTR_INIT_COMMAND]);
+    }
+
     public function test_db_url_se_hereda_y_el_usuario_de_lectura_tiene_precedencia(): void
     {
         // Proceso separado: el repositorio inmutable de env no reutiliza el entorno de la suite.

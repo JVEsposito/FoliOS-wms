@@ -35,6 +35,21 @@ Los cambios de horario estacional se calculan por tiempo real. No se descuenta d
 
 El estado operativo **no elimina cantidades programadas ni obligaciones comerciales**. Un compromiso, reserva de cuadrilla, disponibilidad, mínimo o cancelación puede cobrarse como concepto acordado de Finanzas, con respaldo y aprobación económica explícita. El costo interno no es una tarifa de venta.
 
+## Llevar dotación a Finanzas
+
+Finanzas → Tarifario → Cargos acordados → **Desde dotación RRHH**. Requiere permisos de Finanzas y consulta de RRHH. Se elige concepto manual, asignación, medida, fecha del cobro y respaldo. Hay que confirmar que la unidad del concepto y su precio corresponden a horas persona o jornadas persona; no se deduce esa correspondencia del nombre libre del concepto.
+
+Finanzas lee por `rrhh_lectura`, sesión MySQL de solo lectura y, preferiblemente, un usuario SELECT definido con `RRHH_LECTURA_DB_USERNAME` / `RRHH_LECTURA_DB_PASSWORD`. `FINANZAS_CONEXION_RRHH` permite seleccionar otra conexión de lectura. La URL de RRHH se resuelve antes de aplicar esas credenciales, para que no las reemplace. La lectura de cada propuesta usa una transacción consistente. No escribe RRHH y no consulta fichas ni credenciales: copia referencia de asignación, cantidades, horario, cargo operativo, área y CECO; no copia nombre personal, RUT, PIN ni costo interno.
+
+- **Programación:** horas o jornadas contratadas. No requiere marcajes y se conserva aunque se cancele el turno. La base económica debe ser acuerdo, disponibilidad o compromiso.
+- **Asistencia:** horas o jornadas con marcajes completos, sin incidencias y turno terminado. Una cantidad cero no crea un cargo. No calcula horas extra legales.
+- Se crea un **borrador**, que se revisa y aprueba expresamente en Finanzas. No hay aprobación ni sondeo automático. La cantidad y el cliente los obtiene el servidor, no el formulario. El precio se resuelve con el tarifario de la fecha elegida.
+- La asignación se cobra como una unidad completa: si cruza de mes, aparece en ambas consultas para encontrarla, pero no se fracciona ni duplica automáticamente. La fecha económica la elige el responsable. Los cortes o mínimos distintos se declaran como conceptos/cargos acordados con su respaldo.
+- Solo un cargo vigente por asignación y concepto; elegir programación y después asistencia para el mismo concepto no agrega otro cobro. Reintentar el mismo contenido devuelve el borrador existente. Otro concepto puede respaldar un servicio adicional explícito.
+- El borrador conserva la copia elegida. Al aprobar, el responsable revisa cantidades y respaldo. Cambios posteriores en la fuente no reescriben cargos ni cierres; la reimportación con cambios se detiene para revisión. Reemplazar exige anular económicamente el cargo anterior y confirmar su ID; crea revisión nueva, conserva las anteriores y vuelve a exigir aprobación.
+
+Los cierres mensuales y sus diferencias usan el mismo circuito de cargos acordados. No se generan ejecuciones operativas ficticias ni se confunde cancelar un turno con cancelar una obligación económica. Bonos, reservas, mínimos, servicios no ejecutados y otros conceptos libres pueden declararse directamente en Finanzas sin una asignación de RRHH.
+
 ## Marcaje propio, reintentos y correcciones
 
 `POST /api/rrhh/marcajes`: `operacion_id` UUID, `codigo`, `pin`, `tipo` (`entrada`/`salida`). No acepta hora del dispositivo. Repetir el UUID devuelve el mismo comprobante; cambiar persona o tipo con ese UUID se rechaza. La persona debe estar activa y tener fuente `folios`. El puesto mantiene sesión de usuario con permiso; no es un terminal público anónimo ni ofrece marcaje sin conexión.

@@ -79,6 +79,7 @@ class TarifasFinanzasController extends Controller
             'monedas' => array_values(array_map(fn (Moneda $moneda): array => $this->presentador->moneda($moneda), $monedas)),
             'clientes' => $this->clientesConPrecio($todas),
             'puede_gestionar' => $request->user()->can('gestionar-tarifas-finanzas'),
+            'puede_usar_rrhh' => $request->user()->can('consultar-rrhh'),
         ]);
     }
 

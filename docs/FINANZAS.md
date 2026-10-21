@@ -7,6 +7,14 @@ la operación no conoce a Finanzas y las áreas operativas no manejan costos; Fi
 Este documento cubre la base propia de Finanzas, la **captura de hechos valorizables**, el
 **tarifario** y la **prefactura en paralelo**, que valoriza los hechos con el tarifario.
 
+## Dotación de RRHH como concepto
+
+Desde Tarifario → Cargos acordados → **Desde dotación RRHH** se proponen horas o jornadas programadas/asistidas, para un concepto manual con unidad confirmada y respaldo comercial. La programación puede cobrarse sin ejecución; la asistencia necesita marcajes completos y turno terminado. La cantidad y el cliente se leen en el servidor.
+
+Finanzas copia una propuesta y exige aprobación económica; no escribe RRHH ni inventa una prestación. Un cargo vigente por asignación y concepto impide duplicar programación y asistencia o reintentos. Cancelar en RRHH no anula un cobro. Reemplazar cantidades exige anular el cargo y confirmar una revisión nueva; los cierres se conservan. El precio de venta lo determina el tarifario, independiente del costo interno de RRHH. Los demás conceptos operativos siguen siendo declarables, aunque no tengan ejecución o asignación.
+
+Solo quienes consultan RRHH y Finanzas acceden al enlace; no se copian nombres personales, RUT, PIN, credenciales ni costos de las fichas. Instalación y alcance de las medidas: [RRHH](RRHH.md#llevar-dotación-a-finanzas).
+
 ## Cómo se separa de la operación
 
 | Pieza | Dónde | Regla |
