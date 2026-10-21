@@ -4,10 +4,13 @@ use App\Finanzas\Http\Controllers\CapturasFinanzasController;
 use App\Finanzas\Http\Controllers\CargosFinanzasController;
 use App\Finanzas\Http\Controllers\CierresPrefacturaController;
 use App\Finanzas\Http\Controllers\DiferenciasPrefacturaController;
+use App\Finanzas\Http\Controllers\DocumentosCompraController;
 use App\Finanzas\Http\Controllers\DotacionFinanzasController;
 use App\Finanzas\Http\Controllers\HechosFinanzasController;
+use App\Finanzas\Http\Controllers\LibroComprasController;
 use App\Finanzas\Http\Controllers\MonedasFinanzasController;
 use App\Finanzas\Http\Controllers\PrefacturaFinanzasController;
+use App\Finanzas\Http\Controllers\ProveedoresFinanzasController;
 use App\Finanzas\Http\Controllers\ServiciosFinanzasController;
 use App\Finanzas\Http\Controllers\TarifasFinanzasController;
 use Illuminate\Support\Facades\Route;
@@ -17,6 +20,26 @@ use Illuminate\Support\Facades\Route;
  * ninguna modifica registros operativos. Ver docs/FINANZAS.md.
  */
 Route::middleware('auth:sanctum')->prefix('finanzas')->group(function (): void {
+    Route::prefix('proveedores')->middleware('can:consultar-proveedores-finanzas')->group(function (): void {
+        Route::get('/', [ProveedoresFinanzasController::class, 'index']);
+        Route::get('/materiales', [ProveedoresFinanzasController::class, 'materiales']);
+        Route::get('/referencias', [DocumentosCompraController::class, 'referencias']);
+        Route::get('/asientos', [LibroComprasController::class, 'asientos']);
+        Route::get('/historial/{entidad}/{id}', [ProveedoresFinanzasController::class, 'historial'])->whereIn('entidad', ['proveedor', 'documento', 'cuenta', 'plan', 'pago', 'aplicacion', 'evaluacion', 'periodo']);
+        Route::get('/documentos', [DocumentosCompraController::class, 'index']);
+        Route::get('/documentos/{documento}', [DocumentosCompraController::class, 'show']);
+        Route::middleware('can:gestionar-proveedores-finanzas')->group(function (): void {
+            Route::post('/', [ProveedoresFinanzasController::class, 'store']);
+            Route::put('/fichas/{proveedor}', [ProveedoresFinanzasController::class, 'update']);
+            Route::post('/plan/inicializar', [ProveedoresFinanzasController::class, 'plan']);
+            Route::post('/cuentas', [ProveedoresFinanzasController::class, 'cuenta']);
+            Route::post('/documentos', [DocumentosCompraController::class, 'store']);
+            Route::put('/documentos/{documento}', [DocumentosCompraController::class, 'update']);
+            Route::post('/documentos/{documento}/registrar', [DocumentosCompraController::class, 'registrar']);
+            Route::post('/documentos/{documento}/anular', [DocumentosCompraController::class, 'anular']);
+        });
+    });
+
     Route::get('/hechos', [HechosFinanzasController::class, 'index'])
         ->middleware('can:consultar-finanzas');
     Route::get('/hechos/{hecho}', [HechosFinanzasController::class, 'show'])

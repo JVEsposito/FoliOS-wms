@@ -6,7 +6,9 @@ use App\Comex\Models\TipoDocumento;
 use App\Finanzas\Models\CargoAcordado;
 use App\Finanzas\Models\ConceptoServicio;
 use App\Finanzas\Models\Diferencia;
+use App\Finanzas\Models\DocumentoCompra;
 use App\Finanzas\Models\Moneda;
+use App\Finanzas\Models\ProveedorFinanciero;
 use App\Finanzas\Models\Tarifa;
 use App\Http\Middleware\AsegurarTemporadaActivaDelRegistro;
 use App\Models;
@@ -36,6 +38,8 @@ class TemporadaActivaRutasTest extends TestCase
 {
     /** @var array<class-string<Model>, string> */
     private const EXENTOS = [
+        ProveedorFinanciero::class => 'ficha financiera global en base propia',
+        DocumentoCompra::class => 'documento recibido por fecha contable, independiente de temporada',
         LoteIntegracion::class => 'recepción laboral persistida en base propia, reintento independiente de temporada',
         EntregaNomina::class => 'acuse de novedad laboral en base propia, sin operación ni temporada',
         CargoLaboral::class => 'catálogo laboral global, independiente de temporada',

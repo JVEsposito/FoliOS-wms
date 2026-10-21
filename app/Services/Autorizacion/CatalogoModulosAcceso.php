@@ -13,6 +13,8 @@ class CatalogoModulosAcceso
 
     public const OFICINA_PORTERIA = 'materia-prima.porteria';
 
+    public const OFICINA_FINANZAS_PROVEEDORES = 'finanzas.proveedores';
+
     public const OFICINA_FINANZAS_PREFACTURA = 'finanzas.prefactura';
 
     public const OFICINA_RRHH_PERSONAL = 'rrhh.personal';
@@ -136,6 +138,7 @@ class CatalogoModulosAcceso
                 'nombre' => 'Finanzas',
                 'descripcion' => 'Conceptos operativos, acuerdos comerciales y valorización por cliente.',
                 'modulos' => [
+                    $this->modulo(self::OFICINA_FINANZAS_PROVEEDORES, 'Proveedores y compras', 'Ficha financiera, documentos recibidos, gastos y contabilidad de proveedores.'),
                     $this->modulo(self::OFICINA_FINANZAS_PREFACTURA, 'Hechos y prefactura', 'Hechos, cargos acordados aunque no se ejecuten, tarifario y prefactura por cliente.'),
                 ],
             ],
