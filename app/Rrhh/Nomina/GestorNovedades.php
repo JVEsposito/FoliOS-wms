@@ -5,6 +5,7 @@ namespace App\Rrhh\Nomina;
 use App\Models\User;
 use App\Rrhh\Auditoria;
 use App\Rrhh\EsquemaRrhh;
+use App\Rrhh\Integracion\IntercambioNomina;
 use App\Rrhh\Models\MovimientoNomina;
 use App\Rrhh\Models\Persona;
 use Carbon\CarbonImmutable;
@@ -89,6 +90,7 @@ final class GestorNovedades
             } else {
                 $m->update(['estado' => 'anulado', 'anulado_at' => now()]);
             }
+            app(IntercambioNomina::class)->preparar($m);
             $this->auditoria->registrar('movimiento_nomina', $m->id, $d['estado'], ['motivo' => $d['motivo'], 'incidencias' => $m->calculo['incidencias_aprobacion'] ?? []], $actor);
 
             return $m;

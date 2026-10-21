@@ -32,8 +32,8 @@ final class ImportadorMarcajes
             $errores = [];
             foreach ($filas as $indice => $fila) {
                 try {
-                    $fila = $fuente->tipo === 'geovictoria' ? $this->geo->normalizar($fila) : $fila;
-                    $fila = Validator::make($fila, ['id_externo' => ['required', 'string', 'max:150', 'not_regex:/^correccion:/'],
+                    $fila = $fuente->tipo === 'geovictoria' ? $this->geo->normalizar($fila, $fuente->configuracion['zona_origen'] ?? null) : $fila;
+                    $fila = Validator::make($fila, ['id_externo' => ['required', 'string', 'max:256', 'not_regex:/^correccion:/'],
                         'identificador' => ['required', 'string', 'max:100'], 'tipo' => ['required', 'in:entrada,salida'], 'instante' => ['required', 'string', 'max:40']])->validate();
                     $vinculo = VinculoMarcaje::query()->where('fuente_id', $fuente->id)->where('identificador_externo', $fila['identificador'])->first();
                     if ($vinculo === null) {
@@ -47,7 +47,16 @@ final class ImportadorMarcajes
                     $resultado['repetido'] ? $repetidas++ : $aceptadas++;
                 } catch (ValidationException $error) {
                     // No se descarta el lote completo ni se guardan credenciales o contenido libre del proveedor.
-                    $errores[] = ['fila' => $indice + 1, 'errores' => $error->errors()];
+                    $referencia = [];
+                    foreach (['id_externo' => ['id_externo', 'id_punch'], 'identificador' => ['identificador', 'identifier', 'UserIdentifier']] as $destino => $claves) {
+                        foreach ($claves as $clave) {
+                            if (is_string($fila[$clave] ?? null)) {
+                                $referencia[$destino] = mb_substr($fila[$clave], 0, $destino === 'id_externo' ? 256 : 100);
+                                break;
+                            }
+                        }
+                    }
+                    $errores[] = ['fila' => $indice + 1, 'referencia' => $referencia, 'errores' => $error->errors()];
                 }
             }
 

@@ -15,7 +15,7 @@ export function importRows(value) {
 }
 
 export function sourceConfiguration(values) {
-    return Object.fromEntries(['base_url', 'usuario', 'password', 'api_key', 'api_secret'].filter((k) => values[k]?.trim()).map((k) => [k, values[k]]));
+    return Object.fromEntries(['base_url', 'usuario', 'password', 'api_key', 'api_secret', 'zona_origen', 'contrato_checkpoint'].filter((k) => values[k]?.trim()).map((k) => [k, values[k]]));
 }
 
 export function attendanceIssueText(issues) {

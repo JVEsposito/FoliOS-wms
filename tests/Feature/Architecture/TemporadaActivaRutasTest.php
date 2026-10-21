@@ -14,7 +14,9 @@ use App\Models\Contracts\PerteneceATemporada;
 use App\Rrhh\Models\AsignacionPersonal;
 use App\Rrhh\Models\CargoLaboral;
 use App\Rrhh\Models\ConceptoNomina;
+use App\Rrhh\Models\EntregaNomina;
 use App\Rrhh\Models\FuenteMarcaje;
+use App\Rrhh\Models\LoteIntegracion;
 use App\Rrhh\Models\Marcaje;
 use App\Rrhh\Models\MovimientoNomina;
 use App\Rrhh\Models\Persona;
@@ -34,6 +36,8 @@ class TemporadaActivaRutasTest extends TestCase
 {
     /** @var array<class-string<Model>, string> */
     private const EXENTOS = [
+        LoteIntegracion::class => 'recepción laboral persistida en base propia, reintento independiente de temporada',
+        EntregaNomina::class => 'acuse de novedad laboral en base propia, sin operación ni temporada',
         CargoLaboral::class => 'catálogo laboral global, independiente de temporada',
         ConceptoNomina::class => 'configuración laboral global con tratamiento histórico conservado',
         MovimientoNomina::class => 'novedad laboral por fecha en base propia',

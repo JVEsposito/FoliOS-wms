@@ -114,3 +114,33 @@ Las autorizaciones escritas, legalidad de descuentos, régimen de jornada y trat
 ### Separación de Finanzas
 
 Una obligación laboral con el trabajador y un servicio comercial vendido al cliente son conceptos distintos, con permisos, acuerdos y aprobación propios. Esta ampliación no copia sueldos ni descuentos a Finanzas y no convierte automáticamente remuneraciones en cobros. Se mantiene el flujo de cargos comerciales acordados y su posibilidad de cobro independiente de la ejecución.
+
+## Integración directa: GeoVictoria y sistema remuneracional
+
+### Recepción conservada de marcajes
+
+La conexión implementa **OAuth 1.0 HMAC-SHA1 / `POST /api/Punch/ListPendingCheckPoint`**, según la [documentación oficial GeoVictoria 2021, págs. 21–22](https://wiki.geovictoria.com/wp-content/uploads/2021/07/API-GV3.pdf). Ese documento es una referencia histórica: el contrato y el ambiente de la cuenta deben confirmarse con el proveedor antes de habilitarlo. No se utiliza el método `ListPending`, que mueve un cursor remoto al consultarlo. No se presenta el conector como probado contra una cuenta real.
+
+1. En Integraciones, configurar fuente GeoVictoria con origen HTTPS oficial (sin ruta), API key/secret, zona IANA confirmada para `Date` y método Checkpoint confirmado. Todo se guarda cifrado en sistema, sin credenciales ni direcciones privadas en Git. El cliente restringe host oficial, puerto HTTPS, ruta fija, tiempos de espera y redirecciones desactivadas; no acepta una dirección arbitraria de la red local.
+2. Usar **Consultar GeoVictoria**, indicar checkpoint `AAAAMMDDhhmmss` en esa zona e identificadores externos (hasta 20 por consulta). Se mantiene la vinculación explícita persona/proveedor. La cuenta determina disponibilidad y forma del método; la respuesta debe ser una lista de hasta 1.000 registros. No se interpreta otra respuesta como un lote vacío exitoso.
+3. La recepción se guarda cifrada **antes** de importar. Solo se conservan ID de marca, identificador, fecha, tipo y fecha de modificación: no biometría, GPS, temperatura ni otros datos ajenos al marcaje. Los IDs estables admiten hasta 256 caracteres y conservan mayúsculas/minúsculas.
+4. Fechas de 14 dígitos requieren zona confirmada. Horas inexistentes o ambiguas por cambio de hora quedan como error, sin adivinar su instante. El formato ISO con offset sigue siendo admitido. La zona utilizada queda asociada al lote; cambiar la configuración no cambia un reintento del lote.
+5. Revisar **Lotes recibidos**: las incidencias incluyen número de fila, ID de marca e identificador externo para resolver vínculos sin exponer el resto del contenido. Luego reintentar el lote conservado después de corregir vínculos/configuración que corresponda. Los válidos permanecen; repetir los mismos IDs no duplica. Un fallo de proceso no obliga a volver a pedir los registros al proveedor. Una marca modificada exige corrección con motivo, no sobrescritura.
+
+No hay sondeo ni avance automático de checkpoint, conciliación declarada completa, modificación de turnos/personas en GeoVictoria ni envío de datos de FoliOS al proveedor. El rango, la paginación y la recuperación completa de la cuenta deben acordarse y validarse antes de automatizar. Un HTTP fallido o esquema desconocido no crea un falso resultado exitoso; el mismo checkpoint se puede consultar nuevamente. Si un lote contiene incidencias, no se recomienda avanzar su recuperación sin resolverlas.
+
+API autenticada de gestión: `POST /api/rrhh/fuentes/{id}/consultar-geovictoria` con `{ "desde": "20261001000000", "identificadores": ["identificador-en-proveedor"] }`; `GET /api/rrhh/fuentes/{id}/lotes?page=1`; `POST /api/rrhh/lotes/{id}/reintentar`. Las respuestas nunca incluyen el contenido cifrado ni credenciales.
+
+### Entrega de novedades a remuneraciones
+
+El contrato **`folios.rrhh.novedad.v1`** prepara una integración remuneracional de destino. No es un formato oficial LRE, Previred ni una orden bancaria. No implementa una API gubernamental no documentada. El sistema receptor debe homologar los códigos de persona/concepto y validar sus reglas para completar la liquidación.
+
+- Aprobar una novedad crea una entrega inmutable en la misma transacción. Anular un aprobado crea una segunda entrega con acción `anulado`; anular un borrador no genera reversa. Los borradores no se entregan. No se hace ningún envío HTTP automático.
+- `GET /api/rrhh/nomina/entregas?page=1` entrega pendientes de acuse, con UUID de evento, UUID del movimiento, secuencia, contenido y huella SHA-256. El contenido incluye código permanente de persona (sin nombre/RUT/PIN), fecha, moneda, total, concepto/mapeos y medidas del cálculo. El receptor aplica una vez por `evento_id`, en su transacción local, y guarda su comprobante. Si falla la respuesta, repite el acuse del mismo evento; **no vuelve a pagar**.
+- `POST /api/rrhh/nomina/entregas/{id}/acuse` con `huella` y `recibo_externo`. El mismo acuse devuelve su confirmación; un comprobante distinto o huella diferente se rechaza. Acusar no afirma que exista pago legal completo: confirma recepción por el sistema de destino.
+- La anulación se ofrece únicamente después del acuse de la aprobación anterior. No se pierde el orden causal aunque se consulte tarde. No se usa un cursor incremental que pueda saltar transacciones todavía no confirmadas. Para consumir pendientes, volver a la primera página tras acusar, porque la lista se reduce.
+- La huella corresponde a JSON UTF-8 con claves de objetos ordenadas recursivamente, sin escapar Unicode ni `/`, conservando listas y tipos. `evento_id` es la clave de idempotencia; el mismo movimiento conserva su ID entre aprobación y anulación.
+- Autenticación bearer de la API existente. Para la integración se debe crear una cuenta de servicio dedicada, habilitada solo para los módulos necesarios; no reutilizar una cuenta personal. Consulta requiere acceso a personal y remuneraciones; el acuse exige gestión de remuneraciones. No hay un endpoint público ni credenciales preconfiguradas.
+- La pantalla Remuneraciones permite revisar entregas pendientes y su contenido. La conexión de un receptor real requiere identificar su producto, versión, ambiente y contrato; no se inventa un adaptador de Buk, Talana, Defontana, Previred u otro sistema sin ese dato.
+
+La cola no contiene novedades aprobadas antes del despliegue del conector: no se reenvían antecedentes históricos automáticamente, lo que podría duplicar importaciones existentes. Una carga inicial requiere conciliación explícita con el destino. Conservar respaldos y evidencias de recibos en ambos sistemas.

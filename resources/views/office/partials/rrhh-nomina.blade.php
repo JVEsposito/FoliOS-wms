@@ -12,6 +12,7 @@
         <h3>Condiciones laborales y asignaciones vigentes</h3><div id="rnConditions" class="rh-table-scroll"></div><div id="rnConditionPages" class="rh-toolbar"></div><div id="rnPacts" class="rh-table-scroll"></div><div id="rnPactPages" class="rh-toolbar"></div>
         <h3>Novedades del mes</h3><p>Los totales registrados son parciales: no equivalen al líquido a pagar. Cotizaciones, impuestos, gratificación y otros cálculos legales requieren completar la liquidación en el sistema remuneracional.</p><div id="rnMovements" class="rh-table-scroll"></div><div id="rnMovementPages" class="rh-toolbar"></div>
     </div>
+    <details><summary>Intercambio con remuneraciones</summary><p>Entregas de novedades aprobadas o anuladas pendientes de acuse del sistema receptor. Un acuse confirma recepción; no acredita pago al trabajador.</p><button type="button" id="rnRefreshOutbox">Consultar entregas pendientes</button><div id="rnOutbox" class="rh-table-scroll"></div><div id="rnOutboxPages" class="rh-toolbar"></div></details>
     <details><summary>Parámetros legales por vigencia</summary><p>Las horas extra usan el sueldo mensual y los adicionales fijos que tengan carácter de sueldo, con piso de ingreso mínimo aplicable y recargo de al menos 50%. Se registran minutos extraordinarios verificados; la duración de un turno no determina por sí sola las horas extra.</p>
         <div id="rnParameters" class="rh-table-scroll"></div><button type="button" id="rnNewParameter" data-rn-manage>Registrar próxima vigencia del ingreso mínimo</button></details>
 </section>

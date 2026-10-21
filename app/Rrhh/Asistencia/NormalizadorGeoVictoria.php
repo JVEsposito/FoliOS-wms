@@ -2,12 +2,13 @@
 
 namespace App\Rrhh\Asistencia;
 
+use App\Rrhh\Integracion\FechaGeoVictoria;
 use Illuminate\Validation\ValidationException;
 
 /** Adaptador de registros Punch documentados. La conexión HTTP se implementa aparte. */
 final class NormalizadorGeoVictoria
 {
-    public function normalizar(array $fila): array
+    public function normalizar(array $fila, ?string $zona = null): array
     {
         $tipo = match ($fila['Type'] ?? $fila['type'] ?? null) {
             'Ingreso', 'entry' => 'entrada', 'Salida', 'exit' => 'salida', default => null
@@ -18,6 +19,6 @@ final class NormalizadorGeoVictoria
             throw ValidationException::withMessages(['fila' => 'Se requieren id_punch estable, identificador externo y tipo Ingreso/Salida o entry/exit.']);
         }
 
-        return ['id_externo' => $id, 'identificador' => $persona, 'tipo' => $tipo, 'instante' => $fila['Date'] ?? ''];
+        return ['id_externo' => $id, 'identificador' => $persona, 'tipo' => $tipo, 'instante' => FechaGeoVictoria::normalizar(is_string($fila['Date'] ?? null) ? $fila['Date'] : '', $zona)];
     }
 }

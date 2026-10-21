@@ -1,5 +1,6 @@
 <?php
 
+use App\Rrhh\Http\IntegracionController;
 use App\Rrhh\Http\NominaController as N;
 use App\Rrhh\Http\RrhhController as R;
 use Illuminate\Support\Facades\Route;
@@ -48,5 +49,17 @@ Route::middleware('auth:sanctum')->prefix('rrhh')->group(function (): void {
             Route::post('/movimientos', [N::class, 'crear']);
             Route::patch('/movimientos/{movimiento}', [N::class, 'estado'])->whereUuid('movimiento');
         });
+    });
+});
+
+Route::middleware('auth:sanctum')->prefix('rrhh')->group(function (): void {
+    Route::middleware(['can:gestionar-rrhh', 'throttle:rrhh-importaciones'])->group(function (): void {
+        Route::post('/fuentes/{fuente}/consultar-geovictoria', [IntegracionController::class, 'consultar'])->whereUuid('fuente');
+        Route::get('/fuentes/{fuente}/lotes', [IntegracionController::class, 'lotes'])->whereUuid('fuente');
+        Route::post('/lotes/{lote}/reintentar', [IntegracionController::class, 'reintentar'])->whereUuid('lote');
+    });
+    Route::middleware(['can:consultar-rrhh', 'can:consultar-remuneraciones-rrhh'])->group(function (): void {
+        Route::get('/nomina/entregas', [IntegracionController::class, 'entregas']);
+        Route::post('/nomina/entregas/{entrega}/acuse', [IntegracionController::class, 'acuse'])->whereUuid('entrega')->middleware(['can:gestionar-remuneraciones-rrhh', 'throttle:rrhh-gestion']);
     });
 });
