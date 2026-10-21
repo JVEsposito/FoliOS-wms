@@ -63,7 +63,7 @@ class GeneradorDocumentoSag
             'campos' => [
                 'codigo' => $formato['codigo'], 'version' => $formato['version'], 'vigencia' => $formato['fecha_vigencia'],
                 'numero' => $documento?->numero ?? '', 'fecha' => $documento?->fecha_actividad->format('d-m-Y') ?? '',
-                'estado' => $documento ? ($documento->estado === 'borrador' ? 'BORRADOR' : 'EMITIDO') : 'EN BLANCO',
+                'estado' => $documento ? ($documento->numero === null ? mb_strtoupper($documento->estado) : 'EMITIDO') : 'EN BLANCO',
                 'establecimiento' => $planta['nombre_establecimiento'] ?? '', 'csp' => $planta['csp'] ?? '',
                 'oficina_sag' => $planta['oficina_sag'] ?? '',
                 'region' => $planta['region'] ?? '', 'provincia_planta' => $planta['provincia'] ?? '', 'comuna_planta' => $planta['comuna'] ?? '',

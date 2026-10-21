@@ -61,4 +61,46 @@ class DespachoSagTest extends TestCase
         $this->assertStringContainsString('DATOS PARA MULTIPUERTO', $pdf);
         $this->assertStringNotContainsString('PLANILLA DE DESPACHO', $pdf);
     }
+
+    public function test_un_borrador_cancelado_no_se_imprime_como_emitido(): void
+    {
+        $doc = $this->documento();
+        $doc->numero = null;
+        $doc->estado = 'cancelado';
+        $datos = app(GeneradorDespachoSag::class)->datos($doc, 'despacho');
+        $this->assertSame('CANCELADO', $datos['campos']['estado']);
+    }
+
+    public function test_despacho_de_25_pallets_no_pierde_folios_ni_observaciones_en_los_anexos(): void
+    {
+        $doc = $this->documento();
+        $detalle = $doc->detalle;
+        $original = $detalle['lineas'][0];
+        $detalle['lineas'] = collect(range(1, 25))->map(fn ($i) => [...$original, 'folio_id' => 'id-'.$i, 'folio' => 'PALLET-'.str_pad((string) $i, 4, '0', STR_PAD_LEFT)])->all();
+        $detalle['pallets'] = 25;
+        $doc->detalle = $detalle;
+        $doc->encabezado = ['observaciones' => str_repeat('Observación extensa de despacho. ', 70).'ULTIMOANTECEDENTE'];
+        $generador = app(GeneradorDespachoSag::class);
+        $pdf = $generador->pdf($doc, 'despacho');
+        $this->assertStringContainsString('PALLET-0025', $pdf);
+        $this->assertStringContainsString('ULTIMOANTECEDENTE', $pdf);
+        $this->assertStringContainsString('6000 cajas / 15000 kg', $pdf);
+        $ruta = $generador->xlsx($doc, 'despacho');
+        $zip = new ZipArchive;
+        try {
+            $zip->open($ruta);
+            $this->assertStringContainsString('PALLET-0025', $zip->getFromName('xl/worksheets/sheet3.xml'));
+            $contenido = '';
+            for ($i = 0; $i < $zip->numFiles; $i++) {
+                if (preg_match('~^xl/worksheets/sheet\d+\.xml$~', $zip->getNameIndex($i))) {
+                    $contenido .= $zip->getFromIndex($i);
+                }
+            }
+            $this->assertStringContainsString('ULTIMOANTECEDENTE', $contenido);
+            $this->assertStringNotContainsString('{{', $contenido);
+        } finally {
+            $zip->close();
+            unlink($ruta);
+        }
+    }
 }
