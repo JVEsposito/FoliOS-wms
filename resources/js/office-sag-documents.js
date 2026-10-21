@@ -1,0 +1,108 @@
+import { sagApi, sagEscape as esc, sagNotice, sagState } from './office-sag-counterpart.js';
+
+const $ = (id) => document.getElementById(id);
+let initialized = false;
+let draft = null;
+let source = null;
+let selected = [];
+let selectedDocument = null;
+let pendingOperation = null;
+const labels = { repaletizaje: 'Repaletizaje', anulacion: 'Anulación / devolución' };
+const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+async function run(action) { try { await action(); } catch (error) { sagNotice(error.message, true); } }
+
+function people() {
+    const select = $('scDocumentForm').elements.responsable_id;
+    const value = select.value;
+    select.innerHTML = '<option value="">Seleccionar</option>' + (sagState().configuration?.responsables || []).filter((r) => r.activo).map((r) => `<option value="${esc(r.id)}">${esc(r.nombre)}</option>`).join('');
+    select.value = value;
+}
+
+async function list(page = 1) {
+    const params = new URLSearchParams(new FormData($('scDocumentFilters'))); params.set('page', page);
+    const data = await sagApi(`/documentos?${params}`);
+    $('scDocuments').innerHTML = data.data.map((d) => `<article><button type="button" class="secondary-button" data-document="${esc(d.id)}">${esc(labels[d.tipo] || d.tipo)} ${esc(d.numero ?? 'Borrador')} · ${esc(d.fecha_actividad.slice(0, 10))} · ${esc(d.estado)}</button></article>`).join('') || '<p>No hay documentos para estos filtros.</p>';
+    $('scDocumentPages').innerHTML = `<button class="secondary-button" data-page="${page - 1}" ${page <= 1 ? 'disabled' : ''}>Anterior</button><span>${page} / ${data.last_page}</span><button class="secondary-button" data-page="${page + 1}" ${page >= data.last_page ? 'disabled' : ''}>Siguiente</button>`;
+}
+
+function lines() {
+    const isRepa = $('scDocumentForm').elements.tipo.value === 'repaletizaje';
+    $('scRepaSource').classList.toggle('is-hidden', !isRepa);
+    $('scFolioSource').classList.toggle('is-hidden', isRepa);
+    const rows = isRepa ? source?.originales || [] : selected;
+    $('scDocumentLines').innerHTML = `<table><thead><tr><th>Folio</th><th>Especie</th><th>Cajas</th><th>Última actividad</th><th>N° actividad</th>${isRepa ? '' : '<th>Causal</th><th></th>'}</tr></thead><tbody>${rows.map((l, i) => `<tr><td>${esc(l.folio)}</td><td>${esc(l.especie)}</td><td>${isRepa ? esc(l.cantidad) : `<input aria-label="Cajas ${esc(l.folio)}" type="number" min="1" max="${esc(l.maximo || l.cantidad)}" data-line="${i}" data-field="cantidad" value="${esc(l.cantidad)}">`}</td><td><input aria-label="Actividad ${esc(l.folio)}" maxlength="100" data-line="${i}" data-field="tipo_actividad" value="${esc(l.tipo_actividad)}"></td><td><input aria-label="Número actividad ${esc(l.folio)}" maxlength="100" data-line="${i}" data-field="numero_actividad" value="${esc(l.numero_actividad)}"></td>${isRepa ? '' : `<td><input aria-label="Causal ${esc(l.folio)}" maxlength="250" required data-line="${i}" data-field="causal" value="${esc(l.causal)}"></td><td><button type="button" data-remove="${i}">Quitar</button></td>`}</tr>`).join('')}</tbody></table>${isRepa && source ? `<p>Resultado: ${source.resultados.map((r) => `${esc(r.folio)} (${esc(r.cantidad)} cajas)`).join(', ')}</p>` : ''}`;
+}
+
+function edit(document = null) {
+    draft = document; source = document?.tipo === 'repaletizaje' ? structuredClone(document.detalle) : null;
+    selected = document?.tipo === 'anulacion' ? structuredClone(document.detalle.lineas) : [];
+    const form = $('scDocumentForm'); form.reset(); people();
+    form.elements.tipo.value = document?.tipo || 'repaletizaje'; form.elements.tipo.disabled = Boolean(document);
+    form.elements.fecha_actividad.value = document?.fecha_actividad.slice(0, 10) || today();
+    form.elements.responsable_id.value = document?.responsable_id || '';
+    for (const [key, value] of Object.entries(document?.encabezado || {})) if (form.elements[key]) form.elements[key].value = value;
+    $('scDocumentTitle').textContent = document ? `Editar ${labels[document.tipo]}` : 'Nuevo documento';
+    form.classList.remove('is-hidden'); $('scDocumentDetail').classList.add('is-hidden'); pendingOperation = null; lines();
+    form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function save() {
+    const form = $('scDocumentForm'); const type = form.elements.tipo.value;
+    if (type === 'repaletizaje' && !source) throw new Error('Carga primero la repa.');
+    const data = { tipo: type, version: draft?.version || 0, responsable_id: form.elements.responsable_id.value, fecha_actividad: form.elements.fecha_actividad.value,
+        encabezado: { observaciones: form.elements.observaciones.value, certificados: Number(form.elements.certificados.value), certificados_devueltos: Number(form.elements.certificados_devueltos.value), certificados_asignados: Number(form.elements.certificados_asignados.value) } };
+    if (type === 'repaletizaje') { data.repaletizaje_id = source.repaletizaje_id; data.actividades = Object.fromEntries(source.originales.map((l) => [l.folio_id, { tipo: l.tipo_actividad, numero: l.numero_actividad }])); }
+    else data.folios = selected.map((l) => ({ folio_id: l.folio_id, cantidad: Number(l.cantidad), causal: l.causal, tipo_actividad: l.tipo_actividad, numero_actividad: l.numero_actividad }));
+    const signature = JSON.stringify(data); if (!pendingOperation || pendingOperation.signature !== signature) pendingOperation = { signature, id: crypto.randomUUID() };
+    data.operacion_id = pendingOperation.id;
+    const saved = await sagApi(`/documentos${draft ? `/${draft.id}` : ''}`, { method: draft ? 'PUT' : 'POST', body: JSON.stringify(data) });
+    pendingOperation = null; $('scDocumentForm').classList.add('is-hidden'); await open(saved.id); await list(); sagNotice('Borrador guardado.');
+}
+
+async function open(id) {
+    selectedDocument = await sagApi(`/documentos/${id}`);
+    const d = selectedDocument;
+    $('scDocumentForm').classList.add('is-hidden');
+    const manage = sagState().configuration.puede_gestionar;
+    const actions = d.estado === 'borrador' ? ['emitir', 'cancelar'] : ['emitido', 'enviado'].includes(d.estado) ? [...(d.estado === 'emitido' ? ['enviar'] : []), 'aprobar', 'rechazar'] : [];
+    $('scDocumentDetail').innerHTML = `<h3>${esc(labels[d.tipo] || d.tipo)} ${esc(d.numero ?? 'Borrador')} · ${esc(d.estado)}</h3><p>Fecha actividad: ${esc(d.fecha_actividad.slice(0, 10))} · Versión ${esc(d.version)}</p><div class="sc-actions">${manage && d.estado === 'borrador' ? '<button class="secondary-button" data-edit>Editar borrador</button>' : ''}<button class="secondary-button" data-download="pdf">PDF</button><button class="secondary-button" data-download="xlsx">Excel</button></div><p>${esc(d.encabezado.observaciones || '')}</p><div class="sc-scroll"><table><thead><tr><th>Folio</th><th>Cajas</th><th>Última actividad</th><th>N° actividad</th></tr></thead><tbody>${(d.detalle.originales || d.detalle.lineas || []).map((l) => `<tr><td>${esc(l.folio)}</td><td>${esc(l.cantidad)}</td><td>${esc(l.tipo_actividad)}</td><td>${esc(l.numero_actividad)}</td></tr>`).join('')}</tbody></table></div>${manage && actions.length ? `<form id="scDocumentAction" class="sc-grid"><label>Acción<select name="accion">${actions.map((a) => `<option value="${a}">${({ emitir: 'Emitir documento', enviar: 'Registrar envío', aprobar: 'Registrar aprobación recibida', rechazar: 'Registrar rechazo recibido', cancelar: 'Cancelar borrador' })[a]}</option>`).join('')}</select></label><label>Referencia de aviso, recepción o resolución<input name="referencia" maxlength="1000"></label><label>Nombre y cargo de quien resolvió<input name="resuelto_por" maxlength="250"></label><button class="primary-button">Registrar</button></form>` : ''}<h4>Respaldos</h4>${manage ? '<form id="scDocumentUpload"><label>Agregar respaldo<input type="file" name="archivo" accept="application/pdf,image/jpeg,image/png,image/webp" required></label><button class="secondary-button">Guardar respaldo</button></form>' : ''}<div>${d.archivos.map((a) => `<button class="secondary-button" data-attachment="${esc(a.id)}">${esc(a.nombre)}</button>`).join('') || 'Sin respaldos.'}</div><h4>Historial</h4>${d.historial.map((e) => `<p>${esc(e.created_at)} · ${esc(e.tipo)} · ${esc(e.datos.referencia || '')} ${esc(e.datos.resuelto_por || '')}</p>`).join('')}`;
+    $('scDocumentDetail').classList.remove('is-hidden');
+}
+
+async function download(path, name) {
+    const response = await fetch(`/api/contraparte-sag${path}`, { headers: { Authorization: `Bearer ${sagState().token}`, Accept: '*/*' } });
+    if (!response.ok) { const d = await response.json(); throw new Error(d.message || 'No se pudo descargar.'); }
+    const url = URL.createObjectURL(await response.blob()); const a = document.createElement('a'); a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
+export async function init() {
+    if (!initialized) {
+        initialized = true;
+        $('scNewDocument').onclick = () => edit(); $('scReloadDocuments').onclick = () => run(list);
+        document.querySelectorAll('[data-blank]').forEach((button) => { button.onclick = () => run(() => download(`/en-blanco/${$('scBlankType').value}/${button.dataset.blank}`, `sag-${$('scBlankType').value}-blanco.${button.dataset.blank}`)); });
+        $('scDocumentFilters').onsubmit = (e) => { e.preventDefault(); run(list); };
+        $('scDocuments').onclick = (e) => { const b = e.target.closest('[data-document]'); if (b) run(() => open(b.dataset.document)); };
+        $('scDocumentPages').onclick = (e) => { const b = e.target.closest('[data-page]'); if (b) run(() => list(Number(b.dataset.page))); };
+        $('scDocumentForm').elements.tipo.onchange = () => { source = null; selected = []; lines(); };
+        $('scLoadRepa').onclick = () => run(async () => { source = await sagApi(`/fuentes/repaletizaje/${encodeURIComponent($('scRepaReference').value.trim())}`); $('scDocumentForm').elements.fecha_actividad.value = source.fecha_actividad; lines(); });
+        $('scAddFolio').onclick = () => run(async () => { const l = await sagApi(`/folios/${encodeURIComponent($('scAddFolioNumber').value.trim())}`); if (selected.some((r) => r.folio_id === l.folio_id)) throw new Error('El folio ya está agregado.'); selected.push({ ...l, maximo: l.cantidad, causal: '' }); $('scAddFolioNumber').value = ''; lines(); });
+        $('scAddFolioNumber').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); $('scAddFolio').click(); } };
+        $('scDocumentLines').oninput = (e) => { const input = e.target.closest('[data-line]'); if (input) { const rows = $('scDocumentForm').elements.tipo.value === 'repaletizaje' ? source.originales : selected; rows[Number(input.dataset.line)][input.dataset.field] = input.value; } };
+        $('scDocumentLines').onclick = (e) => { const b = e.target.closest('[data-remove]'); if (b) { selected.splice(Number(b.dataset.remove), 1); lines(); } };
+        $('scDocumentForm').onsubmit = (e) => { e.preventDefault(); run(save); };
+        $('scDocumentDetail').onclick = (e) => {
+            if (e.target.closest('[data-edit]')) edit(selectedDocument);
+            const d = e.target.closest('[data-download]'); if (d) run(() => download(`/documentos/${selectedDocument.id}/archivo/${d.dataset.download}`, `sag-${selectedDocument.tipo}.${d.dataset.download}`));
+            const a = e.target.closest('[data-attachment]'); if (a) run(() => download(`/documentos/${selectedDocument.id}/respaldos/${a.dataset.attachment}`, selectedDocument.archivos.find((x) => x.id === a.dataset.attachment).nombre));
+        };
+        $('scDocumentDetail').onsubmit = (e) => { e.preventDefault(); run(async () => {
+            if (e.target.id === 'scDocumentAction') { const data = Object.fromEntries(new FormData(e.target)); const action = data.accion; delete data.accion; await sagApi(`/documentos/${selectedDocument.id}/${action}`, { method: 'POST', body: JSON.stringify({ ...data, version: selectedDocument.version, operacion_id: crypto.randomUUID() }) }); }
+            if (e.target.id === 'scDocumentUpload') { const response = await fetch(`/api/contraparte-sag/documentos/${selectedDocument.id}/respaldos`, { method: 'POST', headers: { Authorization: `Bearer ${sagState().token}`, Accept: 'application/json' }, body: new FormData(e.target) }); if (!response.ok) throw new Error((await response.json()).message); }
+            await open(selectedDocument.id); await list(); sagNotice('Registro guardado.');
+        }); };
+        document.addEventListener('sag:configuration', people);
+    }
+    people(); await list();
+    const params = new URLSearchParams(location.search);
+    if (params.get('repa')) { document.querySelector('[data-panel="documentos"]').click(); edit(); $('scRepaReference').value = params.get('repa'); $('scLoadRepa').click(); }
+}

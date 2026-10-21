@@ -92,5 +92,6 @@ $('scPerson').addEventListener('submit', (event) => { event.preventDefault(); ru
 }); });
 async function enter() {
     await config(); $('officeAccess').classList.add('is-hidden'); $('officeApp').classList.remove('is-hidden'); await stock();
+    const documents = await import('./office-sag-documents.js'); await documents.init();
 }
 if (token) run(enter);

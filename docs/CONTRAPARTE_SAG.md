@@ -44,3 +44,31 @@ existencia del filtro completo. Se pueden consultar temporadas anteriores por AP
 Fuentes de diseño: planillas entregadas por la planta y Manual para Externos Programa
 Origen v04, 10-07-2024, secciones 6.1.2.2 y 6.8:
 https://www.sag.gob.cl/sites/default/files/Manual%20para%20Externos%20v4%202024-07-10.pdf
+
+## Repaletizaje y anulación / devolución
+
+En **Documentos SAG**, crear un borrador y seleccionar un responsable activo. Para la
+repa, cargar su código REPA o abrir **Documento SAG** desde su historial. El origen y
+resultado se toman del registro físico, incluidas cantidades parciales y divisiones.
+Se completa la última actividad y su número cuando aún no estaban registrados.
+No se exige ni imprime país de destino.
+
+La anulación / devolución permite seleccionar folios escaneando su número, cantidades
+parciales y causal, o devolver certificados sin seleccionar fruta. Generar el formulario
+documenta la solicitud: no borra fruta, no anula una repa física y no simula una
+resolución del SAG. Esos hechos conservan sus respectivos registros operacionales.
+
+**Emitir** asigna el correlativo por tipo y temporada en una transacción y conserva
+una fotografía del formato, establecimiento, responsable y detalle. Solo se edita el
+borrador. PDF y Excel de un documento emitido siempre usan esa fotografía, aunque el
+catálogo de formatos cambie después. Se pueden descargar ambos formularios en blanco.
+
+El seguimiento distingue emitido, enviado y aprobación o rechazo recibido. El usuario
+registra la referencia y el nombre/cargo de quien resuelve; puede adjuntar PDF o fotos
+de hasta 10 MB. Cada respaldo queda privado y no se reemplazan archivos anteriores.
+Las descargas verifican el documento al que pertenece cada archivo.
+
+Los cambios de estado no envían correos ni acceden a plataformas SAG. El perfil de
+consulta puede leer y descargar, pero no crear, emitir ni adjuntar. Un documento de
+temporada cerrada conserva su consulta y sus descargas; las escrituras requieren la
+temporada activa.
