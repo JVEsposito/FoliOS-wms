@@ -72,6 +72,8 @@ export default defineConfig({
                 'resources/js/office-operational-integrity.js',
                 'resources/css/office-finance.css',
                 'resources/js/office-finance-facts.js',
+                'resources/js/office-finance-suppliers.js',
+                'resources/css/office-finance-suppliers.css',
                 'resources/js/office-finance-tariffs.js',
                 'resources/js/office-finance-prebilling.js',
                 'resources/css/office-rrhh.css',

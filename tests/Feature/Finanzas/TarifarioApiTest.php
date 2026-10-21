@@ -164,7 +164,7 @@ class TarifarioApiTest extends TestCase
         $this->assertStringContainsString('<h1>Tarifario</h1>', $html);
         $this->assertStringContainsString('data-office-key="finanzas-tarifario"', $html);
         $this->assertStringContainsString('href="/oficina/finanzas/hechos"', $html);
-        $this->assertMatchesRegularExpression('/<p data-navigation-permissions="puede_consultar_finanzas"\s+data-navigation-module="finanzas.prefactura"\s+class="estiba-office-subgroup">Finanzas<\/p>/', $html);
+        $this->assertMatchesRegularExpression('/<p data-navigation-permissions="puede_consultar_finanzas,puede_consultar_proveedores_finanzas"\s+data-navigation-module=""\s+class="estiba-office-subgroup">Finanzas<\/p>/', $html);
     }
 
     private function administrador(): User

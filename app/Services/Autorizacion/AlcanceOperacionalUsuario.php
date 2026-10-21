@@ -214,6 +214,16 @@ class AlcanceOperacionalUsuario
     }
 
     /** Finanzas no es parte de ningún rol operativo: solo administración o un perfil que lo incluya. */
+    public function puedeConsultarProveedoresFinanzas(User $usuario): bool
+    {
+        return $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador, RolUsuario::Consulta], CatalogoModulosAcceso::OFICINA_FINANZAS_PROVEEDORES);
+    }
+
+    public function puedeGestionarProveedoresFinanzas(User $usuario): bool
+    {
+        return $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador], CatalogoModulosAcceso::OFICINA_FINANZAS_PROVEEDORES);
+    }
+
     public function puedeConsultarFinanzas(User $usuario): bool
     {
         return $this->rolActivoEnModulo(
@@ -1182,6 +1192,8 @@ class AlcanceOperacionalUsuario
             'puede_consultar_configuracion_camaras' => $this->puedeConsultarConfiguracionCamaras($usuario),
             'puede_consultar_integridad_operacional' => $this->puedeConsultarIntegridadOperacional($usuario),
             'puede_ejecutar_integridad_operacional' => $this->puedeEjecutarIntegridadOperacional($usuario),
+            'puede_consultar_proveedores_finanzas' => $this->puedeConsultarProveedoresFinanzas($usuario),
+            'puede_gestionar_proveedores_finanzas' => $this->puedeGestionarProveedoresFinanzas($usuario),
             'puede_consultar_finanzas' => $this->puedeConsultarFinanzas($usuario),
             'puede_capturar_hechos_finanzas' => $this->puedeCapturarHechosFinanzas($usuario),
             'puede_gestionar_tarifas_finanzas' => $this->puedeGestionarTarifasFinanzas($usuario),
