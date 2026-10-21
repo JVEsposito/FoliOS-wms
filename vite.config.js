@@ -74,6 +74,8 @@ export default defineConfig({
                 'resources/js/office-finance-facts.js',
                 'resources/js/office-finance-tariffs.js',
                 'resources/js/office-finance-prebilling.js',
+                'resources/css/office-rrhh.css',
+                'resources/js/office-rrhh.js',
                 'resources/css/office-comex.css',
                 'resources/js/office-comex-files.js',
                 'resources/js/office-comex-settings.js',

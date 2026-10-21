@@ -162,3 +162,6 @@ Route::view('/oficina/materiales/reposicion', 'office.material-replenishment');
 Route::view('/oficina/materiales/items/niveles', 'office.material-replenishment', ['niveles' => true]);
 
 Route::view('/oficina/materiales/items', 'office.material-items');
+
+Route::view('/oficina/rrhh', 'office.rrhh');
+Route::view('/oficina/rrhh/marcaje', 'office.rrhh-clock');

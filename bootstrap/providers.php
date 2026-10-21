@@ -9,6 +9,7 @@ use App\Providers\AppServiceProvider;
 use App\Providers\BinRetornoPackingServiceProvider;
 use App\Providers\CustodiaDistribuidaMaterialesServiceProvider;
 use App\Providers\RepaletizajeServiceProvider;
+use App\Rrhh\RrhhServiceProvider;
 
 return [
     'App\\Providers\\ConsultaTrazabilidadServiceProvider',
@@ -21,4 +22,5 @@ return [
     GestionServiceProvider::class,
     FinanzasServiceProvider::class,
     ComexServiceProvider::class,
+    RrhhServiceProvider::class,
 ];
