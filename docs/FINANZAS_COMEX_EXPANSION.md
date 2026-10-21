@@ -43,3 +43,15 @@ El acuerdo contiene productos, variedad, calibre, categoría, embalaje, cantidad
 El flujo es borrador → en revisión → aprobada o rechazada. Se puede retirar a borrador. La aprobación/rechazo exige acceso comercial y aprobaciones. Por defecto quien preparó la última edición no puede decidir (`COMEX_APROBADOR_DISTINTO=true`); la excepción es configurable y queda documentada aquí. Una nueva revisión conserva el acuerdo anterior hasta aprobar el reemplazo; las versiones anteriores siguen consultables. Vendedor, folio, cliente y gestión son permanentes. Cerrar exige un acuerdo aprobado y ninguna propuesta pendiente; anular conserva las revisiones y los motivos.
 
 La impresión del navegador permite guardar PDF de la revisión seleccionada, conserva Unicode y muestra estado, revisión, responsables y el rótulo “Documento comercial interno · No tributario”. Para clientes de servicio se identifica como referencia comercial del cliente. No representa aceptación externa del comprador ni emite DTE.
+
+## Bookings, cantidades y despacho
+
+Book​ings y contenedores cubre reservas marítimas con naviera, forwarder, puertos, nave/viaje, fechas estimadas y cutoffs con zona horaria expresa. Código, naviera, cliente y gestión son permanentes. El borrador admite hasta 50 contenedores con referencia interna permanente, número opcional, tipo y sello. El formato del número se comprueba; no se acredita registro ni dígito BIC.
+
+Una nota puede abastecer múltiples bookings y un booking múltiples notas del mismo cliente/gestión. Las cantidades se asignan a un contenedor y a una línea de la revisión aprobada; la suma decimal entre todas las reservas no puede superar lo acordado. El candado común serializa notas y reservas. La asignación conserva la copia del acuerdo y puede retirarse, con motivo e historial, mientras la reserva sea borrador. La salida debe quedar dentro de la vigencia contractual. No se infieren kilos desde cajas ni se reservan pallets físicos.
+
+Confirmar requiere permiso de aprobaciones y asignaciones activas. Mientras haya asignaciones, la nota no puede sustituirse ni anularse; se retiran primero en los bookings modificables. Una nota con despachos cerrados necesita rectificación formal, fuera de este piloto, para sustituir el acuerdo. El cierre comercial de la nota exige terminar los bookings pendientes.
+
+Un booking confirmado vincula cada contenedor a un embarque operativo existente del mismo cliente, modalidad y número de contenedor. Un embarque y un contenedor solo tienen un vínculo vigente. Se conserva la evidencia, hash y fecha de captura, y se muestra por separado el estado actual y si cambió. Retirar el vínculo conserva el historial y exige que la carga no haya salido; la falta de evidencia bloquea el retiro. El cierre exige salida operativa de todos los contenedores asignados. Volver a borrador o anular requiere retirar antes los vínculos.
+
+Esta reserva comercial no certifica cantidades cargadas: los pallets, los instructivos y los documentos oficiales siguen en la operación y el expediente existente. El vínculo no modifica ni crea embarques, cargas, inventario o documentos tributarios.

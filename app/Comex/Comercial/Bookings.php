@@ -27,6 +27,11 @@ final class Bookings
             if (! $b && $d['version'] !== 0) {
                 $this->registro->error('version', 'Una reserva nueva parte de cero.');
             }
+            foreach (['cutoff_fisico', 'cutoff_documental'] as $campo) {
+                if (substr($d[$campo], 0, 10) > $d['fecha_salida']) {
+                    $this->registro->error($campo, 'El cutoff no puede quedar después del día de salida.');
+                }
+            }
             $cliente = $this->operacion->cliente($d['cliente_operacion_id']);
             $gestion = $b?->gestion ?? ClienteComex::query()->find($d['cliente_operacion_id'])?->gestion ?? 'servicio';
             if (! $cliente || ! $cliente['activo'] || $gestion !== $d['gestion'] || $gestion === 'sin_seguimiento') {

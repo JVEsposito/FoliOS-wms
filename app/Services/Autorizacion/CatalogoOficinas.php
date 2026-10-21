@@ -105,6 +105,7 @@ class CatalogoOficinas
         ['administracion', 'Configuración Comex', '/oficina/comex/configuracion', 'comex.configuracion', ['puede_consultar_comex']],
         ['administracion', 'Actores y lugares', '/oficina/comex/comercial', 'comex.comercial', ['puede_consultar_comercial_comex']],
         ['administracion', 'Notas de venta', '/oficina/comex/notas', 'comex.comercial', ['puede_consultar_comercial_comex']],
+        ['administracion', 'Bookings y contenedores', '/oficina/comex/bookings', 'comex.comercial', ['puede_consultar_comercial_comex']],
         ['consultas', 'Resumen', '/oficina/consultas', '', ['puede_consultar_oficina_consultas', 'puede_consultar_sag']],
         ['consultas', 'Búsqueda Operacional', '/oficina/consultas/busqueda', 'consultas.busqueda', ['puede_consultar_oficina_consultas']],
         ['consultas', 'Trazabilidad de lotes', '/oficina/consultas/trazabilidad', 'consultas.busqueda', ['puede_consultar_oficina_consultas']],
