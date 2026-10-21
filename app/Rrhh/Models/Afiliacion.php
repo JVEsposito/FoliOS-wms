@@ -18,6 +18,6 @@ class Afiliacion extends Model
 
     protected function casts(): array
     {
-        return ['institucion' => 'array'];
+        return ['institucion' => 'array', 'precio_plan' => 'decimal:6'];
     }
 }

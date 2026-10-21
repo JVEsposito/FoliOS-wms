@@ -52,7 +52,7 @@ final class PrevisionController extends Controller
 
     public function afiliaciones(Request $r): JsonResponse
     {
-        $d = $r->validate(['persona_id' => ['required_without:empleador_id', 'prohibited_with:empleador_id', 'uuid'], 'empleador_id' => ['required_without:persona_id', 'prohibited_with:persona_id', 'uuid'], 'page' => ['nullable', 'integer', 'min:1']]);
+        $d = $r->validate(['persona_id' => ['required_without:empleador_id', 'prohibits:empleador_id', 'uuid'], 'empleador_id' => ['required_without:persona_id', 'prohibits:persona_id', 'uuid'], 'page' => ['nullable', 'integer', 'min:1']]);
 
         return response()->json(['data' => Afiliacion::query()->where(isset($d['persona_id']) ? 'persona_id' : 'empleador_id', $d['persona_id'] ?? $d['empleador_id'])->orderByDesc('desde')->orderBy('id')->paginate(25)]);
     }
