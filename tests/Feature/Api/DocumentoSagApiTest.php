@@ -3,7 +3,11 @@
 namespace Tests\Feature\Api;
 
 use App\Models\CondicionSag;
+use App\Models\EnvaseValidacion;
+use App\Models\EspecieValidacion;
 use App\Models\Folio;
+use App\Models\LoteInspeccionSag;
+use App\Models\Pais;
 use App\Models\ResponsableContraparteSag;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -81,5 +85,29 @@ class DocumentoSagApiTest extends TestCase
         $this->desactivarTemporadasDePrueba();
         $this->getJson('/api/contraparte-sag/documentos/'.$r['id'])->assertOk();
         $this->postJson('/api/contraparte-sag/documentos/'.$r['id'].'/emitir', ['operacion_id' => (string) Str::uuid(), 'version' => 1])->assertConflict();
+    }
+
+    public function test_cambio_mercado_toma_el_lote_y_no_autoriza_destinos_al_emitir(): void
+    {
+        $p = $this->preparar();
+        $especie = EspecieValidacion::create(['temporada_id' => $p['folio']->temporada_id, 'nombre' => 'UVA', 'activo' => true]);
+        $envase = EnvaseValidacion::create(['especie_validacion_id' => $especie->id, 'nombre' => 'Caja 5 kg', 'kilos_netos_por_caja' => 5, 'activo' => true]);
+        $p['folio']->update(['datos_externos' => ['especie' => 'UVA', 'cantidad_cajas' => 180, 'envase_validacion_id' => $envase->id]]);
+        $lote = LoteInspeccionSag::create(['temporada_id' => $p['folio']->temporada_id, 'codigo' => 'CM-PRUEBA-1', 'operacion_id' => (string) Str::uuid(),
+            'payload_hash' => hash('sha256', 'prueba'), 'tipo' => 'cambio_mercado', 'estado' => 'preparacion', 'creado_por_user_id' => $p['usuario']->id]);
+        $lote->folios()->create(['folio_id' => $p['folio']->id, 'estado' => 'pendiente', 'estado_sag_anterior' => ['destinos' => ['China', 'Taiwán']]]);
+        $pais = Pais::where('iso_alpha2', 'VN')->firstOrFail();
+        $lote->destinos()->create(['tipo_destino' => 'pais', 'pais_id' => $pais->id, 'destino_snapshot' => ['codigo' => 'VN', 'nombre' => 'Vietnam']]);
+        $this->getJson('/api/contraparte-sag/fuentes/cambio_mercado/'.$lote->codigo)->assertOk()
+            ->assertJsonPath('lineas.0.kilos', 900)->assertJsonPath('lineas.0.mercados_anteriores', 'China - Taiwán')->assertJsonPath('lineas.0.nuevo_destino', 'Vietnam');
+        $entrada = [...$p['entrada'], 'tipo' => 'cambio_mercado', 'lote_inspeccion_sag_id' => $lote->id,
+            'encabezado' => ['programa' => 'ORIGEN', 'motivo' => 'DECISIÓN COMERCIAL'],
+            'actividades' => [$p['folio']->id => ['tipo' => 'INSPECCIÓN', 'numero' => '1513']]];
+        unset($entrada['folios']);
+        $doc = $this->postJson('/api/contraparte-sag/documentos', $entrada)->assertCreated()->json();
+        $this->postJson('/api/contraparte-sag/documentos/'.$doc['id'].'/emitir', ['operacion_id' => (string) Str::uuid(), 'version' => 1])
+            ->assertOk()->assertJsonPath('formato_snapshot.codigo', 'F-CER-PPS-PA-002')->assertJsonPath('detalle.lineas.0.kilos', 900);
+        $this->assertDatabaseCount('autorizaciones_sag_folio', 0);
+        $this->assertSame('preparacion', $lote->fresh()->estado->value);
     }
 }

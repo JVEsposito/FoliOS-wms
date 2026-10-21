@@ -7,7 +7,7 @@ let source = null;
 let selected = [];
 let selectedDocument = null;
 let pendingOperation = null;
-const labels = { repaletizaje: 'Repaletizaje', anulacion: 'Anulación / devolución' };
+const labels = { repaletizaje: 'Repaletizaje', anulacion: 'Anulación / devolución', cambio_mercado: 'Cambio de mercado' };
 const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 async function run(action) { try { await action(); } catch (error) { sagNotice(error.message, true); } }
 
@@ -26,18 +26,23 @@ async function list(page = 1) {
 }
 
 function lines() {
-    const isRepa = $('scDocumentForm').elements.tipo.value === 'repaletizaje';
-    $('scRepaSource').classList.toggle('is-hidden', !isRepa);
-    $('scFolioSource').classList.toggle('is-hidden', isRepa);
+    const type = $('scDocumentForm').elements.tipo.value;
+    const isRepa = type === 'repaletizaje'; const isMarket = type === 'cambio_mercado';
+    $('scRepaSource').classList.toggle('is-hidden', !isRepa && !isMarket);
+    $('scFolioSource').classList.toggle('is-hidden', isRepa || isMarket);
+    $('scSourceLabel').textContent = isMarket ? 'Número de lote de cambio de mercado' : 'Número REPA';
+    $('scLoadRepa').textContent = isMarket ? 'Cargar lote' : 'Cargar repa';
+    document.querySelectorAll('[data-market]').forEach((el) => { el.hidden = !isMarket; });
     const rows = isRepa ? source?.originales || [] : selected;
-    $('scDocumentLines').innerHTML = `<table><thead><tr><th>Folio</th><th>Especie</th><th>Cajas</th><th>Última actividad</th><th>N° actividad</th>${isRepa ? '' : '<th>Causal</th><th></th>'}</tr></thead><tbody>${rows.map((l, i) => `<tr><td>${esc(l.folio)}</td><td>${esc(l.especie)}</td><td>${isRepa ? esc(l.cantidad) : `<input aria-label="Cajas ${esc(l.folio)}" type="number" min="1" max="${esc(l.maximo || l.cantidad)}" data-line="${i}" data-field="cantidad" value="${esc(l.cantidad)}">`}</td><td><input aria-label="Actividad ${esc(l.folio)}" maxlength="100" data-line="${i}" data-field="tipo_actividad" value="${esc(l.tipo_actividad)}"></td><td><input aria-label="Número actividad ${esc(l.folio)}" maxlength="100" data-line="${i}" data-field="numero_actividad" value="${esc(l.numero_actividad)}"></td>${isRepa ? '' : `<td><input aria-label="Causal ${esc(l.folio)}" maxlength="250" required data-line="${i}" data-field="causal" value="${esc(l.causal)}"></td><td><button type="button" data-remove="${i}">Quitar</button></td>`}</tr>`).join('')}</tbody></table>${isRepa && source ? `<p>Resultado: ${source.resultados.map((r) => `${esc(r.folio)} (${esc(r.cantidad)} cajas)`).join(', ')}</p>` : ''}`;
+    const input = (l, i, field, label, extra = '') => `<input aria-label="${label} ${esc(l.folio)}" data-line="${i}" data-field="${field}" value="${esc(l[field] ?? '')}" ${extra}>`;
+    $('scDocumentLines').innerHTML = `<table><thead><tr><th>Folio</th><th>Especie</th><th>Cajas</th><th>Última actividad</th><th>N° actividad</th>${isMarket ? '<th>Kilos</th><th>Destino aprobado</th><th>Nuevo destino</th>' : isRepa ? '' : '<th>Causal</th><th></th>'}</tr></thead><tbody>${rows.map((l, i) => `<tr><td>${esc(l.folio)}</td><td>${esc(l.especie)}</td><td>${isRepa || isMarket ? esc(l.cantidad) : input(l, i, 'cantidad', 'Cajas', `type="number" min="1" max="${esc(l.maximo || l.cantidad)}"`)}</td><td>${input(l, i, 'tipo_actividad', 'Actividad', 'maxlength="100"')}</td><td>${input(l, i, 'numero_actividad', 'Número actividad', 'maxlength="100"')}</td>${isMarket ? `<td>${input(l, i, 'kilos', 'Kilos', 'type="number" min="0.0001" step="0.0001"')}</td><td>${input(l, i, 'mercados_anteriores', 'Destino aprobado', 'maxlength="1000"')}</td><td>${esc(l.nuevo_destino)}</td>` : isRepa ? '' : `<td>${input(l, i, 'causal', 'Causal', 'maxlength="250" required')}</td><td><button type="button" data-remove="${i}">Quitar</button></td>`}</tr>`).join('')}</tbody></table>${isRepa && source ? `<p>Resultado: ${source.resultados.map((r) => `${esc(r.folio)} (${esc(r.cantidad)} cajas)`).join(', ')}</p>` : ''}`;
 }
 
-function edit(document = null) {
-    draft = document; source = document?.tipo === 'repaletizaje' ? structuredClone(document.detalle) : null;
-    selected = document?.tipo === 'anulacion' ? structuredClone(document.detalle.lineas) : [];
+function edit(document = null, type = 'repaletizaje') {
+    draft = document; source = ['repaletizaje', 'cambio_mercado'].includes(document?.tipo) ? structuredClone(document.detalle) : null;
+    selected = ['anulacion', 'cambio_mercado'].includes(document?.tipo) ? structuredClone(document.detalle.lineas) : [];
     const form = $('scDocumentForm'); form.reset(); people();
-    form.elements.tipo.value = document?.tipo || 'repaletizaje'; form.elements.tipo.disabled = Boolean(document);
+    form.elements.tipo.value = document?.tipo || type; form.elements.tipo.disabled = Boolean(document);
     form.elements.fecha_actividad.value = document?.fecha_actividad.slice(0, 10) || today();
     form.elements.responsable_id.value = document?.responsable_id || '';
     for (const [key, value] of Object.entries(document?.encabezado || {})) if (form.elements[key]) form.elements[key].value = value;
@@ -48,10 +53,11 @@ function edit(document = null) {
 
 async function save() {
     const form = $('scDocumentForm'); const type = form.elements.tipo.value;
-    if (type === 'repaletizaje' && !source) throw new Error('Carga primero la repa.');
+    if (['repaletizaje', 'cambio_mercado'].includes(type) && !source) throw new Error('Carga primero la repa.');
     const data = { tipo: type, version: draft?.version || 0, responsable_id: form.elements.responsable_id.value, fecha_actividad: form.elements.fecha_actividad.value,
-        encabezado: { observaciones: form.elements.observaciones.value, certificados: Number(form.elements.certificados.value), certificados_devueltos: Number(form.elements.certificados_devueltos.value), certificados_asignados: Number(form.elements.certificados_asignados.value) } };
+        encabezado: { observaciones: form.elements.observaciones.value, programa: form.elements.programa.value, motivo: form.elements.motivo.value, certificados: Number(form.elements.certificados.value), certificados_devueltos: Number(form.elements.certificados_devueltos.value), certificados_asignados: Number(form.elements.certificados_asignados.value) } };
     if (type === 'repaletizaje') { data.repaletizaje_id = source.repaletizaje_id; data.actividades = Object.fromEntries(source.originales.map((l) => [l.folio_id, { tipo: l.tipo_actividad, numero: l.numero_actividad }])); }
+    else if (type === 'cambio_mercado') { data.lote_inspeccion_sag_id = source.lote_inspeccion_sag_id; data.kilos = Object.fromEntries(selected.filter((l) => l.kilos !== null && l.kilos !== '').map((l) => [l.folio_id, Number(l.kilos)])); data.mercados_anteriores = Object.fromEntries(selected.map((l) => [l.folio_id, l.mercados_anteriores])); data.actividades = Object.fromEntries(selected.map((l) => [l.folio_id, { tipo: l.tipo_actividad, numero: l.numero_actividad }])); }
     else data.folios = selected.map((l) => ({ folio_id: l.folio_id, cantidad: Number(l.cantidad), causal: l.causal, tipo_actividad: l.tipo_actividad, numero_actividad: l.numero_actividad }));
     const signature = JSON.stringify(data); if (!pendingOperation || pendingOperation.signature !== signature) pendingOperation = { signature, id: crypto.randomUUID() };
     data.operacion_id = pendingOperation.id;
@@ -84,7 +90,7 @@ export async function init() {
         $('scDocuments').onclick = (e) => { const b = e.target.closest('[data-document]'); if (b) run(() => open(b.dataset.document)); };
         $('scDocumentPages').onclick = (e) => { const b = e.target.closest('[data-page]'); if (b) run(() => list(Number(b.dataset.page))); };
         $('scDocumentForm').elements.tipo.onchange = () => { source = null; selected = []; lines(); };
-        $('scLoadRepa').onclick = () => run(async () => { source = await sagApi(`/fuentes/repaletizaje/${encodeURIComponent($('scRepaReference').value.trim())}`); $('scDocumentForm').elements.fecha_actividad.value = source.fecha_actividad; lines(); });
+        $('scLoadRepa').onclick = () => run(async () => { source = await sagApi(`/fuentes/${$('scDocumentForm').elements.tipo.value}/${encodeURIComponent($('scRepaReference').value.trim())}`); selected = source.lineas ? structuredClone(source.lineas) : []; $('scDocumentForm').elements.fecha_actividad.value = source.fecha_actividad; lines(); });
         $('scAddFolio').onclick = () => run(async () => { const l = await sagApi(`/folios/${encodeURIComponent($('scAddFolioNumber').value.trim())}`); if (selected.some((r) => r.folio_id === l.folio_id)) throw new Error('El folio ya está agregado.'); selected.push({ ...l, maximo: l.cantidad, causal: '' }); $('scAddFolioNumber').value = ''; lines(); });
         $('scAddFolioNumber').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); $('scAddFolio').click(); } };
         $('scDocumentLines').oninput = (e) => { const input = e.target.closest('[data-line]'); if (input) { const rows = $('scDocumentForm').elements.tipo.value === 'repaletizaje' ? source.originales : selected; rows[Number(input.dataset.line)][input.dataset.field] = input.value; } };
@@ -104,5 +110,6 @@ export async function init() {
     }
     people(); await list();
     const params = new URLSearchParams(location.search);
+    if (params.get('lote')) { document.querySelector('[data-panel="documentos"]').click(); edit(null, 'cambio_mercado'); $('scRepaReference').value = params.get('lote'); $('scLoadRepa').click(); }
     if (params.get('repa')) { document.querySelector('[data-panel="documentos"]').click(); edit(); $('scRepaReference').value = params.get('repa'); $('scLoadRepa').click(); }
 }
