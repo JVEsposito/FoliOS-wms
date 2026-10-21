@@ -60,7 +60,7 @@
             ['key' => 'operacion-ahora', 'module' => 'gerencia.panel', 'label' => 'Operación ahora', 'href' => '/oficina/operacion-ahora', 'permissions' => ['puede_consultar_panel_gerencial']],
         ],
         'administracion' => [
-            ['key' => 'resumen', 'module' => '', 'label' => 'Resumen', 'href' => '/oficina/administracion', 'permissions' => ['puede_consultar_panel_gerencial', 'puede_consultar_accesos', 'puede_administrar_catalogos_validacion', 'puede_consultar_configuracion_camaras', 'puede_consultar_integridad_operacional', 'puede_consultar_finanzas', 'puede_consultar_proveedores_finanzas', 'puede_consultar_comex', 'puede_consultar_rrhh', 'puede_marcar_rrhh']],
+            ['key' => 'resumen', 'module' => '', 'label' => 'Resumen', 'href' => '/oficina/administracion', 'permissions' => ['puede_consultar_panel_gerencial', 'puede_consultar_accesos', 'puede_administrar_catalogos_validacion', 'puede_consultar_configuracion_camaras', 'puede_consultar_integridad_operacional', 'puede_consultar_finanzas', 'puede_consultar_proveedores_finanzas', 'puede_consultar_comex', 'puede_consultar_comercial_comex', 'puede_consultar_rrhh', 'puede_marcar_rrhh']],
             ['key' => 'accesos', 'module' => 'administracion.accesos', 'label' => 'Accesos & Temporadas', 'href' => '/oficina/accesos', 'permissions' => ['puede_consultar_accesos']],
             ['key' => 'fruta-embalada', 'module' => 'administracion.accesos', 'label' => 'Plantas y umbrales de prefrío', 'href' => '/oficina/administracion/fruta-embalada', 'permissions' => ['puede_administrar_accesos']],
             ['key' => 'maestros-temporada', 'module' => 'administracion.maestros-temporada', 'label' => 'Maestros de temporada', 'href' => '/oficina/administracion/maestros-temporada', 'permissions' => ['puede_administrar_catalogos_validacion']],
@@ -75,6 +75,7 @@
             ['key' => 'rrhh-marcaje', 'module' => 'rrhh.marcaje', 'section' => 'Recursos humanos', 'label' => 'Puesto de marcaje', 'href' => '/oficina/rrhh/marcaje', 'permissions' => ['puede_marcar_rrhh']],
             ['key' => 'comex-expedientes', 'module' => 'comex.expedientes', 'section' => 'Comercio exterior', 'label' => 'Expedientes de embarque', 'href' => '/oficina/comex/expedientes', 'permissions' => ['puede_consultar_comex']],
             ['key' => 'comex-configuracion', 'module' => 'comex.configuracion', 'section' => 'Comercio exterior', 'label' => 'Configuración Comex', 'href' => '/oficina/comex/configuracion', 'permissions' => ['puede_consultar_comex']],
+            ['key' => 'comex-comercial', 'module' => 'comex.comercial', 'section' => 'Comercio exterior', 'label' => 'Actores y lugares', 'href' => '/oficina/comex/comercial', 'permissions' => ['puede_consultar_comercial_comex']],
         ],
         'consultas' => [
             ['key' => 'resumen', 'module' => '', 'label' => 'Resumen', 'href' => '/oficina/consultas', 'permissions' => ['puede_consultar_oficina_consultas', 'puede_consultar_sag']],

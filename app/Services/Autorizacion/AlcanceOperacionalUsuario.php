@@ -308,6 +308,21 @@ class AlcanceOperacionalUsuario
         );
     }
 
+    public function puedeConsultarComercialComex(User $usuario): bool
+    {
+        return $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador, RolUsuario::Consulta], CatalogoModulosAcceso::COMEX_COMERCIAL);
+    }
+
+    public function puedeGestionarComercialComex(User $usuario): bool
+    {
+        return $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador], CatalogoModulosAcceso::COMEX_COMERCIAL);
+    }
+
+    public function puedeAprobarComercialComex(User $usuario): bool
+    {
+        return $this->puedeGestionarComercialComex($usuario) && $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador], CatalogoModulosAcceso::COMEX_APROBACIONES);
+    }
+
     /** Registrar documentos y respaldos de los embarques. */
     public function puedeGestionarDocumentosComex(User $usuario): bool
     {
@@ -1225,6 +1240,9 @@ class AlcanceOperacionalUsuario
             'puede_consultar_comex' => $this->puedeConsultarComex($usuario),
             'puede_gestionar_documentos_comex' => $this->puedeGestionarDocumentosComex($usuario),
             'puede_configurar_comex' => $this->puedeConfigurarComex($usuario),
+            'puede_consultar_comercial_comex' => $this->puedeConsultarComercialComex($usuario),
+            'puede_gestionar_comercial_comex' => $this->puedeGestionarComercialComex($usuario),
+            'puede_aprobar_comercial_comex' => $this->puedeAprobarComercialComex($usuario),
             'puede_consultar_prefrio' => $this->puedeConsultarPrefrio($usuario),
             'puede_consultar_contraparte_sag' => $this->puedeConsultarContraparteSag($usuario),
             'puede_gestionar_contraparte_sag' => $this->puedeGestionarContraparteSag($usuario),

@@ -31,6 +31,10 @@ class CatalogoModulosAcceso
 
     public const OFICINA_COMEX_CONFIGURACION = 'comex.configuracion';
 
+    public const COMEX_COMERCIAL = 'comex.comercial';
+
+    public const COMEX_APROBACIONES = 'comex.aprobaciones';
+
     public const OFICINA_CATALOGOS_VALIDACION_LEGADO = 'frigorifico.catalogos';
 
     public const TABLET_PORTERIA = 'porteria';
@@ -167,6 +171,8 @@ class CatalogoModulosAcceso
                 'modulos' => [
                     $this->modulo(self::OFICINA_COMEX_EXPEDIENTES, 'Expedientes de embarque', 'Documentos de cada embarque, respaldos y packing list.'),
                     $this->modulo(self::OFICINA_COMEX_CONFIGURACION, 'Configuración Comex', 'Documentos que se exigen por destino, transporte y cliente.'),
+                    $this->modulo(self::COMEX_COMERCIAL, 'Gestión comercial COMEX', 'Actores, lugares, notas de venta y reservas comerciales.'),
+                    $this->modulo(self::COMEX_APROBACIONES, 'Aprobaciones comerciales COMEX', 'Revisar acuerdos comerciales. Requiere Gestión comercial COMEX.'),
                 ],
             ],
         ];

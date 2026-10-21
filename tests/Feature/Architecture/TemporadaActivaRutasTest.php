@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Architecture;
 
+use App\Comex\Models\LugarComercial;
+use App\Comex\Models\ParteComercial;
 use App\Comex\Models\TipoDocumento;
 use App\Finanzas\Models\AplicacionProveedor;
 use App\Finanzas\Models\CargoAcordado;
@@ -45,6 +47,8 @@ class TemporadaActivaRutasTest extends TestCase
 {
     /** @var array<class-string<Model>, string> */
     private const EXENTOS = [
+        ParteComercial::class => 'identidad comercial global; documentos vigentes entre temporadas',
+        LugarComercial::class => 'catálogo logístico global en base Comex, sin inventario físico',
         ExpedienteContratista::class => 'control de empresa, faena y mes; las obligaciones laborales continúan después de cerrar una temporada',
         AntecedenteContratista::class => 'antecedente laboral/previsional de RRHH por período, con revisión documental independiente de temporada',
         RetencionContratista::class => 'anotación de retención comercial respaldada por fecha; no modifica existencias ni ejecución operacional',

@@ -83,6 +83,7 @@ export default defineConfig({
                 'resources/css/office-comex.css',
                 'resources/js/office-comex-files.js',
                 'resources/js/office-comex-settings.js',
+                'resources/js/office-comex-commercial.js',
                 'resources/css/office-inventory-exports.css',
                 'resources/js/office-inventory-exports.js',
                 'resources/css/office-weighbridge.css',

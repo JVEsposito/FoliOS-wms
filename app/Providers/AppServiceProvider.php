@@ -274,6 +274,9 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('consultar-comex', fn (User $usuario): bool => $alcance->puedeConsultarComex($usuario));
         Gate::define('gestionar-documentos-comex', fn (User $usuario): bool => $alcance->puedeGestionarDocumentosComex($usuario));
         Gate::define('configurar-comex', fn (User $usuario): bool => $alcance->puedeConfigurarComex($usuario));
+        Gate::define('consultar-comercial-comex', fn (User $usuario): bool => $alcance->puedeConsultarComercialComex($usuario));
+        Gate::define('gestionar-comercial-comex', fn (User $usuario): bool => $alcance->puedeGestionarComercialComex($usuario));
+        Gate::define('aprobar-comercial-comex', fn (User $usuario): bool => $alcance->puedeAprobarComercialComex($usuario));
         Gate::define(
             'reiniciar-datos-operacionales',
             fn (User $usuario): bool => $usuario->activo
