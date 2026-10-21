@@ -264,6 +264,8 @@ class AppServiceProvider extends ServiceProvider
             fn (User $usuario): bool => $alcance->puedeReabrirPrefacturaFinanzas($usuario),
         );
         Gate::define('consultar-rrhh', fn (User $usuario): bool => $alcance->puedeConsultarRrhh($usuario));
+        Gate::define('consultar-remuneraciones-rrhh', fn (User $usuario): bool => $alcance->puedeConsultarRemuneracionesRrhh($usuario));
+        Gate::define('gestionar-remuneraciones-rrhh', fn (User $usuario): bool => $alcance->puedeGestionarRemuneracionesRrhh($usuario));
         Gate::define('gestionar-rrhh', fn (User $usuario): bool => $alcance->puedeGestionarRrhh($usuario));
         Gate::define('marcar-rrhh', fn (User $usuario): bool => $alcance->puedeMarcarRrhh($usuario));
         Gate::define('consultar-comex', fn (User $usuario): bool => $alcance->puedeConsultarComex($usuario));

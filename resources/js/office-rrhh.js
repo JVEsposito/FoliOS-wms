@@ -1,3 +1,4 @@
+import { initNomina } from './office-rrhh-nomina';
 import { attendanceIssueText, importRows, newOperationId, sourceConfiguration } from './shared/rrhh-logic';
 
 const $ = (id) => document.getElementById(id);
@@ -53,11 +54,12 @@ if (clock) {
         } catch (e) { message(e.message); } finally { button.disabled = false; }
     });
 } else {
+    initNomina({ api, capability, escape, table, choices, open, pages, message });
     const dates = $('rhDatesForm');
     const today = new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
     dates.elements.desde.value = today; dates.elements.hasta.value = today;
     $('rhDeviceZone').textContent = `Horario del equipo: ${Intl.DateTimeFormat().resolvedOptions().timeZone}. Duración máxima: 24 horas.`;
-    for (const form of document.querySelectorAll('.rh-dialog form')) form.addEventListener('submit', submitDialog);
+    for (const form of document.querySelectorAll('.rh-dialog form:not([data-nomina-form])')) form.addEventListener('submit', submitDialog);
     document.addEventListener('click', async (event) => {
         const close = event.target.closest('[data-rh-close]'); if (close) return close.closest('dialog').close();
         const tab = event.target.closest('[data-rh-tab]');

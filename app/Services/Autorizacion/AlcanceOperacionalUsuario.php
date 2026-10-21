@@ -268,6 +268,16 @@ class AlcanceOperacionalUsuario
         return $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador], CatalogoModulosAcceso::OFICINA_RRHH_PERSONAL);
     }
 
+    public function puedeConsultarRemuneracionesRrhh(User $usuario): bool
+    {
+        return $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador, RolUsuario::Consulta], CatalogoModulosAcceso::OFICINA_RRHH_REMUNERACIONES);
+    }
+
+    public function puedeGestionarRemuneracionesRrhh(User $usuario): bool
+    {
+        return $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador], CatalogoModulosAcceso::OFICINA_RRHH_REMUNERACIONES);
+    }
+
     public function puedeMarcarRrhh(User $usuario): bool
     {
         return $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador], CatalogoModulosAcceso::OFICINA_RRHH_MARCAJE);
@@ -1179,6 +1189,8 @@ class AlcanceOperacionalUsuario
             'puede_reabrir_prefactura_finanzas' => $this->puedeReabrirPrefacturaFinanzas($usuario),
             'puede_consultar_rrhh' => $this->puedeConsultarRrhh($usuario),
             'puede_gestionar_rrhh' => $this->puedeGestionarRrhh($usuario),
+            'puede_consultar_remuneraciones_rrhh' => $this->puedeConsultarRemuneracionesRrhh($usuario),
+            'puede_gestionar_remuneraciones_rrhh' => $this->puedeGestionarRemuneracionesRrhh($usuario),
             'puede_marcar_rrhh' => $this->puedeMarcarRrhh($usuario),
             'puede_consultar_comex' => $this->puedeConsultarComex($usuario),
             'puede_gestionar_documentos_comex' => $this->puedeGestionarDocumentosComex($usuario),

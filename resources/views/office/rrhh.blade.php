@@ -39,7 +39,7 @@
                 <small>Marcaje operativo de FoliOS. Para emplearlo como registro laboral oficial se requiere autorización del sistema por la Dirección del Trabajo.</small>
             </section>
         @else
-            <nav class="rh-tabs" aria-label="Secciones RRHH"><button type="button" data-rh-tab="personal" aria-pressed="true">Personal</button><button type="button" data-rh-tab="dotacion" aria-pressed="false">Dotación y asistencia</button><button type="button" data-rh-tab="fuentes" aria-pressed="false">Integraciones</button></nav>
+            <nav class="rh-tabs" aria-label="Secciones RRHH"><button type="button" data-rh-tab="personal" aria-pressed="true">Personal</button><button type="button" data-rh-tab="dotacion" aria-pressed="false">Dotación y asistencia</button><button type="button" data-rh-tab="cargos" aria-pressed="false">Cargos</button><button type="button" data-rh-tab="nomina" id="rnTab" aria-pressed="false" hidden>Remuneraciones</button><button type="button" data-rh-tab="fuentes" aria-pressed="false">Integraciones</button></nav>
             <section class="panel" data-rh-panel="personal"><div class="rh-heading"><h2>Personal</h2><button type="button" class="primary-button" data-rh-manage id="rhNewPerson">Agregar persona</button></div>
                 <form id="rhSearchForm" class="rh-toolbar"><label><span>Nombre o código</span><input name="buscar" type="search" maxlength="100"></label><button class="secondary-button" type="submit">Buscar</button></form>
                 <div id="rhPeople" class="rh-table-scroll"></div><div id="rhPeoplePages" class="rh-toolbar"></div>
@@ -49,6 +49,7 @@
                 <p>Programe desde la ficha de cada persona. Las pausas reales se respaldan con salida y entrada. Las horas con incidencias requieren revisión.</p>
                 <div id="rhAssignments" class="rh-table-scroll"></div><div id="rhAssignmentPages" class="rh-toolbar"></div>
             </section>
+            @include('office.partials.rrhh-nomina')
             <section class="panel" data-rh-panel="fuentes" hidden><div class="rh-heading"><h2>Integraciones de marcaje</h2><button type="button" class="primary-button" id="rhNewSource" data-rh-manage>Agregar fuente</button></div>
                 <p>Recepción por lotes con vínculo explícito de personas. GeoVictoria admite registros Punch normalizados; la conexión automática requiere validar el contrato de la cuenta.</p>
                 <div id="rhSources"></div><pre id="rhIntegrationResult" class="rh-history" aria-live="polite"></pre>

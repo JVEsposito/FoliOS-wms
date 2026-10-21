@@ -1,5 +1,6 @@
 <?php
 
+use App\Rrhh\Http\NominaController as N;
 use App\Rrhh\Http\RrhhController as R;
 use Illuminate\Support\Facades\Route;
 
@@ -23,4 +24,29 @@ Route::middleware('auth:sanctum')->prefix('rrhh')->group(function (): void {
         Route::post('/fuentes/{fuente}/vinculos', [R::class, 'vincular'])->whereUuid('fuente');
     });
     Route::post('/fuentes/{fuente}/importar', [R::class, 'importar'])->whereUuid('fuente')->middleware(['can:gestionar-rrhh', 'throttle:rrhh-importaciones']);
+});
+
+Route::middleware('auth:sanctum')->prefix('rrhh')->group(function (): void {
+    Route::get('/cargos', [N::class, 'cargos'])->middleware('can:consultar-rrhh');
+    Route::middleware(['can:gestionar-rrhh', 'throttle:rrhh-gestion'])->group(function (): void {
+        Route::post('/cargos', [N::class, 'cargo']);
+        Route::put('/cargos/{cargo}', [N::class, 'editarCargo'])->whereUuid('cargo');
+    });
+    Route::middleware(['can:consultar-remuneraciones-rrhh', 'can:consultar-rrhh'])->prefix('nomina')->group(function (): void {
+        Route::get('/conceptos', [N::class, 'catalogo']);
+        Route::get('/personas/{persona}', [N::class, 'ficha'])->whereUuid('persona');
+        Route::get('/movimientos', [N::class, 'movimientos']);
+        Route::get('/historial', [N::class, 'historial']);
+        Route::middleware(['can:gestionar-remuneraciones-rrhh', 'throttle:rrhh-gestion'])->group(function (): void {
+            Route::post('/conceptos', [N::class, 'concepto']);
+            Route::patch('/conceptos/{concepto}', [N::class, 'activarConcepto'])->whereUuid('concepto');
+            Route::patch('/vigencias/{tipo}/{id}', [N::class, 'terminar'])->whereIn('tipo', ['condicion', 'pacto_concepto'])->whereUuid('id');
+            Route::post('/condiciones', [N::class, 'condicion']);
+            Route::post('/asignaciones', [N::class, 'pacto']);
+            Route::post('/parametros', [N::class, 'parametro']);
+            Route::post('/simular', [N::class, 'simular']);
+            Route::post('/movimientos', [N::class, 'crear']);
+            Route::patch('/movimientos/{movimiento}', [N::class, 'estado'])->whereUuid('movimiento');
+        });
+    });
 });

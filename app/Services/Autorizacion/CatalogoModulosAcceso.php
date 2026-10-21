@@ -17,6 +17,8 @@ class CatalogoModulosAcceso
 
     public const OFICINA_RRHH_PERSONAL = 'rrhh.personal';
 
+    public const OFICINA_RRHH_REMUNERACIONES = 'rrhh.remuneraciones';
+
     public const OFICINA_RRHH_MARCAJE = 'rrhh.marcaje';
 
     public const OFICINA_COMEX_EXPEDIENTES = 'comex.expedientes';
@@ -143,6 +145,7 @@ class CatalogoModulosAcceso
                 'descripcion' => 'Personal, dotación por turno y asistencia operativa.',
                 'modulos' => [
                     $this->modulo(self::OFICINA_RRHH_PERSONAL, 'Personal y dotación', 'Personas, turnos asignados, asistencia e integraciones de marcaje.'),
+                    $this->modulo(self::OFICINA_RRHH_REMUNERACIONES, 'Remuneraciones RRHH', 'Condiciones laborales, conceptos, horas extra y novedades de remuneraciones.'),
                     $this->modulo(self::OFICINA_RRHH_MARCAJE, 'Puesto de marcaje', 'Registrar entrada y salida con código y PIN sin consultar fichas personales.'),
                 ],
             ],
