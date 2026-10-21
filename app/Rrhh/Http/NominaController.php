@@ -58,7 +58,8 @@ final class NominaController extends Controller
         $d = $r->validate(['codigo' => ['required', 'string', 'max:40', 'regex:/^[A-Z0-9_-]+$/'], 'nombre' => ['required', 'string', 'max:120'],
             'tipo' => ['required', 'in:haber,descuento,aporte_empleador'], 'calculo' => ['required', 'in:monto,porcentaje,horas_extra'],
             'remuneracion' => ['required', 'boolean'], 'imponible' => ['required', 'boolean'], 'tributable' => ['required', 'boolean'], 'base_he' => ['required', 'boolean'],
-            'grupo_descuento' => ['nullable', 'in:voluntario,vivienda,cooperativa,obligatorio,judicial'], 'codigo_lre' => ['nullable', 'string', 'max:40'],
+            'grupo_descuento' => ['nullable', 'in:voluntario,vivienda,cooperativa,obligatorio,judicial,ccaf,sindical,apv'], 'codigo_lre' => ['nullable', 'string', 'max:40'],
+            'institucion_id' => ['nullable', 'uuid', Rule::exists('rrhh.rh_instituciones', 'id')],
             'codigo_externo' => ['nullable', 'string', 'max:100'], 'fundamento' => ['required', 'string', 'min:10', 'max:1000'], 'activo' => ['required', 'boolean']]);
 
         return response()->json(['data' => $g->concepto($d, $r->user())], 201);
@@ -116,7 +117,7 @@ final class NominaController extends Controller
 
     public function parametro(Request $r, ConfiguracionNomina $g): JsonResponse
     {
-        $d = $r->validate([...$this->vigencia(), 'imm_general' => ['required', 'integer', 'min:1', 'max:999999999'], 'imm_menor_mayor' => ['required', 'integer', 'min:1', 'max:999999999'], 'respaldo' => ['required', 'string', 'min:10', 'max:1000']]);
+        $d = $r->validate([...$this->vigencia(), 'imm_general' => ['required', 'integer', 'min:1', 'max:999999999'], 'imm_menor_mayor' => ['required', 'integer', 'min:1', 'max:999999999'], 'imm_no_remuneracional' => ['nullable', 'integer', 'min:1', 'max:999999999'], 'respaldo' => ['required', 'string', 'min:10', 'max:1000']]);
 
         return response()->json(['data' => $g->parametro($d, $r->user())], 201);
     }
@@ -148,7 +149,7 @@ final class NominaController extends Controller
 
     public function historial(Request $r): JsonResponse
     {
-        $d = $r->validate(['entidad' => ['required', 'in:concepto_nomina,condicion,pacto_concepto,parametro_legal,movimiento_nomina'], 'registro_id' => ['required', 'uuid'], 'page' => ['nullable', 'integer', 'min:1']]);
+        $d = $r->validate(['entidad' => ['required', 'in:concepto_nomina,condicion,pacto_concepto,parametro_legal,movimiento_nomina,mandato_descuento'], 'registro_id' => ['required', 'uuid'], 'page' => ['nullable', 'integer', 'min:1']]);
         unset($d['page']);
 
         return response()->json(['data' => EventoRrhh::query()->where($d)->orderByDesc('id')->paginate(50)]);
@@ -158,12 +159,15 @@ final class NominaController extends Controller
     {
         $d = $r->validate(['operacion_id' => [$crear ? 'required' : 'nullable', 'uuid'], 'persona_id' => ['required', 'uuid', Rule::exists('rrhh.rh_personas', 'id')],
             'concepto_id' => ['required', 'uuid', Rule::exists('rrhh.rh_conceptos_nomina', 'id')], 'pacto_id' => ['nullable', 'uuid', Rule::exists('rrhh.rh_pactos_conceptos', 'id')],
+            'institucion_id' => ['nullable', 'uuid', Rule::exists('rrhh.rh_instituciones', 'id')], 'mandato_id' => ['nullable', 'uuid', Rule::exists('rrhh.rh_mandatos_descuento', 'id')],
+            'contrato_id' => ['nullable', 'uuid', Rule::exists('rrhh.rh_contratos', 'id')],
+            'liquido_legal' => $this->decimal(false), 'base_imponible' => $this->decimal(false), 'excepcion_ccaf' => ['nullable', 'in:vivienda_emergencia,salud'],
             'fecha' => ['required', 'date_format:Y-m-d'], 'cantidad' => $this->decimal(false), 'valor' => $this->decimal(false),
             'minutos' => ['nullable', 'integer', 'min:1', 'max:1440'], 'recargo' => ['nullable', 'string', 'regex:/^\d{1,3}(?:\.\d{1,4})?$/'],
             'respaldo_he' => ['nullable', 'in:pacto,conocimiento_empleador'], 'pacto_desde' => ['nullable', 'date_format:Y-m-d'],
             'pacto_hasta' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:pacto_desde'], 'remuneracion_bruta' => $this->decimal(false),
             'pago_directo_institucion' => ['sometimes', 'boolean'], 'autorizacion' => ['nullable', 'string', 'min:10', 'max:1000'], 'respaldo' => ['required', 'string', 'min:10', 'max:1000']]);
-        foreach (['cantidad', 'valor', 'recargo', 'remuneracion_bruta'] as $campo) {
+        foreach (['cantidad', 'valor', 'recargo', 'remuneracion_bruta', 'liquido_legal', 'base_imponible'] as $campo) {
             if (isset($d[$campo])) {
                 $d[$campo] = ReglasChile::texto(ReglasChile::decimal($d[$campo]));
             }

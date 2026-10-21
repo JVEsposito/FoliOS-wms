@@ -37,9 +37,9 @@ final class PrevisionController extends Controller
 
     public function contratos(Request $r): JsonResponse
     {
-        $d = $r->validate(['persona_id' => ['required', 'uuid'], 'page' => ['nullable', 'integer', 'min:1']]);
+        $d = $r->validate(['persona_id' => ['required', 'uuid'], 'vigente_en' => ['nullable', 'date_format:Y-m-d'], 'buscar' => ['nullable', 'string', 'max:100'], 'page' => ['nullable', 'integer', 'min:1']]);
 
-        return response()->json(['data' => ContratoLaboral::query()->where('persona_id', $d['persona_id'])->orderByDesc('desde')->orderBy('id')->paginate(25)]);
+        return response()->json(['data' => ContratoLaboral::query()->where('persona_id', $d['persona_id'])->when($d['vigente_en'] ?? null, fn ($q, $f) => $q->where('desde', '<=', $f)->where('hasta', '>=', $f))->when($d['buscar'] ?? null, fn ($q, $s) => $q->where('referencia', 'like', '%'.$s.'%'))->orderByDesc('desde')->orderBy('id')->paginate(25)]);
     }
 
     public function contrato(Request $r, RegistroPrevisional $g): JsonResponse

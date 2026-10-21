@@ -7,7 +7,7 @@ import { chromium } from 'playwright';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const launch = () => chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined, args: ['--no-sandbox', '--disable-gpu'] });
-async function setup(browser, { clock = false, manage = true, payroll = false, geo = false } = {}) {
+async function setup(browser, { clock = false, manage = true, payroll = false, geo = false, discounts = false } = {}) {
     const context = await browser.newContext({ viewport: { width: 390, height: 900 }, timezoneId: 'America/Santiago' });
     const identity = { nombre: 'RRHH Prueba', rol: manage ? 'administrador' : 'consulta', puede_consultar_rrhh: !clock, puede_consultar_remuneraciones_rrhh: payroll, puede_gestionar_remuneraciones_rrhh: payroll && manage, puede_marcar_rrhh: clock, modulos_acceso: [clock ? 'rrhh.marcaje' : 'rrhh.personal'] };
     const writes = []; const errors = [];
@@ -32,8 +32,9 @@ async function setup(browser, { clock = false, manage = true, payroll = false, g
         if (['/api/rrhh/prevision/contratos', '/api/rrhh/prevision/afiliaciones'].includes(path) && request.method() === 'GET') return route.fulfill({ json: { data: { data: [], current_page: 1, last_page: 1 } } });
         if (path === '/api/rrhh/prevision/afiliaciones' && request.method() === 'POST') { writes.push({ path, ...request.postDataJSON() }); return route.fulfill({ status: 201, json: { data: { id: 'afiliacion-1' } } }); }
         if (path === '/api/rrhh/nomina/movimientos' && request.method() === 'GET') return route.fulfill({ json: { data: { data: [], current_page: 1, last_page: 1 } } });
-        if (path === '/api/rrhh/nomina/simular') return route.fulfill({ json: { data: { total: '6667', base_he: '800000', valor_hora_ordinaria: '4444.444444', valor_hora_extra: '6666.666666', minutos: 60, incidencias: [] } } });
-        if (path === '/api/rrhh/nomina/movimientos' && request.method() === 'POST') { writes.push(request.postDataJSON()); return route.fulfill({ status: 201, json: { data: { id: 'novedad-1' } } }); }
+        if (path === '/api/rrhh/nomina/mandatos') return route.fulfill({ json: { data: { data: discounts ? [{ id: 'mandato-1', concepto_id: 'coop-1', concepto: { nombre: 'Crédito cooperativa', calculo: 'monto' }, institucion: { razon_social: 'Cooperativa de prueba' }, referencia: 'CRED-01', desde: '2026-10-01', hasta: '2027-12-31', cuota: '20000', deuda_total: '45000', saldo_por_descontar: '45000', descontado: '0', cuotas: 3, cuotas_descontadas: 0, respaldo: 'Autorización escrita y deuda verificadas' }] : [], current_page: 1, last_page: 1 } } });
+        if (path === '/api/rrhh/nomina/simular') return route.fulfill({ json: { data: request.postDataJSON().mandato_id ? { total: '20000', institucion: { razon_social: 'Cooperativa de prueba' } } : { total: '6667', base_he: '800000', valor_hora_ordinaria: '4444.444444', valor_hora_extra: '6666.666666', minutos: 60, incidencias: [] } } });
+        if (path === '/api/rrhh/nomina/movimientos' && request.method() === 'POST') { writes.push(request.postDataJSON()); if (discounts && writes.length === 1) return route.fulfill({ status: 503, json: { message: 'Reintente la misma cuota.' } }); return route.fulfill({ status: 201, json: { data: { id: 'novedad-1' } } }); }
         if (path === '/api/rrhh/asignaciones') return route.fulfill({ json: { data: { data: [{ id: 'asignacion-1', persona_nombre: 'Camarero Prueba', desde_at: '2026-11-02T01:00:00Z', hasta_at: '2026-11-02T09:00:00Z', estado: 'cancelada', horas_programadas: '7.5', horas_asistidas: '0', asistencia_valida: false, incidencias: ['sin_marcajes'], costo_programado: null }], current_page: 1, last_page: 1 } } });
         if (path === '/api/rrhh/marcajes' && request.method() === 'POST') {
             writes.push(request.postDataJSON());
@@ -124,5 +125,20 @@ test('afilia a salud con FUN y precio de plan Isapre y mantiene separado al empl
         for (const [name, value] of Object.entries({ desde: '2026-10-01', referencia: 'FUN-2026-001', precio_plan: '3.45', respaldo: 'FUN firmado y precio mensual revisado' })) await f.locator(`[name=${name}]`).fill(value);
         await f.locator('button[type=submit]').click(); await page.waitForFunction(() => !document.getElementById('rpAffiliationDialog').open);
         assert.equal(writes.length, 1); assert.equal(writes[0].persona_id, 'persona-1'); assert.equal(writes[0].empleador_id, undefined); assert.equal(writes[0].moneda_plan, 'UF'); assert.equal(writes[0].precio_plan, '3.45'); assert.deepEqual(errors, []); await context.close();
+    } finally { await browser.close(); }
+});
+
+test('prepara una cuota en borrador y reintenta con el mismo UUID sin aprobar ni modificar el saldo desde la pantalla', async () => {
+    const browser = await launch();
+    try {
+        const { page, context, writes, errors } = await setup(browser, { payroll: true, discounts: true });
+        await page.locator('#rnTab').click(); await page.waitForFunction(() => document.getElementById('rnPerson').options.length > 1);
+        await page.selectOption('#rnPerson', 'persona-1'); await page.locator('#rnMonth').fill('2026-10'); await page.locator('#rnLoad').click();
+        await page.locator('[data-rd-action=quota]').click(); await page.locator('#rdQuotaForm [name=remuneracion_bruta]').fill('1000000');
+        await page.locator('#rdSimulateQuota').click(); await page.waitForFunction(() => document.getElementById('rdQuotaPreview').textContent.includes('20.000 CLP'));
+        assert.equal(writes.length, 0);
+        await page.locator('#rdQuotaForm button[type=submit]').click(); await page.waitForFunction(() => document.querySelector('#rdQuotaForm [data-rh-error]').textContent.includes('Reintente'));
+        await page.locator('#rdQuotaForm button[type=submit]').click(); await page.waitForFunction(() => !document.getElementById('rdQuotaDialog').open);
+        assert.equal(writes.length, 2); assert.equal(writes[0].operacion_id, writes[1].operacion_id); assert.equal(writes[0].mandato_id, 'mandato-1'); assert.equal(writes[0].estado, undefined); assert.equal(writes[0].valor, undefined); assert.deepEqual(errors, []); await context.close();
     } finally { await browser.close(); }
 });

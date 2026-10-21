@@ -19,6 +19,8 @@ final class CalculadorNovedad
         if (! $concepto->activo) {
             $this->error('concepto_id', 'El concepto está inactivo.');
         }
+        $destino = app(DestinosNomina::class)->preparar($d, $concepto);
+        $d = $destino['entrada'];
         $pacto = null;
         if (! empty($d['pacto_id'])) {
             $pacto = PactoConcepto::query()->findOrFail($d['pacto_id']);
@@ -29,6 +31,14 @@ final class CalculadorNovedad
             $d['valor'] = $pacto->valor;
         }
         $resultado = ['regla' => ReglasChile::VERSION, 'concepto' => $concepto->toArray(), 'pacto' => $pacto?->toArray(), 'incidencias' => []];
+        if ($destino['institucion']) {
+            $resultado['institucion'] = $destino['institucion'];
+            $resultado['contrato'] = $destino['contrato'];
+        }
+        if ($destino['mandato']) {
+            $resultado['mandato'] = $destino['mandato'];
+            $resultado['entrada_mandato'] = array_intersect_key($d, array_flip(['cantidad', 'valor', 'institucion_id', 'autorizacion', 'pago_directo_institucion', 'excepcion_ccaf']));
+        }
         if ($concepto->calculo !== 'horas_extra') {
             $cantidad = $d['cantidad'] ?? null;
             $valor = $d['valor'] ?? null;

@@ -6,7 +6,7 @@ export function initNomina({ api, capability, escape, table, choices, open, page
     const canWrite = () => capability('puede_gestionar_remuneraciones_rrhh');
     const state = { cargos: [], concepts: [], person: null, people: [], cargo: null, movements: [], pact: null, operation: null, page: 1, movementPage: 1 };
     const safe = async (fn) => { try { await fn(); } catch (e) { message(e.message); } };
-    const labels = { haber: 'Haber', descuento: 'Descuento', aporte_empleador: 'Aporte empleador', monto: 'Monto', porcentaje: 'Porcentaje', horas_extra: 'Horas extra', voluntario: 'Voluntario 15%', vivienda: 'Vivienda / educación 30%', cooperativa: 'Cooperativa', obligatorio: 'Obligatorio', judicial: 'Judicial' };
+    const labels = { haber: 'Haber', descuento: 'Descuento', aporte_empleador: 'Aporte empleador', monto: 'Monto', porcentaje: 'Porcentaje', horas_extra: 'Horas extra', voluntario: 'Voluntario 15%', vivienda: 'Vivienda / educación 30%', cooperativa: 'Cooperativa', obligatorio: 'Obligatorio', judicial: 'Judicial', ccaf: 'Crédito CCAF', sindical: 'Cuota sindical', apv: 'APV' };
     const money = (v) => `${new Intl.NumberFormat('es-CL').format(v)} CLP`;
     const values = (form) => Object.fromEntries(new FormData(form));
     function permissions() {
@@ -103,7 +103,7 @@ export function initNomina({ api, capability, escape, table, choices, open, page
     async function save(form) {
         const d = values(form); const path = '/api/rrhh/nomina';
         if (form.id === 'rnCargoForm') { await api(`/api/rrhh/cargos${state.cargo ? `/${state.cargo.id}` : ''}`, state.cargo ? 'PUT' : 'POST', { ...d, activo: d.activo === '1', ...(state.cargo ? { version: state.cargo.version } : {}) }); return loadCargos(); }
-        if (form.id === 'rnConceptForm') { for (const k of ['remuneracion', 'imponible', 'tributable', 'base_he']) d[k] = d[k] === '1'; for (const k of ['grupo_descuento', 'codigo_lre', 'codigo_externo']) d[k] ||= null; await api(`${path}/conceptos`, 'POST', { ...d, activo: true }); return loadConcepts(); }
+        if (form.id === 'rnConceptForm') { for (const k of ['remuneracion', 'imponible', 'tributable', 'base_he']) d[k] = d[k] === '1'; for (const k of ['grupo_descuento', 'codigo_lre', 'codigo_externo', 'institucion_id']) d[k] ||= null; await api(`${path}/conceptos`, 'POST', { ...d, activo: true }); return loadConcepts(); }
         if (form.id === 'rnConditionForm') await api(`${path}/condiciones`, 'POST', { ...d, persona_id: state.person.id });
         if (form.id === 'rnPactForm') await api(`${path}/asignaciones`, 'POST', { ...d, persona_id: state.person.id });
         if (form.id === 'rnParameterForm') { await api(`${path}/parametros`, 'POST', d); return loadConcepts(); }

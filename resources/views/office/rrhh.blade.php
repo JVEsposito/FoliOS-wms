@@ -51,6 +51,7 @@
             </section>
             @include('office.partials.rrhh-nomina')
             @include('office.partials.rrhh-prevision')
+            @include('office.partials.rrhh-descuentos')
             <section class="panel" data-rh-panel="fuentes" hidden><div class="rh-heading"><h2>Integraciones de marcaje</h2><button type="button" class="primary-button" id="rhNewSource" data-rh-manage>Agregar fuente</button></div>
                 <p>Reciba lotes o consulte directamente el método Checkpoint de GeoVictoria, habilitado y confirmado para su cuenta. Los lotes quedan conservados para revisar incidencias y reintentar.</p>
                 <div id="rhSources"></div><pre id="rhIntegrationResult" class="rh-history" aria-live="polite"></pre>
