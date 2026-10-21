@@ -36,7 +36,7 @@ class CatalogoOficinas
         'frigorifico' => ['frigorifico.'],
         'materiales' => ['materiales.'],
         'gerencia' => ['gerencia.'],
-        'administracion' => ['administracion.', 'gerencia.', 'finanzas.', 'comex.'],
+        'administracion' => ['administracion.', 'gerencia.', 'finanzas.', 'comex.', 'rrhh.'],
         'consultas' => ['consultas.'],
     ];
 
@@ -85,7 +85,7 @@ class CatalogoOficinas
         ['materiales', 'Recetas', '/oficina/materiales/recetas', 'materiales.recetas', ['puede_consultar_transformaciones_materiales']],
         ['materiales', 'Órdenes', '/oficina/materiales/ordenes', 'materiales.ordenes', ['puede_consultar_transformaciones_materiales']],
         ['materiales', 'Existencias', '/oficina/materiales/exportaciones', 'materiales.exportaciones', ['puede_consultar_despachos_materiales']],
-        ['administracion', 'Resumen', '/oficina/administracion', '', ['puede_consultar_panel_gerencial', 'puede_consultar_accesos', 'puede_administrar_catalogos_validacion', 'puede_consultar_configuracion_camaras', 'puede_consultar_integridad_operacional', 'puede_consultar_finanzas', 'puede_consultar_comex']],
+        ['administracion', 'Resumen', '/oficina/administracion', '', ['puede_consultar_panel_gerencial', 'puede_consultar_accesos', 'puede_administrar_catalogos_validacion', 'puede_consultar_configuracion_camaras', 'puede_consultar_integridad_operacional', 'puede_consultar_finanzas', 'puede_consultar_proveedores_finanzas', 'puede_consultar_comex', 'puede_consultar_rrhh', 'puede_marcar_rrhh']],
         ['gerencia', 'Operación ahora', '/oficina/operacion-ahora', 'gerencia.panel', ['puede_consultar_panel_gerencial']],
         ['gerencia', 'Panel Gerencial', '/oficina/gerencia', 'gerencia.panel', ['puede_consultar_panel_gerencial']],
         ['administracion', 'Accesos & Temporadas', '/oficina/accesos', 'administracion.accesos', ['puede_consultar_accesos']],
@@ -96,7 +96,10 @@ class CatalogoOficinas
         ['administracion', 'Demo comercial', '/oficina/demo', '', ['puede_habilitar_demo']],
         ['administracion', 'Hechos valorizables', '/oficina/finanzas/hechos', 'finanzas.prefactura', ['puede_consultar_finanzas']],
         ['administracion', 'Tarifario', '/oficina/finanzas/tarifario', 'finanzas.prefactura', ['puede_consultar_finanzas']],
+        ['administracion', 'Proveedores', '/oficina/finanzas/proveedores', 'finanzas.proveedores', ['puede_consultar_proveedores_finanzas']],
         ['administracion', 'Prefactura', '/oficina/finanzas/prefactura', 'finanzas.prefactura', ['puede_consultar_finanzas']],
+        ['administracion', 'Personal y dotación', '/oficina/rrhh', 'rrhh.personal', ['puede_consultar_rrhh']],
+        ['administracion', 'Puesto de marcaje', '/oficina/rrhh/marcaje', 'rrhh.marcaje', ['puede_marcar_rrhh']],
         ['administracion', 'Expedientes de embarque', '/oficina/comex/expedientes', 'comex.expedientes', ['puede_consultar_comex']],
         ['administracion', 'Configuración Comex', '/oficina/comex/configuracion', 'comex.configuracion', ['puede_consultar_comex']],
         ['consultas', 'Resumen', '/oficina/consultas', '', ['puede_consultar_oficina_consultas', 'puede_consultar_sag']],

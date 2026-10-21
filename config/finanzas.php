@@ -20,6 +20,8 @@ return [
     // de solo lectura (y, idealmente, un usuario con permiso SELECT y nada más).
     'conexion_lectura' => env('FINANZAS_CONEXION_LECTURA', 'operacion_lectura'),
 
+    'conexion_rrhh' => env('FINANZAS_CONEXION_RRHH', 'rrhh_lectura'),
+
     'captura' => [
         // La captura programada corre cada 10 minutos; se puede pausar sin tocar la operación.
         'habilitada' => (bool) env('FINANZAS_CAPTURA_HABILITADA', true),

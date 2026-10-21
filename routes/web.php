@@ -75,6 +75,7 @@ Route::view('/oficina/validacion/pendientes', 'office.validation-pending');
 Route::redirect('/oficina/validacion/catalogo', '/oficina/administracion/maestros-temporada', 301);
 Route::view('/oficina/administracion/maestros-temporada', 'office.validation-catalog');
 Route::view('/oficina/administracion/integridad-operacional', 'office.operational-integrity');
+Route::view('/oficina/finanzas/proveedores', 'office.finance-suppliers');
 Route::view('/oficina/finanzas/hechos', 'office.finance-facts');
 Route::view('/oficina/finanzas/tarifario', 'office.finance-tariffs');
 Route::view('/oficina/finanzas/prefactura', 'office.finance-prebilling');
@@ -162,3 +163,6 @@ Route::view('/oficina/materiales/reposicion', 'office.material-replenishment');
 Route::view('/oficina/materiales/items/niveles', 'office.material-replenishment', ['niveles' => true]);
 
 Route::view('/oficina/materiales/items', 'office.material-items');
+
+Route::view('/oficina/rrhh', 'office.rrhh');
+Route::view('/oficina/rrhh/marcaje', 'office.rrhh-clock');

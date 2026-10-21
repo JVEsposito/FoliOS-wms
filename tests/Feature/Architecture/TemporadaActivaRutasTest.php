@@ -3,14 +3,28 @@
 namespace Tests\Feature\Architecture;
 
 use App\Comex\Models\TipoDocumento;
+use App\Finanzas\Models\AplicacionProveedor;
 use App\Finanzas\Models\CargoAcordado;
 use App\Finanzas\Models\ConceptoServicio;
 use App\Finanzas\Models\Diferencia;
+use App\Finanzas\Models\DocumentoCompra;
+use App\Finanzas\Models\EvaluacionProveedor;
 use App\Finanzas\Models\Moneda;
+use App\Finanzas\Models\PagoProveedor;
+use App\Finanzas\Models\ProveedorFinanciero;
 use App\Finanzas\Models\Tarifa;
 use App\Http\Middleware\AsegurarTemporadaActivaDelRegistro;
 use App\Models;
 use App\Models\Contracts\PerteneceATemporada;
+use App\Rrhh\Models\AsignacionPersonal;
+use App\Rrhh\Models\CargoLaboral;
+use App\Rrhh\Models\ConceptoNomina;
+use App\Rrhh\Models\EntregaNomina;
+use App\Rrhh\Models\FuenteMarcaje;
+use App\Rrhh\Models\LoteIntegracion;
+use App\Rrhh\Models\Marcaje;
+use App\Rrhh\Models\MovimientoNomina;
+use App\Rrhh\Models\Persona;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Routing\Route as RutaLaravel;
@@ -27,6 +41,20 @@ class TemporadaActivaRutasTest extends TestCase
 {
     /** @var array<class-string<Model>, string> */
     private const EXENTOS = [
+        PagoProveedor::class => 'registro de desembolso por fecha en base financiera propia',
+        AplicacionProveedor::class => 'aplicación de créditos por fecha contable, sin temporada',
+        EvaluacionProveedor::class => 'evaluación de proveedor por período en base financiera propia',
+        ProveedorFinanciero::class => 'ficha financiera global en base propia',
+        DocumentoCompra::class => 'documento recibido por fecha contable, independiente de temporada',
+        LoteIntegracion::class => 'recepción laboral persistida en base propia, reintento independiente de temporada',
+        EntregaNomina::class => 'acuse de novedad laboral en base propia, sin operación ni temporada',
+        CargoLaboral::class => 'catálogo laboral global, independiente de temporada',
+        ConceptoNomina::class => 'configuración laboral global con tratamiento histórico conservado',
+        MovimientoNomina::class => 'novedad laboral por fecha en base propia',
+        Persona::class => 'maestro laboral global, independiente de temporada',
+        AsignacionPersonal::class => 'dotación por fechas y turnos en base propia',
+        Marcaje::class => 'asistencia por instante en base propia, sin modificar operación',
+        FuenteMarcaje::class => 'configuración global de integración de asistencia',
         // Configuración física y maestros: no pertenecen a una temporada.
         Models\Anden::class => 'infraestructura física',
         Models\BandaOperacional::class => 'infraestructura física',

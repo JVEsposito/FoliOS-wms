@@ -13,7 +13,17 @@ class CatalogoModulosAcceso
 
     public const OFICINA_PORTERIA = 'materia-prima.porteria';
 
+    public const FINANZAS_PAGOS_PROVEEDORES = 'finanzas.pagos-proveedores';
+
+    public const OFICINA_FINANZAS_PROVEEDORES = 'finanzas.proveedores';
+
     public const OFICINA_FINANZAS_PREFACTURA = 'finanzas.prefactura';
+
+    public const OFICINA_RRHH_PERSONAL = 'rrhh.personal';
+
+    public const OFICINA_RRHH_REMUNERACIONES = 'rrhh.remuneraciones';
+
+    public const OFICINA_RRHH_MARCAJE = 'rrhh.marcaje';
 
     public const OFICINA_COMEX_EXPEDIENTES = 'comex.expedientes';
 
@@ -130,7 +140,19 @@ class CatalogoModulosAcceso
                 'nombre' => 'Finanzas',
                 'descripcion' => 'Conceptos operativos, acuerdos comerciales y valorización por cliente.',
                 'modulos' => [
+                    $this->modulo(self::FINANZAS_PAGOS_PROVEEDORES, 'Registro de pagos a proveedores', 'Registrar pagos, anticipos, aplicaciones y reversos. Requiere acceso a Proveedores.'),
+                    $this->modulo(self::OFICINA_FINANZAS_PROVEEDORES, 'Proveedores y compras', 'Ficha financiera, documentos recibidos, gastos y contabilidad de proveedores.'),
                     $this->modulo(self::OFICINA_FINANZAS_PREFACTURA, 'Hechos y prefactura', 'Hechos, cargos acordados aunque no se ejecuten, tarifario y prefactura por cliente.'),
+                ],
+            ],
+            [
+                'clave' => 'rrhh',
+                'nombre' => 'Recursos humanos',
+                'descripcion' => 'Personal, dotación por turno y asistencia operativa.',
+                'modulos' => [
+                    $this->modulo(self::OFICINA_RRHH_PERSONAL, 'Personal y dotación', 'Personas, turnos asignados, asistencia e integraciones de marcaje.'),
+                    $this->modulo(self::OFICINA_RRHH_REMUNERACIONES, 'Remuneraciones RRHH', 'Condiciones laborales, conceptos, horas extra y novedades de remuneraciones.'),
+                    $this->modulo(self::OFICINA_RRHH_MARCAJE, 'Puesto de marcaje', 'Registrar entrada y salida con código y PIN sin consultar fichas personales.'),
                 ],
             ],
             [

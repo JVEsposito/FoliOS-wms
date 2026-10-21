@@ -243,6 +243,9 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('consultar-porteria', fn (User $usuario): bool => $alcance->puedeConsultarPorteria($usuario));
         Gate::define('registrar-porteria', fn (User $usuario): bool => $alcance->puedeRegistrarPorteria($usuario));
         Gate::define('administrar-porteria', fn (User $usuario): bool => $alcance->puedeAdministrarPorteria($usuario));
+        Gate::define('registrar-pagos-proveedores', fn (User $usuario): bool => $alcance->puedeRegistrarPagosProveedores($usuario));
+        Gate::define('consultar-proveedores-finanzas', fn (User $usuario): bool => $alcance->puedeConsultarProveedoresFinanzas($usuario));
+        Gate::define('gestionar-proveedores-finanzas', fn (User $usuario): bool => $alcance->puedeGestionarProveedoresFinanzas($usuario));
         Gate::define(
             'consultar-finanzas',
             fn (User $usuario): bool => $alcance->puedeConsultarFinanzas($usuario),
@@ -263,6 +266,11 @@ class AppServiceProvider extends ServiceProvider
             'reabrir-prefactura-finanzas',
             fn (User $usuario): bool => $alcance->puedeReabrirPrefacturaFinanzas($usuario),
         );
+        Gate::define('consultar-rrhh', fn (User $usuario): bool => $alcance->puedeConsultarRrhh($usuario));
+        Gate::define('consultar-remuneraciones-rrhh', fn (User $usuario): bool => $alcance->puedeConsultarRemuneracionesRrhh($usuario));
+        Gate::define('gestionar-remuneraciones-rrhh', fn (User $usuario): bool => $alcance->puedeGestionarRemuneracionesRrhh($usuario));
+        Gate::define('gestionar-rrhh', fn (User $usuario): bool => $alcance->puedeGestionarRrhh($usuario));
+        Gate::define('marcar-rrhh', fn (User $usuario): bool => $alcance->puedeMarcarRrhh($usuario));
         Gate::define('consultar-comex', fn (User $usuario): bool => $alcance->puedeConsultarComex($usuario));
         Gate::define('gestionar-documentos-comex', fn (User $usuario): bool => $alcance->puedeGestionarDocumentosComex($usuario));
         Gate::define('configurar-comex', fn (User $usuario): bool => $alcance->puedeConfigurarComex($usuario));

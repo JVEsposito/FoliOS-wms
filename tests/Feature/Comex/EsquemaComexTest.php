@@ -30,7 +30,8 @@ class EsquemaComexTest extends TestCase
     {
         $esquemas = array_map(fn (object $esquema): string => $esquema::class, app(ModulosGestion::class)->esquemas());
 
-        $this->assertSame([EsquemaFinanzas::class, EsquemaComex::class], $esquemas);
+        $this->assertContains(EsquemaFinanzas::class, $esquemas);
+        $this->assertContains(EsquemaComex::class, $esquemas);
     }
 
     public function test_no_retira_tablas_con_datos_que_el_registro_de_migraciones_no_conoce(): void

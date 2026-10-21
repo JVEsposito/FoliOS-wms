@@ -214,6 +214,21 @@ class AlcanceOperacionalUsuario
     }
 
     /** Finanzas no es parte de ningún rol operativo: solo administración o un perfil que lo incluya. */
+    public function puedeRegistrarPagosProveedores(User $usuario): bool
+    {
+        return $this->puedeConsultarProveedoresFinanzas($usuario) && $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador], CatalogoModulosAcceso::FINANZAS_PAGOS_PROVEEDORES);
+    }
+
+    public function puedeConsultarProveedoresFinanzas(User $usuario): bool
+    {
+        return $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador, RolUsuario::Consulta], CatalogoModulosAcceso::OFICINA_FINANZAS_PROVEEDORES);
+    }
+
+    public function puedeGestionarProveedoresFinanzas(User $usuario): bool
+    {
+        return $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador], CatalogoModulosAcceso::OFICINA_FINANZAS_PROVEEDORES);
+    }
+
     public function puedeConsultarFinanzas(User $usuario): bool
     {
         return $this->rolActivoEnModulo(
@@ -256,6 +271,31 @@ class AlcanceOperacionalUsuario
     public function puedeReabrirPrefacturaFinanzas(User $usuario): bool
     {
         return $usuario->rol === RolUsuario::Administrador && $this->puedeCerrarPrefacturaFinanzas($usuario);
+    }
+
+    public function puedeConsultarRrhh(User $usuario): bool
+    {
+        return $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador, RolUsuario::Consulta], CatalogoModulosAcceso::OFICINA_RRHH_PERSONAL);
+    }
+
+    public function puedeGestionarRrhh(User $usuario): bool
+    {
+        return $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador], CatalogoModulosAcceso::OFICINA_RRHH_PERSONAL);
+    }
+
+    public function puedeConsultarRemuneracionesRrhh(User $usuario): bool
+    {
+        return $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador, RolUsuario::Consulta], CatalogoModulosAcceso::OFICINA_RRHH_REMUNERACIONES);
+    }
+
+    public function puedeGestionarRemuneracionesRrhh(User $usuario): bool
+    {
+        return $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador], CatalogoModulosAcceso::OFICINA_RRHH_REMUNERACIONES);
+    }
+
+    public function puedeMarcarRrhh(User $usuario): bool
+    {
+        return $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador], CatalogoModulosAcceso::OFICINA_RRHH_MARCAJE);
     }
 
     /** Comex no es parte de ningún rol operativo: solo administración o un perfil que lo incluya. */
@@ -1157,11 +1197,19 @@ class AlcanceOperacionalUsuario
             'puede_consultar_configuracion_camaras' => $this->puedeConsultarConfiguracionCamaras($usuario),
             'puede_consultar_integridad_operacional' => $this->puedeConsultarIntegridadOperacional($usuario),
             'puede_ejecutar_integridad_operacional' => $this->puedeEjecutarIntegridadOperacional($usuario),
+            'puede_registrar_pagos_proveedores' => $this->puedeRegistrarPagosProveedores($usuario),
+            'puede_consultar_proveedores_finanzas' => $this->puedeConsultarProveedoresFinanzas($usuario),
+            'puede_gestionar_proveedores_finanzas' => $this->puedeGestionarProveedoresFinanzas($usuario),
             'puede_consultar_finanzas' => $this->puedeConsultarFinanzas($usuario),
             'puede_capturar_hechos_finanzas' => $this->puedeCapturarHechosFinanzas($usuario),
             'puede_gestionar_tarifas_finanzas' => $this->puedeGestionarTarifasFinanzas($usuario),
             'puede_cerrar_prefactura_finanzas' => $this->puedeCerrarPrefacturaFinanzas($usuario),
             'puede_reabrir_prefactura_finanzas' => $this->puedeReabrirPrefacturaFinanzas($usuario),
+            'puede_consultar_rrhh' => $this->puedeConsultarRrhh($usuario),
+            'puede_gestionar_rrhh' => $this->puedeGestionarRrhh($usuario),
+            'puede_consultar_remuneraciones_rrhh' => $this->puedeConsultarRemuneracionesRrhh($usuario),
+            'puede_gestionar_remuneraciones_rrhh' => $this->puedeGestionarRemuneracionesRrhh($usuario),
+            'puede_marcar_rrhh' => $this->puedeMarcarRrhh($usuario),
             'puede_consultar_comex' => $this->puedeConsultarComex($usuario),
             'puede_gestionar_documentos_comex' => $this->puedeGestionarDocumentosComex($usuario),
             'puede_configurar_comex' => $this->puedeConfigurarComex($usuario),

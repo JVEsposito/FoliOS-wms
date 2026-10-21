@@ -1,0 +1,26 @@
+.cp-workspace { min-width: 0; }
+.cp-tabs, .cp-toolbar, .cp-pages, .cp-dialog footer { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-block: 16px; }
+.cp-tabs button { min-height: 44px; padding: 10px 16px; border: 1px solid var(--line, #8394a6); border-radius: 10px; background: var(--surface, #fff); color: inherit; cursor: pointer; }
+.cp-tabs button[aria-pressed="true"] { background: #12394b; color: #fff; }
+.cp-panel { padding: 20px; min-width: 0; }
+.cp-table { overflow-x: auto; max-width: 100%; }
+.cp-table table { border-collapse: collapse; width: 100%; }
+.cp-table th, .cp-table td { padding: 12px; text-align: left; border-bottom: 1px solid #8593a444; vertical-align: top; }
+.cp-table td button { margin: 2px; min-height: 40px; }
+.cp-panel label, .cp-dialog label { display: grid; gap: 6px; min-width: 0; }
+.cp-panel input, .cp-dialog input, .cp-dialog select, .cp-dialog textarea { width: 100%; min-height: 42px; box-sizing: border-box; }
+.cp-dialog { width: min(660px, calc(100vw - 24px)); max-height: calc(100dvh - 32px); border-radius: 16px; padding: 24px; box-sizing: border-box; background: var(--surface, #fff); color: var(--text, #162b35); border: 1px solid #7f93a6; }
+.cp-dialog--wide { width: min(1000px, calc(100vw - 24px)); }
+.cp-dialog::backdrop { background: #07151eb3; }
+.cp-dialog [data-cp-error] { color: #d14136; }
+.cp-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.cp-line { display: grid; grid-template-columns: 2fr 2fr 1fr 1fr auto; gap: 10px; align-items: end; margin-block: 16px; }
+.cp-journal-entry { border: 1px solid #8593a444; border-radius: 10px; padding: 14px; margin-block: 12px; }
+.cp-dialog footer { justify-content: end; }
+.cp-dialog p { overflow-wrap: anywhere; }
+.cp-dialog [hidden], .cp-workspace [hidden] { display: none !important; }
+@media (max-width: 700px) { .cp-grid, .cp-line { grid-template-columns: 1fr; } .cp-panel { padding: 12px; } .cp-dialog { padding: 16px; } .cp-tabs { gap: 8px; } }
+
+.cp-criterion { display: grid; grid-template-columns: 2fr 1fr 1fr auto; align-items: end; gap: 12px; margin-block: 12px; }
+.cp-dialog input[type="checkbox"] { width: 22px; min-height: 22px; }
+@media (max-width: 700px) { .cp-criterion { grid-template-columns: 1fr; } }
