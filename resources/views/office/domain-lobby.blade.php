@@ -96,6 +96,7 @@
                     ['module' => 'comex.configuracion', 'permissions' => ['puede_consultar_comex'], 'href' => '/oficina/comex/configuracion', 'icon' => '☰', 'eyebrow' => 'COMEX', 'title' => 'Configuración Comex', 'description' => 'Qué documentos se exigen según destino, transporte y cliente.'],
                     ['module' => 'comex.comercial', 'permissions' => ['puede_consultar_comercial_comex'], 'href' => '/oficina/comex/comercial', 'icon' => '⚓', 'eyebrow' => 'COMEX', 'title' => 'Actores y lugares', 'description' => 'Identidades comerciales, navieras, agentes, puertos y terminales con historial.'],
                     ['module' => 'comex.comercial', 'permissions' => ['puede_consultar_comercial_comex'], 'href' => '/oficina/comex/notas', 'icon' => '⚓', 'eyebrow' => 'COMEX', 'title' => 'Notas de venta', 'description' => 'Acuerdos versionados, revisión, aprobación e impresión comercial.'],
+                    ['module' => 'comex.comercial', 'permissions' => ['puede_consultar_comercial_comex'], 'href' => '/oficina/comex/bookings', 'icon' => '⚓', 'eyebrow' => 'COMEX', 'title' => 'Bookings y contenedores', 'description' => 'Reservas marítimas, cantidades parciales y evidencia del despacho.'],
                     ['module' => '', 'permissions' => ['puede_habilitar_demo'], 'href' => '/oficina/demo', 'icon' => '▶', 'eyebrow' => 'PRESENTACIÓN', 'title' => 'Demo comercial', 'description' => 'Habilita un escenario ficticio y aislado para gerencia, compradores e inversionistas.'],
                 ],
             ],

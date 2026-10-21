@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Architecture;
 
+use App\Comex\Models\Booking;
 use App\Comex\Models\LugarComercial;
 use App\Comex\Models\NotaVenta;
 use App\Comex\Models\ParteComercial;
@@ -48,6 +49,7 @@ class TemporadaActivaRutasTest extends TestCase
 {
     /** @var array<class-string<Model>, string> */
     private const EXENTOS = [
+        Booking::class => 'reserva comercial con viaje y fechas propios; solo lee el despacho de la temporada referenciada',
         NotaVenta::class => 'acuerdo comercial con vigencia y revisiones propias; continúa entre temporadas sin modificar stock',
         ParteComercial::class => 'identidad comercial global; documentos vigentes entre temporadas',
         LugarComercial::class => 'catálogo logístico global en base Comex, sin inventario físico',

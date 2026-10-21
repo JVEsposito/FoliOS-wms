@@ -3,6 +3,8 @@
 namespace App\Comex\Comercial;
 
 use App\Comex\Expediente\EmbarquesOperacion;
+use App\Comex\Models\Booking;
+use App\Comex\Models\BookingAsignacion;
 use App\Comex\Models\ClienteComex;
 use App\Comex\Models\NotaVenta;
 use App\Comex\Models\NotaVentaRevision;
@@ -107,6 +109,7 @@ final class NotasVenta
                     }
                     if ($d['accion'] === 'aprobar') {
                         $this->validarCopias($rev);
+                        $this->exigirSinReservas($nota);
                         if ($nota->revision_activa_id) {
                             NotaVentaRevision::query()->findOrFail($nota->revision_activa_id)->update(['estado' => 'sustituida']);
                         }
@@ -119,9 +122,14 @@ final class NotasVenta
                     if (! $nota->revision_activa_id) {
                         $this->registro->error('estado', 'Solo se cierra comercialmente un acuerdo aprobado.');
                     }
+                    $pendientes = Booking::query()->whereIn('id', BookingAsignacion::query()->where('nota_id', $nota->id)->where('activa', true)->select('booking_id'))->whereNotIn('estado', ['cerrado', 'anulado'])->exists();
+                    if ($pendientes) {
+                        $this->registro->error('estado', 'Cierre los bookings pendientes antes de cerrar el acuerdo.');
+                    }
                     $nota->estado = 'cerrada';
                     break;
                 case 'anular':
+                    $this->exigirSinReservas($nota);
                     $nota->estado = 'anulada';
                     break;
                 default:
@@ -193,6 +201,13 @@ final class NotasVenta
     {
         if (! in_array($rev->estado, $estados, true)) {
             $this->registro->error('estado', 'La propuesta no está en el estado requerido para esta acción.');
+        }
+    }
+
+    private function exigirSinReservas(NotaVenta $nota): void
+    {
+        if (BookingAsignacion::query()->where('nota_id', $nota->id)->where('activa', true)->exists()) {
+            $this->registro->error('estado', 'Hay cantidades comprometidas en bookings. Retire las asignaciones antes de sustituir o anular el acuerdo; los despachos cerrados requieren rectificación formal.');
         }
     }
 }

@@ -42,9 +42,11 @@ final class EmbarquesOperacion
     /** @return array<string, mixed>|null */
     public function uno(string $embarqueId): ?array
     {
-        $fila = $this->consulta()->where('e.id', $embarqueId)->first();
+        return $this->lector->conexion()->transaction(function () use ($embarqueId) {
+            $fila = $this->consulta()->where('e.id', $embarqueId)->first();
 
-        return $fila === null ? null : $this->conDetalle(collect([$fila]))[0];
+            return $fila === null ? null : $this->conDetalle(collect([$fila]))[0];
+        });
     }
 
     public function documentosSag(string $embarqueId): array
