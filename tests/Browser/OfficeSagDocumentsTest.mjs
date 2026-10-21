@@ -28,6 +28,7 @@ async function setup(browser, { consulta = false, width = 390 } = {}) {
         if (path === '/api/contraparte-sag/configuracion') return route.fulfill({ json: { planta: {}, version: 1, puede_gestionar: !consulta, responsables: [{ id: personId, nombre: 'Responsable prueba', cargo: 'tecnica', activo: true }] } });
         if (path === '/api/contraparte-sag/existencias') return route.fulfill({ json: { cajas: 0, unidades: 0, folios: { data: [], current_page: 1, last_page: 1 }, movimientos: { data: [], current_page: 1, last_page: 1 } } });
         if (path === '/api/contraparte-sag/folios/00000123') return route.fulfill({ json: { folio_id: folioId, folio: '00000123', cantidad: 180, especie: 'UVA', tipo_actividad: 'INSPECCIÓN', numero_actividad: '1513', con_condicion: true } });
+        if (path === '/api/contraparte-sag/fuentes/cambio_mercado/CM-1') return route.fulfill({ json: { lote_inspeccion_sag_id: docId, fecha_actividad: '2026-10-21', lineas: [{ folio_id: folioId, folio: '00000123', cantidad: 168, especie: 'CEREZAS', kilos: 840, mercados_anteriores: 'CHINA - TAIWAN', nuevo_destino: 'VIETNAM', tipo_actividad: 'INSPECCIÓN', numero_actividad: '1513' }] } });
         if (path === '/api/contraparte-sag/documentos' && route.request().method() === 'POST') {
             saved = route.request().postDataJSON(); const d = { ...saved, id: docId, version: 1, estado: 'borrador', numero: null, detalle: { lineas: [{ folio: '00000123', cantidad: 4, tipo_actividad: 'INSPECCIÓN', numero_actividad: '1513' }] } }; records = [d]; return route.fulfill({ status: 201, json: d });
         }
@@ -64,6 +65,24 @@ test('consulta no ve controles de escritura ni corte inicial', async () => {
         const { page, context } = await setup(browser, { consulta: true, width: 1280 });
         assert.equal(await page.locator('#scInitial').isVisible(), false);
         await page.locator('[data-panel="documentos"]').click(); assert.equal(await page.locator('#scNewDocument').isVisible(), false);
+        await context.close();
+    } finally { await browser.close(); }
+});
+
+test('cambio de mercado permite revisar pesos y conserva los mercados del lote', async () => {
+    const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined, args: ['--no-sandbox', '--disable-gpu'] });
+    try {
+        const { page, context, saved } = await setup(browser);
+        await page.locator('[data-panel="documentos"]').click(); await page.locator('#scNewDocument').click();
+        await page.locator('#scDocumentForm [name="tipo"]').selectOption('cambio_mercado');
+        await page.locator('#scDocumentForm [name="responsable_id"]').selectOption(personId);
+        await page.locator('#scRepaReference').fill('CM-1'); await page.locator('#scLoadRepa').click();
+        await page.locator('[data-field="kilos"]').waitFor();
+        assert.equal(await page.locator('[data-field="kilos"]').inputValue(), '840');
+        await page.locator('[name="programa"]').fill('ORIGEN'); await page.locator('[name="motivo"]').fill('DECISIÓN COMERCIAL');
+        await page.locator('#scDocumentForm button.primary-button').click(); await page.waitForSelector('#scDocumentDetail:not(.is-hidden)');
+        assert.equal(saved().lote_inspeccion_sag_id, docId); assert.equal(saved().kilos[folioId], 840);
+        assert.equal(saved().mercados_anteriores[folioId], 'CHINA - TAIWAN'); assert.equal('folios' in saved(), false);
         await context.close();
     } finally { await browser.close(); }
 });

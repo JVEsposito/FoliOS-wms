@@ -18,19 +18,21 @@ class DocumentoSagTest extends TestCase
             public function datos(?DocumentoSag $documento, string $tipo): array
             {
                 $repa = $tipo === 'repaletizaje';
+                $mercado = $tipo === 'cambio_mercado';
                 $filas = [];
                 foreach (range(1, $this->cantidad) as $i) {
                     $filas[] = $repa ? ['INSPECCIÓN', '1513', '000'.$i, 180, 'RE-'.$i, 180]
-                        : ['INSPECCIÓN', '1513', '000'.$i, 'UVA', 'FRESCO', 'FRUTO', 1, 'CAJAS', 'DECISIÓN COMERCIAL'];
+                        : ($mercado ? ['INSPECCIÓN', '1513', '000'.$i, '', 'CEREZAS FRESCAS', 168, 'CAJAS', 840, 'KILOGRAMOS', 'CHINA - TAIWAN', 'VIETNAM'] : ['INSPECCIÓN', '1513', '000'.$i, 'UVA', 'FRESCO', 'FRUTO', 1, 'CAJAS', 'DECISIÓN COMERCIAL']);
                 }
 
                 return ['tipo' => $tipo, 'formato' => [], 'filas' => $filas, 'capacidad' => $repa ? 32 : 20,
                     'columnas' => $repa ? ['Actividad', 'Número', 'Folio original', 'Envases originales', 'Folio resultado', 'Envases resultantes']
-                        : ['Actividad', 'Número', 'Folio', 'Especie', 'Condición', 'Producto', 'Envases', 'Tipo envase', 'Causal'],
-                    'campos' => ['codigo' => $repa ? 'F-PA-CFT-DR-010' : 'F-PA-CFT-DR-011', 'version' => '01', 'vigencia' => '2026-10-21',
+                        : ($mercado ? ['Actividad', 'Número', 'Folio', 'Lote', 'Producto', 'Envases', 'Tipo envase', 'Cantidad producto', 'Unidad', 'Destino aprobado', 'Nuevo destino'] : ['Actividad', 'Número', 'Folio', 'Especie', 'Condición', 'Producto', 'Envases', 'Tipo envase', 'Causal']),
+                    'campos' => ['codigo' => $repa ? 'F-PA-CFT-DR-010' : ($mercado ? 'F-CER-PPS-PA-002' : 'F-PA-CFT-DR-011'), 'version' => '01', 'vigencia' => '2026-10-21',
                         'numero' => 1, 'fecha' => '21-10-2026', 'estado' => 'EMITIDO', 'establecimiento' => 'Planta de prueba',
                         'csp' => '00123', 'oficina_sag' => 'Rengo', 'especie' => 'UVA', 'solicitud' => 'REPA-1',
-                        'certificados' => 0, 'devueltos' => 0, 'asignados' => 0, 'total' => $this->cantidad * ($repa ? 180 : 1),
+                        'certificados' => 0, 'devueltos' => 0, 'asignados' => 0, 'total' => $this->cantidad * ($repa ? 180 : ($mercado ? 168 : 1)),
+                        'programa' => 'ORIGEN LÍNEA', 'motivo' => 'DECISIÓN COMERCIAL', 'total_kilos' => $this->cantidad * 840,
                         'observaciones' => $this->observacion, 'responsable' => 'Responsable prueba', 'cargo' => 'tecnica', 'nota' => '']];
             }
         };
@@ -80,5 +82,28 @@ class DocumentoSagTest extends TestCase
         $this->assertStringContainsString('ANEXO DE OBSERVACIONES', $pdf);
         $this->assertStringContainsString('ULTIMAOBSERVACION', $pdf);
         $this->assertStringNotContainsString('{{', $pdf);
+    }
+
+    public function test_cambio_mercado_conserva_destinos_y_totales_672_cajas_3360_kilos(): void
+    {
+        $generador = $this->generador('cambio_mercado', 4);
+        $pdf = $generador->pdf(null, 'cambio_mercado');
+        $this->assertStringContainsString('F-CER-PPS-PA-002', $pdf);
+        $this->assertStringContainsString('672 envases', $pdf);
+        $this->assertStringContainsString('3360 kg', $pdf);
+        $this->assertStringContainsString('VIETNAM', $pdf);
+        $ruta = $generador->xlsx(null, 'cambio_mercado');
+        $zip = new ZipArchive;
+        try {
+            $zip->open($ruta);
+            $hoja = $zip->getFromName('xl/worksheets/sheet1.xml');
+            $this->assertStringContainsString('TOTAL DOCUMENTO: 672 envases', $hoja);
+            $this->assertStringContainsString('3360 kg', $hoja);
+            $this->assertStringContainsString('CHINA - TAIWAN', $hoja);
+            $this->assertStringNotContainsString('{{', $hoja);
+        } finally {
+            $zip->close();
+            unlink($ruta);
+        }
     }
 }

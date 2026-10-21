@@ -72,3 +72,17 @@ Los cambios de estado no envían correos ni acceden a plataformas SAG. El perfil
 consulta puede leer y descargar, pero no crear, emitir ni adjuntar. Un documento de
 temporada cerrada conserva su consulta y sus descargas; las escrituras requieren la
 temporada activa.
+
+## Cambio de mercado
+
+El lote de Inspección SAG ofrece **Formulario cambio de mercado**, también disponible
+en Documentos SAG cargando su código. Recupera los destinos anteriores conservados al
+crear el lote y los destinos solicitados. El cambio se documenta con F-CER-PPS-PA-002,
+versión de planta 01. Programa, motivo, última actividad y su número se revisan antes
+de emitir. El cálculo de kilos usa cajas por peso neto del envase, incluida composición
+mixta; si falta el peso, se completa expresamente. No se sustituye un dato faltante por
+cero. Los kilos y destinos revisados quedan guardados con el documento emitido.
+
+La emisión no autoriza el nuevo mercado. La resolución por destino se registra en el
+lote mediante el flujo existente de Inspección SAG. Se pueden adjuntar la resolución
+y los certificados devueltos o asignados al seguimiento documental.

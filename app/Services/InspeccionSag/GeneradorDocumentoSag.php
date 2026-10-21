@@ -38,10 +38,17 @@ class GeneradorDocumentoSag
             }
             $total = collect($resultados)->sum('cantidad');
             $capacidad = 32;
+        } elseif ($tipo === 'cambio_mercado') {
+            $columnas = ['Tipo actividad', 'N° actividad', 'Folio', 'N° lote', 'Producto', 'Cantidad envases', 'Tipo envase', 'Cantidad producto', 'Unidad', 'Destino aprobado', 'Nuevo destino'];
+            foreach ($detalle['lineas'] ?? [] as $l) {
+                $filas[] = [$l['tipo_actividad'], $l['numero_actividad'], $l['folio'], $l['lote'], 'FRUTA FRESCA: '.$l['especie'], $l['cantidad'], 'CAJAS', $l['kilos'] ?? '', 'KILOGRAMOS', $l['mercados_anteriores'], $l['nuevo_destino']];
+            }
+            $total = collect($detalle['lineas'] ?? [])->sum('cantidad');
+            $capacidad = 20;
         } else {
             $columnas = ['Tipo actividad', 'N° actividad', 'Folio', 'Especie', 'Condición', 'Producto', 'Cantidad envases', 'Tipo envase', 'Causal de anulación'];
             foreach ($detalle['lineas'] ?? [] as $l) {
-                $filas[] = [$l['tipo_actividad'], $l['numero_actividad'], $l['folio'], $l['especie'], 'FRESCO', $l['producto'], $l['cantidad'], $l['envase'], $l['causal']];
+                $filas[] = [$l['tipo_actividad'], $l['numero_actividad'], $l['folio'], $l['especie'], 'FRESCO', $l['producto'], $l['cantidad'], 'CAJAS', $l['causal']];
             }
             $total = collect($detalle['lineas'] ?? [])->sum('cantidad');
             $capacidad = 20;
@@ -61,6 +68,8 @@ class GeneradorDocumentoSag
                 'asignados' => $encabezado['certificados_asignados'] ?? '', 'total' => $documento ? $total : '',
                 'observaciones' => $encabezado['observaciones'] ?? '', 'responsable' => $responsable['nombre'] ?? '',
                 'cargo' => $responsable['cargo'] ?? '', 'nota' => $encabezado['nota'] ?? '',
+                'programa' => $encabezado['programa'] ?? '', 'motivo' => $encabezado['motivo'] ?? '',
+                'total_kilos' => $documento ? collect($detalle['lineas'] ?? [])->sum(fn ($l) => (int) round(($l['kilos'] ?? 0) * 10000)) / 10000 : '',
             ],
         ];
     }
@@ -216,18 +225,22 @@ class GeneradorDocumentoSag
             $altura += $h;
         }
         $bloques[] = $actual;
-        $observaciones = $pdf->envolver('Observaciones: '.$datos['campos']['observaciones'].' '.$datos['campos']['nota'], $ancho - 48, 8);
+        $observaciones = $pdf->envolver(($tipo === 'cambio_mercado' ? 'Motivo: '.$datos['campos']['motivo'].'. ' : '').'Observaciones: '.$datos['campos']['observaciones'].' '.$datos['campos']['nota'], $ancho - 48, 8);
         $anexos = array_chunk(array_slice($observaciones, 3), (int) floor(($alto - 140) / 12));
         $totalPaginas = count($bloques) + count($anexos);
         foreach ($bloques as $i => $bloque) {
             $c = $datos['campos'];
-            $titulo = $tipo === 'repaletizaje' ? 'REPALETIZAJE' : 'ANULACIÓN DE PRODUCTOS APROBADOS Y DEVOLUCIÓN DE CERTIFICADOS';
+            $titulo = match ($tipo) {
+                'repaletizaje' => 'REPALETIZAJE', 'cambio_mercado' => 'CAMBIO DE MERCADO', default => 'ANULACIÓN DE PRODUCTOS APROBADOS Y DEVOLUCIÓN DE CERTIFICADOS'
+            };
             $p = $pdf->texto(24, $alto - 30, 11, $titulo, true);
             foreach ([$c['codigo'].' · Versión de planta '.$c['version'].' · Vigencia '.$c['vigencia'],
                 'N° '.$c['numero'].' · Fecha '.$c['fecha'].' · '.$c['estado'].' · Hoja '.($i + 1).' de '.$totalPaginas,
                 'Establecimiento: '.$c['establecimiento'].' · CSP '.$c['csp'],
                 'Oficina SAG: '.$c['oficina_sag'].' · Especie: '.$c['especie'],
-                $tipo === 'repaletizaje' ? 'Solicitud: '.$c['solicitud'] : 'Certificados que anula o devuelve: '.$c['certificados']] as $j => $texto) {
+                match ($tipo) {
+                    'repaletizaje' => 'Solicitud: '.$c['solicitud'], 'cambio_mercado' => 'Programa: '.$c['programa'], default => 'Certificados que anula o devuelve: '.$c['certificados']
+                }] as $j => $texto) {
                 $p .= $pdf->texto(24, $alto - 48 - $j * 15, 8, $texto);
             }
             $y = $alto - 145;
@@ -246,7 +259,7 @@ class GeneradorDocumentoSag
                 }
                 $y -= $fila['alto'];
             }
-            $p .= $pdf->texto(24, 110, 9, 'Total documento: '.$c['total'].' envases · Devueltos: '.$c['devueltos'].' · Asignados: '.$c['asignados']);
+            $p .= $pdf->texto(24, 110, 9, 'Total documento: '.$c['total'].' envases'.($tipo === 'cambio_mercado' ? ' · '.$c['total_kilos'].' kg' : '').' · Devueltos: '.$c['devueltos'].' · Asignados: '.$c['asignados']);
             foreach (array_slice($observaciones, 0, 3) as $k => $linea) {
                 $p .= $pdf->texto(24, 94 - $k * 10, 8, $linea);
             }

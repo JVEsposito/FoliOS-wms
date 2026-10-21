@@ -14,7 +14,7 @@ use Illuminate\Support\Str;
 
 class ServicioDocumentosSag
 {
-    public const FORMATOS = ['repaletizaje' => 'F-PA-CFT-DR-010', 'anulacion' => 'F-PA-CFT-DR-011'];
+    public const FORMATOS = ['repaletizaje' => 'F-PA-CFT-DR-010', 'anulacion' => 'F-PA-CFT-DR-011', 'cambio_mercado' => 'F-CER-PPS-PA-002'];
 
     public function __construct(private readonly DatosDocumentoSag $datos) {}
 
@@ -22,6 +22,10 @@ class ServicioDocumentosSag
     {
         return DB::transaction(function () use ($entrada, $usuario, $documento): DocumentoSag {
             if ($anterior = $this->repetida($entrada, 'guardar', $usuario)) {
+                if ($documento && $anterior->id !== $documento->id) {
+                    throw new ConflictoOperacion('La operación pertenece a otro documento.');
+                }
+
                 return $anterior;
             }
             $temporada = app(ServicioTemporadaActiva::class)->obtener(bloquear: true);
@@ -49,6 +53,9 @@ class ServicioDocumentosSag
             ]);
             if (! $registro->exists && $registro->repaletizaje_id && DocumentoSag::where('repaletizaje_id', $registro->repaletizaje_id)->exists()) {
                 throw new ConflictoOperacion('La repa ya tiene un documento SAG. Ábrelo desde el listado.');
+            }
+            if ($registro->lote_inspeccion_sag_id && DocumentoSag::where('lote_inspeccion_sag_id', $registro->lote_inspeccion_sag_id)->when($registro->exists, fn ($q) => $q->whereKeyNot($registro->id))->exists()) {
+                throw new ConflictoOperacion('El lote ya tiene un documento SAG. Ábrelo desde el listado.');
             }
             $registro->save();
             $this->registrar($registro, $entrada, 'guardar', $usuario);
@@ -86,6 +93,16 @@ class ServicioDocumentosSag
                     throw new DomainException('El responsable está inactivo. Corrige el borrador.');
                 }
                 $detalle = $this->datos->preparar($registro->tipo, $registro->entrada);
+                if ($registro->tipo === 'cambio_mercado') {
+                    if (blank($registro->encabezado['programa'] ?? null) || blank($registro->encabezado['motivo'] ?? null) || empty($detalle['lineas'])) {
+                        throw new DomainException('Completa el programa, motivo y folios del cambio de mercado.');
+                    }
+                    foreach ($detalle['lineas'] as $linea) {
+                        if ($linea['kilos'] === null || blank($linea['mercados_anteriores']) || blank($linea['nuevo_destino'])) {
+                            throw new DomainException('Revisa los kilos y mercados de cada folio antes de emitir.');
+                        }
+                    }
+                }
                 foreach ($detalle['originales'] ?? $detalle['lineas'] ?? [] as $linea) {
                     if (blank($linea['tipo_actividad'] ?? null) || blank($linea['numero_actividad'] ?? null)) {
                         throw new DomainException('Completa la última actividad y su número para cada folio antes de emitir.');

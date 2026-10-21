@@ -52,9 +52,9 @@ class DocumentoSagController extends Controller
 
     public function fuente(string $tipo, string $referencia, DatosDocumentoSag $datos)
     {
-        abort_unless($tipo === 'repaletizaje', 404);
+        abort_unless(in_array($tipo, ['repaletizaje', 'cambio_mercado'], true), 404);
 
-        return response()->json($datos->repaletizaje($referencia));
+        return response()->json($tipo === 'repaletizaje' ? $datos->repaletizaje($referencia) : $datos->cambioMercado($referencia));
     }
 
     public function folio(string $numero, DatosDocumentoSag $datos)
@@ -158,7 +158,11 @@ class DocumentoSagController extends Controller
             'responsable_id' => ['required', 'uuid', 'exists:responsables_contraparte_sag,id'],
             'fecha_actividad' => ['required', 'date'],
             'repaletizaje_id' => ['required_if:tipo,repaletizaje', 'nullable', 'uuid'],
-            'encabezado' => ['present', 'array:observaciones,solicitud,certificados,certificados_devueltos,certificados_asignados,nota'],
+            'lote_inspeccion_sag_id' => ['required_if:tipo,cambio_mercado', 'nullable', 'uuid'],
+            'kilos' => ['nullable', 'array', 'max:500'], 'kilos.*' => ['nullable', 'numeric', 'gt:0', 'max:10000000'],
+            'mercados_anteriores' => ['nullable', 'array', 'max:500'], 'mercados_anteriores.*' => ['nullable', 'string', 'max:1000'],
+            'encabezado' => ['present', 'array:observaciones,solicitud,certificados,certificados_devueltos,certificados_asignados,nota,programa,motivo'],
+            'encabezado.programa' => ['nullable', 'string', 'max:100'], 'encabezado.motivo' => ['nullable', 'string', 'max:250'],
             'encabezado.observaciones' => ['nullable', 'string', 'max:2000'],
             'encabezado.solicitud' => ['nullable', 'string', 'max:250'], 'encabezado.nota' => ['nullable', 'string', 'max:500'],
             'encabezado.certificados' => ['nullable', 'integer', 'min:0', 'max:10000'],
