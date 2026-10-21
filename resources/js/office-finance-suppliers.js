@@ -62,8 +62,9 @@ function addLine(line = {}) {
 }
 function totals() { const f = $('cpDocumentForm'); try { const base = ['neto', 'exento', 'otros'].reduce((s, k) => s + BigInt(f.elements[k].value || '0'), 0n); const cost = [...$('cpCostLines').querySelectorAll('[data-line="monto"]')].reduce((s, e) => s + BigInt(e.value || '0'), 0n); $('cpTotal').textContent = `Total: ${money(base + BigInt(f.elements.iva.value || '0'))} · Por distribuir: ${money(base - cost)}`; } catch { $('cpTotal').textContent = 'Ingrese importes enteros en CLP.'; } }
 async function references() {
-    const d = await api(`${url}/referencias?${new URLSearchParams({ proveedor_id: state.selected.id, buscar: $('cpReferenceSearch').value })}`);
     const invoice = $('cpInvoiceReference').value || state.document?.referencia_id || ''; const guides = [...$('cpGuideReferences').selectedOptions].map((o) => o.value); if (!guides.length) guides.push(...(state.document?.guias || []));
+    const q = new URLSearchParams({ proveedor_id: state.selected.id, buscar: $('cpReferenceSearch').value }); for (const id of [...new Set([invoice, ...guides].filter(Boolean))]) q.append('ids[]', id);
+    const d = await api(`${url}/referencias?${q}`);
     const keep = state.references.filter((v) => v.id === invoice || guides.includes(v.id)); state.references = [...new Map([...keep, ...d.data].map((v) => [v.id, v])).values()];
     $('cpInvoiceReference').innerHTML = options(state.references.filter((v) => ['33', '34'].includes(v.tipo)).map((v) => [v.id, `${state.types[v.tipo]} ${v.folio}`]), 'Sin referencia'); $('cpInvoiceReference').value = invoice;
     $('cpGuideReferences').innerHTML = options(state.references.filter((v) => v.tipo === '52').map((v) => [v.id, `Guía ${v.folio} · ${v.fecha_emision}`])); for (const o of $('cpGuideReferences').options) o.selected = guides.includes(o.value);

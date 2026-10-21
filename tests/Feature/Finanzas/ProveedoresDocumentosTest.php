@@ -100,6 +100,7 @@ class ProveedoresDocumentosTest extends TestCase
         $factura = $this->crear(['guias' => [$guia['id']]]);
         $this->registrar($factura);
         $this->assertSame(1, AsientoCompra::query()->count());
+        $this->getJson($this->base.'/referencias?proveedor_id='.$this->proveedor.'&buscar=123&ids[]='.$guia['id'])->assertOk()->assertJsonCount(2, 'data');
         $this->getJson($this->base.'/referencias?proveedor_id='.$this->proveedor.'&buscar=80')->assertOk()->assertJsonCount(1, 'data');
         $this->postJson($this->base.'/documentos/'.$guia['id'].'/anular', ['fecha_contable' => '2026-10-04', 'motivo' => 'Tiene factura vinculada.'])->assertUnprocessable();
         $otro = $this->postJson($this->base, $this->ficha(['rut' => '11111111-1']))->assertCreated()->json('data.id');

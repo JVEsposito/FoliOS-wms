@@ -21,9 +21,13 @@ class DocumentosCompraController extends Controller
 
     public function referencias(Request $request): JsonResponse
     {
-        $d = $request->validate(['proveedor_id' => ['required', 'uuid'], 'buscar' => ['nullable', 'string', 'max:40']]);
+        $d = $request->validate(['proveedor_id' => ['required', 'uuid'], 'buscar' => ['nullable', 'string', 'max:40'], 'ids' => ['sometimes', 'array', 'max:101'], 'ids.*' => ['uuid', 'distinct']]);
+        $base = DocumentoCompra::query()->where('proveedor_id', $d['proveedor_id'])->whereIn('tipo', ['33', '34', '52'])->whereNotNull('registrado_at')->whereNull('anulado_at');
+        $campos = ['id', 'tipo', 'folio', 'fecha_emision'];
+        $recientes = (clone $base)->when(filled($d['buscar'] ?? null), fn ($q) => $q->where('folio', 'like', '%'.$d['buscar'].'%'))->orderByDesc('fecha_emision')->limit(50)->get($campos);
+        $seleccionados = (clone $base)->whereIn('id', $d['ids'] ?? [])->get($campos);
 
-        return response()->json(['data' => DocumentoCompra::query()->where('proveedor_id', $d['proveedor_id'])->whereIn('tipo', ['33', '34', '52'])->whereNotNull('registrado_at')->whereNull('anulado_at')->when(filled($d['buscar'] ?? null), fn ($q) => $q->where('folio', 'like', '%'.$d['buscar'].'%'))->orderByDesc('fecha_emision')->limit(50)->get(['id', 'tipo', 'folio', 'fecha_emision'])]);
+        return response()->json(['data' => $recientes->merge($seleccionados)->unique('id')->values()]);
     }
 
     public function show(DocumentoCompra $documento): JsonResponse
