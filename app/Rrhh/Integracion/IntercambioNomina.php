@@ -31,6 +31,9 @@ final class IntercambioNomina
             $contenido['institucion'] = array_intersect_key($m->calculo['institucion'], array_flip(['id', 'codigo', 'rut', 'razon_social', 'tipo', 'codigo_oficial', 'codigo_externo']));
             $contenido['mandato_id'] = $m->mandato_id;
             $contenido['empleador'] = array_intersect_key($m->calculo['contrato']['empleador'], array_flip(['id', 'codigo', 'rut', 'razon_social', 'codigo_externo']));
+            if (isset($m->calculo['regimen_apv'])) {
+                $contenido['regimen_apv'] = $m->calculo['regimen_apv'];
+            }
             $contenido = $this->ordenar($contenido);
         }
         $json = json_encode($contenido, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);

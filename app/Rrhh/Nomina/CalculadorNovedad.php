@@ -35,9 +35,12 @@ final class CalculadorNovedad
             $resultado['institucion'] = $destino['institucion'];
             $resultado['contrato'] = $destino['contrato'];
         }
+        if ($concepto->grupo_descuento === 'apv') {
+            $resultado['regimen_apv'] = $d['regimen_apv'];
+        }
         if ($destino['mandato']) {
             $resultado['mandato'] = $destino['mandato'];
-            $resultado['entrada_mandato'] = array_intersect_key($d, array_flip(['cantidad', 'valor', 'institucion_id', 'autorizacion', 'pago_directo_institucion', 'excepcion_ccaf']));
+            $resultado['entrada_mandato'] = array_intersect_key($d, array_flip(['cantidad', 'valor', 'institucion_id', 'autorizacion', 'pago_directo_institucion', 'excepcion_ccaf', 'regimen_apv']));
         }
         if ($concepto->calculo !== 'horas_extra') {
             $cantidad = $d['cantidad'] ?? null;

@@ -1,11 +1,22 @@
 <?php
 
+use App\Rrhh\Http\CalculosLegalesController as L;
 use App\Rrhh\Http\DescuentosController as D;
 use App\Rrhh\Http\IntegracionController;
 use App\Rrhh\Http\NominaController as N;
 use App\Rrhh\Http\PrevisionController as P;
 use App\Rrhh\Http\RrhhController as R;
 use Illuminate\Support\Facades\Route;
+
+Route::middleware(['auth:sanctum', 'can:consultar-rrhh', 'can:consultar-remuneraciones-rrhh'])->prefix('rrhh/nomina/legal')->group(function (): void {
+    Route::get('/indices', [L::class, 'indices']);
+    Route::get('/calculos', [L::class, 'calculos']);
+    Route::middleware(['can:gestionar-remuneraciones-rrhh', 'throttle:rrhh-gestion'])->group(function (): void {
+        Route::post('/indices', [L::class, 'indice']);
+        Route::post('/simular', [L::class, 'simular']);
+        Route::post('/calculos', [L::class, 'guardar']);
+    });
+});
 
 Route::middleware(['auth:sanctum', 'can:consultar-rrhh', 'can:consultar-remuneraciones-rrhh'])->prefix('rrhh/nomina')->group(function (): void {
     Route::get('/mandatos', [D::class, 'mandatos']);

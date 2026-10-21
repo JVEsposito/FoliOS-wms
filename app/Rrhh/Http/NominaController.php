@@ -162,6 +162,7 @@ final class NominaController extends Controller
             'institucion_id' => ['nullable', 'uuid', Rule::exists('rrhh.rh_instituciones', 'id')], 'mandato_id' => ['nullable', 'uuid', Rule::exists('rrhh.rh_mandatos_descuento', 'id')],
             'contrato_id' => ['nullable', 'uuid', Rule::exists('rrhh.rh_contratos', 'id')],
             'liquido_legal' => $this->decimal(false), 'base_imponible' => $this->decimal(false), 'excepcion_ccaf' => ['nullable', 'in:vivienda_emergencia,salud'],
+            'regimen_apv' => ['nullable', 'in:A,B'],
             'fecha' => ['required', 'date_format:Y-m-d'], 'cantidad' => $this->decimal(false), 'valor' => $this->decimal(false),
             'minutos' => ['nullable', 'integer', 'min:1', 'max:1440'], 'recargo' => ['nullable', 'string', 'regex:/^\d{1,3}(?:\.\d{1,4})?$/'],
             'respaldo_he' => ['nullable', 'in:pacto,conocimiento_empleador'], 'pacto_desde' => ['nullable', 'date_format:Y-m-d'],

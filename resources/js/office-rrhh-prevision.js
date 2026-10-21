@@ -76,6 +76,7 @@ export function initPrevision({ api, capability, escape, table, choices, open, p
     function plan() {
         const f = $('rpAffiliationForm'); const show = f._institutions?.find((r) => r.id === f.elements.institucion_id.value)?.tipo === 'isapre'; $('rpPlan').hidden = !show;
         for (const k of ['moneda_plan', 'precio_plan']) { f.elements[k].disabled = !show; f.elements[k].required = show; }
+        const apv = f.elements.regimen.value === 'apv'; $('rpApv').hidden = !apv; f.elements.regimen_apv.disabled = !apv; f.elements.regimen_apv.required = apv;
     }
     async function save(form) {
         const d = values(form);

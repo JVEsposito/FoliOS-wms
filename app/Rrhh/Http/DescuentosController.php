@@ -34,7 +34,7 @@ final class DescuentosController extends Controller
             'desde' => ['required', 'date_format:Y-m-d'], 'hasta' => ['required', 'date_format:Y-m-d', 'after_or_equal:desde'],
             'cuota' => ['required', 'string', 'regex:/^\d{1,12}(?:\.\d{1,6})?$/'], 'deuda_total' => ['nullable', 'string', 'regex:/^\d{1,15}$/'], 'cuotas' => ['nullable', 'integer', 'min:1', 'max:1200'],
             'base_porcentaje' => ['nullable', 'in:remuneracion_bruta,liquido_legal,base_imponible'], 'pago_directo_institucion' => ['required', 'boolean'],
-            'excepcion_ccaf' => ['nullable', 'in:vivienda_emergencia,salud'], 'respaldo' => ['required', 'string', 'min:10', 'max:1000']]);
+            'excepcion_ccaf' => ['nullable', 'in:vivienda_emergencia,salud'], 'regimen_apv' => ['nullable', 'in:A,B'], 'respaldo' => ['required', 'string', 'min:10', 'max:1000']]);
 
         return response()->json(['data' => $g->mandato($d, $r->user())], 201);
     }

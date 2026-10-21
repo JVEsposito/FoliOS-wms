@@ -61,7 +61,7 @@ final class PrevisionController extends Controller
     {
         $d = $r->validate([...$this->vigencia(), 'persona_id' => ['nullable', 'uuid', Rule::exists('rrhh.rh_personas', 'id')], 'empleador_id' => ['nullable', 'uuid', Rule::exists('rrhh.rh_empleadores', 'id')],
             'institucion_id' => ['required', 'uuid', Rule::exists('rrhh.rh_instituciones', 'id')], 'regimen' => ['required', Rule::in(array_keys(RegistroPrevisional::REGIMENES))],
-            'referencia' => ['required', 'string', 'max:100'], 'moneda_plan' => ['nullable', 'in:CLP,UF'], 'precio_plan' => ['nullable', 'string', 'regex:/^\d{1,10}(?:\.\d{1,6})?$/']]);
+            'referencia' => ['required', 'string', 'max:100'], 'moneda_plan' => ['nullable', 'in:CLP,UF'], 'precio_plan' => ['nullable', 'string', 'regex:/^\d{1,10}(?:\.\d{1,6})?$/'], 'regimen_apv' => ['nullable', 'in:A,B']]);
 
         return response()->json(['data' => $g->afiliacion($d, $r->user())], 201);
     }

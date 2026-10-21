@@ -41,6 +41,7 @@ export function initDescuentos({ api, capability, escape, table, choices, open, 
         for (const k of ['deuda_total', 'cuotas']) { f.elements[k].disabled = percent; f.elements[k].required = false; }
         f.elements.base_porcentaje.disabled = !percent; f.elements.base_porcentaje.required = percent;
         $('rdQuotaLabel').textContent = percent ? 'Porcentaje autorizado' : 'Monto mensual de la cuota en CLP';
+        const apv = f._concepts?.find((c) => c.id === f.elements.concepto_id.value)?.grupo_descuento === 'apv'; $('rdApv').hidden = !apv; f.elements.regimen_apv.disabled = !apv; f.elements.regimen_apv.required = apv;
     }
     const requests = new WeakMap();
     async function contracts() {

@@ -32,6 +32,10 @@ async function setup(browser, { clock = false, manage = true, payroll = false, g
         if (['/api/rrhh/prevision/contratos', '/api/rrhh/prevision/afiliaciones'].includes(path) && request.method() === 'GET') return route.fulfill({ json: { data: { data: [], current_page: 1, last_page: 1 } } });
         if (path === '/api/rrhh/prevision/afiliaciones' && request.method() === 'POST') { writes.push({ path, ...request.postDataJSON() }); return route.fulfill({ status: 201, json: { data: { id: 'afiliacion-1' } } }); }
         if (path === '/api/rrhh/nomina/movimientos' && request.method() === 'GET') return route.fulfill({ json: { data: { data: [], current_page: 1, last_page: 1 } } });
+        if (path === '/api/rrhh/nomina/legal/indices') return route.fulfill({ json: { data: { data: [{ id: 'indice-1', mes: '2026-10', version: 1, uf: '40000', utm: '72151', fecha_uf: '2026-10-31', respaldo: 'Índices oficiales revisados' }], current_page: 1, last_page: 1 } } });
+        if (path === '/api/rrhh/nomina/legal/calculos' && request.method() === 'GET') return route.fulfill({ json: { data: { data: [], current_page: 1, last_page: 1 } } });
+        if (path === '/api/rrhh/nomina/legal/simular') return route.fulfill({ json: { data: { regla: 'CL-CALCULOS-2026-10-21-v1', alcance: 'Preparación revisada; no es una liquidación completa.', lineas: [{ codigo: 'GRAT50_ANTICIPO', nombre: 'Anticipo de gratificación artículo 50', tipo: 'haber', monto: '200000', base: '800000', tasa: '25', destino: null }], totales: { haber: '200000' }, detalle: { tope_mensual_referencia: '219114.729166' } } } });
+        if (path === '/api/rrhh/nomina/legal/calculos' && request.method() === 'POST') { writes.push({ path, ...request.postDataJSON() }); return route.fulfill({ status: 201, json: { data: { id: 'calculo-1' } } }); }
         if (path === '/api/rrhh/nomina/mandatos') return route.fulfill({ json: { data: { data: discounts ? [{ id: 'mandato-1', concepto_id: 'coop-1', concepto: { nombre: 'Crédito cooperativa', calculo: 'monto' }, institucion: { razon_social: 'Cooperativa de prueba' }, referencia: 'CRED-01', desde: '2026-10-01', hasta: '2027-12-31', cuota: '20000', deuda_total: '45000', saldo_por_descontar: '45000', descontado: '0', cuotas: 3, cuotas_descontadas: 0, respaldo: 'Autorización escrita y deuda verificadas' }] : [], current_page: 1, last_page: 1 } } });
         if (path === '/api/rrhh/nomina/simular') return route.fulfill({ json: { data: request.postDataJSON().mandato_id ? { total: '20000', institucion: { razon_social: 'Cooperativa de prueba' } } : { total: '6667', base_he: '800000', valor_hora_ordinaria: '4444.444444', valor_hora_extra: '6666.666666', minutos: 60, incidencias: [] } } });
         if (path === '/api/rrhh/nomina/movimientos' && request.method() === 'POST') { writes.push(request.postDataJSON()); if (discounts && writes.length === 1) return route.fulfill({ status: 503, json: { message: 'Reintente la misma cuota.' } }); return route.fulfill({ status: 201, json: { data: { id: 'novedad-1' } } }); }
@@ -140,5 +144,21 @@ test('prepara una cuota en borrador y reintenta con el mismo UUID sin aprobar ni
         await page.locator('#rdQuotaForm button[type=submit]').click(); await page.waitForFunction(() => document.querySelector('#rdQuotaForm [data-rh-error]').textContent.includes('Reintente'));
         await page.locator('#rdQuotaForm button[type=submit]').click(); await page.waitForFunction(() => !document.getElementById('rdQuotaDialog').open);
         assert.equal(writes.length, 2); assert.equal(writes[0].operacion_id, writes[1].operacion_id); assert.equal(writes[0].mandato_id, 'mandato-1'); assert.equal(writes[0].estado, undefined); assert.equal(writes[0].valor, undefined); assert.deepEqual(errors, []); await context.close();
+    } finally { await browser.close(); }
+});
+
+test('calcula un anticipo legal con base y tope visibles y guarda preparación sin generar una novedad', async () => {
+    const browser = await launch();
+    try {
+        const { page, context, writes, errors } = await setup(browser, { payroll: true });
+        await page.locator('#rnTab').click(); await page.waitForFunction(() => document.getElementById('rnPerson').options.length > 1);
+        await page.selectOption('#rnPerson', 'persona-1'); await page.locator('#rnMonth').fill('2026-10'); await page.locator('#rnLoad').click(); await page.locator('#rlNew').click();
+        const f = page.locator('#rlForm'); await f.locator('[name=tipo]').selectOption('anticipo50');
+        await f.locator('[name=base_computable]').fill('800000'); await f.locator('[name=imm_aplicable]').fill('553553'); await f.locator('[name=respaldo]').fill('Modalidad, remuneraciones e ingreso mínimo revisados');
+        assert.equal(await f.locator('[name=base_imponible]').isEnabled(), false);
+        await page.locator('#rlSimulate').click(); await page.waitForFunction(() => document.getElementById('rlPreview').textContent.includes('200.000 CLP'));
+        assert.match(await page.locator('#rlPreview').textContent(), /Tope mensual de referencia/); assert.equal(writes.length, 0);
+        await f.locator('button[type=submit]').click(); await page.waitForFunction(() => !document.getElementById('rlDialog').open);
+        assert.equal(writes.length, 1); assert.equal(writes[0].path, '/api/rrhh/nomina/legal/calculos'); assert.equal(writes[0].tipo, 'anticipo50'); assert.equal(writes[0].datos.base_computable, '800000'); assert.equal(writes[0].datos.base_imponible, undefined); assert.equal(writes[0].parametro_id, undefined); assert.deepEqual(errors, []); await context.close();
     } finally { await browser.close(); }
 });
