@@ -62,6 +62,7 @@ class CatalogoOficinas
         ['frigorifico', 'Recepción de fruta embalada', '/oficina/recepcion-fruta-embalada', 'frigorifico.recepcion-fruta-embalada', ['puede_consultar_recepciones_fruta_embalada']],
         ['frigorifico', 'Repaletizajes', '/oficina/validacion/repaletizajes', '', ['puede_consultar_repaletizajes']],
         ['frigorifico', 'Anulaciones', '/oficina/validacion/anulaciones', 'frigorifico.validacion', ['puede_consultar_validaciones_pallet']],
+        ['frigorifico', 'Contraparte SAG', '/oficina/frigorifico/contraparte-sag', 'frigorifico.contraparte-sag', ['puede_consultar_contraparte_sag']],
         ['frigorifico', 'Inspección SAG', '/oficina/frigorifico/inspeccion-sag', 'frigorifico.inspeccion-sag', ['puede_consultar_inspeccion_sag']],
         ['frigorifico', 'Prefrío', '/oficina/prefrio', 'frigorifico.prefrio', ['puede_consultar_prefrio']],
         ['frigorifico', 'Cámaras', '/oficina/frigorifico/camaras', 'frigorifico.camaras', ['ambito_camaras_productos']],

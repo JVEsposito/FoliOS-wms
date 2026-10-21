@@ -166,3 +166,5 @@ Route::view('/oficina/materiales/items', 'office.material-items');
 
 Route::view('/oficina/rrhh', 'office.rrhh');
 Route::view('/oficina/rrhh/marcaje', 'office.rrhh-clock');
+
+Route::view('/oficina/frigorifico/contraparte-sag', 'office.sag-counterpart');

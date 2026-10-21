@@ -371,7 +371,12 @@ class ServicioInspeccionSag
                 sujetoId: $lote ? (string) $lote->id : null,
                 referencia: $lote?->codigo,
             ),
-            $accion,
+            function () use ($accion): LoteInspeccionSag {
+                $resultado = $accion();
+                app(ServicioExistenciasSag::class)->sincronizar($resultado->folios()->pluck('folio_id')->all(), $resultado->tipo->value, $resultado->numero_inspeccion_sag ?: $resultado->codigo);
+
+                return $resultado;
+            },
         );
     }
 

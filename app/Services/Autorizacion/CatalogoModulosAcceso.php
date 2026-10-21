@@ -11,6 +11,8 @@ class CatalogoModulosAcceso
 
     public const OFICINA_MAESTROS_TEMPORADA = 'administracion.maestros-temporada';
 
+    public const OFICINA_CONTRAPARTE_SAG = 'frigorifico.contraparte-sag';
+
     public const OFICINA_PORTERIA = 'materia-prima.porteria';
 
     public const FINANZAS_PAGOS_PROVEEDORES = 'finanzas.pagos-proveedores';
@@ -92,6 +94,7 @@ class CatalogoModulosAcceso
                     $this->modulo('frigorifico.validacion', 'Validación PT', 'Validación y observación de pallets.'),
                     $this->modulo(self::OFICINA_RECEPCION_FRUTA_EMBALADA, 'Recepción de fruta embalada', 'Captura de recepciones externas y sus pallets en borrador.'),
                     $this->modulo(self::OFICINA_REPALETIZAJE, 'Repaletizaje', 'Repas desde cámaras y registro RRPL-01.'),
+                    $this->modulo(self::OFICINA_CONTRAPARTE_SAG, 'Contraparte SAG', 'Existencias aprobadas y documentación fitosanitaria de la planta.'),
                     $this->modulo('frigorifico.inspeccion-sag', 'Inspección SAG', 'Muestreos, inspecciones, fumigaciones y cambios de mercado.'),
                     $this->modulo('frigorifico.prefrio', 'Prefrío', 'Túneles, procesos y verificaciones de prefrío.'),
                     $this->modulo('frigorifico.camaras', 'Cámaras PT', 'Plano, movimientos y sesiones de producto terminado.'),
@@ -381,6 +384,7 @@ class CatalogoModulosAcceso
                 self::OFICINA_RECEPCION_FRUTA_EMBALADA,
                 self::OFICINA_REPALETIZAJE,
                 'frigorifico.inspeccion-sag',
+                self::OFICINA_CONTRAPARTE_SAG,
                 'frigorifico.prefrio',
                 'frigorifico.camaras',
                 'frigorifico.cargas',
@@ -469,6 +473,7 @@ class CatalogoModulosAcceso
                 'materia-prima.cuenta-envases',
                 'frigorifico.prefrio',
                 'frigorifico.inspeccion-sag',
+                self::OFICINA_CONTRAPARTE_SAG,
                 'frigorifico.camaras',
                 'frigorifico.cargas',
                 'materiales.resumen',

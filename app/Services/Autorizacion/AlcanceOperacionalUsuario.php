@@ -779,6 +779,16 @@ class AlcanceOperacionalUsuario
         ], 'frigorifico.prefrio');
     }
 
+    public function puedeConsultarContraparteSag(User $usuario): bool
+    {
+        return $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador, RolUsuario::SupervisorFrio, RolUsuario::Consulta], CatalogoModulosAcceso::OFICINA_CONTRAPARTE_SAG);
+    }
+
+    public function puedeGestionarContraparteSag(User $usuario): bool
+    {
+        return $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador, RolUsuario::SupervisorFrio], CatalogoModulosAcceso::OFICINA_CONTRAPARTE_SAG);
+    }
+
     public function puedeConsultarInspeccionSag(User $usuario): bool
     {
         return $this->rolActivoEnModulo($usuario, [
@@ -1214,6 +1224,8 @@ class AlcanceOperacionalUsuario
             'puede_gestionar_documentos_comex' => $this->puedeGestionarDocumentosComex($usuario),
             'puede_configurar_comex' => $this->puedeConfigurarComex($usuario),
             'puede_consultar_prefrio' => $this->puedeConsultarPrefrio($usuario),
+            'puede_consultar_contraparte_sag' => $this->puedeConsultarContraparteSag($usuario),
+            'puede_gestionar_contraparte_sag' => $this->puedeGestionarContraparteSag($usuario),
             'puede_consultar_inspeccion_sag' => $this->puedeConsultarInspeccionSag($usuario),
             'puede_gestionar_inspeccion_sag' => $this->puedeGestionarInspeccionSag($usuario),
             'puede_operar_prefrio' => $this->puedeOperarPrefrio($usuario),
