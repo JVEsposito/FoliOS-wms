@@ -10,6 +10,6 @@ final class Auditoria
     public function registrar(string $entidad, string $id, string $accion, array $datos, ?User $actor): void
     {
         EventoRrhh::query()->create(['entidad' => $entidad, 'registro_id' => $id, 'accion' => $accion,
-            'datos' => $datos, 'user_id' => $actor?->id, 'user_nombre' => $actor?->nombre, 'created_at' => now()]);
+            'datos' => $datos, 'user_id' => $actor?->id, 'user_nombre' => $actor?->name, 'created_at' => now()]);
     }
 }

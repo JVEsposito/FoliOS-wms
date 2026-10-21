@@ -57,11 +57,28 @@ class AsistenciaRrhhTest extends TestCase
         $this->assertSame(1, Marcaje::query()->count());
     }
 
+    public function test_historial_conserva_id_y_nombre_del_responsable_de_cada_cambio(): void
+    {
+        $this->admin->update(['name' => 'Ana Pérez']);
+        $id = $this->persona();
+        $this->admin->update(['name' => 'Ana Pérez González']);
+        $this->putJson('/api/rrhh/personas/'.$id, [...$this->datosPersona(), 'nombre' => 'Ficha corregida', 'version' => 1])->assertOk();
+
+        $this->getJson('/api/rrhh/historial?entidad=persona&registro_id='.$id)->assertOk()
+            ->assertJsonCount(2, 'data.data')
+            ->assertJsonPath('data.data.0.user_id', $this->admin->id)
+            ->assertJsonPath('data.data.0.user_nombre', 'Ana Pérez González')
+            ->assertJsonPath('data.data.1.user_id', $this->admin->id)
+            ->assertJsonPath('data.data.1.user_nombre', 'Ana Pérez');
+    }
+
     public function test_puesto_de_marcaje_no_puede_leer_fichas_ni_corregir_asistencia(): void
     {
         $this->persona();
-        $puesto = $this->perfil(['rrhh.marcaje']);
+        $puesto = $this->perfil(['rrhh.marcaje'], RolUsuario::GuardiaPorteria);
         $this->actingAs($puesto, 'sanctum');
+        $this->assertFalse($puesto->can('reiniciar-datos-operacionales'));
+        $this->assertFalse($puesto->can('archivar-temporadas'));
         $this->getJson('/api/rrhh/personas')->assertForbidden();
         $marca = $this->postJson('/api/rrhh/marcajes', ['operacion_id' => (string) Str::uuid(), 'codigo' => 'OP01', 'pin' => '345678', 'tipo' => 'entrada'])->assertCreated()->json('data.id');
         $this->postJson('/api/rrhh/marcajes/'.$marca.'/corregir', ['motivo' => 'Corrección no autorizada'])->assertForbidden();

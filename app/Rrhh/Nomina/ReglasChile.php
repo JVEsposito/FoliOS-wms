@@ -74,9 +74,7 @@ final class ReglasChile
                 $incidencias[] = "El grupo {$grupo} supera el {$porcentaje}% de la remuneración bruta.";
             }
         }
-        if (self::decimal($totales['voluntario'] ?? 0)->plus($totales['cooperativa'] ?? 0)->multipliedBy(100)->isGreaterThan($b->multipliedBy(25))) {
-            $incidencias[] = 'Descuentos voluntarios y cooperativa superan juntos el 25%.';
-        }
+        // DT ORD 3456/37: cooperativa tiene su propio tope del 25%; el conjunto facultativo se limita al 45%.
         $suma = self::decimal(0);
         foreach ($totales as $total) {
             $suma = $suma->plus($total);

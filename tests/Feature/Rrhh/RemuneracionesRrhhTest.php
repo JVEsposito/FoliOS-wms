@@ -12,6 +12,7 @@ use App\Rrhh\Nomina\ReglasChile;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class RemuneracionesRrhhTest extends TestCase
@@ -122,7 +123,36 @@ class RemuneracionesRrhhTest extends TestCase
         $this->aprobar($o)->assertOk();
         $this->assertCount(0, app(ReglasChile::class)->limites(['voluntario' => '150000', 'vivienda' => '300000'], '1000000'));
         $this->assertNotEmpty(app(ReglasChile::class)->limites(['voluntario' => '150001'], '1000000'));
-        $this->assertNotEmpty(app(ReglasChile::class)->limites(['cooperativa' => '200000', 'voluntario' => '100000'], '1000000'));
+        $this->assertSame([], app(ReglasChile::class)->limites(['cooperativa' => '200000', 'voluntario' => '100000'], '1000000'));
+    }
+
+    #[DataProvider('combinacionesCooperativa')]
+    public function test_aprueba_descuentos_voluntarios_y_cooperativa_hasta_el_tope_conjunto_del_45_por_ciento(string $voluntario, string $cooperativa, bool $cooperativaPrimero): void
+    {
+        $conceptos = [
+            'voluntario' => $this->conceptoDescuento('VOL', 'voluntario'),
+            'cooperativa' => $this->conceptoDescuento('COOP', 'cooperativa'),
+            'vivienda' => $this->conceptoDescuento('VIV', 'vivienda'),
+        ];
+        $datos = ['cantidad' => '1', 'remuneracion_bruta' => '1000000', 'autorizacion' => 'Autorización escrita y régimen del descuento verificados'];
+        $montos = ['voluntario' => $voluntario, 'cooperativa' => $cooperativa];
+        foreach ($cooperativaPrimero ? array_reverse($montos, true) : $montos as $grupo => $valor) {
+            $this->aprobar($this->crear($conceptos[$grupo], [...$datos, 'valor' => $valor]))->assertOk();
+        }
+        $vivienda = ReglasChile::texto(ReglasChile::decimal('450000')->minus($voluntario)->minus($cooperativa));
+        $this->aprobar($this->crear($conceptos['vivienda'], [...$datos, 'valor' => $vivienda, 'pago_directo_institucion' => true]))->assertOk();
+        $exceso = $this->crear($conceptos['vivienda'], [...$datos, 'valor' => '1', 'pago_directo_institucion' => true]);
+        $this->aprobar($exceso)->assertUnprocessable()->assertJsonPath('errors.total.0', 'Los descuentos facultativos superan juntos el 45%.');
+        $this->assertSame('borrador', MovimientoNomina::query()->findOrFail($exceso)->estado);
+        $this->assertSame(3, MovimientoNomina::query()->where('estado', 'aprobado')->count());
+    }
+
+    public static function combinacionesCooperativa(): array
+    {
+        return [
+            '15% voluntario y 20% cooperativa' => ['150000', '200000', false],
+            '25% cooperativa y 10% voluntario' => ['100000', '250000', true],
+        ];
     }
 
     public function test_idempotencia_y_cambios_de_antecedentes_no_recalculan_aprobados(): void
