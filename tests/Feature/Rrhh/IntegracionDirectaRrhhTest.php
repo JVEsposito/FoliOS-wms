@@ -42,7 +42,7 @@ class IntegracionDirectaRrhhTest extends TestCase
         $this->persona = (string) Str::uuid();
         Persona::query()->create(['id' => $this->persona, 'codigo' => 'R01', 'nombre' => 'Nombre privado', 'documento' => 'DOCUMENTO_PRIVADO', 'fuente_marcaje' => 'geo']);
         $this->fuente = $this->postJson('/api/rrhh/fuentes', ['codigo' => 'geo', 'nombre' => 'GeoVictoria prueba', 'tipo' => 'geovictoria', 'activa' => true,
-            'configuracion' => ['base_url' => 'https://apiv3.geovictoria.com', 'api_key' => 'KEY_PRUEBA', 'api_secret' => 'SECRETO_NO_PUBLICAR', 'zona_origen' => 'America/Santiago', 'contrato_checkpoint' => 'validado']])->assertCreated()->json('data.id');
+            'configuracion' => ['base_url' => 'https://APIV3.geovictoria.com:443', 'api_key' => 'KEY_PRUEBA', 'api_secret' => 'SECRETO_NO_PUBLICAR', 'zona_origen' => 'America/Santiago', 'contrato_checkpoint' => 'validado']])->assertCreated()->json('data.id');
         $this->vincular($this->persona, 'EXT-1');
     }
 

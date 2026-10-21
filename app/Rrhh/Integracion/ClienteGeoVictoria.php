@@ -22,7 +22,8 @@ final class ClienteGeoVictoria
         if (! is_array($url) || ($url['scheme'] ?? '') !== 'https' || ! preg_match('/^[a-z0-9-]+\.geovictoria\.com$/i', $url['host'] ?? '') || ! in_array($url['port'] ?? 443, [443], true) || isset($url['user']) || isset($url['pass']) || isset($url['query']) || isset($url['fragment']) || ! empty($url['path'])) {
             $this->error('La dirección debe ser un origen HTTPS oficial de GeoVictoria, sin ruta, usuario ni redirecciones.');
         }
-        $endpoint = $base.'/api/Punch/ListPendingCheckPoint';
+        // OAuth usa el host en minúsculas y omite el puerto HTTPS por defecto en la URI firmada.
+        $endpoint = 'https://'.strtolower($url['host']).'/api/Punch/ListPendingCheckPoint';
         $oauth = ['oauth_consumer_key' => $c['api_key'], 'oauth_nonce' => Str::random(32), 'oauth_signature_method' => 'HMAC-SHA1', 'oauth_timestamp' => (string) now()->getTimestamp(), 'oauth_version' => '1.0'];
         ksort($oauth);
         $parametros = http_build_query($oauth, '', '&', PHP_QUERY_RFC3986);
