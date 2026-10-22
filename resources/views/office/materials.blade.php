@@ -369,10 +369,10 @@
                                     <label><span>Número guía de despacho *</span><input name="numero_guia_despacho" maxlength="50" required></label>
                                     <label><span>Fecha del documento</span><input name="fecha_documento" type="date"></label>
                                     <label><span>Orden de compra</span><input name="orden_compra" maxlength="80"></label>
-                                    <label><span>Patente</span><input name="patente" maxlength="20"></label>
-                                    <label><span>Transportista</span><input name="transportista" maxlength="150"></label>
                                     <label class="materials-wide"><span>Observación</span><textarea name="observacion" maxlength="2000" rows="2"></textarea></label>
                                 </div>
+
+                                @include('office.partials.material-reception-transport')
 
                                 <div class="material-reception-lines-heading">
                                     <div><h3>Productos recibidos</h3><p>Indica la cantidad aceptada y cuántas unidades contiene cada bulto; el último se calcula con el diferencial.</p></div>

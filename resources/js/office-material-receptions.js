@@ -1,4 +1,5 @@
 import { createReceptionPhotosPanel } from './office-material-reception-photos.js';
+import { createReceptionTransport } from './office-material-reception-transport.js';
 import './office-material-reception-import.js';
 
 const receptionElements = {
@@ -68,6 +69,7 @@ const receptionState = {
     loadingPromise: null,
 };
 
+const transportPanel = receptionElements.form ? createReceptionTransport(receptionElements.form, receptionApi) : null;
 const photosPanel = receptionElements.photos ? createReceptionPhotosPanel(receptionElements.photos, {
     getReception: () => receptionState.current, token: receptionToken, uuid: receptionUuid, canManage: receptionCanManage, canAdminister: receptionCanAdminister,
     onChange: refreshReceptionPhotos,
@@ -343,6 +345,9 @@ function renderReceptionDetail() {
     receptionElements.detailState.textContent = { borrador: 'Recepción en borrador', confirmada: 'Recepción confirmada', anulada: 'Recepción anulada' }[record.estado];
     receptionElements.detailTitle.textContent = `Guía ${record.numero_guia_despacho}`;
     receptionElements.detailMeta.textContent = `Cliente ${record.cliente?.nombre || '—'} (${record.cliente?.codigo || '—'}), proveedor ${record.proveedor?.nombre || '—'}${record.orden_compra ? `, OC ${record.orden_compra}` : ''}`;
+    if (record.transporte?.conductor) receptionElements.detailMeta.textContent += ` · Conductor ${record.transporte.conductor.nombre} (${record.transporte.conductor.rut})`;
+    if (record.patente) receptionElements.detailMeta.textContent += ` · Camión ${record.patente}`;
+    if (record.transportista) receptionElements.detailMeta.textContent += ` · Transportista ${record.transportista}`;
     const action = (name, text) => `<button type="button" class="secondary-button" data-action="${name}" data-id="${receptionEscape(record.id)}">${text}</button>`;
     receptionElements.detailActions.innerHTML = action('view', 'Ver formulario')
         + (record.estado === 'confirmada' ? action('sampling', 'Registro de muestreo') : '')
@@ -552,6 +557,7 @@ function populateReceptionForm(record = null) {
     receptionElements.form.elements.orden_compra.value = record?.orden_compra || '';
     receptionElements.form.elements.patente.value = record?.patente || '';
     receptionElements.form.elements.transportista.value = record?.transportista || '';
+    transportPanel?.populate(record);
     receptionElements.form.elements.observacion.value = record?.observacion || '';
     receptionElements.form.elements.motivo_correccion.value = '';
     renderReceptionLines();
@@ -561,6 +567,7 @@ function configureReceptionDialog() {
     const readonly = receptionState.mode === 'view';
     const editing = receptionState.mode === 'edit';
     const confirmed = receptionState.current?.estado === 'confirmada';
+    transportPanel?.setReadonly(readonly);
     receptionElements.dialogEyebrow.textContent = readonly ? 'EXPEDIENTE DE RECEPCIÓN' : editing ? 'CORRECCIÓN ADMINISTRATIVA' : 'NUEVA RECEPCIÓN';
     receptionElements.dialogTitle.textContent = receptionState.current
         ? `Guía ${receptionState.current.numero_guia_despacho}`
@@ -652,6 +659,7 @@ function receptionPayload() {
         orden_compra: form.get('orden_compra') || null,
         patente: form.get('patente') || null,
         transportista: form.get('transportista') || null,
+        ...transportPanel?.payload(),
         observacion: form.get('observacion') || null,
         detalles: receptionState.lines.map((line) => ({
             item_material_id: line.itemId,
