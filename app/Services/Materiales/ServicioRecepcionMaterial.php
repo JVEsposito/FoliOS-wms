@@ -1096,6 +1096,7 @@ class ServicioRecepcionMaterial
                     'categoria_operacional' => $detalle->categoria_operacional->value,
                     'unidad_medida' => $detalle->unidad_medida,
                     'cantidad_documental' => $detalle->cantidad_documental,
+                    'conversion_unidad' => $detalle->conversion_unidad,
                     'cantidad_contada' => $detalle->cantidad_contada,
                     'cantidad_aceptada' => $detalle->cantidad_recibida,
                     'cantidad_rechazada' => $detalle->cantidad_rechazada,
@@ -1183,7 +1184,9 @@ class ServicioRecepcionMaterial
             $proveedor,
             $vinculoProveedor,
             $temporadaId,
+            bloquear: true,
         );
+        [$linea, $conversion] = app(ServicioUnidadesMateriales::class)->convertirLinea($item, $linea);
         $cantidadDocumental = $this->cantidad($linea['cantidad_documental']);
         $cantidadContada = $this->cantidad($linea['cantidad_contada']);
         $cantidadAceptada = $this->cantidad($linea['cantidad_aceptada'], permitirCero: true);
@@ -1203,6 +1206,7 @@ class ServicioRecepcionMaterial
             'item_material_id' => $item->id,
             'categoria_operacional' => $item->categoria_operacional,
             'unidad_medida' => $item->unidad_medida,
+            'conversion_unidad' => $conversion,
             'cantidad_documental' => $cantidadDocumental,
             'cantidad_contada' => $cantidadContada,
             'cantidad_recibida' => $cantidadAceptada,

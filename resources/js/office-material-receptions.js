@@ -347,7 +347,7 @@ function renderReceptionDetail() {
     receptionElements.detailActions.innerHTML = action('view', 'Ver formulario')
         + (record.estado === 'confirmada' ? action('sampling', 'Registro de muestreo') : '')
         + (receptionCanAdminister() ? (record.estado !== 'anulada' ? action('edit', 'Editar') : '') + action('delete', 'Eliminar') : '');
-    receptionElements.detailLines.innerHTML = (record.detalles || []).map((detail) => `<article class="material-reception-detail-line"><strong>${receptionEscape(detail.item?.nombre || '—')}</strong><code>${receptionEscape(detail.item?.codigo || '—')}</code><b>${receptionEscape(receptionQuantity(detail.cantidad_aceptada ?? detail.cantidad_recibida))} ${receptionEscape(detail.unidad_medida || '')}</b><small>${receptionEscape(receptionPackageSummary(detail))}</small></article>`).join('');
+    receptionElements.detailLines.innerHTML = (record.detalles || []).map((detail) => `<article class="material-reception-detail-line"><strong>${receptionEscape(detail.item?.nombre || '—')}</strong><code>${receptionEscape(detail.item?.codigo || '—')}</code><b>${receptionEscape(receptionQuantity(detail.cantidad_aceptada ?? detail.cantidad_recibida))} ${receptionEscape(detail.unidad_medida || '')}</b><small>${receptionEscape(receptionPackageSummary(detail))}</small>${detail.conversion_unidad ? `<small>Ingreso: ${receptionEscape(detail.conversion_unidad.entrada.cantidad_aceptada)} ${receptionEscape(detail.conversion_unidad.unidad_origen)} × ${receptionEscape(detail.conversion_unidad.factor)} ${receptionEscape(detail.unidad_medida)}</small>` : ''}</article>`).join('');
     const folios = record.snapshot_confirmacion?.folios || [];
     receptionElements.detailFoot.textContent = record.estado === 'borrador'
         ? `Al confirmar se generan ${(record.detalles || []).reduce((total, detail) => total + (detail.bultos || []).length, 0)} folios.`
@@ -469,17 +469,20 @@ function packageSizeFromExisting(packages) {
 }
 
 function receptionLineState(detail = null) {
-    const packages = detail?.bultos || [];
+    const snapshot = detail?.conversion_unidad;
+    const packages = (detail?.bultos || []).map((p, i) => ({ ...p, cantidad: snapshot?.bultos_entrada?.[i] ?? p.cantidad }));
     const first = packages[0] || {};
     return {
         key: receptionUuid(),
         itemId: detail?.item?.id || '',
-        itemSnapshot: detail?.item || null,
+        itemSnapshot: detail?.item ? { ...detail.item, unidad_medida: detail.unidad_medida } : null,
+        inputUnit: snapshot?.unidad_origen || '',
+        conversionSnapshot: snapshot || null,
         itemFilter: '',
-        documentary: detail?.cantidad_documental ?? '',
-        counted: detail?.cantidad_contada ?? '',
-        accepted: detail?.cantidad_aceptada ?? detail?.cantidad_recibida ?? '',
-        rejected: detail?.cantidad_rechazada ?? 0,
+        documentary: snapshot?.entrada?.cantidad_documental ?? detail?.cantidad_documental ?? '',
+        counted: snapshot?.entrada?.cantidad_contada ?? detail?.cantidad_contada ?? '',
+        accepted: snapshot?.entrada?.cantidad_aceptada ?? detail?.cantidad_aceptada ?? detail?.cantidad_recibida ?? '',
+        rejected: snapshot?.entrada?.cantidad_rechazada ?? detail?.cantidad_rechazada ?? 0,
         packageSize: packageSizeFromExisting(packages),
         lot: first.lote_proveedor || '',
         manufacturedAt: first.fecha_fabricacion || '',
@@ -511,6 +514,19 @@ function packageSummary(line) {
         : `${total} bultos de ${receptionQuantity(packageSize)}.`;
 }
 
+function receptionConversion(line) {
+    if (line.inputUnit && line.conversionSnapshot?.unidad_origen === line.inputUnit) return line.conversionSnapshot;
+    const item = receptionState.catalogs.items.find((i) => i.id === line.itemId) || line.itemSnapshot;
+    return item?.conversiones_unidad?.find((c) => c.unidad_origen === line.inputUnit);
+}
+
+function receptionInputUnit(line, item, readonly) {
+    const choices = new Map((item?.conversiones_unidad || []).map((c) => [c.unidad_origen, c]));
+    if (line.inputUnit && !choices.has(line.inputUnit)) choices.set(line.inputUnit, line.conversionSnapshot);
+    const factor = receptionConversion(line)?.factor;
+    return `<label><span>Unidad de ingreso</span><select name="unidad_ingreso"${readonly ? ' disabled' : ''}><option value="">${receptionEscape(item?.unidad_medida || 'Unidad base')}</option>${[...choices.keys()].map((u) => `<option value="${receptionEscape(u)}"${u === line.inputUnit ? ' selected' : ''}>${receptionEscape(u)}</option>`).join('')}</select></label><p class="materials-help wide material-reception-conversion-hint">${line.inputUnit && factor ? `1 ${receptionEscape(line.inputUnit)} = ${receptionEscape(factor)} ${receptionEscape(item?.unidad_medida || line.conversionSnapshot?.unidad_base)}. Todas las cantidades y el tamaño de bulto se ingresan en ${receptionEscape(line.inputUnit)}.` : 'Las cantidades se ingresan en la unidad base del ítem.'}</p>`;
+}
+
 function renderReceptionLines() {
     const readonly = receptionState.mode === 'view';
     receptionElements.lines.innerHTML = receptionState.lines.map((line, index) => {
@@ -521,6 +537,7 @@ function renderReceptionLines() {
             <div class="material-reception-line__heading"><strong>Producto ${index + 1}</strong>${readonly ? '' : `<button data-remove-line="${line.key}" type="button">Quitar</button>`}</div>
             <div class="material-reception-line__grid">
                 <label class="wide"><span>Producto *</span><div class="material-item-picker material-reception-item-picker"><div class="material-reception-item-controls"><input class="material-item-search" type="search" value="${receptionEscape(receptionItemLabel(selectedItem))}" placeholder="Buscar por código, nombre, categoría o unidad" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false"${readonly ? ' readonly' : ''}><select class="material-reception-item-filter" aria-label="Filtrar productos por tipo"${readonly ? ' disabled' : ''}><option value="">Todos los tipos</option><option value="insumo"${line.itemFilter === 'insumo' ? ' selected' : ''}>Insumos</option><option value="material_mp"${line.itemFilter === 'material_mp' ? ' selected' : ''}>Material MP</option><option value="material_pt"${line.itemFilter === 'material_pt' ? ' selected' : ''}>Material PT</option></select></div><input name="item_material_id" type="hidden" value="${receptionEscape(line.itemId)}"><div class="material-item-results is-hidden" role="listbox"></div><small class="material-reception-item-hint">Escribe para filtrar; Enter selecciona el primer resultado.</small></div></label>
+                ${receptionInputUnit(line, selectedItem, readonly)}
                 <label><span>Cantidad documental *</span><input name="cantidad_documental" type="number" min="0.001" step="0.001" value="${receptionEscape(line.documentary)}" required></label>
                 <label><span>Cantidad contada *</span><input name="cantidad_contada" type="number" min="0.001" step="0.001" value="${receptionEscape(line.counted)}" required></label>
                 <label><span>Cantidad aceptada *</span><input name="cantidad_aceptada" type="number" min="0" step="0.001" value="${receptionEscape(line.accepted)}" required></label>
@@ -598,6 +615,8 @@ function syncLineFromElement(article, markDirty = true) {
     const line = receptionState.lines.find((candidate) => candidate.key === article.dataset.lineKey);
     if (!line) return;
     line.itemId = article.querySelector('[name="item_material_id"]').value;
+    const unit = article.querySelector('[name="unidad_ingreso"]').value;
+    if (unit !== line.inputUnit) { line.inputUnit = unit; line.conversionSnapshot = null; }
     line.documentary = article.querySelector('[name="cantidad_documental"]').value;
     line.counted = article.querySelector('[name="cantidad_contada"]').value;
     line.accepted = article.querySelector('[name="cantidad_aceptada"]').value;
@@ -611,6 +630,11 @@ function syncLineFromElement(article, markDirty = true) {
     line.observation = article.querySelector('[name="observacion_detalle"]').value;
     if (markDirty) line.packagesDirty = true;
     article.querySelector('.material-reception-package-summary').textContent = packageSummary(line);
+    const item = receptionState.catalogs.items.find((i) => i.id === line.itemId) || line.itemSnapshot;
+    const factor = receptionConversion(line)?.factor;
+    article.querySelector('.material-reception-conversion-hint').textContent = line.inputUnit && factor
+        ? `1 ${line.inputUnit} = ${factor} ${item?.unidad_medida || line.conversionSnapshot?.unidad_base}. Cantidades y tamaño de bulto en ${line.inputUnit}.`
+        : 'Las cantidades se ingresan en la unidad base del ítem.';
 }
 
 function generatedPackages(line) {
@@ -655,6 +679,7 @@ function receptionPayload() {
         observacion: form.get('observacion') || null,
         detalles: receptionState.lines.map((line) => ({
             item_material_id: line.itemId,
+            ...(line.inputUnit ? { unidad_ingreso: line.inputUnit, conversion_version: receptionConversion(line)?.version || 0 } : {}),
             cantidad_documental: Number(line.documentary),
             cantidad_contada: Number(line.counted),
             cantidad_aceptada: Number(line.accepted),
@@ -824,10 +849,10 @@ if (receptionElements.workspace) {
         if (!line || !item) return;
         line.itemId = item.id;
         line.itemSnapshot = item;
-        article.querySelector('[name="item_material_id"]').value = item.id;
-        article.querySelector('.material-item-search').value = receptionItemLabel(item);
+        line.inputUnit = ''; line.conversionSnapshot = null;
+        renderReceptionLines();
         closeReceptionItemResults();
-        article.querySelector('[name="cantidad_documental"]').focus();
+        receptionElements.lines.querySelector(`[data-line-key="${line.key}"] [name="cantidad_documental"]`).focus();
     });
     receptionElements.lines.addEventListener('focusin', (event) => {
         const input = event.target.closest('.material-item-search');

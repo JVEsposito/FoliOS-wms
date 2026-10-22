@@ -176,6 +176,7 @@
                             'clients' => ['label' => 'Clientes', 'icon' => '◇'],
                             'providers' => ['label' => 'Proveedores', 'icon' => '⇄'],
                             'items' => ['label' => 'Ítems', 'icon' => '▤'],
+                            'units' => ['label' => 'Unidades', 'icon' => '≋'],
                             'destinations' => ['label' => 'Destinos', 'icon' => '⌖'],
                         ]"
                     />
@@ -244,7 +245,7 @@
                                     <label><span>Descripción *</span><input name="nombre" maxlength="180" placeholder="Caja cartón 10 kg" required></label>
                                     <label><span>Categoría comercial</span><input name="categoria" maxlength="100" placeholder="Cajas"></label>
                                     <label><span>Tipo de ítem *</span><select name="categoria_operacional" required><option value="">Selecciona un tipo</option><option value="insumo">Insumo</option><option value="material_mp">Material MP · sin preparar</option><option value="material_pt">Material PT · preparado para línea</option></select></label>
-                                    <label><span>Unidad *</span><input name="unidad_medida" maxlength="40" placeholder="unidades" required></label>
+                                    <label><span>Unidad base *</span><select name="unidad_medida" required><option value="">Seleccione una unidad</option></select></label>
                                     <label><span>Código ERP futuro</span><input name="codigo_externo" maxlength="150"></label>
                                     <label><span>Stock mínimo</span><input name="stock_minimo" type="number" min="0" step="0.001" placeholder="Sin nivel"></label>
                                     <label><span>Punto de reorden</span><input name="punto_reorden" type="number" min="0" step="0.001" placeholder="Sin nivel"></label>
@@ -259,6 +260,8 @@
                         </details>
                         <div class="materials-list" id="itemsMaterialList"></div>
                     </section>
+
+                    @include('office.partials.material-units')
 
                     <dialog class="materials-import material-regularization-dialog" id="materialRegularizationDialog">
                         <form id="materialRegularizationForm" novalidate>

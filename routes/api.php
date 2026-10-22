@@ -84,6 +84,7 @@ use App\Http\Controllers\Api\TomaInventarioMaterialController;
 use App\Http\Controllers\Api\TransferenciaClienteMaterialController;
 use App\Http\Controllers\Api\TransformacionMaterialController;
 use App\Http\Controllers\Api\TunelPrefrioController;
+use App\Http\Controllers\Api\UnidadMaterialController;
 use App\Http\Controllers\Api\ValidacionMpController;
 use App\Http\Controllers\Api\ValidacionPalletController;
 use App\Http\Controllers\Api\VencimientoMaterialController;
@@ -712,6 +713,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/administracion/andenes/{anden}', [AndenController::class, 'update']);
     });
     Route::middleware('can:administrar-catalogos-materiales')->group(function () {
+        Route::get('/administracion/materiales/unidades', [UnidadMaterialController::class, 'index']);
+        Route::post('/administracion/materiales/unidades', [UnidadMaterialController::class, 'store']);
+        Route::get('/administracion/materiales/unidades/historial', [UnidadMaterialController::class, 'historial']);
+        Route::put('/administracion/materiales/unidades/{unidadMaterial}', [UnidadMaterialController::class, 'update']);
+        Route::get('/administracion/materiales/items/{itemMaterial}/unidades', [UnidadMaterialController::class, 'conversiones']);
+        Route::put('/administracion/materiales/items/{itemMaterial}/unidades', [UnidadMaterialController::class, 'guardarConversion']);
         Route::get('/administracion/materiales/temporadas', [CatalogoMaterialController::class, 'temporadas']);
         Route::get('/administracion/materiales/clientes', [CatalogoMaterialController::class, 'clientes']);
         Route::get('/administracion/materiales/proveedores', [ProveedorMaterialController::class, 'index']);

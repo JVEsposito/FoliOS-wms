@@ -128,7 +128,7 @@ class ServicioImportacionCatalogoMaterial
 
             /** @var ItemMaterial|null $existente */
             $existente = $claveCodigo === '' ? null : $existentesPorCodigo->get($claveCodigo);
-            if ($existente && mb_strtolower($this->texto($existente->unidad_medida)) === $fila['unidad_medida']) {
+            if ($existente && app(ServicioUnidadesMateriales::class)->equivalentes($existente->unidad_medida, $fila['unidad_medida'])) {
                 // Conservar la representación histórica al descargar y reimportar.
                 $fila['unidad_medida'] = $existente->unidad_medida;
             }
@@ -149,7 +149,7 @@ class ServicioImportacionCatalogoMaterial
 
             if ($existente
                 && $existente->unidad_medida !== $fila['unidad_medida']
-                && $existente->folios_materiales_count > 0) {
+                && app(ServicioUnidadesMateriales::class)->referenciado($existente)) {
                 $mensajes[] = 'La unidad de medida no puede cambiar porque el ítem ya posee folios asociados.';
             }
 
@@ -254,7 +254,7 @@ class ServicioImportacionCatalogoMaterial
 
                 if ($item
                     && $item->unidad_medida !== $fila['unidad_medida']
-                    && $item->foliosMateriales()->exists()) {
+                    && app(ServicioUnidadesMateriales::class)->referenciado($item)) {
                     throw new DomainException(
                         'La unidad de '.$item->codigo.' cambió después de la previsualización y ya posee folios asociados.',
                     );

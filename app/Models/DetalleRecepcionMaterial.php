@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'item_material_id',
     'categoria_operacional',
     'unidad_medida',
+    'conversion_unidad',
     'cantidad_documental',
     'cantidad_contada',
     'cantidad_recibida',
@@ -46,6 +47,7 @@ class DetalleRecepcionMaterial extends Model
     protected function casts(): array
     {
         return [
+            'conversion_unidad' => 'array',
             'categoria_operacional' => CategoriaOperacionalMaterial::class,
             'cantidad_documental' => 'decimal:3',
             'cantidad_contada' => 'decimal:3',
