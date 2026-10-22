@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 
 /** Un pallet del stock de origen, tal como venía en la última lectura que lo incluyó. */
 #[Fillable([
-    'bodega', 'numero_pallet', 'tipo_bulto', 'tipo_mezclado', 'temporada_origen', 'temporada_origen_nombre', 'empresa',
+    'ambito', 'bodega', 'numero_pallet', 'tipo_bulto', 'tipo_mezclado', 'temporada_origen', 'temporada_origen_nombre', 'empresa',
     'especie', 'especie_codigo', 'variedad', 'variedad_codigo', 'calibre', 'categoria', 'envase_codigo', 'envase', 'envase_kilos',
     'marca', 'origen', 'mezclados',
     'cajas', 'kilos', 'fecha_embalaje', 'recibido_origen_at', 'composicion', 'huella', 'presente',

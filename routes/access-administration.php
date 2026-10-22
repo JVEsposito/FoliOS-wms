@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AdministracionAccesoController;
 use App\Http\Controllers\Api\ConexionExternaController;
+use App\Http\Controllers\Api\ConfiguracionStockOrigenController;
 use App\Http\Controllers\Api\ExploracionOrigenController;
 use Illuminate\Support\Facades\Route;
 
@@ -17,6 +18,9 @@ Route::middleware(['auth:sanctum', 'can:administrar-accesos'])
     ->group(function (): void {
         Route::get('/', [ConexionExternaController::class, 'index']);
         Route::post('/', [ConexionExternaController::class, 'store']);
+        Route::get('/lectura-stock', [ConfiguracionStockOrigenController::class, 'index']);
+        Route::put('/lectura-stock', [ConfiguracionStockOrigenController::class, 'guardar'])->middleware('throttle:12,1');
+        Route::post('/lectura-stock/simular', [ConfiguracionStockOrigenController::class, 'simular'])->middleware('throttle:12,1');
         Route::put('/{conexionExterna}', [ConexionExternaController::class, 'update']);
         Route::post('/{conexionExterna}/probar', [ConexionExternaController::class, 'probar'])
             ->middleware('throttle:6,1');

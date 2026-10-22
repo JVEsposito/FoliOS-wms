@@ -3,10 +3,12 @@
 namespace App\Services\Integraciones;
 
 use App\Models\ConexionExterna;
+use App\Models\ConfiguracionOrigen;
 use App\Models\LecturaStockOrigen;
 use App\Models\PalletStockOrigen;
 use App\Models\User;
 use Carbon\CarbonImmutable;
+use DomainException;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
@@ -48,11 +50,26 @@ class ServicioLecturaStockOrigen
         'temporada_origen_nombre' => 'temporada',
     ];
 
-    public function __construct(private readonly ConectorMySqlLectura $conector) {}
+    public function __construct(
+        private readonly ConectorMySqlLectura $conector,
+        private readonly ExploradorMySql $explorador,
+        private readonly MapeoStockOrigen $mapeo,
+    ) {}
 
-    /** @return array{conexion: ?ConexionExterna, tabla: string, bodega: string, temporada: ?string, habilitada: bool} */
+    /** La configuración de Oficina tiene prioridad; sin ella se conserva el contrato anterior. */
     public function configuracion(): array
     {
+        $perfil = ConfiguracionOrigen::find(ConfiguracionOrigen::STOCK);
+        if ($perfil) {
+            $conexion = ConexionExterna::find($perfil->conexion_externa_id);
+
+            return [
+                'conexion' => $conexion?->activa ? $conexion : null,
+                'tabla' => $perfil->ajustes['tabla'], 'bodega' => '', 'temporada' => null,
+                'habilitada' => $perfil->ajustes['habilitada'], 'ambito' => $perfil->ambito($conexion),
+                'perfil' => $perfil->ajustes,
+            ];
+        }
         $config = config('integraciones.stock_pt');
         $nombre = trim((string) ($config['conexion'] ?? ''));
         $activas = ConexionExterna::query()->where('activa', true);
@@ -66,6 +83,8 @@ class ServicioLecturaStockOrigen
             'bodega' => (string) $config['bodega'],
             'temporada' => filled($config['temporada'] ?? null) ? (string) $config['temporada'] : null,
             'habilitada' => (bool) $config['habilitada'],
+            'ambito' => 'legacy',
+            'perfil' => null,
         ];
     }
 
@@ -89,6 +108,7 @@ class ServicioLecturaStockOrigen
     {
         $lectura = LecturaStockOrigen::create([
             'conexion_externa_id' => $config['conexion']->id,
+            'ambito' => $config['ambito'],
             'tabla' => $config['tabla'],
             'bodega' => $config['bodega'],
             'temporada_origen' => $config['temporada'],
@@ -98,19 +118,30 @@ class ServicioLecturaStockOrigen
         ]);
 
         try {
-            if (preg_match('/^[A-Za-z0-9_]{1,64}$/', $config['tabla']) !== 1) {
-                throw new LecturaStockOrigenFallida('tabla_invalida', 'El nombre de la tabla de origen solo admite letras, números y guion bajo.');
+            if ($config['perfil'] !== null) {
+                $columnas = $this->explorador->columnas($config['conexion']->credenciales, $config['tabla']);
+                [$sql, $parametros] = $this->mapeo->consulta($config['perfil'], $columnas);
+            } else {
+                if (preg_match('/^[A-Za-z0-9_]{1,64}$/', $config['tabla']) !== 1) {
+                    throw new LecturaStockOrigenFallida('tabla_invalida', 'El nombre de la tabla de origen solo admite letras, números y guion bajo.');
+                }
+                $sql = $this->consulta($config['tabla'], $config['temporada'] !== null);
+                $parametros = array_values(array_filter([$config['bodega'], $config['temporada']], fn (?string $valor): bool => $valor !== null));
             }
-            $filas = $this->conector->consultar(
-                $config['conexion']->credenciales,
-                $this->consulta($config['tabla'], $config['temporada'] !== null),
-                array_values(array_filter([$config['bodega'], $config['temporada']], fn (?string $valor): bool => $valor !== null)),
-            );
+            $filas = $this->conector->consultar($config['conexion']->credenciales, $sql, $parametros);
             if ($filas === []) {
                 // Una vista caída o filtrada por error devolvería vacío: no se da todo por retirado.
-                throw new LecturaStockOrigenFallida('sin_filas', "La tabla de origen no devolvió pallets de la bodega {$config['bodega']}; se conserva la lectura anterior.");
+                throw new LecturaStockOrigenFallida('sin_filas', 'La fuente no devolvió filas con los filtros configurados; se conserva la lectura anterior.');
+            }
+            if ($config['perfil'] !== null) {
+                $this->mapeo->validarFilas($filas);
             }
             $pallets = $this->agrupar($filas);
+            foreach ($pallets as $pallet) {
+                if ($pallet['cajas'] > 4294967295 || $pallet['kilos'] > 9999999999.99) {
+                    throw new DomainException('La suma de cajas o kilos de un pallet supera el máximo admitido. Revise las columnas asignadas.');
+                }
+            }
             $resultado = $this->guardar($pallets, $config['bodega'], $lectura);
             $lectura->update([
                 'estado' => 'correcta',
@@ -122,9 +153,11 @@ class ServicioLecturaStockOrigen
         } catch (Throwable $error) {
             [$causa, $mensaje] = $error instanceof LecturaStockOrigenFallida
                 ? [$error->causa, $error->getMessage()]
-                : array_values(array_intersect_key(ConectorMySqlLectura::diagnosticar($error), array_flip(['causa', 'mensaje'])));
+                : ($error instanceof DomainException
+                    ? ['mapeo_invalido', $error->getMessage()]
+                    : array_values(array_intersect_key(ConectorMySqlLectura::diagnosticar($error), array_flip(['causa', 'mensaje']))));
             if ($causa === 'tabla_inexistente') {
-                $mensaje = "No existe la tabla o vista {$config['tabla']} en la base de origen. Revisa WMS_STOCK_ORIGEN_TABLA.";
+                $mensaje = "No existe la tabla o vista {$config['tabla']} en la base de origen. Revisa ".($config['perfil'] ? 'el mapeo en Conexiones externas.' : 'WMS_STOCK_ORIGEN_TABLA.');
             }
             $lectura->update([
                 'estado' => 'fallida',
@@ -230,8 +263,15 @@ class ServicioLecturaStockOrigen
     private function guardar(array $pallets, string $bodega, LecturaStockOrigen $lectura): array
     {
         return DB::transaction(function () use ($pallets, $bodega, $lectura): array {
+            // Un cambio mientras respondía el servidor externo no debe publicar una copia obsoleta.
+            ConfiguracionOrigen::query()->whereKey(ConfiguracionOrigen::STOCK)->lockForUpdate()->first();
+            ConexionExterna::query()->whereKey($lectura->conexion_externa_id)->lockForUpdate()->first();
+            $vigente = $this->configuracion();
+            if (! $vigente['habilitada'] || ! $vigente['conexion'] || $vigente['ambito'] !== $lectura->ambito) {
+                throw new LecturaStockOrigenFallida('configuracion_cambiada', 'La configuración cambió durante la lectura. Repita la lectura con la selección vigente.');
+            }
             $ahora = now();
-            $existentes = PalletStockOrigen::query()->where('bodega', $bodega)->get()->keyBy('numero_pallet');
+            $existentes = PalletStockOrigen::query()->where('ambito', $lectura->ambito)->where('bodega', $bodega)->get()->keyBy('numero_pallet');
             $nuevos = 0;
             $modificados = 0;
             foreach ($pallets as $numero => $datos) {
@@ -242,7 +282,7 @@ class ServicioLecturaStockOrigen
                 } elseif ($existente->huella !== $datos['huella']) {
                     $modificados++;
                 }
-                $modelo = $existente ?? new PalletStockOrigen(['bodega' => $bodega, 'primera_lectura_at' => $ahora]);
+                $modelo = $existente ?? new PalletStockOrigen(['ambito' => $lectura->ambito, 'bodega' => $bodega, 'primera_lectura_at' => $ahora]);
                 $modelo->fill([
                     ...$datos,
                     'presente' => true,
@@ -253,6 +293,7 @@ class ServicioLecturaStockOrigen
                 ])->save();
             }
             $retirados = PalletStockOrigen::query()
+                ->where('ambito', $lectura->ambito)
                 ->where('bodega', $bodega)
                 ->where('presente', true)
                 ->whereNotIn('numero_pallet', array_keys($pallets))

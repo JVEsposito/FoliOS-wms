@@ -20,6 +20,7 @@ async function setup(browser, handler, admin = true) {
         const path = new URL(route.request().url()).pathname;
         if (path === '/oficina/accesos') return route.fulfill({ body: html, contentType: 'text/html' });
         if (path === '/shared/origin-explorer.js') return route.fulfill({ body: readFileSync(resolve(root, 'resources/js/shared/origin-explorer.js')), contentType: 'text/javascript' });
+        if (path === '/shared/origin-stock-mapping.js') return route.fulfill({ body: readFileSync(resolve(root, 'resources/js/shared/origin-stock-mapping.js')), contentType: 'text/javascript' });
         if (path === '/fixture-external.js') return route.fulfill({ body: source, contentType: 'text/javascript' });
         // La sección se ejecuta sobre el HTML Blade real; el resto de los módulos no participa.
         if (path.endsWith('.js')) return route.abort();
@@ -44,6 +45,65 @@ async function openPanel(page) {
 async function launch() {
     return chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined, args: ['--no-sandbox', '--disable-gpu'] });
 }
+
+test('mapea columnas, prueba sin filtros y guarda la selección para las lecturas', async () => {
+    const browser = await launch();
+    try {
+        const calls = [];
+        let revision = 0;
+        let release;
+        let started;
+        let delayed = false;
+        const pending = new Promise((resolve) => { release = resolve; });
+        const requested = new Promise((resolve) => { started = resolve; });
+        const { context, page } = await setup(browser, async (route) => {
+            const request = route.request();
+            const path = new URL(request.url()).pathname;
+            if (request.method() === 'GET') {
+                if (path.endsWith('/lectura-stock')) return route.fulfill({ json: { data: { version: revision, conexion_id: null, ajustes: null, campos: { Pallet: 'Folio', cantidad: 'Cajas', descripcion_especie: 'Especie' } } } });
+                return route.fulfill({ json: { data: [fixture] } });
+            }
+            if (path.endsWith('/estructura')) return route.fulfill({ json: { data: [{ nombre: 'vista_existencias', tipo: 'VIEW' }] } });
+            if (path.endsWith('/columnas')) return route.fulfill({ json: { data: ['folio_real', 'cajas_reales', 'fruta_real'].map((nombre) => ({ nombre, tipo: 'varchar' })) } });
+            if (path.includes('/lectura-stock')) {
+                calls.push({ path, payload: request.postDataJSON() });
+                if (delayed) { started(); await pending; }
+                if (path.endsWith('/simular')) return route.fulfill({ json: { data: { filas: [{ Pallet: '000123', cantidad: '40', descripcion_especie: '<Fruta>' }] } } });
+                return route.fulfill({ json: { data: { version: ++revision } } });
+            }
+            return route.fulfill({ json: {} });
+        });
+        await openPanel(page);
+        await page.locator('[data-explore-connection]').click();
+        await page.locator('#originObjects').selectOption('vista_existencias');
+        await page.locator('#originColumns input').first().waitFor();
+        await page.locator('#originConfigureStock').click();
+        for (const [field, value] of Object.entries({ Pallet: 'folio_real', cantidad: 'cajas_reales', descripcion_especie: 'fruta_real' })) await page.locator(`[data-stock-field="${field}"]`).selectOption(value);
+        await page.locator('#originMappingPreview').click();
+        await page.waitForFunction(() => document.getElementById('originMappingStatus').textContent.startsWith('Mapeo válido'));
+        assert.match(await page.locator('#originMappingSample').textContent(), /000123.*40.*<Fruta>/);
+        assert.deepEqual(calls[0].payload.ajustes.filtros, []);
+        assert.equal(calls[0].payload.ajustes.campos.Pallet, 'folio_real');
+        await page.locator('#originStockMapping [type="submit"]').click();
+        await page.waitForFunction(() => document.getElementById('originMappingStatus').textContent.startsWith('Configuración guardada'));
+        assert.equal(calls[1].payload.version_conocida, 0);
+        assert.equal(calls[1].payload.ajustes.habilitada, true);
+        delayed = true;
+        await page.locator('#originMappingPreview').click();
+        await requested;
+        await page.evaluate(() => {
+            localStorage.removeItem('estiba_wms_office_token');
+            window.dispatchEvent(new Event('estiba:office-session'));
+        });
+        release();
+        await page.waitForLoadState('networkidle');
+        assert.equal(calls[2].payload.version_conocida, 1);
+        assert.equal(await page.locator('#originStockMapping').isHidden(), true);
+        assert.equal(await page.locator('#originMappingSample').textContent(), '');
+        assert.equal(await page.locator('[data-stock-field]').count(), 0);
+        await context.close();
+    } finally { await browser.close(); }
+});
 
 test('explora vistas, prueba sin filtros y descarta una muestra al perder la sesión', async () => {
     const browser = await launch();

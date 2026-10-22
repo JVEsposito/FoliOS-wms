@@ -62,8 +62,6 @@ preparar la importación hacen falta las tablas o vistas autorizadas, sus campos
 claves y la frecuencia de actualización. Los secretos se completan solamente
 en la instalación de destino; no se incorporan a commits ni descripciones de PR.
 
-## Stock de origen y pendientes por validar
-
 ## Explorar el árbol de la base
 
 «Explorar origen» lista todas las tablas y vistas que el usuario puede descubrir dentro de
@@ -81,6 +79,27 @@ servidor a partir de las columnas descubiertas y parámetros, sin recibir SQL li
 La muestra no se persiste ni se guarda en el navegador. Al perder o cambiar la sesión se
 limpia y se descartan respuestas pendientes. La auditoría conserva quién consultó y la
 acción, sin filas de origen, valores de filtros ni credenciales.
+
+## Guardar la lectura de stock
+
+Después de elegir una fuente, «Configurar para pendientes por validar» permite asociar
+sus columnas al folio, cajas, cliente, especie, variedad, CSG, proceso y demás campos.
+Solo folio y cajas son obligatorios. «Probar mapeo» devuelve hasta diez filas traducidas
+sin importar nada. «Guardar mapeo» conserva esa selección y los filtros visibles,
+cifrados en la instalación. Sin filtros se consulta toda la fuente: no se agregan filtros
+de bodega, tipo de artículo o temporada por detrás.
+
+La selección se usa tanto al pulsar «Leer ahora» como en las lecturas programadas.
+Cada cambio de configuración o conexión separa su copia de las anteriores: hasta leer
+correctamente la nueva selección no se presenta la copia antigua como stock vigente.
+Un error, una cantidad inválida, más de 50.000 líneas o una respuesta vacía no retiran
+pallets de la última copia correcta. Los cambios mientras responde el origen descartan
+esa lectura. Las fechas del origen se interpretan en la zona horaria de la planta.
+
+El árbol sirve para explorar cualquier tabla o vista accesible; este mapeo alimenta
+la copia de stock por pallet, no importa procesos de otras áreas ni crea folios.
+Sin un mapeo guardado se mantiene la configuración anterior por variables de entorno.
+Deshabilitar un mapeo guardado apaga la lectura y no reactiva esa configuración anterior.
 
 El primer uso de la conexión es **Frigorífico → Pendientes por validar**
 (`/oficina/validacion/pendientes`). Se documenta en

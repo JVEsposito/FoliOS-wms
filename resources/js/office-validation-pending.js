@@ -59,7 +59,9 @@ const causes = {
     sin_permiso_tabla: 'Sin permiso sobre la tabla',
     columna_faltante: 'Falta una columna',
     tiempo_agotado: 'Tiempo agotado',
-    sin_filas: 'Sin pallets en la bodega',
+    sin_filas: 'Sin filas con esta selección',
+    mapeo_invalido: 'Revise las columnas asignadas',
+    configuracion_cambiada: 'La configuración cambió durante la lectura',
 };
 const state = {
     token: localStorage.getItem(keys.token),
@@ -198,7 +200,10 @@ function renderSource(data) {
         elements.source.innerHTML = '<b>Lectura sin configurar.</b> Falta una conexión externa activa en Administración → Accesos → Conexiones externas.';
         return;
     }
-    const origin = `${escapeHtml(fuente.conexion)} · ${escapeHtml(fuente.tabla)} · bodega ${escapeHtml(fuente.bodega)}${fuente.temporada ? ` · temporada ${escapeHtml(fuente.temporada)}` : ''}`;
+    const selection = fuente.mapeo_personalizado
+        ? (fuente.filtros?.length ? fuente.filtros.map((f) => `${escapeHtml(f.columna)} = ${escapeHtml(f.valor)}`).join(' · ') : 'sin filtros')
+        : `bodega ${escapeHtml(fuente.bodega)}${fuente.temporada ? ` · temporada ${escapeHtml(fuente.temporada)}` : ''}`;
+    const origin = `${escapeHtml(fuente.conexion)} · ${escapeHtml(fuente.tabla)} · ${selection}`;
     if (last?.estado === 'fallida') {
         elements.source.className = 'pending-source pending-source--error';
         elements.source.innerHTML = `<b>No se pudo leer el origen (${escapeHtml(causes[last.causa] || 'error')}).</b> ${escapeHtml(last.mensaje || '')} <small>Intento: ${formatDate(last.iniciada_at)} · Fuente: ${origin}${lectura.ultima_correcta_at ? ` · Se muestra la lectura correcta del ${formatDate(lectura.ultima_correcta_at)}` : ''}</small>`;
