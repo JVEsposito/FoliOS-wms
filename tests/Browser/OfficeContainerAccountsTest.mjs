@@ -12,6 +12,7 @@ async function setup(browser, manage, width = 390) {
     const context = await browser.newContext({ viewport: { width, height: 1000 } });
     const identity = { nombre: 'Cuenta Envases', rol: manage ? 'administrador' : 'consulta', puede_consultar_cuenta_envases: true, puede_ajustar_cuenta_envases: manage, modulos_acceso: ['materia-prima.cuenta-envases'] };
     await context.addInitScript((user) => {
+        Object.defineProperty(Crypto.prototype, 'randomUUID', { value: undefined });
         localStorage.setItem('estiba_wms_office_token', 'fixture_envases');
         localStorage.setItem('estiba_wms_office_identity', JSON.stringify(user));
     }, identity);
@@ -77,7 +78,7 @@ test('registra una apertura negativa y su reversa conservando el contexto de cue
             assert.equal(writes[0].tipo_movimiento, 'apertura_cuenta');
             assert.equal(writes[0].temporada_id, 'temporada');
             await page.locator('#container-accounts-tab-movements').click();
-            await page.locator('[data-reverse-adjustment]').click();
+            await page.locator('#movementsBody .office-action-select').selectOption({ label: 'Revertir asiento' });
             await form.locator('[name="motivo"]').fill('Reversa por conciliación equivocada');
             await form.locator('[type="submit"]').click();
             await page.waitForFunction(() => !document.getElementById('accountAdjustmentDialog').open);

@@ -64,6 +64,16 @@ const state = {
 };
 const MOVEMENTS_LIMIT = 300;
 
+function accountOperationId() {
+    if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+    // Las oficinas también se usan por HTTP en la red local de la planta.
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    bytes[6] = (bytes[6] & 15) | 64;
+    bytes[8] = (bytes[8] & 63) | 128;
+    const hex = [...bytes].map((value) => value.toString(16).padStart(2, '0')).join('');
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 function read(key) {
     try {
         return JSON.parse(localStorage.getItem(key) || 'null');
@@ -340,7 +350,7 @@ function openAdjustment(origin = null) {
     elements.adjustmentForm.elements.fecha.max = state.catalogs.hoy;
     elements.adjustmentForm.elements.fecha.min = origin?.ocurrido_at?.slice(0, 10) || '';
     elements.adjustmentError.textContent = '';
-    state.adjustment = { origin, operacion_id: crypto.randomUUID(), temporada_id: season.id };
+    state.adjustment = { origin, operacion_id: accountOperationId(), temporada_id: season.id };
     updateAdjustmentPreview();
     elements.adjustmentDialog.showModal();
 }
