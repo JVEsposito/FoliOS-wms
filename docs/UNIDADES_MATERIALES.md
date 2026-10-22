@@ -45,8 +45,10 @@ bulto conserva su cantidad de ingreso por identificador, sin depender del orden 
 ## Despliegue y comprobaciones
 
 Aplicar las migraciones normales y compilar Oficina. No requiere una APK nueva. El cambio
-parte de `main` con #489 integrado; no implementa categorías/tipos del PR 2. Si ese PR
-modifica los mismos formularios, integrar sus cambios y volver a comprobar ambos selectores.
+parte de #491 (categorías/tipos, PR 2), con #489 ya integrado. El orden de integración
+es #491 y después #490. Ambos selectores y sus permisos se conservan; la prueba de
+categorías usa el desplegable de unidades. El alcance revisable de #490 corresponde a
+las unidades y sus equivalencias, sin repetir la implementación de categorías/tipos.
 
 Las pruebas cubren normalización, precisión, límites, permisos API, versiones, factores
 por ítem, reintentos, conservación de cantidades históricas, confirmación de stock en

@@ -3,10 +3,12 @@
 namespace App\Services\Materiales;
 
 use App\Enums\CategoriaOperacionalMaterial;
+use App\Models\CategoriaComercialMaterial;
 use App\Models\ClienteMaterial;
 use App\Models\ImportacionCatalogoMaterial;
 use App\Models\ItemMaterial;
 use App\Models\TemporadaMaterial;
+use App\Models\TipoItemMaterial;
 use App\Models\User;
 use DomainException;
 use Illuminate\Http\UploadedFile;
@@ -81,6 +83,9 @@ class ServicioImportacionCatalogoMaterial
                 (string) $item->codigo_externo,
             ));
 
+        $categorias = CategoriaComercialMaterial::all()->keyBy('nombre_normalizado');
+        $tipos = TipoItemMaterial::all()->keyBy('id');
+        $tiposBase = $tipos->whereNotNull('codigo_base')->keyBy('codigo_base');
         $filas = [];
         $errores = [];
         $codigosVistos = [];
@@ -135,6 +140,18 @@ class ServicioImportacionCatalogoMaterial
             if ($existente && $fila['categoria_operacional_original'] === '') {
                 $fila['categoria_operacional'] = $existente->categoria_operacional?->value;
                 $mensajes = array_values(array_diff($mensajes, ['Falta el tipo de ítem.']));
+            }
+            $claveCategoria = NombreClasificacionMaterial::normalizar($fila['categoria'] ?? '');
+            $categoria = $categorias->get($claveCategoria);
+            if ($categoria && ! $categoria->activo
+                && NombreClasificacionMaterial::normalizar($existente?->categoria ?? '') !== $claveCategoria) {
+                $mensajes[] = 'La categoría comercial está inactiva.';
+            }
+            $tipo = $existente?->tipo_item_material_id && $existente->categoria_operacional?->value === $fila['categoria_operacional']
+                ? $tipos->get($existente->tipo_item_material_id)
+                : $tiposBase->get($fila['categoria_operacional']);
+            if ($tipo && ! $tipo->activo && $existente?->tipo_item_material_id !== $tipo->id) {
+                $mensajes[] = 'El tipo de ítem está inactivo.';
             }
             if ($cliente && ! $cliente->activo && (! $existente || $this->accionEstimada($fila, $existente) !== 'sin_cambios')) {
                 $mensajes[] = 'El cliente se encuentra inactivo.';
@@ -300,6 +317,9 @@ class ServicioImportacionCatalogoMaterial
                     if (($fila[$campo] ?? null) !== null) {
                         $datos[$campo] = $fila[$campo];
                     }
+                }
+                if ($nuevo || $this->accionEstimada($fila, $item) !== 'sin_cambios') {
+                    $datos = app(ServicioClasificacionMaterial::class)->resolverParaItem($datos, $nuevo ? null : $item, $usuario);
                 }
                 $item->fill($datos);
                 $cambio = $nuevo || $item->isDirty();
@@ -469,6 +489,7 @@ class ServicioImportacionCatalogoMaterial
             'nombre' => $item->nombre,
             'categoria' => $item->categoria,
             'categoria_operacional' => $item->categoria_operacional?->value,
+            'tipo_item_material_id' => $item->tipo_item_material_id,
             'unidad_medida' => $item->unidad_medida,
             'codigo_externo' => $item->codigo_externo,
             'activo' => (bool) $item->activo,

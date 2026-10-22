@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Schema;
     'nombre',
     'categoria',
     'categoria_operacional',
+    'tipo_item_material_id',
     'unidad_medida',
     'codigo_externo',
     'origen_sistema',
@@ -58,6 +59,11 @@ class ItemMaterial extends Model
     public function cliente(): BelongsTo
     {
         return $this->belongsTo(ClienteMaterial::class, 'cliente_material_id');
+    }
+
+    public function tipoItem(): BelongsTo
+    {
+        return $this->belongsTo(TipoItemMaterial::class, 'tipo_item_material_id');
     }
 
     public function fotos(): HasMany

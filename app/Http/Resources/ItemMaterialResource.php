@@ -34,6 +34,13 @@ class ItemMaterialResource extends JsonResource
             'categoria' => $this->categoria,
             'categoria_operacional' => $this->categoria_operacional?->value,
             'categoria_operacional_etiqueta' => $this->categoria_operacional?->etiqueta(),
+            'tipo_item_material_id' => $this->tipo_item_material_id,
+            'tipo_item' => $this->whenLoaded('tipoItem', fn () => $this->tipoItem ? [
+                'id' => $this->tipoItem->id,
+                'nombre' => $this->tipoItem->nombre,
+                'activo' => $this->tipoItem->activo,
+                'categoria_operacional' => $this->tipoItem->categoria_operacional->value,
+            ] : null),
             'unidad_medida' => $this->unidad_medida,
             'codigo_externo' => $this->codigo_externo,
             'origen_sistema' => $this->origen_sistema,
