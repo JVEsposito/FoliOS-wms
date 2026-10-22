@@ -196,11 +196,18 @@
                     </section>
 
                     <section class="panel materials-panel" id="materials-catalog-panel-providers" data-office-panel-group="materials-catalog" data-office-panel-id="providers" role="tabpanel" aria-labelledby="materials-catalog-tab-providers">
-                        <div class="materials-panel__heading"><div><p class="eyebrow">ABASTECIMIENTO</p><h2>Proveedores</h2></div><span id="providersSummary">0 registrados</span></div>
+                        <div class="materials-panel__heading"><div><p class="eyebrow">ABASTECIMIENTO</p><h2>Proveedores</h2></div><span id="providersSummary" role="status" aria-live="polite">0 registrados</span></div>
+                        <div class="materials-item-search materials-provider-search" role="search" aria-label="Buscar proveedores">
+                            <label class="materials-item-search__query"><span>Buscar proveedor</span><input id="providersMaterialSearch" type="search" autocomplete="off" placeholder="Nombre, código o cliente"></label>
+                            <label><span>Cliente asociado</span><select id="providersMaterialClientFilter"><option value="">Todos los clientes</option></select></label>
+                            <label><span>Estado</span><select id="providersMaterialStatusFilter"><option value="todos">Todos</option><option value="activo">Activos</option><option value="inactivo">Inactivos</option></select></label>
+                            <button class="secondary-button" id="clearProviderFilters" type="button">Limpiar filtros</button>
+                        </div>
                         <form class="materials-form" id="providerMaterialForm" novalidate>
                             <input name="id" type="hidden">
                             <div class="materials-form__grid">
-                                <label><span>Código *</span><input name="codigo" maxlength="80" placeholder="PRV-001" required></label>
+                                <label><span>Código interno automático</span><input id="providerInternalCode" placeholder="Se asigna al guardar" readonly></label>
+                                <label><span>Código comercial / tarja</span><input name="codigo" maxlength="80" placeholder="Opcional, por ejemplo CSF"></label>
                                 <label><span>Nombre *</span><input name="nombre" maxlength="180" placeholder="Proveedor de embalajes" required></label>
                                 <label><span>Código ERP futuro</span><input name="codigo_externo" maxlength="150"></label>
                                 <label class="materials-check"><input name="activo" type="checkbox" checked><span>Proveedor activo</span></label>

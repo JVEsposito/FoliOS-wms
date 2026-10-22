@@ -20,6 +20,32 @@ permite recibir todos los ítems activos de `ABSORPAD` pertenecientes a La Aguad
 
 ## Configuración en oficina
 
+Cada proveedor recibe un **código interno automático** (`PRV-001`, `PRV-002`, …).
+Es global, continúa al superar 999, no se reinicia por temporada y no se edita.
+La asignación se serializa en una transacción y tiene una restricción única en la base.
+
+El campo **Código comercial / tarja** es opcional y conserva el código que utiliza
+el negocio, por ejemplo `CSF`. Si queda vacío, se utiliza el código interno. Los
+proveedores históricos conservan su código comercial, UUID, asociaciones y fechas;
+la migración únicamente les asigna el nuevo correlativo. Los códigos comerciales
+históricos equivalentes no se fusionan automáticamente.
+
+Al crear o cambiar un código comercial, se rechaza otro proveedor que ya lo use,
+incluidos los inactivos, aunque se omitan guiones, puntos o guiones bajos. También
+se protegen los códigos internos frente a su uso como código de otro proveedor.
+La asignación salta números que ya identificaban a un proveedor histórico.
+
+Encima del listado hay búsqueda por nombre, código interno, código comercial o
+cliente, y filtros de cliente asociado y estado. Las palabras pueden combinarse
+y la búsqueda de oficina no distingue tildes ni mayúsculas. Los filtros no borran
+el formulario que se está preparando. El contador muestra visibles y total.
+
+La API de administración conserva la respuesta `data` y admite `q`, `cliente_id`
+y `estado` (`todos`, `activo`, `inactivo`). `codigo` mantiene su significado
+comercial para que las recepciones, tarjas y aplicaciones existentes continúen
+funcionando; `codigo_interno` es de solo lectura. Al actualizar, omitir `codigo`
+conserva el valor anterior y enviarlo vacío vuelve al código interno.
+
 En **Oficina de Materiales → Proveedores**:
 
 1. Se registra o edita el proveedor.

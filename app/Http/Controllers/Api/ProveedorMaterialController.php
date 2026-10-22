@@ -6,16 +6,25 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\GuardarProveedorMaterialRequest;
 use App\Models\ClienteProveedorMaterial;
 use App\Models\ProveedorMaterial;
+use App\Services\Materiales\ServicioCorrelativoProveedorMaterial;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\Response;
 
 class ProveedorMaterialController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         Gate::authorize('administrar-catalogos-materiales');
+
+        $filtros = $request->validate([
+            'q' => ['nullable', 'string', 'max:150'],
+            'cliente_id' => ['nullable', 'uuid', Rule::exists('clientes', 'id')],
+            'estado' => ['nullable', Rule::in(['todos', 'activo', 'inactivo'])],
+        ]);
 
         return response()->json([
             'data' => ProveedorMaterial::query()
@@ -24,6 +33,24 @@ class ProveedorMaterialController extends Controller
                         ->wherePivot('activo', true)
                         ->orderBy('clientes.codigo'),
                 ])
+                ->when($request->filled('q'), function ($consulta) use ($filtros): void {
+                    $texto = $filtros['q'];
+                    $consulta->where(function ($consulta) use ($texto): void {
+                        $patron = '%'.trim($texto).'%';
+                        $consulta->whereLike('nombre', $patron)
+                            ->orWhereLike('codigo', $patron)
+                            ->orWhereLike('codigo_interno', $patron)
+                            ->orWhereLike('codigo_externo', $patron)
+                            ->orWhereRaw("REPLACE(REPLACE(REPLACE(UPPER(codigo), '-', ''), '.', ''), '_', '') LIKE ?", ['%'.ServicioCorrelativoProveedorMaterial::normalizar($texto).'%'])
+                            ->orWhereRaw("REPLACE(UPPER(codigo_interno), '-', '') LIKE ?", ['%'.ServicioCorrelativoProveedorMaterial::normalizar($texto).'%'])
+                            ->orWhereHas('clientes', fn ($clientes) => $clientes->where('clientes_proveedores_materiales.activo', true)
+                                ->where(fn ($cliente) => $cliente->whereLike('clientes.nombre', $patron)->orWhereLike('clientes.codigo', $patron)));
+                    });
+                })
+                ->when($filtros['cliente_id'] ?? null, fn ($consulta, string $clienteId) => $consulta
+                    ->whereHas('clientes', fn ($clientes) => $clientes->where('clientes.id', $clienteId)->where('clientes_proveedores_materiales.activo', true)))
+                ->when(in_array($filtros['estado'] ?? 'todos', ['activo', 'inactivo'], true), fn ($consulta) => $consulta
+                    ->where('activo', $filtros['estado'] === 'activo'))
                 ->orderByDesc('activo')
                 ->orderBy('codigo')
                 ->get()
@@ -57,9 +84,12 @@ class ProveedorMaterialController extends Controller
         $datos = $request->validated();
 
         return DB::transaction(function () use ($datos, $request, $proveedor): ProveedorMaterial {
+            $correlativo = app(ServicioCorrelativoProveedorMaterial::class);
+            $correlativo->bloquear();
+            $correlativo->validarCodigoComercial($datos['codigo'], $proveedor);
             $proveedor ??= new ProveedorMaterial;
             $proveedor->fill([
-                'codigo' => $datos['codigo'],
+                'codigo' => $datos['codigo'] ?? $proveedor->codigo_interno,
                 'nombre' => $datos['nombre'],
                 'codigo_externo' => $datos['codigo_externo'],
                 'activo' => $datos['activo'],
@@ -113,6 +143,7 @@ class ProveedorMaterialController extends Controller
     {
         return [
             'id' => $proveedor->id,
+            'codigo_interno' => $proveedor->codigo_interno,
             'codigo' => $proveedor->codigo,
             'nombre' => $proveedor->nombre,
             'codigo_externo' => $proveedor->codigo_externo,
