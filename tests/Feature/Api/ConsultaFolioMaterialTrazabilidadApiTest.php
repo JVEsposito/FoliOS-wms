@@ -154,8 +154,9 @@ class ConsultaFolioMaterialTrazabilidadApiTest extends TestCase
         $almacen->creado_por_user_id = $usuario->id;
         $almacen->actualizado_por_user_id = $usuario->id;
         $almacen->save();
-        SaldoMaterialAlmacen::create([
-            'folio_id' => $folio->id,
+        // El alta del folio ya creó su saldo en Central: este escenario lo ubica
+        // en Packing, sin duplicar las mismas 70 unidades en dos almacenes.
+        SaldoMaterialAlmacen::where('folio_id', $folio->id)->firstOrFail()->update([
             'almacen_material_id' => $almacen->id,
             'cantidad_actual' => 70,
             'cantidad_reservada' => 10,
@@ -197,6 +198,7 @@ class ConsultaFolioMaterialTrazabilidadApiTest extends TestCase
         $this->assertNotNull($saldoPacking);
         $this->assertSame('CC-4100', $saldoPacking['centro_costo']);
         $this->assertSame(60, $saldoPacking['cantidad_disponible']);
+        $this->assertEquals(70, SaldoMaterialAlmacen::where('folio_id', $folio->id)->sum('cantidad_actual'));
 
         $eventos = collect($respuesta->json('timeline'));
         $recepcionEvento = $eventos->firstWhere('tipo', 'recepcion_material');
