@@ -85,9 +85,10 @@ final class ServicioCapturaHechos
             $contexto = new ContextoCaptura($this->lector, fn (string $fuente): array => $this->abiertos($fuente));
             $resumen = [];
             $fallidas = [];
+            $fallidasClaves = [];
             foreach ($seleccion as $clave => $fuente) {
                 try {
-                    if ($clave === ReglaValorizacion::FUENTE && $fallidas !== []) {
+                    if ($clave === ReglaValorizacion::FUENTE && array_intersect($fallidasClaves, $dependencias) !== []) {
                         throw new \RuntimeException('Cálculos pendientes: primero corrija las fuentes que no se pudieron leer.');
                     }
                     $resumen[$clave] = $this->capturarFuente($fuente, $contexto, $lectura, $conciliaciones[$clave]);
@@ -95,6 +96,7 @@ final class ServicioCapturaHechos
                     report($error);
                     $resumen[$clave] = ['error' => Str::limit($error->getMessage(), 300)];
                     $fallidas[] = $fuente->nombre();
+                    $fallidasClaves[] = $clave;
                 }
             }
 

@@ -110,3 +110,41 @@ Las gestiones COMEX se fechan con la primera confirmación registrada (en regist
 sin evento se conserva su creación). La dotación programada se identifica como disponibilidad;
 no acredita asistencia ni genera remuneraciones. Los compromisos que deben seguir cobrándose
 después de una cancelación se registran mediante cargos acordados, con aprobación económica.
+
+## Bodegaje de materiales y servicios por período
+
+**Bodegaje de materiales** conserva la permanencia de cada folio y reconstruye sus saldos
+con el kardex. Ofrece folio-día y, con un filtro explícito de unidad, cantidad-día. El
+criterio es el máximo de existencia de cada día civil en hora de planta. Un retiro parcial
+no altera las cantidades de los días anteriores ni crea otra estadía. Los días con saldo
+cero no se cobran. Una salida a medianoche cierra el día anterior.
+
+El historial conserva cada movimiento y sus saldos, los tramos de existencia y los picos
+de cada día. Los movimientos simultáneos se ordenan por continuidad de sus saldos. Si el
+kardex no concilia con el saldo actual, la fuente falla con aviso y conserva sus versiones
+anteriores; no redistribuye una diferencia sobre días pasados. Cada folio admite hasta
+5.000 movimientos para esta reconstrucción.
+
+Este servicio mide existencia bajo custodia, incluyendo material pendiente de ubicación;
+un folio no implica una posición, un pallet físico o un volumen determinado. Para cobrar
+capacidad reservada, posiciones o m³ contratados se usa un acuerdo por período con esa unidad.
+
+Los **conceptos directos** también admiten filtros de dimensiones. Por ejemplo, puede crear
+un concepto sobre producción de recetas filtrado por receta y unidad de salida, y asignar
+un precio por caja. No requiere una expresión cuando la cantidad proviene de una sola
+medida. Los reemplazos del concepto base pueden coexistir con filtros disjuntos; se rechazan
+los que podrían aplicarse a los mismos hechos, fechas y días.
+
+Para un arriendo o capacidad contratada, cree un concepto de **Servicio acordado por período**,
+indique la unidad (bin, posición, m³, equipo, etc.) y asigne su precio por unidad y día. En
+**Cargos acordados** registre cantidad diaria, cliente, fecha inicial, último día incluido y
+respaldo. Al aprobarlo se valoriza cada día civil, incluso sin ejecución, hasta el corte de
+la prefactura. Un período puede cruzar meses y cambios de hora; no se divide su duración
+en bloques de 24 horas. También admite cantidades o precios negativos para abonos.
+
+**Terminar período** adelanta el último día cobrable con motivo e historial. Conserva los
+días anteriores. Si se corrige un mes cerrado, se presenta una diferencia y permanece el
+cierre original. La devolución física no cancela automáticamente un acuerdo comercial:
+el término económico debe registrarse. Para cambiar la cantidad diaria se termina el tramo
+anterior y se aprueba otro con la nueva cantidad, evitando fechas superpuestas por decisión
+comercial. Anular un acuerdo retira todo su efecto económico mediante una versión.

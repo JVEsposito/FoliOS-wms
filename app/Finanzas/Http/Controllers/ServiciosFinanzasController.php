@@ -31,7 +31,9 @@ class ServiciosFinanzasController extends Controller
     {
         $datos = $request->validate([
             'nombre' => ['required', 'string', 'max:120'],
-            'unidad_libre' => ['required_if:fuente,declarado,calculado', 'nullable', 'string', 'max:60'],
+            'unidad_libre' => ['required_if:fuente,declarado,periodico,calculado', 'nullable', 'string', 'max:60'],
+            'filtros' => ['sometimes', 'array', 'max:8'],
+            'filtros.*' => ['required', 'string', 'max:180'],
             'area' => ['sometimes', 'required', 'string', 'max:60'],
             'regla' => ['required_if:fuente,calculado', 'nullable', 'array'],
             'proceso_referencia' => ['nullable', 'string', 'max:120'],
