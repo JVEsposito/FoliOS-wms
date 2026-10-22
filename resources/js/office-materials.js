@@ -2,6 +2,7 @@ import { createClientTransfers } from './office-material-client-transfers.js';
 import { openItemPhotoPanel, loadPrivateItemImages, releasePrivateItemImages } from './shared/private-item-photos';
 import { createOperationalPoller } from './shared/operational-poller';
 import { filterMaterialItems, materialItemsSummary, normalizeSearchText } from './shared/material-item-search.js';
+import { filterMaterialProviders } from './shared/material-provider-search.js';
 
 const byId = (id) => document.getElementById(id);
 const elements = {
@@ -18,6 +19,9 @@ const elements = {
     clientList: byId('clientsMaterialList'),
     providerForm: byId('providerMaterialForm'), providerError: byId('providerMaterialError'),
     providerCancel: byId('cancelProviderEdit'), providerList: byId('providersMaterialList'),
+    providerInternalCode: byId('providerInternalCode'), providerSearch: byId('providersMaterialSearch'),
+    providerClientFilter: byId('providersMaterialClientFilter'), providerStatusFilter: byId('providersMaterialStatusFilter'),
+    providerClearFilters: byId('clearProviderFilters'),
     providerClientOptions: byId('providerClientOptions'), providerCategoryOptions: byId('providerCategoryOptions'), providersSummary: byId('providersSummary'),
     destinationForm: byId('destinationMaterialForm'), destinationError: byId('destinationMaterialError'),
     destinationCancel: byId('cancelDestinationEdit'), destinationList: byId('destinationsMaterialList'),
@@ -255,7 +259,6 @@ function renderProviderCategories(checkedKeys = null) {
 }
 function renderProviders() {
     if (!elements.providerForm) return;
-    elements.providersSummary.textContent = `${state.providers.length} registrados`;
     const checked = new Set([...elements.providerClientOptions.querySelectorAll('input:checked')].map((input) => input.value));
     const checkedCategories = new Set([...elements.providerCategoryOptions.querySelectorAll('input:checked')].map((input) => input.dataset.key));
     elements.providerClientOptions.innerHTML = globalClients()
@@ -263,11 +266,27 @@ function renderProviders() {
         .map((client) => `<label><input name="cliente_ids" type="checkbox" value="${client.cliente_id}"${checked.has(client.cliente_id) ? ' checked' : ''}><span>${escapeHtml(client.codigo)} · ${escapeHtml(client.nombre)}</span></label>`)
         .join('') || '<p class="empty-state">No existen clientes activos en Accesos.</p>';
     renderProviderCategories(checkedCategories);
-    elements.providerList.innerHTML = state.providers.map((provider) => {
+    const selectedClient = elements.providerClientFilter.value;
+    const clients = [...new Map(state.providers.flatMap((provider) => provider.clientes || []).map((client) => [client.id, client])).values()]
+        .sort((left, right) => left.nombre.localeCompare(right.nombre, 'es'));
+    elements.providerClientFilter.innerHTML = '<option value="">Todos los clientes</option>'
+        + clients.map((client) => `<option value="${escapeHtml(client.id)}">${escapeHtml(client.codigo)} · ${escapeHtml(client.nombre)}</option>`).join('');
+    elements.providerClientFilter.value = clients.some((client) => client.id === selectedClient) ? selectedClient : '';
+    renderProviderList();
+}
+function renderProviderList() {
+    const providers = filterMaterialProviders(state.providers, {
+        query: elements.providerSearch.value,
+        clientId: elements.providerClientFilter.value,
+        status: elements.providerStatusFilter.value,
+    });
+    elements.providersSummary.textContent = materialItemsSummary(providers.length, state.providers.length);
+    elements.providerList.innerHTML = providers.map((provider) => {
         const clients = (provider.clientes || []).map((client) => `${client.codigo} · ${client.nombre}`).join(', ');
         const categories = (provider.categorias || []).map((entry) => entry.categoria).filter(Boolean);
-        return `<article class="material-row${provider.activo ? '' : ' is-inactive'}"><div><strong>${escapeHtml(provider.codigo)} · ${escapeHtml(provider.nombre)}</strong><small>${escapeHtml(clients || 'Sin clientes asociados')} · ${escapeHtml([...new Set(categories)].join(', ') || 'Sin categorías')}${provider.codigo_externo ? ` · ERP ${escapeHtml(provider.codigo_externo)}` : ''}</small></div><button data-edit-provider="${provider.id}" type="button">Editar</button></article>`;
-    }).join('') || '<p class="empty-state">No existen proveedores registrados.</p>';
+        const commercialCode = provider.codigo && provider.codigo !== provider.codigo_interno ? ` · Tarja: ${escapeHtml(provider.codigo)}` : '';
+        return `<article class="material-row${provider.activo ? '' : ' is-inactive'}"><div><strong>${escapeHtml(provider.codigo_interno || provider.codigo)} · ${escapeHtml(provider.nombre)}</strong><small>${escapeHtml(clients || 'Sin clientes asociados')} · ${escapeHtml([...new Set(categories)].join(', ') || 'Sin categorías')}${commercialCode}${provider.codigo_externo ? ` · ERP ${escapeHtml(provider.codigo_externo)}` : ''}</small></div><button data-edit-provider="${provider.id}" type="button">Editar</button></article>`;
+    }).join('') || `<p class="empty-state">${state.providers.length ? 'No hay proveedores que coincidan con los filtros.' : 'No existen proveedores registrados.'}</p>`;
 }
 function renderItems() {
     const canAdminister = state.identity?.puede_administrar_catalogos_materiales === true;
@@ -665,7 +684,7 @@ async function openDispatchTrace(dispatchId) {
     } catch (error) { elements.dispatchTraceBody.textContent = error.message; }
 }
 function resetItemForm() { elements.itemForm.reset(); elements.itemForm.elements.id.value = ''; elements.itemForm.elements.activo.checked = true; elements.itemCancel.classList.add('is-hidden'); elements.itemError.textContent = ''; if (elements.itemEditorTitle) elements.itemEditorTitle.textContent = 'Nuevo ítem'; if (elements.itemEditor) elements.itemEditor.open = false; }
-function resetProviderForm() { elements.providerForm.reset(); elements.providerForm.elements.id.value = ''; elements.providerForm.elements.activo.checked = true; elements.providerCancel.classList.add('is-hidden'); elements.providerError.textContent = ''; renderProviders(); }
+function resetProviderForm() { elements.providerForm.reset(); elements.providerInternalCode.value = ''; elements.providerForm.elements.id.value = ''; elements.providerForm.elements.activo.checked = true; elements.providerCancel.classList.add('is-hidden'); elements.providerError.textContent = ''; renderProviders(); }
 function resetDestinationForm() { elements.destinationForm.reset(); elements.destinationForm.elements.id.value = ''; elements.destinationForm.elements.activo.checked = true; elements.destinationCancel.classList.add('is-hidden'); elements.destinationError.textContent = ''; }
 function resetImportPreview() { state.importPreview = null; elements.importError.textContent = ''; renderImportPreview(); }
 
@@ -680,8 +699,8 @@ elements.providerForm.addEventListener('submit', async (event) => {
     data.categorias = [...elements.providerCategoryOptions.querySelectorAll('input:checked')].map((input) => ({ cliente_id: input.dataset.clientId, categoria: input.dataset.category }));
     setBusy(true, 'Guardando proveedor…');
     try {
-        await api(id ? `/api/administracion/materiales/proveedores/${id}` : '/api/administracion/materiales/proveedores', { method: id ? 'PUT' : 'POST', body: JSON.stringify(data) });
-        resetProviderForm(); await loadAll(); toast('Proveedor, clientes y categorías actualizados.');
+        const response = await api(id ? `/api/administracion/materiales/proveedores/${id}` : '/api/administracion/materiales/proveedores', { method: id ? 'PUT' : 'POST', body: JSON.stringify(data) });
+        resetProviderForm(); await loadAll(); toast(`Proveedor, clientes y categorías actualizados. Código: ${response.data.codigo_interno || response.data.codigo}.`);
     } catch (error) { elements.providerError.textContent = error.message; } finally { setBusy(false); }
 });
 elements.itemForm.addEventListener('submit', async (event) => { event.preventDefault(); elements.itemError.textContent = ''; const data = Object.fromEntries(new FormData(elements.itemForm)); const id = data.id; delete data.id; data.activo = elements.itemForm.elements.activo.checked; setBusy(true, 'Guardando ítem…'); try { await api(id ? `/api/administracion/materiales/items/${id}` : '/api/administracion/materiales/items', { method: id ? 'PUT' : 'POST', body: JSON.stringify(data) }); resetItemForm(); await loadAll(); toast('Ítem guardado correctamente.'); } catch (error) { elements.itemError.textContent = error.message; } finally { setBusy(false); } });
@@ -691,6 +710,8 @@ elements.providerList.addEventListener('click', (event) => {
     const button = event.target.closest('[data-edit-provider]'); if (!button) return;
     const provider = state.providers.find((candidate) => candidate.id === button.dataset.editProvider); if (!provider) return;
     for (const field of ['id', 'codigo', 'nombre', 'codigo_externo']) elements.providerForm.elements[field].value = provider[field] || '';
+    elements.providerInternalCode.value = provider.codigo_interno || '';
+    if (provider.codigo === provider.codigo_interno) elements.providerForm.elements.codigo.value = '';
     elements.providerForm.elements.activo.checked = provider.activo;
     const clientIds = new Set((provider.clientes || []).map((client) => client.id));
     elements.providerClientOptions.querySelectorAll('input').forEach((input) => { input.checked = clientIds.has(input.value); });
@@ -742,6 +763,15 @@ elements.regularizationForm?.addEventListener('submit', async (event) => {
     button.addEventListener('click', () => elements.regularizationDialog.close()));
 elements.destinationList.addEventListener('click', (event) => { const button = event.target.closest('[data-edit-destination]'); if (!button) return; const destination = state.destinations.find((candidate) => candidate.id === button.dataset.editDestination); if (!destination) return; for (const field of ['id', 'nombre', 'centro_costo', 'descripcion', 'codigo_externo']) elements.destinationForm.elements[field].value = destination[field] || ''; elements.destinationForm.elements.activo.checked = destination.activo; elements.destinationCancel.classList.remove('is-hidden'); });
 elements.providerClientOptions.addEventListener('change', () => renderProviderCategories());
+elements.providerSearch.addEventListener('input', renderProviderList);
+elements.providerClientFilter.addEventListener('change', renderProviderList);
+elements.providerStatusFilter.addEventListener('change', renderProviderList);
+elements.providerClearFilters.addEventListener('click', () => {
+    elements.providerSearch.value = '';
+    elements.providerClientFilter.value = '';
+    elements.providerStatusFilter.value = 'todos';
+    renderProviderList();
+});
 elements.providerCancel.addEventListener('click', resetProviderForm); elements.itemCancel.addEventListener('click', resetItemForm);
 let itemSearchTimer = null;
 function scheduleItemSearch() {

@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Models\Concerns\ImpideEliminacionFisica;
+use App\Services\Materiales\ServicioCorrelativoProveedorMaterial;
+use DomainException;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
@@ -23,6 +25,20 @@ class ProveedorMaterial extends Model
     use HasUuids, ImpideEliminacionFisica;
 
     protected $table = 'proveedores_materiales';
+
+    protected static function booted(): void
+    {
+        static::creating(function (ProveedorMaterial $proveedor): void {
+            $proveedor->codigo_interno = app(ServicioCorrelativoProveedorMaterial::class)->siguiente();
+            $proveedor->codigo = $proveedor->codigo ?: $proveedor->codigo_interno;
+        });
+
+        static::updating(function (ProveedorMaterial $proveedor): void {
+            if ($proveedor->isDirty('codigo_interno')) {
+                throw new DomainException('El código interno del proveedor es automático y no se puede modificar.');
+            }
+        });
+    }
 
     public function clientes(): BelongsToMany
     {

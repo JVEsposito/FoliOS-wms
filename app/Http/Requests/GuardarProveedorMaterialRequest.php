@@ -4,6 +4,8 @@ namespace App\Http\Requests;
 
 use App\Models\ItemMaterial;
 use App\Models\ProveedorMaterial;
+use App\Services\Materiales\ServicioCorrelativoProveedorMaterial;
+use Closure;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -23,12 +25,19 @@ class GuardarProveedorMaterialRequest extends FormRequest
 
         return [
             'codigo' => [
-                'required',
+                'nullable',
                 'string',
                 'max:80',
                 'regex:/^[A-Z0-9][A-Z0-9._-]*$/',
                 Rule::unique('proveedores_materiales', 'codigo')->ignore($proveedorId),
+                function (string $atributo, mixed $valor, Closure $fallar) use ($proveedor): void {
+                    if ($valor !== $proveedor?->codigo
+                        && app(ServicioCorrelativoProveedorMaterial::class)->enUso($valor, $proveedor?->id)) {
+                        $fallar('El código ya identifica a otro proveedor, incluso omitiendo guiones, puntos o guiones bajos.');
+                    }
+                },
             ],
+            'codigo_interno' => ['prohibited'],
             'nombre' => ['required', 'string', 'min:2', 'max:180'],
             'codigo_externo' => [
                 'nullable',
@@ -112,6 +121,7 @@ class GuardarProveedorMaterialRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'codigo_interno.prohibited' => 'El código interno se asigna automáticamente al guardar.',
             'categorias.required' => 'Selecciona al menos una categoría habilitada.',
             'categorias.min' => 'Selecciona al menos una categoría habilitada.',
         ];
@@ -133,7 +143,9 @@ class GuardarProveedorMaterialRequest extends FormRequest
             ->all();
 
         $this->merge([
-            'codigo' => mb_strtoupper(trim((string) $this->input('codigo'))),
+            'codigo' => $this->filled('codigo')
+                ? mb_strtoupper(trim((string) $this->input('codigo')))
+                : ($this->has('codigo') ? null : $this->route('proveedorMaterial')?->codigo),
             'nombre' => trim((string) $this->input('nombre')),
             'codigo_externo' => $this->filled('codigo_externo')
                 ? trim((string) $this->input('codigo_externo'))

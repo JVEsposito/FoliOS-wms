@@ -1,3 +1,6 @@
+.materials-item-search.materials-provider-search{grid-template-columns:minmax(220px,1fr) minmax(150px,220px) minmax(100px,140px) auto}
+@media(max-width:1000px){.materials-item-search.materials-provider-search{grid-template-columns:1fr 1fr}}
+@media(max-width:760px){.materials-item-search.materials-provider-search{grid-template-columns:1fr}}
 .materials-access-brand{background:radial-gradient(circle at 18% 20%,color-mix(in srgb, var(--warning-text) 14%, transparent),transparent 25rem),linear-gradient(145deg,var(--surface-muted),var(--header-bg))}
 .materials-workspace{display:grid;gap:16px;padding:16px}.materials-heading{display:flex;align-items:center;justify-content:space-between;padding:20px}.materials-heading h1{margin:4px 0;font-size:1.55rem}.materials-heading p{margin:0;color:var(--muted);font-size:.76rem}
 .materials-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:12px}.materials-metrics article{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:15px}.materials-metrics span{display:block;color:var(--muted);font-size:.62rem;font-weight:900;letter-spacing:.08em}.materials-metrics strong{display:block;margin-top:5px;font-size:1.55rem}
