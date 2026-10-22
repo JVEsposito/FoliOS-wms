@@ -190,11 +190,13 @@ class ConsultaFolioMaterialTrazabilidadApiTest extends TestCase
             ->assertJsonPath('material.recepcion.numero_guia', 'GD-4588')
             ->assertJsonPath('material.recepcion.orden_compra', 'OC-7788')
             ->assertJsonPath('material.recepcion.confirmado_por', 'Operador Materiales')
-            ->assertJsonPath('material.saldos.0.almacen', 'Packing Línea 1')
-            ->assertJsonPath('material.saldos.0.centro_costo', 'CC-4100')
-            ->assertJsonPath('material.saldos.0.cantidad_disponible', 60)
             ->assertJsonPath('totales.recepciones_material', 1)
             ->assertJsonPath('totales.consumos_material', 1);
+
+        $saldoPacking = collect($respuesta->json('material.saldos'))->firstWhere('almacen', 'Packing Línea 1');
+        $this->assertNotNull($saldoPacking);
+        $this->assertSame('CC-4100', $saldoPacking['centro_costo']);
+        $this->assertSame(60, $saldoPacking['cantidad_disponible']);
 
         $eventos = collect($respuesta->json('timeline'));
         $recepcionEvento = $eventos->firstWhere('tipo', 'recepcion_material');
