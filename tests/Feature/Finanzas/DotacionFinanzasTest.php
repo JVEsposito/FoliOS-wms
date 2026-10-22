@@ -53,6 +53,19 @@ class DotacionFinanzasTest extends TestCase
         app(GestorTarifas::class)->crear(['cliente_id' => null, 'servicio' => $this->servicio, 'unidad' => 'cantidad', 'moneda' => 'CLP', 'precio' => '3.5', 'vigente_desde' => '2026-11-01', 'cerrar_anterior' => false], $this->admin);
     }
 
+    public function test_la_fuente_transversal_de_programacion_no_copia_datos_personales(): void
+    {
+        $lectura = app(ServicioCapturaHechos::class)->capturar(Lectura::ORIGEN_MANUAL, $this->admin, ['rrhh_programacion']);
+        $this->assertSame('completada', $lectura->estado, $lectura->error ?? '');
+        $hecho = Hecho::query()->vigentes()->where('fuente', 'rrhh_programacion')->sole();
+        $this->assertSame('8', $hecho->medidas['horas']);
+        $this->assertFalse($hecho->datos['asistencia_acreditada']);
+        $json = $hecho->toJson();
+        foreach (['Nombre privado de prueba', 'DOCUMENTO_PRIVADO', '345678', 'persona_id', 'persona_nombre', 'costo_hora'] as $privado) {
+            $this->assertStringNotContainsString($privado, $json);
+        }
+    }
+
     public function test_lleva_programacion_sin_asistencia_y_cancelar_rrhh_no_anula_un_cargo_aprobado(): void
     {
         $datos = $this->datos();

@@ -31,6 +31,8 @@ final class PresentadorHechos
             'termina_at' => $hecho->termina_at?->toIso8601String(),
             'fecha_operacional' => $hecho->fecha_operacional->toDateString(),
             'medidas' => $hecho->medidas,
+            'medidas_info' => ($this->fuentes->todas()[$hecho->fuente] ?? null)?->medidas() ?? [],
+            'dimensiones_info' => $this->fuentes->contexto($hecho->fuente)['dimensiones'],
             'datos' => $hecho->datos,
             'capturado_at' => $hecho->capturado_at->toIso8601String(),
         ];

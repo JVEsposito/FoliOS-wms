@@ -305,6 +305,7 @@ async function openHistory(id) {
                 + `<small>Capturada ${escapeHtml(formatDate(version.capturado_at))}${version.vigente ? ' · vigente' : ''}</small></div>`
                 + `<p>${escapeHtml(measuresText(version))}${factDetail(version) ? ` · ${escapeHtml(factDetail(version))}` : ''}</p>`
                 + (version.datos?.tramos?.length ? `<ul>${version.datos.tramos.map((tramo) => `<li>${escapeHtml(tranchesText([tramo]))}</li>`).join('')}</ul>` : '')
+                + (version.datos?.aportes?.length ? `<details><summary>Ver fórmula y ${version.datos.aportes.length} aportes</summary><ul>${version.datos.aportes.map((input) => `<li>${escapeHtml(input.fuente)} · ${escapeHtml(input.valor)} × ${escapeHtml(input.factor)} = ${escapeHtml(input.cantidad)} · hecho ${escapeHtml(input.hecho_id)}, versión ${escapeHtml(input.version)}</li>`).join('')}</ul></details>` : '')
                 + (changes.length ? `<ul>${changes.map((change) => `<li><span>${escapeHtml(change.label)}</span> ${escapeHtml(change.before)} → <strong>${escapeHtml(change.after)}</strong></li>`).join('')}</ul>` : '')
                 + '</li>';
         }).join('');

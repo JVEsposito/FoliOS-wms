@@ -40,6 +40,12 @@ final class CatalogoFuentes
                 $fuente = app($clase);
                 $this->fuentes[$fuente->clave()] = $fuente;
             }
+            $calculado = $this->fuentes['calculado'];
+            unset($this->fuentes['calculado']);
+            foreach (app(FuentesOperativas::class)->todas() as $fuente) {
+                $this->fuentes[$fuente->clave()] = $fuente;
+            }
+            $this->fuentes['calculado'] = $calculado;
         }
 
         return $this->fuentes;

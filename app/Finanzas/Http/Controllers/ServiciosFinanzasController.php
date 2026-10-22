@@ -9,6 +9,7 @@ use App\Finanzas\Periodo;
 use App\Finanzas\Tarifario\CatalogoServicios;
 use App\Finanzas\Tarifario\GestorServicios;
 use App\Finanzas\Valorizacion\ConsultaRegla;
+use App\Finanzas\Valorizacion\ReferenciasValorizacion;
 use App\Finanzas\Valorizacion\ReglaValorizacion;
 use App\Http\Controllers\Controller;
 use DomainException;
@@ -19,6 +20,13 @@ use Illuminate\Validation\ValidationException;
 
 class ServiciosFinanzasController extends Controller
 {
+    public function referencias(Request $request, ReferenciasValorizacion $referencias): JsonResponse
+    {
+        $datos = $request->validate(['fuente' => ['required', 'string', 'max:40'], 'campo' => ['required', 'string', 'max:60']]);
+
+        return response()->json(['data' => $referencias->valores($datos['fuente'], $datos['campo'])]);
+    }
+
     public function store(Request $request, CatalogoFuentes $fuentes, GestorServicios $gestor, CatalogoServicios $catalogo): JsonResponse
     {
         $datos = $request->validate([

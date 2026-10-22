@@ -89,7 +89,7 @@ final class CatalogoServicios
             'por_dia' => $fuente->intervalo(),
             'unidades' => array_map(fn (string $unidad): array => [
                 'clave' => $unidad, 'nombre' => in_array($fuente->clave(), [CargosDeclarados::CLAVE, ReglaValorizacion::FUENTE], true) ? 'por '.($datos['unidad_libre'] ?? 'unidad') : $this->etiquetaUnidad($fuente, $unidad),
-            ], array_keys($fuente->medidas())),
+            ], array_keys(array_filter($fuente->medidas(), fn (array $medida): bool => ! isset($medida['dimension_unidad'])))),
         ];
     }
 

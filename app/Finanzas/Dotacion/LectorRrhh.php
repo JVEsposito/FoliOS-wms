@@ -22,6 +22,13 @@ final class LectorRrhh
         ]);
     }
 
+    /** Proyección comercial sin persona, documentos, marcajes individuales ni costo interno. */
+    public function hechosProgramacion(): Builder
+    {
+        return DB::connection(config('finanzas.conexion_rrhh'))->table('rh_asignaciones', 'a')
+            ->select(['a.id', 'a.created_at', 'a.desde_at as ocurrido_at', 'a.cliente_id', 'a.cliente_nombre', 'a.cargo', 'a.area', 'a.ceco', 'a.desde_at', 'a.hasta_at', 'a.descanso_programado_minutos', 'a.estado']);
+    }
+
     public function mes(Periodo $periodo): LengthAwarePaginator
     {
         return DB::connection(config('finanzas.conexion_rrhh'))->transaction(fn () => $this->asignaciones()->where('desde_at', '<', $periodo->hastaUtc())->where('hasta_at', '>', $periodo->desdeUtc())
