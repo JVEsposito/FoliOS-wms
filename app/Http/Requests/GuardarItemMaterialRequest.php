@@ -37,9 +37,11 @@ class GuardarItemMaterialRequest extends FormRequest
             'nombre' => ['required', 'string', 'min:3', 'max:180'],
             'categoria' => ['nullable', 'string', 'max:100'],
             'categoria_operacional' => [
-                'required',
+                'required_without:tipo_item_material_id',
+                'nullable',
                 Rule::enum(CategoriaOperacionalMaterial::class),
             ],
+            'tipo_item_material_id' => ['nullable', 'uuid', 'exists:tipos_items_materiales,id'],
             'unidad_medida' => ['required', 'string', 'max:40'],
             'codigo_externo' => [
                 'nullable',
@@ -62,6 +64,7 @@ class GuardarItemMaterialRequest extends FormRequest
     {
         return [
             'categoria_operacional.required' => 'Selecciona el tipo de ítem.',
+            'categoria_operacional.required_without' => 'Selecciona el tipo de ítem.',
             'categoria_operacional.enum' => 'El tipo de ítem debe ser Insumo, Material MP o Material PT.',
         ];
     }
@@ -78,7 +81,7 @@ class GuardarItemMaterialRequest extends FormRequest
             'unidad_medida' => mb_strtolower(trim((string) $this->input('unidad_medida'))),
             'codigo_externo' => $this->filled('codigo_externo')
                 ? trim((string) $this->input('codigo_externo'))
-                : null,
+                : ($this->has('codigo_externo') ? null : $this->route('itemMaterial')?->codigo_externo),
         ]);
     }
 }

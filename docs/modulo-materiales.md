@@ -28,16 +28,57 @@ cliente global para asociar ítems e inventario sin duplicar el maestro.
 
 En Materiales el administrador mantiene:
 
-1. Ítems: código, nombre, categoría, unidad de medida y referencia externa
-   opcional.
-2. Proveedores: código, nombre, referencia externa y uno o más clientes
-   globales asociados.
-3. Destinos: nombre, centro de costo, descripción y referencia externa
-   opcional.
+1. Ítems: código, nombre, categoría comercial, tipo de ítem y unidad de medida.
+2. Proveedores: correlativo automático, código comercial opcional, nombre y uno
+   o más clientes globales asociados.
+3. Destinos: nombre, centro de costo y descripción.
+4. Categorías y tipos: maestros reutilizables entre clientes y temporadas.
 
 Los registros se activan o desactivan; no se eliminan físicamente. Los campos
 de integración permiten que una futura sincronización con ERP mantenga la
-identidad interna del registro.
+identidad interna del registro. Esos campos se conservan en API e importaciones,
+pero ya no se solicitan como «Código ERP futuro» en los formularios manuales de
+clientes, proveedores, ítems y destinos. Editar sin enviarlos conserva su valor;
+una integración todavía puede enviarlos o limpiarlos explícitamente.
+
+### Categorías comerciales y tipos de ítem configurables
+
+En **Materiales → Catálogos → Categorías y tipos** se crean, editan y activan o
+desactivan los valores que alimentan los desplegables del formulario de ítems.
+Se requiere `administrar-catalogos-materiales`, igual que para editar ítems.
+Los nombres no se duplican por mayúsculas, tildes o espacios repetidos, incluso
+si el valor anterior está inactivo. No se eliminan físicamente.
+
+Las categorías actuales se incorporan al maestro sin reescribir los textos de
+los ítems ni las habilitaciones de proveedores. Una categoría que ya figura en
+ítems o asociaciones de proveedores conserva su nombre; se puede desactivar o
+crear una categoría distinta. Una categoría todavía sin uso admite renombre.
+
+Cada tipo configurable tiene un nombre y una de tres funciones operacionales:
+`insumo`, `material_mp` o `material_pt`. Recepciones, recetas, folios y existencias
+siguen usando estas funciones; agregar un nombre no inventa nuevos estados.
+La función de un tipo base o asignado a ítems queda protegida. Su nombre y estado
+sí pueden editarse. Desactivar una categoría o tipo impide asignarlo a otro ítem,
+pero permite conservarlo al editar el ítem que ya lo tenía y no bloquea su stock.
+
+La migración `2026_10_22_200000_crear_clasificaciones_catalogo_materiales` crea los
+dos maestros y vincula los ítems tipificados con los tres tipos base. Los ítems
+pendientes de tipificación siguen pendientes. No cambia UUID, códigos, unidades,
+fechas históricas, inventario ni recetas. Al copiar el catálogo entre temporadas
+se conserva el tipo configurable.
+
+La API anterior sigue aceptando `categoria` y `categoria_operacional`; el nombre
+de categoría se incorpora al maestro y el enum resuelve su tipo base. El nuevo
+formulario envía `tipo_item_material_id` y el servidor determina la función. Si
+se envían ambos, deben coincidir. La importación conserva los tipos configurables
+de ítems existentes cuando la función no cambia y registra categorías nuevas.
+Los CSV mantienen `tipo_item` como función operacional para compatibilidad.
+La consulta paginada y las exportaciones admiten `tipo_item_material_id` para
+filtrar por el tipo configurable; el filtro anterior `tipo_item` sigue vigente.
+
+Despliegue: respaldo de la base operativa, `php artisan migrate --force`,
+compilación web (`npm ci` y `npm run build`), limpieza de cachés y reinicio de
+colas. No requiere cambios nativos, APK ni OTA.
 
 ### Catálogo descargable y fotos de ítems
 
