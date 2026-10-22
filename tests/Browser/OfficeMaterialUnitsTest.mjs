@@ -65,13 +65,15 @@ test('catálogo de unidades y equivalencias por ítem funcionan en escritorio y 
             await page.locator('#materialUnitConversionForm [type="submit"]').click();
             await page.waitForFunction(() => document.getElementById('materialConversionsList').textContent.includes('100'));
             assert.equal(writes[1].unidad_origen, 'cajas'); assert.equal(writes[1].factor, '100'); assert.equal(writes[1].version_conocida, 0);
-            await page.locator('[data-edit-unit="unidades"]').click();
+            const unitRow = page.locator('#materialUnitsList .material-row').filter({ has: page.locator('[data-edit-unit="unidades"]') });
+            await unitRow.locator('.office-action-select').selectOption({ label: 'Editar' });
             await page.locator('#materialUnitForm [name="activa"]').uncheck();
             await page.locator('#materialUnitForm [name="motivo"]').fill('Conservar solamente los ítems existentes');
             await page.locator('#materialUnitForm [type="submit"]').click();
             await page.waitForFunction(() => document.querySelector('#itemMaterialForm [name="unidad_medida"]').textContent.includes('inactiva'));
             await page.locator('#materials-catalog-tab-items').click();
-            await page.locator('[data-edit-item="item"]').click();
+            const itemRow = page.locator('#itemsMaterialList .material-row').filter({ has: page.locator('[data-edit-item="item"]') });
+            await itemRow.locator('.office-action-select').selectOption({ label: 'Editar' });
             assert.equal(await page.locator('#itemMaterialForm [name="unidad_medida"]').inputValue(), 'unidades');
             assert.deepEqual(errors, [], `${width}px`);
             await context.close();
