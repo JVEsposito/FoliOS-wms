@@ -64,6 +64,7 @@ class ProveedorMaterialConcurrenciaTest extends TestCase
             'cliente_material_id' => $cliente->id, 'codigo' => 'CAJA-CONCURRENTE', 'nombre' => 'Caja',
             'categoria' => 'Embalaje', 'categoria_operacional' => 'material_mp',
             'unidad_medida' => 'unidades', 'activo' => true,
+            'creado_por_user_id' => $admin->id, 'actualizado_por_user_id' => $admin->id,
         ]);
         $dir = sys_get_temp_dir().'/proveedores-concurrentes-'.bin2hex(random_bytes(8));
         mkdir($dir);

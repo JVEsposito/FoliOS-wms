@@ -34,6 +34,7 @@ class ProveedorMaterialApiTest extends TestCase
             'codigo' => 'CAJA-PRUEBA', 'nombre' => 'Caja prueba', 'categoria' => 'Embalaje',
             'categoria_operacional' => 'material_mp', 'unidad_medida' => 'unidades',
             'activo' => true, 'origen_sistema' => 'manual',
+            'creado_por_user_id' => $this->admin->id, 'actualizado_por_user_id' => $this->admin->id,
         ]);
     }
 
