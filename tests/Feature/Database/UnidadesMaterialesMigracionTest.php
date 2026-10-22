@@ -3,6 +3,7 @@
 namespace Tests\Feature\Database;
 
 use App\Models\ClienteMaterial;
+use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Support\Facades\DB;
@@ -30,10 +31,11 @@ class UnidadesMaterialesMigracionTest extends TestCase
         $migracion = require database_path('migrations/2026_10_22_210000_catalogo_unidades_materiales.php');
         $migracion->down();
         $cliente = ClienteMaterial::firstOrFail();
+        $usuario = User::factory()->create();
         $ids = [];
         foreach ([' UN ', 'unidad', 'Unidades', 'KG', 'Kilógramos', 'presentación propia'] as $i => $texto) {
             $id = $ids[] = (string) Str::uuid();
-            DB::table('items_materiales')->insert(['id' => $id, 'cliente_material_id' => $cliente->id, 'codigo' => 'LEGADO-'.$i, 'nombre' => 'Material existente '.$i, 'unidad_medida' => $texto, 'activo' => true, 'origen_sistema' => 'manual', 'created_at' => '2026-01-01 09:00:00', 'updated_at' => '2026-02-01 09:00:00']);
+            DB::table('items_materiales')->insert(['id' => $id, 'cliente_material_id' => $cliente->id, 'codigo' => 'LEGADO-'.$i, 'nombre' => 'Material existente '.$i, 'unidad_medida' => $texto, 'activo' => true, 'origen_sistema' => 'manual', 'creado_por_user_id' => $usuario->id, 'actualizado_por_user_id' => $usuario->id, 'created_at' => '2026-01-01 09:00:00', 'updated_at' => '2026-02-01 09:00:00']);
         }
         $antes = DB::table('items_materiales')->whereIn('id', $ids)->orderBy('id')->get()->map(fn ($i) => (array) $i)->all();
         $migracion->up();

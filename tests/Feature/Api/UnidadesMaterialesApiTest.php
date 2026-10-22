@@ -25,13 +25,16 @@ class UnidadesMaterialesApiTest extends TestCase
 
     private ClienteMaterial $cliente;
 
+    private array $auditoria;
+
     protected function setUp(): void
     {
         parent::setUp();
         $this->actingAs(User::factory()->create(['rol' => RolUsuario::Administrador]), 'sanctum');
+        $this->auditoria = ['creado_por_user_id' => auth()->id(), 'actualizado_por_user_id' => auth()->id()];
         $this->cliente = ClienteMaterial::with('cliente')->where('codigo', 'GENERAL')->whereHas('temporada', fn ($q) => $q->where('activa', true))->firstOrFail();
         $this->cliente->cliente->update(['codigo_folio_materiales' => 'GE']);
-        $this->item = ItemMaterial::create(['cliente_material_id' => $this->cliente->id, 'codigo' => 'UNID-TEST', 'nombre' => 'Caja plana fixture', 'categoria' => 'Embalaje', 'categoria_operacional' => 'material_mp', 'unidad_medida' => 'unidades', 'activo' => true]);
+        $this->item = ItemMaterial::create(['cliente_material_id' => $this->cliente->id, 'codigo' => 'UNID-TEST', 'nombre' => 'Caja plana fixture', 'categoria' => 'Embalaje', 'categoria_operacional' => 'material_mp', 'unidad_medida' => 'unidades', 'activo' => true, ...$this->auditoria]);
         $this->proveedor = ProveedorMaterial::create(['nombre' => 'Proveedor fixture', 'activo' => true]);
         $this->proveedor->clientes()->attach($this->cliente->cliente_id, ['id' => Str::uuid(), 'activo' => true, 'categorias' => json_encode(['Embalaje'])]);
     }
@@ -62,7 +65,7 @@ class UnidadesMaterialesApiTest extends TestCase
     public function test_catalogo_normaliza_las_variantes_y_controla_versiones_codigo_y_alias(): void
     {
         $unidad = UnidadMaterial::findOrFail($this->item->unidad_material_id);
-        $otra = ItemMaterial::create(['cliente_material_id' => $this->cliente->id, 'codigo' => 'OTRO', 'nombre' => 'Otro ítem fixture', 'categoria_operacional' => 'insumo', 'unidad_medida' => 'UN', 'activo' => true]);
+        $otra = ItemMaterial::create(['cliente_material_id' => $this->cliente->id, 'codigo' => 'OTRO', 'nombre' => 'Otro ítem fixture', 'categoria_operacional' => 'insumo', 'unidad_medida' => 'UN', 'activo' => true, ...$this->auditoria]);
         $this->assertSame($unidad->id, $otra->unidad_material_id);
         $this->assertSame('UN', $otra->unidad_medida);
         $datos = ['codigo' => 'resmas', 'nombre' => 'Resmas', 'alias' => ['resma'], 'activa' => true, 'version_conocida' => 0, 'motivo' => 'Nueva unidad del catálogo'];
@@ -90,7 +93,7 @@ class UnidadesMaterialesApiTest extends TestCase
         $this->postJsonConDocumento('/api/materiales/recepciones/'.$id.'/confirmar', ['operacion_id' => (string) Str::uuid(), 'version_conocida' => 1])->assertOk();
         $this->assertSame('200.000', (string) DB::table('folios_materiales')->sum('cantidad_actual'));
         $this->assertSame(['unidades'], DB::table('folios_materiales')->distinct()->pluck('unidad_medida')->all());
-        $otra = ItemMaterial::create(['cliente_material_id' => $this->cliente->id, 'codigo' => 'SIN-FACTOR', 'nombre' => 'Otro material fixture', 'categoria_operacional' => 'material_mp', 'categoria' => 'Embalaje', 'unidad_medida' => 'unidades', 'activo' => true]);
+        $otra = ItemMaterial::create(['cliente_material_id' => $this->cliente->id, 'codigo' => 'SIN-FACTOR', 'nombre' => 'Otro material fixture', 'categoria_operacional' => 'material_mp', 'categoria' => 'Embalaje', 'unidad_medida' => 'unidades', 'activo' => true, ...$this->auditoria]);
         $this->postJson('/api/materiales/recepciones', $this->recepcion(['item_material_id' => $otra->id]))->assertUnprocessable();
         $this->assertDatabaseCount('recepciones_materiales', 1);
     }
