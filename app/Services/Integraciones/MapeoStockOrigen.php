@@ -29,7 +29,7 @@ class MapeoStockOrigen
     {
         $tabla = ExploradorMySql::identificador($ajustes['tabla']);
         $mapa = $ajustes['campos'];
-        if (array_diff(array_keys($mapa), array_keys(self::CAMPOS)) !== [] || empty($mapa['Pallet']) || empty($mapa['cantidad'])) {
+        if (array_diff(array_keys($mapa), array_keys(self::CAMPOS)) !== [] || ($mapa['Pallet'] ?? '') === '' || ($mapa['cantidad'] ?? '') === '') {
             throw new DomainException('Asigne al menos las columnas de folio y cantidad de cajas.');
         }
         $tipos = array_column($columnas, 'tipo', 'nombre');
@@ -65,7 +65,7 @@ class MapeoStockOrigen
             if (! preg_match('/^\d+(?:\.0+)?$/D', $cajas) || (float) $cajas > 4294967295) {
                 throw new DomainException('La fila '.($indice + 1).' debe tener una cantidad entera de cajas, mayor o igual a cero.');
             }
-            foreach (['kilos_netos' => 9999999999.99, 'peso_neto_articulo' => 999999.999] as $campo => $maximo) {
+            foreach (['kilos_netos' => 9999999999.99, 'peso_neto_articulo' => 99999.999] as $campo => $maximo) {
                 $valor = $fila[$campo] ?? null;
                 if ($valor !== null && $valor !== '' && (! is_numeric($valor) || ! is_finite((float) $valor) || (float) $valor < 0 || (float) $valor > $maximo)) {
                     throw new DomainException('La fila '.($indice + 1).' tiene un valor inválido en '.self::CAMPOS[$campo].'.');

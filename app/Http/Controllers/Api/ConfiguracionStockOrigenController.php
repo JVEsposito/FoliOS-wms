@@ -74,6 +74,9 @@ class ConfiguracionStockOrigenController extends Controller
             'ajustes.filtros' => ['present', 'array', 'max:8'], 'ajustes.filtros.*' => ['required', 'array:columna,valor'],
             'ajustes.filtros.*.columna' => ['required', 'string', 'max:64'], 'ajustes.filtros.*.valor' => ['present', 'string', 'max:180'],
         ]);
+        $datos['version_conexion'] = (int) $datos['version_conexion'];
+        $datos['version_conocida'] = (int) $datos['version_conocida'];
+        $datos['ajustes']['habilitada'] = (bool) $datos['ajustes']['habilitada'];
         $conexion = ConexionExterna::findOrFail($datos['conexion_id']);
         $this->vigente($conexion, $datos['version_conexion']);
         try {
