@@ -73,7 +73,7 @@ test('catálogo de unidades y equivalencias por ítem funcionan en escritorio y 
             await page.waitForFunction(() => document.querySelector('#itemMaterialForm [name="unidad_medida"]').textContent.includes('inactiva'));
             await page.locator('#materials-catalog-tab-items').click();
             const itemRow = page.locator('#itemsMaterialList .material-row').filter({ has: page.locator('[data-edit-item="item"]') });
-            await itemRow.locator('.office-action-select').selectOption({ label: 'Editar' });
+            await itemRow.locator('[data-edit-item="item"]').click();
             assert.equal(await page.locator('#itemMaterialForm [name="unidad_medida"]').inputValue(), 'unidades');
             assert.deepEqual(errors, [], `${width}px`);
             await context.close();
