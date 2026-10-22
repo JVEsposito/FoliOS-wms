@@ -34,6 +34,9 @@ test('catálogo de unidades y equivalencias por ítem funcionan en escritorio y 
                     if (request.method() === 'POST') { const data = request.postDataJSON(); writes.push(data); units.push({ ...data, id: 'resmas', version: 1 }); return route.fulfill({ status: 201, json: { data: units.at(-1) } }); }
                     return route.fulfill({ json: { data: units } });
                 }
+                if (path === '/api/administracion/materiales/unidades/unidades' && request.method() === 'PUT') {
+                    Object.assign(units[0], request.postDataJSON(), { version: 2 }); return route.fulfill({ json: { data: units[0] } });
+                }
                 if (path === '/api/administracion/materiales/items/item/unidades') {
                     if (request.method() === 'PUT') { const data = request.postDataJSON(); writes.push(data); conversion = { ...data, version: 1, origen: units[1] }; return route.fulfill({ json: { data: conversion } }); }
                     return route.fulfill({ json: { data: conversion ? [conversion] : [], unidad_base: 'unidades' } });
@@ -62,6 +65,14 @@ test('catálogo de unidades y equivalencias por ítem funcionan en escritorio y 
             await page.locator('#materialUnitConversionForm [type="submit"]').click();
             await page.waitForFunction(() => document.getElementById('materialConversionsList').textContent.includes('100'));
             assert.equal(writes[1].unidad_origen, 'cajas'); assert.equal(writes[1].factor, '100'); assert.equal(writes[1].version_conocida, 0);
+            await page.locator('[data-edit-unit="unidades"]').click();
+            await page.locator('#materialUnitForm [name="activa"]').uncheck();
+            await page.locator('#materialUnitForm [name="motivo"]').fill('Conservar solamente los ítems existentes');
+            await page.locator('#materialUnitForm [type="submit"]').click();
+            await page.waitForFunction(() => document.querySelector('#itemMaterialForm [name="unidad_medida"]').textContent.includes('inactiva'));
+            await page.locator('#materials-catalog-tab-items').click();
+            await page.locator('[data-edit-item="item"]').click();
+            assert.equal(await page.locator('#itemMaterialForm [name="unidad_medida"]').inputValue(), 'unidades');
             assert.deepEqual(errors, [], `${width}px`);
             await context.close();
         }

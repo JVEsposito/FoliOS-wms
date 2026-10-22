@@ -9,7 +9,11 @@ export function createMaterialUnits({ api, getItems, getToken, authorized, escap
     function renderBase() {
         const value = baseSelect.value;
         const known = new Map(units.filter((u) => u.activa || u.codigo === value).map((u) => [u.codigo, u.nombre]));
-        for (const item of getItems()) if (!units.some((u) => !u.activa && (u.codigo === item.unidad_medida || u.alias?.includes(item.unidad_medida)))) known.set(item.unidad_medida, item.unidad_medida);
+        for (const item of getItems()) {
+            const key = String(item.unidad_medida).trim().toLocaleLowerCase('es');
+            const unit = units.find((u) => u.codigo === key || u.alias?.includes(key));
+            known.set(item.unidad_medida, unit && !unit.activa ? `${item.unidad_medida} (inactiva; solo ítems existentes)` : item.unidad_medida);
+        }
         if (value) known.set(value, value);
         baseSelect.innerHTML = '<option value="">Seleccione una unidad</option>' + options([...known]);
         baseSelect.value = value;
