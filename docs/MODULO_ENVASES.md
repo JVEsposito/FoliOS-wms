@@ -19,6 +19,16 @@ Envases es un dominio independiente de los folios de Frigorífico y del inventar
 
 ## Interfaces
 
+La cuenta corriente permite registrar **aperturas y ajustes con signo**, con permiso de administrador y acceso al módulo de cuenta de envases. Un saldo positivo significa que la planta debe envases al cliente; uno negativo significa que el cliente debe envases a la planta. No se limita el saldo a cero.
+
+Desde «Saldos → Registrar apertura o ajuste» se seleccionan cliente, tipo de envase, propiedad, cantidad entera con signo, fecha efectiva, referencia y motivo. La apertura se admite una vez por cliente, temporada, tipo y propiedad y debe preceder al primer movimiento de esa cuenta. Si una apertura es errónea, se revierte y se registra un ajuste: la apertura original permanece en el historial.
+
+Estos asientos siempre tienen `signo_existencia = 0`: modifican obligaciones de devolución y no crean stock ni disponibilidad para despachar. Las compras, recepciones y salidas físicas continúan con sus controles operativos. Una obligación de envases propios tampoco equivale a una compra o ingreso físico.
+
+Los ajustes se registran en la temporada activa, con fecha efectiva transcurrida dentro de su vigencia. Conservan usuario, hora de registro, motivo y referencia. El UUID de operación hace idempotentes los reintentos y rechaza reutilizaciones con datos distintos. «Revertir asiento» crea una única contrapartida con fecha igual o posterior al original; nunca edita o borra el movimiento. Las temporadas históricas siguen siendo de consulta.
+
+El kardex y los estados de cuenta incluyen estos asientos con signo. Recibidos/entregados representan efectos de cuenta y los asientos identificados como apertura, ajuste o reversa no acreditan entrega física. La fuente financiera `envases_movimiento` permite seleccionar el tipo de movimiento; para arriendos por días se puede acordar cantidad diaria y término de período en Finanzas. La obligación de cuenta no se interpreta automáticamente como existencia arrendada.
+
 ```text
 /oficina/envases/cuenta-corriente
 /oficina/envases/despachos

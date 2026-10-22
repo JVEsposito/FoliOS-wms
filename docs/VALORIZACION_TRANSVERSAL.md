@@ -101,10 +101,10 @@ específica, use también **Versión de receta**. El precio se asigna al concept
 o como tarifa general. Solo los lotes cerrados aportan producción; su reversión la retira
 mediante una versión financiera. La receta y la unidad de la versión utilizada se conservan.
 
-Las cantidades de materiales de distintas unidades no son sumables. Por eso las unidades
-variables solo pueden valorizarse con un filtro explícito de unidad en un cálculo. Los
-conceptos directos de estas fuentes ofrecen lotes o movimientos. Los costos de insumos y
-los precios de venta del servicio permanecen independientes.
+Las cantidades de materiales de distintas unidades no son sumables. Las medidas con unidad
+variable requieren un filtro explícito de unidad, tanto en conceptos directos como en
+cálculos. Los conceptos sin ese filtro ofrecen lotes, folios o movimientos. Los costos de
+insumos y los precios de venta del servicio permanecen independientes.
 
 Las gestiones COMEX se fechan con la primera confirmación registrada (en registros antiguos
 sin evento se conserva su creación). La dotación programada se identifica como disponibilidad;

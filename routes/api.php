@@ -185,6 +185,10 @@ Route::middleware('auth:sanctum')->group(function () {
         ->middleware('can:corregir-propiedad-envases');
     Route::post('/envases/cuenta-corriente/movimientos/{movimientoEnvase}/corregir-cantidad', [CuentaCorrienteEnvaseController::class, 'corregirCantidad'])
         ->middleware('can:corregir-cantidad-envases');
+    Route::post('/envases/cuenta-corriente/ajustes', [CuentaCorrienteEnvaseController::class, 'registrarAjuste'])
+        ->middleware('can:ajustar-cuenta-envases');
+    Route::post('/envases/cuenta-corriente/movimientos/{movimientoEnvase}/revertir-ajuste', [CuentaCorrienteEnvaseController::class, 'revertirAjuste'])
+        ->middleware('can:ajustar-cuenta-envases');
     Route::middleware('can:consultar-cuenta-envases')->prefix('envases/guias-despacho')->group(function () {
         Route::get('/catalogos', [GuiaDespachoEnvaseController::class, 'catalogos']);
         Route::get('/', [GuiaDespachoEnvaseController::class, 'index']);
