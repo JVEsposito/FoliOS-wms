@@ -8,6 +8,7 @@ use App\Finanzas\EsquemaFinanzas;
 use App\Finanzas\Models\ConceptoServicio;
 use App\Finanzas\Models\EventoServicio;
 use App\Finanzas\Periodo;
+use App\Finanzas\Valorizacion\ReglaValorizacion;
 use App\Models\User;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -25,8 +26,17 @@ final class GestorServicios
         if (($datos['fuente'] === CargosDeclarados::CLAVE) !== ($datos['aplicacion'] === 'declarado')) {
             throw ValidationException::withMessages(['aplicacion' => 'La modalidad acordada/manual requiere la fuente de cargos declarados.']);
         }
-        if ($datos['fuente'] === CargosDeclarados::CLAVE && trim((string) ($datos['unidad_libre'] ?? '')) === '') {
+        if (($datos['fuente'] === ReglaValorizacion::FUENTE) !== ($datos['aplicacion'] === 'calculado')) {
+            throw ValidationException::withMessages(['aplicacion' => 'La modalidad calculada requiere la fuente de cálculo entre medidas.']);
+        }
+        if (in_array($datos['fuente'], [CargosDeclarados::CLAVE, ReglaValorizacion::FUENTE], true) && trim((string) ($datos['unidad_libre'] ?? '')) === '') {
             throw ValidationException::withMessages(['unidad_libre' => 'Indique la unidad de cobro del concepto.']);
+        }
+        $datos['area'] = trim((string) ($datos['area'] ?? $this->fuentes->contexto($datos['fuente'])['area']));
+        if ($datos['fuente'] === ReglaValorizacion::FUENTE) {
+            $datos['regla'] = app(ReglaValorizacion::class)->normalizar($datos['regla'] ?? []);
+        } elseif (! empty($datos['regla'])) {
+            throw ValidationException::withMessages(['regla' => 'Las fórmulas corresponden a conceptos calculados.']);
         }
         if (! $fuente->intervalo() && ($datos['dia_desde'] !== 1 || $datos['dia_hasta'] !== null)) {
             throw ValidationException::withMessages(['dia_desde' => 'Los rangos de días solo corresponden a una estadía.']);

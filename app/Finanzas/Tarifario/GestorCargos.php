@@ -34,6 +34,9 @@ final class GestorCargos
             throw ValidationException::withMessages(['base_cobro' => 'Para cobrar sin ejecución, indique acuerdo, compromiso o disponibilidad como base del cobro.']);
         }
         $datos['cantidad'] = Precio::normalizar($datos['cantidad']);
+        if ($datos['cantidad'] === '0') {
+            throw ValidationException::withMessages(['cantidad' => 'La cantidad debe ser distinta de cero; un valor negativo registra un abono.']);
+        }
         ksort($datos);
         $hash = hash('sha256', json_encode($datos, JSON_THROW_ON_ERROR));
         $candado = 'cargo-'.$datos['operacion_id'];

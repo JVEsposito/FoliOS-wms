@@ -148,6 +148,7 @@
                     <button class="fin-boton fin-form__wide" id="tariffFormCreateService" type="button">+ Crear un concepto de servicio</button>
                     <label><span>Moneda</span><select name="moneda" id="tariffFormCurrency" required></select></label>
                     <label><span>Precio unitario</span><input name="precio" id="tariffFormPrice" inputmode="decimal" autocomplete="off" placeholder="Por ejemplo, 0,35" required></label>
+                    <p class="fin-form__preview fin-form__wide">Un precio negativo genera un abono. El monto resulta de multiplicar la cantidad por el precio, conservando ambos signos.</p>
                     <label><span>Vigente desde</span><input name="vigente_desde" id="tariffFormFrom" type="date" required></label>
                     <label><span>Vigente hasta <small>(opcional)</small></span><input name="vigente_hasta" id="tariffFormTo" type="date"></label>
                     <label class="fin-form__wide"><span>Nota <small>(opcional)</small></span><textarea name="nota" id="tariffFormNote" rows="2" maxlength="500"></textarea></label>
@@ -241,6 +242,7 @@
                     <label class="fin-form__wide"><span>Concepto acordado/manual</span><select name="servicio" required></select></label>
                     <label class="fin-form__wide"><span>Cliente</span><select name="cliente_id" required></select></label>
                     <label><span>Cantidad</span><input name="cantidad" inputmode="decimal" required></label><label><span>Fecha del cobro</span><input name="fecha" type="date" required></label>
+                    <p class="fin-form__preview fin-form__wide">Puede registrar cantidades negativas para abonos o ajustes, con su respaldo. El resultado conserva el signo de cantidad × precio.</p>
                     <p class="fin-form__preview fin-form__wide" id="chargeUnit"></p>
                     <label><span>Base económica del cobro</span><select name="base_cobro" required><option value="acuerdo">Acuerdo comercial</option><option value="compromiso">Compromiso contratado</option><option value="disponibilidad">Disponibilidad o reserva</option><option value="ejecucion">Prestación realizada</option></select></label>
                     <label><span>Ejecución al registrar el cargo</span><select name="estado_ejecucion" required><option value="no_aplica">No aplica</option><option value="programado">Programado</option><option value="realizado">Realizado</option><option value="no_realizado">No realizado</option><option value="cancelado">Cancelado</option></select></label>
@@ -260,13 +262,24 @@
                 </header>
                 <div class="fin-form">
                     <label class="fin-form__wide"><span>Nombre que aparecerá en la prefactura</span><input name="nombre" maxlength="120" required placeholder="Por ejemplo, Frío normal"></label>
+                    <label class="fin-form__wide"><span>Área del servicio</span><input name="area" maxlength="60" value="general" list="serviceAreas" required placeholder="materiales, envases, packing, RRHH…"><datalist id="serviceAreas"><option value="materiales"><option value="envases"><option value="packing"><option value="recepcion"><option value="frigorifico"><option value="logistica"><option value="rrhh"><option value="comex"><option value="servicios"><option value="general"></datalist></label>
                     <label class="fin-form__wide"><span>Cómo se registran las cantidades</span><select name="fuente" required></select></label>
                     <p class="fin-form__preview fin-form__wide" id="serviceProcessHelp"></p>
                     <fieldset class="fin-form__wide fin-service-days" id="serviceManualFields" hidden>
-                        <legend>Concepto acordado/manual</legend>
+                        <legend>Unidad del concepto</legend>
                         <label><span>Unidad de cobro</span><input name="unidad_libre" maxlength="60" placeholder="hora persona, jornada, bin, documento…"></label>
                         <label><span>Proceso asociado (opcional)</span><input name="proceso_referencia" maxlength="120" placeholder="RRHH, inspección, embalaje…"></label>
                         <p>Nombre y unidad libres. El cobro se aprueba con su cantidad y acuerdo, incluso si el proceso no se ejecuta.</p>
+                    </fieldset>
+                    <fieldset class="fin-form__wide fin-service-days" id="serviceRule" hidden>
+                        <legend>Cálculo de la cantidad</legend>
+                        <p>Combine medidas de igual unidad. El primer término fija la fecha del servicio. Los clientes y temporadas se mantienen separados. Los procesos originales conservan sus propios precios: revise cuáles desea cobrar.</p>
+                        <div data-rule-terms></div>
+                        <button type="button" class="fin-boton" data-rule-add>+ Agregar término</button>
+                        <fieldset><legend>Agrupar por referencias comunes (hasta cuatro)</legend><div data-rule-groups></div></fieldset>
+                        <label class="fin-form__check"><input type="checkbox" data-rule-complete checked><span>Exigir aportes de todos los términos para cobrar</span></label>
+                        <button type="button" class="fin-boton" id="serviceRulePreviewButton">Simular cantidad</button>
+                        <div data-rule-preview role="status" aria-live="polite"></div>
                     </fieldset>
                     <label class="fin-form__wide"><span>Cómo se aplica</span><select name="aplicacion" required><option value="">Seleccione</option><option value="reemplaza_base">Reemplaza al concepto base en los hechos que correspondan</option><option value="adicional">Suma un cobro adicional al concepto base</option></select></label>
                     <label><span>Vigente desde</span><input name="vigente_desde" type="date" required></label>

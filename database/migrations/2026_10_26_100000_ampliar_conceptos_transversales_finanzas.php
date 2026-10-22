@@ -1,0 +1,25 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    protected $connection = 'finanzas';
+
+    public function up(): void
+    {
+        Schema::connection($this->connection)->table('fin_servicios', function (Blueprint $table): void {
+            $table->string('area', 60)->default('general');
+            $table->json('regla')->nullable();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::connection($this->connection)->table('fin_servicios', function (Blueprint $table): void {
+            $table->dropColumn(['area', 'regla']);
+        });
+    }
+};

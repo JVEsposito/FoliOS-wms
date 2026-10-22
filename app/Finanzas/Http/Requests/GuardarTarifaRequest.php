@@ -63,7 +63,7 @@ class GuardarTarifaRequest extends FormRequest
             'uuid' => ':Attribute no es válido.',
             'date_format' => ':Attribute no es una fecha válida.',
             'servicio.in' => 'El servicio elegido no existe.',
-            'precio.regex' => 'El precio debe ser un número positivo, con hasta 6 decimales y sin separador de miles.',
+            'precio.regex' => 'El precio debe ser un número con hasta 6 decimales y sin separador de miles. Puede ser negativo para un abono.',
             'vigente_hasta.after_or_equal' => 'El término no puede ser anterior al inicio.',
         ];
     }

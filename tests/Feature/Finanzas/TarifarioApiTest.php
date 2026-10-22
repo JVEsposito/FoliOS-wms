@@ -84,7 +84,7 @@ class TarifarioApiTest extends TestCase
         $general = ['servicio' => 'estadia', 'unidad' => 'bultos', 'moneda' => 'clp', 'vigente_desde' => '2026-11-01'];
         $this->postJson('/api/finanzas/tarifas', [...$general, 'precio' => '1.234,5'])
             ->assertUnprocessable()
-            ->assertJsonPath('errors.precio.0', 'El precio debe ser un número positivo, con hasta 6 decimales y sin separador de miles.');
+            ->assertJsonPath('errors.precio.0', 'El precio debe ser un número con hasta 6 decimales y sin separador de miles. Puede ser negativo para un abono.');
         $this->postJson('/api/finanzas/tarifas', [...$general, 'precio' => '1300', 'vigente_hasta' => '2026-10-31'])
             ->assertUnprocessable()
             ->assertJsonPath('errors.vigente_hasta.0', 'El término no puede ser anterior al inicio.');
