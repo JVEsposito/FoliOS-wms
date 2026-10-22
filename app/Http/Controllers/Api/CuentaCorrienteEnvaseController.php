@@ -6,6 +6,7 @@ use App\Enums\ConceptoEnvasesRomana;
 use App\Enums\EstadoGuiaDespachoEnvase;
 use App\Enums\EstadoRevisionMovimientoEnvase;
 use App\Enums\EstadoValidacionMp;
+use App\Enums\PropiedadEnvase;
 use App\Enums\TipoEnvaseRomana;
 use App\Enums\TipoMovimientoEnvase;
 use App\Enums\TipoRecepcionRomana;
@@ -18,6 +19,7 @@ use App\Models\MovimientoEnvase;
 use App\Models\RevisionMovimientoEnvase;
 use App\Models\Temporada;
 use App\Services\Envases\GeneradorEstadoCuentaEnvasesPdf;
+use App\Services\Envases\ServicioAjustesCuentaEnvases;
 use App\Services\Envases\ServicioCorreccionCantidadEnvases;
 use App\Services\Envases\ServicioCorreccionPropiedadEnvases;
 use App\Services\Envases\ServicioCuentaCorrienteEnvases;
@@ -36,6 +38,38 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class CuentaCorrienteEnvaseController extends Controller
 {
+    public function registrarAjuste(Request $request, ServicioAjustesCuentaEnvases $servicio): JsonResponse
+    {
+        Gate::authorize('ajustar-cuenta-envases');
+        $datos = $request->validate([
+            'operacion_id' => ['required', 'uuid'],
+            'temporada_id' => ['required', 'uuid', 'exists:temporadas,id'],
+            'cliente_id' => ['required', 'uuid', 'exists:clientes,id'],
+            'tipo_movimiento' => ['required', Rule::in([TipoMovimientoEnvase::AperturaCuenta->value, TipoMovimientoEnvase::AjusteCuenta->value])],
+            'tipo_envase' => ['required', Rule::enum(TipoEnvaseRomana::class)],
+            'propiedad' => ['required', Rule::enum(PropiedadEnvase::class)],
+            'cantidad' => ['required', 'integer', 'between:-100000000,100000000', 'not_in:0'],
+            'fecha' => ['required', 'date_format:Y-m-d'],
+            'referencia' => ['required', 'string', 'max:80'],
+            'motivo' => ['required', 'string', 'min:10', 'max:2000'],
+        ]);
+        $movimiento = $servicio->registrar($datos, $request->user());
+
+        return response()->json(['data' => $this->movimiento($movimiento->load(['cliente', 'temporada', 'creadoPor', 'revisiones']))], 201);
+    }
+
+    public function revertirAjuste(Request $request, MovimientoEnvase $movimientoEnvase, ServicioAjustesCuentaEnvases $servicio): JsonResponse
+    {
+        Gate::authorize('ajustar-cuenta-envases');
+        $datos = $request->validate([
+            'operacion_id' => ['required', 'uuid'], 'fecha' => ['required', 'date_format:Y-m-d'],
+            'motivo' => ['required', 'string', 'min:10', 'max:2000'],
+        ]);
+        $movimiento = $servicio->revertir($movimientoEnvase, $datos, $request->user());
+
+        return response()->json(['data' => $this->movimiento($movimiento->load(['cliente', 'temporada', 'creadoPor', 'revisiones']))], 201);
+    }
+
     public function catalogos(): JsonResponse
     {
         Gate::authorize('consultar-cuenta-envases');
@@ -44,6 +78,7 @@ class CuentaCorrienteEnvaseController extends Controller
             'clientes' => Cliente::query()->where('activo', true)->orderBy('nombre')->get(['id', 'codigo', 'nombre']),
             'temporadas' => Temporada::query()->productivas()->orderByDesc('fecha_inicio')->get(['id', 'codigo', 'nombre', 'activa']),
             'tipos_envase' => TipoEnvaseRomana::catalogo(),
+            'hoy' => now(config('app.operational_timezone'))->toDateString(),
             'estados_revision' => array_map(
                 fn (EstadoRevisionMovimientoEnvase $estado): string => $estado->value,
                 EstadoRevisionMovimientoEnvase::cases(),
@@ -459,6 +494,10 @@ class CuentaCorrienteEnvaseController extends Controller
                 && empty($movimiento->datos['correccion_propiedad']),
             'correccion_propiedad' => $movimiento->datos['correccion_propiedad'] ?? null,
             'correccion_cantidad' => $movimiento->datos['correccion_cantidad'] ?? null,
+            'ajuste_cuenta' => $movimiento->datos['ajuste_cuenta'] ?? null,
+            'movimiento_origen_id' => $movimiento->movimiento_origen_id,
+            'puede_revertir_ajuste' => ! $conVinculos && $movimiento->temporada?->activa
+                && in_array($movimiento->tipo_movimiento, [TipoMovimientoEnvase::AperturaCuenta, TipoMovimientoEnvase::AjusteCuenta], true),
             'documento_tipo' => $movimiento->documento_tipo,
             'documento_id' => $movimiento->documento_id,
             'numero_documento' => $movimiento->numero_documento,

@@ -158,7 +158,7 @@ final class FuentesOperativas
     private function envases(): array
     {
         return ['clave' => 'envases_movimiento', 'nombre' => 'Movimientos de cuenta de envases', 'area' => 'envases',
-            'descripcion' => 'Movimientos y efectos con signo, diferenciados por cliente, tipo de envase y propiedad.',
+            'descripcion' => 'Movimientos y efectos con signo por cliente, tipo y propiedad. Aperturas y ajustes son obligaciones de cuenta, sin movimiento físico; filtre el tipo que corresponda al servicio.',
             'id' => 'm.id', 'cambios' => ['m.updated_at'], 'dimensiones' => ['tipo' => 'Tipo de movimiento', 'tipo_envase' => 'Tipo de envase', 'propiedad' => 'Propiedad', 'documento_tipo' => 'Tipo de documento'],
             'medidas' => ['movimientos' => ['nombre' => 'Movimientos', 'unidad' => 'movimiento'], 'envases' => ['nombre' => 'Envases del movimiento', 'unidad' => 'envase'], 'efecto_cuenta' => ['nombre' => 'Efecto firmado en la cuenta', 'unidad' => 'envase']],
             'consulta' => fn (ContextoCaptura $c) => $c->lector->tabla('movimientos_envases', 'm')->select(['m.id', 'm.created_at', 'm.ocurrido_at', 'm.cliente_id', 'm.temporada_id', 'm.tipo_movimiento as tipo', 'm.tipo_envase', 'm.propiedad', 'm.documento_tipo', 'm.numero_documento', 'm.cantidad', 'm.signo_cuenta']),

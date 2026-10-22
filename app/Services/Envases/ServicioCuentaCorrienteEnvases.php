@@ -38,6 +38,9 @@ class ServicioCuentaCorrienteEnvases
         'reversion_despacho' => 'Anulación de despacho',
         'correccion_propiedad' => 'Corrección de propiedad',
         'correccion_cantidad' => 'Corrección de cantidad',
+        'apertura_cuenta' => 'Apertura de cuenta',
+        'ajuste_cuenta' => 'Ajuste de cuenta',
+        'reversion_ajuste_cuenta' => 'Reversa de ajuste de cuenta',
     ];
 
     private const DOCUMENTO_GUIA = 'guia_despacho_envases';
@@ -142,7 +145,7 @@ class ServicioCuentaCorrienteEnvases
             }
 
             $revision = $movimiento->revisiones->sortByDesc('revisado_at')->first();
-            $correccion = $movimiento->datos['correccion_propiedad'] ?? $movimiento->datos['correccion_cantidad'] ?? null;
+            $correccion = $movimiento->datos['correccion_propiedad'] ?? $movimiento->datos['correccion_cantidad'] ?? $movimiento->datos['ajuste_cuenta'] ?? null;
 
             yield [
                 'fecha_hora' => $this->local($movimiento->ocurrido_at),
@@ -220,7 +223,8 @@ class ServicioCuentaCorrienteEnvases
             if ($fin !== null && $movimiento->ocurrido_at->gte($fin)) {
                 continue;
             }
-            $esSalida = in_array($movimiento->tipo_movimiento, self::SALIDAS, true);
+            $esSalida = in_array($movimiento->tipo_movimiento, self::SALIDAS, true)
+                || ($movimiento->tipo_movimiento->esAjusteCuenta() && $impacto < 0);
             if ($esSalida) {
                 $tipos[$tipo]['salidas'] -= $impacto;
                 $tipos[$tipo]['salidas_por_propiedad'][$movimiento->propiedad->value] -= $impacto;

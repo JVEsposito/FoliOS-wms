@@ -40,8 +40,8 @@
 
                 <div class="accounts-grid office-panel-workspace">
                     <section class="panel" id="container-accounts-panel-balances" data-office-panel-group="container-accounts" data-office-panel-id="balances" role="tabpanel" aria-labelledby="container-accounts-tab-balances">
-                        <div class="panel-heading"><div><p class="eyebrow">SALDOS</p><h2>Por cliente y tipo</h2></div><small>El estado de cuenta toma la temporada y las fechas del filtro.</small></div>
-                        <p class="balance-legend"><b class="positive">+</b> envases del cliente a cargo de la planta · <b class="negative">−</b> envases entregados al cliente, pendientes de devolución. La compra de envases propios no mueve la cuenta de ningún cliente: se ve en Existencia.</p>
+                        <div class="panel-heading"><div><p class="eyebrow">SALDOS</p><h2>Por cliente y tipo</h2></div><button class="secondary-button is-hidden" id="accountAdjustmentNew" type="button">Registrar apertura o ajuste</button></div>
+                        <p class="balance-legend"><b class="positive">+</b> La planta debe envases al cliente · <b class="negative">−</b> El cliente debe envases a la planta. Aperturas y ajustes registran obligaciones de cuenta. La compra de envases propios se ve en Existencia.</p>
                         <div class="balance-list" id="balanceList"></div>
                     </section>
                     <section class="panel" id="container-accounts-panel-stock" data-office-panel-group="container-accounts" data-office-panel-id="stock" role="tabpanel" aria-labelledby="container-accounts-tab-stock">
@@ -59,6 +59,25 @@
                 <section class="panel movements-panel" id="container-accounts-panel-movements" data-office-panel-group="container-accounts" data-office-panel-id="movements" role="tabpanel" aria-labelledby="container-accounts-tab-movements"><div class="panel-heading"><div><p class="eyebrow">KARDEX DOCUMENTAL</p><h2>Movimientos confirmados</h2></div><div class="movements-heading__side"><small id="movementsNote">Ingreso y salida conservan fecha y hora exactas.</small><button class="secondary-button" id="movementsExcelButton" type="button">↓ Excel</button></div></div><div class="accounts-table-scroll"><table><thead><tr><th>Fecha y hora</th><th>Cliente / documento</th><th>Envase</th><th>Cuenta</th><th>Existencia</th><th>Propiedad</th><th>Revisión</th><th>Acción</th></tr></thead><tbody id="movementsBody"></tbody></table></div></section>
             </section>
         </main>
+        <dialog class="review-dialog property-dialog" id="accountAdjustmentDialog" aria-labelledby="accountAdjustmentTitle">
+            <form id="accountAdjustmentForm">
+                <header class="review-dialog__header"><p class="eyebrow">CUENTA DE ENVASES</p><h2 id="accountAdjustmentTitle">Registrar apertura o ajuste</h2></header>
+                <fieldset id="accountAdjustmentFields">
+                    <label><span>Asiento</span><select name="tipo_movimiento" required><option value="ajuste_cuenta">Ajuste de cuenta</option><option value="apertura_cuenta">Saldo de apertura</option></select></label>
+                    <label><span>Cliente</span><select name="cliente_id" required><option value="">Seleccionar cliente</option></select></label>
+                    <label><span>Tipo de envase</span><select name="tipo_envase" required></select></label>
+                    <label><span>Propiedad del envase</span><select name="propiedad" required><option value="cliente">Del cliente</option><option value="propia">De la planta</option><option value="arrendada">Arrendada</option></select></label>
+                    <label><span>Cantidad con signo (+ o −)</span><input name="cantidad" type="number" min="-100000000" max="100000000" step="1" required placeholder="Ej.: -30"></label>
+                    <label><span>Referencia o respaldo</span><input name="referencia" maxlength="80" required placeholder="Acuerdo, conciliación o saldo anterior"></label>
+                </fieldset>
+                <label><span>Fecha efectiva en planta</span><input name="fecha" type="date" required></label>
+                <label><span>Motivo</span><textarea name="motivo" minlength="10" maxlength="2000" required></textarea></label>
+                <p class="property-dialog__help">+ La planta debe envases al cliente. − El cliente debe envases a la planta. Este asiento modifica la obligación en cuenta y mantiene la existencia física.</p>
+                <p id="accountAdjustmentPreview" role="status"></p>
+                <p class="form-error" id="accountAdjustmentError" role="alert"></p>
+                <div class="dialog-actions"><button class="secondary-button" id="accountAdjustmentCancel" type="button">Cancelar</button><button class="primary-button" type="submit">Registrar asiento</button></div>
+            </form>
+        </dialog>
         <dialog class="review-dialog" id="reviewDialog" aria-labelledby="reviewDialogTitle">
             <form id="reviewForm" method="dialog">
                 <input name="movimiento_id" type="hidden">

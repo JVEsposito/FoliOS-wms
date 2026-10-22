@@ -11,6 +11,7 @@ use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class FuentesTransversalesTest extends TestCase
@@ -53,6 +54,25 @@ class FuentesTransversalesTest extends TestCase
         DB::table('bins_retorno_packing')->where('id', $bin)->update(['estado' => 'anulado', 'updated_at' => now()]);
         $this->capturar(['packing_retorno']);
         $this->assertSame(2, Hecho::query()->vigentes()->where('fuente', 'calculado')->where('estado', Hecho::ESTADO_ANULADO)->count());
+    }
+
+    public function test_una_apertura_de_envases_negativa_y_su_reversa_se_leen_con_signo_sin_alterar_operacion(): void
+    {
+        $datos = ['operacion_id' => (string) Str::uuid(), 'temporada_id' => $this->temporadaFinanzas(), 'cliente_id' => $this->cliente,
+            'tipo_movimiento' => 'apertura_cuenta', 'tipo_envase' => 'bins', 'propiedad' => 'arrendada', 'cantidad' => -30,
+            'fecha' => '2026-11-01', 'referencia' => 'APERTURA-ARRIENDO', 'motivo' => 'Saldo de apertura convenido con el cliente'];
+        $id = $this->postJson('/api/envases/cuenta-corriente/ajustes', $datos)->assertCreated()->json('data.id');
+        $this->assertSame('completada', $this->capturar(['envases_movimiento'])->estado);
+        $hecho = $this->hechos('envases_movimiento')->sole();
+        $this->assertSame(-30, $hecho->medidas['efecto_cuenta']);
+        $this->assertSame('apertura_cuenta', $hecho->datos['tipo']);
+        $this->postJson('/api/envases/cuenta-corriente/movimientos/'.$id.'/revertir-ajuste', [
+            'operacion_id' => (string) Str::uuid(), 'fecha' => '2026-11-02', 'motivo' => 'Reversa del saldo conciliado inicialmente',
+        ])->assertCreated();
+        $antes = DB::table('movimientos_envases')->orderBy('id')->get()->toJson();
+        $this->capturar(['envases_movimiento'], true);
+        $this->assertSame(0, $this->hechos('envases_movimiento')->sum(fn (Hecho $h) => $h->medidas['efecto_cuenta']));
+        $this->assertSame($antes, DB::table('movimientos_envases')->orderBy('id')->get()->toJson());
     }
 
     public function test_receta_se_valoriza_por_produccion_real_y_conserva_version_unidad_y_anulacion(): void

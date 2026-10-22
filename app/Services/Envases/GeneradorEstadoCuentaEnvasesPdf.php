@@ -54,6 +54,7 @@ class GeneradorEstadoCuentaEnvasesPdf
         foreach ([
             'Saldo positivo: envases del cliente a cargo de la planta.',
             'Saldo negativo: envases entregados al cliente pendientes de devolución.',
+            'Aperturas, ajustes y sus reversas son obligaciones de cuenta; no acreditan movimientos físicos.',
         ] as $leyenda) {
             $contenido .= $this->pdf->texto(self::MARGEN, $y, 8, $leyenda);
             $y -= 11;

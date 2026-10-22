@@ -540,3 +540,7 @@
         min-width: 0;
     }
 }
+/* El formulario conserva una columna legible en tablets y teléfonos. */
+#accountAdjustmentFields { display: grid; gap: 14px; border: 0; padding: 0; margin: 0; min-width: 0; }
+#accountAdjustmentFields[hidden] { display: none; }
+#accountAdjustmentPreview { overflow-wrap: anywhere; }
