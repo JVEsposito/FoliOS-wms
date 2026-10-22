@@ -68,15 +68,20 @@ class UnidadesMaterialesApiTest extends TestCase
         $otra = ItemMaterial::create(['cliente_material_id' => $this->cliente->id, 'codigo' => 'OTRO', 'nombre' => 'Otro ítem fixture', 'categoria_operacional' => 'insumo', 'unidad_medida' => 'UN', 'activo' => true, ...$this->auditoria]);
         $this->assertSame($unidad->id, $otra->unidad_material_id);
         $this->assertSame('UN', $otra->unidad_medida);
-        $datos = ['codigo' => 'resmas', 'nombre' => 'Resmas', 'alias' => ['resma'], 'activa' => true, 'version_conocida' => 0, 'motivo' => 'Nueva unidad del catálogo'];
+        $alias = ['resma', ...array_map(fn ($i) => 'resma-'.$i, range(1, 19))];
+        $datos = ['codigo' => 'resmas', 'nombre' => 'Resmas', 'alias' => $alias, 'activa' => true, 'version_conocida' => 0, 'motivo' => 'Nueva unidad del catálogo'];
         $id = $this->postJson(self::BASE, $datos)->assertCreated()->json('data.id');
         $this->postJson(self::BASE, [...$datos, 'codigo' => 'RESMA'])->assertUnprocessable();
         $this->putJson(self::BASE.'/'.$id, [...$datos, 'version_conocida' => 0])->assertConflict();
         $this->putJson(self::BASE.'/'.$id, [...$datos, 'codigo' => 'otra', 'version_conocida' => 1])->assertUnprocessable();
         $this->putJson(self::BASE.'/'.$id, [...$datos, 'alias' => ['kg'], 'version_conocida' => 1])->assertUnprocessable();
-        $this->putJson(self::BASE.'/'.$id, [...$datos, 'activa' => false, 'version_conocida' => 1])->assertOk();
-        $this->getJson(self::BASE)->assertOk();
-        $this->getJson(self::BASE.'/historial')->assertOk()->assertJsonPath('data.0.responsable', auth()->user()->name);
+        $this->putJson(self::BASE.'/'.$id, [...$datos, 'alias' => [], 'activa' => false, 'version_conocida' => 1])->assertOk();
+        $unidades = $this->getJson(self::BASE)->assertOk()->json('data');
+        $this->assertCount(21, collect($unidades)->firstWhere('id', $id)['alias']);
+        $historial = $this->getJson(self::BASE.'/historial')->assertOk()->assertJsonPath('data.0.responsable', auth()->user()->name)->json('data');
+        $evento = collect($historial)->firstWhere('accion', 'unidad_actualizada');
+        $this->assertSame($evento['antes']['alias'], $evento['despues']['alias']);
+        $this->assertContains('resma', $evento['despues']['alias']);
     }
 
     public function test_equivalencias_son_por_item_y_el_cambio_de_factor_no_modifica_la_recepcion_ya_convertida(): void

@@ -4,6 +4,8 @@ En Materiales → Catálogos → Unidades se administran las unidades globales. 
 permanente; se puede cambiar el nombre, desactivar para nuevas altas y agregar sinónimos.
 Los sinónimos se conservan para seguir reconociendo datos anteriores. Cada cambio exige
 motivo, controla la versión y registra responsable, fecha y valores anteriores/nuevos.
+Al editar se ingresan solamente los sinónimos nuevos (hasta veinte por envío); los
+anteriores permanecen en el listado y en el respaldo de auditoría.
 Usa el permiso existente `administrar-catalogos-materiales`.
 
 La migración vincula los ítems al catálogo, agrupando variantes como Unidad, unidades y

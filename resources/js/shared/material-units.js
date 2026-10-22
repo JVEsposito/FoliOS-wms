@@ -79,7 +79,7 @@ export function createMaterialUnits({ api, getItems, getToken, authorized, escap
     $('materialUnitsList').addEventListener('click', (event) => {
         const u = units.find((u) => u.id === event.target.closest('[data-edit-unit]')?.dataset.editUnit); if (!u || busy) return;
         for (const name of ['id', 'codigo', 'nombre']) form.elements[name].value = u[name];
-        form.elements.alias.value = u.alias.join(', '); form.elements.activa.checked = u.activa; form.elements.version_conocida.value = u.version; form.elements.codigo.readOnly = true; form.elements.motivo.value = ''; form.scrollIntoView({ block: 'center' });
+        form.elements.alias.value = ''; form.elements.activa.checked = u.activa; form.elements.version_conocida.value = u.version; form.elements.codigo.readOnly = true; form.elements.motivo.value = ''; form.scrollIntoView({ block: 'center' });
     });
     $('newMaterialUnit').addEventListener('click', reset);
     $('reloadMaterialUnits').addEventListener('click', () => { void load(); });

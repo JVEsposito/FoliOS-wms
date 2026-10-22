@@ -87,7 +87,7 @@ class ServicioUnidadesMateriales
             if (! $unidad && (UnidadMaterial::where('codigo', $codigo)->exists() || DB::table('alias_unidades_materiales')->where('clave', UnidadesMateriales::clave($datos['codigo']))->exists())) {
                 throw new DomainException('Esa unidad o sinónimo ya está registrado.');
             }
-            $antes = $unidad?->toArray();
+            $antes = $unidad ? [...$unidad->toArray(), 'alias' => $this->aliasRegistrados($unidad)] : null;
             $unidad ??= new UnidadMaterial(['codigo' => $codigo]);
             $unidad->fill(['nombre' => trim($datos['nombre']), 'activa' => $datos['activa'], 'version' => ($unidad->version ?? 0) + 1, 'actualizado_por_user_id' => auth()->id()])->save();
             $nombre = UnidadesMateriales::clave($datos['nombre']);
@@ -95,7 +95,7 @@ class ServicioUnidadesMateriales
                 throw new DomainException('El nombre de la unidad no puede estar vacío.');
             }
             $this->alias($unidad, [$codigo, UnidadesMateriales::clave($datos['codigo']), ...(mb_strlen($nombre) <= 40 ? [$nombre] : []), ...$datos['alias']]);
-            $this->evento($unidad, null, $antes ? 'unidad_actualizada' : 'unidad_creada', $antes, [...$unidad->toArray(), 'alias' => $datos['alias']], $datos['motivo']);
+            $this->evento($unidad, null, $antes ? 'unidad_actualizada' : 'unidad_creada', $antes, [...$unidad->toArray(), 'alias' => $this->aliasRegistrados($unidad)], $datos['motivo']);
 
             return $unidad;
         }, 3);
@@ -195,6 +195,11 @@ class ServicioUnidadesMateriales
             }
             DB::table('alias_unidades_materiales')->insertOrIgnore(['clave' => $clave, 'unidad_material_id' => $unidad->id]);
         }
+    }
+
+    private function aliasRegistrados(UnidadMaterial $unidad): array
+    {
+        return DB::table('alias_unidades_materiales')->where('unidad_material_id', $unidad->id)->orderBy('clave')->pluck('clave')->all();
     }
 
     private function version(int $actual, int $conocida): void

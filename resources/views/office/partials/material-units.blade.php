@@ -7,7 +7,7 @@
         <div class="materials-form__grid">
             <label><span>Código permanente *</span><input name="codigo" maxlength="40" required></label>
             <label><span>Nombre *</span><input name="nombre" maxlength="100" required></label>
-            <label><span>Sinónimos, separados por coma</span><input name="alias" placeholder="unidad, un, u"></label>
+            <label><span>Agregar sinónimos, separados por coma</span><input name="alias" placeholder="unidad, un, u"></label>
             <label><span>Motivo *</span><input name="motivo" minlength="5" maxlength="500" required></label>
             <label class="materials-check"><input name="activa" type="checkbox" checked><span>Disponible para nuevos ítems</span></label>
         </div>
