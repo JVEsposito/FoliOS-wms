@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AdministracionAccesoController;
 use App\Http\Controllers\Api\ConexionExternaController;
+use App\Http\Controllers\Api\ExploracionOrigenController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth:sanctum', 'can:administrar-accesos'])->group(function (): void {
@@ -19,4 +20,7 @@ Route::middleware(['auth:sanctum', 'can:administrar-accesos'])
         Route::put('/{conexionExterna}', [ConexionExternaController::class, 'update']);
         Route::post('/{conexionExterna}/probar', [ConexionExternaController::class, 'probar'])
             ->middleware('throttle:6,1');
+        Route::post('/{conexionExterna}/estructura', [ExploracionOrigenController::class, 'estructura'])->middleware('throttle:12,1');
+        Route::post('/{conexionExterna}/columnas', [ExploracionOrigenController::class, 'columnas'])->middleware('throttle:24,1');
+        Route::post('/{conexionExterna}/muestra', [ExploracionOrigenController::class, 'muestra'])->middleware('throttle:12,1');
     });

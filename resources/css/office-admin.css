@@ -845,3 +845,14 @@
         grid-template-columns: 1fr;
     }
 }
+.origin-explorer { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--line); }
+.origin-explorer[hidden] { display: none; }
+.origin-explorer__grid { display: grid; grid-template-columns: minmax(200px, 1fr) minmax(0, 2fr); gap: 20px; }
+.origin-explorer__grid > div { min-width: 0; }
+.origin-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; max-height: 380px; overflow: auto; }
+.origin-columns label { overflow-wrap: anywhere; }
+.origin-filter { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto; gap: 8px; margin: 8px 0; }
+.origin-filter input, .origin-filter select { min-width: 0; }
+#originObjects { min-height: 300px; width: 100%; }
+#originSample td { max-width: 360px; overflow-wrap: anywhere; white-space: normal; }
+@media (max-width: 650px) { .origin-explorer__grid { grid-template-columns: 1fr; } .origin-filter { grid-template-columns: minmax(0, 1fr) auto; } }

@@ -19,6 +19,7 @@ async function setup(browser, handler, admin = true) {
     await context.route('http://localhost/**', async (route) => {
         const path = new URL(route.request().url()).pathname;
         if (path === '/oficina/accesos') return route.fulfill({ body: html, contentType: 'text/html' });
+        if (path === '/shared/origin-explorer.js') return route.fulfill({ body: readFileSync(resolve(root, 'resources/js/shared/origin-explorer.js')), contentType: 'text/javascript' });
         if (path === '/fixture-external.js') return route.fulfill({ body: source, contentType: 'text/javascript' });
         // La sección se ejecuta sobre el HTML Blade real; el resto de los módulos no participa.
         if (path.endsWith('.js')) return route.abort();
@@ -43,6 +44,57 @@ async function openPanel(page) {
 async function launch() {
     return chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined, args: ['--no-sandbox', '--disable-gpu'] });
 }
+
+test('explora vistas, prueba sin filtros y descarta una muestra al perder la sesión', async () => {
+    const browser = await launch();
+    try {
+        let release;
+        let started;
+        let delayed = false;
+        const pending = new Promise((resolve) => { release = resolve; });
+        const requested = new Promise((resolve) => { started = resolve; });
+        const calls = [];
+        const { context, page } = await setup(browser, async (route) => {
+            const path = new URL(route.request().url()).pathname;
+            const body = route.request().postDataJSON();
+            if (route.request().method() === 'GET') return route.fulfill({ json: { data: [fixture] } });
+            if (path.endsWith('/estructura')) return route.fulfill({ json: { data: [{ nombre: 'vista_existencias', tipo: 'VIEW' }, { nombre: 'catalogo', tipo: 'BASE TABLE' }] } });
+            if (path.endsWith('/columnas')) return route.fulfill({ json: { data: [{ nombre: 'folio_real', tipo: 'varchar' }, { nombre: 'bodega_real', tipo: 'varchar' }] } });
+            if (path.endsWith('/muestra')) {
+                calls.push(body);
+                if (delayed) { started(); await pending; }
+                return route.fulfill({ json: { data: { columnas: ['folio_real', 'bodega_real'], filas: [{ folio_real: '<img src=x>', bodega_real: 'PLANTA' }], limite: 10 } } });
+            }
+            return route.fulfill({ json: {} });
+        });
+        await page.setViewportSize({ width: 390, height: 1000 });
+        await openPanel(page);
+        await page.locator('[data-explore-connection]').click();
+        await page.locator('#originObjects').selectOption('vista_existencias');
+        await page.locator('#originColumns input').first().waitFor();
+        await page.locator('#originPreview').click();
+        await page.waitForFunction(() => document.getElementById('originStatus').textContent.includes('Lectura correcta'));
+        assert.deepEqual(calls[0].filtros, []);
+        assert.equal(await page.locator('#originSample img').count(), 0);
+        assert.match(await page.locator('#originSample').textContent(), /<img src=x>/);
+        await page.locator('#originFilterAdd').click();
+        await page.locator('#originFilters select').selectOption('bodega_real');
+        await page.locator('#originFilters input').fill('PLANTA');
+        delayed = true;
+        await page.locator('#originPreview').click();
+        await requested;
+        await page.evaluate(() => {
+            localStorage.removeItem('estiba_wms_office_token');
+            window.dispatchEvent(new Event('estiba:office-session'));
+        });
+        release();
+        await page.waitForLoadState('networkidle');
+        assert.deepEqual(calls[1].filtros, [{ columna: 'bodega_real', valor: 'PLANTA' }]);
+        assert.equal(await page.locator('#originExplorer').isHidden(), true);
+        assert.equal(await page.locator('#originSample').textContent(), '');
+        await context.close();
+    } finally { await browser.close(); }
+});
 
 test('formulario vacío, guardado, edición sin clave y prueba de la versión guardada', async () => {
     const browser = await launch();

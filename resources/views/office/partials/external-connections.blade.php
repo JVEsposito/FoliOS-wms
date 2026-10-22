@@ -29,4 +29,17 @@
             <tbody id="externalConnectionsBody"></tbody>
         </table>
     </div>
+    <section id="originExplorer" class="origin-explorer" hidden aria-labelledby="originTitle">
+        <h3 id="originTitle">Explorar origen</h3>
+        <p class="admin-form__hint">Seleccione una tabla o vista y sus columnas para comprobar los datos reales. La muestra usa hasta diez filas y se consulta desde el servidor de FoliOS.</p>
+        <div class="origin-explorer__grid">
+            <div><label class="field"><span>Buscar en el árbol</span><input id="originSearch" type="search" placeholder="Nombre de tabla o vista"></label><label class="field"><span>Tablas y vistas disponibles</span><select id="originObjects" size="12"></select></label></div>
+            <div><h4>Columnas de la fuente</h4><div id="originColumns" class="origin-columns"></div></div>
+        </div>
+        <h4>Filtros de igualdad (opcionales)</h4>
+        <div id="originFilters"></div>
+        <div class="admin-form__actions"><button id="originFilterAdd" type="button" class="secondary-button">Agregar filtro</button><button id="originPreview" type="button" class="primary-button">Ver muestra</button></div>
+        <p id="originStatus" class="admin-form__hint" role="status"></p>
+        <div id="originSample" class="admin-table-scroll"></div>
+    </section>
 </section>

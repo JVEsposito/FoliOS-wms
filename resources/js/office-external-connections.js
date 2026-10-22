@@ -1,3 +1,5 @@
+import { createOriginExplorer } from './shared/origin-explorer.js';
+
 const byId = (id) => document.getElementById(id);
 const form = byId('externalConnectionForm');
 const table = byId('externalConnectionsBody');
@@ -6,6 +8,7 @@ const panel = byId('administration-panel-external-connections');
 const state = { items: [], generation: 0, busy: false, session: null, allowed: null };
 const token = () => localStorage.getItem('estiba_wms_office_token') || '';
 const escapeHtml = (value) => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
+const explorer = form ? createOriginExplorer({ api, authorized, session: token, escapeHtml }) : null;
 
 function authorized() {
     try {
@@ -29,6 +32,7 @@ function setBusy(busy) {
 }
 
 function clearPrivateData() {
+    explorer?.clear();
     state.generation += 1;
     state.session = null;
     state.allowed = null;
@@ -67,7 +71,7 @@ function render() {
             <td>${item.activa ? 'Activa' : 'Inactiva'}</td>
             <td>${test}${item.ultima_prueba_at ? `<small>${escapeHtml(new Date(item.ultima_prueba_at).toLocaleString('es-CL'))}</small>` : ''}</td>
             <td>${escapeHtml(item.actualizado_por || '—')}</td>
-            <td><div class="admin-season-actions"><button type="button" data-edit-connection="${escapeHtml(item.id)}">Editar</button><button type="button" data-test-connection="${escapeHtml(item.id)}" data-connection-inactive="${!item.activa}" ${item.activa ? '' : 'disabled'}>Probar conexión</button></div></td>
+            <td><div class="admin-season-actions"><button type="button" data-edit-connection="${escapeHtml(item.id)}">Editar</button><button type="button" data-test-connection="${escapeHtml(item.id)}" data-connection-inactive="${!item.activa}" ${item.activa ? '' : 'disabled'}>Probar conexión</button><button type="button" data-explore-connection="${escapeHtml(item.id)}" data-connection-inactive="${!item.activa}" ${item.activa ? '' : 'disabled'}>Explorar origen</button></div></td>
         </tr>`;
     }).join('') || '<tr class="admin-empty"><td colspan="5">No hay conexiones configuradas. Completa el formulario para crear una.</td></tr>';
 }
@@ -121,6 +125,7 @@ form?.addEventListener('submit', async (event) => {
     try {
         await api(id ? `/${encodeURIComponent(id)}` : '', { method: id ? 'PUT' : 'POST', body: JSON.stringify(data) });
         if (generation !== state.generation || session !== token() || !authorized()) return;
+        explorer.clear();
         resetForm();
         byId('externalConnectionStatus').textContent = 'Conexión guardada. Puedes comprobarla con «Probar conexión».';
     } catch (error) {
@@ -138,8 +143,10 @@ table?.addEventListener('click', async (event) => {
     if (state.busy || !authorized()) return;
     const edit = event.target.closest('[data-edit-connection]');
     const test = event.target.closest('[data-test-connection]');
-    const item = state.items.find((candidate) => candidate.id === (edit?.dataset.editConnection || test?.dataset.testConnection));
+    const explore = event.target.closest('[data-explore-connection]');
+    const item = state.items.find((candidate) => candidate.id === (edit?.dataset.editConnection || test?.dataset.testConnection || explore?.dataset.exploreConnection));
     if (!item) return;
+    if (explore && item.activa) { void explorer.open(item); return; }
     if (edit) {
         resetForm();
         for (const field of ['id', 'nombre', 'host', 'puerto', 'usuario', 'base_datos']) form.elements[field].value = item[field] ?? '';
