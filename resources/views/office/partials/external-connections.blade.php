@@ -41,5 +41,16 @@
         <div class="admin-form__actions"><button id="originFilterAdd" type="button" class="secondary-button">Agregar filtro</button><button id="originPreview" type="button" class="primary-button">Ver muestra</button></div>
         <p id="originStatus" class="admin-form__hint" role="status"></p>
         <div id="originSample" class="admin-table-scroll"></div>
+        <div class="admin-form__actions"><button id="originConfigureStock" type="button" class="secondary-button" disabled>Configurar para pendientes por validar</button></div>
+        <form id="originStockMapping" class="admin-form" hidden autocomplete="off">
+            <h3 id="originMappingTitle">Mapeo de stock</h3>
+            <p class="admin-form__hint">Cada fila debe ser una línea de stock por pallet. El folio y las cajas son obligatorios; los demás datos pueden asignarse según las columnas disponibles. Las fechas se interpretan en la zona horaria de la planta.</p>
+            <p id="originMappingFilters" class="admin-form__hint"></p>
+            <div id="originMappingFields" class="admin-form__grid"></div>
+            <label class="admin-check"><input id="originMappingEnabled" type="checkbox"><span>Habilitar la lectura manual y programada de esta fuente</span></label>
+            <div class="admin-form__actions"><button id="originMappingPreview" type="button" class="secondary-button">Probar mapeo</button><button type="submit" class="primary-button">Guardar mapeo</button></div>
+            <p id="originMappingStatus" class="admin-form__hint" role="status"></p>
+            <div id="originMappingSample" class="admin-table-scroll"></div>
+        </form>
     </section>
 </section>
