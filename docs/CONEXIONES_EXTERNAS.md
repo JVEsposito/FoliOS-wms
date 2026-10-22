@@ -64,6 +64,24 @@ en la instalación de destino; no se incorporan a commits ni descripciones de PR
 
 ## Stock de origen y pendientes por validar
 
+## Explorar el árbol de la base
+
+«Explorar origen» lista todas las tablas y vistas que el usuario puede descubrir dentro de
+la base configurada. No se limita a una vista de stock ni enumera otras bases del servidor.
+Al seleccionar una fuente se consultan sus columnas y tipos desde `information_schema`;
+no se necesita consultar la definición SQL de las vistas con `SHOW CREATE VIEW`.
+
+Se pueden seleccionar columnas y probar una muestra sin filtros, o agregar hasta ocho
+filtros de igualdad. Cada muestra contiene hasta veinte filas por API (diez en Oficina),
+hasta cuarenta columnas y hasta quinientos caracteres por celda. Los binarios se omiten.
+Una muestra vacía se distingue de un error de acceso o de columnas; no modifica el stock.
+
+El explorador requiere Administración de accesos. Las consultas se construyen en el
+servidor a partir de las columnas descubiertas y parámetros, sin recibir SQL libre.
+La muestra no se persiste ni se guarda en el navegador. Al perder o cambiar la sesión se
+limpia y se descartan respuestas pendientes. La auditoría conserva quién consultó y la
+acción, sin filas de origen, valores de filtros ni credenciales.
+
 El primer uso de la conexión es **Frigorífico → Pendientes por validar**
 (`/oficina/validacion/pendientes`). Se documenta en
 [PENDIENTES_VALIDACION_ORIGEN.md](PENDIENTES_VALIDACION_ORIGEN.md).
