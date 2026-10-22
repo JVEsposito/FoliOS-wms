@@ -79,6 +79,7 @@ class CuentaCorrienteEnvaseController extends Controller
             'temporadas' => Temporada::query()->productivas()->orderByDesc('fecha_inicio')->get(['id', 'codigo', 'nombre', 'activa']),
             'tipos_envase' => TipoEnvaseRomana::catalogo(),
             'hoy' => now(config('app.operational_timezone'))->toDateString(),
+            'puede_ajustar' => Gate::allows('ajustar-cuenta-envases'),
             'estados_revision' => array_map(
                 fn (EstadoRevisionMovimientoEnvase $estado): string => $estado->value,
                 EstadoRevisionMovimientoEnvase::cases(),

@@ -10,7 +10,7 @@ const html = readFileSync(resolve(root, 'storage/app/ui/oficina/cuenta-corriente
 
 async function setup(browser, manage, width = 390) {
     const context = await browser.newContext({ viewport: { width, height: 1000 } });
-    const identity = { nombre: 'Cuenta Envases', rol: manage ? 'administrador' : 'consulta', puede_consultar_cuenta_envases: true, puede_ajustar_cuenta_envases: manage, modulos_acceso: ['materia-prima.cuenta-envases'] };
+    const identity = { nombre: 'Cuenta Envases', rol: manage ? 'administrador' : 'consulta', puede_consultar_cuenta_envases: true, modulos_acceso: ['materia-prima.cuenta-envases'] };
     await context.addInitScript((user) => {
         Object.defineProperty(Crypto.prototype, 'randomUUID', { value: undefined });
         localStorage.setItem('estiba_wms_office_token', 'fixture_envases');
@@ -30,7 +30,7 @@ async function setup(browser, manage, width = 390) {
         }
         if (path === '/api/acceso-oficina') return route.fulfill({ json: { usuario: identity } });
         if (path === '/api/oficina/contexto') return route.fulfill({ json: { data: { planta: 'Prueba', temporada: { nombre: '2026' } } } });
-        if (path.endsWith('/cuenta-corriente/catalogos')) return route.fulfill({ json: { clientes: [client], temporadas: [{ id: 'temporada', codigo: '2026', nombre: '2026', activa: true }], tipos_envase: [{ codigo: 'bins', nombre: 'Bins' }], hoy: '2026-10-21' } });
+        if (path.endsWith('/cuenta-corriente/catalogos')) return route.fulfill({ json: { clientes: [client], temporadas: [{ id: 'temporada', codigo: '2026', nombre: '2026', activa: true }], tipos_envase: [{ codigo: 'bins', nombre: 'Bins' }], hoy: '2026-10-21', puede_ajustar: manage } });
         if (path.endsWith('/cuenta-corriente/ajustes')) {
             const body = request.postDataJSON();
             writes.push(body);

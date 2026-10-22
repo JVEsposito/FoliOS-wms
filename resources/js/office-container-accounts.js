@@ -187,7 +187,7 @@ function showOffice() {
         'is-hidden',
         state.identity?.puede_consultar_materia_prima !== true,
     );
-    elements.adjustmentNew.classList.toggle('is-hidden', state.identity?.puede_ajustar_cuenta_envases !== true);
+    elements.adjustmentNew.classList.add('is-hidden');
     return true;
 }
 
@@ -200,6 +200,9 @@ function addOptions(select, items, labelFunction) {
 
 async function loadCatalogs() {
     state.catalogs = await api('/api/envases/cuenta-corriente/catalogos');
+    // El perfil guardado en una sesión anterior puede no conocer esta capacidad.
+    state.identity.puede_ajustar_cuenta_envases = state.catalogs.puede_ajustar === true;
+    elements.adjustmentNew.classList.toggle('is-hidden', !state.identity.puede_ajustar_cuenta_envases);
     addOptions(elements.filters.elements.cliente_id, state.catalogs.clientes, (item) => `${item.codigo} · ${item.nombre}`);
     addOptions(
         elements.filters.elements.temporada_id,
