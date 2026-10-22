@@ -616,8 +616,11 @@ class ServicioCatalogoStockOrigen
     /** @return Collection<int, PalletStockOrigen> */
     private function palletsPresentes(): Collection
     {
+        $config = $this->lecturas->configuracion();
+
         return PalletStockOrigen::query()
-            ->where('bodega', $this->lecturas->configuracion()['bodega'])
+            ->where('ambito', $config['ambito'])
+            ->where('bodega', $config['bodega'])
             ->where('presente', true)
             ->orderBy('numero_pallet')
             ->get();

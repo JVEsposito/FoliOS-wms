@@ -58,6 +58,7 @@ class ServicioPendientesValidacionOrigen
         $config = $this->lecturas->configuracion();
         $bodega = $config['bodega'];
         $pallets = PalletStockOrigen::query()
+            ->where('ambito', $config['ambito'])
             ->where('bodega', $bodega)
             ->where('presente', true)
             ->orderBy('recibido_origen_at')
@@ -124,7 +125,7 @@ class ServicioPendientesValidacionOrigen
             ->map(fn (Folio $folio): array => $this->folio($folio))
             ->values()
             ->all();
-        $hayCopia = PalletStockOrigen::query()->where('bodega', $bodega)->exists();
+        $hayCopia = PalletStockOrigen::query()->where('ambito', $config['ambito'])->where('bodega', $bodega)->exists();
 
         return [
             'fuente' => [
@@ -133,9 +134,11 @@ class ServicioPendientesValidacionOrigen
                 'tabla' => $config['tabla'],
                 'bodega' => $bodega,
                 'temporada' => $config['temporada'],
+                'mapeo_personalizado' => $config['perfil'] !== null,
+                'filtros' => $config['perfil']['filtros'] ?? [],
                 'temporada_catalogo' => $temporada?->nombre,
             ],
-            'lectura' => $this->estadoLectura($bodega),
+            'lectura' => $this->estadoLectura($bodega, $config['ambito']),
             'resumen' => [
                 'en_origen' => $pallets->count(),
                 'validados' => $validados,
@@ -333,10 +336,10 @@ class ServicioPendientesValidacionOrigen
     }
 
     /** @return array<string, mixed> */
-    private function estadoLectura(string $bodega): array
+    private function estadoLectura(string $bodega, string $ambito): array
     {
-        $ultima = LecturaStockOrigen::query()->where('bodega', $bodega)->latest('iniciada_at')->first();
-        $correcta = LecturaStockOrigen::query()->where('bodega', $bodega)->where('estado', 'correcta')->latest('iniciada_at')->first();
+        $ultima = LecturaStockOrigen::query()->where('ambito', $ambito)->where('bodega', $bodega)->latest('iniciada_at')->first();
+        $correcta = LecturaStockOrigen::query()->where('ambito', $ambito)->where('bodega', $bodega)->where('estado', 'correcta')->latest('iniciada_at')->first();
         $vigencia = (int) config('integraciones.stock_pt.vigencia_minutos', 20);
 
         return [

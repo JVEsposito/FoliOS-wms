@@ -9,12 +9,23 @@ siendo la única puerta a Frigorífico** y nada de lo leído crea, modifica ni b
 
 - La conexión se configura en Administración → Accesos → Conexiones externas
   ([CONEXIONES_EXTERNAS.md](CONEXIONES_EXTERNAS.md)).
-- FoliOS lee la tabla o vista `odbc_stock` del origen: el stock actual de producto
-  terminado, una fila por línea de pallet. Solo trae las filas de la bodega de la
-  planta (`cod_bodega`, por defecto `AR01`) y de tipo `PT`, y solo las columnas que usa.
+- Desde **Explorar origen → Configurar para pendientes por validar** se elige la tabla
+  o vista de stock, una fila por línea de pallet, y se asignan sus columnas. El folio y
+  las cajas son obligatorios; los demás campos son opcionales. Los filtros se agregan
+  expresamente en el explorador: sin filtros se lee toda la fuente elegida.
 - Lee cada cinco minutos (programador de Laravel, `integraciones:leer-stock-origen`) y
-  cuando alguien pulsa **Leer ahora**. La consulta es un `SELECT` fijo, dentro de una
-  transacción de solo lectura que se revierte.
+  cuando alguien pulsa **Leer ahora**. La consulta se construye en el servidor con
+  nombres descubiertos y valores parametrizados, dentro de una transacción de solo
+  lectura que se revierte. La muestra y la lectura usan las mismas asignaciones.
+- Cambiar el mapeo o la conexión exige una nueva lectura correcta antes de mostrar esa
+  selección. No se mezclan copias ni estados de lectura de configuraciones distintas.
+  Hasta 50.000 líneas por lectura; si se supera el límite debe acotarse la fuente.
+  Una fila con folio vacío, demasiado largo o cajas inválidas hace fallar la lectura
+  completa y conserva la copia anterior. Lo mismo ocurre con una respuesta vacía.
+
+**Compatibilidad:** si todavía no hay mapeo guardado, se conserva la lectura anterior
+de `odbc_stock`, bodega `AR01` y tipo `PT`, controlada por estas variables. Un mapeo
+guardado tiene prioridad; si se deshabilita no se vuelve automáticamente a las variables.
 
 | Variable | Por defecto | Uso |
 |---|---|---|
@@ -26,7 +37,8 @@ siendo la única puerta a Frigorífico** y nada de lo leído crea, modifica ni b
 
 ## Cómo se interpreta el origen
 
-El origen trae una fila por línea; FoliOS las agrupa por **número de pallet**, que es el
+Los nombres de la siguiente tabla son campos del contrato de FoliOS: pueden asociarse
+a columnas con otros nombres. El origen trae una fila por línea; FoliOS las agrupa por **número de pallet**, que es el
 mismo número del folio en FoliOS:
 
 | Origen | FoliOS |

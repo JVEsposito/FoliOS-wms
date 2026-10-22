@@ -1,4 +1,5 @@
 import { createOriginExplorer } from './shared/origin-explorer.js';
+import { createOriginStockMapping } from './shared/origin-stock-mapping.js';
 
 const byId = (id) => document.getElementById(id);
 const form = byId('externalConnectionForm');
@@ -9,6 +10,7 @@ const state = { items: [], generation: 0, busy: false, session: null, allowed: n
 const token = () => localStorage.getItem('estiba_wms_office_token') || '';
 const escapeHtml = (value) => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
 const explorer = form ? createOriginExplorer({ api, authorized, session: token, escapeHtml }) : null;
+const mapping = form ? createOriginStockMapping({ api, authorized, session: token, explorer, escapeHtml }) : null;
 
 function authorized() {
     try {
@@ -33,6 +35,7 @@ function setBusy(busy) {
 
 function clearPrivateData() {
     explorer?.clear();
+    mapping?.clear();
     state.generation += 1;
     state.session = null;
     state.allowed = null;
