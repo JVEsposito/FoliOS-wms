@@ -97,7 +97,9 @@ test('proveedores permite buscar, combinar filtros y guardar sin escribir el cor
             assert.deepEqual(writes[0].categorias, [{ cliente_id: 'aguada', categoria: 'Cajas' }]);
             assert.match(await page.locator('#officeToasts').textContent(), /PRV-004/);
 
-            await page.locator('[data-edit-provider="provider-1"]').click();
+            const firstProvider = page.locator('#providersMaterialList .material-row')
+                .filter({ has: page.locator('[data-edit-provider="provider-1"]') });
+            await firstProvider.locator('.office-action-select').selectOption({ label: 'Editar' });
             assert.equal(await page.locator('#providerInternalCode').inputValue(), 'PRV-001');
             assert.equal(await page.locator('#providerMaterialForm [name="codigo"]').inputValue(), 'CSF-01');
             assert.deepEqual(errors, [], `${width}px ${theme}`);
