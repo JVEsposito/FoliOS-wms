@@ -67,7 +67,6 @@ test('explora vistas, prueba sin filtros y descarta una muestra al perder la ses
             }
             return route.fulfill({ json: {} });
         });
-        await page.setViewportSize({ width: 390, height: 1000 });
         await openPanel(page);
         await page.locator('[data-explore-connection]').click();
         await page.locator('#originObjects').selectOption('vista_existencias');
