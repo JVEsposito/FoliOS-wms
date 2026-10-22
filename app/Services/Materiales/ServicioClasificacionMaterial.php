@@ -84,11 +84,14 @@ class ServicioClasificacionMaterial
         if (isset($datos['categoria'])) {
             $nombre = NombreClasificacionMaterial::limpiar($datos['categoria']);
             $clave = NombreClasificacionMaterial::normalizar($nombre);
-            $categoria = CategoriaComercialMaterial::firstOrCreate(['nombre_normalizado' => $clave], [
+            CategoriaComercialMaterial::firstOrCreate(['nombre_normalizado' => $clave], [
                 'nombre' => $nombre, 'activo' => true,
                 'creado_por_user_id' => $usuario->id, 'actualizado_por_user_id' => $usuario->id,
             ]);
-            $categoria = CategoriaComercialMaterial::whereKey($categoria->id)->lockForUpdate()->firstOrFail();
+            $categoria = CategoriaComercialMaterial::where('nombre_normalizado', $clave)->lockForUpdate()->first();
+            if ($categoria === null) {
+                throw ValidationException::withMessages(['categoria' => 'La categoría cambió mientras se guardaba. Actualiza el catálogo y vuelve a seleccionar.']);
+            }
             if (! $categoria->activo && NombreClasificacionMaterial::normalizar($actual?->categoria ?? '') !== $clave) {
                 throw ValidationException::withMessages(['categoria' => 'La categoría comercial está inactiva. Selecciona una categoría activa.']);
             }

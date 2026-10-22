@@ -14,7 +14,7 @@ class GuardarCategoriaComercialMaterialRequest extends FormRequest
 
     public function rules(): array
     {
-        return ['nombre' => ['required', 'string', 'min:2', 'max:100'], 'activo' => ['required', 'boolean']];
+        return ['nombre' => ['required', 'string', 'min:1', 'max:100'], 'activo' => ['required', 'boolean']];
     }
 
     protected function prepareForValidation(): void

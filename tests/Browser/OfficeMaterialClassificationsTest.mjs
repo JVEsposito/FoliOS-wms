@@ -115,7 +115,7 @@ test('categorías y tipos alimentan los ítems, muestran errores y conservan val
             await page.locator('#materials-catalog-tab-items').click();
             assert.equal(await page.locator('#itemMaterialForm [name="tipo_item_material_id"] option[value="type-adh"]').count(), 0);
             const itemRow = page.locator('#itemsMaterialList .material-row').filter({ has: page.locator('[data-edit-item="item-adh"]') });
-            await itemRow.locator('.office-action-select').selectOption({ label: 'Editar' });
+            await itemRow.locator('[data-edit-item="item-adh"]').click();
             assert.equal(await page.locator('#itemMaterialForm [name="tipo_item_material_id"]').inputValue(), 'type-adh');
             assert.match(await page.locator('#itemMaterialForm [name="tipo_item_material_id"] option:checked').textContent(), /inactivo/);
             const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);

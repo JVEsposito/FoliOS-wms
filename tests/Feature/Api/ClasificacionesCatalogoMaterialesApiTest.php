@@ -53,6 +53,9 @@ class ClasificacionesCatalogoMaterialesApiTest extends TestCase
             ->assertJsonPath('clasificaciones.categorias.0.nombre', 'Cajas');
         $this->getJson('/api/materiales/catalogo')->assertOk()->assertJsonPath('items.0.tipo_item.nombre', 'Adhesivo');
         $this->getJson('/api/materiales/items/catalogo')->assertOk()->assertJsonPath('data.0.tipo_item.nombre', 'Adhesivo');
+        $this->getJson('/api/materiales/items/catalogo?tipo_item_material_id='.$tipo)->assertOk()->assertJsonPath('total', 1);
+        $base = TipoItemMaterial::where('codigo_base', 'material_pt')->firstOrFail();
+        $this->getJson('/api/materiales/items/catalogo?tipo_item_material_id='.$base->id)->assertOk()->assertJsonPath('total', 0);
         $this->assertDatabaseHas('items_materiales', ['id' => $id, 'categoria_operacional' => 'insumo', 'tipo_item_material_id' => $tipo]);
         $this->assertDatabaseCount('folios_materiales', 0);
     }
@@ -192,6 +195,13 @@ class ClasificacionesCatalogoMaterialesApiTest extends TestCase
         $this->postJson('/api/administracion/materiales/categorias', ['nombre' => ['malformado'], 'activo' => true])
             ->assertUnprocessable()->assertJsonValidationErrors('nombre');
         $this->getJson('/api/materiales/items/catalogo?tipo_item_material_id='.$id)->assertUnprocessable();
+    }
+
+    public function test_categoria_historica_de_una_letra_puede_desactivarse_sin_renombrarla(): void
+    {
+        $id = $this->postJson('/api/administracion/materiales/categorias', ['nombre' => 'A', 'activo' => true])->assertCreated()->json('data.id');
+        $this->putJson('/api/administracion/materiales/categorias/'.$id, ['nombre' => 'A', 'activo' => false])
+            ->assertOk()->assertJsonPath('data.activo', false);
     }
 
     private function crearTipo(string $nombre, string $operacional): string
