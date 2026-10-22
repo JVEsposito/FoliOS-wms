@@ -1,5 +1,6 @@
 import { serviceEventText, serviceRules, serviceValidity } from './shared/finance-services-logic';
 import { mountRuleEditor } from './shared/finance-rule-editor';
+import { mountSourceFilters } from './shared/finance-source-filters';
 
 /** Catálogo dentro del tarifario; comparte sesión y permisos con la página. */
 export function mountServiceCatalog({ api, data, canManage, reload, openPrice, escapeHtml: esc, toast, formatDateTime }) {
@@ -13,7 +14,9 @@ export function mountServiceCatalog({ api, data, canManage, reload, openPrice, e
     const endError = byId('serviceEndError');
     const history = byId('serviceHistory');
     const ruleRoot = byId('serviceRule');
-    const ruleEditor = mountRuleEditor({ root: ruleRoot, processes: () => data()?.procesos, escapeHtml: esc });
+    const ruleEditor = mountRuleEditor({ root: ruleRoot, processes: () => data()?.procesos, escapeHtml: esc, api });
+    const filtersRoot = byId('serviceSourceFilters');
+    const sourceFilters = mountSourceFilters({ root: filtersRoot, source: () => data()?.procesos.find((item) => item.clave === form.elements.fuente.value), api, escapeHtml: esc });
     let ending = null;
     const getService = (key) => data()?.servicios.find((service) => service.clave === key);
     const message = (response) => Object.values(response.data?.errors || {}).flat()[0] || response.data?.message || 'No fue posible guardar el concepto.';
@@ -38,10 +41,12 @@ export function mountServiceCatalog({ api, data, canManage, reload, openPrice, e
 
     function syncProcess() {
         const process = data()?.procesos.find((item) => item.clave === form.elements.fuente.value);
-        const declared = process?.clave === 'declarado';
+        const declared = ['declarado', 'periodico'].includes(process?.clave);
         const calculated = process?.clave === 'calculado';
         byId('serviceManualFields').hidden = !(declared || calculated);
         ruleRoot.hidden = !calculated;
+        filtersRoot.hidden = declared || calculated || !Object.keys(process?.dimensiones || {}).length;
+        sourceFilters.reset();
         form.elements.unidad_libre.disabled = !(declared || calculated);
         form.elements.unidad_libre.required = declared || calculated;
         form.elements.proceso_referencia.disabled = !declared;
@@ -76,7 +81,8 @@ export function mountServiceCatalog({ api, data, canManage, reload, openPrice, e
             dia_desde: Number(body.dia_desde || 1), dia_hasta: body.dia_hasta ? Number(body.dia_hasta) : null,
             vigente_hasta: body.vigente_hasta || null, descripcion: body.descripcion?.trim() || null,
         });
-        if (body.fuente === 'calculado') body.regla = ruleEditor.read();
+        try { if (body.fuente === 'calculado') body.regla = ruleEditor.read(); else body.filtros = sourceFilters.read(); }
+        catch (problem) { error.textContent = problem.message; return; }
         button.disabled = true;
         error.textContent = '';
         try {
@@ -100,7 +106,8 @@ export function mountServiceCatalog({ api, data, canManage, reload, openPrice, e
             const result = response.data.data;
             output.innerHTML = `<p>${esc(result.grupos)} grupos · ${esc(result.incompletos)} incompletos. ${esc(result.aviso)}</p>`
                 + result.muestra.map((group) => `<details><summary>${esc(group.cliente_nombre || group.cliente_id || 'Cliente sin vincular')} · ${esc(group.fecha)} · ${esc(group.cantidad)} ${esc(result.unidad)} · ${group.completo ? 'Completo' : 'Pendiente'}</summary><p>${esc(Object.entries(group.dimensiones).map(([key, value]) => `${key}: ${value}`).join(' · '))}</p><ul>${group.aportes.map((input) => `<li>${esc(input.fuente)} · ${esc(input.valor)} × ${esc(input.factor)} = ${esc(input.cantidad)} · hecho ${esc(input.hecho_id)}, versión ${esc(input.version)}</li>`).join('')}</ul></details>`).join('');
-        } finally { button.disabled = false; }
+        } catch (problem) { output.textContent = problem.message; }
+        finally { button.disabled = false; }
     });
 
     endForm.addEventListener('submit', async (event) => {

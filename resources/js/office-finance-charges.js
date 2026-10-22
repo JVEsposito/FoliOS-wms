@@ -8,6 +8,8 @@ export function mountCharges({ api, data, canManage, escapeHtml: esc, toast }) {
     let page = 1;
     let generation = 0;
     let operation = null;
+    let listed = new Map();
+    let ending = null;
     const names = { ejecucion: 'Prestación realizada', acuerdo: 'Acuerdo comercial', compromiso: 'Compromiso', disponibilidad: 'Disponibilidad', realizado: 'Realizado', programado: 'Programado', no_realizado: 'No realizado', cancelado: 'Cancelado', no_aplica: 'No aplica' };
     const message = (r) => Object.values(r.data?.errors || {}).flat()[0] || r.data?.message || 'No fue posible guardar el cargo.';
     const uuid = () => {
@@ -15,7 +17,14 @@ export function mountCharges({ api, data, canManage, escapeHtml: esc, toast }) {
         return '10000000-1000-4000-8000-100000000000'.replace(/[018]/g, (c) => (Number(c) ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> Number(c) / 4).toString(16));
     };
     const service = (key) => data()?.servicios.find((item) => item.clave === key);
-    function syncUnit() { $('chargeUnit').textContent = service(form.elements.servicio.value)?.unidades[0]?.nombre || ''; }
+    function syncUnit() {
+        const selected = service(form.elements.servicio.value);
+        const periodic = selected?.fuente === 'periodico';
+        $('chargeUnit').textContent = `${selected?.unidades[0]?.nombre || ''}${periodic ? ' · la cantidad se aplica a cada día civil del período, hasta hoy.' : ''}`;
+        $('chargePeriodField').hidden = !periodic;
+        form.elements.fecha_hasta.disabled = !periodic;
+        form.elements.fecha_hasta.required = periodic;
+    }
 
     async function load() {
         if (!data()) return;
@@ -25,6 +34,7 @@ export function mountCharges({ api, data, canManage, escapeHtml: esc, toast }) {
         if (!response.ok) { $('chargeStatus').textContent = message(response); return; }
         const result = response.data.data;
         if (!result || !Array.isArray(result.data)) { $('chargeStatus').textContent = 'No fue posible leer los cargos.'; return; }
+        listed = new Map(result.data.map((cargo) => [cargo.id, cargo]));
         $('chargeStatus').textContent = 'Los borradores no se cobran. Los aprobados se valorizan según el tarifario; el estado operativo no los anula.';
         $('chargePage').textContent = `${result.current_page} / ${result.last_page}`;
         $('chargePrev').disabled = !result.prev_page_url;
@@ -32,8 +42,8 @@ export function mountCharges({ api, data, canManage, escapeHtml: esc, toast }) {
         $('chargeRows').innerHTML = result.data.map((cargo) => {
             const state = cargo.anulado_at ? 'Anulado' : cargo.aprobado_at ? 'Aprobado' : 'Borrador';
             const actions = `<button class="fin-boton" data-charge-history="${esc(cargo.id)}" type="button">Historial</button>`
-                + (canManage() && !cargo.anulado_at ? `${cargo.aprobado_at ? '' : `<button class="fin-boton" data-charge-action="aprobar" data-charge-id="${esc(cargo.id)}" type="button">Aprobar cargo</button>`}<button class="fin-boton" data-charge-action="anular" data-charge-id="${esc(cargo.id)}" type="button">Anular</button>` : '');
-            return `<tr><td>${esc(cargo.cliente_nombre)}<small>${esc(service(cargo.servicio)?.nombre || cargo.servicio)}</small></td><td>${esc(cargo.cantidad)} ${esc(service(cargo.servicio)?.unidad_libre)}<small>${esc(cargo.fecha.slice(0, 10))}</small></td><td>${esc(names[cargo.base_cobro])}<small>Ejecución: ${esc(names[cargo.estado_ejecucion])}</small><small>${esc(cargo.respaldo)}</small>${cargo.contexto?.rrhh ? `<small>RRHH · ${esc(cargo.contexto.rrhh.medida)} · asignación ${esc(cargo.contexto.rrhh.asignacion_id.slice(0, 8))} · revisión ${esc(cargo.contexto.rrhh.revision)}</small>` : ''}</td><td>${state}<div class="fin-acciones">${actions}</div></td></tr>`;
+                + (canManage() && !cargo.anulado_at ? `${cargo.aprobado_at ? '' : `<button class="fin-boton" data-charge-action="aprobar" data-charge-id="${esc(cargo.id)}" type="button">Aprobar cargo</button>`}${cargo.aprobado_at && cargo.fecha_hasta ? `<button class="fin-boton" data-charge-end-period="${esc(cargo.id)}" type="button">Terminar período</button>` : ''}<button class="fin-boton" data-charge-action="anular" data-charge-id="${esc(cargo.id)}" type="button">Anular</button>` : '');
+            return `<tr><td>${esc(cargo.cliente_nombre)}<small>${esc(service(cargo.servicio)?.nombre || cargo.servicio)}</small></td><td>${esc(cargo.cantidad)} ${esc(service(cargo.servicio)?.unidad_libre)}${cargo.fecha_hasta ? ' por día' : ''}<small>${esc(cargo.fecha.slice(0, 10))}${cargo.fecha_hasta ? ` → ${esc(cargo.fecha_hasta.slice(0, 10))}` : ''}</small></td><td>${esc(names[cargo.base_cobro])}<small>Ejecución: ${esc(names[cargo.estado_ejecucion])}</small><small>${esc(cargo.respaldo)}</small>${cargo.contexto?.rrhh ? `<small>RRHH · ${esc(cargo.contexto.rrhh.medida)} · asignación ${esc(cargo.contexto.rrhh.asignacion_id.slice(0, 8))} · revisión ${esc(cargo.contexto.rrhh.revision)}</small>` : ''}</td><td>${state}<div class="fin-acciones">${actions}</div></td></tr>`;
         }).join('') || '<tr><td colspan="4">No hay cargos en este mes.</td></tr>';
     }
     function render() {
@@ -43,7 +53,7 @@ export function mountCharges({ api, data, canManage, escapeHtml: esc, toast }) {
         load();
     }
     $('chargeNew').addEventListener('click', () => {
-        const services = (data()?.servicios || []).filter((item) => item.fuente === 'declarado');
+        const services = (data()?.servicios || []).filter((item) => ['declarado', 'periodico'].includes(item.fuente));
         if (!services.length) { toast('Primero cree un concepto en modalidad acordada/manual.', true); $('finance-tariffs-tab-services').click(); return; }
         form.reset(); operation = uuid(); $('chargeError').textContent = '';
         form.elements.servicio.innerHTML = services.map((item) => `<option value="${esc(item.clave)}">${esc(item.nombre)}</option>`).join('');
@@ -63,6 +73,19 @@ export function mountCharges({ api, data, canManage, escapeHtml: esc, toast }) {
         } finally { button.disabled = false; }
     });
     $('chargeRows').addEventListener('click', async (event) => {
+        const end = event.target.closest('[data-charge-end-period]');
+        if (end && canManage()) {
+            const cargo = listed.get(end.dataset.chargeEndPeriod);
+            if (!cargo) return;
+            ending = cargo.id;
+            const endForm = $('chargePeriodEndForm');
+            endForm.reset(); $('chargePeriodEndError').textContent = '';
+            endForm.elements.fecha_hasta.min = cargo.fecha.slice(0, 10);
+            endForm.elements.fecha_hasta.max = cargo.fecha_hasta.slice(0, 10);
+            endForm.elements.fecha_hasta.value = cargo.fecha_hasta.slice(0, 10);
+            $('chargePeriodEnd').showModal();
+            return;
+        }
         const action = event.target.closest('[data-charge-action]');
         const history = event.target.closest('[data-charge-history]');
         if (history) {
@@ -80,9 +103,19 @@ export function mountCharges({ api, data, canManage, escapeHtml: esc, toast }) {
             toast('Estado económico actualizado.'); await load();
         } finally { action.disabled = false; }
     });
+    $('chargePeriodEndForm').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const button = event.target.querySelector('[type="submit"]');
+        button.disabled = true;
+        try {
+            const response = await api(`/api/finanzas/cargos/${encodeURIComponent(ending)}/finalizar-periodo`, { method: 'POST', body: JSON.stringify(Object.fromEntries(new FormData(event.target))) });
+            if (!response.ok) { $('chargePeriodEndError').textContent = message(response); return; }
+            $('chargePeriodEnd').close(); toast('Término del servicio registrado.'); await load();
+        } finally { button.disabled = false; }
+    });
     $('chargeMonth').addEventListener('change', () => { page = 1; load(); });
     $('chargePrev').addEventListener('click', () => { page--; load(); });
     $('chargeNext').addEventListener('click', () => { page++; load(); });
-    for (const modal of [dialog, $('chargeHistory')]) modal.addEventListener('click', (event) => { if (event.target.closest('[data-charge-close]')) modal.close(); });
+    for (const modal of [dialog, $('chargeHistory'), $('chargePeriodEnd')]) modal.addEventListener('click', (event) => { if (event.target.closest('[data-charge-close]')) modal.close(); });
     return { render };
 }

@@ -3,6 +3,7 @@
 namespace App\Finanzas\Tarifario;
 
 use App\Finanzas\Captura\CatalogoFuentes;
+use App\Finanzas\Captura\Fuentes\AcuerdosPeriodo;
 use App\Finanzas\Captura\Fuentes\CargosDeclarados;
 use App\Finanzas\EsquemaFinanzas;
 use App\Finanzas\Models\ConceptoServicio;
@@ -23,16 +24,22 @@ final class GestorServicios
         if ($fuente === null) {
             throw ValidationException::withMessages(['fuente' => 'El proceso no está disponible para Finanzas.']);
         }
-        if (($datos['fuente'] === CargosDeclarados::CLAVE) !== ($datos['aplicacion'] === 'declarado')) {
+        if ((in_array($datos['fuente'], [CargosDeclarados::CLAVE, AcuerdosPeriodo::CLAVE], true)) !== ($datos['aplicacion'] === 'declarado')) {
             throw ValidationException::withMessages(['aplicacion' => 'La modalidad acordada/manual requiere la fuente de cargos declarados.']);
         }
         if (($datos['fuente'] === ReglaValorizacion::FUENTE) !== ($datos['aplicacion'] === 'calculado')) {
             throw ValidationException::withMessages(['aplicacion' => 'La modalidad calculada requiere la fuente de cálculo entre medidas.']);
         }
-        if (in_array($datos['fuente'], [CargosDeclarados::CLAVE, ReglaValorizacion::FUENTE], true) && trim((string) ($datos['unidad_libre'] ?? '')) === '') {
+        if (in_array($datos['fuente'], [CargosDeclarados::CLAVE, AcuerdosPeriodo::CLAVE, ReglaValorizacion::FUENTE], true) && trim((string) ($datos['unidad_libre'] ?? '')) === '') {
             throw ValidationException::withMessages(['unidad_libre' => 'Indique la unidad de cobro del concepto.']);
         }
         $datos['area'] = trim((string) ($datos['area'] ?? $this->fuentes->contexto($datos['fuente'])['area']));
+        $filtros = $datos['filtros'] ?? [];
+        if (array_diff(array_keys($filtros), array_keys($this->fuentes->contexto($datos['fuente'])['dimensiones'])) !== []) {
+            throw ValidationException::withMessages(['filtros' => 'Use las dimensiones publicadas por el proceso.']);
+        }
+        ksort($filtros);
+        $datos['filtros'] = $filtros;
         if ($datos['fuente'] === ReglaValorizacion::FUENTE) {
             $datos['regla'] = app(ReglaValorizacion::class)->normalizar($datos['regla'] ?? []);
         } elseif (! empty($datos['regla'])) {
@@ -50,7 +57,15 @@ final class GestorServicios
                     ->where(fn ($q) => $q->whereNull('vigente_hasta')->orWhere('vigente_hasta', '>=', $datos['vigente_desde']))
                     ->where('dia_desde', '<=', $datos['dia_hasta'] ?? 65535)
                     ->where(fn ($q) => $q->whereNull('dia_hasta')->orWhere('dia_hasta', '>=', $datos['dia_desde']))
-                    ->exists();
+                    ->get()->contains(function (ConceptoServicio $otro) use ($datos): bool {
+                        foreach ($datos['filtros'] as $campo => $valor) {
+                            if (isset($otro->filtros[$campo]) && $otro->filtros[$campo] !== $valor) {
+                                return false;
+                            }
+                        }
+
+                        return true;
+                    });
                 if ($cruza) {
                     throw ValidationException::withMessages(['aplicacion' => 'Ya hay un concepto que reemplaza al base en esas fechas y días. Ajuste sus rangos.']);
                 }

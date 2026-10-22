@@ -3,12 +3,22 @@
 namespace App\Finanzas\Comex;
 
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /** Proyección mínima de COMEX: conexión SELECT/READ ONLY, sin importar sus modelos. */
 final class LectorComex
 {
+    public function hechosReservas(): Builder
+    {
+        $c = DB::connection(config('finanzas.conexion_comex'));
+
+        return $c->table('cx_bookings', 'b')
+            ->select(['b.id', 'b.codigo', 'b.cliente_operacion_id as cliente_id', 'b.gestion', 'b.estado', 'b.created_at'])
+            ->selectSub($c->table('cx_eventos_comerciales', 'e')->where('e.entidad', 'booking')->whereColumn('e.entidad_id', 'b.id')->where('e.accion', 'confirmar')->selectRaw('MIN(e.created_at)'), 'ocurrido_at');
+    }
+
     public function bookings(?string $buscar): LengthAwarePaginator
     {
         return DB::connection(config('finanzas.conexion_comex'))->table('cx_bookings')->whereIn('estado', ['confirmado', 'cerrado'])->when($buscar, fn ($q) => $q->where('codigo', 'like', '%'.$buscar.'%'))->orderByDesc('created_at')->orderBy('id')->paginate(25, ['id', 'codigo', 'cliente', 'gestion', 'estado', 'version'])->through(function ($b) {

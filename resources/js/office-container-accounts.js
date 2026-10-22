@@ -37,6 +37,14 @@ const elements = {
     quantitySummary: byId('quantitySummary'),
     quantityError: byId('quantityError'),
     quantityCancel: byId('quantityCancel'),
+    adjustmentNew: byId('accountAdjustmentNew'),
+    adjustmentDialog: byId('accountAdjustmentDialog'),
+    adjustmentForm: byId('accountAdjustmentForm'),
+    adjustmentFields: byId('accountAdjustmentFields'),
+    adjustmentTitle: byId('accountAdjustmentTitle'),
+    adjustmentPreview: byId('accountAdjustmentPreview'),
+    adjustmentError: byId('accountAdjustmentError'),
+    adjustmentCancel: byId('accountAdjustmentCancel'),
     loading: byId('officeLoading'),
     loadingText: byId('officeLoadingText'),
     toasts: byId('officeToasts'),
@@ -50,9 +58,21 @@ const state = {
     identity: read(keys.identity),
     catalogs: null,
     movements: [],
+    balances: [],
+    adjustment: null,
     parameters: new URLSearchParams(),
 };
 const MOVEMENTS_LIMIT = 300;
+
+function accountOperationId() {
+    if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+    // Las oficinas también se usan por HTTP en la red local de la planta.
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    bytes[6] = (bytes[6] & 15) | 64;
+    bytes[8] = (bytes[8] & 63) | 128;
+    const hex = [...bytes].map((value) => value.toString(16).padStart(2, '0')).join('');
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
 
 function read(key) {
     try {
@@ -167,6 +187,7 @@ function showOffice() {
         'is-hidden',
         state.identity?.puede_consultar_materia_prima !== true,
     );
+    elements.adjustmentNew.classList.add('is-hidden');
     return true;
 }
 
@@ -179,6 +200,9 @@ function addOptions(select, items, labelFunction) {
 
 async function loadCatalogs() {
     state.catalogs = await api('/api/envases/cuenta-corriente/catalogos');
+    // El perfil guardado en una sesión anterior puede no conocer esta capacidad.
+    state.identity.puede_ajustar_cuenta_envases = state.catalogs.puede_ajustar === true;
+    elements.adjustmentNew.classList.toggle('is-hidden', !state.identity.puede_ajustar_cuenta_envases);
     addOptions(elements.filters.elements.cliente_id, state.catalogs.clientes, (item) => `${item.codigo} · ${item.nombre}`);
     addOptions(
         elements.filters.elements.temporada_id,
@@ -186,6 +210,8 @@ async function loadCatalogs() {
         (item) => `${item.codigo} · ${item.nombre}${item.activa ? ' (activa)' : ''}`,
     );
     addOptions(elements.filters.elements.tipo_envase, state.catalogs.tipos_envase, (item) => item.nombre);
+    addOptions(elements.adjustmentForm.elements.cliente_id, state.catalogs.clientes, (item) => `${item.codigo} · ${item.nombre}`);
+    addOptions(elements.adjustmentForm.elements.tipo_envase, state.catalogs.tipos_envase, (item) => item.nombre);
 }
 
 function typeName(code) {
@@ -206,7 +232,7 @@ function renderBalances(balances) {
     });
     return [...clients.values()].map(({ cliente, lines }) => `<article class="balance-client">
         <header class="balance-client__header"><div><b>${escapeHtml(cliente.nombre)}</b><small>${escapeHtml(cliente.codigo)}</small></div><div class="balance-actions" data-office-action-menu><button type="button" data-statement="${escapeHtml(cliente.id)}" data-format="pdf" data-action-label="Estado de cuenta en PDF">↓ Estado de cuenta PDF</button><button type="button" data-statement="${escapeHtml(cliente.id)}" data-format="xlsx" data-action-label="Estado de cuenta en Excel">↓ Estado de cuenta Excel</button></div></header>
-        ${lines.map((line) => `<div class="balance-line"><div><b>${escapeHtml(typeName(line.tipo_envase))}</b>${line.propios_entregados ? `<small>${line.propios_entregados} envases propios de la planta entregados en la temporada</small>` : ''}</div><strong class="${line.saldo < 0 ? 'negative' : 'positive'}">${signed(line.saldo)}</strong></div>`).join('')}
+        ${lines.map((line) => `<div class="balance-line"><div><b>${escapeHtml(typeName(line.tipo_envase))}</b><small>${line.saldo < 0 ? 'El cliente debe envases a la planta' : line.saldo > 0 ? 'La planta debe envases al cliente' : 'Cuenta saldada'}</small>${line.propios_entregados ? `<small>${line.propios_entregados} envases propios de la planta entregados en la temporada</small>` : ''}</div><strong class="${line.saldo < 0 ? 'negative' : 'positive'}">${signed(line.saldo)}</strong></div>`).join('')}
     </article>`).join('');
 }
 
@@ -231,6 +257,7 @@ function renderStock(stock) {
 
 function render(data) {
     state.movements = data.data;
+    state.balances = data.balances;
     elements.confirmed.textContent = data.resumen.movimientos_confirmados;
     elements.reserved.textContent = data.resumen.envases_reservados;
     elements.pending.textContent = data.resumen.lineas_pendientes_validacion;
@@ -267,15 +294,17 @@ function render(data) {
             const quantityButton = state.identity?.puede_corregir_cantidad_envases && movement.puede_corregir_cantidad
                 ? `<button class="property-button" data-correct-quantity="${escapeHtml(movement.id)}">Corregir cantidad</button>`
                 : '';
+            const reverseButton = state.identity?.puede_ajustar_cuenta_envases && movement.puede_revertir_ajuste
+                ? `<button data-reverse-adjustment="${escapeHtml(movement.id)}">Revertir asiento</button>` : '';
             const documentNote = movement.corregido ? ' · propiedad corregida' : movement.cantidad_corregida ? ' · cantidad corregida' : movement.correccion_propiedad ? ' · ajuste de propiedad' : movement.correccion_cantidad ? ' · ajuste de cantidad' : '';
-            const correction = movement.correccion_propiedad || movement.correccion_cantidad;
+            const correction = movement.correccion_propiedad || movement.correccion_cantidad || movement.ajuste_cuenta;
             const trace = correction
-                ? `<br><small>Motivo: ${escapeHtml(correction.motivo)} · ${formatDate(correction.corregido_at)} · ${escapeHtml(movement.creado_por?.nombre || '')}</small>`
+                ? `<br><small>Motivo: ${escapeHtml(correction.motivo)} · ${formatDate(correction.corregido_at || correction.registrado_at)} · ${escapeHtml(movement.creado_por?.nombre || '')}</small>`
                 : '';
             const account = movement.impacto_cuenta === 0
                 ? '<td class="impact-none" title="No mueve la cuenta de ningún cliente">—</td>'
                 : `<td class="${movement.impacto_cuenta < 0 ? 'impact-negative' : 'impact-positive'}">${signed(movement.impacto_cuenta)}</td>`;
-            return `<tr><td>${formatDate(movement.ocurrido_at)}</td><td><b>${escapeHtml(movement.cliente?.nombre)}</b><br><small>${escapeHtml(movement.movimiento)} · ${escapeHtml(movement.numero_documento)}${emittedNote}${documentNote}</small>${trace}</td><td>${escapeHtml(typeName(movement.tipo_envase))} · ${movement.cantidad}</td>${account}<td class="impact-stock">${signed(movement.impacto_existencia)}</td><td>${escapeHtml(label(movement.propiedad))}</td><td>${escapeHtml(label(movement.estado_revision))}</td><td><div class="table-actions">${guideButton}${emittedButton}${reviewButton}${propertyButton}${quantityButton}${!guideButton && !reviewButton && !propertyButton && !quantityButton ? '—' : ''}</div></td></tr>`;
+            return `<tr><td>${formatDate(movement.ocurrido_at)}</td><td><b>${escapeHtml(movement.cliente?.nombre)}</b><br><small>${escapeHtml(movement.movimiento)} · ${escapeHtml(movement.numero_documento)}${emittedNote}${documentNote}</small>${trace}</td><td>${escapeHtml(typeName(movement.tipo_envase))} · ${movement.cantidad}</td>${account}<td class="impact-stock">${signed(movement.impacto_existencia)}</td><td>${escapeHtml(label(movement.propiedad))}</td><td>${escapeHtml(label(movement.estado_revision))}</td><td><div class="table-actions">${guideButton}${emittedButton}${reviewButton}${propertyButton}${quantityButton}${reverseButton}${!guideButton && !reviewButton && !propertyButton && !quantityButton && !reverseButton ? '—' : ''}</div></td></tr>`;
         }).join('')
         : '<tr><td colspan="8">Aún no hay movimientos confirmados.</td></tr>';
 }
@@ -295,6 +324,66 @@ async function load() {
         busy(false);
     }
 }
+
+function updateAdjustmentPreview() {
+    const form = elements.adjustmentForm.elements;
+    const origin = state.adjustment?.origin;
+    const client = origin?.cliente?.id || form.cliente_id.value;
+    const type = origin?.tipo_envase || form.tipo_envase.value;
+    const balance = state.balances.find((line) => line.cliente.id === client && line.tipo_envase === type)?.saldo || 0;
+    const delta = origin ? -origin.impacto_cuenta : Number(form.cantidad.value);
+    elements.adjustmentPreview.textContent = Number.isInteger(delta) && delta !== 0
+        ? `Saldo actual de este tipo (todas las propiedades): ${signed(balance)} → ${signed(balance + delta)}. Ajuste: ${signed(delta)} envases.`
+        : 'Indique una cantidad entera distinta de cero.';
+}
+
+function openAdjustment(origin = null) {
+    const season = state.catalogs.temporadas.find((item) => item.activa);
+    const selected = elements.filters.elements.temporada_id.value;
+    if (!season || (selected && selected !== season.id)) {
+        toast('Seleccione la temporada activa para registrar un asiento.', true);
+        return;
+    }
+    elements.adjustmentForm.reset();
+    elements.adjustmentFields.disabled = Boolean(origin);
+    elements.adjustmentFields.hidden = Boolean(origin);
+    elements.adjustmentTitle.textContent = origin ? `Revertir ${origin.numero_documento}` : 'Registrar apertura o ajuste';
+    elements.adjustmentForm.elements.cliente_id.value = elements.filters.elements.cliente_id.value;
+    elements.adjustmentForm.elements.fecha.value = state.catalogs.hoy;
+    elements.adjustmentForm.elements.fecha.max = state.catalogs.hoy;
+    elements.adjustmentForm.elements.fecha.min = origin?.ocurrido_at?.slice(0, 10) || '';
+    elements.adjustmentError.textContent = '';
+    state.adjustment = { origin, operacion_id: accountOperationId(), temporada_id: season.id };
+    updateAdjustmentPreview();
+    elements.adjustmentDialog.showModal();
+}
+
+elements.adjustmentNew.addEventListener('click', () => openAdjustment());
+elements.adjustmentCancel.addEventListener('click', () => elements.adjustmentDialog.close());
+elements.adjustmentForm.addEventListener('input', updateAdjustmentPreview);
+elements.adjustmentForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const submit = elements.adjustmentForm.querySelector('[type="submit"]');
+    const { origin, operacion_id, temporada_id } = state.adjustment;
+    const fields = Object.fromEntries(new FormData(elements.adjustmentForm));
+    const body = origin
+        ? { operacion_id, fecha: fields.fecha, motivo: fields.motivo }
+        : { ...fields, operacion_id, temporada_id, cantidad: Number(fields.cantidad) };
+    submit.disabled = true;
+    elements.adjustmentError.textContent = '';
+    try {
+        await api(origin ? `/api/envases/cuenta-corriente/movimientos/${origin.id}/revertir-ajuste` : '/api/envases/cuenta-corriente/ajustes', {
+            method: 'POST', body: JSON.stringify(body),
+        });
+        elements.adjustmentDialog.close();
+        toast('Asiento registrado en la cuenta de envases.');
+        await load();
+    } catch (error) {
+        elements.adjustmentError.textContent = error.message;
+    } finally {
+        submit.disabled = false;
+    }
+});
 
 elements.login.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -341,6 +430,12 @@ elements.filters.addEventListener('submit', (event) => {
     load();
 });
 document.addEventListener('click', async (event) => {
+    const reverseButton = event.target.closest('[data-reverse-adjustment]');
+    if (reverseButton) {
+        const origin = state.movements.find((item) => item.id === reverseButton.dataset.reverseAdjustment);
+        if (origin) openAdjustment(origin);
+        return;
+    }
     const reviewButton = event.target.closest('[data-review]');
     const propertyButton = event.target.closest('[data-correct-property]');
     const quantityButton = event.target.closest('[data-correct-quantity]');

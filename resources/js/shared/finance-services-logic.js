@@ -5,9 +5,10 @@ export function serviceRules(service) {
     const application = service.aplicacion === 'calculado' ? 'Cantidad calculada entre medidas operativas' : service.aplicacion === 'declarado' ? 'Cargo por acuerdo o declaración' : service.base ? 'Concepto base del proceso'
         : (service.aplicacion === 'reemplaza_base' ? 'Reemplaza al concepto base' : 'Cobro adicional al concepto base');
     const days = service.por_dia
-        ? ` · días ${service.dia_desde || 1} a ${service.dia_hasta || 'sin límite'} de esta estadía del folio`
+        ? ` · días ${service.dia_desde || 1} a ${service.dia_hasta || 'sin límite'} ${service.fuente && service.fuente !== 'estadia' ? 'del servicio' : 'de esta estadía del folio'}`
         : '';
-    return `${application}${days}`;
+    const filters = Object.entries(service.filtros || {}).map(([field, value]) => `${field.replaceAll('_', ' ')}: ${value}`).join(' · ');
+    return `${application}${days}${filters ? ` · ${filters}` : ''}`;
 }
 
 export function serviceValidity(service) {

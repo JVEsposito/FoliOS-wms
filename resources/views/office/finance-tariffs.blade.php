@@ -242,6 +242,7 @@
                     <label class="fin-form__wide"><span>Concepto acordado/manual</span><select name="servicio" required></select></label>
                     <label class="fin-form__wide"><span>Cliente</span><select name="cliente_id" required></select></label>
                     <label><span>Cantidad</span><input name="cantidad" inputmode="decimal" required></label><label><span>Fecha del cobro</span><input name="fecha" type="date" required></label>
+                    <label id="chargePeriodField" hidden><span>Hasta el día (incluido)</span><input name="fecha_hasta" type="date" disabled></label>
                     <p class="fin-form__preview fin-form__wide">Puede registrar cantidades negativas para abonos o ajustes, con su respaldo. El resultado conserva el signo de cantidad × precio.</p>
                     <p class="fin-form__preview fin-form__wide" id="chargeUnit"></p>
                     <label><span>Base económica del cobro</span><select name="base_cobro" required><option value="acuerdo">Acuerdo comercial</option><option value="compromiso">Compromiso contratado</option><option value="disponibilidad">Disponibilidad o reserva</option><option value="ejecucion">Prestación realizada</option></select></label>
@@ -253,6 +254,7 @@
             </form>
         </dialog>
         <dialog class="fin-history" id="chargeHistory" aria-labelledby="chargeHistoryTitle"><header class="fin-history__heading"><h2 id="chargeHistoryTitle">Historial del cargo</h2><button class="fin-history__close" data-charge-close type="button" aria-label="Cerrar">×</button></header><div class="fin-form" id="chargeHistoryBody"></div></dialog>
+        <dialog class="fin-history fin-dialog" id="chargePeriodEnd" aria-labelledby="chargePeriodEndTitle"><form id="chargePeriodEndForm"><header class="fin-history__heading"><h2 id="chargePeriodEndTitle">Terminar servicio por período</h2><button type="button" class="fin-history__close" data-charge-close aria-label="Cerrar">×</button></header><div class="fin-form"><label><span>Último día cobrable (incluido)</span><input name="fecha_hasta" type="date" required></label><label class="fin-form__wide"><span>Motivo del término anticipado</span><textarea name="motivo" minlength="5" maxlength="500" required></textarea></label><p class="fin-form__preview fin-form__wide">Conserva los días anteriores. Un cambio de un período cerrado se presenta como diferencia.</p><p id="chargePeriodEndError" class="form-error fin-form__wide" role="alert"></p></div><footer class="fin-history__actions"><button type="button" class="secondary-button" data-charge-close>Cancelar</button><button type="submit" class="primary-button">Guardar término</button></footer></form></dialog>
 
         <dialog class="fin-history fin-dialog" id="serviceDialog" aria-labelledby="serviceDialogTitle">
             <form id="serviceForm">
@@ -265,6 +267,7 @@
                     <label class="fin-form__wide"><span>Área del servicio</span><input name="area" maxlength="60" value="general" list="serviceAreas" required placeholder="materiales, envases, packing, RRHH…"><datalist id="serviceAreas"><option value="materiales"><option value="envases"><option value="packing"><option value="recepcion"><option value="frigorifico"><option value="logistica"><option value="rrhh"><option value="comex"><option value="servicios"><option value="general"></datalist></label>
                     <label class="fin-form__wide"><span>Cómo se registran las cantidades</span><select name="fuente" required></select></label>
                     <p class="fin-form__preview fin-form__wide" id="serviceProcessHelp"></p>
+                    <fieldset class="fin-form__wide fin-service-days" id="serviceSourceFilters" hidden><legend>Aplicar solo a estas condiciones</legend><p>Filtre ítem, receta, unidad u otras dimensiones del proceso. Para cobrar cantidades de materiales seleccione su unidad de medida.</p><div data-source-filter-rows></div><button type="button" class="fin-boton" data-source-filter-add>+ Agregar filtro</button></fieldset>
                     <fieldset class="fin-form__wide fin-service-days" id="serviceManualFields" hidden>
                         <legend>Unidad del concepto</legend>
                         <label><span>Unidad de cobro</span><input name="unidad_libre" maxlength="60" placeholder="hora persona, jornada, bin, documento…"></label>
@@ -285,10 +288,10 @@
                     <label><span>Vigente desde</span><input name="vigente_desde" type="date" required></label>
                     <label><span>Vigente hasta <small>(opcional)</small></span><input name="vigente_hasta" type="date"></label>
                     <fieldset class="fin-form__wide fin-service-days" id="serviceDays" hidden>
-                        <legend>Días de esta estadía del folio</legend>
+                        <legend>Días desde el inicio del servicio</legend>
                         <label><span>Desde el día</span><input name="dia_desde" type="number" min="1" max="65535" step="1" value="1" required></label>
                         <label><span>Hasta el día <small>(vacío: sin límite)</small></span><input name="dia_hasta" type="number" min="1" max="65535" step="1"></label>
-                        <p>El ingreso es el día 1, en hora de planta. Se cuenta desde el inicio de esta custodia; un folio nuevo de repaletizaje comienza otra. No representa la antigüedad de la fruta de sus orígenes.</p>
+                        <p>El inicio del servicio es el día 1, en hora de planta. En frigorífico se cuenta desde el inicio de la custodia; un folio nuevo de repaletizaje comienza otra. Los acuerdos por período aplican estos rangos a su fecha inicial.</p>
                     </fieldset>
                     <label class="fin-form__wide"><span>Descripción <small>(opcional)</small></span><textarea name="descripcion" maxlength="500" rows="2"></textarea></label>
                     <p class="fin-form__preview fin-form__wide">Sin precio, los hechos del concepto quedan pendientes de valorizar. La unidad de cobro se elige al asignar el precio, entre las cantidades registradas por el proceso. El proceso y las reglas del concepto se conservan: para cambiarlos se finaliza y se crea otro concepto.</p>

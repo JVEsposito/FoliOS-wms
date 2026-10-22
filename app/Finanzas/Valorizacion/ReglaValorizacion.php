@@ -37,10 +37,20 @@ final class ReglaValorizacion
                 $this->error('Elija fuentes operativas puntuales. Los intervalos y acuerdos tienen su propia valorización.');
             }
             $medida = $fuente->medidas()[$termino['medida']] ?? null;
-            if ($medida === null || ($unidad !== null && $unidad !== $medida['unidad'])) {
+            if ($medida === null) {
                 $this->error('Los términos deben usar medidas existentes de la misma unidad.');
             }
-            $unidad = $medida['unidad'];
+            $unidadTermino = $medida['unidad'];
+            if (isset($medida['dimension_unidad'])) {
+                $unidadTermino = $termino['filtros'][$medida['dimension_unidad']] ?? null;
+                if (! is_string($unidadTermino) || trim($unidadTermino) === '') {
+                    $this->error('Para valorizar cantidades de materiales, filtre una unidad de medida explícita. No se suman cajas, kilos u otras unidades diferentes.');
+                }
+            }
+            if ($unidad !== null && $unidad !== $unidadTermino) {
+                $this->error('Los términos deben usar medidas de la misma unidad.');
+            }
+            $unidad = $unidadTermino;
             $dimensiones = array_keys($this->fuentes->contexto($termino['fuente'])['dimensiones']);
             $agrupaciones = ['origen_id', 'fecha_operacional', ...$dimensiones];
             if (array_diff($regla['agrupar'], $agrupaciones) !== [] || array_diff(array_keys($termino['filtros']), $dimensiones) !== []) {
