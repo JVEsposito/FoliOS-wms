@@ -59,9 +59,12 @@ class ServicioDirectorioTransporte
                     $viaje['empresa'] = ['nombre' => $datos['transportista'] ?? null];
                 }
             } else {
+                $patente = trim((string) ($datos['patente'] ?? ''));
+                $transportista = trim((string) ($datos['transportista'] ?? ''));
+
                 return [
-                    'patente' => $datos['patente'] ?? null,
-                    'transportista' => $datos['transportista'] ?? null,
+                    'patente' => $patente === '' ? null : $patente,
+                    'transportista' => $transportista === '' ? null : $transportista,
                 ];
             }
         }
@@ -71,7 +74,7 @@ class ServicioDirectorioTransporte
         $empresa = $this->ficha(EmpresaTransporte::class, 'empresa', 'rut', $viaje['empresa'] ?? [], $datos, $actor, $previo['empresa'] ?? null);
         $placa = $viaje['vehiculo']['patente'] ?? null;
         $vehiculo = ! isset($datos['transporte']) && $placa !== null && ! preg_match('/^[A-Z0-9]{4,12}$/', $placa)
-            ? ['id' => null, 'patente' => $datos['patente'], 'descripcion' => null, 'version' => null]
+            ? ['id' => null, 'patente' => trim($datos['patente']), 'descripcion' => null, 'version' => null]
             : $this->ficha(VehiculoTransporte::class, 'vehiculo', 'patente', $viaje['vehiculo'] ?? [], $datos, $actor, $previo['vehiculo'] ?? null);
         $snapshot = [
             'conductor' => $conductor,
@@ -101,7 +104,7 @@ class ServicioDirectorioTransporte
         }
         $valores[$clave] = $clave === 'rut' ? self::rut($entrada[$clave] ?? null) : self::patente($entrada[$clave] ?? null);
         if ($previo !== null && ! ($entrada['actualizar_directorio'] ?? false)
-            && $valores === array_intersect_key($previo, $valores)) {
+            && collect($valores)->every(fn ($valor, string $campo): bool => array_key_exists($campo, $previo) && $previo[$campo] === $valor)) {
             return $previo;
         }
         if (! array_filter($valores, fn ($valor) => $valor !== null)) {

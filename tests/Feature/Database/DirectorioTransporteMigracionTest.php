@@ -42,12 +42,15 @@ class DirectorioTransporteMigracionTest extends TestCase
 
         $servicio = app(ServicioDirectorioTransporte::class);
         $actor = User::findOrFail(1);
+        $compat = $servicio->capturar(['patente' => '  TEXTO ANTIGUO  ', 'transportista' => '  Empresa  '], $actor);
+        $this->assertSame(['patente' => 'TEXTO ANTIGUO', 'transportista' => 'Empresa'], $compat);
         $datos = ['operacion_id' => (string) Str::uuid(), 'transporte' => [
             'conductor' => ['rut' => '11.111.111-1', 'nombre' => 'Juan', 'telefono' => '123'],
             'empresa' => ['rut' => '76123456-0', 'nombre' => 'Empresa'],
             'vehiculo' => ['patente' => 'AB-CD 12', 'descripcion' => 'Camión'],
         ]];
         $captura = DB::transaction(fn () => $servicio->capturar($datos, $actor));
+        $datosHistoricos = $datos;
         $legacy->update($captura);
         $this->assertSame('11111111-1', $captura['transporte_snapshot']['conductor']['rut']);
         $datos['operacion_id'] = (string) Str::uuid();
@@ -56,6 +59,14 @@ class DirectorioTransporteMigracionTest extends TestCase
         DB::transaction(fn () => $servicio->capturar($datos, $actor));
         $this->assertSame(2, ConductorTransporte::firstOrFail()->version);
         $this->assertSame($captura['transporte_snapshot'], $legacy->fresh()->transporte_snapshot);
+        // El orden de claves de un objeto JSON puede cambiar al persistirlo.
+        // La comparación debe reconocer los mismos datos sin adoptar la v2.
+        $legacy->update(['transporte_snapshot' => array_map(
+            fn ($ficha) => is_array($ficha) ? array_reverse($ficha, true) : $ficha,
+            $captura['transporte_snapshot'],
+        )]);
+        $historico = DB::transaction(fn () => $servicio->capturar($datosHistoricos, $actor, $legacy->fresh()));
+        $this->assertSame(1, $historico['transporte_snapshot']['conductor']['version']);
         try {
             DB::transaction(fn () => $servicio->capturar($datos, $actor));
             $this->fail('Una versión obsoleta no puede reemplazar la ficha.');

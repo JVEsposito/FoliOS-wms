@@ -63,8 +63,8 @@ class DirectorioTransporteApiTest extends TestCase
         $this->assertDatabaseCount('vehiculos_transporte', 2);
         $this->assertSame('+56999999999', ConductorTransporte::firstOrFail()->telefono);
         $confirmada->refresh();
-        $this->assertSame($original['transporte'], $confirmada->transporte_snapshot);
-        $this->assertSame($original['transporte'], $confirmada->snapshot_confirmacion['transporte']);
+        $this->assertEquals($original['transporte'], $confirmada->transporte_snapshot);
+        $this->assertEquals($original['transporte'], $confirmada->snapshot_confirmacion['transporte']);
         $this->assertSame('ABCD12', $confirmada->patente);
         $evento = EventoDirectorioTransporte::where('tipo', 'conductor')->whereNotNull('antes')->firstOrFail();
         $this->assertSame('+56911111111', $evento->antes['telefono']);
@@ -154,6 +154,12 @@ class DirectorioTransporteApiTest extends TestCase
             ->assertJsonPath('data.transporte.conductor.rut', '11111111-1')
             ->assertJsonPath('data.transporte.empresa.nombre', 'Otro transportista')
             ->assertJsonPath('data.transporte.vehiculo.patente', 'WXYZ34');
+        $datos['operacion_id'] = (string) Str::uuid();
+        $datos['version_conocida']++;
+        $datos['patente'] = 'CAMION-SIN-PATENTE';
+        $this->withToken($token)->putJson('/api/materiales/recepciones/'.$original['id'], $datos)->assertOk()
+            ->assertJsonPath('data.transporte.vehiculo.id', null)
+            ->assertJsonPath('data.patente', 'CAMION-SIN-PATENTE');
     }
 
     public function test_directorio_exige_permiso_y_la_busqueda_no_crea_registros(): void
