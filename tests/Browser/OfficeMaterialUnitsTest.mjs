@@ -50,7 +50,7 @@ test('catálogo de unidades y equivalencias por ítem funcionan en escritorio y 
             await page.goto('http://localhost/oficina/materiales/catalogos');
             await page.waitForFunction(() => document.getElementById('itemsSummary').textContent.includes('1'));
             await page.locator('#materials-catalog-tab-units').click();
-            await page.locator('[data-edit-unit]').first().waitFor();
+            await page.locator('#materialUnitsList .material-row').first().waitFor();
             await page.locator('#materialUnitForm [name="codigo"]').fill('resmas');
             await page.locator('#materialUnitForm [name="nombre"]').fill('Resmas');
             await page.locator('#materialUnitForm [name="alias"]').fill('resma');
