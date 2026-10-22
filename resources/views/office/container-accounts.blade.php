@@ -41,7 +41,8 @@
                 <div class="accounts-grid office-panel-workspace">
                     <section class="panel" id="container-accounts-panel-balances" data-office-panel-group="container-accounts" data-office-panel-id="balances" role="tabpanel" aria-labelledby="container-accounts-tab-balances">
                         <div class="panel-heading"><div><p class="eyebrow">SALDOS</p><h2>Por cliente y tipo</h2></div><button class="secondary-button is-hidden" id="accountAdjustmentNew" type="button">Registrar apertura o ajuste</button></div>
-                        <p class="balance-legend"><b class="positive">+</b> La planta debe envases al cliente · <b class="negative">−</b> El cliente debe envases a la planta. Aperturas y ajustes registran obligaciones de cuenta. La compra de envases propios se ve en Existencia.</p>
+                        <p class="balance-legend"><b class="positive">+</b> La planta debe envases al cliente · <b class="negative">−</b> El cliente debe envases a la planta. Aperturas y ajustes registran obligaciones de cuenta. La compra de envases propios no mueve la cuenta de ningún cliente: se ve en Existencia.</p>
+                        <p class="stock-note">El estado de cuenta toma la temporada y las fechas del filtro.</p>
                         <div class="balance-list" id="balanceList"></div>
                     </section>
                     <section class="panel" id="container-accounts-panel-stock" data-office-panel-group="container-accounts" data-office-panel-id="stock" role="tabpanel" aria-labelledby="container-accounts-tab-stock">
