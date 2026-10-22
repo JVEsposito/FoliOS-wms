@@ -15,7 +15,7 @@ test('catálogo de unidades y equivalencias por ítem funcionan en escritorio y 
             const context = await browser.newContext({ viewport: { width, height: 900 } });
             await context.addInitScript(() => {
                 localStorage.setItem('estiba_wms_office_token', 'units-fixture');
-                localStorage.setItem('estiba_wms_office_identity', JSON.stringify({ nombre: 'Administrador fixture', rol: 'administrador', puede_administrar_catalogos_materiales: true, puede_consultar_despachos_materiales: true }));
+                localStorage.setItem('estiba_wms_office_identity', JSON.stringify({ nombre: 'Administrador fixture', rol: 'administrador', puede_administrar_catalogos_materiales: true, puede_consultar_despachos_materiales: true, modulos_acceso: ['materiales.resumen', 'materiales.catalogos'] }));
             });
             const units = [{ id: 'unidades', codigo: 'unidades', nombre: 'Unidades', alias: ['unidad', 'un'], version: 1, activa: true }, { id: 'cajas', codigo: 'cajas', nombre: 'Cajas', alias: ['caja'], version: 1, activa: true }];
             const season = { id: 'season', codigo: 'TEMP', nombre: 'Temporada', activa: true };
@@ -25,7 +25,8 @@ test('catálogo de unidades y equivalencias por ítem funcionan en escritorio y 
             await context.route('http://localhost/**', async (route) => {
                 const request = route.request(); const path = new URL(request.url()).pathname;
                 if (path === '/oficina/materiales/catalogos') return route.fulfill({ body: html, contentType: 'text/html' });
-                if (path.startsWith('/build/')) return route.fulfill({ body: readFileSync(resolve(root, `public${path}`)), contentType: path.endsWith('.css') ? 'text/css' : 'application/octet-stream' });
+                if (path.startsWith('/build/')) return route.fulfill({ body: readFileSync(resolve(root, `public${path}`)), contentType: path.endsWith('.js') ? 'text/javascript' : path.endsWith('.css') ? 'text/css' : 'application/octet-stream' });
+                if (path === '/api/oficina/contexto') return route.fulfill({ json: { data: { temporada: season, planta: 'Planta', avisos_cierre: [], avisos_materiales: [] } } });
                 if (path === '/api/consultas/resumen') return route.fulfill({ json: { pendientes: { prefrio: [], despacho: [], cargas: [], excepciones: [], inspeccion_sag: [], reordenamiento_rolling: [], reposicion_materiales: [], fuera_de_encuadre: [], avisos_materiales: [] } } });
                 if (path === '/api/materiales/reposicion/resumen') return route.fulfill({ json: { data: { quiebre: 0, bajo_minimo: 0 } } });
                 if (path.endsWith('/unidades/historial')) return route.fulfill({ json: { data: [] } });

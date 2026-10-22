@@ -238,6 +238,10 @@ class ServicioRecepcionMaterial
                 ]);
 
                 foreach ($datos['detalles'] as $linea) {
+                    $anterior = isset($linea['detalle_origen_id']) ? $recepcion->detalles->firstWhere('id', $linea['detalle_origen_id']) : null;
+                    if (isset($linea['detalle_origen_id']) && ! $anterior) {
+                        throw new DomainException('El detalle de origen no pertenece a esta recepción.');
+                    }
                     $this->crearDetalle(
                         $recepcion,
                         $linea,
@@ -245,6 +249,7 @@ class ServicioRecepcionMaterial
                         $proveedor,
                         $vinculoProveedor,
                         $temporada->id,
+                        $anterior,
                     );
                 }
 
@@ -1177,6 +1182,7 @@ class ServicioRecepcionMaterial
         ProveedorMaterial $proveedor,
         ClienteProveedorMaterial $vinculoProveedor,
         string $temporadaId,
+        ?DetalleRecepcionMaterial $anterior = null,
     ): void {
         $item = $this->validarItem(
             $linea['item_material_id'],
@@ -1186,7 +1192,7 @@ class ServicioRecepcionMaterial
             $temporadaId,
             bloquear: true,
         );
-        [$linea, $conversion] = app(ServicioUnidadesMateriales::class)->convertirLinea($item, $linea);
+        [$linea, $conversion] = app(ServicioUnidadesMateriales::class)->convertirLinea($item, $linea, $anterior);
         $cantidadDocumental = $this->cantidad($linea['cantidad_documental']);
         $cantidadContada = $this->cantidad($linea['cantidad_contada']);
         $cantidadAceptada = $this->cantidad($linea['cantidad_aceptada'], permitirCero: true);
@@ -1215,7 +1221,7 @@ class ServicioRecepcionMaterial
         ]);
         $sumaBultos = 0.0;
 
-        foreach ($linea['bultos'] as $datosBulto) {
+        foreach ($linea['bultos'] as $indice => $datosBulto) {
             $cantidad = $this->cantidad($datosBulto['cantidad']);
             $bloqueado = (bool) ($datosBulto['bloqueado'] ?? false);
             $motivoBloqueo = $this->textoOpcional($datosBulto['motivo_bloqueo'] ?? null);
@@ -1226,7 +1232,7 @@ class ServicioRecepcionMaterial
                 );
             }
 
-            BultoRecepcionMaterial::create([
+            $bulto = BultoRecepcionMaterial::create([
                 'detalle_recepcion_material_id' => $detalle->id,
                 'cantidad' => $cantidad,
                 'lote_proveedor' => $this->textoOpcional($datosBulto['lote_proveedor'] ?? null),
@@ -1235,7 +1241,14 @@ class ServicioRecepcionMaterial
                 'bloqueado' => $bloqueado,
                 'motivo_bloqueo' => $motivoBloqueo,
             ]);
+            if ($conversion) {
+                $conversion['bultos_entrada_por_id'][$bulto->id] = $conversion['bultos_entrada'][$indice];
+            }
             $sumaBultos = round($sumaBultos + $cantidad, 3);
+        }
+
+        if ($conversion) {
+            $detalle->update(['conversion_unidad' => $conversion]);
         }
 
         if (abs($sumaBultos - $cantidadAceptada) > 0.0001) {

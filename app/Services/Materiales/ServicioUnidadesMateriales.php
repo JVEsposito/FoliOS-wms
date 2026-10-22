@@ -4,6 +4,7 @@ namespace App\Services\Materiales;
 
 use App\Exceptions\ConflictoOperacion;
 use App\Models\ConversionUnidadMaterial;
+use App\Models\DetalleRecepcionMaterial;
 use App\Models\EventoUnidadMaterial;
 use App\Models\ItemMaterial;
 use App\Models\UnidadMaterial;
@@ -123,33 +124,58 @@ class ServicioUnidadesMateriales
     }
 
     /** Convierte una línea completa antes de generar stock. El respaldo queda congelado en el detalle. */
-    public function convertirLinea(ItemMaterial $item, array $linea): array
+    public function convertirLinea(ItemMaterial $item, array $linea, ?DetalleRecepcionMaterial $anterior = null): array
     {
         if (! filled($linea['unidad_ingreso'] ?? null)) {
             return [$linea, null];
         }
-        $clave = UnidadesMateriales::clave($linea['unidad_ingreso']);
-        $unidad = UnidadMaterial::whereIn('id', DB::table('alias_unidades_materiales')->where('clave', $clave)->select('unidad_material_id'))->lockForUpdate()->first();
-        if (! $unidad || ! $unidad->activa || $unidad->id === $item->unidad_material_id) {
-            throw new DomainException('La unidad alternativa no está habilitada. Para la unidad base deje la conversión vacía.');
+        $snapshot = $this->conversionConservada($item, $linea, $anterior);
+        if (! $snapshot) {
+            $clave = UnidadesMateriales::clave($linea['unidad_ingreso']);
+            $unidad = UnidadMaterial::whereIn('id', DB::table('alias_unidades_materiales')->where('clave', $clave)->select('unidad_material_id'))->lockForUpdate()->first();
+            if (! $unidad || ! $unidad->activa || $unidad->id === $item->unidad_material_id) {
+                throw new DomainException('La unidad alternativa no está habilitada. Para la unidad base deje la conversión vacía.');
+            }
+            $conversion = ConversionUnidadMaterial::where('item_material_id', $item->id)->where('unidad_origen_id', $unidad->id)->where('activa', true)->lockForUpdate()->first();
+            if (! $conversion || $conversion->unidad_base_id !== $item->unidad_material_id) {
+                throw new DomainException('El ítem no tiene una equivalencia activa para esa unidad.');
+            }
+            $this->version($conversion->version, (int) ($linea['conversion_version'] ?? -1));
+            $snapshot = ['unidad_origen' => $unidad->codigo, 'unidad_base' => $item->unidad_medida, 'factor' => $conversion->factor, 'version' => $conversion->version, 'conversion_id' => $conversion->id];
         }
-        $conversion = ConversionUnidadMaterial::where('item_material_id', $item->id)->where('unidad_origen_id', $unidad->id)->where('activa', true)->lockForUpdate()->first();
-        if (! $conversion || $conversion->unidad_base_id !== $item->unidad_material_id) {
-            throw new DomainException('El ítem no tiene una equivalencia activa para esa unidad.');
-        }
-        $this->version($conversion->version, (int) ($linea['conversion_version'] ?? -1));
         $campos = ['cantidad_documental', 'cantidad_contada', 'cantidad_aceptada', 'cantidad_rechazada'];
         $entrada = array_intersect_key($linea, array_flip($campos));
         $bultos = array_column($linea['bultos'], 'cantidad');
         foreach ($campos as $campo) {
-            $linea[$campo] = UnidadesMateriales::convertir($linea[$campo] ?? 0, $conversion->factor);
+            $linea[$campo] = UnidadesMateriales::convertir($linea[$campo] ?? 0, $snapshot['factor']);
         }
         foreach ($linea['bultos'] as &$bulto) {
-            $bulto['cantidad'] = UnidadesMateriales::convertir($bulto['cantidad'], $conversion->factor);
+            $bulto['cantidad'] = UnidadesMateriales::convertir($bulto['cantidad'], $snapshot['factor']);
         }
         unset($bulto);
 
-        return [$linea, ['unidad_origen' => $unidad->codigo, 'unidad_base' => $item->unidad_medida, 'factor' => $conversion->factor, 'version' => $conversion->version, 'conversion_id' => $conversion->id, 'entrada' => $entrada, 'bultos_entrada' => $bultos]];
+        unset($snapshot['bultos_entrada_por_id']);
+
+        return [$linea, [...$snapshot, 'entrada' => $entrada, 'bultos_entrada' => $bultos]];
+    }
+
+    /** Solo reutilizar un factor histórico si las cantidades no cambiaron y el detalle pertenece a esta recepción. */
+    private function conversionConservada(ItemMaterial $item, array $linea, ?DetalleRecepcionMaterial $anterior): ?array
+    {
+        $snapshot = $anterior?->conversion_unidad;
+        if (! $snapshot || $anterior->item_material_id !== $item->id
+            || (int) $snapshot['version'] !== (int) ($linea['conversion_version'] ?? -1)
+            || ! $this->equivalentes($snapshot['unidad_origen'], $linea['unidad_ingreso'])) {
+            return null;
+        }
+        foreach (['cantidad_documental', 'cantidad_contada', 'cantidad_aceptada', 'cantidad_rechazada'] as $campo) {
+            if (UnidadesMateriales::convertir($linea[$campo] ?? 0, '1') !== UnidadesMateriales::convertir($snapshot['entrada'][$campo] ?? 0, '1')) {
+                return null;
+            }
+        }
+        $cantidades = fn (array $valores): array => collect($valores)->map(fn ($valor) => UnidadesMateriales::convertir($valor, '1'))->sort()->values()->all();
+
+        return $cantidades(array_column($linea['bultos'], 'cantidad')) === $cantidades($snapshot['bultos_entrada']) ? $snapshot : null;
     }
 
     private function bloquearCatalogo(): void

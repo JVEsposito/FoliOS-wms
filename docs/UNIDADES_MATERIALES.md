@@ -36,8 +36,11 @@ Las conversiones usan aritmética decimal exacta (`brick/math`, ya presente). Si
 no cabe en tres decimales o supera el máximo del inventario, la operación se rechaza sin
 redondear ni dejar un ingreso parcial. Si el factor cambia después de cargar el formulario,
 se exige actualizar y revisar las cantidades. Un borrador ya convertido conserva su factor
-al confirmarse; para editarlo con un factor nuevo se debe volver a seleccionar la unidad
-de ingreso y revisar las cantidades.
+al confirmarse y al corregir antecedentes sin cambiar cantidades. El servidor toma ese
+respaldo del detalle original de la misma recepción; no acepta factores históricos del
+cliente. Si se cambian cantidades, exige la equivalencia vigente. La opción «Usar
+equivalencia vigente» permite aplicarla explícitamente y revisar las cantidades. Cada
+bulto conserva su cantidad de ingreso por identificador, sin depender del orden del listado.
 
 ## Despliegue y comprobaciones
 

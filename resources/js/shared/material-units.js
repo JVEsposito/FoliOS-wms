@@ -53,13 +53,15 @@ export function createMaterialUnits({ api, getItems, getToken, authorized, escap
     async function save(path, data, callback) {
         if (!authorized() || busy) return;
         busy = true; const n = generation; const token = getToken();
+        const controls = [...form.elements, ...conversionForm.elements, $('newMaterialUnit')];
+        controls.forEach((control) => { control.disabled = true; });
         $('materialUnitsStatus').textContent = 'Guardando…';
         try {
             await api(path, { method: data.id ? 'PUT' : 'POST', body: JSON.stringify(data) });
             if (!valid(n, token)) return;
             callback(); $('materialUnitsStatus').textContent = 'Guardado correctamente.';
         } catch (error) { if (valid(n, token)) $('materialUnitsStatus').textContent = error.message; }
-        finally { busy = false; if (valid(n, token)) await load(); }
+        finally { busy = false; controls.forEach((control) => { control.disabled = false; }); if (valid(n, token)) await load(); }
     }
     form.addEventListener('submit', (event) => {
         event.preventDefault(); const data = Object.fromEntries(new FormData(form));
@@ -83,6 +85,7 @@ export function createMaterialUnits({ api, getItems, getToken, authorized, escap
     document.addEventListener('estiba:office-panel-change', (event) => { if (event.detail?.group === 'materials-catalog' && event.detail.panel === 'units') void load(); });
     window.addEventListener('estiba:office-session', () => {
         generation++; units = []; conversions = []; reset(); conversionForm.reset();
+        baseSelect.replaceChildren();
         for (const id of ['materialUnitsList', 'materialConversionsList', 'materialUnitsHistory', 'materialUnitsStatus', 'materialConversionItem', 'materialConversionUnit']) $(id).replaceChildren();
     });
     return { renderBase };

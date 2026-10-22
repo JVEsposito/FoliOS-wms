@@ -470,10 +470,11 @@ function packageSizeFromExisting(packages) {
 
 function receptionLineState(detail = null) {
     const snapshot = detail?.conversion_unidad;
-    const packages = (detail?.bultos || []).map((p, i) => ({ ...p, cantidad: snapshot?.bultos_entrada?.[i] ?? p.cantidad }));
+    const packages = (detail?.bultos || []).map((p, i) => ({ ...p, cantidad: snapshot?.bultos_entrada_por_id?.[p.id] ?? snapshot?.bultos_entrada?.[i] ?? p.cantidad }));
     const first = packages[0] || {};
     return {
         key: receptionUuid(),
+        originDetailId: detail?.id || null,
         itemId: detail?.item?.id || '',
         itemSnapshot: detail?.item ? { ...detail.item, unidad_medida: detail.unidad_medida } : null,
         inputUnit: snapshot?.unidad_origen || '',
@@ -524,7 +525,7 @@ function receptionInputUnit(line, item, readonly) {
     const choices = new Map((item?.conversiones_unidad || []).map((c) => [c.unidad_origen, c]));
     if (line.inputUnit && !choices.has(line.inputUnit)) choices.set(line.inputUnit, line.conversionSnapshot);
     const factor = receptionConversion(line)?.factor;
-    return `<label><span>Unidad de ingreso</span><select name="unidad_ingreso"${readonly ? ' disabled' : ''}><option value="">${receptionEscape(item?.unidad_medida || 'Unidad base')}</option>${[...choices.keys()].map((u) => `<option value="${receptionEscape(u)}"${u === line.inputUnit ? ' selected' : ''}>${receptionEscape(u)}</option>`).join('')}</select></label><p class="materials-help wide material-reception-conversion-hint">${line.inputUnit && factor ? `1 ${receptionEscape(line.inputUnit)} = ${receptionEscape(factor)} ${receptionEscape(item?.unidad_medida || line.conversionSnapshot?.unidad_base)}. Todas las cantidades y el tamaño de bulto se ingresan en ${receptionEscape(line.inputUnit)}.` : 'Las cantidades se ingresan en la unidad base del ítem.'}</p>`;
+    return `<label><span>Unidad de ingreso</span><select name="unidad_ingreso"${readonly ? ' disabled' : ''}><option value="">${receptionEscape(item?.unidad_medida || 'Unidad base')}</option>${[...choices.keys()].map((u) => `<option value="${receptionEscape(u)}"${u === line.inputUnit ? ' selected' : ''}>${receptionEscape(u)}</option>`).join('')}</select></label>${!readonly && line.conversionSnapshot ? `<button type="button" data-refresh-line-conversion="${line.key}">Usar equivalencia vigente</button>` : ''}<p class="materials-help wide material-reception-conversion-hint">${line.inputUnit && factor ? `1 ${receptionEscape(line.inputUnit)} = ${receptionEscape(factor)} ${receptionEscape(item?.unidad_medida || line.conversionSnapshot?.unidad_base)}. Todas las cantidades y el tamaño de bulto se ingresan en ${receptionEscape(line.inputUnit)}.` : 'Las cantidades se ingresan en la unidad base del ítem.'}</p>`;
 }
 
 function renderReceptionLines() {
@@ -679,6 +680,7 @@ function receptionPayload() {
         observacion: form.get('observacion') || null,
         detalles: receptionState.lines.map((line) => ({
             item_material_id: line.itemId,
+            ...(line.originDetailId ? { detalle_origen_id: line.originDetailId } : {}),
             ...(line.inputUnit ? { unidad_ingreso: line.inputUnit, conversion_version: receptionConversion(line)?.version || 0 } : {}),
             cantidad_documental: Number(line.documentary),
             cantidad_contada: Number(line.counted),
@@ -834,6 +836,13 @@ if (receptionElements.workspace) {
         renderReceptionLines();
     });
     receptionElements.lines.addEventListener('click', (event) => {
+        const refresh = event.target.closest('[data-refresh-line-conversion]');
+        if (refresh && receptionState.mode !== 'view') {
+            const line = receptionState.lines.find((candidate) => candidate.key === refresh.dataset.refreshLineConversion);
+            line.conversionSnapshot = null;
+            renderReceptionLines();
+            return;
+        }
         const button = event.target.closest('[data-remove-line]');
         if (button) {
             receptionState.lines = receptionState.lines.filter((line) => line.key !== button.dataset.removeLine);

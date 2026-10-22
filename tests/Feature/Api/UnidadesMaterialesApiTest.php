@@ -106,6 +106,41 @@ class UnidadesMaterialesApiTest extends TestCase
         $this->assertSame('unidades', $this->item->fresh()->unidad_medida);
     }
 
+    public function test_editar_antecedentes_conserva_el_factor_historico_pero_cambiar_cantidades_exige_el_vigente(): void
+    {
+        $this->putJson($this->rutaConversion(), $this->equivalencia())->assertOk();
+        $datos = $this->recepcion(['bultos' => [['cantidad' => '1.5'], ['cantidad' => '0.5']]]);
+        $creada = $this->postJson('/api/materiales/recepciones', $datos)->assertCreated()->json('data');
+        $detalle = $creada['detalles'][0];
+        foreach ($detalle['bultos'] as $bulto) {
+            $entrada = $detalle['conversion_unidad']['bultos_entrada_por_id'][$bulto['id']];
+            $this->assertEquals((float) $bulto['cantidad'], (float) $entrada * 100);
+        }
+        $this->putJson($this->rutaConversion(), $this->equivalencia('120', 1))->assertOk();
+        $datos['version_conocida'] = 1;
+        $datos['detalles'][0]['detalle_origen_id'] = $detalle['id'];
+        $datos['detalles'][0]['observacion'] = 'Antecedente aclarado sin cambiar cantidades';
+        $datos['operacion_id'] = (string) Str::uuid();
+        $actualizada = $this->putJson('/api/materiales/recepciones/'.$creada['id'], $datos)->assertOk()
+            ->assertJsonPath('data.detalles.0.cantidad_aceptada', '200.000')
+            ->assertJsonPath('data.detalles.0.conversion_unidad.version', 1)->json('data');
+        $datos['operacion_id'] = (string) Str::uuid();
+        $datos['version_conocida'] = 2;
+        $datos['detalles'][0]['detalle_origen_id'] = (string) Str::uuid();
+        $this->putJson('/api/materiales/recepciones/'.$creada['id'], $datos)->assertUnprocessable();
+        $datos['detalles'][0]['detalle_origen_id'] = $actualizada['detalles'][0]['id'];
+        foreach (['cantidad_documental', 'cantidad_contada', 'cantidad_aceptada'] as $campo) {
+            $datos['detalles'][0][$campo] = 3;
+        }
+        $datos['detalles'][0]['bultos'] = [['cantidad' => 3]];
+        $this->putJson('/api/materiales/recepciones/'.$creada['id'], $datos)->assertConflict();
+        $datos['detalles'][0]['conversion_version'] = 2;
+        $this->putJson('/api/materiales/recepciones/'.$creada['id'], $datos)->assertOk()
+            ->assertJsonPath('data.detalles.0.cantidad_aceptada', '360.000')
+            ->assertJsonPath('data.detalles.0.conversion_unidad.version', 2);
+        $this->assertDatabaseCount('folios_materiales', 0);
+    }
+
     public function test_rechaza_factores_vencidos_inactivos_y_conversiones_que_exigen_redondear(): void
     {
         $this->putJson($this->rutaConversion(), $this->equivalencia('0.5'))->assertOk();
