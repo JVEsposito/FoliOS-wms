@@ -152,7 +152,8 @@ final class CalculadoraPrefactura
     private function puntual(object $fila, array $medidas): void
     {
         $fecha = substr((string) $fila->fecha_operacional, 0, 10);
-        foreach ($this->servicios->paraHecho($fila->fuente, $fecha, conceptoDeclarado: (json_decode((string) $fila->datos, true) ?: [])['concepto_declarado'] ?? null) as $servicio) {
+        $datos = json_decode((string) $fila->datos, true) ?: [];
+        foreach ($this->servicios->paraHecho($fila->fuente, $fecha, conceptoDeclarado: $datos['concepto_declarado'] ?? null, datos: $datos) as $servicio) {
             $precios = $this->aplicables($fila->cliente_id, $servicio, $fecha);
             if ($precios === []) {
                 $this->sinPrecio[$fila->cliente_id][$servicio][$fila->id] = true;
@@ -192,7 +193,7 @@ final class CalculadoraPrefactura
         $ingresoCivil = strtotime($this->fechaLocal($ingreso).' UTC');
         $tramos = $this->tramos($datos['tramos'] ?? [], $medidas, $ingreso);
         $unTramo = count($tramos) === 1 ? $tramos[0][2] : null;
-        $folio = (string) strtok((string) $fila->origen_id, '#');
+        $folio = $fila->fuente.'|'.(string) strtok((string) $fila->origen_id, '#');
         $cliente = (string) $fila->cliente_id;
         $servicio = (string) $fila->fuente;
         $cobrados = $this->diasCobrados[$folio] ?? 0;
@@ -220,7 +221,15 @@ final class CalculadoraPrefactura
             // Diferencia de fechas civiles, sin dividir segundos por 24 h (cambio de hora).
             $diaEstadia = (int) ((strtotime($dia.' UTC') - $ingresoCivil) / 86400) + 1;
             $delDia = $unTramo ?? $this->medidasAl($tramos, max($inicioDia, $ingreso));
-            foreach ($this->servicios->paraHecho($servicio, $dia, $diaEstadia) as $concepto) {
+            foreach ($datos['picos_diarios'][$dia] ?? [] as $medida => $pico) {
+                if (BigDecimal::of((string) $pico)->isGreaterThan((string) ($delDia[$medida] ?? '0'))) {
+                    $delDia[$medida] = $pico;
+                }
+            }
+            if (array_filter($delDia, fn ($valor): bool => is_numeric($valor) && $valor != 0) === []) {
+                continue;
+            }
+            foreach ($this->servicios->paraHecho($servicio, $dia, $diaEstadia, $datos['concepto_declarado'] ?? null, $datos) as $concepto) {
                 $precios = $this->aplicables($cliente, $concepto, $dia);
                 if ($precios === []) {
                     $this->sinPrecio[$cliente][$concepto][$fila->id] = true;

@@ -8,6 +8,29 @@ use Illuminate\Support\Str;
 /** Evidencias operativas mínimas; Finanzas nunca invoca servicios que modifiquen la operación. */
 trait PreparaServiciosTransversales
 {
+    private function materialServicio(string $cliente, string $actual = '0'): array
+    {
+        $folio = $this->folio('MAT-BODEGA', $cliente, tipoBulto: 'material');
+        $cm = (string) Str::uuid();
+        $item = (string) Str::uuid();
+        $this->sinLlaves(function () use ($cliente, $actual, $folio, $cm, $item): void {
+            DB::table('folios')->where('id', $folio)->update(['created_at' => $this->utc('2026-11-01 09:00')]);
+            DB::table('clientes_materiales')->insert(['id' => $cm, 'temporada_material_id' => (string) Str::uuid(), 'cliente_id' => $cliente, 'codigo' => 'MAT-SERVICIO', 'nombre' => 'Cliente materiales', 'created_at' => now(), 'updated_at' => now()]);
+            DB::table('items_materiales')->insert(['id' => $item, 'cliente_material_id' => $cm, 'codigo' => 'CAJA-SERVICIO', 'nombre' => 'Caja', 'unidad_medida' => 'caja', 'creado_por_user_id' => $this->usuarioOperacion(), 'actualizado_por_user_id' => $this->usuarioOperacion(), 'created_at' => now(), 'updated_at' => now()]);
+            DB::table('folios_materiales')->insert(['folio_id' => $folio, 'item_material_id' => $item, 'cantidad_inicial' => 120, 'cantidad_actual' => $actual, 'unidad_medida' => 'caja', 'created_at' => now(), 'updated_at' => now()]);
+        });
+
+        return compact('folio', 'item');
+    }
+
+    private function kardexServicio(array $material, string $at, string $antes, string $despues): string
+    {
+        $id = (string) Str::uuid();
+        DB::table('movimientos_inventario_materiales')->insert(['id' => $id, 'folio_id' => $material['folio'], 'item_material_id' => $material['item'], 'tipo' => 'retiro', 'cantidad' => abs((float) $despues - (float) $antes), 'cantidad_anterior' => $antes, 'cantidad_resultante' => $despues, 'user_id' => $this->usuarioOperacion(), 'ocurrido_at' => $this->utc($at), 'created_at' => now(), 'updated_at' => now()]);
+
+        return $id;
+    }
+
     private function loteServicio(string $cliente, string $numero): string
     {
         $id = (string) Str::uuid();

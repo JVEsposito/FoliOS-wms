@@ -4,6 +4,7 @@ namespace App\Finanzas\Tarifario;
 
 use App\Finanzas\Captura\CatalogoFuentes;
 use App\Finanzas\Captura\FuenteHechos;
+use App\Finanzas\Captura\Fuentes\AcuerdosPeriodo;
 use App\Finanzas\Captura\Fuentes\CargosDeclarados;
 use App\Finanzas\Models\ConceptoServicio;
 use App\Finanzas\Valorizacion\ReglaValorizacion;
@@ -54,7 +55,7 @@ final class CatalogoServicios
         if ($this->catalogo === null) {
             $this->catalogo = [];
             foreach ($this->fuentes->todas() as $fuente) {
-                if (in_array($fuente->clave(), [CargosDeclarados::CLAVE, ReglaValorizacion::FUENTE], true)) {
+                if (in_array($fuente->clave(), [CargosDeclarados::CLAVE, AcuerdosPeriodo::CLAVE, ReglaValorizacion::FUENTE], true)) {
                     continue;
                 }
                 $this->catalogo[$fuente->clave()] = $this->describir($fuente, [
@@ -73,7 +74,7 @@ final class CatalogoServicios
                         'vigente_hasta' => $servicio->vigente_hasta?->toDateString(),
                         'dia_desde' => $servicio->dia_desde, 'dia_hasta' => $servicio->dia_hasta,
                         'unidad_libre' => $servicio->unidad_libre, 'proceso_referencia' => $servicio->proceso_referencia,
-                        'area' => $servicio->area, 'regla' => $servicio->regla,
+                        'area' => $servicio->area, 'regla' => $servicio->regla, 'filtros' => $servicio->filtros,
                     ]);
                 }
             }
@@ -88,8 +89,10 @@ final class CatalogoServicios
             'area' => $this->fuentes->contexto($fuente->clave())['area'], ...$datos, 'fuente' => $fuente->clave(), 'fuente_nombre' => $fuente->nombre(),
             'por_dia' => $fuente->intervalo(),
             'unidades' => array_map(fn (string $unidad): array => [
-                'clave' => $unidad, 'nombre' => in_array($fuente->clave(), [CargosDeclarados::CLAVE, ReglaValorizacion::FUENTE], true) ? 'por '.($datos['unidad_libre'] ?? 'unidad') : $this->etiquetaUnidad($fuente, $unidad),
-            ], array_keys(array_filter($fuente->medidas(), fn (array $medida): bool => ! isset($medida['dimension_unidad'])))),
+                'clave' => $unidad, 'nombre' => in_array($fuente->clave(), [CargosDeclarados::CLAVE, AcuerdosPeriodo::CLAVE, ReglaValorizacion::FUENTE], true)
+                    ? 'por '.($datos['unidad_libre'] ?? 'unidad').($fuente->intervalo() ? ' y día' : '')
+                    : (isset($fuente->medidas()[$unidad]['dimension_unidad']) ? 'por '.$datos['filtros'][$fuente->medidas()[$unidad]['dimension_unidad']].($fuente->intervalo() ? ' y día' : '') : $this->etiquetaUnidad($fuente, $unidad)),
+            ], array_keys(array_filter($fuente->medidas(), fn (array $medida): bool => ! isset($medida['dimension_unidad']) || isset($datos['filtros'][$medida['dimension_unidad']])))),
         ];
     }
 
@@ -125,14 +128,14 @@ final class CatalogoServicios
      *
      * @return list<string>
      */
-    public function paraHecho(string $fuente, string $fecha, int $diaEstadia = 1, ?string $conceptoDeclarado = null): array
+    public function paraHecho(string $fuente, string $fecha, int $diaEstadia = 1, ?string $conceptoDeclarado = null, array $datos = []): array
     {
-        if (in_array($fuente, [CargosDeclarados::CLAVE, ReglaValorizacion::FUENTE], true)) {
+        if (in_array($fuente, [CargosDeclarados::CLAVE, AcuerdosPeriodo::CLAVE, ReglaValorizacion::FUENTE], true)) {
             $concepto = $conceptoDeclarado === null ? null : $this->buscar($conceptoDeclarado);
 
             // La vigencia se verifica al aprobar el acuerdo. Finalizar el catálogo no
             // revoca compromisos ya aprobados: eso requiere anular el cargo explícitamente.
-            return $concepto !== null && $concepto['fuente'] === $fuente ? [$conceptoDeclarado] : [];
+            return $concepto !== null && $concepto['fuente'] === $fuente && ($fuente !== AcuerdosPeriodo::CLAVE || ($diaEstadia >= $concepto['dia_desde'] && ($concepto['dia_hasta'] === null || $diaEstadia <= $concepto['dia_hasta']))) ? [$conceptoDeclarado] : [];
         }
         $adicionales = [];
         $reemplaza = false;
@@ -143,6 +146,11 @@ final class CatalogoServicios
                 || $diaEstadia < $servicio['dia_desde']
                 || ($servicio['dia_hasta'] !== null && $diaEstadia > $servicio['dia_hasta'])) {
                 continue;
+            }
+            foreach ($servicio['filtros'] ?? [] as $campo => $valor) {
+                if (! is_scalar($datos[$campo] ?? null) || (string) $datos[$campo] !== $valor) {
+                    continue 2;
+                }
             }
             $adicionales[] = $servicio['clave'];
             $reemplaza = $reemplaza || $servicio['aplicacion'] === ConceptoServicio::REEMPLAZA_BASE;
@@ -155,8 +163,10 @@ final class CatalogoServicios
     public function nombreUnidad(string $servicio, string $unidad): string
     {
         $concepto = $this->buscar($servicio);
-        if (in_array($concepto['fuente'] ?? null, [CargosDeclarados::CLAVE, ReglaValorizacion::FUENTE], true)) {
-            return 'por '.($concepto['unidad_libre'] ?? 'unidad');
+        foreach ($concepto['unidades'] ?? [] as $definicion) {
+            if ($definicion['clave'] === $unidad) {
+                return $definicion['nombre'];
+            }
         }
         $claveFuente = $concepto['fuente'] ?? $servicio;
         $fuente = $this->fuentes->todas()[$claveFuente] ?? null;

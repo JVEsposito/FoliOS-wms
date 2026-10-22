@@ -90,6 +90,7 @@ Route::middleware('auth:sanctum')->prefix('finanzas')->group(function (): void {
     Route::get('/cargos/{cargo}/historial', [CargosFinanzasController::class, 'historial'])->middleware('can:consultar-finanzas');
     Route::post('/cargos/{cargo}/aprobar', [CargosFinanzasController::class, 'aprobar'])->middleware('can:gestionar-tarifas-finanzas');
     Route::post('/cargos/{cargo}/anular', [CargosFinanzasController::class, 'anular'])->middleware('can:gestionar-tarifas-finanzas');
+    Route::post('/cargos/{cargo}/finalizar-periodo', [CargosFinanzasController::class, 'finalizarPeriodo'])->middleware('can:gestionar-tarifas-finanzas');
 
     Route::post('/servicios/simular', [ServiciosFinanzasController::class, 'simular'])
         ->middleware(['can:gestionar-tarifas-finanzas', 'throttle:12,1']);

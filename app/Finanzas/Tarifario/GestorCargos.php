@@ -3,6 +3,7 @@
 namespace App\Finanzas\Tarifario;
 
 use App\Finanzas\Captura\CapturaEnCurso;
+use App\Finanzas\Captura\Fuentes\AcuerdosPeriodo;
 use App\Finanzas\Captura\Fuentes\CargosDeclarados;
 use App\Finanzas\Captura\ServicioCapturaHechos;
 use App\Finanzas\EsquemaFinanzas;
@@ -20,8 +21,17 @@ final class GestorCargos
     public function crear(array $datos, User $usuario): CargoAcordado
     {
         $servicio = $this->servicios->buscar($datos['servicio']);
-        if (($servicio['fuente'] ?? null) !== CargosDeclarados::CLAVE) {
+        if (! in_array($servicio['fuente'] ?? null, [CargosDeclarados::CLAVE, AcuerdosPeriodo::CLAVE], true)) {
             throw ValidationException::withMessages(['servicio' => 'Cree o elija un concepto en modalidad acordada/manual. Así su cantidad no se vuelve a cobrar por captura automática.']);
+        }
+        if (($servicio['fuente'] === AcuerdosPeriodo::CLAVE) !== ! empty($datos['fecha_hasta'])) {
+            throw ValidationException::withMessages(['fecha_hasta' => 'Los servicios por período requieren fecha de término; los cargos puntuales usan una sola fecha.']);
+        }
+        if (($datos['fecha_hasta'] ?? $datos['fecha']) < $datos['fecha'] || ($servicio['vigente_hasta'] !== null && ($datos['fecha_hasta'] ?? $datos['fecha']) > $servicio['vigente_hasta'])) {
+            throw ValidationException::withMessages(['fecha_hasta' => 'El período debe comenzar antes de terminar y quedar dentro de la vigencia del concepto.']);
+        }
+        if (empty($datos['fecha_hasta'])) {
+            unset($datos['fecha_hasta']);
         }
         if ($datos['fecha'] < $servicio['vigente_desde'] || ($servicio['vigente_hasta'] !== null && $datos['fecha'] > $servicio['vigente_hasta'])) {
             throw ValidationException::withMessages(['fecha' => 'La fecha del cargo debe estar dentro de la vigencia del concepto.']);
@@ -75,7 +85,7 @@ final class GestorCargos
                 $this->servicios->recargar();
                 $concepto = $this->servicios->buscar($cargo->servicio);
                 $fecha = $cargo->fecha->toDateString();
-                if ($fecha < $concepto['vigente_desde'] || ($concepto['vigente_hasta'] !== null && $fecha > $concepto['vigente_hasta'])) {
+                if ($fecha < $concepto['vigente_desde'] || ($concepto['vigente_hasta'] !== null && ($cargo->fecha_hasta?->toDateString() ?? $fecha) > $concepto['vigente_hasta'])) {
                     throw ValidationException::withMessages(['cargo' => 'El concepto ya no cubre la fecha del borrador. Cree otro cargo con el concepto vigente.']);
                 }
                 $cargo->update(['aprobado_at' => now()]);
@@ -104,10 +114,28 @@ final class GestorCargos
         });
     }
 
+    public function finalizarPeriodo(CargoAcordado $cargo, string $hasta, string $motivo, User $usuario): CargoAcordado
+    {
+        return $this->esquema->transaccion(function () use ($cargo, $hasta, $motivo, $usuario): CargoAcordado {
+            $cargo = CargoAcordado::query()->lockForUpdate()->findOrFail($cargo->id);
+            if ($cargo->anulado_at !== null || $cargo->aprobado_at === null || $cargo->fecha_hasta === null || $hasta < $cargo->fecha->toDateString() || $hasta > $cargo->fecha_hasta->toDateString()) {
+                throw ValidationException::withMessages(['fecha_hasta' => 'Elija un término anticipado válido de un acuerdo por período aprobado.']);
+            }
+            if ($hasta !== $cargo->fecha_hasta->toDateString()) {
+                $anterior = $cargo->fecha_hasta->toDateString();
+                $cargo->update(['fecha_hasta' => $hasta]);
+                $this->evento($cargo, 'periodo_finalizado', ['antes' => $anterior, 'despues' => $hasta, 'motivo' => $motivo], $usuario);
+                $this->capturar($usuario);
+            }
+
+            return $cargo;
+        });
+    }
+
     private function capturar(User $usuario): void
     {
         try {
-            $lectura = $this->captura->capturar(Lectura::ORIGEN_MANUAL, $usuario, [CargosDeclarados::CLAVE]);
+            $lectura = $this->captura->capturar(Lectura::ORIGEN_MANUAL, $usuario, [CargosDeclarados::CLAVE, AcuerdosPeriodo::CLAVE]);
         } catch (CapturaEnCurso) {
             throw ValidationException::withMessages(['cargo' => 'Hay una captura en curso. El cambio no se guardó; reintente en unos segundos.']);
         }

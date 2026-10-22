@@ -21,7 +21,7 @@ class CargoAcordado extends Model
 
     protected function casts(): array
     {
-        return ['fecha' => 'date', 'cantidad' => 'decimal:6', 'contexto' => 'array', 'aprobado_at' => 'datetime', 'anulado_at' => 'datetime'];
+        return ['fecha' => 'date', 'fecha_hasta' => 'date', 'cantidad' => 'decimal:6', 'contexto' => 'array', 'aprobado_at' => 'datetime', 'anulado_at' => 'datetime'];
     }
 
     public function eventos(): HasMany

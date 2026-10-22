@@ -2,6 +2,8 @@
 
 namespace App\Finanzas\Captura;
 
+use App\Finanzas\Captura\Fuentes\AcuerdosPeriodo;
+use App\Finanzas\Captura\Fuentes\BodegajeMateriales;
 use App\Finanzas\Captura\Fuentes\CalculosConcepto;
 use App\Finanzas\Captura\Fuentes\CargosDeclarados;
 use App\Finanzas\Captura\Fuentes\Despacho;
@@ -25,6 +27,8 @@ final class CatalogoFuentes
         Repaletizaje::class,
         Despacho::class,
         CargosDeclarados::class,
+        AcuerdosPeriodo::class,
+        BodegajeMateriales::class,
         CalculosConcepto::class,
     ];
 

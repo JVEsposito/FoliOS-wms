@@ -1150,3 +1150,37 @@
     color: var(--muted);
     font-size: 12px;
 }
+
+#serviceRule > div,
+#serviceRule > fieldset,
+#serviceSourceFilters > div {
+    grid-column: 1 / -1;
+    min-width: 0;
+}
+
+[data-rule-terms],
+[data-rule-filters],
+[data-source-filter-rows] {
+    display: grid;
+    gap: 12px;
+    min-width: 0;
+}
+
+[data-rule-filter-row],
+[data-source-filter-row] {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    min-width: 0;
+}
+
+#serviceRule fieldset {
+    min-width: 0;
+}
+
+@media (max-width: 600px) {
+    [data-rule-filter-row],
+    [data-source-filter-row] {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}

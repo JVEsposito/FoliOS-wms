@@ -41,7 +41,7 @@ final class CargosDeclarados implements FuenteHechos
 
     public function cambios(ContextoCaptura $contexto, ?CarbonImmutable $desde): iterable
     {
-        foreach (CargoAcordado::query()->whereNotNull('aprobado_at')
+        foreach (CargoAcordado::query()->whereNotNull('aprobado_at')->whereNull('fecha_hasta')
             ->when($desde !== null, fn ($q) => $q->where('updated_at', '>=', $desde))->lazyById(500) as $cargo) {
             yield $this->hecho($cargo);
         }
@@ -50,7 +50,7 @@ final class CargosDeclarados implements FuenteHechos
     public function porIds(ContextoCaptura $contexto, array $origenIds): iterable
     {
         foreach (array_chunk($origenIds, 500) as $ids) {
-            foreach (CargoAcordado::query()->whereNotNull('aprobado_at')->whereIn('id', $ids)->get() as $cargo) {
+            foreach (CargoAcordado::query()->whereNotNull('aprobado_at')->whereNull('fecha_hasta')->whereIn('id', $ids)->get() as $cargo) {
                 yield $this->hecho($cargo);
             }
         }

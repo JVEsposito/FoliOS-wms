@@ -17,7 +17,9 @@ class CargosFinanzasController extends Controller
         $datos = $request->validate(['mes' => ['nullable', 'date_format:Y-m']]);
         $periodo = Periodo::mes($datos['mes'] ?? null);
 
-        return response()->json(['data' => CargoAcordado::query()->whereBetween('fecha', [$periodo->inicio->toDateString(), $periodo->fin->toDateString()])->orderByDesc('fecha')->orderByDesc('id')->paginate(50)]);
+        return response()->json(['data' => CargoAcordado::query()->where('fecha', '<=', $periodo->fin->toDateString())
+            ->where(fn ($q) => $q->where('fecha_hasta', '>=', $periodo->inicio->toDateString())->orWhere(fn ($p) => $p->whereNull('fecha_hasta')->where('fecha', '>=', $periodo->inicio->toDateString())))
+            ->orderByDesc('fecha')->orderByDesc('id')->paginate(50)]);
     }
 
     public function store(Request $request, GestorCargos $gestor): JsonResponse
@@ -25,6 +27,7 @@ class CargosFinanzasController extends Controller
         $datos = $request->validate([
             'operacion_id' => ['required', 'uuid'], 'servicio' => ['required', 'string', 'max:40'], 'cliente_id' => ['required', 'uuid'],
             'fecha' => ['required', 'date_format:Y-m-d'], 'cantidad' => ['required', 'regex:/^-?\d{1,18}(?:\.\d{1,6})?$/'],
+            'fecha_hasta' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:fecha'],
             'base_cobro' => ['required', Rule::in(['ejecucion', 'acuerdo', 'disponibilidad', 'compromiso'])],
             'estado_ejecucion' => ['required', Rule::in(['realizado', 'programado', 'no_realizado', 'cancelado', 'no_aplica'])],
             'respaldo' => ['required', 'string', 'min:5', 'max:500'],
@@ -48,5 +51,12 @@ class CargosFinanzasController extends Controller
     public function historial(CargoAcordado $cargo): JsonResponse
     {
         return response()->json(['data' => $cargo->eventos()->orderByDesc('id')->get()]);
+    }
+
+    public function finalizarPeriodo(Request $request, CargoAcordado $cargo, GestorCargos $gestor): JsonResponse
+    {
+        $datos = $request->validate(['fecha_hasta' => ['required', 'date_format:Y-m-d'], 'motivo' => ['required', 'string', 'min:5', 'max:500']]);
+
+        return response()->json(['data' => $gestor->finalizarPeriodo($cargo, $datos['fecha_hasta'], $datos['motivo'], $request->user())]);
     }
 }
