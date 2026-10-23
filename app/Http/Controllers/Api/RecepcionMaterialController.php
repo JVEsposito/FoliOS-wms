@@ -60,7 +60,7 @@ class RecepcionMaterialController extends Controller
         $clienteIds = $clientesMateriales->pluck('cliente_id')->unique()->values();
         $clienteIdsPorCatalogo = $clientesMateriales->pluck('cliente_id', 'id');
 
-        $items = ItemMaterial::query()->with('fotoPrincipal')
+        $items = ItemMaterial::query()->with(['fotoPrincipal', 'conversionesUnidad.origen'])
             ->whereIn('cliente_material_id', $clienteMaterialIds)
             ->where('activo', true)
             ->whereNotNull('categoria')
@@ -144,6 +144,9 @@ class RecepcionMaterialController extends Controller
                 'categoria_operacional' => $item->categoria_operacional->value,
                 'categoria_operacional_etiqueta' => $item->categoria_operacional->etiqueta(),
                 'unidad_medida' => $item->unidad_medida,
+                'conversiones_unidad' => $item->conversionesUnidad->filter(fn ($c) => $c->activa && $c->origen->activa && $c->unidad_base_id === $item->unidad_material_id)->map(fn ($c) => [
+                    'unidad_origen' => $c->origen->codigo, 'factor' => $c->factor, 'version' => $c->version,
+                ])->values(),
             ])->values(),
         ]);
     }

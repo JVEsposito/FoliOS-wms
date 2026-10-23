@@ -40,6 +40,8 @@ test('categorías y tipos alimentan los ítems, muestran errores y conservan val
                 if (path === '/oficina/materiales/catalogos') return route.fulfill({ body: html, contentType: 'text/html' });
                 if (path === '/api/oficina/contexto') return route.fulfill({ json: { data: { temporada: season, planta: 'Planta', avisos_cierre: [], avisos_materiales: [] } } });
                 if (path === '/api/materiales/reposicion/resumen') return route.fulfill({ json: { data: { quiebre: 0, bajo_minimo: 0 } } });
+                if (path === '/api/administracion/materiales/unidades') return route.fulfill({ json: { data: [{ id: 'unit-litros', codigo: 'litros', nombre: 'Litros', alias: ['litro'], activa: true, version: 1 }] } });
+                if (path === '/api/administracion/materiales/unidades/historial') return route.fulfill({ json: { data: [] } });
                 if (path === '/api/administracion/materiales/categorias') {
                     const data = request.postDataJSON();
                     if (categories.some(category => category.nombre === data.nombre)) return route.fulfill({ status: 422, json: { errors: { nombre: ['El nombre ya está registrado.'] } } });
@@ -92,7 +94,7 @@ test('categorías y tipos alimentan los ítems, muestran errores y conservan val
             await page.locator('#itemMaterialForm [name="nombre"]').fill('Pegamento transparente');
             await page.locator('#itemMaterialForm [name="categoria"]').selectOption('Adhesivos');
             await page.locator('#itemMaterialForm [name="tipo_item_material_id"]').selectOption('type-adh');
-            await page.locator('#itemMaterialForm [name="unidad_medida"]').fill('litros');
+            await page.locator('#itemMaterialForm [name="unidad_medida"]').selectOption('litros');
             assert.match(await page.locator('#materialItemTypeHelp').textContent(), /Insumo/);
             await page.locator('#itemMaterialForm button[type="submit"]').click();
             await page.waitForFunction(() => document.getElementById('itemsSummary').textContent === '1 registrados');
