@@ -74,7 +74,15 @@ test('despacho directo consulta y entrega solo desde la bodega elegida', async (
 test('dos saldos del mismo folio abren el despacho del saldo seleccionado', async () => {
     const { browser, page, calls, errors } = await fixture('inventario');
     try {
-        await page.locator('[data-direct-dispatch="saldo-norte"]').click();
+        const action = page.locator('[data-direct-dispatch="saldo-norte"]');
+        await action.waitFor({ state: 'attached' });
+        const visibility = await action.evaluate((node) => {
+            const chain = [];
+            for (let el = node; el; el = el.parentElement) chain.push({ tag: el.tagName, id: el.id, class: el.className, hidden: el.hidden, display: getComputedStyle(el).display, section: el.dataset.materialsSection });
+            return chain;
+        });
+        assert.ok(await action.isVisible(), JSON.stringify(visibility));
+        await action.click();
         assert.match(await page.locator('#materialDirectDispatchContext').textContent(), /Bodega Norte/);
         assert.equal(await page.locator('#materialDirectDispatchForm [name="almacen_origen_id"]').inputValue(), 'norte');
         await page.selectOption('#materialDirectDispatchForm [name="destino_material_id"]', 'packing');

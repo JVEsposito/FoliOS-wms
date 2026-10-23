@@ -148,6 +148,7 @@ test('expediente y diálogo reintentan la misma confirmación con el mismo ident
         await page.locator('#materialReceptionDetailActions [data-action="view"]').click();
         await page.locator('#materialReceptionPhotos [data-confirm]').click();
         await page.waitForFunction(() => document.getElementById('materialReceptionDetailState').textContent === 'Recepción confirmada');
+        await page.waitForFunction(() => !document.querySelector('#materialReceptionDetailPhotos [data-confirm]') && !document.querySelector('#materialReceptionPhotos [data-confirm]'));
         assert.equal(confirmations.length, 2); assert.equal(confirmations[0].operacion_id, confirmations[1].operacion_id);
         assert.equal(confirmations[0].version_conocida, 5); assert.equal(confirmations[1].version_conocida, 5);
         assert.match(confirmations[0].operacion_id, /^[0-9a-f-]{36}$/);
