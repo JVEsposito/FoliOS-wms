@@ -63,10 +63,10 @@ calibre, variedad u otro dato del artículo mezclado, se marca como «mezcla en 
   por antigüedad en bodega.
 - **Por resolver:** hubo intento, pero no quedó un folio vigente: observado, rechazo
   definitivo, conflicto o validación anulada. Manda el último intento.
-- **Con diferencias:** validado, pero no coincide en tipo (pallet/saldo), cajas, cliente,
-  marca, especie, variedad, calibre, embalaje o cajas por CSG, o el folio ya no está en
-  planta (despachado, agotado, retirado) mientras el origen lo sigue mostrando en bodega.
-  La categoría no cuenta como diferencia: se muestra como sugerencia.
+- **Con diferencias:** conciliaciones entre planta y la validación física, con respaldo
+  e historial (ver abajo). La comparación adicional con el stock actual de FoliOS se
+  conserva desplegable: incluye tipo, cliente, artículo y estado operacional posterior.
+  La categoría continúa siendo una sugerencia.
 - **Solo en FoliOS:** folios nacidos en Validación, todavía en planta, que el origen no
   tiene en bodega: un número mal digitado o un traspaso que el origen aún no registra.
   Solo se calcula cuando ya existe una lectura correcta.
@@ -75,6 +75,67 @@ calibre, variedad u otro dato del artículo mezclado, se marca como «mezcla en 
 
 **Excel** descarga las cuatro listas de pallets en una hoja, con la situación de cada
 pallet, la categoría sugerida y lo que falta en el catálogo.
+
+## Cuadraturas de la validación con planta
+
+Este seguimiento es independiente de las discrepancias operacionales y del stock
+actual del folio. Conserva las diferencias detectadas al validar para que Oficina
+pueda cuadrar el sistema planta.
+
+| Campo | Comparación |
+|---|---|
+| Cajas | Total físico validado frente al total de planta; diferencia = FoliOS − planta. |
+| Marca | Marca validada frente a la equivalencia del catálogo de la marca de planta. |
+| Calibre | Calibre validado frente a la equivalencia del catálogo del calibre de planta. |
+| CSG | Cajas agrupadas por código CSG; el total igual no oculta otra distribución. Se conservan los ceros iniciales. |
+
+El registro aprobado que crea un folio captura el snapshot completo del validador,
+su identidad, dispositivo, intento y fechas, junto con la copia de planta disponible
+en el servidor, su lectura y equivalencias. Esta captura **no acredita que la PDA
+haya mostrado esos datos**: esa precarga corresponde a una entrega posterior.
+Las validaciones anteriores se incorporan con **Leer ahora**, la lectura programada
+o **Registrar / recomprobar conciliaciones**; se identifican como primera comparación
+posterior, sin reconstruir una lectura histórica que no existe. Los GET no escriben.
+
+Los respaldos iniciales no se sustituyen. Una corrección autorizada de Validación
+actualiza la comparación vigente y deja la anterior en el historial. Los movimientos,
+despachos y repaletizajes posteriores del folio no cambian la base física validada.
+Si el folio cambió o salió de planta, se indica esa situación y se suspende el cierre
+o reapertura automática de la conciliación.
+
+| Estado | Significado |
+|---|---|
+| Pendiente de cuadratura | Hay diferencias conocidas con planta. |
+| En revisión | Oficina tomó el caso o informó una corrección en planta. |
+| Cuadrado | Después de haber diferencias, una lectura posterior vigente coincide en los cuatro campos. |
+| Reabierto | Un caso cuadrado vuelve a tener diferencias en una lectura vigente. |
+| Sin diferencias | La comparación completa coincide y el caso nunca tuvo diferencias. |
+| Por revisar | No hay evidencia completa para confirmar la comparación. |
+
+Una gestión guarda usuario, comentario obligatorio, referencia opcional y fecha;
+**no cierra manualmente** el caso. Los envíos usan UUID y versión para evitar
+operaciones duplicadas o sobrescribir una lectura más reciente. Ante una respuesta
+perdida la pantalla conserva el mismo envío y permite reintentarlo.
+
+La ausencia del pallet, una lectura fallida, en curso o de más de 20 minutos, campos
+sin equivalencia o composiciones incompletas nunca prueban una cuadratura. El estado
+histórico se conserva y la pantalla muestra que la comprobación requiere revisión.
+**Registrar / recomprobar** usa la copia disponible; **Leer ahora** consulta planta.
+Si falla el cálculo derivado, se conserva la lectura correcta y se avisa que quedan
+conciliaciones por recomprobar. Cada caso se procesa en su propia transacción.
+
+La lista y su Excel admiten filtros por folio exacto, estado, campo con diferencia y
+fechas de validación en hora de Chile. El Excel incluye los cuatro campos, respaldos
+originales, valores vigentes, lectura, fuente, contexto e identidad del validador.
+El detalle conserva el historial paginado. La fuente y temporada activas son el alcance
+por defecto; se pueden incluir fuentes anteriores. La API admite `temporada_id` para
+consultas históricas. Los casos de temporadas cerradas y fuentes anteriores son de
+consulta; no admiten gestiones nuevas. Los respaldos permanecen aunque se purgue el
+registro técnico de la lectura de origen.
+
+Para desplegar: ejecutar las migraciones (`php artisan migrate --force`) y compilar
+la interfaz (`npm ci && npm run build`). No cambia el contrato de la PDA ni se escribe
+en la base de planta.
 
 ## Catálogo: el origen alimenta los maestros de temporada
 
@@ -135,6 +196,9 @@ descripción, así que no se proponen.
 
 Consulta, lectura inmediata y Excel: `consultar-validaciones-pallet`, los mismos perfiles
 que ven Validación. «Leer ahora» admite cuatro solicitudes por minuto por usuario.
+Gestionar y recomprobar conciliaciones: `gestionar-conciliaciones-validacion`, limitado
+a Administrador o Supervisor de Frío con acceso a Validación; Consulta y Validador
+conservan consulta y Excel.
 Vincular o agregar al catálogo: además, `administrar-catalogos-validacion`. Quien solo
 consulta ve lo que falta, sin las acciones.
 

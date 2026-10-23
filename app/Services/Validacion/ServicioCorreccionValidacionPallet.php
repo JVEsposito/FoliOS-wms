@@ -271,6 +271,8 @@ class ServicioCorreccionValidacionPallet
                 'corregido_at' => now(),
             ]);
 
+            app(ServicioConciliacionValidacion::class)->registrar($validacionBloqueada->refresh(), 'correccion_autorizada');
+
             return $this->cargar($validacionBloqueada->refresh());
         };
 

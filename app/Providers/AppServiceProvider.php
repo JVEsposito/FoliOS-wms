@@ -416,6 +416,7 @@ class AppServiceProvider extends ServiceProvider
             fn (User $usuario): bool => $alcance->puedeConsultarValidacionesPallet($usuario),
         );
         Gate::define('imprimir-etiquetas-pt', fn (User $usuario): bool => $alcance->puedeImprimirEtiquetasPt($usuario));
+        Gate::define('gestionar-conciliaciones-validacion', fn (User $usuario): bool => $alcance->puedeGestionarConciliacionesValidacion($usuario));
         Gate::define(
             'corregir-validaciones-pallet',
             fn (User $usuario): bool => $alcance->puedeCorregirValidacionesPallet($usuario),

@@ -320,3 +320,65 @@
         flex-direction: column;
     }
 }
+/* Cuadraturas: los valores originales se conservan fuera del stock actual. */
+.reconciliation-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: end;
+    margin: 16px 0;
+}
+.reconciliation-filters label {
+    display: grid;
+    gap: 6px;
+    min-width: 140px;
+}
+.reconciliation-filters label:has(input[type=checkbox]) {
+    display: flex;
+    align-items: center;
+}
+.reconciliation-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin: 12px 0;
+}
+.reconciliation-field--diferente {
+    border-left: 3px solid var(--warning-text);
+    padding-left: 8px;
+}
+.reconciliation-field--por_revisar {
+    border-left: 3px solid var(--line);
+    padding-left: 8px;
+}
+.reconciliation-stock {
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+}
+#reconciliationDialog {
+    width: min(950px, 95vw);
+    max-width: 95vw;
+    max-height: 90dvh;
+    overflow: auto;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--panel);
+    color: var(--text);
+}
+#reconciliationDialog::backdrop {
+    background: var(--overlay);
+}
+.reconciliation-dialog { padding: 18px; }
+.reconciliation-dialog form {
+    display: grid;
+    gap: 12px;
+    margin: 20px 0;
+}
+.reconciliation-dialog form label { display: grid; gap: 6px; }
+.reconciliation-event { border-top: 1px solid var(--line); padding: 12px 0; }
+@media (max-width: 600px) {
+    .reconciliation-filters label { min-width: 0; flex: 1 1 140px; }
+    .reconciliation-dialog { padding: 10px; }
+}

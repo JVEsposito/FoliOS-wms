@@ -1,3 +1,5 @@
+import { initReconciliations, loadReconciliations } from './office-validation-reconciliation.js';
+
 const byId = (id) => document.getElementById(id);
 const elements = {
     access: byId('officeAccess'),
@@ -22,7 +24,6 @@ const elements = {
     kpiOnlyFolios: byId('kpiOnlyFolios'),
     tabPending: byId('tabPendingCount'),
     tabUnresolved: byId('tabUnresolvedCount'),
-    tabDifferences: byId('tabDifferencesCount'),
     tabOnlyFolios: byId('tabOnlyFoliosCount'),
     tabCatalog: byId('tabCatalogCount'),
     pendingBody: byId('pendingBody'),
@@ -233,7 +234,6 @@ function render() {
     elements.kpiOnlyFolios.textContent = number(summary.solo_en_folios);
     elements.tabPending.textContent = summary.pendientes;
     elements.tabUnresolved.textContent = summary.por_resolver;
-    elements.tabDifferences.textContent = summary.con_diferencias;
     elements.tabOnlyFolios.textContent = summary.solo_en_folios;
     elements.tabCatalog.textContent = summary.catalogo_pendiente;
     renderCatalogNote(data);
@@ -402,6 +402,7 @@ async function load({ quiet = false } = {}) {
         if (!response.ok) throw new Error(response.data?.message || 'No fue posible cargar los pendientes.');
         state.data = response.data;
         render();
+        await loadReconciliations();
     } catch (error) {
         if (!quiet) toast(error.message, true);
     } finally {
@@ -417,6 +418,7 @@ async function readNow() {
         if (response.data?.resumen) {
             state.data = response.data;
             render();
+            await loadReconciliations();
         }
         toast(response.data?.message || (response.ok ? 'Stock de origen leído.' : 'No fue posible leer el origen.'), !response.ok);
     } catch {
@@ -494,4 +496,5 @@ elements.catalogBody.addEventListener('click', (event) => {
     if (button) applyCatalog(button);
 });
 
+initReconciliations(api, toast, () => state.token);
 if (state.token && showApp()) start();

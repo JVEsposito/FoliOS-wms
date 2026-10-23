@@ -24,6 +24,7 @@ use App\Http\Controllers\Api\CierreTemporadaController;
 use App\Http\Controllers\Api\ClasificacionMaterialController;
 use App\Http\Controllers\Api\ClienteGlobalController;
 use App\Http\Controllers\Api\ComparacionCiclosPlanificadorController;
+use App\Http\Controllers\Api\ConciliacionValidacionController;
 use App\Http\Controllers\Api\CondicionSagController;
 use App\Http\Controllers\Api\ConfiguracionCamaraController;
 use App\Http\Controllers\Api\ConsultaOficinaController;
@@ -338,6 +339,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/validacion/etiquetas', [EtiquetaPtController::class, 'store']);
     });
     Route::middleware('can:consultar-validaciones-pallet')->prefix('validacion/pendientes-origen')->group(function () {
+        Route::get('/conciliaciones', [ConciliacionValidacionController::class, 'index']);
+        Route::get('/conciliaciones/excel', [ConciliacionValidacionController::class, 'excel']);
+        Route::post('/conciliaciones/recomprobar', [ConciliacionValidacionController::class, 'recomprobar'])->middleware(['can:gestionar-conciliaciones-validacion', 'throttle:4,1']);
+        Route::get('/conciliaciones/{conciliacion}', [ConciliacionValidacionController::class, 'show']);
+        Route::post('/conciliaciones/{conciliacion}/gestiones', [ConciliacionValidacionController::class, 'gestionar'])->middleware('can:gestionar-conciliaciones-validacion');
         Route::get('/', [PendientesValidacionOrigenController::class, 'index']);
         Route::get('/excel', [PendientesValidacionOrigenController::class, 'excel']);
         Route::post('/leer', [PendientesValidacionOrigenController::class, 'leer'])->middleware('throttle:4,1');
