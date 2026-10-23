@@ -125,6 +125,7 @@ class TareaMovimientoResource extends JsonResource
                 'calibre' => $this->folio->calibre,
                 'marca' => $this->folio->marca,
                 'exportadora' => $this->folio->exportadora,
+                'envase' => $this->folio->datos_externos['envase'] ?? null,
                 'fecha_ingreso' => $this->folio->fecha_ingreso?->toAtomString(),
             ]),
             'origen' => $this->extremo('Origen'),
@@ -158,7 +159,10 @@ class TareaMovimientoResource extends JsonResource
                 ] : null;
             }),
             'instruccion' => $this->instruccion,
-            'contexto' => $this->contexto ?? [],
+            // Corrige también tareas existentes sin reescribir decisiones ni movimientos.
+            'contexto' => $this->relationLoaded('folio') && $this->folio
+                ? [...($this->contexto ?? []), 'formato' => $this->folio->datos_externos['envase'] ?? null]
+                : ($this->contexto ?? []),
             'asumida_at' => $this->asumida_at?->toAtomString(),
             'iniciada_at' => $this->iniciada_at?->toAtomString(),
             'completada_at' => $this->completada_at?->toAtomString(),

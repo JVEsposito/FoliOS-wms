@@ -135,6 +135,7 @@ export type OperationalTask = {
     marca?: string | null;
     exportadora?: string | null;
     fecha_ingreso?: string | null;
+    envase?: string | null;
   };
   origen: OperationalTaskEndpoint;
   destino: OperationalTaskEndpoint;

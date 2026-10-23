@@ -113,9 +113,10 @@ class CamaraController extends Controller
                     'ubicacionesActuales.folio.material.item.cliente.temporada',
                     'ubicacionesActuales.folio.asignacionCargaActual.carga',
                     'reservaTareaActiva' => fn ($reservas) => $reservas
-                        ->where('vence_at', '>', now())
+                        ->conCompromisoVigente()
                         ->with([
-                            'tareaMovimiento:id,prioridad',
+                            'tareaMovimiento:id,prioridad,folio_id',
+                            'tareaMovimiento.folio:id,tipo_bulto,marca,exportadora,datos_externos,activo',
                             'usuario:id,name',
                             'dispositivo:id,nombre',
                         ]),

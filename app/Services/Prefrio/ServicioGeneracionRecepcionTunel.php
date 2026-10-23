@@ -58,7 +58,7 @@ class ServicioGeneracionRecepcionTunel
                     ->where('estado', EstadoFolioProcesoPrefrio::Aprobado->value)
                     ->with([
                         'posicion:id,tunel_prefrio_id,numero,etiqueta',
-                        'folio:id,temporada_id,numero_folio,tipo_bulto,activo,marca,exportadora,variedad,calibre',
+                        'folio:id,temporada_id,numero_folio,tipo_bulto,activo,marca,exportadora,variedad,calibre,datos_externos',
                         'folio.ubicacionActual:id,folio_id,camara_id,posicion_id',
                         'folio.asignacionCargaActual.carga.presenciaAndenActiva',
                     ]),
@@ -108,7 +108,8 @@ class ServicioGeneracionRecepcionTunel
                         'posicion_tunel_prefrio_id' => $asignacion->posicion_tunel_prefrio_id,
                         'posicion_tunel' => $asignacion->posicion?->etiqueta,
                         'marca' => $folio->marca,
-                        'formato' => $proceso->formato_referencia,
+                        'formato' => $folio->datos_externos['envase'] ?? null,
+                        'formato_prefrio' => $proceso->formato_referencia,
                         'cliente' => $folio->exportadora,
                         'exportadora' => $folio->exportadora,
                         'variedad' => $folio->variedad,

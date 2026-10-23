@@ -9,6 +9,29 @@ use Illuminate\Support\Collection;
 
 class CalculadorAfinidadBanda
 {
+    /** @return Collection<int, Folio> */
+    public function presentes(Collection $posiciones): Collection
+    {
+        return $posiciones->flatMap(fn ($posicion) => $posicion->ubicacionesActuales->pluck('folio'))
+            ->filter()->unique('id')->values();
+    }
+
+    /** Solo destinos físicos comprometidos; un claim sin posición no aporta afinidad. */
+    public function entrantes(Collection $posiciones): Collection
+    {
+        $presentes = $this->presentes($posiciones)->pluck('id');
+
+        return $posiciones->map(fn ($posicion) => $posicion->reservaTareaActiva?->tareaMovimiento?->folio)
+            ->filter()->reject(fn (Folio $folio) => $presentes->contains($folio->id))
+            ->unique('id')->values();
+    }
+
+    public function resumirConEntradas(Collection $posiciones): array
+    {
+        return [...$this->resumir($this->presentes($posiciones)),
+            'entrantes' => $this->resumir($this->entrantes($posiciones))];
+    }
+
     /**
      * @param  Collection<int, Folio>  $folios
      * @return array<string, mixed>
@@ -90,6 +113,7 @@ class CalculadorAfinidadBanda
                     'cliente' => 0,
                 ],
                 'mezclaria_clientes' => false,
+                'mezclaria_perfiles' => false,
                 'motivo' => 'Banda libre, sin afinidad vigente; puede iniciar una agrupación para este cliente.',
             ];
         }
@@ -140,8 +164,22 @@ class CalculadorAfinidadBanda
                 'cliente' => $mismoCliente,
             ],
             'mezclaria_clientes' => $otrosClientes > 0,
+            'mezclaria_perfiles' => $completos->count() !== $mismoFormato,
             'motivo' => $this->motivo($nivel, $mismoFormato, $mismaMarca, $mismoCliente),
         ];
+    }
+
+    /** Agrupación homogénea, banda vacía y luego alternativas con mezcla. */
+    public function orden(array $evaluacion): int
+    {
+        return match (true) {
+            $evaluacion['nivel'] === NivelAfinidadUbicacion::ClienteMarcaFormato && ! $evaluacion['mezclaria_perfiles'] => 0,
+            $evaluacion['nivel'] === NivelAfinidadUbicacion::BandaLibre => 1,
+            $evaluacion['nivel'] === NivelAfinidadUbicacion::ClienteMarcaFormato => 2,
+            $evaluacion['nivel'] === NivelAfinidadUbicacion::ClienteMarca => 3,
+            $evaluacion['nivel'] === NivelAfinidadUbicacion::Cliente => 4,
+            default => 5,
+        };
     }
 
     /** @return array<string, string|null> */

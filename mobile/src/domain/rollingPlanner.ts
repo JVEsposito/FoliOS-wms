@@ -52,6 +52,11 @@ export function calculateRollingFrontier(
     .filter((task) => snapshot.tareas.find((item) => item.id === task.id)?.materializable !== false)
     .sort(compareTasks);
 
+  // Copia solo los contenedores que cambian en la simulación; el snapshot recibido sigue intacto.
+  const virtualPlans = cameraPlans.map((plan) => ({ ...plan,
+    bandas_operacionales: plan.bandas_operacionales?.map((band) => ({ ...band, capacidad: { ...band.capacidad },
+      afinidad: band.afinidad ? { ...band.afinidad } : band.afinidad })),
+  }));
   const usedDestinations = new Set<string>();
   const protectedOrigins = new Set(
     eligible
@@ -67,7 +72,7 @@ export function calculateRollingFrontier(
 
     const candidate = bestCandidate(
       task,
-      cameraPlans,
+      virtualPlans,
       usedDestinations,
       protectedOrigins,
       snapshot.planner.camara_preferente_despacho_id,
@@ -83,6 +88,7 @@ export function calculateRollingFrontier(
 
     usedDestinations.add(candidate.position.id);
     candidates.push(candidate);
+    commitVirtualArrival(task, candidate, virtualPlans);
     proposals.push({
       tarea_id: task.id,
       posicion_destino_id: candidate.position.id,
@@ -156,41 +162,60 @@ export function bestCandidate(
   return candidate;
 }
 
+type AffinityProfile = { cliente: string | null; marca: string | null; formato: string | null; pallets: number };
+
+function taskProfile(task: OperationalTask): Omit<AffinityProfile, 'pallets'> {
+  return {
+    cliente: task.folio?.exportadora ?? taskContext(task, ['cliente', 'cliente_codigo', 'cliente_nombre']),
+    marca: task.folio?.marca ?? taskContext(task, ['marca']),
+    // Un envase explícitamente ausente no se sustituye por «granel» del proceso antiguo.
+    formato: task.folio && Object.prototype.hasOwnProperty.call(task.folio, 'envase') ? task.folio.envase ?? null : taskContext(task, ['formato', 'tipo_formato']),
+  };
+}
+
+function bandProfiles(plan: CameraPlan, position: Position): AffinityProfile[] {
+  const band = plan.bandas_operacionales?.find((item) => item.numero === position.banda);
+  const affinity = band?.afinidad;
+  const physicalCount = affinity?.pallets_completos ?? band?.capacidad.ocupadas ?? 0;
+  const physical = affinity?.perfiles?.length ? affinity.perfiles : physicalCount > 0 ? [{
+    cliente: affinity?.cliente?.valor ?? null, marca: affinity?.marca?.valor ?? null,
+    formato: affinity?.formato?.valor ?? null, pallets: physicalCount,
+  }] : [];
+  return [...physical, ...(affinity?.entrantes?.perfiles ?? [])];
+}
+
+function matches(profile: AffinityProfile, target: Omit<AffinityProfile, 'pallets'>, fields: Array<'cliente' | 'marca' | 'formato'>) {
+  return fields.every((field) => target[field] && sameText(target[field]!, profile[field]));
+}
+
 function mixesClients(task: OperationalTask, plan: CameraPlan, position: Position) {
-  const affinity = plan.bandas_operacionales?.find((band) => band.numero === position.banda)?.afinidad;
-  if (!affinity?.pallets_completos) return false;
-  const client = taskContext(task, ['cliente', 'cliente_codigo', 'cliente_nombre']);
-  if (affinity.perfiles) {
-    return affinity.perfiles.some((profile) => !client || !sameText(client, profile.cliente));
-  }
-  return !client || !sameText(client, affinity.cliente?.valor)
-    || (affinity.cliente?.pallets ?? 0) < affinity.pallets_completos;
+  const target = taskProfile(task);
+  return bandProfiles(plan, position).some((profile) => !matches(profile, target, ['cliente']));
 }
 
 function affinityRank(task: OperationalTask, plan: CameraPlan, position: Position) {
-  const band = plan.bandas_operacionales?.find((item) => item.numero === position.banda);
-  const affinity = band?.afinidad;
-  if (!affinity) return band?.capacidad.ocupadas === 0 ? 3 : 4;
-  if (affinity.pallets_completos === 0) return 3;
+  const profiles = bandProfiles(plan, position);
+  if (!profiles.length) return 1;
+  const target = taskProfile(task);
+  if (profiles.every((profile) => matches(profile, target, ['cliente', 'marca', 'formato']))) return 0;
+  if (profiles.some((profile) => matches(profile, target, ['cliente', 'marca', 'formato']))) return 2;
+  if (profiles.some((profile) => matches(profile, target, ['cliente', 'marca']))) return 3;
+  return profiles.some((profile) => matches(profile, target, ['cliente'])) ? 4 : 5;
+}
 
-  const client = taskContext(task, ['cliente', 'cliente_codigo', 'cliente_nombre']);
-  const brand = taskContext(task, ['marca']);
-  const format = taskContext(task, ['formato', 'tipo_formato']);
-  if (affinity.perfiles) {
-    const byClient = affinity.perfiles.filter((profile) => client && sameText(client, profile.cliente));
-    if (byClient.length === 0) return 4;
-    const byBrand = byClient.filter((profile) => brand && sameText(brand, profile.marca));
-    if (byBrand.length === 0) return 2;
-    return byBrand.some((profile) => format && sameText(format, profile.formato)) ? 0 : 1;
-  }
-
-  // Snapshot antiguo: el dominante puede no representar una banda mixta.
-  // En caso de duda se conserva la clasificación conservadora.
-  if (!client || !sameText(client, affinity.cliente?.valor)) return 4;
-
-  if (!brand || !sameText(brand, affinity.marca?.valor)) return 2;
-
-  return format && sameText(format, affinity.formato?.valor) ? 0 : 1;
+function commitVirtualArrival(task: OperationalTask, candidate: RollingCandidate, plans: CameraPlan[]) {
+  const band = plans.find((plan) => plan.id === candidate.cameraId)?.bandas_operacionales
+    ?.find((item) => item.numero === candidate.position.banda);
+  if (!band) return;
+  const incoming = band.afinidad?.entrantes;
+  band.afinidad = { activa: false, cliente: null, marca: null, formato: null,
+    pallets_completos: 0, perfiles_diferentes: 0, perfiles: [], fuera_alcance: 0,
+    ...band.afinidad, entrantes: {
+      pallets_completos: (incoming?.pallets_completos ?? 0) + 1,
+      perfiles: [...(incoming?.perfiles ?? []), { ...taskProfile(task), pallets: 1 }],
+    } };
+  band.capacidad.disponibles = Math.max(0, band.capacidad.disponibles - 1);
+  if (band.capacidad.disponibles === 0) band.acepta_nuevos_ingresos = false;
 }
 
 function compareTasks(left: OperationalTask, right: OperationalTask) {
@@ -295,28 +320,23 @@ function scoreCandidate(task: OperationalTask, plan: CameraPlan, position: Posit
     }
   }
 
-  const client = taskContext(task, ['cliente', 'cliente_codigo', 'cliente_nombre']);
-  const brand = taskContext(task, ['marca']);
-  const format = taskContext(task, ['formato', 'tipo_formato']);
-  if (band?.afinidad?.activa) {
-    const sameClient = Boolean(client && sameText(client, band.afinidad.cliente?.valor));
-    const sameBrand = Boolean(sameClient && brand && sameText(brand, band.afinidad.marca?.valor));
-    if (sameClient) {
-      score += 900;
-      reasons.push('coincide cliente');
-    }
-    if (sameBrand) {
-      score += 450;
-      reasons.push('coincide marca');
-    }
-    if (sameBrand && format && sameText(format, band.afinidad.formato?.valor)) {
-      score += 225;
-      reasons.push('coincide formato');
-    }
-    if (band.afinidad.perfiles_diferentes === 0 && band.afinidad.pallets_completos === 0) {
-      score += 120;
-      reasons.push('banda libre para nueva afinidad');
-    }
+  const profiles = bandProfiles(plan, position);
+  const target = taskProfile(task);
+  if (profiles.some((profile) => matches(profile, target, ['cliente']))) {
+    score += 900;
+    reasons.push('coincide cliente');
+  }
+  if (profiles.some((profile) => matches(profile, target, ['cliente', 'marca']))) {
+    score += 450;
+    reasons.push('coincide marca');
+  }
+  if (profiles.some((profile) => matches(profile, target, ['cliente', 'marca', 'formato']))) {
+    score += 225;
+    reasons.push('coincide envase en pallets presentes o comprometidos');
+  }
+  if (!profiles.length) {
+    score += 120;
+    reasons.push('banda libre para nueva afinidad');
   }
 
   // P01 es el fondo. Preferir la menor profundidad libre vuelve a compactar

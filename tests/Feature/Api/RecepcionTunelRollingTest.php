@@ -182,6 +182,19 @@ class RecepcionTunelRollingTest extends TestCase
         $this->assertNotSame('completado', $plan->refresh()->estado->value);
     }
 
+    public function test_usa_el_envase_individual_y_conserva_aparte_el_formato_termico_del_tunel(): void
+    {
+        $this->habilitarGeneracion();
+        $contexto = $this->crearProcesoAprobado(2);
+        $contexto['folios'][0]->update(['datos_externos' => ['envase' => 'MAFLV225A']]);
+        $contexto['folios'][1]->update(['datos_externos' => ['envase' => 'GFL50M']]);
+        $plan = app(ServicioGeneracionRecepcionTunel::class)->generar($contexto['proceso'], $contexto['usuario']);
+        $tareas = $plan->tareas->keyBy('folio_id');
+        $this->assertSame('MAFLV225A', $tareas[$contexto['folios'][0]->id]->contexto['formato']);
+        $this->assertSame('GFL50M', $tareas[$contexto['folios'][1]->id]->contexto['formato']);
+        $this->assertSame('granel', $tareas->first()->contexto['formato_prefrio']);
+    }
+
     /**
      * @param  array<int, TipoBulto>  $tipos
      * @return array<string, mixed>
