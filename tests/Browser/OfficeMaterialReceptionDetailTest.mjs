@@ -194,7 +194,7 @@ test('confirmar ofrece imprimir, precarga fuera de la lista y reintenta la selec
             await page.locator('#materialReceptionPrintLink').click();
             await page.waitForFunction(() => document.querySelectorAll('#materialLabelFolios input').length === 3);
             assert.equal(await page.locator('#materialLabelReception').inputValue(), 'A');
-            assert.equal(await page.locator('#materialLabelSource option[value="transformacion"]').isDisabled(), true);
+            assert.equal(await page.locator('#materialLabelSource option[value="transformacion"]').evaluate(option => option.disabled), true);
             await page.selectOption('#materialLabelForm [name="formato"]', 'pdf');
             await page.locator('#materialLabelForm [name="copias"]').fill('2');
             await page.locator('#materialLabelFolios input[value="folio-1"]').check();
