@@ -472,6 +472,9 @@
 .office-app .material-reception-detail__head h3 { margin: 4px 0; font-family: var(--font-mono) !important; font-size: 1.875rem !important; font-stretch: 100% !important; font-weight: 700; letter-spacing: -.04em; }
 .office-app .material-reception-detail__head p { margin: 0; color: var(--text-secondary); font-size: .875rem; }
 .office-app .material-reception-detail__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.office-app .material-reception-print-notice { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px; border: 1px solid var(--info-text); border-radius: 10px; background: var(--deep); }
+.office-app .material-reception-print-notice > span { flex: 1 1 260px; color: var(--text); font-size: .75rem; line-height: 1.5; }
+.office-app .material-reception-print-notice a, .office-app .material-reception-detail__actions a, .office-app .material-reception-form__footer a { text-decoration: none; }
 
 .office-app .material-reception-photos--inline { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; padding: 0; border-width: 0 0 1px; border-style: solid; border-color: var(--line-soft); border-radius: 0; background: none; box-shadow: none; }
 .office-app .material-reception-photos--inline > h3 { display: none; }

@@ -319,6 +319,12 @@
                         <article><span>FOLIOS VISIBLES</span><strong id="materialReceptionFolioCount">0</strong><small>en esta página</small></article>
                     </div>
 
+                    <div class="material-reception-print-notice is-hidden" id="materialReceptionPrintNotice" role="status">
+                        <span id="materialReceptionPrintNoticeText"></span>
+                        <a class="secondary-button" id="materialReceptionPrintLink">Imprimir folios</a>
+                        <button class="secondary-button" id="dismissMaterialReceptionPrintNotice" type="button" aria-label="Cerrar aviso de impresión">Cerrar aviso</button>
+                    </div>
+
                     <form class="material-receptions-filters" id="materialReceptionsFilters">
                         <label><span>Documento</span><select name="sin_foto_documento"><option value="">Todas</option><option value="1">Sin foto de documento</option></select></label>
                         <label><span>Buscar guía</span><input name="guia" maxlength="50" placeholder="Número de guía"></label>
@@ -392,6 +398,7 @@
                             </div>
                             <footer class="material-reception-form__footer">
                                 <button class="secondary-button" id="cancelMaterialReception" type="button">Cancelar</button>
+                                <a class="secondary-button is-hidden" id="printMaterialReceptionFromForm">Imprimir folios</a>
                                 <button class="secondary-button" id="saveMaterialReceptionDraft" type="submit" value="draft">Guardar borrador</button>
                                 <button class="primary-button" id="saveAndConfirmMaterialReception" type="submit" value="confirm">Guardar y confirmar</button>
                             </footer>
@@ -420,7 +427,7 @@
                 <section class="panel materials-panel material-label-workspace" id="materialLabelWorkspace" data-materials-view="recepcion">
                     <div class="materials-panel__heading">
                         <div><p class="eyebrow">ETIQUETAS DE RECEPCIÓN</p><h2>Descarga PDF y NiceLabel</h2><span id="materialLabelSummary">Selecciona una recepción confirmada</span></div>
-                        <button class="secondary-button" id="reloadMaterialLabels" type="button">↻ Actualizar recepciones</button>
+                        <div class="materials-panel__tools"><a class="secondary-button" href="/oficina/materiales/recepciones">Volver a recepciones</a><button class="secondary-button" id="reloadMaterialLabels" type="button">↻ Actualizar recepciones</button></div>
                     </div>
                     <form class="materials-form material-label-form" id="materialLabelForm" novalidate>
                         <div class="materials-form__grid material-label-controls">
@@ -441,6 +448,7 @@
                         </div>
                         <p class="materials-help">La descarga queda auditada como archivo generado. El sistema no la marca como impresión física confirmada.</p>
                         <p class="form-error" id="materialLabelError" role="alert"></p>
+                        <p id="materialLabelStatus" role="status"></p>
                         <div class="materials-actions"><button class="primary-button" type="submit">Generar y descargar etiquetas</button></div>
                     </form>
                     <div class="material-label-history">
