@@ -82,6 +82,7 @@ use App\Http\Controllers\Api\RomanaPorteriaController;
 use App\Http\Controllers\Api\SaludPlanificadorController;
 use App\Http\Controllers\Api\SesionesAccesoAdministracionController;
 use App\Http\Controllers\Api\SesionEstibaController;
+use App\Http\Controllers\Api\SupervisionMaterialesController;
 use App\Http\Controllers\Api\TomaInventarioMaterialController;
 use App\Http\Controllers\Api\TransferenciaClienteMaterialController;
 use App\Http\Controllers\Api\TransformacionMaterialController;
@@ -504,6 +505,11 @@ Route::middleware('auth:sanctum')->group(function () {
     });
     Route::get('/materiales/kardex', [DespachoMaterialController::class, 'kardex'])
         ->middleware('can:consultar-kardex-materiales');
+    Route::middleware('can:consultar-kardex-materiales')->group(function () {
+        Route::get('/materiales/supervision/catalogos', [SupervisionMaterialesController::class, 'catalogos']);
+        Route::get('/materiales/supervision', [SupervisionMaterialesController::class, 'index']);
+        Route::get('/materiales/supervision/evidencia/{fuente}/{id}', [SupervisionMaterialesController::class, 'evidencia']);
+    });
     Route::post('/materiales/inventario/{folioMaterial}/transferir-cliente', [TransferenciaClienteMaterialController::class, 'store'])->middleware('can:transferir-folios-materiales-clientes');
     Route::get('/materiales/transferencias-clientes/opciones', [TransferenciaClienteMaterialController::class, 'opciones'])->middleware('can:transferir-folios-materiales-clientes');
     Route::get('/materiales/transferencias-clientes/exportar.csv', [TransferenciaClienteMaterialController::class, 'csv']);
