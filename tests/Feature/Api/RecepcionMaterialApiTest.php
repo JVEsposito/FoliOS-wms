@@ -37,6 +37,30 @@ class RecepcionMaterialApiTest extends TestCase
 {
     use RefreshDatabase, \Tests\Concerns\PreparaFotoDocumentoRecepcionMaterial;
 
+    public function test_medidas_de_carga_y_capacidad_en_esquema_real_no_modifican_stock_y_no_bloquean_eliminacion(): void
+    {
+        [, $token, $cliente, $proveedor, $item] = $this->prepararCatalogo();
+        $recepcion = $this->conToken($token)->postJson('/api/materiales/recepciones', $this->payloadRecepcion($cliente, $proveedor, $item, [['cantidad' => 50]]))->assertCreated()->json('data');
+        $this->postJsonConDocumento("/api/materiales/recepciones/{$recepcion['id']}/confirmar", ['operacion_id' => (string) Str::uuid(), 'version_conocida' => $recepcion['version']])->assertOk();
+        $folioCreado = data_get(RecepcionMaterial::findOrFail($recepcion['id'])->snapshot_confirmacion, 'folios.0.id');
+        $saldo = DB::table('saldos_materiales_almacenes')->where('folio_id', $folioCreado)->sole();
+        $tipo = $this->postJson('/api/materiales/capacidad/tipos-pallet', ['operacion_id' => (string) Str::uuid(), 'version' => 0, 'codigo' => 'TEST-CAP', 'nombre' => 'Pallet de prueba',
+            'largo_m' => 1.5, 'ancho_m' => 1, 'altura_total_m' => 1.5, 'max_niveles' => 1, 'activo' => true])->assertCreated()->json('data');
+        $this->putJson('/api/materiales/capacidad/almacenes/'.$saldo->almacen_material_id, ['operacion_id' => (string) Str::uuid(), 'version' => 0,
+            'largo_m' => 10, 'ancho_m' => 10, 'altura_util_m' => 3, 'zonas' => [['id' => (string) Str::uuid(), 'nombre' => 'Piso', 'x_m' => 0, 'y_m' => 0,
+                'largo_m' => 3, 'ancho_m' => 2, 'altura_util_m' => 3, 'max_niveles' => 1, 'permite_giro' => true, 'tipo_pallet_ids' => [$tipo['id']]]]])->assertOk();
+        $this->getJson('/api/materiales/capacidad/almacenes/'.$saldo->almacen_material_id.'/simular?tipo_pallet_id='.$tipo['id'])->assertOk()->assertJsonPath('data.pallets_referencia', 4);
+        $this->putJson('/api/materiales/capacidad/cargas/'.$saldo->id, ['operacion_id' => (string) Str::uuid(), 'version' => 0, 'saldo_version' => $saldo->version,
+            'tipo_pallet_id' => $tipo['id'], 'bultos_fisicos' => 1, 'altura_total_m' => 2])->assertOk()->assertJsonPath('data.altura_total_m', 2);
+        $numeroFolio = Folio::findOrFail($folioCreado)->numero_folio;
+        $this->getJson('/api/materiales/capacidad/cargas?'.http_build_query(['almacen_id' => $saldo->almacen_material_id, 'busqueda' => $numeroFolio]))->assertOk()->assertJsonPath('data.0.medidas_vigentes', true);
+        $this->assertDatabaseHas('saldos_materiales_almacenes', ['id' => $saldo->id, 'cantidad_actual' => 50, 'version' => $saldo->version]);
+        $actual = RecepcionMaterial::findOrFail($recepcion['id']);
+        app(ServicioRecepcionMaterial::class)->eliminarAdministrativamente($actual, (string) Str::uuid(), $actual->version, 'Duplicado de prueba', User::findOrFail($actual->creado_por_user_id));
+        $this->assertDatabaseCount('dimensiones_cargas_materiales', 0);
+        $this->getJson('/api/materiales/capacidad/historial?entidad=carga&registro_id='.$saldo->id)->assertOk()->assertJsonPath('meta.total', 1);
+    }
+
     public function test_supervision_consulta_el_esquema_real_y_conserva_auditoria_tras_eliminar(): void
     {
         [, $token, $cliente, $proveedor, $item] = $this->prepararCatalogo();

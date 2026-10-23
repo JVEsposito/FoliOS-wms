@@ -36,6 +36,10 @@ class CatalogoPermisosMateriales
             $this->grupo('datos_items', 'Datos operativos de ítems', ['materiales.catalogos', 'materiales.inventario'], [
                 'inventario.editar_datos_item' => 'Editar niveles de stock y fotos de ítems',
             ]),
+            $this->grupo('capacidad', 'Capacidad de bodegas', ['materiales.inventario'], [
+                'capacidad.configurar' => 'Configurar bodegas, zonas útiles y tipos de pallet',
+                'capacidad.medir' => 'Registrar medidas reales de las cargas',
+            ]),
             $this->grupo('recetas', 'Recetas', ['materiales.recetas'], [
                 'recetas.administrar' => 'Crear y editar recetas',
             ]),
@@ -75,6 +79,11 @@ class CatalogoPermisosMateriales
         $seleccion = $perfil->permisos_materiales;
         if ($seleccion === null) {
             $seleccion = $this->compatibles($perfil->modulos ?? [], $perfil->rol_base === RolUsuario::Consulta, (bool) $perfil->protegido);
+            // Las nuevas escrituras de capacidad requieren selección explícita
+            // en perfiles existentes, salvo el Administrador protegido.
+            if (! $perfil->protegido) {
+                $seleccion = array_values(array_diff($seleccion, ['capacidad.configurar', 'capacidad.medir']));
+            }
         }
 
         $efectivos = array_values(array_intersect($compatibles, $seleccion));
@@ -92,6 +101,11 @@ class CatalogoPermisosMateriales
             return false;
         }
         if ($usuario->perfil_acceso_id === null) {
+            if (str_starts_with($accion, 'capacidad.')) {
+                return $usuario->rol === RolUsuario::Administrador
+                    || ($accion === 'capacidad.medir' && $usuario->rol === RolUsuario::SupervisorMateriales);
+            }
+
             return ! str_ends_with($accion, '.autorizar_tardios') || $usuario->rol === RolUsuario::Administrador;
         }
         $usuario->loadMissing('perfilAcceso');

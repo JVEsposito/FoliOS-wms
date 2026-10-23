@@ -335,6 +335,8 @@ class AppServiceProvider extends ServiceProvider
             'consultar-kardex-materiales',
             fn (User $usuario): bool => $alcance->puedeConsultarKardexMateriales($usuario),
         );
+        Gate::define('configurar-capacidad-materiales', fn (User $usuario): bool => $alcance->puedeConfigurarCapacidadMateriales($usuario));
+        Gate::define('medir-cargas-materiales', fn (User $usuario): bool => $alcance->puedeMedirCargasMateriales($usuario));
         Gate::define(
             'transferir-folios-materiales-clientes',
             fn (User $usuario): bool => $alcance->puedeTransferirFoliosMaterialesClientes($usuario),

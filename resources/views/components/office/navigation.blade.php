@@ -39,6 +39,7 @@
             ['key' => 'existencias-pt', 'module' => 'frigorifico.cargas', 'label' => 'Existencias PT', 'href' => '/oficina/frigorifico/existencias', 'permissions' => ['puede_consultar_cargas']],
         ],
         'materiales' => [
+            ['key' => 'capacidad', 'module' => 'materiales.inventario', 'label' => 'Capacidad de bodegas', 'href' => '/oficina/materiales/capacidad', 'permissions' => ['puede_consultar_kardex_materiales']],
             ['key' => 'supervision', 'module' => 'materiales.inventario', 'label' => 'Supervisión', 'href' => '/oficina/materiales/supervision', 'permissions' => ['puede_consultar_kardex_materiales']],
             ['key' => 'resumen', 'module' => 'materiales.resumen', 'label' => 'Resumen', 'href' => '/oficina/materiales', 'permissions' => ['puede_consultar_despachos_materiales']],
             ['key' => 'catalogos', 'module' => 'materiales.catalogos', 'label' => 'Catálogos', 'href' => '/oficina/materiales/catalogos', 'permissions' => ['puede_consultar_despachos_materiales']],
