@@ -23,12 +23,13 @@ class AdministracionValidacionController extends Controller
     ): JsonResponse {
         $request->validate([
             'temporada_id' => ['nullable', 'uuid', 'exists:temporadas,id'],
+            'resumen' => ['sometimes', 'boolean'],
         ]);
         $temporada = $request->filled('temporada_id')
             ? Temporada::query()->findOrFail($request->string('temporada_id')->toString())
             : null;
 
-        return response()->json($servicio->datosAdministracion($temporada));
+        return response()->json($servicio->datosAdministracion($temporada, $request->boolean('resumen')));
     }
 
     public function storeArticulo(
@@ -178,3 +179,4 @@ class AdministracionValidacionController extends Controller
         ]);
     }
 }
+

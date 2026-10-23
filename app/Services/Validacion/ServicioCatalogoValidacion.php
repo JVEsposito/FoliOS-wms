@@ -23,10 +23,10 @@ class ServicioCatalogoValidacion
     /**
      * @return array<string, mixed>
      */
-    public function datosAdministracion(?Temporada $seleccionada = null): array
+    public function datosAdministracion(?Temporada $seleccionada = null, bool $resumen = false): array
     {
         $temporadas = Temporada::query()
-            ->withCount(['articulos', 'origenes', 'combinaciones'])
+            ->when(! $resumen, fn ($consulta) => $consulta->withCount(['articulos', 'origenes', 'combinaciones']))
             ->orderByDesc('activa')
             ->orderByDesc('fecha_inicio')
             ->orderByDesc('created_at')
@@ -35,6 +35,22 @@ class ServicioCatalogoValidacion
         $temporada = $seleccionada
             ?? $temporadas->firstWhere('activa', true)
             ?? $temporadas->first();
+
+        // Maestros utiliza la jerarquía: no necesita descargar la proyección
+        // cartesiana para la PDA ni las filas completas de las importaciones.
+        if ($resumen) {
+            return [
+                'temporadas' => $temporadas->values(),
+                'temporada' => $temporada,
+                'importaciones' => $temporada
+                    ? $temporada->importaciones()
+                        ->select(['id', 'temporada_id', 'nombre_archivo', 'estado', 'resumen', 'created_at'])
+                        ->latest()
+                        ->limit(10)
+                        ->get()
+                    : [],
+            ];
+        }
 
         if (! $temporada) {
             return [
@@ -249,3 +265,4 @@ class ServicioCatalogoValidacion
         return $texto !== null ? mb_strtoupper($texto) : null;
     }
 }
+

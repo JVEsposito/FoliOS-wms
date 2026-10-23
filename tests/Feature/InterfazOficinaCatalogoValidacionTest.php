@@ -11,6 +11,8 @@ class InterfazOficinaCatalogoValidacionTest extends TestCase
         $this->get('/oficina/administracion/maestros-temporada')
             ->assertOk()
             ->assertSee('Maestros de temporada')
+            ->assertSee('id="catalogLoadError" role="alert"', false)
+            ->assertSee('id="projectionCombinationCount">—</strong>', false)
             ->assertSee('Clientes')
             ->assertSee('Marcas')
             ->assertSee('Categorías')
@@ -47,3 +49,4 @@ class InterfazOficinaCatalogoValidacionTest extends TestCase
             ->assertDontSee('Importar planilla');
     }
 }
+
