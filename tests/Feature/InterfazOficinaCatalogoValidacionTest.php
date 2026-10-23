@@ -49,4 +49,3 @@ class InterfazOficinaCatalogoValidacionTest extends TestCase
             ->assertDontSee('Importar planilla');
     }
 }
-

@@ -265,4 +265,3 @@ class ServicioCatalogoValidacion
         return $texto !== null ? mb_strtoupper($texto) : null;
     }
 }
-

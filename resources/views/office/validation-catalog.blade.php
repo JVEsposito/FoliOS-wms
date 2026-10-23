@@ -166,4 +166,3 @@
         <div class="toast-region" id="catalogToasts" aria-live="polite"></div>
     </body>
 </html>
-

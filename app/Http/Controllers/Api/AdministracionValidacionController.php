@@ -179,4 +179,3 @@ class AdministracionValidacionController extends Controller
         ]);
     }
 }
-

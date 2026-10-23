@@ -376,4 +376,3 @@ elements.logout.addEventListener('click', async () => {
 });
 
 if (verifyAccess()) void load();
-
