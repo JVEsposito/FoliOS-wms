@@ -786,6 +786,49 @@ class RecepcionMaterialApiTest extends TestCase
             ->assertJsonPath('data.0.motivo_reimpresion', 'Etiqueta dañada durante la instalación.');
     }
 
+    public function test_imprime_una_seleccion_y_reimprime_solo_un_folio_sin_modificar_la_recepcion_ni_el_stock(): void
+    {
+        [$autor, $token, $cliente, $proveedor, $item] = $this->prepararCatalogo();
+        $recepcion = $this->conToken($token)->postJson('/api/materiales/recepciones', $this->payloadRecepcion(
+            $cliente, $proveedor, $item, [['cantidad' => 10], ['cantidad' => 10], ['cantidad' => 5]],
+        ))->assertCreated()->json('data');
+        $confirmada = $this->conToken($token)->postJsonConDocumento("/api/materiales/recepciones/{$recepcion['id']}/confirmar", [
+            'operacion_id' => (string) Str::uuid(), 'version_conocida' => 1,
+        ])->assertOk()->json('data');
+        $folios = array_map(fn ($bulto) => $bulto['folio']['id'], $confirmada['detalles'][0]['bultos']);
+        $cantidades = fn () => FolioMaterial::query()->orderBy('folio_id')->get()->map->only([
+            'folio_id', 'cantidad_inicial', 'cantidad_actual', 'cantidad_reservada',
+        ])->all();
+        $stock = $cantidades();
+        $movimientos = MovimientoInventarioMaterial::query()->count();
+        $payload = [
+            'operacion_id' => (string) Str::uuid(),
+            'perfil_id' => PerfilImpresionEtiqueta::query()->where('predeterminado', true)->firstOrFail()->id,
+            'formato' => 'pdf', 'simbologia' => 'code128', 'canal' => 'oficina_descarga',
+            'folio_ids' => [$folios[0], $folios[2]], 'copias' => 2,
+        ];
+        $url = "/api/materiales/recepciones/{$recepcion['id']}/etiquetas";
+        $trabajo = $this->conToken($token)->postJson($url, $payload)->assertOk()
+            ->assertHeader('content-type', 'application/pdf')->headers->get('X-Estiba-Print-Job');
+        $this->conToken($token)->postJson($url, $payload)->assertOk()->assertHeader('X-Estiba-Print-Job', $trabajo);
+        $this->assertDatabaseCount('trabajos_impresion_materiales', 1);
+        $this->assertEqualsCanonicalizing([$folios[0], $folios[2]], DB::table('folios_trabajos_impresion_materiales')
+            ->where('trabajo_impresion_material_id', $trabajo)->pluck('folio_id')->all());
+        $this->assertDatabaseHas('trabajos_impresion_materiales', [
+            'id' => $trabajo, 'solicitado_por_user_id' => $autor->id, 'copias' => 2, 'canal' => 'oficina_descarga',
+        ]);
+        $this->conToken($token)->postJson($url, [...$payload, 'operacion_id' => (string) Str::uuid(),
+            'folio_ids' => [$folios[2]], 'copias' => 1, 'motivo_reimpresion' => 'Etiqueta dañada al instalarla.',
+        ])->assertOk();
+        $this->assertDatabaseCount('trabajos_impresion_materiales', 2);
+        $this->assertDatabaseCount('folios_trabajos_impresion_materiales', 3);
+        $this->assertDatabaseHas('folios_trabajos_impresion_materiales', ['folio_id' => $folios[2], 'es_reimpresion' => true]);
+        $this->assertDatabaseMissing('folios_trabajos_impresion_materiales', ['folio_id' => $folios[1]]);
+        $this->assertSame($stock, $cantidades());
+        $this->assertSame($movimientos, MovimientoInventarioMaterial::query()->count());
+        $this->assertSame($confirmada['version'], RecepcionMaterial::findOrFail($recepcion['id'])->version);
+    }
+
     public function test_genera_nlbl_nativo_con_qr_para_zebra_y_nicelabel(): void
     {
         [, $token, $cliente, $proveedor, $item] = $this->prepararCatalogo();

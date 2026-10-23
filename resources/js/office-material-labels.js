@@ -10,6 +10,7 @@ const labelElements = {
     selectAll: document.getElementById('selectAllMaterialLabels'),
     history: document.getElementById('materialLabelHistory'),
     reload: document.getElementById('reloadMaterialLabels'),
+    status: document.getElementById('materialLabelStatus'),
 };
 const labelState = {
     receptions: [],
@@ -19,6 +20,9 @@ const labelState = {
     source: 'recepcion',
     history: [],
     loading: false,
+    selectionRequest: 0,
+    operation: null,
+    submitting: false,
 };
 
 function labelToken() {
@@ -35,6 +39,12 @@ function labelIdentity() {
 
 function labelSectionIsActive() {
     return document.getElementById('officeApp')?.dataset.materialsSection === 'recepcion';
+}
+
+function labelCanReadTransformations() {
+    const identity = labelIdentity();
+    return (identity?.puede_consultar_transformaciones_materiales
+        ?? identity?.capacidades?.puede_consultar_transformaciones_materiales) === true;
 }
 
 function labelEscape(value) {
@@ -177,6 +187,7 @@ function renderFolios() {
         </label>
     `).join('') || '<p class="empty-state">El origen seleccionado no posee folios etiquetables.</p>';
     labelElements.selectAll.checked = false;
+    labelElements.form.querySelector('button[type="submit"]').disabled = !labelState.selected || folios.length === 0;
 }
 
 function renderHistory() {
@@ -189,44 +200,67 @@ function renderHistory() {
 }
 
 async function selectSourceRecord(id) {
+    const request = ++labelState.selectionRequest;
+    const source = labelState.source;
+    const token = labelToken();
     labelState.selected = null;
     labelState.history = [];
     renderFolios();
     renderHistory();
     if (!id) return;
-    const prefix = labelState.source === 'transformacion'
+    if (source === 'transformacion' && !labelCanReadTransformations()) {
+        throw new Error('Tu perfil no permite consultar órdenes de transformación.');
+    }
+    const prefix = source === 'transformacion'
         ? '/api/materiales/transformaciones/ordenes'
         : '/api/materiales/recepciones';
     const [record, history] = await Promise.all([
         labelApi(`${prefix}/${encodeURIComponent(id)}`),
         labelApi(`${prefix}/${encodeURIComponent(id)}/impresiones`),
     ]);
+    if (request !== labelState.selectionRequest || source !== labelState.source || token !== labelToken()) return;
+    if (source === 'recepcion' && record.data?.estado !== 'confirmada') {
+        throw new Error('Solo se pueden imprimir folios de una recepción confirmada.');
+    }
     labelState.selected = record.data;
     labelState.history = history.data || [];
+    // El acceso desde Recepciones puede apuntar a un documento fuera de la primera página.
+    const records = source === 'transformacion' ? labelState.orders : labelState.receptions;
+    if (!records.some(item => item.id === record.data.id)) {
+        records.unshift(record.data);
+        renderSourceOptions();
+    }
+    labelElements.reception.value = id;
     renderFolios();
     renderHistory();
 }
 
 async function loadLabels() {
+    if (labelState.submitting) return;
     const identity = labelIdentity();
-    const enabled = labelSectionIsActive() && (
-        identity?.puede_imprimir_etiquetas_materiales === true
-        || identity?.capacidades?.puede_imprimir_etiquetas_materiales === true
-    );
+    const enabled = labelSectionIsActive() && (identity?.puede_imprimir_etiquetas_materiales
+        ?? identity?.capacidades?.puede_imprimir_etiquetas_materiales) === true;
     labelElements.workspace.classList.toggle('is-hidden', !enabled);
     if (!enabled || !labelToken() || labelState.loading) return;
+    labelState.selectionRequest++;
     labelState.loading = true;
     labelElements.error.textContent = '';
     try {
+        const canReadTransformations = labelCanReadTransformations();
         const [receptions, orders, profiles] = await Promise.all([
             labelApi('/api/materiales/recepciones?estado=confirmada&per_page=100'),
-            labelApi('/api/materiales/transformaciones/ordenes?per_page=100'),
+            canReadTransformations ? labelApi('/api/materiales/transformaciones/ordenes?per_page=100') : Promise.resolve({ data: [] }),
             labelApi('/api/materiales/recepciones/perfiles-impresion'),
         ]);
         labelState.receptions = receptions.data || [];
         labelState.orders = (orders.data || []).filter((order) => order.tiene_salidas === true
             || (order.folios_salida_resumen?.reservados || 0) > 0);
         labelState.profiles = profiles.data || [];
+        labelElements.source.querySelector('option[value="transformacion"]').disabled = !canReadTransformations;
+        if (!canReadTransformations) {
+            labelState.source = 'recepcion';
+            labelElements.source.value = 'recepcion';
+        }
         renderSourceOptions();
         renderProfileOptions();
         labelState.selected = null;
@@ -238,13 +272,13 @@ async function loadLabels() {
         const requestedSource = parameters.get('origen');
         const requestedId = parameters.get('id');
         if (['recepcion', 'transformacion'].includes(requestedSource) && requestedId) {
+            if (requestedSource === 'transformacion' && !canReadTransformations) {
+                throw new Error('Tu perfil no permite consultar órdenes de transformación.');
+            }
             labelState.source = requestedSource;
             labelElements.source.value = requestedSource;
             renderSourceOptions();
-            if ([...labelElements.reception.options].some((option) => option.value === requestedId)) {
-                labelElements.reception.value = requestedId;
-                await selectSourceRecord(requestedId);
-            }
+            await selectSourceRecord(requestedId);
         }
     } catch (error) {
         labelElements.error.textContent = error.message;
@@ -263,6 +297,7 @@ labelElements.reception?.addEventListener('change', async (event) => {
 });
 
 labelElements.source?.addEventListener('change', (event) => {
+    labelState.selectionRequest++;
     labelState.source = event.target.value;
     labelState.selected = null;
     labelState.history = [];
@@ -279,7 +314,9 @@ labelElements.selectAll?.addEventListener('change', (event) => {
 
 labelElements.form?.addEventListener('submit', async (event) => {
     event.preventDefault();
+    if (labelState.submitting) return;
     labelElements.error.textContent = '';
+    labelElements.status.textContent = '';
     const form = new FormData(labelElements.form);
     const checked = [...labelElements.folios.querySelectorAll('input[type="checkbox"]:checked')];
     const folioIds = checked.filter((checkbox) => checkbox.dataset.labelKind !== 'reserva')
@@ -290,22 +327,34 @@ labelElements.form?.addEventListener('submit', async (event) => {
         labelElements.error.textContent = 'Selecciona un origen y al menos un folio.';
         return;
     }
+    if (!labelElements.form.reportValidity()) return;
     const payload = {
-        operacion_id: labelUuid(),
         perfil_id: form.get('perfil_id'),
         formato: form.get('formato'),
         simbologia: form.get('simbologia'),
         canal: 'oficina_descarga',
-        ...(folioIds.length ? { folio_ids: folioIds } : {}),
-        ...(reservationIds.length ? { reserva_ids: reservationIds } : {}),
+        ...(folioIds.length ? { folio_ids: folioIds.sort() } : {}),
+        ...(reservationIds.length ? { reserva_ids: reservationIds.sort() } : {}),
         copias: Number(form.get('copias')),
         motivo_reimpresion: String(form.get('motivo_reimpresion') || '').trim() || null,
     };
+    const source = labelState.source;
+    const id = labelState.selected.id;
+    const token = labelToken();
+    const fingerprint = JSON.stringify({ source, id, ...payload });
+    if (labelState.operation?.fingerprint !== fingerprint) {
+        labelState.operation = { fingerprint, id: labelUuid() };
+    }
+    payload.operacion_id = labelState.operation.id;
+    labelState.submitting = true;
+    const controls = [...labelElements.form.elements, labelElements.reload].map(input => [input, input.disabled]);
+    controls.forEach(([input]) => { input.disabled = true; });
+    labelElements.form.setAttribute('aria-busy', 'true');
     try {
-        const prefix = labelState.source === 'transformacion'
+        const prefix = source === 'transformacion'
             ? '/api/materiales/transformaciones/ordenes'
             : '/api/materiales/recepciones';
-        const response = await fetch(`${prefix}/${encodeURIComponent(labelState.selected.id)}/etiquetas`, {
+        const response = await fetch(`${prefix}/${encodeURIComponent(id)}/etiquetas`, {
             method: 'POST',
             headers: {
                 Accept: payload.formato === 'pdf'
@@ -321,6 +370,7 @@ labelElements.form?.addEventListener('submit', async (event) => {
             throw new Error(Object.values(data?.errors || {}).flat()[0] || data?.message || 'No fue posible generar las etiquetas.');
         }
         const blob = await response.blob();
+        if (token !== labelToken()) return;
         const disposition = response.headers.get('Content-Disposition') || '';
         const filename = disposition.match(/filename="([^"]+)"/)?.[1] || `etiquetas.${payload.formato}`;
         const url = URL.createObjectURL(blob);
@@ -329,10 +379,21 @@ labelElements.form?.addEventListener('submit', async (event) => {
         link.download = filename;
         link.click();
         window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+        labelState.operation = null;
+        labelElements.status.textContent = `Archivo generado: ${checked.length} folios × ${payload.copias} copias. La impresión física se realiza desde el archivo descargado.`;
         labelElements.form.elements.motivo_reimpresion.value = '';
-        await selectSourceRecord(labelState.selected.id);
+        try {
+            await selectSourceRecord(id);
+        } catch {
+            labelElements.error.textContent = 'El archivo fue generado. No se pudo actualizar el historial; pulsa Actualizar recepciones para consultarlo.';
+        }
     } catch (error) {
         labelElements.error.textContent = error.message;
+    } finally {
+        labelState.submitting = false;
+        controls.forEach(([input, disabled]) => { input.disabled = disabled; });
+        labelElements.form.querySelector('button[type="submit"]').disabled = !labelState.selected || selectedFolios().length === 0;
+        labelElements.form.removeAttribute('aria-busy');
     }
 });
 
@@ -346,6 +407,8 @@ labelElements.form?.elements.formato?.addEventListener('change', (event) => {
     }
 });
 window.addEventListener('estiba:office-session', (event) => {
+    labelState.selectionRequest++;
+    labelState.operation = null;
     if (event.detail?.authenticated) void loadLabels();
     else labelElements.workspace.classList.add('is-hidden');
 });

@@ -45,6 +45,11 @@ const receptionElements = {
     warning: document.getElementById('materialReceptionConfirmedWarning'),
     saveDraft: document.getElementById('saveMaterialReceptionDraft'),
     saveConfirm: document.getElementById('saveAndConfirmMaterialReception'),
+    printNotice: document.getElementById('materialReceptionPrintNotice'),
+    printNoticeText: document.getElementById('materialReceptionPrintNoticeText'),
+    printLink: document.getElementById('materialReceptionPrintLink'),
+    printFromForm: document.getElementById('printMaterialReceptionFromForm'),
+    dismissPrintNotice: document.getElementById('dismissMaterialReceptionPrintNotice'),
     deleteDialog: document.getElementById('materialReceptionDeleteDialog'),
     deleteForm: document.getElementById('materialReceptionDeleteForm'),
     deleteSummary: document.getElementById('materialReceptionDeleteSummary'),
@@ -110,7 +115,11 @@ async function confirmReception(record) {
     confirmation.pending = receptionApi(`/api/materiales/recepciones/${record.id}/confirmar`, {
         method: 'POST', body: JSON.stringify({ operacion_id: confirmation.operationId, version_conocida: record.version }),
     });
-    try { return await confirmation.pending; }
+    try {
+        const response = await confirmation.pending;
+        offerReceptionPrinting(response.data);
+        return response;
+    }
     finally { confirmation.pending = null; }
 }
 
@@ -217,6 +226,21 @@ function receptionUuid() {
     bytes[8] = (bytes[8] & 0x3f) | 0x80;
     const hex = [...bytes].map((value) => value.toString(16).padStart(2, '0')).join('');
     return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+function receptionCanPrint() {
+    return receptionCapabilities().puede_imprimir_etiquetas_materiales === true;
+}
+
+function receptionPrintUrl(id) {
+    return `/oficina/materiales/recepcion?origen=recepcion&id=${encodeURIComponent(id)}`;
+}
+
+function offerReceptionPrinting(record) {
+    if (record?.estado !== 'confirmada' || !receptionCanPrint()) return;
+    receptionElements.printNoticeText.textContent = `Guía ${record.numero_guia_despacho} confirmada. Puedes imprimir todos sus folios o seleccionar algunos.`;
+    receptionElements.printLink.href = receptionPrintUrl(record.id);
+    receptionElements.printNotice.classList.remove('is-hidden');
 }
 
 function receptionError(data, fallback) {
@@ -357,7 +381,9 @@ function renderReceptionDetail() {
     if (record.patente) receptionElements.detailMeta.textContent += ` · Camión ${record.patente}`;
     if (record.transportista) receptionElements.detailMeta.textContent += ` · Transportista ${record.transportista}`;
     const action = (name, text) => `<button type="button" class="secondary-button" data-action="${name}" data-id="${receptionEscape(record.id)}">${text}</button>`;
-    receptionElements.detailActions.innerHTML = action('view', 'Ver formulario')
+    const printAction = record.estado === 'confirmada' && receptionCanPrint()
+        ? `<a class="secondary-button" href="${receptionPrintUrl(record.id)}">Imprimir folios</a>` : '';
+    receptionElements.detailActions.innerHTML = printAction + action('view', 'Ver formulario')
         + (record.estado === 'confirmada' ? action('sampling', 'Registro de muestreo') : '')
         + (receptionCanAdminister() && record.estado !== 'anulada' ? action('edit', 'Editar') : '')
         + (receptionCanDelete() ? action('delete', 'Eliminar') : '');
@@ -611,6 +637,9 @@ function configureReceptionDialog() {
     receptionElements.saveConfirm.classList.toggle('is-hidden', readonly || (!confirmed && !receptionCanConfirm()));
     receptionElements.saveConfirm.textContent = confirmed ? 'Guardar corrección' : 'Guardar y confirmar';
     receptionElements.saveConfirm.disabled = !confirmed && !receptionState.current?.fotos?.some((f) => f.tipo === 'documento');
+    receptionElements.printFromForm.classList.toggle('is-hidden', !confirmed || !readonly || !receptionCanPrint());
+    if (confirmed && readonly && receptionCanPrint()) receptionElements.printFromForm.href = receptionPrintUrl(receptionState.current.id);
+    else receptionElements.printFromForm.removeAttribute('href');
 }
 
 async function openReception(id = null, mode = 'view') {
@@ -741,6 +770,7 @@ async function saveReception(confirm) {
         populateReceptionForm(response.data); configureReceptionDialog(); await photosPanel?.render();
         receptionElements.photos?.scrollIntoView({ block: 'center' });
     } else { receptionElements.dialog.close(); }
+    if (confirmed) offerReceptionPrinting(response.data);
     await refreshReceptionViews();
 }
 
@@ -799,6 +829,7 @@ window.estibaMaterialReceptionImportContext = {
 };
 
 if (receptionElements.workspace) {
+    receptionElements.dismissPrintNotice?.addEventListener('click', () => receptionElements.printNotice.classList.add('is-hidden'));
     receptionElements.reload.addEventListener('click', () => loadReceptions(receptionState.page));
     receptionElements.blankSampling.addEventListener('click', async () => {
         try {
@@ -966,6 +997,8 @@ if (receptionElements.workspace) {
     [receptionElements.deleteClose, receptionElements.deleteCancel].forEach((button) =>
         button.addEventListener('click', () => receptionElements.deleteDialog.close()));
     window.addEventListener('estiba:office-session', () => {
+        receptionElements.printNotice?.classList.add('is-hidden');
+        receptionElements.printLink?.removeAttribute('href');
         photosPanel?.reset(); receptionElements.dialog.close(); receptionState.current = null;
         clearReceptionDetail(); detailPhotosPanel?.reset(); receptionState.confirmations.clear();
         receptionElements.eliminations?.replaceChildren(); receptionElements.eliminations?.classList.add('is-hidden');
