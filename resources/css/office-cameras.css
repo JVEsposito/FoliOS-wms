@@ -426,6 +426,7 @@
 .camera-ops__band-heading i { font-size: .68rem; font-style: normal; font-weight: 800; }
 .camera-ops__band-capacity,
 .camera-ops__band-foot { color: var(--muted); font-size: .67rem; }
+.camera-ops__band-foot { overflow-wrap: anywhere; white-space: normal; }
 
 .camera-ops__positions { display: grid; gap: 3px; }
 .camera-ops__position {

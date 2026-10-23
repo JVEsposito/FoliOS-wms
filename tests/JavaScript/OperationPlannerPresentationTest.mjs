@@ -25,3 +25,16 @@ test('afinidad y cámara se leen como valores, nunca como objetos implícitos', 
     } }), 'Cliente A · Marca B');
     assert.equal(cameraReferenceLabel({ codigo: 'CAM-09', nombre: 'Cámara de tránsito 07' }), 'CAM-09 · Cámara de tránsito 07');
 });
+
+
+test('muestra todos los envases presentes y diferencia las entradas reservadas', () => {
+    const text = bandAffinityText({ afinidad: { activa: true, perfiles: [
+        { cliente: 'LA AGUADA', marca: 'FLA', formato: 'GFL50M', pallets: 11 },
+        { cliente: 'LA AGUADA', marca: 'FLA', formato: 'MAFLV225A', pallets: 1 },
+    ], entrantes: { pallets_completos: 2, perfiles: [{ cliente: 'LA AGUADA', marca: 'FLA', formato: 'MAFLV225A', pallets: 2 }] } } });
+    assert.match(text, /MIX/);
+    assert.match(text, /GFL50M \(11 presentes\)/);
+    assert.match(text, /MAFLV225A \(1 presente\)/);
+    assert.match(text, /Entradas reservadas:.*MAFLV225A \(2\)/);
+    assert.doesNotMatch(text, /\[object Object\]/);
+});

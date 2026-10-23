@@ -1,3 +1,4 @@
+import { bandAffinityText } from './shared/camera-band-affinity';
 import { createOperationalPoller } from './shared/operational-poller';
 import { cameraDisplayName } from './shared/camera-display';
 import { bandNumberingLabel, orderBandsForCamera } from './shared/camera-layout';
@@ -714,20 +715,10 @@ function renderOperationalBandHeading(band, operationalBand) {
 
 function operationalBandAffinityLabel(operationalBand) {
     const affinity = operationalBand.afinidad;
-
-    if (! affinity?.activa) {
-        return affinity?.fuera_alcance
-            ? `${affinity.fuera_alcance} bulto(s) fuera del planificador`
-            : 'Sin afinidad · banda liberada';
-    }
-
-    const profile = [affinity.cliente?.valor, affinity.marca?.valor, affinity.formato?.valor]
-        .filter(Boolean)
-        .join(' › ') || 'Afinidad sin datos completos';
-
-    return affinity.perfiles_diferentes > 1
-        ? `${profile} · MIX ${affinity.perfiles_diferentes}`
-        : profile;
+    if (affinity?.activa || affinity?.entrantes?.pallets_completos) return bandAffinityText(operationalBand);
+    return affinity?.fuera_alcance
+        ? `${affinity.fuera_alcance} bulto(s) fuera del planificador`
+        : 'Sin afinidad · banda liberada';
 }
 
 function renderPositionCell(position) {

@@ -6,7 +6,6 @@ use App\Enums\ContenidoCamara;
 use App\Enums\EstadoCamara;
 use App\Enums\EstadoPosicion;
 use App\Enums\ModoBandaOperacional;
-use App\Enums\NivelAfinidadUbicacion;
 use App\Enums\TipoBulto;
 use App\Enums\UsoBandaOperacional;
 use App\Models\BandaOperacional;
@@ -70,7 +69,7 @@ class ServicioRecomendacionUbicacion
                     ->with([
                         'ubicacionesActuales.folio:id,tipo_bulto,marca,exportadora,datos_externos,activo',
                         'reservaTareaActiva' => fn ($reservas) => $reservas
-                            ->where('vence_at', '>', now()),
+                            ->conCompromisoVigente()->with('tareaMovimiento.folio:id,tipo_bulto,marca,exportadora,datos_externos,activo'),
                         'reservaPreparacionSagActiva',
                     ])
                     ->orderBy('banda')
@@ -93,8 +92,7 @@ class ServicioRecomendacionUbicacion
                     $item['camara']['codigo'],
                 );
 
-                return ($this->ordenAfinidad($izquierda['afinidad']['nivel'])
-                    <=> $this->ordenAfinidad($derecha['afinidad']['nivel']))
+                return ($izquierda['afinidad']['orden_compatibilidad'] <=> $derecha['afinidad']['orden_compatibilidad'])
                     ?: ($izquierda['afinidad']['mezclaria_clientes'] <=> $derecha['afinidad']['mezclaria_clientes'])
                     ?: ($preferida($derecha) <=> $preferida($izquierda))
                     ?: ($derecha['afinidad']['puntaje'] <=> $izquierda['afinidad']['puntaje'])
@@ -179,7 +177,8 @@ class ServicioRecomendacionUbicacion
                     return null;
                 }
 
-                $evaluacion = $this->afinidad->evaluar($folio, $folios);
+                $entrantes = $this->afinidad->entrantes($posiciones);
+                $evaluacion = $this->afinidad->evaluar($folio, $folios->concat($entrantes)->unique('id'));
 
                 return [
                     'camara' => [
@@ -204,6 +203,8 @@ class ServicioRecomendacionUbicacion
                     'afinidad' => [
                         'nivel' => $evaluacion['nivel']->value,
                         'puntaje' => $evaluacion['puntaje'],
+                        'orden_compatibilidad' => $this->afinidad->orden($evaluacion),
+                        'mezclaria_perfiles' => $evaluacion['mezclaria_perfiles'],
                         'coincidencias' => $evaluacion['coincidencias'],
                         'mezclaria_clientes' => $evaluacion['mezclaria_clientes'],
                         'motivo' => $evaluacion['motivo'],
@@ -269,16 +270,5 @@ class ServicioRecomendacionUbicacion
             'excluye_destinos_reservados' => true,
             'camara_preferente_despacho' => config('planificador.camara_preferente_despacho'),
         ];
-    }
-
-    private function ordenAfinidad(string $nivel): int
-    {
-        return match ($nivel) {
-            NivelAfinidadUbicacion::ClienteMarcaFormato->value => 0,
-            NivelAfinidadUbicacion::ClienteMarca->value => 1,
-            NivelAfinidadUbicacion::Cliente->value => 2,
-            NivelAfinidadUbicacion::BandaLibre->value => 3,
-            default => 4,
-        };
     }
 }

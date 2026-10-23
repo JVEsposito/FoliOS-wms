@@ -2,9 +2,12 @@
 
 namespace App\Models;
 
+use App\Enums\EstadoCustodiaTemporal;
 use App\Enums\EstadoReservaTareaMovimiento;
+use App\Enums\EstadoTareaMovimiento;
 use App\Models\Concerns\ImpideEliminacionFisica;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -31,6 +34,17 @@ class ReservaTareaMovimiento extends Model
     use HasUuids, ImpideEliminacionFisica;
 
     protected $table = 'reservas_tareas_movimiento';
+
+    /** Un pallet ya retirado conserva su compromiso aunque venza el lease. */
+    public function scopeConCompromisoVigente(Builder $consulta): Builder
+    {
+        return $consulta->where('estado', EstadoReservaTareaMovimiento::Activa->value)
+            ->where(fn (Builder $vigente) => $vigente->where('vence_at', '>', now())
+                ->orWhereHas('tareaMovimiento', fn (Builder $tarea) => $tarea
+                    ->where('estado', EstadoTareaMovimiento::EnProceso->value)
+                    ->orWhereHas('maniobraOperacional.custodiasTemporales', fn (Builder $custodia) => $custodia
+                        ->where('estado', EstadoCustodiaTemporal::Activa->value))));
+    }
 
     public function tareaMovimiento(): BelongsTo
     {

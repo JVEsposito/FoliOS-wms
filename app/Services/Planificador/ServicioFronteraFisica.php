@@ -22,7 +22,7 @@ use Illuminate\Support\Facades\DB;
 
 class ServicioFronteraFisica
 {
-    private const VERSION_SNAPSHOT = 'frontera_fisica_global_v2_preferencia_despacho';
+    private const VERSION_SNAPSHOT = 'frontera_fisica_global_v3_envases_comprometidos';
 
     public function __construct(
         private readonly ServicioEstadoArbitrajePlanificador $estadoArbitraje,
