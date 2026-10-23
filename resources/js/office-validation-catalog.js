@@ -11,6 +11,7 @@ const state = {
     csg: [],
     imports: [],
     preview: null,
+    loaded: false,
     projection: { articulos: 0, origenes: 0, combinaciones: 0 },
     showInactive: false,
 };
@@ -20,6 +21,7 @@ const elements = {
     toggleInactive: byId('catalogToggleInactive'),
     importForm: byId('importForm'), importError: byId('importError'), importPreview: byId('importPreview'), importList: byId('importList'),
     loading: byId('catalogLoading'), loadingText: byId('catalogLoadingText'), toasts: byId('catalogToasts'),
+    loadError: byId('catalogLoadError'),
 };
 
 const entityConfig = {
@@ -78,22 +80,20 @@ function verifyAccess() {
 }
 
 async function fetchCatalog(seasonId) {
-    const suffix = seasonId ? `?temporada_id=${encodeURIComponent(seasonId)}` : '';
+    const suffix = `?resumen=1${seasonId ? `&temporada_id=${encodeURIComponent(seasonId)}` : ''}`;
     const admin = await api(`/api/administracion/validacion${suffix}`);
-    state.seasons = admin.temporadas || [];
-    state.season = admin.temporada || null;
-    state.imports = admin.importaciones || [];
-    if (state.season) {
-        const hierarchy = await api(`/api/administracion/validacion/temporadas/${state.season.id}/catalogo`);
-        state.clients = hierarchy.clientes || [];
-        state.categories = hierarchy.categorias || [];
-        state.species = hierarchy.especies || [];
-        state.csg = hierarchy.csg || [];
-        state.projection = hierarchy.proyeccion || { articulos: 0, origenes: 0, combinaciones: 0 };
-        return;
-    }
-    state.clients = []; state.categories = []; state.species = []; state.csg = [];
-    state.projection = { articulos: 0, origenes: 0, combinaciones: 0 };
+    const season = admin.temporada || null;
+    const hierarchy = season
+        ? await api(`/api/administracion/validacion/temporadas/${season.id}/catalogo`)
+        : {};
+    // Publicar ambos resultados juntos evita mezclar temporadas si falla la segunda petición.
+    Object.assign(state, {
+        seasons: admin.temporadas || [], season, imports: admin.importaciones || [],
+        clients: hierarchy.clientes || [], categories: hierarchy.categorias || [],
+        species: hierarchy.especies || [], csg: hierarchy.csg || [],
+        projection: hierarchy.proyeccion || { articulos: 0, origenes: 0, combinaciones: 0 },
+        loaded: true,
+    });
 }
 
 async function load(seasonId = null, { announce = false } = {}) {
@@ -102,16 +102,22 @@ async function load(seasonId = null, { announce = false } = {}) {
         try {
             await fetchCatalog(seasonId);
         } catch (error) {
-            if (error.status !== 0 && error.status < 500) throw error;
+            if (error.status !== 0) throw error;
             await wait(600);
             await fetchCatalog(seasonId);
         }
         render();
+        elements.loadError.textContent = '';
+        elements.loadError.classList.add('is-hidden');
         if (announce) {
             toast(`Catálogo actualizado · ${state.season?.nombre || 'sin temporada activa'}.`);
         }
+        return true;
     } catch (error) {
-        toast(error.message, true);
+        elements.selector.value = state.season?.id || '';
+        elements.loadError.textContent = `No se pudo actualizar el catálogo. ${state.loaded ? 'Se conservan los últimos datos cargados.' : 'Los datos todavía no se han cargado.'} Pulsa Actualizar para reintentar. ${error.message}`;
+        elements.loadError.classList.remove('is-hidden');
+        return false;
     } finally {
         setBusy(false);
     }
@@ -263,8 +269,8 @@ async function save(type) {
             body: JSON.stringify(data),
         });
         resetForm(form);
-        await load(state.season.id);
-        toast('Catálogo actualizado y publicado para la PDA.');
+        const refreshed = await load(state.season.id);
+        toast(refreshed ? 'Catálogo actualizado y publicado para la PDA.' : 'Cambio guardado. No fue posible refrescar la vista; pulsa Actualizar.', !refreshed);
     } catch (error) {
         errorNode.textContent = error.message;
     } finally {
@@ -286,8 +292,8 @@ async function remove(type, id) {
         await api(`/api/administracion/validacion/${config.path}/${id}`, { method: 'DELETE' });
         const form = byId(config.form);
         if (form.elements.id.value === id) resetForm(form);
-        await load(state.season?.id);
-        toast('Elemento retirado del catálogo operativo y de la PDA.');
+        const refreshed = await load(state.season?.id);
+        toast(refreshed ? 'Elemento retirado del catálogo operativo y de la PDA.' : 'Elemento retirado. No fue posible refrescar la vista; pulsa Actualizar.', !refreshed);
     } catch (error) {
         toast(error.message, true);
     } finally {
@@ -311,8 +317,8 @@ async function confirmImport(id) {
         await api(`/api/administracion/validacion/importaciones/${id}/confirmar`, { method: 'POST' });
         state.preview = null;
         elements.importPreview.classList.add('is-hidden');
-        await load(state.season?.id);
-        toast('Datos maestros importados y versión actualizada.');
+        const refreshed = await load(state.season?.id);
+        toast(refreshed ? 'Datos maestros importados y versión actualizada.' : 'Importación confirmada. No fue posible refrescar la vista; pulsa Actualizar.', !refreshed);
     } catch (error) {
         elements.importError.textContent = error.message;
     } finally {
@@ -359,6 +365,7 @@ document.addEventListener('click', (event) => {
 elements.selector.addEventListener('change', () => void load(elements.selector.value));
 elements.reload.addEventListener('click', () => void load(state.season?.id, { announce: true }));
 elements.toggleInactive.addEventListener('click', () => {
+    if (!state.loaded) return;
     state.showInactive = !state.showInactive;
     render();
 });

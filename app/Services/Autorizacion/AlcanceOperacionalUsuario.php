@@ -721,6 +721,18 @@ class AlcanceOperacionalUsuario
         );
     }
 
+    public function puedeConfigurarCapacidadMateriales(User $usuario): bool
+    {
+        return $this->permiteAccionMateriales($usuario, 'capacidad.configurar')
+            && $this->puedeConsultarKardexMateriales($usuario);
+    }
+
+    public function puedeMedirCargasMateriales(User $usuario): bool
+    {
+        return $this->permiteAccionMateriales($usuario, 'capacidad.medir')
+            && $this->puedeConsultarKardexMateriales($usuario);
+    }
+
     public function puedeCorregirItemsEstibadosMateriales(User $usuario): bool
     {
         if (! $this->permiteAccionMateriales($usuario, 'inventario.corregir_item')) {

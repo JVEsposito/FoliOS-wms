@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\BandaOperacionalController;
 use App\Http\Controllers\Api\BloqueoMaterialController;
 use App\Http\Controllers\Api\CamaraController;
 use App\Http\Controllers\Api\CambioPasswordUsuarioController;
+use App\Http\Controllers\Api\CapacidadMaterialController;
 use App\Http\Controllers\Api\CargaController;
 use App\Http\Controllers\Api\CatalogoEnvaseController;
 use App\Http\Controllers\Api\CatalogoFrutaEmbaladaController;
@@ -511,6 +512,18 @@ Route::middleware('auth:sanctum')->group(function () {
     });
     Route::get('/materiales/kardex', [DespachoMaterialController::class, 'kardex'])
         ->middleware('can:consultar-kardex-materiales');
+    Route::prefix('materiales/capacidad')->middleware('can:consultar-kardex-materiales')->group(function () {
+        Route::get('/catalogo', [CapacidadMaterialController::class, 'catalogo']);
+        Route::get('/cargas', [CapacidadMaterialController::class, 'cargas']);
+        Route::get('/historial', [CapacidadMaterialController::class, 'historial']);
+        Route::get('/almacenes/{id}/simular', [CapacidadMaterialController::class, 'simular'])->whereUuid('id');
+        Route::middleware('can:configurar-capacidad-materiales')->group(function () {
+            Route::post('/tipos-pallet', [CapacidadMaterialController::class, 'storeTipo']);
+            Route::put('/tipos-pallet/{id}', [CapacidadMaterialController::class, 'updateTipo'])->whereUuid('id');
+            Route::put('/almacenes/{id}', [CapacidadMaterialController::class, 'guardarAlmacen'])->whereUuid('id');
+        });
+        Route::put('/cargas/{id}', [CapacidadMaterialController::class, 'guardarCarga'])->whereUuid('id')->middleware('can:medir-cargas-materiales');
+    });
     Route::middleware('can:consultar-kardex-materiales')->group(function () {
         Route::get('/materiales/supervision/catalogos', [SupervisionMaterialesController::class, 'catalogos']);
         Route::get('/materiales/supervision', [SupervisionMaterialesController::class, 'index']);
