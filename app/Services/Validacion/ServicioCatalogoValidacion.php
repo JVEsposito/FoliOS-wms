@@ -26,7 +26,7 @@ class ServicioCatalogoValidacion
     public function datosAdministracion(?Temporada $seleccionada = null, bool $resumen = false): array
     {
         $temporadas = Temporada::query()
-            ->when(! $resumen, fn ($consulta) => $consulta->withCount(['articulos', 'origenes', 'combinaciones']))
+            ->unless($resumen, fn ($consulta) => $consulta->withCount(['articulos', 'origenes', 'combinaciones']))
             ->orderByDesc('activa')
             ->orderByDesc('fecha_inicio')
             ->orderByDesc('created_at')
