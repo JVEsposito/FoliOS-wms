@@ -31,7 +31,7 @@
             'inventario' => [
                 'eyebrow' => 'INVENTARIO BC · BODEGA CENTRAL',
                 'title' => 'Inventario físico por folio y cliente',
-                'description' => 'Consulta cantidades, ubicación, reservas y bloqueos de la Bodega Central.',
+                'description' => 'Consulta cantidades, ubicación, reservas y bloqueos de las bodegas físicas.',
             ],
             'despachos' => [
                 'eyebrow' => 'DESPACHOS INTERNOS',
@@ -506,6 +506,7 @@
                                 <label><input type="radio" name="modalidad" value="directo"> Directo desde bodega · seleccionar folios y entregar ahora</label>
                             </fieldset>
                             <label><span>Destino *</span><select name="destino_material_id" id="dispatchDestination" required></select></label>
+                            <label><span>Bodega de origen *</span><select name="almacen_origen_id" id="dispatchWarehouse" required></select></label>
                             <label id="dispatchAssigneeField"><span>Camarero asignado</span><select name="asignado_a_user_id" id="dispatchAssignee"><option value="">Cualquier camarero autorizado</option></select></label>
                             <label class="materials-wide"><span>Observación</span><textarea name="observacion" maxlength="1000" rows="2"></textarea></label>
                             <div class="dispatch-lines" id="dispatchMaterialLines"></div>
@@ -583,6 +584,7 @@
             </div>
             <form class="materials-import__form" id="materialDirectDispatchForm">
                 <input name="folio_id" type="hidden">
+                <input name="almacen_origen_id" type="hidden">
                 <label><span>Destino y centro de costo *</span><select name="destino_material_id" required></select></label>
                 <label><span>Cantidad a entregar *</span><input name="cantidad" type="number" min="0.001" step="0.001" required></label>
                 <label><span>Observación</span><textarea name="observacion" maxlength="1000" rows="2" placeholder="Referencia, turno o motivo de la entrega"></textarea></label>
@@ -598,7 +600,7 @@
         <dialog class="materials-import" id="materialDirectConsumptionDialog">
             <div class="materials-import__header">
                 <div>
-                    <p class="eyebrow">CONSUMO DIRECTO · BODEGA CENTRAL</p>
+                    <p class="eyebrow">CONSUMO DIRECTO · BODEGA DE ORIGEN</p>
                     <h2>Consumir insumo</h2>
                     <p id="materialDirectConsumptionContext">Selecciona un insumo disponible.</p>
                 </div>
@@ -613,7 +615,7 @@
                 <label><span>Documento o referencia</span><input name="documento_relacionado" maxlength="150" placeholder="Orden, turno o vale de consumo"></label>
                 <label><span>Motivo *</span><textarea name="motivo" minlength="3" maxlength="1000" rows="2" placeholder="Consumo turno día, mantención preventiva…" required></textarea></label>
                 <label><span>Justificación de excepción FIFO</span><textarea name="motivo_excepcion_fifo" minlength="5" maxlength="1000" rows="2" placeholder="Completar solo si no se consume el lote más antiguo"></textarea></label>
-                <p class="materials-import__help">Este movimiento descuenta la existencia de Bodega Central e imputa el consumo al centro de costo. No crea existencia temporal en el centro de costo y no puede deshacerse editando el Kardex.</p>
+                <p class="materials-import__help">Este movimiento descuenta la existencia de la bodega de origen e imputa el consumo al centro de costo. No crea existencia temporal en el centro de costo y no puede deshacerse editando el Kardex.</p>
                 <p class="form-error" id="materialDirectConsumptionError" role="alert"></p>
                 <div class="materials-import__actions">
                     <button class="secondary-button" id="cancelMaterialDirectConsumption" type="button">Cancelar</button>

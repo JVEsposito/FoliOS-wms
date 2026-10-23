@@ -21,6 +21,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'asignado_a_user_id',
     'estado',
     'destino_material_id',
+    'almacen_origen_id',
     'destino_nombre',
     'destino_centro_costo',
     'observacion',
@@ -53,6 +54,11 @@ class DespachoMaterial extends Model
     public function operacionesRetiro(): HasMany
     {
         return $this->hasMany(OperacionRetiroMaterial::class)->whereNotNull('procesada_at')->orderBy('procesada_at')->orderBy('id');
+    }
+
+    public function almacenOrigen(): BelongsTo
+    {
+        return $this->belongsTo(AlmacenMaterial::class, 'almacen_origen_id');
     }
 
     public function detalles(): HasMany

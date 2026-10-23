@@ -49,6 +49,7 @@ class ServicioTransformacionMaterial
         private readonly ServicioCorrelativoFolioMaterial $correlativoFolio,
         private readonly ServicioReservaFifoMaterial $reservaFifo,
         private readonly ServicioArmadoMaterial $armado,
+        private readonly ServicioAlmacenMaterial $almacenes,
     ) {}
 
     /**
@@ -226,11 +227,13 @@ class ServicioTransformacionMaterial
                 throw new DomainException('La receta no pertenece a la temporada global activa.');
             }
 
+            $origen = $this->almacenes->origen($datos['almacen_origen_id'] ?? null, $usuario);
             $orden = OrdenTransformacionMaterial::create([
                 'operacion_id' => $datos['operacion_id'],
                 'payload_hash' => $payloadHash,
                 'temporada_id' => $temporada->id,
                 'cliente_id' => $receta->cliente_id,
+                'almacen_origen_id' => $origen->id,
                 'version_receta_material_id' => $version->id,
                 'estado' => EstadoOrdenTransformacionMaterial::Borrador,
                 'cantidad_planificada_salida' => $this->cantidad($datos['cantidad_planificada_salida']),
@@ -359,6 +362,7 @@ class ServicioTransformacionMaterial
                     isset($componente['categoria_operacional'])
                         ? [(string) $componente['categoria_operacional']]
                         : null,
+                    $orden->almacen_origen_id,
                 );
 
                 if ($pendiente > 0.0001) {
@@ -478,13 +482,7 @@ class ServicioTransformacionMaterial
                 ->get();
 
             foreach ($reservas as $reserva) {
-                $folio = FolioMaterial::query()->lockForUpdate()->findOrFail($reserva->folio_id);
-                $folio->update([
-                    'cantidad_reservada' => max(
-                        0,
-                        round((float) $folio->cantidad_reservada - (float) $reserva->cantidad, 3),
-                    ),
-                ]);
+                $this->almacenes->aplicarReserva($reserva, 0, -max(0, round((float) $reserva->cantidad - (float) $reserva->cantidad_consumida, 3)));
                 $reserva->update(['estado' => EstadoReservaMaterial::Liberada]);
             }
 
@@ -937,7 +935,7 @@ class ServicioTransformacionMaterial
                 $folioMaterial->asegurarVigente();
 
                 if (! $folio->activo
-                    || $folio->estado_operacional !== EstadoOperacionalFolio::Disponible
+                    || ! in_array($folio->estado_operacional, [EstadoOperacionalFolio::Disponible, EstadoOperacionalFolio::PendienteUbicacion], true)
                     || $folioMaterial->motivo_bloqueo !== null) {
                     throw new DomainException(sprintf(
                         'El folio %s ya no está disponible para transformación.',
@@ -967,17 +965,14 @@ class ServicioTransformacionMaterial
                 $cantidadResultante = max(0, round($cantidadAnterior - $cantidad, 3));
                 $reservaConsumida = round((float) $reserva->cantidad_consumida + $cantidad, 3);
                 $reservaCompleta = abs($reservaConsumida - (float) $reserva->cantidad) <= 0.0001;
-                $ubicacion = $folio->ubicacionActual;
-                $camara = $ubicacion?->camara ?? $ubicacion?->posicion?->camara;
+                $saldoOrigen = $this->almacenes->saldoReserva($reserva);
+                $camara = $saldoOrigen->camara;
                 $metadatosUbicacion = $camara ? [
                     'camara' => $camara->codigo,
-                    'posicion' => $ubicacion?->posicion?->etiqueta,
+                    'posicion' => $saldoOrigen->posicion?->etiqueta,
                 ] : [];
 
-                $folioMaterial->update([
-                    'cantidad_actual' => $cantidadResultante,
-                    'cantidad_reservada' => max(0, round($cantidadReservada - $cantidad, 3)),
-                ]);
+                $this->almacenes->aplicarReserva($reserva, -$cantidad, -$cantidad);
                 $reserva->update([
                     'cantidad_consumida' => $reservaConsumida,
                     'estado' => $reservaCompleta
@@ -1011,6 +1006,9 @@ class ServicioTransformacionMaterial
                     'motivo' => 'Consumo real en transformación de materiales.',
                     'metadatos' => [
                         'siguio_fifo' => $consumoPreparado['siguio_fifo'],
+                        'almacen_origen_id' => $saldoOrigen->almacen_material_id,
+                        'saldo_material_almacen_id' => $saldoOrigen->id,
+                        'saldo_version_resultante' => $saldoOrigen->fresh()->version,
                         'motivo_desviacion_fifo' => $consumoPreparado['motivo_desviacion_fifo'],
                         ...$metadatosUbicacion,
                     ],
@@ -1018,10 +1016,6 @@ class ServicioTransformacionMaterial
                 ]);
 
                 if ($cantidadResultante <= 0.0001) {
-                    if ($ubicacion) {
-                        UbicacionActual::query()->whereKey($ubicacion->id)->delete();
-                        $camara?->increment('version_plano');
-                    }
                     $folio->update([
                         'estado_operacional' => EstadoOperacionalFolio::RetiradoDefinitivo,
                         'activo' => false,
@@ -1479,6 +1473,7 @@ class ServicioTransformacionMaterial
                 $cantidadConsumida = round((float) $consumo->cantidad_consumida, 3);
                 $cantidadReservada = round((float) $material->cantidad_reservada, 3);
                 $reservaConsumida = round((float) $reserva->cantidad_consumida, 3);
+                $saldoOrigen = $this->almacenes->saldoReserva($reserva);
                 $quedoAgotado = $cantidadEsperada <= 0.0001;
                 $ultimoMovimiento = MovimientoInventarioMaterial::query()
                     ->where('folio_id', $folio->id)
@@ -1493,7 +1488,9 @@ class ServicioTransformacionMaterial
                     || ! $ultimoMovimiento
                     || $ultimoMovimiento->tipo
                         !== TipoMovimientoInventarioMaterial::ConsumoTransformacion
-                    || $ultimoMovimiento->lote_transformacion_material_id !== $lote->id) {
+                    || $ultimoMovimiento->lote_transformacion_material_id !== $lote->id
+                    || (isset($ultimoMovimiento->metadatos['saldo_version_resultante'])
+                        && (int) $ultimoMovimiento->metadatos['saldo_version_resultante'] !== $saldoOrigen->version)) {
                     throw new DomainException(sprintf(
                         'El folio de entrada %s posee movimientos posteriores y no puede restaurarse.',
                         $folio->numero_folio,
@@ -1510,8 +1507,7 @@ class ServicioTransformacionMaterial
                         ));
                     }
                 } elseif (! $folio->activo
-                    || $folio->estado_operacional !== EstadoOperacionalFolio::Disponible
-                    || ! $ubicaciones->has($folio->id)
+                    || ((float) $saldoOrigen->cantidad_actual > 0 && ! $saldoOrigen->esReservable())
                     || $material->motivo_bloqueo !== null) {
                     throw new DomainException(sprintf(
                         'El folio de entrada %s ya no conserva su condición operacional.',
@@ -1533,19 +1529,10 @@ class ServicioTransformacionMaterial
                     ));
                 }
 
-                $material->update([
-                    'cantidad_actual' => $cantidadRestaurada,
-                    'cantidad_reservada' => $reservaRestaurada,
-                ]);
+                $this->almacenes->aplicarReserva($reserva, $cantidadConsumida, $cantidadConsumida);
                 $reserva->update([
                     'cantidad_consumida' => $reservaConsumidaRestante,
                     'estado' => EstadoReservaMaterial::Activa,
-                ]);
-                $folio->update([
-                    'estado_operacional' => $quedoAgotado
-                        ? EstadoOperacionalFolio::PendienteUbicacion
-                        : EstadoOperacionalFolio::Disponible,
-                    'activo' => true,
                 ]);
                 MovimientoInventarioMaterial::create([
                     'folio_id' => $folio->id,
@@ -1726,13 +1713,7 @@ class ServicioTransformacionMaterial
                     0,
                     round((float) $reserva->cantidad - (float) $reserva->cantidad_consumida, 3),
                 );
-                $folio = FolioMaterial::query()->lockForUpdate()->findOrFail($reserva->folio_id);
-                $folio->update([
-                    'cantidad_reservada' => max(
-                        0,
-                        round((float) $folio->cantidad_reservada - $restante, 3),
-                    ),
-                ]);
+                $this->almacenes->aplicarReserva($reserva, 0, -$restante);
                 $reserva->update([
                     'estado' => $restante <= 0.0001
                         ? EstadoReservaMaterial::Consumida
@@ -1844,7 +1825,7 @@ class ServicioTransformacionMaterial
             $folioMaterial->asegurarVigente();
 
             if (! $folio->activo
-                || $folio->estado_operacional !== EstadoOperacionalFolio::Disponible
+                || ! in_array($folio->estado_operacional, [EstadoOperacionalFolio::Disponible, EstadoOperacionalFolio::PendienteUbicacion], true)
                 || $folioMaterial->motivo_bloqueo !== null) {
                 throw new DomainException(sprintf(
                     'El folio %s ya no está disponible para transformación.',
@@ -1875,13 +1856,10 @@ class ServicioTransformacionMaterial
             }
 
             $cantidadResultante = max(0, round($cantidadAnterior - $cantidad, 3));
-            $ubicacion = $folio->ubicacionActual;
-            $camara = $ubicacion?->camara ?? $ubicacion?->posicion?->camara;
+            $saldoOrigen = $this->almacenes->saldoReserva($reserva);
+            $camara = $saldoOrigen->camara;
 
-            $folioMaterial->update([
-                'cantidad_actual' => $cantidadResultante,
-                'cantidad_reservada' => max(0, round($cantidadReservada - $cantidad, 3)),
-            ]);
+            $this->almacenes->aplicarReserva($reserva, -$cantidad, -$cantidad);
             $reserva->update([
                 'cantidad_consumida' => round((float) $reserva->cantidad_consumida + $cantidad, 3),
                 'estado' => EstadoReservaMaterial::Consumida,
@@ -1899,19 +1877,17 @@ class ServicioTransformacionMaterial
                 'motivo' => 'Retiro de componentes a la línea de transformación.',
                 'metadatos' => [
                     'sentido' => 'retiro_linea',
+                    'almacen_origen_id' => $saldoOrigen->almacen_material_id,
+                    'saldo_material_almacen_id' => $saldoOrigen->id,
                     ...($camara ? [
                         'camara' => $camara->codigo,
-                        'posicion' => $ubicacion?->posicion?->etiqueta,
+                        'posicion' => $saldoOrigen->posicion?->etiqueta,
                     ] : []),
                 ],
                 'ocurrido_at' => $ahora,
             ]);
 
             if ($cantidadResultante <= 0.0001) {
-                if ($ubicacion) {
-                    UbicacionActual::query()->whereKey($ubicacion->id)->delete();
-                    $camara?->increment('version_plano');
-                }
                 $folio->update([
                     'estado_operacional' => EstadoOperacionalFolio::RetiradoDefinitivo,
                     'activo' => false,
@@ -2073,15 +2049,10 @@ class ServicioTransformacionMaterial
         $folio = Folio::query()->lockForUpdate()->findOrFail($material->folio_id);
         $cantidadAnterior = round((float) $material->cantidad_actual, 3);
         $cantidadResultante = round($cantidadAnterior + $cantidad, 3);
-        $estabaVacio = $cantidadAnterior <= 0.0001;
+        $saldoOrigen = $this->almacenes->saldoReserva($reserva);
+        $estabaVacio = (float) $saldoOrigen->cantidad_actual <= 0.0001;
 
-        $material->update(['cantidad_actual' => $cantidadResultante]);
-        if ($estabaVacio) {
-            $folio->refresh()->update([
-                'estado_operacional' => EstadoOperacionalFolio::PendienteUbicacion,
-                'activo' => true,
-            ]);
-        }
+        $this->almacenes->aplicarReserva($reserva, $cantidad, 0);
         $consumida = max(0, round((float) $reserva->cantidad_consumida - $cantidad, 3));
         $reserva->update([
             'cantidad_consumida' => $consumida,
@@ -2103,6 +2074,7 @@ class ServicioTransformacionMaterial
             'motivo' => $motivo,
             'metadatos' => [
                 'sentido' => $sentido,
+                'almacen_origen_id' => $saldoOrigen->almacen_material_id,
                 'requiere_ubicacion' => $estabaVacio,
             ],
             'ocurrido_at' => $ahora,
@@ -2395,6 +2367,10 @@ class ServicioTransformacionMaterial
             'versionReceta.detalles.itemEntrada',
             'reservas' => fn ($consulta) => $consulta->orderBy('item_material_id')->orderBy('orden_fifo'),
             'reservas.folioMaterial.folio.ubicacionActual.posicion.camara',
+            'reservas.saldoAlmacen.almacen',
+            'reservas.saldoAlmacen.camara',
+            'reservas.saldoAlmacen.posicion',
+            'almacenOrigen',
             'lotes' => fn ($consulta) => $consulta->orderBy('numero_lote'),
             'foliosSalidaReservados',
             'cuadraturas' => fn ($consulta) => $consulta->orderByDesc('es_componente_principal'),

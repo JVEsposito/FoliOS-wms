@@ -214,10 +214,10 @@ class ServicioMovimientoAlmacenMaterial
     ): ?AlmacenMaterial {
         $centroCostoId = $datos['centro_costo_id'] ?? null;
 
-        if ($almacen->codigo !== AlmacenMaterial::CODIGO_BODEGA_CENTRAL) {
+        if ($almacen->tipo !== TipoAlmacenMaterial::Fisica) {
             if ($centroCostoId) {
                 throw new DomainException(
-                    'La imputación directa a centro de costo solo aplica desde Bodega Central.',
+                    'La imputación directa a centro de costo requiere una bodega física.',
                 );
             }
 
@@ -226,7 +226,7 @@ class ServicioMovimientoAlmacenMaterial
 
         if ($folio->categoria_operacional !== CategoriaOperacionalMaterial::Insumo) {
             throw new DomainException(
-                'El consumo directo desde Bodega Central solo está disponible para insumos.',
+                'El consumo directo desde una bodega física solo está disponible para insumos.',
             );
         }
 
@@ -295,7 +295,8 @@ class ServicioMovimientoAlmacenMaterial
             throw new DomainException('La transferencia supera el saldo disponible de origen.');
         }
 
-        [$camara, $posicion] = $this->ubicacionDestino($destino, $saldoDestino, $datos);
+        [$camara, $posicion] = $this->ubicacionDestino($destino, $saldoDestino, $datos,
+            abs($cantidad - (float) $saldoOrigen->cantidad_actual) <= 0.0001 ? $saldoOrigen->id : null);
         $origenAnterior = (float) $saldoOrigen->cantidad_actual;
         $origenResultante = round($origenAnterior - $cantidad, 3);
         $destinoAnterior = (float) $saldoDestino->cantidad_actual;
@@ -575,6 +576,7 @@ class ServicioMovimientoAlmacenMaterial
         AlmacenMaterial $almacen,
         SaldoMaterialAlmacen $saldo,
         array $datos,
+        ?string $saldoALiberarId = null,
     ): array {
         if ($almacen->tipo === TipoAlmacenMaterial::Virtual) {
             if (($datos['camara_destino_id'] ?? null)
@@ -618,6 +620,11 @@ class ServicioMovimientoAlmacenMaterial
 
         if ($posicionId && ! $posicion) {
             throw new DomainException('La posición no pertenece a la cámara o está inactiva.');
+        }
+
+        if ($posicion && SaldoMaterialAlmacen::query()->where('posicion_id', $posicion->id)->where('cantidad_actual', '>', 0)
+            ->whereKeyNot($saldo->id)->when($saldoALiberarId, fn ($q, $id) => $q->whereKeyNot($id))->exists()) {
+            throw new DomainException('La posición destino ya contiene otro saldo físico. Selecciona una posición libre.');
         }
 
         return [$camara, $posicion];

@@ -21,6 +21,7 @@ class CrearOrdenTransformacionMaterialRequest extends FormRequest
 
         return [
             'operacion_id' => ['required', 'uuid'],
+            'almacen_origen_id' => ['nullable', 'uuid', 'exists:destinos_materiales,id'],
             'version_receta_material_id' => [
                 'required',
                 'uuid',

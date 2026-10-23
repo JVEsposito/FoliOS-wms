@@ -51,6 +51,11 @@ class Camara extends Model
         return $this->ubicacionesActuales()->whereNull('posicion_id');
     }
 
+    public function saldosMateriales(): HasMany
+    {
+        return $this->hasMany(SaldoMaterialAlmacen::class);
+    }
+
     public function sesionesEstiba(): HasMany
     {
         return $this->hasMany(SesionEstiba::class);

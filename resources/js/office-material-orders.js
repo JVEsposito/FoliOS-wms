@@ -12,6 +12,7 @@ const orderState = {
     // Tarja de armado: si la bodega tiene código, la línea es la máquina y el turno es 01 o 02.
     armado: null,
     inventory: [],
+    bodegas: [],
     loadedToken: null,
     loading: false,
     creationOperation: null,
@@ -190,6 +191,8 @@ function injectOrderPanel() {
             <form class="materials-form materials-order-form is-hidden" id="materialOrderForm" novalidate>
                 <div><p class="eyebrow">NUEVA ORDEN</p><h3>Preparar borrador</h3></div>
                 <label><span>Receta y versión activa *</span><select name="version_receta_material_id" required></select></label>
+                <label><span>Bodega de componentes *</span><select name="almacen_origen_id" required></select></label>
+                <p class="materials-help">Las reservas y devoluciones corresponden a esta bodega. Los folios producidos ingresan a Bodega Central para su ubicación o transferencia posterior.</p>
                 <div class="materials-form__grid">
                     <label><span>Cantidad planificada de salida *</span><input name="cantidad_planificada_salida" type="number" min="0.001" step="0.001" required></label>
                     <label><span>Fecha operacional *</span><input name="fecha_operacional" type="date" required></label>
@@ -335,6 +338,7 @@ function selectedRecipeEntry() {
 function availableByItem(itemId, operationalCategory = null) {
     return Math.round(orderState.inventory
         .filter((folio) => folio.item?.id === itemId
+            && (!folio.almacen || folio.almacen.id === orderElements.form?.elements.almacen_origen_id.value)
             && (!operationalCategory || folio.categoria_operacional === operationalCategory))
         .reduce((sum, folio) => sum + Number(folio.cantidad_disponible || 0), 0) * 1000) / 1000;
 }
@@ -368,6 +372,10 @@ function requirementsForRecipe(entry, plannedOutput) {
 }
 
 function renderOrderSelectors() {
+    const source = orderElements.form.elements.almacen_origen_id;
+    const previousSource = source.value;
+    source.innerHTML = '<option value="">Selecciona una bodega</option>' + orderState.bodegas.map((w) => `<option value="${orderEscape(w.id)}">${orderEscape(w.codigo)} · ${orderEscape(w.nombre)}</option>`).join('');
+    source.value = orderState.bodegas.some((w) => w.id === previousSource) ? previousSource : previousSource ? '' : orderState.bodegas.find((w) => w.codigo === 'BOD-CENTRAL')?.id || '';
     const previousVersion = orderElements.form.elements.version_receta_material_id.value;
     const entries = availableRecipeVersions();
     orderElements.form.elements.version_receta_material_id.innerHTML = entries.map(({ recipe, version }) => `
@@ -673,6 +681,7 @@ function renderOrders() {
                 <div class="materials-order-meta">
                     <span>${orderEscape(orderDate(order.fecha_operacional))}</span>
                     <span>Receta v${orderEscape(order.version_receta?.numero_version)}</span>
+                    <span>Bodega: ${orderEscape(order.almacen_origen?.nombre || 'Bodega Central')}</span>
                     <span>${orderEscape(orderLineLabel(order))}</span>
                     <span>${orderEscape(orderShiftLabel(order))}</span>
                     <span>Versión operacional ${order.version}</span>
@@ -753,7 +762,12 @@ async function submitOrderForm(event) {
         linea: armado ? String(machine).padStart(2, '0') : (String(data.linea || '').trim() || null),
         turno: armado ? data.turno_armado : (String(data.turno || '').trim() || null),
         observacion: String(data.observacion || '').trim() || null,
+        ...(data.almacen_origen_id ? { almacen_origen_id: data.almacen_origen_id } : {}),
     };
+    if (orderState.bodegas.length && !orderState.bodegas.some((w) => w.id === data.almacen_origen_id)) {
+        orderElements.error.textContent = 'Selecciona una bodega de componentes activa.';
+        return;
+    }
     const payloadKey = JSON.stringify(payloadWithoutOperation);
     if (orderState.creationOperation?.payloadKey !== payloadKey) {
         orderState.creationOperation = { id: orderUuid(), payloadKey };
@@ -908,6 +922,7 @@ function clearOrderSession(token) {
     orderState.recipes = [];
     orderState.orders = [];
     orderState.inventory = [];
+    orderState.bodegas = [];
     orderState.creationOperation = null;
     orderState.planningOperations.clear();
     orderState.cancellationOperations.clear();
@@ -915,6 +930,7 @@ function clearOrderSession(token) {
     orderElements.panel?.classList.add('is-hidden');
     orderElements.form.reset();
     orderElements.form.elements.version_receta_material_id.innerHTML = '';
+    orderElements.form.elements.almacen_origen_id.innerHTML = '';
     orderElements.form.elements.fecha_operacional.value = orderToday();
     orderElements.form.classList.add('is-hidden');
     orderElements.stateFilter.value = '';
@@ -948,7 +964,8 @@ async function loadOrdersForToken(token, isCurrent, showErrors = false) {
         orderState.orders = orders.data || [];
         orderState.armado = orders.armado?.activo ? orders.armado : null;
         applyOrderArmadoFields();
-        orderState.inventory = inventory.resumen_items || [];
+        orderState.inventory = inventory.resumen_items_almacenes || inventory.resumen_items || [];
+        orderState.bodegas = inventory.bodegas || [];
         renderOrderSelectors();
         renderOrderMetrics();
         renderOrders();

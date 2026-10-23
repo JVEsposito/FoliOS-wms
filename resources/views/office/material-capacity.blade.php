@@ -4,7 +4,7 @@
     <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
     <title>FoliOS · Capacidad de bodegas</title>
     @if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
-        @vite(['resources/css/office.css', 'resources/css/office-materials.css', 'resources/css/office-material-capacity.css', 'resources/js/office-material-capacity.js'])
+        @vite(['resources/css/office.css', 'resources/css/office-materials.css', 'resources/css/office-material-capacity.css', 'resources/js/office-material-capacity.js', 'resources/js/office-material-bodegas.js'])
     @endif
     @include('office.partials.arranque')
 </head>
@@ -16,6 +16,21 @@
         <section class="custody-card"><label>Almacén físico<select id="capacityWarehouse"></select></label><p id="capacityMetrics"></p>
             <p class="materials-help">La superficie y el volumen útiles corresponden a las zonas definidas. Los pasillos y espacios de seguridad deben quedar fuera de ellas.</p>
         </section>
+        <details class="custody-card" id="bodegaDirectory"><summary>Bodegas físicas: altas y estado</summary>
+            <p>Una bodega nueva comienza sin stock. Traslada materiales mediante una transferencia interna desde Inventario CC, indicando la cámara y posición de destino. Las dimensiones se configuran por separado.</p>
+            <p id="bodegaNotice" role="status" aria-live="polite"></p>
+            <div class="capacity-actions"><button id="bodegaReload" type="button" class="secondary-button">Actualizar bodegas</button><button id="bodegaNew" type="button" class="secondary-button" hidden>Crear bodega</button></div>
+            <div id="bodegaList" class="capacity-type-list"></div>
+            <form id="bodegaForm" hidden><h2 id="bodegaTitle">Bodega física</h2><fieldset id="bodegaFields" class="capacity-grid" disabled>
+                <label>Código permanente<input name="codigo" maxlength="40" pattern="[A-Za-z0-9][A-Za-z0-9_-]*" placeholder="BOD-NORTE" required></label>
+                <label>Nombre<input name="nombre" maxlength="180" minlength="3" required></label>
+                <label>Descripción<input name="descripcion" maxlength="1000"></label>
+                <label>Estado<select name="activo"><option value="1">Activa</option><option value="0">Inactiva</option></select></label>
+            </fieldset><p>El código se conserva. Bodega Central permanece activa. Para desactivar otra bodega debe quedar sin existencias, reservas ni despachos u órdenes pendientes.</p>
+                <div class="capacity-actions"><button type="submit" class="primary-button">Guardar bodega</button><button id="bodegaCancel" type="button" class="secondary-button">Cancelar edición</button></div>
+            </form>
+            <details id="bodegaHistory"><summary>Historial de bodegas</summary><div id="bodegaHistoryRows"></div><nav id="bodegaHistoryPages" class="capacity-actions" aria-label="Páginas del historial de bodegas"></nav></details>
+        </details>
         <details class="custody-card" id="capacityTypes"><summary>Tipos de pallet y medidas de referencia</summary>
             <p>La altura total incluye el pallet y la carga. Cada tipo conserva límites de apilamiento y peso; las medidas reales pueden registrarse por separado.</p>
             <div id="capacityTypeList" class="capacity-type-list"></div>

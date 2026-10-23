@@ -128,7 +128,7 @@ class ServicioProcesamientoVencimientosMaterial
                 $reserva->fill(['cantidad' => round($anterior + $asignada, 3),
                     'estado' => EstadoReservaMaterial::Activa, 'orden_fifo' => $orden])->save();
                 $resumen['reservas_reasignadas']++;
-            });
+            }, almacenId: $detalle->despacho->almacen_origen_id);
         $this->ordenarFefo(ReservaMaterial::query()->where('detalle_despacho_material_id', $detalle->id));
 
         return $faltante;
@@ -146,7 +146,7 @@ class ServicioProcesamientoVencimientosMaterial
                 $reserva->fill(['item_material_id' => $item, 'cantidad' => round($anterior + $asignada, 3),
                     'estado' => EstadoReservaMaterial::Activa, 'orden_fifo' => $ordenFifo])->save();
                 $resumen['reservas_reasignadas']++;
-            }, $categorias);
+            }, $categorias, $orden->almacen_origen_id);
         $this->ordenarFefo(ReservaTransformacionMaterial::query()->where('orden_transformacion_material_id', $orden->id)->where('item_material_id', $item));
 
         return $faltante;

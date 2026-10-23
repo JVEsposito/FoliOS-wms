@@ -27,6 +27,8 @@ class OrdenTransformacionMaterialResource extends JsonResource
 
         return [
             'id' => $this->id,
+            'almacen_origen_id' => $this->almacen_origen_id,
+            'almacen_origen' => $this->whenLoaded('almacenOrigen', fn () => $this->almacenOrigen ? ['id' => $this->almacenOrigen->id, 'codigo' => $this->almacenOrigen->codigo, 'nombre' => $this->almacenOrigen->nombre] : null),
             'estado' => $this->estado->value,
             'modo_operacion' => $this->modo_operacion?->value ?? 'por_lote',
             'version' => $this->version,
@@ -144,14 +146,16 @@ class OrdenTransformacionMaterialResource extends JsonResource
                     ), 3, '.', ''),
                     'orden_fifo' => $reserva->orden_fifo,
                     'item_material_id' => $reserva->item_material_id,
+                    'saldo_material_almacen_id' => $reserva->saldo_material_almacen_id,
+                    'almacen' => $reserva->saldoAlmacen?->almacen ? ['id' => $reserva->saldoAlmacen->almacen->id, 'codigo' => $reserva->saldoAlmacen->almacen->codigo, 'nombre' => $reserva->saldoAlmacen->almacen->nombre] : null,
                     'folio' => $reserva->relationLoaded('folioMaterial') ? [
                         'id' => $reserva->folio_id,
                         'numero_folio' => $reserva->folioMaterial->folio->numero_folio,
-                        'cantidad_actual' => $reserva->folioMaterial->cantidad_actual,
-                        'cantidad_reservada' => $reserva->folioMaterial->cantidad_reservada,
-                        'ubicacion' => $reserva->folioMaterial->folio->ubicacionActual?->posicion ? [
-                            'camara' => $reserva->folioMaterial->folio->ubicacionActual->posicion->camara->codigo,
-                            'posicion' => $reserva->folioMaterial->folio->ubicacionActual->posicion->etiqueta,
+                        'cantidad_actual' => $reserva->saldoAlmacen?->cantidad_actual,
+                        'cantidad_reservada' => $reserva->saldoAlmacen?->cantidad_reservada,
+                        'ubicacion' => $reserva->saldoAlmacen?->camara ? [
+                            'camara' => $reserva->saldoAlmacen->camara->codigo,
+                            'posicion' => $reserva->saldoAlmacen->posicion?->etiqueta ?? 'Sin posición',
                         ] : null,
                     ] : null,
                 ],

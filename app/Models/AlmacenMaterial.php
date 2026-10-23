@@ -22,6 +22,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'activo',
     'creado_por_user_id',
     'actualizado_por_user_id',
+    'version_bodega',
 ])]
 class AlmacenMaterial extends Model
 {
@@ -42,6 +43,7 @@ class AlmacenMaterial extends Model
             'tipo' => TipoAlmacenMaterial::class,
             'requiere_ubicacion_fisica' => 'boolean',
             'activo' => 'boolean',
+            'version_bodega' => 'integer',
             'sincronizado_at' => 'datetime',
         ];
     }

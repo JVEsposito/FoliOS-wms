@@ -29,7 +29,7 @@ const elements = {
     destinationForm: byId('destinationMaterialForm'), destinationError: byId('destinationMaterialError'),
     destinationCancel: byId('cancelDestinationEdit'), destinationList: byId('destinationsMaterialList'),
     dispatchForm: byId('dispatchMaterialForm'), dispatchError: byId('dispatchMaterialError'),
-    dispatchDestination: byId('dispatchDestination'), dispatchLines: byId('dispatchMaterialLines'),
+    dispatchDestination: byId('dispatchDestination'), dispatchWarehouse: byId('dispatchWarehouse'), dispatchLines: byId('dispatchMaterialLines'),
     dispatchAssignee: byId('dispatchAssignee'), dispatchAssigneeField: byId('dispatchAssigneeField'),
     dispatchFolioSelection: byId('dispatchFolioSelection'), dispatchFifoReasonField: byId('dispatchFifoReasonField'), dispatchSubmit: byId('dispatchSubmit'),
     dispatchTraceDialog: byId('materialDispatchTraceDialog'), dispatchTraceTitle: byId('dispatchTraceTitle'), dispatchTraceBody: byId('dispatchTraceBody'),
@@ -69,6 +69,8 @@ const state = {
     cancellationOperations: new Map(), blockOperations: new Map(), operationalRefreshPromise: null, inventorySyncedAt: null,
     regularizationItemId: null, regularizationOperationId: null,
     classifications: {},
+    bodegas: [],
+    inventoryItemsByWarehouse: null,
     assignees: [], dispatchFolios: new Map(), dispatchAllocations: new Map(), dispatchPreviewVersion: 0, reassignOperationId: null, traceDispatchId: null,
     operationalPoller: null,
 };
@@ -151,15 +153,15 @@ function globalClients() {
 }
 function seasonItems() { return state.items.filter((item) => item.cliente?.temporada?.id === state.selectedSeasonId); }
 function activeItems() { return state.items.filter((item) => item.activo && item.cliente?.activo !== false && item.cliente?.temporada?.activa !== false); }
-function activeDestinations() { return state.destinations.filter((destination) => destination.activo); }
+function activeDestinations() { return state.destinations.filter((destination) => destination.activo && destination.tipo !== 'fisica'); }
 function directDispatchDestinations() { return activeDestinations().filter((destination) => destination.tipo !== 'fisica'); }
 function directConsumptionCenters() { return activeDestinations().filter((destination) => destination.tipo === 'virtual' && destination.centro_costo); }
 function normalizedSearch(value) { return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); }
 function itemLabel(item) { return `${item.cliente?.temporada?.codigo || ''} · ${item.cliente?.codigo || ''} · ${item.codigo} · ${item.nombre}`; }
 function itemSearchText(item) { return normalizedSearch(`${itemLabel(item)} ${item.cliente?.nombre || ''} ${item.categoria || ''}`); }
 function availableStock(itemId) {
-    return Math.round(state.inventoryItems
-        .filter((summary) => summary.item.id === itemId)
+    return Math.round((state.inventoryItemsByWarehouse || state.inventoryItems)
+        .filter((summary) => summary.item.id === itemId && (!summary.almacen || summary.almacen.id === elements.dispatchWarehouse.value))
         .reduce((total, summary) => total + Number(summary.cantidad_disponible || 0), 0) * 1000) / 1000;
 }
 function closeItemResults(except = null) {
@@ -330,13 +332,18 @@ function renderDestinations() {
     elements.destinationsSummary.textContent = `${state.destinations.length} registrados`;
     elements.destinationList.innerHTML = state.destinations.map((destination) => `<article class="material-row${destination.activo ? '' : ' is-inactive'}"><div><strong>${escapeHtml(destination.nombre)}</strong><small>${escapeHtml(destination.centro_costo)}${destination.descripcion ? ` · ${escapeHtml(destination.descripcion)}` : ''}</small></div>${canAdminister ? `<button data-edit-destination="${destination.id}" type="button">Editar</button>` : ''}</article>`).join('') || '<p class="empty-state">No existen destinos.</p>';
     elements.dispatchDestination.innerHTML = '<option value="">Selecciona un destino</option>' + activeDestinations().map((destination) => `<option value="${destination.id}">${escapeHtml(destination.nombre)} · ${escapeHtml(destination.centro_costo)}</option>`).join('');
+    if (elements.dispatchWarehouse) {
+        const previous = elements.dispatchWarehouse.value;
+        elements.dispatchWarehouse.innerHTML = '<option value="">Selecciona una bodega</option>' + state.bodegas.map((w) => `<option value="${escapeHtml(w.id)}">${escapeHtml(w.codigo)} · ${escapeHtml(w.nombre)}</option>`).join('');
+        elements.dispatchWarehouse.value = state.bodegas.some((w) => w.id === previous) ? previous : previous ? '' : state.bodegas.find((w) => w.codigo === 'BOD-CENTRAL')?.id || '';
+    }
 }
 function renderDispatches() {
     elements.dispatchList.innerHTML = state.dispatches.map((dispatch) => {
         const detail = dispatch.items.map((item) => `${item.item.cliente?.temporada?.codigo || ''}/${item.item.cliente?.codigo || ''}/${item.item.codigo}: ${quantity(item.cantidad_despachada)}/${quantity(item.cantidad_solicitada)} ${item.unidad_medida}`).join(' · ');
         const shortage = dispatch.items.some((item) => Number(item.cantidad_reservada) + Number(item.cantidad_despachada) < Number(item.cantidad_solicitada));
         const canCancel = state.identity?.puede_cancelar_despachos_materiales === true;
-        return `<article class="dispatch-row"><div><strong>${escapeHtml(dispatch.codigo)} · ${escapeHtml(dispatch.destino.nombre)}</strong><small>${escapeHtml(dispatch.destino.centro_costo)} · ${escapeHtml(dispatch.modalidad === 'directo' ? 'Directo desde bodega' : 'Delegado a tablet')} · ${escapeHtml(detail)}${dispatch.items.some((item) => item.alerta_vencimiento) ? ' · Reserva insuficiente por vencimiento' : shortage ? ' · Falta existencia por reservar' : ''}</small></div><div class="dispatch-row__state"><span>${escapeHtml(statusText(dispatch.estado))}</span><small>${escapeHtml((dispatch.entregas || []).filter(e => e.provisional || e.retroactivo).map(dispatchRegistrationLabel).join(' / '))}</small><button data-trace-dispatch="${dispatch.id}" type="button">Ver trazabilidad</button>${canCancel && ['pendiente', 'parcial'].includes(dispatch.estado) ? `<button data-cancel-dispatch="${dispatch.id}" type="button">Cancelar</button>` : ''}</div></article>`;
+        return `<article class="dispatch-row"><div><strong>${escapeHtml(dispatch.codigo)} · ${escapeHtml(dispatch.destino.nombre)}</strong><small>${escapeHtml(dispatch.almacen_origen?.nombre || 'Bodega Central')} · ${escapeHtml(dispatch.destino.centro_costo)} · ${escapeHtml(dispatch.modalidad === 'directo' ? 'Directo desde bodega' : 'Delegado a tablet')} · ${escapeHtml(detail)}${dispatch.items.some((item) => item.alerta_vencimiento) ? ' · Reserva insuficiente por vencimiento' : shortage ? ' · Falta existencia por reservar' : ''}</small></div><div class="dispatch-row__state"><span>${escapeHtml(statusText(dispatch.estado))}</span><small>${escapeHtml((dispatch.entregas || []).filter(e => e.provisional || e.retroactivo).map(dispatchRegistrationLabel).join(' / '))}</small><button data-trace-dispatch="${dispatch.id}" type="button">Ver trazabilidad</button>${canCancel && ['pendiente', 'parcial'].includes(dispatch.estado) ? `<button data-cancel-dispatch="${dispatch.id}" type="button">Cancelar</button>` : ''}</div></article>`;
     }).join('') || '<p class="empty-state">No existen despachos de materiales.</p>';
 }
 function renderInventory() {
@@ -374,13 +381,13 @@ function renderInventory() {
             && Number(folio.cantidad_disponible || 0) > 0;
         const canConsumeDirect = state.identity?.puede_gestionar_despachos_materiales === true
             && folio.categoria_operacional === 'insumo'
-            && folio.almacen?.codigo === 'BOD-CENTRAL'
+            && folio.almacen?.tipo === 'fisica'
             && folio.reservable === true
             && Number(folio.cantidad_disponible || 0) > 0;
         const actions = [
-            canConsumeDirect ? `<button data-direct-consumption="${folio.folio_id}" type="button">Consumir insumo</button>` : '',
-            canDirect ? `<button data-direct-dispatch="${folio.folio_id}" type="button">Despachar directo</button>` : '',
-            state.identity?.puede_transferir_folios_materiales_clientes === true ? `<button data-transfer-client="${folio.folio_id}" type="button">Transferir a otro cliente</button>` : '',
+            canConsumeDirect ? `<button data-direct-consumption="${escapeHtml(folio.saldo_id || folio.folio_id)}" type="button">Consumir insumo</button>` : '',
+            canDirect ? `<button data-direct-dispatch="${escapeHtml(folio.saldo_id || folio.folio_id)}" type="button">Despachar directo</button>` : '',
+            state.identity?.puede_transferir_folios_materiales_clientes === true && folio.almacen?.codigo === 'BOD-CENTRAL' ? `<button data-transfer-client="${folio.folio_id}" type="button">Transferir a otro cliente</button>` : '',
             canCorrect ? `<button data-correct-material="${folio.folio_id}" type="button">Corregir código</button>` : '',
             canManageBlock ? `<button data-correct-expiry="${folio.folio_id}" type="button">Corregir vencimiento</button>` : '',
             canManageBlock && blocked && folio.vencimiento?.estado !== 'vencido' && !folio.vencimiento?.bloqueado_por_vencimiento
@@ -390,7 +397,7 @@ function renderInventory() {
                     : '',
         ].filter(Boolean).join(' ');
 
-        return `<tr><td><strong>${escapeHtml(folio.numero_folio)}</strong><small>${escapeHtml(folio.lote || 'Sin lote')}</small>${expiryBadge(folio.vencimiento)}</td><td><strong>${escapeHtml(folio.item.cliente?.codigo || '—')} · ${escapeHtml(folio.item.cliente?.nombre || '—')}</strong><small>${escapeHtml(folio.item.cliente?.temporada?.codigo || '—')}</small></td><td><strong>${escapeHtml(folio.item.codigo)}</strong><small>${escapeHtml(folio.item.nombre)} · ${escapeHtml(itemTypeLabel(folio.categoria_operacional))}</small></td><td>${quantity(folio.cantidad_actual)} ${escapeHtml(folio.unidad_medida)}</td><td>${quantity(folio.cantidad_reservada)}</td><td>${quantity(folio.cantidad_disponible)}</td><td>${status}</td><td><strong>${escapeHtml(folio.camara?.codigo || 'Sin cámara')}</strong><small>${escapeHtml(folio.posicion?.etiqueta || 'Sin posición')}</small></td><td>${actions || '—'}</td></tr>`;
+        return `<tr><td><strong>${escapeHtml(folio.numero_folio)}</strong><small>${escapeHtml(folio.lote || 'Sin lote')}</small>${expiryBadge(folio.vencimiento)}</td><td><strong>${escapeHtml(folio.item.cliente?.codigo || '—')} · ${escapeHtml(folio.item.cliente?.nombre || '—')}</strong><small>${escapeHtml(folio.item.cliente?.temporada?.codigo || '—')}</small></td><td><strong>${escapeHtml(folio.item.codigo)}</strong><small>${escapeHtml(folio.item.nombre)} · ${escapeHtml(itemTypeLabel(folio.categoria_operacional))}</small></td><td>${quantity(folio.cantidad_actual)} ${escapeHtml(folio.unidad_medida)}</td><td>${quantity(folio.cantidad_reservada)}</td><td>${quantity(folio.cantidad_disponible)}</td><td>${status}</td><td><strong>${escapeHtml(folio.almacen?.codigo || 'Bodega')} · ${escapeHtml(folio.camara?.codigo || 'Sin cámara')}</strong><small>${escapeHtml(folio.posicion?.etiqueta || 'Sin posición')}</small></td><td>${actions || '—'}</td></tr>`;
     }).join('') || '<tr><td colspan="9">No existen folios coincidentes.</td></tr>';
     const currentPage = Number(state.inventoryMeta?.current_page || 1);
     const lastPage = Math.max(1, Number(state.inventoryMeta?.last_page || 1));
@@ -444,9 +451,11 @@ function inventoryApiPath({ summary = false } = {}) {
 }
 
 function applyInventoryResponse(inventory) {
+    state.bodegas = inventory.bodegas || [];
     state.inventory = inventory.data || [];
     state.inventorySummary = inventory.resumen_clientes || [];
     state.inventoryItems = inventory.resumen_items || [];
+    state.inventoryItemsByWarehouse = inventory.resumen_items_almacenes || null;
     state.inventoryTotals = inventory.resumen || {};
     state.inventoryMeta = inventory.meta || null;
     state.inventorySyncedAt = new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -610,6 +619,7 @@ function toggleDispatchMode() {
 async function refreshDispatchFolioSelection() {
     if (!isDirectDispatch()) return;
     const version = ++state.dispatchPreviewVersion;
+    const warehouseId = elements.dispatchWarehouse?.value || '';
     const lines = [...elements.dispatchLines.querySelectorAll('.dispatch-line')]
         .map((row) => ({ itemId: row.querySelector('[name="item_material_id"]').value, amount: Number(row.querySelector('[name="cantidad"]').value) }))
         .filter((line) => line.itemId && line.amount > 0);
@@ -623,13 +633,17 @@ async function refreshDispatchFolioSelection() {
             let lastPage = 1;
             do {
                 const query = new URLSearchParams({ item_material_id: line.itemId, per_page: '100', page: String(page) });
+                if (warehouseId) query.set('almacen_id', warehouseId);
                 const response = await api(`/api/materiales/inventario?${query}`);
                 folios.push(...response.data.filter((folio) => folio.reservable && Number(folio.cantidad_disponible) > 0));
                 lastPage = Number(response.meta?.last_page || 1);
                 page += 1;
             } while (page <= lastPage && page <= 10);
             if (page <= lastPage) throw new ApiError('Hay más de 1.000 folios de un mismo ítem. Acota la entrega desde inventario.', 422);
-            folios.sort((a, b) => String(a.fecha_ingreso).localeCompare(String(b.fecha_ingreso)) || a.numero_folio.localeCompare(b.numero_folio));
+            folios.sort((a, b) => String(a.vencimiento?.fecha || '9999-12-31').localeCompare(String(b.vencimiento?.fecha || '9999-12-31'))
+                || String(a.fecha_fabricacion || '9999-12-31').localeCompare(String(b.fecha_fabricacion || '9999-12-31'))
+                || String(a.fecha_ingreso).localeCompare(String(b.fecha_ingreso)) || a.numero_folio.localeCompare(b.numero_folio));
+            if (version !== state.dispatchPreviewVersion) return;
             state.dispatchFolios.set(line.itemId, folios);
         }));
         if (version !== state.dispatchPreviewVersion) return;
@@ -686,7 +700,7 @@ async function openDispatchTrace(dispatchId) {
             ...dispatch.items.flatMap((item) => (item.retiros || []).map((entry) => ({ at: entry.retirado_at, label: 'Entrega', detail: `${entry.folio.numero_folio} · ${quantity(entry.cantidad_retirada)} ${item.unidad_medida} · ${entry.usuario?.nombre || 'Usuario'} · ${entry.dispositivo?.codigo || 'Oficina'}${entry.siguio_fifo ? ' · FIFO' : ` · Excepción FIFO: ${entry.motivo_excepcion_fifo || 'sin motivo histórico'}`}` }))),
             ...(dispatch.cancelacion ? [{ at: dispatch.cancelacion.cancelado_at, label: 'Cancelación', detail: dispatch.cancelacion.motivo }] : [])]
             .sort((a, b) => String(a.at).localeCompare(String(b.at)));
-        elements.dispatchTraceBody.innerHTML = `<p><strong>${escapeHtml(dispatch.modalidad === 'directo' ? 'Directo desde bodega' : 'Delegado a tablet')}</strong> · ${escapeHtml(statusText(dispatch.estado))} · ${escapeHtml(dispatch.destino.centro_costo)}</p><p>Asignado: ${escapeHtml(dispatch.asignado_a?.nombre || 'Sin asignación individual')}</p>`
+        elements.dispatchTraceBody.innerHTML = `<p><strong>${escapeHtml(dispatch.modalidad === 'directo' ? 'Directo desde bodega' : 'Delegado a tablet')}</strong> · ${escapeHtml(statusText(dispatch.estado))} · ${escapeHtml(dispatch.destino.centro_costo)}</p><p>Origen: ${escapeHtml(dispatch.almacen_origen?.nombre || 'Bodega Central')}</p><p>Asignado: ${escapeHtml(dispatch.asignado_a?.nombre || 'Sin asignación individual')}</p>`
             + dispatch.items.map((item) => `<section class="dispatch-trace-item"><h3>${escapeHtml(item.item.codigo)} · ${escapeHtml(item.item.nombre)} · ${quantity(item.cantidad_despachada)}/${quantity(item.cantidad_solicitada)} ${escapeHtml(item.unidad_medida)}</h3>`
                 + `<p>Reserva FIFO registrada: ${(item.reservas_fifo || []).map((folio) => `${escapeHtml(folio.numero_folio)} (${quantity(folio.cantidad)}) · ${escapeHtml(statusText(folio.estado))}`).join(' · ') || 'Sin reserva registrada'}</p>`
                 + (item.retiros || []).map((entry) => `<p><strong>${escapeHtml(entry.folio.numero_folio)}</strong> · ${quantity(entry.cantidad_retirada)} ${escapeHtml(item.unidad_medida)} · ${escapeHtml(entry.camara?.codigo || 'Sin cámara')}/${escapeHtml(entry.posicion?.etiqueta || 'Sin posición')} · ${escapeHtml(entry.usuario?.nombre || 'Usuario')} · ${escapeHtml(entry.dispositivo?.codigo || 'Oficina')} · ${escapeHtml(dateTime(entry.retirado_at))} · ${entry.siguio_fifo ? 'FIFO' : `<strong>Excepción FIFO: ${escapeHtml(entry.motivo_excepcion_fifo || 'sin motivo histórico')}</strong>`}</p>`).join('') + '</section>').join('')
@@ -920,6 +934,8 @@ elements.dispatchForm.addEventListener('submit', async (event) => {
     state.dispatchOperationId ||= operationUuid();
     const direct = isDirectDispatch();
     const payload = { operacion_id: state.dispatchOperationId, destino_material_id: form.get('destino_material_id'), observacion: form.get('observacion') };
+    if (form.get('almacen_origen_id')) payload.almacen_origen_id = form.get('almacen_origen_id');
+    if (state.bodegas.length && !state.bodegas.some((w) => w.id === payload.almacen_origen_id)) { elements.dispatchError.textContent = 'Selecciona una bodega de origen activa.'; return; }
     try {
         if (direct) {
             Object.assign(payload, readDispatchRegistration(elements.dispatchForm));
@@ -938,6 +954,14 @@ elements.dispatchForm.addEventListener('submit', async (event) => {
     } catch (error) { elements.dispatchError.textContent = error.message; } finally { setBusy(false); }
 });
 elements.dispatchForm.addEventListener('input', () => { state.dispatchOperationId = null; });
+elements.dispatchWarehouse?.addEventListener('change', () => {
+    ++state.dispatchPreviewVersion;
+    state.dispatchOperationId = null;
+    state.dispatchFolios.clear(); state.dispatchAllocations.clear();
+    elements.dispatchFolioSelection.replaceChildren();
+    refreshDispatchLines();
+    if (isDirectDispatch()) void refreshDispatchFolioSelection();
+});
 elements.dispatchList.addEventListener('click', async (event) => {
     const trace = event.target.closest('[data-trace-dispatch]');
     if (trace) { await openDispatchTrace(trace.dataset.traceDispatch); return; }
@@ -1057,7 +1081,7 @@ elements.directConsumptionForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     elements.directConsumptionError.textContent = '';
     const payload = Object.fromEntries(new FormData(elements.directConsumptionForm));
-    const folio = state.inventory.find((candidate) => candidate.folio_id === payload.folio_id);
+    const folio = state.inventory.find((candidate) => candidate.folio_id === payload.folio_id && candidate.almacen?.id === payload.almacen_origen_id);
     const center = directConsumptionCenters().find(
         (candidate) => candidate.id === payload.centro_costo_id,
     );
@@ -1078,7 +1102,7 @@ elements.directConsumptionForm.addEventListener('submit', async (event) => {
         });
         closeDirectConsumptionDialog();
         await loadAll();
-        toast(`Consumo registrado para ${center.nombre}; Bodega Central fue descontada.`);
+        toast(`Consumo registrado para ${center.nombre}; se descontó ${folio.almacen.nombre}.`);
     } catch (error) {
         elements.directConsumptionError.textContent = error.message;
     } finally {
@@ -1089,11 +1113,11 @@ elements.inventoryBody.addEventListener('click', async (event) => {
     const consumptionButton = event.target.closest('[data-direct-consumption]');
     if (consumptionButton) {
         const folio = state.inventory.find(
-            (candidate) => candidate.folio_id === consumptionButton.dataset.directConsumption,
+            (candidate) => (candidate.saldo_id || candidate.folio_id) === consumptionButton.dataset.directConsumption,
         );
         if (!folio
             || folio.categoria_operacional !== 'insumo'
-            || folio.almacen?.codigo !== 'BOD-CENTRAL'
+            || folio.almacen?.tipo !== 'fisica'
             || folio.reservable !== true
             || Number(folio.cantidad_disponible || 0) <= 0) return;
         const centers = directConsumptionCenters();
@@ -1110,7 +1134,7 @@ elements.inventoryBody.addEventListener('click', async (event) => {
             + centers.map((center) => `<option value="${center.id}">${escapeHtml(center.nombre)} · ${escapeHtml(center.centro_costo)}</option>`).join('');
         elements.directConsumptionForm.elements.cantidad.max = String(folio.cantidad_disponible);
         elements.directConsumptionForm.elements.cantidad.value = String(folio.cantidad_disponible);
-        elements.directConsumptionContext.textContent = `${folio.numero_folio} · ${folio.item.codigo} · ${folio.item.nombre} · ${folio.camara?.codigo || 'Bodega Central'} / ${folio.posicion?.etiqueta || 'Sin posición'} · máximo ${quantity(folio.cantidad_disponible)} ${folio.unidad_medida}`;
+        elements.directConsumptionContext.textContent = `${folio.numero_folio} · ${folio.item.codigo} · ${folio.item.nombre} · ${folio.almacen.nombre} · ${folio.camara?.codigo || 'Sin cámara'} / ${folio.posicion?.etiqueta || 'Sin posición'} · máximo ${quantity(folio.cantidad_disponible)} ${folio.unidad_medida}`;
         elements.directConsumptionError.textContent = '';
         elements.directConsumptionDialog.showModal();
         return;
@@ -1119,7 +1143,7 @@ elements.inventoryBody.addEventListener('click', async (event) => {
     const directButton = event.target.closest('[data-direct-dispatch]');
     if (directButton) {
         const folio = state.inventory.find(
-            (candidate) => candidate.folio_id === directButton.dataset.directDispatch,
+            (candidate) => (candidate.saldo_id || candidate.folio_id) === directButton.dataset.directDispatch,
         );
         if (!folio || !folio.camara || Number(folio.cantidad_disponible || 0) <= 0) return;
         const destinations = directDispatchDestinations();
@@ -1131,11 +1155,12 @@ elements.inventoryBody.addEventListener('click', async (event) => {
         state.directDispatchOperationId = operationUuid();
         elements.directDispatchForm.reset();
         elements.directDispatchForm.elements.folio_id.value = folio.folio_id;
+        elements.directDispatchForm.elements.almacen_origen_id.value = folio.almacen.id;
         elements.directDispatchForm.elements.destino_material_id.innerHTML = '<option value="">Selecciona un centro de costo</option>'
             + destinations.map((destination) => `<option value="${destination.id}">${escapeHtml(destination.nombre)} · ${escapeHtml(destination.centro_costo)}</option>`).join('');
         elements.directDispatchForm.elements.cantidad.max = String(folio.cantidad_disponible);
         elements.directDispatchForm.elements.cantidad.value = String(folio.cantidad_disponible);
-        elements.directDispatchContext.textContent = `${folio.numero_folio} · ${folio.item.codigo} · ${folio.item.nombre} · ${folio.camara.codigo} / ${folio.posicion?.etiqueta || 'Sin posición'} · máximo ${quantity(folio.cantidad_disponible)} ${folio.unidad_medida}`;
+        elements.directDispatchContext.textContent = `${folio.numero_folio} · ${folio.item.codigo} · ${folio.item.nombre} · ${folio.almacen?.nombre || ''} · ${folio.camara.codigo} / ${folio.posicion?.etiqueta || 'Sin posición'} · máximo ${quantity(folio.cantidad_disponible)} ${folio.unidad_medida}`;
         elements.directDispatchError.textContent = '';
         elements.directDispatchDialog.showModal();
         return;

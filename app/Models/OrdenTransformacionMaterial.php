@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'payload_hash',
     'temporada_id',
     'cliente_id',
+    'almacen_origen_id',
     'version_receta_material_id',
     'estado',
     'modo_operacion',
@@ -52,6 +53,11 @@ class OrdenTransformacionMaterial extends Model
     public function cliente(): BelongsTo
     {
         return $this->belongsTo(Cliente::class);
+    }
+
+    public function almacenOrigen(): BelongsTo
+    {
+        return $this->belongsTo(AlmacenMaterial::class, 'almacen_origen_id');
     }
 
     public function versionReceta(): BelongsTo

@@ -23,6 +23,7 @@ class DespacharDirectoMaterialRequest extends FormRequest
         return [
             ...$this->reglasRegistro(),
             'operacion_id' => ['required', 'uuid'],
+            'almacen_origen_id' => ['nullable', 'uuid', 'exists:destinos_materiales,id'],
             'folio_id' => ['required_without:retiros', 'prohibits:retiros', 'uuid', 'exists:folios_materiales,folio_id'],
             'destino_material_id' => ['required', 'uuid', 'exists:destinos_materiales,id'],
             'cantidad' => ['required_with:folio_id', 'prohibits:retiros', 'numeric', 'gt:0', 'decimal:0,3'],

@@ -70,6 +70,8 @@ class ReposicionMaterialCalculoTest extends TestCase
         Schema::create('destinos_materiales', function (Blueprint $t) {
             $t->uuid('id')->primary();
             $t->string('codigo');
+            $t->string('tipo')->default('virtual');
+            $t->boolean('activo')->default(true);
         });
         Schema::create('notificaciones_operacionales', function (Blueprint $t) {
             $t->uuid('id')->primary();
@@ -87,11 +89,14 @@ class ReposicionMaterialCalculoTest extends TestCase
         DB::table('temporadas_materiales')->insert(['id' => $tm, 'temporada_id' => $this->temporadaId]);
         DB::table('clientes_materiales')->insert(['id' => $cliente, 'temporada_material_id' => $tm, 'nombre' => 'Cliente', 'activo' => true]);
         DB::table('items_materiales')->insert(['id' => $this->item, 'cliente_material_id' => $cliente, 'codigo' => 'FILM', 'nombre' => 'Film', 'unidad_medida' => 'unidad']);
-        DB::table('destinos_materiales')->insert(['id' => $this->bodega, 'codigo' => AlmacenMaterial::CODIGO_BODEGA_CENTRAL]);
+        DB::table('destinos_materiales')->insert(['id' => $this->bodega, 'codigo' => AlmacenMaterial::CODIGO_BODEGA_CENTRAL, 'tipo' => 'fisica']);
     }
 
     private function stock(float $cantidad, float $reserva = 0, ?string $almacen = null, ?string $bloqueo = null, ?string $vence = null): string
     {
+        if ($almacen) {
+            DB::table('destinos_materiales')->insertOrIgnore(['id' => $almacen, 'codigo' => 'CC-'.$almacen]);
+        }
         $folio = $this->folioEn($this->posicion(), 'F-'.Str::random(10), $cantidad);
         DB::table('folios_materiales')->where('folio_id', $folio)->update(['item_material_id' => $this->item, 'fecha_vencimiento' => $vence, 'motivo_bloqueo' => $bloqueo]);
         DB::table('saldos_materiales_almacenes')->where('folio_id', $folio)->update(['almacen_material_id' => $almacen ?? $this->bodega, 'cantidad_reservada' => $reserva]);
@@ -106,6 +111,9 @@ class ReposicionMaterialCalculoTest extends TestCase
 
     private function movimiento(string $folio, string $tipo, float $cantidad, ?string $origen, ?string $destino = null, string $fuente = 'almacen', ?string $retiro = null, ?string $fecha = null): string
     {
+        foreach (array_unique(array_filter([$origen, $destino])) as $almacen) {
+            DB::table('destinos_materiales')->insertOrIgnore(['id' => $almacen, 'codigo' => 'CC-'.$almacen]);
+        }
         $id = (string) Str::uuid();
         $datos = ['id' => $id, 'folio_id' => $folio, 'item_material_id' => $this->item, 'tipo' => $tipo, 'cantidad' => $cantidad, 'retiro_material_id' => $retiro, 'ocurrido_at' => $fecha ?? now()];
         if ($fuente === 'almacen') {

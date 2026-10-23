@@ -2,10 +2,7 @@
 
 namespace App\Services\Materiales;
 
-use App\Enums\ContenidoCamara;
-use App\Enums\EstadoCamara;
 use App\Enums\EstadoOperacionalFolio;
-use App\Enums\EstadoPosicion;
 use App\Enums\TipoAlmacenMaterial;
 use App\Enums\TipoMovimientoAlmacenMaterial;
 use App\Models\AlmacenMaterial;
@@ -104,7 +101,7 @@ class ServicioConsultaAlmacenesMaterial
                     ['clave' => 'cliente', 'titulo' => 'Cliente', 'ancho' => 28],
                     ['clave' => 'item', 'titulo' => 'Ítem', 'ancho' => 34],
                     ['clave' => 'unidad_medida', 'titulo' => 'Unidad', 'ancho' => 14],
-                    ['clave' => 'en_bodega', 'titulo' => 'En Bodega Central', 'ancho' => 19, 'tipo' => 'numero'],
+                    ['clave' => 'en_bodega', 'titulo' => 'En bodegas físicas', 'ancho' => 19, 'tipo' => 'numero'],
                     ['clave' => 'en_centros_costo', 'titulo' => 'En centros de costo', 'ancho' => 21, 'tipo' => 'numero'],
                     ['clave' => 'total_empresa', 'titulo' => 'Total empresa', 'ancho' => 18, 'tipo' => 'numero'],
                     ['clave' => 'folios', 'titulo' => 'Folios', 'ancho' => 12, 'tipo' => 'numero'],
@@ -142,10 +139,10 @@ class ServicioConsultaAlmacenesMaterial
         return [
             'titulo' => $esCentroCosto
                 ? 'Inventario CC · Existencia en centros de costo'
-                : 'Inventario CC · Existencia en Bodega Central',
+                : 'Inventario CC · Existencia en bodegas físicas',
             'archivo' => $esCentroCosto
                 ? 'Inventario_CC_Centros_Costo'
-                : 'Inventario_CC_Bodega_Central',
+                : 'Inventario_CC_Bodegas',
             'columnas' => $columnas,
             'filas' => $filas->map(function (array $fila) use ($esCentroCosto): array {
                 $exportada = [
@@ -498,20 +495,15 @@ class ServicioConsultaAlmacenesMaterial
 
     private function disponible(SaldoMaterialAlmacen $saldo): float
     {
+        if ($saldo->almacen->tipo === TipoAlmacenMaterial::Fisica) {
+            return $saldo->esReservable() ? $saldo->cantidadDisponible() : 0;
+        }
         $material = $saldo->folioMaterial;
 
         if ($material->estaVencido()
             || $material->motivo_bloqueo !== null
             || $material->folio->estado_operacional !== EstadoOperacionalFolio::Disponible
             || ! $saldo->almacen->activo) {
-            return 0;
-        }
-
-        if ($saldo->almacen->tipo === TipoAlmacenMaterial::Fisica
-            && ($saldo->camara?->contenido !== ContenidoCamara::Materiales
-                || $saldo->camara?->estado !== EstadoCamara::Activa
-                || ($saldo->posicion
-                    && $saldo->posicion->estado !== EstadoPosicion::Activa))) {
             return 0;
         }
 

@@ -22,6 +22,8 @@ class DespachoMaterialResource extends JsonResource
                 'activa' => $this->temporada->activa,
             ] : null),
             'codigo' => $this->codigo,
+            'almacen_origen_id' => $this->almacen_origen_id,
+            'almacen_origen' => $this->whenLoaded('almacenOrigen', fn () => $this->almacenOrigen ? ['id' => $this->almacenOrigen->id, 'codigo' => $this->almacenOrigen->codigo, 'nombre' => $this->almacenOrigen->nombre] : null),
             'origen' => $this->origen->value,
             'modalidad' => $this->modalidad,
             'estado' => $this->estado->value,
@@ -101,12 +103,14 @@ class DespachoMaterialResource extends JsonResource
                         'sugerencias_fifo' => $detalle->relationLoaded('reservas')
                             ? $detalle->reservas->map(function ($reserva): array {
                                 $folio = $reserva->folioMaterial->folio;
-                                $ubicacion = $folio->ubicacionActual;
+                                $ubicacion = $reserva->saldoAlmacen;
                                 $posicion = $ubicacion?->posicion;
                                 $camara = $ubicacion?->camara ?? $posicion?->camara;
 
                                 return [
                                     'folio_id' => $folio->id,
+                                    'saldo_material_almacen_id' => $reserva->saldo_material_almacen_id,
+                                    'almacen' => $ubicacion?->almacen ? ['id' => $ubicacion->almacen->id, 'codigo' => $ubicacion->almacen->codigo, 'nombre' => $ubicacion->almacen->nombre] : null,
                                     'numero_folio' => $folio->numero_folio,
                                     'cantidad' => $reserva->cantidad,
                                     'camara' => $camara ? [

@@ -22,6 +22,8 @@ class ResumenDespachoMaterialResource extends JsonResource
                 'activa' => $this->temporada->activa,
             ] : null),
             'codigo' => $this->codigo,
+            'almacen_origen_id' => $this->almacen_origen_id,
+            'almacen_origen' => $this->whenLoaded('almacenOrigen', fn () => $this->almacenOrigen ? ['id' => $this->almacenOrigen->id, 'codigo' => $this->almacenOrigen->codigo, 'nombre' => $this->almacenOrigen->nombre] : null),
             'origen' => $this->origen->value,
             'modalidad' => $this->modalidad,
             'estado' => $this->estado->value,
