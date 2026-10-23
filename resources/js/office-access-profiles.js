@@ -9,6 +9,7 @@ if (profileForm && profileTable) {
         tabletMacros: [],
         homes: [],
         roles: [],
+        materialPermissions: [],
     };
 
     const escapeHtml = (value) => String(value ?? '')
@@ -91,6 +92,7 @@ if (profileForm && profileTable) {
             updateMacroState(fieldset, 'modulos_tablet[]');
         });
         applyHomeAvailability();
+        applyMaterialPermissionAvailability();
     }
 
     function renderHomeOptions() {
@@ -217,6 +219,42 @@ if (profileForm && profileTable) {
         });
     }
 
+    function applyMaterialPermissionAvailability() {
+        const modules = new Set(selectedModules());
+        profileForm.querySelectorAll('[name="permisos_materiales[]"]').forEach(input => {
+            const roles = (input.dataset.requiredRoles || '').split(' ').filter(Boolean);
+            const enabled = !isReadOnlyProfile() && (!roles.length || roles.includes(profileForm.elements.rol_base.value))
+                && (input.dataset.requiredModules || '').split(' ').some(module => modules.has(module));
+            input.disabled = !enabled;
+            if (!enabled) input.checked = false;
+            input.closest('.access-module-option')?.classList.toggle('is-disabled', !enabled);
+        });
+        profileForm.querySelectorAll('[data-material-permission-group]').forEach(group => {
+            const inputs = [...group.querySelectorAll('[name="permisos_materiales[]"]:not(:disabled)')];
+            const toggle = group.querySelector('[data-permission-group-toggle]');
+            const count = inputs.filter(input => input.checked).length;
+            toggle.disabled = !inputs.length;
+            toggle.checked = inputs.length > 0 && count === inputs.length;
+            toggle.indeterminate = count > 0 && count < inputs.length;
+        });
+    }
+
+    function renderMaterialPermissions() {
+        const container = document.getElementById('accessMaterialPermissionsSelector');
+        if (!container) return;
+        container.innerHTML = state.materialPermissions.map(group => `<fieldset class="access-module-group" data-material-permission-group="${escapeHtml(group.clave)}">
+            <legend><label><input type="checkbox" data-permission-group-toggle><span><strong>${escapeHtml(group.nombre)}</strong><small>Todas las acciones de este grupo</small></span></label></legend>
+            ${group.preparado ? '<p class="admin-form__hint">Permiso preparado para el circuito de registros retroactivos y provisionales de la siguiente etapa.</p>' : ''}
+            <div class="access-module-options">${group.acciones.map(action => `<label class="access-module-option"><input type="checkbox" name="permisos_materiales[]" value="${escapeHtml(action.clave)}" data-required-modules="${escapeHtml(group.modulos.join(' '))}" data-required-roles="${escapeHtml((action.roles_requeridos || []).join(' '))}"><span><strong>${escapeHtml(action.nombre)}</strong></span></label>`).join('')}</div>
+        </fieldset>`).join('');
+        container.addEventListener('change', event => {
+            if (event.target.matches('[data-permission-group-toggle]')) {
+                event.target.closest('[data-material-permission-group]').querySelectorAll('[name="permisos_materiales[]"]:not(:disabled)').forEach(input => { input.checked = event.target.checked; });
+            }
+            applyMaterialPermissionAvailability();
+        }, { signal: state.permissionEvents?.signal });
+    }
+
     function renderProfiles() {
         document.getElementById('accessProfilesSummary').textContent =
             `${state.profiles.length} ${state.profiles.length === 1 ? 'configurado' : 'configurados'}`;
@@ -247,6 +285,7 @@ if (profileForm && profileTable) {
         document.getElementById('cancelAccessProfileEdit').classList.add('is-hidden');
         document.getElementById('accessProfileError').textContent = '';
         applyAccessMode(true);
+        document.getElementById('accessMaterialPermissionsHint').textContent = 'Selecciona las facultades necesarias. Para impedir toda escritura, utiliza el modo Solo consulta.';
     }
 
     function editProfile(profile) {
@@ -273,6 +312,10 @@ if (profileForm && profileTable) {
         profileForm.querySelectorAll('[data-access-tablet-macro]').forEach((fieldset) => {
             updateMacroState(fieldset, 'modulos_tablet[]');
         });
+        const permissions = new Set(profile.permisos_materiales_efectivos || profile.permisos_materiales || []);
+        profileForm.querySelectorAll('[name="permisos_materiales[]"]').forEach(input => { input.checked = permissions.has(input.value); });
+        applyMaterialPermissionAvailability();
+        document.getElementById('accessMaterialPermissionsHint').textContent = profile.permisos_materiales === null ? 'Este perfil conserva su configuración anterior. Revisa las selecciones; al guardar quedarán definidas por acción.' : 'Las acciones seleccionadas delimitan las facultades del perfil. Para impedir toda escritura, utiliza Solo consulta.';
         profileForm.elements.pantalla_inicio.value = profile.pantalla_inicio || '';
         applyHomeAvailability();
         document.getElementById('cancelAccessProfileEdit').classList.remove('is-hidden');
@@ -288,10 +331,14 @@ if (profileForm && profileTable) {
         state.tabletMacros = response.catalogo_tablet || [];
         state.homes = response.pantallas_inicio || [];
         state.roles = response.roles_base || [];
+        state.materialPermissions = response.catalogo_permisos_materiales || [];
+        state.permissionEvents?.abort();
+        state.permissionEvents = new AbortController();
         profileForm.elements.rol_base.innerHTML = state.roles.map((role) =>
             `<option value="${escapeHtml(role.clave)}">${escapeHtml(role.nombre)}</option>`,
         ).join('');
         renderSelector();
+        renderMaterialPermissions();
         renderHomeOptions();
         renderProfiles();
         resetForm();
@@ -330,6 +377,7 @@ if (profileForm && profileTable) {
             pantalla_inicio: profileForm.elements.pantalla_inicio.value || null,
             activo: profileForm.elements.activo.checked,
         };
+        if (state.materialPermissions.length) payload.permisos_materiales = [...profileForm.querySelectorAll('[name="permisos_materiales[]"]:checked:not(:disabled)')].map(input => input.value);
         if (!payload.modulos.length) {
             error.textContent = 'Selecciona al menos un módulo.';
             return;

@@ -71,7 +71,7 @@ const receptionState = {
 
 const transportPanel = receptionElements.form ? createReceptionTransport(receptionElements.form, receptionApi) : null;
 const photosPanel = receptionElements.photos ? createReceptionPhotosPanel(receptionElements.photos, {
-    getReception: () => receptionState.current, token: receptionToken, uuid: receptionUuid, canManage: receptionCanManage, canAdminister: receptionCanAdminister,
+    getReception: () => receptionState.current, token: receptionToken, uuid: receptionUuid, canManage: receptionCanManage, canAdminister: receptionCanAdminister, canConfirm: receptionCanConfirm,
     onChange: refreshReceptionPhotos,
     onConfirm: async () => {
         const current = receptionState.current;
@@ -85,7 +85,7 @@ const photosPanel = receptionElements.photos ? createReceptionPhotosPanel(recept
     },
 }) : null;
 const detailPhotosPanel = receptionElements.detailPhotos ? createReceptionPhotosPanel(receptionElements.detailPhotos, {
-    getReception: () => receptionState.selected, token: receptionToken, uuid: receptionUuid, canManage: receptionCanManage, canAdminister: receptionCanAdminister,
+    getReception: () => receptionState.selected, token: receptionToken, uuid: receptionUuid, canManage: receptionCanManage, canAdminister: receptionCanAdminister, canConfirm: receptionCanConfirm,
     onChange: refreshReceptionPhotos,
     onConfirm: async () => {
         const selected = receptionState.selected;
@@ -189,6 +189,14 @@ function receptionCanManage() {
     return receptionCapabilities().puede_gestionar_recepciones_materiales === true;
 }
 
+function receptionCanConfirm() {
+    return (receptionCapabilities().puede_confirmar_recepciones_materiales ?? receptionCapabilities().puede_gestionar_recepciones_materiales) === true;
+}
+
+function receptionCanDelete() {
+    return (receptionCapabilities().puede_eliminar_recepciones_materiales ?? receptionCapabilities().puede_administrar_recepciones_materiales) === true;
+}
+
 function receptionCanAdminister() {
     return receptionCapabilities().puede_administrar_recepciones_materiales === true;
 }
@@ -281,7 +289,7 @@ function receptionFolioCount(record) {
 
 function renderReceptionList() {
     const admin = receptionCanAdminister();
-    receptionElements.showEliminations?.classList.toggle('is-hidden', !admin);
+    receptionElements.showEliminations?.classList.toggle('is-hidden', !(admin || receptionCanDelete()));
     const counts = receptionState.records.reduce((result, record) => {
         result[record.estado] = (result[record.estado] || 0) + 1; return result;
     }, {});
@@ -351,7 +359,8 @@ function renderReceptionDetail() {
     const action = (name, text) => `<button type="button" class="secondary-button" data-action="${name}" data-id="${receptionEscape(record.id)}">${text}</button>`;
     receptionElements.detailActions.innerHTML = action('view', 'Ver formulario')
         + (record.estado === 'confirmada' ? action('sampling', 'Registro de muestreo') : '')
-        + (receptionCanAdminister() ? (record.estado !== 'anulada' ? action('edit', 'Editar') : '') + action('delete', 'Eliminar') : '');
+        + (receptionCanAdminister() && record.estado !== 'anulada' ? action('edit', 'Editar') : '')
+        + (receptionCanDelete() ? action('delete', 'Eliminar') : '');
     receptionElements.detailLines.innerHTML = (record.detalles || []).map((detail) => `<article class="material-reception-detail-line"><strong>${receptionEscape(detail.item?.nombre || '—')}</strong><code>${receptionEscape(detail.item?.codigo || '—')}</code><b>${receptionEscape(receptionQuantity(detail.cantidad_aceptada ?? detail.cantidad_recibida))} ${receptionEscape(detail.unidad_medida || '')}</b><small>${receptionEscape(receptionPackageSummary(detail))}</small>${detail.conversion_unidad ? `<small>Ingreso: ${receptionEscape(detail.conversion_unidad.entrada.cantidad_aceptada)} ${receptionEscape(detail.conversion_unidad.unidad_origen)} × ${receptionEscape(detail.conversion_unidad.factor)} ${receptionEscape(detail.unidad_medida)}</small>` : ''}</article>`).join('');
     const folios = record.snapshot_confirmacion?.folios || [];
     receptionElements.detailFoot.textContent = record.estado === 'borrador'
@@ -599,7 +608,7 @@ function configureReceptionDialog() {
     receptionElements.reason.classList.toggle('is-hidden', !editing);
     receptionElements.warning.classList.toggle('is-hidden', !(editing && confirmed));
     receptionElements.saveDraft.classList.toggle('is-hidden', readonly || confirmed);
-    receptionElements.saveConfirm.classList.toggle('is-hidden', readonly);
+    receptionElements.saveConfirm.classList.toggle('is-hidden', readonly || (!confirmed && !receptionCanConfirm()));
     receptionElements.saveConfirm.textContent = confirmed ? 'Guardar corrección' : 'Guardar y confirmar';
     receptionElements.saveConfirm.disabled = !confirmed && !receptionState.current?.fotos?.some((f) => f.tipo === 'documento');
 }
@@ -820,7 +829,7 @@ if (receptionElements.workspace) {
             }
         }
         if (button.dataset.action === 'edit' && receptionCanAdminister()) openReception(record.id, 'edit');
-        if (button.dataset.action === 'delete' && receptionCanAdminister()) openReceptionDelete(receptionState.selected?.id === record.id ? receptionState.selected : record);
+        if (button.dataset.action === 'delete' && receptionCanDelete()) openReceptionDelete(receptionState.selected?.id === record.id ? receptionState.selected : record);
     }
     receptionElements.list.addEventListener('click', handleReceptionAction);
     receptionElements.detailActions.addEventListener('click', handleReceptionAction);

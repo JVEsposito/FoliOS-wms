@@ -8,6 +8,7 @@ use App\Http\Requests\GuardarPerfilAccesoRequest;
 use App\Models\PerfilAcceso;
 use App\Services\Autorizacion\CatalogoModulosAcceso;
 use App\Services\Autorizacion\CatalogoOficinas;
+use App\Services\Autorizacion\CatalogoPermisosMateriales;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -34,6 +35,7 @@ class PerfilAccesoController extends Controller
                 ->map(fn (PerfilAcceso $perfil): array => $this->perfil($perfil)),
             'catalogo' => $this->catalogo->macromodulos(),
             'catalogo_tablet' => $this->catalogo->macromodulosTablet(),
+            'catalogo_permisos_materiales' => app(CatalogoPermisosMateriales::class)->catalogo(),
             'pantallas_inicio' => array_map(
                 fn (array $oficina): array => [
                     'ruta' => $oficina['ruta'],
@@ -96,10 +98,19 @@ class PerfilAccesoController extends Controller
         }
         $resultado = DB::transaction(function () use ($datos, $perfilAcceso, $request): array {
             $perfil = PerfilAcceso::query()->lockForUpdate()->findOrFail($perfilAcceso->id);
+            // Un cliente anterior que omite el campo conserva la restricción.
+            // Quitar oficinas también quita las acciones que dependían de ellas.
+            if (! array_key_exists('permisos_materiales', $datos) && $perfil->permisos_materiales !== null) {
+                $datos['permisos_materiales'] = array_values(array_intersect(
+                    $perfil->permisos_materiales,
+                    app(CatalogoPermisosMateriales::class)->compatibles($datos['modulos'], $datos['rol_base'] === RolUsuario::Consulta->value),
+                ));
+            }
             $seguridadCambio = $perfil->rol_base->value !== $datos['rol_base']
                 || $perfil->modulos !== $datos['modulos']
                 || $perfil->modulos_tablet !== $datos['modulos_tablet']
-                || $perfil->activo !== (bool) $datos['activo'];
+                || $perfil->activo !== (bool) $datos['activo']
+                || (array_key_exists('permisos_materiales', $datos) && $perfil->permisos_materiales !== $datos['permisos_materiales']);
 
             $perfil->fill([
                 ...$datos,
@@ -141,6 +152,8 @@ class PerfilAccesoController extends Controller
             'solo_consulta' => $perfil->rol_base === RolUsuario::Consulta,
             'modulos' => $perfil->modulos,
             'modulos_tablet' => $perfil->modulos_tablet ?? [],
+            'permisos_materiales' => $perfil->permisos_materiales,
+            'permisos_materiales_efectivos' => app(CatalogoPermisosMateriales::class)->efectivosPerfil($perfil),
             'pantalla_inicio' => $perfil->pantalla_inicio,
             'activo' => $perfil->activo,
             'predeterminado' => $perfil->predeterminado,

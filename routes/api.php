@@ -537,8 +537,8 @@ Route::middleware('auth:sanctum')->group(function () {
         ->middleware('can:consultar-kardex-materiales');
     Route::post('/materiales/almacenes/movimientos', [AlmacenMaterialController::class, 'store']);
 
-    Route::get('/materiales/recepciones/eliminaciones', [FotoRecepcionMaterialController::class, 'eliminaciones'])->middleware('can:administrar-recepciones-materiales');
-    Route::get('/materiales/recepciones/eliminaciones/{eliminacion}/fotos/{indice}', [FotoRecepcionMaterialController::class, 'eliminada'])->middleware('can:administrar-recepciones-materiales');
+    Route::get('/materiales/recepciones/eliminaciones', [FotoRecepcionMaterialController::class, 'eliminaciones'])->middleware('can:consultar-eliminaciones-recepciones-materiales');
+    Route::get('/materiales/recepciones/eliminaciones/{eliminacion}/fotos/{indice}', [FotoRecepcionMaterialController::class, 'eliminada'])->middleware('can:consultar-eliminaciones-recepciones-materiales');
     Route::prefix('materiales/transporte')->middleware('can:consultar-recepciones-materiales')->group(function () {
         Route::get('/conductor', [DirectorioTransporteController::class, 'conductor']);
         Route::get('/empresa', [DirectorioTransporteController::class, 'empresa']);
@@ -565,8 +565,8 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::put('/{recepcionMaterial}', [RecepcionMaterialController::class, 'update']);
             Route::post('/{recepcionMaterial}/fotos', [FotoRecepcionMaterialController::class, 'store']);
             Route::delete('/{recepcionMaterial}/fotos/{foto}', [FotoRecepcionMaterialController::class, 'destroy'])->scopeBindings();
-            Route::post('/{recepcionMaterial}/confirmar', [RecepcionMaterialController::class, 'confirmar']);
         });
+        Route::post('/{recepcionMaterial}/confirmar', [RecepcionMaterialController::class, 'confirmar'])->middleware('can:confirmar-recepciones-materiales');
         Route::post('/{recepcionMaterial}/etiquetas', [ImpresionEtiquetaMaterialController::class, 'store'])
             ->middleware('can:imprimir-etiquetas-materiales');
         Route::post('/trabajos-impresion/{trabajoImpresionMaterial}/resultado', [ImpresionEtiquetaMaterialController::class, 'resultado'])
@@ -577,7 +577,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/{recepcionMaterial}/administrar', [RecepcionMaterialController::class, 'administrar'])
             ->middleware('can:administrar-recepciones-materiales');
         Route::delete('/{recepcionMaterial}', [RecepcionMaterialController::class, 'destroy'])
-            ->middleware('can:administrar-recepciones-materiales');
+            ->middleware('can:eliminar-recepciones-materiales');
     });
 
     Route::prefix('materiales/transformaciones')->group(function () {

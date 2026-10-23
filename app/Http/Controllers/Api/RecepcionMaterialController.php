@@ -173,7 +173,7 @@ class RecepcionMaterialController extends Controller
             ->when($request->query('guia'), fn ($query, $guia) => $query
                 ->where('numero_guia_despacho', 'like', '%'.trim((string) $guia).'%'));
 
-        if (! $usuario->can('anular-recepciones-materiales')) {
+        if (! $usuario->can('supervisar-recepciones-materiales')) {
             if ($usuario->can('gestionar-recepciones-materiales')) {
                 $consulta->where(function ($query) use ($usuario): void {
                     $query->where('estado', EstadoRecepcionMaterial::Confirmada->value)
@@ -405,8 +405,8 @@ class RecepcionMaterialController extends Controller
     {
         $usuario = $request->user();
 
-        return $usuario->can('anular-recepciones-materiales')
-            || ($usuario->can('gestionar-recepciones-materiales')
+        return $usuario->can('supervisar-recepciones-materiales')
+            || (($usuario->can('gestionar-recepciones-materiales') || $usuario->can('confirmar-recepciones-materiales'))
                 && $recepcion->creado_por_user_id === $usuario->id);
     }
 }

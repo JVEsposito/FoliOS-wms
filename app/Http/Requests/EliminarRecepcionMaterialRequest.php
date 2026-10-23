@@ -8,7 +8,7 @@ class EliminarRecepcionMaterialRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('administrar-recepciones-materiales') === true;
+        return $this->user()?->can('eliminar-recepciones-materiales') === true;
     }
 
     /**
