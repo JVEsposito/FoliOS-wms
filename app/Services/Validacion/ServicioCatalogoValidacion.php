@@ -6,10 +6,12 @@ use App\Models\ArticuloValidacion;
 use App\Models\CategoriaValidacion;
 use App\Models\ClienteValidacion;
 use App\Models\CombinacionValidacion;
+use App\Models\ImportacionValidacion;
 use App\Models\OrigenValidacion;
 use App\Models\Temporada;
 use App\Services\Clientes\ServicioCliente;
 use DomainException;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -23,10 +25,10 @@ class ServicioCatalogoValidacion
     /**
      * @return array<string, mixed>
      */
-    public function datosAdministracion(?Temporada $seleccionada = null): array
+    public function datosAdministracion(?Temporada $seleccionada = null, bool $resumen = false): array
     {
         $temporadas = Temporada::query()
-            ->withCount(['articulos', 'origenes', 'combinaciones'])
+            ->unless($resumen, fn ($consulta) => $consulta->withCount(['articulos', 'origenes', 'combinaciones']))
             ->orderByDesc('activa')
             ->orderByDesc('fecha_inicio')
             ->orderByDesc('created_at')
@@ -35,6 +37,22 @@ class ServicioCatalogoValidacion
         $temporada = $seleccionada
             ?? $temporadas->firstWhere('activa', true)
             ?? $temporadas->first();
+
+        // Maestros utiliza la jerarquía: no necesita descargar la proyección
+        // cartesiana para la PDA ni las filas completas de las importaciones.
+        if ($resumen) {
+            return [
+                'temporadas' => $temporadas->values(),
+                'temporada' => $temporada,
+                'importaciones' => $temporada
+                    ? $temporada->importaciones()
+                        ->select(['id', 'temporada_id', 'nombre_archivo', 'estado', 'resumen', 'created_at'])
+                        ->latest()
+                        ->limit(10)
+                        ->get()
+                    : [],
+            ];
+        }
 
         if (! $temporada) {
             return [
@@ -80,12 +98,23 @@ class ServicioCatalogoValidacion
                 ->latest('activo')
                 ->latest('updated_at')
                 ->get(),
-            'importaciones' => $temporada->importaciones()
-                ->with(['creadoPor:id,name', 'confirmadoPor:id,name'])
-                ->latest()
-                ->limit(10)
-                ->get(),
+            'importaciones' => $this->importacionesCompletasRecientes($temporada),
         ];
+    }
+
+    /** @return Collection<int, ImportacionValidacion> */
+    private function importacionesCompletasRecientes(Temporada $temporada): Collection
+    {
+        // Ordenar solo los IDs impide que MySQL incluya los JSON de filas y
+        // errores en el buffer de ordenación de la consulta de compatibilidad.
+        $ids = $temporada->importaciones()->latest()->orderByDesc('id')->limit(10)->pluck('id');
+
+        return $temporada->importaciones()
+            ->whereKey($ids)
+            ->with(['creadoPor:id,name', 'confirmadoPor:id,name'])
+            ->get()
+            ->sortBy(fn (ImportacionValidacion $importacion) => $ids->search($importacion->id))
+            ->values();
     }
 
     /**

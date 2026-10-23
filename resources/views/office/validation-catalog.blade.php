@@ -27,6 +27,8 @@
                     </div>
                 </header>
 
+                <p class="panel form-error is-hidden" id="catalogLoadError" role="alert"></p>
+
                 <section class="panel catalog-season-panel">
                     <div class="validation-panel__heading"><div><p class="eyebrow">TEMPORADA TRANSVERSAL</p><h2>Datos maestros de la temporada seleccionada</h2></div><span>Administración TI</span></div>
                     <p class="validation-help">Las temporadas se crean y activan en Accesos. Aquí TI administra sus datos maestros e importaciones; al eliminar un elemento se retira de la operación, pero se conserva su trazabilidad histórica.</p>
@@ -38,9 +40,9 @@
                         <span>Se actualizan automáticamente con la jerarquía</span>
                     </div>
                     <div class="validation-metrics catalog-projection-metrics">
-                        <article><span>ARTÍCULOS</span><strong id="projectionArticleCount">0</strong></article>
-                        <article><span>ORÍGENES</span><strong id="projectionOriginCount">0</strong></article>
-                        <article><span>COMBINACIONES</span><strong id="projectionCombinationCount">0</strong></article>
+                        <article><span>ARTÍCULOS</span><strong id="projectionArticleCount">—</strong></article>
+                        <article><span>ORÍGENES</span><strong id="projectionOriginCount">—</strong></article>
+                        <article><span>COMBINACIONES</span><strong id="projectionCombinationCount">—</strong></article>
                     </div>
                 </section>
 
@@ -75,13 +77,13 @@
 
                 <div class="catalog-columns catalog-columns--three office-panel-workspace">
                     <section class="panel catalog-card" id="validation-catalog-panel-clients" data-office-panel-group="validation-catalog" data-office-panel-id="clients" role="tabpanel" aria-labelledby="validation-catalog-tab-clients">
-                        <div class="validation-panel__heading"><div><p class="eyebrow">MAESTRO TRANSVERSAL</p><h2>Clientes</h2></div><span id="clientCount">0</span></div>
+                        <div class="validation-panel__heading"><div><p class="eyebrow">MAESTRO TRANSVERSAL</p><h2>Clientes</h2></div><span id="clientCount">—</span></div>
                         <p class="validation-help">Los clientes se crean y modifican exclusivamente en Accesos. Los módulos operacionales los consumen para asociar sus marcas dentro de la temporada.</p>
                         <div class="validation-list" id="clientList"></div>
                     </section>
 
                     <section class="panel catalog-card" id="validation-catalog-panel-brands" data-office-panel-group="validation-catalog" data-office-panel-id="brands" role="tabpanel" aria-labelledby="validation-catalog-tab-brands">
-                        <div class="validation-panel__heading"><div><p class="eyebrow">CLIENTE → MARCA</p><h2>Marcas</h2></div><span id="brandCount">0</span></div>
+                        <div class="validation-panel__heading"><div><p class="eyebrow">CLIENTE → MARCA</p><h2>Marcas</h2></div><span id="brandCount">—</span></div>
                         <form class="catalog-form" id="brandForm">
                             <input name="id" type="hidden">
                             <label><span>Cliente *</span><select name="cliente_validacion_id" required></select></label>
@@ -94,7 +96,7 @@
                     </section>
 
                     <section class="panel catalog-card" id="validation-catalog-panel-categories" data-office-panel-group="validation-catalog" data-office-panel-id="categories" role="tabpanel" aria-labelledby="validation-catalog-tab-categories">
-                        <div class="validation-panel__heading"><div><p class="eyebrow">INDEPENDIENTE</p><h2>Categorías</h2></div><span id="categoryCount">0</span></div>
+                        <div class="validation-panel__heading"><div><p class="eyebrow">INDEPENDIENTE</p><h2>Categorías</h2></div><span id="categoryCount">—</span></div>
                         <form class="catalog-form" id="categoryForm">
                             <input name="id" type="hidden">
                             <label><span>Nombre *</span><input name="nombre" maxlength="100" required></label>
@@ -108,7 +110,7 @@
 
                 <div class="catalog-columns office-panel-workspace">
                     <section class="panel catalog-card" id="validation-catalog-panel-species" data-office-panel-group="validation-catalog" data-office-panel-id="species" role="tabpanel" aria-labelledby="validation-catalog-tab-species">
-                        <div class="validation-panel__heading"><div><p class="eyebrow">BASE PRODUCTIVA</p><h2>Especies</h2></div><span id="speciesCount">0</span></div>
+                        <div class="validation-panel__heading"><div><p class="eyebrow">BASE PRODUCTIVA</p><h2>Especies</h2></div><span id="speciesCount">—</span></div>
                         <form class="catalog-form" id="speciesForm">
                             <input name="id" type="hidden">
                             <label><span>Nombre *</span><input name="nombre" maxlength="100" required></label>
@@ -120,7 +122,7 @@
                     </section>
 
                     <section class="panel catalog-card" id="validation-catalog-panel-varieties" data-office-panel-group="validation-catalog" data-office-panel-id="varieties" role="tabpanel" aria-labelledby="validation-catalog-tab-varieties">
-                        <div class="validation-panel__heading"><div><p class="eyebrow">ESPECIE → VARIEDAD</p><h2>Variedades</h2></div><span id="varietyCount">0</span></div>
+                        <div class="validation-panel__heading"><div><p class="eyebrow">ESPECIE → VARIEDAD</p><h2>Variedades</h2></div><span id="varietyCount">—</span></div>
                         <form class="catalog-form" id="varietyForm">
                             <input name="id" type="hidden">
                             <label><span>Especie *</span><select name="especie_validacion_id" required></select></label>
@@ -135,21 +137,21 @@
 
                 <div class="catalog-columns catalog-columns--three office-panel-workspace">
                     <section class="panel catalog-card" id="validation-catalog-panel-calibers" data-office-panel-group="validation-catalog" data-office-panel-id="calibers" role="tabpanel" aria-labelledby="validation-catalog-tab-calibers">
-                        <div class="validation-panel__heading"><div><p class="eyebrow">POR ESPECIE</p><h2>Calibres</h2></div><span id="caliberCount">0</span></div>
+                        <div class="validation-panel__heading"><div><p class="eyebrow">POR ESPECIE</p><h2>Calibres</h2></div><span id="caliberCount">—</span></div>
                         <form class="catalog-form" id="caliberForm">
                             <input name="id" type="hidden"><label><span>Especie *</span><select name="especie_validacion_id" required></select></label><label><span>Calibre *</span><input name="nombre" maxlength="50" required></label><label><span>Código externo</span><input name="codigo_externo" maxlength="100"></label><label class="validation-check"><input name="activo" type="checkbox" checked><span>Activo</span></label>
                             <div class="catalog-actions"><button class="secondary-button" data-reset-form="caliberForm" type="button">Limpiar</button><button class="primary-button" type="submit">Guardar calibre</button></div>
                         </form><p class="form-error" id="caliberError"></p><div class="validation-list" id="caliberList"></div>
                     </section>
                     <section class="panel catalog-card" id="validation-catalog-panel-packages" data-office-panel-group="validation-catalog" data-office-panel-id="packages" role="tabpanel" aria-labelledby="validation-catalog-tab-packages">
-                        <div class="validation-panel__heading"><div><p class="eyebrow">POR ESPECIE</p><h2>Envases</h2></div><span id="packageCount">0</span></div>
+                        <div class="validation-panel__heading"><div><p class="eyebrow">POR ESPECIE</p><h2>Envases</h2></div><span id="packageCount">—</span></div>
                         <form class="catalog-form" id="packageForm">
                             <input name="id" type="hidden"><label><span>Especie *</span><select name="especie_validacion_id" required></select></label><label><span>Envase *</span><input name="nombre" maxlength="100" required></label><label><span>Código externo</span><input name="codigo_externo" maxlength="100"></label><label><span>Cliente *</span><select name="cliente_validacion_id" required></select></label><label><span>Kilos netos por caja</span><input name="kilos_netos_por_caja" type="number" step="0.0001" min="0.0001" max="999999" placeholder="Sin configurar"></label><label class="validation-check"><input name="activo" type="checkbox" checked><span>Activo</span></label>
                             <div class="catalog-actions"><button class="secondary-button" data-reset-form="packageForm" type="button">Limpiar</button><button class="primary-button" type="submit">Guardar envase</button></div>
                         </form><p class="form-error" id="packageError"></p><div class="validation-list" id="packageList"></div>
                     </section>
                     <section class="panel catalog-card" id="validation-catalog-panel-csg" data-office-panel-group="validation-catalog" data-office-panel-id="csg" role="tabpanel" aria-labelledby="validation-catalog-tab-csg">
-                        <div class="validation-panel__heading"><div><p class="eyebrow">CSG → VARIEDADES</p><h2>CSG</h2></div><span id="csgCount">0</span></div>
+                        <div class="validation-panel__heading"><div><p class="eyebrow">CSG → VARIEDADES</p><h2>CSG</h2></div><span id="csgCount">—</span></div>
                         <form class="catalog-form" id="csgForm">
                             <input name="id" type="hidden"><label><span>Código CSG *</span><input name="codigo" maxlength="50" required></label><label><span>Predio</span><input name="predio" maxlength="150"></label><label><span>Código externo</span><input name="codigo_externo" maxlength="100"></label>
                             <fieldset class="catalog-varieties"><legend>Variedades autorizadas *</legend><div id="csgVarietyOptions"></div></fieldset>
