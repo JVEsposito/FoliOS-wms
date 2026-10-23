@@ -8,5 +8,6 @@ enum TipoEventoRecepcionMaterial: string
     case Actualizada = 'actualizada';
     case CorregidaAdministrativamente = 'corregida_administrativamente';
     case Confirmada = 'confirmada';
+    case Regularizada = 'regularizada';
     case Anulada = 'anulada';
 }

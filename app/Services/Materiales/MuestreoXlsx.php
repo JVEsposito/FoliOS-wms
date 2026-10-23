@@ -204,7 +204,7 @@ class MuestreoXlsx
             ])->filter()->implode(' · ');
             $filas[] = $this->row($fila, [
                 $this->inlineCell("C{$fila}", $material, 7),
-                $this->numberCell("D{$fila}", (float) $detalle->cantidad_documental, 8),
+                $detalle->cantidad_documental === null ? $this->inlineCell("D{$fila}", 'Pendiente', 7) : $this->numberCell("D{$fila}", (float) $detalle->cantidad_documental, 8),
                 $this->inlineCell("E{$fila}", $this->unidadEmbalaje($detalle), 7),
                 $this->numberCell("F{$fila}", $bultos->count(), 8),
                 $this->numberCell("G{$fila}", $porcentajeAplicado, 9),

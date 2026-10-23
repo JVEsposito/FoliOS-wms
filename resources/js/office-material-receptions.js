@@ -1,3 +1,4 @@
+import { createReceptionRegistration, registrationLabel, registrationDetail, requestReceptionAuthorization, openReceptionRegularization, resetReceptionRegularization } from './office-material-reception-registration.js';
 import { createReceptionPhotosPanel } from './office-material-reception-photos.js';
 import { createReceptionTransport } from './office-material-reception-transport.js';
 import './office-material-reception-import.js';
@@ -70,13 +71,16 @@ const receptionState = {
     confirmations: new Map(),
     mode: 'view',
     lines: [],
+    saving: false,
+    mutations: new Map(),
     loading: false,
     loadingPromise: null,
 };
 
+const registrationPanel = receptionElements.form ? createReceptionRegistration(receptionElements.form) : null;
 const transportPanel = receptionElements.form ? createReceptionTransport(receptionElements.form, receptionApi) : null;
 const photosPanel = receptionElements.photos ? createReceptionPhotosPanel(receptionElements.photos, {
-    getReception: () => receptionState.current, token: receptionToken, uuid: receptionUuid, canManage: receptionCanManage, canAdminister: receptionCanAdminister, canConfirm: receptionCanConfirm,
+    getReception: () => receptionState.current, token: receptionToken, uuid: receptionUuid, canManage: receptionCanManage, canAdminister: receptionCanAdminister, canConfirm: receptionCanConfirm, canConfirmWithoutDocument: (record) => record.registro?.provisional && receptionCanAuthorize(),
     onChange: refreshReceptionPhotos,
     onConfirm: async () => {
         const current = receptionState.current;
@@ -90,7 +94,7 @@ const photosPanel = receptionElements.photos ? createReceptionPhotosPanel(recept
     },
 }) : null;
 const detailPhotosPanel = receptionElements.detailPhotos ? createReceptionPhotosPanel(receptionElements.detailPhotos, {
-    getReception: () => receptionState.selected, token: receptionToken, uuid: receptionUuid, canManage: receptionCanManage, canAdminister: receptionCanAdminister, canConfirm: receptionCanConfirm,
+    getReception: () => receptionState.selected, token: receptionToken, uuid: receptionUuid, canManage: receptionCanManage, canAdminister: receptionCanAdminister, canConfirm: receptionCanConfirm, canConfirmWithoutDocument: (record) => record.registro?.provisional && receptionCanAuthorize(),
     onChange: refreshReceptionPhotos,
     onConfirm: async () => {
         const selected = receptionState.selected;
@@ -108,13 +112,17 @@ async function confirmReception(record) {
     if (receptionState.selected?.id === record.id && Number(receptionState.selected.version) > Number(record.version)) record = receptionState.selected;
     let confirmation = receptionState.confirmations.get(record.id);
     if (!confirmation || confirmation.version !== record.version) {
-        confirmation = { operationId: receptionUuid(), version: record.version, pending: null };
+        confirmation = { operationId: receptionUuid(), version: record.version, pending: null, authorization: null };
         receptionState.confirmations.set(record.id, confirmation);
     }
     if (confirmation.pending) return confirmation.pending;
-    confirmation.pending = receptionApi(`/api/materiales/recepciones/${record.id}/confirmar`, {
-        method: 'POST', body: JSON.stringify({ operacion_id: confirmation.operationId, version_conocida: record.version }),
-    });
+    confirmation.pending = (async () => {
+        if (record.registro?.requiere_autorizacion && !receptionCanAuthorize()) throw new Error('La recepción requiere autorización. Un usuario habilitado debe confirmarla con un motivo.');
+        confirmation.authorization ??= await requestReceptionAuthorization(record);
+        return receptionApi(`/api/materiales/recepciones/${record.id}/confirmar`, {
+            method: 'POST', body: JSON.stringify({ operacion_id: confirmation.operationId, version_conocida: record.version, ...confirmation.authorization }),
+        });
+    })();
     try {
         const response = await confirmation.pending;
         offerReceptionPrinting(response.data);
@@ -153,7 +161,7 @@ async function loadEliminationEvidence(page = 1) {
     eliminationsPage = response.current_page;
     const root = receptionElements.eliminations;
     root.classList.remove('is-hidden');
-    root.innerHTML = '<h3>Evidencia de recepciones eliminadas</h3>' + response.data.map((record) => `<article><strong>Guía ${receptionEscape(record.numero_guia_despacho)}</strong><p>${receptionEscape(record.motivo)} · ${receptionEscape(record.eliminado_at)}</p>${record.fotos.map((foto) => `<button type="button" data-archived-photo="${receptionEscape(foto.url)}">${foto.tipo === 'documento' ? 'Documento' : 'Referencial'} ${foto.orden}</button>`).join('') || '<p>Sin fotos conservadas</p>'}</article>`).join('') + `<button type="button" data-archive-page="${page - 1}" ${page <= 1 ? 'disabled' : ''}>Anterior</button><button type="button" data-archive-page="${page + 1}" ${page >= response.last_page ? 'disabled' : ''}>Siguiente</button>`;
+    root.innerHTML = '<h3>Evidencia de recepciones eliminadas</h3>' + response.data.map((record) => `<article><strong>Guía ${receptionEscape(record.numero_guia_despacho || 'Pendiente de guía')}</strong><p>${receptionEscape(record.motivo)} · ${receptionEscape(record.eliminado_at)}</p>${record.fotos.map((foto) => `<button type="button" data-archived-photo="${receptionEscape(foto.url)}">${foto.tipo === 'documento' ? 'Documento' : 'Referencial'} ${foto.orden}</button>`).join('') || '<p>Sin fotos conservadas</p>'}</article>`).join('') + `<button type="button" data-archive-page="${page - 1}" ${page <= 1 ? 'disabled' : ''}>Anterior</button><button type="button" data-archive-page="${page + 1}" ${page >= response.last_page ? 'disabled' : ''}>Siguiente</button>`;
 }
 receptionElements.showEliminations?.addEventListener('click', () => { void loadEliminationEvidence(eliminationsPage).catch((error) => { receptionElements.error.textContent = error.message; }); });
 receptionElements.eliminations?.addEventListener('click', async (event) => {
@@ -200,6 +208,10 @@ function receptionCanManage() {
 
 function receptionCanConfirm() {
     return (receptionCapabilities().puede_confirmar_recepciones_materiales ?? receptionCapabilities().puede_gestionar_recepciones_materiales) === true;
+}
+
+function receptionCanAuthorize() {
+    return receptionCapabilities().puede_autorizar_recepciones_tardias_materiales === true;
 }
 
 function receptionCanDelete() {
@@ -328,7 +340,7 @@ function renderReceptionList() {
     receptionElements.list.innerHTML = receptionState.records.map((record) => {
         const selected = record.id === receptionState.selectedId;
         const status = record.estado === 'borrador' && !Number(record.fotos_documento) ? 'sin-foto' : record.estado;
-        return `<article class="material-reception-card${selected ? ' is-selected' : ''}" role="listitem"><button type="button" class="material-reception-card__open" data-action="select" data-id="${receptionEscape(record.id)}" aria-pressed="${selected}"><span class="material-reception-card__k">Guía</span><strong class="material-reception-card__code">${receptionEscape(record.numero_guia_despacho)}</strong><span class="material-reception-card__who">${receptionEscape(record.cliente?.nombre)}, ${receptionEscape(record.proveedor?.nombre)}</span><small>${receptionEscape(receptionDate(record.fecha_documento))} · ${receptionEscape(record.detalles_count ?? '—')} ítems · ${receptionFolioCount(record)} folios</small></button><span class="material-reception-state material-reception-state--${receptionEscape(status)}">${status === 'sin-foto' ? 'Sin foto' : receptionEscape(receptionStatus(record.estado))}</span></article>`;
+        return `<article class="material-reception-card${selected ? ' is-selected' : ''}" role="listitem"><button type="button" class="material-reception-card__open" data-action="select" data-id="${receptionEscape(record.id)}" aria-pressed="${selected}"><span class="material-reception-card__k">Guía</span><strong class="material-reception-card__code">${receptionEscape(record.numero_guia_despacho || 'Pendiente de guía')}</strong><span class="material-reception-card__who">${receptionEscape(record.cliente?.nombre)}, ${receptionEscape(record.proveedor?.nombre)}</span><small>${receptionEscape(receptionDate(record.fecha_documento))} · ${receptionEscape(record.detalles_count ?? '—')} ítems · ${receptionFolioCount(record)} folios</small><small>${receptionEscape(registrationLabel(record))}</small></button><span class="material-reception-state material-reception-state--${receptionEscape(status)}">${status === 'sin-foto' ? 'Sin foto' : receptionEscape(receptionStatus(record.estado))}</span></article>`;
     }).join('') || '<p class="empty-state">No existen recepciones para los filtros seleccionados.</p>';
     if (receptionState.selectedId && !receptionState.records.some((record) => record.id === receptionState.selectedId)) clearReceptionDetail();
     const current = receptionState.meta?.current_page || receptionState.page;
@@ -375,7 +387,7 @@ function renderReceptionDetail() {
     receptionElements.detail.setAttribute('aria-busy', String(Boolean(receptionState.selectedId && !record)));
     if (!record) return;
     receptionElements.detailState.textContent = { borrador: 'Recepción en borrador', confirmada: 'Recepción confirmada', anulada: 'Recepción anulada' }[record.estado];
-    receptionElements.detailTitle.textContent = `Guía ${record.numero_guia_despacho}`;
+    receptionElements.detailTitle.textContent = `Guía ${record.numero_guia_despacho || 'pendiente'}`;
     receptionElements.detailMeta.textContent = `Cliente ${record.cliente?.nombre || '—'} (${record.cliente?.codigo || '—'}), proveedor ${record.proveedor?.nombre || '—'}${record.orden_compra ? `, OC ${record.orden_compra}` : ''}`;
     if (record.transporte?.conductor) receptionElements.detailMeta.textContent += ` · Conductor ${record.transporte.conductor.nombre} (${record.transporte.conductor.rut})`;
     if (record.patente) receptionElements.detailMeta.textContent += ` · Camión ${record.patente}`;
@@ -385,9 +397,10 @@ function renderReceptionDetail() {
         ? `<a class="secondary-button" href="${receptionPrintUrl(record.id)}">Imprimir folios</a>` : '';
     receptionElements.detailActions.innerHTML = printAction + action('view', 'Ver formulario')
         + (record.estado === 'confirmada' ? action('sampling', 'Registro de muestreo') : '')
-        + (receptionCanAdminister() && record.estado !== 'anulada' ? action('edit', 'Editar') : '')
+        + ((record.estado === 'borrador' ? receptionCanManage() || receptionCanAdminister() : receptionCanAdminister() && !record.registro?.provisional && record.estado !== 'anulada') ? action('edit', 'Editar') : '')
+        + (receptionCanAuthorize() && record.estado === 'confirmada' && ['pendiente', 'vencida'].includes(record.registro?.estado) ? action('regularize', 'Regularizar documentos') : '')
         + (receptionCanDelete() ? action('delete', 'Eliminar') : '');
-    receptionElements.detailLines.innerHTML = (record.detalles || []).map((detail) => `<article class="material-reception-detail-line"><strong>${receptionEscape(detail.item?.nombre || '—')}</strong><code>${receptionEscape(detail.item?.codigo || '—')}</code><b>${receptionEscape(receptionQuantity(detail.cantidad_aceptada ?? detail.cantidad_recibida))} ${receptionEscape(detail.unidad_medida || '')}</b><small>${receptionEscape(receptionPackageSummary(detail))}</small>${detail.conversion_unidad ? `<small>Ingreso: ${receptionEscape(detail.conversion_unidad.entrada.cantidad_aceptada)} ${receptionEscape(detail.conversion_unidad.unidad_origen)} × ${receptionEscape(detail.conversion_unidad.factor)} ${receptionEscape(detail.unidad_medida)}</small>` : ''}</article>`).join('');
+    receptionElements.detailLines.innerHTML = registrationDetail(record) + (record.detalles || []).map((detail) => `<article class="material-reception-detail-line"><strong>${receptionEscape(detail.item?.nombre || '—')}</strong><code>${receptionEscape(detail.item?.codigo || '—')}</code><b>${receptionEscape(receptionQuantity(detail.cantidad_aceptada ?? detail.cantidad_recibida))} ${receptionEscape(detail.unidad_medida || '')}</b><small>Documental: ${detail.cantidad_documental == null ? 'Pendiente' : receptionEscape(receptionQuantity(detail.cantidad_documental))} ${receptionEscape(detail.unidad_medida || '')}</small><small>${receptionEscape(receptionPackageSummary(detail))}</small>${detail.conversion_unidad ? `<small>Ingreso: ${receptionEscape(detail.conversion_unidad.entrada.cantidad_aceptada)} ${receptionEscape(detail.conversion_unidad.unidad_origen)} × ${receptionEscape(detail.conversion_unidad.factor)} ${receptionEscape(detail.unidad_medida)}</small>` : ''}</article>`).join('');
     const folios = record.snapshot_confirmacion?.folios || [];
     receptionElements.detailFoot.textContent = record.estado === 'borrador'
         ? `Al confirmar se generan ${(record.detalles || []).reduce((total, detail) => total + (detail.bultos || []).length, 0)} folios.`
@@ -406,7 +419,11 @@ async function loadReceptions(page = receptionState.page) {
         const params = new URLSearchParams({ page: String(page), per_page: '25' });
         if (data.get('guia')) params.set('guia', data.get('guia'));
         if (data.get('estado')) params.set('estado', data.get('estado'));
+        if (data.get('sin_foto_documento')) params.set('sin_foto_documento', data.get('sin_foto_documento'));
+        if (data.get('regularizacion')) params.set('regularizacion', data.get('regularizacion'));
         const response = await receptionApi(`/api/materiales/recepciones?${params}`);
+        const registrationSummary = document.getElementById('materialReceptionRegularizationSummary');
+        if (registrationSummary) registrationSummary.textContent = response.regularizacion ? `${response.regularizacion.pendientes} provisionales pendientes · ${response.regularizacion.vencidas} con plazo vencido (todos los resultados autorizados)` : '';
         receptionState.records = response.data || [];
         receptionState.meta = response.meta || null;
         receptionState.page = response.meta?.current_page || page;
@@ -520,7 +537,9 @@ function receptionLineState(detail = null) {
         inputUnit: snapshot?.unidad_origen || '',
         conversionSnapshot: snapshot || null,
         itemFilter: '',
-        documentary: snapshot?.entrada?.cantidad_documental ?? detail?.cantidad_documental ?? '',
+        documentary: snapshot ? (snapshot.entrada?.cantidad_documental ?? '') : detail?.cantidad_documental ?? '',
+        documentaryRegularized: snapshot && receptionState.current?.registro?.estado === 'regularizada' ? detail?.cantidad_documental : null,
+        baseUnit: detail?.unidad_medida || '',
         counted: snapshot?.entrada?.cantidad_contada ?? detail?.cantidad_contada ?? '',
         accepted: snapshot?.entrada?.cantidad_aceptada ?? detail?.cantidad_aceptada ?? detail?.cantidad_recibida ?? '',
         rejected: snapshot?.entrada?.cantidad_rechazada ?? detail?.cantidad_rechazada ?? 0,
@@ -579,7 +598,7 @@ function renderReceptionLines() {
             <div class="material-reception-line__grid">
                 <label class="wide"><span>Producto *</span><div class="material-item-picker material-reception-item-picker"><div class="material-reception-item-controls"><input class="material-item-search" type="search" value="${receptionEscape(receptionItemLabel(selectedItem))}" placeholder="Buscar por código, nombre, categoría o unidad" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false"${readonly ? ' readonly' : ''}><select class="material-reception-item-filter" aria-label="Filtrar productos por tipo"${readonly ? ' disabled' : ''}><option value="">Todos los tipos</option><option value="insumo"${line.itemFilter === 'insumo' ? ' selected' : ''}>Insumos</option><option value="material_mp"${line.itemFilter === 'material_mp' ? ' selected' : ''}>Material MP</option><option value="material_pt"${line.itemFilter === 'material_pt' ? ' selected' : ''}>Material PT</option></select></div><input name="item_material_id" type="hidden" value="${receptionEscape(line.itemId)}"><div class="material-item-results is-hidden" role="listbox"></div><small class="material-reception-item-hint">Escribe para filtrar; Enter selecciona el primer resultado.</small></div></label>
                 ${receptionInputUnit(line, selectedItem, readonly)}
-                <label><span>Cantidad documental *</span><input name="cantidad_documental" type="number" min="0.001" step="0.001" value="${receptionEscape(line.documentary)}" required></label>
+                <label><span>${line.documentaryRegularized != null ? 'Cantidad documental al ingresar' : 'Cantidad documental *'}</span><input name="cantidad_documental" type="number" min="0.001" step="0.001" value="${receptionEscape(line.documentary)}" required></label>
                 <label><span>Cantidad contada *</span><input name="cantidad_contada" type="number" min="0.001" step="0.001" value="${receptionEscape(line.counted)}" required></label>
                 <label><span>Cantidad aceptada *</span><input name="cantidad_aceptada" type="number" min="0" step="0.001" value="${receptionEscape(line.accepted)}" required></label>
                 <label><span>Cantidad rechazada *</span><input name="cantidad_rechazada" type="number" min="0" step="0.001" value="${receptionEscape(line.rejected)}" required></label>
@@ -591,6 +610,7 @@ function renderReceptionLines() {
                 <label class="wide"><span>Motivo de bloqueo</span><input name="motivo_bloqueo" maxlength="2000" value="${receptionEscape(line.blockReason)}"></label>
                 <label class="wide"><span>Observación del producto</span><input name="observacion_detalle" maxlength="2000" value="${receptionEscape(line.observation)}"></label>
             </div>
+            ${line.documentaryRegularized != null ? `<p class="materials-help">Respaldo regularizado: ${receptionEscape(receptionQuantity(line.documentaryRegularized))} ${receptionEscape(line.baseUnit)}. Las cantidades de esta captura conservan la unidad de ingreso original.</p>` : ''}
             <p class="material-reception-package-summary">${line.originalPackages.length && !line.packagesDirty ? `${line.originalPackages.length} bultos existentes; se conservarán mientras no cambies su distribución.` : packageSummary(line)}</p>
         </article>
     `;
@@ -614,6 +634,7 @@ function populateReceptionForm(record = null) {
     receptionElements.form.elements.observacion.value = record?.observacion || '';
     receptionElements.form.elements.motivo_correccion.value = '';
     renderReceptionLines();
+    registrationPanel?.populate(record);
 }
 
 function configureReceptionDialog() {
@@ -621,7 +642,7 @@ function configureReceptionDialog() {
     const editing = receptionState.mode === 'edit';
     const confirmed = receptionState.current?.estado === 'confirmada';
     transportPanel?.setReadonly(readonly);
-    receptionElements.dialogEyebrow.textContent = readonly ? 'EXPEDIENTE DE RECEPCIÓN' : editing ? 'CORRECCIÓN ADMINISTRATIVA' : 'NUEVA RECEPCIÓN';
+    receptionElements.dialogEyebrow.textContent = readonly ? 'EXPEDIENTE DE RECEPCIÓN' : editing ? (confirmed || receptionCanAdminister() ? 'CORRECCIÓN ADMINISTRATIVA' : 'EDITAR BORRADOR') : 'NUEVA RECEPCIÓN';
     receptionElements.dialogTitle.textContent = receptionState.current
         ? `Guía ${receptionState.current.numero_guia_despacho}`
         : 'Registrar recepción';
@@ -631,12 +652,12 @@ function configureReceptionDialog() {
     receptionElements.form.classList.toggle('material-reception-readonly', readonly);
     receptionElements.addLine.classList.toggle('is-hidden', readonly);
     window.estibaMaterialReceptionImporter?.setVisible(!readonly);
-    receptionElements.reason.classList.toggle('is-hidden', !editing);
+    receptionElements.reason.classList.toggle('is-hidden', !(editing && (confirmed || receptionCanAdminister())));
     receptionElements.warning.classList.toggle('is-hidden', !(editing && confirmed));
     receptionElements.saveDraft.classList.toggle('is-hidden', readonly || confirmed);
     receptionElements.saveConfirm.classList.toggle('is-hidden', readonly || (!confirmed && !receptionCanConfirm()));
     receptionElements.saveConfirm.textContent = confirmed ? 'Guardar corrección' : 'Guardar y confirmar';
-    receptionElements.saveConfirm.disabled = !confirmed && !receptionState.current?.fotos?.some((f) => f.tipo === 'documento');
+    receptionElements.saveConfirm.disabled = !confirmed && !(receptionElements.form.elements.provisional?.checked && receptionCanAuthorize()) && !receptionState.current?.fotos?.some((f) => f.tipo === 'documento');
     receptionElements.printFromForm.classList.toggle('is-hidden', !confirmed || !readonly || !receptionCanPrint());
     if (confirmed && readonly && receptionCanPrint()) receptionElements.printFromForm.href = receptionPrintUrl(receptionState.current.id);
     else receptionElements.printFromForm.removeAttribute('href');
@@ -723,12 +744,13 @@ function receptionPayload() {
         patente: form.get('patente') || null,
         transportista: form.get('transportista') || null,
         ...transportPanel?.payload(),
+        ...registrationPanel?.payload(),
         observacion: form.get('observacion') || null,
         detalles: receptionState.lines.map((line) => ({
             item_material_id: line.itemId,
             ...(line.originDetailId ? { detalle_origen_id: line.originDetailId } : {}),
             ...(line.inputUnit ? { unidad_ingreso: line.inputUnit, conversion_version: receptionConversion(line)?.version || 0 } : {}),
-            cantidad_documental: Number(line.documentary),
+            cantidad_documental: line.documentary === '' && receptionElements.form.elements.provisional?.checked ? null : Number(line.documentary),
             cantidad_contada: Number(line.counted),
             cantidad_aceptada: Number(line.accepted),
             cantidad_rechazada: Number(line.rejected),
@@ -742,6 +764,9 @@ async function saveReception(confirm) {
     if (receptionState.mode === 'view') return;
     receptionElements.formError.textContent = '';
     const payload = receptionPayload();
+    const mutationKey = JSON.stringify({ id: receptionState.current?.id, version: receptionState.current?.version, ...payload, operacion_id: undefined });
+    if (!receptionState.mutations.has(mutationKey)) receptionState.mutations.set(mutationKey, payload.operacion_id);
+    payload.operacion_id = receptionState.mutations.get(mutationKey);
     const editing = receptionState.mode === 'edit';
     const confirmed = receptionState.current?.estado === 'confirmada';
     let response;
@@ -756,7 +781,7 @@ async function saveReception(confirm) {
         payload.motivo_correccion = receptionElements.form.elements.motivo_correccion.value;
         if (confirmed) payload.confirmacion_operacion_id = receptionUuid();
         response = await receptionApi(
-            `/api/materiales/recepciones/${receptionState.current.id}/administrar`,
+            `/api/materiales/recepciones/${receptionState.current.id}${confirmed || receptionCanAdminister() ? '/administrar' : ''}`,
             { method: 'PUT', body: JSON.stringify(payload) },
         );
     }
@@ -770,6 +795,7 @@ async function saveReception(confirm) {
         populateReceptionForm(response.data); configureReceptionDialog(); await photosPanel?.render();
         receptionElements.photos?.scrollIntoView({ block: 'center' });
     } else { receptionElements.dialog.close(); }
+    receptionState.mutations.clear();
     if (confirmed) offerReceptionPrinting(response.data);
     await refreshReceptionViews();
 }
@@ -859,7 +885,8 @@ if (receptionElements.workspace) {
                 receptionElements.error.textContent = error.message;
             }
         }
-        if (button.dataset.action === 'edit' && receptionCanAdminister()) openReception(record.id, 'edit');
+        if (button.dataset.action === 'regularize' && receptionCanAuthorize()) openReceptionRegularization(receptionState.selected, { api: receptionApi, uuid: receptionUuid, onSaved: refreshReceptionViews });
+        if (button.dataset.action === 'edit' && (record.estado === 'borrador' ? receptionCanManage() || receptionCanAdminister() : receptionCanAdminister())) openReception(record.id, 'edit');
         if (button.dataset.action === 'delete' && receptionCanDelete()) openReceptionDelete(receptionState.selected?.id === record.id ? receptionState.selected : record);
     }
     receptionElements.list.addEventListener('click', handleReceptionAction);
@@ -975,14 +1002,17 @@ if (receptionElements.workspace) {
             }
         }
     });
+    receptionElements.form.addEventListener('change', () => { registrationPanel?.sync(); if (receptionState.mode !== 'view') configureReceptionDialog(); });
     receptionElements.form.addEventListener('submit', async (event) => {
         event.preventDefault();
+        if (receptionState.saving) return;
+        receptionState.saving = true;
         try {
             const confirmed = receptionState.current?.estado === 'confirmada';
             await saveReception(confirmed || event.submitter?.value === 'confirm');
         } catch (error) {
             receptionElements.formError.textContent = error.message;
-        }
+        } finally { receptionState.saving = false; }
     });
     [receptionElements.close, receptionElements.cancel].forEach((button) =>
         button.addEventListener('click', () => receptionElements.dialog.close()));
@@ -999,8 +1029,9 @@ if (receptionElements.workspace) {
     window.addEventListener('estiba:office-session', () => {
         receptionElements.printNotice?.classList.add('is-hidden');
         receptionElements.printLink?.removeAttribute('href');
+        resetReceptionRegularization();
         photosPanel?.reset(); receptionElements.dialog.close(); receptionState.current = null;
-        clearReceptionDetail(); detailPhotosPanel?.reset(); receptionState.confirmations.clear();
+        clearReceptionDetail(); detailPhotosPanel?.reset(); receptionState.confirmations.clear(); receptionState.mutations.clear();
         receptionElements.eliminations?.replaceChildren(); receptionElements.eliminations?.classList.add('is-hidden');
         void loadReceptions(1);
     });

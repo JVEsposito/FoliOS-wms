@@ -73,7 +73,7 @@ export type ReceptionDetail = {
   categoria_operacional: string;
   categoria_operacional_etiqueta: string;
   unidad_medida: string;
-  cantidad_documental: string;
+  cantidad_documental: string | null;
   cantidad_contada: string;
   cantidad_aceptada: string;
   cantidad_recibida: string;
@@ -82,7 +82,20 @@ export type ReceptionDetail = {
   bultos: ReceptionPackage[];
 };
 
+export type ReceptionAuthorization = { motivo_autorizacion?: string; aceptar_fuera_plazo?: boolean };
+export type ReceptionRegistration = {
+  provisional: boolean; retroactivo: boolean; fecha_recepcion: string | null; fecha_limite: string | null;
+  estado: 'no_requerida' | 'por_autorizar' | 'pendiente' | 'vencida' | 'regularizada'; requiere_autorizacion: boolean;
+  motivo: string | null; autorizado_at: string | null; autorizado_por: { id: number; name: string } | null; motivo_autorizacion: string | null;
+  regularizado_at: string | null; regularizado_por: { id: number; name: string } | null; motivo_regularizacion: string | null; regularizada_fuera_plazo: boolean;
+};
+export type RegularizeMaterialReceptionPayload = {
+  operacion_id: string; version_conocida: number; numero_guia_despacho: string | null; fecha_documento: string;
+  motivo: string; aceptar_fuera_plazo: boolean; detalles: { id: string; cantidad_documental: number }[];
+};
+
 export type MaterialReception = {
+  registro?: ReceptionRegistration;
   id: string;
   temporada: { id: string; codigo: string; nombre: string; activa: boolean } | null;
   cliente: {
@@ -92,7 +105,7 @@ export type MaterialReception = {
     nombre: string;
   } | null;
   proveedor: { id: string; codigo: string; nombre: string } | null;
-  numero_guia_despacho: string;
+  numero_guia_despacho: string | null;
   fecha_documento: string | null;
   orden_compra: string | null;
   patente: string | null;
@@ -126,7 +139,7 @@ export type PendingReceptionFolio = {
   motivo_bloqueo: string | null;
   recepcion: {
     id: string;
-    numero_guia_despacho: string;
+    numero_guia_despacho: string | null;
     proveedor: string | null;
     confirmado_at: string | null;
   } | null;
@@ -216,10 +229,11 @@ export type ReceptionDraftDetail = {
 };
 
 export type CreateMaterialReceptionPayload = {
+  provisional?: boolean; fecha_recepcion?: string; motivo_registro_tardio?: string | null;
   operacion_id: string;
   cliente_id: string;
   proveedor_material_id: string;
-  numero_guia_despacho: string;
+  numero_guia_despacho: string | null;
   fecha_documento: string | null;
   orden_compra: string | null;
   patente: string | null;
@@ -227,7 +241,7 @@ export type CreateMaterialReceptionPayload = {
   observacion: string | null;
   detalles: Array<{
     item_material_id: string;
-    cantidad_documental: number;
+    cantidad_documental: number | null;
     cantidad_contada: number;
     cantidad_aceptada: number;
     cantidad_recibida: number;

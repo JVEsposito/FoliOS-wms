@@ -5,6 +5,7 @@ namespace App\Http\Resources;
 use App\Models\BultoRecepcionMaterial;
 use App\Models\DetalleRecepcionMaterial;
 use App\Models\EventoRecepcionMaterial;
+use App\Services\Materiales\RegistroRecepcionMaterial;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -42,6 +43,7 @@ class RecepcionMaterialResource extends JsonResource
             'transporte' => $this->transporte_snapshot,
             'estado' => $this->estado->value,
             'version' => $this->version,
+            'registro' => app(RegistroRecepcionMaterial::class)->representar($this->resource),
             'fotos_documento' => (int) ($this->resource->getAttribute('fotos_documento') ?? $this->fotos->where('tipo', 'documento')->count()),
             'fotos_referenciales' => (int) ($this->resource->getAttribute('fotos_referenciales') ?? $this->fotos->where('tipo', 'referencial')->count()),
             'puede_confirmar_por_fotos' => (int) ($this->resource->getAttribute('fotos_documento') ?? $this->fotos->where('tipo', 'documento')->count()) > 0,

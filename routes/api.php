@@ -578,6 +578,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('/{recepcionMaterial}/fotos', [FotoRecepcionMaterialController::class, 'store']);
             Route::delete('/{recepcionMaterial}/fotos/{foto}', [FotoRecepcionMaterialController::class, 'destroy'])->scopeBindings();
         });
+        Route::post('/{recepcionMaterial}/regularizar', [RecepcionMaterialController::class, 'regularizar'])->middleware('can:autorizar-recepciones-tardias-materiales');
         Route::post('/{recepcionMaterial}/confirmar', [RecepcionMaterialController::class, 'confirmar'])->middleware('can:confirmar-recepciones-materiales');
         Route::post('/{recepcionMaterial}/etiquetas', [ImpresionEtiquetaMaterialController::class, 'store'])
             ->middleware('can:imprimir-etiquetas-materiales');

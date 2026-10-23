@@ -59,6 +59,7 @@ export type UserCapabilities = {
   puede_consultar_recepciones_materiales?: boolean;
   puede_gestionar_recepciones_materiales?: boolean;
   puede_confirmar_recepciones_materiales?: boolean;
+  puede_autorizar_recepciones_tardias_materiales?: boolean;
   puede_anular_recepciones_materiales?: boolean;
   puede_administrar_recepciones_materiales?: boolean;
   puede_imprimir_etiquetas_materiales?: boolean;

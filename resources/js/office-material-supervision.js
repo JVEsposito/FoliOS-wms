@@ -8,7 +8,7 @@ const label = (v) => ({ corregida_administrativamente: 'Corrección administrati
 const types = {
     inventario: ['transferencia_cliente_salida', 'transferencia_cliente_entrada', 'ingreso', 'ingreso_recepcion', 'anulacion_recepcion', 'despacho', 'transferencia_interna', 'consumo_centro_costo', 'ajuste_almacen', 'ajuste', 'devolucion', 'correccion_item_salida', 'correccion_item_entrada', 'consumo_transformacion', 'produccion_transformacion', 'merma_transformacion', 'reversa_transformacion', 'devolucion_transformacion'],
     almacenes: ['entrega', 'transferencia', 'devolucion', 'consumo', 'ajuste'],
-    recepciones: ['creada', 'actualizada', 'confirmada', 'corregida_administrativamente', 'anulada', 'eliminada'],
+    recepciones: ['creada', 'actualizada', 'confirmada', 'regularizada', 'corregida_administrativamente', 'anulada', 'eliminada'],
     diferencias: ['faltante', 'sobrante', 'diferencia_cantidad'],
 };
 const columns = {
@@ -91,8 +91,16 @@ async function load(page = 1) {
         $('Results').hidden = false; $('Notice').textContent = '';
     } catch (error) { if (myVersion === version && error.name !== 'AbortError') $('Notice').textContent = error.message; }
 }
+function registrationEvidence(info, title) {
+    if (!info) return '';
+    return `<section><h4>${esc(title)}</h4><p>Recepción física: ${esc(date(info.fecha_recepcion))} · Plazo: ${esc(date(info.fecha_limite))}</p><p>${info.provisional ? 'Provisional' : 'Documentación completa'}${info.retroactivo ? ' · Registro retroactivo' : ''} · ${esc(info.motivo || 'Sin motivo adicional')}</p>${info.autorizado_at ? `<p>Autorizó ${esc(info.autorizado_por?.name || 'Usuario auditado')} · ${esc(date(info.autorizado_at))}: ${esc(info.motivo_autorizacion)}</p>` : ''}</section>`;
+}
+function documentEvidence(info, title) {
+    if (!info) return '';
+    return `<section><h4>${esc(title)}</h4><p>Guía: ${esc(info.numero_guia_despacho || 'Pendiente')} · Emisión: ${esc(info.fecha_documento || 'Pendiente')}</p>${(info.detalles || []).map((line) => `<p>${esc(line.item?.nombre || line.id)}: ${line.cantidad_documental == null ? 'Pendiente' : esc(qty(line.cantidad_documental))} ${esc(line.unidad_medida || '')}</p>`).join('')}</section>`;
+}
 function eventHtml(e) {
-    return `<article><h3>${esc(label(e.tipo))}</h3><p>${esc(date(e.fecha))} · ${esc(e.usuario || (e.user_id ? `Usuario #${e.user_id}` : 'Sin usuario'))}</p><p>${esc(e.motivo || 'Sin observación registrada')}</p>${e.estado_anterior || e.estado_resultante ? `<p>Estado: ${esc(e.estado_anterior)} → ${esc(e.estado_resultante)}</p>` : ''}${['anteriores', 'resultantes'].map((key) => e[`folios_${key}`]?.length ? `<p>Folios ${key} (hasta 100): ${esc(e[`folios_${key}`].join(', '))}</p>` : '').join('')}${e.folios_confirmados?.length ? `<p>Folios confirmados: ${e.folios_confirmados.length} de ${qty(e.folios_confirmados_total)}</p>` + e.folios_confirmados.map((f) => `<p>${esc(f.numero_folio)} · Cantidad registrada ${qty(f.cantidad)} · Ítem ${esc(f.item_material_id)}</p>`).join('') : ''}</article>`;
+    return `<article><h3>${esc(label(e.tipo))}</h3><p>${esc(date(e.fecha))} · ${esc(e.usuario || (e.user_id ? `Usuario #${e.user_id}` : 'Sin usuario'))}</p><p>${esc(e.motivo || 'Sin observación registrada')}</p>${e.estado_anterior || e.estado_resultante ? `<p>Estado: ${esc(e.estado_anterior)} → ${esc(e.estado_resultante)}</p>` : ''}${['anteriores', 'resultantes'].map((key) => e[`folios_${key}`]?.length ? `<p>Folios ${key} (hasta 100): ${esc(e[`folios_${key}`].join(', '))}</p>` : '').join('')}${e.folios_confirmados?.length ? `<p>Folios confirmados: ${e.folios_confirmados.length} de ${qty(e.folios_confirmados_total)}</p>` + e.folios_confirmados.map((f) => `<p>${esc(f.numero_folio)} · Cantidad registrada ${qty(f.cantidad)} · Ítem ${esc(f.item_material_id)}</p>`).join('') : ''}${registrationEvidence(e.registro, 'Ingreso autorizado')}${registrationEvidence(e.registro_anterior, 'Ingreso antes de editar')}${registrationEvidence(e.registro_resultante, 'Ingreso después de editar')}${documentEvidence(e.documento_anterior, 'Respaldo anterior')}${documentEvidence(e.documento_resultante, 'Respaldo regularizado')}${e.fuera_plazo ? '<p>Excepción fuera del plazo de cinco días corridos.</p>' : ''}</article>`;
 }
 async function detail(index) {
     const row = rows[index]; if (!row || !current) return;

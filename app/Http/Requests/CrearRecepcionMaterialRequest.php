@@ -22,7 +22,10 @@ class CrearRecepcionMaterialRequest extends FormRequest
             'operacion_id' => ['required', 'uuid'],
             'cliente_id' => ['required', 'uuid', 'exists:clientes,id'],
             'proveedor_material_id' => ['required', 'uuid', 'exists:proveedores_materiales,id'],
-            'numero_guia_despacho' => ['required', 'string', 'max:50'],
+            'provisional' => ['sometimes', 'boolean'],
+            'fecha_recepcion' => ['sometimes', 'required', 'date'],
+            'motivo_registro_tardio' => ['sometimes', 'nullable', 'string', 'min:5', 'max:1000'],
+            'numero_guia_despacho' => [$this->esProvisional() ? 'nullable' : 'required', 'string', 'max:50'],
             'fecha_documento' => ['nullable', 'date'],
             'orden_compra' => ['nullable', 'string', 'max:80'],
             'patente' => ['nullable', 'string', 'max:20'],
@@ -50,7 +53,7 @@ class CrearRecepcionMaterialRequest extends FormRequest
             'detalles.*.detalle_origen_id' => ['nullable', 'uuid', 'distinct'],
             'detalles.*.unidad_ingreso' => ['nullable', 'string', 'max:40'],
             'detalles.*.conversion_version' => ['required_with:detalles.*.unidad_ingreso', 'nullable', 'integer', 'min:1'],
-            'detalles.*.cantidad_documental' => ['required', 'numeric', 'gt:0', 'decimal:0,3'],
+            'detalles.*.cantidad_documental' => [$this->esProvisional() ? 'nullable' : 'required', 'numeric', 'gt:0', 'decimal:0,3'],
             'detalles.*.cantidad_contada' => ['required', 'numeric', 'gt:0', 'decimal:0,3'],
             'detalles.*.cantidad_aceptada' => ['required', 'numeric', 'min:0', 'decimal:0,3'],
             'detalles.*.cantidad_recibida' => ['nullable', 'numeric', 'min:0', 'decimal:0,3'],
@@ -96,7 +99,7 @@ class CrearRecepcionMaterialRequest extends FormRequest
             ->all();
 
         $this->merge([
-            'numero_guia_despacho' => trim((string) $this->input('numero_guia_despacho')),
+            'numero_guia_despacho' => $this->esProvisional() ? $this->limpiar($this->input('numero_guia_despacho')) : trim((string) $this->input('numero_guia_despacho')),
             'orden_compra' => $this->limpiar($this->input('orden_compra')),
             'patente' => $this->limpiar($this->input('patente')),
             'transportista' => $this->limpiar($this->input('transportista')),
@@ -127,6 +130,11 @@ class CrearRecepcionMaterialRequest extends FormRequest
             }
             $this->merge(['transporte' => $viaje]);
         }
+    }
+
+    private function esProvisional(): bool
+    {
+        return $this->has('provisional') ? $this->boolean('provisional') : (bool) $this->route('recepcionMaterial')?->provisional;
     }
 
     private function limpiar(mixed $valor): ?string

@@ -147,7 +147,8 @@ class ServicioUnidadesMateriales
         $entrada = array_intersect_key($linea, array_flip($campos));
         $bultos = array_column($linea['bultos'], 'cantidad');
         foreach ($campos as $campo) {
-            $linea[$campo] = UnidadesMateriales::convertir($linea[$campo] ?? 0, $snapshot['factor']);
+            $linea[$campo] = $campo === 'cantidad_documental' && ($linea[$campo] ?? null) === null
+                ? null : UnidadesMateriales::convertir($linea[$campo] ?? 0, $snapshot['factor']);
         }
         foreach ($linea['bultos'] as &$bulto) {
             $bulto['cantidad'] = UnidadesMateriales::convertir($bulto['cantidad'], $snapshot['factor']);
