@@ -63,6 +63,8 @@ class PermisosMaterialesApiTest extends TestCase
         $sesion = $operador->createToken('confirmador', ['oficina'])->plainTextToken;
         $this->withToken($sesion)->getJson('/api/materiales/recepciones')->assertOk()->assertJsonFragment(['id' => $recepcion->id]);
         $this->withToken($sesion)->getJson('/api/materiales/recepciones/'.$recepcion->id)->assertOk();
+        $this->withToken($sesion)->getJson('/api/materiales/recepciones/'.$recepcion->id.'/fotos')->assertOk();
+        $this->withToken($sesion)->getJson('/api/materiales/recepciones/'.$recepcion->id.'/impresiones')->assertOk();
         // Supera la autorización y llega al control documental: no genera stock sin foto.
         $this->withToken($sesion)->postJson('/api/materiales/recepciones/'.$recepcion->id.'/confirmar',
             ['operacion_id' => (string) Str::uuid(), 'version_conocida' => 1])->assertUnprocessable()->assertJsonPath('codigo', 'recepcion_sin_foto_documento');
