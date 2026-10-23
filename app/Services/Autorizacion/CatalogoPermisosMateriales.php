@@ -79,16 +79,16 @@ class CatalogoPermisosMateriales
         $seleccion = $perfil->permisos_materiales;
         if ($seleccion === null) {
             $seleccion = $this->compatibles($perfil->modulos ?? [], $perfil->rol_base === RolUsuario::Consulta, (bool) $perfil->protegido);
-            // Las nuevas escrituras de capacidad requieren selección explícita
-            // en perfiles existentes, salvo el Administrador protegido.
-            if (! $perfil->protegido) {
-                $seleccion = array_values(array_diff($seleccion, ['capacidad.configurar', 'capacidad.medir']));
-            }
         }
 
         $efectivos = array_values(array_intersect($compatibles, $seleccion));
         if (! in_array($perfil->rol_base, [RolUsuario::Administrador, RolUsuario::SupervisorMateriales], true)) {
             $efectivos = array_values(array_diff($efectivos, ['inventario.aprobar_ajustes']));
+        }
+        // Las nuevas escrituras de capacidad requieren selección explícita
+        // en perfiles existentes, salvo el Administrador protegido.
+        if ($perfil->permisos_materiales === null && ! $perfil->protegido) {
+            $efectivos = array_values(array_diff($efectivos, ['capacidad.configurar', 'capacidad.medir']));
         }
 
         return $efectivos;
