@@ -88,7 +88,7 @@ async function fetchCatalog(seasonId) {
         : {};
     // Publicar ambos resultados juntos evita mezclar temporadas si falla la segunda petición.
     Object.assign(state, {
-        seasons: admin.temporadas || [], season, imports: admin.importaciones || [],
+        seasons: admin.temporadas || [], season: hierarchy.temporada || season, imports: admin.importaciones || [],
         clients: hierarchy.clientes || [], categories: hierarchy.categorias || [],
         species: hierarchy.especies || [], csg: hierarchy.csg || [],
         projection: hierarchy.proyeccion || { articulos: 0, origenes: 0, combinaciones: 0 },
@@ -248,6 +248,44 @@ function edit(type, id) {
     form.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
+// Aplica únicamente una publicación basada en la versión que está viendo esta pantalla.
+// Si otra persona cambió el catálogo se recupera el resumen con el circuito de errores del #501.
+function applySaved(type, { data, publicacion } = {}) {
+    if (!data?.id || !publicacion || publicacion.temporada_id !== state.season?.id
+        || Number(publicacion.desde) !== Number(state.season.version_catalogo)) return false;
+    const roots = { category: 'categories', species: 'species', csg: 'csg' };
+    const children = { brand: ['clients', 'marcas', 'cliente_validacion_id'], variety: ['species', 'variedades', 'especie_validacion_id'],
+        caliber: ['species', 'calibres', 'especie_validacion_id'], package: ['species', 'envases', 'especie_validacion_id'] };
+    const upsert = (items) => {
+        const old = items.find((item) => item.id === data.id);
+        return [...items.filter((item) => item.id !== data.id), { ...old, ...data }]
+            .sort((a, b) => String(a.nombre || a.codigo).localeCompare(String(b.nombre || b.codigo), 'es'));
+    };
+    if (roots[type]) state[roots[type]] = upsert(state[roots[type]]);
+    else if (children[type]) {
+        const [root, relation, parentKey] = children[type];
+        if (!state[root].some((parent) => parent.id === data[parentKey])) return false;
+        state[root] = state[root].map((parent) => ({ ...parent, [relation]: parent.id === data[parentKey]
+            ? upsert(parent[relation] || []) : (parent[relation] || []).filter((item) => item.id !== data.id) }));
+        if (type === 'variety') state.csg = state.csg.map((csg) => ({ ...csg,
+            variedades: (csg.variedades || []).map((item) => item.id === data.id ? { ...item, ...data } : item) }));
+    } else return false;
+    state.season = { ...state.season, version_catalogo: publicacion.version_catalogo };
+    state.seasons = state.seasons.map((season) => season.id === state.season.id ? state.season : season);
+    state.projection = publicacion.proyeccion;
+    const retained = Object.values(entityConfig).flatMap((config) => [...byId(config.form).querySelectorAll('input,select,textarea')]
+        .map((field) => ({ form: config.form, name: field.name, value: field.value, checked: field.checked, type: field.type })));
+    render();
+    for (const old of retained) {
+        for (const field of byId(old.form).querySelectorAll('input,select,textarea')) {
+            if (field.name !== old.name || (old.type === 'checkbox' && field.value !== old.value)) continue;
+            if (old.type === 'checkbox') field.checked = old.checked;
+            else if (field.tagName !== 'SELECT' || [...field.options].some((option) => option.value === old.value)) field.value = old.value;
+        }
+    }
+    return true;
+}
+
 async function save(type) {
     const config = entityConfig[type];
     const form = byId(config.form);
@@ -264,12 +302,12 @@ async function save(type) {
 
     setBusy(true, 'Actualizando catálogo…');
     try {
-        await api(`/api/administracion/validacion/${config.path}${id ? `/${id}` : ''}`, {
+        const saved = await api(`/api/administracion/validacion/${config.path}${id ? `/${id}` : ''}`, {
             method: id ? 'PUT' : 'POST',
             body: JSON.stringify(data),
         });
         resetForm(form);
-        const refreshed = await load(state.season.id);
+        const refreshed = applySaved(type, saved) || await load(state.season.id);
         toast(refreshed ? 'Catálogo actualizado y publicado para la PDA.' : 'Cambio guardado. No fue posible refrescar la vista; pulsa Actualizar.', !refreshed);
     } catch (error) {
         errorNode.textContent = error.message;
@@ -289,10 +327,10 @@ async function remove(type, id) {
 
     setBusy(true, 'Eliminando del catálogo…');
     try {
-        await api(`/api/administracion/validacion/${config.path}/${id}`, { method: 'DELETE' });
+        const saved = await api(`/api/administracion/validacion/${config.path}/${id}`, { method: 'DELETE' });
         const form = byId(config.form);
         if (form.elements.id.value === id) resetForm(form);
-        const refreshed = await load(state.season?.id);
+        const refreshed = applySaved(type, saved) || await load(state.season?.id);
         toast(refreshed ? 'Elemento retirado del catálogo operativo y de la PDA.' : 'Elemento retirado. No fue posible refrescar la vista; pulsa Actualizar.', !refreshed);
     } catch (error) {
         toast(error.message, true);

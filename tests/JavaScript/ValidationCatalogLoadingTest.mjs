@@ -112,3 +112,26 @@ test('un guardado seguido de un refresco fallido no anuncia catálogo publicado 
     assert.match(messages.at(-1), /Cambio guardado.*No fue posible refrescar/);
     assert.equal(h.byId('catalogLoadError').classList.contains('is-hidden'), false);
 });
+
+test('un guardado habitual aplica la publicación sin recargar resumen ni jerarquía', async () => {
+    const a = admin(); a.body.temporada.version_catalogo = 7;
+    const h = harness([a, hierarchy, { status: 201, body: { data: { id: 'cat-1', nombre: 'Categoría nueva', activo: true },
+        publicacion: { temporada_id: 'A', desde: 7, version_catalogo: 8, proyeccion: { articulos: 150, origenes: 200, combinaciones: 30000 } } } }]);
+    await h.load(); await h.save('category');
+    assert.equal(h.requests.length, 3);
+    assert.equal(h.requests.at(-1).method, 'POST');
+    assert.equal(h.state.categories[0].nombre, 'Categoría nueva');
+    assert.equal(h.state.season.version_catalogo, 8);
+    assert.match(h.byId('catalogToasts').children.at(-1).textContent, /publicado/);
+});
+
+test('una publicación concurrente recupera la jerarquía antes de anunciar actualización completa', async () => {
+    const a = admin(); a.body.temporada.version_catalogo = 7;
+    const updated = admin(); updated.body.temporada.version_catalogo = 10;
+    const h = harness([a, hierarchy, { status: 201, body: { data: { id: 'cat-1' },
+        publicacion: { temporada_id: 'A', desde: 9, version_catalogo: 10, proyeccion: {} } } }, updated, hierarchy]);
+    await h.load(); await h.save('category');
+    assert.equal(h.requests.length, 5);
+    assert.equal(h.state.season.version_catalogo, 10);
+    assert.equal(h.requests.filter((r) => r.method === 'POST').length, 1);
+});
