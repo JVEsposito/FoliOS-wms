@@ -78,6 +78,7 @@ class CatalogoOficinas
         ['materiales', 'Recepciones', '/oficina/materiales/recepciones', 'materiales.etiquetas', ['puede_consultar_recepciones_materiales']],
         ['materiales', 'Etiquetas', '/oficina/materiales/recepcion', 'materiales.etiquetas', ['puede_consultar_recepciones_materiales', 'puede_imprimir_etiquetas_materiales']],
         ['materiales', 'Inventario BC', '/oficina/materiales/inventario', 'materiales.inventario', ['puede_consultar_despachos_materiales']],
+        ['materiales', 'Supervisión', '/oficina/materiales/supervision', 'materiales.inventario', ['puede_consultar_kardex_materiales']],
         ['materiales', 'Vencimientos', '/oficina/materiales/vencimientos', 'materiales.inventario', ['puede_consultar_despachos_materiales']],
         ['materiales', 'Reposición', '/oficina/materiales/reposicion', 'materiales.inventario', ['puede_consultar_despachos_materiales']],
         ['materiales', 'Tomas de inventario', '/oficina/materiales/tomas', 'materiales.inventario', ['puede_gestionar_bloqueos_materiales']],

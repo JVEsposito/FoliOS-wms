@@ -10,6 +10,9 @@ class ApiRoutesConventionTest extends TestCase
     public function test_las_rutas_api_estan_centralizadas_y_sin_duplicados(): void
     {
         $rutas = [
+            ['GET', 'api/materiales/supervision', 'can:consultar-kardex-materiales'],
+            ['GET', 'api/materiales/supervision/catalogos', 'can:consultar-kardex-materiales'],
+            ['GET', 'api/materiales/supervision/evidencia/{fuente}/{id}', 'can:consultar-kardex-materiales'],
             ['GET', 'api/materiales/recepciones/catalogos', 'can:consultar-recepciones-materiales'],
             ['GET', 'api/materiales/recepciones/folios-pendientes', 'can:consultar-recepciones-materiales'],
             ['GET', 'api/materiales/recepciones', 'can:consultar-recepciones-materiales'],

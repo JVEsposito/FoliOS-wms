@@ -9,6 +9,19 @@ use Tests\TestCase;
 
 class EstructuraOficinaTest extends TestCase
 {
+    public function test_supervision_materiales_tiene_navegacion_y_consulta_sin_acciones_operativas(): void
+    {
+        $html = $this->get('/oficina/materiales/supervision')->assertOk()->getContent();
+        $this->assertStringContainsString('office="supervision"', file_get_contents(resource_path('views/office/material-supervision.blade.php')));
+        $this->assertStringContainsString('id="supervisionFilters"', $html);
+        $this->assertStringContainsString('aria-current="page"', $html);
+        $this->assertStringNotContainsString('Eliminar recepción', $html);
+        if (getenv('ESTIBA_EXPORTAR_UI_TESTS') === '1') {
+            File::ensureDirectoryExists(storage_path('app/ui/oficina'));
+            File::put(storage_path('app/ui/oficina/supervision.html'), $html);
+        }
+    }
+
     public function test_cabecera_conserva_identidad_y_navegacion_en_las_seis_areas(): void
     {
         foreach (['/oficina/envases/cuenta-corriente', '/oficina/materia-prima', '/oficina/frigorifico', '/oficina/materiales', '/oficina/materiales/catalogos', '/oficina/materiales/items', '/oficina/administracion', '/oficina/consultas', '/oficina/accesos', '/oficina/porteria', '/oficina/romana', '/oficina/finanzas/tarifario', '/oficina/finanzas/proveedores', '/oficina/rrhh', '/oficina/rrhh/marcaje', '/oficina/comex/comercial', '/oficina/comex/notas', '/oficina/comex/bookings', '/oficina/finanzas/costos-comex', '/oficina/frigorifico/contraparte-sag'] as $path) {

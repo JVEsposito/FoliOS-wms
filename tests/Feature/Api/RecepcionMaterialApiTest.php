@@ -24,6 +24,7 @@ use App\Models\Temporada;
 use App\Models\TrabajoImpresionMaterial;
 use App\Models\UbicacionActual;
 use App\Models\User;
+use App\Services\Materiales\ServicioRecepcionMaterial;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -35,6 +36,35 @@ use ZipArchive;
 class RecepcionMaterialApiTest extends TestCase
 {
     use RefreshDatabase, \Tests\Concerns\PreparaFotoDocumentoRecepcionMaterial;
+
+    public function test_supervision_consulta_el_esquema_real_y_conserva_auditoria_tras_eliminar(): void
+    {
+        [, $token, $cliente, $proveedor, $item] = $this->prepararCatalogo();
+        $recepcion = $this->conToken($token)->postJson('/api/materiales/recepciones', $this->payloadRecepcion(
+            $cliente, $proveedor, $item, [['cantidad' => 30], ['cantidad' => 20]],
+        ))->assertCreated()->json('data');
+        $this->postJsonConDocumento("/api/materiales/recepciones/{$recepcion['id']}/confirmar", [
+            'operacion_id' => (string) Str::uuid(), 'version_conocida' => $recepcion['version'],
+        ])->assertOk();
+        $base = ['temporada_id' => RecepcionMaterial::findOrFail($recepcion['id'])->temporada_id, 'cliente_id' => $cliente->id];
+        $actividad = ['desde' => now('America/Santiago')->toDateString(), 'hasta' => now('America/Santiago')->toDateString()];
+        $this->getJson('/api/materiales/supervision/catalogos')->assertOk();
+        $stock = $this->getJson('/api/materiales/supervision?'.http_build_query(['vista' => 'stock', ...$base]))
+            ->assertOk()->assertJsonPath('resumen.folios', 2)->assertJsonPath('meta.total', 2);
+        $this->assertEquals(50, $stock->json('resumen.unidades.0.actual'));
+        foreach (['inventario' => 2, 'almacenes' => 0, 'diferencias' => 0, 'recepciones' => 2] as $vista => $total) {
+            $this->getJson('/api/materiales/supervision?'.http_build_query(['vista' => $vista, ...$base, ...$actividad]))
+                ->assertOk()->assertJsonPath('meta.total', $total);
+        }
+        $actual = RecepcionMaterial::findOrFail($recepcion['id']);
+        app(ServicioRecepcionMaterial::class)->eliminarAdministrativamente(
+            $actual, (string) Str::uuid(), $actual->version, 'Duplicado documentado', User::findOrFail($actual->creado_por_user_id),
+        );
+        $auditoria = $this->getJson('/api/materiales/supervision?'.http_build_query(['vista' => 'recepciones', ...$base, ...$actividad]))
+            ->assertOk()->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.tipo', 'eliminada');
+        $this->getJson('/api/materiales/supervision/evidencia/eliminacion/'.$auditoria->json('data.0.id'))
+            ->assertOk()->assertJsonPath('data.eventos_total', 2)->assertDontSee('ruta_original')->assertDontSee('payload_hash');
+    }
 
     public function test_busqueda_de_folios_para_camat_respeta_prefijo_temporada_y_ubicacion(): void
     {
