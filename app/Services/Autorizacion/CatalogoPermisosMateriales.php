@@ -49,7 +49,7 @@ class CatalogoPermisosMateriales
             ]),
             $this->grupo('regularizacion_despachos', 'Autorizaciones de despacho', ['materiales.despachos'], [
                 'despachos.autorizar_tardios' => 'Autorizar despachos retroactivos y provisionales',
-            ], true),
+            ]),
         ];
     }
 

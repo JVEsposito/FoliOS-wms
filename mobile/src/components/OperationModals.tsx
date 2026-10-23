@@ -10,6 +10,8 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { MaterialDispatchRegistrationFields } from './MaterialDispatchRegistration';
+import type { MaterialDispatchRegistrationInput } from '../domain/estiba';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { bandNumberingLabel, cameraDisplayName, orderBandsForCamera } from '../domain/cameras';
@@ -644,6 +646,7 @@ export function MoveModal({
 }
 
 export type MaterialDispatchFormValue = {
+  registro?: MaterialDispatchRegistrationInput;
   cantidad: number;
   despacho_id: string;
   motivo_excepcion_fifo?: string;
@@ -651,6 +654,7 @@ export type MaterialDispatchFormValue = {
 
 export function MaterialDispatchModal({
   busy,
+  canAuthorize = false,
   baseUrl,
   token,
   dispatches,
@@ -662,6 +666,7 @@ export function MaterialDispatchModal({
   visible,
 }: {
   busy: boolean;
+  canAuthorize?: boolean;
   baseUrl: string | null;
   token: string;
   dispatches: MaterialDispatch[];
@@ -686,12 +691,14 @@ export function MaterialDispatchModal({
   const [dispatchId, setDispatchId] = useState<string>();
   const [amount, setAmount] = useState('');
   const [fifoReason, setFifoReason] = useState('');
+  const [registration, setRegistration] = useState<MaterialDispatchRegistrationInput>({});
 
   useEffect(() => {
     if (!visible) return;
     setDispatchId(preferredDispatchId ?? matchingDispatches[0]?.id);
     setAmount('');
     setFifoReason('');
+    setRegistration({});
   }, [preferredDispatchId, visible, position?.folio?.id]);
 
   const selectedDispatch = matchingDispatches.find((dispatch) => dispatch.id === dispatchId);
@@ -720,7 +727,8 @@ export function MaterialDispatchModal({
   async function submit() {
     const parsed = Number(amount);
     if (parsed <= 0 || parsed > maximum || !dispatchId || (!followsFifo && fifoReason.trim().length < 5)) return;
-    await onConfirm({ cantidad: parsed, despacho_id: dispatchId, ...(!followsFifo ? { motivo_excepcion_fifo: fifoReason.trim() } : {}) });
+    const registro = Object.fromEntries(Object.entries(registration).filter(([, value]) => value !== '' && value !== false && value !== undefined));
+    await onConfirm({ ...(Object.keys(registro).length ? { registro } : {}), cantidad: parsed, despacho_id: dispatchId, ...(!followsFifo ? { motivo_excepcion_fifo: fifoReason.trim() } : {}) });
   }
 
   return (
@@ -736,6 +744,7 @@ export function MaterialDispatchModal({
               title={material ? `${material.item.cliente.temporada.codigo} · ${material.item.cliente.codigo} · ${material.item.nombre}` : 'Retirar material'}
             />
 
+            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 12 }}>
             <PrivateMaterialThumbnail photo={selectedDetail?.item.foto_principal} baseUrl={baseUrl} token={token} />
             <View style={styles.materialBalance}>
               <View><Text style={styles.label}>SALDO ACTUAL</Text><Text style={styles.materialBalanceValue}>{material?.cantidad_actual ?? '0'} {material?.unidad_medida}</Text></View>
@@ -777,6 +786,8 @@ export function MaterialDispatchModal({
               </View>
             ) : null}
 
+            <MaterialDispatchRegistrationFields value={registration} onChange={setRegistration} canAuthorize={canAuthorize} />
+            </ScrollView>
             <ModalError message={error} />
             <DialogActions busy={busy} compact={compact} confirmDisabled={Number(amount) <= 0 || Number(amount) > maximum || !dispatchId || (!followsFifo && fifoReason.trim().length < 5)} confirmLabel="Confirmar despacho" onCancel={onCancel} onConfirm={submit} />
           </View>

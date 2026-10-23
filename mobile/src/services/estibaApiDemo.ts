@@ -209,6 +209,10 @@ export class DemoEstibaApi implements EstibaApi {
     throw new ApiError('El despacho de materiales no está disponible en modo demo.', 422);
   }
 
+  async regularizeMaterialDelivery(): Promise<MaterialDispatch> {
+    throw new ApiError('La regularización de entregas no está disponible en modo demo.', 422);
+  }
+
   async withdrawMaterial(_token: string, _dispatchId: string, _payload: WithdrawMaterialPayload): Promise<MaterialDispatch> {
     throw new ApiError('El despacho de materiales no está disponible en modo demo.', 422);
   }

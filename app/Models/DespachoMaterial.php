@@ -50,6 +50,11 @@ class DespachoMaterial extends Model
         return $this->belongsTo(DestinoMaterial::class, 'destino_material_id');
     }
 
+    public function operacionesRetiro(): HasMany
+    {
+        return $this->hasMany(OperacionRetiroMaterial::class)->whereNotNull('procesada_at')->orderBy('procesada_at')->orderBy('id');
+    }
+
     public function detalles(): HasMany
     {
         return $this->hasMany(DetalleDespachoMaterial::class, 'despacho_material_id');

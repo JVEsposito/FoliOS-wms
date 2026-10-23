@@ -87,8 +87,10 @@ class PermisosAccionesMaterialesTest extends TestCase
         $this->assertTrue($usuario->can('eliminar-recepciones-materiales'));
         $this->assertTrue($usuario->can('aprobar-ajustes-materiales'));
         $this->assertFalse($usuario->can('autorizar-recepciones-tardias-materiales'));
+        $this->assertFalse($usuario->can('autorizar-despachos-tardios-materiales'));
         $usuario->perfilAcceso->protegido = true;
         $this->assertTrue($usuario->can('autorizar-recepciones-tardias-materiales'));
+        $this->assertTrue($usuario->can('autorizar-despachos-tardios-materiales'));
         $usuario->perfil_acceso_id = null;
         $usuario->setRelation('perfilAcceso', null);
         $this->assertTrue($usuario->can('confirmar-recepciones-materiales'));

@@ -49,6 +49,8 @@ import {
 } from '../domain/materialReception';
 import { isDemoRuntime } from '../config/appVariant';
 
+import type { RegularizeMaterialDeliveryPayload } from '../domain/estiba';
+
 export interface EstibaApi {
   readonly mode: ApiMode;
   readonly baseUrl: string | null;
@@ -80,6 +82,7 @@ export interface EstibaApi {
   ): Promise<MaterialDispatchSummary[]>;
   getMaterialDispatch(token: string, dispatchId: string): Promise<MaterialDispatch>;
   createMaterialDispatch(token: string, payload: CreateMaterialDispatchPayload): Promise<MaterialDispatch>;
+  regularizeMaterialDelivery(token: string, dispatchId: string, deliveryId: string, payload: RegularizeMaterialDeliveryPayload): Promise<MaterialDispatch>;
   withdrawMaterial(token: string, dispatchId: string, payload: WithdrawMaterialPayload): Promise<MaterialDispatch>;
   listMaterialTransformations(token: string): Promise<MaterialTransformationOrderSummary[]>;
   getMaterialTransformation(token: string, orderId: string): Promise<MaterialTransformationOrder>;
@@ -418,6 +421,13 @@ class HttpEstibaApi implements EstibaApi {
     })).data;
   }
 
+  async regularizeMaterialDelivery(token: string, dispatchId: string, deliveryId: string, payload: RegularizeMaterialDeliveryPayload) {
+    return (await this.request<ApiItem<MaterialDispatch>>(
+      `/api/materiales/despachos/${dispatchId}/entregas/${deliveryId}/regularizar`, token,
+      { method: 'POST', body: JSON.stringify(payload) },
+    )).data;
+  }
+
   async withdrawMaterial(token: string, dispatchId: string, payload: WithdrawMaterialPayload) {
     return (await this.request<ApiItem<MaterialDispatch>>(
       `/api/materiales/despachos/${dispatchId}/retirar`,
@@ -738,6 +748,7 @@ function createUnavailableApi(message: string): EstibaApi {
     listMaterialDispatchSummaries: unavailable,
     getMaterialDispatch: unavailable,
     createMaterialDispatch: unavailable,
+    regularizeMaterialDelivery: unavailable,
     withdrawMaterial: unavailable,
     listMaterialTransformations: unavailable,
     getMaterialTransformation: unavailable,

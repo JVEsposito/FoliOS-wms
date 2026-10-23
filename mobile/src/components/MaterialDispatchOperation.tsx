@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 
+import { MaterialDeliveryRegistrationPanel } from './MaterialDispatchRegistration';
 import { PrivateMaterialThumbnail } from './PrivateMaterialThumbnail';
 import { OPERATIONAL_POLL_INTERVAL_MS } from '../config/polling';
 import { cameraDisplayName } from '../domain/cameras';
@@ -17,7 +18,7 @@ import { useOperationalPolling } from '../hooks/useOperationalPolling';
 import { EstibaApi } from '../services/estibaApi';
 import { colors } from '../theme/colors';
 
-type QueueFilter = 'activas' | 'completadas' | 'todas';
+type QueueFilter = 'activas' | 'completadas' | 'todas' | 'por_regularizar';
 
 type Props = {
   api: EstibaApi;
@@ -54,6 +55,7 @@ export function MaterialDispatchOperation({
   const pollInFlight = useRef(false);
 
   const filtered = useMemo(() => dispatches.filter((dispatch) => {
+    if (filter === 'por_regularizar') return (dispatch.entregas || []).some(e => ['pendiente', 'vencida'].includes(e.estado));
     if (filter === 'activas') return dispatch.estado === 'pendiente' || dispatch.estado === 'parcial';
     if (filter === 'completadas') return dispatch.estado === 'completado' || dispatch.estado === 'cancelado';
     return true;
@@ -165,14 +167,14 @@ export function MaterialDispatchOperation({
       <View style={[styles.workspace, compact && styles.workspaceCompact]}>
         <View style={[styles.queue, compact && styles.queueCompact]}>
           <View style={styles.filters}>
-            {(['activas', 'completadas', 'todas'] as QueueFilter[]).map((value) => (
+            {(['activas', 'completadas', 'todas', 'por_regularizar'] as QueueFilter[]).map((value) => (
               <Pressable
                 key={value}
                 onPress={() => setFilter(value)}
                 style={[styles.filter, filter === value && styles.filterActive]}
               >
                 <Text style={[styles.filterText, filter === value && styles.filterTextActive]}>
-                  {value === 'activas' ? 'Activas' : value === 'completadas' ? 'Historial' : 'Todas'}
+                  {value === 'activas' ? 'Activas' : value === 'completadas' ? 'Historial' : value === 'por_regularizar' ? 'Por regularizar' : 'Todas'}
                 </Text>
               </Pressable>
             ))}
@@ -280,6 +282,7 @@ export function MaterialDispatchOperation({
                 ))}
               </View>
 
+              {(selected.entregas || []).map(delivery => <MaterialDeliveryRegistrationPanel key={delivery.id} delivery={delivery} dispatchId={selected.id} api={api} token={auth.token} canAuthorize={auth.usuario.capacidades.puede_autorizar_despachos_tardios_materiales === true} onChange={updated => { setSelectedDetail(updated); setDispatches(current => current.map(item => item.id === updated.id ? { ...item, entregas: updated.entregas } : item)); }} />)}
               <View style={styles.traceHeader}>
                 <Text style={styles.sectionTitle}>Trazabilidad de retiros</Text>
                 <Text style={styles.traceCount}>{withdrawals.length} registros</Text>
@@ -414,8 +417,8 @@ const styles = StyleSheet.create({
   workspaceCompact: { flexDirection: 'column' },
   queue: { width: 310, borderRightWidth: 1, borderRightColor: colors.border, backgroundColor: colors.backgroundDeep },
   queueCompact: { width: '100%', maxHeight: 280, borderRightWidth: 0, borderBottomWidth: 1, borderBottomColor: colors.border },
-  filters: { padding: 10, flexDirection: 'row', gap: 6 },
-  filter: { flex: 1, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: colors.border, alignItems: 'center' },
+  filters: { padding: 10, flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  filter: { flex: 1, minWidth: 100, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: colors.border, alignItems: 'center' },
   filterActive: { borderColor: colors.cyan, backgroundColor: colors.selected },
   filterText: { color: colors.muted, fontSize: 11, fontWeight: '900' },
   filterTextActive: { color: colors.cyan },
