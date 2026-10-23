@@ -188,6 +188,7 @@ test('confirmar ofrece imprimir, precarga fuera de la lista y reintenta la selec
             assert.match(await notice.textContent(), /Guía GUIA-A confirmada/);
             assert.equal(await page.locator('#materialReceptionDetailActions a', { hasText: 'Imprimir folios' }).getAttribute('href'), '/oficina/materiales/recepcion?origen=recepcion&id=A');
             await page.locator('#materialReceptionDetailActions [data-action="view"]').click();
+            await page.locator('#printMaterialReceptionFromForm').waitFor({ state: 'visible' });
             assert.equal(await page.locator('#printMaterialReceptionFromForm').getAttribute('href'), '/oficina/materiales/recepcion?origen=recepcion&id=A');
             await page.locator('#closeMaterialReceptionDialog').click();
             await page.locator('#materialReceptionPrintLink').click();
