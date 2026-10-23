@@ -44,7 +44,7 @@ async function fixture(browser, { width = 1366, canAuthorize = true } = {}) {
         return route.fulfill({ status: 404 });
     });
     await page.goto('http://localhost/oficina/materiales/despachos');
-    await page.locator('[data-trace-dispatch="dispatch"]').waitFor();
+    await page.locator('#dispatchMaterialList .office-action-select').waitFor();
     return { context, page, errors, writes, queries };
 }
 
@@ -55,7 +55,7 @@ test('Oficina regulariza una entrega vencida, conserva el UUID tras un error y m
             const { context, page, errors, writes, queries } = await fixture(browser, { width });
             await page.locator('#dispatchRegularizationFilter').selectOption('vencida');
             await page.waitForFunction(() => document.querySelector('#dispatchRegularizationAlerts').textContent.includes('1 vencidas'));
-            await page.locator('[data-trace-dispatch="dispatch"]').click();
+            await page.locator('#dispatchMaterialList .office-action-select').selectOption({ label: 'Ver trazabilidad' });
             const form = page.locator('[data-regularize-dispatch="delivery"]');
             await form.locator('[name="numero_documento"]').fill('VALE-901');
             await form.locator('[name="fecha_documento"]').fill('2026-10-10');
@@ -84,7 +84,7 @@ test('el lector consulta las fechas y la autorización sin recibir controles de 
     const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined, args: ['--no-sandbox', '--disable-gpu'] });
     try {
         const { context, page, errors } = await fixture(browser, { canAuthorize: false });
-        await page.locator('[data-trace-dispatch="dispatch"]').click();
+        await page.locator('#dispatchMaterialList .office-action-select').selectOption({ label: 'Ver trazabilidad' });
         await page.waitForFunction(() => document.querySelector('#dispatchTraceBody').textContent.includes('Entrega física'));
         assert.equal(await page.locator('[data-regularize-dispatch]').count(), 0);
         assert.equal(await page.locator('[data-dispatch-authorization]').first().isVisible(), false);
