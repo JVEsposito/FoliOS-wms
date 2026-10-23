@@ -324,3 +324,22 @@ test('regularizar en pantalla móvil conserva el UUID tras perder la respuesta y
         assert.deepEqual(errors, []);
     } finally { await browser.close(); }
 });
+
+test('el respaldo regularizado en unidades base no se presenta como cantidad en cajas de la captura original', async () => {
+    const record = reception('A', [photo]); record.estado = 'confirmada';
+    record.registro = { provisional: true, estado: 'regularizada', fecha_recepcion: '2026-10-20T13:30:00Z' };
+    record.detalles[0].cantidad_documental = '150.000';
+    record.detalles[0].conversion_unidad = { unidad_origen: 'cajas', factor: '10', version: 1, entrada: { cantidad_documental: null, cantidad_contada: 1.5, cantidad_aceptada: 1.5, cantidad_rechazada: 0 }, bultos_entrada: [1, 0.5] };
+    const { browser, page, errors } = await fixture(new Map([['A', record]]));
+    try {
+        await page.locator('[data-action="select"]').click();
+        await page.waitForFunction(() => document.querySelector('#materialReceptionDetailLines')?.textContent.includes('Documental: 150 unidades'));
+        assert.equal(await page.locator('[data-action="edit"]').count(), 0);
+        await page.locator('[data-action="view"]').click();
+        await page.locator('#materialReceptionDialog').waitFor({ state: 'visible' });
+        assert.equal(await page.locator('#materialReceptionForm [name="cantidad_documental"]').inputValue(), '');
+        assert.equal(await page.locator('#materialReceptionForm [name="unidad_ingreso"]').inputValue(), 'cajas');
+        assert.match(await page.locator('#materialReceptionForm').textContent(), /Respaldo regularizado: 150 unidades/);
+        assert.deepEqual(errors, []);
+    } finally { await browser.close(); }
+});

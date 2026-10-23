@@ -400,7 +400,7 @@ function renderReceptionDetail() {
         + ((record.estado === 'borrador' ? receptionCanManage() || receptionCanAdminister() : receptionCanAdminister() && !record.registro?.provisional && record.estado !== 'anulada') ? action('edit', 'Editar') : '')
         + (receptionCanAuthorize() && record.estado === 'confirmada' && ['pendiente', 'vencida'].includes(record.registro?.estado) ? action('regularize', 'Regularizar documentos') : '')
         + (receptionCanDelete() ? action('delete', 'Eliminar') : '');
-    receptionElements.detailLines.innerHTML = registrationDetail(record) + (record.detalles || []).map((detail) => `<article class="material-reception-detail-line"><strong>${receptionEscape(detail.item?.nombre || '—')}</strong><code>${receptionEscape(detail.item?.codigo || '—')}</code><b>${receptionEscape(receptionQuantity(detail.cantidad_aceptada ?? detail.cantidad_recibida))} ${receptionEscape(detail.unidad_medida || '')}</b><small>${receptionEscape(receptionPackageSummary(detail))}</small>${detail.conversion_unidad ? `<small>Ingreso: ${receptionEscape(detail.conversion_unidad.entrada.cantidad_aceptada)} ${receptionEscape(detail.conversion_unidad.unidad_origen)} × ${receptionEscape(detail.conversion_unidad.factor)} ${receptionEscape(detail.unidad_medida)}</small>` : ''}</article>`).join('');
+    receptionElements.detailLines.innerHTML = registrationDetail(record) + (record.detalles || []).map((detail) => `<article class="material-reception-detail-line"><strong>${receptionEscape(detail.item?.nombre || '—')}</strong><code>${receptionEscape(detail.item?.codigo || '—')}</code><b>${receptionEscape(receptionQuantity(detail.cantidad_aceptada ?? detail.cantidad_recibida))} ${receptionEscape(detail.unidad_medida || '')}</b><small>Documental: ${detail.cantidad_documental == null ? 'Pendiente' : receptionEscape(receptionQuantity(detail.cantidad_documental))} ${receptionEscape(detail.unidad_medida || '')}</small><small>${receptionEscape(receptionPackageSummary(detail))}</small>${detail.conversion_unidad ? `<small>Ingreso: ${receptionEscape(detail.conversion_unidad.entrada.cantidad_aceptada)} ${receptionEscape(detail.conversion_unidad.unidad_origen)} × ${receptionEscape(detail.conversion_unidad.factor)} ${receptionEscape(detail.unidad_medida)}</small>` : ''}</article>`).join('');
     const folios = record.snapshot_confirmacion?.folios || [];
     receptionElements.detailFoot.textContent = record.estado === 'borrador'
         ? `Al confirmar se generan ${(record.detalles || []).reduce((total, detail) => total + (detail.bultos || []).length, 0)} folios.`
@@ -537,7 +537,9 @@ function receptionLineState(detail = null) {
         inputUnit: snapshot?.unidad_origen || '',
         conversionSnapshot: snapshot || null,
         itemFilter: '',
-        documentary: snapshot?.entrada?.cantidad_documental ?? detail?.cantidad_documental ?? '',
+        documentary: snapshot ? (snapshot.entrada?.cantidad_documental ?? '') : detail?.cantidad_documental ?? '',
+        documentaryRegularized: snapshot && receptionState.current?.registro?.estado === 'regularizada' ? detail?.cantidad_documental : null,
+        baseUnit: detail?.unidad_medida || '',
         counted: snapshot?.entrada?.cantidad_contada ?? detail?.cantidad_contada ?? '',
         accepted: snapshot?.entrada?.cantidad_aceptada ?? detail?.cantidad_aceptada ?? detail?.cantidad_recibida ?? '',
         rejected: snapshot?.entrada?.cantidad_rechazada ?? detail?.cantidad_rechazada ?? 0,
@@ -596,7 +598,7 @@ function renderReceptionLines() {
             <div class="material-reception-line__grid">
                 <label class="wide"><span>Producto *</span><div class="material-item-picker material-reception-item-picker"><div class="material-reception-item-controls"><input class="material-item-search" type="search" value="${receptionEscape(receptionItemLabel(selectedItem))}" placeholder="Buscar por código, nombre, categoría o unidad" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false"${readonly ? ' readonly' : ''}><select class="material-reception-item-filter" aria-label="Filtrar productos por tipo"${readonly ? ' disabled' : ''}><option value="">Todos los tipos</option><option value="insumo"${line.itemFilter === 'insumo' ? ' selected' : ''}>Insumos</option><option value="material_mp"${line.itemFilter === 'material_mp' ? ' selected' : ''}>Material MP</option><option value="material_pt"${line.itemFilter === 'material_pt' ? ' selected' : ''}>Material PT</option></select></div><input name="item_material_id" type="hidden" value="${receptionEscape(line.itemId)}"><div class="material-item-results is-hidden" role="listbox"></div><small class="material-reception-item-hint">Escribe para filtrar; Enter selecciona el primer resultado.</small></div></label>
                 ${receptionInputUnit(line, selectedItem, readonly)}
-                <label><span>Cantidad documental *</span><input name="cantidad_documental" type="number" min="0.001" step="0.001" value="${receptionEscape(line.documentary)}" required></label>
+                <label><span>${line.documentaryRegularized != null ? 'Cantidad documental al ingresar' : 'Cantidad documental *'}</span><input name="cantidad_documental" type="number" min="0.001" step="0.001" value="${receptionEscape(line.documentary)}" required></label>
                 <label><span>Cantidad contada *</span><input name="cantidad_contada" type="number" min="0.001" step="0.001" value="${receptionEscape(line.counted)}" required></label>
                 <label><span>Cantidad aceptada *</span><input name="cantidad_aceptada" type="number" min="0" step="0.001" value="${receptionEscape(line.accepted)}" required></label>
                 <label><span>Cantidad rechazada *</span><input name="cantidad_rechazada" type="number" min="0" step="0.001" value="${receptionEscape(line.rejected)}" required></label>
@@ -608,6 +610,7 @@ function renderReceptionLines() {
                 <label class="wide"><span>Motivo de bloqueo</span><input name="motivo_bloqueo" maxlength="2000" value="${receptionEscape(line.blockReason)}"></label>
                 <label class="wide"><span>Observación del producto</span><input name="observacion_detalle" maxlength="2000" value="${receptionEscape(line.observation)}"></label>
             </div>
+            ${line.documentaryRegularized != null ? `<p class="materials-help">Respaldo regularizado: ${receptionEscape(receptionQuantity(line.documentaryRegularized))} ${receptionEscape(line.baseUnit)}. Las cantidades de esta captura conservan la unidad de ingreso original.</p>` : ''}
             <p class="material-reception-package-summary">${line.originalPackages.length && !line.packagesDirty ? `${line.originalPackages.length} bultos existentes; se conservarán mientras no cambies su distribución.` : packageSummary(line)}</p>
         </article>
     `;
