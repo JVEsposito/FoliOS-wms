@@ -188,6 +188,7 @@ class ServicioMigracionTemporada
                     'nombre' => $item->nombre,
                     'categoria' => $item->categoria,
                     'categoria_operacional' => $item->categoria_operacional,
+                    'tipo_item_material_id' => $item->tipo_item_material_id,
                     'unidad_medida' => $item->unidad_medida,
                     'stock_minimo' => $item->stock_minimo,
                     'punto_reorden' => $item->punto_reorden,

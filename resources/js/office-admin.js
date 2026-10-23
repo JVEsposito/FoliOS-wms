@@ -841,7 +841,7 @@ function renderClients() {
     elements.clientsSummary.textContent = `${state.clients.length} ${state.clients.length === 1 ? 'registrado' : 'registrados'}`;
 
     if (!state.clients.length) {
-        elements.clientsTableBody.innerHTML = '<tr class="admin-empty"><td colspan="6">No existen clientes globales registrados.</td></tr>';
+        elements.clientsTableBody.innerHTML = '<tr class="admin-empty"><td colspan="5">No existen clientes globales registrados.</td></tr>';
         return;
     }
 
@@ -858,7 +858,6 @@ function renderClients() {
             <tr>
                 <td><strong>${escapeHtml(client.codigo)} · ${escapeHtml(client.nombre)}</strong><small>Maestro transversal${aliasDetail}</small></td>
                 <td>${client.codigo_folio_materiales ? `<strong>${escapeHtml(client.codigo_folio_materiales)}</strong><small>F / I / E + 7 dígitos</small>` : 'Pendiente'}</td>
-                <td>${escapeHtml(client.codigo_externo || '—')}</td>
                 <td>${escapeHtml(presence)}</td>
                 <td>${statusBadge(client.activo)}</td>
                 <td><div class="admin-season-actions"><button data-edit-client="${client.id}" type="button">Editar</button></div></td>
@@ -1062,7 +1061,7 @@ elements.clientsTableBody.addEventListener('click', (event) => {
     if (!button) return;
     const client = state.clients.find((candidate) => candidate.id === button.dataset.editClient);
     if (!client) return;
-    for (const field of ['id', 'codigo', 'nombre', 'codigo_externo', 'codigo_folio_materiales']) {
+    for (const field of ['id', 'codigo', 'nombre', 'codigo_folio_materiales']) {
         elements.clientForm.elements[field].value = client[field] || '';
     }
     elements.clientForm.elements.activo.checked = client.activo;

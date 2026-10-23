@@ -21,6 +21,7 @@ function searchableText(item) {
         item.codigo,
         item.nombre,
         item.categoria,
+        item.tipo_item?.nombre,
         item.codigo_externo,
         item.unidad_medida,
         item.cliente?.codigo,
@@ -31,14 +32,15 @@ function searchableText(item) {
 
 /**
  * @param {Array<object>} items
- * @param {{ query?: string, type?: string, includeInactive?: boolean }} filters
+ * @param {{ query?: string, type?: string, typeId?: string, includeInactive?: boolean }} filters
  *   type: '' (todos), 'insumo', 'material_mp', 'material_pt' o 'sin_tipo'.
  */
-export function filterMaterialItems(items, { query = '', type = '', includeInactive = true } = {}) {
+export function filterMaterialItems(items, { query = '', type = '', typeId = '', includeInactive = true } = {}) {
     const words = normalizeSearchText(query).split(/\s+/).filter(Boolean);
 
     return items.filter((item) => {
         if (!includeInactive && !item.activo) return false;
+        if (typeId && item.tipo_item_material_id !== typeId) return false;
         if (type === 'sin_tipo' && item.categoria_operacional) return false;
         if (type && type !== 'sin_tipo' && item.categoria_operacional !== type) return false;
         if (!words.length) return true;

@@ -4,12 +4,14 @@ namespace App\Models;
 
 use App\Enums\CategoriaOperacionalMaterial;
 use App\Models\Concerns\ImpideEliminacionFisica;
+use App\Services\Materiales\ServicioUnidadesMateriales;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Facades\Schema;
 
 #[Fillable([
     'cliente_material_id',
@@ -17,6 +19,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
     'nombre',
     'categoria',
     'categoria_operacional',
+    'tipo_item_material_id',
     'unidad_medida',
     'codigo_externo',
     'origen_sistema',
@@ -35,9 +38,32 @@ class ItemMaterial extends Model
 
     protected $table = 'items_materiales';
 
+    protected static function booted(): void
+    {
+        static::saving(function (ItemMaterial $item): void {
+            // Migraciones anteriores pueden reconstruir ítems antes de crear este catálogo.
+            if (! Schema::hasTable('unidades_materiales')) {
+                return;
+            }
+            if (! $item->exists || $item->isDirty('unidad_medida') || ! $item->unidad_material_id) {
+                app(ServicioUnidadesMateriales::class)->prepararItem($item);
+            }
+        });
+    }
+
+    public function conversionesUnidad(): HasMany
+    {
+        return $this->hasMany(ConversionUnidadMaterial::class, 'item_material_id');
+    }
+
     public function cliente(): BelongsTo
     {
         return $this->belongsTo(ClienteMaterial::class, 'cliente_material_id');
+    }
+
+    public function tipoItem(): BelongsTo
+    {
+        return $this->belongsTo(TipoItemMaterial::class, 'tipo_item_material_id');
     }
 
     public function fotos(): HasMany
