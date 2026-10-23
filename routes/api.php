@@ -37,6 +37,7 @@ use App\Http\Controllers\Api\DesocupacionCamaraController;
 use App\Http\Controllers\Api\DespachoComercialRetornoController;
 use App\Http\Controllers\Api\DespachoFrigorificoController;
 use App\Http\Controllers\Api\DespachoMaterialController;
+use App\Http\Controllers\Api\DirectorioTransporteController;
 use App\Http\Controllers\Api\DocumentoRecepcionEmbaladaController;
 use App\Http\Controllers\Api\EmbarqueController;
 use App\Http\Controllers\Api\EtiquetaPtController;
@@ -537,6 +538,11 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/materiales/recepciones/eliminaciones', [FotoRecepcionMaterialController::class, 'eliminaciones'])->middleware('can:administrar-recepciones-materiales');
     Route::get('/materiales/recepciones/eliminaciones/{eliminacion}/fotos/{indice}', [FotoRecepcionMaterialController::class, 'eliminada'])->middleware('can:administrar-recepciones-materiales');
+    Route::prefix('materiales/transporte')->middleware('can:consultar-recepciones-materiales')->group(function () {
+        Route::get('/conductor', [DirectorioTransporteController::class, 'conductor']);
+        Route::get('/empresa', [DirectorioTransporteController::class, 'empresa']);
+        Route::get('/vehiculo', [DirectorioTransporteController::class, 'vehiculo']);
+    });
     Route::prefix('materiales/recepciones')->group(function () {
         Route::middleware('can:consultar-recepciones-materiales')->group(function () {
             Route::get('/catalogos', [RecepcionMaterialController::class, 'catalogos']);

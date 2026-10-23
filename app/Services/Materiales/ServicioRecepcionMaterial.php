@@ -83,8 +83,7 @@ class ServicioRecepcionMaterial
                     'numero_guia_despacho' => trim($datos['numero_guia_despacho']),
                     'fecha_documento' => $datos['fecha_documento'] ?? null,
                     'orden_compra' => $this->textoOpcional($datos['orden_compra'] ?? null),
-                    'patente' => $this->textoOpcional($datos['patente'] ?? null),
-                    'transportista' => $this->textoOpcional($datos['transportista'] ?? null),
+                    ...app(ServicioDirectorioTransporte::class)->capturar($datos, $usuario),
                     'estado' => EstadoRecepcionMaterial::Borrador,
                     'version' => 1,
                     'observacion' => $this->textoOpcional($datos['observacion'] ?? null),
@@ -100,7 +99,7 @@ class ServicioRecepcionMaterial
                     TipoEventoRecepcionMaterial::Creada,
                     $usuario,
                     $datos['operacion_id'],
-                    ['numero_guia_despacho' => $recepcion->numero_guia_despacho],
+                    ['numero_guia_despacho' => $recepcion->numero_guia_despacho, 'transporte' => $recepcion->transporte_snapshot],
                 );
 
                 return $this->cargar($recepcion);
@@ -203,6 +202,7 @@ class ServicioRecepcionMaterial
                 }
 
                 $versionAnterior = $recepcion->version;
+                $transporteAnterior = $recepcion->transporte_snapshot;
                 $ahora = now();
                 $bultoIds = $bultosActuales->pluck('id');
                 $detalleIds = $recepcion->detalles->pluck('id');
@@ -231,8 +231,7 @@ class ServicioRecepcionMaterial
                     'numero_guia_despacho' => trim($datos['numero_guia_despacho']),
                     'fecha_documento' => $datos['fecha_documento'] ?? null,
                     'orden_compra' => $this->textoOpcional($datos['orden_compra'] ?? null),
-                    'patente' => $this->textoOpcional($datos['patente'] ?? null),
-                    'transportista' => $this->textoOpcional($datos['transportista'] ?? null),
+                    ...app(ServicioDirectorioTransporte::class)->capturar($datos, $usuario, $recepcion),
                     'observacion' => $this->textoOpcional($datos['observacion'] ?? null),
                     'version' => $versionAnterior + 1,
                 ]);
@@ -256,6 +255,8 @@ class ServicioRecepcionMaterial
                     [
                         'payload_hash' => $payloadHash,
                         'version_anterior' => $versionAnterior,
+                        'transporte_anterior' => $transporteAnterior,
+                        'transporte_resultante' => $recepcion->transporte_snapshot,
                         'version_resultante' => $recepcion->version,
                         'cantidad_detalles' => count($datos['detalles']),
                         'cantidad_bultos' => collect($datos['detalles'])
@@ -482,6 +483,7 @@ class ServicioRecepcionMaterial
                     'nombre' => $proveedor->nombre,
                 ],
                 'numero_guia_despacho' => $recepcion->numero_guia_despacho,
+                'transporte' => $recepcion->transporte_snapshot,
                 'folios' => $foliosGenerados,
                 'fotos' => $fotos->map(fn ($foto) => $foto->only(['id', 'tipo', 'orden', 'sha256', 'bytes']))->values()->all(),
             ];
@@ -1076,6 +1078,7 @@ class ServicioRecepcionMaterial
                 'orden_compra' => $recepcion->orden_compra,
                 'patente' => $recepcion->patente,
                 'transportista' => $recepcion->transportista,
+                'transporte' => $recepcion->transporte_snapshot,
                 'estado' => $recepcion->estado->value,
                 'version' => $recepcion->version,
                 'observacion' => $recepcion->observacion,

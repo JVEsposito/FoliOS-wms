@@ -29,7 +29,7 @@ async function fixture(records, options = {}) {
         const request = route.request(); const url = new URL(request.url());
         if (url.pathname === '/test') return route.fulfill({ body: html, contentType: 'text/html' });
         if (url.pathname.startsWith('/build/')) return route.fulfill({ body: readFileSync(resolve(root, 'public' + url.pathname)), contentType: url.pathname.endsWith('.css') ? 'text/css' : 'application/octet-stream' });
-        if (url.pathname === '/office-material-receptions.js' || url.pathname === '/office-material-reception-photos.js') return route.fulfill({ body: readFileSync(resolve(root, 'resources/js' + url.pathname)), contentType: 'text/javascript' });
+        if (url.pathname === '/office-material-receptions.js' || url.pathname === '/office-material-reception-photos.js' || url.pathname === '/office-material-reception-transport.js') return route.fulfill({ body: readFileSync(resolve(root, 'resources/js' + url.pathname)), contentType: 'text/javascript' });
         if (url.pathname === '/office-material-reception-import.js') return route.fulfill({ body: '', contentType: 'text/javascript' });
         if (url.pathname === '/thumb' || url.pathname === '/original') return route.fulfill({ body: image, contentType: 'image/png' });
         calls.push({ path: url.pathname, method: request.method(), body: request.postData() });

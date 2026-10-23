@@ -39,6 +39,7 @@ class RecepcionMaterialResource extends JsonResource
             'orden_compra' => $this->orden_compra,
             'patente' => $this->patente,
             'transportista' => $this->transportista,
+            'transporte' => $this->transporte_snapshot,
             'estado' => $this->estado->value,
             'version' => $this->version,
             'fotos_documento' => (int) ($this->resource->getAttribute('fotos_documento') ?? $this->fotos->where('tipo', 'documento')->count()),

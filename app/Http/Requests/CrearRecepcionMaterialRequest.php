@@ -2,6 +2,8 @@
 
 namespace App\Http\Requests;
 
+use App\Rules\RutChileno;
+use App\Services\Materiales\ServicioDirectorioTransporte;
 use Illuminate\Foundation\Http\FormRequest;
 
 class CrearRecepcionMaterialRequest extends FormRequest
@@ -25,6 +27,23 @@ class CrearRecepcionMaterialRequest extends FormRequest
             'orden_compra' => ['nullable', 'string', 'max:80'],
             'patente' => ['nullable', 'string', 'max:20'],
             'transportista' => ['nullable', 'string', 'max:150'],
+            'transporte' => ['sometimes', 'array:conductor,empresa,vehiculo,patente_carro'],
+            'transporte.conductor' => ['nullable', 'array:rut,nombre,telefono,version_conocida,actualizar_directorio'],
+            'transporte.conductor.rut' => ['nullable', 'required_with:transporte.conductor.nombre,transporte.conductor.telefono', 'regex:/^[1-9][0-9]{5,7}-[0-9K]$/', new RutChileno],
+            'transporte.conductor.nombre' => ['nullable', 'required_with:transporte.conductor.rut', 'string', 'max:150'],
+            'transporte.conductor.telefono' => ['nullable', 'string', 'max:40'],
+            'transporte.empresa' => ['nullable', 'array:rut,nombre,telefono,version_conocida,actualizar_directorio'],
+            'transporte.empresa.rut' => ['nullable', 'regex:/^[1-9][0-9]{5,7}-[0-9K]$/', new RutChileno],
+            'transporte.empresa.nombre' => ['nullable', 'required_with:transporte.empresa.rut,transporte.empresa.telefono', 'string', 'max:150'],
+            'transporte.empresa.telefono' => ['nullable', 'string', 'max:40'],
+            'transporte.vehiculo' => ['nullable', 'array:patente,descripcion,version_conocida,actualizar_directorio'],
+            'transporte.vehiculo.patente' => ['nullable', 'required_with:transporte.vehiculo.descripcion', 'regex:/^[A-Z0-9]{4,12}$/'],
+            'transporte.vehiculo.descripcion' => ['nullable', 'string', 'max:150'],
+            'transporte.patente_carro' => ['nullable', 'regex:/^[A-Z0-9]{4,12}$/'],
+            ...collect(['conductor', 'empresa', 'vehiculo'])->flatMap(fn (string $tipo): array => [
+                "transporte.$tipo.version_conocida" => ['nullable', 'integer', 'min:1'],
+                "transporte.$tipo.actualizar_directorio" => ['sometimes', 'boolean'],
+            ])->all(),
             'observacion' => ['nullable', 'string', 'max:2000'],
             'detalles' => ['required', 'array', 'min:1', 'max:100'],
             'detalles.*.item_material_id' => ['required', 'uuid', 'exists:items_materiales,id'],
@@ -81,6 +100,30 @@ class CrearRecepcionMaterialRequest extends FormRequest
             'observacion' => $this->limpiar($this->input('observacion')),
             'detalles' => $detalles,
         ]);
+
+        // No agregar la clave a clientes anteriores: preserva sus hashes de
+        // idempotencia y las recepciones históricas que solo traían texto.
+        if ($this->has('transporte') && is_array($viaje = $this->input('transporte'))) {
+            foreach (['conductor', 'empresa', 'vehiculo'] as $tipo) {
+                if (! isset($viaje[$tipo]) || ! is_array($viaje[$tipo])) {
+                    continue;
+                }
+                foreach (['rut', 'nombre', 'telefono', 'patente', 'descripcion'] as $campo) {
+                    if (array_key_exists($campo, $viaje[$tipo])) {
+                        $valor = $viaje[$tipo][$campo];
+                        $viaje[$tipo][$campo] = match ($campo) {
+                            'rut' => ServicioDirectorioTransporte::rut($valor),
+                            'patente' => ServicioDirectorioTransporte::patente($valor),
+                            default => is_scalar($valor) || $valor === null ? $this->limpiar($valor) : $valor,
+                        };
+                    }
+                }
+            }
+            if (array_key_exists('patente_carro', $viaje)) {
+                $viaje['patente_carro'] = ServicioDirectorioTransporte::patente($viaje['patente_carro']);
+            }
+            $this->merge(['transporte' => $viaje]);
+        }
     }
 
     private function limpiar(mixed $valor): ?string
