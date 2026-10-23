@@ -20,6 +20,7 @@ class ServicioCatalogoJerarquicoValidacion
 {
     public function __construct(
         private readonly ServicioProyeccionCatalogoValidacion $proyector,
+        private readonly ServicioProyeccionParcialValidacion $parcial,
     ) {}
 
     /**
@@ -27,39 +28,43 @@ class ServicioCatalogoJerarquicoValidacion
      */
     public function datos(Temporada $temporada): array
     {
-        return [
-            'temporada' => $temporada,
-            'clientes' => ClienteValidacion::query()
-                ->where('temporada_id', $temporada->id)
-                ->with('marcas')
-                ->orderBy('nombre')
-                ->get(),
-            'categorias' => CategoriaValidacion::query()
-                ->where('temporada_id', $temporada->id)
-                ->orderBy('nombre')
-                ->get(),
-            'especies' => EspecieValidacion::query()
-                ->where('temporada_id', $temporada->id)
-                ->with([
-                    'variedades' => fn ($query) => $query->orderBy('nombre'),
-                    'calibres' => fn ($query) => $query->orderBy('nombre'),
-                    'envases' => fn ($query) => $query
-                        ->with('cliente:id,nombre,codigo_externo')
-                        ->orderBy('nombre'),
-                ])
-                ->orderBy('nombre')
-                ->get(),
-            'csg' => CsgValidacion::query()
-                ->where('temporada_id', $temporada->id)
-                ->with([
-                    'variedades:id,especie_validacion_id,nombre,activo',
-                    'productor.clientes' => fn ($consulta) => $consulta
-                        ->where('clientes_productores_csg.activo', true),
-                ])
-                ->orderBy('codigo')
-                ->get(),
-            'proyeccion' => $this->proyector->conteos($temporada),
-        ];
+        return DB::transaction(function () use ($temporada): array {
+            $temporada = Temporada::sharedLock()->findOrFail($temporada->id);
+
+            return [
+                'temporada' => $temporada,
+                'clientes' => ClienteValidacion::query()
+                    ->where('temporada_id', $temporada->id)
+                    ->with('marcas')
+                    ->orderBy('nombre')
+                    ->get(),
+                'categorias' => CategoriaValidacion::query()
+                    ->where('temporada_id', $temporada->id)
+                    ->orderBy('nombre')
+                    ->get(),
+                'especies' => EspecieValidacion::query()
+                    ->where('temporada_id', $temporada->id)
+                    ->with([
+                        'variedades' => fn ($query) => $query->orderBy('nombre'),
+                        'calibres' => fn ($query) => $query->orderBy('nombre'),
+                        'envases' => fn ($query) => $query
+                            ->with('cliente:id,nombre,codigo_externo')
+                            ->orderBy('nombre'),
+                    ])
+                    ->orderBy('nombre')
+                    ->get(),
+                'csg' => CsgValidacion::query()
+                    ->where('temporada_id', $temporada->id)
+                    ->with([
+                        'variedades:id,especie_validacion_id,nombre,activo',
+                        'productor.clientes' => fn ($consulta) => $consulta
+                            ->where('clientes_productores_csg.activo', true),
+                    ])
+                    ->orderBy('codigo')
+                    ->get(),
+                'proyeccion' => $this->proyector->conteos($temporada),
+            ];
+        });
     }
 
     /** @param array<string, mixed> $datos */
@@ -209,7 +214,9 @@ class ServicioCatalogoJerarquicoValidacion
         }
 
         return DB::transaction(function () use ($datos, $modelo, $codigo, $variedades): CsgValidacion {
-            $modelo ??= new CsgValidacion;
+            $temporada = Temporada::lockForUpdate()->findOrFail($datos['temporada_id']);
+            $desde = $temporada->version_catalogo;
+            $modelo = $modelo?->exists ? CsgValidacion::lockForUpdate()->findOrFail($modelo->id) : new CsgValidacion;
             $modelo->fill([
                 'temporada_id' => $datos['temporada_id'],
                 'codigo' => $codigo,
@@ -228,11 +235,11 @@ class ServicioCatalogoJerarquicoValidacion
             }
 
             if ($cambio) {
-                Temporada::query()->whereKey($datos['temporada_id'])->increment('version_catalogo');
-                $this->proyector->reconstruir(Temporada::query()->findOrFail($datos['temporada_id']));
+                $temporada->increment('version_catalogo');
+                $this->parcial->sincronizar($temporada, $modelo);
             }
 
-            return $modelo->refresh()->load('variedades');
+            return $this->publicado($modelo->refresh()->load(['variedades', 'productor.clientes' => fn ($q) => $q->where('clientes_productores_csg.activo', true)]), $temporada, $desde);
         }, attempts: 3);
     }
 
@@ -254,19 +261,21 @@ class ServicioCatalogoJerarquicoValidacion
         }
 
         return DB::transaction(function () use ($modelo, $temporadaId): Model {
+            $temporada = Temporada::lockForUpdate()->findOrFail($temporadaId);
+            $desde = $temporada->version_catalogo;
             $bloqueado = $modelo->newQuery()
                 ->lockForUpdate()
                 ->findOrFail($modelo->getKey());
 
             if (! (bool) $bloqueado->getAttribute('activo')) {
-                return $bloqueado->refresh();
+                return $this->publicado($bloqueado->refresh(), $temporada, $desde);
             }
 
             $bloqueado->forceFill(['activo' => false])->save();
-            Temporada::query()->whereKey($temporadaId)->increment('version_catalogo');
-            $this->proyector->reconstruir(Temporada::query()->findOrFail($temporadaId));
+            $temporada->increment('version_catalogo');
+            $this->parcial->sincronizar($temporada, $bloqueado);
 
-            return $bloqueado->refresh();
+            return $this->publicado($bloqueado->refresh(), $temporada, $desde);
         }, attempts: 3);
     }
 
@@ -313,17 +322,30 @@ class ServicioCatalogoJerarquicoValidacion
     private function guardar(Model $modelo, array $atributos, string $temporadaId): Model
     {
         return DB::transaction(function () use ($modelo, $atributos, $temporadaId): Model {
+            $temporada = Temporada::lockForUpdate()->findOrFail($temporadaId);
+            $desde = $temporada->version_catalogo;
+            $modelo = $modelo->exists ? $modelo->newQuery()->lockForUpdate()->findOrFail($modelo->id) : $modelo;
             $modelo->fill($atributos);
             $cambio = ! $modelo->exists || $modelo->isDirty();
             $modelo->save();
 
             if ($cambio) {
-                Temporada::query()->whereKey($temporadaId)->increment('version_catalogo');
-                $this->proyector->reconstruir(Temporada::query()->findOrFail($temporadaId));
+                $temporada->increment('version_catalogo');
+                $this->parcial->sincronizar($temporada, $modelo);
             }
 
-            return $modelo->refresh();
+            return $this->publicado($modelo->refresh(), $temporada, $desde);
         }, attempts: 3);
+    }
+
+    private function publicado(Model $modelo, Temporada $temporada, int $desde): Model
+    {
+        // Se calcula con el mismo bloqueo que la escritura, nunca con una versión posterior.
+        return $modelo->setRelation('publicacion_catalogo', [
+            'temporada_id' => $temporada->id, 'desde' => $desde,
+            'version_catalogo' => $temporada->version_catalogo,
+            'proyeccion' => $this->proyector->conteos($temporada),
+        ]);
     }
 
     private function asegurarMismaTemporada(?Model $modelo, string $temporadaId): void

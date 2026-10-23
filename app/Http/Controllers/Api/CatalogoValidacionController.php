@@ -9,6 +9,7 @@ use App\Http\Controllers\Controller;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\Validacion\CatalogoOperativoValidacion;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
 
 class CatalogoValidacionController extends Controller
@@ -18,7 +19,12 @@ class CatalogoValidacionController extends Controller
         ServicioTemporadaActiva $temporadas,
         CatalogoOperativoValidacion $operativo,
     ): Response {
-        $temporada = $temporadas->buscar();
+        return DB::transaction(fn () => $this->catalogoConsistente($request, $temporadas, $operativo));
+    }
+
+    private function catalogoConsistente(Request $request, ServicioTemporadaActiva $temporadas, CatalogoOperativoValidacion $operativo): Response
+    {
+        $temporada = $temporadas->buscarConBloqueoCompartido();
         abort_unless($temporada, 404, 'No existe una temporada activa para validación.');
 
         $etag = sprintf(

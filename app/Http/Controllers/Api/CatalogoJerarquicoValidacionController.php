@@ -36,10 +36,10 @@ class CatalogoJerarquicoValidacionController extends Controller
         MarcaValidacion $marcaValidacion,
         ServicioCatalogoJerarquicoValidacion $servicio,
     ): JsonResponse {
-        return response()->json(['data' => $servicio->guardarMarca(
+        return $this->actualizado($servicio->guardarMarca(
             $this->datosHijo($request, 'cliente_validacion_id', 'clientes_validacion', 150),
             $marcaValidacion,
-        )]);
+        ));
     }
 
     public function storeEspecie(Request $request, ServicioCatalogoJerarquicoValidacion $servicio): JsonResponse
@@ -52,10 +52,10 @@ class CatalogoJerarquicoValidacionController extends Controller
         EspecieValidacion $especieValidacion,
         ServicioCatalogoJerarquicoValidacion $servicio,
     ): JsonResponse {
-        return response()->json(['data' => $servicio->guardarEspecie(
+        return $this->actualizado($servicio->guardarEspecie(
             $this->datosRaiz($request, 100),
             $especieValidacion,
-        )]);
+        ));
     }
 
     public function storeCategoria(Request $request, ServicioCatalogoJerarquicoValidacion $servicio): JsonResponse
@@ -68,10 +68,10 @@ class CatalogoJerarquicoValidacionController extends Controller
         CategoriaValidacion $categoriaValidacion,
         ServicioCatalogoJerarquicoValidacion $servicio,
     ): JsonResponse {
-        return response()->json(['data' => $servicio->guardarCategoria(
+        return $this->actualizado($servicio->guardarCategoria(
             $this->datosRaiz($request, 100),
             $categoriaValidacion,
-        )]);
+        ));
     }
 
     public function storeVariedad(Request $request, ServicioCatalogoJerarquicoValidacion $servicio): JsonResponse
@@ -84,10 +84,10 @@ class CatalogoJerarquicoValidacionController extends Controller
         VariedadValidacion $variedadValidacion,
         ServicioCatalogoJerarquicoValidacion $servicio,
     ): JsonResponse {
-        return response()->json(['data' => $servicio->guardarVariedad(
+        return $this->actualizado($servicio->guardarVariedad(
             $this->datosHijoEspecie($request, 100),
             $variedadValidacion,
-        )]);
+        ));
     }
 
     public function storeCalibre(Request $request, ServicioCatalogoJerarquicoValidacion $servicio): JsonResponse
@@ -100,10 +100,10 @@ class CatalogoJerarquicoValidacionController extends Controller
         CalibreValidacion $calibreValidacion,
         ServicioCatalogoJerarquicoValidacion $servicio,
     ): JsonResponse {
-        return response()->json(['data' => $servicio->guardarCalibre(
+        return $this->actualizado($servicio->guardarCalibre(
             $this->datosHijoEspecie($request, 50),
             $calibreValidacion,
-        )]);
+        ));
     }
 
     public function storeEnvase(Request $request, ServicioCatalogoJerarquicoValidacion $servicio): JsonResponse
@@ -116,10 +116,10 @@ class CatalogoJerarquicoValidacionController extends Controller
         EnvaseValidacion $envaseValidacion,
         ServicioCatalogoJerarquicoValidacion $servicio,
     ): JsonResponse {
-        return response()->json(['data' => $servicio->guardarEnvase(
+        return $this->actualizado($servicio->guardarEnvase(
             $this->datosEnvase($request),
             $envaseValidacion,
-        )]);
+        ));
     }
 
     public function storeCsg(Request $request, ServicioCatalogoJerarquicoValidacion $servicio): JsonResponse
@@ -132,10 +132,10 @@ class CatalogoJerarquicoValidacionController extends Controller
         CsgValidacion $csgValidacion,
         ServicioCatalogoJerarquicoValidacion $servicio,
     ): JsonResponse {
-        return response()->json(['data' => $servicio->guardarCsg(
+        return $this->actualizado($servicio->guardarCsg(
             $this->datosCsg($request),
             $csgValidacion,
-        )]);
+        ));
     }
 
     public function destroyMarca(
@@ -190,14 +190,27 @@ class CatalogoJerarquicoValidacionController extends Controller
     private function eliminado(Model $modelo): JsonResponse
     {
         return response()->json([
-            'data' => $modelo,
+            ...$this->contenido($modelo),
             'message' => 'Elemento eliminado del catálogo operativo.',
         ]);
     }
 
     private function creado($modelo): JsonResponse
     {
-        return response()->json(['data' => $modelo], Response::HTTP_CREATED);
+        return response()->json($this->contenido($modelo), Response::HTTP_CREATED);
+    }
+
+    private function actualizado(Model $modelo): JsonResponse
+    {
+        return response()->json($this->contenido($modelo));
+    }
+
+    private function contenido(Model $modelo): array
+    {
+        $publicacion = $modelo->getRelation('publicacion_catalogo');
+        $modelo->unsetRelation('publicacion_catalogo');
+
+        return ['data' => $modelo, 'publicacion' => $publicacion];
     }
 
     /** @return array<string, mixed> */
