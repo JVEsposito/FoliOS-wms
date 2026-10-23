@@ -10,7 +10,6 @@ class ApiRoutesConventionTest extends TestCase
     public function test_las_rutas_api_estan_centralizadas_y_sin_duplicados(): void
     {
         $rutas = [
-            ['POST', 'api/materiales/despachos/{despachoMaterial}/entregas/{entrega}/regularizar', 'can:autorizar-despachos-tardios-materiales'],
             ['GET', 'api/materiales/supervision', 'can:consultar-kardex-materiales'],
             ['GET', 'api/materiales/supervision/catalogos', 'can:consultar-kardex-materiales'],
             ['GET', 'api/materiales/supervision/evidencia/{fuente}/{id}', 'can:consultar-kardex-materiales'],
@@ -30,6 +29,7 @@ class ApiRoutesConventionTest extends TestCase
             ['GET', 'api/materiales/recepciones/eliminaciones/{eliminacion}/fotos/{indice}', 'can:consultar-eliminaciones-recepciones-materiales'],
             ['POST', 'api/materiales/inventario/{folioMaterial}/bloquear', 'can:gestionar-bloqueos-materiales'],
             ['POST', 'api/materiales/inventario/{folioMaterial}/liberar-bloqueo', 'can:gestionar-bloqueos-materiales'],
+            ['POST', 'api/materiales/despachos/{despachoMaterial}/entregas/{entrega}/regularizar', 'can:autorizar-despachos-tardios-materiales'],
             ['GET', 'api/materiales/almacenes', 'can:consultar-despachos-materiales'],
             ['GET', 'api/materiales/almacenes/exportar', 'can:consultar-despachos-materiales'],
             ['GET', 'api/materiales/almacenes/movimientos', 'can:consultar-kardex-materiales'],

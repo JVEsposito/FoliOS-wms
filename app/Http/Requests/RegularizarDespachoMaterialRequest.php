@@ -14,6 +14,11 @@ class RegularizarDespachoMaterialRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'retiros' => ['prohibited'],
+            'cantidad' => ['prohibited'],
+            'destino_material_id' => ['prohibited'],
+            'fecha_despacho' => ['prohibited'],
+            'provisional' => ['prohibited'],
             'operacion_id' => ['required', 'uuid'],
             'version_conocida' => ['required', 'integer', 'min:1'],
             'numero_documento' => ['required', 'string', 'max:50'],

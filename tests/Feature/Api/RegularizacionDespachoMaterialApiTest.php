@@ -196,6 +196,15 @@ class RegularizacionDespachoMaterialApiTest extends TestCase
         $this->assertDatabaseCount('regularizaciones_despachos_materiales', 0);
     }
 
+    public function test_el_respaldo_no_permite_reescribir_la_fecha_fisica_ni_cantidades(): void
+    {
+        $despacho = $this->crear();
+        $antes = $this->inventario();
+        $this->postJson($this->url($despacho), $this->regularizacion(['cantidad' => 100, 'fecha_despacho' => '2026-10-22T10:30:00-03:00']))->assertUnprocessable()->assertJsonValidationErrors(['cantidad', 'fecha_despacho']);
+        $this->assertSame($antes, $this->inventario());
+        $this->assertDatabaseCount('regularizaciones_despachos_materiales', 0);
+    }
+
     public function test_cada_entrega_parcial_tiene_su_fecha_y_su_regularizacion_independiente(): void
     {
         $despacho = $this->postJson('/api/materiales/despachos', ['operacion_id' => (string) Str::uuid(), 'destino_material_id' => $this->destino->id, 'items' => [['item_material_id' => $this->item->id, 'cantidad' => 10]]])->assertCreated()->json('data');
