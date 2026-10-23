@@ -1,4 +1,4 @@
-import { MovementType } from './estiba';
+import type { MovementType } from './estiba';
 
 export type OperationalTaskPriority = 'normal' | 'alta' | 'urgente' | 'critica';
 export type OperationalTaskState = 'bloqueada' | 'pendiente' | 'asumida' | 'en_proceso' | 'completada' | 'cancelada';
@@ -371,7 +371,28 @@ export function operationalTaskPositionLabel(endpoint: OperationalTaskEndpoint) 
 
 export function operationalTaskDestinationLabel(task: OperationalTask) {
   if (task.destino_logico?.tipo === 'anden') return task.destino_logico.nombre;
+  if (task.tipo_paso_maniobra === 'extraccion_temporal') return 'Bajo custodia de esta maniobra';
+  if (!task.destino) {
+    const acopio = task.contexto?.acopio_carga;
+    return acopio && typeof acopio === 'object' && 'carga_codigo' in acopio
+      ? `Acopio de ${String(acopio.carga_codigo)} · posición pendiente de confirmar`
+      : 'Destino pendiente de confirmar';
+  }
   return operationalTaskPositionLabel(task.destino);
+}
+
+export function operationalTaskOriginLabel(task: OperationalTask) {
+  if (task.origen) return operationalTaskPositionLabel(task.origen);
+  if (task.tipo_paso_maniobra === 'retorno_banda') return 'Pallet bajo custodia de esta maniobra';
+  const context = task.contexto ?? {};
+  const tunnel = typeof context.tunel_nombre === 'string' ? context.tunel_nombre
+    : typeof context.tunel_codigo === 'string' ? context.tunel_codigo : null;
+  const position = typeof context.posicion_tunel === 'string' ? context.posicion_tunel : null;
+  if (tunnel) return [tunnel, position].filter(Boolean).join(' · ');
+  if (context.origen_logico === 'tunel_prefrio' || task.plan.tipo === 'recepcion_tunel') return 'Túnel de prefrío';
+  if (context.origen_logico === 'repaletizaje' || task.plan.tipo === 'recepcion_repaletizaje') return 'Área de repaletizaje';
+  if (context.origen_logico === 'recepcion_externa') return 'Recepción de packing externo';
+  return 'Recepción · origen por confirmar';
 }
 
 export function operationalTaskReason(task: OperationalTask) {

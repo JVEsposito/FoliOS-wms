@@ -172,3 +172,16 @@ test('maniobra: excepciones abren el mismo formulario y liberar conserva su call
     assert.deepEqual(h.calls.map((call) => call.name), ['onRelease']);
   } finally { await h.unmount(); }
 });
+
+
+test('folio, envase, túnel y posición se leen en tablet horizontal, vertical y PDA', async () => {
+  for (const width of [360, 800, 1280]) {
+    const h = harness(width, { task: task({ origen: null, contexto: { tunel_nombre: 'Túnel 1', posicion_tunel: 'IZQ-P04' }, folio: { numero_folio: '2610045902', tipo_bulto: 'pallet', envase: 'Caja 5 kg' } }) });
+    try {
+      await h.mount();
+      assert.match(h.message(), /2610045902/); assert.match(h.message(), /Caja 5 kg/); assert.match(h.message(), /Túnel 1 · IZQ-P04/);
+      assert.equal(h.button('RETIRAR PALLET').props.disabled, false);
+      assert.equal(h.find('Text').some((node) => String(node.props.children).includes('Túnel 1 · IZQ-P04') && node.props.numberOfLines === undefined), true);
+    } finally { await h.unmount(); }
+  }
+});

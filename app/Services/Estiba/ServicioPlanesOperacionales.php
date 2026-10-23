@@ -144,6 +144,7 @@ class ServicioPlanesOperacionales
                     $prioridad,
                 );
             }
+            $this->acopio->actualizarRecepciones($plan->tareas()->with('planOperacional')->get());
 
             return $this->cargar($plan);
         }, attempts: 3);
@@ -221,6 +222,7 @@ class ServicioPlanesOperacionales
                 $datosTarea,
                 $planBloqueado->prioridad,
             );
+            $this->acopio->actualizarRecepcion($tarea);
             $planBloqueado->update(['version' => $planBloqueado->version + 1]);
 
             return $this->cargarTarea($tarea);
@@ -451,6 +453,7 @@ class ServicioPlanesOperacionales
                 'revision_reservas' => $camara->revision_reservas,
             ])
             ->values();
+        $acopios = $this->acopio->paraTareas($plan->tareas);
         $tareas = $plan->tareas->map(fn (TareaMovimiento $tarea): array => [
             'id' => $tarea->id,
             'version' => $tarea->version,
@@ -464,8 +467,8 @@ class ServicioPlanesOperacionales
             'maniobra_id' => $tarea->maniobra_operacional_id,
             'secuencia_maniobra' => $tarea->secuencia_maniobra,
             'tipo_paso_maniobra' => $tarea->tipo_paso_maniobra?->value,
-            ...($this->acopio->esRecepcion($plan, $tarea->tipo_movimiento)
-                ? ['acopio_carga' => $this->acopio->paraFolio($tarea->folio_id, $tarea->id)]
+            ...(array_key_exists($tarea->id, $acopios)
+                ? ['acopio_carga' => $acopios[$tarea->id]]
                 : []),
         ])->values();
         $modoEfectivo = $this->despliegue->modoEfectivo($cameraIds);
@@ -585,7 +588,6 @@ class ServicioPlanesOperacionales
             'contexto' => ($datos['contexto'] ?? []) !== [] ? $datos['contexto'] : null,
         ]);
         $tarea->setRelation('planOperacional', $plan);
-        $this->acopio->actualizarRecepcion($tarea);
 
         $tipoPaso = $datos['tipo_paso_maniobra']
             ?? TipoPasoManiobra::MovimientoPermanente;
@@ -775,7 +777,7 @@ class ServicioPlanesOperacionales
             ?? config('planificador.horizon');
     }
 
-    private function cargarTarea(TareaMovimiento $tarea): TareaMovimiento
+    public function cargarTarea(TareaMovimiento $tarea): TareaMovimiento
     {
         return $tarea->load([
             ...$this->relacionesTarea(),

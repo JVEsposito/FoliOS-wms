@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import {
   OperationalTask,
   operationalTaskDestinationLabel,
-  operationalTaskPositionLabel,
+  operationalTaskOriginLabel,
   operationalTaskReason,
 } from '../../domain/operationalTasks';
 import type { OperatorQueueItem, OperatorQueueSource } from '../../domain/operatorTaskQueue';
@@ -167,11 +167,12 @@ function NextTaskCard({ busy, compact, item, onOpen, suggestion }: {
           <Text style={styles.heroTitle}>{purpose.label}</Text>
           <Text style={styles.folioLabel}>Folio / pallet</Text>
           <OperatorEntityCode prominent value={task.folio.numero_folio} />
+          <Text style={styles.queueGoal}>Envase: {task.folio.envase || 'sin informar'}</Text>
         </View>
 
         <View style={[styles.heroRoute, compact && styles.heroRouteCompact]}>
-          <OperatorRouteLine label="Origen" value={operationalTaskPositionLabel(task.origen)} />
-          <OperatorRouteLine label="Destino" value={suggestion ? `${suggestion} · sugerido` : operationalTaskDestinationLabel(task)} strong />
+          <OperatorRouteLine label="Origen" value={operationalTaskOriginLabel(task)} />
+          <OperatorRouteLine label="Destino" value={suggestion ? `${suggestion} · propuesto` : operationalTaskDestinationLabel(task)} strong />
           <OperatorRouteLine label="Instrucción" value={operationalTaskReason(task)} />
         </View>
       </View>
@@ -213,14 +214,15 @@ function QueueRow({ busy, compact, index, item, onOpen, suggestion }: {
       <View style={[styles.queueIdentity, compact && styles.queueIdentityCompact]}>
         <Text style={styles.queueMeta}>{paused ? 'EN ESPERA' : alternative ? 'ALTERNATIVA' : item.source === 'mine' ? 'ASIGNADA' : 'DISPONIBLE'}</Text>
         <OperatorEntityCode value={task.folio.numero_folio} />
+        <Text style={styles.queueGoal}>Envase: {task.folio.envase || 'sin informar'}</Text>
       </View>
       <View style={[styles.queueContext, compact && styles.queueRouteCompact]}>
         <Text style={styles.queuePurpose}>{purpose.label}</Text>
         <Text style={styles.queueGoal}>{purpose.goal}</Text>
         <View style={styles.queueRoute}>
-          <Text numberOfLines={1} style={styles.queueRouteText}>{operationalTaskPositionLabel(task.origen)}</Text>
+          <Text numberOfLines={2} style={styles.queueRouteText}>{operationalTaskOriginLabel(task)}</Text>
           <Text style={styles.queueArrow}>→</Text>
-          <Text numberOfLines={1} style={styles.queueRouteDestination}>{suggestion ? `${suggestion} · sugerido` : operationalTaskDestinationLabel(task)}</Text>
+          <Text numberOfLines={2} style={styles.queueRouteDestination}>{suggestion ? `${suggestion} · propuesto` : operationalTaskDestinationLabel(task)}</Text>
         </View>
       </View>
       <View style={styles.queueSteps}>

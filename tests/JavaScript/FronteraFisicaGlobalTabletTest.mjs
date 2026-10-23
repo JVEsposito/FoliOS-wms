@@ -6,6 +6,7 @@ const inbox = await readFile(
     new URL('../../mobile/src/components/OperationalTaskInbox.tsx', import.meta.url),
     'utf8',
 );
+const cameraPlans = await readFile(new URL('../../mobile/src/domain/operationalCameraPlans.ts', import.meta.url), 'utf8');
 const api = await readFile(
     new URL('../../mobile/src/services/operationalTasksApi.ts', import.meta.url),
     'utf8',
@@ -28,7 +29,7 @@ test('la tablet materializa contra el snapshot físico global', () => {
     assert.match(api, /'\/api\/frontera-fisica\/materializar'/);
     assert.match(inbox, /materializePhysicalFrontier\(/);
     assert.match(inbox, /snapshot\.arbitraje\.vigencia\.vigente/);
-    assert.match(inbox, /Espera la próxima actualización antes de mover el pallet/);
+    assert.match(inbox, /Mantén el pallet en su origen hasta confirmar el destino/);
 });
 
 test('cada propuesta conserva la versión de su propio plan', () => {
@@ -37,7 +38,7 @@ test('cada propuesta conserva la versión de su propio plan', () => {
 });
 
 test('la tablet limita candidatos a las cámaras del snapshot autoritativo', () => {
-    assert.match(inbox, /new Set\(snapshot\.camaras\.map\(\(camera\) => camera\.id\)\)/);
-    assert.match(inbox, /directedCameraIds\.has\(camera\.id\)/);
-    assert.match(inbox, /No existen cámaras dirigidas disponibles en el rollout vigente/);
+    assert.match(cameraPlans, /new Set\(snapshot\.camaras\.map\(\(camera\) => camera\.id\)\)/);
+    assert.match(cameraPlans, /allowed\.has\(camera\)/);
+    assert.match(inbox, /No hay cámaras habilitadas para esta labor/);
 });

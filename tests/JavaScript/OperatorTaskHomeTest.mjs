@@ -75,12 +75,12 @@ test('la portada usa acciones existentes y no inventa datos operacionales', () =
     assert.match(component, /ALTERNATIVA EN ESPERA/);
     assert.match(component, /isArbitrationAlternative/);
     assert.match(component, /disabled=\{busy \|\| alternative\}/);
-    assert.match(component, /operationalTaskPositionLabel/);
+    assert.match(component, /operationalTaskOriginLabel/);
     assert.match(component, /operationalTaskDestinationLabel/);
     assert.doesNotMatch(component, /Temperatura objetivo/);
     assert.doesNotMatch(component, /Equipo asignado/);
     assert.doesNotMatch(component, /Producto/);
     assert.match(inbox, /item\.source === 'mine'/);
-    assert.match(inbox, /void takeTask\(item\.task\)/);
+    assert.match(inbox, /runAction\('Tomando labor…', \(\) => takeTask\(item\.task\)\)/);
     assert.match(inbox, /beginTask\(item\.task\)/);
 });

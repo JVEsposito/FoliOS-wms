@@ -13,6 +13,7 @@ use App\Models\Carga;
 use App\Models\CargaFolio;
 use App\Models\PlanOperacional;
 use App\Models\Posicion;
+use App\Models\ReservaCargaFolio;
 use App\Models\ReservaTareaMovimiento;
 use App\Models\TareaMovimiento;
 use App\Models\UbicacionActual;
@@ -42,17 +43,26 @@ class ServicioAcopioCarga
      */
     public function paraFolio(string $folioId, ?string $excluirTareaId = null, bool $bloquear = false): ?array
     {
-        $cargaId = CargaFolio::query()
+        $asignacionLeida = CargaFolio::query()
             ->where('folio_id', $folioId)
             ->whereHas('reservaActiva')
-            ->value('carga_id');
-        if (! $cargaId) {
+            ->first(['id', 'carga_id']);
+        if (! $asignacionLeida && ! $bloquear) {
             return null;
         }
 
-        $carga = Carga::query()
+        $carga = $asignacionLeida ? Carga::query()
             ->when($bloquear, fn ($consulta) => $consulta->lockForUpdate())
-            ->find($cargaId);
+            ->find($asignacionLeida->carga_id) : null;
+        if ($bloquear) {
+            // La primera lectura puede pertenecer al snapshot REPEATABLE READ.
+            // Se conserva el orden carga/reserva de Oficina y se comprueba con
+            // una lectura actual incluso cuando antes no había asignación.
+            $reservaActual = ReservaCargaFolio::query()->lockForUpdate()->find($folioId);
+            if ($reservaActual?->carga_folio_id !== $asignacionLeida?->id) {
+                throw new ConflictoOperacion('La asignación de carga cambió durante la operación; actualice la tarea antes de reservar destino.');
+            }
+        }
         if (! $carga || ! in_array($carga->estado, EstadoCarga::visiblesEnOperacion(), true)
             || ! $carga->temporada()->where('activa', true)->exists()) {
             return null;
@@ -88,6 +98,63 @@ class ServicioAcopioCarga
             ->when($bloquear, fn ($consulta) => $consulta->lockForUpdate())
             ->get();
 
+        return $this->proyectar($carga, $asignaciones, $reservas, $folioId, $tieneCamion);
+    }
+
+    /** Una lectura compartida por carga; se usa solo para preparar propuestas, nunca para autorizar escrituras.
+     * @param  Collection<int, TareaMovimiento>  $tareas
+     * @return array<string, array<string, mixed>|null>
+     */
+    public function paraTareas(Collection $tareas): array
+    {
+        $tareas = (new TareaMovimiento)->newCollection($tareas->all())->loadMissing('planOperacional');
+        $recepciones = $tareas->filter(fn (TareaMovimiento $tarea): bool => $this
+            ->esRecepcion($tarea->planOperacional, $tarea->tipo_movimiento));
+        $salida = $recepciones->mapWithKeys(fn (TareaMovimiento $tarea): array => [$tarea->id => null])->all();
+        if ($recepciones->isEmpty()) {
+            return $salida;
+        }
+        $actuales = CargaFolio::query()->whereIn('folio_id', $recepciones->pluck('folio_id'))
+            ->where('estado', EstadoCargaFolio::Pendiente)->whereHas('reservaActiva')
+            ->with(['carga.temporada', 'carga.presenciaAndenActiva'])->get()->keyBy('folio_id');
+        if ($actuales->isEmpty()) {
+            return $salida;
+        }
+        $asignaciones = CargaFolio::query()->whereIn('carga_id', $actuales->pluck('carga_id')->unique())
+            ->whereHas('reservaActiva')
+            ->whereHas('folio', fn ($consulta) => $consulta->where('activo', true)->where('tipo_bulto', TipoBulto::Pallet))
+            ->with('folio.ubicacionActual.posicion.camara')->orderBy('id')->get();
+        $reservas = ReservaTareaMovimiento::query()->conCompromisoVigente()->whereNotNull('bloqueo_posicion_id')
+            ->whereHas('tareaMovimiento', fn ($consulta) => $consulta->whereIn('folio_id', $asignaciones->pluck('folio_id')))
+            ->with(['tareaMovimiento:id,folio_id', 'posicionDestino.camara'])
+            ->orderBy('reservada_at')->orderBy('id')->get();
+        $porCarga = $asignaciones->groupBy('carga_id');
+        foreach ($recepciones as $tarea) {
+            $carga = $actuales->get($tarea->folio_id)?->carga;
+            if (! $carga || ! $carga->temporada?->activa
+                || ! in_array($carga->estado, EstadoCarga::visiblesEnOperacion(), true)) {
+                continue;
+            }
+            $grupo = $porCarga->get($carga->id, collect());
+            if (! $grupo->contains('folio_id', $tarea->folio_id)) {
+                continue;
+            }
+            $folios = $grupo->pluck('folio_id')->flip();
+            $salida[$tarea->id] = $this->proyectar($carga, $grupo, $reservas->filter(
+                fn (ReservaTareaMovimiento $reserva): bool => $reserva->tarea_movimiento_id !== $tarea->id
+                    && $folios->has($reserva->tareaMovimiento->folio_id),
+            ), $tarea->folio_id, $carga->presenciaAndenActiva !== null);
+        }
+
+        return $salida;
+    }
+
+    /** @param Collection<int, CargaFolio> $asignaciones
+     * @param  Collection<int, ReservaTareaMovimiento>  $reservas
+     * @return array<string, mixed>
+     */
+    private function proyectar(Carga $carga, Collection $asignaciones, Collection $reservas, string $folioId, bool $tieneCamion): array
+    {
         // Se construye una geometría proyectada aparte. Los entrantes conservan
         // sus reservas y nunca se cuentan como pallets físicamente recibidos.
         $proyectadas = $asignaciones->map(function (CargaFolio $item) use ($reservas, $folioId): CargaFolio {
@@ -115,7 +182,7 @@ class ServicioAcopioCarga
         return [
             'carga_id' => $carga->id,
             'carga_codigo' => $carga->codigo,
-            'carga_folio_id' => $asignacion->id,
+            'carga_folio_id' => $asignaciones->firstWhere('folio_id', $folioId)->id,
             'camara_objetivo_id' => $camaraId,
             'puntos' => $analisis['grupo_principal_puntos'],
             'despacho_directo' => $tieneCamion,
@@ -125,12 +192,31 @@ class ServicioAcopioCarga
     /** Actualiza solamente trabajo aún sin destino comprometido. */
     public function actualizarRecepcion(TareaMovimiento $tarea): void
     {
-        if (! $this->esRecepcion($tarea->planOperacional, $tarea->tipo_movimiento)
-            || ! in_array($tarea->estado, [EstadoTareaMovimiento::Pendiente, EstadoTareaMovimiento::Asumida], true)
-            || $tarea->reservaActiva()->conCompromisoVigente()->whereNotNull('bloqueo_posicion_id')->exists()) {
+        $this->actualizarRecepciones(collect([$tarea]));
+    }
+
+    /** @param Collection<int, TareaMovimiento> $tareas */
+    public function actualizarRecepciones(Collection $tareas): void
+    {
+        $tareas = (new TareaMovimiento)->newCollection($tareas->all())->loadMissing('planOperacional');
+        $candidatas = $tareas->filter(fn (TareaMovimiento $tarea): bool => $this->esRecepcion($tarea->planOperacional, $tarea->tipo_movimiento)
+            && in_array($tarea->estado, [EstadoTareaMovimiento::Pendiente, EstadoTareaMovimiento::Asumida], true));
+        if ($candidatas->isEmpty()) {
             return;
         }
-        $acopio = $this->paraFolio($tarea->folio_id, $tarea->id);
+        $comprometidas = ReservaTareaMovimiento::query()->conCompromisoVigente()
+            ->whereIn('tarea_movimiento_id', $candidatas->pluck('id'))->whereNotNull('bloqueo_posicion_id')
+            ->pluck('tarea_movimiento_id')->flip();
+        $candidatas = $candidatas->reject(fn (TareaMovimiento $tarea): bool => $comprometidas->has($tarea->id));
+        $acopios = $this->paraTareas($candidatas);
+        foreach ($candidatas as $tarea) {
+            $this->aplicarAcopio($tarea, $acopios[$tarea->id] ?? null);
+        }
+    }
+
+    /** @param array<string, mixed>|null $acopio */
+    private function aplicarAcopio(TareaMovimiento $tarea, ?array $acopio): void
+    {
         $contexto = $tarea->contexto ?? [];
         $anterior = $contexto['acopio_carga'] ?? null;
         if ($acopio === $anterior) {

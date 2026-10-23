@@ -41,8 +41,10 @@ use App\Services\Estiba\ServicioMovimientoEstiba;
 use App\Services\Estiba\ServicioPlanesOperacionales;
 use App\Services\Estiba\ServicioReservasTareasMovimiento;
 use App\Services\Estiba\ServicioSesionEstiba;
+use App\Services\Planificador\ServicioRecalculosPendientesPlanificador;
 use DomainException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -1085,6 +1087,10 @@ class ConcentracionCargaRollingTest extends TestCase
         $tarea = $planes->materializarDestino($tarea, $contexto['posicionesObjetivo'][3], $operador, $tablet);
         $tarea = $planes->iniciar($tarea, $operador, $tablet);
         $sesion = app(ServicioSesionEstiba::class)->abrir($contexto['camaraObjetivo'], $operador, $tablet);
+        $proyector = app(ServicioPlanConcentracionCarga::class);
+        $doble = \Mockery::mock(ServicioPlanConcentracionCarga::class);
+        $doble->shouldNotReceive('sincronizar');
+        app()->instance(ServicioPlanConcentracionCarga::class, $doble);
         app(ServicioMovimientoEstiba::class)->ubicar(
             operacionId: (string) Str::uuid(), numeroFolio: $folio->numero_folio, tipoBulto: TipoBulto::Pallet,
             posicionDestino: $contexto['posicionesObjetivo'][3], sesionDestino: $sesion,
@@ -1092,6 +1098,11 @@ class ConcentracionCargaRollingTest extends TestCase
             versionDestinoConocida: $contexto['camaraObjetivo']->refresh()->version_plano,
             generadoDispositivoAt: now(), tareaMovimiento: $tarea,
         );
+        app()->instance(ServicioPlanConcentracionCarga::class, $proyector);
+        $this->assertDatabaseHas('recalculos_pendientes_planificador', [
+            'tipo' => ServicioRecalculosPendientesPlanificador::CARGA,
+            'fuente_id' => $contexto['carga']->id, 'pendiente' => true,
+        ]);
         app(ServicioPlanConcentracionCarga::class)->sincronizar($contexto['carga'], $contexto['usuario']);
         $this->assertSame('completado', $recepcion->refresh()->estado->value);
         $this->assertSame('completado', $carga->refresh()->estado->value);
@@ -1221,6 +1232,33 @@ class ConcentracionCargaRollingTest extends TestCase
         $this->assertSame(1, $tarea->maniobraOperacional->objetivos()->count());
         $tarea = $planes->materializarDestino($tarea, $contexto['posicionesFuera'][0], $operador, $tablet);
         $this->assertSame($contexto['posicionesFuera'][0]->id, $tarea->posicion_destino_id);
+    }
+
+    public function test_snapshot_de_25_recepciones_comparte_consultas_y_conserva_el_acopio_individual(): void
+    {
+        $contexto = $this->crearContexto(total: 26, concentrados: 1, fuera: 0, sinUbicacion: 25);
+        $recepcion = $this->crearRecepcion($contexto);
+        $tareas = $recepcion->tareas()->get();
+        $acopio = app(ServicioAcopioCarga::class);
+        DB::enableQueryLog();
+        try {
+            DB::flushQueryLog();
+            $acopio->paraTareas($tareas->take(1));
+            $consultasUna = count(DB::getQueryLog());
+            $tareas->each->unsetRelation('planOperacional');
+            DB::flushQueryLog();
+            $resultado = $acopio->paraTareas($tareas);
+            $consultasTodas = count(DB::getQueryLog());
+        } finally {
+            DB::disableQueryLog();
+            DB::flushQueryLog();
+        }
+        $this->assertCount(25, $resultado);
+        $this->assertSame($consultasUna, $consultasTodas, 'El número de consultas no debe crecer por pallet de la misma carga.');
+        $this->assertLessThanOrEqual(15, $consultasTodas);
+        foreach ($tareas as $tarea) {
+            $this->assertSame($acopio->paraFolio($tarea->folio_id, $tarea->id), $resultado[$tarea->id]);
+        }
     }
 
     private function crearRecepcion(array $contexto, TipoPlanOperacional $tipo = TipoPlanOperacional::RecepcionTunel): PlanOperacional

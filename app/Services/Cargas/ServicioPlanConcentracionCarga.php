@@ -99,9 +99,7 @@ class ServicioPlanConcentracionCarga
             if ($camaraObjetivoId === null && $recepciones->isEmpty()) {
                 return $plan?->refresh();
             }
-            foreach ($recepciones as $recepcion) {
-                $this->acopio->actualizarRecepcion($recepcion);
-            }
+            $this->acopio->actualizarRecepciones($recepciones);
             $camaraObjetivoId ??= $recepciones->first()?->camara_destino_id;
             $camarasInvolucradas = $asignaciones
                 ->map(fn (CargaFolio $asignacion): ?string => $asignacion
