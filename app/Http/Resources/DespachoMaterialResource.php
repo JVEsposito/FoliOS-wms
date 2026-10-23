@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Services\Materiales\RegistroDespachoMaterial;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -162,6 +163,14 @@ class DespachoMaterialResource extends JsonResource
                     ];
                 },
             )),
+            'entregas' => $this->whenLoaded('operacionesRetiro', fn () => $this->operacionesRetiro->map(fn ($entrega) => [
+                ...app(RegistroDespachoMaterial::class)->representar($entrega),
+                'retiros' => $entrega->relationLoaded('retiros') ? $entrega->retiros->map(fn ($retiro) => [...$retiro->only(['id', 'folio_id', 'cantidad_retirada']), 'numero_folio' => $retiro->folioMaterial?->folio?->numero_folio])->values()->all() : [],
+                'regularizaciones' => $entrega->relationLoaded('regularizaciones') ? $entrega->regularizaciones->map(fn ($evento) => [
+                    'id' => $evento->id, 'antes' => $evento->antes, 'despues' => $evento->despues, 'motivo' => $evento->motivo,
+                    'usuario' => $evento->usuario?->only(['id', 'name']), 'fuera_plazo' => $evento->fuera_plazo, 'ocurrido_at' => $evento->ocurrido_at?->toAtomString(),
+                ])->values()->all() : [],
+            ])->values()),
             'completado_at' => $this->completado_at?->toAtomString(),
             'cancelacion' => $this->cancelado_at ? [
                 'motivo' => $this->cancelacion_motivo,

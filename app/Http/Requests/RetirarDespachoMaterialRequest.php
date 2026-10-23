@@ -2,10 +2,13 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\ValidaRegistroDespachoMaterial;
 use Illuminate\Foundation\Http\FormRequest;
 
 class RetirarDespachoMaterialRequest extends FormRequest
 {
+    use ValidaRegistroDespachoMaterial;
+
     public function authorize(): bool
     {
         return $this->user()?->can('retirar-materiales') === true;
@@ -17,6 +20,7 @@ class RetirarDespachoMaterialRequest extends FormRequest
     public function rules(): array
     {
         return [
+            ...$this->reglasRegistro(),
             'operacion_id' => ['required', 'uuid'],
             'motivo_excepcion_fifo' => ['nullable', 'string', 'min:5', 'max:1000'],
             'retiros' => ['required', 'array', 'min:1', 'max:100'],

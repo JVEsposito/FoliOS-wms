@@ -60,6 +60,7 @@ export type UserCapabilities = {
   puede_gestionar_recepciones_materiales?: boolean;
   puede_confirmar_recepciones_materiales?: boolean;
   puede_autorizar_recepciones_tardias_materiales?: boolean;
+  puede_autorizar_despachos_tardios_materiales?: boolean;
   puede_anular_recepciones_materiales?: boolean;
   puede_administrar_recepciones_materiales?: boolean;
   puede_imprimir_etiquetas_materiales?: boolean;
@@ -318,7 +319,36 @@ export type MaterialDispatchItem = {
   }>;
 };
 
+export type MaterialDispatchRegistrationInput = {
+  fecha_despacho?: string;
+  provisional?: boolean;
+  numero_documento?: string;
+  fecha_documento?: string;
+  motivo?: string;
+  motivo_autorizacion?: string;
+  aceptar_fuera_plazo?: boolean;
+};
+export type RegularizeMaterialDeliveryPayload = {
+  operacion_id: string; version_conocida: number; numero_documento: string;
+  fecha_documento: string; motivo: string; aceptar_fuera_plazo?: boolean;
+};
+export type MaterialDelivery = {
+  id: string; version: number; provisional: boolean; retroactivo: boolean;
+  estado: 'pendiente' | 'vencida' | 'regularizada' | 'no_requerida';
+  fecha_despacho: string | null; registrado_at: string | null; fecha_limite: string | null;
+  numero_documento: string | null; fecha_documento: string | null; motivo: string | null;
+  registrado_por: { id: number; name: string } | null;
+  autorizado_por: { id: number; name: string } | null; autorizado_at: string | null;
+  motivo_autorizacion: string | null; regularizado_at: string | null;
+  regularizado_por: { id: number; name: string } | null; motivo_regularizacion: string | null;
+  regularizada_fuera_plazo: boolean;
+  retiros?: Array<{ id: string; folio_id: string; numero_folio?: string; cantidad_retirada: string }>;
+  regularizaciones?: Array<{ id: string; usuario: { id: number; name: string } | null; ocurrido_at: string;
+    motivo: string; fuera_plazo: boolean; antes: { numero_documento: string | null }; despues: { numero_documento: string } }>;
+};
+
 export type MaterialDispatch = {
+  entregas?: MaterialDelivery[];
   id: string;
   codigo: string;
   origen: 'oficina' | 'tablet';
@@ -694,6 +724,7 @@ export type CreateMaterialDispatchPayload = {
 };
 
 export type WithdrawMaterialPayload = {
+  registro?: MaterialDispatchRegistrationInput;
   operacion_id: string;
   motivo_excepcion_fifo?: string;
   retiros: Array<{ folio_id: string; cantidad: number; sesion_estiba_id: string }>;

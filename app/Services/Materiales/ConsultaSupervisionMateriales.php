@@ -84,6 +84,11 @@ class ConsultaSupervisionMateriales
             ->where('f.temporada_id', $f['temporada_id'])->select('m.id', 'm.folio_id', 'f.numero_folio as folio',
                 'i.codigo', 'i.nombre as item', 'i.unidad_medida as unidad', 'c.nombre as cliente', 'm.tipo', 'm.cantidad',
                 'm.ocurrido_at as fecha', 'm.user_id', 'u.name as usuario', 'm.motivo', 'm.despacho_material_id', 'm.retiro_material_id');
+        $q->leftJoin('retiros_materiales as rt', 'rt.id', '=', 'm.retiro_material_id')
+            ->leftJoin('operaciones_retiro_materiales as op', 'op.id', '=', 'rt.operacion_retiro_material_id')
+            ->leftJoin('users as au', 'au.id', '=', 'op.autorizado_por_user_id')
+            ->leftJoin('users as rg', 'rg.id', '=', 'op.regularizado_por_user_id')
+            ->addSelect('op.fecha_despacho', 'op.numero_documento', 'op.fecha_documento', 'op.provisional', 'op.registro_retroactivo', 'op.fecha_limite_regularizacion', 'op.autorizado_at', 'au.name as autorizado_por', 'op.motivo_autorizacion', 'op.regularizado_at', 'rg.name as regularizado_por', 'op.motivo_regularizacion');
         if ($almacenes) {
             $q->leftJoin('destinos_materiales as ao', 'ao.id', '=', 'm.almacen_origen_id')
                 ->leftJoin('destinos_materiales as ad', 'ad.id', '=', 'm.almacen_destino_id')

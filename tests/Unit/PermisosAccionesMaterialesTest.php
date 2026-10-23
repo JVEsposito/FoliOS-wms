@@ -53,6 +53,14 @@ class PermisosAccionesMaterialesTest extends TestCase
         }
     }
 
+    public function test_activar_despachos_tardios_no_otorga_autorizacion_a_perfiles_historicos(): void
+    {
+        $usuario = $this->usuario(null);
+        $this->assertFalse($usuario->can('autorizar-despachos-tardios-materiales'));
+        $usuario->perfilAcceso->protegido = true;
+        $this->assertTrue($usuario->can('autorizar-despachos-tardios-materiales'));
+    }
+
     public function test_quitar_escrituras_no_quita_lectura_ni_entrega_administracion_de_camaras_o_accesos(): void
     {
         $usuario = $this->usuario([]);

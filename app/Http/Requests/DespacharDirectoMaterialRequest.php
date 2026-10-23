@@ -2,10 +2,13 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\ValidaRegistroDespachoMaterial;
 use Illuminate\Foundation\Http\FormRequest;
 
 class DespacharDirectoMaterialRequest extends FormRequest
 {
+    use ValidaRegistroDespachoMaterial;
+
     public function authorize(): bool
     {
         return $this->user()?->can('gestionar-despachos-materiales') === true
@@ -18,6 +21,7 @@ class DespacharDirectoMaterialRequest extends FormRequest
     public function rules(): array
     {
         return [
+            ...$this->reglasRegistro(),
             'operacion_id' => ['required', 'uuid'],
             'folio_id' => ['required_without:retiros', 'prohibits:retiros', 'uuid', 'exists:folios_materiales,folio_id'],
             'destino_material_id' => ['required', 'uuid', 'exists:destinos_materiales,id'],

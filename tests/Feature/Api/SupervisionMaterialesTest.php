@@ -41,6 +41,8 @@ class SupervisionMaterialesTest extends TestCase
             'saldos_materiales_almacenes' => ['id', 'folio_id', 'almacen_material_id', 'cantidad_actual', 'cantidad_reservada', 'version'],
             'movimientos_inventario_materiales' => ['id', 'folio_id', 'item_material_id', 'tipo', 'cantidad', 'cantidad_anterior', 'cantidad_resultante', 'user_id', 'motivo', 'ocurrido_at', 'despacho_material_id', 'retiro_material_id'],
             'movimientos_almacenes_materiales' => ['id', 'folio_id', 'item_material_id', 'tipo', 'cantidad', 'user_id', 'motivo', 'ocurrido_at', 'despacho_material_id', 'retiro_material_id', 'almacen_origen_id', 'almacen_destino_id', 'documento_relacionado', 'operacion_id', 'saldo_origen_anterior', 'saldo_origen_resultante', 'saldo_destino_anterior', 'saldo_destino_resultante'],
+            'retiros_materiales' => ['id', 'operacion_retiro_material_id'],
+            'operaciones_retiro_materiales' => ['id', 'fecha_despacho', 'numero_documento', 'fecha_documento', 'provisional', 'registro_retroactivo', 'fecha_limite_regularizacion', 'autorizado_por_user_id', 'autorizado_at', 'motivo_autorizacion', 'regularizado_por_user_id', 'regularizado_at', 'motivo_regularizacion'],
             'recepciones_materiales' => ['id', 'temporada_id', 'cliente_id', 'numero_guia_despacho', 'estado'],
             'eventos_recepciones_materiales' => ['id', 'recepcion_material_id', 'tipo', 'user_id', 'ocurrido_at', 'observacion', 'datos'],
             'eliminaciones_recepciones_materiales' => ['id', 'recepcion_material_id_original', 'temporada_id', 'cliente_id', 'numero_guia_despacho', 'eliminado_por_user_id', 'eliminado_at', 'motivo', 'snapshot'],
@@ -149,6 +151,25 @@ class SupervisionMaterialesTest extends TestCase
         $this->consultar('almacenes', ['almacen_id' => $otro])->assertOk()->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.destino', 'Producción');
         $this->consultar('inventario', ['user_id' => 2])->assertOk()->assertJsonPath('meta.total', 0);
         $this->consultar('inventario', ['tipo' => 'ingreso'])->assertOk()->assertJsonPath('meta.total', 0);
+    }
+
+    public function test_movimiento_distingue_entrega_fisica_documento_y_autorizacion_sin_duplicar_cantidades(): void
+    {
+        $folio = $this->stock();
+        $entrega = $this->insertar('operaciones_retiro_materiales', [
+            'fecha_despacho' => '2026-10-20 13:30:00', 'numero_documento' => 'VALE-901', 'fecha_documento' => '2026-10-20',
+            'provisional' => true, 'registro_retroactivo' => true, 'fecha_limite_regularizacion' => '2026-10-26 02:59:59',
+            'autorizado_por_user_id' => 1, 'autorizado_at' => '2026-10-22 12:00:00', 'motivo_autorizacion' => 'Conteo físico verificado',
+            'regularizado_por_user_id' => 1, 'regularizado_at' => '2026-10-22 13:00:00', 'motivo_regularizacion' => 'Documento recibido',
+        ]);
+        $retiro = $this->insertar('retiros_materiales', ['operacion_retiro_material_id' => $entrega]);
+        $this->insertar('movimientos_almacenes_materiales', ['folio_id' => $folio, 'item_material_id' => $this->item, 'tipo' => 'entrega', 'cantidad' => 4, 'user_id' => 1, 'ocurrido_at' => '2026-10-22 12:00:00', 'retiro_material_id' => $retiro]);
+        $this->consultar('almacenes')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.numero_documento', 'VALE-901')->assertJsonPath('data.0.fecha_documento', '2026-10-20')
+            ->assertJsonPath('data.0.fecha_despacho', '2026-10-20 13:30:00')->assertJsonPath('data.0.fecha', '2026-10-22 12:00:00')
+            ->assertJsonPath('data.0.autorizado_por', 'Ana Pérez')->assertJsonPath('data.0.regularizado_por', 'Ana Pérez')
+            ->assertJsonPath('resumen.tipos.0.registros', 1);
+        $this->assertEquals(4, DB::table('movimientos_almacenes_materiales')->sum('cantidad'));
     }
 
     public function test_auditoria_conserva_eliminaciones_sin_recepcion_y_solo_expone_evidencia_permitida(): void

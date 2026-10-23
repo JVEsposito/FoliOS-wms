@@ -117,6 +117,7 @@ class ServicioDespachoMaterialDistribuido extends ServicioDespachoMaterial
                 null,
                 requiereSesion: false,
                 motivoExcepcionFifo: $datos['motivo_excepcion_fifo'] ?? null,
+                registro: $datos['registro'] ?? [],
             );
         }, attempts: 3);
     }
@@ -135,6 +136,7 @@ class ServicioDespachoMaterialDistribuido extends ServicioDespachoMaterial
         ?Dispositivo $dispositivo,
         bool $requiereSesion = true,
         ?string $motivoExcepcionFifo = null,
+        array $registro = [],
     ): DespachoMaterial {
         if (! $this->alcanceDistribuido->puedeRetirarMateriales($usuario)) {
             throw new OperacionNoAutorizada(
@@ -156,6 +158,7 @@ class ServicioDespachoMaterialDistribuido extends ServicioDespachoMaterial
             $dispositivo,
             $requiereSesion,
             $motivoExcepcionFifo,
+            $registro,
         ): DespachoMaterial {
             $despacho = DespachoMaterial::query()
                 ->with(['detalles', 'destino'])
@@ -168,6 +171,9 @@ class ServicioDespachoMaterialDistribuido extends ServicioDespachoMaterial
             ];
             if ($motivoExcepcionFifo !== null) {
                 $payload['motivo_excepcion_fifo'] = $motivoExcepcionFifo;
+            }
+            if ($registro !== []) {
+                $payload['registro'] = $registro;
             }
             $payloadHash = $this->payloadHash($payload);
             $operacionRetiro = OperacionRetiroMaterial::query()
@@ -221,7 +227,9 @@ class ServicioDespachoMaterialDistribuido extends ServicioDespachoMaterial
                 );
             }
 
+            $registroPreparado = app(RegistroDespachoMaterial::class)->preparar($registro, $usuario);
             $operacionRetiro = OperacionRetiroMaterial::create([
+                ...$registroPreparado,
                 'id' => $operacionId,
                 'despacho_material_id' => $despacho->id,
                 'user_id' => $usuario->id,

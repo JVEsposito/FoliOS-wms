@@ -512,9 +512,12 @@
                             <button class="secondary-button" id="addDispatchLine" type="button">+ Agregar ítem</button>
                             <div id="dispatchFolioSelection" class="materials-wide is-hidden" aria-live="polite"></div>
                             <label id="dispatchFifoReasonField" class="materials-wide is-hidden"><span>Motivo de excepción FIFO *</span><textarea name="motivo_excepcion_fifo" minlength="5" maxlength="1000" rows="2" placeholder="Explica por qué se omite el folio más antiguo"></textarea></label>
+                            @include('office.partials.material-dispatch-registration-fields')
                             <p class="form-error" id="dispatchMaterialError" role="alert"></p>
                             <div class="materials-actions"><button class="primary-button" id="dispatchSubmit" type="submit">Crear despacho y reservar</button></div>
                         </form>
+                        <p id="dispatchRegularizationAlerts" role="status" aria-live="polite"></p>
+                        <label><span>Regularización documental</span><select id="dispatchRegularizationFilter"><option value="">Todos los despachos</option><option value="pendiente">Con entregas pendientes de regularizar</option><option value="vencida">Con plazo vencido</option><option value="regularizada">Con entregas regularizadas</option><option value="retroactiva">Con entregas retroactivas</option></select></label>
                         <div class="dispatch-list" id="dispatchMaterialList"></div>
                         <dialog class="materials-import" id="materialDispatchTraceDialog">
                             <div class="materials-import__header"><div><p class="eyebrow">TRAZABILIDAD DEL DESPACHO</p><h2 id="dispatchTraceTitle">Cargando…</h2></div><button id="closeMaterialDispatchTrace" type="button" aria-label="Cerrar">×</button></div>
@@ -584,6 +587,7 @@
                 <label><span>Cantidad a entregar *</span><input name="cantidad" type="number" min="0.001" step="0.001" required></label>
                 <label><span>Observación</span><textarea name="observacion" maxlength="1000" rows="2" placeholder="Referencia, turno o motivo de la entrega"></textarea></label>
                 <p class="materials-import__help">Solo se admiten folios con ubicación válida en una cámara de Materiales. La entrega traslada la custodia al centro de costo y no disminuye la existencia total de la empresa.</p>
+                @include('office.partials.material-dispatch-registration-fields')
                 <p class="form-error" id="materialDirectDispatchError" role="alert"></p>
                 <div class="materials-import__actions">
                     <button class="secondary-button" id="cancelMaterialDirectDispatch" type="button">Cancelar</button>

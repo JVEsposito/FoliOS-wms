@@ -37,6 +37,7 @@ class ApiRoutesConventionTest extends TestCase
             ['GET', 'api/materiales/recepciones/eliminaciones/{eliminacion}/fotos/{indice}', 'can:consultar-eliminaciones-recepciones-materiales'],
             ['POST', 'api/materiales/inventario/{folioMaterial}/bloquear', 'can:gestionar-bloqueos-materiales'],
             ['POST', 'api/materiales/inventario/{folioMaterial}/liberar-bloqueo', 'can:gestionar-bloqueos-materiales'],
+            ['POST', 'api/materiales/despachos/{despachoMaterial}/entregas/{entrega}/regularizar', 'can:autorizar-despachos-tardios-materiales'],
             ['GET', 'api/materiales/almacenes', 'can:consultar-despachos-materiales'],
             ['GET', 'api/materiales/almacenes/exportar', 'can:consultar-despachos-materiales'],
             ['GET', 'api/materiales/almacenes/movimientos', 'can:consultar-kardex-materiales'],

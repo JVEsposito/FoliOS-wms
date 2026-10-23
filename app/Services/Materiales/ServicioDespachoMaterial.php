@@ -174,6 +174,7 @@ class ServicioDespachoMaterial
         ?Dispositivo $dispositivo,
         bool $requiereSesion = true,
         ?string $motivoExcepcionFifo = null,
+        array $registro = [],
     ): DespachoMaterial {
         if (! $this->alcance->puedeRetirarMateriales($usuario)) {
             throw new OperacionNoAutorizada(
@@ -188,6 +189,7 @@ class ServicioDespachoMaterial
             $usuario,
             $dispositivo,
             $motivoExcepcionFifo,
+            $registro,
         ): DespachoMaterial {
             $despacho = DespachoMaterial::query()
                 ->with('detalles')
@@ -200,6 +202,9 @@ class ServicioDespachoMaterial
             ];
             if ($motivoExcepcionFifo !== null) {
                 $payload['motivo_excepcion_fifo'] = $motivoExcepcionFifo;
+            }
+            if ($registro !== []) {
+                $payload['registro'] = $registro;
             }
             $payloadHash = $this->payloadHash($payload);
             $operacionRetiro = OperacionRetiroMaterial::query()
@@ -230,7 +235,9 @@ class ServicioDespachoMaterial
                 throw new OperacionNoAutorizada('Este despacho está asignado a otro camarero.');
             }
 
+            $registroPreparado = app(RegistroDespachoMaterial::class)->preparar($registro, $usuario);
             $operacionRetiro = OperacionRetiroMaterial::create([
+                ...$registroPreparado,
                 'id' => $operacionId,
                 'despacho_material_id' => $despacho->id,
                 'user_id' => $usuario->id,
@@ -579,6 +586,9 @@ class ServicioDespachoMaterial
     public function cargarColeccionResumen(EloquentCollection $despachos): EloquentCollection
     {
         $despachos->load([
+            'operacionesRetiro.usuario:id,name',
+            'operacionesRetiro.autorizadoPor:id,name',
+            'operacionesRetiro.regularizadoPor:id,name',
             'temporada:id,codigo,nombre,activa',
             'detalles' => fn ($consulta) => $consulta->withSum(
                 ['reservas as cantidad_reservada_resumen' => fn ($reservas) => $reservas
@@ -599,6 +609,9 @@ class ServicioDespachoMaterial
     public function cargarColeccionOperacion(EloquentCollection $despachos): EloquentCollection
     {
         $despachos->load([
+            'operacionesRetiro.usuario:id,name',
+            'operacionesRetiro.autorizadoPor:id,name',
+            'operacionesRetiro.regularizadoPor:id,name',
             'temporada:id,codigo,nombre,activa',
             'detalles.item.cliente.temporada',
             'detalles.item.fotoPrincipal',
@@ -617,6 +630,11 @@ class ServicioDespachoMaterial
     private function relacionesCarga(): array
     {
         return [
+            'operacionesRetiro.usuario:id,name',
+            'operacionesRetiro.autorizadoPor:id,name',
+            'operacionesRetiro.regularizadoPor:id,name',
+            'operacionesRetiro.regularizaciones.usuario:id,name',
+            'operacionesRetiro.retiros.folioMaterial.folio',
             'temporada:id,codigo,nombre,activa',
             'creadoPor:id,name',
             'asignadoA:id,name',

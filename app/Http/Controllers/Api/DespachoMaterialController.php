@@ -6,17 +6,20 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\CancelarDespachoMaterialRequest;
 use App\Http\Requests\CrearDespachoMaterialRequest;
 use App\Http\Requests\DespacharDirectoMaterialRequest;
+use App\Http\Requests\RegularizarDespachoMaterialRequest;
 use App\Http\Requests\RetirarDespachoMaterialRequest;
 use App\Http\Resources\DespachoMaterialResource;
 use App\Http\Resources\ResumenDespachoMaterialResource;
 use App\Models\DespachoMaterial;
 use App\Models\MovimientoInventarioMaterial;
+use App\Models\OperacionRetiroMaterial;
 use App\Models\PersonalAccessToken;
 use App\Models\User;
 use App\Services\Autenticacion\ContextoOperacional;
 use App\Services\Materiales\ServicioConsultaInventarioMaterial;
 use App\Services\Materiales\ServicioDespachoMaterial;
 use App\Services\Materiales\ServicioDespachoMaterialDistribuido;
+use App\Services\Materiales\ServicioRegularizacionDespachoMaterial;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -32,9 +35,12 @@ class DespachoMaterialController extends Controller
         ServicioDespachoMaterial $servicio,
     ): JsonResponse {
         Gate::authorize('consultar-despachos-materiales');
+        $filtro = $request->validate(['regularizacion' => ['nullable', Rule::in(['pendiente', 'vencida', 'regularizada', 'retroactiva'])]]);
+        $temporadaId = $this->consultaTemporadaActiva();
         $estados = array_filter(explode(',', (string) $request->query('estados', '')));
         $despachos = DespachoMaterial::query()
-            ->where('temporada_id', '=', $this->consultaTemporadaActiva())
+            ->where('temporada_id', '=', $temporadaId)
+            ->when($filtro['regularizacion'] ?? null, fn ($q, $f) => $q->whereHas('operacionesRetiro', fn ($e) => $e->regularizacion($f)))
             ->when($estados !== [], fn ($consulta) => $consulta->whereIn('estado', $estados))
             ->latest()
             ->limit(100)
@@ -49,7 +55,10 @@ class DespachoMaterialController extends Controller
             $servicio->cargarColeccion($despachos);
         }
 
+        $entregas = OperacionRetiroMaterial::whereNotNull('procesada_at')->whereHas('despacho', fn ($q) => $q->where('temporada_id', $temporadaId));
+
         return response()->json([
+            'regularizacion' => ['pendientes' => (clone $entregas)->regularizacion('pendiente')->count(), 'vencidas' => (clone $entregas)->regularizacion('vencida')->count()],
             'data' => $vista === 'resumen'
                 ? ResumenDespachoMaterialResource::collection($despachos)
                 : DespachoMaterialResource::collection($despachos),
@@ -112,9 +121,19 @@ class DespachoMaterialController extends Controller
             $usuario,
             $dispositivo,
             motivoExcepcionFifo: $request->validated('motivo_excepcion_fifo'),
+            registro: $request->validated('registro', []),
         );
 
         return new DespachoMaterialResource($despacho);
+    }
+
+    public function regularizar(
+        RegularizarDespachoMaterialRequest $request,
+        DespachoMaterial $despachoMaterial,
+        string $entrega,
+        ServicioRegularizacionDespachoMaterial $servicio,
+    ): DespachoMaterialResource {
+        return new DespachoMaterialResource($servicio->regularizar($despachoMaterial, $entrega, $request->validated(), $request->user()));
     }
 
     public function camareros(): JsonResponse

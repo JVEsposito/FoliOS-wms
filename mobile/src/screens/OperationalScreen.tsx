@@ -483,6 +483,7 @@ export function OperationalScreen({ api, auth, onLogout }: OperationalScreenProp
     const succeeded = await runOperation(async () => {
       await api.withdrawMaterial(auth.token, form.despacho_id, {
         operacion_id: materialWithdrawOperationId.current,
+        ...(form.registro ? { registro: form.registro } : {}),
         ...(form.motivo_excepcion_fifo ? { motivo_excepcion_fifo: form.motivo_excepcion_fifo } : {}),
         retiros: [{
           folio_id: operationalPosition.folio!.id,
@@ -867,6 +868,7 @@ export function OperationalScreen({ api, auth, onLogout }: OperationalScreenProp
         visible={moveVisible}
       />
       <MaterialDispatchModal
+        canAuthorize={auth.usuario.capacidades.puede_autorizar_despachos_tardios_materiales === true}
         baseUrl={api.baseUrl}
         token={auth.token}
         busy={busy}
