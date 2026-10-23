@@ -21,6 +21,7 @@ use App\Http\Controllers\Api\CatalogoJerarquicoValidacionController;
 use App\Http\Controllers\Api\CatalogoMaterialController;
 use App\Http\Controllers\Api\CatalogoValidacionController;
 use App\Http\Controllers\Api\CierreTemporadaController;
+use App\Http\Controllers\Api\ClasificacionMaterialController;
 use App\Http\Controllers\Api\ClienteGlobalController;
 use App\Http\Controllers\Api\ComparacionCiclosPlanificadorController;
 use App\Http\Controllers\Api\CondicionSagController;
@@ -36,6 +37,7 @@ use App\Http\Controllers\Api\DesocupacionCamaraController;
 use App\Http\Controllers\Api\DespachoComercialRetornoController;
 use App\Http\Controllers\Api\DespachoFrigorificoController;
 use App\Http\Controllers\Api\DespachoMaterialController;
+use App\Http\Controllers\Api\DirectorioTransporteController;
 use App\Http\Controllers\Api\DocumentoRecepcionEmbaladaController;
 use App\Http\Controllers\Api\EmbarqueController;
 use App\Http\Controllers\Api\EtiquetaPtController;
@@ -84,6 +86,7 @@ use App\Http\Controllers\Api\TomaInventarioMaterialController;
 use App\Http\Controllers\Api\TransferenciaClienteMaterialController;
 use App\Http\Controllers\Api\TransformacionMaterialController;
 use App\Http\Controllers\Api\TunelPrefrioController;
+use App\Http\Controllers\Api\UnidadMaterialController;
 use App\Http\Controllers\Api\ValidacionMpController;
 use App\Http\Controllers\Api\ValidacionPalletController;
 use App\Http\Controllers\Api\VencimientoMaterialController;
@@ -534,8 +537,13 @@ Route::middleware('auth:sanctum')->group(function () {
         ->middleware('can:consultar-kardex-materiales');
     Route::post('/materiales/almacenes/movimientos', [AlmacenMaterialController::class, 'store']);
 
-    Route::get('/materiales/recepciones/eliminaciones', [FotoRecepcionMaterialController::class, 'eliminaciones'])->middleware('can:administrar-recepciones-materiales');
-    Route::get('/materiales/recepciones/eliminaciones/{eliminacion}/fotos/{indice}', [FotoRecepcionMaterialController::class, 'eliminada'])->middleware('can:administrar-recepciones-materiales');
+    Route::get('/materiales/recepciones/eliminaciones', [FotoRecepcionMaterialController::class, 'eliminaciones'])->middleware('can:consultar-eliminaciones-recepciones-materiales');
+    Route::get('/materiales/recepciones/eliminaciones/{eliminacion}/fotos/{indice}', [FotoRecepcionMaterialController::class, 'eliminada'])->middleware('can:consultar-eliminaciones-recepciones-materiales');
+    Route::prefix('materiales/transporte')->middleware('can:consultar-recepciones-materiales')->group(function () {
+        Route::get('/conductor', [DirectorioTransporteController::class, 'conductor']);
+        Route::get('/empresa', [DirectorioTransporteController::class, 'empresa']);
+        Route::get('/vehiculo', [DirectorioTransporteController::class, 'vehiculo']);
+    });
     Route::prefix('materiales/recepciones')->group(function () {
         Route::middleware('can:consultar-recepciones-materiales')->group(function () {
             Route::get('/catalogos', [RecepcionMaterialController::class, 'catalogos']);
@@ -557,8 +565,8 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::put('/{recepcionMaterial}', [RecepcionMaterialController::class, 'update']);
             Route::post('/{recepcionMaterial}/fotos', [FotoRecepcionMaterialController::class, 'store']);
             Route::delete('/{recepcionMaterial}/fotos/{foto}', [FotoRecepcionMaterialController::class, 'destroy'])->scopeBindings();
-            Route::post('/{recepcionMaterial}/confirmar', [RecepcionMaterialController::class, 'confirmar']);
         });
+        Route::post('/{recepcionMaterial}/confirmar', [RecepcionMaterialController::class, 'confirmar'])->middleware('can:confirmar-recepciones-materiales');
         Route::post('/{recepcionMaterial}/etiquetas', [ImpresionEtiquetaMaterialController::class, 'store'])
             ->middleware('can:imprimir-etiquetas-materiales');
         Route::post('/trabajos-impresion/{trabajoImpresionMaterial}/resultado', [ImpresionEtiquetaMaterialController::class, 'resultado'])
@@ -569,7 +577,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/{recepcionMaterial}/administrar', [RecepcionMaterialController::class, 'administrar'])
             ->middleware('can:administrar-recepciones-materiales');
         Route::delete('/{recepcionMaterial}', [RecepcionMaterialController::class, 'destroy'])
-            ->middleware('can:administrar-recepciones-materiales');
+            ->middleware('can:eliminar-recepciones-materiales');
     });
 
     Route::prefix('materiales/transformaciones')->group(function () {
@@ -712,6 +720,17 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/administracion/andenes/{anden}', [AndenController::class, 'update']);
     });
     Route::middleware('can:administrar-catalogos-materiales')->group(function () {
+        Route::get('/administracion/materiales/unidades', [UnidadMaterialController::class, 'index']);
+        Route::post('/administracion/materiales/unidades', [UnidadMaterialController::class, 'store']);
+        Route::get('/administracion/materiales/unidades/historial', [UnidadMaterialController::class, 'historial']);
+        Route::put('/administracion/materiales/unidades/{unidadMaterial}', [UnidadMaterialController::class, 'update']);
+        Route::get('/administracion/materiales/items/{itemMaterial}/unidades', [UnidadMaterialController::class, 'conversiones']);
+        Route::put('/administracion/materiales/items/{itemMaterial}/unidades', [UnidadMaterialController::class, 'guardarConversion']);
+        Route::get('/administracion/materiales/clasificaciones', [ClasificacionMaterialController::class, 'index']);
+        Route::post('/administracion/materiales/categorias', [ClasificacionMaterialController::class, 'storeCategoria']);
+        Route::put('/administracion/materiales/categorias/{categoriaComercialMaterial}', [ClasificacionMaterialController::class, 'updateCategoria']);
+        Route::post('/administracion/materiales/tipos-items', [ClasificacionMaterialController::class, 'storeTipo']);
+        Route::put('/administracion/materiales/tipos-items/{tipoItemMaterial}', [ClasificacionMaterialController::class, 'updateTipo']);
         Route::get('/administracion/materiales/temporadas', [CatalogoMaterialController::class, 'temporadas']);
         Route::get('/administracion/materiales/clientes', [CatalogoMaterialController::class, 'clientes']);
         Route::get('/administracion/materiales/proveedores', [ProveedorMaterialController::class, 'index']);

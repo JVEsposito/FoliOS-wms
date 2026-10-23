@@ -210,7 +210,6 @@
                         <div class="admin-form__grid admin-form__grid--season">
                             <label class="field"><span>Código *</span><input name="codigo" maxlength="80" placeholder="AG-001" required></label>
                             <label class="field"><span>Nombre *</span><input name="nombre" maxlength="180" placeholder="LA AGUADA" required></label>
-                            <label class="field"><span>Código ERP futuro</span><input name="codigo_externo" maxlength="150"></label>
                             <label class="field"><span>Sigla documental (2 letras)</span><input name="codigo_folio_materiales" minlength="2" maxlength="2" pattern="[A-Za-z]{2}" placeholder="AG"></label>
                             <label class="admin-check"><input name="activo" type="checkbox" checked><span>Cliente activo para todas las oficinas</span></label>
                         </div>
@@ -224,7 +223,7 @@
 
                     <div class="admin-table-scroll">
                         <table class="admin-table">
-                            <thead><tr><th>Cliente</th><th>Sigla documental</th><th>Código ERP</th><th>Presencia</th><th>Estado</th><th>Acciones</th></tr></thead>
+                            <thead><tr><th>Cliente</th><th>Sigla documental</th><th>Presencia</th><th>Estado</th><th>Acciones</th></tr></thead>
                             <tbody id="globalClientsTableBody"></tbody>
                         </table>
                     </div>
@@ -287,6 +286,12 @@
                                 <span>Definen la navegación disponible al ingresar desde un computador.</span>
                             </div>
                             <div class="access-module-selector" id="accessModuleSelector"></div>
+                            <div class="access-permission-heading">
+                                <div><p class="eyebrow">ACCIONES DE MATERIALES</p><h3>Facultades por proceso</h3></div>
+                                <span>Selecciona las acciones que podrá ejecutar dentro de las oficinas habilitadas.</span>
+                            </div>
+                            <p class="admin-form__hint" id="accessMaterialPermissionsHint">Selecciona las facultades necesarias. Para impedir toda escritura, utiliza el modo Solo consulta.</p>
+                            <div class="access-module-selector" id="accessMaterialPermissionsSelector"></div>
                             <div class="access-home-field">
                                 <label class="field"><span>Pantalla de inicio</span><select name="pantalla_inicio" id="accessProfileHome"><option value="">Según el nivel operacional base</option></select></label>
                                 <p class="admin-form__hint">Pantalla a la que llega el usuario al entrar a FoliOS (/FoliOS). Solo se ofrecen oficinas de los módulos seleccionados. Si el perfil no la permite, se usa la del nivel operacional base o la primera oficina habilitada.</p>

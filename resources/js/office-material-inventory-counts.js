@@ -35,11 +35,17 @@ async function load() {
     if (take) { $('takes').value = take.id; await select(take.id); }
 }
 async function select(id) { if (!id) { $('detail').hidden = true; take = null; return; } take = (await api(`/api/materiales/tomas/${id}`)).data; render(); }
+function canApprove() {
+    try {
+        const identity = JSON.parse(localStorage.getItem('estiba_wms_office_identity') || 'null');
+        return (identity?.puede_aprobar_ajustes_materiales ?? identity?.capacidades?.puede_aprobar_ajustes_materiales ?? ['administrador', 'supervisor_materiales'].includes(identity?.rol)) === true;
+    } catch { return false; }
+}
 function render() {
     $('detail').hidden = false; $('heading').textContent = `Toma ${take.id.slice(0, 8)} · ${take.estado}`;
     $('scope').textContent = `${take.camaras.join(', ')} · ${take.categoria || 'Todas las categorías'} · Abierta por ${take.abierta_por}`;
     $('metrics').textContent = `Exactitud por presencia: ${qty(take.exactitud_presencia_pct)} % · por cantidad: ${qty(take.exactitud_cantidad_pct)} %`;
-    const buttons = take.estado === 'borrador' ? '<button data-action="abrir">Abrir toma y asignar posiciones</button>' : take.estado === 'en_conteo' ? '<button data-action="revisar">Enviar a revisión</button>' : take.estado === 'en_revision' ? '<button data-action="aprobar">Aprobar y aplicar</button>' : '';
+    const buttons = take.estado === 'borrador' ? '<button data-action="abrir">Abrir toma y asignar posiciones</button>' : take.estado === 'en_conteo' ? '<button data-action="revisar">Enviar a revisión</button>' : take.estado === 'en_revision' && canApprove() ? '<button data-action="aprobar">Aprobar y aplicar</button>' : '';
     $('controls').innerHTML = buttons + (!['aprobada', 'anulada'].includes(take.estado) ? '<button data-action="anular">Anular toma</button>' : '') + '<button data-download="excel">Exportar Excel</button><button data-download="acta">Acta PDF</button>';
     $('progress').textContent = `${take.posiciones.filter((p) => p.estado === 'contada').length} de ${take.posiciones.length} posiciones contadas · ` + take.posiciones.map((p) => `${p.camara} ${p.posicion}: ${p.camarero} (${p.estado})`).join(' · ');
     const filters = $('filters').elements;

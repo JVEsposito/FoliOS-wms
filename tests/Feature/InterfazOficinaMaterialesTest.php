@@ -6,6 +6,19 @@ use Tests\TestCase;
 
 class InterfazOficinaMaterialesTest extends TestCase
 {
+    public function test_catalogos_permite_administrar_categorias_y_tipos_sin_campos_erp_manuales(): void
+    {
+        $this->get('/oficina/materiales/catalogos')->assertOk()
+            ->assertSee('Categorías y tipos')
+            ->assertSee('id="materialCategoryForm"', false)
+            ->assertSee('id="materialItemTypeForm"', false)
+            ->assertSee('select name="categoria"', false)
+            ->assertSee('name="tipo_item_material_id"', false)
+            ->assertDontSee('Código ERP futuro')
+            ->assertDontSee('name="codigo_externo"', false);
+        $this->get('/oficina/accesos')->assertOk()->assertDontSee('Código ERP futuro')->assertDontSee('name="codigo_externo"', false);
+    }
+
     public function test_materiales_solo_consume_la_temporada_transversal(): void
     {
         $this->get('/oficina/materiales')
@@ -58,7 +71,7 @@ class InterfazOficinaMaterialesTest extends TestCase
         $this->get('/oficina/materiales/catalogos')
             ->assertOk()
             ->assertSee('id="itemsMaterialSearch" type="search"', false)
-            ->assertSee('Código, descripción, categoría, código ERP o cliente')
+            ->assertSee('Código, descripción, categoría o cliente')
             ->assertSee('id="itemsMaterialTypeFilter"', false)
             ->assertSee('<option value="sin_tipo">Sin tipo operacional</option>', false)
             ->assertSee('id="itemsMaterialShowInactive"', false)

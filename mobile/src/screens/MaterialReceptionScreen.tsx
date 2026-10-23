@@ -66,6 +66,7 @@ export function MaterialReceptionScreen({ auth, baseUrl, onLogout }: Props) {
   const compact = useWindowDimensions().width < 900;
   const capabilities = auth.usuario.capacidades;
   const canManage = capabilities.puede_gestionar_recepciones_materiales === true;
+  const canConfirm = (capabilities.puede_confirmar_recepciones_materiales ?? capabilities.puede_gestionar_recepciones_materiales) === true;
   const canAnnul = capabilities.puede_anular_recepciones_materiales === true;
   const api = useMemo(() => createMaterialReceptionApi(baseUrl, auth.token), [auth.token, baseUrl]);
   const confirmationOperationIds = useRef(new Map<string, string>());
@@ -275,7 +276,7 @@ export function MaterialReceptionScreen({ auth, baseUrl, onLogout }: Props) {
           version_conocida: editingDraft.version,
         })
         : await api.create(payload);
-      if (confirmImmediately && reception.estado === 'borrador' && puedeConfirmarPorFotos(reception.fotos ?? [])) {
+      if (confirmImmediately && canConfirm && reception.estado === 'borrador' && puedeConfirmarPorFotos(reception.fotos ?? [])) {
         reception = await api.confirm(
           reception.id,
           confirmationOperationId(reception.id),
@@ -673,6 +674,7 @@ export function MaterialReceptionScreen({ auth, baseUrl, onLogout }: Props) {
             canAdminister={capabilities.puede_administrar_recepciones_materiales === true}
             onPhotosChange={(fotos) => setSelected((current) => current?.id === selected.id ? { ...current, fotos, fotos_documento: fotos.filter((f) => f.tipo === 'documento').length } : current)}
             canManage={canManage}
+            canConfirm={canConfirm}
             canAnnul={canAnnul}
             canPrint={capabilities.puede_imprimir_etiquetas_materiales === true}
             api={api}
@@ -749,6 +751,7 @@ export function MaterialReceptionScreen({ auth, baseUrl, onLogout }: Props) {
 function ReceptionDetail({
   reception, baseUrl, token, canAdminister, onPhotosChange,
   canManage,
+  canConfirm,
   canAnnul,
   canPrint,
   api,
@@ -763,6 +766,7 @@ function ReceptionDetail({
   reception: MaterialReception;
   baseUrl: string; token: string; canAdminister: boolean; onPhotosChange: (fotos: FotoRecepcion[]) => void;
   canManage: boolean;
+  canConfirm: boolean;
   canAnnul: boolean;
   canPrint: boolean;
   api: ReturnType<typeof createMaterialReceptionApi>;
@@ -835,10 +839,10 @@ function ReceptionDetail({
         <MaterialLabelPrintPanel api={api} deviceId={deviceId} reception={reception} />
       ) : null}
 
-      {reception.estado === 'borrador' && canManage ? (
+      {reception.estado === 'borrador' && (canManage || canConfirm) ? (
         <View style={styles.row}>
-          <Button label="Editar borrador" onPress={onEdit} secondary />
-          <Button label="Confirmar y generar folios" disabled={!puedeConfirmarPorFotos(reception.fotos ?? [])} onPress={onConfirm} />
+          {canManage ? <Button label="Editar borrador" onPress={onEdit} secondary /> : null}
+          {canConfirm ? <Button label="Confirmar y generar folios" disabled={!puedeConfirmarPorFotos(reception.fotos ?? [])} onPress={onConfirm} /> : null}
           {!puedeConfirmarPorFotos(reception.fotos ?? []) ? <Text style={styles.muted}>Falta la foto de la guía de despacho o factura. Agrégala antes de confirmar.</Text> : null}
         </View>
       ) : null}

@@ -29,7 +29,7 @@ class ImpresionEtiquetaMaterialController extends Controller
         Gate::authorize('consultar-recepciones-materiales');
         abort_unless(
             $recepcionMaterial->estado->value === 'confirmada'
-                || $request->user()->can('anular-recepciones-materiales')
+                || $request->user()->can('supervisar-recepciones-materiales')
                 || ($request->user()->can('gestionar-recepciones-materiales')
                     && $recepcionMaterial->creado_por_user_id === $request->user()->id),
             Response::HTTP_NOT_FOUND,

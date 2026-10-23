@@ -35,7 +35,7 @@ async function fixture(records, options = {}) {
             await import('/office-material-labels.js');
         </script></body>`) });
         if (url.pathname.startsWith('/build/')) return route.fulfill({ body: readFileSync(resolve(root, 'public' + url.pathname)), contentType: url.pathname.endsWith('.css') ? 'text/css' : 'application/octet-stream' });
-        if (['/office-material-receptions.js', '/office-material-reception-photos.js', '/office-material-labels.js'].includes(url.pathname)) return route.fulfill({ body: readFileSync(resolve(root, 'resources/js' + url.pathname)), contentType: 'text/javascript' });
+        if (['/office-material-receptions.js', '/office-material-reception-photos.js', '/office-material-labels.js', '/office-material-reception-transport.js'].includes(url.pathname)) return route.fulfill({ body: readFileSync(resolve(root, 'resources/js' + url.pathname)), contentType: 'text/javascript' });
         if (url.pathname === '/office-material-reception-import.js') return route.fulfill({ body: '', contentType: 'text/javascript' });
         if (url.pathname === '/thumb' || url.pathname === '/original') return route.fulfill({ body: image, contentType: 'image/png' });
         calls.push({ path: url.pathname, method: request.method(), body: request.postData() });
@@ -71,6 +71,43 @@ test('seleccionar pide el expediente y bloquea la confirmación sin documento', 
         assert.ok(calls.some((call) => call.path === '/api/materiales/recepciones/A' && call.method === 'GET'));
         assert.deepEqual(errors, []);
     } finally { await browser.close(); }
+});
+
+test('editar una recepción usa las cantidades originales por bulto y permite elegir la equivalencia vigente', async () => {
+    for (const refresh of [false, true]) {
+        const record = reception('A');
+        record.detalles[0] = { ...record.detalles[0], id: 'detail', cantidad_documental: 200, cantidad_contada: 200, cantidad_aceptada: 200, cantidad_rechazada: 0,
+            conversion_unidad: { unidad_origen: 'cajas', unidad_base: 'unidades', factor: '100.000000', version: 1, entrada: { cantidad_documental: 2, cantidad_contada: 2, cantidad_aceptada: 2, cantidad_rechazada: 0 }, bultos_entrada: [1.5, 0.5], bultos_entrada_por_id: { grande: 1.5, chico: 0.5 } },
+            bultos: [{ id: 'chico', cantidad: 50 }, { id: 'grande', cantidad: 150 }] };
+        const records = new Map([['A', record]]); let sent;
+        const { browser, page, errors } = await fixture(records, { route: async (route, url, request) => {
+            if (url.pathname === '/api/materiales/recepciones/catalogos') {
+                await route.fulfill({ json: { clientes: [record.cliente], proveedores: [{ ...record.proveedor, cliente_ids: ['client'], categorias: [] }], items: [{ ...record.detalles[0].item, unidad_medida: 'unidades', conversiones_unidad: [{ unidad_origen: 'cajas', factor: '120.000000', version: 2 }] }] } }); return true;
+            }
+            if (url.pathname === '/api/materiales/recepciones/A/administrar') {
+                sent = request.postDataJSON(); await route.fulfill({ json: { data: record } }); return true;
+            }
+            return false;
+        } });
+        try {
+            await page.locator('[data-action="select"]').click();
+            await page.locator('#materialReceptionDetailActions [data-action="edit"]').click();
+            await page.locator('#materialReceptionDialog [name="unidad_ingreso"]').waitFor();
+            assert.equal(await page.locator('#materialReceptionDialog [name="cantidad_aceptada"]').inputValue(), '2');
+            assert.equal(await page.locator('#materialReceptionDialog [name="tamano_bulto"]').inputValue(), '1.5');
+            if (refresh) await page.locator('[data-refresh-line-conversion]').click();
+            assert.match(await page.locator('.material-reception-conversion-hint').textContent(), refresh ? /120/ : /100/);
+            await page.locator('#materialReceptionForm [name="motivo_correccion"]').fill('Aclaración de antecedentes');
+            const saved = page.waitForResponse((response) => response.url().endsWith('/A/administrar'));
+            await page.locator('#saveMaterialReceptionDraft').click();
+            await saved;
+            assert.equal(sent.detalles[0].detalle_origen_id, 'detail');
+            assert.equal(sent.detalles[0].conversion_version, refresh ? 2 : 1);
+            assert.equal(sent.detalles[0].cantidad_aceptada, 2);
+            assert.deepEqual(sent.detalles[0].bultos.map((b) => b.cantidad), [0.5, 1.5]);
+            assert.deepEqual(errors, []);
+        } finally { await browser.close(); }
+    }
 });
 
 test('la respuesta demorada de A no reemplaza el expediente seleccionado de B', async () => {

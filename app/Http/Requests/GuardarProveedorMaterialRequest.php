@@ -149,7 +149,7 @@ class GuardarProveedorMaterialRequest extends FormRequest
             'nombre' => trim((string) $this->input('nombre')),
             'codigo_externo' => $this->filled('codigo_externo')
                 ? trim((string) $this->input('codigo_externo'))
-                : null,
+                : ($this->has('codigo_externo') ? null : $this->route('proveedorMaterial')?->codigo_externo),
             'activo' => $this->boolean('activo'),
             'categorias' => $categorias,
         ]);
