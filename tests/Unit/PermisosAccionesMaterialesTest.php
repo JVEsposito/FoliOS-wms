@@ -31,6 +31,8 @@ class PermisosAccionesMaterialesTest extends TestCase
         'inventario.bloquear' => 'gestionar-bloqueos-materiales',
         'catalogos.administrar' => 'administrar-catalogos-materiales',
         'inventario.editar_datos_item' => 'editar-niveles-stock-materiales',
+        'capacidad.configurar' => 'configurar-capacidad-materiales',
+        'capacidad.medir' => 'medir-cargas-materiales',
         'recetas.administrar' => 'administrar-recetas-materiales',
         'transformaciones.planificar' => 'gestionar-transformaciones-materiales',
         'transformaciones.operar' => 'operar-transformaciones-materiales',
@@ -87,8 +89,11 @@ class PermisosAccionesMaterialesTest extends TestCase
         $this->assertTrue($usuario->can('eliminar-recepciones-materiales'));
         $this->assertTrue($usuario->can('aprobar-ajustes-materiales'));
         $this->assertFalse($usuario->can('autorizar-recepciones-tardias-materiales'));
+        $this->assertFalse($usuario->can('configurar-capacidad-materiales'));
+        $this->assertFalse($usuario->can('medir-cargas-materiales'));
         $usuario->perfilAcceso->protegido = true;
         $this->assertTrue($usuario->can('autorizar-recepciones-tardias-materiales'));
+        $this->assertTrue($usuario->can('configurar-capacidad-materiales'));
         $usuario->perfil_acceso_id = null;
         $usuario->setRelation('perfilAcceso', null);
         $this->assertTrue($usuario->can('confirmar-recepciones-materiales'));

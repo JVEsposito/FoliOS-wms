@@ -1,0 +1,18 @@
+#materialCapacityApp .custody-card { min-width: 0; margin-bottom: 18px; }
+#materialCapacityApp label { display: grid; gap: 6px; font-size: .85rem; }
+#materialCapacityApp input, #materialCapacityApp select { max-width: 100%; min-width: 0; width: 100%; min-height: 42px; padding: 9px; background: var(--deep); color: var(--text); border: 1px solid var(--line); border-radius: 7px; }
+#materialCapacityApp input[type="checkbox"] { width: 20px; min-height: 20px; }
+#materialCapacityApp fieldset { min-width: 0; margin-block: 16px; padding: 16px; border: 1px solid var(--line); border-radius: 9px; }
+#materialCapacityApp summary { cursor: pointer; font-weight: 700; padding: 8px 0; }
+#materialCapacityApp button { margin-block: 5px; }
+.capacity-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 15px; }
+.capacity-zone .capacity-type-options { display: flex; flex-wrap: wrap; gap: 16px; margin-block: 15px; }
+.capacity-zone .capacity-type-options label { display: flex !important; align-items: center; }
+.capacity-actions, .capacity-search, .capacity-type-list article { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.capacity-type-list article { border-bottom: 1px solid var(--line); padding-block: 10px; }
+.capacity-type-list article p { flex: 1; min-width: 160px; overflow-wrap: anywhere; }
+.capacity-history-comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.capacity-history-comparison li { overflow-wrap: anywhere; margin-bottom: 6px; }
+#materialCapacityApp [hidden] { display: none !important; }
+#capacityNotice:not(:empty) { padding: 12px; }
+@media(max-width: 600px) { .capacity-history-comparison { grid-template-columns: 1fr; } }

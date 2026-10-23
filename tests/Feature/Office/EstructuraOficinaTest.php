@@ -9,6 +9,18 @@ use Tests\TestCase;
 
 class EstructuraOficinaTest extends TestCase
 {
+    public function test_capacidad_materiales_tiene_formularios_y_navegacion(): void
+    {
+        $html = $this->get('/oficina/materiales/capacidad')->assertOk()->getContent();
+        $this->assertStringContainsString('id="capacityWarehouseForm"', $html);
+        $this->assertStringContainsString('id="capacitySimulationForm"', $html);
+        $this->assertStringContainsString('aria-current="page"', $html);
+        if (getenv('ESTIBA_EXPORTAR_UI_TESTS') === '1') {
+            File::ensureDirectoryExists(storage_path('app/ui/oficina'));
+            File::put(storage_path('app/ui/oficina/capacidad.html'), $html);
+        }
+    }
+
     public function test_supervision_materiales_tiene_navegacion_y_consulta_sin_acciones_operativas(): void
     {
         $html = $this->get('/oficina/materiales/supervision')->assertOk()->getContent();
