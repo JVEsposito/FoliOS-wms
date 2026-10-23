@@ -46,7 +46,7 @@ class CatalogoPermisosMateriales
             ]),
             $this->grupo('regularizacion_recepciones', 'Autorizaciones de recepción', ['materiales.etiquetas'], [
                 'recepciones.autorizar_tardios' => 'Autorizar recepciones retroactivas y provisionales',
-            ], true),
+            ]),
             $this->grupo('regularizacion_despachos', 'Autorizaciones de despacho', ['materiales.despachos'], [
                 'despachos.autorizar_tardios' => 'Autorizar despachos retroactivos y provisionales',
             ], true),
@@ -75,6 +75,10 @@ class CatalogoPermisosMateriales
         $seleccion = $perfil->permisos_materiales;
         if ($seleccion === null) {
             $seleccion = $this->compatibles($perfil->modulos ?? [], $perfil->rol_base === RolUsuario::Consulta, (bool) $perfil->protegido);
+            if (! $perfil->protegido) {
+                // Activar el circuito no concede autorizaciones a perfiles históricos sin selección explícita.
+                $seleccion = array_values(array_filter($seleccion, fn (string $accion): bool => ! str_ends_with($accion, '.autorizar_tardios')));
+            }
         }
 
         $efectivos = array_values(array_intersect($compatibles, $seleccion));
