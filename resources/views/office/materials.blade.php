@@ -176,6 +176,7 @@
                             'clients' => ['label' => 'Clientes', 'icon' => '◇'],
                             'providers' => ['label' => 'Proveedores', 'icon' => '⇄'],
                             'items' => ['label' => 'Ítems', 'icon' => '▤'],
+                            'units' => ['label' => 'Unidades', 'icon' => '≋'],
                             'classifications' => ['label' => 'Categorías y tipos', 'icon' => '≡'],
                             'destinations' => ['label' => 'Destinos', 'icon' => '⌖'],
                         ]"
@@ -245,7 +246,7 @@
                                     <label><span>Descripción *</span><input name="nombre" maxlength="180" placeholder="Caja cartón 10 kg" required></label>
                                     <label><span>Categoría comercial</span><select name="categoria"><option value="">Sin categoría comercial</option></select></label>
                                     <label><span>Tipo de ítem *</span><select name="tipo_item_material_id" required><option value="">Selecciona un tipo</option></select></label>
-                                    <label><span>Unidad *</span><input name="unidad_medida" maxlength="40" placeholder="unidades" required></label>
+                                    <label><span>Unidad base *</span><select name="unidad_medida" required><option value="">Seleccione una unidad</option></select></label>
                                     <label><span>Stock mínimo</span><input name="stock_minimo" type="number" min="0" step="0.001" placeholder="Sin nivel"></label>
                                     <label><span>Punto de reorden</span><input name="punto_reorden" type="number" min="0" step="0.001" placeholder="Sin nivel"></label>
                                     <label><span>Stock máximo</span><input name="stock_maximo" type="number" min="0" step="0.001" placeholder="Sin nivel"></label>
@@ -260,6 +261,8 @@
                         </details>
                         <div class="materials-list" id="itemsMaterialList"></div>
                     </section>
+
+                    @include('office.partials.material-units')
 
                     <dialog class="materials-import material-regularization-dialog" id="materialRegularizationDialog">
                         <form id="materialRegularizationForm" novalidate>
