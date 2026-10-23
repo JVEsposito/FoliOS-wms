@@ -127,6 +127,7 @@ function showApp() {
         'is-hidden',
         state.identity?.puede_gestionar_despachos_materiales !== true,
     );
+    if (activeMaterialsSection() === 'despachos') toggleDispatchMode();
 }
 
 function activeMaterialsSection() {

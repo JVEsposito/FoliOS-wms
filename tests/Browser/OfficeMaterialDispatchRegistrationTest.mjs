@@ -53,7 +53,13 @@ test('Oficina regulariza una entrega vencida, conserva el UUID tras un error y m
     try {
         for (const width of [1366, 390]) {
             const { context, page, errors, writes, queries } = await fixture(browser, { width });
+            const registration = page.locator('#dispatchMaterialForm [data-dispatch-registration]');
+            assert.equal(await registration.isVisible(), false);
+            await page.locator('#dispatchMaterialForm [name="modalidad"][value="directo"]').check();
+            await registration.waitFor({ state: 'visible' });
             await page.screenshot({ path: resolve(root, `storage/app/ui/oficina/pr9-despacho-registro-${width}.png`), fullPage: true });
+            await page.locator('#dispatchMaterialForm [name="modalidad"][value="delegado"]').check();
+            assert.equal(await registration.isVisible(), false);
             await page.locator('#dispatchRegularizationFilter').selectOption('vencida');
             await page.waitForFunction(() => document.querySelector('#dispatchRegularizationAlerts').textContent.includes('1 vencidas'));
             await page.locator('#dispatchMaterialList .office-action-select').selectOption({ label: 'Ver trazabilidad' });
