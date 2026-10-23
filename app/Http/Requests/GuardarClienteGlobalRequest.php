@@ -58,7 +58,7 @@ class GuardarClienteGlobalRequest extends FormRequest
             'nombre' => trim((string) $this->input('nombre')),
             'codigo_externo' => $this->filled('codigo_externo')
                 ? trim((string) $this->input('codigo_externo'))
-                : null,
+                : ($this->has('codigo_externo') ? null : $this->route('cliente')?->codigo_externo),
             'codigo_folio_materiales' => $this->filled('codigo_folio_materiales')
                 ? mb_strtoupper(trim((string) $this->input('codigo_folio_materiales')))
                 : null,

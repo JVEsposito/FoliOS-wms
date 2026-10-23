@@ -12,7 +12,7 @@ async function load() {
         const r = await fetch(`/api/materiales/items/catalogo?${query}`, { headers: { Accept: 'application/json', Authorization: `Bearer ${auth}` } }); const body = await r.json();
         if (!r.ok) throw new Error(body.message || 'No se pudo consultar el catálogo.');
         if (generation !== sequence || token() !== auth) return;
-        for (const [key, data, label] of [['temporada_id', body.catalogos.temporadas, 'codigo'], ['cliente_id', body.catalogos.clientes, 'nombre'], ['categoria', body.catalogos.categorias, null]]) {
+        for (const [key, data, label] of [['temporada_id', body.catalogos.temporadas, 'codigo'], ['cliente_id', body.catalogos.clientes, 'nombre'], ['categoria', body.catalogos.categorias, null], ['tipo_item_material_id', body.catalogos.tipos_item || [], 'nombre']]) {
             const select = $('itemFilters').elements[key]; const old = select.value;
             const options = key === 'cliente_id' && $('itemFilters').elements.temporada_id.value ? data.filter((c) => c.temporada_material_id === $('itemFilters').elements.temporada_id.value) : data;
             select.innerHTML = '<option value="">Todos</option>' + options.map((d) => `<option value="${esc(label ? d.id : d)}">${esc(label ? d[label] : d)}</option>`).join(''); select.value = old;
@@ -20,7 +20,7 @@ async function load() {
         rows = body.data; pages = body.paginas; $('itemSummary').textContent = `${body.total} ítems · Página ${body.pagina} de ${pages}`;
         $('itemPrevious').disabled = page <= 1; $('itemNext').disabled = page >= pages;
         releasePrivateItemImages($('itemRows'));
-        $('itemRows').innerHTML = rows.map((i) => `<tr><td>${i.foto_principal ? `<img class="item-photo-thumb" alt="${esc(i.nombre)}" data-private-item-photo="${esc(i.foto_principal.miniatura_url)}">` : '—'}</td><td>${esc(i.cliente.temporada.codigo)}</td><td>${esc(i.cliente.nombre)}</td><td>${esc(i.codigo)}</td><td><strong>${esc(i.nombre)}</strong><br><button type="button" data-photos="${esc(i.id)}">Fotos (${i.cantidad_fotos ?? 0})</button></td><td>${esc(i.categoria)}</td><td>${esc(i.categoria_operacional_etiqueta || 'Sin tipo')}</td><td>${esc(i.unidad_medida)}</td><td>${i.activo ? 'Activo' : 'Inactivo'}</td><td>${[i.stock_minimo, i.punto_reorden, i.stock_maximo].map((n) => n ?? '—').join(' / ')}</td></tr>`).join('') || '<tr><td colspan="10">Sin ítems para estos filtros.</td></tr>';
+        $('itemRows').innerHTML = rows.map((i) => `<tr><td>${i.foto_principal ? `<img class="item-photo-thumb" alt="${esc(i.nombre)}" data-private-item-photo="${esc(i.foto_principal.miniatura_url)}">` : '—'}</td><td>${esc(i.cliente.temporada.codigo)}</td><td>${esc(i.cliente.nombre)}</td><td>${esc(i.codigo)}</td><td><strong>${esc(i.nombre)}</strong><br><button type="button" data-photos="${esc(i.id)}">Fotos (${i.cantidad_fotos ?? 0})</button></td><td>${esc(i.categoria)}</td><td>${esc(i.tipo_item?.nombre || i.categoria_operacional_etiqueta || 'Sin tipo')}</td><td>${esc(i.unidad_medida)}</td><td>${i.activo ? 'Activo' : 'Inactivo'}</td><td>${[i.stock_minimo, i.punto_reorden, i.stock_maximo].map((n) => n ?? '—').join(' / ')}</td></tr>`).join('') || '<tr><td colspan="10">Sin ítems para estos filtros.</td></tr>';
         void loadPrivateItemImages($('itemRows'));
     } catch (e) { if (generation === sequence) $('itemNotice').textContent = e.message; }
 }
