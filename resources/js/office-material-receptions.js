@@ -397,7 +397,7 @@ function renderReceptionDetail() {
         ? `<a class="secondary-button" href="${receptionPrintUrl(record.id)}">Imprimir folios</a>` : '';
     receptionElements.detailActions.innerHTML = printAction + action('view', 'Ver formulario')
         + (record.estado === 'confirmada' ? action('sampling', 'Registro de muestreo') : '')
-        + ((record.estado === 'borrador' ? receptionCanManage() : receptionCanAdminister() && !record.registro?.provisional && record.estado !== 'anulada') ? action('edit', 'Editar') : '')
+        + ((record.estado === 'borrador' ? receptionCanManage() || receptionCanAdminister() : receptionCanAdminister() && !record.registro?.provisional && record.estado !== 'anulada') ? action('edit', 'Editar') : '')
         + (receptionCanAuthorize() && record.estado === 'confirmada' && ['pendiente', 'vencida'].includes(record.registro?.estado) ? action('regularize', 'Regularizar documentos') : '')
         + (receptionCanDelete() ? action('delete', 'Eliminar') : '');
     receptionElements.detailLines.innerHTML = registrationDetail(record) + (record.detalles || []).map((detail) => `<article class="material-reception-detail-line"><strong>${receptionEscape(detail.item?.nombre || '—')}</strong><code>${receptionEscape(detail.item?.codigo || '—')}</code><b>${receptionEscape(receptionQuantity(detail.cantidad_aceptada ?? detail.cantidad_recibida))} ${receptionEscape(detail.unidad_medida || '')}</b><small>${receptionEscape(receptionPackageSummary(detail))}</small>${detail.conversion_unidad ? `<small>Ingreso: ${receptionEscape(detail.conversion_unidad.entrada.cantidad_aceptada)} ${receptionEscape(detail.conversion_unidad.unidad_origen)} × ${receptionEscape(detail.conversion_unidad.factor)} ${receptionEscape(detail.unidad_medida)}</small>` : ''}</article>`).join('');
@@ -639,7 +639,7 @@ function configureReceptionDialog() {
     const editing = receptionState.mode === 'edit';
     const confirmed = receptionState.current?.estado === 'confirmada';
     transportPanel?.setReadonly(readonly);
-    receptionElements.dialogEyebrow.textContent = readonly ? 'EXPEDIENTE DE RECEPCIÓN' : editing ? 'CORRECCIÓN ADMINISTRATIVA' : 'NUEVA RECEPCIÓN';
+    receptionElements.dialogEyebrow.textContent = readonly ? 'EXPEDIENTE DE RECEPCIÓN' : editing ? (confirmed || receptionCanAdminister() ? 'CORRECCIÓN ADMINISTRATIVA' : 'EDITAR BORRADOR') : 'NUEVA RECEPCIÓN';
     receptionElements.dialogTitle.textContent = receptionState.current
         ? `Guía ${receptionState.current.numero_guia_despacho}`
         : 'Registrar recepción';
@@ -649,7 +649,7 @@ function configureReceptionDialog() {
     receptionElements.form.classList.toggle('material-reception-readonly', readonly);
     receptionElements.addLine.classList.toggle('is-hidden', readonly);
     window.estibaMaterialReceptionImporter?.setVisible(!readonly);
-    receptionElements.reason.classList.toggle('is-hidden', !(editing && confirmed));
+    receptionElements.reason.classList.toggle('is-hidden', !(editing && (confirmed || receptionCanAdminister())));
     receptionElements.warning.classList.toggle('is-hidden', !(editing && confirmed));
     receptionElements.saveDraft.classList.toggle('is-hidden', readonly || confirmed);
     receptionElements.saveConfirm.classList.toggle('is-hidden', readonly || (!confirmed && !receptionCanConfirm()));
@@ -778,7 +778,7 @@ async function saveReception(confirm) {
         payload.motivo_correccion = receptionElements.form.elements.motivo_correccion.value;
         if (confirmed) payload.confirmacion_operacion_id = receptionUuid();
         response = await receptionApi(
-            `/api/materiales/recepciones/${receptionState.current.id}${confirmed ? '/administrar' : ''}`,
+            `/api/materiales/recepciones/${receptionState.current.id}${confirmed || receptionCanAdminister() ? '/administrar' : ''}`,
             { method: 'PUT', body: JSON.stringify(payload) },
         );
     }
@@ -883,7 +883,7 @@ if (receptionElements.workspace) {
             }
         }
         if (button.dataset.action === 'regularize' && receptionCanAuthorize()) openReceptionRegularization(receptionState.selected, { api: receptionApi, uuid: receptionUuid, onSaved: refreshReceptionViews });
-        if (button.dataset.action === 'edit' && (record.estado === 'borrador' ? receptionCanManage() : receptionCanAdminister())) openReception(record.id, 'edit');
+        if (button.dataset.action === 'edit' && (record.estado === 'borrador' ? receptionCanManage() || receptionCanAdminister() : receptionCanAdminister())) openReception(record.id, 'edit');
         if (button.dataset.action === 'delete' && receptionCanDelete()) openReceptionDelete(receptionState.selected?.id === record.id ? receptionState.selected : record);
     }
     receptionElements.list.addEventListener('click', handleReceptionAction);
