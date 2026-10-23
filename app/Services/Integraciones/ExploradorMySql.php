@@ -28,7 +28,7 @@ class ExploradorMySql
         return $columnas;
     }
 
-    public function muestra(#[SensitiveParameter] array $credenciales, string $tabla, array $seleccion, array $filtros = [], int $limite = 10): array
+    public function muestra(#[SensitiveParameter] array $credenciales, string $tabla, array $seleccion, array $filtros = [], int $limite = 10, int $segundos = 15): array
     {
         $columnas = $this->columnas($credenciales, $tabla);
         if ($seleccion === [] || count($seleccion) > 40 || count(array_unique($seleccion)) !== count($seleccion) || $limite < 1 || $limite > 20) {
@@ -45,7 +45,7 @@ class ExploradorMySql
             $campos[] = ($binaria ? "'[Dato binario]'" : "LEFT(CAST({$nombre} AS CHAR), 501)").' AS '.$nombre;
         }
         [$where, $parametros] = $this->condiciones($columnas, $filtros);
-        $filas = $this->conector->consultar($credenciales, 'SELECT '.implode(', ', $campos).' FROM '.self::identificador($tabla).$where.' LIMIT '.$limite, $parametros, 15);
+        $filas = $this->conector->consultar($credenciales, 'SELECT '.implode(', ', $campos).' FROM '.self::identificador($tabla).$where.' LIMIT '.$limite, $parametros, $segundos);
         $recortadas = false;
         foreach ($filas as &$fila) {
             foreach ($fila as &$valor) {

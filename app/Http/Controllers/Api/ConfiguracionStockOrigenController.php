@@ -30,8 +30,9 @@ class ConfiguracionStockOrigenController extends Controller
 
     public function simular(Request $request, ExploradorMySql $explorador, MapeoStockOrigen $mapeo, ConectorMySqlLectura $conector): JsonResponse
     {
-        return $this->ejecutar($request, $explorador, $mapeo, function ($datos, $conexion, $consulta) use ($conector, $mapeo): array {
-            $filas = $conector->consultar($conexion->credenciales, $consulta[0], $consulta[1], 15);
+        return $this->ejecutar($request, $explorador, $mapeo, function ($datos, $conexion, $consulta) use ($conector, $mapeo, $request): array {
+            $filas = $conector->consultar($conexion->credenciales, $consulta[0], $consulta[1],
+                ConectorMySqlLectura::segundosMuestra($request->attributes->has('integracion_id'), config('integraciones.consultas.muestra_segundos', 60)));
             $mapeo->validarFilas($filas);
             $this->vigente($conexion->fresh(), $datos['version_conexion']);
 

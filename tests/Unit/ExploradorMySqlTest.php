@@ -26,7 +26,8 @@ class ExploradorMySqlTest extends TestCase
     public function test_la_muestra_recorta_valores_omite_binarios_y_parametriza_los_filtros(): void
     {
         $conector = $this->createMock(ConectorMySqlLectura::class);
-        $conector->expects($this->exactly(2))->method('consultar')->willReturnCallback(function ($credenciales, $sql, $parametros) {
+        $conector->expects($this->exactly(2))->method('consultar')->willReturnCallback(function ($credenciales, $sql, $parametros, $segundos) {
+            $this->assertSame(15, $segundos);
             if (str_contains($sql, 'information_schema.COLUMNS')) {
                 $this->assertSame(['Vista de stock'], $parametros);
 
@@ -43,6 +44,26 @@ class ExploradorMySqlTest extends TestCase
         $resultado = (new ExploradorMySql($conector))->muestra([], 'Vista de stock', ['Folio real', 'archivo'], [['columna' => 'Folio real', 'valor' => "x'; DROP TABLE ejemplo; --"]]);
         $this->assertTrue($resultado['valores_recortados']);
         $this->assertSame(501, mb_strlen($resultado['filas'][0]['Folio real']));
+    }
+
+    public function test_el_presupuesto_de_muestra_no_amplia_la_consulta_de_columnas(): void
+    {
+        $conector = $this->createMock(ConectorMySqlLectura::class);
+        $conector->expects($this->exactly(2))->method('consultar')->willReturnCallback(function ($credenciales, $sql, $parametros, $segundos) {
+            if (str_contains($sql, 'information_schema.COLUMNS')) {
+                $this->assertSame(15, $segundos);
+
+                return [['nombre' => 'Pallet', 'tipo' => 'varchar']];
+            }
+            $this->assertSame(60, $segundos);
+            $this->assertStringContainsString('WHERE `Pallet` = ? LIMIT 5', $sql);
+            $this->assertSame(['21'], $parametros);
+
+            return [['Pallet' => '21']];
+        });
+
+        $resultado = (new ExploradorMySql($conector))->muestra([], 'odbc_stock', ['Pallet'], [['columna' => 'Pallet', 'valor' => '21']], 5, 60);
+        $this->assertSame([['Pallet' => '21']], $resultado['filas']);
     }
 
     public function test_rechaza_nombres_ajenos_a_la_base_y_columnas_no_descubiertas(): void

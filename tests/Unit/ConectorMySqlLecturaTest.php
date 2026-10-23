@@ -10,6 +10,15 @@ use PHPUnit\Framework\TestCase;
 
 class ConectorMySqlLecturaTest extends TestCase
 {
+    public function test_las_muestras_amplian_su_presupuesto_solo_en_cola_y_con_un_limite_acotado(): void
+    {
+        $this->assertSame(60, ConectorMySqlLectura::segundosMuestra(true));
+        foreach ([[15, 15], [60, 60], ['90', 90], [120, 120], [300, 120], [0, 15], [-30, 15], ['', 60], [null, 60], ['60s', 60]] as [$configurado, $esperado]) {
+            $this->assertSame($esperado, ConectorMySqlLectura::segundosMuestra(true, $configurado));
+            $this->assertSame(15, ConectorMySqlLectura::segundosMuestra(false, $configurado));
+        }
+    }
+
     public function test_solo_ejecuta_una_consulta_fija_dentro_de_una_transaccion_de_lectura(): void
     {
         $pdo = $this->createMock(PDO::class);
@@ -69,6 +78,8 @@ class ConectorMySqlLecturaTest extends TestCase
             [1049, "SQLSTATE[HY000] [1049] Unknown database 'base_privada'", 'base_inexistente'],
             [1146, "SQLSTATE[42S02]: Table 'base_privada.odbc_stock' doesn't exist", 'tabla_inexistente'],
             [1142, "SQLSTATE[42000]: SELECT command denied to user 'lector_privado'", 'sin_permiso_tabla'],
+            [3024, 'Query execution was interrupted, maximum statement execution time exceeded', 'tiempo_agotado'],
+            [1969, 'Query execution was interrupted (max_statement_time exceeded)', 'tiempo_agotado'],
             [9999, 'otro error con srv-privado', 'error_desconocido'],
         ];
         foreach ($casos as [$codigo, $mensaje, $causa]) {

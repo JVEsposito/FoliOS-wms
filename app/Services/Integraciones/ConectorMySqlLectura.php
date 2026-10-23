@@ -24,6 +24,18 @@ class ConectorMySqlLectura
         'error_desconocido' => 'La base de origen respondió con un error no reconocido.',
     ];
 
+    /** Amplía solo las muestras en cola; deja margen bajo los 180 s del worker. */
+    public static function segundosMuestra(bool $enCola, mixed $configurados = 60): int
+    {
+        if (! $enCola) {
+            return 15;
+        }
+
+        $segundos = filter_var($configurados, FILTER_VALIDATE_INT);
+
+        return max(15, min(120, $segundos === false ? 60 : $segundos));
+    }
+
     public function probar(#[SensitiveParameter] array $credenciales): void
     {
         $pdo = $this->abrir($credenciales);
