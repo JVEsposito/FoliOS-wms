@@ -323,6 +323,7 @@ class ServicioValidacionPallet
                     )
                     : Folio::create($atributosFolio);
                 $validacion->update(['folio_id' => $folio->id]);
+                app(ServicioConciliacionValidacion::class)->registrar($validacion, 'registro_servidor');
             }
 
             return [$this->cargar($validacion->refresh()), true, $hayConflicto];

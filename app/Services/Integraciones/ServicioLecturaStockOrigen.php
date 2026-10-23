@@ -7,12 +7,14 @@ use App\Models\ConfiguracionOrigen;
 use App\Models\LecturaStockOrigen;
 use App\Models\PalletStockOrigen;
 use App\Models\User;
+use App\Services\Validacion\ServicioConciliacionValidacion;
 use Carbon\CarbonImmutable;
 use DomainException;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
@@ -142,14 +144,13 @@ class ServicioLecturaStockOrigen
                     throw new DomainException('La suma de cajas o kilos de un pallet supera el máximo admitido. Revise las columnas asignadas.');
                 }
             }
-            $resultado = $this->guardar($pallets, $config['bodega'], $lectura);
-            $lectura->update([
-                'estado' => 'correcta',
-                'filas' => count($filas),
-                'pallets' => count($pallets),
-                ...$resultado,
-                'terminada_at' => now(),
-            ]);
+            DB::transaction(function () use ($pallets, $config, $lectura, $filas): void {
+                $resultado = $this->guardar($pallets, $config['bodega'], $lectura);
+                $lectura->update([
+                    'estado' => 'correcta', 'filas' => count($filas), 'pallets' => count($pallets),
+                    ...$resultado, 'terminada_at' => now(),
+                ]);
+            }, 3);
         } catch (Throwable $error) {
             [$causa, $mensaje] = $error instanceof LecturaStockOrigenFallida
                 ? [$error->causa, $error->getMessage()]
@@ -165,6 +166,18 @@ class ServicioLecturaStockOrigen
                 'mensaje' => mb_substr($mensaje, 0, 255),
                 'terminada_at' => now(),
             ]);
+        }
+
+        // Cada caso se comprueba en su propia transacción para no bloquear toda
+        // la temporada. El reporte derivado no invalida una lectura correcta.
+        if ($lectura->estado === 'correcta') {
+            try {
+                app(ServicioConciliacionValidacion::class)->recomprobar();
+            } catch (Throwable $error) {
+                $lectura->update(['causa' => 'conciliacion_pendiente',
+                    'mensaje' => 'Stock leído. Quedaron conciliaciones pendientes de recomprobar en Oficina.']);
+                Log::warning('Conciliación pendiente tras lectura de stock', ['lectura_id' => $lectura->id, 'error' => $error::class]);
+            }
         }
 
         LecturaStockOrigen::query()

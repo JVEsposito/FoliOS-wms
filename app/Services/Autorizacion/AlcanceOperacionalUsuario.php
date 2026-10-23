@@ -908,6 +908,15 @@ class AlcanceOperacionalUsuario
         return $this->puedeConsultarValidacionesPallet($usuario) || $this->puedeConsultarRepaletizajes($usuario);
     }
 
+    public function puedeGestionarConciliacionesValidacion(User $usuario): bool
+    {
+        $usuario->loadMissing('perfilAcceso');
+
+        return ! $this->esSoloConsulta($usuario)
+            && in_array($usuario->perfilAcceso?->rol_base ?? $usuario->rol, [RolUsuario::Administrador, RolUsuario::SupervisorFrio], true)
+            && $this->puedeConsultarValidacionesPallet($usuario);
+    }
+
     /**
      * Repaletizaje: se conserva el acceso histórico desde Validación PT y se suma
      * el módulo propio del tarjador. Desde una PDA o tablet, el token debe traer
