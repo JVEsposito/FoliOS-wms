@@ -34,7 +34,7 @@ class ResumenCatalogoValidacionApiTest extends TestCase
             'temporada_id' => $temporada->id, 'articulo_validacion_id' => $articulo->id,
             'origen_validacion_id' => $origen->id, 'activo' => true,
         ]);
-        ImportacionValidacion::create([
+        $importacion = ImportacionValidacion::create([
             'temporada_id' => $temporada->id, 'nombre_archivo' => 'temporada.csv', 'tipo_archivo' => 'csv',
             'checksum' => hash('sha256', 'fixture'), 'estado' => 'borrador', 'creado_por_user_id' => $administrador->id,
             'resumen' => ['filas_validas' => 25000],
@@ -66,7 +66,46 @@ class ResumenCatalogoValidacionApiTest extends TestCase
 
         // Los consumidores anteriores siguen recibiendo el contrato completo.
         $this->getJson('/api/administracion/validacion')
-            ->assertOk()->assertJsonPath('combinaciones.0.id', $combinacion->id);
+            ->assertOk()->assertJsonPath('combinaciones.0.id', $combinacion->id)
+            ->assertJsonPath('importaciones.0.id', $importacion->id)
+            ->assertJsonPath('importaciones.0.filas.0.dato', $importacion->filas[0]['dato'])
+            ->assertJsonPath('importaciones.0.errores.0.mensaje', 'ERROR_QUE_NO_DEBE_DESCARGARSE');
+    }
+
+    public function test_consulta_completa_carga_solo_diez_importaciones_recientes_y_conserva_su_orden(): void
+    {
+        $temporada = $this->crearTemporadaActivaPrueba([
+            ...$this->vigenciaProductiva(), 'codigo' => 'COMPLETA', 'nombre' => 'Completa',
+        ]);
+        $administrador = User::factory()->create(['rol' => RolUsuario::Administrador]);
+        $esperadas = [];
+        foreach (range(1, 12) as $numero) {
+            $importacion = new ImportacionValidacion([
+                'temporada_id' => $temporada->id, 'nombre_archivo' => "importacion-{$numero}.csv", 'tipo_archivo' => 'csv',
+                'checksum' => hash('sha256', (string) $numero), 'estado' => 'borrador',
+                'creado_por_user_id' => $administrador->id, 'resumen' => [],
+                'filas' => [['numero' => $numero]], 'errores' => [],
+            ]);
+            $importacion->created_at = now()->subMinutes(13 - $numero);
+            $importacion->save();
+            $esperadas[] = $importacion->id;
+        }
+        $consultas = [];
+        DB::listen(function ($evento) use (&$consultas): void {
+            if (str_contains($evento->sql, 'importaciones_validacion')) {
+                $consultas[] = strtolower($evento->sql);
+            }
+        });
+
+        $respuesta = $this->actingAs($administrador, 'sanctum')
+            ->getJson('/api/administracion/validacion')->assertOk()->assertJsonCount(10, 'importaciones');
+        $this->assertSame(array_slice(array_reverse($esperadas), 0, 10), array_column($respuesta->json('importaciones'), 'id'));
+        $respuesta->assertJsonPath('importaciones.0.filas.0.numero', 12)
+            ->assertJsonPath('importaciones.0.creado_por.name', $administrador->name);
+        $this->assertCount(2, $consultas);
+        $this->assertStringNotContainsString('*', $consultas[0]);
+        $this->assertStringContainsString('order by', $consultas[0]);
+        $this->assertStringNotContainsString('order by', $consultas[1]);
     }
 
     public function test_resumen_respeta_temporada_solicitada_y_limita_importaciones(): void
