@@ -11,6 +11,7 @@ use App\Http\Requests\AnularRecepcionMaterialRequest;
 use App\Http\Requests\ConfirmarRecepcionMaterialRequest;
 use App\Http\Requests\CrearRecepcionMaterialRequest;
 use App\Http\Requests\EliminarRecepcionMaterialRequest;
+use App\Http\Requests\RegularizarRecepcionMaterialRequest;
 use App\Http\Resources\RecepcionMaterialResource;
 use App\Models\ClienteMaterial;
 use App\Models\FolioMaterial;
@@ -20,6 +21,7 @@ use App\Models\RecepcionMaterial;
 use App\Models\TemporadaMaterial;
 use App\Services\Materiales\MuestreoXlsx;
 use App\Services\Materiales\ServicioRecepcionMaterial;
+use App\Services\Materiales\ServicioRegularizacionRecepcionMaterial;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -157,13 +159,14 @@ class RecepcionMaterialController extends Controller
         $filtros = $request->validate([
             'temporada_id' => ['nullable', 'uuid', 'exists:temporadas,id'],
             'sin_foto_documento' => ['nullable', 'boolean'],
+            'regularizacion' => ['nullable', 'in:pendiente,vencida,regularizada,retroactiva'],
         ]);
         $temporadaId = $filtros['temporada_id'] ?? app(ServicioTemporadaActiva::class)->buscar()?->id;
         $usuario = $request->user();
         $consulta = RecepcionMaterial::query()
             ->when($temporadaId, fn ($query) => $query->where('temporada_id', $temporadaId))
             ->when(! $temporadaId, fn ($query) => $query->whereRaw('1 = 0'))
-            ->with(['temporada', 'cliente', 'proveedor', 'creadoPor', 'confirmadoPor', 'anuladoPor'])
+            ->with(['temporada', 'cliente', 'proveedor', 'creadoPor', 'confirmadoPor', 'anuladoPor', 'autorizadoPor', 'regularizadoPor'])
             ->withCount(['detalles', 'fotos as fotos_documento' => fn ($q) => $q->where('tipo', 'documento'), 'fotos as fotos_referenciales' => fn ($q) => $q->where('tipo', 'referencial')])
             ->when($request->boolean('sin_foto_documento'), fn ($q) => $q->whereDoesntHave('fotos', fn ($f) => $f->where('tipo', 'documento')))
             ->when($request->query('estado'), fn ($query, $estado) => $query->where('estado', $estado))
@@ -184,9 +187,26 @@ class RecepcionMaterialController extends Controller
             }
         }
 
+        $pendientes = (clone $consulta)->where('provisional', true)->where('estado', EstadoRecepcionMaterial::Confirmada->value)->whereNull('regularizado_at');
+        $resumen = ['pendientes' => (clone $pendientes)->count(), 'vencidas' => (clone $pendientes)->where('fecha_limite_regularizacion', '<', now())->count()];
+        $filtro = $filtros['regularizacion'] ?? null;
+        if ($filtro === 'retroactiva') {
+            $consulta->where('registro_retroactivo', true);
+        } elseif ($filtro) {
+            $consulta->where('provisional', true)->where('estado', EstadoRecepcionMaterial::Confirmada->value);
+            if ($filtro === 'regularizada') {
+                $consulta->whereNotNull('regularizado_at');
+            } else {
+                $consulta->whereNull('regularizado_at');
+                if ($filtro === 'vencida') {
+                    $consulta->where('fecha_limite_regularizacion', '<', now());
+                }
+            }
+        }
+
         return RecepcionMaterialResource::collection(
             $consulta->latest()->paginate(min(100, max(10, (int) $request->query('per_page', 25)))),
-        );
+        )->additional(['regularizacion' => $resumen]);
     }
 
     public function show(
@@ -221,7 +241,7 @@ class RecepcionMaterialController extends Controller
         );
 
         $ruta = $generador->generar($recepcionMaterial);
-        $guia = Str::upper(Str::slug($recepcionMaterial->numero_guia_despacho, '_'));
+        $guia = Str::upper(Str::slug((string) ($recepcionMaterial->numero_guia_despacho ?? $recepcionMaterial->id), '_'));
         $archivo = 'Registro_Muestreo_'.($guia !== '' ? $guia : $recepcionMaterial->id).'.xlsx';
 
         return response()->download(
@@ -285,7 +305,15 @@ class RecepcionMaterialController extends Controller
             $request->validated('operacion_id'),
             $request->integer('version_conocida'),
             $request->user(),
+            autorizacion: $request->safe()->only(['motivo_autorizacion', 'aceptar_fuera_plazo']),
         ));
+    }
+
+    public function regularizar(RegularizarRecepcionMaterialRequest $request, RecepcionMaterial $recepcionMaterial, ServicioRegularizacionRecepcionMaterial $servicio): RecepcionMaterialResource
+    {
+        abort_unless($this->puedeVerRecepcion($request, $recepcionMaterial), Response::HTTP_NOT_FOUND);
+
+        return new RecepcionMaterialResource($servicio->regularizar($recepcionMaterial, $request->validated(), $request->user()));
     }
 
     public function anular(

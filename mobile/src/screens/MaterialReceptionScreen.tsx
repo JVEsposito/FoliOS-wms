@@ -16,10 +16,12 @@ import {
 
 import { AuthSession } from '../domain/estiba';
 import { PrivateMaterialThumbnail, MaterialItemPhoto } from '../components/PrivateMaterialThumbnail';
+import { MaterialReceptionRegistrationPanel, ReceptionAuthorizationFields } from '../components/MaterialReceptionRegistrationPanel';
 import { MaterialReceptionPhotosPanel } from '../components/MaterialReceptionPhotosPanel';
 import { ApiError } from '../services/apiError';
 import { MaterialLabelPrintPanel } from '../components/MaterialLabelPrintPanel';
 import {
+  ReceptionAuthorization,
   puedeConfirmarPorFotos,
   FotoRecepcion,
   CreateMaterialReceptionPayload,
@@ -42,6 +44,7 @@ type Props = {
 type Tab = 'nueva' | 'historial' | 'pendientes';
 type HistoryFilter = MaterialReceptionState | 'todas';
 type Form = {
+  provisional: boolean; fecha_recepcion_original?: string; fecha_recepcion: string; hora_recepcion: string; motivo_registro_tardio: string;
   cliente_id: string;
   proveedor_material_id: string;
   numero_guia_despacho: string;
@@ -67,6 +70,7 @@ export function MaterialReceptionScreen({ auth, baseUrl, onLogout }: Props) {
   const capabilities = auth.usuario.capacidades;
   const canManage = capabilities.puede_gestionar_recepciones_materiales === true;
   const canConfirm = (capabilities.puede_confirmar_recepciones_materiales ?? capabilities.puede_gestionar_recepciones_materiales) === true;
+  const canAuthorize = capabilities.puede_autorizar_recepciones_tardias_materiales === true;
   const canAnnul = capabilities.puede_anular_recepciones_materiales === true;
   const api = useMemo(() => createMaterialReceptionApi(baseUrl, auth.token), [auth.token, baseUrl]);
   const confirmationOperationIds = useRef(new Map<string, string>());
@@ -276,7 +280,7 @@ export function MaterialReceptionScreen({ auth, baseUrl, onLogout }: Props) {
           version_conocida: editingDraft.version,
         })
         : await api.create(payload);
-      if (confirmImmediately && canConfirm && reception.estado === 'borrador' && puedeConfirmarPorFotos(reception.fotos ?? [])) {
+      if (confirmImmediately && canConfirm && !reception.registro?.requiere_autorizacion && reception.estado === 'borrador' && puedeConfirmarPorFotos(reception.fotos ?? [])) {
         reception = await api.confirm(
           reception.id,
           confirmationOperationId(reception.id),
@@ -299,7 +303,7 @@ export function MaterialReceptionScreen({ auth, baseUrl, onLogout }: Props) {
       setTab('historial');
       setMessage(reception.estado === 'confirmada'
         ? 'Recepción confirmada. Los folios quedaron disponibles para ubicación.'
-        : 'Borrador guardado. Agrega la foto de la guía o factura y luego confirma.'
+        : reception.registro?.requiere_autorizacion ? 'Borrador guardado. Requiere autorización para confirmar y operar.' : 'Borrador guardado. Agrega la foto de la guía o factura y luego confirma.'
       );
 
     } catch (reason) {
@@ -365,7 +369,7 @@ export function MaterialReceptionScreen({ auth, baseUrl, onLogout }: Props) {
       }
       setCatalog(loadedCatalog);
       setForm(formFromReception(draft));
-      setEditingDraft({ id: draft.id, version: draft.version, guide: draft.numero_guia_despacho });
+      setEditingDraft({ id: draft.id, version: draft.version, guide: draft.numero_guia_despacho ?? 'pendiente' });
       setOperationId(Crypto.randomUUID());
       setSelected(null);
       setTab('nueva');
@@ -377,18 +381,18 @@ export function MaterialReceptionScreen({ auth, baseUrl, onLogout }: Props) {
     }
   }
 
-  function requestConfirm(reception: MaterialReception) {
+  function requestConfirm(reception: MaterialReception, authorization: ReceptionAuthorization = {}) {
     Alert.alert(
       'Confirmar recepción',
       'Se generará un folio definitivo por cada bulto. ¿Continuar?',
       [
         { text: 'Cancelar', style: 'cancel' },
-        { text: 'Confirmar', onPress: () => void confirmReception(reception) },
+        { text: 'Confirmar', onPress: () => void confirmReception(reception, authorization) },
       ],
     );
   }
 
-  async function confirmReception(reception: MaterialReception) {
+  async function confirmReception(reception: MaterialReception, authorization: ReceptionAuthorization = {}) {
     setActionBusy(true);
     setError('');
     try {
@@ -396,6 +400,7 @@ export function MaterialReceptionScreen({ auth, baseUrl, onLogout }: Props) {
         reception.id,
         confirmationOperationId(reception.id),
         reception.version,
+        authorization,
       );
       confirmationOperationIds.current.delete(reception.id);
       setSelected(confirmed);
@@ -540,6 +545,10 @@ export function MaterialReceptionScreen({ auth, baseUrl, onLogout }: Props) {
                     onChange={changeSupplier}
                   />
                   <Field label="N.º guía despacho" value={form.numero_guia_despacho} onChange={(value) => setForm({ ...form, numero_guia_despacho: value })} placeholder="GD-12345" />
+                  <DateField label="Día de recepción física (Chile)" value={form.fecha_recepcion} onChange={(value) => setForm({ ...form, fecha_recepcion: value })} />
+                  <Field label="Hora de recepción física (HH:mm, Chile)" value={form.hora_recepcion} onChange={(value) => setForm({ ...form, hora_recepcion: value })} placeholder="14:30" />
+                  <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: form.provisional }} onPress={() => setForm({ ...form, provisional: !form.provisional })} style={styles.infoCard}><Text style={styles.cardTitle}>{form.provisional ? '✓ ' : ''}Recepción provisional</Text><Text style={styles.muted}>Puede quedar pendiente el respaldo documental. El conteo físico y los bultos son obligatorios. Cinco días corridos para regularizar.</Text></Pressable>
+                  <Field label="Motivo del registro retroactivo o provisional" value={form.motivo_registro_tardio} onChange={(value) => setForm({ ...form, motivo_registro_tardio: value })} placeholder="Explica el ingreso pendiente o tardío" multiline />
                   <DateField label="Fecha documento" value={form.fecha_documento} onChange={(value) => setForm({ ...form, fecha_documento: value })} />
                   <Field label="Orden de compra" value={form.orden_compra} onChange={(value) => setForm({ ...form, orden_compra: value })} placeholder="Opcional" />
                   <Field label="Patente" value={form.patente} onChange={(value) => setForm({ ...form, patente: value.toUpperCase() })} placeholder="Opcional" />
@@ -675,6 +684,8 @@ export function MaterialReceptionScreen({ auth, baseUrl, onLogout }: Props) {
             onPhotosChange={(fotos) => setSelected((current) => current?.id === selected.id ? { ...current, fotos, fotos_documento: fotos.filter((f) => f.tipo === 'documento').length } : current)}
             canManage={canManage}
             canConfirm={canConfirm}
+            canAuthorize={canAuthorize}
+            onReceptionChange={(reception) => { setSelected(reception); void loadAll(); }}
             canAnnul={canAnnul}
             canPrint={capabilities.puede_imprimir_etiquetas_materiales === true}
             api={api}
@@ -683,7 +694,7 @@ export function MaterialReceptionScreen({ auth, baseUrl, onLogout }: Props) {
             onAnnulReason={setAnnulReason}
              onBack={() => setSelected(null)}
              onEdit={() => void editDraft(selected)}
-             onConfirm={() => requestConfirm(selected)}
+             onConfirm={(authorization) => requestConfirm(selected, authorization)}
             onAnnul={() => requestAnnul(selected)}
           />
         ) : (
@@ -752,6 +763,8 @@ function ReceptionDetail({
   reception, baseUrl, token, canAdminister, onPhotosChange,
   canManage,
   canConfirm,
+  canAuthorize,
+  onReceptionChange,
   canAnnul,
   canPrint,
   api,
@@ -767,6 +780,8 @@ function ReceptionDetail({
   baseUrl: string; token: string; canAdminister: boolean; onPhotosChange: (fotos: FotoRecepcion[]) => void;
   canManage: boolean;
   canConfirm: boolean;
+  canAuthorize: boolean;
+  onReceptionChange: (reception: MaterialReception) => void;
   canAnnul: boolean;
   canPrint: boolean;
   api: ReturnType<typeof createMaterialReceptionApi>;
@@ -775,9 +790,12 @@ function ReceptionDetail({
   onAnnulReason: (value: string) => void;
   onBack: () => void;
   onEdit: () => void;
-  onConfirm: () => void;
+  onConfirm: (authorization?: ReceptionAuthorization) => void;
   onAnnul: () => void;
 }) {
+  const [authorization, setAuthorization] = useState<ReceptionAuthorization>({});
+  const late = Boolean(reception.registro?.fecha_limite && new Date(reception.registro.fecha_limite) < new Date());
+  const authorized = !reception.registro?.requiere_autorizacion || (canAuthorize && (authorization.motivo_autorizacion?.trim().length ?? 0) >= 5 && (!late || authorization.aceptar_fuera_plazo));
   return (
     <ScrollView contentContainerStyle={styles.content}>
       <Button label="← Volver" onPress={onBack} secondary />
@@ -799,6 +817,8 @@ function ReceptionDetail({
         </View>
       </View>
 
+      <MaterialReceptionRegistrationPanel key={reception.id} reception={reception} api={api} canAuthorize={canAuthorize} onChange={onReceptionChange} />
+      {reception.estado === 'borrador' && reception.registro?.requiere_autorizacion && canAuthorize ? <ReceptionAuthorizationFields value={authorization} onChange={setAuthorization} late={late} /> : null}
       <MaterialReceptionPhotosPanel receptionId={reception.id} state={reception.estado} api={api} baseUrl={baseUrl} token={token} canManage={canManage} canAdminister={canAdminister} onChange={onPhotosChange}/>
 
       {(reception.detalles ?? []).map((detail, index) => (
@@ -811,7 +831,7 @@ function ReceptionDetail({
             <Text style={styles.greenText}>{detail.cantidad_aceptada} {detail.unidad_medida} aceptadas</Text>
           </View>
           <View style={styles.summaryGrid}>
-            <Summary label="Documental" value={detail.cantidad_documental} />
+            <Summary label="Documental" value={detail.cantidad_documental ?? 'Pendiente'} />
             <Summary label="Contado" value={detail.cantidad_contada} />
             <Summary label="Aceptado" value={detail.cantidad_aceptada} />
             <Summary label="Rechazado" value={detail.cantidad_rechazada} />
@@ -842,8 +862,8 @@ function ReceptionDetail({
       {reception.estado === 'borrador' && (canManage || canConfirm) ? (
         <View style={styles.row}>
           {canManage ? <Button label="Editar borrador" onPress={onEdit} secondary /> : null}
-          {canConfirm ? <Button label="Confirmar y generar folios" disabled={!puedeConfirmarPorFotos(reception.fotos ?? [])} onPress={onConfirm} /> : null}
-          {!puedeConfirmarPorFotos(reception.fotos ?? []) ? <Text style={styles.muted}>Falta la foto de la guía de despacho o factura. Agrégala antes de confirmar.</Text> : null}
+          {canConfirm ? <Button label="Confirmar y generar folios" disabled={!authorized || !(puedeConfirmarPorFotos(reception.fotos ?? []) || (reception.registro?.provisional && canAuthorize))} onPress={() => onConfirm(authorization)} /> : null}
+          {reception.registro?.requiere_autorizacion ? <Text style={styles.muted}>Requiere autorización y motivo. La provisional debe completar el respaldo dentro de cinco días corridos.</Text> : !puedeConfirmarPorFotos(reception.fotos ?? []) ? <Text style={styles.muted}>Falta la foto de la guía de despacho o factura. Agrégala antes de confirmar.</Text> : null}
         </View>
       ) : null}
       {reception.estado === 'confirmada' && canAnnul ? (
@@ -1102,6 +1122,11 @@ function Empty({ title }: { title: string }) {
   return <View style={styles.empty}><Text style={styles.sectionTitle}>{title}</Text></View>;
 }
 
+function chileTime(value = new Date().toISOString()) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(value)).map(({ type, value }) => [type, value]));
+  return { date: `${parts.year}-${parts.month}-${parts.day}`, time: `${parts.hour}:${parts.minute}` };
+}
+
 function localDate() {
   const date = new Date();
   return dateToIso(date);
@@ -1111,7 +1136,12 @@ function formFromReception(reception: MaterialReception): Form {
   return {
     cliente_id: reception.cliente?.id ?? '',
     proveedor_material_id: reception.proveedor?.id ?? '',
-    numero_guia_despacho: reception.numero_guia_despacho,
+    fecha_recepcion_original: reception.registro?.fecha_recepcion ?? undefined,
+    provisional: reception.registro?.provisional ?? false,
+    fecha_recepcion: reception.registro?.fecha_recepcion ? chileTime(reception.registro.fecha_recepcion).date : '',
+    hora_recepcion: reception.registro?.fecha_recepcion ? chileTime(reception.registro.fecha_recepcion).time : '',
+    motivo_registro_tardio: reception.registro?.motivo ?? '',
+    numero_guia_despacho: reception.numero_guia_despacho ?? '',
     fecha_documento: reception.fecha_documento ?? '',
     orden_compra: reception.orden_compra ?? '',
     patente: reception.patente ?? '',
@@ -1120,7 +1150,7 @@ function formFromReception(reception: MaterialReception): Form {
     detalles: (reception.detalles ?? []).map((detail) => ({
       local_id: Crypto.randomUUID(),
       item_material_id: detail.item?.id ?? '',
-      cantidad_documental: detail.cantidad_documental,
+      cantidad_documental: detail.cantidad_documental ?? '',
       cantidad_contada: detail.cantidad_contada,
       cantidad_por_bulto: inferPackageCapacity(detail.bultos),
       observacion: detail.observacion ?? '',
@@ -1141,6 +1171,7 @@ function emptyForm(): Form {
   return {
     cliente_id: '',
     proveedor_material_id: '',
+    provisional: false, fecha_recepcion: chileTime().date, hora_recepcion: chileTime().time, motivo_registro_tardio: '',
     numero_guia_despacho: '',
     fecha_documento: localDate(),
     orden_compra: '',
@@ -1178,13 +1209,16 @@ function emptyPackage(): ReceptionDraftPackage {
 function buildPayload(form: Form, operationId: string): CreateMaterialReceptionPayload {
   if (!form.cliente_id) throw new Error('Selecciona el cliente.');
   if (!form.proveedor_material_id) throw new Error('Selecciona un proveedor autorizado.');
-  if (!form.numero_guia_despacho.trim()) throw new Error('Ingresa el número de guía.');
+  if (!form.provisional && !form.numero_guia_despacho.trim()) throw new Error('Ingresa el número de guía.');
   validateDate(form.fecha_documento, 'fecha del documento');
+  validateDate(form.fecha_recepcion, 'recepción física');
+  if (form.fecha_recepcion && !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(form.hora_recepcion)) throw new Error('La hora física debe tener formato HH:mm.');
+  if ((form.provisional || (form.fecha_recepcion && form.fecha_recepcion < chileTime().date)) && form.motivo_registro_tardio.trim().length < 5) throw new Error('Indica el motivo del ingreso retroactivo o provisional (al menos 5 caracteres).');
 
   const details = form.detalles.map((detail, detailIndex) => {
     if (!detail.item_material_id) throw new Error(`Selecciona el ítem ${detailIndex + 1}.`);
 
-    const documentary = positive(detail.cantidad_documental, `Cantidad documental del ítem ${detailIndex + 1}`);
+    const documentary = form.provisional && !detail.cantidad_documental.trim() ? null : positive(detail.cantidad_documental, `Cantidad documental del ítem ${detailIndex + 1}`);
     const counted = positive(detail.cantidad_contada, `Cantidad contada del ítem ${detailIndex + 1}`);
     const packages = distributePackages(detail).map((itemPackage, packageIndex) => {
       const quantity = positive(itemPackage.cantidad, `Cantidad del bulto ${packageIndex + 1}`);
@@ -1225,7 +1259,10 @@ function buildPayload(form: Form, operationId: string): CreateMaterialReceptionP
     operacion_id: operationId,
     cliente_id: form.cliente_id,
     proveedor_material_id: form.proveedor_material_id,
-    numero_guia_despacho: form.numero_guia_despacho.trim(),
+    provisional: form.provisional,
+    ...(form.fecha_recepcion ? { fecha_recepcion: form.fecha_recepcion_original && chileTime(form.fecha_recepcion_original).date === form.fecha_recepcion && chileTime(form.fecha_recepcion_original).time === form.hora_recepcion ? form.fecha_recepcion_original : `${form.fecha_recepcion}T${form.hora_recepcion}:00` } : {}),
+    motivo_registro_tardio: optional(form.motivo_registro_tardio),
+    numero_guia_despacho: optional(form.numero_guia_despacho),
     fecha_documento: optional(form.fecha_documento),
     orden_compra: optional(form.orden_compra),
     patente: optional(form.patente),

@@ -19,6 +19,8 @@ class ConfirmarRecepcionMaterialRequest extends FormRequest
         return [
             'operacion_id' => ['required', 'uuid'],
             'version_conocida' => ['required', 'integer', 'min:1'],
+            'motivo_autorizacion' => ['sometimes', 'nullable', 'string', 'min:5', 'max:1000'],
+            'aceptar_fuera_plazo' => ['sometimes', 'boolean'],
         ];
     }
 }

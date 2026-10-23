@@ -35,7 +35,7 @@ async function fixture(records, options = {}) {
             await import('/office-material-labels.js');
         </script></body>`) });
         if (url.pathname.startsWith('/build/')) return route.fulfill({ body: readFileSync(resolve(root, 'public' + url.pathname)), contentType: url.pathname.endsWith('.css') ? 'text/css' : 'application/octet-stream' });
-        if (['/office-material-receptions.js', '/office-material-reception-photos.js', '/office-material-labels.js', '/office-material-reception-transport.js'].includes(url.pathname)) return route.fulfill({ body: readFileSync(resolve(root, 'resources/js' + url.pathname)), contentType: 'text/javascript' });
+        if (['/office-material-receptions.js', '/office-material-reception-registration.js', '/office-material-reception-photos.js', '/office-material-labels.js', '/office-material-reception-transport.js'].includes(url.pathname)) return route.fulfill({ body: readFileSync(resolve(root, 'resources/js' + url.pathname)), contentType: 'text/javascript' });
         if (url.pathname === '/office-material-reception-import.js') return route.fulfill({ body: '', contentType: 'text/javascript' });
         if (url.pathname === '/thumb' || url.pathname === '/original') return route.fulfill({ body: image, contentType: 'image/png' });
         calls.push({ path: url.pathname, method: request.method(), body: request.postData() });
@@ -264,4 +264,58 @@ test('confirmar ofrece imprimir, precarga fuera de la lista y reintenta la selec
             assert.deepEqual(errors, []);
         } finally { await browser.close(); }
     }
+});
+
+test('una provisional requiere autorización con motivo y reintenta sin generar otra operación', async () => {
+    const record = reception('A'); record.registro = { provisional: true, retroactivo: true, requiere_autorizacion: true, estado: 'por_autorizar', fecha_recepcion: '2026-10-20T13:30:00Z', fecha_limite: new Date(Date.now() + 86400000).toISOString(), motivo: 'Guía pendiente' };
+    record.numero_guia_despacho = null;
+    const records = new Map([['A', record]]); const confirmations = [];
+    const { browser, page, errors } = await fixture(records, { width: 390, identity: { puede_confirmar_recepciones_materiales: true, puede_autorizar_recepciones_tardias_materiales: true }, route: async (route, url, request) => {
+        if (!url.pathname.endsWith('/confirmar')) return false;
+        confirmations.push(request.postDataJSON());
+        if (confirmations.length === 1) await route.fulfill({ status: 503, json: { message: 'Reintenta la autorización' } });
+        else { records.set('A', { ...record, estado: 'confirmada', version: 6, registro: { ...record.registro, estado: 'pendiente' } }); await route.fulfill({ json: { data: records.get('A') } }); }
+        return true;
+    } });
+    try {
+        await page.locator('[data-action="select"]').click();
+        await page.locator('#materialReceptionDetailPhotos [data-confirm]').click();
+        await page.locator('#materialReceptionAuthorizationForm [name="motivo_autorizacion"]').fill('Conteo supervisado; guía pendiente');
+        await page.locator('#materialReceptionAuthorizationForm [type="submit"]').click();
+        await page.waitForFunction(() => document.querySelector('[data-photo-error]')?.textContent.includes('Reintenta'));
+        await page.locator('#materialReceptionDetailPhotos [data-confirm]').click();
+        await page.waitForFunction(() => document.querySelector('#materialReceptionDetailState')?.textContent === 'Recepción confirmada');
+        assert.equal(confirmations.length, 2); assert.deepEqual(confirmations[0], confirmations[1]);
+        assert.equal(confirmations[0].motivo_autorizacion, 'Conteo supervisado; guía pendiente');
+        assert.deepEqual(errors, []);
+    } finally { await browser.close(); }
+});
+
+test('regularizar en pantalla móvil conserva el UUID tras perder la respuesta y deja evidencia visible', async () => {
+    const record = reception('A', [photo]); record.estado = 'confirmada'; record.numero_guia_despacho = null;
+    record.detalles[0].id = 'detail-A'; record.detalles[0].cantidad_documental = null;
+    record.registro = { provisional: true, requiere_autorizacion: true, estado: 'pendiente', fecha_recepcion: '2026-10-20T13:30:00Z', fecha_limite: new Date(Date.now() + 86400000).toISOString() };
+    const records = new Map([['A', record]]); const requests = [];
+    const { browser, page, errors } = await fixture(records, { width: 390, identity: { puede_autorizar_recepciones_tardias_materiales: true }, route: async (route, url, request) => {
+        if (!url.pathname.endsWith('/regularizar')) return false;
+        requests.push(request.postDataJSON());
+        if (requests.length === 1) await route.fulfill({ status: 503, json: { message: 'Reintenta la regularización' } });
+        else { records.set('A', { ...record, numero_guia_despacho: 'GD-891', version: 6, registro: { ...record.registro, estado: 'regularizada', regularizado_at: new Date().toISOString(), regularizado_por: { name: 'Jefa bodega' }, motivo_regularizacion: 'Guía recibida y verificada' } }); await route.fulfill({ json: { data: records.get('A') } }); }
+        return true;
+    } });
+    try {
+        await page.locator('[data-action="select"]').click();
+        await page.locator('[data-action="regularize"]').click();
+        const form = page.locator('#materialReceptionRegularizationForm');
+        await form.locator('[name="numero_guia_despacho"]').fill('GD-891');
+        await form.locator('[name="fecha_documento"]').fill('2026-10-20');
+        await form.locator('[data-documentary-detail]').fill('15');
+        await form.locator('[name="motivo"]').fill('Guía recibida y verificada');
+        await form.locator('[type="submit"]').click();
+        await page.waitForFunction(() => document.querySelector('#materialReceptionRegularizationError')?.textContent.includes('Reintenta'));
+        await form.locator('[type="submit"]').click();
+        await page.waitForFunction(() => document.querySelector('#materialReceptionDetailLines')?.textContent.includes('Jefa bodega'));
+        assert.deepEqual(requests[0], requests[1]); assert.equal(requests.length, 2);
+        assert.deepEqual(errors, []);
+    } finally { await browser.close(); }
 });

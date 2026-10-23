@@ -1,5 +1,7 @@
 import { ApiError } from './apiError';
 import {
+  ReceptionAuthorization,
+  RegularizeMaterialReceptionPayload,
   FotoRecepcion,
   TipoFotoRecepcion,
   CreateMaterialReceptionPayload,
@@ -92,7 +94,7 @@ export function createMaterialReceptionApi(baseUrl: string, token: string) {
       )).data;
     },
 
-    async confirm(id: string, operationId: string, knownVersion: number): Promise<MaterialReception> {
+    async confirm(id: string, operationId: string, knownVersion: number, authorization: ReceptionAuthorization = {}): Promise<MaterialReception> {
       return (await request<ApiItem<MaterialReception>>(
         `/api/materiales/recepciones/${encodeURIComponent(id)}/confirmar`,
         {
@@ -100,9 +102,14 @@ export function createMaterialReceptionApi(baseUrl: string, token: string) {
           body: JSON.stringify({
             operacion_id: operationId,
             version_conocida: knownVersion,
+            ...authorization,
           }),
         },
       )).data;
+    },
+
+    async regularize(id: string, payload: RegularizeMaterialReceptionPayload): Promise<MaterialReception> {
+      return (await request<ApiItem<MaterialReception>>(`/api/materiales/recepciones/${encodeURIComponent(id)}/regularizar`, { method: 'POST', body: JSON.stringify(payload) })).data;
     },
 
     async annul(id: string, operationId: string, reason: string): Promise<MaterialReception> {

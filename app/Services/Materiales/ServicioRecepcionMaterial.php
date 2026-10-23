@@ -30,6 +30,7 @@ use DomainException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Schema;
 use JsonException;
 
@@ -80,7 +81,7 @@ class ServicioRecepcionMaterial
                     'temporada_id' => $temporada->id,
                     'cliente_id' => $cliente->id,
                     'proveedor_material_id' => $proveedor->id,
-                    'numero_guia_despacho' => trim($datos['numero_guia_despacho']),
+                    'numero_guia_despacho' => $this->textoOpcional($datos['numero_guia_despacho'] ?? null),
                     'fecha_documento' => $datos['fecha_documento'] ?? null,
                     'orden_compra' => $this->textoOpcional($datos['orden_compra'] ?? null),
                     ...app(ServicioDirectorioTransporte::class)->capturar($datos, $usuario),
@@ -88,6 +89,7 @@ class ServicioRecepcionMaterial
                     'version' => 1,
                     'observacion' => $this->textoOpcional($datos['observacion'] ?? null),
                     'creado_por_user_id' => $usuario->id,
+                    ...app(RegistroRecepcionMaterial::class)->preparar($datos),
                 ]);
 
                 foreach ($datos['detalles'] as $linea) {
@@ -99,7 +101,7 @@ class ServicioRecepcionMaterial
                     TipoEventoRecepcionMaterial::Creada,
                     $usuario,
                     $datos['operacion_id'],
-                    ['numero_guia_despacho' => $recepcion->numero_guia_despacho, 'transporte' => $recepcion->transporte_snapshot],
+                    ['numero_guia_despacho' => $recepcion->numero_guia_despacho, 'transporte' => $recepcion->transporte_snapshot, 'registro' => app(RegistroRecepcionMaterial::class)->representar($recepcion)],
                 );
 
                 return $this->cargar($recepcion);
@@ -202,6 +204,7 @@ class ServicioRecepcionMaterial
                 }
 
                 $versionAnterior = $recepcion->version;
+                $registroAnterior = app(RegistroRecepcionMaterial::class)->representar($recepcion);
                 $transporteAnterior = $recepcion->transporte_snapshot;
                 $ahora = now();
                 $bultoIds = $bultosActuales->pluck('id');
@@ -228,12 +231,13 @@ class ServicioRecepcionMaterial
                 $recepcion->update([
                     'cliente_id' => $cliente->id,
                     'proveedor_material_id' => $proveedor->id,
-                    'numero_guia_despacho' => trim($datos['numero_guia_despacho']),
+                    'numero_guia_despacho' => $this->textoOpcional($datos['numero_guia_despacho'] ?? null),
                     'fecha_documento' => $datos['fecha_documento'] ?? null,
                     'orden_compra' => $this->textoOpcional($datos['orden_compra'] ?? null),
                     ...app(ServicioDirectorioTransporte::class)->capturar($datos, $usuario, $recepcion),
                     'observacion' => $this->textoOpcional($datos['observacion'] ?? null),
                     'version' => $versionAnterior + 1,
+                    ...app(RegistroRecepcionMaterial::class)->preparar($datos, $recepcion),
                 ]);
 
                 foreach ($datos['detalles'] as $linea) {
@@ -260,6 +264,8 @@ class ServicioRecepcionMaterial
                     [
                         'payload_hash' => $payloadHash,
                         'version_anterior' => $versionAnterior,
+                        'registro_anterior' => $registroAnterior,
+                        'registro_resultante' => app(RegistroRecepcionMaterial::class)->representar($recepcion),
                         'transporte_anterior' => $transporteAnterior,
                         'transporte_resultante' => $recepcion->transporte_snapshot,
                         'version_resultante' => $recepcion->version,
@@ -299,10 +305,12 @@ class ServicioRecepcionMaterial
         int $versionConocida,
         User $usuario,
         bool $exigirFotoDocumento = true,
+        array $autorizacion = [],
     ): RecepcionMaterial {
         $payload = [
             'recepcion_material_id' => $recepcion->id,
             'version_conocida' => $versionConocida,
+            ...$autorizacion,
         ];
         $payloadHash = $this->payloadHash($payload);
 
@@ -313,6 +321,7 @@ class ServicioRecepcionMaterial
             $usuario,
             $payloadHash,
             $exigirFotoDocumento,
+            $autorizacion,
         ): RecepcionMaterial {
             $recepcion = RecepcionMaterial::query()
                 ->with(['detalles.bultos', 'cliente', 'proveedor'])
@@ -341,8 +350,26 @@ class ServicioRecepcionMaterial
                 throw new ConflictoOperacion('La recepción cambió desde la última lectura.');
             }
 
+            $requiereAutorizacion = $recepcion->provisional || $recepcion->registro_retroactivo;
+            if ($recepcion->fecha_recepcion?->isFuture()) {
+                throw new DomainException('La fecha física no puede estar en el futuro.');
+            }
+            if ($requiereAutorizacion) {
+                Gate::forUser($usuario)->authorize('autorizar-recepciones-tardias-materiales');
+                $motivo = trim((string) ($autorizacion['motivo_autorizacion'] ?? ''));
+                if (mb_strlen($motivo) < 5) {
+                    throw new DomainException('La autorización requiere un motivo de al menos 5 caracteres.');
+                }
+                if ($recepcion->fecha_limite_regularizacion?->isPast() && ! ($autorizacion['aceptar_fuera_plazo'] ?? false)) {
+                    throw new DomainException('Se superaron los cinco días corridos. Reconoce expresamente la autorización fuera de plazo.');
+                }
+                $recepcion->fill(['autorizado_por_user_id' => $usuario->id, 'autorizado_at' => now(), 'motivo_autorizacion' => $motivo]);
+            }
+            if (! $recepcion->provisional && (! $recepcion->numero_guia_despacho || $recepcion->detalles->contains(fn ($d) => $d->cantidad_documental === null))) {
+                throw new DomainException('Una recepción normal requiere guía y cantidades documentales.');
+            }
             $fotos = $recepcion->fotos()->orderBy('tipo')->orderBy('orden')->lockForUpdate()->get();
-            if ($exigirFotoDocumento && ! $fotos->contains('tipo', 'documento')) {
+            if ($exigirFotoDocumento && ! $recepcion->provisional && ! $fotos->contains('tipo', 'documento')) {
                 throw new FotoDocumentoRecepcionRequerida;
             }
 
@@ -406,7 +433,7 @@ class ServicioRecepcionMaterial
                         'estado_operacional' => $bulto->bloqueado
                             ? EstadoOperacionalFolio::Bloqueado
                             : EstadoOperacionalFolio::PendienteUbicacion,
-                        'fecha_ingreso' => $ahora,
+                        'fecha_ingreso' => $recepcion->fecha_recepcion ?? $ahora,
                         'activo' => true,
                         'origen_sistema' => 'recepcion_materiales',
                         'identificador_externo' => $bulto->id,
@@ -457,6 +484,7 @@ class ServicioRecepcionMaterial
                             'bulto_recepcion_material_id' => $bulto->id,
                             'numero_guia_despacho' => $recepcion->numero_guia_despacho,
                             'estado_ubicacion' => 'pendiente_ubicacion',
+                            'registro' => app(RegistroRecepcionMaterial::class)->representar($recepcion),
                         ],
                         'ocurrido_at' => $ahora,
                     ]);
@@ -490,9 +518,10 @@ class ServicioRecepcionMaterial
                 'numero_guia_despacho' => $recepcion->numero_guia_despacho,
                 'transporte' => $recepcion->transporte_snapshot,
                 'folios' => $foliosGenerados,
+                'registro' => app(RegistroRecepcionMaterial::class)->representar($recepcion),
                 'fotos' => $fotos->map(fn ($foto) => $foto->only(['id', 'tipo', 'orden', 'sha256', 'bytes']))->values()->all(),
             ];
-            if (! $exigirFotoDocumento && ! $fotos->contains('tipo', 'documento')) {
+            if ((! $exigirFotoDocumento || $recepcion->provisional) && ! $fotos->contains('tipo', 'documento')) {
                 $snapshot['sin_foto_documento'] = true;
             }
             $recepcion->update([
@@ -503,13 +532,16 @@ class ServicioRecepcionMaterial
                 'confirmacion_payload_hash' => $payloadHash,
                 'confirmado_por_user_id' => $usuario->id,
                 'confirmado_at' => $ahora,
+                'autorizado_por_user_id' => $recepcion->autorizado_por_user_id,
+                'autorizado_at' => $recepcion->autorizado_at,
+                'motivo_autorizacion' => $recepcion->motivo_autorizacion,
             ]);
             $this->registrarEvento(
                 $recepcion,
                 TipoEventoRecepcionMaterial::Confirmada,
                 $usuario,
                 $operacionId,
-                ['folios' => $foliosGenerados],
+                ['folios' => $foliosGenerados, 'registro' => app(RegistroRecepcionMaterial::class)->representar($recepcion), 'fuera_plazo' => $recepcion->fecha_limite_regularizacion?->isPast() ?? false],
             );
 
             return $this->cargar($recepcion->refresh());
@@ -713,6 +745,10 @@ class ServicioRecepcionMaterial
                 throw new ConflictoOperacion('La recepción cambió desde la última lectura.');
             }
 
+            if ($recepcion->estado === EstadoRecepcionMaterial::Confirmada && $recepcion->provisional) {
+                throw new DomainException('Regulariza los documentos de la recepción provisional. Sus folios y cantidades físicas se conservan; los ajustes de inventario se realizan por su flujo auditado.');
+            }
+
             $estadoAnterior = $recepcion->estado;
             $foliosAnteriores = collect();
             $impresionesAnteriores = collect();
@@ -760,6 +796,7 @@ class ServicioRecepcionMaterial
                     $actualizada->version,
                     $usuario,
                     exigirFotoDocumento: false,
+                    autorizacion: $actualizada->registro_retroactivo ? ['motivo_autorizacion' => $motivo, 'aceptar_fuera_plazo' => true] : [],
                 );
             }
 
@@ -909,6 +946,8 @@ class ServicioRecepcionMaterial
             'creadoPor:id,name',
             'confirmadoPor:id,name',
             'anuladoPor:id,name',
+            'autorizadoPor:id,name',
+            'regularizadoPor:id,name',
             'detalles.item.cliente.cliente:id,codigo,nombre',
             'detalles.bultos.folioMaterial.folio.ubicacionActual.posicion.camara',
             'eventos.usuario:id,name',
@@ -1087,6 +1126,7 @@ class ServicioRecepcionMaterial
                 'estado' => $recepcion->estado->value,
                 'version' => $recepcion->version,
                 'observacion' => $recepcion->observacion,
+                'registro' => app(RegistroRecepcionMaterial::class)->representar($recepcion),
                 'snapshot_confirmacion' => $recepcion->snapshot_confirmacion,
                 'creado_por_user_id' => $recepcion->creado_por_user_id,
                 'confirmado_por_user_id' => $recepcion->confirmado_por_user_id,
@@ -1196,7 +1236,8 @@ class ServicioRecepcionMaterial
             bloquear: true,
         );
         [$linea, $conversion] = app(ServicioUnidadesMateriales::class)->convertirLinea($item, $linea, $anterior);
-        $cantidadDocumental = $this->cantidad($linea['cantidad_documental']);
+        $cantidadDocumental = $recepcion->provisional && ($linea['cantidad_documental'] ?? null) === null
+            ? null : $this->cantidad($linea['cantidad_documental'] ?? null);
         $cantidadContada = $this->cantidad($linea['cantidad_contada']);
         $cantidadAceptada = $this->cantidad($linea['cantidad_aceptada'], permitirCero: true);
         $cantidadRechazada = $this->cantidad($linea['cantidad_rechazada'] ?? 0, permitirCero: true);

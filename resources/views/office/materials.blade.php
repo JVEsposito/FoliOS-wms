@@ -333,7 +333,7 @@
                     </section>
                 </div>
 
-                <section class="panel materials-panel material-receptions-workspace" id="materialReceptionsWorkspace" data-materials-view="recepciones">
+                <section class="panel materials-panel material-receptions-workspace" id="materialReceptionsWorkspace" data-materials-view="recepciones" data-operational-timezone="{{ config('app.operational_timezone') }}">
                     <div class="materials-panel__heading">
                         <div>
                             <p class="eyebrow">INGRESO DE MATERIALES</p>
@@ -349,7 +349,7 @@
 
                     <div class="material-receptions-metrics">
                         <article><span>BORRADORES</span><strong id="materialReceptionDraftCount">0</strong><small>abiertos</small></article>
-                        <article data-material-reception-attention><span>SIN FOTO DE DOCUMENTO</span><strong id="materialReceptionNoPhotoCount">0</strong><small>no se pueden confirmar</small></article>
+                        <article data-material-reception-attention><span>SIN FOTO DE DOCUMENTO</span><strong id="materialReceptionNoPhotoCount">0</strong><small>requieren documento o autorización provisional</small></article>
                         <article><span>CONFIRMADAS</span><strong id="materialReceptionConfirmedCount">0</strong><small>en esta página</small></article>
                         <article><span>FOLIOS VISIBLES</span><strong id="materialReceptionFolioCount">0</strong><small>en esta página</small></article>
                     </div>
@@ -362,6 +362,7 @@
 
                     <form class="material-receptions-filters" id="materialReceptionsFilters">
                         <label><span>Documento</span><select name="sin_foto_documento"><option value="">Todas</option><option value="1">Sin foto de documento</option></select></label>
+                        <label><span>Regularización</span><select name="regularizacion"><option value="">Todas</option><option value="pendiente">Provisionales pendientes</option><option value="vencida">Plazo vencido</option><option value="regularizada">Regularizadas</option><option value="retroactiva">Registro retroactivo</option></select></label>
                         <label><span>Buscar guía</span><input name="guia" maxlength="50" placeholder="Número de guía"></label>
                         <label><span>Estado</span><select name="estado"><option value="">Todos</option><option value="borrador">Borrador</option><option value="confirmada">Confirmada</option><option value="anulada">Anulada</option></select></label>
                         <button class="secondary-button" type="submit">Buscar</button>
@@ -369,6 +370,7 @@
 
                     <button class="secondary-button is-hidden" id="showMaterialReceptionEliminations" type="button">Evidencia de recepciones eliminadas</button>
                     <section id="materialReceptionEliminations" class="is-hidden" aria-label="Recepciones eliminadas"></section>
+                    <p id="materialReceptionRegularizationSummary" role="status"></p>
                     <p class="form-error" id="materialReceptionsError" role="alert"></p>
                     <div class="material-receptions-layout">
                         <section class="material-receptions-list" aria-labelledby="materialReceptionsListTitle">
@@ -413,6 +415,7 @@
                                     <label class="materials-wide"><span>Observación</span><textarea name="observacion" maxlength="2000" rows="2"></textarea></label>
                                 </div>
 
+                                @include('office.partials.material-reception-registration-fields')
                                 @include('office.partials.material-reception-transport')
 
                                 <div class="material-reception-lines-heading">
@@ -439,6 +442,8 @@
                             </footer>
                         </form>
                     </dialog>
+
+                    @include('office.partials.material-reception-regularization-dialogs')
 
                     <dialog class="materials-import material-reception-delete-dialog" id="materialReceptionDeleteDialog">
                         <form id="materialReceptionDeleteForm" novalidate>

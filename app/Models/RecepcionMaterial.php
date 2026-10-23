@@ -11,6 +11,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
+    'fecha_recepcion', 'provisional', 'registro_retroactivo', 'motivo_registro_tardio',
+    'fecha_limite_regularizacion', 'autorizado_por_user_id', 'autorizado_at', 'motivo_autorizacion',
+    'regularizado_por_user_id', 'regularizado_at', 'motivo_regularizacion',
     'operacion_id',
     'payload_hash',
     'temporada_id',
@@ -91,9 +94,25 @@ class RecepcionMaterial extends Model
         return $this->belongsTo(User::class, 'anulado_por_user_id');
     }
 
+    public function autorizadoPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'autorizado_por_user_id');
+    }
+
+    public function regularizadoPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'regularizado_por_user_id');
+    }
+
     protected function casts(): array
     {
         return [
+            'fecha_recepcion' => 'datetime',
+            'fecha_limite_regularizacion' => 'datetime',
+            'autorizado_at' => 'datetime',
+            'regularizado_at' => 'datetime',
+            'provisional' => 'boolean',
+            'registro_retroactivo' => 'boolean',
             'fecha_documento' => 'date',
             'estado' => EstadoRecepcionMaterial::class,
             'snapshot_confirmacion' => 'array',
