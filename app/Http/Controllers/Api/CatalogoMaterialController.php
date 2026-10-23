@@ -169,7 +169,6 @@ class CatalogoMaterialController extends Controller
             }
 
             if ($itemMaterial->foliosMateriales()->exists()) {
-                unset($datos['unidad_medida']);
                 if ($itemMaterial->cliente_material_id !== $datos['cliente_material_id']
                     && $itemMaterial->cliente()->value('codigo') !== 'GENERAL') {
                     abort(Response::HTTP_UNPROCESSABLE_ENTITY, 'El cliente no puede cambiar porque el ítem ya posee folios asociados.');

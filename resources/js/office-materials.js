@@ -3,6 +3,7 @@ import { openItemPhotoPanel, loadPrivateItemImages, releasePrivateItemImages } f
 import { createOperationalPoller } from './shared/operational-poller';
 import { filterMaterialItems, materialItemsSummary, normalizeSearchText } from './shared/material-item-search.js';
 import { filterMaterialProviders } from './shared/material-provider-search.js';
+import { createMaterialUnits } from './shared/material-units.js';
 import { createMaterialClassifications } from './office-material-classifications.js';
 
 const byId = (id) => document.getElementById(id);
@@ -422,7 +423,7 @@ function renderImportPreview() {
             ? 'Corrige la planilla y vuelve a previsualizarla. No se aplicó ningún cambio.'
             : 'La confirmación actualizará solo el catálogo. Los ítems ausentes permanecerán sin cambios.';
 }
-function renderAll() { renderSeasons(); renderClients(); renderProviders(); classifications.render(); renderItems(); renderDestinations(); renderDispatches(); renderInventory(); renderMetrics(); renderImportHistory(); }
+function renderAll() { renderSeasons(); renderClients(); renderProviders(); classifications.render(); renderItems(); renderDestinations(); renderDispatches(); renderInventory(); renderMetrics(); renderImportHistory(); unitCatalog.renderBase(); }
 
 function inventoryApiPath({ summary = false } = {}) {
     if (summary) return materialInventorySummaryPath;
@@ -463,6 +464,7 @@ async function loadInventoryPage(page = 1) {
 }
 
 const clientTransfers = createClientTransfers({ api, getIdentity: () => state.identity, getClients: seasonClients, getToken: () => state.token, uuid: operationUuid, onRefresh: loadAll });
+const unitCatalog = createMaterialUnits({ api, getItems: () => state.items || [], getToken: () => state.token, authorized: () => Boolean(state.token) && state.identity?.puede_administrar_catalogos_materiales === true, escapeHtml });
 const classifications = createMaterialClassifications({ api, getCatalogs: () => state.classifications, refresh: loadAll, toast, setBusy });
 
 async function loadAll() {
