@@ -29,6 +29,7 @@ async function fixture(records, options = {}) {
         const request = route.request(); const url = new URL(request.url());
         if (url.pathname === '/test') return route.fulfill({ body: html, contentType: 'text/html' });
         if (url.pathname === '/oficina/materiales/recepcion') return route.fulfill({ contentType: 'text/html', body: html.replace('</body>', `<script type="module">
+            document.querySelector('[data-office-shell]')?.remove();
             const app = document.getElementById('officeApp'); app.classList.remove('is-hidden'); app.dataset.materialsSection = 'recepcion';
             document.querySelectorAll('[data-materials-view]').forEach(node => node.classList.toggle('is-hidden', node.dataset.materialsView !== 'recepcion'));
             await import('/office-material-labels.js');
@@ -47,6 +48,8 @@ async function fixture(records, options = {}) {
     });
     await page.goto('http://localhost/test');
     await page.evaluate(async () => {
+        // Esta fixture monta solo Recepciones; la navegación tiene su propia suite y arranque.
+        document.querySelector('[data-office-shell]')?.remove();
         const app = document.getElementById('officeApp'); app.classList.remove('is-hidden'); app.dataset.materialsSection = 'recepciones';
         document.querySelectorAll('[data-materials-view]').forEach((node) => node.classList.toggle('is-hidden', node.dataset.materialsView !== 'recepciones'));
         await import('/office-material-receptions.js');
