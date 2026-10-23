@@ -187,10 +187,38 @@ class ConsultaSupervisionMateriales
         return ['tipo' => $evento['tipo'], 'fecha' => $evento['ocurrido_at'], 'user_id' => $evento['user_id'] ?? null,
             'motivo' => $evento['observacion'] ?? null, 'estado_anterior' => $datos['estado_anterior'] ?? null,
             'estado_resultante' => $datos['estado_resultante'] ?? null,
+            'registro' => $this->registroSeguro($datos['registro'] ?? null),
+            'registro_anterior' => $this->registroSeguro($datos['registro_anterior'] ?? null),
+            'registro_resultante' => $this->registroSeguro($datos['registro_resultante'] ?? null),
+            'documento_anterior' => $this->documentoSeguro($datos['antes'] ?? null),
+            'documento_resultante' => $this->documentoSeguro($datos['despues'] ?? null),
+            'fuera_plazo' => $datos['fuera_plazo'] ?? false,
             'folios_confirmados' => array_map(fn (array $folio) => array_intersect_key($folio, array_flip(['numero_folio', 'item_material_id', 'cantidad', 'bloqueado'])), array_slice($datos['folios'] ?? [], 0, 100)),
             'folios_confirmados_total' => count($datos['folios'] ?? []),
             'folios_anteriores' => array_slice($datos['folios_anteriores'] ?? [], 0, 100),
             'folios_resultantes' => array_slice($datos['folios_resultantes'] ?? [], 0, 100)];
+    }
+
+    private function registroSeguro(?array $registro): ?array
+    {
+        return $registro === null ? null : array_intersect_key($registro, array_flip([
+            'provisional', 'retroactivo', 'fecha_recepcion', 'fecha_limite', 'motivo', 'estado',
+            'autorizado_at', 'autorizado_por', 'motivo_autorizacion', 'regularizado_at', 'regularizado_por',
+            'motivo_regularizacion', 'regularizada_fuera_plazo',
+        ]));
+    }
+
+    private function documentoSeguro(?array $documento): ?array
+    {
+        if ($documento === null) {
+            return null;
+        }
+
+        return [
+            'numero_guia_despacho' => $documento['numero_guia_despacho'] ?? null,
+            'fecha_documento' => $documento['fecha_documento'] ?? null,
+            'detalles' => array_map(fn (array $detalle): array => array_intersect_key($detalle, array_flip(['id', 'item', 'unidad_medida', 'cantidad_documental'])), array_slice($documento['detalles'] ?? [], 0, 100)),
+        ];
     }
 
     private function periodo(Builder $q, array $f, string $columna): void

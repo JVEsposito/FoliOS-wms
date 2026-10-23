@@ -59,12 +59,13 @@ class ServicioRegularizacionRecepcionMaterial
                 if ($fotos->isEmpty()) {
                     throw new FotoDocumentoRecepcionRequerida;
                 }
-                $detalles = $recepcion->detalles()->lockForUpdate()->get()->keyBy('id');
+                $detalles = $recepcion->detalles()->with('item:id,codigo,nombre')->lockForUpdate()->get()->keyBy('id');
                 $ids = collect($datos['detalles'])->pluck('id');
                 if ($ids->duplicates()->isNotEmpty() || $ids->count() !== $detalles->count() || $ids->diff($detalles->keys())->isNotEmpty()) {
                     throw new DomainException('Incluye una vez cada detalle original de esta recepción, sin agregar ni eliminar productos.');
                 }
-                $antes = ['numero_guia_despacho' => $recepcion->numero_guia_despacho, 'fecha_documento' => $recepcion->fecha_documento?->toDateString(), 'detalles' => $detalles->map->only(['id', 'cantidad_documental'])->values()->all()];
+                $representarDetalle = fn ($detalle): array => ['id' => $detalle->id, 'item' => $detalle->item?->only(['codigo', 'nombre']), 'unidad_medida' => $detalle->unidad_medida, 'cantidad_documental' => $detalle->cantidad_documental];
+                $antes = ['numero_guia_despacho' => $recepcion->numero_guia_despacho, 'fecha_documento' => $recepcion->fecha_documento?->toDateString(), 'detalles' => $detalles->map($representarDetalle)->values()->all()];
                 foreach ($datos['detalles'] as $linea) {
                     // La unidad base del detalle original es inmutable; no se vuelve a convertir el inventario.
                     $detalles[$linea['id']]->update(['cantidad_documental' => UnidadesMateriales::convertir($linea['cantidad_documental'], '1')]);
@@ -82,7 +83,7 @@ class ServicioRegularizacionRecepcionMaterial
                     'recepcion_material_id' => $recepcion->id,
                     'operacion_id' => $datos['operacion_id'],
                     'tipo' => TipoEventoRecepcionMaterial::Regularizada,
-                    'datos' => ['payload_hash' => $hash, 'antes' => $antes, 'despues' => ['numero_guia_despacho' => $recepcion->numero_guia_despacho, 'fecha_documento' => $datos['fecha_documento'], 'detalles' => $datos['detalles']], 'version_anterior' => $version, 'version_resultante' => $version + 1, 'fuera_plazo' => $fueraPlazo, 'usuario' => $usuario->only(['id', 'name']), 'fotos_documento' => $fotos->map->only(['id', 'sha256'])->values()->all()],
+                    'datos' => ['payload_hash' => $hash, 'antes' => $antes, 'despues' => ['numero_guia_despacho' => $recepcion->numero_guia_despacho, 'fecha_documento' => $datos['fecha_documento'], 'detalles' => $detalles->map($representarDetalle)->values()->all()], 'version_anterior' => $version, 'version_resultante' => $version + 1, 'fuera_plazo' => $fueraPlazo, 'usuario' => $usuario->only(['id', 'name']), 'fotos_documento' => $fotos->map->only(['id', 'sha256'])->values()->all()],
                     'observacion' => trim($datos['motivo']), 'user_id' => $usuario->id, 'ocurrido_at' => now(),
                 ]);
 

@@ -145,6 +145,12 @@ class RegularizacionRecepcionMaterialApiTest extends TestCase
         $this->assertSame($snapshot, RecepcionMaterial::firstOrFail()->snapshot_confirmacion);
         $this->assertDatabaseCount('eventos_recepciones_materiales', 3);
         $this->postJson($url, [...$datos, 'numero_guia_despacho' => 'GUIA-OTRA'])->assertConflict();
+        $evento = EventoRecepcionMaterial::where('tipo', 'regularizada')->firstOrFail();
+        $this->getJson('/api/materiales/supervision/evidencia/evento/'.$evento->id)->assertOk()
+            ->assertJsonPath('data.evento.documento_anterior.detalles.0.cantidad_documental', null)
+            ->assertJsonPath('data.evento.documento_resultante.detalles.0.cantidad_documental', '12.000')
+            ->assertJsonPath('data.evento.documento_resultante.detalles.0.item.nombre', 'Film para recepción')
+            ->assertDontSee('payload_hash')->assertDontSee('ruta_original');
         $this->assertSame('regularizada', EventoRecepcionMaterial::latest('ocurrido_at')->where('tipo', 'regularizada')->firstOrFail()->tipo->value);
     }
 

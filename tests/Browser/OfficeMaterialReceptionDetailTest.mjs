@@ -281,6 +281,7 @@ test('una provisional requiere autorización con motivo y reintenta sin generar 
         await page.locator('[data-action="select"]').click();
         await page.locator('#materialReceptionDetailPhotos [data-confirm]').click();
         await page.locator('#materialReceptionAuthorizationForm [name="motivo_autorizacion"]').fill('Conteo supervisado; guía pendiente');
+        await page.screenshot({ path: resolve(root, 'storage/app/ui/oficina/pr8-provisional-autorizacion-pda.png'), fullPage: true });
         await page.locator('#materialReceptionAuthorizationForm [type="submit"]').click();
         await page.waitForFunction(() => document.querySelector('[data-photo-error]')?.textContent.includes('Reintenta'));
         await page.locator('#materialReceptionDetailPhotos [data-confirm]').click();
@@ -315,6 +316,7 @@ test('regularizar en pantalla móvil conserva el UUID tras perder la respuesta y
         await page.waitForFunction(() => document.querySelector('#materialReceptionRegularizationError')?.textContent.includes('Reintenta'));
         await form.locator('[type="submit"]').click();
         await page.waitForFunction(() => document.querySelector('#materialReceptionDetailLines')?.textContent.includes('Jefa bodega'));
+        await page.screenshot({ path: resolve(root, 'storage/app/ui/oficina/pr8-provisional-regularizada-pda.png'), fullPage: true });
         assert.deepEqual(requests[0], requests[1]); assert.equal(requests.length, 2);
         assert.deepEqual(errors, []);
     } finally { await browser.close(); }

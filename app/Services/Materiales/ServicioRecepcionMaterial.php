@@ -542,6 +542,7 @@ class ServicioRecepcionMaterial
                 $usuario,
                 $operacionId,
                 ['folios' => $foliosGenerados, 'registro' => app(RegistroRecepcionMaterial::class)->representar($recepcion), 'fuera_plazo' => $recepcion->fecha_limite_regularizacion?->isPast() ?? false],
+                $requiereAutorizacion ? $recepcion->motivo_autorizacion : null,
             );
 
             return $this->cargar($recepcion->refresh());
