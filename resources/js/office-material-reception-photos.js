@@ -1,5 +1,5 @@
 /** Evidencia privada: las URLs temporales no llevan tokens y se liberan al cerrar. */
-export function createReceptionPhotosPanel(root, { getReception, token, uuid, canManage, canAdminister, onChange, onConfirm }) {
+export function createReceptionPhotosPanel(root, { getReception, token, uuid, canManage, canAdminister, canConfirm = canManage, onChange, onConfirm }) {
     let urls = [];
     let generation = 0;
     let busy = false;
@@ -34,7 +34,7 @@ export function createReceptionPhotosPanel(root, { getReception, token, uuid, ca
             </section>`;
         }).join('')}
         ${fotos.length ? '<button type="button" data-zip>Descargar fotos (ZIP)</button>' : ''}
-        ${reception.estado === 'borrador' && canManage() ? `<p>${fotos.some((f) => f.tipo === 'documento') ? 'Documento recibido. Puedes confirmar la recepción.' : 'Falta la foto de la guía de despacho o factura. Agrégala antes de confirmar.'}</p><button type="button" class="primary-button" data-confirm ${fotos.some((f) => f.tipo === 'documento') ? '' : 'disabled'}>Confirmar recepción</button>` : ''}
+        ${reception.estado === 'borrador' && canConfirm() ? `<p>${fotos.some((f) => f.tipo === 'documento') ? 'Documento recibido. Puedes confirmar la recepción.' : 'Falta la foto de la guía de despacho o factura. Agrégala antes de confirmar.'}</p><button type="button" class="primary-button" data-confirm ${fotos.some((f) => f.tipo === 'documento') ? '' : 'disabled'}>Confirmar recepción</button>` : ''}
         <div data-pending></div><p role="alert" data-photo-error></p>`;
         renderPending();
         await Promise.all(fotos.map(async (foto) => {

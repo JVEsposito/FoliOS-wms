@@ -46,7 +46,7 @@ class GuardarDestinoMaterialRequest extends FormRequest
                 : null,
             'codigo_externo' => $this->filled('codigo_externo')
                 ? trim((string) $this->input('codigo_externo'))
-                : null,
+                : ($this->has('codigo_externo') ? null : $this->route('destinoMaterial')?->codigo_externo),
         ]);
     }
 }

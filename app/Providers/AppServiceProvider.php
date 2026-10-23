@@ -337,7 +337,7 @@ class AppServiceProvider extends ServiceProvider
         );
         Gate::define(
             'transferir-folios-materiales-clientes',
-            fn (User $usuario): bool => $alcance->puedeCorregirItemsEstibadosMateriales($usuario),
+            fn (User $usuario): bool => $alcance->puedeTransferirFoliosMaterialesClientes($usuario),
         );
         Gate::define(
             'corregir-items-estibados-materiales',
@@ -363,6 +363,14 @@ class AppServiceProvider extends ServiceProvider
             'administrar-recepciones-materiales',
             fn (User $usuario): bool => $alcance->puedeAdministrarRecepcionesMateriales($usuario),
         );
+        Gate::define('confirmar-recepciones-materiales', fn (User $usuario): bool => $alcance->puedeConfirmarRecepcionesMateriales($usuario));
+        Gate::define('eliminar-recepciones-materiales', fn (User $usuario): bool => $alcance->puedeEliminarRecepcionesMateriales($usuario));
+        Gate::define('supervisar-recepciones-materiales', fn (User $usuario): bool => $alcance->puedeSupervisarRecepcionesMateriales($usuario));
+        Gate::define('aprobar-ajustes-materiales', fn (User $usuario): bool => $alcance->puedeAprobarAjustesMateriales($usuario));
+        Gate::define('autorizar-recepciones-tardias-materiales', fn (User $usuario): bool => $alcance->puedeAutorizarRecepcionesTardiasMateriales($usuario));
+        Gate::define('autorizar-despachos-tardios-materiales', fn (User $usuario): bool => $alcance->puedeAutorizarDespachosTardiosMateriales($usuario));
+        Gate::define('consultar-eliminaciones-recepciones-materiales', fn (User $usuario): bool => $alcance->puedeAdministrarRecepcionesMateriales($usuario) || $alcance->puedeEliminarRecepcionesMateriales($usuario));
+
         Gate::define(
             'imprimir-etiquetas-materiales',
             fn (User $usuario): bool => $alcance->puedeImprimirEtiquetasMateriales($usuario),

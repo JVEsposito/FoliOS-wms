@@ -7,7 +7,8 @@
 <x-office.navigation domain="materiales" office="items" context="CATÁLOGO DE ÍTEMS" icon="▦" />
 <div class="custody-shell"><header class="custody-heading"><div><p class="eyebrow">MATERIALES</p><h1>Ítems</h1><p>Descarga el catálogo, edita sus columnas y vuelve a importarlo desde Catálogos. Los encabezados grises del Excel son informativos.</p></div><button type="button" id="itemReload" class="secondary-button">Actualizar</button></header>
 <section class="custody-card"><form id="itemFilters" class="custody-filters"><label>Temporada<select name="temporada_id"><option value="">Todas</option></select></label><label>Cliente<select name="cliente_id"><option value="">Todos</option></select></label><label>Categoría<select name="categoria"><option value="">Todas</option></select></label>
-<label>Tipo<select name="tipo_item"><option value="">Todos</option><option value="insumo">Insumo</option><option value="material_mp">Material MP</option><option value="material_pt">Material PT</option><option value="sin_tipo">Sin tipo</option></select></label>
+<label>Tipo de ítem<select name="tipo_item_material_id"><option value="">Todos</option></select></label>
+<label>Uso del material<select name="tipo_item"><option value="">Todos</option><option value="insumo">Insumo</option><option value="material_mp">Material MP</option><option value="material_pt">Material PT</option><option value="sin_tipo">Sin tipo</option></select></label>
 <label>Estado<select name="estado"><option value="todos">Todos</option><option value="activos">Activos</option><option value="inactivos">Inactivos</option></select></label></form>
 <div class="materials-actions"><button class="primary-button" type="button" data-export-catalog="xlsx">Descargar catálogo</button><button class="secondary-button" type="button" data-export-catalog="csv">Descargar CSV</button></div>
 <p id="itemSummary"></p><p id="itemNotice" role="alert"></p>

@@ -3,6 +3,8 @@ import { openItemPhotoPanel, loadPrivateItemImages, releasePrivateItemImages } f
 import { createOperationalPoller } from './shared/operational-poller';
 import { filterMaterialItems, materialItemsSummary, normalizeSearchText } from './shared/material-item-search.js';
 import { filterMaterialProviders } from './shared/material-provider-search.js';
+import { createMaterialUnits } from './shared/material-units.js';
+import { createMaterialClassifications } from './office-material-classifications.js';
 
 const byId = (id) => document.getElementById(id);
 const elements = {
@@ -65,6 +67,7 @@ const state = {
     seasons: [], selectedSeasonId: null, clients: [], providers: [], items: [], destinations: [], dispatches: [], inventory: [], inventorySummary: [], inventoryItems: [], inventoryTotals: {}, inventoryMeta: null, inventoryCurrentPage: 1, imports: [], importPreview: null, dispatchOperationId: null, directDispatchOperationId: null, directDispatchFolioId: null, directConsumptionOperationId: null, directConsumptionFolioId: null, correctionOperationId: null,
     cancellationOperations: new Map(), blockOperations: new Map(), operationalRefreshPromise: null, inventorySyncedAt: null,
     regularizationItemId: null, regularizationOperationId: null,
+    classifications: {},
     assignees: [], dispatchFolios: new Map(), dispatchAllocations: new Map(), dispatchPreviewVersion: 0, reassignOperationId: null, traceDispatchId: null,
     operationalPoller: null,
 };
@@ -230,7 +233,7 @@ function renderSeasons() {
 function renderClients() {
     const clients = seasonClients();
     elements.clientsSummary.textContent = `${clients.length} registrados`;
-    elements.clientList.innerHTML = clients.map((client) => `<article class="material-row${client.activo ? '' : ' is-inactive'}"><div><strong>${escapeHtml(client.codigo)} · ${escapeHtml(client.nombre)}</strong><small>${client.items_activos} ítems activos${client.codigo_externo ? ` · ERP ${escapeHtml(client.codigo_externo)}` : ''} · administrado en Accesos</small></div></article>`).join('') || '<p class="empty-state">No existen clientes en esta temporada. Créalo o actívalo en Accesos.</p>';
+    elements.clientList.innerHTML = clients.map((client) => `<article class="material-row${client.activo ? '' : ' is-inactive'}"><div><strong>${escapeHtml(client.codigo)} · ${escapeHtml(client.nombre)}</strong><small>${client.items_activos} ítems activos · administrado en Accesos</small></div></article>`).join('') || '<p class="empty-state">No existen clientes en esta temporada. Créalo o actívalo en Accesos.</p>';
     const current = elements.itemForm.elements.cliente_material_id.value;
     elements.itemForm.elements.cliente_material_id.innerHTML = '<option value="">Selecciona un cliente</option>' + clients.filter((client) => client.activo).map((client) => `<option value="${client.id}">${escapeHtml(client.codigo)} · ${escapeHtml(client.nombre)}</option>`).join('');
     if ([...elements.itemForm.elements.cliente_material_id.options].some((option) => option.value === current)) elements.itemForm.elements.cliente_material_id.value = current;
@@ -285,7 +288,7 @@ function renderProviderList() {
         const clients = (provider.clientes || []).map((client) => `${client.codigo} · ${client.nombre}`).join(', ');
         const categories = (provider.categorias || []).map((entry) => entry.categoria).filter(Boolean);
         const commercialCode = provider.codigo && provider.codigo !== provider.codigo_interno ? ` · Tarja: ${escapeHtml(provider.codigo)}` : '';
-        return `<article class="material-row${provider.activo ? '' : ' is-inactive'}"><div><strong>${escapeHtml(provider.codigo_interno || provider.codigo)} · ${escapeHtml(provider.nombre)}</strong><small>${escapeHtml(clients || 'Sin clientes asociados')} · ${escapeHtml([...new Set(categories)].join(', ') || 'Sin categorías')}${commercialCode}${provider.codigo_externo ? ` · ERP ${escapeHtml(provider.codigo_externo)}` : ''}</small></div><button data-edit-provider="${provider.id}" type="button">Editar</button></article>`;
+        return `<article class="material-row${provider.activo ? '' : ' is-inactive'}"><div><strong>${escapeHtml(provider.codigo_interno || provider.codigo)} · ${escapeHtml(provider.nombre)}</strong><small>${escapeHtml(clients || 'Sin clientes asociados')} · ${escapeHtml([...new Set(categories)].join(', ') || 'Sin categorías')}${commercialCode}</small></div><button data-edit-provider="${provider.id}" type="button">Editar</button></article>`;
     }).join('') || `<p class="empty-state">${state.providers.length ? 'No hay proveedores que coincidan con los filtros.' : 'No existen proveedores registrados.'}</p>`;
 }
 function renderItems() {
@@ -296,6 +299,7 @@ function renderItems() {
     const query = elements.itemSearch?.value || '';
     const items = filterMaterialItems(allItems, {
         query,
+        typeId: byId('itemsMaterialClassificationFilter')?.value || '',
         type: elements.itemTypeFilter?.value || '',
         includeInactive: elements.itemShowInactive?.checked !== false,
     });
@@ -305,7 +309,7 @@ function renderItems() {
         const consolidated = item.regularizacion?.item_canonico;
         const detail = consolidated
             ? `Consolidado en ${consolidated.codigo} · ${consolidated.nombre}`
-            : `${item.categoria || 'Sin categoría comercial'} · ${itemTypeLabel(item.categoria_operacional)} · ${item.unidad_medida} · ${item.folios_activos} folios activos`;
+            : `${item.categoria || 'Sin categoría comercial'} · ${item.tipo_item?.nombre || itemTypeLabel(item.categoria_operacional)} · ${item.unidad_medida} · ${item.folios_activos} folios activos`;
         const actions = canAdminister && !consolidated
             ? `<div class="material-row__actions"><button data-edit-item="${item.id}" type="button">Editar</button>${canRegularize && item.activo && item.categoria_operacional === 'material_pt' ? `<button data-regularize-item="${item.id}" type="button">Consolidar con MP</button>` : ''}</div>`
             : '';
@@ -419,7 +423,7 @@ function renderImportPreview() {
             ? 'Corrige la planilla y vuelve a previsualizarla. No se aplicó ningún cambio.'
             : 'La confirmación actualizará solo el catálogo. Los ítems ausentes permanecerán sin cambios.';
 }
-function renderAll() { renderSeasons(); renderClients(); renderProviders(); renderItems(); renderDestinations(); renderDispatches(); renderInventory(); renderMetrics(); renderImportHistory(); }
+function renderAll() { renderSeasons(); renderClients(); renderProviders(); classifications.render(); renderItems(); renderDestinations(); renderDispatches(); renderInventory(); renderMetrics(); renderImportHistory(); unitCatalog.renderBase(); }
 
 function inventoryApiPath({ summary = false } = {}) {
     if (summary) return materialInventorySummaryPath;
@@ -460,6 +464,8 @@ async function loadInventoryPage(page = 1) {
 }
 
 const clientTransfers = createClientTransfers({ api, getIdentity: () => state.identity, getClients: seasonClients, getToken: () => state.token, uuid: operationUuid, onRefresh: loadAll });
+const unitCatalog = createMaterialUnits({ api, getItems: () => state.items || [], getToken: () => state.token, authorized: () => Boolean(state.token) && state.identity?.puede_administrar_catalogos_materiales === true, escapeHtml });
+const classifications = createMaterialClassifications({ api, getCatalogs: () => state.classifications, refresh: loadAll, toast, setBusy });
 
 async function loadAll() {
     window.dispatchEvent(new Event('materiales:reposicion-actualizada'));
@@ -489,6 +495,7 @@ async function loadAll() {
         state.seasons = catalog[0].data;
         state.clients = catalog[1].data;
         state.items = catalog[2].data;
+        state.classifications = catalog[2].clasificaciones || {};
         state.destinations = catalog[3].data;
         state.imports = catalog[4].data;
         state.providers = catalog[5].data;
@@ -496,6 +503,7 @@ async function loadAll() {
         state.seasons = catalog.temporada ? [catalog.temporada] : [];
         state.clients = catalog.clientes;
         state.items = catalog.items;
+        state.classifications = {};
         state.destinations = catalog.destinos;
         state.imports = [];
         state.providers = [];
@@ -683,7 +691,7 @@ async function openDispatchTrace(dispatchId) {
         elements.dispatchReassignForm.elements.asignado_a_user_id.value = dispatch.asignado_a?.id || '';
     } catch (error) { elements.dispatchTraceBody.textContent = error.message; }
 }
-function resetItemForm() { elements.itemForm.reset(); elements.itemForm.elements.id.value = ''; elements.itemForm.elements.activo.checked = true; elements.itemCancel.classList.add('is-hidden'); elements.itemError.textContent = ''; if (elements.itemEditorTitle) elements.itemEditorTitle.textContent = 'Nuevo ítem'; if (elements.itemEditor) elements.itemEditor.open = false; }
+function resetItemForm() { elements.itemForm.reset(); classifications.resetSelection(); elements.itemForm.elements.id.value = ''; elements.itemForm.elements.activo.checked = true; elements.itemCancel.classList.add('is-hidden'); elements.itemError.textContent = ''; if (elements.itemEditorTitle) elements.itemEditorTitle.textContent = 'Nuevo ítem'; if (elements.itemEditor) elements.itemEditor.open = false; }
 function resetProviderForm() { elements.providerForm.reset(); elements.providerInternalCode.value = ''; elements.providerForm.elements.id.value = ''; elements.providerForm.elements.activo.checked = true; elements.providerCancel.classList.add('is-hidden'); elements.providerError.textContent = ''; renderProviders(); }
 function resetDestinationForm() { elements.destinationForm.reset(); elements.destinationForm.elements.id.value = ''; elements.destinationForm.elements.activo.checked = true; elements.destinationCancel.classList.add('is-hidden'); elements.destinationError.textContent = ''; }
 function resetImportPreview() { state.importPreview = null; elements.importError.textContent = ''; renderImportPreview(); }
@@ -709,7 +717,7 @@ elements.seasonSelector.addEventListener('change', () => { state.selectedSeasonI
 elements.providerList.addEventListener('click', (event) => {
     const button = event.target.closest('[data-edit-provider]'); if (!button) return;
     const provider = state.providers.find((candidate) => candidate.id === button.dataset.editProvider); if (!provider) return;
-    for (const field of ['id', 'codigo', 'nombre', 'codigo_externo']) elements.providerForm.elements[field].value = provider[field] || '';
+    for (const field of ['id', 'codigo', 'nombre']) elements.providerForm.elements[field].value = provider[field] || '';
     elements.providerInternalCode.value = provider.codigo_interno || '';
     if (provider.codigo === provider.codigo_interno) elements.providerForm.elements.codigo.value = '';
     elements.providerForm.elements.activo.checked = provider.activo;
@@ -719,7 +727,7 @@ elements.providerList.addEventListener('click', (event) => {
     renderProviderCategories(categoryKeys);
     elements.providerCancel.classList.remove('is-hidden');
 });
-elements.itemList.addEventListener('click', (event) => { const button = event.target.closest('[data-edit-item]'); if (!button) return; const item = state.items.find((candidate) => candidate.id === button.dataset.editItem); if (!item) return; for (const field of ['id', 'codigo', 'nombre', 'categoria', 'categoria_operacional', 'unidad_medida', 'codigo_externo', 'dias_alerta_vencimiento', 'stock_minimo', 'punto_reorden', 'stock_maximo']) elements.itemForm.elements[field].value = item[field] ?? ''; elements.itemForm.elements.cliente_material_id.value = item.cliente?.id || ''; elements.itemForm.elements.activo.checked = item.activo; elements.itemCancel.classList.remove('is-hidden'); if (elements.itemEditorTitle) elements.itemEditorTitle.textContent = `Editar ítem ${item.codigo}`; if (elements.itemEditor) elements.itemEditor.open = true; (elements.itemEditor || elements.itemForm).scrollIntoView({ block: 'start', behavior: 'smooth' }); elements.itemForm.elements.nombre.focus({ preventScroll: true }); });
+elements.itemList.addEventListener('click', (event) => { const button = event.target.closest('[data-edit-item]'); if (!button) return; const item = state.items.find((candidate) => candidate.id === button.dataset.editItem); if (!item) return; for (const field of ['id', 'codigo', 'nombre', 'unidad_medida', 'dias_alerta_vencimiento', 'stock_minimo', 'punto_reorden', 'stock_maximo']) elements.itemForm.elements[field].value = item[field] ?? ''; classifications.selectItem(item); elements.itemForm.elements.cliente_material_id.value = item.cliente?.id || ''; elements.itemForm.elements.activo.checked = item.activo; elements.itemCancel.classList.remove('is-hidden'); if (elements.itemEditorTitle) elements.itemEditorTitle.textContent = `Editar ítem ${item.codigo}`; if (elements.itemEditor) elements.itemEditor.open = true; (elements.itemEditor || elements.itemForm).scrollIntoView({ block: 'start', behavior: 'smooth' }); elements.itemForm.elements.nombre.focus({ preventScroll: true }); });
 elements.itemList.addEventListener('click', (event) => {
     const button = event.target.closest('[data-regularize-item]');
     if (!button || !elements.regularizationDialog) return;
@@ -761,7 +769,7 @@ elements.regularizationForm?.addEventListener('submit', async (event) => {
 });
 [elements.regularizationClose, elements.regularizationCancel].filter(Boolean).forEach((button) =>
     button.addEventListener('click', () => elements.regularizationDialog.close()));
-elements.destinationList.addEventListener('click', (event) => { const button = event.target.closest('[data-edit-destination]'); if (!button) return; const destination = state.destinations.find((candidate) => candidate.id === button.dataset.editDestination); if (!destination) return; for (const field of ['id', 'nombre', 'centro_costo', 'descripcion', 'codigo_externo']) elements.destinationForm.elements[field].value = destination[field] || ''; elements.destinationForm.elements.activo.checked = destination.activo; elements.destinationCancel.classList.remove('is-hidden'); });
+elements.destinationList.addEventListener('click', (event) => { const button = event.target.closest('[data-edit-destination]'); if (!button) return; const destination = state.destinations.find((candidate) => candidate.id === button.dataset.editDestination); if (!destination) return; for (const field of ['id', 'nombre', 'centro_costo', 'descripcion']) elements.destinationForm.elements[field].value = destination[field] || ''; elements.destinationForm.elements.activo.checked = destination.activo; elements.destinationCancel.classList.remove('is-hidden'); });
 elements.providerClientOptions.addEventListener('change', () => renderProviderCategories());
 elements.providerSearch.addEventListener('input', renderProviderList);
 elements.providerClientFilter.addEventListener('change', renderProviderList);
@@ -786,6 +794,7 @@ elements.itemSearch?.addEventListener('keydown', (event) => {
     renderItems();
 });
 elements.itemTypeFilter?.addEventListener('change', renderItems);
+byId('itemsMaterialClassificationFilter')?.addEventListener('change', renderItems);
 elements.itemShowInactive?.addEventListener('change', renderItems); elements.destinationCancel.addEventListener('click', resetDestinationForm);
 elements.importOpen.addEventListener('click', () => elements.importDialog.showModal());
 elements.importClose.addEventListener('click', () => elements.importDialog.close());

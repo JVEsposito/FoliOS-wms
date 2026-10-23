@@ -13,10 +13,11 @@ class ServicioCatalogoItemsMateriales
 
     public function consulta(array $filtros): Builder
     {
-        return ItemMaterial::query()->with(['cliente.temporada', 'actualizadoPor:id,name', 'fotoPrincipal'])->withCount('fotos')
+        return ItemMaterial::query()->with(['cliente.temporada', 'actualizadoPor:id,name', 'fotoPrincipal', 'tipoItem'])->withCount('fotos')
             ->when($filtros['temporada_id'] ?? null, fn ($q, $id) => $q->whereHas('cliente', fn ($c) => $c->where('temporada_material_id', $id)))
             ->when($filtros['cliente_id'] ?? null, fn ($q, $id) => $q->where('cliente_material_id', $id))
             ->when($filtros['categoria'] ?? null, fn ($q, $c) => $q->where('categoria', $c))
+            ->when($filtros['tipo_item_material_id'] ?? null, fn ($q, $id) => $q->where('tipo_item_material_id', $id))
             ->when($filtros['tipo_item'] ?? null, fn ($q, $t) => $t === 'sin_tipo' ? $q->whereNull('categoria_operacional') : $q->where('categoria_operacional', $t))
             ->when(($filtros['estado'] ?? 'todos') !== 'todos', fn ($q) => $q->where('activo', $filtros['estado'] === 'activos'));
     }

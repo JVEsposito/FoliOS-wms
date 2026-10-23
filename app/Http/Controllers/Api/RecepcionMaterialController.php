@@ -60,7 +60,7 @@ class RecepcionMaterialController extends Controller
         $clienteIds = $clientesMateriales->pluck('cliente_id')->unique()->values();
         $clienteIdsPorCatalogo = $clientesMateriales->pluck('cliente_id', 'id');
 
-        $items = ItemMaterial::query()->with('fotoPrincipal')
+        $items = ItemMaterial::query()->with(['fotoPrincipal', 'conversionesUnidad.origen'])
             ->whereIn('cliente_material_id', $clienteMaterialIds)
             ->where('activo', true)
             ->whereNotNull('categoria')
@@ -144,6 +144,9 @@ class RecepcionMaterialController extends Controller
                 'categoria_operacional' => $item->categoria_operacional->value,
                 'categoria_operacional_etiqueta' => $item->categoria_operacional->etiqueta(),
                 'unidad_medida' => $item->unidad_medida,
+                'conversiones_unidad' => $item->conversionesUnidad->filter(fn ($c) => $c->activa && $c->origen->activa && $c->unidad_base_id === $item->unidad_material_id)->map(fn ($c) => [
+                    'unidad_origen' => $c->origen->codigo, 'factor' => $c->factor, 'version' => $c->version,
+                ])->values(),
             ])->values(),
         ]);
     }
@@ -170,7 +173,7 @@ class RecepcionMaterialController extends Controller
             ->when($request->query('guia'), fn ($query, $guia) => $query
                 ->where('numero_guia_despacho', 'like', '%'.trim((string) $guia).'%'));
 
-        if (! $usuario->can('anular-recepciones-materiales')) {
+        if (! $usuario->can('supervisar-recepciones-materiales')) {
             if ($usuario->can('gestionar-recepciones-materiales')) {
                 $consulta->where(function ($query) use ($usuario): void {
                     $query->where('estado', EstadoRecepcionMaterial::Confirmada->value)
@@ -402,8 +405,8 @@ class RecepcionMaterialController extends Controller
     {
         $usuario = $request->user();
 
-        return $usuario->can('anular-recepciones-materiales')
-            || ($usuario->can('gestionar-recepciones-materiales')
+        return $usuario->can('supervisar-recepciones-materiales')
+            || (($usuario->can('gestionar-recepciones-materiales') || $usuario->can('confirmar-recepciones-materiales'))
                 && $recepcion->creado_por_user_id === $usuario->id);
     }
 }

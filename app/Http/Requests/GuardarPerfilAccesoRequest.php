@@ -5,6 +5,7 @@ namespace App\Http\Requests;
 use App\Enums\RolUsuario;
 use App\Services\Autorizacion\CatalogoModulosAcceso;
 use App\Services\Autorizacion\CatalogoOficinas;
+use App\Services\Autorizacion\CatalogoPermisosMateriales;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
@@ -43,6 +44,8 @@ class GuardarPerfilAccesoRequest extends FormRequest
             'modulos' => ['required', 'array', 'min:1'],
             'modulos.*' => ['required', 'string', 'distinct', Rule::in($catalogo->claves())],
             'modulos_tablet' => ['present', 'array'],
+            'permisos_materiales' => ['sometimes', 'array', 'max:40'],
+            'permisos_materiales.*' => ['required', 'string', 'distinct', Rule::in(app(CatalogoPermisosMateriales::class)->claves())],
             'modulos_tablet.*' => [
                 'required',
                 'string',
@@ -69,6 +72,16 @@ class GuardarPerfilAccesoRequest extends FormRequest
             }
 
             $catalogo = app(CatalogoModulosAcceso::class);
+            $compatiblesMateriales = app(CatalogoPermisosMateriales::class)->compatibles(
+                (array) $this->input('modulos', []), $this->input('rol_base') === RolUsuario::Consulta->value,
+            );
+            if (array_diff((array) $this->input('permisos_materiales', []), $compatiblesMateriales) !== []) {
+                $validator->errors()->add('permisos_materiales', 'Cada acción de Materiales requiere su oficina habilitada y un perfil que no sea de solo consulta.');
+            }
+            if (in_array('inventario.aprobar_ajustes', (array) $this->input('permisos_materiales', []), true)
+                && ! in_array($this->input('rol_base'), ['administrador', 'supervisor_materiales'], true)) {
+                $validator->errors()->add('permisos_materiales', 'La aprobación de tomas requiere nivel Administrador o Supervisor de materiales.');
+            }
             $compatibles = $catalogo->modulosTabletCompatiblesCon(
                 (array) $this->input('modulos', []),
             );

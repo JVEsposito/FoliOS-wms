@@ -1,4 +1,5 @@
 import { createReceptionPhotosPanel } from './office-material-reception-photos.js';
+import { createReceptionTransport } from './office-material-reception-transport.js';
 import './office-material-reception-import.js';
 
 const receptionElements = {
@@ -44,6 +45,11 @@ const receptionElements = {
     warning: document.getElementById('materialReceptionConfirmedWarning'),
     saveDraft: document.getElementById('saveMaterialReceptionDraft'),
     saveConfirm: document.getElementById('saveAndConfirmMaterialReception'),
+    printNotice: document.getElementById('materialReceptionPrintNotice'),
+    printNoticeText: document.getElementById('materialReceptionPrintNoticeText'),
+    printLink: document.getElementById('materialReceptionPrintLink'),
+    printFromForm: document.getElementById('printMaterialReceptionFromForm'),
+    dismissPrintNotice: document.getElementById('dismissMaterialReceptionPrintNotice'),
     deleteDialog: document.getElementById('materialReceptionDeleteDialog'),
     deleteForm: document.getElementById('materialReceptionDeleteForm'),
     deleteSummary: document.getElementById('materialReceptionDeleteSummary'),
@@ -68,8 +74,9 @@ const receptionState = {
     loadingPromise: null,
 };
 
+const transportPanel = receptionElements.form ? createReceptionTransport(receptionElements.form, receptionApi) : null;
 const photosPanel = receptionElements.photos ? createReceptionPhotosPanel(receptionElements.photos, {
-    getReception: () => receptionState.current, token: receptionToken, uuid: receptionUuid, canManage: receptionCanManage, canAdminister: receptionCanAdminister,
+    getReception: () => receptionState.current, token: receptionToken, uuid: receptionUuid, canManage: receptionCanManage, canAdminister: receptionCanAdminister, canConfirm: receptionCanConfirm,
     onChange: refreshReceptionPhotos,
     onConfirm: async () => {
         const current = receptionState.current;
@@ -83,7 +90,7 @@ const photosPanel = receptionElements.photos ? createReceptionPhotosPanel(recept
     },
 }) : null;
 const detailPhotosPanel = receptionElements.detailPhotos ? createReceptionPhotosPanel(receptionElements.detailPhotos, {
-    getReception: () => receptionState.selected, token: receptionToken, uuid: receptionUuid, canManage: receptionCanManage, canAdminister: receptionCanAdminister,
+    getReception: () => receptionState.selected, token: receptionToken, uuid: receptionUuid, canManage: receptionCanManage, canAdminister: receptionCanAdminister, canConfirm: receptionCanConfirm,
     onChange: refreshReceptionPhotos,
     onConfirm: async () => {
         const selected = receptionState.selected;
@@ -108,7 +115,11 @@ async function confirmReception(record) {
     confirmation.pending = receptionApi(`/api/materiales/recepciones/${record.id}/confirmar`, {
         method: 'POST', body: JSON.stringify({ operacion_id: confirmation.operationId, version_conocida: record.version }),
     });
-    try { return await confirmation.pending; }
+    try {
+        const response = await confirmation.pending;
+        offerReceptionPrinting(response.data);
+        return response;
+    }
     finally { confirmation.pending = null; }
 }
 
@@ -187,6 +198,14 @@ function receptionCanManage() {
     return receptionCapabilities().puede_gestionar_recepciones_materiales === true;
 }
 
+function receptionCanConfirm() {
+    return (receptionCapabilities().puede_confirmar_recepciones_materiales ?? receptionCapabilities().puede_gestionar_recepciones_materiales) === true;
+}
+
+function receptionCanDelete() {
+    return (receptionCapabilities().puede_eliminar_recepciones_materiales ?? receptionCapabilities().puede_administrar_recepciones_materiales) === true;
+}
+
 function receptionCanAdminister() {
     return receptionCapabilities().puede_administrar_recepciones_materiales === true;
 }
@@ -207,6 +226,21 @@ function receptionUuid() {
     bytes[8] = (bytes[8] & 0x3f) | 0x80;
     const hex = [...bytes].map((value) => value.toString(16).padStart(2, '0')).join('');
     return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+function receptionCanPrint() {
+    return receptionCapabilities().puede_imprimir_etiquetas_materiales === true;
+}
+
+function receptionPrintUrl(id) {
+    return `/oficina/materiales/recepcion?origen=recepcion&id=${encodeURIComponent(id)}`;
+}
+
+function offerReceptionPrinting(record) {
+    if (record?.estado !== 'confirmada' || !receptionCanPrint()) return;
+    receptionElements.printNoticeText.textContent = `Guía ${record.numero_guia_despacho} confirmada. Puedes imprimir todos sus folios o seleccionar algunos.`;
+    receptionElements.printLink.href = receptionPrintUrl(record.id);
+    receptionElements.printNotice.classList.remove('is-hidden');
 }
 
 function receptionError(data, fallback) {
@@ -279,7 +313,7 @@ function receptionFolioCount(record) {
 
 function renderReceptionList() {
     const admin = receptionCanAdminister();
-    receptionElements.showEliminations?.classList.toggle('is-hidden', !admin);
+    receptionElements.showEliminations?.classList.toggle('is-hidden', !(admin || receptionCanDelete()));
     const counts = receptionState.records.reduce((result, record) => {
         result[record.estado] = (result[record.estado] || 0) + 1; return result;
     }, {});
@@ -343,11 +377,17 @@ function renderReceptionDetail() {
     receptionElements.detailState.textContent = { borrador: 'Recepción en borrador', confirmada: 'Recepción confirmada', anulada: 'Recepción anulada' }[record.estado];
     receptionElements.detailTitle.textContent = `Guía ${record.numero_guia_despacho}`;
     receptionElements.detailMeta.textContent = `Cliente ${record.cliente?.nombre || '—'} (${record.cliente?.codigo || '—'}), proveedor ${record.proveedor?.nombre || '—'}${record.orden_compra ? `, OC ${record.orden_compra}` : ''}`;
+    if (record.transporte?.conductor) receptionElements.detailMeta.textContent += ` · Conductor ${record.transporte.conductor.nombre} (${record.transporte.conductor.rut})`;
+    if (record.patente) receptionElements.detailMeta.textContent += ` · Camión ${record.patente}`;
+    if (record.transportista) receptionElements.detailMeta.textContent += ` · Transportista ${record.transportista}`;
     const action = (name, text) => `<button type="button" class="secondary-button" data-action="${name}" data-id="${receptionEscape(record.id)}">${text}</button>`;
-    receptionElements.detailActions.innerHTML = action('view', 'Ver formulario')
+    const printAction = record.estado === 'confirmada' && receptionCanPrint()
+        ? `<a class="secondary-button" href="${receptionPrintUrl(record.id)}">Imprimir folios</a>` : '';
+    receptionElements.detailActions.innerHTML = printAction + action('view', 'Ver formulario')
         + (record.estado === 'confirmada' ? action('sampling', 'Registro de muestreo') : '')
-        + (receptionCanAdminister() ? (record.estado !== 'anulada' ? action('edit', 'Editar') : '') + action('delete', 'Eliminar') : '');
-    receptionElements.detailLines.innerHTML = (record.detalles || []).map((detail) => `<article class="material-reception-detail-line"><strong>${receptionEscape(detail.item?.nombre || '—')}</strong><code>${receptionEscape(detail.item?.codigo || '—')}</code><b>${receptionEscape(receptionQuantity(detail.cantidad_aceptada ?? detail.cantidad_recibida))} ${receptionEscape(detail.unidad_medida || '')}</b><small>${receptionEscape(receptionPackageSummary(detail))}</small></article>`).join('');
+        + (receptionCanAdminister() && record.estado !== 'anulada' ? action('edit', 'Editar') : '')
+        + (receptionCanDelete() ? action('delete', 'Eliminar') : '');
+    receptionElements.detailLines.innerHTML = (record.detalles || []).map((detail) => `<article class="material-reception-detail-line"><strong>${receptionEscape(detail.item?.nombre || '—')}</strong><code>${receptionEscape(detail.item?.codigo || '—')}</code><b>${receptionEscape(receptionQuantity(detail.cantidad_aceptada ?? detail.cantidad_recibida))} ${receptionEscape(detail.unidad_medida || '')}</b><small>${receptionEscape(receptionPackageSummary(detail))}</small>${detail.conversion_unidad ? `<small>Ingreso: ${receptionEscape(detail.conversion_unidad.entrada.cantidad_aceptada)} ${receptionEscape(detail.conversion_unidad.unidad_origen)} × ${receptionEscape(detail.conversion_unidad.factor)} ${receptionEscape(detail.unidad_medida)}</small>` : ''}</article>`).join('');
     const folios = record.snapshot_confirmacion?.folios || [];
     receptionElements.detailFoot.textContent = record.estado === 'borrador'
         ? `Al confirmar se generan ${(record.detalles || []).reduce((total, detail) => total + (detail.bultos || []).length, 0)} folios.`
@@ -469,17 +509,21 @@ function packageSizeFromExisting(packages) {
 }
 
 function receptionLineState(detail = null) {
-    const packages = detail?.bultos || [];
+    const snapshot = detail?.conversion_unidad;
+    const packages = (detail?.bultos || []).map((p, i) => ({ ...p, cantidad: snapshot?.bultos_entrada_por_id?.[p.id] ?? snapshot?.bultos_entrada?.[i] ?? p.cantidad }));
     const first = packages[0] || {};
     return {
         key: receptionUuid(),
+        originDetailId: detail?.id || null,
         itemId: detail?.item?.id || '',
-        itemSnapshot: detail?.item || null,
+        itemSnapshot: detail?.item ? { ...detail.item, unidad_medida: detail.unidad_medida } : null,
+        inputUnit: snapshot?.unidad_origen || '',
+        conversionSnapshot: snapshot || null,
         itemFilter: '',
-        documentary: detail?.cantidad_documental ?? '',
-        counted: detail?.cantidad_contada ?? '',
-        accepted: detail?.cantidad_aceptada ?? detail?.cantidad_recibida ?? '',
-        rejected: detail?.cantidad_rechazada ?? 0,
+        documentary: snapshot?.entrada?.cantidad_documental ?? detail?.cantidad_documental ?? '',
+        counted: snapshot?.entrada?.cantidad_contada ?? detail?.cantidad_contada ?? '',
+        accepted: snapshot?.entrada?.cantidad_aceptada ?? detail?.cantidad_aceptada ?? detail?.cantidad_recibida ?? '',
+        rejected: snapshot?.entrada?.cantidad_rechazada ?? detail?.cantidad_rechazada ?? 0,
         packageSize: packageSizeFromExisting(packages),
         lot: first.lote_proveedor || '',
         manufacturedAt: first.fecha_fabricacion || '',
@@ -511,6 +555,19 @@ function packageSummary(line) {
         : `${total} bultos de ${receptionQuantity(packageSize)}.`;
 }
 
+function receptionConversion(line) {
+    if (line.inputUnit && line.conversionSnapshot?.unidad_origen === line.inputUnit) return line.conversionSnapshot;
+    const item = receptionState.catalogs.items.find((i) => i.id === line.itemId) || line.itemSnapshot;
+    return item?.conversiones_unidad?.find((c) => c.unidad_origen === line.inputUnit);
+}
+
+function receptionInputUnit(line, item, readonly) {
+    const choices = new Map((item?.conversiones_unidad || []).map((c) => [c.unidad_origen, c]));
+    if (line.inputUnit && !choices.has(line.inputUnit)) choices.set(line.inputUnit, line.conversionSnapshot);
+    const factor = receptionConversion(line)?.factor;
+    return `<label><span>Unidad de ingreso</span><select name="unidad_ingreso"${readonly ? ' disabled' : ''}><option value="">${receptionEscape(item?.unidad_medida || 'Unidad base')}</option>${[...choices.keys()].map((u) => `<option value="${receptionEscape(u)}"${u === line.inputUnit ? ' selected' : ''}>${receptionEscape(u)}</option>`).join('')}</select></label>${!readonly && line.conversionSnapshot ? `<button type="button" data-refresh-line-conversion="${line.key}">Usar equivalencia vigente</button>` : ''}<p class="materials-help wide material-reception-conversion-hint">${line.inputUnit && factor ? `1 ${receptionEscape(line.inputUnit)} = ${receptionEscape(factor)} ${receptionEscape(item?.unidad_medida || line.conversionSnapshot?.unidad_base)}. Todas las cantidades y el tamaño de bulto se ingresan en ${receptionEscape(line.inputUnit)}.` : 'Las cantidades se ingresan en la unidad base del ítem.'}</p>`;
+}
+
 function renderReceptionLines() {
     const readonly = receptionState.mode === 'view';
     receptionElements.lines.innerHTML = receptionState.lines.map((line, index) => {
@@ -521,6 +578,7 @@ function renderReceptionLines() {
             <div class="material-reception-line__heading"><strong>Producto ${index + 1}</strong>${readonly ? '' : `<button data-remove-line="${line.key}" type="button">Quitar</button>`}</div>
             <div class="material-reception-line__grid">
                 <label class="wide"><span>Producto *</span><div class="material-item-picker material-reception-item-picker"><div class="material-reception-item-controls"><input class="material-item-search" type="search" value="${receptionEscape(receptionItemLabel(selectedItem))}" placeholder="Buscar por código, nombre, categoría o unidad" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false"${readonly ? ' readonly' : ''}><select class="material-reception-item-filter" aria-label="Filtrar productos por tipo"${readonly ? ' disabled' : ''}><option value="">Todos los tipos</option><option value="insumo"${line.itemFilter === 'insumo' ? ' selected' : ''}>Insumos</option><option value="material_mp"${line.itemFilter === 'material_mp' ? ' selected' : ''}>Material MP</option><option value="material_pt"${line.itemFilter === 'material_pt' ? ' selected' : ''}>Material PT</option></select></div><input name="item_material_id" type="hidden" value="${receptionEscape(line.itemId)}"><div class="material-item-results is-hidden" role="listbox"></div><small class="material-reception-item-hint">Escribe para filtrar; Enter selecciona el primer resultado.</small></div></label>
+                ${receptionInputUnit(line, selectedItem, readonly)}
                 <label><span>Cantidad documental *</span><input name="cantidad_documental" type="number" min="0.001" step="0.001" value="${receptionEscape(line.documentary)}" required></label>
                 <label><span>Cantidad contada *</span><input name="cantidad_contada" type="number" min="0.001" step="0.001" value="${receptionEscape(line.counted)}" required></label>
                 <label><span>Cantidad aceptada *</span><input name="cantidad_aceptada" type="number" min="0" step="0.001" value="${receptionEscape(line.accepted)}" required></label>
@@ -552,6 +610,7 @@ function populateReceptionForm(record = null) {
     receptionElements.form.elements.orden_compra.value = record?.orden_compra || '';
     receptionElements.form.elements.patente.value = record?.patente || '';
     receptionElements.form.elements.transportista.value = record?.transportista || '';
+    transportPanel?.populate(record);
     receptionElements.form.elements.observacion.value = record?.observacion || '';
     receptionElements.form.elements.motivo_correccion.value = '';
     renderReceptionLines();
@@ -561,6 +620,7 @@ function configureReceptionDialog() {
     const readonly = receptionState.mode === 'view';
     const editing = receptionState.mode === 'edit';
     const confirmed = receptionState.current?.estado === 'confirmada';
+    transportPanel?.setReadonly(readonly);
     receptionElements.dialogEyebrow.textContent = readonly ? 'EXPEDIENTE DE RECEPCIÓN' : editing ? 'CORRECCIÓN ADMINISTRATIVA' : 'NUEVA RECEPCIÓN';
     receptionElements.dialogTitle.textContent = receptionState.current
         ? `Guía ${receptionState.current.numero_guia_despacho}`
@@ -574,9 +634,12 @@ function configureReceptionDialog() {
     receptionElements.reason.classList.toggle('is-hidden', !editing);
     receptionElements.warning.classList.toggle('is-hidden', !(editing && confirmed));
     receptionElements.saveDraft.classList.toggle('is-hidden', readonly || confirmed);
-    receptionElements.saveConfirm.classList.toggle('is-hidden', readonly);
+    receptionElements.saveConfirm.classList.toggle('is-hidden', readonly || (!confirmed && !receptionCanConfirm()));
     receptionElements.saveConfirm.textContent = confirmed ? 'Guardar corrección' : 'Guardar y confirmar';
     receptionElements.saveConfirm.disabled = !confirmed && !receptionState.current?.fotos?.some((f) => f.tipo === 'documento');
+    receptionElements.printFromForm.classList.toggle('is-hidden', !confirmed || !readonly || !receptionCanPrint());
+    if (confirmed && readonly && receptionCanPrint()) receptionElements.printFromForm.href = receptionPrintUrl(receptionState.current.id);
+    else receptionElements.printFromForm.removeAttribute('href');
 }
 
 async function openReception(id = null, mode = 'view') {
@@ -598,6 +661,8 @@ function syncLineFromElement(article, markDirty = true) {
     const line = receptionState.lines.find((candidate) => candidate.key === article.dataset.lineKey);
     if (!line) return;
     line.itemId = article.querySelector('[name="item_material_id"]').value;
+    const unit = article.querySelector('[name="unidad_ingreso"]').value;
+    if (unit !== line.inputUnit) { line.inputUnit = unit; line.conversionSnapshot = null; }
     line.documentary = article.querySelector('[name="cantidad_documental"]').value;
     line.counted = article.querySelector('[name="cantidad_contada"]').value;
     line.accepted = article.querySelector('[name="cantidad_aceptada"]').value;
@@ -611,6 +676,11 @@ function syncLineFromElement(article, markDirty = true) {
     line.observation = article.querySelector('[name="observacion_detalle"]').value;
     if (markDirty) line.packagesDirty = true;
     article.querySelector('.material-reception-package-summary').textContent = packageSummary(line);
+    const item = receptionState.catalogs.items.find((i) => i.id === line.itemId) || line.itemSnapshot;
+    const factor = receptionConversion(line)?.factor;
+    article.querySelector('.material-reception-conversion-hint').textContent = line.inputUnit && factor
+        ? `1 ${line.inputUnit} = ${factor} ${item?.unidad_medida || line.conversionSnapshot?.unidad_base}. Cantidades y tamaño de bulto en ${line.inputUnit}.`
+        : 'Las cantidades se ingresan en la unidad base del ítem.';
 }
 
 function generatedPackages(line) {
@@ -652,9 +722,12 @@ function receptionPayload() {
         orden_compra: form.get('orden_compra') || null,
         patente: form.get('patente') || null,
         transportista: form.get('transportista') || null,
+        ...transportPanel?.payload(),
         observacion: form.get('observacion') || null,
         detalles: receptionState.lines.map((line) => ({
             item_material_id: line.itemId,
+            ...(line.originDetailId ? { detalle_origen_id: line.originDetailId } : {}),
+            ...(line.inputUnit ? { unidad_ingreso: line.inputUnit, conversion_version: receptionConversion(line)?.version || 0 } : {}),
             cantidad_documental: Number(line.documentary),
             cantidad_contada: Number(line.counted),
             cantidad_aceptada: Number(line.accepted),
@@ -697,6 +770,7 @@ async function saveReception(confirm) {
         populateReceptionForm(response.data); configureReceptionDialog(); await photosPanel?.render();
         receptionElements.photos?.scrollIntoView({ block: 'center' });
     } else { receptionElements.dialog.close(); }
+    if (confirmed) offerReceptionPrinting(response.data);
     await refreshReceptionViews();
 }
 
@@ -755,6 +829,7 @@ window.estibaMaterialReceptionImportContext = {
 };
 
 if (receptionElements.workspace) {
+    receptionElements.dismissPrintNotice?.addEventListener('click', () => receptionElements.printNotice.classList.add('is-hidden'));
     receptionElements.reload.addEventListener('click', () => loadReceptions(receptionState.page));
     receptionElements.blankSampling.addEventListener('click', async () => {
         try {
@@ -785,7 +860,7 @@ if (receptionElements.workspace) {
             }
         }
         if (button.dataset.action === 'edit' && receptionCanAdminister()) openReception(record.id, 'edit');
-        if (button.dataset.action === 'delete' && receptionCanAdminister()) openReceptionDelete(receptionState.selected?.id === record.id ? receptionState.selected : record);
+        if (button.dataset.action === 'delete' && receptionCanDelete()) openReceptionDelete(receptionState.selected?.id === record.id ? receptionState.selected : record);
     }
     receptionElements.list.addEventListener('click', handleReceptionAction);
     receptionElements.detailActions.addEventListener('click', handleReceptionAction);
@@ -809,6 +884,13 @@ if (receptionElements.workspace) {
         renderReceptionLines();
     });
     receptionElements.lines.addEventListener('click', (event) => {
+        const refresh = event.target.closest('[data-refresh-line-conversion]');
+        if (refresh && receptionState.mode !== 'view') {
+            const line = receptionState.lines.find((candidate) => candidate.key === refresh.dataset.refreshLineConversion);
+            line.conversionSnapshot = null;
+            renderReceptionLines();
+            return;
+        }
         const button = event.target.closest('[data-remove-line]');
         if (button) {
             receptionState.lines = receptionState.lines.filter((line) => line.key !== button.dataset.removeLine);
@@ -824,10 +906,10 @@ if (receptionElements.workspace) {
         if (!line || !item) return;
         line.itemId = item.id;
         line.itemSnapshot = item;
-        article.querySelector('[name="item_material_id"]').value = item.id;
-        article.querySelector('.material-item-search').value = receptionItemLabel(item);
+        line.inputUnit = ''; line.conversionSnapshot = null;
+        renderReceptionLines();
         closeReceptionItemResults();
-        article.querySelector('[name="cantidad_documental"]').focus();
+        receptionElements.lines.querySelector(`[data-line-key="${line.key}"] [name="cantidad_documental"]`).focus();
     });
     receptionElements.lines.addEventListener('focusin', (event) => {
         const input = event.target.closest('.material-item-search');
@@ -915,6 +997,8 @@ if (receptionElements.workspace) {
     [receptionElements.deleteClose, receptionElements.deleteCancel].forEach((button) =>
         button.addEventListener('click', () => receptionElements.deleteDialog.close()));
     window.addEventListener('estiba:office-session', () => {
+        receptionElements.printNotice?.classList.add('is-hidden');
+        receptionElements.printLink?.removeAttribute('href');
         photosPanel?.reset(); receptionElements.dialog.close(); receptionState.current = null;
         clearReceptionDetail(); detailPhotosPanel?.reset(); receptionState.confirmations.clear();
         receptionElements.eliminations?.replaceChildren(); receptionElements.eliminations?.classList.add('is-hidden');

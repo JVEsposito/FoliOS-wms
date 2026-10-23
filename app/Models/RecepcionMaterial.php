@@ -21,6 +21,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'orden_compra',
     'patente',
     'transportista',
+    'conductor_transporte_id',
+    'empresa_transporte_id',
+    'vehiculo_transporte_id',
+    'transporte_snapshot',
     'estado',
     'version',
     'observacion',
@@ -93,6 +97,7 @@ class RecepcionMaterial extends Model
             'fecha_documento' => 'date',
             'estado' => EstadoRecepcionMaterial::class,
             'snapshot_confirmacion' => 'array',
+            'transporte_snapshot' => 'array',
             'confirmado_at' => 'datetime',
             'anulado_at' => 'datetime',
         ];

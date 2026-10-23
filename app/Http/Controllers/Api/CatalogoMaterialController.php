@@ -14,6 +14,7 @@ use App\Models\ClienteMaterial;
 use App\Models\DestinoMaterial;
 use App\Models\ItemMaterial;
 use App\Models\TemporadaMaterial;
+use App\Services\Materiales\ServicioClasificacionMaterial;
 use App\Services\Materiales\ServicioRegularizacionItemMaterial;
 use DomainException;
 use Illuminate\Http\JsonResponse;
@@ -53,7 +54,7 @@ class CatalogoMaterialController extends Controller
             ),
             'items' => ItemMaterialResource::collection(
                 ItemMaterial::query()
-                    ->with(['cliente.temporada', 'fotoPrincipal'])->withCount('fotos')
+                    ->with(['cliente.temporada', 'fotoPrincipal', 'tipoItem'])->withCount('fotos')
                     ->where('activo', true)
                     ->whereHas('cliente', fn ($consulta) => $consulta
                         ->where('temporada_material_id', $temporada->id)
@@ -75,7 +76,7 @@ class CatalogoMaterialController extends Controller
         Gate::authorize('administrar-catalogos-materiales');
 
         $items = ItemMaterial::query()
-            ->with(['cliente.temporada', 'regularizacionComoDuplicado.itemCanonico', 'fotoPrincipal'])->withCount('fotos')
+            ->with(['cliente.temporada', 'regularizacionComoDuplicado.itemCanonico', 'fotoPrincipal', 'tipoItem'])->withCount('fotos')
             ->withCount([
                 'foliosMateriales as folios_activos_count' => fn ($consulta) => $consulta
                     ->whereHas('folio', fn ($folios) => $folios->where('activo', true)),
@@ -91,7 +92,10 @@ class CatalogoMaterialController extends Controller
             ->orderBy('nombre')
             ->get();
 
-        return response()->json(['data' => ItemMaterialResource::collection($items)]);
+        return response()->json([
+            'data' => ItemMaterialResource::collection($items),
+            'clasificaciones' => app(ServicioClasificacionMaterial::class)->catalogos(),
+        ]);
     }
 
     public function clientes(): JsonResponse
@@ -132,15 +136,16 @@ class CatalogoMaterialController extends Controller
     {
         return DB::transaction(function () use ($request) {
             $this->validarClienteActivo($request->validated('cliente_material_id'));
+            $datos = app(ServicioClasificacionMaterial::class)->resolverParaItem($request->validated(), null, $request->user());
             $item = ItemMaterial::create([
-                ...$request->validated(),
+                ...$datos,
                 'activo' => true,
                 'origen_sistema' => 'manual',
                 'creado_por_user_id' => $request->user()->id,
                 'actualizado_por_user_id' => $request->user()->id,
             ]);
 
-            return (new ItemMaterialResource($item->load('cliente.temporada')))
+            return (new ItemMaterialResource($item->load(['cliente.temporada', 'tipoItem'])))
                 ->response()
                 ->setStatusCode(Response::HTTP_CREATED);
         }, 3);
@@ -164,7 +169,6 @@ class CatalogoMaterialController extends Controller
             }
 
             if ($itemMaterial->foliosMateriales()->exists()) {
-                unset($datos['unidad_medida']);
                 if ($itemMaterial->cliente_material_id !== $datos['cliente_material_id']
                     && $itemMaterial->cliente()->value('codigo') !== 'GENERAL') {
                     abort(Response::HTTP_UNPROCESSABLE_ENTITY, 'El cliente no puede cambiar porque el ítem ya posee folios asociados.');
@@ -172,11 +176,11 @@ class CatalogoMaterialController extends Controller
             }
 
             $itemMaterial->update([
-                ...$datos,
+                ...app(ServicioClasificacionMaterial::class)->resolverParaItem($datos, $itemMaterial, $request->user()),
                 'actualizado_por_user_id' => $request->user()->id,
             ]);
 
-            return new ItemMaterialResource($itemMaterial->refresh()->load('cliente.temporada'));
+            return new ItemMaterialResource($itemMaterial->refresh()->load(['cliente.temporada', 'tipoItem']));
         }, 3);
     }
 

@@ -59,6 +59,9 @@ class ServicioTomaInventarioMaterial
     public function operar(TomaInventarioMaterial $toma, string $accion, array $datos, User $user): TomaInventarioMaterial
     {
         $this->supervisar($user);
+        if ($accion === 'aprobar') {
+            abort_unless($user->can('aprobar-ajustes-materiales'), 403);
+        }
 
         return $this->mutar($toma, $accion, $datos, $user, function ($toma) use ($accion, $datos, $user) {
             if ($accion === 'abrir') {

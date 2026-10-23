@@ -176,6 +176,8 @@
                             'clients' => ['label' => 'Clientes', 'icon' => '◇'],
                             'providers' => ['label' => 'Proveedores', 'icon' => '⇄'],
                             'items' => ['label' => 'Ítems', 'icon' => '▤'],
+                            'units' => ['label' => 'Unidades', 'icon' => '≋'],
+                            'classifications' => ['label' => 'Categorías y tipos', 'icon' => '≡'],
                             'destinations' => ['label' => 'Destinos', 'icon' => '⌖'],
                         ]"
                     />
@@ -209,7 +211,6 @@
                                 <label><span>Código interno automático</span><input id="providerInternalCode" placeholder="Se asigna al guardar" readonly></label>
                                 <label><span>Código comercial / tarja</span><input name="codigo" maxlength="80" placeholder="Opcional, por ejemplo CSF"></label>
                                 <label><span>Nombre *</span><input name="nombre" maxlength="180" placeholder="Proveedor de embalajes" required></label>
-                                <label><span>Código ERP futuro</span><input name="codigo_externo" maxlength="150"></label>
                                 <label class="materials-check"><input name="activo" type="checkbox" checked><span>Proveedor activo</span></label>
                                 <fieldset class="materials-provider-clients materials-wide">
                                     <legend>Clientes asociados *</legend>
@@ -229,9 +230,10 @@
 
                     <section class="panel materials-panel" id="materials-catalog-panel-items" data-office-panel-group="materials-catalog" data-office-panel-id="items" role="tabpanel" aria-labelledby="materials-catalog-tab-items">
                         <div class="materials-panel__heading"><div><p class="eyebrow">CATÁLOGO</p><h2>Ítems seleccionables</h2></div><div class="materials-panel__tools"><span id="itemsSummary">0 registrados</span><a class="secondary-button" href="/oficina/materiales/items">Ver ítems y filtros</a><button class="secondary-button" id="downloadFullMaterialCatalog" type="button">Descargar catálogo</button><button class="secondary-button" id="openMaterialImport" type="button">Importar catálogo</button></div></div>
-                        <div class="materials-item-search" role="search" aria-label="Buscar en el catálogo de ítems">
-                            <label class="materials-item-search__query"><span>Buscar ítem</span><input id="itemsMaterialSearch" type="search" autocomplete="off" placeholder="Código, descripción, categoría, código ERP o cliente"></label>
-                            <label><span>Tipo</span><select id="itemsMaterialTypeFilter"><option value="">Todos los tipos</option><option value="insumo">Insumo</option><option value="material_mp">Material MP</option><option value="material_pt">Material PT</option><option value="sin_tipo">Sin tipo operacional</option></select></label>
+                        <div class="materials-item-search materials-item-classification-search" role="search" aria-label="Buscar en el catálogo de ítems">
+                            <label class="materials-item-search__query"><span>Buscar ítem</span><input id="itemsMaterialSearch" type="search" autocomplete="off" placeholder="Código, descripción, categoría o cliente"></label>
+                            <label><span>Tipo de ítem</span><select id="itemsMaterialClassificationFilter"><option value="">Todos los tipos</option></select></label>
+                            <label><span>Uso del material</span><select id="itemsMaterialTypeFilter"><option value="">Todos los usos</option><option value="insumo">Insumo</option><option value="material_mp">Material MP</option><option value="material_pt">Material PT</option><option value="sin_tipo">Sin tipo operacional</option></select></label>
                             <label class="materials-check"><input id="itemsMaterialShowInactive" type="checkbox" checked><span>Incluir inactivos</span></label>
                         </div>
                         <details class="materials-item-editor" id="itemMaterialEditor">
@@ -242,23 +244,25 @@
                                     <label><span>Cliente *</span><select name="cliente_material_id" required></select></label>
                                     <label><span>Código *</span><input name="codigo" maxlength="80" placeholder="MAT-CAJ-010" required></label>
                                     <label><span>Descripción *</span><input name="nombre" maxlength="180" placeholder="Caja cartón 10 kg" required></label>
-                                    <label><span>Categoría comercial</span><input name="categoria" maxlength="100" placeholder="Cajas"></label>
-                                    <label><span>Tipo de ítem *</span><select name="categoria_operacional" required><option value="">Selecciona un tipo</option><option value="insumo">Insumo</option><option value="material_mp">Material MP · sin preparar</option><option value="material_pt">Material PT · preparado para línea</option></select></label>
-                                    <label><span>Unidad *</span><input name="unidad_medida" maxlength="40" placeholder="unidades" required></label>
-                                    <label><span>Código ERP futuro</span><input name="codigo_externo" maxlength="150"></label>
+                                    <label><span>Categoría comercial</span><select name="categoria"><option value="">Sin categoría comercial</option></select></label>
+                                    <label><span>Tipo de ítem *</span><select name="tipo_item_material_id" required><option value="">Selecciona un tipo</option></select></label>
+                                    <label><span>Unidad base *</span><select name="unidad_medida" required><option value="">Seleccione una unidad</option></select></label>
                                     <label><span>Stock mínimo</span><input name="stock_minimo" type="number" min="0" step="0.001" placeholder="Sin nivel"></label>
                                     <label><span>Punto de reorden</span><input name="punto_reorden" type="number" min="0" step="0.001" placeholder="Sin nivel"></label>
                                     <label><span>Stock máximo</span><input name="stock_maximo" type="number" min="0" step="0.001" placeholder="Sin nivel"></label>
                                     <label><span>Alerta de vencimiento (días)</span><input name="dias_alerta_vencimiento" type="number" min="0" max="3650" placeholder="Predeterminado: {{ config('materiales.dias_alerta_vencimiento', 30) }}"></label>
                                     <label class="materials-check"><input name="activo" type="checkbox" checked><span>Ítem activo</span></label>
-                                    <p class="materials-help materials-wide">El tipo determina si el ítem puede recibirse como insumo o Material MP, o generarse como Material PT mediante una receta. Los ítems sin tipo permanecen fuera de Recepción y Transformación.</p>
+                                    <p class="materials-help materials-wide" id="materialItemTypeHelp">Selecciona un tipo para indicar cómo se usa el material en recepción y recetas.</p>
+                                    <p class="materials-help materials-wide">Los ítems sin tipo permanecen fuera de Recepción y Transformación. Puedes crear nuevas categorías y tipos en «Categorías y tipos».</p>
                                 </div>
                                 <p class="form-error" id="itemMaterialError" role="alert"></p>
-                                <div class="materials-actions"><button class="secondary-button is-hidden" id="cancelItemEdit" type="button">Cancelar</button><button class="primary-button" type="submit">Guardar ítem</button></div>
+                                <div class="materials-actions"><button class="secondary-button" id="manageMaterialClassifications" type="button">Categorías y tipos</button><button class="secondary-button is-hidden" id="cancelItemEdit" type="button">Cancelar</button><button class="primary-button" type="submit">Guardar ítem</button></div>
                             </form>
                         </details>
                         <div class="materials-list" id="itemsMaterialList"></div>
                     </section>
+
+                    @include('office.partials.material-units')
 
                     <dialog class="materials-import material-regularization-dialog" id="materialRegularizationDialog">
                         <form id="materialRegularizationForm" novalidate>
@@ -280,6 +284,38 @@
                         </form>
                     </dialog>
 
+                    <section class="panel materials-panel" id="materials-catalog-panel-classifications" data-office-panel-group="materials-catalog" data-office-panel-id="classifications" role="tabpanel" aria-labelledby="materials-catalog-tab-classifications">
+                        <section class="materials-classification-section" aria-labelledby="materialCategoriesTitle">
+                            <div class="materials-panel__heading"><div><p class="eyebrow">CLASIFICACIÓN COMERCIAL</p><h2 id="materialCategoriesTitle">Categorías comerciales</h2></div><span id="materialCategoriesSummary">0 registradas</span></div>
+                            <form class="materials-form" id="materialCategoryForm" novalidate>
+                                <input name="id" type="hidden">
+                                <div class="materials-form__grid">
+                                    <label><span>Nombre de categoría *</span><input name="nombre" maxlength="100" placeholder="Cajas, etiquetas, adhesivos…" required></label>
+                                    <label class="materials-check"><input name="activo" type="checkbox" checked><span>Categoría activa</span></label>
+                                    <p class="materials-help materials-wide">Las categorías se comparten entre clientes y temporadas. Una categoría en uso conserva su nombre para mantener proveedores e historial; puedes desactivarla para nuevas asignaciones.</p>
+                                </div>
+                                <p class="form-error" id="materialCategoryError" role="alert"></p>
+                                <div class="materials-actions"><button class="secondary-button is-hidden" id="cancelMaterialCategoryEdit" type="button">Cancelar</button><button class="primary-button" type="submit">Guardar categoría</button></div>
+                            </form>
+                            <div class="materials-list" id="materialCategoriesList"></div>
+                        </section>
+                        <section class="materials-classification-section" aria-labelledby="materialItemTypesTitle">
+                            <div class="materials-panel__heading"><div><p class="eyebrow">TIPIFICACIÓN</p><h2 id="materialItemTypesTitle">Tipos de ítem</h2></div><span id="materialItemTypesSummary">0 registrados</span></div>
+                            <form class="materials-form" id="materialItemTypeForm" novalidate>
+                                <input name="id" type="hidden">
+                                <div class="materials-form__grid">
+                                    <label><span>Nombre del tipo *</span><input name="nombre" maxlength="100" placeholder="Adhesivo, caja sin armar…" required></label>
+                                    <label><span>Uso del material *</span><select name="categoria_operacional" required><option value="">Selecciona un uso</option><option value="insumo">Insumo</option><option value="material_mp">Material MP · sin preparar</option><option value="material_pt">Material PT · preparado para línea</option></select></label>
+                                    <label class="materials-check"><input name="activo" type="checkbox" checked><span>Tipo activo</span></label>
+                                    <p class="materials-help materials-wide">El uso determina si se recibe como insumo o Material MP, o se obtiene como Material PT mediante una receta. El uso de un tipo base o ya asignado no puede cambiar; su nombre y estado sí pueden editarse.</p>
+                                </div>
+                                <p class="form-error" id="materialItemTypeError" role="alert"></p>
+                                <div class="materials-actions"><button class="secondary-button is-hidden" id="cancelMaterialItemTypeEdit" type="button">Cancelar</button><button class="primary-button" type="submit">Guardar tipo</button></div>
+                            </form>
+                            <div class="materials-list" id="materialItemTypesList"></div>
+                        </section>
+                    </section>
+
                     <section class="panel materials-panel" id="materials-catalog-panel-destinations" data-office-panel-group="materials-catalog" data-office-panel-id="destinations" role="tabpanel" aria-labelledby="materials-catalog-tab-destinations">
                         <div class="materials-panel__heading"><div><p class="eyebrow">DESTINOS</p><h2>Centros de costo</h2></div><span id="destinationsSummary">0 registrados</span></div>
                         <form class="materials-form" id="destinationMaterialForm" novalidate>
@@ -287,7 +323,6 @@
                             <div class="materials-form__grid">
                                 <label><span>Nombre *</span><input name="nombre" maxlength="180" placeholder="Packing cerezas" required></label>
                                 <label><span>Centro de costo *</span><input name="centro_costo" maxlength="100" placeholder="CC-1205" required></label>
-                                <label><span>Código ERP futuro</span><input name="codigo_externo" maxlength="150"></label>
                                 <label class="materials-check"><input name="activo" type="checkbox" checked><span>Destino activo</span></label>
                                 <label class="materials-wide"><span>Descripción</span><textarea name="descripcion" maxlength="1000" rows="2"></textarea></label>
                             </div>
@@ -317,6 +352,12 @@
                         <article data-material-reception-attention><span>SIN FOTO DE DOCUMENTO</span><strong id="materialReceptionNoPhotoCount">0</strong><small>no se pueden confirmar</small></article>
                         <article><span>CONFIRMADAS</span><strong id="materialReceptionConfirmedCount">0</strong><small>en esta página</small></article>
                         <article><span>FOLIOS VISIBLES</span><strong id="materialReceptionFolioCount">0</strong><small>en esta página</small></article>
+                    </div>
+
+                    <div class="material-reception-print-notice is-hidden" id="materialReceptionPrintNotice" role="status">
+                        <span id="materialReceptionPrintNoticeText"></span>
+                        <a class="secondary-button" id="materialReceptionPrintLink">Imprimir folios</a>
+                        <button class="secondary-button" id="dismissMaterialReceptionPrintNotice" type="button" aria-label="Cerrar aviso de impresión">Cerrar aviso</button>
                     </div>
 
                     <form class="material-receptions-filters" id="materialReceptionsFilters">
@@ -369,10 +410,10 @@
                                     <label><span>Número guía de despacho *</span><input name="numero_guia_despacho" maxlength="50" required></label>
                                     <label><span>Fecha del documento</span><input name="fecha_documento" type="date"></label>
                                     <label><span>Orden de compra</span><input name="orden_compra" maxlength="80"></label>
-                                    <label><span>Patente</span><input name="patente" maxlength="20"></label>
-                                    <label><span>Transportista</span><input name="transportista" maxlength="150"></label>
                                     <label class="materials-wide"><span>Observación</span><textarea name="observacion" maxlength="2000" rows="2"></textarea></label>
                                 </div>
+
+                                @include('office.partials.material-reception-transport')
 
                                 <div class="material-reception-lines-heading">
                                     <div><h3>Productos recibidos</h3><p>Indica la cantidad aceptada y cuántas unidades contiene cada bulto; el último se calcula con el diferencial.</p></div>
@@ -392,6 +433,7 @@
                             </div>
                             <footer class="material-reception-form__footer">
                                 <button class="secondary-button" id="cancelMaterialReception" type="button">Cancelar</button>
+                                <a class="secondary-button is-hidden" id="printMaterialReceptionFromForm">Imprimir folios</a>
                                 <button class="secondary-button" id="saveMaterialReceptionDraft" type="submit" value="draft">Guardar borrador</button>
                                 <button class="primary-button" id="saveAndConfirmMaterialReception" type="submit" value="confirm">Guardar y confirmar</button>
                             </footer>
@@ -420,7 +462,7 @@
                 <section class="panel materials-panel material-label-workspace" id="materialLabelWorkspace" data-materials-view="recepcion">
                     <div class="materials-panel__heading">
                         <div><p class="eyebrow">ETIQUETAS DE RECEPCIÓN</p><h2>Descarga PDF y NiceLabel</h2><span id="materialLabelSummary">Selecciona una recepción confirmada</span></div>
-                        <button class="secondary-button" id="reloadMaterialLabels" type="button">↻ Actualizar recepciones</button>
+                        <div class="materials-panel__tools"><a class="secondary-button" href="/oficina/materiales/recepciones">Volver a recepciones</a><button class="secondary-button" id="reloadMaterialLabels" type="button">↻ Actualizar recepciones</button></div>
                     </div>
                     <form class="materials-form material-label-form" id="materialLabelForm" novalidate>
                         <div class="materials-form__grid material-label-controls">
@@ -441,6 +483,7 @@
                         </div>
                         <p class="materials-help">La descarga queda auditada como archivo generado. El sistema no la marca como impresión física confirmada.</p>
                         <p class="form-error" id="materialLabelError" role="alert"></p>
+                        <p id="materialLabelStatus" role="status"></p>
                         <div class="materials-actions"><button class="primary-button" type="submit">Generar y descargar etiquetas</button></div>
                     </form>
                     <div class="material-label-history">

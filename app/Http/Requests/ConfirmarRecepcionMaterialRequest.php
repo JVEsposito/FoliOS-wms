@@ -8,7 +8,7 @@ class ConfirmarRecepcionMaterialRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('gestionar-recepciones-materiales') === true;
+        return $this->user()?->can('confirmar-recepciones-materiales') === true;
     }
 
     /**
