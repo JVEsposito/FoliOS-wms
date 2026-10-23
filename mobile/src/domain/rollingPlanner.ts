@@ -5,6 +5,7 @@ import type {
   OperationalSnapshot,
   OperationalTask,
   OperationalTaskPriority,
+  OperationalLoadStaging,
 } from './operationalTasks';
 
 export type RollingCandidate = {
@@ -66,9 +67,15 @@ export function calculateRollingFrontier(
   const proposals: OperationalFrontierProposal[] = [];
   const candidates: RollingCandidate[] = [];
   const unresolvedTaskIds: string[] = [];
+  const virtualLoadTargets = new Map<string, OperationalLoadStaging>();
 
-  for (const task of eligible) {
+  for (const original of eligible) {
     if (proposals.length >= limit) break;
+    const taskSnapshot = snapshot.tareas.find((item) => item.id === original.id);
+    let task = taskWithCurrentLoadTarget(original, taskSnapshot);
+    const acopio = loadStaging(task);
+    const virtualTarget = acopio ? virtualLoadTargets.get(acopio.carga_id) : null;
+    if (virtualTarget) task = withLoadTarget(task, virtualTarget);
 
     const candidate = bestCandidate(
       task,
@@ -77,7 +84,6 @@ export function calculateRollingFrontier(
       protectedOrigins,
       snapshot.planner.camara_preferente_despacho_id,
     );
-    const taskSnapshot = snapshot.tareas.find((item) => item.id === task.id);
     const candidatePlan = candidate
       ? cameraPlans.find((plan) => plan.id === candidate.cameraId)
       : null;
@@ -89,6 +95,14 @@ export function calculateRollingFrontier(
     usedDestinations.add(candidate.position.id);
     candidates.push(candidate);
     commitVirtualArrival(task, candidate, virtualPlans);
+    const loadTarget = loadStaging(task);
+    if (loadTarget) virtualLoadTargets.set(loadTarget.carga_id, {
+      ...loadTarget,
+      camara_objetivo_id: candidate.cameraId,
+      puntos: [...loadTarget.puntos, {
+        banda: candidate.position.banda, posicion: candidate.position.posicion, nivel: candidate.position.nivel,
+      }],
+    });
     proposals.push({
       tarea_id: task.id,
       posicion_destino_id: candidate.position.id,
@@ -101,6 +115,28 @@ export function calculateRollingFrontier(
   }
 
   return { proposals, candidates, unresolvedTaskIds };
+}
+
+export function loadStaging(task: OperationalTask): OperationalLoadStaging | null {
+  const value = task.contexto?.acopio_carga;
+  if (!value || typeof value !== 'object' || !('carga_id' in value)) return null;
+  return value as OperationalLoadStaging;
+}
+
+function withLoadTarget(task: OperationalTask, acopio: OperationalLoadStaging | null): OperationalTask {
+  return { ...task,
+    contexto: { ...task.contexto, acopio_carga: acopio },
+    destino: acopio?.camara_objetivo_id ? {
+      camara: { id: acopio.camara_objetivo_id, nombre: task.destino?.camara.nombre ?? 'Acopio de carga' },
+      posicion: null,
+    } : null,
+  };
+}
+
+export function taskWithCurrentLoadTarget(task: OperationalTask, snapshotTask?: { acopio_carga?: OperationalLoadStaging | null }) {
+  if (!snapshotTask || !Object.prototype.hasOwnProperty.call(snapshotTask, 'acopio_carga')) return task;
+  if (!snapshotTask.acopio_carga && !loadStaging(task)) return task;
+  return withLoadTarget(task, snapshotTask.acopio_carga ?? null);
 }
 
 function planVersion(
@@ -123,6 +159,8 @@ export function bestCandidate(
   }> = [];
   const initialWithoutTarget = task.tipo_movimiento === 'ubicacion_inicial'
     && !task.destino?.camara.id;
+  const rankByAffinity = (task.tipo_movimiento === 'ubicacion_inicial' || Boolean(loadStaging(task)))
+    && !task.destino?.posicion?.id;
 
   for (const plan of cameraPlans) {
     if (plan.contenido !== 'productos' || plan.estado !== 'activa') continue;
@@ -137,8 +175,8 @@ export function bestCandidate(
         position,
         score: scoring.score,
         reason: scoring.reason,
-        affinityRank: initialWithoutTarget ? affinityRank(task, plan, position) : 0,
-        mixesClients: initialWithoutTarget && mixesClients(task, plan, position),
+        affinityRank: rankByAffinity ? affinityRank(task, plan, position) : 0,
+        mixesClients: rankByAffinity && mixesClients(task, plan, position),
         preferred: initialWithoutTarget && plan.id === preferredDispatchCameraId,
       });
     }
@@ -233,6 +271,9 @@ function maneuverValue(task: OperationalTask) {
 }
 
 function cameraAllowedForTask(task: OperationalTask, cameraId: string) {
+  const acopio = loadStaging(task);
+  if (acopio?.despacho_directo) return false;
+  if (acopio?.camara_objetivo_id && acopio.camara_objetivo_id !== cameraId) return false;
   const returnCamera = taskContext(task, ['camara_retorno_id']);
   if (task.tipo_paso_maniobra === 'retorno_banda') {
     return Boolean(returnCamera && returnCamera === cameraId);
@@ -271,6 +312,10 @@ function positionAllowed(
   if (!band || !band.acepta_nuevos_ingresos) return false;
   if (!band.usos_permitidos.includes('transito_pt')) return false;
   if (band.modo !== 'operativa' || band.estado === 'bloqueada' || band.estado === 'en_vaciado') return false;
+  const acopio = loadStaging(task);
+  if (acopio?.puntos.length && !acopio.puntos.some((point) => areConcentrationNeighbors(point, position))) {
+    return false;
+  }
 
   if (task.contexto?.tipo_decision === 'concentrar_carga') {
     const targetCamera = taskContext(task, ['camara_objetivo_id']);
@@ -297,6 +342,12 @@ function scoreCandidate(task: OperationalTask, plan: CameraPlan, position: Posit
   const band = plan.bandas_operacionales?.find((item) => item.numero === position.banda);
   let score = 0;
   const reasons: string[] = [];
+  const acopio = loadStaging(task);
+  if (acopio) {
+    const contacts = acopio.puntos.filter((point) => areConcentrationNeighbors(point, position)).length;
+    score += 10_000 * contacts;
+    reasons.push(`entrega directamente al acopio de ${acopio.carga_codigo}`);
+  }
 
   if (task.destino?.posicion?.id === position.id) {
     score += 100_000;

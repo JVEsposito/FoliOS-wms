@@ -170,6 +170,15 @@ export type PlannerMode = 'off' | 'shadow' | 'guided';
 export type PlannerCompute = 'server' | 'tablet';
 export type PlannerHorizon = 'batch' | 'rolling';
 
+export type OperationalLoadStaging = {
+  carga_id: string;
+  carga_codigo: string;
+  carga_folio_id: string;
+  camara_objetivo_id: string | null;
+  puntos: Array<{ banda: number; posicion: number; nivel: number }>;
+  despacho_directo: boolean;
+};
+
 export type OperationalSnapshotTask = {
   id: string;
   version: number;
@@ -192,6 +201,7 @@ export type OperationalSnapshotTask = {
   decision_arbitraje?: OperationalManeuverArbitration['decision'] | null;
   orden_arbitraje?: number | null;
   materializable?: boolean;
+  acopio_carga?: OperationalLoadStaging | null;
 };
 
 export type OperationalSnapshot = {

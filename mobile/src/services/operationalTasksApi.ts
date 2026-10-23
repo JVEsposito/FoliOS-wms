@@ -14,7 +14,7 @@ import { fetchWithTimeout } from './httpClient';
 import type { ShiftVerification, MaterialVerificationReading } from '../domain/verification';
 import type { OperatorLoadFeed } from '../domain/operatorLoads';
 
-export const TABLET_PLANNER_VERSION = 'rolling-global-3-envases';
+export const TABLET_PLANNER_VERSION = 'rolling-global-4-acopio-cargas';
 
 export type StartConfirmation = {
   folioDigits: string;

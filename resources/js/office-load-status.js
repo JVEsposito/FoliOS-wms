@@ -1,4 +1,5 @@
 import { createOperationalPoller } from './shared/operational-poller';
+import { loadReceptionDependencies } from './shared/load-reception-dependencies.js';
 
 const byId = (id) => document.getElementById(id);
 const keys = { token: 'estiba_wms_office_token', identity: 'estiba_wms_office_identity' };
@@ -185,6 +186,8 @@ function renderDetail() {
     elements.dispatchMessage.textContent = load.camion_en_anden
         ? `${load.camion_en_anden.patente} está en ${load.camion_en_anden.anden?.nombre || 'andén'}; el WMS prioriza el retiro directo.`
         : 'Registra la presencia del camión desde Cargas para activar la prioridad a andén.';
+    const dependencies = loadReceptionDependencies(progress, Boolean(load.camion_en_anden));
+    if (dependencies) elements.dispatchMessage.textContent += ` ${dependencies}`;
     renderLocations(load);
     elements.folioSummary.textContent = `${total} folios`;
     elements.folios.innerHTML = total ? load.folios.map((folio) => `<tr><td><strong>${escapeHtml(folio.numero_folio)}</strong><small>${escapeHtml(folio.tipo_bulto || 'bulto')}</small></td><td>${escapeHtml(locationLabel(folio))}</td><td><span data-state="${escapeHtml(folio.estado_carga)}">${escapeHtml(String(folio.estado_carga || '').replaceAll('_', ' '))}</span></td></tr>`).join('') : '<tr><td colspan="3">Sin folios asignados.</td></tr>';

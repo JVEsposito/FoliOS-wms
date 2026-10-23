@@ -9,6 +9,7 @@ use App\Enums\ModalidadSalidaCarga;
 use App\Enums\PrioridadCarga;
 use App\Enums\RolUsuario;
 use App\Enums\TipoBulto;
+use App\Models\Camara;
 use App\Models\Carga;
 use App\Models\CargaFolio;
 use App\Models\Folio;
@@ -195,6 +196,30 @@ class RecepcionTunelRollingTest extends TestCase
         $this->assertSame('granel', $tareas->first()->contexto['formato_prefrio']);
     }
 
+    public function test_carga_asignada_antes_de_liberar_tunel_comparte_recepcion_y_acopio_sin_camion(): void
+    {
+        $this->habilitarGeneracion();
+        $contexto = $this->crearProcesoAprobado(2);
+        $carga = $this->asignarSalidaDirecta($contexto['folios'][0], $contexto['temporada'], $contexto['usuario']);
+        $camara = Camara::create([
+            'codigo' => 'CAM-ACOPIO', 'nombre' => 'Acopio de carga', 'contenido' => 'productos', 'tipo' => 'transito',
+            'estado' => 'activa', 'bandas' => 1, 'posiciones_por_banda' => 5, 'niveles' => 1,
+            'creada_por_user_id' => $contexto['usuario']->id,
+        ]);
+        $carga->update(['camara_objetivo_id' => $camara->id]);
+        $recepcion = app(ServicioGeneracionRecepcionTunel::class)->generar($contexto['proceso'], $contexto['usuario']);
+        $tarea = $recepcion->tareas()->where('folio_id', $contexto['folios'][0]->id)->sole();
+        $objetivo = PlanOperacional::query()->where('referencia_tipo', 'carga_concentracion')
+            ->where('referencia_id', $carga->id)->sole();
+        $this->assertSame($camara->id, $tarea->camara_destino_id);
+        $this->assertNull($tarea->posicion_destino_id);
+        $this->assertSame(2, $tarea->maniobraOperacional->objetivos()->count());
+        $this->assertSame(0, $objetivo->tareas()->count());
+        $this->assertSame($contexto['tunel']->nombre, $objetivo->contexto['dependencias'][0]['origen']);
+        $this->assertSame(1, $objetivo->contexto['recepciones_pendientes']);
+        $this->assertDatabaseCount('tareas_movimiento', 2);
+    }
+
     /**
      * @param  array<int, TipoBulto>  $tipos
      * @return array<string, mixed>
@@ -286,7 +311,7 @@ class RecepcionTunelRollingTest extends TestCase
         ]);
     }
 
-    private function asignarSalidaDirecta(Folio $folio, Temporada $temporada, User $usuario): void
+    private function asignarSalidaDirecta(Folio $folio, Temporada $temporada, User $usuario): Carga
     {
         $carga = Carga::create([
             'temporada_id' => $temporada->id,
@@ -309,5 +334,7 @@ class RecepcionTunelRollingTest extends TestCase
             'folio_id' => $folio->id,
             'carga_folio_id' => $asignacion->id,
         ]);
+
+        return $carga;
     }
 }

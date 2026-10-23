@@ -28,6 +28,10 @@ export function operatorTaskPurpose(task: OperationalTask) {
   else if (task.tipo_movimiento === 'ubicacion_inicial') step = 'Ubicación inicial del pallet';
   else if (task.tipo_movimiento === 'retiro') step = 'Retiro del pallet';
   else step = 'Traslado del pallet a su destino';
+  const acopio = task.contexto?.acopio_carga;
+  if (acopio && typeof acopio === 'object' && 'carga_codigo' in acopio && !('despacho_directo' in acopio && acopio.despacho_directo)) {
+    step = `Entregar directamente al acopio de ${String(acopio.carga_codigo)}`;
+  }
 
   return {
     label,

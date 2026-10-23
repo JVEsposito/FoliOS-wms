@@ -27,6 +27,7 @@ use App\Models\ReservaTareaMovimiento;
 use App\Models\TareaMovimiento;
 use App\Models\UbicacionActual;
 use App\Models\User;
+use App\Services\Cargas\ServicioAcopioCarga;
 use Carbon\CarbonInterface;
 use DomainException;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -174,6 +175,7 @@ class ServicioReservasTareasMovimiento
             throw new ConflictoOperacion('El plan cambió desde el snapshot utilizado por la tablet.');
         }
 
+        app(ServicioAcopioCarga::class)->validarDestino($tareaBloqueada, $posicion);
         $posicionBloqueada = Posicion::query()->lockForUpdate()->findOrFail($posicion->id);
         $camara = Camara::query()->lockForUpdate()->findOrFail($posicionBloqueada->camara_id);
         if ($versionCamara !== null && $camara->version_plano !== $versionCamara) {
@@ -259,6 +261,10 @@ class ServicioReservasTareasMovimiento
             );
         }
         if ($tareaBloqueada->posicion_destino_id) {
+            app(ServicioAcopioCarga::class)->validarDestino(
+                $tareaBloqueada,
+                Posicion::query()->findOrFail($tareaBloqueada->posicion_destino_id),
+            );
             $this->validarBandaOperacional(
                 Posicion::query()->lockForUpdate()->findOrFail($tareaBloqueada->posicion_destino_id),
                 $tareaBloqueada,
@@ -472,6 +478,10 @@ class ServicioReservasTareasMovimiento
             throw new ConflictoOperacion('El destino físico no corresponde a la reserva materializada.');
         }
         if ($posicionDestinoId) {
+            app(ServicioAcopioCarga::class)->validarDestino(
+                $tareaBloqueada,
+                Posicion::query()->findOrFail($posicionDestinoId),
+            );
             $this->validarReservaPreparacionSag($posicionDestinoId, $folio->id);
         }
 
