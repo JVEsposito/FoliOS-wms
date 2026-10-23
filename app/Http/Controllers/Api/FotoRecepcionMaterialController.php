@@ -132,7 +132,7 @@ class FotoRecepcionMaterialController extends Controller
     private function autorizarRecepcion(Request $request, RecepcionMaterial $recepcion): void
     {
         abort_unless($recepcion->estado === EstadoRecepcionMaterial::Confirmada
-            || $request->user()->can('anular-recepciones-materiales')
+            || $request->user()->can('supervisar-recepciones-materiales')
             || ($request->user()->can('gestionar-recepciones-materiales') && $recepcion->creado_por_user_id === $request->user()->id), 404);
     }
 }

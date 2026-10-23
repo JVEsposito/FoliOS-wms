@@ -160,6 +160,10 @@ class AlcanceOperacionalUsuario
 
     public function puedeAdministrarCatalogosMateriales(User $usuario): bool
     {
+        if (! $this->permiteAccionMateriales($usuario, 'catalogos.administrar')) {
+            return false;
+        }
+
         return $this->rolActivoEnModulo(
             $usuario,
             [RolUsuario::Administrador],
@@ -169,6 +173,10 @@ class AlcanceOperacionalUsuario
 
     public function puedeEditarNivelesStockMateriales(User $usuario): bool
     {
+        if (! $this->permiteAccionMateriales($usuario, 'inventario.editar_datos_item')) {
+            return false;
+        }
+
         return $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador, RolUsuario::SupervisorMateriales], ['materiales.catalogos', 'materiales.inventario']);
     }
 
@@ -476,6 +484,10 @@ class AlcanceOperacionalUsuario
 
     public function puedeGestionarDespachosMateriales(User $usuario): bool
     {
+        if (! $this->permiteAccionMateriales($usuario, 'despachos.gestionar')) {
+            return false;
+        }
+
         return $this->permiteModuloTablet(
             $usuario,
             CatalogoModulosAcceso::TABLET_OPERACION_MATERIALES,
@@ -525,6 +537,10 @@ class AlcanceOperacionalUsuario
 
     public function puedeGestionarRecepcionesMateriales(User $usuario): bool
     {
+        if (! $this->permiteAccionMateriales($usuario, 'recepciones.gestionar')) {
+            return false;
+        }
+
         return $this->permiteModuloTablet(
             $usuario,
             CatalogoModulosAcceso::TABLET_RECEPCION_MATERIALES,
@@ -537,6 +553,10 @@ class AlcanceOperacionalUsuario
 
     public function puedeAnularRecepcionesMateriales(User $usuario): bool
     {
+        if (! $this->permiteAccionMateriales($usuario, 'recepciones.anular')) {
+            return false;
+        }
+
         return $this->permiteModuloTablet(
             $usuario,
             CatalogoModulosAcceso::TABLET_RECEPCION_MATERIALES,
@@ -549,6 +569,10 @@ class AlcanceOperacionalUsuario
 
     public function puedeAdministrarRecepcionesMateriales(User $usuario): bool
     {
+        if (! $this->permiteAccionMateriales($usuario, 'recepciones.corregir')) {
+            return false;
+        }
+
         return $this->permiteModuloTablet(
             $usuario,
             CatalogoModulosAcceso::TABLET_RECEPCION_MATERIALES,
@@ -561,6 +585,10 @@ class AlcanceOperacionalUsuario
 
     public function puedeImprimirEtiquetasMateriales(User $usuario): bool
     {
+        if (! $this->permiteAccionMateriales($usuario, 'recepciones.imprimir')) {
+            return false;
+        }
+
         return $this->permiteModuloTablet(
             $usuario,
             CatalogoModulosAcceso::TABLET_RECEPCION_MATERIALES,
@@ -587,6 +615,10 @@ class AlcanceOperacionalUsuario
 
     public function puedeGestionarTransformacionesMateriales(User $usuario): bool
     {
+        if (! $this->permiteAccionMateriales($usuario, 'transformaciones.planificar')) {
+            return false;
+        }
+
         return $this->permiteModuloTablet(
             $usuario,
             CatalogoModulosAcceso::TABLET_OPERACION_MATERIALES,
@@ -599,6 +631,10 @@ class AlcanceOperacionalUsuario
 
     public function puedeOperarTransformacionesMateriales(User $usuario): bool
     {
+        if (! $this->permiteAccionMateriales($usuario, 'transformaciones.operar')) {
+            return false;
+        }
+
         return $this->permiteModuloTablet(
             $usuario,
             CatalogoModulosAcceso::TABLET_OPERACION_MATERIALES,
@@ -611,11 +647,26 @@ class AlcanceOperacionalUsuario
 
     public function puedeRevertirTransformacionesMateriales(User $usuario): bool
     {
-        return $this->puedeGestionarTransformacionesMateriales($usuario);
+        if (! $this->permiteAccionMateriales($usuario, 'transformaciones.revertir')) {
+            return false;
+        }
+
+        return $this->permiteModuloTablet(
+            $usuario,
+            CatalogoModulosAcceso::TABLET_OPERACION_MATERIALES,
+        ) && $this->rolActivoEnModulo(
+            $usuario,
+            [RolUsuario::Administrador, RolUsuario::SupervisorMateriales],
+            'materiales.ordenes',
+        );
     }
 
     public function puedeAdministrarRecetasMateriales(User $usuario): bool
     {
+        if (! $this->permiteAccionMateriales($usuario, 'recetas.administrar')) {
+            return false;
+        }
+
         return $this->permiteModuloTablet(
             $usuario,
             CatalogoModulosAcceso::TABLET_OPERACION_MATERIALES,
@@ -628,6 +679,10 @@ class AlcanceOperacionalUsuario
 
     public function puedeRetirarMateriales(User $usuario): bool
     {
+        if (! $this->permiteAccionMateriales($usuario, 'despachos.retirar')) {
+            return false;
+        }
+
         return $this->permiteModuloTablet(
             $usuario,
             CatalogoModulosAcceso::TABLET_OPERACION_MATERIALES,
@@ -640,7 +695,18 @@ class AlcanceOperacionalUsuario
 
     public function puedeCancelarDespachosMateriales(User $usuario): bool
     {
-        return $this->puedeGestionarDespachosMateriales($usuario);
+        if (! $this->permiteAccionMateriales($usuario, 'despachos.cancelar')) {
+            return false;
+        }
+
+        return $this->permiteModuloTablet(
+            $usuario,
+            CatalogoModulosAcceso::TABLET_OPERACION_MATERIALES,
+        ) && $this->rolActivoEnModulo($usuario, [
+            RolUsuario::Administrador,
+            RolUsuario::SupervisorMateriales,
+            RolUsuario::Despachador,
+        ], 'materiales.despachos');
     }
 
     public function puedeConsultarKardexMateriales(User $usuario): bool
@@ -657,6 +723,10 @@ class AlcanceOperacionalUsuario
 
     public function puedeCorregirItemsEstibadosMateriales(User $usuario): bool
     {
+        if (! $this->permiteAccionMateriales($usuario, 'inventario.corregir_item')) {
+            return false;
+        }
+
         return $this->permiteModuloTablet(
             $usuario,
             CatalogoModulosAcceso::TABLET_OPERACION_MATERIALES,
@@ -669,7 +739,122 @@ class AlcanceOperacionalUsuario
 
     public function puedeGestionarBloqueosMateriales(User $usuario): bool
     {
-        return $this->puedeCorregirItemsEstibadosMateriales($usuario);
+        if (! $this->permiteAccionMateriales($usuario, 'inventario.bloquear')) {
+            return false;
+        }
+
+        return $this->permiteModuloTablet(
+            $usuario,
+            CatalogoModulosAcceso::TABLET_OPERACION_MATERIALES,
+        ) && $this->rolActivoEnModulo(
+            $usuario,
+            [RolUsuario::Administrador, RolUsuario::SupervisorMateriales],
+            'materiales.inventario',
+        );
+    }
+
+    public function puedeConfirmarRecepcionesMateriales(User $usuario): bool
+    {
+        if (! $this->permiteAccionMateriales($usuario, 'recepciones.confirmar')) {
+            return false;
+        }
+
+        return $this->permiteModuloTablet(
+            $usuario,
+            CatalogoModulosAcceso::TABLET_RECEPCION_MATERIALES,
+        ) && $this->rolActivoEnModulo($usuario, [
+            RolUsuario::Administrador,
+            RolUsuario::SupervisorMateriales,
+            RolUsuario::CamareroMateriales,
+        ], 'materiales.etiquetas');
+    }
+
+    public function puedeEliminarRecepcionesMateriales(User $usuario): bool
+    {
+        if (! $this->permiteAccionMateriales($usuario, 'recepciones.eliminar')) {
+            return false;
+        }
+
+        return $this->permiteModuloTablet(
+            $usuario,
+            CatalogoModulosAcceso::TABLET_RECEPCION_MATERIALES,
+        ) && $this->rolActivoEnModulo(
+            $usuario,
+            [RolUsuario::Administrador],
+            'materiales.etiquetas',
+        );
+    }
+
+    public function puedeSupervisarRecepcionesMateriales(User $usuario): bool
+    {
+        return $this->permiteModuloTablet(
+            $usuario,
+            CatalogoModulosAcceso::TABLET_RECEPCION_MATERIALES,
+        ) && $this->rolActivoEnModulo(
+            $usuario,
+            [RolUsuario::Administrador, RolUsuario::SupervisorMateriales],
+            'materiales.etiquetas',
+        );
+    }
+
+    public function puedeTransferirFoliosMaterialesClientes(User $usuario): bool
+    {
+        if (! $this->permiteAccionMateriales($usuario, 'inventario.transferir_cliente')) {
+            return false;
+        }
+
+        return $this->permiteModuloTablet(
+            $usuario,
+            CatalogoModulosAcceso::TABLET_OPERACION_MATERIALES,
+        ) && $this->rolActivoEnModulo(
+            $usuario,
+            [RolUsuario::Administrador, RolUsuario::SupervisorMateriales],
+            'materiales.inventario',
+        );
+    }
+
+    public function puedeAutorizarRecepcionesTardiasMateriales(User $usuario): bool
+    {
+        if (! $this->permiteAccionMateriales($usuario, 'recepciones.autorizar_tardios')) {
+            return false;
+        }
+
+        return $this->permiteModuloTablet(
+            $usuario,
+            CatalogoModulosAcceso::TABLET_RECEPCION_MATERIALES,
+        ) && $this->rolActivoEnModulo(
+            $usuario,
+            [RolUsuario::Administrador, RolUsuario::SupervisorMateriales],
+            'materiales.etiquetas',
+        );
+    }
+
+    public function puedeAutorizarDespachosTardiosMateriales(User $usuario): bool
+    {
+        if (! $this->permiteAccionMateriales($usuario, 'despachos.autorizar_tardios')) {
+            return false;
+        }
+
+        return $this->permiteModuloTablet(
+            $usuario,
+            CatalogoModulosAcceso::TABLET_OPERACION_MATERIALES,
+        ) && $this->rolActivoEnModulo($usuario, [
+            RolUsuario::Administrador,
+            RolUsuario::SupervisorMateriales,
+            RolUsuario::Despachador,
+        ], 'materiales.despachos');
+    }
+
+    public function puedeAprobarAjustesMateriales(User $usuario): bool
+    {
+        return in_array($usuario->rol, [RolUsuario::Administrador, RolUsuario::SupervisorMateriales], true)
+            && $this->puedeSupervisarCamara($usuario, ContenidoCamara::Materiales)
+            && $this->permiteAccionMateriales($usuario, 'inventario.aprobar_ajustes');
+    }
+
+    private function permiteAccionMateriales(User $usuario, string $accion): bool
+    {
+        return app(CatalogoPermisosMateriales::class)->permite($usuario, $accion);
     }
 
     public function puedeConsultarRecepcionesFrutaEmbalada(User $usuario): bool
@@ -1204,11 +1389,17 @@ class AlcanceOperacionalUsuario
             'puede_retirar_materiales' => $this->puedeRetirarMateriales($usuario),
             'puede_cancelar_despachos_materiales' => $this->puedeCancelarDespachosMateriales($usuario),
             'puede_consultar_kardex_materiales' => $this->puedeConsultarKardexMateriales($usuario),
-            'puede_transferir_folios_materiales_clientes' => $this->puedeCorregirItemsEstibadosMateriales($usuario),
+            'puede_transferir_folios_materiales_clientes' => $this->puedeTransferirFoliosMaterialesClientes($usuario),
             'puede_corregir_items_estibados_materiales' => $this->puedeCorregirItemsEstibadosMateriales($usuario),
             'puede_gestionar_bloqueos_materiales' => $this->puedeGestionarBloqueosMateriales($usuario),
             'puede_consultar_recepciones_materiales' => $this->puedeConsultarRecepcionesMateriales($usuario),
             'puede_gestionar_recepciones_materiales' => $this->puedeGestionarRecepcionesMateriales($usuario),
+            'puede_confirmar_recepciones_materiales' => $this->puedeConfirmarRecepcionesMateriales($usuario),
+            'puede_supervisar_recepciones_materiales' => $this->puedeSupervisarRecepcionesMateriales($usuario),
+            'puede_eliminar_recepciones_materiales' => $this->puedeEliminarRecepcionesMateriales($usuario),
+            'puede_aprobar_ajustes_materiales' => $this->puedeAprobarAjustesMateriales($usuario),
+            'puede_autorizar_recepciones_tardias_materiales' => $this->puedeAutorizarRecepcionesTardiasMateriales($usuario),
+            'puede_autorizar_despachos_tardios_materiales' => $this->puedeAutorizarDespachosTardiosMateriales($usuario),
             'puede_anular_recepciones_materiales' => $this->puedeAnularRecepcionesMateriales($usuario),
             'puede_administrar_recepciones_materiales' => $this->puedeAdministrarRecepcionesMateriales($usuario),
             'puede_imprimir_etiquetas_materiales' => $this->puedeImprimirEtiquetasMateriales($usuario),

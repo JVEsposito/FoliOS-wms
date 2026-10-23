@@ -287,6 +287,12 @@
                                 <span>Definen la navegación disponible al ingresar desde un computador.</span>
                             </div>
                             <div class="access-module-selector" id="accessModuleSelector"></div>
+                            <div class="access-permission-heading">
+                                <div><p class="eyebrow">ACCIONES DE MATERIALES</p><h3>Facultades por proceso</h3></div>
+                                <span>Selecciona las acciones que podrá ejecutar dentro de las oficinas habilitadas.</span>
+                            </div>
+                            <p class="admin-form__hint" id="accessMaterialPermissionsHint">Selecciona las facultades necesarias. Para impedir toda escritura, utiliza el modo Solo consulta.</p>
+                            <div class="access-module-selector" id="accessMaterialPermissionsSelector"></div>
                             <div class="access-home-field">
                                 <label class="field"><span>Pantalla de inicio</span><select name="pantalla_inicio" id="accessProfileHome"><option value="">Según el nivel operacional base</option></select></label>
                                 <p class="admin-form__hint">Pantalla a la que llega el usuario al entrar a FoliOS (/FoliOS). Solo se ofrecen oficinas de los módulos seleccionados. Si el perfil no la permite, se usa la del nivel operacional base o la primera oficina habilitada.</p>

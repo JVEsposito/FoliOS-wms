@@ -58,6 +58,7 @@ export type UserCapabilities = {
   puede_gestionar_bloqueos_materiales?: boolean;
   puede_consultar_recepciones_materiales?: boolean;
   puede_gestionar_recepciones_materiales?: boolean;
+  puede_confirmar_recepciones_materiales?: boolean;
   puede_anular_recepciones_materiales?: boolean;
   puede_administrar_recepciones_materiales?: boolean;
   puede_imprimir_etiquetas_materiales?: boolean;
