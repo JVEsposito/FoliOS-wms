@@ -30,6 +30,7 @@ async function fixture(records, options = {}) {
         if (url.pathname === '/test') return route.fulfill({ body: html, contentType: 'text/html' });
         if (url.pathname === '/oficina/materiales/recepcion') return route.fulfill({ contentType: 'text/html', body: html.replace('</body>', `<script type="module">
             document.querySelector('[data-office-shell]')?.remove();
+            document.getElementById('officeAccess')?.classList.add('is-hidden');
             const app = document.getElementById('officeApp'); app.classList.remove('is-hidden'); app.dataset.materialsSection = 'recepcion';
             document.querySelectorAll('[data-materials-view]').forEach(node => node.classList.toggle('is-hidden', node.dataset.materialsView !== 'recepcion'));
             await import('/office-material-labels.js');
@@ -50,6 +51,7 @@ async function fixture(records, options = {}) {
     await page.evaluate(async () => {
         // Esta fixture monta solo Recepciones; la navegación tiene su propia suite y arranque.
         document.querySelector('[data-office-shell]')?.remove();
+            document.getElementById('officeAccess')?.classList.add('is-hidden');
         const app = document.getElementById('officeApp'); app.classList.remove('is-hidden'); app.dataset.materialsSection = 'recepciones';
         document.querySelectorAll('[data-materials-view]').forEach((node) => node.classList.toggle('is-hidden', node.dataset.materialsView !== 'recepciones'));
         await import('/office-material-receptions.js');
@@ -281,6 +283,7 @@ test('una provisional requiere autorización con motivo y reintenta sin generar 
         await page.locator('[data-action="select"]').click();
         await page.locator('#materialReceptionDetailPhotos [data-confirm]').click();
         await page.locator('#materialReceptionAuthorizationForm [name="motivo_autorizacion"]').fill('Conteo supervisado; guía pendiente');
+        assert.equal(await page.locator('#materialReceptionAuthorizationDialog').evaluate((node) => node.scrollWidth <= node.clientWidth + 1), true);
         await page.screenshot({ path: resolve(root, 'storage/app/ui/oficina/pr8-provisional-autorizacion-pda.png'), fullPage: true });
         await page.locator('#materialReceptionAuthorizationForm [type="submit"]').click();
         await page.waitForFunction(() => document.querySelector('[data-photo-error]')?.textContent.includes('Reintenta'));

@@ -28,7 +28,7 @@ export function createReceptionPhotosPanel(root, { getReception, token, uuid, ca
         const editable = canManage() && reception.estado !== 'anulada';
         root.innerHTML = `<h3>Fotos</h3>${['documento', 'referencial'].map((tipo) => {
             const group = fotos.filter((f) => f.tipo === tipo);
-            return `<section><h4><span>${tipo === 'documento' ? 'Guía o factura' : 'Foto de la carga'}</span><em class="${tipo === 'documento' ? 'is-required' : ''}">${tipo === 'documento' ? (canConfirmWithoutDocument(reception) ? 'Pendiente en provisional' : 'Obligatoria') : 'Opcional'}, ${group.length} de 5</em></h4>
+            return `<section><h4><span>${tipo === 'documento' ? 'Guía o factura' : 'Foto de la carga'}</span><em class="${tipo === 'documento' ? 'is-required' : ''}">${tipo === 'documento' ? (reception.registro?.provisional && reception.registro.estado !== 'regularizada' ? 'Pendiente de regularización' : 'Obligatoria') : 'Opcional'}, ${group.length} de 5</em></h4>
                 <div class="material-reception-photo-grid">${group.map((f) => `<article><button type="button" data-original="${f.id}" aria-label="Abrir foto ${f.orden}"><img data-thumbnail="${f.id}" alt="${tipo} ${f.orden}" width="120" height="120"></button>${editable && (reception.estado === 'borrador' || canAdminister()) ? `<button type="button" data-delete="${f.id}">Eliminar</button>` : ''}</article>`).join('')}</div>
                 ${editable && group.length < 5 ? `<label>${tipo === 'documento' ? 'Agregar foto' : 'Subir fotos de referencia'}<input type="file" data-upload="${tipo}" accept="image/jpeg,image/png,image/webp" multiple></label>` : ''}
             </section>`;
