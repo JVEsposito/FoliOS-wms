@@ -78,3 +78,13 @@ test('un rechazo parcial obliga a recalcular el ancla, incluso si otra propuesta
     assert.deepEqual(materializationOutcome(result, 'a'), { accepted: null, recalculate: true });
     assert.deepEqual(materializationOutcome(result, 'otra'), { accepted: { id: 'otra' }, recalculate: true });
 });
+
+test('una carga cambiada descarta el precálculo aunque los planos conserven sus versiones', () => {
+    const before = task('a');
+    before.contexto.acopio_carga = { carga_id: 'carga-a', carga_codigo: 'Carga A', carga_folio_id: 'cf-a',
+        camara_objetivo_id: 'cam-1', puntos: [], despacho_directo: false };
+    const preview = simulateFrontierPreview([before], snapshot(), [plan]);
+    const current = { ...snapshot(), tareas: [{ id: 'a', version: 2, plan_version: 3, materializable: true,
+        acopio_carga: { ...before.contexto.acopio_carga, carga_id: 'carga-b' } }] };
+    assert.equal(reusablePreviewProposal(preview, current, before), null);
+});

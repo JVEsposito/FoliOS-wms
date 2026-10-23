@@ -22,6 +22,8 @@ use App\Models\TareaMovimiento;
 use App\Models\Temporada;
 use App\Models\User;
 use App\Services\Camaras\InterbloqueoEvacuacionEmergencia;
+use App\Services\Cargas\ServicioAcopioCarga;
+use App\Services\Cargas\ServicioPlanConcentracionCarga;
 use App\Services\Planificador\ServicioDesplieguePlanificador;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use DomainException;
@@ -35,6 +37,7 @@ class ServicioPlanesOperacionales
         private readonly ServicioManiobrasOperacionales $maniobras,
         private readonly InterbloqueoEvacuacionEmergencia $emergencias,
         private readonly ServicioDesplieguePlanificador $despliegue,
+        private readonly ServicioAcopioCarga $acopio,
     ) {}
 
     /**
@@ -163,6 +166,10 @@ class ServicioPlanesOperacionales
 
             if ($tareaBloqueada->estado->esFinal()) {
                 throw new DomainException('La tarea ya se encuentra finalizada.');
+            }
+            $this->acopio->actualizarRecepcion($tareaBloqueada);
+            if ($this->acopio->esRecepcion($plan, $tareaBloqueada->tipo_movimiento)) {
+                app(ServicioPlanConcentracionCarga::class)->coordinarRecepcion($tareaBloqueada, $usuario);
             }
             if ($tareaBloqueada->maniobra_operacional_id) {
                 $this->maniobras->asumirPaso($tareaBloqueada, $usuario, $dispositivo);
@@ -457,6 +464,9 @@ class ServicioPlanesOperacionales
             'maniobra_id' => $tarea->maniobra_operacional_id,
             'secuencia_maniobra' => $tarea->secuencia_maniobra,
             'tipo_paso_maniobra' => $tarea->tipo_paso_maniobra?->value,
+            ...($this->acopio->esRecepcion($plan, $tarea->tipo_movimiento)
+                ? ['acopio_carga' => $this->acopio->paraFolio($tarea->folio_id, $tarea->id)]
+                : []),
         ])->values();
         $modoEfectivo = $this->despliegue->modoEfectivo($cameraIds);
         $versionData = [
@@ -574,6 +584,8 @@ class ServicioPlanesOperacionales
                 : null,
             'contexto' => ($datos['contexto'] ?? []) !== [] ? $datos['contexto'] : null,
         ]);
+        $tarea->setRelation('planOperacional', $plan);
+        $this->acopio->actualizarRecepcion($tarea);
 
         $tipoPaso = $datos['tipo_paso_maniobra']
             ?? TipoPasoManiobra::MovimientoPermanente;

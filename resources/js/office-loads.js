@@ -1,4 +1,5 @@
 import { showOfficeToast } from './office-toast.js';
+import { loadReceptionDependencies } from './shared/load-reception-dependencies.js';
 
 const byId = (id) => document.getElementById(id);
 
@@ -743,6 +744,8 @@ function renderConcentration(load) {
         elements.concentrationMessage.textContent = `Faltan ${missing} ${missing === 1 ? 'pallet' : 'pallets'} para alcanzar una concentración operacional suficiente.`;
     }
 
+    const dependencies = loadReceptionDependencies(progress, Boolean(load.camion_en_anden));
+    if (dependencies) elements.concentrationMessage.textContent += ` ${dependencies}`;
     const cluster = progress.grupo_principal;
     elements.mainCluster.textContent = cluster
         ? `${cluster.camara.codigo} · nivel ${cluster.nivel} · bandas ${cluster.banda_desde}–${cluster.banda_hasta}`

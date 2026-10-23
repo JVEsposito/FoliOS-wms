@@ -6,7 +6,7 @@ destinos, dependencias y reservas. Operación ahora conserva la vista de toda la
 
 ## Entrega 1: compatibilidad y contenido de bandas
 
-Implementado en este PR:
+Implementado en el PR #507:
 
 - Recepción de túnel usa el envase individual del folio. El formato térmico del proceso
   queda separado como `formato_prefrio`; no sustituye un envase ausente.
@@ -36,6 +36,42 @@ la versión móvil nueva; corregir el contexto del servidor ayuda a tareas antig
 sustituye la actualización del algoritmo de la tablet.
 
 ## Entrega 2: coordinación de objetivos y dependencias
+
+Implementado en esta entrega:
+
+- La recepción de túnel, REPA y almacenamiento inicial consulta la asignación vigente
+  del folio antes de proponer ubicación, aunque no exista camión. Conserva la labor de
+  recepción como objetivo principal y puede vincular el objetivo de concentración.
+- El destino usa la cámara definida en Oficina y el grupo conectado de la carga,
+  incluyendo posiciones de otras entregas reservadas. Si todavía no hay cámara ni
+  grupo, la primera reserva establece el acopio; las siguientes deben extenderlo.
+  La carga se bloquea durante esa comprobación y la materialización del destino.
+- Las reservas proyectan llegadas sin aumentar stock físico ni el porcentaje de
+  concentración. La tablet incorpora también las propuestas anteriores de su propio
+  precálculo y descarta el precálculo si cambió la asignación de carga.
+- Si no queda destino conectado habilitado, la propuesta espera capacidad; no deriva
+  automáticamente a almacenamiento general para generar después otra extracción.
+- Cada recepción conserva una sola tarea, maniobra y movimiento. Al terminar se
+  actualizan los objetivos de carga vinculados, además del cierre de la recepción.
+  Los blockers útiles vinculan también cargas que aún no tenían tareas propias.
+- Antes de reservar, iniciar o registrar el movimiento se comprueba la carga vigente.
+  Si cambia la asignación después de tomar una tarea, se debe liberar y volver a tomar;
+  si cambia su cámara, se recalcula el destino. Un movimiento iniciado conserva su
+  destino y responsable. Los cambios de una carga solicitan además recalcular las
+  labores de otras cargas cuyos blockers contribuían a su acopio.
+- Oficina expone las recepciones pendientes con origen y responsable, separadas del
+  progreso físico. Las consultas condicionales se invalidan al cambiar esas tareas.
+- La llegada del camión conserva el flujo existente de despacho directo. La previsión
+  de acopio no habilita un pallet sin autorización térmica ni sustituye controles SAG,
+  de retención, de bandas o de reservas de posiciones.
+
+Requiere servidor, compilación web y actualización de la app de camareros. No agrega
+migraciones. Se prepara sobre #507: ese PR debe integrarse primero. Se conserva el
+umbral operacional existente del 80%; no se lo presenta como preparación física del
+100% de la carga. No implementa aún las funciones por turno, el estado personal de
+espera ni la ejecución preparada en servidor de la entrega 3. La geometría conectada
+reutiliza el criterio vigente de concentración; no constituye un optimizador global
+de todas las secuencias de extracción de la planta ni una garantía de tiempo de respuesta.
 
 Antes de elegir ubicación, cada folio debe resolver su carga o lote comprometido, aunque
 todavía permanezca en túnel. La existencia de un camión en andén determina si puede

@@ -415,6 +415,35 @@ class ServicioManiobrasOperacionales
         }, attempts: 3);
     }
 
+    /** Una recepción pendiente conserva su objetivo principal al cambiar de carga. */
+    public function desvincularAcopiosAnteriores(ManiobraOperacional $maniobra, ?string $cargaVigenteId): void
+    {
+        $maniobra = ManiobraOperacional::query()->lockForUpdate()->findOrFail($maniobra->id);
+        if ($maniobra->estado !== EstadoManiobraOperacional::Pendiente) {
+            return;
+        }
+        $anteriores = $maniobra->objetivos()->wherePivot('es_principal', false)
+            ->where('referencia_tipo', 'carga_concentracion')
+            ->when($cargaVigenteId, fn ($consulta) => $consulta->where('referencia_id', '!=', $cargaVigenteId))
+            ->pluck('planes_operacionales.id');
+        if ($anteriores->isEmpty()) {
+            return;
+        }
+        $maniobra->objetivos()->detach($anteriores);
+        $objetivos = $maniobra->objetivos()->get();
+        $prioridad = $objetivos->map(fn (PlanOperacional $plan) => $plan->prioridad)
+            ->sortByDesc(fn (PrioridadOperacional $valor) => $valor->peso())->first();
+        $maniobra->update([
+            'prioridad' => $prioridad,
+            'beneficio_estimado' => (int) $maniobra->objetivos()->sum('maniobra_objetivos.beneficio_estimado'),
+            'version' => $maniobra->version + 1,
+        ]);
+        $maniobra->pasos()->whereIn('estado', $this->estadosActivosTarea())->get()
+            ->each(fn (TareaMovimiento $paso) => $paso->update([
+                'prioridad' => $prioridad, 'version' => $paso->version + 1,
+            ]));
+    }
+
     public function asumirPaso(
         TareaMovimiento $tarea,
         User $usuario,
@@ -633,11 +662,9 @@ class ServicioManiobrasOperacionales
                 'secuencia_actual' => $tarea->secuencia_maniobra,
                 'version' => $maniobra->version + 1,
             ]);
-            $plan = $maniobra->planOperacional()->first();
-            $cargaId = $plan?->referencia_tipo === 'carga_concentracion'
-                ? $plan->referencia_id
-                : null;
-            if ($cargaId) {
+            $cargaIds = $maniobra->objetivos()->where('referencia_tipo', 'carga_concentracion')
+                ->pluck('referencia_id')->unique();
+            foreach ($cargaIds as $cargaId) {
                 $usuarioId = $movimiento->user_id;
                 DB::afterCommit(function () use ($cargaId, $usuarioId): void {
                     $carga = Carga::query()->find($cargaId);

@@ -5,6 +5,7 @@ namespace App\Http\Resources;
 use App\Enums\EstadoCarga;
 use App\Enums\EstadoCargaFolio;
 use App\Services\Cargas\CalculadorConcentracionCarga;
+use App\Services\Cargas\ServicioAcopioCarga;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Collection;
@@ -23,6 +24,9 @@ class CargaResource extends JsonResource
         $folios = $this->transformarFolios($asignaciones);
         $concentracion = app(CalculadorConcentracionCarga::class)
             ->calcular($asignaciones);
+        $dependencias = app(ServicioAcopioCarga::class)->dependencias($asignaciones);
+        $concentracion['recepciones_pendientes'] = count($dependencias);
+        $concentracion['dependencias'] = $dependencias;
 
         return [
             'id' => $this->id,
