@@ -718,7 +718,7 @@ elements.dispatchTraceBody.addEventListener('submit', async event => {
     try {
         await api(`/api/materiales/despachos/${dispatchId}/entregas/${deliveryId}/regularizar`, { method: 'POST', body: JSON.stringify({ ...data, operacion_id: dispatchRegularizationOperations.get(key) }) });
         await loadAll();
-        await openDispatchTrace(dispatchId);
+        if (state.traceDispatchId === dispatchId && elements.dispatchTraceDialog.open) await openDispatchTrace(dispatchId);
         toast('Respaldo regularizado. Las cantidades entregadas se conservan.');
     } catch (reason) { error.textContent = reason.message; button.disabled = false; }
 });

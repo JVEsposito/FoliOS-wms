@@ -282,7 +282,7 @@ export function MaterialDispatchOperation({
                 ))}
               </View>
 
-              {(selected.entregas || []).map(delivery => <MaterialDeliveryRegistrationPanel key={delivery.id} delivery={delivery} dispatchId={selected.id} api={api} token={auth.token} canAuthorize={auth.usuario.capacidades.puede_autorizar_despachos_tardios_materiales === true} onChange={updated => { setSelectedDetail(updated); setDispatches(current => current.map(item => item.id === updated.id ? { ...item, entregas: updated.entregas } : item)); }} />)}
+              {(selected.entregas || []).map(delivery => <MaterialDeliveryRegistrationPanel key={delivery.id} delivery={delivery} dispatchId={selected.id} api={api} token={auth.token} canAuthorize={auth.usuario.capacidades.puede_autorizar_despachos_tardios_materiales === true} onChange={updated => { setSelectedDetail(current => current?.id === updated.id ? updated : current); setDispatches(current => current.map(item => item.id === updated.id ? { ...item, entregas: updated.entregas } : item)); }} />)}
               <View style={styles.traceHeader}>
                 <Text style={styles.sectionTitle}>Trazabilidad de retiros</Text>
                 <Text style={styles.traceCount}>{withdrawals.length} registros</Text>

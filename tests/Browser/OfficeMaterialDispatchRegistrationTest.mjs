@@ -6,7 +6,7 @@ import test from 'node:test';
 import { chromium } from 'playwright';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
-const html = readFileSync(resolve(root, 'storage/app/ui/oficina/materiales.html'), 'utf8').replace('data-materials-section="resumen"', 'data-materials-section="despachos"');
+const html = readFileSync(resolve(root, 'storage/app/ui/oficina/despachos.html'), 'utf8');
 const season = { id: 'season', codigo: 'TEMP-2627', nombre: 'Temporada', activa: true };
 const client = { id: 'client', codigo: 'CLI', nombre: 'Cliente', activo: true, temporada: season };
 const item = { id: 'item', cliente: client, codigo: 'FILM', nombre: 'Film', unidad_medida: 'kg', activo: true };
