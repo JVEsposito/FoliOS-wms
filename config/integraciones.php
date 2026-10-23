@@ -1,6 +1,11 @@
 <?php
 
 return [
+    'consultas' => [
+        // Solo muestras en el worker: entre 15 y 120 s. Metadatos y API síncrona: 15 s.
+        'muestra_segundos' => env('WMS_ORIGEN_MUESTRA_SEGUNDOS', 60),
+    ],
+
     /*
     | Stock de producto terminado del sistema de origen, leído por una conexión externa
     | (Administración → Accesos → Conexiones externas) para saber qué falta por validar.

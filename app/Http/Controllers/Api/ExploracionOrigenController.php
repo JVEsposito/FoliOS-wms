@@ -33,7 +33,10 @@ class ExploracionOrigenController extends Controller
             'columnas.*' => ['required', 'string', 'max:64', 'distinct'], 'limite' => ['required', 'integer', 'between:1,20'],
             'filtros' => ['present', 'array', 'max:8'], 'filtros.*' => ['required', 'array:columna,valor'],
             'filtros.*.columna' => ['required', 'string', 'max:64'], 'filtros.*.valor' => ['present', 'string', 'max:180'],
-        ], fn ($datos) => $explorador->muestra($conexionExterna->credenciales, $datos['tabla'], $datos['columnas'], $datos['filtros'], $datos['limite']), 'muestra_consultada');
+        ], fn ($datos) => $explorador->muestra(
+            $conexionExterna->credenciales, $datos['tabla'], $datos['columnas'], $datos['filtros'], $datos['limite'],
+            ConectorMySqlLectura::segundosMuestra($request->attributes->has('integracion_id'), config('integraciones.consultas.muestra_segundos', 60)),
+        ), 'muestra_consultada');
     }
 
     private function ejecutar(Request $request, ConexionExterna $conexion, array $reglas, callable $leer, string $accion): JsonResponse

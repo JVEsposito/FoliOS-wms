@@ -79,6 +79,16 @@ de un fallo. Para diagnóstico manual existe `integraciones:leer-stock-origen --
 
 ## Fuente de planta
 
+«Ver muestra» y la simulación del mapeo disponen de **60 segundos por SELECT de datos**
+cuando se ejecutan en el worker de Integraciones. Antes conservaban un límite de 15 s,
+inferior a los 16,71 s observados al consultar un pallet de `odbc_stock`. Se puede ajustar
+`WMS_ORIGEN_MUESTRA_SEGUNDOS` entre 15 y 120; un valor inválido usa 60. Las consultas de
+estructura/columnas y las muestras de consumidores síncronos conservan sus 15 s.
+El presupuesto de muestra deja margen bajo el timeout de 180 s del worker. No cambia
+el timeout de conexión de 5 s ni el presupuesto de la lectura completa de stock (60 s).
+Después de cambiar código o configuración, ejecutar `php artisan optimize:clear` y
+reiniciar el worker exclusivo para que cargue los nuevos valores.
+
 El mapeo permite filtros de igualdad de empresa, temporada y bodega usando las columnas
 descubiertas; no fija CAP ni agrega filtros ocultos. `Pallet` es el número del pallet,
 incluidos ceros iniciales. El campo opcional **Disponibilidad en origen** conserva NULL

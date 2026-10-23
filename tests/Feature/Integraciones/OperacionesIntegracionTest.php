@@ -26,6 +26,8 @@ class OperacionesIntegracionTest extends TestCase
 
     private int $consultas = 0;
 
+    private array $segundosConsultas = [];
+
     private array $filas = [['Pallet' => '000021', 'cantidad' => '40', 'disponibilidad' => null]];
 
     private ?\Closure $durante = null;
@@ -38,8 +40,9 @@ class OperacionesIntegracionTest extends TestCase
         $this->conexion = ConexionExterna::create(['nombre' => 'Origen fixture', 'activa' => true, 'version' => 1,
             'credenciales' => ['host' => '192.0.2.1', 'puerto' => 3306, 'usuario' => 'lector', 'password' => 'SECRETO_FIXTURE', 'base_datos' => 'origen']]);
         config(['integraciones.stock_pt' => ['habilitada' => true, 'conexion' => $this->conexion->nombre, 'tabla' => 'vista_stock', 'bodega' => 'BODEGA_REAL', 'temporada' => '2026']]);
-        $this->mock(ConectorMySqlLectura::class)->shouldReceive('consultar')->andReturnUsing(function ($credenciales, $sql) {
+        $this->mock(ConectorMySqlLectura::class)->shouldReceive('consultar')->andReturnUsing(function ($credenciales, $sql, $parametros = [], $segundos = 60) {
             $this->consultas++;
+            $this->segundosConsultas[] = $segundos;
             if (str_contains($sql, 'information_schema.COLUMNS')) {
                 return [['nombre' => 'folio', 'tipo' => 'varchar'], ['nombre' => 'cajas', 'tipo' => 'decimal'], ['nombre' => 'disponible', 'tipo' => 'varchar']];
             }
@@ -117,6 +120,41 @@ class OperacionesIntegracionTest extends TestCase
         $this->assertNull($this->conexion->fresh()->ultima_prueba_estado);
         $this->assertSame('correcta', $this->ejecutar(OperacionIntegracion::sole())->estado);
         $this->assertSame('correcta', $this->conexion->fresh()->ultima_prueba_estado);
+    }
+
+    public function test_muestra_en_cola_usa_sesenta_segundos_y_http_no_puede_pedir_el_presupuesto_del_worker(): void
+    {
+        $this->filas = [['folio' => '21']];
+        $datos = ['version_conocida' => 1, 'tabla' => 'vista_stock', 'columnas' => ['folio'], 'filtros' => [], 'limite' => 5];
+        $this->postJson($this->ruta('muestra'), $datos, ['Prefer' => 'respond-async'])->assertStatus(202);
+        $this->assertSame([], $this->segundosConsultas);
+        $op = $this->ejecutar(OperacionIntegracion::sole());
+        $this->assertSame('correcta', $op->estado);
+        $this->assertSame([15, 60], $this->segundosConsultas);
+        $this->assertSame('21', $op->resultado['contenido']['data']['filas'][0]['folio']);
+
+        config(['integraciones.consultas.muestra_segundos' => 120]);
+        $this->postJson($this->ruta('muestra'), [...$datos, 'integracion_id' => $op->id, 'segundos' => 120])
+            ->assertOk()->assertJsonPath('data.filas.0.folio', '21');
+        $this->assertSame([15, 60, 15, 15], $this->segundosConsultas);
+    }
+
+    public function test_simulacion_de_mapeo_respeta_presupuesto_configurado_solo_en_cola(): void
+    {
+        config(['integraciones.consultas.muestra_segundos' => 90]);
+        $datos = ['conexion_id' => $this->conexion->id, 'version_conexion' => 1, 'version_conocida' => 0,
+            'ajustes' => ['tabla' => 'vista_stock', 'campos' => ['Pallet' => 'folio', 'cantidad' => 'cajas'], 'filtros' => [], 'habilitada' => true]];
+        $ruta = '/api/administracion/conexiones-externas/lectura-stock/simular';
+        $this->postJson($ruta, $datos, ['Prefer' => 'respond-async'])->assertStatus(202);
+        $this->assertSame([], $this->segundosConsultas);
+        $op = $this->ejecutar(OperacionIntegracion::sole());
+        $this->assertSame('correcta', $op->estado);
+        $this->assertSame([15, 90], $this->segundosConsultas);
+        $this->assertNull($op->resultado['contenido']['data']['filas'][0]['disponibilidad']);
+        $this->assertDatabaseCount('configuraciones_origen', 0);
+
+        $this->postJson($ruta, $datos)->assertOk()->assertJsonPath('data.filas.0.Pallet', '000021');
+        $this->assertSame([15, 90, 15, 15], $this->segundosConsultas);
     }
 
     public function test_fila_invalida_legacy_rechaza_toda_la_lectura_sin_retirar_la_copia(): void
