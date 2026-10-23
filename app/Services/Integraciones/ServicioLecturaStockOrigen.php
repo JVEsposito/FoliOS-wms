@@ -50,6 +50,7 @@ class ServicioLecturaStockOrigen
         'origen' => 'origen_i',
         'temporada_origen' => 'cod_temporada',
         'temporada_origen_nombre' => 'temporada',
+        'disponibilidad_origen' => 'disponibilidad',
     ];
 
     public function __construct(
@@ -90,8 +91,16 @@ class ServicioLecturaStockOrigen
         ];
     }
 
+    public function huellaConfiguracion(array $config): string
+    {
+        return hash('sha256', json_encode([
+            $config['ambito'], $config['conexion']?->id, $config['conexion']?->version,
+            $config['tabla'], $config['bodega'], $config['temporada'], $config['habilitada'],
+        ], JSON_THROW_ON_ERROR));
+    }
+
     /** Lee el origen y actualiza la copia. Null si la lectura no está configurada o ya corre otra. */
-    public function leer(?User $usuario = null): ?LecturaStockOrigen
+    public function leer(?User $usuario = null, ?string $operacionId = null): ?LecturaStockOrigen
     {
         $config = $this->configuracion();
         if (! $config['habilitada'] || ! $config['conexion']) {
@@ -99,18 +108,20 @@ class ServicioLecturaStockOrigen
         }
 
         try {
-            return Cache::lock('lectura-stock-origen', 300)->block(0, fn () => $this->ejecutar($config, $usuario));
+            return Cache::lock('lectura-stock-origen', 300)->block(0, fn () => $this->ejecutar($config, $usuario, $operacionId));
         } catch (LockTimeoutException) {
             return null;
         }
     }
 
     /** @param array{conexion: ConexionExterna, tabla: string, bodega: string, temporada: ?string} $config */
-    private function ejecutar(array $config, ?User $usuario): LecturaStockOrigen
+    private function ejecutar(array $config, ?User $usuario, ?string $operacionId): LecturaStockOrigen
     {
         $lectura = LecturaStockOrigen::create([
             'conexion_externa_id' => $config['conexion']->id,
             'ambito' => $config['ambito'],
+            'configuracion_hash' => $this->huellaConfiguracion($config),
+            'operacion_integracion_id' => $operacionId,
             'tabla' => $config['tabla'],
             'bodega' => $config['bodega'],
             'temporada_origen' => $config['temporada'],
@@ -135,9 +146,7 @@ class ServicioLecturaStockOrigen
                 // Una vista caída o filtrada por error devolvería vacío: no se da todo por retirado.
                 throw new LecturaStockOrigenFallida('sin_filas', 'La fuente no devolvió filas con los filtros configurados; se conserva la lectura anterior.');
             }
-            if ($config['perfil'] !== null) {
-                $this->mapeo->validarFilas($filas);
-            }
+            $this->mapeo->validarFilas($filas);
             $pallets = $this->agrupar($filas);
             foreach ($pallets as $pallet) {
                 if ($pallet['cajas'] > 4294967295 || $pallet['kilos'] > 9999999999.99) {
@@ -194,7 +203,7 @@ class ServicioLecturaStockOrigen
 
         return "SELECT {$columnas} FROM `{$tabla}` WHERE `cod_bodega` = ? AND `cod_tipo_articulo` = 'PT'"
             .($conTemporada ? ' AND `cod_temporada` = ?' : '')
-            .' ORDER BY `Pallet`';
+            .' ORDER BY `Pallet` LIMIT '.(MapeoStockOrigen::MAX_FILAS + 1);
     }
 
     /**
@@ -215,10 +224,13 @@ class ServicioLecturaStockOrigen
                 $mezclados = [];
                 foreach (self::CAMPOS_ARTICULO as $campo => $columna) {
                     $valores = $lineas->map(fn (array $fila): ?string => $this->texto($fila[strtolower($columna)] ?? null))
-                        ->filter()->unique()->values();
+                        ->filter(fn (?string $valor): bool => $valor !== null)->unique()->values();
                     $articulo[$campo] = $valores->isEmpty() ? null : mb_substr($valores->implode(' / '), 0, 200);
                     if ($valores->count() > 1) {
                         $mezclados[] = $campo;
+                    }
+                    if ($campo === 'disponibilidad_origen' && $lineas->contains(fn (array $fila): bool => $this->texto($fila['disponibilidad'] ?? null) === null)) {
+                        $articulo[$campo] = null; // Una línea pendiente no se convierte en disponible por las otras.
                     }
                 }
                 $cajasPorEstado = $lineas->groupBy(fn (array $fila): string => mb_strtoupper((string) $this->texto($fila['cod_estado_stock_paletizado'] ?? null)))
@@ -280,9 +292,10 @@ class ServicioLecturaStockOrigen
             ConfiguracionOrigen::query()->whereKey(ConfiguracionOrigen::STOCK)->lockForUpdate()->first();
             ConexionExterna::query()->whereKey($lectura->conexion_externa_id)->lockForUpdate()->first();
             $vigente = $this->configuracion();
-            if (! $vigente['habilitada'] || ! $vigente['conexion'] || $vigente['ambito'] !== $lectura->ambito) {
+            if ($this->huellaConfiguracion($vigente) !== $lectura->configuracion_hash) {
                 throw new LecturaStockOrigenFallida('configuracion_cambiada', 'La configuración cambió durante la lectura. Repita la lectura con la selección vigente.');
             }
+            app(ServicioOperacionesIntegracion::class)->exigirVigente($lectura->operacion_integracion_id);
             $ahora = now();
             $existentes = PalletStockOrigen::query()->where('ambito', $lectura->ambito)->where('bodega', $bodega)->get()->keyBy('numero_pallet');
             $nuevos = 0;

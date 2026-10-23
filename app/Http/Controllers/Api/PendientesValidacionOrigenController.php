@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Services\Existencias\GeneradorLibroXlsx;
 use App\Services\Integraciones\ServicioCatalogoStockOrigen;
 use App\Services\Integraciones\ServicioLecturaStockOrigen;
+use App\Services\Integraciones\ServicioOperacionesIntegracion;
 use App\Services\Validacion\ServicioPendientesValidacionOrigen;
 use Carbon\CarbonImmutable;
 use DomainException;
@@ -75,6 +76,11 @@ class PendientesValidacionOrigenController extends Controller
             return response()->json([
                 'message' => 'La lectura del stock de origen no está configurada: falta una conexión externa activa.',
             ], 409);
+        }
+        if (str_contains(strtolower((string) $request->header('Prefer')), 'respond-async')) {
+            $operaciones = app(ServicioOperacionesIntegracion::class);
+
+            return $operaciones->aceptada($operaciones->solicitarStock($request->user()));
         }
         $lectura = $lecturas->leer($request->user());
         if ($lectura === null) {

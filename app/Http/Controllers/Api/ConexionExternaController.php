@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\GuardarConexionExternaRequest;
 use App\Models\ConexionExterna;
 use App\Services\Integraciones\ConectorMySqlLectura;
+use App\Services\Integraciones\ServicioOperacionesIntegracion;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -41,6 +42,9 @@ class ConexionExternaController extends Controller
             throw new DomainException('Activa la conexión antes de probarla.');
         }
 
+        if ($aceptada = app(ServicioOperacionesIntegracion::class)->diferir($request, 'probar', $conexionExterna, $datos)) {
+            return $aceptada;
+        }
         $correcta = false;
         $diagnostico = null;
         try {
@@ -55,6 +59,7 @@ class ConexionExternaController extends Controller
         $conexion = DB::transaction(function () use ($conexionExterna, $datos, $correcta, $request): ConexionExterna {
             $conexion = ConexionExterna::query()->lockForUpdate()->findOrFail($conexionExterna->id);
             $this->comprobarVersion($conexion, (int) $datos['version_conocida']);
+            app(ServicioOperacionesIntegracion::class)->exigirVigente($request->attributes->get('integracion_id'));
             $conexion->forceFill([
                 'ultima_prueba_estado' => $correcta ? 'correcta' : 'fallida',
                 'ultima_prueba_at' => now(),

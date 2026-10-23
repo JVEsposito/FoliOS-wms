@@ -22,7 +22,7 @@ class TelescopeServiceProvider extends TelescopeApplicationServiceProvider
 
         Telescope::filter(function (IncomingEntry $entry) use ($isLocal) {
             // Estas solicitudes y sus respuestas contienen datos privados de conexión.
-            if ($this->app->bound('request') && request()->is('api/administracion/conexiones-externas*')) {
+            if ($this->app->bound('request') && request()->is('api/administracion/conexiones-externas*', 'api/integraciones/operaciones*')) {
                 return false;
             }
 

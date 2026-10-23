@@ -4,7 +4,10 @@ use App\Http\Controllers\Api\AdministracionAccesoController;
 use App\Http\Controllers\Api\ConexionExternaController;
 use App\Http\Controllers\Api\ConfiguracionStockOrigenController;
 use App\Http\Controllers\Api\ExploracionOrigenController;
+use App\Http\Controllers\Api\OperacionIntegracionController;
 use Illuminate\Support\Facades\Route;
+
+Route::get('/integraciones/operaciones/{operacionIntegracion}', [OperacionIntegracionController::class, 'show'])->middleware(['auth:sanctum', 'throttle:120,1']);
 
 Route::middleware(['auth:sanctum', 'can:administrar-accesos'])->group(function (): void {
     Route::put(

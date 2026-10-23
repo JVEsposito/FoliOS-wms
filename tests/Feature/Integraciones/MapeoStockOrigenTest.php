@@ -81,7 +81,7 @@ class MapeoStockOrigenTest extends TestCase
         $this->assertDatabaseCount('pallets_stock_origen', 0);
         $this->assertDatabaseCount('configuraciones_origen', 0);
         $this->putJson(self::RUTA, $this->datos())->assertOk();
-        $this->artisan('integraciones:leer-stock-origen')->assertSuccessful();
+        $this->artisan('integraciones:leer-stock-origen --sin-cola')->assertSuccessful();
         $pallet = PalletStockOrigen::sole();
         $this->assertSame('0000123', $pallet->numero_pallet);
         $this->assertSame(40, $pallet->cajas);

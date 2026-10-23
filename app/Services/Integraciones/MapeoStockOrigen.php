@@ -19,7 +19,7 @@ class MapeoStockOrigen
         'codigo_csg_predio' => 'CSG', 'descripcion_predio' => 'Predio', 'fecha_embalaje' => 'Fecha de embalaje',
         'kilos_netos' => 'Kilos netos', 'cod_bodega' => 'Bodega', 'origen_i' => 'Origen',
         'cod_estado_stock_paletizado' => 'Estado del bulto (PC / PI)', 'marca' => 'Marca', 'Proceso' => 'Proceso',
-        'fecha_recepcion' => 'Fecha de recepción',
+        'fecha_recepcion' => 'Fecha de recepción', 'disponibilidad' => 'Disponibilidad en origen (sin interpretar)',
     ];
 
     public function __construct(private readonly ExploradorMySql $explorador) {}
@@ -34,7 +34,7 @@ class MapeoStockOrigen
         }
         $tipos = array_column($columnas, 'tipo', 'nombre');
         $seleccion = [];
-        foreach (ServicioLecturaStockOrigen::COLUMNAS as $campo) {
+        foreach (array_keys(self::CAMPOS) as $campo) {
             $columna = $mapa[$campo] ?? null;
             $expresion = 'NULL';
             if ($columna !== null && $columna !== '') {

@@ -8,10 +8,12 @@ use App\Enums\ResultadoValidacionPallet;
 use App\Enums\TipoBulto;
 use App\Models\Folio;
 use App\Models\LecturaStockOrigen;
+use App\Models\OperacionIntegracion;
 use App\Models\PalletStockOrigen;
 use App\Models\ValidacionPallet;
 use App\Services\Integraciones\ServicioCatalogoStockOrigen;
 use App\Services\Integraciones\ServicioLecturaStockOrigen;
+use App\Services\Integraciones\ServicioOperacionesIntegracion;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
@@ -139,6 +141,7 @@ class ServicioPendientesValidacionOrigen
                 'temporada_catalogo' => $temporada?->nombre,
             ],
             'lectura' => $this->estadoLectura($bodega, $config['ambito']),
+            'sincronizacion' => $this->sincronizacion($config),
             'resumen' => [
                 'en_origen' => $pallets->count(),
                 'validados' => $validados,
@@ -272,6 +275,18 @@ class ServicioPendientesValidacionOrigen
      * @param  array<string, mixed>  $resuelto
      * @return array<string, mixed>
      */
+    private function sincronizacion(array $config): ?array
+    {
+        $op = OperacionIntegracion::where('tipo', 'stock')
+            ->where('fuente_hash', $this->lecturas->huellaConfiguracion($config))->latest()->first();
+        if (! $op) {
+            return null;
+        }
+
+        // El estado es compartido; las muestras administrativas nunca pasan por esta respuesta.
+        return app(ServicioOperacionesIntegracion::class)->recurso($op);
+    }
+
     private function pallet(PalletStockOrigen $pallet, array $resuelto): array
     {
         $composicion = collect($pallet->composicion);
@@ -294,6 +309,7 @@ class ServicioPendientesValidacionOrigen
             'envase' => $pallet->envase,
             'envase_codigo' => $pallet->envase_codigo,
             'marca' => $pallet->marca,
+            'disponibilidad_origen' => $pallet->disponibilidad_origen,
             'sin_catalogo' => array_map(
                 fn (string $dimension): string => ServicioCatalogoStockOrigen::DIMENSIONES[$dimension],
                 $resuelto['sin_catalogo'],

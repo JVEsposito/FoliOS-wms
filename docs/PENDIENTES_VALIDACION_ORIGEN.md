@@ -13,8 +13,10 @@ siendo la única puerta a Frigorífico** y nada de lo leído crea, modifica ni b
   o vista de stock, una fila por línea de pallet, y se asignan sus columnas. El folio y
   las cajas son obligatorios; los demás campos son opcionales. Los filtros se agregan
   expresamente en el explorador: sin filtros se lee toda la fuente elegida.
-- Lee cada cinco minutos (programador de Laravel, `integraciones:leer-stock-origen`) y
-  cuando alguien pulsa **Leer ahora**. La consulta se construye en el servidor con
+- Encola una lectura cada cinco minutos (programador de Laravel, `integraciones:leer-stock-origen`) y
+  cuando alguien pulsa **Leer ahora**. Un proceso exclusivo la ejecuta y la pantalla
+  muestra su avance mientras permite seguir trabajando con la copia local. Activarlo
+  según [INTEGRACIONES_EN_COLA.md](INTEGRACIONES_EN_COLA.md). La consulta se construye en el servidor con
   nombres descubiertos y valores parametrizados, dentro de una transacción de solo
   lectura que se revierte. La muestra y la lectura usan las mismas asignaciones.
 - Cambiar el mapeo o la conexión exige una nueva lectura correcta antes de mostrar esa
@@ -43,7 +45,8 @@ mismo número del folio en FoliOS:
 
 | Origen | FoliOS |
 |---|---|
-| `Pallet` | N° de folio |
+| `Pallet` | N° de folio (conserva ceros iniciales) |
+| `disponibilidad` (opcional) | Valor del origen; NULL = por confirmar, no decide disponibilidad operativa |
 | `cod_estado_stock_paletizado` PC / PI | pallet / saldo (si un pallet mezcla ambos, manda la mayoría de cajas) |
 | suma de `cantidad` y `kilos_netos` | cajas y kilos |
 | `cod_empresa` | cliente (exportadora) |

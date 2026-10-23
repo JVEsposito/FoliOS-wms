@@ -53,9 +53,14 @@ class ConectorMySqlLectura
         try {
             $pdo->exec('SET SESSION TRANSACTION READ ONLY');
             try {
-                // MySQL 5.7+; en MariaDB no existe y se sigue sin límite propio.
+                // MySQL 5.7+; MariaDB usa max_statement_time (segundos).
                 $pdo->exec('SET SESSION MAX_EXECUTION_TIME='.max(1, $segundos) * 1000);
             } catch (PDOException) {
+                try {
+                    $pdo->exec('SET SESSION max_statement_time='.max(1, $segundos));
+                } catch (PDOException) {
+                    // Servidores antiguos: el proceso exclusivo mantiene aislada la espera.
+                }
             }
             $pdo->beginTransaction();
             $consulta = $pdo->prepare($sql);

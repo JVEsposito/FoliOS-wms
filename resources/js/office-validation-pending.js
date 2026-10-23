@@ -1,3 +1,4 @@
+import { waitIntegrationOperation } from './shared/integration-operation.js';
 import { initReconciliations, loadReconciliations } from './office-validation-reconciliation.js';
 
 const byId = (id) => document.getElementById(id);
@@ -11,6 +12,7 @@ const elements = {
     initials: byId('officeInitials'),
     logout: byId('officeLogoutButton'),
     source: byId('pendingSource'),
+    sync: byId('pendingSyncStatus'),
     catalogNote: byId('pendingCatalogNote'),
     read: byId('pendingReadButton'),
     excel: byId('pendingExcelButton'),
@@ -157,7 +159,7 @@ function article(item, { folio = false } = {}) {
     }
     const mixed = item.mezclados?.length ? `<small class="pending-warning">Mezcla en origen: ${escapeHtml(item.mezclados.join(', '))}</small>` : '';
     const missing = item.sin_catalogo?.length ? `<small class="pending-warning">Falta en catálogo: ${escapeHtml(item.sin_catalogo.join(', '))}</small>` : '';
-    return `<b>${escapeHtml(main || '—')}</b><small>${escapeHtml(detail)}</small>${owner ? `<small>${escapeHtml(owner)}</small>` : ''}${category}${mixed}${missing}`;
+    return `<b>${escapeHtml(main || '—')}</b><small>${escapeHtml(detail)}</small>${owner ? `<small>${escapeHtml(owner)}</small>` : ''}${category}${!folio ? `<small>Disponibilidad en origen: ${escapeHtml(item.disponibilidad_origen ?? 'Por confirmar')}</small>` : ''}${mixed}${missing}`;
 }
 
 function differenceItem(difference, suggestion = false) {
@@ -402,6 +404,9 @@ async function load({ quiet = false } = {}) {
         if (!response.ok) throw new Error(response.data?.message || 'No fue posible cargar los pendientes.');
         state.data = response.data;
         render();
+        const op = response.data.sincronizacion;
+        if (op && ['en_cola', 'en_curso'].includes(op.estado)) void watchStockOperation({ operacion: op });
+        else if (op && !trackedOperation && elements.sync) elements.sync.textContent = op.respuesta?.contenido?.message || op.fase;
         await loadReconciliations();
     } catch (error) {
         if (!quiet) toast(error.message, true);
@@ -410,22 +415,51 @@ async function load({ quiet = false } = {}) {
     }
 }
 
-async function readNow() {
-    busy(true, 'Leyendo el stock del sistema de origen…');
+let trackedOperation = null;
+async function watchStockOperation(accepted) {
+    if (trackedOperation) return;
+    trackedOperation = accepted.operacion.id;
+    const session = state.token;
     elements.read.disabled = true;
     try {
-        const response = await api('/api/validacion/pendientes-origen/leer', { method: 'POST' });
-        if (response.data?.resumen) {
-            state.data = response.data;
-            render();
-            await loadReconciliations();
+        const result = await waitIntegrationOperation(accepted, {
+            headers: { Accept: 'application/json', Authorization: `Bearer ${session}` },
+            valid: () => state.token === session && localStorage.getItem(keys.token) === session,
+            onProgress: (op) => { if (elements.sync) elements.sync.textContent = `${op.fase}. Puedes seguir trabajando con la última copia válida.`; },
+        });
+        if (elements.sync) elements.sync.textContent = result.message || 'Stock actualizado.';
+        toast(result.message || 'Stock actualizado.');
+        await load({ quiet: true });
+    } catch (error) {
+        if (error.name !== 'AbortError') {
+            if ([401, 403].includes(error.status)) { clearSession(); return; }
+            if (elements.sync) elements.sync.textContent = error.message;
+            toast(error.message, true);
+            await load({ quiet: true });
         }
-        toast(response.data?.message || (response.ok ? 'Stock de origen leído.' : 'No fue posible leer el origen.'), !response.ok);
-    } catch {
-        toast('No fue posible leer el origen.', true);
     } finally {
+        trackedOperation = null;
         elements.read.disabled = false;
-        busy(false);
+    }
+}
+
+async function readNow() {
+    elements.read.disabled = true;
+    if (elements.sync) elements.sync.textContent = 'Solicitando lectura en segundo plano…';
+    try {
+        const response = await api('/api/validacion/pendientes-origen/leer', { method: 'POST', headers: { Prefer: 'respond-async' } });
+        if (!response.ok) throw new Error(response.data?.message || 'No fue posible solicitar la lectura.');
+        if (response.status === 202 && response.data.operacion) {
+            await watchStockOperation(response.data);
+        } else {
+            await load({ quiet: true });
+            toast(response.data?.message || 'Stock de origen leído.');
+        }
+    } catch (error) {
+        if (elements.sync) elements.sync.textContent = error.message;
+        toast(error.message, true);
+    } finally {
+        if (!trackedOperation) elements.read.disabled = false;
     }
 }
 

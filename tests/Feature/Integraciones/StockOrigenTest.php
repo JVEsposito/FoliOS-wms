@@ -85,7 +85,7 @@ class StockOrigenTest extends TestCase
             $this->fila('1000000003', ['cantidad' => 5, 'cod_calibre' => 'JD']),
         ];
 
-        $this->artisan('integraciones:leer-stock-origen')
+        $this->artisan('integraciones:leer-stock-origen --sin-cola')
             ->expectsOutput('Stock de origen: 3 pallets (3 nuevos, 0 modificados, 0 retirados) desde 6 filas.')
             ->assertSuccessful();
 
@@ -119,11 +119,11 @@ class StockOrigenTest extends TestCase
     {
         $this->perfil();
         $this->respuesta = [$this->fila('A1', ['cantidad' => 120]), $this->fila('A2', ['cantidad' => 60])];
-        $this->artisan('integraciones:leer-stock-origen')->assertSuccessful();
+        $this->artisan('integraciones:leer-stock-origen --sin-cola')->assertSuccessful();
 
         $this->travel(5)->minutes();
         $this->respuesta = [$this->fila('A1', ['cantidad' => 112])];
-        $this->artisan('integraciones:leer-stock-origen')
+        $this->artisan('integraciones:leer-stock-origen --sin-cola')
             ->expectsOutput('Stock de origen: 1 pallets (0 nuevos, 1 modificados, 1 retirados) desde 1 filas.')
             ->assertSuccessful();
         $retirado = PalletStockOrigen::query()->where('numero_pallet', 'A2')->sole();
@@ -132,7 +132,7 @@ class StockOrigenTest extends TestCase
 
         // Si vuelve a aparecer, queda presente otra vez.
         $this->respuesta = [$this->fila('A1', ['cantidad' => 112]), $this->fila('A2', ['cantidad' => 60])];
-        $this->artisan('integraciones:leer-stock-origen')->assertSuccessful();
+        $this->artisan('integraciones:leer-stock-origen --sin-cola')->assertSuccessful();
         $this->assertTrue(PalletStockOrigen::query()->where('numero_pallet', 'A2')->sole()->presente);
         $this->assertSame(3, LecturaStockOrigen::query()->where('estado', 'correcta')->count());
     }
@@ -141,47 +141,47 @@ class StockOrigenTest extends TestCase
     {
         $this->perfil();
         $this->respuesta = [$this->fila('A1', ['cantidad' => 120])];
-        $this->artisan('integraciones:leer-stock-origen')->assertSuccessful();
+        $this->artisan('integraciones:leer-stock-origen --sin-cola')->assertSuccessful();
 
         $error = new PDOException("SQLSTATE[42S02]: Base table or view not found: 1146 Table 'origen.odbc_stock' doesn't exist");
         $error->errorInfo = ['42S02', 1146, "Table 'origen.odbc_stock' doesn't exist"];
         $this->respuesta = $error;
-        $this->artisan('integraciones:leer-stock-origen')
+        $this->artisan('integraciones:leer-stock-origen --sin-cola')
             ->expectsOutput('Lectura fallida (tabla_inexistente): No existe la tabla o vista odbc_stock en la base de origen. Revisa WMS_STOCK_ORIGEN_TABLA.')
             ->assertFailed();
 
         $acceso = new PDOException("SQLSTATE[HY000] [1045] Access denied for user 'lector'@'10.0.0.5' (using password: YES)");
         $acceso->errorInfo = ['HY000', 1045, "Access denied for user 'lector'@'10.0.0.5'"];
         $this->respuesta = $acceso;
-        $this->artisan('integraciones:leer-stock-origen')->assertFailed();
+        $this->artisan('integraciones:leer-stock-origen --sin-cola')->assertFailed();
         $this->assertSame('acceso_denegado', LecturaStockOrigen::query()->where('causa', 'acceso_denegado')->sole()->causa);
         $this->assertStringNotContainsString('lector', LecturaStockOrigen::query()->pluck('mensaje')->implode(' '));
 
         // Una vista vacía no da todo por retirado.
         $this->respuesta = [];
-        $this->artisan('integraciones:leer-stock-origen')->assertFailed();
+        $this->artisan('integraciones:leer-stock-origen --sin-cola')->assertFailed();
         $this->assertTrue(PalletStockOrigen::query()->where('numero_pallet', 'A1')->sole()->presente);
         $this->assertSame(1, LecturaStockOrigen::query()->where('causa', 'sin_filas')->count());
     }
 
     public function test_sin_perfil_unico_o_con_tabla_invalida_no_consulta_el_origen(): void
     {
-        $this->artisan('integraciones:leer-stock-origen')
+        $this->artisan('integraciones:leer-stock-origen --sin-cola')
             ->expectsOutput('Lectura del stock de origen sin configurar, deshabilitada o en curso.')
             ->assertSuccessful();
         $this->perfil('SE');
         $this->perfil('OTRO');
-        $this->artisan('integraciones:leer-stock-origen')->assertSuccessful();
+        $this->artisan('integraciones:leer-stock-origen --sin-cola')->assertSuccessful();
         $this->assertSame([], $this->consultas);
 
         config(['integraciones.stock_pt.conexion' => 'SE', 'integraciones.stock_pt.tabla' => 'odbc_stock; DROP TABLE x']);
-        $this->artisan('integraciones:leer-stock-origen')->assertFailed();
+        $this->artisan('integraciones:leer-stock-origen --sin-cola')->assertFailed();
         $this->assertSame([], $this->consultas);
         $this->assertSame('tabla_invalida', LecturaStockOrigen::query()->sole()->causa);
 
         config(['integraciones.stock_pt.tabla' => 'odbc_stock', 'integraciones.stock_pt.temporada' => '00']);
         $this->respuesta = [$this->fila('A1')];
-        $this->artisan('integraciones:leer-stock-origen')->assertSuccessful();
+        $this->artisan('integraciones:leer-stock-origen --sin-cola')->assertSuccessful();
         $this->assertSame(['AR01', '00'], $this->consultas[0]['parametros']);
         $this->assertStringContainsString('AND `cod_temporada` = ?', $this->consultas[0]['sql']);
     }
@@ -206,7 +206,7 @@ class StockOrigenTest extends TestCase
             $this->fila('P-OBSERVADO', ['cantidad' => 120]),
             $this->fila('P-ANULADO', ['cantidad' => 120]),
         ];
-        $this->artisan('integraciones:leer-stock-origen')->assertSuccessful();
+        $this->artisan('integraciones:leer-stock-origen --sin-cola')->assertSuccessful();
 
         $this->folio('P-IGUAL', 120, [['csg' => '100001', 'cantidad_cajas' => 100], ['csg' => '100002', 'cantidad_cajas' => 20]]);
         $this->folio('P-CAJAS', 112, [['csg' => '100001', 'cantidad_cajas' => 112]]);
@@ -292,7 +292,7 @@ class StockOrigenTest extends TestCase
             $this->fila('P-MEZCLA', ['cantidad' => 50, 'cod_calibre' => 'XL']),
             $this->fila('P-MEZCLA', ['cantidad' => 30, 'cod_calibre' => 'XL', 'variedad' => 'LAPINS', 'codigo_variedad' => 'LAP', 'codigo_csg_predio' => '100002', 'descripcion_predio' => 'PREDIO DOS']),
         ];
-        $this->artisan('integraciones:leer-stock-origen')->assertSuccessful();
+        $this->artisan('integraciones:leer-stock-origen --sin-cola')->assertSuccessful();
 
         $respuesta = $this->actingAs($this->administrador, 'sanctum')->getJson('/api/validacion/pendientes-origen')->assertOk()
             ->assertJsonPath('puede_administrar_catalogo', true)

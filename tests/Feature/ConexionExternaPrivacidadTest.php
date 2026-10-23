@@ -19,6 +19,8 @@ class ConexionExternaPrivacidadTest extends TestCase
             (new TelescopeServiceProvider($this->app))->register();
             $filtro = Telescope::$filterUsing[array_key_last(Telescope::$filterUsing)];
             $this->assertFalse($filtro(IncomingEntry::make(['uri' => 'fixture'])));
+            $this->app->instance('request', Request::create('/api/integraciones/operaciones/fixture'));
+            $this->assertFalse($filtro(IncomingEntry::make(['uri' => 'fixture'])));
             $this->app->instance('request', Request::create('/api/otro'));
             $this->assertTrue($filtro(IncomingEntry::make(['uri' => 'fixture'])));
         } finally {

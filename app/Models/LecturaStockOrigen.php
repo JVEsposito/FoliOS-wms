@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /** Cada lectura del stock de origen: origen, fecha, resultado y error (regla 16.6). */
 #[Fillable([
     'ambito', 'conexion_externa_id', 'tabla', 'bodega', 'temporada_origen', 'estado', 'causa', 'mensaje',
+    'configuracion_hash', 'operacion_integracion_id',
     'filas', 'pallets', 'nuevos', 'modificados', 'retirados', 'solicitada_por_user_id', 'iniciada_at', 'terminada_at',
 ])]
 class LecturaStockOrigen extends Model
