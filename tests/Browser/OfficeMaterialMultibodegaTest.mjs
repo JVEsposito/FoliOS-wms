@@ -74,15 +74,9 @@ test('despacho directo consulta y entrega solo desde la bodega elegida', async (
 test('dos saldos del mismo folio abren el despacho del saldo seleccionado', async () => {
     const { browser, page, calls, errors } = await fixture('inventario');
     try {
-        const action = page.locator('[data-direct-dispatch="saldo-norte"]');
-        await action.waitFor({ state: 'attached' });
-        const visibility = await action.evaluate((node) => {
-            const chain = [];
-            for (let el = node; el; el = el.parentElement) chain.push({ tag: el.tagName, id: el.id, class: el.className, hidden: el.hidden, display: getComputedStyle(el).display, section: el.dataset.materialsSection });
-            return chain;
-        });
-        assert.ok(await action.isVisible(), JSON.stringify(visibility));
-        await action.click();
+        const row = page.locator('#materialsInventoryBody tr').filter({ has: page.locator('[data-direct-dispatch="saldo-norte"]') });
+        await row.getByRole('button', { name: 'Acciones' }).click();
+        await page.getByRole('menuitem', { name: 'Despachar directo', exact: true }).click();
         assert.match(await page.locator('#materialDirectDispatchContext').textContent(), /Bodega Norte/);
         assert.equal(await page.locator('#materialDirectDispatchForm [name="almacen_origen_id"]').inputValue(), 'norte');
         await page.selectOption('#materialDirectDispatchForm [name="destino_material_id"]', 'packing');
@@ -126,11 +120,11 @@ test('la orden informa cobertura por bodega y conserva el origen en el borrador'
         await page.fill('#materialOrderForm [name="cantidad_planificada_salida"]', '50');
         assert.match(await page.locator('#materialOrderRequirements').textContent(), /40 disponibles[\s\S]*Faltan 10/);
         await page.fill('#materialOrderForm [name="cantidad_planificada_salida"]', '20');
+        await page.screenshot({ path: resolve(root, 'storage/app/ui/oficina/multibodega-ordenes.png'), fullPage: true });
         await page.locator('#saveMaterialOrder').click();
         await page.waitForFunction(() => document.getElementById('officeToasts').textContent.includes('creada en borrador'));
         const write = calls.find((c) => c.path.endsWith('/transformaciones/ordenes') && c.method === 'POST');
         assert.equal(write.body.almacen_origen_id, 'norte'); assert.equal(write.body.cantidad_planificada_salida, 20);
         assert.deepEqual(errors, []);
-        await page.screenshot({ path: resolve(root, 'storage/app/ui/oficina/multibodega-ordenes.png'), fullPage: true });
     } finally { await browser.close(); }
 });

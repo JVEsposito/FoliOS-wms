@@ -29,7 +29,7 @@
                 'description' => 'Revisa fechas, existencias y ubicación en todos los almacenes.',
             ],
             'inventario' => [
-                'eyebrow' => 'INVENTARIO BC · BODEGA CENTRAL',
+                'eyebrow' => 'INVENTARIO · BODEGAS FÍSICAS',
                 'title' => 'Inventario físico por folio y cliente',
                 'description' => 'Consulta cantidades, ubicación, reservas y bloqueos de las bodegas físicas.',
             ],
