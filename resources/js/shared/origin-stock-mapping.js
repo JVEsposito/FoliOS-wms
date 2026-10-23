@@ -59,7 +59,7 @@ export function createOriginStockMapping({ api, authorized, session, explorer, e
         $('originMappingSample').replaceChildren();
         $('originMappingStatus').textContent = preview ? 'Probando la lectura con las columnas asignadas…' : 'Guardando la configuración…';
         try {
-            const { data } = await api(`/lectura-stock${preview ? '/simular' : ''}`, { method: preview ? 'POST' : 'PUT', body: JSON.stringify(payload) });
+            const { data } = await api(`/lectura-stock${preview ? '/simular' : ''}`, { method: preview ? 'POST' : 'PUT', body: JSON.stringify(payload), valid: () => valid(version, token), onProgress: (op) => { if (valid(version, token)) $('originMappingStatus').textContent = op.fase; } });
             if (!valid(version, token)) return;
             if (preview) {
                 const columns = Object.keys(fields).filter((field) => fields[field]);

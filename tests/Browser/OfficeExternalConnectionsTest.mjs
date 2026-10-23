@@ -19,13 +19,14 @@ async function setup(browser, handler, admin = true) {
     await context.route('http://localhost/**', async (route) => {
         const path = new URL(route.request().url()).pathname;
         if (path === '/oficina/accesos') return route.fulfill({ body: html, contentType: 'text/html' });
+        if (path === '/shared/integration-operation.js') return route.fulfill({ body: readFileSync(resolve(root, 'resources/js/shared/integration-operation.js')), contentType: 'text/javascript' });
         if (path === '/shared/origin-explorer.js') return route.fulfill({ body: readFileSync(resolve(root, 'resources/js/shared/origin-explorer.js')), contentType: 'text/javascript' });
         if (path === '/shared/origin-stock-mapping.js') return route.fulfill({ body: readFileSync(resolve(root, 'resources/js/shared/origin-stock-mapping.js')), contentType: 'text/javascript' });
         if (path === '/fixture-external.js') return route.fulfill({ body: source, contentType: 'text/javascript' });
         // La sección se ejecuta sobre el HTML Blade real; el resto de los módulos no participa.
         if (path.endsWith('.js')) return route.abort();
         if (path.startsWith('/build/')) return route.fulfill({ body: readFileSync(resolve(root, `public${path}`)), contentType: path.endsWith('.css') ? 'text/css' : 'application/octet-stream' });
-        if (path.startsWith('/api/administracion/conexiones-externas')) return handler(route);
+        if (path.startsWith('/api/administracion/conexiones-externas') || path.startsWith('/api/integraciones/operaciones')) return handler(route);
         return route.fulfill({ status: 404, body: '' });
     });
     const page = await context.newPage();
@@ -237,6 +238,33 @@ test('un perfil sin administración no consulta las conexiones', async () => {
         assert.equal(await page.locator('#administration-tab-external-connections').isHidden(), true);
         assert.equal(await page.locator('#externalConnectionForm').isHidden(), true);
         assert.deepEqual(calls, []);
+        await context.close();
+    } finally { await browser.close(); }
+});
+
+
+test('exploración solicita una operación y sondea el resultado sin repetir la consulta', async () => {
+    const browser = await launch();
+    try {
+        let posts = 0; let polls = 0;
+        const id = '00000000-0000-4000-8000-000000000002';
+        const { context, page } = await setup(browser, async (route) => {
+            const req = route.request(); const path = new URL(req.url()).pathname;
+            if (path.startsWith('/api/integraciones/operaciones/')) {
+                polls++;
+                assert.equal(req.method(), 'GET');
+                return route.fulfill({ json: { operacion: { id, estado: 'correcta', fase: 'Finalizada', respuesta: { codigo_http: 200, contenido: { data: [{ nombre: 'vista_async', tipo: 'VIEW' }] } } } } });
+            }
+            if (req.method() === 'GET') return route.fulfill({ json: { data: [fixture] } });
+            posts++;
+            assert.equal(req.headers().prefer, 'respond-async');
+            return route.fulfill({ status: 202, json: { operacion: { id, estado: 'en_cola', fase: 'Esperando proceso fixture' } } });
+        });
+        await openPanel(page);
+        await page.locator('[data-explore-connection]').click();
+        await page.waitForFunction(() => document.getElementById('originStatus').textContent.includes('Esperando proceso fixture'));
+        await page.locator('#originObjects option[value="vista_async"]').waitFor({ state: 'attached' });
+        assert.equal(posts, 1); assert.equal(polls, 1);
         await context.close();
     } finally { await browser.close(); }
 });

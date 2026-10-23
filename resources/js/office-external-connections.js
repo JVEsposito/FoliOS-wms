@@ -1,3 +1,4 @@
+import { waitIntegrationOperation } from './shared/integration-operation.js';
 import { createOriginExplorer } from './shared/origin-explorer.js';
 import { createOriginStockMapping } from './shared/origin-stock-mapping.js';
 
@@ -51,16 +52,27 @@ function clearPrivateData() {
 
 async function api(path, options = {}) {
     const requestToken = token();
+    const { onProgress, valid = () => true, ...requestOptions } = options;
+    const queued = ['POST', 'PUT'].includes(options.method) && (/(probar|estructura|columnas|muestra)$/.test(path) || path.startsWith('/lectura-stock'));
+    const headers = { Accept: 'application/json', Authorization: `Bearer ${requestToken}`, ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...(queued ? { Prefer: 'respond-async' } : {}) };
     const response = await fetch(`/api/administracion/conexiones-externas${path}`, {
-        ...options,
+        ...requestOptions,
         cache: 'no-store',
-        headers: { Accept: 'application/json', Authorization: `Bearer ${requestToken}`, ...(options.body ? { 'Content-Type': 'application/json' } : {}) },
+        headers,
     });
     const data = await response.json().catch(() => ({}));
     if ((response.status === 401 || response.status === 403) && requestToken === token()) clearPrivateData();
     if (!response.ok) {
         const message = response.status >= 500 ? 'No fue posible completar la operación.' : Object.values(data.errors || {}).flat()[0] || data.message || 'No fue posible completar la operación.';
         throw new Error(message);
+    }
+    if (response.status === 202 && data.operacion) {
+        try {
+            return await waitIntegrationOperation(data, { headers, onProgress, valid: () => requestToken === token() && authorized() && valid() });
+        } catch (error) {
+            if ([401, 403].includes(error.status) && requestToken === token()) clearPrivateData();
+            throw error;
+        }
     }
     return data;
 }
@@ -169,7 +181,7 @@ table?.addEventListener('click', async (event) => {
     byId('externalConnectionStatus').textContent = 'Comprobando desde el servidor de FoliOS…';
     setBusy(true);
     try {
-        const result = await api(`/${encodeURIComponent(item.id)}/probar`, { method: 'POST', body: JSON.stringify({ version_conocida: item.version }) });
+        const result = await api(`/${encodeURIComponent(item.id)}/probar`, { method: 'POST', body: JSON.stringify({ version_conocida: item.version }), valid: () => generation === state.generation, onProgress: (op) => { if (generation === state.generation) byId('externalConnectionStatus').textContent = op.fase; } });
         if (generation === state.generation && session === token() && authorized()) byId('externalConnectionStatus').textContent = result.message;
     } catch (error) {
         if (generation === state.generation && session === token() && authorized()) {

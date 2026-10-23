@@ -15,7 +15,8 @@ export function createOriginExplorer({ api, authorized, session, escapeHtml: esc
         root.dispatchEvent(new CustomEvent('origin:selection', { detail: null }));
     }
     async function request(action, data = {}) {
-        return api(`/${encodeURIComponent(connection.id)}/${action}`, { method: 'POST', body: JSON.stringify({ version_conocida: connection.version, ...data }) });
+        const version = generation; const token = session();
+        return api(`/${encodeURIComponent(connection.id)}/${action}`, { method: 'POST', body: JSON.stringify({ version_conocida: connection.version, ...data }), valid: () => valid(version, token), onProgress: (op) => { if (valid(version, token)) $('originStatus').textContent = op.fase; } });
     }
     function choices() { return columns.map((c) => `<option value="${esc(c.nombre)}">${esc(c.nombre)}</option>`).join(''); }
     function filters() { return [...$('originFilters').children].map((row) => ({ columna: row.querySelector('select').value, valor: row.querySelector('input').value })); }

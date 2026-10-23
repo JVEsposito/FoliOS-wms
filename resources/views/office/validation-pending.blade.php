@@ -44,6 +44,7 @@
                     </div>
                 </header>
 
+                <div class="pending-source" id="pendingSyncStatus" role="status" aria-live="polite"></div>
                 <div class="pending-source" id="pendingSource" role="status">Cargando estado de la lectura…</div>
                 <div class="pending-catalog-note" id="pendingCatalogNote" role="status" hidden></div>
 

@@ -9,6 +9,7 @@ use App\Models\ConfiguracionOrigen;
 use App\Services\Integraciones\ConectorMySqlLectura;
 use App\Services\Integraciones\ExploradorMySql;
 use App\Services\Integraciones\MapeoStockOrigen;
+use App\Services\Integraciones\ServicioOperacionesIntegracion;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -47,6 +48,7 @@ class ConfiguracionStockOrigenController extends Controller
                 if (($perfil?->version ?? 0) !== $datos['version_conocida']) {
                     throw new ConflictoOperacion('La configuración cambió. Vuelva a abrir el mapeo antes de guardar.');
                 }
+                app(ServicioOperacionesIntegracion::class)->exigirVigente($request->attributes->get('integracion_id'));
                 $perfil ??= new ConfiguracionOrigen(['clave' => ConfiguracionOrigen::STOCK]);
                 $perfil->fill([
                     'conexion_externa_id' => $conexion->id, 'ajustes' => $datos['ajustes'],
@@ -69,7 +71,7 @@ class ConfiguracionStockOrigenController extends Controller
             'version_conocida' => ['required', 'integer', 'min:0'],
             'ajustes' => ['required', 'array:tabla,campos,filtros,habilitada'],
             'ajustes.tabla' => ['required', 'string', 'max:64'], 'ajustes.habilitada' => ['required', 'boolean'],
-            'ajustes.campos' => ['required', 'array', 'max:27'], 'ajustes.campos.*' => ['nullable', 'string', 'max:64'],
+            'ajustes.campos' => ['required', 'array', 'max:28'], 'ajustes.campos.*' => ['nullable', 'string', 'max:64'],
             'ajustes.campos.Pallet' => ['required', 'string', 'max:64'], 'ajustes.campos.cantidad' => ['required', 'string', 'max:64'],
             'ajustes.filtros' => ['present', 'array', 'max:8'], 'ajustes.filtros.*' => ['required', 'array:columna,valor'],
             'ajustes.filtros.*.columna' => ['required', 'string', 'max:64'], 'ajustes.filtros.*.valor' => ['present', 'string', 'max:180'],
@@ -79,6 +81,9 @@ class ConfiguracionStockOrigenController extends Controller
         $datos['ajustes']['habilitada'] = (bool) $datos['ajustes']['habilitada'];
         $conexion = ConexionExterna::findOrFail($datos['conexion_id']);
         $this->vigente($conexion, $datos['version_conexion']);
+        if ($aceptada = app(ServicioOperacionesIntegracion::class)->diferir($request, $muestra ? 'mapeo_muestra' : 'mapeo_guardar', $conexion, $datos)) {
+            return $aceptada;
+        }
         try {
             $columnas = $explorador->columnas($conexion->credenciales, $datos['ajustes']['tabla']);
             $consulta = $mapeo->consulta($datos['ajustes'], $columnas, $muestra);

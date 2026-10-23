@@ -76,8 +76,10 @@ Una muestra vacía se distingue de un error de acceso o de columnas; no modifica
 
 El explorador requiere Administración de accesos. Las consultas se construyen en el
 servidor a partir de las columnas descubiertas y parámetros, sin recibir SQL libre.
-La muestra no se persiste ni se guarda en el navegador. Al perder o cambiar la sesión se
-limpia y se descartan respuestas pendientes. La auditoría conserva quién consultó y la
+La muestra no se incorpora al stock ni se guarda en el navegador. Para entregarla desde
+la cola se conserva un resultado temporal cifrado, accesible durante cinco minutos; el
+scheduler elimina su contenido vencido. Al perder o cambiar la sesión se limpia la
+pantalla y se descartan respuestas pendientes. La auditoría conserva quién consultó y la
 acción, sin filas de origen, valores de filtros ni credenciales.
 
 ## Guardar la lectura de stock
@@ -104,3 +106,6 @@ Deshabilitar un mapeo guardado apaga la lectura y no reactiva esa configuración
 El primer uso de la conexión es **Frigorífico → Pendientes por validar**
 (`/oficina/validacion/pendientes`). Se documenta en
 [PENDIENTES_VALIDACION_ORIGEN.md](PENDIENTES_VALIDACION_ORIGEN.md).
+
+Las pantallas ejecutan las consultas externas en una cola exclusiva. Antes de desplegar,
+activar el proceso descrito en [Integraciones en cola](INTEGRACIONES_EN_COLA.md).

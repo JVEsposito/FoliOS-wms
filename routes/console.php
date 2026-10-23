@@ -1,5 +1,6 @@
 <?php
 
+use App\Services\Integraciones\ServicioOperacionesIntegracion;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\Verificaciones\ServicioVerificacionesUbicacion;
 use Illuminate\Foundation\Inspiring;
@@ -52,6 +53,11 @@ Schedule::command('salud:latido-scheduler')->everyMinute();
 Schedule::command('integraciones:leer-stock-origen')
     ->everyFiveMinutes()
     ->withoutOverlapping(10);
+
+Artisan::command('integraciones:limpiar-operaciones', function () {
+    app(ServicioOperacionesIntegracion::class)->limpiar();
+})->purpose('Elimina resultados temporales y vence consultas de integración interrumpidas.');
+Schedule::command('integraciones:limpiar-operaciones')->everyMinute()->withoutOverlapping(2);
 
 Schedule::command('materiales:procesar-vencimientos')
     ->dailyAt('00:15')

@@ -19,11 +19,11 @@ const fixture = { id, numero_folio: '000123', estado: 'pendiente', contexto_actu
     planta_inicial: { cajas: 240, marca: 'Marca B', calibre: '3J', csg: { '001567': 240 }, leida_at: '2026-10-23T15:01:00Z' }, comparacion: comparison };
 const pagination = (data) => ({ data, current_page: 1, last_page: 1, total: data.length });
 
-async function setup(browser, { consulta = false, lost = false, conflict = false, width = 1280 } = {}) {
+async function setup(browser, { consulta = false, lost = false, conflict = false, width = 1280, background = false } = {}) {
     const context = await browser.newContext({ viewport: { width, height: 850 } });
     const identity = { nombre: 'Oficina prueba', rol: consulta ? 'consulta' : 'supervisor_frio', puede_consultar_validaciones_pallet: true, modulos_acceso: ['frigorifico.validacion'] };
     await context.addInitScript((user) => { localStorage.setItem('estiba_wms_office_token', 'fixture'); localStorage.setItem('estiba_wms_office_identity', JSON.stringify(user)); }, identity);
-    const requests = []; const writes = []; let current = structuredClone(fixture); let events = [];
+    const requests = []; const writes = []; const integration = { posts: 0, polls: 0, done: false, reads: 0 }; let current = structuredClone(fixture); let events = [];
     await context.route('http://localhost/**', async (route) => {
         const request = route.request(); const url = new URL(request.url()); const path = url.pathname;
         if (path === '/oficina/validacion/pendientes') return route.fulfill({ body: html, contentType: 'text/html' });
@@ -33,12 +33,24 @@ async function setup(browser, { consulta = false, lost = false, conflict = false
         }
         if (path === '/api/acceso-oficina') return route.fulfill({ json: { usuario: identity } });
         if (path === '/api/oficina/contexto') return route.fulfill({ json: { data: { planta: 'Planta prueba', temporada: null, avisos_cierre: [], avisos_materiales: [] } } });
-        if (path === '/api/validacion/pendientes-origen') return route.fulfill({ json: {
+        if (background && path === '/api/validacion/pendientes-origen/leer') {
+            integration.posts++;
+            assert.equal(request.headers().prefer, 'respond-async');
+            return route.fulfill({ status: 202, json: { operacion: { id, estado: 'en_cola', fase: 'Esperando integración' } } });
+        }
+        if (background && path === `/api/integraciones/operaciones/${id}`) {
+            integration.polls++;
+            assert.equal(request.method(), 'GET');
+            return route.fulfill({ json: { operacion: integration.done
+                ? { id, estado: 'correcta', fase: 'Finalizada', respuesta: { codigo_http: 200, contenido: { message: 'Stock actualizado fixture' } } }
+                : { id, estado: 'en_curso', fase: 'Consultando planta fixture' } } });
+        }
+        if (path === '/api/validacion/pendientes-origen') { integration.reads++; return route.fulfill({ json: {
             fuente: { habilitada: true, conexion: 'Planta', tabla: 'odbc_stock', bodega: 'AR01', temporada_catalogo: 'Prueba' },
             lectura: { ultima: null, ultima_correcta_at: '2026-10-23T15:01:00Z', desactualizada: false, vigencia_minutos: 20 },
             resumen: { en_origen: 0, validados: 0, pendientes: 0, cajas_pendientes: 0, por_resolver: 0, con_diferencias: 0, solo_en_folios: 0, catalogo_pendiente: 0, pallets_sin_catalogo: 0 },
             pendientes: [], por_resolver: [], diferencias: [], solo_en_folios: [], catalogo: [], puede_administrar_catalogo: false,
-        } });
+        } }); }
         if (path === base) { requests.push(url.searchParams); return route.fulfill({ json: { casos: pagination([current]), resumen: { pendiente: 1 }, fuente: { vigente: true }, puede_gestionar: !consulta } }); }
         if (path === `${base}/excel`) { requests.push(url.searchParams); return route.fulfill({ body: 'fixture', contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }); }
         if (path === `${base}/${id}`) return route.fulfill({ json: { ...current, historial: pagination(events) } });
@@ -58,7 +70,7 @@ async function setup(browser, { consulta = false, lost = false, conflict = false
     await page.goto('http://localhost/oficina/validacion/pendientes');
     await page.locator('#reconciliationBody [data-reconciliation]').waitFor({ state: 'attached' });
     await page.locator('#pending-validation-tab-differences').click();
-    return { context, page, requests, writes, errors };
+    return { context, page, requests, writes, errors, integration };
 }
 
 async function launch() {
@@ -123,6 +135,29 @@ test('una versión obsoleta conserva el comentario y no registra automáticament
         assert.equal(await page.locator('#reconciliationManagement textarea').inputValue(), 'Revisar cuadratura con nueva lectura');
         assert.equal(await page.locator('#reconciliationManagement textarea').isDisabled(), false);
         assert.equal(writes.length, 1); assert.equal(await page.locator('#reconciliationPending').isVisible(), false);
+        await context.close();
+    } finally { await browser.close(); }
+});
+
+
+test('Leer ahora espera en segundo plano y mantiene búsquedas y cuadraturas disponibles', async () => {
+    const browser = await launch();
+    try {
+        const { page, context, integration, errors } = await setup(browser, { background: true });
+        await page.locator('#pendingReadButton').click();
+        await page.waitForFunction(() => document.getElementById('pendingSyncStatus').textContent.includes('Consultando planta fixture'));
+        assert.equal(await page.locator('#officeLoading').isVisible(), false);
+        await page.locator('#pendingSearch').fill('000123');
+        assert.equal(await page.locator('#pendingSearch').inputValue(), '000123');
+        assert.equal(await page.locator('[data-reconciliation]').isEnabled(), true);
+        assert.equal(await page.locator('#pendingReadButton').isDisabled(), true);
+        integration.done = true;
+        await page.waitForFunction(() => document.getElementById('pendingSyncStatus').textContent.includes('Stock actualizado fixture'));
+        await page.waitForFunction(() => !document.getElementById('pendingReadButton').disabled);
+        assert.equal(integration.posts, 1);
+        assert.ok(integration.polls >= 2);
+        assert.ok(integration.reads >= 2);
+        assert.deepEqual(errors, []);
         await context.close();
     } finally { await browser.close(); }
 });

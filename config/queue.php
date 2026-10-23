@@ -30,6 +30,11 @@ return [
     */
 
     'connections' => [
+        // Siempre asíncrona, aunque QUEUE_CONNECTION sea sync. Misma BD que la solicitud.
+        'integraciones' => [
+            'driver' => 'database', 'connection' => null, 'table' => 'jobs',
+            'queue' => 'integraciones', 'retry_after' => 300, 'after_commit' => false,
+        ],
 
         'sync' => [
             'driver' => 'sync',
@@ -84,6 +89,11 @@ return [
         'failover' => [
             'driver' => 'failover',
             'connections' => [
+                // Siempre asíncrona, aunque QUEUE_CONNECTION sea sync. Misma BD que la solicitud.
+                'integraciones' => [
+                    'driver' => 'database', 'connection' => null, 'table' => 'jobs',
+                    'queue' => 'integraciones', 'retry_after' => 300, 'after_commit' => false,
+                ],
                 'database',
                 'deferred',
             ],

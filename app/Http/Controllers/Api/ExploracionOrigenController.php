@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ConexionExterna;
 use App\Services\Integraciones\ConectorMySqlLectura;
 use App\Services\Integraciones\ExploradorMySql;
+use App\Services\Integraciones\ServicioOperacionesIntegracion;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -39,6 +40,10 @@ class ExploracionOrigenController extends Controller
     {
         $datos = $request->validate(['version_conocida' => ['required', 'integer', 'min:1'], ...$reglas]);
         $this->vigente($conexion, (int) $datos['version_conocida']);
+        $tipo = ['estructura_consultada' => 'estructura', 'columnas_consultadas' => 'columnas', 'muestra_consultada' => 'muestra'][$accion];
+        if ($aceptada = app(ServicioOperacionesIntegracion::class)->diferir($request, $tipo, $conexion, $datos)) {
+            return $aceptada;
+        }
         try {
             $resultado = $leer($datos);
         } catch (Throwable $error) {
