@@ -66,13 +66,13 @@ class ReposicionMaterialController extends Controller
     {
         $filtros = $this->filtros($r);
         $titulos = ['cliente' => 'Cliente', 'codigo' => 'Código', 'item' => 'Ítem', 'categoria' => 'Categoría', 'unidad' => 'Unidad',
-            'disponible' => 'Disponible Bodega Central', 'reservado' => 'Reservado', 'bloqueado_vencido' => 'Bloqueado o vencido', 'total_empresa' => 'Total empresa',
+            'disponible' => 'Disponible en bodegas físicas', 'reservado' => 'Reservado', 'bloqueado_vencido' => 'Bloqueado o vencido', 'total_empresa' => 'Total empresa',
             'consumo_periodo' => 'Consumo del período', 'consumo_diario' => 'Consumo diario', 'dias_cobertura' => 'Días de cobertura', 'cobertura_etiqueta' => 'Sin consumo',
             'stock_minimo' => 'Mínimo', 'punto_reorden' => 'Reorden', 'stock_maximo' => 'Máximo', 'cantidad_sugerida' => 'Cantidad sugerida', 'estado' => 'Estado'];
         $textos = ['cliente', 'codigo', 'item', 'categoria', 'unidad', 'cobertura_etiqueta', 'estado'];
         $columnas = collect($titulos)->map(fn ($t, $c) => ['clave' => $c, 'titulo' => $t, 'tipo' => in_array($c, $textos, true) ? 'texto' : 'numero'])->values()->all();
         $ruta = $excel->generar('Reposición de materiales', $columnas, $servicio->filas($filtros)->all(),
-            ['consumo' => $servicio->dias($filtros['dias'] ?? null).' días', 'perspectiva' => 'Disponible Bodega Central', 'usuario' => $r->user()->name], 'Reposición');
+            ['consumo' => $servicio->dias($filtros['dias'] ?? null).' días', 'perspectiva' => 'Disponible en bodegas físicas', 'usuario' => $r->user()->name], 'Reposición');
 
         return response()->download($ruta, 'reposicion-materiales.xlsx')->deleteFileAfterSend();
     }

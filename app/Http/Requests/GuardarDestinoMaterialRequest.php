@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\TipoAlmacenMaterial;
 use App\Models\DestinoMaterial;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -10,7 +11,10 @@ class GuardarDestinoMaterialRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('administrar-catalogos-materiales') === true;
+        $destino = $this->route('destinoMaterial');
+
+        return $this->user()?->can('administrar-catalogos-materiales') === true
+            && ! ($destino instanceof DestinoMaterial && $destino->tipo === TipoAlmacenMaterial::Fisica->value);
     }
 
     /**

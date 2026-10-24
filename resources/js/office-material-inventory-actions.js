@@ -1,6 +1,8 @@
 const bodySelector = '#materialsInventoryBody';
 const actionSelector = [
+    '[data-direct-consumption]',
     '[data-direct-dispatch]',
+    '[data-transfer-client]',
     '[data-correct-material]',
     '[data-correct-expiry]',
     '[data-block-material]',
@@ -12,7 +14,9 @@ let popover = null;
 let inventoryObserver = null;
 
 function actionPresentation(button) {
+    if (button.matches('[data-direct-consumption]')) return ['−', 'Consumir insumo', 'primary'];
     if (button.matches('[data-direct-dispatch]')) return ['↗', 'Despachar directo', 'primary'];
+    if (button.matches('[data-transfer-client]')) return ['⇄', 'Transferir a otro cliente', 'neutral'];
     if (button.matches('[data-correct-expiry]')) return ['✎', 'Corregir vencimiento', 'neutral'];
     if (button.matches('[data-correct-material]')) return ['✎', 'Corregir código', 'neutral'];
     if (button.matches('[data-release-material]')) return ['✓', 'Liberar material', 'success'];

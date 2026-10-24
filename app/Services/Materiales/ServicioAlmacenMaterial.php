@@ -5,8 +5,11 @@ namespace App\Services\Materiales;
 use App\Enums\EstadoOperacionalFolio;
 use App\Enums\TipoAlmacenMaterial;
 use App\Models\AlmacenMaterial;
+use App\Models\Camara;
 use App\Models\DestinoMaterial;
 use App\Models\FolioMaterial;
+use App\Models\ReservaMaterial;
+use App\Models\ReservaTransformacionMaterial;
 use App\Models\SaldoMaterialAlmacen;
 use App\Models\UbicacionActual;
 use App\Models\User;
@@ -18,6 +21,53 @@ use LogicException;
 
 class ServicioAlmacenMaterial
 {
+    public function origen(?string $id, ?User $actor = null, bool $exigirActivo = true): AlmacenMaterial
+    {
+        $almacen = $id ? AlmacenMaterial::query()->lockForUpdate()->findOrFail($id) : $this->bodegaCentral($actor);
+        if ($almacen->tipo !== TipoAlmacenMaterial::Fisica || ($exigirActivo && ! $almacen->activo)) {
+            throw new DomainException('La bodega de origen debe ser física y estar activa.');
+        }
+
+        return $almacen;
+    }
+
+    public function saldoReserva(ReservaMaterial|ReservaTransformacionMaterial $reserva): SaldoMaterialAlmacen
+    {
+        $documento = $reserva instanceof ReservaMaterial ? $reserva->detalle->despacho : $reserva->orden;
+        $origen = $this->origen($documento->almacen_origen_id, exigirActivo: false);
+
+        return SaldoMaterialAlmacen::query()->with(['almacen', 'camara', 'posicion', 'folioMaterial.folio'])
+            ->whereKey($reserva->saldo_material_almacen_id)->where('folio_id', $reserva->folio_id)
+            ->where('almacen_material_id', $origen->id)->lockForUpdate()->firstOrFail();
+    }
+
+    /** Cambia exclusivamente el saldo que dio origen a la reserva y recompone el total. */
+    public function aplicarReserva(ReservaMaterial|ReservaTransformacionMaterial $reserva, float $deltaActual, float $deltaReservada): FolioMaterial
+    {
+        return DB::transaction(function () use ($reserva, $deltaActual, $deltaReservada) {
+            $folio = FolioMaterial::query()->lockForUpdate()->findOrFail($reserva->folio_id);
+            $saldo = $this->saldoReserva($reserva);
+            if ($deltaActual < 0 && ! $saldo->esReservable()) {
+                throw new DomainException('El saldo reservado ya no está disponible en su bodega y ubicación de origen.');
+            }
+            $actual = round((float) $saldo->cantidad_actual + $deltaActual, 3);
+            $reservada = round((float) $saldo->cantidad_reservada + $deltaReservada, 3);
+            $this->validarCantidades($actual, $reservada);
+            $camaraAnterior = $saldo->camara_id;
+            $saldo->update([
+                'cantidad_actual' => max(0, $actual), 'cantidad_reservada' => max(0, $reservada),
+                'camara_id' => $actual > 0 ? $saldo->camara_id : null,
+                'posicion_id' => $actual > 0 ? $saldo->posicion_id : null,
+            ]);
+            $resultado = $this->sincronizarProyeccion($folio);
+            if ($camaraAnterior && $actual <= 0) {
+                Camara::query()->whereKey($camaraAnterior)->increment('version_plano');
+            }
+
+            return $resultado;
+        }, attempts: 3);
+    }
+
     public function bodegaCentral(?User $actor = null, bool $bloquear = false): AlmacenMaterial
     {
         $consulta = AlmacenMaterial::query()
@@ -236,18 +286,15 @@ class ServicioAlmacenMaterial
 
         return DB::transaction(function () use ($folioId): FolioMaterial {
             $material = FolioMaterial::query()
-                ->with('folio')
                 ->lockForUpdate()
                 ->findOrFail($folioId);
-            $totales = SaldoMaterialAlmacen::query()
+            $material->setRelation('folio', $material->folio()->lockForUpdate()->first());
+            // Lectura actual bajo REPEATABLE READ: otra bodega pudo cambiar mientras esperábamos el folio.
+            $saldos = SaldoMaterialAlmacen::query()
                 ->where('folio_id', $folioId)
-                ->selectRaw(
-                    'COALESCE(SUM(cantidad_actual), 0) AS cantidad_actual, '
-                    .'COALESCE(SUM(cantidad_reservada), 0) AS cantidad_reservada',
-                )
-                ->firstOrFail();
-            $cantidadActual = round((float) $totales->cantidad_actual, 3);
-            $cantidadReservada = round((float) $totales->cantidad_reservada, 3);
+                ->lockForUpdate()->get(['cantidad_actual', 'cantidad_reservada']);
+            $cantidadActual = round((float) $saldos->sum('cantidad_actual'), 3);
+            $cantidadReservada = round((float) $saldos->sum('cantidad_reservada'), 3);
 
             $this->validarCantidades($cantidadActual, $cantidadReservada);
             $material->forceFill([
@@ -287,17 +334,13 @@ class ServicioAlmacenMaterial
 
     public function validarProyeccion(string $folioId): void
     {
-        $material = FolioMaterial::query()->findOrFail($folioId);
-        $totales = SaldoMaterialAlmacen::query()
+        $material = FolioMaterial::query()->lockForUpdate()->findOrFail($folioId);
+        $saldos = SaldoMaterialAlmacen::query()
             ->where('folio_id', $folioId)
-            ->selectRaw(
-                'COALESCE(SUM(cantidad_actual), 0) AS cantidad_actual, '
-                .'COALESCE(SUM(cantidad_reservada), 0) AS cantidad_reservada',
-            )
-            ->firstOrFail();
+            ->lockForUpdate()->get(['cantidad_actual', 'cantidad_reservada']);
 
-        if (abs((float) $material->cantidad_actual - (float) $totales->cantidad_actual) > 0.0001
-            || abs((float) $material->cantidad_reservada - (float) $totales->cantidad_reservada) > 0.0001) {
+        if (abs((float) $material->cantidad_actual - (float) $saldos->sum('cantidad_actual')) > 0.0001
+            || abs((float) $material->cantidad_reservada - (float) $saldos->sum('cantidad_reservada')) > 0.0001) {
             throw new LogicException(
                 'La proyección global del folio no coincide con sus saldos por almacén.',
             );
@@ -317,6 +360,7 @@ class ServicioAlmacenMaterial
         $saldo = SaldoMaterialAlmacen::query()
             ->where('folio_id', $folio->folio_id)
             ->where('almacen_material_id', $bodega->id)
+            ->lockForUpdate()
             ->first();
 
         if (! $saldo || (float) $saldo->cantidad_actual <= 0 || ! $saldo->camara_id) {
@@ -354,19 +398,13 @@ class ServicioAlmacenMaterial
             return;
         }
 
-        $bodega = AlmacenMaterial::query()
-            ->where('codigo', AlmacenMaterial::CODIGO_BODEGA_CENTRAL)
-            ->first();
-        $saldoBodega = $bodega
-            ? SaldoMaterialAlmacen::query()
-                ->where('folio_id', $folio->folio_id)
-                ->where('almacen_material_id', $bodega->id)
-                ->first()
-            : null;
+        $pendienteUbicacion = SaldoMaterialAlmacen::query()->where('folio_id', $folio->folio_id)
+            ->where('cantidad_actual', '>', 0)->whereNull('camara_id')
+            ->whereHas('almacen', fn ($q) => $q->where('tipo', TipoAlmacenMaterial::Fisica->value))
+            ->lockForUpdate()->get(['id'])->isNotEmpty();
         $estado = $folio->motivo_bloqueo
             ? EstadoOperacionalFolio::Bloqueado
-            : ((float) ($saldoBodega?->cantidad_actual ?? 0) > 0
-                && ! $saldoBodega?->camara_id
+            : ($pendienteUbicacion
                     ? EstadoOperacionalFolio::PendienteUbicacion
                     : EstadoOperacionalFolio::Disponible);
 

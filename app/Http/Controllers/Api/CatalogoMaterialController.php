@@ -10,6 +10,7 @@ use App\Http\Resources\ClienteMaterialResource;
 use App\Http\Resources\DestinoMaterialResource;
 use App\Http\Resources\ItemMaterialResource;
 use App\Http\Resources\TemporadaMaterialResource;
+use App\Models\AlmacenMaterial;
 use App\Models\ClienteMaterial;
 use App\Models\DestinoMaterial;
 use App\Models\ItemMaterial;
@@ -28,21 +29,24 @@ class CatalogoMaterialController extends Controller
     public function catalogo(): JsonResponse
     {
         Gate::authorize('consultar-despachos-materiales');
+        $bodegas = AlmacenMaterial::query()->where('tipo', 'fisica')->where('activo', true)->orderBy('nombre')->get(['id', 'codigo', 'nombre']);
         $temporada = TemporadaMaterial::query()->where('activa', true)->first();
 
         if ($temporada === null) {
             return response()->json([
                 'temporada' => null,
+                'bodegas' => $bodegas,
                 'clientes' => [],
                 'items' => [],
                 'destinos' => DestinoMaterialResource::collection(
-                    DestinoMaterial::query()->where('activo', true)->orderBy('nombre')->get(),
+                    DestinoMaterial::query()->where('tipo', 'virtual')->where('activo', true)->orderBy('nombre')->get(),
                 ),
             ]);
         }
 
         return response()->json([
             'temporada' => new TemporadaMaterialResource($temporada),
+            'bodegas' => $bodegas,
             'clientes' => ClienteMaterialResource::collection(
                 ClienteMaterial::query()
                     ->with('temporada')
@@ -66,7 +70,7 @@ class CatalogoMaterialController extends Controller
                     ->get(),
             ),
             'destinos' => DestinoMaterialResource::collection(
-                DestinoMaterial::query()->where('activo', true)->orderBy('nombre')->get(),
+                DestinoMaterial::query()->where('tipo', 'virtual')->where('activo', true)->orderBy('nombre')->get(),
             ),
         ]);
     }
@@ -225,7 +229,7 @@ class CatalogoMaterialController extends Controller
 
         return response()->json([
             'data' => DestinoMaterialResource::collection(
-                DestinoMaterial::query()->orderByDesc('activo')->orderBy('nombre')->get(),
+                DestinoMaterial::query()->where('tipo', 'virtual')->orderByDesc('activo')->orderBy('nombre')->get(),
             ),
         ]);
     }

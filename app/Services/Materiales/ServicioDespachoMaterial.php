@@ -10,6 +10,7 @@ use App\Enums\EstadoPosicion;
 use App\Enums\EstadoReservaMaterial;
 use App\Enums\EstadoSesionEstiba;
 use App\Enums\OrigenDespachoMaterial;
+use App\Enums\TipoAlmacenMaterial;
 use App\Enums\TipoMovimientoInventarioMaterial;
 use App\Exceptions\ConflictoOperacion;
 use App\Exceptions\OperacionNoAutorizada;
@@ -89,8 +90,8 @@ class ServicioDespachoMaterial
                 ->lockForUpdate()
                 ->first();
 
-            if (! $destino) {
-                throw new DomainException('El destino no existe o se encuentra inactivo.');
+            if (! $destino || $destino->tipo !== TipoAlmacenMaterial::Virtual->value) {
+                throw new DomainException('El destino debe ser un centro de costo virtual activo. Para trasladar entre bodegas usa una transferencia interna.');
             }
 
             $asignado = isset($datos['asignado_a_user_id'])
@@ -100,6 +101,7 @@ class ServicioDespachoMaterial
                 throw new DomainException('El camarero asignado no está activo o no puede retirar materiales.');
             }
 
+            $almacenOrigen = app(ServicioAlmacenMaterial::class)->origen($datos['almacen_origen_id'] ?? null, $usuario);
             $despacho = DespachoMaterial::create([
                 'temporada_id' => $temporada->id,
                 'codigo' => $this->siguienteCodigoBloqueado(),
@@ -112,6 +114,7 @@ class ServicioDespachoMaterial
                 'asignado_a_user_id' => $asignado?->id,
                 'estado' => EstadoDespachoMaterial::Pendiente,
                 'destino_material_id' => $destino->id,
+                'almacen_origen_id' => $almacenOrigen->id,
                 'destino_nombre' => $destino->nombre,
                 'destino_centro_costo' => $destino->centro_costo,
                 'observacion' => $datos['observacion'] ?? null,
@@ -590,6 +593,7 @@ class ServicioDespachoMaterial
             'operacionesRetiro.autorizadoPor:id,name',
             'operacionesRetiro.regularizadoPor:id,name',
             'temporada:id,codigo,nombre,activa',
+            'almacenOrigen:id,codigo,nombre,tipo,activo',
             'detalles' => fn ($consulta) => $consulta->withSum(
                 ['reservas as cantidad_reservada_resumen' => fn ($reservas) => $reservas
                     ->where('estado', EstadoReservaMaterial::Activa->value)],
@@ -613,12 +617,16 @@ class ServicioDespachoMaterial
             'operacionesRetiro.autorizadoPor:id,name',
             'operacionesRetiro.regularizadoPor:id,name',
             'temporada:id,codigo,nombre,activa',
+            'almacenOrigen:id,codigo,nombre,tipo,activo',
             'detalles.item.cliente.temporada',
             'detalles.item.fotoPrincipal',
             'detalles.reservas' => fn ($consulta) => $consulta
                 ->where('estado', EstadoReservaMaterial::Activa->value)
                 ->orderBy('orden_fifo'),
             'detalles.reservas.folioMaterial.folio.ubicacionActual.posicion.camara',
+            'detalles.reservas.saldoAlmacen.almacen',
+            'detalles.reservas.saldoAlmacen.camara',
+            'detalles.reservas.saldoAlmacen.posicion',
         ]);
 
         return $despachos;
@@ -636,6 +644,7 @@ class ServicioDespachoMaterial
             'operacionesRetiro.regularizaciones.usuario:id,name',
             'operacionesRetiro.retiros.folioMaterial.folio',
             'temporada:id,codigo,nombre,activa',
+            'almacenOrigen:id,codigo,nombre,tipo,activo',
             'creadoPor:id,name',
             'asignadoA:id,name',
             'asignaciones.asignadoA:id,name',
@@ -649,6 +658,9 @@ class ServicioDespachoMaterial
                 ->where('estado', EstadoReservaMaterial::Activa->value)
                 ->orderBy('orden_fifo'),
             'detalles.reservas.folioMaterial.folio.ubicacionActual.posicion.camara',
+            'detalles.reservas.saldoAlmacen.almacen',
+            'detalles.reservas.saldoAlmacen.camara',
+            'detalles.reservas.saldoAlmacen.posicion',
             'detalles.historialReservas.folioMaterial.folio',
             'detalles.retiros.folioMaterial.folio',
             'detalles.retiros.camara:id,codigo,nombre',
@@ -705,6 +717,7 @@ class ServicioDespachoMaterial
                     'orden_fifo' => $orden,
                 ]);
             },
+            almacenId: $detalle->despacho->almacen_origen_id,
         );
         if ((float) $detalle->cantidad_sin_reserva_por_vencimiento > 0) {
             $detalle->update(['cantidad_sin_reserva_por_vencimiento' => $faltante]);
@@ -724,13 +737,7 @@ class ServicioDespachoMaterial
             ->get();
 
         foreach ($reservas as $reserva) {
-            $folio = FolioMaterial::query()->lockForUpdate()->findOrFail($reserva->folio_id);
-            $folio->update([
-                'cantidad_reservada' => max(
-                    0,
-                    round((float) $folio->cantidad_reservada - (float) $reserva->cantidad, 3),
-                ),
-            ]);
+            app(ServicioAlmacenMaterial::class)->aplicarReserva($reserva, 0, -(float) $reserva->cantidad);
             $reserva->update(['estado' => EstadoReservaMaterial::Liberada]);
         }
 

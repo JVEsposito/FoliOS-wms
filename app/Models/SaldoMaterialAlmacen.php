@@ -2,6 +2,11 @@
 
 namespace App\Models;
 
+use App\Enums\ContenidoCamara;
+use App\Enums\EstadoCamara;
+use App\Enums\EstadoOperacionalFolio;
+use App\Enums\EstadoPosicion;
+use App\Enums\TipoAlmacenMaterial;
 use App\Models\Concerns\ImpideEliminacionFisica;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -58,6 +63,20 @@ class SaldoMaterialAlmacen extends Model
                 3,
             ),
         );
+    }
+
+    /** La aptitud física corresponde al saldo, aunque otro saldo del folio esté sin ubicar. */
+    public function esReservable(): bool
+    {
+        return $this->almacen?->tipo === TipoAlmacenMaterial::Fisica
+            && $this->almacen->activo
+            && $this->folioMaterial?->folio?->activo
+            && in_array($this->folioMaterial->folio->estado_operacional, [EstadoOperacionalFolio::Disponible, EstadoOperacionalFolio::PendienteUbicacion], true)
+            && ! $this->folioMaterial->estaVencido()
+            && $this->folioMaterial->motivo_bloqueo === null
+            && $this->camara?->contenido === ContenidoCamara::Materiales
+            && $this->camara->estado === EstadoCamara::Activa
+            && (! $this->posicion_id || $this->posicion?->estado === EstadoPosicion::Activa);
     }
 
     protected function casts(): array

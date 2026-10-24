@@ -14,6 +14,7 @@ use App\Services\Camaras\EstadoDesocupacionProgramada;
 use App\Services\Camaras\EstadoEvacuacionEmergencia;
 use App\Services\Camaras\ServicioBandasOperacionales;
 use App\Services\Estiba\ServicioReservasTareasMovimiento;
+use App\Services\Materiales\ServicioPlanoBodegasMateriales;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
@@ -24,6 +25,7 @@ class CamaraController extends Controller
     public function index(
         Request $request,
         AlcanceOperacionalUsuario $alcance,
+        ServicioPlanoBodegasMateriales $planoMateriales,
     ): Response {
         $contenidos = collect($alcance->contenidosVisibles($request->user()))
             ->map->value
@@ -32,6 +34,7 @@ class CamaraController extends Controller
             ->where('estado', EstadoCamara::Activa->value)
             ->whereIn('contenido', $contenidos)
             ->with($this->relacionesBloqueo())
+            ->withSum('saldosMateriales as revision_materiales', 'version')
             ->orderBy('codigo')
             ->get();
         $etag = $this->etagListado($request, $camaras);
@@ -49,6 +52,7 @@ class CamaraController extends Controller
                 ->whereHas('ubicacionesActuales'),
             'ubicacionesSinPosicion',
         ]);
+        $planoMateriales->resumir($camaras);
 
         return $this->configurarCache(
             CamaraResumenResource::collection($camaras)->response(),
@@ -64,6 +68,7 @@ class CamaraController extends Controller
         ServicioReservasTareasMovimiento $reservasTareas,
         EstadoEvacuacionEmergencia $emergencias,
         EstadoDesocupacionProgramada $desocupaciones,
+        ServicioPlanoBodegasMateriales $planoMateriales,
     ): Response {
         abort_unless($camara->estado === EstadoCamara::Activa, 404);
         abort_unless($alcance->puedeVerCamara($request->user(), $camara), 403);
@@ -72,6 +77,7 @@ class CamaraController extends Controller
         }
 
         $camara->load('bloqueo.sesionEstiba');
+        $camara->loadSum('saldosMateriales as revision_materiales', 'version');
         $camara->setRelation('emergenciaActiva', $emergencias->activa($camara->id));
         $camara->setRelation('ultimaDesocupacion', $desocupaciones->ultima($camara->id));
         $camara->setAttribute('desocupacion_habilitada', $desocupaciones->habilitada($camara));
@@ -128,6 +134,7 @@ class CamaraController extends Controller
                 ->orderBy('nivel')
                 ->orderBy('posicion'),
         ]);
+        $planoMateriales->enriquecer($camara);
         $bandasOperacionales->enriquecer($camara);
 
         return $this->configurarCache(
@@ -158,6 +165,7 @@ class CamaraController extends Controller
                     'contenido' => $camara->contenido->value,
                     'estado' => $camara->estado->value,
                     'version_plano' => $camara->version_plano,
+                    'revision_materiales' => $camara->revision_materiales,
                     'actualizada_at' => $camara->updated_at?->toAtomString(),
                     'bloqueo_id' => $bloqueo?->getKey(),
                     'bloqueo_adquirido_at' => $bloqueo?->adquirido_at?->toAtomString(),
@@ -186,9 +194,11 @@ class CamaraController extends Controller
             : null;
         $huella = json_encode([
             'version_perfiles_afinidad' => 2,
+            'version_materiales_multibodega' => 1,
             'camara_id' => $camara->id,
             'camara_actualizada_at' => $camara->updated_at?->toAtomString(),
             'version_plano' => $camara->version_plano,
+            'revision_materiales' => $camara->revision_materiales,
             'usuario_id' => $request->user()?->getAuthIdentifier(),
             'dispositivo_id' => $dispositivoId,
             'bloqueo_id' => $bloqueo?->getKey(),

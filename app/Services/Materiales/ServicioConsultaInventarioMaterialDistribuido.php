@@ -2,11 +2,8 @@
 
 namespace App\Services\Materiales;
 
-use App\Enums\ContenidoCamara;
-use App\Enums\EstadoCamara;
-use App\Enums\EstadoOperacionalFolio;
-use App\Enums\EstadoPosicion;
 use App\Enums\TipoAlmacenMaterial;
+use App\Models\AlmacenMaterial;
 use App\Models\SaldoMaterialAlmacen;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -17,6 +14,8 @@ class ServicioConsultaInventarioMaterialDistribuido extends ServicioConsultaInve
     public function detalle(array $filtros): LengthAwarePaginator
     {
         $consulta = $this->consultaBodega()
+            ->when($filtros['almacen_id'] ?? null, fn ($q, $id) => $q->where('almacen_material_id', $id))
+            ->when($filtros['item_material_id'] ?? null, fn ($q, $id) => $q->whereHas('folioMaterial', fn ($f) => $f->where('item_material_id', $id)))
             ->with([
                 'almacen',
                 'camara',
@@ -60,7 +59,7 @@ class ServicioConsultaInventarioMaterialDistribuido extends ServicioConsultaInve
                             ->where('etiqueta', 'like', $termino));
                 });
             })
-            ->orderBy('folio_id');
+            ->orderBy('folio_id')->orderBy('almacen_material_id');
 
         $paginacion = $consulta
             ->paginate((int) ($filtros['per_page'] ?? 25))
@@ -73,9 +72,10 @@ class ServicioConsultaInventarioMaterialDistribuido extends ServicioConsultaInve
         return $paginacion;
     }
 
-    public function resumen(?string $clienteId = null): array
+    public function resumen(?string $clienteId = null, ?string $almacenId = null): array
     {
         $saldos = $this->consultaBodega()
+            ->when($almacenId, fn ($q, $id) => $q->where('almacen_material_id', $id))
             ->with([
                 'almacen',
                 'camara',
@@ -164,6 +164,9 @@ class ServicioConsultaInventarioMaterialDistribuido extends ServicioConsultaInve
             ],
             'resumen_clientes' => $clientes,
             'resumen_items' => $items,
+            'bodegas' => AlmacenMaterial::query()->where('tipo', 'fisica')->where('activo', true)->orderBy('nombre')->get(['id', 'codigo', 'nombre']),
+            'resumen_items_almacenes' => $saldos->groupBy(fn ($s) => $s->almacen_material_id.':'.$s->folioMaterial->item_material_id.':'.$s->folioMaterial->categoria_operacional?->value)
+                ->map(fn ($grupo) => [...$this->resumenItem($grupo), 'almacen' => ['id' => $grupo->first()->almacen->id, 'codigo' => $grupo->first()->almacen->codigo, 'nombre' => $grupo->first()->almacen->nombre]])->values(),
         ];
     }
 
@@ -213,6 +216,8 @@ class ServicioConsultaInventarioMaterialDistribuido extends ServicioConsultaInve
         $recepcion = $material->bultoRecepcion?->detalle?->recepcion;
 
         return [
+            'saldo_id' => $saldo->id,
+            'saldo_version' => $saldo->version,
             'folio_id' => $folio->id,
             'numero_folio' => $folio->numero_folio,
             'estado_operacional' => $folio->estado_operacional->value,
@@ -237,6 +242,7 @@ class ServicioConsultaInventarioMaterialDistribuido extends ServicioConsultaInve
             'unidad_medida' => $material->unidad_medida,
             'lote' => $material->lote,
             'fecha_ingreso' => $folio->fecha_ingreso?->toAtomString(),
+            'fecha_fabricacion' => $material->fecha_fabricacion?->toDateString(),
             'almacen' => [
                 'id' => $saldo->almacen->id,
                 'codigo' => $saldo->almacen->codigo,
@@ -267,12 +273,7 @@ class ServicioConsultaInventarioMaterialDistribuido extends ServicioConsultaInve
 
     private function reservable(SaldoMaterialAlmacen $saldo): bool
     {
-        return $saldo->camara?->contenido === ContenidoCamara::Materiales
-            && $saldo->camara?->estado === EstadoCamara::Activa
-            && (! $saldo->posicion || $saldo->posicion->estado === EstadoPosicion::Activa)
-            && $saldo->folioMaterial->folio->estado_operacional === EstadoOperacionalFolio::Disponible
-            && ! $saldo->folioMaterial->estaVencido()
-            && $saldo->folioMaterial->motivo_bloqueo === null;
+        return $saldo->esReservable();
     }
 
     private function disponible(SaldoMaterialAlmacen $saldo): float

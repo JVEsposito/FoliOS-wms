@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\AndenController;
 use App\Http\Controllers\Api\ArchivoTemporadaController;
 use App\Http\Controllers\Api\BandaOperacionalController;
 use App\Http\Controllers\Api\BloqueoMaterialController;
+use App\Http\Controllers\Api\BodegaMaterialController;
 use App\Http\Controllers\Api\CamaraController;
 use App\Http\Controllers\Api\CambioPasswordUsuarioController;
 use App\Http\Controllers\Api\CapacidadMaterialController;
@@ -563,6 +564,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/materiales/almacenes/movimientos/exportar', [AlmacenMaterialController::class, 'exportarMovimientos'])
         ->middleware('can:consultar-kardex-materiales');
     Route::post('/materiales/almacenes/movimientos', [AlmacenMaterialController::class, 'store']);
+
+    Route::get('/materiales/bodegas', [BodegaMaterialController::class, 'index'])->middleware('can:consultar-despachos-materiales');
+    Route::get('/materiales/bodegas/historial', [BodegaMaterialController::class, 'historial'])->middleware('can:consultar-kardex-materiales');
+    Route::post('/materiales/bodegas', [BodegaMaterialController::class, 'store'])->middleware('can:configurar-capacidad-materiales');
+    Route::put('/materiales/bodegas/{id}', [BodegaMaterialController::class, 'update'])->middleware('can:configurar-capacidad-materiales');
 
     Route::get('/materiales/recepciones/eliminaciones', [FotoRecepcionMaterialController::class, 'eliminaciones'])->middleware('can:consultar-eliminaciones-recepciones-materiales');
     Route::get('/materiales/recepciones/eliminaciones/{eliminacion}/fotos/{indice}', [FotoRecepcionMaterialController::class, 'eliminada'])->middleware('can:consultar-eliminaciones-recepciones-materiales');

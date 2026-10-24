@@ -8,6 +8,7 @@ const date = (value) => new Intl.DateTimeFormat('es-CL', { timeZone: catalog?.zo
 const numeric = new Set(['largo_m', 'ancho_m', 'altura_total_m', 'altura_util_m', 'max_niveles', 'peso_maximo_kg', 'peso_unitario_kg', 'bultos_fisicos']);
 let catalog = null; let rows = []; let type = null; let measurement = null; let busy = false;
 let catalogSeq = 0; let stockSeq = 0; let simulationSeq = 0; let historySeq = 0; let historyFilter = {};
+let warehousesPending = false;
 const pending = new WeakMap();
 function fields(form) {
     return Object.fromEntries([...new FormData(form)].map(([key, v]) => [key, v === '' ? null : numeric.has(key) ? Number(v) : key === 'activo' ? v === '1' : v]));
@@ -149,7 +150,7 @@ async function save(form, path, body, method = 'PUT') {
     } catch (error) {
         if (error.status && error.status < 500) pending.delete(form);
         $('Notice').textContent = saved ? 'Guardado. No se pudo actualizar la consulta; pulsa Actualizar.' : error.message;
-    } finally { busy = false; permissions(); }
+    } finally { busy = false; permissions(); if (warehousesPending) { warehousesPending = false; void reload(); } }
 }
 function describe(d) {
     if (!d) return '<p>Sin registro anterior.</p>';
@@ -214,5 +215,6 @@ document.getElementById('materialCapacityApp').addEventListener('click', (event)
     if (open) void loadHistory(); $('History').scrollIntoView({ block: 'nearest' });
 });
 permissions();
+window.addEventListener('estiba:material-warehouses-updated', () => { if (busy) warehousesPending = true; else void reload(); });
 if (localStorage.getItem('estiba_wms_office_token')) void reload();
 else $('Notice').textContent = 'Ingresa desde Materiales para consultar la capacidad de bodegas.';

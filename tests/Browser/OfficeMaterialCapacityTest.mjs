@@ -17,6 +17,7 @@ async function fixture({ write = false, intercept, mobile = false } = {}) {
     const page = await context.newPage(); const calls = []; const errors = [];
     let config = { largo_m: 10, ancho_m: 8, altura_util_m: 4, zonas: [structuredClone(zone)], superficie_util_m2: 24, volumen_util_m3: 72, version: 1 };
     let types = [structuredClone(pallet)]; let currentStock = structuredClone(stock);
+    let warehouses = [{ id: 'w1', nombre: 'Central', codigo: 'BOD-CENTRAL', activo: true, version_bodega: 1 }];
     page.on('pageerror', (error) => errors.push(error.message));
     await context.addInitScript(() => localStorage.setItem('estiba_wms_office_token', 'test-token'));
     await context.route('http://localhost/**', async (route) => {
@@ -24,10 +25,19 @@ async function fixture({ write = false, intercept, mobile = false } = {}) {
         if (url.pathname === '/test') return route.fulfill({ body: html, contentType: 'text/html' });
         if (url.pathname.startsWith('/build/')) return route.fulfill({ body: readFileSync(resolve(root, 'public' + url.pathname)), contentType: url.pathname.endsWith('.css') ? 'text/css' : 'application/octet-stream' });
         if (url.pathname === '/office-navigation.js') return route.fulfill({ body: '', contentType: 'text/javascript' });
-        if (url.pathname === '/office-material-capacity.js') return route.fulfill({ body: readFileSync(resolve(root, 'resources/js/office-material-capacity.js')), contentType: 'text/javascript' });
+        if (['/office-material-capacity.js', '/office-material-bodegas.js'].includes(url.pathname)) return route.fulfill({ body: readFileSync(resolve(root, 'resources/js' + url.pathname)), contentType: 'text/javascript' });
         const call = { path: url.pathname, method: request.method(), body: request.postDataJSON() }; calls.push(call);
         if (intercept && await intercept(route, url, call)) return;
-        if (url.pathname.endsWith('/catalogo')) return route.fulfill({ json: { almacenes: [{ id: 'w1', nombre: 'Central', codigo: 'BC', activo: true, configuracion: config }], tipos: types, permisos: { configurar: write, medir: write }, zona_horaria: 'America/Santiago' } });
+        if (url.pathname === '/api/materiales/bodegas/historial') return route.fulfill({ json: { data: [{ usuario: 'Ana Pérez', ocurrido_at: '2026-10-23 12:00:00', anterior: null, resultado: warehouses.at(-1) }], meta: { pagina: 1, paginas: 1 } } });
+        if (url.pathname === '/api/materiales/bodegas') {
+            if (call.method === 'POST') { const item = { id: 'w2', ...call.body, version_bodega: 1 }; warehouses.push(item); return route.fulfill({ status: 201, json: { data: item } }); }
+            return route.fulfill({ json: { data: warehouses, puede_configurar: write } });
+        }
+        if (url.pathname === '/api/materiales/bodegas/w1' && call.method === 'PUT') {
+            warehouses[0] = { ...warehouses[0], ...call.body, version_bodega: call.body.version + 1 };
+            return route.fulfill({ json: { data: warehouses[0] } });
+        }
+        if (url.pathname.endsWith('/catalogo')) return route.fulfill({ json: { almacenes: warehouses.map((w) => ({ ...w, configuracion: w.id === 'w1' ? config : null })), tipos: types, permisos: { configurar: write, medir: write }, zona_horaria: 'America/Santiago' } });
         if (url.pathname.endsWith('/almacenes/w1') && request.method() === 'PUT') { config = { ...config, ...call.body, version: 2 }; return route.fulfill({ json: { data: config } }); }
         if (url.pathname.endsWith('/cargas/s1') && request.method() === 'PUT') { currentStock = { ...currentStock, ...call.body, id: 'm1', version: 1, medidas_vigentes: true }; return route.fulfill({ json: { data: currentStock } }); }
         if (url.pathname.endsWith('/cargas')) return route.fulfill({ json: { data: [currentStock], meta: { pagina: 1, paginas: 1, total: 1 } } });
@@ -37,7 +47,7 @@ async function fixture({ write = false, intercept, mobile = false } = {}) {
         return route.fulfill({ status: 404 });
     });
     await page.goto('http://localhost/test');
-    await page.evaluate(async () => { document.querySelector('[data-office-shell]')?.remove(); await import('/office-material-capacity.js'); });
+    await page.evaluate(async () => { document.querySelector('[data-office-shell]')?.remove(); await import('/office-material-capacity.js'); await import('/office-material-bodegas.js'); });
     await page.waitForFunction(() => document.getElementById('capacityStockRows').textContent.includes('FM-1'));
     return { browser, page, calls, errors };
 }
@@ -48,6 +58,12 @@ test('consulta en tablet permite simular y consultar historia sin habilitar escr
         assert.equal(await page.locator('#capacityNewType').isHidden(), true);
         assert.equal(await page.locator('[data-measure]').count(), 0);
         assert.equal(await page.locator('#capacityWarehouseForm [name="largo_m"]').isDisabled(), true);
+        await page.locator('#bodegaDirectory > summary').click();
+        await page.waitForFunction(() => document.getElementById('bodegaList').textContent.includes('BOD-CENTRAL'));
+        assert.equal(await page.locator('#bodegaNew').isHidden(), true);
+        assert.equal(await page.locator('[data-edit-bodega]').count(), 0);
+        await page.locator('#bodegaHistory > summary').click();
+        await page.waitForFunction(() => document.getElementById('bodegaHistoryRows').textContent.includes('Ana Pérez'));
         await page.fill('#capacitySimulationForm [name="peso_unitario_kg"]', '350');
         await page.getByRole('button', { name: 'Simular capacidad de referencia' }).click();
         await page.waitForFunction(() => document.getElementById('capacitySimulationResult').textContent.includes('20 pallets'));
@@ -57,6 +73,59 @@ test('consulta en tablet permite simular y consultar historia sin habilitar escr
         assert.deepEqual(errors, []);
         assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
         await page.screenshot({ path: resolve(root, 'storage/app/ui/oficina/capacidad-tablet.png'), fullPage: true });
+    } finally { await browser.close(); }
+});
+
+test('alta de bodega reintenta el mismo UUID y actualiza el catálogo de capacidad', async () => {
+    let first = true; const writes = [];
+    const { browser, page, errors } = await fixture({ write: true, intercept: async (route, url, call) => {
+        if (url.pathname !== '/api/materiales/bodegas' || call.method !== 'POST') return false;
+        writes.push(call.body);
+        if (!first) return false;
+        first = false; await route.fulfill({ status: 503, json: { message: 'Reintenta el guardado.' } }); return true;
+    } });
+    try {
+        await page.locator('#bodegaDirectory > summary').click();
+        await page.locator('#bodegaNew').click();
+        await page.fill('#bodegaForm [name="codigo"]', 'BOD-NORTE');
+        await page.fill('#bodegaForm [name="nombre"]', 'Bodega Norte');
+        await page.getByRole('button', { name: 'Guardar bodega', exact: true }).click();
+        await page.waitForFunction(() => document.getElementById('bodegaNotice').textContent.includes('Reintenta'));
+        await page.getByRole('button', { name: 'Guardar bodega', exact: true }).click();
+        await page.waitForFunction(() => document.querySelector('#capacityWarehouse option[value="w2"]'));
+        assert.equal(writes.length, 2); assert.deepEqual(writes[0], writes[1]);
+        assert.equal(writes[0].version, 0); assert.match(writes[0].operacion_id, /^[0-9a-f-]{36}$/);
+        assert.deepEqual(errors, []);
+        await page.screenshot({ path: resolve(root, 'storage/app/ui/oficina/bodegas-escritorio.png'), fullPage: true });
+    } finally { await browser.close(); }
+});
+
+test('un conflicto de versión permite actualizar la edición sin cambiar el código', async () => {
+    let first = true; let fresh = false; const writes = [];
+    const { browser, page, errors } = await fixture({ write: true, intercept: async (route, url, call) => {
+        if (url.pathname === '/api/materiales/bodegas/w1' && call.method === 'PUT') {
+            writes.push(call.body);
+            if (first) { first = false; fresh = true; await route.fulfill({ status: 409, json: { message: 'La bodega cambió. Actualiza los datos antes de guardar.' } }); return true; }
+        }
+        if (fresh && url.pathname === '/api/materiales/bodegas' && call.method === 'GET') {
+            await route.fulfill({ json: { data: [{ id: 'w1', codigo: 'BOD-CENTRAL', nombre: 'Central actualizada', activo: true, version_bodega: 2 }], puede_configurar: true } }); return true;
+        }
+        return false;
+    } });
+    try {
+        await page.locator('#bodegaDirectory > summary').click();
+        await page.locator('[data-edit-bodega="w1"]').click();
+        assert.equal(await page.locator('#bodegaForm [name="codigo"]').getAttribute('readonly'), '');
+        await page.fill('#bodegaForm [name="nombre"]', 'Edición anterior');
+        await page.getByRole('button', { name: 'Guardar bodega', exact: true }).click();
+        await page.waitForFunction(() => document.getElementById('bodegaNotice').textContent.includes('La bodega cambió'));
+        await page.locator('#bodegaReload').click();
+        await page.waitForFunction(() => document.querySelector('#bodegaForm [name="nombre"]').value === 'Central actualizada');
+        await page.fill('#bodegaForm [name="nombre"]', 'Central definitiva');
+        await page.getByRole('button', { name: 'Guardar bodega', exact: true }).click();
+        await page.waitForFunction(() => document.getElementById('bodegaForm').hidden);
+        assert.equal(writes[1].version, 2); assert.notEqual(writes[0].operacion_id, writes[1].operacion_id);
+        assert.equal(writes[1].codigo, 'BOD-CENTRAL'); assert.deepEqual(errors, []);
     } finally { await browser.close(); }
 });
 

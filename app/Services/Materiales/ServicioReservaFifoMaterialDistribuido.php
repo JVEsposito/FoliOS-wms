@@ -7,7 +7,6 @@ use App\Enums\ContenidoCamara;
 use App\Enums\EstadoCamara;
 use App\Enums\EstadoOperacionalFolio;
 use App\Enums\EstadoPosicion;
-use App\Models\AlmacenMaterial;
 use App\Models\FolioMaterial;
 use App\Models\SaldoMaterialAlmacen;
 use Closure;
@@ -22,7 +21,7 @@ class ServicioReservaFifoMaterialDistribuido extends ServicioReservaFifoMaterial
     ) {}
 
     /**
-     * Reserva únicamente saldos pertenecientes a Bodega Central.
+     * Reserva saldos de la bodega elegida; sin origen expreso conserva Bodega Central.
      *
      * El cuarto argumento enviado al callback es opcional para conservar
      * compatibilidad con consumidores históricos de este servicio.
@@ -34,7 +33,9 @@ class ServicioReservaFifoMaterialDistribuido extends ServicioReservaFifoMaterial
         float $cantidadRequerida,
         Closure $registrarReserva,
         ?array $categoriasOperacionales = null,
+        ?string $almacenId = null,
     ): float {
+        $almacenId = $this->almacenes->origen($almacenId)->id;
         $pendiente = round($cantidadRequerida, 3);
         $ordenFifo = 1;
 
@@ -42,6 +43,7 @@ class ServicioReservaFifoMaterialDistribuido extends ServicioReservaFifoMaterial
             $saldo = $this->siguienteDisponibleBloqueado(
                 $itemMaterialId,
                 $categoriasOperacionales,
+                $almacenId,
             );
 
             if (! $saldo) {
@@ -86,12 +88,16 @@ class ServicioReservaFifoMaterialDistribuido extends ServicioReservaFifoMaterial
     private function siguienteDisponibleBloqueado(
         string $itemMaterialId,
         ?array $categoriasOperacionales,
+        string $almacenId,
     ): ?SaldoMaterialAlmacen {
+        $descartados = [];
         while (true) {
             $candidato = $this->consultaCandidatos(
                 $itemMaterialId,
                 $categoriasOperacionales,
+                $almacenId,
             )
+                ->whereNotIn('saldos_materiales_almacenes.id', $descartados)
                 ->first([
                     'saldos_materiales_almacenes.id',
                     'saldos_materiales_almacenes.folio_id',
@@ -113,7 +119,10 @@ class ServicioReservaFifoMaterialDistribuido extends ServicioReservaFifoMaterial
                 $saldo,
                 $folio,
                 $categoriasOperacionales,
+                $almacenId,
             )) {
+                $descartados[] = $candidato->id;
+
                 continue;
             }
 
@@ -127,6 +136,7 @@ class ServicioReservaFifoMaterialDistribuido extends ServicioReservaFifoMaterial
     private function consultaCandidatos(
         string $itemMaterialId,
         ?array $categoriasOperacionales,
+        string $almacenId,
     ): Builder {
         $categorias = $this->normalizarCategorias($categoriasOperacionales);
 
@@ -156,7 +166,7 @@ class ServicioReservaFifoMaterialDistribuido extends ServicioReservaFifoMaterial
                 '=',
                 'saldos_materiales_almacenes.posicion_id',
             )
-            ->where('am.codigo', AlmacenMaterial::CODIGO_BODEGA_CENTRAL)
+            ->where('am.id', $almacenId)
             ->where('am.activo', true)
             ->where('fm.item_material_id', $itemMaterialId)
             ->when($categorias !== [], fn (Builder $consulta) => $consulta
@@ -169,7 +179,7 @@ class ServicioReservaFifoMaterialDistribuido extends ServicioReservaFifoMaterial
             ->tap(fn ($consulta) => ServicioVencimientoMaterial::filtrarVigentes($consulta, 'fm.fecha_vencimiento'))
             ->whereNull('fm.motivo_bloqueo')
             ->where('f.activo', true)
-            ->where('f.estado_operacional', EstadoOperacionalFolio::Disponible->value)
+            ->whereIn('f.estado_operacional', [EstadoOperacionalFolio::Disponible->value, EstadoOperacionalFolio::PendienteUbicacion->value])
             ->where('ca.contenido', ContenidoCamara::Materiales->value)
             ->where('ca.estado', EstadoCamara::Activa->value)
             ->where(function (Builder $ubicacion): void {
@@ -190,16 +200,17 @@ class ServicioReservaFifoMaterialDistribuido extends ServicioReservaFifoMaterial
         SaldoMaterialAlmacen $saldo,
         FolioMaterial $folio,
         ?array $categoriasOperacionales,
+        string $almacenId,
     ): bool {
         $categorias = $this->normalizarCategorias($categoriasOperacionales);
 
-        return $saldo->almacen?->codigo === AlmacenMaterial::CODIGO_BODEGA_CENTRAL
-            && $saldo->almacen?->activo
+        return $saldo->almacen_material_id === $almacenId
+            && $saldo->esReservable()
             && $saldo->cantidadDisponible() > 0
             && ! $folio->estaVencido()
             && $folio->motivo_bloqueo === null
             && $folio->folio?->activo
-            && $folio->folio?->estado_operacional === EstadoOperacionalFolio::Disponible
+            && in_array($folio->folio?->estado_operacional, [EstadoOperacionalFolio::Disponible, EstadoOperacionalFolio::PendienteUbicacion], true)
             && ($categorias === [] || in_array(
                 $folio->categoria_operacional?->value,
                 $categorias,

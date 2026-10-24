@@ -2,7 +2,6 @@
 
 namespace App\Services\Materiales;
 
-use App\Models\AlmacenMaterial;
 use App\Models\ItemMaterial;
 use App\Services\Gerencia\ServicioPanelGerencial;
 use App\Services\Notificaciones\ServicioNotificacionesOperacionales;
@@ -65,17 +64,18 @@ class ServicioReposicionMaterial
     private function saldos(array $items, ?string $temporada): Collection
     {
         $bloqueado = '(fm.motivo_bloqueo IS NOT NULL OR (fm.fecha_vencimiento IS NOT NULL AND fm.fecha_vencimiento < ?) OR f.estado_operacional = ?)';
-        $bodega = AlmacenMaterial::where('codigo', AlmacenMaterial::CODIGO_BODEGA_CENTRAL)->value('id');
+        $bodegas = "a.tipo = 'fisica'";
         $hoy = ServicioVencimientoMaterial::hoyChile();
 
         return DB::table('saldos_materiales_almacenes as s')->join('folios_materiales as fm', 'fm.folio_id', '=', 's.folio_id')
+            ->join('destinos_materiales as a', 'a.id', '=', 's.almacen_material_id')
             ->join('folios as f', 'f.id', '=', 's.folio_id')->whereIn('fm.item_material_id', $items)
             ->where('f.temporada_id', $temporada)->where('f.activo', true)->select('fm.item_material_id')
             ->selectRaw('SUM(s.cantidad_actual) AS total_empresa')
-            ->selectRaw('SUM(CASE WHEN s.almacen_material_id = ? THEN s.cantidad_actual ELSE 0 END) AS bodega', [$bodega])
-            ->selectRaw('SUM(CASE WHEN s.almacen_material_id = ? THEN s.cantidad_reservada ELSE 0 END) AS reservado', [$bodega])
-            ->selectRaw("SUM(CASE WHEN s.almacen_material_id = ? AND $bloqueado THEN s.cantidad_actual ELSE 0 END) AS bloqueado_vencido", [$bodega, $hoy, 'bloqueado'])
-            ->selectRaw("SUM(CASE WHEN s.almacen_material_id = ? AND NOT $bloqueado THEN CASE WHEN s.cantidad_actual > s.cantidad_reservada THEN s.cantidad_actual - s.cantidad_reservada ELSE 0 END ELSE 0 END) AS disponible", [$bodega, $hoy, 'bloqueado'])
+            ->selectRaw("SUM(CASE WHEN $bodegas THEN s.cantidad_actual ELSE 0 END) AS bodega")
+            ->selectRaw("SUM(CASE WHEN $bodegas THEN s.cantidad_reservada ELSE 0 END) AS reservado")
+            ->selectRaw("SUM(CASE WHEN $bodegas AND $bloqueado THEN s.cantidad_actual ELSE 0 END) AS bloqueado_vencido", [$hoy, 'bloqueado'])
+            ->selectRaw("SUM(CASE WHEN $bodegas AND a.activo = 1 AND NOT $bloqueado THEN CASE WHEN s.cantidad_actual > s.cantidad_reservada THEN s.cantidad_actual - s.cantidad_reservada ELSE 0 END ELSE 0 END) AS disponible", [$hoy, 'bloqueado'])
             ->groupBy('fm.item_material_id')->get()->keyBy('item_material_id');
     }
 
@@ -83,15 +83,17 @@ class ServicioReposicionMaterial
     {
         $inicio = Carbon::now('America/Santiago')->startOfDay()->subDays($dias - 1)->utc();
         $fin = now();
-        $bodega = AlmacenMaterial::where('codigo', AlmacenMaterial::CODIGO_BODEGA_CENTRAL)->value('id');
         $almacenes = DB::table('movimientos_almacenes_materiales as m')->join('folios as f', 'f.id', '=', 'm.folio_id')
+            ->leftJoin('destinos_materiales as origen', 'origen.id', '=', 'm.almacen_origen_id')
+            ->leftJoin('destinos_materiales as destino', 'destino.id', '=', 'm.almacen_destino_id')
             ->whereIn('m.item_material_id', $items)->where('f.temporada_id', $temporada)->whereBetween('m.ocurrido_at', [$inicio, $fin])
-            ->where(fn ($q) => $q->where(fn ($salida) => $salida->where('m.almacen_origen_id', $bodega)->whereIn('m.tipo', ['entrega', 'consumo', 'transferencia']))
-                ->orWhere(fn ($devolucion) => $devolucion->where('m.almacen_destino_id', $bodega)->where('m.tipo', 'devolucion')))
+            ->where(fn ($q) => $q->where(fn ($salida) => $salida->where('origen.tipo', 'fisica')
+                ->where(fn ($t) => $t->where('m.tipo', 'consumo')->orWhere(fn ($c) => $c->whereIn('m.tipo', ['entrega', 'transferencia'])->where('destino.tipo', 'virtual'))))
+                ->orWhere(fn ($devolucion) => $devolucion->where('destino.tipo', 'fisica')->where('origen.tipo', 'virtual')->where('m.tipo', 'devolucion')))
             ->select('m.id', 'm.item_material_id', 'f.numero_folio as folio', 'm.tipo', 'm.ocurrido_at', 'm.motivo')
             ->selectRaw("CASE WHEN m.tipo = 'devolucion' THEN -ABS(m.cantidad) ELSE ABS(m.cantidad) END AS cantidad")
             ->selectRaw("'almacen' AS fuente");
-        // El flujo legado/transformación modifica exclusivamente Bodega Central.
+        // Transformación puede retirar componentes de cualquiera de las bodegas físicas.
         // Las entregas con registro de almacén se leen arriba, sin su espejo de kardex.
         $inventario = DB::table('movimientos_inventario_materiales as m')->join('folios as f', 'f.id', '=', 'm.folio_id')
             ->whereIn('m.item_material_id', $items)->where('f.temporada_id', $temporada)->whereBetween('m.ocurrido_at', [$inicio, $fin])

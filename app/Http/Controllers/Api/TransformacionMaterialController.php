@@ -112,7 +112,7 @@ class TransformacionMaterialController extends Controller
                     ->where('estado', 'cerrado')
                     ->whereHas('salidas'),
             ])
-            ->with([
+            ->with(['almacenOrigen',
                 'temporada:id,codigo,nombre,activa',
                 'cliente:id,codigo,nombre,codigo_folio_materiales,activo',
                 'versionReceta.receta.itemSalida',

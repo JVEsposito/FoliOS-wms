@@ -69,7 +69,7 @@ class ServicioConsultaInventarioMaterial
         return $paginacion;
     }
 
-    public function resumen(?string $clienteId = null): array
+    public function resumen(?string $clienteId = null, ?string $almacenId = null): array
     {
         $base = $this->consultaAgregadaBase($clienteId);
         [$disponible, $bindingsDisponible] = $this->expresionDisponible();
