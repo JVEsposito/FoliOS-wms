@@ -49,6 +49,9 @@ final class ServicioExplicabilidadArbitraje
                 'etiqueta' => $this->etiquetaFactor($factorDecisivo),
             ],
             'formula' => 'prioridad × 1.000.000.000 + objetivo × 10.000.000 + beneficio neto',
+            'orden_comparacion' => ($componentes['funcion_turno']['turno_id'] ?? null)
+                ? ['realidad_fisica', 'prioridad', 'cobertura_funciones_turno', 'objetivo', 'beneficio_neto', 'antiguedad']
+                : ['realidad_fisica', 'prioridad', 'objetivo', 'beneficio_neto', 'antiguedad'],
             'componentes' => $componentes,
             'capacidad' => $capacidad,
             'restricciones' => array_values(array_merge([

@@ -16,6 +16,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\PlanOperacionalResource;
 use App\Http\Resources\TareaMovimientoResource;
 use App\Models\Folio;
+use App\Models\LaborCamarero;
 use App\Models\OperacionSincronizacion;
 use App\Models\PersonalAccessToken;
 use App\Models\PlanOperacional;
@@ -32,6 +33,7 @@ use App\Services\Estiba\ServicioReservasTareasMovimiento;
 use App\Services\Planificador\ServicioArbitrajeManiobras;
 use App\Services\Planificador\ServicioDesplieguePlanificador;
 use App\Services\Planificador\ServicioEstadoArbitrajePlanificador;
+use App\Services\Planificador\ServicioLaboresTurno;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\Verificaciones\ServicioVerificacionesUbicacion;
 use Carbon\CarbonImmutable;
@@ -184,6 +186,9 @@ class PlanOperacionalController extends Controller
         $tokenActual = $request->user()->currentAccessToken();
         $dispositivoId = $tokenActual instanceof PersonalAccessToken ? $tokenActual->dispositivo_id : null;
         $reservas->expirarVencidas();
+        $temporadaLabores = app(ServicioTemporadaActiva::class)->buscar();
+        $servicioLabores = app(ServicioLaboresTurno::class);
+        $contextoLabores = $temporadaLabores ? $servicioLabores->contexto($temporadaLabores, $request->user()) : null;
         $cicloArbitraje = null;
         $proyeccionArbitraje = null;
         $maniobrasPublicables = null;
@@ -289,16 +294,37 @@ class PlanOperacionalController extends Controller
             );
         }
 
+        if ($asignacion === 'disponibles' && (($contextoLabores['funciones'] ?? null) || LaborCamarero::query()->whereNotNull('bloqueo_labor')->exists())) {
+            // Solo IDs y contexto para ordenar; la página carga luego los recursos completos.
+            $ligeras = (clone $consultaTareas)->setEagerLoads([])->with('planOperacional')
+                ->get(['id', 'plan_operacional_id', 'contexto', 'prioridad', 'responsable_user_id']);
+            $ids = $servicioLabores->ordenar($ligeras, $usuarioId)->pluck('id')->all();
+            $consultaTareas->whereIn('id', $ids)->reorder();
+            if ($ids !== []) {
+                $casos = implode(' ', array_fill(0, count($ids), 'WHEN ? THEN ?'));
+                $bindings = [];
+                foreach ($ids as $i => $id) {
+                    $bindings[] = $id;
+                    $bindings[] = $i;
+                }
+                $consultaTareas->orderByRaw("CASE tareas_movimiento.id {$casos} ELSE 999999 END", $bindings);
+            }
+        }
         $tareas = $consultaTareas
             ->orderBy('created_at')
             ->orderBy('secuencia')
             ->paginate((int) ($filtros['per_page'] ?? 25))
             ->withQueryString();
 
+        if ($asignacion === 'disponibles') {
+            $tareas->setCollection($servicioLabores->ordenar($tareas->getCollection(), $usuarioId));
+        }
         $respuesta = TareaMovimientoResource::collection($tareas);
+        $respuesta->additional(['labores' => $contextoLabores]);
         if ($proyeccionArbitraje) {
             unset($proyeccionArbitraje['ciclo']);
             $respuesta->additional([
+                'labores' => $contextoLabores,
                 'arbitraje' => [
                     'ciclo_id' => $cicloArbitraje?->id,
                     'snapshot_version' => $cicloArbitraje?->snapshot_version,
@@ -589,7 +615,7 @@ class PlanOperacionalController extends Controller
     private function relacionesTarea(): array
     {
         return [
-            'planOperacional:id,temporada_id,tipo,estado,prioridad,titulo,motivo,version,contexto',
+            'planOperacional:id,temporada_id,tipo,estado,prioridad,titulo,motivo,version,contexto,referencia_tipo,referencia_id',
             'folio:id,numero_folio,tipo_bulto,variedad,calibre,marca,exportadora,fecha_ingreso,datos_externos',
             'camaraOrigen:id,nombre',
             'posicionOrigen:id,camara_id,etiqueta,banda,posicion,nivel',

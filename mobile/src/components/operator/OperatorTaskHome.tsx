@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 
 import {
   OperationalTask,
+  OperationalShiftContext,
   operationalTaskDestinationLabel,
   operationalTaskOriginLabel,
   operationalTaskReason,
@@ -10,6 +11,7 @@ import {
 import type { OperatorQueueItem, OperatorQueueSource } from '../../domain/operatorTaskQueue';
 import { operatorTaskPurpose } from '../../domain/operatorTaskPurpose';
 import { OperatorTaskPurpose } from './OperatorTaskPurpose';
+import { OperatorShiftDuties } from './OperatorShiftDuties';
 import { operatorTheme as o } from '../../theme/operatorTheme';
 import {
   OperatorEntityCode,
@@ -19,6 +21,7 @@ import {
 } from './OperatorPrimitives';
 
 type Props = {
+  shiftContext?: OperationalShiftContext | null;
   availableCount: number;
   busy: boolean;
   mineCount: number;
@@ -34,6 +37,7 @@ type Props = {
 };
 
 export function OperatorTaskHome({
+  shiftContext,
   availableCount,
   busy,
   mineCount,
@@ -61,6 +65,8 @@ export function OperatorTaskHome({
           <Text style={styles.refreshText}>↻ Actualizar</Text>
         </Pressable>
       </View>
+
+      <OperatorShiftDuties context={shiftContext ?? null} />
 
       {next ? (
         <NextTaskCard busy={busy} compact={compact} item={next} onOpen={() => onOpen(next)} suggestion={suggestedDestinations[next.task.id]} />
