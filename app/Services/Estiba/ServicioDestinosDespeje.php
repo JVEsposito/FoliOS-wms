@@ -78,7 +78,9 @@ class ServicioDestinosDespeje
             ->where('maniobra_operacional_id', '!=', $tarea->maniobra_operacional_id ?? '')->get();
 
         return $posiciones->filter(function (Posicion $p) use ($tarea, $camara, $porBanda, $bloqueos, $protegidas): bool {
-            if ($p->id === $tarea->posicion_origen_id || $p->ubicacionesActuales->isNotEmpty() || $p->reservaTareaActiva || $p->reservaPreparacionSagActiva) {
+            $reservaAjena = $p->reservaTareaActiva
+                && $p->reservaTareaActiva->tarea_movimiento_id !== $tarea->id;
+            if ($p->id === $tarea->posicion_origen_id || $p->ubicacionesActuales->isNotEmpty() || $reservaAjena || $p->reservaPreparacionSagActiva) {
                 return false;
             }
             if (collect($protegidas)->contains(fn (array $b) => $b['camara_id'] === $p->camara_id && $b['banda'] === $p->banda && $b['nivel'] === $p->nivel)) {

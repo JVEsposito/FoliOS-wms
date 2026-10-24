@@ -14,6 +14,7 @@ use App\Models\Carga;
 use App\Models\Dispositivo;
 use App\Models\EventoCarga;
 use App\Models\Folio;
+use App\Models\Movimiento;
 use App\Models\PlanOperacional;
 use App\Models\Posicion;
 use App\Models\PresenciaCargaAnden;
@@ -493,6 +494,11 @@ class PresenciaCargaAndenApiTest extends TestCase
         $materializada = $planes->materializarDestino($asumida->fresh(), $local, $ctx['operador'], $ctx['dispositivo']);
         $this->assertSame('reubicacion', $materializada->tipo_movimiento->value);
         $this->assertSame($ctx['camara']->id, $materializada->camara_destino_id);
+        $movimientosAntes = Movimiento::count();
+        $iniciada = $planes->iniciar($materializada, $ctx['operador'], $ctx['dispositivo']);
+        $this->assertSame(EstadoTareaMovimiento::EnProceso, $iniciada->estado);
+        $this->assertSame($local->id, $iniciada->reservaActiva->bloqueo_posicion_id);
+        $this->assertSame($movimientosAntes, Movimiento::count());
     }
 
     public function test_despeje_permite_otra_camara_si_no_queda_destino_local_valido(): void

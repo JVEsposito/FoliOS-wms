@@ -16,7 +16,7 @@ import { fetchWithTimeout } from './httpClient';
 import type { ShiftVerification, MaterialVerificationReading } from '../domain/verification';
 import type { OperatorLoadFeed } from '../domain/operatorLoads';
 
-export const TABLET_PLANNER_VERSION = 'rolling-global-4-acopio-cargas';
+export const TABLET_PLANNER_VERSION = 'rolling-global-5-despeje-local';
 
 export type StartConfirmation = {
   folioDigits: string;

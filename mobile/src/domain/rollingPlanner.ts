@@ -152,6 +152,8 @@ export function bestCandidate(
   protectedOrigins: ReadonlySet<string> = new Set(),
   preferredDispatchCameraId: string | null = null,
 ): RollingCandidate | null {
+  // Una propuesta anterior sin reserva física no fija el destino del despeje.
+  if (canRecalculateClearance(task)) task = { ...task, destino: null };
   const candidates: Array<RollingCandidate & {
     affinityRank: number;
     mixesClients: boolean;
@@ -276,6 +278,14 @@ function maneuverValue(task: OperationalTask) {
 
 export function isClearanceTask(task: OperationalTask) {
   return ['despeje_salida_directa', 'despeje_concentracion'].includes(String(task.contexto?.tipo_decision ?? ''));
+}
+
+export function canRecalculateClearance(task: OperationalTask) {
+  return isClearanceTask(task) && !task.punto_no_retorno && task.estado !== 'en_proceso'
+    && task.reserva?.tipo_compromiso !== 'fisica'
+    && !task.reserva?.destino_reservado && !task.maniobra?.custodia_temporal_activa
+    && task.contexto?.destino_precalculado_inmutable !== true
+    && !loadStaging(task);
 }
 
 function cameraAllowedForTask(task: OperationalTask, cameraId: string) {

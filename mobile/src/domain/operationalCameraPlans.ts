@@ -1,6 +1,6 @@
 import type { CameraPlan } from './estiba';
 import type { OperationalPhysicalFrontierSnapshot, OperationalTask } from './operationalTasks';
-import { isClearanceTask, taskWithCurrentLoadTarget } from './rollingPlanner';
+import { canRecalculateClearance, isClearanceTask, taskWithCurrentLoadTarget } from './rollingPlanner';
 
 export function candidateCameraIds(tasks: OperationalTask[], snapshot: OperationalPhysicalFrontierSnapshot): string[] {
   const allowed = new Set(snapshot.camaras.map((camera) => camera.id));
@@ -9,7 +9,7 @@ export function candidateCameraIds(tasks: OperationalTask[], snapshot: Operation
     const task = taskWithCurrentLoadTarget(original, snapshot.tareas.find((item) => item.id === original.id));
     if (task.contexto?.acopio_carga && typeof task.contexto.acopio_carga === 'object'
       && 'despacho_directo' in task.contexto.acopio_carga && task.contexto.acopio_carga.despacho_directo) continue;
-    const camera = task.destino?.camara.id
+    const camera = canRecalculateClearance(task) ? null : task.destino?.camara.id
       ?? (task.tipo_movimiento === 'reubicacion' && !isClearanceTask(task) ? task.origen?.camara.id : null);
     if (camera) { if (allowed.has(camera)) ids.add(camera); }
     else if (task.tipo_movimiento !== 'retiro') allowed.forEach((id) => ids.add(id));
