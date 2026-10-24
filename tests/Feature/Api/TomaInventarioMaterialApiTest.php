@@ -292,7 +292,8 @@ class TomaInventarioMaterialApiTest extends TestCase
         $toma = $s->decidir($sobrante, $this->datos($toma) + ['accion' => 'reubicar_y_ajustar', 'clasificacion' => 'merma', 'motivo' => 'Cinco unidades deterioradas', 'posicion_destino_id' => $encontrada->id], $this->supervisor);
         $this->assertSame('merma', $sobrante->fresh()->clasificacion);
         $this->assertSame(95.0, (float) $sobrante->diferencia);
-        $this->assertSame(-5.0, app(ConsultaTomaInventarioMaterial::class)->detalle($toma)['diferencias'][1]['diferencia_reubicacion']);
+        $fila = collect(app(ConsultaTomaInventarioMaterial::class)->detalle($toma)['diferencias'])->firstWhere('id', $sobrante->id);
+        $this->assertSame(-5.0, $fila['diferencia_reubicacion']);
     }
 
     public function test_cierre_no_acepta_ubicacion_cambiada_despues_de_una_lectura_coincidente(): void
