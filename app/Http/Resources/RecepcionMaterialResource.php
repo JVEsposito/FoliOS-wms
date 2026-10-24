@@ -77,6 +77,7 @@ class RecepcionMaterialResource extends JsonResource
                             'fecha_vencimiento' => $bulto->fecha_vencimiento?->toDateString(),
                             'bloqueado' => $bulto->bloqueado,
                             'motivo_bloqueo' => $bulto->motivo_bloqueo,
+                            'asignacion_bodega' => $bulto->folioMaterial?->asignacion_bodega,
                             'folio' => $bulto->folioMaterial?->folio ? [
                                 'id' => $bulto->folioMaterial->folio->id,
                                 'numero_folio' => $bulto->folioMaterial->folio->numero_folio,

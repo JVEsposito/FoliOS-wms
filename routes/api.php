@@ -76,6 +76,7 @@ use App\Http\Controllers\Api\ProveedorMaterialController;
 use App\Http\Controllers\Api\RecepcionFrutaEmbaladaController;
 use App\Http\Controllers\Api\RecepcionMaterialController;
 use App\Http\Controllers\Api\RecepcionRomanaController;
+use App\Http\Controllers\Api\ReglaBodegaMaterialController;
 use App\Http\Controllers\Api\ReinicioOperacionalController;
 use App\Http\Controllers\Api\ReplayCicloPlanificadorController;
 use App\Http\Controllers\Api\ReposicionMaterialController;
@@ -564,6 +565,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/materiales/almacenes/movimientos/exportar', [AlmacenMaterialController::class, 'exportarMovimientos'])
         ->middleware('can:consultar-kardex-materiales');
     Route::post('/materiales/almacenes/movimientos', [AlmacenMaterialController::class, 'store']);
+
+    Route::prefix('materiales/asignacion-bodegas')->middleware('can:consultar-kardex-materiales')->group(function () {
+        Route::get('/', [ReglaBodegaMaterialController::class, 'index']);
+        Route::get('/historial', [ReglaBodegaMaterialController::class, 'historial']);
+        Route::post('/', [ReglaBodegaMaterialController::class, 'store'])->middleware('can:configurar-capacidad-materiales');
+        Route::put('/{id}', [ReglaBodegaMaterialController::class, 'update'])->middleware('can:configurar-capacidad-materiales');
+    });
 
     Route::get('/materiales/bodegas', [BodegaMaterialController::class, 'index'])->middleware('can:consultar-despachos-materiales');
     Route::get('/materiales/bodegas/historial', [BodegaMaterialController::class, 'historial'])->middleware('can:consultar-kardex-materiales');

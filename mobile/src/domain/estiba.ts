@@ -1,3 +1,5 @@
+export type MaterialWarehouseAssignment = { almacen_id: string; codigo: string; nombre: string; origen: 'regla' | 'central_por_defecto'; regla: { id: string; nombre: string; version: number; prioridad: number } | null; ubicacion_fisica: 'pendiente'; capacidad: 'pendiente_verificacion'; aviso: string };
+
 export type ApiMode = 'demo' | 'connected' | 'unconfigured';
 export type AccessMode = 'disponible' | 'edicion' | 'solo_lectura';
 export type MovementType =
@@ -219,6 +221,7 @@ export type FolioLookup = {
     posicion: { id: string; etiqueta: string | null } | null;
   } | null;
   material: {
+    asignacion_bodega?: MaterialWarehouseAssignment | null;
     item_material_id: string;
     item: { codigo: string; nombre: string };
     cantidad: string;
@@ -229,6 +232,7 @@ export type FolioLookup = {
 };
 
 export type AvailableMaterialFolio = {
+  asignacion_bodega?: MaterialWarehouseAssignment | null;
   numero_folio: string;
   codigo_item: string;
   item: string;

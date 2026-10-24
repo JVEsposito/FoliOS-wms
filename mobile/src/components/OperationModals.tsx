@@ -267,7 +267,8 @@ export function LocateModal({
         ? result.mensaje_disponibilidad
         : 'El tipo de folio no corresponde a esta cámara.';
     const recommendation = recommendationMessage(result);
-    setLookupMessage(`${source} ${availability}${recommendation ? ` ${recommendation}` : ''}`);
+    const warehouse = result.material?.asignacion_bodega;
+    setLookupMessage(`${source} ${availability}${warehouse ? ` Bodega asignada al ingreso: ${warehouse.nombre}. Verifica capacidad antes de ubicar.` : ''}${recommendation ? ` ${recommendation}` : ''}`);
     setLookupTone(result.disponible_ubicacion && compatible ? 'success' : 'warning');
   }
 
@@ -395,7 +396,7 @@ export function LocateModal({
                   >
                     <Text style={styles.suggestionNumber}>{suggestion.numero_folio}</Text>
                     <Text style={styles.suggestionItem} numberOfLines={1}>
-                      {suggestion.codigo_item} · {suggestion.item}
+                      {suggestion.codigo_item} · {suggestion.item}{suggestion.asignacion_bodega ? ` · ${suggestion.asignacion_bodega.nombre}` : ''}
                     </Text>
                   </Pressable>
                 ))}

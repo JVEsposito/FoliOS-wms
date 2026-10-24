@@ -2,8 +2,9 @@
 
 **Materiales → Capacidad de bodegas** (`/oficina/materiales/capacidad`).
 Configura los almacenes físicos existentes en `destinos_materiales`. Los centros
-de costo virtuales no representan recintos físicos. Las altas y la operación de
-varias bodegas corresponden al PR 11; la asignación automática al PR 12.
+de costo virtuales no representan recintos físicos. Las altas y la operación de varias bodegas corresponden al PR 11. El
+[PR 12](materiales-asignacion-bodegas.md) configura la bodega de ingreso de
+recepciones; la ubicación física y capacidad libre siguen requiriendo verificación.
 
 ## Datos configurables
 

@@ -46,6 +46,7 @@ export default defineConfig({
                 'resources/js/office-material-replenishment.js',
                 'resources/js/office-material-capacity.js',
                 'resources/js/office-material-bodegas.js',
+                'resources/js/office-material-routing.js',
                 'resources/css/office-material-capacity.css',
                 'resources/js/office-material-supervision.js',
                 'resources/css/office-material-supervision.css',

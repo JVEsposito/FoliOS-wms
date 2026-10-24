@@ -60,6 +60,9 @@ class ServicioTransferenciaClienteMaterial
                 $origen = FolioMaterial::with(['item.cliente.temporada', 'folio'])->lockForUpdate()->findOrFail($origen->folio_id);
                 $folio = Folio::lockForUpdate()->findOrFail($origen->folio_id);
                 $bodega = $this->almacenes->bodegaCentral($usuario);
+                if ($origen->almacen_inicial_id && $origen->almacen_inicial_id !== $bodega->id) {
+                    throw new DomainException('La transferencia de propiedad de este folio requiere el circuito de su bodega de ingreso. No se debita otra bodega mediante la ubicación de compatibilidad.');
+                }
                 $saldo = $this->almacenes->saldo($origen, $bodega);
                 $ubicacion = UbicacionActual::where('folio_id', $origen->folio_id)->lockForUpdate()->first();
                 if ($saldo->posicion_id) {

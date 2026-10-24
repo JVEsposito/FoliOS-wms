@@ -20,7 +20,7 @@ Bodega Central permanece activa. Otra bodega solo se desactiva sin stock, reserv
 - La entrega a un centro de costo transfiere custodia. El consumo directo de un insumo descuenta la bodega elegida e imputa el gasto al centro de costo sin crearle stock temporal.
 - La tablet consulta las posiciones y cantidades del saldo de cada cámara. Las sugerencias FIFO indican la ubicación de la reserva, y el retiro exige sesión en esa cámara. El plano invalida su caché al cambiar la versión de un saldo.
 - La ubicación de compatibilidad del folio sigue representando Central. Los traslados entre bodegas se hacen en Inventario CC; el movimiento general de folios continúa sujeto a esa ubicación de compatibilidad.
-- Las recepciones y los folios producidos por transformación ingresan inicialmente a Central. Pueden transferirse después. La asignación automática de bodega corresponde al PR 12.
+- Las recepciones nuevas pueden asignarse automáticamente mediante las reglas del [PR 12](materiales-asignacion-bodegas.md). Sin coincidencia conservan Central. Los folios producidos por transformación siguen ingresando inicialmente a Central y pueden transferirse después.
 - Las transferencias de propiedad entre clientes conservan su circuito de Central y su permiso específico.
 
 ## Compatibilidad y controles

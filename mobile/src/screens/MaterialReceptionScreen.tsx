@@ -742,6 +742,7 @@ export function MaterialReceptionScreen({ auth, baseUrl, onLogout }: Props) {
                 <Text style={styles.cardTitle}>{folio.item.codigo} · {folio.item.nombre}</Text>
                 <Text style={styles.muted}>{folio.cantidad_actual} {folio.unidad_medida} · Lote {folio.lote_proveedor ?? '—'}</Text>
                 <Text style={styles.muted}>{folio.cliente?.nombre ?? 'Cliente sin datos'} · Guía {folio.recepcion?.numero_guia_despacho ?? '—'} · {folio.recepcion?.proveedor ?? 'Proveedor sin datos'}</Text>
+                {folio.asignacion_bodega ? <Text style={styles.muted}>Bodega asignada: {folio.asignacion_bodega.nombre} · Verifica capacidad y ubicación</Text> : null}
                 {folio.motivo_bloqueo ? <Text style={styles.redText}>{folio.motivo_bloqueo}</Text> : null}
               </View>
             </View>
@@ -842,6 +843,7 @@ function ReceptionDetail({
               <View style={styles.headerCopy}>
                 <Text style={styles.cardTitle}>Bulto {packageIndex + 1} · {itemPackage.cantidad} {detail.unidad_medida}</Text>
                 <Text style={styles.muted}>Lote {itemPackage.lote_proveedor ?? '—'} · Vence {formatDateCL(itemPackage.fecha_vencimiento)}</Text>
+                {itemPackage.asignacion_bodega ? <Text style={styles.muted}>Bodega asignada al ingreso: {itemPackage.asignacion_bodega.nombre} · Ubicación y capacidad pendientes de verificar</Text> : null}
                 {itemPackage.bloqueado ? <Text style={styles.redText}>BLOQUEADO · {itemPackage.motivo_bloqueo}</Text> : null}
               </View>
               {itemPackage.folio ? (
