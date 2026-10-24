@@ -8,6 +8,7 @@ use App\Enums\RolUsuario;
 use App\Models\Camara;
 use App\Models\Cliente;
 use App\Models\ClienteMaterial;
+use App\Models\DestinoMaterial;
 use App\Models\Dispositivo;
 use App\Models\FolioMaterial;
 use App\Models\ItemMaterial;
@@ -203,6 +204,18 @@ class AsignacionRecepcionBodegaMaterialApiTest extends TestCase
         $this->withToken($token);
         $this->getJson('/api/materiales/inventario?almacen_id='.$b['id'])->assertOk()->assertSee('20.000');
         $this->getJson('/api/camaras/'.$cam->id.'/plano')->assertOk()->assertSee($f['numero_folio']);
+        $destino = DestinoMaterial::create(['nombre' => 'Packing asignación', 'centro_costo' => 'PACK-AUTO', 'activo' => true, 'creado_por_user_id' => $u->id, 'actualizado_por_user_id' => $u->id]);
+        $orden = $this->postJson('/api/materiales/despachos', ['operacion_id' => (string) Str::uuid(), 'almacen_origen_id' => $b['id'], 'destino_material_id' => $destino->id, 'items' => [['item_material_id' => $item->id, 'cantidad' => 10]]])->assertCreated()->json('data');
+        $this->withToken($tablet);
+        $entrega = ['operacion_id' => (string) Str::uuid(), 'retiros' => [['folio_id' => $f['id'], 'cantidad' => 4, 'sesion_estiba_id' => $ses]]];
+        $this->postJson('/api/materiales/despachos/'.$orden['id'].'/retirar', $entrega)->assertOk();
+        $this->postJson('/api/materiales/despachos/'.$orden['id'].'/retirar', $entrega)->assertOk();
+        $this->withToken($token);
+        $this->postJson('/api/materiales/despachos/'.$orden['id'].'/cancelar', ['operacion_id' => (string) Str::uuid(), 'motivo' => 'Cancelar solamente el remanente'])->assertOk();
+        $this->assertDatabaseHas('saldos_materiales_almacenes', ['folio_id' => $f['id'], 'almacen_material_id' => $b['id'], 'cantidad_actual' => 16, 'cantidad_reservada' => 0]);
+        $this->assertEquals(20, FolioMaterial::findOrFail($f['id'])->cantidad_actual);
+        $this->assertEquals(20, SaldoMaterialAlmacen::where('folio_id', $f['id'])->sum('cantidad_actual'));
+
     }
 
     public function test_anular_sin_movimientos_vacia_solo_bodega_inicial_y_no_repite_stock(): void

@@ -69,7 +69,7 @@ class ServicioAsignacionBodegaMaterial
             ->where(fn ($q) => $q->whereNull('categoria_operacional')->orWhere('categoria_operacional', $categoria->value))
             ->orderBy('prioridad')->orderBy('id')->sharedLock()->get();
         foreach ($reglas as $regla) {
-            $bodega = DB::table('destinos_materiales')->where('id', $regla->almacen_material_id)->where('tipo', 'fisica')->where('activo', true)->sharedLock()->first();
+            $bodega = DB::table('destinos_materiales')->where('id', $regla->almacen_material_id)->where('tipo', 'fisica')->where('activo', true)->lockForUpdate()->first();
             if ($bodega) {
                 return $this->decision($bodega, $actor, $regla);
             }
