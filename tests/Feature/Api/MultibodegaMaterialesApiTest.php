@@ -15,6 +15,7 @@ use App\Models\User;
 use App\Services\Materiales\ServicioProcesamientoVencimientosMaterial;
 use App\Services\Materiales\ServicioReposicionMaterial;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Support\MultibodegaMaterialFixture;
@@ -27,6 +28,7 @@ class MultibodegaMaterialesApiTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->travelTo(Carbon::parse('2026-10-23 12:00:00', 'UTC'));
         $this->prepararMultibodega();
     }
 
@@ -227,8 +229,10 @@ class MultibodegaMaterialesApiTest extends TestCase
         $this->assertSame('90.000', $this->origen->fresh()->cantidad_actual);
     }
 
-    public function test_vencimiento_no_reasigna_una_reserva_a_otra_bodega(): void
+    #[DataProvider('momentosDeVencimiento')]
+    public function test_vencimiento_respeta_el_dia_chileno_y_no_reasigna_a_otra_bodega(string $instante, string $fechaVencimiento, bool $vencido): void
     {
+        $this->travelTo(Carbon::parse($instante, 'UTC'));
         $this->repartir();
         $despacho = $this->despacho($this->norte['id'], 10);
         $folio = Folio::create(['temporada_id' => $this->origen->folio->temporada_id, 'numero_folio' => 'FAA0000002', 'tipo_bulto' => 'material',
@@ -237,11 +241,22 @@ class MultibodegaMaterialesApiTest extends TestCase
             'cantidad_actual' => 100, 'cantidad_reservada' => 0, 'unidad_medida' => 'rollos', 'fecha_vencimiento' => now()->addDays(20)->toDateString()]);
         $posicion = Posicion::create(['camara_id' => $this->camara->id, 'banda' => 1, 'posicion' => 2, 'nivel' => 1, 'etiqueta' => 'B01-P02-N1']);
         UbicacionActual::create(['folio_id' => $folio->id, 'camara_id' => $this->camara->id, 'posicion_id' => $posicion->id, 'ubicado_at' => now()]);
-        $this->origen->update(['fecha_vencimiento' => now()->subDay()->toDateString()]);
-        app(ServicioProcesamientoVencimientosMaterial::class)->procesar();
-        $this->assertSame('0.000', $this->saldo($this->norte['id'])->cantidad_reservada);
-        $this->assertSame(0, ReservaMaterial::query()->where('detalle_despacho_material_id', $despacho['items'][0]['detalle_id'])->where('estado', 'activa')->count());
-        $this->assertDatabaseHas('detalles_despacho_materiales', ['id' => $despacho['items'][0]['detalle_id'], 'cantidad_sin_reserva_por_vencimiento' => 10]);
+        $this->origen->update(['fecha_vencimiento' => $fechaVencimiento]);
+        $resumen = app(ServicioProcesamientoVencimientosMaterial::class)->procesar();
+        $this->assertSame($vencido ? 1 : 0, $resumen['reservas_liberadas']);
+        $this->assertSame($vencido ? '0.000' : '10.000', $this->saldo($this->norte['id'])->cantidad_reservada);
+        $this->assertSame($vencido ? 0 : 1, ReservaMaterial::query()->where('detalle_despacho_material_id', $despacho['items'][0]['detalle_id'])->where('estado', 'activa')->count());
+        $this->assertDatabaseHas('detalles_despacho_materiales', ['id' => $despacho['items'][0]['detalle_id'], 'cantidad_sin_reserva_por_vencimiento' => $vencido ? 10 : 0]);
         $this->assertSame('0.000', SaldoMaterialAlmacen::query()->where('folio_id', $folio->id)->firstOrFail()->cantidad_reservada);
+    }
+
+    public static function momentosDeVencimiento(): array
+    {
+        return [
+            'vencido en Chile después de medianoche UTC' => ['2026-10-24 00:30:00', '2026-10-22', true],
+            'vigente en Chile después de medianoche UTC' => ['2026-10-24 00:30:00', '2026-10-23', false],
+            'último segundo del día chileno' => ['2026-10-24 02:59:59', '2026-10-23', false],
+            'inicio del siguiente día chileno' => ['2026-10-24 03:00:00', '2026-10-23', true],
+        ];
     }
 }
