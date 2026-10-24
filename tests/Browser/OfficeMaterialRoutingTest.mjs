@@ -5,7 +5,10 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { chromium } from 'playwright';
 const root = fileURLToPath(new URL('../../', import.meta.url));
-const html = readFileSync(resolve(root, 'storage/app/ui/oficina/capacidad.html'), 'utf8').replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
+// Laravel exports absolute localhost assets; keep them on the insecure test origin.
+const html = readFileSync(resolve(root, 'storage/app/ui/oficina/capacidad.html'), 'utf8')
+    .replaceAll('http://localhost/build/', 'http://folios.test/build/')
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
 async function fixture({ width = 1366, can = true, lost = false } = {}) {
     const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined, args: ['--no-sandbox', '--disable-gpu'] });
     const context = await browser.newContext({ viewport: { width, height: 1000 } }); const page = await context.newPage(); const writes = []; const errors = [];

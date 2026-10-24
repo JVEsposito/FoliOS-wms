@@ -6,7 +6,10 @@ import test from 'node:test';
 import { chromium } from 'playwright';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
-const html = readFileSync(resolve(root, 'storage/app/ui/oficina/capacidad.html'), 'utf8').replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
+// Laravel exports absolute localhost assets; keep them on the insecure test origin.
+const html = readFileSync(resolve(root, 'storage/app/ui/oficina/capacidad.html'), 'utf8')
+    .replaceAll('http://localhost/build/', 'http://folios.test/build/')
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
 const pallet = { id: 'p1', codigo: 'P-1', nombre: '<Pallet>', largo_m: 1.2, ancho_m: 1, altura_total_m: 1.5, max_niveles: 1, peso_maximo_kg: 500, activo: true, version: 1 };
 const zone = { id: 'z1', nombre: 'Zona A', x_m: 0, y_m: 0, largo_m: 6, ancho_m: 4, altura_util_m: 3, max_niveles: 1, permite_giro: true, limite_pallets: null, peso_maximo_kg: 500, tipo_pallet_ids: ['p1'], modo: 'piso' };
 const stock = { saldo_id: 's1', saldo_version_actual: 8, id: null, folio: 'FM-1', item: 'Cajas', cantidad_actual: 120, unidad_medida: 'unidades', medidas_vigentes: false };
