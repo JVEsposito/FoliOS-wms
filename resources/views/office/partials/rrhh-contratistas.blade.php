@@ -7,7 +7,7 @@
 </dialog>
 <dialog id="rcPersonalDialog" class="rh-dialog"><form id="rcPersonalForm" class="rh-form" data-contratistas-form>
     <div class="rh-heading"><h2 id="rcPersonalTitle">Abrir expediente</h2><button type="button" class="secondary-button" data-rh-close aria-label="Cerrar">×</button></div>
-    <label><span>Código de faena</span><input name="faena" maxlength="40" pattern="[A-Z0-9_-]+" required></label>
+    <label><span>Código de faena</span><input name="faena" maxlength="40" pattern="[A-Z0-9_\-]+" required></label>
     <label><span>Mes</span><input name="mes" type="month" required></label>
     <label><span>Referencia del contrato comercial</span><input name="referencia_contrato" maxlength="200" required></label>
     <label id="rcPersonalReason" hidden><span>Motivo del cambio de personal</span><textarea name="motivo" minlength="10" maxlength="1000" disabled></textarea></label>

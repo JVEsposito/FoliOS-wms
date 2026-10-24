@@ -6,7 +6,7 @@
 </head><body>@include('office.partials.comex-commercial-access')
 <main class="office-app is-hidden" id="officeApp"><x-office.navigation domain="administracion" office="comex-comercial" context="ADMINISTRACIÓN · COMEX" icon="⚓" /><section class="cx-workspace"><header class="cx-heading"><div><p class="eyebrow">COMEX · COMERCIAL</p><h1>Actores y lugares</h1><p>Identidades y funciones comerciales, con puertos, terminales y puntos de entrega. Los roles de cada negocio se eligen al preparar el acuerdo.</p></div></header><p id="ccMessage" class="cx-status" role="status">Cargando…</p><section class="panel cx-panel"><form id="ccSearch" class="cx-filters"><label><span>Directorio</span><select name="catalogo"><option value="partes">Actores comerciales y logísticos</option><option value="lugares">Puertos, terminales y lugares</option></select></label><label><span>Nombre, código o identidad</span><input name="buscar" type="search" maxlength="100"></label><button type="submit" class="secondary-button">Buscar</button></form><button id="ccNew" type="button" class="primary-button" hidden>Agregar ficha</button><div id="ccRows" class="cx-table-scroll"></div><div id="ccPages" class="cx-acciones"></div></section></section></main>
 <dialog id="ccPartyDialog" class="cx-dialog"><form id="ccPartyForm"><header class="cx-dialog__heading"><h2>Actor comercial o logístico</h2><button type="button" data-cc-close class="cx-dialog__close" aria-label="Cerrar">×</button></header><div class="cx-form">
-<label><span>Código interno permanente</span><input name="codigo" pattern="[A-Z0-9_-]+" maxlength="40" required></label>
+<label><span>Código interno permanente</span><input name="codigo" pattern="[A-Z0-9_\-]+" maxlength="40" required></label>
 <label><span>País de identidad fiscal</span><select name="pais_iso2" required></select></label>
 <label><span>RUT chileno o tax ID extranjero</span><input name="tax_id" maxlength="80" required></label>
 <label><span>Razón social</span><input name="razon_social" maxlength="200" required></label>
@@ -19,7 +19,7 @@
 <label><span>Motivo de la modificación</span><textarea name="motivo" minlength="10" maxlength="1000"></textarea></label>
 <p class="form-error cx-form__wide" role="alert" data-cc-error></p></div><footer class="cx-acciones"><button type="button" data-cc-close class="secondary-button">Cancelar</button><button type="submit" class="primary-button">Guardar ficha</button></footer></form></dialog>
 <dialog id="ccPlaceDialog" class="cx-dialog"><form id="ccPlaceForm"><header class="cx-dialog__heading"><h2>Puerto, terminal o lugar</h2><button type="button" data-cc-close class="cx-dialog__close" aria-label="Cerrar">×</button></header><div class="cx-form">
-<label><span>Código interno permanente</span><input name="codigo" pattern="[A-Z0-9_-]+" maxlength="40" required></label>
+<label><span>Código interno permanente</span><input name="codigo" pattern="[A-Z0-9_\-]+" maxlength="40" required></label>
 <label><span>Tipo</span><select name="tipo" required></select></label>
 <label><span>Nombre</span><input name="nombre" maxlength="200" required></label>
 <label><span>País</span><select name="pais_iso2" required></select></label>

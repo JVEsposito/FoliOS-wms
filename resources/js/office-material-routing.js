@@ -1,6 +1,6 @@
+import { createUuid as uuid } from './shared/uuid.js';
 const $ = id => document.getElementById(`routing${id}`);
 const esc = v => String(v ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
-const uuid = () => globalThis.crypto?.randomUUID?.() ?? 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const n = Math.random() * 16 | 0; return (c === 'x' ? n : n & 3 | 8).toString(16); });
 const when = value => new Intl.DateTimeFormat('es-CL', { timeZone: 'America/Santiago', dateStyle: 'short', timeStyle: 'short' }).format(new Date(String(value).replace(' ', 'T') + (/Z$|[+-]\d{2}:\d{2}$/.test(value) ? '' : 'Z')));
 const state = { rows: [], warehouses: [], clients: [], can: false, loaded: false, busy: false, editing: null, retry: null, page: 1, seq: 0, historySeq: 0 };
 async function api(path = '', options = {}) {

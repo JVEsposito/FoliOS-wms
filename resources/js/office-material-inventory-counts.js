@@ -1,3 +1,4 @@
+import { createUuid } from './shared/uuid.js';
 import './office-navigation';
 const $ = (id) => document.getElementById(id);
 const token = localStorage.getItem('estiba_wms_office_token');
@@ -13,7 +14,7 @@ async function api(path, data) {
 }
 async function mutate(path, data) {
     const key = JSON.stringify({ path, data });
-    if (retry?.key !== key) retry = { key, id: crypto.randomUUID() };
+    if (retry?.key !== key) retry = { key, id: createUuid() };
     const response = await api(path, { ...data, operacion_id: retry.id }); retry = null; return response;
 }
 async function run(work) {

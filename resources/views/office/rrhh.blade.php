@@ -63,7 +63,7 @@
 </main>
 @unless($clock)
 <dialog id="rhPersonDialog" class="rh-dialog"><form id="rhPersonForm" class="rh-form"><div class="rh-heading"><h2 id="rhPersonTitle">Agregar persona</h2><button type="button" class="secondary-button" data-rh-close aria-label="Cerrar">×</button></div>
-    <label><span>Código permanente</span><input name="codigo" maxlength="40" pattern="[A-Za-z0-9_-]+" required></label>
+    <label><span>Código permanente</span><input name="codigo" maxlength="40" pattern="[A-Za-z0-9_\-]+" required></label>
     <label><span>Nombre</span><input name="nombre" maxlength="180" required></label>
     <label><span>Documento / RUT</span><input name="documento" maxlength="40"></label><label><span>Empleador</span><input name="empleador" maxlength="180"></label>
     <label><span>Cargo</span><input name="cargo" maxlength="120"></label><label><span>Área</span><input name="area" maxlength="120"></label><label><span>CECO</span><input name="ceco" maxlength="60"></label>
@@ -82,7 +82,7 @@
     <div class="rh-actions"><button type="button" class="secondary-button" data-rh-close>Cancelar</button><button type="submit" class="primary-button">Programar</button></div><p class="form-error" role="alert" data-rh-error></p>
 </form></dialog>
 <dialog id="rhSourceDialog" class="rh-dialog"><form id="rhSourceForm" class="rh-form"><div class="rh-heading"><h2>Fuente externa</h2><button type="button" class="secondary-button" data-rh-close aria-label="Cerrar">×</button></div>
-    <label><span>Código permanente</span><input name="codigo" pattern="[a-z][a-z0-9_-]+" maxlength="60" required></label><label><span>Nombre</span><input name="nombre" maxlength="120" required></label>
+    <label><span>Código permanente</span><input name="codigo" pattern="[a-z][a-z0-9_\-]+" maxlength="60" required></label><label><span>Nombre</span><input name="nombre" maxlength="120" required></label>
     <label><span>Formato</span><select name="tipo"><option value="normalizado">Marcajes normalizados</option><option value="geovictoria">GeoVictoria · Punch</option></select></label>
     <label><span>Estado</span><select name="activa"><option value="1">Activa</option><option value="0">Inactiva</option></select></label>
     <p>Credenciales de la cuenta para la conexión. Se guardan cifradas; no se devuelven al navegador. Vacío conserva las actuales al editar.</p>

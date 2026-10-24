@@ -1,3 +1,4 @@
+import { createUuid } from './shared/uuid.js';
 import { createOperationalPoller } from './shared/operational-poller';
 import { buildAttention, buildOperationTabBadges } from './shared/operation-now-attention';
 import { createOperationTabs } from './shared/operation-now-tabs';
@@ -382,7 +383,7 @@ async function executeManeuverIntervention({
     state.interventionSaving = true;
 
     try {
-        const operationId = window.crypto.randomUUID();
+        const operationId = createUuid();
         const request = buildManeuverInterventionRequest(
             decision,
             action,
@@ -1392,7 +1393,7 @@ function addCatalogItem(key) {
     const x = 400 + (sequence % 5) * 1800;
     const y = 400 + (Math.floor(sequence / 5) % 5) * 1500;
     state.mapDraft.push({
-        id: crypto.randomUUID(),
+        id: createUuid(),
         tipo: item.tipo,
         referencia_id: item.id,
         nombre: item.nombre || item.codigo,
@@ -1482,7 +1483,7 @@ function finishConnection(targetId) {
         toast(problem, true);
         return;
     }
-    state.mapConnections.push({ id: crypto.randomUUID(), desde: origin, hacia: targetId });
+    state.mapConnections.push({ id: createUuid(), desde: origin, hacia: targetId });
     state.mapConnecting = null;
     renderEditor();
 }
@@ -1578,11 +1579,11 @@ byId('operationMapZoneForm').addEventListener('submit', (event) => {
     // Un pasillo es un elemento de circulación angosto; el resto son áreas.
     state.mapDraft.push(kind === 'pasillo'
         ? {
-            id: crypto.randomUUID(), tipo: 'pasillo', referencia_id: null, nombre: name,
+            id: createUuid(), tipo: 'pasillo', referencia_id: null, nombre: name,
             categoria: null, x: 500, y: 500, ancho: 3000, alto: 300, rotacion: 0,
         }
         : {
-            id: crypto.randomUUID(), tipo: 'zona', referencia_id: null, nombre: name,
+            id: createUuid(), tipo: 'zona', referencia_id: null, nombre: name,
             categoria: kind, x: 500, y: 500, ancho: 2200, alto: 1400, rotacion: 0,
         });
     state.mapSelectedId = state.mapDraft.at(-1).id;
@@ -1818,7 +1819,7 @@ document.body.append(verificationResolutionDialog);
 let verificationResolution = null;
 elements.alertRows.addEventListener('click', (event) => {
     const button = event.target.closest('[data-resolve-verification]'); if (!button) return;
-    verificationResolution = { id: button.dataset.resolveVerification, operation: crypto.randomUUID() };
+    verificationResolution = { id: button.dataset.resolveVerification, operation: createUuid() };
     verificationResolutionDialog.querySelector('form').reset(); verificationResolutionDialog.querySelector('[role="alert"]').textContent = ''; verificationResolutionDialog.showModal();
 });
 verificationResolutionDialog.querySelector('[data-cancel-resolution]').addEventListener('click', () => verificationResolutionDialog.close());

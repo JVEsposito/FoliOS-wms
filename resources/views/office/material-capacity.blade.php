@@ -22,7 +22,7 @@
             <div class="capacity-actions"><button id="bodegaReload" type="button" class="secondary-button">Actualizar bodegas</button><button id="bodegaNew" type="button" class="secondary-button" hidden>Crear bodega</button></div>
             <div id="bodegaList" class="capacity-type-list"></div>
             <form id="bodegaForm" hidden><h2 id="bodegaTitle">Bodega física</h2><fieldset id="bodegaFields" class="capacity-grid" disabled>
-                <label>Código permanente<input name="codigo" maxlength="40" pattern="[A-Za-z0-9][A-Za-z0-9_-]*" placeholder="BOD-NORTE" required></label>
+                <label>Código permanente<input name="codigo" maxlength="40" pattern="[A-Za-z0-9][A-Za-z0-9_\-]*" placeholder="BOD-NORTE" required></label>
                 <label>Nombre<input name="nombre" maxlength="180" minlength="3" required></label>
                 <label>Descripción<input name="descripcion" maxlength="1000"></label>
                 <label>Estado<select name="activo"><option value="1">Activa</option><option value="0">Inactiva</option></select></label>
@@ -53,7 +53,7 @@
             <div id="capacityTypeList" class="capacity-type-list"></div>
             <button type="button" id="capacityNewType" class="secondary-button" hidden>Crear tipo de pallet</button>
             <form id="capacityTypeForm" hidden><h2 id="capacityTypeTitle">Tipo de pallet</h2><fieldset id="capacityTypeFields" class="capacity-grid">
-                <label>Código<input name="codigo" required maxlength="40" pattern="[A-Za-z0-9][A-Za-z0-9_-]*"></label>
+                <label>Código<input name="codigo" required maxlength="40" pattern="[A-Za-z0-9][A-Za-z0-9_\-]*"></label>
                 <label>Nombre<input name="nombre" required minlength="2" maxlength="150"></label>
                 <label>Largo (m)<input name="largo_m" type="number" min="0.001" max="20" step="0.001" required></label>
                 <label>Ancho (m)<input name="ancho_m" type="number" min="0.001" max="20" step="0.001" required></label>

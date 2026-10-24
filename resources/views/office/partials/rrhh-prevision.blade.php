@@ -6,7 +6,7 @@
 </section>
 <dialog id="rpDirectoryDialog" class="rh-dialog"><form id="rpDirectoryForm" class="rh-form" data-prevision-form>
     <div class="rh-heading"><h2 id="rpDirectoryTitle">Registro institucional</h2><button type="button" data-rh-close aria-label="Cerrar">×</button></div>
-    <label><span>Código permanente</span><input name="codigo" pattern="[A-Z0-9_-]+" maxlength="40" required></label>
+    <label><span>Código permanente</span><input name="codigo" pattern="[A-Z0-9_\-]+" maxlength="40" required></label>
     <label><span>RUT</span><input name="rut" maxlength="15" required></label><label><span>Razón social</span><input name="razon_social" maxlength="160" required></label>
     <label><span>Tipo</span><select name="tipo" required></select></label>
     <label><span>Código oficial (opcional)</span><input name="codigo_oficial" maxlength="40"></label><label><span>Código de integración (opcional)</span><input name="codigo_externo" maxlength="100"></label>
