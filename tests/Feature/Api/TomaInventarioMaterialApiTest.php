@@ -16,8 +16,11 @@ use App\Services\Materiales\ServicioAlmacenMaterial;
 use App\Services\Materiales\ServicioMovimientoAlmacenMaterial;
 use App\Services\Materiales\ServicioTomaInventarioMaterial;
 use App\Services\Verificaciones\ServicioResolverIncidenciaVerificacion;
+use Illuminate\Auth\Middleware\Authenticate;
+use Illuminate\Auth\Middleware\Authorize;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -39,7 +42,18 @@ class TomaInventarioMaterialApiTest extends TestCase
             $t->string('nombre')->default('Insumo');
             $t->string('categoria')->default('Insumos');
         });
-        Schema::create('destinos_materiales', fn (Blueprint $t) => $t->uuid('id')->primary());
+        Schema::create('destinos_materiales', function (Blueprint $t): void {
+            $t->uuid('id')->primary();
+            $t->string('nombre')->default('Bodega de prueba');
+            $t->string('tipo')->default('fisica');
+            $t->boolean('activo')->default(true);
+        });
+        Schema::table('temporadas', fn (Blueprint $t) => $t->string('nombre')->default('Temporada 2026'));
+        Schema::table('items_materiales', fn (Blueprint $t) => $t->uuid('cliente_material_id')->nullable());
+        Schema::create('clientes_materiales', function (Blueprint $t): void {
+            $t->uuid('id')->primary();
+            $t->string('nombre');
+        });
         Schema::table('camaras', fn (Blueprint $t) => $t->unsignedInteger('version_plano')->default(1));
         Schema::table('movimientos_almacenes_materiales', function (Blueprint $t) {
             $t->uuid('almacen_origen_id')->nullable();
@@ -47,12 +61,252 @@ class TomaInventarioMaterialApiTest extends TestCase
             $t->timestamp('ocurrido_at')->nullable();
         });
         (require database_path('migrations/2026_10_08_160000_crear_tomas_inventario_materiales.php'))->up();
+        (require database_path('migrations/2026_10_24_180000_agregar_cierre_inventario_materiales.php'))->up();
         $id = DB::table('users')->insertGetId(['name' => 'Supervisor', 'rol' => 'supervisor_materiales', 'activo' => true]);
         $this->supervisor = User::findOrFail($id);
         $alcance = Mockery::mock(AlcanceOperacionalUsuario::class);
         $alcance->shouldReceive('puedeSupervisarCamara')->andReturn(true);
         $alcance->shouldReceive('puedeOperarCamara')->andReturn(true);
         $this->app->instance(AlcanceOperacionalUsuario::class, $alcance);
+    }
+
+    private function cierre($posicion, string $folio, float $cantidad): TomaInventarioMaterial
+    {
+        $bodega = DB::table('saldos_materiales_almacenes')->where('folio_id', $folio)->value('almacen_material_id');
+        DB::table('destinos_materiales')->insertOrIgnore(['id' => $bodega, 'nombre' => 'Bodega Norte']);
+        $s = app(ServicioTomaInventarioMaterial::class);
+        $toma = $s->crear(['operacion_id' => (string) Str::uuid(), 'camara_ids' => [$posicion->camara_id], 'finalidad' => 'cierre_temporada', 'almacen_id' => $bodega], $this->supervisor);
+        $toma = $s->operar($toma, 'abrir', $this->datos($toma) + ['camarero_ids' => [$this->camarero->id]], $this->supervisor);
+
+        return $s->operar($this->contar($toma, [['numero_folio' => DB::table('folios')->where('id', $folio)->value('numero_folio'), 'cantidad_contada' => $cantidad]]), 'revisar', $this->datos($toma), $this->supervisor);
+    }
+
+    public function test_cierre_exige_clasificacion_y_merma_requiere_ajuste_negativo(): void
+    {
+        $p = $this->posicion();
+        $f = $this->folioEn($p, 'MAT-CIERRE', 10);
+        $toma = $this->cierre($p, $f, 8);
+        $s = app(ServicioTomaInventarioMaterial::class);
+        $resultado = TomaInventarioMaterialResultado::sole();
+        foreach ([['accion' => 'aceptar_sin_ajuste'], ['accion' => 'aceptar_sin_ajuste', 'clasificacion' => 'merma'], ['accion' => 'ajustar', 'clasificacion' => 'sobrante'], ['accion' => 'ajustar', 'clasificacion' => 'error_conteo']] as $decision) {
+            try {
+                $s->decidir($resultado, $this->datos($toma) + $decision + ['motivo' => 'Verificado por supervisor'], $this->supervisor);
+                $this->fail('Debe rechazar la clasificación incompatible');
+            } catch (ValidationException $e) {
+                $this->assertNotEmpty($e->errors());
+            }
+        }
+        $this->assertDatabaseCount('movimientos_almacenes_materiales', 0);
+        $this->assertNull($resultado->fresh()->historial_decisiones);
+    }
+
+    public function test_cierre_merma_aplica_una_vez_y_congela_cliente_usuario_y_temporada(): void
+    {
+        $p = $this->posicion();
+        $f = $this->folioEn($p, 'MAT-MERMA', 10);
+        $cliente = (string) Str::uuid();
+        DB::table('clientes_materiales')->insert(['id' => $cliente, 'nombre' => 'Disfruta']);
+        DB::table('items_materiales')->update(['cliente_material_id' => $cliente, 'nombre' => 'Film original']);
+        $toma = $this->cierre($p, $f, 8);
+        $s = app(ServicioTomaInventarioMaterial::class);
+        $toma = $s->decidir(TomaInventarioMaterialResultado::sole(), $this->datos($toma) + ['accion' => 'ajustar', 'clasificacion' => 'merma', 'motivo' => 'Dos unidades dañadas durante la temporada'], $this->supervisor);
+        $movimientos = Mockery::mock(ServicioMovimientoAlmacenMaterial::class);
+        $movimientos->shouldReceive('registrar')->once()->andReturnUsing(function ($datos) {
+            $this->assertSame(-2.0, $datos['cantidad']);
+            DB::table('saldos_materiales_almacenes')->where('folio_id', $datos['folio_id'])->decrement('cantidad_actual', 2);
+            $mov = new MovimientoAlmacenMaterial;
+            $mov->id = (string) Str::uuid();
+            DB::table('movimientos_almacenes_materiales')->insert(['id' => $mov->id, 'folio_id' => $datos['folio_id']]);
+
+            return $mov;
+        });
+        $this->app->instance(ServicioMovimientoAlmacenMaterial::class, $movimientos);
+        // Un retiro legítimo después del conteo no se sobrescribe con la cantidad contada.
+        DB::table('saldos_materiales_almacenes')->where('folio_id', $f)->update(['cantidad_actual' => 9, 'version' => 2]);
+        $datos = $this->datos($toma);
+        $toma = $s->operar($toma, 'aprobar', $datos, $this->supervisor);
+        $s->operar($toma, 'aprobar', $datos, $this->supervisor);
+        $this->assertDatabaseHas('saldos_materiales_almacenes', ['folio_id' => $f, 'cantidad_actual' => 7]);
+        $acta = app(ConsultaTomaInventarioMaterial::class)->detalle($toma);
+        $this->assertSame(2.0, (float) $acta['resumen_cierre'][0]['merma_aplicada']);
+        $this->assertSame(9.0, (float) $acta['diferencias'][0]['saldo_antes']);
+        $this->assertSame(7.0, (float) $acta['diferencias'][0]['saldo_despues']);
+        $this->assertSame('Disfruta', $acta['diferencias'][0]['cliente']);
+        DB::table('clientes_materiales')->update(['nombre' => 'Otro nombre']);
+        DB::table('items_materiales')->update(['nombre' => 'Ítem editado']);
+        DB::table('users')->where('id', $this->supervisor->id)->update(['name' => 'Nombre nuevo']);
+        DB::table('destinos_materiales')->update(['nombre' => 'Bodega editada']);
+        DB::table('temporadas')->update(['activa' => false, 'nombre' => 'Temporada editada']);
+        $nueva = (string) Str::uuid();
+        DB::table('temporadas')->insert(['id' => $nueva, 'activa' => true, 'fecha_inicio' => '2027-01-01']);
+        $this->assertEquals($acta, app(ConsultaTomaInventarioMaterial::class)->detalle($toma->fresh()));
+        $this->assertCount(0, app(ConsultaTomaInventarioMaterial::class)->detalle($toma->fresh(), ['clasificacion' => 'sobrante'])['diferencias']);
+        try {
+            $s->operar($toma, 'anular', $this->datos($toma) + ['motivo' => 'No permitido'], $this->supervisor);
+            $this->fail('El cierre histórico no se modifica');
+        } catch (ConflictoOperacion $e) {
+            $this->assertStringContainsString('temporada activa', $e->getMessage());
+        }
+    }
+
+    public function test_error_de_conteo_guarda_recuento_en_acta_aunque_la_nueva_lectura_coincida(): void
+    {
+        $p = $this->posicion();
+        $f = $this->folioEn($p, 'MAT-RECONTAR', 10);
+        $toma = $this->cierre($p, $f, 8);
+        $s = app(ServicioTomaInventarioMaterial::class);
+        $toma = $s->decidir(TomaInventarioMaterialResultado::sole(), $this->datos($toma) + ['accion' => 'recontar', 'clasificacion' => 'error_conteo', 'motivo' => 'Se digitó mal la cantidad'], $this->supervisor);
+        $toma = $this->contar($toma, [['numero_folio' => 'MAT-RECONTAR', 'cantidad_contada' => 10]]);
+        $toma = $s->operar($toma, 'revisar', $this->datos($toma), $this->supervisor);
+        $toma = $s->operar($toma, 'aprobar', $this->datos($toma), $this->supervisor);
+        $acta = app(ConsultaTomaInventarioMaterial::class)->detalle($toma);
+        $this->assertSame('coincide', $acta['diferencias'][0]['tipo']);
+        $this->assertSame('error_conteo', $acta['historial_decisiones'][0]['clasificacion']);
+        $this->assertFalse($acta['historial_decisiones'][0]['vigente']);
+        $this->assertDatabaseCount('movimientos_almacenes_materiales', 0);
+    }
+
+    public function test_cierre_impide_omitir_saldos_pendientes_de_ubicacion_y_nuevos_saldos_sin_contar(): void
+    {
+        $p = $this->posicion();
+        $f = $this->folioEn($p, 'MAT-A', 10);
+        $otro = $this->folioEn($p, 'MAT-B', 5);
+        $bodega = DB::table('saldos_materiales_almacenes')->where('folio_id', $f)->value('almacen_material_id');
+        DB::table('destinos_materiales')->insert(['id' => $bodega]);
+        DB::table('saldos_materiales_almacenes')->where('folio_id', $otro)->update(['almacen_material_id' => $bodega, 'camara_id' => null, 'posicion_id' => null]);
+        $s = app(ServicioTomaInventarioMaterial::class);
+        $toma = $s->crear(['operacion_id' => (string) Str::uuid(), 'camara_ids' => [$p->camara_id], 'finalidad' => 'cierre_temporada', 'almacen_id' => $bodega], $this->supervisor);
+        try {
+            $s->operar($toma, 'abrir', $this->datos($toma) + ['camarero_ids' => [$this->camarero->id]], $this->supervisor);
+            $this->fail('No omitir stock pendiente');
+        } catch (ConflictoOperacion $e) {
+            $this->assertStringContainsString('pendientes de ubicación', $e->getMessage());
+        }
+        DB::table('saldos_materiales_almacenes')->where('folio_id', $otro)->update(['camara_id' => $p->camara_id, 'posicion_id' => $p->id, 'cantidad_actual' => 0]);
+        $toma = $s->operar($toma, 'abrir', $this->datos($toma) + ['camarero_ids' => [$this->camarero->id]], $this->supervisor);
+        $toma = $this->contar($toma, [['numero_folio' => 'MAT-A', 'cantidad_contada' => 10]]);
+        DB::table('saldos_materiales_almacenes')->where('folio_id', $otro)->update(['cantidad_actual' => 5]);
+        $toma = $s->operar($toma, 'revisar', $this->datos($toma), $this->supervisor);
+        try {
+            $s->operar($toma, 'aprobar', $this->datos($toma), $this->supervisor);
+            $this->fail('No aprobar sin contar nuevos saldos');
+        } catch (ConflictoOperacion $e) {
+            $this->assertStringContainsString('sin contar', $e->getMessage());
+        }
+        $this->assertNull($toma->fresh()->cierre_snapshot);
+    }
+
+    public function test_cierre_aisla_bodega_rechaza_folios_ajenos_y_conserva_unidades_separadas(): void
+    {
+        $p = $this->posicion();
+        $f = $this->folioEn($p, 'PROPIO', 10);
+        $otro = $this->folioEn($p, 'AJENO', 5);
+        $bodega = DB::table('saldos_materiales_almacenes')->where('folio_id', $f)->value('almacen_material_id');
+        DB::table('destinos_materiales')->insert(['id' => $bodega]);
+        $s = app(ServicioTomaInventarioMaterial::class);
+        $toma = $s->crear(['operacion_id' => (string) Str::uuid(), 'camara_ids' => [$p->camara_id], 'finalidad' => 'cierre_temporada', 'almacen_id' => $bodega], $this->supervisor);
+        $toma = $s->operar($toma, 'abrir', $this->datos($toma) + ['camarero_ids' => [$this->camarero->id]], $this->supervisor);
+        $this->assertCount(1, $toma->foto);
+        try {
+            $this->contar($toma, [['numero_folio' => 'AJENO', 'cantidad_contada' => 5]]);
+            $this->fail('No contar saldos de otra bodega');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('folios', $e->errors());
+        }
+        DB::table('saldos_materiales_almacenes')->where('folio_id', $otro)->update(['almacen_material_id' => $bodega]);
+        DB::table('items_materiales')->where('id', DB::table('folios_materiales')->where('folio_id', $otro)->value('item_material_id'))->update(['unidad_medida' => 'kg']);
+        $toma = $this->contar($toma, [['numero_folio' => 'PROPIO', 'cantidad_contada' => 10], ['numero_folio' => 'AJENO', 'cantidad_contada' => 5]]);
+        $toma = $s->operar($toma, 'revisar', $this->datos($toma), $this->supervisor);
+        $toma = $s->operar($toma, 'aprobar', $this->datos($toma), $this->supervisor);
+        $acta = app(ConsultaTomaInventarioMaterial::class)->detalle($toma);
+        $this->assertEqualsCanonicalizing(['kg', 'unidad'], array_column($acta['totales_categorias'], 'unidad'));
+        $this->assertCount(2, $acta['resumen_cierre']);
+    }
+
+    public function test_cierre_no_admite_categoria_parcial_ni_bodega_virtual(): void
+    {
+        $p = $this->posicion();
+        $bodega = (string) Str::uuid();
+        DB::table('destinos_materiales')->insert(['id' => $bodega, 'tipo' => 'virtual']);
+        $s = app(ServicioTomaInventarioMaterial::class);
+        $datos = ['operacion_id' => (string) Str::uuid(), 'camara_ids' => [$p->camara_id], 'finalidad' => 'cierre_temporada', 'almacen_id' => $bodega];
+        try {
+            $s->crear($datos, $this->supervisor);
+            $this->fail('Requiere bodega física');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('almacen_id', $e->errors());
+        }
+        DB::table('destinos_materiales')->update(['tipo' => 'fisica']);
+        try {
+            $s->crear($datos + ['categoria' => 'Insumos'], $this->supervisor);
+            $this->fail('No cerrar una categoría parcial');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('categoria', $e->errors());
+        }
+    }
+
+    public function test_indice_historico_paginado_y_exportaciones_no_dependen_de_temporada_activa(): void
+    {
+        $p = $this->posicion();
+        $f = $this->folioEn($p, 'MAT-HISTORICO', 10);
+        $toma = $this->cierre($p, $f, 10);
+        $s = app(ServicioTomaInventarioMaterial::class);
+        $toma = $s->operar($toma, 'aprobar', $this->datos($toma), $this->supervisor);
+        $this->actingAs($this->supervisor);
+        $this->withoutMiddleware([Authenticate::class, Authorize::class]);
+        DB::table('temporadas')->update(['activa' => false]);
+        $this->getJson('/api/materiales/tomas?temporada_id='.$toma->temporada_id)->assertOk()->assertJsonPath('data.0.id', $toma->id)->assertJsonPath('meta.last_page', 1)->assertJsonMissingPath('data.0.cierre_snapshot')->assertJsonMissingPath('data.0.foto');
+        $this->getJson('/api/materiales/tomas/'.$toma->id)->assertOk()->assertJsonPath('data.diferencias.0.folio', 'MAT-HISTORICO');
+        $this->get('/api/materiales/tomas/'.$toma->id.'/acta')->assertOk()->assertHeader('Content-Type', 'application/pdf');
+        $this->get('/api/materiales/tomas/'.$toma->id.'/excel')->assertOk();
+        $this->assertSame(1, DB::table('temporadas')->count());
+    }
+
+    public function test_permiso_de_aprobacion_y_version_obsoleta_protegen_el_cierre(): void
+    {
+        $p = $this->posicion();
+        $f = $this->folioEn($p, 'MAT-PERMISO', 10);
+        $toma = $this->cierre($p, $f, 10);
+        $s = app(ServicioTomaInventarioMaterial::class);
+        try {
+            $s->operar($toma, 'aprobar', ['operacion_id' => (string) Str::uuid(), 'version' => 1], $this->supervisor);
+            $this->fail('No usar versiones antiguas');
+        } catch (ConflictoOperacion $e) {
+            $this->assertStringContainsString('versión', $e->getMessage());
+        }
+        Gate::define('aprobar-ajustes-materiales', fn () => false);
+        try {
+            $s->operar($toma, 'aprobar', $this->datos($toma), $this->supervisor);
+            $this->fail('Requiere permiso de aprobación');
+        } catch (HttpException $e) {
+            $this->assertSame(403, $e->getStatusCode());
+        }
+        $this->assertNull($toma->fresh()->cierre_snapshot);
+        $this->assertSame('en_revision', $toma->fresh()->estado);
+    }
+
+    public function test_merma_al_reubicar_usa_delta_real_y_no_el_sobrante_observado(): void
+    {
+        [$toma, $faltante, $sobrante, , $encontrada] = $this->pareja();
+        $s = app(ServicioTomaInventarioMaterial::class);
+        $toma = $s->decidir($sobrante, $this->datos($toma) + ['accion' => 'reubicar_y_ajustar', 'clasificacion' => 'merma', 'motivo' => 'Cinco unidades deterioradas', 'posicion_destino_id' => $encontrada->id], $this->supervisor);
+        $this->assertSame('merma', $sobrante->fresh()->clasificacion);
+        $this->assertSame(95.0, (float) $sobrante->diferencia);
+        $fila = collect(app(ConsultaTomaInventarioMaterial::class)->detalle($toma)['diferencias'])->firstWhere('id', $sobrante->id);
+        $this->assertSame(-5.0, $fila['diferencia_reubicacion']);
+    }
+
+    public function test_cierre_no_acepta_ubicacion_cambiada_despues_de_una_lectura_coincidente(): void
+    {
+        $p = $this->posicion();
+        $f = $this->folioEn($p, 'MAT-MOVIDO', 10);
+        $toma = $this->cierre($p, $f, 10);
+        $nuevo = (string) Str::uuid();
+        DB::table('posiciones')->insert(['id' => $nuevo, 'camara_id' => $p->camara_id, 'banda' => 1, 'posicion' => 2, 'nivel' => 1, 'estado' => 'activa']);
+        DB::table('saldos_materiales_almacenes')->where('folio_id', $f)->update(['posicion_id' => $nuevo]);
+        $this->expectException(ConflictoOperacion::class);
+        $this->expectExceptionMessage('cambió de posición');
+        app(ServicioTomaInventarioMaterial::class)->operar($toma, 'aprobar', $this->datos($toma), $this->supervisor);
     }
 
     private function toma($posicion): TomaInventarioMaterial

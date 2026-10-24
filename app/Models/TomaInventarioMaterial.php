@@ -18,7 +18,7 @@ class TomaInventarioMaterial extends Model implements PerteneceATemporada
 
     protected function casts(): array
     {
-        return ['camara_ids' => 'array', 'foto' => 'array', 'operaciones' => 'array', 'version' => 'integer', 'abierta_at' => 'datetime', 'revisada_at' => 'datetime', 'aprobada_at' => 'datetime', 'anulada_at' => 'datetime'];
+        return ['cierre_snapshot' => 'array', 'camara_ids' => 'array', 'foto' => 'array', 'operaciones' => 'array', 'version' => 'integer', 'abierta_at' => 'datetime', 'revisada_at' => 'datetime', 'aprobada_at' => 'datetime', 'anulada_at' => 'datetime'];
     }
 
     public function posiciones(): HasMany

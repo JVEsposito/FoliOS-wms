@@ -12,16 +12,28 @@ class ActaTomaInventarioMaterialPdf
         $lineas = [];
         foreach ($datos['diferencias'] as $fila) {
             $texto = $fila['folio'].' · '.$fila['camara'].' '.$fila['posicion'].' · '.$fila['item'].' · Esperado '.$fila['esperado'].' / contado '.$fila['contado'].' '.$fila['unidad'].' · '.str_replace('_', ' ', $fila['tipo']);
+            if (isset($fila['cliente'], $fila['bodega'])) {
+                $texto .= ' · Cliente: '.$fila['cliente'].' · Bodega: '.$fila['bodega'];
+            }
             $lineas = $this->pdf->envolver($texto, 535, 8);
             if ($fila['accion']) {
                 $lineas = array_merge($lineas, $this->pdf->envolver('Acción: '.str_replace('_', ' ', $fila['accion']).' · '.$fila['motivo'].($fila['ajuste_id'] ? ' · Ajuste aplicado: '.$fila['ajuste_id'] : '').($fila['posicion_destino_id'] ? ' · Posición destino: '.$fila['posicion_destino_id'] : ''), 535, 8));
+            }
+            if ($fila['clasificacion'] ?? null) {
+                $lineas = array_merge($lineas, $this->pdf->envolver('Clasificación: '.str_replace('_', ' ', $fila['clasificacion']).' · '.$fila['decidida_por'].' · '.$fila['decidida_at'].' · Ajuste aplicado: '.$fila['ajuste_aplicado'].' '.$fila['unidad'], 535, 8));
             }
             $bloques[] = [...$lineas, ''];
         }
         foreach ($datos['totales_categorias'] as $total) {
             $bloques[] = $this->pdf->envolver('Total '.$total['categoria'].' ('.$total['unidad'].'): esperado '.$total['esperado'].'; contado '.$total['contado'].'; diferencia '.$total['diferencia'], 535, 8);
         }
-        $resumen = ['Toma: '.$datos['id'].' · '.$datos['estado'], 'Alcance: '.implode(', ', $datos['camaras']).' · Categoría: '.($datos['categoria'] ?: 'Todas'),
+        foreach ($datos['resumen_cierre'] ?? [] as $total) {
+            $bloques[] = $this->pdf->envolver($total['bodega'].' / '.$total['cliente'].' / '.$total['item'].' ('.$total['unidad'].'): faltante observado '.$total['faltante_observado'].'; sobrante observado '.$total['sobrante_observado'].'; merma aplicada '.$total['merma_aplicada'].'; ajuste aplicado '.$total['ajuste_aplicado'], 535, 8);
+        }
+        foreach ($datos['historial_decisiones'] ?? [] as $decision) {
+            $bloques[] = $this->pdf->envolver('Decisión '.$decision['folio'].' · '.$decision['usuario'].' · '.$decision['fecha'].' · '.$decision['accion'].' · '.($decision['clasificacion'] ?? '').' · '.$decision['motivo'], 535, 8);
+        }
+        $resumen = ['Temporada: '.($datos['temporada'] ?? '—').' · Bodega: '.($datos['bodega'] ?? 'Según alcance').' · '.(($datos['finalidad'] ?? '') === 'cierre_temporada' ? 'Cierre de temporada' : 'Conteo operativo'), 'Toma: '.$datos['id'].' · '.$datos['estado'], 'Alcance: '.implode(', ', $datos['camaras']).' · Categoría: '.($datos['categoria'] ?: 'Todas'),
             'Abierta: '.($datos['abierta_at'] ?? '—').' · '.$datos['abierta_por'], 'Revisada: '.($datos['revisada_at'] ?? '—').' · '.($datos['revisada_por'] ?? '—'),
             'Aprobada: '.($datos['aprobada_at'] ?? '—').' · '.($datos['aprobada_por'] ?? '—'),
             'Exactitud por presencia: '.($datos['exactitud_presencia_pct'] ?? '—').'% · por cantidad: '.($datos['exactitud_cantidad_pct'] ?? '—').'%'];
@@ -43,7 +55,7 @@ class ActaTomaInventarioMaterialPdf
         $hojas[] = $pagina;
         $paginas = [];
         foreach ($hojas as $indice => $filas) {
-            $contenido = "q 60 0 0 30 30 790 cm /Logo Do Q\n".$this->pdf->texto(105, 805, 13, 'ACTA DE TOMA DE INVENTARIO DE MATERIALES', true);
+            $contenido = "q 60 0 0 30 30 790 cm /Logo Do Q\n".$this->pdf->texto(105, 805, 13, ($datos['finalidad'] ?? '') === 'cierre_temporada' ? 'CIERRE DE INVENTARIO DE MATERIALES' : 'ACTA DE TOMA DE INVENTARIO DE MATERIALES', true);
             $contenido .= $this->pdf->texto(30, 772, 8, 'Toma '.$datos['id'].' · '.$datos['estado']);
             foreach ($filas as $n => $texto) {
                 $contenido .= $this->pdf->texto(30, 750 - $n * 12, 8, $texto);

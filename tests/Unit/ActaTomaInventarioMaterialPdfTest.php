@@ -9,9 +9,9 @@ class ActaTomaInventarioMaterialPdfTest extends TestCase
 {
     public function test_acta_pagina_sin_recortar_folios_motivos_y_firmas(): void
     {
-        $datos = ['id' => 'INV-001', 'estado' => 'aprobada', 'camaras' => ['MAT-01'], 'categoria' => 'Embalaje', 'abierta_at' => '2026-10-08', 'abierta_por' => 'Supervisor', 'revisada_at' => null, 'revisada_por' => null, 'aprobada_at' => '2026-10-08', 'aprobada_por' => 'Administrador', 'exactitud_presencia_pct' => 100, 'exactitud_cantidad_pct' => 0, 'totales_categorias' => [], 'diferencias' => []];
+        $datos = ['id' => 'INV-001', 'estado' => 'aprobada', 'camaras' => ['MAT-01'], 'temporada' => 'TEMP-2026', 'finalidad' => 'cierre_temporada', 'bodega' => 'Bodega Norte', 'categoria' => 'Embalaje', 'abierta_at' => '2026-10-08', 'abierta_por' => 'Supervisor', 'revisada_at' => null, 'revisada_por' => null, 'aprobada_at' => '2026-10-08', 'aprobada_por' => 'Administrador', 'exactitud_presencia_pct' => 100, 'exactitud_cantidad_pct' => 0, 'totales_categorias' => [], 'diferencias' => []];
         for ($i = 1; $i <= 55; $i++) {
-            $datos['diferencias'][] = ['folio' => 'FM'.str_pad($i, 5, '0', STR_PAD_LEFT), 'camara' => 'MAT-01', 'posicion' => 'B1 P'.$i, 'item' => 'Film', 'esperado' => 100, 'contado' => 99, 'unidad' => 'kg', 'tipo' => 'diferencia_cantidad', 'accion' => 'ajustar', 'motivo' => 'Conteo revisado', 'ajuste_id' => 'AJ'.$i, 'posicion_destino_id' => null];
+            $datos['diferencias'][] = ['cliente' => 'Disfruta', 'bodega' => 'Bodega Norte', 'folio' => 'FM'.str_pad($i, 5, '0', STR_PAD_LEFT), 'camara' => 'MAT-01', 'posicion' => 'B1 P'.$i, 'item' => 'Film', 'esperado' => 100, 'contado' => 99, 'unidad' => 'kg', 'tipo' => 'diferencia_cantidad', 'accion' => 'ajustar', 'motivo' => 'Conteo revisado', 'ajuste_id' => 'AJ'.$i, 'posicion_destino_id' => null];
         }
         $pdf = app(ActaTomaInventarioMaterialPdf::class)->generar($datos);
         $this->assertStringStartsWith('%PDF-1.4', $pdf);
@@ -23,6 +23,9 @@ class ActaTomaInventarioMaterialPdfTest extends TestCase
         foreach ($datos['diferencias'] as $folio) {
             $this->assertSame(1, substr_count($pdf, $folio['folio']));
         }
+        $this->assertStringContainsString('TEMP-2026', $pdf);
+        $this->assertStringContainsString('Cliente: Disfruta', $pdf);
+        $this->assertStringContainsString('Bodega: Bodega Norte', $pdf);
         $this->assertStringContainsString('AJ55', $pdf);
         $this->assertStringContainsString('Conteo revisado', $pdf);
     }

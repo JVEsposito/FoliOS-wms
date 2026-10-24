@@ -22,6 +22,18 @@ class EstructuraOficinaTest extends TestCase
         }
     }
 
+    public function test_tomas_inventario_conserva_cierre_historial_y_filtros(): void
+    {
+        $html = $this->get('/oficina/materiales/tomas')->assertOk()->getContent();
+        foreach (['season', 'warehouseLabel', 'closingSummary', 'decisionHistory'] as $id) {
+            $this->assertStringContainsString('id="'.$id.'"', $html);
+        }
+        if (getenv('ESTIBA_EXPORTAR_UI_TESTS') === '1') {
+            File::ensureDirectoryExists(storage_path('app/ui/oficina'));
+            File::put(storage_path('app/ui/oficina/tomas.html'), $html);
+        }
+    }
+
     public function test_estatus_cargas_conserva_el_detalle_de_recepciones(): void
     {
         $html = $this->get('/oficina/frigorifico/despacho/estatus')->assertOk()->getContent();

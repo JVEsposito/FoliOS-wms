@@ -5,6 +5,7 @@ namespace App\Services\Materiales;
 use App\Enums\ContenidoCamara;
 use App\Enums\RolUsuario;
 use App\Exceptions\ConflictoOperacion;
+use App\Models\AlmacenMaterial;
 use App\Models\Camara;
 use App\Models\Folio;
 use App\Models\FolioMaterial;
@@ -23,6 +24,8 @@ use Illuminate\Validation\ValidationException;
 
 class ServicioTomaInventarioMaterial
 {
+    public const CLASIFICACIONES = ['merma', 'faltante', 'sobrante', 'error_conteo', 'diferencia_ubicacion', 'otro'];
+
     public function supervisar(User $user): void
     {
         abort_unless($user->activo && in_array($user->rol, [RolUsuario::Administrador, RolUsuario::SupervisorMateriales], true), 403);
@@ -50,7 +53,17 @@ class ServicioTomaInventarioMaterial
                 throw ValidationException::withMessages(['camara_ids' => 'Selecciona cámaras de materiales activas.']);
             }
 
-            return TomaInventarioMaterial::create(['temporada_id' => $temporada->id, 'camara_ids' => $datos['camara_ids'],
+            $finalidad = $datos['finalidad'] ?? 'operativo';
+            if ($finalidad === 'cierre_temporada') {
+                if (! AlmacenMaterial::whereKey($datos['almacen_id'] ?? null)->where('activo', true)->where('tipo', 'fisica')->exists()) {
+                    throw ValidationException::withMessages(['almacen_id' => 'Selecciona una bodega física activa para el cierre.']);
+                }
+                if (! empty($datos['categoria'])) {
+                    throw ValidationException::withMessages(['categoria' => 'El cierre debe incluir todas las categorías de la bodega.']);
+                }
+            }
+
+            return TomaInventarioMaterial::create(['finalidad' => $finalidad, 'almacen_id' => $finalidad === 'cierre_temporada' ? $datos['almacen_id'] : null, 'temporada_id' => $temporada->id, 'camara_ids' => $datos['camara_ids'],
                 'categoria' => $datos['categoria'] ?? null, 'operacion_id' => $datos['operacion_id'], 'payload_hash' => $hash,
                 'creada_por_user_id' => $user->id, 'abierta_por_user_id' => $user->id, 'estado' => 'borrador', 'version' => 1, 'operaciones' => []]);
         }, 3);
@@ -99,6 +112,7 @@ class ServicioTomaInventarioMaterial
         if (Camara::whereIn('id', $toma->camara_ids)->where('estado', 'activa')->where('contenido', 'materiales')->count() !== count($toma->camara_ids)) {
             throw new ConflictoOperacion('Una cámara del borrador ya no está activa para materiales.');
         }
+        $this->validarCoberturaCierre($toma);
         $saldos = $this->saldosAlcance($toma)->get();
         $this->bloquearFolios($saldos->pluck('folio_id')->all());
         $saldos = $this->saldosAlcance($toma)->orderBy('folio_id')->lockForUpdate()->get();
@@ -164,11 +178,14 @@ class ServicioTomaInventarioMaterial
             }
             foreach ($restantes as $numero => $lectura) {
                 $folio = $folios->get($numero);
+                if ($folio && $toma->almacen_id && ! SaldoMaterialAlmacen::where('folio_id', $folio->id)->where('almacen_material_id', $toma->almacen_id)->where('cantidad_actual', '>', 0)->exists()) {
+                    throw ValidationException::withMessages(['folios' => 'Un folio leído pertenece a otra bodega. Regulariza su traslado antes de contarlo en el cierre.']);
+                }
                 if ($folio && $toma->categoria && $folio->material->item->categoria !== $toma->categoria) {
                     continue; // Un material ajeno a la categoría no es una diferencia del alcance.
                 }
                 // El sobrante se enlaza a su saldo real; no al total distribuido del folio.
-                $opciones = $folio ? SaldoMaterialAlmacen::where('folio_id', $folio->id)->whereNotNull('camara_id')->whereNotNull('posicion_id')
+                $opciones = $folio ? SaldoMaterialAlmacen::where('folio_id', $folio->id)->when($toma->almacen_id, fn ($q) => $q->where('almacen_material_id', $toma->almacen_id))->whereNotNull('camara_id')->whereNotNull('posicion_id')
                     ->where('cantidad_actual', '>', 0)->orderBy('id')->lockForUpdate()->get() : collect();
                 $saldo = $opciones->count() === 1 ? $opciones->first() : null;
                 $this->resultado($toma, $tarea, $folio, $saldo, $lectura, 0, $numero);
@@ -202,13 +219,20 @@ class ServicioTomaInventarioMaterial
     {
         $this->supervisar($user);
 
-        return $this->mutar($resultado->tarea->toma, 'decidir:'.$resultado->id, $datos, $user, function ($toma) use ($resultado, $datos) {
+        return $this->mutar($resultado->tarea->toma, 'decidir:'.$resultado->id, $datos, $user, function ($toma) use ($resultado, $datos, $user) {
             $this->exigirEstado($toma, ['en_revision']);
             $resultado = TomaInventarioMaterialResultado::whereKey($resultado->id)->lockForUpdate()->firstOrFail();
             if (! $resultado->vigente || $resultado->tipo === 'coincide') {
                 throw new ConflictoOperacion('La diferencia ya fue recontada o el folio coincide.');
             }
+            $this->validarClasificacion($toma, $resultado, $datos);
+            $historial = $resultado->historial_decisiones ?? [];
+            $historial[] = ['operacion_id' => $datos['operacion_id'], 'user_id' => $user->id, 'usuario' => $user->name,
+                'fecha' => now()->toAtomString(), 'accion' => $datos['accion'], 'motivo' => $datos['motivo'],
+                'clasificacion' => $datos['clasificacion'] ?? null, 'posicion_destino_id' => $datos['posicion_destino_id'] ?? null];
             if ($datos['accion'] === 'recontar') {
+                $resultado->update(['historial_decisiones' => $historial, 'decidida_por_user_id' => $user->id, 'decidida_at' => now(),
+                    'accion' => 'recontar', 'motivo' => $datos['motivo'], 'clasificacion' => $datos['clasificacion'] ?? null]);
                 $tarea = $resultado->tarea;
                 $tarea->resultados()->where('vigente', true)->update(['vigente' => false]);
                 $tarea->update(['estado' => 'pendiente', 'version' => $tarea->version + 1]);
@@ -222,13 +246,17 @@ class ServicioTomaInventarioMaterial
             if ($datos['accion'] === 'ajustar' && $resultado->tipo === 'sobrante' && $resultado->saldo_confirmado['posicion_id'] !== $resultado->tarea->posicion_id) {
                 throw ValidationException::withMessages(['accion' => 'El folio tiene saldo en otra posición. Reubícalo o solicita recontar.']);
             }
+            if ($toma->finalidad === 'cierre_temporada' && in_array($datos['accion'], ['reubicar', 'reubicar_y_ajustar'], true) && ($datos['posicion_destino_id'] ?? null) !== $resultado->tarea->posicion_id) {
+                throw ValidationException::withMessages(['posicion_destino_id' => 'En el cierre, reubica a la posición donde se contó el folio.']);
+            }
             if ($datos['accion'] === 'reubicar_y_ajustar') {
                 $this->diferenciaReubicacion($resultado);
                 if ($datos['posicion_destino_id'] !== $resultado->tarea->posicion_id) {
                     throw ValidationException::withMessages(['posicion_destino_id' => 'Reubica a la posición donde se contó el folio.']);
                 }
             }
-            $resultado->update(['accion' => $datos['accion'], 'motivo' => $datos['motivo'], 'posicion_destino_id' => $datos['posicion_destino_id'] ?? null]);
+            $resultado->update(['accion' => $datos['accion'], 'motivo' => $datos['motivo'], 'posicion_destino_id' => $datos['posicion_destino_id'] ?? null,
+                'clasificacion' => $datos['clasificacion'] ?? null, 'decidida_por_user_id' => $user->id, 'decidida_at' => now(), 'historial_decisiones' => $historial]);
         });
     }
 
@@ -240,6 +268,10 @@ class ServicioTomaInventarioMaterial
         if ($resultados->contains(fn ($r) => $r->tipo !== 'coincide' && ! $r->accion)) {
             throw new ConflictoOperacion('Elige una acción para cada diferencia antes de aprobar.');
         }
+        $this->validarCoberturaCierre($toma, $resultados->pluck('saldo_id')->filter()->all());
+        foreach ($resultados->where('tipo', '!=', 'coincide') as $resultado) {
+            $this->validarClasificacion($toma, $resultado, $resultado->only(['accion', 'clasificacion', 'motivo']));
+        }
         $acciones = $resultados->whereIn('accion', ['ajustar', 'reubicar', 'reubicar_y_ajustar']);
         if ($acciones->pluck('saldo_id')->unique()->count() !== $acciones->count()) {
             throw new ConflictoOperacion('Un mismo saldo no puede recibir dos correcciones. Resuelve el sobrante con reubicar o reubicar y ajustar, y acepta el faltante sin ajuste.');
@@ -248,6 +280,7 @@ class ServicioTomaInventarioMaterial
         foreach ($acciones as $resultado) {
             $saldo = SaldoMaterialAlmacen::whereKey($resultado->saldo_id)->lockForUpdate()->firstOrFail();
             $foto = $resultado->saldo_confirmado;
+            $antes = (float) $saldo->cantidad_actual;
             if ($saldo->camara_id !== $foto['camara_id'] || $saldo->posicion_id !== $foto['posicion_id'] || $saldo->almacen_material_id !== $foto['almacen_id']) {
                 throw new ConflictoOperacion('Un folio se movió de posición desde el conteo. Solicita recontar.');
             }
@@ -264,8 +297,11 @@ class ServicioTomaInventarioMaterial
                     'documento_relacionado' => 'Toma '.$toma->id,
                     'camara_destino_id' => $saldo->camara_id, 'posicion_destino_id' => $saldo->posicion_id,
                 ], $user, null);
-                $resultado->update(['movimiento_almacen_id' => $movimiento->id]);
+                $resultado->movimiento_almacen_id = $movimiento->id;
             }
+            $resultado->aplicacion = ['saldo_antes' => $antes, 'saldo_despues' => (float) $saldo->fresh()->cantidad_actual,
+                'delta' => in_array($resultado->accion, ['ajustar', 'reubicar_y_ajustar'], true) ? $cantidad : 0];
+            $resultado->save();
         }
         $toma->fill(['estado' => 'aprobada', 'aprobada_at' => now(), 'aprobada_por_user_id' => $user->id]);
         DB::afterCommit(fn () => app(ServicioPanelGerencial::class)->invalidar());
@@ -316,9 +352,53 @@ class ServicioTomaInventarioMaterial
 
     private function saldosAlcance(TomaInventarioMaterial $toma)
     {
-        return SaldoMaterialAlmacen::whereIn('camara_id', $toma->camara_ids)->where('cantidad_actual', '>', 0)
+        return SaldoMaterialAlmacen::whereIn('camara_id', $toma->camara_ids)->when($toma->almacen_id, fn ($q) => $q->where('almacen_material_id', $toma->almacen_id))->where('cantidad_actual', '>', 0)
             ->whereHas('folioMaterial.folio', fn ($q) => $q->where('temporada_id', $toma->temporada_id)->where('activo', true))
             ->when($toma->categoria, fn ($q) => $q->whereHas('folioMaterial.item', fn ($i) => $i->where('categoria', $toma->categoria)));
+    }
+
+    private function validarClasificacion(TomaInventarioMaterial $toma, TomaInventarioMaterialResultado $resultado, array $datos): void
+    {
+        $clase = $datos['clasificacion'] ?? null;
+        if (($toma->finalidad === 'cierre_temporada' && ! $clase)
+            || ($clase && ! in_array($clase, self::CLASIFICACIONES, true))) {
+            throw ValidationException::withMessages(['clasificacion' => 'Clasifica cada diferencia del cierre antes de aprobar.']);
+        }
+        if ($toma->finalidad === 'cierre_temporada' && ! trim($datos['motivo'] ?? '')) {
+            throw ValidationException::withMessages(['motivo' => 'Documenta el motivo de la diferencia.']);
+        }
+        $delta = $datos['accion'] === 'reubicar_y_ajustar' ? $this->diferenciaReubicacion($resultado) : (float) $resultado->diferencia;
+        if ($clase === 'merma' && (! in_array($datos['accion'], ['ajustar', 'reubicar_y_ajustar'], true) || $delta >= 0)) {
+            throw ValidationException::withMessages(['clasificacion' => 'La merma requiere una disminución real de stock mediante un ajuste aprobado.']);
+        }
+        if (($clase === 'faltante' && $delta >= 0) || ($clase === 'sobrante' && $delta <= 0)) {
+            throw ValidationException::withMessages(['clasificacion' => 'La clasificación debe corresponder al signo de la diferencia.']);
+        }
+        if ($clase === 'error_conteo' && $datos['accion'] !== 'recontar') {
+            throw ValidationException::withMessages(['accion' => 'Un error de conteo requiere recontar la posición.']);
+        }
+    }
+
+    private function validarCoberturaCierre(TomaInventarioMaterial $toma, ?array $contados = null): void
+    {
+        if ($toma->finalidad !== 'cierre_temporada') {
+            return;
+        }
+        $saldos = SaldoMaterialAlmacen::where('almacen_material_id', $toma->almacen_id)->where('cantidad_actual', '>', 0)
+            ->whereHas('folioMaterial.folio', fn ($q) => $q->where('temporada_id', $toma->temporada_id)->where('activo', true))->get();
+        if ($saldos->contains(fn ($s) => ! $s->posicion_id || ! in_array($s->camara_id, $toma->camara_ids, true))) {
+            throw new ConflictoOperacion('La bodega tiene saldos pendientes de ubicación o fuera de las cámaras seleccionadas. Regularízalos e incluye todo el alcance antes del cierre.');
+        }
+        if ($contados !== null && $saldos->contains(fn ($s) => ! in_array($s->id, $contados, true))) {
+            throw new ConflictoOperacion('Aparecieron saldos sin contar durante la toma. Anula y abre una nueva toma que incluya el inventario actual.');
+        }
+        if ($contados !== null) {
+            $resultados = TomaInventarioMaterialResultado::with('tarea')->where('vigente', true)
+                ->whereHas('tarea', fn ($q) => $q->where('toma_id', $toma->id))->get()->groupBy('saldo_id');
+            if ($saldos->contains(fn ($s) => ! $resultados->get($s->id, collect())->contains(fn ($r) => $r->tarea->posicion_id === $s->posicion_id || in_array($r->accion, ['reubicar', 'reubicar_y_ajustar'], true)))) {
+                throw new ConflictoOperacion('Un saldo cambió de posición después del conteo. Anula y abre una nueva toma para verificar su ubicación actual.');
+            }
+        }
     }
 
     private function bloquearFolios(array $ids): void
@@ -369,6 +449,11 @@ class ServicioTomaInventarioMaterial
             $toma->operaciones = $operaciones;
             $toma->version++;
             $toma->save();
+            if ($accion === 'aprobar' && $toma->finalidad === 'cierre_temporada') {
+                // Acta definitiva dentro de la misma transacción que los ajustes.
+                $toma->cierre_snapshot = app(ConsultaTomaInventarioMaterial::class)->detalle($toma);
+                $toma->save();
+            }
 
             return $toma;
         }, 3);

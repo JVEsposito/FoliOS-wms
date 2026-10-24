@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Api;
 
 use App\Enums\RolUsuario;
 use App\Http\Controllers\Controller;
+use App\Models\AlmacenMaterial;
 use App\Models\Camara;
 use App\Models\ItemMaterial;
+use App\Models\Temporada;
 use App\Models\TomaInventarioMaterial;
 use App\Models\TomaInventarioMaterialPosicion;
 use App\Models\TomaInventarioMaterialResultado;
@@ -26,17 +28,23 @@ class TomaInventarioMaterialController extends Controller
     public function index(Request $r)
     {
         $this->servicio->supervisar($r->user());
-        $temporada = app(ServicioTemporadaActiva::class)->obtener();
+        $filtros = $r->validate(['temporada_id' => ['nullable', 'uuid', 'exists:temporadas,id'], 'page' => ['nullable', 'integer', 'min:1']]);
+        $activa = Temporada::where('activa', true)->orderByDesc('fecha_inicio')->first();
+        $temporadaId = $filtros['temporada_id'] ?? $activa?->id;
+        $pagina = TomaInventarioMaterial::where('temporada_id', $temporadaId)->select(['id', 'temporada_id', 'finalidad', 'almacen_id', 'estado', 'version', 'categoria', 'created_at', 'abierta_at', 'aprobada_at'])->latest()->orderByDesc('id')->paginate(50);
 
-        return response()->json(['data' => TomaInventarioMaterial::where('temporada_id', $temporada->id)->latest()->limit(100)->get(['id', 'estado', 'version', 'categoria', 'created_at', 'abierta_at', 'aprobada_at']),
-            'catalogos' => ['camaras' => Camara::where('contenido', 'materiales')->where('estado', 'activa')->get(['id', 'codigo']),
+        return response()->json(['data' => $pagina->items(), 'meta' => ['page' => $pagina->currentPage(), 'last_page' => $pagina->lastPage()],
+            'temporada_activa_id' => $activa?->id,
+            'catalogos' => ['temporadas' => Temporada::orderByDesc('fecha_inicio')->get(['id', 'nombre', 'activa']),
+                'bodegas' => AlmacenMaterial::where('activo', true)->where('tipo', 'fisica')->orderBy('nombre')->get(['id', 'nombre']),
+                'camaras' => Camara::where('contenido', 'materiales')->where('estado', 'activa')->get(['id', 'codigo']),
                 'camareros' => User::where('rol', 'camarero_materiales')->where('activo', true)->get(['id', 'name']),
                 'categorias' => ItemMaterial::where('activo', true)->distinct()->orderBy('categoria')->pluck('categoria')]])->header('Cache-Control', 'no-store');
     }
 
     public function store(Request $r)
     {
-        $datos = $r->validate(['operacion_id' => ['required', 'uuid'], 'camara_ids' => ['required', 'array', 'min:1', 'max:100'], 'camara_ids.*' => ['required', 'uuid', 'distinct'], 'categoria' => ['nullable', 'string', 'max:100']]);
+        $datos = $r->validate(['finalidad' => ['sometimes', Rule::in(['operativo', 'cierre_temporada'])], 'almacen_id' => ['required_if:finalidad,cierre_temporada', 'nullable', 'uuid'], 'operacion_id' => ['required', 'uuid'], 'camara_ids' => ['required', 'array', 'min:1', 'max:100'], 'camara_ids.*' => ['required', 'uuid', 'distinct'], 'categoria' => ['nullable', 'string', 'max:100']]);
 
         return response()->json(['data' => $this->consulta->detalle($this->servicio->crear($datos, $r->user()))], 201);
     }
@@ -44,7 +52,7 @@ class TomaInventarioMaterialController extends Controller
     public function show(Request $r, TomaInventarioMaterial $toma)
     {
         $this->servicio->supervisar($r->user());
-        $filtros = $r->validate(['tipo' => ['nullable', Rule::in(['faltante', 'sobrante', 'coincide', 'diferencia_cantidad'])], 'item_id' => ['nullable', 'uuid'], 'categoria' => ['nullable', 'string', 'max:100']]);
+        $filtros = $r->validate(['tipo' => ['nullable', Rule::in(['faltante', 'sobrante', 'coincide', 'diferencia_cantidad'])], 'item_id' => ['nullable', 'uuid'], 'categoria' => ['nullable', 'string', 'max:100'], 'clasificacion' => ['nullable', Rule::in(ServicioTomaInventarioMaterial::CLASIFICACIONES)], 'cliente_id' => ['nullable', 'uuid']]);
 
         return response()->json(['data' => $this->consulta->detalle($toma, array_filter($filtros))])->header('Cache-Control', 'no-store');
     }
@@ -59,6 +67,7 @@ class TomaInventarioMaterialController extends Controller
     public function decidir(Request $r, TomaInventarioMaterialResultado $resultado)
     {
         $datos = $r->validate($this->operacion() + ['accion' => ['required', Rule::in(['ajustar', 'reubicar', 'reubicar_y_ajustar', 'aceptar_sin_ajuste', 'recontar'])],
+            'clasificacion' => ['nullable', Rule::in(ServicioTomaInventarioMaterial::CLASIFICACIONES)],
             'motivo' => ['required', 'string', 'max:2000', 'regex:/\S/u'], 'posicion_destino_id' => ['required_if:accion,reubicar,reubicar_y_ajustar', 'nullable', 'uuid', 'exists:posiciones,id']]);
 
         return response()->json(['data' => $this->consulta->detalle($this->servicio->decidir($resultado, $datos, $r->user()))]);
@@ -78,7 +87,7 @@ class TomaInventarioMaterialController extends Controller
     public function contar(Request $r, TomaInventarioMaterialPosicion $tarea, ContextoOperacional $contexto)
     {
         [$user] = $contexto->obtener($r);
-        $datos = $r->validate(['operacion_id' => ['required', 'uuid'], 'posicion_version' => ['required', 'integer', 'min:1'], 'vacia' => ['required', 'boolean'],
+        $datos = $r->validate(['finalidad' => ['sometimes', Rule::in(['operativo', 'cierre_temporada'])], 'almacen_id' => ['required_if:finalidad,cierre_temporada', 'nullable', 'uuid'], 'operacion_id' => ['required', 'uuid'], 'posicion_version' => ['required', 'integer', 'min:1'], 'vacia' => ['required', 'boolean'],
             'folios' => ['present', 'array', 'max:500'], 'folios.*.numero_folio' => ['required', 'string', 'max:100'],
             'folios.*.cantidad_contada' => ['required', 'numeric', 'min:0', 'max:99999999999.999']]);
         $toma = $this->servicio->contar($tarea, $datos, $user);
@@ -89,12 +98,12 @@ class TomaInventarioMaterialController extends Controller
     public function excel(Request $r, TomaInventarioMaterial $toma, GeneradorLibroXlsx $excel)
     {
         $this->servicio->supervisar($r->user());
-        $datos = $this->consulta->detalle($toma, array_filter($r->only('tipo', 'item_id', 'categoria')));
-        $titulos = ['folio' => 'Folio', 'camara' => 'Cámara', 'posicion' => 'Posición', 'item' => 'Ítem', 'categoria' => 'Categoría', 'unidad' => 'Unidad',
+        $datos = $this->consulta->detalle($toma, array_filter($r->only('tipo', 'item_id', 'categoria', 'clasificacion', 'cliente_id')));
+        $titulos = ['cliente' => 'Cliente', 'bodega' => 'Bodega', 'clasificacion' => 'Clasificación', 'decidida_por' => 'Decidida por', 'decidida_at' => 'Fecha decisión', 'contada_por' => 'Contada por', 'contada_at' => 'Fecha conteo', 'ajuste_aplicado' => 'Ajuste aplicado (cantidad)', 'saldo_antes' => 'Saldo antes de aplicar', 'saldo_despues' => 'Saldo después de aplicar', 'folio' => 'Folio', 'camara' => 'Cámara', 'posicion' => 'Posición', 'item' => 'Ítem', 'categoria' => 'Categoría', 'unidad' => 'Unidad',
             'cantidad_inicial' => 'Foto inicial', 'variacion_operativa' => 'Movimientos', 'esperado' => 'Esperado', 'contado' => 'Contado',
             'cantidad_saldo_al_contar' => 'Saldo del folio al contar', 'diferencia_reubicacion' => 'Diferencia al reubicar', 'diferencia' => 'Diferencia', 'diferencia_absoluta' => 'Diferencia absoluta', 'diferencia_pct' => 'Diferencia %', 'tipo' => 'Resultado', 'accion' => 'Acción', 'motivo' => 'Motivo', 'ajuste_id' => 'Ajuste aplicado'];
-        $columnas = collect($titulos)->map(fn ($titulo, $clave) => ['clave' => $clave, 'titulo' => $titulo, 'tipo' => in_array($clave, ['cantidad_inicial', 'variacion_operativa', 'esperado', 'contado', 'diferencia', 'diferencia_absoluta', 'diferencia_pct', 'cantidad_saldo_al_contar', 'diferencia_reubicacion']) ? 'numero' : 'texto'])->values()->all();
-        $ruta = $excel->generar('Toma de inventario de materiales', $columnas, $datos['diferencias'], ['toma' => $toma->id, 'estado' => $toma->estado, 'alcance' => implode(', ', $datos['camaras']), 'usuario' => $r->user()->name], 'Diferencias');
+        $columnas = collect($titulos)->map(fn ($titulo, $clave) => ['clave' => $clave, 'titulo' => $titulo, 'tipo' => in_array($clave, ['ajuste_aplicado', 'saldo_antes', 'saldo_despues', 'cantidad_inicial', 'variacion_operativa', 'esperado', 'contado', 'diferencia', 'diferencia_absoluta', 'diferencia_pct', 'cantidad_saldo_al_contar', 'diferencia_reubicacion']) ? 'numero' : 'texto'])->values()->all();
+        $ruta = $excel->generar('Toma de inventario de materiales', $columnas, $datos['diferencias'], ['temporada' => $datos['temporada'], 'finalidad' => $datos['finalidad'], 'bodega' => $datos['bodega'] ?? '', 'aprobada_por' => $datos['aprobada_por'] ?? '', 'aprobada_at' => $datos['aprobada_at'] ?? '', 'toma' => $toma->id, 'estado' => $toma->estado, 'alcance' => implode(', ', $datos['camaras']), 'usuario' => $r->user()->name], 'Diferencias');
 
         return response()->download($ruta, 'toma-inventario.xlsx')->deleteFileAfterSend();
     }

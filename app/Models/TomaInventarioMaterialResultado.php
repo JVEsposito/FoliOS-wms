@@ -18,7 +18,7 @@ class TomaInventarioMaterialResultado extends Model implements PerteneceATempora
 
     protected function casts(): array
     {
-        return ['vigente' => 'boolean', 'movimientos' => 'array', 'saldo_confirmado' => 'array', 'cantidad_inicial' => 'decimal:3', 'cantidad_esperada' => 'decimal:3', 'cantidad_contada' => 'decimal:3', 'diferencia' => 'decimal:3', 'diferencia_pct' => 'decimal:3'];
+        return ['historial_decisiones' => 'array', 'aplicacion' => 'array', 'decidida_at' => 'datetime', 'vigente' => 'boolean', 'movimientos' => 'array', 'saldo_confirmado' => 'array', 'cantidad_inicial' => 'decimal:3', 'cantidad_esperada' => 'decimal:3', 'cantidad_contada' => 'decimal:3', 'diferencia' => 'decimal:3', 'diferencia_pct' => 'decimal:3'];
     }
 
     public function tarea(): BelongsTo
