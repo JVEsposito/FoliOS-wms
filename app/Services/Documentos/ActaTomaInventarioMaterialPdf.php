@@ -12,6 +12,9 @@ class ActaTomaInventarioMaterialPdf
         $lineas = [];
         foreach ($datos['diferencias'] as $fila) {
             $texto = $fila['folio'].' · '.$fila['camara'].' '.$fila['posicion'].' · '.$fila['item'].' · Esperado '.$fila['esperado'].' / contado '.$fila['contado'].' '.$fila['unidad'].' · '.str_replace('_', ' ', $fila['tipo']);
+            if (isset($fila['cliente'], $fila['bodega'])) {
+                $texto .= ' · Cliente: '.$fila['cliente'].' · Bodega: '.$fila['bodega'];
+            }
             $lineas = $this->pdf->envolver($texto, 535, 8);
             if ($fila['accion']) {
                 $lineas = array_merge($lineas, $this->pdf->envolver('Acción: '.str_replace('_', ' ', $fila['accion']).' · '.$fila['motivo'].($fila['ajuste_id'] ? ' · Ajuste aplicado: '.$fila['ajuste_id'] : '').($fila['posicion_destino_id'] ? ' · Posición destino: '.$fila['posicion_destino_id'] : ''), 535, 8));

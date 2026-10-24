@@ -71,7 +71,7 @@ class ConsultaTomaInventarioMaterial
                 'ajuste_aplicado' => round($g->sum('ajuste_aplicado'), 3),
             ])->values()->all(),
             'historial_decisiones' => TomaInventarioMaterialResultado::whereHas('tarea', fn ($q) => $q->where('toma_id', $toma->id))->orderBy('created_at')->orderBy('id')->get()
-                ->flatMap(fn ($r) => collect($r->historial_decisiones ?? [])->map(fn ($d) => ['resultado_id' => $r->id, 'folio' => $r->numero_folio, 'vigente' => $r->vigente, ...$d]))->values()->all(),
+                ->flatMap(fn ($r) => collect($r->historial_decisiones ?? [])->map(fn ($d) => ['resultado_id' => $r->id, 'folio' => $r->numero_folio, 'vigente' => $r->vigente, ...$d]))->sortBy('fecha')->values()->all(),
             'diferencias' => $filas->all(),
             'reubicaciones' => DB::table('reubicaciones_toma_inventario_materiales')->whereIn('resultado_id', $resultados->pluck('id'))->get()->map(fn ($r) => (array) $r)->all()];
 
