@@ -80,3 +80,28 @@ Las pruebas de concurrencia usan datos de prueba y no acceden al servidor planta
 No se ha verificado la versión instalada de las tablets ni se han modificado sus
 asignaciones activas. La identificación del incidente concreto requiere el folio y
 la custodia que tiene cada operador en terreno.
+
+## Recálculo sin destino físico y validación de la reserva propia
+
+Un despeje puede conservar una propuesta anterior en otra cámara mientras su reserva
+todavía es solo un claim. Esa propuesta no debe excluir la cámara de origen del
+recálculo ni limitar a una sola cámara la descarga de planos. El cliente vuelve a
+considerar los destinos locales habilitados antes de proponer otra cámara. Conserva
+los destinos inmutables, los acopios de carga y las posiciones ya reservadas físicamente,
+así como los movimientos iniciados.
+
+Al iniciar un despeje local, su propia reserva de destino es la garantía de la tarea;
+no se interpreta como una reserva ajena. La ocupación física, las reservas de otras
+tareas, los bloqueos SAG y las bandas protegidas siguen impidiendo usar esa posición.
+
+La corrección requiere servidor y actualización compatible de la app de camareros.
+La APK `apk-camaras-pruebas` recibe OTA por `camaras-pruebas`; la APK `apk-camaras`
+recibe por `production`. Publicar en un canal no actualiza los otros. No incorpora
+migraciones ni cambia dependencias nativas, ni cancela labores o cambia custodias
+históricas durante el despliegue. El incidente concreto se verifica por folio,
+tarea, reserva, dispositivo y custodia antes de recuperar una asignación.
+
+Las regresiones cubren la propuesta remota sin compromiso físico, la selección de
+planos locales, los destinos fijos y el inicio con reserva propia. La comprobación
+aislada de reservas usa SQLite en memoria; el recorrido de API se comprueba en MySQL
+en CI, sin acceso a la base de la instalación.

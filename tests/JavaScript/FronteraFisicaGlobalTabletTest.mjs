@@ -24,7 +24,7 @@ test('la tablet calcula una sola frontera para tareas de planes distintos', () =
 });
 
 test('la tablet materializa contra el snapshot físico global', () => {
-    assert.match(api, /TABLET_PLANNER_VERSION = 'rolling-global-4-acopio-cargas'/);
+    assert.match(api, /TABLET_PLANNER_VERSION = 'rolling-global-5-despeje-local'/);
     assert.match(api, /'\/api\/frontera-fisica\/snapshot'/);
     assert.match(api, /'\/api\/frontera-fisica\/materializar'/);
     assert.match(inbox, /materializePhysicalFrontier\(/);

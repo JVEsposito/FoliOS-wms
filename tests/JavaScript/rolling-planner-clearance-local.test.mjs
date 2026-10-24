@@ -43,3 +43,26 @@ test('abre otra cámara cuando la capacidad local está ocupada, reservada, bloq
 test('cuando la cámara de origen no tiene capacidad no inventa un destino', () => {
     assert.equal(bestCandidate(clearance, [camera('cam5', [])]), null);
 });
+
+test('al recalcular un despeje sin destino reservado una propuesta remota anterior no excluye la cámara local', () => {
+    for (const posicion of [null, position('remote')]) {
+        const pending = { ...clearance, estado: 'asumida', punto_no_retorno: false,
+            destino: { camara: { id: 'cam1' }, posicion }, reserva: { tipo_compromiso: 'claim' } };
+        assert.equal(bestCandidate(pending, [camera('cam1', [position('remote')]), camera('cam5')]).cameraId, 'cam5');
+        assert.equal(pending.destino.camara.id, 'cam1');
+    }
+});
+
+test('el recálculo de despeje conserva destinos físicos, movimientos iniciados y destinos inmutables', () => {
+    const fixed = { ...clearance, estado: 'asumida', destino: { camara: { id: 'cam1' }, posicion: position('remote') } };
+    for (const commitment of [
+        { reserva: { tipo_compromiso: 'fisica' } },
+        { reserva: { destino_reservado: true } },
+        { maniobra: { custodia_temporal_activa: true } },
+        { estado: 'en_proceso' },
+        { punto_no_retorno: true },
+        { contexto: { ...fixed.contexto, destino_precalculado_inmutable: true } },
+    ]) {
+        assert.equal(bestCandidate({ ...fixed, ...commitment }, [camera('cam1', [position('remote')]), camera('cam5')]).position.id, 'remote');
+    }
+});

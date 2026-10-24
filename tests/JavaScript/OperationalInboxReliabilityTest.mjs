@@ -40,6 +40,16 @@ test('los planos candidatos usan la cámara de carga actual del servidor y respe
     s.tareas[0].acopio_carga.despacho_directo = true; assert.deepEqual(candidateCameraIds([t], s), []);
 });
 
+test('un despeje sin compromiso físico lee también la cámara de origen aunque conserve una propuesta remota', () => {
+    const t = { ...task(), tipo_movimiento: 'traslado_entre_camaras', estado: 'asumida', punto_no_retorno: false,
+        origen: { camara: { id: 'cam5' } }, destino: { camara: { id: 'cam1' }, posicion: null },
+        contexto: { tipo_decision: 'despeje_salida_directa' }, reserva: { tipo_compromiso: 'claim' } };
+    assert.deepEqual(candidateCameraIds([t], snapshot('cam1', 'cam5')), ['cam1', 'cam5']);
+    t.reserva.tipo_compromiso = 'fisica';
+    assert.deepEqual(candidateCameraIds([t], snapshot('cam1', 'cam5')), ['cam1']);
+    assert.deepEqual(candidateCameraIds([{ ...t, reserva: null }], snapshot('cam1')), ['cam1']);
+});
+
 test('el precálculo reutiliza planos y los descarta por reserva, inventario o vencimiento', async () => {
     let clock = 0; let calls = 0; const cache = new OperationalCameraPlans(() => clock, 30_000); const s = snapshot('a');
     const fetch = async (id) => { calls++; return { ...s.camaras.find((c) => c.id === id) }; };
