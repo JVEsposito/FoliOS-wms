@@ -5,6 +5,7 @@ namespace App\Services\Planificador;
 use App\Enums\EstadoTareaMovimiento;
 use App\Jobs\EjecutarRecalculoPendientePlanificador;
 use App\Models\Carga;
+use App\Models\CargaFolio;
 use App\Models\Movimiento;
 use App\Models\PlanOperacional;
 use App\Models\Posicion;
@@ -300,6 +301,7 @@ final class ServicioRecalculosPendientesPlanificador
             $usuario = $usuarioId ? User::query()->findOrFail($usuarioId) : null;
             if ($usuario) {
                 app(ServicioPlanConcentracionCarga::class)->sincronizar($carga, $usuario);
+                app(ServicioLaboresTurno::class)->actualizarEsperasCarga($carga->id);
             }
 
             return;
@@ -318,6 +320,12 @@ final class ServicioRecalculosPendientesPlanificador
                 ->sincronizarTrasMovimiento($movimiento, $usuario),
             default => throw new \LogicException('Tipo de recálculo del planificador desconocido.'),
         };
+        if ($tipo === self::UBICACION) {
+            $cargaId = CargaFolio::query()->where('folio_id', $movimiento->folio_id)->whereHas('reservaActiva')->value('carga_id');
+            if ($cargaId) {
+                app(ServicioLaboresTurno::class)->actualizarEsperasCarga($cargaId);
+            }
+        }
     }
 
     private function sincronizarSegregacion(Movimiento $movimiento, User $usuario): void

@@ -25,6 +25,7 @@ use App\Services\Camaras\InterbloqueoEvacuacionEmergencia;
 use App\Services\Cargas\ServicioAcopioCarga;
 use App\Services\Cargas\ServicioPlanConcentracionCarga;
 use App\Services\Planificador\ServicioDesplieguePlanificador;
+use App\Services\Planificador\ServicioLaboresTurno;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use DomainException;
 use Illuminate\Support\Facades\DB;
@@ -156,6 +157,8 @@ class ServicioPlanesOperacionales
         Dispositivo $dispositivo,
     ): TareaMovimiento {
         return DB::transaction(function () use ($tarea, $usuario, $dispositivo): TareaMovimiento {
+            $this->validarActor($usuario, $dispositivo);
+            app(ServicioLaboresTurno::class)->tomar($tarea, $usuario, $dispositivo);
             app(ServicioExclusionPallet::class)->bloquear($tarea);
             $tareaBloqueada = TareaMovimiento::query()
                 ->with('planOperacional.temporada')

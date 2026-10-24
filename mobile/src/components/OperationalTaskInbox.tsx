@@ -20,6 +20,7 @@ import {
 import {
   ManeuverDiscrepancyType,
   OperationalTask,
+  OperationalShiftContext,
   ReportedManeuverDiscrepancy,
   TemporaryExtractionPayload,
   operationalTaskDestinationLabel,
@@ -78,6 +79,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
     [api.baseUrl, api.mode],
   );
   const [available, setAvailable] = useState<OperationalTask[]>([]);
+  const [shiftContext, setShiftContext] = useState<OperationalShiftContext | null>(null);
   const [mine, setMine] = useState<OperationalTask[]>([]);
   const [tab, setTab] = useState<TaskTab>('mias');
   const [showLoads, setShowLoads] = useState(false);
@@ -292,6 +294,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
     try {
       const result = await own;
       if (!result.current || !reads.isCurrent(generation)) return;
+      setShiftContext(result.value.labores ?? null);
       setMine(result.value); setLastReadAt(new Date().toISOString());
       setActiveTask((current) => current ? result.value.find((task) => task.id === current.id)
         ?? (pendingRef.current?.taskId === current.id ? current : null) : current);
@@ -987,6 +990,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
         />
       ) : (
         <OperatorTaskHome
+          shiftContext={shiftContext}
           availableCount={available.length}
           busy={busy}
           mineCount={mine.length}

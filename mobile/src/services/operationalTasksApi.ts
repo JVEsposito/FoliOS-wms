@@ -4,6 +4,8 @@ import {
   OperationalPhysicalFrontierSnapshot,
   OperationalSnapshot,
   OperationalTask,
+  OperationalTaskList,
+  OperationalShiftContext,
   OperationalTaskAssignment,
   ManeuverDiscrepancyType,
   ReportedManeuverDiscrepancy,
@@ -91,15 +93,15 @@ export class OperationalTasksApi {
     );
   }
 
-  async list(token: string, assignment: OperationalTaskAssignment) {
+  async list(token: string, assignment: OperationalTaskAssignment): Promise<OperationalTaskList> {
     const params = new URLSearchParams({
       asignacion: assignment,
       per_page: '50',
     });
-    return (await this.request<{ data: OperationalTask[] }>(
-      `/api/tareas-movimiento?${params.toString()}`,
-      token,
-    )).data;
+    const response = await this.request<{ data: OperationalTask[]; labores?: OperationalShiftContext | null }>(
+      `/api/tareas-movimiento?${params.toString()}`, token,
+    );
+    return Object.assign(response.data, { labores: response.labores });
   }
 
   async snapshot(token: string, planId: string) {

@@ -21,6 +21,12 @@ class ServicioArbitrajeManiobras
 {
     private const VERSION_REGLAS = 'arbitraje_global_v5_pausa_fisica';
 
+    private array $preferenciasTurno = [];
+
+    private array $versionTurno = [];
+
+    private string $reglas = self::VERSION_REGLAS;
+
     public function __construct(
         private readonly ServicioDesplieguePlanificador $despliegue,
         private readonly ServicioExplicabilidadArbitraje $explicabilidad,
@@ -38,6 +44,10 @@ class ServicioArbitrajeManiobras
             return DB::transaction(function () use ($temporada, &$snapshot): CicloArbitrajeManiobras {
                 $maniobras = $this->maniobrasVigentes($temporada);
                 $camarasRollout = $this->camarasRolloutArbitraje();
+                $labores = app(ServicioLaboresTurno::class);
+                $this->versionTurno = $labores->versionArbitraje($temporada->id);
+                $this->preferenciasTurno = $labores->preferenciasArbitraje($maniobras, $temporada->id);
+                $this->reglas = $this->versionTurno[0] ? MotorReplayArbitrajeV6::VERSION_REGLAS : self::VERSION_REGLAS;
                 $snapshot = $this->snapshot($temporada, $maniobras, $camarasRollout);
                 $existente = CicloArbitrajeManiobras::query()
                     ->where('snapshot_version', $snapshot)
@@ -60,8 +70,9 @@ class ServicioArbitrajeManiobras
                     'capacidad_ejecucion' => $capacidad,
                     'frontera_max' => $fronteraMax,
                     'contexto' => [
-                        'version_reglas' => self::VERSION_REGLAS,
-                        'criterio' => 'prioridad_tipo_beneficio_neto_antiguedad',
+                        'version_reglas' => $this->reglas,
+                        'funciones_turno' => $this->versionTurno,
+                        'criterio' => $this->versionTurno[0] ? 'prioridad_cobertura_funciones_tipo_beneficio_antiguedad' : 'prioridad_tipo_beneficio_neto_antiguedad',
                         'formula_beneficio_neto' => 'beneficio_estimado-costo_movimientos-riesgo_operacional',
                         'camaras_rollout' => $camarasRollout,
                         'tipos_fuera_planificador' => [
@@ -284,6 +295,7 @@ class ServicioArbitrajeManiobras
         foreach ($ordenadas as $maniobra) {
             $orden++;
             $componentes = $this->componentesPuntaje($maniobra);
+            $componentes['funcion_turno'] = ['peso' => $this->preferenciasTurno[$maniobra->id] ?? 0, 'turno_id' => $this->versionTurno[0] ?? null];
             $beneficioNeto = $componentes['beneficio']['neto'];
             $puntaje = $componentes['puntaje'];
             $conflictos = $this->conflictos($maniobra, $recursosTomados);
@@ -339,7 +351,9 @@ class ServicioArbitrajeManiobras
             } elseif ($seleccionadas < min($cupos, $fronteraMax)) {
                 $decision = DecisionArbitrajeManiobra::Seleccionada;
                 $factorDecisivo = 'cupo_disponible';
-                $motivo = 'Seleccionada por prioridad, objetivo dominante y beneficio neto.';
+                $motivo = isset($this->preferenciasTurno[$maniobra->id])
+                    ? 'Seleccionada para dar continuidad y cobertura a las funciones del turno, respetando prioridad y recursos.'
+                    : 'Seleccionada por prioridad, objetivo dominante y beneficio neto.';
                 $seleccionadas++;
                 $publicadas++;
                 $this->ocuparRecursos($maniobra, $recursosTomados);
@@ -367,7 +381,7 @@ class ServicioArbitrajeManiobras
                 'motivo' => $motivo,
                 'conflictos' => $conflictos !== [] ? $conflictos : null,
                 'explicacion' => $this->explicabilidad->construir(
-                    reglas: self::VERSION_REGLAS,
+                    reglas: $this->reglas,
                     maniobra: $maniobra,
                     decision: $decision,
                     factorDecisivo: $factorDecisivo,
@@ -391,6 +405,7 @@ class ServicioArbitrajeManiobras
             ($maniobra->estado === EstadoManiobraOperacional::EnEjecucion
                 || $this->realidadFisicaIniciada($maniobra)) ? 1 : 0,
             $maniobra->prioridad->peso(),
+            $this->preferenciasTurno[$maniobra->id] ?? 0,
             $this->pesoObjetivo($maniobra),
             $this->beneficioNeto($maniobra),
         ];
@@ -611,7 +626,8 @@ class ServicioArbitrajeManiobras
             ])->values()->all();
 
         return hash('sha256', json_encode([
-            'reglas' => self::VERSION_REGLAS,
+            'reglas' => $this->reglas,
+            'funciones_turno' => $this->versionTurno,
             'temporada' => $temporada->id,
             'capacidad' => config('planificador.maniobras_simultaneas_max', 3),
             'frontera' => config('planificador.frontier_max', 4),

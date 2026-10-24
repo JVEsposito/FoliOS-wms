@@ -59,6 +59,7 @@ use App\Http\Controllers\Api\IngresoPorteriaController;
 use App\Http\Controllers\Api\InspeccionEnvasesController;
 use App\Http\Controllers\Api\InspeccionSagController;
 use App\Http\Controllers\Api\IntegridadOperacionalController;
+use App\Http\Controllers\Api\LaboresTurnoController;
 use App\Http\Controllers\Api\MateriaPrimaController;
 use App\Http\Controllers\Api\MovimientoController;
 use App\Http\Controllers\Api\NotificacionOperacionalController;
@@ -123,6 +124,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/demo/autorizar', [AccesoOficinaController::class, 'autorizarDemo']);
     Route::get('/gerencia/resumen', PanelGerencialController::class)
         ->middleware('can:consultar-panel-gerencial');
+    Route::middleware('can:supervisar-camaras-productos')->prefix('labores-turno')->group(function () {
+        Route::get('/', [LaboresTurnoController::class, 'index']);
+        Route::post('/', [LaboresTurnoController::class, 'store']);
+        Route::post('/labores/{laborCamarero}/liberar', [LaboresTurnoController::class, 'liberar']);
+    });
     Route::get('/operacion-ahora', OperacionAhoraController::class)
         ->middleware('can:consultar-panel-gerencial');
     Route::get('/operacion-ahora/planificador/comparacion', ComparacionCiclosPlanificadorController::class)

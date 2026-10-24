@@ -16,6 +16,7 @@ final class ServicioReplayCiclosArbitraje
         private readonly ServicioEstadoArbitrajePlanificador $estadoArbitraje,
         private readonly MotorReplayArbitrajeV4 $motorV4,
         private readonly MotorReplayArbitrajeV5 $motorV5,
+        private readonly MotorReplayArbitrajeV6 $motorV6,
     ) {}
 
     /** @return array<string, mixed> */
@@ -35,7 +36,7 @@ final class ServicioReplayCiclosArbitraje
         $ciclo->load(['decisiones' => fn ($consulta) => $consulta->with('maniobraOperacional:id,titulo')]);
         $contexto = is_array($ciclo->contexto) ? $ciclo->contexto : [];
         $reglas = (string) ($contexto['version_reglas'] ?? '');
-        if (! in_array($reglas, [MotorReplayArbitrajeV4::VERSION_REGLAS, MotorReplayArbitrajeV5::VERSION_REGLAS], true)
+        if (! in_array($reglas, [MotorReplayArbitrajeV4::VERSION_REGLAS, MotorReplayArbitrajeV5::VERSION_REGLAS, MotorReplayArbitrajeV6::VERSION_REGLAS], true)
             || ! array_key_exists('camaras_rollout', $contexto)) {
             return $this->insuficiente(
                 $ciclo,
@@ -56,7 +57,9 @@ final class ServicioReplayCiclosArbitraje
 
         /** @var array<int, array<string, mixed>> $candidatos */
         $candidatos = $normalizadas->values()->all();
-        $motor = $reglas === MotorReplayArbitrajeV5::VERSION_REGLAS ? $this->motorV5 : $this->motorV4;
+        $motor = match ($reglas) {
+            MotorReplayArbitrajeV6::VERSION_REGLAS => $this->motorV6, MotorReplayArbitrajeV5::VERSION_REGLAS => $this->motorV5, default => $this->motorV4
+        };
         $reproducidas = $motor->reproducir(
             $candidatos,
             $ciclo->capacidad_ejecucion,
@@ -171,6 +174,7 @@ final class ServicioReplayCiclosArbitraje
             'folio' => $this->primerFolio($pasos),
             'ruta' => $this->primeraRuta($pasos),
             'realidad_fisica' => $componentes['realidad_fisica'],
+            'preferencia_turno' => (int) ($componentes['funcion_turno']['peso'] ?? 0),
             'peso_prioridad' => $pesoPrioridad,
             'peso_objetivo' => $pesoObjetivo,
             'beneficio_estimado' => (int) $beneficio['estimado'],

@@ -108,49 +108,70 @@ adicionales de confirmaciones, reservas, recálculos, lecturas repetidas y legib
 Los objetivos secundarios ahora se actualizan mediante solicitudes durables en cola,
 confirmadas junto al movimiento físico; ya no se recalculan dentro de su respuesta.
 
-## Entrega 3: funciones por turno y ejecución preparada
+## Entrega 3A: labores y funciones por turno
 
-Oficina configura por turno función principal, funciones secundarias en orden,
-disponibilidad y cambios de asignación. Las preferencias no conceden permisos adicionales.
+Implementada sobre `main`, que ya integra #513:
 
-Una carga sin más movimientos útiles pasa a `esperando_dependencias`, con cantidad,
-origen y labor que resolverá la espera. El camarero puede asumir otra carga. Cuando el
-receptor entrega los últimos pallets, se actualiza la carga anterior sin obligar al
-separador a repetir un traslado. Su preparación física termina al quedar todos los
-folios donde corresponde y no quedar acciones físicas pendientes.
+- **Operación ahora → Personal y equipos → Labores por turno** y
+  **Frigorífico → Labores por turno** abren `/oficina/frigorifico/labores-turno`.
+  Requiere supervisar cámaras de productos y acceso al módulo Cámaras.
+- Cada turno define nombre y fechas de inicio/término en la zona de planta
+  (`APP_OPERATIONAL_TIMEZONE`, por defecto America/Santiago). Puede cruzar medianoche;
+  no se superpone con otro turno de la temporada y dura como máximo 36 horas.
+- Cada camarero autorizado tiene disponibilidad, función principal, apoyos ordenados y,
+  opcionalmente, túnel, carga o preparación SAG preferidos. Se puede copiar la dotación
+  a otro horario. Quitar una persona de la solicitud la deja no disponible, sin borrar
+  su historial. Las funciones son preferencias y no conceden permisos adicionales.
+- El guardado bloquea la temporada, compara la versión y registra actor y cambios.
+  Un conflicto 409 conserva el borrador en pantalla; Actualizar tampoco borra lo escrito.
+- Una labor agrupa la recepción de un proceso de túnel, una recepción externa, una
+  carga, una preparación SAG u otro plan. Dos índices únicos reservan una sola labor
+  por camarero y un solo camarero/tablet por labor. Cerrojos persistidos por clave evitan
+  los bloqueos de huecos al crear la primera labor concurrentemente. La toma y la reserva de la tarea
+  comparten transacción: un rechazo no deja una labor huérfana. Se conserva además
+  la exclusión por folio de #513, incluso entre planes diferentes.
+- Mientras quedan movimientos publicados, el operador conserva esa labor. Los cambios
+  de función, disponibilidad o turno se aplican después de terminar o liberar la maniobra
+  ya tomada. Un movimiento iniciado o una custodia nunca vence por el cambio de turno.
+- Sin tareas útiles publicadas, una carga incompleta pasa a `esperando_dependencias`
+  y el camarero puede avanzar otra. Se guarda porcentaje físico y recepciones pendientes;
+  el recálculo en cola actualiza esa espera cuando llegan los pallets. El 80% operacional
+  no se presenta como 100% físico. La recepción conserva el acopio compartido de la carga.
+- Entre urgencias iguales, el arbitraje V6 favorece cobertura de funciones y continuidad
+  antes del tipo de objetivo y el beneficio. Respeta recursos, rollout y cupos físicos
+  existentes: cuatro camareros no elevan automáticamente el límite de tres maniobras.
+  La explicación conserva el peso de turno y el orden de comparación; su replay histórico
+  reproduce la decisión sin consultar la configuración actual. Sin turno vigente se usa V5.
+- La bandeja ordena antes de paginar, muestra turno, principal, apoyos, labor actual y
+  cargas en espera. Las respuestas antiguas no sustituyen el contexto de una lectura
+  posterior a una mutación. No añade consultas ODBC ni reconstrucciones de catálogos.
+- El comando programado `planificador:recalcular-arbitraje` comprueba cada minuto los
+  límites de turno y labores inactivas. Una labor sin pallet comprometido vence tras
+  15 minutos de inactividad; una maniobra aún comprometida conserva continuidad.
+  Oficina puede liberar una labor sin reservas ni custodia. No se borran labores ni eventos.
 
-Prioridades de asignación:
+Para desplegar: ejecutar migraciones, compilar web, actualizar la app de camareros y
+mantener activos scheduler y worker. El servidor sigue comprobando propiedad aunque
+una tablet antigua no muestre el resumen nuevo. Crear turnos no reasigna una maniobra
+que ya estaba tomada al habilitar esta versión.
 
-1. Cerrar el movimiento físico en curso y los retornos necesarios de su maniobra.
-2. Atender compromisos urgentes y recursos que bloquean operación.
-3. Elegir trabajo ejecutable de la función prioritaria entre urgencias comparables.
-4. Mantener continuidad y reducir costo total de traslados, despejes y retornos.
-5. Ofrecer apoyo en funciones secundarias si no queda trabajo ejecutable propio.
+Pruebas automatizadas cubren edición concurrente, horario nocturno, permisos, temporada,
+continuidad multipallet, espera/recepción/otra carga, cuatro funciones, replay V6,
+orden previo a paginación, reversión de toma fallida y carreras reales MySQL con dos procesos.
+El navegador prueba guardado y recuperación de conflicto en 1280 y 390 px.
 
-La falta de folios ejecutables de una carga no equivale a falta de trabajo del camarero.
-Los cambios de función se realizan al cerrar una maniobra o agotarse el trabajo útil;
-pequeñas variaciones de puntaje no provocan alternancia continua de funciones.
+## Entrega 3B: horizonte anticipado pendiente
 
-| Horizonte | Preparación | Compromiso |
+Esta entrega persiste funciones, propiedad y esperas. La selección geométrica conserva
+la frontera móvil y la proyección global existentes. La preparación completa de todas
+las secuencias del turno y una ventana anticipada configurable siguen pendientes:
+
+| Horizonte | Preparación prevista | Compromiso |
 |---|---|---|
-| Turno completo | Todas las cargas, túneles, lotes, funciones y dependencias conocidas. | Previsión de demanda y espacio, sin reservar físicamente toda la planta. |
-| Anticipación | Próximas liberaciones y entregas; ventana inicial propuesta de 30–60 minutos, configurable. | Secuencias y destinos coordinados, sujetos a confirmación del evento. |
-| Ejecución | Movimiento actual y siguientes pasos preparados para cada camarero. | Reservas próximas y comprobación de habilitación física. |
+| Turno completo | Cargas, túneles, lotes y dependencias conocidas. | Previsión de demanda y espacio. |
+| Anticipación | Próximas liberaciones y entregas; ventana propuesta de 30–60 minutos. | Secuencias y destinos sujetos al evento. |
+| Ejecución | Movimiento actual y siguientes pasos preparados. | Reservas próximas y comprobación física. |
 
-El servidor prepara y publica las secuencias en segundo plano. Tomar el siguiente paso
-consulta lo preparado y valida vigencia; no descarga todos los planos ni vuelve a
-resolver la planta completa. Los eventos actualizan únicamente las labores afectadas.
-
-## Pruebas de aceptación pendientes para entregas 2 y 3
-
-- Carga asignada antes de liberar túnel: A entrega donde C/D necesita; no aparece una
-  ubicación genérica seguida de una reextracción evitable.
-- A recibe, B recibe packing externo, C separa A y D separa B: todos conocen destinos
-  de cargas A/B/C/D y evitan reservas o movimientos duplicados.
-- C agota movimientos útiles de carga A, pendiente de dos folios de túnel: avanza otra
-  carga; al entregarlos el receptor, A queda físicamente preparada si no quedan acciones.
-- Un lote SAG, retención, falta de aprobación térmica o destino ocupado conserva su
-  restricción. Una previsión no habilita por sí misma el movimiento.
-- Cambiar turno, función, carga o disponibilidad no reasigna una custodia física iniciada.
-- Medir tiempo y tamaño de las consultas de tomar/continuar tarea con el catálogo real,
-  sin afirmar una mejora de rendimiento de planta antes de esa medición.
+La migración del cálculo geométrico restante a servidor debe validarse separadamente.
+Antes de desplegar en planta, medir latencia y tamaño de tomar/continuar tarea con su
+catálogo real y verificar el cambio de turno con recepciones y cargas simultáneas.

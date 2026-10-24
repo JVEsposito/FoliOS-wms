@@ -231,6 +231,7 @@
                                     <div><h2 id="operationOperatorsTitle">Camareros activos</h2><span>Ubicación y labor vigente</span></div>
                                 </div>
                                 <div class="operation-now-panel__tools">
+                                    <a class="operation-now-pin-button" href="/oficina/frigorifico/labores-turno" id="operationShiftDutiesOpen" hidden>Labores por turno</a>
                                     <strong class="operation-now-panel__count" id="operatorPanelCount">—</strong>
                                     <button type="button" class="operation-now-pin-button" id="operationPinsOpen" hidden>PIN de operadores</button>
                                 </div>

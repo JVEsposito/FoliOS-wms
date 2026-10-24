@@ -32,6 +32,7 @@
             ['key' => 'inspeccion-sag', 'module' => 'frigorifico.inspeccion-sag', 'label' => 'Inspección SAG', 'href' => '/oficina/frigorifico/inspeccion-sag', 'permissions' => ['puede_consultar_inspeccion_sag']],
             ['key' => 'prefrio', 'module' => 'frigorifico.prefrio', 'label' => 'Prefrío', 'href' => '/oficina/prefrio', 'permissions' => ['puede_consultar_prefrio']],
             ['key' => 'camaras', 'module' => 'frigorifico.camaras', 'label' => 'Cámaras', 'href' => '/oficina/frigorifico/camaras', 'permissions' => ['ambito_camaras_productos']],
+            ['key' => 'labores-turno', 'module' => 'frigorifico.camaras', 'label' => 'Labores por turno', 'href' => '/oficina/frigorifico/labores-turno', 'permissions' => ['puede_supervisar_camaras_productos']],
             ['key' => 'discrepancias', 'module' => 'frigorifico.camaras', 'label' => 'Discrepancias', 'href' => '/oficina/frigorifico/discrepancias', 'permissions' => ['puede_supervisar']],
             ['key' => 'cargas', 'module' => 'frigorifico.cargas', 'section' => 'Despacho', 'label' => 'Cargas', 'href' => '/oficina/frigorifico/despacho/cargas', 'permissions' => ['puede_consultar_catalogo_cargas']],
             ['key' => 'despacho-estatus', 'module' => 'frigorifico.cargas', 'section' => 'Despacho', 'label' => 'Estatus operativo', 'href' => '/oficina/frigorifico/despacho/estatus', 'permissions' => ['puede_consultar_cargas']],

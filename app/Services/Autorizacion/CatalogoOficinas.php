@@ -66,6 +66,7 @@ class CatalogoOficinas
         ['frigorifico', 'Inspección SAG', '/oficina/frigorifico/inspeccion-sag', 'frigorifico.inspeccion-sag', ['puede_consultar_inspeccion_sag']],
         ['frigorifico', 'Prefrío', '/oficina/prefrio', 'frigorifico.prefrio', ['puede_consultar_prefrio']],
         ['frigorifico', 'Cámaras', '/oficina/frigorifico/camaras', 'frigorifico.camaras', ['ambito_camaras_productos']],
+        ['frigorifico', 'Labores por turno', '/oficina/frigorifico/labores-turno', 'frigorifico.camaras', ['puede_supervisar_camaras_productos']],
         ['frigorifico', 'Discrepancias', '/oficina/frigorifico/discrepancias', 'frigorifico.camaras', ['puede_supervisar']],
         ['frigorifico', 'Cargas', '/oficina/frigorifico/despacho/cargas', 'frigorifico.cargas', ['puede_consultar_catalogo_cargas']],
         ['frigorifico', 'Estatus operativo', '/oficina/frigorifico/despacho/estatus', 'frigorifico.cargas', ['puede_consultar_cargas']],

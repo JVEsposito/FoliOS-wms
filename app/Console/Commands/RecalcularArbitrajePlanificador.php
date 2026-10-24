@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Services\Planificador\ServicioEstadoArbitrajePlanificador;
+use App\Services\Planificador\ServicioLaboresTurno;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Console\Command;
 
@@ -21,6 +22,7 @@ class RecalcularArbitrajePlanificador extends Command
             return self::SUCCESS;
         }
 
+        app(ServicioLaboresTurno::class)->pulso($temporada);
         $solicitado = $estado->asegurarProgramado(
             $temporada,
             (bool) $this->option('forzar'),
