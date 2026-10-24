@@ -1,6 +1,7 @@
 const $ = id => document.getElementById(`routing${id}`);
 const esc = v => String(v ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
 const uuid = () => globalThis.crypto?.randomUUID?.() ?? 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const n = Math.random() * 16 | 0; return (c === 'x' ? n : n & 3 | 8).toString(16); });
+const when = value => new Intl.DateTimeFormat('es-CL', { timeZone: 'America/Santiago', dateStyle: 'short', timeStyle: 'short' }).format(new Date(String(value).replace(' ', 'T') + (/Z$|[+-]\d{2}:\d{2}$/.test(value) ? '' : 'Z')));
 const state = { rows: [], warehouses: [], clients: [], can: false, loaded: false, busy: false, editing: null, retry: null, page: 1, seq: 0, historySeq: 0 };
 async function api(path = '', options = {}) {
     const r = await fetch(`/api/materiales/asignacion-bodegas${path}`, { cache: 'no-store', ...options, headers: { Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('estiba_wms_office_token') || ''}` } });
@@ -37,7 +38,7 @@ function edit(id = null) {
 async function history(page = 1) {
     const seq = ++state.historySeq; $('HistoryRows').textContent = 'Consultando historial…';
     try { const d = await api(`/historial?page=${page}`); if (seq !== state.historySeq) return;
-        $('HistoryRows').innerHTML = d.data.map(e => `<details><summary>${esc(e.usuario)} · ${esc(e.despues.nombre)}</summary><p>${esc(e.motivo)}</p><p>Antes: ${esc(e.antes ? `${e.antes.nombre} · prioridad ${e.antes.prioridad} · ${Number(e.antes.activo) ? 'Activa' : 'Inactiva'}` : 'Creación')}</p><p>Después: prioridad ${esc(e.despues.prioridad)} · ${Number(e.despues.activo) ? 'Activa' : 'Inactiva'}</p></details>`).join('') || '<p>Sin cambios registrados.</p>'; pages('HistoryPages', d.meta);
+        $('HistoryRows').innerHTML = d.data.map(e => `<details><summary>${esc(when(e.ocurrido_at))} · ${esc(e.usuario)} · ${esc(e.despues.nombre)}</summary><p>${esc(e.motivo)}</p><p>Antes: ${esc(e.antes ? `${e.antes.nombre} · prioridad ${e.antes.prioridad} · ${Number(e.antes.activo) ? 'Activa' : 'Inactiva'}` : 'Creación')}</p><p>Después: prioridad ${esc(e.despues.prioridad)} · ${Number(e.despues.activo) ? 'Activa' : 'Inactiva'}</p></details>`).join('') || '<p>Sin cambios registrados.</p>'; pages('HistoryPages', d.meta);
     } catch (e) { if (seq === state.historySeq) $('HistoryRows').textContent = e.message; }
 }
 $('Panel').addEventListener('toggle', () => { if ($('Panel').open && !state.loaded && !state.busy) void load(); });

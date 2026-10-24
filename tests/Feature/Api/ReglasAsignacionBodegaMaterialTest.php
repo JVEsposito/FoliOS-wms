@@ -3,8 +3,10 @@
 namespace Tests\Feature\Api;
 
 use App\Enums\CategoriaOperacionalMaterial;
+use App\Models\FolioMaterial;
 use App\Models\PerfilAcceso;
 use App\Models\User;
+use App\Services\Materiales\ServicioAlmacenMaterial;
 use App\Services\Materiales\ServicioAsignacionBodegaMaterial;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -140,8 +142,50 @@ class ReglasAsignacionBodegaMaterialTest extends TestCase
         $d = $this->datos();
         $this->postJson('/api/materiales/asignacion-bodegas', $d)->assertCreated();
         DB::table('users')->insert(['id' => 2, 'name' => 'Otro administrador', 'rol' => 'administrador', 'activo' => true]);
-        $this->actingAs(User::findOrFail(2),'sanctum');
-        $this->postJson('/api/materiales/asignacion-bodegas',$d)->assertConflict();
-        $this->assertDatabaseCount('eventos_reglas_bodegas_materiales',1);
+        $this->actingAs(User::findOrFail(2), 'sanctum');
+        $this->postJson('/api/materiales/asignacion-bodegas', $d)->assertConflict();
+        $this->assertDatabaseCount('eventos_reglas_bodegas_materiales', 1);
+    }
+
+    public function test_saldo_y_primera_ubicacion_siguen_bodega_inicial_sin_duplicar_central(): void
+    {
+        Schema::create('folios', function (Blueprint $t) {
+            $t->uuid('id')->primary();
+        });
+        Schema::create('ubicaciones_actuales', function (Blueprint $t) {
+            $t->uuid('folio_id')->primary();
+            $t->uuid('camara_id');
+            $t->uuid('posicion_id')->nullable();
+        });
+        Schema::table('folios_materiales', function (Blueprint $t) {
+            $t->decimal('cantidad_actual', 14, 3);
+            $t->decimal('cantidad_reservada', 14, 3);
+        });
+        Schema::create('saldos_materiales_almacenes', function (Blueprint $t) {
+            $t->uuid('id')->primary();
+            $t->uuid('folio_id');
+            $t->uuid('almacen_material_id');
+            $t->decimal('cantidad_actual', 14, 3);
+            $t->decimal('cantidad_reservada', 14, 3);
+            $t->uuid('camara_id')->nullable();
+            $t->uuid('posicion_id')->nullable();
+            $t->unsignedBigInteger('version');
+            $t->timestamps();
+            $t->unique(['folio_id', 'almacen_material_id']);
+        });
+        $id = (string) Str::uuid();
+        $camara = (string) Str::uuid();
+        DB::table('folios')->insert(['id' => $id]);
+        DB::table('folios_materiales')->insert(['folio_id' => $id, 'almacen_inicial_id' => $this->norte, 'cantidad_actual' => 25, 'cantidad_reservada' => 0]);
+        $f = FolioMaterial::findOrFail($id);
+        $s = app(ServicioAlmacenMaterial::class);
+        $s->inicializarFolio($f);
+        $s->inicializarFolio($f);
+        $this->assertDatabaseCount('saldos_materiales_almacenes', 1);
+        $this->assertDatabaseHas('saldos_materiales_almacenes', ['folio_id' => $id, 'almacen_material_id' => $this->norte, 'cantidad_actual' => 25, 'camara_id' => null]);
+        DB::table('ubicaciones_actuales')->insert(['folio_id' => $id, 'camara_id' => $camara, 'posicion_id' => null]);
+        $s->sincronizarUbicacionDesdeCompatibilidad($f);
+        $this->assertDatabaseHas('saldos_materiales_almacenes', ['folio_id' => $id, 'almacen_material_id' => $this->norte, 'cantidad_actual' => 25, 'camara_id' => $camara]);
+        $this->assertDatabaseCount('saldos_materiales_almacenes', 1);
     }
 }

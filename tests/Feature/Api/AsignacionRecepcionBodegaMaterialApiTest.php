@@ -173,7 +173,7 @@ class AsignacionRecepcionBodegaMaterialApiTest extends TestCase
         $this->postJson('/api/materiales/recepciones/'.$rec['id'].'/confirmar', $d)->assertOk();
         $this->assertDatabaseCount('folios_materiales', 2);
         $this->getJson('/api/materiales/recepciones/folios-pendientes')->assertOk()->assertJsonPath('data.0.asignacion_bodega.almacen_id', $b['id']);
-        $this->getJson('/api/materiales/inventario?almacen_origen_id='.$b['id'])->assertOk()->assertJsonCount(2, 'data')->assertJsonPath('data.0.reservable', false);
+        $this->getJson('/api/materiales/inventario?almacen_id='.$b['id'])->assertOk()->assertJsonCount(2, 'data')->assertJsonPath('data.0.reservable', false);
         $this->assertEquals(30, SaldoMaterialAlmacen::where('almacen_material_id', $b['id'])->sum('cantidad_actual'));
         $this->assertDatabaseCount('movimientos_almacenes_materiales', 0);
         // Cambiar o desactivar la regla no redistribuye ingresos ya confirmados.
@@ -201,7 +201,7 @@ class AsignacionRecepcionBodegaMaterialApiTest extends TestCase
         $this->assertEquals(20, FolioMaterial::findOrFail($f['id'])->cantidad_actual);
         $this->assertEquals(20, SaldoMaterialAlmacen::where('folio_id', $f['id'])->sum('cantidad_actual'));
         $this->withToken($token);
-        $this->getJson('/api/materiales/inventario?almacen_origen_id='.$b['id'])->assertOk()->assertSee('20.000');
+        $this->getJson('/api/materiales/inventario?almacen_id='.$b['id'])->assertOk()->assertSee('20.000');
         $this->getJson('/api/camaras/'.$cam->id.'/plano')->assertOk()->assertSee($f['numero_folio']);
     }
 
@@ -240,9 +240,9 @@ class AsignacionRecepcionBodegaMaterialApiTest extends TestCase
         [$b] = $this->regla($u);
         [$rec] = $this->recibir($cli, $prov, $item);
         $actual = RecepcionMaterial::findOrFail($rec['id']);
-        app(ServicioRecepcionMaterial::class)->eliminarAdministrativamente($actual,(string) Str::uuid(),$actual->version,'Duplicado detectado antes de ubicación',$u);
-        $this->assertDatabaseCount('folios_materiales',0);
-        $this->assertDatabaseCount('saldos_materiales_almacenes',0);
-        $this->assertDatabaseCount('eliminaciones_recepciones_materiales',1);
+        app(ServicioRecepcionMaterial::class)->eliminarAdministrativamente($actual, (string) Str::uuid(), $actual->version, 'Duplicado detectado antes de ubicación', $u);
+        $this->assertDatabaseCount('folios_materiales', 0);
+        $this->assertDatabaseCount('saldos_materiales_almacenes', 0);
+        $this->assertDatabaseCount('eliminaciones_recepciones_materiales', 1);
     }
 }

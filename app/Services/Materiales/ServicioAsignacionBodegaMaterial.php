@@ -21,7 +21,7 @@ class ServicioAsignacionBodegaMaterial
 
         return DB::transaction(function () use ($id, $d, $actor, $hash) {
             DB::table('configuracion_asignacion_bodegas_materiales')->where('id', 1)->lockForUpdate()->firstOrFail();
-            $evento = DB::table('eventos_reglas_bodegas_materiales')->where('operacion_id', $d['operacion_id'])->first();
+            $evento = DB::table('eventos_reglas_bodegas_materiales')->where('operacion_id', $d['operacion_id'])->lockForUpdate()->first();
             if ($evento) {
                 if ((int) $evento->user_id !== (int) $actor->id || ! hash_equals($evento->payload_hash, $hash)) {
                     throw new ConflictoOperacion('El UUID ya se utilizó con otros datos o responsable.');
@@ -31,14 +31,14 @@ class ServicioAsignacionBodegaMaterial
             }
             $antes = $id ? DB::table('reglas_bodegas_materiales')->where('id', $id)->lockForUpdate()->first() : null;
             abort_if($id && ! $antes, 404);
-            if ((int) ($antes->version ?? 0) !== $d['version']) {
+            if ((int) ($antes->version ?? 0) !== (int) $d['version']) {
                 throw new ConflictoOperacion('La regla cambió. Actualiza antes de guardar.');
             }
             $bodega = DB::table('destinos_materiales')->where('id', $d['almacen_material_id'])->where('tipo', 'fisica')->lockForUpdate()->first();
             if (! $bodega || ($d['activo'] && ! $bodega->activo)) {
                 throw ValidationException::withMessages(['almacen_material_id' => 'Selecciona una bodega física activa.']);
             }
-            if ($d['activo'] && DB::table('reglas_bodegas_materiales')->where('activo', true)->where('prioridad', $d['prioridad'])->when($id, fn ($q) => $q->where('id', '!=', $id))->exists()) {
+            if ($d['activo'] && DB::table('reglas_bodegas_materiales')->where('activo', true)->where('prioridad', $d['prioridad'])->when($id, fn ($q) => $q->where('id', '!=', $id))->lockForUpdate()->first(['id'])) {
                 throw ValidationException::withMessages(['prioridad' => 'Cada regla activa debe tener una prioridad distinta. Un número menor se evalúa primero.']);
             }
             if ($d['activo'] && ($d['cliente_id'] ?? null) && ! DB::table('clientes')->where('id', $d['cliente_id'])->where('activo', true)->exists()) {
