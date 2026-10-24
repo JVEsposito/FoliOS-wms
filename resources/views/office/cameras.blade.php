@@ -302,7 +302,7 @@
 
                     <form id="dockForm" novalidate>
                         <div class="dock-form-grid">
-                            <label class="field"><span>Código *</span><input name="codigo" maxlength="30" placeholder="AND-01" pattern="[A-Za-z0-9-]+" required></label>
+                            <label class="field"><span>Código *</span><input name="codigo" maxlength="30" placeholder="AND-01" pattern="[A-Za-z0-9\-]+" required></label>
                             <label class="field"><span>Nombre del andén *</span><input name="nombre" maxlength="100" placeholder="Ej. Andén principal" required></label>
                             <label class="field"><span>Código externo</span><input name="codigo_externo" maxlength="100" placeholder="Opcional: ERP-AND-01"></label>
                         </div>

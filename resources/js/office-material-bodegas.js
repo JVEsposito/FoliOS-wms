@@ -1,3 +1,4 @@
+import { createUuid } from './shared/uuid.js';
 const $ = (id) => document.getElementById(`bodega${id}`);
 const esc = (v) => String(v ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
 const state = { rows: [], edit: null, pending: null, busy: false, can: false, loaded: false, sequence: 0, historySequence: 0, timezone: 'America/Santiago' };
@@ -68,7 +69,7 @@ $('Form').addEventListener('submit', async (event) => {
     event.preventDefault(); if (state.busy || !state.can) return;
     const f = event.target;
     const operation = state.pending || { path: state.edit ? `/${state.edit.id}` : '', method: state.edit ? 'PUT' : 'POST', body: {
-        operacion_id: crypto.randomUUID(), version: Number(state.edit?.version_bodega || 0), codigo: f.elements.codigo.value.trim().toUpperCase(),
+        operacion_id: createUuid(), version: Number(state.edit?.version_bodega || 0), codigo: f.elements.codigo.value.trim().toUpperCase(),
         nombre: f.elements.nombre.value.trim(), descripcion: f.elements.descripcion.value.trim() || null, activo: f.elements.activo.value === '1',
     } };
     state.pending = operation; state.busy = true; controls(); $('Notice').textContent = 'Guardando bodega…';

@@ -1,3 +1,4 @@
+import { createUuid } from './shared/uuid.js';
 import { sagApi, sagEscape as esc, sagNotice, sagState } from './office-sag-counterpart.js';
 
 import { dispatchFields, dispatchRows } from './office-sag-dispatch.js';
@@ -69,7 +70,7 @@ async function save() {
     else if (type === 'cambio_mercado') { data.lote_inspeccion_sag_id = source.lote_inspeccion_sag_id; data.kilos = Object.fromEntries(selected.filter((l) => l.kilos !== null && l.kilos !== '').map((l) => [l.folio_id, Number(l.kilos)])); data.mercados_anteriores = Object.fromEntries(selected.map((l) => [l.folio_id, l.mercados_anteriores])); data.actividades = Object.fromEntries(selected.map((l) => [l.folio_id, { tipo: l.tipo_actividad, numero: l.numero_actividad }])); }
     else if (type === 'despacho') { const included = selected.filter((l) => l.incluido); if (!included.length) throw new Error('Selecciona los pallets del documento.'); data.embarque_id = source.embarque_id; data.instructivo_id = dispatchInstruction || null; data.seleccion_folios = [...new Set(included.map((l) => l.folio_id))]; data.encabezado.despacho = dispatchHeader; data.kilos = Object.fromEntries(included.filter((l) => l.kilos !== null && l.kilos !== '').map((l) => [l.linea_id, Number(l.kilos)])); data.origenes = Object.fromEntries(included.map((l) => [l.linea_id, Object.fromEntries(['provincia', 'comuna', 'csg', 'csp'].map((k) => [k, l[k]]))])); }
     else data.folios = selected.map((l) => ({ folio_id: l.folio_id, cantidad: Number(l.cantidad), causal: l.causal, tipo_actividad: l.tipo_actividad, numero_actividad: l.numero_actividad }));
-    const signature = JSON.stringify(data); if (!pendingOperation || pendingOperation.signature !== signature) pendingOperation = { signature, id: crypto.randomUUID() };
+    const signature = JSON.stringify(data); if (!pendingOperation || pendingOperation.signature !== signature) pendingOperation = { signature, id: createUuid() };
     data.operacion_id = pendingOperation.id;
     const saved = await sagApi(`/documentos${draft ? `/${draft.id}` : ''}`, { method: draft ? 'PUT' : 'POST', body: JSON.stringify(data) });
     pendingOperation = null; $('scDocumentForm').classList.add('is-hidden'); await open(saved.id); await list(); sagNotice('Borrador guardado.');
@@ -113,7 +114,7 @@ export async function init() {
             const a = e.target.closest('[data-attachment]'); if (a) run(() => download(`/documentos/${selectedDocument.id}/respaldos/${a.dataset.attachment}`, selectedDocument.archivos.find((x) => x.id === a.dataset.attachment).nombre));
         };
         $('scDocumentDetail').onsubmit = (e) => { e.preventDefault(); run(async () => {
-            if (e.target.id === 'scDocumentAction') { const data = Object.fromEntries(new FormData(e.target)); const action = data.accion; delete data.accion; await sagApi(`/documentos/${selectedDocument.id}/${action}`, { method: 'POST', body: JSON.stringify({ ...data, version: selectedDocument.version, operacion_id: crypto.randomUUID() }) }); }
+            if (e.target.id === 'scDocumentAction') { const data = Object.fromEntries(new FormData(e.target)); const action = data.accion; delete data.accion; await sagApi(`/documentos/${selectedDocument.id}/${action}`, { method: 'POST', body: JSON.stringify({ ...data, version: selectedDocument.version, operacion_id: createUuid() }) }); }
             if (e.target.id === 'scDocumentUpload') { const response = await fetch(`/api/contraparte-sag/documentos/${selectedDocument.id}/respaldos`, { method: 'POST', headers: { Authorization: `Bearer ${sagState().token}`, Accept: 'application/json' }, body: new FormData(e.target) }); if (!response.ok) throw new Error((await response.json()).message); }
             await open(selectedDocument.id); await list(); sagNotice('Registro guardado.');
         }); };

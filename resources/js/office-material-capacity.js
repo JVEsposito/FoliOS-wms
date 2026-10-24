@@ -1,3 +1,4 @@
+import { createUuid } from './shared/uuid.js';
 import './office-navigation.js';
 
 const $ = (id) => document.getElementById(`capacity${id}`);
@@ -54,7 +55,7 @@ function zoneInput(title, key, value, { max = 1000, min = .001, step = .001, req
     return `<label>${title}<input data-zone-field="${key}" type="number" min="${min}" max="${max}" step="${step}" ${required ? 'required' : ''} value="${esc(value)}"></label>`;
 }
 function addZone(z = {}) {
-    const node = document.createElement('fieldset'); node.className = 'capacity-zone'; node.dataset.zoneId = z.id || crypto.randomUUID();
+    const node = document.createElement('fieldset'); node.className = 'capacity-zone'; node.dataset.zoneId = z.id || createUuid();
     node.innerHTML = `<legend>Zona útil</legend><div class="capacity-grid"><label>Nombre<input data-zone-field="nombre" required maxlength="100" value="${esc(z.nombre)}"></label><label>Modo<select data-zone-field="modo"><option value="piso" ${z.modo !== 'rack' ? 'selected' : ''}>Piso</option><option value="rack" ${z.modo === 'rack' ? 'selected' : ''}>Rack con huecos declarados</option></select></label>`
         + [['X desde el origen (m)', 'x_m'], ['Y desde el origen (m)', 'y_m']].map(([title, key]) => zoneInput(title, key, z[key] ?? 0, { min: 0 })).join('')
         + [['Largo útil (m)', 'largo_m'], ['Ancho útil (m)', 'ancho_m'], ['Altura útil (m)', 'altura_util_m']].map(([title, key]) => zoneInput(title, key, z[key], { max: key === 'altura_util_m' ? 50 : 1000 })).join('')
@@ -141,7 +142,7 @@ function editMeasurement(index) {
 }
 async function save(form, path, body, method = 'PUT') {
     if (busy) return; busy = true; permissions(); $('Notice').textContent = 'Guardando…';
-    const operation = pending.get(form) || { path, method, body: { ...body, operacion_id: crypto.randomUUID() } }; pending.set(form, operation);
+    const operation = pending.get(form) || { path, method, body: { ...body, operacion_id: createUuid() } }; pending.set(form, operation);
     let saved = false;
     try {
         await api(operation.path, { method: operation.method, body: JSON.stringify(operation.body) });
