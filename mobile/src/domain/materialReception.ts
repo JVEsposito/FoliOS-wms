@@ -1,3 +1,5 @@
+import type { MaterialWarehouseAssignment } from './estiba';
+
 export type TipoFotoRecepcion = 'documento' | 'referencial';
 export type FotoRecepcion = { id: string; tipo: TipoFotoRecepcion; orden: number; sha256: string; bytes: number; url: string; miniatura_url: string };
 
@@ -52,6 +54,7 @@ export type MaterialReceptionCatalog = {
 };
 
 export type ReceptionPackage = {
+  asignacion_bodega?: MaterialWarehouseAssignment | null;
   id: string;
   cantidad: string;
   lote_proveedor: string | null;
@@ -126,6 +129,7 @@ export type MaterialReception = {
 };
 
 export type PendingReceptionFolio = {
+  asignacion_bodega?: MaterialWarehouseAssignment | null;
   folio_id: string;
   numero_folio: string;
   estado_operacional: string;

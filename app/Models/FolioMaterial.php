@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 #[Fillable([
+    'almacen_inicial_id', 'asignacion_bodega',
     'folio_id',
     'item_material_id',
     'bulto_recepcion_material_id',
@@ -67,6 +68,11 @@ class FolioMaterial extends Model
     public function informacionVencimiento(): array
     {
         return app(ServicioVencimientoMaterial::class)->informacion($this);
+    }
+
+    public function almacenInicial(): BelongsTo
+    {
+        return $this->belongsTo(AlmacenMaterial::class, 'almacen_inicial_id');
     }
 
     public function folio(): BelongsTo
@@ -127,6 +133,7 @@ class FolioMaterial extends Model
     protected function casts(): array
     {
         return [
+            'asignacion_bodega' => 'array',
             'categoria_operacional' => CategoriaOperacionalMaterial::class,
             'cantidad_inicial' => 'decimal:3',
             'cantidad_actual' => 'decimal:3',

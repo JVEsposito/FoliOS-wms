@@ -4,7 +4,7 @@
     <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
     <title>FoliOS · Capacidad de bodegas</title>
     @if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
-        @vite(['resources/css/office.css', 'resources/css/office-materials.css', 'resources/css/office-material-capacity.css', 'resources/js/office-material-capacity.js', 'resources/js/office-material-bodegas.js'])
+        @vite(['resources/css/office.css', 'resources/css/office-materials.css', 'resources/css/office-material-capacity.css', 'resources/js/office-material-capacity.js', 'resources/js/office-material-bodegas.js', 'resources/js/office-material-routing.js'])
     @endif
     @include('office.partials.arranque')
 </head>
@@ -30,6 +30,23 @@
                 <div class="capacity-actions"><button type="submit" class="primary-button">Guardar bodega</button><button id="bodegaCancel" type="button" class="secondary-button">Cancelar edición</button></div>
             </form>
             <details id="bodegaHistory"><summary>Historial de bodegas</summary><div id="bodegaHistoryRows"></div><nav id="bodegaHistoryPages" class="capacity-actions" aria-label="Páginas del historial de bodegas"></nav></details>
+        </details>
+        <details class="custody-card" id="routingPanel"><summary>Asignación automática al aprobar recepciones</summary>
+            <p>Las reglas se evalúan de menor a mayor prioridad. La primera coincidencia por cliente y tipo de material asigna la bodega de cada folio nuevo. Sin coincidencia activa se conserva Central. Ninguna regla cambia el inventario anterior.</p>
+            <p>La asignación deja cámara y posición pendientes. La capacidad de referencia no equivale a espacio libre: verifica dimensiones y ocupación antes de ubicar.</p>
+            <p id="routingNotice" role="status" aria-live="polite"></p>
+            <div class="capacity-actions"><button id="routingReload" type="button" class="secondary-button">Actualizar reglas</button><button id="routingNew" type="button" class="secondary-button" hidden>Crear regla</button></div>
+            <div id="routingRows" class="capacity-type-list"></div><nav id="routingPages" class="capacity-actions" aria-label="Páginas de reglas"></nav>
+            <form id="routingForm" hidden><h2 id="routingTitle">Regla de recepción</h2><fieldset id="routingFields" class="capacity-grid" disabled>
+                <label>Nombre<input name="nombre" required minlength="3" maxlength="150"></label>
+                <label>Prioridad (menor primero)<input name="prioridad" type="number" min="1" max="9999" step="1" value="10" required></label>
+                <label>Cliente<select name="cliente_id"><option value="">Todos los clientes</option></select></label>
+                <label>Tipo de material<select name="categoria_operacional"><option value="">Todos los tipos</option><option value="insumo">Insumo</option><option value="material_mp">Material de embalaje sin preparar</option><option value="material_pt">Material preparado para línea</option></select></label>
+                <label>Bodega de ingreso<select name="almacen_material_id" required></select></label>
+                <label>Estado<select name="activo"><option value="1">Activa</option><option value="0">Inactiva</option></select></label>
+                <label>Motivo del cambio<textarea name="motivo" minlength="5" maxlength="1000" required></textarea></label>
+            </fieldset><div class="capacity-actions"><button type="submit" class="primary-button">Guardar regla</button><button id="routingCancel" type="button" class="secondary-button">Cancelar regla</button></div></form>
+            <details id="routingHistory"><summary>Historial de reglas</summary><div id="routingHistoryRows"></div><nav id="routingHistoryPages" class="capacity-actions" aria-label="Páginas de historial de reglas"></nav></details>
         </details>
         <details class="custody-card" id="capacityTypes"><summary>Tipos de pallet y medidas de referencia</summary>
             <p>La altura total incluye el pallet y la carga. Cada tipo conserva límites de apilamiento y peso; las medidas reales pueden registrarse por separado.</p>

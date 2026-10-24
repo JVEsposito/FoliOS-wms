@@ -85,6 +85,7 @@ class MovimientoController extends Controller
                 'numero_folio' => $folio->numero_folio,
                 'item' => $folio->material->item->nombre,
                 'codigo_item' => $folio->material->item->codigo,
+                'asignacion_bodega' => $folio->material->asignacion_bodega,
             ])
             ->values();
 
@@ -172,6 +173,7 @@ class MovimientoController extends Controller
                         'nombre' => $material->item->nombre,
                     ],
                     'cantidad' => $material->cantidad_inicial,
+                    'asignacion_bodega' => $material->asignacion_bodega,
                     'lote' => $material->lote,
                     'proveedor' => $material->proveedor,
                     'observacion' => $material->observacion,

@@ -424,6 +424,7 @@ class ServicioRecepcionMaterial
                     ));
                 }
 
+                $asignacion = app(ServicioAsignacionBodegaMaterial::class)->elegir($cliente->id, $detalle->categoria_operacional, $usuario);
                 foreach ($detalle->bultos as $bulto) {
                     $codigoFolio = $this->correlativoFolio->siguiente($cliente);
                     $folio = Folio::create([
@@ -456,6 +457,8 @@ class ServicioRecepcionMaterial
                         'folio_id' => $folio->id,
                         'item_material_id' => $item->id,
                         'bulto_recepcion_material_id' => $bulto->id,
+                        'almacen_inicial_id' => $asignacion['almacen_id'],
+                        'asignacion_bodega' => $asignacion,
                         'proveedor_material_id' => $proveedor->id,
                         'categoria_operacional' => $detalle->categoria_operacional,
                         'cantidad_inicial' => $bulto->cantidad,
@@ -484,6 +487,7 @@ class ServicioRecepcionMaterial
                             'bulto_recepcion_material_id' => $bulto->id,
                             'numero_guia_despacho' => $recepcion->numero_guia_despacho,
                             'estado_ubicacion' => 'pendiente_ubicacion',
+                            'asignacion_bodega' => $asignacion,
                             'registro' => app(RegistroRecepcionMaterial::class)->representar($recepcion),
                         ],
                         'ocurrido_at' => $ahora,
@@ -494,6 +498,7 @@ class ServicioRecepcionMaterial
                         'item_material_id' => $item->id,
                         'cantidad' => $material->cantidad_inicial,
                         'bloqueado' => $bulto->bloqueado,
+                        'asignacion_bodega' => $asignacion,
                     ];
                 }
             }

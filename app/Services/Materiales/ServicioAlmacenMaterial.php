@@ -197,6 +197,15 @@ class ServicioAlmacenMaterial
             ->get();
     }
 
+    public function bodegaInicial(FolioMaterial $folio, bool $bloquear = false): AlmacenMaterial
+    {
+        if (! $folio->almacen_inicial_id) {
+            return $this->bodegaCentral(bloquear: $bloquear);
+        }
+
+        return AlmacenMaterial::whereKey($folio->almacen_inicial_id)->when($bloquear, fn ($q) => $q->lockForUpdate())->firstOrFail();
+    }
+
     public function inicializarFolio(FolioMaterial $folio): void
     {
         DB::transaction(function () use ($folio): void {
@@ -204,7 +213,7 @@ class ServicioAlmacenMaterial
                 ->with('folio.ubicacionActual')
                 ->lockForUpdate()
                 ->findOrFail($folio->folio_id);
-            $bodega = $this->bodegaCentral(bloquear: true);
+            $bodega = $this->bodegaInicial($folio, bloquear: true);
             $existente = SaldoMaterialAlmacen::query()
                 ->where('folio_id', $folio->folio_id)
                 ->where('almacen_material_id', $bodega->id)
@@ -252,7 +261,7 @@ class ServicioAlmacenMaterial
                 ->with('folio')
                 ->lockForUpdate()
                 ->findOrFail($folio->folio_id);
-            $bodega = $this->bodegaCentral(bloquear: true);
+            $bodega = $this->bodegaInicial($bloqueado, bloquear: true);
             $saldo = $this->saldo($bloqueado, $bodega);
             $cantidadActual = round((float) $saldo->cantidad_actual + $deltaActual, 3);
             $cantidadReservada = round(
@@ -316,7 +325,7 @@ class ServicioAlmacenMaterial
                 ->with('folio.ubicacionActual')
                 ->lockForUpdate()
                 ->findOrFail($folio->folio_id);
-            $bodega = $this->bodegaCentral(bloquear: true);
+            $bodega = $this->bodegaInicial($folio, bloquear: true);
             $saldo = $this->saldo($folio, $bodega);
             $ubicacion = $folio->folio?->ubicacionActual;
 
@@ -349,9 +358,7 @@ class ServicioAlmacenMaterial
 
     private function sincronizarUbicacionCompatibilidad(FolioMaterial $folio): void
     {
-        $bodega = AlmacenMaterial::query()
-            ->where('codigo', AlmacenMaterial::CODIGO_BODEGA_CENTRAL)
-            ->first();
+        $bodega = $folio->almacen_inicial_id ? AlmacenMaterial::find($folio->almacen_inicial_id) : AlmacenMaterial::where('codigo', AlmacenMaterial::CODIGO_BODEGA_CENTRAL)->first();
 
         if (! $bodega) {
             return;

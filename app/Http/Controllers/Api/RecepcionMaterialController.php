@@ -406,6 +406,7 @@ class RecepcionMaterialController extends Controller
                     'cantidad_actual' => $material->cantidad_actual,
                     'unidad_medida' => $material->unidad_medida,
                     'lote_proveedor' => $material->lote,
+                    'asignacion_bodega' => $material->asignacion_bodega,
                     'bloqueado' => $material->folio?->estado_operacional === EstadoOperacionalFolio::Bloqueado,
                     'motivo_bloqueo' => $material->motivo_bloqueo,
                     'recepcion' => $recepcion ? [

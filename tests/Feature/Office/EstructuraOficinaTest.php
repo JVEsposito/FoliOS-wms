@@ -14,6 +14,8 @@ class EstructuraOficinaTest extends TestCase
         $html = $this->get('/oficina/materiales/capacidad')->assertOk()->getContent();
         $this->assertStringContainsString('id="capacityWarehouseForm"', $html);
         $this->assertStringContainsString('id="capacitySimulationForm"', $html);
+        $this->assertStringContainsString('id="routingPanel"', $html);
+        $this->assertStringContainsString('name="motivo"', $html);
         $this->assertStringContainsString('aria-current="page"', $html);
         if (getenv('ESTIBA_EXPORTAR_UI_TESTS') === '1') {
             File::ensureDirectoryExists(storage_path('app/ui/oficina'));
