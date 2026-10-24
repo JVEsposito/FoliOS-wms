@@ -197,13 +197,14 @@ class DespachoMaterialController extends Controller
         Gate::authorize('consultar-despachos-materiales');
         $filtros = $request->validate([
             'vista' => ['nullable', Rule::in(['detalle', 'resumen'])],
+            'almacen_origen_id' => ['nullable', 'uuid', 'exists:destinos_materiales,id'],
             'cliente_id' => ['nullable', 'uuid', 'exists:clientes_materiales,id'],
             'item_material_id' => ['nullable', 'uuid', 'exists:items_materiales,id'],
             'q' => ['nullable', 'string', 'max:100'],
             'per_page' => ['nullable', 'integer', Rule::in([10, 25, 50, 100])],
             'page' => ['nullable', 'integer', 'min:1'],
         ]);
-        $resumen = $servicio->resumen($filtros['cliente_id'] ?? null);
+        $resumen = $servicio->resumen($filtros['cliente_id'] ?? null, $filtros['almacen_origen_id'] ?? null);
 
         if (($filtros['vista'] ?? 'detalle') === 'resumen') {
             return response()->json(['data' => [], ...$resumen]);

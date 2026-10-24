@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 
+import { MaterialWarehouseDelivery } from './MaterialWarehouseDelivery';
 import { MaterialDeliveryRegistrationPanel } from './MaterialDispatchRegistration';
 import { PrivateMaterialThumbnail } from './PrivateMaterialThumbnail';
 import { OPERATIONAL_POLL_INTERVAL_MS } from '../config/polling';
@@ -190,7 +191,7 @@ export function MaterialDispatchOperation({
                   <Text style={styles.queueCode}>{dispatch.codigo}</Text>
                   <StatusBadge state={dispatch.estado} />
                 </View>
-                <Text numberOfLines={1} style={styles.queueDestination}>{dispatch.destino.nombre}</Text>
+                <Text numberOfLines={1} style={styles.queueDestination}>{dispatch.almacen_origen?.nombre ?? 'Bodega Central'} → {dispatch.destino.nombre}</Text>
                 <Text style={styles.queueMeta}>
                   {dispatch.items.length} ítems · {formatDate(dispatch.created_at)}
                 </Text>
@@ -214,7 +215,7 @@ export function MaterialDispatchOperation({
                     <StatusBadge state={selected.estado} />
                   </View>
                   <Text style={styles.detailDestination}>
-                    {selected.destino.nombre} · CC {selected.destino.centro_costo}
+                    {selected.almacen_origen?.nombre ?? 'Bodega Central'} → {selected.destino.nombre} · CC {selected.destino.centro_costo}
                   </Text>
                   <Text style={styles.detailMeta}>
                     Creada {formatDateTime(selected.created_at)}
@@ -266,7 +267,7 @@ export function MaterialDispatchOperation({
                             <Text style={styles.location}>
                               {suggestion.camara
                                 ? `${cameraDisplayName(suggestion.camara)} · ${suggestion.posicion?.etiqueta ?? 'Sin posición'}`
-                                : 'Sin cámara asignada'}
+                                : selected.almacen_origen?.nombre ?? 'Sin cámara asignada'}
                             </Text>
                           </View>
                           <Text style={styles.reservationAmount}>
@@ -278,6 +279,16 @@ export function MaterialDispatchOperation({
                         <Text style={styles.noReservations}>Sin reservas FIFO activas.</Text>
                       ) : null}
                     </View>
+                    {selected.almacen_origen?.requiere_ubicacion_fisica === false ? (
+                      <MaterialWarehouseDelivery
+                        key={`${selected.id}-${item.detalle_id}`}
+                        dispatch={selected} item={item} api={api} auth={auth}
+                        onChange={updated => {
+                          setSelectedDetail(current => current?.id === updated.id ? updated : current);
+                          setDispatches(current => current.map(row => row.id === updated.id ? { ...row, estado: updated.estado, items: updated.items, entregas: updated.entregas } : row));
+                        }}
+                      />
+                    ) : null}
                   </View>
                 ))}
               </View>

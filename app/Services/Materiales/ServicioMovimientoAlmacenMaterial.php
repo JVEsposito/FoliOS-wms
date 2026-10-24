@@ -12,6 +12,7 @@ use App\Enums\TipoMovimientoAlmacenMaterial;
 use App\Exceptions\ConflictoOperacion;
 use App\Exceptions\OperacionNoAutorizada;
 use App\Models\AlmacenMaterial;
+use App\Models\BloqueoCamara;
 use App\Models\Camara;
 use App\Models\Dispositivo;
 use App\Models\FolioMaterial;
@@ -22,11 +23,13 @@ use App\Models\SaldoMaterialAlmacen;
 use App\Models\User;
 use App\Services\Autorizacion\AlcanceOperacionalUsuario;
 use App\Services\Gerencia\ServicioPanelGerencial;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use DomainException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 
 class ServicioMovimientoAlmacenMaterial
 {
@@ -276,6 +279,19 @@ class ServicioMovimientoAlmacenMaterial
             );
         }
 
+        $entreBodegas = $origen->tipo === TipoAlmacenMaterial::Fisica && $destino->tipo === TipoAlmacenMaterial::Fisica;
+        if (! $entreBodegas && ! $this->alcance->puedeGestionarDespachosMateriales($usuario)) {
+            throw new OperacionNoAutorizada('El permiso de traslado entre bodegas no permite movimientos de centros de costo.');
+        }
+        if ($entreBodegas) {
+            Gate::forUser($usuario)->authorize('trasladar-bodegas-materiales');
+            if (mb_strlen(trim((string) ($datos['motivo'] ?? ''))) < 5) {
+                throw new DomainException('Indica el motivo del traslado (mínimo 5 caracteres).');
+            }
+            if (app(ServicioTemporadaActiva::class)->obtener(bloquear: true)->id !== $folio->folio->temporada_id) {
+                throw new DomainException('Solo se traslada inventario de la temporada activa.');
+            }
+        }
         $this->almacenes->asegurarSaldo($folio, $destino);
         $saldos = $this->almacenes->saldosBloqueados(
             $folio,
@@ -288,6 +304,13 @@ class ServicioMovimientoAlmacenMaterial
             throw new DomainException('No fue posible bloquear ambos saldos de la transferencia.');
         }
 
+        if ($entreBodegas) {
+            foreach (['origen' => $saldoOrigen, 'destino' => $saldoDestino] as $clave => $saldo) {
+                if (! isset($datos['version_'.$clave]) || (int) $datos['version_'.$clave] !== (int) $saldo->version) {
+                    throw new ConflictoOperacion('El saldo de '.$clave.' cambió. Actualiza antes de trasladar.');
+                }
+            }
+        }
         $saldoOrigen->loadMissing(['camara', 'posicion']);
         $this->validarDisponible($folio, $saldoOrigen, $origen, $tipo === TipoMovimientoAlmacenMaterial::Devolucion);
 
@@ -296,6 +319,12 @@ class ServicioMovimientoAlmacenMaterial
         }
 
         [$camara, $posicion] = $this->ubicacionDestino($destino, $saldoDestino, $datos);
+        if ((float) $saldoDestino->cantidad_actual > 0 && ($saldoDestino->camara_id !== $camara?->id || $saldoDestino->posicion_id !== $posicion?->id)) {
+            throw new DomainException('El folio ya tiene otra ubicación en la bodega de destino. No se reubica su saldo previo mediante un traslado parcial.');
+        }
+        if ($entreBodegas && BloqueoCamara::whereIn('camara_id', array_filter([$saldoOrigen->camara_id, $camara?->id]))->exists()) {
+            throw new DomainException('Hay una estiba abierta en una cámara del traslado. Cierra la estiba antes de mover existencias desde Oficina.');
+        }
         $origenAnterior = (float) $saldoOrigen->cantidad_actual;
         $origenResultante = round($origenAnterior - $cantidad, 3);
         $destinoAnterior = (float) $saldoDestino->cantidad_actual;
@@ -463,6 +492,9 @@ class ServicioMovimientoAlmacenMaterial
             ? $this->alcance->puedeGestionarBloqueosMateriales($usuario)
             : $this->alcance->puedeGestionarDespachosMateriales($usuario);
 
+        if ($tipo === TipoMovimientoAlmacenMaterial::Transferencia && $usuario->can('trasladar-bodegas-materiales')) {
+            $autorizado = true;
+        }
         if (! $autorizado) {
             throw new OperacionNoAutorizada(
                 $tipo === TipoMovimientoAlmacenMaterial::Ajuste

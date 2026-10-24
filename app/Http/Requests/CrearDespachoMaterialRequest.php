@@ -18,6 +18,7 @@ class CrearDespachoMaterialRequest extends FormRequest
     {
         return [
             'operacion_id' => ['required', 'uuid'],
+            'almacen_origen_id' => ['sometimes', 'uuid', 'exists:destinos_materiales,id'],
             'destino_material_id' => ['required', 'uuid', 'exists:destinos_materiales,id'],
             'asignado_a_user_id' => ['nullable', 'integer', 'exists:users,id'],
             'observacion' => ['nullable', 'string', 'max:1000'],

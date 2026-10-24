@@ -681,7 +681,8 @@ export function MaterialDispatchModal({
   const compact = height < 700 || width < 1000;
   const material = position?.folio?.material;
   const matchingDispatches = dispatches.filter((dispatch) =>
-    (!dispatch.asignado_a_user_id || String(dispatch.asignado_a_user_id) === operatorId)
+    dispatch.almacen_origen?.requiere_ubicacion_fisica !== false
+    && (!dispatch.asignado_a_user_id || String(dispatch.asignado_a_user_id) === operatorId)
     && dispatch.items.some((detail) => detail.item.id === material?.item.id && Number(detail.cantidad_pendiente) > 0));
   const prioritizedDispatches = [...matchingDispatches].sort((left, right) => (
     reservationForFolio(right, material?.item.id, position?.folio?.id)
@@ -818,7 +819,7 @@ function materialDispatchLabel(
   const reservation = reservationForFolio(dispatch, itemId, folioId);
   const fifo = reservation > 0 ? ` · FIFO ${reservation} ${unit ?? ''}` : '';
 
-  return `${dispatch.codigo} · ${dispatch.destino.nombre}${fifo}`;
+  return `${dispatch.codigo} · ${dispatch.almacen_origen?.nombre ?? 'Bodega Central'} → ${dispatch.destino.nombre}${fifo}`;
 }
 
 function DestinationPlanMap({

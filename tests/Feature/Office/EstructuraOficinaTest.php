@@ -9,6 +9,18 @@ use Tests\TestCase;
 
 class EstructuraOficinaTest extends TestCase
 {
+    public function test_bodegas_materiales_tiene_formulario_auditado_y_navegacion(): void
+    {
+        $html = $this->get('/oficina/materiales/bodegas')->assertOk()->getContent();
+        $this->assertStringContainsString('id="warehouseForm"', $html);
+        $this->assertStringContainsString('name="motivo"', $html);
+        $this->assertStringContainsString('aria-current="page"', $html);
+        if (getenv('ESTIBA_EXPORTAR_UI_TESTS') === '1') {
+            File::ensureDirectoryExists(storage_path('app/ui/oficina'));
+            File::put(storage_path('app/ui/oficina/bodegas.html'), $html);
+        }
+    }
+
     public function test_capacidad_materiales_tiene_formularios_y_navegacion(): void
     {
         $html = $this->get('/oficina/materiales/capacidad')->assertOk()->getContent();

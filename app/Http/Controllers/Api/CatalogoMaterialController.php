@@ -10,6 +10,7 @@ use App\Http\Resources\ClienteMaterialResource;
 use App\Http\Resources\DestinoMaterialResource;
 use App\Http\Resources\ItemMaterialResource;
 use App\Http\Resources\TemporadaMaterialResource;
+use App\Models\AlmacenMaterial;
 use App\Models\ClienteMaterial;
 use App\Models\DestinoMaterial;
 use App\Models\ItemMaterial;
@@ -36,12 +37,13 @@ class CatalogoMaterialController extends Controller
                 'clientes' => [],
                 'items' => [],
                 'destinos' => DestinoMaterialResource::collection(
-                    DestinoMaterial::query()->where('activo', true)->orderBy('nombre')->get(),
+                    DestinoMaterial::query()->where('tipo', 'virtual')->where('activo', true)->orderBy('nombre')->get(),
                 ),
             ]);
         }
 
         return response()->json([
+            'almacenes' => AlmacenMaterial::where('tipo', 'fisica')->where('activo', true)->orderBy('nombre')->get(['id', 'codigo', 'nombre', 'requiere_ubicacion_fisica']),
             'temporada' => new TemporadaMaterialResource($temporada),
             'clientes' => ClienteMaterialResource::collection(
                 ClienteMaterial::query()
@@ -66,7 +68,7 @@ class CatalogoMaterialController extends Controller
                     ->get(),
             ),
             'destinos' => DestinoMaterialResource::collection(
-                DestinoMaterial::query()->where('activo', true)->orderBy('nombre')->get(),
+                DestinoMaterial::query()->where('tipo', 'virtual')->where('activo', true)->orderBy('nombre')->get(),
             ),
         ]);
     }
@@ -225,7 +227,7 @@ class CatalogoMaterialController extends Controller
 
         return response()->json([
             'data' => DestinoMaterialResource::collection(
-                DestinoMaterial::query()->orderByDesc('activo')->orderBy('nombre')->get(),
+                DestinoMaterial::query()->where('tipo', 'virtual')->orderByDesc('activo')->orderBy('nombre')->get(),
             ),
         ]);
     }
@@ -250,6 +252,7 @@ class CatalogoMaterialController extends Controller
         GuardarDestinoMaterialRequest $request,
         DestinoMaterial $destinoMaterial,
     ): DestinoMaterialResource {
+        abort_unless($destinoMaterial->tipo === 'virtual', 422, 'Las bodegas físicas se editan desde Inventario CC → Bodegas.');
         $this->validarDestinoUnico($request, $destinoMaterial);
         $destinoMaterial->update([
             ...$request->validated(),

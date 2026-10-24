@@ -501,6 +501,7 @@
                     <section class="panel materials-panel" id="materialDispatchWorkspace" data-materials-view="despachos">
                         <div class="materials-panel__heading"><div><p class="eyebrow">SOLICITUD</p><h2>Nuevo despacho de materiales</h2></div><span id="materialsStockSync" aria-live="polite">Consultando stock disponible…</span></div>
                         <form class="materials-form" id="dispatchMaterialForm" novalidate>
+                            <label><span>Bodega de origen *</span><select name="almacen_origen_id" id="dispatchOriginWarehouse"><option value="">Bodega Central</option></select></label>
                             <fieldset class="materials-wide"><legend>Modalidad del despacho</legend>
                                 <label><input type="radio" name="modalidad" value="delegado" checked> Delegado a tablet · Bodega reserva FIFO; el camarero retira</label>
                                 <label><input type="radio" name="modalidad" value="directo"> Directo desde bodega · seleccionar folios y entregar ahora</label>

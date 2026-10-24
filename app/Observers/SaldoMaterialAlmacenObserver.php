@@ -51,6 +51,12 @@ class SaldoMaterialAlmacenObserver
             return;
         }
 
+        if ($actual > 0 && $saldo->camara_id && SaldoMaterialAlmacen::where('folio_id', $saldo->folio_id)
+            ->where('cantidad_actual', '>', 0)->whereNotNull('camara_id')->where('almacen_material_id', '!=', $saldo->almacen_material_id)
+            ->whereHas('almacen', fn ($q) => $q->where('tipo', TipoAlmacenMaterial::Fisica->value))->exists()) {
+            throw new DomainException('Un folio mantiene una sola ubicación en el plano. Traslada todo el saldo ubicado, o usa una bodega sin plano para separar cantidades.');
+        }
+
         if ($saldo->posicion_id) {
             $camaraId = Posicion::query()
                 ->whereKey($saldo->posicion_id)

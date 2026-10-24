@@ -33,7 +33,7 @@ class RetirarDespachoMaterialRequest extends FormRequest
             ],
             'retiros.*.cantidad' => ['required', 'numeric', 'gt:0', 'decimal:0,3'],
             'retiros.*.sesion_estiba_id' => [
-                'required',
+                'nullable',
                 'uuid',
                 'exists:sesiones_estiba,id',
             ],

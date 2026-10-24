@@ -7,6 +7,7 @@ use App\Enums\EstadoCamara;
 use App\Enums\EstadoOperacionalFolio;
 use App\Enums\EstadoPosicion;
 use App\Enums\TipoAlmacenMaterial;
+use App\Models\AlmacenMaterial;
 use App\Models\SaldoMaterialAlmacen;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -16,7 +17,7 @@ class ServicioConsultaInventarioMaterialDistribuido extends ServicioConsultaInve
 {
     public function detalle(array $filtros): LengthAwarePaginator
     {
-        $consulta = $this->consultaBodega()
+        $consulta = $this->consultaBodega($filtros['almacen_origen_id'] ?? null)
             ->with([
                 'almacen',
                 'camara',
@@ -73,9 +74,9 @@ class ServicioConsultaInventarioMaterialDistribuido extends ServicioConsultaInve
         return $paginacion;
     }
 
-    public function resumen(?string $clienteId = null): array
+    public function resumen(?string $clienteId = null, ?string $almacenId = null): array
     {
-        $saldos = $this->consultaBodega()
+        $saldos = $this->consultaBodega($almacenId)
             ->with([
                 'almacen',
                 'camara',
@@ -118,7 +119,7 @@ class ServicioConsultaInventarioMaterialDistribuido extends ServicioConsultaInve
                             'unidad_medida' => $nombre,
                             'cantidad_actual' => $this->cantidad($unidad->sum('cantidad_actual')),
                             'cantidad_pendiente_ubicacion' => $this->cantidad(
-                                $unidad->filter(fn (SaldoMaterialAlmacen $saldo): bool => ! $saldo->camara_id)
+                                $unidad->filter(fn (SaldoMaterialAlmacen $saldo): bool => ! $saldo->camara_id && $saldo->almacen->requiere_ubicacion_fisica)
                                     ->sum('cantidad_actual'),
                             ),
                             'cantidad_bloqueada' => $this->cantidad(
@@ -137,7 +138,7 @@ class ServicioConsultaInventarioMaterialDistribuido extends ServicioConsultaInve
                     'cliente' => $this->cliente($cliente),
                     'folios' => $grupo->pluck('folio_id')->unique()->count(),
                     'folios_pendientes_ubicacion' => $grupo
-                        ->filter(fn (SaldoMaterialAlmacen $saldo): bool => ! $saldo->camara_id)
+                        ->filter(fn (SaldoMaterialAlmacen $saldo): bool => ! $saldo->camara_id && $saldo->almacen->requiere_ubicacion_fisica)
                         ->pluck('folio_id')
                         ->unique()
                         ->count(),
@@ -167,12 +168,13 @@ class ServicioConsultaInventarioMaterialDistribuido extends ServicioConsultaInve
         ];
     }
 
-    private function consultaBodega(): Builder
+    private function consultaBodega(?string $almacenId = null): Builder
     {
         return SaldoMaterialAlmacen::query()
             ->where('cantidad_actual', '>', 0)
             ->whereHas('almacen', fn (Builder $almacenes) => $almacenes
                 ->where('tipo', TipoAlmacenMaterial::Fisica->value)
+                ->when($almacenId, fn ($q, $id) => $q->whereKey($id), fn ($q) => $q->where('codigo', AlmacenMaterial::CODIGO_BODEGA_CENTRAL))
                 ->where('activo', true))
             ->whereHas('folioMaterial.folio', fn (Builder $folios) => $folios
                 ->where('activo', true)
@@ -213,12 +215,14 @@ class ServicioConsultaInventarioMaterialDistribuido extends ServicioConsultaInve
         $recepcion = $material->bultoRecepcion?->detalle?->recepcion;
 
         return [
+            'saldo_id' => $saldo->id,
+            'saldo_version' => $saldo->version,
             'folio_id' => $folio->id,
             'numero_folio' => $folio->numero_folio,
-            'estado_operacional' => $folio->estado_operacional->value,
-            'estado_ubicacion' => ! $saldo->camara_id
+            'estado_operacional' => $material->motivo_bloqueo ? 'bloqueado' : ($this->reservable($saldo) ? 'disponible' : $folio->estado_operacional->value),
+            'estado_ubicacion' => ! $saldo->almacen->requiere_ubicacion_fisica ? 'en_bodega' : (! $saldo->camara_id
                 ? 'pendiente_ubicacion'
-                : ($saldo->posicion_id ? 'ubicado' : 'solo_camara'),
+                : ($saldo->posicion_id ? 'ubicado' : 'solo_camara')),
             'reservable' => $this->reservable($saldo),
             'motivo_bloqueo' => $material->motivo_bloqueo,
             'vencimiento' => $material->informacionVencimiento(),
@@ -267,10 +271,10 @@ class ServicioConsultaInventarioMaterialDistribuido extends ServicioConsultaInve
 
     private function reservable(SaldoMaterialAlmacen $saldo): bool
     {
-        return $saldo->camara?->contenido === ContenidoCamara::Materiales
+        return (! $saldo->almacen->requiere_ubicacion_fisica || ($saldo->camara?->contenido === ContenidoCamara::Materiales
             && $saldo->camara?->estado === EstadoCamara::Activa
-            && (! $saldo->posicion || $saldo->posicion->estado === EstadoPosicion::Activa)
-            && $saldo->folioMaterial->folio->estado_operacional === EstadoOperacionalFolio::Disponible
+            && (! $saldo->posicion || $saldo->posicion->estado === EstadoPosicion::Activa)))
+            && in_array($saldo->folioMaterial->folio->estado_operacional, [EstadoOperacionalFolio::Disponible, EstadoOperacionalFolio::PendienteUbicacion], true)
             && ! $saldo->folioMaterial->estaVencido()
             && $saldo->folioMaterial->motivo_bloqueo === null;
     }

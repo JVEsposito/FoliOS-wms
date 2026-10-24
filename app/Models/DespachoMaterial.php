@@ -20,6 +20,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'modalidad',
     'asignado_a_user_id',
     'estado',
+    'almacen_origen_id',
     'destino_material_id',
     'destino_nombre',
     'destino_centro_costo',
@@ -43,6 +44,11 @@ class DespachoMaterial extends Model
     public function temporada(): BelongsTo
     {
         return $this->belongsTo(Temporada::class);
+    }
+
+    public function almacenOrigen(): BelongsTo
+    {
+        return $this->belongsTo(AlmacenMaterial::class, 'almacen_origen_id');
     }
 
     public function destino(): BelongsTo

@@ -51,6 +51,7 @@ class AlmacenMaterialController extends Controller
         return response()->json([
             ...$existencias,
             'camaras' => $camaras,
+            'permisos' => ['puede_trasladar_bodegas_materiales' => Gate::allows('trasladar-bodegas-materiales')],
         ]);
     }
 
@@ -159,6 +160,8 @@ class AlmacenMaterialController extends Controller
             'almacen_origen_id' => ['nullable', 'uuid', 'exists:destinos_materiales,id'],
             'almacen_destino_id' => ['nullable', 'uuid', 'exists:destinos_materiales,id'],
             'centro_costo_id' => ['nullable', 'uuid', 'exists:destinos_materiales,id'],
+            'version_origen' => ['nullable', 'integer', 'min:0'],
+            'version_destino' => ['nullable', 'integer', 'min:0'],
             'cantidad' => ['required', 'numeric', 'between:-99999999999.999,99999999999.999', 'not_in:0'],
             'motivo' => [
                 Rule::requiredIf(fn (): bool => in_array(

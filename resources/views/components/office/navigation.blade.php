@@ -51,6 +51,7 @@
             ['key' => 'vencimientos', 'module' => 'materiales.inventario', 'label' => 'Vencimientos', 'href' => '/oficina/materiales/vencimientos', 'permissions' => ['puede_consultar_despachos_materiales']],
             ['key' => 'reposicion', 'module' => 'materiales.inventario', 'label' => 'Reposición', 'href' => '/oficina/materiales/reposicion', 'permissions' => ['puede_consultar_despachos_materiales']],
             ['key' => 'tomas', 'module' => 'materiales.inventario', 'label' => 'Tomas de inventario', 'href' => '/oficina/materiales/tomas', 'permissions' => ['puede_gestionar_bloqueos_materiales']],
+            ['key' => 'bodegas', 'module' => 'materiales.inventario', 'label' => 'Bodegas físicas', 'href' => '/oficina/materiales/bodegas', 'permissions' => ['puede_consultar_kardex_materiales']],
             ['key' => 'custodia', 'module' => 'materiales.inventario', 'label' => 'Inventario CC', 'href' => '/oficina/materiales/almacenes', 'permissions' => ['puede_consultar_despachos_materiales']],
             ['key' => 'despachos', 'module' => 'materiales.despachos', 'label' => 'Despachos', 'href' => '/oficina/materiales/despachos', 'permissions' => ['puede_consultar_despachos_materiales']],
             ['key' => 'recetas', 'module' => 'materiales.recetas', 'label' => 'Recetas', 'href' => '/oficina/materiales/recetas', 'permissions' => ['puede_consultar_transformaciones_materiales']],

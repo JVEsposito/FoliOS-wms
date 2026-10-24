@@ -16,6 +16,8 @@ use Tests\TestCase;
 class PermisosAccionesMaterialesTest extends TestCase
 {
     private const ACCIONES = [
+        'bodegas.administrar' => 'administrar-bodegas-materiales',
+        'bodegas.trasladar' => 'trasladar-bodegas-materiales',
         'recepciones.gestionar' => 'gestionar-recepciones-materiales',
         'recepciones.confirmar' => 'confirmar-recepciones-materiales',
         'recepciones.corregir' => 'administrar-recepciones-materiales',

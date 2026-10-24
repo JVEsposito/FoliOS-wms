@@ -44,6 +44,8 @@ export default defineConfig({
                 'resources/js/office-material-warehouses.js',
                 'resources/js/office-material-inventory-counts.js',
                 'resources/js/office-material-replenishment.js',
+                'resources/js/office-material-physical-warehouses.js',
+                'resources/css/office-material-physical-warehouses.css',
                 'resources/js/office-material-capacity.js',
                 'resources/css/office-material-capacity.css',
                 'resources/js/office-material-supervision.js',

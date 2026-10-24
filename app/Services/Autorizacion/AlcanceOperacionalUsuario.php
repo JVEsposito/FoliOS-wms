@@ -721,6 +721,16 @@ class AlcanceOperacionalUsuario
         );
     }
 
+    public function puedeAdministrarBodegasMateriales(User $usuario): bool
+    {
+        return $this->permiteAccionMateriales($usuario, 'bodegas.administrar') && $this->puedeConsultarKardexMateriales($usuario);
+    }
+
+    public function puedeTrasladarBodegasMateriales(User $usuario): bool
+    {
+        return $this->permiteAccionMateriales($usuario, 'bodegas.trasladar') && $this->puedeConsultarKardexMateriales($usuario);
+    }
+
     public function puedeConfigurarCapacidadMateriales(User $usuario): bool
     {
         return $this->permiteAccionMateriales($usuario, 'capacidad.configurar')
@@ -1412,6 +1422,8 @@ class AlcanceOperacionalUsuario
             'puede_consultar_kardex_materiales' => $this->puedeConsultarKardexMateriales($usuario),
             'puede_transferir_folios_materiales_clientes' => $this->puedeTransferirFoliosMaterialesClientes($usuario),
             'puede_corregir_items_estibados_materiales' => $this->puedeCorregirItemsEstibadosMateriales($usuario),
+            'puede_administrar_bodegas_materiales' => $this->puedeAdministrarBodegasMateriales($usuario),
+            'puede_trasladar_bodegas_materiales' => $this->puedeTrasladarBodegasMateriales($usuario),
             'puede_gestionar_bloqueos_materiales' => $this->puedeGestionarBloqueosMateriales($usuario),
             'puede_consultar_recepciones_materiales' => $this->puedeConsultarRecepcionesMateriales($usuario),
             'puede_gestionar_recepciones_materiales' => $this->puedeGestionarRecepcionesMateriales($usuario),

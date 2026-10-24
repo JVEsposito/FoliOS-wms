@@ -36,6 +36,10 @@ class CatalogoPermisosMateriales
             $this->grupo('datos_items', 'Datos operativos de ítems', ['materiales.catalogos', 'materiales.inventario'], [
                 'inventario.editar_datos_item' => 'Editar niveles de stock y fotos de ítems',
             ]),
+            $this->grupo('bodegas', 'Bodegas físicas', ['materiales.inventario'], [
+                'bodegas.administrar' => 'Crear, editar y desactivar bodegas físicas',
+                'bodegas.trasladar' => 'Trasladar existencias entre bodegas físicas',
+            ]),
             $this->grupo('capacidad', 'Capacidad de bodegas', ['materiales.inventario'], [
                 'capacidad.configurar' => 'Configurar bodegas, zonas útiles y tipos de pallet',
                 'capacidad.medir' => 'Registrar medidas reales de las cargas',
@@ -92,7 +96,7 @@ class CatalogoPermisosMateriales
         // Las nuevas escrituras de capacidad requieren selección explícita
         // en perfiles existentes, salvo el Administrador protegido.
         if ($perfil->permisos_materiales === null && ! $perfil->protegido) {
-            $efectivos = array_values(array_diff($efectivos, ['capacidad.configurar', 'capacidad.medir']));
+            $efectivos = array_values(array_diff($efectivos, ['capacidad.configurar', 'capacidad.medir', 'bodegas.administrar', 'bodegas.trasladar']));
         }
 
         return $efectivos;
@@ -105,6 +109,10 @@ class CatalogoPermisosMateriales
             return false;
         }
         if ($usuario->perfil_acceso_id === null) {
+            if (str_starts_with($accion, 'bodegas.')) {
+                return $usuario->rol === RolUsuario::Administrador
+                    || ($accion === 'bodegas.trasladar' && $usuario->rol === RolUsuario::SupervisorMateriales);
+            }
             if (str_starts_with($accion, 'capacidad.')) {
                 return $usuario->rol === RolUsuario::Administrador
                     || ($accion === 'capacidad.medir' && $usuario->rol === RolUsuario::SupervisorMateriales);

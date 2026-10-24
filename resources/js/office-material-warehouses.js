@@ -52,6 +52,7 @@ function capabilities() {
 }
 
 function can(permission) {
+    if (permission === 'puede_trasladar_bodegas_materiales') return state.data?.permisos?.[permission] ?? capabilities()[permission] === true;
     if (state.identity?.rol === 'administrador') return true;
 
     return capabilities()[permission] === true;
@@ -142,36 +143,39 @@ async function load() {
     state.data = data;
     state.kardex = movements.data || [];
     renderFilterOptions();
+    const requestedWarehouse = new URLSearchParams(window.location.search).get('almacen_id');
+    if (!state.warehouseLinkApplied && requestedWarehouse) { $('custodyFilters').elements.almacen_id.value = requestedWarehouse; state.warehouseLinkApplied = true; }
     render();
     prepareIncidentAdjustment();
 }
 
 function render() {
+    const puedeTrasladar = can('puede_trasladar_bodegas_materiales');
     const puedeGestionar = can('puede_gestionar_despachos_materiales');
     const puedeAjustar = can('puede_gestionar_bloqueos_materiales');
     const puedeConsultarKardex = can('puede_consultar_kardex_materiales');
 
     $('custodyMovementPanel').classList.toggle(
         'is-hidden',
-        !puedeGestionar && !puedeAjustar,
+        !puedeGestionar && !puedeAjustar && !puedeTrasladar,
     );
     $('custodyKardexPanel').classList.toggle('is-hidden', !puedeConsultarKardex);
     $('custodyFolioCount').textContent = state.data.resumen.folios;
     $('custodyWarehouseCount').textContent = state.data.resumen.almacenes;
     $('custodyItemCount').textContent = state.data.resumen.items;
-    configureActions(puedeGestionar, puedeAjustar);
+    configureActions(puedeGestionar, puedeAjustar, puedeTrasladar);
     renderTable();
-    if (puedeGestionar || puedeAjustar) renderSelectors();
+    if (puedeGestionar || puedeAjustar || puedeTrasladar) renderSelectors();
     if (puedeConsultarKardex) renderKardex();
 }
 
-function configureActions(puedeGestionar, puedeAjustar) {
+function configureActions(puedeGestionar, puedeAjustar, puedeTrasladar) {
     const select = $('custodyMovementForm').elements.tipo;
 
     [...select.options].forEach((option) => {
         const permitida = option.value === 'ajuste'
             ? puedeAjustar
-            : puedeGestionar;
+            : puedeGestionar || (option.value === 'transferencia' && puedeTrasladar);
         option.disabled = !permitida;
         option.hidden = !permitida;
     });
@@ -583,6 +587,7 @@ function renderDestinationWarehouses() {
     const requiresDestination = ['devolucion', 'transferencia'].includes(type);
     const warehouses = (state.data.almacenes || []).filter((warehouse) => (
         warehouse.id !== originId
+        && (can('puede_gestionar_despachos_materiales') || (warehouse.tipo === 'fisica' && (state.data.almacenes || []).find(w => w.id === originId)?.tipo === 'fisica'))
         && (type !== 'devolucion' || warehouse.tipo === 'fisica')
     ));
 
@@ -640,14 +645,30 @@ $('custodyMovementForm').elements.almacen_origen_id.addEventListener('change', (
 });
 $('custodyMovementForm').elements.folio_id.addEventListener('change', renderFoliosForOrigin);
 $('custodyMovementForm').elements.camara_destino_id.addEventListener('change', renderPositions);
+for (const event of ['input', 'change']) $('custodyMovementForm').addEventListener(event, () => {
+    if ($('custodyMovementForm').dataset.saving === '1') return;
+    delete $('custodyMovementForm').dataset.operationId;
+    delete $('custodyMovementForm').warehouseVersions;
+});
 $('custodyMovementForm').addEventListener('submit', async (event) => {
     event.preventDefault();
+    if (event.currentTarget.dataset.saving === '1') return;
+    event.currentTarget.dataset.saving = '1';
     $('custodyMovementError').textContent = '';
     const movementForm = event.currentTarget;
     const submitButton = event.submitter
         ?? movementForm.querySelector('button[type="submit"]');
     const form = new FormData(movementForm);
     const payload = Object.fromEntries(form.entries());
+    const origin = (state.data.almacenes || []).find(w => w.id === payload.almacen_origen_id);
+    const destination = (state.data.almacenes || []).find(w => w.id === payload.almacen_destino_id);
+    if (payload.tipo === 'transferencia' && origin?.tipo === 'fisica' && destination?.tipo === 'fisica') {
+        const balances = state.data.perspectivas.bodega;
+        const source = balances.find(s => s.folio_id === payload.folio_id && s.almacen.id === origin.id);
+        const target = balances.find(s => s.folio_id === payload.folio_id && s.almacen.id === destination.id);
+        payload.version_origen = source?.saldo_version;
+        payload.version_destino = target?.saldo_version;
+    }
     payload.operacion_id = movementForm.dataset.operationId || uuid();
     movementForm.dataset.operationId = payload.operacion_id;
     Object.keys(payload).forEach((key) => {
@@ -655,6 +676,15 @@ $('custodyMovementForm').addEventListener('submit', async (event) => {
     });
     if (submitButton) submitButton.disabled = true;
     try {
+        if (payload.tipo === 'transferencia' && origin?.tipo === 'fisica' && destination?.tipo === 'fisica') {
+            const cached = movementForm.warehouseVersions;
+            if (cached?.operacion === payload.operacion_id) Object.assign(payload, cached.versions);
+            else {
+                if (payload.version_destino === undefined) payload.version_destino = (await api(`/api/materiales/bodegas/${destination.id}/saldo?folio_id=${encodeURIComponent(payload.folio_id)}`)).version;
+                movementForm.warehouseVersions = { operacion: payload.operacion_id, versions: { version_origen: payload.version_origen, version_destino: payload.version_destino } };
+            }
+        }
+        movementForm.inert = true;
         await api('/api/materiales/almacenes/movimientos', {
             method: 'POST',
             body: JSON.stringify(payload),
@@ -670,6 +700,8 @@ $('custodyMovementForm').addEventListener('submit', async (event) => {
         if (handleAuthenticationError(error)) return;
         $('custodyMovementError').textContent = error.message;
     } finally {
+        movementForm.inert = false;
+        delete movementForm.dataset.saving;
         if (submitButton) submitButton.disabled = false;
     }
 });

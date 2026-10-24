@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\AndenController;
 use App\Http\Controllers\Api\ArchivoTemporadaController;
 use App\Http\Controllers\Api\BandaOperacionalController;
 use App\Http\Controllers\Api\BloqueoMaterialController;
+use App\Http\Controllers\Api\BodegaMaterialController;
 use App\Http\Controllers\Api\CamaraController;
 use App\Http\Controllers\Api\CambioPasswordUsuarioController;
 use App\Http\Controllers\Api\CapacidadMaterialController;
@@ -512,6 +513,13 @@ Route::middleware('auth:sanctum')->group(function () {
     });
     Route::get('/materiales/kardex', [DespachoMaterialController::class, 'kardex'])
         ->middleware('can:consultar-kardex-materiales');
+    Route::prefix('materiales/bodegas')->middleware('can:consultar-kardex-materiales')->group(function () {
+        Route::get('/', [BodegaMaterialController::class, 'index']);
+        Route::get('/historial', [BodegaMaterialController::class, 'historial']);
+        Route::get('/{id}/saldo', [BodegaMaterialController::class, 'saldo'])->whereUuid('id');
+        Route::post('/', [BodegaMaterialController::class, 'store'])->middleware('can:administrar-bodegas-materiales');
+        Route::put('/{id}', [BodegaMaterialController::class, 'update'])->whereUuid('id')->middleware('can:administrar-bodegas-materiales');
+    });
     Route::prefix('materiales/capacidad')->middleware('can:consultar-kardex-materiales')->group(function () {
         Route::get('/catalogo', [CapacidadMaterialController::class, 'catalogo']);
         Route::get('/cargas', [CapacidadMaterialController::class, 'cargas']);

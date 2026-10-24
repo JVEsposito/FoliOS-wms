@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
+    'version_bodega',
     'codigo',
     'nombre',
     'tipo',
@@ -39,6 +40,7 @@ class AlmacenMaterial extends Model
     protected function casts(): array
     {
         return [
+            'version_bodega' => 'integer',
             'tipo' => TipoAlmacenMaterial::class,
             'requiere_ubicacion_fisica' => 'boolean',
             'activo' => 'boolean',

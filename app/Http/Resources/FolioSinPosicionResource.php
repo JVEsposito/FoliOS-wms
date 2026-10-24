@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Enums\EstadoCarga;
+use App\Services\Materiales\StockMaterialEnPlano;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -58,10 +59,10 @@ class FolioSinPosicionResource extends JsonResource
                     'categoria' => $folio->material->item->categoria,
                 ],
                 'cantidad_inicial' => $folio->material->cantidad_inicial,
-                'cantidad_actual' => $folio->material->cantidad_actual,
-                'cantidad_reservada' => $folio->material->cantidad_reservada,
+                'cantidad_actual' => app(StockMaterialEnPlano::class)->cantidades($folio->id, $this->camara_id, null)['actual'],
+                'cantidad_reservada' => app(StockMaterialEnPlano::class)->cantidades($folio->id, $this->camara_id, null)['reservada'],
                 'cantidad_disponible' => number_format(
-                    max(0, (float) $folio->material->cantidad_actual - (float) $folio->material->cantidad_reservada),
+                    max(0, (float) app(StockMaterialEnPlano::class)->cantidades($folio->id, $this->camara_id, null)['actual'] - (float) app(StockMaterialEnPlano::class)->cantidades($folio->id, $this->camara_id, null)['reservada']),
                     3,
                     '.',
                     '',

@@ -70,6 +70,7 @@ class ServicioConsultaAlmacenesMaterial
                     'tipo' => $almacen->tipo->value,
                     'centro_costo' => $almacen->centro_costo,
                     'requiere_ubicacion_fisica' => $almacen->requiere_ubicacion_fisica,
+                    'version' => $almacen->version_bodega,
                 ])
                 ->values(),
             'perspectivas' => [
@@ -104,7 +105,7 @@ class ServicioConsultaAlmacenesMaterial
                     ['clave' => 'cliente', 'titulo' => 'Cliente', 'ancho' => 28],
                     ['clave' => 'item', 'titulo' => 'Ítem', 'ancho' => 34],
                     ['clave' => 'unidad_medida', 'titulo' => 'Unidad', 'ancho' => 14],
-                    ['clave' => 'en_bodega', 'titulo' => 'En Bodega Central', 'ancho' => 19, 'tipo' => 'numero'],
+                    ['clave' => 'en_bodega', 'titulo' => 'En bodegas físicas', 'ancho' => 19, 'tipo' => 'numero'],
                     ['clave' => 'en_centros_costo', 'titulo' => 'En centros de costo', 'ancho' => 21, 'tipo' => 'numero'],
                     ['clave' => 'total_empresa', 'titulo' => 'Total empresa', 'ancho' => 18, 'tipo' => 'numero'],
                     ['clave' => 'folios', 'titulo' => 'Folios', 'ancho' => 12, 'tipo' => 'numero'],
@@ -142,10 +143,10 @@ class ServicioConsultaAlmacenesMaterial
         return [
             'titulo' => $esCentroCosto
                 ? 'Inventario CC · Existencia en centros de costo'
-                : 'Inventario CC · Existencia en Bodega Central',
+                : 'Inventario CC · Existencia en bodegas físicas',
             'archivo' => $esCentroCosto
                 ? 'Inventario_CC_Centros_Costo'
-                : 'Inventario_CC_Bodega_Central',
+                : 'Inventario_CC_Bodegas_Fisicas',
             'columnas' => $columnas,
             'filas' => $filas->map(function (array $fila) use ($esCentroCosto): array {
                 $exportada = [
@@ -424,6 +425,7 @@ class ServicioConsultaAlmacenesMaterial
 
         return [
             'saldo_id' => $saldo->id,
+            'saldo_version' => $saldo->version,
             'folio_id' => $folio->id,
             'numero_folio' => $folio->numero_folio,
             'lote' => $material->lote,
@@ -502,12 +504,12 @@ class ServicioConsultaAlmacenesMaterial
 
         if ($material->estaVencido()
             || $material->motivo_bloqueo !== null
-            || $material->folio->estado_operacional !== EstadoOperacionalFolio::Disponible
+            || ! in_array($material->folio->estado_operacional, [EstadoOperacionalFolio::Disponible, EstadoOperacionalFolio::PendienteUbicacion], true)
             || ! $saldo->almacen->activo) {
             return 0;
         }
 
-        if ($saldo->almacen->tipo === TipoAlmacenMaterial::Fisica
+        if ($saldo->almacen->tipo === TipoAlmacenMaterial::Fisica && $saldo->almacen->requiere_ubicacion_fisica
             && ($saldo->camara?->contenido !== ContenidoCamara::Materiales
                 || $saldo->camara?->estado !== EstadoCamara::Activa
                 || ($saldo->posicion

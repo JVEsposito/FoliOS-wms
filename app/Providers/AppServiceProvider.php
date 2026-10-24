@@ -46,6 +46,7 @@ use App\Observers\ReplanificarSegregacionMovimientoObserver;
 use App\Observers\SolicitarArbitrajePlanificadorObserver;
 use App\Observers\UbicacionActualObserver;
 use App\Services\Autorizacion\AlcanceOperacionalUsuario;
+use App\Services\Materiales\StockMaterialEnPlano;
 use App\Services\Planificador\ServicioSaludProcesos;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\Transiciones\ContextoEjecucionTransicionOperacional;
@@ -65,6 +66,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->scoped(StockMaterialEnPlano::class);
         $this->app->singleton(ContextoEjecucionTransicionOperacional::class);
         $this->app->scoped(ServicioTemporadaActiva::class);
 
@@ -335,6 +337,8 @@ class AppServiceProvider extends ServiceProvider
             'consultar-kardex-materiales',
             fn (User $usuario): bool => $alcance->puedeConsultarKardexMateriales($usuario),
         );
+        Gate::define('administrar-bodegas-materiales', fn (User $usuario): bool => $alcance->puedeAdministrarBodegasMateriales($usuario));
+        Gate::define('trasladar-bodegas-materiales', fn (User $usuario): bool => $alcance->puedeTrasladarBodegasMateriales($usuario));
         Gate::define('configurar-capacidad-materiales', fn (User $usuario): bool => $alcance->puedeConfigurarCapacidadMateriales($usuario));
         Gate::define('medir-cargas-materiales', fn (User $usuario): bool => $alcance->puedeMedirCargasMateriales($usuario));
         Gate::define(

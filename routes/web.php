@@ -53,6 +53,7 @@ Route::view('/oficina/materiales/inventario', 'office.materials', [
     'navigationOffice' => 'inventario',
     'materialsSection' => 'inventario',
 ]);
+Route::view('/oficina/materiales/bodegas', 'office.material-physical-warehouses');
 Route::view('/oficina/materiales/almacenes', 'office.material-warehouses');
 Route::view('/oficina/materiales/tomas', 'office.material-inventory-counts');
 Route::view('/oficina/materiales/despachos', 'office.materials', [

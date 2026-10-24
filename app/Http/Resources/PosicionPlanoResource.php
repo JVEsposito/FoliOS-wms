@@ -6,6 +6,7 @@ use App\Enums\EstadoCarga;
 use App\Enums\TipoBulto;
 use App\Models\Folio;
 use App\Models\UbicacionActual;
+use App\Services\Materiales\StockMaterialEnPlano;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -155,10 +156,10 @@ class PosicionPlanoResource extends JsonResource
                     'categoria' => $folio->material->item->categoria,
                 ],
                 'cantidad_inicial' => $folio->material->cantidad_inicial,
-                'cantidad_actual' => $folio->material->cantidad_actual,
-                'cantidad_reservada' => $folio->material->cantidad_reservada,
+                'cantidad_actual' => app(StockMaterialEnPlano::class)->cantidades($folio->id, $ubicacion->camara_id, $ubicacion->posicion_id)['actual'],
+                'cantidad_reservada' => app(StockMaterialEnPlano::class)->cantidades($folio->id, $ubicacion->camara_id, $ubicacion->posicion_id)['reservada'],
                 'cantidad_disponible' => number_format(
-                    max(0, (float) $folio->material->cantidad_actual - (float) $folio->material->cantidad_reservada),
+                    max(0, (float) app(StockMaterialEnPlano::class)->cantidades($folio->id, $ubicacion->camara_id, $ubicacion->posicion_id)['actual'] - (float) app(StockMaterialEnPlano::class)->cantidades($folio->id, $ubicacion->camara_id, $ubicacion->posicion_id)['reservada']),
                     3,
                     '.',
                     '',

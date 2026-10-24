@@ -26,6 +26,7 @@ class ResumenDespachoMaterialResource extends JsonResource
             'modalidad' => $this->modalidad,
             'estado' => $this->estado->value,
             'asignado_a_user_id' => $this->asignado_a_user_id,
+            'almacen_origen' => $this->whenLoaded('almacenOrigen', fn () => $this->almacenOrigen?->only(['id', 'codigo', 'nombre', 'requiere_ubicacion_fisica'])),
             'destino' => [
                 'id' => $this->destino_material_id,
                 'nombre' => $this->destino_nombre,

@@ -7,7 +7,7 @@ use App\Enums\ContenidoCamara;
 use App\Enums\EstadoCamara;
 use App\Enums\EstadoOperacionalFolio;
 use App\Enums\EstadoPosicion;
-use App\Models\AlmacenMaterial;
+use App\Enums\TipoAlmacenMaterial;
 use App\Models\FolioMaterial;
 use App\Models\SaldoMaterialAlmacen;
 use Closure;
@@ -34,7 +34,9 @@ class ServicioReservaFifoMaterialDistribuido extends ServicioReservaFifoMaterial
         float $cantidadRequerida,
         Closure $registrarReserva,
         ?array $categoriasOperacionales = null,
+        ?string $almacenOrigenId = null,
     ): float {
+        $bodega = $this->almacenes->origenDespacho($almacenOrigenId);
         $pendiente = round($cantidadRequerida, 3);
         $ordenFifo = 1;
 
@@ -42,6 +44,7 @@ class ServicioReservaFifoMaterialDistribuido extends ServicioReservaFifoMaterial
             $saldo = $this->siguienteDisponibleBloqueado(
                 $itemMaterialId,
                 $categoriasOperacionales,
+                $bodega->id,
             );
 
             if (! $saldo) {
@@ -86,11 +89,13 @@ class ServicioReservaFifoMaterialDistribuido extends ServicioReservaFifoMaterial
     private function siguienteDisponibleBloqueado(
         string $itemMaterialId,
         ?array $categoriasOperacionales,
+        string $almacenOrigenId,
     ): ?SaldoMaterialAlmacen {
         while (true) {
             $candidato = $this->consultaCandidatos(
                 $itemMaterialId,
                 $categoriasOperacionales,
+                $almacenOrigenId,
             )
                 ->first([
                     'saldos_materiales_almacenes.id',
@@ -113,6 +118,7 @@ class ServicioReservaFifoMaterialDistribuido extends ServicioReservaFifoMaterial
                 $saldo,
                 $folio,
                 $categoriasOperacionales,
+                $almacenOrigenId,
             )) {
                 continue;
             }
@@ -127,6 +133,7 @@ class ServicioReservaFifoMaterialDistribuido extends ServicioReservaFifoMaterial
     private function consultaCandidatos(
         string $itemMaterialId,
         ?array $categoriasOperacionales,
+        string $almacenOrigenId,
     ): Builder {
         $categorias = $this->normalizarCategorias($categoriasOperacionales);
 
@@ -156,7 +163,8 @@ class ServicioReservaFifoMaterialDistribuido extends ServicioReservaFifoMaterial
                 '=',
                 'saldos_materiales_almacenes.posicion_id',
             )
-            ->where('am.codigo', AlmacenMaterial::CODIGO_BODEGA_CENTRAL)
+            ->where('am.id', $almacenOrigenId)
+            ->where('am.tipo', 'fisica')
             ->where('am.activo', true)
             ->where('fm.item_material_id', $itemMaterialId)
             ->when($categorias !== [], fn (Builder $consulta) => $consulta
@@ -169,14 +177,10 @@ class ServicioReservaFifoMaterialDistribuido extends ServicioReservaFifoMaterial
             ->tap(fn ($consulta) => ServicioVencimientoMaterial::filtrarVigentes($consulta, 'fm.fecha_vencimiento'))
             ->whereNull('fm.motivo_bloqueo')
             ->where('f.activo', true)
-            ->where('f.estado_operacional', EstadoOperacionalFolio::Disponible->value)
-            ->where('ca.contenido', ContenidoCamara::Materiales->value)
-            ->where('ca.estado', EstadoCamara::Activa->value)
-            ->where(function (Builder $ubicacion): void {
-                $ubicacion
-                    ->whereNull('saldos_materiales_almacenes.posicion_id')
-                    ->orWhere('p.estado', EstadoPosicion::Activa->value);
-            })
+            ->whereIn('f.estado_operacional', [EstadoOperacionalFolio::Disponible->value, EstadoOperacionalFolio::PendienteUbicacion->value])
+            ->where(fn (Builder $q) => $q->where('am.requiere_ubicacion_fisica', false)->orWhere(fn (Builder $q) => $q
+                ->where('ca.contenido', ContenidoCamara::Materiales->value)->where('ca.estado', EstadoCamara::Activa->value)
+                ->where(fn (Builder $p) => $p->whereNull('saldos_materiales_almacenes.posicion_id')->orWhere('p.estado', EstadoPosicion::Activa->value))))
             ->orderByRaw('fm.fecha_vencimiento IS NULL')
             ->orderBy('fm.fecha_vencimiento')
             ->orderByRaw('fm.fecha_fabricacion IS NULL')
@@ -190,24 +194,25 @@ class ServicioReservaFifoMaterialDistribuido extends ServicioReservaFifoMaterial
         SaldoMaterialAlmacen $saldo,
         FolioMaterial $folio,
         ?array $categoriasOperacionales,
+        string $almacenOrigenId,
     ): bool {
         $categorias = $this->normalizarCategorias($categoriasOperacionales);
 
-        return $saldo->almacen?->codigo === AlmacenMaterial::CODIGO_BODEGA_CENTRAL
+        return $saldo->almacen_material_id === $almacenOrigenId && $saldo->almacen?->tipo === TipoAlmacenMaterial::Fisica
             && $saldo->almacen?->activo
             && $saldo->cantidadDisponible() > 0
             && ! $folio->estaVencido()
             && $folio->motivo_bloqueo === null
             && $folio->folio?->activo
-            && $folio->folio?->estado_operacional === EstadoOperacionalFolio::Disponible
+            && in_array($folio->folio?->estado_operacional, [EstadoOperacionalFolio::Disponible, EstadoOperacionalFolio::PendienteUbicacion], true)
             && ($categorias === [] || in_array(
                 $folio->categoria_operacional?->value,
                 $categorias,
                 true,
             ))
-            && $saldo->camara?->contenido === ContenidoCamara::Materiales
-            && $saldo->camara?->estado === EstadoCamara::Activa
-            && (! $saldo->posicion || $saldo->posicion->estado === EstadoPosicion::Activa);
+            && (! $saldo->almacen->requiere_ubicacion_fisica || ($saldo->camara?->contenido === ContenidoCamara::Materiales
+                && $saldo->camara?->estado === EstadoCamara::Activa
+                && (! $saldo->posicion || $saldo->posicion->estado === EstadoPosicion::Activa)));
     }
 
     /**

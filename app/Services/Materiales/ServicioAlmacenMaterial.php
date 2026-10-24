@@ -67,6 +67,23 @@ class ServicioAlmacenMaterial
         return $consulta->firstOrFail();
     }
 
+    public function origenDespacho(?string $id, ?User $actor = null, bool $bloquear = false): AlmacenMaterial
+    {
+        if (! $id) {
+            $id = $this->bodegaCentral($actor, $bloquear)->id;
+        }
+        $q = AlmacenMaterial::whereKey($id)->where('tipo', TipoAlmacenMaterial::Fisica->value)->where('activo', true);
+        if ($bloquear) {
+            $q->lockForUpdate();
+        }
+        $almacen = $q->first();
+        if (! $almacen) {
+            throw new DomainException('La bodega de origen no existe, está inactiva o no es física.');
+        }
+
+        return $almacen;
+    }
+
     public function almacenDesdeDestino(DestinoMaterial $destino, User $actor): AlmacenMaterial
     {
         $almacen = AlmacenMaterial::query()->lockForUpdate()->findOrFail($destino->id);
@@ -182,6 +199,28 @@ class ServicioAlmacenMaterial
         }, attempts: 3);
     }
 
+    private function saldoCompatibilidad(FolioMaterial $folio): SaldoMaterialAlmacen
+    {
+        $ubicados = SaldoMaterialAlmacen::where('folio_id', $folio->folio_id)->where('cantidad_actual', '>', 0)
+            ->whereNotNull('camara_id')->whereHas('almacen', fn ($q) => $q->where('tipo', 'fisica'))->lockForUpdate()->get();
+        if ($ubicados->count() > 1) {
+            throw new DomainException('El folio tiene más de una existencia en plano. Usa el inventario por bodegas para regularizar su ubicación.');
+        }
+        if ($ubicados->isNotEmpty()) {
+            return $ubicados->first();
+        }
+        $pendientes = SaldoMaterialAlmacen::where('folio_id', $folio->folio_id)->where('cantidad_actual', '>', 0)
+            ->whereHas('almacen', fn ($q) => $q->where('tipo', 'fisica')->where('requiere_ubicacion_fisica', true))->lockForUpdate()->get();
+        if ($pendientes->count() === 1) {
+            return $pendientes->first();
+        }
+        if ($pendientes->count() > 1) {
+            throw new DomainException('Hay varias existencias pendientes de ubicación. Usa el inventario por bodegas.');
+        }
+
+        return $this->saldo($folio, $this->bodegaCentral(bloquear: true));
+    }
+
     public function aplicarCambioLegado(FolioMaterial $folio): void
     {
         $deltaActual = round(
@@ -202,8 +241,7 @@ class ServicioAlmacenMaterial
                 ->with('folio')
                 ->lockForUpdate()
                 ->findOrFail($folio->folio_id);
-            $bodega = $this->bodegaCentral(bloquear: true);
-            $saldo = $this->saldo($bloqueado, $bodega);
+            $saldo = $this->saldoCompatibilidad($bloqueado);
             $cantidadActual = round((float) $saldo->cantidad_actual + $deltaActual, 3);
             $cantidadReservada = round(
                 (float) $saldo->cantidad_reservada + $deltaReservada,
@@ -269,8 +307,7 @@ class ServicioAlmacenMaterial
                 ->with('folio.ubicacionActual')
                 ->lockForUpdate()
                 ->findOrFail($folio->folio_id);
-            $bodega = $this->bodegaCentral(bloquear: true);
-            $saldo = $this->saldo($folio, $bodega);
+            $saldo = $this->saldoCompatibilidad($folio);
             $ubicacion = $folio->folio?->ubicacionActual;
 
             $saldo->update([
@@ -306,18 +343,8 @@ class ServicioAlmacenMaterial
 
     private function sincronizarUbicacionCompatibilidad(FolioMaterial $folio): void
     {
-        $bodega = AlmacenMaterial::query()
-            ->where('codigo', AlmacenMaterial::CODIGO_BODEGA_CENTRAL)
-            ->first();
-
-        if (! $bodega) {
-            return;
-        }
-
-        $saldo = SaldoMaterialAlmacen::query()
-            ->where('folio_id', $folio->folio_id)
-            ->where('almacen_material_id', $bodega->id)
-            ->first();
+        $saldo = SaldoMaterialAlmacen::where('folio_id', $folio->folio_id)->where('cantidad_actual', '>', 0)
+            ->whereNotNull('camara_id')->whereHas('almacen', fn ($q) => $q->where('tipo', 'fisica'))->first();
 
         if (! $saldo || (float) $saldo->cantidad_actual <= 0 || ! $saldo->camara_id) {
             UbicacionActual::withoutEvents(fn () => UbicacionActual::query()
@@ -354,21 +381,10 @@ class ServicioAlmacenMaterial
             return;
         }
 
-        $bodega = AlmacenMaterial::query()
-            ->where('codigo', AlmacenMaterial::CODIGO_BODEGA_CENTRAL)
-            ->first();
-        $saldoBodega = $bodega
-            ? SaldoMaterialAlmacen::query()
-                ->where('folio_id', $folio->folio_id)
-                ->where('almacen_material_id', $bodega->id)
-                ->first()
-            : null;
-        $estado = $folio->motivo_bloqueo
-            ? EstadoOperacionalFolio::Bloqueado
-            : ((float) ($saldoBodega?->cantidad_actual ?? 0) > 0
-                && ! $saldoBodega?->camara_id
-                    ? EstadoOperacionalFolio::PendienteUbicacion
-                    : EstadoOperacionalFolio::Disponible);
+        $pendiente = SaldoMaterialAlmacen::where('folio_id', $folio->folio_id)->where('cantidad_actual', '>', 0)->whereNull('camara_id')
+            ->whereHas('almacen', fn ($q) => $q->where('tipo', 'fisica')->where('requiere_ubicacion_fisica', true))->exists();
+        $estado = $folio->motivo_bloqueo ? EstadoOperacionalFolio::Bloqueado
+            : ($pendiente ? EstadoOperacionalFolio::PendienteUbicacion : EstadoOperacionalFolio::Disponible);
 
         if (! $folio->folio->activo || $folio->folio->estado_operacional !== $estado) {
             $folio->folio->update([

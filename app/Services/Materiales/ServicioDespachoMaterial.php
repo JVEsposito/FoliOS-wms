@@ -25,6 +25,7 @@ use App\Models\MovimientoInventarioMaterial;
 use App\Models\OperacionRetiroMaterial;
 use App\Models\ReservaMaterial;
 use App\Models\RetiroMaterial;
+use App\Models\SaldoMaterialAlmacen;
 use App\Models\SesionEstiba;
 use App\Models\UbicacionActual;
 use App\Models\User;
@@ -93,6 +94,11 @@ class ServicioDespachoMaterial
                 throw new DomainException('El destino no existe o se encuentra inactivo.');
             }
 
+            $bodega = app(ServicioAlmacenMaterial::class)->origenDespacho($datos['almacen_origen_id'] ?? null, $usuario, bloquear: true);
+            if ($destino->tipo !== 'virtual') {
+                throw new DomainException('El destino de una entrega debe ser un centro de costo virtual.');
+            }
+
             $asignado = isset($datos['asignado_a_user_id'])
                 ? User::query()->find($datos['asignado_a_user_id']) : null;
             if (isset($datos['asignado_a_user_id'])
@@ -111,6 +117,7 @@ class ServicioDespachoMaterial
                 'modalidad' => $datos['modalidad'] ?? 'delegado',
                 'asignado_a_user_id' => $asignado?->id,
                 'estado' => EstadoDespachoMaterial::Pendiente,
+                'almacen_origen_id' => $bodega->id,
                 'destino_material_id' => $destino->id,
                 'destino_nombre' => $destino->nombre,
                 'destino_centro_costo' => $destino->centro_costo,
@@ -586,6 +593,7 @@ class ServicioDespachoMaterial
     public function cargarColeccionResumen(EloquentCollection $despachos): EloquentCollection
     {
         $despachos->load([
+            'almacenOrigen',
             'operacionesRetiro.usuario:id,name',
             'operacionesRetiro.autorizadoPor:id,name',
             'operacionesRetiro.regularizadoPor:id,name',
@@ -609,6 +617,7 @@ class ServicioDespachoMaterial
     public function cargarColeccionOperacion(EloquentCollection $despachos): EloquentCollection
     {
         $despachos->load([
+            'almacenOrigen',
             'operacionesRetiro.usuario:id,name',
             'operacionesRetiro.autorizadoPor:id,name',
             'operacionesRetiro.regularizadoPor:id,name',
@@ -619,6 +628,8 @@ class ServicioDespachoMaterial
                 ->where('estado', EstadoReservaMaterial::Activa->value)
                 ->orderBy('orden_fifo'),
             'detalles.reservas.folioMaterial.folio.ubicacionActual.posicion.camara',
+            'detalles.reservas.saldoAlmacen.camara',
+            'detalles.reservas.saldoAlmacen.posicion',
         ]);
 
         return $despachos;
@@ -630,6 +641,7 @@ class ServicioDespachoMaterial
     private function relacionesCarga(): array
     {
         return [
+            'almacenOrigen',
             'operacionesRetiro.usuario:id,name',
             'operacionesRetiro.autorizadoPor:id,name',
             'operacionesRetiro.regularizadoPor:id,name',
@@ -649,6 +661,8 @@ class ServicioDespachoMaterial
                 ->where('estado', EstadoReservaMaterial::Activa->value)
                 ->orderBy('orden_fifo'),
             'detalles.reservas.folioMaterial.folio.ubicacionActual.posicion.camara',
+            'detalles.reservas.saldoAlmacen.camara',
+            'detalles.reservas.saldoAlmacen.posicion',
             'detalles.historialReservas.folioMaterial.folio',
             'detalles.retiros.folioMaterial.folio',
             'detalles.retiros.camara:id,codigo,nombre',
@@ -705,6 +719,8 @@ class ServicioDespachoMaterial
                     'orden_fifo' => $orden,
                 ]);
             },
+            null,
+            $detalle->despacho->almacen_origen_id,
         );
         if ((float) $detalle->cantidad_sin_reserva_por_vencimiento > 0) {
             $detalle->update(['cantidad_sin_reserva_por_vencimiento' => $faltante]);
@@ -725,12 +741,16 @@ class ServicioDespachoMaterial
 
         foreach ($reservas as $reserva) {
             $folio = FolioMaterial::query()->lockForUpdate()->findOrFail($reserva->folio_id);
-            $folio->update([
-                'cantidad_reservada' => max(
-                    0,
-                    round((float) $folio->cantidad_reservada - (float) $reserva->cantidad, 3),
-                ),
-            ]);
+            if ($reserva->saldo_material_almacen_id) {
+                $saldo = SaldoMaterialAlmacen::whereKey($reserva->saldo_material_almacen_id)->lockForUpdate()->firstOrFail();
+                if ($saldo->folio_id !== $folio->folio_id || (float) $reserva->cantidad > (float) $saldo->cantidad_reservada + 0.0001) {
+                    throw new DomainException('La reserva no coincide con el saldo de su bodega.');
+                }
+                $saldo->update(['cantidad_reservada' => round((float) $saldo->cantidad_reservada - (float) $reserva->cantidad, 3)]);
+                app(ServicioAlmacenMaterial::class)->sincronizarProyeccion($folio);
+            } else {
+                $folio->update(['cantidad_reservada' => max(0, round((float) $folio->cantidad_reservada - (float) $reserva->cantidad, 3))]);
+            }
             $reserva->update(['estado' => EstadoReservaMaterial::Liberada]);
         }
 

@@ -36,6 +36,7 @@ class DespachoMaterialResource extends JsonResource
                 'motivo' => $asignacion->motivo,
                 'created_at' => $asignacion->created_at?->toAtomString(),
             ])->values()),
+            'almacen_origen' => $this->whenLoaded('almacenOrigen', fn () => $this->almacenOrigen?->only(['id', 'codigo', 'nombre', 'requiere_ubicacion_fisica'])),
             'destino' => [
                 'id' => $this->destino_material_id,
                 'nombre' => $this->destino_nombre,
@@ -102,8 +103,9 @@ class DespachoMaterialResource extends JsonResource
                             ? $detalle->reservas->map(function ($reserva): array {
                                 $folio = $reserva->folioMaterial->folio;
                                 $ubicacion = $folio->ubicacionActual;
-                                $posicion = $ubicacion?->posicion;
-                                $camara = $ubicacion?->camara ?? $posicion?->camara;
+                                $saldo = $reserva->saldoAlmacen;
+                                $posicion = $saldo ? $saldo->posicion : $ubicacion?->posicion;
+                                $camara = $saldo ? $saldo->camara : ($ubicacion?->camara ?? $posicion?->camara);
 
                                 return [
                                     'folio_id' => $folio->id,

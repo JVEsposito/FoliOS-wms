@@ -27,7 +27,6 @@ use App\Models\ReservaMaterial;
 use App\Models\RetiroMaterial;
 use App\Models\SaldoMaterialAlmacen;
 use App\Models\SesionEstiba;
-use App\Models\UbicacionActual;
 use App\Models\User;
 use App\Services\Autorizacion\AlcanceOperacionalUsuario;
 use App\Services\Notificaciones\ServicioNotificacionesOperacionales;
@@ -104,6 +103,7 @@ class ServicioDespachoMaterialDistribuido extends ServicioDespachoMaterial
                 'destino_material_id' => $datos['destino_material_id'],
                 'observacion' => $datos['observacion'] ?? null,
                 'items' => $items,
+                ...(isset($datos['almacen_origen_id']) ? ['almacen_origen_id' => $datos['almacen_origen_id']] : []),
             ], $usuario, null, notificar: false);
             if ($despacho->modalidad !== 'directo') {
                 $despacho->update(['modalidad' => 'directo']);
@@ -214,7 +214,7 @@ class ServicioDespachoMaterialDistribuido extends ServicioDespachoMaterial
                 throw new DomainException('El destino de la solicitud ya no está activo.');
             }
 
-            $bodega = $this->almacenes->bodegaCentral($usuario, bloquear: true);
+            $bodega = $this->almacenes->origenDespacho($despacho->almacen_origen_id, $usuario, bloquear: true);
             $almacenDestino = $this->almacenes->almacenDesdeDestino(
                 $destinoCatalogo,
                 $usuario,
@@ -260,7 +260,7 @@ class ServicioDespachoMaterialDistribuido extends ServicioDespachoMaterial
 
                 if (! $folioMaterial->folio?->activo
                     || $folioMaterial->motivo_bloqueo !== null
-                    || $folioMaterial->folio->estado_operacional !== EstadoOperacionalFolio::Disponible) {
+                    || ! in_array($folioMaterial->folio->estado_operacional, [EstadoOperacionalFolio::Disponible, EstadoOperacionalFolio::PendienteUbicacion], true)) {
                     throw new DomainException(
                         'El folio se encuentra bloqueado o no está disponible para entrega.',
                     );
@@ -299,7 +299,7 @@ class ServicioDespachoMaterialDistribuido extends ServicioDespachoMaterial
 
                 if (! $saldoOrigen) {
                     throw new DomainException(
-                        'El folio no posee saldo bajo custodia de Bodega Central.',
+                        'El folio no posee saldo en la bodega de origen de esta orden.',
                     );
                 }
 
@@ -318,17 +318,17 @@ class ServicioDespachoMaterialDistribuido extends ServicioDespachoMaterial
                 $camara = $saldoOrigen->camara;
                 $posicion = $saldoOrigen->posicion;
 
-                if (! $camara
+                if ($bodega->requiere_ubicacion_fisica && (! $camara
                     || $camara->contenido !== ContenidoCamara::Materiales
                     || $camara->estado !== EstadoCamara::Activa
-                    || ($posicion && $posicion->estado !== EstadoPosicion::Activa)) {
+                    || ($posicion && $posicion->estado !== EstadoPosicion::Activa))) {
                     throw new DomainException(
                         'El saldo de Bodega no posee una ubicación material válida.',
                     );
                 }
 
                 $sesion = null;
-                if ($requiereSesion) {
+                if ($requiereSesion && $bodega->requiere_ubicacion_fisica) {
                     $sesion = SesionEstiba::query()
                         ->lockForUpdate()
                         ->findOrFail($datosRetiro['sesion_estiba_id'] ?? null);
@@ -352,7 +352,7 @@ class ServicioDespachoMaterialDistribuido extends ServicioDespachoMaterial
 
                 $saldoOrigen->update([
                     'cantidad_actual' => $origenResultante,
-                    'camara_id' => $origenResultante > 0 ? $camara->id : null,
+                    'camara_id' => $origenResultante > 0 ? $camara?->id : null,
                     'posicion_id' => $origenResultante > 0 ? $posicion?->id : null,
                 ]);
                 $saldoDestino->update([
@@ -368,7 +368,7 @@ class ServicioDespachoMaterialDistribuido extends ServicioDespachoMaterial
                     'cantidad_anterior' => $origenAnterior,
                     'cantidad_retirada' => $cantidad,
                     'cantidad_resultante' => $origenResultante,
-                    'camara_id' => $camara->id,
+                    'camara_id' => $camara?->id,
                     'posicion_id' => $posicion?->id,
                     'user_id' => $usuario->id,
                     'dispositivo_id' => $dispositivo?->id,
@@ -400,7 +400,7 @@ class ServicioDespachoMaterialDistribuido extends ServicioDespachoMaterial
                     'metadatos' => [
                         'siguio_fifo' => $siguioFifo,
                         'motivo_excepcion_fifo' => $siguioFifo ? null : $motivoExcepcionFifo,
-                        'camara_origen' => $camara->codigo,
+                        'camara_origen' => $camara?->codigo,
                         'posicion_origen' => $posicion?->etiqueta,
                         'existencia_total_empresa' => (float) $folioMaterial->cantidad_actual,
                         'origen_operacion' => $requiereSesion ? 'tablet' : 'oficina',
@@ -432,17 +432,10 @@ class ServicioDespachoMaterialDistribuido extends ServicioDespachoMaterial
                 $retiradoPorDetalle[$detalle->id] = $yaRetirado + $cantidad;
                 $sesion?->update(['ultima_actividad_at' => now()]);
 
-                if ($origenResultante <= 0.0001) {
-                    UbicacionActual::query()
-                        ->where('folio_id', $folioMaterial->folio_id)
-                        ->delete();
+                $this->almacenes->sincronizarProyeccion($folioMaterial);
+                if ($origenResultante <= 0.0001 && $camara) {
                     $camara->increment('version_plano');
                 }
-
-                $folioMaterial->folio->update([
-                    'estado_operacional' => EstadoOperacionalFolio::Disponible,
-                    'activo' => true,
-                ]);
             }
 
             foreach ($retiradoPorDetalle as $detalleId => $cantidad) {
@@ -491,12 +484,16 @@ class ServicioDespachoMaterialDistribuido extends ServicioDespachoMaterial
             $folio = FolioMaterial::query()
                 ->lockForUpdate()
                 ->findOrFail($reserva->folio_id);
-            $folio->update([
-                'cantidad_reservada' => max(
-                    0,
-                    round((float) $folio->cantidad_reservada - (float) $reserva->cantidad, 3),
-                ),
-            ]);
+            if ($reserva->saldo_material_almacen_id) {
+                $saldo = SaldoMaterialAlmacen::whereKey($reserva->saldo_material_almacen_id)->lockForUpdate()->firstOrFail();
+                if ($saldo->folio_id !== $folio->folio_id || (float) $reserva->cantidad > (float) $saldo->cantidad_reservada + 0.0001) {
+                    throw new DomainException('La reserva no coincide con el saldo de su bodega.');
+                }
+                $saldo->update(['cantidad_reservada' => round((float) $saldo->cantidad_reservada - (float) $reserva->cantidad, 3)]);
+                app(ServicioAlmacenMaterial::class)->sincronizarProyeccion($folio);
+            } else {
+                $folio->update(['cantidad_reservada' => max(0, round((float) $folio->cantidad_reservada - (float) $reserva->cantidad, 3))]);
+            }
             $reserva->update(['estado' => EstadoReservaMaterial::Liberada]);
         }
 
@@ -530,6 +527,8 @@ class ServicioDespachoMaterialDistribuido extends ServicioDespachoMaterial
                     'orden_fifo' => $orden,
                 ]);
             },
+            null,
+            $detalle->despacho->almacen_origen_id,
         );
         if ((float) $detalle->cantidad_sin_reserva_por_vencimiento > 0) {
             $detalle->update(['cantidad_sin_reserva_por_vencimiento' => $faltante]);

@@ -349,6 +349,7 @@ export type MaterialDelivery = {
 
 export type MaterialDispatch = {
   entregas?: MaterialDelivery[];
+  almacen_origen?: { id: string; codigo: string; nombre: string; requiere_ubicacion_fisica: boolean } | null;
   id: string;
   codigo: string;
   origen: 'oficina' | 'tablet';
@@ -727,7 +728,7 @@ export type WithdrawMaterialPayload = {
   registro?: MaterialDispatchRegistrationInput;
   operacion_id: string;
   motivo_excepcion_fifo?: string;
-  retiros: Array<{ folio_id: string; cantidad: number; sesion_estiba_id: string }>;
+  retiros: Array<{ folio_id: string; cantidad: number; sesion_estiba_id?: string }>;
 };
 
 export type MovePayload = {
