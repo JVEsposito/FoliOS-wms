@@ -1,3 +1,4 @@
+import { createUuid as uuid } from './shared/uuid.js';
 const tokenKey = 'estiba_wms_office_token';
 const identityKey = 'estiba_wms_office_identity';
 const state = {
@@ -31,12 +32,6 @@ const dateTime = (value) => value
         timeStyle: 'short',
     }).format(new Date(value))
     : '—';
-const uuid = () => crypto.randomUUID
-    ? crypto.randomUUID()
-    : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (character) => {
-        const random = Math.random() * 16 | 0;
-        return (character === 'x' ? random : (random & 3 | 8)).toString(16);
-    });
 
 try {
     state.identity = JSON.parse(localStorage.getItem(identityKey) || 'null');

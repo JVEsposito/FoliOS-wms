@@ -1,3 +1,4 @@
+import { createUuid } from './shared/uuid.js';
 import { initSupplierAccounts } from './office-finance-supplier-accounts';
 const $ = (id) => document.getElementById(id);
 const escape = (value) => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
@@ -101,7 +102,7 @@ $('cpDocumentForm').elements.fecha_recepcion.addEventListener('change', (e) => {
 $('cpDocumentForm').addEventListener('submit', (e) => { e.preventDefault(); submit(e.target, async () => {
     const f = e.target; const data = Object.fromEntries(new FormData(f)); data.proveedor_id = state.selected.id; data.guias = [...$('cpGuideReferences').selectedOptions].map((o) => o.value); data.referencia_id ||= null;
     data.lineas = [...$('cpCostLines').children].map((row) => Object.fromEntries([...row.querySelectorAll('[data-line]')].map((input) => [input.dataset.line, input.value])));
-    if (state.document && !state.document.correction) data.version = state.document.version; else { f.dataset.operation ||= crypto.randomUUID(); data.operacion_id = f.dataset.operation; }
+    if (state.document && !state.document.correction) data.version = state.document.version; else { f.dataset.operation ||= createUuid(); data.operacion_id = f.dataset.operation; }
     if (state.document?.correction) data.reemplaza_id = state.document.id;
     const editing = state.document && !state.document.correction;
     await api(editing ? `${url}/documentos/${state.document.id}` : `${url}/documentos`, editing ? 'PUT' : 'POST', data); await loadDocuments(1); message('Borrador guardado. Revíselo antes de contabilizar.');

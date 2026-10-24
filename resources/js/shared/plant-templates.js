@@ -1,3 +1,5 @@
+import { createUuid } from './uuid.js';
+
 // Planos base: la geometría real de una planta para no dibujarla a mano en el editor.
 // Las coordenadas van de 0 a 10000 en cada eje y la proporción (ancho/alto) conserva la
 // forma del dibujo. Cada recinto declara tipo y número; al cargarlo se enlaza con el
@@ -136,7 +138,7 @@ function linkLabel(item) {
  * que un recinto de FoliOS (el «Altillo», por ejemplo) pasa a ser ese recinto. Devuelve
  * cada enlace para revisarlo, lo que quedó por asignar y lo que FoliOS tiene y el dibujo no.
  */
-export function buildPlantFromTemplate(template, catalog = [], { uuid = () => globalThis.crypto.randomUUID() } = {}) {
+export function buildPlantFromTemplate(template, catalog = [], { uuid = createUuid } = {}) {
     const used = new Set();
     const links = new Map();
     const assigned = [];

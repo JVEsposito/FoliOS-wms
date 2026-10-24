@@ -10,12 +10,13 @@ async function fixture({ width = 1366, can = true, lost = false } = {}) {
     const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined, args: ['--no-sandbox', '--disable-gpu'] });
     const context = await browser.newContext({ viewport: { width, height: 1000 } }); const page = await context.newPage(); const writes = []; const errors = [];
     let rows = [{ id: 'r1', nombre: 'Insumos <Norte>', prioridad: 10, cliente_id: null, cliente: null, categoria_operacional: 'insumo', almacen_material_id: 'w1', bodega: 'Bodega Norte', bodega_activa: 1, activo: 1, version: 3 }];
-    await context.addInitScript(({ width }) => { localStorage.setItem('estiba_wms_office_token', 'token'); localStorage.setItem('estiba_wms_office_theme', width === 390 ? 'dark-industrial' : 'light-professional'); Object.defineProperty(crypto, 'randomUUID', { value: undefined }); }, { width });
+    await context.addInitScript(({ width }) => { localStorage.setItem('estiba_wms_office_token', 'token'); localStorage.setItem('estiba_wms_office_theme', width === 390 ? 'dark-industrial' : 'light-professional'); }, { width });
     page.on('pageerror', e => errors.push(e.message));
-    await context.route('http://localhost/**', async route => {
+    await context.route('http://folios.test/**', async route => {
         const req = route.request(); const path = new URL(req.url()).pathname;
         if (path === '/test') return route.fulfill({ body: html, contentType: 'text/html' });
         if (path.startsWith('/build/')) return route.fulfill({ body: readFileSync(resolve(root, 'public' + path)), contentType: path.endsWith('.css') ? 'text/css' : 'application/octet-stream' });
+        if (path === '/shared/uuid.js') return route.fulfill({ body: readFileSync(resolve(root, 'resources/js/shared/uuid.js')), contentType: 'text/javascript' });
         if (path === '/office-material-routing.js') return route.fulfill({ body: readFileSync(resolve(root, 'resources/js/office-material-routing.js')), contentType: 'text/javascript' });
         if (path.endsWith('/historial')) return route.fulfill({ json: { data: [{ id: 'e1', usuario: 'Ana Pérez', motivo: '<b>Redistribuir ingresos</b>', antes: null, despues: rows[0], ocurrido_at: '2026-10-24 13:00:00' }], meta: { pagina: 1, paginas: 1 } } });
         if (req.method() === 'POST' || req.method() === 'PUT') {
@@ -27,7 +28,7 @@ async function fixture({ width = 1366, can = true, lost = false } = {}) {
         if (path === '/api/materiales/asignacion-bodegas') return route.fulfill({ json: { data: rows, meta: { pagina: 1, paginas: 1 }, puede_configurar: can, almacenes: [{ id: 'w1', codigo: 'BOD-N', nombre: 'Bodega Norte', activo: 1 }], clientes: [{ id: 'c1', codigo: 'CLI', nombre: 'Cliente de prueba' }] } });
         return route.fulfill({ status: 404 });
     });
-    await page.goto('http://localhost/test');
+    await page.goto('http://folios.test/test');
     await page.evaluate(async () => { document.querySelector('[data-office-shell]')?.remove(); await import('/office-material-routing.js'); });
     await page.locator('#routingPanel > summary').click(); await page.locator('#routingRows').filter({ hasText: 'Insumos <Norte>' }).waitFor();
     return { browser, page, writes, errors };

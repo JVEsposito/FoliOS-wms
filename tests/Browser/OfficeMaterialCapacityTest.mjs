@@ -11,19 +11,20 @@ const pallet = { id: 'p1', codigo: 'P-1', nombre: '<Pallet>', largo_m: 1.2, anch
 const zone = { id: 'z1', nombre: 'Zona A', x_m: 0, y_m: 0, largo_m: 6, ancho_m: 4, altura_util_m: 3, max_niveles: 1, permite_giro: true, limite_pallets: null, peso_maximo_kg: 500, tipo_pallet_ids: ['p1'], modo: 'piso' };
 const stock = { saldo_id: 's1', saldo_version_actual: 8, id: null, folio: 'FM-1', item: 'Cajas', cantidad_actual: 120, unidad_medida: 'unidades', medidas_vigentes: false };
 function simulation() { return { data: { pallets_referencia: 20, aviso: 'Referencia sin descontar ocupación.', zonas: [{ nombre: 'Zona A', modo: 'piso', puestos: 20, niveles: 1, pallets_referencia: 20, superficie_util_m2: 24, volumen_util_m3: 72, estado: 'referencia', motivos: [] }] } }; }
-async function fixture({ write = false, intercept, mobile = false } = {}) {
+async function fixture({ write = false, intercept, mobile = false, configured = true } = {}) {
     const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined, args: ['--no-sandbox', '--disable-gpu'] });
     const context = await browser.newContext({ viewport: { width: mobile ? 390 : 1440, height: 1000 } });
     const page = await context.newPage(); const calls = []; const errors = [];
-    let config = { largo_m: 10, ancho_m: 8, altura_util_m: 4, zonas: [structuredClone(zone)], superficie_util_m2: 24, volumen_util_m3: 72, version: 1 };
+    let config = configured ? { largo_m: 10, ancho_m: 8, altura_util_m: 4, zonas: [structuredClone(zone)], superficie_util_m2: 24, volumen_util_m3: 72, version: 1 } : null;
     let types = [structuredClone(pallet)]; let currentStock = structuredClone(stock);
     let warehouses = [{ id: 'w1', nombre: 'Central', codigo: 'BOD-CENTRAL', activo: true, version_bodega: 1 }];
     page.on('pageerror', (error) => errors.push(error.message));
     await context.addInitScript(() => localStorage.setItem('estiba_wms_office_token', 'test-token'));
-    await context.route('http://localhost/**', async (route) => {
+    await context.route('http://folios.test/**', async (route) => {
         const request = route.request(); const url = new URL(request.url());
         if (url.pathname === '/test') return route.fulfill({ body: html, contentType: 'text/html' });
         if (url.pathname.startsWith('/build/')) return route.fulfill({ body: readFileSync(resolve(root, 'public' + url.pathname)), contentType: url.pathname.endsWith('.css') ? 'text/css' : 'application/octet-stream' });
+        if (url.pathname === '/shared/uuid.js') return route.fulfill({ body: readFileSync(resolve(root, 'resources/js/shared/uuid.js')), contentType: 'text/javascript' });
         if (url.pathname === '/office-navigation.js') return route.fulfill({ body: '', contentType: 'text/javascript' });
         if (['/office-material-capacity.js', '/office-material-bodegas.js'].includes(url.pathname)) return route.fulfill({ body: readFileSync(resolve(root, 'resources/js' + url.pathname)), contentType: 'text/javascript' });
         const call = { path: url.pathname, method: request.method(), body: request.postDataJSON() }; calls.push(call);
@@ -46,11 +47,39 @@ async function fixture({ write = false, intercept, mobile = false } = {}) {
         if (url.pathname.endsWith('/tipos-pallet') && request.method() === 'POST') { const item = { id: 'p2', ...call.body, version: 1 }; types = [...types, item]; return route.fulfill({ status: 201, json: { data: item } }); }
         return route.fulfill({ status: 404 });
     });
-    await page.goto('http://localhost/test');
+    await page.goto('http://folios.test/test');
+    assert.deepEqual(await page.evaluate(() => ({ secure: isSecureContext, uuid: typeof crypto.randomUUID, random: typeof crypto.getRandomValues })), { secure: false, uuid: 'undefined', random: 'function' });
     await page.evaluate(async () => { document.querySelector('[data-office-shell]')?.remove(); await import('/office-material-capacity.js'); await import('/office-material-bodegas.js'); });
     await page.waitForFunction(() => document.getElementById('capacityStockRows').textContent.includes('FM-1'));
     return { browser, page, calls, errors };
 }
+
+test('HTTP de red local permite abrir una bodega sin configurar, agregar zonas y guardarlas', async () => {
+    const { browser, page, calls, errors } = await fixture({ write: true, configured: false });
+    try {
+        await page.locator('#capacityConfiguration > summary').click();
+        for (const [key, value] of Object.entries({ largo_m: '10', ancho_m: '8', altura_util_m: '4' })) {
+            await page.locator(`#capacityWarehouseForm [name="${key}"]`).fill(value);
+        }
+        await page.locator('#capacityAddZone').click();
+        const zones = page.locator('#capacityZones > fieldset');
+        assert.equal(await zones.count(), 2);
+        for (let index = 0; index < 2; index++) {
+            const values = { nombre: `Zona ${index + 1}`, x_m: String(index * 5), largo_m: '5', ancho_m: '8', altura_util_m: '4' };
+            for (const [key, value] of Object.entries(values)) await zones.nth(index).locator(`[data-zone-field="${key}"]`).fill(value);
+        }
+        const ids = await zones.evaluateAll((nodes) => nodes.map((node) => node.dataset.zoneId));
+        assert.notEqual(ids[0], ids[1]);
+        await page.locator('#capacitySaveWarehouse').click();
+        await page.waitForFunction(() => document.getElementById('capacityNotice').textContent.includes('Guardado y registrado'));
+        const saved = calls.find((call) => call.path.endsWith('/almacenes/w1') && call.method === 'PUT');
+        assert.equal(saved.body.version, 0);
+        assert.deepEqual(saved.body.zonas.map((zone) => zone.id), ids);
+        for (const id of [...ids, saved.body.operacion_id]) assert.match(id, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+        assert.deepEqual(await zones.evaluateAll((nodes) => nodes.map((node) => node.dataset.zoneId)), ids);
+        assert.deepEqual(errors, []);
+    } finally { await browser.close(); }
+});
 
 test('consulta en tablet permite simular y consultar historia sin habilitar escrituras', async () => {
     const { browser, page, calls, errors } = await fixture({ mobile: true });

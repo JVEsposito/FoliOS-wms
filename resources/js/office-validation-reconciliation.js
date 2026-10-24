@@ -1,3 +1,4 @@
+import { createUuid } from './shared/uuid.js';
 const $ = (id) => document.getElementById(id);
 const root = '/api/validacion/pendientes-origen/conciliaciones';
 const labels = { pendiente: 'Pendiente de cuadratura', en_revision: 'En revisión', cuadrado: 'Cuadrado', reabierto: 'Reabierto', sin_diferencias: 'Sin diferencias', por_revisar: 'Por revisar' };
@@ -85,7 +86,7 @@ export function initReconciliations(request, showNotice, getToken) {
     $('reconciliationDialog').addEventListener('cancel', (e) => { if (pending || working) e.preventDefault(); });
     $('reconciliationManagement').onsubmit = (e) => {
         e.preventDefault(); if (pending || working || !current) return;
-        pending = { id: current.id, data: { ...Object.fromEntries(new FormData(e.target)), operacion_id: crypto.randomUUID(), version: current.version } }; void send();
+        pending = { id: current.id, data: { ...Object.fromEntries(new FormData(e.target)), operacion_id: createUuid(), version: current.version } }; void send();
     };
     $('reconciliationRetry').onclick = () => void send();
     $('reconciliationCheck').onclick = async () => {

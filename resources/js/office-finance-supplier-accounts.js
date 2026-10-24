@@ -1,3 +1,4 @@
+import { createUuid } from './shared/uuid.js';
 export function initSupplierAccounts({ api, can, escape, table, options, button, message, open, pages, money, today, state, token, tab, submit, safely }) {
     const $ = (id) => document.getElementById(id); const base = '/api/finanzas/proveedores';
     let account = null; let reverse = null; let evaluations = [];
@@ -44,7 +45,7 @@ export function initSupplierAccounts({ api, can, escape, table, options, button,
     }
     function criterion(name = '', weight = 25, score = 3) { const row = document.createElement('div'); row.className = 'cp-criterion'; row.innerHTML = '<label>Criterio<input data-criterion="nombre" required maxlength="100"></label><label>Peso %<input data-criterion="peso" type="number" min="1" max="100" required></label><label>Nota 1 a 5<input data-criterion="nota" type="number" min="1" max="5" required></label><button type="button" class="secondary-button" data-cp-remove-criterion>Quitar</button>'; for (const [k, v] of Object.entries({ nombre: name, peso: weight, nota: score })) row.querySelector(`[data-criterion="${k}"]`).value = v; $('cpEvaluationCriteria').append(row); }
     for (const id of ['cpPaymentForm', 'cpApplyForm', 'cpEvaluationForm']) $(id).addEventListener('input', () => { delete $(id).dataset.operation; });
-    const operation = (f) => { f.dataset.operation ||= crypto.randomUUID(); return f.dataset.operation; };
+    const operation = (f) => { f.dataset.operation ||= createUuid(); return f.dataset.operation; };
     $('cpAccountFilters').elements.fecha_corte.value = today(); $('cpReportFilters').elements.desde.value = `${today().slice(0, 7)}-01`; $('cpReportFilters').elements.hasta.value = today(); $('cpPeriodForm').elements.mes.value = today().slice(0, 7);
     $('cpLedgerForm').onsubmit = (e) => { e.preventDefault(); safely(() => ledger()); };
     $('cpAccountFilters').onsubmit = (e) => { e.preventDefault(); safely(loadAccount); }; $('cpReportFilters').onsubmit = (e) => { e.preventDefault(); safely(reports); };
