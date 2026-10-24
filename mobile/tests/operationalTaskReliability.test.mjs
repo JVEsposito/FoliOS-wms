@@ -211,3 +211,19 @@ test('el movimiento iniciado impide tomar otra labor, también en tareas antigua
     assert.match(h.message(), /bajo custodia/);
   } finally { await h.unmount(); }
 });
+
+
+test('Una lectura vieja de turnos no reemplaza la configuración más reciente de la tablet', async () => {
+  const next = task({ id: 'new-turn-task', estado: 'pendiente' });
+  const h = harness({ initial: null, offered: [next] });
+  const older = deferred(); const newer = deferred(); let ownReads = 0;
+  h.controls.list = (assignment) => assignment === 'mias' ? (++ownReads === 1 ? older.promise : newer.promise) : Promise.resolve([next]);
+  await h.mount();
+  await h.flush(() => { h.props('OperatorTaskHome').onOpen({ source: 'available', task: next }); });
+  const current = { turno: { nombre: 'Turno actual' }, funciones: null, disponible: true, labor_actual: null, en_espera: [] };
+  await h.flush(() => newer.resolve(Object.assign([], { labores: current })));
+  assert.equal(h.props('OperatorTaskHome').shiftContext.turno.nombre, 'Turno actual');
+  await h.flush(() => older.resolve(Object.assign([], { labores: { ...current, turno: { nombre: 'Turno anterior' } } })));
+  assert.equal(h.props('OperatorTaskHome').shiftContext.turno.nombre, 'Turno actual');
+  await h.unmount();
+});

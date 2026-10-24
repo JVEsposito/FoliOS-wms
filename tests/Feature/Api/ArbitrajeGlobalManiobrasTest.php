@@ -15,14 +15,17 @@ use App\Jobs\RecalcularArbitrajePlanificador;
 use App\Models\Camara;
 use App\Models\Dispositivo;
 use App\Models\Folio;
+use App\Models\FuncionCamareroTurno;
 use App\Models\ManiobraOperacional;
 use App\Models\Posicion;
 use App\Models\Temporada;
+use App\Models\TurnoPlanificador;
 use App\Models\User;
 use App\Services\Camaras\ServicioBandasOperacionales;
 use App\Services\Estiba\ServicioPlanesOperacionales;
 use App\Services\Planificador\ServicioArbitrajeManiobras;
 use App\Services\Planificador\ServicioEstadoArbitrajePlanificador;
+use App\Services\Planificador\ServicioReplayCiclosArbitraje;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -48,6 +51,53 @@ class ArbitrajeGlobalManiobrasTest extends TestCase
         $this->assertSame(DecisionArbitrajeManiobra::Seleccionada, $decisiones[$tunel->id]->decision);
         $this->assertSame(DecisionArbitrajeManiobra::Alternativa, $decisiones[$conciliacion->id]->decision);
         $this->assertSame($tunel->id, app(ServicioArbitrajeManiobras::class)->idsPublicables($ciclo)->first());
+    }
+
+    public function test_turno_cubre_cuatro_funciones_sin_consumir_toda_la_frontera_con_un_tunel_y_con_replay(): void
+    {
+        $c = $this->crearContexto();
+        $turno = TurnoPlanificador::create(['temporada_id' => $c['temporada']->id, 'nombre' => 'Cuatro camareros',
+            'inicio_at' => now()->subHour(), 'fin_at' => now()->addHours(7), 'creado_por_user_id' => $c['supervisor']->id, 'actualizado_por_user_id' => $c['supervisor']->id]);
+        $tipos = [TipoPlanOperacional::RecepcionTunel, TipoPlanOperacional::RecepcionTunel,
+            TipoPlanOperacional::AlmacenamientoPallet, TipoPlanOperacional::ConcentracionCarga,
+            TipoPlanOperacional::ConcentracionCarga, TipoPlanOperacional::PreparacionInspeccion];
+        $maniobras = [];
+        foreach ($tipos as $i => $tipo) {
+            $camara = Camara::create(['codigo' => 'LAB-ARB-'.$i, 'nombre' => 'Cámara '.$i, 'cantidad_bandas' => 1, 'posiciones_por_banda' => 1, 'cantidad_niveles' => 1]);
+            $posicion = Posicion::create(['camara_id' => $camara->id, 'banda' => 1, 'posicion' => 1, 'nivel' => 1, 'etiqueta' => 'B01-P01-N1']);
+            $m = $this->crearManiobra($c, $i, $tipo, PrioridadOperacional::Alta, 10, camaraDestino: $camara, posicionDestino: $posicion);
+            $plan = $m->planOperacional;
+            if ($tipo === TipoPlanOperacional::RecepcionTunel) {
+                // Dos pallets de la misma recepción compiten como una sola labor.
+                $plan->update(['referencia_id' => $c['folios'][0]->id, 'contexto' => ['planner_horizon' => 'rolling']]);
+            } elseif ($i === 2) {
+                $plan->update(['contexto' => ['planner_horizon' => 'rolling', 'origen_logico' => 'recepcion_externa']]);
+            } elseif (in_array($i, [3, 4], true)) {
+                $plan->update(['referencia_tipo' => 'carga_concentracion', 'referencia_id' => $c['folios'][$i]->id]);
+            }
+            $maniobras[] = $m;
+        }
+        foreach (['recepcion_tuneles', 'recepcion_packing', 'separacion_cargas', 'separacion_cargas'] as $i => $funcion) {
+            $u = User::factory()->create(['rol' => RolUsuario::CamareroFrio, 'activo' => true]);
+            FuncionCamareroTurno::create(['turno_id' => $turno->id, 'user_id' => $u->id, 'funcion_principal' => $funcion,
+                'funciones_apoyo' => [], 'disponible' => true, 'preferencia' => $i >= 2 ? ['tipo' => 'carga', 'id' => $c['folios'][$i + 1]->id] : null]);
+        }
+        $servicio = app(ServicioArbitrajeManiobras::class);
+        $ciclo = $servicio->arbitrar($c['temporada']);
+        $publicadas = $servicio->idsPublicables($ciclo)->all();
+        $this->assertCount(4, $publicadas);
+        $this->assertCount(3, $ciclo->decisiones->where('decision', DecisionArbitrajeManiobra::Seleccionada));
+        foreach ([2, 3, 4] as $i) {
+            $this->assertContains($maniobras[$i]->id, $publicadas);
+        }
+        $this->assertSame(1, count(array_intersect([$maniobras[0]->id, $maniobras[1]->id], $publicadas)));
+        $this->assertSame('arbitraje_global_v6_funciones_turno', $ciclo->contexto['version_reglas']);
+        $this->assertSame($ciclo->id, $servicio->arbitrar($c['temporada'])->id);
+        $estado = app(ServicioEstadoArbitrajePlanificador::class);
+        $version = $estado->iniciarCalculo($c['temporada']->id);
+        $estado->completarCalculo($c['temporada']->id, $version, $ciclo, 1);
+        $replay = app(ServicioReplayCiclosArbitraje::class)->verificar($c['temporada'], 'actual');
+        $this->assertSame('coincide', $replay['estado']);
     }
 
     protected function setUp(): void

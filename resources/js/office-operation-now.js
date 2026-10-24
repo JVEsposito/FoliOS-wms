@@ -1804,6 +1804,8 @@ async function boot() {
     setText('officeInitials', name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase());
     byId('officeLogoutButton')?.addEventListener('click', () => void logout());
     elements.app.classList.remove('is-hidden');
+    const shiftDutiesLink = byId('operationShiftDutiesOpen');
+    if (shiftDutiesLink) shiftDutiesLink.hidden = !can('puede_supervisar_camaras_productos') || !hasModule('frigorifico.camaras');
     if (pinElements.open) pinElements.open.hidden = !can('puede_gestionar_pines_operadores');
 
     if (!navigator.onLine) showConnectionIssue(new ApiError('El equipo no tiene conexión de red.'));

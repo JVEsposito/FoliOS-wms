@@ -9,6 +9,19 @@ use Tests\TestCase;
 
 class EstructuraOficinaTest extends TestCase
 {
+    public function test_labores_turno_tiene_formulario_navegacion_y_resumen(): void
+    {
+        $html = $this->get('/oficina/frigorifico/labores-turno')->assertOk()->getContent();
+        foreach (['shiftForm', 'shiftAssignments', 'shiftJobs', 'shiftStart', 'shiftEnd'] as $id) {
+            $this->assertStringContainsString('id="'.$id.'"', $html);
+        }
+        $this->assertStringContainsString('aria-current="page"', $html);
+        if (getenv('ESTIBA_EXPORTAR_UI_TESTS') === '1') {
+            File::ensureDirectoryExists(storage_path('app/ui/oficina'));
+            File::put(storage_path('app/ui/oficina/turnos.html'), $html);
+        }
+    }
+
     public function test_estatus_cargas_conserva_el_detalle_de_recepciones(): void
     {
         $html = $this->get('/oficina/frigorifico/despacho/estatus')->assertOk()->getContent();

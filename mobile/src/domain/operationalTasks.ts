@@ -425,3 +425,17 @@ export function folioScanMatches(task: OperationalTask, scannedValue: string) {
 function normalizeScan(value: string) {
   return value.trim().toUpperCase();
 }
+
+export type OperationalShiftContext = {
+  generado_at: string;
+  turno: { id: string; nombre: string; inicio_at: string; fin_at: string; zona_horaria: string; version: number } | null;
+  funciones: { principal: string; principal_nombre: string; apoyos: string[]; preferencia: { tipo: string; id: string } | null } | null;
+  disponible: boolean;
+  labor_actual: OperationalShiftLabor | null;
+  en_espera: OperationalShiftLabor[];
+};
+export type OperationalShiftLabor = {
+  id: string; titulo: string; estado: string; motivo: string | null; funcion: string; version: number;
+  espera: { porcentaje_fisico?: number };
+};
+export type OperationalTaskList = OperationalTask[] & { labores?: OperationalShiftContext | null };
