@@ -74,6 +74,7 @@ test('histórico en celular conserva merma e historial, escapa texto y solo ofre
         await page.locator('#closingSummary summary').click(); assert.match(await page.locator('#decisionHistory').textContent(), /Material deteriorado/); assert.equal(await page.locator('#decisionHistory b').count(), 0); assert.equal(await page.locator('#rows norte').count(), 0);
         assert.equal(await page.locator('[data-download]').count(), 2); assert.equal(writes.length, 0); assert.deepEqual(errors, []);
         await page.screenshot({ path: resolve(root, 'storage/app/ui/oficina/pr13-cierre-390.png'), fullPage: true });
-        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+        const layout = await page.evaluate(() => ({ width: document.documentElement.scrollWidth, viewport: innerWidth, overflowing: [...document.querySelectorAll('#inventoryCountApp *')].filter(e => e.getBoundingClientRect().right > innerWidth && !e.closest('.custody-table-wrap')).map(e => ({ id: e.id, tag: e.tagName, right: e.getBoundingClientRect().right })).slice(0, 10) }));
+        assert.ok(layout.width <= layout.viewport, JSON.stringify(layout));
     } finally { await browser.close(); }
 });
