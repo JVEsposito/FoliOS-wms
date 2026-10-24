@@ -12,6 +12,7 @@ use App\Services\Planificador\ServicioRecalculosPendientesPlanificador;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
@@ -58,6 +59,19 @@ class RecalculosPendientesPlanificadorTest extends TestCase
             'version_solicitada' => 1,
             'version_calculada' => 0,
             'pendiente' => true,
+        ]);
+    }
+
+    public function test_fallo_al_publicar_el_job_conserva_el_commit_y_la_solicitud_recuperable(): void
+    {
+        config(['queue.default' => 'database']);
+        Bus::shouldReceive('dispatch')->once()->andThrow(new RuntimeException('Cola temporalmente inaccesible'));
+        $id = (string) Str::uuid();
+        DB::transaction(fn () => app(ServicioRecalculosPendientesPlanificador::class)
+            ->solicitar(ServicioRecalculosPendientesPlanificador::CARGA, $id));
+        $this->assertDatabaseHas('recalculos_pendientes_planificador', [
+            'tipo' => ServicioRecalculosPendientesPlanificador::CARGA,
+            'fuente_id' => $id, 'pendiente' => true, 'version_solicitada' => 1,
         ]);
     }
 

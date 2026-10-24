@@ -16,6 +16,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\PlanOperacionalResource;
 use App\Http\Resources\TareaMovimientoResource;
 use App\Models\Folio;
+use App\Models\OperacionSincronizacion;
 use App\Models\PersonalAccessToken;
 use App\Models\PlanOperacional;
 use App\Models\Posicion;
@@ -23,6 +24,7 @@ use App\Models\SesionEstiba;
 use App\Models\TareaMovimiento;
 use App\Services\Autenticacion\ContextoOperacional;
 use App\Services\Estiba\ServicioConfirmacionInicioTarea;
+use App\Services\Estiba\ServicioExclusionPallet;
 use App\Services\Estiba\ServicioManiobrasOperacionales;
 use App\Services\Estiba\ServicioMovimientoEstiba;
 use App\Services\Estiba\ServicioPlanesOperacionales;
@@ -38,10 +40,42 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class PlanOperacionalController extends Controller
 {
+    /** Consulta de recuperación: únicamente el camarero y equipo de la tarea. */
+    public function estadoPropio(
+        Request $request,
+        TareaMovimiento $tareaMovimiento,
+        ContextoOperacional $contexto,
+        ServicioPlanesOperacionales $planes,
+    ): JsonResponse {
+        [$usuario, $dispositivo] = $contexto->obtener($request);
+
+        return DB::transaction(function () use ($request, $tareaMovimiento, $planes, $usuario, $dispositivo): JsonResponse {
+            // Tarea y operación se leen en el mismo snapshot, aun si un POST termina durante la consulta.
+            $tareaMovimiento->refresh();
+            abort_unless((string) $tareaMovimiento->responsable_user_id === (string) $usuario->id
+                && $tareaMovimiento->dispositivo_id === $dispositivo->id, 404);
+            $datos = $request->validate(['operacion_id' => ['nullable', 'uuid']]);
+            $operacion = isset($datos['operacion_id']) ? OperacionSincronizacion::query()
+                ->whereKey($datos['operacion_id'])->where('user_id', $usuario->id)
+                ->where('dispositivo_id', $dispositivo->id)
+                ->where('payload->tarea_movimiento_id', $tareaMovimiento->id)->first() : null;
+
+            return response()->json(['data' => [
+                'confirmada' => $tareaMovimiento->estado === EstadoTareaMovimiento::Completada,
+                'tarea' => new TareaMovimientoResource($planes->cargarTarea($tareaMovimiento)),
+                'operacion' => $operacion ? [
+                    'id' => $operacion->id, 'estado' => $operacion->estado->value,
+                    'codigo_error' => $operacion->codigo_error,
+                ] : null,
+            ]]);
+        });
+    }
+
     public function index(Request $request): AnonymousResourceCollection
     {
         $filtros = $request->validate([
@@ -147,6 +181,8 @@ class PlanOperacionalController extends Controller
             }
         }
         $usuarioId = $request->user()->id;
+        $tokenActual = $request->user()->currentAccessToken();
+        $dispositivoId = $tokenActual instanceof PersonalAccessToken ? $tokenActual->dispositivo_id : null;
         $reservas->expirarVencidas();
         $cicloArbitraje = null;
         $proyeccionArbitraje = null;
@@ -215,11 +251,13 @@ class PlanOperacionalController extends Controller
             )
             ->when(
                 $asignacion === 'disponibles',
-                fn (Builder $consulta): Builder => $consulta->whereNull('responsable_user_id'),
+                fn (Builder $consulta): Builder => $consulta->whereNull('responsable_user_id')
+                    ->whereDoesntHave('folio.tareasMovimiento', fn (Builder $otra) => ServicioExclusionPallet::conCompromiso($otra)),
             )
             ->when(
                 $asignacion === 'mias',
-                fn (Builder $consulta): Builder => $consulta->where('responsable_user_id', $usuarioId),
+                fn (Builder $consulta): Builder => $consulta->where('responsable_user_id', $usuarioId)
+                    ->when($dispositivoId, fn (Builder $propias) => $propias->where('dispositivo_id', $dispositivoId)),
             )
             ->when(
                 $maniobrasPublicables !== null,

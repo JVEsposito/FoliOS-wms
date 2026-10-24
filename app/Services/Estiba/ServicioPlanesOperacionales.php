@@ -22,6 +22,8 @@ use App\Models\TareaMovimiento;
 use App\Models\Temporada;
 use App\Models\User;
 use App\Services\Camaras\InterbloqueoEvacuacionEmergencia;
+use App\Services\Cargas\ServicioAcopioCarga;
+use App\Services\Cargas\ServicioPlanConcentracionCarga;
 use App\Services\Planificador\ServicioDesplieguePlanificador;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use DomainException;
@@ -35,6 +37,7 @@ class ServicioPlanesOperacionales
         private readonly ServicioManiobrasOperacionales $maniobras,
         private readonly InterbloqueoEvacuacionEmergencia $emergencias,
         private readonly ServicioDesplieguePlanificador $despliegue,
+        private readonly ServicioAcopioCarga $acopio,
     ) {}
 
     /**
@@ -141,6 +144,7 @@ class ServicioPlanesOperacionales
                     $prioridad,
                 );
             }
+            $this->acopio->actualizarRecepciones($plan->tareas()->with('planOperacional')->get());
 
             return $this->cargar($plan);
         }, attempts: 3);
@@ -152,6 +156,7 @@ class ServicioPlanesOperacionales
         Dispositivo $dispositivo,
     ): TareaMovimiento {
         return DB::transaction(function () use ($tarea, $usuario, $dispositivo): TareaMovimiento {
+            app(ServicioExclusionPallet::class)->bloquear($tarea);
             $tareaBloqueada = TareaMovimiento::query()
                 ->with('planOperacional.temporada')
                 ->lockForUpdate()
@@ -163,6 +168,19 @@ class ServicioPlanesOperacionales
 
             if ($tareaBloqueada->estado->esFinal()) {
                 throw new DomainException('La tarea ya se encuentra finalizada.');
+            }
+            $despejes = app(ServicioDestinosDespeje::class);
+            if ($despejes->aplica($tareaBloqueada) && $tareaBloqueada->estado !== EstadoTareaMovimiento::EnProceso) {
+                $contexto = $tareaBloqueada->contexto ?? [];
+                $bandas = $despejes->bandasProtegidas($tareaBloqueada);
+                if (($contexto['bandas_extraccion_protegidas'] ?? null) !== $bandas) {
+                    $tareaBloqueada->update(['contexto' => [...$contexto, 'bandas_extraccion_protegidas' => $bandas],
+                        'version' => $tareaBloqueada->version + 1]);
+                }
+            }
+            $this->acopio->actualizarRecepcion($tareaBloqueada);
+            if ($this->acopio->esRecepcion($plan, $tareaBloqueada->tipo_movimiento)) {
+                app(ServicioPlanConcentracionCarga::class)->coordinarRecepcion($tareaBloqueada, $usuario);
             }
             if ($tareaBloqueada->maniobra_operacional_id) {
                 $this->maniobras->asumirPaso($tareaBloqueada, $usuario, $dispositivo);
@@ -214,6 +232,7 @@ class ServicioPlanesOperacionales
                 $datosTarea,
                 $planBloqueado->prioridad,
             );
+            $this->acopio->actualizarRecepcion($tarea);
             $planBloqueado->update(['version' => $planBloqueado->version + 1]);
 
             return $this->cargarTarea($tarea);
@@ -444,6 +463,7 @@ class ServicioPlanesOperacionales
                 'revision_reservas' => $camara->revision_reservas,
             ])
             ->values();
+        $acopios = $this->acopio->paraTareas($plan->tareas);
         $tareas = $plan->tareas->map(fn (TareaMovimiento $tarea): array => [
             'id' => $tarea->id,
             'version' => $tarea->version,
@@ -457,6 +477,9 @@ class ServicioPlanesOperacionales
             'maniobra_id' => $tarea->maniobra_operacional_id,
             'secuencia_maniobra' => $tarea->secuencia_maniobra,
             'tipo_paso_maniobra' => $tarea->tipo_paso_maniobra?->value,
+            ...(array_key_exists($tarea->id, $acopios)
+                ? ['acopio_carga' => $acopios[$tarea->id]]
+                : []),
         ])->values();
         $modoEfectivo = $this->despliegue->modoEfectivo($cameraIds);
         $versionData = [
@@ -574,6 +597,7 @@ class ServicioPlanesOperacionales
                 : null,
             'contexto' => ($datos['contexto'] ?? []) !== [] ? $datos['contexto'] : null,
         ]);
+        $tarea->setRelation('planOperacional', $plan);
 
         $tipoPaso = $datos['tipo_paso_maniobra']
             ?? TipoPasoManiobra::MovimientoPermanente;
@@ -763,7 +787,7 @@ class ServicioPlanesOperacionales
             ?? config('planificador.horizon');
     }
 
-    private function cargarTarea(TareaMovimiento $tarea): TareaMovimiento
+    public function cargarTarea(TareaMovimiento $tarea): TareaMovimiento
     {
         return $tarea->load([
             ...$this->relacionesTarea(),

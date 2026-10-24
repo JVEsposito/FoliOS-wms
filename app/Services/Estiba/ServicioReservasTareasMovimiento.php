@@ -27,6 +27,7 @@ use App\Models\ReservaTareaMovimiento;
 use App\Models\TareaMovimiento;
 use App\Models\UbicacionActual;
 use App\Models\User;
+use App\Services\Cargas\ServicioAcopioCarga;
 use Carbon\CarbonInterface;
 use DomainException;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -68,6 +69,7 @@ class ServicioReservasTareasMovimiento
         User $usuario,
         Dispositivo $dispositivo,
     ): ReservaTareaMovimiento {
+        app(ServicioExclusionPallet::class)->bloquear($tarea);
         $reserva = $this->reservaActivaTarea($tarea->id, true);
 
         if ($reserva && $this->estaVencida($reserva)) {
@@ -148,6 +150,7 @@ class ServicioReservasTareasMovimiento
         ?int $versionPlan = null,
         ?int $versionCamara = null,
     ): ReservaTareaMovimiento {
+        app(ServicioExclusionPallet::class)->bloquear($tarea);
         $tareaBloqueada = TareaMovimiento::query()
             ->with('planOperacional')
             ->lockForUpdate()
@@ -174,6 +177,7 @@ class ServicioReservasTareasMovimiento
             throw new ConflictoOperacion('El plan cambió desde el snapshot utilizado por la tablet.');
         }
 
+        app(ServicioAcopioCarga::class)->validarDestino($tareaBloqueada, $posicion);
         $posicionBloqueada = Posicion::query()->lockForUpdate()->findOrFail($posicion->id);
         $camara = Camara::query()->lockForUpdate()->findOrFail($posicionBloqueada->camara_id);
         if ($versionCamara !== null && $camara->version_plano !== $versionCamara) {
@@ -190,6 +194,7 @@ class ServicioReservasTareasMovimiento
         }
 
         $this->validarBandaOperacional($posicionBloqueada, $tareaBloqueada);
+        app(ServicioDestinosDespeje::class)->validar($tareaBloqueada, $posicionBloqueada);
         $this->validarDestinoParaTipo($tareaBloqueada, $posicionBloqueada);
         $this->validarDestinoSinConflicto(
             $posicionBloqueada->id,
@@ -232,6 +237,7 @@ class ServicioReservasTareasMovimiento
         User $usuario,
         Dispositivo $dispositivo,
     ): ReservaTareaMovimiento {
+        app(ServicioExclusionPallet::class)->bloquear($tarea);
         $tareaBloqueada = TareaMovimiento::query()
             ->with('planOperacional')
             ->lockForUpdate()
@@ -259,6 +265,11 @@ class ServicioReservasTareasMovimiento
             );
         }
         if ($tareaBloqueada->posicion_destino_id) {
+            app(ServicioDestinosDespeje::class)->validar($tareaBloqueada, Posicion::query()->findOrFail($tareaBloqueada->posicion_destino_id));
+            app(ServicioAcopioCarga::class)->validarDestino(
+                $tareaBloqueada,
+                Posicion::query()->findOrFail($tareaBloqueada->posicion_destino_id),
+            );
             $this->validarBandaOperacional(
                 Posicion::query()->lockForUpdate()->findOrFail($tareaBloqueada->posicion_destino_id),
                 $tareaBloqueada,
@@ -294,6 +305,7 @@ class ServicioReservasTareasMovimiento
         User $usuario,
         Dispositivo $dispositivo,
     ): ?ReservaTareaMovimiento {
+        app(ServicioExclusionPallet::class)->bloquear($tarea);
         $reserva = $this->reservaActivaTarea($tarea->id, true);
 
         if (! $reserva) {
@@ -423,6 +435,10 @@ class ServicioReservasTareasMovimiento
             ->with('planOperacional')
             ->lockForUpdate()
             ->findOrFail($tarea->id);
+        app(ServicioExclusionPallet::class)->bloquear($tareaBloqueada, soloFolio: true);
+        if ($tareaBloqueada->estado !== EstadoTareaMovimiento::EnProceso && $posicionDestinoId) {
+            app(ServicioDestinosDespeje::class)->validar($tareaBloqueada, Posicion::query()->findOrFail($posicionDestinoId));
+        }
         $custodia = CustodiaTemporalManiobra::query()
             ->where('bloqueo_folio_id', $folio->id)
             ->lockForUpdate()
@@ -472,6 +488,10 @@ class ServicioReservasTareasMovimiento
             throw new ConflictoOperacion('El destino físico no corresponde a la reserva materializada.');
         }
         if ($posicionDestinoId) {
+            app(ServicioAcopioCarga::class)->validarDestino(
+                $tareaBloqueada,
+                Posicion::query()->findOrFail($posicionDestinoId),
+            );
             $this->validarReservaPreparacionSag($posicionDestinoId, $folio->id);
         }
 

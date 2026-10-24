@@ -14,7 +14,7 @@ import { fetchWithTimeout } from './httpClient';
 import type { ShiftVerification, MaterialVerificationReading } from '../domain/verification';
 import type { OperatorLoadFeed } from '../domain/operatorLoads';
 
-export const TABLET_PLANNER_VERSION = 'rolling-global-3-envases';
+export const TABLET_PLANNER_VERSION = 'rolling-global-4-acopio-cargas';
 
 export type StartConfirmation = {
   folioDigits: string;
@@ -27,6 +27,13 @@ export type OperatorPinStatus = {
 };
 
 export class OperationalTasksApi {
+  async ownState(token: string, taskId: string, operationId?: string) {
+    const query = operationId ? `?operacion_id=${encodeURIComponent(operationId)}` : '';
+    return (await this.request<{ data: { confirmada: boolean; tarea: OperationalTask;
+      operacion: { id: string; estado: string; codigo_error: string | null } | null } }>(
+      `/api/tareas-movimiento/${encodeURIComponent(taskId)}/estado-propio${query}`, token,
+    )).data;
+  }
   private loadsEtag: { token: string; value: string | null } | null = null;
 
   constructor(private readonly baseUrl: string) {}

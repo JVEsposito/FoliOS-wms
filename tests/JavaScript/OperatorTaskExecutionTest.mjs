@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import { stripTypeScriptTypes } from 'node:module';
 
-import {
-    buildOperatorManeuverAction,
-    buildOperatorManeuverSequence,
-} from '../../mobile/src/domain/operatorManeuver.ts';
+const tasksUrl = `data:text/javascript,${encodeURIComponent(stripTypeScriptTypes(await readFile(new URL('../../mobile/src/domain/operationalTasks.ts', import.meta.url), 'utf8')))}`;
+const maneuverSource = stripTypeScriptTypes(await readFile(new URL('../../mobile/src/domain/operatorManeuver.ts', import.meta.url), 'utf8')).replace("from './operationalTasks'", `from ${JSON.stringify(tasksUrl)}`);
+const { buildOperatorManeuverAction, buildOperatorManeuverSequence } = await import(`data:text/javascript,${encodeURIComponent(maneuverSource)}`);
 
 const component = await readFile(
     new URL('../../mobile/src/components/operator/OperatorTaskExecution.tsx', import.meta.url),

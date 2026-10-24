@@ -23,6 +23,7 @@ use App\Models\EventoCarga;
 use App\Models\Movimiento;
 use App\Models\PlanOperacional;
 use App\Models\Posicion;
+use App\Models\ReservaTareaMovimiento;
 use App\Models\TareaMovimiento;
 use App\Models\UbicacionActual;
 use App\Models\User;
@@ -45,6 +46,7 @@ class ServicioPlanConcentracionCarga
         private readonly ServicioPlanesOperacionales $planes,
         private readonly ServicioManiobrasOperacionales $maniobras,
         private readonly ServicioDesplieguePlanificador $despliegue,
+        private readonly ServicioAcopioCarga $acopio,
     ) {}
 
     public function sincronizar(Carga $carga, User $usuario): ?PlanOperacional
@@ -91,9 +93,14 @@ class ServicioPlanConcentracionCarga
             $camaraObjetivoId = $carga->camara_objetivo_id
                 ?? ($analisisGeneral['grupo_principal']['camara']['id'] ?? null);
 
-            if ($camaraObjetivoId === null) {
+            $recepciones = $asignaciones->flatMap(fn (CargaFolio $asignacion) => $asignacion->folio->tareasMovimiento)
+                ->filter(fn (TareaMovimiento $tarea): bool => $this->acopio
+                    ->esRecepcion($tarea->planOperacional, $tarea->tipo_movimiento));
+            if ($camaraObjetivoId === null && $recepciones->isEmpty()) {
                 return $plan?->refresh();
             }
+            $this->acopio->actualizarRecepciones($recepciones);
+            $camaraObjetivoId ??= $recepciones->first()?->camara_destino_id;
             $camarasInvolucradas = $asignaciones
                 ->map(fn (CargaFolio $asignacion): ?string => $asignacion
                     ->folio
@@ -107,6 +114,7 @@ class ServicioPlanConcentracionCarga
             $modo = $this->despliegue->modoEfectivo($camarasInvolucradas);
 
             $analisis = $this->calculador->analizar($asignaciones, $camaraObjetivoId);
+            $analisis['dependencias'] = $this->acopio->dependencias($asignaciones);
             $necesarios = max(
                 0,
                 (int) ceil(
@@ -186,7 +194,17 @@ class ServicioPlanConcentracionCarga
                 $camaraObjetivoId,
                 $geometriaHash,
             );
-            $candidatos = $this->candidatos(
+            foreach ($recepciones as $recepcion) {
+                $maniobra = $recepcion->maniobraOperacional()->first();
+                if ($maniobra?->estado === EstadoManiobraOperacional::Pendiente) {
+                    $this->maniobras->vincularObjetivo($maniobra, $plan, 300, [
+                        'tipo_beneficio' => 'recepcion_directa_acopio',
+                        'carga_id' => $carga->id,
+                        'folios_beneficiados_ids' => [$recepcion->folio_id],
+                    ]);
+                }
+            }
+            $candidatos = $camaraObjetivoId === null ? collect() : $this->candidatos(
                 $carga,
                 $asignaciones,
                 $analisis,
@@ -213,6 +231,29 @@ class ServicioPlanConcentracionCarga
 
             return $plan->refresh();
         }, attempts: 3);
+    }
+
+    /** Revalida el objetivo beneficiado al reclamar, sin recalcular rutas de otras cargas. */
+    public function coordinarRecepcion(TareaMovimiento $tarea, User $usuario): void
+    {
+        if (! config('planificador.generacion_automatica')
+            || config('planificador.mode') !== 'guided' || config('planificador.compute') !== 'tablet') {
+            return;
+        }
+        $maniobra = $tarea->maniobraOperacional()->first();
+        if ($maniobra?->estado !== EstadoManiobraOperacional::Pendiente) {
+            return;
+        }
+        $cargaId = $tarea->contexto['acopio_carga']['carga_id'] ?? null;
+        $this->maniobras->desvincularAcopiosAnteriores($maniobra, $cargaId);
+        $objetivo = $cargaId ? $this->objetivoSecundario($cargaId, $usuario) : null;
+        if ($objetivo) {
+            $this->maniobras->vincularObjetivo($maniobra, $objetivo, 300, [
+                'tipo_beneficio' => 'recepcion_directa_acopio',
+                'carga_id' => $cargaId,
+                'folios_beneficiados_ids' => [$tarea->folio_id],
+            ]);
+        }
     }
 
     /**
@@ -280,7 +321,15 @@ class ServicioPlanConcentracionCarga
             ->whereHas('folio', fn ($consulta) => $consulta
                 ->where('activo', true)
                 ->where('tipo_bulto', TipoBulto::Pallet->value))
-            ->with('folio.ubicacionActual.posicion.camara')
+            ->with([
+                'folio.ubicacionActual.posicion.camara',
+                'folio.procesosPrefrio.proceso.tunel',
+                'folio.tareasMovimiento' => fn ($consulta) => $consulta->whereIn('estado', [
+                    EstadoTareaMovimiento::Pendiente->value,
+                    EstadoTareaMovimiento::Asumida->value,
+                    EstadoTareaMovimiento::EnProceso->value,
+                ])->with(['planOperacional', 'responsable']),
+            ])
             ->orderBy('asignado_at')
             ->lockForUpdate()
             ->get();
@@ -443,6 +492,7 @@ class ServicioPlanConcentracionCarga
             ->whereDoesntHave('ubicacionActual')
             ->whereDoesntHave('reservaTareaActiva')
             ->whereDoesntHave('reservaPreparacionSagActiva')
+            ->orderBy('nivel')->orderBy('banda')->orderBy('posicion')
             ->get()
             ->filter(function (Posicion $posicion) use ($bandas, $puntos): bool {
                 if (! $bandas->has($posicion->banda)) {
@@ -619,7 +669,12 @@ class ServicioPlanConcentracionCarga
         $blockerIds = $bloqueadores->pluck('folio_id')->sort()->values()->implode(':');
         $clave = 'maniobra_concentracion:'.hash(
             'sha256',
-            "{$habilitada->folio_id}:{$blockerIds}:{$geometriaHash}",
+            "{$habilitada->folio_id}:{$blockerIds}:{$geometriaHash}:".json_encode(
+                collect($pasos)->map(fn (array $paso): array => [
+                    $paso['folio_id'], $paso['posicion_destino_id'] ?? null,
+                    $paso['contexto']['carga_beneficiada_id'] ?? null,
+                ])->all(), JSON_THROW_ON_ERROR,
+            ),
         );
         $bloqueosBanda = $temporales !== []
             ? collect($temporales)
@@ -789,17 +844,31 @@ class ServicioPlanConcentracionCarga
         if ($asignaciones->isEmpty()) {
             return null;
         }
-        $analisisGeneral = $this->calculador->analizar($asignaciones);
-        $camaraObjetivoId = $otraCarga->camara_objetivo_id
-            ?? ($analisisGeneral['grupo_principal']['camara']['id'] ?? null);
+        $acopio = $this->acopio->paraFolio($bloqueador->folio_id);
+        $camaraObjetivoId = $acopio['camara_objetivo_id'] ?? null;
         if (! $camaraObjetivoId) {
             return null;
         }
-        $analisis = $this->calculador->analizar($asignaciones, $camaraObjetivoId);
+        if ($acopio['despacho_directo']) {
+            return null;
+        }
+        $comprometida = ReservaTareaMovimiento::query()->conCompromisoVigente()
+            ->whereNotNull('bloqueo_posicion_id')
+            ->whereHas('tareaMovimiento', fn ($consulta) => $consulta->where('folio_id', $bloqueador->folio_id))
+            ->with('posicionDestino')->first()?->posicionDestino;
+        if ($comprometida && $comprometida->camara_id === $camaraObjetivoId
+            && ! $destinosUsados->contains($comprometida->id)
+            && ($acopio['puntos'] === [] || collect($acopio['puntos'])->contains(
+                fn (array $punto): bool => $this->sonPuntosVecinos($punto, [
+                    'banda' => $comprometida->banda, 'posicion' => $comprometida->posicion, 'nivel' => $comprometida->nivel,
+                ]),
+            ))) {
+            return $comprometida;
+        }
 
         return $this->destinosLibresVecinos(
             $camaraObjetivoId,
-            collect($analisis['grupo_principal_puntos']),
+            collect($acopio['puntos']),
         )->first(fn (Posicion $posicion): bool => ! $destinosUsados->contains($posicion->id));
     }
 
@@ -937,10 +1006,11 @@ class ServicioPlanConcentracionCarga
                 }
             }
 
-            $beneficioObjetivosSecundarios = $conflictos
-                ->pluck('folio_id')
-                ->unique()
-                ->count() * self::BENEFICIO_BLOCKER_DESTINO_UTIL;
+            $objetivosSecundarios = collect($candidato['pasos'])
+                ->filter(fn (array $paso): bool => filled($paso['contexto']['carga_beneficiada_id'] ?? null))
+                ->groupBy('contexto.carga_beneficiada_id');
+            $beneficioObjetivosSecundarios = $objetivosSecundarios->flatten(1)->count()
+                * self::BENEFICIO_BLOCKER_DESTINO_UTIL;
             $candidato['beneficio_principal_estimado'] = max(
                 0,
                 $candidato['beneficio_estimado'] - $beneficioObjetivosSecundarios,
@@ -951,12 +1021,12 @@ class ServicioPlanConcentracionCarga
                 $candidato,
             );
 
-            foreach ($conflictos->groupBy('plan_operacional_id') as $tareasObjetivo) {
-                $planObjetivo = $tareasObjetivo->first()?->planOperacional;
+            foreach ($objetivosSecundarios as $cargaId => $pasosObjetivo) {
+                $planObjetivo = $this->objetivoSecundario($cargaId, $usuario);
                 if (! $planObjetivo) {
                     continue;
                 }
-                $foliosBeneficiados = $tareasObjetivo
+                $foliosBeneficiados = $pasosObjetivo
                     ->pluck('folio_id')
                     ->unique()
                     ->values();
@@ -997,7 +1067,7 @@ class ServicioPlanConcentracionCarga
         Carga $carga,
         User $usuario,
         array $analisis,
-        string $camaraObjetivoId,
+        ?string $camaraObjetivoId,
         string $geometriaHash,
     ): PlanOperacional {
         if (! $plan) {
@@ -1048,11 +1118,35 @@ class ServicioPlanConcentracionCarga
         return $plan->refresh();
     }
 
+    /** Publica el objetivo beneficiado sin generar otra maniobra para el mismo pallet. */
+    private function objetivoSecundario(string $cargaId, User $usuario): ?PlanOperacional
+    {
+        $carga = Carga::query()->lockForUpdate()->find($cargaId);
+        if (! $carga || ! in_array($carga->estado, EstadoCarga::visiblesEnOperacion(), true)
+            || ! $carga->temporada()->where('activa', true)->exists()
+            || $carga->presenciaAndenActiva()->exists()) {
+            return null;
+        }
+        $asignaciones = $this->asignaciones($carga);
+        $general = $this->calculador->analizar($asignaciones);
+        $camaraId = $carga->camara_objetivo_id ?? ($general['grupo_principal']['camara']['id'] ?? null);
+        $analisis = $this->calculador->analizar($asignaciones, $camaraId);
+        if ($analisis['cumple_umbral']) {
+            return null;
+        }
+        $analisis['dependencias'] = $this->acopio->dependencias($asignaciones);
+
+        return $this->asegurarPlan(
+            $this->planExistente($cargaId, bloquear: true), $carga, $usuario, $analisis,
+            $camaraId, $this->geometriaHash($camaraId, $analisis),
+        );
+    }
+
     private function actualizarContexto(
         PlanOperacional $plan,
         Carga $carga,
         array $analisis,
-        string $camaraObjetivoId,
+        ?string $camaraObjetivoId,
         string $geometriaHash,
         bool $suspendidoPorAnden = false,
     ): void {
@@ -1083,7 +1177,7 @@ class ServicioPlanConcentracionCarga
     private function contextoPlan(
         Carga $carga,
         array $analisis,
-        string $camaraObjetivoId,
+        ?string $camaraObjetivoId,
         string $geometriaHash,
         bool $suspendidoPorAnden = false,
     ): array {
@@ -1100,6 +1194,8 @@ class ServicioPlanConcentracionCarga
             'grupo_principal' => $analisis['grupo_principal'],
             'concentracion_geometry_hash' => $geometriaHash,
             'suspendido_por_anden' => $suspendidoPorAnden,
+            'recepciones_pendientes' => count($analisis['dependencias'] ?? []),
+            'dependencias' => $analisis['dependencias'] ?? [],
         ];
     }
 
@@ -1217,7 +1313,7 @@ class ServicioPlanConcentracionCarga
     }
 
     /** @param array<string, mixed> $analisis */
-    private function geometriaHash(string $camaraObjetivoId, array $analisis): string
+    private function geometriaHash(?string $camaraObjetivoId, array $analisis): string
     {
         return hash('sha256', json_encode([
             'camara_objetivo_id' => $camaraObjetivoId,
@@ -1257,7 +1353,7 @@ class ServicioPlanConcentracionCarga
         Carga $carga,
         User $usuario,
         array $analisis,
-        string $camaraObjetivoId,
+        ?string $camaraObjetivoId,
         int $necesarios,
     ): void {
         EventoCarga::create([

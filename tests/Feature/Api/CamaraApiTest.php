@@ -139,6 +139,7 @@ class CamaraApiTest extends TestCase
             ->getJson("/api/camaras/{$camara->id}/plano")
             ->assertOk()
             ->assertJsonPath('data.version_plano', 1)
+            ->assertJsonPath('data.revision_reservas', (int) $camara->refresh()->revision_reservas)
             ->assertJsonPath('data.sentido_numeracion_bandas', 'izquierda_a_derecha')
             ->assertJsonPath('data.acceso.modo', 'edicion')
             ->assertJsonPath('data.acceso.sesion.es_propia', true)

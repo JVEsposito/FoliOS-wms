@@ -6,6 +6,7 @@ use App\Enums\PrioridadOperacional;
 use App\Enums\RolUsuario;
 use App\Enums\TipoBulto;
 use App\Enums\TipoMovimiento;
+use App\Enums\TipoPasoManiobra;
 use App\Enums\TipoPlanOperacional;
 use App\Exceptions\ConflictoOperacion;
 use App\Models\Camara;
@@ -17,6 +18,7 @@ use App\Models\ReservaTareaMovimiento;
 use App\Models\Temporada;
 use App\Models\User;
 use App\Services\Camaras\ServicioBandasOperacionales;
+use App\Services\Estiba\ServicioManiobrasOperacionales;
 use App\Services\Estiba\ServicioMovimientoEstiba;
 use App\Services\Estiba\ServicioPlanesOperacionales;
 use App\Services\Estiba\ServicioSesionEstiba;
@@ -450,6 +452,62 @@ class PlanesOperacionalesApiTest extends TestCase
     {
         $this->assertTrue(is_subclass_of(ConflictoOperacion::class, DomainException::class));
         $this->assertFalse(config('planificador.generacion_automatica'));
+    }
+
+    public function test_dos_planes_del_mismo_pallet_no_pueden_asignarse_a_dos_usuarios(): void
+    {
+        $ctx = $this->crearContexto();
+        $a = $this->crearPlan($ctx)->tareas()->sole();
+        $otroCtx = $ctx;
+        $otroCtx['folios'][0] = $ctx['folios'][1];
+        $b = $this->crearPlan($otroCtx)->tareas()->sole();
+        // Reproduce tareas históricas de dos generadores para el mismo folio.
+        $b->update(['folio_id' => $ctx['folios'][0]->id, 'posicion_destino_id' => $ctx['posiciones'][1]->id]);
+        $this->conToken($ctx['token'])->postJson("/api/tareas-movimiento/{$a->id}/asumir")->assertOk();
+        $this->conToken($ctx['tokenOtro'])->getJson('/api/tareas-movimiento?asignacion=disponibles')
+            ->assertOk()->assertJsonMissing(['id' => $b->id]);
+        $this->conToken($ctx['tokenOtro'])->postJson("/api/tareas-movimiento/{$b->id}/asumir")
+            ->assertConflict()->assertJsonPath('codigo', 'conflicto_operacional');
+        $this->assertNull($b->refresh()->responsable_user_id);
+        $this->assertDatabaseCount('reservas_tareas_movimiento', 1);
+        $this->conToken($ctx['token'])->postJson("/api/tareas-movimiento/{$a->id}/liberar")->assertOk();
+        $this->conToken($ctx['tokenOtro'])->postJson("/api/tareas-movimiento/{$b->id}/asumir")->assertOk();
+        $this->assertSame($ctx['otroCamarero']->id, $b->refresh()->responsable_user_id);
+    }
+
+    public function test_mis_tareas_no_muestra_en_otra_tablet_la_labor_del_mismo_usuario(): void
+    {
+        $ctx = $this->crearContexto();
+        $a = $this->crearPlan($ctx)->tareas()->sole();
+        $this->conToken($ctx['token'])->postJson("/api/tareas-movimiento/{$a->id}/asumir")->assertOk();
+        $otra = $ctx['camarero']->crearTokenParaDispositivo($ctx['otroDispositivo'], 'segunda-tablet')->plainTextToken;
+        $this->conToken($otra)->getJson('/api/tareas-movimiento?asignacion=mias')->assertOk()->assertJsonCount(0, 'data');
+        $this->conToken($ctx['token'])->getJson('/api/tareas-movimiento?asignacion=mias')->assertOk()->assertJsonPath('data.0.id', $a->id);
+    }
+
+    public function test_un_pallet_de_un_paso_futuro_queda_protegido_por_la_labor_completa(): void
+    {
+        $ctx = $this->crearContexto();
+        $plan = PlanOperacional::create([
+            'temporada_id' => $ctx['temporada']->id, 'tipo' => TipoPlanOperacional::ReordenamientoCamara,
+            'estado' => 'programado', 'titulo' => 'Dos pallets en la misma maniobra', 'prioridad' => 'normal',
+            'creado_por_user_id' => $ctx['supervisor']->id, 'programado_at' => now(), 'contexto' => ['planner_horizon' => 'rolling'],
+        ]);
+        $maniobra = app(ServicioManiobrasOperacionales::class)->crearCerrada($plan, $ctx['supervisor'], [
+            'candidate_key' => 'proteccion-futura', 'titulo' => 'Dos pasos',
+            'pasos' => collect($ctx['folios'])->map(fn ($f) => [
+                'folio_id' => $f->id, 'tipo_movimiento' => TipoMovimiento::UbicacionInicial,
+                'tipo_paso_maniobra' => TipoPasoManiobra::MovimientoPermanente,
+            ])->all(),
+        ]);
+        $primera = $maniobra->pasos()->orderBy('secuencia_maniobra')->firstOrFail();
+        app(ServicioPlanesOperacionales::class)->asumir($primera, $ctx['camarero'], $ctx['dispositivo']);
+        $duplicada = $primera->replicate();
+        $duplicada->fill(['maniobra_operacional_id' => null, 'secuencia' => 3, 'secuencia_maniobra' => null,
+            'folio_id' => $ctx['folios'][1]->id, 'estado' => 'pendiente', 'responsable_user_id' => null, 'dispositivo_id' => null]);
+        $duplicada->save();
+        $this->conToken($ctx['tokenOtro'])->postJson("/api/tareas-movimiento/{$duplicada->id}/asumir")->assertConflict();
+        $this->assertNull($duplicada->refresh()->responsable_user_id);
     }
 
     /** @param array<string, mixed> $contexto */
