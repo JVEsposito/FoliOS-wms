@@ -249,12 +249,12 @@ class InterfazOficinaMaterialesTest extends TestCase
         );
     }
 
-    public function test_consumo_directo_de_insumos_se_opera_desde_inventario_bc(): void
+    public function test_consumo_directo_de_insumos_se_opera_desde_la_bodega_de_origen(): void
     {
         $this->get('/oficina/materiales/inventario')
             ->assertOk()
             ->assertSee('id="materialDirectConsumptionDialog"', false)
-            ->assertSee('CONSUMO DIRECTO · BODEGA CENTRAL')
+            ->assertSee('CONSUMO DIRECTO · BODEGA DE ORIGEN')
             ->assertSee('Centro de costo que consume')
             ->assertSee('No crea existencia temporal');
 
@@ -263,7 +263,7 @@ class InterfazOficinaMaterialesTest extends TestCase
         $this->assertIsString($office);
         $this->assertStringContainsString('data-direct-consumption', $office);
         $this->assertStringContainsString("folio.categoria_operacional === 'insumo'", $office);
-        $this->assertStringContainsString("folio.almacen?.codigo === 'BOD-CENTRAL'", $office);
+        $this->assertStringContainsString("folio.almacen?.tipo === 'fisica'", $office);
         $this->assertStringContainsString('centro_costo_id', $office);
         $this->assertStringContainsString(
             '/api/materiales/almacenes/movimientos',

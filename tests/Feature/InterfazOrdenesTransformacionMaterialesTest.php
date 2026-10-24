@@ -34,7 +34,7 @@ class InterfazOrdenesTransformacionMaterialesTest extends TestCase
             $script,
         );
         $this->assertStringContainsString(
-            'orderState.inventory = inventory.resumen_items || []',
+            'inventory.resumen_items_almacenes || inventory.resumen_items || []',
             $script,
         );
         $this->assertStringContainsString(
