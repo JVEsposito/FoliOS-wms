@@ -5,7 +5,7 @@ namespace Tests\Feature\Architecture;
 use App\Finanzas\EsquemaFinanzas;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\File;
-use Illuminate\Support\Str;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\Finder\SplFileInfo;
 use Tests\TestCase;
 
@@ -97,10 +97,42 @@ class FinanzasArchitectureTest extends TestCase
 
         // Y ninguna migración operativa apunta a una tabla de Finanzas.
         $operativas = $migraciones->diff($deFinanzas)
-            ->filter(fn (SplFileInfo $archivo): bool => Str::contains($archivo->getContents(), ["'fin_", '"fin_']))
+            ->filter(fn (SplFileInfo $archivo): bool => $this->referenciaTablasFinanzas($archivo->getContents()))
             ->map(fn (SplFileInfo $archivo): string => $archivo->getFilename())
             ->values()
             ->all();
         $this->assertSame([], $operativas);
+    }
+
+    #[DataProvider('referenciasDeMigraciones')]
+    public function test_el_control_de_finanzas_distingue_tablas_de_columnas(string $contenido, bool $esperado): void
+    {
+        $this->assertSame($esperado, $this->referenciaTablasFinanzas($contenido));
+    }
+
+    public static function referenciasDeMigraciones(): array
+    {
+        return [
+            'fecha de termino' => ["\$t->dateTime('fin_at')->index();", false],
+            'columna y filtro operativos' => [' $t->string("fin_observacion"); $q->where("fin_at", ">", now()); ', false],
+            'crear tabla financiera' => ["Schema::create('fin_tarifas', fn (\$t) => null);", true],
+            'alterar tabla financiera' => ["Schema::table(\n 'fin_tarifas', fn (\$t) => null);", true],
+            'consulta financiera' => ['DB::table("fin_hechos")->update([]);', true],
+            'llave hacia finanzas' => ["\$t->foreignId('tarifa_id')->constrained('fin_tarifas');", true],
+            'llave con tabla nombrada' => ["\$t->foreignId('tarifa_id')->constrained(table: 'fin_tarifas');", true],
+            'llave hacia tabla implicita' => ["\$t->foreignId('fin_tarifa_id')->constrained();", true],
+            'llave con on' => ["\$t->foreign('tarifa_id')->references('id')->on('fin_tarifas');", true],
+            'eliminar tabla' => ["Schema::dropIfExists('fin_tarifas');", true],
+            'renombrar a tabla financiera' => ["Schema::rename('tarifas_operativas', 'fin_tarifas');", true],
+        ];
+    }
+
+    private function referenciaTablasFinanzas(string $contenido): bool
+    {
+        // Revisar argumentos que nombran tablas (o llaves inferidas), no cualquier
+        // texto con el prefijo: fin_at es la fecha de término de una operación.
+        return preg_match(<<<'REGEX'
+~(?:::|->)\s*(?:create|table|drop|dropIfExists|hasTable|constrained|on|from|join|leftJoin|rightJoin|foreignId|foreignUuid|foreignUlid)\s*\(\s*(?:table\s*:\s*)?(['"])fin_[^'"]+\1|(?:::|->)\s*rename\s*\([^)]*['"]fin_[^'"]+['"]~i
+REGEX, $contenido) === 1;
     }
 }

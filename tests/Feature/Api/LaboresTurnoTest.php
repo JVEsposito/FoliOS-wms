@@ -224,6 +224,26 @@ class LaboresTurnoTest extends TestCase
             ->assertJsonStructure(['arbitraje' => ['vigencia'], 'labores' => ['turno', 'labor_actual']]);
     }
 
+    public function test_liberar_labor_respeta_el_control_central_de_temporada(): void
+    {
+        $asignacion = $this->asignacion();
+        $this->tomar($this->tarea());
+        $labor = LaborCamarero::sole();
+        $otraTemporada = Temporada::create(['codigo' => 'LAB-ARCHIVO', 'nombre' => 'Archivo', 'fecha_inicio' => '2025-01-01', 'activa' => false]);
+        $turnoArchivo = $this->turno(['temporada_id' => $otraTemporada->id]);
+        $laborArchivo = $labor->replicate();
+        $laborArchivo->fill(['turno_id' => $turnoArchivo->id, 'bloqueo_labor' => null, 'bloqueo_camarero' => null])->save();
+        $this->assertSame($this->temporada->id, $asignacion->temporadaOperacionalId());
+        $this->assertSame($otraTemporada->id, $laborArchivo->temporadaOperacionalId());
+        Sanctum::actingAs($this->supervisor);
+        $this->postJson('/api/labores-turno/labores/'.$laborArchivo->id.'/liberar', ['version' => $laborArchivo->version])
+            ->assertStatus(409)->assertJsonPath('codigo', 'temporada_no_activa')->assertJsonPath('temporada_registro', 'LAB-ARCHIVO');
+        $this->assertSame('en_curso', $laborArchivo->refresh()->estado);
+        $this->postJson('/api/labores-turno/labores/'.$labor->id.'/liberar', ['version' => $labor->version])
+            ->assertOk()->assertJsonPath('data.estado', 'liberada');
+        $this->assertSame('liberada', $labor->refresh()->estado);
+    }
+
     public function test_un_fallo_al_reservar_no_deja_labor_huerfana(): void
     {
         $this->asignacion();

@@ -3,13 +3,14 @@
 namespace App\Models;
 
 use App\Models\Concerns\ImpideEliminacionFisica;
+use App\Models\Contracts\PerteneceATemporada;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable(['turno_id', 'user_id', 'funcion_principal', 'funciones_apoyo', 'preferencia', 'disponible', 'version'])]
-class FuncionCamareroTurno extends Model
+class FuncionCamareroTurno extends Model implements PerteneceATemporada
 {
     use HasUuids, ImpideEliminacionFisica;
 
@@ -25,6 +26,11 @@ class FuncionCamareroTurno extends Model
     public function turno(): BelongsTo
     {
         return $this->belongsTo(TurnoPlanificador::class, 'turno_id');
+    }
+
+    public function temporadaOperacionalId(): ?string
+    {
+        return $this->turno?->temporadaOperacionalId();
     }
 
     protected function casts(): array
