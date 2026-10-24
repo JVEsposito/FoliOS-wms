@@ -18,10 +18,12 @@ const recipe = { id: 'recipe', nombre: 'Armar cajas', activa: true, temporada: s
     versiones: [{ id: 'version', estado: 'activa', numero_version: 1, cantidad_base_salida: 1, unidad_medida_salida: 'UN', unidades_por_folio_salida: 10,
         componentes: [{ item, cantidad_estandar: 1, unidad_medida: 'UN', es_componente_principal: true }] }] };
 
-async function fixture(section, { intercept } = {}) {
+async function fixture(section, { intercept, category = 'material_mp' } = {}) {
     const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined, args: ['--no-sandbox', '--disable-gpu'] });
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
     const page = await context.newPage(); const calls = []; const errors = [];
+    const categoryItem = { ...item, categoria_operacional: category };
+    const rows = balances.map((b) => ({ ...b, item: categoryItem, categoria_operacional: category }));
     page.on('pageerror', (e) => errors.push(e.message));
     await context.addInitScript(() => {
         localStorage.setItem('estiba_wms_office_token', 'test-token');
@@ -37,10 +39,10 @@ async function fixture(section, { intercept } = {}) {
         if (intercept && await intercept(route, call)) return;
         if (r.method() === 'POST') return route.fulfill({ status: 201, json: { data: { id: 'created', codigo: 'DM-001' } } });
         if (path === '/api/oficina/contexto') return route.fulfill({ json: { data: { temporada: season, planta: 'Planta de prueba', avisos_materiales: [], avisos_cierre: [] } } });
-        if (path === '/api/materiales/catalogo') return route.fulfill({ json: { temporada: season, clientes: [client], items: [item],
+        if (path === '/api/materiales/catalogo') return route.fulfill({ json: { temporada: season, clientes: [client], items: [categoryItem],
             destinos: [{ id: 'packing', tipo: 'virtual', nombre: 'Packing', centro_costo: 'PACK', activo: true }], bodegas: warehouses } });
-        if (path === '/api/materiales/inventario') return route.fulfill({ json: { data: balances.filter((b) => !url.searchParams.get('almacen_id') || b.almacen.id === url.searchParams.get('almacen_id')),
-            bodegas: warehouses, resumen_clientes: [], resumen_items: [{ item, cantidad_disponible: '100.000' }], resumen_items_almacenes: balances,
+        if (path === '/api/materiales/inventario') return route.fulfill({ json: { data: rows.filter((b) => !url.searchParams.get('almacen_id') || b.almacen.id === url.searchParams.get('almacen_id')),
+            bodegas: warehouses, resumen_clientes: [], resumen_items: [{ item, cantidad_disponible: '100.000' }], resumen_items_almacenes: rows,
             resumen: { clientes: 1, folios: 1 }, meta: { total: 2, last_page: 1, current_page: 1 } } });
         if (path === '/api/materiales/transformaciones/recetas') return route.fulfill({ json: { data: [recipe] } });
         return route.fulfill({ json: { data: [] } });
@@ -110,6 +112,25 @@ test('cambiar de bodega descarta una consulta anterior demorada', async () => {
         assert.doesNotMatch(await page.locator('#dispatchFolioSelection').textContent(), /MAT-CENTRAL/);
         assert.deepEqual(errors, []);
     } finally { release(); await browser.close(); }
+});
+
+test('el menú conserva el consumo de insumos e imputa la bodega del saldo elegido', async () => {
+    const { browser, page, calls, errors } = await fixture('inventario', { category: 'insumo' });
+    page.on('dialog', (dialog) => dialog.accept());
+    try {
+        const row = page.locator('#materialsInventoryBody tr').filter({ has: page.locator('[data-direct-consumption="saldo-norte"]') });
+        await row.getByRole('button', { name: 'Acciones' }).click();
+        await page.getByRole('menuitem', { name: 'Consumir insumo', exact: true }).click();
+        assert.match(await page.locator('#materialDirectConsumptionContext').textContent(), /Bodega Norte/);
+        await page.selectOption('#materialDirectConsumptionForm [name="centro_costo_id"]', 'packing');
+        await page.fill('#materialDirectConsumptionForm [name="cantidad"]', '5');
+        await page.fill('#materialDirectConsumptionForm [name="motivo"]', 'Consumo de la línea Norte');
+        await page.locator('#materialDirectConsumptionForm [type="submit"]').click();
+        await page.waitForFunction(() => !document.getElementById('materialDirectConsumptionDialog').open);
+        const write = calls.find((c) => c.path.endsWith('/almacenes/movimientos') && c.method === 'POST');
+        assert.equal(write.body.almacen_origen_id, 'norte'); assert.equal(write.body.centro_costo_id, 'packing');
+        assert.equal(write.body.tipo, 'consumo'); assert.deepEqual(errors, []);
+    } finally { await browser.close(); }
 });
 
 test('la orden informa cobertura por bodega y conserva el origen en el borrador', async () => {
