@@ -16,6 +16,7 @@ class CamaraPlanoResource extends CamaraResumenResource
     {
         return [
             ...parent::toArray($request),
+            'revision_reservas' => (int) $this->revision_reservas,
             'desocupacion_habilitada' => (bool) $this->resource->getAttribute('desocupacion_habilitada'),
             'desocupacion' => $this->resource->getRelation('ultimaDesocupacion')
                 ? app(EstadoDesocupacionProgramada::class)->resumir($this->resource->getRelation('ultimaDesocupacion'))

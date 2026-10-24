@@ -465,6 +465,51 @@ class PresenciaCargaAndenApiTest extends TestCase
         $this->assertCount(1, $evento->datos['candidatos']);
     }
 
+    public function test_despeje_rechaza_otra_camara_si_hay_espacio_local_y_no_rebloquea_la_salida(): void
+    {
+        $ctx = $this->crearContexto(2, 3);
+        $carga = $this->crearCargaPublicada($ctx, [$ctx['folios'][0]]);
+        $this->registrarPresencia($ctx, $carga, $ctx['anden']);
+        $tarea = TareaMovimiento::query()->sole();
+        $otra = Camara::create(['codigo' => 'CAM-ALTERNATIVA', 'nombre' => 'Cámara 1', 'cantidad_bandas' => 1, 'posiciones_por_banda' => 1, 'cantidad_niveles' => 1]);
+        app(ServicioBandasOperacionales::class)->sincronizar($otra, $ctx['administrador']);
+        $remota = Posicion::create(['camara_id' => $otra->id, 'banda' => 1, 'posicion' => 1, 'nivel' => 1]);
+        $local = Posicion::create(['camara_id' => $ctx['camara']->id, 'banda' => 2, 'posicion' => 1, 'nivel' => 1]);
+        $planes = app(ServicioPlanesOperacionales::class);
+        $asumida = $planes->asumir($tarea, $ctx['operador'], $ctx['dispositivo']);
+        try {
+            $planes->materializarDestino($asumida, $remota, $ctx['operador'], $ctx['dispositivo']);
+            $this->fail('Se aceptó cruzar de cámara teniendo un destino local válido.');
+        } catch (ConflictoOperacion $e) {
+            $this->assertStringContainsString('cámara de origen', $e->getMessage());
+        }
+        $frente = $ctx['posiciones'][2];
+        try {
+            $planes->materializarDestino($asumida->fresh(), $frente, $ctx['operador'], $ctx['dispositivo']);
+            $this->fail('Se aceptó volver a bloquear la banda de extracción.');
+        } catch (ConflictoOperacion $e) {
+            $this->assertStringContainsString('extraer la carga', $e->getMessage());
+        }
+        $materializada = $planes->materializarDestino($asumida->fresh(), $local, $ctx['operador'], $ctx['dispositivo']);
+        $this->assertSame('reubicacion', $materializada->tipo_movimiento->value);
+        $this->assertSame($ctx['camara']->id, $materializada->camara_destino_id);
+    }
+
+    public function test_despeje_permite_otra_camara_si_no_queda_destino_local_valido(): void
+    {
+        $ctx = $this->crearContexto(2, 3);
+        $carga = $this->crearCargaPublicada($ctx, [$ctx['folios'][0]]);
+        $this->registrarPresencia($ctx, $carga, $ctx['anden']);
+        $tarea = TareaMovimiento::query()->sole();
+        $otra = Camara::create(['codigo' => 'CAM-RESPALDO', 'nombre' => 'Cámara respaldo', 'cantidad_bandas' => 1, 'posiciones_por_banda' => 1, 'cantidad_niveles' => 1]);
+        app(ServicioBandasOperacionales::class)->sincronizar($otra, $ctx['administrador']);
+        $remota = Posicion::create(['camara_id' => $otra->id, 'banda' => 1, 'posicion' => 1, 'nivel' => 1]);
+        $planes = app(ServicioPlanesOperacionales::class);
+        $asumida = $planes->asumir($tarea, $ctx['operador'], $ctx['dispositivo']);
+        $materializada = $planes->materializarDestino($asumida, $remota, $ctx['operador'], $ctx['dispositivo']);
+        $this->assertSame('traslado_entre_camaras', $materializada->tipo_movimiento->value);
+    }
+
     /** @return array<string, mixed> */
     private function crearContexto(
         int $cantidadFolios,

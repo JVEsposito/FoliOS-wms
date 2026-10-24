@@ -659,6 +659,7 @@ export type LocationRecommendation = {
 };
 
 export type CameraPlan = CameraSummary & {
+  revision_reservas?: number;
   bandas_operacionales?: OperationalBand[];
   folios_sin_posicion: Folio[];
   posiciones: Position[];

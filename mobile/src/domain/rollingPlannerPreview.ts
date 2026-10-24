@@ -5,12 +5,13 @@ import type {
   OperationalPhysicalFrontierSnapshot,
   OperationalTask,
 } from './operationalTasks';
-import { calculateRollingFrontier } from './rollingPlanner';
+import { calculateRollingFrontier, loadStaging, taskWithCurrentLoadTarget } from './rollingPlanner';
 
 export type FrontierPreview = {
   physicalVersion: string;
   proposals: OperationalFrontierProposal[];
   destinations: Record<string, string>;
+  loadTargets?: Record<string, string>;
 };
 
 // El snapshot completo incluye las tareas asumidas por esta tablet: cambia al
@@ -79,6 +80,9 @@ export function simulateFrontierPreview(
       candidate.taskId,
       `${cameraNames.get(candidate.cameraId) ?? 'Cámara'} · ${candidate.position.etiqueta ?? `B${candidate.position.banda}-P${candidate.position.posicion}-N${candidate.position.nivel}`}`,
     ])),
+    loadTargets: Object.fromEntries(eligible.map((task) => [task.id, JSON.stringify(loadStaging(
+      taskWithCurrentLoadTarget(task, snapshot.tareas.find((item) => item.id === task.id)),
+    ))])),
   };
 }
 
@@ -93,6 +97,8 @@ export function reusablePreviewProposal(
   const old = preview.proposals.find((proposal) => proposal.tarea_id === taken.id);
   const task = current.tareas.find((item) => item.id === taken.id && item.materializable);
   if (!old || !task || !task.plan_version || taken.reserva?.tipo_compromiso === 'fisica') return null;
+  const target = JSON.stringify(loadStaging(taskWithCurrentLoadTarget(taken, task)));
+  if (preview.loadTargets?.[taken.id] !== undefined && preview.loadTargets[taken.id] !== target) return null;
   return { ...old, tarea_version: task.version, plan_version: task.plan_version };
 }
 

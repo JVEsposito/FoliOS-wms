@@ -15,6 +15,7 @@ use App\Models\ReservaTareaMovimiento;
 use App\Models\TareaMovimiento;
 use App\Models\Temporada;
 use App\Models\User;
+use App\Services\Cargas\ServicioAcopioCarga;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use DomainException;
 use Illuminate\Support\Collection;
@@ -22,11 +23,12 @@ use Illuminate\Support\Facades\DB;
 
 class ServicioFronteraFisica
 {
-    private const VERSION_SNAPSHOT = 'frontera_fisica_global_v3_envases_comprometidos';
+    private const VERSION_SNAPSHOT = 'frontera_fisica_global_v4_acopio_cargas';
 
     public function __construct(
         private readonly ServicioEstadoArbitrajePlanificador $estadoArbitraje,
         private readonly ServicioDesplieguePlanificador $despliegue,
+        private readonly ServicioAcopioCarga $acopio,
     ) {}
 
     /** @return array<string, mixed> */
@@ -44,10 +46,13 @@ class ServicioFronteraFisica
             $ciclo = $proyeccionArbitraje['vigente'] ? $ultimoCiclo : null;
             unset($proyeccionArbitraje['ciclo']);
             $decisiones = $ciclo?->decisiones?->keyBy('maniobra_operacional_id') ?? collect();
-            $tareas = $this->tareasActuales($temporada, $usuario, $dispositivo)
+            $actuales = $this->tareasActuales($temporada, $usuario, $dispositivo);
+            $acopios = $this->acopio->paraTareas($actuales);
+            $tareas = $actuales
                 ->map(function (TareaMovimiento $tarea) use (
                     $camarasDirigidas,
                     $decisiones,
+                    $acopios,
                 ): array {
                     $maniobra = $tarea->maniobraOperacional;
                     $reserva = $tarea->reservaActiva;
@@ -95,6 +100,9 @@ class ServicioFronteraFisica
                         ] : null,
                         'destino_reservado' => $reserva?->bloqueo_posicion_id !== null,
                         'materializable' => $materializable,
+                        ...(array_key_exists($tarea->id, $acopios)
+                            ? ['acopio_carga' => $acopios[$tarea->id]]
+                            : []),
                     ];
                 })
                 ->sortBy(fn (array $tarea): string => implode(':', [

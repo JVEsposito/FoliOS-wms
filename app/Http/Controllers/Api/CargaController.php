@@ -11,6 +11,7 @@ use App\Enums\EstadoIncidenciaCarga;
 use App\Enums\EstadoOperacionalFolio;
 use App\Enums\EstadoPosicion;
 use App\Enums\EstadoProcesoPrefrio;
+use App\Enums\EstadoTareaMovimiento;
 use App\Enums\HabilitacionAlmacenamientoFolio;
 use App\Enums\TipoBulto;
 use App\Http\Controllers\Controller;
@@ -541,6 +542,9 @@ class CargaController extends Controller
             'asignacionesActuales.anden:id,codigo,nombre',
             'asignacionesActuales.folio.ubicacionActual.posicion.camara:id,codigo,nombre',
             'asignacionesActuales.folio.procesosPrefrio.proceso.tunel:id,codigo,nombre',
+            'asignacionesActuales.folio.tareasMovimiento' => fn ($consulta) => $consulta
+                ->whereIn('estado', [EstadoTareaMovimiento::Pendiente, EstadoTareaMovimiento::Asumida, EstadoTareaMovimiento::EnProceso])
+                ->with('responsable:id,name'),
             'asignacionesHistoricas.anden:id,codigo,nombre',
             'asignacionesHistoricas.folio.ubicacionActual.posicion.camara:id,codigo,nombre',
             'tareas.camaraOrigen:id,codigo,nombre',
@@ -561,6 +565,9 @@ class CargaController extends Controller
             'asignacionesActuales.anden:id,codigo,nombre',
             'asignacionesActuales.folio.ubicacionActual.posicion.camara:id,codigo,nombre',
             'asignacionesActuales.folio.procesosPrefrio.proceso.tunel:id,codigo,nombre',
+            'asignacionesActuales.folio.tareasMovimiento' => fn ($consulta) => $consulta
+                ->whereIn('estado', [EstadoTareaMovimiento::Pendiente, EstadoTareaMovimiento::Asumida, EstadoTareaMovimiento::EnProceso])
+                ->with('responsable:id,name'),
         ];
     }
 

@@ -6,6 +6,7 @@ import {
   type ManeuverDiscrepancyType,
   type ReportedManeuverDiscrepancy,
   operationalTaskPositionLabel,
+  operationalTaskOriginLabel,
   operationalTaskReason,
 } from '../../domain/operationalTasks';
 import {
@@ -150,7 +151,8 @@ export function OperatorTaskExecution({
                 <Text style={styles.wideLabor}>
                   {purpose.label}{maneuverObjectiveCount(task) > 1 ? ' · ' + maneuverObjectiveCount(task) + ' objetivos' : ''}
                 </Text>
-                <Text style={styles.wideRoute}>{operationalTaskPositionLabel(task.origen)} → {action.destination}</Text>
+                <Text style={styles.wideLabor}>Envase: {task.folio.envase || 'sin informar'}</Text>
+                <Text style={styles.wideRoute}>{operationalTaskOriginLabel(task)} → {action.destination}</Text>
               </View>
               <View style={styles.wideSteps}>
                 <Text style={styles.wideLabel}>PASO {currentStep} / {totalSteps}</Text>
@@ -185,8 +187,8 @@ export function OperatorTaskExecution({
             <View style={styles.wideRight}>
               <Text style={styles.wideDestinationLabel}>{action.verb === 'RETIRAR' ? 'Retira el pallet de' : action.verb === 'UBICAR' ? 'Lleva el pallet a' : 'Entrega el pallet en'}</Text>
               <View style={styles.wideDestinationRow}>
-                <Text style={[styles.wideDestination, (action.verb === 'RETIRAR' ? operationalTaskPositionLabel(task.origen) : action.destination).length > 14 && styles.wideDestinationLong]}>
-                  {action.verb === 'RETIRAR' ? operationalTaskPositionLabel(task.origen) : action.destination}
+                <Text style={[styles.wideDestination, (action.verb === 'RETIRAR' ? operationalTaskOriginLabel(task) : action.destination).length > 14 && styles.wideDestinationLong]}>
+                  {action.verb === 'RETIRAR' ? operationalTaskOriginLabel(task) : action.destination}
                 </Text>
                 <Text style={styles.wideReason}>{operationalTaskReason(task)}</Text>
               </View>
@@ -226,11 +228,12 @@ export function OperatorTaskExecution({
 
           <View style={[styles.summary, compact && styles.summaryCompact]}>
             <SummaryCell label="Folio / pallet"><OperatorEntityCode prominent value={task.folio.numero_folio} /></SummaryCell>
+            <SummaryCell label="Envase" value={task.folio.envase || 'Sin informar'} />
             <SummaryCell label="Labor" value={purpose.label} />
             {maneuverObjectiveCount(task) > 1 ? (
               <SummaryCell label="Objetivos" value={String(maneuverObjectiveCount(task))} />
             ) : null}
-            <SummaryCell label="Ubicación actual" value={operationalTaskPositionLabel(task.origen)} />
+            <SummaryCell label="Ubicación actual" value={operationalTaskOriginLabel(task)} />
             <SummaryCell label="Operador" value={task.responsable?.nombre ?? operatorName} />
             <SummaryCell label="Dispositivo" value={task.dispositivo?.nombre ?? deviceName} />
           </View>
@@ -277,7 +280,7 @@ export function OperatorTaskExecution({
               </View>
 
               <View style={styles.locationCard}>
-                <LocationLine label="Origen" value={operationalTaskPositionLabel(task.origen)} />
+                <LocationLine label="Origen" value={operationalTaskOriginLabel(task)} />
                 <LocationLine label="Destino" value={action.destination} strong />
                 <LocationLine label="Instrucción" value={operationalTaskReason(task)} />
               </View>
@@ -379,7 +382,7 @@ function PausedManeuver({ onBack, task }: { onBack: () => void; task: Operationa
         <SummaryCell label="Folio / pallet"><OperatorEntityCode prominent value={task.folio.numero_folio} /></SummaryCell>
         <SummaryCell label="Estado físico" value={physicalState} />
         <SummaryCell label="Paso" value={`${task.secuencia_maniobra ?? task.maniobra?.secuencia_actual ?? 1} de ${task.maniobra?.pasos_totales ?? 1}`} />
-        <SummaryCell label="Ubicación informada" value={operationalTaskPositionLabel(task.origen)} />
+        <SummaryCell label="Ubicación informada" value={operationalTaskOriginLabel(task)} />
         <SummaryCell label="Destino protegido" value={buildOperatorManeuverAction(task).destination} />
       </View>
 
@@ -403,7 +406,7 @@ function SummaryCell({ children, label, value }: { children?: ReactNode; label: 
   return (
     <View style={styles.summaryCell}>
       <Text style={styles.summaryLabel}>{label}</Text>
-      {children ?? <Text numberOfLines={2} style={styles.summaryValue}>{value}</Text>}
+      {children ?? <Text style={styles.summaryValue}>{value}</Text>}
     </View>
   );
 }

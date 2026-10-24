@@ -10,11 +10,13 @@ use App\Enums\PrioridadOperacional;
 use App\Enums\TipoBulto;
 use App\Enums\TipoMovimiento;
 use App\Enums\TipoPlanOperacional;
+use App\Models\Carga;
 use App\Models\PlanOperacional;
 use App\Models\ProcesoPrefrio;
 use App\Models\ProcesoPrefrioFolio;
 use App\Models\TareaMovimiento;
 use App\Models\User;
+use App\Services\Cargas\ServicioPlanConcentracionCarga;
 use App\Services\Estiba\ServicioPlanesOperacionales;
 use App\Services\InspeccionSag\ServicioPreparacionFisicaSag;
 use DomainException;
@@ -139,6 +141,7 @@ class ServicioGeneracionRecepcionTunel
                 ],
                 'version' => $existente->version + 1,
             ]);
+            $this->coordinarCargas($existente, $usuario);
 
             return $existente->refresh();
         }
@@ -173,6 +176,7 @@ class ServicioGeneracionRecepcionTunel
             foreach ($plan->tareas()->get() as $nueva) {
                 $this->vincularRestauracionSag($nueva);
             }
+            $this->coordinarCargas($plan, $usuario);
 
             return $plan;
         } catch (UniqueConstraintViolationException) {
@@ -224,6 +228,17 @@ class ServicioGeneracionRecepcionTunel
             ->whereHas('planOperacional', fn ($consulta) => $consulta
                 ->where('referencia_tipo', ServicioPreparacionFisicaSag::REFERENCIA_PLAN))
             ->update(['reemplazada_por_tarea_id' => $nueva->id]);
+    }
+
+    private function coordinarCargas(PlanOperacional $plan, User $usuario): void
+    {
+        $cargas = Carga::query()
+            ->whereHas('asignacionesActuales', fn ($consulta) => $consulta
+                ->whereIn('folio_id', $plan->tareas()->select('folio_id')))
+            ->get();
+        foreach ($cargas as $carga) {
+            app(ServicioPlanConcentracionCarga::class)->sincronizar($carga, $usuario);
+        }
     }
 
     private function planExistente(string $procesoId): ?PlanOperacional

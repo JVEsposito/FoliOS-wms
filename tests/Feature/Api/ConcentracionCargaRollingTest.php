@@ -15,6 +15,7 @@ use App\Enums\RolUsuario;
 use App\Enums\TipoBulto;
 use App\Enums\TipoMovimiento;
 use App\Enums\TipoPasoManiobra;
+use App\Enums\TipoPlanOperacional;
 use App\Exceptions\ConflictoOperacion;
 use App\Models\Anden;
 use App\Models\Camara;
@@ -23,21 +24,27 @@ use App\Models\CargaFolio;
 use App\Models\Dispositivo;
 use App\Models\EventoCarga;
 use App\Models\Folio;
+use App\Models\PlanOperacional;
 use App\Models\Posicion;
 use App\Models\PresenciaCargaAnden;
 use App\Models\ReservaCargaFolio;
+use App\Models\ReservaTareaMovimiento;
 use App\Models\Temporada;
 use App\Models\UbicacionActual;
 use App\Models\User;
 use App\Services\Camaras\ServicioBandasOperacionales;
+use App\Services\Cargas\RevisionCargaOperacional;
+use App\Services\Cargas\ServicioAcopioCarga;
 use App\Services\Cargas\ServicioPlanConcentracionCarga;
 use App\Services\Estiba\ServicioManiobrasOperacionales;
 use App\Services\Estiba\ServicioMovimientoEstiba;
 use App\Services\Estiba\ServicioPlanesOperacionales;
 use App\Services\Estiba\ServicioReservasTareasMovimiento;
 use App\Services\Estiba\ServicioSesionEstiba;
+use App\Services\Planificador\ServicioRecalculosPendientesPlanificador;
 use DomainException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -232,6 +239,20 @@ class ConcentracionCargaRollingTest extends TestCase
         $this->assertSame(0, $maniobra->reservasBandas()->count());
         $this->assertSame(1, $maniobra->contexto['blockers_destino_util']);
         $this->assertSame(0, $maniobra->contexto['blockers_retorno']);
+        $this->assertSame(2, $maniobra->objetivos()->count());
+        $objetivoSecundario = PlanOperacional::query()->where('referencia_tipo', 'carga_concentracion')
+            ->where('referencia_id', $otraCarga->id)->sole();
+        $this->assertSame(0, $objetivoSecundario->tareas()->count());
+        $this->assertSame(1, $objetivoSecundario->maniobrasResolutorias()->count());
+        $otraCarga->update(['camara_objetivo_id' => $contexto['camaraFuera']->id]);
+        [$operador, $tablet] = $this->crearOperador();
+        try {
+            app(ServicioPlanesOperacionales::class)->asumir($pasos[0], $operador, $tablet);
+            $this->fail('La maniobra usó el acopio anterior de la carga beneficiada.');
+        } catch (ConflictoOperacion $error) {
+            $this->assertStringContainsString('acopio', $error->getMessage());
+            $this->assertSame(EstadoTareaMovimiento::Pendiente, $pasos[0]->refresh()->estado);
+        }
     }
 
     public function test_maniobra_temporal_no_cierra_hasta_devolver_el_blocker(): void
@@ -976,6 +997,287 @@ class ConcentracionCargaRollingTest extends TestCase
         $this->assertSame(60, $plan->contexto['porcentaje_actual']);
         $this->assertFalse($plan->estado->esFinal());
         $this->assertSame(0, $plan->tareas()->count());
+    }
+
+    public function test_recepcion_comparte_acopio_y_objetivo_sin_duplicar_la_tarea_fisica(): void
+    {
+        $contexto = $this->crearContexto(total: 5, concentrados: 3, fuera: 0, sinUbicacion: 2);
+        $recepcion = $this->crearRecepcion($contexto);
+        $plan = app(ServicioPlanConcentracionCarga::class)->sincronizar($contexto['carga'], $contexto['usuario']);
+
+        $this->assertSame(0, $plan->tareas()->count());
+        $this->assertSame(2, $recepcion->tareas()->count());
+        $this->assertSame(2, $plan->contexto['recepciones_pendientes']);
+        $this->assertSame(2, $plan->maniobrasResolutorias()->count());
+        foreach ($recepcion->tareas()->get() as $tarea) {
+            $this->assertSame($contexto['camaraObjetivo']->id, $tarea->camara_destino_id);
+            $this->assertSame($contexto['carga']->id, $tarea->contexto['acopio_carga']['carga_id']);
+            $this->assertCount(3, $tarea->contexto['acopio_carga']['puntos']);
+            $this->assertSame(1, $tarea->maniobraOperacional->costo_movimientos);
+            $this->assertSame(2, $tarea->maniobraOperacional->objetivos()->count());
+        }
+        app(ServicioPlanConcentracionCarga::class)->sincronizar($contexto['carga'], $contexto['usuario']);
+        $this->assertSame(2, $plan->maniobrasResolutorias()->count());
+        $this->assertDatabaseCount('tareas_movimiento', 2);
+    }
+
+    public function test_dos_tablets_extienden_el_acopio_comprometido_y_rechazan_otra_camara_o_un_hueco(): void
+    {
+        $contexto = $this->crearContexto(total: 5, concentrados: 3, fuera: 0, sinUbicacion: 2);
+        $recepcion = $this->crearRecepcion($contexto);
+        $planes = app(ServicioPlanesOperacionales::class);
+        [$a, $tabletA] = $this->crearOperador();
+        [$b, $tabletB] = $this->crearOperadorAdicional();
+        [$primera, $segunda] = $recepcion->tareas()->get()->all();
+        $primera = $planes->asumir($primera, $a, $tabletA);
+        $segunda = $planes->asumir($segunda, $b, $tabletB);
+        $planes->materializarDestino($primera, $contexto['posicionesObjetivo'][3], $a, $tabletA);
+
+        foreach ([$contexto['posicionesFuera'][0], $contexto['posicionesObjetivo'][8]] as $invalida) {
+            try {
+                $planes->materializarDestino($segunda, $invalida, $b, $tabletB);
+                $this->fail('La recepción aceptó un destino ajeno al acopio de la carga.');
+            } catch (ConflictoOperacion $error) {
+                $this->assertStringContainsString('acopio', $error->getMessage());
+            }
+        }
+        // P5 ya es vecina de P4 reservada por A, aunque A aún no la haya recibido.
+        $materializada = $planes->materializarDestino($segunda, $contexto['posicionesObjetivo'][4], $b, $tabletB);
+        $this->assertSame($contexto['posicionesObjetivo'][4]->id, $materializada->posicion_destino_id);
+        $this->assertSame(3, UbicacionActual::query()->count());
+        $this->assertSame(2, ReservaTareaMovimiento::query()->whereNotNull('bloqueo_posicion_id')->count());
+    }
+
+    public function test_primera_recepcion_establece_un_solo_acopio_aun_sin_camara_objetivo(): void
+    {
+        $contexto = $this->crearContexto(total: 2, concentrados: 0, fuera: 0, sinUbicacion: 2);
+        $contexto['carga']->update(['camara_objetivo_id' => null]);
+        $recepcion = $this->crearRecepcion($contexto);
+        $concentracion = app(ServicioPlanConcentracionCarga::class)->sincronizar($contexto['carga'], $contexto['usuario']);
+        $this->assertNotNull($concentracion);
+        $this->assertNull($concentracion->contexto['camara_objetivo_id']);
+        [$a, $tabletA] = $this->crearOperador();
+        [$b, $tabletB] = $this->crearOperadorAdicional();
+        $planes = app(ServicioPlanesOperacionales::class);
+        [$primera, $segunda] = $recepcion->tareas()->get()->all();
+        $primera = $planes->asumir($primera, $a, $tabletA);
+        $segunda = $planes->asumir($segunda, $b, $tabletB);
+        $planes->materializarDestino($primera, $contexto['posicionesObjetivo'][0], $a, $tabletA);
+        $objetivo = app(ServicioAcopioCarga::class)->paraFolio($segunda->folio_id, $segunda->id);
+        $this->assertSame($contexto['camaraObjetivo']->id, $objetivo['camara_objetivo_id']);
+        $this->assertCount(1, $objetivo['puntos']);
+        $this->expectException(ConflictoOperacion::class);
+        $planes->materializarDestino($segunda, $contexto['posicionesFuera'][0], $b, $tabletB);
+    }
+
+    public function test_entrega_de_recepcion_avanza_ambos_objetivos_con_un_solo_movimiento(): void
+    {
+        $contexto = $this->crearContexto(total: 4, concentrados: 3, fuera: 0, sinUbicacion: 1);
+        $folio = $contexto['folios'][3];
+        $folio->update([
+            'estado_operacional' => 'pendiente_ubicacion',
+            'condicion_termica' => 'prefrio_aprobado',
+            'habilitacion_almacenamiento' => 'habilitado',
+        ]);
+        $recepcion = $this->crearRecepcion($contexto);
+        $carga = app(ServicioPlanConcentracionCarga::class)->sincronizar($contexto['carga'], $contexto['usuario']);
+        [$operador, $tablet] = $this->crearOperador();
+        $planes = app(ServicioPlanesOperacionales::class);
+        $tarea = $planes->asumir($recepcion->tareas()->sole(), $operador, $tablet);
+        $tarea = $planes->materializarDestino($tarea, $contexto['posicionesObjetivo'][3], $operador, $tablet);
+        $tarea = $planes->iniciar($tarea, $operador, $tablet);
+        $sesion = app(ServicioSesionEstiba::class)->abrir($contexto['camaraObjetivo'], $operador, $tablet);
+        $proyector = app(ServicioPlanConcentracionCarga::class);
+        $doble = \Mockery::mock(ServicioPlanConcentracionCarga::class);
+        $doble->shouldNotReceive('sincronizar');
+        app()->instance(ServicioPlanConcentracionCarga::class, $doble);
+        app(ServicioMovimientoEstiba::class)->ubicar(
+            operacionId: (string) Str::uuid(), numeroFolio: $folio->numero_folio, tipoBulto: TipoBulto::Pallet,
+            posicionDestino: $contexto['posicionesObjetivo'][3], sesionDestino: $sesion,
+            usuario: $operador, dispositivo: $tablet,
+            versionDestinoConocida: $contexto['camaraObjetivo']->refresh()->version_plano,
+            generadoDispositivoAt: now(), tareaMovimiento: $tarea,
+        );
+        app()->instance(ServicioPlanConcentracionCarga::class, $proyector);
+        $this->assertDatabaseHas('recalculos_pendientes_planificador', [
+            'tipo' => ServicioRecalculosPendientesPlanificador::CARGA,
+            'fuente_id' => $contexto['carga']->id, 'pendiente' => true,
+        ]);
+        app(ServicioPlanConcentracionCarga::class)->sincronizar($contexto['carga'], $contexto['usuario']);
+        $this->assertSame('completado', $recepcion->refresh()->estado->value);
+        $this->assertSame('completado', $carga->refresh()->estado->value);
+        $this->assertSame(100, $carga->contexto['porcentaje_actual']);
+        $this->assertSame(0, $carga->contexto['recepciones_pendientes']);
+        $this->assertDatabaseCount('movimientos', 1);
+        $this->assertDatabaseCount('tareas_movimiento', 1);
+    }
+
+    public function test_cambio_de_camara_antes_de_iniciar_rechaza_la_reserva_antigua_pero_respeta_movimiento_iniciado(): void
+    {
+        $contexto = $this->crearContexto(total: 4, concentrados: 3, fuera: 0, sinUbicacion: 1);
+        $recepcion = $this->crearRecepcion($contexto);
+        [$operador, $tablet] = $this->crearOperador();
+        $planes = app(ServicioPlanesOperacionales::class);
+        $tarea = $planes->asumir($recepcion->tareas()->sole(), $operador, $tablet);
+        $tarea = $planes->materializarDestino($tarea, $contexto['posicionesObjetivo'][3], $operador, $tablet);
+        $contexto['carga']->update(['camara_objetivo_id' => $contexto['camaraFuera']->id]);
+        try {
+            $planes->iniciar($tarea, $operador, $tablet);
+            $this->fail('Se inició una entrega hacia una cámara que ya no corresponde.');
+        } catch (ConflictoOperacion $error) {
+            $this->assertStringContainsString('acopio', $error->getMessage());
+        }
+        $contexto['carga']->update(['camara_objetivo_id' => $contexto['camaraObjetivo']->id]);
+        $tarea = $planes->iniciar($tarea, $operador, $tablet);
+        $contexto['carga']->update(['camara_objetivo_id' => $contexto['camaraFuera']->id]);
+        app(ServicioPlanConcentracionCarga::class)->sincronizar($contexto['carga'], $contexto['usuario']);
+        $this->assertSame(EstadoTareaMovimiento::EnProceso, $tarea->refresh()->estado);
+        $this->assertSame($contexto['posicionesObjetivo'][3]->id, $tarea->posicion_destino_id);
+        $this->assertSame($operador->id, $tarea->responsable_user_id);
+    }
+
+    public function test_packing_asignado_despues_de_generar_recepcion_incorpora_la_carga_al_asumir(): void
+    {
+        $contexto = $this->crearContexto(total: 4, concentrados: 3, fuera: 0, sinUbicacion: 1);
+        $folio = $contexto['folios'][3];
+        $folio->update(['origen_sistema' => 'recepcion_externa']);
+        ReservaCargaFolio::query()->where('folio_id', $folio->id)->delete();
+        $recepcion = $this->crearRecepcion($contexto, TipoPlanOperacional::AlmacenamientoPallet);
+        $this->assertNull($recepcion->tareas()->sole()->camara_destino_id);
+        $asignacion = CargaFolio::query()->where('folio_id', $folio->id)->sole();
+        ReservaCargaFolio::create(['folio_id' => $folio->id, 'carga_folio_id' => $asignacion->id]);
+        [$operador, $tablet] = $this->crearOperador();
+        $tarea = app(ServicioPlanesOperacionales::class)->asumir($recepcion->tareas()->sole(), $operador, $tablet);
+        $this->assertSame($contexto['camaraObjetivo']->id, $tarea->camara_destino_id);
+        $this->assertSame($contexto['carga']->id, $tarea->contexto['acopio_carga']['carga_id']);
+        $this->assertSame(TipoPlanOperacional::AlmacenamientoPallet, $tarea->planOperacional->tipo);
+        $this->assertSame(2, $tarea->maniobraOperacional->objetivos()->count());
+        $this->assertDatabaseCount('tareas_movimiento', 1);
+    }
+
+    public function test_carga_reasignada_antes_del_claim_sustituye_solo_el_objetivo_secundario(): void
+    {
+        $contexto = $this->crearContexto(total: 4, concentrados: 3, fuera: 0, sinUbicacion: 1);
+        $recepcion = $this->crearRecepcion($contexto);
+        app(ServicioPlanConcentracionCarga::class)->sincronizar($contexto['carga'], $contexto['usuario']);
+        $folio = $contexto['folios'][3];
+        $otra = Carga::create([
+            'temporada_id' => $contexto['temporada']->id, 'codigo' => 'CAR-COORD-OTRA',
+            'estado' => EstadoCarga::Pendiente, 'prioridad' => PrioridadCarga::Normal,
+            'camara_objetivo_id' => $contexto['camaraFuera']->id, 'creada_por_user_id' => $contexto['usuario']->id,
+            'actualizada_por_user_id' => $contexto['usuario']->id,
+        ]);
+        $asignacion = CargaFolio::create([
+            'carga_id' => $otra->id, 'folio_id' => $folio->id, 'estado' => EstadoCargaFolio::Pendiente,
+            'asignado_por_user_id' => $contexto['usuario']->id, 'asignado_at' => now(),
+        ]);
+        ReservaCargaFolio::query()->where('folio_id', $folio->id)->update(['carga_folio_id' => $asignacion->id]);
+        [$operador, $tablet] = $this->crearOperador();
+        $tarea = app(ServicioPlanesOperacionales::class)->asumir($recepcion->tareas()->sole(), $operador, $tablet);
+        $objetivos = $tarea->maniobraOperacional->objetivos()->get();
+        $this->assertSame($otra->id, $tarea->contexto['acopio_carga']['carga_id']);
+        $this->assertSame($contexto['camaraFuera']->id, $tarea->camara_destino_id);
+        $this->assertSame(2, $objetivos->count());
+        $this->assertTrue($objetivos->contains('id', $recepcion->id));
+        $this->assertFalse($objetivos->contains('referencia_id', $contexto['carga']->id));
+        $this->assertTrue($objetivos->contains('referencia_id', $otra->id));
+    }
+
+    public function test_un_destino_de_carga_no_habilita_almacenar_un_pallet_sin_aprobacion_termica(): void
+    {
+        $contexto = $this->crearContexto(total: 4, concentrados: 3, fuera: 0, sinUbicacion: 1);
+        $folio = $contexto['folios'][3];
+        $folio->update(['condicion_termica' => 'pendiente_prefrio', 'habilitacion_almacenamiento' => 'no_habilitado']);
+        $recepcion = $this->crearRecepcion($contexto);
+        [$operador, $tablet] = $this->crearOperador();
+        $planes = app(ServicioPlanesOperacionales::class);
+        $tarea = $planes->asumir($recepcion->tareas()->sole(), $operador, $tablet);
+        $tarea = $planes->materializarDestino($tarea, $contexto['posicionesObjetivo'][3], $operador, $tablet);
+        $sesion = app(ServicioSesionEstiba::class)->abrir($contexto['camaraObjetivo'], $operador, $tablet);
+        try {
+            app(ServicioMovimientoEstiba::class)->ubicar(
+                operacionId: (string) Str::uuid(), numeroFolio: $folio->numero_folio, tipoBulto: TipoBulto::Pallet,
+                posicionDestino: $contexto['posicionesObjetivo'][3], sesionDestino: $sesion,
+                usuario: $operador, dispositivo: $tablet,
+                versionDestinoConocida: $contexto['camaraObjetivo']->refresh()->version_plano,
+                generadoDispositivoAt: now(), tareaMovimiento: $tarea,
+            );
+            $this->fail('La previsión de la carga habilitó almacenamiento sin autorización térmica.');
+        } catch (DomainException) {
+            $this->assertDatabaseCount('movimientos', 0);
+            $this->assertSame(EstadoTareaMovimiento::Asumida, $tarea->refresh()->estado);
+        }
+    }
+
+    public function test_asignacion_retirada_despues_del_claim_se_puede_liberar_y_retomar_sin_objetivo_obsoleto(): void
+    {
+        $contexto = $this->crearContexto(total: 4, concentrados: 3, fuera: 0, sinUbicacion: 1);
+        $recepcion = $this->crearRecepcion($contexto);
+        [$operador, $tablet] = $this->crearOperador();
+        $revision = app(RevisionCargaOperacional::class);
+        $antes = $revision->calcular();
+        $planes = app(ServicioPlanesOperacionales::class);
+        $tarea = $planes->asumir($recepcion->tareas()->sole(), $operador, $tablet);
+        $this->assertNotSame($antes, $revision->calcular());
+        ReservaCargaFolio::query()->where('folio_id', $tarea->folio_id)->delete();
+        try {
+            $planes->materializarDestino($tarea, $contexto['posicionesObjetivo'][3], $operador, $tablet);
+            $this->fail('El claim siguió asociado a una carga retirada.');
+        } catch (ConflictoOperacion $error) {
+            $this->assertStringContainsString('libere y vuelva a tomar', $error->getMessage());
+        }
+        $tarea = $planes->liberar($tarea, $operador, $tablet);
+        $tarea = $planes->asumir($tarea, $operador, $tablet);
+        $this->assertNull($tarea->contexto['acopio_carga']);
+        $this->assertSame(1, $tarea->maniobraOperacional->objetivos()->count());
+        $tarea = $planes->materializarDestino($tarea, $contexto['posicionesFuera'][0], $operador, $tablet);
+        $this->assertSame($contexto['posicionesFuera'][0]->id, $tarea->posicion_destino_id);
+    }
+
+    public function test_snapshot_de_25_recepciones_comparte_consultas_y_conserva_el_acopio_individual(): void
+    {
+        $contexto = $this->crearContexto(total: 26, concentrados: 1, fuera: 0, sinUbicacion: 25);
+        $recepcion = $this->crearRecepcion($contexto);
+        $tareas = $recepcion->tareas()->get();
+        $acopio = app(ServicioAcopioCarga::class);
+        DB::enableQueryLog();
+        try {
+            DB::flushQueryLog();
+            $acopio->paraTareas($tareas->take(1));
+            $consultasUna = count(DB::getQueryLog());
+            $tareas->each->unsetRelation('planOperacional');
+            DB::flushQueryLog();
+            $resultado = $acopio->paraTareas($tareas);
+            $consultasTodas = count(DB::getQueryLog());
+        } finally {
+            DB::disableQueryLog();
+            DB::flushQueryLog();
+        }
+        $this->assertCount(25, $resultado);
+        $this->assertSame($consultasUna, $consultasTodas, 'El número de consultas no debe crecer por pallet de la misma carga.');
+        $this->assertLessThanOrEqual(15, $consultasTodas);
+        foreach ($tareas as $tarea) {
+            $this->assertSame($acopio->paraFolio($tarea->folio_id, $tarea->id), $resultado[$tarea->id]);
+        }
+    }
+
+    private function crearRecepcion(array $contexto, TipoPlanOperacional $tipo = TipoPlanOperacional::RecepcionTunel): PlanOperacional
+    {
+        $folios = collect($contexto['folios'])->filter(fn (Folio $folio): bool => ! $folio->ubicacionActual()->exists());
+
+        return app(ServicioPlanesOperacionales::class)->crear(
+            temporada: $contexto['temporada'], tipo: $tipo,
+            titulo: 'Recibir túnel coordinado', creadoPor: $contexto['usuario'],
+            tareas: $folios->map(fn (Folio $folio): array => [
+                'folio_id' => $folio->id, 'tipo_movimiento' => TipoMovimiento::UbicacionInicial,
+            ])->values()->all(), contexto: ['planner_horizon' => 'rolling'],
+        );
+    }
+
+    private function crearOperadorAdicional(): array
+    {
+        return [User::factory()->create(['rol' => RolUsuario::CamareroFrio, 'activo' => true]),
+            Dispositivo::create(['codigo' => 'TABLET-COORD-B', 'nombre' => 'Tablet B', 'activo' => true])];
     }
 
     public function test_servidor_rechaza_destino_que_no_amplia_el_grupo_y_acepta_un_vecino(): void

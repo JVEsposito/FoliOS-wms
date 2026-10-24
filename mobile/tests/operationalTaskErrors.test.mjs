@@ -34,6 +34,7 @@ function harness({ cameraBusy = true, openConflict = false, completionError = ''
       return tab === 'mias' ? [nextTask] : [];
     },
     currentVerification: async () => null,
+    ownState: async () => ({ confirmada: false, tarea: nextTask, operacion: null }),
     physicalFrontierSnapshot: async () => { throw new Error('Sin simulación local'); },
     pinStatus: async () => ({ configurado: true, bloqueado_hasta: null }),
     start: async () => {
@@ -44,6 +45,7 @@ function harness({ cameraBusy = true, openConflict = false, completionError = ''
     },
   };
   const cache = new Map();
+  const storage = new Map();
   const native = {
     ActivityIndicator: 'ActivityIndicator', Modal: 'Modal', Pressable: 'Pressable',
     ScrollView: 'ScrollView', Text: 'Text', View: 'View',
@@ -60,6 +62,7 @@ function harness({ cameraBusy = true, openConflict = false, completionError = ''
     }).outputText;
     const mockRequire = (id) => {
       if (id === 'react-native') return native;
+      if (id === '@react-native-async-storage/async-storage') return { getItem: async (key) => storage.get(key) ?? null, setItem: async (key, value) => { storage.set(key, value); }, removeItem: async (key) => { storage.delete(key); } };
       if (id === 'expo-crypto') return { randomUUID: () => 'operation-1' };
       if (id.endsWith('/hooks/useOperationalPolling')) return { useOperationalPolling: (task, options) => { polling = { task, options }; } };
       if (id.endsWith('/services/operationalTasksApi')) return { OperationalTasksApi: class { constructor() { return taskApi; } } };
@@ -113,7 +116,7 @@ function harness({ cameraBusy = true, openConflict = false, completionError = ''
   return {
     calls,
     async mount() {
-      await flush(() => { renderer = create(React.createElement(OperationalTaskInbox, { api, auth: { token: 'token', dispositivo: { nombre: 'TABLET-02' }, usuario: { nombre: 'Camarero', capacidades: { puede_consultar_cargas: withLoads } } } })); });
+      await flush(() => { renderer = create(React.createElement(OperationalTaskInbox, { api, auth: { token: 'token', dispositivo: { id: 'tablet-2', nombre: 'TABLET-02' }, usuario: { id: '1', nombre: 'Camarero', capacidades: { puede_consultar_cargas: withLoads } } } })); });
     },
     async start() {
       await flush(() => view('OperatorTaskHome').props.onOpen({ source: 'mine', task: nextTask }));
@@ -124,7 +127,7 @@ function harness({ cameraBusy = true, openConflict = false, completionError = ''
       await flush(() => view('OperatorTaskExecution').props.onConfirmStart({ folioDigits: '003', pin: '1234' }));
     },
     async complete() { await flush(() => view('OperatorTaskExecution').props.onComplete()); },
-    async refresh() { await flush(() => polling.task()); },
+    async refresh() { await flush(() => polling.task().catch(polling.options.onError)); },
     async openLoads() { await flush(() => renderer.root.findAllByType('Pressable').find((button) => button.findAllByType('Text').some((text) => String(text.props.children).includes('Cargas activas'))).props.onPress()); },
     async closeLoads() { await flush(() => view('OperatorLoadStatus').props.onBack()); },
     async backgroundFailure(message) { listError = message; await this.refresh(); },
@@ -174,7 +177,8 @@ test('cámara destino ocupada: el error sobrevive al refresco y solo se cierra c
     await h.refresh();
     assert.equal(h.message(), original);
     await h.backgroundFailure('El servidor no responde');
-    assert.equal(h.message(), original);
+    assert.ok(h.message().includes('No se pudo actualizar'));
+    assert.equal(h.modal()[0].findAllByType('Text').some((node) => String(node.props.children).includes('TABLET-PREFRIO')), true);
     assert.equal(h.modal().length, 1);
     await h.dismiss();
     assert.equal(h.modal().length, 0);

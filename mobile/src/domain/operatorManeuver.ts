@@ -3,6 +3,7 @@ import type {
   OperationalTask,
   OperationalTaskEndpoint,
 } from './operationalTasks';
+import { operationalTaskDestinationLabel, operationalTaskOriginLabel } from './operationalTasks';
 
 export type OperatorManeuverAction = {
   verb: 'RETIRAR' | 'UBICAR' | 'ENTREGAR';
@@ -71,7 +72,7 @@ export function buildOperatorManeuverSequence(task: OperationalTask): OperatorMa
   if (steps.length) {
     return [...steps]
       .sort((left, right) => left.secuencia - right.secuencia)
-      .map((step) => sequenceItem(step, current));
+      .map((step) => sequenceItem(step, current, task));
   }
 
   const total = task.maniobra?.pasos_totales ?? 1;
@@ -82,7 +83,7 @@ export function buildOperatorManeuverSequence(task: OperationalTask): OperatorMa
       number,
       folio: number === current ? task.folio.numero_folio : 'Paso protegido',
       route: number === current
-        ? `${positionLabel(task.origen)} → ${taskDestinationLabel(task)}`
+        ? `${operationalTaskOriginLabel(task)} → ${taskDestinationLabel(task)}`
         : 'El detalle se habilitará al avanzar',
       action: number === current ? buildOperatorManeuverAction(task).primaryLabel : 'Pendiente',
       state: number < current ? 'complete' : number === current ? 'current' : 'pending',
@@ -90,8 +91,9 @@ export function buildOperatorManeuverSequence(task: OperationalTask): OperatorMa
   });
 }
 
-function sequenceItem(step: OperationalManeuverStep, current: number): OperatorManeuverSequenceItem {
-  const origin = positionLabel(step.origen);
+function sequenceItem(step: OperationalManeuverStep, current: number, task: OperationalTask): OperatorManeuverSequenceItem {
+  const origin = step.id === task.id ? operationalTaskOriginLabel(task)
+    : step.tipo_paso === 'retorno_banda' ? 'Pallet bajo custodia' : positionLabel(step.origen);
   const destination = stepDestinationLabel(step);
   return {
     id: step.id,
@@ -119,7 +121,7 @@ function positionLabel(endpoint: OperationalTaskEndpoint) {
 function taskDestinationLabel(task: OperationalTask) {
   if (task.destino_logico?.tipo === 'anden') return task.destino_logico.nombre;
   if (task.tipo_paso_maniobra === 'extraccion_temporal') return 'Bajo maniobra';
-  return positionLabel(task.destino);
+  return operationalTaskDestinationLabel(task);
 }
 
 function stepDestinationLabel(step: OperationalManeuverStep) {
