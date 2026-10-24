@@ -98,6 +98,13 @@ Las entregas previstas son dependencias: quien separa la carga conoce qué viene
 y dónde llegará. Una tarea ya iniciada conserva su custodia y destino; los cambios de
 demanda recalculan el trabajo pendiente afectado.
 
+## Auditoría previa al despliegue
+
+La [auditoría de tablets](AUDITORIA_PLANIFICADOR_TABLETS.md) documenta las correcciones
+adicionales de confirmaciones, reservas, recálculos, lecturas repetidas y legibilidad.
+Los objetivos secundarios ahora se actualizan mediante solicitudes durables en cola,
+confirmadas junto al movimiento físico; ya no se recalculan dentro de su respuesta.
+
 ## Entrega 3: funciones por turno y ejecución preparada
 
 Oficina configura por turno función principal, funciones secundarias en orden,

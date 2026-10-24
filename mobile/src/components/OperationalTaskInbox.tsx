@@ -29,6 +29,9 @@ import {
 import { buildOperatorTaskHome, type OperatorQueueItem } from '../domain/operatorTaskQueue';
 import type { ShiftVerification, VerificationItem } from '../domain/verification';
 import { calculateRollingFrontier } from '../domain/rollingPlanner';
+import { OperationalActionGate, OperationalInboxReads } from '../domain/operationalInboxConcurrency';
+import { OperationalCameraPlans } from '../domain/operationalCameraPlans';
+import { OperationalMovementStore, type PendingOperationalMovement } from '../services/operationalMovementStore';
 import {
   previewableTasks,
   materializationOutcome,
@@ -79,7 +82,14 @@ export function OperationalTaskInbox({ api, auth }: Props) {
   const [tab, setTab] = useState<TaskTab>('mias');
   const [showLoads, setShowLoads] = useState(false);
   const [activeTask, setActiveTask] = useState<OperationalTask | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [actionLabel, setActionLabel] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [journalReady, setJournalReady] = useState(false);
+  const [pendingMovement, setPendingMovement] = useState<PendingOperationalMovement | null>(null);
+  const [recoveryIssue, setRecoveryIssue] = useState('');
+  const [connectionIssue, setConnectionIssue] = useState('');
+  const [lastReadAt, setLastReadAt] = useState<string | null>(null);
+  const [availableFresh, setAvailableFresh] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [confirmation, setConfirmation] = useState<FolioConfirmationState | null>(null);
@@ -88,10 +98,16 @@ export function OperationalTaskInbox({ api, auth }: Props) {
   const [suggestedDestinations, setSuggestedDestinations] = useState<Record<string, string>>({});
   const [verification, setVerification] = useState<ShiftVerification | null>(null);
   const initialLoad = useRef(true);
-  const loadInFlight = useRef(false);
+  const reads = useMemo(() => new OperationalInboxReads(), [taskApi, auth.token]);
+  const actionGate = useMemo(() => new OperationalActionGate(), [taskApi, auth.token]);
+  const cameraPlans = useMemo(() => new OperationalCameraPlans(), [taskApi, auth.token]);
+  const movementStore = useMemo(() => new OperationalMovementStore(api.baseUrl ?? '', auth.usuario.id, auth.dispositivo.id),
+    [api.baseUrl, auth.usuario.id, auth.dispositivo.id]);
+  const pendingRef = useRef<PendingOperationalMovement | null>(null);
   const preview = useRef<FrontierPreview | null>(null);
   const previewGeneration = useRef(0);
   const executionSessions = useRef<OpenSession[]>([]);
+  const busy = Boolean(actionLabel) || loading || !journalReady;
 
   const inPhysicalMovement = activeTask?.estado === 'en_proceso';
   const secondsRemaining = useMemo(() => {
@@ -111,8 +127,12 @@ export function OperationalTaskInbox({ api, auth }: Props) {
   const homeQueue = homeView === 'mine' ? home.mine : home.available;
 
   useEffect(() => {
+    setAvailable([]); setMine([]); setActiveTask(null); initialLoad.current = true;
+    setJournalReady(false); setRecoveryIssue(''); setAvailableFresh(false);
+    pendingRef.current = null; setPendingMovement(null);
     void loadTasks();
-    return () => { previewGeneration.current += 1; preview.current = null; };
+    void recoverMovement(false);
+    return () => { reads.invalidate(); previewGeneration.current += 1; preview.current = null; cameraPlans.clear(); };
   }, [taskApi, auth.token]);
 
   // La confirmación pertenece a una tarea concreta antes de iniciar.
@@ -137,25 +157,25 @@ export function OperationalTaskInbox({ api, auth }: Props) {
     if (!taskApi || !activeTask?.reserva || activeTask.estado === 'en_proceso' || leaseExpired) {
       return undefined;
     }
-    const interval = setInterval(() => void renewActiveTask(), 4 * 60_000);
+    const interval = setInterval(() => void runAction('Renovando reserva…', renewActiveTask), 4 * 60_000);
     return () => clearInterval(interval);
   }, [taskApi, activeTask?.id, activeTask?.estado, activeTask?.reserva?.id, leaseExpired]);
 
   useEffect(() => {
     if (!leaseExpired || !activeTask) return;
-    reportError('El claim venció antes de iniciar el movimiento. Actualiza la bandeja y vuelve a tomar la tarea.');
+    reportError('La reserva venció antes de iniciar. Actualiza la bandeja y vuelve a tomar la labor.');
   }, [leaseExpired, activeTask?.id]);
 
   useOperationalPolling(
-    () => loadTasks({ quiet: true }),
+    () => loadTasks({ quiet: true, propagateError: true }),
     {
-      enabled: Boolean(taskApi) && (
+      enabled: Boolean(taskApi) && !actionLabel && !pendingMovement && !recoveryIssue && (
         activeTask === null
         || activeTask.maniobra?.estado === 'pausada_discrepancia'
       ),
       intervalMs: OPERATIONAL_POLL_INTERVAL_MS,
-      onError: (reason) => reportError(messageFrom(reason)),
-      onResume: () => loadTasks({ quiet: true }),
+      onError: () => setConnectionIssue('No se pudo actualizar. Conservamos la última información recibida.'),
+      onResume: () => pendingRef.current ? recoverMovement(false) : loadTasks({ quiet: true, propagateError: true }),
     },
   );
 
@@ -164,44 +184,130 @@ export function OperationalTaskInbox({ api, auth }: Props) {
     setError((current) => current || message);
   }
 
-  async function loadTasks({ quiet = false }: { quiet?: boolean } = {}) {
-    if (!taskApi || loadInFlight.current) return;
-    loadInFlight.current = true;
-    if (!quiet) setBusy(true);
+  async function runAction<T>(label: string, action: () => Promise<T> | T): Promise<T | undefined> {
+    if (!journalReady) return undefined;
+    const owner = actionGate.begin();
+    if (!owner) return undefined;
+    reads.invalidate(); previewGeneration.current += 1;
+    setActionLabel(label);
+    try { return await action(); }
+    catch (reason) { reportError(messageFrom(reason)); return undefined; }
+    finally { if (actionGate.finish(owner)) setActionLabel(''); }
+  }
 
+  function rememberPending(entry: PendingOperationalMovement | null) {
+    pendingRef.current = entry; setPendingMovement(entry);
+  }
+
+  async function recoverMovement(retry: boolean) {
+    if (!taskApi) { setJournalReady(true); return; }
+    setRecoveryIssue('');
+    let captureRead = false;
     try {
-      const [nextMine, nextAvailable, nextVerification] = await Promise.all([
-        taskApi.list(auth.token, 'mias'),
-        taskApi.list(auth.token, 'disponibles'),
-        taskApi.currentVerification(auth.token).catch(() => null),
-      ]);
-      setMine(nextMine);
-      setAvailable(nextAvailable);
-      setVerification(nextVerification);
-      void precalculate(nextMine, nextAvailable);
-
-      setActiveTask((current) => {
-        if (!current) return current;
-        return nextMine.find((task) => task.id === current.id) ?? null;
-      });
-
-      if (initialLoad.current) {
-        initialLoad.current = false;
-        setTab(nextMine.length > 0 ? 'mias' : 'disponibles');
+      const entry = await movementStore.read();
+      captureRead = true;
+      rememberPending(entry);
+      if (!entry) return;
+      const state = await taskApi.ownState(auth.token, entry.taskId, entry.id);
+      if (state.confirmada) {
+        await movementStore.clear(entry.id); rememberPending(null);
+        setNotice(`Entrega de ${entry.folio} confirmada por el servidor. No repitas el movimiento.`);
+        await continueManeuver(state.tarea, retry);
+      } else {
+        setActiveTask(state.tarea);
+        if (!retry) return;
+        if (state.tarea.estado !== 'en_proceso') {
+          throw new Error('La labor cambió antes de confirmar la entrega. Conserva esta captura y solicita revisión en Oficina.');
+        }
+        await transmitPending(entry);
+        setNotice(`Entrega de ${entry.folio} confirmada por el servidor.`);
+        await continueManeuver(state.tarea);
       }
-
-      return { mine: nextMine, available: nextAvailable };
     } catch (reason) {
-      reportError(messageFrom(reason));
-    } finally {
-      loadInFlight.current = false;
-      if (!quiet) setBusy(false);
+      if (!captureRead || pendingRef.current) setRecoveryIssue(messageFrom(reason));
+      else { setRecoveryIssue(''); reportError(messageFrom(reason)); }
+    } finally { setJournalReady(true); }
+  }
+
+  async function persistMovement(task: OperationalTask, kind: PendingOperationalMovement['kind'],
+    payload: PendingOperationalMovement['payload'], assignmentId?: string) {
+    const entry: PendingOperationalMovement = { id: 'operacion_id' in payload ? payload.operacion_id : Crypto.randomUUID(),
+      taskId: task.id, folio: task.folio.numero_folio, kind, payload, assignmentId, createdAt: new Date().toISOString() };
+    await movementStore.save(entry); rememberPending(entry);
+    await transmitPending(entry);
+  }
+
+  async function transmitPending(entry: PendingOperationalMovement) {
+    if (!taskApi) return;
+    const send = async (payload: PendingOperationalMovement['payload']) => {
+      const saved = { ...entry, payload };
+      await movementStore.save(saved); rememberPending(saved);
+      if (entry.kind === 'move') await api.move(auth.token, payload as MovePayload);
+      else if (entry.kind === 'locate') await api.locate(auth.token, payload as LocatePayload);
+      else if (entry.kind === 'temporary') await taskApi.completeTemporaryExtraction(auth.token, entry.taskId, payload as TemporaryExtractionPayload);
+      else if (entry.kind === 'dock') await api.sendLoadFolioToDock(auth.token, entry.assignmentId!, payload as SendLoadFolioToDockPayload);
+      else await taskApi.completeDirectPrefrio(auth.token, entry.taskId);
+    };
+    try {
+      await executeWithWarnings(entry.payload, send);
+    } catch (reason) {
+      if ((reason instanceof ApiError && reason.status >= 400 && reason.status < 500)
+        || reason instanceof OperatorWarningCancelled) {
+        const state = await taskApi.ownState(auth.token, entry.taskId, entry.id).catch(() => null);
+        if (state?.confirmada) {
+          await movementStore.clear(entry.id); rememberPending(null); return;
+        }
+        if (state) {
+          await movementStore.clear(entry.id); rememberPending(null); setActiveTask(state.tarea);
+          throw reason;
+        }
+      }
+      setRecoveryIssue('No se recibió la confirmación. La entrega está guardada en esta tablet; revísala antes de repetir cualquier movimiento.');
+      throw new Error('Confirmación pendiente. No repitas el movimiento físico; usa «Revisar confirmación».');
     }
+    await movementStore.clear(entry.id); rememberPending(null); setRecoveryIssue('');
+  }
+
+  async function loadTasks({ quiet = false, propagateError = false }: { quiet?: boolean; propagateError?: boolean } = {}) {
+    if (!taskApi) return;
+    const generation = reads.generation();
+    if (!quiet) setLoading(true);
+    const own = reads.read('mine', () => taskApi.list(auth.token, 'mias'));
+    const offered = reads.read('available', () => taskApi.list(auth.token, 'disponibles'));
+    void offered.then((result) => {
+      if (!result.current || !reads.isCurrent(generation)) return;
+      setAvailable(result.value); setAvailableFresh(true);
+    }).catch(() => {
+      if (!reads.isCurrent(generation)) return;
+      setAvailableFresh(false); setConnectionIssue('No se pudieron actualizar las labores disponibles.');
+    });
+    // Una verificación lenta no retrasa el movimiento ni la continuación de la maniobra.
+    void reads.read('verification', () => taskApi.currentVerification(auth.token)).then((result) => {
+      if (result.current && reads.isCurrent(generation)) setVerification(result.value);
+    }).catch(() => undefined);
+    void Promise.all([own, offered]).then(([self, others]) => {
+      if (!self.current || !others.current || !reads.isCurrent(generation)) return;
+      setConnectionIssue(''); void precalculate(self.value, others.value);
+    }).catch(() => undefined);
+    try {
+      const result = await own;
+      if (!result.current || !reads.isCurrent(generation)) return;
+      setMine(result.value); setLastReadAt(new Date().toISOString());
+      setActiveTask((current) => current ? result.value.find((task) => task.id === current.id)
+        ?? (pendingRef.current?.taskId === current.id ? current : null) : current);
+      if (initialLoad.current) {
+        initialLoad.current = false; setTab(result.value.length ? 'mias' : 'disponibles');
+      }
+      return { mine: result.value, available };
+    } catch (reason) {
+      if (reads.isCurrent(generation)) setConnectionIssue('No se pudo actualizar. Conservamos la última información recibida.');
+      if (propagateError) throw reason;
+      if (!quiet) reportError(messageFrom(reason));
+    } finally { if (!quiet) setLoading(false); }
   }
 
   async function verifyPosition(item: VerificationItem, number: string | null) {
     if (!taskApi) return;
-    setBusy(true);
     try {
       const response = await taskApi.recordVerification(auth.token, item.id, item.version, Crypto.randomUUID(), number);
       setVerification(response.data);
@@ -213,8 +319,6 @@ export function OperationalTaskInbox({ api, auth }: Props) {
     } catch (reason) {
       reportError(messageFrom(reason));
       setVerification(await taskApi.currentVerification(auth.token).catch(() => verification));
-    } finally {
-      setBusy(false);
     }
   }
 
@@ -233,14 +337,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
 
       const tasks = previewableTasks([...nextMine, ...nextAvailable]);
       if (!tasks.length) return;
-      const directedCameraIds = new Set(snapshot.camaras.map((camera) => camera.id));
-      const cameras = (await api.listCameras(auth.token))
-        .filter((camera) => camera.contenido === 'productos'
-          && camera.estado === 'activa'
-          && directedCameraIds.has(camera.id));
-      if (generation !== previewGeneration.current || !cameras.length) return;
-      const requiredIds = candidateCameraIds(tasks, cameras.map((camera) => camera.id));
-      const plans = await Promise.all([...requiredIds].map((id) => api.getPlan(auth.token, id)));
+      const plans = await cameraPlans.load(snapshot, tasks, (id) => api.getPlan(auth.token, id), () => generation === previewGeneration.current);
       if (generation !== previewGeneration.current) return;
       const result = simulateFrontierPreview(tasks, snapshot, plans);
       preview.current = result;
@@ -257,18 +354,19 @@ export function OperationalTaskInbox({ api, auth }: Props) {
 
   async function takeTask(task: OperationalTask) {
     if (!taskApi) return;
-    setBusy(true);
     setNotice('');
     try {
       const taken = await taskApi.take(auth.token, task.id);
+      replaceMine([taken]);
+      setAvailable((current) => current.filter((item) => item.id !== taken.id));
       setActiveTask(taken);
       setTab('mias');
       setNotice(
         taken.tipo_movimiento === 'retiro'
-          ? `Tarea crítica tomada. Destino directo: ${operationalTaskDestinationLabel(taken)}.`
+          ? `Labor tomada. Entrega en ${operationalTaskDestinationLabel(taken)}.`
           : taken.reserva?.tipo_compromiso === 'fisica'
           ? `Tarea ${operationalTaskLabel(taken.plan.tipo)} tomada con destino físico reservado.`
-          : `Tarea ${operationalTaskLabel(taken.plan.tipo)} tomada. El destino se calculará con el snapshot vigente.`,
+          : `Tarea ${operationalTaskLabel(taken.plan.tipo)} tomada. Confirmaremos la posición antes de retirar el pallet.`,
       );
       if (taken.tipo_movimiento !== 'retiro'
         && (!taken.destino?.posicion || taken.reserva?.tipo_compromiso !== 'fisica')) {
@@ -278,31 +376,38 @@ export function OperationalTaskInbox({ api, auth }: Props) {
     } catch (reason) {
       reportError(messageFrom(reason));
       await loadTasks({ quiet: true });
-    } finally {
-      setBusy(false);
     }
   }
 
-  function beginTask(task: OperationalTask) {
+  async function beginTask(task: OperationalTask) {
     setActiveTask(task);
     setNotice('');
     if (task.estado === 'en_proceso') {
       setNotice('Movimiento ya iniciado: el destino está fijo hasta completar o registrar una incidencia.');
       return;
     }
-    if ((task.reserva?.segundos_restantes ?? 600) < 180) void renewActiveTaskById(task.id);
+    if ((task.reserva?.segundos_restantes ?? 600) < 180) await renewActiveTaskById(task.id);
     if (task.tipo_movimiento !== 'retiro'
       && (!task.destino?.posicion || task.reserva?.tipo_compromiso !== 'fisica')) {
-      void calculateAndMaterializeFrontier(task);
+      await calculateAndMaterializeFrontier(task);
     }
   }
 
   function openHomeTask(item: OperatorQueueItem) {
+    if (pendingRef.current || recoveryIssue) return;
+    if (item.source === 'available' && !availableFresh) {
+      reportError('Actualiza las labores disponibles antes de tomar una nueva. Tus tareas propias se conservan.'); return;
+    }
+    const physical = mine.find((task) => task.estado === 'en_proceso' || task.maniobra?.custodia_temporal_activa);
+    if (physical && physical.id !== item.task.id && (physical.estado === 'en_proceso'
+      || !physical.maniobra?.id || physical.maniobra.id !== item.task.maniobra?.id)) {
+      setActiveTask(physical); setNotice('Continúa el pallet o retorno que ya tienes bajo custodia antes de tomar otra labor.'); return;
+    }
     if (item.source === 'mine') {
-      beginTask(item.task);
+      void runAction('Preparando tu labor…', () => beginTask(item.task));
       return;
     }
-    void takeTask(item.task);
+    void runAction('Tomando labor…', () => takeTask(item.task));
   }
 
   async function renewActiveTask() {
@@ -339,14 +444,13 @@ export function OperationalTaskInbox({ api, auth }: Props) {
         : 'La tarea volverá a la bandeja. Aún no existe una posición física comprometida.',
       [
         { text: 'Cancelar', style: 'cancel' },
-        { text: 'Liberar', style: 'destructive', onPress: () => void releaseTask(task) },
+        { text: 'Liberar', style: 'destructive', onPress: () => void runAction('Liberando reserva…', () => releaseTask(task)) },
       ],
     );
   }
 
   async function releaseTask(task: OperationalTask) {
     if (!taskApi || task.estado === 'en_proceso') return;
-    setBusy(true);
     try {
       await taskApi.release(auth.token, task.id);
       if (activeTask?.id === task.id) {
@@ -357,27 +461,22 @@ export function OperationalTaskInbox({ api, auth }: Props) {
     } catch (reason) {
       reportError(messageFrom(reason));
       await loadTasks({ quiet: true });
-    } finally {
-      setBusy(false);
     }
   }
 
   async function calculateAndMaterializeFrontier(anchorTask: OperationalTask) {
     if (!taskApi) return;
-    setBusy(true);
+    setActionLabel('Confirmando destino…');
 
     try {
       let snapshot = await taskApi.physicalFrontierSnapshot(auth.token);
       if (snapshot.planner.horizon !== 'rolling' || snapshot.planner.compute !== 'tablet') {
         throw new Error(
-          `El planificador está configurado como ${snapshot.planner.compute}/${snapshot.planner.horizon}; no corresponde cálculo rolling en tablet.`,
+          'La configuración actual no permite confirmar el destino. Solicita revisión en Oficina.',
         );
       }
       if (!snapshot.arbitraje.vigencia.vigente) {
-        throw new Error(
-          `El arbitraje está ${snapshot.arbitraje.vigencia.estado}. `
-          + `${snapshot.arbitraje.vigencia.detalle} Espera la próxima actualización antes de mover el pallet.`,
-        );
+        throw new Error('El plan de trabajo se está actualizando. Mantén el pallet en su origen hasta confirmar el destino.');
       }
 
       const cachedProposal = reusablePreviewProposal(preview.current, snapshot, anchorTask);
@@ -390,7 +489,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
           if (accepted) {
             replaceMine([accepted]);
             setActiveTask(accepted);
-            setNotice(`Destino sugerido confirmado: ${operationalTaskPositionLabel(accepted.destino)}.${recalculate ? ' Otras propuestas requieren actualización.' : ''}`);
+            setNotice(`Destino reservado: ${operationalTaskPositionLabel(accepted.destino)}.${recalculate ? ' Otras propuestas requieren actualización.' : ''}`);
             preview.current = null;
             return;
           }
@@ -406,20 +505,14 @@ export function OperationalTaskInbox({ api, auth }: Props) {
         ...mine,
       ]).filter((task) => task.estado === 'asumida'
         && snapshot.tareas.some((item) => item.id === task.id && item.materializable));
-      const directedCameraIds = new Set(snapshot.camaras.map((camera) => camera.id));
-      const cameras = (await api.listCameras(auth.token))
-        .filter((camera) => camera.contenido === 'productos'
-          && camera.estado === 'activa'
-          && directedCameraIds.has(camera.id));
-      if (!cameras.length) {
-        throw new Error('No existen cámaras dirigidas disponibles en el rollout vigente.');
+      if (!snapshot.camaras.length) {
+        throw new Error('No hay cámaras habilitadas para esta labor. Solicita revisión en Oficina.');
       }
-      const requiredIds = candidateCameraIds(tasksForFrontier, cameras.map((camera) => camera.id));
-      const plans = await Promise.all([...requiredIds].map((cameraId) => api.getPlan(auth.token, cameraId)));
+      const plans = await cameraPlans.load(snapshot, tasksForFrontier, (id) => api.getPlan(auth.token, id));
       const frontier = calculateRollingFrontier(tasksForFrontier, snapshot, plans);
 
       if (!frontier.proposals.length) {
-        throw new Error('El snapshot no contiene un destino libre y compatible para la frontera actual.');
+        throw new Error('No hay una posición libre y compatible para esta labor. Mantén el pallet en su origen y solicita revisión en Oficina.');
       }
 
       const result = await taskApi.materializePhysicalFrontier(
@@ -433,8 +526,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
       if (acceptedAnchor) {
         setActiveTask(acceptedAnchor);
         setNotice(
-          `Frontera validada: ${acceptedTasks.length} tarea(s) con reserva física. `
-          + `Destino actual: ${operationalTaskPositionLabel(acceptedAnchor.destino)}.`,
+          `Destino reservado: ${operationalTaskPositionLabel(acceptedAnchor.destino)}.`,
         );
       } else {
         const rejected = result.rechazadas.find((item) => item.tarea_id === anchorTask.id);
@@ -446,15 +538,12 @@ export function OperationalTaskInbox({ api, auth }: Props) {
 
       if (result.recalcular && acceptedAnchor) {
         setNotice(
-          `Frontera parcial: ${acceptedTasks.length} aceptada(s), ${result.rechazadas.length} reemplazada(s). `
-          + `La tablet recalculará con el nuevo snapshot en el siguiente ciclo.`,
+          'Tu destino está reservado. Hay otras propuestas pendientes de actualización.',
         );
       }
     } catch (reason) {
       reportError(messageFrom(reason));
       await loadTasks({ quiet: true });
-    } finally {
-      setBusy(false);
     }
   }
 
@@ -487,7 +576,6 @@ export function OperationalTaskInbox({ api, auth }: Props) {
 
   async function createOperatorPin(pin: string) {
     if (!taskApi) return false;
-    setBusy(true);
     try {
       const pinStatus = await taskApi.savePin(auth.token, pin);
       setConfirmation((current) => current ? { pinStatus, error: '' } : current);
@@ -495,15 +583,12 @@ export function OperationalTaskInbox({ api, auth }: Props) {
     } catch (reason) {
       setConfirmation((current) => current ? { ...current, error: messageFrom(reason) } : current);
       return false;
-    } finally {
-      setBusy(false);
     }
   }
 
   async function startPhysicalTask(folioConfirmation: StartConfirmation) {
     if (!canStartPhysicalTask(activeTask)) return;
 
-    setBusy(true);
     setConfirmation((current) => current ? { ...current, error: '' } : current);
     const sessions: OpenSession[] = [];
     try {
@@ -528,13 +613,12 @@ export function OperationalTaskInbox({ api, auth }: Props) {
       setConfirmation(null);
       reportError(messageFrom(reason));
       await loadTasks({ quiet: true });
-    } finally {
-      setBusy(false);
     }
   }
 
   async function completeTask() {
     if (!activeTask || activeTask.estado !== 'en_proceso') return;
+    if (pendingRef.current) { await recoverMovement(true); return; }
     const task = activeTask;
     const destination = task.destino;
     if (!destination?.posicion) {
@@ -542,7 +626,6 @@ export function OperationalTaskInbox({ api, auth }: Props) {
       return;
     }
 
-    setBusy(true);
     setNotice('');
     const sessions = executionSessions.current.length
       ? executionSessions.current
@@ -567,7 +650,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
           version_destino_conocida: destinationSession.plan.version_plano,
           generado_dispositivo_at: new Date().toISOString(),
         };
-        await executeWithWarnings(payload, (confirmedPayload) => api.move(auth.token, confirmedPayload));
+        await persistMovement(task, 'move', payload);
       } else if (task.tipo_movimiento === 'ubicacion_inicial') {
         const payload: LocatePayload = {
           operacion_id: Crypto.randomUUID(),
@@ -580,7 +663,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
           version_destino_conocida: destinationSession.plan.version_plano,
           generado_dispositivo_at: new Date().toISOString(),
         };
-        await executeWithWarnings(payload, (confirmedPayload) => api.locate(auth.token, confirmedPayload));
+        await persistMovement(task, 'locate', payload);
       } else {
         throw new Error('La tarea no posee un origen físico compatible con este movimiento.');
       }
@@ -593,7 +676,6 @@ export function OperationalTaskInbox({ api, auth }: Props) {
     } finally {
       await closeTemporarySessions(sessions);
       executionSessions.current = [];
-      setBusy(false);
     }
   }
 
@@ -603,6 +685,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
       || activeTask.estado !== 'en_proceso'
       || activeTask.tipo_movimiento !== 'retiro'
       || !activeTask.destino_logico?.carga_folio_id) return;
+    if (pendingRef.current) { await recoverMovement(true); return; }
 
     const task = activeTask;
     const directDestination = activeTask.destino_logico;
@@ -610,12 +693,11 @@ export function OperationalTaskInbox({ api, auth }: Props) {
     const sessions = executionSessions.current.length
       ? executionSessions.current
       : [];
-    setBusy(true);
     setNotice('');
 
     try {
       if (fromPrefrio) {
-        await taskApi.completeDirectPrefrio(auth.token, task.id);
+        await persistMovement(task, 'prefrio', {});
       } else {
         if (!sessions.length) await acquireExecutionSessions(task, sessions);
         if (!task.origen?.camara) throw new Error('La tarea no conserva una cámara de origen.');
@@ -628,28 +710,19 @@ export function OperationalTaskInbox({ api, auth }: Props) {
           version_camara_conocida: sourceSession.plan.version_plano,
           generado_dispositivo_at: new Date().toISOString(),
         };
-        await executeWithWarnings(
-          payload,
-          (confirmedPayload) => api.sendLoadFolioToDock(
-            auth.token,
-            directDestination.carga_folio_id,
-            confirmedPayload,
-          ).then(() => undefined),
-        );
+        await persistMovement(task, 'dock', payload, directDestination.carga_folio_id);
       }
 
       setNotice(
         `Retiro completado: ${task.folio.numero_folio} entregado en ${directDestination.nombre}.`,
       );
-      setActiveTask(null);
-      await loadTasks({ quiet: true });
+      await continueManeuver(task);
     } catch (reason) {
       reportError(messageFrom(reason));
       await loadTasks({ quiet: true });
     } finally {
       await closeTemporarySessions(sessions);
       executionSessions.current = [];
-      setBusy(false);
     }
   }
 
@@ -658,10 +731,10 @@ export function OperationalTaskInbox({ api, auth }: Props) {
       || !activeTask
       || activeTask.estado !== 'en_proceso'
       || activeTask.tipo_paso_maniobra !== 'extraccion_temporal') return;
+    if (pendingRef.current) { await recoverMovement(true); return; }
 
     const task = activeTask;
     const sessions = executionSessions.current.length ? executionSessions.current : [];
-    setBusy(true);
     try {
       if (!sessions.length) await acquireExecutionSessions(task, sessions);
       if (!task.origen?.camara) throw new Error('La extracción no conserva su cámara de origen.');
@@ -672,14 +745,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
         version_origen_conocida: sourceSession.plan.version_plano,
         generado_dispositivo_at: new Date().toISOString(),
       };
-      await executeWithWarnings(
-        payload,
-        (confirmedPayload) => taskApi.completeTemporaryExtraction(
-          auth.token,
-          task.id,
-          confirmedPayload,
-        ),
-      );
+      await persistMovement(task, 'temporary', payload);
       setNotice(
         `${task.folio.numero_folio} quedó bajo custodia temporal de la maniobra. Continúa con el siguiente paso mostrado.`,
       );
@@ -690,7 +756,6 @@ export function OperationalTaskInbox({ api, auth }: Props) {
     } finally {
       await closeTemporarySessions(sessions);
       executionSessions.current = [];
-      setBusy(false);
     }
   }
 
@@ -702,7 +767,6 @@ export function OperationalTaskInbox({ api, auth }: Props) {
       reportError('La gestión de incidencias está disponible para maniobras físicas del planificador.');
       return null;
     }
-    setBusy(true);
     try {
       const reported = await taskApi.reportDiscrepancy(auth.token, activeTask.id, type, detail);
       const refreshed = await loadTasks({ quiet: true });
@@ -715,12 +779,11 @@ export function OperationalTaskInbox({ api, auth }: Props) {
     } catch (reason) {
       reportError(messageFrom(reason));
       return null;
-    } finally {
-      setBusy(false);
     }
   }
 
-  async function continueManeuver(completedTask: OperationalTask) {
+  async function continueManeuver(completedTask: OperationalTask, prepare = true) {
+    reads.invalidate();
     setActiveTask(null);
     const refreshed = await loadTasks({ quiet: true });
     if (!completedTask.maniobra || !refreshed) return;
@@ -737,7 +800,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
       `Continúa la misma maniobra: paso ${next.secuencia_maniobra ?? next.maniobra?.secuencia_actual} `
       + `de ${next.maniobra?.pasos_totales} · ${next.folio.numero_folio}.`,
     );
-    if (next.tipo_movimiento !== 'retiro'
+    if (prepare && next.tipo_movimiento !== 'retiro'
       && (!next.destino?.posicion || next.reserva?.tipo_compromiso !== 'fisica')) {
       await calculateAndMaterializeFrontier(next);
     }
@@ -751,10 +814,9 @@ export function OperationalTaskInbox({ api, auth }: Props) {
       return;
     }
     if (!task.destino?.camara) throw new Error('La tarea no posee cámara de destino materializada.');
-    await acquireSession(task.destino.camara.id, sessions, 'destino');
-    if (task.origen?.camara && task.origen.camara.id !== task.destino.camara.id) {
-      await acquireSession(task.origen.camara.id, sessions, 'origen');
-    }
+    const required = new Map<string, 'origen' | 'destino'>([[task.destino.camara.id, 'destino']]);
+    if (task.origen?.camara) required.set(task.origen.camara.id, task.origen.camara.id === task.destino.camara.id ? 'destino' : 'origen');
+    for (const [id, role] of [...required].sort(([left], [right]) => left.localeCompare(right))) await acquireSession(id, sessions, role);
   }
 
   async function acquireSession(cameraId: string, sessions: OpenSession[], role: 'origen' | 'destino') {
@@ -792,14 +854,15 @@ export function OperationalTaskInbox({ api, auth }: Props) {
       }
       throw reason;
     }
-    const openedPlan = await api.getPlan(auth.token, cameraId);
     const session: OpenSession = {
       cameraId,
       sessionId: opened.id,
       openedByTask: true,
-      plan: openedPlan,
+      plan,
     };
     sessions.push(session);
+    // Registrar el recurso antes del siguiente GET permite cerrarlo si falla la red.
+    session.plan = await api.getPlan(auth.token, cameraId);
     return session;
   }
 
@@ -826,7 +889,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
       if (!warnings.length) throw reason;
 
       const accepted = await confirmWarnings(warnings);
-      if (!accepted) throw new Error('Operación cancelada: no se confirmaron las advertencias físicas.');
+      if (!accepted) throw new OperatorWarningCancelled('Operación cancelada: no se confirmaron las advertencias físicas.');
 
       await operation({
         ...payload,
@@ -852,7 +915,8 @@ export function OperationalTaskInbox({ api, auth }: Props) {
   function replaceMine(tasks: OperationalTask[]) {
     if (!tasks.length) return;
     const byId = new Map(tasks.map((task) => [task.id, task]));
-    setMine((current) => current.map((task) => byId.get(task.id) ?? task));
+    setMine((current) => [...current.map((task) => byId.get(task.id) ?? task),
+      ...tasks.filter((task) => !current.some((item) => item.id === task.id))]);
   }
 
   if (!taskApi) {
@@ -870,6 +934,11 @@ export function OperationalTaskInbox({ api, auth }: Props) {
   return (
     <View style={styles.screen}>
       <OperatorErrorDialog message={error} onAcknowledge={() => setError('')} />
+      <View accessibilityLiveRegion="polite" style={styles.syncStatus}>
+        <Text style={[styles.syncText, connectionIssue ? styles.syncWarning : null]}>
+          {connectionIssue || (lastReadAt ? `Mis tareas actualizadas a las ${new Date(lastReadAt).toLocaleTimeString('es-CL')}` : 'Consultando tus labores…')}
+        </Text>
+      </View>
       {notice ? (
         <Pressable onPress={() => setNotice('')} style={styles.noticeBanner}>
           <Text style={styles.noticeText}>{notice}</Text>
@@ -877,13 +946,22 @@ export function OperationalTaskInbox({ api, auth }: Props) {
         </Pressable>
       ) : null}
 
-      {auth.usuario.capacidades?.puede_consultar_cargas && !showLoads ? (
-        <Pressable accessibilityRole="button" onPress={() => setShowLoads(true)} style={styles.loadsButton}>
+      {auth.usuario.capacidades?.puede_consultar_cargas && !showLoads && !pendingMovement && !recoveryIssue ? (
+        <Pressable accessibilityRole="button" disabled={busy} onPress={() => setShowLoads(true)} style={styles.loadsButton}>
           <Text style={styles.loadsButtonText}>Cargas activas y terminadas del turno →</Text>
         </Pressable>
       ) : null}
 
-      {showLoads ? (
+      {pendingMovement || recoveryIssue ? (
+        <View style={styles.recoveryPanel}>
+          <Text accessibilityRole="header" style={styles.recoveryTitle}>Confirmación pendiente</Text>
+          {pendingMovement ? <Text style={styles.recoveryFolio}>Folio {pendingMovement.folio}</Text> : null}
+          <Text style={styles.recoveryCopy}>{recoveryIssue || 'La entrega está guardada en esta tablet. Comprueba el resultado antes de repetir el movimiento físico.'}</Text>
+          <Pressable accessibilityRole="button" disabled={busy} onPress={() => void runAction('Revisando confirmación…', () => recoverMovement(true))} style={styles.recoveryButton}>
+            <Text style={styles.recoveryButtonText}>Revisar confirmación</Text>
+          </Pressable>
+        </View>
+      ) : showLoads ? (
         <OperatorLoadStatus api={taskApi} token={auth.token} onBack={() => setShowLoads(false)} />
       ) : activeTask ? (
         <OperatorTaskExecution
@@ -894,13 +972,13 @@ export function OperationalTaskInbox({ api, auth }: Props) {
           leaseExpired={leaseExpired}
           onBack={() => setActiveTask(null)}
           onCancelConfirmation={() => setConfirmation(null)}
-          onComplete={() => void completeTask()}
-          onCompleteDirect={() => void completeDirectWithdrawal()}
-          onCompleteTemporary={() => void completeTemporaryExtraction()}
-          onReportException={sendDiscrepancy}
-          onConfirmStart={(folioConfirmation) => void startPhysicalTask(folioConfirmation)}
-          onCreatePin={createOperatorPin}
-          onRecalculate={() => void calculateAndMaterializeFrontier(activeTask)}
+          onComplete={() => void runAction('Guardando entrega…', completeTask)}
+          onCompleteDirect={() => void runAction('Confirmando entrega en andén…', completeDirectWithdrawal)}
+          onCompleteTemporary={() => void runAction('Confirmando retiro temporal…', completeTemporaryExtraction)}
+          onReportException={async (type, detail) => (await runAction('Registrando incidencia…', () => sendDiscrepancy(type, detail))) ?? null}
+          onConfirmStart={(folioConfirmation) => void runAction('Validando retiro…', () => startPhysicalTask(folioConfirmation))}
+          onCreatePin={async (pin) => Boolean(await runAction('Guardando PIN…', () => createOperatorPin(pin)))}
+          onRecalculate={() => void runAction('Confirmando destino…', () => calculateAndMaterializeFrontier(activeTask))}
           onRelease={() => requestRelease(activeTask)}
           onStart={openStartConfirmation}
           operatorName={auth.usuario.nombre}
@@ -920,41 +998,21 @@ export function OperationalTaskInbox({ api, auth }: Props) {
           queue={homeQueue}
           suggestedDestinations={suggestedDestinations}
           view={homeView}
-          verification={<TurnVerification round={verification} busy={busy} onVerify={(item, number) => void verifyPosition(item, number)} />}
+          verification={<TurnVerification round={verification} busy={busy} onVerify={(item, number) => void runAction('Guardando verificación…', () => verifyPosition(item, number))} />}
         />
       )}
 
       {busy ? (
-        <View pointerEvents="none" style={styles.busyOverlay}>
+        <View pointerEvents="auto" style={styles.busyOverlay}>
           <ActivityIndicator color={o.color.primary} size="large" />
-          <Text style={styles.busyText}>Sincronizando estado operacional…</Text>
+          <Text style={styles.busyText}>{actionLabel || (!journalReady ? 'Revisando confirmaciones guardadas…' : 'Actualizando tus labores…')}</Text>
         </View>
       ) : null}
     </View>
   );
 }
 
-function candidateCameraIds(tasks: OperationalTask[], allProductCameraIds: string[]) {
-  const ids = new Set<string>();
-  let needsGeneralSearch = false;
-
-  for (const task of tasks) {
-    if (task.destino?.camara.id) {
-      ids.add(task.destino.camara.id);
-      continue;
-    }
-    if (task.tipo_movimiento === 'reubicacion' && task.origen?.camara.id) {
-      ids.add(task.origen.camara.id);
-      continue;
-    }
-    if (task.tipo_movimiento === 'ubicacion_inicial' || task.tipo_movimiento === 'traslado_entre_camaras') {
-      needsGeneralSearch = true;
-    }
-  }
-
-  if (needsGeneralSearch) allProductCameraIds.forEach((id) => ids.add(id));
-  return ids;
-}
+class OperatorWarningCancelled extends Error {}
 
 function dedupeTasks(tasks: OperationalTask[]) {
   return [...new Map(tasks.map((task) => [task.id, task])).values()];
@@ -979,6 +1037,15 @@ function messageFrom(reason: unknown) {
 }
 
 const styles = StyleSheet.create({
+  syncStatus: { paddingBottom: o.space[2] },
+  syncText: { color: o.color.muted, fontSize: o.type.small },
+  syncWarning: { color: o.color.warning },
+  recoveryPanel: { padding: o.space[4], gap: o.space[3], borderWidth: 1, borderColor: o.color.warning, borderRadius: o.radius.panel, backgroundColor: o.color.surface },
+  recoveryTitle: { color: o.color.warning, fontSize: o.type.heading, fontWeight: '800' },
+  recoveryFolio: { color: o.color.text, fontSize: o.type.heading, fontWeight: '900' },
+  recoveryCopy: { color: o.color.textSecondary, fontSize: o.type.body },
+  recoveryButton: { minHeight: o.touch.minimum, padding: o.space[3], justifyContent: 'center', backgroundColor: o.color.primary, borderRadius: o.radius.control },
+  recoveryButtonText: { color: o.color.onPrimary, fontSize: o.type.body, fontWeight: '800' },
   loadsButton: { minHeight: o.touch.minimum, justifyContent: 'center', padding: 14, marginBottom: 12, borderWidth: 1, borderColor: o.color.primary, borderRadius: o.radius.control, backgroundColor: o.color.surface },
   loadsButtonText: { color: o.color.primaryPressed, fontSize: o.type.body, fontWeight: '800' },
   screen: { flex: 1, padding: o.space[4], backgroundColor: o.color.canvas },

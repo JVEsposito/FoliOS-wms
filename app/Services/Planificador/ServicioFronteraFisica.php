@@ -46,10 +46,13 @@ class ServicioFronteraFisica
             $ciclo = $proyeccionArbitraje['vigente'] ? $ultimoCiclo : null;
             unset($proyeccionArbitraje['ciclo']);
             $decisiones = $ciclo?->decisiones?->keyBy('maniobra_operacional_id') ?? collect();
-            $tareas = $this->tareasActuales($temporada, $usuario, $dispositivo)
+            $actuales = $this->tareasActuales($temporada, $usuario, $dispositivo);
+            $acopios = $this->acopio->paraTareas($actuales);
+            $tareas = $actuales
                 ->map(function (TareaMovimiento $tarea) use (
                     $camarasDirigidas,
                     $decisiones,
+                    $acopios,
                 ): array {
                     $maniobra = $tarea->maniobraOperacional;
                     $reserva = $tarea->reservaActiva;
@@ -97,8 +100,8 @@ class ServicioFronteraFisica
                         ] : null,
                         'destino_reservado' => $reserva?->bloqueo_posicion_id !== null,
                         'materializable' => $materializable,
-                        ...($this->acopio->esRecepcion($tarea->planOperacional, $tarea->tipo_movimiento)
-                            ? ['acopio_carga' => $this->acopio->paraFolio($tarea->folio_id, $tarea->id)]
+                        ...(array_key_exists($tarea->id, $acopios)
+                            ? ['acopio_carga' => $acopios[$tarea->id]]
                             : []),
                     ];
                 })

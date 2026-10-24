@@ -3,6 +3,7 @@
 namespace Tests\Feature\Api;
 
 use App\Enums\EstadoManiobraOperacional;
+use App\Enums\EstadoTareaMovimiento;
 use App\Enums\RolUsuario;
 use App\Enums\TipoBulto;
 use App\Enums\TipoMovimiento;
@@ -11,6 +12,7 @@ use App\Jobs\RecalcularArbitrajePlanificador;
 use App\Models\Camara;
 use App\Models\Dispositivo;
 use App\Models\Folio;
+use App\Models\OperacionSincronizacion;
 use App\Models\Posicion;
 use App\Models\Temporada;
 use App\Models\User;
@@ -18,6 +20,7 @@ use App\Services\Camaras\ServicioBandasOperacionales;
 use App\Services\Estiba\ServicioPlanesOperacionales;
 use App\Services\Planificador\ServicioEstadoArbitrajePlanificador;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class FronteraFisicaGlobalApiTest extends TestCase
@@ -387,6 +390,37 @@ class FronteraFisicaGlobalApiTest extends TestCase
             'score' => 100,
             'motivo' => 'Destino próximo calculado por la tablet.',
         ];
+    }
+
+    public function test_recuperacion_confirma_tarea_propia_finalizada_sin_exponer_otros_actores_o_dispositivos(): void
+    {
+        $ctx = $this->crearContexto();
+        $tarea = $this->crearPlan($ctx, $ctx['folios'][0], TipoPlanOperacional::RecepcionTunel)->tareas()->sole();
+        app(ServicioPlanesOperacionales::class)->asumir($tarea, $ctx['camarero'], $ctx['dispositivo']);
+        $tarea->refresh()->update(['estado' => EstadoTareaMovimiento::Completada]);
+        $operacion = OperacionSincronizacion::create([
+            'id' => (string) Str::uuid(), 'user_id' => $ctx['camarero']->id,
+            'dispositivo_id' => $ctx['dispositivo']->id, 'tipo' => 'ubicacion_inicial',
+            'estado' => 'aceptada', 'payload_hash' => str_repeat('a', 64),
+            'payload' => ['tarea_movimiento_id' => $tarea->id],
+            'generada_dispositivo_at' => now(), 'recibida_servidor_at' => now(),
+        ]);
+        // El histórico debe poder recuperarse aunque Oficina haya cerrado su temporada.
+        $ctx['temporada']->update(['activa' => false]);
+        $ruta = "/api/tareas-movimiento/{$tarea->id}/estado-propio";
+        $this->conToken($ctx['token'])->getJson($ruta.'?operacion_id='.$operacion->id)
+            ->assertOk()->assertJsonPath('data.confirmada', true)
+            ->assertJsonPath('data.tarea.id', $tarea->id)->assertJsonPath('data.operacion.estado', 'aceptada');
+        $this->conToken($ctx['token'])->getJson($ruta.'?operacion_id='.(string) Str::uuid())
+            ->assertOk()->assertJsonPath('data.operacion', null);
+        $otroDispositivo = Dispositivo::create(['codigo' => 'OTRA-TABLET', 'nombre' => 'Otra tablet']);
+        $tokenOtroDispositivo = $ctx['camarero']->crearTokenParaDispositivo($otroDispositivo, 'otro-equipo')->plainTextToken;
+        $this->conToken($tokenOtroDispositivo)->getJson($ruta)->assertNotFound();
+        $otroUsuario = User::factory()->create(['rol' => RolUsuario::CamareroFrio, 'activo' => true]);
+        $tokenOtroUsuario = $otroUsuario->crearTokenParaDispositivo($ctx['dispositivo'], 'otro-actor')->plainTextToken;
+        $this->conToken($tokenOtroUsuario)->getJson($ruta)->assertNotFound();
+        $this->assertDatabaseCount('movimientos', 0);
+        $this->assertDatabaseCount('operaciones_sincronizacion', 1);
     }
 
     private function crearPlan(

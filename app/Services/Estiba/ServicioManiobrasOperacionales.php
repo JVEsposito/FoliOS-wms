@@ -15,7 +15,6 @@ use App\Enums\TipoBulto;
 use App\Enums\TipoMovimiento;
 use App\Enums\TipoPasoManiobra;
 use App\Exceptions\ConflictoOperacion;
-use App\Models\Carga;
 use App\Models\CustodiaTemporalManiobra;
 use App\Models\DiscrepanciaManiobra;
 use App\Models\Dispositivo;
@@ -30,8 +29,8 @@ use App\Models\TareaMovimiento;
 use App\Models\UbicacionActual;
 use App\Models\User;
 use App\Services\Camaras\InterbloqueoEvacuacionEmergencia;
-use App\Services\Cargas\ServicioPlanConcentracionCarga;
 use App\Services\Planificador\ServicioArbitrajeManiobras;
+use App\Services\Planificador\ServicioRecalculosPendientesPlanificador;
 use DomainException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -665,14 +664,9 @@ class ServicioManiobrasOperacionales
             $cargaIds = $maniobra->objetivos()->where('referencia_tipo', 'carga_concentracion')
                 ->pluck('referencia_id')->unique();
             foreach ($cargaIds as $cargaId) {
-                $usuarioId = $movimiento->user_id;
-                DB::afterCommit(function () use ($cargaId, $usuarioId): void {
-                    $carga = Carga::query()->find($cargaId);
-                    $usuario = User::query()->find($usuarioId);
-                    if ($carga && $usuario) {
-                        app(ServicioPlanConcentracionCarga::class)->sincronizar($carga, $usuario);
-                    }
-                });
+                app(ServicioRecalculosPendientesPlanificador::class)->solicitar(
+                    ServicioRecalculosPendientesPlanificador::CARGA, $cargaId,
+                );
             }
 
             return;
