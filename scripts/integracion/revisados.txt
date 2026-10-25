@@ -1,0 +1,32 @@
+# Cabezas de ramas/PR con cambios fuera de main que ya fueron revisadas.
+# Formato: <sha completo> <estado> <motivo>
+# Estados: integrado | obsoleto | pendiente (ver auditar-fuera-de-main.sh).
+# Si una rama recibe commits nuevos cambia su SHA y vuelve a revisarse.
+# Revisión inicial: 25-10-2026 sobre main 2f65f86a (#517).
+
+# Integrado: el contenido llegó a main con otra forma o con refactor posterior.
+4bc5b47176f596513b705bc6ba09528f7ed44fa6 integrado compactar-editor-perfiles: todos sus parches ya están en main.
+13a826187f988831fb005a0b1598d220ceeb745a integrado #158 movimientos de materiales sin posición: en main, con refactor posterior del texto.
+3b077a31e7409a355feeef30f210a93b120ed8af integrado #169 gerencia y existencias por área: en main vía 55c7a590, con filtro de varios tipos.
+ce8d30a76007784ba09fd3dbe02b51de4857e4d6 integrado #170 paneles seleccionables: misma cadena que #169.
+06671297b6669f510e4f62e3768745373eeffea0 integrado corregir-contexto-fisico-folio: contiene #301, ya en main.
+4f6bbfc156e275fe4f14e7535b4dc9437ca1ed64 integrado #301 continuidad de maniobras pausadas: en main, con refactor posterior.
+b175511c89a7c04e16c6892dad9c26a27aea608b integrado materiales-verificacion-ubicacion: contiene #401, ya en main.
+ea072c7fae047be03d95300c82cd963d9d5c83eb integrado #401 toma ciega de inventario: en main y ampliada por #516.
+a52aaa96862d5a5888ef586d25094333b8ec37f9 integrado avance/folios-v2-terreno: todos sus parches ya están en main.
+611ed3ad02dc0e9e33ed22731d189cf7aad209e2 integrado stock-origen-pendientes-validacion: todos sus parches ya están en main.
+e05a2d0d2aff6ac7e6d4e2d815e22ee77b47c23a integrado stock-origen-catalogo: todos sus parches ya están en main.
+49738dbd63c3ef5aaf49e72aee640321a583a482 integrado #492: sus líneas ya están en main.
+e244ed8a9eb023978525260419679c92e0c54a4f integrado #508 acopio de cargas con una sola tarea física: llegó a main en #513 (paraTareas por lote, versión rolling-global-5).
+10ec92abcac3ebff816e148338c83e7dd717952f integrado #509 estabilidad de tablets: llegó a main en #513.
+5a4f22c837feeb2b20d2e2930489b1e6a3ad1589 integrado Rama intermedia donde se fusionó #508: su contenido llegó a main en #513.
+984291a3e5de827726a7f0eca3e89a7f2f196011 integrado Rama intermedia donde se fusionó #509: su contenido llegó a main en #513.
+
+# Obsoleto: reemplazado a propósito o no debe aplicarse.
+200fb92c0087ada0462e619db9f129c552cdebab obsoleto #269 shell de Oficina «Estiba»: reemplazado por el rediseño FoliOS (diseno/pr1–pr9).
+1f19bf63ae833ec38b2f27eaa188b04f0bb1e859 obsoleto interfaz-camaras-pt-contraste: la vista de cámaras PT está en main; el contraste lo reemplazó el rediseño FoliOS.
+519e8f85707858c037ae0f076b91e2a8de3a3df3 obsoleto Renombre de la migración de envases 2026_10_16_090000: no aplicar; ya corrió con su nombre y renombrarla haría que se reejecute.
+
+# Pendiente: requiere una decisión funcional.
+a77eb7d372e71a07a989cda7aec763167364aa01 pendiente #196 filtros estructurados de folios en prefrío (exportadora y especie, luego variedad, CSG y fecha de ingreso). Nunca llegó a main; main solo tiene búsqueda libre.
+1d99bce3dba6a1c19576d37c902a1f6cd53c305e pendiente #511 multibodega alternativa: main usa #510. #511 traía «bodegas sin plano»: entrega desde la orden móvil sin cámara ni sesión. Decidir si se necesita.

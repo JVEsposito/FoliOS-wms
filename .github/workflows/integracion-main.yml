@@ -1,0 +1,70 @@
+name: Integración en main
+
+# Un PR fusionado en una rama intermedia figura como «merged», pero sus cambios
+# no llegan a main (caso #508 y #509). Este flujo avisa en el propio PR y audita
+# a diario que todo lo fusionado haya llegado a main.
+# Ver docs/INTEGRACION_MAIN.md.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, edited]
+  push:
+    branches:
+      - main
+  schedule:
+    # 08:17 en Chile continental (UTC-3).
+    - cron: '17 11 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  base-del-pr:
+    name: Base del PR
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Comprobar que el PR apunte a main
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if [ "$BASE_REF" = "main" ]; then
+            echo "El PR apunta a main."
+            exit 0
+          fi
+          {
+            echo "### Este PR apunta a \`$BASE_REF\`, no a \`main\`"
+            echo
+            echo "Al fusionarlo quedará como «merged», pero sus cambios **no llegarán a main**."
+            echo "Cambia la base a \`main\` o integra después la rama \`$BASE_REF\` en main."
+            echo "La auditoría diaria lo marcará mientras su contenido falte en main."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=PR fuera de main::Este PR apunta a '$BASE_REF'. Al fusionarlo, sus cambios no llegan a main."
+          exit 1
+
+  auditoria:
+    name: Contenido fuera de main
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar código con historial
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Listar PR abiertos
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls?state=open&per_page=100" \
+            --jq '.[].head.sha' > "$RUNNER_TEMP/pr-abiertos.txt"
+          echo "PR abiertos: $(wc -l < "$RUNNER_TEMP/pr-abiertos.txt")"
+
+      - name: Auditar ramas y PR
+        run: |
+          bash scripts/integracion/auditar-fuera-de-main.sh \
+            --traer \
+            --abiertos "$RUNNER_TEMP/pr-abiertos.txt" \
+            --resumen "$GITHUB_STEP_SUMMARY"
