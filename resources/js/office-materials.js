@@ -1068,7 +1068,7 @@ elements.directDispatchForm.addEventListener('submit', async (event) => {
         setBusy(false);
     }
 });
-const consumptionAllocation = setupConsumptionAllocation(elements.directConsumptionForm, api, () => state.identity?.puede_gestionar_transformaciones_materiales === true || ['administrador', 'supervisor_materiales'].includes(state.identity?.rol));
+const consumptionAllocation = setupConsumptionAllocation(elements.directConsumptionForm, api, () => typeof state.identity?.puede_gestionar_transformaciones_materiales === 'boolean' ? state.identity.puede_gestionar_transformaciones_materiales : ['administrador', 'supervisor_materiales'].includes(state.identity?.rol));
 function closeDirectConsumptionDialog() {
     state.directConsumptionOperationId = null;
     state.directConsumptionFolioId = null;

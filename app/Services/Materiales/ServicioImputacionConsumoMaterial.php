@@ -64,7 +64,7 @@ class ServicioImputacionConsumoMaterial
             $total += $cantidad;
             $filas[] = ['orden_transformacion_material_id' => $orden->id, 'cantidad' => $cantidad / 1000, 'cantidad_merma' => $merma / 1000,
                 'snapshot' => ['item_id' => $folio->item_material_id, 'codigo' => $folio->item->codigo, 'nombre' => $folio->item->nombre,
-                    'unidad' => $folio->item->unidad_medida, 'folio' => $folio->folio->numero_folio,
+                    'unidad' => $folio->unidad_medida, 'folio' => $folio->folio->numero_folio,
                     'referencia_ot' => $orden->referencia_ot, 'proceso' => $orden->proceso, 'turno' => $orden->turno,
                     'linea' => $orden->linea, 'fecha_operacional' => $orden->fecha_operacional?->toDateString(),
                     'operador' => trim((string) ($datos['operador_nombre'] ?? '')) ?: $orden->operador_nombre,

@@ -121,7 +121,7 @@ class ConsumosOrdenMaterialTest extends TestCase
         $usuario->id = 8;
         $item = new ItemMaterial(['codigo' => 'FILM', 'nombre' => 'Film', 'unidad_medida' => 'kg']);
         $item->setRelation('cliente', new ClienteMaterial(['cliente_id' => 'c1']));
-        $folio = new FolioMaterial(['categoria_operacional' => 'insumo', 'item_material_id' => 'film']);
+        $folio = new FolioMaterial(['categoria_operacional' => 'insumo', 'item_material_id' => 'film', 'unidad_medida' => 'kg']);
         $folio->setRelation('item', $item);
         $folio->setRelation('folio', new Folio(['temporada_id' => 's1', 'numero_folio' => 'F001']));
         $ordenes = new Collection;
@@ -145,6 +145,7 @@ class ConsumosOrdenMaterialTest extends TestCase
         $this->assertEquals(0.2, $filas[1]['cantidad']);
         $this->assertSame('Operador real', $filas[0]['snapshot']['operador']);
         $this->assertSame('Registrador', $filas[0]['snapshot']['registrado_por']);
+        $this->assertSame('kg', $filas[0]['snapshot']['unidad']);
     }
 
     public function test_reparto_incompleto_y_merma_excesiva_se_rechazan_antes_de_descontar(): void
