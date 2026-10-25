@@ -36,7 +36,7 @@ class ConsumosOrdenMaterialController extends Controller
     {
         Gate::authorize('consultar-transformaciones-materiales');
         $filtros = $this->filtros($r);
-        $pagina = $consulta->consulta($filtros)->with($consulta->relaciones())
+        $pagina = $consulta->consulta($filtros)->with($consulta->relaciones(true))
             ->orderByDesc('fecha_operacional')->orderByDesc('id')->paginate(25);
 
         return response()->json(['data' => $pagina->getCollection()->map(fn ($o) => $consulta->detalle($o, false)),
@@ -58,7 +58,7 @@ class ConsumosOrdenMaterialController extends Controller
         Gate::authorize('consultar-transformaciones-materiales');
         $filtros = $this->filtros($r);
         $filas = function () use ($consulta, $filtros) {
-            foreach ($consulta->consulta($filtros)->with($consulta->relaciones())->lazyById(100) as $orden) {
+            foreach ($consulta->consulta($filtros)->with($consulta->relaciones(true))->lazyById(100) as $orden) {
                 $datos = $consulta->detalle($orden, false);
                 foreach ($datos['componentes'] as $componente) {
                     yield array_merge($datos, $componente, ['orden' => $datos['codigo'], 'estado_orden' => $datos['estado']]);

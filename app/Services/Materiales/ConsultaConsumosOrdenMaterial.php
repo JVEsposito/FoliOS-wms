@@ -28,10 +28,23 @@ class ConsultaConsumosOrdenMaterial
             ->when($filtros['q'] ?? null, fn ($q, $v) => $q->where(fn ($q) => $q->where('id', 'like', '%'.$v.'%')->orWhere('referencia_ot', 'like', '%'.$v.'%')));
     }
 
-    public function relaciones(): array
+    public function relaciones(bool $resumen = false): array
     {
-        return ['temporada', 'cliente', 'almacenOrigen', 'creadoPor', 'lotes', 'cuadraturas',
+        $relaciones = ['temporada', 'cliente', 'almacenOrigen', 'creadoPor', 'lotes', 'cuadraturas',
             'movimientosConsumo', 'imputacionesConsumo.movimiento'];
+        if ($resumen) {
+            $relaciones = array_values(array_diff($relaciones, ['lotes', 'movimientosConsumo']));
+            $relaciones['lotes'] = fn ($q) => $q->where('estado', 'cerrado')
+                ->select('orden_transformacion_material_id', 'estado')
+                ->selectRaw('SUM(cantidad_real_salida) as cantidad_real_salida, SUM(merma_real) as merma_real')
+                ->groupBy('orden_transformacion_material_id', 'estado');
+            $relaciones['movimientosConsumo'] = fn ($q) => $q->select('orden_transformacion_material_id', 'item_material_id')
+                ->selectRaw('SUM(CASE WHEN tipo = ? AND cantidad < 0 THEN -cantidad ELSE 0 END) as retirado_total', ['consumo_transformacion'])
+                ->selectRaw('SUM(CASE WHEN tipo IN (?, ?) AND cantidad > 0 THEN cantidad ELSE 0 END) as devuelto_total', ['devolucion_transformacion', 'reversa_transformacion'])
+                ->groupBy('orden_transformacion_material_id', 'item_material_id');
+        }
+
+        return $relaciones;
     }
 
     public function detalle(OrdenTransformacionMaterial $orden, bool $conRegistros = true): array
@@ -59,6 +72,16 @@ class ConsultaConsumosOrdenMaterial
         }
         $registros = [];
         foreach ($orden->movimientosConsumo as $movimiento) {
+            if ($movimiento->getAttribute('retirado_total') !== null) {
+                $componente = $componentes->firstWhere('item_id', $movimiento->item_material_id);
+                if ($componente) {
+                    $clave = $movimiento->item_material_id.'|'.($componente['unidad_medida'] ?? '');
+                    $filas[$clave]['retirado'] += (float) $movimiento->retirado_total;
+                    $filas[$clave]['devuelto'] += (float) $movimiento->devuelto_total;
+                }
+
+                continue;
+            }
             $tipo = $movimiento->tipo;
             $cantidad = (float) $movimiento->cantidad;
             $consumo = $tipo === TipoMovimientoInventarioMaterial::ConsumoTransformacion && $cantidad < 0;

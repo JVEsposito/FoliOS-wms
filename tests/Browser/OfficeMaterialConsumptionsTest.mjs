@@ -9,7 +9,7 @@ const root = fileURLToPath(new URL('../../', import.meta.url));
 const html = readFileSync(resolve(root, 'storage/app/ui/oficina/consumos-ot.html'), 'utf8').replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
 const form = readFileSync(resolve(root, 'resources/views/office/materials.blade.php'), 'utf8').match(/<form[^>]*id="materialDirectConsumptionForm"[\s\S]*?<\/form>/)[0];
 const order = { id: 'o1', codigo: 'OT-000001', referencia_ot: 'ARM-200', temporada: '2026–2027', fecha_operacional: '2026-10-25', estado: 'cerrada', bodega: 'Bodega Norte', cliente: 'Cliente <Norte>', proceso: 'Armado', linea: 'L1', turno: 'Día', operador: 'Juan', creada_por: 'Ana', salida_real: 50, unidad_salida: 'cajas', merma_produccion: null,
-    componentes: [{ item_id: 'film', codigo: 'FILM', nombre: 'Film <prueba>', unidad: 'kg', estandar_planificado: 20, esperado: 10, retirado: 20, devuelto: 7, compartido: 0, consumo_neto: 13, merma_declarada: 3, utilizado: 10, desviacion: 0, desviacion_pct: 0, estado: 'dentro_tolerancia' }] };
+    componentes: [{ item_id: 'film', codigo: 'FILM', nombre: 'Film <prueba>', unidad: 'kg', estandar_planificado: 20, esperado: 10, retirado: 20, devuelto: 7, compartido: 0, consumo_neto: 13, merma_declarada: 3, utilizado: 10, desviacion: 0, desviacion_pct: 0, desviacion_neta: 3, desviacion_neta_pct: 30, estado: 'dentro_tolerancia' }] };
 async function fixture({ width = 1366, allocation = false } = {}) {
     const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined, args: ['--no-sandbox', '--disable-gpu'] });
     const context = await browser.newContext({ viewport: { width, height: 1000 }, acceptDownloads: true });

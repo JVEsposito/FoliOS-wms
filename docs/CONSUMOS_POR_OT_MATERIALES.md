@@ -89,7 +89,9 @@ circuito existente; no se genera una devolución ficticia de un consumo definiti
 - `GET /api/materiales/transformaciones/consumos`: órdenes paginadas y componentes.
 - `GET /api/materiales/transformaciones/ordenes/{orden}/consumos`: detalle y actores.
 - `GET /api/materiales/transformaciones/consumos/excel`: todas las órdenes filtradas,
-  recorridas en bloques de 100, una fila por componente/unidad.
+  recorridas en bloques de 100, una fila por componente/unidad. Los listados
+  y el Excel agregan retiros/devoluciones y producción en SQL, sin cargar cada
+  movimiento/lote de todas las órdenes; los actores se cargan al pedir un detalle.
 - `GET /api/materiales/transformaciones/consumos/ordenes?folio_id=...&q=...`:
   búsqueda de OT para distribuir, con hasta 50 coincidencias e indicación para
   acotar si hay más. Requiere también gestión de transformaciones.

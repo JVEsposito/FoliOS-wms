@@ -15,6 +15,8 @@ use App\Models\User;
 use App\Services\Materiales\ConsultaConsumosOrdenMaterial;
 use App\Services\Materiales\ServicioImputacionConsumoMaterial;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class ConsumosOrdenMaterialTest extends TestCase
@@ -172,5 +174,43 @@ class ConsumosOrdenMaterialTest extends TestCase
                 $this->assertNotEmpty($e->getMessage());
             }
         }
+    }
+
+    public function test_agregacion_sql_del_listado_conserva_devoluciones_y_excluye_lotes_anulados(): void
+    {
+        config(['database.default' => 'consumos_consulta_test', 'database.connections.consumos_consulta_test' => ['driver' => 'sqlite', 'database' => ':memory:', 'prefix' => '']]);
+        Schema::create('movimientos_inventario_materiales', function ($t): void {
+            $t->uuid('orden_transformacion_material_id');
+            $t->uuid('item_material_id');
+            $t->string('tipo');
+            $t->decimal('cantidad', 14, 3);
+        });
+        Schema::create('lotes_transformacion_materiales', function ($t): void {
+            $t->uuid('orden_transformacion_material_id');
+            $t->string('estado');
+            $t->decimal('cantidad_real_salida', 14, 3);
+            $t->decimal('merma_real', 14, 3);
+        });
+        foreach ([['consumo_transformacion', -16], ['devolucion_transformacion', 2], ['reversa_transformacion', 3], ['produccion_transformacion', 50], ['reversa_transformacion', -50]] as [$tipo, $cantidad]) {
+            DB::table('movimientos_inventario_materiales')->insert(['orden_transformacion_material_id' => 'orden', 'item_material_id' => 'film', 'tipo' => $tipo, 'cantidad' => $cantidad]);
+        }
+        foreach (['cerrado', 'anulado'] as $estado) {
+            DB::table('lotes_transformacion_materiales')->insert(['orden_transformacion_material_id' => 'orden', 'estado' => $estado, 'cantidad_real_salida' => 50, 'merma_real' => 4]);
+        }
+        $consulta = app(ConsultaConsumosOrdenMaterial::class);
+        $relaciones = $consulta->relaciones(true);
+        $orden = $this->orden();
+        foreach (['lotes', 'movimientosConsumo'] as $nombre) {
+            $relacion = $orden->{$nombre}();
+            $relaciones[$nombre]($relacion);
+            $orden->setRelation($nombre, $relacion->get());
+        }
+        $this->assertCount(1, $orden->lotes);
+        $this->assertCount(1, $orden->movimientosConsumo);
+        $datos = $consulta->detalle($orden, false);
+        $this->assertEquals(50, $datos['salida_real']);
+        $this->assertEquals(11, $datos['componentes'][0]['utilizado']);
+        $this->assertEquals(10, $datos['componentes'][0]['esperado']);
+        $this->assertEquals(1, $datos['componentes'][0]['desviacion_neta']);
     }
 }
