@@ -127,7 +127,7 @@ jobs:
         run: php artisan migrate:fresh --force
 
       - name: Ejecutar pruebas
-        run: php artisan test --fail-on-warning
+        run: php artisan test --fail-on-warning --stop-on-failure
 
   mobile:
     runs-on: ubuntu-latest

@@ -87,6 +87,7 @@ class CatalogoOficinas
         ['materiales', 'Inventario CC', '/oficina/materiales/almacenes', 'materiales.inventario', ['puede_consultar_despachos_materiales']],
         ['materiales', 'Despachos', '/oficina/materiales/despachos', 'materiales.despachos', ['puede_consultar_despachos_materiales']],
         ['materiales', 'Recetas', '/oficina/materiales/recetas', 'materiales.recetas', ['puede_consultar_transformaciones_materiales']],
+        ['materiales', 'Consumos por OT', '/oficina/materiales/consumos', 'materiales.ordenes', ['puede_consultar_transformaciones_materiales']],
         ['materiales', 'Órdenes', '/oficina/materiales/ordenes', 'materiales.ordenes', ['puede_consultar_transformaciones_materiales']],
         ['materiales', 'Existencias', '/oficina/materiales/exportaciones', 'materiales.exportaciones', ['puede_consultar_despachos_materiales']],
         ['administracion', 'Resumen', '/oficina/administracion', '', ['puede_consultar_panel_gerencial', 'puede_consultar_accesos', 'puede_administrar_catalogos_validacion', 'puede_consultar_configuracion_camaras', 'puede_consultar_integridad_operacional', 'puede_consultar_finanzas', 'puede_consultar_proveedores_finanzas', 'puede_consultar_comex', 'puede_consultar_comercial_comex', 'puede_consultar_rrhh', 'puede_marcar_rrhh']],

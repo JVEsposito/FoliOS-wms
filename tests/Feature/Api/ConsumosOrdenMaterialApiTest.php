@@ -31,7 +31,7 @@ class ConsumosOrdenMaterialApiTest extends TestCase
                 'creado_por_user_id' => $this->admin->id, 'actualizado_por_user_id' => $this->admin->id]);
         }
         $receta = $this->postJson('/api/materiales/transformaciones/recetas', ['cliente_id' => $this->clienteA->id, 'item_salida_id' => $items[1]->id,
-            'nombre' => 'Receta OT', 'cantidad_base_salida' => 10,
+            'nombre' => 'Receta OT '.Str::uuid(), 'cantidad_base_salida' => 10,
             'componentes' => [['item_entrada_id' => $items[0]->id, 'cantidad_estandar' => 10, 'es_componente_principal' => true]],
         ])->assertCreated()->json('data');
         $orden = $this->postJson('/api/materiales/transformaciones/ordenes', ['operacion_id' => (string) Str::uuid(), 'version_receta_material_id' => $receta['versiones'][0]['id'],
