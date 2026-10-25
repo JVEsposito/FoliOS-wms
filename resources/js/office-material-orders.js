@@ -182,6 +182,9 @@ function injectOrderPanel() {
                 <div class="materials-form__grid">
                     <label><span>Cantidad planificada de salida *</span><input name="cantidad_planificada_salida" type="number" min="0.001" step="0.001" required></label>
                     <label><span>Fecha operacional *</span><input name="fecha_operacional" type="date" required></label>
+                    <label><span>Referencia OT</span><input name="referencia_ot" maxlength="100" placeholder="Referencia de producción (opcional)"></label>
+                    <label><span>Proceso</span><input name="proceso" maxlength="100" placeholder="Armado, embalaje…"></label>
+                    <label><span>Operador físico</span><input name="operador_nombre" maxlength="150" placeholder="Persona que realiza el trabajo"></label>
                     <label data-order-free-field><span>Línea</span><input name="linea" maxlength="100" placeholder="Línea 1"></label>
                     <label data-order-free-field><span>Turno</span><input name="turno" maxlength="80" placeholder="Día / Noche"></label>
                     <label data-order-armado-field hidden><span>Máquina de armado *</span><input name="maquina" type="number" min="1" max="99" step="1" inputmode="numeric" placeholder="3" disabled></label>
@@ -587,6 +590,7 @@ function orderAudit(order) {
 
 function orderDetailContent(order) {
     return `
+        <p><a href="/oficina/materiales/consumos?q=${encodeURIComponent(order.id)}">Ver consumo esperado, real y movimientos de esta OT</a></p>
         ${orderRequirementTable(order)}
         ${(order.folios_salida || []).length ? `<h4>Folios de salida reservados</h4>${orderOutputFoliosTable(order)}` : ''}
         ${(order.cuadratura || []).length ? `<h4>Cuadratura de cierre</h4>${orderReconciliationTable(order)}` : ''}
@@ -619,7 +623,7 @@ function renderOrders() {
         const matchesState = !stateFilter || order.estado === stateFilter;
         const matchesClient = !clientFilter || order.cliente?.id === clientFilter;
         const haystack = orderNormalize([
-            orderCode(order),
+            orderCode(order), order.referencia_ot, order.proceso, order.operador_nombre,
             order.cliente?.codigo,
             order.cliente?.nombre,
             order.version_receta?.receta?.nombre,
@@ -667,6 +671,9 @@ function renderOrders() {
                 <div class="materials-order-meta">
                     <span>${orderEscape(orderDate(order.fecha_operacional))}</span>
                     <span>Receta v${orderEscape(order.version_receta?.numero_version)}</span>
+                    ${order.referencia_ot ? `<span>Referencia: ${orderEscape(order.referencia_ot)}</span>` : ''}
+                    ${order.proceso ? `<span>Proceso: ${orderEscape(order.proceso)}</span>` : ''}
+                    ${order.operador_nombre ? `<span>Operador: ${orderEscape(order.operador_nombre)}</span>` : ''}
                     <span>Bodega: ${orderEscape(order.almacen_origen?.nombre || 'Bodega Central')}</span>
                     <span>${orderEscape(orderLineLabel(order))}</span>
                     <span>${orderEscape(orderShiftLabel(order))}</span>
@@ -745,6 +752,9 @@ async function submitOrderForm(event) {
         version_receta_material_id: data.version_receta_material_id,
         cantidad_planificada_salida: plannedOutput,
         fecha_operacional: data.fecha_operacional,
+        referencia_ot: String(data.referencia_ot || '').trim() || null,
+        proceso: String(data.proceso || '').trim() || null,
+        operador_nombre: String(data.operador_nombre || '').trim() || null,
         linea: armado ? String(machine).padStart(2, '0') : (String(data.linea || '').trim() || null),
         turno: armado ? data.turno_armado : (String(data.turno || '').trim() || null),
         observacion: String(data.observacion || '').trim() || null,

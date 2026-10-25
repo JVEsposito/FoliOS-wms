@@ -616,6 +616,19 @@
                 <label><span>Motivo *</span><textarea name="motivo" minlength="3" maxlength="1000" rows="2" placeholder="Consumo turno día, mantención preventiva…" required></textarea></label>
                 <label><span>Justificación de excepción FIFO</span><textarea name="motivo_excepcion_fifo" minlength="5" maxlength="1000" rows="2" placeholder="Completar solo si no se consume el lote más antiguo"></textarea></label>
                 <p class="materials-import__help">Este movimiento descuenta la existencia de la bodega de origen e imputa el consumo al centro de costo. No crea existencia temporal en el centro de costo y no puede deshacerse editando el Kardex.</p>
+                <label><span>Operador físico del consumo</span><input name="operador_nombre" maxlength="150" placeholder="Persona que utiliza el insumo"></label>
+                <fieldset data-consumption-allocation hidden>
+                    <legend>Consumo por orden de trabajo</legend>
+                    <label><input type="checkbox" data-allocation-toggle> Distribuir este consumo entre órdenes</label>
+                    <div data-allocation-tools hidden>
+                        <p class="materials-help">La suma debe coincidir con el consumo físico. La merma forma parte de la cantidad de cada orden.</p>
+                        <label>Buscar referencia de OT<input data-allocation-search maxlength="100"></label>
+                        <button type="button" class="secondary-button" data-allocation-find>Buscar órdenes</button>
+                        <label>Orden en ejecución<select data-allocation-select></select></label>
+                        <button type="button" class="secondary-button" data-allocation-add>Agregar OT</button>
+                        <p data-allocation-notice role="status"></p><div data-allocation-rows></div>
+                    </div>
+                </fieldset>
                 <p class="form-error" id="materialDirectConsumptionError" role="alert"></p>
                 <div class="materials-import__actions">
                     <button class="secondary-button" id="cancelMaterialDirectConsumption" type="button">Cancelar</button>

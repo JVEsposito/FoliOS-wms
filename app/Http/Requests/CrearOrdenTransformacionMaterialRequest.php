@@ -35,6 +35,9 @@ class CrearOrdenTransformacionMaterialRequest extends FormRequest
                 ? ['required', 'string', Rule::in(array_keys(ServicioArmadoMaterial::TURNOS))]
                 : ['nullable', 'string', 'max:80'],
             'fecha_operacional' => ['required', 'date'],
+            'referencia_ot' => ['nullable', 'string', 'max:100', 'regex:/\S/u'],
+            'proceso' => ['nullable', 'string', 'max:100', 'regex:/\S/u'],
+            'operador_nombre' => ['nullable', 'string', 'max:150', 'regex:/\S/u'],
             'observacion' => ['nullable', 'string', 'max:2000'],
         ];
     }
