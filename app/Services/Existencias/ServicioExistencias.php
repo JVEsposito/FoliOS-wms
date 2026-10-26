@@ -44,7 +44,7 @@ class ServicioExistencias
             self::PRODUCTO_TERMINADO => [
                 'tipo' => self::PRODUCTO_TERMINADO,
                 'titulo' => 'Existencia de producto terminado',
-                'descripcion' => 'Folios activos de pallets y saldos, desde Validación y Prefrío hasta cámara y despacho.',
+                'descripcion' => 'Composición de pallets y saldos activos, con cajas y atributos de cada línea, desde Validación hasta despacho.',
                 'archivo' => 'Existencia_Producto_Terminado',
                 'columnas' => [
                     ['clave' => 'temporada', 'titulo' => 'Temporada', 'ancho' => 18],
@@ -75,6 +75,10 @@ class ServicioExistencias
                     ['clave' => 'anden', 'titulo' => 'Andén', 'ancho' => 18],
                     ['clave' => 'fecha_ingreso', 'titulo' => 'Fecha de ingreso', 'ancho' => 22],
                     ['clave' => 'ultima_actualizacion', 'titulo' => 'Última actualización', 'ancho' => 22],
+                    ['clave' => 'fecha_embalaje', 'titulo' => 'Fecha de embalaje', 'ancho' => 20, 'tipo' => 'fecha'],
+                    ['clave' => 'lote_materia_prima', 'titulo' => 'Lote de materia prima', 'ancho' => 24],
+                    ['clave' => 'proceso_packing', 'titulo' => 'Proceso de packing', 'ancho' => 22],
+                    ['clave' => 'estado_desglose', 'titulo' => 'Estado del desglose', 'ancho' => 45],
                 ],
             ],
             self::MATERIALES => [
@@ -373,76 +377,85 @@ class ServicioExistencias
             ->orderBy('numero_folio')
             ->orderBy('id')
             ->lazy(200)
-            ->map(function (Folio $folio): array {
-                $datos = $folio->datos_externos ?? [];
-                $ubicacion = $folio->ubicacionActual;
-                $posicion = $ubicacion?->posicion;
-                $asignacionPrefrioActiva = $folio->procesosPrefrio
-                    ->filter(fn ($asignacion): bool => $asignacion->proceso?->estado?->esActivo() === true
-                        && ! in_array($asignacion->estado, [
-                            EstadoFolioProcesoPrefrio::Retirado,
-                            EstadoFolioProcesoPrefrio::Cancelado,
-                        ], true))
-                    ->sortByDesc(fn ($asignacion) => $asignacion->cargado_at?->getTimestamp() ?? 0)
-                    ->first();
-                $proceso = $asignacionPrefrioActiva?->proceso;
-                $pendienteUbicacion = $ubicacion === null
-                    && $asignacionPrefrioActiva === null
-                    && $folio->condicion_termica === CondicionTermicaFolio::PrefrioAprobado
-                    && $folio->habilitacion_almacenamiento === HabilitacionAlmacenamientoFolio::Habilitado;
-                $asignacionCarga = $folio->asignacionCargaActual;
-                $carga = $asignacionCarga?->carga;
-                $estadoSag = $this->estadoSag->resumir($folio);
+            ->chunk(200)
+            ->flatMap(function (LazyCollection $bloque) {
+                $folios = $bloque->collect();
+                $desglose = new DesgloseProductoTerminado;
+                $desglose->preparar($folios);
 
-                return [
-                    'temporada' => $folio->temporada?->codigo,
-                    'folio' => $folio->numero_folio,
-                    'tipo_bulto' => $this->humanizar($folio->tipo_bulto->value),
-                    'estado_operacional' => $pendienteUbicacion
-                        ? 'Pendiente de ubicación'
-                        : $this->humanizar($folio->estado_operacional->value),
-                    'etapa_actual' => $this->etapaProducto(
-                        $folio,
-                        $ubicacion !== null,
-                        $asignacionPrefrioActiva !== null,
-                        $asignacionCarga?->estado?->value,
-                    ),
-                    'cantidad_cajas' => isset($datos['cantidad_cajas']) ? (int) $datos['cantidad_cajas'] : null,
-                    'cliente' => $folio->exportadora,
-                    'marca' => $folio->marca,
-                    'especie' => $datos['especie'] ?? null,
-                    'variedad' => $folio->variedad,
-                    'calibre' => $folio->calibre,
-                    'envase' => $datos['envase'] ?? null,
-                    'categoria' => $datos['categoria'] ?? null,
-                    'csg' => $datos['csg'] ?? null,
-                    'estado_sag' => $estadoSag['etiqueta'],
-                    'destinos_sag' => implode(' · ', $estadoSag['destinos']),
-                    'predio' => $datos['predio'] ?? null,
-                    'condicion_termica' => $this->humanizar($folio->condicion_termica?->value),
-                    'habilitacion_almacenamiento' => $this->humanizar($folio->habilitacion_almacenamiento?->value),
-                    'tunel_prefrio' => $proceso
-                        ? trim(($proceso->tunel?->codigo ?? '').' · '.$proceso->codigo, ' ·')
-                        : null,
-                    'camara' => $posicion?->camara
-                        ? trim($posicion->camara->codigo.' · '.$posicion->camara->nombre)
-                        : null,
-                    'posicion' => $posicion?->etiqueta,
-                    'carga' => $carga?->codigo,
-                    'orden_embarque' => $carga?->numero_orden_externa,
-                    'estado_carga' => $this->humanizar($asignacionCarga?->estado?->value),
-                    'anden' => $asignacionCarga?->anden
-                        ? trim($asignacionCarga->anden->codigo.' · '.$asignacionCarga->anden->nombre)
-                        : null,
-                    'fecha_ingreso' => $folio->fecha_ingreso?->toAtomString(),
-                    'ultima_actualizacion' => collect([
-                        $folio->updated_at,
-                        $ubicacion?->ubicado_at,
-                        $asignacionPrefrioActiva?->updated_at,
-                        $asignacionCarga?->updated_at,
-                        $asignacionCarga?->enviado_anden_at,
-                    ])->filter()->sortDesc()->first()?->toAtomString(),
-                ];
+                return $folios->flatMap(function (Folio $folio) use ($desglose): array {
+                    $datos = $folio->datos_externos ?? [];
+                    $ubicacion = $folio->ubicacionActual;
+                    $posicion = $ubicacion?->posicion;
+                    $asignacionPrefrioActiva = $folio->procesosPrefrio
+                        ->filter(fn ($asignacion): bool => $asignacion->proceso?->estado?->esActivo() === true
+                            && ! in_array($asignacion->estado, [
+                                EstadoFolioProcesoPrefrio::Retirado,
+                                EstadoFolioProcesoPrefrio::Cancelado,
+                            ], true))
+                        ->sortByDesc(fn ($asignacion) => $asignacion->cargado_at?->getTimestamp() ?? 0)
+                        ->first();
+                    $proceso = $asignacionPrefrioActiva?->proceso;
+                    $pendienteUbicacion = $ubicacion === null
+                        && $asignacionPrefrioActiva === null
+                        && $folio->condicion_termica === CondicionTermicaFolio::PrefrioAprobado
+                        && $folio->habilitacion_almacenamiento === HabilitacionAlmacenamientoFolio::Habilitado;
+                    $asignacionCarga = $folio->asignacionCargaActual;
+                    $carga = $asignacionCarga?->carga;
+                    $estadoSag = $this->estadoSag->resumir($folio);
+
+                    $cabecera = [
+                        'temporada' => $folio->temporada?->codigo,
+                        'folio' => $folio->numero_folio,
+                        'tipo_bulto' => $this->humanizar($folio->tipo_bulto->value),
+                        'estado_operacional' => $pendienteUbicacion
+                            ? 'Pendiente de ubicación'
+                            : $this->humanizar($folio->estado_operacional->value),
+                        'etapa_actual' => $this->etapaProducto(
+                            $folio,
+                            $ubicacion !== null,
+                            $asignacionPrefrioActiva !== null,
+                            $asignacionCarga?->estado?->value,
+                        ),
+                        'cantidad_cajas' => isset($datos['cantidad_cajas']) ? (int) $datos['cantidad_cajas'] : null,
+                        'cliente' => $folio->exportadora,
+                        'marca' => $folio->marca,
+                        'especie' => $datos['especie'] ?? null,
+                        'variedad' => $folio->variedad,
+                        'calibre' => $folio->calibre,
+                        'envase' => $datos['envase'] ?? null,
+                        'categoria' => $datos['categoria'] ?? null,
+                        'csg' => $datos['csg'] ?? null,
+                        'estado_sag' => $estadoSag['etiqueta'],
+                        'destinos_sag' => implode(' · ', $estadoSag['destinos']),
+                        'predio' => $datos['predio'] ?? null,
+                        'condicion_termica' => $this->humanizar($folio->condicion_termica?->value),
+                        'habilitacion_almacenamiento' => $this->humanizar($folio->habilitacion_almacenamiento?->value),
+                        'tunel_prefrio' => $proceso
+                            ? trim(($proceso->tunel?->codigo ?? '').' · '.$proceso->codigo, ' ·')
+                            : null,
+                        'camara' => $posicion?->camara
+                            ? trim($posicion->camara->codigo.' · '.$posicion->camara->nombre)
+                            : null,
+                        'posicion' => $posicion?->etiqueta,
+                        'carga' => $carga?->codigo,
+                        'orden_embarque' => $carga?->numero_orden_externa,
+                        'estado_carga' => $this->humanizar($asignacionCarga?->estado?->value),
+                        'anden' => $asignacionCarga?->anden
+                            ? trim($asignacionCarga->anden->codigo.' · '.$asignacionCarga->anden->nombre)
+                            : null,
+                        'fecha_ingreso' => $folio->fecha_ingreso?->toAtomString(),
+                        'ultima_actualizacion' => collect([
+                            $folio->updated_at,
+                            $ubicacion?->ubicado_at,
+                            $asignacionPrefrioActiva?->updated_at,
+                            $asignacionCarga?->updated_at,
+                            $asignacionCarga?->enviado_anden_at,
+                        ])->filter()->sortDesc()->first()?->toAtomString(),
+                    ];
+
+                    return $desglose->filas($cabecera, $datos);
+                });
             });
     }
 
