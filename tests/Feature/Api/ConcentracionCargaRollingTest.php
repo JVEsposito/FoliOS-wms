@@ -1055,7 +1055,9 @@ class ConcentracionCargaRollingTest extends TestCase
         $recepcion = $this->crearRecepcion($contexto);
         $concentracion = app(ServicioPlanConcentracionCarga::class)->sincronizar($contexto['carga'], $contexto['usuario']);
         $this->assertNotNull($concentracion);
-        $this->assertNull($concentracion->contexto['camara_objetivo_id']);
+        // Sin cámara objetivo, el acopio se estima antes del primer pallet en la cámara que
+        // tiene bandas libres para la carga completa (la de pallets dispersos tiene una posición).
+        $this->assertSame($contexto['camaraObjetivo']->id, $concentracion->contexto['camara_objetivo_id']);
         [$a, $tabletA] = $this->crearOperador();
         [$b, $tabletB] = $this->crearOperadorAdicional();
         $planes = app(ServicioPlanesOperacionales::class);

@@ -22,7 +22,10 @@ use Illuminate\Support\Collection;
 /** Comparte el destino de carga sin crear otra tarea ni anticipar inventario físico. */
 class ServicioAcopioCarga
 {
-    public function __construct(private readonly CalculadorConcentracionCarga $calculador) {}
+    public function __construct(
+        private readonly CalculadorConcentracionCarga $calculador,
+        private readonly SectorAcopioCarga $sector,
+    ) {}
 
     public function esRecepcion(PlanOperacional $plan, TipoMovimiento $tipo): bool
     {
@@ -43,6 +46,7 @@ class ServicioAcopioCarga
      */
     public function paraFolio(string $folioId, ?string $excluirTareaId = null, bool $bloquear = false): ?array
     {
+        $this->sector->olvidar();
         $asignacionLeida = CargaFolio::query()
             ->where('folio_id', $folioId)
             ->whereHas('reservaActiva')
@@ -97,8 +101,14 @@ class ServicioAcopioCarga
             ->orderBy('reservada_at')->orderBy('id')
             ->when($bloquear, fn ($consulta) => $consulta->lockForUpdate())
             ->get();
+        $propias = $excluirTareaId === null ? [] : ReservaTareaMovimiento::query()
+            ->conCompromisoVigente()
+            ->where('tarea_movimiento_id', $excluirTareaId)
+            ->whereNotNull('bloqueo_posicion_id')
+            ->pluck('bloqueo_posicion_id')
+            ->all();
 
-        return $this->proyectar($carga, $asignaciones, $reservas, $folioId, $tieneCamion);
+        return $this->proyectar($carga, $asignaciones, $reservas, $folioId, $tieneCamion, $propias);
     }
 
     /** Una lectura compartida por carga; se usa solo para preparar propuestas, nunca para autorizar escrituras.
@@ -107,6 +117,7 @@ class ServicioAcopioCarga
      */
     public function paraTareas(Collection $tareas): array
     {
+        $this->sector->olvidar();
         $tareas = (new TareaMovimiento)->newCollection($tareas->all())->loadMissing('planOperacional');
         $recepciones = $tareas->filter(fn (TareaMovimiento $tarea): bool => $this
             ->esRecepcion($tarea->planOperacional, $tarea->tipo_movimiento));
@@ -143,7 +154,12 @@ class ServicioAcopioCarga
             $salida[$tarea->id] = $this->proyectar($carga, $grupo, $reservas->filter(
                 fn (ReservaTareaMovimiento $reserva): bool => $reserva->tarea_movimiento_id !== $tarea->id
                     && $folios->has($reserva->tareaMovimiento->folio_id),
-            ), $tarea->folio_id, $carga->presenciaAndenActiva !== null);
+            ), $tarea->folio_id, $carga->presenciaAndenActiva !== null, $reservas
+                ->where('tarea_movimiento_id', $tarea->id)
+                ->pluck('bloqueo_posicion_id')
+                ->filter()
+                ->values()
+                ->all());
         }
 
         return $salida;
@@ -151,9 +167,10 @@ class ServicioAcopioCarga
 
     /** @param Collection<int, CargaFolio> $asignaciones
      * @param  Collection<int, ReservaTareaMovimiento>  $reservas
+     * @param  list<string>  $propias  destinos ya reservados por la tarea del pallet
      * @return array<string, mixed>
      */
-    private function proyectar(Carga $carga, Collection $asignaciones, Collection $reservas, string $folioId, bool $tieneCamion): array
+    private function proyectar(Carga $carga, Collection $asignaciones, Collection $reservas, string $folioId, bool $tieneCamion, array $propias = []): array
     {
         // Se construye una geometría proyectada aparte. Los entrantes conservan
         // sus reservas y nunca se cuentan como pallets físicamente recibidos.
@@ -174,19 +191,53 @@ class ServicioAcopioCarga
             return $copia->setRelation('folio', $folio);
         });
         $fisico = $this->calculador->analizar($asignaciones->where('folio_id', '!=', $folioId));
+        $pendientes = $asignaciones->where('estado', EstadoCargaFolio::Pendiente)->count();
         $camaraId = $carga->camara_objetivo_id
             ?? ($fisico['grupo_principal']['camara']['id'] ?? null)
-            ?? $reservas->first()?->posicionDestino?->camara_id;
-        $analisis = $this->calculador->analizar($proyectadas, $camaraId);
+            ?? $reservas->first()?->posicionDestino?->camara_id
+            // Antes del primer pallet ya se estima dónde cabe la carga completa.
+            ?? $this->sector->camaraParaCarga(
+                $carga->id,
+                $asignaciones->pluck('folio.exportadora')->filter()->unique()->values()->all(),
+                $pendientes,
+            );
+        // El acopio crece donde cabe lo que falta de la carga, no necesariamente junto al grupo
+        // más grande: un grupo encajonado entre bandas llenas no recibe a nadie más.
+        $sector = $camaraId === null ? null : $this->sector->elegir(
+            $camaraId,
+            $carga->id,
+            $this->puntosEnCamara($proyectadas, $camaraId),
+            $pendientes,
+            $propias,
+        );
 
         return [
             'carga_id' => $carga->id,
             'carga_codigo' => $carga->codigo,
             'carga_folio_id' => $asignaciones->firstWhere('folio_id', $folioId)->id,
             'camara_objetivo_id' => $camaraId,
-            'puntos' => $analisis['grupo_principal_puntos'],
+            'puntos' => $sector['puntos'] ?? [],
+            'sector' => $sector['sector'] ?? null,
             'despacho_directo' => $tieneCamion,
         ];
+    }
+
+    /**
+     * @param  Collection<int, CargaFolio>  $proyectadas
+     * @return list<array{banda: int, posicion: int, nivel: int}>
+     */
+    private function puntosEnCamara(Collection $proyectadas, string $camaraId): array
+    {
+        return $proyectadas
+            ->map(fn (CargaFolio $asignacion): ?Posicion => $asignacion->folio?->ubicacionActual?->posicion)
+            ->filter(fn (?Posicion $posicion): bool => $posicion !== null && $posicion->camara_id === $camaraId)
+            ->map(fn (Posicion $posicion): array => [
+                'banda' => (int) $posicion->banda,
+                'posicion' => (int) $posicion->posicion,
+                'nivel' => (int) $posicion->nivel,
+            ])
+            ->values()
+            ->all();
     }
 
     /** Actualiza solamente trabajo aún sin destino comprometido. */
@@ -231,7 +282,11 @@ class ServicioAcopioCarga
         ]);
     }
 
-    public function validarDestino(TareaMovimiento $tarea, Posicion $posicion): void
+    /**
+     * @param  bool  $reservado  el destino ya fue validado y reservado (al iniciar el retiro): si
+     *                           el acopio se movió entre medio, el pallet igual va a su reserva.
+     */
+    public function validarDestino(TareaMovimiento $tarea, Posicion $posicion, bool $reservado = false): void
     {
         $complementario = ($tarea->contexto['tipo_decision'] ?? null) === 'blocker_destino_util';
         if ((! $this->esRecepcion($tarea->planOperacional, $tarea->tipo_movimiento) && ! $complementario)
@@ -253,6 +308,9 @@ class ServicioAcopioCarga
         }
         if ($acopio['camara_objetivo_id'] && $posicion->camara_id !== $acopio['camara_objetivo_id']) {
             throw new ConflictoOperacion('El destino debe respetar la cámara de acopio vigente de la carga.');
+        }
+        if ($reservado) {
+            return;
         }
         if ($acopio['puntos'] !== [] && ! collect($acopio['puntos'])->contains(
             fn (array $punto): bool => (int) $punto['nivel'] === (int) $posicion->nivel

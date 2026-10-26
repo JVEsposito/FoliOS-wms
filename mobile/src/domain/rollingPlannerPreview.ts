@@ -5,13 +5,15 @@ import type {
   OperationalPhysicalFrontierSnapshot,
   OperationalTask,
 } from './operationalTasks';
-import { calculateRollingFrontier, loadStaging, taskWithCurrentLoadTarget } from './rollingPlanner';
+import { areConcentrationNeighbors, calculateRollingFrontier, loadStaging, taskWithCurrentLoadTarget } from './rollingPlanner';
 
 export type FrontierPreview = {
   physicalVersion: string;
   proposals: OperationalFrontierProposal[];
   destinations: Record<string, string>;
   loadTargets?: Record<string, string>;
+  /** Propuestas que solo calzan junto al destino simulado de otro pallet todavía sin reserva. */
+  dependent?: string[];
 };
 
 // El snapshot completo incluye las tareas asumidas por esta tablet: cambia al
@@ -73,6 +75,15 @@ export function simulateFrontierPreview(
     plans,
   );
   const cameraNames = new Map(plans.map((plan) => [plan.id, plan.nombre]));
+  const currentTargets = new Map(eligible.map((task) => [task.id, loadStaging(
+    taskWithCurrentLoadTarget(task, snapshot.tareas.find((item) => item.id === task.id)),
+  )]));
+  const dependent = frontier.candidates
+    .filter((candidate) => {
+      const target = currentTargets.get(candidate.taskId);
+      return Boolean(target?.puntos.length) && !target!.puntos.some((point) => areConcentrationNeighbors(point, candidate.position));
+    })
+    .map((candidate) => candidate.taskId);
   return {
     physicalVersion: physicalSnapshotVersion(snapshot),
     proposals: frontier.proposals,
@@ -80,9 +91,8 @@ export function simulateFrontierPreview(
       candidate.taskId,
       `${cameraNames.get(candidate.cameraId) ?? 'Cámara'} · ${candidate.position.etiqueta ?? `B${candidate.position.banda}-P${candidate.position.posicion}-N${candidate.position.nivel}`}`,
     ])),
-    loadTargets: Object.fromEntries(eligible.map((task) => [task.id, JSON.stringify(loadStaging(
-      taskWithCurrentLoadTarget(task, snapshot.tareas.find((item) => item.id === task.id)),
-    ))])),
+    loadTargets: Object.fromEntries(eligible.map((task) => [task.id, JSON.stringify(currentTargets.get(task.id) ?? null)])),
+    dependent,
   };
 }
 
@@ -97,6 +107,8 @@ export function reusablePreviewProposal(
   const old = preview.proposals.find((proposal) => proposal.tarea_id === taken.id);
   const task = current.tareas.find((item) => item.id === taken.id && item.materializable);
   if (!old || !task || !task.plan_version || taken.reserva?.tipo_compromiso === 'fisica') return null;
+  // Si dependía del destino simulado de otro pallet, el servidor la rechazaría: se recalcula.
+  if (preview.dependent?.includes(taken.id)) return null;
   const target = JSON.stringify(loadStaging(taskWithCurrentLoadTarget(taken, task)));
   if (preview.loadTargets?.[taken.id] !== undefined && preview.loadTargets[taken.id] !== target) return null;
   return { ...old, tarea_version: task.version, plan_version: task.plan_version };
