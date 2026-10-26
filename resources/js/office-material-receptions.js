@@ -401,7 +401,7 @@ function renderReceptionDetail() {
         + ((record.estado === 'borrador' ? receptionCanManage() || receptionCanAdminister() : receptionCanAdminister() && !record.registro?.provisional && record.estado !== 'anulada') ? action('edit', 'Editar') : '')
         + (receptionCanAuthorize() && record.estado === 'confirmada' && ['pendiente', 'vencida'].includes(record.registro?.estado) ? action('regularize', 'Regularizar documentos') : '')
         + (receptionCanDelete() ? action('delete', 'Eliminar') : '');
-    receptionElements.detailLines.innerHTML = registrationDetail(record) + (record.detalles || []).map((detail) => `<article class="material-reception-detail-line"><strong>${receptionEscape(detail.item?.nombre || '—')}</strong><code>${receptionEscape(detail.item?.codigo || '—')}</code><b>${receptionEscape(receptionQuantity(detail.cantidad_aceptada ?? detail.cantidad_recibida))} ${receptionEscape(detail.unidad_medida || '')}</b><small>Documental: ${detail.cantidad_documental == null ? 'Pendiente' : receptionEscape(receptionQuantity(detail.cantidad_documental))} ${receptionEscape(detail.unidad_medida || '')}</small><small>${receptionEscape(receptionPackageSummary(detail))}</small>${detail.conversion_unidad ? `<small>Ingreso: ${receptionEscape(detail.conversion_unidad.entrada.cantidad_aceptada)} ${receptionEscape(detail.conversion_unidad.unidad_origen)} × ${receptionEscape(detail.conversion_unidad.factor)} ${receptionEscape(detail.unidad_medida)}</small>` : ''}</article>`).join('');
+    receptionElements.detailLines.innerHTML = registrationDetail(record) + (record.detalles || []).map((detail) => `<article class="material-reception-detail-line"><strong>${receptionEscape(detail.item?.nombre || '—')}</strong><code>${receptionEscape(detail.item?.codigo || '—')}</code><b>${receptionEscape(receptionQuantity(detail.cantidad_aceptada ?? detail.cantidad_recibida))} ${receptionEscape(materialCatalogLabel(detail.unidad_medida || ''))}</b><small>Documental: ${detail.cantidad_documental == null ? 'Pendiente' : receptionEscape(receptionQuantity(detail.cantidad_documental))} ${receptionEscape(materialCatalogLabel(detail.unidad_medida || ''))}</small><small>${receptionEscape(receptionPackageSummary(detail))}</small>${detail.conversion_unidad ? `<small>Ingreso: ${receptionEscape(detail.conversion_unidad.entrada.cantidad_aceptada)} ${receptionEscape(materialCatalogLabel(detail.conversion_unidad.unidad_origen))} × ${receptionEscape(detail.conversion_unidad.factor)} ${receptionEscape(materialCatalogLabel(detail.unidad_medida))}</small>` : ''}</article>`).join('');
     const folios = record.snapshot_confirmacion?.folios || [];
     const assigned = folios.filter(f => f.asignacion_bodega);
     if (record.estado === 'confirmada' && assigned.length) receptionElements.detailLines.innerHTML += `<article class="material-reception-detail-line"><strong>Bodegas asignadas al ingreso</strong>${assigned.map(f => `<small>${receptionEscape(f.numero_folio)} → ${receptionEscape(f.asignacion_bodega.nombre)} · ${f.asignacion_bodega.origen === 'regla' ? `Regla: ${receptionEscape(f.asignacion_bodega.regla?.nombre)}` : 'Central por defecto'}</small>`).join('')}<small>La asignación no certifica espacio libre ni una ubicación física. Revisa Inventario para ver la ubicación actual.</small></article>`;
@@ -477,7 +477,7 @@ function receptionNormalizedSearch(value) {
 
 function receptionItemLabel(item) {
     if (!item) return '';
-    return `${item.codigo} · ${item.nombre} · ${item.categoria_operacional_etiqueta || item.categoria_operacional || 'Sin tipo'} · ${item.unidad_medida}`;
+    return `${item.codigo} · ${item.nombre} · ${item.categoria_operacional_etiqueta || item.categoria_operacional || 'Sin tipo'} · ${materialCatalogLabel(item.unidad_medida)}`;
 }
 
 function receptionMatchingItems(query, category = '') {
@@ -517,7 +517,7 @@ function renderReceptionItemResults(article) {
     const filter = article.querySelector('.material-reception-item-filter');
     const results = article.querySelector('.material-item-results');
     const matches = receptionMatchingItems(input.value, filter.value);
-    results.innerHTML = matches.map((item) => `<button class="material-item-option" data-select-reception-item="${item.id}" type="button" role="option"><span>${receptionEscape(item.codigo)} · ${receptionEscape(item.nombre)}</span><strong>${receptionEscape(item.categoria_operacional_etiqueta)} · ${receptionEscape(item.unidad_medida)}</strong></button>`).join('')
+    results.innerHTML = matches.map((item) => `<button class="material-item-option" data-select-reception-item="${item.id}" type="button" role="option"><span>${receptionEscape(item.codigo)} · ${receptionEscape(item.nombre)}</span><strong>${receptionEscape(item.categoria_operacional_etiqueta)} · ${receptionEscape(materialCatalogLabel(item.unidad_medida))}</strong></button>`).join('')
         || '<p class="material-item-empty">No hay productos que coincidan con la búsqueda y el filtro.</p>';
     results.classList.remove('is-hidden');
     input.setAttribute('aria-expanded', 'true');

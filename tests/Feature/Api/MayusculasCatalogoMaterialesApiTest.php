@@ -50,7 +50,9 @@ class MayusculasCatalogoMaterialesApiTest extends TestCase
         $ruta = $respuesta->baseResponse->getFile()->getPathname();
         try {
             $excel = new UploadedFile($ruta, 'catalogo.xlsx', null, null, true);
-            $this->assertSame('CAJA PEQUEÑA', app(LectorPlanillaMaterial::class)->leer($excel)[0]['nombre']);
+            $fila = app(LectorPlanillaMaterial::class)->leer($excel)[0];
+            $this->assertSame('CAJA PEQUEÑA', $fila['nombre']);
+            $this->assertSame('KG', $fila['unidad_medida']);
             $id = $this->post('/api/administracion/materiales/importaciones/previsualizar', ['archivo' => $excel], ['Accept' => 'application/json'])
                 ->assertCreated()->assertJsonPath('data.resumen.sin_cambios_estimados', 1)->json('data.id');
             $this->postJson('/api/administracion/materiales/importaciones/'.$id.'/confirmar')

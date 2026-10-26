@@ -48,7 +48,7 @@ normalizados porque la caja original no puede reconstruirse.
 
 Las unidades mantienen códigos y alias canónicos, por ejemplo `kg` y `unidades`,
 para las conversiones y la compatibilidad con los dispositivos. Sus nombres y las
-etiquetas del catálogo y los selectores de Oficina se muestran en mayúsculas. Los
+etiquetas del catálogo, las descargas y los selectores de Oficina se muestran en mayúsculas. Los
 valores enviados por los selectores y las equivalencias históricas se conservan.
 
 Descargar y reimportar sin editar sigue produciendo cero creaciones y cero

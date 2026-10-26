@@ -56,6 +56,7 @@ class ServicioCatalogoItemsMateriales
             foreach ($bloque as $item) {
                 yield ['temporada_codigo' => $item->cliente->temporada->codigo, 'cliente_codigo' => $item->cliente->codigo,
                     ...$item->only(['codigo', 'nombre', 'categoria', 'unidad_medida', 'codigo_externo', 'stock_minimo', 'punto_reorden', 'stock_maximo']),
+                    'unidad_medida' => NombreClasificacionMaterial::mayusculas($item->unidad_medida),
                     'tipo_item' => $item->categoria_operacional?->value, 'activo' => $item->activo ? 'si' : 'no',
                     'cliente_nombre' => $item->cliente->nombre, 'dias_alerta_vencimiento' => $item->dias_alerta_vencimiento,
                     ...($datos[$item->id] ?? []), 'cantidad_fotos' => (int) $item->fotos_count,
