@@ -202,7 +202,7 @@ class AdministracionAccesoApiTest extends TestCase
         $this->actingAs($administrador, 'sanctum')
             ->postJson('/api/administracion/materiales/proveedores', $payload)
             ->assertCreated()
-            ->assertJsonPath('data.categorias.0.categoria', 'Solo no operacional');
+            ->assertJsonPath('data.categorias.0.categoria', 'SOLO NO OPERACIONAL');
 
         $payload['codigo'] = 'PROV-MALFORMADO';
         $payload['categorias'] = ['entrada-malformada'];

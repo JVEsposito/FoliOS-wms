@@ -50,12 +50,12 @@ async function fixture(records, options = {}) {
     try {
         await page.goto('http://localhost/test');
         await page.evaluate(async () => {
-        // Esta fixture monta solo Recepciones; la navegación tiene su propia suite y arranque.
-        document.querySelector('[data-office-shell]')?.remove();
+            // Esta fixture monta solo Recepciones; la navegación tiene su propia suite y arranque.
+            document.querySelector('[data-office-shell]')?.remove();
             document.getElementById('officeAccess')?.classList.add('is-hidden');
-        const app = document.getElementById('officeApp'); app.classList.remove('is-hidden'); app.dataset.materialsSection = 'recepciones';
-        document.querySelectorAll('[data-materials-view]').forEach((node) => node.classList.toggle('is-hidden', node.dataset.materialsView !== 'recepciones'));
-        await import('/office-material-receptions.js');
+            const app = document.getElementById('officeApp'); app.classList.remove('is-hidden'); app.dataset.materialsSection = 'recepciones';
+            document.querySelectorAll('[data-materials-view]').forEach((node) => node.classList.toggle('is-hidden', node.dataset.materialsView !== 'recepciones'));
+            await import('/office-material-receptions.js');
         });
         await page.waitForFunction(() => document.querySelector('[data-action="select"]'));
     } catch (error) {
