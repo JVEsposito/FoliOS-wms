@@ -36,7 +36,7 @@ async function fixture(records, options = {}) {
             await import('/office-material-labels.js');
         </script></body>`) });
         if (url.pathname.startsWith('/build/')) return route.fulfill({ body: readFileSync(resolve(root, 'public' + url.pathname)), contentType: url.pathname.endsWith('.css') ? 'text/css' : 'application/octet-stream' });
-        if (['/office-material-receptions.js', '/office-material-reception-registration.js', '/office-material-reception-photos.js', '/office-material-labels.js', '/office-material-reception-transport.js'].includes(url.pathname)) return route.fulfill({ body: readFileSync(resolve(root, 'resources/js' + url.pathname)), contentType: 'text/javascript' });
+        if (['/office-material-receptions.js', '/office-material-reception-registration.js', '/office-material-reception-photos.js', '/office-material-labels.js', '/office-material-reception-transport.js', '/shared/material-catalog-label.js'].includes(url.pathname)) return route.fulfill({ body: readFileSync(resolve(root, 'resources/js' + url.pathname)), contentType: 'text/javascript' });
         if (url.pathname === '/office-material-reception-import.js') return route.fulfill({ body: '', contentType: 'text/javascript' });
         if (url.pathname === '/thumb' || url.pathname === '/original') return route.fulfill({ body: image, contentType: 'image/png' });
         calls.push({ path: url.pathname, method: request.method(), body: request.postData() });
@@ -47,16 +47,21 @@ async function fixture(records, options = {}) {
         if (id && records.has(id)) return route.fulfill({ json: { data: records.get(id) } });
         return route.fulfill({ status: 404 });
     });
-    await page.goto('http://localhost/test');
-    await page.evaluate(async () => {
+    try {
+        await page.goto('http://localhost/test');
+        await page.evaluate(async () => {
         // Esta fixture monta solo Recepciones; la navegación tiene su propia suite y arranque.
         document.querySelector('[data-office-shell]')?.remove();
             document.getElementById('officeAccess')?.classList.add('is-hidden');
         const app = document.getElementById('officeApp'); app.classList.remove('is-hidden'); app.dataset.materialsSection = 'recepciones';
         document.querySelectorAll('[data-materials-view]').forEach((node) => node.classList.toggle('is-hidden', node.dataset.materialsView !== 'recepciones'));
         await import('/office-material-receptions.js');
-    });
-    await page.waitForFunction(() => document.querySelector('[data-action="select"]'));
+        });
+        await page.waitForFunction(() => document.querySelector('[data-action="select"]'));
+    } catch (error) {
+        await browser.close();
+        throw error;
+    }
     return { browser, page, calls, errors };
 }
 
