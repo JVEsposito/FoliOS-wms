@@ -47,6 +47,7 @@ class ServicioPlanConcentracionCarga
         private readonly ServicioManiobrasOperacionales $maniobras,
         private readonly ServicioDesplieguePlanificador $despliegue,
         private readonly ServicioAcopioCarga $acopio,
+        private readonly SectorAcopioCarga $sector,
     ) {}
 
     public function sincronizar(Carga $carga, User $usuario): ?PlanOperacional
@@ -113,7 +114,12 @@ class ServicioPlanConcentracionCarga
                 ->values();
             $modo = $this->despliegue->modoEfectivo($camarasInvolucradas);
 
-            $analisis = $this->calculador->analizar($asignaciones, $camaraObjetivoId);
+            $analisis = $this->conSectorDeAcopio(
+                $this->calculador->analizar($asignaciones, $camaraObjetivoId),
+                $carga,
+                $asignaciones,
+                $camaraObjetivoId,
+            );
             $analisis['dependencias'] = $this->acopio->dependencias($asignaciones);
             $necesarios = max(
                 0,
@@ -466,6 +472,50 @@ class ServicioPlanConcentracionCarga
             })
             ->sortByDesc(fn (UbicacionActual $ubicacion): int => $ubicacion->posicion->posicion)
             ->values();
+    }
+
+    /**
+     * La concentración apunta al mismo sector que las recepciones del túnel: si el grupo más
+     * grande ya no puede crecer, juntar pallets a su lado es imposible y se junta en el sector
+     * con espacio para la carga. El porcentaje concentrado se sigue midiendo igual.
+     *
+     * @param  array<string, mixed>  $analisis
+     * @param  Collection<int, CargaFolio>  $asignaciones
+     * @return array<string, mixed>
+     */
+    private function conSectorDeAcopio(array $analisis, Carga $carga, Collection $asignaciones, ?string $camaraObjetivoId): array
+    {
+        if ($camaraObjetivoId === null) {
+            return $analisis;
+        }
+        $ubicadas = $asignaciones->filter(fn (CargaFolio $asignacion): bool => $asignacion
+            ->folio?->ubicacionActual?->posicion?->camara_id === $camaraObjetivoId);
+        $this->sector->olvidar();
+        $sector = $this->sector->elegir(
+            $camaraObjetivoId,
+            $carga->id,
+            $ubicadas->map(fn (CargaFolio $asignacion): array => [
+                'banda' => (int) $asignacion->folio->ubicacionActual->posicion->banda,
+                'posicion' => (int) $asignacion->folio->ubicacionActual->posicion->posicion,
+                'nivel' => (int) $asignacion->folio->ubicacionActual->posicion->nivel,
+            ])->values()->all(),
+            $asignaciones->where('estado', EstadoCargaFolio::Pendiente)->count(),
+        );
+        if ($sector['sector']['tipo'] === 'grupo') {
+            $puntos = collect($sector['puntos']);
+            $analisis['grupo_principal_puntos'] = $sector['puntos'];
+            $analisis['grupo_principal_folio_ids'] = $ubicadas
+                ->filter(fn (CargaFolio $asignacion): bool => $puntos->contains(fn (array $punto): bool => $punto['banda'] === (int) $asignacion->folio->ubicacionActual->posicion->banda
+                    && $punto['posicion'] === (int) $asignacion->folio->ubicacionActual->posicion->posicion
+                    && $punto['nivel'] === (int) $asignacion->folio->ubicacionActual->posicion->nivel))
+                ->pluck('folio_id')->sort()->values()->all();
+        } elseif ($sector['sector']['tipo'] === 'nuevo') {
+            $analisis['grupo_principal_puntos'] = $sector['puntos'];
+            $analisis['grupo_principal_folio_ids'] = [];
+        }
+        $analisis['sector_acopio'] = $sector['sector'];
+
+        return $analisis;
     }
 
     /**
@@ -1192,6 +1242,7 @@ class ServicioPlanConcentracionCarga
             'concentrados' => $analisis['concentrados'],
             'total' => $analisis['total'],
             'grupo_principal' => $analisis['grupo_principal'],
+            'sector_acopio' => $analisis['sector_acopio'] ?? null,
             'concentracion_geometry_hash' => $geometriaHash,
             'suspendido_por_anden' => $suspendidoPorAnden,
             'recepciones_pendientes' => count($analisis['dependencias'] ?? []),

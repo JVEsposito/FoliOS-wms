@@ -44,14 +44,17 @@ export function calculateRollingFrontier(
   tasks: OperationalTask[],
   snapshot: OperationalSnapshot | OperationalPhysicalFrontierSnapshot,
   cameraPlans: CameraPlan[],
+  anchorTaskId: string | null = null,
 ): RollingFrontier {
   const limit = Math.max(1, snapshot.planner.frontier_max);
+  // El pallet en el que trabaja el camarero se calcula primero: su destino nunca depende de
+  // la propuesta de otro pallet que el servidor podría rechazar en la misma frontera.
   const eligible = tasks
     .filter((task) => task.estado === 'asumida' && !task.punto_no_retorno)
     .filter((task) => task.tipo_movimiento !== 'retiro')
     .filter((task) => task.reserva?.tipo_compromiso !== 'fisica')
     .filter((task) => snapshot.tareas.find((item) => item.id === task.id)?.materializable !== false)
-    .sort(compareTasks);
+    .sort((left, right) => Number(right.id === anchorTaskId) - Number(left.id === anchorTaskId) || compareTasks(left, right));
 
   // Copia solo los contenedores que cambian en la simulación; el snapshot recibido sigue intacto.
   const virtualPlans = cameraPlans.map((plan) => ({ ...plan,
@@ -159,6 +162,7 @@ export function bestCandidate(
     mixesClients: boolean;
     preferred: boolean;
     localClearance: boolean;
+    outsideSector: boolean;
   }> = [];
   const initialWithoutTarget = task.tipo_movimiento === 'ubicacion_inicial'
     && !task.destino?.camara.id;
@@ -182,12 +186,14 @@ export function bestCandidate(
         mixesClients: rankByAffinity && mixesClients(task, plan, position),
         preferred: initialWithoutTarget && plan.id === preferredDispatchCameraId,
         localClearance: isClearanceTask(task) && plan.id === task.origen?.camara.id,
+        outsideSector: outsideLoadSector(task, position),
       });
     }
   }
 
   candidates.sort((left, right) => (
     Number(right.localClearance) - Number(left.localClearance)
+    || Number(left.outsideSector) - Number(right.outsideSector)
     || left.affinityRank - right.affinityRank
     || Number(left.mixesClients) - Number(right.mixesClients)
     || Number(right.preferred) - Number(left.preferred)
@@ -200,7 +206,7 @@ export function bestCandidate(
 
   const best = candidates[0];
   if (!best) return null;
-  const { affinityRank: _affinityRank, mixesClients: _mixesClients, localClearance, preferred, ...candidate } = best;
+  const { affinityRank: _affinityRank, mixesClients: _mixesClients, localClearance, preferred, outsideSector: _outsideSector, ...candidate } = best;
   if (localClearance) candidate.reason += '; despeje dentro de la cámara de origen sin traslado adicional';
   if (preferred) candidate.reason += '; cámara preferente para despacho entre bandas de igual afinidad';
   return candidate;
@@ -344,6 +350,8 @@ function positionAllowed(
   if (acopio?.puntos.length && !acopio.puntos.some((point) => areConcentrationNeighbors(point, position))) {
     return false;
   }
+  // El acopio se arma desde el fondo de cada banda: no se deja un hueco detrás de un pallet.
+  if (acopio && !isNextSlot(plan, position, usedDestinations)) return false;
 
   if (task.contexto?.tipo_decision === 'concentrar_carga') {
     const targetCamera = taskContext(task, ['camara_objetivo_id']);
@@ -431,6 +439,23 @@ function scoreCandidate(task: OperationalTask, plan: CameraPlan, position: Posit
   return { score, reason: reasons.join('; ') };
 }
 
+/** La posición libre más al fondo, delante del último pallet ocupado o comprometido de su banda. */
+export function isNextSlot(plan: CameraPlan, position: Position, usedDestinations: ReadonlySet<string> = new Set()) {
+  const lane = plan.posiciones.filter((item) => item.banda === position.banda && item.nivel === position.nivel);
+  const taken = (item: Position) => item.ocupada || item.reservada || usedDestinations.has(item.id);
+  const front = Math.max(0, ...lane.filter(taken).map((item) => item.posicion));
+  if (position.posicion <= front) return false;
+  return !lane.some((item) => item.posicion > front && item.posicion < position.posicion
+    && item.estado === 'activa' && !taken(item));
+}
+
+/** Un sector nuevo del servidor marca las bandas donde cabe la carga completa. */
+function outsideLoadSector(task: OperationalTask, position: Position) {
+  const sector = loadStaging(task)?.sector;
+  if (!sector || sector.tipo !== 'nuevo' || sector.banda_desde === null || sector.banda_hasta === null) return false;
+  return position.nivel !== sector.nivel || position.banda < sector.banda_desde || position.banda > sector.banda_hasta;
+}
+
 function concentrationPoints(task: OperationalTask): ConcentrationPoint[] {
   const raw = task.contexto?.concentracion_puntos;
   if (!Array.isArray(raw)) return [];
@@ -444,7 +469,7 @@ function concentrationPoints(task: OperationalTask): ConcentrationPoint[] {
   ));
 }
 
-function areConcentrationNeighbors(point: ConcentrationPoint, position: Position) {
+export function areConcentrationNeighbors(point: ConcentrationPoint, position: Pick<Position, 'banda' | 'posicion' | 'nivel'>) {
   if (point.nivel !== position.nivel) return false;
   const bandDistance = Math.abs(point.banda - position.banda);
   const positionDistance = Math.abs(point.posicion - position.posicion);

@@ -52,8 +52,9 @@ Implementado en esta entrega:
 - Las reservas proyectan llegadas sin aumentar stock físico ni el porcentaje de
   concentración. La tablet incorpora también las propuestas anteriores de su propio
   precálculo y descarta el precálculo si cambió la asignación de carga.
-- Si no queda destino conectado habilitado, la propuesta espera capacidad; no deriva
-  automáticamente a almacenamiento general para generar después otra extracción.
+- Si el grupo de la carga ya no puede crecer, el acopio se abre en un sector con espacio
+  para la carga completa (ver *Sector de acopio con capacidad*). Hasta el 26-10-2026 la
+  propuesta esperaba capacidad y el pallet quedaba en el túnel.
 - Cada recepción conserva una sola tarea, maniobra y movimiento. Al terminar se
   actualizan los objetivos de carga vinculados, además del cierre de la recepción.
   Los blockers útiles vinculan también cargas que aún no tenían tareas propias.
@@ -159,6 +160,51 @@ Pruebas automatizadas cubren edición concurrente, horario nocturno, permisos, t
 continuidad multipallet, espera/recepción/otra carga, cuatro funciones, replay V6,
 orden previo a paginación, reversión de toma fallida y carreras reales MySQL con dos procesos.
 El navegador prueba guardado y recuperación de conflicto en 1280 y 390 px.
+
+## Sector de acopio con capacidad (26-10-2026)
+
+Origen: en la Cámara de tránsito 07, CAR-000024 tenía tres pallets ya guardados entre pallets
+de otro cliente (B02-P01, B02-P03, B03-P09). Su «grupo principal» era B02-P01, al fondo de una
+banda llena y con B01 completa al lado. Los seis pallets de túnel debían quedar pegados a ese
+grupo y no había ninguna posición así: las tablets respondían *No hay una posición libre y
+compatible* con 277 posiciones libres en la cámara.
+
+Regla nueva (`App\Services\Cargas\SectorAcopioCarga`), la misma para las recepciones y para
+la concentración de la carga:
+
+1. Se estima cuántos pallets le faltan a la carga (sus asignaciones pendientes menos las del
+   grupo) y se simula cuántos recibe cada grupo creciendo por posiciones vecinas, cada una la
+   siguiente libre de su banda (las bandas se llenan desde el fondo, sin huecos detrás).
+2. El acopio es el grupo más grande que recibe todo lo que falta.
+3. Si ninguno puede, se abre un **sector nuevo** en el tramo de bandas completamente libres
+   más cercano al grupo que tenga espacio para la carga completa. Se descartan las bandas
+   pegadas a pallets de otra carga, para no mezclar acopios.
+4. Sin espacio completo en ninguna parte, se usa lo que más reciba (el grupo antes que un
+   sector nuevo); si nada crece, el pallet va a cualquier posición válida de la cámara y la
+   concentración lo junta después. Un pallet ya no se queda en el túnel por esta regla.
+5. Una carga sin pallets ni cámara objetivo recibe, antes del primer pallet, la cámara con
+   bandas libres para toda la carga: la preferente de despacho, luego la que guarda más
+   pallets del mismo cliente y luego por código.
+
+El sector nuevo se comunica con un **ancla virtual** en el fondo de una banda (posición 0).
+La regla de vecindad que ya aplican la tablet y el servidor la entiende sin cambios, así que
+el arreglo funciona con la app que hoy tienen las tablets: el primer pallet cae en P01 de la
+banda más cercana del sector y los siguientes crecen desde ahí. El acopio informa además
+`sector` (`grupo`, `nuevo` o `libre`, bandas y pallets requeridos) para Oficina y la app nueva.
+
+Otros ajustes de la misma entrega:
+
+- Un destino ya reservado no se rechaza al iniciar el retiro ni al registrar el movimiento
+  solo porque el acopio cambió de lugar entre medio; la cámara y el despacho directo se
+  siguen comprobando.
+- App de camareros (requiere la APK nueva): el pallet en el que trabaja el camarero se
+  calcula primero; una propuesta anticipada que solo calzaba junto al destino simulado de
+  otro pallet sin reserva no se reutiliza; el acopio usa solo la siguiente posición libre de
+  cada banda y prefiere las bandas del sector nuevo.
+
+Pendiente: desocupar una banda para abrir un sector cuando la cámara no tiene bandas libres
+suficientes, y evitar que dos cargas del mismo cliente terminen compartiendo una banda cuando
+sus acopios se tocan.
 
 ## Entrega 3B: horizonte anticipado pendiente
 

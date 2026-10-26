@@ -512,7 +512,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
         throw new Error('No hay cámaras habilitadas para esta labor. Solicita revisión en Oficina.');
       }
       const plans = await cameraPlans.load(snapshot, tasksForFrontier, (id) => api.getPlan(auth.token, id));
-      const frontier = calculateRollingFrontier(tasksForFrontier, snapshot, plans);
+      const frontier = calculateRollingFrontier(tasksForFrontier, snapshot, plans, anchorTask.id);
 
       if (!frontier.proposals.length) {
         throw new Error('No hay una posición libre y compatible para esta labor. Mantén el pallet en su origen y solicita revisión en Oficina.');

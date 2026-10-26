@@ -177,6 +177,18 @@ export type OperationalLoadStaging = {
   camara_objetivo_id: string | null;
   puntos: Array<{ banda: number; posicion: number; nivel: number }>;
   despacho_directo: boolean;
+  /** Sector elegido por el servidor según el espacio que necesita la carga completa. */
+  sector?: OperationalLoadSector | null;
+};
+
+export type OperationalLoadSector = {
+  /** grupo: crece el grupo actual; nuevo: bandas libres cercanas; libre: cualquier posición válida. */
+  tipo: 'grupo' | 'nuevo' | 'libre' | 'sin_espacio';
+  nivel: number | null;
+  banda_desde: number | null;
+  banda_hasta: number | null;
+  requeridas: number;
+  ancla: { banda: number; posicion: number; nivel: number } | null;
 };
 
 export type OperationalSnapshotTask = {

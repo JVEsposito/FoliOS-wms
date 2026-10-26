@@ -269,6 +269,7 @@ class ServicioReservasTareasMovimiento
             app(ServicioAcopioCarga::class)->validarDestino(
                 $tareaBloqueada,
                 Posicion::query()->findOrFail($tareaBloqueada->posicion_destino_id),
+                reservado: true,
             );
             $this->validarBandaOperacional(
                 Posicion::query()->lockForUpdate()->findOrFail($tareaBloqueada->posicion_destino_id),
@@ -491,6 +492,7 @@ class ServicioReservasTareasMovimiento
             app(ServicioAcopioCarga::class)->validarDestino(
                 $tareaBloqueada,
                 Posicion::query()->findOrFail($posicionDestinoId),
+                reservado: true,
             );
             $this->validarReservaPreparacionSag($posicionDestinoId, $folio->id);
         }

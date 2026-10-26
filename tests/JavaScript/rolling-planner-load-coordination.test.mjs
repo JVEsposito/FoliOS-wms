@@ -53,9 +53,9 @@ test('el snapshot sustituye un destino anterior por la demanda vigente de la car
     const stale = task();
     stale.destino = { camara: { id: 'anterior', nombre: 'Anterior' }, posicion: null };
     const current = snapshot([stale]);
-    current.tareas[0].acopio_carga = target('vigente', [point(2)]);
-    const result = calculateRollingFrontier([stale], current, [camera('anterior'), camera('vigente', [2])]);
-    assert.equal(result.proposals[0].posicion_destino_id, 'vigente-1');
+    current.tareas[0].acopio_carga = target('vigente', [point(1)]);
+    const result = calculateRollingFrontier([stale], current, [camera('anterior'), camera('vigente', [1])]);
+    assert.equal(result.proposals[0].posicion_destino_id, 'vigente-2');
 });
 
 test('una asignación retirada libera la restricción anterior en el siguiente cálculo', () => {
