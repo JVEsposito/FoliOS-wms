@@ -12,6 +12,7 @@ use App\Models\PerfilAcceso;
 use App\Models\ProveedorMaterial;
 use App\Models\RecepcionMaterial;
 use App\Models\User;
+use App\Services\Materiales\ConsultaSupervisionMateriales;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -192,6 +193,17 @@ class ValorCompraRecepcionMaterialApiTest extends TestCase
         $this->assertSame('123.456789', $original->fresh()->precio_unitario_compra);
         $this->assertSame('2.000000', $segunda->fresh()->precio_unitario_compra);
         $this->assertSame($result['version'], RecepcionMaterial::findOrFail($r['id'])->version);
+    }
+
+    public function test_panel_operacional_no_expone_historia_economica_por_otra_ruta(): void
+    {
+        $r = $this->crear();
+        $this->postJson($this->url($r), $this->datos($r))->assertOk();
+        $evento = EventoRecepcionMaterial::where('tipo', 'valorizada')->firstOrFail();
+        $consulta = app(ConsultaSupervisionMateriales::class);
+        $resultado = $consulta->consultar(['vista' => 'recepciones', 'temporada_id' => $r['temporada']['id'], 'desde' => now()->toDateString(), 'hasta' => now()->toDateString()]);
+        $this->assertStringNotContainsString('valorizada', json_encode($resultado));
+        $this->getJson('/api/materiales/supervision/evidencia/evento/'.$evento->id)->assertNotFound();
     }
 
     public function test_descarga_recoge_todas_las_paginas_y_protege_textos_con_formulas(): void

@@ -111,6 +111,7 @@ class ConsultaSupervisionMateriales
     private function recepciones(array $f): Builder
     {
         $eventos = DB::table('eventos_recepciones_materiales as e')->join('recepciones_materiales as r', 'r.id', '=', 'e.recepcion_material_id')
+            ->where('e.tipo', '!=', 'valorizada')
             ->where('r.temporada_id', $f['temporada_id'])
             ->select('e.id', 'r.id as recepcion_id', 'r.cliente_id', 'r.temporada_id', 'r.numero_guia_despacho as guia',
                 'e.tipo', 'e.user_id', 'e.ocurrido_at as fecha', 'e.observacion as motivo', 'r.estado as estado_actual')
@@ -163,14 +164,15 @@ class ConsultaSupervisionMateriales
     {
         if ($fuente === 'evento') {
             $evento = DB::table('eventos_recepciones_materiales')->where('id', $id)->first();
-            abort_unless($evento, 404);
+            // La evidencia económica se consulta en Recepciones con su permiso específico.
+            abort_unless($evento && $evento->tipo !== 'valorizada', 404);
 
             return ['recepcion_id' => $evento->recepcion_material_id, 'evento' => $this->eventoSeguro((array) $evento)];
         }
         $registro = DB::table('eliminaciones_recepciones_materiales')->where('id', $id)->first();
         abort_unless($registro, 404);
         $snapshot = json_decode($registro->snapshot, true) ?? [];
-        $eventos = $snapshot['eventos'] ?? [];
+        $eventos = array_values(array_filter($snapshot['eventos'] ?? [], fn ($evento) => ($evento['tipo'] ?? null) !== 'valorizada'));
         $detalles = $snapshot['detalles'] ?? [];
         $usuarios = DB::table('users')->whereIn('id', array_values(array_unique(array_filter(array_column($eventos, 'user_id')))))->pluck('name', 'id');
 
