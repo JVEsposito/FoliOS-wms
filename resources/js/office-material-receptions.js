@@ -1,3 +1,4 @@
+import { purchasePrice, purchaseTotal, purchaseAmount } from './shared/material-purchase-value.js';
 import { materialCatalogLabel } from './shared/material-catalog-label.js';
 import { createReceptionRegistration, registrationLabel, registrationDetail, requestReceptionAuthorization, openReceptionRegularization, resetReceptionRegularization } from './office-material-reception-registration.js';
 import { createReceptionPhotosPanel } from './office-material-reception-photos.js';
@@ -341,7 +342,7 @@ function renderReceptionList() {
     receptionElements.list.innerHTML = receptionState.records.map((record) => {
         const selected = record.id === receptionState.selectedId;
         const status = record.estado === 'borrador' && !Number(record.fotos_documento) ? 'sin-foto' : record.estado;
-        return `<article class="material-reception-card${selected ? ' is-selected' : ''}" role="listitem"><button type="button" class="material-reception-card__open" data-action="select" data-id="${receptionEscape(record.id)}" aria-pressed="${selected}"><span class="material-reception-card__k">Guía</span><strong class="material-reception-card__code">${receptionEscape(record.numero_guia_despacho || 'Pendiente de guía')}</strong><span class="material-reception-card__who">${receptionEscape(record.cliente?.nombre)}, ${receptionEscape(record.proveedor?.nombre)}</span><small>${receptionEscape(receptionDate(record.fecha_documento))} · ${receptionEscape(record.detalles_count ?? '—')} ítems · ${receptionFolioCount(record)} folios</small><small>${receptionEscape(registrationLabel(record))}</small></button><span class="material-reception-state material-reception-state--${receptionEscape(status)}">${status === 'sin-foto' ? 'Sin foto' : receptionEscape(receptionStatus(record.estado))}</span></article>`;
+        return `<article class="material-reception-card${selected ? ' is-selected' : ''}" role="listitem"><button type="button" class="material-reception-card__open" data-action="select" data-id="${receptionEscape(record.id)}" aria-pressed="${selected}"><span class="material-reception-card__k">Guía</span><strong class="material-reception-card__code">${receptionEscape(record.numero_guia_despacho || 'Pendiente de guía')}</strong><span class="material-reception-card__who">${receptionEscape(record.cliente?.nombre)}, ${receptionEscape(record.proveedor?.nombre)}</span><small>${receptionEscape(receptionDate(record.fecha_documento))} · ${receptionEscape(record.detalles_count ?? '—')} ítems · ${receptionFolioCount(record)} folios</small><small>${receptionEscape(registrationLabel(record))}</small>${record.estado === 'confirmada' && record.valorizacion ? `<small>${record.valorizacion.lineas_aceptadas > 0 ? (record.valorizacion.lineas_pendientes > 0 ? `${record.valorizacion.lineas_pendientes} líneas con valor pendiente` : 'Valores de compra completos') : 'Sin cantidad aceptada para valorizar'}</small>` : ''}</button><span class="material-reception-state material-reception-state--${receptionEscape(status)}">${status === 'sin-foto' ? 'Sin foto' : receptionEscape(receptionStatus(record.estado))}</span></article>`;
     }).join('') || '<p class="empty-state">No existen recepciones para los filtros seleccionados.</p>';
     if (receptionState.selectedId && !receptionState.records.some((record) => record.id === receptionState.selectedId)) clearReceptionDetail();
     const current = receptionState.meta?.current_page || receptionState.page;
@@ -398,10 +399,12 @@ function renderReceptionDetail() {
         ? `<a class="secondary-button" href="${receptionPrintUrl(record.id)}">Imprimir folios</a>` : '';
     receptionElements.detailActions.innerHTML = printAction + action('view', 'Ver formulario')
         + (record.estado === 'confirmada' ? action('sampling', 'Registro de muestreo') : '')
+        + (record.estado === 'confirmada' && receptionCapabilities().puede_valorizar_recepciones_materiales === true ? action('value-purchase', 'Valorizar compra') : '')
         + ((record.estado === 'borrador' ? receptionCanManage() || receptionCanAdminister() : receptionCanAdminister() && !record.registro?.provisional && record.estado !== 'anulada') ? action('edit', 'Editar') : '')
         + (receptionCanAuthorize() && record.estado === 'confirmada' && ['pendiente', 'vencida'].includes(record.registro?.estado) ? action('regularize', 'Regularizar documentos') : '')
         + (receptionCanDelete() ? action('delete', 'Eliminar') : '');
     receptionElements.detailLines.innerHTML = registrationDetail(record) + (record.detalles || []).map((detail) => `<article class="material-reception-detail-line"><strong>${receptionEscape(detail.item?.nombre || '—')}</strong><code>${receptionEscape(detail.item?.codigo || '—')}</code><b>${receptionEscape(receptionQuantity(detail.cantidad_aceptada ?? detail.cantidad_recibida))} ${receptionEscape(materialCatalogLabel(detail.unidad_medida || ''))}</b><small>Documental: ${detail.cantidad_documental == null ? 'Pendiente' : receptionEscape(receptionQuantity(detail.cantidad_documental))} ${receptionEscape(materialCatalogLabel(detail.unidad_medida || ''))}</small><small>${receptionEscape(receptionPackageSummary(detail))}</small>${detail.conversion_unidad ? `<small>Ingreso: ${receptionEscape(detail.conversion_unidad.entrada.cantidad_aceptada)} ${receptionEscape(materialCatalogLabel(detail.conversion_unidad.unidad_origen))} × ${receptionEscape(detail.conversion_unidad.factor)} ${receptionEscape(materialCatalogLabel(detail.unidad_medida))}</small>` : ''}</article>`).join('');
+    receptionElements.detailLines.insertAdjacentHTML('beforeend', renderPurchaseValues(record));
     const folios = record.snapshot_confirmacion?.folios || [];
     const assigned = folios.filter(f => f.asignacion_bodega);
     if (record.estado === 'confirmada' && assigned.length) receptionElements.detailLines.innerHTML += `<article class="material-reception-detail-line"><strong>Bodegas asignadas al ingreso</strong>${assigned.map(f => `<small>${receptionEscape(f.numero_folio)} → ${receptionEscape(f.asignacion_bodega.nombre)} · ${f.asignacion_bodega.origen === 'regla' ? `Regla: ${receptionEscape(f.asignacion_bodega.regla?.nombre)}` : 'Central por defecto'}</small>`).join('')}<small>La asignación no certifica espacio libre ni una ubicación física. Revisa Inventario para ver la ubicación actual.</small></article>`;
@@ -423,6 +426,7 @@ async function loadReceptions(page = receptionState.page) {
         if (data.get('guia')) params.set('guia', data.get('guia'));
         if (data.get('estado')) params.set('estado', data.get('estado'));
         if (data.get('sin_foto_documento')) params.set('sin_foto_documento', data.get('sin_foto_documento'));
+        if (data.get('valorizacion') && receptionCapabilities().puede_consultar_valores_compra_materiales === true) params.set('valorizacion', data.get('valorizacion'));
         if (data.get('regularizacion')) params.set('regularizacion', data.get('regularizacion'));
         const response = await receptionApi(`/api/materiales/recepciones?${params}`);
         const registrationSummary = document.getElementById('materialReceptionRegularizationSummary');
@@ -888,6 +892,7 @@ if (receptionElements.workspace) {
                 receptionElements.error.textContent = error.message;
             }
         }
+        if (button.dataset.action === 'value-purchase' && receptionCapabilities().puede_valorizar_recepciones_materiales === true) openPurchaseValues(receptionState.selected);
         if (button.dataset.action === 'regularize' && receptionCanAuthorize()) openReceptionRegularization(receptionState.selected, { api: receptionApi, uuid: receptionUuid, onSaved: refreshReceptionViews });
         if (button.dataset.action === 'edit' && (record.estado === 'borrador' ? receptionCanManage() || receptionCanAdminister() : receptionCanAdminister())) openReception(record.id, 'edit');
         if (button.dataset.action === 'delete' && receptionCanDelete()) openReceptionDelete(receptionState.selected?.id === record.id ? receptionState.selected : record);
@@ -1043,3 +1048,98 @@ if (receptionElements.workspace) {
     });
     loadReceptions(1);
 }
+
+
+function renderPurchaseValues(record) {
+    if (!record.detalles?.some(line => Object.hasOwn(line, 'valor_compra'))) return '';
+    const lines = record.detalles.filter(line => Number(line.cantidad_aceptada ?? line.cantidad_recibida) > 0);
+    const values = lines.map(line => {
+        const v = line.valor_compra;
+        return `<p><strong>${receptionEscape(line.item?.nombre || 'Ítem')}</strong>: ${v?.precio_unitario_neto == null ? 'Pendiente de valorizar' : `${receptionEscape(purchaseAmount(v.precio_unitario_neto))} ${receptionEscape(v.moneda)} / ${receptionEscape(materialCatalogLabel(line.unidad_medida))} · Total neto ${receptionEscape(purchaseAmount(v.total_neto))} ${receptionEscape(v.moneda)}`}</p>`;
+    }).join('');
+    const events = (record.eventos || []).filter(event => event.tipo === 'valorizada');
+    const history = events.map(event => `<article><strong>${receptionEscape(event.usuario?.nombre || event.datos?.usuario?.name || 'Usuario registrado')}</strong> · ${receptionEscape(event.ocurrido_at ? new Date(event.ocurrido_at).toLocaleString('es-CL', { timeZone: 'America/Santiago' }) : '')}<p>${receptionEscape(event.observacion || '')}</p>${(event.datos?.despues || []).map(after => {
+        const before = event.datos?.antes?.find(line => line.id === after.id);
+        const label = value => value?.precio_unitario_neto == null ? 'Pendiente' : `${purchaseAmount(value.precio_unitario_neto)} ${value.moneda} / ${materialCatalogLabel(value.unidad)}`;
+        return `<small>${receptionEscape(after.item?.codigo || '')}: ${receptionEscape(label(before))} → ${receptionEscape(label(after))}</small>`;
+    }).join('')}</article>`).join('');
+    return `<article class="material-reception-detail-line material-purchase-values"><strong>VALORES DE COMPRA NETOS · ANTES DE IVA</strong>${values || '<p>Sin cantidad aceptada para valorizar.</p>'}<small>Importes de ingreso; no representan el valor del stock restante ni un documento tributario.</small>${events.length ? `<details><summary>Historial de valorización (${events.length})</summary>${history}</details>` : ''}</article>`;
+}
+
+let purchaseRecord = null;
+let purchaseOperation = null;
+let purchasePayload = null;
+let purchaseSaving = false;
+const purchaseDialog = document.getElementById('materialPurchaseValueDialog');
+const purchaseForm = document.getElementById('materialPurchaseValueForm');
+const purchaseLines = document.getElementById('materialPurchaseValueLines');
+const purchaseError = document.getElementById('materialPurchaseValueError');
+
+function openPurchaseValues(record) {
+    if (purchaseSaving || !record || record.estado !== 'confirmada') return;
+    purchaseRecord = record;
+    purchaseOperation = null; purchasePayload = null;
+    purchaseForm.reset(); purchaseError.textContent = '';
+    document.getElementById('materialPurchaseValueTitle').textContent = `Valorizar compra · Guía ${record.numero_guia_despacho || 'pendiente'}`;
+    purchaseLines.innerHTML = (record.detalles || []).filter(line => Number(line.cantidad_aceptada ?? line.cantidad_recibida) > 0).map(line => `<fieldset class="material-reception-detail-line" data-purchase-line="${receptionEscape(line.id)}"><legend>${receptionEscape(line.item?.codigo || '')} · ${receptionEscape(line.item?.nombre || '')}</legend><p>Aceptado: ${receptionEscape(receptionQuantity(line.cantidad_aceptada ?? line.cantidad_recibida))} ${receptionEscape(materialCatalogLabel(line.unidad_medida))}</p><label><span>Precio unitario neto por ${receptionEscape(materialCatalogLabel(line.unidad_medida))}</span><input name="precio_unitario_neto" inputmode="decimal" maxlength="16" autocomplete="off" placeholder="Pendiente" value="${receptionEscape(line.valor_compra?.precio_unitario_neto ?? '')}"></label><label><span>Moneda</span><select name="moneda">${['CLP', 'USD', 'EUR'].map(code => `<option${code === (line.valor_compra?.moneda || 'CLP') ? ' selected' : ''}>${code}</option>`).join('')}</select></label><output data-purchase-total></output></fieldset>`).join('');
+    updatePurchaseTotals(); purchaseDialog.showModal();
+}
+
+function updatePurchaseTotals() {
+    for (const row of purchaseLines.querySelectorAll('[data-purchase-line]')) {
+        const line = purchaseRecord.detalles.find(line => line.id === row.dataset.purchaseLine);
+        const currency = row.querySelector('[name="moneda"]').value;
+        try {
+            const total = purchaseTotal(line.cantidad_aceptada ?? line.cantidad_recibida, purchasePrice(row.querySelector('input').value), currency);
+            row.querySelector('output').textContent = total === null ? 'Pendiente de valorizar' : `Total neto: ${purchaseAmount(total)} ${currency}`;
+        } catch (error) { row.querySelector('output').textContent = error.message; }
+    }
+}
+purchaseForm?.addEventListener('input', updatePurchaseTotals);
+purchaseForm?.addEventListener('change', updatePurchaseTotals);
+document.getElementById('cancelMaterialPurchaseValue')?.addEventListener('click', () => { if (!purchaseSaving) purchaseDialog.close(); });
+purchaseDialog?.addEventListener('cancel', event => { if (purchaseSaving) event.preventDefault(); });
+purchaseForm?.addEventListener('submit', async event => {
+    event.preventDefault(); if (purchaseSaving) return;
+    purchaseError.textContent = '';
+    try {
+        const details = [...purchaseLines.querySelectorAll('[data-purchase-line]')].map(row => {
+            const price = purchasePrice(row.querySelector('input').value);
+            return { id: row.dataset.purchaseLine, precio_unitario_neto: price, moneda: price === null ? null : row.querySelector('select').value };
+        });
+        if (!details.length) throw new Error('No hay líneas con cantidad aceptada.');
+        const body = { version_conocida: purchaseRecord.version, motivo: purchaseForm.elements.motivo.value.trim(), detalles: details };
+        const serialized = JSON.stringify(body);
+        // Conservar el UUID cuando se reintenta el mismo envío tras un corte de red.
+        if (serialized !== purchasePayload) { purchaseOperation = receptionUuid(); purchasePayload = serialized; }
+        purchaseSaving = true;
+        purchaseForm.querySelectorAll('button').forEach(button => { button.disabled = true; });
+        await receptionApi(`/api/materiales/recepciones/${encodeURIComponent(purchaseRecord.id)}/valorizacion`, { method: 'POST', body: JSON.stringify({ ...body, operacion_id: purchaseOperation }) });
+        purchaseDialog.close(); await refreshReceptionViews();
+    } catch (error) { purchaseError.textContent = error.message; }
+    finally { purchaseSaving = false; purchaseForm.querySelectorAll('button').forEach(button => { button.disabled = false; }); }
+});
+
+const purchaseDownload = document.getElementById('downloadMaterialPurchaseValues');
+function configurePurchaseAccess() {
+    const canRead = receptionCapabilities().puede_consultar_valores_compra_materiales === true;
+    purchaseDownload?.classList.toggle('is-hidden', !canRead);
+    document.getElementById('materialPurchaseValueFilter')?.classList.toggle('is-hidden', !canRead);
+}
+configurePurchaseAccess();
+window.addEventListener('estiba:office-session', () => {
+    configurePurchaseAccess();
+    purchaseDialog?.close();
+});
+purchaseDownload?.addEventListener('click', async () => {
+    purchaseDownload.disabled = true;
+    try {
+        const params = new URLSearchParams(new FormData(receptionElements.filters));
+        const response = await fetch(`/api/materiales/recepciones/valores-compra.csv?${params}`, { headers: { Authorization: `Bearer ${receptionToken()}`, Accept: 'text/csv' }, cache: 'no-store' });
+        if (!response.ok) throw new Error('No se pudo descargar la valorización. Revisa tus permisos e inténtalo nuevamente.');
+        const url = URL.createObjectURL(await response.blob());
+        const link = document.createElement('a'); link.href = url; link.download = 'Compras_materiales_neto_sin_IVA.csv'; link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) { receptionElements.error.textContent = error.message; }
+    finally { purchaseDownload.disabled = false; }
+});

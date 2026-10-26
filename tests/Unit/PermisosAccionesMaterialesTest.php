@@ -16,6 +16,7 @@ use Tests\TestCase;
 class PermisosAccionesMaterialesTest extends TestCase
 {
     private const ACCIONES = [
+        'recepciones.valorizar' => 'valorizar-recepciones-materiales',
         'recepciones.gestionar' => 'gestionar-recepciones-materiales',
         'recepciones.confirmar' => 'confirmar-recepciones-materiales',
         'recepciones.corregir' => 'administrar-recepciones-materiales',

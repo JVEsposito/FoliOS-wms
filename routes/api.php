@@ -594,6 +594,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
     Route::prefix('materiales/recepciones')->group(function () {
         Route::middleware('can:consultar-recepciones-materiales')->group(function () {
+            Route::get('/valores-compra.csv', [RecepcionMaterialController::class, 'exportarValoresCompra'])->middleware('can:consultar-valores-compra-materiales');
             Route::get('/catalogos', [RecepcionMaterialController::class, 'catalogos']);
             Route::get('/folios-pendientes', [RecepcionMaterialController::class, 'foliosPendientes']);
             Route::get('/perfiles-impresion', [PerfilImpresionEtiquetaController::class, 'index']);
@@ -614,6 +615,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('/{recepcionMaterial}/fotos', [FotoRecepcionMaterialController::class, 'store']);
             Route::delete('/{recepcionMaterial}/fotos/{foto}', [FotoRecepcionMaterialController::class, 'destroy'])->scopeBindings();
         });
+        Route::post('/{recepcionMaterial}/valorizacion', [RecepcionMaterialController::class, 'valorizar'])->middleware('can:valorizar-recepciones-materiales');
         Route::post('/{recepcionMaterial}/regularizar', [RecepcionMaterialController::class, 'regularizar'])->middleware('can:autorizar-recepciones-tardias-materiales');
         Route::post('/{recepcionMaterial}/confirmar', [RecepcionMaterialController::class, 'confirmar'])->middleware('can:confirmar-recepciones-materiales');
         Route::post('/{recepcionMaterial}/etiquetas', [ImpresionEtiquetaMaterialController::class, 'store'])

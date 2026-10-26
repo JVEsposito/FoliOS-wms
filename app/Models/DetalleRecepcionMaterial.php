@@ -22,6 +22,8 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'cantidad_recibida',
     'cantidad_rechazada',
     'observacion',
+    'precio_unitario_compra',
+    'moneda_compra',
 ])]
 class DetalleRecepcionMaterial extends Model
 {
@@ -47,6 +49,7 @@ class DetalleRecepcionMaterial extends Model
     protected function casts(): array
     {
         return [
+            'precio_unitario_compra' => 'decimal:6',
             'conversion_unidad' => 'array',
             'categoria_operacional' => CategoriaOperacionalMaterial::class,
             'cantidad_documental' => 'decimal:3',

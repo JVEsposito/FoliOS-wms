@@ -535,6 +535,21 @@ class AlcanceOperacionalUsuario
         ], ['materiales.etiquetas', 'materiales.despachos']);
     }
 
+    public function puedeConsultarValoresCompraMateriales(User $usuario): bool
+    {
+        $usuario->loadMissing('perfilAcceso');
+        $rol = $usuario->perfilAcceso?->rol_base ?? $usuario->rol;
+
+        return in_array($rol, [RolUsuario::Administrador, RolUsuario::SupervisorMateriales], true)
+            && $this->puedeSupervisarRecepcionesMateriales($usuario);
+    }
+
+    public function puedeValorizarRecepcionesMateriales(User $usuario): bool
+    {
+        return $this->permiteAccionMateriales($usuario, 'recepciones.valorizar')
+            && $this->puedeConsultarValoresCompraMateriales($usuario);
+    }
+
     public function puedeGestionarRecepcionesMateriales(User $usuario): bool
     {
         if (! $this->permiteAccionMateriales($usuario, 'recepciones.gestionar')) {
@@ -1416,6 +1431,8 @@ class AlcanceOperacionalUsuario
             'puede_consultar_recepciones_materiales' => $this->puedeConsultarRecepcionesMateriales($usuario),
             'puede_gestionar_recepciones_materiales' => $this->puedeGestionarRecepcionesMateriales($usuario),
             'puede_confirmar_recepciones_materiales' => $this->puedeConfirmarRecepcionesMateriales($usuario),
+            'puede_consultar_valores_compra_materiales' => $this->puedeConsultarValoresCompraMateriales($usuario),
+            'puede_valorizar_recepciones_materiales' => $this->puedeValorizarRecepcionesMateriales($usuario),
             'puede_supervisar_recepciones_materiales' => $this->puedeSupervisarRecepcionesMateriales($usuario),
             'puede_eliminar_recepciones_materiales' => $this->puedeEliminarRecepcionesMateriales($usuario),
             'puede_aprobar_ajustes_materiales' => $this->puedeAprobarAjustesMateriales($usuario),

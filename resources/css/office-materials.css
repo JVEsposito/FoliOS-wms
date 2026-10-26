@@ -553,3 +553,14 @@
 .materials-allocation-row input, [data-allocation-tools] select { max-width: 100%; min-width: 0; }
 
 .materials-consumption-order .custody-table th { overflow-wrap: normal; word-break: normal; }
+
+#materialPurchaseValueDialog { width: min(780px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow: auto; padding: 22px; background: var(--surface, var(--deep)); color: var(--text); border: 1px solid var(--line); border-radius: var(--radius-card, 12px); }
+#materialPurchaseValueForm, #materialPurchaseValueLines { display: grid; gap: 16px; min-width: 0; }
+#materialPurchaseValueForm label { display: grid; gap: 6px; min-width: 0; }
+#materialPurchaseValueForm input, #materialPurchaseValueForm select, #materialPurchaseValueForm textarea { box-sizing: border-box; width: 100%; min-width: 0; background: var(--raised); color: var(--text); border: 1px solid var(--line); padding: 10px; border-radius: 6px; }
+#materialPurchaseValueForm fieldset { display: grid; grid-template-columns: minmax(0, 1fr) 100px; gap: 12px; padding: 16px; border: 1px solid var(--line); min-width: 0; }
+#materialPurchaseValueForm fieldset > p, #materialPurchaseValueForm fieldset > output { grid-column: 1 / -1; }
+#materialPurchaseValueForm legend { max-width: 100%; overflow-wrap: anywhere; font-weight: 700; }
+.office-app .material-purchase-values { grid-template-columns: minmax(0, 1fr); gap: 10px; overflow-wrap: anywhere; }
+.material-purchase-values details article { display: grid; gap: 6px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+@media (max-width: 600px) { #materialPurchaseValueForm fieldset { grid-template-columns: minmax(0, 1fr); } }
