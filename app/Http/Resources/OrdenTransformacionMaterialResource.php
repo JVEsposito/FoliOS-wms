@@ -34,6 +34,9 @@ class OrdenTransformacionMaterialResource extends JsonResource
             'version' => $this->version,
             'faltantes_por_vencimiento' => $this->faltantes_por_vencimiento,
             'alerta_vencimiento' => $this->faltantes_por_vencimiento ? 'Reserva insuficiente por vencimiento' : null,
+            'referencia_ot' => $this->referencia_ot,
+            'proceso' => $this->proceso,
+            'operador_nombre' => $this->operador_nombre,
             'cantidad_planificada_salida' => $this->cantidad_planificada_salida,
             'cantidad_real_salida' => $this->cantidad_real_salida,
             'unidades_por_folio_salida' => $unidadesPorFolio !== null

@@ -164,6 +164,7 @@ Route::view('/oficina/materiales/vencimientos', 'office.materials', [
 
 Route::view('/oficina/materiales/reposicion', 'office.material-replenishment');
 Route::view('/oficina/materiales/capacidad', 'office.material-capacity');
+Route::view('/oficina/materiales/consumos', 'office.material-consumptions');
 Route::view('/oficina/materiales/supervision', 'office.material-supervision');
 
 Route::view('/oficina/materiales/items/niveles', 'office.material-replenishment', ['niveles' => true]);

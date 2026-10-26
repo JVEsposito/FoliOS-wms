@@ -31,6 +31,7 @@ use App\Http\Controllers\Api\CondicionSagController;
 use App\Http\Controllers\Api\ConfiguracionCamaraController;
 use App\Http\Controllers\Api\ConsultaOficinaController;
 use App\Http\Controllers\Api\ConsultaSagController;
+use App\Http\Controllers\Api\ConsumosOrdenMaterialController;
 use App\Http\Controllers\Api\ContextoOficinaController;
 use App\Http\Controllers\Api\ControlAmbientalController;
 use App\Http\Controllers\Api\CorreccionItemMaterialController;
@@ -630,6 +631,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::prefix('materiales/transformaciones')->group(function () {
         Route::middleware('can:consultar-transformaciones-materiales')->group(function () {
+            Route::get('/consumos', [ConsumosOrdenMaterialController::class, 'index']);
+            Route::get('/consumos/ordenes', [ConsumosOrdenMaterialController::class, 'opciones']);
+            Route::get('/consumos/excel', [ConsumosOrdenMaterialController::class, 'excel']);
+            Route::get('/ordenes/{ordenTransformacionMaterial}/consumos', [ConsumosOrdenMaterialController::class, 'show']);
             Route::get('/recetas', [TransformacionMaterialController::class, 'recetas']);
             Route::get('/ordenes', [TransformacionMaterialController::class, 'ordenes']);
             Route::get('/ordenes/{ordenTransformacionMaterial}/impresiones', [ImpresionEtiquetaMaterialController::class, 'indexTransformacion']);

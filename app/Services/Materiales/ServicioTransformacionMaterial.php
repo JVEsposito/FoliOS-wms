@@ -242,6 +242,9 @@ class ServicioTransformacionMaterial
                     ? ($this->armado->maquina($datos['linea'] ?? null) ?? $this->textoOpcional($datos['linea'] ?? null))
                     : $this->textoOpcional($datos['linea'] ?? null),
                 'turno' => $this->textoOpcional($datos['turno'] ?? null),
+                'referencia_ot' => $this->textoOpcional($datos['referencia_ot'] ?? null),
+                'proceso' => $this->textoOpcional($datos['proceso'] ?? null),
+                'operador_nombre' => $this->textoOpcional($datos['operador_nombre'] ?? null),
                 'fecha_operacional' => $datos['fecha_operacional'],
                 'version' => 1,
                 'snapshot_receta' => $version->snapshot,

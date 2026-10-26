@@ -22,6 +22,18 @@ class EstructuraOficinaTest extends TestCase
         }
     }
 
+    public function test_consumos_por_ot_tiene_filtros_trazabilidad_y_exportacion(): void
+    {
+        $html = $this->get('/oficina/materiales/consumos')->assertOk()->getContent();
+        foreach (['consumptionFilters', 'consumptionOrders', 'exportConsumptions'] as $id) {
+            $this->assertStringContainsString('id="'.$id.'"', $html);
+        }
+        if (getenv('ESTIBA_EXPORTAR_UI_TESTS') === '1') {
+            File::ensureDirectoryExists(storage_path('app/ui/oficina'));
+            File::put(storage_path('app/ui/oficina/consumos-ot.html'), $html);
+        }
+    }
+
     public function test_tomas_inventario_conserva_cierre_historial_y_filtros(): void
     {
         $html = $this->get('/oficina/materiales/tomas')->assertOk()->getContent();

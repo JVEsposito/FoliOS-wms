@@ -22,6 +22,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'modo_operacion',
     'cantidad_planificada_salida',
     'cantidad_real_salida',
+    'referencia_ot', 'proceso', 'operador_nombre',
     'linea',
     'turno',
     'fecha_operacional',
@@ -63,6 +64,16 @@ class OrdenTransformacionMaterial extends Model
     public function versionReceta(): BelongsTo
     {
         return $this->belongsTo(VersionRecetaMaterial::class, 'version_receta_material_id');
+    }
+
+    public function movimientosConsumo(): HasMany
+    {
+        return $this->hasMany(MovimientoInventarioMaterial::class, 'orden_transformacion_material_id');
+    }
+
+    public function imputacionesConsumo(): HasMany
+    {
+        return $this->hasMany(ImputacionConsumoMaterial::class, 'orden_transformacion_material_id');
     }
 
     public function reservas(): HasMany

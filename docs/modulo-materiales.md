@@ -513,3 +513,13 @@ Solo un supervisor autorizado con `inventario.aprobar_ajustes` puede aprobar y a
 El selector de temporada permite consultar y exportar tomas anteriores con paginación. Una temporada histórica solo ofrece lectura y exportación; el cierre aprobado no se edita. Este cierre es un acta de inventario de una bodega: no activa otra temporada, no pone saldos en cero ni migra existencias. Esas operaciones conservan sus flujos y permisos existentes.
 
 Despliegue: `php artisan migrate --force` y compilación habitual de Oficina (`npm ci`, `npm run build`). La migración conserva las tomas anteriores con finalidad `operativo`. El conteo móvil mantiene su contrato actual; este cambio no requiere APK ni OTA nueva.
+
+### Consumos por orden de trabajo, proceso y turno (14/15)
+
+En **Materiales → Consumos por OT** se compara la receta histórica de cada orden con su producción y consumos reales. La consulta incluye filtros por temporada, fechas operacionales, cliente, bodega de componentes, proceso, línea, turno, operador, estado y referencia de OT. El Excel recorre todas las páginas y conserva los mismos filtros. Las nuevas órdenes admiten referencia externa, proceso y operador físico declarado; los registros anteriores conservan estos campos sin declarar. El usuario autenticado que registra cada movimiento se mantiene separado del operador físico.
+
+Las devoluciones y reversas de transformación reducen el consumo neto; la producción y sus espejos no se suman como consumo. En cuadratura al cierre, un retiro a línea sigue pendiente de cuadratura hasta conocer lo utilizado y la merma. La merma de producción por lote permanece en la unidad de salida y no se convierte en merma de insumos. Cada ítem/unidad conserva su propia comparación, sin un total que mezcle kg, rollos o unidades.
+
+Al consumir insumos desde Inventario, un supervisor con gestión de transformaciones puede repartir un único consumo entre órdenes en ejecución del mismo cliente y temporada. La cantidad distribuida debe coincidir exactamente con el consumo físico. No genera transferencias ficticias, stock en centros de costo ni nuevos descuentos por cada orden. Las cantidades, merma incluida, contexto, operador y registrador quedan congelados en cada imputación; un insumo ajeno a la receta aparece **sin estándar**, sin inventar un consumo esperado. Esta distribución describe un consumo definitivo: no es un préstamo ni material sin utilizar pendiente de devolución.
+
+Detalles, fórmulas, API y despliegue en [Consumos por OT](CONSUMOS_POR_OT_MATERIALES.md).

@@ -15,6 +15,7 @@ use App\Models\AlmacenMaterial;
 use App\Models\Camara;
 use App\Models\Dispositivo;
 use App\Models\FolioMaterial;
+use App\Models\ImputacionConsumoMaterial;
 use App\Models\IncidenciaVerificacionUbicacion;
 use App\Models\MovimientoAlmacenMaterial;
 use App\Models\Posicion;
@@ -46,6 +47,9 @@ class ServicioMovimientoAlmacenMaterial
         if (! empty($datos['incidencia_verificacion_id']) && $tipo !== TipoMovimientoAlmacenMaterial::Ajuste) {
             throw new DomainException('Solo un ajuste supervisado puede enlazarse a una incidencia de verificación.');
         }
+        if (isset($datos['imputaciones_ot'])) {
+            $datos['imputaciones_ot'] = collect($datos['imputaciones_ot'])->map(fn ($linea) => [...$linea, 'orden_id' => mb_strtolower($linea['orden_id'])])->sortBy('orden_id')->values()->all();
+        }
         $hash = $this->payloadHash($datos);
 
         try {
@@ -60,6 +64,7 @@ class ServicioMovimientoAlmacenMaterial
                     return $this->validarReintento($existente, $usuario, $hash);
                 }
 
+                $ordenes = app(ServicioImputacionConsumoMaterial::class)->bloquear($datos, $tipo, $usuario);
                 $folio = FolioMaterial::query()
                     ->with(['folio', 'item'])
                     ->lockForUpdate()
@@ -76,6 +81,7 @@ class ServicioMovimientoAlmacenMaterial
                         $usuario,
                         $dispositivo,
                         $hash,
+                        $ordenes,
                     ),
                     TipoMovimientoAlmacenMaterial::Ajuste => $this->ajustar(
                         $folio,
@@ -134,7 +140,9 @@ class ServicioMovimientoAlmacenMaterial
         User $usuario,
         ?Dispositivo $dispositivo,
         string $hash,
+        Collection $ordenes,
     ): MovimientoAlmacenMaterial {
+        $imputaciones = app(ServicioImputacionConsumoMaterial::class)->preparar($datos, $folio, $ordenes, $usuario);
         $cantidad = $this->cantidadPositiva($datos['cantidad']);
         $almacenes = $this->almacenesBloqueados([
             $datos['almacen_origen_id'] ?? null,
@@ -175,7 +183,7 @@ class ServicioMovimientoAlmacenMaterial
         $proyeccion = $this->almacenes->sincronizarProyeccion($folio);
         $this->incrementarPlanos($resultante <= 0 ? [$camaraAnterior] : []);
 
-        return $this->crearMovimiento([
+        $movimiento = $this->crearMovimiento([
             'operacion_id' => $datos['operacion_id'],
             'payload_hash' => $hash,
             'tipo' => TipoMovimientoAlmacenMaterial::Consumo,
@@ -191,6 +199,7 @@ class ServicioMovimientoAlmacenMaterial
             'user_id' => $usuario->id,
             'dispositivo_id' => $dispositivo?->id,
             'metadatos' => [
+                'operador_nombre' => $this->texto($datos['operador_nombre'] ?? null),
                 'total_empresa_anterior' => $totalAnterior,
                 'total_empresa_resultante' => (float) $proyeccion->cantidad_actual,
                 'motivo_excepcion_fifo' => $this->texto($excepcionFifo),
@@ -203,6 +212,11 @@ class ServicioMovimientoAlmacenMaterial
                 ] : []),
             ],
         ]);
+        foreach ($imputaciones as $fila) {
+            ImputacionConsumoMaterial::create(['movimiento_almacen_id' => $movimiento->id, ...$fila]);
+        }
+
+        return $movimiento;
     }
 
     /** @param array<string, mixed> $datos */

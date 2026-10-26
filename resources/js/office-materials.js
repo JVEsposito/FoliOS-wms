@@ -1,3 +1,4 @@
+import { setupConsumptionAllocation } from './office-material-consumption-allocation.js';
 import { readDispatchRegistration, dispatchRegistrationLabel, dispatchRegistrationDetail } from './office-material-dispatch-registration.js';
 import { createClientTransfers } from './office-material-client-transfers.js';
 import { openItemPhotoPanel, loadPrivateItemImages, releasePrivateItemImages } from './shared/private-item-photos';
@@ -1067,9 +1068,11 @@ elements.directDispatchForm.addEventListener('submit', async (event) => {
         setBusy(false);
     }
 });
+const consumptionAllocation = setupConsumptionAllocation(elements.directConsumptionForm, api, () => typeof state.identity?.puede_gestionar_transformaciones_materiales === 'boolean' ? state.identity.puede_gestionar_transformaciones_materiales : ['administrador', 'supervisor_materiales'].includes(state.identity?.rol));
 function closeDirectConsumptionDialog() {
     state.directConsumptionOperationId = null;
     state.directConsumptionFolioId = null;
+    consumptionAllocation.reset();
     elements.directConsumptionDialog.close();
 }
 elements.directConsumptionClose.addEventListener('click', closeDirectConsumptionDialog);
@@ -1081,6 +1084,9 @@ elements.directConsumptionForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     elements.directConsumptionError.textContent = '';
     const payload = Object.fromEntries(new FormData(elements.directConsumptionForm));
+    try { const allocation = consumptionAllocation.payload(); if (allocation) payload.imputaciones_ot = allocation; }
+    catch (error) { elements.directConsumptionError.textContent = error.message; return; }
+    if (!payload.operador_nombre) delete payload.operador_nombre;
     const folio = state.inventory.find((candidate) => candidate.folio_id === payload.folio_id && candidate.almacen?.id === payload.almacen_origen_id);
     const center = directConsumptionCenters().find(
         (candidate) => candidate.id === payload.centro_costo_id,
@@ -1128,6 +1134,7 @@ elements.inventoryBody.addEventListener('click', async (event) => {
         state.directConsumptionFolioId = folio.folio_id;
         state.directConsumptionOperationId = operationUuid();
         elements.directConsumptionForm.reset();
+        consumptionAllocation.reset();
         elements.directConsumptionForm.elements.folio_id.value = folio.folio_id;
         elements.directConsumptionForm.elements.almacen_origen_id.value = folio.almacen.id;
         elements.directConsumptionForm.elements.centro_costo_id.innerHTML = '<option value="">Selecciona un centro de costo</option>'

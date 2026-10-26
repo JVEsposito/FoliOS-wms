@@ -526,3 +526,15 @@
 .materials-form [hidden]{display:none}
 
 #inventoryCountApp .custody-shell{min-width:0;display:grid;grid-template-columns:minmax(0,1fr);gap:14px}#inventoryCountApp .custody-card{min-width:0}#inventoryCountApp [data-decision]{display:block;margin-top:8px}#inventoryCountApp select{max-width:100%}#inventoryCountApp .custody-card>label{display:grid;gap:6px;margin-bottom:12px}#inventoryCountApp #scope,#inventoryCountApp #progress,#inventoryCountApp #closingTotals p,#inventoryCountApp #decisionHistory p{overflow-wrap:anywhere}#decision{width:min(640px,calc(100vw - 32px));max-height:calc(100vh - 32px);overflow:auto;background:var(--deep);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:20px}#decide{display:grid;gap:12px}#decide label{display:grid;gap:6px;min-width:0}#decide select,#decide textarea{width:100%;min-width:0;background:var(--raised);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:10px}#decide textarea{min-height:88px}
+
+/* Consumos por OT: conserva las tablas desplazables dentro de su tarjeta. */
+#consumptionApp .custody-shell, .materials-consumption-order { min-width: 0; }
+#consumptionFilters { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: 12px; }
+#consumptionFilters label { display: grid; gap: 6px; min-width: 0; }
+#consumptionFilters input, #consumptionFilters select { width: 100%; min-width: 0; box-sizing: border-box; }
+.materials-consumption-order { margin-bottom: 16px; overflow-wrap: anywhere; }
+.materials-consumption-order > button { margin-top: 12px; }
+.materials-allocation-row { display: grid; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.materials-allocation-row input, [data-allocation-tools] select { max-width: 100%; min-width: 0; }
+
+.materials-consumption-order .custody-table th { overflow-wrap: normal; word-break: normal; }
