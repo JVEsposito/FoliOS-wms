@@ -95,6 +95,6 @@ class ClasificacionItemMaterialApiTest extends TestCase
                 ]],
             ])
             ->assertCreated()
-            ->assertJsonPath('data.categorias.0.categoria', 'Cajas');
+            ->assertJsonPath('data.categorias.0.categoria', 'CAJAS');
     }
 }

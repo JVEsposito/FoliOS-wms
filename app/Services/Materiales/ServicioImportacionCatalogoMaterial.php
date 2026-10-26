@@ -183,6 +183,11 @@ class ServicioImportacionCatalogoMaterial
             }
 
             $fila['accion'] = $this->accionEstimada($fila, $existente);
+            // Una descarga histórica reimportada sin cambios conserva su representación.
+            if ($existente && $fila['accion'] === 'sin_cambios') {
+                $fila['nombre'] = $existente->nombre;
+                $fila['categoria'] = $fila['categoria'] === null ? null : $existente->categoria;
+            }
             $fila['huella_catalogo'] = $existente ? $this->huellaItem($existente) : null;
             $filas[] = $fila;
         }
@@ -370,8 +375,8 @@ class ServicioImportacionCatalogoMaterial
             'temporada_codigo' => mb_strtoupper($this->texto($fila['temporada_codigo'] ?? '')),
             'cliente_codigo' => mb_strtoupper($this->texto($fila['cliente_codigo'] ?? '')),
             'codigo' => mb_strtoupper($this->texto($fila['codigo'] ?? '')),
-            'nombre' => $this->texto($fila['nombre'] ?? ''),
-            'categoria' => $this->opcional($fila['categoria'] ?? ''),
+            'nombre' => NombreClasificacionMaterial::mayusculas($this->texto($fila['nombre'] ?? '')),
+            'categoria' => ($categoria = $this->opcional($fila['categoria'] ?? '')) === null ? null : NombreClasificacionMaterial::mayusculas($categoria),
             'categoria_operacional' => $this->categoriaOperacional($fila['categoria_operacional'] ?? ''),
             'categoria_operacional_original' => $this->texto($fila['categoria_operacional'] ?? ''),
             'unidad_medida' => mb_strtolower($this->texto($fila['unidad_medida'] ?? '')),
@@ -441,9 +446,9 @@ class ServicioImportacionCatalogoMaterial
             return 'crear';
         }
 
-        $cambio = $existente->nombre !== $fila['nombre']
+        $cambio = NombreClasificacionMaterial::mayusculas($existente->nombre) !== NombreClasificacionMaterial::mayusculas($fila['nombre'])
             || $existente->unidad_medida !== $fila['unidad_medida']
-            || (($fila['categoria'] ?? null) !== null && $existente->categoria !== $fila['categoria'])
+            || (($fila['categoria'] ?? null) !== null && NombreClasificacionMaterial::mayusculas($existente->categoria ?? '') !== NombreClasificacionMaterial::mayusculas($fila['categoria']))
             || $existente->categoria_operacional?->value !== $fila['categoria_operacional']
             || (($fila['codigo_externo'] ?? null) !== null && $existente->codigo_externo !== $fila['codigo_externo'])
             || (($fila['activo'] ?? null) !== null && $existente->activo !== $fila['activo']);

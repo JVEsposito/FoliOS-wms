@@ -20,7 +20,7 @@ class GuardarCategoriaComercialMaterialRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         if (is_string($this->input('nombre'))) {
-            $this->merge(['nombre' => NombreClasificacionMaterial::limpiar($this->input('nombre'))]);
+            $this->merge(['nombre' => NombreClasificacionMaterial::mayusculas($this->input('nombre'))]);
         }
     }
 }

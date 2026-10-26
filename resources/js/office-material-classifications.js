@@ -1,4 +1,5 @@
 import { materialCategoryOptions, materialItemTypeOptions, materialItemTypeId } from './shared/material-classification-options.js';
+import { materialCatalogLabel } from './shared/material-catalog-label.js';
 
 export function createMaterialClassifications({ api, getCatalogs, refresh, toast, setBusy }) {
     const byId = id => document.getElementById(id);
@@ -19,7 +20,7 @@ export function createMaterialClassifications({ api, getCatalogs, refresh, toast
         fillOptions(itemForm.elements.categoria, materialCategoryOptions(categorias, originalItem?.categoria || ''), 'Sin categoría comercial');
         fillOptions(itemForm.elements.tipo_item_material_id, materialItemTypeOptions(tipos_item, materialItemTypeId(originalItem, tipos_item)), 'Selecciona un tipo');
         const filter = byId('itemsMaterialClassificationFilter');
-        fillOptions(filter, tipos_item.map(type => ({ value: type.id, label: `${type.nombre}${type.activo ? '' : ' · inactivo'}` })), 'Todos los tipos');
+        fillOptions(filter, tipos_item.map(type => ({ value: type.id, label: `${materialCatalogLabel(type.nombre)}${type.activo ? '' : ' · inactivo'}` })), 'Todos los tipos');
         renderTypeHelp();
     }
 

@@ -23,10 +23,12 @@ class CatalogoItemsMaterialesController extends Controller
         $pagina = $servicio->consulta($filtros)->orderBy('codigo')->orderBy('id')->paginate(50);
 
         return response()->json(['data' => ItemMaterialResource::collection($pagina->items()), 'pagina' => $pagina->currentPage(), 'paginas' => $pagina->lastPage(), 'total' => $pagina->total(),
+            'temporada_seleccionada_id' => $filtros['temporada_id'] ?? null,
             'catalogos' => ['temporadas' => TemporadaMaterial::orderByDesc('activa')->orderByDesc('codigo')->get(['id', 'codigo', 'nombre', 'activa']),
                 'clientes' => ClienteMaterial::orderBy('nombre')->get(['id', 'nombre', 'codigo', 'temporada_material_id']),
+                'clientes_maestros' => $servicio->clientes($filtros),
                 'tipos_item' => TipoItemMaterial::orderBy('nombre')->get(['id', 'nombre', 'activo']),
-                'categorias' => $servicio->consulta(array_intersect_key($filtros, array_flip(['temporada_id', 'cliente_id'])))->select('categoria')->whereNotNull('categoria')->distinct()->orderBy('categoria')->pluck('categoria')]])
+                'categorias' => $servicio->consulta(array_intersect_key($filtros, array_flip(['temporada_id', 'cliente_id', 'cliente_global_id'])))->select('categoria')->whereNotNull('categoria')->distinct()->orderBy('categoria')->pluck('categoria')]])
             ->header('Cache-Control', 'no-store, private');
     }
 
@@ -66,9 +68,16 @@ class CatalogoItemsMaterialesController extends Controller
 
     private function filtros(Request $r): array
     {
-        return $r->validate(['temporada_id' => ['nullable', 'uuid', 'exists:temporadas_materiales,id'], 'cliente_id' => ['nullable', 'uuid', 'exists:clientes_materiales,id'],
+        $filtros = $r->validate(['temporada_id' => ['nullable', 'uuid', 'exists:temporadas_materiales,id'], 'temporada_actual' => ['sometimes', 'boolean'],
+            'cliente_id' => ['nullable', 'uuid', 'exists:clientes_materiales,id', 'prohibits:cliente_global_id'],
+            'cliente_global_id' => ['nullable', 'uuid', 'exists:clientes,id', 'prohibits:cliente_id'],
             'categoria' => ['nullable', 'string', 'max:100'], 'tipo_item' => ['nullable', Rule::in([...array_column(CategoriaOperacionalMaterial::cases(), 'value'), 'sin_tipo'])],
             'tipo_item_material_id' => ['nullable', 'uuid', 'exists:tipos_items_materiales,id'],
             'estado' => ['nullable', Rule::in(['activos', 'inactivos', 'todos'])]]);
+        if ($r->boolean('temporada_actual') && ! filled($filtros['temporada_id'] ?? null)) {
+            $filtros['temporada_id'] = TemporadaMaterial::where('activa', true)->value('id');
+        }
+
+        return $filtros;
     }
 }

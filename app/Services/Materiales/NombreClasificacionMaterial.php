@@ -11,6 +11,11 @@ class NombreClasificacionMaterial
         return preg_replace('/\s+/u', ' ', trim($nombre));
     }
 
+    public static function mayusculas(string $nombre): string
+    {
+        return mb_strtoupper(self::limpiar($nombre));
+    }
+
     public static function normalizar(string $nombre): string
     {
         return mb_strtolower(Str::ascii(self::limpiar($nombre)));

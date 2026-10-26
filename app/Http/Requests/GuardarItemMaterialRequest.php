@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Enums\CategoriaOperacionalMaterial;
 use App\Models\ItemMaterial;
+use App\Services\Materiales\NombreClasificacionMaterial;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -73,8 +74,8 @@ class GuardarItemMaterialRequest extends FormRequest
     {
         $this->merge([
             'codigo' => mb_strtoupper(trim((string) $this->input('codigo'))),
-            'nombre' => trim((string) $this->input('nombre')),
-            'categoria' => $this->filled('categoria') ? trim((string) $this->input('categoria')) : null,
+            'nombre' => is_string($this->input('nombre')) ? NombreClasificacionMaterial::mayusculas($this->input('nombre')) : $this->input('nombre'),
+            'categoria' => is_string($this->input('categoria')) ? (NombreClasificacionMaterial::mayusculas($this->input('categoria')) ?: null) : $this->input('categoria'),
             'categoria_operacional' => $this->filled('categoria_operacional')
                 ? mb_strtolower(trim((string) $this->input('categoria_operacional')))
                 : null,

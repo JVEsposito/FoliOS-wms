@@ -34,10 +34,11 @@ class ServicioClasificacionMaterial
 
     public function guardarCategoria(array $datos, User $usuario, ?CategoriaComercialMaterial $categoria = null): CategoriaComercialMaterial
     {
+        $datos['nombre'] = NombreClasificacionMaterial::mayusculas($datos['nombre']);
         try {
             return DB::transaction(function () use ($datos, $usuario, $categoria) {
                 $categoria = $categoria ? CategoriaComercialMaterial::whereKey($categoria->id)->lockForUpdate()->firstOrFail() : new CategoriaComercialMaterial;
-                if ($categoria->exists && $datos['nombre'] !== $categoria->nombre
+                if ($categoria->exists && $datos['nombre'] !== NombreClasificacionMaterial::mayusculas($categoria->nombre)
                     && $this->referenciasCategorias()->has($categoria->nombre_normalizado)) {
                     throw ValidationException::withMessages(['nombre' => 'Una categoría en uso conserva su nombre para mantener proveedores e historial. Puedes desactivarla o crear otra.']);
                 }
@@ -57,6 +58,7 @@ class ServicioClasificacionMaterial
 
     public function guardarTipo(array $datos, User $usuario, ?TipoItemMaterial $tipo = null): TipoItemMaterial
     {
+        $datos['nombre'] = NombreClasificacionMaterial::mayusculas($datos['nombre']);
         try {
             return DB::transaction(function () use ($datos, $usuario, $tipo) {
                 $tipo = $tipo ? TipoItemMaterial::whereKey($tipo->id)->lockForUpdate()->firstOrFail() : new TipoItemMaterial;
@@ -82,7 +84,7 @@ class ServicioClasificacionMaterial
     public function resolverParaItem(array $datos, ?ItemMaterial $actual, User $usuario): array
     {
         if (isset($datos['categoria'])) {
-            $nombre = NombreClasificacionMaterial::limpiar($datos['categoria']);
+            $nombre = NombreClasificacionMaterial::mayusculas($datos['categoria']);
             $clave = NombreClasificacionMaterial::normalizar($nombre);
             CategoriaComercialMaterial::firstOrCreate(['nombre_normalizado' => $clave], [
                 'nombre' => $nombre, 'activo' => true,

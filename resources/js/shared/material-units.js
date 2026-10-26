@@ -1,10 +1,12 @@
+import { materialCatalogLabel } from './material-catalog-label.js';
+
 export function createMaterialUnits({ api, getItems, getToken, authorized, escapeHtml: esc }) {
     const $ = (id) => document.getElementById(id);
     const form = $('materialUnitForm'); const conversionForm = $('materialUnitConversionForm');
     const baseSelect = document.querySelector('#itemMaterialForm [name="unidad_medida"]');
     let units = []; let conversions = []; let generation = 0; let conversionRevision = 0; let busy = false;
     const valid = (n, token) => n === generation && getToken() === token && authorized();
-    const options = (values) => values.map(([value, label]) => `<option value="${esc(value)}">${esc(label)}</option>`).join('');
+    const options = (values) => values.map(([value, label]) => `<option value="${esc(value)}">${esc(materialCatalogLabel(label))}</option>`).join('');
     function reset() { form.reset(); form.elements.id.value = ''; form.elements.codigo.readOnly = false; form.elements.version_conocida.value = 0; }
     function renderBase() {
         const value = baseSelect.value;
@@ -33,8 +35,8 @@ export function createMaterialUnits({ api, getItems, getToken, authorized, escap
             const result = await api(`/api/administracion/materiales/items/${encodeURIComponent(id)}/unidades`);
             if (!valid(n, token)) return;
             conversions = result.data;
-            $('materialConversionFactorLabel').textContent = `Cantidad en ${result.unidad_base} por unidad de ingreso *`;
-            $('materialConversionsList').innerHTML = conversions.map((c) => `<div class="material-row"><strong>1 ${esc(c.origen.codigo)} = ${esc(c.factor)} ${esc(result.unidad_base)}</strong><small>Versión ${c.version} · ${c.activa ? 'Activa' : 'Inactiva'}</small></div>`).join('');
+            $('materialConversionFactorLabel').textContent = `Cantidad en ${materialCatalogLabel(result.unidad_base)} por unidad de ingreso *`;
+            $('materialConversionsList').innerHTML = conversions.map((c) => `<div class="material-row"><strong>1 ${esc(materialCatalogLabel(c.origen.codigo))} = ${esc(c.factor)} ${esc(materialCatalogLabel(result.unidad_base))}</strong><small>Versión ${c.version} · ${c.activa ? 'Activa' : 'Inactiva'}</small></div>`).join('');
             selectConversion();
         } catch (error) { if (valid(n, token)) $('materialUnitsStatus').textContent = error.message; }
     }
@@ -45,7 +47,7 @@ export function createMaterialUnits({ api, getItems, getToken, authorized, escap
             const [data, history] = await Promise.all([api('/api/administracion/materiales/unidades'), api('/api/administracion/materiales/unidades/historial')]);
             if (!valid(n, token)) return;
             units = data.data; renderBase();
-            $('materialUnitsList').innerHTML = units.map((u) => `<div class="material-row"><strong>${esc(u.codigo)} · ${esc(u.nombre)}</strong><small>${u.activa ? 'Activa' : 'Inactiva'} · ${esc(u.alias.join(', '))}</small><button type="button" data-edit-unit="${esc(u.id)}">Editar</button></div>`).join('');
+            $('materialUnitsList').innerHTML = units.map((u) => `<div class="material-row"><strong>${esc(materialCatalogLabel(u.codigo))} · ${esc(materialCatalogLabel(u.nombre))}</strong><small>${u.activa ? 'Activa' : 'Inactiva'} · ${esc(materialCatalogLabel(u.alias.join(', ')))}</small><button type="button" data-edit-unit="${esc(u.id)}">Editar</button></div>`).join('');
             const item = $('materialConversionItem').value; const unit = $('materialConversionUnit').value;
             $('materialConversionItem').innerHTML = '<option value="">Seleccione un ítem</option>' + options(getItems().filter((i) => i.activo).map((i) => [i.id, `${i.cliente?.codigo || ''} · ${i.codigo} · ${i.nombre} (${i.unidad_medida})`]));
             $('materialConversionUnit').innerHTML = '<option value="">Seleccione una unidad</option>' + options(units.filter((u) => u.activa).map((u) => [u.codigo, u.nombre]));
