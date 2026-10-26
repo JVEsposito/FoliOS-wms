@@ -219,6 +219,7 @@ export function FrutaProcesoScreen({ auth, baseUrl, onLogout }: Props) {
       try {
         const updated = await createProcessDelivery(baseUrl, auth.token, action.lot.id, {
           operacion_id: operationId,
+          camara_origen_id: action.lot.camara?.id ?? null,
           cantidad_envases: numericQuantity,
           kilos_enviados: numericKilos,
           linea_proceso: line.trim(),

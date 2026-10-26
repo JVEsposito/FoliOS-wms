@@ -724,7 +724,11 @@ class ServicioLoteMateriaPrima
                 $datos['operacion_id'],
                 EstadoLoteMateriaPrima::PendienteAsignacion,
                 EstadoLoteMateriaPrima::AsignadoCamara,
-                ['camara_id' => $camara->id, 'camara_codigo' => $camara->codigo],
+                ['camara_id' => $camara->id, 'camara_codigo' => $camara->codigo,
+                    'camara_destino_id' => $camara->id, 'camara_destino_codigo' => $camara->codigo, 'camara_destino_nombre' => $camara->nombre,
+                    'cantidad_envases' => $lote->cantidad_envases_primarios, 'tipo_envase' => $lote->envase_primario->value,
+                    'origen_operacional' => $lote->requiere_hidrocooler ? 'Hidrocooler' : 'Recepción MP',
+                    'usuario_nombre' => $usuario->name, 'observacion' => $datos['observacion'] ?? null],
             );
 
             return $this->cargar($lote);

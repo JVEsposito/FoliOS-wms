@@ -172,6 +172,15 @@ body {
 .operation-fields { display: grid; gap: 12px; }
 .operation-fields .field { display: grid; gap: 7px; }
 
+#movimientos { margin-top: 24px; padding: 18px; }
+#movimientos > summary { cursor: pointer; }
+#movementFilters { display: flex; width: 100%; flex-wrap: wrap; align-items: end; gap: 12px; }
+#movementFilters label { display: grid; flex: 1 1 145px; gap: 6px; }
+#movementFilters input, #movementFilters select { min-height: 44px; width: 100%; }
+#movimientos .raw-material-table { min-width: 1200px; }
+#movementStatus { min-height: 24px; }
+#movimientos .raw-material-table td { vertical-align: top; }
+
 @media (max-width: 1250px) {
     .raw-material-grid { grid-template-columns: 1fr; }
     .raw-material-form-grid { grid-template-columns: repeat(3, 1fr); }

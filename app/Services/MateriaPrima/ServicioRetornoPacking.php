@@ -289,6 +289,9 @@ class ServicioRetornoPacking
                     'numero_sublote' => $sublote->numero_sublote,
                     'camara_id' => $camara->id,
                     'camara_codigo' => $camara->codigo,
+                    'camara_destino_id' => $camara->id, 'camara_destino_codigo' => $camara->codigo, 'camara_destino_nombre' => $camara->nombre,
+                    'cantidad_envases' => $sublote->cantidad_bins, 'tipo_envase' => 'bins',
+                    'usuario_nombre' => $usuario->name, 'observacion' => $observacion,
                 ],
             );
 

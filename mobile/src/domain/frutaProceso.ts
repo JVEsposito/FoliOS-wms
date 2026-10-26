@@ -114,6 +114,7 @@ export type ProcessSummary = {
 
 export type CreateProcessDelivery = {
   operacion_id: string;
+  camara_origen_id?: string | null;
   cantidad_envases: number;
   kilos_enviados: number | null;
   linea_proceso: string;

@@ -113,6 +113,55 @@ La asignación del lote:
 - no crea folio;
 - no ocupa una posición del plano frigorífico.
 
+## Registro de movimientos y traslados de cámara
+
+En **Materia Prima → Digitación de lotes → Registro de movimientos** se consulta
+la ubicación histórica de los lotes de la temporada activa. El botón **Ubicaciones**
+de cada lote abre el registro filtrado. Permite buscar por lote, CSG o cliente y
+filtrar por cámara de origen o destino, tipo de movimiento y fechas. La consulta
+se pagina de 50 en 50; **Descargar Excel** exporta todos los resultados del filtro.
+Las fechas se filtran y muestran en el horario operacional de planta
+(`APP_OPERATIONAL_TIMEZONE`, por defecto `America/Santiago`), conservando UTC en
+la base de datos. El Excel incluye la zona horaria en su hoja de corte.
+
+Incluye el ingreso inicial, los traslados entre cámaras, las salidas a Packing,
+sus anulaciones y la ubicación de sublotes retornados. Conserva fecha, responsable,
+cantidad y tipo de envase, origen, destino y observación. Las anulaciones se
+identifican como correcciones del registro: no acreditan un traslado físico.
+Los datos históricos provienen de los eventos y viajes que ya existen; no se
+reconstruyen movimientos físicos que nunca se registraron.
+
+Los sublotes retornados que reúnen varios lotes se pueden encontrar desde cualquiera
+de sus orígenes. El ingreso físico aparece una sola vez y muestra todos los lotes
+vinculados. Su cantidad corresponde al sublote completo, sin atribuir proporciones
+que Packing no registró. La exportación recorre el registro por cursor y en bloques,
+evitando duplicar filas si llegan nuevos movimientos durante la descarga.
+
+**Trasladar saldo** mueve a otra cámara activa MP todo el saldo que todavía tiene
+el lote. El modelo mantiene una cámara por lote; no divide su saldo entre cámaras.
+Las entregas anteriores conservan su cámara de salida. El traslado comprueba
+versión, origen y cantidad vigentes, exige motivo y usa un UUID de operación para
+que un reintento no duplique el movimiento. Ubicación y evento se guardan en la
+misma transacción. Los traslados posteriores agregan eventos sin borrar el historial.
+
+Las nuevas versiones de Oficina y tablet envían la cámara que se mostró al abrir
+un viaje a Packing. Si cambió antes de confirmar, el servidor rechaza el viaje y
+pide actualizar. Los clientes anteriores que no envían ese dato conservan la
+compatibilidad; para esta comprobación en la APK es necesario actualizarla.
+Una entrega anterior al cambio de cámara no se puede anular mientras el lote
+esté en otra cámara, evitando restituir sus bins en una ubicación incorrecta.
+
+La consulta utiliza el permiso de lectura de Materia Prima; los traslados requieren
+el permiso de gestión de lotes. No emplea las posiciones ni tareas del planificador
+de producto terminado. Al desplegar se ejecuta la migración del índice de eventos.
+
+```http
+GET  /api/materia-prima/movimientos
+GET  /api/materia-prima/movimientos/exportar
+GET  /api/materia-prima/lotes/{lote}/ubicacion
+POST /api/materia-prima/lotes/{lote}/trasladar-camara
+```
+
 ## Fruta a proceso
 
 La oficina `/oficina/materia-prima/fruta-a-proceso` y el módulo tablet `fruta_proceso` muestran únicamente lotes cuyo envase primario es `bins`, pertenecen a la temporada activa y ya están asignados a una cámara de materia prima.

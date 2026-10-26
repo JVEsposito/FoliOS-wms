@@ -12,19 +12,24 @@ use App\Models\Cliente;
 use App\Models\CsgValidacion;
 use App\Models\EntregaFrutaProceso;
 use App\Models\EspecieValidacion;
+use App\Models\EventoLoteMateriaPrima;
 use App\Models\FormatoRegistro;
+use App\Models\LoteMateriaPrima;
 use App\Models\ProductoHidrocooler;
 use App\Models\Temporada;
 use App\Models\TipoResultadoPacking;
 use App\Models\User;
 use App\Models\VariedadValidacion;
+use App\Services\MateriaPrima\RegistroMovimientosCamaraMp;
 use App\Services\MateriaPrima\RellenoEnvasesLotes;
 use App\Services\MateriaPrima\ServicioCompletarEnvasesSegmentos;
+use App\Services\MateriaPrima\ServicioTrasladoLoteMateriaPrima;
 use App\Services\Temporadas\Cierre\ServicioRegularizacionCierreTemporada;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Str;
 use Tests\Concerns\PreparaInspeccionesEnvases;
 use Tests\TestCase;
@@ -34,6 +39,290 @@ class MateriaPrimaApiTest extends TestCase
 {
     use PreparaInspeccionesEnvases;
     use RefreshDatabase;
+
+    public function test_movimientos_mp_conservan_las_camaras_historicas_y_el_excel_respeta_los_filtros(): void
+    {
+        [$lote, $origen, $destino] = $this->loteParaTraslado();
+        $viaje = ['operacion_id' => (string) Str::uuid(), 'camara_origen_id' => $origen->id,
+            'cantidad_envases' => 12, 'linea_proceso' => 'Línea 1', 'turno' => 'A', 'numero_orden' => 'OP-100'];
+        $this->postJson("/api/materia-prima/fruta-proceso/lotes/{$lote['id']}/entregas", $viaje)->assertOk();
+        $ubicacion = $this->getJson("/api/materia-prima/lotes/{$lote['id']}/ubicacion")->assertOk()->assertJsonPath('data.saldo', 36)->json('data');
+        $traslado = ['operacion_id' => (string) Str::uuid(), 'version_conocida' => $ubicacion['version'],
+            'camara_origen_id' => $origen->id, 'camara_destino_id' => $destino->id, 'cantidad_envases' => 36, 'motivo' => 'Acercar a la salida de Packing'];
+        $this->postJson("/api/materia-prima/lotes/{$lote['id']}/trasladar-camara", $traslado)->assertOk();
+        $this->postJson("/api/materia-prima/fruta-proceso/lotes/{$lote['id']}/entregas", [
+            ...$viaje, 'operacion_id' => (string) Str::uuid(), 'camara_origen_id' => $destino->id, 'cantidad_envases' => 5,
+        ])->assertOk()->assertJsonPath('data.progreso.disponibles', 31);
+        $filas = $this->getJson('/api/materia-prima/movimientos?lote_id='.$lote['id'])->assertOk()->assertJsonPath('total', 4)->json('data');
+        $ingreso = collect($filas)->firstWhere('tipo', 'camara_asignada');
+        $movido = collect($filas)->firstWhere('tipo', 'camara_trasladada');
+        $salidas = collect($filas)->where('tipo', 'fruta_entregada_proceso')->keyBy('cantidad_envases');
+        $this->assertSame(48, $ingreso['cantidad_envases']);
+        $this->assertSame($origen->id, $ingreso['camara_destino_id']);
+        $this->assertSame(36, $movido['cantidad_envases']);
+        $this->assertSame($origen->id, $movido['camara_origen_id']);
+        $this->assertSame($destino->id, $movido['camara_destino_id']);
+        $this->assertSame($origen->id, $salidas[12]['camara_origen_id']);
+        $this->assertSame($destino->id, $salidas[5]['camara_origen_id']);
+        $this->assertDatabaseHas('entregas_fruta_proceso', ['operacion_id' => $viaje['operacion_id'], 'camara_id' => $origen->id]);
+        $this->getJson('/api/materia-prima/movimientos?camara_id='.$origen->id)->assertOk()->assertJsonPath('total', 3);
+        $this->getJson('/api/materia-prima/movimientos?camara_id='.$destino->id)->assertOk()->assertJsonPath('total', 2);
+        $filtro = '?tipo=camara_trasladada&hasta='.now()->toDateString();
+        $this->getJson('/api/materia-prima/movimientos'.$filtro)->assertOk()->assertJsonPath('total', 1);
+        $archivo = $this->get('/api/materia-prima/movimientos/exportar'.$filtro)->assertOk()->assertDownload();
+        $ruta = $archivo->baseResponse->getFile()->getPathname();
+        $zip = new ZipArchive;
+        $this->assertTrue($zip->open($ruta));
+        $xml = $zip->getFromName('xl/worksheets/sheet1.xml');
+        $zip->close();
+        @unlink($ruta);
+        $doc = new \DOMDocument;
+        $doc->loadXML($xml);
+        $this->assertSame(2, $doc->getElementsByTagName('row')->length);
+        $this->assertStringContainsString('MP-TR-A', $xml);
+        $this->assertStringContainsString('MP-TR-B', $xml);
+        $this->assertStringContainsString('Acercar a la salida de Packing', $xml);
+    }
+
+    public function test_traslado_mp_es_idempotente_y_rechaza_otro_contenido_o_una_version_vieja(): void
+    {
+        [$lote, $origen, $destino] = $this->loteParaTraslado();
+        $payload = ['operacion_id' => (string) Str::uuid(), 'version_conocida' => $lote['version'],
+            'camara_origen_id' => $origen->id, 'camara_destino_id' => $destino->id, 'cantidad_envases' => 48, 'motivo' => 'Reorganización de cámara'];
+        $url = "/api/materia-prima/lotes/{$lote['id']}/trasladar-camara";
+        $primera = $this->postJson($url, $payload)->assertOk()->json('data.version');
+        $this->postJson($url, $payload)->assertOk()->assertJsonPath('data.version', $primera);
+        $this->postJson($url, [...$payload, 'motivo' => 'Otro motivo diferente'])->assertConflict();
+        $this->postJson($url, [...$payload, 'operacion_id' => (string) Str::uuid()])->assertConflict();
+        $this->assertSame(1, DB::table('eventos_lote_materia_prima')->where('tipo', 'camara_trasladada')->count());
+        $this->assertDatabaseHas('asignaciones_camara_lote_materia_prima', ['lote_materia_prima_id' => $lote['id'], 'camara_id' => $destino->id]);
+    }
+
+    public function test_traslado_mp_rechaza_cantidad_parcial_destino_invalido_y_lectura_sin_permiso_de_escritura(): void
+    {
+        [$lote, $origen, $destino] = $this->loteParaTraslado();
+        $payload = ['operacion_id' => (string) Str::uuid(), 'version_conocida' => $lote['version'],
+            'camara_origen_id' => $origen->id, 'camara_destino_id' => $destino->id, 'cantidad_envases' => 48, 'motivo' => 'Reorganización de cámara'];
+        $url = "/api/materia-prima/lotes/{$lote['id']}/trasladar-camara";
+        $this->postJson($url, [...$payload, 'cantidad_envases' => 10])->assertConflict();
+        $this->postJson($url, [...$payload, 'camara_destino_id' => $origen->id])->assertUnprocessable();
+        $destino->update(['contenido' => 'productos']);
+        $this->postJson($url, $payload)->assertUnprocessable();
+        $destino->update(['contenido' => 'materia_prima', 'estado' => 'inactiva']);
+        $this->postJson($url, $payload)->assertUnprocessable();
+        $this->actingAs(User::factory()->create(['rol' => RolUsuario::Consulta]), 'sanctum');
+        $this->getJson('/api/materia-prima/movimientos')->assertOk();
+        $this->postJson($url, $payload)->assertForbidden();
+        $this->assertSame(0, DB::table('eventos_lote_materia_prima')->where('tipo', 'camara_trasladada')->count());
+        $this->assertDatabaseHas('asignaciones_camara_lote_materia_prima', ['lote_materia_prima_id' => $lote['id'], 'camara_id' => $origen->id]);
+    }
+
+    public function test_un_viaje_con_camara_antigua_no_sale_ni_se_restituye_en_otra_camara(): void
+    {
+        [$lote, $origen, $destino] = $this->loteParaTraslado();
+        $viaje = ['operacion_id' => (string) Str::uuid(), 'camara_origen_id' => $origen->id,
+            'cantidad_envases' => 12, 'linea_proceso' => 'Línea 1', 'turno' => 'A', 'numero_orden' => 'OP-100'];
+        $this->postJson("/api/materia-prima/fruta-proceso/lotes/{$lote['id']}/entregas", $viaje)->assertOk();
+        $entrega = EntregaFrutaProceso::where('operacion_id', $viaje['operacion_id'])->firstOrFail();
+        $ubicacion = $this->getJson("/api/materia-prima/lotes/{$lote['id']}/ubicacion")->assertOk()->json('data');
+        $this->postJson("/api/materia-prima/lotes/{$lote['id']}/trasladar-camara", [
+            'operacion_id' => (string) Str::uuid(), 'version_conocida' => $ubicacion['version'],
+            'camara_origen_id' => $origen->id, 'camara_destino_id' => $destino->id, 'cantidad_envases' => 36, 'motivo' => 'Cambio de cámara física',
+        ])->assertOk();
+        $this->postJson("/api/materia-prima/fruta-proceso/lotes/{$lote['id']}/entregas", [...$viaje, 'operacion_id' => (string) Str::uuid()])->assertConflict();
+        $this->actingAs(User::factory()->create(['rol' => RolUsuario::SupervisorFrio]), 'sanctum');
+        $this->postJson("/api/materia-prima/fruta-proceso/entregas/{$entrega->id}/anular", [
+            'operacion_id' => (string) Str::uuid(), 'motivo' => 'Corrección posterior al traslado',
+        ])->assertConflict();
+        $this->assertDatabaseCount('entregas_fruta_proceso', 1);
+        $this->assertNull($entrega->fresh()->anulado_at);
+        $this->getJson("/api/materia-prima/lotes/{$lote['id']}/ubicacion")->assertOk()->assertJsonPath('data.saldo', 36);
+    }
+
+    public function test_si_falla_la_bitacora_del_traslado_no_cambia_la_ubicacion_ni_la_version(): void
+    {
+        [$lote, $origen, $destino] = $this->loteParaTraslado();
+        $usuario = User::findOrFail(auth()->id());
+        $evento = 'eloquent.creating: '.EventoLoteMateriaPrima::class;
+        Event::listen($evento, function ($registro) {
+            if ($registro->tipo === 'camara_trasladada') {
+                throw new \RuntimeException('Fallo simulado de bitácora');
+            }
+        });
+        try {
+            app(ServicioTrasladoLoteMateriaPrima::class)->trasladar(LoteMateriaPrima::findOrFail($lote['id']), [
+                'operacion_id' => (string) Str::uuid(), 'version_conocida' => $lote['version'],
+                'camara_origen_id' => $origen->id, 'camara_destino_id' => $destino->id, 'cantidad_envases' => 48, 'motivo' => 'Reorganización de cámara',
+            ], $usuario);
+            $this->fail('La bitácora debía fallar.');
+        } catch (\RuntimeException $error) {
+            $this->assertSame('Fallo simulado de bitácora', $error->getMessage());
+        } finally {
+            Event::forget($evento);
+        }
+        $this->assertDatabaseHas('asignaciones_camara_lote_materia_prima', ['lote_materia_prima_id' => $lote['id'], 'camara_id' => $origen->id]);
+        $this->assertDatabaseHas('lotes_materia_prima', ['id' => $lote['id'], 'version' => $lote['version']]);
+    }
+
+    private function loteParaTraslado(): array
+    {
+        $contexto = $this->prepararRecepcionValidada();
+        $this->actingAs(User::factory()->create(['rol' => RolUsuario::SupervisorFrio]), 'sanctum');
+        $camaras = [];
+        foreach (['A', 'B'] as $letra) {
+            $camaras[] = Camara::create(['codigo' => 'MP-TR-'.$letra, 'nombre' => 'Cámara '.$letra,
+                'tipo' => 'almacenaje', 'contenido' => ContenidoCamara::MateriaPrima, 'cantidad_bandas' => 1, 'posiciones_por_banda' => 1, 'cantidad_niveles' => 1]);
+        }
+        $lote = $this->postJson('/api/materia-prima/lotes', $this->payloadLote($contexto))->assertCreated()->json('data');
+        $this->postJson("/api/materia-prima/lotes/{$lote['id']}/confirmar", [
+            'operacion_id' => (string) Str::uuid(), 'version_conocida' => $lote['version'],
+        ])->assertOk();
+        $lote = $this->postJson("/api/materia-prima/lotes/{$lote['id']}/asignar-camara", [
+            'operacion_id' => (string) Str::uuid(), 'camara_id' => $camaras[0]->id,
+        ])->assertOk()->json('data');
+
+        return [$lote, ...$camaras];
+    }
+
+    public function test_movimientos_mp_filtran_el_dia_de_planta_y_no_la_fecha_utc(): void
+    {
+        config(['app.operational_timezone' => 'America/Santiago']);
+        [$lote] = $this->loteParaTraslado();
+        DB::table('eventos_lote_materia_prima')->where('lote_materia_prima_id', $lote['id'])->where('tipo', 'camara_asignada')
+            ->update(['ocurrido_at' => '2026-10-27 02:59:59']);
+        $this->getJson('/api/materia-prima/movimientos?desde=2026-10-26&hasta=2026-10-26')->assertOk()
+            ->assertJsonPath('total', 1)->assertJsonPath('data.0.fecha', '2026-10-26 23:59:59');
+        DB::table('eventos_lote_materia_prima')->where('lote_materia_prima_id', $lote['id'])->where('tipo', 'camara_asignada')
+            ->update(['ocurrido_at' => '2026-10-27 03:00:00']);
+        $this->getJson('/api/materia-prima/movimientos?desde=2026-10-26&hasta=2026-10-26')->assertOk()->assertJsonPath('total', 0);
+        $this->getJson('/api/materia-prima/movimientos?desde=2026-10-27&hasta=2026-10-27')->assertOk()
+            ->assertJsonPath('total', 1)->assertJsonPath('data.0.fecha', '2026-10-27 00:00:00');
+    }
+
+    public function test_movimientos_mp_exportan_mas_de_un_bloque_sin_duplicar_filas_si_llegan_movimientos(): void
+    {
+        [$lote, $origen, $destino] = $this->loteParaTraslado();
+        $fecha = now()->subHour();
+        $registros = [];
+        foreach (range(1, 205) as $i) {
+            $registros[] = [
+                'id' => (string) Str::uuid(), 'lote_materia_prima_id' => $lote['id'], 'tipo' => 'camara_trasladada',
+                'user_id' => auth()->id(), 'ocurrido_at' => $fecha, 'created_at' => $fecha, 'updated_at' => $fecha,
+                'datos' => json_encode(['camara_origen_id' => $origen->id, 'camara_destino_id' => $destino->id, 'cantidad_envases' => 48]),
+            ];
+        }
+        DB::table('eventos_lote_materia_prima')->insert($registros);
+        DB::enableQueryLog();
+        $filas = [];
+        foreach (app(RegistroMovimientosCamaraMp::class)->filasExportacion(['tipo' => 'camara_trasladada']) as $indice => $fila) {
+            $filas[$indice] = $fila;
+            if (count($filas) === 1) {
+                $this->travel(2)->seconds();
+                DB::table('eventos_lote_materia_prima')->insert([...$registros[0], 'id' => (string) Str::uuid(),
+                    'ocurrido_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
+            }
+        }
+        $consultas = DB::getQueryLog();
+        DB::disableQueryLog();
+        $this->assertCount(205, $filas);
+        $this->assertCount(205, array_unique(array_column($filas, 'id')));
+        $this->assertSame(range(0, 204), array_keys($filas));
+        $this->assertLessThan(30, count($consultas), 'Las referencias deben resolverse por bloques, no por fila.');
+    }
+
+    public function test_movimientos_mp_muestran_anulaciones_y_excluyen_lotes_de_otras_temporadas(): void
+    {
+        [$lote, $origen] = $this->loteParaTraslado();
+        $id = (string) Str::uuid();
+        $this->postJson("/api/materia-prima/fruta-proceso/lotes/{$lote['id']}/entregas", [
+            'operacion_id' => $id, 'camara_origen_id' => $origen->id, 'cantidad_envases' => 12,
+            'linea_proceso' => 'Línea 1', 'turno' => 'A', 'numero_orden' => 'OP-ANULADA',
+        ])->assertOk();
+        $entrega = EntregaFrutaProceso::where('operacion_id', $id)->firstOrFail();
+        $this->postJson("/api/materia-prima/fruta-proceso/entregas/{$entrega->id}/anular", [
+            'operacion_id' => (string) Str::uuid(), 'motivo' => 'El viaje se registró por error',
+        ])->assertOk();
+        $this->getJson('/api/materia-prima/movimientos?tipo=entrega_fruta_proceso_anulada&camara_id='.$origen->id)
+            ->assertOk()->assertJsonPath('total', 1)->assertJsonPath('data.0.es_correccion', true)
+            ->assertJsonPath('data.0.cantidad_envases', 12)->assertJsonPath('data.0.camara_destino_id', $origen->id);
+        $salida = $this->getJson('/api/materia-prima/movimientos?tipo=fruta_entregada_proceso')->assertOk()->json('data.0');
+        $this->assertStringContainsString('Salida anulada', $salida['detalle']);
+        $this->getJson('/api/materia-prima/movimientos?desde=2026-11-01&hasta=2026-10-01')->assertUnprocessable();
+        $otra = Temporada::where('activa', true)->firstOrFail()->replicate(['activa_unica']);
+        $otra->codigo = 'HISTORIA-MP';
+        $otra->nombre = 'Histórica MP';
+        $otra->activa = false;
+        $otra->save();
+        DB::table('lotes_materia_prima')->where('id', $lote['id'])->update(['temporada_id' => $otra->id]);
+        $this->getJson('/api/materia-prima/movimientos')->assertOk()->assertJsonPath('total', 0);
+        $this->getJson("/api/materia-prima/lotes/{$lote['id']}/ubicacion")->assertNotFound();
+    }
+
+    public function test_movimientos_mp_historicos_conservan_codigo_y_cantidad_del_ingreso_original(): void
+    {
+        [$lote, $origen, $destino] = $this->loteParaTraslado();
+        // Simula los datos que guardaban las asignaciones anteriores a este registro.
+        DB::table('eventos_lote_materia_prima')->where('lote_materia_prima_id', $lote['id'])->where('tipo', 'camara_asignada')
+            ->update(['datos' => json_encode(['camara_id' => $origen->id, 'camara_codigo' => $origen->codigo])]);
+        $this->postJson("/api/materia-prima/lotes/{$lote['id']}/trasladar-camara", [
+            'operacion_id' => (string) Str::uuid(), 'version_conocida' => $lote['version'],
+            'camara_origen_id' => $origen->id, 'camara_destino_id' => $destino->id,
+            'cantidad_envases' => 48, 'motivo' => 'Reorganizar para despacho a Packing',
+        ])->assertOk();
+        $origen->update(['codigo' => 'MP-RENOMBRADA', 'nombre' => 'Nombre actualizado']);
+        $this->getJson('/api/materia-prima/movimientos?tipo=camara_asignada')->assertOk()
+            ->assertJsonPath('total', 1)->assertJsonPath('data.0.camara_destino_id', $origen->id)
+            ->assertJsonPath('data.0.cantidad_envases', 48)->assertJsonPath('data.0.tipo_envase', 'bins');
+        $this->getJson('/api/materia-prima/movimientos?tipo=camara_trasladada')->assertOk()
+            ->assertJsonPath('data.0.origen', 'MP-TR-A · Cámara A')
+            ->assertJsonPath('data.0.destino', 'MP-TR-B · Cámara B');
+    }
+
+    public function test_movimientos_mp_vinculan_un_sublote_a_todos_sus_lotes_sin_duplicar_el_ingreso(): void
+    {
+        $contexto = $this->prepararRecepcionValidada(tresTipos: true);
+        $this->actingAs(User::factory()->create(['rol' => RolUsuario::SupervisorFrio]), 'sanctum');
+        $camara = Camara::create(['codigo' => 'MP-MIX', 'nombre' => 'Cámara de retornos', 'tipo' => 'almacenaje',
+            'contenido' => ContenidoCamara::MateriaPrima, 'cantidad_bandas' => 1, 'posiciones_por_banda' => 1, 'cantidad_niveles' => 1]);
+        $lotes = [];
+        $entregas = [];
+        foreach ([$contexto['segmento_id'], $contexto['segundo_segmento_id']] as $i => $segmento) {
+            $lote = $this->postJson('/api/materia-prima/lotes', $this->payloadLote([...$contexto, 'segmento_id' => $segmento], [
+                'numero_lote' => 'ORIGEN-MP-'.$i,
+                'kilos_netos_confirmados' => $i === 0 ? 7500 : 10500,
+                'cuartel' => $i === 0 ? 'A' : 'B',
+                'cantidad_envases_primarios' => $i === 0 ? 20 : 28,
+                'cantidad_envases_secundarios' => $i === 0 ? 4 : 6,
+            ]))->assertCreated()->json('data');
+            $this->postJson("/api/materia-prima/lotes/{$lote['id']}/confirmar", ['operacion_id' => (string) Str::uuid(), 'version_conocida' => $lote['version']])->assertOk();
+            $this->postJson("/api/materia-prima/lotes/{$lote['id']}/asignar-camara", ['operacion_id' => (string) Str::uuid(), 'camara_id' => $camara->id])->assertOk();
+            $entregas[] = $this->postJson("/api/materia-prima/fruta-proceso/lotes/{$lote['id']}/entregas", [
+                'operacion_id' => (string) Str::uuid(), 'cantidad_envases' => 10, 'linea_proceso' => 'Línea 1', 'turno' => 'A', 'numero_orden' => 'OP-'.$i,
+            ])->assertOk()->json('data.entregas.0.id');
+            $lotes[] = $lote;
+        }
+        $retorno = $this->postJson("/api/materia-prima/fruta-proceso/entregas/{$entregas[0]}/retornos", [
+            'operacion_id' => (string) Str::uuid(),
+            'entregas' => array_map(fn ($id) => ['entrega_fruta_proceso_id' => $id, 'cierra_entrega' => false], $entregas),
+            'resultados' => [['tipo_resultado_packing_id' => TipoResultadoPacking::where('codigo', 'comercial')->firstOrFail()->id, 'cantidad_bins' => 8]],
+        ])->assertOk()->json('data.entregas.0.retorno.movimientos.0.resultados.0');
+        $this->postJson("/api/materia-prima/fruta-proceso/sublotes/{$retorno['id']}/ubicar", [
+            'operacion_id' => (string) Str::uuid(), 'camara_id' => $camara->id,
+        ])->assertOk();
+        DB::table('lotes_materia_prima')->where('id', $lotes[1]['id'])->update(['csg_snapshot' => '87654321', 'variedad_snapshot' => 'Lapins']);
+        $this->getJson('/api/materia-prima/movimientos?tipo=sublote_packing_ubicado')->assertOk()->assertJsonPath('total', 1)->assertJsonPath('data.0.cantidad_envases', 8);
+        foreach ($lotes as $lote) {
+            $fila = $this->getJson('/api/materia-prima/movimientos?tipo=sublote_packing_ubicado&lote_id='.$lote['id'])
+                ->assertOk()->assertJsonPath('total', 1)->assertJsonPath('data.0.numero_sublote', $retorno['numero_sublote'])->json('data.0');
+            $this->assertStringContainsString('ORIGEN-MP-0', $fila['lotes_origen']);
+            $this->assertStringContainsString('ORIGEN-MP-1', $fila['lotes_origen']);
+            $this->assertStringContainsString('sin reparto supuesto', $fila['detalle']);
+            $this->assertStringContainsString('12345678', $fila['csg']);
+            $this->assertStringContainsString('87654321', $fila['csg']);
+            $this->assertStringContainsString('Santina', $fila['variedad']);
+            $this->assertStringContainsString('Lapins', $fila['variedad']);
+        }
+    }
 
     public function test_borradores_previos_al_destare_se_concilian_en_orden_y_no_se_confirman_antes(): void
     {

@@ -35,7 +35,7 @@
             <section class="raw-material-workspace">
                 <header class="raw-material-heading">
                     <div><p class="eyebrow">OFICINA MADRE</p><h1>Materia prima</h1><p id="seasonDescription">Lotización de recepciones validadas y despacho operacional hacia cámara.</p></div>
-                    <button class="secondary-button" id="reloadButton" type="button">↻ Actualizar</button>
+                    <div><a class="secondary-button" href="#movimientos" id="movementOpen">Registro de movimientos</a><button class="secondary-button" id="reloadButton" type="button">↻ Actualizar</button></div>
                 </header>
 
                 <nav class="raw-material-module-links" aria-label="Procesos del módulo">
@@ -76,6 +76,7 @@
                         </div>
                     </section>
                 </div>
+                @include('office.partials.raw-material-movements')
             </section>
         </main>
 
