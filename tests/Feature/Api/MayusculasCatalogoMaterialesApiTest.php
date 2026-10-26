@@ -34,6 +34,8 @@ class MayusculasCatalogoMaterialesApiTest extends TestCase
         $this->postJson('/api/administracion/materiales/unidades', ['codigo' => 'resmas', 'nombre' => '  Resmas   pequeñas ', 'alias' => ['resma'], 'activa' => true, 'version_conocida' => 0, 'motivo' => 'Alta solicitada por bodega'])
             ->assertCreated()->assertJsonPath('data.nombre', 'RESMAS PEQUEÑAS')->assertJsonPath('data.codigo', 'resmas');
         $this->postJson('/api/administracion/materiales/items', [...$datos, 'codigo' => 'MALFORMADO', 'nombre' => ['incorrecto']])->assertUnprocessable();
+        $this->postJson('/api/administracion/materiales/items', [...$datos, 'codigo' => 'CATEGORIA-CERO', 'categoria' => '0'])
+            ->assertCreated()->assertJsonPath('data.categoria', '0');
     }
 
     public function test_importa_mayusculas_y_el_excel_descargado_se_reimporta_sin_cambios(): void

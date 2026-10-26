@@ -45,7 +45,7 @@ class NormalizacionCatalogoMaterialesMigracionTest extends TestCase
         foreach (['folios', 'folios_materiales', 'ubicaciones_actuales', 'alias_unidades_materiales', 'eventos_unidad_materiales'] as $tabla) {
             $antes[$tabla] = DB::table($tabla)->get()->toJson();
         }
-        $itemAntes = $this->itemA->getRawOriginal();
+        $itemAntes = $this->itemA->refresh()->getRawOriginal();
         $migracion = require database_path('migrations/2026_10_25_150000_normalizar_etiquetas_catalogo_materiales.php');
         $migracion->up();
         $this->assertSame('CARTÓN PEQUEÑO ÑANDÚ', $this->itemA->refresh()->nombre);

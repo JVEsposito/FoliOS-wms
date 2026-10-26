@@ -72,10 +72,15 @@ class GuardarItemMaterialRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        $categoria = $this->input('categoria');
+        if (is_string($categoria)) {
+            $categoria = NombreClasificacionMaterial::mayusculas($categoria);
+            $categoria = $categoria === '' ? null : $categoria;
+        }
         $this->merge([
             'codigo' => mb_strtoupper(trim((string) $this->input('codigo'))),
             'nombre' => is_string($this->input('nombre')) ? NombreClasificacionMaterial::mayusculas($this->input('nombre')) : $this->input('nombre'),
-            'categoria' => is_string($this->input('categoria')) ? (NombreClasificacionMaterial::mayusculas($this->input('categoria')) ?: null) : $this->input('categoria'),
+            'categoria' => $categoria,
             'categoria_operacional' => $this->filled('categoria_operacional')
                 ? mb_strtolower(trim((string) $this->input('categoria_operacional')))
                 : null,
