@@ -1,4 +1,3 @@
-import { materialCatalogLabel } from './shared/material-catalog-label.js';
 import { readDispatchRegistration, dispatchRegistrationLabel, dispatchRegistrationDetail } from './office-material-dispatch-registration.js';
 import { createClientTransfers } from './office-material-client-transfers.js';
 import { openItemPhotoPanel, loadPrivateItemImages, releasePrivateItemImages } from './shared/private-item-photos';
@@ -7,6 +6,7 @@ import { filterMaterialItems, materialItemsSummary, normalizeSearchText } from '
 import { filterMaterialProviders } from './shared/material-provider-search.js';
 import { createMaterialUnits } from './shared/material-units.js';
 import { createMaterialClassifications } from './office-material-classifications.js';
+import { materialCatalogLabel } from './shared/material-catalog-label.js';
 
 const byId = (id) => document.getElementById(id);
 const elements = {
