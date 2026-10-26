@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
@@ -23,13 +23,15 @@ async function scenario(width, callback) {
         page.setDefaultTimeout(10000);
         page.setDefaultNavigationTimeout(10000);
         page.on('pageerror', e => errors.push(e.message));
-        await context.addInitScript(() => {
+        await context.addInitScript((theme) => {
             localStorage.setItem('estiba_wms_office_token', 'catalog-filter-fixture');
+            localStorage.setItem('estiba_wms_office_theme', theme);
             localStorage.setItem('estiba_wms_office_identity', JSON.stringify({ rol: 'consulta', nombre: 'Consulta', puede_consultar_despachos_materiales: true, modulos_acceso: ['materiales.catalogos'] }));
-        });
+        }, width === 390 ? 'dark-industrial' : 'light-professional');
         await context.route('http://localhost/**', async route => {
             const request = route.request(); const url = new URL(request.url()); const path = url.pathname; const params = url.searchParams;
             if (path.startsWith('/build/')) return route.fulfill({ body: readFileSync(resolve(root, `public${path}`)), contentType: path.endsWith('.js') ? 'text/javascript' : path.endsWith('.css') ? 'text/css' : 'application/octet-stream' });
+            if (/\.(?:svg|png)$/.test(path) && existsSync(resolve(root, `public${path}`))) return route.fulfill({ body: readFileSync(resolve(root, `public${path}`)), contentType: path.endsWith('.svg') ? 'image/svg+xml' : 'image/png' });
             if (path === '/oficina/materiales/items') return route.fulfill({ body: html, contentType: 'text/html' });
             if (path === '/api/oficina/contexto') return route.fulfill({ json: { data: { temporada: seasons[0], planta: 'Agro Rosario', avisos_cierre: [], avisos_materiales: [] } } });
             if (path === '/api/materiales/reposicion/resumen') return route.fulfill({ json: { data: { quiebre: 0, bajo_minimo: 0 } } });
@@ -79,6 +81,11 @@ test('catálogo inicia en temporada activa y un cliente consulta todos sus perí
         assert.ok(calls.find(u => u.pathname === '/api/materiales/items/catalogo').searchParams.has('temporada_actual'));
         assert.equal(await page.evaluate(() => !!window.catalogXss), false);
         assert.equal(await page.locator('[name="cliente_id"] img').count(), 0);
+        assert.equal(await page.locator('#itemFilters select').evaluateAll(controls => controls.every(control => {
+            const rect = control.getBoundingClientRect(); return rect.left >= 0 && rect.right <= innerWidth;
+        })), true, 'Todos los filtros deben caber en la pantalla');
+        assert.equal(await page.evaluate(() => document.documentElement.dataset.officeTheme), width === 390 ? 'dark-industrial' : 'light-professional');
+        await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' }));
         await page.screenshot({ path: resolve(root, `storage/app/ui/oficina/catalogo-clientes-${width}.png`), fullPage: true, timeout: 10000 });
     });
 });
