@@ -36,7 +36,7 @@ class ServicioUnidadesMateriales
             if ($id) {
                 return UnidadMaterial::findOrFail($id);
             }
-            $unidad = UnidadMaterial::firstOrCreate(['codigo' => UnidadesMateriales::canonica($texto)], ['nombre' => trim($texto), 'activa' => true, 'version' => 1]);
+            $unidad = UnidadMaterial::firstOrCreate(['codigo' => UnidadesMateriales::canonica($texto)], ['nombre' => NombreClasificacionMaterial::mayusculas($texto), 'activa' => true, 'version' => 1]);
             $this->alias($unidad, [$clave, $unidad->codigo]);
             if ($unidad->wasRecentlyCreated) {
                 $this->evento($unidad, null, 'unidad_creada', null, $unidad->toArray(), 'Alta desde catálogo de ítems o importación');
@@ -89,7 +89,7 @@ class ServicioUnidadesMateriales
             }
             $antes = $unidad ? [...$unidad->toArray(), 'alias' => $this->aliasRegistrados($unidad)] : null;
             $unidad ??= new UnidadMaterial(['codigo' => $codigo]);
-            $unidad->fill(['nombre' => trim($datos['nombre']), 'activa' => $datos['activa'], 'version' => ($unidad->version ?? 0) + 1, 'actualizado_por_user_id' => auth()->id()])->save();
+            $unidad->fill(['nombre' => NombreClasificacionMaterial::mayusculas($datos['nombre']), 'activa' => $datos['activa'], 'version' => ($unidad->version ?? 0) + 1, 'actualizado_por_user_id' => auth()->id()])->save();
             $nombre = UnidadesMateriales::clave($datos['nombre']);
             if ($nombre === '') {
                 throw new DomainException('El nombre de la unidad no puede estar vacío.');

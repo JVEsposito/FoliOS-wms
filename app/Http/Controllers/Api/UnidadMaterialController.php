@@ -7,6 +7,7 @@ use App\Models\ConversionUnidadMaterial;
 use App\Models\EventoUnidadMaterial;
 use App\Models\ItemMaterial;
 use App\Models\UnidadMaterial;
+use App\Services\Materiales\NombreClasificacionMaterial;
 use App\Services\Materiales\ServicioUnidadesMateriales;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -54,6 +55,10 @@ class UnidadMaterialController extends Controller
 
     private function datos(Request $request): array
     {
+        if (is_string($request->input('nombre'))) {
+            $request->merge(['nombre' => NombreClasificacionMaterial::mayusculas($request->input('nombre'))]);
+        }
+
         return $request->validate([
             'codigo' => ['required', 'string', 'max:40'], 'nombre' => ['required', 'string', 'min:1', 'max:100'],
             'alias' => ['present', 'array', 'max:20'], 'alias.*' => ['required', 'string', 'max:40', 'distinct'],

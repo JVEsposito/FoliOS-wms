@@ -30,8 +30,8 @@ class ClasificacionesCatalogoMaterialesApiTest extends TestCase
     public function test_categorias_reutilizables_rechazan_duplicados_con_tildes_espacios_y_distinta_caja(): void
     {
         $id = $this->postJson('/api/administracion/materiales/categorias', ['nombre' => '  Adhesivos   especiales ', 'activo' => true])
-            ->assertCreated()->assertJsonPath('data.nombre', 'Adhesivos especiales')->json('data.id');
-        $this->putJson('/api/administracion/materiales/categorias/'.$id, ['nombre' => 'Adhesivos especiales', 'activo' => false])->assertOk();
+            ->assertCreated()->assertJsonPath('data.nombre', 'ADHESIVOS ESPECIALES')->json('data.id');
+        $this->putJson('/api/administracion/materiales/categorias/'.$id, ['nombre' => 'ADHESIVOS ESPECIALES', 'activo' => false])->assertOk();
         $this->postJson('/api/administracion/materiales/categorias', ['nombre' => 'ADHÉSIVOS ESPECIALES', 'activo' => true])
             ->assertUnprocessable()->assertJsonValidationErrors('nombre');
         $this->assertDatabaseHas('categorias_comerciales_materiales', [
@@ -42,17 +42,17 @@ class ClasificacionesCatalogoMaterialesApiTest extends TestCase
 
     public function test_tipo_configurable_asigna_el_uso_operacional_sin_pedir_un_enum_al_formulario(): void
     {
-        $tipo = $this->crearTipo('Adhesivo', 'insumo');
+        $tipo = $this->crearTipo('ADHESIVO', 'insumo');
         $id = $this->postJson('/api/administracion/materiales/items', $this->datosItem([
             'tipo_item_material_id' => $tipo, 'categoria_operacional' => null,
         ]))->assertCreated()->assertJsonPath('data.categoria_operacional', 'insumo')
-            ->assertJsonPath('data.tipo_item.nombre', 'Adhesivo')->json('data.id');
+            ->assertJsonPath('data.tipo_item.nombre', 'ADHESIVO')->json('data.id');
 
         $this->getJson('/api/administracion/materiales/items')->assertOk()
             ->assertJsonPath('data.0.tipo_item_material_id', $tipo)
-            ->assertJsonPath('clasificaciones.categorias.0.nombre', 'Cajas');
-        $this->getJson('/api/materiales/catalogo')->assertOk()->assertJsonPath('items.0.tipo_item.nombre', 'Adhesivo');
-        $this->getJson('/api/materiales/items/catalogo')->assertOk()->assertJsonPath('data.0.tipo_item.nombre', 'Adhesivo');
+            ->assertJsonPath('clasificaciones.categorias.0.nombre', 'CAJAS');
+        $this->getJson('/api/materiales/catalogo')->assertOk()->assertJsonPath('items.0.tipo_item.nombre', 'ADHESIVO');
+        $this->getJson('/api/materiales/items/catalogo')->assertOk()->assertJsonPath('data.0.tipo_item.nombre', 'ADHESIVO');
         $this->getJson('/api/materiales/items/catalogo?tipo_item_material_id='.$tipo)->assertOk()->assertJsonPath('total', 1);
         $base = TipoItemMaterial::where('codigo_base', 'material_pt')->firstOrFail();
         $this->getJson('/api/materiales/items/catalogo?tipo_item_material_id='.$base->id)->assertOk()->assertJsonPath('total', 0);
@@ -76,8 +76,8 @@ class ClasificacionesCatalogoMaterialesApiTest extends TestCase
     {
         $this->postJson('/api/administracion/materiales/items', $this->datosItem())
             ->assertCreated()->assertJsonPath('data.categoria_operacional', 'material_mp')
-            ->assertJsonPath('data.tipo_item.nombre', 'Material MP');
-        $this->assertDatabaseHas('categorias_comerciales_materiales', ['nombre' => 'Cajas', 'activo' => true]);
+            ->assertJsonPath('data.tipo_item.nombre', 'MATERIAL MP');
+        $this->assertDatabaseHas('categorias_comerciales_materiales', ['nombre' => 'CAJAS', 'activo' => true]);
     }
 
     public function test_inactivos_se_conservan_al_editar_el_item_original_pero_no_pueden_asignarse_a_otro(): void
@@ -85,8 +85,8 @@ class ClasificacionesCatalogoMaterialesApiTest extends TestCase
         $tipo = $this->crearTipo('Cartón de exportación', 'material_mp');
         $datos = $this->datosItem(['tipo_item_material_id' => $tipo]);
         $id = $this->postJson('/api/administracion/materiales/items', $datos)->assertCreated()->json('data.id');
-        $categoria = CategoriaComercialMaterial::where('nombre', 'Cajas')->firstOrFail();
-        $this->putJson('/api/administracion/materiales/categorias/'.$categoria->id, ['nombre' => 'Cajas', 'activo' => false])->assertOk();
+        $categoria = CategoriaComercialMaterial::where('nombre', 'CAJAS')->firstOrFail();
+        $this->putJson('/api/administracion/materiales/categorias/'.$categoria->id, ['nombre' => 'CAJAS', 'activo' => false])->assertOk();
         $this->putJson('/api/administracion/materiales/tipos-items/'.$tipo, ['nombre' => 'Cartón de exportación', 'categoria_operacional' => 'material_mp', 'activo' => false])->assertOk();
 
         $this->putJson('/api/administracion/materiales/items/'.$id, [...$datos, 'nombre' => 'Caja actualizada'])
@@ -106,7 +106,7 @@ class ClasificacionesCatalogoMaterialesApiTest extends TestCase
         $this->putJson('/api/administracion/materiales/categorias/'.$categoria->id, ['nombre' => 'Otro nombre', 'activo' => true])
             ->assertUnprocessable()->assertJsonValidationErrors('nombre');
         $this->getJson('/api/administracion/materiales/clasificaciones')->assertOk()->assertJsonPath('data.categorias.0.en_uso', true);
-        $this->assertDatabaseHas('items_materiales', ['categoria' => 'Cajas']);
+        $this->assertDatabaseHas('items_materiales', ['categoria' => 'CAJAS']);
     }
 
     public function test_tipo_en_uso_o_base_conserva_su_funcion_y_un_tipo_libre_si_puede_cambiar(): void
@@ -141,7 +141,7 @@ class ClasificacionesCatalogoMaterialesApiTest extends TestCase
         $this->putJson('/api/administracion/materiales/items/'.$item, $this->datosItem(['nombre' => 'Descripción actualizada']))
             ->assertOk()->assertJsonPath('data.codigo_externo', 'ERP-ITEM');
         $proveedor = ['nombre' => 'Proveedor con integración', 'activo' => true, 'cliente_ids' => [$this->cliente->cliente_id],
-            'categorias' => [['cliente_id' => $this->cliente->cliente_id, 'categoria' => 'Cajas']]];
+            'categorias' => [['cliente_id' => $this->cliente->cliente_id, 'categoria' => 'CAJAS']]];
         $id = $this->postJson('/api/administracion/materiales/proveedores', [...$proveedor, 'codigo_externo' => 'ERP-PROV'])->assertCreated()->json('data.id');
         $this->putJson('/api/administracion/materiales/proveedores/'.$id, $proveedor)->assertOk()->assertJsonPath('data.codigo_externo', 'ERP-PROV');
         $destino = ['nombre' => 'Packing integrado', 'centro_costo' => 'CC-ERP', 'activo' => true];
@@ -162,8 +162,8 @@ class ClasificacionesCatalogoMaterialesApiTest extends TestCase
         $importacion = $this->post('/api/administracion/materiales/importaciones/previsualizar', ['archivo' => $archivo], ['Accept' => 'application/json'])
             ->assertCreated()->json('data.id');
         $this->postJson('/api/administracion/materiales/importaciones/'.$importacion.'/confirmar')->assertOk();
-        $this->assertDatabaseHas('items_materiales', ['id' => $id, 'tipo_item_material_id' => $tipo, 'categoria' => 'Embalajes nuevos']);
-        $this->assertDatabaseHas('categorias_comerciales_materiales', ['nombre' => 'Embalajes nuevos', 'creado_por_user_id' => $this->admin->id]);
+        $this->assertDatabaseHas('items_materiales', ['id' => $id, 'tipo_item_material_id' => $tipo, 'categoria' => 'EMBALAJES NUEVOS']);
+        $this->assertDatabaseHas('categorias_comerciales_materiales', ['nombre' => 'EMBALAJES NUEVOS', 'creado_por_user_id' => $this->admin->id]);
     }
 
     public function test_importacion_detecta_inactivos_antes_de_confirmar_y_revalida_cambios_posteriores(): void
@@ -214,7 +214,7 @@ class ClasificacionesCatalogoMaterialesApiTest extends TestCase
     {
         return [...[
             'cliente_material_id' => $this->cliente->id, 'codigo' => 'CAJA-PR2', 'nombre' => 'Caja de prueba',
-            'categoria' => 'Cajas', 'categoria_operacional' => 'material_mp', 'unidad_medida' => 'unidades', 'activo' => true,
+            'categoria' => 'CAJAS', 'categoria_operacional' => 'material_mp', 'unidad_medida' => 'unidades', 'activo' => true,
         ], ...$cambios];
     }
 }

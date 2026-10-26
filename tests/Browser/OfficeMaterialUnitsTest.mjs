@@ -59,7 +59,7 @@ test('catálogo de unidades y equivalencias por ítem funcionan en escritorio y 
             await page.waitForFunction(() => [...document.querySelectorAll('#itemMaterialForm [name="unidad_medida"] option')].some((o) => o.value === 'resmas'));
             assert.deepEqual(writes[0].alias, ['resma']);
             await page.locator('#materialConversionItem').selectOption('item');
-            await page.waitForFunction(() => document.getElementById('materialConversionFactorLabel').textContent.includes('unidades'));
+            await page.waitForFunction(() => document.getElementById('materialConversionFactorLabel').textContent.includes('UNIDADES'));
             await page.locator('#materialConversionUnit').selectOption('cajas');
             await page.locator('#materialUnitConversionForm [name="factor"]').fill('100');
             await page.locator('#materialUnitConversionForm [name="motivo"]').fill('Contenido por caja verificado');
@@ -72,7 +72,7 @@ test('catálogo de unidades y equivalencias por ítem funcionan en escritorio y 
             await page.locator('#materialUnitForm [name="activa"]').uncheck();
             await page.locator('#materialUnitForm [name="motivo"]').fill('Conservar solamente los ítems existentes');
             await page.locator('#materialUnitForm [type="submit"]').click();
-            await page.waitForFunction(() => document.querySelector('#itemMaterialForm [name="unidad_medida"]').textContent.includes('inactiva'));
+            await page.waitForFunction(() => document.querySelector('#itemMaterialForm [name="unidad_medida"]').textContent.includes('INACTIVA'));
             await page.locator('#materials-catalog-tab-items').click();
             const itemRow = page.locator('#itemsMaterialList .material-row').filter({ has: page.locator('[data-edit-item="item"]') });
             await itemRow.locator('[data-edit-item="item"]').click();

@@ -147,6 +147,21 @@
     border-radius: var(--radius, 7px);
 }
 
+#itemFilters {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+}
+
+#itemFilters label,
+#itemFilters select {
+    min-width: 0;
+}
+
+@media (max-width: 900px) {
+    #itemFilters {
+        grid-template-columns: 1fr;
+    }
+}
+
 .custody-filters label,
 .custody-form label,
 .custody-login label {

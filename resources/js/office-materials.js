@@ -7,6 +7,7 @@ import { filterMaterialItems, materialItemsSummary, normalizeSearchText } from '
 import { filterMaterialProviders } from './shared/material-provider-search.js';
 import { createMaterialUnits } from './shared/material-units.js';
 import { createMaterialClassifications } from './office-material-classifications.js';
+import { materialCatalogLabel } from './shared/material-catalog-label.js';
 
 const byId = (id) => document.getElementById(id);
 const elements = {
@@ -158,7 +159,7 @@ function activeDestinations() { return state.destinations.filter((destination) =
 function directDispatchDestinations() { return activeDestinations().filter((destination) => destination.tipo !== 'fisica'); }
 function directConsumptionCenters() { return activeDestinations().filter((destination) => destination.tipo === 'virtual' && destination.centro_costo); }
 function normalizedSearch(value) { return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); }
-function itemLabel(item) { return `${item.cliente?.temporada?.codigo || ''} · ${item.cliente?.codigo || ''} · ${item.codigo} · ${item.nombre}`; }
+function itemLabel(item) { return `${item.cliente?.temporada?.codigo || ''} · ${item.cliente?.codigo || ''} · ${item.codigo} · ${materialCatalogLabel(item.nombre)}`; }
 function itemSearchText(item) { return normalizedSearch(`${itemLabel(item)} ${item.cliente?.nombre || ''} ${item.categoria || ''}`); }
 function availableStock(itemId) {
     return Math.round((state.inventoryItemsByWarehouse || state.inventoryItems)
@@ -188,7 +189,7 @@ function renderItemResults(row) {
     const matches = matchingItems(input.value);
     results.innerHTML = matches.map((item) => {
         const stock = availableStock(item.id);
-        return `<button class="material-item-option" data-select-item="${item.id}" type="button" role="option"${stock <= 0 ? ' disabled' : ''}><span>${escapeHtml(itemLabel(item))}</span><strong>${stock > 0 ? `${quantity(stock)} ${escapeHtml(item.unidad_medida)} disponibles` : 'Sin stock disponible'}</strong></button>`;
+        return `<button class="material-item-option" data-select-item="${item.id}" type="button" role="option"${stock <= 0 ? ' disabled' : ''}><span>${escapeHtml(itemLabel(item))}</span><strong>${stock > 0 ? `${quantity(stock)} ${escapeHtml(materialCatalogLabel(item.unidad_medida))} disponibles` : 'Sin stock disponible'}</strong></button>`;
     }).join('') || '<p class="material-item-empty">No hay ítems que coincidan con la búsqueda.</p>';
     results.classList.remove('is-hidden');
     input.setAttribute('aria-expanded', 'true');
@@ -213,7 +214,7 @@ function updateDispatchLine(row) {
     amount.max = String(stock);
     amount.setAttribute('aria-describedby', stockHint.id);
     stockHint.textContent = stock > 0
-        ? `Stock disponible: ${quantity(stock)} ${item.unidad_medida}`
+        ? `Stock disponible: ${quantity(stock)} ${materialCatalogLabel(item.unidad_medida)}`
         : `Sin stock disponible en cámaras de materiales`;
     stockHint.classList.toggle('material-stock--empty', stock <= 0);
     row.classList.toggle('dispatch-line--unavailable', stock <= 0 || Number(amount.value || 0) > stock);
@@ -317,11 +318,11 @@ function renderItems() {
         const consolidated = item.regularizacion?.item_canonico;
         const detail = consolidated
             ? `Consolidado en ${consolidated.codigo} · ${consolidated.nombre}`
-            : `${item.categoria || 'Sin categoría comercial'} · ${item.tipo_item?.nombre || itemTypeLabel(item.categoria_operacional)} · ${item.unidad_medida} · ${item.folios_activos} folios activos`;
+            : `${item.categoria || 'Sin categoría comercial'} · ${item.tipo_item?.nombre || itemTypeLabel(item.categoria_operacional)} · ${materialCatalogLabel(item.unidad_medida)} · ${item.folios_activos} folios activos`;
         const actions = canAdminister && !consolidated
             ? `<div class="material-row__actions"><button data-edit-item="${item.id}" type="button">Editar</button>${canRegularize && item.activo && item.categoria_operacional === 'material_pt' ? `<button data-regularize-item="${item.id}" type="button">Consolidar con MP</button>` : ''}</div>`
             : '';
-        return `<article class="material-row${item.activo ? '' : ' is-inactive'}">${item.foto_principal ? `<img class="item-photo-thumb" alt="${escapeHtml(item.nombre)}" data-private-item-photo="${escapeHtml(item.foto_principal.miniatura_url)}">` : ''}<div><strong>${escapeHtml(item.cliente?.codigo || 'SIN CLIENTE')} · ${escapeHtml(item.codigo)} · ${escapeHtml(item.nombre)}</strong><small>${escapeHtml(detail)}</small></div><button data-item-photos="${item.id}" type="button">Fotos (${item.cantidad_fotos ?? 0})</button>${actions}</article>`;
+        return `<article class="material-row${item.activo ? '' : ' is-inactive'}">${item.foto_principal ? `<img class="item-photo-thumb" alt="${escapeHtml(item.nombre)}" data-private-item-photo="${escapeHtml(item.foto_principal.miniatura_url)}">` : ''}<div><strong>${escapeHtml(item.cliente?.codigo || 'SIN CLIENTE')} · ${escapeHtml(item.codigo)} · ${escapeHtml(materialCatalogLabel(item.nombre))}</strong><small>${escapeHtml(detail)}</small></div><button data-item-photos="${item.id}" type="button">Fotos (${item.cantidad_fotos ?? 0})</button>${actions}</article>`;
     }).join('') || (allItems.length
         ? `<p class="empty-state">Ningún ítem coincide${normalizeSearchText(query) ? ` con «${escapeHtml(query.trim())}»` : ''} con los filtros actuales.</p>`
         : '<p class="empty-state">No existen ítems en esta temporada.</p>');
@@ -702,9 +703,9 @@ async function openDispatchTrace(dispatchId) {
             ...(dispatch.cancelacion ? [{ at: dispatch.cancelacion.cancelado_at, label: 'Cancelación', detail: dispatch.cancelacion.motivo }] : [])]
             .sort((a, b) => String(a.at).localeCompare(String(b.at)));
         elements.dispatchTraceBody.innerHTML = `<p><strong>${escapeHtml(dispatch.modalidad === 'directo' ? 'Directo desde bodega' : 'Delegado a tablet')}</strong> · ${escapeHtml(statusText(dispatch.estado))} · ${escapeHtml(dispatch.destino.centro_costo)}</p><p>Origen: ${escapeHtml(dispatch.almacen_origen?.nombre || 'Bodega Central')}</p><p>Asignado: ${escapeHtml(dispatch.asignado_a?.nombre || 'Sin asignación individual')}</p>`
-            + dispatch.items.map((item) => `<section class="dispatch-trace-item"><h3>${escapeHtml(item.item.codigo)} · ${escapeHtml(item.item.nombre)} · ${quantity(item.cantidad_despachada)}/${quantity(item.cantidad_solicitada)} ${escapeHtml(item.unidad_medida)}</h3>`
+            + dispatch.items.map((item) => `<section class="dispatch-trace-item"><h3>${escapeHtml(item.item.codigo)} · ${escapeHtml(item.item.nombre)} · ${quantity(item.cantidad_despachada)}/${quantity(item.cantidad_solicitada)} ${escapeHtml(materialCatalogLabel(item.unidad_medida))}</h3>`
                 + `<p>Reserva FIFO registrada: ${(item.reservas_fifo || []).map((folio) => `${escapeHtml(folio.numero_folio)} (${quantity(folio.cantidad)}) · ${escapeHtml(statusText(folio.estado))}`).join(' · ') || 'Sin reserva registrada'}</p>`
-                + (item.retiros || []).map((entry) => `<p><strong>${escapeHtml(entry.folio.numero_folio)}</strong> · ${quantity(entry.cantidad_retirada)} ${escapeHtml(item.unidad_medida)} · ${escapeHtml(entry.camara?.codigo || 'Sin cámara')}/${escapeHtml(entry.posicion?.etiqueta || 'Sin posición')} · ${escapeHtml(entry.usuario?.nombre || 'Usuario')} · ${escapeHtml(entry.dispositivo?.codigo || 'Oficina')} · ${escapeHtml(dateTime(entry.retirado_at))} · ${entry.siguio_fifo ? 'FIFO' : `<strong>Excepción FIFO: ${escapeHtml(entry.motivo_excepcion_fifo || 'sin motivo histórico')}</strong>`}</p>`).join('') + '</section>').join('')
+                + (item.retiros || []).map((entry) => `<p><strong>${escapeHtml(entry.folio.numero_folio)}</strong> · ${quantity(entry.cantidad_retirada)} ${escapeHtml(materialCatalogLabel(item.unidad_medida))} · ${escapeHtml(entry.camara?.codigo || 'Sin cámara')}/${escapeHtml(entry.posicion?.etiqueta || 'Sin posición')} · ${escapeHtml(entry.usuario?.nombre || 'Usuario')} · ${escapeHtml(entry.dispositivo?.codigo || 'Oficina')} · ${escapeHtml(dateTime(entry.retirado_at))} · ${entry.siguio_fifo ? 'FIFO' : `<strong>Excepción FIFO: ${escapeHtml(entry.motivo_excepcion_fifo || 'sin motivo histórico')}</strong>`}</p>`).join('') + '</section>').join('')
             + (dispatch.entregas || []).map(delivery => dispatchRegistrationDetail(delivery, state.identity?.puede_autorizar_despachos_tardios_materiales === true)).join('')
             + `<h3>Historial</h3><ol>${events.map((entry) => `<li><strong>${escapeHtml(entry.label)}</strong> · ${escapeHtml(dateTime(entry.at))} · ${escapeHtml(entry.detail)}</li>`).join('')}</ol>`;
         const canReassign = dispatch.modalidad === 'delegado' && ['pendiente', 'parcial'].includes(dispatch.estado)

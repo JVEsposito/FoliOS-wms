@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Models\ItemMaterial;
 use App\Models\ProveedorMaterial;
+use App\Services\Materiales\NombreClasificacionMaterial;
 use App\Services\Materiales\ServicioCorrelativoProveedorMaterial;
 use Closure;
 use Illuminate\Foundation\Http\FormRequest;
@@ -136,7 +137,7 @@ class GuardarProveedorMaterialRequest extends FormRequest
 
                 return [
                     'cliente_id' => (string) ($asignacion['cliente_id'] ?? ''),
-                    'categoria' => trim((string) ($asignacion['categoria'] ?? '')),
+                    'categoria' => NombreClasificacionMaterial::mayusculas((string) ($asignacion['categoria'] ?? '')),
                 ];
             })
             ->values()

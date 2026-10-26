@@ -82,6 +82,12 @@ colas. No requiere cambios nativos, APK ni OTA.
 
 ### Catálogo descargable y fotos de ítems
 
+La consulta de Oficina abre en la temporada activa y ofrece una opción por cliente
+maestro, con código y nombre. **Todas las temporadas** reúne sus ítems de distintos
+períodos sin repetir al cliente en el selector. Los nombres de ítems, categorías,
+tipos y unidades se normalizan a mayúsculas. Véase
+[consulta por cliente, normalización y despliegue](CATALOGO_CLIENTES_MAYUSCULAS_MATERIALES.md).
+
 En **Oficina → Materiales → Ítems** (`/oficina/materiales/items`) se puede
 consultar el catálogo, paginado, y **Descargar catálogo** completo en XLSX o CSV.
 Ambos respetan los filtros de temporada, cliente, categoría, tipo y estado;

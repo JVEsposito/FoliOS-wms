@@ -1,3 +1,4 @@
+import { materialCatalogLabel } from './shared/material-catalog-label.js';
 import { createReceptionRegistration, registrationLabel, registrationDetail, requestReceptionAuthorization, openReceptionRegularization, resetReceptionRegularization } from './office-material-reception-registration.js';
 import { createReceptionPhotosPanel } from './office-material-reception-photos.js';
 import { createReceptionTransport } from './office-material-reception-transport.js';
@@ -400,7 +401,7 @@ function renderReceptionDetail() {
         + ((record.estado === 'borrador' ? receptionCanManage() || receptionCanAdminister() : receptionCanAdminister() && !record.registro?.provisional && record.estado !== 'anulada') ? action('edit', 'Editar') : '')
         + (receptionCanAuthorize() && record.estado === 'confirmada' && ['pendiente', 'vencida'].includes(record.registro?.estado) ? action('regularize', 'Regularizar documentos') : '')
         + (receptionCanDelete() ? action('delete', 'Eliminar') : '');
-    receptionElements.detailLines.innerHTML = registrationDetail(record) + (record.detalles || []).map((detail) => `<article class="material-reception-detail-line"><strong>${receptionEscape(detail.item?.nombre || '—')}</strong><code>${receptionEscape(detail.item?.codigo || '—')}</code><b>${receptionEscape(receptionQuantity(detail.cantidad_aceptada ?? detail.cantidad_recibida))} ${receptionEscape(detail.unidad_medida || '')}</b><small>Documental: ${detail.cantidad_documental == null ? 'Pendiente' : receptionEscape(receptionQuantity(detail.cantidad_documental))} ${receptionEscape(detail.unidad_medida || '')}</small><small>${receptionEscape(receptionPackageSummary(detail))}</small>${detail.conversion_unidad ? `<small>Ingreso: ${receptionEscape(detail.conversion_unidad.entrada.cantidad_aceptada)} ${receptionEscape(detail.conversion_unidad.unidad_origen)} × ${receptionEscape(detail.conversion_unidad.factor)} ${receptionEscape(detail.unidad_medida)}</small>` : ''}</article>`).join('');
+    receptionElements.detailLines.innerHTML = registrationDetail(record) + (record.detalles || []).map((detail) => `<article class="material-reception-detail-line"><strong>${receptionEscape(detail.item?.nombre || '—')}</strong><code>${receptionEscape(detail.item?.codigo || '—')}</code><b>${receptionEscape(receptionQuantity(detail.cantidad_aceptada ?? detail.cantidad_recibida))} ${receptionEscape(materialCatalogLabel(detail.unidad_medida || ''))}</b><small>Documental: ${detail.cantidad_documental == null ? 'Pendiente' : receptionEscape(receptionQuantity(detail.cantidad_documental))} ${receptionEscape(materialCatalogLabel(detail.unidad_medida || ''))}</small><small>${receptionEscape(receptionPackageSummary(detail))}</small>${detail.conversion_unidad ? `<small>Ingreso: ${receptionEscape(detail.conversion_unidad.entrada.cantidad_aceptada)} ${receptionEscape(materialCatalogLabel(detail.conversion_unidad.unidad_origen))} × ${receptionEscape(detail.conversion_unidad.factor)} ${receptionEscape(materialCatalogLabel(detail.unidad_medida))}</small>` : ''}</article>`).join('');
     const folios = record.snapshot_confirmacion?.folios || [];
     const assigned = folios.filter(f => f.asignacion_bodega);
     if (record.estado === 'confirmada' && assigned.length) receptionElements.detailLines.innerHTML += `<article class="material-reception-detail-line"><strong>Bodegas asignadas al ingreso</strong>${assigned.map(f => `<small>${receptionEscape(f.numero_folio)} → ${receptionEscape(f.asignacion_bodega.nombre)} · ${f.asignacion_bodega.origen === 'regla' ? `Regla: ${receptionEscape(f.asignacion_bodega.regla?.nombre)}` : 'Central por defecto'}</small>`).join('')}<small>La asignación no certifica espacio libre ni una ubicación física. Revisa Inventario para ver la ubicación actual.</small></article>`;
@@ -476,7 +477,7 @@ function receptionNormalizedSearch(value) {
 
 function receptionItemLabel(item) {
     if (!item) return '';
-    return `${item.codigo} · ${item.nombre} · ${item.categoria_operacional_etiqueta || item.categoria_operacional || 'Sin tipo'} · ${item.unidad_medida}`;
+    return `${item.codigo} · ${item.nombre} · ${item.categoria_operacional_etiqueta || item.categoria_operacional || 'Sin tipo'} · ${materialCatalogLabel(item.unidad_medida)}`;
 }
 
 function receptionMatchingItems(query, category = '') {
@@ -516,7 +517,7 @@ function renderReceptionItemResults(article) {
     const filter = article.querySelector('.material-reception-item-filter');
     const results = article.querySelector('.material-item-results');
     const matches = receptionMatchingItems(input.value, filter.value);
-    results.innerHTML = matches.map((item) => `<button class="material-item-option" data-select-reception-item="${item.id}" type="button" role="option"><span>${receptionEscape(item.codigo)} · ${receptionEscape(item.nombre)}</span><strong>${receptionEscape(item.categoria_operacional_etiqueta)} · ${receptionEscape(item.unidad_medida)}</strong></button>`).join('')
+    results.innerHTML = matches.map((item) => `<button class="material-item-option" data-select-reception-item="${item.id}" type="button" role="option"><span>${receptionEscape(item.codigo)} · ${receptionEscape(item.nombre)}</span><strong>${receptionEscape(item.categoria_operacional_etiqueta)} · ${receptionEscape(materialCatalogLabel(item.unidad_medida))}</strong></button>`).join('')
         || '<p class="material-item-empty">No hay productos que coincidan con la búsqueda y el filtro.</p>';
     results.classList.remove('is-hidden');
     input.setAttribute('aria-expanded', 'true');
@@ -586,7 +587,7 @@ function receptionInputUnit(line, item, readonly) {
     const choices = new Map((item?.conversiones_unidad || []).map((c) => [c.unidad_origen, c]));
     if (line.inputUnit && !choices.has(line.inputUnit)) choices.set(line.inputUnit, line.conversionSnapshot);
     const factor = receptionConversion(line)?.factor;
-    return `<label><span>Unidad de ingreso</span><select name="unidad_ingreso"${readonly ? ' disabled' : ''}><option value="">${receptionEscape(item?.unidad_medida || 'Unidad base')}</option>${[...choices.keys()].map((u) => `<option value="${receptionEscape(u)}"${u === line.inputUnit ? ' selected' : ''}>${receptionEscape(u)}</option>`).join('')}</select></label>${!readonly && line.conversionSnapshot ? `<button type="button" data-refresh-line-conversion="${line.key}">Usar equivalencia vigente</button>` : ''}<p class="materials-help wide material-reception-conversion-hint">${line.inputUnit && factor ? `1 ${receptionEscape(line.inputUnit)} = ${receptionEscape(factor)} ${receptionEscape(item?.unidad_medida || line.conversionSnapshot?.unidad_base)}. Todas las cantidades y el tamaño de bulto se ingresan en ${receptionEscape(line.inputUnit)}.` : 'Las cantidades se ingresan en la unidad base del ítem.'}</p>`;
+    return `<label><span>Unidad de ingreso</span><select name="unidad_ingreso"${readonly ? ' disabled' : ''}><option value="">${receptionEscape(materialCatalogLabel(item?.unidad_medida || 'Unidad base'))}</option>${[...choices.keys()].map((u) => `<option value="${receptionEscape(u)}"${u === line.inputUnit ? ' selected' : ''}>${receptionEscape(materialCatalogLabel(u))}</option>`).join('')}</select></label>${!readonly && line.conversionSnapshot ? `<button type="button" data-refresh-line-conversion="${line.key}">Usar equivalencia vigente</button>` : ''}<p class="materials-help wide material-reception-conversion-hint">${line.inputUnit && factor ? `1 ${receptionEscape(materialCatalogLabel(line.inputUnit))} = ${receptionEscape(factor)} ${receptionEscape(materialCatalogLabel(item?.unidad_medida || line.conversionSnapshot?.unidad_base))}. Todas las cantidades y el tamaño de bulto se ingresan en ${receptionEscape(materialCatalogLabel(line.inputUnit))}.` : 'Las cantidades se ingresan en la unidad base del ítem.'}</p>`;
 }
 
 function renderReceptionLines() {
@@ -612,7 +613,7 @@ function renderReceptionLines() {
                 <label class="wide"><span>Motivo de bloqueo</span><input name="motivo_bloqueo" maxlength="2000" value="${receptionEscape(line.blockReason)}"></label>
                 <label class="wide"><span>Observación del producto</span><input name="observacion_detalle" maxlength="2000" value="${receptionEscape(line.observation)}"></label>
             </div>
-            ${line.documentaryRegularized != null ? `<p class="materials-help">Respaldo regularizado: ${receptionEscape(receptionQuantity(line.documentaryRegularized))} ${receptionEscape(line.baseUnit)}. Las cantidades de esta captura conservan la unidad de ingreso original.</p>` : ''}
+            ${line.documentaryRegularized != null ? `<p class="materials-help">Respaldo regularizado: ${receptionEscape(receptionQuantity(line.documentaryRegularized))} ${receptionEscape(materialCatalogLabel(line.baseUnit))}. Las cantidades de esta captura conservan la unidad de ingreso original.</p>` : ''}
             <p class="material-reception-package-summary">${line.originalPackages.length && !line.packagesDirty ? `${line.originalPackages.length} bultos existentes; se conservarán mientras no cambies su distribución.` : packageSummary(line)}</p>
         </article>
     `;
@@ -702,7 +703,7 @@ function syncLineFromElement(article, markDirty = true) {
     const item = receptionState.catalogs.items.find((i) => i.id === line.itemId) || line.itemSnapshot;
     const factor = receptionConversion(line)?.factor;
     article.querySelector('.material-reception-conversion-hint').textContent = line.inputUnit && factor
-        ? `1 ${line.inputUnit} = ${factor} ${item?.unidad_medida || line.conversionSnapshot?.unidad_base}. Cantidades y tamaño de bulto en ${line.inputUnit}.`
+        ? `1 ${materialCatalogLabel(line.inputUnit)} = ${factor} ${materialCatalogLabel(item?.unidad_medida || line.conversionSnapshot?.unidad_base)}. Cantidades y tamaño de bulto en ${materialCatalogLabel(line.inputUnit)}.`
         : 'Las cantidades se ingresan en la unidad base del ítem.';
 }
 

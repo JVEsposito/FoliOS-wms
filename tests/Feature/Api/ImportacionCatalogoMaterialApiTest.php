@@ -66,7 +66,7 @@ class ImportacionCatalogoMaterialApiTest extends TestCase
 
         $this->assertDatabaseHas('items_materiales', [
             'id' => $existente->id,
-            'nombre' => 'Film stretch reforzado',
+            'nombre' => 'FILM STRETCH REFORZADO',
             'codigo_externo' => 'ERP-FILM',
             'unidad_medida' => 'rollos',
             'categoria_operacional' => 'insumo',
@@ -75,7 +75,7 @@ class ImportacionCatalogoMaterialApiTest extends TestCase
         ]);
         $this->assertDatabaseHas('items_materiales', [
             'codigo' => 'CAJ-5KG',
-            'nombre' => 'Caja cartón 5 kg',
+            'nombre' => 'CAJA CARTÓN 5 KG',
             'unidad_medida' => 'unidad',
             'categoria_operacional' => 'material_mp',
             'codigo_externo' => 'ERP-CAJ-5',

@@ -36,7 +36,7 @@ async function fixture(records, options = {}) {
             await import('/office-material-labels.js');
         </script></body>`) });
         if (url.pathname.startsWith('/build/')) return route.fulfill({ body: readFileSync(resolve(root, 'public' + url.pathname)), contentType: url.pathname.endsWith('.css') ? 'text/css' : 'application/octet-stream' });
-        if (['/office-material-receptions.js', '/office-material-reception-registration.js', '/office-material-reception-photos.js', '/office-material-labels.js', '/office-material-reception-transport.js'].includes(url.pathname)) return route.fulfill({ body: readFileSync(resolve(root, 'resources/js' + url.pathname)), contentType: 'text/javascript' });
+        if (['/office-material-receptions.js', '/office-material-reception-registration.js', '/office-material-reception-photos.js', '/office-material-labels.js', '/office-material-reception-transport.js', '/shared/material-catalog-label.js'].includes(url.pathname)) return route.fulfill({ body: readFileSync(resolve(root, 'resources/js' + url.pathname)), contentType: 'text/javascript' });
         if (url.pathname === '/office-material-reception-import.js') return route.fulfill({ body: '', contentType: 'text/javascript' });
         if (url.pathname === '/thumb' || url.pathname === '/original') return route.fulfill({ body: image, contentType: 'image/png' });
         calls.push({ path: url.pathname, method: request.method(), body: request.postData() });
@@ -47,16 +47,21 @@ async function fixture(records, options = {}) {
         if (id && records.has(id)) return route.fulfill({ json: { data: records.get(id) } });
         return route.fulfill({ status: 404 });
     });
-    await page.goto('http://localhost/test');
-    await page.evaluate(async () => {
-        // Esta fixture monta solo Recepciones; la navegación tiene su propia suite y arranque.
-        document.querySelector('[data-office-shell]')?.remove();
+    try {
+        await page.goto('http://localhost/test');
+        await page.evaluate(async () => {
+            // Esta fixture monta solo Recepciones; la navegación tiene su propia suite y arranque.
+            document.querySelector('[data-office-shell]')?.remove();
             document.getElementById('officeAccess')?.classList.add('is-hidden');
-        const app = document.getElementById('officeApp'); app.classList.remove('is-hidden'); app.dataset.materialsSection = 'recepciones';
-        document.querySelectorAll('[data-materials-view]').forEach((node) => node.classList.toggle('is-hidden', node.dataset.materialsView !== 'recepciones'));
-        await import('/office-material-receptions.js');
-    });
-    await page.waitForFunction(() => document.querySelector('[data-action="select"]'));
+            const app = document.getElementById('officeApp'); app.classList.remove('is-hidden'); app.dataset.materialsSection = 'recepciones';
+            document.querySelectorAll('[data-materials-view]').forEach((node) => node.classList.toggle('is-hidden', node.dataset.materialsView !== 'recepciones'));
+            await import('/office-material-receptions.js');
+        });
+        await page.waitForFunction(() => document.querySelector('[data-action="select"]'));
+    } catch (error) {
+        await browser.close();
+        throw error;
+    }
     return { browser, page, calls, errors };
 }
 
@@ -68,7 +73,7 @@ test('seleccionar pide el expediente y bloquea la confirmación sin documento', 
         assert.equal(await page.locator('[data-action="select"]').getAttribute('aria-pressed'), 'true');
         assert.equal(await page.locator('#materialReceptionDetailPhotos [data-confirm]').isDisabled(), true);
         assert.equal(await page.locator('#materialReceptionNoPhotoCount').textContent(), '1');
-        assert.match(await page.locator('#materialReceptionDetailLines').textContent(), /15 unidades/);
+        assert.match(await page.locator('#materialReceptionDetailLines').textContent(), /15 UNIDADES/);
         assert.match(await page.locator('#materialReceptionDetailLines').textContent(), /1 de 10 y 1 de 5/);
         assert.ok(calls.some((call) => call.path === '/api/materiales/recepciones/A' && call.method === 'GET'));
         assert.deepEqual(errors, []);
@@ -334,13 +339,13 @@ test('el respaldo regularizado en unidades base no se presenta como cantidad en 
     const { browser, page, errors } = await fixture(new Map([['A', record]]));
     try {
         await page.locator('[data-action="select"]').click();
-        await page.waitForFunction(() => document.querySelector('#materialReceptionDetailLines')?.textContent.includes('Documental: 150 unidades'));
+        await page.waitForFunction(() => document.querySelector('#materialReceptionDetailLines')?.textContent.includes('Documental: 150 UNIDADES'));
         assert.equal(await page.locator('[data-action="edit"]').count(), 0);
         await page.locator('[data-action="view"]').click();
         await page.locator('#materialReceptionDialog').waitFor({ state: 'visible' });
         assert.equal(await page.locator('#materialReceptionForm [name="cantidad_documental"]').inputValue(), '');
         assert.equal(await page.locator('#materialReceptionForm [name="unidad_ingreso"]').inputValue(), 'cajas');
-        assert.match(await page.locator('#materialReceptionForm').textContent(), /Respaldo regularizado: 150 unidades/);
+        assert.match(await page.locator('#materialReceptionForm').textContent(), /Respaldo regularizado: 150 UNIDADES/);
         assert.deepEqual(errors, []);
     } finally { await browser.close(); }
 });
