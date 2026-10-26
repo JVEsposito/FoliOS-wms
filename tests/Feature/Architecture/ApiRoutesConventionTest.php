@@ -29,6 +29,8 @@ class ApiRoutesConventionTest extends TestCase
             ['GET', 'api/materiales/supervision', 'can:consultar-kardex-materiales'],
             ['GET', 'api/materiales/supervision/catalogos', 'can:consultar-kardex-materiales'],
             ['GET', 'api/materiales/supervision/evidencia/{fuente}/{id}', 'can:consultar-kardex-materiales'],
+            ['GET', 'api/materiales/recepciones/valores-compra.csv', 'can:consultar-valores-compra-materiales'],
+            ['POST', 'api/materiales/recepciones/{recepcionMaterial}/valorizacion', 'can:valorizar-recepciones-materiales'],
             ['GET', 'api/materiales/recepciones/catalogos', 'can:consultar-recepciones-materiales'],
             ['GET', 'api/materiales/recepciones/folios-pendientes', 'can:consultar-recepciones-materiales'],
             ['GET', 'api/materiales/recepciones', 'can:consultar-recepciones-materiales'],

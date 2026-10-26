@@ -751,6 +751,10 @@ class ServicioRecepcionMaterial
                 throw new ConflictoOperacion('La recepción cambió desde la última lectura.');
             }
 
+            if ($recepcion->detalles()->whereNotNull('precio_unitario_compra')->exists()) {
+                throw new DomainException('Esta recepción tiene valores de compra. Déjalos pendientes con un motivo auditado antes de reconstruir sus líneas.');
+            }
+
             if ($recepcion->estado === EstadoRecepcionMaterial::Confirmada && $recepcion->provisional) {
                 throw new DomainException('Regulariza los documentos de la recepción provisional. Sus folios y cantidades físicas se conservan; los ajustes de inventario se realizan por su flujo auditado.');
             }
@@ -1149,6 +1153,7 @@ class ServicioRecepcionMaterial
                     'item_material_id' => $detalle->item_material_id,
                     'categoria_operacional' => $detalle->categoria_operacional->value,
                     'unidad_medida' => $detalle->unidad_medida,
+                    'valor_compra' => ValorCompraMaterial::representar($detalle),
                     'cantidad_documental' => $detalle->cantidad_documental,
                     'conversion_unidad' => $detalle->conversion_unidad,
                     'cantidad_contada' => $detalle->cantidad_contada,

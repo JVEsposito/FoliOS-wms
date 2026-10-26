@@ -12,6 +12,7 @@ use App\Http\Requests\ConfirmarRecepcionMaterialRequest;
 use App\Http\Requests\CrearRecepcionMaterialRequest;
 use App\Http\Requests\EliminarRecepcionMaterialRequest;
 use App\Http\Requests\RegularizarRecepcionMaterialRequest;
+use App\Http\Requests\ValorizarRecepcionMaterialRequest;
 use App\Http\Resources\RecepcionMaterialResource;
 use App\Models\ClienteMaterial;
 use App\Models\FolioMaterial;
@@ -22,6 +23,8 @@ use App\Models\TemporadaMaterial;
 use App\Services\Materiales\MuestreoXlsx;
 use App\Services\Materiales\ServicioRecepcionMaterial;
 use App\Services\Materiales\ServicioRegularizacionRecepcionMaterial;
+use App\Services\Materiales\ServicioValorCompraMaterial;
+use App\Services\Materiales\ValorCompraMaterial;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -30,6 +33,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class RecepcionMaterialController extends Controller
 {
@@ -155,11 +159,21 @@ class RecepcionMaterialController extends Controller
 
     public function index(Request $request): AnonymousResourceCollection
     {
+        [$consulta, $resumen] = $this->consultaListado($request);
+
+        return RecepcionMaterialResource::collection(
+            $consulta->latest()->paginate(min(100, max(10, (int) $request->query('per_page', 25)))),
+        )->additional(['regularizacion' => $resumen]);
+    }
+
+    private function consultaListado(Request $request): array
+    {
         Gate::authorize('consultar-recepciones-materiales');
         $filtros = $request->validate([
             'temporada_id' => ['nullable', 'uuid', 'exists:temporadas,id'],
             'sin_foto_documento' => ['nullable', 'boolean'],
             'regularizacion' => ['nullable', 'in:pendiente,vencida,regularizada,retroactiva'],
+            'valorizacion' => ['nullable', 'in:pendiente,completa'],
         ]);
         $temporadaId = $filtros['temporada_id'] ?? app(ServicioTemporadaActiva::class)->buscar()?->id;
         $usuario = $request->user();
@@ -167,6 +181,7 @@ class RecepcionMaterialController extends Controller
             ->when($temporadaId, fn ($query) => $query->where('temporada_id', $temporadaId))
             ->when(! $temporadaId, fn ($query) => $query->whereRaw('1 = 0'))
             ->with(['temporada', 'cliente', 'proveedor', 'creadoPor', 'confirmadoPor', 'anuladoPor', 'autorizadoPor', 'regularizadoPor'])
+            ->withCount(['detalles as lineas_aceptadas_count' => fn ($q) => $q->where('cantidad_recibida', '>', 0), 'detalles as lineas_sin_valor_count' => fn ($q) => $q->where('cantidad_recibida', '>', 0)->whereNull('precio_unitario_compra')])
             ->withCount(['detalles', 'fotos as fotos_documento' => fn ($q) => $q->where('tipo', 'documento'), 'fotos as fotos_referenciales' => fn ($q) => $q->where('tipo', 'referencial')])
             ->when($request->boolean('sin_foto_documento'), fn ($q) => $q->whereDoesntHave('fotos', fn ($f) => $f->where('tipo', 'documento')))
             ->when($request->query('estado'), fn ($query, $estado) => $query->where('estado', $estado))
@@ -204,9 +219,49 @@ class RecepcionMaterialController extends Controller
             }
         }
 
-        return RecepcionMaterialResource::collection(
-            $consulta->latest()->paginate(min(100, max(10, (int) $request->query('per_page', 25)))),
-        )->additional(['regularizacion' => $resumen]);
+        if ($filtros['valorizacion'] ?? null) {
+            Gate::authorize('consultar-valores-compra-materiales');
+            $consulta->where('estado', EstadoRecepcionMaterial::Confirmada->value)
+                ->whereHas('detalles', fn ($q) => $q->where('cantidad_recibida', '>', 0));
+            $pendientes = fn ($q) => $q->where('cantidad_recibida', '>', 0)->whereNull('precio_unitario_compra');
+            if ($filtros['valorizacion'] === 'pendiente') {
+                $consulta->whereHas('detalles', $pendientes);
+            } else {
+                $consulta->whereDoesntHave('detalles', $pendientes);
+            }
+        }
+
+        return [$consulta, $resumen];
+    }
+
+    public function valorizar(ValorizarRecepcionMaterialRequest $request, RecepcionMaterial $recepcionMaterial, ServicioValorCompraMaterial $servicio): RecepcionMaterialResource
+    {
+        return new RecepcionMaterialResource($servicio->guardar($recepcionMaterial, $request->validated(), $request->user()));
+    }
+
+    public function exportarValoresCompra(Request $request): StreamedResponse
+    {
+        Gate::authorize('consultar-valores-compra-materiales');
+        [$consulta] = $this->consultaListado($request);
+        $consulta->where('estado', EstadoRecepcionMaterial::Confirmada->value)->with('detalles.item');
+
+        return response()->streamDownload(function () use ($consulta): void {
+            $salida = fopen('php://output', 'w');
+            fwrite($salida, "\xEF\xBB\xBF");
+            fputcsv($salida, ['TEMPORADA', 'RECEPCION ID', 'GUIA', 'CLIENTE', 'PROVEEDOR', 'ITEM CODIGO', 'ITEM', 'UNIDAD BASE', 'CANTIDAD ACEPTADA', 'PRECIO UNITARIO NETO', 'MONEDA', 'TOTAL NETO', 'ESTADO VALORIZACION'], ';', escape: '');
+            $consulta->orderBy('id')->chunkById(100, function ($recepciones) use ($salida): void {
+                foreach ($recepciones as $recepcion) {
+                    foreach ($recepcion->detalles as $detalle) {
+                        $valor = ValorCompraMaterial::representar($detalle);
+                        $fila = [$recepcion->temporada?->codigo, $recepcion->id, $recepcion->numero_guia_despacho, $recepcion->cliente?->nombre, $recepcion->proveedor?->nombre, $detalle->item?->codigo, $detalle->item?->nombre, mb_strtoupper($detalle->unidad_medida), $detalle->cantidad_recibida, $valor['precio_unitario_neto'], $valor['moneda'], $valor['total_neto'], (float) $detalle->cantidad_recibida <= 0 ? 'SIN CANTIDAD ACEPTADA' : ($valor['precio_unitario_neto'] === null ? 'PENDIENTE' : 'VALORIZADA')];
+                        // Las celdas textuales no deben ejecutar fórmulas al abrirse en Excel.
+                        $fila = array_map(fn ($v) => is_string($v) && preg_match('/^[\s]*[=+@-]/', $v) ? "'".$v : $v, $fila);
+                        fputcsv($salida, $fila, ';', escape: '');
+                    }
+                }
+            });
+            fclose($salida);
+        }, 'Compras_materiales_neto_sin_IVA.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
     public function show(

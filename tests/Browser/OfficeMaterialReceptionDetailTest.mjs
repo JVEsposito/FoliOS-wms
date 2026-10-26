@@ -19,7 +19,8 @@ function reception(id, fotos = []) {
 }
 async function fixture(records, options = {}) {
     const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined, args: ['--no-sandbox', '--disable-gpu'] });
-    const context = await browser.newContext({ viewport: { width: options.width || 1440, height: 1000 } }); const page = await context.newPage();
+    const context = await browser.newContext({ viewport: { width: options.width || 1440, height: 1000 }, colorScheme: options.width === 390 ? 'dark' : 'light' }); const page = await context.newPage();
+    page.setDefaultTimeout(10000); page.setDefaultNavigationTimeout(10000);
     const calls = []; const errors = []; page.on('pageerror', (error) => errors.push(error.message));
     await context.addInitScript(identity => {
         localStorage.setItem('estiba_wms_office_token', 'test-token');
@@ -36,7 +37,7 @@ async function fixture(records, options = {}) {
             await import('/office-material-labels.js');
         </script></body>`) });
         if (url.pathname.startsWith('/build/')) return route.fulfill({ body: readFileSync(resolve(root, 'public' + url.pathname)), contentType: url.pathname.endsWith('.css') ? 'text/css' : 'application/octet-stream' });
-        if (['/office-material-receptions.js', '/office-material-reception-registration.js', '/office-material-reception-photos.js', '/office-material-labels.js', '/office-material-reception-transport.js', '/shared/material-catalog-label.js'].includes(url.pathname)) return route.fulfill({ body: readFileSync(resolve(root, 'resources/js' + url.pathname)), contentType: 'text/javascript' });
+        if (['/office-material-receptions.js', '/office-material-reception-registration.js', '/office-material-reception-photos.js', '/office-material-labels.js', '/office-material-reception-transport.js', '/shared/material-catalog-label.js', '/shared/material-purchase-value.js'].includes(url.pathname)) return route.fulfill({ body: readFileSync(resolve(root, 'resources/js' + url.pathname)), contentType: 'text/javascript' });
         if (url.pathname === '/office-material-reception-import.js') return route.fulfill({ body: '', contentType: 'text/javascript' });
         if (url.pathname === '/thumb' || url.pathname === '/original') return route.fulfill({ body: image, contentType: 'image/png' });
         calls.push({ path: url.pathname, method: request.method(), body: request.postData() });
@@ -347,5 +348,74 @@ test('el respaldo regularizado en unidades base no se presenta como cantidad en 
         assert.equal(await page.locator('#materialReceptionForm [name="unidad_ingreso"]').inputValue(), 'cajas');
         assert.match(await page.locator('#materialReceptionForm').textContent(), /Respaldo regularizado: 150 UNIDADES/);
         assert.deepEqual(errors, []);
+    } finally { await browser.close(); }
+});
+
+for (const [width, theme] of [[1366, 'light'], [390, 'dark']]) {
+    test(`valorizar recepción confirmada en ${width}px conserva unidad base y registra motivo`, async () => {
+        const record = reception('A', [photo]); record.estado = 'confirmada';
+        record.detalles[0] = { ...record.detalles[0], id: 'detail-value', cantidad_aceptada: '15.000', cantidad_recibida: '15.000', valor_compra: { precio_unitario_neto: null, moneda: null, total_neto: null } };
+        const records = new Map([['A', record]]); let submitted;
+        const { browser, page, errors } = await fixture(records, { width, identity: { puede_valorizar_recepciones_materiales: true, puede_consultar_valores_compra_materiales: true }, route: async (route, url, request) => {
+            if (url.pathname !== '/api/materiales/recepciones/A/valorizacion') return false;
+            submitted = request.postDataJSON();
+            record.version++;
+            record.detalles[0].valor_compra = { precio_unitario_neto: submitted.detalles[0].precio_unitario_neto, moneda: submitted.detalles[0].moneda, total_neto: '1852' };
+            await route.fulfill({ json: { data: record } }); return true;
+        } });
+        try {
+            await page.evaluate(theme => { document.documentElement.dataset.officeTheme = theme === 'dark' ? 'dark-industrial' : 'light-professional'; localStorage.setItem('estiba_wms_office_theme', document.documentElement.dataset.officeTheme); }, theme);
+            await page.locator('[data-action="select"]').click();
+            await page.locator('[data-action="value-purchase"]').click();
+            await page.locator('#materialPurchaseValueForm [name="precio_unitario_neto"]').fill('123,456789');
+            await page.locator('#materialPurchaseValueForm [name="motivo"]').fill('Compra neta según documento del proveedor');
+            assert.match(await page.locator('[data-purchase-total]').textContent(), /1\.852 CLP/);
+            const dialog = page.locator('#materialPurchaseValueDialog');
+            const bounds = await dialog.boundingBox(); assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= width + 1);
+            await page.screenshot({ path: resolve(root, `storage/app/ui/material-purchase-value-${width}.png`), fullPage: true });
+            await page.locator('#materialPurchaseValueForm button[type="submit"]').click();
+            await page.waitForFunction(() => !document.getElementById('materialPurchaseValueDialog').open);
+            assert.equal(submitted.version_conocida, 5);
+            assert.equal(submitted.detalles[0].precio_unitario_neto, '123.456789');
+            assert.equal(submitted.detalles[0].moneda, 'CLP');
+            assert.equal(submitted.detalles[0].id, 'detail-value');
+            assert.match(submitted.motivo, /Compra neta/);
+            await page.waitForFunction(() => document.querySelector('.material-purchase-values')?.textContent.includes('1.852'));
+            assert.deepEqual(errors, []);
+        } finally { await browser.close(); }
+    });
+}
+
+test('una respuesta de error conserva el formulario y el UUID del reintento de valorización', async () => {
+    const record = reception('A', [photo]); record.estado = 'confirmada'; record.detalles[0].id = 'detail';
+    const attempts = [];
+    const { browser, page, errors } = await fixture(new Map([['A', record]]), { identity: { puede_valorizar_recepciones_materiales: true }, route: async (route, url, request) => {
+        if (!url.pathname.endsWith('/valorizacion')) return false;
+        attempts.push(request.postDataJSON());
+        await route.fulfill({ status: 409, json: { message: 'La recepción cambió. Recarga y revisa los valores.' } }); return true;
+    } });
+    try {
+        await page.locator('[data-action="select"]').click(); await page.locator('[data-action="value-purchase"]').click();
+        await page.locator('#materialPurchaseValueForm [name="precio_unitario_neto"]').fill('0');
+        await page.locator('#materialPurchaseValueForm [name="motivo"]').fill('Documento confirma entrega sin costo');
+        await page.locator('#materialPurchaseValueForm button[type="submit"]').click();
+        await page.waitForFunction(() => document.getElementById('materialPurchaseValueError').textContent.includes('cambió'));
+        await page.locator('#materialPurchaseValueForm button[type="submit"]').click();
+        await page.waitForFunction(() => !document.querySelector('#materialPurchaseValueForm button[type="submit"]').disabled);
+        assert.equal(attempts.length, 2); assert.equal(attempts[0].operacion_id, attempts[1].operacion_id);
+        assert.equal(attempts[0].detalles[0].precio_unitario_neto, '0.000000');
+        assert.ok(await page.locator('#materialPurchaseValueDialog').evaluate(node => node.open));
+        assert.deepEqual(errors, []);
+    } finally { await browser.close(); }
+});
+
+test('perfil sin permiso de valorización conserva consulta y no ofrece escritura de precios', async () => {
+    const record = reception('A', [photo]); record.estado = 'confirmada';
+    const { browser, page } = await fixture(new Map([['A', record]]));
+    try {
+        await page.locator('[data-action="select"]').click();
+        await page.waitForFunction(() => document.getElementById('materialReceptionDetailTitle').textContent.includes('GUIA-A'));
+        assert.equal(await page.locator('[data-action="value-purchase"]').count(), 0);
+        assert.equal(await page.locator('#downloadMaterialPurchaseValues').isVisible(), false);
     } finally { await browser.close(); }
 });

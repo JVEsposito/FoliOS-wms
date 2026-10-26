@@ -94,6 +94,8 @@ class IdentidadOficina
             'puede_consultar_recepciones_materiales' => $capacidades['puede_consultar_recepciones_materiales'],
             'puede_gestionar_recepciones_materiales' => $capacidades['puede_gestionar_recepciones_materiales'],
             'puede_confirmar_recepciones_materiales' => $capacidades['puede_confirmar_recepciones_materiales'],
+            'puede_consultar_valores_compra_materiales' => $capacidades['puede_consultar_valores_compra_materiales'],
+            'puede_valorizar_recepciones_materiales' => $capacidades['puede_valorizar_recepciones_materiales'],
             'puede_supervisar_recepciones_materiales' => $capacidades['puede_supervisar_recepciones_materiales'],
             'puede_eliminar_recepciones_materiales' => $capacidades['puede_eliminar_recepciones_materiales'],
             'puede_aprobar_ajustes_materiales' => $capacidades['puede_aprobar_ajustes_materiales'],

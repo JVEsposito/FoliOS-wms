@@ -18,6 +18,7 @@ class CatalogoPermisosMateriales
                 'recepciones.anular' => 'Anular recepciones',
                 'recepciones.eliminar' => 'Eliminar con conservación de evidencia',
                 'recepciones.imprimir' => 'Imprimir etiquetas',
+                'recepciones.valorizar' => 'Asignar y corregir valores de compra netos',
             ]),
             $this->grupo('despachos', 'Despachos', ['materiales.despachos'], [
                 'despachos.gestionar' => 'Crear y gestionar despachos',
@@ -85,9 +86,13 @@ class CatalogoPermisosMateriales
             }
         }
 
+        // La valorización es una autorización nueva y explícita para perfiles personalizados.
+        if ($perfil->permisos_materiales === null && ! $perfil->protegido) {
+            $seleccion = array_values(array_diff($seleccion, ['recepciones.valorizar']));
+        }
         $efectivos = array_values(array_intersect($compatibles, $seleccion));
         if (! in_array($perfil->rol_base, [RolUsuario::Administrador, RolUsuario::SupervisorMateriales], true)) {
-            $efectivos = array_values(array_diff($efectivos, ['inventario.aprobar_ajustes']));
+            $efectivos = array_values(array_diff($efectivos, ['inventario.aprobar_ajustes', 'recepciones.valorizar']));
         }
         // Las nuevas escrituras de capacidad requieren selección explícita
         // en perfiles existentes, salvo el Administrador protegido.
@@ -122,7 +127,7 @@ class CatalogoPermisosMateriales
     {
         return compact('clave', 'nombre', 'modulos', 'preparado') + [
             'acciones' => collect($acciones)->map(fn ($nombre, $clave) => compact('clave', 'nombre') + [
-                'roles_requeridos' => $clave === 'inventario.aprobar_ajustes' ? ['administrador', 'supervisor_materiales'] : [],
+                'roles_requeridos' => in_array($clave, ['inventario.aprobar_ajustes', 'recepciones.valorizar'], true) ? ['administrador', 'supervisor_materiales'] : [],
             ])->values()->all(),
         ];
     }

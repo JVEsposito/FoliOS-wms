@@ -2,10 +2,12 @@
 
 namespace App\Http\Resources;
 
+use App\Enums\TipoEventoRecepcionMaterial;
 use App\Models\BultoRecepcionMaterial;
 use App\Models\DetalleRecepcionMaterial;
 use App\Models\EventoRecepcionMaterial;
 use App\Services\Materiales\RegistroRecepcionMaterial;
+use App\Services\Materiales\ValorCompraMaterial;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -49,6 +51,10 @@ class RecepcionMaterialResource extends JsonResource
             'puede_confirmar_por_fotos' => (int) ($this->resource->getAttribute('fotos_documento') ?? $this->fotos->where('tipo', 'documento')->count()) > 0,
             'fotos' => $this->whenLoaded('fotos', fn () => $this->fotos->map->representar()->values()),
             'observacion' => $this->observacion,
+            'valorizacion' => $this->when($request->user()?->can('consultar-valores-compra-materiales'), fn () => [
+                'lineas_aceptadas' => $this->resource->getAttribute('lineas_aceptadas_count'),
+                'lineas_pendientes' => $this->resource->getAttribute('lineas_sin_valor_count'),
+            ]),
             'detalles_count' => $this->whenCounted('detalles'),
             'detalles' => $this->whenLoaded('detalles', fn () => $this->detalles
                 ->map(fn (DetalleRecepcionMaterial $detalle): array => [
@@ -67,6 +73,7 @@ class RecepcionMaterialResource extends JsonResource
                     'cantidad_aceptada' => $detalle->cantidad_recibida,
                     'cantidad_recibida' => $detalle->cantidad_recibida,
                     'cantidad_rechazada' => $detalle->cantidad_rechazada,
+                    ...($request->user()?->can('consultar-valores-compra-materiales') ? ['valor_compra' => ValorCompraMaterial::representar($detalle)] : []),
                     'observacion' => $detalle->observacion,
                     'bultos' => $detalle->relationLoaded('bultos')
                         ? $detalle->bultos->map(fn (BultoRecepcionMaterial $bulto): array => [
@@ -91,6 +98,7 @@ class RecepcionMaterialResource extends JsonResource
                         : [],
                 ])->values()),
             'eventos' => $this->whenLoaded('eventos', fn () => $this->eventos
+                ->filter(fn ($evento) => $evento->tipo !== TipoEventoRecepcionMaterial::Valorizada || $request->user()?->can('consultar-valores-compra-materiales'))
                 ->map(fn (EventoRecepcionMaterial $evento): array => [
                     'id' => $evento->id,
                     'tipo' => $evento->tipo->value,

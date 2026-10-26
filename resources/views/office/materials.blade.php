@@ -341,6 +341,7 @@
                             <span id="materialReceptionsSummary">Cargando recepciones…</span>
                         </div>
                         <div class="materials-panel__tools">
+                            <button class="secondary-button is-hidden" id="downloadMaterialPurchaseValues" type="button">↓ Compras netas CSV</button>
                             <button class="secondary-button" id="downloadBlankMaterialSampling" type="button">↓ Muestreo en blanco</button>
                             <button class="secondary-button" id="reloadMaterialReceptions" type="button">↻ Actualizar</button>
                             <button class="primary-button is-hidden" id="newMaterialReception" type="button">+ Nueva recepción</button>
@@ -363,6 +364,7 @@
                     <form class="material-receptions-filters" id="materialReceptionsFilters">
                         <label><span>Documento</span><select name="sin_foto_documento"><option value="">Todas</option><option value="1">Sin foto de documento</option></select></label>
                         <label><span>Regularización</span><select name="regularizacion"><option value="">Todas</option><option value="pendiente">Provisionales pendientes</option><option value="vencida">Plazo vencido</option><option value="regularizada">Regularizadas</option><option value="retroactiva">Registro retroactivo</option></select></label>
+                        <label class="is-hidden" id="materialPurchaseValueFilter"><span>Valor de compra</span><select name="valorizacion"><option value="">Todas</option><option value="pendiente">Confirmadas con valores pendientes</option><option value="completa">Confirmadas con valores completos</option></select></label>
                         <label><span>Buscar guía</span><input name="guia" maxlength="50" placeholder="Número de guía"></label>
                         <label><span>Estado</span><select name="estado"><option value="">Todos</option><option value="borrador">Borrador</option><option value="confirmada">Confirmada</option><option value="anulada">Anulada</option></select></label>
                         <button class="secondary-button" type="submit">Buscar</button>
@@ -372,6 +374,16 @@
                     <section id="materialReceptionEliminations" class="is-hidden" aria-label="Recepciones eliminadas"></section>
                     <p id="materialReceptionRegularizationSummary" role="status"></p>
                     <p class="form-error" id="materialReceptionsError" role="alert"></p>
+                    <dialog id="materialPurchaseValueDialog" class="material-reception-dialog" aria-labelledby="materialPurchaseValueTitle">
+                        <form id="materialPurchaseValueForm" class="materials-form">
+                            <h2 id="materialPurchaseValueTitle">Valorizar compra</h2>
+                            <p class="materials-help">Precio unitario NETO antes de IVA, por unidad base del ítem. Se valoriza solo la cantidad aceptada. Un campo vacío queda pendiente; cero representa una compra sin costo. Los totales se redondean por línea: CLP sin decimales; USD y EUR con dos.</p>
+                            <div id="materialPurchaseValueLines"></div>
+                            <label><span>Motivo del registro o corrección</span><textarea name="motivo" required minlength="5" maxlength="1000"></textarea></label>
+                            <p class="form-error" id="materialPurchaseValueError" role="alert"></p>
+                            <div class="materials-panel__tools"><button class="secondary-button" id="cancelMaterialPurchaseValue" type="button">Cancelar</button><button class="primary-button" type="submit">Guardar valores</button></div>
+                        </form>
+                    </dialog>
                     <div class="material-receptions-layout">
                         <section class="material-receptions-list" aria-labelledby="materialReceptionsListTitle">
                             <h3 id="materialReceptionsListTitle">Recepciones</h3>
