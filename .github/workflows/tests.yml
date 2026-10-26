@@ -108,6 +108,7 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Probar Materiales en el navegador
+        timeout-minutes: 10
         run: npm run test:browser
 
       - name: Conservar catálogo visual para revisión

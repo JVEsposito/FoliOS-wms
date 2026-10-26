@@ -6,7 +6,7 @@
         "build": "vite build",
         "dev": "vite",
         "test:js": "node --test tests/JavaScript/*.mjs",
-        "test:browser": "node --test tests/Browser/*.mjs",
+        "test:browser": "node --test --test-concurrency=2 tests/Browser/*.mjs",
         "design:tokens": "node scripts/build-design-tokens.mjs",
         "design:check": "node scripts/build-design-tokens.mjs --check",
         "ui:catalog": "php artisan ui:catalogo"
