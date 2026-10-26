@@ -20,6 +20,8 @@ async function scenario(width, callback) {
     try {
         const context = await browser.newContext({ viewport: { width, height: 900 }, colorScheme: width === 390 ? 'dark' : 'light' });
         const page = await context.newPage(); const errors = []; const calls = [];
+        page.setDefaultTimeout(10000);
+        page.setDefaultNavigationTimeout(10000);
         page.on('pageerror', e => errors.push(e.message));
         await context.addInitScript(() => {
             localStorage.setItem('estiba_wms_office_token', 'catalog-filter-fixture');
@@ -52,7 +54,7 @@ async function scenario(width, callback) {
     } finally { await browser.close(); }
 }
 
-test('catálogo inicia en temporada activa y un cliente consulta todos sus períodos sin duplicar opciones', async () => {
+test('catálogo inicia en temporada activa y un cliente consulta todos sus períodos sin duplicar opciones', { timeout: 90000 }, async () => {
     for (const width of [1366, 390]) await scenario(width, async ({ page, calls }) => {
         assert.equal(await page.locator('[name="temporada_id"]').inputValue(), 'actual');
         assert.equal(await page.locator('[name="cliente_id"] option').count(), 3);
@@ -76,11 +78,11 @@ test('catálogo inicia en temporada activa y un cliente consulta todos sus perí
         assert.ok(calls.find(u => u.pathname === '/api/materiales/items/catalogo').searchParams.has('temporada_actual'));
         assert.equal(await page.evaluate(() => !!window.catalogXss), false);
         assert.equal(await page.locator('[name="cliente_id"] img').count(), 0);
-        await page.screenshot({ path: resolve(root, `storage/app/ui/oficina/catalogo-clientes-${width}.png`), fullPage: true });
+        await page.screenshot({ path: resolve(root, `storage/app/ui/oficina/catalogo-clientes-${width}.png`), fullPage: true, timeout: 10000 });
     });
 });
 
-test('cambiar a una temporada sin ese cliente limpia filtros y los históricos sin maestro siguen consultables', async () => {
+test('cambiar a una temporada sin ese cliente limpia filtros y los históricos sin maestro siguen consultables', { timeout: 45000 }, async () => {
     await scenario(1366, async ({ page, calls }) => {
         await page.locator('[name="cliente_id"]').selectOption('master-b');
         await page.waitForFunction(() => document.getElementById('itemRows').textContent.includes('HOMONIMO'));
