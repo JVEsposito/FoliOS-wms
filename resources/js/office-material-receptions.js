@@ -613,7 +613,7 @@ function renderReceptionLines() {
                 <label class="wide"><span>Motivo de bloqueo</span><input name="motivo_bloqueo" maxlength="2000" value="${receptionEscape(line.blockReason)}"></label>
                 <label class="wide"><span>Observación del producto</span><input name="observacion_detalle" maxlength="2000" value="${receptionEscape(line.observation)}"></label>
             </div>
-            ${line.documentaryRegularized != null ? `<p class="materials-help">Respaldo regularizado: ${receptionEscape(receptionQuantity(line.documentaryRegularized))} ${receptionEscape(line.baseUnit)}. Las cantidades de esta captura conservan la unidad de ingreso original.</p>` : ''}
+            ${line.documentaryRegularized != null ? `<p class="materials-help">Respaldo regularizado: ${receptionEscape(receptionQuantity(line.documentaryRegularized))} ${receptionEscape(materialCatalogLabel(line.baseUnit))}. Las cantidades de esta captura conservan la unidad de ingreso original.</p>` : ''}
             <p class="material-reception-package-summary">${line.originalPackages.length && !line.packagesDirty ? `${line.originalPackages.length} bultos existentes; se conservarán mientras no cambies su distribución.` : packageSummary(line)}</p>
         </article>
     `;
@@ -703,7 +703,7 @@ function syncLineFromElement(article, markDirty = true) {
     const item = receptionState.catalogs.items.find((i) => i.id === line.itemId) || line.itemSnapshot;
     const factor = receptionConversion(line)?.factor;
     article.querySelector('.material-reception-conversion-hint').textContent = line.inputUnit && factor
-        ? `1 ${line.inputUnit} = ${factor} ${item?.unidad_medida || line.conversionSnapshot?.unidad_base}. Cantidades y tamaño de bulto en ${line.inputUnit}.`
+        ? `1 ${materialCatalogLabel(line.inputUnit)} = ${factor} ${materialCatalogLabel(item?.unidad_medida || line.conversionSnapshot?.unidad_base)}. Cantidades y tamaño de bulto en ${materialCatalogLabel(line.inputUnit)}.`
         : 'Las cantidades se ingresan en la unidad base del ítem.';
 }
 

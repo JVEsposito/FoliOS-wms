@@ -68,7 +68,7 @@ test('seleccionar pide el expediente y bloquea la confirmación sin documento', 
         assert.equal(await page.locator('[data-action="select"]').getAttribute('aria-pressed'), 'true');
         assert.equal(await page.locator('#materialReceptionDetailPhotos [data-confirm]').isDisabled(), true);
         assert.equal(await page.locator('#materialReceptionNoPhotoCount').textContent(), '1');
-        assert.match(await page.locator('#materialReceptionDetailLines').textContent(), /15 unidades/);
+        assert.match(await page.locator('#materialReceptionDetailLines').textContent(), /15 UNIDADES/);
         assert.match(await page.locator('#materialReceptionDetailLines').textContent(), /1 de 10 y 1 de 5/);
         assert.ok(calls.some((call) => call.path === '/api/materiales/recepciones/A' && call.method === 'GET'));
         assert.deepEqual(errors, []);
@@ -334,13 +334,13 @@ test('el respaldo regularizado en unidades base no se presenta como cantidad en 
     const { browser, page, errors } = await fixture(new Map([['A', record]]));
     try {
         await page.locator('[data-action="select"]').click();
-        await page.waitForFunction(() => document.querySelector('#materialReceptionDetailLines')?.textContent.includes('Documental: 150 unidades'));
+        await page.waitForFunction(() => document.querySelector('#materialReceptionDetailLines')?.textContent.includes('Documental: 150 UNIDADES'));
         assert.equal(await page.locator('[data-action="edit"]').count(), 0);
         await page.locator('[data-action="view"]').click();
         await page.locator('#materialReceptionDialog').waitFor({ state: 'visible' });
         assert.equal(await page.locator('#materialReceptionForm [name="cantidad_documental"]').inputValue(), '');
         assert.equal(await page.locator('#materialReceptionForm [name="unidad_ingreso"]').inputValue(), 'cajas');
-        assert.match(await page.locator('#materialReceptionForm').textContent(), /Respaldo regularizado: 150 unidades/);
+        assert.match(await page.locator('#materialReceptionForm').textContent(), /Respaldo regularizado: 150 UNIDADES/);
         assert.deepEqual(errors, []);
     } finally { await browser.close(); }
 });
