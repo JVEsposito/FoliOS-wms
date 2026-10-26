@@ -10,7 +10,7 @@ const html = readFileSync(resolve(root, 'storage/app/ui/oficina/items.html'), 'u
 const seasons = [{ id: 'actual', codigo: 'TEMP-2627', activa: true }, { id: 'anterior', codigo: 'TEMP-PR-03', activa: false }, { id: 'vacia', codigo: 'SIN-CATALOGO', activa: false }];
 const a = { id: 'master-a', codigo: 'CLI-A', nombre: 'CLIENTE COMÚN', es_maestro: true };
 const b = { id: 'master-b', codigo: 'CLI-B', nombre: 'CLIENTE COMÚN', es_maestro: true };
-const legacy = { id: 'legacy', codigo: 'HIST', nombre: '<img src=x onerror="window.catalogXss=true">', es_maestro: false };
+const legacy = { id: 'legacy', codigo: 'HIST', nombre: '<img src=x onerror="window.catalogXss=true">', es_maestro: false, temporada_codigo: 'TEMP-PR-03' };
 const row = (id, season, master, client, category = 'CAJAS') => ({ id, codigo: id, nombre: `Caja cartón ${id}`, categoria: category, unidad_medida: 'kg', activo: true, cantidad_fotos: 0,
     cliente: { id: client, nombre: master.nombre, temporada: seasons.find(s => s.id === season) }, masterId: master.id });
 const rows = [row('NUEVO', 'actual', a, 'projection-new'), row('ANTERIOR', 'anterior', a, 'projection-old'), row('HOMONIMO', 'actual', b, 'projection-b'), row('LEGADO', 'anterior', legacy, 'legacy', 'FILM')];
@@ -66,6 +66,7 @@ test('catálogo inicia en temporada activa y un cliente consulta todos sus perí
         await page.waitForFunction(() => document.getElementById('itemRows').textContent.includes('ANTERIOR'));
         assert.equal(await page.locator('[name="cliente_id"]').inputValue(), 'master-a');
         assert.equal(await page.locator('[name="cliente_id"] option[value="master-a"]').count(), 1);
+        assert.match(await page.locator('[name="cliente_id"] option[value="legacy"]').textContent(), /histórico · TEMP-PR-03/);
         assert.equal(await page.locator('#itemRows tr').count(), 2);
         await page.locator('[name="categoria"]').selectOption('CAJAS');
         const exportRequest = page.waitForRequest(r => r.url().includes('/exportar/csv'));

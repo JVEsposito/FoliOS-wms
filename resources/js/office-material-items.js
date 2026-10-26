@@ -41,7 +41,7 @@ async function load() {
             initial = false;
         }
         clients = body.catalogos.clientes_maestros || body.catalogos.clientes;
-        const clientReset = options('cliente_id', clients, (c) => `${c.codigo ? `${c.codigo} · ` : ''}${c.nombre}${c.es_maestro === false ? ' (histórico)' : ''}`);
+        const clientReset = options('cliente_id', clients, (c) => `${c.codigo ? `${c.codigo} · ` : ''}${c.nombre}${c.es_maestro === false ? ` (histórico${c.temporada_codigo ? ` · ${c.temporada_codigo}` : ''})` : ''}`);
         if (clientReset) form.elements.categoria.value = '';
         const categoryReset = options('categoria', body.catalogos.categorias);
         options('tipo_item_material_id', body.catalogos.tipos_item || [], (t) => materialCatalogLabel(t.nombre));

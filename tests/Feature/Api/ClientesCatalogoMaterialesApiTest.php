@@ -100,6 +100,11 @@ class ClientesCatalogoMaterialesApiTest extends TestCase
         $respuesta = $this->getJson(self::URL.'?temporada_id='.$this->historica->id)->assertOk();
         $opcion = collect($respuesta->json('catalogos.clientes_maestros'))->firstWhere('id', $legacy->id);
         $this->assertFalse($opcion['es_maestro']);
+        $this->assertSame($this->historica->codigo, $opcion['temporada_codigo']);
+        $otro = ClienteMaterial::create(['temporada_material_id' => $this->activa->id, 'codigo' => 'LEGADO', 'nombre' => 'Cliente común', 'activo' => false]);
+        $opciones = collect($this->getJson(self::URL)->assertOk()->json('catalogos.clientes_maestros'));
+        $this->assertSame($this->activa->codigo, $opciones->firstWhere('id', $otro->id)['temporada_codigo']);
+        $this->assertCount(2, $opciones->where('codigo', 'LEGADO'));
         $this->getJson(self::URL.'?cliente_id='.$legacy->id)->assertOk()->assertJsonPath('total', 1)->assertJsonPath('data.0.codigo', 'LEGADO-ITEM');
         $this->getJson(self::URL.'?cliente_global_id='.$this->maestro->id)->assertOk()->assertJsonPath('total', 2);
     }

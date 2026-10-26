@@ -28,7 +28,7 @@ class ServicioCatalogoItemsMateriales
     /** Una opción por identidad; los registros antiguos sin maestro mantienen su identidad propia. */
     public function clientes(array $filtros): Collection
     {
-        return ClienteMaterial::with('cliente:id,codigo,nombre')
+        return ClienteMaterial::with(['cliente:id,codigo,nombre', 'temporada:id,codigo'])
             ->when($filtros['temporada_id'] ?? null, fn ($q, $id) => $q->where('temporada_material_id', $id))
             ->get(['id', 'cliente_id', 'nombre', 'codigo', 'temporada_material_id'])
             ->map(fn ($c) => [
@@ -36,9 +36,10 @@ class ServicioCatalogoItemsMateriales
                 'es_maestro' => $c->cliente_id !== null,
                 'codigo' => $c->cliente?->codigo ?? $c->codigo,
                 'nombre' => $c->cliente?->nombre ?? $c->nombre,
+                'temporada_codigo' => $c->cliente_id === null ? $c->temporada?->codigo : null,
             ])
             ->unique(fn ($c) => ($c['es_maestro'] ? 'maestro:' : 'historico:').$c['id'])
-            ->sortBy(fn ($c) => mb_strtoupper($c['nombre'].' '.$c['codigo']))->values();
+            ->sortBy(fn ($c) => mb_strtoupper($c['nombre'].' '.$c['codigo'].' '.($c['temporada_codigo'] ?? '')))->values();
     }
 
     public function columnas(): array

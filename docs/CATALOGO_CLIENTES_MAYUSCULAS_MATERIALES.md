@@ -16,7 +16,7 @@ se obtienen para el cliente y temporada seleccionados.
 Con **Todas las temporadas**, seleccionar un cliente reúne sus ítems de todos los
 períodos. La columna Temporada distingue cada registro. Dos maestros que comparten
 nombre se ofrecen por separado con sus respectivos códigos. Los registros antiguos
-sin vínculo a un maestro conservan su opción `CÓDIGO · NOMBRE (histórico)` y su
+sin vínculo a un maestro conservan su opción `CÓDIGO · NOMBRE (histórico · TEMPORADA)` y su
 identidad; no se vinculan por coincidencia de nombre.
 
 La tabla y las descargas XLSX/CSV comparten filtros. La descarga conserva las columnas
