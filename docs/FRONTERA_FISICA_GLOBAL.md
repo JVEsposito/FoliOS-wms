@@ -56,6 +56,26 @@ compatibilidad física, ocupación y reservas. Las propuestas
 se procesan en orden y devuelven `aceptadas`, `rechazadas`, `recalcular` y un
 nuevo snapshot global.
 
+## Rechazos y pallets sin destino
+
+Cada propuesta rechazada al materializar queda registrada en
+`incidencias_destino_planificador` con el motivo, la posición y cámara propuestas, la versión de
+reglas de la tablet (`planner_version`), el usuario y la tablet. La frontera por plan de clientes
+anteriores registra igual sus rechazos.
+
+Cuando la tablet no encuentra posición para el pallet que tiene tomado, lo informa con
+`POST /api/frontera-fisica/sin-destino` (`tarea_id`, `planner_version`, `camaras_evaluadas`).
+Solo la tablet que tiene la tarea tomada puede informarlo; no cambia la tarea ni su reserva, y el
+camarero sigue viendo su mensaje.
+
+Un mismo motivo de una tarea dentro de `WMS_PLANNER_INCIDENCIAS_DESTINO_MINUTOS` (10 por
+defecto) suma repeticiones sobre la misma fila. Registrar es telemetría: un fallo al guardar
+nunca cambia la respuesta de la operación.
+
+`TABLET_PLANNER_VERSION` cambia cada vez que cambian las reglas con que la tablet elige
+destinos (`rolling-global-6-sector-acopio` desde el sector de acopio), para saber qué tablets
+tienen las reglas vigentes.
+
 ## Replanificación segura
 
 Al terminar un paso, el servidor avanza la misma maniobra y la tablet vuelve a

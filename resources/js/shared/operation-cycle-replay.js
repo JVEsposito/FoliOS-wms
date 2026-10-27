@@ -14,6 +14,7 @@ const DECISION_LABELS = {
     fuera_frontera: 'Fuera de frontera',
     fuera_rollout: 'Fuera de rollout',
     fuera_planificador: 'Fuera del planificador',
+    sin_destino: 'Sin destino posible',
 };
 
 const FIELD_LABELS = {

@@ -43,7 +43,11 @@ La cámara objetivo se determina en este orden:
 1. `carga.camara_objetivo_id`, si fue definida explícitamente;
 2. cámara del grupo físico principal ya existente.
 
-Si no existe ninguna de las dos señales, el planificador no inventa una cámara objetivo.
+Desde el 26-10-2026, si no existe ninguna de las dos señales, las recepciones de la carga
+estiman antes del primer pallet una cámara con bandas libres para toda la carga (la preferente
+de despacho, luego la que guarda más pallets del mismo cliente y luego por código). El acopio
+crece donde cabe lo que falta de la carga; ver *Sector de acopio con capacidad* en
+[Labores coordinadas](PLANIFICADOR_LABORES_COORDINADAS.md).
 
 Cuando existe una cámara objetivo explícita pero todavía no hay un grupo dentro de ella, la frontera publica como máximo un pallet semilla. Después de ejecutarlo se recalcula la geometría antes de publicar más trabajo.
 

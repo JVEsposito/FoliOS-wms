@@ -91,7 +91,7 @@ class ArbitrajeGlobalManiobrasTest extends TestCase
             $this->assertContains($maniobras[$i]->id, $publicadas);
         }
         $this->assertSame(1, count(array_intersect([$maniobras[0]->id, $maniobras[1]->id], $publicadas)));
-        $this->assertSame('arbitraje_global_v6_funciones_turno', $ciclo->contexto['version_reglas']);
+        $this->assertSame('arbitraje_global_v7_destino_posible', $ciclo->contexto['version_reglas']);
         $this->assertSame($ciclo->id, $servicio->arbitrar($c['temporada'])->id);
         $estado = app(ServicioEstadoArbitrajePlanificador::class);
         $version = $estado->iniciarCalculo($c['temporada']->id);
@@ -184,7 +184,7 @@ class ArbitrajeGlobalManiobrasTest extends TestCase
         $explicacionEmergencia = $decisiones[$emergencia->id]->explicacion;
         $this->assertSame(1, $explicacionEmergencia['version']);
         $this->assertSame(
-            'arbitraje_global_v5_pausa_fisica',
+            'arbitraje_global_v7_destino_posible',
             $explicacionEmergencia['reglas'],
         );
         $this->assertSame(

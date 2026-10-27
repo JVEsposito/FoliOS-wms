@@ -135,3 +135,20 @@ test('las insignias en cero desaparecen', () => {
 
     assert.deepEqual(badges, { atencion: null, maniobras: null, plano: null, camaras: null, prefrio: null, personal: null });
 });
+
+test('las maniobras sin destino y los rechazos repetidos llegan a Atención como advertencias del planificador', () => {
+    const { rows } = buildAttention(snapshot({
+        planificador: {
+            despliegue: { mode_global: 'guided' },
+            arbitraje: { vigencia: { estado: 'actual' }, ciclo: { resumen: { en_curso: 0 } } },
+            salud: { riesgos: { maniobras_sin_destino: 4, destinos_rechazados_repetidos: 1 } },
+        },
+    }));
+    const sinDestino = rows.find((row) => row.key === 'planificador:maniobras_sin_destino');
+    const rechazos = rows.find((row) => row.key === 'planificador:destinos_rechazados_repetidos');
+
+    assert.equal(sinDestino.severity, 'warning');
+    assert.match(sinDestino.detail, /^4 maniobras · sin posición libre y accesible/);
+    assert.equal(rechazos.condition, 'Destinos rechazados varias veces');
+    assert.match(rechazos.detail, /^1 pallet · /);
+});

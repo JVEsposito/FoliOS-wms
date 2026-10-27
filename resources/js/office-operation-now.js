@@ -271,6 +271,7 @@ function toneForPlannerDecision(decision) {
         fuera_frontera: 'warning',
         fuera_rollout: 'warning',
         fuera_planificador: 'neutral',
+        sin_destino: 'critical',
     }[decision] || 'neutral';
 }
 
@@ -567,6 +568,7 @@ function plannerDecisionLabel(decision, factor = '') {
         excluida_conflicto: 'Bloqueada por otra',
         fuera_rollout: 'Cámara sin planificador',
         fuera_planificador: 'Gestión manual',
+        sin_destino: 'Sin destino posible',
     }[decision] || humanize(decision);
 }
 
@@ -658,6 +660,7 @@ function renderPlanner(planner = {}) {
     setText('plannerAlternativeCount', cycle ? number(summary.alternativa || 0) : '—');
     setText('plannerConflictCount', cycle ? number(summary.excluida_conflicto || 0) : '—');
     setText('plannerRolloutCount', cycle ? number(summary.fuera_rollout || 0) : '—');
+    setText('plannerNoDestinationCount', cycle ? number(summary.sin_destino || 0) : '—');
 
     const riskDefinitions = [
         ['leases_vencidos_activos', 'Reservas de tarea vencidas', 'critical'],
@@ -665,6 +668,8 @@ function renderPlanner(planner = {}) {
         ['custodias_temporales_activas', 'Pallets fuera de su posición', 'warning'],
         ['maniobras_completadas_con_custodia', 'Pallets sin devolver', 'critical'],
         ['discrepancias_abiertas', 'Diferencias reportadas', 'warning'],
+        ['maniobras_sin_destino', 'Maniobras sin destino posible', 'warning'],
+        ['destinos_rechazados_repetidos', 'Pallets con destino rechazado varias veces', 'warning'],
     ];
     elements.plannerRiskRows.innerHTML = riskDefinitions.map(([key, label, warningTone]) => {
         const value = Number(risks[key] || 0);

@@ -16,7 +16,9 @@ import { fetchWithTimeout } from './httpClient';
 import type { ShiftVerification, MaterialVerificationReading } from '../domain/verification';
 import type { OperatorLoadFeed } from '../domain/operatorLoads';
 
-export const TABLET_PLANNER_VERSION = 'rolling-global-5-despeje-local';
+// Cambia cada vez que cambian las reglas con que la tablet elige destinos: el servidor la
+// registra con cada rechazo para saber qué tablets tienen las reglas vigentes.
+export const TABLET_PLANNER_VERSION = 'rolling-global-6-sector-acopio';
 
 export type StartConfirmation = {
   folioDigits: string;
@@ -160,6 +162,22 @@ export class OperationalTasksApi {
           snapshot_version: snapshotVersion,
           planner_version: TABLET_PLANNER_VERSION,
           propuestas: proposals,
+        }),
+      },
+    )).data;
+  }
+
+  /** Avisa a Oficina que la tablet no encontró una posición para la tarea que tiene tomada. */
+  async reportNoDestination(token: string, taskId: string, evaluatedCameras: number) {
+    return (await this.request<{ data: { registrada: boolean; repeticiones: number } }>(
+      '/api/frontera-fisica/sin-destino',
+      token,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          tarea_id: taskId,
+          planner_version: TABLET_PLANNER_VERSION,
+          camaras_evaluadas: evaluatedCameras,
         }),
       },
     )).data;

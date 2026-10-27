@@ -16,6 +16,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\PlanOperacionalResource;
 use App\Http\Resources\TareaMovimientoResource;
 use App\Models\Folio;
+use App\Models\IncidenciaDestinoPlanificador;
 use App\Models\LaborCamarero;
 use App\Models\OperacionSincronizacion;
 use App\Models\PersonalAccessToken;
@@ -33,6 +34,7 @@ use App\Services\Estiba\ServicioReservasTareasMovimiento;
 use App\Services\Planificador\ServicioArbitrajeManiobras;
 use App\Services\Planificador\ServicioDesplieguePlanificador;
 use App\Services\Planificador\ServicioEstadoArbitrajePlanificador;
+use App\Services\Planificador\ServicioIncidenciasDestino;
 use App\Services\Planificador\ServicioLaboresTurno;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\Verificaciones\ServicioVerificacionesUbicacion;
@@ -369,6 +371,7 @@ class PlanOperacionalController extends Controller
         ContextoOperacional $contexto,
         ServicioPlanesOperacionales $servicio,
         ServicioDesplieguePlanificador $despliegue,
+        ServicioIncidenciasDestino $incidencias,
     ): JsonResponse {
         abort_unless($planOperacional->temporada_id === app(ServicioTemporadaActiva::class)->buscar()?->id, 404);
         $horizon = ($planOperacional->contexto ?? [])['planner_horizon']
@@ -456,7 +459,17 @@ class PlanOperacionalController extends Controller
                     'posicion_destino_id' => $propuesta['posicion_destino_id'],
                     'motivo' => $exception->getMessage(),
                 ];
+                $incidencias->registrar(
+                    $tarea,
+                    IncidenciaDestinoPlanificador::ORIGEN_RECHAZO_SERVIDOR,
+                    $exception->getMessage(),
+                    $posicion ?? null,
+                    $datos['planner_version'],
+                    $usuario,
+                    $dispositivo,
+                );
             }
+            unset($posicion);
         }
 
         return response()->json([
