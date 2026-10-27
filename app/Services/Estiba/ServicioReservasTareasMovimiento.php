@@ -777,25 +777,19 @@ class ServicioReservasTareasMovimiento
         string $folioId,
         ?string $maniobraPermitidaId,
     ): void {
-        $maniobra = ManiobraOperacional::query()
-            ->whereIn('estado', [
-                EstadoManiobraOperacional::EnEjecucion->value,
-                EstadoManiobraOperacional::PausadaDiscrepancia->value,
-            ])
-            ->when(
-                $maniobraPermitidaId,
-                fn ($consulta) => $consulta->whereKeyNot($maniobraPermitidaId),
-            )
-            ->whereHas('pasos', fn ($consulta) => $consulta
-                ->where('folio_id', $folioId)
-                ->whereIn('estado', [
-                    EstadoTareaMovimiento::Bloqueada->value,
-                    EstadoTareaMovimiento::Pendiente->value,
-                    EstadoTareaMovimiento::Asumida->value,
-                    EstadoTareaMovimiento::EnProceso->value,
-                ]))
-            ->lockForUpdate()
-            ->first();
+        // El movimiento ya mantiene el mutex del folio. Leer primero sus pasos
+        // evita bloquear el índice de todas las maniobras en ejecución.
+        $ids = TareaMovimiento::query()->where('folio_id', $folioId)
+            ->whereNotNull('maniobra_operacional_id')
+            ->when($maniobraPermitidaId, fn ($q) => $q->where('maniobra_operacional_id', '!=', $maniobraPermitidaId))
+            ->whereIn('estado', [EstadoTareaMovimiento::Bloqueada->value, EstadoTareaMovimiento::Pendiente->value,
+                EstadoTareaMovimiento::Asumida->value, EstadoTareaMovimiento::EnProceso->value])
+            ->orderBy('id')->lockForUpdate()->get(['maniobra_operacional_id'])
+            ->pluck('maniobra_operacional_id')->unique();
+        $maniobra = $ids->isEmpty() ? null : ManiobraOperacional::query()
+            ->whereIn('id', $ids)->whereIn('estado', [EstadoManiobraOperacional::EnEjecucion->value,
+                EstadoManiobraOperacional::PausadaDiscrepancia->value])
+            ->orderBy('id')->lockForUpdate()->first();
 
         if ($maniobra) {
             throw new ConflictoOperacion(

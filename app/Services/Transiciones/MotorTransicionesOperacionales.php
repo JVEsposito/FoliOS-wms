@@ -7,6 +7,7 @@ use App\Exceptions\ConflictoOperacion;
 use App\Models\TransicionOperacional;
 use Closure;
 use DomainException;
+use Illuminate\Contracts\Database\ConcurrencyErrorDetector;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -52,9 +53,16 @@ class MotorTransicionesOperacionales
                         return ['repetida' => true];
                     }
 
+                    // Un fallo técnico histórico no es una nueva excepción de MySQL.
+                    // Reemitir su SQLSTATE hace que Laravel lo confunda con otro deadlock
+                    // y evita que el cliente reciba el rechazo definitivo del UUID.
+                    $mensaje = $existente->error_mensaje;
+                    if ($existente->estado === EstadoTransicionOperacional::Fallida
+                        || Str::contains((string) $mensaje, ['SQLSTATE[', 'Deadlock found'])) {
+                        $mensaje = 'El intento anterior terminó con un fallo técnico. Comprueba el resultado antes de registrar un nuevo intento.';
+                    }
                     throw new ConflictoOperacion(
-                        $existente->error_mensaje
-                            ?: 'La transición ya fue procesada y no puede reintentarse con el mismo UUID.',
+                        $mensaje ?: 'La transición ya fue procesada y no puede reintentarse con el mismo UUID.',
                     );
                 }
 
@@ -92,6 +100,11 @@ class MotorTransicionesOperacionales
                 return ['valor' => $valor];
             }, attempts: 3);
         } catch (Throwable $exception) {
+            // La transacción exterior es quien puede reintentar el comando completo.
+            // No escribir una transición final para una operación que MySQL revirtió.
+            if (app(ConcurrencyErrorDetector::class)->causedByConcurrencyError($exception)) {
+                throw $exception;
+            }
             $this->registrarFallo(
                 $comando,
                 $tipo,

@@ -9,14 +9,18 @@ use App\Enums\EstadoTransicionOperacional;
 use App\Enums\HabilitacionAlmacenamientoFolio;
 use App\Enums\RolUsuario;
 use App\Enums\TipoBulto;
+use App\Exceptions\ConflictoOperacion;
 use App\Models\CambioTransicionOperacional;
 use App\Models\Folio;
 use App\Models\TransicionOperacional;
 use App\Models\User;
 use App\Services\Transiciones\ComandoTransicionOperacional;
 use App\Services\Transiciones\MotorTransicionesOperacionales;
+use App\Services\Transiciones\NormalizadorTransicionOperacional;
 use DomainException;
+use Illuminate\Database\DeadlockException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use RuntimeException;
 use Tests\TestCase;
@@ -231,6 +235,36 @@ class MotorTransicionesOperacionalesTest extends TestCase
         $this->assertSame(EstadoTransicionOperacional::Fallida, $transicion->estado);
         $this->assertSame('fallo_no_controlado', $transicion->error_codigo);
         $this->assertSame(0, $transicion->cantidad_cambios);
+        $this->assertDatabaseCount('cambios_transiciones_operacionales', 0);
+    }
+
+    public function test_un_deadlock_historico_se_rechaza_sin_reemitirlo_como_excepcion_mysql(): void
+    {
+        $usuario = $this->usuario();
+        $folio = $this->folio('PAL-DEADLOCK-HISTORICO');
+        $uuid = (string) Str::uuid();
+        $payload = ['folio_id' => $folio->id];
+        $normalizador = app(NormalizadorTransicionOperacional::class);
+        $fallida = TransicionOperacional::create(['dominio' => DominioTransicionOperacional::Estiba,
+            'tipo' => 'ubicacion_inicial', 'operacion_id' => $uuid, 'estado' => EstadoTransicionOperacional::Fallida,
+            'user_id' => $usuario->id, 'payload' => $payload, 'payload_hash' => $normalizador->hash($payload),
+            'cantidad_cambios' => 0, 'error_tipo' => DeadlockException::class,
+            'error_codigo' => 'fallo_no_controlado', 'error_mensaje' => 'SQLSTATE[40001]: Deadlock found when trying to get lock',
+            'ocurrido_at' => now(), 'finalizado_at' => now()]);
+        $anterior = $fallida->refresh()->getRawOriginal();
+        try {
+            DB::transaction(fn () => $this->motor()->ejecutar(
+                new ComandoTransicionOperacional(dominio: DominioTransicionOperacional::Estiba,
+                    tipo: 'ubicacion_inicial', usuario: $usuario, payload: $payload, operacionId: $uuid),
+                fn () => $this->fail('Un UUID finalizado no debe volver a ejecutar el cambio.')));
+            $this->fail('Debe informar que este intento falló.');
+        } catch (ConflictoOperacion $error) {
+            $this->assertStringContainsString('nuevo intento', $error->getMessage());
+            $this->assertStringNotContainsString('Deadlock', $error->getMessage());
+            $this->assertStringNotContainsString('SQLSTATE', $error->getMessage());
+        }
+        $this->assertSame($anterior, $fallida->refresh()->getRawOriginal());
+        $this->assertDatabaseCount('transiciones_operacionales', 1);
         $this->assertDatabaseCount('cambios_transiciones_operacionales', 0);
     }
 

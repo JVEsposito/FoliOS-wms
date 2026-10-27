@@ -230,7 +230,12 @@ export function OperationalTaskInbox({ api, auth }: Props) {
     } catch (reason) {
       if (!captureRead || pendingRef.current) setRecoveryIssue(messageFrom(reason));
       else { setRecoveryIssue(''); reportError(messageFrom(reason)); }
-    } finally { setJournalReady(true); }
+    } finally {
+      if (!pendingRef.current) {
+        await closeTemporarySessions(executionSessions.current); executionSessions.current = [];
+      }
+      setJournalReady(true);
+    }
   }
 
   async function persistMovement(task: OperationalTask, kind: PendingOperationalMovement['kind'],
@@ -266,8 +271,11 @@ export function OperationalTaskInbox({ api, auth }: Props) {
           throw reason;
         }
       }
-      setRecoveryIssue('No se recibió la confirmación. La entrega está guardada en esta tablet; revísala antes de repetir cualquier movimiento.');
-      throw new Error('Confirmación pendiente. No repitas el movimiento físico; usa «Revisar confirmación».');
+      const detail = reason instanceof ApiError && [0, 503].includes(reason.status)
+        ? reason.message : reason instanceof ApiError ? `El servidor devolvió un error (${reason.status}).` : 'No se recibió la respuesta del servidor.';
+      const message = `Confirmación pendiente. ${detail} La entrega sigue guardada; usa «Revisar confirmación» sin repetir el movimiento físico.`;
+      setRecoveryIssue(message);
+      throw new Error(message);
     }
     await movementStore.clear(entry.id); rememberPending(null); setRecoveryIssue('');
   }
@@ -703,8 +711,10 @@ export function OperationalTaskInbox({ api, auth }: Props) {
       reportError(messageFrom(reason));
       await loadTasks({ quiet: true });
     } finally {
-      await closeTemporarySessions(sessions);
-      executionSessions.current = [];
+      // La respuesta puede haberse perdido mientras el servidor sigue trabajando.
+      // Conservar las sesiones del intento pendiente permite reenviar su mismo UUID.
+      if (pendingRef.current) executionSessions.current = sessions;
+      else { await closeTemporarySessions(sessions); executionSessions.current = []; }
     }
   }
 
@@ -750,8 +760,10 @@ export function OperationalTaskInbox({ api, auth }: Props) {
       reportError(messageFrom(reason));
       await loadTasks({ quiet: true });
     } finally {
-      await closeTemporarySessions(sessions);
-      executionSessions.current = [];
+      // La respuesta puede haberse perdido mientras el servidor sigue trabajando.
+      // Conservar las sesiones del intento pendiente permite reenviar su mismo UUID.
+      if (pendingRef.current) executionSessions.current = sessions;
+      else { await closeTemporarySessions(sessions); executionSessions.current = []; }
     }
   }
 
@@ -783,8 +795,10 @@ export function OperationalTaskInbox({ api, auth }: Props) {
       reportError(messageFrom(reason));
       await loadTasks({ quiet: true });
     } finally {
-      await closeTemporarySessions(sessions);
-      executionSessions.current = [];
+      // La respuesta puede haberse perdido mientras el servidor sigue trabajando.
+      // Conservar las sesiones del intento pendiente permite reenviar su mismo UUID.
+      if (pendingRef.current) executionSessions.current = sessions;
+      else { await closeTemporarySessions(sessions); executionSessions.current = []; }
     }
   }
 
@@ -991,7 +1005,10 @@ export function OperationalTaskInbox({ api, auth }: Props) {
       {pendingMovement || recoveryIssue ? (
         <View style={styles.recoveryPanel}>
           <Text accessibilityRole="header" style={styles.recoveryTitle}>Confirmación pendiente</Text>
-          {pendingMovement ? <Text style={styles.recoveryFolio}>Folio {pendingMovement.folio}</Text> : null}
+          {pendingMovement ? <>
+            <Text style={styles.recoveryFolio}>Folio {pendingMovement.folio}</Text>
+            <Text selectable style={styles.recoveryCopy}>Operación: {pendingMovement.id}</Text>
+          </> : null}
           <Text style={styles.recoveryCopy}>{recoveryIssue || 'La entrega está guardada en esta tablet. Comprueba el resultado antes de repetir el movimiento físico.'}</Text>
           <Pressable accessibilityRole="button" disabled={busy} onPress={() => void runAction('Revisando confirmación…', () => recoverMovement(true))} style={styles.recoveryButton}>
             <Text style={styles.recoveryButtonText}>Revisar confirmación</Text>

@@ -30,6 +30,7 @@ use App\Models\PresenciaCargaAnden;
 use App\Models\ReservaCargaFolio;
 use App\Models\ReservaTareaMovimiento;
 use App\Models\Temporada;
+use App\Models\TransicionOperacional;
 use App\Models\UbicacionActual;
 use App\Models\User;
 use App\Services\Camaras\ServicioBandasOperacionales;
@@ -42,10 +43,13 @@ use App\Services\Estiba\ServicioPlanesOperacionales;
 use App\Services\Estiba\ServicioReservasTareasMovimiento;
 use App\Services\Estiba\ServicioSesionEstiba;
 use App\Services\Planificador\ServicioRecalculosPendientesPlanificador;
+use App\Services\Transiciones\NormalizadorTransicionOperacional;
 use DomainException;
+use Illuminate\Database\DeadlockException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class ConcentracionCargaRollingTest extends TestCase
@@ -255,7 +259,13 @@ class ConcentracionCargaRollingTest extends TestCase
         }
     }
 
-    public function test_maniobra_temporal_no_cierra_hasta_devolver_el_blocker(): void
+    public static function estadosPreviosRetorno(): array
+    {
+        return ['sin fallo anterior' => [false], 'UUID con deadlock histórico' => [true]];
+    }
+
+    #[DataProvider('estadosPreviosRetorno')]
+    public function test_maniobra_temporal_no_cierra_hasta_devolver_el_blocker(bool $falloHistorico): void
     {
         $contexto = $this->crearContexto(total: 5, concentrados: 3, fuera: 1, sinUbicacion: 1);
         $objetivo = $contexto['foliosFuera'][0];
@@ -384,6 +394,31 @@ class ConcentracionCargaRollingTest extends TestCase
             $dispositivo,
         );
         $planes->iniciar($retorno, $operador, $dispositivo);
+        if ($falloHistorico) {
+            $uuidFallido = (string) Str::uuid();
+            $fecha = now()->toImmutable();
+            $payload = ['numero_folio' => $blocker->numero_folio, 'tipo_bulto' => 'pallet',
+                'camara_destino_id' => $contexto['camaraFuera']->id, 'posicion_destino_id' => $posicionObjetivo->id,
+                'sesion_destino_id' => $sesionOrigen->id, 'version_destino_conocida' => $contexto['camaraFuera']->refresh()->version_plano,
+                'generado_dispositivo_at' => $fecha->format(DATE_ATOM), 'datos_folio' => [], 'datos_material' => [],
+                'advertencias_confirmadas' => [], 'tarea_movimiento_id' => $retorno->id];
+            $normalizador = app(NormalizadorTransicionOperacional::class);
+            $fallida = TransicionOperacional::create(['dominio' => 'estiba', 'tipo' => 'ubicacion_inicial',
+                'operacion_id' => $uuidFallido, 'estado' => 'fallida', 'user_id' => $operador->id, 'dispositivo_id' => $dispositivo->id,
+                'payload' => $payload, 'payload_hash' => $normalizador->hash($payload), 'cantidad_cambios' => 0,
+                'error_tipo' => DeadlockException::class, 'error_codigo' => 'fallo_no_controlado',
+                'error_mensaje' => 'SQLSTATE[40001]: Deadlock found when trying to get lock', 'ocurrido_at' => now(), 'finalizado_at' => now()]);
+            $token = $operador->crearTokenParaDispositivo($dispositivo, 'recuperar-retorno')->plainTextToken;
+            $this->withToken($token)->postJson('/api/movimientos/ubicar', ['operacion_id' => $uuidFallido, ...$payload])
+                ->assertConflict()->assertJsonPath('codigo', 'conflicto_operacional');
+            $this->assertSame('en_proceso', $retorno->refresh()->estado->value);
+            $this->assertNull($blocker->refresh()->ubicacionActual);
+            $this->assertDatabaseHas('custodias_temporales_maniobra', ['folio_id' => $blocker->id, 'estado' => 'activa']);
+            $this->assertDatabaseHas('operaciones_sincronizacion', ['id' => $uuidFallido, 'estado' => 'rechazada']);
+            $this->assertSame('fallida', $fallida->refresh()->estado->value);
+            $this->withToken($token)->getJson('/api/tareas-movimiento/'.$retorno->id.'/estado-propio?operacion_id='.$uuidFallido)
+                ->assertOk()->assertJsonPath('data.confirmada', false)->assertJsonPath('data.operacion.estado', 'rechazada');
+        }
         $movimientos->ubicar(
             operacionId: (string) Str::uuid(),
             numeroFolio: $blocker->numero_folio,
@@ -398,7 +433,7 @@ class ConcentracionCargaRollingTest extends TestCase
         );
 
         $this->assertSame(EstadoManiobraOperacional::Completada, $maniobra->refresh()->estado);
-        $this->assertSame($posicionObjetivo->id, $blocker->ubicacionActual->refresh()->posicion_id);
+        $this->assertSame($posicionObjetivo->id, $blocker->refresh()->ubicacionActual->posicion_id);
         $this->assertDatabaseHas('custodias_temporales_maniobra', [
             'maniobra_operacional_id' => $maniobra->id,
             'folio_id' => $blocker->id,
