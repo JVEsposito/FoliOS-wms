@@ -250,6 +250,13 @@ function renderContainerWeighings(reception, canOperate) {
             ${canOperate && !reading.anulado && reception.puede_registrar_pesaje ? `<button type="button" data-annul-weighing-id="${escapeHtml(reading.id)}">Anular</button>` : '<span></span>'}
         </article>`).join('') : '<p class="weighbridge-empty">Aún no se registran tandas. Puedes comenzar con 1, 3 o cualquier cantidad pendiente.</p>';
 }
+/** Bins de la planta agregados en Validación MP; se prestan a la cuenta del cliente y vuelven en el destare. */
+function plantBinsFact(reception) {
+    const loan = reception.bins_prestados_planta;
+    if (!loan?.cantidad) return '';
+    return `${loan.cantidad} ${loan.cantidad === 1 ? 'prestado' : 'prestados'} · ${loan.devuelto ? 'devuelto internamente' : 'se devuelve al cerrar'}`;
+}
+
 function renderDetail(reception) {
     state.selected = reception;
     elements.detail.classList.remove('is-hidden');
@@ -283,6 +290,7 @@ function renderDetail(reception) {
         fact('INGRESO', formatDate(reception.ingreso_at)), fact(reception.tipo_recepcion === 'solo_envases' ? 'CIERRE DOCUMENTAL' : reception.pesaje_envases ? 'CIERRE DE PESAJE' : 'SALIDA / DESTARE', formatDate(reception.salida_at)), fact('TEMPORADA GLOBAL', `${reception.temporada.nombre} · ${reception.temporada.codigo}`), fact('CLIENTE', reception.cliente.nombre), fact('TIPO RECEPCIÓN', label(reception.tipo_recepcion)), fact('SERVICIO / CONCEPTO', reception.tipo_recepcion === 'solo_envases' ? label(reception.concepto_envases) : label(reception.tipo_servicio)), fact('GUÍA', reception.numero_guia_despacho),
         ...(reception.destare_pendiente_validacion ? [fact('DESTARE', 'Espera la Validación MP completa en la PDA')] : []),
         ...(reception.modo_salida_envases ? [fact('SALIDA ENVASES', label(reception.modo_salida_envases)), fact('GUÍA DE SALIDA', reception.numero_guia_salida || 'Sin salida'), fact('ENVASES RETIRADOS', (reception.salida_envases || []).filter((x) => x.cantidad > 0).map((x) => `${x.cantidad} ${label(x.tipo_envase)}`).join(' · ') || 'Ninguno')] : []),
+        ...(plantBinsFact(reception) ? [fact('BINS DE PLANTA', plantBinsFact(reception))] : []),
         fact('CAMIÓN', reception.patente_camion), fact('TIPO DE CAMIÓN', reception.tipo_camion ? label(reception.tipo_camion) : 'No informado'), fact('CARRO', reception.patente_carro || 'No informado'), fact('CONDUCTOR', reception.nombre_conductor), fact('RUT', reception.rut_conductor), fact('ENVASES DECLARADOS', envasesLabel(reception)), fact('VALIDACIÓN MP', label(reception.estado_validacion_mp)),
         ...weighingFacts,
         ...outboundTareFacts,
@@ -589,7 +597,9 @@ function openTareDialog(correcting) {
     }
     elements.exitCorrectionReasonField.classList.toggle('is-hidden', !correcting);
     elements.tareForm.elements.motivo_correccion.required = correcting;
-    elements.tareDescription.textContent = `${state.selected.patente_camion} · bruto ${formatWeight(state.selected.peso_bruto)}. Completa la guía y el retiro físico de envases.`;
+    const plantBins = state.selected.bins_prestados_planta;
+    elements.tareDescription.textContent = `${state.selected.patente_camion} · bruto ${formatWeight(state.selected.peso_bruto)}. Completa la guía y el retiro físico de envases.`
+        + (plantBins && !plantBins.devuelto ? ` Validación MP agregó ${plantBins.cantidad} ${plantBins.cantidad === 1 ? 'bin' : 'bins'} de planta: no sale${plantBins.cantidad === 1 ? '' : 'n'} con el camión y se devuelve${plantBins.cantidad === 1 ? '' : 'n'} internamente al cerrar.` : '');
     updateExitMode();
     elements.tareDialog.showModal();
     if (!correcting) elements.tareForm.elements.peso_tara.focus();

@@ -210,6 +210,8 @@ Los envases declarados y luego confirmados alimentan el dominio de Envases media
 
 Romana no modifica saldos de forma opaca: la cuenta se explica con movimientos firmados y puede distinguir propiedad propia, del cliente o arrendada según el origen de la operación.
 
+Si Validación MP agregó bins de planta, el expediente los muestra. El destare los devuelve internamente antes de registrar los envases que salen: el camión no se los lleva. Ver [Préstamo interno de bins de planta](MODULO_ENVASES.md#préstamo-interno-de-bins-de-planta).
+
 ## Trazabilidad
 
 Los eventos de Romana incluyen, entre otros:

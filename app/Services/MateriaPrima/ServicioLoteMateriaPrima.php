@@ -898,6 +898,15 @@ class ServicioLoteMateriaPrima
         $principal = $segmento->envases->first(fn ($envase): bool => $envase->tipo_envase === $recepcion->tipo_envase_declarado && $envase->tipo_envase->contieneFruta() && $envase->cantidad > 0)
             ?? $segmento->envases->first(fn ($envase): bool => $envase->tipo_envase->contieneFruta() && $envase->cantidad > 0);
         $contenedor = $principal->tipo_envase->value;
+        $cantidadPrimarios = (int) $principal->cantidad;
+        // Bins de la planta que completan la carga: la fruta se mueve en bins, así que el lote
+        // los cuenta para hidrocooler, cámara y Fruta a proceso. Los kilos y el reparto del neto
+        // siguen saliendo solo de los envases recibidos, porque esos bins llegaron vacíos.
+        $binsPlanta = (int) $segmento->bins_prestados_planta;
+        if ($binsPlanta > 0) {
+            $contenedor = TipoEnvaseRomana::Bins->value;
+            $cantidadPrimarios = (int) ($segmento->envases->first(fn ($envase): bool => $envase->tipo_envase === TipoEnvaseRomana::Bins)?->cantidad ?? 0) + $binsPlanta;
+        }
         $secundario = $segmento->envases->first(fn ($envase): bool => $envase->tipo_envase->value !== $contenedor && $envase->cantidad > 0);
         $destarePendiente = $recepcion->peso_neto === null;
         $calculados = $destarePendiente
@@ -939,8 +948,9 @@ class ServicioLoteMateriaPrima
             'tipo_producto' => $datos['tipo_producto'],
             'envase_primario' => $contenedor,
             'envase_secundario' => $secundario?->tipo_envase->value,
-            'cantidad_envases_primarios' => (int) $principal->cantidad,
+            'cantidad_envases_primarios' => $cantidadPrimarios,
             'cantidad_envases_secundarios' => (int) ($secundario?->cantidad ?? 0),
+            'bins_prestados_planta' => $binsPlanta,
             'kilos_brutos' => $brutos,
             'kilos_netos_calculados' => $calculados,
             'kilos_netos_confirmados' => $calculados,

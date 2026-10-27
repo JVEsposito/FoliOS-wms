@@ -369,6 +369,7 @@ function renderSegments() {
                 <p>${escapeHtml(origin)}</p>
                 <div class="segment-card__containers">
                     ${segment.envases.map((container) => `<span>${escapeHtml(label(container.tipo_envase))}: ${escapeHtml(container.cantidad_disponible)} disponibles de ${escapeHtml(container.cantidad)}</span>`).join('')}
+                    ${plantBinsLabel(segment.bins_prestados_planta) ? `<span data-plant-bins>${escapeHtml(plantBinsLabel(segment.bins_prestados_planta))}</span>` : ''}
                 </div>
                 <div class="segment-card__net">
                     <div><span>NETO ESTIMADO SEGMENTO</span><strong>${escapeHtml(segment.destare_pendiente ? 'Pendiente de destare' : segment.error_neto || formatWeight(segment.neto_estimado))}</strong></div>
@@ -422,7 +423,7 @@ function renderLots() {
             <td><strong>${escapeHtml(lot.numero_lote)}</strong><small>${escapeHtml(lot.recepcion?.numero_recepcion)} · guía ${escapeHtml(lot.recepcion?.numero_guia_despacho)}</small><small>${escapeHtml(lot.cliente?.nombre)}</small></td>
             <td><strong>CSG ${escapeHtml(lot.trazabilidad.csg)}</strong><small>SdP ${escapeHtml(lot.trazabilidad.sdp)} · GGN ${escapeHtml(lot.trazabilidad.ggn)}</small><small>${escapeHtml(lot.trazabilidad.predio)}${lot.trazabilidad.cuartel ? ` · ${escapeHtml(lot.trazabilidad.cuartel)}` : ' · Sin cuartel'}</small></td>
             <td><strong>${escapeHtml(lot.trazabilidad.especie)} · ${escapeHtml(lot.trazabilidad.variedad)}</strong><small>${escapeHtml(label(lot.trazabilidad.tipo_producto))}${lot.trazabilidad.calibre ? ` · Calibre histórico: ${escapeHtml(lot.trazabilidad.calibre)}` : ''}</small><small>Cosecha ${escapeHtml(lot.trazabilidad.fecha_cosecha)}</small></td>
-            <td><strong>${(lot.envases.detalle || []).map((item) => `${escapeHtml(item.cantidad)} ${escapeHtml(label(item.tipo_envase))}`).join(' · ')}</strong><small class="weight-value">${escapeHtml(lot.pesos.destare_pendiente ? 'Kilos: pendiente de destare' : formatWeight(lot.pesos.kilos_netos_confirmados) + ' netos')}</small><small>${lot.pesos.destare_pendiente ? 'Confirma el lote después del destare' : lot.pesos.corregido_por_digitador ? `Calculado: ${escapeHtml(formatWeight(lot.pesos.kilos_netos_calculados))}` : 'Neto calculado confirmado'}</small></td>
+            <td><strong>${(lot.envases.detalle || []).map((item) => `${escapeHtml(item.cantidad)} ${escapeHtml(label(item.tipo_envase))}`).join(' · ')}</strong>${plantBinsLabel(lot.envases.bins_prestados_planta) ? `<small data-plant-bins>${escapeHtml(plantBinsLabel(lot.envases.bins_prestados_planta))} · ${escapeHtml(lot.envases.cantidad_primarios)} bins en proceso</small>` : ''}<small class="weight-value">${escapeHtml(lot.pesos.destare_pendiente ? 'Kilos: pendiente de destare' : formatWeight(lot.pesos.kilos_netos_confirmados) + ' netos')}</small><small>${lot.pesos.destare_pendiente ? 'Confirma el lote después del destare' : lot.pesos.corregido_por_digitador ? `Calculado: ${escapeHtml(formatWeight(lot.pesos.kilos_netos_calculados))}` : 'Neto calculado confirmado'}</small></td>
             <td>${stateBadge(lot.estado)}<small>${lot.requiere_hidrocooler ? 'Con hidrocooler' : 'Sin hidrocooler'}</small>${lot.asignacion_camara?.camara ? `<small>Cámara ${escapeHtml(lot.asignacion_camara.camara.codigo)}</small>` : ''}</td>
             <td><div class="lot-actions">${lotActions(lot)}</div></td>
         </tr>`).join('');
@@ -455,13 +456,19 @@ function updateSpeciesDependants(selectedVariety = '') {
     form.variedad_validacion_id.value = selectedVariety;
 }
 
+/** Bins de la planta que completan la carga recibida; el lote los suma a sus bins. */
+function plantBinsLabel(count) {
+    const value = Number(count || 0);
+    return value > 0 ? `+ ${value} ${value === 1 ? 'bin' : 'bins'} de planta` : '';
+}
+
 function renderSourceSummary(segment) {
     const available = segment.envases.filter((item) => Number(item.cantidad_disponible || 0) > 0)
         .map((item) => `${item.cantidad_disponible} ${label(item.tipo_envase)}`).join(' · ');
     elements.lotSourceSummary.innerHTML = `
         <div><span>RECEPCIÓN</span><strong>${escapeHtml(segment.recepcion.numero_recepcion)}</strong></div>
         <div><span>EXPORTADORA / CLIENTE</span><strong>${escapeHtml(segment.recepcion.cliente.nombre)}</strong></div>
-        <div><span>ENVASES DISPONIBLES</span><strong>${escapeHtml(available || 'Sin envases')}</strong></div>
+        <div><span>ENVASES DISPONIBLES</span><strong>${escapeHtml([available || 'Sin envases', plantBinsLabel(segment.bins_prestados_planta)].filter(Boolean).join(' · '))}</strong></div>
         <div><span>NETO UNITARIO ROMANA</span><strong>${escapeHtml(segment.destare_pendiente ? 'Pendiente de destare' : (segment.recepcion.reparto_neto_envases || []).map((r) => `${label(r.tipo_envase)}: ${formatWeight(r.peso_neto_unitario)}`).join(' · '))}</strong></div>`;
 }
 

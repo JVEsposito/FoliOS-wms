@@ -46,6 +46,7 @@ export type MpValidation = {
   dispositivo: { id: string; codigo: string } | null;
   tarjas_verificadas: boolean | null;
   requiere_segregacion: boolean;
+  bins_prestados_planta: number;
   tomada_at: string;
   validada_at: string | null;
   observacion: string | null;
@@ -57,6 +58,7 @@ export type MpValidation = {
     cuartel: string | null;
     variedad: string | null;
     estado: 'pendiente_lote';
+    bins_prestados_planta: number;
     envases: Array<{ tipo_envase: ContainerType; cantidad: number }>;
   }>;
 };
@@ -70,6 +72,8 @@ export type MpCatalog = {
   csg: Array<{ id: string; codigo: string; predio: string | null; variedad_ids: string[] }>;
   variedades: Array<{ id: string; nombre: string; especie: string | null }>;
   motivos: SegregationReason[];
+  /** Referencia de la especie para sugerir bins de planta; null si no está configurada. */
+  totes_por_bin?: number | null;
 };
 
 export type MpSegmentDraft = {
@@ -79,4 +83,6 @@ export type MpSegmentDraft = {
   cuartel: string;
   variedad_validacion_id: string | null;
   cantidades: Record<ContainerType, string>;
+  /** Bins de planta del segmento; null usa la sugerencia. */
+  bins_planta: string | null;
 };

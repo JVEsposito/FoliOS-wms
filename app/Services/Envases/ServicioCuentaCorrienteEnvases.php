@@ -41,6 +41,14 @@ class ServicioCuentaCorrienteEnvases
         'apertura_cuenta' => 'Apertura de cuenta',
         'ajuste_cuenta' => 'Ajuste de cuenta',
         'reversion_ajuste_cuenta' => 'Reversa de ajuste de cuenta',
+        'prestamo_interno' => 'Préstamo interno de bins de planta',
+        'devolucion_prestamo_interno' => 'Devolución interna de bins de planta',
+    ];
+
+    /** Préstamo de bins de planta y su devolución: trazabilidad interna, con efecto neto 0. */
+    private const PRESTAMO_INTERNO = [
+        TipoMovimientoEnvase::PrestamoInterno,
+        TipoMovimientoEnvase::DevolucionPrestamoInterno,
     ];
 
     private const DOCUMENTO_GUIA = 'guia_despacho_envases';
@@ -180,7 +188,9 @@ class ServicioCuentaCorrienteEnvases
      * - una guía anulada y su anulación no aparecen; una corrección se aplica sobre el
      *   movimiento que corrige y no sale como línea propia;
      * - las líneas de un mismo documento, envase y propiedad se suman en una;
-     * - en los despachos se informa el N° de la guía emitida en el sistema de facturación.
+     * - en los despachos se informa el N° de la guía emitida en el sistema de facturación;
+     * - el préstamo interno de bins de planta no aparece: se devuelve en el destare sin salir
+     *   de la planta, y mientras el camión sigue en planta el saldo al cliente no lo descuenta.
      *
      * @return array<string, mixed>
      */
@@ -190,6 +200,7 @@ class ServicioCuentaCorrienteEnvases
             ->where('temporada_id', $temporada->id)
             ->where('cliente_id', $cliente->id)
             ->where('signo_cuenta', '!=', 0)
+            ->whereNotIn('tipo_movimiento', array_map(fn (TipoMovimientoEnvase $tipo): string => $tipo->value, self::PRESTAMO_INTERNO))
             ->orderBy('ocurrido_at')
             ->orderBy('id')
             ->get();
@@ -324,7 +335,9 @@ class ServicioCuentaCorrienteEnvases
                 ])->all();
             $enPlanta = $porPropiedad($filas);
             $reservas = $porPropiedad($reservado->where('tipo_envase', $tipo->value));
-            $propios = $filas->where('propiedad', PropiedadEnvase::Propia->value);
+            // El préstamo interno no mueve la existencia: no basta para mostrar el tipo.
+            $propios = $filas->where('propiedad', PropiedadEnvase::Propia->value)
+                ->reject(fn (object $fila): bool => TipoMovimientoEnvase::from($fila->tipo_movimiento)->esPrestamoInterno());
             $despachados = -(int) $propios->whereIn('tipo_movimiento', $despachos)->sum('cantidad');
 
             if (! array_filter($enPlanta) && ! array_filter($reservas) && $propios->isEmpty()) {

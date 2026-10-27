@@ -20,12 +20,16 @@ class ServicioRepartoEnvases
                 'peso_referencia' => $peso, 'created_at' => now(), 'updated_at' => now()]);
         }
         DB::table('preferencias_envase_especie')->insertOrIgnore(['especie_validacion_id' => $especie->id,
-            'tipo_envase' => 'totes', 'created_at' => now(), 'updated_at' => now()]);
+            'tipo_envase' => 'totes', 'totes_por_bin' => 24, 'created_at' => now(), 'updated_at' => now()]);
     }
 
     public function configuracion(?string $especieId): array
     {
-        return ['sugerido' => DB::table('preferencias_envase_especie')->where('especie_validacion_id', $especieId)->value('tipo_envase'),
+        $preferencia = DB::table('preferencias_envase_especie')->where('especie_validacion_id', $especieId)->first(['tipo_envase', 'totes_por_bin']);
+
+        return ['sugerido' => $preferencia?->tipo_envase,
+            // Totes que caben en un bin. Solo sugiere en la PDA los bins de planta que faltan.
+            'totes_por_bin' => $preferencia?->totes_por_bin !== null ? (int) $preferencia->totes_por_bin : null,
             'referencias' => DB::table('pesos_referencia_envases')->where('especie_validacion_id', $especieId)
                 ->pluck('peso_referencia', 'tipo_envase')->map(fn ($peso): float => (float) $peso)->all()];
     }

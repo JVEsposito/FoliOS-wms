@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 #[Fillable([
     'recepcion_romana_id', 'temporada_id', 'operacion_toma_id', 'operacion_confirmacion_id',
     'estado', 'validador_user_id', 'dispositivo_id', 'tarjas_verificadas',
-    'requiere_segregacion', 'tomada_at', 'validada_at', 'observacion',
+    'requiere_segregacion', 'bins_prestados_planta', 'tomada_at', 'validada_at', 'observacion',
 ])]
 class ValidacionMp extends Model implements PerteneceATemporada
 {
@@ -54,6 +54,7 @@ class ValidacionMp extends Model implements PerteneceATemporada
             'estado' => EstadoValidacionMp::class,
             'tarjas_verificadas' => 'boolean',
             'requiere_segregacion' => 'boolean',
+            'bins_prestados_planta' => 'integer',
             'tomada_at' => 'datetime',
             'validada_at' => 'datetime',
         ];

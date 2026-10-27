@@ -95,6 +95,12 @@ La diferencia entre declarado y observado:
 
 No deben duplicarse líneas del mismo tipo dentro de una confirmación incompatible ni utilizarse tipos no declarados por la recepción.
 
+### Bins de planta agregados
+
+Cuando llegan más totes de los que caben en los bins recibidos (por ejemplo 31 totes sobre 1 bin, con 24 por bin), la planta agrega bins propios para procesar la fruta. La PDA sugiere cuántos con la referencia «Totes por bin» de la especie y el validador los confirma o corrige en **Bins de planta agregados**. Con segregación se indican por segmento y deben sumar el total.
+
+La confirmación envía `bins_prestados_planta` y, por segmento, `segmentos.*.bins_prestados_planta` (enteros de 0 a 999). Los bins agregados no cambian lo validado. Se prestan a la cuenta del cliente y se devuelven en el destare. El detalle está en [Préstamo interno de bins de planta](MODULO_ENVASES.md#préstamo-interno-de-bins-de-planta).
+
 ## Revisión de tarjas
 
 La tarja se revisa visualmente como control operacional.
@@ -151,7 +157,7 @@ Digitación crea una relación explícita entre segmento y lote. No convierte `R
 
 ## Cuenta corriente de envases
 
-Al confirmar, las cantidades reales alimentan el dominio de Envases mediante movimientos auditables.
+Al confirmar, las cantidades reales alimentan el dominio de Envases mediante movimientos auditables. Si se agregaron bins de planta, además se registra su préstamo interno a la cuenta del cliente.
 
 La corrección no reescribe el declarado original de Romana. Se conservan:
 

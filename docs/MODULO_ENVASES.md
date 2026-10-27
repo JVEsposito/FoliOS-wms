@@ -107,6 +107,7 @@ Las fechas **desde** y **hasta** de los filtros son días de planta (`app.operat
 
 El estado de cuenta es la vista del cliente; la trazabilidad interna completa está en el Excel de movimientos:
 
+- **Préstamo interno de bins de planta.** No aparece: el préstamo y su devolución quedan en el Excel de movimientos (ver más abajo).
 - **Anulaciones y correcciones.** Una guía anulada no aparece: ni el despacho ni su anulación. Una corrección (de cantidad, de propiedad o de la devolución en recepción) se aplica sobre el movimiento que corrige y no sale como línea propia. Lo que queda en 0 desaparece. Una anulación histórica sin referencia al despacho se informa como descuento de lo entregado (salida con signo negativo).
 - **Una línea por guía.** Las líneas de un mismo documento, envase y propiedad se suman (una guía con varios orígenes es una sola entrega).
 - **Número de guía.** En los despachos se informa el N° de la guía emitida en el sistema de facturación. Si una guía antigua no lo tiene registrado, se muestra el GDE-… interno.
@@ -125,9 +126,47 @@ Pueden existir movimientos asociados a:
 - confirmación real de Validación MP;
 - guía de despacho;
 - anulación de guía;
+- préstamo interno de bins de planta y su devolución;
 - ajustes expresamente autorizados.
 
 Romana conserva la cantidad declarada. Validación MP confirma la cantidad real y deja visible la diferencia.
+
+## Préstamo interno de bins de planta
+
+Un bin lleva normalmente hasta 24 totes de cereza. A veces el campo manda más (28, 30 o 31) apilados sobre los mismos bins para no enviar otro. La planta necesita un bin más para procesar esa fruta, así que agrega uno propio y se lo presta a la cuenta del cliente.
+
+**En la PDA (Validación MP).** Al contar, la PDA sugiere los bins que faltan con la referencia de la especie:
+
+```text
+bins de planta sugeridos = máx(0, ⌈totes / totes por bin⌉ − bins recibidos)
+```
+
+Con 1 bin y 31 totes, a 24 por bin, sugiere 1. El validador confirma, cambia o deja 0. Es solo una sugerencia: no bloquea nada. Si la recepción se segrega, cada segmento indica sus bins de planta y el total es la suma. El campo aparece cuando la recepción trae totes, y no se admite en recepciones solo de envases.
+
+La referencia «Totes por bin» se configura por especie en **Administración → Reparto del neto por especie**, junto a los pesos de referencia. Cereza parte con 24. Sin referencia no hay sugerencia, pero el validador puede indicar los bins igual.
+
+**En la cuenta corriente.** Se registran dos asientos con referencia a la recepción:
+
+| Movimiento | Envase y propiedad | Cuenta | Existencia | Cuándo |
+|---|---|---:|---:|---|
+| Préstamo interno de bins de planta | Bins, propia | −N | 0 | Al confirmar Validación MP |
+| Devolución interna de bins de planta | Bins, propia | +N | 0 | En el destare, antes de la salida de envases; lleva el N° de la guía de salida |
+
+El efecto neto es 0 y la existencia de la planta no cambia, porque esos bins nunca salen. El camión se lleva sus propios envases (por ejemplo 1 bin y 31 totes) como cualquier destare:
+
+- **Mismos envases:** la cuenta del cliente queda en 0.
+- **Se lleva 2 bins:** la salida descuenta 2 y la cuenta queda en −1. El cliente debe 1 bin.
+- **Sale vacío:** la planta le sigue debiendo 1 bin y 31 totes.
+
+En el pesaje acumulativo, Romana cierra antes de Validación MP, así que el préstamo y su devolución se registran juntos al validar.
+
+**Dónde se ve.**
+
+- Kardex, Saldos y Excel de movimientos: muestran ambos asientos. Mientras el camión sigue en planta, Saldos descuenta el bin prestado.
+- Estado de cuenta: no lo muestra, porque es trazabilidad interna.
+- Finanzas: la fuente `envases_movimiento` permite filtrar el tipo «Préstamo interno de bins de planta» si se decide cobrar ese servicio.
+- Romana: indica en el expediente y en el destare los bins prestados y si ya se devolvieron.
+- Lote: suma esos bins a sus envases primarios para hidrocooler, cámara y Fruta a proceso. El kilaje y el reparto del neto siguen saliendo de los envases recibidos.
 
 ## Revisión
 

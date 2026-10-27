@@ -56,6 +56,7 @@ export async function confirmMpValidation(baseUrl: string, token: string, valida
   csgId: string | null;
   varietyId: string | null;
   segments: MpSegmentDraft[];
+  plantBins: number;
   observation: string;
   inspection: ReturnType<typeof inspectionPayload>;
 }) {
@@ -64,6 +65,7 @@ export async function confirmMpValidation(baseUrl: string, token: string, valida
     csg_validacion_id: segment.csg_validacion_id,
     cuartel: segment.cuartel || null,
     variedad_validacion_id: segment.variedad_validacion_id,
+    bins_prestados_planta: Number(segment.bins_planta || 0),
     envases: input.containers.map((container) => ({
       tipo_envase: container.tipo_envase,
       cantidad: Number(segment.cantidades[container.tipo_envase] || 0),
@@ -79,6 +81,7 @@ export async function confirmMpValidation(baseUrl: string, token: string, valida
       csg_validacion_id: input.segregation ? null : input.csgId,
       variedad_validacion_id: input.segregation ? null : input.varietyId,
       segmentos,
+      bins_prestados_planta: input.plantBins,
       observacion: input.observation || null,
       inspeccion_envases: input.inspection,
     }),

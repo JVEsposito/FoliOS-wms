@@ -17,6 +17,7 @@ function render() {
     const selected = species.find((item) => item.id === form.elements.especie_id.value);
     form.elements.sugerido.innerHTML = '<option value="">Sin sugerencia</option>' + containers.map((c) => `<option value="${escape(c.codigo)}">${escape(c.nombre)}</option>`).join('');
     form.elements.sugerido.value = selected?.sugerido || '';
+    form.elements.totes_por_bin.value = selected?.totes_por_bin ?? '';
     byId('containerReferenceRows').innerHTML = containers.map((c) => `<label class="field"><span>${escape(c.nombre)} · kg de referencia</span><input type="number" step="0.001" min="0.001" max="100000" data-reference="${escape(c.codigo)}" value="${selected?.referencias[c.codigo] ?? ''}" placeholder="Sin configurar"></label>`).join('');
 }
 
@@ -42,7 +43,7 @@ form?.addEventListener('submit', async (event) => {
     byId('containerReferenceError').textContent = '';
     try {
         const references = [...form.querySelectorAll('[data-reference]')].filter((input) => input.value !== '').map((input) => ({ tipo_envase: input.dataset.reference, peso_referencia: Number(input.value) }));
-        const result = await api(`/api/administracion/reparto-envases/${form.elements.especie_id.value}`, { method: 'PUT', body: JSON.stringify({ sugerido: form.elements.sugerido.value || null, referencias: references }) });
+        const result = await api(`/api/administracion/reparto-envases/${form.elements.especie_id.value}`, { method: 'PUT', body: JSON.stringify({ sugerido: form.elements.sugerido.value || null, totes_por_bin: form.elements.totes_por_bin.value === '' ? null : Number(form.elements.totes_por_bin.value), referencias: references }) });
         Object.assign(species.find((s) => s.id === form.elements.especie_id.value), result.data);
         byId('containerReferenceError').textContent = 'Referencias guardadas. Los destares ya emitidos conservan su reparto.';
     } catch (error) { byId('containerReferenceError').textContent = error.message; }

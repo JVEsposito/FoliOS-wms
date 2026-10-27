@@ -19,6 +19,7 @@ use App\Models\RecepcionRomana;
 use App\Models\Temporada;
 use App\Models\User;
 use App\Services\Documentos\ServicioFormatosRegistro;
+use App\Services\Envases\ServicioPrestamoInternoEnvases;
 use App\Services\MateriaPrima\ServicioLoteMateriaPrima;
 use App\Services\Notificaciones\ServicioNotificacionesOperacionales;
 use App\Services\Temporadas\ServicioTemporadaActiva;
@@ -729,6 +730,9 @@ class ServicioRecepcionRomana
                         ?? null,
                 ]);
             }
+            // Los bins de planta prestados en Validación MP no salen con el camión: se devuelven
+            // internamente antes de registrar los envases que sí salen.
+            app(ServicioPrestamoInternoEnvases::class)->devolver($recepcion, $usuario, $ahora, $payload['numero_guia_salida'] ?? null);
             foreach ($tarasEnvases['salidas'] as $tipo => $cantidad) {
                 if ($cantidad === 0) {
                     continue;
