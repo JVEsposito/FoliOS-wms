@@ -476,6 +476,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
     const epoch = sessionEpoch.current;
     const attempt = async () => {
       let snapshot = await taskApi.physicalFrontierSnapshot(auth.token);
+      if (epoch !== sessionEpoch.current) return;
       if (snapshot.planner.horizon !== 'rolling' || snapshot.planner.compute !== 'tablet') {
         throw new Error(
           'La configuración actual no permite confirmar el destino. Solicita revisión en Oficina.',
@@ -499,6 +500,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
           const cachedResult = await taskApi.materializePhysicalFrontier(
             auth.token, snapshot.snapshot_version, [cachedProposal], snapshot.contrato_recursos === 'recursos_v1',
           );
+          if (epoch !== sessionEpoch.current) return;
           const { accepted, recalculate } = materializationOutcome(cachedResult, anchorTask.id);
           if (accepted) {
             replaceMine([accepted]);
@@ -511,7 +513,9 @@ export function OperationalTaskInbox({ api, auth }: Props) {
           if (!(reason instanceof ApiError && reason.status === 409)) throw reason;
         }
         // Un rechazo parcial o una versión obsoleta exige recalcular con estado nuevo.
+        if (epoch !== sessionEpoch.current) return;
         snapshot = await taskApi.physicalFrontierSnapshot(auth.token);
+        if (epoch !== sessionEpoch.current) return;
       }
 
       const tasksForFrontier = dedupeTasks([
@@ -523,6 +527,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
         throw new Error('No hay cámaras habilitadas para esta labor. Solicita revisión en Oficina.');
       }
       const plans = await cameraPlans.load(snapshot, tasksForFrontier, (id) => api.getPlan(auth.token, id));
+      if (epoch !== sessionEpoch.current) return;
       const frontier = calculateRollingFrontier(tasksForFrontier, snapshot, plans, anchorTask.id);
       if (frontier.unresolvedTaskIds.includes(anchorTask.id)) {
         // Oficina queda informada de que este pallet no tiene destino; el aviso nunca
@@ -540,6 +545,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
         frontier.proposals,
         snapshot.contrato_recursos === 'recursos_v1',
       );
+      if (epoch !== sessionEpoch.current) return;
       const acceptedTasks = result.aceptadas.map((item) => item.tarea);
       replaceMine(acceptedTasks);
       const acceptedAnchor = acceptedTasks.find((task) => task.id === anchorTask.id);

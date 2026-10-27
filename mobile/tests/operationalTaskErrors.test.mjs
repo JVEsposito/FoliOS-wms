@@ -15,10 +15,12 @@ const sourceRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../src');
 
 // Ejecuta el componente real con hooks de React; solo sustituye las APIs,
 // superficies nativas y pantallas hijas ajenas al comportamiento probado.
-function harness({ cameraBusy = true, openConflict = false, completionError = '', rejectPin = false, withLoads = false, scoped = false } = {}) {
+function harness({ cameraBusy = true, openConflict = false, completionError = '', rejectPin = false, withLoads = false, scoped = false, delayedSnapshot = false } = {}) {
   let polling;
   let renderer;
   let listError = '';
+  let resolveSnapshot;
+  const snapshotResponse = delayedSnapshot ? new Promise((resolve) => { resolveSnapshot = resolve; }) : null;
   let nextTask = {
     id: 'task-1', estado: 'asumida', tipo_movimiento: 'ubicacion_inicial',
     permite_sesion_por_tarea: scoped,
@@ -27,7 +29,7 @@ function harness({ cameraBusy = true, openConflict = false, completionError = ''
     destino: { camara: { id: 'cam-5', nombre: 'Cámara 5' }, posicion: { id: 'pos-1', etiqueta: 'B01-P01', banda: 1, posicion: 1, nivel: 1 } },
     origen: null, reserva: { tipo_compromiso: 'fisica', vence_at: null },
   };
-  const calls = { list: 0, open: 0, start: 0, locate: 0, close: [], scoped: [] };
+  const calls = { list: 0, open: 0, start: 0, locate: 0, close: [], scoped: [], own: 0 };
   const taskApi = {
     list: async (_token, tab) => {
       calls.list++;
@@ -35,8 +37,8 @@ function harness({ cameraBusy = true, openConflict = false, completionError = ''
       return tab === 'mias' ? [nextTask] : [];
     },
     currentVerification: async () => null,
-    ownState: async () => ({ confirmada: false, tarea: nextTask, operacion: null }),
-    physicalFrontierSnapshot: async () => { throw new Error('Sin simulación local'); },
+    ownState: async () => { calls.own++; return { confirmada: false, tarea: nextTask, operacion: null }; },
+    physicalFrontierSnapshot: async () => { if (snapshotResponse) return snapshotResponse; throw new Error('Sin simulación local'); },
     pinStatus: async () => ({ configurado: true, bloqueado_hasta: null }),
     start: async () => {
       calls.start++;
@@ -124,6 +126,11 @@ function harness({ cameraBusy = true, openConflict = false, completionError = ''
       await flush(() => view('OperatorTaskHome').props.onOpen({ source: 'mine', task: nextTask }));
       await this.retry();
     },
+    async openWithoutDestination() {
+      nextTask = { ...nextTask, destino: null, reserva: { tipo_compromiso: 'logica', vence_at: null } };
+      await flush(() => view('OperatorTaskHome').props.onOpen({ source: 'mine', task: nextTask }));
+    },
+    async finishLateSnapshot() { await flush(() => resolveSnapshot({ planner: { horizon: 'rolling', compute: 'tablet' }, arbitraje: { vigencia: { vigente: true } }, tareas: [{ id: nextTask.id, destino_reservado: true }] })); },
     async retry() {
       await flush(() => view('OperatorTaskExecution').props.onStart());
       await flush(() => view('OperatorTaskExecution').props.onConfirmStart({ folioDigits: '003', pin: '1234' }));
@@ -274,4 +281,17 @@ test('el diálogo conserva completo un error largo y ofrece desplazamiento para 
     assert.equal(errorText.props.numberOfLines, undefined);
     assert.equal(h.modal()[0].findAllByType('ScrollView').length, 1);
   } finally { await h.unmount(); }
+});
+
+
+test('una frontera que llega después de cerrar sesión no continúa confirmaciones del usuario anterior', async () => {
+  const h = harness({ delayedSnapshot: true });
+  await h.mount();
+  await h.openWithoutDestination();
+  const ownBefore = h.calls.own;
+  await h.unmount();
+  await h.finishLateSnapshot();
+  assert.equal(h.calls.own, ownBefore);
+  assert.equal(h.calls.open, 0);
+  assert.equal(h.calls.start, 0);
 });
