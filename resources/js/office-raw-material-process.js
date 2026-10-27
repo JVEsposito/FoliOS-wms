@@ -237,7 +237,7 @@ async function submitDelivery() {
         elements.deliveryError.textContent = `Ingresa una cantidad entre 1 y ${state.selected?.lot?.progreso.disponibles || 0}.`; return;
     }
     const kilos = String(data.get('kilos_enviados') || '').trim();
-    const payload = { operacion_id: uuid(), cantidad_envases: quantity, kilos_enviados: kilos ? Number(kilos) : null, linea_proceso: String(data.get('linea_proceso') || '').trim(), turno: data.get('turno'), numero_orden: String(data.get('numero_orden') || '').trim(), observacion: String(data.get('observacion') || '').trim() || null };
+    const payload = { operacion_id: uuid(), camara_origen_id: state.selected.lot.camara?.id ?? null, cantidad_envases: quantity, kilos_enviados: kilos ? Number(kilos) : null, linea_proceso: String(data.get('linea_proceso') || '').trim(), turno: data.get('turno'), numero_orden: String(data.get('numero_orden') || '').trim(), observacion: String(data.get('observacion') || '').trim() || null };
     if (!payload.linea_proceso || !payload.turno || !payload.numero_orden) { elements.deliveryError.textContent = 'Completa línea, turno y número de orden.'; return; }
     setBusy(true, 'Registrando viaje…');
     try { await api(`/api/materia-prima/fruta-proceso/lotes/${state.selected.lot.id}/entregas`, { method: 'POST', body: JSON.stringify(payload) }); elements.deliveryDialog.close(); toast('Viaje registrado y saldo actualizado.'); await load(); }

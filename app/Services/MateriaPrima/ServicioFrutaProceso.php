@@ -74,6 +74,9 @@ class ServicioFrutaProceso
                     ->where('lote_materia_prima_id', $lote->id)
                     ->lockForUpdate()
                     ->first();
+                if (array_key_exists('camara_origen_id', $datos) && ($datos['camara_origen_id'] ?? null) !== $asignacion?->camara_id) {
+                    throw new ConflictoOperacion('La cámara del lote cambió. Actualiza antes de registrar el viaje.');
+                }
                 $esSalidaDirecta = ! $asignacion
                     && $lote->hidrocooler()
                         ->where('destino_salida', 'proceso')
@@ -147,6 +150,12 @@ class ServicioFrutaProceso
                         'turno' => $entrega->turno,
                         'numero_orden' => $entrega->numero_orden,
                         'camara_id' => $asignacion?->camara_id,
+                        'camara_origen_id' => $asignacion?->camara_id,
+                        'camara_origen_codigo' => $asignacion?->camara?->codigo,
+                        'camara_origen_nombre' => $asignacion?->camara?->nombre,
+                        'tipo_envase' => $lote->envase_primario->value,
+                        'usuario_nombre' => $usuario->name,
+                        'observacion' => $entrega->observacion,
                         'origen_operacional' => $esSalidaDirecta
                             ? 'hidrocooler_directo'
                             : 'camara_materia_prima',
@@ -249,6 +258,12 @@ class ServicioFrutaProceso
                         'motivo' => trim($motivo),
                         'cantidad_entregada_vigente' => $entregados,
                         'saldo_vigente' => $lote->cantidad_envases_primarios - $entregados,
+                        'camara_destino_id' => $lote->asignacionCamara?->camara_id,
+                        'camara_destino_codigo' => $lote->asignacionCamara?->camara?->codigo,
+                        'camara_destino_nombre' => $lote->asignacionCamara?->camara?->nombre,
+                        'linea_proceso' => $entrega->linea_proceso,
+                        'tipo_envase' => $lote->envase_primario->value,
+                        'usuario_nombre' => $usuario->name,
                     ],
                 );
 
@@ -280,6 +295,9 @@ class ServicioFrutaProceso
         if ($entrega->anulado_at !== null) {
             return false;
         }
+        if ($entrega->camara_id !== $lote->asignacionCamara?->camara_id) {
+            return false;
+        }
         if ($entrega->retornos()->whereNull('anulado_at')->exists()) {
             return false;
         }
@@ -308,6 +326,9 @@ class ServicioFrutaProceso
         LoteMateriaPrima $lote,
         User $usuario,
     ): void {
+        if ($entrega->camara_id !== $lote->asignacionCamara?->camara_id) {
+            throw new ConflictoOperacion('La cámara del lote cambió desde este viaje. Revisa su ubicación antes de anularlo.');
+        }
         if (! $this->puedeAnular($entrega, $lote, $usuario)) {
             abort(403, 'No puedes anular esta entrega. Debe ser tu último viaje abierto y no puede tener retornos de Packing.');
         }
@@ -340,6 +361,7 @@ class ServicioFrutaProceso
     private function payload(array $datos): array
     {
         return [
+            ...(array_key_exists('camara_origen_id', $datos) ? ['camara_origen_id' => $datos['camara_origen_id']] : []),
             'cantidad_envases' => (int) $datos['cantidad_envases'],
             'kilos_enviados' => filled($datos['kilos_enviados'] ?? null)
                 ? round((float) $datos['kilos_enviados'], 3)

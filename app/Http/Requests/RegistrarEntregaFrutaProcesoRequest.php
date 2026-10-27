@@ -16,6 +16,7 @@ class RegistrarEntregaFrutaProcesoRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'camara_origen_id' => ['sometimes', 'nullable', 'uuid', 'exists:camaras,id'],
             'operacion_id' => ['required', 'uuid'],
             'cantidad_envases' => ['required', 'integer', 'min:1', 'max:100000'],
             'kilos_enviados' => ['nullable', 'numeric', 'min:0.001', 'max:999999999.999'],

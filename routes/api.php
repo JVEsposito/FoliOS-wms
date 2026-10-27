@@ -62,6 +62,7 @@ use App\Http\Controllers\Api\InspeccionSagController;
 use App\Http\Controllers\Api\IntegridadOperacionalController;
 use App\Http\Controllers\Api\LaboresTurnoController;
 use App\Http\Controllers\Api\MateriaPrimaController;
+use App\Http\Controllers\Api\MovimientoCamaraMpController;
 use App\Http\Controllers\Api\MovimientoController;
 use App\Http\Controllers\Api\NotificacionOperacionalController;
 use App\Http\Controllers\Api\OperacionAhoraController;
@@ -390,6 +391,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/materia-prima/defectos-recepcion/{defecto}/evidencias/{evidencia}',
         [DefectoRecepcionMpController::class, 'evidencia']);
     Route::middleware('can:consultar-materia-prima')->prefix('materia-prima')->group(function () {
+        Route::get('/movimientos', [MovimientoCamaraMpController::class, 'index']);
+        Route::get('/movimientos/exportar', [MovimientoCamaraMpController::class, 'exportar']);
+        Route::get('/lotes/{loteMateriaPrima}/ubicacion', [MovimientoCamaraMpController::class, 'ubicacion']);
         Route::get('/resumen', [MateriaPrimaController::class, 'resumen']);
         Route::get('/catalogos', [MateriaPrimaController::class, 'catalogos']);
         Route::get('/segmentos-pendientes', [MateriaPrimaController::class, 'segmentosPendientes']);
@@ -397,6 +401,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/lotes/{loteMateriaPrima}', [MateriaPrimaController::class, 'show']);
     });
     Route::middleware('can:gestionar-lotes-materia-prima')->prefix('materia-prima')->group(function () {
+        Route::post('/lotes/{loteMateriaPrima}/trasladar-camara', [MovimientoCamaraMpController::class, 'trasladar']);
         Route::post('/lotes', [MateriaPrimaController::class, 'store']);
         Route::put('/lotes/{loteMateriaPrima}', [MateriaPrimaController::class, 'update']);
         Route::put('/lotes/{loteMateriaPrima}/corregir-origen', [MateriaPrimaController::class, 'corregirOrigen']);

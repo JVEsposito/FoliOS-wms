@@ -39,6 +39,14 @@ const elements = {
     loading: byId('officeLoading'),
     loadingText: byId('officeLoadingText'),
     toasts: byId('officeToasts'),
+    movements: byId('movimientos'),
+    movementFilters: byId('movementFilters'),
+    movementRows: byId('movementRows'),
+    movementStatus: byId('movementStatus'),
+    movementScope: byId('movementScope'),
+    movementPrevious: byId('movementPrevious'),
+    movementNext: byId('movementNext'),
+    movementExport: byId('movementExport'),
 };
 
 const keys = {
@@ -58,6 +66,10 @@ const state = {
     editingLot: null,
     selectedSegment: null,
     poller: null,
+    movementPage: 1,
+    movementRequest: 0,
+    movementsLoaded: false,
+    operationInFlight: false,
 };
 
 class ApiError extends Error {
@@ -135,13 +147,14 @@ function formatWeight(value, fallback = '—') {
     }).format(Number(value))} kg`;
 }
 
-function formatDate(value, fallback = 'Pendiente') {
+function formatDate(value, fallback = 'Pendiente', timeZone = undefined) {
     if (!value) return fallback;
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return fallback;
     return new Intl.DateTimeFormat('es-CL', {
         dateStyle: 'short',
         timeStyle: 'short',
+        ...(timeZone ? { timeZone } : {}),
     }).format(date);
 }
 
@@ -198,6 +211,13 @@ function clearSession() {
     state.catalogEtag = null;
     state.segments = [];
     state.lots = [];
+    state.movementRequest += 1;
+    state.movementPage = 1;
+    state.movementsLoaded = false;
+    elements.movementRows.innerHTML = '';
+    elements.movementStatus.textContent = '';
+    elements.movementFilters.reset();
+    elements.movementScope.textContent = 'Ingresos, traslados, salidas a Packing y correcciones de la temporada activa.';
     state.panelErrors = { summary: null, segments: null, lots: null, catalogs: null };
     localStorage.removeItem(keys.token);
     localStorage.removeItem(keys.identity);
@@ -363,6 +383,7 @@ function renderSegments() {
 
 function lotActions(lot) {
     const actions = [];
+    actions.push(`<button data-action="history" data-lot-id="${escapeHtml(lot.id)}" type="button">Ubicaciones</button>`);
     const canManage = state.identity?.puede_gestionar_lotes_materia_prima === true;
     const canSupervise = state.identity?.puede_supervisar_lotes_materia_prima === true;
     if (canManage && lot.estado === 'borrador') {
@@ -376,6 +397,9 @@ function lotActions(lot) {
     }
     if (canManage && lot.estado === 'pendiente_asignacion') {
         actions.push(`<button class="is-primary" data-action="assign" data-lot-id="${escapeHtml(lot.id)}" type="button">Asignar cámara</button>`);
+    }
+    if (canManage && ['asignado_camara', 'entrega_parcial_proceso'].includes(lot.estado)) {
+        actions.push(`<button data-action="transfer" data-lot-id="${escapeHtml(lot.id)}" type="button">Trasladar saldo</button>`);
     }
     if (canSupervise && ['borrador', 'pendiente_hidrocooler', 'pendiente_asignacion'].includes(lot.estado)) {
         actions.push(`<button class="is-danger" data-action="void" data-lot-id="${escapeHtml(lot.id)}" type="button">Anular</button>`);
@@ -649,6 +673,13 @@ async function submitOperation() {
         payload.version_conocida = lot?.version;
         payload.cuartel = values.cuartel || null;
         payload.retirar_calibre = values.retirar_calibre === '1';
+    } else if (type === 'transfer') {
+        path = `/api/materia-prima/lotes/${lotId}/trasladar-camara`;
+        payload.version_conocida = Number(values.version_conocida);
+        payload.camara_origen_id = values.camara_origen_id;
+        payload.camara_destino_id = values.camara_destino_id;
+        payload.cantidad_envases = Number(values.cantidad_envases);
+        payload.motivo = values.motivo;
     } else if (type === 'assign') {
         path = `/api/materia-prima/lotes/${lotId}/asignar-camara`;
         payload.camara_id = values.camara_id;
@@ -676,7 +707,7 @@ async function loadLots() {
     renderLots();
 }
 
-async function loadAll({ notify = false } = {}) {
+async function loadAll({ notify = false, refreshMovements = false } = {}) {
     const [summary, catalogs, segments, lots] = await Promise.allSettled([
         api('/api/materia-prima/resumen'),
         loadCatalogs(),
@@ -696,7 +727,122 @@ async function loadAll({ notify = false } = {}) {
     renderSegments();
     renderLots();
     if (notify && !Object.values(state.panelErrors).some(Boolean)) toast('Materia prima actualizada.');
+    if (elements.movements.open && (notify || refreshMovements || !state.movementsLoaded)) await loadMovements(state.movementPage);
 }
+
+async function openTransfer(lotId) {
+    const lot = state.lots.find((item) => item.id === lotId);
+    if (!lot) return;
+    setBusy(true, 'Comprobando ubicación y saldo…');
+    try {
+        const { data } = await api(`/api/materia-prima/lotes/${lotId}/ubicacion`);
+        if (!data.camara || data.saldo < 1) throw new Error('El lote ya no tiene saldo en cámara. Actualiza la pantalla.');
+        if (!state.catalogs || state.panelErrors.catalogs) await loadCatalogs(true);
+        elements.operationForm.reset();
+        const form = elements.operationForm.elements;
+        form.operation_type.value = 'transfer'; form.lote_id.value = lotId; form.operacion_id.value = operationUuid();
+        elements.operationEyebrow.textContent = 'TRASLADO ENTRE CÁMARAS MP';
+        elements.operationTitle.textContent = `Trasladar ${lot.numero_lote}`;
+        elements.operationDescription.textContent = `Moverás los ${data.saldo} ${label(data.tipo_envase)} restantes desde ${data.camara.codigo}. Las cantidades ya entregadas a Packing conservan su origen.`;
+        elements.operationFields.innerHTML = `
+            <input name="version_conocida" type="hidden" value="${escapeHtml(data.version)}">
+            <input name="camara_origen_id" type="hidden" value="${escapeHtml(data.camara.id)}">
+            <label class="field"><span>Saldo completo a trasladar</span><input name="cantidad_envases" type="number" value="${escapeHtml(data.saldo)}" readonly></label>
+            <label class="field"><span>Cámara de destino *</span><select name="camara_destino_id" required><option value="">Seleccionar cámara</option>${(state.catalogs?.camaras || []).filter((c) => c.id !== data.camara.id).map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.codigo)} · ${escapeHtml(c.nombre)}</option>`).join('')}</select></label>
+            <label class="field"><span>Motivo del traslado *</span><textarea name="motivo" minlength="5" maxlength="2000" required></textarea></label>`;
+        elements.operationFormError.textContent = '';
+        elements.operationDialog.showModal();
+    } catch (error) { toast(error.message, true); }
+    finally { setBusy(false); }
+}
+
+function movementQuery() {
+    return new URLSearchParams(new FormData(elements.movementFilters));
+}
+
+async function loadMovements(page = 1) {
+    const request = ++state.movementRequest;
+    const query = movementQuery(); query.set('page', String(page));
+    elements.movementPrevious.disabled = true; elements.movementNext.disabled = true;
+    elements.movementStatus.textContent = 'Consultando movimientos…';
+    try {
+        const payload = await api(`/api/materia-prima/movimientos?${query}`);
+        if (request !== state.movementRequest) return;
+        if (!Array.isArray(payload.data) || !Number.isInteger(payload.current_page) || !Number.isInteger(payload.last_page)) throw new Error('El servidor no entregó un registro válido.');
+        if (payload.current_page > payload.last_page) { await loadMovements(payload.last_page); return; }
+        state.movementsLoaded = true;
+        const cameraFilter = elements.movementFilters.elements.camara_id;
+        const selected = cameraFilter.value;
+        const cameras = payload.camaras || state.catalogs?.camaras || [];
+        cameraFilter.innerHTML = '<option value="">Todas las cámaras</option>' + cameras.map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.codigo)} · ${escapeHtml(c.nombre)}</option>`).join('');
+        cameraFilter.value = selected;
+        state.movementPage = payload.current_page;
+        elements.movementRows.innerHTML = payload.data.map((row) => `<tr>
+            <td><strong>${escapeHtml(formatDate(row.ocurrido_at, '—', payload.zona_horaria || 'America/Santiago'))}</strong><small>${escapeHtml(row.usuario)}</small></td>
+            <td><strong>${escapeHtml(row.numero_sublote || row.numero_lote)}</strong>${row.numero_sublote ? `<small>Orígenes: ${escapeHtml(row.lotes_origen || row.numero_lote)}</small>` : ''}<small>${escapeHtml(row.cliente)}</small><small>CSG ${escapeHtml(row.csg)} · ${escapeHtml(row.variedad)}</small></td>
+            <td><strong>${escapeHtml(row.movimiento)}</strong>${row.detalle ? `<small>${escapeHtml(row.detalle)}</small>` : ''}</td>
+            <td><strong>${row.cantidad_envases === null ? 'Sin dato' : escapeHtml(row.cantidad_envases)}</strong><small>${escapeHtml(label(row.tipo_envase))}</small></td>
+            <td>${escapeHtml(row.origen)}</td><td>${escapeHtml(row.destino)}</td><td>${escapeHtml(row.observacion || '—')}</td></tr>`).join('') || '<tr><td colspan="7">No hay movimientos para estos filtros.</td></tr>';
+        elements.movementStatus.textContent = `${payload.total} movimientos · página ${payload.current_page} de ${payload.last_page}.`;
+        elements.movementPrevious.disabled = !payload.prev_page_url;
+        elements.movementNext.disabled = !payload.next_page_url;
+    } catch (error) {
+        if (request !== state.movementRequest) return;
+        elements.movementRows.innerHTML = '';
+        elements.movementStatus.textContent = `No se pudieron cargar los movimientos: ${error.message}`;
+    }
+}
+
+function openMovements(lot = null) {
+    if (lot) {
+        elements.movementFilters.reset();
+        elements.movementFilters.elements.lote_id.value = lot.id;
+        elements.movementScope.textContent = `Historial de ${lot.numero_lote} · ${lot.cliente?.nombre || ''}. Usa «Ver todos» para consultar otros lotes.`;
+    }
+    const wasOpen = elements.movements.open;
+    elements.movements.open = true;
+    elements.movements.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (wasOpen) void loadMovements();
+}
+
+elements.movements.addEventListener('toggle', () => { if (elements.movements.open && state.token) void loadMovements(); });
+byId('movementOpen').addEventListener('click', () => openMovements());
+elements.movementFilters.addEventListener('submit', (event) => { event.preventDefault(); void loadMovements(); });
+elements.movementFilters.addEventListener('input', (event) => {
+    if (event.target.name === 'buscar') {
+        elements.movementFilters.elements.lote_id.value = '';
+        elements.movementScope.textContent = 'Ingresos, traslados, salidas a Packing y correcciones de la temporada activa.';
+    }
+});
+byId('movementClear').addEventListener('click', () => {
+    elements.movementFilters.reset();
+    elements.movementScope.textContent = 'Ingresos, traslados, salidas a Packing y correcciones de la temporada activa.';
+    void loadMovements();
+});
+elements.movementPrevious.addEventListener('click', () => { void loadMovements(state.movementPage - 1); });
+elements.movementNext.addEventListener('click', () => { void loadMovements(state.movementPage + 1); });
+elements.movementExport.addEventListener('click', async () => {
+    if (elements.movementExport.disabled) return;
+    elements.movementExport.disabled = true;
+    const exportToken = state.token;
+    try {
+        const response = await fetch(`/api/materia-prima/movimientos/exportar?${movementQuery()}`, { headers: { Authorization: `Bearer ${exportToken}`, Accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' } });
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            if (response.status === 401) clearSession();
+            throw new Error(errorMessage(error, 'No se pudo descargar el registro.'));
+        }
+        const blob = await response.blob();
+        if (state.token !== exportToken) return;
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'Movimientos_Camaras_MP.xlsx';
+        document.body.append(anchor); anchor.click(); anchor.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+        toast('Registro de movimientos descargado.');
+    } catch (error) { toast(error.message, true); }
+    finally { elements.movementExport.disabled = false; }
+});
+if (window.location?.hash === '#movimientos') elements.movements.open = true;
 
 elements.login.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -805,6 +951,8 @@ elements.lotTableBody.addEventListener('click', async (event) => {
     const button = event.target.closest('[data-action]');
     if (!button) return;
     const { action, lotId } = button.dataset;
+    if (action === 'history') { openMovements(state.lots.find((item) => item.id === lotId)); return; }
+    if (action === 'transfer') { await openTransfer(lotId); return; }
     if (action === 'edit') {
         openEditLot(lotId);
         return;
@@ -837,16 +985,19 @@ elements.lotTableBody.addEventListener('click', async (event) => {
 elements.operationForm.addEventListener('submit', async (event) => {
     if (event.submitter?.value === 'cancel') return;
     event.preventDefault();
+    if (state.operationInFlight) return;
+    state.operationInFlight = true;
     elements.operationFormError.textContent = '';
     setBusy(true, 'Registrando operación…');
     try {
         await submitOperation();
         elements.operationDialog.close();
-        await loadAll();
+        await loadAll({ refreshMovements: true });
         toast('Operación registrada correctamente.');
     } catch (error) {
         elements.operationFormError.textContent = error.message;
     } finally {
+        state.operationInFlight = false;
         setBusy(false);
     }
 });
