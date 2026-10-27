@@ -18,6 +18,7 @@ import {
 import { AuthSession } from '../domain/estiba';
 import { useOperationalPolling } from '../hooks/useOperationalPolling';
 import {
+  AvailableValidationPrefill,
   RegisterValidationPayload,
   ValidationAttempt,
   ValidationCatalog,
@@ -32,6 +33,7 @@ import {
   getMyValidationSession,
   getValidationCatalog,
   getValidationOperation,
+  getValidationPrefill,
   listRecentValidations,
   listValidationsByFolio,
   registerValidation,
@@ -55,6 +57,7 @@ import { isPdaBuild } from '../config/appVariant';
 import { ScanInput, ScanInputHandle } from '../components/ui/ScanInput';
 import { LabelCell, LabelCounters, LabelRow, LabelSection, ResultTalon, SignalMark, StatusChip, TalonRow, type LabelTone } from '../components/validation/ValidationLabel';
 import { articlesForOrigins, createOriginArticleSelector, indexValidationCatalog, productCompatibleWithOrigins } from '../domain/validationCatalogIndex';
+import { PREFILL_FIELD_LABELS, prefillChanges } from '../domain/validationPrefill';
 
 type ValidationScreenProps = {
   auth: AuthSession;
@@ -138,6 +141,8 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
   const [lastResult, setLastResult] = useState<LastResult | null>(null);
   // Un problema al decidir se muestra junto a los botones, donde está el operador.
   const [decisionError, setDecisionError] = useState('');
+  // Datos de planta con que partió el folio: el validador confirma o corrige lo que no coincide.
+  const [prefill, setPrefill] = useState<AvailableValidationPrefill | null>(null);
 
   const userId = auth.usuario.id;
   const deviceId = auth.dispositivo.id;
@@ -234,6 +239,9 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
     [catalogIndex, selectedArticle, selectedOrigins],
   );
   const compositionBoxes = originDrafts.reduce((sum, draft) => sum + Number(draft.boxes || 0), 0);
+  const prefillDiff = useMemo(() => prefill ? prefillChanges(prefill, {
+    packageType, boxes, packingDate, articleId: selectedArticle?.id ?? null, categoryId, drafts: originDrafts,
+  }) : [], [prefill, packageType, boxes, packingDate, selectedArticle, categoryId, originDrafts]);
   const selectedCombination = originDrafts.length > 0
     && selectedOrigins.every(Boolean)
     && selectedCombinations.every(Boolean);
@@ -435,6 +443,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
     if (folioReview && normalizeFolio(value) !== folioReview.numero_folio) {
       setFolioReview(null);
       setObservation(null);
+      setPrefill(null);
     }
   }
 
@@ -512,6 +521,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
     setError('');
     setNotice('');
     setLastResult(null);
+    setPrefill(null);
 
     const localItem = outbox.find((item) => normalizeFolio(item.payload.numero_folio) === normalized);
     if (localItem) {
@@ -560,7 +570,11 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
           return;
         }
         setFolioReview({ numero_folio: normalized, status: 'nuevo', attempt: null });
-        setNotice(`${normalized} no posee validaciones anteriores en la temporada activa.`);
+        // Con conexión, la PDA parte con lo que la planta informa del pallet.
+        const source = baseUrl ? await loadPrefill(baseUrl, normalized) : null;
+        setNotice(source?.available
+          ? `Datos de planta cargados para ${normalized}. Revisa el pallet y corrige solo lo que no coincida.`
+          : `${normalized} no posee validaciones anteriores en la temporada activa.${source?.reason ? ` ${source.reason}` : ''}`);
         return;
       }
 
@@ -577,6 +591,52 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
     } finally {
       setBusy(false);
     }
+  }
+
+  /** Sin datos de planta se valida como siempre: el aviso explica por qué. */
+  async function loadPrefill(url: string, normalized: string): Promise<{ available: boolean; reason: string | null }> {
+    try {
+      const data = await getValidationPrefill(url, auth.token, normalized);
+      if (!data.disponible) return { available: false, reason: data.motivo };
+      return { available: applyPrefill(data), reason: null };
+    } catch {
+      return { available: false, reason: null };
+    }
+  }
+
+  function applyPrefill(data: AvailableValidationPrefill): boolean {
+    if (!catalog || !catalogIndex) return false;
+    const origins = data.composicion
+      .map((line) => line.origen_validacion_id ? catalogIndex.originById.get(line.origen_validacion_id) ?? null : null);
+    const first = origins.find((origin) => origin?.activo) ?? null;
+    const prefillClient = first?.cliente
+      ?? catalog.origenes.find((origin) => origin.activo && origin.cliente === data.origen.cliente)?.cliente ?? '';
+    const prefillBrand = first?.marca
+      ?? catalog.origenes.find((origin) => origin.activo && origin.cliente === prefillClient && origin.marca === data.origen.marca)?.marca ?? '';
+    const article = catalog.articulos.find((item) => item.id === data.articulo_validacion_id && item.activo) ?? null;
+    const category = catalog.categorias.find((item) => item.id === data.categoria_validacion_id && item.activo) ?? null;
+
+    setPackageType(data.tipo_bulto);
+    setBoxes(String(data.cantidad_cajas));
+    setPackingDate(data.fecha_embalaje ?? todayLocal());
+    setClient(prefillClient);
+    setBrand(prefillBrand);
+    setOriginDrafts(data.composicion.length ? data.composicion.map((line, index) => {
+      const origin = origins[index];
+      return {
+        key: newOriginDraft().key,
+        originId: origin?.activo && origin.cliente === prefillClient && origin.marca === prefillBrand ? origin.id : '',
+        boxes: String(line.cantidad_cajas),
+        lot: line.lote_materia_prima ?? '',
+        process: line.proceso_packing ?? '',
+      };
+    }) : [newOriginDraft()]);
+    setSpecies(article?.especie ?? ''); setVariety(article?.variedad ?? '');
+    setCaliber(article?.calibre ?? ''); setPackageName(article?.envase ?? '');
+    setCategoryId(category?.id ?? '');
+    setOriginError('');
+    setPrefill(data);
+    return true;
   }
 
   function validateForm(result?: ValidationResult) {
@@ -638,6 +698,10 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
       ...(reason ? { motivo: reason } : {}),
       ...(note?.trim() ? { observacion: note.trim() } : {}),
       generado_dispositivo_at: new Date().toISOString(),
+      // Constancia de que el validador partió con los datos de planta y de qué corrigió.
+      ...(prefill
+        ? { precarga_origen: { huella: prefill.huella, modificados: prefillDiff } }
+        : editingOutbox?.payload.precarga_origen ? { precarga_origen: editingOutbox.payload.precarga_origen } : {}),
     };
 
     const registered: Omit<LastResult, 'delivery'> = {
@@ -691,6 +755,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
 
       setFolio('');
       setFolioReview(null);
+      setPrefill(null);
       setBoxes('');
       setPackingDate(todayLocal());
       setOriginDrafts([newOriginDraft()]);
@@ -807,7 +872,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
 
   function cancelRecovery() {
     finishRecovery();
-    setFolio(''); setFolioReview(null); setBoxes('');
+    setFolio(''); setFolioReview(null); setPrefill(null); setBoxes('');
     setPackingDate(todayLocal());
     setClient(''); setBrand(''); resetProduct();
     setOriginDrafts([newOriginDraft()]); setObservation(null);
@@ -985,6 +1050,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
           value={folio}
         />
         {folioReview ? <FolioReviewCard review={folioReview} /> : null}
+        {prefill && folioReview?.status === 'nuevo' ? <PrefillCard changes={prefillDiff} prefill={prefill} /> : null}
         {editingOutbox ? (
           <View style={styles.correction}>
             <View style={styles.correctionCopy}>
@@ -1380,6 +1446,30 @@ function FolioReviewCard({ review }: { review: FolioReview }) {
       {attempt?.motivo ? <Text style={styles.reviewText}>Motivo: {reasonLabel(attempt.motivo)}</Text> : null}
       {attempt?.observacion ? <Text style={styles.reviewText}>Observación: {attempt.observacion}</Text> : null}
       <Text style={styles.reviewDetail}>{detail}</Text>
+    </View>
+  );
+}
+
+/** Lo que trajo la planta y lo que el validador corrigió: confirma el pallet físico. */
+function PrefillCard({ prefill, changes }: { prefill: AvailableValidationPrefill; changes: string[] }) {
+  // La composición ya queda cargada abajo, línea por línea: aquí basta el resumen.
+  const csgs = [...new Set(prefill.composicion.map((line) => line.csg ?? 'sin CSG'))];
+  return (
+    <View style={styles.review}>
+      <StatusChip label="Datos de planta" tone={prefill.desactualizada ? 'warning' : 'neutral'} />
+      <Text style={styles.reviewMeta}>
+        {prefill.cantidad_cajas} cajas · {packageLabel(prefill.tipo_bulto)}{prefill.leido_at ? ` · leído ${formatDateTime(prefill.leido_at)}` : ''}
+      </Text>
+      {prefill.desactualizada ? <Text style={styles.reviewText}>La lectura de planta está desactualizada: revisa con más cuidado.</Text> : null}
+      <Text style={styles.reviewText}>
+        {prefill.composicion.length} {prefill.composicion.length === 1 ? 'línea' : 'líneas'} · CSG {csgs.join(', ')}
+      </Text>
+      {prefill.pendientes.map((item) => <Text key={item} style={styles.reviewText}>Completar: {item}</Text>)}
+      <Text style={styles.reviewDetail}>
+        {changes.length
+          ? `Corregido respecto de planta: ${changes.map((field) => PREFILL_FIELD_LABELS[field as keyof typeof PREFILL_FIELD_LABELS] ?? field).join(', ')}.`
+          : 'Confirma que el pallet coincide o corrige lo que no.'}
+      </Text>
     </View>
   );
 }

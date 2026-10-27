@@ -42,6 +42,8 @@ class ValidacionPalletResource extends JsonResource
                 'fecha_embalaje' => $this->snapshot['fecha_embalaje'] ?? null,
                 'categoria' => $this->snapshot['categoria'] ?? null,
             ],
+            // La PDA partió con los datos de planta: huella de la copia y campos que corrigió el validador.
+            'precarga_origen' => $this->snapshot['precarga_origen'] ?? null,
             'folio' => $this->whenLoaded('folio', fn () => $this->folio ? [
                 'id' => $this->folio->id,
                 'numero_folio' => $this->folio->numero_folio,

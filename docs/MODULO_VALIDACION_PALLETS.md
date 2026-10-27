@@ -142,6 +142,40 @@ nuevo, antes de transmitirlo. Si la respuesta se pierde, los reintentos de ese
 envío conservan su UUID y contenido. Una transición rechazada nunca se reabre ni
 se modifica para forzar un reintento.
 
+## Precarga con los datos de planta
+
+Con conexión, al ingresar un folio sin validaciones anteriores la PDA consulta
+`GET /api/validacion/precarga-origen?numero_folio=…` y parte con lo que el sistema de
+planta informa del pallet (lectura de stock, ver
+[Pendientes por validar](PENDIENTES_VALIDACION_ORIGEN.md)):
+
+- tipo de bulto, cajas y fecha de embalaje;
+- cliente, marca y la composición completa: cada CSG con sus cajas, lote y proceso;
+- especie, variedad, calibre y envase cuando el producto está habilitado en el catálogo;
+- la categoría sugerida (la equivalente del catálogo, como en Pendientes por validar).
+
+El validador revisa el pallet físico y **solo corrige lo que no coincide**. La tarjeta
+«Datos de planta» resume lo cargado, la hora de la lectura (avisa si está desactualizada),
+lo que falta completar porque no tiene equivalencia en el catálogo y lo que el validador
+ya corrigió. El registro sigue validando cada dato contra el catálogo, igual que antes.
+
+Cada línea de la PDA es un CSG con su lote y proceso: las filas del origen que solo
+difieren en productor o variedad se suman. Un CSG o un producto sin equivalencia llegan
+sin seleccionar, para completarlos a mano; completar no cuenta como corrección.
+
+No hay precarga si la PDA está sin conexión, si la lectura de planta no está configurada,
+si el pallet no figura en la bodega de planta o si ya salió según la última lectura. En
+esos casos se valida como siempre y la PDA indica el motivo. Un folio observado se sigue
+recuperando desde su intento anterior.
+
+El envío informa `precarga_origen` con la huella de la copia de planta mostrada y los
+campos corregidos (`tipo_bulto`, `cantidad_cajas`, `fecha_embalaje`, `articulo`,
+`categoria`, `composicion`). El servidor lo guarda en la validación junto con
+`coincide_con_copia_vigente` (si la planta no cambió el pallet entre medio), lo publica
+en la API y Oficina lo muestra en el historial: «Datos de planta · confirmados sin
+cambios» o «Datos de planta · corrigió cajas, composición». Las PDA anteriores no lo
+envían y su hash de idempotencia no cambia.
+
 ## Intentos e idempotencia
 
 Cada envío utiliza `operacion_id` UUID y hash del payload.
@@ -232,6 +266,7 @@ Conserva acceso total y administra el catálogo desde oficina.
 
 ```http
 GET  /api/validacion/catalogos
+GET  /api/validacion/precarga-origen?numero_folio={folio}
 GET  /api/validacion/pallets
 GET  /api/validacion/pallets/{id}
 POST /api/validacion/pallets
@@ -286,9 +321,12 @@ Las rutas bajo `/api/administracion/validacion/*` permiten consultar el catálog
   "resultado": "aprobado",
   "motivo": null,
   "observacion": null,
-  "generado_dispositivo_at": "2026-07-23T11:42:00-04:00"
+  "generado_dispositivo_at": "2026-07-23T11:42:00-04:00",
+  "precarga_origen": { "huella": "sha256 de la copia de planta", "modificados": ["cantidad_cajas"] }
 }
 ```
+
+`precarga_origen` es opcional: solo lo envía la PDA que partió con los datos de planta.
 
 ## Interfaces implementadas
 

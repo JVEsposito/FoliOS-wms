@@ -71,6 +71,51 @@ export type ValidationCatalog = {
   generado_at: string;
 };
 
+/** Campos de la precarga de planta que el validador puede corregir. */
+export type ValidationPrefillField = 'tipo_bulto' | 'cantidad_cajas' | 'fecha_embalaje' | 'articulo' | 'categoria' | 'composicion';
+
+export type ValidationPrefillLine = {
+  csg: string | null;
+  predio: string | null;
+  origen_validacion_id: string | null;
+  cantidad_cajas: number;
+  lote_materia_prima: string | null;
+  proceso_packing: string | null;
+};
+
+/** Datos de planta de un pallet, traducidos al catálogo de validación. */
+export type AvailableValidationPrefill = {
+  disponible: true;
+  numero_folio: string;
+  huella: string;
+  leido_at: string | null;
+  desactualizada: boolean;
+  tipo_bulto: 'pallet' | 'saldo';
+  cantidad_cajas: number;
+  fecha_embalaje: string | null;
+  articulo_validacion_id: string | null;
+  categoria_validacion_id: string | null;
+  composicion: ValidationPrefillLine[];
+  origen: {
+    cliente: string | null;
+    marca: string | null;
+    especie: string | null;
+    variedad: string | null;
+    calibre: string | null;
+    envase: string | null;
+    categoria: string | null;
+  };
+  pendientes: string[];
+};
+
+export type ValidationPrefill = AvailableValidationPrefill | { disponible: false; motivo: string };
+
+export type ValidationPrefillTrace = {
+  huella: string;
+  modificados: ValidationPrefillField[];
+  coincide_con_copia_vigente?: boolean;
+};
+
 export type RegisterValidationPayload = {
   operacion_id: string;
   numero_folio: string;
@@ -94,6 +139,7 @@ export type RegisterValidationPayload = {
   motivo?: string;
   observacion?: string;
   generado_dispositivo_at: string;
+  precarga_origen?: ValidationPrefillTrace;
 };
 
 export type ValidationAttempt = {
@@ -137,6 +183,7 @@ export type ValidationAttempt = {
   usuario: { id: string; nombre: string };
   dispositivo: { id: string; codigo: string; nombre: string };
   conflicto_con: { id: string; numero_folio: string; numero_intento: number; resultado: ValidationResult } | null;
+  precarga_origen?: ValidationPrefillTrace | null;
   generado_dispositivo_at: string;
   recibido_servidor_at: string;
 };

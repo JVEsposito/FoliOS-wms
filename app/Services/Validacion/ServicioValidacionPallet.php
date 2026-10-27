@@ -14,9 +14,11 @@ use App\Exceptions\ConflictoOperacion;
 use App\Exceptions\OperacionNoAutorizada;
 use App\Models\Dispositivo;
 use App\Models\Folio;
+use App\Models\PalletStockOrigen;
 use App\Models\User;
 use App\Models\ValidacionPallet;
 use App\Services\Autorizacion\AlcanceOperacionalUsuario;
+use App\Services\Integraciones\ServicioLecturaStockOrigen;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\Transiciones\ComandoTransicionOperacional;
 use App\Services\Transiciones\MotorTransicionesOperacionales;
@@ -253,6 +255,7 @@ class ServicioValidacionPallet
                     'codigo_externo' => $combinacion->codigo_externo,
                 ],
                 'payload' => $payload,
+                ...(isset($payload['precarga_origen']) ? ['precarga_origen' => $this->precargaOrigen($payload)] : []),
             ];
 
             $validacion = ValidacionPallet::create([
@@ -368,6 +371,34 @@ class ServicioValidacionPallet
             'motivo' => $datos['motivo'] ?? null,
             'observacion' => $datos['observacion'] ?? null,
             'generado_dispositivo_at' => $generadoDispositivoAt->toAtomString(),
+            // Solo si la PDA partió con datos de planta: el hash de las PDA anteriores no cambia.
+            ...(isset($datos['precarga_origen']['huella']) ? ['precarga_origen' => [
+                'huella' => (string) $datos['precarga_origen']['huella'],
+                'modificados' => collect($datos['precarga_origen']['modificados'] ?? [])
+                    ->map(fn (mixed $campo): string => (string) $campo)->unique()->sort()->values()->all(),
+            ]] : []),
+        ];
+    }
+
+    /**
+     * Deja constancia de que la PDA mostró los datos de planta y de qué corrigió el validador.
+     * La huella permite saber si esa copia sigue siendo la vigente al registrar.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function precargaOrigen(array $payload): array
+    {
+        $config = app(ServicioLecturaStockOrigen::class)->configuracion();
+        $vigente = PalletStockOrigen::query()
+            ->where('ambito', $config['ambito'])
+            ->where('bodega', $config['bodega'])
+            ->where('numero_pallet', $payload['numero_folio'])
+            ->value('huella');
+
+        return [
+            ...$payload['precarga_origen'],
+            'coincide_con_copia_vigente' => $vigente !== null && hash_equals($vigente, $payload['precarga_origen']['huella']),
         ];
     }
 

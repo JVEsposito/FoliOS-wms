@@ -145,6 +145,16 @@ function validationTimeZone() {
     return document.querySelector('[data-validation-timezone]')?.dataset.validationTimezone || 'America/Santiago';
 }
 
+const PREFILL_FIELDS = { tipo_bulto: 'tipo de bulto', cantidad_cajas: 'cajas', fecha_embalaje: 'fecha de embalaje', articulo: 'producto', categoria: 'categoría', composicion: 'composición' };
+
+/** La PDA partió con los datos de planta: se informa si el validador corrigió algo. */
+function prefillLabel(item) {
+    const prefill = item.precarga_origen;
+    if (!prefill) return '';
+    const changed = (prefill.modificados || []).map((field) => PREFILL_FIELDS[field] || field);
+    return `<small class="validation-prefill">${changed.length ? `Datos de planta · corrigió ${escapeHtml(changed.join(', '))}` : 'Datos de planta · confirmados sin cambios'}</small>`;
+}
+
 function renderHistory() {
     elements.history.innerHTML = state.history.map((item) => {
         const article = item.catalogo?.articulo || {}; const origin = item.catalogo?.origen || {};
@@ -154,7 +164,7 @@ function renderHistory() {
         const correction = item.puede_corregir === true
             ? `<button class="validation-correction-button" data-correct-validation="${escapeHtml(item.id)}" type="button">Corregir</button>` : '';
         const resultLabel = { aprobado: 'Aprobado', observado: 'Observado', rechazado: 'Rechazo definitivo', conflicto: 'Conflicto' }[resultClass] || statusText(resultClass);
-        return `<tr class="validation-record validation-record--${escapeHtml(resultClass)}"><td><strong class="validation-code">${escapeHtml(item.numero_folio)}</strong><small>${item.tipo_bulto === 'pallet' ? 'Pallet completo' : 'Saldo'}, ${escapeHtml(item.cantidad_cajas)} cajas${item.numero_intento > 1 ? ` · intento ${escapeHtml(item.numero_intento)}` : ''}</small></td><td><strong>${escapeHtml([article.especie || 'Sin artículo', article.variedad, article.calibre].filter(Boolean).join(' '))}</strong><small>${escapeHtml(article.envase || '—')} · ${escapeHtml(category.nombre || 'Sin categoría')}</small></td><td><strong>${escapeHtml(validationOriginLabel(item.catalogo))}</strong><small>${escapeHtml(origin.cliente || 'Sin origen')} · ${escapeHtml(origin.marca || '')}</small></td><td><span class="validation-result validation-result--${escapeHtml(resultClass)}"><i aria-hidden="true"></i>${escapeHtml(resultLabel)}</span>${item.motivo ? `<small>${escapeHtml(statusText(item.motivo))}</small>` : ''}</td><td><strong>${escapeHtml(item.usuario?.nombre || '—')}</strong><small>${escapeHtml(validationJourneyLabel(item, validationTimeZone()))}</small>${lastCorrection ? `<small>Corregido ${escapeHtml(formatDate(lastCorrection.corregido_at))}</small>` : ''}</td><td class="validation-record__action">${correction}</td></tr>`;
+        return `<tr class="validation-record validation-record--${escapeHtml(resultClass)}"><td><strong class="validation-code">${escapeHtml(item.numero_folio)}</strong><small>${item.tipo_bulto === 'pallet' ? 'Pallet completo' : 'Saldo'}, ${escapeHtml(item.cantidad_cajas)} cajas${item.numero_intento > 1 ? ` · intento ${escapeHtml(item.numero_intento)}` : ''}</small>${prefillLabel(item)}</td><td><strong>${escapeHtml([article.especie || 'Sin artículo', article.variedad, article.calibre].filter(Boolean).join(' '))}</strong><small>${escapeHtml(article.envase || '—')} · ${escapeHtml(category.nombre || 'Sin categoría')}</small></td><td><strong>${escapeHtml(validationOriginLabel(item.catalogo))}</strong><small>${escapeHtml(origin.cliente || 'Sin origen')} · ${escapeHtml(origin.marca || '')}</small></td><td><span class="validation-result validation-result--${escapeHtml(resultClass)}"><i aria-hidden="true"></i>${escapeHtml(resultLabel)}</span>${item.motivo ? `<small>${escapeHtml(statusText(item.motivo))}</small>` : ''}</td><td><strong>${escapeHtml(item.usuario?.nombre || '—')}</strong><small>${escapeHtml(validationJourneyLabel(item, validationTimeZone()))}</small>${lastCorrection ? `<small>Corregido ${escapeHtml(formatDate(lastCorrection.corregido_at))}</small>` : ''}</td><td class="validation-record__action">${correction}</td></tr>`;
     }).join('') || '<tr><td class="empty-validation" colspan="6">No existen validaciones coincidentes.</td></tr>';
 }
 

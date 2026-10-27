@@ -12,6 +12,9 @@ use Illuminate\Validation\Validator;
 
 class RegistrarValidacionPalletRequest extends FormRequest
 {
+    /** Campos de la precarga de planta que el validador puede haber corregido. */
+    public const CAMPOS_PRECARGA = ['tipo_bulto', 'cantidad_cajas', 'fecha_embalaje', 'articulo', 'categoria', 'composicion'];
+
     public function authorize(): bool
     {
         $usuario = $this->user();
@@ -73,6 +76,12 @@ class RegistrarValidacionPalletRequest extends FormRequest
             'motivo' => ['nullable', Rule::enum(MotivoValidacionPallet::class), 'required_unless:resultado,aprobado'],
             'observacion' => ['nullable', 'string', 'max:2000', 'required_if:motivo,otro'],
             'generado_dispositivo_at' => ['required', 'date'],
+            // La PDA partió con los datos de planta de este pallet (huella de la copia leída) y
+            // el validador cambió estos campos. Las PDA anteriores no lo envían.
+            'precarga_origen' => ['nullable', 'array'],
+            'precarga_origen.huella' => ['required_with:precarga_origen', 'string', 'size:64'],
+            'precarga_origen.modificados' => ['nullable', 'array', 'max:6'],
+            'precarga_origen.modificados.*' => ['string', Rule::in(self::CAMPOS_PRECARGA)],
         ];
     }
 
