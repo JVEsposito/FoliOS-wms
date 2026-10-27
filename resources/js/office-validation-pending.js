@@ -168,6 +168,19 @@ function differenceItem(difference, suggestion = false) {
     return `<li${suggestion ? ' class="pending-suggestion"' : ''}><b>${escapeHtml(label)}${suggestion ? ' · sugerida' : ''}</b><span>origen ${escapeHtml(difference.origen)}${escapeHtml(catalog)}</span><span>FoliOS ${escapeHtml(difference.folios ?? '—')}</span></li>`;
 }
 
+/**
+ * Cajas por CSG y, dentro de cada CSG, por lote y proceso: lo que Validación debe encontrar en
+ * la etiqueta del pallet. El CSG con más cajas va primero.
+ */
+function composition(item) {
+    const groups = item.distribucion || [];
+    if (!groups.length) return '—';
+    return `<div class="pending-composition">${groups.map((group) => `<div class="pending-composition__csg">
+        <div class="pending-composition__head"><b>${escapeHtml(group.csg || 'Sin CSG')}</b>${group.predio ? `<span>${escapeHtml(group.predio)}</span>` : ''}<em>${number(group.cajas)}</em></div>
+        ${(group.lineas || []).map((line) => `<div class="pending-composition__line"><span>${line.lote ? `lote ${escapeHtml(line.lote)}` : 'sin lote'}${line.proceso ? ` · ${escapeHtml(line.proceso)}` : ''}</span><em>${number(line.cajas)}</em></div>`).join('')}
+    </div>`).join('')}</div>`;
+}
+
 function bulkType(item) {
     const label = item.tipo_bulto === 'saldo' ? 'Saldo' : 'Pallet';
     return `<span class="pending-chip${item.tipo_bulto === 'saldo' ? ' pending-chip--saldo' : ''}">${label}</span>${item.tipo_mezclado ? '<small class="pending-warning">PC/PI mezclado</small>' : ''}`;
@@ -245,9 +258,8 @@ function render() {
         <td>${formatDate(item.recibido_origen_at)}<small>${age(item.recibido_origen_at)} · embalado ${formatDay(item.fecha_embalaje)}</small></td>
         <td class="pending-num">${number(item.cajas)}</td>
         <td>${article(item)}</td>
-        <td>${escapeHtml(item.csgs.join(', ') || '—')}</td>
-        <td>${escapeHtml(item.procesos.join(', ') || '—')}<small>${item.lotes.length ? `lote ${escapeHtml(item.lotes.join(', '))}` : 'sin lote'}</small></td>
-    </tr>`, 'Todo lo que está en bodega según el origen ya pasó por Validación.', 6);
+        <td>${composition(item)}</td>
+    </tr>`, 'Todo lo que está en bodega según el origen ya pasó por Validación.', 5);
 
     elements.unresolvedBody.innerHTML = rows(data.por_resolver, (item) => `<tr>
         <td><b class="pending-number">${escapeHtml(item.numero)}</b>${bulkType(item)}</td>
@@ -271,7 +283,7 @@ function render() {
         <td>${formatDate(item.validado_at)}<small>${age(item.validado_at)}</small></td>
         <td class="pending-num">${number(item.cajas)}</td>
         <td>${article(item, { folio: true })}</td>
-        <td>${escapeHtml(item.csgs.join(', ') || '—')}</td>
+        <td>${composition(item)}</td>
     </tr>`, 'Todo lo validado que sigue en planta figura en el stock del origen.', 6);
 
     renderCatalog(data);

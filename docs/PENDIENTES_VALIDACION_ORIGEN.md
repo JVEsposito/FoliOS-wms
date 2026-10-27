@@ -63,7 +63,10 @@ calibre, variedad u otro dato del artículo mezclado, se marca como «mezcla en 
 ## Qué muestra
 
 - **Pendientes:** en el stock del origen y sin ningún intento de validación. Ordenados
-  por antigüedad en bodega.
+  por antigüedad en bodega. La columna **Composición** muestra las cajas de cada CSG (con
+  su predio) y, dentro de cada CSG, las cajas por lote y proceso: lo que el validador debe
+  encontrar en la etiqueta. El CSG con más cajas va primero. **Solo en FoliOS** muestra la
+  misma distribución, tomada de la composición validada.
 - **Por resolver:** hubo intento, pero no quedó un folio vigente: observado, rechazo
   definitivo, conflicto o validación anulada. Manda el último intento.
 - **Con diferencias:** conciliaciones entre planta y la validación física, con respaldo
@@ -77,7 +80,8 @@ calibre, variedad u otro dato del artículo mezclado, se marca como «mezcla en 
   todavía no reconoce (ver abajo).
 
 **Excel** descarga las cuatro listas de pallets en una hoja, con la situación de cada
-pallet, la categoría sugerida y lo que falta en el catálogo.
+pallet, la categoría sugerida, lo que falta en el catálogo, las cajas por CSG y la
+composición (CSG · lote · proceso: cajas).
 
 ## Cuadraturas de la validación con planta
 

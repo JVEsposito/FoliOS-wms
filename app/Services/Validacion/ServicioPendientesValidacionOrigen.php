@@ -253,6 +253,39 @@ class ServicioPendientesValidacionOrigen
         return $resultado;
     }
 
+    /**
+     * Cajas por CSG y, dentro de cada CSG, por lote y proceso: la composición tal como la revisa
+     * Validación. El CSG con más cajas va primero.
+     *
+     * @return list<array{csg: ?string, predio: ?string, cajas: int, lineas: list<array{lote: ?string, proceso: ?string, cajas: int}>}>
+     */
+    private function distribucion(Collection $lineas, string $cajas, string $lote, string $proceso): array
+    {
+        $texto = fn (mixed $valor): ?string => is_scalar($valor) && trim((string) $valor) !== '' ? trim((string) $valor) : null;
+
+        return $lineas
+            ->filter(fn (mixed $linea): bool => is_array($linea))
+            ->groupBy(fn (array $linea): string => $this->normalizar($texto($linea['csg'] ?? null)) ?? '')
+            ->map(fn (Collection $grupo): array => [
+                'csg' => $texto($grupo->first()['csg'] ?? null),
+                'predio' => $grupo->map(fn (array $linea): ?string => $texto($linea['predio'] ?? null))->filter()->first(),
+                'cajas' => (int) $grupo->sum(fn (array $linea): int => (int) ($linea[$cajas] ?? 0)),
+                'lineas' => $grupo
+                    ->groupBy(fn (array $linea): string => ($this->normalizar($texto($linea[$lote] ?? null)) ?? '').'|'.($this->normalizar($texto($linea[$proceso] ?? null)) ?? ''))
+                    ->map(fn (Collection $partes): array => [
+                        'lote' => $texto($partes->first()[$lote] ?? null),
+                        'proceso' => $texto($partes->first()[$proceso] ?? null),
+                        'cajas' => (int) $partes->sum(fn (array $linea): int => (int) ($linea[$cajas] ?? 0)),
+                    ])
+                    ->sortBy(fn (array $linea): string => ($linea['lote'] ?? '').'|'.($linea['proceso'] ?? ''))
+                    ->values()
+                    ->all(),
+            ])
+            ->sort(fn (array $a, array $b): int => [$b['cajas'], $a['csg'] ?? ''] <=> [$a['cajas'], $b['csg'] ?? ''])
+            ->values()
+            ->all();
+    }
+
     /** @param array<string, int> $cajas */
     private function textoCsg(array $cajas): string
     {
@@ -320,6 +353,7 @@ class ServicioPendientesValidacionOrigen
             'csgs' => $composicion->pluck('csg')->filter()->unique()->values()->all(),
             'procesos' => $composicion->pluck('proceso')->filter()->unique()->values()->all(),
             'lotes' => $composicion->pluck('lote')->filter()->unique()->values()->all(),
+            'distribucion' => $this->distribucion($composicion, 'cajas', 'lote', 'proceso'),
             'composicion' => $pallet->composicion,
             'fecha_embalaje' => $pallet->fecha_embalaje?->toDateString(),
             'recibido_origen_at' => $pallet->recibido_origen_at?->toAtomString(),
@@ -347,6 +381,7 @@ class ServicioPendientesValidacionOrigen
             'categoria' => $datos['categoria'] ?? null,
             'envase' => $datos['envase'] ?? null,
             'csgs' => collect($datos['composicion'] ?? [])->pluck('csg')->filter()->unique()->values()->all(),
+            'distribucion' => $this->distribucion(collect($datos['composicion'] ?? []), 'cantidad_cajas', 'lote_materia_prima', 'proceso_packing'),
             'validado_at' => $folio->created_at?->toAtomString(),
         ];
     }
