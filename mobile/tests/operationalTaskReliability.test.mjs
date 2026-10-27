@@ -227,3 +227,38 @@ test('Una lectura vieja de turnos no reemplaza la configuración más reciente d
   assert.equal(h.props('OperatorTaskHome').shiftContext.turno.nombre, 'Turno actual');
   await h.unmount();
 });
+
+
+test('un conflicto temporal conserva UUID y sesiones y permite confirmar el mismo registro', async () => {
+  const h = harness(); let reject = true;
+  h.controls.post = () => { if (reject) throw new h.ApiError('Otra operación está actualizando los mismos datos.', 503); };
+  try {
+    await h.mount(); await h.open(); await h.action('onComplete');
+    const saved = clone(h.journal()[0]);
+    assert.equal(h.journal().length, 1);
+    assert.deepEqual(h.calls.closes, []);
+    assert.match(h.message(), /Otra operación está actualizando/);
+    assert.ok(h.message().includes(saved.id));
+    reject = false; await h.retry();
+    assert.equal(h.journal().length, 0);
+    assert.equal(h.calls.posts.length, 2);
+    assert.deepEqual(h.calls.posts[0], h.calls.posts[1]);
+    assert.equal(h.calls.closes.length, 1);
+  } finally { await h.unmount(); }
+});
+
+test('un intento histórico rechazado deja volver a confirmar sin declarar terminada la labor', async () => {
+  const h = harness({ postFailure: 'before' });
+  try {
+    await h.mount(); await h.open(); await h.action('onComplete');
+    const oldId = h.journal()[0].id;
+    h.controls.post = () => { throw new h.ApiError('El intento anterior falló antes de confirmarse. Usa un identificador nuevo.', 409); };
+    await h.retry();
+    assert.equal(h.journal().length, 0);
+    assert.equal(h.props('OperatorTaskExecution').task.estado, 'en_proceso');
+    h.controls.post = () => {};
+    await h.action('onComplete');
+    assert.notEqual(h.calls.posts.at(-1).payload.operacion_id, oldId);
+    assert.equal(h.journal().length, 0);
+  } finally { await h.unmount(); }
+});

@@ -9,6 +9,9 @@ use App\Exceptions\ServicioSagNoDisponible;
 use App\Exceptions\TemporadaConPendientesDeCierre;
 use App\Http\Middleware\AsegurarTemporadaActivaDelRegistro;
 use App\Http\Middleware\ExigirCambioPasswordTablet;
+use Illuminate\Contracts\Database\ConcurrencyErrorDetector;
+use Illuminate\Database\DeadlockException;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -53,6 +56,17 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*'),
         );
+
+        $exceptions->render(function (DeadlockException|QueryException $exception, Request $request) {
+            if (! $request->is('api/*') || ! app(ConcurrencyErrorDetector::class)->causedByConcurrencyError($exception)) {
+                return null;
+            }
+
+            return response()->json([
+                'message' => 'Otra operación está actualizando los mismos datos. Espera unos segundos y vuelve a comprobar el resultado con el mismo intento.',
+                'codigo' => 'concurrencia_temporal',
+            ], 503)->header('Retry-After', '1');
+        });
 
         $exceptions->render(function (
             AdvertenciasMovimientoPendientes $exception,
