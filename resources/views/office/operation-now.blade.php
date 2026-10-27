@@ -229,14 +229,16 @@
                             <header class="operation-now-panel__heading">
                                 <div class="operation-now-panel__title">
                                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                                    <div><h2 id="operationOperatorsTitle">Camareros activos</h2><span>Ubicación y labor vigente</span></div>
+                                    <div><h2 id="operationOperatorsTitle">Camareros activos</h2><span>Ubicación, labor y disponibilidad</span></div>
                                 </div>
                                 <div class="operation-now-panel__tools">
                                     <a class="operation-now-pin-button" href="/oficina/frigorifico/labores-turno" id="operationShiftDutiesOpen" hidden>Labores por turno</a>
                                     <strong class="operation-now-panel__count" id="operatorPanelCount">—</strong>
+                                    <span id="operatorAvailableCount" class="operation-now-availability-count">Disponibles: —</span>
                                     <button type="button" class="operation-now-pin-button" id="operationPinsOpen" hidden>PIN de operadores</button>
                                 </div>
                             </header>
+                            <p class="operation-now-availability-notice" id="operatorAvailabilityNotice" role="status" aria-live="polite">Consultando disponibilidad…</p>
                             <div class="operation-now-panel__body operation-now-operator-list" id="operationOperatorList"><div class="operation-now-empty">Consultando sesiones…</div></div>
                         </section>
                         <section class="operation-now-panel operation-now-panel--verifications" aria-labelledby="operationVerificationsTitle">

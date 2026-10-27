@@ -9,6 +9,15 @@ use Tests\TestCase;
 
 class EstructuraOficinaTest extends TestCase
 {
+    public function test_operacion_ahora_exporta_la_vista_para_probar_la_disponibilidad(): void
+    {
+        $html = $this->get('/oficina/operacion-ahora')->assertOk()->getContent();
+        if (getenv('ESTIBA_EXPORTAR_UI_TESTS') === '1') {
+            File::ensureDirectoryExists(storage_path('app/ui/oficina'));
+            File::put(storage_path('app/ui/oficina/operacion-ahora.html'), $html);
+        }
+    }
+
     public function test_labores_turno_tiene_formulario_navegacion_y_resumen(): void
     {
         $html = $this->get('/oficina/frigorifico/labores-turno')->assertOk()->getContent();

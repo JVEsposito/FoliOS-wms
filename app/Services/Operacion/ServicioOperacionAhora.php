@@ -395,7 +395,7 @@ class ServicioOperacionAhora
     /**
      * @return array<int, array<string, mixed>>
      */
-    private function camareros(Temporada $temporada): array
+    public function camareros(Temporada $temporada): array
     {
         $limiteActividad = now()->subMinutes((int) config('planificador.camarero_sesion_inactiva_minutos', 30));
         $sesiones = SesionEstiba::query()

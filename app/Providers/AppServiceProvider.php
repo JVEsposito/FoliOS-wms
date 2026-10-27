@@ -11,6 +11,7 @@ use App\Models\AutorizacionSagFolio;
 use App\Models\Carga;
 use App\Models\CargaFolio;
 use App\Models\CorreccionValidacionPallet;
+use App\Models\CustodiaTemporalManiobra;
 use App\Models\DestinoLoteInspeccionSag;
 use App\Models\EventoCarga;
 use App\Models\EventoPrefrio;
@@ -37,6 +38,7 @@ use App\Models\UbicacionActual;
 use App\Models\User;
 use App\Models\ValidacionPallet;
 use App\Observers\AuditarCambioTransicionOperacionalObserver;
+use App\Observers\DisponibilidadCamareroObserver;
 use App\Observers\EventoCargaObserver;
 use App\Observers\InvalidarBandejasOperacionalesObserver;
 use App\Observers\InvalidarPanelGerencialObserver;
@@ -144,6 +146,9 @@ class AppServiceProvider extends ServiceProvider
         }
         foreach (SolicitarArbitrajePlanificadorObserver::modelosObservados() as $modelo) {
             $modelo::observe(SolicitarArbitrajePlanificadorObserver::class);
+        }
+        foreach ([TareaMovimiento::class, ManiobraOperacional::class, CustodiaTemporalManiobra::class] as $modelo) {
+            $modelo::observe(DisponibilidadCamareroObserver::class);
         }
         Event::listen(EventoCargaRegistrado::class, CrearNotificacionesOperacionales::class);
 

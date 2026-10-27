@@ -11,6 +11,8 @@ import { MaterialVerificationPanel } from '../components/MaterialVerificationPan
 import { OperationalTaskInbox } from '../components/OperationalTaskInbox';
 import { EnvironmentalControlScreen } from './EnvironmentalControlScreen';
 import { OperationalScreen } from './OperationalScreen';
+import { useOperationalPolling } from '../hooks/useOperationalPolling';
+import { sendOperatorPresence } from '../services/operatorPresenceApi';
 
 type Props = {
   api: EstibaApi;
@@ -27,6 +29,12 @@ export function OperationalWorkspaceScreen({ api, auth, onLogout }: Props) {
     && auth.usuario.capacidades.puede_consultar_control_ambiental === true;
 
   const updateEnvironmentalDue = useCallback((due: number) => setEnvironmentalDue(due), []);
+
+  const presenceEnabled = api.mode === 'connected' && Boolean(api.baseUrl)
+    && auth.usuario.capacidades.puede_operar_productos === true;
+  const presence = useCallback(() => sendOperatorPresence(api.baseUrl!, auth.token), [api.baseUrl, auth.token]);
+  useEffect(() => { if (presenceEnabled) void presence().catch(() => undefined); }, [presence, presenceEnabled]);
+  useOperationalPolling(presence, { enabled: presenceEnabled, intervalMs: 15_000, maxBackoffMs: 30_000 });
 
   useEffect(() => {
     if (!environmentalAvailable || !api.baseUrl || view === 'ambiente') return;
