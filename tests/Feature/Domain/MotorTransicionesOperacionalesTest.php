@@ -251,7 +251,7 @@ class MotorTransicionesOperacionalesTest extends TestCase
             'cantidad_cambios' => 0, 'error_tipo' => DeadlockException::class,
             'error_codigo' => 'fallo_no_controlado', 'error_mensaje' => 'SQLSTATE[40001]: Deadlock found when trying to get lock',
             'ocurrido_at' => now(), 'finalizado_at' => now()]);
-        $anterior = $fallida->getRawOriginal();
+        $anterior = $fallida->refresh()->getRawOriginal();
         try {
             DB::transaction(fn () => $this->motor()->ejecutar(
                 new ComandoTransicionOperacional(dominio: DominioTransicionOperacional::Estiba,
