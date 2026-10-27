@@ -2,6 +2,7 @@ import {
   RegisterValidationPayload,
   ValidationAttempt,
   ValidationCatalog,
+  ValidationPrefill,
   ValidationSessionSnapshot,
 } from '../domain/validation';
 import { ApiError } from './apiError';
@@ -153,4 +154,18 @@ export async function listValidationsByFolio(
     token,
   );
   return response.data;
+}
+
+/** Lo que la planta informa del pallet, para partir la validación con esos datos. */
+export async function getValidationPrefill(
+  baseUrl: string,
+  token: string,
+  folio: string,
+): Promise<ValidationPrefill> {
+  const query = new URLSearchParams({ numero_folio: folio });
+  return (await request<{ data: ValidationPrefill }>(
+    baseUrl,
+    `/api/validacion/precarga-origen?${query.toString()}`,
+    token,
+  )).data;
 }

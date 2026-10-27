@@ -98,8 +98,11 @@ pueda cuadrar el sistema planta.
 
 El registro aprobado que crea un folio captura el snapshot completo del validador,
 su identidad, dispositivo, intento y fechas, junto con la copia de planta disponible
-en el servidor, su lectura y equivalencias. Esta captura **no acredita que la PDA
-haya mostrado esos datos**: esa precarga corresponde a una entrega posterior.
+en el servidor, su lectura y equivalencias. Desde la precarga en la PDA, el snapshot
+del validador incluye `precarga_origen`: la huella de la copia de planta que la PDA mostró,
+los campos que el validador corrigió y si esa copia seguía vigente al registrar. Sin
+`precarga_origen` (PDA anterior o sin conexión), la captura no acredita que la PDA haya
+mostrado los datos de planta.
 Las validaciones anteriores se incorporan con **Leer ahora**, la lectura programada
 o **Registrar / recomprobar conciliaciones**; se identifican como primera comparación
 posterior, sin reconstruir una lectura histórica que no existe. Los GET no escriben.
@@ -141,8 +144,7 @@ consulta; no admiten gestiones nuevas. Los respaldos permanecen aunque se purgue
 registro técnico de la lectura de origen.
 
 Para desplegar: ejecutar las migraciones (`php artisan migrate --force`) y compilar
-la interfaz (`npm ci && npm run build`). No cambia el contrato de la PDA ni se escribe
-en la base de planta.
+la interfaz (`npm ci && npm run build`). No se escribe en la base de planta.
 
 ## Catálogo: el origen alimenta los maestros de temporada
 
@@ -209,8 +211,13 @@ conservan consulta y Excel.
 Vincular o agregar al catálogo: además, `administrar-catalogos-validacion`. Quien solo
 consulta ve lo que falta, sin las acciones.
 
+## Precarga en la PDA
+
+La PDA parte la validación con estos mismos datos de planta, traducidos al catálogo,
+incluida la categoría sugerida. El validador confirma el pallet o corrige lo que no
+coincide. Ver *Precarga con los datos de planta* en
+[Validación de pallets](MODULO_VALIDACION_PALLETS.md).
+
 ## Pendiente
 
-- Precargar la validación en la PDA con los datos del origen, incluida la categoría
-  sugerida.
 - Procesos de packing desde el origen.

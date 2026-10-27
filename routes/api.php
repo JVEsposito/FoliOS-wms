@@ -74,6 +74,7 @@ use App\Http\Controllers\Api\PerfilImpresionEtiquetaController;
 use App\Http\Controllers\Api\PinOperacionalController;
 use App\Http\Controllers\Api\PlanOperacionalController;
 use App\Http\Controllers\Api\PlanoPlantaController;
+use App\Http\Controllers\Api\PrecargaValidacionOrigenController;
 use App\Http\Controllers\Api\ProcesoPrefrioController;
 use App\Http\Controllers\Api\ProductoHidrocoolerController;
 use App\Http\Controllers\Api\ProveedorMaterialController;
@@ -342,6 +343,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/validacion/pallets/operaciones/{operacionId}', [ValidacionPalletController::class, 'estadoOperacion'])
         ->whereUuid('operacionId')->middleware('can:validar-pallets');
     Route::post('/validacion/pallets', [ValidacionPalletController::class, 'store'])
+        ->middleware('can:validar-pallets');
+    Route::get('/validacion/precarga-origen', PrecargaValidacionOrigenController::class)
         ->middleware('can:validar-pallets');
     Route::get(
         '/validacion/pallets/{validacionPallet}/correccion',
