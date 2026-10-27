@@ -60,6 +60,7 @@ class DisponibilidadCamarerosApiTest extends TestCase
             'creado_por_user_id' => $c['supervisor']->id, 'responsable_user_id' => $c['usuario']->id,
             'dispositivo_id' => $c['dispositivo']->id, 'estado' => 'pausada_discrepancia',
             'candidate_key' => (string) Str::uuid(), 'costo_movimientos' => 1, 'titulo' => 'Labor pausada']);
+        $this->consulta($c)->assertJsonPath('data.camareros.0.estado_presencia', 'esperando');
         $tarea->update(['estado' => 'completada']);
         $this->assertSame('esperando', PresenciaCamarero::sole()->estado);
         $this->consulta($c)->assertJsonPath('data.disponibles', 0)->assertJsonPath('data.camareros.0.estado_presencia', 'esperando');

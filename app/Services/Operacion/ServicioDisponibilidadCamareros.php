@@ -92,7 +92,7 @@ class ServicioDisponibilidadCamareros
         $camareros = $filas->map(function (PresenciaCamarero $presencia) use ($actividad): array {
             $fresco = $presencia->desconectada_at === null && $presencia->ultima_actividad_at->gt(now()->subSeconds(self::AUSENCIA_SEGUNDOS));
             $estado = $fresco ? $presencia->estado : 'desconectado';
-            if ($fresco && ($actividad->get($presencia->user_id)['tarea_actual'] ?? false)) {
+            if ($fresco && $estado === 'disponible' && ($actividad->get($presencia->user_id)['tarea_actual'] ?? false)) {
                 $estado = 'trabajando';
             }
 
