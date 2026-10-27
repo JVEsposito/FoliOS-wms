@@ -93,6 +93,7 @@ export type OperationalTaskReservation = {
 
 export type OperationalTask = {
   id: string;
+  permite_sesion_por_tarea?: boolean;
   plan: {
     id: string;
     tipo: string;
@@ -213,6 +214,7 @@ export type OperationalSnapshotTask = {
   decision_arbitraje?: OperationalManeuverArbitration['decision'] | null;
   orden_arbitraje?: number | null;
   materializable?: boolean;
+  materializable_por_recursos?: boolean;
   acopio_carga?: OperationalLoadStaging | null;
 };
 
@@ -245,6 +247,7 @@ export type OperationalSnapshot = {
 };
 
 export type OperationalPhysicalFrontierSnapshot = {
+  contrato_recursos?: 'recursos_v1';
   snapshot_version: string;
   generado_at: string;
   planner: {

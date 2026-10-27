@@ -15,18 +15,19 @@ const sourceRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../src');
 
 // Ejecuta el componente real con hooks de React; solo sustituye las APIs,
 // superficies nativas y pantallas hijas ajenas al comportamiento probado.
-function harness({ cameraBusy = true, openConflict = false, completionError = '', rejectPin = false, withLoads = false } = {}) {
+function harness({ cameraBusy = true, openConflict = false, completionError = '', rejectPin = false, withLoads = false, scoped = false } = {}) {
   let polling;
   let renderer;
   let listError = '';
   let nextTask = {
     id: 'task-1', estado: 'asumida', tipo_movimiento: 'ubicacion_inicial',
+    permite_sesion_por_tarea: scoped,
     plan: { id: 'plan-1', tipo: 'recepcion_tunel', titulo: 'Recibir túnel', prioridad: 'normal' },
     folio: { id: 'folio-1', numero_folio: '0000000003', tipo_bulto: 'pallet' },
     destino: { camara: { id: 'cam-5', nombre: 'Cámara 5' }, posicion: { id: 'pos-1', etiqueta: 'B01-P01', banda: 1, posicion: 1, nivel: 1 } },
     origen: null, reserva: { tipo_compromiso: 'fisica', vence_at: null },
   };
-  const calls = { list: 0, open: 0, start: 0, locate: 0, close: [] };
+  const calls = { list: 0, open: 0, start: 0, locate: 0, close: [], scoped: [] };
   const taskApi = {
     list: async (_token, tab) => {
       calls.list++;
@@ -94,8 +95,9 @@ function harness({ cameraBusy = true, openConflict = false, completionError = ''
         ? { modo: 'solo_lectura', sesion: { id: 'other-session', es_propia: false, usuario: { nombre: 'Operador de prueba' }, dispositivo: { nombre: 'TABLET-PREFRIO' } } }
         : { modo: 'disponible', sesion: null },
     }),
-    openSession: async () => {
+    openSession: async (_token, _camera, taskId) => {
       calls.open++;
+      if (taskId) calls.scoped.push(taskId);
       if (openConflict) throw new ApiError('La cámara ya está siendo modificada por otra sesión.', 409);
       return { id: 'own-session' };
     },
@@ -143,6 +145,17 @@ function harness({ cameraBusy = true, openConflict = false, completionError = ''
     async unmount() { if (renderer) await flush(() => renderer.unmount()); },
   };
 }
+
+test('una labor dirigida abre su sesión de tarea aunque otra tablet tenga abierta la cámara', async () => {
+  const h = harness({ cameraBusy: true, scoped: true });
+  try {
+    await h.mount(); await h.start();
+    assert.equal(h.state(), 'en_proceso');
+    assert.equal(h.calls.start, 1);
+    assert.deepEqual(h.calls.scoped, ['task-1']);
+    assert.equal(h.modal().length, 0);
+  } finally { await h.unmount(); }
+});
 
 test('consultar las cargas del turno conserva el movimiento y la sesión de cámara en curso', async () => {
   const h = harness({ cameraBusy: false, withLoads: true });

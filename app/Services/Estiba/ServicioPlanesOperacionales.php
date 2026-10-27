@@ -291,6 +291,7 @@ class ServicioPlanesOperacionales
         ?int $versionTarea = null,
         ?int $versionPlan = null,
         ?int $versionCamara = null,
+        bool $validacionRecursos = false,
     ): TareaMovimiento {
         return DB::transaction(function () use (
             $tarea,
@@ -300,6 +301,7 @@ class ServicioPlanesOperacionales
             $versionTarea,
             $versionPlan,
             $versionCamara,
+            $validacionRecursos,
         ): TareaMovimiento {
             $this->validarActor($usuario, $dispositivo);
             $tareaBloqueada = TareaMovimiento::query()
@@ -362,6 +364,7 @@ class ServicioPlanesOperacionales
                 $versionTarea,
                 $versionPlan,
                 $versionCamara,
+                $validacionRecursos,
             );
 
             return $this->cargarTarea($tareaBloqueada->refresh());

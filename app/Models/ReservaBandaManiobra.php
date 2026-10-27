@@ -17,6 +17,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'reservada_at',
     'liberada_at',
     'motivo_liberacion',
+    'sesion_estiba_id',
 ])]
 class ReservaBandaManiobra extends Model
 {

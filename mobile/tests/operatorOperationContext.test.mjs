@@ -54,6 +54,7 @@ test('la consulta de cargas usa GET condicional y separa la caché entre usuario
     require: (id) => {
       if (id === './apiError') return { ApiError: class extends Error {} };
       if (id === './httpClient') return { fetchWithTimeout: async (url, init) => { calls.push({ url, init }); return responses.shift(); } };
+      if (id.endsWith('/physicalFrontierRecovery')) return { resourceFrontier: (snapshot) => snapshot };
       throw new Error(`Import inesperado ${id}`);
     },
   });

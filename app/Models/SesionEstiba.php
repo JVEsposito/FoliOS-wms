@@ -23,6 +23,8 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
     'cerrada_at',
     'cierre_forzado_por_user_id',
     'motivo_cierre',
+    'tarea_movimiento_id',
+    'clave_tarea_activa',
 ])]
 class SesionEstiba extends Model
 {
@@ -33,6 +35,11 @@ class SesionEstiba extends Model
     public function camara(): BelongsTo
     {
         return $this->belongsTo(Camara::class);
+    }
+
+    public function tareaMovimiento(): BelongsTo
+    {
+        return $this->belongsTo(TareaMovimiento::class);
     }
 
     public function usuario(): BelongsTo

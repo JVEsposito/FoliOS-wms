@@ -29,6 +29,7 @@ import {
 } from '../domain/operationalTasks';
 import { buildOperatorTaskHome, type OperatorQueueItem } from '../domain/operatorTaskQueue';
 import type { ShiftVerification, VerificationItem } from '../domain/verification';
+import { recoverPhysicalFrontier } from '../domain/physicalFrontierRecovery';
 import { calculateRollingFrontier } from '../domain/rollingPlanner';
 import { OperationalActionGate, OperationalInboxReads } from '../domain/operationalInboxConcurrency';
 import { OperationalCameraPlans } from '../domain/operationalCameraPlans';
@@ -100,6 +101,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
   const [suggestedDestinations, setSuggestedDestinations] = useState<Record<string, string>>({});
   const [verification, setVerification] = useState<ShiftVerification | null>(null);
   const initialLoad = useRef(true);
+  const sessionEpoch = useRef(0);
   const reads = useMemo(() => new OperationalInboxReads(), [taskApi, auth.token]);
   const actionGate = useMemo(() => new OperationalActionGate(), [taskApi, auth.token]);
   const cameraPlans = useMemo(() => new OperationalCameraPlans(), [taskApi, auth.token]);
@@ -134,7 +136,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
     pendingRef.current = null; setPendingMovement(null);
     void loadTasks();
     void recoverMovement(false);
-    return () => { reads.invalidate(); previewGeneration.current += 1; preview.current = null; cameraPlans.clear(); };
+    return () => { sessionEpoch.current += 1; reads.invalidate(); previewGeneration.current += 1; preview.current = null; cameraPlans.clear(); };
   }, [taskApi, auth.token]);
 
   // La confirmación pertenece a una tarea concreta antes de iniciar.
@@ -471,22 +473,31 @@ export function OperationalTaskInbox({ api, auth }: Props) {
     if (!taskApi) return;
     setActionLabel('Confirmando destino…');
 
-    try {
+    const epoch = sessionEpoch.current;
+    const attempt = async () => {
       let snapshot = await taskApi.physicalFrontierSnapshot(auth.token);
       if (snapshot.planner.horizon !== 'rolling' || snapshot.planner.compute !== 'tablet') {
         throw new Error(
           'La configuración actual no permite confirmar el destino. Solicita revisión en Oficina.',
         );
       }
-      if (!snapshot.arbitraje.vigencia.vigente) {
-        throw new Error('El plan de trabajo se está actualizando. Mantén el pallet en su origen hasta confirmar el destino.');
+      if (!snapshot.arbitraje.vigencia.vigente && snapshot.contrato_recursos !== 'recursos_v1') {
+        throw new ApiError('El plan de trabajo se está actualizando. Mantén el pallet en su origen hasta confirmar el destino.', 503);
       }
 
+      const reserved = snapshot.tareas.find((item) => item.id === anchorTask.id && item.destino_reservado);
+      if (reserved) {
+        const own = await taskApi.ownState(auth.token, anchorTask.id);
+        if (epoch !== sessionEpoch.current) return;
+        replaceMine([own.tarea]); setActiveTask(own.tarea);
+        setNotice(`Destino reservado: ${operationalTaskPositionLabel(own.tarea.destino)}.`);
+        return;
+      }
       const cachedProposal = reusablePreviewProposal(preview.current, snapshot, anchorTask);
       if (cachedProposal) {
         try {
           const cachedResult = await taskApi.materializePhysicalFrontier(
-            auth.token, snapshot.snapshot_version, [cachedProposal],
+            auth.token, snapshot.snapshot_version, [cachedProposal], snapshot.contrato_recursos === 'recursos_v1',
           );
           const { accepted, recalculate } = materializationOutcome(cachedResult, anchorTask.id);
           if (accepted) {
@@ -527,6 +538,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
         auth.token,
         snapshot.snapshot_version,
         frontier.proposals,
+        snapshot.contrato_recursos === 'recursos_v1',
       );
       const acceptedTasks = result.aceptadas.map((item) => item.tarea);
       replaceMine(acceptedTasks);
@@ -538,10 +550,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
         );
       } else {
         const rejected = result.rechazadas.find((item) => item.tarea_id === anchorTask.id);
-        reportError(
-          rejected?.motivo
-            ?? 'La tarea quedó fuera de la frontera inmediata. Actualiza el estado antes de ejecutarla.',
-        );
+        throw new ApiError(rejected?.motivo ?? 'El destino cambió; actualiza las labores antes de retirar el pallet.', 409);
       }
 
       if (result.recalcular && acceptedAnchor) {
@@ -549,7 +558,13 @@ export function OperationalTaskInbox({ api, auth }: Props) {
           'Tu destino está reservado. Hay otras propuestas pendientes de actualización.',
         );
       }
+    };
+    try {
+      await recoverPhysicalFrontier(attempt, () => {
+        cameraPlans.clear(); preview.current = null; setActionLabel('Actualizando destino…');
+      }, () => epoch === sessionEpoch.current);
     } catch (reason) {
+      if (epoch !== sessionEpoch.current) return;
       reportError(messageFrom(reason));
       await loadTasks({ quiet: true });
     }
@@ -818,20 +833,27 @@ export function OperationalTaskInbox({ api, auth }: Props) {
     if (task.tipo_movimiento === 'retiro') {
       if (task.contexto?.origen_logico === 'tunel_prefrio') return;
       if (!task.origen?.camara) throw new Error('La tarea no posee cámara de origen.');
-      await acquireSession(task.origen.camara.id, sessions, 'origen');
+      await acquireSession(task.origen.camara.id, sessions, 'origen', task);
       return;
     }
     if (!task.destino?.camara) throw new Error('La tarea no posee cámara de destino materializada.');
     const required = new Map<string, 'origen' | 'destino'>([[task.destino.camara.id, 'destino']]);
     if (task.origen?.camara) required.set(task.origen.camara.id, task.origen.camara.id === task.destino.camara.id ? 'destino' : 'origen');
-    for (const [id, role] of [...required].sort(([left], [right]) => left.localeCompare(right))) await acquireSession(id, sessions, role);
+    for (const [id, role] of [...required].sort(([left], [right]) => left.localeCompare(right))) await acquireSession(id, sessions, role, task);
   }
 
-  async function acquireSession(cameraId: string, sessions: OpenSession[], role: 'origen' | 'destino') {
+  async function acquireSession(cameraId: string, sessions: OpenSession[], role: 'origen' | 'destino', task?: OperationalTask) {
     const existing = sessions.find((session) => session.cameraId === cameraId);
     if (existing) return existing;
 
     const plan = await api.getPlan(auth.token, cameraId);
+    if (task?.permite_sesion_por_tarea) {
+      const opened = await api.openSession(auth.token, cameraId, task.id);
+      const scoped: OpenSession = { cameraId, sessionId: opened.id, openedByTask: true, plan };
+      sessions.push(scoped);
+      scoped.plan = await api.getPlan(auth.token, cameraId);
+      return scoped;
+    }
     if (plan.acceso.modo === 'solo_lectura') {
       throw new Error(cameraSessionConflictMessage(plan, role));
     }

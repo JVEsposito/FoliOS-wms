@@ -15,6 +15,8 @@ class TareaMovimientoResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'permite_sesion_por_tarea' => $this->maniobra_operacional_id !== null
+                && (($this->planOperacional?->contexto ?? [])['planner_horizon'] ?? config('planificador.horizon')) === 'rolling',
             'plan' => $this->whenLoaded('planOperacional', fn (): array => [
                 'id' => $this->planOperacional->id,
                 'tipo' => $this->planOperacional->tipo->value,
