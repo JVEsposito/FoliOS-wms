@@ -9,6 +9,7 @@ use App\Http\Requests\CerrarSesionEstibaRequest;
 use App\Http\Resources\SesionEstibaResource;
 use App\Models\Camara;
 use App\Models\SesionEstiba;
+use App\Models\TareaMovimiento;
 use App\Services\Autenticacion\ContextoOperacional;
 use App\Services\Estiba\ServicioSesionEstiba;
 use App\Services\Verificaciones\ServicioVerificacionesUbicacion;
@@ -24,9 +25,11 @@ class SesionEstibaController extends Controller
         ServicioSesionEstiba $servicio,
     ): Response {
         [$usuario, $dispositivo] = $contexto->obtener($request);
-        $sesion = $servicio
-            ->abrir($camara, $usuario, $dispositivo)
-            ->load('usuario', 'dispositivo');
+        $datos = $request->validate(['tarea_movimiento_id' => ['sometimes', 'required', 'uuid', 'exists:tareas_movimiento,id']]);
+        $sesion = isset($datos['tarea_movimiento_id'])
+            ? $servicio->abrirParaTarea($camara, $usuario, $dispositivo, TareaMovimiento::findOrFail($datos['tarea_movimiento_id']))
+            : $servicio->abrir($camara, $usuario, $dispositivo);
+        $sesion->load('usuario', 'dispositivo');
         if (config('verificaciones.habilitada') && $usuario->rol === RolUsuario::CamareroFrio) {
             try {
                 app(ServicioVerificacionesUbicacion::class)->actual($usuario, $dispositivo);

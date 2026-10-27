@@ -51,6 +51,7 @@ class FronteraFisicaController extends Controller
         $datos = $request->validate([
             'snapshot_version' => ['required', 'string', 'size:64'],
             'planner_version' => ['required', 'string', 'max:80'],
+            'contrato_recursos' => ['sometimes', 'in:recursos_v1'],
             'propuestas' => ['required', 'array', 'min:1', "max:{$max}"],
             'propuestas.*.tarea_id' => ['required', 'uuid', 'distinct', 'exists:tareas_movimiento,id'],
             'propuestas.*.posicion_destino_id' => ['required', 'uuid', 'exists:posiciones,id'],
@@ -62,7 +63,8 @@ class FronteraFisicaController extends Controller
         ]);
         [$usuario, $dispositivo] = $contexto->obtener($request);
         $snapshot = $frontera->snapshot($usuario, $dispositivo);
-        if (! hash_equals($snapshot['snapshot_version'], $datos['snapshot_version'])) {
+        $porRecursos = ($datos['contrato_recursos'] ?? null) === 'recursos_v1';
+        if (! $porRecursos && ! hash_equals($snapshot['snapshot_version'], $datos['snapshot_version'])) {
             return response()->json([
                 'message' => 'La realidad física cambió antes de materializar la frontera global.',
                 'codigo' => 'snapshot_fisico_obsoleto',
@@ -74,11 +76,28 @@ class FronteraFisicaController extends Controller
             ], 409);
         }
 
-        $materializables = $frontera->idsMaterializables($snapshot);
+        $materializables = $frontera->idsMaterializables($snapshot, $porRecursos);
         $aceptadas = [];
         $rechazadas = [];
 
         foreach ($datos['propuestas'] as $propuesta) {
+            if ($porRecursos) {
+                $confirmada = TareaMovimiento::query()->whereKey($propuesta['tarea_id'])
+                    ->where('responsable_user_id', $usuario->id)->where('dispositivo_id', $dispositivo->id)
+                    ->where('posicion_destino_id', $propuesta['posicion_destino_id'])
+                    ->whereIn('estado', ['asumida', 'en_proceso'])
+                    ->whereHas('planOperacional', fn ($q) => $q->where('estado', 'en_ejecucion')->whereHas('temporada', fn ($q) => $q->where('activa', true)))
+                    ->whereHas('maniobraOperacional', fn ($q) => $q->where('estado', 'en_ejecucion'))
+                    ->whereHas('reservaActiva', fn ($q) => $q->where('bloqueo_posicion_id', $propuesta['posicion_destino_id'])->conCompromisoVigente())
+                    ->first();
+                if ($confirmada) {
+                    $aceptadas[] = ['tarea' => (new TareaMovimientoResource($planes->cargarTarea($confirmada)))->resolve($request),
+                        'score' => $propuesta['score'] ?? null, 'motivo' => 'Destino propio ya reservado.',
+                        'planner_version' => $datos['planner_version']];
+
+                    continue;
+                }
+            }
             if (! $materializables->contains($propuesta['tarea_id'])) {
                 $rechazadas[] = [
                     'tarea_id' => $propuesta['tarea_id'],
@@ -101,6 +120,7 @@ class FronteraFisicaController extends Controller
                     versionTarea: (int) $propuesta['tarea_version'],
                     versionPlan: (int) $propuesta['plan_version'],
                     versionCamara: (int) $propuesta['version_camara_conocida'],
+                    validacionRecursos: $porRecursos,
                 );
                 $aceptadas[] = [
                     'tarea' => (new TareaMovimientoResource($materializada))->resolve($request),

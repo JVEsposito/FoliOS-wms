@@ -300,6 +300,10 @@ class ValidadorMovimiento
             ->where('sesion_estiba_id', $sesion->id)
             ->exists();
 
+        if ($sesion->tarea_movimiento_id) {
+            $poseeBloqueo = $sesion->tarea_movimiento_id === $movimiento->tarea_movimiento_id
+                && $sesion->clave_tarea_activa === $sesion->tarea_movimiento_id.':'.$camara->id;
+        }
         if (! $poseeBloqueo) {
             throw new DomainException("La sesión de {$extremo} no posee el bloqueo de la cámara.");
         }

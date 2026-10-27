@@ -6,6 +6,7 @@ use App\Enums\ContenidoCamara;
 use App\Enums\DecisionArbitrajeManiobra;
 use App\Enums\EstadoCamara;
 use App\Enums\EstadoManiobraOperacional;
+use App\Enums\EstadoPlanOperacional;
 use App\Enums\EstadoTareaMovimiento;
 use App\Enums\TipoMovimiento;
 use App\Models\Camara;
@@ -100,6 +101,15 @@ class ServicioFronteraFisica
                         ] : null,
                         'destino_reservado' => $reserva?->bloqueo_posicion_id !== null,
                         'materializable' => $materializable,
+                        // Un claim ya otorgado se revalida en la escritura, incluso mientras
+                        // el worker evalúa cambios ajenos. No publica tareas nuevas.
+                        'materializable_por_recursos' => $tarea->estado === EstadoTareaMovimiento::Asumida
+                            && $tarea->tipo_movimiento !== TipoMovimiento::Retiro
+                            && $reserva !== null && $reserva->bloqueo_posicion_id === null
+                            && $reserva->vence_at?->gt(now())
+                            && $maniobra?->estado === EstadoManiobraOperacional::EnEjecucion
+                            && $tarea->planOperacional->estado === EstadoPlanOperacional::EnEjecucion
+                            && $horizon === 'rolling' && $this->tareaEnRollout($tarea, $camarasDirigidas),
                         ...(array_key_exists($tarea->id, $acopios)
                             ? ['acopio_carga' => $acopios[$tarea->id]]
                             : []),
@@ -163,6 +173,7 @@ class ServicioFronteraFisica
             ];
 
             return [
+                'contrato_recursos' => 'recursos_v1',
                 'snapshot_version' => hash(
                     'sha256',
                     json_encode($estado, JSON_THROW_ON_ERROR),
@@ -198,10 +209,10 @@ class ServicioFronteraFisica
     }
 
     /** @return Collection<int, string> */
-    public function idsMaterializables(array $snapshot): Collection
+    public function idsMaterializables(array $snapshot, bool $porRecursos = false): Collection
     {
         return collect($snapshot['tareas'] ?? [])
-            ->where('materializable', true)
+            ->where($porRecursos ? 'materializable_por_recursos' : 'materializable', true)
             ->pluck('id')
             ->filter(fn (mixed $id): bool => is_string($id))
             ->values();
@@ -265,7 +276,7 @@ class ServicioFronteraFisica
             ->with([
                 'planOperacional:id,temporada_id,tipo,estado,version,contexto',
                 'maniobraOperacional:id,plan_operacional_id,estado,secuencia_actual,version',
-                'reservaActiva:id,tarea_movimiento_id,bloqueo_tarea_id,bloqueo_posicion_id,version',
+                'reservaActiva:id,tarea_movimiento_id,bloqueo_tarea_id,bloqueo_posicion_id,version,vence_at',
             ])
             ->get()
             ->filter(fn (TareaMovimiento $tarea): bool => $tarea->maniobraOperacional !== null

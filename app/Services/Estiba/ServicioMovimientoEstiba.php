@@ -7,6 +7,7 @@ use App\Enums\DominioTransicionOperacional;
 use App\Enums\EstadoIntegracionFolio;
 use App\Enums\EstadoOperacionalFolio;
 use App\Enums\EstadoOperacionSincronizacion;
+use App\Enums\EstadoSesionEstiba;
 use App\Enums\TipoBulto;
 use App\Enums\TipoMovimiento;
 use App\Exceptions\ConflictoMovimiento;
@@ -548,7 +549,7 @@ class ServicioMovimientoEstiba
         // El número se busca en todas las temporadas: un pallet de otra temporada no se ubica.
         $this->guardiaTemporada->asegurar($folio);
 
-        $this->validarVersion($camara, $versionDestinoConocida, 'destino');
+        $this->validarVersion($camara, $versionDestinoConocida, 'destino', $sesion, $tareaMovimiento);
         $ubicacion = UbicacionActual::query()
             ->where('folio_id', $folio->id)
             ->lockForUpdate()
@@ -742,8 +743,8 @@ class ServicioMovimientoEstiba
         $this->validarContenidoCamara($camaraOrigen, $folioBloqueado->tipo_bulto);
         $this->validarContenidoCamara($camaraDestino, $folioBloqueado->tipo_bulto);
 
-        $this->validarVersion($camaraOrigen, $versionOrigenConocida, 'origen');
-        $this->validarVersion($camaraDestino, $versionDestinoConocida, 'destino');
+        $this->validarVersion($camaraOrigen, $versionOrigenConocida, 'origen', $sesionOrigenBloqueada, $tareaMovimiento);
+        $this->validarVersion($camaraDestino, $versionDestinoConocida, 'destino', $sesionDestinoBloqueada, $tareaMovimiento);
 
         $tareaEnEjecucion = $this->reservasTareas->validarParaMovimiento(
             $tareaMovimiento,
@@ -900,7 +901,7 @@ class ServicioMovimientoEstiba
         }
 
         $this->validarContenidoCamara($camara, $folioBloqueado->tipo_bulto);
-        $this->validarVersion($camara, $versionOrigenConocida, 'origen');
+        $this->validarVersion($camara, $versionOrigenConocida, 'origen', $sesion, $tareaMovimiento);
         $tareaEnEjecucion = $this->reservasTareas->validarParaMovimiento(
             $tareaMovimiento,
             $folioBloqueado,
@@ -968,8 +969,16 @@ class ServicioMovimientoEstiba
             ->keyBy('id');
     }
 
-    private function validarVersion(Camara $camara, int $versionConocida, string $extremo): void
+    private function validarVersion(Camara $camara, int $versionConocida, string $extremo, ?SesionEstiba $sesion = null, ?TareaMovimiento $tarea = null): void
     {
+        if ($sesion?->tarea_movimiento_id) {
+            if ($sesion->tarea_movimiento_id !== $tarea?->id || $sesion->estado !== EstadoSesionEstiba::Abierta) {
+                throw new ConflictoMovimiento('La sesión de tarea no autoriza este movimiento.');
+            }
+            app(ServicioRecursosEstibaDirigida::class)->validarTarea($tarea);
+
+            return;
+        }
         if ($versionConocida < 0 || $camara->version_plano !== $versionConocida) {
             throw new ConflictoMovimiento(sprintf(
                 'La versión conocida de la cámara de %s está desactualizada.',

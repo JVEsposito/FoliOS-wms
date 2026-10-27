@@ -24,6 +24,7 @@ use App\Models\Posicion;
 use App\Models\ReservaBandaManiobra;
 use App\Models\ReservaPosicionInspeccionSag;
 use App\Models\ReservaTareaMovimiento;
+use App\Models\SesionEstiba;
 use App\Models\TareaMovimiento;
 use App\Models\UbicacionActual;
 use App\Models\User;
@@ -149,6 +150,7 @@ class ServicioReservasTareasMovimiento
         ?int $versionTarea = null,
         ?int $versionPlan = null,
         ?int $versionCamara = null,
+        bool $validacionRecursos = false,
     ): ReservaTareaMovimiento {
         app(ServicioExclusionPallet::class)->bloquear($tarea);
         $tareaBloqueada = TareaMovimiento::query()
@@ -180,7 +182,7 @@ class ServicioReservasTareasMovimiento
         app(ServicioAcopioCarga::class)->validarDestino($tareaBloqueada, $posicion);
         $posicionBloqueada = Posicion::query()->lockForUpdate()->findOrFail($posicion->id);
         $camara = Camara::query()->lockForUpdate()->findOrFail($posicionBloqueada->camara_id);
-        if ($versionCamara !== null && $camara->version_plano !== $versionCamara) {
+        if (! $validacionRecursos && $versionCamara !== null && $camara->version_plano !== $versionCamara) {
             throw new ConflictoOperacion('La cámara cambió desde el snapshot utilizado por la tablet.');
         }
         if ($posicionBloqueada->estado !== EstadoPosicion::Activa) {
@@ -195,6 +197,9 @@ class ServicioReservasTareasMovimiento
 
         $this->validarBandaOperacional($posicionBloqueada, $tareaBloqueada);
         app(ServicioDestinosDespeje::class)->validar($tareaBloqueada, $posicionBloqueada);
+        if ($validacionRecursos) {
+            app(ServicioRecursosEstibaDirigida::class)->validarAcceso($posicionBloqueada, $tareaBloqueada);
+        }
         $this->validarDestinoParaTipo($tareaBloqueada, $posicionBloqueada);
         $this->validarDestinoSinConflicto(
             $posicionBloqueada->id,
@@ -295,6 +300,11 @@ class ServicioReservasTareasMovimiento
             'iniciada_at' => now(),
             'version' => $tareaBloqueada->version + 1,
         ]);
+
+        if (SesionEstiba::query()->where('tarea_movimiento_id', $tareaBloqueada->id)->where('estado', 'abierta')->exists()) {
+            Camara::query()->whereIn('id', array_filter([$tareaBloqueada->camara_origen_id, $tareaBloqueada->camara_destino_id]))->orderBy('id')->lockForUpdate()->get();
+            app(ServicioRecursosEstibaDirigida::class)->validarTarea($tareaBloqueada);
+        }
 
         // Desde aquí el lease deja de ser descartable: esta reserva no expirará
         // automáticamente hasta completar el movimiento o registrar incidencia.
@@ -581,6 +591,7 @@ class ServicioReservasTareasMovimiento
             'version' => $tareaBloqueada->version + 1,
         ]);
 
+        app(ServicioSesionEstiba::class)->cerrarDeTarea($tareaBloqueada);
         app(ServicioManiobrasOperacionales::class)->avanzarTrasMovimiento(
             $tareaBloqueada->refresh(),
             $movimiento,
@@ -989,6 +1000,10 @@ class ServicioReservasTareasMovimiento
             'version' => $reserva->version + 1,
         ]);
         $this->incrementarRevisionCamara($posicionDestinoId);
+        $tarea = TareaMovimiento::query()->find($reserva->tarea_movimiento_id);
+        if ($tarea) {
+            app(ServicioSesionEstiba::class)->cerrarDeTarea($tarea);
+        }
     }
 
     private function incrementarRevisionCamara(?string $posicionDestinoId): void
@@ -1031,6 +1046,7 @@ class ServicioReservasTareasMovimiento
             'iniciada_at' => null,
             'version' => $tarea->version + 1,
         ]);
+        app(ServicioSesionEstiba::class)->cerrarDeTarea($tarea);
         $this->restablecerManiobraTrasExpirar($tarea);
     }
 

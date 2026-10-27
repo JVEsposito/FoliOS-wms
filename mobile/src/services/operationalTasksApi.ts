@@ -11,6 +11,7 @@ import {
   ReportedManeuverDiscrepancy,
   TemporaryExtractionPayload,
 } from '../domain/operationalTasks';
+import { resourceFrontier } from '../domain/physicalFrontierRecovery';
 import { ApiError } from './apiError';
 import { fetchWithTimeout } from './httpClient';
 import type { ShiftVerification, MaterialVerificationReading } from '../domain/verification';
@@ -18,7 +19,7 @@ import type { OperatorLoadFeed } from '../domain/operatorLoads';
 
 // Cambia cada vez que cambian las reglas con que la tablet elige destinos: el servidor la
 // registra con cada rechazo para saber qué tablets tienen las reglas vigentes.
-export const TABLET_PLANNER_VERSION = 'rolling-global-6-sector-acopio';
+export const TABLET_PLANNER_VERSION = 'rolling-global-7-concurrencia-recursos';
 
 export type StartConfirmation = {
   folioDigits: string;
@@ -114,10 +115,10 @@ export class OperationalTasksApi {
   }
 
   async physicalFrontierSnapshot(token: string) {
-    return (await this.request<{ data: OperationalPhysicalFrontierSnapshot }>(
+    return resourceFrontier((await this.request<{ data: OperationalPhysicalFrontierSnapshot }>(
       '/api/frontera-fisica/snapshot',
       token,
-    )).data;
+    )).data);
   }
 
   async take(token: string, taskId: string) {
@@ -152,6 +153,7 @@ export class OperationalTasksApi {
     token: string,
     snapshotVersion: string,
     proposals: OperationalFrontierProposal[],
+    byResources = false,
   ) {
     return (await this.request<{ data: OperationalFrontierResult }>(
       '/api/frontera-fisica/materializar',
@@ -160,6 +162,7 @@ export class OperationalTasksApi {
         method: 'POST',
         body: JSON.stringify({
           snapshot_version: snapshotVersion,
+          ...(byResources ? { contrato_recursos: 'recursos_v1' } : {}),
           planner_version: TABLET_PLANNER_VERSION,
           propuestas: proposals,
         }),

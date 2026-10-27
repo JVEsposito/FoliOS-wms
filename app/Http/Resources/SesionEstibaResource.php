@@ -15,6 +15,8 @@ class SesionEstibaResource extends JsonResource
         return [
             'id' => $this->id,
             'camara_id' => $this->camara_id,
+            'tarea_movimiento_id' => $this->tarea_movimiento_id,
+            'alcance' => $this->tarea_movimiento_id ? 'tarea' : 'camara',
             'estado' => $this->estado->value,
             'version_inicial' => $this->version_inicial,
             'version_final' => $this->version_final,

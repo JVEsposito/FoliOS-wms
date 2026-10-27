@@ -65,7 +65,7 @@ export interface EstibaApi {
   refreshPlan(token: string, cameraId: string): Promise<CameraPlan | null>;
   listRecent(token: string, cameraId: string): Promise<Movement[]>;
   refreshRecent(token: string, cameraId: string): Promise<Movement[] | null>;
-  openSession(token: string, cameraId: string): Promise<OpenedSession>;
+  openSession(token: string, cameraId: string, taskId?: string): Promise<OpenedSession>;
   closeSession(token: string, sessionId: string): Promise<void>;
   lookupFolio(token: string, folioNumber: string, cameraId?: string): Promise<FolioLookup>;
   searchAvailableMaterialFolios(token: string, prefix: string, cameraId: string, cameraOnly: boolean): Promise<AvailableMaterialFolio[]>;
@@ -336,11 +336,11 @@ class HttpEstibaApi implements EstibaApi {
     return (data as ApiItem<CameraPlan>).data;
   }
 
-  async openSession(token: string, cameraId: string) {
+  async openSession(token: string, cameraId: string, taskId?: string) {
     return (await this.request<ApiItem<OpenedSession>>(
       `/api/camaras/${cameraId}/sesiones`,
       token,
-      { method: 'POST' },
+      { method: 'POST', ...(taskId ? { body: JSON.stringify({ tarea_movimiento_id: taskId }) } : {}) },
     )).data;
   }
 
