@@ -42,6 +42,7 @@ use App\Http\Controllers\Api\DespachoComercialRetornoController;
 use App\Http\Controllers\Api\DespachoFrigorificoController;
 use App\Http\Controllers\Api\DespachoMaterialController;
 use App\Http\Controllers\Api\DirectorioTransporteController;
+use App\Http\Controllers\Api\DisponibilidadCamarerosController;
 use App\Http\Controllers\Api\DocumentoRecepcionEmbaladaController;
 use App\Http\Controllers\Api\EmbarqueController;
 use App\Http\Controllers\Api\EtiquetaPtController;
@@ -133,6 +134,10 @@ Route::middleware('auth:sanctum')->group(function () {
     });
     Route::get('/operacion-ahora', OperacionAhoraController::class)
         ->middleware('can:consultar-panel-gerencial');
+    Route::get('/operacion-ahora/camareros', [DisponibilidadCamarerosController::class, 'index'])
+        ->middleware('can:consultar-panel-gerencial');
+    Route::post('/operacion/camareros/presencia', [DisponibilidadCamarerosController::class, 'latido'])
+        ->middleware('can:operar-camaras-productos');
     Route::get('/operacion-ahora/planificador/comparacion', ComparacionCiclosPlanificadorController::class)
         ->middleware('can:consultar-panel-gerencial');
     Route::get('/operacion-ahora/planificador/replay', ReplayCicloPlanificadorController::class)

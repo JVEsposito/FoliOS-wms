@@ -1,3 +1,4 @@
+import { createAvailabilityTracker, operatorPresenceLabel } from './shared/operator-availability';
 import { createUuid } from './shared/uuid.js';
 import { createOperationalPoller } from './shared/operational-poller';
 import { buildAttention, buildOperationTabBadges } from './shared/operation-now-attention';
@@ -125,6 +126,11 @@ const state = {
     snapshot: null,
     loading: false,
     poller: null,
+    operatorPoller: null,
+    operatorSnapshot: null,
+    operatorReading: false,
+    operatorFresh: false,
+    availabilityTracker: createAvailabilityTracker(),
     clockTimer: null,
     clockOffsetMs: 0,
     mapZoom: 1,
@@ -323,9 +329,12 @@ function validateSnapshot(data) {
 }
 
 function clearSession() {
+    state.token = null;
+    state.operatorSnapshot = null;
     localStorage.removeItem(tokenKey);
     localStorage.removeItem(identityKey);
     state.poller?.stop();
+    state.operatorPoller?.stop();
     window.clearInterval(state.clockTimer);
     window.location.replace('/oficina/accesos');
 }
@@ -775,7 +784,7 @@ function renderOperators(operators = []) {
         const locationType = operator.ubicacion_actual?.tipo;
         const locationLabel = locationType === 'transito' ? 'En tránsito'
             : locationType === 'destino_previsto' ? 'Destino previsto'
-                : locationType === 'origen' ? 'Origen de la tarea' : 'Cámara de sesión';
+                : locationType === 'origen' ? 'Origen de la tarea' : locationType === 'sin_ubicacion' ? 'Sin ubicación reciente' : 'Cámara de sesión';
         const taskMarkup = task ? `<div class="operation-now-operator__task">
             <div class="operation-now-operator__task-head">
                 <div><span class="operation-now-operator__label">TAREA ${escapeHtml(humanize(task.estado).toUpperCase())}</span><p><span class="operation-now-code">${escapeHtml(task.folio?.numero_folio || 'Sin folio')}</span></p></div>
@@ -783,13 +792,13 @@ function renderOperators(operators = []) {
             </div>
             <p>${escapeHtml(task.instruccion || task.plan?.titulo || humanize(task.tipo_movimiento))}</p>
             <div class="operation-now-route"><span>${escapeHtml(taskLocation(task.origen))}</span><b aria-label="hacia">→</b><span>${escapeHtml(task.destino_logico?.nombre || taskLocation(task.destino))}</span></div>
-        </div>` : `<div class="operation-now-operator__task">${signal('Disponible, sin tarea tomada', 'success')}</div>`;
+        </div>` : `<div class="operation-now-operator__task">${signal(operatorPresenceLabel(operator), operator.estado_presencia === 'disponible' ? 'success' : 'warning')}${operator.disponible_desde ? `<p>Disponible desde ${escapeHtml(dateTime(operator.disponible_desde, { timeOnly: true }))}</p>` : ''}</div>`;
 
         return `<article class="operation-now-operator">
             <div class="operation-now-operator__identity">
                 <h3>${escapeHtml(operator.usuario?.nombre || 'Camarero')}</h3>
                 <span class="operation-now-operator__meta">${escapeHtml(operator.dispositivo?.codigo || 'Sin dispositivo')} · actividad ${escapeHtml(dateTime(operator.ultima_actividad_at, { timeOnly: true }))}</span>
-                <div class="operation-now-operator__status">${signal(task ? 'Con tarea' : 'Sesión reciente', task ? 'info' : 'success')}</div>
+                <div class="operation-now-operator__status">${signal(operatorPresenceLabel(operator), operator.estado_presencia === 'disponible' ? 'success' : operator.estado_presencia === 'desconectado' ? 'warning' : 'info')}</div>
             </div>
             <div class="operation-now-operator__location"><span class="operation-now-operator__label">${escapeHtml(locationLabel.toUpperCase())}</span><p><strong>${escapeHtml(currentCamera ? cameraReferenceLabel(currentCamera) : locationLabel)}</strong></p></div>
             ${taskMarkup}
@@ -1090,6 +1099,17 @@ function renderTabBadges(badges) {
         if (badge?.label) node.title = badge.label;
         else node.removeAttribute('title');
     });
+    renderOperatorAvailabilityBadge();
+}
+
+function renderOperatorAvailabilityBadge() {
+    const badge = document.querySelector('[data-tab-badge="personal"]');
+    if (!badge || !state.operatorSnapshot) return;
+    badge.hidden = false;
+    const count = Number(state.operatorSnapshot.disponibles) || 0;
+    badge.textContent = state.operatorFresh ? `${number(count)} ${count === 1 ? 'disponible' : 'disponibles'}` : 'Sin confirmar';
+    badge.dataset.tone = state.operatorFresh && count > 0 ? 'success' : 'neutral';
+    badge.title = state.operatorFresh ? 'Camareros conectados sin labores pendientes' : 'Disponibilidad sin confirmar';
 }
 
 function tunnelProgress(tunnel) {
@@ -1196,7 +1216,7 @@ function render(data) {
     renderSync(data.sincronizacion, data.generado_at);
     renderPlanner(data.planificador);
     renderCameras(data.camaras);
-    renderOperators(data.camareros);
+    renderOperators(state.operatorSnapshot ? (state.operatorFresh ? state.operatorSnapshot.camareros : state.operatorSnapshot.camareros.map((operator) => ({ ...operator, estado_presencia: 'sin_confirmar', disponible_desde: null }))) : data.camareros);
     renderTunnels(data.prefrio?.tuneles);
     renderVerifications(data.verificaciones);
     // La lista de atención y las insignias se recalculan en cada lectura; la pestaña
@@ -1243,6 +1263,37 @@ async function load({ blocking = false, silent = false, propagate = false } = {}
     }
 }
 
+async function loadOperatorAvailability() {
+    const token = state.token;
+    if (!token || state.operatorReading) return;
+    state.operatorReading = true;
+    try {
+        const response = await api('/api/operacion-ahora/camareros');
+        const data = response.data;
+        if (token !== state.token) return;
+        if (!Array.isArray(data.camareros) || !data.temporada_id) throw new Error('Lectura de camareros incompleta.');
+        const received = state.availabilityTracker.receive(data);
+        if (!received.applied) return;
+        state.operatorSnapshot = data;
+        state.operatorFresh = true;
+        renderOperators(data.camareros);
+        renderOperatorAvailabilityBadge();
+        setText('operatorAvailableCount', `Disponibles: ${number(data.disponibles)}`);
+        setText('operatorAvailabilityNotice', `${number(data.disponibles)} camareros disponibles · última lectura ${dateTime(data.generado_at, { timeOnly: true })}`);
+        for (const operator of received.alerts) toast(`${operator.usuario.nombre} terminó sus labores y quedó disponible.`);
+    } catch (error) {
+        if (token !== state.token) return;
+        state.operatorFresh = false;
+        renderOperatorAvailabilityBadge();
+        setText('operatorAvailableCount', 'Disponibles: sin confirmar');
+        setText('operatorAvailabilityNotice', `Sin comunicación reciente. La disponibilidad no está confirmada.${state.operatorSnapshot ? ` Última lectura ${dateTime(state.operatorSnapshot.generado_at, { timeOnly: true })}.` : ''}`);
+        if (state.operatorSnapshot) renderOperators(state.operatorSnapshot.camareros.map((operator) => ({ ...operator, estado_presencia: 'sin_confirmar', disponible_desde: null })));
+        throw error;
+    } finally {
+        if (token === state.token) state.operatorReading = false;
+    }
+}
+
 function startPolling() {
     state.poller?.stop();
     const seconds = Math.max(10, Number(state.snapshot?.actualizacion_sugerida_segundos || 30));
@@ -1255,6 +1306,14 @@ function startPolling() {
         },
     );
     state.poller.start();
+    state.operatorPoller?.stop();
+    state.operatorPoller = createOperationalPoller(loadOperatorAvailability, {
+        intervalMs: 5_000, maxBackoffMs: 30_000,
+        canRun: () => Boolean(state.token) && !state.operatorReading,
+        onError: () => {},
+    });
+    state.operatorPoller.start();
+    void loadOperatorAvailability().catch(() => {});
 }
 
 async function logout() {

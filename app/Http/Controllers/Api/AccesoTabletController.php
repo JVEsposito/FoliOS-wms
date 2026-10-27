@@ -9,6 +9,7 @@ use App\Models\PersonalAccessToken;
 use App\Models\User;
 use App\Services\Autorizacion\AlcanceOperacionalUsuario;
 use App\Services\Autorizacion\CatalogoModulosAcceso;
+use App\Services\Operacion\ServicioDisponibilidadCamareros;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -106,6 +107,7 @@ class AccesoTabletController extends Controller
         $token = $request->user()?->currentAccessToken();
 
         if ($token instanceof PersonalAccessToken) {
+            app(ServicioDisponibilidadCamareros::class)->desconectar((int) $token->getKey());
             $token->delete();
         }
 

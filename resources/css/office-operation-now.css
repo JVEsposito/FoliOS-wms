@@ -1,5 +1,18 @@
 @import './estiba-tokens.css';
 
+.operation-now-availability-count {
+    color: var(--text);
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.operation-now-availability-notice {
+    margin: 0;
+    padding: 12px 18px;
+    color: var(--text);
+    border-block-end: 1px solid var(--corporate-border);
+}
+
 .operation-now-app {
     min-width: 320px;
     background: var(--corporate-canvas);
