@@ -52,6 +52,17 @@ return [
     ),
     // Una sesión de cámara sin tarea deja de representar presencia operacional tras este plazo.
     'camarero_sesion_inactiva_minutos' => max(1, (int) env('WMS_OPERATOR_SESSION_IDLE_MINUTES', 30)),
+    // Una maniobra cuyo paso actual no tiene destino posible no ocupa cupo de la frontera.
+    // false vuelve al arbitraje anterior (V5/V6) como rollback operacional.
+    'arbitraje_destino_posible' => filter_var(
+        env('WMS_PLANNER_DESTINO_POSIBLE', true),
+        FILTER_VALIDATE_BOOL,
+    ),
+    // Rechazos de destino y avisos «sin destino» de las tablets: un mismo motivo de una tarea
+    // dentro de esta ventana suma repeticiones en vez de crear otra fila.
+    'incidencias_destino_ventana_minutos' => max(1, (int) env('WMS_PLANNER_INCIDENCIAS_DESTINO_MINUTOS', 10)),
+    // Repeticiones en la última hora a partir de las cuales Salud advierte una tarea.
+    'incidencias_destino_repetidas' => max(2, (int) env('WMS_PLANNER_INCIDENCIAS_DESTINO_REPETIDAS', 3)),
     'arbitraje_refresco_segundos' => max(
         60,
         (int) env('WMS_PLANNER_ARBITRATION_REFRESH_SECONDS', 240),

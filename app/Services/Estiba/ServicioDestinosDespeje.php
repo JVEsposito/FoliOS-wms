@@ -61,6 +61,12 @@ class ServicioDestinosDespeje
         }
     }
 
+    /** Existe hoy una posición válida para el despeje dentro de su cámara de origen. */
+    public function tieneDestinoLocal(TareaMovimiento $tarea): bool
+    {
+        return $this->aplica($tarea) && $this->locales($tarea, $this->bandasProtegidas($tarea))->isNotEmpty();
+    }
+
     /** @return Collection<int, Posicion> */
     private function locales(TareaMovimiento $tarea, array $protegidas): Collection
     {

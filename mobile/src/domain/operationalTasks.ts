@@ -53,7 +53,7 @@ export type OperationalManeuverObjective = {
 };
 
 export type OperationalManeuverArbitration = {
-  decision: 'en_ejecucion' | 'seleccionada' | 'alternativa' | 'excluida_conflicto' | 'fuera_frontera' | 'fuera_planificador' | 'fuera_rollout';
+  decision: 'en_ejecucion' | 'seleccionada' | 'alternativa' | 'excluida_conflicto' | 'fuera_frontera' | 'fuera_planificador' | 'fuera_rollout' | 'sin_destino';
   orden: number;
   puntaje: number;
   beneficio_neto: number;

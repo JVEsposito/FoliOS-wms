@@ -2,6 +2,7 @@
 
 namespace App\Services\Planificador;
 
+use App\Enums\ContenidoCamara;
 use App\Enums\DecisionArbitrajeManiobra;
 use App\Enums\EstadoCustodiaTemporal;
 use App\Enums\EstadoManiobraOperacional;
@@ -9,6 +10,7 @@ use App\Enums\EstadoPlanOperacional;
 use App\Enums\EstadoTareaMovimiento;
 use App\Enums\TipoPlanOperacional;
 use App\Exceptions\ConflictoOperacion;
+use App\Models\Camara;
 use App\Models\CicloArbitrajeManiobras;
 use App\Models\DecisionArbitrajeManiobra as DecisionPersistida;
 use App\Models\ManiobraOperacional;
@@ -30,6 +32,7 @@ class ServicioArbitrajeManiobras
     public function __construct(
         private readonly ServicioDesplieguePlanificador $despliegue,
         private readonly ServicioExplicabilidadArbitraje $explicabilidad,
+        private readonly ServicioFactibilidadDestino $factibilidad,
     ) {}
 
     /**
@@ -47,7 +50,9 @@ class ServicioArbitrajeManiobras
                 $labores = app(ServicioLaboresTurno::class);
                 $this->versionTurno = $labores->versionArbitraje($temporada->id);
                 $this->preferenciasTurno = $labores->preferenciasArbitraje($maniobras, $temporada->id);
-                $this->reglas = $this->versionTurno[0] ? MotorReplayArbitrajeV6::VERSION_REGLAS : self::VERSION_REGLAS;
+                $this->reglas = $this->validaDestino()
+                    ? MotorReplayArbitrajeV7::VERSION_REGLAS
+                    : ($this->versionTurno[0] ? MotorReplayArbitrajeV6::VERSION_REGLAS : self::VERSION_REGLAS);
                 $snapshot = $this->snapshot($temporada, $maniobras, $camarasRollout);
                 $existente = CicloArbitrajeManiobras::query()
                     ->where('snapshot_version', $snapshot)
@@ -58,6 +63,7 @@ class ServicioArbitrajeManiobras
 
                 $capacidad = max(1, (int) config('planificador.maniobras_simultaneas_max', 3));
                 $fronteraMax = max(1, (int) config('planificador.frontier_max', 4));
+                $this->factibilidad->preparar($maniobras, $camarasRollout);
                 $decisiones = $this->resolver(
                     $maniobras,
                     $capacidad,
@@ -73,6 +79,7 @@ class ServicioArbitrajeManiobras
                         'version_reglas' => $this->reglas,
                         'funciones_turno' => $this->versionTurno,
                         'criterio' => $this->versionTurno[0] ? 'prioridad_cobertura_funciones_tipo_beneficio_antiguedad' : 'prioridad_tipo_beneficio_neto_antiguedad',
+                        'destino_posible' => $this->reglas === MotorReplayArbitrajeV7::VERSION_REGLAS,
                         'formula_beneficio_neto' => 'beneficio_estimado-costo_movimientos-riesgo_operacional',
                         'camaras_rollout' => $camarasRollout,
                         'tipos_fuera_planificador' => [
@@ -296,6 +303,7 @@ class ServicioArbitrajeManiobras
             $orden++;
             $componentes = $this->componentesPuntaje($maniobra);
             $componentes['funcion_turno'] = ['peso' => $this->preferenciasTurno[$maniobra->id] ?? 0, 'turno_id' => $this->versionTurno[0] ?? null];
+            $destino = ServicioFactibilidadDestino::noEvaluado();
             $beneficioNeto = $componentes['beneficio']['neto'];
             $puntaje = $componentes['puntaje'];
             $conflictos = $this->conflictos($maniobra, $recursosTomados);
@@ -348,6 +356,14 @@ class ServicioArbitrajeManiobras
                 $decision = DecisionArbitrajeManiobra::ExcluidaConflicto;
                 $factorDecisivo = 'conflicto_recursos';
                 $motivo = 'La maniobra comparte recursos con otra labor de mayor precedencia.';
+            } elseif ($this->reglas === MotorReplayArbitrajeV7::VERSION_REGLAS
+                && ($seleccionadas < min($cupos, $fronteraMax) || (! $alternativaAsignada && $publicadas < $fronteraMax))
+                && ! ($destino = $this->factibilidad->evaluar($maniobra))['posible']) {
+                // Sin destino posible no ocupa cupo: los camareros no pueden ejecutarla y
+                // dejaría esperando a maniobras que sí tienen dónde ir.
+                $decision = DecisionArbitrajeManiobra::SinDestino;
+                $factorDecisivo = 'sin_destino';
+                $motivo = $destino['detalle'];
             } elseif ($seleccionadas < min($cupos, $fronteraMax)) {
                 $decision = DecisionArbitrajeManiobra::Seleccionada;
                 $factorDecisivo = 'cupo_disponible';
@@ -371,6 +387,9 @@ class ServicioArbitrajeManiobras
 
             $capacidadDecision['seleccionadas_despues'] = $seleccionadas;
             $capacidadDecision['publicadas_despues'] = $publicadas;
+            if ($this->reglas === MotorReplayArbitrajeV7::VERSION_REGLAS) {
+                $componentes['destino'] = $destino;
+            }
 
             $decisiones[] = [
                 'maniobra_operacional_id' => $maniobra->id,
@@ -633,6 +652,21 @@ class ServicioArbitrajeManiobras
             'frontera' => config('planificador.frontier_max', 4),
             'camaras_rollout' => $camarasRollout,
             'maniobras' => $estado,
+            // Con destino posible, un cambio físico (movimiento, banda) puede volver ofrecible
+            // una maniobra aunque ninguna maniobra cambie.
+            'estado_fisico' => $this->reglas === MotorReplayArbitrajeV7::VERSION_REGLAS
+                ? Camara::query()
+                    ->where('contenido', ContenidoCamara::Productos->value)
+                    ->orderBy('id')
+                    ->get(['id', 'estado', 'version_plano'])
+                    ->map(fn (Camara $camara): array => [$camara->id, $camara->estado->value, $camara->version_plano])
+                    ->all()
+                : null,
         ], JSON_THROW_ON_ERROR));
+    }
+
+    private function validaDestino(): bool
+    {
+        return (bool) config('planificador.arbitraje_destino_posible', true);
     }
 }

@@ -129,8 +129,16 @@ La respuesta incluye un `snapshot_version` SHA-256, la configuración efectiva
 por cámara, métricas de planes, maniobras, tareas, movimientos, reservas y
 discrepancias, más señales actuales de riesgo. `critico` identifica leases
 vencidos todavía activos o maniobras completadas con custodia temporal;
-`advertencia` identifica tareas estancadas, custodias activas o discrepancias
-abiertas.
+`advertencia` identifica tareas estancadas, custodias activas, discrepancias
+abiertas, maniobras sin destino posible en el ciclo vigente (`maniobras_sin_destino`) o
+pallets cuyo destino se rechazó varias veces en la última hora
+(`destinos_rechazados_repetidos`, desde `WMS_PLANNER_INCIDENCIAS_DESTINO_REPETIDAS`, 3 por
+defecto). Las dos últimas también aparecen en Operación ahora: en los riesgos del planificador,
+en la pestaña Atención y como contador «Sin destino posible».
+
+`metricas.destinos` resume en la ventana los rechazos del servidor y los avisos sin destino de
+las tablets: registros, repeticiones, tareas afectadas, conteo por origen y los cinco motivos
+más frecuentes.
 
 En `shadow` y `guided`, consultar salud lee el último resultado persistido sin
 ejecutar el árbitro. `vigencia_arbitraje` informa si el resultado está actual,

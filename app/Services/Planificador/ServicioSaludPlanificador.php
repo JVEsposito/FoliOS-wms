@@ -29,6 +29,7 @@ final class ServicioSaludPlanificador
         private readonly ServicioEstadoArbitrajePlanificador $estadoArbitraje,
         private readonly ServicioRecalculosPendientesPlanificador $recalculos,
         private readonly ServicioSaludProcesos $procesos,
+        private readonly ServicioIncidenciasDestino $incidencias,
     ) {}
 
     /** @return array<string, mixed> */
@@ -214,6 +215,7 @@ final class ServicioSaludPlanificador
                 $hasta,
                 $camaraId,
             ),
+            'destinos' => $this->incidencias->metricas($temporadaId, $desde, $hasta, $camaraId),
         ];
     }
 
@@ -319,6 +321,8 @@ final class ServicioSaludPlanificador
                 'custodias_temporales_activas' => 0,
                 'maniobras_completadas_con_custodia' => 0,
                 'discrepancias_abiertas' => 0,
+                'maniobras_sin_destino' => 0,
+                'destinos_rechazados_repetidos' => 0,
             ];
         }
 
@@ -368,7 +372,28 @@ final class ServicioSaludPlanificador
                     ->where('estado', EstadoManiobraOperacional::Completada->value))
                 ->count(),
             'discrepancias_abiertas' => $discrepancias->count(),
+            'maniobras_sin_destino' => $this->maniobrasSinDestino($temporadaId, $camaraId),
+            'destinos_rechazados_repetidos' => $this->incidencias->tareasRepetidas($temporadaId, $camaraId),
         ];
+    }
+
+    /** Maniobras que el ciclo vigente dejó fuera porque su paso actual no tiene destino posible. */
+    private function maniobrasSinDestino(string $temporadaId, ?string $camaraId): int
+    {
+        $ciclo = CicloArbitrajeManiobras::query()
+            ->where('temporada_id', $temporadaId)
+            ->latest('created_at')
+            ->latest('id')
+            ->first(['id']);
+        if (! $ciclo) {
+            return 0;
+        }
+        $decisiones = DecisionPersistida::query()
+            ->where('ciclo_arbitraje_id', $ciclo->id)
+            ->where('decision', DecisionArbitrajeManiobra::SinDestino->value);
+        $this->filtrarDecisionesPorCamara($decisiones, $camaraId);
+
+        return $decisiones->count();
     }
 
     /** @param array<string, int> $riesgos */
@@ -380,7 +405,9 @@ final class ServicioSaludPlanificador
         }
         if ($riesgos['tareas_estancadas'] > 0
             || $riesgos['custodias_temporales_activas'] > 0
-            || $riesgos['discrepancias_abiertas'] > 0) {
+            || $riesgos['discrepancias_abiertas'] > 0
+            || $riesgos['maniobras_sin_destino'] > 0
+            || $riesgos['destinos_rechazados_repetidos'] > 0) {
             return 'advertencia';
         }
 
@@ -434,6 +461,13 @@ final class ServicioSaludPlanificador
                     ],
                 ],
                 'ultimo_ciclo' => null,
+            ],
+            'destinos' => [
+                'registros' => 0,
+                'repeticiones' => 0,
+                'tareas_afectadas' => 0,
+                'por_origen' => [],
+                'motivos_frecuentes' => [],
             ],
         ];
     }

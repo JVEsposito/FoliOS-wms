@@ -114,6 +114,7 @@
                                     <div data-decision="alternativa"><dt>En espera</dt><dd id="plannerAlternativeCount">0</dd></div>
                                     <div data-decision="excluida_conflicto"><dt>Bloqueadas por otra</dt><dd id="plannerConflictCount">0</dd></div>
                                     <div data-decision="fuera_rollout"><dt>Sin planificador</dt><dd id="plannerRolloutCount">0</dd></div>
+                                    <div data-decision="sin_destino"><dt>Sin destino posible</dt><dd id="plannerNoDestinationCount">0</dd></div>
                                 </dl>
                                 <div class="operation-now-planner__risks" id="plannerRiskRows" aria-label="Riesgos físicos actuales"><span>Evaluando riesgos…</span></div>
                                 <div class="operation-now-table-scroll operation-now-planner__decisions">

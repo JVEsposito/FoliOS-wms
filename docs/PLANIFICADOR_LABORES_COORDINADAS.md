@@ -206,6 +206,23 @@ Pendiente: desocupar una banda para abrir un sector cuando la cámara no tiene b
 suficientes, y evitar que dos cargas del mismo cliente terminen compartiendo una banda cuando
 sus acopios se tocan.
 
+## Maniobras sin destino posible y registro de rechazos (27-10-2026)
+
+Origen: el 26-10-2026 el servidor de planta todavía no tenía el sector de acopio. Las cuatro
+maniobras que el arbitraje dejaba tomar eran pallets urgentes de CAR-000024 sin destino, y
+detrás esperaban 162 labores: 37 recepciones de túnel, 117 almacenamientos, 5 preparaciones SAG
+y 1 reordenamiento.
+
+- El arbitraje comprueba que el paso actual tenga un destino posible antes de darle cupo. Sin
+  destino queda `sin_destino`, con su motivo en Oficina, y deja pasar a las siguientes. Ver
+  *Destino posible* en [Arbitraje global](ARBITRAJE_GLOBAL_MANIOBRAS.md).
+- Los rechazos de destino y los avisos de las tablets que no encuentran posición quedan
+  registrados y se ven en Salud y Operación ahora. Ver *Rechazos y pallets sin destino* en
+  [Frontera física global](FRONTERA_FISICA_GLOBAL.md).
+
+Despliegue: ejecutar migraciones y compilar la web. El arbitraje nuevo funciona con la app que
+hoy tienen las tablets; el aviso «sin destino» desde la tablet requiere la APK u OTA nueva.
+
 ## Entrega 3B: horizonte anticipado pendiente
 
 Esta entrega persiste funciones, propiedad y esperas. La selección geométrica conserva

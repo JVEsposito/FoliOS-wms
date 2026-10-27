@@ -394,6 +394,35 @@ final class SectorAcopioCarga
         ];
     }
 
+    /**
+     * La posición que hoy recibe un pallet en cada banda de la cámara: la más al fondo, delante
+     * del último pallet ocupado o comprometido. Estima si existe un destino; la reserva vuelve
+     * a validar la posición elegida.
+     *
+     * @return list<array{id: string, banda: int, posicion: int, nivel: int}>
+     */
+    public function siguientesLibres(string $camaraId): array
+    {
+        $mapa = $this->mapa($camaraId);
+        $libre = fn (array $celda): bool => $celda['activa'] && $celda['banda_util'] && ! $celda['ocupada'];
+        $frentes = $this->frentes($mapa, $libre);
+        $salida = [];
+        foreach ($mapa['bandas'] as $clave => $banda) {
+            $celda = $this->siguienteLibre($banda, $frentes[$clave], $libre);
+            if ($celda !== null) {
+                $salida[] = ['id' => $celda['id'], 'banda' => $celda['banda'], 'posicion' => $celda['posicion'], 'nivel' => $celda['nivel']];
+            }
+        }
+
+        return $salida;
+    }
+
+    /** La cámara tiene posiciones registradas: sin plano no hay nada que estimar. */
+    public function tienePosiciones(string $camaraId): bool
+    {
+        return $this->mapa($camaraId)['bandas'] !== [];
+    }
+
     /** @return array<string, mixed> */
     private function mapa(string $camaraId): array
     {

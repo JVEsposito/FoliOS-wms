@@ -24,7 +24,7 @@ test('la tablet calcula una sola frontera para tareas de planes distintos', () =
 });
 
 test('la tablet materializa contra el snapshot físico global', () => {
-    assert.match(api, /TABLET_PLANNER_VERSION = 'rolling-global-5-despeje-local'/);
+    assert.match(api, /TABLET_PLANNER_VERSION = 'rolling-global-6-sector-acopio'/);
     assert.match(api, /'\/api\/frontera-fisica\/snapshot'/);
     assert.match(api, /'\/api\/frontera-fisica\/materializar'/);
     assert.match(inbox, /materializePhysicalFrontier\(/);
@@ -41,4 +41,12 @@ test('la tablet limita candidatos a las cámaras del snapshot autoritativo', () 
     assert.match(cameraPlans, /new Set\(snapshot\.camaras\.map\(\(camera\) => camera\.id\)\)/);
     assert.match(cameraPlans, /allowed\.has\(camera\)/);
     assert.match(inbox, /No hay cámaras habilitadas para esta labor/);
+});
+
+test('la tablet informa a Oficina cuando no encuentra destino para el pallet tomado', () => {
+    assert.match(api, /'\/api\/frontera-fisica\/sin-destino'/);
+    assert.match(api, /planner_version: TABLET_PLANNER_VERSION,\s*camaras_evaluadas: evaluatedCameras/);
+    // El aviso sale solo para el pallet del camarero y nunca reemplaza el error que lee.
+    assert.match(inbox, /frontier\.unresolvedTaskIds\.includes\(anchorTask\.id\)/);
+    assert.match(inbox, /void taskApi\.reportNoDestination\?\.\(auth\.token, anchorTask\.id, plans\.length\)\.catch\(\(\) => undefined\)/);
 });

@@ -49,6 +49,20 @@ const PLANNER_RISKS = [
         unit: ['pallet', 'pallets'],
         detail: 'en custodia temporal mientras avanza una maniobra',
     },
+    {
+        key: 'maniobras_sin_destino',
+        severity: 'warning',
+        condition: 'Maniobras sin destino posible',
+        unit: ['maniobra', 'maniobras'],
+        detail: 'sin posición libre y accesible; no ocupan cupo hasta que se libere espacio',
+    },
+    {
+        key: 'destinos_rechazados_repetidos',
+        severity: 'warning',
+        condition: 'Destinos rechazados varias veces',
+        unit: ['pallet', 'pallets'],
+        detail: 'la tablet o el servidor rechazaron su destino varias veces en la última hora',
+    },
 ];
 
 const INCIDENT_TYPE_LABELS = {

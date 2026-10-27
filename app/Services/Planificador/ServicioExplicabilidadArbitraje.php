@@ -288,6 +288,7 @@ final class ServicioExplicabilidadArbitraje
             'conflicto_recursos' => 'Conflicto de recursos',
             'cupo_disponible' => 'Cupo de ejecución disponible',
             'alternativa_sin_reserva' => 'Alternativa sin reserva',
+            'sin_destino' => 'Sin destino posible',
             default => 'Frontera operacional completa',
         };
     }

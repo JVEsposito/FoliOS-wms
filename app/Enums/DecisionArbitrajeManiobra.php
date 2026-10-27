@@ -11,6 +11,8 @@ enum DecisionArbitrajeManiobra: string
     case FueraFrontera = 'fuera_frontera';
     case FueraRollout = 'fuera_rollout';
     case FueraPlanificador = 'fuera_planificador';
+    /** Su paso actual no tiene hoy ningún destino posible: no ocupa cupo de la frontera. */
+    case SinDestino = 'sin_destino';
 
     public function publicable(): bool
     {

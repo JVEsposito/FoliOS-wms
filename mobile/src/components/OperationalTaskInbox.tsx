@@ -513,6 +513,11 @@ export function OperationalTaskInbox({ api, auth }: Props) {
       }
       const plans = await cameraPlans.load(snapshot, tasksForFrontier, (id) => api.getPlan(auth.token, id));
       const frontier = calculateRollingFrontier(tasksForFrontier, snapshot, plans, anchorTask.id);
+      if (frontier.unresolvedTaskIds.includes(anchorTask.id)) {
+        // Oficina queda informada de que este pallet no tiene destino; el aviso nunca
+        // reemplaza el mensaje que lee el camarero ni detiene la acción.
+        void taskApi.reportNoDestination?.(auth.token, anchorTask.id, plans.length).catch(() => undefined);
+      }
 
       if (!frontier.proposals.length) {
         throw new Error('No hay una posición libre y compatible para esta labor. Mantén el pallet en su origen y solicita revisión en Oficina.');

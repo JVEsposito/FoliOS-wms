@@ -19,6 +19,29 @@ La comparación es determinista y se aplica en este orden:
 
 Un beneficio alto nunca puede desplazar una prioridad superior. Tampoco se generan movimientos para mejorar solamente la apariencia del plano: el beneficio proviene de objetivos operacionales ya materializados.
 
+## Destino posible (27-10-2026)
+
+Antes de ocupar un cupo o la alternativa, el árbitro comprueba que el paso actual de la
+maniobra tenga hoy al menos un destino que el servidor aceptaría y al que se pueda llegar:
+una posición activa, libre, sin reserva, en una banda operativa de PT y con todo libre delante
+(las bandas se llenan desde el fondo). Para una recepción con carga se usa el mismo acopio que
+valida la reserva (cámara de acopio, grupo o sector); para una concentración, la cámara objetivo
+y su grupo principal; para un despeje, la cámara de origen y, si no hay espacio, otra cámara.
+
+Si no existe ninguno, la maniobra queda `sin_destino` con el motivo (por ejemplo, *No hay
+posiciones libres junto al acopio de CAR-000024 en Cámara de tránsito 07*). No ocupa cupo, no se
+publica a las tablets y se rechaza si un cliente anterior intenta tomarla. Las siguientes en
+orden de precedencia pasan a ocupar la frontera. Un paso que la regla no sabe evaluar se
+considera posible, como antes: la reserva sigue validando el destino elegido.
+
+Origen: el 26-10-2026 las cuatro maniobras ofrecidas eran pallets urgentes de CAR-000024 sin
+destino, y 162 labores con destino esperaban detrás de ellas.
+
+La huella del ciclo incluye la versión del plano de cada cámara de PT: un movimiento o un cambio
+de banda produce un ciclo nuevo y una maniobra vuelve a la frontera cuando se libera espacio.
+La regla se identifica como `arbitraje_global_v7_destino_posible` y se aplica con o sin turno.
+`WMS_PLANNER_DESTINO_POSIBLE=false` vuelve al arbitraje anterior (V5 sin turno, V6 con turno).
+
 ## Exclusión de recursos
 
 Antes de publicar cada candidata, el árbitro compara:
@@ -110,8 +133,10 @@ puntaje y factor decisivo. El contrato público informa nombres operacionales,
 folio y ruta, pero nunca publica UUID.
 
 Solo se reproduce una versión para la que exista un motor histórico compatible y
-un snapshot completo. En este incremento se admite
-`arbitraje_global_v4_explicabilidad` con explicación versión 1. Los ciclos
+un snapshot completo. Se admiten `arbitraje_global_v4_explicabilidad`, `v5_pausa_fisica`,
+`v6_funciones_turno` y `v7_destino_posible`, con explicación versión 1. En V7 cada decisión
+conserva en `componentes.destino` si se evaluó su destino y con qué resultado; el replay usa
+ese dato y no vuelve a leer las cámaras. Los ciclos
 anteriores se muestran como `informacion_insuficiente`; el sistema no inventa
 datos faltantes ni aplica retrospectivamente las reglas actuales. La respuesta
 limita el detalle a cien verificaciones, conserva el resumen completo y prioriza

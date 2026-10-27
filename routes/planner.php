@@ -16,6 +16,10 @@ Route::middleware(['auth:sanctum', 'can:operar-camaras-productos'])->group(funct
         '/frontera-fisica/materializar',
         [FronteraFisicaController::class, 'materializar'],
     );
+    Route::post(
+        '/frontera-fisica/sin-destino',
+        [FronteraFisicaController::class, 'sinDestino'],
+    );
     Route::get(
         '/planes-operacionales/{planOperacional}/snapshot',
         [PlanOperacionalController::class, 'snapshot'],
