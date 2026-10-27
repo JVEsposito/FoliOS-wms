@@ -74,7 +74,7 @@
 
                 <section class="panel pending-panel" id="pending-validation-panel-pending" data-office-panel-group="pending-validation" data-office-panel-id="pending" role="tabpanel" aria-labelledby="pending-validation-tab-pending">
                     <div class="pending-panel__heading"><div><p class="eyebrow">SIN VALIDAR</p><h2>En bodega y sin ningún intento de validación</h2></div><small>Los más antiguos primero.</small></div>
-                    <div class="pending-table-scroll"><table class="pending-table"><thead><tr><th>N° pallet</th><th>En bodega desde</th><th>Cajas</th><th>Artículo</th><th>CSG</th><th>Proceso · lote</th></tr></thead><tbody id="pendingBody"></tbody></table></div>
+                    <div class="pending-table-scroll"><table class="pending-table"><thead><tr><th>N° pallet</th><th>En bodega desde</th><th>Cajas</th><th>Artículo</th><th>Composición <small>CSG · lote · proceso · cajas</small></th></tr></thead><tbody id="pendingBody"></tbody></table></div>
                 </section>
                 <section class="panel pending-panel" id="pending-validation-panel-unresolved" data-office-panel-group="pending-validation" data-office-panel-id="unresolved" role="tabpanel" aria-labelledby="pending-validation-tab-unresolved" hidden>
                     <div class="pending-panel__heading"><div><p class="eyebrow">VALIDACIÓN SIN FOLIO</p><h2>Se intentó validar, pero no quedó folio vigente</h2></div><small>El último intento manda.</small></div>
@@ -103,7 +103,7 @@
                 </section>
                 <section class="panel pending-panel" id="pending-validation-panel-only-folios" data-office-panel-group="pending-validation" data-office-panel-id="only-folios" role="tabpanel" aria-labelledby="pending-validation-tab-only-folios" hidden>
                     <div class="pending-panel__heading"><div><p class="eyebrow">SIN STOCK EN ORIGEN</p><h2>Validados en FoliOS, en planta, que el origen no tiene en bodega</h2></div><small>Puede ser un número mal digitado o un traspaso aún no registrado en el origen.</small></div>
-                    <div class="pending-table-scroll"><table class="pending-table"><thead><tr><th>N° folio</th><th>Estado en FoliOS</th><th>Validado</th><th>Cajas</th><th>Artículo</th><th>CSG</th></tr></thead><tbody id="onlyFoliosBody"></tbody></table></div>
+                    <div class="pending-table-scroll"><table class="pending-table"><thead><tr><th>N° folio</th><th>Estado en FoliOS</th><th>Validado</th><th>Cajas</th><th>Artículo</th><th>Composición validada</th></tr></thead><tbody id="onlyFoliosBody"></tbody></table></div>
                 </section>
                 <section class="panel pending-panel" id="pending-validation-panel-catalog" data-office-panel-group="pending-validation" data-office-panel-id="catalog" role="tabpanel" aria-labelledby="pending-validation-tab-catalog" hidden>
                     <div class="pending-panel__heading"><div><p class="eyebrow">CATÁLOGO DE LA TEMPORADA</p><h2>Datos del origen que el catálogo todavía no reconoce</h2></div><small>El cliente se reconoce por cód. empresa y el embalaje por cód. artículo. Marca, variedad y calibre, tal cual. La categoría solo se sugiere.</small></div>

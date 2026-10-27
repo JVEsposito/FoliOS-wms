@@ -207,6 +207,57 @@
     font-weight: 700;
 }
 
+/* Composición: cajas por CSG y, dentro de cada CSG, por lote y proceso. */
+.pending-table th small {
+    display: block;
+    margin-top: 2px;
+    font-weight: 600;
+}
+
+.pending-composition {
+    display: grid;
+    gap: 8px;
+    min-width: 260px;
+}
+
+.pending-composition__head,
+.pending-composition__line {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: baseline;
+}
+
+.pending-composition__head {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.pending-composition__head span {
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.pending-composition em {
+    font-style: normal;
+    font-variant-numeric: tabular-nums;
+    font-weight: 800;
+    text-align: right;
+}
+
+.pending-composition__line {
+    padding-left: 12px;
+    border-left: 2px solid var(--line);
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.pending-composition__line em {
+    font-weight: 700;
+}
+
 .pending-differences {
     display: grid;
     gap: 6px;

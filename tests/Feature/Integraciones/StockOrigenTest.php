@@ -269,6 +269,59 @@ class StockOrigenTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_pendientes_muestra_la_distribucion_de_cajas_por_csg_lote_y_proceso(): void
+    {
+        $this->perfil();
+        // Como el pallet 1000000170 de planta: varios CSG, cada uno con sus lotes y procesos.
+        $this->respuesta = [
+            $this->fila('P-MIX', ['cantidad' => 24, 'codigo_csg_predio' => '119003', 'lote_recepcion' => '11464', 'Proceso' => 'AR01STD10002']),
+            $this->fila('P-MIX', ['cantidad' => 48, 'codigo_csg_predio' => '119003', 'lote_recepcion' => '11471', 'Proceso' => 'AR01STD10009']),
+            $this->fila('P-MIX', ['cantidad' => 60, 'codigo_csg_predio' => '176364', 'lote_recepcion' => '11463', 'Proceso' => 'AR01STD10001', 'descripcion_predio' => 'PREDIO SUR']),
+            $this->fila('P-MIX', ['cantidad' => 20, 'codigo_csg_predio' => '3126339', 'lote_recepcion' => '11468', 'Proceso' => 'AR01STD10006']),
+            $this->fila('P-MIX', ['cantidad' => 16, 'codigo_csg_predio' => '3126339', 'lote_recepcion' => '11468', 'Proceso' => 'AR01STD10006']),
+        ];
+        $this->artisan('integraciones:leer-stock-origen --sin-cola')->assertSuccessful();
+        $this->folio('SOLO-FOLIOS', 30, [
+            ['csg' => '100001', 'predio' => 'PREDIO VALIDADO', 'cantidad_cajas' => 18, 'lote_materia_prima' => '11462', 'proceso_packing' => 'AR01STD10000'],
+            ['csg' => '100001', 'predio' => 'PREDIO VALIDADO', 'cantidad_cajas' => 12, 'lote_materia_prima' => '11470', 'proceso_packing' => 'AR01STD10005'],
+        ]);
+
+        $respuesta = $this->actingAs($this->administrador, 'sanctum')->getJson('/api/validacion/pendientes-origen')->assertOk();
+
+        $this->assertSame([
+            ['csg' => '119003', 'predio' => 'PREDIO DE PRUEBA', 'cajas' => 72, 'lineas' => [
+                ['lote' => '11464', 'proceso' => 'AR01STD10002', 'cajas' => 24],
+                ['lote' => '11471', 'proceso' => 'AR01STD10009', 'cajas' => 48],
+            ]],
+            ['csg' => '176364', 'predio' => 'PREDIO SUR', 'cajas' => 60, 'lineas' => [
+                ['lote' => '11463', 'proceso' => 'AR01STD10001', 'cajas' => 60],
+            ]],
+            ['csg' => '3126339', 'predio' => 'PREDIO DE PRUEBA', 'cajas' => 36, 'lineas' => [
+                ['lote' => '11468', 'proceso' => 'AR01STD10006', 'cajas' => 36],
+            ]],
+        ], $respuesta->json('pendientes.0.distribucion'));
+        $this->assertSame([
+            ['csg' => '100001', 'predio' => 'PREDIO VALIDADO', 'cajas' => 30, 'lineas' => [
+                ['lote' => '11462', 'proceso' => 'AR01STD10000', 'cajas' => 18],
+                ['lote' => '11470', 'proceso' => 'AR01STD10005', 'cajas' => 12],
+            ]],
+        ], $respuesta->json('solo_en_folios.0.distribucion'));
+
+        $excel = $this->get('/api/validacion/pendientes-origen/excel')->assertOk();
+        $zip = new ZipArchive;
+        $this->assertTrue($zip->open($excel->baseResponse->getFile()->getPathname()));
+        $hoja = (string) $zip->getFromName('xl/worksheets/sheet1.xml').(string) $zip->getFromName('xl/sharedStrings.xml');
+        $zip->close();
+        foreach ([
+            'Cajas por CSG',
+            '119003: 72 · 176364: 60 · 3126339: 36',
+            '119003 · lote 11464 · AR01STD10002: 24; 119003 · lote 11471 · AR01STD10009: 48; 176364 · lote 11463 · AR01STD10001: 60',
+            '100001 · lote 11470 · AR01STD10005: 12',
+        ] as $texto) {
+            $this->assertStringContainsString($texto, $hoja);
+        }
+    }
+
     public function test_lo_que_trae_el_origen_se_vincula_o_se_agrega_al_catalogo_y_se_compara(): void
     {
         $temporada = Temporada::query()->where('activa', true)->firstOrFail();

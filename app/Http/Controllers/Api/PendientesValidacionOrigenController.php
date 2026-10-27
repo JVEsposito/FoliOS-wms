@@ -131,6 +131,7 @@ class PendientesValidacionOrigenController extends Controller
                 'calibre' => $folio['calibre'],
                 'envase' => $folio['envase'],
                 'csg' => implode(', ', $folio['csgs']),
+                ...$this->columnasDistribucion($folio['distribucion']),
                 'situacion' => 'Solo en FoliOS',
                 'estado_folio' => $folio['estado_etiqueta'],
             ], $datos['solo_en_folios']),
@@ -152,6 +153,8 @@ class PendientesValidacionOrigenController extends Controller
             ['clave' => 'csg', 'titulo' => 'CSG'],
             ['clave' => 'proceso', 'titulo' => 'Proceso'],
             ['clave' => 'lote', 'titulo' => 'Lote'],
+            ['clave' => 'cajas_por_csg', 'titulo' => 'Cajas por CSG'],
+            ['clave' => 'composicion', 'titulo' => 'Composición (CSG · lote · proceso: cajas)'],
             ['clave' => 'fecha_embalaje', 'titulo' => 'Fecha de embalaje', 'tipo' => 'fecha'],
             ['clave' => 'recibido', 'titulo' => 'En bodega desde', 'tipo' => 'fecha_hora'],
             ['clave' => 'estado_folio', 'titulo' => 'Estado en FoliOS'],
@@ -192,10 +195,35 @@ class PendientesValidacionOrigenController extends Controller
             'csg' => implode(', ', $pallet['csgs']),
             'proceso' => implode(', ', $pallet['procesos']),
             'lote' => implode(', ', $pallet['lotes']),
+            ...$this->columnasDistribucion($pallet['distribucion']),
             'fecha_embalaje' => $pallet['fecha_embalaje'],
             'recibido' => $pallet['recibido_origen_at']
                 ? CarbonImmutable::parse($pallet['recibido_origen_at'])->setTimezone($zona)->format('Y-m-d H:i:s')
                 : null,
+        ];
+    }
+
+    /**
+     * La distribución en texto para el Excel: una celda con las cajas por CSG y otra con cada
+     * línea de CSG, lote y proceso.
+     *
+     * @param  list<array<string, mixed>>  $distribucion
+     * @return array{cajas_por_csg: string, composicion: string}
+     */
+    private function columnasDistribucion(array $distribucion): array
+    {
+        $grupos = collect($distribucion);
+
+        return [
+            'cajas_por_csg' => $grupos->map(fn (array $grupo): string => ($grupo['csg'] ?? 'Sin CSG').': '.$grupo['cajas'])->implode(' · '),
+            'composicion' => $grupos->flatMap(fn (array $grupo): array => array_map(
+                fn (array $linea): string => implode(' · ', array_filter([
+                    $grupo['csg'] ?? 'Sin CSG',
+                    $linea['lote'] !== null ? "lote {$linea['lote']}" : 'sin lote',
+                    $linea['proceso'],
+                ])).': '.$linea['cajas'],
+                $grupo['lineas'],
+            ))->implode('; '),
         ];
     }
 
