@@ -136,6 +136,9 @@ final class ServicioFactibilidadDestino
         if (! $camara) {
             return $this->sinDestino(sprintf('La cámara de acopio de %s no recibe pallets dirigidos.', $carga));
         }
+        if (! $this->sector->tienePosiciones($camaraId)) {
+            return $this->posible('no_evaluable');
+        }
 
         $puntos = $acopio['puntos'] ?? [];
         $siguientes = $this->siguientes($camaraId);
@@ -156,7 +159,7 @@ final class ServicioFactibilidadDestino
         $contexto = $paso->contexto ?? [];
         $camaraId = $contexto['camara_objetivo_id'] ?? $paso->camara_destino_id;
         $camara = $camaraId ? $this->camaras()->get($camaraId) : null;
-        if (! $camara) {
+        if (! $camara || ! $this->sector->tienePosiciones($camara->id)) {
             return $this->posible('no_evaluable');
         }
         $puntos = collect(is_array($contexto['concentracion_puntos'] ?? null) ? $contexto['concentracion_puntos'] : [])
@@ -178,7 +181,12 @@ final class ServicioFactibilidadDestino
             return $this->posible('disponible');
         }
         $protegidas = collect($this->despejes->bandasProtegidas($paso));
-        foreach ($this->camaras()->except([$paso->camara_origen_id]) as $camara) {
+        $otras = $this->camaras()->except([$paso->camara_origen_id]);
+        if (! $this->sector->tienePosiciones($paso->camara_origen_id)
+            && $otras->every(fn (Camara $camara): bool => ! $this->sector->tienePosiciones($camara->id))) {
+            return $this->posible('no_evaluable');
+        }
+        foreach ($otras as $camara) {
             $libre = collect($this->siguientes($camara->id))->contains(fn (array $celda): bool => ! $protegidas
                 ->contains(fn (array $banda): bool => $banda['camara_id'] === $camara->id
                     && $banda['banda'] === $celda['banda'] && $banda['nivel'] === $celda['nivel']));
@@ -202,9 +210,9 @@ final class ServicioFactibilidadDestino
                 ? $this->camaras()->only([$paso->camara_destino_id])
                 : $this->camaras(),
         };
-        if ($this->camaras()->isEmpty()) {
-            // Sin cámaras de producto terminado dirigidas no hay nada que estimar: la tablet
-            // ya informa la configuración y el rollout decide qué se publica.
+        if ($camaras->every(fn (Camara $camara): bool => ! $this->sector->tienePosiciones($camara->id))) {
+            // Sin cámaras dirigidas con plano no hay nada que estimar: la tablet ya informa la
+            // configuración y el rollout decide qué se publica.
             return $this->posible('no_evaluable');
         }
         foreach ($camaras as $camara) {

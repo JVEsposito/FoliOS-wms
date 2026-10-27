@@ -219,7 +219,7 @@ class OperacionAhoraOfficeTest extends TestCase
         $this->assertStringContainsString('operation-supervision__evidence', $styles);
         $this->assertStringContainsString('operation-supervision__actions', $styles);
         $this->assertStringContainsString('operation-supervision__confirm', $styles);
-        $this->assertStringContainsString('grid-template-columns: repeat(7, minmax(132px, 1fr))', $styles);
+        $this->assertStringContainsString('grid-template-columns: repeat(8, minmax(132px, 1fr))', $styles);
         $this->assertStringNotContainsString('radial-gradient', $styles);
     }
 

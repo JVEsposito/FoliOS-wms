@@ -417,6 +417,12 @@ final class SectorAcopioCarga
         return $salida;
     }
 
+    /** La cámara tiene posiciones registradas: sin plano no hay nada que estimar. */
+    public function tienePosiciones(string $camaraId): bool
+    {
+        return $this->mapa($camaraId)['bandas'] !== [];
+    }
+
     /** @return array<string, mixed> */
     private function mapa(string $camaraId): array
     {

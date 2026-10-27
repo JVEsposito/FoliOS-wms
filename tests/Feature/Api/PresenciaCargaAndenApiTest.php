@@ -424,6 +424,13 @@ class PresenciaCargaAndenApiTest extends TestCase
             'modo' => 'bloqueada',
             'motivo_estado' => 'Bloqueo de prueba.',
         ]);
+        // Otra cámara con espacio: el despeje tiene un destino posible y se puede tomar.
+        $otra = Camara::create([
+            'codigo' => 'CAM-252-B', 'nombre' => 'Cámara de tránsito B', 'contenido' => ContenidoCamara::Productos,
+            'cantidad_bandas' => 1, 'posiciones_por_banda' => 1, 'cantidad_niveles' => 1,
+        ]);
+        app(ServicioBandasOperacionales::class)->sincronizar($otra, $contexto['administrador']);
+        Posicion::create(['camara_id' => $otra->id, 'banda' => 1, 'posicion' => 1, 'nivel' => 1, 'etiqueta' => 'B01-P01-N1']);
         $servicio = app(ServicioPlanesOperacionales::class);
         $servicio->asumir($tarea, $contexto['operador'], $contexto['dispositivo']);
 
