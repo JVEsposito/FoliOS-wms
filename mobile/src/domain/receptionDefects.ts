@@ -10,6 +10,7 @@ export type ReceptionDefectPhoto = {
 
 export type ReceptionDefect = {
   id: string;
+  operacion_id?: string;
   numero_recepcion: string;
   numero_guia_despacho: string;
   categoria: ReceptionDefectCategory;

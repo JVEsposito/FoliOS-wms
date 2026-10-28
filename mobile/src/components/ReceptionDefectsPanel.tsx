@@ -1,12 +1,12 @@
 import { ContainerOption, containerLabel, getContainerCatalog } from '../services/containerCatalog';
 import * as Crypto from 'expo-crypto';
 import * as ImagePicker from 'expo-image-picker';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { ReceptionDefect, ReceptionDefectCategory, ReceptionDefectContainer, ReceptionDefectDraft, ReceptionDefectPhoto } from '../domain/receptionDefects';
 import { ApiError } from '../services/apiError';
-import { createReceptionDefect, listReceptionDefects } from '../services/receptionDefectsApi';
+import { createReceptionDefect, findReceptionDefectOperation, listReceptionDefects } from '../services/receptionDefectsApi';
 import { colors } from '../theme/colors';
 
 type Props = { baseUrl: string; token: string; receptionId: string; guideNumber: string };
@@ -44,6 +44,7 @@ export function ReceptionDefectsPanel({ baseUrl, token, receptionId, guideNumber
   const [sending, setSending] = useState(false);
   const [uncertain, setUncertain] = useState(false);
   const [error, setError] = useState('');
+  const busy = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -56,7 +57,7 @@ export function ReceptionDefectsPanel({ baseUrl, token, receptionId, guideNumber
   }, [baseUrl, token, receptionId]);
 
   function change(patch: Partial<ReceptionDefectDraft>) {
-    if (sending || uncertain) return;
+    if (busy.current || uncertain) return;
     setDraft((current) => ({ ...current, ...patch, operacionId: Crypto.randomUUID() }));
     setError('');
   }
@@ -86,23 +87,43 @@ export function ReceptionDefectsPanel({ baseUrl, token, receptionId, guideNumber
   }
 
   async function submit() {
-    if (sending) return;
+    if (busy.current) return;
     if (!draft.descripcion.trim()) { setError('Describe el defecto antes de guardar.'); return; }
     if (!draft.fotografias.length) { setError('Agrega al menos una foto del defecto.'); return; }
     if (draft.cantidadAfectada && (!/^\d+$/.test(draft.cantidadAfectada) || Number(draft.cantidadAfectada) < 1 || Number(draft.cantidadAfectada) > 100000)) {
       setError('La cantidad afectada debe estar entre 1 y 100000.'); return;
     }
+    busy.current = true;
     setSending(true); setError('');
     try {
+      if (uncertain) {
+        const existing = await findReceptionDefectOperation(baseUrl, token, receptionId, draft.operacionId);
+        if (existing) { finish(existing); return; }
+      }
       const saved = await createReceptionDefect(baseUrl, token, receptionId, draft);
-      setRecords((previous) => [saved, ...previous.filter((item) => item.id !== saved.id)]);
-      setDraft(blankDraft()); setShowForm(false); setUncertain(false);
+      finish(saved);
     } catch (reason) {
       // El servidor puede haber guardado la foto antes de perder la conexión.
       // Conservar el mismo UUID y las mismas imágenes para reintentar sin duplicar.
-      if (reason instanceof ApiError && reason.status === 0) setUncertain(true);
+      if (reason instanceof ApiError && (reason.status === 0 || reason.status === 408 || reason.status >= 500)) setUncertain(true);
       setError(message(reason));
-    } finally { setSending(false); }
+    } finally { busy.current = false; setSending(false); }
+  }
+
+  function finish(saved: ReceptionDefect) {
+    setRecords((previous) => [saved, ...previous.filter((item) => item.id !== saved.id)]);
+    setDraft(blankDraft()); setShowForm(false); setUncertain(false); setError('');
+  }
+
+  async function reviewPending() {
+    if (busy.current) return;
+    busy.current = true; setSending(true); setError('');
+    try {
+      const saved = await findReceptionDefectOperation(baseUrl, token, receptionId, draft.operacionId);
+      if (saved) finish(saved);
+      else setError('El envío todavía no aparece registrado. Reintenta con las mismas fotos y datos; no se creará otro defecto si el primer envío se guardó.');
+    } catch (reason) { setError(message(reason)); }
+    finally { busy.current = false; setSending(false); }
   }
 
   return <View style={styles.panel}>
@@ -134,8 +155,8 @@ export function ReceptionDefectsPanel({ baseUrl, token, receptionId, guideNumber
       <View style={styles.options}><Pressable disabled={sending || uncertain} onPress={() => void pickPhoto(true, true)} style={styles.outline}><Text style={styles.outlineText}>Fotografiar guía</Text></Pressable><Pressable disabled={sending || uncertain} onPress={() => void pickPhoto(true, false)} style={styles.outline}><Text style={styles.outlineText}>Elegir imagen</Text></Pressable></View>
       {draft.fotografiaGuia ? <View style={styles.preview}><Image source={{ uri: draft.fotografiaGuia.uri }} style={styles.photo}/><Pressable disabled={sending || uncertain} onPress={() => change({ fotografiaGuia: null })}><Text style={styles.remove}>Quitar guía</Text></Pressable></View> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      {uncertain ? <Text style={styles.warning}>El envío podría haberse guardado. Conserva este formulario y reintenta con los mismos datos cuando vuelva la conexión.</Text> : null}
-      <View style={styles.actions}><Pressable disabled={sending || uncertain} onPress={() => { setShowForm(false); setError(''); }} style={styles.outline}><Text style={styles.outlineText}>Cancelar</Text></Pressable><Pressable disabled={sending} onPress={() => void submit()} style={styles.primary}><Text style={styles.primaryText}>{sending ? 'Enviando fotos…' : uncertain ? 'Reintentar envío' : 'Guardar defecto'}</Text></Pressable></View>
+      {uncertain ? <View style={styles.warning}><Text style={styles.body}>El envío podría haberse guardado. Revisa su estado sin volver a subir las fotos o reintenta con los mismos datos cuando vuelva la conexión.</Text><Pressable disabled={sending} onPress={() => void reviewPending()} style={styles.outline}><Text style={styles.outlineText}>Revisar envío</Text></Pressable></View> : null}
+      <View style={styles.actions}><Pressable disabled={sending || uncertain} onPress={() => { setShowForm(false); setError(''); }} style={styles.outline}><Text style={styles.outlineText}>Cancelar</Text></Pressable><Pressable disabled={sending} onPress={() => void submit()} style={styles.primary}><Text style={styles.primaryText}>{sending ? 'Procesando envío…' : uncertain ? 'Reintentar envío' : 'Guardar defecto'}</Text></Pressable></View>
     </View>}
     {!showForm && error ? <Text style={styles.error}>{error}</Text> : null}
   </View>;
@@ -164,5 +185,5 @@ const styles = StyleSheet.create({
   primary: { paddingHorizontal: 16, paddingVertical: 12, borderRadius: 9, backgroundColor: colors.cyan, alignItems: 'center' },
   primaryText: { color: colors.accentText, fontWeight: '900' }, outline: { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 9, borderWidth: 1, borderColor: colors.cyanDark, alignItems: 'center' },
   outlineText: { color: colors.cyan, fontWeight: '800' }, actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, flexWrap: 'wrap' },
-  error: { color: colors.red, fontWeight: '800', padding: 8 }, warning: { color: colors.text, padding: 10, borderRadius: 8, backgroundColor: colors.panel },
+  error: { color: colors.red, fontWeight: '800', padding: 8 }, warning: { padding: 10, gap: 8, borderRadius: 8, backgroundColor: colors.panel },
 });

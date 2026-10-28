@@ -33,6 +33,7 @@ class DefectoRecepcionMpApiTest extends TestCase
             ->assertJsonPath('data.cantidad_afectada', 2)
             ->assertJsonPath('data.categoria', 'envase_danado')
             ->assertJsonPath('data.dispositivo.codigo', $dispositivo->codigo)
+            ->assertJsonPath('data.operacion_id', $operacion)
             ->assertJsonCount(2, 'data.evidencias')
             ->json('data');
         $this->assertSame($validador->id, $resultado['validador']['id']);
@@ -71,6 +72,41 @@ class DefectoRecepcionMpApiTest extends TestCase
         $this->actingAs($validador, 'sanctum')
             ->post($ruta, $this->entrada((string) Str::uuid()), ['Accept' => 'application/json'])
             ->assertForbidden();
+        $this->assertDatabaseCount('defectos_recepcion_mp', 0);
+        $this->assertCount(0, Storage::disk('local')->allFiles('defectos-recepcion-mp'));
+    }
+
+    public function test_consulta_el_resultado_por_uuid_sin_volver_a_subir_fotos_y_respeta_el_validador(): void
+    {
+        Storage::fake('local');
+        [$recepcion] = $this->prepararRecepcionTomada();
+        $ruta = "/api/validacion-mp/recepciones/{$recepcion['id']}/defectos";
+        $operacion = (string) Str::uuid();
+        $guardado = $this->post($ruta, $this->entrada($operacion), ['Accept' => 'application/json'])
+            ->assertCreated()->json('data');
+        $this->post($ruta, $this->entrada((string) Str::uuid(), 'Otro defecto'), ['Accept' => 'application/json'])
+            ->assertCreated();
+
+        $this->getJson($ruta.'?operacion_id='.$operacion)->assertOk()->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $guardado['id'])->assertJsonPath('data.0.operacion_id', $operacion);
+        $this->getJson($ruta.'?operacion_id='.Str::uuid())->assertOk()->assertJsonCount(0, 'data');
+        $this->getJson($ruta.'?operacion_id=invalida')->assertUnprocessable()->assertJsonValidationErrors('operacion_id');
+        $this->actingAs(User::factory()->create(['rol' => RolUsuario::ValidadorMp]), 'sanctum')
+            ->getJson($ruta.'?operacion_id='.$operacion)->assertForbidden();
+        $this->assertDatabaseCount('defectos_recepcion_mp', 2);
+        $this->assertCount(4, Storage::disk('local')->allFiles('defectos-recepcion-mp'));
+    }
+
+    public function test_explica_la_foto_rechazada_por_el_limite_de_php_sin_guardar_registros(): void
+    {
+        Storage::fake('local');
+        [$recepcion] = $this->prepararRecepcionTomada();
+        $entrada = $this->entrada((string) Str::uuid());
+        $archivo = $entrada['fotografia_guia'];
+        $entrada['fotografia_guia'] = new UploadedFile($archivo->getRealPath(), 'guia.png', 'image/png', UPLOAD_ERR_INI_SIZE, true);
+        $this->post("/api/validacion-mp/recepciones/{$recepcion['id']}/defectos", $entrada, ['Accept' => 'application/json'])
+            ->assertUnprocessable()->assertJsonValidationErrors('fotografia_guia')
+            ->assertJsonPath('errors.fotografia_guia.0', 'No se recibió la foto de la guía completa. Revisa el límite de subida del servidor y vuelve a intentarlo.');
         $this->assertDatabaseCount('defectos_recepcion_mp', 0);
         $this->assertCount(0, Storage::disk('local')->allFiles('defectos-recepcion-mp'));
     }

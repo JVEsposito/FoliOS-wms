@@ -40,8 +40,10 @@ class DefectoRecepcionMpController extends Controller
         $this->asegurarTemporadaActiva($recepcion);
         $this->asegurarValidadorAsignado($recepcion, $request);
 
+        $filtros = $request->validate(['operacion_id' => ['sometimes', 'required', 'uuid']]);
         $defectos = DefectoRecepcionMp::query()
             ->where('recepcion_romana_id', $recepcion->id)
+            ->when(isset($filtros['operacion_id']), fn (Builder $consulta) => $consulta->where('operacion_id', $filtros['operacion_id']))
             ->with(['validador:id,name', 'dispositivo:id,codigo', 'evidencias'])
             ->orderByDesc('registrado_at')->orderByDesc('id')->get();
 
@@ -66,6 +68,9 @@ class DefectoRecepcionMpController extends Controller
             'fotografias' => ['required', 'array', 'min:1', 'max:3'],
             'fotografias.*' => ['required', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:'.self::MAX_FOTO_KIB],
             'fotografia_guia' => ['nullable', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:'.self::MAX_FOTO_KIB],
+        ], [
+            'fotografias.*.uploaded' => 'No se recibió una foto completa. Revisa el límite de subida del servidor y vuelve a intentarlo.',
+            'fotografia_guia.uploaded' => 'No se recibió la foto de la guía completa. Revisa el límite de subida del servidor y vuelve a intentarlo.',
         ]);
 
         $hash = $this->hashPeticion($datos);
@@ -401,6 +406,7 @@ class DefectoRecepcionMpController extends Controller
     {
         return [
             'id' => $defecto->id,
+            'operacion_id' => $defecto->operacion_id,
             'recepcion_romana_id' => $defecto->recepcion_romana_id,
             'numero_recepcion' => $defecto->numero_recepcion_snapshot,
             'numero_guia_despacho' => $defecto->numero_guia_snapshot,
