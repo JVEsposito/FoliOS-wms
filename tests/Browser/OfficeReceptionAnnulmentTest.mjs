@@ -8,10 +8,11 @@ import { chromium } from 'playwright';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const html = readFileSync(resolve(root, 'storage/app/ui/oficina/romana.html'), 'utf8');
 
-test('administrador anula con motivo, conserva el intento al fallar y consulta el historial', async () => {
+test('administrador anula o elimina desde la lista, conserva el intento y consulta el historial', async () => {
     const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined, args: ['--no-sandbox', '--disable-gpu'] });
     try {
-        for (const width of [390, 1280]) {
+        for (const mode of ['anular', 'eliminar', 'lectura']) for (const width of [390, 1280]) {
+            const deleting = mode === 'eliminar'; const readOnly = mode === 'lectura';
             const context = await browser.newContext({ viewport: { width, height: 1000 } });
             const identity = { id: 1, nombre: 'Administrador', rol: 'administrador', puede_consultar_romana: true, puede_anular_recepciones_romana: true, modulos_acceso: ['materia-prima.romana'] };
             await context.addInitScript((user) => {
@@ -23,7 +24,7 @@ test('administrador anula con motivo, conserva el intento al fallar y consulta e
                 estado: 'cerrado', estado_validacion_mp: 'pendiente', version: 3, cliente: { id: 'cliente', nombre: 'Agro Rosario' }, temporada: { id: 'temporada', nombre: '2026', codigo: '2026' },
                 tipo_envase_declarado: 'tote', cantidad_envases_declarados: 1393, envases: [{ tipo_envase: 'tote', cantidad_declarada: 1393, cantidad_validada: null }],
                 patente_camion: 'WDWK38', nombre_conductor: 'Conductor', ingreso_at: '2026-09-22T20:22:00Z', salida_at: '2026-09-22T20:30:00Z',
-                puede_anular: true, puede_editar: false, eventos: [], inspecciones_envases: [], salida_envases: [], reparto_neto_envases: null };
+                puede_eliminar: deleting, puede_anular: !readOnly, puede_editar: false, eventos: [], inspecciones_envases: [], salida_envases: [], reparto_neto_envases: null };
             const writes = []; const errors = []; let annulled = false;
             await context.route('http://localhost/**', async (route) => {
                 const req = route.request(); const url = new URL(req.url()); const path = url.pathname;
@@ -37,11 +38,11 @@ test('administrador anula con motivo, conserva el intento al fallar y consulta e
                 if (path === '/api/envases/catalogo') return route.fulfill({ json: { data: [{ codigo: 'tote', nombre: 'Tote', contiene_fruta: true }] } });
                 if (path === '/api/romana/porteria/resumen') return route.fulfill({ json: { data: { pendientes: 0, recientes: [], consultado_at: '2026-10-28T12:00:00Z' } } });
                 if (path.endsWith('/romana/catalogos')) return route.fulfill({ json: { temporadas: [{ ...reception.temporada, activa: true }], clientes: [reception.cliente], especies: [], tipos_envase: [{ codigo: 'tote', nombre: 'Tote' }], tipos_servicio: [], tipos_recepcion: [], conceptos_envases: [] } });
-                if (path.endsWith('/anular')) {
+                if (path.endsWith('/anular') || (req.method() === 'DELETE' && path === '/api/romana/recepciones/recepcion')) {
                     writes.push(req.postDataJSON());
                     if (writes.length === 1) return route.fulfill({ status: 503, json: { message: 'Intenta nuevamente con el mismo registro.' } });
-                    annulled = true; reception.estado = 'anulada'; reception.puede_anular = false;
-                    reception.eventos = [{ tipo: 'recepcion_anulada', usuario: { nombre: 'Administrador' }, estado_anterior: 'cerrado', estado_nuevo: 'anulada', ocurrido_at: '2026-10-28T12:00:00Z', datos: { motivo: writes[1].motivo } }];
+                    annulled = true; reception.estado = 'anulada'; reception.eliminada = deleting; reception.puede_anular = false; reception.puede_eliminar = false;
+                    reception.eventos = [{ tipo: deleting ? 'recepcion_eliminada' : 'recepcion_anulada', usuario: { nombre: 'Administrador' }, estado_anterior: 'cerrado', estado_nuevo: 'anulada', ocurrido_at: '2026-10-28T12:00:00Z', datos: { motivo: writes[1].motivo } }];
                     return route.fulfill({ json: { data: reception } });
                 }
                 if (path === '/api/romana/recepciones/recepcion') return route.fulfill({ json: { data: reception } });
@@ -53,8 +54,23 @@ test('administrador anula con motivo, conserva el intento al fallar y consulta e
             });
             const page = await context.newPage(); page.on('pageerror', (e) => errors.push(e.message));
             await page.goto('http://localhost/oficina/romana');
-            await page.locator('tr.rec-row[data-reception-id="recepcion"]').click();
-            await page.locator('#annulReceptionButton').click();
+            if (readOnly) {
+                assert.equal(await page.locator('[data-delete-reception-id]').count(), 0);
+                await page.locator('tr.rec-row[data-reception-id="recepcion"]').click();
+                await page.locator('#receptionDetail').waitFor({ state: 'visible' });
+                assert.equal(await page.locator('#deleteReceptionButton').isHidden(), true);
+                assert.equal(await page.locator('#annulReceptionButton').isHidden(), true);
+                await context.close(); continue;
+            }
+            if (deleting) {
+                const button = page.getByRole('button', { name: 'Eliminar recepción REC-2609-0023', exact: true });
+                await button.focus(); await button.press('Enter');
+                assert.equal(await page.locator('#receptionDetail').isHidden(), true);
+                assert.equal(await page.locator('#annulReceptionTitle').textContent(), 'Eliminar recepción');
+            } else {
+                await page.locator('tr.rec-row[data-reception-id="recepcion"]').click();
+                await page.locator('#annulReceptionButton').click();
+            }
             await page.locator('#annulReceptionForm [name="motivo"]').fill('Recepción de prueba ingresada por equivocación.');
             await page.locator('#annulReceptionForm [type="submit"]').click();
             await page.waitForFunction(() => document.getElementById('annulReceptionError').textContent.includes('Intenta nuevamente'));
@@ -68,6 +84,7 @@ test('administrador anula con motivo, conserva el intento al fallar y consulta e
             await page.waitForFunction(() => document.getElementById('detailTimeline').textContent.includes('Recepción de prueba ingresada por equivocación'));
             assert.match(await page.locator('#detailTimeline').textContent(), /Recepción de prueba ingresada por equivocación/);
             assert.equal(await page.locator('#annulReceptionButton').isHidden(), true);
+            assert.equal(await page.locator('#deleteReceptionButton').isHidden(), true);
             assert.deepEqual(errors, []);
             await context.close();
         }

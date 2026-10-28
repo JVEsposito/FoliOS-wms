@@ -3,6 +3,10 @@
     --weighbridge-gold: #e2b45d;
 }
 
+.rec-title-row { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.office-app button.secondary-button.rec-delete-button { min-height: 44px; padding: 8px 12px; color: var(--red) !important; border-color: var(--red) !important; }
+.rec-delete-button:focus-visible { outline: 2px solid var(--red); outline-offset: 3px; }
+
 body {
     background: radial-gradient(circle at 80% -12%, rgba(226, 180, 93, .12), transparent 34rem), var(--bg);
 }

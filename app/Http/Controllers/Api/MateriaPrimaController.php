@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Enums\ContenidoCamara;
 use App\Enums\EstadoCamara;
 use App\Enums\EstadoLoteMateriaPrima;
+use App\Enums\EstadoRecepcionRomana;
 use App\Enums\TipoEnvaseRomana;
 use App\Enums\TipoProductoMateriaPrima;
 use App\Http\Controllers\Controller;
@@ -269,6 +270,10 @@ class MateriaPrimaController extends Controller
         Gate::authorize('consultar-materia-prima');
         $temporada = app(ServicioTemporadaActiva::class)->buscar();
         $lotes = LoteMateriaPrima::query()
+            ->when($request->input('estado') !== EstadoLoteMateriaPrima::Anulado->value,
+                fn (Builder $consulta) => $consulta->where(fn (Builder $consulta) => $consulta
+                    ->whereDoesntHave('recepcion')->orWhereHas('recepcion', fn (Builder $recepciones) => $recepciones
+                    ->where('estado', '!=', EstadoRecepcionRomana::Anulada->value))))
             ->when($temporada, fn (Builder $consulta) => $consulta
                 ->where('temporada_id', $temporada->id))
             ->when(! $temporada, fn (Builder $consulta) => $consulta->whereRaw('1 = 0'))

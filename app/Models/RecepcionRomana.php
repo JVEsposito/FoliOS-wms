@@ -35,6 +35,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'cantidad_envases_declarados',
     'tipo_envase_declarado',
     'numero_guia_despacho',
+    'guia_vigente',
+    'eliminada_at',
     'patente_camion',
     'tipo_camion',
     'patente_carro',
@@ -178,6 +180,8 @@ class RecepcionRomana extends Model implements PerteneceATemporada
             'validado_at' => 'datetime',
             'formato_registro_fecha_vigencia' => 'immutable_date',
             'version' => 'integer',
+            'eliminada_at' => 'datetime',
+            'guia_vigente' => 'integer',
         ];
     }
 }

@@ -496,6 +496,8 @@ class AppServiceProvider extends ServiceProvider
         );
         Gate::define('anular-recepciones-romana', fn (User $usuario): bool => $usuario->activo
             && $usuario->rol === RolUsuario::Administrador && $alcance->puedeConsultarRomana($usuario));
+        Gate::define('eliminar-recepciones-romana', fn (User $usuario): bool => $usuario->activo
+            && $usuario->rol === RolUsuario::Administrador && $alcance->puedeConsultarRomana($usuario));
         Gate::define(
             'corregir-recepciones-romana',
             fn (User $usuario): bool => $alcance->puedeCorregirRecepcionesRomana($usuario),

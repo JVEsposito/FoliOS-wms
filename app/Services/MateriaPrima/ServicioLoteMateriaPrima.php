@@ -6,6 +6,7 @@ use App\Enums\ContenidoCamara;
 use App\Enums\EstadoCamara;
 use App\Enums\EstadoHidrocoolerMateriaPrima;
 use App\Enums\EstadoLoteMateriaPrima;
+use App\Enums\EstadoRecepcionRomana;
 use App\Enums\EstadoValidacionMp;
 use App\Enums\TipoEnvaseRomana;
 use App\Exceptions\ConflictoOperacion;
@@ -819,6 +820,9 @@ class ServicioLoteMateriaPrima
             ->findOrFail($validacion->recepcion_romana_id);
         // El lote nace en la temporada de su recepción; esa temporada debe estar activa.
         $this->guardiaTemporada->asegurar($recepcion);
+        if ($recepcion->estado === EstadoRecepcionRomana::Anulada) {
+            throw new ConflictoOperacion('La recepción fue eliminada o anulada y no admite nuevos lotes.');
+        }
         Cliente::query()->lockForUpdate()->findOrFail($recepcion->cliente_id);
         if ($validacion->estado !== EstadoValidacionMp::Validada) {
             throw new ConflictoOperacion(

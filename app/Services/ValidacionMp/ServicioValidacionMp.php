@@ -125,6 +125,9 @@ class ServicioValidacionMp
         return DB::transaction(function () use ($validacion, $datos, $usuario): ValidacionMp {
             $validacion = ValidacionMp::query()->lockForUpdate()->findOrFail($validacion->id);
             $recepcion = RecepcionRomana::query()->with('detallesEnvases')->lockForUpdate()->findOrFail($validacion->recepcion_romana_id);
+            if ($recepcion->estado === EstadoRecepcionRomana::Anulada) {
+                throw new ConflictoOperacion('La recepción fue eliminada o anulada y no admite confirmar su validación.');
+            }
             if ($validacion->validador_user_id !== $usuario->id) {
                 throw new ConflictoOperacion('Solo el validador que tomó la recepción puede confirmarla.');
             }

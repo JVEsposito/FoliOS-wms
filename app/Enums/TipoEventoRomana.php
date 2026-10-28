@@ -13,5 +13,6 @@ enum TipoEventoRomana: string
     case SalidaEnvasesCorregida = 'salida_envases_corregida';
     case RecepcionCerrada = 'recepcion_cerrada';
     case RecepcionAnulada = 'recepcion_anulada';
+    case RecepcionEliminada = 'recepcion_eliminada';
     case EspecieCompletada = 'especie_completada';
 }
