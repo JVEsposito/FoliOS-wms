@@ -28,12 +28,14 @@ use App\Models\RecepcionRomana;
 use App\Models\Temporada;
 use App\Services\Envases\ServicioPrestamoInternoEnvases;
 use App\Services\Romana\GeneradorAvisoReciboPdf;
+use App\Services\Romana\ServicioAnulacionRecepcionRomana;
 use App\Services\Romana\ServicioInspeccionEnvases;
 use App\Services\Romana\ServicioRecepcionRomana;
 use App\Services\Romana\ServicioRepartoEnvases;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Gate;
 
@@ -130,6 +132,8 @@ class RecepcionRomanaController extends Controller
 
         if (! empty($filtros['estado'])) {
             $base->where('estado', $filtros['estado']);
+        } else {
+            $base->where('estado', '!=', EstadoRecepcionRomana::Anulada->value);
         }
         $paginacion = $base
             ->with(['creadoPor', 'ingresoConfirmadoPor', 'cerradoPor', 'validacionTomadaPor', 'detallesEnvases', 'salidasEnvases'])
@@ -200,6 +204,17 @@ class RecepcionRomanaController extends Controller
         );
 
         return response()->json(['data' => $this->recepcion($recepcion, true)]);
+    }
+
+    public function anular(Request $request, RecepcionRomana $recepcion, ServicioAnulacionRecepcionRomana $servicio): JsonResponse
+    {
+        Gate::authorize('anular-recepciones-romana');
+        $datos = $request->validate(['operacion_id' => ['required', 'uuid'],
+            'version_conocida' => ['required', 'integer', 'min:1'], 'motivo' => ['required', 'string', 'min:10', 'max:2000']]);
+        $datos['version_conocida'] = (int) $datos['version_conocida'];
+        $servicio->anular($recepcion, $datos, $request->user());
+
+        return $this->show($recepcion->refresh());
     }
 
     public function confirmarIngreso(
@@ -407,7 +422,8 @@ class RecepcionRomanaController extends Controller
             'observacion_cierre' => $recepcion->observacion_cierre,
             'version' => $recepcion->version,
             'puede_editar' => $puedeEditar,
-            'correccion_administrativa_disponible' => $recepcion->estado_validacion_mp === EstadoValidacionMp::Pendiente
+            'puede_anular' => Gate::allows('anular-recepciones-romana') && $recepcion->estado !== EstadoRecepcionRomana::Anulada,
+            'correccion_administrativa_disponible' => $recepcion->estado !== EstadoRecepcionRomana::Anulada && $recepcion->estado_validacion_mp === EstadoValidacionMp::Pendiente
                 && (! $esPesajeEnvases || $cantidadPesada === 0),
             'puede_confirmar_ingreso' => $recepcion->estado === EstadoRecepcionRomana::EnBasculaIngreso,
             'puede_registrar_pesaje' => $recepcion->estado === EstadoRecepcionRomana::EnPesajeEnvases,

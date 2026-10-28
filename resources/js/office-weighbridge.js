@@ -14,6 +14,7 @@ const elements = {
     entryCount: byId('entryCount'), containerWeighingCount: byId('containerWeighingCount'), exitCount: byId('exitCount'), closedCount: byId('closedCount'), netWeight: byId('netWeight'),
     paginationSummary: byId('paginationSummary'), previousPage: byId('previousPageButton'), nextPage: byId('nextPageButton'),
     detail: byId('receptionDetail'), detailTitle: byId('detailTitle'), detailSubtitle: byId('detailSubtitle'), detailFacts: byId('detailFacts'), detailTimeline: byId('detailTimeline'), weightBalance: byId('weightBalance'),
+    annulReception: byId('annulReceptionButton'), annulDialog: byId('annulReceptionDialog'), annulForm: byId('annulReceptionForm'), annulSummary: byId('annulReceptionSummary'), annulError: byId('annulReceptionError'),
     editReception: byId('editReceptionButton'), confirmEntry: byId('confirmEntryButton'), addContainerWeighing: byId('addContainerWeighingButton'), closeReception: byId('closeReceptionButton'), correctExit: byId('correctExitButton'), downloadReceipt: byId('downloadReceiptButton'), closeDetail: byId('closeDetailButton'),
     containerWeighingPanel: byId('containerWeighingPanel'), containerWeighingProgress: byId('containerWeighingProgress'), containerWeighingList: byId('containerWeighingList'),
     receptionDialog: byId('receptionDialog'), receptionForm: byId('receptionForm'), receptionDialogTitle: byId('receptionDialogTitle'), receptionDialogDescription: byId('receptionDialogDescription'), receptionFormError: byId('receptionFormError'), saveReception: byId('saveReceptionButton'),
@@ -66,7 +67,7 @@ function label(value) {
     const labels = {
         mismos: 'Se va con los mismos', diferentes: 'Se va con más o menos', vacio: 'Se va vacío',
         en_bascula_ingreso: 'En báscula ingreso', en_pesaje_envases: 'Pesaje acumulativo', en_bascula_salida: 'Pendiente de destare', cerrado: 'Cerrado',
-        ingreso_registrado: 'Ingreso registrado', ingreso_actualizado: 'Antecedentes de ingreso actualizados', correccion_administrativa: 'Corrección administrativa', ingreso_confirmado: 'Ingreso confirmado', pesaje_envases_registrado: 'Tanda de envases pesada', pesaje_envases_anulado: 'Tanda de pesaje anulada', recepcion_cerrada: 'Recepción cerrada', salida_envases_corregida: 'Salida de envases corregida',
+        anulada: 'Anulada', recepcion_anulada: 'Recepción anulada', ingreso_registrado: 'Ingreso registrado', ingreso_actualizado: 'Antecedentes de ingreso actualizados', correccion_administrativa: 'Corrección administrativa', ingreso_confirmado: 'Ingreso confirmado', pesaje_envases_registrado: 'Tanda de envases pesada', pesaje_envases_anulado: 'Tanda de pesaje anulada', recepcion_cerrada: 'Recepción cerrada', salida_envases_corregida: 'Salida de envases corregida',
         almacenaje: 'Almacenaje', proceso: 'Proceso', prefrio: 'Pre-frío', fruta_con_envases: 'Fruta con envases', fruta_pesaje_envases: 'Fruta con pesaje acumulativo', solo_envases: 'Solo envases', termo: 'Camión termo', plano: 'Camión plano', compra: 'Compra', arriendo: 'Arriendo', pendiente: 'Pendiente', en_curso: 'En curso', validada: 'Validada',
     };
     return labels[value] || String(value || '').replaceAll('_', ' ').replace(/^./, (character) => character.toUpperCase());
@@ -99,7 +100,7 @@ function formatKpiWeight(value) {
     return `${escapeHtml(number)} <span class="kpi-unit">kg</span>`;
 }
 function receptionStateBadge(reception) {
-    if (reception.tipo_recepcion !== 'solo_envases') return stateBadge(reception.estado);
+    if (reception.tipo_recepcion !== 'solo_envases' || reception.estado === 'anulada') return stateBadge(reception.estado);
     const contextualLabel = receptionStateLabel(reception, reception.estado);
     const style = reception.estado === 'cerrado' ? 'closed' : reception.estado === 'en_bascula_salida' ? 'exit' : 'entry';
     return `<span class="state-badge state-badge--${style}">${escapeHtml(contextualLabel)}</span>`;
@@ -305,6 +306,7 @@ function renderDetail(reception) {
     const canCorrect = state.identity?.puede_corregir_recepciones_romana === true
         && reception.correccion_administrativa_disponible
         && !reception.puede_editar;
+    elements.annulReception.classList.toggle('is-hidden', !reception.puede_anular);
     elements.editReception.textContent = canCorrect ? 'Corregir recepción' : 'Editar ingreso';
     elements.editReception.classList.toggle('is-hidden', (!canOperate || !reception.puede_editar) && !canCorrect);
     elements.confirmEntry.classList.toggle('is-hidden', !canOperate || !reception.puede_confirmar_ingreso);
@@ -449,6 +451,28 @@ elements.receptionForm.addEventListener('submit', async (event) => {
         toast(administrativeCorrection ? 'Recepción corregida con trazabilidad.' : id ? 'Ingreso actualizado.' : soloEnvases ? 'Recepción de envases registrada sin kilos.' : 'Pesaje de ingreso registrado.');
     } catch (error) { elements.receptionFormError.textContent = error.message; }
     finally { setBusy(false); }
+});
+
+elements.annulReception.addEventListener('click', () => {
+    if (!state.selected?.puede_anular) return;
+    const reception = state.selected;
+    state.annulment = { id: reception.id, operacion_id: operationUuid(), version_conocida: reception.version };
+    elements.annulForm.reset(); elements.annulError.textContent = '';
+    elements.annulSummary.textContent = `${reception.numero_recepcion} · ${reception.cliente.nombre} · Guía ${reception.numero_guia_despacho} · ${envasesLabel(reception)}`;
+    elements.annulDialog.showModal();
+});
+byId('annulReceptionCancel').addEventListener('click', () => elements.annulDialog.close());
+elements.annulForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const submit = elements.annulForm.querySelector('[type="submit"]');
+    const { id, ...attempt } = state.annulment;
+    submit.disabled = true; elements.annulError.textContent = '';
+    try {
+        await api(`/api/romana/recepciones/${id}/anular`, { method: 'POST', body: JSON.stringify({ ...attempt, motivo: elements.annulForm.elements.motivo.value.trim() }) });
+        elements.annulDialog.close(); closeDetail();
+        await loadReceptions({ silent: true }); toast('Recepción anulada. Su historial queda disponible en el filtro Anuladas.');
+    } catch (error) { elements.annulError.textContent = error.message; }
+    finally { submit.disabled = false; }
 });
 
 elements.confirmEntry.addEventListener('click', async () => {

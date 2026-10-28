@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\EstadoRecepcionRomana;
 use App\Enums\EstadoValidacionMp;
 use App\Enums\MotivoSegregacionMp;
 use App\Enums\TipoEnvaseRomana;
@@ -26,7 +27,7 @@ class ValidacionMpController extends Controller
 {
     public function pendientes(Request $request): JsonResponse
     {
-        $recepciones = RecepcionRomana::query()
+        $recepciones = RecepcionRomana::query()->where('estado', '!=', EstadoRecepcionRomana::Anulada->value)
             ->with([
                 'detallesEnvases', 'validacionTomadaPor',
                 'validacionesMp.recepcion', 'validacionesMp.temporada', 'validacionesMp.validador',
@@ -90,7 +91,7 @@ class ValidacionMpController extends Controller
 
     public function buscar(string $numeroRecepcion): JsonResponse
     {
-        $recepcion = RecepcionRomana::query()
+        $recepcion = RecepcionRomana::query()->where('estado', '!=', EstadoRecepcionRomana::Anulada->value)
             ->where('numero_recepcion', mb_strtoupper(trim($numeroRecepcion)))
             ->whereHas('temporada', fn (Builder $temporada): Builder => $temporada
                 ->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))

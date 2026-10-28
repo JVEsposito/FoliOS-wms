@@ -37,6 +37,7 @@ const elements = {
     quantitySummary: byId('quantitySummary'),
     quantityError: byId('quantityError'),
     quantityCancel: byId('quantityCancel'),
+    historicalDialog: byId('historicalBalanceDialog'), historicalForm: byId('historicalBalanceForm'), historicalSummary: byId('historicalBalanceSummary'), historicalPreview: byId('historicalBalancePreview'), historicalError: byId('historicalBalanceError'),
     adjustmentNew: byId('accountAdjustmentNew'),
     adjustmentDialog: byId('accountAdjustmentDialog'),
     adjustmentForm: byId('accountAdjustmentForm'),
@@ -294,17 +295,19 @@ function render(data) {
             const quantityButton = state.identity?.puede_corregir_cantidad_envases && movement.puede_corregir_cantidad
                 ? `<button class="property-button" data-correct-quantity="${escapeHtml(movement.id)}">Corregir cantidad</button>`
                 : '';
+            const historicalButton = state.identity?.puede_ajustar_cuenta_envases && movement.puede_corregir_saldo_historico
+                ? `<button data-correct-historical="${escapeHtml(movement.id)}">Corregir saldo anterior</button>` : '';
             const reverseButton = state.identity?.puede_ajustar_cuenta_envases && movement.puede_revertir_ajuste
                 ? `<button data-reverse-adjustment="${escapeHtml(movement.id)}">Revertir asiento</button>` : '';
-            const documentNote = movement.corregido ? ' · propiedad corregida' : movement.cantidad_corregida ? ' · cantidad corregida' : movement.correccion_propiedad ? ' · ajuste de propiedad' : movement.correccion_cantidad ? ' · ajuste de cantidad' : '';
-            const correction = movement.correccion_propiedad || movement.correccion_cantidad || movement.ajuste_cuenta;
+            const documentNote = movement.cuenta_corregida ? ` · saldo anterior vigente: ${signed(movement.impacto_cuenta_vigente)}` : movement.corregido ? ' · propiedad corregida' : movement.cantidad_corregida ? ' · cantidad corregida' : movement.correccion_propiedad ? ' · ajuste de propiedad' : movement.correccion_cantidad ? ' · ajuste de cantidad' : '';
+            const correction = movement.correccion_propiedad || movement.correccion_cantidad || movement.ajuste_cuenta || movement.correccion_cuenta;
             const trace = correction
                 ? `<br><small>Motivo: ${escapeHtml(correction.motivo)} · ${formatDate(correction.corregido_at || correction.registrado_at)} · ${escapeHtml(movement.creado_por?.nombre || '')}</small>`
                 : '';
             const account = movement.impacto_cuenta === 0
                 ? '<td class="impact-none" title="No mueve la cuenta de ningún cliente">—</td>'
                 : `<td class="${movement.impacto_cuenta < 0 ? 'impact-negative' : 'impact-positive'}">${signed(movement.impacto_cuenta)}</td>`;
-            return `<tr><td>${formatDate(movement.ocurrido_at)}</td><td><b>${escapeHtml(movement.cliente?.nombre)}</b><br><small>${escapeHtml(movement.movimiento)} · ${escapeHtml(movement.numero_documento)}${emittedNote}${documentNote}</small>${trace}</td><td>${escapeHtml(typeName(movement.tipo_envase))} · ${movement.cantidad}</td>${account}<td class="impact-stock">${signed(movement.impacto_existencia)}</td><td>${escapeHtml(label(movement.propiedad))}</td><td>${escapeHtml(label(movement.estado_revision))}</td><td><div class="table-actions">${guideButton}${emittedButton}${reviewButton}${propertyButton}${quantityButton}${reverseButton}${!guideButton && !reviewButton && !propertyButton && !quantityButton && !reverseButton ? '—' : ''}</div></td></tr>`;
+            return `<tr><td>${formatDate(movement.ocurrido_at)}</td><td><b>${escapeHtml(movement.cliente?.nombre)}</b><br><small>${escapeHtml(movement.movimiento)} · ${escapeHtml(movement.numero_documento)}${emittedNote}${documentNote}</small>${trace}</td><td>${escapeHtml(typeName(movement.tipo_envase))} · ${movement.cantidad}</td>${account}<td class="impact-stock">${signed(movement.impacto_existencia)}</td><td>${escapeHtml(label(movement.propiedad))}</td><td>${escapeHtml(label(movement.estado_revision))}</td><td><div class="table-actions">${guideButton}${emittedButton}${reviewButton}${propertyButton}${quantityButton}${historicalButton}${reverseButton}${!guideButton && !reviewButton && !propertyButton && !quantityButton && !historicalButton && !reverseButton ? '—' : ''}</div></td></tr>`;
         }).join('')
         : '<tr><td colspan="8">Aún no hay movimientos confirmados.</td></tr>';
 }
@@ -324,6 +327,47 @@ async function load() {
         busy(false);
     }
 }
+
+function updateHistoricalPreview() {
+    const origin = state.historical?.origin;
+    if (!origin) return;
+    const fields = elements.historicalForm.elements;
+    const correct = Number(fields.sentido.value) * Number(fields.cantidad.value);
+    const delta = correct - origin.impacto_cuenta_vigente;
+    const balance = state.balances.find((line) => line.cliente.id === origin.cliente.id && line.tipo_envase === origin.tipo_envase)?.saldo;
+    elements.historicalPreview.textContent = `Importe del asiento: ${signed(origin.impacto_cuenta_vigente)} → ${signed(correct)}. Corrección: ${signed(delta)} envases.`
+        + (balance === undefined ? '' : ` Saldo total de este tipo: ${signed(balance)} → ${signed(balance + delta)}.`);
+}
+elements.body.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-correct-historical]');
+    if (!button || !state.identity?.puede_ajustar_cuenta_envases) return;
+    const origin = state.movements.find((item) => item.id === button.dataset.correctHistorical);
+    if (!origin) return;
+    state.historical = { origin, operacion_id: accountOperationId() };
+    elements.historicalForm.reset(); elements.historicalError.textContent = '';
+    elements.historicalForm.elements.cantidad.value = Math.abs(origin.impacto_cuenta_vigente);
+    elements.historicalForm.elements.sentido.value = origin.impacto_cuenta_vigente < 0 ? '-1' : '1';
+    elements.historicalSummary.textContent = `${origin.cliente.nombre} · ${typeName(origin.tipo_envase)} · ${origin.numero_documento}`;
+    updateHistoricalPreview(); elements.historicalDialog.showModal();
+});
+byId('historicalBalanceCancel').addEventListener('click', () => elements.historicalDialog.close());
+elements.historicalForm.addEventListener('input', updateHistoricalPreview);
+elements.historicalForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const submit = elements.historicalForm.querySelector('[type="submit"]');
+    const { origin, operacion_id } = state.historical;
+    const fields = elements.historicalForm.elements;
+    submit.disabled = true; elements.historicalError.textContent = '';
+    try {
+        await api(`/api/envases/cuenta-corriente/movimientos/${origin.id}/corregir-saldo-historico`, { method: 'POST', body: JSON.stringify({
+            operacion_id, impacto_conocido: origin.impacto_cuenta_vigente,
+            saldo_correcto: Number(fields.sentido.value) * Number(fields.cantidad.value),
+            es_saldo_historico: fields.es_saldo_historico.checked, motivo: fields.motivo.value.trim(),
+        }) });
+        elements.historicalDialog.close(); toast('Saldo anterior corregido con trazabilidad. La existencia no cambió.'); await load();
+    } catch (error) { elements.historicalError.textContent = error.message; }
+    finally { submit.disabled = false; }
+});
 
 function updateAdjustmentPreview() {
     const form = elements.adjustmentForm.elements;

@@ -68,7 +68,7 @@ class ServicioAjustesCuentaEnvases
                 throw new ConflictoOperacion('Solo se revierten aperturas y ajustes de cuenta de la temporada activa.');
             }
             if (MovimientoEnvase::query()->where('movimiento_origen_id', $origen->id)
-                ->where('tipo_movimiento', TipoMovimientoEnvase::ReversionAjusteCuenta->value)->exists()) {
+                ->whereIn('tipo_movimiento', [TipoMovimientoEnvase::ReversionAjusteCuenta->value, TipoMovimientoEnvase::CorreccionCuenta->value])->exists()) {
                 throw new ConflictoOperacion('El asiento ya tiene una reversa.');
             }
             $fecha = $this->fecha($payload['fecha'], $temporada);

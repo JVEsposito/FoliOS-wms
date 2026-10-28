@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Enums\ConceptoEnvasesRomana;
 use App\Enums\EstadoGuiaDespachoEnvase;
+use App\Enums\EstadoRecepcionRomana;
 use App\Enums\EstadoRevisionMovimientoEnvase;
 use App\Enums\EstadoValidacionMp;
 use App\Enums\PropiedadEnvase;
@@ -22,6 +23,7 @@ use App\Services\Envases\GeneradorEstadoCuentaEnvasesPdf;
 use App\Services\Envases\ServicioAjustesCuentaEnvases;
 use App\Services\Envases\ServicioCorreccionCantidadEnvases;
 use App\Services\Envases\ServicioCorreccionPropiedadEnvases;
+use App\Services\Envases\ServicioCorreccionSaldoHistoricoEnvases;
 use App\Services\Envases\ServicioCuentaCorrienteEnvases;
 use App\Services\Existencias\GeneradorLibroXlsx;
 use App\Services\Temporadas\ServicioTemporadaActiva;
@@ -70,6 +72,20 @@ class CuentaCorrienteEnvaseController extends Controller
         return response()->json(['data' => $this->movimiento($movimiento->load(['cliente', 'temporada', 'creadoPor', 'revisiones']))], 201);
     }
 
+    public function corregirSaldoHistorico(Request $request, MovimientoEnvase $movimientoEnvase, ServicioCorreccionSaldoHistoricoEnvases $servicio): JsonResponse
+    {
+        Gate::authorize('ajustar-cuenta-envases');
+        $datos = $request->validate(['operacion_id' => ['required', 'uuid'],
+            'impacto_conocido' => ['required', 'integer', 'between:-100000000,100000000'],
+            'saldo_correcto' => ['required', 'integer', 'between:-100000000,100000000'],
+            'es_saldo_historico' => ['required', 'accepted'], 'motivo' => ['required', 'string', 'min:10', 'max:2000']]);
+        $datos['impacto_conocido'] = (int) $datos['impacto_conocido'];
+        $datos['saldo_correcto'] = (int) $datos['saldo_correcto'];
+        $movimiento = $servicio->corregir($movimientoEnvase, $datos, $request->user());
+
+        return response()->json(['data' => $this->movimiento($movimiento->load(['cliente', 'temporada', 'creadoPor', 'revisiones']))], 201);
+    }
+
     public function catalogos(): JsonResponse
     {
         Gate::authorize('consultar-cuenta-envases');
@@ -96,7 +112,9 @@ class CuentaCorrienteEnvaseController extends Controller
         $filtros = $this->filtros($request, $temporadaActiva);
 
         $consulta = MovimientoEnvase::query()
-            ->with(['cliente:id,codigo,nombre', 'temporada:id,codigo,nombre,activa', 'creadoPor:id,name', 'revisiones.usuario:id,name', 'recepcion:id,tipo_recepcion']);
+            ->withSum('correccionesCuenta as ajuste_cuenta_acumulado', DB::raw('CAST(cantidad AS SIGNED) * signo_cuenta'))
+            ->withExists('correccionesInvalidantes')
+            ->with(['cliente:id,codigo,nombre', 'temporada:id,codigo,nombre,activa', 'creadoPor:id,name', 'revisiones.usuario:id,name', 'recepcion:id,tipo_recepcion,estado']);
         $cuenta->aplicarFiltros($consulta, $filtros);
         $movimientos = $consulta->orderByDesc('ocurrido_at')->limit(300)->get();
         $corregidos = MovimientoEnvase::query()
@@ -122,7 +140,8 @@ class CuentaCorrienteEnvaseController extends Controller
         $pendientes = DetalleEnvaseRecepcionRomana::query()
             ->with('recepcion')
             ->whereHas('recepcion', function (Builder $recepcion) use ($filtros, $cuenta): void {
-                $recepcion->where('estado_validacion_mp', '!=', EstadoValidacionMp::Validada->value);
+                $recepcion->where('estado', '!=', EstadoRecepcionRomana::Anulada->value)
+                    ->where('estado_validacion_mp', '!=', EstadoValidacionMp::Validada->value);
                 if (! empty($filtros['cliente_id'])) {
                     $recepcion->where('cliente_id', $filtros['cliente_id']);
                 }
@@ -488,11 +507,18 @@ class CuentaCorrienteEnvaseController extends Controller
                 && $movimiento->recepcion?->tipo_recepcion === TipoRecepcionRomana::SoloEnvases
                 && in_array($movimiento->tipo_movimiento, [TipoMovimientoEnvase::RecepcionCompra, TipoMovimientoEnvase::RecepcionArriendo], true)
                 && empty($movimiento->datos['correccion_propiedad']),
-            'puede_corregir_propiedad' => $corregido === false
+            'puede_corregir_propiedad' => $corregido === false && $movimiento->recepcion?->estado !== EstadoRecepcionRomana::Anulada
                 && $movimiento->temporada?->activa
                 && $movimiento->recepcion_romana_id !== null
                 && in_array($movimiento->tipo_movimiento, [TipoMovimientoEnvase::RecepcionCompra, TipoMovimientoEnvase::RecepcionArriendo], true)
                 && empty($movimiento->datos['correccion_propiedad']),
+            'cuenta_corregida' => $movimiento->ajuste_cuenta_acumulado !== null,
+            'correccion_cuenta' => $movimiento->datos['correccion_cuenta'] ?? $movimiento->datos['anulacion_recepcion'] ?? null,
+            'impacto_cuenta_vigente' => $movimiento->cantidad * $movimiento->signo_cuenta + (int) $movimiento->ajuste_cuenta_acumulado,
+            'puede_corregir_saldo_historico' => $movimiento->temporada?->activa && $movimiento->movimiento_origen_id === null
+                && $movimiento->recepcion?->estado !== EstadoRecepcionRomana::Anulada
+                && in_array($movimiento->tipo_movimiento, [TipoMovimientoEnvase::RecepcionArriendo, TipoMovimientoEnvase::AperturaCuenta, TipoMovimientoEnvase::AjusteCuenta], true)
+                && ! $movimiento->correcciones_invalidantes_exists && empty($movimiento->datos['correccion_propiedad']),
             'correccion_propiedad' => $movimiento->datos['correccion_propiedad'] ?? null,
             'correccion_cantidad' => $movimiento->datos['correccion_cantidad'] ?? null,
             'ajuste_cuenta' => $movimiento->datos['ajuste_cuenta'] ?? null,

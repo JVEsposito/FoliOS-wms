@@ -30,7 +30,7 @@ class GeneradorAvisoReciboPdf
             ->map(fn ($detalle): string => $detalle->cantidad_declarada.' '.$detalle->tipo_envase->etiqueta())
             ->implode(' · ');
         $valores = [
-            $recepcion->numero_recepcion,
+            $recepcion->numero_recepcion.($recepcion->estado === EstadoRecepcionRomana::Anulada ? ' · ANULADA' : ''),
             $recepcion->ingreso_at?->format('d-m-Y H:i'),
             $cerrada ? $recepcion->salida_at?->format('d-m-Y H:i') : null,
             $recepcion->cliente_nombre_snapshot,

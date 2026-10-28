@@ -64,7 +64,7 @@
                         <form class="weighbridge-filters" id="receptionFilters">
                             <input name="buscar" maxlength="100" placeholder="Recepción, guía, patente, cliente">
                             <select name="temporada_id"><option value="">Todas las temporadas</option></select>
-                            <select name="estado"><option value="">Todos los estados</option><option value="en_bascula_ingreso">En báscula ingreso</option><option value="en_pesaje_envases">Pesaje acumulativo</option><option value="en_bascula_salida">Salida / cierre pendiente</option><option value="cerrado">Cerrado</option></select>
+                            <select name="estado"><option value="">Recepciones vigentes</option><option value="anulada">Anuladas</option><option value="en_bascula_ingreso">En báscula ingreso</option><option value="en_pesaje_envases">Pesaje acumulativo</option><option value="en_bascula_salida">Salida / cierre pendiente</option><option value="cerrado">Cerrado</option></select>
                             <input name="desde" type="date" aria-label="Desde">
                             <input name="hasta" type="date" aria-label="Hasta">
                             <button class="secondary-button" type="submit">Filtrar</button>
@@ -83,6 +83,7 @@
                     <div class="weighbridge-panel-heading">
                         <div><p class="eyebrow">EXPEDIENTE DE RECEPCIÓN</p><h2 id="detailTitle">Recepción</h2><p id="detailSubtitle"></p></div>
                         <div class="detail-actions">
+                            <button class="secondary-button is-hidden" id="annulReceptionButton" type="button">Anular recepción</button>
                             <button class="secondary-button is-hidden" id="editReceptionButton" type="button">Editar ingreso</button>
                             <button class="primary-button is-hidden" id="confirmEntryButton" type="button">Confirmar ingreso</button>
                             <button class="primary-button is-hidden" id="addContainerWeighingButton" type="button">+ Registrar tanda</button>
@@ -104,6 +105,16 @@
             </section>
         </main>
 
+        <dialog class="review-dialog" id="annulReceptionDialog" aria-labelledby="annulReceptionTitle">
+            <form id="annulReceptionForm">
+                <header><p class="eyebrow">CORRECCIÓN ADMINISTRATIVA</p><h2 id="annulReceptionTitle">Anular recepción</h2></header>
+                <p id="annulReceptionSummary"></p>
+                <p>Se retirará de las recepciones vigentes y de los pendientes de Validación MP. Los ingresos confirmados se revertirán con trazabilidad. Si tiene lotes, reservas o correcciones vinculadas, se indicará qué debe resolverse.</p>
+                <label><span>Motivo de anulación</span><textarea name="motivo" required minlength="10" maxlength="2000" rows="3"></textarea></label>
+                <p class="form-error" id="annulReceptionError" role="alert"></p>
+                <footer><button class="secondary-button" id="annulReceptionCancel" type="button">Volver</button><button class="primary-button" type="submit">Confirmar anulación</button></footer>
+            </form>
+        </dialog>
         <dialog class="weighbridge-dialog" id="receptionDialog">
             <form method="dialog" class="weighbridge-dialog__shell" id="receptionForm" novalidate>
                 <div class="weighbridge-dialog__heading"><div><p class="eyebrow">INGRESO A ROMANA</p><h2 id="receptionDialogTitle">Registrar ingreso</h2><p id="receptionDialogDescription">Captura los antecedentes documentales y el peso del camión cargado.</p></div><button class="dialog-close" value="cancel" type="submit" aria-label="Cerrar">×</button></div>

@@ -301,7 +301,7 @@ final class ServicioDiagnosticoCierreTemporada
     {
         $consulta = DB::table('recepciones_romana as r')
             ->where('r.temporada_id', $temporada->id)
-            ->where('r.estado', '!=', EstadoRecepcionRomana::Cerrado->value)
+            ->whereNotIn('r.estado', [EstadoRecepcionRomana::Cerrado->value, EstadoRecepcionRomana::Anulada->value])
             ->select([
                 'r.id', 'r.numero_recepcion as referencia', 'r.estado',
                 'r.creado_por_user_id as responsable_id', 'r.ingreso_at as fecha',
@@ -320,6 +320,7 @@ final class ServicioDiagnosticoCierreTemporada
     {
         $consulta = DB::table('recepciones_romana as r')
             ->where('r.temporada_id', $temporada->id)
+            ->where('r.estado', '!=', EstadoRecepcionRomana::Anulada->value)
             ->where('r.estado_validacion_mp', '!=', EstadoValidacionMp::Validada->value)
             ->select([
                 'r.id', 'r.numero_recepcion as referencia', 'r.estado_validacion_mp as estado',

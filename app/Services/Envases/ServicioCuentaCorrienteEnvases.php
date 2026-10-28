@@ -3,6 +3,7 @@
 namespace App\Services\Envases;
 
 use App\Enums\EstadoGuiaDespachoEnvase;
+use App\Enums\EstadoRecepcionRomana;
 use App\Enums\EstadoValidacionMp;
 use App\Enums\PropiedadEnvase;
 use App\Enums\TipoEnvaseRomana;
@@ -38,6 +39,8 @@ class ServicioCuentaCorrienteEnvases
         'reversion_despacho' => 'Anulación de despacho',
         'correccion_propiedad' => 'Corrección de propiedad',
         'correccion_cantidad' => 'Corrección de cantidad',
+        'correccion_cuenta' => 'Corrección de saldo anterior',
+        'anulacion_recepcion' => 'Anulación de recepción',
         'apertura_cuenta' => 'Apertura de cuenta',
         'ajuste_cuenta' => 'Ajuste de cuenta',
         'reversion_ajuste_cuenta' => 'Reversa de ajuste de cuenta',
@@ -153,7 +156,7 @@ class ServicioCuentaCorrienteEnvases
             }
 
             $revision = $movimiento->revisiones->sortByDesc('revisado_at')->first();
-            $correccion = $movimiento->datos['correccion_propiedad'] ?? $movimiento->datos['correccion_cantidad'] ?? $movimiento->datos['ajuste_cuenta'] ?? null;
+            $correccion = $movimiento->datos['correccion_propiedad'] ?? $movimiento->datos['correccion_cantidad'] ?? $movimiento->datos['ajuste_cuenta'] ?? $movimiento->datos['correccion_cuenta'] ?? $movimiento->datos['anulacion_recepcion'] ?? null;
 
             yield [
                 'fecha_hora' => $this->local($movimiento->ocurrido_at),
@@ -212,6 +215,7 @@ class ServicioCuentaCorrienteEnvases
         $indices = [];
         $documentos = [];
         $saldos = [];
+        $historicos = $movimientos->where('tipo_movimiento', TipoMovimientoEnvase::CorreccionCuenta)->pluck('movimiento_origen_id')->all();
         foreach ($this->vistaCliente($movimientos) as ['movimiento' => $movimiento, 'impacto' => $impacto]) {
             $tipo = $movimiento->tipo_envase->value;
             $tipos[$tipo] ??= [
@@ -235,7 +239,7 @@ class ServicioCuentaCorrienteEnvases
                 continue;
             }
             $esSalida = in_array($movimiento->tipo_movimiento, self::SALIDAS, true)
-                || ($movimiento->tipo_movimiento->esAjusteCuenta() && $impacto < 0);
+                || (($movimiento->tipo_movimiento->esAjusteCuenta() || in_array($movimiento->id, $historicos, true)) && $impacto < 0);
             if ($esSalida) {
                 $tipos[$tipo]['salidas'] -= $impacto;
                 $tipos[$tipo]['salidas_por_propiedad'][$movimiento->propiedad->value] -= $impacto;
@@ -266,7 +270,7 @@ class ServicioCuentaCorrienteEnvases
                 'orden' => [$documentos[$claveDocumento], $movimiento->tipo_envase->orden(), $movimiento->propiedad->value],
                 'fecha' => $this->local($movimiento->ocurrido_at),
                 'documento' => $documento,
-                'movimiento' => self::etiquetaMovimiento($movimiento->tipo_movimiento),
+                'movimiento' => (in_array($movimiento->id, $historicos, true) ? 'Saldo anterior corregido' : self::etiquetaMovimiento($movimiento->tipo_movimiento)),
                 'tipo_envase' => $movimiento->tipo_envase->etiqueta(),
                 'propiedad' => self::etiquetaPropiedad($movimiento->propiedad),
                 'entrada' => $esSalida ? null : $impacto,
@@ -288,6 +292,7 @@ class ServicioCuentaCorrienteEnvases
             ->whereHas('recepcion', fn (Builder $recepcion) => $recepcion
                 ->where('cliente_id', $cliente->id)
                 ->where('temporada_id', $temporada->id)
+                ->where('estado', '!=', EstadoRecepcionRomana::Anulada->value)
                 ->where('estado_validacion_mp', '!=', EstadoValidacionMp::Validada->value))
             ->count();
 
@@ -417,6 +422,8 @@ class ServicioCuentaCorrienteEnvases
                 TipoMovimientoEnvase::ReversionDespacho => $movimiento->datos['reversa_de_movimiento_id'] ?? null,
                 TipoMovimientoEnvase::ReversionSalidaRecepcionFruta,
                 TipoMovimientoEnvase::CorreccionCantidad,
+                TipoMovimientoEnvase::CorreccionCuenta,
+                TipoMovimientoEnvase::AnulacionRecepcion,
                 TipoMovimientoEnvase::CorreccionPropiedad => $movimiento->movimiento_origen_id,
                 default => null,
             };
