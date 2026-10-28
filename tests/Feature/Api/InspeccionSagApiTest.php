@@ -24,6 +24,7 @@ use App\Models\ClienteValidacion;
 use App\Models\CombinacionValidacion;
 use App\Models\CondicionSag;
 use App\Models\CsgValidacion;
+use App\Models\CustodiaTemporalManiobra;
 use App\Models\Dispositivo;
 use App\Models\EspecieValidacion;
 use App\Models\Folio;
@@ -58,6 +59,146 @@ use Tests\TestCase;
 class InspeccionSagApiTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_recupera_ingreso_sag_iniciado_con_tunel_historico_y_ubicacion_previa_sin_duplicar_movimientos(): void
+    {
+        [$usuario, $folio, $origen, $zona, $lote, $tarea] = $this->prepararIngresoSagObsoleto();
+        $operador = User::factory()->create(['rol' => RolUsuario::CamareroFrio, 'activo' => true]);
+        $dispositivo = Dispositivo::create(['codigo' => 'TABLET-SAG-ORIGEN', 'nombre' => 'Tablet SAG']);
+        $planes = app(ServicioPlanesOperacionales::class);
+        $planes->asumir($tarea, $operador, $dispositivo);
+        $planes->iniciar($tarea, $operador, $dispositivo);
+        $reserva = $tarea->refresh()->reservaActiva;
+        $maniobra = $tarea->maniobraOperacional;
+        $movimientos = $folio->movimientos()->count();
+
+        $this->artisan('sag:preparar-traslados')->assertSuccessful();
+        $this->artisan('sag:preparar-traslados')->assertSuccessful();
+
+        $this->assertSame('cancelada', $tarea->refresh()->estado->value);
+        $this->assertSame('cancelada', $maniobra->refresh()->estado->value);
+        $this->assertSame('liberada', $reserva->refresh()->estado->value);
+        $this->assertSame($origen->id, $folio->refresh()->ubicacionActual->posicion_id);
+        $this->assertSame($movimientos, $folio->movimientos()->count());
+        $nueva = TareaMovimiento::where('plan_operacional_id', $tarea->plan_operacional_id)->where('estado', 'pendiente')->sole();
+        $this->assertSame($nueva->id, $tarea->reemplazada_por_tarea_id);
+        $this->assertSame('traslado_entre_camaras', $nueva->tipo_movimiento->value);
+        $this->assertSame($origen->id, $nueva->posicion_origen_id);
+        $this->assertSame($tarea->posicion_destino_id, $nueva->posicion_destino_id);
+        $this->assertSame('camara', $nueva->contexto['origen_logico']);
+        $this->assertArrayNotHasKey('tunel_codigo', $nueva->contexto);
+        $this->assertSame($tarea->id, $nueva->contexto['tarea_origen_corregido_id']);
+        $this->assertSame('en_proceso', $tarea->contexto['origen_sag_corregido']['estado_anterior']);
+        $this->assertSame($origen->id, $tarea->contexto['origen_sag_corregido']['posicion_id']);
+        $this->assertStringContainsString($origen->camara->nombre.' · '.$origen->etiqueta, $nueva->instruccion);
+
+        $planes->asumir($nueva, $operador, $dispositivo);
+        $planes->iniciar($nueva, $operador, $dispositivo);
+        $sesionOrigen = app(ServicioSesionEstiba::class)->abrir($origen->camara, $operador, $dispositivo);
+        $sesionDestino = app(ServicioSesionEstiba::class)->abrir($zona, $operador, $dispositivo);
+        app(ServicioMovimientoEstiba::class)->mover(
+            operacionId: (string) Str::uuid(), folio: $folio,
+            posicionDestino: $nueva->posicionDestino, sesionOrigen: $sesionOrigen, sesionDestino: $sesionDestino,
+            usuario: $operador, dispositivo: $dispositivo,
+            versionOrigenConocida: $origen->camara->refresh()->version_plano,
+            versionDestinoConocida: $zona->refresh()->version_plano,
+            generadoDispositivoAt: now(), tareaMovimiento: $nueva->refresh(),
+        );
+        $this->assertSame('completada', $nueva->refresh()->estado->value);
+        $this->assertSame($movimientos + 1, $folio->movimientos()->count());
+        $this->assertSame($origen->id, $folio->movimientos()->latest('recibido_servidor_at')->first()->posicion_origen_id);
+        $this->actingAs($usuario, 'sanctum')->postJson("/api/inspeccion-sag/lotes/{$lote['id']}/iniciar")->assertOk();
+    }
+
+    public function test_recupera_ingreso_sag_pendiente_ya_ubicado_en_el_sector_sin_otro_movimiento(): void
+    {
+        [, $folio, , , , $tarea] = $this->prepararIngresoSagObsoleto();
+        $folio->ubicacionActual->update([
+            'camara_id' => $tarea->camara_destino_id,
+            'posicion_id' => $tarea->posicion_destino_id,
+        ]);
+        $movimientos = $folio->movimientos()->count();
+
+        $this->artisan('sag:preparar-traslados')->assertSuccessful();
+        $this->artisan('sag:preparar-traslados')->assertSuccessful();
+
+        $this->assertSame('cancelada', $tarea->refresh()->estado->value);
+        $this->assertSame(1, TareaMovimiento::count());
+        $this->assertSame($movimientos, $folio->movimientos()->count());
+        $this->assertSame(1, $tarea->planOperacional->contexto['pallets_preparados']);
+    }
+
+    public function test_no_reemplaza_ingreso_sag_iniciado_si_la_ubicacion_es_posterior_a_la_orden(): void
+    {
+        [, $folio, , , , $tarea] = $this->prepararIngresoSagObsoleto();
+        $operador = User::factory()->create(['rol' => RolUsuario::CamareroFrio, 'activo' => true]);
+        $dispositivo = Dispositivo::create(['codigo' => 'TABLET-SAG-POSTERIOR', 'nombre' => 'Tablet SAG']);
+        app(ServicioPlanesOperacionales::class)->asumir($tarea, $operador, $dispositivo);
+        app(ServicioPlanesOperacionales::class)->iniciar($tarea, $operador, $dispositivo);
+        $folio->ubicacionActual->update(['ubicado_at' => $tarea->created_at->copy()->addMinute()]);
+
+        $this->artisan('sag:preparar-traslados')->assertSuccessful();
+
+        $this->assertSame('en_proceso', $tarea->refresh()->estado->value);
+        $this->assertNotNull($tarea->reservaActiva);
+        $this->assertNull($tarea->reemplazada_por_tarea_id);
+        $this->assertSame(1, TareaMovimiento::count());
+    }
+
+    public function test_no_reemplaza_ingreso_sag_con_custodia_fisica_registrada(): void
+    {
+        [, $folio, $origen, , , $tarea] = $this->prepararIngresoSagObsoleto();
+        $operador = User::factory()->create(['rol' => RolUsuario::CamareroFrio, 'activo' => true]);
+        $dispositivo = Dispositivo::create(['codigo' => 'TABLET-SAG-CUSTODIA', 'nombre' => 'Tablet SAG']);
+        app(ServicioPlanesOperacionales::class)->asumir($tarea, $operador, $dispositivo);
+        app(ServicioPlanesOperacionales::class)->iniciar($tarea, $operador, $dispositivo);
+        $custodia = CustodiaTemporalManiobra::create([
+            'maniobra_operacional_id' => $tarea->refresh()->maniobra_operacional_id,
+            'folio_id' => $folio->id,
+            'tarea_extraccion_id' => $tarea->id,
+            'camara_origen_id' => $origen->camara_id,
+            'posicion_origen_id' => $origen->id,
+            'banda_origen' => $origen->banda,
+            'posicion_origen' => $origen->posicion,
+            'nivel_origen' => $origen->nivel,
+            'estado' => 'activa',
+            'bloqueo_folio_id' => $folio->id,
+            'user_id' => $operador->id,
+            'dispositivo_id' => $dispositivo->id,
+            'extraido_at' => now(),
+        ]);
+
+        $this->artisan('sag:preparar-traslados')->assertSuccessful();
+
+        $this->assertSame('en_proceso', $tarea->refresh()->estado->value);
+        $this->assertNotNull($tarea->reservaActiva);
+        $this->assertSame('activa', $custodia->refresh()->estado->value);
+        $this->assertSame(1, TareaMovimiento::count());
+    }
+
+    private function prepararIngresoSagObsoleto(): array
+    {
+        $this->activarPlanificadorDirigido();
+        $usuario = $this->administradorConTemporada();
+        $zona = $this->crearZonaInspeccion($usuario, posiciones: 2);
+        $folio = $this->crearFolioUbicado('1000000004');
+        $origen = $folio->ubicacionActual->posicion;
+        $this->travel(-7)->days();
+        $proceso = $this->crearPrefrioSag($usuario, [$folio], aprobado: true);
+        $this->travelBack();
+        UbicacionActual::create(['folio_id' => $folio->id, 'camara_id' => $origen->camara_id,
+            'posicion_id' => $origen->id, 'ubicado_at' => now()->subDays(6)]);
+        $folio->update(['estado_operacional' => EstadoOperacionalFolio::Disponible]);
+        $lote = $this->crearLoteEnPreparacion($usuario, [$folio], Pais::where('iso_alpha2', 'CL')->firstOrFail());
+        $tarea = TareaMovimiento::sole();
+        $this->assertSame('traslado_entre_camaras', $tarea->tipo_movimiento->value);
+        // Estado persistido por el error: el histórico de prefrío se usó como origen vigente.
+        $tarea->update(['tipo_movimiento' => 'ubicacion_inicial', 'camara_origen_id' => null, 'posicion_origen_id' => null,
+            'instruccion' => 'Llevar 1000000004 desde TUNEL 6 para inspección SAG.',
+            'contexto' => [...$tarea->contexto, 'origen_logico' => 'tunel_prefrio', 'proceso_prefrio_id' => $proceso->id, 'tunel_codigo' => 'TUN-06']]);
+
+        return [$usuario, $folio, $origen, $zona, $lote, $tarea->refresh()];
+    }
 
     public function test_preparacion_fisica_reserva_tramo_contiguo_idempotente_con_factor_uno_coma_cinco_en_nivel_uno(): void
     {
