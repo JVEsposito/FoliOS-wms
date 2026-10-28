@@ -25,7 +25,8 @@ class ServicioAnulacionRecepcionRomana
 
         return DB::transaction(function () use ($seleccionada, $datos, $actor, $hash): RecepcionRomana {
             $recepcion = RecepcionRomana::query()->lockForUpdate()->findOrFail($seleccionada->id);
-            $evento = EventoRecepcionRomana::where('operacion_id', $datos['operacion_id'])->first();
+            // Lectura actual: no abrir un snapshot antes de adquirir el mutex de temporada.
+            $evento = EventoRecepcionRomana::where('operacion_id', $datos['operacion_id'])->lockForUpdate()->first();
             if ($evento) {
                 if ($evento->recepcion_romana_id !== $recepcion->id || $evento->tipo !== TipoEventoRomana::RecepcionAnulada
                     || $evento->payload_hash !== $hash || $evento->user_id !== $actor->id) {
