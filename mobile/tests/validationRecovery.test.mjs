@@ -31,20 +31,23 @@ const pending = (overrides = {}) => ({
   message: 'La combinación de artículo y CSG no se encuentra habilitada.', ...overrides,
 });
 
-function harness({ item = pending(), statusError = false, record = null, finalRecord = null, failPost = null, width = 1200 } = {}) {
+function harness({ item = pending(), statusError = false, record = null, finalRecord = null, failPost = null, width = 1200,
+  cachedVersion = 2, serverVersion = 2, catalogError = null, historyError = false, cacheError = false, noCached = false } = {}) {
   let renderer; let sequence = 0; let failWrite = false;
+  let pollTask;
+  const files = new Map();
   const calls = { posts: [], checks: [] };
   const storage = new Map([[outboxKey, JSON.stringify(item ? [item] : [])]]);
   const records = record ? [record] : finalRecord ? [finalRecord] : [];
   const catalog = {
-    temporada: { id: 'season', nombre: '2026', version_catalogo: 2 },
+    temporada: { id: 'season', nombre: '2026', version_catalogo: serverVersion },
     categorias: [{ id: 'category', nombre: 'Exportación', activo: true }],
     articulos: [{ id: 'article', especie: 'Cereza', variedad: 'Santina', calibre: '2J', envase: '5 kg', variedad_validacion_id: 'v1', activo: true }],
     origenes: [1, 2].map((n) => ({ id: `origin-${n}`, cliente: 'Cliente', marca: 'Marca', csg: String(n).repeat(5), variedad_ids: ['v1'], activo: true })),
     combinaciones: [1, 2].map((n) => ({ origen_validacion_id: `origin-${n}`, articulo_validacion_id: 'article' })),
     motivos: ['otro'],
   };
-  storage.set('estiba_validation_catalog:1:pda', JSON.stringify(catalog));
+  if (!noCached) storage.set('estiba_validation_catalog:1:pda', JSON.stringify({ ...catalog, temporada: { ...catalog.temporada, version_catalogo: cachedVersion } }));
   storage.set('estiba_validation_work_context:1:pda', JSON.stringify({ linea_proceso: 1, turno: 'A' }));
   const asyncStorage = {
     getItem: async (key) => storage.get(key) ?? null,
@@ -54,7 +57,7 @@ function harness({ item = pending(), statusError = false, record = null, finalRe
     },
     removeItem: async (key) => storage.delete(key), getAllKeys: async () => [...storage.keys()],
     multiGet: async (keys) => keys.map((key) => [key, storage.get(key) ?? null]),
-    multiSet: async (pairs) => { pairs.forEach(([key, value]) => storage.set(key, value)); },
+    multiSet: async (pairs) => { if (cacheError) throw new Error('Almacenamiento lleno.'); pairs.forEach(([key, value]) => storage.set(key, value)); },
     multiRemove: async (keys) => { keys.forEach((key) => storage.delete(key)); },
   };
   function attempt(p, overrides = {}) {
@@ -69,7 +72,12 @@ function harness({ item = pending(), statusError = false, record = null, finalRe
   const fetch = async (url, options = {}) => {
     assert.equal(options.headers.get('Authorization'), 'Bearer token');
     const parsed = new URL(url);
-    if (parsed.pathname.endsWith('/catalogos')) return response(catalog);
+    if (parsed.pathname.endsWith('/catalogos')) {
+      if (catalogError) return response({ message: 'Catálogo temporalmente no disponible.' }, catalogError);
+      if (options.headers.get('If-None-Match') === `"validacion-catalogo-season-${catalog.temporada.version_catalogo}"`) return new Response(null, { status: 304 });
+      return response(catalog);
+    }
+    if (historyError && (parsed.pathname.endsWith('/mi-sesion') || (parsed.pathname.endsWith('/pallets') && options.method !== 'POST'))) return response({ message: 'Historial no disponible.' }, 503);
     if (parsed.pathname.includes('/operaciones/')) {
       const id = parsed.pathname.split('/').at(-1); calls.checks.push(id);
       if (statusError) return response({ message: 'El servidor no está disponible.' }, 503);
@@ -112,7 +120,12 @@ function harness({ item = pending(), statusError = false, record = null, finalRe
       if (id === 'react-native') return native;
       if (id === 'expo-crypto') return { randomUUID: () => `00000000-0000-4000-8000-${String(++sequence).padStart(12, '0')}` };
       if (id === '@react-native-async-storage/async-storage') return asyncStorage;
-      if (id.endsWith('/hooks/useOperationalPolling')) return { useOperationalPolling: () => {} };
+      if (id.endsWith('/hooks/useOperationalPolling')) return { useOperationalPolling: (task) => { pollTask = task; } };
+      if (id.endsWith('/validationCatalogFileStore')) return {
+        usesNativeCatalogFiles: true,
+        loadValidationCatalogFile: async () => files.get('catalog') ?? null,
+        saveValidationCatalogFile: async (_server, _device, value) => { if (cacheError) throw new Error('Almacenamiento lleno.'); files.set('catalog', clone(value)); },
+      };
       if (id.endsWith('/config/appVariant')) return { isPdaBuild: width < 420 };
       if (id.endsWith('/theme/areas')) return { areas: { frigorifico: { gajo: 1, bright: '#000' } } };
       if (id.endsWith('/components/ui/ScanInput')) return { ScanInput: 'ScanInput' };
@@ -135,7 +148,12 @@ function harness({ item = pending(), statusError = false, record = null, finalRe
   async function flush(action = () => {}) { await act(async () => { await action(); for (let n = 0; n < 80; n++) await Promise.resolve(); }); }
   const button = (label) => renderer.root.findAllByType('Pressable').find((node) => node.findAllByType('Text').some((text) => flatten(text.props.children) === label));
   return {
-    calls, records, offline,
+    calls, records, offline, storage,
+    cachedFile: () => files.get('catalog'),
+    catalogError: (status) => { catalogError = status; },
+    cacheError: (value) => { cacheError = value; },
+    async poll() { await flush(pollTask); },
+    async folio(value) { await flush(() => renderer.root.findByType('ScanInput').props.onChangeText(value)); },
     outbox: () => JSON.parse(storage.get(outboxKey)),
     failNextWrite: () => { failWrite = true; },
     async mount() { await flush(() => { renderer = create(React.createElement(ValidationScreen, { auth, baseUrl: 'https://server.test', onLogout: () => {} })); }); },
@@ -150,6 +168,61 @@ function harness({ item = pending(), statusError = false, record = null, finalRe
     async lot(value) { await flush(() => renderer.root.findAllByType('TextInput').find((node) => node.props.placeholder === 'Según etiqueta').props.onChangeText(value)); },
   };
 }
+
+test('instala v227 aunque el historial falle y conserva la bandeja del usuario', async () => {
+  const h = harness({ cachedVersion: 218, serverVersion: 227, historyError: true });
+  try {
+    await h.mount();
+    assert.match(h.message(), /catálogo v227/);
+    assert.equal(h.cachedFile().temporada.version_catalogo, 227);
+    assert.equal(h.outbox()[0].id, pending().id);
+    assert.equal(h.outbox()[0].status, 'error');
+  } finally { await h.unmount(); }
+});
+
+test('un catálogo antiguo nunca figura al día tras un error y el sondeo lo recupera sin perder el folio', async () => {
+  const h = harness({ item: null, cachedVersion: 218, serverVersion: 227, catalogError: 503 });
+  try {
+    await h.mount();
+    assert.match(h.message(), /catálogo v218/);
+    assert.match(h.message(), /Catálogo sin actualizar/);
+    assert.match(h.message(), /HTTP 503/);
+    assert.doesNotMatch(h.message(), /Catálogo al día/);
+    await h.folio('CAPTURA-EN-CURSO');
+    h.catalogError(null); await h.poll();
+    assert.match(h.message(), /catálogo v227/);
+    assert.match(h.message(), /Catálogo al día/);
+    assert.equal(h.scan().value, 'CAPTURA-EN-CURSO');
+  } finally { await h.unmount(); }
+});
+
+test('un usuario sin copia ve el fallo del catálogo y no recibe un estado verde de al día', async () => {
+  const h = harness({ item: null, noCached: true, catalogError: 500, width: 360 });
+  try {
+    await h.mount();
+    assert.match(h.message(), /Sin catálogo · reintentar/);
+    assert.match(h.message(), /HTTP 500/);
+    assert.doesNotMatch(h.message(), /Catálogo al día/);
+    assert.equal(h.button('Aprobar').props.disabled, true);
+  } finally { await h.unmount(); }
+});
+
+test('un fallo de guardado conserva v218 en disco y permite ver v227 con aviso de falta de respaldo', async () => {
+  const h = harness({ cachedVersion: 218, serverVersion: 227, cacheError: true });
+  try {
+    await h.mount();
+    assert.match(h.message(), /catálogo v227/);
+    assert.match(h.message(), /Catálogo sin respaldo/);
+    assert.match(h.message(), /Almacenamiento lleno/);
+    assert.equal(JSON.parse(h.storage.get('estiba_validation_catalog:1:pda')).temporada.version_catalogo, 218);
+    assert.equal(h.outbox()[0].id, pending().id);
+    await h.poll();
+    assert.match(h.message(), /Catálogo sin respaldo/, 'Un 304 no oculta el fallo de guardado');
+    h.cacheError(false); await h.poll();
+    assert.equal(h.cachedFile().temporada.version_catalogo, 227);
+    assert.doesNotMatch(h.message(), /Catálogo sin respaldo/);
+  } finally { await h.unmount(); }
+});
 
 test('tablet retoma la bandeja anterior, conserva la captura y envía la corrección con UUID nuevo', async () => {
   const h = harness();

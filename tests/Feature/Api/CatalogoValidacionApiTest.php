@@ -16,6 +16,20 @@ class CatalogoValidacionApiTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_entrega_solo_los_campos_operativos_y_permite_actualizar_desde_v218_a_v227(): void
+    {
+        [$temporada, $token] = $this->contexto();
+        $temporada->update(['version_catalogo' => 227]);
+        $respuesta = $this->withToken($token)->withHeader('If-None-Match', "\"validacion-catalogo-{$temporada->id}-218\"")
+            ->getJson('/api/validacion/catalogos')->assertOk()->assertJsonPath('temporada.version_catalogo', 227);
+        foreach (['categorias', 'articulos', 'origenes', 'combinaciones'] as $coleccion) {
+            $this->assertArrayNotHasKey('created_at', $respuesta->json($coleccion.'.0'));
+            $this->assertArrayNotHasKey('updated_at', $respuesta->json($coleccion.'.0'));
+        }
+        $this->assertSame($respuesta->json('articulos.0.id'), $respuesta->json('combinaciones.0.articulo_validacion_id'));
+        $this->assertSame($respuesta->json('origenes.0.id'), $respuesta->json('combinaciones.0.origen_validacion_id'));
+    }
+
     public function test_reutiliza_el_catalogo_por_version_sin_consultar_sus_tablas(): void
     {
         [$temporada, $token] = $this->contexto();

@@ -27,19 +27,21 @@ class CatalogoOperativoValidacion
             ->orderBy('articulo.variedad')
             ->orderBy('articulo.calibre')
             ->orderBy('articulo.envase')
-            ->get(['articulo.*', 'envase.codigo_externo as envase_codigo']);
+            ->get(['articulo.id', 'articulo.temporada_id', 'articulo.variedad_validacion_id',
+                'articulo.especie', 'articulo.variedad', 'articulo.calibre', 'articulo.envase',
+                'articulo.codigo_externo', 'articulo.activo', 'envase.codigo_externo as envase_codigo']);
         $categorias = DB::table('categorias_validacion')
             ->where('temporada_id', $temporadaId)
             ->where('activo', true)
             ->orderBy('nombre')
-            ->get();
+            ->get(['id', 'temporada_id', 'nombre', 'codigo_externo', 'activo']);
         $origenes = DB::table('origenes_validacion')
             ->where('temporada_id', $temporadaId)
             ->where('activo', true)
             ->orderBy('cliente')
             ->orderBy('marca')
             ->orderBy('csg')
-            ->get();
+            ->get(['id', 'temporada_id', 'cliente_validacion_id', 'csg_validacion_id', 'cliente', 'marca', 'csg', 'predio', 'codigo_externo', 'activo']);
         $variedadesPorCsg = DB::table('csg_variedades_validacion')
             ->whereIn('csg_validacion_id', $origenes->pluck('csg_validacion_id')->filter()->unique())
             ->get(['csg_validacion_id', 'variedad_validacion_id'])
