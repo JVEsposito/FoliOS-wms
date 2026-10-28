@@ -59,12 +59,13 @@ test('administrador anula con motivo, conserva el intento al fallar y consulta e
             await page.locator('#annulReceptionForm [type="submit"]').click();
             await page.waitForFunction(() => document.getElementById('annulReceptionError').textContent.includes('Intenta nuevamente'));
             await page.locator('#annulReceptionForm [type="submit"]').click();
-            await page.waitForFunction(() => !document.getElementById('annulReceptionDialog').open);
+            await page.waitForFunction(() => !document.getElementById('annulReceptionDialog').open && !document.querySelector('tr.rec-row'));
             assert.deepEqual(writes[0], writes[1]);
             assert.equal(writes[0].version_conocida, 3);
             await page.locator('#receptionFilters [name="estado"]').selectOption('anulada');
             await page.locator('#receptionFilters [type="submit"]').click();
             await page.locator('tr.rec-row[data-reception-id="recepcion"]').click();
+            await page.waitForFunction(() => document.getElementById('detailTimeline').textContent.includes('Recepción de prueba ingresada por equivocación'));
             assert.match(await page.locator('#detailTimeline').textContent(), /Recepción de prueba ingresada por equivocación/);
             assert.equal(await page.locator('#annulReceptionButton').isHidden(), true);
             assert.deepEqual(errors, []);
