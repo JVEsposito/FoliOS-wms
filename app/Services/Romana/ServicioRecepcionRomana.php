@@ -147,7 +147,7 @@ class ServicioRecepcionRomana
                 return $this->cargar($recepcion);
             }
 
-            if ($recepcion->estado_validacion_mp !== EstadoValidacionMp::Pendiente) {
+            if ($recepcion->estado === EstadoRecepcionRomana::Anulada || $recepcion->estado_validacion_mp !== EstadoValidacionMp::Pendiente) {
                 throw new ConflictoOperacion('La recepción ya fue tomada por Validación MP y sus antecedentes no pueden editarse.');
             }
             if (! $recepcion->estado->esEditable()) {
@@ -279,7 +279,7 @@ class ServicioRecepcionRomana
                 return $this->cargar($recepcion);
             }
 
-            if ($recepcion->estado_validacion_mp !== EstadoValidacionMp::Pendiente) {
+            if ($recepcion->estado === EstadoRecepcionRomana::Anulada || $recepcion->estado_validacion_mp !== EstadoValidacionMp::Pendiente) {
                 throw new ConflictoOperacion(
                     'La recepción ya fue tomada por Validación MP y no admite correcciones administrativas.',
                 );

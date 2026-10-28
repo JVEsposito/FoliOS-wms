@@ -79,6 +79,9 @@ class ServicioValidacionMp
     ): ValidacionMp {
         return DB::transaction(function () use ($recepcion, $operacionId, $usuario, $dispositivoId): ValidacionMp {
             $recepcion = RecepcionRomana::query()->lockForUpdate()->findOrFail($recepcion->id);
+            if ($recepcion->estado === EstadoRecepcionRomana::Anulada) {
+                throw new ConflictoOperacion('La recepción fue anulada y no admite validación MP.');
+            }
             $porOperacion = ValidacionMp::query()->where('operacion_toma_id', $operacionId)->first();
             if ($porOperacion && $porOperacion->recepcion_romana_id !== $recepcion->id) {
                 throw new ConflictoOperacion('El identificador de operación ya fue utilizado en otra recepción.');

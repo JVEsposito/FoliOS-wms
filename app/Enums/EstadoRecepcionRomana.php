@@ -8,6 +8,7 @@ enum EstadoRecepcionRomana: string
     case EnBasculaSalida = 'en_bascula_salida';
     case EnPesajeEnvases = 'en_pesaje_envases';
     case Cerrado = 'cerrado';
+    case Anulada = 'anulada';
 
     public function esEditable(): bool
     {

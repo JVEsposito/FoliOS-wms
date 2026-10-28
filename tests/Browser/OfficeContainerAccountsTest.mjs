@@ -8,7 +8,7 @@ import { chromium } from 'playwright';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const html = readFileSync(resolve(root, 'storage/app/ui/oficina/cuenta-corriente.html'), 'utf8');
 
-async function setup(browser, manage, width = 390) {
+async function setup(browser, manage, width = 390, historical = false) {
     const context = await browser.newContext({ viewport: { width, height: 1000 } });
     const identity = { nombre: 'Cuenta Envases', rol: manage ? 'administrador' : 'consulta', puede_consultar_cuenta_envases: true, modulos_acceso: ['materia-prima.cuenta-envases'] };
     await context.addInitScript((user) => {
@@ -17,9 +17,9 @@ async function setup(browser, manage, width = 390) {
         localStorage.setItem('estiba_wms_office_identity', JSON.stringify(user));
     }, identity);
     const client = { id: 'cliente', codigo: 'CLI', nombre: 'Cliente de arriendo' };
-    const movements = [];
+    const movements = historical ? [{ id: 'historico', cliente: client, numero_documento: '123', movimiento: 'Ingreso en arriendo', tipo_envase: 'bins', cantidad: 138, impacto_cuenta: 138, impacto_cuenta_vigente: 138, impacto_existencia: 138, propiedad: 'arrendada', ocurrido_at: '2026-09-01T13:36:00Z', estado_revision: 'pendiente', puede_corregir_saldo_historico: true }] : [];
     const writes = [];
-    let balance = 0;
+    let balance = historical ? -306 : 0;
     await context.route('http://localhost/**', async (route) => {
         const request = route.request();
         const path = new URL(request.url()).pathname;
@@ -37,6 +37,12 @@ async function setup(browser, manage, width = 390) {
             balance += body.cantidad;
             movements.unshift({ id: 'asiento', cliente: client, numero_documento: body.referencia, movimiento: 'Saldo de apertura', tipo_envase: 'bins', cantidad: Math.abs(body.cantidad), impacto_cuenta: body.cantidad, impacto_existencia: 0, propiedad: body.propiedad, ocurrido_at: '2026-10-05T03:00:00Z', estado_revision: 'pendiente', puede_revertir_ajuste: true, ajuste_cuenta: { motivo: body.motivo }, creado_por: { nombre: identity.nombre } });
             return route.fulfill({ status: 201, json: { data: movements[0] } });
+        }
+        if (path.endsWith('/corregir-saldo-historico')) {
+            const body = request.postDataJSON(); writes.push(body);
+            balance += body.saldo_correcto - body.impacto_conocido;
+            movements[0].impacto_cuenta_vigente = body.saldo_correcto;
+            return route.fulfill({ status: 201, json: { data: { id: 'correccion' } } });
         }
         if (path.endsWith('/revertir-ajuste')) {
             writes.push(request.postDataJSON());
@@ -100,5 +106,33 @@ test('el perfil de consulta no ofrece acciones para modificar la cuenta', async 
         assert.equal(writes.length, 0);
         assert.deepEqual(errors, []);
         await context.close();
+    } finally { await browser.close(); }
+});
+
+
+test('corrige +138 a -138 con vista previa de -276 y conserva la existencia en móvil y escritorio', async () => {
+    const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined, args: ['--no-sandbox', '--disable-gpu'] });
+    try {
+        for (const width of [390, 1280]) {
+            const { context, page, writes, errors } = await setup(browser, true, width, true);
+            await page.locator('#container-accounts-tab-movements').click();
+            await page.locator('#movementsBody .office-action-select').selectOption({ label: 'Corregir saldo anterior' });
+            const form = page.locator('#historicalBalanceForm');
+            await form.locator('[name="sentido"]').selectOption('-1');
+            assert.match(await page.locator('#historicalBalancePreview').textContent(), /138 → -138/);
+            assert.match(await page.locator('#historicalBalancePreview').textContent(), /-276/);
+            assert.match(await page.locator('#historicalBalancePreview').textContent(), /-306 → -582/);
+            await form.locator('[name="es_saldo_historico"]').check();
+            await form.locator('[name="motivo"]').fill('Saldo anterior adeudado por el cliente con signo equivocado');
+            await form.locator('[type="submit"]').click();
+            await page.waitForFunction(() => !document.getElementById('historicalBalanceDialog').open);
+            assert.equal(writes.length, 1);
+            assert.equal(writes[0].impacto_conocido, 138);
+            assert.equal(writes[0].saldo_correcto, -138);
+            assert.equal(writes[0].es_saldo_historico, true);
+            assert.match(await page.locator('#movementsBody').textContent(), /138/);
+            assert.deepEqual(errors, []);
+            await context.close();
+        }
     } finally { await browser.close(); }
 });

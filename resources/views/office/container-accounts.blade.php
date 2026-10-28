@@ -60,6 +60,20 @@
                 <section class="panel movements-panel" id="container-accounts-panel-movements" data-office-panel-group="container-accounts" data-office-panel-id="movements" role="tabpanel" aria-labelledby="container-accounts-tab-movements"><div class="panel-heading"><div><p class="eyebrow">KARDEX DOCUMENTAL</p><h2>Movimientos confirmados</h2></div><div class="movements-heading__side"><small id="movementsNote">Ingreso y salida conservan fecha y hora exactas.</small><button class="secondary-button" id="movementsExcelButton" type="button">↓ Excel</button></div></div><div class="accounts-table-scroll"><table><thead><tr><th>Fecha y hora</th><th>Cliente / documento</th><th>Envase</th><th>Cuenta</th><th>Existencia</th><th>Propiedad</th><th>Revisión</th><th>Acción</th></tr></thead><tbody id="movementsBody"></tbody></table></div></section>
             </section>
         </main>
+        <dialog class="review-dialog property-dialog" id="historicalBalanceDialog" aria-labelledby="historicalBalanceTitle">
+            <form id="historicalBalanceForm">
+                <header class="review-dialog__header"><p class="eyebrow">SOLO CUENTA DE ENVASES</p><h2 id="historicalBalanceTitle">Corregir saldo anterior</h2></header>
+                <p id="historicalBalanceSummary"></p>
+                <label><span>Sentido del saldo correcto</span><select name="sentido" required><option value="-1">El cliente debe envases (−)</option><option value="1">La planta debe envases al cliente (+)</option></select></label>
+                <label><span>Cantidad correcta de envases</span><input name="cantidad" type="number" min="0" max="100000000" step="1" required></label>
+                <p id="historicalBalancePreview" aria-live="polite"></p>
+                <p>Esta corrección modifica solo la cuenta. No ingresa, retira ni reserva existencia física. El original y el motivo se conservan en el kardex.</p>
+                <label class="historical-confirmation"><input name="es_saldo_historico" type="checkbox" required> Confirmo que corresponde a un saldo anterior, sin movimiento físico.</label>
+                <label><span>Motivo de corrección</span><textarea name="motivo" required minlength="10" maxlength="2000" rows="3"></textarea></label>
+                <p class="form-error" id="historicalBalanceError" role="alert"></p>
+                <footer class="dialog-actions"><button class="secondary-button" id="historicalBalanceCancel" type="button">Volver</button><button class="primary-button" type="submit">Confirmar corrección</button></footer>
+            </form>
+        </dialog>
         <dialog class="review-dialog property-dialog" id="accountAdjustmentDialog" aria-labelledby="accountAdjustmentTitle">
             <form id="accountAdjustmentForm">
                 <header class="review-dialog__header"><p class="eyebrow">CUENTA DE ENVASES</p><h2 id="accountAdjustmentTitle">Registrar apertura o ajuste</h2></header>

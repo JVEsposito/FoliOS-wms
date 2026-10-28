@@ -68,6 +68,18 @@ class MovimientoEnvase extends Model implements PerteneceATemporada
         return $this->hasMany(RevisionMovimientoEnvase::class);
     }
 
+    public function correccionesCuenta(): HasMany
+    {
+        return $this->hasMany(self::class, 'movimiento_origen_id')->where('tipo_movimiento', TipoMovimientoEnvase::CorreccionCuenta->value);
+    }
+
+    public function correccionesInvalidantes(): HasMany
+    {
+        return $this->hasMany(self::class, 'movimiento_origen_id')->whereIn('tipo_movimiento', [
+            TipoMovimientoEnvase::CorreccionCantidad->value, TipoMovimientoEnvase::CorreccionPropiedad->value,
+            TipoMovimientoEnvase::ReversionAjusteCuenta->value, TipoMovimientoEnvase::AnulacionRecepcion->value]);
+    }
+
     protected function casts(): array
     {
         return [

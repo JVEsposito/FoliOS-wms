@@ -13,6 +13,8 @@ enum TipoMovimientoEnvase: string
     case ReversionDespacho = 'reversion_despacho';
     case CorreccionPropiedad = 'correccion_propiedad';
     case CorreccionCantidad = 'correccion_cantidad';
+    case AnulacionRecepcion = 'anulacion_recepcion';
+    case CorreccionCuenta = 'correccion_cuenta';
     case AperturaCuenta = 'apertura_cuenta';
     case AjusteCuenta = 'ajuste_cuenta';
     case ReversionAjusteCuenta = 'reversion_ajuste_cuenta';
