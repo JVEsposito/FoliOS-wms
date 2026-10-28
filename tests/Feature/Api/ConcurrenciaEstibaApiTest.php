@@ -166,6 +166,61 @@ class ConcurrenciaEstibaApiTest extends TestCase
         $this->assertDatabaseMissing('sesiones_estiba', ['tarea_movimiento_id' => $c['tareas'][0]->id]);
     }
 
+    public function test_retomar_labor_con_tres_sesiones_cerradas_no_reactiva_las_reservas_historicas_de_banda(): void
+    {
+        $c = $this->contexto();
+        $this->materializar($c, 0, $this->snapshot($c, 0))->assertJsonCount(1, 'data.aceptadas');
+        $sesiones = app(ServicioSesionEstiba::class);
+        for ($i = 0; $i < 3; $i++) {
+            $sesion = $sesiones->abrirParaTarea($c['camara'], $c['usuarios'][0], $c['dispositivos'][0], $c['tareas'][0]->refresh());
+            $sesiones->cerrar($sesion, $c['usuarios'][0], 'Destino revisado antes del retiro.');
+        }
+        $consulta = fn () => ReservaBandaManiobra::where('maniobra_operacional_id', $c['tareas'][0]->maniobra_operacional_id)->orderBy('id');
+        $historial = $consulta()->get()->toArray();
+        $this->assertCount(3, $historial);
+        $planes = app(ServicioPlanesOperacionales::class);
+        $planes->liberar($c['tareas'][0]->refresh(), $c['usuarios'][0], $c['dispositivos'][0]);
+
+        $planes->asumir($c['tareas'][0]->refresh(), $c['usuarios'][0], $c['dispositivos'][0]);
+
+        $this->assertSame($historial, $consulta()->get()->toArray());
+        $this->assertSame('asumida', $c['tareas'][0]->refresh()->estado->value);
+        $this->materializar($c, 0, $this->snapshot($c, 0))->assertJsonCount(1, 'data.aceptadas');
+        $sesion = $sesiones->abrirParaTarea($c['camara'], $c['usuarios'][0], $c['dispositivos'][0], $c['tareas'][0]->refresh());
+        $this->assertSame(1, $consulta()->whereNotNull('clave_bloqueo')->count());
+        $this->assertSame($sesion->id, $consulta()->whereNotNull('clave_bloqueo')->sole()->sesion_estiba_id);
+        $this->assertSame($historial, $consulta()->where('id', '!=', $consulta()->whereNotNull('clave_bloqueo')->sole()->id)->get()->toArray());
+
+        $planes->iniciar($c['tareas'][0]->refresh(), $c['usuarios'][0], $c['dispositivos'][0]);
+        app(ServicioMovimientoEstiba::class)->ubicar((string) Str::uuid(), $c['folios'][0]->numero_folio,
+            TipoBulto::Pallet, $c['posiciones'][0], $sesion, $c['usuarios'][0], $c['dispositivos'][0],
+            $c['camara']->refresh()->version_plano, now(), tareaMovimiento: $c['tareas'][0]->refresh());
+        $this->assertSame('completada', $c['tareas'][0]->refresh()->estado->value);
+        $this->assertSame(0, $consulta()->whereNotNull('clave_bloqueo')->count());
+    }
+
+    public function test_retomar_no_reclama_una_banda_historica_que_ahora_usa_otra_labor(): void
+    {
+        $c = $this->contexto();
+        $this->materializar($c, 0, $this->snapshot($c, 0))->assertJsonCount(1, 'data.aceptadas');
+        $sesiones = app(ServicioSesionEstiba::class);
+        $sesion = $sesiones->abrirParaTarea($c['camara'], $c['usuarios'][0], $c['dispositivos'][0], $c['tareas'][0]->refresh());
+        $sesiones->cerrar($sesion, $c['usuarios'][0], 'Revisión previa al retiro.');
+        $planes = app(ServicioPlanesOperacionales::class);
+        $planes->liberar($c['tareas'][0]->refresh(), $c['usuarios'][0], $c['dispositivos'][0]);
+        $this->materializar($c, 1, $this->snapshot($c, 1), $c['posiciones'][0])->assertJsonCount(1, 'data.aceptadas');
+        $otraSesion = $sesiones->abrirParaTarea($c['camara'], $c['usuarios'][1], $c['dispositivos'][1], $c['tareas'][1]->refresh());
+
+        $planes->asumir($c['tareas'][0]->refresh(), $c['usuarios'][0], $c['dispositivos'][0]);
+        $this->materializar($c, 0, $this->snapshot($c, 0), $c['posiciones'][2])->assertJsonCount(1, 'data.aceptadas');
+        $sesiones->abrirParaTarea($c['camara'], $c['usuarios'][0], $c['dispositivos'][0], $c['tareas'][0]->refresh());
+
+        $bloqueo = ReservaBandaManiobra::where('clave_bloqueo', $c['camara']->id.':1:1')->sole();
+        $this->assertSame($otraSesion->id, $bloqueo->sesion_estiba_id);
+        $this->assertSame($c['tareas'][1]->maniobra_operacional_id, $bloqueo->maniobra_operacional_id);
+        $this->assertSame('abierta', $otraSesion->refresh()->estado->value);
+    }
+
     private function contexto(): array
     {
         Temporada::query()->update(['activa' => false]);

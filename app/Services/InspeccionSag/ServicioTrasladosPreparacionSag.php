@@ -230,9 +230,21 @@ class ServicioTrasladosPreparacionSag
     ): ?TareaMovimiento {
         if ($tarea->tipo_movimiento !== TipoMovimiento::UbicacionInicial
             || ! $actual->ubicado_at
-            || $actual->ubicado_at->greaterThan($tarea->created_at)
             || $tarea->movimientos()->lockForUpdate()->exists()) {
             return null;
+        }
+
+        // La orden puede haberse creado en el túnel y quedar obsoleta antes
+        // de que el camarero la inicie. No basta comparar con created_at.
+        if ($actual->ubicado_at->greaterThan($tarea->created_at)) {
+            if ($tarea->iniciada_at) {
+                if (! $actual->ubicado_at->lessThan($tarea->iniciada_at)) {
+                    return null;
+                }
+            } elseif ($tarea->estado === EstadoTareaMovimiento::EnProceso) {
+                // Sin evidencia de cuándo inició, no se interrumpe una labor física.
+                return null;
+            }
         }
 
         return DB::transaction(function () use ($tarea, $actual, $usuario): ?TareaMovimiento {
@@ -258,12 +270,14 @@ class ServicioTrasladosPreparacionSag
                     'posicion_id' => $actual->posicion_id,
                     'movimiento_id' => $actual->movimiento_id,
                     'ubicado_at' => $actual->ubicado_at->toIso8601String(),
+                    'tarea_creada_at' => $tarea->created_at->toIso8601String(),
+                    'tarea_iniciada_at' => $tarea->iniciada_at?->toIso8601String(),
                     'corregido_at' => now()->toIso8601String(),
                     'corregido_por_user_id' => $usuario->id,
                 ],
             ];
-            // La ubicación precede a esta orden de ingreso imposible: iniciar
-            // la orden no creó un movimiento físico. Solo en este caso se
+            // La ubicación precede al inicio de esta orden de ingreso imposible:
+            // iniciar la orden no creó un movimiento físico. Solo en este caso se
             // habilita la cancelación normal, dentro de la misma transacción.
             $tarea->update([
                 'estado' => $tarea->estado === EstadoTareaMovimiento::EnProceso
@@ -274,7 +288,7 @@ class ServicioTrasladosPreparacionSag
             $cancelada = $this->planes->cancelarPorReplanificacion(
                 $tarea,
                 $usuario,
-                'Ingreso SAG obsoleto: el pallet ya tenía una ubicación antes de crearse la tarea.',
+                'Ingreso SAG obsoleto: el pallet ya tenía una ubicación antes de iniciar el traslado.',
             );
             if (! $cancelada) {
                 throw new DomainException('No fue posible recuperar la orden SAG; se conserva su estado anterior.');

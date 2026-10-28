@@ -1476,7 +1476,15 @@ class ServicioManiobrasOperacionales
 
     private function bloquearBandas(ManiobraOperacional $maniobra): void
     {
-        foreach ($maniobra->reservasBandas as $reserva) {
+        // Las reservas de sesión se adquieren al abrirla y su cierre es final.
+        // Reactivar su historial haría competir a la maniobra contra sí misma
+        // y volvería a reclamar bandas de destinos anteriores.
+        $reservas = $maniobra->reservasBandas()
+            ->whereNull('sesion_estiba_id')
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+        foreach ($reservas as $reserva) {
             if ($reserva->clave_bloqueo) {
                 continue;
             }
