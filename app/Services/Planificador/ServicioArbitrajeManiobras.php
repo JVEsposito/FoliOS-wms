@@ -98,10 +98,15 @@ class ServicioArbitrajeManiobras
             $cicloConcurrente = $snapshot
                 ? CicloArbitrajeManiobras::query()
                     ->where('snapshot_version', $snapshot)
+                    // La transacción exterior puede conservar un snapshot
+                    // anterior al commit ganador. Ambas lecturas deben ser
+                    // actuales: una cabecera sin sus decisiones no autoriza el inicio.
+                    ->with(['decisiones' => fn ($consulta) => $consulta->lockForUpdate()])
+                    ->lockForUpdate()
                     ->first()
                 : null;
             if ($cicloConcurrente) {
-                return $cicloConcurrente->load('decisiones');
+                return $cicloConcurrente;
             }
 
             throw $excepcion;
