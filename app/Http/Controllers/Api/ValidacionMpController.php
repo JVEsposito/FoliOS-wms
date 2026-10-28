@@ -13,6 +13,7 @@ use App\Models\RecepcionRomana;
 use App\Models\ValidacionMp;
 use App\Models\VariedadValidacion;
 use App\Services\Romana\ServicioInspeccionEnvases;
+use App\Services\Romana\ServicioRepartoEnvases;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\ValidacionMp\ServicioValidacionMp;
 use Carbon\CarbonImmutable;
@@ -130,6 +131,8 @@ class ValidacionMpController extends Controller
                     'id' => $variedad->id, 'nombre' => $variedad->nombre, 'especie' => $variedad->especie?->nombre,
                 ]),
             'motivos' => array_column(MotivoSegregacionMp::cases(), 'value'),
+            // Referencia para sugerir los bins de planta que faltan; no limita lo que se registra.
+            'totes_por_bin' => app(ServicioRepartoEnvases::class)->configuracion($recepcion->especie_validacion_id)['totes_por_bin'],
         ]);
     }
 
@@ -182,6 +185,8 @@ class ValidacionMpController extends Controller
             'segmentos.*.envases.*.tipo_envase' => ['required', Rule::enum(TipoEnvaseRomana::class)],
             'segmentos.*.envases.*.cantidad' => ['required', 'integer', 'min:0', 'max:100000'],
             'segmentos.*.observacion' => ['nullable', 'string', 'max:1000'],
+            'segmentos.*.bins_prestados_planta' => ['nullable', 'integer', 'min:0', 'max:999'],
+            'bins_prestados_planta' => ['nullable', 'integer', 'min:0', 'max:999'],
             'observacion' => ['nullable', 'string', 'max:2000'],
             ...ServicioInspeccionEnvases::reglas(true),
         ]);
@@ -251,6 +256,7 @@ class ValidacionMpController extends Controller
             'dispositivo' => $validacion->dispositivo ? ['id' => $validacion->dispositivo->id, 'codigo' => $validacion->dispositivo->codigo] : null,
             'tarjas_verificadas' => $validacion->tarjas_verificadas,
             'requiere_segregacion' => $validacion->requiere_segregacion,
+            'bins_prestados_planta' => $validacion->bins_prestados_planta,
             'tomada_at' => $validacion->tomada_at?->toAtomString(),
             'validada_at' => $validacion->validada_at?->toAtomString(),
             'observacion' => $validacion->observacion,
@@ -262,6 +268,7 @@ class ValidacionMpController extends Controller
                 'cuartel' => $segmento->cuartel,
                 'variedad' => $segmento->variedad_snapshot,
                 'estado' => $segmento->estado,
+                'bins_prestados_planta' => $segmento->bins_prestados_planta,
                 'envases' => $segmento->envases->map(fn ($envase): array => ['tipo_envase' => $envase->tipo_envase->value, 'cantidad' => $envase->cantidad])->values(),
             ])->values(),
         ];

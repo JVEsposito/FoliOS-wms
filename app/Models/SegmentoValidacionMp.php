@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
     'validacion_mp_id', 'secuencia', 'motivos', 'csg_validacion_id', 'csg_snapshot',
-    'cuartel', 'variedad_validacion_id', 'variedad_snapshot', 'estado', 'observacion',
+    'cuartel', 'variedad_validacion_id', 'variedad_snapshot', 'bins_prestados_planta', 'estado', 'observacion',
 ])]
 class SegmentoValidacionMp extends Model
 {
@@ -46,6 +46,6 @@ class SegmentoValidacionMp extends Model
 
     protected function casts(): array
     {
-        return ['secuencia' => 'integer', 'motivos' => 'array'];
+        return ['secuencia' => 'integer', 'motivos' => 'array', 'bins_prestados_planta' => 'integer'];
     }
 }

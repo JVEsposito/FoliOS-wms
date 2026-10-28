@@ -16,9 +16,18 @@ enum TipoMovimientoEnvase: string
     case AperturaCuenta = 'apertura_cuenta';
     case AjusteCuenta = 'ajuste_cuenta';
     case ReversionAjusteCuenta = 'reversion_ajuste_cuenta';
+    // Bins de la planta que completan una recepción con más totes de los que caben en sus
+    // bins. No salen de la planta: el préstamo y su devolución son internos.
+    case PrestamoInterno = 'prestamo_interno';
+    case DevolucionPrestamoInterno = 'devolucion_prestamo_interno';
 
     public function esAjusteCuenta(): bool
     {
         return in_array($this, [self::AperturaCuenta, self::AjusteCuenta, self::ReversionAjusteCuenta], true);
+    }
+
+    public function esPrestamoInterno(): bool
+    {
+        return in_array($this, [self::PrestamoInterno, self::DevolucionPrestamoInterno], true);
     }
 }

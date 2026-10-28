@@ -23,6 +23,7 @@ use App\Models\SegmentoValidacionMp;
 use App\Models\User;
 use App\Models\ValidacionMp;
 use App\Models\VariedadValidacion;
+use App\Services\Envases\ServicioPrestamoInternoEnvases;
 use App\Services\Romana\ServicioInspeccionEnvases;
 use App\Services\Romana\ServicioRepartoEnvases;
 use App\Services\Temporadas\GuardiaTemporadaActiva;
@@ -157,8 +158,14 @@ class ServicioValidacionMp
                 throw ValidationException::withMessages(['tarjas_verificadas' => 'Confirma el chequeo visual de las tarjas de campo.']);
             }
             $requiereSegregacion = $esFruta && (bool) ($datos['requiere_segregacion'] ?? false);
+            // Bins de la planta que completan la carga cuando el campo manda más totes de los que
+            // caben en sus bins. Se prestan a la cuenta del cliente y se devuelven en el destare.
+            $binsPlanta = (int) ($datos['bins_prestados_planta'] ?? 0);
+            if ($binsPlanta > 0 && ! $esFruta) {
+                throw ValidationException::withMessages(['bins_prestados_planta' => 'Los bins de planta solo se agregan a recepciones con fruta.']);
+            }
             $segmentos = $esFruta
-                ? $this->prepararSegmentos($validacion, $recepcion, $datos, $cantidades, $requiereSegregacion)
+                ? $this->prepararSegmentos($validacion, $recepcion, $datos, $cantidades, $requiereSegregacion, $binsPlanta)
                 : [];
             $tiposReparto = $recepcion->peso_neto !== null
                 ? app(ServicioRepartoEnvases::class)->tipos($recepcion)
@@ -175,6 +182,13 @@ class ServicioValidacionMp
                 $detalle->update(['cantidad_validada' => $cantidadValidada]);
                 $this->crearMovimiento($recepcion, $detalle->tipo_envase->value, $detalle->cantidad_declarada, $cantidadValidada, $usuario, $ahora);
             }
+            $prestamos = app(ServicioPrestamoInternoEnvases::class);
+            if ($prestamos->prestar($recepcion, $binsPlanta, $usuario, $ahora, $validacion->id)
+                && $recepcion->estado === EstadoRecepcionRomana::Cerrado) {
+                // Pesaje acumulativo: Romana cerró antes de validar y el camión ya salió con sus
+                // envases, así que el préstamo se devuelve en el mismo momento.
+                $prestamos->devolver($recepcion, $usuario, $ahora);
+            }
             foreach ($segmentos as $segmento) {
                 $this->guardarSegmento($validacion, $recepcion, $segmento);
             }
@@ -186,6 +200,7 @@ class ServicioValidacionMp
                 'estado' => EstadoValidacionMp::Validada,
                 'tarjas_verificadas' => $esFruta ? true : null,
                 'requiere_segregacion' => $requiereSegregacion,
+                'bins_prestados_planta' => $binsPlanta,
                 'validada_at' => $ahora,
                 'observacion' => $datos['observacion'] ?? null,
             ]);
@@ -205,12 +220,14 @@ class ServicioValidacionMp
         array $datos,
         $cantidades,
         bool $requiereSegregacion,
+        int $binsPlanta,
     ): array {
         if (! $requiereSegregacion) {
             return [[
                 'motivos' => [],
                 'csg_validacion_id' => $datos['csg_validacion_id'] ?? null,
                 'variedad_validacion_id' => $datos['variedad_validacion_id'] ?? null,
+                'bins_prestados_planta' => $binsPlanta,
                 'envases' => $cantidades->map(fn (array $envase, string $tipo): array => [
                     'tipo_envase' => $tipo,
                     'cantidad' => (int) $envase['cantidad_validada'],
@@ -262,6 +279,9 @@ class ServicioValidacionMp
                 throw ValidationException::withMessages(['segmentos' => "La distribución de {$tipo} entre segmentos no coincide con lo validado."]);
             }
         }
+        if (array_sum(array_map(fn (array $segmento): int => (int) ($segmento['bins_prestados_planta'] ?? 0), $segmentos)) !== $binsPlanta) {
+            throw ValidationException::withMessages(['segmentos' => 'Los bins de planta de los segmentos no suman el total agregado a la recepción.']);
+        }
 
         return $segmentos;
     }
@@ -297,6 +317,7 @@ class ServicioValidacionMp
             'cuartel' => filled($segmento['cuartel'] ?? null) ? trim($segmento['cuartel']) : null,
             'variedad_validacion_id' => $variedad?->id,
             'variedad_snapshot' => $variedad?->nombre,
+            'bins_prestados_planta' => (int) ($segmento['bins_prestados_planta'] ?? 0),
             'estado' => 'pendiente_lote',
             'observacion' => $segmento['observacion'] ?? null,
         ]);

@@ -6,6 +6,7 @@ use App\Enums\ConceptoEnvasesRomana;
 use App\Enums\EstadoRecepcionRomana;
 use App\Enums\EstadoValidacionMp;
 use App\Enums\TipoEnvaseRomana;
+use App\Enums\TipoMovimientoEnvase;
 use App\Enums\TipoRecepcionRomana;
 use App\Enums\TipoServicioRomana;
 use App\Http\Controllers\Controller;
@@ -21,9 +22,11 @@ use App\Http\Requests\RegistrarPesajeEnvasesRomanaRequest;
 use App\Models\Cliente;
 use App\Models\EspecieValidacion;
 use App\Models\EventoRecepcionRomana;
+use App\Models\MovimientoEnvase;
 use App\Models\PesajeEnvaseRecepcionRomana;
 use App\Models\RecepcionRomana;
 use App\Models\Temporada;
+use App\Services\Envases\ServicioPrestamoInternoEnvases;
 use App\Services\Romana\GeneradorAvisoReciboPdf;
 use App\Services\Romana\ServicioInspeccionEnvases;
 use App\Services\Romana\ServicioRecepcionRomana;
@@ -428,6 +431,12 @@ class RecepcionRomanaController extends Controller
         ];
 
         if ($conEventos) {
+            $prestamo = app(ServicioPrestamoInternoEnvases::class)->prestamo($recepcion);
+            $datos['bins_prestados_planta'] = $prestamo ? [
+                'cantidad' => $prestamo->cantidad,
+                'devuelto' => MovimientoEnvase::query()->where('movimiento_origen_id', $prestamo->id)
+                    ->where('tipo_movimiento', TipoMovimientoEnvase::DevolucionPrestamoInterno->value)->exists(),
+            ] : null;
             $datos['lecturas_pesaje_envases'] = $recepcion->relationLoaded('pesajesEnvases')
                 ? $recepcion->pesajesEnvases
                     ->map(fn (PesajeEnvaseRecepcionRomana $pesaje): array => [

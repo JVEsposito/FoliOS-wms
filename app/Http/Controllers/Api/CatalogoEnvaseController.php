@@ -32,6 +32,7 @@ class CatalogoEnvaseController extends Controller
         Gate::authorize('administrar-accesos');
         $fruta = array_column(array_filter(TipoEnvaseRomana::catalogo(), fn ($t): bool => $t['contiene_fruta']), 'codigo');
         $datos = $request->validate(['sugerido' => ['nullable', Rule::in($fruta)],
+            'totes_por_bin' => ['nullable', 'integer', 'min:1', 'max:200'],
             'referencias' => ['required', 'array'], 'referencias.*.tipo_envase' => ['required', 'distinct', Rule::in($fruta)],
             'referencias.*.peso_referencia' => ['required', 'numeric', 'min:0.001', 'max:100000', 'decimal:0,3']]);
         DB::transaction(function () use ($datos, $especieValidacion, $request): void {
@@ -42,7 +43,10 @@ class CatalogoEnvaseController extends Controller
                     ...$fila, 'especie_validacion_id' => $especieValidacion->id, 'actualizado_por_user_id' => $request->user()->id, 'created_at' => now(), 'updated_at' => now()]);
             }
             DB::table('preferencias_envase_especie')->updateOrInsert(['especie_validacion_id' => $especieValidacion->id], [
-                'tipo_envase' => $datos['sugerido'] ?? null, 'actualizado_por_user_id' => $request->user()->id, 'created_at' => now(), 'updated_at' => now()]);
+                'tipo_envase' => $datos['sugerido'] ?? null,
+                // Una pantalla anterior que no envía la referencia no la borra.
+                ...(array_key_exists('totes_por_bin', $datos) ? ['totes_por_bin' => $datos['totes_por_bin']] : []),
+                'actualizado_por_user_id' => $request->user()->id, 'created_at' => now(), 'updated_at' => now()]);
         });
 
         return response()->json(['data' => app(ServicioRepartoEnvases::class)->configuracion($especieValidacion->id)]);

@@ -115,6 +115,7 @@
                         <label class="field"><span>Especie</span><select name="especie_id"></select></label>
                         <label class="field"><span>Envase sugerido para el reparto</span><select name="sugerido"></select></label>
                         <div class="admin-form__grid" id="containerReferenceRows"></div>
+                        <label class="field"><span>Totes por bin</span><input type="number" name="totes_por_bin" min="1" max="200" step="1" placeholder="Sin referencia"><small>La PDA sugiere los bins de planta que faltan cuando llegan más totes de los que caben en los bins recibidos. No limita lo que se registra.</small></label>
                         <p class="form-error" id="containerReferenceError" role="status"></p><button class="primary-button" type="submit">Guardar referencias</button>
                     </form>
                     <div class="is-hidden" id="recordFormatHistory"><h3 id="recordFormatHistoryTitle">Historial del formato</h3><div class="admin-table-scroll"><table class="admin-table"><thead><tr><th>Fecha y usuario</th><th>Anterior</th><th>Nuevo</th></tr></thead><tbody id="recordFormatHistoryBody"></tbody></table></div><button class="secondary-button" id="recordFormatHistoryMore" type="button">Ver más cambios</button></div>

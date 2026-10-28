@@ -222,6 +222,7 @@ class MateriaPrimaController extends Controller
                     'secuencia' => $segmento->secuencia,
                     'estado' => $segmento->estado,
                     'motivos' => $segmento->motivos,
+                    'bins_prestados_planta' => $segmento->bins_prestados_planta,
                     'csg' => $segmento->csg ? [
                         'id' => $segmento->csg->id,
                         'codigo' => $segmento->csg->codigo,

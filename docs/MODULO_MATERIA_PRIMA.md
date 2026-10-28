@@ -57,6 +57,8 @@ Cada lote registra:
 
 Los envases asignados entre borradores y lotes vigentes no pueden superar lo confirmado en el segmento.
 
+Si Validación MP agregó bins de planta al segmento, el lote los suma a sus envases primarios: un segmento con 1 bin, 31 totes y 1 bin de planta crea un lote con 2 bins primarios y 31 totes secundarios. Hidrocooler, cámara y Fruta a proceso trabajan con esos 2 bins. El detalle de envases, la tara, los kilos y el reparto del neto siguen usando solo los envases recibidos, porque el bin de planta llegó vacío. La oficina muestra «+ 1 bin de planta» en el segmento y en el lote.
+
 ## Número de lote
 
 El número se escribe manualmente según la información de la exportadora. Debe ser único entre lotes vigentes para la combinación temporada y cliente.

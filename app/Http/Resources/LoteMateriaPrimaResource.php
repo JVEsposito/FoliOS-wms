@@ -67,6 +67,8 @@ class LoteMateriaPrimaResource extends JsonResource
                 'cantidad_primarios' => $this->cantidad_envases_primarios,
                 'secundario' => $this->envase_secundario?->value,
                 'cantidad_secundarios' => $this->cantidad_envases_secundarios,
+                // Bins de planta incluidos en cantidad_primarios; no están en el detalle recibido.
+                'bins_prestados_planta' => $this->bins_prestados_planta,
                 'detalle' => $this->whenLoaded('envasesDetalle', fn () => $this->envasesDetalle
                     ->map(fn ($envase): array => [
                         'tipo_envase' => $envase->tipo_envase->value,
