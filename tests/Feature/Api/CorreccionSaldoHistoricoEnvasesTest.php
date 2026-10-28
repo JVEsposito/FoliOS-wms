@@ -43,6 +43,8 @@ class CorreccionSaldoHistoricoEnvasesTest extends TestCase
         $filas = $this->getJson('/api/envases/cuenta-corriente/movimientos?cliente_id='.$cliente->id)->assertOk()->json('data');
         $this->assertSame(-138, collect($filas)->firstWhere('id', $m->id)['impacto_cuenta_vigente']);
         $this->getJson('/api/envases/cuenta-corriente/estado-cuenta?cliente_id='.$cliente->id.'&temporada_id='.$temporada->id)->assertOk();
+        $this->postJson('/api/romana/recepciones/'.$r->id.'/anular', ['operacion_id' => (string) Str::uuid(),
+            'version_conocida' => $r->version, 'motivo' => 'No duplicar el efecto de una corrección anterior.'])->assertConflict();
         $this->assertDatabaseCount('movimientos_envases', 3);
     }
 
@@ -76,6 +78,23 @@ class CorreccionSaldoHistoricoEnvasesTest extends TestCase
         $this->postJson($this->ruta($m), $this->datos())->assertConflict();
         $temporada->update(['activa' => false]);
         $this->postJson($this->ruta($m), $this->datos())->assertConflict();
+    }
+
+    public function test_corrige_una_apertura_y_no_permite_revertir_el_importe_original(): void
+    {
+        [, , $cliente, $temporada, $admin] = $this->ingresoEnvases(false);
+        $movimiento = $this->postJson('/api/envases/cuenta-corriente/ajustes', ['operacion_id' => (string) Str::uuid(),
+            'temporada_id' => $temporada->id, 'cliente_id' => $cliente->id, 'tipo_movimiento' => 'apertura_cuenta',
+            'tipo_envase' => 'bins', 'propiedad' => 'arrendada', 'cantidad' => 138,
+            'fecha' => now(config('app.operational_timezone'))->toDateString(), 'referencia' => 'Saldo anterior',
+            'motivo' => 'Registro de una deuda anterior de envases.'])->assertCreated()->json('data.id');
+        $m = MovimientoEnvase::findOrFail($movimiento);
+        $this->postJson($this->ruta($m), $this->datos())->assertCreated();
+        $this->postJson('/api/envases/cuenta-corriente/movimientos/'.$m->id.'/revertir-ajuste', [
+            'operacion_id' => (string) Str::uuid(), 'fecha' => now(config('app.operational_timezone'))->toDateString(),
+            'motivo' => 'No revertir una apertura con saldo corregido.'])->assertConflict();
+        $this->assertSame(-138, $this->saldo('signo_cuenta', $cliente));
+        $this->assertSame(0, $this->saldo('signo_existencia', $cliente));
     }
 
     private function datos(array $extras = []): array

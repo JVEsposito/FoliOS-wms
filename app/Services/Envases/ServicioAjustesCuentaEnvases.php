@@ -69,7 +69,7 @@ class ServicioAjustesCuentaEnvases
             }
             if (MovimientoEnvase::query()->where('movimiento_origen_id', $origen->id)
                 ->whereIn('tipo_movimiento', [TipoMovimientoEnvase::ReversionAjusteCuenta->value, TipoMovimientoEnvase::CorreccionCuenta->value])->exists()) {
-                throw new ConflictoOperacion('El asiento ya tiene una reversa.');
+                throw new ConflictoOperacion('El asiento ya tiene una reversa o corrección de saldo.');
             }
             $fecha = $this->fecha($payload['fecha'], $temporada);
             if ($fecha->lt($origen->ocurrido_at)) {

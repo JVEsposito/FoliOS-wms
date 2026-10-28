@@ -105,14 +105,14 @@
             </section>
         </main>
 
-        <dialog class="review-dialog" id="annulReceptionDialog" aria-labelledby="annulReceptionTitle">
-            <form id="annulReceptionForm">
-                <header><p class="eyebrow">CORRECCIÓN ADMINISTRATIVA</p><h2 id="annulReceptionTitle">Anular recepción</h2></header>
+        <dialog class="weighbridge-dialog weighbridge-dialog--compact" id="annulReceptionDialog" aria-labelledby="annulReceptionTitle">
+            <form class="weighbridge-dialog__shell" id="annulReceptionForm">
+                <header class="weighbridge-dialog__heading"><div><p class="eyebrow">CORRECCIÓN ADMINISTRATIVA</p><h2 id="annulReceptionTitle">Anular recepción</h2></div></header>
                 <p id="annulReceptionSummary"></p>
                 <p>Se retirará de las recepciones vigentes y de los pendientes de Validación MP. Los ingresos confirmados se revertirán con trazabilidad. Si tiene lotes, reservas o correcciones vinculadas, se indicará qué debe resolverse.</p>
-                <label><span>Motivo de anulación</span><textarea name="motivo" required minlength="10" maxlength="2000" rows="3"></textarea></label>
+                <label class="field"><span>Motivo de anulación</span><textarea name="motivo" required minlength="10" maxlength="2000" rows="3"></textarea></label>
                 <p class="form-error" id="annulReceptionError" role="alert"></p>
-                <footer><button class="secondary-button" id="annulReceptionCancel" type="button">Volver</button><button class="primary-button" type="submit">Confirmar anulación</button></footer>
+                <footer class="dialog-actions"><button class="secondary-button" id="annulReceptionCancel" type="button">Volver</button><button class="primary-button" type="submit">Confirmar anulación</button></footer>
             </form>
         </dialog>
         <dialog class="weighbridge-dialog" id="receptionDialog">

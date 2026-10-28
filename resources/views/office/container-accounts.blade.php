@@ -68,10 +68,10 @@
                 <label><span>Cantidad correcta de envases</span><input name="cantidad" type="number" min="0" max="100000000" step="1" required></label>
                 <p id="historicalBalancePreview" aria-live="polite"></p>
                 <p>Esta corrección modifica solo la cuenta. No ingresa, retira ni reserva existencia física. El original y el motivo se conservan en el kardex.</p>
-                <label><input name="es_saldo_historico" type="checkbox" required> Confirmo que corresponde a un saldo anterior, sin movimiento físico.</label>
+                <label class="historical-confirmation"><input name="es_saldo_historico" type="checkbox" required> Confirmo que corresponde a un saldo anterior, sin movimiento físico.</label>
                 <label><span>Motivo de corrección</span><textarea name="motivo" required minlength="10" maxlength="2000" rows="3"></textarea></label>
                 <p class="form-error" id="historicalBalanceError" role="alert"></p>
-                <footer class="review-dialog__actions"><button class="secondary-button" id="historicalBalanceCancel" type="button">Volver</button><button class="primary-button" type="submit">Confirmar corrección</button></footer>
+                <footer class="dialog-actions"><button class="secondary-button" id="historicalBalanceCancel" type="button">Volver</button><button class="primary-button" type="submit">Confirmar corrección</button></footer>
             </form>
         </dialog>
         <dialog class="review-dialog property-dialog" id="accountAdjustmentDialog" aria-labelledby="accountAdjustmentTitle">

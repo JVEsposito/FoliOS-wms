@@ -14,7 +14,7 @@ use Tests\TestCase;
 
 class AnulacionRecepcionRomanaTest extends TestCase
 {
-    use PreparaCorreccionesEnvases, RefreshDatabase;
+    use PreparaCorreccionesEnvases, RefreshDatabase, \Tests\Concerns\PreparaRecepcionEnvases;
 
     public function test_anula_documental_cerrada_pendiente_y_la_retira_de_las_bandejas(): void
     {
@@ -83,6 +83,16 @@ class AnulacionRecepcionRomanaTest extends TestCase
                 'propiedad' => 'arrendada', 'movimiento_origen_id' => $m->id]]])->assertCreated();
         $this->postJson('/api/romana/recepciones/'.$r->id.'/anular', $this->datos($r->refresh()->version))->assertConflict();
         $this->assertSame(138, $this->saldo('signo_existencia', $cliente));
+    }
+
+    public function test_los_segmentos_de_fruta_bloquean_la_anulacion_antes_de_lotizar(): void
+    {
+        $contexto = $this->preparar(['bins' => 4]);
+        $admin = User::factory()->create(['rol' => RolUsuario::Administrador]);
+        $r = $contexto['recepcion']->refresh();
+        $this->actingAs($admin, 'sanctum')->postJson('/api/romana/recepciones/'.$r->id.'/anular', $this->datos($r->version))
+            ->assertConflict()->assertJsonPath('message', 'La recepción tiene segmentos o lotes de materia prima vinculados. Requiere conciliación antes de anular.');
+        $this->assertNotSame('anulada', $r->refresh()->estado->value);
     }
 
     private function datos(int $version): array

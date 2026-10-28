@@ -34,6 +34,8 @@ test('administrador anula con motivo, conserva el intento al fallar y consulta e
                 }
                 if (path === '/api/acceso-oficina') return route.fulfill({ json: { usuario: identity } });
                 if (path === '/api/oficina/contexto') return route.fulfill({ json: { data: { planta: 'Prueba', temporada: reception.temporada } } });
+                if (path === '/api/envases/catalogo') return route.fulfill({ json: { data: [{ codigo: 'tote', nombre: 'Tote', contiene_fruta: true }] } });
+                if (path === '/api/romana/porteria/resumen') return route.fulfill({ json: { data: { pendientes: 0, recientes: [], consultado_at: '2026-10-28T12:00:00Z' } } });
                 if (path.endsWith('/romana/catalogos')) return route.fulfill({ json: { temporadas: [{ ...reception.temporada, activa: true }], clientes: [reception.cliente], especies: [], tipos_envase: [{ codigo: 'tote', nombre: 'Tote' }], tipos_servicio: [], tipos_recepcion: [], conceptos_envases: [] } });
                 if (path.endsWith('/anular')) {
                     writes.push(req.postDataJSON());
@@ -51,7 +53,7 @@ test('administrador anula con motivo, conserva el intento al fallar y consulta e
             });
             const page = await context.newPage(); page.on('pageerror', (e) => errors.push(e.message));
             await page.goto('http://localhost/oficina/romana');
-            await page.locator('[data-reception-id="recepcion"]').click();
+            await page.locator('tr.rec-row[data-reception-id="recepcion"]').click();
             await page.locator('#annulReceptionButton').click();
             await page.locator('#annulReceptionForm [name="motivo"]').fill('Recepción de prueba ingresada por equivocación.');
             await page.locator('#annulReceptionForm [type="submit"]').click();
@@ -62,7 +64,7 @@ test('administrador anula con motivo, conserva el intento al fallar y consulta e
             assert.equal(writes[0].version_conocida, 3);
             await page.locator('#receptionFilters [name="estado"]').selectOption('anulada');
             await page.locator('#receptionFilters [type="submit"]').click();
-            await page.locator('[data-reception-id="recepcion"]').click();
+            await page.locator('tr.rec-row[data-reception-id="recepcion"]').click();
             assert.match(await page.locator('#detailTimeline').textContent(), /Recepción de prueba ingresada por equivocación/);
             assert.equal(await page.locator('#annulReceptionButton').isHidden(), true);
             assert.deepEqual(errors, []);
