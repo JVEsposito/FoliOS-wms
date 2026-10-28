@@ -217,6 +217,17 @@ class RecepcionRomanaController extends Controller
         return $this->show($recepcion->refresh());
     }
 
+    public function destroy(Request $request, RecepcionRomana $recepcion, ServicioAnulacionRecepcionRomana $servicio): JsonResponse
+    {
+        Gate::authorize('eliminar-recepciones-romana');
+        $datos = $request->validate(['operacion_id' => ['required', 'uuid'],
+            'version_conocida' => ['required', 'integer', 'min:1'], 'motivo' => ['required', 'string', 'min:10', 'max:2000']]);
+        $datos['version_conocida'] = (int) $datos['version_conocida'];
+        $servicio->eliminar($recepcion, $datos, $request->user());
+
+        return $this->show($recepcion->refresh());
+    }
+
     public function confirmarIngreso(
         ConfirmarIngresoRomanaRequest $request,
         RecepcionRomana $recepcion,
@@ -423,6 +434,9 @@ class RecepcionRomanaController extends Controller
             'version' => $recepcion->version,
             'puede_editar' => $puedeEditar,
             'puede_anular' => Gate::allows('anular-recepciones-romana') && $recepcion->estado !== EstadoRecepcionRomana::Anulada,
+            'puede_eliminar' => Gate::allows('eliminar-recepciones-romana') && $recepcion->estado !== EstadoRecepcionRomana::Anulada,
+            'eliminada' => $recepcion->eliminada_at !== null,
+            'eliminada_at' => $recepcion->eliminada_at?->toAtomString(),
             'correccion_administrativa_disponible' => $recepcion->estado !== EstadoRecepcionRomana::Anulada && $recepcion->estado_validacion_mp === EstadoValidacionMp::Pendiente
                 && (! $esPesajeEnvases || $cantidadPesada === 0),
             'puede_confirmar_ingreso' => $recepcion->estado === EstadoRecepcionRomana::EnBasculaIngreso,

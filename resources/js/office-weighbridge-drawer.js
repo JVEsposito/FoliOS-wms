@@ -189,6 +189,7 @@ function initializeWeighbridgeDrawer() {
     });
 
     function rememberRow(event) {
+        if (event.target.closest('button')) return;
         if (event.type === 'keydown' && !['Enter', ' '].includes(event.key)) return;
         const row = event.target.closest('[data-reception-id]');
         if (!row) return;

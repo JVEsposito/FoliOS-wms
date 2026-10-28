@@ -14,7 +14,7 @@ const elements = {
     entryCount: byId('entryCount'), containerWeighingCount: byId('containerWeighingCount'), exitCount: byId('exitCount'), closedCount: byId('closedCount'), netWeight: byId('netWeight'),
     paginationSummary: byId('paginationSummary'), previousPage: byId('previousPageButton'), nextPage: byId('nextPageButton'),
     detail: byId('receptionDetail'), detailTitle: byId('detailTitle'), detailSubtitle: byId('detailSubtitle'), detailFacts: byId('detailFacts'), detailTimeline: byId('detailTimeline'), weightBalance: byId('weightBalance'),
-    annulReception: byId('annulReceptionButton'), annulDialog: byId('annulReceptionDialog'), annulForm: byId('annulReceptionForm'), annulSummary: byId('annulReceptionSummary'), annulError: byId('annulReceptionError'),
+    deleteReception: byId('deleteReceptionButton'), annulReception: byId('annulReceptionButton'), annulDialog: byId('annulReceptionDialog'), annulForm: byId('annulReceptionForm'), annulSummary: byId('annulReceptionSummary'), annulError: byId('annulReceptionError'),
     editReception: byId('editReceptionButton'), confirmEntry: byId('confirmEntryButton'), addContainerWeighing: byId('addContainerWeighingButton'), closeReception: byId('closeReceptionButton'), correctExit: byId('correctExitButton'), downloadReceipt: byId('downloadReceiptButton'), closeDetail: byId('closeDetailButton'),
     containerWeighingPanel: byId('containerWeighingPanel'), containerWeighingProgress: byId('containerWeighingProgress'), containerWeighingList: byId('containerWeighingList'),
     receptionDialog: byId('receptionDialog'), receptionForm: byId('receptionForm'), receptionDialogTitle: byId('receptionDialogTitle'), receptionDialogDescription: byId('receptionDialogDescription'), receptionFormError: byId('receptionFormError'), saveReception: byId('saveReceptionButton'),
@@ -65,6 +65,7 @@ function formatWeight(value, fallback = '—') {
 function label(value) {
     if (containerLabel(value)) return containerLabel(value);
     const labels = {
+        recepcion_eliminada: 'Recepción eliminada por el administrador',
         mismos: 'Se va con los mismos', diferentes: 'Se va con más o menos', vacio: 'Se va vacío',
         en_bascula_ingreso: 'En báscula ingreso', en_pesaje_envases: 'Pesaje acumulativo', en_bascula_salida: 'Pendiente de destare', cerrado: 'Cerrado',
         anulada: 'Anulada', recepcion_anulada: 'Recepción anulada', ingreso_registrado: 'Ingreso registrado', ingreso_actualizado: 'Antecedentes de ingreso actualizados', correccion_administrativa: 'Corrección administrativa', ingreso_confirmado: 'Ingreso confirmado', pesaje_envases_registrado: 'Tanda de envases pesada', pesaje_envases_anulado: 'Tanda de pesaje anulada', recepcion_cerrada: 'Recepción cerrada', salida_envases_corregida: 'Salida de envases corregida',
@@ -77,6 +78,7 @@ function stateBadge(status) {
     return `<span class="state-badge state-badge--${style}">${escapeHtml(label(status))}</span>`;
 }
 function receptionStateLabel(reception, status) {
+    if (status === 'anulada' && reception.eliminada) return 'Eliminada';
     if (reception.tipo_recepcion !== 'solo_envases') return label(status);
     if (status === 'en_bascula_ingreso') return 'Ingreso documental';
     if (status === 'en_bascula_salida') return 'Listo para cerrar';
@@ -209,7 +211,7 @@ function renderList(payload) {
         const truck = [reception.patente_camion, reception.tipo_camion ? label(reception.tipo_camion).toLowerCase() : null].filter(Boolean).join(', ');
         return `
         <tr class="rec-row" data-reception-id="${escapeHtml(reception.id)}" tabindex="0">
-            <td><span class="rec-k">Recepción</span><strong class="rec-code">${escapeHtml(reception.numero_recepcion || 'Ingreso abierto')}</strong><small>Ingreso ${escapeHtml(formatTime(reception.ingreso_at))}</small></td>
+            <td><span class="rec-k">Recepción</span><span class="rec-title-row"><strong class="rec-code">${escapeHtml(reception.numero_recepcion || 'Ingreso abierto')}</strong>${reception.puede_eliminar ? `<button type="button" class="secondary-button rec-delete-button" data-delete-reception-id="${escapeHtml(reception.id)}" aria-label="Eliminar recepción ${escapeHtml(reception.numero_recepcion)}">Eliminar</button>` : ''}</span><small>Ingreso ${escapeHtml(formatTime(reception.ingreso_at))}</small></td>
             <td><span class="rec-k">Cliente y guía</span><strong>${escapeHtml(reception.cliente.nombre)}</strong><small>Guía <span class="rec-mono">${escapeHtml(reception.numero_guia_despacho)}</span></small></td>
             <td><span class="rec-k">Transporte y declaración</span><strong>${escapeHtml(truck)}</strong><small>${escapeHtml(envasesLabel(reception))} · ${escapeHtml(reception.nombre_conductor)}</small></td>
             <td class="rec-weight"><span class="rec-k">${escapeHtml(weightLabel)}</span><strong class="rec-code">${escapeHtml(weightValue)}</strong></td>
@@ -306,7 +308,8 @@ function renderDetail(reception) {
     const canCorrect = state.identity?.puede_corregir_recepciones_romana === true
         && reception.correccion_administrativa_disponible
         && !reception.puede_editar;
-    elements.annulReception.classList.toggle('is-hidden', !reception.puede_anular);
+    elements.annulReception.classList.toggle('is-hidden', !reception.puede_anular || Boolean(reception.puede_eliminar));
+    elements.deleteReception.classList.toggle('is-hidden', !reception.puede_eliminar);
     elements.editReception.textContent = canCorrect ? 'Corregir recepción' : 'Editar ingreso';
     elements.editReception.classList.toggle('is-hidden', (!canOperate || !reception.puede_editar) && !canCorrect);
     elements.confirmEntry.classList.toggle('is-hidden', !canOperate || !reception.puede_confirmar_ingreso);
@@ -453,26 +456,37 @@ elements.receptionForm.addEventListener('submit', async (event) => {
     finally { setBusy(false); }
 });
 
-elements.annulReception.addEventListener('click', () => {
-    if (!state.selected?.puede_anular) return;
-    const reception = state.selected;
-    state.annulment = { id: reception.id, operacion_id: operationUuid(), version_conocida: reception.version };
+function openReceptionRemoval(reception, deleting = false) {
+    if (!reception || !(deleting ? reception.puede_eliminar : reception.puede_anular)) return;
+    state.annulment = { id: reception.id, operacion_id: operationUuid(), version_conocida: reception.version, deleting, submitting: false };
     elements.annulForm.reset(); elements.annulError.textContent = '';
     elements.annulSummary.textContent = `${reception.numero_recepcion} · ${reception.cliente.nombre} · Guía ${reception.numero_guia_despacho} · ${envasesLabel(reception)}`;
+    byId('annulReceptionTitle').textContent = deleting ? 'Eliminar recepción' : 'Anular recepción';
+    byId('annulReceptionDescription').textContent = deleting
+        ? 'La recepción y sus lotes dejarán de estar vigentes. Se corregirán los saldos de envases y se conservará el historial con tu nombre y el motivo.'
+        : 'Se retirará de las recepciones vigentes y de los pendientes de Validación MP. Los ingresos confirmados se revertirán con trazabilidad. Si tiene lotes, reservas o correcciones vinculadas, se indicará qué debe resolverse.';
+    byId('annulReceptionReasonLabel').textContent = deleting ? 'Motivo de eliminación' : 'Motivo de anulación';
+    elements.annulForm.querySelector('[type="submit"]').textContent = deleting ? 'Eliminar recepción' : 'Confirmar anulación';
+    elements.annulForm.querySelector('[type="submit"]').disabled = false;
     elements.annulDialog.showModal();
-});
+}
+elements.annulReception.addEventListener('click', () => openReceptionRemoval(state.selected));
+elements.deleteReception.addEventListener('click', () => openReceptionRemoval(state.selected, true));
 byId('annulReceptionCancel').addEventListener('click', () => elements.annulDialog.close());
 elements.annulForm.addEventListener('submit', async (event) => {
     event.preventDefault();
+    if (!state.annulment || state.annulment.submitting) return;
     const submit = elements.annulForm.querySelector('[type="submit"]');
-    const { id, ...attempt } = state.annulment;
+    const attempt = state.annulment;
+    const { id, operacion_id, version_conocida, deleting } = attempt;
+    attempt.submitting = true;
     submit.disabled = true; elements.annulError.textContent = '';
     try {
-        await api(`/api/romana/recepciones/${id}/anular`, { method: 'POST', body: JSON.stringify({ ...attempt, motivo: elements.annulForm.elements.motivo.value.trim() }) });
+        await api(`/api/romana/recepciones/${id}${deleting ? '' : '/anular'}`, { method: deleting ? 'DELETE' : 'POST', body: JSON.stringify({ operacion_id, version_conocida, motivo: elements.annulForm.elements.motivo.value.trim() }) });
         elements.annulDialog.close(); closeDetail();
-        await loadReceptions({ silent: true }); toast('Recepción anulada. Su historial queda disponible en el filtro Anuladas.');
+        await loadReceptions({ silent: true }); toast(deleting ? 'Recepción eliminada de los registros vigentes. Historial disponible en Anuladas.' : 'Recepción anulada. Su historial queda disponible en el filtro Anuladas.');
     } catch (error) { elements.annulError.textContent = error.message; }
-    finally { submit.disabled = false; }
+    finally { attempt.submitting = false; if (state.annulment === attempt) submit.disabled = false; }
 });
 
 elements.confirmEntry.addEventListener('click', async () => {
@@ -801,8 +815,20 @@ elements.blankWeighingForm.addEventListener('click', async () => {
     }
 });
 
-elements.tableBody.addEventListener('click', (event) => { const row = event.target.closest('[data-reception-id]'); if (row) void selectReception(row.dataset.receptionId); });
-elements.tableBody.addEventListener('keydown', (event) => { const row = event.target.closest('[data-reception-id]'); if (row && ['Enter', ' '].includes(event.key)) { event.preventDefault(); void selectReception(row.dataset.receptionId); } });
+elements.tableBody.addEventListener('click', (event) => {
+    const deletion = event.target.closest('[data-delete-reception-id]');
+    if (deletion) {
+        openReceptionRemoval(state.receptions.find((reception) => reception.id === deletion.dataset.deleteReceptionId), true);
+        return;
+    }
+    const row = event.target.closest('[data-reception-id]');
+    if (row) void selectReception(row.dataset.receptionId);
+});
+elements.tableBody.addEventListener('keydown', (event) => {
+    if (event.target.closest('button')) return;
+    const row = event.target.closest('[data-reception-id]');
+    if (row && ['Enter', ' '].includes(event.key)) { event.preventDefault(); void selectReception(row.dataset.receptionId); }
+});
 elements.filters.addEventListener('submit', async (event) => { event.preventDefault(); state.page = 1; setBusy(true, 'Aplicando filtros…'); try { await loadReceptions({ silent: true }); } catch (error) { toast(error.message, true); } finally { setBusy(false); } });
 elements.previousPage.addEventListener('click', async () => { if (state.page <= 1) return; state.page--; await loadReceptions({ silent: true }); });
 elements.nextPage.addEventListener('click', async () => { if (state.meta && state.page >= state.meta.ultima_pagina) return; state.page++; await loadReceptions({ silent: true }); });

@@ -1552,6 +1552,7 @@ class ServicioRecepcionRomana
         $consulta = RecepcionRomana::query()
             ->where('temporada_id', $temporadaId)
             ->where('cliente_id', $clienteId)
+            ->whereNull('eliminada_at')
             ->where('numero_guia_despacho', $guia);
         if ($ignorarId) {
             $consulta->where('id', '!=', $ignorarId);

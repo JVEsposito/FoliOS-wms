@@ -2,7 +2,7 @@
 // actual dice qué falta; el estado también se lee sin color.
 export function receptionSteps(reception) {
     const status = reception.estado;
-    if (status === 'anulada') return [{ label: 'Recepción anulada', state: 'done' }];
+    if (status === 'anulada') return [{ label: reception.eliminada ? 'Recepción eliminada' : 'Recepción anulada', state: 'done' }];
     const closed = status === 'cerrado';
     const entryDone = status !== 'en_bascula_ingreso';
     if (reception.tipo_recepcion === 'solo_envases') {

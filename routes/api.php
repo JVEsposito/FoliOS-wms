@@ -193,6 +193,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/romana/recepciones/{recepcion}/inspecciones-envases/{tipo}', [InspeccionEnvasesController::class, 'corregir'])->middleware('can:corregir-recepciones-romana');
     Route::put('/romana/recepciones/{recepcion}/corregir', [RecepcionRomanaController::class, 'corregir'])
         ->middleware('can:corregir-recepciones-romana');
+    Route::delete('/romana/recepciones/{recepcion}', [RecepcionRomanaController::class, 'destroy'])
+        ->middleware('can:eliminar-recepciones-romana');
     Route::post('/romana/recepciones/{recepcion}/corregir-salida-envases', [RecepcionRomanaController::class, 'corregirSalidaEnvases'])
         ->middleware('can:corregir-recepciones-romana');
     Route::middleware('can:consultar-cuenta-envases')->prefix('envases/cuenta-corriente')->group(function () {
