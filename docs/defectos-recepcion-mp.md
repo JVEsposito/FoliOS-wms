@@ -31,6 +31,49 @@ El número de guía, cliente, temporada, validador, dispositivo y hora se toman 
 servidor. El mismo UUID y contenido devuelve el registro existente (200); un UUID
 reutilizado para otro contenido devuelve 409. Un registro nuevo devuelve 201.
 
+### Envío de fotos con Expo 57 y consulta de una confirmación pendiente
+
+La app adjunta cada URI mediante `File` de `expo-file-system` y usa explícitamente
+`fetch` de `expo/fetch`. El formato anterior de React Native, `{ uri, name, type }`,
+no es un archivo para el codificador multipart de Expo 57: puede lanzar
+`Unsupported FormDataPart implementation` antes de hacer la solicitud. La app
+mostraba ese fallo como «No se pudo confirmar el envío», aunque la red estuviera
+disponible. La corrección cubre tanto las fotos del defecto de la recepción de
+Romana como la foto opcional de su guía en Validación MP.
+
+Antes de transmitir, se comprueba que el archivo local siga disponible y que su
+tamaño real no supere 5 MiB; el dato opcional del selector no sustituye esa lectura.
+Las respuestas HTTP 413 se muestran como un límite del servidor incluso si Apache
+devuelve HTML. Una foto rechazada por el límite de PHP también tiene un mensaje
+explícito. Estos rechazos permiten corregir las imágenes; no se presentan como una
+confirmación incierta del primer envío.
+
+Si la respuesta se pierde, llega incompleta o el servidor responde 408/5xx, el
+formulario conserva las imágenes y el mismo UUID. **Revisar envío** consulta el
+registro sin volver a subir archivos. **Reintentar envío** hace primero esa consulta:
+si encuentra el registro, lo recupera; si no, reenvía las mismas fotos y UUID con la
+idempotencia existente. Si tampoco se puede consultar, no reenvía ni permite cambiar
+el formulario. Un doble toque no inicia dos solicitudes a la vez.
+
+`GET /api/validacion-mp/recepciones/{recepcion}/defectos?operacion_id={uuid}` devuelve
+únicamente el registro de esa operación, o una lista vacía si aún no aparece. La
+respuesta incluye `operacion_id`; se conservan la temporada activa y la autorización
+del validador asignado. Una lista vacía no cancela un POST que pueda seguir en curso,
+por lo que el formulario continúa conservando el UUID y sus fotos. La captura
+pendiente sigue siendo local a la pantalla: no se conserva al cerrar la aplicación.
+
+Desplegar primero el servidor y luego publicar OTA en los canales que utilicen
+Validación MP (`pda`, `production` y sus variantes de pruebas según la APK instalada).
+No agrega migraciones ni dependencias nativas y conserva el runtime 1.5.0; no requiere
+otra APK. Los límites de PHP deben comprobarse en el `php.ini` efectivo de **Apache**,
+que puede diferir del de la terminal. Se mantienen las recomendaciones de 8M por
+archivo y 32M por solicitud indicadas arriba; este cambio no modifica el servidor.
+
+Regresiones: se usa el codificador multipart real del SDK instalado para reproducir
+el fallo anterior y comprobar los bytes de tres fotos y una guía. Las pruebas también
+cubren archivos ausentes, tamaño real excesivo, 413 sin JSON, recuperación sin reenviar,
+doble toque, conservación de UUID, cortes de red, permisos y errores de subida de PHP.
+
 `GET /api/validacion-mp/recepciones/{recepcion}/defectos` devuelve los registros de
 la recepción al validador asignado, solo durante su temporada activa. Las rutas de
 captura responden con una lista `evidencias` que contiene identificadores, tipo y URL
