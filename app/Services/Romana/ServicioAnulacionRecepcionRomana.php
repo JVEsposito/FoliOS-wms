@@ -76,14 +76,18 @@ class ServicioAnulacionRecepcionRomana
             }
             $movimientos = $recepcion->movimientosEnvases()->orderBy('id')->lockForUpdate()->get();
             $ids = $movimientos->pluck('id');
-            if (DetalleGuiaDespachoEnvase::whereIn('movimiento_origen_id', $ids)
+            $guias = DetalleGuiaDespachoEnvase::whereIn('movimiento_origen_id', $ids)
                 ->whereHas('guia', fn ($q) => $q->whereIn('estado', [
                     EstadoGuiaDespachoEnvase::Borrador->value, EstadoGuiaDespachoEnvase::Confirmada->value,
-                ]))->exists()
-                || $this->tieneMovimientosDependientes($recepcion, $ids, $eliminar)
-                || (! $eliminar && $movimientos->contains(fn ($m) => $m->movimiento_origen_id !== null
-                    || ! in_array($m->tipo_movimiento, [TipoMovimientoEnvase::RecepcionArriendo, TipoMovimientoEnvase::RecepcionCompra], true)))) {
-                throw new ConflictoOperacion('La recepción tiene guías, reservas o correcciones vinculadas. Requiere conciliación antes de anular.');
+                ]))->with('guia')->orderBy('guia_despacho_envase_id')->orderBy('id')->get();
+            $dependientes = $this->movimientosDependientes($recepcion, $ids, $eliminar);
+            if (! $eliminar) {
+                $dependientes = $dependientes->concat($movimientos->filter(fn ($m) => $m->movimiento_origen_id !== null
+                    || ! in_array($m->tipo_movimiento, [TipoMovimientoEnvase::RecepcionArriendo, TipoMovimientoEnvase::RecepcionCompra], true)))->unique('id');
+            }
+            if ($guias->isNotEmpty() || $dependientes->isNotEmpty()) {
+                throw new ConflictoOperacion(app(ServicioDiagnosticoEnvasesRecepcion::class)
+                    ->dependencias($recepcion, $guias, $dependientes, $eliminar ? 'eliminar' : 'anular'));
             }
             if ($eliminar) {
                 $this->asegurarEnvasesDisponibles($recepcion, $movimientos);
@@ -144,7 +148,12 @@ class ServicioAnulacionRecepcionRomana
         }
         // El cliente de un despacho es su destinatario: no identifica el origen
         // físico de los envases. Usar el mismo inventario por origen que las guías.
-        $inventario = collect(app(ServicioGuiaDespachoEnvases::class)->inventario($recepcion->temporada)['origenes'])->keyBy('id');
+        try {
+            $inventario = collect(app(ServicioGuiaDespachoEnvases::class)->inventario($recepcion->temporada)['origenes'])->keyBy('id');
+        } catch (ConflictoOperacion $conflicto) {
+            throw new ConflictoOperacion(app(ServicioDiagnosticoEnvasesRecepcion::class)
+                ->inventarioInconsistente($recepcion, $conflicto->getMessage()));
+        }
         foreach ($grupos as $grupo) {
             $retirar = $grupo->sum(fn ($m) => $m->cantidad * $m->signo_existencia);
             $disponible = $grupo->whereNull('movimiento_origen_id')->sum(fn ($m) => $inventario[$m->id]['disponible'] ?? 0);
@@ -153,19 +162,20 @@ class ServicioAnulacionRecepcionRomana
                 ->where('tipo_envase', $primero->tipo_envase->value)->where('propiedad', $primero->propiedad->value)
                 ->selectRaw('SUM(CAST(cantidad AS SIGNED) * signo_existencia) as saldo')->value('saldo');
             if ($disponible < $retirar || $totalFisico < $retirar) {
-                throw new ConflictoOperacion('Los envases de esta recepción ya tienen salidas. Resuelve esas salidas antes de eliminarla.');
+                throw new ConflictoOperacion(app(ServicioDiagnosticoEnvasesRecepcion::class)
+                    ->disponibilidad($recepcion, $grupo, $retirar, $disponible, $totalFisico));
             }
         }
     }
 
-    private function tieneMovimientosDependientes(RecepcionRomana $recepcion, Collection $ids, bool $eliminar): bool
+    private function movimientosDependientes(RecepcionRomana $recepcion, Collection $ids, bool $eliminar): Collection
     {
         $externos = MovimientoEnvase::whereIn('movimiento_origen_id', $ids)
             ->when($eliminar, fn ($q) => $q->where(fn ($q) => $q
                 ->whereNull('recepcion_romana_id')->orWhere('recepcion_romana_id', '!=', $recepcion->id)))
             ->orderBy('id')->lockForUpdate()->get();
         if ($externos->isEmpty()) {
-            return false;
+            return $externos;
         }
         // Anulada es un estado terminal. Se conserva la guía y sus asientos;
         // solo se ignoran dependencias cuyo despacho quedó compensado exactamente.
@@ -200,7 +210,7 @@ class ServicioAnulacionRecepcionRomana
             }
         }
 
-        return $externos->contains(fn ($movimiento) => ! isset($compensados[$movimiento->id]));
+        return $externos->reject(fn ($movimiento) => isset($compensados[$movimiento->id]));
     }
 
     private function retirarMateriaPrima(RecepcionRomana $recepcion, string $motivo, User $actor): array
