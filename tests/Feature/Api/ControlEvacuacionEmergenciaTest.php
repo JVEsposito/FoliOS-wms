@@ -118,8 +118,10 @@ class ControlEvacuacionEmergenciaTest extends TestCase
         );
     }
 
-    public function test_guided_incompleto_rechaza_la_emergencia_antes_de_mutar_la_operacion(): void
+    #[DataProvider('calculosDirigidos')]
+    public function test_guided_incompleto_rechaza_la_emergencia_antes_de_mutar_la_operacion(string $compute): void
     {
+        config(['planificador.compute' => $compute]);
         $contexto = $this->crearContexto();
         $planNormal = $this->crearPlan($contexto, PrioridadOperacional::Normal);
         $tareaReversible = $this->crearTarea(
@@ -132,7 +134,7 @@ class ControlEvacuacionEmergenciaTest extends TestCase
         );
         $casos = [
             ['planificador.generacion_automatica' => false],
-            ['planificador.compute' => 'server'],
+            ['planificador.compute' => 'invalido'],
             ['planificador.horizon' => 'batch'],
         ];
 
@@ -140,7 +142,7 @@ class ControlEvacuacionEmergenciaTest extends TestCase
             config(array_merge([
                 'planificador.mode' => 'guided',
                 'planificador.generacion_automatica' => true,
-                'planificador.compute' => 'tablet',
+                'planificador.compute' => $compute,
                 'planificador.horizon' => 'rolling',
                 'planificador.rollout_camaras' => [],
             ], $configuracionInvalida));
@@ -155,7 +157,7 @@ class ControlEvacuacionEmergenciaTest extends TestCase
                 ->assertUnprocessable()
                 ->assertJsonPath(
                     'message',
-                    'La emergencia dirigida requiere generación automática, cálculo tablet y horizonte rolling.',
+                    'La emergencia dirigida requiere generación automática, cálculo tablet o servidor y horizonte rolling.',
                 );
 
             $this->assertDatabaseMissing('planes_operacionales', [
@@ -172,8 +174,10 @@ class ControlEvacuacionEmergenciaTest extends TestCase
         $this->assertSame(EstadoPlanOperacional::Programado, $planNormal->refresh()->estado);
     }
 
-    public function test_declara_bloquea_y_antepone_solo_trabajo_reversible_de_menor_prioridad(): void
+    #[DataProvider('calculosDirigidos')]
+    public function test_declara_bloquea_y_antepone_solo_trabajo_reversible_de_menor_prioridad(string $compute): void
     {
+        config(['planificador.compute' => $compute]);
         $contexto = $this->crearContexto();
         $planNormal = $this->crearPlan($contexto, PrioridadOperacional::Normal);
         $reversible = $this->crearTarea(
@@ -490,8 +494,10 @@ class ControlEvacuacionEmergenciaTest extends TestCase
             ->count());
     }
 
-    public function test_recalcula_rolling_y_completa_solo_al_evacuarse_el_cien_por_ciento(): void
+    #[DataProvider('calculosDirigidos')]
+    public function test_recalcula_rolling_y_completa_solo_al_evacuarse_el_cien_por_ciento(string $compute): void
     {
+        config(['planificador.compute' => $compute]);
         $contexto = $this->crearContexto();
         $this->ubicar($contexto, $contexto['emergencia'], 1, 1, 'PAL-260-ROLLING-1');
         $this->ubicar($contexto, $contexto['emergencia'], 1, 2, 'PAL-260-ROLLING-2');
@@ -602,6 +608,14 @@ class ControlEvacuacionEmergenciaTest extends TestCase
         $this->assertSame($tareas, $anterior->tareas()->get()->map->getAttributes()->all());
         $this->assertSame($maniobras, $anterior->maniobras()->get()->map->getAttributes()->all());
         $this->assertSame($movimientos, $anterior->movimientos()->pluck('id')->all());
+    }
+
+    public static function calculosDirigidos(): array
+    {
+        return [
+            'tablet' => ['tablet'],
+            'servidor' => ['server'],
+        ];
     }
 
     public static function cierresDeCiclo(): array

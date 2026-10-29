@@ -127,7 +127,7 @@ class ServicioDesocupacionProgramada
             }
             if (! $this->planificadorDirigidoActivo($camara)) {
                 throw new DomainException(
-                    'La desocupación dirigida requiere generación automática, cálculo tablet y horizonte rolling.',
+                    'La desocupación dirigida requiere generación automática, cálculo tablet o servidor y horizonte rolling.',
                 );
             }
 

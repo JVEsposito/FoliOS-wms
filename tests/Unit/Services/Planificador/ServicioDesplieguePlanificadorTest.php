@@ -4,6 +4,7 @@ namespace Tests\Unit\Services\Planificador;
 
 use App\Models\Camara;
 use App\Services\Planificador\ServicioDesplieguePlanificador;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class ServicioDesplieguePlanificadorTest extends TestCase
@@ -21,11 +22,12 @@ class ServicioDesplieguePlanificadorTest extends TestCase
         );
     }
 
-    public function test_guided_se_limita_por_codigo_y_degrada_el_resto_a_shadow(): void
+    #[DataProvider('calculosDirigidos')]
+    public function test_guided_se_limita_por_codigo_y_degrada_el_resto_a_shadow(string $compute): void
     {
         config([
             'planificador.mode' => 'guided',
-            'planificador.compute' => 'tablet',
+            'planificador.compute' => $compute,
             'planificador.horizon' => 'rolling',
             'planificador.generacion_automatica' => true,
             'planificador.rollout_camaras' => ['cam-01'],
@@ -49,6 +51,14 @@ class ServicioDesplieguePlanificadorTest extends TestCase
             'guided',
             app(ServicioDesplieguePlanificador::class)->modoParaCamara($this->camara('CAM-99')),
         );
+    }
+
+    public static function calculosDirigidos(): array
+    {
+        return [
+            'tablet' => ['tablet'],
+            'servidor' => ['server'],
+        ];
     }
 
     private function camara(string $codigo): Camara

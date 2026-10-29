@@ -53,7 +53,7 @@ class ServicioControlEvacuacionEmergencia
         }
         if ($modo === 'guided' && ! $this->despliegue->dirige([$camara])) {
             throw new DomainException(
-                'La emergencia dirigida requiere generación automática, cálculo tablet y horizonte rolling.',
+                'La emergencia dirigida requiere generación automática, cálculo tablet o servidor y horizonte rolling.',
             );
         }
 
