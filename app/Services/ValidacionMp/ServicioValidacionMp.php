@@ -352,7 +352,7 @@ class ServicioValidacionMp
             TipoRecepcionRomana::FrutaPesajeEnvases => [
                 TipoMovimientoEnvase::RecepcionFruta,
                 1,
-                PropiedadEnvase::Cliente,
+                $recepcion->propiedadEnvase($tipoEnvase),
             ],
             TipoRecepcionRomana::SoloEnvases => $recepcion->concepto_envases === ConceptoEnvasesRomana::Arriendo
                 ? [TipoMovimientoEnvase::RecepcionArriendo, 1, PropiedadEnvase::Arrendada]

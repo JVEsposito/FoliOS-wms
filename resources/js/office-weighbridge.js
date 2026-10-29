@@ -162,7 +162,10 @@ function showApp() {
 function fillCatalogs() {
     const form = elements.receptionForm.elements;
     const quantities = Object.fromEntries(state.catalogs.tipos_envase.map((t) => [t.codigo, form[`cantidad_${t.codigo}`]?.value || '0']));
-    byId('standardContainerLines').innerHTML = '<legend>Envases declarados en la guía *</legend>' + state.catalogs.tipos_envase.map((t) => `<label><span>${escapeHtml(t.nombre)}</span><input name="cantidad_${t.codigo}" type="number" min="0" max="100000" value="${quantities[t.codigo]}"></label>`).join('');
+    const properties = Object.fromEntries(state.catalogs.tipos_envase.map((t) => [t.codigo, form[`propiedad_${t.codigo}`]?.value || '']));
+    byId('standardContainerLines').innerHTML = '<legend>Envases declarados en la guía *</legend><small data-container-property-help>Indica su propiedad. Propios y arrendados corresponden a envases de planta que regresan con fruta.</small>'
+        + state.catalogs.tipos_envase.map((t) => `<div class="container-entry-line"><label><span>${escapeHtml(t.nombre)}</span><input name="cantidad_${t.codigo}" type="number" min="0" max="100000" value="${quantities[t.codigo]}"></label><label class="is-hidden" data-container-property="${t.codigo}"><span>Propiedad *</span><select name="propiedad_${t.codigo}" aria-label="Propiedad de ${escapeHtml(t.nombre)}" disabled>${propertyOptions(properties[t.codigo])}</select></label></div>`).join('');
+    form.propiedad_envase_pesaje.innerHTML = propertyOptions(form.propiedad_envase_pesaje.value);
     form.tipo_envase_pesaje.innerHTML = state.catalogs.tipos_envase.filter((t) => t.contiene_fruta).map((t) => `<option value="${t.codigo}">${escapeHtml(t.nombre)}</option>`).join('');
     const activeSeasons = state.catalogs.temporadas.filter((season) => season.activa);
     form.temporada_id.innerHTML = '<option value="">Seleccionar temporada activa</option>' + activeSeasons.map((season) => `<option value="${escapeHtml(season.id)}">${escapeHtml(season.nombre)} · ${escapeHtml(season.codigo)}</option>`).join('');
@@ -172,6 +175,27 @@ function fillCatalogs() {
     form.tipo_recepcion.innerHTML = state.catalogs.tipos_recepcion.map((type) => `<option value="${escapeHtml(type.codigo)}">${escapeHtml(type.nombre)}</option>`).join('');
     form.especie_validacion_id.innerHTML = '<option value="">Seleccionar especie</option>' + state.catalogs.especies.map((species) => `<option value="${escapeHtml(species.id)}">${escapeHtml(species.nombre)}</option>`).join('');
     form.concepto_envases.innerHTML = state.catalogs.conceptos_envases.map((type) => `<option value="${escapeHtml(type.codigo)}">${escapeHtml(type.nombre)}</option>`).join('');
+    syncContainerProperties();
+}
+
+const containerProperties = { cliente: 'Del cliente', propia: 'Propios', arrendada: 'Arrendados' };
+function propertyOptions(selected = '') {
+    return '<option value="">Seleccionar</option>' + Object.entries(containerProperties)
+        .map(([value, name]) => `<option value="${value}"${value === selected ? ' selected' : ''}>${name}</option>`).join('');
+}
+function syncContainerProperties() {
+    const form = elements.receptionForm.elements;
+    const fruit = form.tipo_recepcion.value !== 'solo_envases';
+    const standard = fruit && form.tipo_recepcion.value !== 'fruta_pesaje_envases';
+    document.querySelector('[data-container-property-help]')?.classList.toggle('is-hidden', !fruit);
+    elements.standardContainerLines.querySelectorAll('[data-container-property]').forEach((field) => {
+        const active = standard && Number(form[`cantidad_${field.dataset.containerProperty}`]?.value || 0) > 0;
+        field.classList.toggle('is-hidden', !active);
+        field.querySelector('select').disabled = !active;
+        field.querySelector('select').required = active;
+    });
+    form.propiedad_envase_pesaje.disabled = form.tipo_recepcion.value !== 'fruta_pesaje_envases';
+    form.propiedad_envase_pesaje.required = !form.propiedad_envase_pesaje.disabled;
 }
 
 function filterQuery() {
@@ -232,7 +256,7 @@ async function loadReceptions({ silent = false } = {}) {
 }
 
 function fact(title, value, weight = false) { return `<article class="detail-fact${weight ? ' detail-fact--weight' : ''}"><span>${escapeHtml(title)}</span><strong>${escapeHtml(value ?? '—')}</strong></article>`; }
-function envasesLabel(reception) { return (reception.envases || []).map((item) => `${item.cantidad_declarada} ${label(item.tipo_envase)}`).join(' · ') || 'Sin envases'; }
+function envasesLabel(reception) { return (reception.envases || []).map((item) => `${item.cantidad_declarada} ${label(item.tipo_envase)}${item.propiedad ? ` (${containerProperties[item.propiedad] || item.propiedad})` : ''}`).join(' · ') || 'Sin envases'; }
 function renderContainerWeighings(reception, canOperate) {
     const weighing = reception.pesaje_envases;
     elements.containerWeighingPanel.classList.toggle('is-hidden', !weighing);
@@ -365,6 +389,8 @@ function syncAdministrativeNetContainerOptions(preferredType = null) {
 
 function openNewReception() {
     elements.receptionForm.reset(); elements.receptionForm.elements.recepcion_id.value = ''; elements.receptionFormError.textContent = '';
+    state.catalogs.tipos_envase.forEach(({ codigo }) => { elements.receptionForm.elements[`cantidad_${codigo}`].value = 0; elements.receptionForm.elements[`propiedad_${codigo}`].value = ''; });
+    elements.receptionForm.elements.propiedad_envase_pesaje.value = '';
     configureAdministrativeCorrection(false);
     elements.receptionDialogTitle.textContent = 'Registrar ingreso';
     const activeSeasons = state.catalogs.temporadas.filter((season) => season.activa);
@@ -389,11 +415,16 @@ function openEditReception() {
     elements.receptionDialogTitle.textContent = canCorrect ? 'Corregir recepción' : 'Editar pesaje de ingreso';
     form.recepcion_id.value = reception.id; form.temporada_id.value = reception.temporada.id; form.cliente_id.value = reception.cliente.id; form.tipo_recepcion.value = reception.tipo_recepcion; form.especie_validacion_id.value = reception.especie_validacion_id || ''; form.fecha_ingreso.value = reception.fecha_ingreso || ''; form.concepto_envases.value = reception.concepto_envases || ''; form.tipo_servicio.value = reception.tipo_servicio;
     form.numero_guia_despacho.value = reception.numero_guia_despacho;
-    state.catalogs.tipos_envase.map((t) => t.codigo).forEach((tipo) => { const item = reception.envases.find((envase) => envase.tipo_envase === tipo); form[`cantidad_${tipo}`].value = item?.cantidad_declarada || 0; });
+    state.catalogs.tipos_envase.map((t) => t.codigo).forEach((tipo) => {
+        const item = reception.envases.find((envase) => envase.tipo_envase === tipo);
+        form[`cantidad_${tipo}`].value = item?.cantidad_declarada || 0;
+        form[`propiedad_${tipo}`].value = item?.propiedad || (item ? 'cliente' : '');
+    });
     if (reception.pesaje_envases) {
         form.tipo_envase_pesaje.value = reception.pesaje_envases.tipo_envase;
         form.cantidad_envases_pesaje.value = reception.pesaje_envases.cantidad_declarada;
         form.tara_unitaria_envase.value = reception.pesaje_envases.tara_unitaria;
+        form.propiedad_envase_pesaje.value = reception.envases.find((item) => item.tipo_envase === reception.pesaje_envases.tipo_envase)?.propiedad || 'cliente';
     }
     form.patente_camion.value = reception.patente_camion; form.tipo_camion.value = reception.tipo_camion || ''; form.patente_carro.value = reception.patente_carro || ''; form.rut_conductor.value = reception.rut_conductor; form.nombre_conductor.value = reception.nombre_conductor;
     form.peso_bruto.value = reception.peso_bruto ?? ''; form.observacion.value = reception.observacion || '';
@@ -432,9 +463,16 @@ elements.receptionForm.addEventListener('submit', async (event) => {
     const soloEnvases = data.tipo_recepcion === 'solo_envases';
     const cumulativeWeighing = data.tipo_recepcion === 'fruta_pesaje_envases';
     data.envases = cumulativeWeighing
-        ? [{ tipo_envase: data.tipo_envase_pesaje, cantidad: Number(data.cantidad_envases_pesaje || 0) }]
-        : state.catalogs.tipos_envase.map((t) => t.codigo).map((tipo) => ({ tipo_envase: tipo, cantidad: Number(data[`cantidad_${tipo}`] || 0) })).filter((item) => item.cantidad > 0);
-    state.catalogs.tipos_envase.map((t) => t.codigo).forEach((tipo) => delete data[`cantidad_${tipo}`]);
+        ? [{ tipo_envase: data.tipo_envase_pesaje, cantidad: Number(data.cantidad_envases_pesaje || 0), propiedad: data.propiedad_envase_pesaje || '' }]
+        : state.catalogs.tipos_envase.map((t) => t.codigo).map((tipo) => ({ tipo_envase: tipo, cantidad: Number(data[`cantidad_${tipo}`] || 0), ...(!soloEnvases ? { propiedad: data[`propiedad_${tipo}`] || '' } : {}) })).filter((item) => item.cantidad > 0);
+    const missingProperty = !soloEnvases && data.envases.find((item) => !item.propiedad);
+    if (missingProperty) {
+        elements.receptionFormError.textContent = `Selecciona la propiedad de ${label(missingProperty.tipo_envase)}: del cliente, propios o arrendados por planta.`;
+        elements.receptionForm.elements[cumulativeWeighing ? 'propiedad_envase_pesaje' : `propiedad_${missingProperty.tipo_envase}`].focus();
+        return;
+    }
+    state.catalogs.tipos_envase.map((t) => t.codigo).forEach((tipo) => { delete data[`cantidad_${tipo}`]; delete data[`propiedad_${tipo}`]; });
+    delete data.propiedad_envase_pesaje;
     delete data.cantidad_envases_pesaje;
     if (cumulativeWeighing || soloEnvases) delete data.peso_bruto;
     else {
@@ -855,6 +893,7 @@ function toggleReceptionType() {
     form.tipo_envase_pesaje.required = cumulativeWeighing;
     form.cantidad_envases_pesaje.required = cumulativeWeighing;
     form.tara_unitaria_envase.required = cumulativeWeighing;
+    syncContainerProperties();
     elements.receptionDialogDescription.textContent = soloEnvases
         ? 'Selecciona la fecha efectiva y registra guía, cliente, transporte y cantidades. Esta recepción no utiliza kilos.'
         : cumulativeWeighing
@@ -867,7 +906,10 @@ function toggleReceptionType() {
     }
 }
 elements.receptionForm.elements.tipo_recepcion.addEventListener('change', toggleReceptionType);
-byId('standardContainerLines').addEventListener('input', () => syncAdministrativeNetContainerOptions());
+byId('standardContainerLines').addEventListener('input', () => { syncAdministrativeNetContainerOptions(); syncContainerProperties(); });
+elements.receptionForm.addEventListener('change', (event) => {
+    if (event.target.name?.startsWith('propiedad_') && elements.receptionFormError.textContent.startsWith('Selecciona la propiedad')) elements.receptionFormError.textContent = '';
+});
 ['patente_camion', 'patente_carro'].forEach((name) => elements.receptionForm.elements[name].addEventListener('input', (event) => { event.target.value = event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''); }));
 elements.logout.addEventListener('click', async () => { try { await api('/api/acceso-oficina', { method: 'DELETE' }); } finally { clearSession(); } });
 

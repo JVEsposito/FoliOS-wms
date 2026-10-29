@@ -24,6 +24,61 @@ class RecepcionRomanaApiTest extends TestCase
     use PreparaInspeccionesEnvases;
     use RefreshDatabase;
 
+    public function test_declara_propiedad_por_tipo_y_la_conserva_al_editar_con_un_cliente_anterior(): void
+    {
+        $this->actingAs(User::factory()->create(['rol' => RolUsuario::OperadorRomana]), 'sanctum');
+        $datos = $this->datosIngreso($this->cliente());
+        $datos['envases'] = [['tipo_envase' => 'bins', 'cantidad' => 1, 'propiedad' => 'arrendada'],
+            ['tipo_envase' => 'totes', 'cantidad' => 31, 'propiedad' => 'cliente']];
+        $recepcion = $this->postJson('/api/romana/recepciones', $datos)->assertCreated()
+            ->assertJsonPath('data.envases.0.propiedad', 'arrendada')->json('data');
+        $this->postJson('/api/romana/recepciones', $datos)->assertCreated()->assertJsonPath('data.id', $recepcion['id']);
+        $this->postJson('/api/romana/recepciones', [...$datos, 'envases' => [['tipo_envase' => 'bins', 'cantidad' => 1, 'propiedad' => 'propia'],
+            ['tipo_envase' => 'totes', 'cantidad' => 31, 'propiedad' => 'cliente']]])->assertConflict();
+        $actualizacion = [...$datos, 'operacion_id' => (string) Str::uuid()];
+        $actualizacion['envases'][0]['propiedad'] = 'propia';
+        $this->putJson("/api/romana/recepciones/{$recepcion['id']}", $actualizacion)->assertOk()
+            ->assertJsonPath('data.envases.0.propiedad', 'propia');
+        $evento = EventoRecepcionRomana::where('operacion_id', $actualizacion['operacion_id'])->sole();
+        $this->assertSame('propia', $evento->datos['envases'][0]['propiedad']);
+        $actualizacion['operacion_id'] = (string) Str::uuid();
+        unset($actualizacion['envases'][0]['propiedad'], $actualizacion['envases'][1]['propiedad']);
+        $this->putJson("/api/romana/recepciones/{$recepcion['id']}", $actualizacion)->assertOk()
+            ->assertJsonPath('data.envases.0.propiedad', 'propia')->assertJsonPath('data.envases.1.propiedad', 'cliente');
+    }
+
+    public function test_valida_la_propiedad_expresa_y_los_clientes_anteriores_conservan_su_contrato(): void
+    {
+        $this->actingAs(User::factory()->create(['rol' => RolUsuario::OperadorRomana]), 'sanctum');
+        $datos = $this->datosIngreso($this->cliente());
+        foreach (['', null, 'prestados', ['arrendada']] as $invalida) {
+            $this->postJson('/api/romana/recepciones', [...$datos,
+                'envases' => [['tipo_envase' => 'bins', 'cantidad' => 1, 'propiedad' => $invalida]]])
+                ->assertUnprocessable()->assertJsonValidationErrors('envases.0.propiedad');
+        }
+        $id = $this->postJson('/api/romana/recepciones', $datos)->assertCreated()
+            ->assertJsonPath('data.envases.0.propiedad', 'cliente')->json('data.id');
+        $this->postJson('/api/romana/recepciones', $datos)->assertCreated()->assertJsonPath('data.id', $id);
+        $this->assertDatabaseCount('recepciones_romana', 1);
+    }
+
+    public function test_pesaje_acumulativo_conserva_propiedad_y_solo_envases_se_rige_por_compra_o_arriendo(): void
+    {
+        $this->actingAs(User::factory()->create(['rol' => RolUsuario::OperadorRomana]), 'sanctum');
+        $datos = $this->datosIngreso($this->cliente());
+        $this->postJson('/api/romana/recepciones', [...$datos, 'tipo_recepcion' => 'fruta_pesaje_envases',
+            'envases' => [['tipo_envase' => 'bins', 'cantidad' => 48, 'propiedad' => 'arrendada']],
+            'tipo_envase_pesaje' => 'bins', 'tara_unitaria_envase' => 40])->assertCreated()
+            ->assertJsonPath('data.envases.0.propiedad', 'arrendada');
+        foreach (['compra' => 'propia', 'arriendo' => 'arrendada'] as $concepto => $propiedad) {
+            $this->postJson('/api/romana/recepciones', [...$datos, 'operacion_id' => (string) Str::uuid(),
+                'numero_guia_despacho' => 'GD-'.$concepto, 'tipo_recepcion' => 'solo_envases',
+                'fecha_ingreso' => now(config('app.operational_timezone'))->toDateString(), 'concepto_envases' => $concepto,
+                'envases' => [['tipo_envase' => 'bins', 'cantidad' => 48, 'propiedad' => 'cliente']]])->assertCreated()
+                ->assertJsonPath('data.envases.0.propiedad', $propiedad);
+        }
+    }
+
     public function test_exige_especie_para_fruta_y_permite_leer_recepciones_historicas_sin_ella(): void
     {
         $operador = User::factory()->create(['rol' => RolUsuario::OperadorRomana]);

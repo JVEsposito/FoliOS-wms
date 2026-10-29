@@ -24,6 +24,46 @@ class ValidacionMpApiTest extends TestCase
     use PreparaInspeccionesEnvases;
     use RefreshDatabase;
 
+    public function test_el_ingreso_destare_y_correccion_conservan_la_propiedad_de_cada_envase(): void
+    {
+        $temporada = Temporada::query()->where('activa', true)->firstOrFail();
+        $operador = User::factory()->create(['rol' => RolUsuario::OperadorRomana]);
+        $datos = $this->recepcion($temporada, $this->cliente());
+        $datos['envases'][0]['propiedad'] = 'arrendada';
+        $datos['envases'][1]['propiedad'] = 'cliente';
+        $recepcion = $this->actingAs($operador, 'sanctum')->postJson('/api/romana/recepciones', $datos)
+            ->assertCreated()->json('data');
+        $this->postJson("/api/romana/recepciones/{$recepcion['id']}/confirmar-ingreso", ['operacion_id' => (string) Str::uuid()])->assertOk();
+        $this->validarParaDestare($recepcion, $operador);
+        foreach (['bins' => ['arrendada', 45], 'totes' => ['cliente', 10]] as $tipo => [$propiedad, $cantidad]) {
+            $this->assertDatabaseHas('movimientos_envases', ['recepcion_romana_id' => $recepcion['id'],
+                'tipo_movimiento' => 'recepcion_fruta', 'tipo_envase' => $tipo, 'propiedad' => $propiedad,
+                'cantidad' => $cantidad, 'signo_cuenta' => 1, 'signo_existencia' => 1]);
+        }
+        $cierre = ['operacion_id' => (string) Str::uuid(), 'modo_salida_envases' => 'mismos',
+            'numero_guia_salida' => 'GS-PROPIEDAD', 'peso_tara' => 10000, 'tipo_envase_calculo_neto' => 'bins',
+            'taras_envases' => [['tipo_envase' => 'bins', 'tara_unitaria' => 40], ['tipo_envase' => 'totes', 'tara_unitaria' => 2]]];
+        $rutaCierre = "/api/romana/recepciones/{$recepcion['id']}/cerrar";
+        $cerrada = $this->postJson($rutaCierre, $this->payloadConInspeccionRc02($rutaCierre, $cierre))->assertOk()->json('data');
+        $this->postJson($rutaCierre, $this->payloadConInspeccionRc02($rutaCierre, $cierre))->assertOk();
+        foreach (['bins' => 'arrendada', 'totes' => 'cliente'] as $tipo => $propiedad) {
+            $movimientos = MovimientoEnvase::where('recepcion_romana_id', $recepcion['id'])->where('tipo_envase', $tipo)->get();
+            $this->assertSame([$propiedad], $movimientos->pluck('propiedad')->map(fn ($p) => $p->value)->unique()->values()->all());
+            $this->assertSame(0, $movimientos->sum(fn ($m) => $m->cantidad * $m->signo_cuenta));
+            $this->assertSame(0, $movimientos->sum(fn ($m) => $m->cantidad * $m->signo_existencia));
+        }
+        $this->actingAs(User::factory()->create(['rol' => RolUsuario::Administrador]), 'sanctum');
+        $ruta = "/api/romana/recepciones/{$recepcion['id']}/corregir-salida-envases";
+        $payload = [...$cierre, 'operacion_id' => (string) Str::uuid(), 'modo_salida_envases' => 'diferentes',
+            'numero_guia_salida' => 'GS-PROP-CORREGIDA', 'salida_envases' => [['tipo_envase' => 'bins', 'cantidad' => 44], ['tipo_envase' => 'totes', 'cantidad' => 10]],
+            'version_conocida' => $cerrada['version'], 'motivo_correccion' => 'Solo salieron 44 bins arrendados.'];
+        $this->postJson($ruta, $this->payloadConInspeccionRc02($ruta, $payload))->assertOk();
+        $this->assertDatabaseHas('movimientos_envases', ['recepcion_romana_id' => $recepcion['id'],
+            'tipo_movimiento' => 'reversion_salida_fruta', 'tipo_envase' => 'bins', 'propiedad' => 'arrendada', 'cantidad' => 45]);
+        $this->assertDatabaseHas('movimientos_envases', ['recepcion_romana_id' => $recepcion['id'],
+            'tipo_movimiento' => 'salida_recepcion_fruta', 'tipo_envase' => 'bins', 'propiedad' => 'arrendada', 'cantidad' => 44]);
+    }
+
     public function test_recepcion_historica_sin_especie_se_completa_con_auditoria_y_filtra_variedades(): void
     {
         $temporada = Temporada::query()->where('activa', true)->firstOrFail();
