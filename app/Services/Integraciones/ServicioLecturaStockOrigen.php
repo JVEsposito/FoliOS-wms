@@ -114,14 +114,34 @@ class ServicioLecturaStockOrigen
         }
     }
 
+    /** Solo en el worker de Integraciones: no recorre ni retira el resto de la bodega. */
+    public function leerPallet(string $numeroPallet, User $usuario, string $operacionId): ?LecturaStockOrigen
+    {
+        $numeroPallet = mb_strtoupper(trim($numeroPallet));
+        if ($numeroPallet === '' || mb_strlen($numeroPallet) > 50 || preg_match('/[\x00-\x1F\x7F]/u', $numeroPallet)) {
+            throw new DomainException('Escanea un folio válido de hasta 50 caracteres.');
+        }
+        $config = $this->configuracion();
+        if (! $config['habilitada'] || ! $config['conexion']) {
+            throw new DomainException('La lectura del sistema de packing no está configurada.');
+        }
+        try {
+            return Cache::lock('lectura-stock-origen', 300)->block(0,
+                fn () => $this->ejecutar($config, $usuario, $operacionId, $numeroPallet));
+        } catch (LockTimeoutException) {
+            return null;
+        }
+    }
+
     /** @param array{conexion: ConexionExterna, tabla: string, bodega: string, temporada: ?string} $config */
-    private function ejecutar(array $config, ?User $usuario, ?string $operacionId): LecturaStockOrigen
+    private function ejecutar(array $config, ?User $usuario, ?string $operacionId, ?string $numeroPallet = null): LecturaStockOrigen
     {
         $lectura = LecturaStockOrigen::create([
             'conexion_externa_id' => $config['conexion']->id,
             'ambito' => $config['ambito'],
             'configuracion_hash' => $this->huellaConfiguracion($config),
             'operacion_integracion_id' => $operacionId,
+            'numero_pallet' => $numeroPallet,
             'tabla' => $config['tabla'],
             'bodega' => $config['bodega'],
             'temporada_origen' => $config['temporada'],
@@ -133,21 +153,27 @@ class ServicioLecturaStockOrigen
         try {
             if ($config['perfil'] !== null) {
                 $columnas = $this->explorador->columnas($config['conexion']->credenciales, $config['tabla']);
-                [$sql, $parametros] = $this->mapeo->consulta($config['perfil'], $columnas);
+                [$sql, $parametros] = $this->mapeo->consulta($config['perfil'], $columnas, numeroPallet: $numeroPallet);
             } else {
                 if (preg_match('/^[A-Za-z0-9_]{1,64}$/', $config['tabla']) !== 1) {
                     throw new LecturaStockOrigenFallida('tabla_invalida', 'El nombre de la tabla de origen solo admite letras, números y guion bajo.');
                 }
-                $sql = $this->consulta($config['tabla'], $config['temporada'] !== null);
+                $sql = $this->consulta($config['tabla'], $config['temporada'] !== null, $numeroPallet !== null);
                 $parametros = array_values(array_filter([$config['bodega'], $config['temporada']], fn (?string $valor): bool => $valor !== null));
+                if ($numeroPallet !== null) {
+                    $parametros[] = $numeroPallet;
+                }
             }
             $filas = $this->conector->consultar($config['conexion']->credenciales, $sql, $parametros);
-            if ($filas === []) {
+            if ($filas === [] && $numeroPallet === null) {
                 // Una vista caída o filtrada por error devolvería vacío: no se da todo por retirado.
                 throw new LecturaStockOrigenFallida('sin_filas', 'La fuente no devolvió filas con los filtros configurados; se conserva la lectura anterior.');
             }
             $this->mapeo->validarFilas($filas);
             $pallets = $this->agrupar($filas);
+            if ($numeroPallet !== null && array_diff(array_keys($pallets), [$numeroPallet]) !== []) {
+                throw new DomainException('Packing devolvió otro folio. No se aplicaron esos datos.');
+            }
             foreach ($pallets as $pallet) {
                 if ($pallet['cajas'] > 4294967295 || $pallet['kilos'] > 9999999999.99) {
                     throw new DomainException('La suma de cajas o kilos de un pallet supera el máximo admitido. Revise las columnas asignadas.');
@@ -179,7 +205,7 @@ class ServicioLecturaStockOrigen
 
         // Cada caso se comprueba en su propia transacción para no bloquear toda
         // la temporada. El reporte derivado no invalida una lectura correcta.
-        if ($lectura->estado === 'correcta') {
+        if ($lectura->estado === 'correcta' && $numeroPallet === null) {
             try {
                 app(ServicioConciliacionValidacion::class)->recomprobar();
             } catch (Throwable $error) {
@@ -197,12 +223,13 @@ class ServicioLecturaStockOrigen
         return $lectura->refresh();
     }
 
-    private function consulta(string $tabla, bool $conTemporada): string
+    private function consulta(string $tabla, bool $conTemporada, bool $porPallet = false): string
     {
         $columnas = implode(', ', array_map(fn (string $columna): string => "`{$columna}`", self::COLUMNAS));
 
         return "SELECT {$columnas} FROM `{$tabla}` WHERE `cod_bodega` = ? AND `cod_tipo_articulo` = 'PT'"
             .($conTemporada ? ' AND `cod_temporada` = ?' : '')
+            .($porPallet ? ' AND UPPER(TRIM(CAST(`Pallet` AS CHAR))) = ?' : '')
             .' ORDER BY `Pallet` LIMIT '.(MapeoStockOrigen::MAX_FILAS + 1);
     }
 
@@ -297,7 +324,9 @@ class ServicioLecturaStockOrigen
             }
             app(ServicioOperacionesIntegracion::class)->exigirVigente($lectura->operacion_integracion_id);
             $ahora = now();
-            $existentes = PalletStockOrigen::query()->where('ambito', $lectura->ambito)->where('bodega', $bodega)->get()->keyBy('numero_pallet');
+            $existentes = PalletStockOrigen::query()->where('ambito', $lectura->ambito)->where('bodega', $bodega)
+                ->when($lectura->numero_pallet !== null, fn ($q) => $q->where('numero_pallet', $lectura->numero_pallet))
+                ->get()->keyBy('numero_pallet');
             $nuevos = 0;
             $modificados = 0;
             foreach ($pallets as $numero => $datos) {
@@ -321,6 +350,7 @@ class ServicioLecturaStockOrigen
             $retirados = PalletStockOrigen::query()
                 ->where('ambito', $lectura->ambito)
                 ->where('bodega', $bodega)
+                ->when($lectura->numero_pallet !== null, fn ($q) => $q->where('numero_pallet', $lectura->numero_pallet))
                 ->where('presente', true)
                 ->whereNotIn('numero_pallet', array_keys($pallets))
                 ->update(['presente' => false, 'ausente_desde' => $ahora, 'updated_at' => $ahora]);

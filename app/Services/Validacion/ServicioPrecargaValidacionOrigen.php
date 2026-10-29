@@ -2,12 +2,16 @@
 
 namespace App\Services\Validacion;
 
+use App\Exceptions\ConflictoOperacion;
 use App\Models\ArticuloValidacion;
+use App\Models\Folio;
 use App\Models\LecturaStockOrigen;
 use App\Models\OrigenValidacion;
 use App\Models\PalletStockOrigen;
+use App\Models\ValidacionPallet;
 use App\Services\Integraciones\ServicioCatalogoStockOrigen;
 use App\Services\Integraciones\ServicioLecturaStockOrigen;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Support\Collection;
 
 /**
@@ -25,6 +29,18 @@ final class ServicioPrecargaValidacionOrigen
         private readonly ServicioLecturaStockOrigen $lecturas,
         private readonly ServicioCatalogoStockOrigen $catalogo,
     ) {}
+
+    public function comprobarFolioNuevo(string $numeroFolio, string $temporadaId): void
+    {
+        if (app(ServicioTemporadaActiva::class)->buscarConBloqueoCompartido()?->id !== $temporadaId) {
+            throw new ConflictoOperacion('La temporada cambió. Actualiza el catálogo de la PDA antes de consultar packing.');
+        }
+        $folio = Folio::where('numero_folio', $numeroFolio)->first();
+        if (($folio && ! app(ProteccionFolioAnulado::class)->esAnuladoPorValidacion($folio))
+            || ValidacionPallet::where('numero_folio', $numeroFolio)->where('temporada_id', $temporadaId)->where('estado', 'aceptada')->exists()) {
+            throw new ConflictoOperacion('El folio ya tiene un registro en FoliOS. Revisa su historial antes de capturar otra validación.');
+        }
+    }
 
     /** @return array<string, mixed> */
     public function paraFolio(string $numeroFolio): array
@@ -104,23 +120,30 @@ final class ServicioPrecargaValidacionOrigen
         if ($composicion === []) {
             $pendientes[] = 'El origen no informa la composición por CSG.';
         }
+        if (! $pallet->fecha_embalaje) {
+            $pendientes[] = 'Fecha de embalaje no informada por packing.';
+        }
 
         $vigencia = (int) config('integraciones.stock_pt.vigencia_minutos', 20);
-        $correcta = LecturaStockOrigen::query()->where('ambito', $config['ambito'])->where('bodega', $config['bodega'])
-            ->where('estado', 'correcta')->latest('iniciada_at')->first();
+        $lectura = $pallet->lectura_stock_origen_id ? LecturaStockOrigen::find($pallet->lectura_stock_origen_id) : null;
 
         return [
             'disponible' => true,
             'numero_folio' => $pallet->numero_pallet,
             'huella' => $pallet->huella,
             'leido_at' => $pallet->ultima_lectura_at?->toAtomString(),
-            'desactualizada' => ! $correcta || $correcta->terminada_at === null || $correcta->terminada_at->lt(now()->subMinutes($vigencia)),
+            'desactualizada' => ! $lectura || $lectura->estado !== 'correcta'
+                || $lectura->configuracion_hash !== $this->lecturas->huellaConfiguracion($config)
+                || ! $pallet->ultima_lectura_at || $pallet->ultima_lectura_at->lt(now()->subMinutes($vigencia)),
             'tipo_bulto' => $pallet->tipo_bulto,
             'cantidad_cajas' => $pallet->cajas,
             'fecha_embalaje' => $pallet->fecha_embalaje?->toDateString(),
             'articulo_validacion_id' => $articulo?->id,
             // Como en Pendientes por validar, la categoría es una sugerencia: el validador la confirma.
             'categoria_validacion_id' => $resuelto['categoria']?->id,
+            // Permite completar lo conocido aunque falte una dimensión del artículo.
+            'producto' => collect(['especie', 'variedad', 'calibre', 'envase'])
+                ->mapWithKeys(fn (string $campo): array => [$campo => $resuelto[$campo]?->nombre])->all(),
             'composicion' => $composicion,
             'origen' => [
                 'cliente' => $cliente?->nombre ?? $pallet->empresa,

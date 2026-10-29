@@ -274,11 +274,58 @@ export async function getValidationPrefill(
   baseUrl: string,
   token: string,
   folio: string,
+  options?: { temporadaId: string; valid?: () => boolean; onProgress?: (phase: string) => void; wait?: (ms: number) => Promise<void> },
 ): Promise<ValidationPrefill> {
+  if (options) {
+    const check = () => { if (options.valid && !options.valid()) throw new ApiError('Consulta cancelada.', 499); };
+    const wait = options.wait ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+    type Operation = { id: string; estado: string; fase: string; respuesta?: { codigo_http: number; contenido: { data?: ValidationPrefill; message?: string } } };
+    let accepted: { data?: ValidationPrefill; operacion?: Operation };
+    check();
+    try {
+      accepted = await request(baseUrl, '/api/validacion/precarga-origen', token, {
+        method: 'POST', body: JSON.stringify({ numero_folio: folio, temporada_id: options.temporadaId }),
+      });
+    } catch (reason) {
+      // Servidor anterior: conserva su precarga local sin exigir desplegar todo a la vez.
+      if (!(reason instanceof ApiError) || ![404, 405].includes(reason.status)) throw reason;
+      accepted = { data: await getValidationPrefill(baseUrl, token, folio) };
+    }
+    check();
+    if (accepted.data) return checkedPrefill(accepted.data, folio);
+    let operation = accepted.operacion;
+    const deadline = Date.now() + 120000;
+    while (operation && ['en_cola', 'en_curso'].includes(operation.estado)) {
+      check();
+      if (Date.now() >= deadline) throw new ApiError('La consulta a packing sigue pendiente. Puedes continuar manualmente o volver a consultar el folio.', 408);
+      if (!/^[a-f0-9-]{36}$/i.test(operation.id)) throw new ApiError('El servidor no pudo identificar la consulta a packing.', 502);
+      options.onProgress?.(operation.fase);
+      await wait(1500);
+      check();
+      operation = (await request<{ operacion: Operation }>(baseUrl, `/api/integraciones/operaciones/${operation.id}`, token)).operacion;
+      check();
+    }
+    const result = operation?.respuesta;
+    if (!result || result.codigo_http >= 400) {
+      throw new ApiError(result?.contenido.message ?? 'La consulta a packing no terminó. Reintenta o completa los datos manualmente.', result?.codigo_http ?? 502);
+    }
+    return checkedPrefill(result.contenido.data, folio);
+  }
   const query = new URLSearchParams({ numero_folio: folio });
   return (await request<{ data: ValidationPrefill }>(
     baseUrl,
     `/api/validacion/precarga-origen?${query.toString()}`,
     token,
   )).data;
+}
+
+function checkedPrefill(data: ValidationPrefill | undefined, folio: string): ValidationPrefill {
+  if (!data || typeof data.disponible !== 'boolean'
+    || (data.disponible && (typeof data.numero_folio !== 'string'
+      || data.numero_folio.trim().toUpperCase() !== folio.trim().toUpperCase()
+      || !Array.isArray(data.composicion) || !Array.isArray(data.pendientes)
+      || !data.origen || !Number.isSafeInteger(data.cantidad_cajas) || data.cantidad_cajas < 0))) {
+    throw new ApiError('Packing devolvió una respuesta incompleta o de otro folio. No se cargaron esos datos.', 502);
+  }
+  return data;
 }

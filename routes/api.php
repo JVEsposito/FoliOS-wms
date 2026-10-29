@@ -353,6 +353,8 @@ Route::middleware('auth:sanctum')->group(function () {
         ->middleware('can:validar-pallets');
     Route::get('/validacion/precarga-origen', PrecargaValidacionOrigenController::class)
         ->middleware('can:validar-pallets');
+    Route::post('/validacion/precarga-origen', [PrecargaValidacionOrigenController::class, 'consultar'])
+        ->middleware(['can:validar-pallets', 'throttle:30,1']);
     Route::get(
         '/validacion/pallets/{validacionPallet}/correccion',
         [ValidacionPalletController::class, 'contextoCorreccion'],

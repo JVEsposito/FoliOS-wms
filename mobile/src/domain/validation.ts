@@ -96,6 +96,7 @@ export type AvailableValidationPrefill = {
   articulo_validacion_id: string | null;
   categoria_validacion_id: string | null;
   composicion: ValidationPrefillLine[];
+  producto?: { especie: string | null; variedad: string | null; calibre: string | null; envase: string | null };
   origen: {
     cliente: string | null;
     marca: string | null;

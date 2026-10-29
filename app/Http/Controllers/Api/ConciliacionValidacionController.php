@@ -145,10 +145,13 @@ class ConciliacionValidacionController extends Controller
         return $q;
     }
 
-    private function fuente(): array
+    private function fuente(?string $numeroPallet = null): array
     {
         $config = app(ServicioLecturaStockOrigen::class)->configuracion();
-        $ultima = LecturaStockOrigen::where('ambito', $config['ambito'])->where('bodega', $config['bodega'])->latest('iniciada_at')->latest('id')->first();
+        $ultima = LecturaStockOrigen::where('ambito', $config['ambito'])->where('bodega', $config['bodega'])
+            ->where(fn ($q) => $q->whereNull('numero_pallet')
+                ->when($numeroPallet !== null, fn ($q) => $q->orWhere('numero_pallet', $numeroPallet)))
+            ->latest('iniciada_at')->latest('id')->first();
 
         return ['ambito' => $this->conciliacion->ambito($config), 'bodega' => $config['bodega'], 'lectura_id' => $ultima?->id,
             'activa' => (bool) ($config['habilitada'] && $config['conexion']),
@@ -160,6 +163,10 @@ class ConciliacionValidacionController extends Controller
 
     private function serializar(ConciliacionValidacionOrigen $caso, array $fuente): array
     {
+        // La vigencia de un pallet consultado en la PDA no renueva la del resto de la bodega.
+        if ($caso->lectura_id !== null && $caso->lectura_id !== $fuente['lectura_id']) {
+            $fuente = $this->fuente($caso->numero_folio);
+        }
         $contexto = $this->conciliacion->contexto($caso->validacion, $caso->validacion_actual['datos']);
 
         return [...$caso->attributesToArray(), 'contexto_actual' => $contexto,

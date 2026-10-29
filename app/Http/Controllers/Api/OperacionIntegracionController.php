@@ -12,7 +12,7 @@ class OperacionIntegracionController extends Controller
 {
     public function show(Request $request, OperacionIntegracion $operacionIntegracion, ServicioOperacionesIntegracion $servicio)
     {
-        Gate::authorize($operacionIntegracion->tipo === 'stock' ? 'consultar-validaciones-pallet' : 'administrar-accesos');
+        Gate::authorize(ServicioOperacionesIntegracion::permiso($operacionIntegracion->tipo));
         abort_unless($operacionIntegracion->tipo === 'stock' || $operacionIntegracion->user_id === $request->user()->id, 403);
 
         return response()->json(['operacion' => $servicio->recurso($operacionIntegracion)], 200, ['Cache-Control' => 'private, no-store']);
