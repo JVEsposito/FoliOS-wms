@@ -45,10 +45,11 @@ function harness() {
     const module = { exports: {} }; modules.set(path, module);
     const source = ts.transpileModule(readFileSync(path, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
     vm.runInNewContext(source, {
-      module, exports: module.exports, Error, Headers, URLSearchParams, console,
+      module, exports: module.exports, Error, Headers, URLSearchParams, AbortController, setTimeout, clearTimeout, console,
       fetch: (...args) => fetchImpl(...args),
       require: (id) => {
         if (id === 'expo-file-system/legacy') return disk;
+        if (id === 'expo-crypto') return { CryptoDigestAlgorithm: { SHA256: 'SHA256' }, digestStringAsync: async (_algorithm, raw) => require('node:crypto').createHash('sha256').update(raw).digest('hex'), randomUUID: require('node:crypto').randomUUID };
         if (id === '@react-native-async-storage/async-storage') return asyncStorage;
         if (id.startsWith('.')) return load(resolve(dirname(path), id) + '.ts');
         return require(id);

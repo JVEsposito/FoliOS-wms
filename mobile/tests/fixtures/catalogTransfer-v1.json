@@ -1,0 +1,32 @@
+{
+    "coleccion": "origenes",
+    "registros": [
+        {
+            "id": "aa000000-0000-4000-8000-000000000001",
+            "cliente_validacion_id": null,
+            "csg_validacion_id": "csg",
+            "variedad_ids": [
+                "variety-b",
+                "variety-a"
+            ],
+            "cliente": "Agrícola Ñuble",
+            "marca": "Marca \"A\" / exportación\u2028",
+            "csg": "00123",
+            "predio": "Huerto 🍒",
+            "codigo_externo": null
+        },
+        {
+            "id": "aa000000-0000-4000-8000-000000000002",
+            "cliente_validacion_id": null,
+            "csg_validacion_id": null,
+            "variedad_ids": null,
+            "cliente": "Agrícola Ñuble",
+            "marca": "Marca \"A\" / exportación\u2028",
+            "csg": "00124",
+            "predio": null,
+            "codigo_externo": "012"
+        }
+    ],
+    "cuerpo": "{\"formato\":\"fragmentos-v1\",\"coleccion\":\"origenes\",\"columnas\":[\"id\",\"cliente_validacion_id\",\"csg_validacion_id\",\"variedad_ids\",\"cliente\",\"marca\",\"csg\",\"predio\",\"codigo_externo\"],\"textos\":[\"aa000000-0000-4000-8000-000000000001\",\"csg\",\"variety-a\",\"variety-b\",\"Agrícola Ñuble\",\"Marca \\\"A\\\" / exportación\u2028\",\"00123\",\"Huerto 🍒\",\"aa000000-0000-4000-8000-000000000002\",\"00124\",\"012\"],\"filas\":[[0,null,1,[2,3],4,5,6,7,null],[8,null,null,null,4,5,9,null,10]]}",
+    "sha256": "668ee7f3035e764031fabfef11a79310a3fbae47dff7fafa46242604ed8fcaf2"
+}
