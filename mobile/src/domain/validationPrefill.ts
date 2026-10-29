@@ -1,4 +1,21 @@
-import type { AvailableValidationPrefill, ValidationPrefillField } from './validation';
+import type { AvailableValidationPrefill, ValidationCatalog, ValidationPrefillField } from './validation';
+
+/** Solo selecciona valores disponibles en el catálogo. Un campo faltante no descarta los demás. */
+export function prefillProductFields(prefill: AvailableValidationPrefill, articles: ValidationCatalog['articulos']) {
+  const article = articles.find((row) => row.id === prefill.articulo_validacion_id && row.activo);
+  if (article) return { especie: article.especie, variedad: article.variedad, calibre: article.calibre, envase: article.envase };
+  const result = { especie: '', variedad: '', calibre: '', envase: '' };
+  let candidates = articles.filter((row) => row.activo);
+  for (const field of ['especie', 'variedad', 'calibre', 'envase'] as const) {
+    const source = prefill.producto ?? prefill.origen;
+    if (!source[field]) continue;
+    const matches = [...new Set(candidates.filter((row) => code(row[field]) === code(source[field])).map((row) => row[field]))];
+    if (matches.length !== 1) continue;
+    result[field] = matches[0];
+    candidates = candidates.filter((row) => row[field] === result[field]);
+  }
+  return result;
+}
 
 /** Lo que el validador tiene hoy en pantalla, para compararlo con lo que informó la planta. */
 export type ValidationPrefillForm = {
@@ -6,6 +23,7 @@ export type ValidationPrefillForm = {
   boxes: string;
   packingDate: string;
   articleId: string | null;
+  product?: { especie: string; variedad: string; calibre: string; envase: string };
   categoryId: string;
   drafts: Array<{ originId: string; boxes: string; lot: string; process: string }>;
 };
@@ -33,6 +51,9 @@ export function prefillChanges(prefill: AvailableValidationPrefill, form: Valida
   if (Number(form.boxes) !== prefill.cantidad_cajas) changes.push('cantidad_cajas');
   if (prefill.fecha_embalaje && form.packingDate !== prefill.fecha_embalaje) changes.push('fecha_embalaje');
   if (prefill.articulo_validacion_id && form.articleId !== prefill.articulo_validacion_id) changes.push('articulo');
+  if (!prefill.articulo_validacion_id && prefill.producto && form.product
+    && (['especie', 'variedad', 'calibre', 'envase'] as const).some((key) => prefill.producto?.[key]
+      && code(prefill.producto[key]) !== code(form.product?.[key]))) changes.push('articulo');
   if (prefill.categoria_validacion_id && form.categoryId !== prefill.categoria_validacion_id) changes.push('categoria');
   if (!sameComposition(prefill, form.drafts)) changes.push('composicion');
   return changes;

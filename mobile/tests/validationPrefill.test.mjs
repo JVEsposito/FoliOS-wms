@@ -64,7 +64,10 @@ function harness(prefills = {}) {
         listRecentValidations: async () => [],
         getMyValidationSession: async () => session,
         listValidationsByFolio: async () => [],
-        getValidationPrefill: async (url, token, folio) => { prefillRequests.push(folio); return prefills[folio] ?? { disponible: false, motivo: 'El sistema de planta no tiene este pallet en bodega.' }; },
+        getValidationPrefill: async (url, token, folio, options) => {
+          prefillRequests.push(folio);
+          return typeof prefills[folio] === 'function' ? prefills[folio](options) : prefills[folio] ?? { disponible: false, motivo: 'El sistema de planta no tiene este pallet en bodega.' };
+        },
         registerValidation: async (url, token, payload) => { registered.push(JSON.parse(JSON.stringify(payload))); return attempt(payload); },
       };
       if (id.endsWith('/services/validationOfflineStore')) return {
@@ -158,11 +161,78 @@ const planta = (cambios = {}) => ({
   ...cambios,
 });
 
+test('precarga los campos conocidos aunque falte un envase y deja la fecha ausente para completar', async () => {
+  const h = harness({ 2610160001: planta({ articulo_validacion_id: null, fecha_embalaje: null,
+    producto: { especie: 'Cereza', variedad: 'Santina', calibre: '2J', envase: null },
+    pendientes: ['Envase sin equivalencia', 'Fecha de embalaje no informada por packing.'] }) });
+  try {
+    await h.mount(); await h.scan('2610160001');
+    assert.equal(h.field('Especie').props.value, 'Cereza');
+    assert.equal(h.field('Variedad').props.value, 'Santina');
+    assert.equal(h.field('Calibre').props.value, '2J');
+    assert.equal(h.field('Envase').props.value, '');
+    assert.equal(h.field('Cliente').props.value, 'Cliente');
+    assert.ok(h.message().includes('Completar: Envase sin equivalencia'));
+    assert.equal(h.registered.length, 0);
+    await h.press('Aprobar');
+    assert.equal(h.registered.length, 0, 'No aprueba con campos obligatorios sin completar');
+  } finally { await h.unmount(); }
+});
+
+test('un fallo de consulta se explica y un folio nuevo no hereda los datos del anterior', async () => {
+  const h = harness({ 2610160001: planta(), NUEVO: async () => { throw new Error('La base de packing no respondió.'); } });
+  try {
+    await h.mount(); await h.scan('2610160001');
+    await h.scan('NUEVO');
+    assert.match(h.message(), /No se pudieron cargar los datos de packing/);
+    assert.match(h.message(), /La base de packing no respondió/);
+    assert.equal(h.boxes()[0].props.value, '');
+    assert.equal(h.field('Cliente').props.value, '');
+    assert.equal(h.field('Especie').props.value, '');
+    assert.equal(h.registered.length, 0);
+  } finally { await h.unmount(); }
+});
+
+test('continuar manualmente conserva las correcciones ante una respuesta tardía', async () => {
+  let finish;
+  const h = harness({ 2610160001: () => new Promise((resolve) => { finish = resolve; }) });
+  try {
+    await h.mount(); await h.scan('2610160001');
+    assert.match(h.message(), /Buscando los datos del folio en packing/);
+    assert.equal(h.boxes()[0].props.editable, false);
+    assert.equal(h.field('Cliente').props.disabled, true);
+    await h.press('Continuar manualmente');
+    assert.equal(h.boxes()[0].props.editable, true);
+    await h.type(h.boxes()[0], '37');
+    await act(async () => finish(planta()));
+    assert.equal(h.boxes()[0].props.value, '37');
+    assert.equal(h.field('Cliente').props.value, '');
+    assert.match(h.message(), /La consulta pendiente no cambiará tus datos/);
+    assert.equal(h.registered.length, 0);
+  } finally { await h.unmount(); }
+});
+
+test('la consulta del primer folio no sustituye una segunda captura', async () => {
+  let finish;
+  const h = harness({ PRIMERO: () => new Promise((resolve) => { finish = resolve; }),
+    SEGUNDO: planta({ numero_folio: 'SEGUNDO', cantidad_cajas: 42,
+      composicion: [{ csg: '11111', origen_validacion_id: 'csg-1', cantidad_cajas: 42, lote_materia_prima: 'L-42', proceso_packing: 'P-42' }] }) });
+  try {
+    await h.mount(); await h.scan('PRIMERO');
+    await h.press('Continuar manualmente'); await h.scan('SEGUNDO');
+    await act(async () => finish(planta({ numero_folio: 'PRIMERO' })));
+    assert.equal(h.boxes()[0].props.value, '42');
+    assert.deepEqual(h.traceValues(), ['L-42', 'P-42']);
+    assert.match(h.message(), /Datos de planta cargados para SEGUNDO/);
+  } finally { await h.unmount(); }
+});
+
 test('al ingresar el folio la PDA replica los datos de planta y el validador solo confirma', async () => {
   const h = harness({ 2610160001: planta() });
   try {
     await h.mount(); await h.scan('2610160001');
     assert.deepEqual(h.prefillRequests, ['2610160001']);
+    assert.equal(h.registered.length, 0, 'La lectura nunca registra ni aprueba el pallet');
     for (const [label, value] of [['Cliente', 'Cliente'], ['Marca', 'Marca'], ['CSG / Predio 1', 'csg-1'], ['CSG / Predio 2', 'csg-2'],
       ['Especie', 'Cereza'], ['Variedad', 'Santina'], ['Calibre', '2J'], ['Envase', '5 kg'], ['Categoría', 'category']]) {
       assert.equal(h.field(label).props.value, value, `Precarga ${label}`);

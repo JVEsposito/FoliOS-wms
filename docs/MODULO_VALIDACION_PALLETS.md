@@ -145,8 +145,10 @@ se modifica para forzar un reintento.
 ## Precarga con los datos de planta
 
 Con conexión, al ingresar un folio sin validaciones anteriores la PDA consulta
-`GET /api/validacion/precarga-origen?numero_folio=…` y parte con lo que el sistema de
-planta informa del pallet (lectura de stock, ver
+`POST /api/validacion/precarga-origen` y parte con lo que el sistema de
+planta informa del pallet. Si falta una copia vigente, consulta ese folio en la cola
+de Integraciones y permite continuar manualmente mientras espera. El GET anterior
+se conserva para aplicaciones existentes (lectura de stock, ver
 [Pendientes por validar](PENDIENTES_VALIDACION_ORIGEN.md)):
 
 - tipo de bulto, cajas y fecha de embalaje;
@@ -160,8 +162,9 @@ lo que falta completar porque no tiene equivalencia en el catálogo y lo que el 
 ya corrigió. El registro sigue validando cada dato contra el catálogo, igual que antes.
 
 Cada línea de la PDA es un CSG con su lote y proceso: las filas del origen que solo
-difieren en productor o variedad se suman. Un CSG o un producto sin equivalencia llegan
-sin seleccionar, para completarlos a mano; completar no cuenta como corrección.
+difieren en productor o variedad se suman. Los campos sin equivalencia llegan sin
+seleccionar para completarlos a mano; se conservan las otras dimensiones conocidas
+del producto. Completar un dato que packing no pudo traducir no cuenta como corrección.
 
 No hay precarga si la PDA está sin conexión, si la lectura de planta no está configurada,
 si el pallet no figura en la bodega de planta o si ya salió según la última lectura. En
@@ -407,3 +410,6 @@ carga y composición.
 - El reinicio controlado de datos de prueba solo descarta la trazabilidad de los folios
   que él mismo elimina. Si un pallet de otra temporada depende de un lote que se
   eliminaría, el reinicio se bloquea sin borrar datos.
+
+El procedimiento de instalación y prueba de la consulta puntual está en
+[Precarga de packing en PDA](operaciones/precarga-packing-pda.md).

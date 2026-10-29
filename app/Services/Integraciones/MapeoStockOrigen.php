@@ -25,7 +25,7 @@ class MapeoStockOrigen
     public function __construct(private readonly ExploradorMySql $explorador) {}
 
     /** @return array{string, array} */
-    public function consulta(array $ajustes, array $columnas, bool $muestra = false): array
+    public function consulta(array $ajustes, array $columnas, bool $muestra = false, ?string $numeroPallet = null): array
     {
         $tabla = ExploradorMySql::identificador($ajustes['tabla']);
         $mapa = $ajustes['campos'];
@@ -46,6 +46,11 @@ class MapeoStockOrigen
             $seleccion[] = $expresion.' AS '.ExploradorMySql::identificador($campo);
         }
         [$where, $parametros] = $this->explorador->condiciones($columnas, $ajustes['filtros']);
+        if ($numeroPallet !== null) {
+            $where .= ($where === '' ? ' WHERE ' : ' AND ')
+                .'UPPER(TRIM(CAST('.ExploradorMySql::identificador($mapa['Pallet']).' AS CHAR))) = ?';
+            $parametros[] = $numeroPallet;
+        }
 
         return ['SELECT '.implode(', ', $seleccion).' FROM '.$tabla.$where.' LIMIT '.($muestra ? 10 : self::MAX_FILAS + 1), $parametros];
     }

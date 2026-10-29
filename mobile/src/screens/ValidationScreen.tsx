@@ -57,7 +57,7 @@ import { isPdaBuild } from '../config/appVariant';
 import { ScanInput, ScanInputHandle } from '../components/ui/ScanInput';
 import { LabelCell, LabelCounters, LabelRow, LabelSection, ResultTalon, SignalMark, StatusChip, TalonRow, type LabelTone } from '../components/validation/ValidationLabel';
 import { articlesForOrigins, createOriginArticleSelector, indexValidationCatalog, productCompatibleWithOrigins } from '../domain/validationCatalogIndex';
-import { PREFILL_FIELD_LABELS, prefillChanges } from '../domain/validationPrefill';
+import { PREFILL_FIELD_LABELS, prefillChanges, prefillProductFields } from '../domain/validationPrefill';
 
 type ValidationScreenProps = {
   auth: AuthSession;
@@ -149,6 +149,8 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
   const [decisionError, setDecisionError] = useState('');
   // Datos de planta con que partió el folio: el validador confirma o corrige lo que no coincide.
   const [prefill, setPrefill] = useState<AvailableValidationPrefill | null>(null);
+  const [prefillPhase, setPrefillPhase] = useState('');
+  const folioRequest = useRef(0);
 
   const userId = auth.usuario.id;
   const deviceId = auth.dispositivo.id;
@@ -171,6 +173,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
     sessionExpanded ? validationSession.data.length : Math.max(0, 6 - currentSessionOutbox.length),
   ) ?? [];
   const terminalDecision = folioReview?.status === 'aprobado' || folioReview?.status === 'rechazado';
+  const captureLocked = terminalDecision || Boolean(prefillPhase);
   const observedAttempt = folioReview?.status === 'observado' ? folioReview.attempt : null;
 
   const catalogIndex = useMemo(() => catalog ? indexValidationCatalog(catalog) : null, [catalog]);
@@ -247,7 +250,8 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
   const compositionBoxes = originDrafts.reduce((sum, draft) => sum + Number(draft.boxes || 0), 0);
   const prefillDiff = useMemo(() => prefill ? prefillChanges(prefill, {
     packageType, boxes, packingDate, articleId: selectedArticle?.id ?? null, categoryId, drafts: originDrafts,
-  }) : [], [prefill, packageType, boxes, packingDate, selectedArticle, categoryId, originDrafts]);
+    product: { especie: species, variedad: variety, calibre: caliber, envase: packageName },
+  }) : [], [prefill, packageType, boxes, packingDate, selectedArticle, categoryId, originDrafts, species, variety, caliber, packageName]);
   const selectedCombination = originDrafts.length > 0
     && selectedOrigins.every(Boolean)
     && selectedCombinations.every(Boolean);
@@ -281,6 +285,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
 
   useEffect(() => {
     void initialize();
+    return () => { folioRequest.current++; };
   }, []);
 
   useOperationalPolling(
@@ -464,6 +469,10 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
 
   function handleFolioChange(value: string) {
     if (editingOutbox) return;
+    if (normalizeFolio(value) !== normalizeFolio(folio)) {
+      folioRequest.current++;
+      if (prefillPhase) { setPrefillPhase(''); setBusy(false); }
+    }
     setFolio(value);
     if (folioReview && normalizeFolio(value) !== folioReview.numero_folio) {
       setFolioReview(null);
@@ -541,12 +550,15 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
       setError('Escanea o ingresa el folio.');
       return;
     }
+    const requestId = ++folioRequest.current;
+    const current = () => folioRequest.current === requestId;
 
     setFolio(normalized);
     setError('');
     setNotice('');
     setLastResult(null);
     setPrefill(null);
+    setPrefillPhase('');
 
     const localItem = outbox.find((item) => normalizeFolio(item.payload.numero_folio) === normalized);
     if (localItem) {
@@ -588,6 +600,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
       }
 
       const accepted = attempts.find((item) => item.estado === 'aceptada') ?? null;
+      if (!current()) return;
       if (!accepted) {
         if (!baseUrl && cachedAttempts.length === 0) {
           setError('Conecta la PDA para comprobar si el folio posee validaciones anteriores.');
@@ -595,8 +608,15 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
           return;
         }
         setFolioReview({ numero_folio: normalized, status: 'nuevo', attempt: null });
+        // Un folio nuevo nunca hereda cajas ni producto del pallet anterior.
+        if (folioReview?.numero_folio !== normalized) {
+          setBoxes(''); setPackageType('pallet'); setClient(''); setBrand('');
+          setOriginDrafts([newOriginDraft()]); setPackingDate(todayLocal()); setCategoryId('');
+          resetProduct(); setObservation(null);
+        }
         // Con conexión, la PDA parte con lo que la planta informa del pallet.
-        const source = baseUrl ? await loadPrefill(baseUrl, normalized) : null;
+        const source = baseUrl ? await loadPrefill(baseUrl, normalized, requestId) : null;
+        if (!current()) return;
         setNotice(source?.available
           ? `Datos de planta cargados para ${normalized}. Revisa el pallet y corrige solo lo que no coincida.`
           : `${normalized} no posee validaciones anteriores en la temporada activa.${source?.reason ? ` ${source.reason}` : ''}`);
@@ -612,21 +632,36 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
         setNotice(`${normalized} posee un rechazo definitivo en el intento ${accepted.numero_intento}.`);
       }
     } catch (reason) {
-      setError(messageFrom(reason));
+      if (current()) setError(messageFrom(reason));
     } finally {
-      setBusy(false);
+      if (current()) { setBusy(false); setPrefillPhase(''); }
     }
   }
 
   /** Sin datos de planta se valida como siempre: el aviso explica por qué. */
-  async function loadPrefill(url: string, normalized: string): Promise<{ available: boolean; reason: string | null }> {
+  async function loadPrefill(url: string, normalized: string, requestId: number): Promise<{ available: boolean; reason: string | null }> {
+    const valid = () => folioRequest.current === requestId && catalogRef.current?.temporada.id === catalog?.temporada.id;
+    if (!catalog) return { available: false, reason: 'Actualiza el catálogo de la PDA para cargar los datos de packing.' };
     try {
-      const data = await getValidationPrefill(url, auth.token, normalized);
+      setPrefillPhase('Buscando los datos del folio en packing…');
+      const data = await getValidationPrefill(url, auth.token, normalized, {
+        temporadaId: catalog.temporada.id, valid,
+        onProgress: (phase) => { if (valid()) setPrefillPhase(phase); },
+      });
+      if (!valid()) return { available: false, reason: null };
       if (!data.disponible) return { available: false, reason: data.motivo };
       return { available: applyPrefill(data), reason: null };
-    } catch {
-      return { available: false, reason: null };
+    } catch (reason) {
+      if (!valid()) return { available: false, reason: null };
+      if (reason instanceof ApiError && [401, 403, 409].includes(reason.status)) throw reason;
+      return { available: false, reason: `No se pudieron cargar los datos de packing. ${messageFrom(reason)} Puedes completarlos manualmente.` };
     }
+  }
+
+  function continueWithoutPrefill() {
+    folioRequest.current++;
+    setPrefillPhase(''); setBusy(false);
+    setNotice('Continúa completando la etiqueta manualmente. La consulta pendiente no cambiará tus datos.');
   }
 
   function applyPrefill(data: AvailableValidationPrefill): boolean {
@@ -638,12 +673,12 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
       ?? catalog.origenes.find((origin) => origin.activo && origin.cliente === data.origen.cliente)?.cliente ?? '';
     const prefillBrand = first?.marca
       ?? catalog.origenes.find((origin) => origin.activo && origin.cliente === prefillClient && origin.marca === data.origen.marca)?.marca ?? '';
-    const article = catalog.articulos.find((item) => item.id === data.articulo_validacion_id && item.activo) ?? null;
+    const product = prefillProductFields(data, catalog.articulos);
     const category = catalog.categorias.find((item) => item.id === data.categoria_validacion_id && item.activo) ?? null;
 
     setPackageType(data.tipo_bulto);
     setBoxes(String(data.cantidad_cajas));
-    setPackingDate(data.fecha_embalaje ?? todayLocal());
+    setPackingDate(data.fecha_embalaje ?? '');
     setClient(prefillClient);
     setBrand(prefillBrand);
     setOriginDrafts(data.composicion.length ? data.composicion.map((line, index) => {
@@ -656,8 +691,8 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
         process: line.proceso_packing ?? '',
       };
     }) : [newOriginDraft()]);
-    setSpecies(article?.especie ?? ''); setVariety(article?.variedad ?? '');
-    setCaliber(article?.calibre ?? ''); setPackageName(article?.envase ?? '');
+    setSpecies(product.especie); setVariety(product.variedad);
+    setCaliber(product.calibre); setPackageName(product.envase);
     setCategoryId(category?.id ?? '');
     setOriginError('');
     setPrefill(data);
@@ -1057,12 +1092,12 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
     <LabelCell label="Cajas del bulto">
       <TextInput
         accessibilityLabel="Cajas del bulto"
-        editable={!terminalDecision}
+        editable={!captureLocked}
         keyboardType="number-pad"
         onChangeText={(value) => { const clean = value.replace(/[^0-9]/g, ''); setBoxes(clean); setOriginDrafts((current) => current.length === 1 ? [{ ...current[0], boxes: clean }] : current); }}
         placeholder="0"
         placeholderTextColor={o.color.muted}
-        style={[styles.cellInput, styles.cellInputNumber, terminalDecision && styles.disabled]}
+        style={[styles.cellInput, styles.cellInputNumber, captureLocked && styles.disabled]}
         value={boxes}
       />
     </LabelCell>
@@ -1084,6 +1119,12 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
           value={folio}
         />
         {folioReview ? <FolioReviewCard review={folioReview} /> : null}
+        {prefillPhase ? <View style={styles.review} accessibilityLiveRegion="polite">
+          <Text style={styles.reviewText}>{prefillPhase}</Text>
+          <Pressable onPress={continueWithoutPrefill} style={styles.secondaryButton}>
+            <Text style={styles.secondaryButtonText}>Continuar manualmente</Text>
+          </Pressable>
+        </View> : null}
         {prefill && folioReview?.status === 'nuevo' ? <PrefillCard changes={prefillDiff} prefill={prefill} /> : null}
         {editingOutbox ? (
           <View style={styles.correction}>
@@ -1103,10 +1144,10 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
               {(['pallet', 'saldo'] as const).map((type) => (
                 <Pressable
                   accessibilityState={{ selected: packageType === type }}
-                  disabled={terminalDecision}
+                  disabled={captureLocked}
                   key={type}
                   onPress={() => setPackageType(type)}
-                  style={[styles.segment, type === 'pallet' && styles.segmentWide, packageType === type && styles.segmentActive, terminalDecision && styles.disabled]}
+                  style={[styles.segment, type === 'pallet' && styles.segmentWide, packageType === type && styles.segmentActive, captureLocked && styles.disabled]}
                 >
                   <Text numberOfLines={1} style={[styles.segmentText, packageType === type && styles.segmentTextActive]}>{packageType === type ? '✓ ' : ''}{type === 'pallet' ? 'Pallet completo' : 'Saldo'}</Text>
                 </Pressable>
@@ -1121,21 +1162,21 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
       <LabelSection index={2} title="Origen comercial" hint={wide ? 'Una sola fecha por bulto validado en línea' : undefined}>
         {wide ? (
           <LabelRow last>
-            <SelectField divider disabled={terminalDecision} label="Cliente" options={clientOptions} value={client} onChange={(value) => { setClient(value); setBrand(''); setOriginDrafts([newOriginDraft()]); resetProduct(); }} />
-            <SelectField divider disabled={terminalDecision || !client} emptyLabel={client ? 'Seleccionar' : 'Primero el cliente'} label="Marca" options={brandOptions} value={brand} onChange={(value) => { setBrand(value); setOriginDrafts([newOriginDraft()]); resetProduct(); }} />
+            <SelectField divider disabled={captureLocked} label="Cliente" options={clientOptions} value={client} onChange={(value) => { setClient(value); setBrand(''); setOriginDrafts([newOriginDraft()]); resetProduct(); }} />
+            <SelectField divider disabled={captureLocked || !client} emptyLabel={client ? 'Seleccionar' : 'Primero el cliente'} label="Marca" options={brandOptions} value={brand} onChange={(value) => { setBrand(value); setOriginDrafts([newOriginDraft()]); resetProduct(); }} />
             <LabelCell label="Fecha de embalaje">
-              <TextInput accessibilityLabel="Fecha de embalaje" editable={!terminalDecision} onChangeText={setPackingDate} placeholder="AAAA-MM-DD" placeholderTextColor={o.color.muted} style={[styles.cellInput, styles.cellInputCode, terminalDecision && styles.disabled]} value={packingDate} />
+              <TextInput accessibilityLabel="Fecha de embalaje" editable={!captureLocked} onChangeText={setPackingDate} placeholder="AAAA-MM-DD" placeholderTextColor={o.color.muted} style={[styles.cellInput, styles.cellInputCode, captureLocked && styles.disabled]} value={packingDate} />
             </LabelCell>
           </LabelRow>
         ) : (
           <>
             <LabelRow>
-              <SelectField disabled={terminalDecision} label="Cliente" options={clientOptions} value={client} onChange={(value) => { setClient(value); setBrand(''); setOriginDrafts([newOriginDraft()]); resetProduct(); }} />
+              <SelectField disabled={captureLocked} label="Cliente" options={clientOptions} value={client} onChange={(value) => { setClient(value); setBrand(''); setOriginDrafts([newOriginDraft()]); resetProduct(); }} />
             </LabelRow>
             <LabelRow last>
-              <SelectField divider disabled={terminalDecision || !client} emptyLabel={client ? 'Seleccionar' : 'Primero el cliente'} label="Marca" options={brandOptions} value={brand} onChange={(value) => { setBrand(value); setOriginDrafts([newOriginDraft()]); resetProduct(); }} />
+              <SelectField divider disabled={captureLocked || !client} emptyLabel={client ? 'Seleccionar' : 'Primero el cliente'} label="Marca" options={brandOptions} value={brand} onChange={(value) => { setBrand(value); setOriginDrafts([newOriginDraft()]); resetProduct(); }} />
               <LabelCell hint="Una por bulto" label="Fecha de embalaje">
-                <TextInput accessibilityLabel="Fecha de embalaje" editable={!terminalDecision} onChangeText={setPackingDate} placeholder="AAAA-MM-DD" placeholderTextColor={o.color.muted} style={[styles.cellInput, styles.cellInputCode, terminalDecision && styles.disabled]} value={packingDate} />
+                <TextInput accessibilityLabel="Fecha de embalaje" editable={!captureLocked} onChangeText={setPackingDate} placeholder="AAAA-MM-DD" placeholderTextColor={o.color.muted} style={[styles.cellInput, styles.cellInputCode, captureLocked && styles.disabled]} value={packingDate} />
               </LabelCell>
             </LabelRow>
           </>
@@ -1160,7 +1201,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
         {originDrafts.map((draft, index) => {
           const csg = (
             <SelectField
-              disabled={terminalDecision || !brand}
+              disabled={captureLocked || !brand}
               divider={wide}
               emptyLabel={brand ? 'Seleccionar' : 'Primero la marca'}
               flex={wide ? 1.5 : 1}
@@ -1175,16 +1216,16 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
           const remove = originDrafts.length > 1 ? (
             <Pressable
               accessibilityLabel={`Quitar la línea ${index + 1}`}
-              disabled={terminalDecision}
+              disabled={captureLocked}
               onPress={() => updateOriginDrafts(originDrafts.filter((item) => item.key !== draft.key))}
               style={styles.removeButton}
             >
               <Text style={styles.removeText}>Quitar</Text>
             </Pressable>
           ) : null;
-          const boxesInput = <TextInput accessibilityLabel={`Cajas de la línea ${index + 1}`} editable={!terminalDecision} keyboardType="number-pad" onChangeText={(value) => setOriginDrafts((current) => current.map((item) => item.key === draft.key ? { ...item, boxes: value.replace(/[^0-9]/g, '') } : item))} placeholder="0" placeholderTextColor={o.color.muted} style={[styles.cellInput, styles.cellInputNumberSmall]} value={draft.boxes} />;
-          const lotInput = <TextInput accessibilityLabel={`Lote MP de la línea ${index + 1}`} autoCapitalize="characters" autoCorrect={false} editable={!terminalDecision} onChangeText={(value) => setOriginDrafts((current) => current.map((item) => item.key === draft.key ? { ...item, lot: value } : item))} placeholder="Según etiqueta" placeholderTextColor={o.color.muted} style={[styles.cellInput, styles.cellInputCode, compact && styles.cellInputCodeCompact]} value={draft.lot} />;
-          const processInput = <TextInput accessibilityLabel={`Proceso packing de la línea ${index + 1}`} autoCapitalize="characters" autoCorrect={false} editable={!terminalDecision} onChangeText={(value) => setOriginDrafts((current) => current.map((item) => item.key === draft.key ? { ...item, process: value } : item))} placeholder="Según etiqueta" placeholderTextColor={o.color.muted} style={[styles.cellInput, styles.cellInputCode, compact && styles.cellInputCodeCompact]} value={draft.process} />;
+          const boxesInput = <TextInput accessibilityLabel={`Cajas de la línea ${index + 1}`} editable={!captureLocked} keyboardType="number-pad" onChangeText={(value) => setOriginDrafts((current) => current.map((item) => item.key === draft.key ? { ...item, boxes: value.replace(/[^0-9]/g, '') } : item))} placeholder="0" placeholderTextColor={o.color.muted} style={[styles.cellInput, styles.cellInputNumberSmall]} value={draft.boxes} />;
+          const lotInput = <TextInput accessibilityLabel={`Lote MP de la línea ${index + 1}`} autoCapitalize="characters" autoCorrect={false} editable={!captureLocked} onChangeText={(value) => setOriginDrafts((current) => current.map((item) => item.key === draft.key ? { ...item, lot: value } : item))} placeholder="Según etiqueta" placeholderTextColor={o.color.muted} style={[styles.cellInput, styles.cellInputCode, compact && styles.cellInputCodeCompact]} value={draft.lot} />;
+          const processInput = <TextInput accessibilityLabel={`Proceso packing de la línea ${index + 1}`} autoCapitalize="characters" autoCorrect={false} editable={!captureLocked} onChangeText={(value) => setOriginDrafts((current) => current.map((item) => item.key === draft.key ? { ...item, process: value } : item))} placeholder="Según etiqueta" placeholderTextColor={o.color.muted} style={[styles.cellInput, styles.cellInputCode, compact && styles.cellInputCodeCompact]} value={draft.process} />;
           return wide ? (
             <View key={draft.key} style={styles.compositionRow}>
               {csg}
@@ -1208,7 +1249,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
           );
         })}
         <View style={styles.compositionFoot}>
-          <Pressable disabled={terminalDecision || !brand} onPress={() => updateOriginDrafts([...originDrafts, newOriginDraft()])} style={[styles.addButton, (terminalDecision || !brand) && styles.disabled]}>
+          <Pressable disabled={captureLocked || !brand} onPress={() => updateOriginDrafts([...originDrafts, newOriginDraft()])} style={[styles.addButton, (captureLocked || !brand) && styles.disabled]}>
             <Text style={styles.linkText}>+ Agregar línea (otro CSG, lote o proceso)</Text>
           </Pressable>
           {originError ? <Text accessibilityRole="alert" style={styles.originError}>{originError}</Text> : null}
@@ -1219,20 +1260,20 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
         {noCsgYet && !wide ? <Text style={styles.sectionNote}>Elige el CSG para filtrar las variedades.</Text> : null}
         {wide ? (
           <LabelRow last>
-            <SelectField divider disabled={terminalDecision || !selectedOriginIds.length} label="Especie" options={speciesOptions} value={species} onChange={(value) => { setSpecies(value); setVariety(''); setCaliber(''); setPackageName(''); }} />
-            <SelectField divider disabled={terminalDecision || !species || noCsgYet} label="Variedad" options={varietyOptions} value={variety} onChange={(value) => { setVariety(value); setCaliber(''); setPackageName(''); }} />
-            <SelectField divider disabled={terminalDecision || !variety} label="Calibre" options={caliberOptions} value={caliber} onChange={(value) => { setCaliber(value); setPackageName(''); }} />
-            <SelectField disabled={terminalDecision || !caliber} label="Envase" options={packageOptions} value={packageName} onChange={setPackageName} />
+            <SelectField divider disabled={captureLocked || !selectedOriginIds.length} label="Especie" options={speciesOptions} value={species} onChange={(value) => { setSpecies(value); setVariety(''); setCaliber(''); setPackageName(''); }} />
+            <SelectField divider disabled={captureLocked || !species || noCsgYet} label="Variedad" options={varietyOptions} value={variety} onChange={(value) => { setVariety(value); setCaliber(''); setPackageName(''); }} />
+            <SelectField divider disabled={captureLocked || !variety} label="Calibre" options={caliberOptions} value={caliber} onChange={(value) => { setCaliber(value); setPackageName(''); }} />
+            <SelectField disabled={captureLocked || !caliber} label="Envase" options={packageOptions} value={packageName} onChange={setPackageName} />
           </LabelRow>
         ) : (
           <>
             <LabelRow>
-              <SelectField divider disabled={terminalDecision || !selectedOriginIds.length} label="Especie" options={speciesOptions} value={species} onChange={(value) => { setSpecies(value); setVariety(''); setCaliber(''); setPackageName(''); }} />
-              <SelectField disabled={terminalDecision || !species || noCsgYet} label="Variedad" options={varietyOptions} value={variety} onChange={(value) => { setVariety(value); setCaliber(''); setPackageName(''); }} />
+              <SelectField divider disabled={captureLocked || !selectedOriginIds.length} label="Especie" options={speciesOptions} value={species} onChange={(value) => { setSpecies(value); setVariety(''); setCaliber(''); setPackageName(''); }} />
+              <SelectField disabled={captureLocked || !species || noCsgYet} label="Variedad" options={varietyOptions} value={variety} onChange={(value) => { setVariety(value); setCaliber(''); setPackageName(''); }} />
             </LabelRow>
             <LabelRow last>
-              <SelectField divider disabled={terminalDecision || !variety} label="Calibre" options={caliberOptions} value={caliber} onChange={(value) => { setCaliber(value); setPackageName(''); }} />
-              <SelectField disabled={terminalDecision || !caliber} label="Envase" options={packageOptions} value={packageName} onChange={setPackageName} />
+              <SelectField divider disabled={captureLocked || !variety} label="Calibre" options={caliberOptions} value={caliber} onChange={(value) => { setCaliber(value); setPackageName(''); }} />
+              <SelectField disabled={captureLocked || !caliber} label="Envase" options={packageOptions} value={packageName} onChange={setPackageName} />
             </LabelRow>
           </>
         )}
@@ -1240,7 +1281,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
 
       <LabelSection index={5} title="Categoría">
         <LabelRow last>
-          <SelectField disabled={terminalDecision || !packageName} label="Categoría" options={categoryOptions} searchable value={categoryId} onChange={setCategoryId} />
+          <SelectField disabled={captureLocked || !packageName} label="Categoría" options={categoryOptions} searchable value={categoryId} onChange={setCategoryId} />
         </LabelRow>
       </LabelSection>
     </View>

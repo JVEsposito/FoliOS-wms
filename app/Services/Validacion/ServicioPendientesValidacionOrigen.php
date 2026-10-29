@@ -127,7 +127,9 @@ class ServicioPendientesValidacionOrigen
             ->map(fn (Folio $folio): array => $this->folio($folio))
             ->values()
             ->all();
-        $hayCopia = PalletStockOrigen::query()->where('ambito', $config['ambito'])->where('bodega', $bodega)->exists();
+        // Una búsqueda de un pallet no permite concluir que los demás falten en packing.
+        $hayCopia = LecturaStockOrigen::whereNull('numero_pallet')->where('ambito', $config['ambito'])
+            ->where('bodega', $bodega)->where('estado', 'correcta')->exists();
 
         return [
             'fuente' => [
@@ -389,8 +391,8 @@ class ServicioPendientesValidacionOrigen
     /** @return array<string, mixed> */
     private function estadoLectura(string $bodega, string $ambito): array
     {
-        $ultima = LecturaStockOrigen::query()->where('ambito', $ambito)->where('bodega', $bodega)->latest('iniciada_at')->first();
-        $correcta = LecturaStockOrigen::query()->where('ambito', $ambito)->where('bodega', $bodega)->where('estado', 'correcta')->latest('iniciada_at')->first();
+        $ultima = LecturaStockOrigen::query()->whereNull('numero_pallet')->where('ambito', $ambito)->where('bodega', $bodega)->latest('iniciada_at')->first();
+        $correcta = LecturaStockOrigen::query()->whereNull('numero_pallet')->where('ambito', $ambito)->where('bodega', $bodega)->where('estado', 'correcta')->latest('iniciada_at')->first();
         $vigencia = (int) config('integraciones.stock_pt.vigencia_minutos', 20);
 
         return [

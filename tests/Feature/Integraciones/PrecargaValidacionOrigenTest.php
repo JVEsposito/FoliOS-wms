@@ -3,13 +3,16 @@
 namespace Tests\Feature\Integraciones;
 
 use App\Enums\RolUsuario;
+use App\Jobs\EjecutarOperacionIntegracion;
 use App\Models\ArticuloValidacion;
 use App\Models\ClienteValidacion;
 use App\Models\CombinacionValidacion;
 use App\Models\ConexionExterna;
 use App\Models\CsgValidacion;
 use App\Models\Dispositivo;
+use App\Models\Folio;
 use App\Models\MarcaValidacion;
+use App\Models\OperacionIntegracion;
 use App\Models\OrigenValidacion;
 use App\Models\PalletStockOrigen;
 use App\Models\Temporada;
@@ -17,6 +20,7 @@ use App\Models\User;
 use App\Models\ValidacionPallet;
 use App\Services\Clientes\ServicioCliente;
 use App\Services\Integraciones\ConectorMySqlLectura;
+use App\Services\Integraciones\ServicioOperacionesIntegracion;
 use App\Services\Validacion\ServicioCatalogoJerarquicoValidacion;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -124,6 +128,43 @@ class PrecargaValidacionOrigenTest extends TestCase
         $this->conToken($token)->postJson('/api/validacion/pallets', [...$payload, 'operacion_id' => (string) Str::uuid(), 'precarga_origen' => ['huella' => 'corta', 'modificados' => ['otra_cosa']]])
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['precarga_origen.huella', 'precarga_origen.modificados.0']);
+    }
+
+    public function test_packing_recien_ingresado_se_precarga_en_cola_y_solo_nace_en_folios_al_confirmar(): void
+    {
+        $catalogo = $this->catalogo();
+        $this->leer([$this->fila('OTRO')]);
+        $this->respuesta = [$this->fila('P-NUEVO', ['cantidad' => 80])];
+        [, $token] = $this->validador('PDA-PRECARGA-NUEVO');
+        $r = $this->conToken($token)->postJson('/api/validacion/precarga-origen', [
+            'numero_folio' => 'P-NUEVO', 'temporada_id' => $catalogo['temporada']->id,
+        ])->assertStatus(202);
+        $op = OperacionIntegracion::findOrFail($r->json('operacion.id'));
+        (new EjecutarOperacionIntegracion($op->id))->handle(app(ServicioOperacionesIntegracion::class));
+        $datos = $this->conToken($token)->getJson('/api/integraciones/operaciones/'.$op->id)
+            ->assertOk()->assertJsonPath('operacion.estado', 'correcta')->json('operacion.respuesta.contenido.data');
+        $this->assertSame($catalogo['articulo']->id, $datos['articulo_validacion_id']);
+        $this->assertSame(80, $datos['cantidad_cajas']);
+        $this->assertFalse(Folio::where('numero_folio', 'P-NUEVO')->exists());
+        $this->assertFalse(ValidacionPallet::where('numero_folio', 'P-NUEVO')->exists());
+        $payload = [
+            'operacion_id' => (string) Str::uuid(), 'numero_folio' => 'P-NUEVO', 'tipo_bulto' => $datos['tipo_bulto'],
+            'cantidad_cajas' => 78, 'linea_proceso' => 1, 'turno' => 'A', 'temporada_id' => $catalogo['temporada']->id,
+            'catalogo_version' => $catalogo['temporada']->refresh()->version_catalogo,
+            'articulo_validacion_id' => $datos['articulo_validacion_id'], 'categoria_validacion_id' => $datos['categoria_validacion_id'],
+            'origen_validacion_id' => $datos['composicion'][0]['origen_validacion_id'], 'fecha_embalaje' => $datos['fecha_embalaje'],
+            'composicion' => [[...$datos['composicion'][0], 'cantidad_cajas' => 78]],
+            'resultado' => 'aprobado', 'generado_dispositivo_at' => now()->toAtomString(),
+            'precarga_origen' => ['huella' => $datos['huella'], 'modificados' => ['cantidad_cajas', 'composicion']],
+        ];
+        $this->conToken($token)->postJson('/api/validacion/pallets', $payload)->assertCreated()
+            ->assertJsonPath('data.precarga_origen.coincide_con_copia_vigente', true);
+        $this->conToken($token)->postJson('/api/validacion/pallets', $payload)->assertOk();
+        $this->assertSame(1, Folio::where('numero_folio', 'P-NUEVO')->count());
+        $this->assertSame(1, ValidacionPallet::where('numero_folio', 'P-NUEVO')->count());
+        $this->assertTrue(PalletStockOrigen::where('numero_pallet', 'OTRO')->sole()->presente);
+        $this->conToken($token)->getJson('/api/validacion/pendientes-origen/conciliaciones?folio=P-NUEVO')
+            ->assertOk()->assertJsonPath('casos.data.0.comprobacion_vigente', true);
     }
 
     /** @return array{temporada: Temporada, articulo: ArticuloValidacion, categoria: string, origenes: array<string, string>} */

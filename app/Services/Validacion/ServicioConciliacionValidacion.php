@@ -64,6 +64,7 @@ class ServicioConciliacionValidacion
             $diferente = collect($comparacion)->contains('estado', 'diferente');
             $completa = ! collect($comparacion)->contains('estado', 'por_revisar');
             $ultima = LecturaStockOrigen::where('ambito', $config['ambito'])->where('bodega', $config['bodega'])
+                ->where(fn ($q) => $q->whereNull('numero_pallet')->orWhere('numero_pallet', $validacion->numero_folio))
                 ->latest('iniciada_at')->latest('id')->first();
             $vigente = $lectura && $lectura->estado === 'correcta' && $ultima?->id === $lectura->id
                 && $lectura->terminada_at?->gte(now()->subMinutes((int) config('integraciones.stock_pt.vigencia_minutos', 20)));
@@ -128,7 +129,7 @@ class ServicioConciliacionValidacion
             });
 
         $config = $this->lecturas->configuracion();
-        $ultima = LecturaStockOrigen::where('ambito', $config['ambito'])->where('bodega', $config['bodega'])
+        $ultima = LecturaStockOrigen::whereNull('numero_pallet')->where('ambito', $config['ambito'])->where('bodega', $config['bodega'])
             ->latest('iniciada_at')->latest('id')->first();
         if ($ultima?->estado === 'correcta' && $ultima->causa === 'conciliacion_pendiente') {
             $ultima->update(['causa' => null, 'mensaje' => null]);

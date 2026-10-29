@@ -10,6 +10,7 @@ use App\Jobs\EjecutarOperacionIntegracion;
 use App\Models\ConexionExterna;
 use App\Models\OperacionIntegracion;
 use App\Models\User;
+use App\Services\Validacion\ServicioPrecargaValidacionOrigen;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -21,6 +22,15 @@ use Throwable;
 
 class ServicioOperacionesIntegracion
 {
+    public static function permiso(string $tipo): string
+    {
+        return match ($tipo) {
+            'stock' => 'consultar-validaciones-pallet',
+            'precarga' => 'validar-pallets',
+            default => 'administrar-accesos',
+        };
+    }
+
     private const CONTROLADORES = [
         'probar' => [ConexionExternaController::class, 'probar'],
         'estructura' => [ExploracionOrigenController::class, 'estructura'],
@@ -52,11 +62,11 @@ class ServicioOperacionesIntegracion
 
     public function solicitar(string $tipo, ConexionExterna $conexion, array $entrada, ?User $usuario): OperacionIntegracion
     {
-        if ($tipo !== 'stock' && ! isset(self::CONTROLADORES[$tipo])) {
+        if (! in_array($tipo, ['stock', 'precarga'], true) && ! isset(self::CONTROLADORES[$tipo])) {
             throw new DomainException('Operación de integración no admitida.');
         }
         if ($usuario) {
-            Gate::forUser($usuario)->authorize($tipo === 'stock' ? 'consultar-validaciones-pallet' : 'administrar-accesos');
+            Gate::forUser($usuario)->authorize(self::permiso($tipo));
         } elseif ($tipo !== 'stock') {
             throw new DomainException('La operación requiere un usuario autorizado.');
         }
@@ -87,7 +97,7 @@ class ServicioOperacionesIntegracion
     public function aceptada(OperacionIntegracion $operacion): JsonResponse
     {
         return response()->json(['operacion' => $this->recurso($operacion),
-            'message' => 'Consulta en cola. Puedes seguir utilizando Oficina.'], 202,
+            'message' => $operacion->tipo === 'precarga' ? 'Consultando los datos de packing para este folio.' : 'Consulta en cola. Puedes seguir utilizando Oficina.'], 202,
             ['Cache-Control' => 'private, no-store', 'Location' => '/api/integraciones/operaciones/'.$operacion->id, 'Preference-Applied' => 'respond-async']);
     }
 
@@ -125,12 +135,31 @@ class ServicioOperacionesIntegracion
                 throw new ConflictoOperacion('La conexión cambió mientras esperaba. No se ejecutó la selección anterior.');
             }
             $usuario = $op->user_id ? User::find($op->user_id) : null;
-            if ($op->user_id && (! $usuario || ! Gate::forUser($usuario)->allows($op->tipo === 'stock' ? 'consultar-validaciones-pallet' : 'administrar-accesos'))) {
+            if (($op->tipo === 'precarga' && ! $usuario)
+                || ($op->user_id && (! $usuario || ! Gate::forUser($usuario)->allows(self::permiso($op->tipo))))) {
                 $this->terminar($op, 403, ['message' => 'El usuario ya no tiene permiso para esta operación.']);
 
                 return;
             }
-            if ($op->tipo === 'stock') {
+            if ($op->tipo === 'precarga') {
+                $lector = app(ServicioLecturaStockOrigen::class);
+                $precarga = app(ServicioPrecargaValidacionOrigen::class);
+                if ($lector->huellaConfiguracion($lector->configuracion()) !== $op->fuente_hash) {
+                    throw new ConflictoOperacion('La fuente de packing cambió. Escanea nuevamente con la configuración vigente.');
+                }
+                $entrada = $op->entrada;
+                $precarga->comprobarFolioNuevo($entrada['numero_folio'], $entrada['temporada_id']);
+                $lectura = $lector->leerPallet($entrada['numero_folio'], $usuario, $op->id);
+                if (! $lectura) {
+                    throw new ConflictoOperacion('Otra lectura de packing está en curso. Reintenta la consulta en unos segundos.');
+                }
+                $precarga->comprobarFolioNuevo($entrada['numero_folio'], $entrada['temporada_id']);
+                $codigo = $lectura->estado === 'correcta' ? 200 : 422;
+                $contenido = $codigo === 200
+                    ? ['data' => $lectura->pallets > 0 ? $precarga->paraFolio($entrada['numero_folio'])
+                        : ['disponible' => false, 'motivo' => 'Packing no tiene este folio en la bodega y filtros configurados. Puedes completar la validación manualmente.']]
+                    : ['message' => 'No se pudo consultar packing. '.$lectura->mensaje, 'causa' => $lectura->causa];
+            } elseif ($op->tipo === 'stock') {
                 $lector = app(ServicioLecturaStockOrigen::class);
                 if ($lector->huellaConfiguracion($lector->configuracion()) !== $op->fuente_hash) {
                     throw new ConflictoOperacion('La fuente cambió mientras esperaba. Solicita una lectura nueva.');
