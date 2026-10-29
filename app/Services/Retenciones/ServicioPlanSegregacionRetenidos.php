@@ -527,7 +527,7 @@ class ServicioPlanSegregacionRetenidos
     {
         return [
             'planner_horizon' => 'rolling',
-            'planner_compute' => 'tablet',
+            'planner_compute' => config('planificador.compute'),
             'objetivo' => 'segregar_retenido_100_por_ciento',
             'folio_id' => $folio->id,
             'total' => 1,

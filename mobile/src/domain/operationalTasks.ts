@@ -103,11 +103,12 @@ export type OperationalTask = {
     motivo?: string | null;
     version: number;
     horizon?: 'batch' | 'rolling';
+    compute?: PlannerCompute;
   };
   secuencia: number;
   maniobra: {
     id: string;
-    estado: 'pendiente' | 'en_ejecucion' | 'pausada_discrepancia' | 'completada' | 'cancelada';
+    estado: 'pendiente' | 'en_ejecucion' | 'pausada_discrepancia' | 'pausada_supervision' | 'completada' | 'cancelada';
     titulo: string;
     secuencia_actual: number;
     pasos_totales: number;
@@ -242,6 +243,7 @@ export type OperationalSnapshot = {
     nombre: string;
     version_plano: number;
     revision_reservas: number;
+    version_protecciones?: string;
   }>;
   tareas: OperationalSnapshotTask[];
 };
@@ -298,6 +300,7 @@ export type OperationalPhysicalFrontierSnapshot = {
     nombre: string;
     version_plano: number;
     revision_reservas: number;
+    version_protecciones?: string;
   }>;
   tareas: OperationalSnapshotTask[];
 };
@@ -454,3 +457,12 @@ export type OperationalShiftLabor = {
   espera: { porcentaje_fisico?: number };
 };
 export type OperationalTaskList = OperationalTask[] & { labores?: OperationalShiftContext | null };
+
+/** Una custodia sigue siendo física aunque el siguiente paso aún no haya comenzado. */
+export function canReleaseOperationalTask(task: OperationalTask): boolean {
+  return task.estado === 'asumida' && !task.punto_no_retorno
+    && !task.maniobra?.custodia_temporal_activa
+    && !(task.maniobra?.custodias_temporales?.length)
+    && task.maniobra?.estado !== 'pausada_discrepancia'
+    && task.maniobra?.estado !== 'pausada_supervision';
+}

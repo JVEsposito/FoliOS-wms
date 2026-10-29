@@ -729,9 +729,16 @@ class InspeccionSagApiTest extends TestCase
         ]);
     }
 
-    public function test_aprobar_prefrio_publica_una_maniobra_sag_tomable_con_destino_fijo_y_sin_recepcion_duplicada(): void
+    public static function motoresDestino(): array
+    {
+        return ['tablet' => ['tablet'], 'servidor' => ['server']];
+    }
+
+    #[DataProvider('motoresDestino')]
+    public function test_aprobar_prefrio_publica_una_maniobra_sag_tomable_con_destino_fijo_y_sin_recepcion_duplicada(string $compute): void
     {
         $this->activarPlanificadorDirigido();
+        config(['planificador.compute' => $compute]);
         $usuario = $this->administradorConTemporada();
         $zona = $this->crearZonaInspeccion($usuario, posiciones: 2);
         $folio = $this->crearFolioUbicado('SAG-TUNEL-001');
@@ -991,9 +998,11 @@ class InspeccionSagApiTest extends TestCase
         $this->assertSame($zona->id, $nueva->camara_destino_id);
     }
 
-    public function test_aprobaciones_de_tuneles_distintos_preparan_desde_el_fondo_sin_apartar_destino_para_el_pendiente(): void
+    #[DataProvider('motoresDestino')]
+    public function test_aprobaciones_de_tuneles_distintos_preparan_desde_el_fondo_sin_apartar_destino_para_el_pendiente(string $compute): void
     {
         $this->activarPlanificadorDirigido();
+        config(['planificador.compute' => $compute]);
         $usuario = $this->administradorConTemporada();
         $this->crearZonaInspeccion($usuario, posiciones: 3);
         $pendiente = $this->crearFolioUbicado('SAG-PARCIAL-001');
@@ -1007,7 +1016,7 @@ class InspeccionSagApiTest extends TestCase
         );
         $primera = TareaMovimiento::query()->with('posicionDestino')->sole();
         $this->assertSame($listo->id, $primera->folio_id);
-        $this->assertSame(2, $primera->posicionDestino->posicion);
+        $this->assertSame(1, $primera->posicionDestino->posicion);
         $this->actingAs($usuario, 'sanctum')
             ->postJson("/api/prefrio/procesos/{$procesoPendiente->id}/aprobar", [
                 'operacion_id' => (string) Str::uuid(),
@@ -1017,9 +1026,28 @@ class InspeccionSagApiTest extends TestCase
             ->assertOk();
         $segunda = TareaMovimiento::query()->where('folio_id', $pendiente->id)->sole();
         $this->assertSame($lote['preparacion_fisica']['plan_id'], $segunda->plan_operacional_id);
-        $this->assertSame(1, $segunda->posicionDestino->posicion);
+        $this->assertSame(2, $segunda->posicionDestino->posicion);
         $this->assertSame($primera->posicion_destino_id, $primera->refresh()->posicion_destino_id);
         $this->assertDatabaseCount('tareas_movimiento', 2);
+        if ($compute === 'server') {
+            $operador = User::factory()->create(['rol' => RolUsuario::CamareroFrio, 'activo' => true]);
+            $tablet = Dispositivo::create(['codigo' => 'SAG-SERVIDOR', 'nombre' => 'Tablet SAG']);
+            $planes = app(ServicioPlanesOperacionales::class);
+            $zona = $primera->posicionDestino->camara;
+            $sesion = app(ServicioSesionEstiba::class)->abrir($zona, $operador, $tablet);
+            foreach ([$primera, $segunda] as $paso) {
+                $paso = $planes->asumir($paso, $operador, $tablet);
+                $paso = $planes->iniciar($paso, $operador, $tablet);
+                app(ServicioMovimientoEstiba::class)->ubicar(
+                    operacionId: (string) Str::uuid(), numeroFolio: $paso->folio->numero_folio, tipoBulto: TipoBulto::Pallet,
+                    posicionDestino: $paso->posicionDestino, sesionDestino: $sesion, usuario: $operador, dispositivo: $tablet,
+                    versionDestinoConocida: $zona->refresh()->version_plano, generadoDispositivoAt: now(), tareaMovimiento: $paso,
+                );
+            }
+            $this->assertDatabaseCount('movimientos', 2);
+            $this->assertSame(1, $listo->refresh()->ubicacionActual->posicion->posicion);
+            $this->assertSame(2, $pendiente->refresh()->ubicacionActual->posicion->posicion);
+        }
     }
 
     public function test_reconciliacion_no_reinventa_origen_de_tunel_para_pallets_ya_en_anden_o_despachados(): void

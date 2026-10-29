@@ -8,7 +8,7 @@ const url = (value) => `data:text/javascript,${encodeURIComponent(value)}`;
 const plannerUrl = url(await source('rollingPlanner'));
 const { OperationalCameraPlans, candidateCameraIds } = await import(url((await source('operationalCameraPlans')).replace("from './rollingPlanner'", `from ${JSON.stringify(plannerUrl)}`)));
 const { OperationalActionGate, OperationalInboxReads } = await import(url(await source('operationalInboxConcurrency')));
-const { operationalTaskOriginLabel, operationalTaskDestinationLabel } = await import(url(await source('operationalTasks')));
+const { operationalTaskOriginLabel, operationalTaskDestinationLabel, canReleaseOperationalTask } = await import(url(await source('operationalTasks')));
 const deferred = () => { let resolve; const promise = new Promise((yes) => { resolve = yes; }); return { promise, resolve }; };
 const camera = (id, revision = 1) => ({ id, version_plano: 3, revision_reservas: revision });
 const snapshot = (...ids) => ({ camaras: ids.map((id) => camera(id)), tareas: [] });
@@ -93,4 +93,31 @@ test('origen de túnel, packing y custodia son explícitos; destino pendiente co
     assert.equal(operationalTaskOriginLabel(t), 'Recepción de packing externo');
     t.tipo_paso_maniobra = 'retorno_banda'; assert.match(operationalTaskOriginLabel(t), /custodia/);
     t.contexto.acopio_carga = { carga_codigo: 'Carga B' }; assert.match(operationalTaskDestinationLabel(t), /Carga B · posición pendiente de confirmar/);
+});
+
+
+test('no ofrece liberar con custodia, pausa o movimiento físico iniciado', () => {
+    const own = { ...task(), estado: 'asumida', punto_no_retorno: false, maniobra: {
+        estado: 'en_ejecucion', custodia_temporal_activa: false, custodias_temporales: [],
+    } };
+    assert.equal(canReleaseOperationalTask(own), true);
+    for (const change of [
+        { custodia_temporal_activa: true }, { custodias_temporales: [{ id: 'pallet' }] },
+        { estado: 'pausada_discrepancia' }, { estado: 'pausada_supervision' },
+    ]) assert.equal(canReleaseOperationalTask({ ...own, maniobra: { ...own.maniobra, ...change } }), false);
+    assert.equal(canReleaseOperationalTask({ ...own, estado: 'en_proceso' }), false);
+    assert.equal(canReleaseOperationalTask({ ...own, punto_no_retorno: true }), false);
+});
+
+test('un cambio de protección de banda invalida el plano aunque no cambie el stock', async () => {
+    const cache = new OperationalCameraPlans();
+    const s = snapshot('a'); s.camaras[0].version_protecciones = 'libre';
+    let calls = 0;
+    const fetch = async () => { calls++; return { ...s.camaras[0] }; };
+    await cache.load(s, [task()], fetch);
+    await cache.load(s, [task()], fetch);
+    assert.equal(calls, 1);
+    s.camaras[0].version_protecciones = 'otra-maniobra';
+    await cache.load(s, [task()], fetch);
+    assert.equal(calls, 2);
 });

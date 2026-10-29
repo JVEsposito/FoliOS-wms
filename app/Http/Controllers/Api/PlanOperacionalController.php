@@ -49,6 +49,28 @@ use Illuminate\Validation\Rule;
 
 class PlanOperacionalController extends Controller
 {
+    public function resolverDestinoServidor(Request $request, TareaMovimiento $tareaMovimiento, ContextoOperacional $contexto,
+        ServicioPlanesOperacionales $planes, ServicioManiobrasOperacionales $maniobras): JsonResponse
+    {
+        [$usuario, $dispositivo] = $contexto->obtener($request);
+        $tarea = DB::transaction(function () use ($tareaMovimiento, $usuario, $dispositivo, $planes, $maniobras) {
+            $tarea = TareaMovimiento::query()->with('planOperacional.temporada')->lockForUpdate()->findOrFail($tareaMovimiento->id);
+            abort_unless($tarea->planOperacional->temporada?->activa && $tarea->planOperacional->estado === EstadoPlanOperacional::EnEjecucion, 409);
+            abort_unless($tarea->responsable_user_id === $usuario->id && $tarea->dispositivo_id === $dispositivo->id, 403);
+            if (! $maniobras->resolverDestinoServidor($tarea, $usuario, $dispositivo)) {
+                return null;
+            }
+
+            return $planes->cargarTarea($tarea->refresh());
+        }, attempts: 3);
+
+        if (! $tarea) {
+            throw new ConflictoOperacion('La reserva venció antes de iniciar. Actualiza tus tareas y vuelve a tomar la labor.');
+        }
+
+        return response()->json(['data' => new TareaMovimientoResource($tarea)]);
+    }
+
     /** Consulta de recuperación: únicamente el camarero y equipo de la tarea. */
     public function estadoPropio(
         Request $request,

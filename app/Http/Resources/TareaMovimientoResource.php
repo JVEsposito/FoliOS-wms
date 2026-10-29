@@ -27,6 +27,7 @@ class TareaMovimientoResource extends JsonResource
                 'version' => $this->planOperacional->version,
                 'horizon' => ($this->planOperacional->contexto ?? [])['planner_horizon']
                     ?? config('planificador.horizon'),
+                'compute' => config('planificador.compute'),
             ]),
             'secuencia' => $this->secuencia,
             'maniobra' => $this->whenLoaded('maniobraOperacional', function (): ?array {

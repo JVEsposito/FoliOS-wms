@@ -8,6 +8,7 @@ import {
   operationalTaskPositionLabel,
   operationalTaskOriginLabel,
   operationalTaskReason,
+  canReleaseOperationalTask,
 } from '../../domain/operationalTasks';
 import {
   buildOperatorManeuverAction,
@@ -78,6 +79,7 @@ export function OperatorTaskExecution({
   const action = buildOperatorManeuverAction(task);
   const purpose = operatorTaskPurpose(task);
   const sequence = buildOperatorManeuverSequence(task);
+  const canRelease = canReleaseOperationalTask(task);
   const moving = task.estado === 'en_proceso';
   const currentStep = task.secuencia_maniobra ?? task.maniobra?.secuencia_actual ?? 1;
   const totalSteps = task.maniobra?.pasos_totales ?? 1;
@@ -181,7 +183,7 @@ export function OperatorTaskExecution({
                     <Pressable disabled={busy} onPress={() => setExceptionKind('impossible')} style={styles.wideExceptionButton}><Text style={styles.wideExceptionText}>NO ES POSIBLE</Text></Pressable>
                   </View>
                 ) : null}
-                {!moving ? <Pressable disabled={busy} onPress={onRelease} style={styles.wideRelease}><Text style={styles.wideReleaseText}>Liberar antes de iniciar</Text></Pressable> : null}
+                {canRelease ? <Pressable disabled={busy} onPress={onRelease} style={styles.wideRelease}><Text style={styles.wideReleaseText}>Liberar antes de iniciar</Text></Pressable> : null}
               </View>
             </View>
             <View style={styles.wideRight}>
@@ -332,7 +334,7 @@ export function OperatorTaskExecution({
                 </Pressable>
               </>
             ) : null}
-            {!moving ? (
+            {canRelease ? (
               <Pressable disabled={busy} onPress={onRelease} style={styles.releaseButton}>
                 <Text style={styles.releaseText}>Liberar antes de iniciar</Text>
               </Pressable>

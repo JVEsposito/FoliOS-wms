@@ -24,7 +24,7 @@ export function physicalSnapshotVersion(snapshot: OperationalPhysicalFrontierSna
     arbitraje: [snapshot.arbitraje.ciclo_id, snapshot.arbitraje.snapshot_version, snapshot.arbitraje.vigencia.vigente],
     camaras: [...snapshot.camaras]
       .sort((a, b) => a.id.localeCompare(b.id))
-      .map((camera) => [camera.id, camera.version_plano, camera.revision_reservas]),
+      .map((camera) => [camera.id, camera.version_plano, camera.revision_reservas, camera.version_protecciones]),
     reservas: snapshot.frontera.reservas_fisicas_activas,
   });
 }

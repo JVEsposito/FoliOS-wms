@@ -322,10 +322,17 @@ function positionAllowed(
   usedDestinations: ReadonlySet<string>,
   protectedOrigins: ReadonlySet<string>,
 ) {
-  if (position.estado !== 'activa' || position.ocupada || position.reservada) return false;
+  if (position.estado !== 'activa' || position.ocupada || position.reservada || position.reservada_sag) return false;
+  if (plan.protecciones_bandas?.some((lock) => lock.banda === position.banda
+    && lock.nivel === position.nivel && lock.maniobra_id !== task.maniobra?.id)) return false;
   if (usedDestinations.has(position.id)) return false;
   if (protectedOrigins.has(position.id) && position.id !== task.origen?.posicion?.id) return false;
   if (position.id === task.origen?.posicion?.id) return false;
+  // Las mismas restricciones físicas rigen recepción, concentración y despeje.
+  if (plan.posiciones.some((front) => front.banda === position.banda && front.nivel === position.nivel
+    && front.posicion > position.posicion && (front.ocupada || front.reservada || front.reservada_sag || usedDestinations.has(front.id)))) return false;
+  if (position.nivel > 1 && !plan.posiciones.some((support) => support.banda === position.banda
+    && support.posicion === position.posicion && support.nivel === position.nivel - 1 && support.ocupada)) return false;
 
   if (isClearanceTask(task)) {
     const origin = task.origen;
@@ -351,7 +358,7 @@ function positionAllowed(
     return false;
   }
   // El acopio se arma desde el fondo de cada banda: no se deja un hueco detrás de un pallet.
-  if (acopio && !isNextSlot(plan, position, usedDestinations)) return false;
+  if (task.tipo_paso_maniobra !== 'retorno_banda' && !isNextSlot(plan, position, usedDestinations)) return false;
 
   if (task.contexto?.tipo_decision === 'concentrar_carga') {
     const targetCamera = taskContext(task, ['camara_objetivo_id']);
@@ -433,7 +440,7 @@ function scoreCandidate(task: OperationalTask, plan: CameraPlan, position: Posit
     reasons.push('compacta nuevamente la banda desde el fondo');
   }
   score += Math.max(0, 10 - position.nivel);
-  score += Math.min(100, band?.capacidad.disponibles ?? 0);
+  score += Math.min(100, profiles.reduce((total, profile) => total + profile.pallets, 0));
 
   if (!reasons.length) reasons.push('posición libre y compatible; prioriza llenado desde el fondo');
   return { score, reason: reasons.join('; ') };
@@ -442,7 +449,7 @@ function scoreCandidate(task: OperationalTask, plan: CameraPlan, position: Posit
 /** La posición libre más al fondo, delante del último pallet ocupado o comprometido de su banda. */
 export function isNextSlot(plan: CameraPlan, position: Position, usedDestinations: ReadonlySet<string> = new Set()) {
   const lane = plan.posiciones.filter((item) => item.banda === position.banda && item.nivel === position.nivel);
-  const taken = (item: Position) => item.ocupada || item.reservada || usedDestinations.has(item.id);
+  const taken = (item: Position) => item.ocupada || item.reservada || item.reservada_sag || usedDestinations.has(item.id);
   const front = Math.max(0, ...lane.filter(taken).map((item) => item.posicion));
   if (position.posicion <= front) return false;
   return !lane.some((item) => item.posicion > front && item.posicion < position.posicion

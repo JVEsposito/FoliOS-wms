@@ -81,6 +81,7 @@ class CamaraController extends Controller
         $camara->setRelation('emergenciaActiva', $emergencias->activa($camara->id));
         $camara->setRelation('ultimaDesocupacion', $desocupaciones->ultima($camara->id));
         $camara->setAttribute('desocupacion_habilitada', $desocupaciones->habilitada($camara));
+        $camara->load('proteccionesBandas');
         $etag = $this->etagPlano($request, $camara);
         $respuestaCondicional = $this->configurarCache(response('', 200), $etag);
 
@@ -118,6 +119,7 @@ class CamaraController extends Controller
                     'ubicacionesActuales.folio.temporada:id,codigo,tipo',
                     'ubicacionesActuales.folio.material.item.cliente.temporada',
                     'ubicacionesActuales.folio.asignacionCargaActual.carga',
+                    'reservaPreparacionSagActiva',
                     'reservaTareaActiva' => fn ($reservas) => $reservas
                         ->conCompromisoVigente()
                         ->with([
@@ -194,6 +196,7 @@ class CamaraController extends Controller
             : null;
         $huella = json_encode([
             'version_perfiles_afinidad' => 2,
+            'version_protecciones' => $camara->versionProtecciones(),
             'version_materiales_multibodega' => 1,
             'camara_id' => $camara->id,
             'camara_actualizada_at' => $camara->updated_at?->toAtomString(),

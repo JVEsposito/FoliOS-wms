@@ -81,7 +81,7 @@ class ServicioPlanDespachoDirecto
 
                 return $this->planExistente($presencia->id);
             }
-            if ($modo !== 'guided' || config('planificador.compute') !== 'tablet') {
+            if ($modo !== 'guided' || ! in_array(config('planificador.compute'), ['tablet', 'server'], true)) {
                 return $this->planExistente($presencia->id);
             }
 

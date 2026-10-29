@@ -48,12 +48,15 @@ class ServicioFronteraFisica
             unset($proyeccionArbitraje['ciclo']);
             $decisiones = $ciclo?->decisiones?->keyBy('maniobra_operacional_id') ?? collect();
             $actuales = $this->tareasActuales($temporada, $usuario, $dispositivo);
+            $reservasVigentes = ReservaTareaMovimiento::query()->whereIn('bloqueo_tarea_id', $actuales->pluck('id'))
+                ->conCompromisoVigente()->pluck('id');
             $acopios = $this->acopio->paraTareas($actuales);
             $tareas = $actuales
                 ->map(function (TareaMovimiento $tarea) use (
                     $camarasDirigidas,
                     $decisiones,
                     $acopios,
+                    $reservasVigentes,
                 ): array {
                     $maniobra = $tarea->maniobraOperacional;
                     $reserva = $tarea->reservaActiva;
@@ -63,6 +66,7 @@ class ServicioFronteraFisica
                     $horizon = ($tarea->planOperacional->contexto ?? [])['planner_horizon']
                         ?? config('planificador.horizon');
                     $materializable = $tarea->estado === EstadoTareaMovimiento::Asumida
+                        && $reservasVigentes->contains($reserva?->id)
                         && $tarea->tipo_movimiento !== TipoMovimiento::Retiro
                         && $reserva?->bloqueo_posicion_id === null
                         && $maniobra !== null
@@ -106,7 +110,7 @@ class ServicioFronteraFisica
                         'materializable_por_recursos' => $tarea->estado === EstadoTareaMovimiento::Asumida
                             && $tarea->tipo_movimiento !== TipoMovimiento::Retiro
                             && $reserva !== null && $reserva->bloqueo_posicion_id === null
-                            && $reserva->vence_at?->gt(now())
+                            && $reservasVigentes->contains($reserva->id)
                             && $maniobra?->estado === EstadoManiobraOperacional::EnEjecucion
                             && $tarea->planOperacional->estado === EstadoPlanOperacional::EnEjecucion
                             && $horizon === 'rolling' && $this->tareaEnRollout($tarea, $camarasDirigidas),
@@ -129,6 +133,7 @@ class ServicioFronteraFisica
                     fn ($consulta) => $consulta->whereIn('id', $camarasDirigidas),
                 )
                 ->orderBy('codigo')
+                ->with('proteccionesBandas')
                 ->get(['id', 'codigo', 'nombre', 'version_plano', 'revision_reservas'])
                 ->map(fn (Camara $camara): array => [
                     'id' => $camara->id,
@@ -136,6 +141,7 @@ class ServicioFronteraFisica
                     'nombre' => $camara->nombre,
                     'version_plano' => $camara->version_plano,
                     'revision_reservas' => $camara->revision_reservas,
+                    'version_protecciones' => $camara->versionProtecciones(),
                 ])
                 ->values();
             $camaraPreferente = $camaras->first(fn (array $camara): bool => $this->despliegue

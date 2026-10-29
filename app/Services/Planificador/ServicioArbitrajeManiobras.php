@@ -651,6 +651,7 @@ class ServicioArbitrajeManiobras
 
         return hash('sha256', json_encode([
             'reglas' => $this->reglas,
+            'destinos_servidor' => ServicioDestinosServidor::activo() ? ServicioDestinosServidor::VERSION : null,
             'funciones_turno' => $this->versionTurno,
             'temporada' => $temporada->id,
             'capacidad' => config('planificador.maniobras_simultaneas_max', 3),
@@ -663,8 +664,8 @@ class ServicioArbitrajeManiobras
                 ? Camara::query()
                     ->where('contenido', ContenidoCamara::Productos->value)
                     ->orderBy('id')
-                    ->get(['id', 'estado', 'version_plano'])
-                    ->map(fn (Camara $camara): array => [$camara->id, $camara->estado->value, $camara->version_plano])
+                    ->with('proteccionesBandas')->get(['id', 'estado', 'version_plano', 'revision_reservas'])
+                    ->map(fn (Camara $camara): array => [$camara->id, $camara->estado->value, $camara->version_plano, $camara->revision_reservas, $camara->versionProtecciones()])
                     ->all()
                 : null,
         ], JSON_THROW_ON_ERROR));

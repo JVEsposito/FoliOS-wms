@@ -555,6 +555,7 @@ export type Position = {
   estado: string;
   ocupada: boolean;
   reservada?: boolean;
+  reservada_sag?: boolean;
   reserva_operacional?: {
     id: string;
     tarea_movimiento_id: string;
@@ -660,6 +661,8 @@ export type LocationRecommendation = {
 
 export type CameraPlan = CameraSummary & {
   revision_reservas?: number;
+  version_protecciones?: string;
+  protecciones_bandas?: Array<{ banda: number; nivel: number; maniobra_id: string }>;
   bandas_operacionales?: OperationalBand[];
   folios_sin_posicion: Folio[];
   posiciones: Position[];

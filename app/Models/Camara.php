@@ -41,6 +41,19 @@ class Camara extends Model
         return $this->hasMany(BandaOperacional::class)->orderBy('numero');
     }
 
+    public function proteccionesBandas(): HasMany
+    {
+        return $this->hasMany(ReservaBandaManiobra::class)->whereNotNull('clave_bloqueo')
+            ->orderBy('banda')->orderBy('nivel');
+    }
+
+    public function versionProtecciones(): string
+    {
+        return hash('sha256', $this->proteccionesBandas->map(fn ($reserva): array => [
+            $reserva->id, $reserva->banda, $reserva->nivel, $reserva->maniobra_operacional_id,
+        ])->toJson());
+    }
+
     public function ubicacionesActuales(): HasMany
     {
         return $this->hasMany(UbicacionActual::class);
