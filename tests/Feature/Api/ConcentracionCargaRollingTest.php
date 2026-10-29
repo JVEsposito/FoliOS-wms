@@ -56,6 +56,22 @@ class ConcentracionCargaRollingTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_calculo_servidor_sin_rolling_no_publica_concentracion_inmaterializable(): void
+    {
+        $contexto = $this->crearContexto(total: 10, concentrados: 7, fuera: 3);
+        config(['planificador.compute' => 'server', 'planificador.horizon' => 'batch']);
+
+        $plan = app(ServicioPlanConcentracionCarga::class)->sincronizar(
+            $contexto['carga'],
+            $contexto['usuario'],
+        );
+
+        $this->assertNull($plan);
+        $this->assertDatabaseCount('planes_operacionales', 0);
+        $this->assertDatabaseCount('tareas_movimiento', 0);
+        $this->assertDatabaseCount('maniobras_operacionales', 0);
+    }
+
     public function test_carga_que_ya_cumple_80_por_ciento_no_genera_movimientos(): void
     {
         $contexto = $this->crearContexto(total: 5, concentrados: 4, fuera: 1);

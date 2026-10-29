@@ -32,6 +32,7 @@ use App\Models\User;
 use App\Services\Estiba\ServicioManiobrasOperacionales;
 use App\Services\Estiba\ServicioPlanesOperacionales;
 use App\Services\Planificador\ServicioDesplieguePlanificador;
+use App\Services\Planificador\ServicioDestinosServidor;
 use DomainException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -81,7 +82,9 @@ class ServicioPlanDespachoDirecto
 
                 return $this->planExistente($presencia->id);
             }
-            if ($modo !== 'guided' || ! in_array(config('planificador.compute'), ['tablet', 'server'], true)) {
+            if ($modo !== 'guided'
+                || ! in_array(config('planificador.compute'), ['tablet', 'server'], true)
+                || (config('planificador.compute') === 'server' && ! ServicioDestinosServidor::activo())) {
                 return $this->planExistente($presencia->id);
             }
 

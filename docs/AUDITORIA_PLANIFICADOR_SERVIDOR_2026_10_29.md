@@ -23,6 +23,8 @@ Hallazgos confirmados en el código:
 
 En `guided + rolling + server`, el servidor decide y valida al tomar la maniobra. La tablet muestra el destino autorizado y confirma acciones físicas. `POST /api/tareas-movimiento/{id}/resolver-destino` recupera el paso propio: no acepta una posición elegida por el cliente y repetirlo conserva la reserva existente. Los endpoints de propuestas de tablet permanecen cerrados en modo servidor.
 
+En cálculo servidor, despacho directo y concentración solo publican labores cuando esa combinación completa está activa y la generación automática está habilitada. Con horizonte `batch` se conserva la presencia del camión, sin publicar tareas que el resolvedor de destinos no puede atender.
+
 La simulación no crea ubicaciones ni anticipa stock. Solo la confirmación de cada movimiento cambia el inventario. Los destinos futuros quedan protegidos por banda; el paso vigente recibe su reserva de posición. La protección pertenece a la maniobra y se conserva durante sus devoluciones, sin competir con sus propias sesiones.
 
 El orden de decisión es:

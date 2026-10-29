@@ -31,15 +31,18 @@ use App\Services\Planificador\ServicioEstadoArbitrajePlanificador;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class PresenciaCargaAndenApiTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_camion_en_anden_crea_una_tarea_critica_de_retiro_directo_e_idempotente(): void
+    #[DataProvider('calculosDirigidos')]
+    public function test_camion_en_anden_crea_una_tarea_critica_de_retiro_directo_e_idempotente(string $compute): void
     {
         $contexto = $this->crearContexto(1, 2);
+        config(['planificador.compute' => $compute]);
         $carga = $this->crearCargaPublicada($contexto, [$contexto['folios'][0]]);
         $operacionId = (string) Str::uuid();
         $payload = [
@@ -66,6 +69,7 @@ class PresenciaCargaAndenApiTest extends TestCase
 
         $this->assertSame('despacho_directo', $plan->tipo->value);
         $this->assertSame('rolling', $plan->contexto['planner_horizon']);
+        $this->assertSame($compute, $plan->contexto['planner_compute']);
         $this->assertSame('critica', $tarea->prioridad->value);
         $this->assertSame('retiro', $tarea->tipo_movimiento->value);
         $this->assertSame('entrega_anden', $tarea->tipo_paso_maniobra->value);
@@ -185,9 +189,11 @@ class PresenciaCargaAndenApiTest extends TestCase
             ->count());
     }
 
-    public function test_la_pda_completa_el_retiro_directo_sin_crear_una_ubicacion_ficticia_en_anden(): void
+    #[DataProvider('calculosDirigidos')]
+    public function test_la_pda_completa_el_retiro_directo_sin_crear_una_ubicacion_ficticia_en_anden(string $compute): void
     {
         $contexto = $this->crearContexto(1, 2);
+        config(['planificador.compute' => $compute]);
         $folio = $contexto['folios'][0];
         $carga = $this->crearCargaPublicada($contexto, [$folio]);
         $this->registrarPresencia($contexto, $carga, $contexto['anden']);
@@ -384,12 +390,13 @@ class PresenciaCargaAndenApiTest extends TestCase
         $this->assertDatabaseCount('tareas_movimiento', 0);
     }
 
-    public function test_guided_server_registra_presencia_sin_publicar_despejes_inmaterializables(): void
+    public function test_guided_server_sin_rolling_registra_presencia_sin_publicar_despejes_inmaterializables(): void
     {
         config([
             'planificador.mode' => 'guided',
             'planificador.generacion_automatica' => true,
             'planificador.compute' => 'server',
+            'planificador.horizon' => 'batch',
         ]);
         $contexto = $this->crearContexto(2, 3, configurarPlanificador: false);
         $carga = $this->crearCargaPublicada($contexto, [$contexto['folios'][0]]);
@@ -521,6 +528,14 @@ class PresenciaCargaAndenApiTest extends TestCase
         $asumida = $planes->asumir($tarea, $ctx['operador'], $ctx['dispositivo']);
         $materializada = $planes->materializarDestino($asumida, $remota, $ctx['operador'], $ctx['dispositivo']);
         $this->assertSame('traslado_entre_camaras', $materializada->tipo_movimiento->value);
+    }
+
+    public static function calculosDirigidos(): array
+    {
+        return [
+            'tablet' => ['tablet'],
+            'servidor' => ['server'],
+        ];
     }
 
     /** @return array<string, mixed> */
