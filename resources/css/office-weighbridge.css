@@ -130,6 +130,7 @@ body {
 .weighbridge-dialog::backdrop { background: rgba(1, 8, 12, .8); backdrop-filter: blur(4px); }
 .weighbridge-dialog__shell { padding: 22px; }
 .weighbridge-dialog__shell--compact { width: min(520px, 100%); }
+#annulReceptionError { white-space: pre-line; overflow-wrap: anywhere; font-weight: 400; line-height: 1.5; }
 .weighbridge-dialog__heading { align-items: flex-start; margin-bottom: 18px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
 .weighbridge-dialog__heading h2 { margin: 0; font-size: 1.5rem; }
 .weighbridge-dialog__heading p:last-child { margin: 5px 0 0; color: var(--muted); font-size: .75rem; }

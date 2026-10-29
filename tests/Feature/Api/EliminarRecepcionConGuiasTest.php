@@ -62,9 +62,14 @@ class EliminarRecepcionConGuiasTest extends TestCase
         [$r, $origen, $cliente] = $this->ingresoEnvases();
         $guia = $this->crearGuia($cliente->id, [[$origen, 36]]);
         $ruta = '/api/romana/recepciones/'.$r->id;
-        $this->deleteJson($ruta, $this->datos($r->version))->assertConflict();
+        $mensaje = $this->deleteJson($ruta, $this->datos($r->version))->assertConflict()->json('message');
+        $this->assertStringContainsString(GuiaDespachoEnvase::findOrFail($guia)->numero, $mensaje);
+        $this->assertStringContainsString('Borrador', $mensaje);
+        $this->assertStringContainsString('36 Bins plástico (arrendados)', $mensaje);
         $this->confirmarGuia($guia);
-        $this->deleteJson($ruta, $this->datos($r->version))->assertConflict();
+        $mensaje = $this->deleteJson($ruta, $this->datos($r->version))->assertConflict()->json('message');
+        $this->assertStringContainsString('Confirmada', $mensaje);
+        $this->assertStringContainsString('guía emitida 991001', $mensaje);
         $this->postJson('/api/envases/guias-despacho/'.$guia.'/anular', ['motivo' => 'Despacho revertido completamente'])->assertOk();
         $datos = $this->datos($r->version);
 
@@ -88,7 +93,11 @@ class EliminarRecepcionConGuiasTest extends TestCase
         DB::table('movimientos_envases')->where('documento_id', $guia)
             ->where('tipo_movimiento', 'reversion_despacho')->update(['cantidad' => 35]);
 
-        $this->deleteJson('/api/romana/recepciones/'.$r->id, $this->datos($r->version))->assertConflict();
+        $mensaje = $this->deleteJson('/api/romana/recepciones/'.$r->id, $this->datos($r->version))->assertConflict()->json('message');
+        $this->assertStringContainsString(GuiaDespachoEnvase::findOrFail($guia)->numero, $mensaje);
+        $this->assertStringContainsString('Anulada', $mensaje);
+        $this->assertStringContainsString('36 Bins plástico', $mensaje);
+        $this->assertStringContainsString('35 Bins plástico', $mensaje);
 
         $this->assertNotSame('anulada', $r->refresh()->estado->value);
         $this->assertSame(0, MovimientoEnvase::where('tipo_movimiento', 'anulacion_recepcion')->count());
@@ -107,16 +116,107 @@ class EliminarRecepcionConGuiasTest extends TestCase
     public function test_no_deja_existencia_negativa_por_una_salida_historica_sin_origen(): void
     {
         [$r, , $cliente, $temporada, $admin] = $this->ingresoEnvases();
-        MovimientoEnvase::create(['operacion_id' => (string) Str::uuid(), 'temporada_id' => $temporada->id,
+        $cancelada = $this->crearGuia($cliente->id, [[$r->movimientosEnvases()->first(), 36]]);
+        $this->postJson('/api/envases/guias-despacho/'.$cancelada.'/cancelar', ['motivo' => 'Cancelar reserva'])->assertOk();
+        $salida = MovimientoEnvase::create(['operacion_id' => (string) Str::uuid(), 'temporada_id' => $temporada->id,
             'cliente_id' => $cliente->id, 'documento_tipo' => 'salida_recepcion_fruta', 'documento_id' => (string) Str::uuid(),
             'numero_documento' => 'SALIDA-ANTERIOR', 'tipo_movimiento' => 'salida_recepcion_fruta',
             'tipo_envase' => 'bins', 'propiedad' => 'arrendada', 'cantidad' => 100,
             'signo_cuenta' => -1, 'signo_existencia' => -1, 'ocurrido_at' => now(), 'creado_por_user_id' => $admin->id]);
 
-        $this->deleteJson('/api/romana/recepciones/'.$r->id, $this->datos($r->version))->assertConflict();
+        $mensaje = $this->deleteJson('/api/romana/recepciones/'.$r->id, $this->datos($r->version))->assertConflict()->json('message');
+        $this->assertStringContainsString($r->numero_recepcion, $mensaje);
+        $this->assertStringContainsString('SALIDA-ANTERIOR', $mensaje);
+        $this->assertStringContainsString($salida->id, $mensaje);
+        $this->assertStringContainsString('Se deben retirar 138', $mensaje);
+        $this->assertStringContainsString('existencia total de planta: 38', $mensaje);
+        $this->assertStringContainsString('Faltan 100', $mensaje);
+        $this->assertStringContainsString('sin origen individual', $mensaje);
+        $this->assertStringNotContainsString(GuiaDespachoEnvase::findOrFail($cancelada)->numero, $mensaje);
 
         $this->assertSame(38, $this->saldo('signo_existencia', $cliente));
         $this->assertSame(0, MovimientoEnvase::where('tipo_movimiento', 'anulacion_recepcion')->count());
+    }
+
+    public function test_identifica_el_despacho_historico_que_impide_calcular_el_inventario(): void
+    {
+        [$r, , $cliente, $temporada, $admin] = $this->ingresoEnvases();
+        $salida = $this->salidaHistorica($cliente->id, $temporada->id, $admin->id, 20, 'GUIA-HISTORICA-721');
+        $salida->update(['tipo_movimiento' => 'despacho_cliente']);
+
+        $mensaje = $this->deleteJson('/api/romana/recepciones/'.$r->id, $this->datos($r->version))->assertConflict()->json('message');
+
+        $this->assertStringContainsString('GUIA-HISTORICA-721', $mensaje);
+        $this->assertStringContainsString($salida->id, $mensaje);
+        $this->assertStringContainsString('20 Bins plástico (arrendados)', $mensaje);
+        $this->assertStringContainsString('no pueden atribuirse a esta recepción', $mensaje);
+        $this->assertSame(0, MovimientoEnvase::where('tipo_movimiento', 'anulacion_recepcion')->count());
+    }
+
+    public function test_identifica_correcciones_vinculadas_aunque_no_tengan_numero_de_documento(): void
+    {
+        [$r, $origen, $cliente, $temporada, $admin] = $this->ingresoEnvases();
+        $correccion = $this->salidaHistorica($cliente->id, $temporada->id, $admin->id, 12, '');
+        $correccion->update(['tipo_movimiento' => 'correccion_cuenta', 'signo_existencia' => 0,
+            'movimiento_origen_id' => $origen->id]);
+
+        $mensaje = $this->deleteJson('/api/romana/recepciones/'.$r->id, $this->datos($r->version))->assertConflict()->json('message');
+
+        $this->assertStringContainsString($correccion->documento_id, $mensaje);
+        $this->assertStringContainsString($correccion->id, $mensaje);
+        $this->assertStringContainsString($origen->id, $mensaje);
+        $this->assertStringContainsString($cliente->nombre, $mensaje);
+        $this->assertStringContainsString('12 Bins plástico', $mensaje);
+        $this->assertSame(0, MovimientoEnvase::where('tipo_movimiento', 'anulacion_recepcion')->count());
+    }
+
+    public function test_detalla_el_saldo_pendiente_sin_acusar_las_salidas_completamente_compensadas(): void
+    {
+        [$r, , $cliente, $temporada, $admin] = $this->ingresoEnvases();
+        $vigente = $this->salidaHistorica($cliente->id, $temporada->id, $admin->id, 60, 'SALIDA-VIGENTE');
+        $parcial = $this->salidaHistorica($cliente->id, $temporada->id, $admin->id, 60, 'SALIDA-PARCIAL');
+        $compensada = $this->salidaHistorica($cliente->id, $temporada->id, $admin->id, 100, 'SALIDA-COMPENSADA');
+        foreach ([[$parcial, 20], [$compensada, 100]] as [$salida, $cantidad]) {
+            $reversa = $salida->replicate(['operacion_id'])->fill(['operacion_id' => (string) Str::uuid(),
+                'tipo_movimiento' => 'reversion_salida_fruta', 'cantidad' => $cantidad,
+                'signo_cuenta' => 1, 'signo_existencia' => 1, 'movimiento_origen_id' => $salida->id]);
+            $reversa->save();
+        }
+
+        $mensaje = $this->deleteJson('/api/romana/recepciones/'.$r->id, $this->datos($r->version))->assertConflict()->json('message');
+
+        $this->assertStringContainsString($vigente->numero_documento, $mensaje);
+        $this->assertStringContainsString($parcial->numero_documento, $mensaje);
+        $this->assertStringContainsString('saldo sin compensar: 40', $mensaje);
+        $this->assertStringNotContainsString($compensada->numero_documento, $mensaje);
+        $this->assertStringContainsString('existencia total de planta: 38', $mensaje);
+        $this->assertSame(0, MovimientoEnvase::where('tipo_movimiento', 'anulacion_recepcion')->count());
+    }
+
+    public function test_muestra_la_recepcion_y_documento_de_una_salida_que_afecta_el_saldo_global(): void
+    {
+        [$r, , , $temporada, $admin] = $this->ingresoEnvases();
+        [$otra, , $cliente] = $this->ingresoEnvases();
+        $salida = $this->salidaHistorica($cliente->id, $temporada->id, $admin->id, 200, 'SALIDA-OTRA-RECEPCION');
+        $salida->update(['recepcion_romana_id' => $otra->id, 'documento_tipo' => 'recepcion_romana', 'documento_id' => $otra->id]);
+
+        $mensaje = $this->deleteJson('/api/romana/recepciones/'.$r->id, $this->datos($r->version))->assertConflict()->json('message');
+
+        $this->assertStringContainsString('Recepción '.$otra->numero_recepcion, $mensaje);
+        $this->assertStringContainsString($salida->numero_documento, $mensaje);
+        $this->assertStringContainsString('pueden pertenecer a otras recepciones', $mensaje);
+        $this->assertStringContainsString('disponibles de sus orígenes: 138', $mensaje);
+        $this->assertStringContainsString('existencia total de planta: 76', $mensaje);
+        $this->assertSame(0, MovimientoEnvase::where('tipo_movimiento', 'anulacion_recepcion')->count());
+    }
+
+    private function salidaHistorica(string $clienteId, string $temporadaId, int $usuarioId, int $cantidad, string $documento): MovimientoEnvase
+    {
+        return MovimientoEnvase::create(['operacion_id' => (string) Str::uuid(), 'temporada_id' => $temporadaId,
+            'cliente_id' => $clienteId, 'documento_tipo' => 'salida_recepcion_fruta', 'documento_id' => (string) Str::uuid(),
+            'numero_documento' => $documento, 'tipo_movimiento' => 'salida_recepcion_fruta',
+            'tipo_envase' => 'bins', 'propiedad' => 'arrendada', 'cantidad' => $cantidad,
+            'signo_cuenta' => -1, 'signo_existencia' => -1, 'ocurrido_at' => now(), 'creado_por_user_id' => $usuarioId]);
     }
 
     private function confirmarGuia(string $id): void
