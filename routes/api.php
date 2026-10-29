@@ -342,6 +342,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/validacion/catalogos', CatalogoValidacionController::class)
         ->middleware('can:validar-pallets');
+    Route::get('/validacion/catalogos/fragmentos/{temporadaId}/{version}/{hash}', [CatalogoValidacionController::class, 'fragmento'])
+        ->whereUuid('temporadaId')->whereNumber('version')->where('hash', '[a-f0-9]{64}')
+        ->middleware('can:validar-pallets');
     Route::get('/validacion/pallets/mi-sesion', [ValidacionPalletController::class, 'miSesion'])
         ->middleware('can:validar-pallets');
     Route::get('/validacion/pallets/operaciones/{operacionId}', [ValidacionPalletController::class, 'estadoOperacion'])

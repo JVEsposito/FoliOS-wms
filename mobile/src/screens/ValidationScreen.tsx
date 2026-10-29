@@ -113,6 +113,8 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
   const catalogNeedsSave = useRef(false);
   const [catalogVerified, setCatalogVerified] = useState(false);
   const [catalogProblem, setCatalogProblem] = useState('');
+  const [catalogProgress, setCatalogProgress] = useState<{ version: number; completed: number; total: number } | null>(null);
+  const historyRefreshedAt = useRef(0);
   const [outbox, setOutbox] = useState<ValidationOutboxItem[]>([]);
   const [recent, setRecent] = useState<ValidationAttempt[]>([]);
   const [validationSession, setValidationSession] = useState<ValidationSessionSnapshot | null>(null);
@@ -286,7 +288,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
     {
       intervalMs: 30000,
       enabled: Boolean(baseUrl),
-      onResume: synchronize,
+      onResume: () => synchronize({ refreshHistory: true }),
     },
   );
 
@@ -312,6 +314,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
         setShift(savedContext.turno);
       }
       if (local[2].status === 'rejected') setError('No se pudo leer la bandeja local. Sus registros se conservan; reintenta la sincronización antes de capturar.');
+      if (cached) setBusy(false);
       await synchronize({ knownCatalog: cached });
     } catch (reason) {
       setError(messageFrom(reason));
@@ -356,9 +359,11 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
 
   async function synchronize({
     notify = false,
+    refreshHistory = false,
     knownCatalog = catalogRef.current,
   }: {
     notify?: boolean;
+    refreshHistory?: boolean;
     knownCatalog?: ValidationCatalog | null;
   } = {}) {
     if (!baseUrl) {
@@ -369,11 +374,14 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
     if (synchronizing.current) return;
     synchronizing.current = true;
     setSyncing(true);
+    void flushOutbox({ refresh: refreshHistory || notify }).catch((reason) => {
+      setError(`No se pudo sincronizar la bandeja local. Se conservan sus capturas. ${messageFrom(reason)}`);
+    });
 
     try {
       // El historial y la bandeja no condicionan la instalación del catálogo.
       try {
-        const loaded = await getValidationCatalog(baseUrl, auth.token, knownCatalog);
+        const loaded = await getValidationCatalog(baseUrl, auth.token, knownCatalog, { deviceId, onProgress: setCatalogProgress });
         const activeCatalog = loaded ?? knownCatalog;
         if (!activeCatalog) throw new Error('No existe un catálogo disponible para validación. Reintenta desde el indicador de sincronización.');
         catalogRef.current = activeCatalog;
@@ -405,23 +413,24 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
         setOnline(!(reason instanceof ApiError && reason.status === 0));
         setCatalogProblem(`${messageFrom(reason)} ${knownCatalog ? `Se conserva v${knownCatalog.temporada.version_catalogo}; su vigencia no está confirmada.` : 'Esta PDA aún no tiene un catálogo válido.'}`);
       }
-      try { await flushOutbox(); }
-      catch (reason) { setError(`No se pudo sincronizar la bandeja local. Se conservan sus capturas. ${messageFrom(reason)}`); }
     } finally {
       synchronizing.current = false;
       setSyncing(false);
+      setCatalogProgress(null);
     }
   }
 
-  async function flushOutbox() {
+  async function flushOutbox({ refresh = false }: { refresh?: boolean } = {}) {
     if (!baseUrl || flushing.current) return;
     flushing.current = true;
     try {
       let items = await loadValidationOutbox(userId, deviceId);
+      let changed = false;
       for (const item of items.filter((candidate) => candidate.status === 'pendiente')) {
         try {
           await registerValidation(baseUrl, auth.token, item.payload);
           items = await removeValidationFromOutbox(userId, deviceId, item.id);
+          changed = true;
           setOnline(true);
         } catch (reason) {
           if (reason instanceof ApiError && reason.status === 0) {
@@ -430,12 +439,15 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
           }
           if (reason instanceof ApiError && reason.status === 409) {
             items = await markValidationOutboxItem(userId, deviceId, item.id, 'conflicto', reason.message);
+            changed = true;
             continue;
           }
           items = await markValidationOutboxItem(userId, deviceId, item.id, 'error', messageFrom(reason));
         }
       }
       setOutbox(items);
+      if (!refresh && !changed && Date.now() - historyRefreshedAt.current < 120000) return;
+      historyRefreshedAt.current = Date.now();
       try {
         const [latest] = await Promise.all([
           listRecentValidations(baseUrl, auth.token),
@@ -928,8 +940,11 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
     onLogout();
   }
 
+  const catalogProgressLabel = catalogProgress
+    ? `Actualizando catálogo v${catalogProgress.version} · ${catalogProgress.completed} de ${catalogProgress.total} partes (${catalogProgress.total ? Math.round(catalogProgress.completed * 100 / catalogProgress.total) : 100} %)`
+    : null;
   if (!catalog && busy) {
-    return <View style={styles.boot}><ActivityIndicator color={o.color.primary} size="large" /><Text style={styles.bootText}>Preparando catálogo de validación…</Text></View>;
+    return <View style={styles.boot}><ActivityIndicator color={o.color.primary} size="large" /><Text style={styles.bootText}>{catalogProgressLabel ?? 'Preparando catálogo de validación…'}</Text></View>;
   }
 
   const device = isPdaBuild ? 'PDA' : 'tablet';
@@ -1407,6 +1422,12 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
           <View accessibilityRole="alert" style={[styles.banner, styles.bannerError]}>
             <SignalMark size={12} tone="warning" />
             <Text style={styles.bannerText}>{catalogProblem}</Text>
+          </View>
+        ) : null}
+        {catalogProgressLabel ? (
+          <View accessibilityLiveRegion="polite" style={[styles.banner, styles.bannerNotice]}>
+            <ActivityIndicator color={o.color.primary} size="small" />
+            <Text style={styles.bannerText}>{catalogProgressLabel}. {catalog ? 'Puedes continuar con el catálogo actual.' : 'Al terminar podrás validar.'}</Text>
           </View>
         ) : null}
         {error && error !== decisionError ? (

@@ -32,11 +32,13 @@ const pending = (overrides = {}) => ({
 });
 
 function harness({ item = pending(), statusError = false, record = null, finalRecord = null, failPost = null, width = 1200,
-  cachedVersion = 2, serverVersion = 2, catalogError = null, historyError = false, cacheError = false, noCached = false } = {}) {
+  cachedVersion = 2, serverVersion = 2, catalogError = null, historyError = false, cacheError = false, noCached = false, catalogBlocked = false, historyBlocked = false } = {}) {
   let renderer; let sequence = 0; let failWrite = false;
   let pollTask;
   const files = new Map();
-  const calls = { posts: [], checks: [] };
+  const calls = { posts: [], checks: [], history: [] };
+  let releaseCatalog; const catalogGate = new Promise((resolve) => { releaseCatalog = resolve; });
+  let releaseHistory; const historyGate = new Promise((resolve) => { releaseHistory = resolve; });
   const storage = new Map([[outboxKey, JSON.stringify(item ? [item] : [])]]);
   const records = record ? [record] : finalRecord ? [finalRecord] : [];
   const catalog = {
@@ -72,11 +74,14 @@ function harness({ item = pending(), statusError = false, record = null, finalRe
   const fetch = async (url, options = {}) => {
     assert.equal(options.headers.get('Authorization'), 'Bearer token');
     const parsed = new URL(url);
+    if (parsed.pathname.endsWith('/mi-sesion') || (parsed.pathname.endsWith('/pallets') && options.method !== 'POST')) calls.history.push(url);
     if (parsed.pathname.endsWith('/catalogos')) {
+      if (catalogBlocked) await catalogGate;
       if (catalogError) return response({ message: 'Catálogo temporalmente no disponible.' }, catalogError);
       if (options.headers.get('If-None-Match') === `"validacion-catalogo-season-${catalog.temporada.version_catalogo}"`) return new Response(null, { status: 304 });
       return response(catalog);
     }
+    if (historyBlocked && (parsed.pathname.endsWith('/mi-sesion') || (parsed.pathname.endsWith('/pallets') && options.method !== 'POST'))) await historyGate;
     if (historyError && (parsed.pathname.endsWith('/mi-sesion') || (parsed.pathname.endsWith('/pallets') && options.method !== 'POST'))) return response({ message: 'Historial no disponible.' }, 503);
     if (parsed.pathname.includes('/operaciones/')) {
       const id = parsed.pathname.split('/').at(-1); calls.checks.push(id);
@@ -126,6 +131,7 @@ function harness({ item = pending(), statusError = false, record = null, finalRe
         loadValidationCatalogFile: async () => files.get('catalog') ?? null,
         saveValidationCatalogFile: async (_server, _device, value) => { if (cacheError) throw new Error('Almacenamiento lleno.'); files.set('catalog', clone(value)); },
       };
+      if (id.endsWith('/validationCatalogTransferStore')) return { supportsCatalogTransfer: false };
       if (id.endsWith('/config/appVariant')) return { isPdaBuild: width < 420 };
       if (id.endsWith('/theme/areas')) return { areas: { frigorifico: { gajo: 1, bright: '#000' } } };
       if (id.endsWith('/components/ui/ScanInput')) return { ScanInput: 'ScanInput' };
@@ -138,7 +144,7 @@ function harness({ item = pending(), statusError = false, record = null, finalRe
       }
       return require(id);
     };
-    vm.runInNewContext(code, { require: mockRequire, module, exports: module.exports, console, Error, Headers, URLSearchParams, fetch, setTimeout: () => 0 }, { filename: path });
+    vm.runInNewContext(code, { require: mockRequire, module, exports: module.exports, console, Error, Headers, URLSearchParams, AbortController, fetch, setTimeout: () => 0, clearTimeout: () => {} }, { filename: path });
     return module.exports;
   }
   const { ValidationScreen } = load(resolve(sourceRoot, 'screens/ValidationScreen.tsx'));
@@ -153,6 +159,9 @@ function harness({ item = pending(), statusError = false, record = null, finalRe
     catalogError: (status) => { catalogError = status; },
     cacheError: (value) => { cacheError = value; },
     async poll() { await flush(pollTask); },
+    async manualSync() { await flush(renderer.root.findAllByType('Pressable').find((node) => node.props.accessibilityLabel?.startsWith('Sincronizar.')).props.onPress); },
+    async releaseCatalog() { catalogBlocked = false; await flush(releaseCatalog); },
+    async releaseHistory() { historyBlocked = false; await flush(releaseHistory); },
     async folio(value) { await flush(() => renderer.root.findByType('ScanInput').props.onChangeText(value)); },
     outbox: () => JSON.parse(storage.get(outboxKey)),
     failNextWrite: () => { failWrite = true; },
@@ -168,6 +177,49 @@ function harness({ item = pending(), statusError = false, record = null, finalRe
     async lot(value) { await flush(() => renderer.root.findAllByType('TextInput').find((node) => node.props.placeholder === 'Según etiqueta').props.onChangeText(value)); },
   };
 }
+
+test('un catálogo lento no bloquea la captura con copia local y conserva el folio al terminar', async () => {
+  const h = harness({ item: null, cachedVersion: 218, serverVersion: 227, catalogBlocked: true });
+  try {
+    await h.mount();
+    assert.match(h.message(), /catálogo v218/);
+    await h.folio('CAPTURA-EN-CURSO');
+    assert.equal(h.scan().value, 'CAPTURA-EN-CURSO');
+    await h.releaseCatalog();
+    assert.match(h.message(), /catálogo v227/);
+    assert.equal(h.scan().value, 'CAPTURA-EN-CURSO');
+  } finally { await h.unmount(); }
+});
+
+test('la bandeja se envía sin esperar una descarga lenta de catálogo y conserva el UUID original', async () => {
+  const h = harness({ item: pending({ status: 'pendiente' }), cachedVersion: 218, serverVersion: 227, catalogBlocked: true });
+  try {
+    await h.mount();
+    assert.equal(h.calls.posts.length, 1);
+    assert.equal(h.calls.posts[0].operacion_id, payload().operacion_id);
+    assert.equal(h.outbox().length, 0);
+    assert.match(h.message(), /catálogo v218/);
+    await h.releaseCatalog();
+    assert.match(h.message(), /catálogo v227/);
+    assert.equal(h.calls.posts.length, 1);
+  } finally { await h.unmount(); }
+});
+
+test('los historiales lentos no retienen la sincronización de catálogo y el sondeo no los repite cada 30 segundos', async () => {
+  const h = harness({ item: null, historyBlocked: true });
+  try {
+    await h.mount();
+    assert.match(h.message(), /Catálogo al día/);
+    assert.equal(h.calls.history.length, 2);
+    await h.poll();
+    assert.equal(h.calls.history.length, 2);
+    await h.releaseHistory();
+    await h.poll();
+    assert.equal(h.calls.history.length, 2);
+    await h.manualSync();
+    assert.equal(h.calls.history.length, 4);
+  } finally { await h.unmount(); }
+});
 
 test('instala v227 aunque el historial falle y conserva la bandeja del usuario', async () => {
   const h = harness({ cachedVersion: 218, serverVersion: 227, historyError: true });
