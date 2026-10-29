@@ -124,7 +124,7 @@ async function api(path, options = {}) {
     const data = response.status === 204 ? null : await response.json().catch(() => ({}));
     if (!response.ok) {
         throw new Error(
-            Object.values(data?.errors || {}).flat()[0]
+            Object.values(data?.errors || {}).flat().join('\n')
             || data?.message
             || 'No fue posible completar la operación.',
         );
@@ -164,7 +164,7 @@ async function uploadGuideFile(guideId, file) {
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
         throw new Error(
-            Object.values(data?.errors || {}).flat()[0]
+            Object.values(data?.errors || {}).flat().join('\n')
             || data?.message
             || 'No fue posible subir el archivo de la guía.',
         );

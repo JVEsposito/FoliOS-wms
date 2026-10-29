@@ -111,11 +111,17 @@
     background: var(--deep);
 }
 
+.form-grid label small,
 .dispatch-line label small {
     display: block;
     margin-top: 5px;
     color: var(--muted);
     font-size: 10px;
+}
+
+#dispatchError,
+#guideDialogError {
+    white-space: pre-line;
 }
 
 .form-actions,
