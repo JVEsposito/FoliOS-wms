@@ -27,18 +27,43 @@ class GeneradorEtiquetaMaterialPdf
      */
     public function generar(array $etiquetas, array $perfil, int $copias = 1): string
     {
-        [$anchoMm, $altoMm] = $this->dimensiones($perfil);
+        $clasica = ($perfil['diseno'] ?? null) === DisenoEtiquetaClasicaMaterial::CODIGO;
+        if ($clasica) {
+            DisenoEtiquetaClasicaMaterial::validarPerfil($perfil);
+        }
+        [$anchoMm, $altoMm] = $clasica ? [200, 100] : $this->dimensiones($perfil);
         $ancho = $this->puntos($anchoMm);
         $alto = $this->puntos($altoMm);
         $paginas = [];
 
         foreach ($etiquetas as $etiqueta) {
             for ($copia = 0; $copia < $copias; $copia++) {
-                $paginas[] = $this->pagina($etiqueta, $ancho, $alto);
+                $paginas[] = $clasica
+                    ? $this->paginaClasica($etiqueta['clasica'], $alto)
+                    : $this->pagina($etiqueta, $ancho, $alto);
             }
         }
 
-        return $this->documento($paginas, $ancho, $alto);
+        return $this->documento($paginas, $ancho, $alto, $clasica);
+    }
+
+    private function paginaClasica(array $datos, float $alto): string
+    {
+        $diseno = DisenoEtiquetaClasicaMaterial::disponer($datos);
+        $contenido = "0 0 0 RG 0.7 w\n";
+        foreach ($diseno['lineas'] as [$x1, $y1, $x2, $y2]) {
+            $contenido .= sprintf("%.2F %.2F m %.2F %.2F l S\n", $this->puntos($x1), $alto - $this->puntos($y1), $this->puntos($x2), $alto - $this->puntos($y2));
+        }
+        $r = $diseno['logo'];
+        $contenido .= sprintf("q 0 0 0 rg %.3F 0 0 %.3F %.3F %.3F cm /Logo Do Q\n", $this->puntos($r['ancho']), $this->puntos($r['alto']), $this->puntos($r['x']), $alto - $this->puntos($r['y'] + $r['alto']));
+        foreach ($diseno['textos'] as $t) {
+            $x = $t['x'] + ($t['centrado'] ? max(0, ($t['ancho'] - DisenoTarjaArmado::anchoRelativo($t['valor'], $t['negrita']) * $t['tamano']) / 2) : 0);
+            $contenido .= $this->texto($this->puntos($x), $alto - $this->puntos($t['y'] + ($t['alto'] + $t['tamano'] * 0.7) / 2), $this->puntos($t['tamano']), $t['valor'], $t['negrita']);
+        }
+        $c = $diseno['codigo'];
+        $contenido .= $this->codigoBarras($c['valor'], $this->puntos($c['x']), $alto - $this->puntos($c['y'] + $c['alto']), $this->puntos($c['ancho']), $this->puntos($c['alto']), true);
+
+        return $contenido;
     }
 
     /** @param array<string, mixed> $etiqueta */
@@ -286,7 +311,7 @@ class GeneradorEtiquetaMaterialPdf
     }
 
     /** @param array<int, string> $paginas */
-    private function documento(array $paginas, float $ancho, float $alto): string
+    private function documento(array $paginas, float $ancho, float $alto, bool $logo = false): string
     {
         $objetos = [
             '<< /Type /Catalog /Pages 2 0 R >>',
@@ -294,14 +319,20 @@ class GeneradorEtiquetaMaterialPdf
             '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>',
             '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>',
         ];
+        $imagen = '';
+        if ($logo) {
+            $datos = gzcompress(LogoAgrorosarioEtiqueta::datos());
+            $objetos[] = '<< /Type /XObject /Subtype /Image /Width '.LogoAgrorosarioEtiqueta::ANCHO.' /Height '.LogoAgrorosarioEtiqueta::ALTO.' /ImageMask true /BitsPerComponent 1 /Decode [1 0] /Filter /FlateDecode /Length '.strlen($datos).">>\nstream\n{$datos}\nendstream";
+            $imagen = ' /XObject << /Logo 5 0 R >>';
+        }
         $referenciasPaginas = [];
 
         foreach ($paginas as $indice => $contenido) {
-            $paginaRef = 5 + ($indice * 2);
+            $paginaRef = count($objetos) + 1;
             $contenidoRef = $paginaRef + 1;
             $referenciasPaginas[] = "{$paginaRef} 0 R";
             $objetos[] = sprintf(
-                '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 %.2F %.2F] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents %d 0 R >>',
+                '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 %.2F %.2F] /Resources << /Font << /F1 3 0 R /F2 4 0 R >>'.$imagen.' >> /Contents %d 0 R >>',
                 $ancho,
                 $alto,
                 $contenidoRef,

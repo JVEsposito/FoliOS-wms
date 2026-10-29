@@ -6,6 +6,8 @@ const labelElements = {
     source: document.getElementById('materialLabelSource'),
     reception: document.getElementById('materialLabelReception'),
     profile: document.getElementById('materialLabelProfile'),
+    design: document.getElementById('materialLabelDesign'),
+    designHelp: document.getElementById('materialLabelDesignHelp'),
     folios: document.getElementById('materialLabelFolios'),
     selectAll: document.getElementById('selectAllMaterialLabels'),
     history: document.getElementById('materialLabelHistory'),
@@ -138,6 +140,7 @@ function selectedFolios() {
 }
 
 function renderSourceOptions() {
+    updateLabelDesign();
     const placeholder = labelState.source === 'transformacion'
         ? 'Seleccionar orden de transformación'
         : 'Seleccionar recepción';
@@ -160,6 +163,27 @@ function renderProfileOptions() {
     labelElements.profile.innerHTML = labelState.profiles.map((profile) => `
         <option value="${profile.id}"${profile.predeterminado ? ' selected' : ''}>${labelEscape(profile.nombre)} · ${labelEscape(profile.fabricante)} · ${labelEscape(profile.ancho_mm)}×${labelEscape(profile.alto_mm)} mm</option>
     `).join('') || '<option value="">No existen perfiles activos</option>';
+    updateLabelDesign();
+}
+
+function updateLabelDesign() {
+    if (!labelElements.design) return;
+    const profile = labelState.profiles.find(item => item.id === labelElements.profile.value);
+    const dimensions = [Number(profile?.ancho_mm), Number(profile?.alto_mm)].sort((a, b) => a - b);
+    const compatible = labelState.source === 'recepcion'
+        && profile?.disenos_disponibles?.includes('clasica_bodega') === true
+        && Math.abs(dimensions[0] - 100) < 0.01 && Math.abs(dimensions[1] - 200) < 0.01;
+    labelElements.design.querySelector('[value="clasica_bodega"]').disabled = !compatible;
+    if (!compatible) labelElements.design.value = 'actual';
+    const symbology = labelElements.form.elements.simbologia;
+    const classic = labelElements.design.value === 'clasica_bodega';
+    const requiresCode128 = classic || labelElements.form.elements.formato.value === 'pdf';
+    symbology.querySelector('[value="qr"]').disabled = requiresCode128;
+    if (requiresCode128) symbology.value = 'code128';
+    labelElements.designHelp.textContent = labelElements.design.value === 'clasica_bodega'
+        ? '200 × 100 mm · cliente dueño, fecha real de recepción y cantidad recibida por bulto. Conserva el folio escaneable. PDF y NiceLabel muestran la cara apaisada; revisa la orientación en las propiedades de impresión.'
+        : compatible ? 'Puedes elegir Clásica bodega para destacar la cantidad recibida de cada bulto.'
+            : 'Clásica bodega está disponible para recepciones con un perfil de 200 × 100 mm. El diseño Actual conserva el modelo de cada origen.';
 }
 
 function labelFolioStatus(folio, generated) {
@@ -193,7 +217,7 @@ function renderFolios() {
 function renderHistory() {
     labelElements.history.innerHTML = labelState.history.map((job) => `
         <article class="material-row">
-            <div><strong>${labelEscape(job.formato.toUpperCase())} · ${labelEscape((job.simbologia || 'code128').toUpperCase())} · ${job.folios.length} folios × ${job.copias} copias</strong><small>${new Date(job.solicitado_at).toLocaleString('es-CL')} · ${labelEscape(job.solicitado_por)} · ${labelEscape(job.perfil?.nombre)}</small>${job.motivo_reimpresion ? `<small>Motivo: ${labelEscape(job.motivo_reimpresion)}</small>` : ''}</div>
+            <div><strong>${labelEscape(job.formato.toUpperCase())} · ${labelEscape((job.simbologia || 'code128').toUpperCase())} · ${job.folios.length} folios × ${job.copias} copias</strong><small>${new Date(job.solicitado_at).toLocaleString('es-CL')} · ${labelEscape(job.solicitado_por)} · ${labelEscape(job.perfil?.nombre)} · ${job.diseno === 'clasica_bodega' ? 'Clásica bodega' : 'Actual'}</small>${job.motivo_reimpresion ? `<small>Motivo: ${labelEscape(job.motivo_reimpresion)}</small>` : ''}</div>
             <span class="material-import-action">${labelEscape(job.estado)}</span>
         </article>
     `).join('') || '<p class="empty-state">Aún no se han generado etiquetas para este origen.</p>';
@@ -299,12 +323,16 @@ labelElements.reception?.addEventListener('change', async (event) => {
 labelElements.source?.addEventListener('change', (event) => {
     labelState.selectionRequest++;
     labelState.source = event.target.value;
+    updateLabelDesign();
     labelState.selected = null;
     labelState.history = [];
     renderSourceOptions();
     renderFolios();
     renderHistory();
 });
+
+labelElements.profile?.addEventListener('change', updateLabelDesign);
+labelElements.design?.addEventListener('change', updateLabelDesign);
 
 labelElements.selectAll?.addEventListener('change', (event) => {
     labelElements.folios.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
@@ -337,6 +365,7 @@ labelElements.form?.addEventListener('submit', async (event) => {
         ...(reservationIds.length ? { reserva_ids: reservationIds.sort() } : {}),
         copias: Number(form.get('copias')),
         motivo_reimpresion: String(form.get('motivo_reimpresion') || '').trim() || null,
+        ...(form.get('diseno') === 'clasica_bodega' ? { diseno: 'clasica_bodega' } : {}),
     };
     const source = labelState.source;
     const id = labelState.selected.id;
@@ -398,14 +427,7 @@ labelElements.form?.addEventListener('submit', async (event) => {
 });
 
 labelElements.reload?.addEventListener('click', () => void loadLabels());
-labelElements.form?.elements.formato?.addEventListener('change', (event) => {
-    const qr = labelElements.form.elements.simbologia.querySelector('option[value="qr"]');
-    const pdf = event.target.value === 'pdf';
-    qr.disabled = pdf;
-    if (pdf && labelElements.form.elements.simbologia.value === 'qr') {
-        labelElements.form.elements.simbologia.value = 'code128';
-    }
-});
+labelElements.form?.elements.formato?.addEventListener('change', updateLabelDesign);
 window.addEventListener('estiba:office-session', (event) => {
     labelState.selectionRequest++;
     labelState.operation = null;

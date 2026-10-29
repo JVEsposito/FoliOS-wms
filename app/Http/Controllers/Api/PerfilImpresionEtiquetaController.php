@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\GuardarPerfilImpresionEtiquetaRequest;
 use App\Models\PerfilImpresionEtiqueta;
+use App\Services\Materiales\DisenoEtiquetaClasicaMaterial;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -113,6 +114,8 @@ class PerfilImpresionEtiquetaController extends Controller
             'orientacion' => $perfil->orientacion,
             'predeterminado' => $perfil->predeterminado,
             'activo' => $perfil->activo,
+            'disenos_disponibles' => $perfil->activo && DisenoEtiquetaClasicaMaterial::admitePerfil($perfil->only(['ancho_mm', 'alto_mm']))
+                ? ['actual', DisenoEtiquetaClasicaMaterial::CODIGO] : ['actual'],
             'created_at' => $perfil->created_at?->toAtomString(),
             'updated_at' => $perfil->updated_at?->toAtomString(),
         ];

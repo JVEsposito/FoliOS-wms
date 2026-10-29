@@ -3,6 +3,7 @@
 namespace App\Services\Materiales;
 
 use App\Enums\EstadoFolioSalidaReservado;
+use App\Enums\EstadoOperacionalFolio;
 use App\Enums\EstadoRecepcionMaterial;
 use App\Exceptions\ConflictoOperacion;
 use App\Models\FolioMaterial;
@@ -71,6 +72,7 @@ class ServicioImpresionEtiquetaMaterial
                         'folio',
                         'item.cliente.cliente',
                         'bultoRecepcion.detalle.recepcion.proveedor',
+                        'bultoRecepcion.detalle.recepcion.cliente',
                     ])
                     ->whereIn('folio_id', $folioIds)
                     ->whereHas('bultoRecepcion.detalle', fn ($consulta) => $consulta
@@ -270,7 +272,22 @@ class ServicioImpresionEtiquetaMaterial
         ?string $dispositivoId,
         Closure $resolver,
     ): array {
+        $diseno = $datos['diseno'] ?? 'actual';
+        if (! in_array($diseno, ['actual', DisenoEtiquetaClasicaMaterial::CODIGO], true)) {
+            throw new DomainException('Selecciona un diseño de etiqueta válido.');
+        }
+        if ($diseno === DisenoEtiquetaClasicaMaterial::CODIGO) {
+            if ($payload['simbologia'] !== 'code128') {
+                throw new DomainException('Clásica bodega utiliza código de barras Code 128.');
+            }
+            if ($payload['origen'] !== 'recepcion') {
+                throw new DomainException('El diseño Clásica bodega está disponible para recepciones de materiales.');
+            }
+            // Omitir "actual" conserva los hashes de clientes y trabajos anteriores.
+            $payload['diseno'] = $diseno;
+        }
         $payloadHash = $this->hash($payload);
+        $contenidoGenerado = null;
 
         try {
             $trabajo = DB::transaction(function () use (
@@ -280,7 +297,9 @@ class ServicioImpresionEtiquetaMaterial
                 $dispositivoId,
                 $resolver,
                 $payloadHash,
+                &$contenidoGenerado,
             ): TrabajoImpresionMaterial {
+                $contenidoGenerado = null;
                 $existente = TrabajoImpresionMaterial::query()
                     ->where('operacion_id', $datos['operacion_id'])
                     ->lockForUpdate()
@@ -322,6 +341,22 @@ class ServicioImpresionEtiquetaMaterial
 
                 $perfilSnapshot = $this->perfilSnapshot($perfil);
                 $contenidoSnapshot = $contexto['etiquetas'];
+                if (($payload['diseno'] ?? null) === DisenoEtiquetaClasicaMaterial::CODIGO) {
+                    DisenoEtiquetaClasicaMaterial::validarPerfil($perfilSnapshot);
+                    $perfilSnapshot['diseno'] = DisenoEtiquetaClasicaMaterial::CODIGO;
+                    $perfilSnapshot['diseno_version'] = DisenoEtiquetaClasicaMaterial::VERSION;
+                    // Validar legibilidad antes de persistir un trabajo o marcar una reimpresión.
+                    foreach ($contenidoSnapshot as $etiqueta) {
+                        DisenoEtiquetaClasicaMaterial::disponer($etiqueta['clasica']);
+                    }
+                } else {
+                    // El contenido del modelo actual conserva exactamente su estructura histórica.
+                    $contenidoSnapshot = array_map(function (array $etiqueta): array {
+                        unset($etiqueta['clasica']);
+
+                        return $etiqueta;
+                    }, $contenidoSnapshot);
+                }
                 $contenidoHash = $this->hash([
                     'perfil' => $perfilSnapshot,
                     'etiquetas' => $contenidoSnapshot,
@@ -350,6 +385,10 @@ class ServicioImpresionEtiquetaMaterial
                     'dispositivo_id' => $dispositivoId,
                     'solicitado_at' => now(),
                 ]);
+                if (($payload['diseno'] ?? null) === DisenoEtiquetaClasicaMaterial::CODIGO) {
+                    // Un error de legibilidad o archivo revierte también la auditoría.
+                    $contenidoGenerado = $this->renderizar($trabajo);
+                }
 
                 foreach ($contenidoSnapshot as $etiqueta) {
                     $clave = $this->claveEtiqueta($etiqueta);
@@ -376,6 +415,7 @@ class ServicioImpresionEtiquetaMaterial
                 return $trabajo->load('folios');
             }, attempts: 3);
         } catch (UniqueConstraintViolationException $exception) {
+            $contenidoGenerado = null;
             $trabajo = TrabajoImpresionMaterial::query()
                 ->where('operacion_id', $datos['operacion_id'])
                 ->first();
@@ -389,7 +429,7 @@ class ServicioImpresionEtiquetaMaterial
             }
         }
 
-        $contenido = $this->renderizar($trabajo);
+        $contenido = $contenidoGenerado ?? $this->renderizar($trabajo);
         $extension = match ($trabajo->formato) {
             'pdf' => 'pdf',
             'nlbl' => 'nlbl',
@@ -520,6 +560,8 @@ class ServicioImpresionEtiquetaMaterial
         $recepcion = $bulto?->detalle?->recepcion;
         $cliente = $material->item?->cliente?->cliente;
         $proveedor = $recepcion?->proveedor;
+        $fechaFisica = $recepcion?->fecha_recepcion ?? $material->folio?->fecha_ingreso ?? $recepcion?->confirmado_at;
+        $cantidad = (float) $bulto?->cantidad;
 
         return [
             'origen' => 'recepcion',
@@ -543,6 +585,19 @@ class ServicioImpresionEtiquetaMaterial
             'orden_transformacion' => null,
             'numero_lote_transformacion' => null,
             'fecha_transformacion' => null,
+            'clasica' => [
+                'cliente' => (string) $recepcion?->cliente?->nombre,
+                'fecha' => $fechaFisica?->copy()->timezone(config('app.operational_timezone', 'America/Santiago'))->format('d/m/Y') ?? 'SIN FECHA',
+                'guia' => $recepcion?->numero_guia_despacho ?: 'PENDIENTE',
+                'proveedor' => (string) $proveedor?->nombre,
+                'codigo' => (string) $material->item?->codigo,
+                'descripcion' => (string) $material->item?->nombre,
+                'cantidad' => rtrim(rtrim(number_format($cantidad, 3, ',', '.'), '0'), ','),
+                'unidad' => mb_strtoupper((string) $material->unidad_medida),
+                'folio' => (string) $material->folio?->numero_folio,
+                'bloqueado' => filled($material->motivo_bloqueo) || $material->folio?->estado_operacional === EstadoOperacionalFolio::Bloqueado,
+                'motivo_bloqueo' => $material->motivo_bloqueo ?: $bulto?->motivo_bloqueo,
+            ],
         ];
     }
 

@@ -15,6 +15,13 @@ class GeneradorEtiquetaMaterialZpl
         string $simbologia = 'code128',
     ): string {
         $dpi = (int) $perfil['dpi'];
+        $clasica = ($perfil['diseno'] ?? null) === DisenoEtiquetaClasicaMaterial::CODIGO;
+        if ($clasica) {
+            if ($simbologia !== 'code128') {
+                throw new \DomainException('Clásica bodega utiliza código de barras Code 128.');
+            }
+            DisenoEtiquetaClasicaMaterial::validarPerfil($perfil);
+        }
         [$anchoMm, $altoMm] = $this->dimensiones($perfil);
         $ancho = $this->puntos($anchoMm, $dpi);
         $alto = $this->puntos($altoMm, $dpi);
@@ -23,6 +30,11 @@ class GeneradorEtiquetaMaterialZpl
 
         foreach ($etiquetas as $etiqueta) {
             for ($copia = 0; $copia < $copias; $copia++) {
+                if ($clasica) {
+                    $contenido .= $this->clasica($etiqueta['clasica'], $ancho, $alto, $dpi);
+
+                    continue;
+                }
                 if (is_array($etiqueta['armado'] ?? null)) {
                     $contenido .= $this->tarjaArmado($etiqueta['armado'], $ancho, $alto, $dpi, $simbologia);
 
@@ -121,6 +133,54 @@ class GeneradorEtiquetaMaterialZpl
         }
 
         return $contenido;
+    }
+
+    private function clasica(array $datos, int $ancho, int $alto, int $dpi): string
+    {
+        $diseno = DisenoEtiquetaClasicaMaterial::disponer($datos);
+        $vertical = $alto > $ancho;
+        $s = $dpi / 25.4;
+        $caja = static function (array $r) use ($s, $vertical): array {
+            $x = $vertical ? 100 - $r['y'] - $r['alto'] : $r['x'];
+            $y = $vertical ? $r['x'] : $r['y'];
+
+            return [(int) round($x * $s), (int) round($y * $s), max(1, (int) round(($vertical ? $r['alto'] : $r['ancho']) * $s)), max(1, (int) round(($vertical ? $r['ancho'] : $r['alto']) * $s))];
+        };
+        $zpl = "^XA\n^CI28\n^PW{$ancho}\n^LL{$alto}\n^LH0,0\n";
+        $r = $diseno['logo'];
+        [$x, $y] = $caja($r);
+        $raster = LogoAgrorosarioEtiqueta::raster((int) round($r['ancho'] * $s), (int) round($r['alto'] * $s), $vertical);
+        $zpl .= "^FO{$x},{$y}^GFA,{$raster['bytes']},{$raster['bytes']},{$raster['bytes_fila']},{$raster['hex']}^FS\n";
+        $rectangulos = [];
+        foreach ($diseno['lineas'] as [$x1, $y1, $x2, $y2]) {
+            $rectangulos[] = ['x' => min($x1, $x2), 'y' => min($y1, $y2), 'ancho' => max(0.25, abs($x2 - $x1)), 'alto' => max(0.25, abs($y2 - $y1))];
+        }
+        foreach ($rectangulos as $r) {
+            [$x, $y, $w, $h] = $caja($r);
+            $zpl .= "^FO{$x},{$y}^GB{$w},{$h},".min($w, $h)."^FS\n";
+        }
+        $orientacion = $vertical ? 'R' : 'N';
+        foreach ($diseno['textos'] as $t) {
+            $tamano = max(10, (int) floor($t['tamano'] * $s));
+            // A0 es proporcional: ajustar también el ancho de carácter para caber en la celda.
+            $anchoFuente = max(8, (int) floor($tamano * 0.88));
+            $r = ['x' => $t['x'], 'y' => $t['y'] + ($t['alto'] - $tamano / $s) / 2, 'ancho' => $t['ancho'], 'alto' => $tamano / $s];
+            [$x, $y] = $caja($r);
+            $w = (int) round($t['ancho'] * $s);
+            $zpl .= sprintf("^FO%d,%d^A0%s,%d,%d^FB%d,1,0,%s,0^FH\\^FD%s^FS\n", $x, $y, $orientacion, $tamano, $anchoFuente, $w, $t['centrado'] ? 'C' : 'L', $this->campo($t['valor']));
+        }
+        $c = $diseno['codigo'];
+        $valor = $this->campo($c['valor']);
+        $modulos = 11 * (strlen($c['valor']) + 3) + 13;
+        $modulo = min((int) floor(0.5 * $s), (int) floor($c['ancho'] * $s / ($modulos + 20)));
+        if ($modulo < max(1, (int) ceil(0.19 * $s))) {
+            throw new \DomainException('El folio es demasiado largo para un código legible en esta etiqueta.');
+        }
+        [$x, $y] = $caja(['x' => $c['x'] + ($c['ancho'] - $modulos * $modulo / $s) / 2, 'y' => $c['y'], 'ancho' => $modulos * $modulo / $s, 'alto' => $c['alto']]);
+        $h = (int) round($c['alto'] * $s);
+        $zpl .= "^BY{$modulo},2,{$h}^FO{$x},{$y}^BC{$orientacion},{$h},N,N,N^FH\\^FD{$valor}^FS\n";
+
+        return $zpl."^PQ1,0,1,N\n^XZ\n";
     }
 
     /**

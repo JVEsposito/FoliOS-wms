@@ -12,6 +12,7 @@ import {
 import {
   GenerateMaterialLabelsPayload,
   LabelPrintProfile,
+  MaterialLabelDesign,
   MaterialPrintJob,
   MaterialPrintOutcomePayload,
   MaterialReception,
@@ -106,11 +107,16 @@ export function MaterialLabelPrintPanel(props: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [copies, setCopies] = useState('1');
   const [reason, setReason] = useState('');
+  const [design, setDesign] = useState<MaterialLabelDesign>('actual');
   const [showConfiguration, setShowConfiguration] = useState(false);
   const [busy, setBusy] = useState(true);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [pendingReport, setPendingReport] = useState<PendingReport | null>(null);
+  const selectedProfile = profiles.find((profile) => profile.id === configuration.profileId);
+  const sizes = [Number(selectedProfile?.ancho_mm), Number(selectedProfile?.alto_mm)].sort((a, b) => a - b);
+  const classicAvailable = Boolean(reception) && selectedProfile?.disenos_disponibles?.includes('clasica_bodega') === true
+    && Math.abs(sizes[0] - 100) < 0.01 && Math.abs(sizes[1] - 200) < 0.01;
 
   useEffect(() => {
     void load();
@@ -119,6 +125,7 @@ export function MaterialLabelPrintPanel(props: Props) {
   async function load() {
     setBusy(true);
     setError('');
+    setDesign('actual');
     try {
       const [loadedProfiles, loadedHistory, saved] = await Promise.all([
         sourceApi.printProfiles(),
@@ -167,6 +174,10 @@ export function MaterialLabelPrintPanel(props: Props) {
     }
     setError('');
     setMessage('');
+    if (design === 'clasica_bodega' && !classicAvailable) {
+      setError('Clásica bodega requiere una recepción y un perfil de etiqueta de 200 × 100 mm. Revisa la configuración de impresora.');
+      return;
+    }
     if (!isDirectPrinterAvailable()) {
       setError('Esta instalación no incluye impresión IP. Instala la nueva APK antes de probar.');
       return;
@@ -204,6 +215,7 @@ export function MaterialLabelPrintPanel(props: Props) {
       folioIds,
       copies: printCopies,
       reason: reason.trim() || null,
+      design,
     });
     if (generation.current?.key !== operationKey) {
       generation.current = { key: operationKey, operationId: Crypto.randomUUID() };
@@ -216,6 +228,7 @@ export function MaterialLabelPrintPanel(props: Props) {
       folio_ids: folioIds,
       copias: printCopies,
       motivo_reimpresion: reason.trim() || null,
+      ...(design === 'clasica_bodega' ? { diseno: design } : {}),
     };
 
     setBusy(true);
@@ -326,6 +339,27 @@ export function MaterialLabelPrintPanel(props: Props) {
             ))}
           </View>
           <Action label="Guardar y probar conexión" onPress={() => void saveAndTest()} />
+        </View>
+      ) : null}
+
+      {reception ? (
+        <View style={styles.profileList}>
+          <Text style={styles.label}>DISEÑO DE ETIQUETA</Text>
+          {(['actual', 'clasica_bodega'] as const).map((option) => (
+            <Pressable
+              key={option}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: design === option, disabled: busy || Boolean(pendingReport) || (option === 'clasica_bodega' && !classicAvailable) }}
+              disabled={busy || Boolean(pendingReport) || (option === 'clasica_bodega' && !classicAvailable)}
+              onPress={() => { setDesign(option); generation.current = null; }}
+              style={[styles.profile, design === option && styles.selected, option === 'clasica_bodega' && !classicAvailable && styles.disabled]}
+            >
+              <Text style={styles.profileTitle}>{option === 'actual' ? 'Actual' : 'Clásica bodega · cantidad destacada'}</Text>
+            </Pressable>
+          ))}
+          <Text style={styles.muted}>{classicAvailable
+            ? 'Clásica bodega: cliente dueño, fecha real y cantidad recibida por bulto. Conserva el folio escaneable; se gira según el perfil de impresora.'
+            : 'Clásica bodega requiere el servidor actualizado y un perfil de 200 × 100 mm.'}</Text>
         </View>
       ) : null}
 
