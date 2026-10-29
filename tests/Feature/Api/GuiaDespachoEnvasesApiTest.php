@@ -22,6 +22,98 @@ class GuiaDespachoEnvasesApiTest extends TestCase
     use PreparaInspeccionesEnvases;
     use RefreshDatabase;
 
+    public function test_identifica_el_formato_de_la_patente_y_permite_corregir_el_borrador_sin_crear_reservas_por_el_error(): void
+    {
+        $temporada = Temporada::query()->where('activa', true)->firstOrFail();
+        $cliente = Cliente::create(['codigo' => 'CLI-PATENTE', 'nombre' => 'Cliente patente', 'activo' => true]);
+        $operador = User::factory()->create(['rol' => RolUsuario::OperadorRomana]);
+        $this->movimientoIngreso($temporada, $cliente, $operador, 'propia', 20);
+        $this->actingAs($operador, 'sanctum');
+        $payload = $this->payloadGuia($cliente, (string) Str::uuid(), [
+            ['tipo_envase' => 'bins', 'cantidad' => 6, 'propiedad' => 'propia'],
+        ]);
+        $payload['patente_camion'] = 'AB-CD-12';
+
+        $this->postJson('/api/envases/guias-despacho', $payload)
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.patente_camion.0', 'Patente: ingresa entre 5 y 8 letras mayúsculas o números, sin espacios ni guiones. Ejemplo: ABCD12.');
+        $this->assertDatabaseCount('guias_despacho_envases', 0);
+        $this->assertDatabaseCount('movimientos_envases', 1);
+        $this->getJson('/api/envases/guias-despacho/catalogos')
+            ->assertOk()->assertJsonPath('inventario.0.reservado', 0);
+
+        $payload['patente_camion'] = 'ABCD12';
+        $this->postJson('/api/envases/guias-despacho', $payload)
+            ->assertCreated()->assertJsonPath('data.patente_camion', 'ABCD12');
+        $this->getJson('/api/envases/guias-despacho/catalogos')
+            ->assertOk()->assertJsonPath('inventario.0.reservado', 6);
+    }
+
+    public function test_explica_los_errores_al_editar_y_conserva_el_borrador_hasta_que_se_corrijan(): void
+    {
+        $temporada = Temporada::query()->where('activa', true)->firstOrFail();
+        $cliente = Cliente::create(['codigo' => 'CLI-EDICION', 'nombre' => 'Cliente edición', 'activo' => true]);
+        $operador = User::factory()->create(['rol' => RolUsuario::OperadorRomana]);
+        $this->movimientoIngreso($temporada, $cliente, $operador, 'propia', 20);
+        $this->actingAs($operador, 'sanctum');
+        $payload = $this->payloadGuia($cliente, (string) Str::uuid(), [
+            ['tipo_envase' => 'bins', 'cantidad' => 6, 'propiedad' => 'propia'],
+        ]);
+        $payload['patente_camion'] = 'ABCD12';
+        $guia = $this->postJson('/api/envases/guias-despacho', $payload)->assertCreated()->json('data');
+        $payload['version'] = $guia['version'];
+        $payload['patente_camion'] = 'WX YZ 34';
+        $payload['detalles'][0]['cantidad'] = 1.5;
+
+        $respuesta = $this->putJson('/api/envases/guias-despacho/'.$guia['id'], $payload)
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.patente_camion.0', 'Patente: ingresa entre 5 y 8 letras mayúsculas o números, sin espacios ni guiones. Ejemplo: ABCD12.')
+            ->assertJsonValidationErrors(['detalles.0.cantidad']);
+        $this->assertSame('Cantidad de envases: ingresa un número entero, sin decimales.', $respuesta->json('errors')['detalles.0.cantidad'][0]);
+        $this->getJson('/api/envases/guias-despacho/'.$guia['id'])
+            ->assertOk()->assertJsonPath('data.patente_camion', 'ABCD12')->assertJsonPath('data.version', $guia['version']);
+        $this->getJson('/api/envases/guias-despacho/catalogos')
+            ->assertOk()->assertJsonPath('inventario.0.reservado', 6);
+
+        $payload['patente_camion'] = 'WXYZ34';
+        $payload['detalles'][0]['cantidad'] = 8;
+        $this->putJson('/api/envases/guias-despacho/'.$guia['id'], $payload)
+            ->assertOk()->assertJsonPath('data.patente_camion', 'WXYZ34');
+        $this->getJson('/api/envases/guias-despacho/catalogos')
+            ->assertOk()->assertJsonPath('inventario.0.reservado', 8);
+    }
+
+    public function test_los_otros_campos_invalidos_del_borrador_tambien_tienen_mensajes_en_espanol(): void
+    {
+        $this->actingAs(User::factory()->create(['rol' => RolUsuario::OperadorRomana]), 'sanctum');
+        $respuesta = $this->postJson('/api/envases/guias-despacho', [
+            'operacion_id' => 'operacion-invalida',
+            'cliente_id' => 'cliente-invalido',
+            'salida_at' => 'fecha-invalida',
+            'rut_conductor' => str_repeat('1', 13),
+            'nombre_conductor' => str_repeat('A', 151),
+            'observacion' => str_repeat('A', 2001),
+            'detalles' => [[
+                'tipo_envase' => 'inexistente',
+                'cantidad' => 100001,
+                'propiedad' => 'inexistente',
+                'movimiento_origen_id' => 'origen-invalido',
+            ]],
+        ])->assertUnprocessable()->assertJsonValidationErrors([
+            'operacion_id', 'cliente_id', 'salida_at', 'rut_conductor', 'nombre_conductor',
+            'observacion', 'detalles.0.tipo_envase', 'detalles.0.cantidad',
+            'detalles.0.propiedad', 'detalles.0.movimiento_origen_id',
+        ]);
+
+        foreach ($respuesta->json('errors') as $mensajes) {
+            foreach ($mensajes as $mensaje) {
+                $this->assertStringNotContainsString('validation.', $mensaje);
+            }
+        }
+        $respuesta->assertJsonPath('errors.salida_at.0', 'Fecha y hora efectiva de salida: ingresa una fecha y hora válidas.');
+        $this->assertDatabaseCount('guias_despacho_envases', 0);
+    }
+
     public function test_transfiere_envases_arrendados_a_un_cliente_y_anula_con_reversa_sin_mover_la_cuenta_del_arrendador(): void
     {
         $this->travelTo(CarbonImmutable::parse('2026-07-21 08:00:00'));
