@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Enums\ConceptoEnvasesRomana;
+use App\Enums\PropiedadEnvase;
 use App\Enums\TipoCamionRomana;
 use App\Enums\TipoEnvaseRomana;
 use App\Enums\TipoRecepcionRomana;
@@ -57,6 +58,7 @@ class CrearRecepcionRomanaRequest extends FormRequest
             'envases' => ['required', 'array', 'min:1', 'max:'.count(TipoEnvaseRomana::cases())],
             'envases.*.tipo_envase' => ['required', 'distinct', Rule::enum(TipoEnvaseRomana::class)],
             'envases.*.cantidad' => ['required', 'integer', 'min:1', 'max:100000'],
+            'envases.*.propiedad' => ['sometimes', 'required', Rule::enum(PropiedadEnvase::class)],
             'tipo_envase_pesaje' => [
                 'nullable',
                 Rule::requiredIf($esPesajeEnvases),
@@ -106,6 +108,8 @@ class CrearRecepcionRomanaRequest extends FormRequest
             'envases.required' => 'Registra al menos un tipo de envase declarado en la guía.',
             'envases.*.tipo_envase.distinct' => 'Cada tipo de envase puede declararse solo una vez.',
             'envases.*.cantidad.min' => 'La guía debe declarar al menos una unidad por tipo de envase.',
+            'envases.*.propiedad.required' => 'Selecciona si los envases son del cliente, propios o arrendados por planta.',
+            'envases.*.propiedad' => 'La propiedad debe ser del cliente, propia o arrendada.',
             'tipo_envase_pesaje.required' => 'Selecciona el tipo de envase que se pesará.',
             'tara_unitaria_envase.required' => 'Configura la tara unitaria del envase.',
             'tara_unitaria_envase.min' => 'La tara unitaria debe ser mayor que cero.',

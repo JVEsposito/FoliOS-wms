@@ -179,7 +179,8 @@ body {
     .weighbridge-form-grid { grid-template-columns: repeat(2, 1fr); }
     .weighbridge-kpis { grid-template-columns: repeat(2, 1fr); }
 }
-.container-lines{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;border:1px solid var(--border);border-radius:12px;padding:12px}.container-lines legend{padding:0 6px;color:var(--muted);font-size:11px;font-weight:900}.container-lines label span{display:block;margin-bottom:6px}.container-lines small{grid-column:1/-1;color:var(--muted)}
+.container-lines{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(140px,100%),1fr));gap:10px;border:1px solid var(--border);border-radius:12px;padding:12px}.container-lines legend{padding:0 6px;color:var(--muted);font-size:11px;font-weight:900}.container-lines label span{display:block;margin-bottom:6px}.container-lines small{grid-column:1/-1;color:var(--muted)}
+.container-entry-line { display: grid; align-content: start; gap: 8px; min-width: 0; }
 
 /*
  * FoliOS v2 · Romana (PR 4, docs/diseno/folios-v2/pr-04-romana.md).

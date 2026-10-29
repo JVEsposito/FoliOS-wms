@@ -362,6 +362,7 @@ class RecepcionRomanaController extends Controller
             'envases' => $recepcion->detallesEnvases->map(fn ($detalle): array => [
                 'id' => $detalle->id,
                 'tipo_envase' => $detalle->tipo_envase->value,
+                'propiedad' => $recepcion->propiedadEnvase($detalle->tipo_envase->value)->value,
                 'cantidad_declarada' => $detalle->cantidad_declarada,
                 'cantidad_validada' => $detalle->cantidad_validada,
                 'tara_unitaria_salida' => $detalle->tara_unitaria_salida !== null

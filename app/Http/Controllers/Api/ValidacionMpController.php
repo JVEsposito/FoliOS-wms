@@ -236,6 +236,7 @@ class ValidacionMpController extends Controller
             ] : null,
             'envases' => $recepcion->detallesEnvases->map(fn ($detalle): array => [
                 'tipo_envase' => $detalle->tipo_envase->value,
+                'propiedad' => $recepcion->propiedadEnvase($detalle->tipo_envase->value)->value,
                 'cantidad_declarada' => $detalle->cantidad_declarada,
                 'cantidad_validada' => $detalle->cantidad_validada,
                 'diferencia' => $detalle->cantidad_validada === null ? null : $detalle->cantidad_validada - $detalle->cantidad_declarada,

@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\ConceptoEnvasesRomana;
 use App\Enums\EstadoRecepcionRomana;
 use App\Enums\EstadoValidacionMp;
+use App\Enums\PropiedadEnvase;
 use App\Enums\TipoCamionRomana;
 use App\Enums\TipoEnvaseRomana;
 use App\Enums\TipoRecepcionRomana;
@@ -99,6 +100,17 @@ class RecepcionRomana extends Model implements PerteneceATemporada
     public function detallesEnvases(): HasMany
     {
         return $this->hasMany(DetalleEnvaseRecepcionRomana::class, 'recepcion_romana_id');
+    }
+
+    public function propiedadEnvase(string $tipo): PropiedadEnvase
+    {
+        if ($this->tipo_recepcion === TipoRecepcionRomana::SoloEnvases) {
+            return $this->concepto_envases === ConceptoEnvasesRomana::Arriendo
+                ? PropiedadEnvase::Arrendada : PropiedadEnvase::Propia;
+        }
+
+        return $this->detallesEnvases->first(fn ($detalle) => $detalle->tipo_envase->value === $tipo)?->propiedad
+            ?? PropiedadEnvase::Cliente;
     }
 
     public function salidasEnvases(): HasMany

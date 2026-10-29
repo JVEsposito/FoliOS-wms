@@ -5,7 +5,6 @@ namespace App\Services\Romana;
 use App\Enums\EstadoRecepcionRomana;
 use App\Enums\EstadoRevisionMovimientoEnvase;
 use App\Enums\EstadoValidacionMp;
-use App\Enums\PropiedadEnvase;
 use App\Enums\TipoEventoRomana;
 use App\Enums\TipoMovimientoEnvase;
 use App\Enums\TipoRecepcionRomana;
@@ -235,6 +234,7 @@ class ServicioRecepcionRomana
                     'version' => $recepcion->version,
                     'fecha_ingreso' => $payload['fecha_ingreso'],
                     'ingreso_at' => $ingresoAt->toAtomString(),
+                    'envases' => $payload['envases'],
                 ],
             );
 
@@ -861,7 +861,7 @@ class ServicioRecepcionRomana
                         'cantidad' => $anterior->cantidad,
                         'signo_cuenta' => 1,
                         'signo_existencia' => 1,
-                        'propiedad' => PropiedadEnvase::Cliente,
+                        'propiedad' => $movimiento->propiedad,
                         'movimiento_origen_id' => $movimiento->id,
                         'ocurrido_at' => $ahora,
                         'salida_at' => $ahora,
@@ -883,7 +883,7 @@ class ServicioRecepcionRomana
                     'cantidad' => $cantidadNueva,
                     'signo_cuenta' => -1,
                     'signo_existencia' => -1,
-                    'propiedad' => PropiedadEnvase::Cliente,
+                    'propiedad' => $recepcion->propiedadEnvase($tipo),
                     'ocurrido_at' => $ahora,
                     'salida_at' => $ahora,
                     'estado_revision' => EstadoRevisionMovimientoEnvase::Pendiente,
@@ -1128,6 +1128,9 @@ class ServicioRecepcionRomana
             ->map(fn (array $envase): array => [
                 'tipo_envase' => $envase['tipo_envase'],
                 'cantidad' => (int) $envase['cantidad'],
+                // Omitirla conserva el contrato y hash de las solicitudes anteriores.
+                ...($datos['tipo_recepcion'] !== TipoRecepcionRomana::SoloEnvases->value && isset($envase['propiedad'])
+                    ? ['propiedad' => $envase['propiedad']] : []),
             ])
             ->sortBy('tipo_envase')
             ->values()
@@ -1344,6 +1347,7 @@ class ServicioRecepcionRomana
                 ->sortBy(fn ($detalle): string => $detalle->tipo_envase->value)
                 ->map(fn ($detalle): array => [
                     'tipo_envase' => $detalle->tipo_envase->value,
+                    'propiedad' => $recepcion->propiedadEnvase($detalle->tipo_envase->value)->value,
                     'cantidad' => $detalle->cantidad_declarada,
                     'tara_unitaria_salida' => $detalle->tara_unitaria_salida !== null
                         ? (float) $detalle->tara_unitaria_salida
@@ -1477,7 +1481,7 @@ class ServicioRecepcionRomana
             'cantidad' => $cantidad,
             'signo_cuenta' => -1,
             'signo_existencia' => -1,
-            'propiedad' => PropiedadEnvase::Cliente,
+            'propiedad' => $recepcion->propiedadEnvase($tipo),
             'ocurrido_at' => $ahora,
             'salida_at' => $ahora,
             'estado_revision' => EstadoRevisionMovimientoEnvase::Pendiente,
@@ -1486,7 +1490,7 @@ class ServicioRecepcionRomana
         ]);
     }
 
-    /** @param array<int, array{tipo_envase: string, cantidad: int}> $envases */
+    /** @param array<int, array{tipo_envase: string, cantidad: int, propiedad?: string}> $envases */
     private function sincronizarEnvases(RecepcionRomana $recepcion, array $envases): void
     {
         $tipos = collect($envases)->pluck('tipo_envase')->all();
@@ -1497,6 +1501,9 @@ class ServicioRecepcionRomana
                 ['tipo_envase' => $envase['tipo_envase']],
                 [
                     'cantidad_declarada' => $envase['cantidad'],
+                    ...($recepcion->tipo_recepcion === TipoRecepcionRomana::SoloEnvases
+                        ? ['propiedad' => $recepcion->propiedadEnvase($envase['tipo_envase'])]
+                        : (isset($envase['propiedad']) ? ['propiedad' => $envase['propiedad']] : [])),
                     ...($recepcion->tipo_recepcion === TipoRecepcionRomana::FrutaPesajeEnvases
                         ? ['tara_unitaria_salida' => $recepcion->tara_unitaria_envase]
                         : []),
