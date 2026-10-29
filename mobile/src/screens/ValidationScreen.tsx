@@ -109,6 +109,10 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
   const resuming = useRef(false);
   const recoveryWorkContext = useRef<{ line: ValidationLine | null; shift: ValidationShift | null } | null>(null);
   const [catalog, setCatalog] = useState<ValidationCatalog | null>(null);
+  const catalogRef = useRef<ValidationCatalog | null>(null);
+  const catalogNeedsSave = useRef(false);
+  const [catalogVerified, setCatalogVerified] = useState(false);
+  const [catalogProblem, setCatalogProblem] = useState('');
   const [outbox, setOutbox] = useState<ValidationOutboxItem[]>([]);
   const [recent, setRecent] = useState<ValidationAttempt[]>([]);
   const [validationSession, setValidationSession] = useState<ValidationSessionSnapshot | null>(null);
@@ -278,7 +282,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
   }, []);
 
   useOperationalPolling(
-    flushOutbox,
+    synchronize,
     {
       intervalMs: 30000,
       enabled: Boolean(baseUrl),
@@ -290,19 +294,24 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
     setBusy(true);
     setError('');
     try {
-      const [cached, cachedSession, queued, savedContext] = await Promise.all([
-        loadCachedValidationCatalog(userId, deviceId),
+      const local = await Promise.allSettled([
+        loadCachedValidationCatalog(userId, deviceId, baseUrl),
         loadCachedValidationSession(userId, deviceId, sessionCacheId),
         loadValidationOutbox(userId, deviceId),
         loadValidationWorkContext(userId, deviceId),
       ]);
-      if (cached) setCatalog(cached);
+      const cached = local[0].status === 'fulfilled' ? local[0].value : null;
+      const cachedSession = local[1].status === 'fulfilled' ? local[1].value : null;
+      const queued = local[2].status === 'fulfilled' ? local[2].value : [];
+      const savedContext = local[3].status === 'fulfilled' ? local[3].value : null;
+      if (cached) { catalogRef.current = cached; setCatalog(cached); }
       if (cachedSession) setValidationSession(cachedSession);
       setOutbox(queued);
       if (savedContext) {
         setLine(savedContext.linea_proceso);
         setShift(savedContext.turno);
       }
+      if (local[2].status === 'rejected') setError('No se pudo leer la bandeja local. Sus registros se conservan; reintenta la sincronización antes de capturar.');
       await synchronize({ knownCatalog: cached });
     } catch (reason) {
       setError(messageFrom(reason));
@@ -347,7 +356,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
 
   async function synchronize({
     notify = false,
-    knownCatalog = catalog,
+    knownCatalog = catalogRef.current,
   }: {
     notify?: boolean;
     knownCatalog?: ValidationCatalog | null;
@@ -362,38 +371,42 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
     setSyncing(true);
 
     try {
-      const [loaded, latest] = await Promise.all([
-        getValidationCatalog(baseUrl, auth.token, knownCatalog),
-        listRecentValidations(baseUrl, auth.token),
-      ]);
-      const activeCatalog = loaded ?? knownCatalog;
-      if (!activeCatalog) {
-        throw new Error('No existe un catálogo disponible para validación.');
+      // El historial y la bandeja no condicionan la instalación del catálogo.
+      try {
+        const loaded = await getValidationCatalog(baseUrl, auth.token, knownCatalog);
+        const activeCatalog = loaded ?? knownCatalog;
+        if (!activeCatalog) throw new Error('No existe un catálogo disponible para validación. Reintenta desde el indicador de sincronización.');
+        catalogRef.current = activeCatalog;
+        setCatalog(activeCatalog);
+        setOnline(true);
+        setCatalogVerified(true);
+        setCatalogProblem('');
+        setLastSync(new Date().toISOString());
+        if (loaded) catalogNeedsSave.current = true;
+        if (catalogNeedsSave.current) {
+          try {
+            await saveValidationCatalog(userId, deviceId, activeCatalog, baseUrl);
+            catalogNeedsSave.current = false;
+          }
+          catch (reason) {
+            setCatalogProblem(`Catálogo v${activeCatalog.temporada.version_catalogo} descargado, pero no pudo guardarse en el equipo. La copia anterior y las capturas se conservan. Reintenta. ${messageFrom(reason)}`);
+          }
+        }
+        if (notify || (knownCatalog && knownCatalog.temporada.version_catalogo !== activeCatalog.temporada.version_catalogo)) {
+          setNotice(`Catálogo v${activeCatalog.temporada.version_catalogo} recibido. Si cambió un envase, revisa la selección de la captura en curso; no se sustituyó por otro.`);
+        }
+      } catch (reason) {
+        if (reason instanceof ApiError && reason.status === 401) {
+          Alert.alert('Sesión vencida', 'Vuelve a iniciar el turno.');
+          onLogout();
+          return;
+        }
+        setCatalogVerified(false);
+        setOnline(!(reason instanceof ApiError && reason.status === 0));
+        setCatalogProblem(`${messageFrom(reason)} ${knownCatalog ? `Se conserva v${knownCatalog.temporada.version_catalogo}; su vigencia no está confirmada.` : 'Esta PDA aún no tiene un catálogo válido.'}`);
       }
-      if (loaded) {
-        await saveValidationCatalog(userId, deviceId, loaded);
-        setCatalog(loaded);
-      } else if (knownCatalog) {
-        setCatalog(knownCatalog);
-      }
-      setRecent(latest);
-      setOnline(true);
-      setLastSync(new Date().toISOString());
-      await flushOutbox();
-      if (notify) {
-        setError('');
-        setNotice(
-          `Catálogo v${activeCatalog.temporada.version_catalogo} y sesión actualizados.`,
-        );
-      }
-    } catch (reason) {
-      if (reason instanceof ApiError && reason.status === 401) {
-        Alert.alert('Sesión vencida', 'Vuelve a iniciar el turno.');
-        onLogout();
-        return;
-      }
-      setOnline(!(reason instanceof ApiError && reason.status === 0));
-      if ((!knownCatalog && !catalog) || notify) setError(messageFrom(reason));
+      try { await flushOutbox(); }
+      catch (reason) { setError(`No se pudo sincronizar la bandeja local. Se conservan sus capturas. ${messageFrom(reason)}`); }
     } finally {
       synchronizing.current = false;
       setSyncing(false);
@@ -929,12 +942,18 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
   const sumLabel = !declaredBoxes && !compositionBoxes
     ? 'Sin cajas ingresadas'
     : `${compositionBoxes} de ${declaredBoxes} cajas`;
-  const syncTone: LabelTone = syncing ? 'neutral' : !online || pendingOutbox.length ? 'warning' : 'success';
+  const reviewOutbox = outbox.filter((item) => item.status !== 'pendiente');
+  const syncTone: LabelTone = syncing ? 'neutral' : !catalog ? 'critical'
+    : !online || !catalogVerified || catalogProblem || pendingOutbox.length || reviewOutbox.length ? 'warning' : 'success';
   const syncLabel = syncing
     ? 'Sincronizando…'
-    : !online
+    : !catalog ? 'Sin catálogo · reintentar'
+      : !online
       ? (pendingOutbox.length ? `Sin conexión · ${pendingOutbox.length} en la ${device}` : 'Sin conexión')
-      : pendingOutbox.length ? `En línea · ${pendingOutbox.length} por enviar` : 'En línea · al día';
+      : !catalogVerified ? 'Catálogo sin actualizar'
+        : catalogProblem ? 'Catálogo sin respaldo'
+          : pendingOutbox.length ? `En línea · ${pendingOutbox.length} por enviar`
+            : reviewOutbox.length ? `${reviewOutbox.length} por revisar` : 'Catálogo al día';
   const headerMeta = [
     auth.dispositivo.codigo,
     wide ? `sesión desde ${formatDateTime(sessionStartedAt)}` : null,
@@ -942,7 +961,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
     lastSync ? `sincronizado ${formatTime(lastSync)}` : null,
   ].filter(Boolean).join(' · ');
   const ready = Boolean(selectedCombination && selectedCategory);
-  const decisionDisabled = busy || terminalDecision;
+  const decisionDisabled = busy || terminalDecision || !catalog;
   const serverRecords = validationSession?.resumen.registros_realizados ?? 0;
   const noCsgYet = !originDrafts.some((draft) => draft.originId);
 
@@ -1384,6 +1403,12 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
           </View>
         ) : null}
 
+        {catalogProblem ? (
+          <View accessibilityRole="alert" style={[styles.banner, styles.bannerError]}>
+            <SignalMark size={12} tone="warning" />
+            <Text style={styles.bannerText}>{catalogProblem}</Text>
+          </View>
+        ) : null}
         {error && error !== decisionError ? (
           <Pressable accessibilityRole="alert" onPress={() => setError('')} style={[styles.banner, styles.bannerError]}>
             <SignalMark size={12} tone="critical" />
@@ -1596,7 +1621,11 @@ function normalizeFolio(value: string) { return value.trim().toUpperCase(); }
 function twoDigits(value: number) { return String(value).padStart(2, '0'); }
 function formatTime(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? '—' : `${twoDigits(date.getHours())}:${twoDigits(date.getMinutes())}`; }
 function formatDateTime(value: string | null) { const date = value ? new Date(value) : null; return !date || Number.isNaN(date.getTime()) ? 'sin hora registrada' : `${twoDigits(date.getDate())}/${twoDigits(date.getMonth() + 1)} ${formatTime(value as string)}`; }
-function messageFrom(reason: unknown) { return reason instanceof Error ? reason.message : 'Ocurrió un error inesperado.'; }
+function messageFrom(reason: unknown) {
+  if (reason instanceof Error) return reason.message;
+  if (reason && typeof reason === 'object' && 'message' in reason && typeof reason.message === 'string') return reason.message;
+  return 'Ocurrió un error inesperado.';
+}
 function statusLabel(status: ValidationOutboxItem['status']) { return status === 'pendiente' ? 'Pendiente' : status === 'conflicto' ? 'Conflicto' : 'Requiere revisión'; }
 function reasonLabel(value: string) { return value.replaceAll('_', ' ').replace(/^./, (letter) => letter.toUpperCase()); }
 function packageLabel(value: 'pallet' | 'saldo') { return value === 'saldo' ? 'saldo' : 'pallet completo'; }

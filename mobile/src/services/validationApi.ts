@@ -6,6 +6,7 @@ import {
   ValidationSessionSnapshot,
 } from '../domain/validation';
 import { ApiError } from './apiError';
+import { assertValidationCatalog } from '../domain/validationCatalogData';
 
 function validationMessage(data: unknown, fallback: string) {
   if (!data || typeof data !== 'object') return fallback;
@@ -73,18 +74,26 @@ export async function getValidationCatalog(
     );
   }
 
-  if (response.status === 304) return null;
+  if (response.status === 304) {
+    if (knownCatalog) return null;
+    throw new ApiError('El servidor indicó catálogo sin cambios, pero esta PDA no tiene una copia válida. Vuelve a sincronizar.', 502);
+  }
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new ApiError(
-      validationMessage(data, 'No fue posible actualizar el catálogo de validación.'),
+      `No se pudo descargar el catálogo (HTTP ${response.status}). ${validationMessage(data, 'Reintenta la sincronización o informa a Oficina.')}`,
       response.status,
       data,
     );
   }
 
-  return data as ValidationCatalog;
+  assertValidationCatalog(data);
+  if (knownCatalog?.temporada.id === data.temporada.id
+    && data.temporada.version_catalogo < knownCatalog.temporada.version_catalogo) {
+    throw new ApiError(`El servidor devolvió v${data.temporada.version_catalogo}, anterior al catálogo v${knownCatalog.temporada.version_catalogo} de la PDA. Se conservó la copia más reciente.`, 409);
+  }
+  return data;
 }
 
 export async function registerValidation(

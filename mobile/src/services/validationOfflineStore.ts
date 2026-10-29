@@ -1,4 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { assertValidationCatalog } from '../domain/validationCatalogData';
+import { loadValidationCatalogFile, saveValidationCatalogFile, usesNativeCatalogFiles } from './validationCatalogFileStore';
 
 import {
   RegisterValidationPayload,
@@ -173,9 +175,10 @@ export async function saveValidationWorkContext(
   await AsyncStorage.setItem(workContextKey(userId, deviceId), JSON.stringify(context));
 }
 
-export async function loadCachedValidationCatalog(
+async function loadLegacyValidationCatalog(
   userId: string,
   deviceId: string,
+  migrate = true,
 ): Promise<ValidationCatalog | null> {
   const manifestKey = catalogManifestKey(userId, deviceId);
   const manifestRaw = await AsyncStorage.getItem(manifestKey);
@@ -217,13 +220,15 @@ export async function loadCachedValidationCatalog(
         }
       }
 
-      return {
+      const catalog = {
         ...manifest.metadata,
         categorias: collections.categorias as ValidationCatalog['categorias'],
         articulos: collections.articulos as ValidationCatalog['articulos'],
         origenes: collections.origenes as ValidationCatalog['origenes'],
         combinaciones: collections.combinaciones as ValidationCatalog['combinaciones'],
       };
+      assertValidationCatalog(catalog);
+      return catalog;
     } catch {
       await AsyncStorage.removeItem(manifestKey);
       if (manifest) {
@@ -248,13 +253,14 @@ export async function loadCachedValidationCatalog(
   let legacyCatalog: ValidationCatalog;
   try {
     legacyCatalog = JSON.parse(legacyRaw) as ValidationCatalog;
+    assertValidationCatalog(legacyCatalog);
   } catch {
     await AsyncStorage.removeItem(catalogKey(userId, deviceId));
     return null;
   }
 
   try {
-    await saveValidationCatalog(userId, deviceId, legacyCatalog);
+    if (migrate) await saveLegacyValidationCatalog(userId, deviceId, legacyCatalog);
   } catch {
     // La copia antigua sigue disponible durante esta sesión aunque la migración falle.
   }
@@ -262,11 +268,12 @@ export async function loadCachedValidationCatalog(
   return legacyCatalog;
 }
 
-export async function saveValidationCatalog(
+async function saveLegacyValidationCatalog(
   userId: string,
   deviceId: string,
   catalog: ValidationCatalog,
 ) {
+  assertValidationCatalog(catalog);
   const generation = [
     catalog.temporada.id,
     catalog.temporada.version_catalogo,
@@ -331,6 +338,33 @@ export async function saveValidationCatalog(
   } catch {
     // El manifiesto nuevo ya es válido; la limpieza puede reintentarse después.
   }
+}
+
+export async function loadCachedValidationCatalog(userId: string, deviceId: string, server?: string | null): Promise<ValidationCatalog | null> {
+  if (!server || !usesNativeCatalogFiles) return loadLegacyValidationCatalog(userId, deviceId);
+  try {
+    const shared = await loadValidationCatalogFile(server, deviceId);
+    if (shared) return shared;
+  } catch { /* La lectura de la copia antigua y la descarga siguen disponibles. */ }
+  const legacy = await loadLegacyValidationCatalog(userId, deviceId, false);
+  if (legacy) {
+    try { await saveValidationCatalog(userId, deviceId, legacy, server); }
+    catch { /* Conserva la copia antigua hasta que se publique un archivo completo. */ }
+  }
+  return legacy;
+}
+
+export async function saveValidationCatalog(userId: string, deviceId: string, catalog: ValidationCatalog, server?: string | null) {
+  if (!server || !usesNativeCatalogFiles) return saveLegacyValidationCatalog(userId, deviceId, catalog);
+  await saveValidationCatalogFile(server, deviceId, catalog);
+  try {
+    // AsyncStorage tiene una cuota compartida entre usuarios. Retirar solo cachés de
+    // catálogo después de publicar el archivo; nunca la bandeja ni sus UUID.
+    const device = `:${deviceId}`;
+    const legacyKeys = (await AsyncStorage.getAllKeys()).filter((key) => key.startsWith('estiba_validation_catalog:')
+      && (key.endsWith(device) || key.includes(`${device}:`)));
+    if (legacyKeys.length) await AsyncStorage.multiRemove(legacyKeys);
+  } catch { /* Una limpieza fallida no invalida el catálogo ya guardado. */ }
 }
 
 export async function loadValidationOutbox(
