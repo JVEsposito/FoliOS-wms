@@ -12,11 +12,14 @@ use App\Models\ManiobraOperacional;
 use App\Models\ReservaTareaMovimiento;
 use App\Models\TareaMovimiento;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /** Exclusión por pallet, compartida por todos los planes y tablets. */
 class ServicioExclusionPallet
 {
-    public function bloquear(TareaMovimiento $tarea, bool $soloFolio = false): void
+    /** Mutex común antes de bloquear una tarea, incluso al renovar o liberar. */
+    public function bloquearFolios(TareaMovimiento $tarea, bool $soloFolio = false): Collection
     {
         $folios = ! $soloFolio && $tarea->maniobra_operacional_id
             ? TareaMovimiento::query()->where('maniobra_operacional_id', $tarea->maniobra_operacional_id)
@@ -25,6 +28,13 @@ class ServicioExclusionPallet
         // Una tarea distinta tiene otra clave única. El mutex debe ser el folio,
         // también cuando aparece como paso futuro de una maniobra cerrada.
         Folio::query()->whereIn('id', $folios)->orderBy('id')->lockForUpdate()->get(['id']);
+
+        return $folios;
+    }
+
+    public function bloquear(TareaMovimiento $tarea, bool $soloFolio = false): void
+    {
+        $folios = $this->bloquearFolios($tarea, $soloFolio);
         $custodia = CustodiaTemporalManiobra::query()->whereIn('bloqueo_folio_id', $folios)
             ->when($tarea->maniobra_operacional_id, fn (Builder $q) => $q->where('maniobra_operacional_id', '!=', $tarea->maniobra_operacional_id))
             ->lockForUpdate()->first();
@@ -32,6 +42,7 @@ class ServicioExclusionPallet
             throw new ConflictoOperacion('El pallet está bajo custodia de otra maniobra; no puede asignarse a otro camarero.');
         }
         $otras = TareaMovimiento::query()->whereIn('folio_id', $folios)->whereKeyNot($tarea->id)
+            ->when(DB::getDriverName() === 'mysql', fn ($q) => $q->forceIndex('tareas_folio_estado_idx'))
             ->whereIn('estado', self::estadosVivos())
             ->when($tarea->maniobra_operacional_id, fn (Builder $q) => $q->where(fn (Builder $otra) => $otra
                 ->whereNull('maniobra_operacional_id')->orWhere('maniobra_operacional_id', '!=', $tarea->maniobra_operacional_id)))

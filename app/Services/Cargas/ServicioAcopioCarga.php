@@ -18,6 +18,7 @@ use App\Models\ReservaTareaMovimiento;
 use App\Models\TareaMovimiento;
 use App\Models\UbicacionActual;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /** Comparte el destino de carga sin crear otra tarea ni anticipar inventario físico. */
 class ServicioAcopioCarga
@@ -38,15 +39,15 @@ class ServicioAcopioCarga
                     || $plan->referencia_tipo === 'recepcion_fruta_embalada')));
     }
 
-    /**
-     * Al materializar se bloquea la carga antes de leer sus puntos. Dos tablets
-     * no pueden establecer simultáneamente dos primeros acopios de una carga.
-     *
-     * @return array<string, mixed>|null
-     */
-    public function paraFolio(string $folioId, ?string $excluirTareaId = null, bool $bloquear = false): ?array
+    public function usaAcopio(TareaMovimiento $tarea): bool
     {
-        $this->sector->olvidar();
+        return $this->esRecepcion($tarea->planOperacional, $tarea->tipo_movimiento)
+            || ($tarea->contexto['tipo_decision'] ?? null) === 'concentrar_carga';
+    }
+
+    /** Lectura actual de la programación: no recorre las reservas de otras labores. */
+    private function cargaVigenteParaFolio(string $folioId, bool $bloquear): ?Carga
+    {
         $asignacionLeida = CargaFolio::query()
             ->where('folio_id', $folioId)
             ->whereHas('reservaActiva')
@@ -71,6 +72,28 @@ class ServicioAcopioCarga
             || ! $carga->temporada()->where('activa', true)->exists()) {
             return null;
         }
+        $actual = $asignacionLeida ? CargaFolio::query()->whereKey($asignacionLeida->id)
+            ->when($bloquear, fn ($q) => $q->lockForUpdate())->first() : null;
+
+        return $actual?->estado === EstadoCargaFolio::Pendiente ? $carga : null;
+    }
+
+    /**
+     * Al materializar se bloquea la carga antes de leer sus puntos. Dos tablets
+     * no pueden establecer simultáneamente dos primeros acopios de una carga.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function paraFolio(string $folioId, ?string $excluirTareaId = null, bool $bloquear = false, ?Collection $camarasActuales = null): ?array
+    {
+        $this->sector->olvidar();
+        if ($camarasActuales !== null) {
+            $this->sector->desdeCamarasActuales($camarasActuales);
+        }
+        $carga = $this->cargaVigenteParaFolio($folioId, $bloquear);
+        if (! $carga) {
+            return null;
+        }
         $asignaciones = CargaFolio::query()
             ->where('carga_id', $carga->id)
             ->whereHas('reservaActiva')
@@ -91,12 +114,15 @@ class ServicioAcopioCarga
         $tieneCamion = $carga->presenciaAndenActiva()
             ->when($bloquear, fn ($consulta) => $consulta->lockForUpdate())
             ->exists();
+        $tareaIds = TareaMovimiento::query()->whereIn('folio_id', $asignaciones->pluck('folio_id'))
+            ->when($excluirTareaId, fn ($q) => $q->whereKeyNot($excluirTareaId))->pluck('id');
         $reservas = ReservaTareaMovimiento::query()
             ->conCompromisoVigente()
             ->whereNotNull('bloqueo_posicion_id')
-            ->whereHas('tareaMovimiento', fn ($consulta) => $consulta
-                ->whereIn('folio_id', $asignaciones->pluck('folio_id'))
-                ->when($excluirTareaId, fn ($tareas) => $tareas->whereKeyNot($excluirTareaId)))
+            ->whereIn('bloqueo_tarea_id', $tareaIds)
+            // Una búsqueda por claves evita que FOR UPDATE escanee y bloquee las
+            // reservas de otras cargas antes de evaluar un EXISTS correlacionado.
+            ->when($bloquear && DB::getDriverName() === 'mysql', fn ($q) => $q->forceIndex('reservas_bloqueo_tarea_unique'))
             ->with(['tareaMovimiento:id,folio_id', 'posicionDestino.camara'])
             ->orderBy('reservada_at')->orderBy('id')
             ->when($bloquear, fn ($consulta) => $consulta->lockForUpdate())
@@ -108,7 +134,8 @@ class ServicioAcopioCarga
             ->pluck('bloqueo_posicion_id')
             ->all();
 
-        return $this->proyectar($carga, $asignaciones, $reservas, $folioId, $tieneCamion, $propias);
+        return $this->proyectar($carga, $asignaciones, $reservas, $folioId, $tieneCamion, $propias,
+            $excluirTareaId ? TareaMovimiento::query()->whereKey($excluirTareaId)->value('maniobra_operacional_id') : null);
     }
 
     /** Una lectura compartida por carga; se usa solo para preparar propuestas, nunca para autorizar escrituras.
@@ -120,7 +147,7 @@ class ServicioAcopioCarga
         $this->sector->olvidar();
         $tareas = (new TareaMovimiento)->newCollection($tareas->all())->loadMissing('planOperacional');
         $recepciones = $tareas->filter(fn (TareaMovimiento $tarea): bool => $this
-            ->esRecepcion($tarea->planOperacional, $tarea->tipo_movimiento));
+            ->usaAcopio($tarea));
         $salida = $recepciones->mapWithKeys(fn (TareaMovimiento $tarea): array => [$tarea->id => null])->all();
         if ($recepciones->isEmpty()) {
             return $salida;
@@ -159,7 +186,7 @@ class ServicioAcopioCarga
                 ->pluck('bloqueo_posicion_id')
                 ->filter()
                 ->values()
-                ->all());
+                ->all(), $tarea->maniobra_operacional_id);
         }
 
         return $salida;
@@ -170,7 +197,7 @@ class ServicioAcopioCarga
      * @param  list<string>  $propias  destinos ya reservados por la tarea del pallet
      * @return array<string, mixed>
      */
-    private function proyectar(Carga $carga, Collection $asignaciones, Collection $reservas, string $folioId, bool $tieneCamion, array $propias = []): array
+    private function proyectar(Carga $carga, Collection $asignaciones, Collection $reservas, string $folioId, bool $tieneCamion, array $propias = [], ?string $maniobraId = null): array
     {
         // Se construye una geometría proyectada aparte. Los entrantes conservan
         // sus reservas y nunca se cuentan como pallets físicamente recibidos.
@@ -200,6 +227,7 @@ class ServicioAcopioCarga
                 $carga->id,
                 $asignaciones->pluck('folio.exportadora')->filter()->unique()->values()->all(),
                 $pendientes,
+                $maniobraId,
             );
         // El acopio crece donde cabe lo que falta de la carga, no necesariamente junto al grupo
         // más grande: un grupo encajonado entre bandas llenas no recibe a nadie más.
@@ -209,6 +237,7 @@ class ServicioAcopioCarga
             $this->puntosEnCamara($proyectadas, $camaraId),
             $pendientes,
             $propias,
+            $maniobraId,
         );
 
         return [
@@ -286,15 +315,33 @@ class ServicioAcopioCarga
      * @param  bool  $reservado  el destino ya fue validado y reservado (al iniciar el retiro): si
      *                           el acopio se movió entre medio, el pallet igual va a su reserva.
      */
-    public function validarDestino(TareaMovimiento $tarea, Posicion $posicion, bool $reservado = false): void
+    public function validarDestino(TareaMovimiento $tarea, Posicion $posicion, bool $reservado = false, ?array $acopioVigente = null): void
     {
         $complementario = ($tarea->contexto['tipo_decision'] ?? null) === 'blocker_destino_util';
-        if ((! $this->esRecepcion($tarea->planOperacional, $tarea->tipo_movimiento) && ! $complementario)
+        if ((! $this->usaAcopio($tarea) && ! $complementario)
             || $tarea->estado === EstadoTareaMovimiento::EnProceso) {
             return;
         }
-        $acopio = $this->paraFolio($tarea->folio_id, $tarea->id, bloquear: true);
-        if (! $complementario && ($acopio['carga_id'] ?? null) !== ($tarea->contexto['acopio_carga']['carga_id'] ?? null)) {
+        $esperada = $complementario ? ($tarea->contexto['carga_beneficiada_id'] ?? null)
+            : ($tarea->contexto['acopio_carga']['carga_id'] ?? $tarea->contexto['carga_id']
+                ?? (($tarea->contexto['tipo_decision'] ?? null) === 'concentrar_carga'
+                    ? ($tarea->planOperacional->contexto['carga_id'] ?? null) : null));
+        if ($reservado) {
+            $carga = $this->cargaVigenteParaFolio($tarea->folio_id, true);
+            if ($carga?->id !== $esperada) {
+                throw new ConflictoOperacion('La carga cambió; libere y vuelva a tomar la tarea para actualizar su acopio.');
+            }
+            if ($carga?->presenciaAndenActiva()->lockForUpdate()->exists()) {
+                throw new ConflictoOperacion('La carga tiene camión en andén; actualice la labor para realizar despacho directo.');
+            }
+            if ($carga?->camara_objetivo_id && $posicion->camara_id !== $carga->camara_objetivo_id) {
+                throw new ConflictoOperacion('El destino debe respetar la cámara de acopio vigente de la carga.');
+            }
+
+            return;
+        }
+        $acopio = $acopioVigente ?? $this->paraFolio($tarea->folio_id, $tarea->id, bloquear: true);
+        if (! $complementario && ($acopio['carga_id'] ?? null) !== $esperada) {
             throw new ConflictoOperacion('La carga cambió; libere y vuelva a tomar la tarea para actualizar su acopio.');
         }
         if ($complementario && ($acopio['carga_id'] ?? null) !== ($tarea->contexto['carga_beneficiada_id'] ?? null)) {
@@ -309,15 +356,27 @@ class ServicioAcopioCarga
         if ($acopio['camara_objetivo_id'] && $posicion->camara_id !== $acopio['camara_objetivo_id']) {
             throw new ConflictoOperacion('El destino debe respetar la cámara de acopio vigente de la carga.');
         }
-        if ($reservado) {
+        if (($tarea->contexto['destino_preparado_servidor'] ?? null)
+            && $tarea->posicion_destino_id === $posicion->id
+            && $posicion->camara->proteccionesBandas()->where('maniobra_operacional_id', $tarea->maniobra_operacional_id)
+                ->where('banda', $posicion->banda)->where('nivel', $posicion->nivel)->exists()) {
+            return;
+        }
+        $prioritaria = $acopio['sector']['banda_prioritaria'] ?? null;
+        if ($prioritaria !== null) {
+            if ($posicion->banda !== $prioritaria) {
+                throw new ConflictoOperacion('Completa la banda '.$prioritaria.' del acopio de la carga antes de abrir otra banda.');
+            }
+            $propias = ReservaTareaMovimiento::query()->conCompromisoVigente()->where('bloqueo_tarea_id', $tarea->id)
+                ->whereNotNull('bloqueo_posicion_id')->pluck('bloqueo_posicion_id')->all();
+            if (! $this->sector->esSiguienteLibre($posicion, $tarea->maniobra_operacional_id, $propias)) {
+                throw new ConflictoOperacion('La posición propuesta no amplía físicamente el acopio de la carga: completa el siguiente espacio accesible de su banda.');
+            }
+
             return;
         }
         if ($acopio['puntos'] !== [] && ! collect($acopio['puntos'])->contains(
-            fn (array $punto): bool => (int) $punto['nivel'] === (int) $posicion->nivel
-                && ((abs($punto['banda'] - $posicion->banda) === 0
-                        && abs($punto['posicion'] - $posicion->posicion) === 1)
-                    || (abs($punto['banda'] - $posicion->banda) === 1
-                        && abs($punto['posicion'] - $posicion->posicion) <= 1)),
+            fn (array $punto): bool => SectorAcopioCarga::vecinos($punto, $posicion->only(['banda', 'posicion', 'nivel'])),
         )) {
             throw new ConflictoOperacion('El destino no amplía el acopio vigente de la carga; actualice la propuesta.');
         }

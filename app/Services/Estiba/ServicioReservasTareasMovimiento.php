@@ -29,6 +29,7 @@ use App\Models\TareaMovimiento;
 use App\Models\UbicacionActual;
 use App\Models\User;
 use App\Services\Cargas\ServicioAcopioCarga;
+use App\Services\Planificador\ServicioDestinosServidor;
 use Carbon\CarbonInterface;
 use DomainException;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -286,12 +287,11 @@ class ServicioReservasTareasMovimiento
             ->where('id', '!=', $tareaBloqueada->id)
             ->where('estado', EstadoTareaMovimiento::EnProceso->value)
             ->where('responsable_user_id', $usuario->id)
-            ->where('dispositivo_id', $dispositivo->id)
             ->lockForUpdate()
             ->exists();
         if ($otraEnProceso) {
             throw new ConflictoOperacion(
-                'El camarero ya posee otro pallet físicamente en movimiento en esta tablet.',
+                'El camarero ya posee otro pallet físicamente en movimiento. Complétalo antes de iniciar otro, incluso desde otra tablet.',
             );
         }
 
@@ -931,7 +931,8 @@ class ServicioReservasTareasMovimiento
             'vence_at' => $this->nuevoVencimiento(),
             'version' => $reserva->version + 1,
         ]);
-        $this->incrementarRevisionCamara($reserva->posicion_destino_id);
+        // Renovar un lease no cambia el destino ni la ocupación de la cámara.
+        // Evita bloquearla e invalidar los planos de los demás camareros en cada pulso.
 
         return $reserva->refresh();
     }
@@ -1071,6 +1072,9 @@ class ServicioReservasTareasMovimiento
             ->where('estado', EstadoTareaMovimiento::Completada->value)
             ->lockForUpdate()
             ->exists();
+        if (! $poseePrefijoFisico) {
+            app(ServicioDestinosServidor::class)->restablecerAntesDeIniciar($maniobra);
+        }
         $maniobra->update([
             'estado' => EstadoManiobraOperacional::Pendiente,
             'responsable_user_id' => null,

@@ -189,7 +189,7 @@ class CargaController extends Controller
         // Al cerrar se liberan las reservas: conservar el detalle despachado del turno.
         $cargas->whereIn('estado', [EstadoCarga::Cerrada, EstadoCarga::Despachada])->load([
             'asignacionesHistoricas.anden:id,codigo,nombre',
-            'asignacionesHistoricas.folio.ubicacionActual.posicion.camara:id,codigo,nombre',
+            'asignacionesHistoricas.folio.ubicacionActual.posicion.camara:id,codigo,nombre,cantidad_bandas,posiciones_por_banda,cantidad_niveles',
         ]);
 
         return $this->configurarCacheOperacion(CargaResource::collection($cargas)->additional([
@@ -364,7 +364,7 @@ class CargaController extends Controller
             )
             ->with([
                 'condicionSag:id,codigo,nombre',
-                'ubicacionActual.posicion.camara:id,codigo,nombre',
+                'ubicacionActual.posicion.camara:id,codigo,nombre,cantidad_bandas,posiciones_por_banda,cantidad_niveles',
             ])
             ->orderBy('numero_folio')
             ->paginate((int) ($filtros['per_page'] ?? 25))
@@ -540,13 +540,13 @@ class CargaController extends Controller
             'cerradaPor:id,name',
             'asignacionesActuales.asignadoPor:id,name',
             'asignacionesActuales.anden:id,codigo,nombre',
-            'asignacionesActuales.folio.ubicacionActual.posicion.camara:id,codigo,nombre',
+            'asignacionesActuales.folio.ubicacionActual.posicion.camara:id,codigo,nombre,cantidad_bandas,posiciones_por_banda,cantidad_niveles',
             'asignacionesActuales.folio.procesosPrefrio.proceso.tunel:id,codigo,nombre',
             'asignacionesActuales.folio.tareasMovimiento' => fn ($consulta) => $consulta
                 ->whereIn('estado', [EstadoTareaMovimiento::Pendiente, EstadoTareaMovimiento::Asumida, EstadoTareaMovimiento::EnProceso])
                 ->with('responsable:id,name'),
             'asignacionesHistoricas.anden:id,codigo,nombre',
-            'asignacionesHistoricas.folio.ubicacionActual.posicion.camara:id,codigo,nombre',
+            'asignacionesHistoricas.folio.ubicacionActual.posicion.camara:id,codigo,nombre,cantidad_bandas,posiciones_por_banda,cantidad_niveles',
             'tareas.camaraOrigen:id,codigo,nombre',
             'tareas.responsable:id,name',
         ];
@@ -563,7 +563,7 @@ class CargaController extends Controller
             'embarque:id,carga_id,codigo,fecha_programada,hora_programada,modalidad,estado',
             'embarque.instructivos:id,embarque_id,orden,numero_externo',
             'asignacionesActuales.anden:id,codigo,nombre',
-            'asignacionesActuales.folio.ubicacionActual.posicion.camara:id,codigo,nombre',
+            'asignacionesActuales.folio.ubicacionActual.posicion.camara:id,codigo,nombre,cantidad_bandas,posiciones_por_banda,cantidad_niveles',
             'asignacionesActuales.folio.procesosPrefrio.proceso.tunel:id,codigo,nombre',
             'asignacionesActuales.folio.tareasMovimiento' => fn ($consulta) => $consulta
                 ->whereIn('estado', [EstadoTareaMovimiento::Pendiente, EstadoTareaMovimiento::Asumida, EstadoTareaMovimiento::EnProceso])

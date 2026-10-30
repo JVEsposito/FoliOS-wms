@@ -113,7 +113,7 @@ class ServicioArbitrajeManiobras
         }
     }
 
-    public function validarAsumible(ManiobraOperacional $maniobra): ?DecisionPersistida
+    public function validarAsumible(ManiobraOperacional $maniobra, ?CicloArbitrajeManiobras $ciclo = null): ?DecisionPersistida
     {
         if (config('planificador.mode') !== 'guided'
             || $maniobra->estado !== EstadoManiobraOperacional::Pendiente) {
@@ -130,7 +130,7 @@ class ServicioArbitrajeManiobras
             throw new ConflictoOperacion('La maniobra no pertenece a la temporada operacional activa.');
         }
 
-        $decision = $this->arbitrar($temporada)->decisiones
+        $decision = ($ciclo ?? $this->arbitrar($temporada))->decisiones
             ->firstWhere('maniobra_operacional_id', $maniobra->id);
         if (! $decision || ! $decision->decision->asumible()) {
             if ($decision?->decision === DecisionArbitrajeManiobra::Alternativa) {
@@ -181,6 +181,24 @@ class ServicioArbitrajeManiobras
         $temporada = $maniobra->planOperacional?->temporada;
         if (! $temporada?->activa) {
             throw new ConflictoOperacion('La maniobra no pertenece a la temporada operacional activa.');
+        }
+
+        if ($maniobra->estado === EstadoManiobraOperacional::EnEjecucion) {
+            // La publicación global autoriza tomar trabajo nuevo. Una vez tomado,
+            // el paso continúa con su claim y recursos propios, sin bloquear a toda
+            // la temporada desde una sesión, renovación o confirmación física.
+            $propia = $maniobra->pasos()->where('secuencia_maniobra', $maniobra->secuencia_actual)
+                ->whereIn('estado', [EstadoTareaMovimiento::Asumida, EstadoTareaMovimiento::EnProceso])
+                ->where('responsable_user_id', $maniobra->responsable_user_id)
+                ->where('dispositivo_id', $maniobra->dispositivo_id)
+                ->whereHas('reservaActiva', fn ($q) => $q->conCompromisoVigente()
+                    ->where('user_id', $maniobra->responsable_user_id)->where('dispositivo_id', $maniobra->dispositivo_id))
+                ->lockForUpdate()->exists();
+            if (! $propia) {
+                throw new ConflictoOperacion('La maniobra perdió su reserva vigente. Actualiza tus tareas antes de continuar.');
+            }
+
+            return null;
         }
 
         $decision = $this->arbitrar($temporada)->decisiones
@@ -252,7 +270,9 @@ class ServicioArbitrajeManiobras
                     EstadoCustodiaTemporal::Activa->value,
                 ),
             ])
-            ->lockForUpdate()
+            // El ciclo describe un snapshot; no debe bloquear la ejecución de
+            // todas las maniobras. La toma comprueba los recursos bajo sus mutex
+            // y la clave única del snapshot coordina ciclos concurrentes.
             ->get();
     }
 
@@ -525,11 +545,19 @@ class ServicioArbitrajeManiobras
     private function recursos(ManiobraOperacional $maniobra): array
     {
         $recursos = $maniobra->pasos
-            ->flatMap(fn ($paso): array => array_values(array_filter([
-                $paso->folio_id ? "folio:{$paso->folio_id}" : null,
-                $paso->posicion_origen_id ? "posicion:{$paso->posicion_origen_id}" : null,
-                $paso->posicion_destino_id ? "posicion:{$paso->posicion_destino_id}" : null,
-            ])))
+            ->flatMap(function ($paso) use ($maniobra): array {
+                // Compatibilidad con claims vencidos antes de corregir su limpieza:
+                // un destino dinámico sin reserva debe volver a poder calcularse.
+                $base = $maniobra->estado === EstadoManiobraOperacional::Pendiente && $maniobra->secuencia_actual === 1
+                    ? ($paso->contexto['destino_base_servidor'] ?? null) : null;
+                $destinoId = is_array($base) ? ($base['posicion_id'] ?? null) : $paso->posicion_destino_id;
+
+                return array_values(array_filter([
+                    $paso->folio_id ? "folio:{$paso->folio_id}" : null,
+                    $paso->posicion_origen_id ? "posicion:{$paso->posicion_origen_id}" : null,
+                    $destinoId ? "posicion:{$destinoId}" : null,
+                ]));
+            })
             ->merge($maniobra->reservasBandas->map(
                 fn ($reserva): string => implode(':', [
                     'banda',

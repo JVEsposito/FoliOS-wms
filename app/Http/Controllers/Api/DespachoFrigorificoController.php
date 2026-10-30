@@ -229,9 +229,9 @@ class DespachoFrigorificoController extends Controller
                 'cerradaPor:id,name',
                 'asignacionesActuales.asignadoPor:id,name',
                 'asignacionesActuales.anden:id,codigo,nombre',
-                'asignacionesActuales.folio.ubicacionActual.posicion.camara:id,codigo,nombre',
+                'asignacionesActuales.folio.ubicacionActual.posicion.camara:id,codigo,nombre,cantidad_bandas,posiciones_por_banda,cantidad_niveles',
                 'asignacionesHistoricas.anden:id,codigo,nombre',
-                'asignacionesHistoricas.folio.ubicacionActual.posicion.camara:id,codigo,nombre',
+                'asignacionesHistoricas.folio.ubicacionActual.posicion.camara:id,codigo,nombre,cantidad_bandas,posiciones_por_banda,cantidad_niveles',
                 'tareas.camaraOrigen:id,codigo,nombre',
                 'tareas.responsable:id,name',
             ])

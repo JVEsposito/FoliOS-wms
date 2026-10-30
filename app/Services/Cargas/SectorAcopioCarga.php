@@ -12,12 +12,14 @@ use App\Models\Camara;
 use App\Models\CargaFolio;
 use App\Models\Posicion;
 use App\Models\ReservaBandaManiobra;
+use App\Models\ReservaTareaMovimiento;
 use App\Services\Planificador\ServicioDesplieguePlanificador;
+use Illuminate\Support\Collection;
 
 /**
- * Elige dónde crece el acopio de una carga antes de mandar pallets a la cámara. El grupo
- * actual sigue siendo el acopio mientras tenga espacio para los pallets que le faltan; si no
- * lo tiene, el acopio se abre en bandas libres cercanas que sí los reciben.
+ * Elige dónde crece el acopio de una carga antes de mandar pallets a la cámara. Completa
+ * primero las bandas puras parcialmente ocupadas y después abre bandas libres cercanas.
+ * Los grupos históricos mezclados conservan la búsqueda de un sector con capacidad.
  *
  * Un sector nuevo se expresa con un ancla virtual en el fondo de una banda (posición 0): la
  * regla de vecindad que ya usan la tablet y el servidor la entiende sin cambios, porque P01
@@ -41,19 +43,50 @@ final class SectorAcopioCarga
         $this->camaras = [];
     }
 
+    /** El resolvedor ya bloqueó estas cámaras; no mezclar su realidad con un snapshot anterior. */
+    public function desdeCamarasActuales(Collection $camaras): void
+    {
+        foreach ($camaras as $camara) {
+            $posiciones = $camara->posiciones->filter(fn ($p) => $p->banda <= $camara->cantidad_bandas
+                && $p->posicion <= $camara->posiciones_por_banda && $p->nivel <= $camara->cantidad_niveles)
+                ->map(function (Posicion $p): Posicion {
+                    $copia = clone $p;
+                    $folio = $p->ubicacionesActuales->first()?->folio;
+                    $reserva = $p->reservaTareaActiva;
+
+                    return $copia->forceFill(['ocupada_fisica' => $p->ubicacionesActuales->isNotEmpty(), 'reservada' => $reserva !== null,
+                        'reservada_sag' => $p->reservaPreparacionSagActiva !== null,
+                        'carga_ubicada_id' => $folio?->asignacionCargaActual?->carga_id,
+                        'carga_entrante_id' => $reserva?->tareaMovimiento?->folio?->asignacionCargaActual?->carga_id]);
+                })->sortBy(fn ($p) => [$p->nivel, $p->banda, $p->posicion])->values();
+            $protegidas = $camara->proteccionesBandas->mapWithKeys(
+                fn ($r) => [$r->nivel.':'.$r->banda => $r->maniobra_operacional_id],
+            );
+            $this->mapas[$camara->id] = $this->construirMapa($posiciones, $camara->bandasOperacionales->keyBy('numero'), $protegidas);
+        }
+    }
+
     /**
      * @param  list<array{banda: int, posicion: int, nivel: int}>  $puntosCarga  pallets de la carga ubicados o con destino reservado en la cámara, sin el que se está ubicando
      * @param  int  $pendientes  pallets de la carga que todavía deben quedar en el acopio (incluye los ya agrupados)
      * @param  list<string>  $posicionesPropias  destinos reservados por la tarea que se evalúa: cuentan como libres
      * @return array{puntos: list<array{banda: int, posicion: int, nivel: int}>, sector: array<string, mixed>}
      */
-    public function elegir(string $camaraId, string $cargaId, array $puntosCarga, int $pendientes, array $posicionesPropias = []): array
+    public function elegir(string $camaraId, string $cargaId, array $puntosCarga, int $pendientes, array $posicionesPropias = [], ?string $maniobraId = null): array
     {
-        $mapa = $this->mapa($camaraId);
+        $mapa = $this->mapa($camaraId, $maniobraId);
         $propias = array_flip($posicionesPropias);
         $libre = fn (array $celda): bool => $celda['activa'] && $celda['banda_util']
             && (! $celda['ocupada'] || isset($propias[$celda['id']]));
         $componentes = $this->componentes($puntosCarga);
+        $prioritaria = $this->bandaEnLlenado($mapa, $puntosCarga, $cargaId, $propias);
+        if ($prioritaria !== null) {
+            $puntosBanda = array_values(array_filter($puntosCarga, fn ($p) => $p['banda'] === $prioritaria));
+            $resultado = $this->resultado('grupo', $puntosBanda, max(1, $pendientes - count($puntosBanda)));
+            $resultado['sector']['banda_prioritaria'] = $prioritaria;
+
+            return $resultado;
+        }
 
         $evaluados = [];
         foreach ($componentes as $componente) {
@@ -92,6 +125,50 @@ final class SectorAcopioCarga
     }
 
     /**
+     * Una protección temporal no convierte una banda parcialmente cargada en llena.
+     * Se cuentan también entradas comprometidas, pero nunca se inventa soporte físico.
+     * El grupo llena todos los niveles utilizables de su banda antes de abrir otra.
+     */
+    private function bandaEnLlenado(array $mapa, array $puntos, string $cargaId, array $propias): ?int
+    {
+        $conteo = array_count_values(array_column($puntos, 'banda'));
+        $celdasPorBanda = [];
+        foreach ($mapa['bandas'] as $banda) {
+            foreach ($banda['celdas'] as $celda) {
+                $celdasPorBanda[$celda['banda']][] = $celda;
+            }
+        }
+        $candidatas = [];
+        foreach ($conteo as $numero => $cantidad) {
+            $celdas = $celdasPorBanda[$numero] ?? [];
+            // No ampliar una mezcla histórica si puede abrirse una banda de la carga.
+            if (collect($celdas)->contains(fn ($c) => $c['ocupada'] && ! isset($propias[$c['id']]) && $c['carga_id'] !== $cargaId)) {
+                continue;
+            }
+            foreach ($mapa['bandas'] as $banda) {
+                if ($banda['numero'] !== $numero) {
+                    continue;
+                }
+                $libre = fn ($c) => $c['activa'] && $c['banda_configurada'] && (! $c['ocupada'] || isset($propias[$c['id']]));
+                $frente = 0;
+                foreach ($banda['celdas'] as $celda) {
+                    if ($celda['ocupada'] && ! isset($propias[$celda['id']])) {
+                        $frente = max($frente, $celda['posicion']);
+                    }
+                }
+                $siguiente = $this->siguienteLibre($banda, $frente, $libre);
+                if ($siguiente && ($siguiente['nivel'] === 1 || collect($celdas)->contains(fn ($c) => $c['posicion'] === $siguiente['posicion'] && $c['nivel'] === $siguiente['nivel'] - 1 && $c['ocupada_fisica']))) {
+                    $candidatas[] = ['banda' => (int) $numero, 'cantidad' => $cantidad];
+                    break;
+                }
+            }
+        }
+        usort($candidatas, fn ($a, $b) => [-$a['cantidad'], $a['banda']] <=> [-$b['cantidad'], $b['banda']]);
+
+        return $candidatas[0]['banda'] ?? null;
+    }
+
+    /**
      * Cámara para una carga que todavía no tiene pallets ni cámara objetivo: la primera, en este
      * orden, con bandas libres para toda la carga. Primero la cámara preferente de despacho,
      * luego la que guarda más pallets del mismo cliente y al final el código. Sin espacio para
@@ -99,17 +176,18 @@ final class SectorAcopioCarga
      *
      * @param  list<string>  $exportadoras
      */
-    public function camaraParaCarga(string $cargaId, array $exportadoras, int $pendientes): ?string
+    public function camaraParaCarga(string $cargaId, array $exportadoras, int $pendientes, ?string $maniobraId = null): ?string
     {
-        if (array_key_exists($cargaId, $this->camaras)) {
-            return $this->camaras[$cargaId];
+        $clave = $cargaId.':'.$maniobraId;
+        if (array_key_exists($clave, $this->camaras)) {
+            return $this->camaras[$clave];
         }
 
-        return $this->camaras[$cargaId] = $this->estimarCamara($cargaId, $exportadoras, $pendientes);
+        return $this->camaras[$clave] = $this->estimarCamara($cargaId, $exportadoras, $pendientes, $maniobraId);
     }
 
     /** @param  list<string>  $exportadoras */
-    private function estimarCamara(string $cargaId, array $exportadoras, int $pendientes): ?string
+    private function estimarCamara(string $cargaId, array $exportadoras, int $pendientes, ?string $maniobraId): ?string
     {
         $despliegue = app(ServicioDesplieguePlanificador::class);
         $dirigidas = $despliegue->idsCamarasDirigidas();
@@ -128,7 +206,7 @@ final class SectorAcopioCarga
             ));
         $todo = fn (array $celda): bool => $celda['activa'] && $celda['banda_util'] && ! $celda['ocupada'];
         foreach ($camaras as $camara) {
-            foreach ($this->tramosLibres($this->mapa($camara->id), $cargaId, $todo) as $tramo) {
+            foreach ($this->tramosLibres($this->mapa($camara->id, $maniobraId), $cargaId, $todo) as $tramo) {
                 if ($tramo['capacidad'] >= max(1, $pendientes)) {
                     return $camara->id;
                 }
@@ -139,7 +217,7 @@ final class SectorAcopioCarga
     }
 
     /**
-     * Grupos conectados de la carga por nivel, del más grande al más chico; entre iguales, el
+     * Grupos conectados de la carga, del más grande al más chico; entre iguales, el
      * de menor banda y profundidad (el mismo desempate del grupo principal).
      *
      * @param  list<array{banda: int, posicion: int, nivel: int}>  $puntos
@@ -417,6 +495,27 @@ final class SectorAcopioCarga
         return $salida;
     }
 
+    /** No permitir que una propuesta de tablet salte un hueco de la banda prioritaria. */
+    public function esSiguienteLibre(Posicion $posicion, ?string $maniobraId, array $propias): bool
+    {
+        $mapa = $this->mapa($posicion->camara_id, $maniobraId);
+        $banda = $mapa['bandas'][$posicion->nivel.':'.$posicion->banda] ?? null;
+        if (! $banda) {
+            return false;
+        }
+        $propias = array_flip($propias);
+        $libre = fn ($c) => $c['activa'] && $c['banda_util'] && ! $c['ocupada_fisica']
+            && (! $c['ocupada'] || isset($propias[$c['id']]));
+        $frente = $this->frentes(['bandas' => [$banda]], $libre)[0];
+        $siguiente = $this->siguienteLibre($banda, $frente, $libre);
+        if (($siguiente['id'] ?? null) !== $posicion->id) {
+            return false;
+        }
+
+        return $posicion->nivel === 1 || collect($mapa['bandas'][($posicion->nivel - 1).':'.$posicion->banda]['celdas'] ?? [])
+            ->contains(fn ($c) => $c['posicion'] === $posicion->posicion && $c['ocupada_fisica']);
+    }
+
     /** La cámara tiene posiciones registradas: sin plano no hay nada que estimar. */
     public function tienePosiciones(string $camaraId): bool
     {
@@ -424,9 +523,24 @@ final class SectorAcopioCarga
     }
 
     /** @return array<string, mixed> */
-    private function mapa(string $camaraId): array
+    private function mapa(string $camaraId, ?string $maniobraId = null): array
     {
-        return $this->mapas[$camaraId] ??= $this->leerMapa($camaraId);
+        $mapa = $this->mapas[$camaraId] ??= $this->leerMapa($camaraId);
+        if ($maniobraId !== null) {
+            // La geometría se lee una sola vez por cámara. Cada maniobra proyecta
+            // su propia protección sin alterar la lectura compartida del arbitraje.
+            foreach ($mapa['bandas'] as &$banda) {
+                foreach ($banda['celdas'] as &$celda) {
+                    if ($celda['proteccion_maniobra_id'] === $maniobraId) {
+                        $celda['banda_util'] = $celda['banda_configurada'];
+                    }
+                }
+                unset($celda);
+            }
+            unset($banda);
+        }
+
+        return $mapa;
     }
 
     /**
@@ -440,6 +554,8 @@ final class SectorAcopioCarga
         // Una sola lectura por cámara: el estado de cada posición viene en subconsultas.
         $posiciones = Posicion::query()
             ->where('camara_id', $camaraId)
+            ->whereHas('camara', fn ($q) => $q->whereColumn('posiciones.banda', '<=', 'camaras.cantidad_bandas')
+                ->whereColumn('posiciones.posicion', '<=', 'camaras.posiciones_por_banda')->whereColumn('posiciones.nivel', '<=', 'camaras.cantidad_niveles'))
             ->select(['id', 'banda', 'posicion', 'nivel', 'estado'])
             ->withExists([
                 'ubicacionActual as ocupada_fisica',
@@ -451,15 +567,26 @@ final class SectorAcopioCarga
                 ->join('ubicaciones_actuales', 'ubicaciones_actuales.folio_id', '=', 'carga_folios.folio_id')
                 ->whereColumn('ubicaciones_actuales.posicion_id', 'posiciones.id')
                 ->whereHas('reservaActiva')
-                ->limit(1)])
+                ->limit(1),
+                'carga_entrante_id' => CargaFolio::query()->select('carga_folios.carga_id')
+                    ->join('tareas_movimiento as entrantes', 'entrantes.folio_id', '=', 'carga_folios.folio_id')
+                    ->join('reservas_tareas_movimiento as reservas', 'reservas.tarea_movimiento_id', '=', 'entrantes.id')
+                    ->whereColumn('reservas.bloqueo_posicion_id', 'posiciones.id')
+                    ->whereIn('reservas.id', ReservaTareaMovimiento::query()->conCompromisoVigente()->select('id'))
+                    ->whereHas('reservaActiva')->limit(1)])
             ->orderBy('nivel')->orderBy('banda')->orderBy('posicion')
             ->get();
         $bandas = BandaOperacional::query()->where('camara_id', $camaraId)->get(['numero', 'modo', 'usos_permitidos'])->keyBy('numero');
         $protegidas = ReservaBandaManiobra::query()->where('camara_id', $camaraId)
             ->whereNotNull('clave_bloqueo')->whereNull('liberada_at')
-            ->get(['banda', 'nivel'])
-            ->mapWithKeys(fn (ReservaBandaManiobra $reserva): array => ["{$reserva->nivel}:{$reserva->banda}" => true]);
+            ->get(['banda', 'nivel', 'maniobra_operacional_id'])
+            ->mapWithKeys(fn (ReservaBandaManiobra $reserva): array => ["{$reserva->nivel}:{$reserva->banda}" => $reserva->maniobra_operacional_id]);
 
+        return $this->construirMapa($posiciones, $bandas, $protegidas);
+    }
+
+    private function construirMapa(Collection $posiciones, Collection $bandas, Collection $protegidas): array
+    {
         $mapa = ['bandas' => []];
         foreach ($posiciones as $posicion) {
             $nivel = (int) $posicion->nivel;
@@ -467,8 +594,9 @@ final class SectorAcopioCarga
             $clave = "{$nivel}:{$numero}";
             $banda = $bandas->get($numero);
             // Sin catálogo de bandas se conserva el flujo histórico, como al reservar destino.
-            $util = ! isset($protegidas[$clave]) && ($banda === null || ($banda->modo === ModoBandaOperacional::Operativa
-                && in_array(UsoBandaOperacional::TransitoProductoTerminado->value, $banda->usos_permitidos ?? [], true)));
+            $configurada = $banda === null || ($banda->modo === ModoBandaOperacional::Operativa
+                && in_array(UsoBandaOperacional::TransitoProductoTerminado->value, $banda->usos_permitidos ?? [], true));
+            $util = ! isset($protegidas[$clave]) && $configurada;
             $mapa['bandas'][$clave] ??= ['nivel' => $nivel, 'numero' => $numero, 'celdas' => []];
             $mapa['bandas'][$clave]['celdas'][] = [
                 'id' => $posicion->id,
@@ -477,8 +605,11 @@ final class SectorAcopioCarga
                 'nivel' => $nivel,
                 'activa' => $posicion->estado === EstadoPosicion::Activa,
                 'banda_util' => $util,
+                'banda_configurada' => $configurada,
+                'proteccion_maniobra_id' => $protegidas[$clave] ?? null,
+                'ocupada_fisica' => (bool) $posicion->ocupada_fisica,
                 'ocupada' => (bool) $posicion->ocupada_fisica || (bool) $posicion->reservada || (bool) $posicion->reservada_sag,
-                'carga_id' => $posicion->carga_ubicada_id,
+                'carga_id' => $posicion->carga_ubicada_id ?? $posicion->carga_entrante_id,
             ];
         }
 
@@ -492,7 +623,8 @@ final class SectorAcopioCarga
     public static function vecinos(array $a, array $b): bool
     {
         if ((int) $a['nivel'] !== (int) $b['nivel']) {
-            return false;
+            return abs((int) $a['nivel'] - (int) $b['nivel']) === 1
+                && (int) $a['banda'] === (int) $b['banda'] && (int) $a['posicion'] === (int) $b['posicion'];
         }
         $bandas = abs((int) $a['banda'] - (int) $b['banda']);
         $posiciones = abs((int) $a['posicion'] - (int) $b['posicion']);

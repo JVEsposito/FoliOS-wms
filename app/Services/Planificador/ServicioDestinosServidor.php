@@ -27,7 +27,7 @@ use Illuminate\Support\Collection;
 /** Una sola geometría para estimar, preparar y reservar la secuencia completa. */
 final class ServicioDestinosServidor
 {
-    public const VERSION = 'servidor_maniobra_completa_v1';
+    public const VERSION = 'servidor_maniobra_completa_v2_bandas';
 
     private ?Collection $lectura = null;
 
@@ -90,6 +90,28 @@ final class ServicioDestinosServidor
         }
     }
 
+    /** Devuelve destinos dinámicos al objetivo original al abandonar un claim reversible. */
+    public function restablecerAntesDeIniciar(ManiobraOperacional $maniobra): void
+    {
+        if ($maniobra->secuencia_actual !== 1
+            || $maniobra->pasos()->whereIn('estado', [EstadoTareaMovimiento::Completada, EstadoTareaMovimiento::EnProceso])->exists()
+            || $maniobra->custodiasTemporales()->where('estado', 'activa')->exists()) {
+            return;
+        }
+        foreach ($maniobra->pasos()->orderBy('secuencia_maniobra')->lockForUpdate()->get() as $paso) {
+            $contexto = $paso->contexto ?? [];
+            $base = $contexto['destino_base_servidor'] ?? null;
+            if (! is_array($base)) {
+                continue;
+            }
+            unset($contexto['destino_preparado_servidor'], $contexto['motivo_destino_servidor'], $contexto['destino_base_servidor']);
+            $contexto['destino_precalculado_inmutable'] = (bool) ($base['inmutable'] ?? false);
+            $paso->update(['camara_destino_id' => $base['camara_id'] ?? null,
+                'posicion_destino_id' => $base['posicion_id'] ?? null, 'contexto' => $contexto,
+                'version' => $paso->version + 1]);
+        }
+    }
+
     private function proteger(ManiobraOperacional $maniobra, Posicion $posicion): void
     {
         $clave = implode(':', [$posicion->camara_id, $posicion->banda, $posicion->nivel]);
@@ -138,11 +160,19 @@ final class ServicioDestinosServidor
     {
         $pasos = $maniobra->pasos()->with(['planOperacional', 'posicionOrigen', 'folio.asignacionCargaActual', 'folio.retencionOperacionalActiva'])->orderBy('secuencia_maniobra')->get()
             ->filter(fn (TareaMovimiento $t): bool => ! $t->estado->esFinal());
+        foreach ($pasos as $paso) {
+            $objetivo = $paso->contexto['carga_id'] ?? $paso->planOperacional->contexto['carga_id'] ?? null;
+            if (($paso->contexto['tipo_decision'] ?? null) === 'concentrar_carga' && $objetivo
+                && $paso->folio->asignacionCargaActual?->carga_id !== $objetivo) {
+                throw new ConflictoOperacion('El pallet '.$paso->folio->numero_folio
+                    .' cambió de carga. Oficina debe actualizar esta labor antes de moverlo.');
+            }
+        }
         $acopio = app(ServicioAcopioCarga::class);
         $acopios = $bloquear ? [] : $acopio->paraTareas($pasos);
         foreach ($pasos as $paso) {
-            if ($acopio->esRecepcion($paso->planOperacional, $paso->tipo_movimiento)) {
-                $vigente = $bloquear ? $acopio->paraFolio($paso->folio_id, $paso->id, true) : ($acopios[$paso->id] ?? null);
+            if ($acopio->usaAcopio($paso)) {
+                $vigente = $bloquear ? $acopio->paraFolio($paso->folio_id, $paso->id, true, $camaras) : ($acopios[$paso->id] ?? null);
                 $paso->contexto = [...($paso->contexto ?? []), 'acopio_carga' => $vigente];
             }
         }
@@ -171,6 +201,13 @@ final class ServicioDestinosServidor
                 $tarea->camara_destino_id = $base['camara_id'];
                 $tarea->posicion_destino_id = $base['posicion_id'];
                 $tarea->contexto = [...$tarea->contexto, 'destino_precalculado_inmutable' => $base['inmutable']];
+            }
+            $acopioVigente = $tarea->contexto['acopio_carga'] ?? null;
+            $bandaPrioritaria = $acopioVigente['sector']['banda_prioritaria'] ?? null;
+            $camaraAcopio = $camaras->get($acopioVigente['camara_objetivo_id'] ?? null);
+            if ($bandaPrioritaria !== null && $camaraAcopio?->proteccionesBandas->contains(fn ($r) => $r->banda === $bandaPrioritaria && $r->maniobra_operacional_id !== $maniobra->id)) {
+                throw new ConflictoOperacion('La banda '.$bandaPrioritaria.' de '.$acopioVigente['carga_codigo']
+                    .' está atendida por otra maniobra. Espera su confirmación para continuar llenando la misma banda.');
             }
             if ($tarea->estado === EstadoTareaMovimiento::EnProceso) {
                 throw new ConflictoOperacion('El movimiento ya está iniciado: confirma su destino reservado o registra una incidencia.');
@@ -206,9 +243,13 @@ final class ServicioDestinosServidor
                 $camara = $camaras[$destino->camara_id];
                 $local = $this->esDespeje($tarea) && $tarea->camara_origen_id === $camara->id;
                 $preferida = app(ServicioDesplieguePlanificador::class)->camaraPreferenteDespacho($camara->id, $camara->codigo);
+                $carga = $tarea->folio->asignacionCargaActual?->carga_id;
+                $deLaCarga = $carga ? $folios->filter(fn ($f) => $f->asignacionCargaActual?->carga_id === $carga)->count() : 0;
+                $ordenCarga = ! $acopio->usaAcopio($tarea) || ! $carga ? 0
+                    : ($folios->isEmpty() ? 1 : ($deLaCarga === $folios->count() ? 0 : 2));
                 $candidatos[] = ['posicion' => $destino, 'motivo' => ($local ? 'Despeje local. ' : '').$afinidad['motivo'],
                     'orden' => [$this->esDespeje($tarea) && ! $local ? 1 : 0,
-                        app(CalculadorAfinidadBanda::class)->orden($afinidad), (int) $afinidad['mezclaria_clientes'],
+                        $ordenCarga, app(CalculadorAfinidadBanda::class)->orden($afinidad), (int) $afinidad['mezclaria_clientes'],
                         $preferida ? 0 : 1, -$afinidad['puntaje'], $camara->codigo, $destino->banda, $destino->posicion, $destino->nivel]];
             }
             usort($candidatos, fn ($a, $b) => $a['orden'] <=> $b['orden']);
@@ -307,8 +348,12 @@ final class ServicioDestinosServidor
             && ($p->nivel !== $sector['nivel'] || $p->banda < $sector['banda_desde'] || $p->banda > $sector['banda_hasta'])) {
             return false;
         }
+        $prioritaria = $acopio['sector']['banda_prioritaria'] ?? null;
+        if ($prioritaria !== null && $p->banda !== $prioritaria) {
+            return false;
+        }
         $puntos = $acopio['puntos'] ?? (($ctx['tipo_decision'] ?? null) === 'concentrar_carga' ? ($ctx['concentracion_puntos'] ?? []) : []);
-        if ($puntos !== [] && ! collect($puntos)->contains(fn ($punto) => SectorAcopioCarga::vecinos($punto, $p->toArray()))) {
+        if ($prioritaria === null && $puntos !== [] && ! collect($puntos)->contains(fn ($punto) => SectorAcopioCarga::vecinos($punto, $p->toArray()))) {
             return false;
         }
         $soporte = $p->nivel === 1;

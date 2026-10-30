@@ -1,3 +1,4 @@
+import { loadClusterLocation } from './shared/load-cluster-location.js';
 import { createUuid as operationId } from './shared/uuid.js';
 import { showOfficeToast } from './office-toast.js';
 import { loadReceptionDependencies } from './shared/load-reception-dependencies.js';
@@ -738,7 +739,7 @@ function renderConcentration(load) {
     if (dependencies) elements.concentrationMessage.textContent += ` ${dependencies}`;
     const cluster = progress.grupo_principal;
     elements.mainCluster.textContent = cluster
-        ? `${cluster.camara.codigo} · nivel ${cluster.nivel} · bandas ${cluster.banda_desde}–${cluster.banda_hasta}`
+        ? loadClusterLocation(cluster)
         : (atDock ? `${atDock} ${atDock === 1 ? 'folio enviado' : 'folios enviados'} a andén` : 'Sin grupo físico principal');
 }
 
