@@ -208,7 +208,9 @@ class ServicioPlanesOperacionales
                 ]);
             }
 
-            return $this->cargarTarea($tareaBloqueada->refresh());
+            // Una retoma puede renovar solo la reserva. refresh() volvería al
+            // snapshot anterior si la tarea fue tomada por otra conexión del mismo actor.
+            return $this->cargarTarea(TareaMovimiento::query()->lockForUpdate()->findOrFail($tareaBloqueada->id));
         }, attempts: 3);
     }
 

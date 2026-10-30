@@ -71,8 +71,10 @@ class ServicioReservasTareasMovimiento
         User $usuario,
         Dispositivo $dispositivo,
     ): ReservaTareaMovimiento {
-        app(ServicioExclusionPallet::class)->bloquear($tarea);
-        $reserva = $this->reservaActivaTarea($tarea->id, true);
+        $exclusion = app(ServicioExclusionPallet::class);
+        $exclusion->bloquear($tarea);
+        $tarea = TareaMovimiento::query()->lockForUpdate()->findOrFail($tarea->id);
+        $reserva = $exclusion->reservaActual($tarea);
 
         if ($reserva && $this->estaVencida($reserva)) {
             $this->expirar($reserva);
@@ -779,12 +781,9 @@ class ServicioReservasTareasMovimiento
     ): void {
         // El movimiento ya mantiene el mutex del folio. Leer primero sus pasos
         // evita bloquear el índice de todas las maniobras en ejecución.
-        $ids = TareaMovimiento::query()->where('folio_id', $folioId)
-            ->whereNotNull('maniobra_operacional_id')
-            ->when($maniobraPermitidaId, fn ($q) => $q->where('maniobra_operacional_id', '!=', $maniobraPermitidaId))
-            ->whereIn('estado', [EstadoTareaMovimiento::Bloqueada->value, EstadoTareaMovimiento::Pendiente->value,
-                EstadoTareaMovimiento::Asumida->value, EstadoTareaMovimiento::EnProceso->value])
-            ->orderBy('id')->lockForUpdate()->get(['maniobra_operacional_id'])
+        $ids = app(ServicioExclusionPallet::class)->tareasActuales($folioId)
+            ->filter(fn (TareaMovimiento $tarea) => $tarea->maniobra_operacional_id !== null
+                && $tarea->maniobra_operacional_id !== $maniobraPermitidaId && $tarea->estado->esActiva())
             ->pluck('maniobra_operacional_id')->unique();
         $maniobra = $ids->isEmpty() ? null : ManiobraOperacional::query()
             ->whereIn('id', $ids)->whereIn('estado', [EstadoManiobraOperacional::EnEjecucion->value,
