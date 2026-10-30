@@ -37,6 +37,86 @@ class RecepcionMaterialApiTest extends TestCase
 {
     use RefreshDatabase, \Tests\Concerns\PreparaFotoDocumentoRecepcionMaterial;
 
+    #[DataProvider('formatosClasicos')]
+    public function test_etiqueta_clasica_es_opcional_por_bulto_con_fecha_fisica_y_snapshot_repetible(string $formato, string $orientacion): void
+    {
+        [$autor, $token, $cliente, $proveedor, $item] = $this->prepararCatalogo();
+        $cliente->update(['nombre' => 'LA AGUADA']);
+        $recepcion = $this->conToken($token)->postJson('/api/materiales/recepciones', $this->payloadRecepcion(
+            $cliente, $proveedor, $item, [['cantidad' => 1500], ['cantidad' => 2.5]],
+        ))->assertCreated()->json('data');
+        $confirmada = $this->postJsonConDocumento("/api/materiales/recepciones/{$recepcion['id']}/confirmar", [
+            'operacion_id' => (string) Str::uuid(), 'version_conocida' => 1,
+        ])->assertOk()->json('data');
+        $modelo = RecepcionMaterial::findOrFail($recepcion['id']);
+        $modelo->update(['fecha_recepcion' => '2026-10-28 01:30:00']);
+        $perfil = PerfilImpresionEtiqueta::where('predeterminado', true)->firstOrFail();
+        $perfil->update(['ancho_mm' => 100, 'alto_mm' => 200, 'orientacion' => $orientacion]);
+        $this->getJson('/api/materiales/recepciones/perfiles-impresion')->assertOk()->assertJsonPath('data.0.disenos_disponibles', ['actual', 'clasica_bodega']);
+        $folios = array_column(array_column($confirmada['detalles'][0]['bultos'], 'folio'), 'id');
+        FolioMaterial::where('folio_id', $folios[0])->update(['cantidad_actual' => 12]);
+        $stock = FolioMaterial::orderBy('folio_id')->get()->map->only(['folio_id', 'cantidad_inicial', 'cantidad_actual', 'cantidad_reservada'])->all();
+        $movimientos = MovimientoInventarioMaterial::count();
+        $payload = ['operacion_id' => (string) Str::uuid(), 'perfil_id' => $perfil->id,
+            'formato' => $formato, 'simbologia' => 'code128', 'canal' => 'oficina_descarga',
+            'folio_ids' => $folios, 'copias' => 2, 'diseno' => 'clasica_bodega'];
+        $url = "/api/materiales/recepciones/{$recepcion['id']}/etiquetas";
+        $respuesta = $this->postJson($url, $payload)->assertOk();
+        $trabajo = TrabajoImpresionMaterial::findOrFail($respuesta->headers->get('X-Estiba-Print-Job'));
+        $this->assertSame('clasica_bodega', $trabajo->perfil_snapshot['diseno']);
+        $this->assertSame(1, $trabajo->perfil_snapshot['diseno_version']);
+        $this->assertSame($autor->id, $trabajo->solicitado_por_user_id);
+        $this->assertEqualsCanonicalizing(['1.500', '2,5'], array_column(array_column($trabajo->contenido_snapshot, 'clasica'), 'cantidad'));
+        foreach ($trabajo->contenido_snapshot as $etiqueta) {
+            $this->assertSame('LA AGUADA', $etiqueta['clasica']['cliente']);
+            $this->assertSame('27/10/2026', $etiqueta['clasica']['fecha']);
+            $this->assertSame($etiqueta['numero_folio'], $etiqueta['clasica']['folio']);
+        }
+        // La misma operación devuelve el snapshot aun si luego cambia el catálogo o perfil.
+        $original = $trabajo->contenido_snapshot;
+        $perfil->update(['ancho_mm' => 50, 'alto_mm' => 100]);
+        $cliente->update(['nombre' => 'CLIENTE MODIFICADO']);
+        $this->postJson($url, $payload)->assertOk()->assertHeader('X-Estiba-Print-Job', $trabajo->id);
+        $this->assertSame($original, $trabajo->fresh()->contenido_snapshot);
+        $this->assertDatabaseCount('trabajos_impresion_materiales', 1);
+        $this->postJson($url, [...$payload, 'diseno' => 'actual'])->assertConflict();
+        $this->getJson("/api/materiales/recepciones/{$recepcion['id']}/impresiones")->assertOk()->assertJsonPath('data.0.diseno', 'clasica_bodega');
+        $this->assertSame($stock, FolioMaterial::orderBy('folio_id')->get()->map->only(['folio_id', 'cantidad_inicial', 'cantidad_actual', 'cantidad_reservada'])->all());
+        $this->assertSame($movimientos, MovimientoInventarioMaterial::count());
+    }
+
+    public static function formatosClasicos(): array
+    {
+        return [['pdf', 'horizontal'], ['nlbl', 'horizontal'], ['zpl', 'horizontal'], ['zpl', 'vertical']];
+    }
+
+    public function test_clasica_rechaza_tamano_incorrecto_y_cambiar_de_diseno_exige_motivo_de_reimpresion(): void
+    {
+        [, $token, $cliente, $proveedor, $item] = $this->prepararCatalogo();
+        $recepcion = $this->conToken($token)->postJson('/api/materiales/recepciones', $this->payloadRecepcion($cliente, $proveedor, $item, [['cantidad' => 7]]))->assertCreated()->json('data');
+        $confirmada = $this->postJsonConDocumento("/api/materiales/recepciones/{$recepcion['id']}/confirmar", ['operacion_id' => (string) Str::uuid(), 'version_conocida' => 1])->assertOk()->json('data');
+        $perfil = PerfilImpresionEtiqueta::where('predeterminado', true)->firstOrFail();
+        $payload = ['operacion_id' => (string) Str::uuid(), 'perfil_id' => $perfil->id, 'formato' => 'pdf', 'simbologia' => 'code128',
+            'canal' => 'oficina_descarga', 'folio_ids' => [$confirmada['detalles'][0]['bultos'][0]['folio']['id']], 'copias' => 1];
+        $url = "/api/materiales/recepciones/{$recepcion['id']}/etiquetas";
+        $this->postJson($url, [...$payload, 'diseno' => 'inventado'])->assertUnprocessable()->assertJsonValidationErrors('diseno');
+        $this->postJson($url, [...$payload, 'diseno' => 'clasica_bodega'])->assertUnprocessable();
+        $this->assertDatabaseCount('trabajos_impresion_materiales', 0);
+        $this->postJson($url, $payload)->assertOk();
+        $actual = TrabajoImpresionMaterial::sole();
+        $this->assertArrayNotHasKey('diseno', $actual->perfil_snapshot);
+        $this->assertArrayNotHasKey('clasica', $actual->contenido_snapshot[0]);
+        // Un cliente antiguo y uno nuevo con "actual" reutilizan el mismo UUID.
+        $this->postJson($url, [...$payload, 'diseno' => 'actual'])->assertOk()->assertHeader('X-Estiba-Print-Job', $actual->id);
+        $perfil->update(['ancho_mm' => 100, 'alto_mm' => 200]);
+        $nuevo = [...$payload, 'operacion_id' => (string) Str::uuid(), 'diseno' => 'clasica_bodega'];
+        $this->postJson($url, $nuevo)->assertUnprocessable();
+        $this->assertDatabaseCount('trabajos_impresion_materiales', 1);
+        $this->postJson($url, [...$nuevo, 'motivo_reimpresion' => 'Cambiar al formato de cantidad grande.'])->assertOk();
+        $this->assertDatabaseCount('trabajos_impresion_materiales', 2);
+        $this->assertDatabaseHas('folios_trabajos_impresion_materiales', ['trabajo_impresion_material_id' => TrabajoImpresionMaterial::latest('id')->first()->id, 'es_reimpresion' => true]);
+    }
+
     public function test_medidas_de_carga_y_capacidad_en_esquema_real_no_modifican_stock_y_no_bloquean_eliminacion(): void
     {
         [, $token, $cliente, $proveedor, $item] = $this->prepararCatalogo();

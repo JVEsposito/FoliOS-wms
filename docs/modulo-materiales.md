@@ -1,5 +1,10 @@
 # Módulo de cámaras de materiales
 
+Las recepciones confirmadas ofrecen además el diseño opcional **Clásica bodega** de
+200 × 100 mm, con cliente dueño, fecha física, proveedor, guía, ítem y cantidad recibida
+por bulto destacada. El diseño **Actual** permanece como opción inicial. Ver
+[operación y despliegue](operaciones/etiqueta-clasica-materiales.md).
+
 ## Objetivo
 
 Controlar materiales almacenados en cámaras o bodegas usando el mismo plano,

@@ -56,9 +56,20 @@ class GeneradorEtiquetaMaterialNlbl
         string $nombre,
     ): string {
         [$ancho, $alto] = $this->dimensiones($perfil);
-        $items = is_array($etiqueta['armado'] ?? null)
+        $clasica = ($perfil['diseno'] ?? null) === DisenoEtiquetaClasicaMaterial::CODIGO;
+        if ($clasica) {
+            if ($simbologia !== 'code128') {
+                throw new \DomainException('Clásica bodega utiliza código de barras Code 128.');
+            }
+            DisenoEtiquetaClasicaMaterial::validarPerfil($perfil);
+            // El documento editable y el PDF representan la cara apaisada del papel.
+            [$ancho, $alto] = [200000, 100000];
+        }
+        $items = $clasica
+            ? $this->itemsClasica($etiqueta['clasica'])
+            : (is_array($etiqueta['armado'] ?? null)
             ? $this->itemsArmado($etiqueta['armado'], $ancho, $alto, $simbologia)
-            : $this->itemsEstandar($etiqueta, $ancho, $alto, $simbologia);
+            : $this->itemsEstandar($etiqueta, $ancho, $alto, $simbologia));
 
         $impresora = $this->impresora($perfil);
         $idFormato = $this->uuid("formato|{$nombre}|{$ancho}|{$alto}");
@@ -333,6 +344,41 @@ XML;
         return $items;
     }
 
+    private function itemsClasica(array $datos): array
+    {
+        $diseno = DisenoEtiquetaClasicaMaterial::disponer($datos);
+        $items = [];
+        $z = 1;
+        $rectangulos = LogoAgrorosarioEtiqueta::rectangulos($diseno['logo']);
+        foreach ($diseno['lineas'] as [$x1, $y1, $x2, $y2]) {
+            $rectangulos[] = ['x' => min($x1, $x2), 'y' => min($y1, $y2), 'ancho' => max(0.25, abs($x2 - $x1)), 'alto' => max(0.25, abs($y2 - $y1))];
+        }
+        foreach ($rectangulos as $r) {
+            $id = $this->uuid('clasica-rectangulo|'.$z);
+            $ancho = (int) round($r['ancho'] * 1000);
+            $alto = (int) round($r['alto'] * 1000);
+            $x = (int) round(($r['x'] + $r['ancho'] / 2) * 1000);
+            $y = (int) round(($r['y'] + $r['alto'] / 2) * 1000);
+            $items[] = <<<XML
+<Item Type="RectangleDocumentItem">
+  <Id>{$id}</Id><Name>Clásica · trazo {$z}</Name><Color>FF000000</Color>
+  <FillColor>FF000000</FillColor><FillStyle>2</FillStyle><LineStyle>0</LineStyle>
+  <SampleValue Type="StringContents" /><PrintAsGraphics>True</PrintAsGraphics>
+  <Geometry Type="RectGeometry"><Width>{$ancho}</Width><Height>{$alto}</Height><Left>{$x}</Left><Top>{$y}</Top><AnchoringPoint>4</AnchoringPoint></Geometry>
+  <ZOrder>{$z}</ZOrder><MergeName>Clásica · trazo {$z}</MergeName>
+</Item>
+XML;
+            $z++;
+        }
+        foreach ($diseno['textos'] as $t) {
+            $items[] = $this->texto($t['valor'], (int) round($t['x'] * 1000), (int) round($t['y'] * 1000), (int) round($t['ancho'] * 1000), (int) round($t['alto'] * 1000), max(6, (int) floor($t['tamano'] / 25.4 * 72)), $t['negrita'], $z++, 'Clásica · '.$t['nombre'], $t['centrado']);
+        }
+        $c = $diseno['codigo'];
+        $items[] = $this->code128($c['valor'], (int) round($c['x'] * 1000), (int) round($c['y'] * 1000), (int) round($c['ancho'] * 1000), (int) round($c['alto'] * 1000), $z++, true);
+
+        return $items;
+    }
+
     private function code128(
         string $valor,
         int $x,
@@ -340,9 +386,16 @@ XML;
         int $ancho,
         int $alto,
         int $z,
+        bool $estricto = false,
     ): string {
         $modulos = (11 * (mb_strlen($valor) + 3)) + 13;
-        $barra = max(180, min(1200, (int) floor($ancho / max(1, $modulos))));
+        $barra = $estricto
+            ? min(500, (int) floor($ancho / ($modulos + 20)))
+            : max(180, min(1200, (int) floor($ancho / max(1, $modulos))));
+        if ($estricto && $barra < 190) {
+            throw new \DomainException('El folio es demasiado largo para un código legible en esta etiqueta.');
+        }
+        $interpretacion = $estricto ? '<HumanInterpretationPosition>0</HumanInterpretationPosition>' : '';
         $id = $this->uuid("code128|{$valor}|{$x}|{$y}");
         $valorXml = $this->xml($valor);
 
@@ -352,6 +405,7 @@ XML;
   <Name>Código Code 128</Name>
   <Color>FF000000</Color>
   <BarcodeData Type="Code128BarcodeData">
+    {$interpretacion}
     <HasCheckDigit>False</HasCheckDigit>
     <AutomaticCheckDigit>True</AutomaticCheckDigit>
     <HasManualEncoding>False</HasManualEncoding>
@@ -421,6 +475,7 @@ XML;
         bool $negrita,
         int $z,
         string $nombre,
+        bool $centrado = false,
     ): string {
         $base64 = base64_encode($valor);
         $peso = $negrita ? 700 : 400;
@@ -428,6 +483,7 @@ XML;
         $nombreXml = $this->xml($nombre);
         $centroX = $x + intdiv($ancho, 2);
         $centroY = $y + intdiv($alto, 2);
+        $alineacion = $centrado ? 1 : 0;
 
         return <<<XML
 <Item Type="TextDocumentItem">
@@ -446,7 +502,7 @@ XML;
   <Contents Type="ExtendedDataValue"><FixedValue Type="StringContents"><StringValue Base64Encoded="true">{$base64}</StringValue></FixedValue></Contents>
   <BestFitMinimumFontSize>4</BestFitMinimumFontSize>
   <BestFitMaximumFontSize>{$tamano}</BestFitMaximumFontSize>
-  <TextBoxAlignment>0</TextBoxAlignment>
+  <TextBoxAlignment>{$alineacion}</TextBoxAlignment>
   <ZOrder>{$z}</ZOrder>
   <MergeName>{$nombreXml}</MergeName>
 </Item>

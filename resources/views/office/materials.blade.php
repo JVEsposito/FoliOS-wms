@@ -486,11 +486,13 @@
                             <label><span>Origen de folios *</span><select id="materialLabelSource"><option value="recepcion">Recepciones confirmadas</option><option value="transformacion">Órdenes de transformación</option></select></label>
                             <label><span>Documento / proceso *</span><select name="origen_id" id="materialLabelReception" required><option value="">Seleccionar origen</option></select></label>
                             <label><span>Perfil de impresora *</span><select name="perfil_id" id="materialLabelProfile" required><option value="">Seleccionar perfil</option></select></label>
+                            <label><span>Diseño de etiqueta *</span><select name="diseno" id="materialLabelDesign"><option value="actual">Actual</option><option value="clasica_bodega">Clásica bodega · cantidad destacada</option></select></label>
                             <label><span>Formato *</span><select name="formato" required><option value="nlbl">NLBL · ZebraDesigner 3 / NiceLabel</option><option value="pdf">PDF · vista previa Code 128</option></select></label>
                             <label><span>Código del folio *</span><select name="simbologia" required><option value="code128">Código de barras Code 128</option><option value="qr">Código QR</option></select></label>
                             <label><span>Copias por folio *</span><input name="copias" type="number" min="1" max="20" value="1" required></label>
                             <label class="materials-wide"><span>Motivo de reimpresión</span><textarea name="motivo_reimpresion" minlength="5" maxlength="1000" rows="2" placeholder="Será obligatorio si uno de los folios ya fue generado anteriormente."></textarea></label>
                         </div>
+                        <p class="materials-help" id="materialLabelDesignHelp">El diseño Actual conserva el modelo de cada origen.</p>
                         <div class="material-label-selection">
                             <div class="material-label-selection__heading">
                                 <strong>Folios de la recepción</strong>

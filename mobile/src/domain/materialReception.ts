@@ -149,7 +149,10 @@ export type PendingReceptionFolio = {
   } | null;
 };
 
+export type MaterialLabelDesign = 'actual' | 'clasica_bodega';
+
 export type LabelPrintProfile = {
+  disenos_disponibles?: MaterialLabelDesign[];
   id: string;
   codigo: string;
   nombre: string;
@@ -172,6 +175,7 @@ export type MaterialPrintJob = {
   estado: 'generado' | 'enviado' | 'fallido' | 'indeterminado';
   copias: number;
   motivo_reimpresion: string | null;
+  diseno?: MaterialLabelDesign;
   perfil: LabelPrintProfile;
   folios: Array<{
     id: string;
@@ -191,6 +195,7 @@ export type MaterialPrintJob = {
 };
 
 export type GenerateMaterialLabelsPayload = {
+  diseno?: MaterialLabelDesign;
   operacion_id: string;
   perfil_id: string;
   formato: 'zpl';
