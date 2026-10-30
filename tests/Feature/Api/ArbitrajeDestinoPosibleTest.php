@@ -172,6 +172,91 @@ class ArbitrajeDestinoPosibleTest extends TestCase
         $this->assertSame(1, CicloArbitrajeManiobras::query()->count());
     }
 
+    public function test_servidor_elige_perfil_real_antes_que_camara_preferente_y_no_duplica_la_reserva(): void
+    {
+        config(['planificador.compute' => 'server', 'planificador.camara_preferente_despacho' => 'CAM-PREFERENTE']);
+        $this->camara('CAM-PREFERENTE', 'Vacía preferente', 1, 3);
+        $compatible = $this->camara('CAM-COMPATIBLE', 'Perfil existente', 1, 3);
+        $existente = $this->folio(null);
+        $existente->update(['datos_externos' => ['envase' => 'Caja 5']]);
+        $this->ubicar($existente, $this->posicion('CAM-COMPATIBLE', 1, 1));
+        $nuevo = $this->folio(null);
+        $nuevo->update(['datos_externos' => ['envase' => 'Caja 5']]);
+        $tarea = $this->recepcion(collect([$nuevo]))->tareas()->sole();
+        [$operador, $tablet] = $this->camarero('PERFIL');
+        $planes = app(ServicioPlanesOperacionales::class);
+        $tomada = $planes->asumir($tarea, $operador, $tablet);
+        $this->assertSame($compatible->id, $tomada->camara_destino_id);
+        $this->assertSame($this->posicion('CAM-COMPATIBLE', 1, 2)->id, $tomada->posicion_destino_id);
+        $this->assertNotNull($tomada->reservaActiva->bloqueo_posicion_id);
+        $token = $operador->crearTokenParaDispositivo($tablet, 'server')->plainTextToken;
+        $this->withToken($token)->postJson('/api/tareas-movimiento/'.$tarea->id.'/resolver-destino', [
+            'posicion_destino_id' => $this->posicion('CAM-PREFERENTE', 1, 1)->id,
+        ])->assertOk()->assertJsonPath('data.destino.posicion.id', $tomada->posicion_destino_id);
+        $this->assertDatabaseCount('reservas_tareas_movimiento', 1);
+        $this->assertDatabaseCount('ubicaciones_actuales', 1);
+        $this->assertDatabaseCount('movimientos', 0);
+    }
+
+    public function test_servidor_respeta_nueva_programacion_de_oficina_al_volver_a_tomar(): void
+    {
+        config(['planificador.compute' => 'server']);
+        $a = $this->camara('CAM-A', 'Programada A', 1, 3);
+        $b = $this->camara('CAM-B', 'Programada B', 1, 3);
+        $carga = $this->carga('CAR-PROGRAMA', $a);
+        $tarea = $this->recepcion(collect([$this->folio($carga)]))->tareas()->sole();
+        [$operador, $tablet] = $this->camarero('OFICINA');
+        $planes = app(ServicioPlanesOperacionales::class);
+        $tomada = $planes->asumir($tarea, $operador, $tablet);
+        $this->assertSame($a->id, $tomada->camara_destino_id);
+        $planes->liberar($tomada, $operador, $tablet);
+        $carga->update(['camara_objetivo_id' => $b->id]);
+        $tomada = $planes->asumir($tarea->refresh(), $operador, $tablet);
+        $this->assertSame($b->id, $tomada->camara_destino_id);
+        $this->assertDatabaseMissing('reservas_bandas_maniobra', ['camara_id' => $a->id, 'liberada_at' => null]);
+        $this->assertDatabaseHas('reservas_bandas_maniobra', ['camara_id' => $b->id, 'liberada_at' => null]);
+    }
+
+    public function test_servidor_no_ofrece_a_otro_operador_una_banda_ya_protegida(): void
+    {
+        config(['planificador.compute' => 'server']);
+        $this->camara('CAM-UNICA', 'Única banda', 1, 3);
+        $primera = $this->recepcion(collect([$this->folio(null)]))->tareas()->sole();
+        $segunda = $this->recepcion(collect([$this->folio(null)]))->tareas()->sole();
+        [$a, $tabletA] = $this->camarero('A');
+        [$b, $tabletB] = $this->camarero('B');
+        $planes = app(ServicioPlanesOperacionales::class);
+        $planes->asumir($primera, $a, $tabletA);
+        try {
+            $planes->asumir($segunda, $b, $tabletB);
+            $this->fail('Dos operadores recibieron la misma banda protegida.');
+        } catch (ConflictoOperacion $error) {
+            $this->assertStringContainsString('destino', $error->getMessage());
+        }
+        $this->assertDatabaseCount('reservas_tareas_movimiento', 1);
+        $this->assertNull($segunda->refresh()->responsable_user_id);
+        $planes->liberar($primera->refresh(), $a, $tabletA);
+        $tomada = $planes->asumir($segunda->refresh(), $b, $tabletB);
+        $this->assertSame($this->posicion('CAM-UNICA', 1, 1)->id, $tomada->posicion_destino_id);
+    }
+
+    public function test_resolver_una_reserva_vencida_sin_custodia_libera_sus_recursos(): void
+    {
+        config(['planificador.compute' => 'server']);
+        $this->camara('CAM-UNICA', 'Única banda', 1, 3);
+        $tarea = $this->recepcion(collect([$this->folio(null)]))->tareas()->sole();
+        [$operador, $tablet] = $this->camarero('VENCIDA');
+        app(ServicioPlanesOperacionales::class)->asumir($tarea, $operador, $tablet);
+        $token = $operador->crearTokenParaDispositivo($tablet, 'server')->plainTextToken;
+        $this->travel(30)->minutes();
+        $this->withToken($token)->postJson('/api/tareas-movimiento/'.$tarea->id.'/resolver-destino')->assertConflict();
+        $this->assertDatabaseMissing('reservas_tareas_movimiento', ['bloqueo_tarea_id' => $tarea->id]);
+        $this->assertDatabaseMissing('reservas_bandas_maniobra', ['maniobra_operacional_id' => $tarea->maniobra_operacional_id, 'liberada_at' => null]);
+        $this->assertNull($tarea->refresh()->responsable_user_id);
+        $this->assertSame('pendiente', $tarea->estado->value);
+        $this->travelBack();
+    }
+
     private function camara(string $codigo, string $nombre, int $bandas, int $profundidad): Camara
     {
         $camara = Camara::create([

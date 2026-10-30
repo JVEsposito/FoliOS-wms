@@ -72,7 +72,7 @@ class ServicioTrasladosPreparacionSag
             ->orderBy('id')
             ->lockForUpdate()
             ->get();
-        $posiciones = $reservas->pluck('posicion')->sortByDesc('posicion')->keyBy('id');
+        $posiciones = $reservas->pluck('posicion')->sortBy('posicion')->keyBy('id');
         $destinos = $this->asignarDestinos($folios, $posiciones, $plan);
         $preparados = 0;
 

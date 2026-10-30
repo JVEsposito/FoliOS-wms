@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\PlanOperacionalController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth:sanctum', 'can:operar-camaras-productos'])->group(function () {
+    Route::post('/tareas-movimiento/{tareaMovimiento}/resolver-destino', [PlanOperacionalController::class, 'resolverDestinoServidor']);
     Route::get(
         '/frontera-fisica/snapshot',
         [FronteraFisicaController::class, 'snapshot'],

@@ -17,6 +17,13 @@ class CamaraPlanoResource extends CamaraResumenResource
         return [
             ...parent::toArray($request),
             'revision_reservas' => (int) $this->revision_reservas,
+            'version_protecciones' => $this->whenLoaded('proteccionesBandas', fn () => $this->resource->versionProtecciones()),
+            'protecciones_bandas' => $this->whenLoaded('proteccionesBandas', fn () => $this->proteccionesBandas
+                ->map(fn ($reserva): array => [
+                    'banda' => $reserva->banda,
+                    'nivel' => $reserva->nivel,
+                    'maniobra_id' => $reserva->maniobra_operacional_id,
+                ])->values()->all()),
             'desocupacion_habilitada' => (bool) $this->resource->getAttribute('desocupacion_habilitada'),
             'desocupacion' => $this->resource->getRelation('ultimaDesocupacion')
                 ? app(EstadoDesocupacionProgramada::class)->resumir($this->resource->getRelation('ultimaDesocupacion'))

@@ -302,7 +302,7 @@ class ServicioPreparacionFisicaSag
             'referencia_id' => $lote->id,
             'contexto' => [
                 'planner_horizon' => 'rolling',
-                'planner_compute' => 'tablet',
+                'planner_compute' => config('planificador.compute'),
                 'objetivo' => 'preparar_inspeccion_sag',
                 'lote_inspeccion_sag_id' => $lote->id,
                 'factor_capacidad' => self::FACTOR_CAPACIDAD,

@@ -155,3 +155,22 @@ test('planifica juntos los pallets iguales y separa los distintos sin alterar el
     assert.deepEqual(separated.candidates.map((item) => item.position.id), ['cam-a-1', 'cam-b-1']);
     assert.equal(JSON.stringify(plans), before);
 });
+
+test('descarta bandas ajenas protegidas y espacios SAG, conservando la banda propia', () => {
+    const protectedCamera = camera('a', { activa: false, pallets_completos: 0 });
+    protectedCamera.protecciones_bandas = [{ banda: 1, nivel: 1, maniobra_id: 'ajena' }];
+    const ownTask = { ...task, maniobra: { id: 'propia' } };
+    assert.equal(bestCandidate(ownTask, [protectedCamera], new Set(), new Set()), null);
+    protectedCamera.protecciones_bandas[0].maniobra_id = 'propia';
+    assert.equal(bestCandidate(ownTask, [protectedCamera], new Set(), new Set())?.position.id, 'position-a');
+    protectedCamera.posiciones[0].reservada_sag = true;
+    assert.equal(bestCandidate(ownTask, [protectedCamera], new Set(), new Set()), null);
+});
+
+test('una ubicación inicial no atraviesa un pallet delante ni se apila sin soporte', () => {
+    const c = camera('a', { activa: false, pallets_completos: 0 });
+    c.posiciones.push({ ...c.posiciones[0], id: 'frente', posicion: 2, ocupada: true });
+    assert.equal(bestCandidate(task, [c], new Set(), new Set()), null);
+    c.posiciones = [{ ...c.posiciones[0], nivel: 2 }];
+    assert.equal(bestCandidate(task, [c], new Set(), new Set()), null);
+});

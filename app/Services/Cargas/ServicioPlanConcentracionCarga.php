@@ -30,6 +30,7 @@ use App\Models\User;
 use App\Services\Estiba\ServicioManiobrasOperacionales;
 use App\Services\Estiba\ServicioPlanesOperacionales;
 use App\Services\Planificador\ServicioDesplieguePlanificador;
+use App\Services\Planificador\ServicioDestinosServidor;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -168,7 +169,8 @@ class ServicioPlanConcentracionCarga
                 return $plan?->refresh();
             }
             if ($modo !== 'guided'
-                || config('planificador.compute') !== 'tablet') {
+                || ! in_array(config('planificador.compute'), ['tablet', 'server'], true)
+                || (config('planificador.compute') === 'server' && ! ServicioDestinosServidor::activo())) {
                 return $plan?->refresh();
             }
 
@@ -243,7 +245,9 @@ class ServicioPlanConcentracionCarga
     public function coordinarRecepcion(TareaMovimiento $tarea, User $usuario): void
     {
         if (! config('planificador.generacion_automatica')
-            || config('planificador.mode') !== 'guided' || config('planificador.compute') !== 'tablet') {
+            || config('planificador.mode') !== 'guided'
+            || ! in_array(config('planificador.compute'), ['tablet', 'server'], true)
+            || (config('planificador.compute') === 'server' && ! ServicioDestinosServidor::activo())) {
             return;
         }
         $maniobra = $tarea->maniobraOperacional()->first();
@@ -1233,7 +1237,7 @@ class ServicioPlanConcentracionCarga
     ): array {
         return [
             'planner_horizon' => 'rolling',
-            'planner_compute' => 'tablet',
+            'planner_compute' => config('planificador.compute'),
             'objetivo' => 'alcanzar_concentracion_minima_sin_movimientos_inutiles',
             'carga_id' => $carga->id,
             'camara_objetivo_id' => $camaraObjetivoId,

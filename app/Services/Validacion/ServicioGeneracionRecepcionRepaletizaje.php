@@ -34,7 +34,7 @@ class ServicioGeneracionRecepcionRepaletizaje
     ): ?PlanOperacional {
         if (! config('planificador.generacion_automatica')
             || config('planificador.mode') !== 'guided'
-            || config('planificador.compute') !== 'tablet') {
+            || ! in_array(config('planificador.compute'), ['tablet', 'server'], true)) {
             return null;
         }
 

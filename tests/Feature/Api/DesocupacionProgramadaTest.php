@@ -506,9 +506,24 @@ class DesocupacionProgramadaTest extends TestCase
         $this->actingAs($contexto['supervisor'], 'sanctum');
         $url = "/api/camaras/{$contexto['origen']->id}/plano";
         $respuesta = $this->getJson($url)->assertOk()->assertJsonPath('data.desocupacion_habilitada', true);
-        config(['planificador.compute' => 'server']);
+        config(['planificador.generacion_automatica' => false]);
         $this->withHeader('If-None-Match', $respuesta->headers->get('ETag'))->getJson($url)->assertOk()
             ->assertJsonPath('data.desocupacion_habilitada', false);
+        $this->assertSame(0, PlanOperacional::query()->count());
+    }
+
+    public function test_plano_mantiene_desocupacion_habilitada_al_cambiar_a_calculo_servidor(): void
+    {
+        $contexto = $this->crearContexto();
+        $this->actingAs($contexto['supervisor'], 'sanctum');
+        $url = "/api/camaras/{$contexto['origen']->id}/plano";
+        $respuesta = $this->getJson($url)->assertOk()->assertJsonPath('data.desocupacion_habilitada', true);
+
+        config(['planificador.compute' => 'server']);
+        // Ambos cálculos permiten desocupar; el contenido del plano no cambia.
+        $this->withHeader('If-None-Match', $respuesta->headers->get('ETag'))->getJson($url)->assertStatus(304);
+        $this->withHeader('If-None-Match', '')->getJson($url)->assertOk()
+            ->assertJsonPath('data.desocupacion_habilitada', true);
         $this->assertSame(0, PlanOperacional::query()->count());
     }
 

@@ -49,6 +49,7 @@ final class ServicioFactibilidadDestino
         private readonly SectorAcopioCarga $sector,
         private readonly ServicioAcopioCarga $acopio,
         private readonly ServicioDestinosDespeje $despejes,
+        private readonly ServicioDestinosServidor $servidor,
     ) {
         $this->pasos = collect();
     }
@@ -61,6 +62,7 @@ final class ServicioFactibilidadDestino
      */
     public function preparar(Collection $maniobras, ?array $camarasRollout): void
     {
+        $this->servidor->olvidar();
         $this->camarasRollout = $camarasRollout;
         $this->acopios = null;
         $this->camaras = null;
@@ -82,6 +84,9 @@ final class ServicioFactibilidadDestino
     /** @return array{evaluado: bool, posible: bool, codigo: string, detalle: string} */
     public function evaluar(ManiobraOperacional $maniobra): array
     {
+        if (ServicioDestinosServidor::activo()) {
+            return $this->servidor->evaluar($maniobra);
+        }
         $paso = $this->pasoActual($maniobra);
         if (! $paso) {
             return $this->posible('sin_paso_actual');

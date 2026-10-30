@@ -93,20 +93,19 @@ class ServicioSesionEstiba
             $camara = Camara::query()->lockForUpdate()->findOrFail($camara->id);
             $tarea = TareaMovimiento::query()->with('planOperacional.temporada')->lockForUpdate()->findOrFail($tarea->id);
             $this->validarParticipantes($camara, $usuario, $dispositivo);
-            $reserva = ReservaTareaMovimiento::query()->where('bloqueo_tarea_id', $tarea->id)->lockForUpdate()->first();
+            $reserva = ReservaTareaMovimiento::query()->where('bloqueo_tarea_id', $tarea->id)->conCompromisoVigente()->lockForUpdate()->first();
             if ($camara->contenido !== ContenidoCamara::Productos || ! $tarea->maniobra_operacional_id
                 || ! $tarea->planOperacional?->temporada?->activa
                 || $tarea->planOperacional->estado !== EstadoPlanOperacional::EnEjecucion
                 || ! in_array($tarea->estado, [EstadoTareaMovimiento::Asumida, EstadoTareaMovimiento::EnProceso], true)
                 || $tarea->responsable_user_id !== $usuario->id || $tarea->dispositivo_id !== $dispositivo->id
                 || ! in_array($camara->id, [$tarea->camara_origen_id, $tarea->camara_destino_id], true)
-                || ! $reserva || $reserva->user_id !== $usuario->id || $reserva->dispositivo_id !== $dispositivo->id
-                || ($tarea->estado !== EstadoTareaMovimiento::EnProceso && $reserva->vence_at?->lte(now()))) {
+                || ! $reserva || $reserva->user_id !== $usuario->id || $reserva->dispositivo_id !== $dispositivo->id) {
                 throw new ConflictoOperacion('La sesión requiere una tarea propia vigente en esta cámara.');
             }
             if ($tarea->estado !== EstadoTareaMovimiento::EnProceso
                 && (($tarea->planOperacional->contexto['planner_horizon'] ?? config('planificador.horizon')) !== 'rolling'
-                    || config('planificador.mode') !== 'guided' || config('planificador.compute') !== 'tablet')) {
+                    || config('planificador.mode') !== 'guided' || ! in_array(config('planificador.compute'), ['tablet', 'server'], true))) {
                 throw new ConflictoOperacion('La sesión de tarea requiere una labor dirigida rolling.');
             }
             if ($tarea->tipo_movimiento !== TipoMovimiento::Retiro && $reserva->bloqueo_posicion_id !== $tarea->posicion_destino_id) {

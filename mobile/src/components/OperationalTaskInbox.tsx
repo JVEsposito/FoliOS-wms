@@ -26,6 +26,7 @@ import {
   operationalTaskDestinationLabel,
   operationalTaskLabel,
   operationalTaskPositionLabel,
+  canReleaseOperationalTask,
 } from '../domain/operationalTasks';
 import { buildOperatorTaskHome, type OperatorQueueItem } from '../domain/operatorTaskQueue';
 import type { ShiftVerification, VerificationItem } from '../domain/verification';
@@ -442,10 +443,10 @@ export function OperationalTaskInbox({ api, auth }: Props) {
   }
 
   function requestRelease(task: OperationalTask) {
-    if (task.estado === 'en_proceso') {
+    if (!canReleaseOperationalTask(task)) {
       Alert.alert(
         'Movimiento ya iniciado',
-        'El pallet está en punto de no retorno. Completa el destino reservado o registra una incidencia.',
+        'La maniobra tiene movimiento o custodia pendiente. Continúa su secuencia o usa NO ES POSIBLE para solicitar revisión y retorno seguro.',
       );
       return;
     }
@@ -463,7 +464,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
   }
 
   async function releaseTask(task: OperationalTask) {
-    if (!taskApi || task.estado === 'en_proceso') return;
+    if (!taskApi || !canReleaseOperationalTask(task)) return;
     try {
       await taskApi.release(auth.token, task.id);
       if (activeTask?.id === task.id) {
@@ -482,9 +483,25 @@ export function OperationalTaskInbox({ api, auth }: Props) {
     setActionLabel('Confirmando destino…');
 
     const epoch = sessionEpoch.current;
+    const resolveOnServer = async () => {
+      const resolved = await taskApi.resolveDestination(auth.token, anchorTask.id);
+      if (epoch !== sessionEpoch.current) return;
+      replaceMine([resolved]);
+      setActiveTask(resolved);
+      preview.current = null;
+      setNotice(`Destino reservado: ${operationalTaskPositionLabel(resolved.destino)}.`);
+    };
     const attempt = async () => {
+      if (anchorTask.plan.compute === 'server') {
+        await resolveOnServer();
+        return;
+      }
       let snapshot = await taskApi.physicalFrontierSnapshot(auth.token);
       if (epoch !== sessionEpoch.current) return;
+      if (snapshot.planner.horizon === 'rolling' && snapshot.planner.compute === 'server') {
+        await resolveOnServer();
+        return;
+      }
       if (snapshot.planner.horizon !== 'rolling' || snapshot.planner.compute !== 'tablet') {
         throw new Error(
           'La configuración actual no permite confirmar el destino. Solicita revisión en Oficina.',

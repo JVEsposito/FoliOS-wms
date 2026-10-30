@@ -53,7 +53,7 @@ final class ServicioDesplieguePlanificador
     {
         return (bool) config('planificador.generacion_automatica')
             && $this->modoEfectivo($camaras) === 'guided'
-            && config('planificador.compute') === 'tablet'
+            && in_array(config('planificador.compute'), ['tablet', 'server'], true)
             && config('planificador.horizon') === 'rolling';
     }
 
@@ -141,7 +141,7 @@ final class ServicioDesplieguePlanificador
     {
         return (bool) config('planificador.generacion_automatica')
             && $this->modoGlobal() === 'guided'
-            && config('planificador.compute') === 'tablet'
+            && in_array(config('planificador.compute'), ['tablet', 'server'], true)
             && config('planificador.horizon') === 'rolling';
     }
 

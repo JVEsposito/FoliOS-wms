@@ -31,13 +31,14 @@ export class OperationalCameraPlans {
       while (next < ids.length && current()) {
         const id = ids[next++];
         const camera = snapshot.camaras.find((item) => item.id === id)!;
-        const version = `${camera.version_plano}:${camera.revision_reservas}`;
+        const version = `${camera.version_plano}:${camera.revision_reservas}:${camera.version_protecciones ?? ''}`;
         let cached = this.entries.get(id);
         if (!cached || cached.version !== version || cached.expires <= this.now()) {
           const entry = { version, expires: this.now() + this.ttlMs, promise: Promise.resolve().then(() => fetchPlan(id)) };
           this.entries.set(id, entry);
           void entry.promise.then((plan) => {
-            if (plan.version_plano !== camera.version_plano || plan.revision_reservas !== camera.revision_reservas) {
+            if (plan.version_plano !== camera.version_plano || plan.revision_reservas !== camera.revision_reservas
+              || plan.version_protecciones !== camera.version_protecciones) {
               if (this.entries.get(id) === entry) this.entries.delete(id);
             }
           }, () => { if (this.entries.get(id) === entry) this.entries.delete(id); });

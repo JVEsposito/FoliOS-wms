@@ -42,6 +42,8 @@ class PosicionPlanoResource extends JsonResource
             'estado' => $this->estado->value,
             'ocupada' => $folios->isNotEmpty(),
             'reservada' => $reserva !== null,
+            'reservada_sag' => $this->resource->relationLoaded('reservaPreparacionSagActiva')
+                && $this->reservaPreparacionSagActiva !== null,
             'reserva_operacional' => $reserva ? [
                 'id' => $reserva->id,
                 'tarea_movimiento_id' => $reserva->tarea_movimiento_id,

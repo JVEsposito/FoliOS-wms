@@ -19,7 +19,7 @@ import type { OperatorLoadFeed } from '../domain/operatorLoads';
 
 // Cambia cada vez que cambian las reglas con que la tablet elige destinos: el servidor la
 // registra con cada rechazo para saber qué tablets tienen las reglas vigentes.
-export const TABLET_PLANNER_VERSION = 'rolling-global-7-concurrencia-recursos';
+export const TABLET_PLANNER_VERSION = 'rolling-global-8-protecciones-servidor';
 
 export type StartConfirmation = {
   folioDigits: string;
@@ -125,6 +125,13 @@ export class OperationalTasksApi {
     return (await this.request<{ data: OperationalTask }>(
       `/api/tareas-movimiento/${encodeURIComponent(taskId)}/asumir`,
       token,
+      { method: 'POST' },
+    )).data;
+  }
+
+  async resolveDestination(token: string, taskId: string): Promise<OperationalTask> {
+    return (await this.request<{ data: OperationalTask }>(
+      `/api/tareas-movimiento/${encodeURIComponent(taskId)}/resolver-destino`, token,
       { method: 'POST' },
     )).data;
   }

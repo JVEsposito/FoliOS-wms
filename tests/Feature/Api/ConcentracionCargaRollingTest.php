@@ -56,6 +56,22 @@ class ConcentracionCargaRollingTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_calculo_servidor_sin_rolling_no_publica_concentracion_inmaterializable(): void
+    {
+        $contexto = $this->crearContexto(total: 10, concentrados: 7, fuera: 3);
+        config(['planificador.compute' => 'server', 'planificador.horizon' => 'batch']);
+
+        $plan = app(ServicioPlanConcentracionCarga::class)->sincronizar(
+            $contexto['carga'],
+            $contexto['usuario'],
+        );
+
+        $this->assertNull($plan);
+        $this->assertDatabaseCount('planes_operacionales', 0);
+        $this->assertDatabaseCount('tareas_movimiento', 0);
+        $this->assertDatabaseCount('maniobras_operacionales', 0);
+    }
+
     public function test_carga_que_ya_cumple_80_por_ciento_no_genera_movimientos(): void
     {
         $contexto = $this->crearContexto(total: 5, concentrados: 4, fuera: 1);
@@ -261,13 +277,15 @@ class ConcentracionCargaRollingTest extends TestCase
 
     public static function estadosPreviosRetorno(): array
     {
-        return ['sin fallo anterior' => [false], 'UUID con deadlock histórico' => [true]];
+        return ['sin fallo anterior' => [false], 'UUID con deadlock histórico' => [true], 'destinos del servidor' => [false, 'server']];
     }
 
     #[DataProvider('estadosPreviosRetorno')]
-    public function test_maniobra_temporal_no_cierra_hasta_devolver_el_blocker(bool $falloHistorico): void
+    public function test_maniobra_temporal_no_cierra_hasta_devolver_el_blocker(bool $falloHistorico, string $compute = 'tablet'): void
     {
         $contexto = $this->crearContexto(total: 5, concentrados: 3, fuera: 1, sinUbicacion: 1);
+        config(['planificador.compute' => $compute]);
+        $contexto['camaraFuera']->update(['posiciones_por_banda' => 2]);
         $objetivo = $contexto['foliosFuera'][0];
         $posicionObjetivo = $objetivo->ubicacionActual->posicion;
         $posicionBlocker = Posicion::create([
@@ -385,7 +403,7 @@ class ConcentracionCargaRollingTest extends TestCase
             );
             $this->fail('El servidor aceptó una profundidad distinta de la resultante.');
         } catch (ConflictoOperacion $exception) {
-            $this->assertStringContainsString('profundidad resultante', $exception->getMessage());
+            $this->assertStringContainsString($compute === 'server' ? 'precalculado' : 'profundidad resultante', $exception->getMessage());
         }
         $retorno = $planes->materializarDestino(
             $retorno->refresh(),
@@ -444,6 +462,143 @@ class ConcentracionCargaRollingTest extends TestCase
             'maniobra_operacional_id' => $maniobra->id,
             'liberada_at' => null,
         ]);
+    }
+
+    public static function cambiosDuranteManiobra(): array
+    {
+        return ['secuencia normal' => [false], 'destino suspendido después de iniciar' => [true]];
+    }
+
+    #[DataProvider('cambiosDuranteManiobra')]
+    public function test_servidor_prepara_y_completa_cinco_pasos_con_reconexion_y_sin_decisiones_tablet(bool $cambioPosterior): void
+    {
+        [$contexto, $maniobra, $blockers] = $this->maniobraServidorCincoPasos();
+        [$operador, $tablet] = $this->crearOperador();
+        $planes = app(ServicioPlanesOperacionales::class);
+        $sesiones = app(ServicioSesionEstiba::class);
+        $movimientos = app(ServicioMovimientoEstiba::class);
+        $primera = $planes->asumir($maniobra->pasos()->orderBy('secuencia_maniobra')->first(), $operador, $tablet);
+        $this->assertCount(5, $maniobra->pasos);
+        $this->assertSame(3, $maniobra->pasos()->whereNotNull('posicion_destino_id')->count());
+        $this->assertDatabaseHas('reservas_bandas_maniobra', [
+            'maniobra_operacional_id' => $maniobra->id, 'camara_id' => $contexto['camaraObjetivo']->id,
+            'banda' => 1, 'nivel' => 1, 'liberada_at' => null,
+        ]);
+        $token = $operador->crearTokenParaDispositivo($tablet, 'servidor')->plainTextToken;
+        foreach (range(1, 5) as $numero) {
+            $paso = $maniobra->pasos()->where('secuencia_maniobra', $numero)->sole();
+            $this->assertSame(EstadoTareaMovimiento::Asumida, $paso->estado);
+            if ($numero === 2 && $cambioPosterior) {
+                $contexto['posicionesObjetivo'][3]->update(['estado' => 'bloqueada']);
+            }
+            if ($numero === 3) {
+                if ($cambioPosterior) {
+                    $this->assertDatabaseCount('movimientos', 2);
+                    $this->assertDatabaseCount('incidencias_destino_planificador', 1);
+                    $this->assertNull($paso->reservaActiva->bloqueo_posicion_id);
+                    $contexto['posicionesObjetivo'][3]->update(['estado' => 'activa']);
+                }
+                // La respuesta del servidor puede perderse: repetir resolver no crea otra reserva.
+                $this->travel(30)->minutes();
+                $this->assertSame(0, app(ServicioReservasTareasMovimiento::class)->expirarVencidas());
+                if (! $cambioPosterior) {
+                    $sesiones->abrirParaTarea($contexto['camaraFuera'], $operador, $tablet, $paso);
+                }
+                $reservaId = $paso->reservaActiva->id;
+                foreach ([1, 2] as $_) {
+                    $this->withToken($token)->postJson('/api/tareas-movimiento/'.$paso->id.'/resolver-destino')
+                        ->assertOk()->assertJsonPath('data.reserva.id', $reservaId)
+                        ->assertJsonPath('data.plan.compute', 'server');
+                }
+                try {
+                    $planes->liberar($paso, $operador, $tablet);
+                    $this->fail('Se liberó una maniobra con dos pallets bajo custodia.');
+                } catch (ConflictoOperacion $error) {
+                    $this->assertStringContainsString('realidad física', $error->getMessage());
+                }
+            }
+            $sesionOrigen = $paso->camara_origen_id
+                ? $sesiones->abrirParaTarea(Camara::findOrFail($paso->camara_origen_id), $operador, $tablet, $paso) : null;
+            $sesionDestino = $paso->camara_destino_id
+                ? $sesiones->abrirParaTarea(Camara::findOrFail($paso->camara_destino_id), $operador, $tablet, $paso) : null;
+            $paso = $planes->iniciar($paso, $operador, $tablet);
+            $operacion = (string) Str::uuid();
+            if ($paso->tipo_movimiento === TipoMovimiento::Retiro) {
+                $movimientos->retirar(
+                    operacionId: $operacion, folio: $paso->folio, sesionOrigen: $sesionOrigen,
+                    usuario: $operador, dispositivo: $tablet,
+                    versionOrigenConocida: $sesionOrigen->camara->refresh()->version_plano,
+                    generadoDispositivoAt: now(), motivo: 'Extracción temporal', tareaMovimiento: $paso,
+                );
+            } elseif ($paso->tipo_movimiento === TipoMovimiento::UbicacionInicial) {
+                $movimientos->ubicar(
+                    operacionId: $operacion, numeroFolio: $paso->folio->numero_folio, tipoBulto: TipoBulto::Pallet,
+                    posicionDestino: $paso->posicionDestino, sesionDestino: $sesionDestino,
+                    usuario: $operador, dispositivo: $tablet,
+                    versionDestinoConocida: $sesionDestino->camara->refresh()->version_plano,
+                    generadoDispositivoAt: now(), tareaMovimiento: $paso,
+                );
+            } else {
+                $movimientos->mover(
+                    operacionId: $operacion, folio: $paso->folio, posicionDestino: $paso->posicionDestino,
+                    sesionOrigen: $sesionOrigen, sesionDestino: $sesionDestino, usuario: $operador, dispositivo: $tablet,
+                    versionOrigenConocida: $sesionOrigen->camara->refresh()->version_plano,
+                    versionDestinoConocida: $sesionDestino->camara->refresh()->version_plano,
+                    generadoDispositivoAt: now(), tareaMovimiento: $paso,
+                );
+            }
+        }
+        $this->travelBack();
+        $this->assertSame(EstadoManiobraOperacional::Completada, $maniobra->refresh()->estado);
+        $this->assertSame($contexto['camaraObjetivo']->id, $contexto['foliosFuera'][0]->refresh()->ubicacionActual->camara_id);
+        foreach ($blockers as $i => $blocker) {
+            $this->assertSame($i + 1, $blocker->refresh()->ubicacionActual->posicion->posicion);
+        }
+        $this->assertDatabaseCount('movimientos', 5);
+        $this->assertDatabaseMissing('custodias_temporales_maniobra', ['estado' => 'activa']);
+        $this->assertDatabaseMissing('reservas_bandas_maniobra', ['maniobra_operacional_id' => $maniobra->id, 'liberada_at' => null]);
+    }
+
+    public function test_servidor_rechaza_antes_del_primer_retiro_si_el_destino_futuro_quedo_ocupado(): void
+    {
+        [$contexto, $maniobra] = $this->maniobraServidorCincoPasos();
+        foreach (array_slice($contexto['posicionesObjetivo'], 3) as $posicion) {
+            $ocupante = Folio::create(['temporada_id' => $contexto['temporada']->id,
+                'numero_folio' => 'LLENA-'.$posicion->posicion, 'tipo_bulto' => TipoBulto::Pallet, 'fecha_ingreso' => now(), 'activo' => true]);
+            $this->ubicarSinEventos($ocupante, $contexto['camaraObjetivo'], $posicion);
+        }
+        $contexto['camaraObjetivo']->increment('version_plano');
+        [$operador, $tablet] = $this->crearOperador();
+        try {
+            app(ServicioPlanesOperacionales::class)->asumir($maniobra->pasos()->orderBy('secuencia_maniobra')->first(), $operador, $tablet);
+            $this->fail('Se autorizó retirar bloqueadores sin destino para el pallet principal.');
+        } catch (ConflictoOperacion $error) {
+            $this->assertStringContainsString('destino', $error->getMessage());
+        }
+        $this->assertDatabaseCount('movimientos', 0);
+        $this->assertDatabaseCount('custodias_temporales_maniobra', 0);
+        $this->assertDatabaseCount('reservas_tareas_movimiento', 0);
+        $this->assertSame(EstadoManiobraOperacional::Pendiente, $maniobra->refresh()->estado);
+    }
+
+    private function maniobraServidorCincoPasos(): array
+    {
+        $contexto = $this->crearContexto(total: 5, concentrados: 3, fuera: 1, sinUbicacion: 1);
+        config(['planificador.compute' => 'server']);
+        $contexto['camaraFuera']->update(['posiciones_por_banda' => 3]);
+        $blockers = [];
+        foreach ([2, 3] as $profundidad) {
+            $posicion = Posicion::create(['camara_id' => $contexto['camaraFuera']->id,
+                'banda' => 1, 'posicion' => $profundidad, 'nivel' => 1, 'etiqueta' => 'B01-P0'.$profundidad.'-N1']);
+            $blocker = Folio::create(['temporada_id' => $contexto['temporada']->id,
+                'numero_folio' => 'BLOCKER-'.$profundidad, 'tipo_bulto' => TipoBulto::Pallet, 'fecha_ingreso' => now(),
+                'activo' => true, 'marca' => 'OTRA', 'exportadora' => 'Otro cliente']);
+            $this->ubicarSinEventos($blocker, $contexto['camaraFuera'], $posicion);
+            $blockers[] = $blocker;
+        }
+        $plan = app(ServicioPlanConcentracionCarga::class)->sincronizar($contexto['carga'], $contexto['usuario']);
+
+        return [$contexto, $plan->maniobras()->sole(), $blockers];
     }
 
     public function test_no_coincide_con_blocker_extraido_rechaza_cancelar_y_reanuda_protegiendo_banda(): void

@@ -52,7 +52,7 @@ final class ConciliarPalletsHistoricosPlanificador extends Command
 
         if (! config('planificador.generacion_automatica')
             || config('planificador.mode') !== 'guided'
-            || config('planificador.compute') !== 'tablet') {
+            || ! in_array(config('planificador.compute'), ['tablet', 'server'], true)) {
             $this->components->error('Se requiere generación automática, guided y cálculo en tablet.');
 
             return self::FAILURE;

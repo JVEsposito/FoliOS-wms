@@ -30,6 +30,8 @@ use App\Models\UbicacionActual;
 use App\Models\User;
 use App\Services\Camaras\InterbloqueoEvacuacionEmergencia;
 use App\Services\Planificador\ServicioArbitrajeManiobras;
+use App\Services\Planificador\ServicioDestinosServidor;
+use App\Services\Planificador\ServicioIncidenciasDestino;
 use App\Services\Planificador\ServicioRecalculosPendientesPlanificador;
 use DomainException;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -489,7 +491,13 @@ class ServicioManiobrasOperacionales
             );
         }
 
-        $this->bloquearBandas($maniobra);
+        if (ServicioDestinosServidor::activo() && $maniobra->estado !== EstadoManiobraOperacional::EnEjecucion) {
+            app(ServicioDestinosServidor::class)->preparar($maniobra, $usuario);
+            $tarea->refresh();
+        }
+        if (! ServicioDestinosServidor::activo()) {
+            $this->bloquearBandas($maniobra);
+        }
         $ahora = now();
         $maniobra->update([
             'estado' => EstadoManiobraOperacional::EnEjecucion,
@@ -685,11 +693,19 @@ class ServicioManiobrasOperacionales
         $dispositivo = Dispositivo::query()->findOrFail($maniobra->dispositivo_id);
         $siguiente = $siguiente->refresh();
         $this->reservas->asumir($siguiente, $usuario, $dispositivo);
-        $this->materializarDestinoPrecalculado(
-            $siguiente->refresh(),
-            $usuario,
-            $dispositivo,
-        );
+        try {
+            // La confirmación física anterior debe persistir aunque cambie la capacidad
+            // del paso siguiente. El savepoint conserva el claim y la custodia.
+            DB::transaction(fn () => $this->materializarDestinoPrecalculado(
+                $siguiente->refresh(), $usuario, $dispositivo,
+            ));
+        } catch (ConflictoOperacion $error) {
+            app(ServicioIncidenciasDestino::class)->registrar(
+                $siguiente->refresh(), 'continuacion_maniobra', $error->getMessage(),
+                plannerVersion: ServicioDestinosServidor::activo() ? ServicioDestinosServidor::VERSION : null,
+                usuario: $usuario, dispositivo: $dispositivo,
+            );
+        }
     }
 
     public function reportarDiscrepancia(
@@ -1541,6 +1557,30 @@ class ServicioManiobrasOperacionales
             $usuario,
             $dispositivo,
         );
+    }
+
+    public function resolverDestinoServidor(TareaMovimiento $tarea, User $usuario, Dispositivo $dispositivo): bool
+    {
+        if (! ServicioDestinosServidor::activo()) {
+            throw new ConflictoOperacion('El cálculo de destinos en servidor no está habilitado.');
+        }
+        $maniobra = ManiobraOperacional::query()->lockForUpdate()->findOrFail($tarea->maniobra_operacional_id);
+        $this->validarPasoActualInterno($maniobra, $tarea);
+        if ($maniobra->estado !== EstadoManiobraOperacional::EnEjecucion
+            || $maniobra->responsable_user_id !== $usuario->id || $maniobra->dispositivo_id !== $dispositivo->id) {
+            throw new ConflictoOperacion('La maniobra no está en ejecución por este camarero y tablet.');
+        }
+        if (! $this->reservas->renovar($tarea, $usuario, $dispositivo)) {
+            // La expiración debe confirmarse; el controlador informa el rechazo después del commit.
+            return false;
+        }
+        if ($tarea->estado === EstadoTareaMovimiento::EnProceso || $tarea->reservaActiva()->whereNotNull('bloqueo_posicion_id')->exists()) {
+            return true;
+        }
+        app(ServicioDestinosServidor::class)->preparar($maniobra, $usuario);
+        $this->materializarDestinoPrecalculado($tarea->refresh(), $usuario, $dispositivo);
+
+        return true;
     }
 
     private function validarPasoActualInterno(
