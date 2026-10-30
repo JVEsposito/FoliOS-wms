@@ -15,6 +15,7 @@ use App\Enums\TipoBulto;
 use App\Enums\TipoMovimiento;
 use App\Enums\TipoPasoManiobra;
 use App\Exceptions\ConflictoOperacion;
+use App\Models\CicloArbitrajeManiobras;
 use App\Models\CustodiaTemporalManiobra;
 use App\Models\DiscrepanciaManiobra;
 use App\Models\Dispositivo;
@@ -449,6 +450,7 @@ class ServicioManiobrasOperacionales
         TareaMovimiento $tarea,
         User $usuario,
         Dispositivo $dispositivo,
+        ?CicloArbitrajeManiobras $ciclo = null,
     ): TareaMovimiento {
         $maniobra = ManiobraOperacional::query()
             ->with('reservasBandas')
@@ -471,7 +473,7 @@ class ServicioManiobrasOperacionales
                 || $maniobra->dispositivo_id !== $dispositivo->id)) {
             throw new ConflictoOperacion('La maniobra ya pertenece a otro camarero o tablet.');
         }
-        $this->arbitraje->validarAsumible($maniobra);
+        $this->arbitraje->validarAsumible($maniobra, $ciclo);
         $esManiobraUnitaria = ($maniobra->contexto['contrato'] ?? null)
             === self::CONTRATO_UNITARIO;
         if ($maniobra->estado !== EstadoManiobraOperacional::EnEjecucion
@@ -1356,7 +1358,7 @@ class ServicioManiobrasOperacionales
         if (! $tarea->maniobra_operacional_id) {
             return;
         }
-        $maniobra = ManiobraOperacional::query()->findOrFail($tarea->maniobra_operacional_id);
+        $maniobra = ManiobraOperacional::query()->lockForUpdate()->findOrFail($tarea->maniobra_operacional_id);
         $this->validarPasoActualInterno($maniobra, $tarea);
         $this->arbitraje->validarMaterializable($maniobra);
     }

@@ -184,6 +184,7 @@ export type OperationalLoadStaging = {
 };
 
 export type OperationalLoadSector = {
+  banda_prioritaria?: number;
   /** grupo: crece el grupo actual; nuevo: bandas libres cercanas; libre: cualquier posición válida. */
   tipo: 'grupo' | 'nuevo' | 'libre' | 'sin_espacio';
   nivel: number | null;

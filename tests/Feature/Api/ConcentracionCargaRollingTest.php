@@ -1634,6 +1634,32 @@ class ConcentracionCargaRollingTest extends TestCase
     }
 
     /** @return array<string, mixed> */
+    public function test_no_toma_concentracion_si_oficina_reasigno_el_pallet_a_otra_carga(): void
+    {
+        $contexto = $this->crearContexto(total: 5, concentrados: 3, fuera: 1, sinUbicacion: 1);
+        config(['planificador.compute' => 'server']);
+        $plan = app(ServicioPlanConcentracionCarga::class)->sincronizar($contexto['carga'], $contexto['usuario']);
+        $paso = $plan->tareas()->where('tipo_paso_maniobra', 'movimiento_permanente')->sole();
+        $otra = Carga::create(['temporada_id' => $contexto['temporada']->id, 'codigo' => 'CAR-REASIGNADA',
+            'estado' => EstadoCarga::Pendiente, 'camara_objetivo_id' => $contexto['camaraObjetivo']->id,
+            'creada_por_user_id' => $contexto['usuario']->id, 'actualizada_por_user_id' => $contexto['usuario']->id]);
+        $asignacion = CargaFolio::create(['carga_id' => $otra->id, 'folio_id' => $paso->folio_id, 'estado' => EstadoCargaFolio::Pendiente,
+            'asignado_por_user_id' => $contexto['usuario']->id, 'asignado_at' => now()]);
+        ReservaCargaFolio::withoutEvents(fn () => ReservaCargaFolio::where('folio_id', $paso->folio_id)
+            ->update(['carga_folio_id' => $asignacion->id]));
+        [$operador, $tablet] = $this->crearOperador();
+        try {
+            app(ServicioPlanesOperacionales::class)->asumir($paso, $operador, $tablet);
+            $this->fail('El camarero recibió un pallet que ya pertenece a otra carga.');
+        } catch (ConflictoOperacion $error) {
+            $this->assertStringContainsString('carga', $error->getMessage());
+        }
+        $this->assertSame(EstadoTareaMovimiento::Pendiente, $paso->refresh()->estado);
+        $this->assertNull($paso->responsable_user_id);
+        $this->assertDatabaseCount('reservas_tareas_movimiento', 0);
+        $this->assertDatabaseCount('movimientos', 0);
+    }
+
     private function crearContexto(
         int $total,
         int $concentrados,

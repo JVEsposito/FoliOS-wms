@@ -396,6 +396,24 @@ class DespachoFrigorificoApiTest extends TestCase
             ->assertJsonMissing(['numero_folio' => $noEquivalente->numero_folio]);
     }
 
+    public function test_oficina_y_operacion_cuentan_bandas_completas_separadas_sin_inventar_bandas_intermedias(): void
+    {
+        $contexto = $this->crearContextoFrio(5);
+        $contexto['camara']->update(['cantidad_bandas' => 4, 'posiciones_por_banda' => 3]);
+        foreach ([3, 4] as $indice) {
+            $posicion = Posicion::create(['camara_id' => $contexto['camara']->id, 'banda' => 4,
+                'posicion' => $indice - 2, 'nivel' => 1, 'etiqueta' => 'B04-P0'.($indice - 2).'-N1']);
+            $contexto['folios'][$indice]->ubicacionActual()->update(['posicion_id' => $posicion->id]);
+        }
+        $carga = $this->crearCargaPublicada($contexto['despachador'], $contexto['anden'], $contexto['folios']);
+        $this->conToken($contexto['tokenOficina'])->getJson('/api/cargas/'.$carga->id)->assertOk()
+            ->assertJsonPath('data.progreso.porcentaje', 100)
+            ->assertJsonPath('data.progreso.grupo_principal.bandas', [1, 4]);
+        $this->conToken($contexto['token'])->getJson('/api/cargas/operacion-turno')->assertOk()
+            ->assertJsonPath('data.0.progreso.porcentaje', 100)
+            ->assertJsonPath('data.0.progreso.grupo_principal.bandas', [1, 4]);
+    }
+
     public function test_el_acceso_de_oficina_expone_capacidades_del_despacho_frigorifico(): void
     {
         $despachador = User::factory()->create([

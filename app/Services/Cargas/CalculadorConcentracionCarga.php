@@ -11,10 +11,11 @@ class CalculadorConcentracionCarga
     public const UMBRAL_PORCENTAJE = 80;
 
     /**
-     * Considera concentrados los folios que ya están en andén y el grupo físico
-     * conectado más grande dentro de una misma cámara y nivel. Dos posiciones
+     * Considera concentrados los folios en andén y, dentro de una misma cámara,
+     * las bandas completas más el mayor grupo parcial conectado. Dos posiciones
      * están conectadas si son correlativas en una banda o pertenecen a bandas
-     * consecutivas con la misma profundidad o una profundidad adyacente.
+     * consecutivas con la misma profundidad o una profundidad adyacente. Los
+     * niveles consecutivos conectan solo si son la misma columna de la banda.
      *
      * @param  Collection<int, CargaFolio>  $asignaciones
      * @return array<string, mixed>
@@ -117,14 +118,32 @@ class CalculadorConcentracionCarga
             ->groupBy(function (CargaFolio $asignacion): string {
                 $posicion = $asignacion->folio->ubicacionActual->posicion;
 
-                return "{$posicion->camara_id}:{$posicion->nivel}";
+                return (string) $posicion->camara_id;
             })
             ->sortKeys();
 
         $grupos->each(function (Collection $grupo) use (&$mejor): void {
             $componentes = $this->componentes($grupo);
+            $completas = $grupo->groupBy(fn ($a) => $a->folio->ubicacionActual->posicion->banda)
+                ->filter(function (Collection $banda): bool {
+                    $camara = $banda->first()->folio->ubicacionActual->posicion->camara;
+                    $numero = (int) $banda->first()->folio->ubicacionActual->posicion->banda;
+                    $profundidad = (int) $camara->posiciones_por_banda;
+                    $niveles = (int) $camara->cantidad_niveles;
+                    if ($numero < 1 || $numero > (int) $camara->cantidad_bandas
+                        || $profundidad < 1 || $niveles < 1 || $banda->count() !== $profundidad * $niveles) {
+                        return false;
+                    }
+                    $posiciones = $banda->map(fn ($a) => $a->folio->ubicacionActual->posicion);
+
+                    return $posiciones->every(fn ($p) => $p->posicion >= 1 && $p->posicion <= $profundidad && $p->nivel >= 1 && $p->nivel <= $niveles)
+                        && $posiciones->unique(fn ($p) => $p->posicion.':'.$p->nivel)->count() === $banda->count();
+                })->flatten(1);
 
             foreach ($componentes as $componente) {
+                // No desarmar una banda completa porque otra carga ocupa bandas
+                // intermedias. Las parciales dispersas siguen sin sumar entre sí.
+                $componente = $componente->concat($completas)->unique('folio_id');
                 $cantidad = $componente->count();
                 if ($cantidad < $mejor['cantidad']) {
                     continue;
@@ -145,7 +164,9 @@ class CalculadorConcentracionCarga
                         'codigo' => $camara->codigo,
                         'nombre' => $camara->nombre,
                     ],
-                    'nivel' => (int) $posicion->nivel,
+                    'nivel' => (int) $posiciones->min('nivel'),
+                    'niveles' => $posiciones->pluck('nivel')->unique()->sort()->values()->all(),
+                    'bandas' => $posiciones->pluck('banda')->unique()->sort()->values()->all(),
                     'banda_desde' => (int) $posiciones->min('banda'),
                     'banda_hasta' => (int) $posiciones->max('banda'),
                     'posicion_desde' => (int) $posiciones->min('posicion'),
@@ -242,10 +263,7 @@ class CalculadorConcentracionCarga
     {
         $primera = $una->folio->ubicacionActual->posicion;
         $segunda = $otra->folio->ubicacionActual->posicion;
-        $diferenciaBanda = abs((int) $primera->banda - (int) $segunda->banda);
-        $diferenciaPosicion = abs((int) $primera->posicion - (int) $segunda->posicion);
 
-        return ($diferenciaBanda === 0 && $diferenciaPosicion === 1)
-            || ($diferenciaBanda === 1 && $diferenciaPosicion <= 1);
+        return SectorAcopioCarga::vecinos($primera->only(['banda', 'posicion', 'nivel']), $segunda->only(['banda', 'posicion', 'nivel']));
     }
 }

@@ -85,3 +85,30 @@ test('una propuesta anticipada que dependía de otro pallet sin reserva no se re
     const takenFirst = snapshot([first], grupo);
     assert.equal(reusablePreviewProposal(preview, takenFirst, first).posicion_destino_id, 'B1-P2');
 });
+
+test('la banda de carga en llenado prevalece sobre contactos laterales', () => {
+    const plan = camera(3, 14, ['1-1', '1-2', '1-3', '1-4', '1-5', '1-6', '2-1', '2-2', '2-3']);
+    const points = plan.posiciones.filter((p) => p.ocupada).map(({ banda, posicion, nivel }) => ({ banda, posicion, nivel }));
+    const acopio = staging(points, { tipo: 'grupo', banda_prioritaria: 1 });
+    assert.equal(bestCandidate(task('t1', acopio), [plan]).position.id, 'B1-P7');
+    plan.protecciones_bandas = [{ banda: 1, nivel: 1, maniobra_id: 'otra' }];
+    assert.equal(bestCandidate(task('t1', acopio), [plan]), null, 'Espera la banda; no dispersa a B02 o B03.');
+});
+
+test('termina los niveles utilizables de la misma banda con soporte físico', () => {
+    const plan = camera(2, 3, ['1-1', '1-2', '1-3']);
+    plan.posiciones.push(...[1, 2, 3].map((p) => ({ id: `arriba-${p}`, banda: 1, posicion: p, nivel: 2,
+        estado: 'activa', ocupada: false, reservada: false })));
+    const acopio = staging([{ banda: 1, posicion: 1, nivel: 1 }, { banda: 1, posicion: 2, nivel: 1 },
+        { banda: 1, posicion: 3, nivel: 1 }], { tipo: 'grupo', banda_prioritaria: 1 });
+    assert.equal(bestCandidate(task('t1', acopio), [plan]).position.id, 'arriba-1');
+});
+
+test('la banda prioritaria no permite atravesar stock ni apilar sobre una reserva', () => {
+    const plan = camera(2, 3, ['1-2']);
+    const acopio = staging([{ banda: 1, posicion: 2, nivel: 1 }], { tipo: 'grupo', banda_prioritaria: 1 });
+    assert.equal(bestCandidate(task('t1', acopio), [plan]).position.id, 'B1-P3');
+    plan.posiciones = [{ id: 'suelo-reservado', banda: 1, posicion: 1, nivel: 1, estado: 'activa', ocupada: false, reservada: true },
+        { id: 'arriba', banda: 1, posicion: 1, nivel: 2, estado: 'activa', ocupada: false, reservada: false }];
+    assert.equal(bestCandidate(task('t1', acopio), [plan]), null);
+});

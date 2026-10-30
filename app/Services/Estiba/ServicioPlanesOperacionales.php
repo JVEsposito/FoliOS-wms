@@ -24,6 +24,7 @@ use App\Models\User;
 use App\Services\Camaras\InterbloqueoEvacuacionEmergencia;
 use App\Services\Cargas\ServicioAcopioCarga;
 use App\Services\Cargas\ServicioPlanConcentracionCarga;
+use App\Services\Planificador\ServicioArbitrajeManiobras;
 use App\Services\Planificador\ServicioDesplieguePlanificador;
 use App\Services\Planificador\ServicioLaboresTurno;
 use App\Services\Temporadas\ServicioTemporadaActiva;
@@ -156,7 +157,14 @@ class ServicioPlanesOperacionales
         User $usuario,
         Dispositivo $dispositivo,
     ): TareaMovimiento {
-        return DB::transaction(function () use ($tarea, $usuario, $dispositivo): TareaMovimiento {
+        $this->validarActor($usuario, $dispositivo);
+        // Calcular antes de adquirir folios, tareas y cámaras: el arbitraje lee la
+        // temporada completa. La toma revalida después todos los recursos actuales.
+        $ciclo = config('planificador.mode') === 'guided' && $tarea->maniobra_operacional_id
+            && $tarea->estado === EstadoTareaMovimiento::Pendiente
+            ? app(ServicioArbitrajeManiobras::class)->arbitrar($tarea->planOperacional->temporada) : null;
+
+        return DB::transaction(function () use ($tarea, $usuario, $dispositivo, $ciclo): TareaMovimiento {
             $this->validarActor($usuario, $dispositivo);
             app(ServicioLaboresTurno::class)->tomar($tarea, $usuario, $dispositivo);
             app(ServicioExclusionPallet::class)->bloquear($tarea);
@@ -186,7 +194,7 @@ class ServicioPlanesOperacionales
                 app(ServicioPlanConcentracionCarga::class)->coordinarRecepcion($tareaBloqueada, $usuario);
             }
             if ($tareaBloqueada->maniobra_operacional_id) {
-                $this->maniobras->asumirPaso($tareaBloqueada, $usuario, $dispositivo);
+                $this->maniobras->asumirPaso($tareaBloqueada, $usuario, $dispositivo, $ciclo);
             } else {
                 $this->reservas->asumir($tareaBloqueada, $usuario, $dispositivo);
             }
@@ -200,7 +208,9 @@ class ServicioPlanesOperacionales
                 ]);
             }
 
-            return $this->cargarTarea($tareaBloqueada->refresh());
+            // Una retoma puede renovar solo la reserva. refresh() volvería al
+            // snapshot anterior si la tarea fue tomada por otra conexión del mismo actor.
+            return $this->cargarTarea(TareaMovimiento::query()->lockForUpdate()->findOrFail($tareaBloqueada->id));
         }, attempts: 3);
     }
 
@@ -304,6 +314,7 @@ class ServicioPlanesOperacionales
             $validacionRecursos,
         ): TareaMovimiento {
             $this->validarActor($usuario, $dispositivo);
+            app(ServicioExclusionPallet::class)->bloquearFolios($tarea);
             $tareaBloqueada = TareaMovimiento::query()
                 ->with('planOperacional')
                 ->lockForUpdate()
@@ -377,6 +388,10 @@ class ServicioPlanesOperacionales
         Dispositivo $dispositivo,
     ): TareaMovimiento {
         return DB::transaction(function () use ($tarea, $usuario, $dispositivo): TareaMovimiento {
+            // El límite físico pertenece al camarero, incluso si abre otra tablet
+            // sin programación de turno. Se comparte el mutex de toma de labores.
+            app(ServicioLaboresTurno::class)->bloquearUsuario($usuario->id);
+            app(ServicioExclusionPallet::class)->bloquearFolios($tarea);
             $tareaBloqueada = TareaMovimiento::query()
                 ->with('planOperacional.temporada')
                 ->lockForUpdate()
@@ -396,6 +411,7 @@ class ServicioPlanesOperacionales
         Dispositivo $dispositivo,
     ): TareaMovimiento {
         $tareaRenovada = DB::transaction(function () use ($tarea, $usuario, $dispositivo): ?TareaMovimiento {
+            app(ServicioExclusionPallet::class)->bloquearFolios($tarea);
             $tareaBloqueada = TareaMovimiento::query()
                 ->with('planOperacional.temporada')
                 ->lockForUpdate()
@@ -423,6 +439,7 @@ class ServicioPlanesOperacionales
         Dispositivo $dispositivo,
     ): TareaMovimiento {
         return DB::transaction(function () use ($tarea, $usuario, $dispositivo): TareaMovimiento {
+            app(ServicioExclusionPallet::class)->bloquearFolios($tarea);
             $tareaBloqueada = TareaMovimiento::query()
                 ->with('planOperacional.temporada')
                 ->lockForUpdate()
@@ -734,6 +751,13 @@ class ServicioPlanesOperacionales
             throw new ConflictoOperacion(
                 'La posición propuesta no pertenece a la cámara objetivo de concentración.',
             );
+        }
+
+        $acopio = $this->acopio->paraFolio($tarea->folio_id, $tarea->id, bloquear: true);
+        if ($acopio !== null) {
+            $this->acopio->validarDestino($tarea, $posicion, acopioVigente: $acopio);
+
+            return;
         }
 
         $puntos = $contexto['concentracion_puntos'] ?? [];

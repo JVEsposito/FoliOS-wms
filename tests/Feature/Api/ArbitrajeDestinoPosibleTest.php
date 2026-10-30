@@ -27,6 +27,7 @@ use App\Models\UbicacionActual;
 use App\Models\User;
 use App\Services\Camaras\ServicioBandasOperacionales;
 use App\Services\Estiba\ServicioPlanesOperacionales;
+use App\Services\Estiba\ServicioReservasTareasMovimiento;
 use App\Services\Planificador\MotorReplayArbitrajeV5;
 use App\Services\Planificador\MotorReplayArbitrajeV7;
 use App\Services\Planificador\ServicioArbitrajeManiobras;
@@ -255,6 +256,54 @@ class ArbitrajeDestinoPosibleTest extends TestCase
         $this->assertNull($tarea->refresh()->responsable_user_id);
         $this->assertSame('pendiente', $tarea->estado->value);
         $this->travelBack();
+    }
+
+    public function test_retomar_recalcula_destino_si_otro_camarero_ocupo_la_banda_liberada(): void
+    {
+        $this->comprobarRetomaSinDestinoObsoleto(false);
+    }
+
+    public function test_retomar_recalcula_destino_si_otro_camarero_ocupo_la_banda_cuyo_lease_vencio(): void
+    {
+        $this->comprobarRetomaSinDestinoObsoleto(true);
+    }
+
+    public function test_un_claim_historico_sin_reserva_no_retiene_su_destino_dinamico_en_el_arbitraje(): void
+    {
+        $this->comprobarRetomaSinDestinoObsoleto(false, true);
+    }
+
+    private function comprobarRetomaSinDestinoObsoleto(bool $vencer, bool $historico = false): void
+    {
+        config(['planificador.compute' => 'server']);
+        $this->camara('CAM-RETOMA', 'Dos bandas disponibles', 2, 3);
+        $a = $this->recepcion(collect([$this->folio(null)]))->tareas()->sole();
+        $b = $this->recepcion(collect([$this->folio(null)]))->tareas()->sole();
+        [$operadorA, $tabletA] = $this->camarero('RETOMA-A');
+        [$operadorB, $tabletB] = $this->camarero('RETOMA-B');
+        $planes = app(ServicioPlanesOperacionales::class);
+        $tomada = $planes->asumir($a, $operadorA, $tabletA);
+        $destinoAnterior = $tomada->posicion_destino_id;
+        $contextoAnterior = $tomada->contexto;
+        $camaraAnterior = $tomada->camara_destino_id;
+        if ($vencer) {
+            $this->travel(30)->minutes();
+            app(ServicioReservasTareasMovimiento::class)->expirarVencidas();
+            $this->travelBack();
+        } else {
+            $planes->liberar($tomada, $operadorA, $tabletA);
+        }
+        $this->assertNull($a->refresh()->posicion_destino_id, 'El destino dinámico liberado no debe seguir comprometiendo recursos en el arbitraje.');
+        if ($historico) {
+            $a->update(['posicion_destino_id' => $destinoAnterior, 'camara_destino_id' => $camaraAnterior,
+                'contexto' => $contextoAnterior]);
+        }
+        $ocupante = $planes->asumir($b, $operadorB, $tabletB);
+        $this->assertSame($destinoAnterior, $ocupante->posicion_destino_id);
+        $retomada = $planes->asumir($a->refresh(), $operadorA, $tabletA);
+        $this->assertNotSame($destinoAnterior, $retomada->posicion_destino_id);
+        $this->assertSame(2, $retomada->posicionDestino->banda);
+        $this->assertDatabaseCount('movimientos', 0);
     }
 
     private function camara(string $codigo, string $nombre, int $bandas, int $profundidad): Camara

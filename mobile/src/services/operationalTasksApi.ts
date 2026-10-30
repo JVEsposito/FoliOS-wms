@@ -19,7 +19,7 @@ import type { OperatorLoadFeed } from '../domain/operatorLoads';
 
 // Cambia cada vez que cambian las reglas con que la tablet elige destinos: el servidor la
 // registra con cada rechazo para saber qué tablets tienen las reglas vigentes.
-export const TABLET_PLANNER_VERSION = 'rolling-global-8-protecciones-servidor';
+export const TABLET_PLANNER_VERSION = 'rolling-global-9-compactacion-bandas';
 
 export type StartConfirmation = {
   folioDigits: string;

@@ -109,7 +109,7 @@ class ServicioLaboresTurno
         return DB::table('cerrojos_labores_turno')->whereIn('clave', $claves)->orderBy('clave')->lockForUpdate()->pluck('labor_id', 'clave')->all();
     }
 
-    private function bloquearUsuario(int $usuarioId): void
+    public function bloquearUsuario(int $usuarioId): void
     {
         DB::table('cerrojos_labores_turno')->upsert([['clave' => 'usuario:'.$usuarioId]], ['clave'], ['clave']);
     }

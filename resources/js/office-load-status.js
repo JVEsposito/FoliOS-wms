@@ -1,3 +1,4 @@
+import { loadClusterLocation } from './shared/load-cluster-location.js';
 import { createOperationalPoller } from './shared/operational-poller';
 import { loadReceptionDependencies } from './shared/load-reception-dependencies.js';
 
@@ -169,7 +170,7 @@ function renderDetail() {
     elements.reference.textContent = shipmentNumbers.join(' / ') || load.numero_orden_externa || load.embarque?.codigo || 'Sin referencia';
     elements.schedule.textContent = scheduled ? `Salida ${scheduled}` : 'Sin programación de embarque';
     elements.camera.textContent = load.camara_objetivo?.nombre || 'Sin cámara objetivo';
-    elements.cluster.textContent = main ? `${main.camara?.nombre || main.camara?.codigo || 'Cámara'} · bandas ${main.banda_desde}–${main.banda_hasta}` : 'Sin grupo principal';
+    elements.cluster.textContent = loadClusterLocation(main, true);
     elements.truck.textContent = load.camion_en_anden?.patente || 'Sin camión';
     elements.dock.textContent = load.camion_en_anden ? `${load.camion_en_anden.anden?.nombre || 'Andén'} · desde ${dateTime(load.camion_en_anden.ingresada_at)}` : (load.anden_previsto?.nombre ? `Previsto: ${load.anden_previsto.nombre}` : 'Sin presencia registrada');
     elements.incidents.textContent = `${load.incidencias_abiertas || 0} abiertas`;

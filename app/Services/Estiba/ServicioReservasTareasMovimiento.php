@@ -29,6 +29,7 @@ use App\Models\TareaMovimiento;
 use App\Models\UbicacionActual;
 use App\Models\User;
 use App\Services\Cargas\ServicioAcopioCarga;
+use App\Services\Planificador\ServicioDestinosServidor;
 use Carbon\CarbonInterface;
 use DomainException;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -70,8 +71,10 @@ class ServicioReservasTareasMovimiento
         User $usuario,
         Dispositivo $dispositivo,
     ): ReservaTareaMovimiento {
-        app(ServicioExclusionPallet::class)->bloquear($tarea);
-        $reserva = $this->reservaActivaTarea($tarea->id, true);
+        $exclusion = app(ServicioExclusionPallet::class);
+        $exclusion->bloquear($tarea);
+        $tarea = TareaMovimiento::query()->lockForUpdate()->findOrFail($tarea->id);
+        $reserva = $exclusion->reservaActual($tarea);
 
         if ($reserva && $this->estaVencida($reserva)) {
             $this->expirar($reserva);
@@ -286,12 +289,11 @@ class ServicioReservasTareasMovimiento
             ->where('id', '!=', $tareaBloqueada->id)
             ->where('estado', EstadoTareaMovimiento::EnProceso->value)
             ->where('responsable_user_id', $usuario->id)
-            ->where('dispositivo_id', $dispositivo->id)
             ->lockForUpdate()
             ->exists();
         if ($otraEnProceso) {
             throw new ConflictoOperacion(
-                'El camarero ya posee otro pallet físicamente en movimiento en esta tablet.',
+                'El camarero ya posee otro pallet físicamente en movimiento. Complétalo antes de iniciar otro, incluso desde otra tablet.',
             );
         }
 
@@ -779,12 +781,9 @@ class ServicioReservasTareasMovimiento
     ): void {
         // El movimiento ya mantiene el mutex del folio. Leer primero sus pasos
         // evita bloquear el índice de todas las maniobras en ejecución.
-        $ids = TareaMovimiento::query()->where('folio_id', $folioId)
-            ->whereNotNull('maniobra_operacional_id')
-            ->when($maniobraPermitidaId, fn ($q) => $q->where('maniobra_operacional_id', '!=', $maniobraPermitidaId))
-            ->whereIn('estado', [EstadoTareaMovimiento::Bloqueada->value, EstadoTareaMovimiento::Pendiente->value,
-                EstadoTareaMovimiento::Asumida->value, EstadoTareaMovimiento::EnProceso->value])
-            ->orderBy('id')->lockForUpdate()->get(['maniobra_operacional_id'])
+        $ids = app(ServicioExclusionPallet::class)->tareasActuales($folioId)
+            ->filter(fn (TareaMovimiento $tarea) => $tarea->maniobra_operacional_id !== null
+                && $tarea->maniobra_operacional_id !== $maniobraPermitidaId && $tarea->estado->esActiva())
             ->pluck('maniobra_operacional_id')->unique();
         $maniobra = $ids->isEmpty() ? null : ManiobraOperacional::query()
             ->whereIn('id', $ids)->whereIn('estado', [EstadoManiobraOperacional::EnEjecucion->value,
@@ -931,7 +930,8 @@ class ServicioReservasTareasMovimiento
             'vence_at' => $this->nuevoVencimiento(),
             'version' => $reserva->version + 1,
         ]);
-        $this->incrementarRevisionCamara($reserva->posicion_destino_id);
+        // Renovar un lease no cambia el destino ni la ocupación de la cámara.
+        // Evita bloquearla e invalidar los planos de los demás camareros en cada pulso.
 
         return $reserva->refresh();
     }
@@ -1071,6 +1071,9 @@ class ServicioReservasTareasMovimiento
             ->where('estado', EstadoTareaMovimiento::Completada->value)
             ->lockForUpdate()
             ->exists();
+        if (! $poseePrefijoFisico) {
+            app(ServicioDestinosServidor::class)->restablecerAntesDeIniciar($maniobra);
+        }
         $maniobra->update([
             'estado' => EstadoManiobraOperacional::Pendiente,
             'responsable_user_id' => null,

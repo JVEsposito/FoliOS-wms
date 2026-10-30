@@ -354,7 +354,9 @@ function positionAllowed(
   if (!band.usos_permitidos.includes('transito_pt')) return false;
   if (band.modo !== 'operativa' || band.estado === 'bloqueada' || band.estado === 'en_vaciado') return false;
   const acopio = loadStaging(task);
-  if (acopio?.puntos.length && !acopio.puntos.some((point) => areConcentrationNeighbors(point, position))) {
+  const priorityBand = acopio?.sector?.banda_prioritaria;
+  if (priorityBand !== undefined && position.banda !== priorityBand) return false;
+  if (priorityBand === undefined && acopio?.puntos.length && !acopio.puntos.some((point) => areConcentrationNeighbors(point, position))) {
     return false;
   }
   // El acopio se arma desde el fondo de cada banda: no se deja un hueco detrás de un pallet.
@@ -365,7 +367,7 @@ function positionAllowed(
     if (targetCamera && targetCamera !== plan.id) return false;
 
     const points = concentrationPoints(task);
-    if (points.length > 0 && !points.some((point) => areConcentrationNeighbors(point, position))) {
+    if (priorityBand === undefined && points.length > 0 && !points.some((point) => areConcentrationNeighbors(point, position))) {
       return false;
     }
   }
@@ -477,7 +479,8 @@ function concentrationPoints(task: OperationalTask): ConcentrationPoint[] {
 }
 
 export function areConcentrationNeighbors(point: ConcentrationPoint, position: Pick<Position, 'banda' | 'posicion' | 'nivel'>) {
-  if (point.nivel !== position.nivel) return false;
+  if (point.nivel !== position.nivel) return Math.abs(point.nivel - position.nivel) === 1
+    && point.banda === position.banda && point.posicion === position.posicion;
   const bandDistance = Math.abs(point.banda - position.banda);
   const positionDistance = Math.abs(point.posicion - position.posicion);
 
