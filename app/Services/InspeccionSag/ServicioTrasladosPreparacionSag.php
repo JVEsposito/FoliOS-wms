@@ -120,6 +120,7 @@ class ServicioTrasladosPreparacionSag
                 ], true)
                 || in_array($folio->asignacionCargaActual?->estado, [
                     EstadoCargaFolio::EnAnden,
+                    EstadoCargaFolio::Cargado,
                     EstadoCargaFolio::Despachado,
                 ], true)) {
                 continue;

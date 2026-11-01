@@ -14,7 +14,7 @@ const elements = {
     incidents: byId('activeLoadIncidents'), concentrationValue: byId('concentrationValue'), concentrationBar: byId('concentrationBar'),
     concentrationComplete: byId('concentrationComplete'), concentrationPending: byId('concentrationPending'), separationValue: byId('separationValue'),
     separationBar: byId('separationBar'), separationComplete: byId('separationComplete'), separationPending: byId('separationPending'),
-    dispatchState: byId('dispatchState'), dispatchMessage: byId('dispatchMessage'), locationSummary: byId('locationSummary'),
+    dispatchState: byId('dispatchState'), dispatchMessage: byId('dispatchMessage'), loadingBar: byId('loadingBar'), locationSummary: byId('locationSummary'),
     locations: byId('loadLocationList'), folioSummary: byId('folioSummary'), folios: byId('activeLoadFolios'),
     loading: byId('officeLoading'), loadingText: byId('officeLoadingText'), toasts: byId('officeToasts'),
 };
@@ -28,6 +28,10 @@ const state = {
 const statusLabels = {
     pendiente: 'Pendiente', en_preparacion: 'En preparación', despacho_parcial: 'Despacho parcial',
     en_separacion: 'En separación', separada: 'Separada', separacion_completa: 'Separación completa',
+    despachada: 'Todo en andén',
+};
+const folioStateLabels = {
+    pendiente: 'En cámara', con_incidencia: 'Con incidencia', en_anden: 'En andén', cargado: 'Cargado', despachado: 'Despachado',
 };
 const priorityLabels = { normal: 'Normal', alta: 'Alta', urgente: 'Urgente' };
 
@@ -182,16 +186,19 @@ function renderDetail() {
     elements.separationBar.style.width = `${separation}%`;
     elements.separationComplete.textContent = `${atDock} en andén`;
     elements.separationPending.textContent = `${Math.max(0, total - atDock)} pendientes`;
-    elements.dispatchState.textContent = load.camion_en_anden ? 'Camión presente' : 'En espera';
-    elements.dispatchState.dataset.tone = load.camion_en_anden ? 'success' : 'neutral';
+    const loaded = Number(progress.cargados || 0);
+    const waitingOnDock = Math.max(0, atDock - loaded);
+    elements.dispatchState.textContent = `${loaded}/${total}`;
+    elements.dispatchState.dataset.tone = total && loaded >= total ? 'success' : (load.camion_en_anden ? 'info' : 'neutral');
+    elements.loadingBar.style.width = `${total ? Math.max(0, Math.min(100, Math.round((loaded / total) * 100))) : 0}%`;
     elements.dispatchMessage.textContent = load.camion_en_anden
-        ? `${load.camion_en_anden.patente} está en ${load.camion_en_anden.anden?.nombre || 'andén'}; el WMS prioriza el retiro directo.`
+        ? `${load.camion_en_anden.patente} está en ${load.camion_en_anden.anden?.nombre || 'andén'}; ${waitingOnDock ? `${waitingOnDock} pallets esperan subir.` : 'el WMS prioriza el retiro directo.'}`
         : 'Registra la presencia del camión desde Cargas para activar la prioridad a andén.';
     const dependencies = loadReceptionDependencies(progress, Boolean(load.camion_en_anden));
     if (dependencies) elements.dispatchMessage.textContent += ` ${dependencies}`;
     renderLocations(load);
     elements.folioSummary.textContent = `${total} folios`;
-    elements.folios.innerHTML = total ? load.folios.map((folio) => `<tr><td><strong>${escapeHtml(folio.numero_folio)}</strong><small>${escapeHtml(folio.tipo_bulto || 'bulto')}</small></td><td>${escapeHtml(locationLabel(folio))}</td><td><span data-state="${escapeHtml(folio.estado_carga)}">${escapeHtml(String(folio.estado_carga || '').replaceAll('_', ' '))}</span></td></tr>`).join('') : '<tr><td colspan="3">Sin folios asignados.</td></tr>';
+    elements.folios.innerHTML = total ? load.folios.map((folio) => `<tr><td><strong>${escapeHtml(folio.numero_folio)}</strong><small>${escapeHtml(folio.tipo_bulto || 'bulto')}</small></td><td>${escapeHtml(locationLabel(folio))}</td><td><span data-state="${escapeHtml(folio.estado_carga)}">${escapeHtml(folioStateLabels[folio.estado_carga] || String(folio.estado_carga || '').replaceAll('_', ' '))}</span></td></tr>`).join('') : '<tr><td colspan="3">Sin folios asignados.</td></tr>';
 }
 
 function render() { renderList(); renderDetail(); }

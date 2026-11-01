@@ -11,7 +11,8 @@ class CalculadorConcentracionCarga
     public const UMBRAL_PORCENTAJE = 80;
 
     /**
-     * Considera concentrados los folios en andén y, dentro de una misma cámara,
+     * Considera concentrados los folios en andén (incluidos los ya cargados en el
+     * camión) y, dentro de una misma cámara,
      * las bandas completas más el mayor grupo parcial conectado. Dos posiciones
      * están conectadas si son correlativas en una banda o pertenecen a bandas
      * consecutivas con la misma profundidad o una profundidad adyacente. Los
@@ -45,8 +46,13 @@ class CalculadorConcentracionCarga
         ?string $camaraObjetivoId = null,
     ): array {
         $total = $asignaciones->count();
+        // «en_anden» cuenta todo lo que salió de la cámara; «cargados» es el
+        // subconjunto que el camarero ya registró arriba del camión.
         $enAnden = $asignaciones
-            ->where('estado', EstadoCargaFolio::EnAnden)
+            ->filter(fn (CargaFolio $asignacion): bool => $asignacion->estado->fueraDeCamara())
+            ->count();
+        $cargados = $asignaciones
+            ->where('estado', EstadoCargaFolio::Cargado)
             ->count();
         $despachados = $asignaciones
             ->where('estado', EstadoCargaFolio::Despachado)
@@ -75,6 +81,8 @@ class CalculadorConcentracionCarga
             'faltantes' => max(0, $total - $concentrados),
             'total' => $total,
             'en_anden' => $enAnden,
+            'cargados' => $cargados,
+            'por_cargar' => max(0, $total - $cargados - $despachados),
             'despachados' => $despachados,
             'con_incidencia' => $conIncidencia,
             'pendientes' => max(0, $total - $enAnden - $despachados - $conIncidencia),

@@ -747,6 +747,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/cargas/asignaciones/{cargaFolio}/incidencias', [DespachoFrigorificoController::class, 'reportarIncidencia']);
     Route::post('/cargas/incidencias/{incidencia}/resolver', [DespachoFrigorificoController::class, 'resolverIncidencia']);
     Route::post('/cargas/asignaciones/{cargaFolio}/enviar-anden', [DespachoFrigorificoController::class, 'enviarAnden']);
+    Route::post('/cargas/{carga}/cargados', [DespachoFrigorificoController::class, 'registrarCargado']);
+    Route::post('/cargas/asignaciones/{cargaFolio}/deshacer-cargado', [DespachoFrigorificoController::class, 'deshacerCargado']);
     Route::post('/cargas/{carga}/cerrar-despacho', [DespachoFrigorificoController::class, 'cerrar']);
 
     Route::middleware('can:consultar-configuracion-camaras')->group(function () {

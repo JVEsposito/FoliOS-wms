@@ -124,9 +124,11 @@ class CargaController extends Controller
         $cargas = Carga::query()
             ->whereHas('temporada', fn (Builder $consulta): Builder => $consulta
                 ->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
+            // «Despachada» = todos los pallets en el andén: la tablet sigue
+            // necesitándola para registrar lo que sube al camión hasta el cierre.
             ->whereIn(
                 'estado',
-                collect(EstadoCarga::visiblesEnOperacion())
+                collect([...EstadoCarga::visiblesEnOperacion(), EstadoCarga::Despachada])
                     ->map(fn (EstadoCarga $estado): string => $estado->value)
                     ->all(),
             )

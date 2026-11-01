@@ -10,8 +10,10 @@ import {
   OperationalNotification,
   OperationalNotificationFeed,
   RefrigeratedLoad,
+  RegisterLoadedFolioPayload,
   ReportLoadIncidentPayload,
   SendLoadFolioToDockPayload,
+  UndoLoadedFolioPayload,
 } from '../domain/estiba';
 import { cameraDisplayName } from '../domain/cameras';
 import { ApiError } from '../services/apiError';
@@ -30,7 +32,7 @@ import {
 
 type DemoLoadStatus = 'draft' | 'published' | 'cancelled';
 type DemoPriority = 'normal' | 'alta' | 'urgente';
-type DemoAssignmentStatus = 'pending' | 'incident' | 'sent' | 'cancelled';
+type DemoAssignmentStatus = 'pending' | 'incident' | 'sent' | 'loaded' | 'cancelled';
 
 type LoadRow = {
   id: string;
@@ -528,12 +530,14 @@ function loadFolio(
     id: assignment.folio_id,
     numero_folio: assignment.folio_number,
     tipo_bulto: location?.folio.tipo_bulto === 'saldo' ? 'saldo' : 'pallet',
-    estado_operacional: assignment.status === 'sent'
+    estado_operacional: assignment.status === 'sent' || assignment.status === 'loaded'
       ? 'en_anden'
       : location?.folio.estado_operacional ?? 'sin_ubicacion',
-    estado_carga: assignment.status === 'sent'
-      ? 'en_anden'
-      : assignment.status === 'incident' ? 'con_incidencia' : 'pendiente',
+    estado_carga: assignment.status === 'loaded'
+      ? 'cargado'
+      : assignment.status === 'sent'
+        ? 'en_anden'
+        : assignment.status === 'incident' ? 'con_incidencia' : 'pendiente',
     anden: dock ? { id: dock.id, codigo: dock.codigo, nombre: dock.nombre } : null,
     asignado_at: assignment.assigned_at,
     ubicacion: location ? {
@@ -555,7 +559,8 @@ function refrigeratedLoad(
   locations: Map<string, LocatedFolio>,
 ): RefrigeratedLoad {
   const folios = assignments.map((assignment) => loadFolio(assignment, locations.get(assignment.folio_id)));
-  const pendingLocations = folios.filter((folio) => folio.estado_carga !== 'en_anden' && folio.ubicacion);
+  const outOfCamera = (folio: LoadFolio) => folio.estado_carga === 'en_anden' || folio.estado_carga === 'cargado';
+  const pendingLocations = folios.filter((folio) => !outOfCamera(folio) && folio.ubicacion);
   const perCamera = new Map<string, { camera: NonNullable<LoadFolio['ubicacion']>['camara']; total: number }>();
   for (const folio of pendingLocations) {
     const camera = folio.ubicacion!.camara;
@@ -564,7 +569,8 @@ function refrigeratedLoad(
     perCamera.set(camera.id, current);
   }
   const main = [...perCamera.values()].sort((left, right) => right.total - left.total)[0] ?? null;
-  const atDock = folios.filter((folio) => folio.estado_carga === 'en_anden').length;
+  const atDock = folios.filter(outOfCamera).length;
+  const loaded = folios.filter((folio) => folio.estado_carga === 'cargado').length;
   const incidents = folios.filter((folio) => folio.estado_carga === 'con_incidencia').length;
   const concentrated = Math.min(folios.length, atDock + (main?.total ?? 0));
   const percentage = folios.length ? Math.round((concentrated / folios.length) * 1000) / 10 : 0;
@@ -595,6 +601,7 @@ function refrigeratedLoad(
       faltantes: Math.max(0, folios.length - concentrated),
       total: folios.length,
       en_anden: atDock,
+      cargados: loaded,
       con_incidencia: incidents,
       pendientes: folios.length - atDock - incidents,
       grupo_principal: main && positions.length ? {
@@ -897,6 +904,61 @@ export async function sendDemoLoadFolioToDock(
       `${load.code} · ${assignment.folio_number} → ${dock.codigo}`,
     );
   });
+  const loads = await listDemoRefrigeratedLoads();
+  const result = loads.find((load) => load.id === loadId);
+  if (!result) throw new ApiError('La carga ya no está disponible.', 404);
+  return result;
+}
+
+export async function registerDemoLoadedFolio(
+  loadId: string,
+  payload: RegisterLoadedFolioPayload,
+): Promise<RefrigeratedLoad> {
+  const expected = fingerprint({ action: 'load_truck', loadId, payload });
+  const db = await openDemoDatabase();
+  await db.withExclusiveTransactionAsync(async (transaction) => {
+    if (await operationResult(transaction, payload.operacion_id, expected) === 'repeat') return;
+    const number = payload.numero_folio.trim().toUpperCase();
+    const assignments = await assignmentRows(transaction, [loadId]);
+    const assignment = assignments.find((item) => item.folio_number.toUpperCase() === number);
+    if (!assignment) throw new ApiError(`El folio ${number} no pertenece a esta carga. No lo subas a este camión.`, 422);
+    if (assignment.status === 'loaded') throw new ApiError(`El folio ${number} ya está registrado como cargado.`, 422);
+    if (assignment.status !== 'sent') {
+      throw new ApiError(`El folio ${number} todavía no sale de la cámara: envíalo al andén antes de cargarlo.`, 422);
+    }
+    await transaction.runAsync(`UPDATE demo_load_assignments SET status = 'loaded' WHERE id = ?`, assignment.id);
+    await transaction.runAsync(`UPDATE demo_loads SET version = version + 1, updated_at = ? WHERE id = ?`, nowIso(), loadId);
+    await rememberOperation(transaction, payload.operacion_id, expected);
+    await writeDemoAudit(transaction, 'cargar_folio_camion', 'folio', assignment.folio_id, number);
+  });
+  return demoLoadById(loadId);
+}
+
+export async function undoDemoLoadedFolio(
+  assignmentId: string,
+  payload: UndoLoadedFolioPayload,
+): Promise<RefrigeratedLoad> {
+  const expected = fingerprint({ action: 'unload_truck', assignmentId, payload });
+  const db = await openDemoDatabase();
+  let loadId = '';
+  await db.withExclusiveTransactionAsync(async (transaction) => {
+    const assignment = await transaction.getFirstAsync<AssignmentRow>(
+      'SELECT * FROM demo_load_assignments WHERE id = ?',
+      assignmentId,
+    );
+    if (!assignment) throw new ApiError('La asignación ya no existe.', 404);
+    loadId = assignment.load_id;
+    if (await operationResult(transaction, payload.operacion_id, expected) === 'repeat') return;
+    if (assignment.status !== 'loaded') throw new ApiError('Solo un pallet registrado como cargado puede bajarse del camión.', 422);
+    await transaction.runAsync(`UPDATE demo_load_assignments SET status = 'sent' WHERE id = ?`, assignmentId);
+    await transaction.runAsync(`UPDATE demo_loads SET version = version + 1, updated_at = ? WHERE id = ?`, nowIso(), loadId);
+    await rememberOperation(transaction, payload.operacion_id, expected);
+    await writeDemoAudit(transaction, 'bajar_folio_camion', 'folio', assignment.folio_id, payload.motivo);
+  });
+  return demoLoadById(loadId);
+}
+
+async function demoLoadById(loadId: string): Promise<RefrigeratedLoad> {
   const loads = await listDemoRefrigeratedLoads();
   const result = loads.find((load) => load.id === loadId);
   if (!result) throw new ApiError('La carga ya no está disponible.', 404);

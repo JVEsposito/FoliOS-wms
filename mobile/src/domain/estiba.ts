@@ -391,7 +391,7 @@ export type Dock = {
   activo: boolean;
 };
 
-export type LoadFolioState = 'pendiente' | 'con_incidencia' | 'en_anden';
+export type LoadFolioState = 'pendiente' | 'con_incidencia' | 'en_anden' | 'cargado';
 
 export type LoadFolio = {
   asignacion_id: string;
@@ -402,6 +402,8 @@ export type LoadFolio = {
   estado_carga: LoadFolioState;
   anden: Pick<Dock, 'id' | 'codigo' | 'nombre'> | null;
   asignado_at: string;
+  enviado_anden_at?: string | null;
+  cargado_at?: string | null;
   ubicacion: {
     camara: { id: string; codigo: string; nombre: string };
     posicion: {
@@ -421,7 +423,10 @@ export type LoadProgress = {
   concentrados: number;
   faltantes: number;
   total: number;
+  /** Pallets fuera de cámara: en el andén o ya arriba del camión. */
   en_anden: number;
+  /** Subconjunto de en_anden que el camarero registró al subirlo al camión. */
+  cargados?: number;
   con_incidencia: number;
   pendientes: number;
   grupo_principal: {
@@ -438,12 +443,17 @@ export type RefrigeratedLoad = {
   id: string;
   codigo: string;
   numero_orden_externa: string | null;
-  estado: 'pendiente' | 'en_preparacion' | 'despacho_parcial' | 'en_separacion' | 'separada' | 'separacion_completa';
+  estado: 'pendiente' | 'en_preparacion' | 'despacho_parcial' | 'en_separacion' | 'separada' | 'separacion_completa' | 'despachada';
   prioridad: 'normal' | 'alta' | 'urgente';
   version: number;
   observacion: string | null;
   camara_objetivo: { id: string; codigo: string; nombre: string } | null;
   anden_previsto: Pick<Dock, 'id' | 'codigo' | 'nombre'> | null;
+  camion_en_anden?: {
+    id: string;
+    patente: string;
+    anden: Pick<Dock, 'id' | 'codigo' | 'nombre'> | null;
+  } | null;
   total_folios: number;
   folios: LoadFolio[];
   progreso: LoadProgress;
@@ -544,6 +554,17 @@ export type SendLoadFolioToDockPayload = {
   version_camara_conocida: number;
   generado_dispositivo_at: string;
   advertencias_confirmadas?: string[];
+};
+
+export type RegisterLoadedFolioPayload = {
+  operacion_id: string;
+  numero_folio: string;
+  generado_dispositivo_at: string;
+};
+
+export type UndoLoadedFolioPayload = {
+  operacion_id: string;
+  motivo: string;
 };
 
 export type Position = {

@@ -457,7 +457,7 @@ function priorityClass(priority) {
 }
 
 function distributionText(load) {
-    const tunnel = (load.folios || []).filter((folio) => !folio.ubicacion && folio.prefrio && !['en_anden', 'despachado'].includes(folio.estado_carga)).length;
+    const tunnel = (load.folios || []).filter((folio) => !folio.ubicacion && folio.prefrio && !['en_anden', 'cargado', 'despachado'].includes(folio.estado_carga)).length;
     const locations = (load.distribucion || [])
         .map((item) => `${item.camara.codigo}: ${item.cantidad}`)
         .join(' · ');
@@ -693,7 +693,7 @@ function startNew() {
 }
 
 function renderDistribution(load) {
-    const tunnel = (load.folios || []).filter((folio) => !folio.ubicacion && folio.prefrio && !['en_anden', 'despachado'].includes(folio.estado_carga)).length;
+    const tunnel = (load.folios || []).filter((folio) => !folio.ubicacion && folio.prefrio && !['en_anden', 'cargado', 'despachado'].includes(folio.estado_carga)).length;
     if (!load.distribucion?.length && !tunnel) {
         elements.distribution.innerHTML = '<span class="distribution-empty">Sin folios asignados</span>';
         return;
@@ -790,6 +790,7 @@ function renderFolios(load) {
     elements.folioTableBody.innerHTML = load.folios.map((folio) => {
         const location = folio.estado_carga === 'despachado' ? 'Despachado'
             : folio.estado_carga === 'en_anden' ? 'En andén'
+                : folio.estado_carga === 'cargado' ? 'Cargado en camión'
                 : folio.ubicacion ? `En cámara ${folio.ubicacion.camara.codigo} · ${folio.ubicacion.posicion.etiqueta}`
                     : folio.prefrio?.estado === 'aprobado' ? `Aprobado en túnel ${folio.prefrio.tunel}`
                         : folio.prefrio ? `En túnel ${folio.prefrio.tunel} · prefrío en curso`
@@ -837,8 +838,14 @@ function renderCommands(load) {
         elements.commandDescription.textContent = 'Podrás modificarla hasta que la operación inicie la separación.';
         elements.folioTableHint.textContent = 'Esta orden ya está disponible para la operación.';
     } else if (load.estado === 'despachada') {
-        elements.commandTitle.textContent = 'Carga completa en andén';
-        elements.commandDescription.textContent = 'Registra patente y conductor cuando el vehículo haya sido cargado.';
+        const loaded = Number(load.progreso?.cargados || 0);
+        const total = Number(load.total_folios || 0);
+        elements.commandTitle.textContent = loaded >= total && total
+            ? 'Carga completa en el camión'
+            : `Carga en andén · ${loaded} de ${total} cargados`;
+        elements.commandDescription.textContent = loaded >= total && total
+            ? 'Registra patente y conductor para cerrar el despacho.'
+            : 'La tablet del andén registra cada pallet al subirlo. Registra patente y conductor cuando el vehículo haya sido cargado.';
         elements.folioTableHint.textContent = 'Los folios ya salieron de las cámaras y esperan el cierre documental.';
     } else if (load.estado === 'cerrada') {
         elements.commandTitle.textContent = `Despacho cerrado · ${load.cierre?.patente || 'sin patente'}`;
