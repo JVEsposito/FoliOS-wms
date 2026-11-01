@@ -150,6 +150,7 @@ Route::view('/oficina/consultas/productores', 'office.queries', [
 Route::view('/oficina/materia-prima/lotes', 'office.raw-material');
 Route::view('/oficina/materia-prima/defectos-recepcion', 'office.raw-material-defects');
 Route::view('/oficina/materia-prima/hidrocooler', 'office.raw-material-hydrocooler');
+Route::view('/oficina/materia-prima/ordenes-proceso', 'office.raw-material-process-orders');
 Route::view('/oficina/materia-prima/fruta-a-proceso', 'office.raw-material-process');
 Route::redirect('/oficina/materia-prima/romana', '/oficina/romana');
 Route::redirect('/oficina/materia-prima/envases', '/oficina/envases/cuenta-corriente');

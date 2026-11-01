@@ -14,6 +14,7 @@
             ['key' => 'defectos-recepcion', 'module' => '', 'label' => 'Defectos de recepción', 'href' => '/oficina/materia-prima/defectos-recepcion', 'permissions' => ['puede_auditar_defectos_recepcion_mp']],
             ['key' => 'digitacion', 'module' => 'materia-prima.digitacion', 'label' => 'Digitación de Lotes', 'href' => '/oficina/materia-prima/lotes', 'permissions' => ['puede_consultar_materia_prima']],
             ['key' => 'hidrocooler', 'module' => 'materia-prima.hidrocooler', 'label' => 'Hidrocooler', 'href' => '/oficina/materia-prima/hidrocooler', 'permissions' => ['puede_consultar_hidrocooler_materia_prima']],
+            ['key' => 'ordenes-proceso', 'module' => 'materia-prima.ordenes-proceso', 'label' => 'Órdenes de Proceso', 'href' => '/oficina/materia-prima/ordenes-proceso', 'permissions' => ['puede_consultar_ordenes_proceso']],
             ['key' => 'fruta-proceso', 'module' => 'materia-prima.fruta-proceso', 'label' => 'Fruta a Proceso', 'href' => '/oficina/materia-prima/fruta-a-proceso', 'permissions' => ['puede_consultar_fruta_proceso']],
             ['key' => 'despacho-comercial', 'module' => 'materia-prima.despacho-comercial', 'label' => 'Despacho Comercial', 'href' => '/oficina/materia-prima/despacho-comercial', 'permissions' => ['puede_consultar_despacho_comercial']],
             ['key' => 'existencias-mp', 'module' => 'materia-prima.digitacion', 'label' => 'Existencias MP', 'href' => '/oficina/materia-prima/existencias', 'permissions' => ['puede_consultar_materia_prima']],

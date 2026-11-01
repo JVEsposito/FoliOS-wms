@@ -543,6 +543,10 @@ class AppServiceProvider extends ServiceProvider
             fn (User $usuario): bool => $alcance->puedeGestionarOrdenesProceso($usuario),
         );
         Gate::define(
+            'cancelar-ordenes-proceso',
+            fn (User $usuario): bool => $alcance->puedeCancelarOrdenesProceso($usuario),
+        );
+        Gate::define(
             'configurar-lineas-proceso',
             fn (User $usuario): bool => $alcance->puedeConfigurarLineasProceso($usuario),
         );

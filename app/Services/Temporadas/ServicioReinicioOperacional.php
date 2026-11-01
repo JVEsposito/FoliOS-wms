@@ -212,6 +212,33 @@ class ServicioReinicioOperacional
         return $resultado;
     }
 
+    /**
+     * Órdenes de proceso de la temporada. Se borran después de las entregas que las
+     * referencian y antes de los lotes que sus versiones y reservas referencian.
+     *
+     * @return array<string, int>
+     */
+    private function eliminarOrdenesProceso(Temporada $temporada): array
+    {
+        $ordenes = DB::table('ordenes_proceso_mp')->select('id')->where('temporada_id', $temporada->id);
+        $versiones = DB::table('versiones_orden_proceso_mp')->select('id')->whereIn('orden_proceso_mp_id', clone $ordenes);
+        $eliminados['reservas_ordenes_proceso'] = DB::table('reservas_lote_orden_proceso_mp')
+            ->whereIn('orden_proceso_mp_id', clone $ordenes)
+            ->delete();
+        $eliminados['lotes_ordenes_proceso'] = DB::table('lotes_version_orden_mp')
+            ->whereIn('version_orden_proceso_mp_id', clone $versiones)
+            ->delete();
+        DB::table('ordenes_proceso_mp')->where('temporada_id', $temporada->id)->update(['version_vigente_id' => null]);
+        $eliminados['versiones_ordenes_proceso'] = DB::table('versiones_orden_proceso_mp')
+            ->whereIn('orden_proceso_mp_id', clone $ordenes)
+            ->delete();
+        $eliminados['ordenes_proceso'] = DB::table('ordenes_proceso_mp')
+            ->where('temporada_id', $temporada->id)
+            ->delete();
+
+        return $eliminados;
+    }
+
     /** @return array<string, array<string, int>> */
     private function resumen(Temporada $temporada): array
     {
@@ -285,6 +312,9 @@ class ServicioReinicioOperacional
                 'lotes' => (clone $lotes)->count(),
                 'entregas_fruta_proceso' => DB::table('entregas_fruta_proceso')
                     ->whereIn('lote_materia_prima_id', clone $lotes)
+                    ->count(),
+                'ordenes_proceso' => DB::table('ordenes_proceso_mp')
+                    ->where('temporada_id', $temporada->id)
                     ->count(),
                 'retornos_packing' => (clone $retornosPacking)->count(),
                 'sublotes_retorno_packing' => DB::table('sublotes_retorno_packing')
@@ -534,6 +564,7 @@ class ServicioReinicioOperacional
         $eliminados['entregas_fruta_proceso'] = DB::table('entregas_fruta_proceso')
             ->whereIn('lote_materia_prima_id', clone $lotes)
             ->delete();
+        $eliminados = [...$eliminados, ...$this->eliminarOrdenesProceso($temporada)];
         $eliminados['eventos_lotes'] = DB::table('eventos_lote_materia_prima')
             ->whereIn('lote_materia_prima_id', clone $lotes)
             ->delete();
