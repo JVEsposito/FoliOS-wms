@@ -128,3 +128,44 @@ Crear y versionar usan `operacion_id`: repetir la misma solicitud devuelve la mi
 ## Oficina
 
 `/oficina/materia-prima/ordenes-proceso` muestra las órdenes por línea con su avance, el detalle de la versión vigente con entregado y pendiente por lote, y el historial de versiones. El digitador arma la orden buscando lotes con bins libres, ordena la secuencia y completa N° de proceso, embalaje, kg por caja, mercado, comuna y provincia. Supervisión ajusta nombre, rendimiento y estado de cada línea.
+
+## Fruta a proceso con orden
+
+El camarero entrega contra la versión vigente de una orden abierta. Línea y número de orden salen de la orden: `linea_proceso` guarda el nombre de la línea y `numero_orden` el N° de proceso de la fila (o el código OP- si la fila no lo tiene), así Finanzas y los retornos por bin siguen leyendo los mismos campos. El turno es el real del viaje, no el de la orden.
+
+| Caso | Resultado |
+| --- | --- |
+| Lote en la versión vigente | Se descuenta de su reserva. La primera entrega pasa la orden a `en_proceso`; sin pendientes termina `completa`. |
+| Más bins que los pendientes de la fila | 422 en `cantidad_envases`: el digitador debe publicar otra versión. |
+| La tablet tenía una versión anterior | Sigue si la fila del lote no cambió; si cambió o el lote salió, 409 con la versión nueva. |
+| Lote fuera de la orden | Exige `autorizacion.user_id` de un supervisor de frío o administrador y su PIN operacional. Entra a la orden como versión nueva de origen `fuera_de_orden`, creada por el supervisor, con los bins del viaje. La entrega queda con `fuera_de_orden` y `autorizado_por_user_id`. |
+| Orden terminada o cancelada | 409. |
+| Anular una entrega | Devuelve los bins a la reserva. Una orden terminada completa se reabre; en una cancelada lo anulado vuelve al lote, no a la orden. |
+
+El PIN se verifica antes de abrir la transacción, para que los intentos fallidos se conserven aunque la entrega se rechace.
+
+### Transición
+
+`FRUTA_PROCESO_EXIGE_ORDEN` (`config/materia_prima.php`) queda en `false`: la APK anterior sigue enviando línea, turno y número de orden como texto. Al pasarlo a `true`, un viaje sin `orden_proceso_mp_id` responde 422. Se activa cuando todas las tablets de cámara tienen la APK con órdenes.
+
+### Bloqueos
+
+Entrega con orden: orden → lotes de la orden e incluido el entregado, por id → reserva. Anulación: orden → entrega → lote, el mismo orden entrega → lote que ya usaban anulación y Retornos de Packing. La temporada se lee con bloqueo compartido para que el snapshot se abra con el lote bloqueado (antes se abría al leer la temporada, antes del lote).
+
+`FrutaProcesoOrdenesConcurrenciaTest`: dos camareros por 6 bins de 10 programados (uno 200, otro 422) y un viaje simultáneo con una versión que baja el lote; en ambos casos la reserva cuadra con las entregas vigentes.
+
+### API de la tablet
+
+```http
+GET  /api/materia-prima/fruta-proceso/ordenes?linea_proceso_id=
+GET  /api/materia-prima/fruta-proceso/autorizadores
+POST /api/materia-prima/fruta-proceso/lotes/{lote}/entregas
+     { orden_proceso_mp_id, version_orden_proceso_mp_id, cantidad_envases, turno, kilos_enviados?, observacion?,
+       autorizacion?: { user_id, pin } }
+```
+
+`/fruta-proceso/catalogos` suma `lineas` y `turnos`. Cada lote informa `ordenes` (órdenes abiertas con bins pendientes de ese lote) y cada entrega su `orden_proceso`.
+
+### APK y oficina
+
+La tablet suma la pestaña Órdenes: elige línea, ve los lotes en secuencia con lo entregado, lo pendiente, la cámara y el horario estimado, y entrega desde la fila (el siguiente lote queda destacado). Al registrar un viaje elige En orden, Fuera de orden (orden de la línea, supervisor y PIN) o Sin orden mientras no se exija. La oficina de Fruta a proceso permite elegir la orden del lote al registrar un viaje.

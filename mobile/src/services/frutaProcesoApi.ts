@@ -1,4 +1,4 @@
-import { CreatePackingReturn, CreateProcessDelivery, ProcessCatalogs, ProcessLot, ProcessSummary } from '../domain/frutaProceso';
+import { CreatePackingReturn, CreateProcessDelivery, ProcessAuthorizer, ProcessCatalogs, ProcessLot, ProcessOrder, ProcessSummary } from '../domain/frutaProceso';
 import { ApiError } from './apiError';
 
 async function request<T>(baseUrl: string, path: string, token: string, init: RequestInit = {}): Promise<T> {
@@ -29,6 +29,20 @@ export async function listProcessLots(baseUrl: string, token: string, search = '
   const params = new URLSearchParams({ per_page: '200', estado: status });
   if (search.trim()) params.set('buscar', search.trim());
   return (await request<{ data: ProcessLot[] }>(baseUrl, `/api/materia-prima/fruta-proceso/lotes?${params}`, token)).data;
+}
+
+export async function getProcessLot(baseUrl: string, token: string, lotId: string) {
+  return (await request<{ data: ProcessLot }>(baseUrl, `/api/materia-prima/fruta-proceso/lotes/${lotId}`, token)).data;
+}
+
+export async function listProcessOrders(baseUrl: string, token: string, lineId = '') {
+  const params = new URLSearchParams();
+  if (lineId) params.set('linea_proceso_id', lineId);
+  return (await request<{ data: ProcessOrder[] }>(baseUrl, `/api/materia-prima/fruta-proceso/ordenes?${params}`, token)).data;
+}
+
+export async function listProcessAuthorizers(baseUrl: string, token: string) {
+  return (await request<{ data: ProcessAuthorizer[] }>(baseUrl, '/api/materia-prima/fruta-proceso/autorizadores', token)).data;
 }
 
 export async function createProcessDelivery(baseUrl: string, token: string, lotId: string, input: CreateProcessDelivery) {

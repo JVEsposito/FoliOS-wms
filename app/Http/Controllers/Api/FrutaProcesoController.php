@@ -3,16 +3,23 @@
 namespace App\Http\Controllers\Api;
 
 use App\Enums\EstadoLoteMateriaPrima;
+use App\Enums\EstadoOrdenProcesoMp;
 use App\Enums\EstadoSubloteRetornoPacking;
+use App\Enums\RolUsuario;
 use App\Enums\TipoEnvaseRomana;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\AnularEntregaFrutaProcesoRequest;
 use App\Http\Requests\RegistrarEntregaFrutaProcesoRequest;
 use App\Http\Resources\FrutaProcesoLoteResource;
+use App\Models\AsignacionCamaraLoteMateriaPrima;
 use App\Models\EntregaFrutaProceso;
 use App\Models\LoteMateriaPrima;
+use App\Models\OrdenProcesoMp;
 use App\Models\RetornoPacking;
 use App\Models\SubloteRetornoPacking;
+use App\Models\User;
+use App\Services\Autorizacion\AlcanceOperacionalUsuario;
+use App\Services\MateriaPrima\OrdenesProceso\PresentadorOrdenProcesoMp;
 use App\Services\MateriaPrima\ServicioFrutaProceso;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Database\Eloquent\Builder;
@@ -230,6 +237,65 @@ class FrutaProcesoController extends Controller
         );
     }
 
+    /**
+     * Órdenes abiertas por línea, como las ve el camarero: lotes en secuencia con lo pendiente
+     * y su cámara. La tablet entrega contra la versión vigente que recibe aquí.
+     */
+    public function ordenes(Request $request, PresentadorOrdenProcesoMp $presentador): JsonResponse
+    {
+        Gate::authorize('consultar-fruta-proceso');
+        $filtros = $request->validate(['linea_proceso_id' => ['nullable', 'uuid']]);
+        $temporada = app(ServicioTemporadaActiva::class)->buscar();
+        if (! $temporada) {
+            return response()->json(['data' => []]);
+        }
+
+        $ordenes = OrdenProcesoMp::query()
+            ->with(['linea', 'versionVigente.lotes', 'reservas', 'creadoPor:id,name', 'cerradoPor:id,name', 'versiones.creadaPor:id,name'])
+            ->where('temporada_id', $temporada->id)
+            ->whereIn('estado', EstadoOrdenProcesoMp::abiertas())
+            ->when($filtros['linea_proceso_id'] ?? null, fn (Builder $consulta, string $linea) => $consulta->where('linea_proceso_id', $linea))
+            ->orderBy('fecha')
+            ->orderBy('correlativo')
+            ->get();
+        $camaras = AsignacionCamaraLoteMateriaPrima::query()
+            ->with('camara:id,codigo,nombre')
+            ->whereIn('lote_materia_prima_id', $ordenes->flatMap(fn (OrdenProcesoMp $orden) => $orden->lote_ids_vigentes ?? [])->unique())
+            ->get()
+            ->keyBy('lote_materia_prima_id');
+
+        return response()->json([
+            'data' => $ordenes->map(function (OrdenProcesoMp $orden) use ($presentador, $camaras): array {
+                $detalle = $presentador->detalle($orden);
+                $detalle['version_vigente']['lotes'] = array_map(fn (array $fila): array => [
+                    ...$fila,
+                    'camara' => $camaras[$fila['lote_materia_prima_id']]?->camara?->only(['id', 'codigo', 'nombre']),
+                ], $detalle['version_vigente']['lotes'] ?? []);
+                unset($detalle['versiones']);
+
+                return $detalle;
+            })->values(),
+        ]);
+    }
+
+    /** Supervisores que pueden autorizar con su PIN una entrega fuera de orden. */
+    public function autorizadores(AlcanceOperacionalUsuario $alcance): JsonResponse
+    {
+        Gate::authorize('entregar-fruta-proceso');
+
+        return response()->json([
+            'data' => User::query()
+                ->where('activo', true)
+                ->whereIn('rol', [RolUsuario::Administrador->value, RolUsuario::SupervisorFrio->value])
+                ->whereNotNull('pin_operacional_hash')
+                ->orderBy('name')
+                ->get()
+                ->filter(fn (User $usuario): bool => $alcance->puedeCorregirEntregasFrutaProceso($usuario))
+                ->map(fn (User $usuario): array => ['id' => $usuario->id, 'nombre' => $usuario->name])
+                ->values(),
+        ]);
+    }
+
     public function show(LoteMateriaPrima $loteMateriaPrima): FrutaProcesoLoteResource
     {
         Gate::authorize('consultar-fruta-proceso');
@@ -308,9 +374,12 @@ class FrutaProcesoController extends Controller
             'cliente',
             'recepcion',
             'asignacionCamara.camara',
+            'reservasOrdenProceso.orden.linea',
             'entregasProceso.entregadoPor',
             'entregasProceso.anuladoPor',
             'entregasProceso.dispositivo',
+            'entregasProceso.ordenProceso:id,codigo',
+            'entregasProceso.autorizadoPor:id,name',
             'entregasProceso.retornos.registradoPor',
             'entregasProceso.retornos.anuladoPor',
             'entregasProceso.retornos.dispositivo',

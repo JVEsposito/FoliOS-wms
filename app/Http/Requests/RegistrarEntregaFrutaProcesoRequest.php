@@ -20,9 +20,15 @@ class RegistrarEntregaFrutaProcesoRequest extends FormRequest
             'operacion_id' => ['required', 'uuid'],
             'cantidad_envases' => ['required', 'integer', 'min:1', 'max:100000'],
             'kilos_enviados' => ['nullable', 'numeric', 'min:0.001', 'max:999999999.999'],
-            'linea_proceso' => ['required', 'string', 'max:50'],
+            'orden_proceso_mp_id' => ['nullable', 'uuid'],
+            'version_orden_proceso_mp_id' => ['nullable', 'uuid'],
+            'autorizacion' => ['nullable', 'array'],
+            'autorizacion.user_id' => ['required_with:autorizacion', 'integer'],
+            'autorizacion.pin' => ['required_with:autorizacion', 'string', 'size:4'],
+            // Sin orden: compatibilidad con la APK anterior mientras no se exija orden.
+            'linea_proceso' => ['required_without:orden_proceso_mp_id', 'nullable', 'string', 'max:50'],
             'turno' => ['required', 'string', Rule::in(['A', 'B'])],
-            'numero_orden' => ['required', 'string', 'max:80'],
+            'numero_orden' => ['required_without:orden_proceso_mp_id', 'nullable', 'string', 'max:80'],
             'observacion' => ['nullable', 'string', 'max:2000'],
         ];
     }
