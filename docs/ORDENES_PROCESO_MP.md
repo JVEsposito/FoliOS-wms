@@ -102,7 +102,11 @@ Una orden terminada no admite versiones.
 
 ### Concurrencia
 
-Orden de bloqueo en toda operación sobre órdenes: primero la orden, después los lotes ordenados por id. Las reservas de un lote solo se escriben con ese lote bloqueado, y las entregas y reservas se leen con lectura actual después de bloquear los lotes. Así dos órdenes no pueden comprometer el mismo bin.
+Orden de bloqueo en toda operación sobre órdenes: primero la orden, después los lotes ordenados por id, después sus reservas. Las reservas y entregas de un lote solo se escriben con ese lote bloqueado.
+
+La orden guarda `lote_ids_vigentes`, así la versión anterior se conoce con la orden bloqueada. Antes de bloquear los lotes solo hay lecturas con bloqueo (temporada y línea con bloqueo compartido): la primera lectura simple abre el snapshot REPEATABLE READ después de tener los lotes y ve todas sus entregas confirmadas sin bloquear filas de entregas. Así las órdenes no compiten con Retornos de Packing, que bloquea entregas antes que lotes.
+
+`OrdenesProcesoMpConcurrenciaTest` lanza procesos PHP separados contra MySQL: dos órdenes en líneas distintas por los mismos bins (una 201, otra 422) y dos versiones simultáneas de la misma orden (una 200, otra 409).
 
 ### Reinicio operacional
 

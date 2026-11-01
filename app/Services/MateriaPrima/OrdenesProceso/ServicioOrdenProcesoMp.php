@@ -21,6 +21,7 @@ use App\Models\VersionOrdenProcesoMp;
 use App\Services\Secuencias\ServicioSecuenciaDocumento;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -31,8 +32,13 @@ use JsonException;
  * Crea, versiona y cancela órdenes de proceso de materia prima.
  *
  * Orden de bloqueo, igual en toda operación que toque órdenes: primero la orden, después
- * los lotes ordenados por id. Las reservas por lote solo se escriben con su lote bloqueado,
- * por eso la suma de bins pendientes de un lote entre órdenes abiertas se lee al día.
+ * los lotes ordenados por id, después sus reservas. Las reservas y las entregas de un lote
+ * solo se escriben con su lote bloqueado.
+ *
+ * Antes de bloquear los lotes solo hay lecturas con bloqueo: la primera lectura simple abre
+ * el snapshot REPEATABLE READ, y si ocurre después de bloquear los lotes ve todas las
+ * entregas confirmadas de esos lotes sin bloquear filas de entregas. Así esta clase no
+ * compite con Retornos de Packing, que bloquea entregas antes que lotes.
  */
 class ServicioOrdenProcesoMp
 {
@@ -66,7 +72,7 @@ class ServicioOrdenProcesoMp
                     return $this->resolverRepetida($existente->payload_hash, $hash, $existente);
                 }
 
-                $temporada = $this->temporadas->buscar();
+                $temporada = $this->temporadas->buscarConBloqueoCompartido();
                 if (! $temporada) {
                     throw new ConflictoOperacion('No hay una temporada activa para programar proceso.');
                 }
@@ -135,7 +141,7 @@ class ServicioOrdenProcesoMp
                     );
                 }
 
-                $linea = LineaProceso::query()->findOrFail($orden->linea_proceso_id);
+                $linea = LineaProceso::query()->sharedLock()->findOrFail($orden->linea_proceso_id);
                 $numero = $orden->numero_version_vigente + 1;
                 $this->publicar($orden, $linea, $datos, $usuario, $numero, OrigenVersionOrdenProcesoMp::Digitador, $datos['operacion_id'], $hash);
 
@@ -165,13 +171,7 @@ class ServicioOrdenProcesoMp
                 throw new ConflictoOperacion("{$orden->codigo} cambió mientras la revisabas. Actualiza antes de cancelar.");
             }
 
-            // Las reservas de esta orden solo cambian con la orden bloqueada: se leen sin bloqueo
-            // y se bloquean los lotes antes de escribirlas, igual que al publicar o entregar.
-            $loteIds = ReservaLoteOrdenProcesoMp::query()
-                ->where('orden_proceso_mp_id', $orden->id)
-                ->orderBy('lote_materia_prima_id')
-                ->pluck('lote_materia_prima_id');
-            LoteMateriaPrima::query()->whereKey($loteIds)->orderBy('id')->lockForUpdate()->get(['id']);
+            $this->bloquearLotes(collect($orden->lote_ids_vigentes ?? []));
             ReservaLoteOrdenProcesoMp::query()
                 ->where('orden_proceso_mp_id', $orden->id)
                 ->update(['bins_pendientes' => 0, 'updated_at' => now()]);
@@ -214,7 +214,7 @@ class ServicioOrdenProcesoMp
             ->limit(300)
             ->get();
         $ids = $lotes->pluck('id');
-        $entregados = $this->entregadosPorLote($ids, bloquear: false);
+        $entregados = $this->entregadosPorLote($ids);
         $comprometidos = ReservaLoteOrdenProcesoMp::query()
             ->whereIn('lote_materia_prima_id', $ids)
             ->whereHas('orden', fn ($consulta) => $consulta->whereIn('estado', EstadoOrdenProcesoMp::abiertas()))
@@ -273,20 +273,8 @@ class ServicioOrdenProcesoMp
             throw ValidationException::withMessages(['lotes' => 'Un lote solo puede aparecer una vez en la orden.']);
         }
 
-        $reservasPrevias = ReservaLoteOrdenProcesoMp::query()
-            ->where('orden_proceso_mp_id', $orden->id)
-            ->get()
-            ->keyBy('lote_materia_prima_id');
-        $loteIds = collect($ids)->merge($reservasPrevias->keys())->unique()->sort()->values();
-
-        // Bloqueo en orden de id, después de la orden: el mismo orden que usa Fruta a proceso.
-        $lotes = LoteMateriaPrima::query()
-            ->with('cliente:id,nombre')
-            ->whereKey($loteIds)
-            ->orderBy('id')
-            ->lockForUpdate()
-            ->get()
-            ->keyBy('id');
+        $loteIds = collect($ids)->merge($orden->lote_ids_vigentes ?? [])->unique()->values();
+        $lotes = $this->bloquearLotes($loteIds)->load('cliente:id,nombre')->keyBy('id');
         $reservas = ReservaLoteOrdenProcesoMp::query()
             ->whereIn('lote_materia_prima_id', $loteIds)
             ->lockForUpdate()
@@ -298,7 +286,7 @@ class ServicioOrdenProcesoMp
             ->filter(fn (ReservaLoteOrdenProcesoMp $reserva): bool => (bool) $reserva->orden?->estado?->abierta())
             ->groupBy('lote_materia_prima_id')
             ->map(fn (Collection $grupo): int => (int) $grupo->sum('bins_pendientes'));
-        $entregados = $this->entregadosPorLote($loteIds, bloquear: true);
+        $entregados = $this->entregadosPorLote($loteIds);
 
         foreach ($propias as $loteId => $reserva) {
             if (! in_array($loteId, $ids, true) && $reserva->bins_entregados > 0) {
@@ -437,6 +425,7 @@ class ServicioOrdenProcesoMp
         $orden->update([
             'version_vigente_id' => $version->id,
             'numero_version_vigente' => $numero,
+            'lote_ids_vigentes' => array_values($ids),
             'version' => $numero === 1 ? 1 : $orden->version + 1,
             ...($completa ? [
                 'estado' => EstadoOrdenProcesoMp::Terminada,
@@ -450,13 +439,32 @@ class ServicioOrdenProcesoMp
     }
 
     /**
-     * Bins entregados vigentes por lote. Con bloqueo es una lectura actual: solo se usa con
-     * los lotes ya bloqueados, así no abre un snapshot anterior a sus entregas.
+     * Bloquea los lotes en orden de id. Es la única forma en que esta clase toma lotes.
+     *
+     * @param  Collection<int, string>  $loteIds
+     * @return EloquentCollection<int, LoteMateriaPrima>
+     */
+    public function bloquearLotes(Collection $loteIds): EloquentCollection
+    {
+        if ($loteIds->isEmpty()) {
+            return new EloquentCollection;
+        }
+
+        return LoteMateriaPrima::query()
+            ->whereKey($loteIds->unique()->values())
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+    }
+
+    /**
+     * Bins entregados vigentes por lote, sin bloquear entregas. Dentro de una transacción solo
+     * es actual si se llama con los lotes ya bloqueados (ver la nota de la clase).
      *
      * @param  Collection<int, string>  $loteIds
      * @return Collection<string, int>
      */
-    private function entregadosPorLote(Collection $loteIds, bool $bloquear): Collection
+    private function entregadosPorLote(Collection $loteIds): Collection
     {
         if ($loteIds->isEmpty()) {
             return collect();
@@ -465,7 +473,6 @@ class ServicioOrdenProcesoMp
         return EntregaFrutaProceso::query()
             ->whereIn('lote_materia_prima_id', $loteIds)
             ->whereNull('anulado_at')
-            ->when($bloquear, fn ($consulta) => $consulta->lockForUpdate())
             ->get(['lote_materia_prima_id', 'cantidad_envases'])
             ->groupBy('lote_materia_prima_id')
             ->map(fn (Collection $grupo): int => (int) $grupo->sum('cantidad_envases'));

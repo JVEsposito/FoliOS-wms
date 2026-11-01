@@ -23,6 +23,9 @@ return new class extends Migration
             $table->string('tipo_cierre', 20)->nullable();
             $table->uuid('version_vigente_id')->nullable();
             $table->unsignedSmallInteger('numero_version_vigente')->default(1);
+            // Lotes de la versión vigente. Se leen con la orden bloqueada, sin abrir un snapshot
+            // antes de bloquear los lotes.
+            $table->json('lote_ids_vigentes')->nullable();
             $table->unsignedInteger('version')->default(1);
             $table->foreignId('creado_por_user_id');
             $table->foreignId('cerrado_por_user_id')->nullable();

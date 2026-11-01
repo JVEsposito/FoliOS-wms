@@ -27,6 +27,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'tipo_cierre',
     'version_vigente_id',
     'numero_version_vigente',
+    'lote_ids_vigentes',
     'version',
     'creado_por_user_id',
     'cerrado_por_user_id',
@@ -48,6 +49,7 @@ class OrdenProcesoMp extends Model implements PerteneceATemporada
             'tipo_cierre' => TipoCierreOrdenProcesoMp::class,
             'correlativo' => 'integer',
             'numero_version_vigente' => 'integer',
+            'lote_ids_vigentes' => 'array',
             'version' => 'integer',
             'cerrado_at' => 'datetime',
         ];
