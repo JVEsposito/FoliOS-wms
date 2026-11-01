@@ -158,6 +158,11 @@ class LoteMateriaPrima extends Model implements PerteneceATemporada
         return $this->hasMany(EventoLoteMateriaPrima::class, 'lote_materia_prima_id');
     }
 
+    public function reservasOrdenProceso(): HasMany
+    {
+        return $this->hasMany(ReservaLoteOrdenProcesoMp::class, 'lote_materia_prima_id');
+    }
+
     public function entregasProceso(): HasMany
     {
         return $this->hasMany(EntregaFrutaProceso::class, 'lote_materia_prima_id');

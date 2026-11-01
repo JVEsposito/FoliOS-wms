@@ -14,6 +14,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
     'operacion_id',
     'payload_hash',
     'lote_materia_prima_id',
+    'orden_proceso_mp_id',
+    'version_orden_proceso_mp_id',
+    'fuera_de_orden',
+    'autorizado_por_user_id',
     'asignacion_camara_lote_id',
     'camara_id',
     'cantidad_envases',
@@ -49,6 +53,16 @@ class EntregaFrutaProceso extends Model implements PerteneceATemporada
             AsignacionCamaraLoteMateriaPrima::class,
             'asignacion_camara_lote_id',
         );
+    }
+
+    public function ordenProceso(): BelongsTo
+    {
+        return $this->belongsTo(OrdenProcesoMp::class, 'orden_proceso_mp_id');
+    }
+
+    public function autorizadoPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'autorizado_por_user_id');
     }
 
     public function camara(): BelongsTo
@@ -88,6 +102,7 @@ class EntregaFrutaProceso extends Model implements PerteneceATemporada
             'kilos_enviados' => 'decimal:3',
             'saldo_anterior' => 'integer',
             'saldo_posterior' => 'integer',
+            'fuera_de_orden' => 'boolean',
             'entregado_at' => 'datetime',
             'anulado_at' => 'datetime',
         ];

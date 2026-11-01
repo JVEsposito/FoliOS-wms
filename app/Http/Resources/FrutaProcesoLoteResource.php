@@ -69,6 +69,19 @@ class FrutaProcesoLoteResource extends JsonResource
                 'disponibles' => $disponibles,
                 'porcentaje' => $total > 0 ? round(($entregados / $total) * 100, 1) : 0,
             ],
+            'ordenes' => $this->relationLoaded('reservasOrdenProceso')
+                ? $this->reservasOrdenProceso
+                    ->filter(fn ($reserva): bool => $reserva->bins_pendientes > 0 && (bool) $reserva->orden?->estado?->abierta())
+                    ->map(fn ($reserva): array => [
+                        'id' => $reserva->orden->id,
+                        'codigo' => $reserva->orden->codigo,
+                        'fecha' => $reserva->orden->fecha?->toDateString(),
+                        'linea' => $reserva->orden->linea?->only(['id', 'codigo', 'nombre']),
+                        'version_id' => $reserva->orden->version_vigente_id,
+                        'numero_version' => $reserva->orden->numero_version_vigente,
+                        'bins_pendientes' => $reserva->bins_pendientes,
+                    ])->values()
+                : [],
             'entregas' => $entregas->map(
                 fn (EntregaFrutaProceso $entrega): array => $this->entrega(
                     $entrega,
@@ -131,6 +144,12 @@ class FrutaProcesoLoteResource extends JsonResource
             'linea_proceso' => $entrega->linea_proceso,
             'turno' => $entrega->turno,
             'numero_orden' => $entrega->numero_orden,
+            'orden_proceso' => $entrega->orden_proceso_mp_id ? [
+                'id' => $entrega->orden_proceso_mp_id,
+                'codigo' => $entrega->ordenProceso?->codigo,
+                'fuera_de_orden' => (bool) $entrega->fuera_de_orden,
+                'autorizado_por' => $entrega->autorizadoPor?->name,
+            ] : null,
             'observacion' => $entrega->observacion,
             'entregado_por' => $entrega->entregadoPor ? [
                 'id' => $entrega->entregadoPor->id,

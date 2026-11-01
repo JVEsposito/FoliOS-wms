@@ -141,7 +141,7 @@ function renderReturnMovement(movement) {
     return `<article class="return-movement${movement.anulado ? ' is-void' : ''}"><div class="return-movement__heading"><div><strong>${escapeHtml(movement.numero)}${movement.cierra_entrega ? ' · Cierre del viaje' : ' · Retorno parcial'}</strong><small>${escapeHtml(movement.registrado_por?.nombre)} · ${escapeHtml(formatDate(movement.registrado_at))}${movement.anulado ? ` · Anulado: ${escapeHtml(movement.motivo_anulacion)}` : ''}</small></div>${movement.puede_anular ? `<button data-annul-return="${escapeHtml(movement.id)}" type="button">Anular retorno</button>` : ''}</div>${originMarkup}${movement.resultados.map(renderResult).join('')}</article>`;
 }
 function renderDelivery(delivery) {
-    const destination = `${delivery.linea_proceso} · turno ${delivery.turno} · orden ${delivery.numero_orden}`;
+    const destination = `${delivery.linea_proceso} · turno ${delivery.turno} · orden ${delivery.numero_orden}${delivery.orden_proceso ? ` · ${delivery.orden_proceso.codigo}${delivery.orden_proceso.fuera_de_orden ? ' (fuera de orden)' : ''}` : ''}`;
     const actions = [
         delivery.retorno?.puede_registrar ? `<button class="return-button" data-return="${escapeHtml(delivery.id)}" type="button">Registrar retorno</button>` : '',
         delivery.puede_anular ? `<button data-annul="${escapeHtml(delivery.id)}" type="button">Anular entrega</button>` : '',
@@ -229,16 +229,36 @@ function openDelivery(lotId) {
         ? `${lot.progreso.disponibles} bins disponibles en ${lot.camara.codigo}.`
         : `${lot.progreso.disponibles} bins disponibles directamente desde Hidrocooler.`;
     elements.deliverySummary.innerHTML = `<div><span>LOTE</span><strong>${escapeHtml(lot.numero_lote)}</strong></div><div><span>PROGRESO</span><strong>${formatNumber(lot.progreso.entregados)}/${formatNumber(lot.progreso.total)}</strong></div><div><span>SALDO MÁXIMO</span><strong>${formatNumber(lot.progreso.disponibles)} bins</strong></div>`;
+    const orders = lot.ordenes || [];
+    elements.deliveryForm.elements.orden_proceso_mp_id.innerHTML = orders.map((order) => `<option value="${escapeHtml(order.id)}" data-version="${escapeHtml(order.version_id)}" data-pending="${escapeHtml(order.bins_pendientes)}">${escapeHtml(order.codigo)} · v${escapeHtml(order.numero_version)} · ${escapeHtml(order.linea?.nombre || 'Sin línea')} · ${formatNumber(order.bins_pendientes)} bins pendientes</option>`).join('')
+        + '<option value="">Sin orden (solo mientras no se exija)</option>';
+    toggleDeliveryFields();
     elements.deliveryError.textContent = ''; elements.deliveryDialog.showModal();
+}
+function selectedDeliveryOrder() {
+    const select = elements.deliveryForm.elements.orden_proceso_mp_id;
+    return select.value ? select.selectedOptions[0] : null;
+}
+function toggleDeliveryFields() {
+    const withOrder = Boolean(selectedDeliveryOrder());
+    elements.deliveryForm.querySelectorAll('[data-free-field]').forEach((field) => { field.hidden = withOrder; });
 }
 async function submitDelivery() {
     const data = new FormData(elements.deliveryForm); const quantity = Number(data.get('cantidad_envases'));
-    if (!Number.isInteger(quantity) || quantity < 1 || quantity > Number(state.selected?.lot?.progreso.disponibles || 0)) {
-        elements.deliveryError.textContent = `Ingresa una cantidad entre 1 y ${state.selected?.lot?.progreso.disponibles || 0}.`; return;
+    const order = selectedDeliveryOrder();
+    const maximum = Math.min(Number(state.selected?.lot?.progreso.disponibles || 0), order ? Number(order.dataset.pending) : Infinity);
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > maximum) {
+        elements.deliveryError.textContent = `Ingresa una cantidad entre 1 y ${maximum}.`; return;
     }
     const kilos = String(data.get('kilos_enviados') || '').trim();
-    const payload = { operacion_id: uuid(), camara_origen_id: state.selected.lot.camara?.id ?? null, cantidad_envases: quantity, kilos_enviados: kilos ? Number(kilos) : null, linea_proceso: String(data.get('linea_proceso') || '').trim(), turno: data.get('turno'), numero_orden: String(data.get('numero_orden') || '').trim(), observacion: String(data.get('observacion') || '').trim() || null };
-    if (!payload.linea_proceso || !payload.turno || !payload.numero_orden) { elements.deliveryError.textContent = 'Completa línea, turno y número de orden.'; return; }
+    const payload = { operacion_id: uuid(), camara_origen_id: state.selected.lot.camara?.id ?? null, cantidad_envases: quantity, kilos_enviados: kilos ? Number(kilos) : null, turno: data.get('turno'), observacion: String(data.get('observacion') || '').trim() || null };
+    if (order) {
+        Object.assign(payload, { orden_proceso_mp_id: order.value, version_orden_proceso_mp_id: order.dataset.version || null });
+        if (!payload.turno) { elements.deliveryError.textContent = 'Elige el turno.'; return; }
+    } else {
+        Object.assign(payload, { linea_proceso: String(data.get('linea_proceso') || '').trim(), numero_orden: String(data.get('numero_orden') || '').trim() });
+        if (!payload.linea_proceso || !payload.turno || !payload.numero_orden) { elements.deliveryError.textContent = 'Completa línea, turno y número de orden.'; return; }
+    }
     setBusy(true, 'Registrando viaje…');
     try { await api(`/api/materia-prima/fruta-proceso/lotes/${state.selected.lot.id}/entregas`, { method: 'POST', body: JSON.stringify(payload) }); elements.deliveryDialog.close(); toast('Viaje registrado y saldo actualizado.'); await load(); }
     catch (error) { elements.deliveryError.textContent = error.message; }
@@ -350,6 +370,7 @@ elements.list.addEventListener('click', (event) => {
     const annulDelivery = event.target.closest('[data-annul]'); if (annulDelivery) void annul(`/api/materia-prima/fruta-proceso/entregas/${annulDelivery.dataset.annul}/anular`, 'Entrega anulada; el saldo del lote fue restituido.', 'Anulando entrega…');
     const annulReturn = event.target.closest('[data-annul-return]'); if (annulReturn) void annul(`/api/materia-prima/fruta-proceso/retornos/${annulReturn.dataset.annulReturn}/anular`, 'Retorno anulado; sus sublotes quedaron invalidados.', 'Anulando retorno…');
 });
+elements.deliveryForm.elements.orden_proceso_mp_id.addEventListener('change', toggleDeliveryFields);
 elements.deliveryForm.addEventListener('submit', (event) => { event.preventDefault(); if (event.submitter?.value === 'cancel') { elements.deliveryDialog.close(); return; } void submitDelivery(); });
 elements.returnForm.addEventListener('submit', (event) => { event.preventDefault(); if (event.submitter?.value === 'cancel') { elements.returnDialog.close(); return; } void submitReturn(); });
 elements.locationForm.addEventListener('submit', (event) => { event.preventDefault(); if (event.submitter?.value === 'cancel') { elements.locationDialog.close(); return; } void submitLocation(); });

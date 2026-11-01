@@ -468,10 +468,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('can:consultar-fruta-proceso')->prefix('materia-prima/fruta-proceso')->group(function () {
         Route::get('/resumen', [FrutaProcesoController::class, 'resumen']);
         Route::get('/catalogos', [RetornoPackingController::class, 'catalogos']);
+        Route::get('/ordenes', [FrutaProcesoController::class, 'ordenes']);
         Route::get('/lotes', [FrutaProcesoController::class, 'index']);
         Route::get('/lotes/{loteMateriaPrima}', [FrutaProcesoController::class, 'show']);
     });
     Route::post('/materia-prima/fruta-proceso/lotes/{loteMateriaPrima}/entregas', [FrutaProcesoController::class, 'store'])
+        ->middleware('can:entregar-fruta-proceso');
+    Route::get('/materia-prima/fruta-proceso/autorizadores', [FrutaProcesoController::class, 'autorizadores'])
         ->middleware('can:entregar-fruta-proceso');
     Route::post('/materia-prima/fruta-proceso/entregas/{entregaFrutaProceso}/anular', [FrutaProcesoController::class, 'anular'])
         ->middleware('can:anular-entregas-fruta-proceso');

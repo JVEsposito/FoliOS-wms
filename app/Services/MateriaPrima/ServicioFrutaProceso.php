@@ -9,19 +9,33 @@ use App\Models\AsignacionCamaraLoteMateriaPrima;
 use App\Models\EntregaFrutaProceso;
 use App\Models\EventoLoteMateriaPrima;
 use App\Models\LoteMateriaPrima;
+use App\Models\LoteVersionOrdenMp;
+use App\Models\OrdenProcesoMp;
 use App\Models\PersonalAccessToken;
 use App\Models\User;
+use App\Services\Autenticacion\ServicioPinOperacional;
 use App\Services\Autorizacion\AlcanceOperacionalUsuario;
+use App\Services\MateriaPrima\OrdenesProceso\ServicioOrdenProcesoMp;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use JsonException;
 
+/**
+ * Entregas de bins desde cámara MP hacia Packing.
+ *
+ * Con orden de proceso el bloqueo sigue el mismo orden que las órdenes: orden, lotes de la
+ * orden por id (incluido el lote entregado) y después reservas. La temporada se lee con
+ * bloqueo compartido para que la primera lectura simple, que abre el snapshot, ocurra con el
+ * lote ya bloqueado y vea todas sus entregas confirmadas.
+ */
 class ServicioFrutaProceso
 {
     public function __construct(
         private readonly AlcanceOperacionalUsuario $alcance,
+        private readonly ServicioOrdenProcesoMp $ordenes,
+        private readonly ServicioPinOperacional $pines,
     ) {}
 
     /** @param array<string, mixed> $datos */
@@ -30,11 +44,22 @@ class ServicioFrutaProceso
         array $datos,
         User $usuario,
     ): LoteMateriaPrima {
+        $ordenId = $datos['orden_proceso_mp_id'] ?? null;
+        if (! $ordenId && config('materia_prima.fruta_proceso_exige_orden')) {
+            throw ValidationException::withMessages([
+                'orden_proceso_mp_id' => 'Elige la orden de proceso de la línea antes de registrar el viaje.',
+            ]);
+        }
+        // El PIN se verifica fuera de la transacción: los intentos fallidos deben quedar
+        // guardados aunque la entrega se rechace.
+        $autorizador = $ordenId && filled($datos['autorizacion']['user_id'] ?? null)
+            ? $this->verificarAutorizador($datos['autorizacion'])
+            : null;
         $payload = $this->payload($datos);
         $hash = $this->hash($payload);
 
         try {
-            return DB::transaction(function () use ($lote, $datos, $usuario, $hash): LoteMateriaPrima {
+            return DB::transaction(function () use ($lote, $datos, $usuario, $hash, $ordenId, $autorizador): LoteMateriaPrima {
                 $existente = EntregaFrutaProceso::query()
                     ->where('operacion_id', $datos['operacion_id'])
                     ->lockForUpdate()
@@ -51,10 +76,25 @@ class ServicioFrutaProceso
                     );
                 }
 
+                $orden = null;
+                if ($ordenId) {
+                    $orden = OrdenProcesoMp::query()->lockForUpdate()->find($ordenId);
+                    if (! $orden) {
+                        throw ValidationException::withMessages(['orden_proceso_mp_id' => 'La orden de proceso no existe.']);
+                    }
+                    if (! $orden->estado->abierta()) {
+                        throw new ConflictoOperacion("{$orden->codigo} ya terminó. Elige otra orden de la línea.");
+                    }
+                    $this->ordenes->bloquearLotes(collect($orden->lote_ids_vigentes ?? [])->push($lote->id));
+                }
+                $temporadaId = app(ServicioTemporadaActiva::class)->buscarConBloqueoCompartido()?->id;
                 $lote = LoteMateriaPrima::query()
-                    ->whereHas('temporada', fn ($consulta) => $consulta->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
+                    ->where('temporada_id', $temporadaId)
                     ->lockForUpdate()
                     ->findOrFail($lote->id);
+                if ($orden && $orden->temporada_id !== $lote->temporada_id) {
+                    throw new ConflictoOperacion('La orden pertenece a otra temporada.');
+                }
                 if (! in_array($lote->estado, [
                     EstadoLoteMateriaPrima::DisponibleProceso,
                     EstadoLoteMateriaPrima::AsignadoCamara,
@@ -97,12 +137,23 @@ class ServicioFrutaProceso
                     ]);
                 }
 
+                $vinculo = $orden
+                    ? $this->vincularOrden($orden, $lote, $cantidad, $datos, $autorizador)
+                    : null;
+                if ($orden) {
+                    $this->ordenes->aplicarEntrega($orden, $lote, $cantidad, $usuario);
+                }
+
                 $saldoPosterior = $disponibles - $cantidad;
                 $token = $usuario->currentAccessToken();
                 $entrega = EntregaFrutaProceso::create([
                     'operacion_id' => $datos['operacion_id'],
                     'payload_hash' => $hash,
                     'lote_materia_prima_id' => $lote->id,
+                    'orden_proceso_mp_id' => $orden?->id,
+                    'version_orden_proceso_mp_id' => $vinculo['version_id'] ?? null,
+                    'fuera_de_orden' => $vinculo['fuera_de_orden'] ?? false,
+                    'autorizado_por_user_id' => ($vinculo['fuera_de_orden'] ?? false) ? $autorizador?->id : null,
                     'asignacion_camara_lote_id' => $asignacion?->id,
                     'camara_id' => $asignacion?->camara_id,
                     'cantidad_envases' => $cantidad,
@@ -111,9 +162,11 @@ class ServicioFrutaProceso
                         : null,
                     'saldo_anterior' => $disponibles,
                     'saldo_posterior' => $saldoPosterior,
-                    'linea_proceso' => trim((string) $datos['linea_proceso']),
+                    // Con orden, línea y número salen de ella: así Finanzas y los retornos por bin
+                    // siguen leyendo los mismos campos.
+                    'linea_proceso' => $orden ? $orden->linea->nombre : trim((string) $datos['linea_proceso']),
                     'turno' => strtoupper(trim((string) $datos['turno'])),
-                    'numero_orden' => trim((string) $datos['numero_orden']),
+                    'numero_orden' => $orden ? ($vinculo['numero_proceso'] ?? $orden->codigo) : trim((string) $datos['numero_orden']),
                     'observacion' => filled($datos['observacion'] ?? null)
                         ? trim((string) $datos['observacion'])
                         : null,
@@ -149,6 +202,10 @@ class ServicioFrutaProceso
                         'linea_proceso' => $entrega->linea_proceso,
                         'turno' => $entrega->turno,
                         'numero_orden' => $entrega->numero_orden,
+                        'orden_proceso_mp_id' => $orden?->id,
+                        'orden_proceso_codigo' => $orden?->codigo,
+                        'fuera_de_orden' => $entrega->fuera_de_orden,
+                        'autorizado_por_user_id' => $entrega->autorizado_por_user_id,
                         'camara_id' => $asignacion?->camara_id,
                         'camara_origen_id' => $asignacion?->camara_id,
                         'camara_origen_codigo' => $asignacion?->camara?->codigo,
@@ -189,11 +246,17 @@ class ServicioFrutaProceso
                 $motivo,
                 $usuario,
             ): LoteMateriaPrima {
+                // La orden de una entrega no cambia: se bloquea primero, como en toda operación
+                // sobre órdenes, y después la entrega y el lote como hasta ahora.
+                $orden = $entrega->orden_proceso_mp_id
+                    ? OrdenProcesoMp::query()->lockForUpdate()->find($entrega->orden_proceso_mp_id)
+                    : null;
                 $entrega = EntregaFrutaProceso::query()
                     ->lockForUpdate()
                     ->findOrFail($entrega->id);
+                $temporadaId = app(ServicioTemporadaActiva::class)->buscarConBloqueoCompartido()?->id;
                 $lote = LoteMateriaPrima::query()
-                    ->whereHas('temporada', fn ($consulta) => $consulta->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
+                    ->where('temporada_id', $temporadaId)
                     ->lockForUpdate()
                     ->findOrFail($entrega->lote_materia_prima_id);
 
@@ -230,6 +293,9 @@ class ServicioFrutaProceso
                     'anulado_at' => now(),
                     'motivo_anulacion' => trim($motivo),
                 ]);
+                if ($orden) {
+                    $this->ordenes->revertirEntrega($orden, $lote, $entrega->cantidad_envases, $usuario);
+                }
 
                 $entregados = $this->cantidadEntregada($lote);
                 $tieneCamara = AsignacionCamaraLoteMateriaPrima::query()
@@ -366,13 +432,84 @@ class ServicioFrutaProceso
             'kilos_enviados' => filled($datos['kilos_enviados'] ?? null)
                 ? round((float) $datos['kilos_enviados'], 3)
                 : null,
-            'linea_proceso' => trim((string) $datos['linea_proceso']),
+            'linea_proceso' => trim((string) ($datos['linea_proceso'] ?? '')),
             'turno' => strtoupper(trim((string) $datos['turno'])),
-            'numero_orden' => trim((string) $datos['numero_orden']),
+            'numero_orden' => trim((string) ($datos['numero_orden'] ?? '')),
             'observacion' => filled($datos['observacion'] ?? null)
                 ? trim((string) $datos['observacion'])
                 : null,
+            ...(filled($datos['orden_proceso_mp_id'] ?? null) ? [
+                'orden_proceso_mp_id' => $datos['orden_proceso_mp_id'],
+                'version_orden_proceso_mp_id' => $datos['version_orden_proceso_mp_id'] ?? null,
+                'autorizado_por_user_id' => $datos['autorizacion']['user_id'] ?? null,
+            ] : []),
         ];
+    }
+
+    /**
+     * Relaciona la entrega con la orden. Si el lote está en la versión vigente se entrega contra
+     * su fila; si no, solo con un supervisor autorizado entra a la orden como nueva versión.
+     *
+     * @param  array<string, mixed>  $datos
+     * @return array{version_id: string, fuera_de_orden: bool, numero_proceso: string|null}
+     */
+    private function vincularOrden(
+        OrdenProcesoMp $orden,
+        LoteMateriaPrima $lote,
+        int $cantidad,
+        array $datos,
+        ?User $autorizador,
+    ): array {
+        $fila = fn (?string $versionId): ?LoteVersionOrdenMp => $versionId ? LoteVersionOrdenMp::query()
+            ->where('version_orden_proceso_mp_id', $versionId)
+            ->where('lote_materia_prima_id', $lote->id)
+            ->first() : null;
+        $vigente = $fila($orden->version_vigente_id);
+        $conocidaId = $datos['version_orden_proceso_mp_id'] ?? null;
+        $cambio = $conocidaId !== null && $conocidaId !== $orden->version_vigente_id;
+        $conocida = $cambio ? $fila($conocidaId) : null;
+
+        if ($vigente) {
+            if ($cambio && $conocida?->bins_programados !== $vigente->bins_programados) {
+                throw new ConflictoOperacion(
+                    "{$orden->codigo} cambió a la v{$orden->numero_version_vigente} y modificó el lote {$lote->numero_lote}. Actualiza la orden antes de entregar.",
+                );
+            }
+
+            return [
+                'version_id' => $orden->version_vigente_id,
+                'fuera_de_orden' => false,
+                'numero_proceso' => $vigente->numero_proceso,
+            ];
+        }
+        if ($conocida) {
+            throw new ConflictoOperacion(
+                "El lote {$lote->numero_lote} salió de {$orden->codigo} en la v{$orden->numero_version_vigente}. Actualiza la orden antes de entregar.",
+            );
+        }
+        if (! $autorizador) {
+            throw ValidationException::withMessages([
+                'autorizacion' => "El lote {$lote->numero_lote} no está en {$orden->codigo}. Un supervisor de frío debe autorizar la entrega con su PIN.",
+            ]);
+        }
+
+        $version = $this->ordenes->agregarFueraDeOrden($orden, $lote, $cantidad, $autorizador);
+
+        return ['version_id' => $version->id, 'fuera_de_orden' => true, 'numero_proceso' => null];
+    }
+
+    /** @param array<string, mixed> $autorizacion */
+    private function verificarAutorizador(array $autorizacion): User
+    {
+        $autorizador = User::query()->find($autorizacion['user_id']);
+        if (! $autorizador || ! $this->alcance->puedeCorregirEntregasFrutaProceso($autorizador)) {
+            throw ValidationException::withMessages([
+                'autorizacion.user_id' => 'Solo un supervisor de frío o administrador puede autorizar una entrega fuera de orden.',
+            ]);
+        }
+        $this->pines->verificar($autorizador, (string) ($autorizacion['pin'] ?? ''), 'autorizacion.pin');
+
+        return $autorizador;
     }
 
     /** @param array<string, mixed> $payload */
@@ -416,9 +553,12 @@ class ServicioFrutaProceso
             'cliente',
             'recepcion',
             'asignacionCamara.camara',
+            'reservasOrdenProceso.orden.linea',
             'entregasProceso.entregadoPor',
             'entregasProceso.anuladoPor',
             'entregasProceso.dispositivo',
+            'entregasProceso.ordenProceso:id,codigo',
+            'entregasProceso.autorizadoPor:id,name',
             'entregasProceso.retornos.registradoPor',
             'entregasProceso.retornos.anuladoPor',
             'entregasProceso.retornos.dispositivo',

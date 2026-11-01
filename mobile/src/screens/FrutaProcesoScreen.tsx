@@ -16,9 +16,13 @@ import { cameraDisplayName } from '../domain/cameras';
 import { OPERATIONAL_POLL_INTERVAL_MS } from '../config/polling';
 import { useOperationalPolling } from '../hooks/useOperationalPolling';
 import {
+  CreateProcessDelivery,
+  ProcessAuthorizer,
   ProcessCatalogs,
   ProcessDelivery,
   ProcessLot,
+  ProcessOrder,
+  ProcessOrderRow,
   ProcessReturnMovement,
   ProcessSublot,
   ProcessSummary,
@@ -29,15 +33,21 @@ import {
   createPackingReturn,
   createProcessDelivery,
   getProcessCatalogs,
+  getProcessLot,
   getProcessSummary,
+  listProcessAuthorizers,
   listProcessLots,
+  listProcessOrders,
   locatePackingSublot,
 } from '../services/frutaProcesoApi';
+import { ApiError } from '../services/apiError';
 import { colors } from '../theme/colors';
 
 type Props = { auth: AuthSession; baseUrl: string; onLogout: () => void };
 type StatusFilter = 'abiertos' | 'completados';
-type Section = 'entregas' | 'retornos';
+type Section = 'ordenes' | 'entregas' | 'retornos';
+/** orden: lote programado · fuera: lote fuera de orden con PIN de supervisor · libre: sin orden (transición). */
+type DeliveryMode = 'orden' | 'fuera' | 'libre';
 type Action =
   | { type: 'deliver'; lot: ProcessLot }
   | { type: 'return'; lot: ProcessLot; delivery: ProcessDelivery }
@@ -69,7 +79,15 @@ export function FrutaProcesoScreen({ auth, baseUrl, onLogout }: Props) {
   const [summary, setSummary] = useState(EMPTY_SUMMARY);
   const [catalogs, setCatalogs] = useState(EMPTY_CATALOGS);
   const [lots, setLots] = useState<ProcessLot[]>([]);
-  const [section, setSection] = useState<Section>('entregas');
+  const [section, setSection] = useState<Section>('ordenes');
+  const [orders, setOrders] = useState<ProcessOrder[]>([]);
+  const [orderLine, setOrderLine] = useState('');
+  const [deliveryMode, setDeliveryMode] = useState<DeliveryMode>('orden');
+  const [deliveryOrderId, setDeliveryOrderId] = useState('');
+  const [deliveryVersionId, setDeliveryVersionId] = useState<string | null>(null);
+  const [authorizers, setAuthorizers] = useState<ProcessAuthorizer[]>([]);
+  const [authorizerId, setAuthorizerId] = useState<number | null>(null);
+  const [authorizerPin, setAuthorizerPin] = useState('');
   const [filter, setFilter] = useState<StatusFilter>('abiertos');
   const [search, setSearch] = useState('');
   const [busy, setBusy] = useState(true);
@@ -92,7 +110,7 @@ export function FrutaProcesoScreen({ auth, baseUrl, onLogout }: Props) {
 
   useEffect(() => {
     void load();
-  }, [filter, section]);
+  }, [filter, section, orderLine]);
 
   useEffect(() => {
     void loadCatalogs();
@@ -123,6 +141,12 @@ export function FrutaProcesoScreen({ auth, baseUrl, onLogout }: Props) {
 
   async function load(silent = false) {
     if (!silent) { setBusy(true); setError(''); setMessage(''); }
+    if (section === 'ordenes') {
+      try { setOrders(await listProcessOrders(baseUrl, auth.token, orderLine)); }
+      catch (reason) { if (!silent) setError(errorMessage(reason)); else throw reason; }
+      finally { if (!silent) setBusy(false); }
+      return;
+    }
     try {
       let nextSummary: ProcessSummary;
       let nextLots: ProcessLot[];
@@ -155,9 +179,43 @@ export function FrutaProcesoScreen({ auth, baseUrl, onLogout }: Props) {
   function newResult(): ReturnResultDraft {
     return { id: Crypto.randomUUID(), typeId: '', name: '', bins: '', kilos: '' };
   }
-  function openDelivery(lot: ProcessLot) {
+  function openDelivery(lot: ProcessLot, orderId?: string) {
+    const programmed = lot.ordenes.find((order) => order.id === orderId) ?? lot.ordenes[0];
     setAction({ type: 'deliver', lot }); setOperationId(Crypto.randomUUID());
+    setDeliveryMode(programmed ? 'orden' : 'fuera');
+    setDeliveryOrderId(programmed?.id ?? ''); setDeliveryVersionId(programmed?.version_id ?? null);
+    setAuthorizerId(null); setAuthorizerPin('');
     setQuantity(''); setSentKilos(''); setLine(''); setShift(''); setOrderNumber(''); setObservation(''); setError('');
+    if (!programmed) void loadOutOfOrderOptions();
+  }
+  async function openDeliveryFromOrder(order: ProcessOrder, row: ProcessOrderRow) {
+    setError('');
+    try {
+      const lot = lots.find((item) => item.id === row.lote_materia_prima_id) ?? await getProcessLot(baseUrl, auth.token, row.lote_materia_prima_id);
+      openDelivery(lot, order.id);
+    } catch (reason) { setError(errorMessage(reason)); }
+  }
+  async function loadOutOfOrderOptions() {
+    try {
+      const [openOrders, people] = await Promise.all([
+        listProcessOrders(baseUrl, auth.token),
+        listProcessAuthorizers(baseUrl, auth.token),
+      ]);
+      setOrders(openOrders); setAuthorizers(people);
+    } catch (reason) { setError(errorMessage(reason)); }
+  }
+  function chooseDeliveryMode(mode: DeliveryMode) {
+    setDeliveryMode(mode); setError('');
+    if (mode === 'orden' && action?.type === 'deliver') {
+      const first = action.lot.ordenes[0];
+      setDeliveryOrderId(first?.id ?? ''); setDeliveryVersionId(first?.version_id ?? null);
+    } else {
+      setDeliveryOrderId(''); setDeliveryVersionId(null);
+    }
+    if (mode === 'fuera') void loadOutOfOrderOptions();
+  }
+  function chooseDeliveryOrder(orderId: string, versionId: string | null) {
+    setDeliveryOrderId(orderId); setDeliveryVersionId(versionId);
   }
   function openReturn(lot: ProcessLot, delivery: ProcessDelivery) {
     setAction({ type: 'return', lot, delivery }); setOperationId(Crypto.randomUUID());
@@ -208,29 +266,53 @@ export function FrutaProcesoScreen({ auth, baseUrl, onLogout }: Props) {
     if (action.type === 'deliver') {
       const numericQuantity = Number(quantity);
       const numericKilos = sentKilos.trim() ? Number(sentKilos) : null;
-      if (!Number.isInteger(numericQuantity) || numericQuantity < 1 || numericQuantity > action.lot.progreso.disponibles) {
-        setError(`Ingresa entre 1 y ${action.lot.progreso.disponibles} bins.`); return;
+      const programmed = deliveryMode === 'orden' ? action.lot.ordenes.find((order) => order.id === deliveryOrderId) : undefined;
+      const maximum = programmed ? Math.min(action.lot.progreso.disponibles, programmed.bins_pendientes) : action.lot.progreso.disponibles;
+      if (!Number.isInteger(numericQuantity) || numericQuantity < 1 || numericQuantity > maximum) {
+        setError(`Ingresa entre 1 y ${maximum} bins.`); return;
       }
       if (numericKilos !== null && (!Number.isFinite(numericKilos) || numericKilos <= 0)) {
         setError('Los kilos enviados deben ser mayores que cero.'); return;
       }
-      if (!line.trim() || !shift || !orderNumber.trim()) { setError('Completa línea, turno y número de orden.'); return; }
+      if (!shift) { setError('Elige el turno.'); return; }
+      const input: CreateProcessDelivery = {
+        operacion_id: operationId,
+        camara_origen_id: action.lot.camara?.id ?? null,
+        cantidad_envases: numericQuantity,
+        kilos_enviados: numericKilos,
+        turno: shift,
+        observacion: observation.trim() || null,
+      };
+      if (deliveryMode === 'libre') {
+        if (!line.trim() || !orderNumber.trim()) { setError('Completa línea y número de orden.'); return; }
+        input.linea_proceso = line.trim(); input.numero_orden = orderNumber.trim();
+      } else {
+        if (!deliveryOrderId) { setError('Elige la orden de proceso.'); return; }
+        input.orden_proceso_mp_id = deliveryOrderId; input.version_orden_proceso_mp_id = deliveryVersionId;
+        if (deliveryMode === 'fuera') {
+          if (authorizerId === null || !/^\d{4}$/.test(authorizerPin)) { setError('Un supervisor debe elegir su nombre e ingresar su PIN de 4 dígitos.'); return; }
+          input.autorizacion = { user_id: authorizerId, pin: authorizerPin };
+        }
+      }
       setActionBusy(true);
       try {
-        const updated = await createProcessDelivery(baseUrl, auth.token, action.lot.id, {
-          operacion_id: operationId,
-          camara_origen_id: action.lot.camara?.id ?? null,
-          cantidad_envases: numericQuantity,
-          kilos_enviados: numericKilos,
-          linea_proceso: line.trim(),
-          turno: shift,
-          numero_orden: orderNumber.trim(),
-          observacion: observation.trim() || null,
-        });
+        const updated = await createProcessDelivery(baseUrl, auth.token, action.lot.id, input);
         replaceLot(updated); setAction(null); setMessage(`Viaje registrado: ${numericQuantity} bins.`);
         setSummary(await getProcessSummary(baseUrl, auth.token));
-      } catch (reason) { setError(errorMessage(reason)); }
-      finally { setActionBusy(false); }
+        if (section === 'ordenes') await load(true);
+      } catch (reason) {
+        setError(errorMessage(reason));
+        // La orden cambió de versión: se refresca para entregar contra lo vigente.
+        if (reason instanceof ApiError && reason.status === 409) {
+          try {
+            const fresh = await getProcessLot(baseUrl, auth.token, action.lot.id);
+            replaceLot(fresh); setAction({ type: 'deliver', lot: fresh });
+            const current = fresh.ordenes.find((order) => order.id === deliveryOrderId);
+            if (current) setDeliveryVersionId(current.version_id);
+          } catch { /* el mensaje del conflicto ya está visible */ }
+        }
+      }
+      finally { setActionBusy(false); setAuthorizerPin(''); }
       return;
     }
     if (action.type === 'return') {
@@ -288,17 +370,18 @@ export function FrutaProcesoScreen({ auth, baseUrl, onLogout }: Props) {
         <View style={styles.headerActions}><Pressable disabled={busy} onPress={() => void Promise.all([loadCatalogs(), load()])} style={styles.secondary}><Text style={styles.secondaryText}>↻ Actualizar</Text></Pressable><Pressable onPress={onLogout} style={styles.secondary}><Text style={styles.secondaryText}>Salir</Text></Pressable></View>
       </View>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <View style={styles.sectionTabs}><FilterButton active={section === 'entregas'} label="1. Entregas" onPress={() => setSection('entregas')} /><FilterButton active={section === 'retornos'} label="2. Retornos" onPress={() => setSection('retornos')} /></View>
-        <View style={styles.metrics}>
+        <View style={styles.sectionTabs}><FilterButton active={section === 'ordenes'} label="Órdenes" onPress={() => setSection('ordenes')} /><FilterButton active={section === 'entregas'} label="Entregas" onPress={() => setSection('entregas')} /><FilterButton active={section === 'retornos'} label="Retornos" onPress={() => setSection('retornos')} /></View>
+        {section === 'ordenes' ? <OrdersPanel busy={busy} canDeliver={canDeliver} lines={catalogs.lineas ?? []} onDeliver={(order, row) => void openDeliveryFromOrder(order, row)} onLine={setOrderLine} orders={orders} selectedLine={orderLine} /> : null}
+        {section !== 'ordenes' ? <><View style={styles.metrics}>
           {section === 'entregas' ? <><Metric label="Lotes abiertos" value={summary.lotes_abiertos} /><Metric label="Bins disponibles" value={summary.bins_disponibles} accent /><Metric label="Bins entregados" value={summary.bins_entregados} /><Metric label="Completados" value={summary.lotes_completados} /></> : <><Metric label="Viajes por retornar" value={summary.entregas_pendientes_retorno} /><Metric label="Bins retornados" value={summary.bins_retornados} accent /><Metric label="Kilos recuperados" value={summary.kilos_recuperados} /><Metric label="Por ubicar" value={summary.sublotes_pendientes_ubicacion} /></>}
         </View>
         <View style={styles.filters}>
           {section === 'entregas' ? <View style={styles.tabs}><FilterButton active={filter === 'abiertos'} label="Abiertos" onPress={() => setFilter('abiertos')} /><FilterButton active={filter === 'completados'} label="Completados" onPress={() => setFilter('completados')} /></View> : null}
           <TextInput onChangeText={setSearch} placeholder="Buscar lote, cámara, CSG u orden" placeholderTextColor={colors.muted} style={styles.search} value={search} />
-        </View>
+        </View></> : null}
         {message ? <Text style={styles.message}>{message}</Text> : null}
         {error && !action ? <Text style={styles.error}>{error}</Text> : null}
-        {busy ? <ActivityIndicator color={colors.cyan} size="large" style={styles.loader} /> : null}
+        {busy && section !== 'ordenes' ? <ActivityIndicator color={colors.cyan} size="large" style={styles.loader} /> : null}
         {!busy && section === 'entregas' && !visibleLots.length ? <Text style={styles.empty}>No hay lotes de bins en este estado.</Text> : null}
         {!busy && section === 'retornos' && !returnEntries.length ? <Text style={styles.empty}>No existen viajes entregados a Packing.</Text> : null}
         <View style={styles.lots}>
@@ -307,7 +390,7 @@ export function FrutaProcesoScreen({ auth, baseUrl, onLogout }: Props) {
       </ScrollView>
       <Modal animationType="slide" onRequestClose={closeAction} transparent visible={action !== null}>
         <View style={styles.modalBackdrop}><View style={styles.modalCard}><ScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
-          {action?.type === 'deliver' ? <DeliveryForm available={action.lot.progreso.disponibles} kilos={sentKilos} line={line} observation={observation} onKilos={setSentKilos} onLine={setLine} onObservation={setObservation} onOrder={setOrderNumber} onQuantity={setQuantity} onShift={setShift} order={orderNumber} quantity={quantity} shift={shift} /> : null}
+          {action?.type === 'deliver' ? <DeliveryForm authorizerId={authorizerId} authorizerPin={authorizerPin} authorizers={authorizers} available={action.lot.progreso.disponibles} kilos={sentKilos} line={line} lot={action.lot} mode={deliveryMode} observation={observation} onAuthorizer={setAuthorizerId} onAuthorizerPin={setAuthorizerPin} onKilos={setSentKilos} onLine={setLine} onMode={chooseDeliveryMode} onObservation={setObservation} onOrder={setOrderNumber} onOrderChoice={chooseDeliveryOrder} onQuantity={setQuantity} onShift={setShift} openOrders={orders} order={orderNumber} orderId={deliveryOrderId} quantity={quantity} shift={shift} /> : null}
           {action?.type === 'return' ? <ReturnForm catalogs={catalogs} delivery={action.delivery} onAdd={() => setReturnResults((current) => [...current, newResult()])} onObservation={setObservation} onRemove={(id) => setReturnResults((current) => current.length > 1 ? current.filter((item) => item.id !== id) : current)} onToggleOrigin={toggleReturnOrigin} onToggleOriginClose={toggleReturnOriginClose} onUpdate={updateResult} observation={observation} origins={returnOrigins} results={returnResults} /> : null}
           {action?.type === 'locate' ? <LocateForm cameraId={cameraId} catalogs={catalogs} observation={observation} onCamera={setCameraId} onObservation={setObservation} sublot={action.sublot} /> : null}
           {action?.type === 'annul-delivery' || action?.type === 'annul-return' ? <><Text style={styles.eyebrow}>CORRECCIÓN TRAZABLE</Text><Text style={styles.modalTitle}>Anular {action.type === 'annul-delivery' ? 'entrega' : 'retorno'}</Text><Field label="Motivo obligatorio *"><TextInput multiline onChangeText={setAnnulReason} placeholder="Explica la corrección" placeholderTextColor={colors.muted} style={[styles.input, styles.textarea]} value={annulReason} /></Field></> : null}
@@ -326,13 +409,43 @@ function ReturnCard({ lot, delivery, onReturn, onLocate, onAnnul }: { lot: Proce
   return <View style={styles.lotCard}><View style={styles.lotHeading}><View><Text style={styles.lotNumber}>{lot.numero_lote}</Text><Text style={styles.lotCopy}>{delivery.numero_orden} · {delivery.linea_proceso} · turno {delivery.turno}</Text></View><Text style={styles.badge}>{returnLabel(delivery.retorno.estado)}</Text></View><View style={styles.returnMetrics}><Text style={styles.progressStrong}>Enviado: {delivery.cantidad_envases} bins · {formatKilos(delivery.kilos_enviados)}</Text><Text style={styles.progressCopy}>Retornado: {delivery.retorno.bins_retornados} bins · {formatKilos(delivery.retorno.kilos_recuperados)}</Text>{delivery.retorno.merma_kilos !== null ? <Text style={styles.progressCopy}>Merma: {formatKilos(delivery.retorno.merma_kilos)}</Text> : null}</View>{delivery.retorno.puede_registrar ? <Pressable onPress={onReturn} style={styles.primary}><Text style={styles.primaryText}>+ Registrar retorno</Text></Pressable> : null}<View style={styles.history}>{delivery.retorno.movimientos.length ? delivery.retorno.movimientos.map((movement) => <ReturnMovement key={movement.id} movement={movement} onAnnul={() => onAnnul(movement)} onLocate={onLocate} />) : <Text style={styles.historyEmpty}>Packing todavía no registra retornos.</Text>}</View></View>;
 }
 function DeliveryRow({ delivery, onAnnul, onReturn }: { delivery: ProcessDelivery; onAnnul: () => void; onReturn: () => void }) {
-  return <View style={[styles.delivery, delivery.anulado && styles.deliveryVoid]}><View style={styles.deliveryText}><Text style={styles.deliveryQuantity}>{delivery.cantidad_envases} bins · {formatKilos(delivery.kilos_enviados)}</Text><Text style={styles.deliveryDestination}>{delivery.linea_proceso} · turno {delivery.turno} · orden {delivery.numero_orden}</Text><Text style={styles.deliveryMeta}>{delivery.entregado_por?.nombre} · {formatDate(delivery.entregado_at)} · {returnLabel(delivery.retorno.estado)}</Text></View><View style={styles.rowActions}>{delivery.retorno.puede_registrar ? <Pressable onPress={onReturn} style={styles.returnButton}><Text style={styles.returnButtonText}>Retorno</Text></Pressable> : null}{delivery.puede_anular ? <Pressable onPress={onAnnul} style={styles.annul}><Text style={styles.annulText}>Anular</Text></Pressable> : null}</View></View>;
+  return <View style={[styles.delivery, delivery.anulado && styles.deliveryVoid]}><View style={styles.deliveryText}><Text style={styles.deliveryQuantity}>{delivery.cantidad_envases} bins · {formatKilos(delivery.kilos_enviados)}</Text><Text style={styles.deliveryDestination}>{delivery.linea_proceso} · turno {delivery.turno} · orden {delivery.numero_orden}{delivery.orden_proceso ? ` · ${delivery.orden_proceso.codigo}${delivery.orden_proceso.fuera_de_orden ? ` · fuera de orden (${delivery.orden_proceso.autorizado_por ?? 'autorizado'})` : ''}` : ''}</Text><Text style={styles.deliveryMeta}>{delivery.entregado_por?.nombre} · {formatDate(delivery.entregado_at)} · {returnLabel(delivery.retorno.estado)}</Text></View><View style={styles.rowActions}>{delivery.retorno.puede_registrar ? <Pressable onPress={onReturn} style={styles.returnButton}><Text style={styles.returnButtonText}>Retorno</Text></Pressable> : null}{delivery.puede_anular ? <Pressable onPress={onAnnul} style={styles.annul}><Text style={styles.annulText}>Anular</Text></Pressable> : null}</View></View>;
 }
 function ReturnMovement({ movement, onLocate, onAnnul }: { movement: ProcessReturnMovement; onLocate: (sublot: ProcessSublot) => void; onAnnul: () => void }) {
   return <View style={[styles.returnMovement, movement.anulado && styles.deliveryVoid]}><View style={styles.lotHeading}><View><Text style={styles.deliveryQuantity}>{movement.numero} · {movement.cierra_entrega ? 'Cierre del viaje' : 'Retorno parcial'}</Text><Text style={styles.deliveryMeta}>{movement.registrado_por?.nombre} · {formatDate(movement.registrado_at)}</Text></View>{movement.puede_anular ? <Pressable onPress={onAnnul} style={styles.annul}><Text style={styles.annulText}>Anular</Text></Pressable> : null}</View>{movement.origenes?.length ? <Text style={styles.deliveryMeta}>Orígenes: {movement.origenes.map((origin) => `${origin.numero_lote ?? 'Lote'} · ${origin.numero_orden}${origin.cierra_entrega ? ' (cerrado)' : ' (abierto)'}`).join(' · ')}</Text> : null}{movement.resultados.map((result) => <View key={result.id} style={styles.resultRow}><View style={styles.deliveryText}><Text style={styles.deliveryDestination}>{result.numero_sublote} · {result.nombre_resultado}</Text><Text style={styles.deliveryMeta}>{result.cantidad_bins} bins · {formatKilos(result.kilos_netos)} · {result.camara ? cameraDisplayName(result.camara) : stateLabel(result.estado)}</Text></View>{result.puede_ubicar ? <Pressable onPress={() => onLocate(result)} style={styles.returnButton}><Text style={styles.returnButtonText}>Ubicar</Text></Pressable> : null}</View>)}</View>;
 }
-function DeliveryForm({ available, quantity, kilos, line, shift, order, observation, onQuantity, onKilos, onLine, onShift, onOrder, onObservation }: { available: number; quantity: string; kilos: string; line: string; shift: 'A' | 'B' | ''; order: string; observation: string; onQuantity: (value: string) => void; onKilos: (value: string) => void; onLine: (value: string) => void; onShift: (value: 'A' | 'B') => void; onOrder: (value: string) => void; onObservation: (value: string) => void }) {
-  return <><Text style={styles.eyebrow}>VIAJE FÍSICO A PACKING</Text><Text style={styles.modalTitle}>Registrar entrega</Text><Text style={styles.modalCopy}>{available} bins disponibles.</Text><Field label="Cantidad de bins *"><TextInput keyboardType="number-pad" onChangeText={onQuantity} placeholder="0" placeholderTextColor={colors.muted} style={styles.input} value={quantity} /></Field><Field label="Kilos enviados"><TextInput keyboardType="decimal-pad" onChangeText={onKilos} placeholder="Opcional" placeholderTextColor={colors.muted} style={styles.input} value={kilos} /></Field><Field label="Línea de proceso *"><TextInput onChangeText={onLine} placeholder="Ej. Línea 1" placeholderTextColor={colors.muted} style={styles.input} value={line} /></Field><Text style={styles.fieldLabel}>Turno *</Text><View style={styles.shiftRow}><FilterButton active={shift === 'A'} label="A" onPress={() => onShift('A')} /><FilterButton active={shift === 'B'} label="B" onPress={() => onShift('B')} /></View><Field label="N° de orden *"><TextInput onChangeText={onOrder} placeholder="Orden de Packing" placeholderTextColor={colors.muted} style={styles.input} value={order} /></Field><Field label="Observación"><TextInput multiline onChangeText={onObservation} placeholder="Opcional" placeholderTextColor={colors.muted} style={[styles.input, styles.textarea]} value={observation} /></Field></>;
+type DeliveryFormProps = {
+  lot: ProcessLot; available: number; mode: DeliveryMode; orderId: string; openOrders: ProcessOrder[];
+  authorizers: ProcessAuthorizer[]; authorizerId: number | null; authorizerPin: string;
+  quantity: string; kilos: string; line: string; shift: 'A' | 'B' | ''; order: string; observation: string;
+  onMode: (mode: DeliveryMode) => void; onOrderChoice: (orderId: string, versionId: string | null) => void;
+  onAuthorizer: (id: number) => void; onAuthorizerPin: (value: string) => void;
+  onQuantity: (value: string) => void; onKilos: (value: string) => void; onLine: (value: string) => void;
+  onShift: (value: 'A' | 'B') => void; onOrder: (value: string) => void; onObservation: (value: string) => void;
+};
+function DeliveryForm({ lot, available, mode, orderId, openOrders, authorizers, authorizerId, authorizerPin, quantity, kilos, line, shift, order, observation, onMode, onOrderChoice, onAuthorizer, onAuthorizerPin, onQuantity, onKilos, onLine, onShift, onOrder, onObservation }: DeliveryFormProps) {
+  const programmed = lot.ordenes.find((item) => item.id === orderId);
+  const limit = mode === 'orden' && programmed ? Math.min(available, programmed.bins_pendientes) : available;
+  return <><Text style={styles.eyebrow}>VIAJE FÍSICO A PACKING</Text><Text style={styles.modalTitle}>Registrar entrega · {lot.numero_lote}</Text><Text style={styles.modalCopy}>{available} bins en cámara{mode === 'orden' && programmed ? ` · ${programmed.bins_pendientes} programados en ${programmed.codigo}` : ''}.</Text>
+    <View style={styles.shiftRow}>{lot.ordenes.length ? <FilterButton active={mode === 'orden'} label="En orden" onPress={() => onMode('orden')} /> : null}<FilterButton active={mode === 'fuera'} label="Fuera de orden" onPress={() => onMode('fuera')} /><FilterButton active={mode === 'libre'} label="Sin orden" onPress={() => onMode('libre')} /></View>
+    {mode === 'orden' ? <><Text style={styles.fieldLabel}>Orden de proceso *</Text><View style={styles.cameraOptions}>{lot.ordenes.map((item) => <Pressable key={item.id} onPress={() => onOrderChoice(item.id, item.version_id)} style={[styles.cameraOption, orderId === item.id && styles.cameraOptionActive]}><Text style={styles.deliveryDestination}>{item.codigo} · v{item.numero_version} · {item.linea?.nombre ?? 'Sin línea'}</Text><Text style={styles.deliveryMeta}>{item.fecha} · {item.bins_pendientes} bins pendientes de este lote</Text></Pressable>)}</View></> : null}
+    {mode === 'fuera' ? <><Text style={styles.modalCopy}>El lote no está programado. Entra a la orden como nueva versión con el PIN de un supervisor de frío.</Text><Text style={styles.fieldLabel}>Orden de la línea *</Text><View style={styles.cameraOptions}>{openOrders.map((item) => <Pressable key={item.id} onPress={() => onOrderChoice(item.id, item.version_vigente?.id ?? null)} style={[styles.cameraOption, orderId === item.id && styles.cameraOptionActive]}><Text style={styles.deliveryDestination}>{item.codigo} · v{item.numero_version_vigente} · {item.linea?.nombre ?? 'Sin línea'}</Text><Text style={styles.deliveryMeta}>{item.fecha} · turno {item.turno_inicio} · {item.progreso.bins_pendientes} bins pendientes</Text></Pressable>)}{!openOrders.length ? <Text style={styles.historyEmpty}>No hay órdenes abiertas.</Text> : null}</View><Text style={styles.fieldLabel}>Supervisor que autoriza *</Text><View style={styles.shiftRow}>{authorizers.map((person) => <FilterButton active={authorizerId === person.id} key={person.id} label={person.nombre} onPress={() => onAuthorizer(person.id)} />)}</View>{!authorizers.length ? <Text style={styles.historyEmpty}>No hay supervisores con PIN operacional.</Text> : null}<Field label="PIN del supervisor *"><TextInput keyboardType="number-pad" maxLength={4} onChangeText={onAuthorizerPin} placeholder="••••" placeholderTextColor={colors.muted} secureTextEntry style={styles.input} value={authorizerPin} /></Field></> : null}
+    {mode === 'libre' ? <><Text style={styles.modalCopy}>Solo mientras la planta no exija orden de proceso.</Text><Field label="Línea de proceso *"><TextInput onChangeText={onLine} placeholder="Ej. Línea 1" placeholderTextColor={colors.muted} style={styles.input} value={line} /></Field><Field label="N° de orden *"><TextInput onChangeText={onOrder} placeholder="Orden de Packing" placeholderTextColor={colors.muted} style={styles.input} value={order} /></Field></> : null}
+    <Field label={`Cantidad de bins * (máx. ${limit})`}><TextInput keyboardType="number-pad" onChangeText={onQuantity} placeholder="0" placeholderTextColor={colors.muted} style={styles.input} value={quantity} /></Field><Field label="Kilos enviados"><TextInput keyboardType="decimal-pad" onChangeText={onKilos} placeholder="Opcional" placeholderTextColor={colors.muted} style={styles.input} value={kilos} /></Field><Text style={styles.fieldLabel}>Turno *</Text><View style={styles.shiftRow}><FilterButton active={shift === 'A'} label="A" onPress={() => onShift('A')} /><FilterButton active={shift === 'B'} label="B" onPress={() => onShift('B')} /></View><Field label="Observación"><TextInput multiline onChangeText={onObservation} placeholder="Opcional" placeholderTextColor={colors.muted} style={[styles.input, styles.textarea]} value={observation} /></Field></>;
+}
+function OrdersPanel({ orders, lines, selectedLine, busy, canDeliver, onLine, onDeliver }: { orders: ProcessOrder[]; lines: { id: string; nombre: string }[]; selectedLine: string; busy: boolean; canDeliver: boolean; onLine: (id: string) => void; onDeliver: (order: ProcessOrder, row: ProcessOrderRow) => void }) {
+  return <View style={styles.lots}>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false}><View style={styles.shiftRow}><FilterButton active={selectedLine === ''} label="Todas" onPress={() => onLine('')} />{lines.map((line) => <FilterButton active={selectedLine === line.id} key={line.id} label={line.nombre} onPress={() => onLine(line.id)} />)}</View></ScrollView>
+    {busy ? <ActivityIndicator color={colors.cyan} size="large" style={styles.loader} /> : null}
+    {!busy && !orders.length ? <Text style={styles.empty}>No hay órdenes abiertas para esta línea.</Text> : null}
+    {orders.map((order) => {
+      const rows = order.version_vigente?.lotes ?? [];
+      const next = rows.find((row) => row.bins_pendientes > 0);
+      return <View key={order.id} style={styles.lotCard}><View style={styles.lotHeading}><View><Text style={styles.lotNumber}>{order.codigo} · v{order.numero_version_vigente}</Text><Text style={styles.lotCopy}>{order.linea?.nombre} · {order.fecha} · turno {order.turno_inicio}</Text></View><Text style={styles.badge}>{order.estado === 'en_proceso' ? 'En proceso' : 'Programada'}</Text></View><View style={styles.progressLabels}><Text style={styles.progressStrong}>{order.progreso.bins_entregados}/{order.progreso.bins_programados} bins</Text><Text style={styles.progressCopy}>{order.progreso.bins_pendientes} pendientes</Text></View>
+        <View style={styles.history}>{rows.map((row) => <View key={row.lote_materia_prima_id} style={[styles.delivery, row === next && styles.nextRow, row.bins_pendientes === 0 && styles.deliveryVoid]}><View style={styles.deliveryText}><Text style={styles.deliveryQuantity}>{row.secuencia}. {row.numero_lote}{row.numero_proceso ? ` · ${row.numero_proceso}` : ''}</Text><Text style={styles.deliveryDestination}>{row.cliente.nombre} · {row.variedad} · {row.camara ? cameraDisplayName(row.camara) : 'sin cámara'}</Text><Text style={styles.deliveryMeta}>{row.bins_entregados}/{row.bins_programados} bins · {row.bins_pendientes} pendientes{row.inicio_estimado ? ` · ${row.inicio_estimado.slice(11, 16)}–${(row.termino_estimado ?? '').slice(11, 16)}` : ''}</Text></View>{canDeliver && row.bins_pendientes > 0 ? <Pressable onPress={() => onDeliver(order, row)} style={styles.returnButton}><Text style={styles.returnButtonText}>{row === next ? 'Entregar' : 'Entregar antes'}</Text></Pressable> : null}</View>)}</View>
+      </View>;
+    })}
+  </View>;
 }
 function ReturnForm({ delivery, catalogs, results, origins, observation, onAdd, onRemove, onUpdate, onToggleOrigin, onToggleOriginClose, onObservation }: { delivery: ProcessDelivery; catalogs: ProcessCatalogs; results: ReturnResultDraft[]; origins: ReturnOriginDraft[]; observation: string; onAdd: () => void; onRemove: (id: string) => void; onUpdate: (id: string, change: Partial<ReturnResultDraft>) => void; onToggleOrigin: (id: string) => void; onToggleOriginClose: (id: string) => void; onObservation: (value: string) => void }) {
   return <><Text style={styles.eyebrow}>PACKING → CÁMARA MP</Text><Text style={styles.modalTitle}>Registrar retorno</Text><Text style={styles.modalCopy}>{delivery.cantidad_envases} bins enviados · {formatKilos(delivery.kilos_enviados)}.</Text><Text style={styles.fieldLabel}>Viajes de origen *</Text>{origins.map((origin) => <View key={origin.deliveryId} style={styles.resultDraft}><Pressable onPress={() => onToggleOrigin(origin.deliveryId)} style={[styles.checkRow, origin.selected && styles.checkRowActive]}><Text style={styles.checkMark}>{origin.selected ? '✓' : '○'}</Text><View><Text style={styles.deliveryDestination}>{origin.label}{origin.primary ? ' · principal' : ''}</Text><Text style={styles.deliveryMeta}>{origin.detail}</Text></View></Pressable>{origin.selected ? <Pressable onPress={() => onToggleOriginClose(origin.deliveryId)} style={[styles.checkRow, origin.closes && styles.checkRowActive]}><Text style={styles.checkMark}>{origin.closes ? '✓' : '○'}</Text><View><Text style={styles.deliveryDestination}>Cerrar este viaje</Text><Text style={styles.deliveryMeta}>Packing no devolverá más fruta de este origen.</Text></View></Pressable> : null}</View>)}<Text style={styles.fieldLabel}>Resultados de Packing *</Text>{results.map((result, index) => <View key={result.id} style={styles.resultDraft}><View style={styles.lotHeading}><Text style={styles.deliveryQuantity}>Resultado {index + 1}</Text>{results.length > 1 ? <Pressable onPress={() => onRemove(result.id)}><Text style={styles.annulText}>Quitar</Text></Pressable> : null}</View><Text style={styles.fieldLabel}>Clasificación *</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.typeScroller}>{catalogs.tipos_resultado.map((type) => <FilterButton active={result.typeId === type.id} key={type.id} label={type.nombre} onPress={() => onUpdate(result.id, { typeId: type.id })} />)}</ScrollView><Field label="Nombre específico"><TextInput onChangeText={(value) => onUpdate(result.id, { name: value })} placeholder="Obligatorio para Otro" placeholderTextColor={colors.muted} style={styles.input} value={result.name} /></Field><Field label="Cantidad de bins *"><TextInput keyboardType="number-pad" onChangeText={(value) => onUpdate(result.id, { bins: value })} placeholder="0" placeholderTextColor={colors.muted} style={styles.input} value={result.bins} /></Field><Field label="Kilos netos"><TextInput keyboardType="decimal-pad" onChangeText={(value) => onUpdate(result.id, { kilos: value })} placeholder="Opcional" placeholderTextColor={colors.muted} style={styles.input} value={result.kilos} /></Field></View>)}<Pressable onPress={onAdd} style={styles.secondary}><Text style={styles.secondaryText}>+ Agregar resultado</Text></Pressable><Field label="Observación"><TextInput multiline onChangeText={onObservation} placeholder="Opcional" placeholderTextColor={colors.muted} style={[styles.input, styles.textarea]} value={observation} /></Field></>;
@@ -359,6 +472,7 @@ const styles = StyleSheet.create({
   progressLabels: { marginTop: 12, flexDirection: 'row', justifyContent: 'space-between' }, progressStrong: { color: colors.text, fontWeight: '900', fontSize: 14 }, progressCopy: { color: colors.muted, fontSize: 14 }, progressTrack: { height: 9, borderRadius: 999, backgroundColor: colors.backgroundDeep, overflow: 'hidden', marginTop: 7, marginBottom: 11 }, progressFill: { height: '100%', backgroundColor: colors.cyan }, returnMetrics: { borderWidth: 1, borderColor: colors.border, borderRadius: 9, backgroundColor: colors.backgroundDeep, gap: 5, marginVertical: 11, padding: 10 },
   primary: { minHeight: 45, borderRadius: 10, backgroundColor: colors.cyan, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 }, primaryText: { color: colors.accentText, fontWeight: '900' }, secondary: { minHeight: 39, borderRadius: 9, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panel, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 11 }, secondaryText: { color: colors.text, fontWeight: '800', fontSize: 14 }, historyToggle: { alignItems: 'center', paddingTop: 11 }, historyToggleText: { color: colors.muted, fontSize: 14, fontWeight: '800' }, history: { marginTop: 9, paddingTop: 9, borderTopWidth: 1, borderTopColor: colors.border, gap: 7 }, historyEmpty: { color: colors.muted, fontSize: 13 },
   delivery: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: colors.border, borderRadius: 9, backgroundColor: colors.backgroundDeep, padding: 9 }, deliveryVoid: { opacity: .5 }, deliveryText: { flex: 1 }, deliveryQuantity: { color: colors.cyan, fontWeight: '900' }, deliveryDestination: { color: colors.text, fontSize: 13, fontWeight: '800', marginTop: 3 }, deliveryMeta: { color: colors.muted, fontSize: 12, marginTop: 3 }, rowActions: { gap: 5 }, annul: { borderWidth: 1, borderColor: colors.red, borderRadius: 7, paddingHorizontal: 8, paddingVertical: 7 }, annulText: { color: colors.red, fontSize: 13, fontWeight: '900' }, returnButton: { borderWidth: 1, borderColor: colors.cyanDark, borderRadius: 7, paddingHorizontal: 8, paddingVertical: 7 }, returnButtonText: { color: colors.cyan, fontSize: 13, fontWeight: '900' },
+  nextRow: { borderColor: colors.cyan },
   returnMovement: { borderWidth: 1, borderColor: colors.border, borderRadius: 9, backgroundColor: colors.backgroundDeep, padding: 9, gap: 7 }, resultRow: { flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 7, gap: 8 },
   modalBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(1,8,12,.82)' }, modalCard: { maxHeight: '94%', borderTopLeftRadius: 20, borderTopRightRadius: 20, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panel }, modalContent: { padding: 18, paddingBottom: 24 }, modalTitle: { color: colors.text, fontSize: 22, fontWeight: '900', marginTop: 3 }, modalCopy: { color: colors.muted, fontSize: 14, marginTop: 4, marginBottom: 8 }, field: { marginTop: 10, gap: 5 }, fieldLabel: { color: colors.text, fontSize: 14, fontWeight: '800', marginTop: 8 }, input: { minHeight: 44, borderWidth: 1, borderColor: colors.border, borderRadius: 9, backgroundColor: colors.backgroundDeep, color: colors.text, paddingHorizontal: 11 }, textarea: { minHeight: 72, paddingTop: 10, textAlignVertical: 'top' }, shiftRow: { flexDirection: 'row', gap: 8, marginTop: 5 }, modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 15, paddingTop: 13, borderTopWidth: 1, borderTopColor: colors.border },
   resultDraft: { borderWidth: 1, borderColor: colors.border, borderRadius: 11, backgroundColor: colors.backgroundDeep, padding: 11, marginTop: 9 }, typeScroller: { marginVertical: 5 }, checkRow: { flexDirection: 'row', alignItems: 'center', gap: 9, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 11, marginTop: 10 }, checkRowActive: { borderColor: colors.cyanDark, backgroundColor: colors.selected }, checkMark: { color: colors.cyan, fontSize: 20, fontWeight: '900' }, cameraOptions: { gap: 7, marginTop: 7 }, cameraOption: { borderWidth: 1, borderColor: colors.border, borderRadius: 9, backgroundColor: colors.backgroundDeep, padding: 11 }, cameraOptionActive: { borderColor: colors.cyan, backgroundColor: colors.selected },

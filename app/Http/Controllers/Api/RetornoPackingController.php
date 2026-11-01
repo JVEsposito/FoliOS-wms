@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Enums\ContenidoCamara;
 use App\Enums\EstadoCamara;
+use App\Enums\TurnoProceso;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\AnularRetornoPackingRequest;
 use App\Http\Requests\RegistrarRetornoPackingRequest;
@@ -11,6 +12,7 @@ use App\Http\Requests\UbicarSubloteRetornoPackingRequest;
 use App\Http\Resources\FrutaProcesoLoteResource;
 use App\Models\Camara;
 use App\Models\EntregaFrutaProceso;
+use App\Models\LineaProceso;
 use App\Models\RetornoPacking;
 use App\Models\SubloteRetornoPacking;
 use App\Models\TipoResultadoPacking;
@@ -35,6 +37,11 @@ class RetornoPackingController extends Controller
                 ->where('estado', EstadoCamara::Activa->value)
                 ->orderBy('codigo')
                 ->get(['id', 'codigo', 'nombre']),
+            'lineas' => LineaProceso::query()
+                ->where('activa', true)
+                ->ordenadas()
+                ->get(['id', 'codigo', 'nombre']),
+            'turnos' => TurnoProceso::catalogo(),
         ]);
     }
 

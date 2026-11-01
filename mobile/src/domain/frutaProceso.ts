@@ -7,6 +7,7 @@ export type ProcessDelivery = {
   linea_proceso: string;
   turno: 'A' | 'B';
   numero_orden: string;
+  orden_proceso: { id: string; codigo: string | null; fuera_de_orden: boolean; autorizado_por: string | null } | null;
   observacion: string | null;
   entregado_por: { id: string; nombre: string } | null;
   dispositivo: { id: string; codigo: string; nombre: string } | null;
@@ -88,6 +89,7 @@ export type ProcessLot = {
   camara: { id: string; codigo: string; nombre: string } | null;
   envase_primario: string;
   progreso: { total: number; entregados: number; disponibles: number; porcentaje: number };
+  ordenes: ProcessLotOrder[];
   entregas: ProcessDelivery[];
   ultima_entrega_at: string | null;
 };
@@ -117,13 +119,61 @@ export type CreateProcessDelivery = {
   camara_origen_id?: string | null;
   cantidad_envases: number;
   kilos_enviados: number | null;
-  linea_proceso: string;
   turno: 'A' | 'B';
-  numero_orden: string;
   observacion: string | null;
+  /** Con orden de proceso, línea y número de orden salen de la orden. */
+  orden_proceso_mp_id?: string;
+  version_orden_proceso_mp_id?: string | null;
+  autorizacion?: { user_id: number; pin: string };
+  /** Solo sin orden, mientras el servidor no exija orden. */
+  linea_proceso?: string;
+  numero_orden?: string;
 };
 
-export type ProcessCatalogs = { tipos_resultado: ProcessResultType[]; camaras: ProcessCamera[] };
+export type ProcessLine = { id: string; codigo: string; nombre: string };
+export type ProcessShift = { codigo: 'A' | 'B'; etiqueta: string; codigo_pre_sif: string; codigo_instructivo: string };
+export type ProcessCatalogs = { tipos_resultado: ProcessResultType[]; camaras: ProcessCamera[]; lineas?: ProcessLine[]; turnos?: ProcessShift[] };
+
+/** Orden abierta que reserva bins de un lote. */
+export type ProcessLotOrder = {
+  id: string;
+  codigo: string;
+  fecha: string;
+  linea: ProcessLine | null;
+  version_id: string;
+  numero_version: number;
+  bins_pendientes: number;
+};
+
+export type ProcessOrderRow = {
+  lote_materia_prima_id: string;
+  secuencia: number;
+  numero_lote: string;
+  numero_proceso: string | null;
+  cliente: { id: string; nombre: string };
+  variedad: string;
+  csg: string;
+  bins_programados: number;
+  bins_entregados: number;
+  bins_pendientes: number;
+  inicio_estimado: string | null;
+  termino_estimado: string | null;
+  camara: { id: string; codigo: string; nombre: string } | null;
+};
+
+export type ProcessOrder = {
+  id: string;
+  codigo: string;
+  fecha: string;
+  turno_inicio: 'A' | 'B';
+  linea: ProcessLine | null;
+  estado: 'programada' | 'en_proceso' | 'terminada';
+  numero_version_vigente: number;
+  progreso: { lotes: number; bins_programados: number; bins_entregados: number; bins_pendientes: number };
+  version_vigente: { id: string; numero: number; lotes: ProcessOrderRow[] } | null;
+};
+
+export type ProcessAuthorizer = { id: number; nombre: string };
 export type CreatePackingReturn = {
   operacion_id: string;
   entregas: Array<{ entrega_fruta_proceso_id: string; cierra_entrega: boolean }>;

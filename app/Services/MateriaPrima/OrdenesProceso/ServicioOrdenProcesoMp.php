@@ -25,6 +25,7 @@ use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use JsonException;
 
@@ -187,6 +188,128 @@ class ServicioOrdenProcesoMp
 
             return $this->cargar($orden);
         }, attempts: 3);
+    }
+
+    /**
+     * Agrega a la orden, como nueva versión, un lote que un supervisor autorizó entregar fuera
+     * de la programación. Debe llamarse dentro de la transacción de la entrega, con la orden y
+     * sus lotes (incluido este) ya bloqueados.
+     */
+    public function agregarFueraDeOrden(
+        OrdenProcesoMp $orden,
+        LoteMateriaPrima $lote,
+        int $bins,
+        User $autorizador,
+    ): VersionOrdenProcesoMp {
+        $this->exigirAbierta($orden);
+        $vigente = VersionOrdenProcesoMp::query()->with('lotes')->findOrFail($orden->version_vigente_id);
+        $datos = [
+            'hora_inicio' => substr((string) $vigente->hora_inicio, 0, 5),
+            'colacion_desde' => $vigente->colacion_desde ? substr((string) $vigente->colacion_desde, 0, 5) : null,
+            'colacion_hasta' => $vigente->colacion_hasta ? substr((string) $vigente->colacion_hasta, 0, 5) : null,
+            'motivo_cambio' => "Entrega fuera de orden del lote {$lote->numero_lote}, autorizada por {$autorizador->name}.",
+            'lotes' => [
+                ...$vigente->lotes->map(fn (LoteVersionOrdenMp $fila): array => [
+                    'lote_materia_prima_id' => $fila->lote_materia_prima_id,
+                    'numero_proceso' => $fila->numero_proceso,
+                    'bins_programados' => $fila->bins_programados,
+                    'embalaje' => $fila->embalaje,
+                    'kilos_por_caja' => $fila->kilos_por_caja,
+                    'mercado_destino' => $fila->mercado_destino,
+                    'comuna' => $fila->comuna,
+                    'provincia' => $fila->provincia,
+                ])->all(),
+                ['lote_materia_prima_id' => $lote->id, 'bins_programados' => $bins],
+            ],
+        ];
+        $linea = LineaProceso::query()->sharedLock()->findOrFail($orden->linea_proceso_id);
+
+        return $this->publicar(
+            $orden,
+            $linea,
+            $datos,
+            $autorizador,
+            $orden->numero_version_vigente + 1,
+            OrigenVersionOrdenProcesoMp::FueraDeOrden,
+            (string) Str::uuid(),
+            $this->hash($datos),
+        );
+    }
+
+    /**
+     * Descuenta una entrega de la reserva del lote y avanza el estado de la orden. Se llama
+     * dentro de la transacción de la entrega, con la orden y el lote bloqueados.
+     */
+    public function aplicarEntrega(OrdenProcesoMp $orden, LoteMateriaPrima $lote, int $cantidad, User $usuario): void
+    {
+        $this->exigirAbierta($orden);
+        $reserva = ReservaLoteOrdenProcesoMp::query()
+            ->where('orden_proceso_mp_id', $orden->id)
+            ->where('lote_materia_prima_id', $lote->id)
+            ->lockForUpdate()
+            ->first();
+        if (! $reserva || $cantidad > $reserva->bins_pendientes) {
+            $pendientes = $reserva?->bins_pendientes ?? 0;
+            throw ValidationException::withMessages([
+                'cantidad_envases' => "En {$orden->codigo} quedan {$pendientes} bins programados del lote {$lote->numero_lote}. Para entregar más, el digitador debe publicar otra versión.",
+            ]);
+        }
+
+        $reserva->update([
+            'bins_entregados' => $reserva->bins_entregados + $cantidad,
+            'bins_pendientes' => $reserva->bins_pendientes - $cantidad,
+        ]);
+        $this->actualizarAvance($orden, $usuario);
+    }
+
+    /** Devuelve a la reserva los bins de una entrega anulada. Con la orden y el lote bloqueados. */
+    public function revertirEntrega(OrdenProcesoMp $orden, LoteMateriaPrima $lote, int $cantidad, User $usuario): void
+    {
+        $reserva = ReservaLoteOrdenProcesoMp::query()
+            ->where('orden_proceso_mp_id', $orden->id)
+            ->where('lote_materia_prima_id', $lote->id)
+            ->lockForUpdate()
+            ->first();
+        if (! $reserva) {
+            return;
+        }
+
+        $cancelada = $orden->tipo_cierre === TipoCierreOrdenProcesoMp::Cancelacion;
+        $reserva->update([
+            'bins_entregados' => max(0, $reserva->bins_entregados - $cantidad),
+            // Una orden cancelada ya liberó lo pendiente: lo anulado vuelve al lote, no a la orden.
+            'bins_pendientes' => $cancelada ? 0 : $reserva->bins_pendientes + $cantidad,
+        ]);
+        if (! $cancelada) {
+            $this->actualizarAvance($orden, $usuario);
+        }
+    }
+
+    private function actualizarAvance(OrdenProcesoMp $orden, User $usuario): void
+    {
+        $totales = ReservaLoteOrdenProcesoMp::query()
+            ->where('orden_proceso_mp_id', $orden->id)
+            ->selectRaw('COALESCE(SUM(bins_entregados), 0) as entregados, COALESCE(SUM(bins_pendientes), 0) as pendientes')
+            ->first();
+        $entregados = (int) $totales->getAttribute('entregados');
+        $pendientes = (int) $totales->getAttribute('pendientes');
+
+        $cambios = match (true) {
+            $pendientes === 0 => [
+                'estado' => EstadoOrdenProcesoMp::Terminada,
+                'tipo_cierre' => TipoCierreOrdenProcesoMp::Completa,
+                'cerrado_por_user_id' => $orden->cerrado_por_user_id ?? $usuario->id,
+                'cerrado_at' => $orden->cerrado_at ?? now(),
+            ],
+            default => [
+                // Una anulación que deja pendientes reabre una orden terminada completa.
+                'estado' => $entregados > 0 ? EstadoOrdenProcesoMp::EnProceso : EstadoOrdenProcesoMp::Programada,
+                'tipo_cierre' => null,
+                'cerrado_por_user_id' => null,
+                'cerrado_at' => null,
+            ],
+        };
+        $orden->update($cambios);
     }
 
     /**
