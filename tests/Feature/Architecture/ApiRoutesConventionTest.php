@@ -76,6 +76,7 @@ class ApiRoutesConventionTest extends TestCase
             ['GET', 'api/materia-prima/fruta-proceso/autorizadores', 'can:entregar-fruta-proceso'],
             ['GET', 'api/materia-prima/ordenes-proceso/lotes-programables', 'can:consultar-ordenes-proceso'],
             ['GET', 'api/materia-prima/ordenes-proceso/{ordenProcesoMp}', 'can:consultar-ordenes-proceso'],
+            ['GET', 'api/materia-prima/ordenes-proceso/{ordenProcesoMp}/pre-sif', 'can:consultar-ordenes-proceso'],
             ['POST', 'api/materia-prima/ordenes-proceso', 'can:gestionar-ordenes-proceso'],
             ['POST', 'api/materia-prima/ordenes-proceso/{ordenProcesoMp}/versiones', 'can:gestionar-ordenes-proceso'],
             ['POST', 'api/materia-prima/ordenes-proceso/{ordenProcesoMp}/cancelar', 'can:cancelar-ordenes-proceso'],

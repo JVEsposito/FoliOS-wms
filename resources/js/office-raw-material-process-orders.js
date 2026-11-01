@@ -33,6 +33,12 @@ const number = (value, digits = 0) => value === null || value === undefined ? '�
 const time = (value) => value ? String(value).slice(11, 16) : '—';
 const estados = { programada: 'Programada', en_proceso: 'En proceso', terminada: 'Terminada' };
 const cierres = { completa: 'completa', cancelacion: 'por cancelación' };
+const desfase = (minutos) => {
+    if (minutos === null || minutos === undefined) return '—';
+    if (Math.abs(minutos) < 1) return 'a tiempo';
+    const texto = `${Math.floor(Math.abs(minutos) / 60) ? `${Math.floor(Math.abs(minutos) / 60)} h ` : ''}${Math.abs(minutos) % 60} min`;
+    return minutos > 0 ? `+${texto}` : `−${texto}`;
+};
 const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago' }).format(new Date());
 
 async function api(url, options = {}) {
@@ -109,6 +115,8 @@ function renderDetalle() {
         <td class="orders-num">${number(fila.bins_programados)}</td><td class="orders-num">${number(fila.bins_entregados)}</td><td class="orders-num">${number(fila.bins_pendientes)}</td>
         <td class="orders-num">${number(fila.kilos_programados, 1)}</td><td>${escape(fila.embalaje || '—')}</td><td class="orders-num">${number(fila.cajas_estimadas, 1)}</td>
         <td>${escape(fila.mercado_destino || '—')}</td><td>${escape(time(fila.inicio_estimado))} – ${escape(time(fila.termino_estimado))}</td>
+        <td>${fila.primera_entrega_at ? `${escape(time(fila.primera_entrega_at))} – ${escape(time(fila.ultima_entrega_at))} · ${number(fila.viajes)} viaje${fila.viajes === 1 ? '' : 's'}` : '—'}</td>
+        <td class="orders-num">${desfase(fila.desfase_minutos)}</td>
     </tr>`).join('');
     const versiones = orden.versiones.map((version) => `<span>v${escape(version.numero)} · ${escape(version.creada_por || '—')} · ${escape(new Date(version.creada_at).toLocaleString('es-CL'))}${version.origen === 'fuera_de_orden' ? ' · lote fuera de orden autorizado' : ''}${version.motivo_cambio ? ` · ${escape(version.motivo_cambio)}` : ''}</span>`).join('');
     panel.innerHTML = `<header class="orders-panel__heading">
@@ -118,10 +126,13 @@ function renderDetalle() {
             <div class="orders-panel__actions">
                 ${abierta && can('puede_gestionar_ordenes_proceso') ? '<button class="primary-button" type="button" data-action="version">Nueva versión</button>' : ''}
                 ${abierta && can('puede_cancelar_ordenes_proceso') ? '<button class="secondary-button" type="button" data-action="cancelar">Cancelar orden</button>' : ''}
+                <button class="secondary-button" type="button" data-action="presif" data-format="xlsx">PRE-SIF Excel</button>
+                <button class="secondary-button" type="button" data-action="presif" data-format="pdf">PRE-SIF PDF</button>
                 <button class="secondary-button" type="button" data-action="cerrar">Cerrar</button>
             </div>
         </header>
-        <div class="orders-table-wrap"><table class="orders-table"><thead><tr><th>#</th><th>Lote</th><th>Cliente</th><th>Variedad</th><th>CSG</th><th>N° proceso</th><th>Bins</th><th>Entregados</th><th>Pendientes</th><th>Kilos</th><th>Embalaje</th><th>Cajas est.</th><th>Mercado</th><th>Horario est.</th></tr></thead><tbody>${filas}</tbody></table></div>
+        <div class="orders-table-wrap"><table class="orders-table"><thead><tr><th>#</th><th>Lote</th><th>Cliente</th><th>Variedad</th><th>CSG</th><th>N° proceso</th><th>Bins</th><th>Entregados</th><th>Pendientes</th><th>Kilos</th><th>Embalaje</th><th>Cajas est.</th><th>Mercado</th><th>Horario est.</th><th>Real</th><th>Desfase</th></tr></thead><tbody>${filas}</tbody></table></div>
+        <p class="orders-muted">Programado ${number(orden.progreso.bins_programados)} bins · entregado ${number(orden.progreso.bins_entregados)} · pendiente ${number(orden.progreso.bins_pendientes)}. El desfase compara el primer viaje real con el inicio estimado del lote.</p>
         <details><summary>Versiones (${orden.versiones.length})</summary><div class="orders-versions">${versiones}</div></details>`;
     panel.hidden = false;
 }
@@ -265,6 +276,23 @@ $('ordersList').addEventListener('click', (event) => {
 $('orderDetail').addEventListener('click', (event) => {
     const action = event.target.closest('[data-action]')?.dataset.action;
     if (action === 'cerrar') { state.detalle = null; renderDetalle(); }
+    if (action === 'presif') {
+        const formato = event.target.closest('[data-format]').dataset.format;
+        void run(async () => {
+            const response = await fetch(`/api/materia-prima/ordenes-proceso/${encodeURIComponent(state.detalle.id)}/pre-sif?formato=${formato}`, {
+                headers: { Accept: 'application/json', Authorization: `Bearer ${state.token}` },
+            });
+            if (!response.ok) {
+                const data = await response.json().catch(() => ({}));
+                throw new Error(data.message || 'No fue posible generar la PRE-SIF.');
+            }
+            const nombre = /filename="?([^"]+)"?/.exec(response.headers.get('Content-Disposition') || '')?.[1] || `pre-sif.${formato}`;
+            const url = URL.createObjectURL(await response.blob());
+            const enlace = document.createElement('a');
+            enlace.href = url; enlace.download = nombre; enlace.click();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        });
+    }
     if (action === 'version') void run(async () => abrirEditor(state.detalle));
     if (action === 'cancelar') {
         const motivo = window.prompt(`Motivo para cancelar ${state.detalle.codigo}. Las entregas hechas se conservan y los bins pendientes quedan libres.`);

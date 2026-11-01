@@ -8,12 +8,16 @@ use App\Http\Requests\CancelarOrdenProcesoMpRequest;
 use App\Http\Requests\CrearOrdenProcesoMpRequest;
 use App\Http\Requests\PublicarVersionOrdenProcesoMpRequest;
 use App\Models\OrdenProcesoMp;
+use App\Services\MateriaPrima\OrdenesProceso\PlanillaPreSif;
 use App\Services\MateriaPrima\OrdenesProceso\PresentadorOrdenProcesoMp;
+use App\Services\MateriaPrima\OrdenesProceso\PreSifPdf;
+use App\Services\MateriaPrima\OrdenesProceso\PreSifXlsx;
 use App\Services\MateriaPrima\OrdenesProceso\ServicioOrdenProcesoMp;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\Response;
 
 class OrdenesProcesoMpController extends Controller
@@ -59,6 +63,23 @@ class OrdenesProcesoMpController extends Controller
     public function show(OrdenProcesoMp $ordenProcesoMp): JsonResponse
     {
         return response()->json(['data' => $this->presentador->detalle($this->servicio->cargar($ordenProcesoMp))]);
+    }
+
+    public function preSif(Request $request, OrdenProcesoMp $ordenProcesoMp, PlanillaPreSif $planilla, PreSifXlsx $xlsx, PreSifPdf $pdf): BinaryFileResponse|Response
+    {
+        $formato = $request->validate(['formato' => ['nullable', Rule::in(['xlsx', 'pdf'])]])['formato'] ?? 'xlsx';
+        $datos = $planilla->construir($ordenProcesoMp);
+
+        if ($formato === 'pdf') {
+            return response($pdf->generar($datos), Response::HTTP_OK, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'attachment; filename="'.$datos['nombre_archivo'].'.pdf"',
+            ]);
+        }
+
+        return response()->download($xlsx->generar($datos), $datos['nombre_archivo'].'.xlsx', [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend();
     }
 
     public function lotesProgramables(Request $request): JsonResponse

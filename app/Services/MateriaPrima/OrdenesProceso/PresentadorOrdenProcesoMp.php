@@ -2,10 +2,12 @@
 
 namespace App\Services\MateriaPrima\OrdenesProceso;
 
+use App\Models\EntregaFrutaProceso;
 use App\Models\LoteVersionOrdenMp;
 use App\Models\OrdenProcesoMp;
 use App\Models\ReservaLoteOrdenProcesoMp;
 use App\Models\VersionOrdenProcesoMp;
+use Carbon\CarbonImmutable;
 
 class PresentadorOrdenProcesoMp
 {
@@ -45,14 +47,42 @@ class PresentadorOrdenProcesoMp
     public function detalle(OrdenProcesoMp $orden): array
     {
         $reservas = $orden->reservas->keyBy('lote_materia_prima_id');
+        $real = EntregaFrutaProceso::query()
+            ->where('orden_proceso_mp_id', $orden->id)
+            ->whereNull('anulado_at')
+            ->selectRaw('lote_materia_prima_id, MIN(entregado_at) as primera, MAX(entregado_at) as ultima, COUNT(*) as viajes')
+            ->groupBy('lote_materia_prima_id')
+            ->get()
+            ->keyBy('lote_materia_prima_id');
+        $version = $orden->versionVigente ? $this->version($orden->versionVigente, $reservas->all()) : null;
+        if ($version) {
+            // Los horarios estimados son hora de planta; las entregas se guardan en UTC.
+            $zona = (string) config('app.operational_timezone');
+            $local = fn (?string $valor): ?CarbonImmutable => $valor
+                ? CarbonImmutable::parse($valor, 'UTC')->setTimezone($zona)
+                : null;
+            $version['lotes'] = array_map(function (array $fila) use ($real, $local, $zona): array {
+                $entregas = $real[$fila['lote_materia_prima_id']] ?? null;
+                $primera = $local($entregas?->getAttribute('primera'));
+                $ultima = $local($entregas?->getAttribute('ultima'));
+                $inicio = $fila['inicio_estimado'] ? CarbonImmutable::parse($fila['inicio_estimado'], $zona) : null;
+
+                return [
+                    ...$fila,
+                    'viajes' => (int) ($entregas?->getAttribute('viajes') ?? 0),
+                    'primera_entrega_at' => $primera?->format('Y-m-d H:i:s'),
+                    'ultima_entrega_at' => $ultima?->format('Y-m-d H:i:s'),
+                    // Positivo: el lote empezó después de lo estimado.
+                    'desfase_minutos' => $primera && $inicio ? (int) round($inicio->diffInMinutes($primera, false)) : null,
+                ];
+            }, $version['lotes']);
+        }
 
         return [
             ...$this->resumen($orden),
             'creado_por' => $orden->creadoPor?->name,
             'cerrado_por' => $orden->cerradoPor?->name,
-            'version_vigente' => $orden->versionVigente
-                ? $this->version($orden->versionVigente, $reservas->all())
-                : null,
+            'version_vigente' => $version,
             'versiones' => $orden->versiones->map(fn (VersionOrdenProcesoMp $version): array => [
                 'id' => $version->id,
                 'numero' => $version->numero,
