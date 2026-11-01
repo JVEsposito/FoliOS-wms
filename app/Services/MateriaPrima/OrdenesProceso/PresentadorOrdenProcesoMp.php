@@ -1,0 +1,114 @@
+<?php
+
+namespace App\Services\MateriaPrima\OrdenesProceso;
+
+use App\Models\LoteVersionOrdenMp;
+use App\Models\OrdenProcesoMp;
+use App\Models\ReservaLoteOrdenProcesoMp;
+use App\Models\VersionOrdenProcesoMp;
+
+class PresentadorOrdenProcesoMp
+{
+    /** @return array<string, mixed> */
+    public function resumen(OrdenProcesoMp $orden): array
+    {
+        $reservas = $orden->relationLoaded('reservas') ? $orden->reservas : $orden->reservas()->get();
+        $vigente = $orden->versionVigente;
+        $lotes = $vigente?->relationLoaded('lotes') ? $vigente->lotes : collect();
+
+        return [
+            'id' => $orden->id,
+            'codigo' => $orden->codigo,
+            'fecha' => $orden->fecha?->toDateString(),
+            'turno_inicio' => $orden->turno_inicio?->value,
+            'turno_pre_sif' => $orden->turno_inicio?->codigoPreSif(),
+            'linea' => $orden->linea?->only(['id', 'codigo', 'nombre']),
+            'estado' => $orden->estado->value,
+            'tipo_cierre' => $orden->tipo_cierre?->value,
+            'numero_version_vigente' => $orden->numero_version_vigente,
+            'version' => $orden->version,
+            'clientes' => $lotes->pluck('cliente_snapshot')->unique()->values()->all(),
+            'progreso' => [
+                'lotes' => $reservas->count(),
+                'bins_programados' => (int) $reservas->sum('bins_programados'),
+                'bins_entregados' => (int) $reservas->sum('bins_entregados'),
+                'bins_pendientes' => (int) $reservas->sum('bins_pendientes'),
+            ],
+            'inicio_estimado' => $lotes->first()?->inicio_estimado?->format('Y-m-d H:i:s'),
+            'termino_estimado' => $lotes->last()?->termino_estimado?->format('Y-m-d H:i:s'),
+            'cerrado_at' => $orden->cerrado_at?->toIso8601String(),
+            'motivo_cancelacion' => $orden->motivo_cancelacion,
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    public function detalle(OrdenProcesoMp $orden): array
+    {
+        $reservas = $orden->reservas->keyBy('lote_materia_prima_id');
+
+        return [
+            ...$this->resumen($orden),
+            'creado_por' => $orden->creadoPor?->name,
+            'cerrado_por' => $orden->cerradoPor?->name,
+            'version_vigente' => $orden->versionVigente
+                ? $this->version($orden->versionVigente, $reservas->all())
+                : null,
+            'versiones' => $orden->versiones->map(fn (VersionOrdenProcesoMp $version): array => [
+                'id' => $version->id,
+                'numero' => $version->numero,
+                'origen' => $version->origen->value,
+                'motivo_cambio' => $version->motivo_cambio,
+                'creada_por' => $version->creadaPor?->name,
+                'creada_at' => $version->creada_at?->toIso8601String(),
+            ])->values()->all(),
+        ];
+    }
+
+    /**
+     * @param  array<string, ReservaLoteOrdenProcesoMp>  $reservas
+     * @return array<string, mixed>
+     */
+    public function version(VersionOrdenProcesoMp $version, array $reservas = []): array
+    {
+        return [
+            'id' => $version->id,
+            'numero' => $version->numero,
+            'origen' => $version->origen->value,
+            'hora_inicio' => substr((string) $version->hora_inicio, 0, 5),
+            'colacion_desde' => $version->colacion_desde ? substr((string) $version->colacion_desde, 0, 5) : null,
+            'colacion_hasta' => $version->colacion_hasta ? substr((string) $version->colacion_hasta, 0, 5) : null,
+            'rendimiento_kg_hora' => (float) $version->rendimiento_kg_hora,
+            'motivo_cambio' => $version->motivo_cambio,
+            'lotes' => $version->lotes->map(function (LoteVersionOrdenMp $fila) use ($reservas): array {
+                $reserva = $reservas[$fila->lote_materia_prima_id] ?? null;
+
+                return [
+                    'id' => $fila->id,
+                    'lote_materia_prima_id' => $fila->lote_materia_prima_id,
+                    'secuencia' => $fila->secuencia,
+                    'numero_proceso' => $fila->numero_proceso,
+                    'numero_lote' => $fila->numero_lote_snapshot,
+                    'cliente' => ['id' => $fila->cliente_id, 'nombre' => $fila->cliente_snapshot],
+                    'especie' => $fila->especie_snapshot,
+                    'variedad' => $fila->variedad_snapshot,
+                    'fecha_cosecha' => $fila->fecha_cosecha_snapshot?->toDateString(),
+                    'csg' => $fila->csg_snapshot,
+                    'productor' => $fila->productor_snapshot,
+                    'comuna' => $fila->comuna,
+                    'provincia' => $fila->provincia,
+                    'bins_programados' => $fila->bins_programados,
+                    'totes_programados' => $fila->totes_programados,
+                    'kilos_programados' => (float) $fila->kilos_programados,
+                    'embalaje' => $fila->embalaje,
+                    'kilos_por_caja' => $fila->kilos_por_caja !== null ? (float) $fila->kilos_por_caja : null,
+                    'cajas_estimadas' => $fila->cajas_estimadas !== null ? (float) $fila->cajas_estimadas : null,
+                    'mercado_destino' => $fila->mercado_destino,
+                    'inicio_estimado' => $fila->inicio_estimado?->format('Y-m-d H:i:s'),
+                    'termino_estimado' => $fila->termino_estimado?->format('Y-m-d H:i:s'),
+                    'bins_entregados' => $reserva?->bins_entregados ?? 0,
+                    'bins_pendientes' => $reserva?->bins_pendientes ?? 0,
+                ];
+            })->values()->all(),
+        ];
+    }
+}

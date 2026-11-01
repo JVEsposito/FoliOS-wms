@@ -50,6 +50,7 @@ class CatalogoOficinas
         ['materia-prima', 'Defectos de recepción', '/oficina/materia-prima/defectos-recepcion', '', ['puede_auditar_defectos_recepcion_mp']],
         ['materia-prima', 'Digitación de Lotes', '/oficina/materia-prima/lotes', 'materia-prima.digitacion', ['puede_consultar_materia_prima']],
         ['materia-prima', 'Hidrocooler', '/oficina/materia-prima/hidrocooler', 'materia-prima.hidrocooler', ['puede_consultar_hidrocooler_materia_prima']],
+        ['materia-prima', 'Órdenes de Proceso', '/oficina/materia-prima/ordenes-proceso', 'materia-prima.ordenes-proceso', ['puede_consultar_ordenes_proceso']],
         ['materia-prima', 'Fruta a Proceso', '/oficina/materia-prima/fruta-a-proceso', 'materia-prima.fruta-proceso', ['puede_consultar_fruta_proceso']],
         ['materia-prima', 'Despacho Comercial', '/oficina/materia-prima/despacho-comercial', 'materia-prima.despacho-comercial', ['puede_consultar_despacho_comercial']],
         ['materia-prima', 'Existencias MP', '/oficina/materia-prima/existencias', 'materia-prima.digitacion', ['puede_consultar_materia_prima']],

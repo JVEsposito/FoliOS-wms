@@ -1213,6 +1213,14 @@ class AlcanceOperacionalUsuario
         ], CatalogoModulosAcceso::OFICINA_ORDENES_PROCESO);
     }
 
+    public function puedeCancelarOrdenesProceso(User $usuario): bool
+    {
+        return $this->rolActivoEnModulo($usuario, [
+            RolUsuario::Administrador,
+            RolUsuario::SupervisorFrio,
+        ], CatalogoModulosAcceso::OFICINA_ORDENES_PROCESO);
+    }
+
     public function puedeConfigurarLineasProceso(User $usuario): bool
     {
         return $this->rolActivoEnModulo($usuario, [
@@ -1432,6 +1440,7 @@ class AlcanceOperacionalUsuario
             'puede_consultar_ordenes_proceso' => $this->puedeConsultarOrdenesProceso($usuario),
             'puede_gestionar_ordenes_proceso' => $this->puedeGestionarOrdenesProceso($usuario),
             'puede_configurar_lineas_proceso' => $this->puedeConfigurarLineasProceso($usuario),
+            'puede_cancelar_ordenes_proceso' => $this->puedeCancelarOrdenesProceso($usuario),
             'puede_consultar_despacho_comercial' => $this->puedeConsultarDespachoComercial($usuario),
             'puede_gestionar_despacho_comercial' => $this->puedeGestionarDespachoComercial($usuario),
             'puede_entregar_fruta_proceso' => $this->puedeEntregarFrutaProceso($usuario),

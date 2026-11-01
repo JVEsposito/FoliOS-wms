@@ -68,6 +68,7 @@ use App\Http\Controllers\Api\MovimientoCamaraMpController;
 use App\Http\Controllers\Api\MovimientoController;
 use App\Http\Controllers\Api\NotificacionOperacionalController;
 use App\Http\Controllers\Api\OperacionAhoraController;
+use App\Http\Controllers\Api\OrdenesProcesoMpController;
 use App\Http\Controllers\Api\PanelGerencialController;
 use App\Http\Controllers\Api\PendientesValidacionOrigenController;
 use App\Http\Controllers\Api\PerfilAccesoController;
@@ -452,6 +453,17 @@ Route::middleware('auth:sanctum')->group(function () {
         ->middleware('can:consultar-ordenes-proceso');
     Route::put('/materia-prima/lineas-proceso/{lineaProceso}', [LineasProcesoController::class, 'update'])
         ->middleware('can:configurar-lineas-proceso');
+    Route::middleware('can:consultar-ordenes-proceso')->prefix('materia-prima/ordenes-proceso')->group(function () {
+        Route::get('/', [OrdenesProcesoMpController::class, 'index']);
+        Route::get('/lotes-programables', [OrdenesProcesoMpController::class, 'lotesProgramables']);
+        Route::get('/{ordenProcesoMp}', [OrdenesProcesoMpController::class, 'show']);
+    });
+    Route::post('/materia-prima/ordenes-proceso', [OrdenesProcesoMpController::class, 'store'])
+        ->middleware('can:gestionar-ordenes-proceso');
+    Route::post('/materia-prima/ordenes-proceso/{ordenProcesoMp}/versiones', [OrdenesProcesoMpController::class, 'publicarVersion'])
+        ->middleware('can:gestionar-ordenes-proceso');
+    Route::post('/materia-prima/ordenes-proceso/{ordenProcesoMp}/cancelar', [OrdenesProcesoMpController::class, 'cancelar'])
+        ->middleware('can:cancelar-ordenes-proceso');
 
     Route::middleware('can:consultar-fruta-proceso')->prefix('materia-prima/fruta-proceso')->group(function () {
         Route::get('/resumen', [FrutaProcesoController::class, 'resumen']);
