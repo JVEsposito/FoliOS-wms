@@ -1194,6 +1194,33 @@ class AlcanceOperacionalUsuario
         ], 'materia-prima.fruta-proceso');
     }
 
+    public function puedeConsultarOrdenesProceso(User $usuario): bool
+    {
+        return $this->rolActivoEnModulo($usuario, [
+            RolUsuario::Administrador,
+            RolUsuario::SupervisorFrio,
+            RolUsuario::DigitadorMateriaPrima,
+            RolUsuario::Consulta,
+        ], CatalogoModulosAcceso::OFICINA_ORDENES_PROCESO);
+    }
+
+    public function puedeGestionarOrdenesProceso(User $usuario): bool
+    {
+        return $this->rolActivoEnModulo($usuario, [
+            RolUsuario::Administrador,
+            RolUsuario::SupervisorFrio,
+            RolUsuario::DigitadorMateriaPrima,
+        ], CatalogoModulosAcceso::OFICINA_ORDENES_PROCESO);
+    }
+
+    public function puedeConfigurarLineasProceso(User $usuario): bool
+    {
+        return $this->rolActivoEnModulo($usuario, [
+            RolUsuario::Administrador,
+            RolUsuario::SupervisorFrio,
+        ], CatalogoModulosAcceso::OFICINA_ORDENES_PROCESO);
+    }
+
     public function puedeConsultarDespachoComercial(User $usuario): bool
     {
         return $this->rolActivoEnModulo($usuario, [
@@ -1402,6 +1429,9 @@ class AlcanceOperacionalUsuario
             'puede_consultar_hidrocooler_materia_prima' => $this->puedeConsultarHidrocoolerMateriaPrima($usuario),
             'puede_operar_hidrocooler_materia_prima' => $this->puedeOperarHidrocoolerMateriaPrima($usuario),
             'puede_consultar_fruta_proceso' => $this->puedeConsultarFrutaProceso($usuario),
+            'puede_consultar_ordenes_proceso' => $this->puedeConsultarOrdenesProceso($usuario),
+            'puede_gestionar_ordenes_proceso' => $this->puedeGestionarOrdenesProceso($usuario),
+            'puede_configurar_lineas_proceso' => $this->puedeConfigurarLineasProceso($usuario),
             'puede_consultar_despacho_comercial' => $this->puedeConsultarDespachoComercial($usuario),
             'puede_gestionar_despacho_comercial' => $this->puedeGestionarDespachoComercial($usuario),
             'puede_entregar_fruta_proceso' => $this->puedeEntregarFrutaProceso($usuario),

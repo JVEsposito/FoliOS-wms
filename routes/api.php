@@ -62,6 +62,7 @@ use App\Http\Controllers\Api\InspeccionEnvasesController;
 use App\Http\Controllers\Api\InspeccionSagController;
 use App\Http\Controllers\Api\IntegridadOperacionalController;
 use App\Http\Controllers\Api\LaboresTurnoController;
+use App\Http\Controllers\Api\LineasProcesoController;
 use App\Http\Controllers\Api\MateriaPrimaController;
 use App\Http\Controllers\Api\MovimientoCamaraMpController;
 use App\Http\Controllers\Api\MovimientoController;
@@ -446,6 +447,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{despacho}/confirmar', [DespachoComercialRetornoController::class, 'confirmar']);
         Route::post('/{despacho}/cancelar', [DespachoComercialRetornoController::class, 'cancelar']);
     });
+
+    Route::get('/materia-prima/ordenes-proceso/catalogos', [LineasProcesoController::class, 'catalogos'])
+        ->middleware('can:consultar-ordenes-proceso');
+    Route::put('/materia-prima/lineas-proceso/{lineaProceso}', [LineasProcesoController::class, 'update'])
+        ->middleware('can:configurar-lineas-proceso');
 
     Route::middleware('can:consultar-fruta-proceso')->prefix('materia-prima/fruta-proceso')->group(function () {
         Route::get('/resumen', [FrutaProcesoController::class, 'resumen']);

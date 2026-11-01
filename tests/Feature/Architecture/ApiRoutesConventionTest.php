@@ -69,6 +69,8 @@ class ApiRoutesConventionTest extends TestCase
             ['GET', 'api/romana/registro-pesaje/en-blanco', 'can:consultar-romana'],
             ['GET', 'api/materia-prima/hidrocooler/registro/en-blanco', 'can:consultar-hidrocooler-materia-prima'],
             ['GET', 'api/materia-prima/hidrocooler/registro', 'can:consultar-hidrocooler-materia-prima'],
+            ['GET', 'api/materia-prima/ordenes-proceso/catalogos', 'can:consultar-ordenes-proceso'],
+            ['PUT', 'api/materia-prima/lineas-proceso/{lineaProceso}', 'can:configurar-lineas-proceso'],
             ['PUT', 'api/romana/recepciones/{recepcion}/corregir', 'can:corregir-recepciones-romana'],
             ['GET', 'api/validacion/registro/rrpp-01/en-blanco', 'can:consultar-validaciones-pallet'],
             ['PUT', 'api/administracion/usuarios/{usuario}', 'can:administrar-accesos'],

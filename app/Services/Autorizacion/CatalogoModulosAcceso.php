@@ -15,6 +15,8 @@ class CatalogoModulosAcceso
 
     public const OFICINA_PORTERIA = 'materia-prima.porteria';
 
+    public const OFICINA_ORDENES_PROCESO = 'materia-prima.ordenes-proceso';
+
     public const FINANZAS_PAGOS_PROVEEDORES = 'finanzas.pagos-proveedores';
 
     public const OFICINA_FINANZAS_PROVEEDORES = 'finanzas.proveedores';
@@ -85,6 +87,7 @@ class CatalogoModulosAcceso
                     $this->modulo('materia-prima.romana', 'Romana', 'Ingreso, pesaje y seguimiento de recepciones.'),
                     $this->modulo('materia-prima.digitacion', 'Digitación de lotes', 'Creación y gestión de lotes posteriores a validación.'),
                     $this->modulo('materia-prima.hidrocooler', 'Hidrocooler', 'Ciclos individuales por lote, temperaturas y destino de salida.'),
+                    $this->modulo(self::OFICINA_ORDENES_PROCESO, 'Órdenes de proceso', 'PRE-SIF versionada: lotes de MP programados por línea y turno.'),
                     $this->modulo('materia-prima.fruta-proceso', 'Fruta a proceso', 'Entregas parciales de bins desde cámara hacia Packing.'),
                     $this->modulo('materia-prima.despacho-comercial', 'Despacho comercial', 'Salidas de bins retornados por Packing con guía SII externa.'),
                     $this->modulo('materia-prima.validacion-mp', 'Validación MP', 'Flujo PDA/tablet para validar y segregar recepciones.'),
@@ -387,6 +390,7 @@ class CatalogoModulosAcceso
                 'materia-prima.romana',
                 'materia-prima.digitacion',
                 'materia-prima.hidrocooler',
+                self::OFICINA_ORDENES_PROCESO,
                 'materia-prima.fruta-proceso',
                 'materia-prima.despacho-comercial',
                 'frigorifico.validacion',
@@ -441,6 +445,7 @@ class CatalogoModulosAcceso
                 'materia-prima.romana',
                 'materia-prima.digitacion',
                 'materia-prima.hidrocooler',
+                self::OFICINA_ORDENES_PROCESO,
                 'materia-prima.despacho-comercial',
                 'materia-prima.cuenta-envases',
                 'consultas.busqueda',
@@ -477,6 +482,7 @@ class CatalogoModulosAcceso
                 'materia-prima.romana',
                 'materia-prima.digitacion',
                 'materia-prima.hidrocooler',
+                self::OFICINA_ORDENES_PROCESO,
                 'materia-prima.fruta-proceso',
                 'materia-prima.despacho-comercial',
                 'materia-prima.cuenta-envases',

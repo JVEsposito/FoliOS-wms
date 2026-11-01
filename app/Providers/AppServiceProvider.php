@@ -535,6 +535,18 @@ class AppServiceProvider extends ServiceProvider
             fn (User $usuario): bool => $alcance->puedeConsultarFrutaProceso($usuario),
         );
         Gate::define(
+            'consultar-ordenes-proceso',
+            fn (User $usuario): bool => $alcance->puedeConsultarOrdenesProceso($usuario),
+        );
+        Gate::define(
+            'gestionar-ordenes-proceso',
+            fn (User $usuario): bool => $alcance->puedeGestionarOrdenesProceso($usuario),
+        );
+        Gate::define(
+            'configurar-lineas-proceso',
+            fn (User $usuario): bool => $alcance->puedeConfigurarLineasProceso($usuario),
+        );
+        Gate::define(
             'consultar-despacho-comercial',
             fn (User $usuario): bool => $alcance->puedeConsultarDespachoComercial($usuario),
         );
