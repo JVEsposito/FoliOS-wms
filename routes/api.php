@@ -457,6 +457,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/', [OrdenesProcesoMpController::class, 'index']);
         Route::get('/lotes-programables', [OrdenesProcesoMpController::class, 'lotesProgramables']);
         Route::get('/{ordenProcesoMp}', [OrdenesProcesoMpController::class, 'show']);
+        Route::get('/{ordenProcesoMp}/pre-sif', [OrdenesProcesoMpController::class, 'preSif']);
     });
     Route::post('/materia-prima/ordenes-proceso', [OrdenesProcesoMpController::class, 'store'])
         ->middleware('can:gestionar-ordenes-proceso');

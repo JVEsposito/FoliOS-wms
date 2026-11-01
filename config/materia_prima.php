@@ -7,4 +7,7 @@ return [
      * versiones anteriores siguen enviando línea, turno y número de orden como texto.
      */
     'fruta_proceso_exige_orden' => (bool) env('FRUTA_PROCESO_EXIGE_ORDEN', false),
+
+    // Código SAG de la planta (CSP) que encabeza la PRE-SIF.
+    'csp_planta' => env('PLANTA_CSP'),
 ];

@@ -169,3 +169,16 @@ POST /api/materia-prima/fruta-proceso/lotes/{lote}/entregas
 ### APK y oficina
 
 La tablet suma la pestaña Órdenes: elige línea, ve los lotes en secuencia con lo entregado, lo pendiente, la cámara y el horario estimado, y entrega desde la fila (el siguiente lote queda destacado). Al registrar un viaje elige En orden, Fuera de orden (orden de la línea, supervisor y PIN) o Sin orden mientras no se exija. La oficina de Fruta a proceso permite elegir la orden del lote al registrar un viaje.
+
+## PRE-SIF y programado contra real
+
+`GET /api/materia-prima/ordenes-proceso/{orden}/pre-sif?formato=xlsx|pdf` genera la PRE-SIF desde la versión vigente, con el nombre `pre-sif_op-000001_v1_t1_l1_02-11-26`.
+
+- **Encabezado**: título, orden y versión, fecha, versión (V1, V2…), turno con código de planilla (T1/T2), línea, CSP de la planta (`PLANTA_CSP`), horario de inicio y vuelta de colación.
+- **Columnas**: las 20 de la planilla actual. Variedad agronómica y comercial repiten la variedad del lote, y N° de cajas muestra queda en blanco porque FoliOS no la registra.
+- **Tiempo estimado**: kilos ÷ rendimiento, sin colación, en h:mm como la planilla. El horario de término sí incluye la colación.
+- **Colación**: va como fila separadora después del último lote que termina antes de salir.
+- **Total**: bins, totes y kilos.
+- **Formatos**: el Excel se arma como OOXML propio, con filas que se ajustan al texto. El PDF es A4 horizontal con el logo de planta y achica la letra antes de cortar una palabra.
+
+El detalle de la orden suma por lote los viajes, el primer y el último viaje en hora de planta y el desfase en minutos del primer viaje contra el inicio estimado (positivo: empezó tarde). La oficina lo muestra en las columnas Real y Desfase, junto a programado, entregado y pendiente, y descarga la PRE-SIF en Excel o PDF.
