@@ -17,6 +17,7 @@ use App\Models\PosicionTunelPrefrio;
 use App\Models\PresenciaCargaAnden;
 use App\Models\ProcesoPrefrio;
 use App\Models\ProcesoPrefrioFolio;
+use App\Models\ReingresoFolioCamara;
 use App\Models\ReservaCargaFolio;
 use App\Models\TareaCarga;
 use App\Models\TareaMovimiento;
@@ -106,6 +107,7 @@ final class InvalidarBandejasOperacionalesObserver
             Movimiento::class,
             Anden::class,
             PresenciaCargaAnden::class,
+            ReingresoFolioCamara::class,
         ];
     }
 

@@ -1044,7 +1044,27 @@ button:disabled {
 .folio-action-cell {
     width: 70px;
     text-align: right !important;
+    white-space: nowrap;
 }
+
+.folio-action-cell .folio-remove + .folio-remove { margin-left: 4px; }
+
+.folio-change {
+    border-color: var(--line);
+    background: var(--raised);
+    color: var(--text);
+}
+
+.change-folio-warnings {
+    margin: 0 0 8px;
+    border: 1px solid var(--amber, #d9a441);
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: var(--text);
+    font-size: .8rem;
+}
+
+.change-folio-warnings ul { margin: 6px 0 0; padding-left: 18px; }
 
 .folio-remove {
     min-height: 31px;

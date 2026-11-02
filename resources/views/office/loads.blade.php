@@ -390,6 +390,29 @@
             </form>
         </dialog>
 
+        <dialog class="office-dialog" id="changeFolioDialog" aria-labelledby="changeFolioTitle">
+            <form id="changeFolioForm" method="dialog" novalidate>
+                <header>
+                    <div>
+                        <p class="eyebrow">CAMBIO COMERCIAL</p>
+                        <h2 id="changeFolioTitle">Cambiar pallet</h2>
+                        <p id="changeFolioContext">El pallet que sale vuelve a quedar disponible.</p>
+                    </div>
+                    <button class="dialog-close" data-close-dialog type="button" aria-label="Cerrar">×</button>
+                </header>
+                <div class="dialog-grid">
+                    <label class="field field--full"><span>Folio que entra *</span><input name="numero_folio_entrante" maxlength="50" autocomplete="off" required placeholder="Número de folio"></label>
+                    <label class="field field--full"><span>Motivo *</span><textarea name="motivo" maxlength="500" rows="2" required placeholder="Ej.: el cliente cambió el calibre"></textarea></label>
+                </div>
+                <div class="change-folio-warnings is-hidden" id="changeFolioWarnings" role="alert"></div>
+                <p class="form-error" id="changeFolioError" role="alert"></p>
+                <footer>
+                    <button class="secondary-button" data-close-dialog type="button">Cancelar</button>
+                    <button class="primary-button" id="changeFolioSubmit" type="submit">Cambiar pallet <span>→</span></button>
+                </footer>
+            </form>
+        </dialog>
+
         <dialog class="office-dialog" id="truckDockDialog" aria-labelledby="truckDockDialogTitle">
             <form id="truckDockForm" method="dialog" novalidate>
                 <header>

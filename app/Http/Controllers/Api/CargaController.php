@@ -17,6 +17,7 @@ use App\Enums\TipoBulto;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ActualizarCargaRequest;
 use App\Http\Requests\AgregarFoliosCargaRequest;
+use App\Http\Requests\CambiarFolioCargaRequest;
 use App\Http\Requests\CrearCargaRequest;
 use App\Http\Requests\FinalizarPresenciaCargaAndenRequest;
 use App\Http\Requests\RegistrarDespachoDirectoPrefrioRequest;
@@ -454,6 +455,25 @@ class CargaController extends Controller
             $request->user(),
             $request->integer('version_esperada'),
             $request->validated('motivo'),
+        );
+
+        return new CargaResource($this->cargarDetalle($actualizada));
+    }
+
+    public function cambiarFolio(
+        CambiarFolioCargaRequest $request,
+        Carga $carga,
+        Folio $folio,
+        ServicioCarga $servicio,
+    ): CargaResource {
+        $actualizada = $servicio->cambiarFolio(
+            $carga,
+            $folio,
+            $request->validated('numero_folio_entrante'),
+            $request->user(),
+            $request->integer('version_esperada'),
+            $request->validated('motivo'),
+            $request->boolean('confirmar_diferencias'),
         );
 
         return new CargaResource($this->cargarDetalle($actualizada));

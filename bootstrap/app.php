@@ -2,6 +2,7 @@
 
 use App\Exceptions\AdvertenciasMovimientoPendientes;
 use App\Exceptions\ConflictoOperacion;
+use App\Exceptions\DiferenciasCambioFolioCarga;
 use App\Exceptions\FoliosCargaInvalidos;
 use App\Exceptions\OperacionNoAutorizada;
 use App\Exceptions\RegistroFueraDeTemporadaActiva;
@@ -140,6 +141,21 @@ return Application::configure(basePath: dirname(__DIR__))
                 'message' => $exception->getMessage(),
                 'codigo' => 'operacion_no_autorizada',
             ], 403);
+        });
+
+        $exceptions->render(function (
+            DiferenciasCambioFolioCarga $exception,
+            Request $request,
+        ) {
+            if (! $request->is('api/*')) {
+                return null;
+            }
+
+            return response()->json([
+                'message' => $exception->getMessage(),
+                'codigo' => 'confirmacion_requerida',
+                'advertencias' => $exception->advertencias,
+            ], 409);
         });
 
         $exceptions->render(function (
