@@ -1,7 +1,11 @@
-import Chart from 'chart.js/auto';
+import { BarController, BarElement, CategoryScale, Chart, Legend, LinearScale, Tooltip } from 'chart.js';
 import { createOperationalPoller } from './shared/operational-poller';
 import { productStateSegments } from './shared/management-product-states';
 import { readManagementChartPaletteSafely } from './shared/management-chart-theme';
+
+// Gerencia solo dibuja barras (horizontales y apiladas) con leyenda y tooltip. Registrar
+// solo esas piezas evita cargar 'chart.js/auto', que trae todos los tipos de gráfico.
+Chart.register(BarController, BarElement, CategoryScale, LinearScale, Legend, Tooltip);
 
 const byId = (id) => document.getElementById(id);
 
@@ -170,7 +174,8 @@ class ApiError extends Error {
     }
 }
 
-Chart.defaults.font.family = 'Inter, ui-sans-serif, system-ui, sans-serif';
+// Misma familia que el resto de Oficina (FoliOS v2): Archivo autoalojada, no Inter.
+Chart.defaults.font.family = '"Archivo Variable", "Archivo", "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
 
 function applyChartTheme() {
     palette = readManagementChartPaletteSafely(palette, fallbackPalette);

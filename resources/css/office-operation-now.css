@@ -1,4 +1,4 @@
-@import './estiba-tokens.css';
+/* Tokens .estiba-ui: los aporta office-shell.css, que toda oficina carga después de esta hoja. */
 
 .operation-now-availability-count {
     color: var(--text);
