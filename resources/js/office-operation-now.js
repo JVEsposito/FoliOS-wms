@@ -68,6 +68,8 @@ const elements = {
     cameraRows: byId('operationCameraRows'),
     operatorList: byId('operationOperatorList'),
     tunnelList: byId('operationTunnelList'),
+    dispatchRows: byId('operationDispatchRows'),
+    dispatchSummary: byId('dispatchPanelSummary'),
     verificationRows: byId('operationVerificationRows'),
     verificationSummary: byId('operationVerificationSummary'),
     plannerPanel: byId('operationPlannerPanel'),
@@ -1178,6 +1180,62 @@ function renderTunnels(tunnels = []) {
     </tr>`).join('');
 }
 
+const DISPATCH_STATES = {
+    pendiente: 'Pendiente', en_preparacion: 'En preparación', despacho_parcial: 'Saliendo a andén',
+    en_separacion: 'En separación', separada: 'Separada', separacion_completa: 'Separación completa',
+    despachada: 'Todo en andén',
+};
+
+function dispatchMeter(done, total, tone, detail) {
+    const value = total ? (Number(done) / Number(total)) * 100 : 0;
+    return `<div class="operation-now-tunnel-progress operation-now-dispatch-progress">
+        <strong>${escapeHtml(`${number(done)}/${number(total)}`)}</strong>
+        <span class="operation-now-meter" data-tone="${tone}" style="--operation-progress:${clampedPercent(value)}%"><i></i></span>
+        <small>${escapeHtml(detail)}</small>
+    </div>`;
+}
+
+function dispatchLoadState(load) {
+    if (load.incidencias_abiertas) return signal(`${number(load.incidencias_abiertas)} ${load.incidencias_abiertas === 1 ? 'incidencia' : 'incidencias'}`, 'critical');
+    if (load.lista_para_cerrar) return signal('Lista para cerrar', 'success');
+    return signal(DISPATCH_STATES[load.estado] || humanize(load.estado), load.prioridad === 'urgente' ? 'warning' : 'neutral');
+}
+
+function renderDispatch(dispatch = {}) {
+    const loads = dispatch.cargas || [];
+    const summary = dispatch.resumen || {};
+    elements.dispatchSummary.textContent = loads.length
+        ? `${number(summary.activas)} ${summary.activas === 1 ? 'activa' : 'activas'} · ${number(summary.cargando)} cargando · ${number(summary.listas_para_cerrar)} ${summary.listas_para_cerrar === 1 ? 'lista' : 'listas'} para cerrar`
+        : 'Sin cargas publicadas';
+    if (!loads.length) {
+        elements.dispatchRows.innerHTML = `<tr><td colspan="5">${empty('Sin cargas en despacho', 'Las cargas aparecen al publicarse y salen al cerrar el despacho.')}</td></tr>`;
+        return;
+    }
+
+    elements.dispatchRows.innerHTML = loads.map((load) => {
+        const separation = load.separacion || {};
+        const loading = load.carguio || {};
+        const reference = [load.numero_orden_externa, load.embarque, (load.clientes || []).join(' · ')].filter(Boolean).join(' · ');
+        const separationTone = separation.total && separation.acopiados >= separation.total ? 'success' : (separation.cumple_umbral ? 'info' : 'warning');
+        const separationDetail = separation.en_anden
+            ? `${number(separation.en_anden)} en andén · ${percent(separation.porcentaje)}`
+            : `${percent(separation.porcentaje)} · umbral ${percent(separation.umbral_porcentaje)}`;
+        const loadingDetail = loading.en_anden_por_cargar
+            ? `${number(loading.en_anden_por_cargar)} en andén por subir`
+            : (loading.total && loading.cargados >= loading.total ? 'Carga completa' : 'Sin pallets esperando en andén');
+        const truck = load.camion_en_anden
+            ? `Camión ${load.camion_en_anden.patente || 'sin patente'} · desde ${dateTime(load.camion_en_anden.ingresada_at, { timeOnly: true })}`
+            : 'Sin camión';
+        return `<tr>
+            <td><span class="operation-now-code">${escapeHtml(load.codigo)}</span><span class="operation-now-subtext">${escapeHtml(reference || 'Sin orden externa')}</span></td>
+            <td>${dispatchMeter(separation.acopiados, separation.total, separationTone, separationDetail)}</td>
+            <td>${dispatchMeter(loading.cargados, loading.total, loading.total && loading.cargados >= loading.total ? 'success' : 'info', loadingDetail)}</td>
+            <td><strong>${escapeHtml(load.anden || '—')}</strong><span class="operation-now-subtext">${escapeHtml(truck)}</span></td>
+            <td>${dispatchLoadState(load)}</td>
+        </tr>`;
+    }).join('');
+}
+
 function incidentContext(incident) {
     if (incident.origen === 'recepcion_embalada') {
         return [incident.contexto?.recepcion?.planta, incident.contexto?.recepcion?.guia].filter(Boolean).join(' · ');
@@ -1218,6 +1276,7 @@ function render(data) {
     renderCameras(data.camaras);
     renderOperators(state.operatorSnapshot ? (state.operatorFresh ? state.operatorSnapshot.camareros : state.operatorSnapshot.camareros.map((operator) => ({ ...operator, estado_presencia: 'sin_confirmar', disponible_desde: null }))) : data.camareros);
     renderTunnels(data.prefrio?.tuneles);
+    renderDispatch(data.despacho);
     renderVerifications(data.verificaciones);
     // La lista de atención y las insignias se recalculan en cada lectura; la pestaña
     // visible no cambia aunque aparezca una condición nueva. Va antes del plano porque

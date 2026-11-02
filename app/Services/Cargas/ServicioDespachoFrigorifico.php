@@ -435,6 +435,7 @@ class ServicioDespachoFrigorifico
             if (! in_array($asignacionBloqueada->estado, [
                 EstadoCargaFolio::Pendiente,
                 EstadoCargaFolio::EnAnden,
+                EstadoCargaFolio::Cargado,
             ], true)) {
                 throw new DomainException(
                     'El folio debe estar pendiente y sin incidencias para enviarse al andén.',
@@ -460,7 +461,7 @@ class ServicioDespachoFrigorifico
             );
             $carga->refresh();
 
-            if ($asignacionBloqueada->estado === EstadoCargaFolio::EnAnden) {
+            if ($asignacionBloqueada->estado->fueraDeCamara()) {
                 if ($asignacionBloqueada->anden_id !== $andenBloqueado->id
                     || $movimiento->folio_id !== $asignacionBloqueada->folio_id) {
                     throw new ConflictoOperacion(
@@ -486,7 +487,7 @@ class ServicioDespachoFrigorifico
                 ->pluck('estado');
             $todosEnAnden = $estados->isNotEmpty()
                 && $estados->every(
-                    fn (EstadoCargaFolio $estado): bool => $estado === EstadoCargaFolio::EnAnden,
+                    fn (EstadoCargaFolio $estado): bool => $estado->fueraDeCamara(),
                 );
             $carga->update([
                 'estado' => $todosEnAnden
@@ -615,9 +616,21 @@ class ServicioDespachoFrigorifico
 
             if ($asignaciones->isEmpty()
                 || $asignaciones->contains(
-                    fn (CargaFolio $asignacion): bool => $asignacion->estado !== EstadoCargaFolio::EnAnden,
+                    fn (CargaFolio $asignacion): bool => ! $asignacion->estado->fueraDeCamara(),
                 )) {
                 throw new DomainException('La carga aún posee folios pendientes fuera del andén.');
+            }
+
+            $sinCargar = $asignaciones
+                ->filter(fn (CargaFolio $asignacion): bool => $asignacion->estado !== EstadoCargaFolio::Cargado)
+                ->map(fn (CargaFolio $asignacion): string => $asignacion->folio->numero_folio)
+                ->values();
+            if ($sinCargar->isNotEmpty() && config('despacho.cierre_exige_pallets_cargados')) {
+                throw new DomainException(sprintf(
+                    'Faltan %d pallets por registrar como cargados en el camión: %s.',
+                    $sinCargar->count(),
+                    $sinCargar->take(6)->implode(', ').($sinCargar->count() > 6 ? '…' : ''),
+                ));
             }
 
             $ultimoEnvioAnden = $asignaciones->max(
@@ -627,6 +640,15 @@ class ServicioDespachoFrigorifico
             if ($ultimoEnvioAnden !== null && $salidaAt->getTimestamp() < $ultimoEnvioAnden) {
                 throw new DomainException(
                     'La fecha y hora de salida no puede ser anterior al último envío de un folio al andén.',
+                );
+            }
+
+            $ultimoCargado = $asignaciones->max(
+                fn (CargaFolio $asignacion): ?int => $asignacion->cargado_at?->getTimestamp(),
+            );
+            if ($ultimoCargado !== null && $salidaAt->getTimestamp() < $ultimoCargado) {
+                throw new DomainException(
+                    'La fecha y hora de salida no puede ser anterior al último pallet registrado como cargado.',
                 );
             }
 
@@ -684,6 +706,8 @@ class ServicioDespachoFrigorifico
                     'patente' => $patente,
                     'conductor' => $conductor,
                     'cantidad_folios' => $asignaciones->count(),
+                    'cantidad_cargados' => $asignaciones->count() - $sinCargar->count(),
+                    'sin_registro_carga' => $sinCargar->all(),
                     'salida_fisica_at' => $salidaAt->toAtomString(),
                     'registrada_at' => CarbonImmutable::now()->toAtomString(),
                 ],

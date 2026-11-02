@@ -89,6 +89,7 @@ class ServicioOperacionAhora
                     ...$estadoEmergencias->resumir($plan),
                 ])->all(),
             'verificaciones' => $this->verificaciones($temporada, $ventana),
+            'despacho' => app(ResumenDespachoOperacion::class)->obtener($temporada),
             'planificador' => [
                 ...$this->puestoMando->obtener($temporada),
                 'conciliacion' => $this->conciliacion->diagnosticar($temporada, 0),

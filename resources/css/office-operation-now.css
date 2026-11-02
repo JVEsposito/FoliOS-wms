@@ -695,6 +695,12 @@
 .operation-now-table--precooling :where(th, td):nth-child(2) { width: 21%; }
 .operation-now-table--precooling :where(th, td):nth-child(3) { width: 34%; }
 .operation-now-table--precooling :where(th, td):nth-child(4) { width: 26%; }
+.operation-now-table--dispatch { min-width: 760px; table-layout: fixed; }
+.operation-now-table--dispatch :where(th, td):nth-child(1) { width: 22%; }
+.operation-now-table--dispatch :where(th, td):nth-child(2) { width: 24%; }
+.operation-now-table--dispatch :where(th, td):nth-child(3) { width: 22%; }
+.operation-now-table--dispatch :where(th, td):nth-child(4) { width: 16%; }
+.operation-now-table--dispatch :where(th, td):nth-child(5) { width: 16%; }
 .operation-now-table--incidents { min-width: 680px; }
 
 .operation-now-code {
@@ -760,6 +766,7 @@
 .operation-now-meter[data-tone="warning"] i { background: var(--warning-text); }
 .operation-now-meter[data-tone="critical"] i { background: var(--danger-text); }
 .operation-now-meter[data-tone="neutral"] i { background: var(--text-subtle); }
+.operation-now-meter[data-tone="info"] i { background: var(--corporate-blue); }
 
 .operation-now-temperature {
     display: block;

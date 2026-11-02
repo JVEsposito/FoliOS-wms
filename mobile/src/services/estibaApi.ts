@@ -24,7 +24,9 @@ import {
   RefrigeratedLoad,
   ReportLoadIncidentPayload,
   SagCondition,
+  RegisterLoadedFolioPayload,
   SendLoadFolioToDockPayload,
+  UndoLoadedFolioPayload,
   WithdrawMaterialPayload,
 } from '../domain/estiba';
 import { ApiError } from './apiError';
@@ -103,6 +105,8 @@ export interface EstibaApi {
   listDocks(token: string): Promise<Dock[]>;
   reportLoadIncident(token: string, assignmentId: string, payload: ReportLoadIncidentPayload): Promise<void>;
   sendLoadFolioToDock(token: string, assignmentId: string, payload: SendLoadFolioToDockPayload): Promise<RefrigeratedLoad>;
+  registerLoadedFolio(token: string, loadId: string, payload: RegisterLoadedFolioPayload): Promise<RefrigeratedLoad>;
+  undoLoadedFolio(token: string, assignmentId: string, payload: UndoLoadedFolioPayload): Promise<RefrigeratedLoad>;
   getOperationalNotificationSummary(token: string): Promise<OperationalNotificationSummary>;
   listOperationalNotifications(token: string): Promise<OperationalNotificationFeed>;
   readOperationalNotification(token: string, notificationId: string): Promise<OperationalNotification>;
@@ -654,6 +658,22 @@ class HttpEstibaApi implements EstibaApi {
     )).data;
   }
 
+  async registerLoadedFolio(token: string, loadId: string, payload: RegisterLoadedFolioPayload) {
+    return (await this.request<ApiItem<RefrigeratedLoad>>(
+      `/api/cargas/${loadId}/cargados`,
+      token,
+      { method: 'POST', body: JSON.stringify(payload) },
+    )).data;
+  }
+
+  async undoLoadedFolio(token: string, assignmentId: string, payload: UndoLoadedFolioPayload) {
+    return (await this.request<ApiItem<RefrigeratedLoad>>(
+      `/api/cargas/asignaciones/${assignmentId}/deshacer-cargado`,
+      token,
+      { method: 'POST', body: JSON.stringify(payload) },
+    )).data;
+  }
+
   async listOperationalNotifications(token: string): Promise<OperationalNotificationFeed> {
     const response = await this.request<{
       data: OperationalNotification[];
@@ -769,6 +789,8 @@ function createUnavailableApi(message: string): EstibaApi {
     listDocks: unavailable,
     reportLoadIncident: unavailable,
     sendLoadFolioToDock: unavailable,
+    registerLoadedFolio: unavailable,
+    undoLoadedFolio: unavailable,
     getOperationalNotificationSummary: unavailable,
     listOperationalNotifications: unavailable,
     readOperationalNotification: unavailable,

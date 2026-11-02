@@ -405,7 +405,10 @@ class ServicioPanelGerencial
                 ])
                 ->count(),
             'folios_en_anden' => (clone $folios)
-                ->where('estado', EstadoCargaFolio::EnAnden->value)
+                ->whereIn('estado', EstadoCargaFolio::valoresFueraDeCamara())
+                ->count(),
+            'folios_cargados' => (clone $folios)
+                ->where('estado', EstadoCargaFolio::Cargado->value)
                 ->count(),
             'folios_con_incidencia' => (clone $folios)
                 ->where('estado', EstadoCargaFolio::ConIncidencia->value)

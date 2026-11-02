@@ -43,6 +43,11 @@ test('una carga cerrada conserva el conteo despachado sin convertirlo en pendien
   assert.match(operatorLoadDate('2026-10-21T05:30:00Z', 'America/Santiago'), /2:30|02:30/);
 });
 
+test('un pallet cargado en el camión sigue contando en andén y deja de estar pendiente', () => {
+  const load = { estado: 'despachada', total_folios: 3, folios: [{ estado_carga: 'cargado' }, { estado_carga: 'en_anden' }, { estado_carga: 'pendiente' }] };
+  assert.deepEqual(operatorLoadCounts(load), { total: 3, dock: 2, shipped: 0, pending: 1 });
+});
+
 test('la consulta de cargas usa GET condicional y separa la caché entre usuarios', async () => {
   const calls = [];
   const feed = { data: [], meta: { turno: { nombre: '22:00–06:00' } } };

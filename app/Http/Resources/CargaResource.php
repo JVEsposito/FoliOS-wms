@@ -192,6 +192,8 @@ class CargaResource extends JsonResource
                         'nombre' => $asignacion->anden->nombre,
                     ] : null,
                     'asignado_at' => $asignacion->asignado_at?->toAtomString(),
+                    'enviado_anden_at' => $asignacion->enviado_anden_at?->toAtomString(),
+                    'cargado_at' => $asignacion->cargado_at?->toAtomString(),
                     'ubicacion' => $posicion && $camara ? [
                         'camara' => [
                             'id' => $camara->id,

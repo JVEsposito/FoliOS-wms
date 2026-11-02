@@ -8,7 +8,9 @@ use App\Enums\TipoIncidenciaCarga;
 use App\Enums\TipoResolucionIncidenciaCarga;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CerrarDespachoFrigorificoRequest;
+use App\Http\Requests\DeshacerFolioCargadoRequest;
 use App\Http\Requests\EnviarFolioAndenRequest;
+use App\Http\Requests\RegistrarFolioCargadoRequest;
 use App\Http\Requests\ReportarIncidenciaCargaRequest;
 use App\Http\Requests\ResolverIncidenciaCargaRequest;
 use App\Http\Resources\CargaResource;
@@ -24,6 +26,7 @@ use App\Models\TareaMovimiento;
 use App\Services\Autenticacion\ContextoOperacional;
 use App\Services\Cargas\PlanificadorExtraccionCarga;
 use App\Services\Cargas\RevisionCargaOperacional;
+use App\Services\Cargas\ServicioCargaCamion;
 use App\Services\Cargas\ServicioDespachoFrigorifico;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Carbon\CarbonImmutable;
@@ -93,8 +96,10 @@ class DespachoFrigorificoController extends Controller
     ): Response {
         Gate::authorize('consultar-cargas-operacion');
 
+        // «Despachada»: todo salió de cámara; la ruta queda vacía mientras la
+        // tablet registra el carguío en el andén.
         abort_unless(
-            in_array($carga->estado, EstadoCarga::visiblesEnOperacion(), true),
+            in_array($carga->estado, [...EstadoCarga::visiblesEnOperacion(), EstadoCarga::Despachada], true),
             404,
         );
 
@@ -188,6 +193,45 @@ class DespachoFrigorificoController extends Controller
             tareaMovimiento: isset($datos['tarea_movimiento_id'])
                 ? TareaMovimiento::query()->findOrFail($datos['tarea_movimiento_id'])
                 : null,
+        );
+
+        return new CargaResource($this->cargarCarga($asignacion->carga));
+    }
+
+    public function registrarCargado(
+        RegistrarFolioCargadoRequest $request,
+        Carga $carga,
+        ContextoOperacional $contexto,
+        ServicioCargaCamion $servicio,
+    ): CargaResource {
+        $datos = $request->validated();
+        [$usuario, $dispositivo] = $contexto->obtener($request);
+        $servicio->registrarCargado(
+            operacionId: $datos['operacion_id'],
+            carga: $carga,
+            numeroFolio: $datos['numero_folio'],
+            usuario: $usuario,
+            dispositivo: $dispositivo,
+            generadoDispositivoAt: CarbonImmutable::parse($datos['generado_dispositivo_at']),
+        );
+
+        return new CargaResource($this->cargarCarga($carga->refresh()));
+    }
+
+    public function deshacerCargado(
+        DeshacerFolioCargadoRequest $request,
+        CargaFolio $cargaFolio,
+        ContextoOperacional $contexto,
+        ServicioCargaCamion $servicio,
+    ): CargaResource {
+        $datos = $request->validated();
+        [$usuario, $dispositivo] = $contexto->obtener($request);
+        $asignacion = $servicio->deshacerCargado(
+            operacionId: $datos['operacion_id'],
+            asignacion: $cargaFolio,
+            motivo: $datos['motivo'],
+            usuario: $usuario,
+            dispositivo: $dispositivo,
         );
 
         return new CargaResource($this->cargarCarga($asignacion->carga));

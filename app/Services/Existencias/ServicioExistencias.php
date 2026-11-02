@@ -276,7 +276,8 @@ class ServicioExistencias
         $zona = config('app.operational_timezone', config('app.timezone'));
         $consulta = CargaFolio::query()
             ->with(['carga.temporada', 'folio'])
-            ->where('estado', EstadoCargaFolio::EnAnden->value)
+            // El cierre deja los pallets como «despachado»; «en_anden» cubre cierres anteriores a esa regla.
+            ->whereIn('estado', [EstadoCargaFolio::Despachado->value, EstadoCargaFolio::EnAnden->value])
             ->whereNotNull('finalizado_at')
             ->whereHas('carga', fn ($consulta) => $consulta
                 ->where('estado', EstadoCarga::Cerrada->value)
@@ -784,6 +785,10 @@ class ServicioExistencias
     ): string {
         if ($estadoCarga === 'en_anden') {
             return 'En andén';
+        }
+
+        if ($estadoCarga === 'cargado') {
+            return 'Cargado en camión';
         }
 
         if ($estadoCarga === 'con_incidencia') {

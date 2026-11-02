@@ -717,6 +717,7 @@ class ServicioCarga
                     EstadoCargaFolio::Pendiente->value,
                     EstadoCargaFolio::ConIncidencia->value,
                     EstadoCargaFolio::EnAnden->value,
+                    EstadoCargaFolio::Cargado->value,
                 ])
                 ->with('reservaActiva')
                 ->orderBy('folio_id')

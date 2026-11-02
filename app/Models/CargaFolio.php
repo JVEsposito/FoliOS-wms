@@ -23,6 +23,9 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
     'enviado_anden_por_user_id',
     'enviado_anden_desde_dispositivo_id',
     'enviado_anden_at',
+    'cargado_por_user_id',
+    'cargado_desde_dispositivo_id',
+    'cargado_at',
     'finalizado_por_user_id',
     'finalizado_at',
     'motivo_finalizacion',
@@ -83,6 +86,11 @@ class CargaFolio extends Model implements PerteneceATemporada
         return $this->belongsTo(Dispositivo::class, 'enviado_anden_desde_dispositivo_id');
     }
 
+    public function cargadoPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cargado_por_user_id');
+    }
+
     public function finalizadoPor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'finalizado_por_user_id');
@@ -94,6 +102,7 @@ class CargaFolio extends Model implements PerteneceATemporada
             'estado' => EstadoCargaFolio::class,
             'asignado_at' => 'datetime',
             'enviado_anden_at' => 'datetime',
+            'cargado_at' => 'datetime',
             'finalizado_at' => 'datetime',
         ];
     }
