@@ -241,11 +241,7 @@ class ServicioCarga
                     $errores[] = $this->errorFolio(
                         $numero,
                         'asignado_otra_carga',
-                        sprintf(
-                            'El folio %s ya está asignado a la carga %s.',
-                            $numero,
-                            $reserva->asignacion->carga->codigo,
-                        ),
+                        $this->mensajeFolioReservado($numero, $reserva),
                     );
 
                     continue;
@@ -534,17 +530,13 @@ class ServicioCarga
 
                 if ($reserva) {
                     $asignacion = $reserva->asignacion;
-                    $codigo = $asignacion->carga_id === $cargaBloqueada->id
+                    $codigo = $asignacion?->carga_id === $cargaBloqueada->id
                         ? 'ya_asignado_carga'
                         : 'asignado_otra_carga';
                     $errores[] = $this->errorFolio(
                         $numero,
                         $codigo,
-                        sprintf(
-                            'El folio %s ya está asignado a la carga %s.',
-                            $numero,
-                            $asignacion->carga->codigo,
-                        ),
+                        $this->mensajeFolioReservado($numero, $reserva),
                     );
 
                     continue;
@@ -780,11 +772,7 @@ class ServicioCarga
                 ->lockForUpdate()
                 ->first();
             if ($reservaEntrante) {
-                throw new DomainException(sprintf(
-                    'El folio %s ya está asignado a la carga %s.',
-                    $numero,
-                    $reservaEntrante->asignacion->carga->codigo,
-                ));
+                throw new DomainException($this->mensajeFolioReservado($numero, $reservaEntrante));
             }
             $error = $this->motivoFolioNoAsignable($entrante, $cargaBloqueada->temporada_id);
             if ($error) {
@@ -1636,6 +1624,17 @@ class ServicioCarga
         if (! $existe) {
             throw new DomainException('El andén previsto debe existir y estar activo.');
         }
+    }
+
+    private function mensajeFolioReservado(string $numero, ReservaCargaFolio $reserva): string
+    {
+        // La reserva bloqueada es una lectura actual. Sus relaciones informativas
+        // pueden no existir aún en el snapshot REPEATABLE READ de esta transacción.
+        $codigoCarga = $reserva->asignacion?->carga?->codigo;
+
+        return $codigoCarga
+            ? "El folio {$numero} ya está asignado a la carga {$codigoCarga}."
+            : "El folio {$numero} ya está asignado a otra carga.";
     }
 
     /**

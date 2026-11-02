@@ -7,6 +7,7 @@ use App\Models\ReingresoFolioCamara;
 use App\Models\ReservaCargaFolio;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\Concerns\EjecutaSolicitudesConcurrentes;
 use Tests\Concerns\PreparaDespachoFrigorifico;
@@ -87,6 +88,48 @@ class CambiosComercialesCargaConcurrenciaTest extends TestCase
             $this->assertSame(0, ReingresoFolioCamara::query()->count());
             $this->assertSame(2, ReservaCargaFolio::query()->whereIn('folio_id', [$primero->id, $segundo->id])->count());
         }
+    }
+
+    public function test_reemplazo_rechaza_reserva_confirmada_despues_del_snapshot_sin_error_500(): void
+    {
+        if (DB::getDriverName() !== 'mysql') {
+            $this->markTestSkipped('Reproduce una lectura REPEATABLE READ anterior a la reserva.');
+        }
+        $contexto = $this->crearContextoFrio(3, 'CX-RR');
+        [$primero, $segundo, $reemplazo] = $contexto['folios'];
+        $cargaA = $this->crearCargaPublicada($contexto['despachador'], $contexto['anden'], [$primero]);
+        $cargaB = $this->crearCargaPublicada($contexto['despachador'], $contexto['anden'], [$segundo]);
+        $tokenOtro = $contexto['administrador']->createToken('oficina-snapshot', ['oficina'])->plainTextToken;
+        $payloadA = $this->cambio($cargaA, $reemplazo->numero_folio);
+        $payloadB = $this->cambio($cargaB, $reemplazo->numero_folio);
+        DB::statement('SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+        DB::beginTransaction();
+        try {
+            $this->assertNull(ReservaCargaFolio::query()->find($reemplazo->id));
+            $ganadora = $this->solicitudesConcurrentes([
+                ['POST', "/api/cargas/{$cargaA->id}/folios/{$primero->id}/cambiar", $contexto['tokenOficina'], $payloadA],
+            ]);
+            $this->assertSame(200, $ganadora[0]['status'], json_encode($ganadora[0]['body']));
+            // El snapshot sigue sin ver la asignación recién creada por la otra oficina.
+            $this->assertNull(ReservaCargaFolio::query()->find($reemplazo->id));
+            $this->conToken($tokenOtro)
+                ->postJson("/api/cargas/{$cargaB->id}/folios/{$segundo->id}/cambiar", $payloadB)
+                ->assertUnprocessable()
+                ->assertJsonPath('codigo', 'regla_de_negocio')
+                ->assertJsonPath('message', "El folio {$reemplazo->numero_folio} ya está asignado a otra carga.");
+            $this->conToken($tokenOtro)->postJson("/api/cargas/{$cargaB->id}/folios", [
+                'folios' => [$reemplazo->numero_folio], 'version_esperada' => $cargaB->version,
+            ])->assertUnprocessable()
+                ->assertJsonPath('codigo', 'folios_no_asignables')
+                ->assertJsonPath('errores.0.codigo', 'asignado_otra_carga')
+                ->assertJsonPath('errores.0.mensaje', "El folio {$reemplazo->numero_folio} ya está asignado a otra carga.");
+        } finally {
+            DB::rollBack();
+        }
+        $this->assertSame($cargaA->id, ReservaCargaFolio::query()->findOrFail($reemplazo->id)->asignacion->carga_id);
+        $this->assertSame($cargaB->id, ReservaCargaFolio::query()->findOrFail($segundo->id)->asignacion->carga_id);
+        $this->assertNull(ReservaCargaFolio::query()->find($primero->id));
+        $this->assertSame(2, ReservaCargaFolio::query()->count());
     }
 
     /** @return array<string, mixed> */
