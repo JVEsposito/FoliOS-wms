@@ -22,6 +22,7 @@ use App\Http\Requests\CrearCargaRequest;
 use App\Http\Requests\FinalizarPresenciaCargaAndenRequest;
 use App\Http\Requests\RegistrarDespachoDirectoPrefrioRequest;
 use App\Http\Requests\RegistrarPresenciaCargaAndenRequest;
+use App\Http\Requests\RegistrarRetornoCargaRequest;
 use App\Http\Requests\VersionCargaRequest;
 use App\Http\Resources\CargaResource;
 use App\Http\Resources\FolioDisponibleCargaResource;
@@ -33,6 +34,7 @@ use App\Services\Cargas\ServicioCarga;
 use App\Services\Cargas\ServicioPresenciaCargaAnden;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\Verificaciones\VentanasVerificacion;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -477,6 +479,23 @@ class CargaController extends Controller
         );
 
         return new CargaResource($this->cargarDetalle($actualizada));
+    }
+
+    public function registrarRetorno(
+        RegistrarRetornoCargaRequest $request,
+        Carga $carga,
+        ServicioCarga $servicio,
+    ): CargaResource {
+        $retornada = $servicio->registrarRetorno(
+            $carga,
+            $request->has('folios') ? $request->validated('folios') : null,
+            $request->user(),
+            $request->integer('version_esperada'),
+            $request->validated('motivo'),
+            $request->filled('llegada_at') ? CarbonImmutable::parse($request->validated('llegada_at')) : null,
+        );
+
+        return new CargaResource($this->cargarDetalle($retornada));
     }
 
     public function publicar(

@@ -12,6 +12,8 @@ enum EstadoCargaFolio: string
     case Despachado = 'despachado';
     case Descartado = 'descartado';
     case Reemplazado = 'reemplazado';
+    /** Salió despachado y volvió a planta con un retorno de carga. */
+    case Retornado = 'retornado';
 
     public function mantieneReserva(): bool
     {

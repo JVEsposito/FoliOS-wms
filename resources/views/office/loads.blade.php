@@ -84,6 +84,8 @@
                                 <option value="despachada">En andén</option>
                                 <option value="cerrada">Cerrada</option>
                                 <option value="cancelada">Cancelada</option>
+                                <option value="retorno_parcial">Retorno parcial</option>
+                                <option value="retornada">Retornada a planta</option>
                             </select>
                         </label>
                         <label class="incident-filter">
@@ -321,6 +323,7 @@
                                     <button class="danger-button" id="cancelLoadButton" type="button">Cancelar orden</button>
                                     <button class="secondary-button is-hidden" id="truckDockButton" type="button">Camión en andén</button>
                                     <button class="primary-button is-hidden" id="closeDispatchButton" type="button">Confirmar salida del camión <span>→</span></button>
+                                    <button class="danger-button is-hidden" id="returnLoadButton" type="button">Registrar retorno a planta</button>
                                     <button class="primary-button" id="publishLoadButton" type="button">Publicar para operación <span>→</span></button>
                                 </div>
                             </footer>
@@ -409,6 +412,32 @@
                 <footer>
                     <button class="secondary-button" data-close-dialog type="button">Cancelar</button>
                     <button class="primary-button" id="changeFolioSubmit" type="submit">Cambiar pallet <span>→</span></button>
+                </footer>
+            </form>
+        </dialog>
+
+        <dialog class="office-dialog" id="returnLoadDialog" aria-labelledby="returnLoadTitle">
+            <form id="returnLoadForm" method="dialog" novalidate>
+                <header>
+                    <div>
+                        <p class="eyebrow">RETORNO A PLANTA</p>
+                        <h2 id="returnLoadTitle">Registrar retorno de la carga</h2>
+                        <p id="returnLoadContext">Los pallets que vuelven quedan pendientes de reingreso a cámara con el mismo folio.</p>
+                    </div>
+                    <button class="dialog-close" data-close-dialog type="button" aria-label="Cerrar">×</button>
+                </header>
+                <div class="dialog-grid">
+                    <fieldset class="field field--full return-load-folios">
+                        <legend>Pallets que volvieron *</legend>
+                        <div id="returnLoadFolios"></div>
+                    </fieldset>
+                    <label class="field field--full"><span>Motivo *</span><textarea name="motivo" maxlength="500" rows="2" required placeholder="Ej.: contenedor rechazado en puerto"></textarea></label>
+                    <label class="field field--full"><span>Llegada a planta *</span><input name="llegada_at" type="datetime-local" required></label>
+                </div>
+                <p class="form-error" id="returnLoadError" role="alert"></p>
+                <footer>
+                    <button class="secondary-button" data-close-dialog type="button">Cancelar</button>
+                    <button class="primary-button" type="submit">Registrar retorno <span>→</span></button>
                 </footer>
             </form>
         </dialog>

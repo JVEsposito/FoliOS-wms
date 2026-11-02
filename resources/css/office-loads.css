@@ -335,6 +335,13 @@
     color: #ffaaaa;
 }
 
+.status-badge--retornada,
+.status-badge--retorno-parcial {
+    border-color: rgba(243, 185, 79, .55);
+    background: rgba(243, 185, 79, .1);
+    color: var(--amber);
+}
+
 .priority-badge {
     min-height: 28px;
     padding: 0 10px;
@@ -1104,6 +1111,18 @@ button:disabled {
     color: var(--green);
 }
 
+.folio-state--cargado {
+    border-color: rgba(85, 216, 137, .6);
+    background: rgba(85, 216, 137, .16);
+    color: var(--green);
+}
+
+.folio-state--retornado {
+    border-color: rgba(243, 185, 79, .55);
+    background: rgba(243, 185, 79, .1);
+    color: var(--amber);
+}
+
 .folio-state--despachado {
     border-color: color-mix(in srgb, var(--success-text) 45%, transparent);
     background: color-mix(in srgb, var(--success-text) 10%, transparent);
@@ -1639,3 +1658,8 @@ button:disabled {
         width: 100%;
     }
 }
+
+.return-load-folios { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; }
+.return-load-folios legend { padding: 0 4px; color: var(--muted); font-size: .72rem; font-weight: 900; }
+.return-load-folios > div { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; max-height: 220px; overflow: auto; }
+.return-load-folio { display: flex; align-items: center; gap: 6px; font-family: var(--font-mono, ui-monospace, Consolas, monospace); font-size: .78rem; }

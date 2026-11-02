@@ -744,6 +744,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/cargas/{carga}/folios/{folio}/cambiar', [CargaController::class, 'cambiarFolio']);
         Route::post('/cargas/{carga}/publicar', [CargaController::class, 'publicar']);
         Route::post('/cargas/{carga}/cancelar', [CargaController::class, 'cancelar']);
+        Route::post('/cargas/{carga}/retorno', [CargaController::class, 'registrarRetorno']);
         Route::post('/cargas/{carga}/camion-en-anden', [CargaController::class, 'registrarCamionEnAnden']);
         Route::post('/cargas/{carga}/camion-en-anden/finalizar', [CargaController::class, 'finalizarCamionEnAnden']);
     });

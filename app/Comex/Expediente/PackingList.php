@@ -91,7 +91,7 @@ final class PackingList
      */
     private function filas(array $lineas): iterable
     {
-        $estados = ['pendiente' => 'Por cargar', 'con_incidencia' => 'Con incidencia', 'en_anden' => 'En andén', 'cargado' => 'Cargado', 'despachado' => 'Despachado'];
+        $estados = ['pendiente' => 'Por cargar', 'con_incidencia' => 'Con incidencia', 'en_anden' => 'En andén', 'cargado' => 'Cargado', 'despachado' => 'Despachado', 'retornado' => 'Retornado a planta'];
         foreach ($lineas as $indice => $linea) {
             yield [
                 'n' => $indice + 1,

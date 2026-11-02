@@ -23,4 +23,5 @@ enum TipoEventoCarga: string
     case CamionEnAnden = 'camion_en_anden';
     case CamionFueraAnden = 'camion_fuera_anden';
     case Cancelada = 'cancelada';
+    case Retornada = 'retornada';
 }

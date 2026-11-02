@@ -280,7 +280,8 @@ class ServicioExistencias
             ->whereIn('estado', [EstadoCargaFolio::Despachado->value, EstadoCargaFolio::EnAnden->value])
             ->whereNotNull('finalizado_at')
             ->whereHas('carga', fn ($consulta) => $consulta
-                ->where('estado', EstadoCarga::Cerrada->value)
+                // Un retorno parcial conserva como despachados los pallets que no volvieron.
+                ->whereIn('estado', [EstadoCarga::Cerrada->value, EstadoCarga::RetornoParcial->value])
                 ->whereHas('temporada', fn ($temporada) => $temporada->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id)))
             ->when($desde, fn ($consulta) => $consulta->where('finalizado_at', '>=', CarbonImmutable::parse($desde, $zona)->startOfDay()->utc()))
             ->when($hasta, fn ($consulta) => $consulta->where('finalizado_at', '<=', CarbonImmutable::parse($hasta, $zona)->endOfDay()->utc()))

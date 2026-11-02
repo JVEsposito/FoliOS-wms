@@ -456,7 +456,7 @@ final class ServicioDiagnosticoCierreTemporada
     {
         $consulta = DB::table('cargas as c')
             ->where('c.temporada_id', $temporada->id)
-            ->whereNotIn('c.estado', [EstadoCarga::Cerrada->value, EstadoCarga::Cancelada->value])
+            ->whereNotIn('c.estado', array_map(fn (EstadoCarga $estado): string => $estado->value, EstadoCarga::terminales()))
             ->select([
                 'c.id', 'c.codigo as referencia', 'c.estado',
                 DB::raw('coalesce(c.publicada_por_user_id, c.creada_por_user_id) as responsable_id'),

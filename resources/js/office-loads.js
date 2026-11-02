@@ -107,6 +107,12 @@ const elements = {
     changeWarnings: byId('changeFolioWarnings'),
     changeError: byId('changeFolioError'),
     changeSubmit: byId('changeFolioSubmit'),
+    returnButton: byId('returnLoadButton'),
+    returnDialog: byId('returnLoadDialog'),
+    returnForm: byId('returnLoadForm'),
+    returnFolios: byId('returnLoadFolios'),
+    returnContext: byId('returnLoadContext'),
+    returnError: byId('returnLoadError'),
     truckDockDialog: byId('truckDockDialog'),
     truckDockForm: byId('truckDockForm'),
     truckDockSelect: byId('truckDockSelect'),
@@ -146,6 +152,8 @@ const statusLabels = {
     separacion_completa: 'Separación completa',
     despachada: 'En andén',
     cerrada: 'Cerrada',
+    retornada: 'Retornada a planta',
+    retorno_parcial: 'Retorno parcial',
     cancelada: 'Cancelada',
 };
 
@@ -395,6 +403,11 @@ function canCancel(load) {
 function canAdjust(load) {
     return state.identity?.puede_gestionar_cargas === true
         && Boolean(load) && !['borrador', 'cerrada', 'cancelada'].includes(load.estado);
+}
+
+function canReturn(load) {
+    return state.identity?.puede_gestionar_cargas === true
+        && ['cerrada', 'retorno_parcial'].includes(load?.estado);
 }
 
 function outOfCamera(folio) {
@@ -806,6 +819,7 @@ function renderFolios(load) {
     const adjustable = canAdjust(load);
     elements.folioTableBody.innerHTML = load.folios.map((folio) => {
         const location = folio.estado_carga === 'despachado' ? 'Despachado'
+            : folio.estado_carga === 'retornado' ? 'Retornado a planta'
             : folio.estado_carga === 'en_anden' ? 'En andén'
                 : folio.estado_carga === 'cargado' ? 'Cargado en camión'
                 : folio.ubicacion ? `En cámara ${folio.ubicacion.camara.codigo} · ${folio.ubicacion.posicion.etiqueta}`
@@ -837,6 +851,7 @@ function renderCommands(load) {
     elements.cancel.classList.toggle('is-hidden', !canCancel(load));
     elements.publish.classList.toggle('is-hidden', !draft);
     elements.closeDispatch.classList.toggle('is-hidden', !canCloseDispatch(load));
+    elements.returnButton.classList.toggle('is-hidden', !canReturn(load));
     elements.truckDock.classList.toggle('is-hidden', !canManageTruckPresence(load));
     elements.truckDock.textContent = load.camion_en_anden ? 'Liberar andén' : 'Camión en andén';
     elements.truckDock.classList.toggle('danger-button', Boolean(load.camion_en_anden));
@@ -865,6 +880,13 @@ function renderCommands(load) {
             ? 'Registra patente y conductor para cerrar el despacho.'
             : 'La tablet del andén registra cada pallet al subirlo. Registra patente y conductor cuando el vehículo haya sido cargado.';
         elements.folioTableHint.textContent = 'Los folios ya salieron de las cámaras y esperan el cierre documental.';
+    } else if (['retornada', 'retorno_parcial'].includes(load.estado)) {
+        const back = (load.folios || []).filter((folio) => folio.estado_carga === 'retornado').length;
+        elements.commandTitle.textContent = load.estado === 'retornada'
+            ? `Carga retornada a planta · ${back} pallets`
+            : `Retorno parcial · ${back} de ${load.total_folios} pallets volvieron`;
+        elements.commandDescription.textContent = `${load.retorno?.motivo || 'Sin motivo'} · llegada ${formatDate(load.retorno?.retornada_at)}. Los pallets quedan pendientes de reingreso a cámara.`;
+        elements.folioTableHint.textContent = 'Los pallets retornados conservan su folio y vuelven a cámara con una tarea del planificador.';
     } else if (load.estado === 'cerrada') {
         elements.commandTitle.textContent = `Despacho cerrado · ${load.cierre?.patente || 'sin patente'}`;
         elements.commandDescription.textContent = `${load.cierre?.conductor || 'Conductor no informado'} · salida física ${formatDate(load.cierre?.cerrada_at)} · registro ${formatDate(load.cierre?.registrada_at)}`;
@@ -1915,6 +1937,66 @@ elements.closeForm.addEventListener('submit', async (event) => {
     } catch (error) {
         elements.closeError.textContent = error.message;
         toast(error.message, true);
+    } finally {
+        setBusy(false);
+    }
+});
+
+function openReturnDialog() {
+    const shipped = (state.selected?.folios || []).filter((folio) => folio.estado_carga === 'despachado');
+    elements.returnForm.reset();
+    elements.returnError.textContent = '';
+    elements.returnContext.textContent = `${state.selected.codigo} · ${shipped.length} ${shipped.length === 1 ? 'pallet despachado' : 'pallets despachados'}. Los que vuelven quedan pendientes de reingreso con el mismo folio.`;
+    elements.returnFolios.innerHTML = shipped.length
+        ? shipped.map((folio) => `<label class="return-load-folio"><input type="checkbox" name="folios" value="${escapeHtml(folio.id)}" checked> <span>${escapeHtml(folio.numero_folio)}</span></label>`).join('')
+        : '<p>No quedan pallets despachados en esta carga.</p>';
+    elements.returnForm.elements.llegada_at.value = localDateTimeValue();
+    elements.returnDialog.showModal();
+}
+
+elements.returnButton.addEventListener('click', () => {
+    if (canReturn(state.selected)) openReturnDialog();
+});
+
+elements.returnForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!canReturn(state.selected)) return;
+    const form = new FormData(elements.returnForm);
+    const selected = form.getAll('folios').map(String);
+    const all = elements.returnFolios.querySelectorAll('input[name="folios"]').length;
+    const reason = String(form.get('motivo') || '').trim();
+    const arrivedAt = localDateTimeToIso(String(form.get('llegada_at') || ''));
+    elements.returnError.textContent = '';
+    if (!selected.length || reason.length < 3 || !arrivedAt) {
+        elements.returnError.textContent = 'Marca los pallets que volvieron, el motivo y la hora de llegada.';
+        return;
+    }
+    if (new Date(arrivedAt).getTime() > Date.now()) {
+        elements.returnError.textContent = 'La llegada a planta no puede estar en el futuro.';
+        return;
+    }
+
+    setBusy(true, 'Registrando retorno a planta…');
+    try {
+        const response = await api(`/api/cargas/${state.selected.id}/retorno`, {
+            method: 'POST',
+            body: JSON.stringify({
+                version_esperada: state.selected.version,
+                motivo: reason,
+                llegada_at: arrivedAt,
+                ...(selected.length < all ? { folios: selected } : {}),
+            }),
+        });
+        elements.returnDialog.close();
+        syncLoad(response.data);
+        await loadCatalog(state.loadPagination.currentPage);
+        toast(`${response.data.codigo}: ${selected.length} ${selected.length === 1 ? 'pallet quedó' : 'pallets quedaron'} pendientes de reingreso a cámara.`);
+    } catch (error) {
+        if (error.status === 409 && await recoverConflict(error)) {
+            elements.returnDialog.close();
+            return;
+        }
+        elements.returnError.textContent = error.message;
     } finally {
         setBusy(false);
     }

@@ -22,7 +22,7 @@ export function operatorLoadState(state: string) {
   const labels: Record<string, string> = {
     pendiente: 'Pendiente', en_preparacion: 'En preparación', despacho_parcial: 'Despacho parcial',
     en_separacion: 'En separación', separada: 'Separada', separacion_completa: 'Separación completa',
-    despachada: 'Despachada', cerrada: 'Cerrada', cancelada: 'Cancelada',
+    despachada: 'Despachada', cerrada: 'Cerrada', cancelada: 'Cancelada', retornada: 'Retornada a planta', retorno_parcial: 'Retorno parcial',
     en_anden: 'En andén', cargado: 'Cargado', despachado: 'Despachado', con_incidencia: 'Con incidencia', cancelado: 'Cancelado',
   };
   return labels[state] ?? state.replaceAll('_', ' ');
