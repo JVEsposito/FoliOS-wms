@@ -47,6 +47,38 @@ excepciones comerciales que antes no tenían registro.
 - El progreso (`progreso`) mantiene `en_anden` como «salió de la cámara»
   (incluye los cargados) y suma `cargados` y `por_cargar`.
 
+## 2. Cancelar, quitar y cambiar pallets antes del cierre
+
+Decisiones comerciales que pueden llegar en cualquier etapa, incluso con el
+camión en el andén. Las hace «despachador hacia arriba» (Despachador,
+Supervisor de frío y Administrador: permiso `gestionar-cargas`) y siempre
+exigen motivo una vez publicada la carga.
+
+| Dónde está el pallet | Qué pasa al cancelar, quitar o cambiar |
+| --- | --- |
+| En cámara (`pendiente` / `con_incidencia`) | Se libera la reserva y vuelve a ofrecerse |
+| Fuera de cámara (`en_anden` / `cargado`) | Se libera la reserva y queda **pendiente de reingreso** |
+
+- **Cancelar** (`POST /api/cargas/{carga}/cancelar`): permitido en cualquier
+  estado salvo `cerrada` (para eso está el retorno) o `cancelada`. Libera el
+  andén y cancela el despacho directo si había camión. El evento `cancelada`
+  separa `folios_liberados` y `pendientes_reingreso`.
+- **Quitar** (`DELETE /api/cargas/{carga}/folios/{folio}`): ahora también con la
+  separación iniciada. La carga debe conservar al menos un pallet; si no queda
+  ninguno, se cancela. El estado se recalcula (por ejemplo, de
+  `despacho_parcial` a `en_preparacion` si ya no queda nada en el andén).
+- **Cambiar** (`POST /api/cargas/{carga}/folios/{folio}/cambiar`): entra un
+  pallet disponible en cámara. Si difiere en cliente, especie, variedad,
+  calibre o embalaje, responde `409 confirmacion_requerida` con las
+  advertencias; con `confirmar_diferencias=true` se aplica. No bloquea: la
+  decisión es comercial. El pallet que entra queda `pendiente` y la carga
+  vuelve a `despacho_parcial` si ya estaba toda en el andén.
+- Las incidencias abiertas del pallet que sale se cierran como
+  `retirado_de_carga` con el motivo.
+- Un pallet pendiente de reingreso no puede asignarse a otra carga (código
+  `pendiente_reingreso`) hasta que vuelva a una posición de cámara. Al ubicarlo,
+  el reingreso se cierra con ese movimiento; el folio conserva su número.
+
 ## Operación ahora · pestaña Despacho
 
 Una fila por carga publicada con dos barras:

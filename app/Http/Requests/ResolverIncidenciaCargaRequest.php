@@ -28,7 +28,7 @@ class ResolverIncidenciaCargaRequest extends FormRequest
     {
         return [
             'operacion_id' => ['required', 'uuid'],
-            'resolucion' => ['required', Rule::enum(TipoResolucionIncidenciaCarga::class)],
+            'resolucion' => ['required', Rule::enum(TipoResolucionIncidenciaCarga::class)->except([TipoResolucionIncidenciaCarga::RetiradoDeCarga])],
             'folio_reemplazo_id' => [
                 'nullable',
                 'required_if:resolucion,reemplazo',

@@ -9,14 +9,18 @@ use App\Enums\EstadoCamara;
 use App\Enums\EstadoCarga;
 use App\Enums\EstadoCargaFolio;
 use App\Enums\EstadoFolioProcesoPrefrio;
+use App\Enums\EstadoIncidenciaCarga;
 use App\Enums\EstadoOperacionalFolio;
 use App\Enums\EstadoProcesoPrefrio;
 use App\Enums\HabilitacionAlmacenamientoFolio;
 use App\Enums\ModalidadSalidaCarga;
+use App\Enums\OrigenReingresoCamara;
 use App\Enums\PrioridadCarga;
 use App\Enums\TipoBulto;
 use App\Enums\TipoEventoCarga;
+use App\Enums\TipoResolucionIncidenciaCarga;
 use App\Exceptions\ConflictoOperacion;
+use App\Exceptions\DiferenciasCambioFolioCarga;
 use App\Exceptions\FoliosCargaInvalidos;
 use App\Exceptions\OperacionNoAutorizada;
 use App\Models\Anden;
@@ -25,6 +29,8 @@ use App\Models\Carga;
 use App\Models\CargaFolio;
 use App\Models\EventoCarga;
 use App\Models\Folio;
+use App\Models\IncidenciaCargaFolio;
+use App\Models\ReingresoFolioCamara;
 use App\Models\ReservaCargaFolio;
 use App\Models\User;
 use App\Services\Autorizacion\AlcanceOperacionalUsuario;
@@ -38,6 +44,7 @@ use DateTimeInterface;
 use DomainException;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use LogicException;
 
 class ServicioCarga
@@ -637,8 +644,13 @@ class ServicioCarga
             $motivo,
         ): Carga {
             $cargaBloqueada = $this->bloquearCarga($carga);
-            $this->asegurarEditable($cargaBloqueada);
+            $this->asegurarAjustable($cargaBloqueada);
             $this->asegurarVersion($cargaBloqueada, $versionEsperada);
+            $enCurso = $this->enCurso($cargaBloqueada);
+            $motivoNormalizado = $this->textoOpcional($motivo);
+            if ($enCurso && $motivoNormalizado === null) {
+                throw new DomainException('Indica por qué el pallet sale de la carga.');
+            }
 
             $asignaciones = CargaFolio::query()
                 ->where('carga_id', $cargaBloqueada->id)
@@ -654,32 +666,40 @@ class ServicioCarga
                 );
             }
 
-            if ($cargaBloqueada->estado === EstadoCarga::Pendiente
+            if ($cargaBloqueada->estado !== EstadoCarga::Borrador
                 && $asignaciones->count() === 1) {
                 throw new DomainException(
-                    'Una carga publicada debe conservar al menos un folio.',
+                    'Una carga publicada debe conservar al menos un folio. Si ya no sale ningún pallet, cancela la carga.',
                 );
             }
 
-            $asignacion->reservaActiva()->lockForUpdate()->first()?->delete();
-            $asignacion->update([
-                'estado' => EstadoCargaFolio::Descartado,
-                'finalizado_por_user_id' => $usuario->id,
-                'finalizado_at' => now(),
-                'motivo_finalizacion' => $this->textoOpcional($motivo),
-            ]);
+            $estadoPrevio = $asignacion->estado;
+            $reingreso = $this->liberarAsignacion(
+                $cargaBloqueada,
+                $asignacion->setRelation('folio', $folio),
+                EstadoCargaFolio::Descartado,
+                OrigenReingresoCamara::PalletQuitado,
+                $motivoNormalizado,
+                $usuario,
+            );
+            if ($enCurso) {
+                $this->recalcularEstadoDespacho($cargaBloqueada);
+            }
             $this->incrementarVersion($cargaBloqueada, $usuario);
             $this->registrarEvento(
                 $cargaBloqueada,
                 TipoEventoCarga::FolioDesasignado,
                 $usuario,
                 $folio,
-                ['motivo' => $this->textoOpcional($motivo)],
+                [
+                    'motivo' => $motivoNormalizado,
+                    'causa' => 'pallet_quitado',
+                    'estado_carga_previo' => $estadoPrevio->value,
+                    'reingreso_id' => $reingreso?->id,
+                ],
             );
 
-            if ($cargaBloqueada->estado === EstadoCarga::Pendiente) {
-                $this->servicioTareas->sincronizar($cargaBloqueada);
-            }
+            $this->sincronizarOperacion($cargaBloqueada, $usuario);
 
             return $cargaBloqueada->refresh();
         };
@@ -692,6 +712,159 @@ class ServicioCarga
                 'folio_id' => $folio->id,
                 'version_esperada' => $versionEsperada,
                 'motivo' => $motivo,
+            ],
+            $accion,
+            $carga,
+        );
+    }
+
+    /**
+     * Cambio comercial de un pallet por otro en cualquier etapa antes del cierre.
+     * Las diferencias de cliente, especie, variedad, calibre o embalaje no
+     * bloquean: se devuelven como advertencias que oficina debe confirmar.
+     */
+    public function cambiarFolio(
+        Carga $carga,
+        Folio $saliente,
+        string $numeroEntrante,
+        User $usuario,
+        int $versionEsperada,
+        string $motivo,
+        bool $confirmarDiferencias = false,
+    ): Carga {
+        $this->asegurarGestionAutorizada($usuario);
+        $numero = mb_strtoupper(trim($numeroEntrante));
+
+        $accion = function () use (
+            $carga,
+            $saliente,
+            $numero,
+            $usuario,
+            $versionEsperada,
+            $motivo,
+            $confirmarDiferencias,
+        ): Carga {
+            $cargaBloqueada = $this->bloquearCarga($carga);
+            $this->asegurarAjustable($cargaBloqueada);
+            $this->asegurarVersion($cargaBloqueada, $versionEsperada);
+            $motivoNormalizado = $this->textoOpcional($motivo);
+            if ($motivoNormalizado === null || mb_strlen($motivoNormalizado) < 3) {
+                throw new DomainException('Indica el motivo del cambio de pallet.');
+            }
+            if ($numero === '' || $numero === mb_strtoupper($saliente->numero_folio)) {
+                throw new DomainException('Indica un folio de reemplazo distinto al que sale.');
+            }
+
+            $asignacion = CargaFolio::query()
+                ->where('carga_id', $cargaBloqueada->id)
+                ->where('folio_id', $saliente->id)
+                ->whereHas('reservaActiva')
+                ->lockForUpdate()
+                ->first();
+            if (! $asignacion) {
+                throw new DomainException('El folio que sale no pertenece actualmente a esta carga.');
+            }
+
+            $entrante = Folio::query()
+                ->where('numero_folio', $numero)
+                ->with('ubicacionActual.posicion.camara')
+                ->lockForUpdate()
+                ->first();
+            if (! $entrante) {
+                throw new DomainException("El folio {$numero} no existe en el sistema.");
+            }
+            $reservaEntrante = ReservaCargaFolio::query()
+                ->where('folio_id', $entrante->id)
+                ->with('asignacion.carga:id,codigo')
+                ->lockForUpdate()
+                ->first();
+            if ($reservaEntrante) {
+                throw new DomainException(sprintf(
+                    'El folio %s ya está asignado a la carga %s.',
+                    $numero,
+                    $reservaEntrante->asignacion->carga->codigo,
+                ));
+            }
+            $error = $this->motivoFolioNoAsignable($entrante, $cargaBloqueada->temporada_id);
+            if ($error) {
+                throw new DomainException($error['mensaje']);
+            }
+
+            $diferencias = $this->diferenciasComerciales($saliente, $entrante);
+            if ($diferencias !== [] && ! $confirmarDiferencias) {
+                throw new DiferenciasCambioFolioCarga($diferencias);
+            }
+
+            $estadoPrevio = $asignacion->estado;
+            $reingreso = $this->liberarAsignacion(
+                $cargaBloqueada,
+                $asignacion->setRelation('folio', $saliente),
+                EstadoCargaFolio::Reemplazado,
+                OrigenReingresoCamara::PalletCambiado,
+                $motivoNormalizado,
+                $usuario,
+            );
+
+            try {
+                $nueva = CargaFolio::create([
+                    'carga_id' => $cargaBloqueada->id,
+                    'folio_id' => $entrante->id,
+                    'estado' => EstadoCargaFolio::Pendiente,
+                    'reemplaza_a_carga_folio_id' => $asignacion->id,
+                    'asignado_por_user_id' => $usuario->id,
+                    'asignado_at' => now(),
+                ]);
+                ReservaCargaFolio::create([
+                    'folio_id' => $entrante->id,
+                    'carga_folio_id' => $nueva->id,
+                ]);
+            } catch (QueryException $exception) {
+                if ($exception->getCode() === '23000') {
+                    throw new ConflictoOperacion(
+                        "El folio {$numero} fue asignado a otra carga mientras se procesaba el cambio.",
+                        previous: $exception,
+                    );
+                }
+
+                throw $exception;
+            }
+
+            if ($this->enCurso($cargaBloqueada)) {
+                $this->recalcularEstadoDespacho($cargaBloqueada);
+            }
+            $this->incrementarVersion($cargaBloqueada, $usuario);
+            $this->registrarEvento(
+                $cargaBloqueada,
+                TipoEventoCarga::FolioReemplazado,
+                $usuario,
+                $saliente,
+                [
+                    'causa' => 'cambio_comercial',
+                    'motivo' => $motivoNormalizado,
+                    'folio_saliente' => $saliente->numero_folio,
+                    'folio_reemplazo_id' => $entrante->id,
+                    'folio_entrante' => $entrante->numero_folio,
+                    'estado_carga_previo' => $estadoPrevio->value,
+                    'diferencias' => array_column($diferencias, 'codigo'),
+                    'reingreso_id' => $reingreso?->id,
+                ],
+            );
+
+            $this->sincronizarOperacion($cargaBloqueada, $usuario);
+
+            return $cargaBloqueada->refresh();
+        };
+
+        return $this->transicionar(
+            'cambiar_folio',
+            $usuario,
+            [
+                'carga_id' => $carga->id,
+                'folio_saliente_id' => $saliente->id,
+                'folio_entrante' => $numero,
+                'version_esperada' => $versionEsperada,
+                'motivo' => $motivo,
+                'confirmar_diferencias' => $confirmarDiferencias,
             ],
             $accion,
             $carga,
@@ -805,6 +978,11 @@ class ServicioCarga
         );
     }
 
+    /**
+     * Cancelación comercial en cualquier etapa antes del cierre. Los pallets que
+     * siguen en cámara quedan libres; los que ya salieron (andén o camión) quedan
+     * pendientes de reingreso y no vuelven a ofrecerse hasta ubicarse.
+     */
     public function cancelar(
         Carga $carga,
         User $usuario,
@@ -822,23 +1000,26 @@ class ServicioCarga
             $cargaBloqueada = $this->bloquearCarga($carga);
             $this->asegurarVersion($cargaBloqueada, $versionEsperada);
 
-            if (! in_array($cargaBloqueada->estado, [
-                EstadoCarga::Borrador,
-                EstadoCarga::Pendiente,
-            ], true)) {
+            if (in_array($cargaBloqueada->estado, [EstadoCarga::Cerrada, EstadoCarga::Cancelada], true)) {
                 throw new DomainException(
-                    'Solo una carga en borrador o pendiente puede cancelarse.',
+                    $cargaBloqueada->estado === EstadoCarga::Cerrada
+                        ? 'La carga ya está cerrada: si el camión volvió a planta, registra el retorno.'
+                        : 'La carga ya está cancelada.',
                 );
+            }
+            $motivoNormalizado = $this->textoOpcional($motivo);
+            if ($cargaBloqueada->estado !== EstadoCarga::Borrador && $motivoNormalizado === null) {
+                throw new DomainException('Indica el motivo comercial de la cancelación.');
             }
 
             $asignaciones = CargaFolio::query()
                 ->where('carga_id', $cargaBloqueada->id)
                 ->whereHas('reservaActiva')
-                ->with('folio:id,numero_folio')
+                ->with('folio:id,numero_folio,temporada_id')
                 ->orderBy('folio_id')
                 ->lockForUpdate()
                 ->get();
-            $motivoNormalizado = $this->textoOpcional($motivo);
+            $estadoPrevio = $cargaBloqueada->estado;
 
             $cargaBloqueada->update([
                 'estado' => EstadoCarga::Cancelada,
@@ -846,8 +1027,17 @@ class ServicioCarga
                 'actualizada_por_user_id' => $usuario->id,
                 'cancelada_por_user_id' => $usuario->id,
                 'cancelada_at' => now(),
+                'motivo_cancelacion' => $motivoNormalizado,
             ]);
+            app(ServicioPresenciaCargaAnden::class)->finalizarPorTermino(
+                $cargaBloqueada,
+                $usuario,
+                (string) Str::uuid(),
+                'Carga cancelada: '.($motivoNormalizado ?? 'sin motivo'),
+            );
 
+            $liberados = [];
+            $pendientesReingreso = [];
             foreach ($asignaciones as $asignacion) {
                 $this->registrarEvento(
                     $cargaBloqueada,
@@ -857,16 +1047,22 @@ class ServicioCarga
                     [
                         'motivo' => $motivoNormalizado,
                         'causa' => 'cancelacion_carga',
+                        'estado_carga_previo' => $asignacion->estado->value,
                     ],
                 );
-
-                $asignacion->reservaActiva()->lockForUpdate()->first()?->delete();
-                $asignacion->update([
-                    'estado' => EstadoCargaFolio::Descartado,
-                    'finalizado_por_user_id' => $usuario->id,
-                    'finalizado_at' => now(),
-                    'motivo_finalizacion' => $motivoNormalizado,
-                ]);
+                $reingreso = $this->liberarAsignacion(
+                    $cargaBloqueada,
+                    $asignacion,
+                    EstadoCargaFolio::Descartado,
+                    OrigenReingresoCamara::CancelacionCarga,
+                    $motivoNormalizado,
+                    $usuario,
+                );
+                if ($reingreso) {
+                    $pendientesReingreso[] = $asignacion->folio->numero_folio;
+                } else {
+                    $liberados[] = $asignacion->folio->numero_folio;
+                }
             }
 
             $this->registrarEvento(
@@ -875,11 +1071,9 @@ class ServicioCarga
                 $usuario,
                 datos: [
                     'motivo' => $motivoNormalizado,
-                    'folios_liberados' => $asignaciones
-                        ->pluck('folio.numero_folio')
-                        ->filter()
-                        ->values()
-                        ->all(),
+                    'estado_previo' => $estadoPrevio->value,
+                    'folios_liberados' => $liberados,
+                    'pendientes_reingreso' => $pendientesReingreso,
                 ],
             );
 
@@ -899,6 +1093,113 @@ class ServicioCarga
             $accion,
             $carga,
         );
+    }
+
+    /**
+     * Saca un pallet de la carga. Si ya salió de la cámara, queda pendiente de
+     * reingreso; las incidencias abiertas se cierran como «retirado de carga».
+     */
+    private function liberarAsignacion(
+        Carga $carga,
+        CargaFolio $asignacion,
+        EstadoCargaFolio $estadoFinal,
+        OrigenReingresoCamara $origen,
+        ?string $motivo,
+        User $usuario,
+    ): ?ReingresoFolioCamara {
+        $estadoPrevio = $asignacion->estado;
+        $asignacion->reservaActiva()->lockForUpdate()->first()?->delete();
+        IncidenciaCargaFolio::query()
+            ->where('carga_folio_id', $asignacion->id)
+            ->where('estado', EstadoIncidenciaCarga::Abierta->value)
+            ->lockForUpdate()
+            ->get()
+            ->each(fn (IncidenciaCargaFolio $incidencia) => $incidencia->update([
+                'estado' => EstadoIncidenciaCarga::Resuelta,
+                'tipo_resolucion' => TipoResolucionIncidenciaCarga::RetiradoDeCarga,
+                'observacion_resolucion' => $motivo ?? $origen->etiqueta(),
+                'resuelta_por_user_id' => $usuario->id,
+                'resuelta_at' => now(),
+            ]));
+        $asignacion->update([
+            'estado' => $estadoFinal,
+            'finalizado_por_user_id' => $usuario->id,
+            'finalizado_at' => now(),
+            'motivo_finalizacion' => $motivo,
+        ]);
+
+        if (! $estadoPrevio->fueraDeCamara()) {
+            return null;
+        }
+
+        return app(ServicioReingresoCamara::class)->registrar(
+            $asignacion->folio,
+            $carga,
+            $asignacion,
+            $origen,
+            $motivo ?? $origen->etiqueta(),
+            $usuario,
+            $estadoPrevio,
+        );
+    }
+
+    /** Recalcula el estado de salida según dónde quedaron los pallets reservados. */
+    private function recalcularEstadoDespacho(Carga $carga): void
+    {
+        $estados = CargaFolio::query()
+            ->where('carga_id', $carga->id)
+            ->whereHas('reservaActiva')
+            ->lockForUpdate()
+            ->pluck('estado');
+        $fuera = $estados->filter(fn (EstadoCargaFolio $estado): bool => $estado->fueraDeCamara())->count();
+        $nuevo = match (true) {
+            $estados->isNotEmpty() && $fuera === $estados->count() => EstadoCarga::Despachada,
+            $fuera > 0 => EstadoCarga::DespachoParcial,
+            in_array($carga->estado, [EstadoCarga::Despachada, EstadoCarga::DespachoParcial], true) => EstadoCarga::EnPreparacion,
+            default => $carga->estado,
+        };
+        if ($nuevo !== $carga->estado) {
+            $carga->update(['estado' => $nuevo]);
+        }
+    }
+
+    private function sincronizarOperacion(Carga $carga, User $usuario): void
+    {
+        if ($carga->estado === EstadoCarga::Borrador) {
+            return;
+        }
+
+        $this->servicioTareas->sincronizar($carga);
+        $presencia = $carga->presenciaAndenActiva()->first();
+        if ($presencia) {
+            app(ServicioPlanDespachoDirecto::class)->sincronizar($presencia, $usuario);
+        }
+    }
+
+    /** @return array<int, array{codigo: string, titulo: string, mensaje: string}> */
+    private function diferenciasComerciales(Folio $original, Folio $reemplazo): array
+    {
+        $campos = [
+            'cliente' => ['Cliente', fn (Folio $folio) => $folio->exportadora],
+            'especie' => ['Especie', fn (Folio $folio) => data_get($folio->datos_externos, 'especie')],
+            'variedad' => ['Variedad', fn (Folio $folio) => $folio->variedad],
+            'calibre' => ['Calibre', fn (Folio $folio) => $folio->calibre],
+            'embalaje' => ['Embalaje', fn (Folio $folio) => data_get($folio->datos_externos, 'envase')],
+        ];
+        $diferencias = [];
+        foreach ($campos as $codigo => [$titulo, $valor]) {
+            $antes = $this->textoOpcional($valor($original));
+            $despues = $this->textoOpcional($valor($reemplazo));
+            if (mb_strtoupper((string) $antes) !== mb_strtoupper((string) $despues)) {
+                $diferencias[] = [
+                    'codigo' => "diferencia_{$codigo}",
+                    'titulo' => "{$titulo} distinto",
+                    'mensaje' => sprintf('%s: %s sale con «%s» y %s entra con «%s».', $titulo, $original->numero_folio, $antes ?? 'sin dato', $reemplazo->numero_folio, $despues ?? 'sin dato'),
+                ];
+            }
+        }
+
+        return $diferencias;
     }
 
     /**
@@ -963,6 +1264,19 @@ class ServicioCarga
                 'La carga ya inició su separación y no admite cambios.',
             );
         }
+    }
+
+    private function asegurarAjustable(Carga $carga): void
+    {
+        if (in_array($carga->estado, [EstadoCarga::Cerrada, EstadoCarga::Cancelada], true)) {
+            throw new DomainException('La carga ya está cerrada o cancelada y no admite cambios de pallets.');
+        }
+    }
+
+    /** Publicada y con la separación iniciada: los cambios exigen motivo. */
+    private function enCurso(Carga $carga): bool
+    {
+        return ! in_array($carga->estado, [EstadoCarga::Borrador, EstadoCarga::Pendiente], true);
     }
 
     private function asegurarVersion(Carga $carga, int $versionEsperada): void
@@ -1033,6 +1347,13 @@ class ServicioCarga
             return [
                 'codigo' => 'retenido',
                 'mensaje' => "El folio {$folio->numero_folio} está retenido.",
+            ];
+        }
+
+        if (app(ServicioReingresoCamara::class)->pendiente($folio->id)) {
+            return [
+                'codigo' => 'pendiente_reingreso',
+                'mensaje' => "El folio {$folio->numero_folio} está pendiente de reingreso a cámara; ubícalo antes de asignarlo a otra carga.",
             ];
         }
 

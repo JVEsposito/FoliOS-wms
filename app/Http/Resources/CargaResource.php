@@ -122,6 +122,7 @@ class CargaResource extends JsonResource
             ] : null),
             'publicada_at' => $this->publicada_at?->toAtomString(),
             'cancelada_at' => $this->cancelada_at?->toAtomString(),
+            'motivo_cancelacion' => $this->motivo_cancelacion,
             'cierre' => $this->cerrada_at ? [
                 'patente' => $this->patente,
                 'conductor' => $this->conductor,

@@ -36,6 +36,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
     'publicada_at',
     'cancelada_por_user_id',
     'cancelada_at',
+    'motivo_cancelacion',
     'operacion_cierre_id',
     'cierre_payload_hash',
     'patente',
