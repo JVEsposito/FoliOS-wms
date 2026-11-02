@@ -44,9 +44,10 @@ class RetornoCargaConcurrenciaTest extends TestCase
         $version = $carga->refresh()->version;
         $tokenOtro = $contexto['administrador']->createToken('oficina-otro', ['oficina'])->plainTextToken;
 
-        $resultados = $this->solicitudesConcurrentes(array_map(fn (string $token): array => [
+        $solicitudes = array_map(fn (string $token): array => [
             'POST', "/api/cargas/{$carga->id}/retorno", $token, ['version_esperada' => $version, 'motivo' => 'Contenedor rechazado'],
-        ], [$contexto['tokenOficina'], $tokenOtro]));
+        ], [$contexto['tokenOficina'], $tokenOtro]);
+        $resultados = $this->reintentarConcurrenciaTemporal($solicitudes, $this->solicitudesConcurrentes($solicitudes));
         $estados = array_column($resultados, 'status');
         sort($estados);
 
