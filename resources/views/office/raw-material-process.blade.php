@@ -77,7 +77,7 @@
                     <label><span>Cantidad de bins *</span><input name="cantidad_envases" type="number" min="1" max="100000" inputmode="numeric" required></label>
                     <label><span>Kilos enviados</span><input name="kilos_enviados" type="number" min="0.001" max="999999999.999" step="0.001" inputmode="decimal" placeholder="Opcional"></label>
                     <label class="field-wide"><span>Orden de proceso</span><select name="orden_proceso_mp_id" id="deliveryOrder"></select></label>
-                    <label data-free-field><span>Línea de proceso *</span><input name="linea_proceso" maxlength="50" autocomplete="off" placeholder="Ej. Línea 1"></label>
+                    <label data-free-field><span>Línea de proceso *</span><input name="linea_proceso" maxlength="60" autocomplete="off" placeholder="Ej. Línea 1"></label>
                     <label><span>Turno *</span><select name="turno" required><option value="">Seleccionar</option><option value="A">Turno A</option><option value="B">Turno B</option></select></label>
                     <label data-free-field><span>N° de orden *</span><input name="numero_orden" maxlength="80" autocomplete="off"></label>
                     <label class="field-wide"><span>Observación</span><textarea name="observacion" maxlength="2000"></textarea></label>

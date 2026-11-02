@@ -207,6 +207,87 @@ class FrutaProcesoOrdenesApiTest extends TestCase
         $this->assertDatabaseHas('entregas_fruta_proceso', ['numero_orden' => 'OP-LIBRE', 'orden_proceso_mp_id' => null]);
     }
 
+    public function test_un_viaje_sin_orden_solo_puede_consumir_bins_libres_de_reservas(): void
+    {
+        config(['materia_prima.fruta_proceso_exige_orden' => false]);
+        $lote = $this->loteMpEnCamara('LEG')['lote'];
+        $orden = $this->crearOrden([['lote_materia_prima_id' => $lote['id'], 'bins_programados' => 40]]);
+        $this->actingAs(User::factory()->create(['rol' => RolUsuario::CamareroFrio]), 'sanctum');
+        $ruta = "/api/materia-prima/fruta-proceso/lotes/{$lote['id']}/entregas";
+        $legado = ['operacion_id' => (string) Str::uuid(), 'cantidad_envases' => 20,
+            'linea_proceso' => 'Línea 1', 'turno' => 'A', 'numero_orden' => 'LIBRE'];
+
+        $this->postJson($ruta, $legado)->assertUnprocessable()->assertJsonValidationErrors('cantidad_envases');
+        $this->assertDatabaseCount('entregas_fruta_proceso', 0);
+        $this->postJson($ruta, [...$legado, 'cantidad_envases' => 8])->assertOk();
+        // El reintento no vuelve a consumir los ocho bins libres.
+        $this->postJson($ruta, [...$legado, 'cantidad_envases' => 8])->assertOk();
+        $this->postJson($ruta, [...$legado, 'operacion_id' => (string) Str::uuid(), 'cantidad_envases' => 1])
+            ->assertUnprocessable();
+        $this->assertDatabaseHas('reservas_lote_orden_proceso_mp', [
+            'orden_proceso_mp_id' => $orden['id'], 'bins_pendientes' => 40, 'bins_entregados' => 0,
+        ]);
+        $this->postJson($ruta, $this->viaje($orden, 40))->assertOk();
+        $this->assertDatabaseHas('ordenes_proceso_mp', ['id' => $orden['id'], 'tipo_cierre' => 'completa']);
+        $this->assertSame(48, (int) EntregaFrutaProceso::query()->sum('cantidad_envases'));
+    }
+
+    public function test_la_version_es_obligatoria_y_debe_pertenecer_a_la_orden_del_viaje(): void
+    {
+        $lote = $this->loteMpEnCamara('VID')['lote'];
+        $fila = ['lote_materia_prima_id' => $lote['id'], 'bins_programados' => 10];
+        $orden = $this->crearOrden([$fila]);
+        $otra = $this->crearOrden([$fila]);
+        $this->actingAs(User::factory()->create(['rol' => RolUsuario::CamareroFrio]), 'sanctum');
+        $ruta = "/api/materia-prima/fruta-proceso/lotes/{$lote['id']}/entregas";
+        $viaje = $this->viaje($orden, 1);
+        unset($viaje['version_orden_proceso_mp_id']);
+        $this->postJson($ruta, $viaje)->assertUnprocessable()->assertJsonValidationErrors('version_orden_proceso_mp_id');
+        $this->postJson($ruta, [...$viaje, 'version_orden_proceso_mp_id' => null])->assertUnprocessable();
+        $this->postJson($ruta, [...$viaje, 'version_orden_proceso_mp_id' => $otra['version_vigente']['id']])->assertStatus(409);
+        $this->assertDatabaseCount('entregas_fruta_proceso', 0);
+    }
+
+    public function test_cambios_de_proceso_embalaje_mercado_y_horario_invalidan_la_fila_vista_por_la_tablet(): void
+    {
+        $lote = $this->loteMpEnCamara('META')['lote'];
+        $fila = ['lote_materia_prima_id' => $lote['id'], 'bins_programados' => 10,
+            'numero_proceso' => 'P-1', 'embalaje' => 'CAJA-5', 'kilos_por_caja' => 5, 'mercado_destino' => 'China'];
+        $orden = $this->crearOrden([$fila]);
+        $version = 1;
+        foreach (['numero_proceso' => 'P-2', 'embalaje' => 'CAJA-2', 'mercado_destino' => 'Europa'] as $campo => $valor) {
+            $fila[$campo] = $valor;
+            $nueva = $this->publicarVersion($orden, [$fila], $version++);
+            $this->actingAs(User::factory()->create(['rol' => RolUsuario::CamareroFrio]), 'sanctum')
+                ->postJson("/api/materia-prima/fruta-proceso/lotes/{$lote['id']}/entregas", $this->viaje($orden, 1))
+                ->assertStatus(409);
+            $orden = $nueva;
+        }
+        $nueva = $this->actingAs(User::factory()->create(['rol' => RolUsuario::DigitadorMateriaPrima]), 'sanctum')
+            ->postJson("/api/materia-prima/ordenes-proceso/{$orden['id']}/versiones", [
+                'operacion_id' => (string) Str::uuid(), 'version' => $version,
+                'motivo_cambio' => 'Cambio de horario', 'hora_inicio' => '09:00', 'lotes' => [$fila],
+            ])->assertOk()->json('data');
+        $this->actingAs(User::factory()->create(['rol' => RolUsuario::CamareroFrio]), 'sanctum')
+            ->postJson("/api/materia-prima/fruta-proceso/lotes/{$lote['id']}/entregas", $this->viaje($orden, 1))->assertStatus(409);
+        $this->assertDatabaseCount('entregas_fruta_proceso', 0);
+        $this->postJson("/api/materia-prima/fruta-proceso/lotes/{$lote['id']}/entregas", $this->viaje($nueva, 1))
+            ->assertOk()->assertJsonPath('data.entregas.0.numero_orden', 'P-2');
+    }
+
+    public function test_una_linea_con_nombre_de_sesenta_caracteres_se_conserva_en_el_viaje(): void
+    {
+        $lote = $this->loteMpEnCamara('N60')['lote'];
+        $nombre = str_repeat('L', 60);
+        $linea = LineaProceso::query()->where('codigo', 'L1')->firstOrFail();
+        $this->actingAs(User::factory()->create(['rol' => RolUsuario::SupervisorFrio]), 'sanctum')
+            ->putJson("/api/materia-prima/lineas-proceso/{$linea->id}", ['nombre' => $nombre, 'version' => 1])->assertOk();
+        $orden = $this->crearOrden([['lote_materia_prima_id' => $lote['id'], 'bins_programados' => 10]]);
+        $this->actingAs(User::factory()->create(['rol' => RolUsuario::CamareroFrio]), 'sanctum')
+            ->postJson("/api/materia-prima/fruta-proceso/lotes/{$lote['id']}/entregas", $this->viaje($orden, 1))
+            ->assertOk()->assertJsonPath('data.entregas.0.linea_proceso', $nombre);
+    }
+
     /**
      * @param  array<int, array<string, mixed>>  $lotes
      * @return array<string, mixed>

@@ -81,6 +81,35 @@ class FrutaProcesoOrdenesConcurrenciaTest extends TestCase
         $this->assertInvariantes($orden['id'], $programados);
     }
 
+    public function test_un_viaje_legado_y_una_version_simultaneos_no_consumen_los_mismos_bins(): void
+    {
+        config(['materia_prima.fruta_proceso_exige_orden' => false]);
+        $lote = $this->loteMpEnCamara('LEGCC')['lote'];
+        $digitador = $this->token(RolUsuario::DigitadorMateriaPrima);
+        $orden = $this->withToken($digitador)->postJson('/api/materia-prima/ordenes-proceso', [
+            'operacion_id' => (string) Str::uuid(),
+            'linea_proceso_id' => LineaProceso::query()->where('codigo', 'L1')->value('id'),
+            'fecha' => '2026-11-02', 'turno_inicio' => 'A', 'hora_inicio' => '08:00',
+            'lotes' => [['lote_materia_prima_id' => $lote['id'], 'bins_programados' => 40]],
+        ])->assertCreated()->json('data');
+        $resultados = $this->solicitudesConcurrentes([
+            ['POST', "/api/materia-prima/fruta-proceso/lotes/{$lote['id']}/entregas", $this->token(RolUsuario::CamareroFrio), [
+                'operacion_id' => (string) Str::uuid(), 'cantidad_envases' => 8,
+                'linea_proceso' => 'Línea 1', 'turno' => 'A', 'numero_orden' => 'LEGADO',
+            ]],
+            ['POST', "/api/materia-prima/ordenes-proceso/{$orden['id']}/versiones", $digitador, [
+                'operacion_id' => (string) Str::uuid(), 'version' => 1,
+                'motivo_cambio' => 'Programar todos los bins', 'hora_inicio' => '08:00',
+                'lotes' => [['lote_materia_prima_id' => $lote['id'], 'bins_programados' => 48]],
+            ]],
+        ]);
+        $estados = array_column($resultados, 'status');
+        sort($estados);
+        $this->assertSame([200, 422], $estados, json_encode($resultados));
+        $fisicos = 48 - (int) EntregaFrutaProceso::query()->whereNull('anulado_at')->sum('cantidad_envases');
+        $this->assertSame($fisicos, (int) ReservaLoteOrdenProcesoMp::query()->sum('bins_pendientes'));
+    }
+
     private function assertInvariantes(string $ordenId, int $programados): void
     {
         $reserva = ReservaLoteOrdenProcesoMp::query()->where('orden_proceso_mp_id', $ordenId)->firstOrFail();

@@ -90,6 +90,21 @@ class BinRetornoPackingApiTest extends TestCase
             ->assertJsonValidationErrors('origenes.0.lote_materia_prima_id');
     }
 
+    public function test_el_nombre_largo_de_linea_se_conserva_desde_el_viaje_hasta_el_origen_del_bin(): void
+    {
+        $nombre = str_repeat('L', 60);
+        $contexto = $this->prepararEntrega('LINEA60', 'OP-LINEA60', $nombre);
+        $payload = $this->payloadBin($contexto, (string) Str::uuid(), 400);
+        $this->actingAs($contexto['camarero'], 'sanctum')
+            ->postJson('/api/materia-prima/fruta-proceso/retornos-bin/bins', $payload)
+            ->assertCreated()->assertJsonPath('data.origenes.0.linea_proceso', $nombre);
+        $this->assertDatabaseHas('bin_retorno_packing_origenes', ['linea_proceso' => $nombre]);
+        $payload['operacion_id'] = (string) Str::uuid();
+        $payload['origenes'][0]['linea_proceso'] = $nombre.'X';
+        $this->postJson('/api/materia-prima/fruta-proceso/retornos-bin/bins', $payload)
+            ->assertUnprocessable()->assertJsonValidationErrors('origenes.0.linea_proceso');
+    }
+
     public function test_registra_bin_real_exige_cuadratura_y_rechaza_reintento_con_payload_distinto(): void
     {
         $contexto = $this->prepararEntrega('REGISTRO', 'OP-BIN-001');
@@ -777,7 +792,7 @@ class BinRetornoPackingApiTest extends TestCase
     }
 
     /** @return array<string, mixed> */
-    private function prepararEntrega(string $sufijo, string $numeroOrden): array
+    private function prepararEntrega(string $sufijo, string $numeroOrden, string $linea = 'Línea 2'): array
     {
         $contexto = $this->prepararRecepcionValidada($sufijo);
         $digitador = User::factory()->create(['rol' => RolUsuario::DigitadorMateriaPrima]);
@@ -814,7 +829,7 @@ class BinRetornoPackingApiTest extends TestCase
                 'operacion_id' => (string) Str::uuid(),
                 'cantidad_envases' => 20,
                 'kilos_enviados' => 7500,
-                'linea_proceso' => 'Línea 2',
+                'linea_proceso' => $linea,
                 'turno' => 'A',
                 'numero_orden' => $numeroOrden,
             ])
@@ -828,7 +843,7 @@ class BinRetornoPackingApiTest extends TestCase
             'camarero' => $camarero,
             'supervisor' => $supervisor,
             'numero_orden' => $numeroOrden,
-            'linea_proceso' => 'Línea 2',
+            'linea_proceso' => $linea,
             'turno' => 'A',
         ];
     }
