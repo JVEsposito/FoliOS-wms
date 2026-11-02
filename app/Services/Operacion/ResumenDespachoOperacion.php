@@ -8,6 +8,7 @@ use App\Models\Carga;
 use App\Models\CargaFolio;
 use App\Models\Temporada;
 use App\Services\Cargas\CalculadorConcentracionCarga;
+use App\Services\Cargas\ServicioReingresoCamara;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
@@ -20,6 +21,7 @@ class ResumenDespachoOperacion
 {
     public function __construct(
         private readonly CalculadorConcentracionCarga $concentracion,
+        private readonly ServicioReingresoCamara $reingresos,
     ) {}
 
     /** @return array<string, mixed> */
@@ -92,14 +94,20 @@ class ResumenDespachoOperacion
             ];
         });
 
+        $reingresos = $this->reingresos->bandeja($temporada->id, incluirUbicados: true, limite: 50);
+        $pendientes = array_values(array_filter($reingresos, fn (array $fila): bool => $fila['estado'] === 'pendiente'));
+
         return [
             'cierre_exige_pallets_cargados' => $exigeCargados,
+            'reingresos' => $reingresos,
             'resumen' => [
                 'activas' => $filas->count(),
                 'en_separacion' => $filas->filter(fn (array $fila): bool => $fila['separacion']['en_anden'] < $fila['separacion']['total'])->count(),
                 'cargando' => $filas->filter(fn (array $fila): bool => $fila['camion_en_anden'] !== null || $fila['carguio']['cargados'] > 0)->count(),
                 'listas_para_cerrar' => $filas->where('lista_para_cerrar', true)->count(),
                 'pallets_por_cargar_en_anden' => $filas->sum(fn (array $fila): int => $fila['carguio']['en_anden_por_cargar']),
+                'pendientes_reingreso' => count($pendientes),
+                'reingreso_mas_antiguo_minutos' => $pendientes === [] ? null : max(array_column($pendientes, 'antiguedad_minutos')),
             ],
             'cargas' => $filas->values()->all(),
         ];

@@ -556,6 +556,35 @@ export type SendLoadFolioToDockPayload = {
   advertencias_confirmadas?: string[];
 };
 
+export type CameraReentry = {
+  id: string;
+  estado: 'pendiente' | 'ubicado';
+  folio: {
+    id: string;
+    numero_folio: string | null;
+    cliente: string | null;
+    variedad: string | null;
+    calibre: string | null;
+    embalaje: string | null;
+  };
+  origen: 'cancelacion_carga' | 'pallet_quitado' | 'pallet_cambiado' | 'retorno_carga';
+  origen_etiqueta: string;
+  estado_carga_previo: string | null;
+  motivo: string;
+  carga: { id: string; codigo: string; numero_orden_externa: string | null } | null;
+  anden: string | null;
+  registrado_por: string | null;
+  registrado_at: string | null;
+  antiguedad_minutos: number | null;
+  temperatura_pulpa: number | null;
+  temperatura_registrada_por: string | null;
+  temperatura_registrada_at: string | null;
+  tarea: { id: string; estado: string; responsable: string | null } | null;
+  ubicado_en: string | null;
+  ubicado_por: string | null;
+  ubicado_at: string | null;
+};
+
 export type RegisterLoadedFolioPayload = {
   operacion_id: string;
   numero_folio: string;

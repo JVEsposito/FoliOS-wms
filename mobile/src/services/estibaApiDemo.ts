@@ -1,5 +1,6 @@
 import {
   AuthSession,
+  CameraReentry,
   CreateMaterialDispatchPayload,
   Dock,
   ExtractionPlan,
@@ -199,6 +200,15 @@ export class DemoEstibaApi implements EstibaApi {
     payload: Parameters<typeof undoDemoLoadedFolio>[1],
   ): Promise<RefrigeratedLoad> {
     return undoDemoLoadedFolio(assignmentId, payload);
+  }
+
+  async listCameraReentries(): Promise<CameraReentry[]> {
+    // El modo demostración no simula cancelaciones con pallets fuera de cámara.
+    return [];
+  }
+
+  async registerReentryTemperature(): Promise<CameraReentry> {
+    throw new ApiError('El reingreso a cámara no está disponible en el modo demostración.', 422);
   }
 
   async listOperationalNotifications(): Promise<OperationalNotificationFeed> {

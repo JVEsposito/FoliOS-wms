@@ -23,6 +23,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'estado_carga_previo',
     'anden_id',
     'motivo',
+    'plan_operacional_id',
+    'temperatura_pulpa',
+    'temperatura_por_user_id',
+    'temperatura_registrada_at',
     'registrado_por_user_id',
     'registrado_at',
     'movimiento_ubicacion_id',
@@ -66,6 +70,16 @@ class ReingresoFolioCamara extends Model implements PerteneceATemporada
         return $this->belongsTo(User::class, 'ubicado_por_user_id');
     }
 
+    public function plan(): BelongsTo
+    {
+        return $this->belongsTo(PlanOperacional::class, 'plan_operacional_id');
+    }
+
+    public function temperaturaRegistradaPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'temperatura_por_user_id');
+    }
+
     public function camaraUbicacion(): BelongsTo
     {
         return $this->belongsTo(Camara::class, 'camara_ubicacion_id');
@@ -78,6 +92,8 @@ class ReingresoFolioCamara extends Model implements PerteneceATemporada
             'estado' => EstadoReingresoCamara::class,
             'registrado_at' => 'datetime',
             'ubicado_at' => 'datetime',
+            'temperatura_pulpa' => 'decimal:1',
+            'temperatura_registrada_at' => 'datetime',
         ];
     }
 }

@@ -43,6 +43,17 @@ test('una carga cerrada conserva el conteo despachado sin convertirlo en pendien
   assert.match(operatorLoadDate('2026-10-21T05:30:00Z', 'America/Santiago'), /2:30|02:30/);
 });
 
+test('la tarea de reingreso explica que el pallet vuelve desde el andén', () => {
+  const context = operatorTaskPurpose({
+    plan: { id: 'r1', tipo: 'almacenamiento_pallet', titulo: 'Reingreso a cámara · FOLIO-1', motivo: 'Carga cancelada: cliente anuló' },
+    maniobra: null, tipo_movimiento: 'ubicacion_inicial',
+    contexto: { origen_logico: 'reingreso_despacho', anden: 'AND-02' },
+  });
+  assert.equal(context.label, 'Reingreso a cámara');
+  assert.equal(context.step, 'Reingreso a cámara desde el andén AND-02');
+  assert.equal(context.reason, 'Carga cancelada: cliente anuló');
+});
+
 test('un pallet cargado en el camión sigue contando en andén y deja de estar pendiente', () => {
   const load = { estado: 'despachada', total_folios: 3, folios: [{ estado_carga: 'cargado' }, { estado_carga: 'en_anden' }, { estado_carga: 'pendiente' }] };
   assert.deepEqual(operatorLoadCounts(load), { total: 3, dock: 2, shipped: 0, pending: 1 });
