@@ -48,10 +48,10 @@ test('embalaje pendiente, corrección de viaje y reducción de bins tienen alcan
                 }
                 if (path === '/api/acceso-oficina') return route.fulfill({ json: { usuario: identity } });
                 if (path === '/api/oficina/contexto') return route.fulfill({ json: { data: { planta: 'Prueba', temporada: { codigo: 'TEMP-PRUEBA' } } } });
-                if (path.endsWith('/ordenes-proceso/catalogos')) return route.fulfill({ json: { data: {
+                if (path.endsWith('/ordenes-proceso/catalogos')) return route.fulfill({ json: {
                     lineas: [{ id: 'linea', codigo: 'L1', nombre: 'Línea 1', activa: true, rendimiento_kg_hora: 6000 }],
                     turnos: [{ codigo: 'A', etiqueta: 'Turno A', codigo_pre_sif: 'T1', codigo_instructivo: 'AM' }],
-                } } });
+                } });
                 if (path.endsWith('/lotes-programables')) return route.fulfill({ json: { data: [] } });
                 if (path.endsWith('/ordenes-proceso/orden/versiones')) {
                     const payload = req.postDataJSON(); versions.push(payload);
@@ -76,6 +76,8 @@ test('embalaje pendiente, corrección de viaje y reducción de bins tienen alcan
             });
             const page = await context.newPage(); page.on('pageerror', (error) => errors.push(error.message));
             await page.goto('http://localhost/oficina/materia-prima/ordenes-proceso');
+            await page.waitForFunction(() => document.querySelector('[data-order]') || document.getElementById('ordersNotice').textContent);
+            assert.equal(await page.locator('#ordersNotice').textContent(), '', errors.join('\n'));
             await page.locator('[data-order="orden"]').click();
             if (readOnly) {
                 assert.equal(await page.locator('[data-correct-packaging]').count(), 0);
