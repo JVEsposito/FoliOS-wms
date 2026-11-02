@@ -155,7 +155,7 @@ class OrdenesProcesoMpApiTest extends TestCase
         ])->assertUnprocessable()->assertJsonValidationErrors('lotes.0.bins_programados');
 
         $this->postJson("/api/materia-prima/ordenes-proceso/{$orden['id']}/versiones", [
-            ...$base, 'operacion_id' => (string) Str::uuid(), 'lotes' => [$this->fila($primero, 5)],
+            ...$base, 'operacion_id' => (string) Str::uuid(), 'confirmar_reduccion' => true, 'lotes' => [$this->fila($primero, 5)],
         ])
             ->assertOk()
             ->assertJsonPath('data.estado', 'terminada')

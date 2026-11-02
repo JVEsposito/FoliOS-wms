@@ -83,6 +83,9 @@ class PresentadorOrdenProcesoMp
             'creado_por' => $orden->creadoPor?->name,
             'cerrado_por' => $orden->cerradoPor?->name,
             'version_vigente' => $version,
+            'entregas' => EntregaFrutaProceso::query()->where('orden_proceso_mp_id', $orden->id)
+                ->with(['lote:id,numero_lote', 'versionOrdenProceso.lotes', 'entregadoPor:id,name', 'correccionesEmbalaje.usuario:id,name'])
+                ->orderByDesc('entregado_at')->get()->map(fn (EntregaFrutaProceso $entrega): array => $this->entrega($entrega))->all(),
             'versiones' => $orden->versiones->map(fn (VersionOrdenProcesoMp $version): array => [
                 'id' => $version->id,
                 'numero' => $version->numero,
@@ -90,6 +93,26 @@ class PresentadorOrdenProcesoMp
                 'motivo_cambio' => $version->motivo_cambio,
                 'creada_por' => $version->creadaPor?->name,
                 'creada_at' => $version->creada_at?->toIso8601String(),
+            ])->values()->all(),
+        ];
+    }
+
+    public function entrega(EntregaFrutaProceso $entrega): array
+    {
+        return [
+            'id' => $entrega->id,
+            'numero_lote' => $entrega->lote?->numero_lote,
+            'cantidad_envases' => $entrega->cantidad_envases,
+            'entregado_at' => $entrega->entregado_at?->toIso8601String(),
+            'entregado_por' => $entrega->entregadoPor?->name,
+            'anulado' => $entrega->anulado_at !== null,
+            'version_embalaje' => (int) $entrega->version_embalaje,
+            ...$entrega->embalajeRegistrado(),
+            'correcciones_embalaje' => $entrega->correccionesEmbalaje->sortBy('version')->map(fn ($correccion): array => [
+                'id' => $correccion->id, 'version' => $correccion->version,
+                'anterior' => $correccion->anterior, 'nuevo' => $correccion->nuevo,
+                'motivo' => $correccion->motivo, 'usuario' => $correccion->usuario?->name,
+                'created_at' => $correccion->created_at?->toIso8601String(),
             ])->values()->all(),
         ];
     }

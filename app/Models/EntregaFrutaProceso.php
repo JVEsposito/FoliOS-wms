@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
     'operacion_id',
@@ -16,6 +17,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
     'lote_materia_prima_id',
     'orden_proceso_mp_id',
     'version_orden_proceso_mp_id',
+    'embalaje_snapshot',
+    'kilos_por_caja_snapshot',
+    'version_embalaje',
     'fuera_de_orden',
     'autorizado_por_user_id',
     'asignacion_camara_lote_id',
@@ -65,6 +69,27 @@ class EntregaFrutaProceso extends Model implements PerteneceATemporada
         return $this->belongsTo(User::class, 'autorizado_por_user_id');
     }
 
+    public function versionOrdenProceso(): BelongsTo
+    {
+        return $this->belongsTo(VersionOrdenProcesoMp::class, 'version_orden_proceso_mp_id');
+    }
+
+    public function correccionesEmbalaje(): HasMany
+    {
+        return $this->hasMany(CorreccionEmbalajeMp::class, 'entrega_fruta_proceso_id');
+    }
+
+    /** Embalaje de este viaje, independiente de la programación vigente. */
+    public function embalajeRegistrado(): array
+    {
+        if ($this->version_embalaje > 0) {
+            return ['embalaje' => $this->embalaje_snapshot, 'kilos_por_caja' => $this->kilos_por_caja_snapshot === null ? null : (float) $this->kilos_por_caja_snapshot];
+        }
+        $fila = $this->versionOrdenProceso?->lotes->firstWhere('lote_materia_prima_id', $this->lote_materia_prima_id);
+
+        return ['embalaje' => $fila?->embalaje, 'kilos_por_caja' => $fila?->kilos_por_caja === null ? null : (float) $fila->kilos_por_caja];
+    }
+
     public function camara(): BelongsTo
     {
         return $this->belongsTo(Camara::class);
@@ -99,6 +124,8 @@ class EntregaFrutaProceso extends Model implements PerteneceATemporada
     {
         return [
             'cantidad_envases' => 'integer',
+            'version_embalaje' => 'integer',
+            'kilos_por_caja_snapshot' => 'decimal:3',
             'kilos_enviados' => 'decimal:3',
             'saldo_anterior' => 'integer',
             'saldo_posterior' => 'integer',

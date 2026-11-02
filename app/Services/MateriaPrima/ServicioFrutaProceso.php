@@ -170,6 +170,9 @@ class ServicioFrutaProceso
                     'lote_materia_prima_id' => $lote->id,
                     'orden_proceso_mp_id' => $orden?->id,
                     'version_orden_proceso_mp_id' => $vinculo['version_id'] ?? null,
+                    'embalaje_snapshot' => $vinculo['embalaje'] ?? null,
+                    'kilos_por_caja_snapshot' => $vinculo['kilos_por_caja'] ?? null,
+                    'version_embalaje' => 1,
                     'fuera_de_orden' => $vinculo['fuera_de_orden'] ?? false,
                     'autorizado_por_user_id' => ($vinculo['fuera_de_orden'] ?? false) ? $autorizador?->id : null,
                     'asignacion_camara_lote_id' => $asignacion?->id,
@@ -504,6 +507,8 @@ class ServicioFrutaProceso
                 'version_id' => $orden->version_vigente_id,
                 'fuera_de_orden' => false,
                 'numero_proceso' => $vigente->numero_proceso,
+                'embalaje' => $vigente->embalaje,
+                'kilos_por_caja' => $vigente->kilos_por_caja,
             ];
         }
         if ($conocida) {
@@ -519,7 +524,7 @@ class ServicioFrutaProceso
 
         $version = $this->ordenes->agregarFueraDeOrden($orden, $lote, $cantidad, $autorizador);
 
-        return ['version_id' => $version->id, 'fuera_de_orden' => true, 'numero_proceso' => null];
+        return ['version_id' => $version->id, 'fuera_de_orden' => true, 'numero_proceso' => null, 'embalaje' => null, 'kilos_por_caja' => null];
     }
 
     /**
@@ -607,6 +612,7 @@ class ServicioFrutaProceso
             'entregasProceso.anuladoPor',
             'entregasProceso.dispositivo',
             'entregasProceso.ordenProceso:id,codigo',
+            'entregasProceso.versionOrdenProceso.lotes',
             'entregasProceso.autorizadoPor:id,name',
             'entregasProceso.retornos.registradoPor',
             'entregasProceso.retornos.anuladoPor',

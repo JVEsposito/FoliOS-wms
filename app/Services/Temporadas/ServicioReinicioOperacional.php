@@ -316,6 +316,8 @@ class ServicioReinicioOperacional
                 'entregas_fruta_proceso' => DB::table('entregas_fruta_proceso')
                     ->whereIn('lote_materia_prima_id', clone $lotes)
                     ->count(),
+                'correcciones_embalaje_mp' => DB::table('correcciones_embalaje_mp')
+                    ->whereIn('entrega_fruta_proceso_id', clone $entregasProceso)->count(),
                 'ordenes_proceso' => DB::table('ordenes_proceso_mp')
                     ->where('temporada_id', $temporada->id)
                     ->count(),
@@ -567,6 +569,8 @@ class ServicioReinicioOperacional
         $eliminados['retornos_packing'] = DB::table('retornos_packing')
             ->whereIn('entrega_fruta_proceso_id', clone $entregasProceso)
             ->delete();
+        $eliminados['correcciones_embalaje_mp'] = DB::table('correcciones_embalaje_mp')
+            ->whereIn('entrega_fruta_proceso_id', clone $entregasProceso)->delete();
         $eliminados['entregas_fruta_proceso'] = DB::table('entregas_fruta_proceso')
             ->whereIn('lote_materia_prima_id', clone $lotes)
             ->delete();

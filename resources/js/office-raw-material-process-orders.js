@@ -1,4 +1,5 @@
 import './office-navigation';
+import { processOrderChanges } from './shared/process-order-changes';
 
 const $ = (id) => document.getElementById(id);
 const keys = { token: 'estiba_wms_office_token', identity: 'estiba_wms_office_identity' };
@@ -9,6 +10,7 @@ const state = {
     ordenes: [],
     detalle: null,
     editor: null,
+    correccion: null,
     candidatos: [],
     busy: false,
 };
@@ -119,6 +121,13 @@ function renderDetalle() {
         <td class="orders-num">${desfase(fila.desfase_minutos)}</td>
     </tr>`).join('');
     const versiones = orden.versiones.map((version) => `<span>v${escape(version.numero)} · ${escape(version.creada_por || '—')} · ${escape(new Date(version.creada_at).toLocaleString('es-CL'))}${version.origen === 'fuera_de_orden' ? ' · lote fuera de orden autorizado' : ''}${version.motivo_cambio ? ` · ${escape(version.motivo_cambio)}` : ''}</span>`).join('');
+    const entregas = (orden.entregas || []).map((entrega) => `<tr>
+        <td>${escape(entrega.numero_lote)}</td><td>${escape(new Date(entrega.entregado_at).toLocaleString('es-CL'))}</td>
+        <td class="orders-num">${number(entrega.cantidad_envases)}</td><td>${escape(entrega.embalaje || 'Sin embalaje registrado')}</td>
+        <td class="orders-num">${number(entrega.kilos_por_caja, 3)}</td><td>${escape(entrega.entregado_por || '—')}${entrega.anulado ? ' · Anulada' : ''}</td>
+        <td>${!entrega.anulado && can('puede_gestionar_ordenes_proceso') ? `<button class="secondary-button" type="button" data-correct-packaging="${escape(entrega.id)}">Corregir embalaje</button>` : ''}
+        ${(entrega.correcciones_embalaje || []).length ? `<details><summary>Historial de correcciones</summary>${entrega.correcciones_embalaje.map((correccion) => `<p>${escape(correccion.anterior.embalaje || 'Sin embalaje')} (${number(correccion.anterior.kilos_por_caja, 3)} kg/caja) → ${escape(correccion.nuevo.embalaje)} (${number(correccion.nuevo.kilos_por_caja, 3)} kg/caja) · ${escape(correccion.usuario)} · ${escape(new Date(correccion.created_at).toLocaleString('es-CL'))}<br>${escape(correccion.motivo)}</p>`).join('')}</details>` : ''}</td>
+    </tr>`).join('');
     panel.innerHTML = `<header class="orders-panel__heading">
             <div><p class="eyebrow">${escape(orden.linea?.nombre)} · ${escape(orden.fecha)} · TURNO ${escape(orden.turno_inicio)}</p>
             <h2 id="orderDetailTitle">${escape(orden.codigo)} · v${escape(orden.numero_version_vigente)} · ${escape(orden.estado === 'terminada' ? `Terminada ${cierres[orden.tipo_cierre] ?? ''}` : estados[orden.estado])}</h2>
@@ -131,8 +140,11 @@ function renderDetalle() {
                 <button class="secondary-button" type="button" data-action="cerrar">Cerrar</button>
             </div>
         </header>
-        <div class="orders-table-wrap"><table class="orders-table"><thead><tr><th>#</th><th>Lote</th><th>Cliente</th><th>Variedad</th><th>CSG</th><th>N° proceso</th><th>Bins</th><th>Entregados</th><th>Pendientes</th><th>Kilos</th><th>Embalaje</th><th>Cajas est.</th><th>Mercado</th><th>Horario est.</th><th>Real</th><th>Desfase</th></tr></thead><tbody>${filas}</tbody></table></div>
+        <div class="orders-table-wrap"><table class="orders-table"><thead><tr><th>#</th><th>Lote</th><th>Cliente</th><th>Variedad</th><th>CSG</th><th>N° proceso</th><th>Total programado</th><th>Entregados</th><th>Pendientes</th><th>Kilos</th><th>Embalaje pendiente</th><th>Cajas est.</th><th>Mercado</th><th>Horario est.</th><th>Real</th><th>Desfase</th></tr></thead><tbody>${filas}</tbody></table></div>
         <p class="orders-muted">Programado ${number(orden.progreso.bins_programados)} bins · entregado ${number(orden.progreso.bins_entregados)} · pendiente ${number(orden.progreso.bins_pendientes)}. El desfase compara el primer viaje real con el inicio estimado del lote.</p>
+        <h3>Entregas realizadas a packing</h3>
+        <p class="orders-muted">Cada viaje conserva su embalaje. Una nueva versión de la programación no cambia las entregas anteriores.</p>
+        <div class="orders-table-wrap"><table class="orders-table"><thead><tr><th>Lote</th><th>Fecha</th><th>Bins entregados</th><th>Embalaje del viaje</th><th>Kg por caja</th><th>Camarero</th><th>Correcciones</th></tr></thead><tbody>${entregas || '<tr><td colspan="7">Todavía no hay entregas.</td></tr>'}</tbody></table></div>
         <details><summary>Versiones (${orden.versiones.length})</summary><div class="orders-versions">${versiones}</div></details>`;
     panel.hidden = false;
 }
@@ -144,6 +156,7 @@ function abrirEditor(orden = null) {
         ordenId: orden?.id ?? null,
         version: orden?.version ?? null,
         operacionId: uuid(),
+        originales: vigente?.lotes || [],
         filas: (vigente?.lotes || []).map((fila) => ({
             lote_materia_prima_id: fila.lote_materia_prima_id, numero_lote: fila.numero_lote, cliente: fila.cliente?.nombre,
             bins_programados: fila.bins_programados, minimo: fila.bins_entregados, numero_proceso: fila.numero_proceso ?? '',
@@ -152,6 +165,7 @@ function abrirEditor(orden = null) {
         })),
     };
     form.reset();
+    $('orderConfirmReduction').checked = false;
     form.elements.linea_proceso_id.innerHTML = state.catalogos.lineas.filter((linea) => linea.activa || linea.id === orden?.linea?.id)
         .map((linea) => `<option value="${escape(linea.id)}">${escape(linea.nombre)} · ${number(linea.rendimiento_kg_hora)} kg/h</option>`).join('');
     form.elements.turno_inicio.innerHTML = state.catalogos.turnos.map((turno) => `<option value="${escape(turno.codigo)}">${escape(turno.etiqueta)} (${escape(turno.codigo_pre_sif)} · ${escape(turno.codigo_instructivo)})</option>`).join('');
@@ -177,7 +191,7 @@ function renderFilas() {
     const filas = state.editor?.filas || [];
     $('orderRows').innerHTML = filas.map((fila, indice) => `<tr data-row="${indice}">
         <td class="orders-num">${indice + 1}</td><td>${escape(fila.numero_lote)}</td><td>${escape(fila.cliente)}</td>
-        <td><input type="number" min="${Math.max(1, fila.minimo || 0)}" ${fila.maximo ? `max="${fila.maximo}"` : ''} data-field="bins_programados" value="${escape(fila.bins_programados)}" aria-label="Bins de ${escape(fila.numero_lote)}"></td>
+        <td><input type="number" min="${Math.max(1, fila.minimo || 0)}" ${fila.maximo ? `max="${fila.maximo}"` : ''} data-field="bins_programados" value="${escape(fila.bins_programados)}" aria-label="Total programado de ${escape(fila.numero_lote)}"><small>${number(fila.minimo || 0)} entregados</small></td>
         <td><input data-field="numero_proceso" maxlength="40" value="${escape(fila.numero_proceso)}" aria-label="N° de proceso"></td>
         <td><input data-field="embalaje" maxlength="150" value="${escape(fila.embalaje)}" aria-label="Embalaje"></td>
         <td><input type="number" step="0.1" min="0.1" data-field="kilos_por_caja" value="${escape(fila.kilos_por_caja)}" aria-label="Kilos por caja"></td>
@@ -189,6 +203,30 @@ function renderFilas() {
             ${fila.minimo > 0 ? '' : '<button type="button" data-remove aria-label="Quitar">✕</button>'}
         </div></td>
     </tr>`).join('') || '<tr><td colspan="11" class="orders-muted">Agrega lotes desde la búsqueda.</td></tr>';
+    renderCambios();
+}
+
+function renderCambios() {
+    const changes = processOrderChanges(state.editor?.originales, state.editor?.filas);
+    $('orderChangeSummary').innerHTML = [
+        ...changes.packaging.map((row) => `<p><strong>${escape(row.lot)}</strong>: el nuevo embalaje aplica a ${number(row.pending)} bins pendientes. Los ${number(row.delivered)} entregados conservan su embalaje; corrige sus viajes por separado si corresponde.</p>`),
+        ...changes.reductions.map((row) => `<p><strong>${escape(row.lot)}: se liberarán ${number(row.released)} bins de esta orden.</strong> Total ${number(row.before)} → ${number(row.after)}; entregados ${number(row.delivered)}; pendientes después del cambio ${number(row.pending)}.</p>`),
+    ].join('');
+    $('orderReductionField').hidden = !changes.released;
+    return changes;
+}
+
+function abrirCorreccion(entregaId) {
+    const entrega = state.detalle?.entregas?.find((item) => item.id === entregaId);
+    if (!entrega || entrega.anulado || !can('puede_gestionar_ordenes_proceso')) return;
+    state.correccion = { entregaId, version: entrega.version_embalaje, operacionId: uuid(), ordenId: state.detalle.id };
+    const form = $('deliveryPackagingForm');
+    form.reset();
+    form.elements.embalaje.value = entrega.embalaje || '';
+    form.elements.kilos_por_caja.value = entrega.kilos_por_caja ?? '';
+    $('deliveryPackagingContext').textContent = `${state.detalle.codigo} · lote ${entrega.numero_lote} · ${number(entrega.cantidad_envases)} bins entregados el ${new Date(entrega.entregado_at).toLocaleString('es-CL')}.`;
+    $('deliveryPackagingError').textContent = '';
+    $('deliveryPackagingDialog').showModal();
 }
 
 async function cargarCandidatos() {
@@ -228,7 +266,7 @@ function payloadEditor() {
             provincia: fila.provincia || null,
         })),
     };
-    if (state.editor.ordenId) return { ...plan, version: state.editor.version, motivo_cambio: form.elements.motivo_cambio.value };
+    if (state.editor.ordenId) return { ...plan, version: state.editor.version, motivo_cambio: form.elements.motivo_cambio.value, confirmar_reduccion: $('orderConfirmReduction').checked };
     return { ...plan, fecha: form.elements.fecha.value, linea_proceso_id: form.elements.linea_proceso_id.value, turno_inicio: form.elements.turno_inicio.value };
 }
 
@@ -274,6 +312,8 @@ $('ordersList').addEventListener('click', (event) => {
     if (card) void run(() => abrirDetalle(card.dataset.order));
 });
 $('orderDetail').addEventListener('click', (event) => {
+    const entregaId = event.target.closest('[data-correct-packaging]')?.dataset.correctPackaging;
+    if (entregaId) abrirCorreccion(entregaId);
     const action = event.target.closest('[data-action]')?.dataset.action;
     if (action === 'cerrar') { state.detalle = null; renderDetalle(); }
     if (action === 'presif') {
@@ -310,7 +350,11 @@ $('orderDetail').addEventListener('click', (event) => {
 $('orderEditorClose').addEventListener('click', () => { $('orderEditor').hidden = true; state.editor = null; });
 $('orderRows').addEventListener('input', (event) => {
     const fila = state.editor?.filas[Number(event.target.closest('[data-row]')?.dataset.row)];
-    if (fila && event.target.dataset.field) fila[event.target.dataset.field] = event.target.value;
+    if (fila && event.target.dataset.field) {
+        fila[event.target.dataset.field] = event.target.value;
+        $('orderConfirmReduction').checked = false;
+        renderCambios();
+    }
 });
 $('orderRows').addEventListener('click', (event) => {
     const indice = Number(event.target.closest('[data-row]')?.dataset.row);
@@ -349,6 +393,8 @@ $('lotCandidates').addEventListener('click', (event) => {
 $('orderEditorForm').addEventListener('submit', (event) => {
     event.preventDefault();
     void run(async () => {
+        const changes = renderCambios();
+        if (changes.released && !$('orderConfirmReduction').checked) throw new Error(`Confirma que deseas liberar ${number(changes.released)} bins de esta orden. Si solo cambia el embalaje, conserva el total programado.`);
         const datos = payloadEditor();
         const url = state.editor.ordenId
             ? `/api/materia-prima/ordenes-proceso/${encodeURIComponent(state.editor.ordenId)}/versiones`
@@ -361,6 +407,30 @@ $('orderEditorForm').addEventListener('submit', (event) => {
         await cargarOrdenes();
         $('ordersNotice').textContent = `${data.codigo} v${data.numero_version_vigente} publicada.`;
     }, 'orderEditorError');
+});
+$('deliveryPackagingCancel').addEventListener('click', () => $('deliveryPackagingDialog').close());
+$('deliveryPackagingDialog').addEventListener('close', () => { state.correccion = null; });
+$('deliveryPackagingForm').addEventListener('submit', (event) => {
+    event.preventDefault();
+    void run(async () => {
+        const correction = state.correccion;
+        if (!correction) return;
+        const form = $('deliveryPackagingForm');
+        const { data } = await api(`/api/materia-prima/fruta-proceso/entregas/${encodeURIComponent(correction.entregaId)}/embalaje`, {
+            method: 'POST', body: JSON.stringify({
+                operacion_id: correction.operacionId, version_embalaje: correction.version,
+                embalaje: form.elements.embalaje.value.trim(),
+                kilos_por_caja: form.elements.kilos_por_caja.value === '' ? null : Number(form.elements.kilos_por_caja.value),
+                motivo: form.elements.motivo.value.trim(),
+            }),
+        });
+        $('deliveryPackagingDialog').close();
+        if (state.detalle?.id === correction.ordenId) {
+            state.detalle.entregas = state.detalle.entregas.map((entrega) => entrega.id === data.id ? data : entrega);
+            renderDetalle();
+        }
+        $('ordersNotice').textContent = 'Embalaje de la entrega corregido. Las cantidades de la orden se conservaron.';
+    }, 'deliveryPackagingError');
 });
 $('linesList').addEventListener('submit', (event) => {
     event.preventDefault();

@@ -480,6 +480,8 @@ Route::middleware('auth:sanctum')->group(function () {
         ->middleware('can:entregar-fruta-proceso');
     Route::post('/materia-prima/fruta-proceso/entregas/{entregaFrutaProceso}/anular', [FrutaProcesoController::class, 'anular'])
         ->middleware('can:anular-entregas-fruta-proceso');
+    Route::post('/materia-prima/fruta-proceso/entregas/{entregaFrutaProceso}/embalaje', [FrutaProcesoController::class, 'corregirEmbalaje'])
+        ->whereUuid('entregaFrutaProceso')->middleware('can:gestionar-ordenes-proceso');
     Route::post('/materia-prima/fruta-proceso/entregas/{entregaFrutaProceso}/retornos', [RetornoPackingController::class, 'store'])
         ->middleware('can:entregar-fruta-proceso');
     Route::post('/materia-prima/fruta-proceso/retornos/{retornoPacking}/anular', [RetornoPackingController::class, 'anular'])

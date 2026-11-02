@@ -9,6 +9,17 @@ use Tests\TestCase;
 
 class EstructuraOficinaTest extends TestCase
 {
+    public function test_ordenes_mp_exporta_el_editor_y_la_correccion_de_entregas(): void
+    {
+        $html = $this->get('/oficina/materia-prima/ordenes-proceso')->assertOk()->getContent();
+        $this->assertStringContainsString('Total programado', $html);
+        $this->assertStringContainsString('id="deliveryPackagingForm"', $html);
+        if (getenv('ESTIBA_EXPORTAR_UI_TESTS') === '1') {
+            File::ensureDirectoryExists(storage_path('app/ui/oficina'));
+            File::put(storage_path('app/ui/oficina/ordenes-proceso.html'), $html);
+        }
+    }
+
     public function test_operacion_ahora_exporta_la_vista_para_probar_la_disponibilidad(): void
     {
         $html = $this->get('/oficina/operacion-ahora')->assertOk()->getContent();

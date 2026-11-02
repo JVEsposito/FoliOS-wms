@@ -68,10 +68,14 @@
                         <h3>Lotes en secuencia</h3>
                         <div class="orders-table-wrap">
                             <table class="orders-table">
-                                <thead><tr><th>#</th><th>Lote</th><th>Cliente</th><th>Bins</th><th>N° proceso</th><th>Embalaje</th><th>Kg por caja</th><th>Mercado</th><th>Comuna</th><th>Provincia</th><th></th></tr></thead>
+                                <thead><tr><th>#</th><th>Lote</th><th>Cliente</th><th>Total programado</th><th>N° proceso</th><th>Embalaje pendiente</th><th>Kg por caja</th><th>Mercado</th><th>Comuna</th><th>Provincia</th><th></th></tr></thead>
                                 <tbody id="orderRows"></tbody>
                             </table>
                         </div>
+
+                        <p class="orders-muted">El total programado incluye los bins ya entregados y los pendientes. Cambiar el embalaje aquí se aplica a los pendientes; para una entrega realizada usa «Corregir embalaje» en su detalle.</p>
+                        <div id="orderChangeSummary" aria-live="polite"></div>
+                        <label class="orders-reduction-confirm" id="orderReductionField" hidden><input type="checkbox" id="orderConfirmReduction">Confirmo que quiero reducir la programación y liberar los bins indicados.</label>
 
                         <div class="orders-picker">
                             <label>Agregar lote<input type="search" id="lotSearch" maxlength="80" placeholder="N° de lote o CSG"></label>
@@ -84,6 +88,19 @@
                         </div>
                     </form>
                 </section>
+
+                <dialog id="deliveryPackagingDialog" class="orders-packaging-dialog" aria-labelledby="deliveryPackagingTitle">
+                    <form id="deliveryPackagingForm">
+                        <h2 id="deliveryPackagingTitle">Corregir embalaje de entrega</h2>
+                        <p id="deliveryPackagingContext"></p>
+                        <p>Esta corrección conserva los bins entregados y los pendientes de la orden.</p>
+                        <label>Nuevo embalaje<input name="embalaje" maxlength="150" required></label>
+                        <label>Kilos por caja<input name="kilos_por_caja" type="number" min="0.001" max="9999999.999" step="0.001"></label>
+                        <label>Motivo de la corrección<textarea name="motivo" minlength="3" maxlength="500" required></textarea></label>
+                        <p id="deliveryPackagingError" class="form-error" role="alert"></p>
+                        <div class="orders-panel__actions"><button type="submit" class="primary-button">Guardar corrección</button><button type="button" class="secondary-button" id="deliveryPackagingCancel">Cancelar</button></div>
+                    </form>
+                </dialog>
 
                 <section class="orders-panel" id="linesPanel" hidden aria-labelledby="linesTitle">
                     <header class="orders-panel__heading"><div><p class="eyebrow">CONFIGURACIÓN</p><h2 id="linesTitle">Líneas de proceso</h2></div></header>

@@ -144,6 +144,8 @@ class FrutaProcesoLoteResource extends JsonResource
             'linea_proceso' => $entrega->linea_proceso,
             'turno' => $entrega->turno,
             'numero_orden' => $entrega->numero_orden,
+            ...$entrega->embalajeRegistrado(),
+            'version_embalaje' => (int) $entrega->version_embalaje,
             'orden_proceso' => $entrega->orden_proceso_mp_id ? [
                 'id' => $entrega->orden_proceso_mp_id,
                 'codigo' => $entrega->ordenProceso?->codigo,
