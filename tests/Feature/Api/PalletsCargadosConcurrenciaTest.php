@@ -42,9 +42,10 @@ class PalletsCargadosConcurrenciaTest extends TestCase
             ->crearTokenParaDispositivo(Dispositivo::create(['codigo' => 'TABLET-CC1-B', 'nombre' => 'Tablet andén B']), 'tablet-cc1-b')
             ->plainTextToken;
 
-        $resultados = $this->solicitudesConcurrentes(array_map(fn (string $token): array => [
+        $solicitudes = array_map(fn (string $token): array => [
             'POST', "/api/cargas/{$carga->id}/cargados", $token, $this->lectura($folio->numero_folio),
-        ], [$contexto['token'], $segundaTablet]));
+        ], [$contexto['token'], $segundaTablet]);
+        $resultados = $this->reintentarConcurrenciaTemporal($solicitudes, $this->solicitudesConcurrentes($solicitudes));
         $estados = array_column($resultados, 'status');
         sort($estados);
 
@@ -63,13 +64,14 @@ class PalletsCargadosConcurrenciaTest extends TestCase
         $tokenOficina = $contexto['despachador']->createToken('oficina-cierre', ['oficina'])->plainTextToken;
         $this->assertSame(RolUsuario::Despachador, $contexto['despachador']->rol);
 
-        $resultados = $this->solicitudesConcurrentes([
+        $solicitudes = [
             ['POST', "/api/cargas/{$carga->id}/cargados", $contexto['token'], $this->lectura($contexto['folios'][0]->numero_folio)],
             ['POST', "/api/cargas/{$carga->id}/cargados", $contexto['token'], $this->lectura($contexto['folios'][1]->numero_folio)],
             ['POST', "/api/cargas/{$carga->id}/cerrar-despacho", $tokenOficina, [
                 'operacion_id' => (string) Str::uuid(), 'patente' => 'AB-CD-12', 'conductor' => 'María Pérez',
             ]],
-        ]);
+        ];
+        $resultados = $this->reintentarConcurrenciaTemporal($solicitudes, $this->solicitudesConcurrentes($solicitudes));
 
         // Cada lectura entra antes del cierre (200) o lo encuentra cerrado (422); nunca un 500.
         foreach (array_slice($resultados, 0, 2) as $resultado) {

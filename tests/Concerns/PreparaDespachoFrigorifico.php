@@ -106,6 +106,29 @@ trait PreparaDespachoFrigorifico
             ->assertOk();
     }
 
+    /**
+     * Contrato del servidor ante un interbloqueo que agotó sus reintentos: 503
+     * «concurrencia_temporal» y el cliente repite el mismo intento. Se repite aquí
+     * para comprobar el resultado final, no el orden en que MySQL eligió víctima.
+     *
+     * @param  array<int, array{0: string, 1: string, 2: string, 3: array<string, mixed>}>  $solicitudes
+     * @param  array<int, array{status: int, body: mixed}>  $resultados
+     * @return array<int, array{status: int, body: mixed}>
+     */
+    protected function reintentarConcurrenciaTemporal(array $solicitudes, array $resultados): array
+    {
+        foreach ($resultados as $indice => $resultado) {
+            if ($resultado['status'] !== 503 || ($resultado['body']['codigo'] ?? null) !== 'concurrencia_temporal') {
+                continue;
+            }
+            [$metodo, $uri, $token, $payload] = $solicitudes[$indice];
+            $respuesta = $this->conToken($token)->json($metodo, $uri, $payload);
+            $resultados[$indice] = ['status' => $respuesta->status(), 'body' => $respuesta->json()];
+        }
+
+        return $resultados;
+    }
+
     protected function conToken(string $token): static
     {
         $this->app['auth']->forgetGuards();
