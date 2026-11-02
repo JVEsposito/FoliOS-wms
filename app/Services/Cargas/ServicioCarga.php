@@ -1001,12 +1001,12 @@ class ServicioCarga
             $cargaBloqueada = $this->bloquearCarga($carga);
             $this->asegurarVersion($cargaBloqueada, $versionEsperada);
 
-            if (in_array($cargaBloqueada->estado, [EstadoCarga::Cerrada, EstadoCarga::Cancelada], true)) {
-                throw new DomainException(
-                    $cargaBloqueada->estado === EstadoCarga::Cerrada
-                        ? 'La carga ya está cerrada: si el camión volvió a planta, registra el retorno.'
-                        : 'La carga ya está cancelada.',
-                );
+            if (in_array($cargaBloqueada->estado, EstadoCarga::terminales(), true)) {
+                throw new DomainException(match ($cargaBloqueada->estado) {
+                    EstadoCarga::Cerrada => 'La carga ya está cerrada: si el camión volvió a planta, registra el retorno.',
+                    EstadoCarga::Cancelada => 'La carga ya está cancelada.',
+                    default => 'La carga ya retornó a planta y no puede cancelarse.',
+                });
             }
             $motivoNormalizado = $this->textoOpcional($motivo);
             if ($cargaBloqueada->estado !== EstadoCarga::Borrador && $motivoNormalizado === null) {
@@ -1403,8 +1403,8 @@ class ServicioCarga
 
     private function asegurarAjustable(Carga $carga): void
     {
-        if (in_array($carga->estado, [EstadoCarga::Cerrada, EstadoCarga::Cancelada], true)) {
-            throw new DomainException('La carga ya está cerrada o cancelada y no admite cambios de pallets.');
+        if (in_array($carga->estado, EstadoCarga::terminales(), true)) {
+            throw new DomainException('La carga ya está cerrada, cancelada o retornada y no admite cambios de pallets.');
         }
     }
 

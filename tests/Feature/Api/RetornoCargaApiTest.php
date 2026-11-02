@@ -46,6 +46,10 @@ class RetornoCargaApiTest extends TestCase
             ]);
             $this->assertDatabaseHas('saldos_existencia_sag', ['folio_id' => $folio->id]);
         }
+        $this->conToken($contexto['tokenOficina'])->postJson("/api/cargas/{$carga->id}/cancelar", [
+            'version_esperada' => $carga->refresh()->version,
+            'motivo' => 'Ya volvió',
+        ])->assertUnprocessable()->assertJsonPath('message', 'La carga ya retornó a planta y no puede cancelarse.');
         $evento = $carga->eventos()->where('tipo', 'retornada')->firstOrFail()->datos;
         $this->assertFalse($evento['parcial']);
         $this->assertSame(0, $evento['siguen_despachados']);

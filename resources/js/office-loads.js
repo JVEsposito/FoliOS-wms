@@ -394,15 +394,17 @@ function canPublish(load) {
         && load.total_folios >= 1;
 }
 
+const TERMINAL_LOAD_STATES = ['cerrada', 'cancelada', 'retornada', 'retorno_parcial'];
+
 function canCancel(load) {
     return state.identity?.puede_gestionar_cargas === true
-        && Boolean(load) && !['cerrada', 'cancelada'].includes(load.estado);
+        && Boolean(load) && !TERMINAL_LOAD_STATES.includes(load.estado);
 }
 
 // Publicada y antes del cierre: oficina puede quitar o cambiar pallets con motivo.
 function canAdjust(load) {
     return state.identity?.puede_gestionar_cargas === true
-        && Boolean(load) && !['borrador', 'cerrada', 'cancelada'].includes(load.estado);
+        && Boolean(load) && load.estado !== 'borrador' && !TERMINAL_LOAD_STATES.includes(load.estado);
 }
 
 function canReturn(load) {
