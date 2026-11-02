@@ -4,7 +4,7 @@ import { operatorTheme as o } from '../../theme/operatorTheme';
 
 const names: Record<string, string> = {
   recepcion_tuneles: 'Salidas de túnel', recepcion_packing: 'Recepción de packing', separacion_cargas: 'Separación de cargas',
-  preparacion_sag: 'Preparación SAG', recepcion_repa: 'Recepción de repaletizaje', apoyo_camaras: 'Apoyo en cámaras',
+  preparacion_sag: 'Preparación SAG', recepcion_repa: 'Recepción de repaletizaje', reingreso_camara: 'Reingreso a cámara', apoyo_camaras: 'Apoyo en cámaras',
 };
 export function OperatorShiftDuties({ context }: { context: OperationalShiftContext | null }) {
   if (!context || (!context.turno && !context.labor_actual && !context.en_espera.length)) return null;

@@ -3,6 +3,17 @@ import test from 'node:test';
 
 import { buildOperationalAlerts } from '../../resources/js/shared/operation-now-alerts.js';
 
+test('agrupa los reingresos por carga y mantiene la alerta hasta ubicar los pallets', () => {
+    const first = { id: 'r1', estado: 'pendiente', carga: { id: 'c1', codigo: 'CAR-1' }, folio: { numero_folio: '1001' }, tarea: null, antiguedad_minutos: 20 };
+    const second = { ...first, id: 'r2', folio: { numero_folio: '1002' }, tarea: { estado: 'asumida' } };
+    const [alert] = buildOperationalAlerts({ despacho: { reingresos: [first, second, { ...first, id: 'r3', estado: 'ubicado' }] } });
+    assert.equal(alert.source, 'Reingresos');
+    assert.equal(alert.tab, 'despacho');
+    assert.match(alert.evidence, /2 pallets.*1001, 1002.*1 sin labor activa/);
+    assert.equal(alert.minutes, 20);
+    assert.deepEqual(buildOperationalAlerts({ despacho: { reingresos: [{ ...first, estado: 'ubicado' }] } }), []);
+});
+
 test('construye alertas solo con evidencia operacional disponible', () => {
     const alerts = buildOperationalAlerts({
         camaras: [

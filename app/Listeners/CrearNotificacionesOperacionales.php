@@ -23,6 +23,7 @@ class CrearNotificacionesOperacionales
 
         match ($evento->tipo) {
             TipoEventoCarga::Publicada => $this->cargaPublicada($evento),
+            TipoEventoCarga::Retornada => $this->cargaRetornada($evento),
             TipoEventoCarga::Actualizada => $this->prioridadCambiada($evento),
             TipoEventoCarga::IncidenciaReportada => $this->incidenciaReportada($evento),
             TipoEventoCarga::IncidenciaResuelta,
@@ -42,6 +43,26 @@ class CrearNotificacionesOperacionales
             "La carga quedó disponible para frío con {$cantidad} folios.",
             AudienciaNotificacionOperacional::Area,
             ContenidoCamara::Productos->value,
+        );
+    }
+
+    private function cargaRetornada(EventoCarga $evento): void
+    {
+        $folios = array_values(array_filter((array) data_get($evento->datos, 'folios', []), 'is_string'));
+        $cantidad = count($folios);
+        $detalle = implode(', ', array_slice($folios, 0, 8));
+        if ($cantidad > 8) {
+            $detalle .= ' y '.($cantidad - 8).' más';
+        }
+        $this->crear(
+            $evento,
+            TipoNotificacionOperacional::CargaRetornada,
+            SeveridadNotificacionOperacional::Advertencia,
+            "Retorno a planta · {$evento->carga->codigo}",
+            "{$cantidad} ".($cantidad === 1 ? 'pallet requiere' : 'pallets requieren')." reingreso a cámara. Folios: {$detalle}. Revisa la labor de reingreso.",
+            AudienciaNotificacionOperacional::Area,
+            ContenidoCamara::Productos->value,
+            ['folios' => $folios, 'cantidad_folios' => $cantidad, 'href' => '/oficina/operacion-ahora#despacho'],
         );
     }
 
@@ -124,6 +145,7 @@ class CrearNotificacionesOperacionales
         string $mensaje,
         AudienciaNotificacionOperacional $audiencia,
         string $audienciaValor,
+        array $datos = [],
     ): void {
         NotificacionOperacional::query()->firstOrCreate(
             ['clave' => "evento:{$evento->id}:{$audiencia->value}:{$audienciaValor}"],
@@ -138,6 +160,7 @@ class CrearNotificacionesOperacionales
                 'folio_id' => $evento->folio_id,
                 'incidencia_carga_folio_id' => data_get($evento->datos, 'incidencia_id'),
                 'datos' => [
+                    ...$datos,
                     'evento_carga_id' => $evento->id,
                     'version_carga' => data_get($evento->datos, 'version'),
                 ],

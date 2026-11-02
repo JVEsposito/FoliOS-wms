@@ -147,6 +147,26 @@ function synchronizationAlerts(synchronization = {}) {
     return alerts;
 }
 
+function reentryAlerts(reentries = []) {
+    const groups = new Map();
+    for (const item of reentries.filter((entry) => entry.estado === 'pendiente')) {
+        const key = item.carga?.id || item.id;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(item);
+    }
+    return [...groups.values()].map((items) => {
+        const folios = items.map((item) => item.folio?.numero_folio).filter(Boolean);
+        const withoutTask = items.filter((item) => !item.tarea || ['completada', 'cancelada'].includes(item.tarea.estado)).length;
+        return {
+            area: items[0].carga?.codigo || 'Reingreso', source: 'Reingresos', tab: 'despacho', severity: 'warning',
+            condition: 'Pallets pendientes de reingreso a cámara',
+            evidence: `${formatNumber(items.length)} ${items.length === 1 ? 'pallet' : 'pallets'} · ${folios.join(', ')}${withoutTask ? ` · ${formatNumber(withoutTask)} sin labor activa` : ''}`,
+            minutes: Math.max(...items.map((item) => numeric(item.antiguedad_minutos))),
+            href: '/oficina/operacion-ahora#despacho', action: 'Revisar labores de reingreso',
+        };
+    });
+}
+
 export function buildOperationalAlerts(snapshot = {}) {
     const productCameras = (snapshot.camaras || [])
         .filter((camera) => camera.contenido === 'productos');
@@ -163,6 +183,7 @@ export function buildOperationalAlerts(snapshot = {}) {
         })),
         ...cameraAlerts(productCameras),
         ...tunnelAlerts(snapshot.prefrio?.tuneles || []),
+        ...reentryAlerts(snapshot.despacho?.reingresos || []),
         ...synchronizationAlerts(snapshot.sincronizacion),
     ];
 

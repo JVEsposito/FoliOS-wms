@@ -107,6 +107,22 @@ andén, motivo, quién lo registró y cuándo.
 
 ## 4. Retorno de una carga cerrada
 
+Al registrar un retorno se emite un aviso para el equipo de productos con la
+carga, los folios y su cantidad. Leer o confirmar ese aviso no ubica los pallets:
+la alerta de Operación ahora permanece mientras haya reingresos pendientes.
+
+Las tareas se identifican como **Reingresar pallets a cámara**, seleccionable
+como función principal o apoyo en Labores por turno. La bandeja distingue el
+retorno comercial guardado de su labor programada y muestra el motivo si falta
+programación. Oficina, con permiso de gestionar cargas, puede usar **Programar
+labor**; se conserva cualquier trabajo activo del folio y su responsable.
+
+El scheduler ejecuta `cargas:recuperar-reingresos` cada minuto, con un margen de
+cinco minutos entre intentos fallidos. También puede ejecutarse manualmente tras
+aplicar la migración. Recupera pendientes de la temporada activa sin repetir la
+devolución ni crear otra tarea para un folio comprometido. Si la labor anterior
+fue cancelada, conserva su historial y utiliza un nuevo ciclo de referencia.
+
 Cuando el camión o el contenedor vuelve a planta después del cierre
 (`POST /api/cargas/{carga}/retorno`, permiso `gestionar-cargas`):
 

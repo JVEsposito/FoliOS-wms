@@ -501,7 +501,7 @@ export type ExtractionPlan = {
 
 export type OperationalNotification = {
   id: string;
-  tipo: 'carga_publicada' | 'despacho_material_creado' | 'prioridad_carga_cambiada' | 'incidencia_carga_reportada' | 'incidencia_carga_resuelta' | 'recepcion_romana_creada' | 'cierre_temporada_pendiente';
+  tipo: 'carga_publicada' | 'carga_retornada' | 'despacho_material_creado' | 'prioridad_carga_cambiada' | 'incidencia_carga_reportada' | 'incidencia_carga_resuelta' | 'recepcion_romana_creada' | 'cierre_temporada_pendiente';
   severidad: 'informativa' | 'advertencia' | 'critica' | 'exito';
   titulo: string;
   mensaje: string;
@@ -580,6 +580,7 @@ export type CameraReentry = {
   temperatura_registrada_por: string | null;
   temperatura_registrada_at: string | null;
   tarea: { id: string; estado: string; responsable: string | null } | null;
+  programacion?: { estado: string; motivo: string | null; puede_programar: boolean };
   ubicado_en: string | null;
   ubicado_por: string | null;
   ubicado_at: string | null;

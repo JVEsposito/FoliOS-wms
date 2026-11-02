@@ -196,11 +196,11 @@ export function NotificationCenter({
                           onPress={() => {
                             void read(notification);
                             close();
-                            onOpenLoads(notification.carga?.id);
+                            onOpenLoads(notification.tipo === 'carga_retornada' ? undefined : notification.carga?.id);
                           }}
                           style={styles.loadLink}
                         >
-                          <Text style={styles.loadLinkText}>Abrir {notification.carga.codigo}</Text>
+                          <Text style={styles.loadLinkText}>{notification.tipo === 'carga_retornada' ? 'Ver reingresos a cámara' : `Abrir ${notification.carga.codigo}`}</Text>
                         </Pressable>
                       )}
                       {notification.despacho_material && onOpenMaterialDispatches && (
