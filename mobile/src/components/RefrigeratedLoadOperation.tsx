@@ -19,9 +19,11 @@ import { useOperationalPolling } from '../hooks/useOperationalPolling';
 import {
   AuthSession,
   CameraPlan,
+  CameraReentry,
   Dock,
   ExtractionPlan,
   ExtractionRouteItem,
+  LoadFolio,
   Position,
   RefrigeratedLoad,
   ReportLoadIncidentPayload,
@@ -31,6 +33,8 @@ import { ApiError } from '../services/apiError';
 import { EstibaApi } from '../services/estibaApi';
 import { colors } from '../theme/colors';
 import { PositionMap } from './PositionMap';
+import { CameraReentryPanel } from './CameraReentryPanel';
+import { TruckLoadingPanel } from './TruckLoadingPanel';
 
 type QueueFilter = 'todas' | 'urgentes' | 'incidencias' | 'preparacion';
 
@@ -68,6 +72,7 @@ export function RefrigeratedLoadOperation({
   const compact = width < 1080;
   const [loads, setLoads] = useState<RefrigeratedLoad[]>([]);
   const [docks, setDocks] = useState<Dock[]>([]);
+  const [reentries, setReentries] = useState<CameraReentry[]>([]);
   const [filter, setFilter] = useState<QueueFilter>('todas');
   const [selectedLoadId, setSelectedLoadId] = useState<string | null>(null);
   const [extractionPlan, setExtractionPlan] = useState<ExtractionPlan | null>(null);
@@ -99,7 +104,7 @@ export function RefrigeratedLoadOperation({
     return true;
   });
   const loadFolioIds = selectedLoad?.folios
-    .filter((folio) => folio.estado_carga !== 'en_anden')
+    .filter((folio) => folio.estado_carga !== 'en_anden' && folio.estado_carga !== 'cargado')
     .map((folio) => folio.id) ?? [];
   const actionableItems = extractionPlan?.items
     .filter((item) => item.orden !== null && item.ubicacion !== null)
@@ -127,6 +132,7 @@ export function RefrigeratedLoadOperation({
     if (pollInFlight.current) return;
     pollInFlight.current = true;
     try {
+      void refreshReentries();
       const refreshedLoads = await api.refreshRefrigeratedLoads(auth.token);
       const nextLoads = refreshedLoads ?? loads;
       if (refreshedLoads) setLoads(refreshedLoads);
@@ -170,6 +176,30 @@ export function RefrigeratedLoadOperation({
     }
   }
 
+  async function refreshReentries() {
+    try {
+      setReentries(await api.listCameraReentries(auth.token));
+    } catch {
+      // La bandeja de reingreso es informativa: un fallo no detiene el despacho.
+    }
+  }
+
+  async function registerReentryTemperature(reentry: CameraReentry, temperature: number): Promise<boolean> {
+    setBusy(true);
+    setError('');
+    try {
+      await api.registerReentryTemperature(auth.token, reentry.id, temperature);
+      await refreshReentries();
+      setNotice(`Temperatura de ${reentry.folio.numero_folio} registrada: ${temperature.toFixed(1)} °C.`);
+      return true;
+    } catch (reason) {
+      fail(reason);
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function initialize() {
     setBusy(true);
     setError('');
@@ -180,6 +210,7 @@ export function RefrigeratedLoadOperation({
       ]);
       setLoads(loadedLoads);
       setDocks(loadedDocks);
+      void refreshReentries();
       const initial = loadedLoads.find((load) => load.id === preferredLoadId) ?? loadedLoads[0] ?? null;
       setSelectedLoadId(initial?.id ?? null);
       setSelectedDockId(initial?.anden_previsto?.id ?? loadedDocks[0]?.id ?? null);
@@ -365,6 +396,45 @@ export function RefrigeratedLoadOperation({
     }
   }
 
+  async function registerLoaded(folioNumber: string): Promise<boolean> {
+    if (!selectedLoad) return false;
+    setBusy(true);
+    setError('');
+    try {
+      await api.registerLoadedFolio(auth.token, selectedLoad.id, {
+        operacion_id: Crypto.randomUUID(),
+        numero_folio: folioNumber,
+        generado_dispositivo_at: new Date().toISOString(),
+      });
+      await refresh(selectedLoad.id, `${folioNumber} quedó registrado arriba del camión.`);
+      return true;
+    } catch (reason) {
+      fail(reason);
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function undoLoaded(folio: LoadFolio, reason: string): Promise<boolean> {
+    if (!selectedLoad) return false;
+    setBusy(true);
+    setError('');
+    try {
+      await api.undoLoadedFolio(auth.token, folio.asignacion_id, {
+        operacion_id: Crypto.randomUUID(),
+        motivo: reason,
+      });
+      await refresh(selectedLoad.id, `${folio.numero_folio} volvió al andén.`);
+      return true;
+    } catch (failure) {
+      fail(failure);
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function confirmConcentration(quantity: number): Promise<boolean> {
     if (!selectedLoad || selectedLoad.progreso.cumple_umbral) return Promise.resolve(true);
     return confirmAlert(
@@ -417,6 +487,12 @@ export function RefrigeratedLoadOperation({
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {notice ? <Text style={styles.notice}>{notice}</Text> : null}
 
+      <CameraReentryPanel
+        disabled={busy}
+        onRegisterTemperature={registerReentryTemperature}
+        reentries={reentries}
+      />
+
       <View style={styles.filters}>
         {(['todas', 'urgentes', 'preparacion', 'incidencias'] as QueueFilter[]).map((value) => (
           <Pressable
@@ -456,6 +532,12 @@ export function RefrigeratedLoadOperation({
         {selectedLoad && extractionPlan ? (
           <View style={styles.detail}>
             <LoadHeader load={selectedLoad} />
+            <TruckLoadingPanel
+              disabled={busy}
+              load={selectedLoad}
+              onRegister={registerLoaded}
+              onUndo={undoLoaded}
+            />
             <View style={[styles.detailBody, compact && styles.detailBodyCompact]}>
               <View style={styles.routePanel}>
                 <Text style={styles.panelEyebrow}>SECUENCIA SUGERIDA</Text>

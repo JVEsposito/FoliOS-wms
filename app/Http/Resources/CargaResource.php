@@ -122,6 +122,12 @@ class CargaResource extends JsonResource
             ] : null),
             'publicada_at' => $this->publicada_at?->toAtomString(),
             'cancelada_at' => $this->cancelada_at?->toAtomString(),
+            'motivo_cancelacion' => $this->motivo_cancelacion,
+            'retorno' => $this->retornada_at ? [
+                'motivo' => $this->motivo_retorno,
+                'retornada_at' => $this->retornada_at->toAtomString(),
+                'parcial' => $this->estado === EstadoCarga::RetornoParcial,
+            ] : null,
             'cierre' => $this->cerrada_at ? [
                 'patente' => $this->patente,
                 'conductor' => $this->conductor,
@@ -144,7 +150,7 @@ class CargaResource extends JsonResource
      */
     private function asignacionesVisibles(Collection $actuales): Collection
     {
-        if ($actuales->isNotEmpty() || ! in_array($this->estado, [EstadoCarga::Cerrada, EstadoCarga::Despachada], true)) {
+        if ($actuales->isNotEmpty() || ! in_array($this->estado, [EstadoCarga::Cerrada, EstadoCarga::Despachada, EstadoCarga::Retornada, EstadoCarga::RetornoParcial], true)) {
             return $actuales;
         }
 
@@ -153,7 +159,7 @@ class CargaResource extends JsonResource
         }
 
         return $this->asignacionesHistoricas
-            ->filter(fn ($asignacion): bool => in_array($asignacion->estado, [EstadoCargaFolio::EnAnden, EstadoCargaFolio::Despachado], true))
+            ->filter(fn ($asignacion): bool => in_array($asignacion->estado, [EstadoCargaFolio::EnAnden, EstadoCargaFolio::Despachado, EstadoCargaFolio::Retornado], true))
             ->values();
     }
 
@@ -192,6 +198,9 @@ class CargaResource extends JsonResource
                         'nombre' => $asignacion->anden->nombre,
                     ] : null,
                     'asignado_at' => $asignacion->asignado_at?->toAtomString(),
+                    'enviado_anden_at' => $asignacion->enviado_anden_at?->toAtomString(),
+                    'cargado_at' => $asignacion->cargado_at?->toAtomString(),
+                    'retornado_at' => $asignacion->retornado_at?->toAtomString(),
                     'ubicacion' => $posicion && $camara ? [
                         'camara' => [
                             'id' => $camara->id,

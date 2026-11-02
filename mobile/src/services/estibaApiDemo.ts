@@ -1,5 +1,6 @@
 import {
   AuthSession,
+  CameraReentry,
   CreateMaterialDispatchPayload,
   Dock,
   ExtractionPlan,
@@ -50,8 +51,10 @@ import {
   listDemoOperationalNotifications,
   listDemoRefrigeratedLoads,
   readDemoOperationalNotification,
+  registerDemoLoadedFolio,
   reportDemoLoadIncident,
   sendDemoLoadFolioToDock,
+  undoDemoLoadedFolio,
 } from '../demo/demoLoadEngine';
 import { ApiError } from './apiError';
 import type { EstibaApi } from './estibaApi';
@@ -181,6 +184,31 @@ export class DemoEstibaApi implements EstibaApi {
     payload: Parameters<typeof sendDemoLoadFolioToDock>[1],
   ): Promise<RefrigeratedLoad> {
     return sendDemoLoadFolioToDock(assignmentId, payload);
+  }
+
+  async registerLoadedFolio(
+    _token: string,
+    loadId: string,
+    payload: Parameters<typeof registerDemoLoadedFolio>[1],
+  ): Promise<RefrigeratedLoad> {
+    return registerDemoLoadedFolio(loadId, payload);
+  }
+
+  async undoLoadedFolio(
+    _token: string,
+    assignmentId: string,
+    payload: Parameters<typeof undoDemoLoadedFolio>[1],
+  ): Promise<RefrigeratedLoad> {
+    return undoDemoLoadedFolio(assignmentId, payload);
+  }
+
+  async listCameraReentries(): Promise<CameraReentry[]> {
+    // El modo demostración no simula cancelaciones con pallets fuera de cámara.
+    return [];
+  }
+
+  async registerReentryTemperature(): Promise<CameraReentry> {
+    throw new ApiError('El reingreso a cámara no está disponible en el modo demostración.', 422);
   }
 
   async listOperationalNotifications(): Promise<OperationalNotificationFeed> {

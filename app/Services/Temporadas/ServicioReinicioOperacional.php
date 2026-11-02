@@ -269,6 +269,9 @@ class ServicioReinicioOperacional
                 'asignaciones_carga' => DB::table('carga_folios')
                     ->whereIn('carga_id', clone $cargas)
                     ->count(),
+                'reingresos_camara' => DB::table('reingresos_folio_camara')
+                    ->where('temporada_id', $temporada->id)
+                    ->count(),
                 'procesos_prefrio' => (clone $procesos)->count(),
                 'folios_prefrio' => DB::table('procesos_prefrio_folios')
                     ->whereIn('proceso_prefrio_id', clone $procesos)
@@ -426,6 +429,9 @@ class ServicioReinicioOperacional
             ->whereIn('folio_id', clone $folios)
             ->delete();
 
+        $eliminados['reingresos_camara'] = DB::table('reingresos_folio_camara')
+            ->where('temporada_id', $temporada->id)
+            ->delete();
         DB::table('carga_folios')
             ->whereIn('carga_id', clone $cargas)
             ->update(['reemplaza_a_carga_folio_id' => null]);

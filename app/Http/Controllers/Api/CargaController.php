@@ -17,10 +17,12 @@ use App\Enums\TipoBulto;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ActualizarCargaRequest;
 use App\Http\Requests\AgregarFoliosCargaRequest;
+use App\Http\Requests\CambiarFolioCargaRequest;
 use App\Http\Requests\CrearCargaRequest;
 use App\Http\Requests\FinalizarPresenciaCargaAndenRequest;
 use App\Http\Requests\RegistrarDespachoDirectoPrefrioRequest;
 use App\Http\Requests\RegistrarPresenciaCargaAndenRequest;
+use App\Http\Requests\RegistrarRetornoCargaRequest;
 use App\Http\Requests\VersionCargaRequest;
 use App\Http\Resources\CargaResource;
 use App\Http\Resources\FolioDisponibleCargaResource;
@@ -32,6 +34,7 @@ use App\Services\Cargas\ServicioCarga;
 use App\Services\Cargas\ServicioPresenciaCargaAnden;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\Verificaciones\VentanasVerificacion;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -124,9 +127,11 @@ class CargaController extends Controller
         $cargas = Carga::query()
             ->whereHas('temporada', fn (Builder $consulta): Builder => $consulta
                 ->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
+            // «Despachada» = todos los pallets en el andén: la tablet sigue
+            // necesitándola para registrar lo que sube al camión hasta el cierre.
             ->whereIn(
                 'estado',
-                collect(EstadoCarga::visiblesEnOperacion())
+                collect([...EstadoCarga::visiblesEnOperacion(), EstadoCarga::Despachada])
                     ->map(fn (EstadoCarga $estado): string => $estado->value)
                     ->all(),
             )
@@ -455,6 +460,42 @@ class CargaController extends Controller
         );
 
         return new CargaResource($this->cargarDetalle($actualizada));
+    }
+
+    public function cambiarFolio(
+        CambiarFolioCargaRequest $request,
+        Carga $carga,
+        Folio $folio,
+        ServicioCarga $servicio,
+    ): CargaResource {
+        $actualizada = $servicio->cambiarFolio(
+            $carga,
+            $folio,
+            $request->validated('numero_folio_entrante'),
+            $request->user(),
+            $request->integer('version_esperada'),
+            $request->validated('motivo'),
+            $request->boolean('confirmar_diferencias'),
+        );
+
+        return new CargaResource($this->cargarDetalle($actualizada));
+    }
+
+    public function registrarRetorno(
+        RegistrarRetornoCargaRequest $request,
+        Carga $carga,
+        ServicioCarga $servicio,
+    ): CargaResource {
+        $retornada = $servicio->registrarRetorno(
+            $carga,
+            $request->has('folios') ? $request->validated('folios') : null,
+            $request->user(),
+            $request->integer('version_esperada'),
+            $request->validated('motivo'),
+            $request->filled('llegada_at') ? CarbonImmutable::parse($request->validated('llegada_at')) : null,
+        );
+
+        return new CargaResource($this->cargarDetalle($retornada));
     }
 
     public function publicar(

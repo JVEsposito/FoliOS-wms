@@ -233,6 +233,15 @@ class ServicioPresenciaCargaAnden
 
     public function finalizarPorCierre(Carga $carga, User $usuario, string $operacionId): void
     {
+        $this->finalizarPorTermino($carga, $usuario, $operacionId, 'Salida del camión confirmada y despacho cerrado.');
+    }
+
+    /**
+     * Libera el andén cuando la carga termina sin salida normal (cancelación
+     * comercial): cancela el despacho directo y deja trazado el motivo.
+     */
+    public function finalizarPorTermino(Carga $carga, User $usuario, string $operacionId, string $motivo): void
+    {
         $presencia = PresenciaCargaAnden::query()
             ->where('bloqueo_carga_id', $carga->id)
             ->lockForUpdate()
@@ -241,7 +250,6 @@ class ServicioPresenciaCargaAnden
             return;
         }
 
-        $motivo = 'Salida del camión confirmada y despacho cerrado.';
         $payload = [
             'carga_id' => $carga->id,
             'motivo' => $motivo,

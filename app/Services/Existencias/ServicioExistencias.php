@@ -276,10 +276,12 @@ class ServicioExistencias
         $zona = config('app.operational_timezone', config('app.timezone'));
         $consulta = CargaFolio::query()
             ->with(['carga.temporada', 'folio'])
-            ->where('estado', EstadoCargaFolio::EnAnden->value)
+            // El cierre deja los pallets como «despachado»; «en_anden» cubre cierres anteriores a esa regla.
+            ->whereIn('estado', [EstadoCargaFolio::Despachado->value, EstadoCargaFolio::EnAnden->value])
             ->whereNotNull('finalizado_at')
             ->whereHas('carga', fn ($consulta) => $consulta
-                ->where('estado', EstadoCarga::Cerrada->value)
+                // Un retorno parcial conserva como despachados los pallets que no volvieron.
+                ->whereIn('estado', [EstadoCarga::Cerrada->value, EstadoCarga::RetornoParcial->value])
                 ->whereHas('temporada', fn ($temporada) => $temporada->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id)))
             ->when($desde, fn ($consulta) => $consulta->where('finalizado_at', '>=', CarbonImmutable::parse($desde, $zona)->startOfDay()->utc()))
             ->when($hasta, fn ($consulta) => $consulta->where('finalizado_at', '<=', CarbonImmutable::parse($hasta, $zona)->endOfDay()->utc()))
@@ -367,6 +369,7 @@ class ServicioExistencias
                 'procesosPrefrio.proceso.tunel',
                 'asignacionCargaActual.carga',
                 'asignacionCargaActual.anden',
+                'reingresoPendiente.carga:id,codigo',
                 'autorizacionesSagActivas',
                 'inspeccionesSag.lote',
                 'inspeccionesSag.resultados.destino',
@@ -396,7 +399,9 @@ class ServicioExistencias
                         ->sortByDesc(fn ($asignacion) => $asignacion->cargado_at?->getTimestamp() ?? 0)
                         ->first();
                     $proceso = $asignacionPrefrioActiva?->proceso;
+                    $reingreso = $folio->reingresoPendiente;
                     $pendienteUbicacion = $ubicacion === null
+                        && $reingreso === null
                         && $asignacionPrefrioActiva === null
                         && $folio->condicion_termica === CondicionTermicaFolio::PrefrioAprobado
                         && $folio->habilitacion_almacenamiento === HabilitacionAlmacenamientoFolio::Habilitado;
@@ -408,15 +413,19 @@ class ServicioExistencias
                         'temporada' => $folio->temporada?->codigo,
                         'folio' => $folio->numero_folio,
                         'tipo_bulto' => $this->humanizar($folio->tipo_bulto->value),
-                        'estado_operacional' => $pendienteUbicacion
-                            ? 'Pendiente de ubicación'
-                            : $this->humanizar($folio->estado_operacional->value),
-                        'etapa_actual' => $this->etapaProducto(
-                            $folio,
-                            $ubicacion !== null,
-                            $asignacionPrefrioActiva !== null,
-                            $asignacionCarga?->estado?->value,
-                        ),
+                        'estado_operacional' => $reingreso
+                            ? 'Pendiente de reingreso'
+                            : ($pendienteUbicacion
+                                ? 'Pendiente de ubicación'
+                                : $this->humanizar($folio->estado_operacional->value)),
+                        'etapa_actual' => $reingreso
+                            ? 'Pendiente de reingreso a cámara'.($reingreso->carga ? " ({$reingreso->carga->codigo})" : '')
+                            : $this->etapaProducto(
+                                $folio,
+                                $ubicacion !== null,
+                                $asignacionPrefrioActiva !== null,
+                                $asignacionCarga?->estado?->value,
+                            ),
                         'cantidad_cajas' => isset($datos['cantidad_cajas']) ? (int) $datos['cantidad_cajas'] : null,
                         'cliente' => $folio->exportadora,
                         'marca' => $folio->marca,
@@ -784,6 +793,10 @@ class ServicioExistencias
     ): string {
         if ($estadoCarga === 'en_anden') {
             return 'En andén';
+        }
+
+        if ($estadoCarga === 'cargado') {
+            return 'Cargado en camión';
         }
 
         if ($estadoCarga === 'con_incidencia') {

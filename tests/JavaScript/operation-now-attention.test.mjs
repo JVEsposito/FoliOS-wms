@@ -133,7 +133,17 @@ test('las insignias en cero desaparecen', () => {
     const empty = { camaras: [], prefrio: { resumen: { procesos_activos: 0 }, tuneles: [] }, camareros: [] };
     const badges = buildOperationTabBadges(empty, buildAttention(empty));
 
-    assert.deepEqual(badges, { atencion: null, maniobras: null, plano: null, camaras: null, prefrio: null, personal: null });
+    assert.deepEqual(badges, { atencion: null, maniobras: null, plano: null, camaras: null, prefrio: null, despacho: null, personal: null });
+});
+
+test('la insignia de Despacho cuenta las cargas publicadas en separación o carguío', () => {
+    const data = { camaras: [], prefrio: { tuneles: [] }, camareros: [], despacho: { resumen: { activas: 3 } } };
+    const badges = buildOperationTabBadges(data, buildAttention(data));
+
+    assert.deepEqual(badges.despacho, { text: '3 cargas', tone: 'neutral', label: 'Cargas publicadas en separación o carguío y pallets pendientes de volver a cámara' });
+
+    const reentry = { ...data, despacho: { resumen: { activas: 0, pendientes_reingreso: 2 } } };
+    assert.equal(buildOperationTabBadges(reentry, buildAttention(reentry)).despacho.text, '2 por reingresar');
 });
 
 test('las maniobras sin destino y los rechazos repetidos llegan a Atención como advertencias del planificador', () => {

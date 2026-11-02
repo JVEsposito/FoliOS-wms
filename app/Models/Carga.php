@@ -36,6 +36,10 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
     'publicada_at',
     'cancelada_por_user_id',
     'cancelada_at',
+    'motivo_cancelacion',
+    'motivo_retorno',
+    'retornada_por_user_id',
+    'retornada_at',
     'operacion_cierre_id',
     'cierre_payload_hash',
     'patente',
@@ -153,6 +157,7 @@ class Carga extends Model implements PerteneceATemporada
             'version' => 'integer',
             'publicada_at' => 'datetime',
             'cancelada_at' => 'datetime',
+            'retornada_at' => 'datetime',
             'cerrada_at' => 'datetime',
             'cierre_registrado_at' => 'datetime',
         ];

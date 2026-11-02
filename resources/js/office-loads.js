@@ -101,6 +101,18 @@ const elements = {
     closeForm: byId('closeDispatchForm'),
     closeContext: byId('closeDispatchContext'),
     closeError: byId('closeDispatchError'),
+    changeDialog: byId('changeFolioDialog'),
+    changeForm: byId('changeFolioForm'),
+    changeContext: byId('changeFolioContext'),
+    changeWarnings: byId('changeFolioWarnings'),
+    changeError: byId('changeFolioError'),
+    changeSubmit: byId('changeFolioSubmit'),
+    returnButton: byId('returnLoadButton'),
+    returnDialog: byId('returnLoadDialog'),
+    returnForm: byId('returnLoadForm'),
+    returnFolios: byId('returnLoadFolios'),
+    returnContext: byId('returnLoadContext'),
+    returnError: byId('returnLoadError'),
     truckDockDialog: byId('truckDockDialog'),
     truckDockForm: byId('truckDockForm'),
     truckDockSelect: byId('truckDockSelect'),
@@ -140,6 +152,8 @@ const statusLabels = {
     separacion_completa: 'Separación completa',
     despachada: 'En andén',
     cerrada: 'Cerrada',
+    retornada: 'Retornada a planta',
+    retorno_parcial: 'Retorno parcial',
     cancelada: 'Cancelada',
 };
 
@@ -380,9 +394,26 @@ function canPublish(load) {
         && load.total_folios >= 1;
 }
 
+const TERMINAL_LOAD_STATES = ['cerrada', 'cancelada', 'retornada', 'retorno_parcial'];
+
 function canCancel(load) {
     return state.identity?.puede_gestionar_cargas === true
-        && ['borrador', 'pendiente'].includes(load?.estado);
+        && Boolean(load) && !TERMINAL_LOAD_STATES.includes(load.estado);
+}
+
+// Publicada y antes del cierre: oficina puede quitar o cambiar pallets con motivo.
+function canAdjust(load) {
+    return state.identity?.puede_gestionar_cargas === true
+        && Boolean(load) && load.estado !== 'borrador' && !TERMINAL_LOAD_STATES.includes(load.estado);
+}
+
+function canReturn(load) {
+    return state.identity?.puede_gestionar_cargas === true
+        && ['cerrada', 'retorno_parcial'].includes(load?.estado);
+}
+
+function outOfCamera(folio) {
+    return ['en_anden', 'cargado'].includes(folio?.estado_carga);
 }
 
 function canResolveIncidents() {
@@ -457,7 +488,7 @@ function priorityClass(priority) {
 }
 
 function distributionText(load) {
-    const tunnel = (load.folios || []).filter((folio) => !folio.ubicacion && folio.prefrio && !['en_anden', 'despachado'].includes(folio.estado_carga)).length;
+    const tunnel = (load.folios || []).filter((folio) => !folio.ubicacion && folio.prefrio && !['en_anden', 'cargado', 'despachado'].includes(folio.estado_carga)).length;
     const locations = (load.distribucion || [])
         .map((item) => `${item.camara.codigo}: ${item.cantidad}`)
         .join(' · ');
@@ -693,7 +724,7 @@ function startNew() {
 }
 
 function renderDistribution(load) {
-    const tunnel = (load.folios || []).filter((folio) => !folio.ubicacion && folio.prefrio && !['en_anden', 'despachado'].includes(folio.estado_carga)).length;
+    const tunnel = (load.folios || []).filter((folio) => !folio.ubicacion && folio.prefrio && !['en_anden', 'cargado', 'despachado'].includes(folio.estado_carga)).length;
     if (!load.distribucion?.length && !tunnel) {
         elements.distribution.innerHTML = '<span class="distribution-empty">Sin folios asignados</span>';
         return;
@@ -787,9 +818,12 @@ function renderFolios(load) {
     }
 
     const editable = canEdit(load);
+    const adjustable = canAdjust(load);
     elements.folioTableBody.innerHTML = load.folios.map((folio) => {
         const location = folio.estado_carga === 'despachado' ? 'Despachado'
+            : folio.estado_carga === 'retornado' ? 'Retornado a planta'
             : folio.estado_carga === 'en_anden' ? 'En andén'
+                : folio.estado_carga === 'cargado' ? 'Cargado en camión'
                 : folio.ubicacion ? `En cámara ${folio.ubicacion.camara.codigo} · ${folio.ubicacion.posicion.etiqueta}`
                     : folio.prefrio?.estado === 'aprobado' ? `Aprobado en túnel ${folio.prefrio.tunel}`
                         : folio.prefrio ? `En túnel ${folio.prefrio.tunel} · prefrío en curso`
@@ -802,7 +836,8 @@ function renderFolios(load) {
                 <td><span class="location-label">${escapeHtml(location)}</span></td>
                 <td>${escapeHtml(formatDate(folio.asignado_at))}</td>
                 <td class="folio-action-cell">
-                    ${editable ? `<button class="folio-remove" data-remove-folio="${escapeHtml(folio.id)}" data-folio-number="${escapeHtml(folio.numero_folio)}" type="button">Quitar</button>` : ''}
+                    ${(editable || adjustable) && folio.estado_carga !== 'despachado' ? `<button class="folio-remove" data-remove-folio="${escapeHtml(folio.id)}" data-folio-number="${escapeHtml(folio.numero_folio)}" data-folio-state="${escapeHtml(folio.estado_carga)}" type="button">Quitar</button>` : ''}
+                    ${adjustable && folio.estado_carga !== 'despachado' ? `<button class="folio-remove folio-change" data-change-folio="${escapeHtml(folio.id)}" data-folio-number="${escapeHtml(folio.numero_folio)}" data-folio-state="${escapeHtml(folio.estado_carga)}" type="button">Cambiar</button>` : ''}
                 </td>
             </tr>
         `;
@@ -818,6 +853,7 @@ function renderCommands(load) {
     elements.cancel.classList.toggle('is-hidden', !canCancel(load));
     elements.publish.classList.toggle('is-hidden', !draft);
     elements.closeDispatch.classList.toggle('is-hidden', !canCloseDispatch(load));
+    elements.returnButton.classList.toggle('is-hidden', !canReturn(load));
     elements.truckDock.classList.toggle('is-hidden', !canManageTruckPresence(load));
     elements.truckDock.textContent = load.camion_en_anden ? 'Liberar andén' : 'Camión en andén';
     elements.truckDock.classList.toggle('danger-button', Boolean(load.camion_en_anden));
@@ -837,9 +873,22 @@ function renderCommands(load) {
         elements.commandDescription.textContent = 'Podrás modificarla hasta que la operación inicie la separación.';
         elements.folioTableHint.textContent = 'Esta orden ya está disponible para la operación.';
     } else if (load.estado === 'despachada') {
-        elements.commandTitle.textContent = 'Carga completa en andén';
-        elements.commandDescription.textContent = 'Registra patente y conductor cuando el vehículo haya sido cargado.';
+        const loaded = Number(load.progreso?.cargados || 0);
+        const total = Number(load.total_folios || 0);
+        elements.commandTitle.textContent = loaded >= total && total
+            ? 'Carga completa en el camión'
+            : `Carga en andén · ${loaded} de ${total} cargados`;
+        elements.commandDescription.textContent = loaded >= total && total
+            ? 'Registra patente y conductor para cerrar el despacho.'
+            : 'La tablet del andén registra cada pallet al subirlo. Registra patente y conductor cuando el vehículo haya sido cargado.';
         elements.folioTableHint.textContent = 'Los folios ya salieron de las cámaras y esperan el cierre documental.';
+    } else if (['retornada', 'retorno_parcial'].includes(load.estado)) {
+        const back = (load.folios || []).filter((folio) => folio.estado_carga === 'retornado').length;
+        elements.commandTitle.textContent = load.estado === 'retornada'
+            ? `Carga retornada a planta · ${back} pallets`
+            : `Retorno parcial · ${back} de ${load.total_folios} pallets volvieron`;
+        elements.commandDescription.textContent = `${load.retorno?.motivo || 'Sin motivo'} · llegada ${formatDate(load.retorno?.retornada_at)}. Los pallets quedan pendientes de reingreso a cámara.`;
+        elements.folioTableHint.textContent = 'Los pallets retornados conservan su folio y vuelven a cámara con una tarea del planificador.';
     } else if (load.estado === 'cerrada') {
         elements.commandTitle.textContent = `Despacho cerrado · ${load.cierre?.patente || 'sin patente'}`;
         elements.commandDescription.textContent = `${load.cierre?.conductor || 'Conductor no informado'} · salida física ${formatDate(load.cierre?.cerrada_at)} · registro ${formatDate(load.cierre?.registrada_at)}`;
@@ -1443,10 +1492,30 @@ elements.addFolios.addEventListener('click', async () => {
 });
 
 elements.folioTableBody.addEventListener('click', async (event) => {
+    const changeButton = event.target.closest('[data-change-folio]');
+    if (changeButton && canAdjust(state.selected)) {
+        openChangeFolioDialog(changeButton);
+        return;
+    }
     const button = event.target.closest('[data-remove-folio]');
-    if (!button || !canEdit(state.selected)) return;
+    if (!button || !(canEdit(state.selected) || canAdjust(state.selected))) return;
     const folioNumber = button.dataset.folioNumber;
-    if (!window.confirm(`¿Quitar ${folioNumber} de ${state.selected.codigo}? El evento quedará registrado.`)) return;
+    const adjusting = canAdjust(state.selected) && state.selected.estado !== 'pendiente';
+    let reason = 'Desasignación desde oficina de despacho';
+    if (adjusting) {
+        const back = outOfCamera({ estado_carga: button.dataset.folioState })
+            ? ' Ya salió de la cámara: quedará pendiente de reingreso.'
+            : ' Sigue en cámara y quedará disponible.';
+        const typed = window.prompt(`Motivo para quitar ${folioNumber} de ${state.selected.codigo}.${back}`, '');
+        if (typed === null) return;
+        if (typed.trim().length < 3) {
+            toast('Indica el motivo para quitar el pallet.', true);
+            return;
+        }
+        reason = typed.trim();
+    } else if (!window.confirm(`¿Quitar ${folioNumber} de ${state.selected.codigo}? El evento quedará registrado.`)) {
+        return;
+    }
 
     setBusy(true, `Quitando ${folioNumber}…`);
     try {
@@ -1456,7 +1525,7 @@ elements.folioTableBody.addEventListener('click', async (event) => {
                 method: 'DELETE',
                 body: JSON.stringify({
                     version_esperada: state.selected.version,
-                    motivo: 'Desasignación desde oficina de despacho',
+                    motivo: reason,
                 }),
             },
         );
@@ -1495,11 +1564,17 @@ elements.publish.addEventListener('click', async () => {
 
 elements.cancel.addEventListener('click', async () => {
     if (!canCancel(state.selected)) return;
+    const outside = (state.selected.folios || []).filter(outOfCamera).length;
     const reason = window.prompt(
-        `Indica el motivo de cancelación de ${state.selected.codigo}.`,
-        'Cancelación desde oficina de despacho',
+        `Indica el motivo comercial de cancelación de ${state.selected.codigo}.`
+            + (outside ? ` ${outside} ${outside === 1 ? 'pallet ya salió' : 'pallets ya salieron'} de la cámara y quedarán pendientes de reingreso.` : ''),
+        state.selected.estado === 'borrador' ? 'Cancelación desde oficina de despacho' : '',
     );
     if (reason === null) return;
+    if (state.selected.estado !== 'borrador' && reason.trim().length < 3) {
+        toast('Indica el motivo comercial de la cancelación.', true);
+        return;
+    }
 
     setBusy(true, 'Cancelando orden y liberando folios…');
     try {
@@ -1515,7 +1590,9 @@ elements.cancel.addEventListener('click', async () => {
             loadCatalog(state.loadPagination.currentPage),
             loadAvailableFolios(state.availablePagination.currentPage),
         ]);
-        toast(`${response.data.codigo} fue cancelada. Sus folios quedaron liberados.`);
+        toast(outside
+            ? `${response.data.codigo} fue cancelada. ${outside} ${outside === 1 ? 'pallet quedó' : 'pallets quedaron'} pendientes de reingreso a cámara.`
+            : `${response.data.codigo} fue cancelada. Sus folios quedaron liberados.`);
     } catch (error) {
         if (!(await recoverConflict(error))) toast(error.message, true);
     } finally {
@@ -1862,6 +1939,139 @@ elements.closeForm.addEventListener('submit', async (event) => {
     } catch (error) {
         elements.closeError.textContent = error.message;
         toast(error.message, true);
+    } finally {
+        setBusy(false);
+    }
+});
+
+function openReturnDialog() {
+    const shipped = (state.selected?.folios || []).filter((folio) => folio.estado_carga === 'despachado');
+    elements.returnForm.reset();
+    elements.returnError.textContent = '';
+    elements.returnContext.textContent = `${state.selected.codigo} · ${shipped.length} ${shipped.length === 1 ? 'pallet despachado' : 'pallets despachados'}. Los que vuelven quedan pendientes de reingreso con el mismo folio.`;
+    elements.returnFolios.innerHTML = shipped.length
+        ? shipped.map((folio) => `<label class="return-load-folio"><input type="checkbox" name="folios" value="${escapeHtml(folio.id)}" checked> <span>${escapeHtml(folio.numero_folio)}</span></label>`).join('')
+        : '<p>No quedan pallets despachados en esta carga.</p>';
+    elements.returnForm.elements.llegada_at.value = localDateTimeValue();
+    elements.returnDialog.showModal();
+}
+
+elements.returnButton.addEventListener('click', () => {
+    if (canReturn(state.selected)) openReturnDialog();
+});
+
+elements.returnForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!canReturn(state.selected)) return;
+    const form = new FormData(elements.returnForm);
+    const selected = form.getAll('folios').map(String);
+    const all = elements.returnFolios.querySelectorAll('input[name="folios"]').length;
+    const reason = String(form.get('motivo') || '').trim();
+    const arrivedAt = localDateTimeToIso(String(form.get('llegada_at') || ''));
+    elements.returnError.textContent = '';
+    if (!selected.length || reason.length < 3 || !arrivedAt) {
+        elements.returnError.textContent = 'Marca los pallets que volvieron, el motivo y la hora de llegada.';
+        return;
+    }
+    if (new Date(arrivedAt).getTime() > Date.now()) {
+        elements.returnError.textContent = 'La llegada a planta no puede estar en el futuro.';
+        return;
+    }
+
+    setBusy(true, 'Registrando retorno a planta…');
+    try {
+        const response = await api(`/api/cargas/${state.selected.id}/retorno`, {
+            method: 'POST',
+            body: JSON.stringify({
+                version_esperada: state.selected.version,
+                motivo: reason,
+                llegada_at: arrivedAt,
+                ...(selected.length < all ? { folios: selected } : {}),
+            }),
+        });
+        elements.returnDialog.close();
+        syncLoad(response.data);
+        await loadCatalog(state.loadPagination.currentPage);
+        toast(`${response.data.codigo}: ${selected.length} ${selected.length === 1 ? 'pallet quedó' : 'pallets quedaron'} pendientes de reingreso a cámara.`);
+    } catch (error) {
+        if (error.status === 409 && await recoverConflict(error)) {
+            elements.returnDialog.close();
+            return;
+        }
+        elements.returnError.textContent = error.message;
+    } finally {
+        setBusy(false);
+    }
+});
+
+function openChangeFolioDialog(button) {
+    elements.changeForm.reset();
+    elements.changeForm.dataset.folioId = button.dataset.changeFolio;
+    elements.changeForm.dataset.folioNumber = button.dataset.folioNumber;
+    elements.changeForm.dataset.confirmed = '';
+    elements.changeWarnings.classList.add('is-hidden');
+    elements.changeWarnings.innerHTML = '';
+    elements.changeError.textContent = '';
+    elements.changeSubmit.firstChild.textContent = 'Cambiar pallet ';
+    elements.changeContext.textContent = outOfCamera({ estado_carga: button.dataset.folioState })
+        ? `${button.dataset.folioNumber} ya salió de la cámara: quedará pendiente de reingreso.`
+        : `${button.dataset.folioNumber} sigue en cámara y quedará disponible.`;
+    elements.changeDialog.showModal();
+}
+
+elements.changeForm.addEventListener('input', () => {
+    // Cualquier cambio en el folio de reemplazo exige revisar de nuevo las diferencias.
+    if (!elements.changeForm.dataset.confirmed) return;
+    elements.changeForm.dataset.confirmed = '';
+    elements.changeWarnings.classList.add('is-hidden');
+    elements.changeSubmit.firstChild.textContent = 'Cambiar pallet ';
+});
+
+elements.changeForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!canAdjust(state.selected)) return;
+    const form = new FormData(elements.changeForm);
+    const incoming = String(form.get('numero_folio_entrante') || '').trim().toUpperCase();
+    const reason = String(form.get('motivo') || '').trim();
+    elements.changeError.textContent = '';
+    if (!incoming || reason.length < 3) {
+        elements.changeError.textContent = 'Indica el folio que entra y el motivo del cambio.';
+        return;
+    }
+
+    const outgoing = elements.changeForm.dataset.folioNumber;
+    setBusy(true, `Cambiando ${outgoing} por ${incoming}…`);
+    try {
+        const response = await api(`/api/cargas/${state.selected.id}/folios/${elements.changeForm.dataset.folioId}/cambiar`, {
+            method: 'POST',
+            body: JSON.stringify({
+                version_esperada: state.selected.version,
+                numero_folio_entrante: incoming,
+                motivo: reason,
+                confirmar_diferencias: elements.changeForm.dataset.confirmed === '1',
+            }),
+        });
+        elements.changeDialog.close();
+        syncLoad(response.data);
+        await Promise.all([
+            loadCatalog(state.loadPagination.currentPage),
+            loadAvailableFolios(state.availablePagination.currentPage),
+        ]);
+        toast(`${outgoing} fue cambiado por ${incoming} en ${response.data.codigo}.`);
+    } catch (error) {
+        if (error.data?.codigo === 'confirmacion_requerida' && Array.isArray(error.data.advertencias)) {
+            elements.changeForm.dataset.confirmed = '1';
+            elements.changeWarnings.innerHTML = `<strong>Revisa las diferencias antes de confirmar:</strong><ul>${error.data.advertencias
+                .map((warning) => `<li>${escapeHtml(warning.mensaje)}</li>`).join('')}</ul>`;
+            elements.changeWarnings.classList.remove('is-hidden');
+            elements.changeSubmit.firstChild.textContent = 'Confirmar cambio con diferencias ';
+            return;
+        }
+        if (error.status === 409 && await recoverConflict(error)) {
+            elements.changeDialog.close();
+            return;
+        }
+        elements.changeError.textContent = error.message;
     } finally {
         setBusy(false);
     }

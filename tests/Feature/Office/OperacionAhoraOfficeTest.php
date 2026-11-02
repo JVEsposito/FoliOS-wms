@@ -76,7 +76,7 @@ class OperacionAhoraOfficeTest extends TestCase
             ->assertSee('Personal y equipos')
             ->assertDontSee('operation-now-dashboard', false);
 
-        foreach (['atencion', 'maniobras', 'plano', 'camaras', 'prefrio', 'personal'] as $pestana) {
+        foreach (['atencion', 'maniobras', 'plano', 'camaras', 'prefrio', 'despacho', 'personal'] as $pestana) {
             $response
                 ->assertSee('data-operation-tab="'.$pestana.'"', false)
                 ->assertSee('id="operationTab-'.$pestana.'" aria-controls="operationPanel-'.$pestana.'"', false)

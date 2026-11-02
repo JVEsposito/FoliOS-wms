@@ -3,7 +3,7 @@
 // La pestaña vive en la dirección (#plano) para compartirla o volver a ella, y se
 // recuerda en el equipo. Una alerta nueva nunca cambia la pestaña: solo su insignia.
 
-export const OPERATION_TABS = Object.freeze(['atencion', 'maniobras', 'plano', 'camaras', 'prefrio', 'personal']);
+export const OPERATION_TABS = Object.freeze(['atencion', 'maniobras', 'plano', 'camaras', 'prefrio', 'despacho', 'personal']);
 export const DEFAULT_OPERATION_TAB = 'atencion';
 export const OPERATION_TAB_STORAGE_KEY = 'folios_operacion_ahora_pestana';
 

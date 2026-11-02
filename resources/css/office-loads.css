@@ -335,6 +335,13 @@
     color: #ffaaaa;
 }
 
+.status-badge--retornada,
+.status-badge--retorno-parcial {
+    border-color: rgba(243, 185, 79, .55);
+    background: rgba(243, 185, 79, .1);
+    color: var(--amber);
+}
+
 .priority-badge {
     min-height: 28px;
     padding: 0 10px;
@@ -1044,7 +1051,27 @@ button:disabled {
 .folio-action-cell {
     width: 70px;
     text-align: right !important;
+    white-space: nowrap;
 }
+
+.folio-action-cell .folio-remove + .folio-remove { margin-left: 4px; }
+
+.folio-change {
+    border-color: var(--line);
+    background: var(--raised);
+    color: var(--text);
+}
+
+.change-folio-warnings {
+    margin: 0 0 8px;
+    border: 1px solid var(--amber, #d9a441);
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: var(--text);
+    font-size: .8rem;
+}
+
+.change-folio-warnings ul { margin: 6px 0 0; padding-left: 18px; }
 
 .folio-remove {
     min-height: 31px;
@@ -1082,6 +1109,18 @@ button:disabled {
     border-color: rgba(85, 216, 137, .45);
     background: rgba(85, 216, 137, .08);
     color: var(--green);
+}
+
+.folio-state--cargado {
+    border-color: rgba(85, 216, 137, .6);
+    background: rgba(85, 216, 137, .16);
+    color: var(--green);
+}
+
+.folio-state--retornado {
+    border-color: rgba(243, 185, 79, .55);
+    background: rgba(243, 185, 79, .1);
+    color: var(--amber);
 }
 
 .folio-state--despachado {
@@ -1619,3 +1658,8 @@ button:disabled {
         width: 100%;
     }
 }
+
+.return-load-folios { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; }
+.return-load-folios legend { padding: 0 4px; color: var(--muted); font-size: .72rem; font-weight: 900; }
+.return-load-folios > div { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; max-height: 220px; overflow: auto; }
+.return-load-folio { display: flex; align-items: center; gap: 6px; font-family: var(--font-mono, ui-monospace, Consolas, monospace); font-size: .78rem; }

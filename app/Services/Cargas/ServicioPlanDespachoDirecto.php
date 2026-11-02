@@ -302,7 +302,7 @@ class ServicioPlanDespachoDirecto
                 ->pluck('estado');
             $todosEnAnden = $estados->isNotEmpty()
                 && $estados->every(
-                    fn (EstadoCargaFolio $estado): bool => $estado === EstadoCargaFolio::EnAnden,
+                    fn (EstadoCargaFolio $estado): bool => $estado->fueraDeCamara(),
                 );
             $carga->update([
                 'estado' => $todosEnAnden

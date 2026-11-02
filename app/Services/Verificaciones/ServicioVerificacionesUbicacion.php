@@ -257,6 +257,7 @@ final class ServicioVerificacionesUbicacion
                             EstadoCargaFolio::Pendiente->value,
                             EstadoCargaFolio::ConIncidencia->value,
                             EstadoCargaFolio::EnAnden->value,
+                            EstadoCargaFolio::Cargado->value,
                         ])
                         ->where('presencias_carga_anden.estado', 'activa')->select('carga_folios.folio_id'));
             })

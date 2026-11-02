@@ -86,7 +86,8 @@
 .load-status-meter { height: 9px; margin-top: 12px; overflow: hidden; background: var(--surface-muted); }
 .load-status-meter i { display: block; width: 0; height: 100%; background: var(--corporate-blue); transition: width .2s ease; }
 .load-status-progress article:nth-child(2) .load-status-meter i { background: var(--success-text); }
-.load-status-progress__dispatch > div { min-height: 32px; margin-top: 10px; color: var(--text-secondary); font-size: .78rem; line-height: 1.35; }
+.load-status-progress article:nth-child(3) .load-status-meter i { background: var(--corporate-blue); }
+.load-status-progress__dispatch > div#dispatchMessage { min-height: 32px; margin-top: 10px; color: var(--text-secondary); font-size: .78rem; line-height: 1.35; }
 .load-status-progress__dispatch b[data-tone="success"] { color: var(--success-text); }
 
 .load-status-bottom { display: grid; grid-template-columns: minmax(230px, .72fr) minmax(0, 1.6fr); gap: 10px; padding: 0 10px 10px; }

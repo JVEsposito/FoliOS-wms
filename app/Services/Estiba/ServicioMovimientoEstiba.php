@@ -23,6 +23,7 @@ use App\Models\TareaMovimiento;
 use App\Models\UbicacionActual;
 use App\Models\User;
 use App\Services\Cargas\ServicioPlanDespachoDirecto;
+use App\Services\Cargas\ServicioReingresoCamara;
 use App\Services\Cargas\ServicioTareasCarga;
 use App\Services\Temporadas\GuardiaTemporadaActiva;
 use App\Services\Temporadas\ServicioTemporadaActiva;
@@ -652,6 +653,10 @@ class ServicioMovimientoEstiba
             'movimiento_id' => $movimiento->id,
             'ubicado_at' => $recibidoServidorAt,
         ]);
+        if ($posicion && $tipoBulto !== TipoBulto::Material) {
+            // Un pallet que volvió desde el andén o el camión cierra su reingreso.
+            app(ServicioReingresoCamara::class)->cerrarPorUbicacion($folio, $movimiento, $usuario);
+        }
 
         if ($tipoBulto === TipoBulto::Material
             && $folio->estado_operacional === EstadoOperacionalFolio::PendienteUbicacion) {

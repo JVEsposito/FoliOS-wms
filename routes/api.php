@@ -84,6 +84,7 @@ use App\Http\Controllers\Api\RecepcionFrutaEmbaladaController;
 use App\Http\Controllers\Api\RecepcionMaterialController;
 use App\Http\Controllers\Api\RecepcionRomanaController;
 use App\Http\Controllers\Api\ReglaBodegaMaterialController;
+use App\Http\Controllers\Api\ReingresoCamaraController;
 use App\Http\Controllers\Api\ReinicioOperacionalController;
 use App\Http\Controllers\Api\ReplayCicloPlanificadorController;
 use App\Http\Controllers\Api\ReposicionMaterialController;
@@ -714,6 +715,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('can:consultar-cargas-operacion')->group(function () {
         Route::get('/cargas/operacion-turno', [CargaController::class, 'operacionTurno']);
         Route::get('/cargas/pendientes', [CargaController::class, 'pendientes']);
+        Route::get('/cargas/reingresos', [ReingresoCamaraController::class, 'index']);
         Route::get('/cargas/{carga}/tareas', [DespachoFrigorificoController::class, 'tareas']);
         Route::get('/cargas/{carga}/plan-extraccion', [DespachoFrigorificoController::class, 'planExtraccion']);
         Route::get('/andenes', [AndenController::class, 'index']);
@@ -739,14 +741,22 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/cargas/{carga}', [CargaController::class, 'update']);
         Route::post('/cargas/{carga}/folios', [CargaController::class, 'agregarFolios']);
         Route::delete('/cargas/{carga}/folios/{folio}', [CargaController::class, 'quitarFolio']);
+        Route::post('/cargas/{carga}/folios/{folio}/cambiar', [CargaController::class, 'cambiarFolio']);
         Route::post('/cargas/{carga}/publicar', [CargaController::class, 'publicar']);
         Route::post('/cargas/{carga}/cancelar', [CargaController::class, 'cancelar']);
+        Route::post('/cargas/{carga}/retorno', [CargaController::class, 'registrarRetorno']);
         Route::post('/cargas/{carga}/camion-en-anden', [CargaController::class, 'registrarCamionEnAnden']);
         Route::post('/cargas/{carga}/camion-en-anden/finalizar', [CargaController::class, 'finalizarCamionEnAnden']);
     });
     Route::post('/cargas/asignaciones/{cargaFolio}/incidencias', [DespachoFrigorificoController::class, 'reportarIncidencia']);
     Route::post('/cargas/incidencias/{incidencia}/resolver', [DespachoFrigorificoController::class, 'resolverIncidencia']);
     Route::post('/cargas/asignaciones/{cargaFolio}/enviar-anden', [DespachoFrigorificoController::class, 'enviarAnden']);
+    Route::post('/cargas/{carga}/cargados', [DespachoFrigorificoController::class, 'registrarCargado']);
+    Route::post('/cargas/asignaciones/{cargaFolio}/deshacer-cargado', [DespachoFrigorificoController::class, 'deshacerCargado']);
+    Route::post('/cargas/reingresos/{reingreso}/temperatura', [ReingresoCamaraController::class, 'temperatura'])->whereUuid('reingreso');
+    Route::post('/cargas/reingresos/{reingreso}/programar', [ReingresoCamaraController::class, 'programar'])
+        ->whereUuid('reingreso')
+        ->middleware('can:gestionar-cargas');
     Route::post('/cargas/{carga}/cerrar-despacho', [DespachoFrigorificoController::class, 'cerrar']);
 
     Route::middleware('can:consultar-configuracion-camaras')->group(function () {

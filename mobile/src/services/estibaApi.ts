@@ -3,6 +3,7 @@ import {
   ApiList,
   ApiMode,
   AuthSession,
+  CameraReentry,
   AvailableMaterialFolio,
   CameraPlan,
   CameraSummary,
@@ -24,7 +25,9 @@ import {
   RefrigeratedLoad,
   ReportLoadIncidentPayload,
   SagCondition,
+  RegisterLoadedFolioPayload,
   SendLoadFolioToDockPayload,
+  UndoLoadedFolioPayload,
   WithdrawMaterialPayload,
 } from '../domain/estiba';
 import { ApiError } from './apiError';
@@ -103,6 +106,10 @@ export interface EstibaApi {
   listDocks(token: string): Promise<Dock[]>;
   reportLoadIncident(token: string, assignmentId: string, payload: ReportLoadIncidentPayload): Promise<void>;
   sendLoadFolioToDock(token: string, assignmentId: string, payload: SendLoadFolioToDockPayload): Promise<RefrigeratedLoad>;
+  registerLoadedFolio(token: string, loadId: string, payload: RegisterLoadedFolioPayload): Promise<RefrigeratedLoad>;
+  undoLoadedFolio(token: string, assignmentId: string, payload: UndoLoadedFolioPayload): Promise<RefrigeratedLoad>;
+  listCameraReentries(token: string): Promise<CameraReentry[]>;
+  registerReentryTemperature(token: string, reentryId: string, temperature: number): Promise<CameraReentry>;
   getOperationalNotificationSummary(token: string): Promise<OperationalNotificationSummary>;
   listOperationalNotifications(token: string): Promise<OperationalNotificationFeed>;
   readOperationalNotification(token: string, notificationId: string): Promise<OperationalNotification>;
@@ -654,6 +661,34 @@ class HttpEstibaApi implements EstibaApi {
     )).data;
   }
 
+  async registerLoadedFolio(token: string, loadId: string, payload: RegisterLoadedFolioPayload) {
+    return (await this.request<ApiItem<RefrigeratedLoad>>(
+      `/api/cargas/${loadId}/cargados`,
+      token,
+      { method: 'POST', body: JSON.stringify(payload) },
+    )).data;
+  }
+
+  async undoLoadedFolio(token: string, assignmentId: string, payload: UndoLoadedFolioPayload) {
+    return (await this.request<ApiItem<RefrigeratedLoad>>(
+      `/api/cargas/asignaciones/${assignmentId}/deshacer-cargado`,
+      token,
+      { method: 'POST', body: JSON.stringify(payload) },
+    )).data;
+  }
+
+  async listCameraReentries(token: string) {
+    return (await this.request<ApiList<CameraReentry>>('/api/cargas/reingresos', token)).data;
+  }
+
+  async registerReentryTemperature(token: string, reentryId: string, temperature: number) {
+    return (await this.request<ApiItem<CameraReentry>>(
+      `/api/cargas/reingresos/${reentryId}/temperatura`,
+      token,
+      { method: 'POST', body: JSON.stringify({ temperatura_pulpa: temperature }) },
+    )).data;
+  }
+
   async listOperationalNotifications(token: string): Promise<OperationalNotificationFeed> {
     const response = await this.request<{
       data: OperationalNotification[];
@@ -769,6 +804,10 @@ function createUnavailableApi(message: string): EstibaApi {
     listDocks: unavailable,
     reportLoadIncident: unavailable,
     sendLoadFolioToDock: unavailable,
+    registerLoadedFolio: unavailable,
+    undoLoadedFolio: unavailable,
+    listCameraReentries: unavailable,
+    registerReentryTemperature: unavailable,
     getOperationalNotificationSummary: unavailable,
     listOperationalNotifications: unavailable,
     readOperationalNotification: unavailable,

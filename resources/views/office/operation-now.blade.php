@@ -54,6 +54,7 @@
                         <button type="button" class="operation-now-tab" role="tab" id="operationTab-plano" aria-controls="operationPanel-plano" aria-selected="false" tabindex="-1" data-operation-tab="plano"><span>Plano</span><span class="operation-now-tab__badge" data-tab-badge="plano" data-tone="neutral" hidden></span></button>
                         <button type="button" class="operation-now-tab" role="tab" id="operationTab-camaras" aria-controls="operationPanel-camaras" aria-selected="false" tabindex="-1" data-operation-tab="camaras"><span>Cámaras</span><span class="operation-now-tab__badge" data-tab-badge="camaras" data-tone="neutral" hidden></span></button>
                         <button type="button" class="operation-now-tab" role="tab" id="operationTab-prefrio" aria-controls="operationPanel-prefrio" aria-selected="false" tabindex="-1" data-operation-tab="prefrio"><span>Prefrío</span><span class="operation-now-tab__badge" data-tab-badge="prefrio" data-tone="neutral" hidden></span></button>
+                        <button type="button" class="operation-now-tab" role="tab" id="operationTab-despacho" aria-controls="operationPanel-despacho" aria-selected="false" tabindex="-1" data-operation-tab="despacho"><span>Despacho</span><span class="operation-now-tab__badge" data-tab-badge="despacho" data-tone="neutral" hidden></span></button>
                         <button type="button" class="operation-now-tab" role="tab" id="operationTab-personal" aria-controls="operationPanel-personal" aria-selected="false" tabindex="-1" data-operation-tab="personal"><span>Personal y equipos</span><span class="operation-now-tab__badge" data-tab-badge="personal" data-tone="neutral" hidden></span></button>
                     </div>
                 </nav>
@@ -222,6 +223,41 @@
                             </div>
                         </section>
                         <p class="operation-now-tabpanel__note">Los avances de prefrío representan tiempo transcurrido, no progreso térmico.</p>
+                    </section>
+                    <section class="operation-now-tabpanel operation-now-tabpanel--despacho" role="tabpanel" id="operationPanel-despacho" aria-labelledby="operationTab-despacho" data-operation-panel="despacho" tabindex="0" hidden>
+                        <section class="operation-now-panel operation-now-panel--dispatch" aria-labelledby="operationDispatchTitle">
+                            <header class="operation-now-panel__heading">
+                                <div class="operation-now-panel__title">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 6h11v9H2zM13 9h4l4 4v2h-8zM6 18a2 2 0 1 0 0-.01M17 18a2 2 0 1 0 0-.01"/></svg>
+                                    <div><h2 id="operationDispatchTitle">Despacho PT</h2><span>Separación en cámara y pallets cargados por carga</span></div>
+                                </div>
+                                <div class="operation-now-panel__tools"><strong class="operation-now-panel__summary" id="dispatchPanelSummary">—</strong><a href="/oficina/frigorifico/despacho/estatus">Ver estatus <span aria-hidden="true">→</span></a></div>
+                            </header>
+                            <div class="operation-now-panel__body operation-now-table-scroll">
+                                <table class="operation-now-table operation-now-table--dispatch">
+                                    <caption class="office-visually-hidden">Avance de separación y carguío de cada carga publicada</caption>
+                                    <thead><tr><th scope="col">Carga</th><th scope="col">Separación</th><th scope="col">Cargados</th><th scope="col">Andén</th><th scope="col">Estado</th></tr></thead>
+                                    <tbody id="operationDispatchRows"><tr><td colspan="5"><div class="operation-now-empty">Consultando cargas…</div></td></tr></tbody>
+                                </table>
+                            </div>
+                        </section>
+                        <section class="operation-now-panel operation-now-panel--reentry" aria-labelledby="operationReentryTitle">
+                            <header class="operation-now-panel__heading">
+                                <div class="operation-now-panel__title">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h13M11 7l5 5-5 5M21 4v16"/></svg>
+                                    <div><h2 id="operationReentryTitle">Reingresos a cámara</h2><span>Pallets que salieron por una carga cancelada, cambiada o retornada</span></div>
+                                </div>
+                                <div class="operation-now-panel__tools"><strong class="operation-now-panel__summary" id="reentryPanelSummary">—</strong></div>
+                            </header>
+                            <div class="operation-now-panel__body operation-now-table-scroll">
+                                <table class="operation-now-table operation-now-table--reentry">
+                                    <caption class="office-visually-hidden">Pallets pendientes de volver a una posición de cámara</caption>
+                                    <thead><tr><th scope="col">Folio</th><th scope="col">Origen</th><th scope="col">Espera</th><th scope="col">Temperatura</th><th scope="col">Tarea</th></tr></thead>
+                                    <tbody id="operationReentryRows"><tr><td colspan="5"><div class="operation-now-empty">Consultando reingresos…</div></td></tr></tbody>
+                                </table>
+                            </div>
+                        </section>
+                        <p class="operation-now-tabpanel__note">Separación: pallets acopiados juntos en la banda designada o ya en andén. Cargados: pallets leídos al subir al camión. La temperatura de pulpa del reingreso es un registro interno opcional.</p>
                     </section>
                     <section class="operation-now-tabpanel operation-now-tabpanel--personal" role="tabpanel" id="operationPanel-personal" aria-labelledby="operationTab-personal" data-operation-panel="personal" tabindex="0" hidden>
                         <div class="operation-now-personal">

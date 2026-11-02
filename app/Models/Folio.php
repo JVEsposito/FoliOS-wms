@@ -90,6 +90,12 @@ class Folio extends Model implements PerteneceATemporada
         return $this->hasOne(UbicacionActual::class);
     }
 
+    /** Reingreso a cámara abierto: el pallet salió por una carga y aún no vuelve a una posición. */
+    public function reingresoPendiente(): HasOne
+    {
+        return $this->hasOne(ReingresoFolioCamara::class, 'folio_pendiente_id');
+    }
+
     public function asignacionCargaActual(): HasOne
     {
         // Gerencia replica este criterio en el EXISTS agregado de ServicioPanelGerencial::productos().

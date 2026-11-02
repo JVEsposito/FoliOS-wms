@@ -326,6 +326,7 @@ class ServicioPlanConcentracionCarga
                 EstadoCargaFolio::Pendiente->value,
                 EstadoCargaFolio::ConIncidencia->value,
                 EstadoCargaFolio::EnAnden->value,
+                EstadoCargaFolio::Cargado->value,
             ])
             ->whereHas('reservaActiva')
             ->whereHas('folio', fn ($consulta) => $consulta

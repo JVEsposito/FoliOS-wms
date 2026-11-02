@@ -22,8 +22,8 @@ export function operatorLoadState(state: string) {
   const labels: Record<string, string> = {
     pendiente: 'Pendiente', en_preparacion: 'En preparación', despacho_parcial: 'Despacho parcial',
     en_separacion: 'En separación', separada: 'Separada', separacion_completa: 'Separación completa',
-    despachada: 'Despachada', cerrada: 'Cerrada', cancelada: 'Cancelada',
-    en_anden: 'En andén', despachado: 'Despachado', con_incidencia: 'Con incidencia', cancelado: 'Cancelado',
+    despachada: 'Despachada', cerrada: 'Cerrada', cancelada: 'Cancelada', retornada: 'Retornada a planta', retorno_parcial: 'Retorno parcial',
+    en_anden: 'En andén', cargado: 'Cargado', despachado: 'Despachado', con_incidencia: 'Con incidencia', cancelado: 'Cancelado',
   };
   return labels[state] ?? state.replaceAll('_', ' ');
 }
@@ -31,9 +31,9 @@ export function operatorLoadState(state: string) {
 export function operatorLoadCounts(load: OperatorLoad) {
   return {
     total: load.total_folios,
-    dock: load.folios.filter((folio) => folio.estado_carga === 'en_anden').length,
+    dock: load.folios.filter((folio) => folio.estado_carga === 'en_anden' || folio.estado_carga === 'cargado').length,
     shipped: load.folios.filter((folio) => folio.estado_carga === 'despachado').length,
-    pending: load.folios.filter((folio) => !['en_anden', 'despachado', 'cancelado'].includes(folio.estado_carga)).length,
+    pending: load.folios.filter((folio) => !['en_anden', 'cargado', 'despachado', 'cancelado'].includes(folio.estado_carga)).length,
   };
 }
 

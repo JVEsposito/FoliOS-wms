@@ -277,6 +277,8 @@ export function buildOperationTabBadges(snapshot = {}, attention = buildAttentio
     const occupancy = capacity ? `${formatNumber((occupied / capacity) * 100)} %` : null;
     const precooling = numeric(snapshot.prefrio?.resumen?.procesos_activos);
     const operators = (snapshot.camareros || []).length;
+    const loads = numeric(snapshot.despacho?.resumen?.activas);
+    const reentries = numeric(snapshot.despacho?.resumen?.pendientes_reingreso);
 
     return {
         atencion: attention.total
@@ -292,6 +294,13 @@ export function buildOperationTabBadges(snapshot = {}, attention = buildAttentio
             ? { text: occupancy, tone: 'neutral', label: `${occupancy} de ocupación en cámaras PT` }
             : null,
         prefrio: precooling ? { text: `${formatNumber(precooling)} en proceso`, tone: 'neutral' } : null,
+        despacho: loads || reentries
+            ? {
+                text: [loads ? plural(loads, ['carga', 'cargas']) : null, reentries ? `${formatNumber(reentries)} por reingresar` : null].filter(Boolean).join(' · '),
+                tone: 'neutral',
+                label: 'Cargas publicadas en separación o carguío y pallets pendientes de volver a cámara',
+            }
+            : null,
         personal: operators ? { text: plural(operators, ['activo', 'activos']), tone: 'neutral' } : null,
     };
 }
