@@ -15,7 +15,7 @@ const sourceRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../src');
 
 // Ejecuta el componente real con hooks de React; solo sustituye las APIs,
 // superficies nativas y pantallas hijas ajenas al comportamiento probado.
-function harness({ cameraBusy = true, openConflict = false, completionError = '', rejectPin = false, withLoads = false, scoped = false, delayedSnapshot = false } = {}) {
+function harness({ cameraBusy = true, openConflict = false, completionError = '', rejectPin = false, withLoads = false, scoped = false, delayedSnapshot = false, clock = Date } = {}) {
   let polling;
   let renderer;
   let listError = '';
@@ -84,7 +84,7 @@ function harness({ cameraBusy = true, openConflict = false, completionError = ''
     };
     vm.runInNewContext(compiled, {
       require: mockRequire, module, exports: module.exports,
-      setInterval: () => 1, clearInterval: () => {}, console, Error,
+      setInterval: () => 1, clearInterval: () => {}, console, Error, Date: clock,
     }, { filename: path });
     return module.exports;
   }
@@ -143,6 +143,9 @@ function harness({ cameraBusy = true, openConflict = false, completionError = ''
     async dismiss() { await flush(() => view('Pressable').props.onPress()); },
     async back() { await flush(() => view('Modal').props.onRequestClose()); },
     modal() { return renderer.root.findAllByType('Modal'); },
+    dialogMessage() {
+      return renderer.root.findByType('Modal').findAllByType('Text').map((node) => node.props.children).filter((item) => typeof item === 'string').join('\n');
+    },
     message() {
       return renderer.root.findAllByType('Text').map((node) => node.props.children).filter((item) => typeof item === 'string').join('\n');
     },
@@ -181,7 +184,12 @@ test('consultar las cargas del turno conserva el movimiento y la sesión de cám
 });
 
 test('cámara destino ocupada: el error sobrevive al refresco y solo se cierra con Entendido', async () => {
-  const h = harness();
+  let now = Date.UTC(2026, 10, 2, 12, 0, 0);
+  class TestDate extends Date {
+    constructor(...args) { super(...(args.length ? args : [now])); }
+    static now() { return now; }
+  }
+  const h = harness({ clock: TestDate });
   try {
     await h.mount();
     await h.start();
@@ -193,9 +201,12 @@ test('cámara destino ocupada: el error sobrevive al refresco y solo se cierra c
     assert.equal(h.calls.open, 0);
     assert.equal(h.calls.locate, 0);
     assert.deepEqual(h.calls.close, []);
-    const original = h.message();
+    const original = h.dialogMessage();
+    const originalScreen = h.message();
+    now += 2000;
     await h.refresh();
-    assert.equal(h.message(), original);
+    assert.notEqual(h.message(), originalScreen, 'La hora de actualización del pie debe cambiar.');
+    assert.equal(h.dialogMessage(), original);
     await h.backgroundFailure('El servidor no responde');
     assert.ok(h.message().includes('No se pudo actualizar'));
     assert.equal(h.modal()[0].findAllByType('Text').some((node) => String(node.props.children).includes('TABLET-PREFRIO')), true);
