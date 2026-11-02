@@ -70,6 +70,8 @@ const elements = {
     tunnelList: byId('operationTunnelList'),
     dispatchRows: byId('operationDispatchRows'),
     dispatchSummary: byId('dispatchPanelSummary'),
+    reentryRows: byId('operationReentryRows'),
+    reentrySummary: byId('reentryPanelSummary'),
     verificationRows: byId('operationVerificationRows'),
     verificationSummary: byId('operationVerificationSummary'),
     plannerPanel: byId('operationPlannerPanel'),
@@ -1236,6 +1238,37 @@ function renderDispatch(dispatch = {}) {
     }).join('');
 }
 
+const REENTRY_TASK_STATES = { pendiente: 'Esperando camarero', asumida: 'Asumida', en_proceso: 'En curso', completada: 'Completada', cancelada: 'Cancelada' };
+
+function reentryTask(item) {
+    if (item.estado === 'ubicado') {
+        return `${signal('Ubicado', 'success')}<span class="operation-now-subtext">${escapeHtml([item.ubicado_en, item.ubicado_por, item.ubicado_at && dateTime(item.ubicado_at, { timeOnly: true })].filter(Boolean).join(' · '))}</span>`;
+    }
+    if (!item.tarea) return `${signal('Sin tarea guiada', 'warning')}<span class="operation-now-subtext">Ubicación manual desde la tablet</span>`;
+    return `${signal(REENTRY_TASK_STATES[item.tarea.estado] || humanize(item.tarea.estado), item.tarea.estado === 'pendiente' ? 'warning' : 'info')}<span class="operation-now-subtext">${escapeHtml(item.tarea.responsable || 'Sin responsable')}</span>`;
+}
+
+function renderReentries(dispatch = {}) {
+    const items = dispatch.reingresos || [];
+    const pending = items.filter((item) => item.estado === 'pendiente').length;
+    elements.reentrySummary.textContent = pending
+        ? `${number(pending)} ${pending === 1 ? 'pendiente' : 'pendientes'}${dispatch.resumen?.reingreso_mas_antiguo_minutos ? ` · el más antiguo espera ${duration(dispatch.resumen.reingreso_mas_antiguo_minutos)}` : ''}`
+        : 'Sin pallets pendientes';
+    if (!items.length) {
+        elements.reentryRows.innerHTML = `<tr><td colspan="5">${empty('Sin reingresos', 'Aparecen cuando un pallet ya fuera de cámara sale de su carga.')}</td></tr>`;
+        return;
+    }
+    elements.reentryRows.innerHTML = items.map((item) => `<tr${item.estado === 'ubicado' ? ' class="is-muted"' : ''}>
+        <td><span class="operation-now-code">${escapeHtml(item.folio?.numero_folio || '—')}</span><span class="operation-now-subtext">${escapeHtml([item.folio?.cliente, item.folio?.variedad].filter(Boolean).join(' · ') || '—')}</span></td>
+        <td><strong>${escapeHtml(item.origen_etiqueta)}</strong><span class="operation-now-subtext">${escapeHtml([item.carga?.codigo, item.anden && `andén ${item.anden}`, item.motivo].filter(Boolean).join(' · '))}</span></td>
+        <td><strong>${escapeHtml(item.antiguedad_minutos === null ? '—' : duration(item.antiguedad_minutos))}</strong><span class="operation-now-subtext">${escapeHtml(item.registrado_por || '—')}</span></td>
+        <td>${item.temperatura_pulpa === null
+        ? '<span class="operation-now-subtext">Sin registro</span>'
+        : `<strong>${escapeHtml(`${Number(item.temperatura_pulpa).toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} °C`)}</strong><span class="operation-now-subtext">${escapeHtml(item.temperatura_registrada_por || '')}</span>`}</td>
+        <td>${reentryTask(item)}</td>
+    </tr>`).join('');
+}
+
 function incidentContext(incident) {
     if (incident.origen === 'recepcion_embalada') {
         return [incident.contexto?.recepcion?.planta, incident.contexto?.recepcion?.guia].filter(Boolean).join(' · ');
@@ -1277,6 +1310,7 @@ function render(data) {
     renderOperators(state.operatorSnapshot ? (state.operatorFresh ? state.operatorSnapshot.camareros : state.operatorSnapshot.camareros.map((operator) => ({ ...operator, estado_presencia: 'sin_confirmar', disponible_desde: null }))) : data.camareros);
     renderTunnels(data.prefrio?.tuneles);
     renderDispatch(data.despacho);
+    renderReentries(data.despacho);
     renderVerifications(data.verificaciones);
     // La lista de atención y las insignias se recalculan en cada lectura; la pestaña
     // visible no cambia aunque aparezca una condición nueva. Va antes del plano porque

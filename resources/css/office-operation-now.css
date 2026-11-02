@@ -701,6 +701,14 @@
 .operation-now-table--dispatch :where(th, td):nth-child(3) { width: 22%; }
 .operation-now-table--dispatch :where(th, td):nth-child(4) { width: 16%; }
 .operation-now-table--dispatch :where(th, td):nth-child(5) { width: 16%; }
+.operation-now-table--reentry { min-width: 720px; table-layout: fixed; }
+.operation-now-table--reentry :where(th, td):nth-child(1) { width: 20%; }
+.operation-now-table--reentry :where(th, td):nth-child(2) { width: 30%; }
+.operation-now-table--reentry :where(th, td):nth-child(3) { width: 14%; }
+.operation-now-table--reentry :where(th, td):nth-child(4) { width: 14%; }
+.operation-now-table--reentry :where(th, td):nth-child(5) { width: 22%; }
+.operation-now-table--reentry tr.is-muted td { opacity: .62; }
+.operation-now-panel--reentry { margin-top: 12px; }
 .operation-now-table--incidents { min-width: 680px; }
 
 .operation-now-code {

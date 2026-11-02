@@ -79,6 +79,32 @@ exigen motivo una vez publicada la carga.
   `pendiente_reingreso`) hasta que vuelva a una posición de cámara. Al ubicarlo,
   el reingreso se cierra con ese movimiento; el folio conserva su número.
 
+## 3. Bandeja de reingreso a cámara
+
+Cada pallet pendiente de reingreso (`reingresos_folio_camara`) guarda origen
+(carga cancelada, pallet quitado, pallet cambiado o carga retornada), carga,
+andén, motivo, quién lo registró y cuándo.
+
+- **Tarea guiada**: al confirmarse la operación se publica un plan
+  `almacenamiento_pallet` (referencia `reingreso_camara`) con una tarea de
+  ubicación inicial, prioridad alta y horizonte rolling. El destino lo calcula
+  el servidor, como el resto del planificador; la tablet no calcula nada. La
+  tarea se publica fuera de la transacción de la carga para no encadenar el
+  bloqueo de la temporada detrás de los bloqueos de la carga. Si el
+  planificador está apagado, el pallet sigue en la bandeja y se ubica a mano;
+  oficina puede reintentar con `POST /api/cargas/reingresos/{id}/programar`.
+- **Temperatura de pulpa**: opcional. La tarea y la tablet la piden, pero no
+  bloquea la ubicación ni cambia el folio
+  (`POST /api/cargas/reingresos/{id}/temperatura`, entre −5 y 40 °C). Lo
+  registra el camarero del andén o quien gestiona cargas.
+- **Cierre**: cuando el pallet vuelve a una posición (por la tarea o a mano) el
+  reingreso queda `ubicado` con el movimiento y la cámara. Si se ubicó a mano,
+  la tarea guiada que nadie tomó se cancela.
+- **Dónde se ve**: `GET /api/cargas/reingresos` (tablet y oficina), la pestaña
+  Despacho de Operación ahora (pendientes primero, con espera, temperatura y
+  estado de la tarea) y Existencias de PT («Pendiente de reingreso a cámara»).
+  Mientras está pendiente no cuenta como disponible para despacho.
+
 ## Operación ahora · pestaña Despacho
 
 Una fila por carga publicada con dos barras:

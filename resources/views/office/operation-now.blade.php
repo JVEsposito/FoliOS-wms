@@ -241,7 +241,23 @@
                                 </table>
                             </div>
                         </section>
-                        <p class="operation-now-tabpanel__note">Separación: pallets acopiados juntos en la banda designada o ya en andén. Cargados: pallets leídos al subir al camión.</p>
+                        <section class="operation-now-panel operation-now-panel--reentry" aria-labelledby="operationReentryTitle">
+                            <header class="operation-now-panel__heading">
+                                <div class="operation-now-panel__title">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h13M11 7l5 5-5 5M21 4v16"/></svg>
+                                    <div><h2 id="operationReentryTitle">Reingresos a cámara</h2><span>Pallets que salieron por una carga cancelada, cambiada o retornada</span></div>
+                                </div>
+                                <div class="operation-now-panel__tools"><strong class="operation-now-panel__summary" id="reentryPanelSummary">—</strong></div>
+                            </header>
+                            <div class="operation-now-panel__body operation-now-table-scroll">
+                                <table class="operation-now-table operation-now-table--reentry">
+                                    <caption class="office-visually-hidden">Pallets pendientes de volver a una posición de cámara</caption>
+                                    <thead><tr><th scope="col">Folio</th><th scope="col">Origen</th><th scope="col">Espera</th><th scope="col">Temperatura</th><th scope="col">Tarea</th></tr></thead>
+                                    <tbody id="operationReentryRows"><tr><td colspan="5"><div class="operation-now-empty">Consultando reingresos…</div></td></tr></tbody>
+                                </table>
+                            </div>
+                        </section>
+                        <p class="operation-now-tabpanel__note">Separación: pallets acopiados juntos en la banda designada o ya en andén. Cargados: pallets leídos al subir al camión. La temperatura de pulpa del reingreso es un registro interno opcional.</p>
                     </section>
                     <section class="operation-now-tabpanel operation-now-tabpanel--personal" role="tabpanel" id="operationPanel-personal" aria-labelledby="operationTab-personal" data-operation-panel="personal" tabindex="0" hidden>
                         <div class="operation-now-personal">

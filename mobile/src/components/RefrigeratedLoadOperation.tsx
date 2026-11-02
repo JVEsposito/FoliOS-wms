@@ -19,6 +19,7 @@ import { useOperationalPolling } from '../hooks/useOperationalPolling';
 import {
   AuthSession,
   CameraPlan,
+  CameraReentry,
   Dock,
   ExtractionPlan,
   ExtractionRouteItem,
@@ -32,6 +33,7 @@ import { ApiError } from '../services/apiError';
 import { EstibaApi } from '../services/estibaApi';
 import { colors } from '../theme/colors';
 import { PositionMap } from './PositionMap';
+import { CameraReentryPanel } from './CameraReentryPanel';
 import { TruckLoadingPanel } from './TruckLoadingPanel';
 
 type QueueFilter = 'todas' | 'urgentes' | 'incidencias' | 'preparacion';
@@ -70,6 +72,7 @@ export function RefrigeratedLoadOperation({
   const compact = width < 1080;
   const [loads, setLoads] = useState<RefrigeratedLoad[]>([]);
   const [docks, setDocks] = useState<Dock[]>([]);
+  const [reentries, setReentries] = useState<CameraReentry[]>([]);
   const [filter, setFilter] = useState<QueueFilter>('todas');
   const [selectedLoadId, setSelectedLoadId] = useState<string | null>(null);
   const [extractionPlan, setExtractionPlan] = useState<ExtractionPlan | null>(null);
@@ -129,6 +132,7 @@ export function RefrigeratedLoadOperation({
     if (pollInFlight.current) return;
     pollInFlight.current = true;
     try {
+      void refreshReentries();
       const refreshedLoads = await api.refreshRefrigeratedLoads(auth.token);
       const nextLoads = refreshedLoads ?? loads;
       if (refreshedLoads) setLoads(refreshedLoads);
@@ -172,6 +176,30 @@ export function RefrigeratedLoadOperation({
     }
   }
 
+  async function refreshReentries() {
+    try {
+      setReentries(await api.listCameraReentries(auth.token));
+    } catch {
+      // La bandeja de reingreso es informativa: un fallo no detiene el despacho.
+    }
+  }
+
+  async function registerReentryTemperature(reentry: CameraReentry, temperature: number): Promise<boolean> {
+    setBusy(true);
+    setError('');
+    try {
+      await api.registerReentryTemperature(auth.token, reentry.id, temperature);
+      await refreshReentries();
+      setNotice(`Temperatura de ${reentry.folio.numero_folio} registrada: ${temperature.toFixed(1)} °C.`);
+      return true;
+    } catch (reason) {
+      fail(reason);
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function initialize() {
     setBusy(true);
     setError('');
@@ -182,6 +210,7 @@ export function RefrigeratedLoadOperation({
       ]);
       setLoads(loadedLoads);
       setDocks(loadedDocks);
+      void refreshReentries();
       const initial = loadedLoads.find((load) => load.id === preferredLoadId) ?? loadedLoads[0] ?? null;
       setSelectedLoadId(initial?.id ?? null);
       setSelectedDockId(initial?.anden_previsto?.id ?? loadedDocks[0]?.id ?? null);
@@ -457,6 +486,12 @@ export function RefrigeratedLoadOperation({
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {notice ? <Text style={styles.notice}>{notice}</Text> : null}
+
+      <CameraReentryPanel
+        disabled={busy}
+        onRegisterTemperature={registerReentryTemperature}
+        reentries={reentries}
+      />
 
       <View style={styles.filters}>
         {(['todas', 'urgentes', 'preparacion', 'incidencias'] as QueueFilter[]).map((value) => (
