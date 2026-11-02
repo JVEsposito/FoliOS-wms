@@ -43,6 +43,7 @@ import {
   type FrontierPreview,
 } from '../domain/rollingPlannerPreview';
 import { useOperationalPolling } from '../hooks/useOperationalPolling';
+import { useLeaseExpired } from '../hooks/useLeaseCountdown';
 import { ApiError } from '../services/apiError';
 import { EstibaApi } from '../services/estibaApi';
 import { OperationalTasksApi, type StartConfirmation } from '../services/operationalTasksApi';
@@ -97,7 +98,6 @@ export function OperationalTaskInbox({ api, auth }: Props) {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [confirmation, setConfirmation] = useState<FolioConfirmationState | null>(null);
-  const [clock, setClock] = useState(Date.now());
   const [plannerFresh, setPlannerFresh] = useState<boolean | null>(null);
   const [suggestedDestinations, setSuggestedDestinations] = useState<Record<string, string>>({});
   const [verification, setVerification] = useState<ShiftVerification | null>(null);
@@ -115,15 +115,16 @@ export function OperationalTaskInbox({ api, auth }: Props) {
   const busy = Boolean(actionLabel) || loading || !journalReady;
 
   const inPhysicalMovement = activeTask?.estado === 'en_proceso';
-  const secondsRemaining = useMemo(() => {
-    if (!activeTask?.reserva
-      || activeTask.estado === 'en_proceso'
-      || activeTask.maniobra?.custodia_temporal_activa) return null;
-    const expiresAt = activeTask.reserva.vence_at;
-    if (!expiresAt) return null;
-    return Math.max(0, Math.floor((new Date(expiresAt).getTime() - clock) / 1000));
-  }, [activeTask?.estado, activeTask?.maniobra?.custodia_temporal_activa, activeTask?.reserva, clock]);
-  const leaseExpired = Boolean(activeTask && !inPhysicalMovement && secondsRemaining === 0);
+  // La reserva corre solo mientras la labor está tomada y sin iniciar. La bandeja solo
+  // necesita saber cuándo vence; la cuenta regresiva visible vive en su insignia, para no
+  // volver a dibujar toda la bandeja cada segundo.
+  const leaseExpiresAt = !activeTask?.reserva
+    || activeTask.estado === 'en_proceso'
+    || activeTask.maniobra?.custodia_temporal_activa
+    ? null
+    : activeTask.reserva.vence_at ?? null;
+  const leaseReachedZero = useLeaseExpired(leaseExpiresAt);
+  const leaseExpired = Boolean(activeTask && !inPhysicalMovement && leaseReachedZero);
   const hasPhysicalDestination = Boolean(
     activeTask?.destino?.posicion && activeTask?.reserva?.tipo_compromiso === 'fisica',
   );
@@ -144,19 +145,6 @@ export function OperationalTaskInbox({ api, auth }: Props) {
   useEffect(() => {
     setConfirmation(null);
   }, [activeTask?.id, activeTask?.estado]);
-
-  useEffect(() => {
-    if (!activeTask?.reserva?.vence_at
-      || activeTask.estado === 'en_proceso'
-      || activeTask.maniobra?.custodia_temporal_activa) return undefined;
-    const interval = setInterval(() => setClock(Date.now()), 1_000);
-    return () => clearInterval(interval);
-  }, [
-    activeTask?.id,
-    activeTask?.estado,
-    activeTask?.maniobra?.custodia_temporal_activa,
-    activeTask?.reserva?.vence_at,
-  ]);
 
   useEffect(() => {
     if (!taskApi || !activeTask?.reserva || activeTask.estado === 'en_proceso' || leaseExpired) {
@@ -435,7 +423,6 @@ export function OperationalTaskInbox({ api, auth }: Props) {
       const renewed = await taskApi.renew(auth.token, taskId);
       setActiveTask((current) => current?.id === renewed.id ? renewed : current);
       replaceMine([renewed]);
-      setClock(Date.now());
     } catch (reason) {
       reportError(messageFrom(reason));
       await loadTasks({ quiet: true });
@@ -1052,7 +1039,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
           onRelease={() => requestRelease(activeTask)}
           onStart={openStartConfirmation}
           operatorName={auth.usuario.nombre}
-          secondsRemaining={secondsRemaining}
+          leaseExpiresAt={leaseExpiresAt}
           task={activeTask}
         />
       ) : (
