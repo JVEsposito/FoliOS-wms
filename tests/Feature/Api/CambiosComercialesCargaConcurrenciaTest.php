@@ -38,10 +38,11 @@ class CambiosComercialesCargaConcurrenciaTest extends TestCase
         $cargaB = $this->crearCargaPublicada($contexto['despachador'], $contexto['anden'], [$segundo]);
         $tokenOtro = $contexto['administrador']->createToken('oficina-otro', ['oficina'])->plainTextToken;
 
-        $resultados = $this->solicitudesConcurrentes([
+        $solicitudes = [
             ['POST', "/api/cargas/{$cargaA->id}/folios/{$primero->id}/cambiar", $contexto['tokenOficina'], $this->cambio($cargaA, $reemplazo->numero_folio)],
             ['POST', "/api/cargas/{$cargaB->id}/folios/{$segundo->id}/cambiar", $tokenOtro, $this->cambio($cargaB, $reemplazo->numero_folio)],
-        ]);
+        ];
+        $resultados = $this->reintentarConcurrenciaTemporal($solicitudes, $this->solicitudesConcurrentes($solicitudes));
         $estados = array_column($resultados, 'status');
         sort($estados);
 
@@ -59,7 +60,7 @@ class CambiosComercialesCargaConcurrenciaTest extends TestCase
         $this->enviarAlAnden($contexto, $carga, $segundo);
         $this->enviarAlAnden($contexto, $carga, $primero);
 
-        $resultados = $this->solicitudesConcurrentes([
+        $solicitudes = [
             ['POST', "/api/cargas/{$carga->id}/cargados", $contexto['token'], [
                 'operacion_id' => (string) Str::uuid(),
                 'numero_folio' => $primero->numero_folio,
@@ -69,7 +70,8 @@ class CambiosComercialesCargaConcurrenciaTest extends TestCase
                 'version_esperada' => $carga->refresh()->version,
                 'motivo' => 'Cliente anuló el pedido',
             ]],
-        ]);
+        ];
+        $resultados = $this->reintentarConcurrenciaTemporal($solicitudes, $this->solicitudesConcurrentes($solicitudes));
 
         // Si la lectura entra primero, la versión cambió y la cancelación responde 409;
         // si la cancelación entra primero, la lectura encuentra la carga cancelada.
