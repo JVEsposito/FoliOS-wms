@@ -12,7 +12,9 @@ use App\Models\LoteMateriaPrima;
 use App\Models\LoteVersionOrdenMp;
 use App\Models\OrdenProcesoMp;
 use App\Models\PersonalAccessToken;
+use App\Models\ReservaLoteOrdenProcesoMp;
 use App\Models\User;
+use App\Models\VersionOrdenProcesoMp;
 use App\Services\Autenticacion\ServicioPinOperacional;
 use App\Services\Autorizacion\AlcanceOperacionalUsuario;
 use App\Services\MateriaPrima\OrdenesProceso\ServicioOrdenProcesoMp;
@@ -135,6 +137,22 @@ class ServicioFrutaProceso
                     throw ValidationException::withMessages([
                         'cantidad_envases' => "Solo quedan {$disponibles} bins disponibles en el lote.",
                     ]);
+                }
+
+                if (! $orden) {
+                    // También las APK anteriores respetan las reservas. Con el lote bloqueado,
+                    // una publicación no puede comprometer estos bins mientras sale el viaje.
+                    $comprometidos = (int) ReservaLoteOrdenProcesoMp::query()
+                        ->where('lote_materia_prima_id', $lote->id)
+                        ->lockForUpdate()
+                        ->get()
+                        ->sum('bins_pendientes');
+                    $libres = max(0, $disponibles - $comprometidos);
+                    if ($cantidad > $libres) {
+                        throw ValidationException::withMessages([
+                            'cantidad_envases' => "Solo quedan {$libres} bins libres de reservas. Elige la orden de proceso para entregar los bins programados.",
+                        ]);
+                    }
                 }
 
                 $vinculo = $orden
@@ -464,13 +482,19 @@ class ServicioFrutaProceso
             ->where('version_orden_proceso_mp_id', $versionId)
             ->where('lote_materia_prima_id', $lote->id)
             ->first() : null;
-        $vigente = $fila($orden->version_vigente_id);
         $conocidaId = $datos['version_orden_proceso_mp_id'] ?? null;
+        if (! $conocidaId || ! VersionOrdenProcesoMp::query()
+            ->whereKey($conocidaId)
+            ->where('orden_proceso_mp_id', $orden->id)
+            ->exists()) {
+            throw new ConflictoOperacion('La versión indicada no pertenece a esta orden. Actualiza antes de entregar.');
+        }
+        $vigente = $fila($orden->version_vigente_id);
         $cambio = $conocidaId !== null && $conocidaId !== $orden->version_vigente_id;
         $conocida = $cambio ? $fila($conocidaId) : null;
 
         if ($vigente) {
-            if ($cambio && $conocida?->bins_programados !== $vigente->bins_programados) {
+            if ($cambio && (! $conocida || ! $this->mismaFilaOrden($conocida, $vigente))) {
                 throw new ConflictoOperacion(
                     "{$orden->codigo} cambió a la v{$orden->numero_version_vigente} y modificó el lote {$lote->numero_lote}. Actualiza la orden antes de entregar.",
                 );
@@ -496,6 +520,31 @@ class ServicioFrutaProceso
         $version = $this->ordenes->agregarFueraDeOrden($orden, $lote, $cantidad, $autorizador);
 
         return ['version_id' => $version->id, 'fuera_de_orden' => true, 'numero_proceso' => null];
+    }
+
+    /**
+     * Campos de la fila que definen qué se entrega. Los kilos y las cajas estimadas
+     * se derivan de ellos. El horario, la secuencia y las copias de maestros quedan
+     * fuera: cambian solos cuando se modifica otro lote de la orden y el horario es
+     * estimativo, así que no deben bloquear la entrega de un lote que no cambió.
+     */
+    private const CAMPOS_FILA_ENTREGA = [
+        'lote_materia_prima_id',
+        'bins_programados',
+        'totes_programados',
+        'numero_proceso',
+        'embalaje',
+        'kilos_por_caja',
+        'mercado_destino',
+    ];
+
+    private function mismaFilaOrden(LoteVersionOrdenMp $anterior, LoteVersionOrdenMp $vigente): bool
+    {
+        // Lista explícita: una columna nueva no invalida entregas sin una decisión.
+        $campos = array_flip(self::CAMPOS_FILA_ENTREGA);
+
+        return array_intersect_key($anterior->attributesToArray(), $campos)
+            == array_intersect_key($vigente->attributesToArray(), $campos);
     }
 
     /** @param array<string, mixed> $autorizacion */

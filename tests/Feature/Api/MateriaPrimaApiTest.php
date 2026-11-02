@@ -14,6 +14,7 @@ use App\Models\EntregaFrutaProceso;
 use App\Models\EspecieValidacion;
 use App\Models\EventoLoteMateriaPrima;
 use App\Models\FormatoRegistro;
+use App\Models\LineaProceso;
 use App\Models\LoteMateriaPrima;
 use App\Models\ProductoHidrocooler;
 use App\Models\Temporada;
@@ -1153,6 +1154,19 @@ class MateriaPrimaApiTest extends TestCase
         ]);
         $this->assertDatabaseCount('procesos_hidrocooler_materia_prima', 1);
         $this->assertDatabaseCount('asignaciones_camara_lote_materia_prima', 0);
+
+        $orden = $this->actingAs($digitador, 'sanctum')->postJson('/api/materia-prima/ordenes-proceso', [
+            'operacion_id' => (string) Str::uuid(),
+            'linea_proceso_id' => LineaProceso::query()->where('codigo', 'L1')->value('id'),
+            'fecha' => '2026-08-17', 'turno_inicio' => 'A', 'hora_inicio' => '10:00',
+            'lotes' => [['lote_materia_prima_id' => $lote['id'], 'bins_programados' => 10]],
+        ])->assertCreated()->json('data');
+        $this->actingAs($camarero, 'sanctum')->getJson('/api/materia-prima/fruta-proceso/ordenes')
+            ->assertOk()->assertJsonPath('data.0.version_vigente.lotes.0.camara', null);
+        $this->postJson("/api/materia-prima/fruta-proceso/lotes/{$lote['id']}/entregas", [
+            'operacion_id' => (string) Str::uuid(), 'cantidad_envases' => 10, 'turno' => 'A',
+            'orden_proceso_mp_id' => $orden['id'], 'version_orden_proceso_mp_id' => $orden['version_vigente']['id'],
+        ])->assertOk()->assertJsonPath('data.camara', null);
     }
 
     public function test_hidrocooler_retiene_desviaciones_y_solo_supervision_libera_tras_evaluar_producto(): void

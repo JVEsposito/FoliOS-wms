@@ -269,7 +269,7 @@ class FrutaProcesoController extends Controller
                 $detalle = $presentador->detalle($orden);
                 $detalle['version_vigente']['lotes'] = array_map(fn (array $fila): array => [
                     ...$fila,
-                    'camara' => $camaras[$fila['lote_materia_prima_id']]?->camara?->only(['id', 'codigo', 'nombre']),
+                    'camara' => $camaras->get($fila['lote_materia_prima_id'])?->camara?->only(['id', 'codigo', 'nombre']),
                 ], $detalle['version_vigente']['lotes'] ?? []);
                 unset($detalle['versiones']);
 

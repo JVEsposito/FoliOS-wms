@@ -22,7 +22,7 @@ class RegistrarBinRetornoPackingRequest extends FormRequest
             'origenes' => ['required', 'array', 'min:1', 'max:20'],
             'origenes.*.lote_materia_prima_id' => ['required', 'uuid', 'exists:lotes_materia_prima,id'],
             'origenes.*.numero_orden' => ['required', 'string', 'max:80'],
-            'origenes.*.linea_proceso' => ['required', 'string', 'max:50'],
+            'origenes.*.linea_proceso' => ['required', 'string', 'max:60'],
             'origenes.*.turno' => ['required', 'string', Rule::in(['A', 'B'])],
             'origenes.*.kilos_aportados' => ['required', 'numeric', 'min:0.001', 'max:999999999.999'],
         ];

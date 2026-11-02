@@ -43,7 +43,7 @@ class ModificarBinRetornoPackingRequest extends FormRequest
                 Rule::exists('lotes_materia_prima', 'id'),
             ],
             'origenes.*.numero_orden' => ['nullable', 'string', 'max:100'],
-            'origenes.*.linea_proceso' => ['nullable', 'string', 'max:100'],
+            'origenes.*.linea_proceso' => ['nullable', 'string', 'max:60'],
             'origenes.*.turno' => ['nullable', 'string', 'max:20'],
             'origenes.*.kilos_aportados' => [
                 'required',

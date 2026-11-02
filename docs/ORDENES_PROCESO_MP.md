@@ -137,7 +137,7 @@ El camarero entrega contra la versión vigente de una orden abierta. Línea y n�
 | --- | --- |
 | Lote en la versión vigente | Se descuenta de su reserva. La primera entrega pasa la orden a `en_proceso`; sin pendientes termina `completa`. |
 | Más bins que los pendientes de la fila | 422 en `cantidad_envases`: el digitador debe publicar otra versión. |
-| La tablet tenía una versión anterior | Sigue si la fila del lote no cambió; si cambió o el lote salió, 409 con la versión nueva. |
+| La tablet tenía una versión anterior | Sigue si no cambió lo que define la entrega del lote: bins, totes, proceso, embalaje, kilos por caja y mercado. Si cambió alguno o el lote salió, 409. El horario estimado, la secuencia y las copias de maestros no bloquean: se corren solos al cambiar otro lote. La versión es obligatoria y debe pertenecer a la orden seleccionada. |
 | Lote fuera de la orden | Exige `autorizacion.user_id` de un supervisor de frío o administrador y su PIN operacional. Entra a la orden como versión nueva de origen `fuera_de_orden`, creada por el supervisor, con los bins del viaje. La entrega queda con `fuera_de_orden` y `autorizado_por_user_id`. |
 | Orden terminada o cancelada | 409. |
 | Anular una entrega | Devuelve los bins a la reserva. Una orden terminada completa se reabre; en una cancelada lo anulado vuelve al lote, no a la orden. |
@@ -147,6 +147,8 @@ El PIN se verifica antes de abrir la transacción, para que los intentos fallido
 ### Transición
 
 `FRUTA_PROCESO_EXIGE_ORDEN` (`config/materia_prima.php`) queda en `false`: la APK anterior sigue enviando línea, turno y número de orden como texto. Al pasarlo a `true`, un viaje sin `orden_proceso_mp_id` responde 422. Se activa cuando todas las tablets de cámara tienen la APK con órdenes.
+
+Durante la transición, un viaje sin orden solo consume bins libres después de descontar las reservas pendientes de todas las órdenes. Si la cantidad requiere bins reservados, debe elegirse la orden correspondiente. El control se realiza en servidor con el lote bloqueado, también frente a publicaciones simultáneas.
 
 ### Bloqueos
 
@@ -170,6 +172,10 @@ POST /api/materia-prima/fruta-proceso/lotes/{lote}/entregas
 
 La tablet suma la pestaña Órdenes: elige línea, ve los lotes en secuencia con lo entregado, lo pendiente, la cámara y el horario estimado, y entrega desde la fila (el siguiente lote queda destacado). Al registrar un viaje elige En orden, Fuera de orden (orden de la línea, supervisor y PIN) o Sin orden mientras no se exija. La oficina de Fruta a proceso permite elegir la orden del lote al registrar un viaje.
 
+Al abrir una fila desde Órdenes, la tablet vuelve a consultar el lote. Si esa orden ya no tiene pendientes, pide actualizar y elegir otra vez; nunca selecciona automáticamente otra orden del mismo lote. Los lotes con salida directa de Hidrocooler se muestran con cámara nula.
+
+Los nombres de línea admiten 60 caracteres tanto en el catálogo como en entregas y orígenes de retornos por bin. La migración `2026_11_02_140000` amplía las columnas existentes sin truncar nombres; al revertirla no se reducen, para no cortar nombres ya registrados.
+
 ## PRE-SIF y programado contra real
 
 `GET /api/materia-prima/ordenes-proceso/{orden}/pre-sif?formato=xlsx|pdf` genera la PRE-SIF desde la versión vigente, con el nombre `pre-sif_op-000001_v1_t1_l1_02-11-26`.
@@ -179,6 +185,6 @@ La tablet suma la pestaña Órdenes: elige línea, ve los lotes en secuencia con
 - **Tiempo estimado**: kilos ÷ rendimiento, sin colación, en h:mm como la planilla. El horario de término sí incluye la colación.
 - **Colación**: va como fila separadora después del último lote que termina antes de salir.
 - **Total**: bins, totes y kilos.
-- **Formatos**: el Excel se arma como OOXML propio, con filas que se ajustan al texto. El PDF es A4 horizontal con el logo de planta y achica la letra antes de cortar una palabra.
+- **Formatos**: el Excel se arma como OOXML propio, con filas que se ajustan al texto. El PDF es A4 horizontal con el logo de planta: ajusta la altura de cada fila al texto completo y pagina por altura disponible, repitiendo el encabezado sin recortar campos ni el total.
 
 El detalle de la orden suma por lote los viajes, el primer y el último viaje en hora de planta y el desfase en minutos del primer viaje contra el inicio estimado (positivo: empezó tarde). La oficina lo muestra en las columnas Real y Desfase, junto a programado, entregado y pendiente, y descarga la PRE-SIF en Excel o PDF.

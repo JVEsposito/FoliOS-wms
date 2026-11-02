@@ -15,7 +15,9 @@ class PreSifPdf
 
     private const ALTO_FILA = 18;
 
-    private const FILAS_POR_PAGINA = 24;
+    private const TECHO_TABLA = 516;
+
+    private const PIE_TABLA = 36;
 
     public function __construct(private readonly DocumentoPdfPlanta $pdf) {}
 
@@ -37,10 +39,29 @@ class PreSifPdf
         [$total[2], $total[11], $total[12], $total[13]] = ['TOTAL', $t['bins'], $t['totes'], $t['kilos']];
         $lineas[] = ['valores' => $total, 'negrita' => true];
 
-        $paginas = array_chunk($lineas, self::FILAS_POR_PAGINA);
+        $cabecera = $this->prepararFila(PlanillaPreSif::COLUMNAS, 5.5);
+        $disponible = self::TECHO_TABLA - $cabecera['alto'] - self::PIE_TABLA;
+        $paginas = [];
+        $pagina = [];
+        $ocupado = 0;
+        foreach ($lineas as $linea) {
+            $linea = isset($linea['separador'])
+                ? [...$linea, 'alto' => self::ALTO_FILA]
+                : [...$linea, ...$this->prepararFila($linea['valores'], 6.5)];
+            if ($pagina !== [] && $ocupado + $linea['alto'] > $disponible) {
+                $paginas[] = $pagina;
+                $pagina = [];
+                $ocupado = 0;
+            }
+            $pagina[] = $linea;
+            $ocupado += $linea['alto'];
+        }
+        if ($pagina !== []) {
+            $paginas[] = $pagina;
+        }
 
         return $this->pdf->generar(array_map(
-            fn (array $pagina, int $indice): string => $this->pagina($planilla['encabezado'], $pagina, $indice + 1, count($paginas)),
+            fn (array $pagina, int $indice): string => $this->pagina($planilla['encabezado'], $cabecera, $pagina, $indice + 1, count($paginas)),
             $paginas,
             array_keys($paginas),
         ), [self::ANCHO, self::ALTO]);
@@ -48,9 +69,10 @@ class PreSifPdf
 
     /**
      * @param  array<string, string>  $e
+     * @param  array<string, mixed>  $cabecera
      * @param  array<int, array<string, mixed>>  $lineas
      */
-    private function pagina(array $e, array $lineas, int $numero, int $total): string
+    private function pagina(array $e, array $cabecera, array $lineas, int $numero, int $total): string
     {
         $ancho = self::ANCHO - 2 * self::MARGEN;
         $c = "0 g 0 G 0.4 w\n";
@@ -59,17 +81,15 @@ class PreSifPdf
         $c .= $this->pdf->texto(150, 544, 8.5, "Orden {$e['orden']} · Fecha {$e['fecha']} · Versión {$e['version']} · Turno {$e['turno']} · Línea {$e['linea']}");
         $c .= $this->pdf->texto(150, 532, 8.5, 'CSP '.($e['csp'] ?: '—')." · Horario inicio {$e['horario_inicio']} · Vuelta de colación ".($e['vuelta_colacion'] ?: '—'));
 
-        $escala = $ancho / array_sum(PlanillaPreSif::ANCHOS);
-        $y = 488;
+        $y = self::TECHO_TABLA - $cabecera['alto'];
         $x = self::MARGEN;
-        foreach (PlanillaPreSif::COLUMNAS as $i => $titulo) {
-            $w = PlanillaPreSif::ANCHOS[$i] * $escala;
-            $c .= sprintf("%.2F %.2F %.2F 28 re S\n", $x, $y, $w);
-            $c .= $this->celda($x, $y, $w, 28, $titulo, 5.5, true);
-            $x += $w;
+        foreach ($cabecera['celdas'] as $celda) {
+            $c .= sprintf("%.2F %.2F %.2F %.2F re S\n", $x, $y, $celda['ancho'], $cabecera['alto']);
+            $c .= $this->celda($x, $y, $cabecera['alto'], $celda, true);
+            $x += $celda['ancho'];
         }
         foreach ($lineas as $linea) {
-            $y -= self::ALTO_FILA;
+            $y -= $linea['alto'];
             if (isset($linea['separador'])) {
                 $c .= sprintf("0.9 g %.2F %.2F %.2F %d re f 0 g\n", self::MARGEN, $y, $ancho, self::ALTO_FILA);
                 $c .= sprintf("%.2F %.2F %.2F %d re S\n", self::MARGEN, $y, $ancho, self::ALTO_FILA);
@@ -78,11 +98,10 @@ class PreSifPdf
                 continue;
             }
             $x = self::MARGEN;
-            foreach ($linea['valores'] as $i => $valor) {
-                $w = PlanillaPreSif::ANCHOS[$i] * $escala;
-                $c .= sprintf("%.2F %.2F %.2F %d re S\n", $x, $y, $w, self::ALTO_FILA);
-                $c .= $this->celda($x, $y, $w, self::ALTO_FILA, $this->texto($valor), 6.5, $linea['negrita'] ?? false);
-                $x += $w;
+            foreach ($linea['celdas'] as $celda) {
+                $c .= sprintf("%.2F %.2F %.2F %.2F re S\n", $x, $y, $celda['ancho'], $linea['alto']);
+                $c .= $this->celda($x, $y, $linea['alto'], $celda, $linea['negrita'] ?? false);
+                $x += $celda['ancho'];
             }
         }
         $c .= $this->pdf->texto(self::ANCHO - 90, 14, 7, "Hoja {$numero} de {$total}");
@@ -102,20 +121,41 @@ class PreSifPdf
         return (string) $valor;
     }
 
-    private function celda(float $x, float $y, float $ancho, float $alto, string $valor, float $tamano, bool $negrita = false): string
+    /**
+     * @param  array<int, mixed>  $valores
+     * @return array{alto: float, celdas: array<int, array{ancho: float, tamano: float, lineas: array<int, string>}>}
+     */
+    private function prepararFila(array $valores, float $tamano): array
     {
-        $palabras = count(preg_split('/\s+/u', trim($valor)) ?: ['']);
-        do {
-            $lineas = $this->pdf->envolver($valor, $ancho - 4, $tamano);
-            // Achica antes de cortar una palabra (una comuna o una fecha) en dos líneas.
-            if (count($lineas) * ($tamano + 1) <= $alto - 2 && count($lineas) <= $palabras) {
-                break;
-            }
-            $tamano -= 0.25;
-        } while ($tamano > 4.5);
-        $max = max(1, (int) floor(($alto - 2) / ($tamano + 1)));
+        $escala = (self::ANCHO - 2 * self::MARGEN) / array_sum(PlanillaPreSif::ANCHOS);
+        $alto = (float) self::ALTO_FILA;
+        $celdas = [];
+        foreach ($valores as $indice => $valor) {
+            $texto = $this->texto($valor);
+            $ancho = PlanillaPreSif::ANCHOS[$indice] * $escala;
+            $fuente = $tamano;
+            $palabras = count(preg_split('/\s+/u', trim($texto)) ?: ['']);
+            do {
+                $lineas = $this->pdf->envolver($texto, $ancho - 4, $fuente);
+                // Primero reduce palabras largas; después crece la fila, sin descartar texto.
+                if (count($lineas) <= $palabras || $fuente <= 4.5) {
+                    break;
+                }
+                $fuente -= 0.25;
+            } while (true);
+            $alto = max($alto, count($lineas) * ($fuente + 1) + 4);
+            $celdas[] = ['ancho' => $ancho, 'tamano' => $fuente, 'lineas' => $lineas];
+        }
+
+        return ['alto' => $alto, 'celdas' => $celdas];
+    }
+
+    /** @param array{ancho: float, tamano: float, lineas: array<int, string>} $celda */
+    private function celda(float $x, float $y, float $alto, array $celda, bool $negrita = false): string
+    {
+        $tamano = $celda['tamano'];
         $c = '';
-        foreach (array_slice($lineas, 0, $max) as $i => $linea) {
+        foreach ($celda['lineas'] as $i => $linea) {
             $c .= $this->pdf->texto($x + 2, $y + $alto - $tamano - 1.5 - $i * ($tamano + 1), $tamano, $linea, $negrita);
         }
 

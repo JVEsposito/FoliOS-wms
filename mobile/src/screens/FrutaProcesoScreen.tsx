@@ -180,7 +180,11 @@ export function FrutaProcesoScreen({ auth, baseUrl, onLogout }: Props) {
     return { id: Crypto.randomUUID(), typeId: '', name: '', bins: '', kilos: '' };
   }
   function openDelivery(lot: ProcessLot, orderId?: string) {
-    const programmed = lot.ordenes.find((order) => order.id === orderId) ?? lot.ordenes[0];
+    const programmed = orderId ? lot.ordenes.find((order) => order.id === orderId) : lot.ordenes[0];
+    if (orderId && !programmed) {
+      setError('La orden seleccionada ya no tiene bins pendientes de este lote. Actualiza las órdenes y vuelve a elegir.');
+      return;
+    }
     setAction({ type: 'deliver', lot }); setOperationId(Crypto.randomUUID());
     setDeliveryMode(programmed ? 'orden' : 'fuera');
     setDeliveryOrderId(programmed?.id ?? ''); setDeliveryVersionId(programmed?.version_id ?? null);
@@ -191,7 +195,7 @@ export function FrutaProcesoScreen({ auth, baseUrl, onLogout }: Props) {
   async function openDeliveryFromOrder(order: ProcessOrder, row: ProcessOrderRow) {
     setError('');
     try {
-      const lot = lots.find((item) => item.id === row.lote_materia_prima_id) ?? await getProcessLot(baseUrl, auth.token, row.lote_materia_prima_id);
+      const lot = await getProcessLot(baseUrl, auth.token, row.lote_materia_prima_id);
       openDelivery(lot, order.id);
     } catch (reason) { setError(errorMessage(reason)); }
   }
