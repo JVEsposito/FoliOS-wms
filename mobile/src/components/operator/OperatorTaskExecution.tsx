@@ -17,6 +17,7 @@ import {
 } from '../../domain/operatorManeuver';
 import { operatorTheme as o } from '../../theme/operatorTheme';
 import { operatorTaskPurpose } from '../../domain/operatorTaskPurpose';
+import { useLeaseSecondsRemaining } from '../../hooks/useLeaseCountdown';
 import type { OperatorExceptionKind } from '../../domain/operatorManeuverException';
 import type { StartConfirmation } from '../../services/operationalTasksApi';
 import { OperatorExceptionReport } from './OperatorExceptionReport';
@@ -47,7 +48,8 @@ type Props = {
   /** Abre la confirmación de folio y PIN; el retiro se envía desde onConfirmStart. */
   onStart: () => void;
   operatorName: string;
-  secondsRemaining: number | null;
+  /** Vencimiento de la reserva tomada y sin iniciar; null si no corre cuenta regresiva. */
+  leaseExpiresAt: string | null;
   task: OperationalTask;
 };
 
@@ -69,7 +71,7 @@ export function OperatorTaskExecution({
   onRelease,
   onStart,
   operatorName,
-  secondsRemaining,
+  leaseExpiresAt,
   task,
 }: Props) {
   const { width } = useWindowDimensions();
@@ -351,7 +353,7 @@ export function OperatorTaskExecution({
         <Pressable disabled={busy} onPress={onBack} style={styles.footerBack}>
           <Text style={styles.footerBackText}>‹ VOLVER A MANIOBRAS</Text>
         </Pressable>
-        <CommitmentBadge seconds={secondsRemaining} task={task} />
+        <CommitmentBadge expiresAt={leaseExpiresAt} task={task} />
       </View>
     </ScrollView>
   );
@@ -515,7 +517,9 @@ function CustodyPanel({ task }: { task: OperationalTask }) {
   );
 }
 
-function CommitmentBadge({ task, seconds }: { task: OperationalTask; seconds: number | null }) {
+function CommitmentBadge({ task, expiresAt }: { task: OperationalTask; expiresAt: string | null }) {
+  // Solo esta insignia se vuelve a dibujar con cada segundo de la cuenta regresiva.
+  const seconds = useLeaseSecondsRemaining(expiresAt);
   if (task.estado === 'en_proceso') {
     return <OperatorStatusBadge label="DESTINO FIJO · PUNTO DE NO RETORNO" tone="critical" />;
   }
