@@ -34,6 +34,7 @@ use App\Models\ReingresoFolioCamara;
 use App\Models\ReservaCargaFolio;
 use App\Models\User;
 use App\Services\Autorizacion\AlcanceOperacionalUsuario;
+use App\Services\InspeccionSag\ServicioExistenciasSag;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\Transiciones\ComandoTransicionOperacional;
 use App\Services\Transiciones\MotorTransicionesOperacionales;
@@ -1000,12 +1001,12 @@ class ServicioCarga
             $cargaBloqueada = $this->bloquearCarga($carga);
             $this->asegurarVersion($cargaBloqueada, $versionEsperada);
 
-            if (in_array($cargaBloqueada->estado, [EstadoCarga::Cerrada, EstadoCarga::Cancelada], true)) {
-                throw new DomainException(
-                    $cargaBloqueada->estado === EstadoCarga::Cerrada
-                        ? 'La carga ya está cerrada: si el camión volvió a planta, registra el retorno.'
-                        : 'La carga ya está cancelada.',
-                );
+            if (in_array($cargaBloqueada->estado, EstadoCarga::terminales(), true)) {
+                throw new DomainException(match ($cargaBloqueada->estado) {
+                    EstadoCarga::Cerrada => 'La carga ya está cerrada: si el camión volvió a planta, registra el retorno.',
+                    EstadoCarga::Cancelada => 'La carga ya está cancelada.',
+                    default => 'La carga ya retornó a planta y no puede cancelarse.',
+                });
             }
             $motivoNormalizado = $this->textoOpcional($motivo);
             if ($cargaBloqueada->estado !== EstadoCarga::Borrador && $motivoNormalizado === null) {
@@ -1092,6 +1093,140 @@ class ServicioCarga
             ],
             $accion,
             $carga,
+        );
+    }
+
+    /**
+     * El camión volvió a planta después del cierre: total (todos los pallets
+     * despachados) o parcial (los indicados). Los folios vuelven a la temporada
+     * con su mismo número, sin ubicación y pendientes de reingreso a cámara.
+     *
+     * @param  array<int, string>|null  $folioIds  null = todos los despachados
+     */
+    public function registrarRetorno(
+        Carga $carga,
+        ?array $folioIds,
+        User $usuario,
+        int $versionEsperada,
+        string $motivo,
+        ?DateTimeInterface $llegadaAt = null,
+    ): Carga {
+        $this->asegurarGestionAutorizada($usuario);
+        $llegada = $llegadaAt ? CarbonImmutable::instance($llegadaAt) : CarbonImmutable::now();
+        if ($llegada->isFuture()) {
+            throw new DomainException('La hora de llegada a planta no puede estar en el futuro.');
+        }
+        $seleccion = $folioIds === null ? null : array_values(array_unique($folioIds));
+        if ($seleccion !== null && $seleccion === []) {
+            throw new DomainException('Indica al menos un pallet que volvió a planta.');
+        }
+
+        $accion = function () use ($carga, $seleccion, $usuario, $versionEsperada, $motivo, $llegada): Carga {
+            $cargaBloqueada = $this->bloquearCarga($carga);
+            $this->asegurarVersion($cargaBloqueada, $versionEsperada);
+            if (! $cargaBloqueada->estado->admiteRetorno()) {
+                throw new DomainException('Solo una carga cerrada (o con retorno parcial) puede registrar un retorno a planta.');
+            }
+            $motivoNormalizado = $this->textoOpcional($motivo);
+            if ($motivoNormalizado === null || mb_strlen($motivoNormalizado) < 3) {
+                throw new DomainException('Indica el motivo del retorno a planta.');
+            }
+            if ($cargaBloqueada->cerrada_at && $llegada->lt($cargaBloqueada->cerrada_at)) {
+                throw new DomainException('La llegada a planta no puede ser anterior a la salida del camión.');
+            }
+
+            $despachadas = CargaFolio::query()
+                ->where('carga_id', $cargaBloqueada->id)
+                ->where('estado', EstadoCargaFolio::Despachado->value)
+                ->orderBy('folio_id')
+                ->lockForUpdate()
+                ->get();
+            $retornan = $seleccion === null
+                ? $despachadas
+                : $despachadas->whereIn('folio_id', $seleccion)->values();
+            if ($seleccion !== null && $retornan->count() !== count($seleccion)) {
+                throw new DomainException('Uno o más pallets indicados no salieron despachados en esta carga o ya retornaron.');
+            }
+            if ($retornan->isEmpty()) {
+                throw new DomainException('La carga no tiene pallets despachados por retornar.');
+            }
+
+            $folios = Folio::query()
+                ->whereIn('id', $retornan->pluck('folio_id'))
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('id');
+            foreach ($retornan as $asignacion) {
+                $folio = $folios->get($asignacion->folio_id);
+                if (! $folio || $folio->temporada_id !== $cargaBloqueada->temporada_id) {
+                    throw new DomainException('El pallet no pertenece a la temporada de la carga.');
+                }
+                if ($folio->activo || $folio->estado_operacional !== EstadoOperacionalFolio::Despachado) {
+                    throw new DomainException("El folio {$folio->numero_folio} ya no figura como despachado.");
+                }
+                $folio->update([
+                    'activo' => true,
+                    'estado_operacional' => EstadoOperacionalFolio::Disponible,
+                ]);
+                $asignacion->update([
+                    'estado' => EstadoCargaFolio::Retornado,
+                    'retornado_por_user_id' => $usuario->id,
+                    'retornado_at' => $llegada,
+                ]);
+                app(ServicioReingresoCamara::class)->registrar(
+                    $folio,
+                    $cargaBloqueada,
+                    $asignacion->setRelation('folio', $folio),
+                    OrigenReingresoCamara::RetornoCarga,
+                    $motivoNormalizado,
+                    $usuario,
+                    EstadoCargaFolio::Despachado,
+                );
+                $this->registrarEvento($cargaBloqueada, TipoEventoCarga::FolioDesasignado, $usuario, $folio, [
+                    'causa' => 'retorno_carga',
+                    'motivo' => $motivoNormalizado,
+                    'llegada_at' => $llegada->toAtomString(),
+                ]);
+            }
+
+            $parcial = $retornan->count() < $despachadas->count();
+            $cargaBloqueada->update([
+                'estado' => $parcial ? EstadoCarga::RetornoParcial : EstadoCarga::Retornada,
+                'motivo_retorno' => $cargaBloqueada->motivo_retorno
+                    ? $cargaBloqueada->motivo_retorno.' · '.$motivoNormalizado
+                    : $motivoNormalizado,
+                'retornada_por_user_id' => $usuario->id,
+                'retornada_at' => $llegada,
+                'version' => $cargaBloqueada->version + 1,
+                'actualizada_por_user_id' => $usuario->id,
+            ]);
+            $this->registrarEvento($cargaBloqueada, TipoEventoCarga::Retornada, $usuario, datos: [
+                'motivo' => $motivoNormalizado,
+                'parcial' => $parcial,
+                'llegada_at' => $llegada->toAtomString(),
+                'folios' => $retornan->map(fn (CargaFolio $asignacion): string => $folios->get($asignacion->folio_id)->numero_folio)->values()->all(),
+                'siguen_despachados' => $despachadas->count() - $retornan->count(),
+            ]);
+            // El saldo SAG vuelve a contar los pallets que regresaron a planta.
+            app(ServicioExistenciasSag::class)->sincronizar($retornan->pluck('folio_id')->all(), 'retorno_despacho', $cargaBloqueada->codigo);
+
+            return $cargaBloqueada->refresh();
+        };
+
+        return $this->transicionar(
+            'registrar_retorno',
+            $usuario,
+            [
+                'carga_id' => $carga->id,
+                'folios' => $seleccion,
+                'version_esperada' => $versionEsperada,
+                'motivo' => $motivo,
+                'llegada_at' => $llegada->toAtomString(),
+            ],
+            $accion,
+            $carga,
+            ocurridoAt: $llegada,
         );
     }
 
@@ -1268,8 +1403,8 @@ class ServicioCarga
 
     private function asegurarAjustable(Carga $carga): void
     {
-        if (in_array($carga->estado, [EstadoCarga::Cerrada, EstadoCarga::Cancelada], true)) {
-            throw new DomainException('La carga ya está cerrada o cancelada y no admite cambios de pallets.');
+        if (in_array($carga->estado, EstadoCarga::terminales(), true)) {
+            throw new DomainException('La carga ya está cerrada, cancelada o retornada y no admite cambios de pallets.');
         }
     }
 

@@ -41,10 +41,10 @@ final class ReglaReservaCarga implements ReglaIntegridadOperacional
             EstadoCargaFolio::Descartado->value,
             EstadoCargaFolio::Reemplazado->value,
         ];
-        $estadosCargaTerminales = [
-            EstadoCarga::Cerrada->value,
-            EstadoCarga::Cancelada->value,
-        ];
+        $estadosCargaTerminales = array_map(
+            fn (EstadoCarga $estado): string => $estado->value,
+            EstadoCarga::terminales(),
+        );
 
         return DB::table('reservas_carga_folio as reserva')
             ->join('carga_folios as asignacion', 'asignacion.id', '=', 'reserva.carga_folio_id')

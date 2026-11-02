@@ -29,6 +29,8 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
     'finalizado_por_user_id',
     'finalizado_at',
     'motivo_finalizacion',
+    'retornado_por_user_id',
+    'retornado_at',
 ])]
 class CargaFolio extends Model implements PerteneceATemporada
 {
@@ -103,6 +105,7 @@ class CargaFolio extends Model implements PerteneceATemporada
             'asignado_at' => 'datetime',
             'enviado_anden_at' => 'datetime',
             'cargado_at' => 'datetime',
+            'retornado_at' => 'datetime',
             'finalizado_at' => 'datetime',
         ];
     }

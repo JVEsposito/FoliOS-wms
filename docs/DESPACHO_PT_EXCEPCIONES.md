@@ -105,6 +105,28 @@ andén, motivo, quién lo registró y cuándo.
   estado de la tarea) y Existencias de PT («Pendiente de reingreso a cámara»).
   Mientras está pendiente no cuenta como disponible para despacho.
 
+## 4. Retorno de una carga cerrada
+
+Cuando el camión o el contenedor vuelve a planta después del cierre
+(`POST /api/cargas/{carga}/retorno`, permiso `gestionar-cargas`):
+
+- **Total** (sin lista de folios): todos los pallets despachados vuelven; la
+  carga queda `retornada`.
+- **Parcial** (`folios`: los que volvieron): la carga queda `retorno_parcial`
+  y lo demás sigue `despachado`. Admite retornos sucesivos hasta completar.
+- Cada pallet retornado: la asignación pasa a `retornado`, el folio vuelve a
+  `activo` y `disponible` **con el mismo número**, sin ubicación, y queda
+  pendiente de reingreso (origen `retorno_carga`) con su tarea guiada.
+- Exige motivo y hora de llegada (no futura ni anterior a la salida). Solo
+  dentro de la temporada activa: el registro de otra temporada responde
+  `temporada_no_activa`.
+- Recalcula el saldo SAG de los pallets (`retorno_despacho`) para que vuelvan
+  a contar en las existencias inspeccionadas.
+- El reporte «Despachos PT» conserva lo que sí salió en un retorno parcial y
+  omite lo que volvió.
+- Los estados `retornada` y `retorno_parcial` son terminales para el cierre de
+  temporada y las reglas de integridad, igual que `cerrada`.
+
 ## Operación ahora · pestaña Despacho
 
 Una fila por carga publicada con dos barras:
