@@ -35,7 +35,7 @@ el despliegue no depende de ejecutar un generador en el dispositivo.
 | Acción principal | Azul `#145DA0`, una acción principal por decisión. |
 | Área de trabajo | Gris frío `#F3F5F7`, paneles blancos y bordes definidos. |
 | Texto | `#182B3A`; texto secundario `#536777`. |
-| Tipografía | Arial Narrow / Roboto Condensed en Oficina; Segoe UI / sistema como respaldo. Sin descarga de fuentes. |
+| Tipografía | Archivo (variable, con eje de ancho para títulos y cifras) y Azeret Mono para identificadores, autoalojadas: la planta no descarga fuentes de internet. Detalle en `docs/diseno/folios-v2/README.md`. |
 | Identificadores | Monoespaciados; conservar el código completo y permitir salto de línea. |
 | Tamaños de lectura | Cuerpo 16, secundario 14, encabezados 20/28; 12 solo metadatos. |
 | Espaciado | 4, 8, 12, 16, 24, 32, 48. |
@@ -231,3 +231,29 @@ normaliza únicamente superficies bajo `.office-app`. Sus reglas de compatibilid
 pueden elevar especificidad para corregir los temas heredados, pero no alcanzan
 Labores ni la aplicación móvil. No renombrar IDs usados por JavaScript durante un
 cambio visual.
+
+## Regresión visual de Oficina
+
+`npm run ui:capturas -- <carpeta>` fotografía todas las vistas estáticas de Oficina
+(rutas `Route::view`) en los temas claro y oscuro, con sesión simulada y sin ejecutar
+los módulos de Vite. El resultado es determinista: dos capturas del mismo código coinciden
+píxel a píxel. Requiere `npm run build` previo y Chromium de Playwright.
+
+Para un cambio de estilos se captura antes y después, y se compara:
+
+```bash
+npm run build && npm run ui:capturas -- storage/app/ui/capturas/antes
+# aplicar el cambio
+npm run build && npm run ui:capturas -- storage/app/ui/capturas/despues
+npm run ui:comparar -- storage/app/ui/capturas/antes storage/app/ui/capturas/despues storage/app/ui/capturas/diferencias
+```
+
+Un cambio que declara no tener efecto visual debe terminar en «0 de N capturas con
+diferencias». Un cambio visual intencional adjunta las capturas afectadas para revisarlas.
+La herramienta no ve filas, diálogos ni estados que dibuja JavaScript con datos del
+servidor; esos se revisan con `npm run test:browser` y en el servidor de pruebas.
+
+Solo existen dos temas de Oficina, `light-professional` (predeterminado) y
+`dark-industrial`, los que acepta `normalizeOfficeTheme`. Cualquier otro valor guardado
+se normaliza al predeterminado, así que la hoja no define temas adicionales.
+

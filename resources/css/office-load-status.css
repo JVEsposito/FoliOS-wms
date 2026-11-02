@@ -1,4 +1,4 @@
-@import './estiba-tokens.css';
+/* Tokens .estiba-ui: los aporta office-shell.css, que toda oficina carga después de esta hoja. */
 
 .load-status-workspace {
     min-height: calc(100vh - var(--office-header-height, 76px));

@@ -1,4 +1,4 @@
-@import './estiba-tokens.css';
+/* Tokens .estiba-ui: los aporta office-shell.css, que toda oficina carga después de esta hoja. */
 
 /* Prefrío: centro de control térmico, denso y legible en la paleta ESTIBA. */
 .prefrio-access-brand {
