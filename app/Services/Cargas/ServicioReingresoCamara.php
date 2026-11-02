@@ -113,15 +113,19 @@ class ServicioReingresoCamara
             return null;
         }
 
-        return DB::transaction(function () use ($reingresoId, $usuario): ?PlanOperacional {
-            $leido = ReingresoFolioCamara::query()->find($reingresoId);
-            if (! $leido) {
-                return null;
-            }
-            $folio = Folio::query()->lockForUpdate()->find($leido->folio_id);
+        // Leer la identidad antes de abrir la transacción evita fijar un snapshot
+        // anterior al trabajo que otro intento acaba de publicar mientras esperamos
+        // el bloqueo del folio (REPEATABLE READ de MySQL).
+        $folioId = ReingresoFolioCamara::query()->whereKey($reingresoId)->value('folio_id');
+        if (! $folioId) {
+            return null;
+        }
+
+        return DB::transaction(function () use ($reingresoId, $folioId, $usuario): ?PlanOperacional {
+            $folio = Folio::query()->lockForUpdate()->find($folioId);
             $reingreso = ReingresoFolioCamara::query()->with(['carga:id,codigo', 'anden:id,codigo', 'registradoPor:id,activo'])
                 ->lockForUpdate()->find($reingresoId);
-            if (! $folio || ! $reingreso || $reingreso->estado !== EstadoReingresoCamara::Pendiente) {
+            if (! $folio || ! $reingreso || $reingreso->folio_id !== $folioId || $reingreso->estado !== EstadoReingresoCamara::Pendiente) {
                 return null;
             }
             $temporada = app(ServicioTemporadaActiva::class)->buscar();
