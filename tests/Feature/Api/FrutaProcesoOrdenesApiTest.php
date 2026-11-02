@@ -88,7 +88,7 @@ class FrutaProcesoOrdenesApiTest extends TestCase
         $v3 = $this->publicarVersion($orden, [
             ['lote_materia_prima_id' => $segundo['id'], 'bins_programados' => 15],
             ['lote_materia_prima_id' => $primero['id'], 'bins_programados' => 10],
-        ], 2);
+        ], 2, confirmarReduccion: true);
         $this->actingAs(User::factory()->create(['rol' => RolUsuario::CamareroFrio]), 'sanctum');
         $this->postJson("/api/materia-prima/fruta-proceso/lotes/{$tercero['id']}/entregas", [
             ...$this->viaje($orden, 2), 'version_orden_proceso_mp_id' => $v3['versiones'][1]['id'],
@@ -336,13 +336,14 @@ class FrutaProcesoOrdenesApiTest extends TestCase
      * @param  array<int, array<string, mixed>>  $lotes
      * @return array<string, mixed>
      */
-    private function publicarVersion(array $orden, array $lotes, int $version = 1): array
+    private function publicarVersion(array $orden, array $lotes, int $version = 1, bool $confirmarReduccion = false): array
     {
         return $this->actingAs(User::factory()->create(['rol' => RolUsuario::DigitadorMateriaPrima]), 'sanctum')
             ->postJson("/api/materia-prima/ordenes-proceso/{$orden['id']}/versiones", [
                 'operacion_id' => (string) Str::uuid(),
                 'version' => $version,
                 'motivo_cambio' => 'Ajuste de programa',
+                'confirmar_reduccion' => $confirmarReduccion,
                 'hora_inicio' => '08:00',
                 'lotes' => $lotes,
             ])

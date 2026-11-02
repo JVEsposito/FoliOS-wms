@@ -9,6 +9,7 @@ use App\Enums\RolUsuario;
 use App\Enums\TipoEnvaseRomana;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\AnularEntregaFrutaProcesoRequest;
+use App\Http\Requests\CorregirEmbalajeEntregaMpRequest;
 use App\Http\Requests\RegistrarEntregaFrutaProcesoRequest;
 use App\Http\Resources\FrutaProcesoLoteResource;
 use App\Models\AsignacionCamaraLoteMateriaPrima;
@@ -20,6 +21,7 @@ use App\Models\SubloteRetornoPacking;
 use App\Models\User;
 use App\Services\Autorizacion\AlcanceOperacionalUsuario;
 use App\Services\MateriaPrima\OrdenesProceso\PresentadorOrdenProcesoMp;
+use App\Services\MateriaPrima\ServicioCorreccionEmbalajeEntregaMp;
 use App\Services\MateriaPrima\ServicioFrutaProceso;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Database\Eloquent\Builder;
@@ -31,6 +33,13 @@ use Symfony\Component\HttpFoundation\Response;
 
 class FrutaProcesoController extends Controller
 {
+    public function corregirEmbalaje(CorregirEmbalajeEntregaMpRequest $request, EntregaFrutaProceso $entregaFrutaProceso, ServicioCorreccionEmbalajeEntregaMp $servicio, PresentadorOrdenProcesoMp $presentador): JsonResponse
+    {
+        $entrega = $servicio->corregir($entregaFrutaProceso, $request->validated(), $request->user());
+
+        return response()->json(['data' => $presentador->entrega($entrega)]);
+    }
+
     public function resumen(): JsonResponse
     {
         Gate::authorize('consultar-fruta-proceso');
@@ -379,6 +388,7 @@ class FrutaProcesoController extends Controller
             'entregasProceso.anuladoPor',
             'entregasProceso.dispositivo',
             'entregasProceso.ordenProceso:id,codigo',
+            'entregasProceso.versionOrdenProceso.lotes',
             'entregasProceso.autorizadoPor:id,name',
             'entregasProceso.retornos.registradoPor',
             'entregasProceso.retornos.anuladoPor',

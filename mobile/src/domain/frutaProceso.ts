@@ -7,6 +7,9 @@ export type ProcessDelivery = {
   linea_proceso: string;
   turno: 'A' | 'B';
   numero_orden: string;
+  embalaje?: string | null;
+  kilos_por_caja?: number | null;
+  version_embalaje?: number;
   orden_proceso: { id: string; codigo: string | null; fuera_de_orden: boolean; autorizado_por: string | null } | null;
   observacion: string | null;
   entregado_por: { id: string; nombre: string } | null;

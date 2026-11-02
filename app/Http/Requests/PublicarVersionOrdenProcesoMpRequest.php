@@ -19,6 +19,7 @@ class PublicarVersionOrdenProcesoMpRequest extends FormRequest
         return [
             'operacion_id' => ['required', 'uuid'],
             'version' => ['required', 'integer', 'min:1'],
+            'confirmar_reduccion' => ['sometimes', 'boolean'],
             'motivo_cambio' => ['required', 'string', 'min:3', 'max:500'],
             ...CrearOrdenProcesoMpRequest::reglasPlan(),
         ];

@@ -127,6 +127,21 @@ Crear y versionar usan `operacion_id`: repetir la misma solicitud devuelve la mi
 
 ## Oficina
 
+El editor llama **Total programado** a la cantidad del lote e informa los bins
+entregados y pendientes. Cambiar su embalaje conserva ese total y aplica el nuevo
+embalaje a lo pendiente. Reducir el total o quitar un lote exige confirmar los
+bins que se liberan, además del motivo de la nueva versión; el servidor también
+exige `confirmar_reduccion=true` cuando corresponde.
+
+El detalle separa las **Entregas realizadas a packing**. Cada viaje conserva el
+embalaje y los kilos por caja con que se registró. Las entregas anteriores a esta
+mejora leen esos datos de su versión histórica, sin copiar el embalaje vigente.
+El digitador MP, supervisor de frío o administrador con acceso a órdenes puede
+usar **Corregir embalaje** sobre una entrega vigente, incluso si la orden terminó.
+Se exige motivo y versión conocida, se conserva el historial anterior/nuevo y el
+autor, y repetir el mismo intento no duplica la corrección. No modifica cantidades,
+reservas, saldos, retornos ni las versiones o PRE-SIF originales.
+
 `/oficina/materia-prima/ordenes-proceso` muestra las órdenes por línea con su avance, el detalle de la versión vigente con entregado y pendiente por lote, y el historial de versiones. El digitador arma la orden buscando lotes con bins libres, ordena la secuencia y completa N° de proceso, embalaje, kg por caja, mercado, comuna y provincia. Supervisión ajusta nombre, rendimiento y estado de cada línea.
 
 ## Fruta a proceso con orden

@@ -475,6 +475,14 @@ class ServicioOrdenProcesoMp
             ];
         }
 
+        $nuevosBins = collect($filas)->pluck('bins_programados', 'lote_materia_prima_id');
+        $liberados = (int) $propias->sum(fn (ReservaLoteOrdenProcesoMp $reserva): int => max(0, $reserva->bins_programados - (int) ($nuevosBins[$reserva->lote_materia_prima_id] ?? 0)));
+        if ($liberados > 0 && ! ($datos['confirmar_reduccion'] ?? false)) {
+            throw ValidationException::withMessages([
+                'confirmar_reduccion' => "Esta edición libera {$liberados} bins pendientes de la orden. Confirma la reducción de la programación; cambiar solo el embalaje no requiere reducir bins.",
+            ]);
+        }
+
         $horarios = $this->horarios->calcular(
             CarbonImmutable::parse($orden->fecha->toDateString()),
             (string) $datos['hora_inicio'],

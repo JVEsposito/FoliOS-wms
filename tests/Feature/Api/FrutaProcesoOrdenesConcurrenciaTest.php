@@ -71,6 +71,7 @@ class FrutaProcesoOrdenesConcurrenciaTest extends TestCase
                 'operacion_id' => (string) Str::uuid(),
                 'version' => 1,
                 'motivo_cambio' => 'Menos fruta para el turno',
+                'confirmar_reduccion' => true,
                 'hora_inicio' => '08:00',
                 'lotes' => [['lote_materia_prima_id' => $lote['id'], 'bins_programados' => 7]],
             ]],
