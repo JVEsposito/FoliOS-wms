@@ -1,5 +1,6 @@
 <?php
 
+use App\Services\Cargas\ServicioReingresoCamara;
 use App\Services\Integraciones\ServicioOperacionesIntegracion;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\Verificaciones\ServicioVerificacionesUbicacion;
@@ -32,6 +33,13 @@ Schedule::command('planificador:recalcular-arbitraje')
 Schedule::command('planificador:recuperar-proyecciones')
     ->everyMinute()
     ->withoutOverlapping(2);
+
+Artisan::command('cargas:recuperar-reingresos {--limite=100}', function (ServicioReingresoCamara $servicio): void {
+    $resultado = $servicio->recuperarPendientes((int) $this->option('limite'));
+    $this->info("Labores de reingreso programadas: {$resultado['programados']}; pendientes de revisión: {$resultado['bloqueados']}.");
+})->purpose('Recupera labores de reingreso pendientes sin duplicar retornos ni tareas activas.');
+
+Schedule::command('cargas:recuperar-reingresos')->everyMinute()->withoutOverlapping(2);
 
 Schedule::call(function (): void {
     if (! config('verificaciones.habilitada')) {

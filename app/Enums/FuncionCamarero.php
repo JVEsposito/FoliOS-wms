@@ -9,6 +9,7 @@ enum FuncionCamarero: string
     case SeparacionCargas = 'separacion_cargas';
     case PreparacionSag = 'preparacion_sag';
     case RecepcionRepa = 'recepcion_repa';
+    case ReingresoCamara = 'reingreso_camara';
     case ApoyoCamaras = 'apoyo_camaras';
 
     public function etiqueta(): string
@@ -17,6 +18,7 @@ enum FuncionCamarero: string
             self::RecepcionTuneles => 'Recibir túneles', self::RecepcionPacking => 'Recibir packing externo',
             self::SeparacionCargas => 'Separar cargas', self::PreparacionSag => 'Preparar lotes SAG',
             self::RecepcionRepa => 'Recibir repaletizaje', self::ApoyoCamaras => 'Apoyar operación de cámaras',
+            self::ReingresoCamara => 'Reingresar pallets a cámara',
         };
     }
 }

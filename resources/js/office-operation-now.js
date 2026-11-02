@@ -1244,7 +1244,12 @@ function reentryTask(item) {
     if (item.estado === 'ubicado') {
         return `${signal('Ubicado', 'success')}<span class="operation-now-subtext">${escapeHtml([item.ubicado_en, item.ubicado_por, item.ubicado_at && dateTime(item.ubicado_at, { timeOnly: true })].filter(Boolean).join(' · '))}</span>`;
     }
-    if (!item.tarea) return `${signal('Sin tarea guiada', 'warning')}<span class="operation-now-subtext">Ubicación manual desde la tablet</span>`;
+    if (!item.tarea || ['completada', 'cancelada'].includes(item.tarea.estado)) {
+        const status = item.programacion;
+        const button = status?.puede_programar && can('puede_gestionar_cargas')
+            ? `<button type="button" class="operation-now-pin-button" data-program-reentry="${escapeHtml(item.id)}">Programar labor</button>` : '';
+        return `${signal('Pendiente de labor', 'warning')}<span class="operation-now-subtext">${escapeHtml(status?.motivo || 'Revisa la programación del reingreso.')}</span>${button}`;
+    }
     return `${signal(REENTRY_TASK_STATES[item.tarea.estado] || humanize(item.tarea.estado), item.tarea.estado === 'pendiente' ? 'warning' : 'info')}<span class="operation-now-subtext">${escapeHtml(item.tarea.responsable || 'Sin responsable')}</span>`;
 }
 
@@ -1268,6 +1273,22 @@ function renderReentries(dispatch = {}) {
         <td>${reentryTask(item)}</td>
     </tr>`).join('');
 }
+
+elements.reentryRows.addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-program-reentry]');
+    if (!button || button.disabled || !can('puede_gestionar_cargas')) return;
+    button.disabled = true;
+    try {
+        const { data } = await api(`/api/cargas/reingresos/${encodeURIComponent(button.dataset.programReentry)}/programar`, { method: 'POST' });
+        toast(data.programacion?.estado === 'programada' ? 'Labor de reingreso disponible en Labores.' : data.programacion?.motivo || 'Revisa el estado de la labor.');
+        await load({ silent: true });
+    } catch (error) {
+        toast(error.message, true);
+        await load({ silent: true });
+    } finally {
+        button.disabled = false;
+    }
+});
 
 function incidentContext(incident) {
     if (incident.origen === 'recepcion_embalada') {

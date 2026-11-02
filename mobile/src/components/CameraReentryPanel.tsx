@@ -36,7 +36,7 @@ export function CameraReentryPanel({ reentries, disabled, onRegisterTemperature 
     <View style={styles.panel}>
       <Text style={styles.eyebrow}>REINGRESO A CÁMARA</Text>
       <Text style={styles.title}>{pending.length} {pending.length === 1 ? 'pallet vuelve' : 'pallets vuelven'} a cámara</Text>
-      <Text style={styles.subtitle}>La tarea con destino calculado está en Labores. El folio no cambia.</Text>
+      <Text style={styles.subtitle}>Las tareas listas aparecen en Labores como Reingreso a cámara. El folio no cambia.</Text>
       <View style={styles.list}>
         {pending.map((reentry) => (
           <View key={reentry.id} style={styles.row}>
@@ -45,6 +45,7 @@ export function CameraReentryPanel({ reentries, disabled, onRegisterTemperature 
               <Text style={styles.meta}>
                 {[reentry.origen_etiqueta, reentry.carga?.codigo, reentry.anden ? `andén ${reentry.anden}` : null].filter(Boolean).join(' · ')}
               </Text>
+              {reentry.programacion?.motivo ? <Text style={styles.meta}>{reentry.programacion.motivo}</Text> : null}
               <Text style={styles.meta}>
                 {reentry.temperatura_pulpa === null
                   ? 'Temperatura de pulpa sin registrar'

@@ -80,6 +80,18 @@ class LaboresTurnoTest extends TestCase
         $this->assertDatabaseCount('turnos_planificador', 1);
     }
 
+    public function test_supervisor_puede_priorizar_reingresos_y_asignar_las_otras_seis_funciones_como_apoyo(): void
+    {
+        Sanctum::actingAs($this->supervisor);
+        $datos = $this->datos();
+        $datos['asignaciones'][0]['funcion_principal'] = 'reingreso_camara';
+        $datos['asignaciones'][0]['funciones_apoyo'] = ['recepcion_tuneles', 'recepcion_packing', 'separacion_cargas', 'preparacion_sag', 'recepcion_repa', 'apoyo_camaras'];
+        $this->postJson('/api/labores-turno', $datos)->assertOk();
+        $this->assertSame('reingreso_camara', FuncionCamareroTurno::query()->sole()->funcion_principal);
+        $catalogo = $this->getJson('/api/labores-turno')->assertOk()->json('catalogo.funciones');
+        $this->assertContains('reingreso_camara', array_column($catalogo, 'codigo'));
+    }
+
     public function test_camarero_no_configura_turnos_y_no_se_puede_asignar_usuario_inhabilitado(): void
     {
         Sanctum::actingAs($this->camarero);

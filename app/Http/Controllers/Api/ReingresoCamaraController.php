@@ -38,9 +38,10 @@ class ReingresoCamaraController extends Controller
         return $this->fila($reingreso);
     }
 
-    public function programar(ReingresoFolioCamara $reingreso): JsonResponse
+    public function programar(Request $request, ReingresoFolioCamara $reingreso, ServicioTemporadaActiva $temporadas): JsonResponse
     {
-        $this->servicio->programarUbicacion($reingreso->id);
+        abort_unless($reingreso->temporada_id === $temporadas->obtener()->id, 404);
+        $this->servicio->programarUbicacion($reingreso->id, $request->user());
 
         return $this->fila($reingreso);
     }

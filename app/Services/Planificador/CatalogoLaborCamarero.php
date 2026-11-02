@@ -36,6 +36,11 @@ class CatalogoLaborCamarero
             $tipo = 'sag';
             $objeto = $plan->id;
             $preferido = $plan->id;
+        } elseif ($plan->referencia_tipo === 'reingreso_camara' || ($c['origen_logico'] ?? $p['origen_logico'] ?? '') === 'reingreso_despacho') {
+            $funcion = FuncionCamarero::ReingresoCamara;
+            $tipo = 'plan';
+            $objeto = $plan->id;
+            $preferido = null;
         } elseif ($plan->tipo === TipoPlanOperacional::AlmacenamientoPallet && ($c['origen_logico'] ?? $p['origen_logico'] ?? '') === 'recepcion_externa') {
             $funcion = FuncionCamarero::RecepcionPacking;
             $tipo = 'plan';

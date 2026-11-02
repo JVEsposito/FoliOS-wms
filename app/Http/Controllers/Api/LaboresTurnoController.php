@@ -60,7 +60,7 @@ class LaboresTurnoController extends Controller
             'fin' => ['required', 'date_format:Y-m-d\TH:i'], 'asignaciones' => ['required', 'array', 'min:1', 'max:100'],
             'asignaciones.*.user_id' => ['required', 'integer', 'distinct', 'exists:users,id'],
             'asignaciones.*.funcion_principal' => ['required', Rule::enum(FuncionCamarero::class)],
-            'asignaciones.*.funciones_apoyo' => ['present', 'array', 'max:5'],
+            'asignaciones.*.funciones_apoyo' => ['present', 'array', 'max:'.(count(FuncionCamarero::cases()) - 1)],
             'asignaciones.*.funciones_apoyo.*' => ['required', Rule::enum(FuncionCamarero::class)],
             'asignaciones.*.disponible' => ['required', 'boolean'],
             'asignaciones.*.preferencia' => ['nullable', 'array:tipo,id'],

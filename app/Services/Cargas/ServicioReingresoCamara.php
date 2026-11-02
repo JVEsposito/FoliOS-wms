@@ -31,6 +31,8 @@ use Throwable;
  */
 class ServicioReingresoCamara
 {
+    private const TAREAS_ACTIVAS = ['bloqueada', 'pendiente', 'asumida', 'en_proceso'];
+
     /** Se llama dentro de la transacción que ya bloqueó la carga y la asignación. */
     public function registrar(
         Folio $folio,
@@ -85,43 +87,84 @@ class ServicioReingresoCamara
      * (horizonte rolling, prioridad alta). Si el planificador está apagado, el
      * pallet queda en la bandeja y el camarero lo ubica manualmente.
      */
-    public function programarUbicacion(string $reingresoId): ?PlanOperacional
+    public function programarUbicacion(string $reingresoId, ?User $usuario = null): ?PlanOperacional
+    {
+        try {
+            return $this->crearPlanUbicacion($reingresoId, $usuario);
+        } catch (Throwable $error) {
+            // El retorno ya está confirmado. Conservar un motivo legible para poder
+            // recuperar su trabajo sin volver a registrar el retorno comercial.
+            ReingresoFolioCamara::query()->whereKey($reingresoId)
+                ->where('estado', EstadoReingresoCamara::Pendiente->value)
+                ->update([
+                    'programacion_intentada_at' => now(),
+                    'programacion_error' => $error instanceof DomainException || $error instanceof ConflictoOperacion
+                        ? mb_substr($error->getMessage(), 0, 500)
+                        : 'No se pudo preparar la labor. Reintenta desde esta bandeja; si persiste, solicita revisión a supervisión.',
+                ]);
+
+            throw $error;
+        }
+    }
+
+    private function crearPlanUbicacion(string $reingresoId, ?User $usuario): ?PlanOperacional
     {
         if (! config('planificador.generacion_automatica') || config('planificador.mode') === 'off') {
             return null;
         }
 
-        return DB::transaction(function () use ($reingresoId): ?PlanOperacional {
-            $leido = ReingresoFolioCamara::query()->find($reingresoId);
-            if (! $leido) {
-                return null;
-            }
-            $folio = Folio::query()->lockForUpdate()->find($leido->folio_id);
+        // Leer la identidad antes de abrir la transacción evita fijar un snapshot
+        // anterior al trabajo que otro intento acaba de publicar mientras esperamos
+        // el bloqueo del folio (REPEATABLE READ de MySQL).
+        $folioId = ReingresoFolioCamara::query()->whereKey($reingresoId)->value('folio_id');
+        if (! $folioId) {
+            return null;
+        }
+
+        return DB::transaction(function () use ($reingresoId, $folioId, $usuario): ?PlanOperacional {
+            $folio = Folio::query()->lockForUpdate()->find($folioId);
             $reingreso = ReingresoFolioCamara::query()->with(['carga:id,codigo', 'anden:id,codigo', 'registradoPor:id,activo'])
                 ->lockForUpdate()->find($reingresoId);
-            if (! $folio || ! $reingreso || $reingreso->estado !== EstadoReingresoCamara::Pendiente
-                || $reingreso->plan_operacional_id !== null) {
+            if (! $folio || ! $reingreso || $reingreso->folio_id !== $folioId || $reingreso->estado !== EstadoReingresoCamara::Pendiente) {
                 return null;
             }
             $temporada = app(ServicioTemporadaActiva::class)->buscar();
-            if (! $temporada || $temporada->id !== $reingreso->temporada_id || ! $reingreso->registradoPor?->activo) {
-                return null;
+            if (! $temporada || $temporada->id !== $reingreso->temporada_id) {
+                throw new DomainException('El reingreso no pertenece a la temporada activa.');
+            }
+            $creador = $usuario ?? $reingreso->registradoPor;
+            if (! $creador?->activo) {
+                throw new DomainException('El usuario que registró el retorno está inactivo. Supervisión debe reintentar la programación.');
+            }
+            if (! $folio->activo) {
+                throw new DomainException('El folio ya no está activo. Revisa su estado antes de programar el reingreso.');
+            }
+            if ($folio->ubicacionActual()->exists()) {
+                throw new DomainException('El folio ya figura ubicado en cámara. Revisa la ubicación física antes de programar otra labor.');
             }
             // Una tarea vigente del mismo folio ya lo guía: no duplicar trabajo.
             $vigente = TareaMovimiento::query()
                 ->where('folio_id', $folio->id)
-                ->whereIn('estado', [EstadoTareaMovimiento::Pendiente->value, EstadoTareaMovimiento::Asumida->value, EstadoTareaMovimiento::EnProceso->value])
-                ->exists();
-            if ($vigente || $folio->ubicacionActual()->exists()) {
-                return null;
+                ->whereIn('estado', self::TAREAS_ACTIVAS)
+                ->with('planOperacional')->lockForUpdate()->first();
+            if ($vigente) {
+                if ($vigente->planOperacional->referencia_tipo === 'reingreso_camara'
+                    && $vigente->planOperacional->referencia_id === $reingreso->id) {
+                    $reingreso->update(['plan_operacional_id' => $vigente->plan_operacional_id, 'programacion_error' => null]);
+
+                    return $vigente->planOperacional;
+                }
+                throw new ConflictoOperacion('El folio tiene otra labor activa. Debe resolverse antes de programar su reingreso.');
             }
 
+            $ciclo = 1 + (int) PlanOperacional::query()->where('referencia_tipo', 'reingreso_camara')
+                ->where('referencia_id', $reingreso->id)->max('ciclo_referencia');
             $origen = trim(($reingreso->anden?->codigo ? "andén {$reingreso->anden->codigo}" : 'andén').($reingreso->carga ? " · {$reingreso->carga->codigo}" : ''));
             $plan = app(ServicioPlanesOperacionales::class)->crear(
                 temporada: $temporada,
                 tipo: TipoPlanOperacional::AlmacenamientoPallet,
                 titulo: "Reingreso a cámara · {$folio->numero_folio}",
-                creadoPor: $reingreso->registradoPor,
+                creadoPor: $creador,
                 tareas: [[
                     'folio_id' => $folio->id,
                     'tipo_movimiento' => TipoMovimiento::UbicacionInicial,
@@ -148,11 +191,41 @@ class ServicioReingresoCamara
                 referenciaTipo: 'reingreso_camara',
                 referenciaId: $reingreso->id,
                 contexto: ['planner_horizon' => 'rolling', 'origen_logico' => 'reingreso_despacho'],
+                cicloReferencia: $ciclo,
             );
-            $reingreso->update(['plan_operacional_id' => $plan->id]);
+            $reingreso->update(['plan_operacional_id' => $plan->id, 'programacion_error' => null, 'programacion_intentada_at' => now()]);
 
             return $plan;
         }, attempts: 3);
+    }
+
+    /** Recupera trabajo pendiente, nunca vuelve a registrar la devolución de la carga. */
+    public function recuperarPendientes(int $limite = 100): array
+    {
+        $temporada = app(ServicioTemporadaActiva::class)->buscar();
+        if (! $temporada || ! config('planificador.generacion_automatica') || config('planificador.mode') === 'off') {
+            return ['programados' => 0, 'bloqueados' => 0];
+        }
+        $pendientes = ReingresoFolioCamara::query()->where('temporada_id', $temporada->id)
+            ->where('estado', EstadoReingresoCamara::Pendiente->value)
+            ->whereDoesntHave('folio.tareasMovimiento', fn ($q) => $q->whereIn('estado', self::TAREAS_ACTIVAS))
+            ->where(fn ($q) => $q->whereNull('programacion_intentada_at')->orWhere('programacion_intentada_at', '<=', now()->subMinutes(5)))
+            ->orderBy('registrado_at')->limit(max(1, min(500, $limite)))->get();
+        $resultado = ['programados' => 0, 'bloqueados' => 0];
+        foreach ($pendientes as $pendiente) {
+            try {
+                if ($this->programarUbicacion($pendiente->id)) {
+                    $resultado['programados']++;
+                }
+            } catch (Throwable $error) {
+                $resultado['bloqueados']++;
+                if (! $error instanceof DomainException && ! $error instanceof ConflictoOperacion) {
+                    report($error);
+                }
+            }
+        }
+
+        return $resultado;
     }
 
     /** Registro interno de temperatura de pulpa: opcional, no cambia el folio ni bloquea. */
@@ -190,7 +263,7 @@ class ServicioReingresoCamara
                 ->where('estado', EstadoReingresoCamara::Pendiente->value)
                 ->when($incluirUbicados, fn ($ubicados) => $ubicados->orWhere('ubicado_at', '>=', $ahora->copy()->subDay())))
             ->with([
-                'folio:id,numero_folio,exportadora,variedad,calibre,datos_externos',
+                'folio:id,numero_folio,exportadora,variedad,calibre,datos_externos,activo',
                 'carga:id,codigo,numero_orden_externa,estado',
                 'anden:id,codigo,nombre',
                 'registradoPor:id,name',
@@ -198,6 +271,8 @@ class ServicioReingresoCamara
                 'temperaturaRegistradaPor:id,name',
                 'camaraUbicacion:id,codigo,nombre',
                 'plan.tareas.responsable:id,name',
+                'folio.ubicacionActual',
+                'folio.tareasMovimiento' => fn ($q) => $q->whereIn('estado', self::TAREAS_ACTIVAS)->with('planOperacional'),
             ])
             ->orderByRaw("CASE estado WHEN 'pendiente' THEN 0 ELSE 1 END")
             ->orderBy('registrado_at')
@@ -240,6 +315,7 @@ class ServicioReingresoCamara
                         'estado' => $tarea->estado->value,
                         'responsable' => $tarea->responsable?->name,
                     ] : null,
+                    'programacion' => $this->estadoProgramacion($reingreso, $tarea),
                     'ubicado_en' => $reingreso->camaraUbicacion?->codigo,
                     'ubicado_por' => $reingreso->ubicadoPor?->name,
                     'ubicado_at' => $reingreso->ubicado_at?->toAtomString(),
@@ -247,6 +323,31 @@ class ServicioReingresoCamara
             })
             ->values()
             ->all();
+    }
+
+    private function estadoProgramacion(ReingresoFolioCamara $reingreso, ?TareaMovimiento $tarea): array
+    {
+        if ($reingreso->estado === EstadoReingresoCamara::Ubicado) {
+            return ['estado' => 'ubicado', 'motivo' => null, 'puede_programar' => false];
+        }
+        if ($tarea && ! $tarea->estado->esFinal()) {
+            return ['estado' => 'programada', 'motivo' => null, 'puede_programar' => false];
+        }
+        if ($reingreso->folio?->ubicacionActual) {
+            return ['estado' => 'bloqueada', 'motivo' => 'El folio ya figura ubicado en cámara. Revisa su ubicación física.', 'puede_programar' => false];
+        }
+        if ($reingreso->folio?->tareasMovimiento->isNotEmpty()) {
+            return ['estado' => 'bloqueada', 'motivo' => 'El folio tiene otra labor activa. Resuélvela antes de programar el reingreso.', 'puede_programar' => false];
+        }
+        if (! config('planificador.generacion_automatica') || config('planificador.mode') === 'off') {
+            return ['estado' => 'sin_planificador', 'motivo' => 'El planificador está desactivado. La ubicación manual sigue disponible.', 'puede_programar' => false];
+        }
+
+        return [
+            'estado' => $reingreso->programacion_error ? 'bloqueada' : 'pendiente',
+            'motivo' => $reingreso->programacion_error ?? ($tarea ? 'La labor anterior terminó sin cerrar el reingreso. Revisa y vuelve a programar.' : 'El pallet está pendiente de una labor de reingreso.'),
+            'puede_programar' => (bool) $reingreso->folio?->activo,
+        ];
     }
 
     public function pendiente(string $folioId, bool $bloquear = false): ?ReingresoFolioCamara

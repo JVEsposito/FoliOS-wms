@@ -11,6 +11,7 @@ export const ATTENTION_SOURCES = Object.freeze([
     'Ambiente',
     'Ocupación',
     'Prefrío',
+    'Reingresos',
     'Planificador',
     'Incidencias',
     'Sincronización',

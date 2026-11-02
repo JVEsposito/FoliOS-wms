@@ -3,8 +3,12 @@
 namespace Tests\Feature\Api;
 
 use App\Enums\RolUsuario;
+use App\Events\EventoCargaRegistrado;
+use App\Listeners\CrearNotificacionesOperacionales;
 use App\Models\Carga;
 use App\Models\CargaFolio;
+use App\Models\NotificacionOperacional;
+use App\Models\ReingresoFolioCamara;
 use App\Models\User;
 use App\Services\Cargas\ServicioCarga;
 use App\Services\Existencias\ServicioExistencias;
@@ -53,6 +57,17 @@ class RetornoCargaApiTest extends TestCase
         $evento = $carga->eventos()->where('tipo', 'retornada')->firstOrFail()->datos;
         $this->assertFalse($evento['parcial']);
         $this->assertSame(0, $evento['siguen_despachados']);
+
+        $notificacion = NotificacionOperacional::query()->where('tipo', 'carga_retornada')->sole();
+        $this->assertSame(2, $notificacion->datos['cantidad_folios']);
+        $this->assertEqualsCanonicalizing([$primero->numero_folio, $segundo->numero_folio], $notificacion->datos['folios']);
+        app(CrearNotificacionesOperacionales::class)->handle(new EventoCargaRegistrado($carga->eventos()->where('tipo', 'retornada')->sole()));
+        $this->assertSame(1, NotificacionOperacional::query()->where('tipo', 'carga_retornada')->count());
+        $feed = $this->conToken($contexto['token'])->getJson('/api/notificaciones-operacionales')->assertOk();
+        $this->assertContains($notificacion->id, array_column($feed->json('data'), 'id'));
+        $this->conToken($contexto['token'])->postJson("/api/notificaciones-operacionales/{$notificacion->id}/confirmar")->assertOk();
+        // Acusar recibo no sustituye el movimiento de ubicación.
+        $this->assertSame(2, ReingresoFolioCamara::query()->where('carga_id', $carga->id)->where('estado', 'pendiente')->count());
 
         // Mientras no vuelva a una posición, el pallet no entra a otra carga.
         $nueva = app(ServicioCarga::class)->crear([], $contexto['despachador']);
