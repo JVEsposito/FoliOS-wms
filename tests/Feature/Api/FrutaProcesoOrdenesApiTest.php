@@ -248,7 +248,7 @@ class FrutaProcesoOrdenesApiTest extends TestCase
         $this->assertDatabaseCount('entregas_fruta_proceso', 0);
     }
 
-    public function test_cambios_de_proceso_embalaje_mercado_y_horario_invalidan_la_fila_vista_por_la_tablet(): void
+    public function test_cambios_de_proceso_embalaje_y_mercado_invalidan_la_fila_y_el_horario_no(): void
     {
         $lote = $this->loteMpEnCamara('META')['lote'];
         $fila = ['lote_materia_prima_id' => $lote['id'], 'bins_programados' => 10,
@@ -268,11 +268,35 @@ class FrutaProcesoOrdenesApiTest extends TestCase
                 'operacion_id' => (string) Str::uuid(), 'version' => $version,
                 'motivo_cambio' => 'Cambio de horario', 'hora_inicio' => '09:00', 'lotes' => [$fila],
             ])->assertOk()->json('data');
-        $this->actingAs(User::factory()->create(['rol' => RolUsuario::CamareroFrio]), 'sanctum')
-            ->postJson("/api/materia-prima/fruta-proceso/lotes/{$lote['id']}/entregas", $this->viaje($orden, 1))->assertStatus(409);
+        $this->assertNotSame($orden['version_vigente']['lotes'][0]['inicio_estimado'], $nueva['version_vigente']['lotes'][0]['inicio_estimado']);
         $this->assertDatabaseCount('entregas_fruta_proceso', 0);
-        $this->postJson("/api/materia-prima/fruta-proceso/lotes/{$lote['id']}/entregas", $this->viaje($nueva, 1))
-            ->assertOk()->assertJsonPath('data.entregas.0.numero_orden', 'P-2');
+        // El horario es estimativo: la tablet con la versión anterior entrega igual.
+        $this->actingAs(User::factory()->create(['rol' => RolUsuario::CamareroFrio]), 'sanctum')
+            ->postJson("/api/materia-prima/fruta-proceso/lotes/{$lote['id']}/entregas", $this->viaje($orden, 1))
+            ->assertOk()
+            ->assertJsonPath('data.entregas.0.numero_orden', 'P-2');
+    }
+
+    public function test_un_cambio_en_otro_lote_no_bloquea_la_entrega_de_un_lote_que_no_cambio(): void
+    {
+        $primero = $this->loteMpEnCamara('AR1')['lote'];
+        $segundo = $this->loteMpEnCamara('AR2')['lote'];
+        $orden = $this->crearOrden([
+            ['lote_materia_prima_id' => $primero['id'], 'bins_programados' => 10],
+            ['lote_materia_prima_id' => $segundo['id'], 'bins_programados' => 10],
+        ]);
+        // La v2 solo cambia el primer lote; el horario estimado del segundo se corre solo.
+        $nueva = $this->publicarVersion($orden, [
+            ['lote_materia_prima_id' => $primero['id'], 'bins_programados' => 20],
+            ['lote_materia_prima_id' => $segundo['id'], 'bins_programados' => 10],
+        ]);
+        $this->assertNotSame($orden['version_vigente']['lotes'][1]['inicio_estimado'], $nueva['version_vigente']['lotes'][1]['inicio_estimado']);
+        $this->actingAs(User::factory()->create(['rol' => RolUsuario::CamareroFrio]), 'sanctum');
+
+        $this->postJson("/api/materia-prima/fruta-proceso/lotes/{$segundo['id']}/entregas", $this->viaje($orden, 4))->assertOk();
+        $this->postJson("/api/materia-prima/fruta-proceso/lotes/{$primero['id']}/entregas", $this->viaje($orden, 4))
+            ->assertStatus(409)
+            ->assertJsonPath('message', fn (string $mensaje): bool => str_contains($mensaje, 'v2'));
     }
 
     public function test_una_linea_con_nombre_de_sesenta_caracteres_se_conserva_en_el_viaje(): void

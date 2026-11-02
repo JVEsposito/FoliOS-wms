@@ -137,7 +137,7 @@ El camarero entrega contra la versión vigente de una orden abierta. Línea y n�
 | --- | --- |
 | Lote en la versión vigente | Se descuenta de su reserva. La primera entrega pasa la orden a `en_proceso`; sin pendientes termina `completa`. |
 | Más bins que los pendientes de la fila | 422 en `cantidad_envases`: el digitador debe publicar otra versión. |
-| La tablet tenía una versión anterior | Sigue si la fila publicada completa no cambió; si cambió proceso, embalaje, mercado, cantidad, secuencia, horario u otro dato del lote, o el lote salió, 409. La versión es obligatoria y debe pertenecer a la orden seleccionada. |
+| La tablet tenía una versión anterior | Sigue si no cambió lo que define la entrega del lote: bins, totes, proceso, embalaje, kilos por caja y mercado. Si cambió alguno o el lote salió, 409. El horario estimado, la secuencia y las copias de maestros no bloquean: se corren solos al cambiar otro lote. La versión es obligatoria y debe pertenecer a la orden seleccionada. |
 | Lote fuera de la orden | Exige `autorizacion.user_id` de un supervisor de frío o administrador y su PIN operacional. Entra a la orden como versión nueva de origen `fuera_de_orden`, creada por el supervisor, con los bins del viaje. La entrega queda con `fuera_de_orden` y `autorizado_por_user_id`. |
 | Orden terminada o cancelada | 409. |
 | Anular una entrega | Devuelve los bins a la reserva. Una orden terminada completa se reabre; en una cancelada lo anulado vuelve al lote, no a la orden. |
@@ -174,7 +174,7 @@ La tablet suma la pestaña Órdenes: elige línea, ve los lotes en secuencia con
 
 Al abrir una fila desde Órdenes, la tablet vuelve a consultar el lote. Si esa orden ya no tiene pendientes, pide actualizar y elegir otra vez; nunca selecciona automáticamente otra orden del mismo lote. Los lotes con salida directa de Hidrocooler se muestran con cámara nula.
 
-Los nombres de línea admiten 60 caracteres tanto en el catálogo como en entregas y orígenes de retornos por bin. La migración `2026_11_02_100000` amplía las columnas existentes sin truncar nombres.
+Los nombres de línea admiten 60 caracteres tanto en el catálogo como en entregas y orígenes de retornos por bin. La migración `2026_11_02_140000` amplía las columnas existentes sin truncar nombres; al revertirla no se reducen, para no cortar nombres ya registrados.
 
 ## PRE-SIF y programado contra real
 

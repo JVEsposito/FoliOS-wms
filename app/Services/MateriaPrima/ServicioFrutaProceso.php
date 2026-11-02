@@ -522,14 +522,29 @@ class ServicioFrutaProceso
         return ['version_id' => $version->id, 'fuera_de_orden' => true, 'numero_proceso' => null];
     }
 
+    /**
+     * Campos de la fila que definen qué se entrega. Los kilos y las cajas estimadas
+     * se derivan de ellos. El horario, la secuencia y las copias de maestros quedan
+     * fuera: cambian solos cuando se modifica otro lote de la orden y el horario es
+     * estimativo, así que no deben bloquear la entrega de un lote que no cambió.
+     */
+    private const CAMPOS_FILA_ENTREGA = [
+        'lote_materia_prima_id',
+        'bins_programados',
+        'totes_programados',
+        'numero_proceso',
+        'embalaje',
+        'kilos_por_caja',
+        'mercado_destino',
+    ];
+
     private function mismaFilaOrden(LoteVersionOrdenMp $anterior, LoteVersionOrdenMp $vigente): bool
     {
-        // Compara la fila publicada completa (incluidos proceso, embalaje, mercado y horario),
-        // sin los identificadores ni las fechas técnicas que cambian al copiar una versión.
-        $tecnicos = array_flip(['id', 'version_orden_proceso_mp_id', 'created_at', 'updated_at']);
+        // Lista explícita: una columna nueva no invalida entregas sin una decisión.
+        $campos = array_flip(self::CAMPOS_FILA_ENTREGA);
 
-        return array_diff_key($anterior->attributesToArray(), $tecnicos)
-            === array_diff_key($vigente->attributesToArray(), $tecnicos);
+        return array_intersect_key($anterior->attributesToArray(), $campos)
+            == array_intersect_key($vigente->attributesToArray(), $campos);
     }
 
     /** @param array<string, mixed> $autorizacion */

@@ -13,7 +13,8 @@ return new class extends Migration
 
     public function down(): void
     {
-        $this->cambiarLongitud(50);
+        // No se reduce a 50: en MySQL estricto fallaría con nombres de 51 a 60
+        // caracteres ya registrados, y truncarlos perdería trazabilidad.
     }
 
     private function cambiarLongitud(int $longitud): void
