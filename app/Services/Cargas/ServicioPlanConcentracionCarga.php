@@ -322,6 +322,7 @@ class ServicioPlanConcentracionCarga
     {
         return CargaFolio::query()
             ->where('carga_id', $carga->id)
+            ->when(DB::getDriverName() === 'mysql', fn ($q) => $q->forceIndex('carga_folios_carga_id_estado_index'))
             ->whereIn('estado', [
                 EstadoCargaFolio::Pendiente->value,
                 EstadoCargaFolio::ConIncidencia->value,

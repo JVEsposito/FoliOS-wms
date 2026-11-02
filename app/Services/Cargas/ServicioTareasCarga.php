@@ -14,6 +14,7 @@ use App\Models\Movimiento;
 use App\Models\TareaCarga;
 use App\Models\User;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class ServicioTareasCarga
 {
@@ -27,6 +28,8 @@ class ServicioTareasCarga
     {
         $asignaciones = CargaFolio::query()
             ->where('carga_id', $carga->id)
+            // FOR UPDATE debe recorrer solo esta carga, no el índice global de estados.
+            ->when(DB::getDriverName() === 'mysql', fn ($q) => $q->forceIndex('carga_folios_carga_id_estado_index'))
             ->whereIn('estado', [
                 EstadoCargaFolio::Pendiente->value,
                 EstadoCargaFolio::ConIncidencia->value,

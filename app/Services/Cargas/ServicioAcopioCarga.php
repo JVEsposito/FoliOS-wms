@@ -96,6 +96,7 @@ class ServicioAcopioCarga
         }
         $asignaciones = CargaFolio::query()
             ->where('carga_id', $carga->id)
+            ->when($bloquear && DB::getDriverName() === 'mysql', fn ($q) => $q->forceIndex('carga_folios_carga_id_estado_index'))
             ->whereHas('reservaActiva')
             ->whereHas('folio', fn ($consulta) => $consulta->where('activo', true)->where('tipo_bulto', TipoBulto::Pallet))
             ->with([
