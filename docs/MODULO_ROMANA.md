@@ -105,10 +105,10 @@ La recepción registra:
 - peso neto;
 - tipo y cantidad de envases elegidos para el cálculo individual;
 - peso neto calculado por envase;
-- tipo de envase sometido a pesaje acumulativo;
-- tara unitaria configurada para ese envase;
-- cantidad pesada y pendiente;
-- lecturas de cada tanda con cantidad, bruto, tara total y neto;
+- tipos de envase sometidos a pesaje acumulativo (uno o más);
+- tara unitaria configurada para cada tipo;
+- cantidad pesada y pendiente, en total y por tipo;
+- lecturas de cada tanda con cantidad, bruto, tara total y neto, y su detalle por tipo de envase;
 - observaciones de ingreso y cierre;
 - versión;
 - usuarios responsables;
@@ -137,14 +137,20 @@ peso neto fruta = peso bruto - tara camión - tara de envases
 
 La lectura real de la báscula y la tara calculada de los envases se conservan por separado en el expediente y en su evento de cierre.
 
-En el pesaje acumulativo se declara un solo tipo de envase y su cantidad total. Por ejemplo, una guía con 60 bins puede registrarse en lecturas de 1, 3 o cualquier número que no supere el saldo pendiente. Cada lectura calcula:
+En el pesaje acumulativo se declaran uno o más tipos de envase con fruta (por ejemplo, bins y totes), cada uno con su cantidad total, su tara por envase y su propiedad. Por ejemplo, una guía con 60 bins puede registrarse en lecturas de 1, 3 o cualquier número que no supere el saldo pendiente. Una tanda puede mezclar tipos: indica cuántos envases de cada tipo están sobre la báscula. Cada lectura calcula:
 
 ```text
-tara total de la tanda = tara unitaria × cantidad pesada
+tara total de la tanda = Σ(tara unitaria del tipo × cantidad pesada del tipo)
 peso neto de la tanda = peso bruto de la tanda - tara total de la tanda
 ```
 
-Los acumulados de bruto, tara y neto se recalculan utilizando únicamente lecturas vigentes. Una lectura errónea puede anularse con motivo antes del cierre. No se permite cerrar con menos o más envases que los declarados.
+Si la tanda trae un solo tipo, todo su neto es de ese tipo. Si mezcla tipos, el neto se reparte según el peso de referencia de cada envase para la especie (Administración → reparto de envases); sin esa referencia, la tanda mixta se rechaza y se puede pesar cada tipo por separado. El cálculo se hace en gramos y el resto queda en el último tipo, de modo que el detalle suma exactamente el neto de la lectura.
+
+Los acumulados de bruto, tara y neto se recalculan utilizando únicamente lecturas vigentes. Una lectura errónea puede anularse con motivo antes del cierre. No se permite cerrar con menos o más envases que los declarados en cualquiera de los tipos.
+
+Con varios tipos, el neto pesado de cada uno se congela como reparto del neto (`reparto_neto_envases`): los lotes de Materia Prima reciben así el neto real de sus bins y totes, no un promedio. Con un solo tipo, el comportamiento es el de siempre.
+
+Contrato de la API (`POST /api/romana/recepciones` y su edición): cada línea de `envases` admite `tara_unitaria`. El contrato anterior de un solo tipo (`tipo_envase_pesaje` y `tara_unitaria_envase`) sigue vigente. La tanda (`POST /api/romana/recepciones/{id}/pesajes-envases`) recibe `envases: [{tipo_envase, cantidad}]`; `cantidad_envases` solo se acepta cuando la recepción pesa un único tipo.
 
 La guía no puede repetirse para el mismo cliente dentro de la misma temporada. El RUT se normaliza y valida con módulo 11. La tara debe ser positiva y menor al bruto.
 
@@ -169,8 +175,8 @@ Flujo alternativo de pesaje acumulativo:
 
 ```text
 crear recepción y asignar REC-*
-→ seleccionar envase, total declarado y tara unitaria
-→ registrar tandas de 1, 3 o N envases
+→ agregar uno o más tipos de envase, cada uno con total declarado, tara unitaria y propiedad
+→ registrar tandas de 1, 3 o N envases, de un tipo o mezclados
 → acumular bruto, tara y neto
 → completar exactamente el total declarado
 → cerrar

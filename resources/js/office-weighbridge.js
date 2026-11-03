@@ -18,9 +18,9 @@ const elements = {
     editReception: byId('editReceptionButton'), confirmEntry: byId('confirmEntryButton'), addContainerWeighing: byId('addContainerWeighingButton'), closeReception: byId('closeReceptionButton'), correctExit: byId('correctExitButton'), downloadReceipt: byId('downloadReceiptButton'), closeDetail: byId('closeDetailButton'),
     containerWeighingPanel: byId('containerWeighingPanel'), containerWeighingProgress: byId('containerWeighingProgress'), containerWeighingList: byId('containerWeighingList'),
     receptionDialog: byId('receptionDialog'), receptionForm: byId('receptionForm'), receptionDialogTitle: byId('receptionDialogTitle'), receptionDialogDescription: byId('receptionDialogDescription'), receptionFormError: byId('receptionFormError'), saveReception: byId('saveReceptionButton'),
-    serviceField: byId('serviceField'), containerEntryDateField: byId('containerEntryDateField'), containerConceptField: byId('containerConceptField'), standardContainerLines: byId('standardContainerLines'), containerWeighingFields: byId('containerWeighingFields'), grossWeightField: byId('grossWeightField'), administrativeCorrectionField: byId('administrativeCorrectionField'), administrativeTareField: byId('administrativeTareField'), administrativeNetContainerField: byId('administrativeNetContainerField'),
+    serviceField: byId('serviceField'), containerEntryDateField: byId('containerEntryDateField'), containerConceptField: byId('containerConceptField'), standardContainerLines: byId('standardContainerLines'), containerWeighingFields: byId('containerWeighingFields'), containerWeighingLines: byId('containerWeighingLines'), addContainerWeighingLine: byId('addContainerWeighingLine'), grossWeightField: byId('grossWeightField'), administrativeCorrectionField: byId('administrativeCorrectionField'), administrativeTareField: byId('administrativeTareField'), administrativeNetContainerField: byId('administrativeNetContainerField'),
     tareDialog: byId('tareDialog'), tareForm: byId('tareForm'), tareDescription: byId('tareDescription'), tareFormError: byId('tareFormError'), outboundContainerTares: byId('outboundContainerTares'), outboundContainerTareList: byId('outboundContainerTareList'), outboundGuideField: byId('outboundGuideField'), outboundExtraField: byId('outboundExtraField'), outboundExtraType: byId('outboundExtraType'), outboundAddType: byId('outboundAddType'), exitCorrectionReasonField: byId('exitCorrectionReasonField'), containerTarePreviewRow: byId('containerTarePreviewRow'), containerTarePreview: byId('containerTarePreview'), netWeightPreview: byId('netWeightPreview'), netPerContainerPreview: byId('netPerContainerPreview'),
-    containerWeighingDialog: byId('containerWeighingDialog'), containerWeighingForm: byId('containerWeighingForm'), containerWeighingDescription: byId('containerWeighingDescription'), containerWeighingFormError: byId('containerWeighingFormError'), containerWeighingTarePreview: byId('containerWeighingTarePreview'), containerWeighingNetPreview: byId('containerWeighingNetPreview'),
+    containerWeighingDialog: byId('containerWeighingDialog'), containerWeighingForm: byId('containerWeighingForm'), containerWeighingDescription: byId('containerWeighingDescription'), containerWeighingFormError: byId('containerWeighingFormError'), containerWeighingQuantities: byId('containerWeighingQuantities'), containerWeighingTarePreview: byId('containerWeighingTarePreview'), containerWeighingNetPreview: byId('containerWeighingNetPreview'),
     loading: byId('officeLoading'), loadingText: byId('officeLoadingText'), toasts: byId('officeToasts'),
 };
 
@@ -165,8 +165,7 @@ function fillCatalogs() {
     const properties = Object.fromEntries(state.catalogs.tipos_envase.map((t) => [t.codigo, form[`propiedad_${t.codigo}`]?.value || '']));
     byId('standardContainerLines').innerHTML = '<legend>Envases declarados en la guía *</legend><small data-container-property-help>Indica su propiedad. Propios y arrendados corresponden a envases de planta que regresan con fruta.</small>'
         + state.catalogs.tipos_envase.map((t) => `<div class="container-entry-line"><label><span>${escapeHtml(t.nombre)}</span><input name="cantidad_${t.codigo}" type="number" min="0" max="100000" value="${quantities[t.codigo]}"></label><label class="is-hidden" data-container-property="${t.codigo}"><span>Propiedad *</span><select name="propiedad_${t.codigo}" aria-label="Propiedad de ${escapeHtml(t.nombre)}" disabled>${propertyOptions(properties[t.codigo])}</select></label></div>`).join('');
-    form.propiedad_envase_pesaje.innerHTML = propertyOptions(form.propiedad_envase_pesaje.value);
-    form.tipo_envase_pesaje.innerHTML = state.catalogs.tipos_envase.filter((t) => t.contiene_fruta).map((t) => `<option value="${t.codigo}">${escapeHtml(t.nombre)}</option>`).join('');
+    renderWeighingLines(readWeighingLines());
     const activeSeasons = state.catalogs.temporadas.filter((season) => season.activa);
     form.temporada_id.innerHTML = '<option value="">Seleccionar temporada activa</option>' + activeSeasons.map((season) => `<option value="${escapeHtml(season.id)}">${escapeHtml(season.nombre)} · ${escapeHtml(season.codigo)}</option>`).join('');
     elements.filters.elements.temporada_id.innerHTML = '<option value="">Temporada activa</option>' + state.catalogs.temporadas.map((season) => `<option value="${escapeHtml(season.id)}">${escapeHtml(season.codigo)}${season.activa ? ' (activa)' : ''}</option>`).join('');
@@ -194,9 +193,48 @@ function syncContainerProperties() {
         field.querySelector('select').disabled = !active;
         field.querySelector('select').required = active;
     });
-    form.propiedad_envase_pesaje.disabled = form.tipo_recepcion.value !== 'fruta_pesaje_envases';
-    form.propiedad_envase_pesaje.required = !form.propiedad_envase_pesaje.disabled;
 }
+
+/*
+ * Pesaje acumulativo con uno o más tipos de envase con fruta. Cada fila declara
+ * el total a pesar, la tara por envase y su propiedad; las tandas pueden mezclarlos.
+ */
+function fruitContainerTypes() { return state.catalogs.tipos_envase.filter((t) => t.contiene_fruta); }
+function readWeighingLines() {
+    return [...elements.containerWeighingLines.querySelectorAll('[data-weighing-line]')].map((row) => ({
+        tipo_envase: row.querySelector('[data-line="tipo_envase"]').value,
+        cantidad: row.querySelector('[data-line="cantidad"]').value,
+        tara_unitaria: row.querySelector('[data-line="tara_unitaria"]').value,
+        propiedad: row.querySelector('[data-line="propiedad"]').value,
+    }));
+}
+function renderWeighingLines(lines) {
+    const types = fruitContainerTypes();
+    const rows = lines.length ? lines : [{ tipo_envase: types[0]?.codigo || '', cantidad: '1', tara_unitaria: '', propiedad: '' }];
+    elements.containerWeighingLines.innerHTML = rows.map((line, index) => `<div class="container-weighing-line" data-weighing-line>
+        <label><span>Tipo de envase</span><select data-line="tipo_envase" aria-label="Tipo de envase ${index + 1}">${types.map((t) => `<option value="${escapeHtml(t.codigo)}"${t.codigo === line.tipo_envase ? ' selected' : ''}>${escapeHtml(t.nombre)}</option>`).join('')}</select></label>
+        <label><span>Total a pesar</span><input data-line="cantidad" type="number" min="1" max="100000" value="${escapeHtml(line.cantidad ?? '1')}" aria-label="Total a pesar ${index + 1}"></label>
+        <label class="weight-field"><span>Tara por envase</span><div><input data-line="tara_unitaria" type="number" min="0.001" max="1000" step="0.001" inputmode="decimal" value="${escapeHtml(line.tara_unitaria ?? '')}" aria-label="Tara por envase ${index + 1}"><b>kg</b></div></label>
+        <label><span>Propiedad del envase *</span><select data-line="propiedad" aria-label="Propiedad del envase ${index + 1}">${propertyOptions(line.propiedad || '')}</select></label>
+        <button type="button" data-remove-weighing-line aria-label="Quitar tipo de envase ${index + 1}" title="Quitar este tipo de envase"${rows.length === 1 ? ' disabled' : ''}>×</button>
+    </div>`).join('');
+    elements.addContainerWeighingLine.disabled = rows.length >= types.length;
+}
+elements.addContainerWeighingLine.addEventListener('click', () => {
+    const lines = readWeighingLines();
+    const used = new Set(lines.map((line) => line.tipo_envase));
+    const next = fruitContainerTypes().find((t) => !used.has(t.codigo));
+    if (!next) return;
+    renderWeighingLines([...lines, { tipo_envase: next.codigo, cantidad: '1', tara_unitaria: '', propiedad: '' }]);
+    elements.containerWeighingLines.querySelectorAll('[data-weighing-line]')[lines.length]?.querySelector('[data-line="cantidad"]').focus();
+});
+elements.containerWeighingLines.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-remove-weighing-line]');
+    if (!button) return;
+    const rows = [...elements.containerWeighingLines.querySelectorAll('[data-weighing-line]')];
+    const index = rows.indexOf(button.closest('[data-weighing-line]'));
+    renderWeighingLines(readWeighingLines().filter((_, position) => position !== index));
+});
 
 function filterQuery() {
     const values = Object.fromEntries(new FormData(elements.filters));
@@ -257,6 +295,21 @@ async function loadReceptions({ silent = false } = {}) {
 
 function fact(title, value, weight = false) { return `<article class="detail-fact${weight ? ' detail-fact--weight' : ''}"><span>${escapeHtml(title)}</span><strong>${escapeHtml(value ?? '—')}</strong></article>`; }
 function envasesLabel(reception) { return (reception.envases || []).map((item) => `${item.cantidad_declarada} ${label(item.tipo_envase)}${item.propiedad ? ` (${containerProperties[item.propiedad] || item.propiedad})` : ''}`).join(' · ') || 'Sin envases'; }
+/** Tipos de envase del pesaje acumulativo; las respuestas antiguas traen uno solo. */
+function weighingTypes(weighing) {
+    if (!weighing) return [];
+    return weighing.tipos?.length ? weighing.tipos : [{ tipo_envase: weighing.tipo_envase, cantidad_declarada: weighing.cantidad_declarada, cantidad_pesada: weighing.cantidad_pesada, cantidad_pendiente: weighing.cantidad_pendiente, tara_unitaria: weighing.tara_unitaria }];
+}
+function readingContainersLabel(reading) {
+    const lines = reading.envases?.length ? reading.envases : [{ tipo_envase: reading.tipo_envase, cantidad: reading.cantidad_envases }];
+    return lines.map((line) => `${line.cantidad} ${label(line.tipo_envase)}`).join(' + ');
+}
+function weighingTotalLabel(weighing) {
+    const types = weighingTypes(weighing);
+    return types.length > 1
+        ? `${weighing.cantidad_declarada} envases (${types.map((item) => `${item.cantidad_declarada} ${label(item.tipo_envase)}`).join(', ')})`
+        : `${weighing.cantidad_declarada} ${label(weighing.tipo_envase)}`;
+}
 function renderContainerWeighings(reception, canOperate) {
     const weighing = reception.pesaje_envases;
     elements.containerWeighingPanel.classList.toggle('is-hidden', !weighing);
@@ -264,12 +317,15 @@ function renderContainerWeighings(reception, canOperate) {
         elements.containerWeighingList.innerHTML = '';
         return;
     }
-    elements.containerWeighingProgress.textContent = `${weighing.cantidad_pesada} / ${weighing.cantidad_declarada} ${label(weighing.tipo_envase)} · faltan ${weighing.cantidad_pendiente}`;
+    const types = weighingTypes(weighing);
+    elements.containerWeighingProgress.textContent = types.length > 1
+        ? `${weighing.cantidad_pesada} / ${weighing.cantidad_declarada} envases · faltan ${weighing.cantidad_pendiente} · ${types.map((item) => `${label(item.tipo_envase)} ${item.cantidad_pesada}/${item.cantidad_declarada}`).join(' · ')}`
+        : `${weighing.cantidad_pesada} / ${weighing.cantidad_declarada} ${label(weighing.tipo_envase)} · faltan ${weighing.cantidad_pendiente}`;
     const readings = reception.lecturas_pesaje_envases || [];
     elements.containerWeighingList.innerHTML = readings.length ? readings.map((reading) => `
         <article class="container-weighing-row${reading.anulado ? ' container-weighing-row--annulled' : ''}">
             <div><span>TANDA</span><strong>#${reading.secuencia}</strong></div>
-            <div><span>ENVASES</span><strong>${reading.cantidad_envases} ${escapeHtml(label(reading.tipo_envase))}</strong></div>
+            <div><span>ENVASES</span><strong>${escapeHtml(readingContainersLabel(reading))}</strong></div>
             <div><span>BRUTO</span><strong>${escapeHtml(formatWeight(reading.peso_bruto))}</strong></div>
             <div><span>TARA</span><strong>${escapeHtml(formatWeight(reading.peso_tara))}</strong></div>
             <div><span>NETO</span><strong>${escapeHtml(formatWeight(reading.peso_neto))}</strong></div>
@@ -289,9 +345,15 @@ function renderDetail(reception) {
     elements.detail.classList.remove('is-hidden');
     elements.detailTitle.textContent = reception.numero_recepcion || `Ingreso · ${reception.patente_camion}`;
     elements.detailSubtitle.innerHTML = `${receptionStateBadge(reception)} · Guía ${escapeHtml(reception.numero_guia_despacho)} · ${escapeHtml(reception.cliente.nombre)}`;
+    const weighingKinds = weighingTypes(reception.pesaje_envases);
     const weighingFacts = reception.pesaje_envases ? [
-        fact('ENVASE PESADO', label(reception.pesaje_envases.tipo_envase)),
-        fact('TARA UNITARIA', formatWeight(reception.pesaje_envases.tara_unitaria), true),
+        ...(weighingKinds.length > 1 ? [
+            fact('ENVASES PESADOS', weighingKinds.map((item) => label(item.tipo_envase)).join(' · ')),
+            fact('TARA POR ENVASE', weighingKinds.map((item) => `${label(item.tipo_envase)} ${formatWeight(item.tara_unitaria)}`).join(' · ')),
+        ] : [
+            fact('ENVASE PESADO', label(reception.pesaje_envases.tipo_envase)),
+            fact('TARA UNITARIA', formatWeight(reception.pesaje_envases.tara_unitaria), true),
+        ]),
         fact('AVANCE', `${reception.pesaje_envases.cantidad_pesada} / ${reception.pesaje_envases.cantidad_declarada}`),
         fact('PENDIENTES', String(reception.pesaje_envases.cantidad_pendiente)),
     ] : [];
@@ -327,7 +389,9 @@ function renderDetail(reception) {
     elements.detailTimeline.innerHTML = (reception.eventos || []).map((event) => `<article class="timeline-item"><i></i><div><strong>${escapeHtml(label(event.tipo))}</strong><small>${escapeHtml(event.usuario?.nombre || 'Sistema')} · ${escapeHtml(event.estado_anterior ? `${receptionStateLabel(reception, event.estado_anterior)} → ${receptionStateLabel(reception, event.estado_nuevo)}` : receptionStateLabel(reception, event.estado_nuevo))}</small>${event.datos?.motivo ? `<small>Motivo: ${escapeHtml(event.datos.motivo)}</small>` : ''}</div><time>${escapeHtml(formatDate(event.ocurrido_at))}</time></article>`).join('');
     elements.weightBalance.innerHTML = reception.tipo_recepcion === 'solo_envases'
         ? '<div class="net-row"><span>Recepción documental</span><strong>Sin registro de kilos</strong></div>'
-        : `<div><span>Bruto${reception.pesaje_envases ? ' acumulado' : ''}</span><strong>${escapeHtml(formatWeight(reception.peso_bruto))}</strong></div><div><span>Tara ${reception.pesaje_envases ? 'acumulada' : 'camión'}</span><strong>${escapeHtml(formatWeight(reception.peso_tara))}</strong></div>${reception.modo_salida_envases && reception.peso_tara_envases !== 0 ? `<div><span>Diferencia tara envases</span><strong>${escapeHtml(formatWeight(reception.peso_tara_envases))}</strong></div>` : ''}${reception.pesaje_envases ? `<div><span>Neto promedio por envase</span><strong>${escapeHtml(formatWeight(reception.peso_neto_por_envase))}</strong></div>` : ''}<div class="net-row"><span>Neto legal</span><strong>${escapeHtml(formatWeight(reception.peso_neto))}</strong></div>`;
+        : `<div><span>Bruto${reception.pesaje_envases ? ' acumulado' : ''}</span><strong>${escapeHtml(formatWeight(reception.peso_bruto))}</strong></div><div><span>Tara ${reception.pesaje_envases ? 'acumulada' : 'camión'}</span><strong>${escapeHtml(formatWeight(reception.peso_tara))}</strong></div>${reception.modo_salida_envases && reception.peso_tara_envases !== 0 ? `<div><span>Diferencia tara envases</span><strong>${escapeHtml(formatWeight(reception.peso_tara_envases))}</strong></div>` : ''}${reception.pesaje_envases ? (weighingTypes(reception.pesaje_envases).length > 1
+            ? weighingTypes(reception.pesaje_envases).map((item) => `<div><span>Neto por envase · ${escapeHtml(label(item.tipo_envase))}</span><strong>${escapeHtml(formatWeight(item.peso_neto_por_envase))}</strong></div>`).join('')
+            : `<div><span>Neto promedio por envase</span><strong>${escapeHtml(formatWeight(reception.peso_neto_por_envase))}</strong></div>`) : ''}<div class="net-row"><span>Neto legal</span><strong>${escapeHtml(formatWeight(reception.peso_neto))}</strong></div>`;
     const canOperate = state.identity?.puede_operar_romana === true;
     const canCorrect = state.identity?.puede_corregir_recepciones_romana === true
         && reception.correccion_administrativa_disponible
@@ -390,7 +454,7 @@ function syncAdministrativeNetContainerOptions(preferredType = null) {
 function openNewReception() {
     elements.receptionForm.reset(); elements.receptionForm.elements.recepcion_id.value = ''; elements.receptionFormError.textContent = '';
     state.catalogs.tipos_envase.forEach(({ codigo }) => { elements.receptionForm.elements[`cantidad_${codigo}`].value = 0; elements.receptionForm.elements[`propiedad_${codigo}`].value = ''; });
-    elements.receptionForm.elements.propiedad_envase_pesaje.value = '';
+    renderWeighingLines([]);
     configureAdministrativeCorrection(false);
     elements.receptionDialogTitle.textContent = 'Registrar ingreso';
     const activeSeasons = state.catalogs.temporadas.filter((season) => season.activa);
@@ -420,12 +484,14 @@ function openEditReception() {
         form[`cantidad_${tipo}`].value = item?.cantidad_declarada || 0;
         form[`propiedad_${tipo}`].value = item?.propiedad || (item ? 'cliente' : '');
     });
-    if (reception.pesaje_envases) {
-        form.tipo_envase_pesaje.value = reception.pesaje_envases.tipo_envase;
-        form.cantidad_envases_pesaje.value = reception.pesaje_envases.cantidad_declarada;
-        form.tara_unitaria_envase.value = reception.pesaje_envases.tara_unitaria;
-        form.propiedad_envase_pesaje.value = reception.envases.find((item) => item.tipo_envase === reception.pesaje_envases.tipo_envase)?.propiedad || 'cliente';
-    }
+    renderWeighingLines(reception.pesaje_envases
+        ? (reception.pesaje_envases.tipos || []).map((item) => ({
+            tipo_envase: item.tipo_envase,
+            cantidad: String(item.cantidad_declarada),
+            tara_unitaria: item.tara_unitaria ?? '',
+            propiedad: reception.envases.find((envase) => envase.tipo_envase === item.tipo_envase)?.propiedad || 'cliente',
+        }))
+        : []);
     form.patente_camion.value = reception.patente_camion; form.tipo_camion.value = reception.tipo_camion || ''; form.patente_carro.value = reception.patente_carro || ''; form.rut_conductor.value = reception.rut_conductor; form.nombre_conductor.value = reception.nombre_conductor;
     form.peso_bruto.value = reception.peso_bruto ?? ''; form.observacion.value = reception.observacion || '';
     if (canCorrect && reception.estado === 'cerrado') {
@@ -462,23 +528,33 @@ elements.receptionForm.addEventListener('submit', async (event) => {
     }
     const soloEnvases = data.tipo_recepcion === 'solo_envases';
     const cumulativeWeighing = data.tipo_recepcion === 'fruta_pesaje_envases';
-    data.envases = cumulativeWeighing
-        ? [{ tipo_envase: data.tipo_envase_pesaje, cantidad: Number(data.cantidad_envases_pesaje || 0), propiedad: data.propiedad_envase_pesaje || '' }]
-        : state.catalogs.tipos_envase.map((t) => t.codigo).map((tipo) => ({ tipo_envase: tipo, cantidad: Number(data[`cantidad_${tipo}`] || 0), ...(!soloEnvases ? { propiedad: data[`propiedad_${tipo}`] || '' } : {}) })).filter((item) => item.cantidad > 0);
-    const missingProperty = !soloEnvases && data.envases.find((item) => !item.propiedad);
-    if (missingProperty) {
-        elements.receptionFormError.textContent = `Selecciona la propiedad de ${label(missingProperty.tipo_envase)}: del cliente, propios o arrendados por planta.`;
-        elements.receptionForm.elements[cumulativeWeighing ? 'propiedad_envase_pesaje' : `propiedad_${missingProperty.tipo_envase}`].focus();
-        return;
+    if (cumulativeWeighing) {
+        const lines = readWeighingLines();
+        const rows = [...elements.containerWeighingLines.querySelectorAll('[data-weighing-line]')];
+        const problem = (index, field, message) => {
+            elements.receptionFormError.textContent = message;
+            rows[index]?.querySelector(`[data-line="${field}"]`)?.focus();
+        };
+        const repeated = lines.findIndex((line, index) => lines.findIndex((other) => other.tipo_envase === line.tipo_envase) !== index);
+        if (repeated >= 0) return problem(repeated, 'tipo_envase', `${label(lines[repeated].tipo_envase)} está repetido: cada tipo de envase va en una sola fila.`);
+        const withoutQuantity = lines.findIndex((line) => !(Number(line.cantidad) >= 1));
+        if (withoutQuantity >= 0) return problem(withoutQuantity, 'cantidad', `Indica cuántos ${label(lines[withoutQuantity].tipo_envase)} se pesarán.`);
+        const withoutTare = lines.findIndex((line) => !(Number(line.tara_unitaria) > 0));
+        if (withoutTare >= 0) return problem(withoutTare, 'tara_unitaria', `Configura la tara por envase de ${label(lines[withoutTare].tipo_envase)}.`);
+        const withoutProperty = lines.findIndex((line) => !line.propiedad);
+        if (withoutProperty >= 0) return problem(withoutProperty, 'propiedad', `Selecciona la propiedad de ${label(lines[withoutProperty].tipo_envase)}: del cliente, propios o arrendados por planta.`);
+        data.envases = lines.map((line) => ({ tipo_envase: line.tipo_envase, cantidad: Number(line.cantidad), tara_unitaria: Number(line.tara_unitaria), propiedad: line.propiedad }));
+    } else {
+        data.envases = state.catalogs.tipos_envase.map((t) => t.codigo).map((tipo) => ({ tipo_envase: tipo, cantidad: Number(data[`cantidad_${tipo}`] || 0), ...(!soloEnvases ? { propiedad: data[`propiedad_${tipo}`] || '' } : {}) })).filter((item) => item.cantidad > 0);
+        const missingProperty = !soloEnvases && data.envases.find((item) => !item.propiedad);
+        if (missingProperty) {
+            elements.receptionFormError.textContent = `Selecciona la propiedad de ${label(missingProperty.tipo_envase)}: del cliente, propios o arrendados por planta.`;
+            elements.receptionForm.elements[`propiedad_${missingProperty.tipo_envase}`].focus();
+            return;
+        }
     }
     state.catalogs.tipos_envase.map((t) => t.codigo).forEach((tipo) => { delete data[`cantidad_${tipo}`]; delete data[`propiedad_${tipo}`]; });
-    delete data.propiedad_envase_pesaje;
-    delete data.cantidad_envases_pesaje;
     if (cumulativeWeighing || soloEnvases) delete data.peso_bruto;
-    else {
-        delete data.tipo_envase_pesaje;
-        delete data.tara_unitaria_envase;
-    }
     const administrativeCorrection = Boolean(id && state.administrativeCorrection);
     if (administrativeCorrection) data.version_conocida = state.selected?.version;
     else delete data.motivo_correccion;
@@ -549,24 +625,31 @@ elements.addContainerWeighing.addEventListener('click', () => {
     elements.containerWeighingFormError.textContent = '';
     elements.containerWeighingTarePreview.textContent = '—';
     elements.containerWeighingNetPreview.textContent = '—';
-    const quantity = elements.containerWeighingForm.elements.cantidad_envases;
-    quantity.max = String(weighing.cantidad_pendiente);
-    quantity.value = String(Math.min(3, weighing.cantidad_pendiente));
-    elements.containerWeighingDescription.textContent = `${weighing.cantidad_pesada}/${weighing.cantidad_declarada} ${label(weighing.tipo_envase)} pesados · faltan ${weighing.cantidad_pendiente} · tara ${formatWeight(weighing.tara_unitaria)} por unidad.`;
+    // Una tanda puede mezclar tipos: un campo por cada tipo con envases pendientes.
+    const pending = weighingTypes(weighing).filter((item) => item.cantidad_pendiente > 0);
+    const single = weighingTypes(weighing).length === 1;
+    elements.containerWeighingQuantities.innerHTML = pending.map((item) => `<label class="field"><span>${single ? 'Cantidad de envases en esta tanda *' : `${escapeHtml(label(item.tipo_envase))} en esta tanda`}</span><input data-weighing-type="${escapeHtml(item.tipo_envase)}" data-tare="${escapeHtml(item.tara_unitaria ?? 0)}" type="number" min="0" max="${item.cantidad_pendiente}" value="${single ? Math.min(3, item.cantidad_pendiente) : 0}" inputmode="numeric"><small>Faltan ${item.cantidad_pendiente} de ${item.cantidad_declarada} · tara ${escapeHtml(formatWeight(item.tara_unitaria))} por envase</small></label>`).join('');
+    elements.containerWeighingDescription.textContent = single
+        ? `${weighing.cantidad_pesada}/${weighing.cantidad_declarada} ${label(weighing.tipo_envase)} pesados · faltan ${weighing.cantidad_pendiente} · tara ${formatWeight(weighing.tara_unitaria)} por unidad.`
+        : `${weighing.cantidad_pesada}/${weighing.cantidad_declarada} envases pesados · faltan ${weighing.cantidad_pendiente}. Indica cuántos de cada tipo están sobre la báscula; la tanda puede mezclarlos.`;
     elements.containerWeighingDialog.showModal();
-    quantity.focus();
+    elements.containerWeighingQuantities.querySelector('input')?.focus();
     updateContainerWeighingPreviews();
 });
 
-function updateContainerWeighingPreviews() {
-    const weighing = state.selected?.pesaje_envases;
-    const quantity = Number(elements.containerWeighingForm.elements.cantidad_envases.value || 0);
-    const gross = Number(elements.containerWeighingForm.elements.peso_bruto.value || 0);
-    const tare = Number(weighing?.tara_unitaria || 0) * quantity;
-    elements.containerWeighingTarePreview.textContent = quantity > 0 ? formatWeight(tare) : '—';
-    elements.containerWeighingNetPreview.textContent = gross > tare ? formatWeight(gross - tare) : '—';
+function containerWeighingLines() {
+    return [...elements.containerWeighingQuantities.querySelectorAll('[data-weighing-type]')]
+        .map((input) => ({ tipo_envase: input.dataset.weighingType, cantidad: Number(input.value || 0), tara: Number(input.dataset.tare || 0) }));
 }
-elements.containerWeighingForm.elements.cantidad_envases.addEventListener('input', updateContainerWeighingPreviews);
+function updateContainerWeighingPreviews() {
+    const lines = containerWeighingLines();
+    const quantity = lines.reduce((sum, line) => sum + line.cantidad, 0);
+    const gross = Number(elements.containerWeighingForm.elements.peso_bruto.value || 0);
+    const tare = lines.reduce((sum, line) => sum + line.cantidad * line.tara, 0);
+    elements.containerWeighingTarePreview.textContent = quantity > 0 ? formatWeight(tare) : '—';
+    elements.containerWeighingNetPreview.textContent = quantity > 0 && gross > tare ? formatWeight(gross - tare) : '—';
+}
+elements.containerWeighingQuantities.addEventListener('input', updateContainerWeighingPreviews);
 elements.containerWeighingForm.elements.peso_bruto.addEventListener('input', updateContainerWeighingPreviews);
 elements.containerWeighingForm.addEventListener('submit', async (event) => {
     if (event.submitter?.value === 'cancel') return;
@@ -574,14 +657,22 @@ elements.containerWeighingForm.addEventListener('submit', async (event) => {
     if (!state.selected) return;
     elements.containerWeighingFormError.textContent = '';
     const data = Object.fromEntries(new FormData(elements.containerWeighingForm));
+    const lines = containerWeighingLines().filter((line) => line.cantidad > 0);
+    if (!lines.length) {
+        elements.containerWeighingFormError.textContent = 'Indica cuántos envases trae esta tanda.';
+        elements.containerWeighingQuantities.querySelector('input')?.focus();
+        return;
+    }
+    data.envases = lines.map((line) => ({ tipo_envase: line.tipo_envase, cantidad: line.cantidad }));
     data.operacion_id = operationUuid();
+    const total = lines.reduce((sum, line) => sum + line.cantidad, 0);
     setBusy(true, 'Registrando tanda y recalculando el peso neto…');
     try {
         const payload = await api(`/api/romana/recepciones/${state.selected.id}/pesajes-envases`, { method: 'POST', body: JSON.stringify(data) });
         elements.containerWeighingDialog.close();
         await loadReceptions({ silent: true });
         renderDetail(payload.data);
-        toast(`Tanda registrada: ${data.cantidad_envases} envase(s).`);
+        toast(`Tanda registrada: ${total} envase(s).`);
     } catch (error) { elements.containerWeighingFormError.textContent = error.message; }
     finally { setBusy(false); }
 });
@@ -611,7 +702,7 @@ elements.containerWeighingList.addEventListener('click', async (event) => {
 elements.closeReception.addEventListener('click', async () => {
     if (!state.selected?.puede_cerrar) return;
     if (state.selected.pesaje_envases) {
-        if (!window.confirm(`¿Cerrar el pesaje de ${state.selected.pesaje_envases.cantidad_declarada} ${label(state.selected.pesaje_envases.tipo_envase)}? Después del cierre no se podrán agregar ni anular tandas.`)) return;
+        if (!window.confirm(`¿Cerrar el pesaje de ${weighingTotalLabel(state.selected.pesaje_envases)}? Después del cierre no se podrán agregar ni anular tandas.`)) return;
         setBusy(true, 'Cerrando pesaje acumulativo…');
         try {
             const payload = await api(`/api/romana/recepciones/${state.selected.id}/cerrar`, {
@@ -890,14 +981,11 @@ function toggleReceptionType() {
     if (soloEnvases && !form.fecha_ingreso.value) form.fecha_ingreso.value = form.fecha_ingreso.max;
     form.concepto_envases.required = soloEnvases;
     form.peso_bruto.required = !cumulativeWeighing && !soloEnvases;
-    form.tipo_envase_pesaje.required = cumulativeWeighing;
-    form.cantidad_envases_pesaje.required = cumulativeWeighing;
-    form.tara_unitaria_envase.required = cumulativeWeighing;
     syncContainerProperties();
     elements.receptionDialogDescription.textContent = soloEnvases
         ? 'Selecciona la fecha efectiva y registra guía, cliente, transporte y cantidades. Esta recepción no utiliza kilos.'
         : cumulativeWeighing
-            ? 'Configura el envase y registra después sus pesajes por tandas.'
+            ? 'Configura los envases y registra después sus pesajes por tandas.'
             : 'Captura los antecedentes documentales y el peso del camión cargado.';
     if (!state.administrativeCorrection) {
         elements.saveReception.textContent = form.recepcion_id.value

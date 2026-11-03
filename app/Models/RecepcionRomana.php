@@ -113,6 +113,47 @@ class RecepcionRomana extends Model implements PerteneceATemporada
             ?? PropiedadEnvase::Cliente;
     }
 
+    /**
+     * Avance del pesaje acumulativo por tipo de envase. Con varios tipos, el
+     * resumen guarda lo pesado de cada uno en el reparto del neto; con uno solo,
+     * lo pesado es el total de la recepción.
+     *
+     * @return list<array{tipo_envase: string, cantidad_declarada: int, cantidad_pesada: int, cantidad_pendiente: int, tara_unitaria: float|null, peso_neto: float, peso_neto_por_envase: float|null}>
+     */
+    public function avancePesajeEnvasesPorTipo(): array
+    {
+        if ($this->tipo_recepcion !== TipoRecepcionRomana::FrutaPesajeEnvases) {
+            return [];
+        }
+        $varios = $this->detallesEnvases->count() > 1;
+        $reparto = collect($this->reparto_neto_envases ?? [])->keyBy('tipo_envase');
+
+        return $this->detallesEnvases
+            ->sortBy(fn ($detalle): int => $detalle->tipo_envase->orden())
+            ->map(function ($detalle) use ($varios, $reparto): array {
+                $tipo = $detalle->tipo_envase->value;
+                $fila = $reparto->get($tipo);
+                $pesada = $varios ? (int) ($fila['cantidad'] ?? 0) : (int) $this->cantidad_envases_pesados;
+                $neto = $varios
+                    ? round((float) ($fila['peso_neto'] ?? (($fila['peso_neto_unitario'] ?? 0) * $pesada)), 3)
+                    : round((float) ($this->peso_neto ?? 0), 3);
+                $tara = $detalle->tara_unitaria_salida
+                    ?? ($tipo === $this->tipo_envase_pesaje?->value ? $this->tara_unitaria_envase : null);
+
+                return [
+                    'tipo_envase' => $tipo,
+                    'cantidad_declarada' => (int) $detalle->cantidad_declarada,
+                    'cantidad_pesada' => $pesada,
+                    'cantidad_pendiente' => max(0, (int) $detalle->cantidad_declarada - $pesada),
+                    'tara_unitaria' => $tara !== null ? (float) $tara : null,
+                    'peso_neto' => $neto,
+                    'peso_neto_por_envase' => $pesada > 0 ? round($neto / $pesada, 3) : null,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
     public function salidasEnvases(): HasMany
     {
         return $this->hasMany(SalidaEnvaseRecepcionRomana::class, 'recepcion_romana_id');

@@ -26,7 +26,6 @@ class CrearRecepcionRomanaRequest extends FormRequest
     public function rules(): array
     {
         $esSoloEnvases = $this->input('tipo_recepcion') === TipoRecepcionRomana::SoloEnvases->value;
-        $esPesajeEnvases = $this->input('tipo_recepcion') === TipoRecepcionRomana::FrutaPesajeEnvases->value;
         $requierePesoBruto = $this->input('tipo_recepcion') === TipoRecepcionRomana::FrutaConEnvases->value;
 
         return [
@@ -59,14 +58,15 @@ class CrearRecepcionRomanaRequest extends FormRequest
             'envases.*.tipo_envase' => ['required', 'distinct', Rule::enum(TipoEnvaseRomana::class)],
             'envases.*.cantidad' => ['required', 'integer', 'min:1', 'max:100000'],
             'envases.*.propiedad' => ['sometimes', 'required', Rule::enum(PropiedadEnvase::class)],
+            // Pesaje acumulativo: tara por envase de cada tipo que se pesará en tandas.
+            'envases.*.tara_unitaria' => ['sometimes', 'nullable', 'numeric', 'min:0.001', 'max:1000', 'decimal:0,3'],
+            // Contrato anterior, de un solo tipo: el envase pesado y su tara.
             'tipo_envase_pesaje' => [
                 'nullable',
-                Rule::requiredIf($esPesajeEnvases),
                 Rule::enum(TipoEnvaseRomana::class),
             ],
             'tara_unitaria_envase' => [
                 'nullable',
-                Rule::requiredIf($esPesajeEnvases),
                 'numeric',
                 'min:0.001',
                 'max:1000',
@@ -110,8 +110,8 @@ class CrearRecepcionRomanaRequest extends FormRequest
             'envases.*.cantidad.min' => 'La guía debe declarar al menos una unidad por tipo de envase.',
             'envases.*.propiedad.required' => 'Selecciona si los envases son del cliente, propios o arrendados por planta.',
             'envases.*.propiedad' => 'La propiedad debe ser del cliente, propia o arrendada.',
-            'tipo_envase_pesaje.required' => 'Selecciona el tipo de envase que se pesará.',
-            'tara_unitaria_envase.required' => 'Configura la tara unitaria del envase.',
+            'envases.*.tara_unitaria.min' => 'La tara por envase debe ser mayor que cero.',
+            'envases.*.tara_unitaria.max' => 'La tara por envase no puede superar 1.000 kg.',
             'tara_unitaria_envase.min' => 'La tara unitaria debe ser mayor que cero.',
             'numero_guia_despacho.required' => 'Ingresa el número de guía de despacho.',
             'patente_camion.required' => 'Ingresa la patente del camión.',
@@ -132,25 +132,35 @@ class CrearRecepcionRomanaRequest extends FormRequest
                 return;
             }
 
-            $envases = collect($this->input('envases', []));
-            if ($envases->count() !== 1) {
-                $validator->errors()->add(
-                    'envases',
-                    'El pesaje acumulativo debe declarar un único tipo de envase.',
-                );
-
-                return;
-            }
-
-            $primerEnvase = $envases->first();
-            $tipoDeclarado = is_array($primerEnvase)
-                ? ($primerEnvase['tipo_envase'] ?? null)
-                : null;
-            if ($tipoDeclarado !== $this->input('tipo_envase_pesaje')) {
+            // Uno o más tipos de envase con fruta, cada uno con su tara por envase.
+            $envases = collect($this->input('envases', []))->filter(fn (mixed $envase): bool => is_array($envase));
+            $tipoPesaje = $this->input('tipo_envase_pesaje');
+            if ($tipoPesaje !== null && ! $envases->contains(fn (array $envase): bool => ($envase['tipo_envase'] ?? null) === $tipoPesaje)) {
                 $validator->errors()->add(
                     'tipo_envase_pesaje',
                     'El envase seleccionado debe coincidir con el declarado en la guía.',
                 );
+            }
+            foreach ($envases as $indice => $envase) {
+                $tipo = TipoEnvaseRomana::tryFrom((string) ($envase['tipo_envase'] ?? ''));
+                if (! $tipo) {
+                    continue;
+                }
+                if (! $tipo->contieneFruta()) {
+                    $validator->errors()->add(
+                        "envases.{$indice}.tipo_envase",
+                        "El pesaje acumulativo solo admite envases con fruta: {$tipo->etiqueta()} no contiene fruta.",
+                    );
+
+                    continue;
+                }
+                $tara = $envase['tara_unitaria'] ?? ($tipo->value === $tipoPesaje ? $this->input('tara_unitaria_envase') : null);
+                if ($tara === null || $tara === '') {
+                    $validator->errors()->add(
+                        "envases.{$indice}.tara_unitaria",
+                        "Configura la tara por envase de {$tipo->etiqueta()}.",
+                    );
+                }
             }
         });
     }

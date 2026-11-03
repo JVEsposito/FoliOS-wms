@@ -968,7 +968,7 @@ class RecepcionRomanaApiTest extends TestCase
             ->assertJsonPath('data.pesaje_envases.cantidad_pesada', 0);
     }
 
-    public function test_pesaje_acumulativo_exige_un_solo_envase_coincidente_y_su_tara(): void
+    public function test_pesaje_acumulativo_exige_tara_por_tipo_y_solo_envases_con_fruta(): void
     {
         $operador = User::factory()->create(['rol' => RolUsuario::OperadorRomana]);
         $datos = $this->datosIngreso($this->cliente());
@@ -980,10 +980,12 @@ class RecepcionRomanaApiTest extends TestCase
         $datos['tipo_envase_pesaje'] = 'bins';
         unset($datos['peso_bruto']);
 
-        $this->actingAs($operador, 'sanctum')
+        $errores = $this->actingAs($operador, 'sanctum')
             ->postJson('/api/romana/recepciones', $datos)
             ->assertUnprocessable()
-            ->assertJsonValidationErrors(['envases', 'tara_unitaria_envase']);
+            ->assertJsonValidationErrors(['envases.0.tara_unitaria', 'envases.1.tara_unitaria'])
+            ->json('errors');
+        $this->assertSame(['Configura la tara por envase de Tote.'], $errores['envases.1.tara_unitaria']);
 
         $datos['envases'] = [['tipo_envase' => 'bins', 'cantidad' => 5]];
         $datos['tipo_envase_pesaje'] = 'totes';
@@ -991,6 +993,153 @@ class RecepcionRomanaApiTest extends TestCase
         $this->postJson('/api/romana/recepciones', $datos)
             ->assertUnprocessable()
             ->assertJsonValidationErrors('tipo_envase_pesaje');
+
+        unset($datos['tipo_envase_pesaje'], $datos['tara_unitaria_envase']);
+        $datos['envases'] = [
+            ['tipo_envase' => 'bins', 'cantidad' => 5, 'tara_unitaria' => 40],
+            ['tipo_envase' => 'esponjas', 'cantidad' => 5, 'tara_unitaria' => 1],
+        ];
+        $this->postJson('/api/romana/recepciones', $datos)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('envases.1.tipo_envase');
+    }
+
+    public function test_pesa_varios_tipos_de_envase_con_tandas_mixtas_y_reparte_el_neto_por_tipo(): void
+    {
+        $operador = User::factory()->create(['rol' => RolUsuario::OperadorRomana]);
+        $datos = $this->datosIngreso($this->cliente());
+        $datos['tipo_recepcion'] = 'fruta_pesaje_envases';
+        $datos['envases'] = [
+            ['tipo_envase' => 'totes', 'cantidad' => 20, 'propiedad' => 'cliente', 'tara_unitaria' => 1.5],
+            ['tipo_envase' => 'bins', 'cantidad' => 2, 'propiedad' => 'arrendada', 'tara_unitaria' => 40],
+        ];
+        unset($datos['peso_bruto']);
+
+        $recepcion = $this->actingAs($operador, 'sanctum')
+            ->postJson('/api/romana/recepciones', $datos)
+            ->assertCreated()
+            ->assertJsonPath('data.estado', EstadoRecepcionRomana::EnPesajeEnvases->value)
+            ->assertJsonPath('data.pesaje_envases.cantidad_declarada', 22)
+            ->assertJsonPath('data.pesaje_envases.cantidad_pendiente', 22)
+            ->assertJsonPath('data.pesaje_envases.tipos.0.tipo_envase', 'bins')
+            ->assertJsonPath('data.pesaje_envases.tipos.0.tara_unitaria', 40)
+            ->assertJsonPath('data.pesaje_envases.tipos.1.tipo_envase', 'totes')
+            ->assertJsonPath('data.pesaje_envases.tipos.1.tara_unitaria', 1.5)
+            ->json('data');
+        $this->assertDatabaseHas('detalles_envases_recepcion_romana', ['recepcion_romana_id' => $recepcion['id'], 'tipo_envase' => 'totes', 'tara_unitaria_salida' => 1.5, 'propiedad' => 'cliente']);
+        $this->assertDatabaseHas('detalles_envases_recepcion_romana', ['recepcion_romana_id' => $recepcion['id'], 'tipo_envase' => 'bins', 'tara_unitaria_salida' => 40, 'propiedad' => 'arrendada']);
+        $ruta = "/api/romana/recepciones/{$recepcion['id']}/pesajes-envases";
+
+        // Con varios tipos, la cantidad total sola no dice qué envases trae la tanda.
+        $this->postJson($ruta, ['operacion_id' => (string) Str::uuid(), 'cantidad_envases' => 2, 'peso_bruto' => 500])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('envases');
+        $this->postJson($ruta, ['operacion_id' => (string) Str::uuid(), 'envases' => [['tipo_envase' => 'smartpick', 'cantidad' => 1]], 'peso_bruto' => 50])
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.envases.0', 'Smartpick no forma parte del pesaje de esta recepción.');
+        $this->postJson($ruta, ['operacion_id' => (string) Str::uuid(), 'envases' => [['tipo_envase' => 'bins', 'cantidad' => 3]], 'peso_bruto' => 700])
+            ->assertConflict()
+            ->assertJsonPath('message', 'La lectura supera los envases pendientes de Bins plástico: quedan 2.');
+
+        // Tanda de un solo tipo: su neto es exacto.
+        $this->postJson($ruta, ['operacion_id' => (string) Str::uuid(), 'envases' => [['tipo_envase' => 'bins', 'cantidad' => 2], ['tipo_envase' => 'totes', 'cantidad' => 0]], 'peso_bruto' => 500])
+            ->assertOk()
+            ->assertJsonPath('data.peso_tara', 80)
+            ->assertJsonPath('data.peso_neto', 420)
+            ->assertJsonPath('data.pesaje_envases.tipos.0.cantidad_pesada', 2)
+            ->assertJsonPath('data.pesaje_envases.tipos.0.cantidad_pendiente', 0)
+            ->assertJsonPath('data.pesaje_envases.tipos.0.peso_neto', 420)
+            ->assertJsonPath('data.pesaje_envases.tipos.1.cantidad_pesada', 0)
+            ->assertJsonPath('data.lecturas_pesaje_envases.0.envases.0.tipo_envase', 'bins');
+
+        // Tanda mixta: 10 totes y nada más; luego 10 totes con un bin ya cerrado no cabe.
+        $mixta = (string) Str::uuid();
+        $payloadMixta = ['operacion_id' => $mixta, 'envases' => [['tipo_envase' => 'totes', 'cantidad' => 10]], 'peso_bruto' => 102.5];
+        $this->postJson($ruta, $payloadMixta)->assertOk()
+            ->assertJsonPath('data.pesaje_envases.cantidad_pesada', 12)
+            ->assertJsonPath('data.pesaje_envases.tipos.1.peso_neto', 87.5);
+        $this->postJson($ruta, $payloadMixta)->assertOk()->assertJsonPath('data.pesaje_envases.cantidad_pesada', 12);
+        $this->postJson($ruta, [...$payloadMixta, 'peso_bruto' => 103])->assertConflict();
+
+        $this->postJson("/api/romana/recepciones/{$recepcion['id']}/cerrar", $this->payloadConInspeccionRc02("/api/romana/recepciones/{$recepcion['id']}/cerrar", [
+            'operacion_id' => (string) Str::uuid(),
+        ]))
+            ->assertConflict()
+            ->assertJsonPath('message', 'Faltan envases por pesar antes de cerrar la recepción: 10 Tote.');
+
+        $completa = $this->postJson($ruta, ['operacion_id' => (string) Str::uuid(), 'envases' => [['tipo_envase' => 'totes', 'cantidad' => 10]], 'peso_bruto' => 100])
+            ->assertOk()
+            ->assertJsonPath('data.pesaje_envases.completo', true)
+            ->assertJsonPath('data.puede_cerrar', true)
+            ->json('data');
+        // Neto real: 420 kg en 2 bins y 87,5 + 85 kg en 20 totes.
+        $this->assertSame(592.5, $completa['peso_neto']);
+        $this->assertEquals([
+            ['tipo_envase' => 'bins', 'cantidad' => 2, 'peso_referencia' => 210, 'peso_neto_unitario' => 210, 'peso_neto' => 420],
+            ['tipo_envase' => 'totes', 'cantidad' => 20, 'peso_referencia' => 8.625, 'peso_neto_unitario' => 8.625, 'peso_neto' => 172.5],
+        ], $completa['reparto_neto_envases']);
+
+        $this->postJson("/api/romana/recepciones/{$recepcion['id']}/cerrar", $this->payloadConInspeccionRc02("/api/romana/recepciones/{$recepcion['id']}/cerrar", [
+            'operacion_id' => (string) Str::uuid(),
+        ]))
+            ->assertOk()
+            ->assertJsonPath('data.estado', EstadoRecepcionRomana::Cerrado->value)
+            ->assertJsonPath('data.peso_neto', 592.5)
+            ->assertJsonPath('data.tipo_envase_calculo_neto', 'bins');
+        $cierre = EventoRecepcionRomana::query()->where('recepcion_romana_id', $recepcion['id'])->where('tipo', 'recepcion_cerrada')->sole();
+        $this->assertEquals([
+            ['tipo_envase' => 'bins', 'cantidad' => 2, 'peso_neto' => 420],
+            ['tipo_envase' => 'totes', 'cantidad' => 20, 'peso_neto' => 172.5],
+        ], $cierre->datos['envases']);
+    }
+
+    public function test_una_tanda_que_mezcla_tipos_reparte_su_neto_por_peso_de_referencia(): void
+    {
+        $operador = User::factory()->create(['rol' => RolUsuario::OperadorRomana]);
+        $datos = $this->datosIngreso($this->cliente());
+        $datos['tipo_recepcion'] = 'fruta_pesaje_envases';
+        $datos['envases'] = [
+            ['tipo_envase' => 'bins', 'cantidad' => 1, 'tara_unitaria' => 40],
+            ['tipo_envase' => 'totes', 'cantidad' => 24, 'tara_unitaria' => 1.25],
+        ];
+        unset($datos['peso_bruto']);
+        $recepcion = $this->actingAs($operador, 'sanctum')->postJson('/api/romana/recepciones', $datos)->assertCreated()->json('data');
+        $ruta = "/api/romana/recepciones/{$recepcion['id']}/pesajes-envases";
+
+        // Cereza: bin 210 kg y tote 8,75 kg de referencia. 1 bin y 24 totes pesan lo mismo en fruta.
+        $lectura = $this->postJson($ruta, [
+            'operacion_id' => (string) Str::uuid(),
+            'envases' => [['tipo_envase' => 'totes', 'cantidad' => 24], ['tipo_envase' => 'bins', 'cantidad' => 1]],
+            'peso_bruto' => 470.001,
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.peso_tara', 70)
+            ->assertJsonPath('data.peso_neto', 400.001)
+            ->assertJsonPath('data.pesaje_envases.completo', true)
+            ->assertJsonPath('data.lecturas_pesaje_envases.0.cantidad_envases', 25)
+            ->json('data.lecturas_pesaje_envases.0.envases');
+        $this->assertEquals([
+            ['tipo_envase' => 'bins', 'cantidad' => 1, 'tara_unitaria' => 40.0, 'peso_tara' => 40.0, 'peso_neto' => 200.0],
+            ['tipo_envase' => 'totes', 'cantidad' => 24, 'tara_unitaria' => 1.25, 'peso_tara' => 30.0, 'peso_neto' => 200.001],
+        ], $lectura);
+        $this->assertDatabaseHas('pesajes_envases_recepcion_romana', ['recepcion_romana_id' => $recepcion['id'], 'tipo_envase' => 'bins', 'cantidad_envases' => 25, 'tara_unitaria_envase' => 2.8]);
+
+        // Sin peso de referencia para la especie, la tanda mixta no se puede repartir.
+        $otra = $this->postJson('/api/romana/recepciones', [...$datos, 'operacion_id' => (string) Str::uuid(), 'numero_guia_despacho' => 'GD-77882',
+            'especie_validacion_id' => EspecieValidacion::create(['temporada_id' => $datos['temporada_id'], 'nombre' => 'Arándano', 'activo' => true])->id])
+            ->assertCreated()->json('data');
+        $this->postJson("/api/romana/recepciones/{$otra['id']}/pesajes-envases", [
+            'operacion_id' => (string) Str::uuid(),
+            'envases' => [['tipo_envase' => 'totes', 'cantidad' => 24], ['tipo_envase' => 'bins', 'cantidad' => 1]],
+            'peso_bruto' => 470,
+        ])
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.envases.0', 'Falta configurar el peso de referencia de Bins plástico para esta especie en Administración: con él se reparte el neto de una tanda que mezcla tipos de envase.');
+        $this->postJson("/api/romana/recepciones/{$otra['id']}/pesajes-envases", [
+            'operacion_id' => (string) Str::uuid(),
+            'envases' => [['tipo_envase' => 'bins', 'cantidad' => 1]],
+            'peso_bruto' => 250,
+        ])->assertOk()->assertJsonPath('data.peso_neto', 210);
     }
 
     public function test_no_edita_una_recepcion_de_temporada_inactiva_ni_la_traslada_a_la_activa(): void

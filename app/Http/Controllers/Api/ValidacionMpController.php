@@ -229,6 +229,7 @@ class ValidacionMpController extends Controller
                     : null,
                 'cantidad_declarada' => $recepcion->cantidad_envases_declarados,
                 'cantidad_pesada' => $recepcion->cantidad_envases_pesados,
+                'tipos' => $recepcion->avancePesajeEnvasesPorTipo(),
                 'peso_neto' => $recepcion->peso_neto !== null ? (float) $recepcion->peso_neto : null,
                 'peso_neto_por_envase' => $recepcion->peso_neto_por_envase !== null
                     ? (float) $recepcion->peso_neto_por_envase
