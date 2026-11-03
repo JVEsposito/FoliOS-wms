@@ -21,8 +21,8 @@
                 <div class="office-logo" aria-hidden="true">↩</div>
                 <p class="eyebrow">FoliOS · MATERIA PRIMA</p>
                 <h1 id="officeAccessTitle">Registra lo que realmente vuelve desde Packing.</h1>
-                <p>Cada bin nace con un folio provisional y kilos verdes. Cuadraturas confirma después su peso definitivo por proceso.</p>
-                <div class="feature-row"><span>Bin individual</span><span>Multiorigen real</span><span>Cuadratura definitiva</span></div>
+                <p>Cada retorno se registra con un folio provisional y kilos verdes. Cuadraturas confirma después su peso definitivo por proceso.</p>
+                <div class="feature-row"><span>BINS y CAJAS 3/4</span><span>Multiorigen real</span><span>Cuadratura definitiva</span></div>
             </div>
             <form class="office-access__form" id="officeLoginForm" novalidate>
                 <div><p class="eyebrow">ACCESO DE OFICINA</p><h2>Ingresar a Retornos de Packing</h2><p>Disponible para operación, supervisión y administración autorizada.</p></div>
@@ -53,6 +53,7 @@
 
                 <div class="return-kpis">
                     <article><span>BINS REGISTRADOS</span><strong id="registeredBins">0</strong><small>Modelo individual</small></article>
+                    <article><span>CAJAS 3/4 REGISTRADAS</span><strong id="registeredBoxes">0</strong><small>Cantidad de cajas retornadas</small></article>
                     <article><span>KILOS VERDES REGISTRADOS</span><strong id="registeredKilos">0</strong><small>Peso provisorio informado al retornar</small></article>
                     <article><span>PENDIENTES DE REGULARIZAR</span><strong id="pendingBins">0</strong><small>Folio provisional vigente</small></article>
                     <article><span>RETORNOS ANTERIORES</span><strong id="legacyReturns">0</strong><small>Pendientes de migrar o descartar</small></article>
@@ -66,18 +67,21 @@
 
                 <section class="return-panel" data-return-panel="recepcion">
                     <div class="return-panel__heading">
-                        <div><p class="eyebrow">NUEVO RETORNO FÍSICO</p><h2>Registrar un bin</h2><p>El WMS asignará un folio provisional PR-* al confirmar.</p></div>
+                        <div><p class="eyebrow">NUEVO RETORNO FÍSICO</p><h2>Registrar retorno de fruta</h2><p>El WMS asignará un folio provisional PR-* al confirmar.</p></div>
                     </div>
 
                     <form id="binReturnForm" class="bin-return-form" novalidate>
                         <div class="return-form-grid">
-                            <label><span>Kilos verdes totales del bin *</span><input name="kilos_totales" id="binTotalKilos" type="number" min="0.001" max="999999999.999" step="0.001" inputmode="decimal" required></label>
+                            <label><span>Envase del retorno *</span><select name="tipo_envase" id="returnContainerType"><option value="bins">BINS</option><option value="caja_3_4">CAJAS 3/4</option></select></label>
+                            <label><span id="returnContainerQuantityLabel">Cantidad de bins *</span><input name="cantidad_envases" id="returnContainerQuantity" type="number" min="1" max="1" step="1" value="1" inputmode="numeric" required></label>
+                            <p class="field-wide">Cada folio identifica un bin o una agrupación de cajas 3/4. Los kilos corresponden al total de fruta retornada.</p>
+                            <label><span>Kilos verdes totales del retorno *</span><input name="kilos_totales" id="binTotalKilos" type="number" min="0.001" max="999999999.999" step="0.001" inputmode="decimal" required></label>
                             <label class="field-wide"><span>Observación</span><textarea name="observacion" maxlength="2000" placeholder="Opcional"></textarea></label>
                         </div>
 
                         <div class="origin-builder">
                             <div class="origin-builder__heading">
-                                <div><strong>Composición verde por proceso</strong><small>Agrega cada proceso y los kilos provisorios que aportó al bin.</small></div>
+                                <div><strong>Composición verde por proceso</strong><small>Agrega cada proceso y los kilos provisorios que aportó al retorno.</small></div>
                                 <div class="origin-add">
                                     <select id="processSelect" aria-label="Proceso de origen"></select>
                                     <button class="secondary-button" id="addOriginButton" type="button">+ Agregar proceso</button>
@@ -90,11 +94,11 @@
                         </div>
 
                         <p class="form-error" id="binReturnError" role="alert"></p>
-                        <div class="return-actions"><button class="primary-button" type="submit">Registrar bin y generar folio provisional</button></div>
+                        <div class="return-actions"><button class="primary-button" type="submit">Registrar retorno y generar folio provisional</button></div>
                     </form>
 
                     <div class="recent-return-heading">
-                        <div><strong>Todos los bins registrados</strong><small id="binListCount">Cargando retornos de la temporada…</small></div>
+                        <div><strong>Todos los retornos registrados</strong><small id="binListCount">Cargando retornos de la temporada…</small></div>
                         <div class="return-list-filters">
                             <label><span>Buscar</span><input id="binListSearch" type="search" autocomplete="off" placeholder="Folio, observación, lote u orden"></label>
                             <label><span>Estado</span><select id="binListState"><option value="">Todos</option><option value="pendiente_regularizacion">Pendientes</option><option value="regularizado">Regularizados</option><option value="anulado">Anulados</option></select></label>
@@ -125,6 +129,8 @@
                 <div class="return-dialog__heading"><div><p class="eyebrow">CORRECCIÓN AUDITADA</p><h2 id="editBinTitle">Modificar retorno</h2><p id="editBinDescription"></p></div><button value="cancel" type="submit" aria-label="Cerrar">×</button></div>
                 <input name="bin_id" type="hidden">
                 <div class="return-form-grid">
+                    <label><span>Envase del retorno *</span><select name="tipo_envase" id="editReturnContainerType"><option value="bins">BINS</option><option value="caja_3_4">CAJAS 3/4</option></select></label>
+                    <label><span id="editReturnContainerQuantityLabel">Cantidad de bins *</span><input name="cantidad_envases" id="editReturnContainerQuantity" type="number" min="1" step="1" inputmode="numeric" required></label>
                     <label><span>Kilos verdes totales *</span><input name="kilos_totales" id="editGreenTotalKilos" type="number" min="0.001" max="999999999.999" step="0.001" inputmode="decimal" required></label>
                     <label class="field-wide"><span>Observación</span><textarea name="observacion" id="editBinObservation" maxlength="2000" placeholder="Opcional"></textarea></label>
                 </div>
@@ -157,7 +163,7 @@
 
         <dialog class="return-dialog return-dialog--wide" id="regularizeDialog">
             <form method="dialog" id="regularizeForm" novalidate>
-                <div class="return-dialog__heading"><div><p class="eyebrow">FOLIO PROVISIONAL</p><h2 id="regularizeTitle">Regularizar bin</h2><p id="regularizeDescription"></p></div><button value="cancel" type="submit" aria-label="Cerrar">×</button></div>
+                <div class="return-dialog__heading"><div><p class="eyebrow">FOLIO PROVISIONAL</p><h2 id="regularizeTitle">Regularizar retorno</h2><p id="regularizeDescription"></p></div><button value="cancel" type="submit" aria-label="Cerrar">×</button></div>
                 <section class="return-source-observation is-empty" aria-labelledby="regularizeObservationLabel">
                     <span id="regularizeObservationLabel">Observación del retorno físico</span>
                     <p id="regularizeObservation">Sin observación registrada.</p>
@@ -183,7 +189,7 @@
             <form method="dialog" id="legacyMigrationForm" novalidate>
                 <div class="return-dialog__heading"><div><p class="eyebrow">MIGRAR RETORNO ANTERIOR</p><h2 id="legacyMigrationTitle">Convertir a bin provisional</h2><p id="legacyMigrationDescription"></p></div><button value="cancel" type="submit" aria-label="Cerrar">×</button></div>
                 <input name="retorno_id" type="hidden">
-                <label class="migration-total"><span>Kilos totales del bin *</span><input name="kilos_totales" id="migrationTotalKilos" type="number" min="0.001" step="0.001" required></label>
+                <label class="migration-total"><span>Kilos totales del retorno *</span><input name="kilos_totales" id="migrationTotalKilos" type="number" min="0.001" step="0.001" required></label>
                 <div class="migration-origins" id="migrationOrigins"></div>
                 <div class="origin-balance" id="migrationBalance"><span>Distribuido</span><strong>0,000 / 0,000 kg</strong><small>Completa la distribución</small></div>
                 <label class="migration-reason"><span>Observación de migración</span><textarea name="motivo" maxlength="2000"></textarea></label>

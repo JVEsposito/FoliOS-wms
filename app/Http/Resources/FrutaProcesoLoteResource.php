@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Enums\TipoEnvaseRetornoPacking;
 use App\Models\EntregaFrutaProceso;
 use App\Models\RetornoPacking;
 use App\Models\SubloteRetornoPacking;
@@ -180,6 +181,7 @@ class FrutaProcesoLoteResource extends JsonResource
                     ? 'completado'
                     : ($retornosVigentes->isEmpty() ? 'pendiente' : 'parcial'),
                 'bins_retornados' => $binsRetornados,
+                'cajas_3_4_retornadas' => (int) $resultadosVigentes->where('tipo_envase', TipoEnvaseRetornoPacking::CajaTresCuartos)->sum('cantidad_envases'),
                 'kilos_recuperados' => $kilosRecuperados,
                 'merma_kilos' => $cerrado
                     && $kilosEnviados !== null
@@ -259,6 +261,9 @@ class FrutaProcesoLoteResource extends JsonResource
                     ],
                     'nombre_resultado' => $sublote->nombre_resultado,
                     'cantidad_bins' => $sublote->cantidad_bins,
+                    'tipo_envase' => $sublote->tipo_envase->value,
+                    'cantidad_envases' => $sublote->cantidad_envases,
+                    'envase' => $sublote->tipo_envase->etiqueta(),
                     'kilos_netos' => $sublote->kilos_netos !== null
                         ? (float) $sublote->kilos_netos
                         : null,

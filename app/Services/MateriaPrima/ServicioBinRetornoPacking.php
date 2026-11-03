@@ -3,6 +3,7 @@
 namespace App\Services\MateriaPrima;
 
 use App\Enums\EstadoSubloteRetornoPacking;
+use App\Enums\TipoEnvaseRetornoPacking;
 use App\Exceptions\ConflictoOperacion;
 use App\Models\BinRetornoPacking;
 use App\Models\BinRetornoPackingOrigen;
@@ -65,6 +66,8 @@ class ServicioBinRetornoPacking
                 'payload_hash' => $hash,
                 'folio_provisional' => $folioProvisional,
                 'kilos_totales' => $payload['kilos_totales'],
+                'tipo_envase' => $payload['tipo_envase'] ?? 'bins',
+                'cantidad_envases' => $payload['cantidad_envases'] ?? 1,
                 'estado' => 'pendiente_regularizacion',
                 'registrado_por_user_id' => $usuario->id,
                 'dispositivo_id' => $token instanceof PersonalAccessToken
@@ -204,6 +207,8 @@ class ServicioBinRetornoPacking
             $datosBin = [
                 'kilos_totales' => $payload['kilos_totales'],
                 'observacion' => $payload['observacion'],
+                'tipo_envase' => $payload['tipo_envase'] ?? $bin->tipo_envase->value,
+                'cantidad_envases' => $payload['cantidad_envases'] ?? $bin->cantidad_envases,
             ];
             if ($regularizado && $tipo) {
                 $datosBin = [
@@ -443,9 +448,10 @@ class ServicioBinRetornoPacking
                 throw new ConflictoOperacion('No se puede migrar un retorno anterior anulado.');
             }
             if ($retorno->resultados->count() !== 1
-                || (int) $retorno->resultados->first()->cantidad_bins !== 1) {
+                || ($retorno->resultados->first()->tipo_envase === TipoEnvaseRetornoPacking::Bins
+                    && (int) $retorno->resultados->first()->cantidad_bins !== 1)) {
                 throw ValidationException::withMessages([
-                    'retorno' => 'Solo se migra automáticamente un retorno anterior que represente exactamente un bin. Descártalo y vuelve a ingresar sus bins individualmente.',
+                    'retorno' => 'Solo se migra un resultado único: un bin o una agrupación de cajas 3/4. Los bins múltiples deben reingresarse individualmente.',
                 ]);
             }
 
@@ -467,6 +473,8 @@ class ServicioBinRetornoPacking
                 'kilos_totales' => $payload['kilos_totales'],
                 'estado' => 'pendiente_regularizacion',
                 'retorno_packing_legacy_id' => $retorno->id,
+                'tipo_envase' => $resultado->tipo_envase->value,
+                'cantidad_envases' => $resultado->tipo_envase === TipoEnvaseRetornoPacking::Bins ? 1 : $resultado->cantidad_envases,
                 'registrado_por_user_id' => $usuario->id,
                 'dispositivo_id' => $token instanceof PersonalAccessToken
                     ? $token->dispositivo_id
@@ -568,12 +576,24 @@ class ServicioBinRetornoPacking
     /** @param array<string, mixed> $datos */
     private function payloadBin(array $datos): array
     {
+        $envase = $this->payloadEnvase($datos);
+
         return [
             'kilos_totales' => $this->decimal($datos['kilos_totales']),
             'observacion' => filled($datos['observacion'] ?? null)
                 ? trim((string) $datos['observacion'])
                 : null,
             'origenes' => $this->normalizarOrigenes($datos['origenes']),
+            // Conserva el hash histórico para reenvíos de un bin sin campos nuevos.
+            ...($envase['tipo_envase'] === 'bins' ? [] : $envase),
+        ];
+    }
+
+    private function payloadEnvase(array $datos): array
+    {
+        return [
+            'tipo_envase' => TipoEnvaseRetornoPacking::from($datos['tipo_envase'] ?? 'bins')->value,
+            'cantidad_envases' => (int) ($datos['cantidad_envases'] ?? 1),
         ];
     }
 
@@ -639,6 +659,9 @@ class ServicioBinRetornoPacking
                 : null,
             'origenes' => $origenes,
         ];
+        if (isset($datos['tipo_envase'])) {
+            $payload = [...$payload, ...$this->payloadEnvase($datos)];
+        }
         if ($regularizado) {
             $payload = [
                 ...$payload,
@@ -713,6 +736,8 @@ class ServicioBinRetornoPacking
     private function snapshotBin(BinRetornoPacking $bin, Collection $origenes): array
     {
         return [
+            'tipo_envase' => $bin->tipo_envase->value,
+            'cantidad_envases' => $bin->cantidad_envases,
             'folio_provisional' => $bin->folio_provisional,
             'folio_definitivo' => $bin->folio_definitivo,
             'kilos_totales' => $this->decimal($bin->kilos_totales),

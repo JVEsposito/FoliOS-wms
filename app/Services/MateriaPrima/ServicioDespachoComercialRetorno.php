@@ -53,6 +53,8 @@ class ServicioDespachoComercialRetorno
                     'folio_definitivo' => $bin->folio_definitivo_vigente,
                     'clasificacion' => $bin->nombre_resultado ?: $bin->tipoResultado?->nombre ?: 'Sin clasificación',
                     'kilos_definitivos' => $bin->kilos_totales_definitivos,
+                    'tipo_envase' => $bin->tipo_envase->value,
+                    'cantidad_envases' => $bin->cantidad_envases,
                 ]);
                 $bin->update(['despacho_comercial_id' => $despacho->id]);
             }

@@ -53,7 +53,7 @@ final class FuentesOperativas
     {
         return ['clave' => 'packing_retorno', 'nombre' => 'Retornos packing regularizados', 'area' => 'packing',
             'descripcion' => 'Kilos definitivos distribuidos por proceso y tipo de resultado. Cada origen se cuenta una vez; los bins pendientes requieren regularización.',
-            'id' => 'o.id', 'cambios' => ['o.updated_at', 'b.updated_at', 'l.updated_at'], 'dimensiones' => [...$this->dimensionesPacking(), 'tipo_resultado' => 'Código del resultado', 'bin_id' => 'Bin de retorno'],
+            'id' => 'o.id', 'cambios' => ['o.updated_at', 'b.updated_at', 'l.updated_at'], 'dimensiones' => [...$this->dimensionesPacking(), 'tipo_resultado' => 'Código del resultado', 'bin_id' => 'Folio de retorno'],
             'medidas' => ['origenes' => ['nombre' => 'Orígenes de retorno', 'unidad' => 'origen'], 'kilos' => ['nombre' => 'Kilos retornados definitivos', 'unidad' => 'kg']],
             'consulta' => fn (ContextoCaptura $c) => $c->lector->tabla('bin_retorno_packing_origenes', 'o')->join('bins_retorno_packing as b', 'b.id', '=', 'o.bin_retorno_packing_id')->join('lotes_materia_prima as l', 'l.id', '=', 'o.lote_materia_prima_id')->leftJoin('tipos_resultado_packing as t', 't.id', '=', 'b.tipo_resultado_packing_id')
                 ->select(['o.id', 'o.created_at', 'b.regularizado_at as ocurrido_at', 'b.estado', 'l.anulado_at as lote_anulado', 'l.cliente_id', 'l.temporada_id', 'l.id as lote_id', 'o.numero_orden', 'o.linea_proceso', 'o.turno', 'o.kilos_aportados_definitivos', 'b.id as bin_id', 't.codigo as tipo_resultado']),

@@ -43,6 +43,8 @@ class DespachoComercialRetornoController extends Controller
                     'folio' => $bin->folio_definitivo_vigente,
                     'clasificacion' => $bin->nombre_resultado ?: $bin->tipoResultado?->nombre,
                     'kilos' => $bin->kilos_totales_definitivos,
+                    'tipo_envase' => $bin->tipo_envase->value,
+                    'cantidad_envases' => $bin->cantidad_envases,
                     'origenes' => $bin->origenes->map(fn ($origen): array => [
                         'lote' => $origen->numero_lote,
                         'orden' => $origen->numero_orden,

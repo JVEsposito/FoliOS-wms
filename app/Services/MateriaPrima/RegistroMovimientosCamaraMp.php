@@ -95,7 +95,7 @@ class RegistroMovimientosCamaraMp
             $destino = $this->camara($destinoId, $datos, 'destino', $camaras);
             $linea = $datos['linea_proceso'] ?? $entrega?->linea_proceso;
             $packing = 'Packing'.(filled($linea) ? ' · '.$linea : '');
-            $cantidad = $datos['cantidad_envases'] ?? $sublote?->cantidad_bins ?? $entrega?->cantidad_envases
+            $cantidad = $datos['cantidad_envases'] ?? $sublote?->cantidad_envases ?? $entrega?->cantidad_envases
                 ?? ($evento->tipo === 'camara_asignada' ? $lote->cantidad_envases_primarios : null);
             $fuentes = $origenes->get($datos['retorno_id'] ?? '', collect());
             $lotesOrigen = $fuentes
@@ -111,7 +111,7 @@ class RegistroMovimientosCamaraMp
                 'csg' => $fuentes->pluck('csg_snapshot')->filter()->unique()->implode(' / ') ?: $lote->csg_snapshot,
                 'variedad' => $fuentes->pluck('variedad_snapshot')->filter()->unique()->implode(' / ') ?: $lote->variedad_snapshot,
                 'cantidad_envases' => $cantidad !== null ? (int) $cantidad : null,
-                'tipo_envase' => $datos['tipo_envase'] ?? ($sublote ? 'bins' : $lote->envase_primario->value),
+                'tipo_envase' => $datos['tipo_envase'] ?? ($sublote ? $sublote->tipo_envase->value : $lote->envase_primario->value),
                 'camara_origen_id' => $origenId, 'camara_destino_id' => $destinoId,
                 'origen' => $origen ?? ($anulacion || $evento->tipo === 'sublote_packing_ubicado'
                     ? $packing : ($datos['origen_operacional'] ?? ($lote->requiere_hidrocooler ? 'Hidrocooler' : 'Recepción MP'))),

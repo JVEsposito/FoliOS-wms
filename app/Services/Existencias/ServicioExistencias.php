@@ -700,7 +700,7 @@ class ServicioExistencias
             'estado_entrega' => $bin->despacho_comercial_id === null
                 ? 'Retornado desde Packing'
                 : 'Reservado para despacho comercial',
-            'avance_entrega' => '0/1',
+            'avance_entrega' => '0/'.$bin->cantidad_envases,
             'numero_recepcion' => $this->valoresUnicos(
                 $lotes->map(fn ($lote) => $lote->recepcion?->numero_recepcion),
             ),
@@ -722,10 +722,10 @@ class ServicioExistencias
             'calibre' => $this->valoresUnicos($lotes->pluck('calibre_snapshot')),
             'cuartel' => $this->valoresUnicos($lotes->pluck('cuartel')),
             'tipo_producto' => 'Retorno de Packing',
-            'envase_primario' => 'Bins',
-            'cantidad_primarios_inicial' => 1,
+            'envase_primario' => $bin->tipo_envase->etiqueta(),
+            'cantidad_primarios_inicial' => $bin->cantidad_envases,
             'cantidad_primarios_entregada' => 0,
-            'cantidad_primarios' => 1,
+            'cantidad_primarios' => $bin->cantidad_envases,
             'envase_secundario' => null,
             'cantidad_secundarios' => 0,
             'kilos_brutos' => null,

@@ -6,7 +6,7 @@
 .return-flow-nav, .return-section-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
 .return-flow-nav a, .return-section-tabs button { border: 1px solid var(--line); background: var(--button-secondary); color: var(--text-secondary); padding: 11px 16px; border-radius: 7px; text-decoration: none; font-weight: 800; }
 .return-flow-nav a.is-active, .return-section-tabs button.is-active { border-color: var(--success-text); color: var(--success-text); background: var(--surface-selected); }
-.return-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.return-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
 .return-kpis article { border: 1px solid var(--line); border-radius: 10px; padding: 13px 15px; background: var(--raised); display: grid; gap: 4px; }
 .return-kpis span { color: var(--muted); font-size: 10px; font-weight: 900; letter-spacing: .08em; }
 .return-kpis strong { font-size: 23px; }

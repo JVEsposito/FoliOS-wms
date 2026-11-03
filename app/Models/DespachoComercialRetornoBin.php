@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['despacho_comercial_id', 'bin_retorno_packing_id', 'folio_definitivo', 'clasificacion', 'kilos_definitivos'])]
+#[Fillable(['despacho_comercial_id', 'bin_retorno_packing_id', 'folio_definitivo', 'clasificacion', 'kilos_definitivos', 'tipo_envase', 'cantidad_envases'])]
 class DespachoComercialRetornoBin extends Model
 {
     use HasUuids, ImpideEliminacionFisica;
@@ -22,6 +22,6 @@ class DespachoComercialRetornoBin extends Model
 
     protected function casts(): array
     {
-        return ['kilos_definitivos' => 'decimal:3'];
+        return ['kilos_definitivos' => 'decimal:3', 'cantidad_envases' => 'integer'];
     }
 }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Enums\ContenidoCamara;
 use App\Enums\EstadoCamara;
+use App\Enums\TipoEnvaseRetornoPacking;
 use App\Enums\TurnoProceso;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\AnularRetornoPackingRequest;
@@ -27,6 +28,7 @@ class RetornoPackingController extends Controller
         Gate::authorize('consultar-fruta-proceso');
 
         return response()->json([
+            'envases_retorno' => TipoEnvaseRetornoPacking::catalogo(),
             'tipos_resultado' => TipoResultadoPacking::query()
                 ->where('activo', true)
                 ->orderBy('orden')

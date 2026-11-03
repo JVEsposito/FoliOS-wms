@@ -1,4 +1,5 @@
 import { createOperationalPoller } from './shared/operational-poller';
+import { packingReturnQuantity } from './shared/packing-return-containers';
 
 const byId = (id) => document.getElementById(id);
 const elements = {
@@ -121,6 +122,7 @@ function showApp() {
 
 function renderSummary() {
     elements.registeredBins.textContent = formatNumber(state.summary.bins_registrados);
+    byId('registeredBoxes').textContent = formatNumber(state.summary.cajas_3_4_registradas || 0);
     elements.registeredKilos.textContent = formatNumber(state.summary.kilos_registrados, 3);
     elements.pendingBins.textContent = formatNumber(state.summary.pendientes_regularizacion);
     elements.legacyReturns.textContent = formatNumber(state.summary.retornos_anteriores_pendientes);
@@ -172,6 +174,8 @@ function filteredBins() {
             bin.folio_provisional,
             bin.folio_definitivo,
             bin.observacion,
+            bin.envase,
+            bin.tipo_envase,
             bin.nombre_resultado,
             ...bin.origenes.flatMap((origin) => [
                 origin.numero_lote,
@@ -202,7 +206,7 @@ function binCard(bin, pending = false) {
     const audit = bin.anulado_at
         ? `<div class="return-annulment"><strong>Anulado ${escapeHtml(formatDate(bin.anulado_at))}</strong><span>${escapeHtml(bin.anulado_por || 'Usuario')} · ${escapeHtml(bin.motivo_anulacion || 'Sin motivo')}</span></div>`
         : '';
-    return `<article class="bin-card"><div class="bin-card__heading"><div><h3>${escapeHtml(bin.folio_provisional)}${bin.folio_definitivo ? ` → ${escapeHtml(bin.folio_definitivo)}` : ''}</h3><p>${escapeHtml(formatDate(bin.registrado_at))} · ${escapeHtml(bin.registrado_por || 'Usuario')}${bin.retorno_legacy ? ` · migrado desde ${escapeHtml(bin.retorno_legacy)}` : ''}</p></div><span class="return-status${bin.estado === 'pendiente_regularizacion' ? ' is-warning' : ''}">${escapeHtml(label(bin.estado))}</span></div><div class="bin-facts"><div><span>PESO VERDE</span><strong>${escapeHtml(formatKilos(bin.kilos_totales_verdes ?? bin.kilos_totales))}</strong></div><div><span>PESO DEFINITIVO</span><strong>${bin.kilos_totales_definitivos === null ? 'Pendiente' : escapeHtml(formatKilos(bin.kilos_totales_definitivos))}</strong></div><div><span>PROCESOS</span><strong>${formatNumber(bin.origenes.length)}</strong></div><div><span>CLASIFICACIÓN</span><strong>${escapeHtml(bin.nombre_resultado || bin.tipo_resultado?.nombre || 'Pendiente')}</strong></div></div>${binOriginsMarkup(bin)}${correction}${audit}${actions.length ? `<div class="bin-card__actions" data-office-action-menu>${actions.join('')}</div>` : ''}</article>`;
+    return `<article class="bin-card"><div class="bin-card__heading"><div><h3>${escapeHtml(bin.folio_provisional)}${bin.folio_definitivo ? ` → ${escapeHtml(bin.folio_definitivo)}` : ''}</h3><p>${escapeHtml(formatDate(bin.registrado_at))} · ${escapeHtml(bin.registrado_por || 'Usuario')}${bin.retorno_legacy ? ` · migrado desde ${escapeHtml(bin.retorno_legacy)}` : ''}</p></div><span class="return-status${bin.estado === 'pendiente_regularizacion' ? ' is-warning' : ''}">${escapeHtml(label(bin.estado))}</span></div><div class="bin-facts"><div><span>ENVASES</span><strong>${escapeHtml(packingReturnQuantity(bin))}</strong></div><div><span>PESO VERDE</span><strong>${escapeHtml(formatKilos(bin.kilos_totales_verdes ?? bin.kilos_totales))}</strong></div><div><span>PESO DEFINITIVO</span><strong>${bin.kilos_totales_definitivos === null ? 'Pendiente' : escapeHtml(formatKilos(bin.kilos_totales_definitivos))}</strong></div><div><span>PROCESOS</span><strong>${formatNumber(bin.origenes.length)}</strong></div><div><span>CLASIFICACIÓN</span><strong>${escapeHtml(bin.nombre_resultado || bin.tipo_resultado?.nombre || 'Pendiente')}</strong></div></div>${binOriginsMarkup(bin)}${correction}${audit}${actions.length ? `<div class="bin-card__actions" data-office-action-menu>${actions.join('')}</div>` : ''}</article>`;
 }
 function renderBins() {
     const visibleBins = filteredBins();
@@ -215,7 +219,7 @@ function renderBins() {
 }
 function renderLegacy() {
     elements.legacyList.innerHTML = state.legacy.length ? state.legacy.map((item) => {
-        const results = item.resultados.map((result) => `${result.numero_sublote || 'Resultado'} · ${result.cantidad_bins} bin(s)${result.kilos_netos === null ? '' : ` · ${formatKilos(result.kilos_netos)}`}`).join(' | ');
+        const results = item.resultados.map((result) => `${result.numero_sublote || 'Resultado'} · ${packingReturnQuantity(result)}${result.kilos_netos === null ? '' : ` · ${formatKilos(result.kilos_netos)}`}`).join(' | ');
         const processes = item.procesos.map((process) => `<div class="bin-origin"><div><strong>${escapeHtml(process.numero_lote || 'Lote')} · ${escapeHtml(process.numero_orden)}</strong><small>${escapeHtml(process.linea_proceso)} · turno ${escapeHtml(process.turno)}</small></div></div>`).join('');
         const actions = canResolveLegacyReturn()
             ? `<div class="legacy-card__actions" data-office-action-menu>${item.migrable ? `<button data-migrate-legacy="${escapeHtml(item.id)}" type="button">Migrar</button>` : ''}<button data-discard-legacy="${escapeHtml(item.id)}" type="button">Descartar y reingresar</button></div>`
@@ -248,15 +252,16 @@ async function loadCatalogs() {
 }
 
 async function submitBin() {
+    const container = readContainerFields(elements.binForm, elements.binError); if (!container) return;
     const data = new FormData(elements.binForm); const balanceData = balance(data.get('kilos_totales'), state.origins);
     if (!state.origins.length) { elements.binError.textContent = 'Agrega al menos un proceso de origen.'; return; }
     if (state.origins.some((origin) => Number(origin.kilos_aportados || 0) <= 0)) { elements.binError.textContent = 'Informa los kilos aportados por cada proceso.'; return; }
-    if (!balanceData.ok) { elements.binError.textContent = 'Los kilos por proceso deben cuadrar exactamente con el peso total del bin.'; return; }
-    const payload = { operacion_id: uuid(), kilos_totales: Number(data.get('kilos_totales')), observacion: String(data.get('observacion') || '').trim() || null, origenes: originPayload() };
-    setBusy(true, 'Registrando bin retornado…'); elements.binError.textContent = '';
+    if (!balanceData.ok) { elements.binError.textContent = 'Los kilos por proceso deben cuadrar exactamente con el peso total del retorno.'; return; }
+    const payload = { operacion_id: uuid(), ...container, kilos_totales: Number(data.get('kilos_totales')), observacion: String(data.get('observacion') || '').trim() || null, origenes: originPayload() };
+    setBusy(true, 'Registrando retorno…'); elements.binError.textContent = '';
     try {
         const response = await api('/api/materia-prima/fruta-proceso/retornos-bin/bins', { method: 'POST', body: JSON.stringify(payload) });
-        elements.binForm.reset(); state.origins = []; renderOriginRows(); toast(`Bin registrado como ${response.data.folio_provisional}.`); await load({ silent: true });
+        elements.binForm.reset(); state.origins = []; syncContainerFields(elements.binForm, 'returnContainerQuantityLabel'); renderOriginRows(); toast(`Retorno registrado como ${response.data.folio_provisional}.`); await load({ silent: true });
     } catch (error) { elements.binError.textContent = error.message; }
     finally { setBusy(false); }
 }
@@ -275,6 +280,9 @@ function openEdit(id) {
         : 'Corrige los procesos de origen, los kilos verdes o la observación antes de regularizar.';
     elements.editGreenTotal.value = bin.kilos_totales_verdes ?? bin.kilos_totales;
     elements.editObservation.value = bin.observacion || '';
+    elements.editForm.elements.tipo_envase.value = bin.tipo_envase || 'bins';
+    elements.editForm.elements.cantidad_envases.value = bin.cantidad_envases ?? 1;
+    syncContainerFields(elements.editForm, 'editReturnContainerQuantityLabel');
     elements.editDefinitiveSection.classList.toggle('is-hidden', !regularized);
     state.editOrigins = bin.origenes.map((origin) => ({
         ...origin,
@@ -386,6 +394,7 @@ async function submitEdit() {
     if (!state.selectedBin || !state.editOperationId) return;
     const bin = state.selectedBin;
     const regularized = bin.estado === 'regularizado' && Boolean(bin.regularizado_at);
+    const container = readContainerFields(elements.editForm, elements.editError); if (!container) return;
     const data = new FormData(elements.editForm);
     const origins = editOriginsPayload();
     const greenBalance = balance(data.get('kilos_totales'), origins);
@@ -402,6 +411,7 @@ async function submitEdit() {
 
     const payload = {
         operacion_id: state.editOperationId,
+        ...container,
         motivo: reason,
         kilos_totales: Number(data.get('kilos_totales')),
         observacion: String(data.get('observacion') || '').trim() || null,
@@ -456,7 +466,7 @@ function openRegularize(id) {
     state.selectedBin = bin; elements.regularizeForm.reset(); elements.regularizeForm.elements.bin_id.value = bin.id;
     state.regularizationOperationId = uuid();
     elements.regularizeTitle.textContent = `Regularizar ${bin.folio_provisional}`;
-    elements.regularizeDescription.textContent = `Peso verde registrado: ${formatKilos(bin.kilos_totales_verdes ?? bin.kilos_totales)}. Cuadraturas debe confirmar el total y cada proceso; el folio provisional se conservará.`;
+    elements.regularizeDescription.textContent = `${packingReturnQuantity(bin)} · Peso verde registrado: ${formatKilos(bin.kilos_totales_verdes ?? bin.kilos_totales)}. Cuadraturas debe confirmar el total y cada proceso; el folio provisional se conservará.`;
     const sourceObservation = String(bin.observacion || '').trim();
     elements.regularizeObservation.textContent = sourceObservation || 'Sin observación registrada.';
     elements.regularizeObservation.closest('.return-source-observation')?.classList.toggle('is-empty', !sourceObservation);
@@ -632,3 +642,26 @@ state.poller = createOperationalPoller(
     },
 );
 state.poller.start();
+
+function syncContainerFields(form, labelId) {
+    const boxes = form.elements.tipo_envase.value === 'caja_3_4';
+    const quantity = form.elements.cantidad_envases;
+    quantity.max = boxes ? '100000' : '1';
+    quantity.readOnly = !boxes;
+    if (!boxes) quantity.value = '1';
+    byId(labelId).textContent = boxes ? 'Cantidad de cajas 3/4 *' : 'Cantidad de bins *';
+}
+for (const [form, labelId] of [[elements.binForm, 'returnContainerQuantityLabel'], [elements.editForm, 'editReturnContainerQuantityLabel']]) {
+    form.elements.tipo_envase.addEventListener('change', () => syncContainerFields(form, labelId));
+    syncContainerFields(form, labelId);
+}
+
+function readContainerFields(form, errorElement) {
+    const tipo_envase = form.elements.tipo_envase.value;
+    const cantidad_envases = Number(form.elements.cantidad_envases.value);
+    if (!['bins', 'caja_3_4'].includes(tipo_envase) || !Number.isInteger(cantidad_envases) || cantidad_envases < 1 || cantidad_envases > (tipo_envase === 'bins' ? 1 : 100000)) {
+        errorElement.textContent = tipo_envase === 'bins' ? 'Registra un bin por folio.' : 'Ingresa una cantidad entera de cajas 3/4 entre 1 y 100000.';
+        return null;
+    }
+    return { tipo_envase, cantidad_envases };
+}
