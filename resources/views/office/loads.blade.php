@@ -214,6 +214,14 @@
                                 <div class="distribution-list" id="loadDistribution"></div>
                             </div>
 
+                            <section class="load-instructions is-hidden" id="loadInstructions" aria-labelledby="loadInstructionsTitle">
+                                <p class="eyebrow">SEGREGACIÓN DE PALLETS</p>
+                                <h2 id="loadInstructionsTitle">Instructivos de esta orden</h2>
+                                <p>Prepara cada instructivo por separado dentro de la misma orden.</p>
+                                <div class="load-instructions__cards" id="loadInstructionCards"></div>
+                                <p id="loadUnassignedInstructions" role="status"></p>
+                            </section>
+
                             <div class="folio-add" id="folioAddSection">
                                 <div>
                                     <p class="eyebrow">INCORPORACIÓN MASIVA</p>
@@ -221,6 +229,11 @@
                                     <p id="folioAddHelp">Pega o escanea uno o varios folios, separados por salto de línea, coma o punto y coma. El lote completo se rechaza si uno presenta problemas.</p>
                                 </div>
                                 <div class="folio-add__controls">
+                                    <label class="instruction-picker is-hidden" id="loadInstructionPicker">
+                                        <span>Instructivo para estos pallets</span>
+                                        <select id="loadInstructionSelect" aria-describedby="loadInstructionHelp"></select>
+                                        <small id="loadInstructionHelp">La selección se aplica a los folios escaneados y elegidos desde inventario.</small>
+                                    </label>
                                     <textarea id="folioInput" rows="5" aria-labelledby="folioAddTitle" aria-describedby="folioAddHelp folioInputCount" placeholder="FOLIO-001&#10;FOLIO-002&#10;FOLIO-003"></textarea>
                                     <div class="folio-add__footer">
                                         <span id="folioInputCount" aria-live="polite">0 folios únicos detectados</span>

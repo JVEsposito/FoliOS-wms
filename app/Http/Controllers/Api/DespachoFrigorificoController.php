@@ -271,6 +271,7 @@ class DespachoFrigorificoController extends Controller
                 'publicadaPor:id,name',
                 'canceladaPor:id,name',
                 'cerradaPor:id,name',
+                'embarque.instructivos',
                 'asignacionesActuales.asignadoPor:id,name',
                 'asignacionesActuales.anden:id,codigo,nombre',
                 'asignacionesActuales.folio.ubicacionActual.posicion.camara:id,codigo,nombre,cantidad_bandas,posiciones_por_banda,cantidad_niveles',

@@ -200,6 +200,10 @@ class ServicioAcopioCarga
      */
     private function proyectar(Carga $carga, Collection $asignaciones, Collection $reservas, string $folioId, bool $tieneCamion, array $propias = [], ?string $maniobraId = null): array
     {
+        $instructivoId = $asignaciones->firstWhere('folio_id', $folioId)->instructivo_embarque_id;
+        $asignaciones = $asignaciones->where('instructivo_embarque_id', $instructivoId)->values();
+        $foliosGrupo = $asignaciones->pluck('folio_id')->flip();
+        $reservas = $reservas->filter(fn ($r): bool => $foliosGrupo->has($r->tareaMovimiento->folio_id));
         // Se construye una geometría proyectada aparte. Los entrantes conservan
         // sus reservas y nunca se cuentan como pallets físicamente recibidos.
         $proyectadas = $asignaciones->map(function (CargaFolio $item) use ($reservas, $folioId): CargaFolio {
@@ -239,12 +243,15 @@ class ServicioAcopioCarga
             $pendientes,
             $propias,
             $maniobraId,
+            $instructivoId,
         );
 
         return [
             'carga_id' => $carga->id,
             'carga_codigo' => $carga->codigo,
             'carga_folio_id' => $asignaciones->firstWhere('folio_id', $folioId)->id,
+            'instructivo_embarque_id' => $instructivoId,
+            'bandas_otros_instructivos' => $camaraId ? $this->sector->bandasAjenas($camaraId, $carga->id, $instructivoId) : [],
             'camara_objetivo_id' => $camaraId,
             'puntos' => $sector['puntos'] ?? [],
             'sector' => $sector['sector'] ?? null,
@@ -338,6 +345,14 @@ class ServicioAcopioCarga
             if ($carga?->camara_objetivo_id && $posicion->camara_id !== $carga->camara_objetivo_id) {
                 throw new ConflictoOperacion('El destino debe respetar la cámara de acopio vigente de la carga.');
             }
+            if (! $carga) {
+                return;
+            }
+            $instructivoId = CargaFolio::query()->where('carga_id', $carga->id)->where('folio_id', $tarea->folio_id)
+                ->whereHas('reservaActiva')->value('instructivo_embarque_id');
+            if (! $this->sector->admiteInstructivo($posicion, $carga->id, $instructivoId)) {
+                throw new ConflictoOperacion('La banda contiene pallets de otro instructivo del embarque. Actualiza la segregación.');
+            }
 
             return;
         }
@@ -350,6 +365,9 @@ class ServicioAcopioCarga
         }
         if (! $acopio) {
             return;
+        }
+        if (! $this->sector->admiteInstructivo($posicion, $acopio['carga_id'], $acopio['instructivo_embarque_id'] ?? null)) {
+            throw new ConflictoOperacion('La banda contiene pallets de otro instructivo del embarque. Selecciona una banda de esta segregación.');
         }
         if ($acopio['despacho_directo']) {
             throw new ConflictoOperacion('La carga tiene camión en andén; actualice la labor para realizar despacho directo.');

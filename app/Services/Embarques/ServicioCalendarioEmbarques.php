@@ -7,6 +7,8 @@ use App\Enums\EstadoEmbarque;
 use App\Enums\PrioridadCarga;
 use App\Exceptions\ConflictoOperacion;
 use App\Exceptions\OperacionNoAutorizada;
+use App\Models\Carga;
+use App\Models\CargaFolio;
 use App\Models\Cliente;
 use App\Models\Embarque;
 use App\Models\EventoEmbarque;
@@ -98,7 +100,12 @@ class ServicioCalendarioEmbarques
             $usuario,
             $versionEsperada,
         ): Embarque {
+            // Las asignaciones toman carga → embarque → instructivos.
+            $carga = $embarque->carga_id ? Carga::query()->lockForUpdate()->findOrFail($embarque->carga_id) : null;
             $embarque = Embarque::query()->lockForUpdate()->findOrFail($embarque->id);
+            if ($embarque->carga_id !== $carga?->id) {
+                throw new ConflictoOperacion('El embarque fue confirmado mientras lo editabas. Actualiza el calendario.');
+            }
             $this->asegurarVersion($embarque, $versionEsperada);
 
             if ($embarque->estado === EstadoEmbarque::Cancelado) {
@@ -156,6 +163,9 @@ class ServicioCalendarioEmbarques
                 ],
             ));
             $this->sincronizarInstructivos($embarque, $datos['instructivos']);
+            if ($carga) {
+                $carga->update(['version' => $carga->version + 1, 'actualizada_por_user_id' => $usuario->id]);
+            }
             $this->evento($embarque, $usuario, $reprogramado ? 'reprogramado' : 'actualizado', [
                 'ventana_anterior' => $inicioAnterior->toIso8601String(),
                 'ventana_actual' => $inicioNuevo->toIso8601String(),
@@ -359,7 +369,20 @@ class ServicioCalendarioEmbarques
     /** @param array<int, array<string, mixed>> $instructivos */
     private function sincronizarInstructivos(Embarque $embarque, array $instructivos): void
     {
-        $embarque->instructivos()->delete();
+        $existentes = $embarque->instructivos()->lockForUpdate()->get()->keyBy('id');
+        $ids = collect($instructivos)->pluck('id')->filter()->all();
+        if (collect($ids)->contains(fn ($id) => ! $existentes->has($id))) {
+            throw new DomainException('Uno de los instructivos no pertenece a este embarque. Actualiza el calendario.');
+        }
+        $quitados = $existentes->except($ids);
+        if ($quitados->isNotEmpty() && CargaFolio::query()->whereIn('instructivo_embarque_id', $quitados->pluck('id'))->exists()) {
+            throw new DomainException('No se puede quitar un instructivo con pallets asignados o históricos. Conserva el instructivo y corrige sus datos.');
+        }
+        $embarque->instructivos()->whereIn('id', $quitados->pluck('id'))->delete();
+        // Evita colisiones de orden al reordenar dos instructivos que ya existen.
+        foreach ($existentes->only($ids)->values() as $indice => $existente) {
+            $existente->update(['orden' => 1000 + $indice]);
+        }
 
         foreach (array_values($instructivos) as $indice => $instructivo) {
             $pais = isset($instructivo['pais_destino_id'])
@@ -369,7 +392,7 @@ class ServicioCalendarioEmbarques
                 ? Puerto::query()->find($instructivo['puerto_destino_id'])
                 : null;
 
-            $embarque->instructivos()->create(array_merge(
+            $datos = array_merge(
                 [
                     'orden' => $indice + 1,
                     'pais_destino_id' => $pais?->id,
@@ -382,7 +405,17 @@ class ServicioCalendarioEmbarques
                     'cantidad_pallets', 'cantidad_cajas', 'booking', 'sps', 'dus',
                     'planilla_sag', 'sello_sag', 'observacion',
                 ])->all(),
-            ));
+            );
+            $actual = $existentes->get($instructivo['id'] ?? '');
+            if ($actual) {
+                $asignados = CargaFolio::query()->where('instructivo_embarque_id', $actual->id)->whereHas('reservaActiva')->count();
+                if (($datos['cantidad_pallets'] ?? null) !== null && $datos['cantidad_pallets'] < $asignados) {
+                    throw new DomainException("El instructivo ya tiene {$asignados} pallets asignados y no puede programarse por debajo de esa cantidad.");
+                }
+                $actual->update($datos);
+            } else {
+                $embarque->instructivos()->create($datos);
+            }
         }
     }
 

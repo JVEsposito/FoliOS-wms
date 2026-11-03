@@ -57,7 +57,9 @@ final class SectorAcopioCarga
                     return $copia->forceFill(['ocupada_fisica' => $p->ubicacionesActuales->isNotEmpty(), 'reservada' => $reserva !== null,
                         'reservada_sag' => $p->reservaPreparacionSagActiva !== null,
                         'carga_ubicada_id' => $folio?->asignacionCargaActual?->carga_id,
-                        'carga_entrante_id' => $reserva?->tareaMovimiento?->folio?->asignacionCargaActual?->carga_id]);
+                        'carga_entrante_id' => $reserva?->tareaMovimiento?->folio?->asignacionCargaActual?->carga_id,
+                        'instructivo_ubicado_id' => $folio?->asignacionCargaActual?->instructivo_embarque_id,
+                        'instructivo_entrante_id' => $reserva?->tareaMovimiento?->folio?->asignacionCargaActual?->instructivo_embarque_id]);
                 })->sortBy(fn ($p) => [$p->nivel, $p->banda, $p->posicion])->values();
             $protegidas = $camara->proteccionesBandas->mapWithKeys(
                 fn ($r) => [$r->nivel.':'.$r->banda => $r->maniobra_operacional_id],
@@ -72,9 +74,24 @@ final class SectorAcopioCarga
      * @param  list<string>  $posicionesPropias  destinos reservados por la tarea que se evalúa: cuentan como libres
      * @return array{puntos: list<array{banda: int, posicion: int, nivel: int}>, sector: array<string, mixed>}
      */
-    public function elegir(string $camaraId, string $cargaId, array $puntosCarga, int $pendientes, array $posicionesPropias = [], ?string $maniobraId = null): array
+    public function elegir(string $camaraId, string $cargaId, array $puntosCarga, int $pendientes, array $posicionesPropias = [], ?string $maniobraId = null, ?string $instructivoId = null): array
     {
         $mapa = $this->mapa($camaraId, $maniobraId);
+        $ajenas = $this->bandasDeOtrosInstructivos($mapa, $cargaId, $instructivoId);
+        $puntosCarga = array_values(array_filter($puntosCarga, fn ($punto): bool => ! in_array($punto['banda'], $ajenas, true)));
+        foreach ($mapa['bandas'] as &$banda) {
+            if (in_array($banda['numero'], $ajenas, true)) {
+                foreach ($banda['celdas'] as &$celda) {
+                    $celda['banda_util'] = false;
+                    $celda['banda_configurada'] = false;
+                    if ($celda['carga_id'] === $cargaId) {
+                        $celda['carga_id'] = 'otro_instructivo';
+                    }
+                }
+                unset($celda);
+            }
+        }
+        unset($banda);
         $propias = array_flip($posicionesPropias);
         $libre = fn (array $celda): bool => $celda['activa'] && $celda['banda_util']
             && (! $celda['ocupada'] || isset($propias[$celda['id']]));
@@ -552,6 +569,16 @@ final class SectorAcopioCarga
     private function leerMapa(string $camaraId): array
     {
         // Una sola lectura por cámara: el estado de cada posición viene en subconsultas.
+        $ubicada = CargaFolio::query()
+            ->join('ubicaciones_actuales', 'ubicaciones_actuales.folio_id', '=', 'carga_folios.folio_id')
+            ->whereColumn('ubicaciones_actuales.posicion_id', 'posiciones.id')
+            ->whereHas('reservaActiva')->limit(1);
+        $entrante = CargaFolio::query()
+            ->join('tareas_movimiento as entrantes', 'entrantes.folio_id', '=', 'carga_folios.folio_id')
+            ->join('reservas_tareas_movimiento as reservas', 'reservas.tarea_movimiento_id', '=', 'entrantes.id')
+            ->whereColumn('reservas.bloqueo_posicion_id', 'posiciones.id')
+            ->whereIn('reservas.id', ReservaTareaMovimiento::query()->conCompromisoVigente()->select('id'))
+            ->whereHas('reservaActiva')->limit(1);
         $posiciones = Posicion::query()
             ->where('camara_id', $camaraId)
             ->whereHas('camara', fn ($q) => $q->whereColumn('posiciones.banda', '<=', 'camaras.cantidad_bandas')
@@ -562,18 +589,12 @@ final class SectorAcopioCarga
                 'reservaTareaActiva as reservada' => fn ($consulta) => $consulta->conCompromisoVigente(),
                 'reservaPreparacionSagActiva as reservada_sag',
             ])
-            ->addSelect(['carga_ubicada_id' => CargaFolio::query()
-                ->select('carga_folios.carga_id')
-                ->join('ubicaciones_actuales', 'ubicaciones_actuales.folio_id', '=', 'carga_folios.folio_id')
-                ->whereColumn('ubicaciones_actuales.posicion_id', 'posiciones.id')
-                ->whereHas('reservaActiva')
-                ->limit(1),
-                'carga_entrante_id' => CargaFolio::query()->select('carga_folios.carga_id')
-                    ->join('tareas_movimiento as entrantes', 'entrantes.folio_id', '=', 'carga_folios.folio_id')
-                    ->join('reservas_tareas_movimiento as reservas', 'reservas.tarea_movimiento_id', '=', 'entrantes.id')
-                    ->whereColumn('reservas.bloqueo_posicion_id', 'posiciones.id')
-                    ->whereIn('reservas.id', ReservaTareaMovimiento::query()->conCompromisoVigente()->select('id'))
-                    ->whereHas('reservaActiva')->limit(1)])
+            ->addSelect([
+                'carga_ubicada_id' => (clone $ubicada)->select('carga_folios.carga_id'),
+                'instructivo_ubicado_id' => (clone $ubicada)->select('carga_folios.instructivo_embarque_id'),
+                'carga_entrante_id' => (clone $entrante)->select('carga_folios.carga_id'),
+                'instructivo_entrante_id' => (clone $entrante)->select('carga_folios.instructivo_embarque_id'),
+            ])
             ->orderBy('nivel')->orderBy('banda')->orderBy('posicion')
             ->get();
         $bandas = BandaOperacional::query()->where('camara_id', $camaraId)->get(['numero', 'modo', 'usos_permitidos'])->keyBy('numero');
@@ -610,10 +631,32 @@ final class SectorAcopioCarga
                 'ocupada_fisica' => (bool) $posicion->ocupada_fisica,
                 'ocupada' => (bool) $posicion->ocupada_fisica || (bool) $posicion->reservada || (bool) $posicion->reservada_sag,
                 'carga_id' => $posicion->carga_ubicada_id ?? $posicion->carga_entrante_id,
+                'instructivo_id' => $posicion->instructivo_ubicado_id ?? $posicion->instructivo_entrante_id,
             ];
         }
 
         return $mapa;
+    }
+
+    /** @return list<int> */
+    private function bandasDeOtrosInstructivos(array $mapa, string $cargaId, ?string $instructivoId): array
+    {
+        return collect($mapa['bandas'])->flatMap(fn ($banda) => $banda['celdas'])
+            ->filter(fn ($celda): bool => $celda['ocupada'] && $celda['carga_id'] === $cargaId
+                && $celda['instructivo_id'] !== $instructivoId)
+            ->pluck('banda')->unique()->values()->all();
+    }
+
+    public function admiteInstructivo(Posicion $posicion, string $cargaId, ?string $instructivoId): bool
+    {
+        return ! in_array((int) $posicion->banda,
+            $this->bandasDeOtrosInstructivos($this->mapa($posicion->camara_id), $cargaId, $instructivoId), true);
+    }
+
+    /** @return list<int> */
+    public function bandasAjenas(string $camaraId, string $cargaId, ?string $instructivoId): array
+    {
+        return $this->bandasDeOtrosInstructivos($this->mapa($camaraId), $cargaId, $instructivoId);
     }
 
     /**

@@ -18,6 +18,7 @@ use App\Models\ReservaCargaFolio;
 use App\Models\RetencionOperacionalFolio;
 use App\Models\TareaMovimiento;
 use App\Models\User;
+use App\Services\Cargas\ServicioInstructivosCarga;
 use App\Services\Cargas\ServicioTareasCarga;
 use App\Services\Estiba\ServicioManiobrasOperacionales;
 use App\Services\Estiba\ServicioPlanesOperacionales;
@@ -258,6 +259,15 @@ class ServicioRetencionesOperacionales
             $motivoNoRestaurado = 'carga_sin_cupo';
         }
 
+        $instructivoId = CargaFolio::query()->find($retencion->carga_folio_id_original)?->instructivo_embarque_id;
+        if ($motivoNoRestaurado === null && $instructivoId !== null) {
+            try {
+                app(ServicioInstructivosCarga::class)->paraAsignacion($carga, $instructivoId, 1);
+            } catch (\DomainException) {
+                $motivoNoRestaurado = 'instructivo_sin_cupo';
+            }
+        }
+
         if ($motivoNoRestaurado) {
             $retencion->update([
                 'contexto' => [
@@ -272,6 +282,7 @@ class ServicioRetencionesOperacionales
 
         $asignacion = CargaFolio::create([
             'carga_id' => $carga->id,
+            'instructivo_embarque_id' => $instructivoId,
             'folio_id' => $folio->id,
             'estado' => EstadoCargaFolio::Pendiente,
             'reemplaza_a_carga_folio_id' => $retencion->carga_folio_id_original,

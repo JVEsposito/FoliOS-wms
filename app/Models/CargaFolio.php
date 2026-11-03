@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable([
     'carga_id',
+    'instructivo_embarque_id',
     'folio_id',
     'estado',
     'anden_id',
@@ -46,6 +47,11 @@ class CargaFolio extends Model implements PerteneceATemporada
     public function folio(): BelongsTo
     {
         return $this->belongsTo(Folio::class);
+    }
+
+    public function instructivo(): BelongsTo
+    {
+        return $this->belongsTo(InstructivoEmbarque::class, 'instructivo_embarque_id');
     }
 
     public function asignadoPor(): BelongsTo

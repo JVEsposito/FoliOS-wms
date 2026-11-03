@@ -7,6 +7,7 @@ enum TipoEventoCarga: string
     case Creada = 'creada';
     case Actualizada = 'actualizada';
     case FolioAsignado = 'folio_asignado';
+    case FolioSegregado = 'folio_segregado';
     case FolioDesasignado = 'folio_desasignado';
     case Publicada = 'publicada';
     case TareasGeneradas = 'tareas_generadas';

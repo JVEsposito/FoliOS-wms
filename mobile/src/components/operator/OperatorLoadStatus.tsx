@@ -94,6 +94,7 @@ function LoadStatusCard({ load, zone, expanded, onToggle }: { load: OperatorLoad
         {load.observacion ? <Text style={styles.copy}>Observación: {load.observacion}</Text> : null}
         {load.folios.map((folio) => <View key={folio.asignacion_id} style={styles.folio}>
           <Text style={styles.folioCode}>{folio.numero_folio} · {folio.tipo_bulto === 'saldo' ? 'Saldo' : 'Pallet'} · {operatorLoadState(folio.estado_carga)}</Text>
+          {folio.instructivo ? <Text style={styles.copy}>Instructivo {folio.instructivo.numero_externo || folio.instructivo.orden}{folio.instructivo.booking ? ` · Booking ${folio.instructivo.booking}` : ''}</Text> : null}
           <Text style={styles.copy}>{folio.estado_carga === 'despachado' ? 'Despachado de la planta' : folio.ubicacion ? `${folio.ubicacion.camara.nombre} · ${folio.ubicacion.posicion.etiqueta ?? `B${folio.ubicacion.posicion.banda}-P${folio.ubicacion.posicion.posicion}-N${folio.ubicacion.posicion.nivel}`}` : folio.anden ? `En ${folio.anden.nombre}` : 'Sin ubicación de cámara'}</Text>
         </View>)}
       </View> : null}

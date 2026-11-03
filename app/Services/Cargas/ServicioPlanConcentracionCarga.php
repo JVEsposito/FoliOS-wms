@@ -93,7 +93,11 @@ class ServicioPlanConcentracionCarga
 
             $analisisGeneral = $this->calculador->analizar($asignaciones);
             $camaraObjetivoId = $carga->camara_objetivo_id
-                ?? ($analisisGeneral['grupo_principal']['camara']['id'] ?? null);
+                ?? ($analisisGeneral['grupo_principal']['camara']['id'] ?? null)
+                // Una mezcla de instructivos todavía no es un grupo principal,
+                // pero sus pallets ubicados sí determinan dónde iniciar la separación.
+                ?? $asignaciones->map(fn ($a) => $a->folio?->ubicacionActual?->posicion?->camara_id)
+                    ->filter()->countBy()->sortKeys()->sortDesc()->keys()->first();
 
             $recepciones = $asignaciones->flatMap(fn (CargaFolio $asignacion) => $asignacion->folio->tareasMovimiento)
                 ->filter(fn (TareaMovimiento $tarea): bool => $this->acopio
@@ -122,12 +126,12 @@ class ServicioPlanConcentracionCarga
                 $camaraObjetivoId,
             );
             $analisis['dependencias'] = $this->acopio->dependencias($asignaciones);
-            $necesarios = max(
+            $necesarios = (int) collect($analisis['segregaciones'] ?? [$analisis])->sum(fn (array $grupo): int => max(
                 0,
                 (int) ceil(
-                    ($analisis['total'] * CalculadorConcentracionCarga::UMBRAL_PORCENTAJE) / 100,
-                ) - (int) $analisis['concentrados'],
-            );
+                    ($grupo['total'] * CalculadorConcentracionCarga::UMBRAL_PORCENTAJE) / 100,
+                ) - (int) $grupo['concentrados'],
+            ));
             $geometriaHash = $this->geometriaHash($camaraObjetivoId, $analisis);
 
             if ($carga->presenciaAndenActiva) {
@@ -334,6 +338,7 @@ class ServicioPlanConcentracionCarga
                 ->where('activo', true)
                 ->where('tipo_bulto', TipoBulto::Pallet->value))
             ->with([
+                'instructivo',
                 'folio.ubicacionActual.posicion.camara',
                 'folio.procesosPrefrio.proceso.tunel',
                 'folio.tareasMovimiento' => fn ($consulta) => $consulta->whereIn('estado', [
@@ -359,9 +364,17 @@ class ServicioPlanConcentracionCarga
         string $camaraObjetivoId,
         string $geometriaHash,
     ): Collection {
+        $grupos = $asignaciones->groupBy(fn (CargaFolio $a): string => $a->instructivo_embarque_id ?? '');
+        if ($grupos->count() > 1) {
+            return $grupos->flatMap(function (Collection $grupo, string $instructivoId) use ($carga, $camaraObjetivoId, $geometriaHash, $analisis): Collection {
+                $analisis = $this->conSectorDeAcopio($analisis['segregaciones'][$instructivoId], $carga, $grupo, $camaraObjetivoId);
+
+                return $analisis['cumple_umbral'] ? collect() : $this->candidatos($carga, $grupo, $analisis, $camaraObjetivoId, $geometriaHash);
+            })->values();
+        }
         $grupoIds = collect($analisis['grupo_principal_folio_ids']);
         $puntos = collect($analisis['grupo_principal_puntos']);
-        $destinosLibres = $this->destinosLibresVecinos($camaraObjetivoId, $puntos);
+        $destinosLibres = $this->destinosLibresVecinos($camaraObjetivoId, $puntos, $carga->id, $asignaciones->first()?->instructivo_embarque_id);
         if ($destinosLibres->isEmpty()) {
             return collect();
         }
@@ -491,7 +504,7 @@ class ServicioPlanConcentracionCarga
      */
     private function conSectorDeAcopio(array $analisis, Carga $carga, Collection $asignaciones, ?string $camaraObjetivoId): array
     {
-        if ($camaraObjetivoId === null) {
+        if ($camaraObjetivoId === null || $asignaciones->groupBy(fn ($a) => $a->instructivo_embarque_id ?? '')->count() > 1) {
             return $analisis;
         }
         $ubicadas = $asignaciones->filter(fn (CargaFolio $asignacion): bool => $asignacion
@@ -506,6 +519,7 @@ class ServicioPlanConcentracionCarga
                 'nivel' => (int) $asignacion->folio->ubicacionActual->posicion->nivel,
             ])->values()->all(),
             $asignaciones->where('estado', EstadoCargaFolio::Pendiente)->count(),
+            instructivoId: $asignaciones->first()?->instructivo_embarque_id,
         );
         if ($sector['sector']['tipo'] === 'grupo') {
             $puntos = collect($sector['puntos']);
@@ -528,7 +542,7 @@ class ServicioPlanConcentracionCarga
      * @param  Collection<int, array<string, mixed>>  $puntos
      * @return Collection<int, Posicion>
      */
-    private function destinosLibresVecinos(string $camaraId, Collection $puntos): Collection
+    private function destinosLibresVecinos(string $camaraId, Collection $puntos, ?string $cargaId = null, ?string $instructivoId = null): Collection
     {
         $bandas = BandaOperacional::query()
             ->where('camara_id', $camaraId)
@@ -550,7 +564,10 @@ class ServicioPlanConcentracionCarga
             ->whereDoesntHave('reservaPreparacionSagActiva')
             ->orderBy('nivel')->orderBy('banda')->orderBy('posicion')
             ->get()
-            ->filter(function (Posicion $posicion) use ($bandas, $puntos): bool {
+            ->filter(function (Posicion $posicion) use ($bandas, $puntos, $cargaId, $instructivoId): bool {
+                if ($cargaId && ! $this->sector->admiteInstructivo($posicion, $cargaId, $instructivoId)) {
+                    return false;
+                }
                 if (! $bandas->has($posicion->banda)) {
                     return false;
                 }
@@ -597,6 +614,8 @@ class ServicioPlanConcentracionCarga
         $tipo = $origen->camara_id === $camaraObjetivoId
             ? TipoMovimiento::Reubicacion
             : TipoMovimiento::TrasladoEntreCamaras;
+        $instructivo = $asignacion->instructivo;
+        $referencia = $instructivo ? ' · Instructivo '.($instructivo->numero_externo ?: $instructivo->orden) : '';
 
         return [
             'candidate_key' => "concentrar:{$folio->id}",
@@ -611,9 +630,10 @@ class ServicioPlanConcentracionCarga
                 $folio->numero_folio,
                 $analisis['porcentaje'],
                 CalculadorConcentracionCarga::UMBRAL_PORCENTAJE,
-            ),
+            ).$referencia,
             'contexto' => [
                 'candidate_key' => "concentrar:{$folio->id}",
+                'instructivo_embarque_id' => $asignacion->instructivo_embarque_id,
                 'tipo_decision' => 'concentrar_carga',
                 'carga_folio_id' => $asignacion->id,
                 'camara_objetivo_id' => $camaraObjetivoId,
@@ -914,6 +934,7 @@ class ServicioPlanConcentracionCarga
             ->with('posicionDestino')->first()?->posicionDestino;
         if ($comprometida && $comprometida->camara_id === $camaraObjetivoId
             && ! $destinosUsados->contains($comprometida->id)
+            && $this->sector->admiteInstructivo($comprometida, $otraCarga->id, $asignacion->instructivo_embarque_id)
             && ($acopio['puntos'] === [] || collect($acopio['puntos'])->contains(
                 fn (array $punto): bool => $this->sonPuntosVecinos($punto, [
                     'banda' => $comprometida->banda, 'posicion' => $comprometida->posicion, 'nivel' => $comprometida->nivel,
@@ -925,6 +946,8 @@ class ServicioPlanConcentracionCarga
         return $this->destinosLibresVecinos(
             $camaraObjetivoId,
             collect($acopio['puntos']),
+            $otraCarga->id,
+            $asignacion->instructivo_embarque_id,
         )->first(fn (Posicion $posicion): bool => ! $destinosUsados->contains($posicion->id));
     }
 
@@ -1376,6 +1399,7 @@ class ServicioPlanConcentracionCarga
             'camara_objetivo_id' => $camaraObjetivoId,
             'grupo_folio_ids' => $analisis['grupo_principal_folio_ids'],
             'puntos' => $analisis['grupo_principal_puntos'],
+            'segregaciones' => $analisis['segregaciones'] ?? [],
         ], JSON_THROW_ON_ERROR));
     }
 

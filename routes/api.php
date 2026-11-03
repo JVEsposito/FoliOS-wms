@@ -742,6 +742,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/cargas', [CargaController::class, 'store']);
         Route::put('/cargas/{carga}', [CargaController::class, 'update']);
         Route::post('/cargas/{carga}/folios', [CargaController::class, 'agregarFolios']);
+        Route::post('/cargas/{carga}/segregaciones', [CargaController::class, 'segregarFolios']);
         Route::delete('/cargas/{carga}/folios/{folio}', [CargaController::class, 'quitarFolio']);
         Route::post('/cargas/{carga}/folios/{folio}/cambiar', [CargaController::class, 'cambiarFolio']);
         Route::post('/cargas/{carga}/publicar', [CargaController::class, 'publicar']);

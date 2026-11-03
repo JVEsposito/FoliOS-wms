@@ -32,6 +32,7 @@ use App\Models\Folio;
 use App\Models\IncidenciaCargaFolio;
 use App\Models\ReingresoFolioCamara;
 use App\Models\ReservaCargaFolio;
+use App\Models\TareaMovimiento;
 use App\Models\User;
 use App\Services\Autorizacion\AlcanceOperacionalUsuario;
 use App\Services\InspeccionSag\ServicioExistenciasSag;
@@ -56,6 +57,7 @@ class ServicioCarga
         private readonly ServicioTemporadaActiva $temporadaActiva,
         private readonly MotorTransicionesOperacionales $motorTransiciones,
         private readonly NormalizadorTransicionOperacional $normalizadorTransiciones,
+        private readonly ServicioInstructivosCarga $instructivos,
     ) {}
 
     /**
@@ -470,6 +472,7 @@ class ServicioCarga
         array $numerosFolio,
         User $usuario,
         int $versionEsperada,
+        ?string $instructivoId = null,
     ): Carga {
         $this->asegurarGestionAutorizada($usuario);
 
@@ -478,12 +481,14 @@ class ServicioCarga
             $numerosFolio,
             $usuario,
             $versionEsperada,
+            $instructivoId,
         ): Carga {
             $cargaBloqueada = $this->bloquearCarga($carga);
             $this->asegurarEditable($cargaBloqueada);
             $this->asegurarVersion($cargaBloqueada, $versionEsperada);
 
             $numeros = $this->normalizarNumerosFolio($numerosFolio);
+            $instructivo = $this->instructivos->paraAsignacion($cargaBloqueada, $instructivoId, count($numeros));
             $cantidadActual = CargaFolio::query()
                 ->where('carga_id', $cargaBloqueada->id)
                 ->whereHas('reservaActiva')
@@ -566,6 +571,7 @@ class ServicioCarga
                 try {
                     $asignacion = CargaFolio::create([
                         'carga_id' => $cargaBloqueada->id,
+                        'instructivo_embarque_id' => $instructivo?->id,
                         'folio_id' => $folio->id,
                         'estado' => EstadoCargaFolio::Pendiente,
                         'asignado_por_user_id' => $usuario->id,
@@ -613,11 +619,48 @@ class ServicioCarga
             [
                 'carga_id' => $carga->id,
                 'folios' => $numerosFolio,
+                'instructivo_embarque_id' => $instructivoId,
                 'version_esperada' => $versionEsperada,
             ],
             $accion,
             $carga,
         );
+    }
+
+    public function segregarFolios(Carga $carga, array $numerosFolio, User $usuario, int $versionEsperada, ?string $instructivoId): Carga
+    {
+        $this->asegurarGestionAutorizada($usuario);
+
+        return $this->transicionar('segregar_folios', $usuario, [
+            'carga_id' => $carga->id, 'folios' => $numerosFolio,
+            'version_esperada' => $versionEsperada, 'instructivo_embarque_id' => $instructivoId,
+        ], function () use ($carga, $numerosFolio, $usuario, $versionEsperada, $instructivoId): Carga {
+            $carga = $this->bloquearCarga($carga);
+            $this->asegurarEditable($carga);
+            $this->asegurarVersion($carga, $versionEsperada);
+            $numeros = $this->normalizarNumerosFolio($numerosFolio);
+            $asignaciones = CargaFolio::query()->where('carga_id', $carga->id)->whereHas('reservaActiva')
+                ->whereHas('folio', fn ($q) => $q->whereIn('numero_folio', $numeros))
+                ->with('folio')->orderBy('folio_id')->lockForUpdate()->get();
+            if ($asignaciones->count() !== count($numeros)) {
+                throw new DomainException('Todos los pallets deben pertenecer actualmente a esta orden de preparación.');
+            }
+            if (TareaMovimiento::query()->whereIn('folio_id', $asignaciones->pluck('folio_id'))
+                ->whereIn('estado', ['asumida', 'en_proceso'])->exists()) {
+                throw new ConflictoOperacion('Hay un pallet con una tarea tomada. Libera la tarea antes de cambiar su instructivo.');
+            }
+            $instructivo = $this->instructivos->paraAsignacion($carga, $instructivoId, $asignaciones->count(), $asignaciones->pluck('id')->all());
+            foreach ($asignaciones as $asignacion) {
+                $anterior = $asignacion->instructivo_embarque_id;
+                $asignacion->update(['instructivo_embarque_id' => $instructivo?->id]);
+                $this->registrarEvento($carga, TipoEventoCarga::FolioSegregado, $usuario, $asignacion->folio, [
+                    'instructivo_anterior_id' => $anterior, 'instructivo_embarque_id' => $instructivo?->id,
+                ]);
+            }
+            $this->incrementarVersion($carga, $usuario);
+
+            return $carga->refresh();
+        }, $carga);
     }
 
     public function quitarFolio(
@@ -797,6 +840,7 @@ class ServicioCarga
             try {
                 $nueva = CargaFolio::create([
                     'carga_id' => $cargaBloqueada->id,
+                    'instructivo_embarque_id' => $asignacion->instructivo_embarque_id,
                     'folio_id' => $entrante->id,
                     'estado' => EstadoCargaFolio::Pendiente,
                     'reemplaza_a_carga_folio_id' => $asignacion->id,
@@ -885,6 +929,11 @@ class ServicioCarga
                 ->orderBy('folio_id')
                 ->lockForUpdate()
                 ->get();
+
+            if ($this->instructivos->instructivos($cargaBloqueada)->isNotEmpty()
+                && $asignaciones->contains(fn (CargaFolio $a): bool => $a->instructivo_embarque_id === null)) {
+                throw new DomainException('Asigna cada pallet a su instructivo antes de publicar la orden de preparación.');
+            }
 
             if ($asignaciones->count() < 1 || $asignaciones->count() > 26) {
                 throw new DomainException(

@@ -20,6 +20,7 @@ class AgregarFoliosCargaRequest extends FormRequest
             'folios' => ['required', 'array', 'min:1', 'max:26'],
             'folios.*' => ['required', 'string', 'max:100', 'distinct'],
             'version_esperada' => ['required', 'integer', 'min:1'],
+            'instructivo_embarque_id' => ['nullable', 'uuid'],
         ];
     }
 

@@ -19,6 +19,8 @@ class InterfazOficinaCargasTest extends TestCase
             ->assertSee('aria-labelledby="folioAddTitle"', false)
             ->assertSee('availableFolioSelectPage', false)
             ->assertSee('availableFolioPagination', false)
+            ->assertSee('loadInstructionSelect', false)
+            ->assertSee('Instructivos de esta orden')
             ->assertSee('Variedad / calibre')
             ->assertSee('Andén previsto')
             ->assertSee('Concentración de la carga')

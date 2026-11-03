@@ -438,7 +438,16 @@ class CargaController extends Controller
             $request->validated('folios'),
             $request->user(),
             $request->integer('version_esperada'),
+            $request->validated('instructivo_embarque_id'),
         );
+
+        return new CargaResource($this->cargarDetalle($actualizada));
+    }
+
+    public function segregarFolios(AgregarFoliosCargaRequest $request, Carga $carga, ServicioCarga $servicio): CargaResource
+    {
+        $actualizada = $servicio->segregarFolios($carga, $request->validated('folios'), $request->user(),
+            $request->integer('version_esperada'), $request->validated('instructivo_embarque_id'));
 
         return new CargaResource($this->cargarDetalle($actualizada));
     }
@@ -573,7 +582,7 @@ class CargaController extends Controller
             'presenciaAndenActiva.anden:id,codigo,nombre',
             'presenciaAndenActiva.ingresadaPor:id,name',
             'embarque:id,carga_id,codigo,fecha_programada,hora_programada,modalidad,estado',
-            'embarque.instructivos:id,embarque_id,orden,numero_externo',
+            'embarque.instructivos',
             'creadaPor:id,name',
             'actualizadaPor:id,name',
             'publicadaPor:id,name',
@@ -602,7 +611,7 @@ class CargaController extends Controller
             'presenciaAndenActiva.anden:id,codigo,nombre',
             'presenciaAndenActiva.ingresadaPor:id,name',
             'embarque:id,carga_id,codigo,fecha_programada,hora_programada,modalidad,estado',
-            'embarque.instructivos:id,embarque_id,orden,numero_externo',
+            'embarque.instructivos',
             'asignacionesActuales.anden:id,codigo,nombre',
             'asignacionesActuales.folio.ubicacionActual.posicion.camara:id,codigo,nombre,cantidad_bandas,posiciones_por_banda,cantidad_niveles',
             'asignacionesActuales.folio.procesosPrefrio.proceso.tunel:id,codigo,nombre',
