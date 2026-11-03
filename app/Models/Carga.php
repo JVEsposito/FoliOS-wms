@@ -45,6 +45,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
     'patente',
     'conductor',
     'observacion_cierre',
+    'datos_embarque_cierre',
     'cerrada_por_user_id',
     'cerrada_at',
     'cierre_registrado_at',
@@ -160,6 +161,7 @@ class Carga extends Model implements PerteneceATemporada
             'retornada_at' => 'datetime',
             'cerrada_at' => 'datetime',
             'cierre_registrado_at' => 'datetime',
+            'datos_embarque_cierre' => 'array',
         ];
     }
 }

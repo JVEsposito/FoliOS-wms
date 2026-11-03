@@ -81,6 +81,7 @@ class CargaResource extends JsonResource
                     : [],
                 'fecha_programada' => $this->embarque->fecha_programada?->toDateString(),
                 'hora_programada' => substr((string) $this->embarque->hora_programada, 0, 5),
+                'datos_despacho_sugeridos' => $this->datosDespachoSugeridos(),
                 'modalidad' => $this->embarque->modalidad->value,
                 'estado' => $this->embarque->estado->value,
             ] : null),
@@ -138,6 +139,7 @@ class CargaResource extends JsonResource
                 'patente' => $this->patente,
                 'conductor' => $this->conductor,
                 'observacion' => $this->observacion_cierre,
+                'datos_embarque' => $this->datos_embarque_cierre,
                 'cerrada_at' => $this->cerrada_at->toAtomString(),
                 'registrada_at' => $this->cierre_registrado_at?->toAtomString(),
                 'cerrada_por' => $this->whenLoaded('cerradaPor', fn () => [
@@ -147,6 +149,30 @@ class CargaResource extends JsonResource
             ] : null,
             'created_at' => $this->created_at?->toAtomString(),
             'updated_at' => $this->updated_at?->toAtomString(),
+        ];
+    }
+
+    /** @return array<string, string|null> */
+    private function datosDespachoSugeridos(): array
+    {
+        $instructivos = $this->embarque->relationLoaded('instructivos') ? $this->embarque->instructivos : collect();
+        $comun = function (string $campo) use ($instructivos): ?string {
+            $valores = $instructivos->pluck($campo)->map(fn ($valor): string => trim((string) $valor))->unique();
+
+            return $valores->count() === 1 && $valores->first() !== '' ? $valores->first() : null;
+        };
+        $destinos = $instructivos->map(fn ($i): string => collect([$i->destino_ciudad, $i->destino_pais])
+            ->map(fn ($valor): string => trim((string) $valor))->filter()->implode(', '))->unique();
+
+        return [
+            'orden_embarque' => $instructivos->isEmpty() ? $this->numero_orden_externa : $comun('numero_externo'),
+            'booking' => $comun('booking'),
+            'sps' => $comun('sps'),
+            'dus' => $comun('dus'),
+            'sello_sag' => $comun('sello_sag'),
+            'contenedor' => $this->embarque->contenedor,
+            'destino' => $destinos->count() === 1 && $destinos->first() !== '' ? $destinos->first() : null,
+            'puerto_embarque' => $this->embarque->puerto_embarque,
         ];
     }
 

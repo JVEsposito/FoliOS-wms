@@ -25,7 +25,7 @@ class SegregacionInstructivosCargaTest extends TestCase
         $cliente = Cliente::create(['codigo' => 'CLI-INST', 'nombre' => 'Cliente instructivos', 'codigo_folio_materiales' => 'IN', 'activo' => true]);
         $payload = ['cliente_id' => $cliente->id, 'fecha_programada' => '2026-11-03', 'hora_programada' => '18:00', 'modalidad' => 'aereo',
             'instructivos' => collect(range(1, $instructivos))->map(fn ($n) => ['numero_externo' => sprintf('F%03d', $n),
-                'cantidad_pallets' => 7, 'cantidad_cajas' => 728, 'recibidor' => 'UPAM FRESH LLC', 'booking' => 'BOOK-'.$n])->all()];
+                'cantidad_pallets' => 7, 'cantidad_cajas' => 728, 'recibidor' => 'UPAM FRESH LLC', 'booking' => 'BOOK-'.$n, 'sps' => 'SPS-COMUN'])->all()];
         $creado = $this->actingAs($usuario, 'sanctum')->postJson('/api/embarques', $payload)->assertCreated()->json('data');
         $confirmado = $this->postJson('/api/embarques/'.$creado['id'].'/confirmar', ['version_esperada' => 1])->assertOk()->json('data');
 
@@ -55,6 +55,10 @@ class SegregacionInstructivosCargaTest extends TestCase
         [$embarque] = $this->embarque();
         $carga = $embarque['carga']['id'];
         [$a, $b] = array_column($embarque['instructivos'], 'id');
+        $this->getJson("/api/cargas/{$carga}")->assertOk()
+            ->assertJsonPath('data.embarque.datos_despacho_sugeridos.booking', null)
+            ->assertJsonPath('data.embarque.datos_despacho_sugeridos.orden_embarque', null)
+            ->assertJsonPath('data.embarque.datos_despacho_sugeridos.sps', 'SPS-COMUN');
         $primero = $this->folios(7);
         $segundo = $this->folios(7);
         $this->postJson("/api/cargas/{$carga}/folios", ['folios' => $primero, 'version_esperada' => 1, 'instructivo_embarque_id' => $a])
@@ -106,6 +110,12 @@ class SegregacionInstructivosCargaTest extends TestCase
     {
         [$embarque] = $this->embarque(1);
         $ruta = '/api/cargas/'.$embarque['carga']['id'];
+        Embarque::findOrFail($embarque['id'])->update(['contenedor' => 'ABCU1234567', 'puerto_embarque' => 'San Antonio']);
+        $this->getJson($ruta)->assertOk()
+            ->assertJsonPath('data.embarque.datos_despacho_sugeridos.orden_embarque', 'F001')
+            ->assertJsonPath('data.embarque.datos_despacho_sugeridos.booking', 'BOOK-1')
+            ->assertJsonPath('data.embarque.datos_despacho_sugeridos.contenedor', 'ABCU1234567')
+            ->assertJsonPath('data.embarque.datos_despacho_sugeridos.puerto_embarque', 'San Antonio');
         $folios = $this->folios(2);
         $this->postJson($ruta.'/folios', ['folios' => [$folios[0]], 'version_esperada' => 1])
             ->assertOk()->assertJsonPath('data.folios.0.instructivo_embarque_id', $embarque['instructivos'][0]['id']);

@@ -91,6 +91,7 @@ const elements = {
     commandBar: byId('loadCommandBar'),
     commandTitle: byId('loadCommandTitle'),
     commandDescription: byId('loadCommandDescription'),
+    dispatchDocuments: byId('loadDispatchDocuments'),
     cancel: byId('cancelLoadButton'),
     truckDock: byId('truckDockButton'),
     closeDispatch: byId('closeDispatchButton'),
@@ -881,7 +882,25 @@ function renderFolios(load) {
     }).join('');
 }
 
+const dispatchDocumentLabels = {
+    numero_guia: 'Número de guía',
+    orden_embarque: 'Orden de embarque',
+    booking: 'Booking',
+    sps: 'SPS',
+    dus: 'DUS',
+    sello_sag: 'Sello SAG',
+    contenedor: 'Número de contenedor',
+    destino: 'Destino',
+    puerto_embarque: 'Puerto de embarque',
+};
+
 function renderCommands(load) {
+    const confirmed = load.cierre?.datos_embarque || {};
+    const documents = Object.entries(dispatchDocumentLabels).filter(([key]) => confirmed[key]);
+    elements.dispatchDocuments.classList.toggle('is-hidden', !documents.length);
+    elements.dispatchDocuments.innerHTML = documents.map(([key, label]) =>
+        `<div><dt>${label}</dt><dd>${escapeHtml(confirmed[key])}</dd></div>`
+    ).join('');
     const editable = canEdit(load);
     const draft = load.estado === 'borrador';
     const pending = load.estado === 'pendiente';
@@ -1309,6 +1328,11 @@ function openCloseDialog() {
     elements.closeForm.elements.ocurrido_at.value = localDateTimeValue();
     elements.closeForm.elements.patente.value = state.selected.camion_en_anden?.patente || '';
     elements.closeForm.elements.conductor.value = state.selected.camion_en_anden?.conductor || '';
+    const suggested = state.selected.embarque?.datos_despacho_sugeridos
+        ?? { orden_embarque: state.selected.numero_orden_externa };
+    for (const key of Object.keys(dispatchDocumentLabels)) {
+        elements.closeForm.elements[key].value = suggested[key] ?? '';
+    }
     elements.closeDialog.showModal();
     (elements.closeForm.elements.patente.value
         ? elements.closeForm.elements.conductor
@@ -1995,6 +2019,9 @@ elements.closeForm.addEventListener('submit', async (event) => {
         return;
     }
 
+    const documents = Object.fromEntries(Object.keys(dispatchDocumentLabels)
+        .map((key) => [key, String(form.get(key) || '').trim()])
+        .filter(([, value]) => value !== ''));
     setBusy(true, 'Cerrando despacho y confirmando salida…');
     try {
         const response = await api(`/api/cargas/${state.selected.id}/cerrar-despacho`, {
@@ -2005,6 +2032,7 @@ elements.closeForm.addEventListener('submit', async (event) => {
                 conductor: driver,
                 ocurrido_at: occurredAt,
                 observacion: observation || null,
+                datos_embarque: documents,
             }),
         });
         elements.closeDialog.close();
