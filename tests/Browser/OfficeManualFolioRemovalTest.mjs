@@ -17,6 +17,8 @@ test('administración elimina desde el expediente un folio creado en cámara sin
             await context.addInitScript((user) => {
                 localStorage.setItem('estiba_wms_office_token', 'fixture');
                 localStorage.setItem('estiba_wms_office_identity', JSON.stringify(user));
+                // La oficina se abre por HTTP en la red de la planta: ahí el navegador no ofrece randomUUID.
+                delete Crypto.prototype.randomUUID;
             }, identity);
             const removals = []; const errors = [];
             let removed = false;
