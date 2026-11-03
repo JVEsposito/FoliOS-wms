@@ -528,6 +528,7 @@ class ServicioDespachoFrigorifico
         );
     }
 
+    /** @param array<string, string|null> $datosEmbarque */
     public function cerrarDespacho(
         string $operacionId,
         Carga $carga,
@@ -536,6 +537,7 @@ class ServicioDespachoFrigorifico
         string $conductor,
         ?string $observacion = null,
         ?DateTimeInterface $ocurridoAt = null,
+        array $datosEmbarque = [],
     ): Carga {
         $this->asegurarUuid($operacionId);
 
@@ -571,6 +573,12 @@ class ServicioDespachoFrigorifico
             $payload['ocurrido_at'] = $salidaAt->toAtomString();
         }
 
+        $datosEmbarque = array_filter(array_map($this->textoOpcional(...), $datosEmbarque), fn (?string $valor): bool => $valor !== null);
+        ksort($datosEmbarque);
+        if ($datosEmbarque !== []) {
+            $payload['datos_embarque'] = $datosEmbarque;
+        }
+
         $payloadHash = $this->hash($payload);
 
         $accion = function () use (
@@ -582,6 +590,7 @@ class ServicioDespachoFrigorifico
             $observacion,
             $salidaAt,
             $payloadHash,
+            $datosEmbarque,
         ): Carga {
             $otraCarga = Carga::query()
                 ->where('operacion_cierre_id', $operacionId)
@@ -693,6 +702,7 @@ class ServicioDespachoFrigorifico
                 'patente' => $patente,
                 'conductor' => $conductor,
                 'observacion_cierre' => $this->textoOpcional($observacion),
+                'datos_embarque_cierre' => $datosEmbarque === [] ? null : $datosEmbarque,
                 'cerrada_por_user_id' => $usuario->id,
                 'cerrada_at' => $salidaAt,
                 'cierre_registrado_at' => CarbonImmutable::now(),
@@ -708,6 +718,7 @@ class ServicioDespachoFrigorifico
                     'conductor' => $conductor,
                     'cantidad_folios' => $asignaciones->count(),
                     'cantidad_cargados' => $asignaciones->count() - $sinCargar->count(),
+                    ...($datosEmbarque !== [] ? ['datos_embarque' => $datosEmbarque] : []),
                     'sin_registro_carga' => $sinCargar->all(),
                     'salida_fisica_at' => $salidaAt->toAtomString(),
                     'registrada_at' => CarbonImmutable::now()->toAtomString(),

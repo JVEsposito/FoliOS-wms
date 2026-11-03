@@ -331,6 +331,7 @@
                                 <div>
                                     <strong id="loadCommandTitle">Orden en borrador</strong>
                                     <span id="loadCommandDescription">Publica la orden cuando la asignación esté lista.</span>
+                                    <dl id="loadDispatchDocuments" class="load-dispatch-documents is-hidden"></dl>
                                 </div>
                                 <div>
                                     <button class="danger-button" id="cancelLoadButton" type="button">Cancelar orden</button>
@@ -398,6 +399,21 @@
                     <label class="field field--full"><span>Fecha y hora física de salida *</span><input name="ocurrido_at" type="datetime-local" required></label>
                     <label class="field field--full"><span>Observación de salida</span><textarea name="observacion" maxlength="1000" rows="3"></textarea></label>
                 </div>
+                <fieldset class="dispatch-document-fields">
+                    <legend>Datos de embarque (opcionales)</legend>
+                    <p>Revisa lo precargado desde el calendario. Si los instructivos difieren, el dato queda en blanco.</p>
+                    <div class="dialog-grid">
+                        <label class="field"><span>Número de guía</span><input name="numero_guia" maxlength="150" autocomplete="off"></label>
+                        <label class="field"><span>Orden de embarque</span><input name="orden_embarque" maxlength="150" autocomplete="off"></label>
+                        <label class="field"><span>Booking</span><input name="booking" maxlength="150" autocomplete="off"></label>
+                        <label class="field"><span>SPS</span><input name="sps" maxlength="150" autocomplete="off"></label>
+                        <label class="field"><span>DUS</span><input name="dus" maxlength="150" autocomplete="off"></label>
+                        <label class="field"><span>Sello SAG</span><input name="sello_sag" maxlength="150" autocomplete="off"></label>
+                        <label class="field"><span>Número de contenedor</span><input name="contenedor" maxlength="150" autocomplete="off"></label>
+                        <label class="field"><span>Destino</span><input name="destino" maxlength="250" autocomplete="off"></label>
+                        <label class="field"><span>Puerto de embarque</span><input name="puerto_embarque" maxlength="150" autocomplete="off"></label>
+                    </div>
+                </fieldset>
                 <p class="form-error" id="closeDispatchError" role="alert"></p>
                 <footer>
                     <button class="secondary-button" data-close-dialog type="button">Cancelar</button>

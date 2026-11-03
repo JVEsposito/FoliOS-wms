@@ -17,7 +17,14 @@ class CerrarDespachoFrigorificoRequest extends FormRequest
     /** @return array<string, mixed> */
     public function rules(): array
     {
+        $campos = ['numero_guia', 'orden_embarque', 'booking', 'sps', 'dus', 'sello_sag', 'contenedor', 'destino', 'puerto_embarque'];
+        $reglas = ['datos_embarque' => ['nullable', 'array:'.implode(',', $campos)]];
+        foreach ($campos as $campo) {
+            $reglas['datos_embarque.'.$campo] = ['nullable', 'string', $campo === 'destino' ? 'max:250' : 'max:150'];
+        }
+
         return [
+            ...$reglas,
             'operacion_id' => ['required', 'uuid'],
             'patente' => ['required', 'string', 'max:20'],
             'conductor' => ['required', 'string', 'max:150'],

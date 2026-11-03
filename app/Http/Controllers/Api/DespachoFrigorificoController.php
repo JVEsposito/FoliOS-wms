@@ -253,6 +253,7 @@ class DespachoFrigorificoController extends Controller
             ocurridoAt: isset($datos['ocurrido_at'])
                 ? CarbonImmutable::parse($datos['ocurrido_at'])
                 : null,
+            datosEmbarque: $datos['datos_embarque'] ?? [],
         );
 
         return new CargaResource($this->cargarCarga($cerrada));

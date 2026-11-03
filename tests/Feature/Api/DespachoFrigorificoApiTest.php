@@ -217,8 +217,25 @@ class DespachoFrigorificoApiTest extends TestCase
             'patente' => 'ab-cd-12',
             'conductor' => 'María Pérez',
             'ocurrido_at' => $salidaFisica->toAtomString(),
+            'datos_embarque' => [
+                'numero_guia' => ' 000512 ',
+                'orden_embarque' => 'OE-27',
+                'booking' => 'BK-120',
+                'sps' => 'SPS-18',
+                'dus' => 'DUS-9',
+                'sello_sag' => 'SAG-81',
+                'contenedor' => 'ABCU1234567',
+                'destino' => 'Lima, Perú',
+                'puerto_embarque' => 'San Antonio',
+            ],
         ];
         $rutaCierre = "/api/cargas/{$carga->id}/cerrar-despacho";
+        $this->conToken($contexto['tokenOficina'])->postJson($rutaCierre, [
+            ...$payloadCierre,
+            'datos_embarque' => ['booking' => str_repeat('X', 151)],
+        ])->assertUnprocessable()->assertJsonValidationErrors('datos_embarque.booking');
+
+        $documentos = [...$payloadCierre['datos_embarque'], 'numero_guia' => '000512'];
 
         $this->conToken($contexto['tokenOficina'])
             ->postJson($rutaCierre, $payloadCierre)
@@ -226,6 +243,8 @@ class DespachoFrigorificoApiTest extends TestCase
             ->assertJsonPath('data.estado', 'cerrada')
             ->assertJsonPath('data.cierre.patente', 'AB-CD-12')
             ->assertJsonPath('data.cierre.conductor', 'María Pérez')
+            ->assertJsonPath('data.cierre.datos_embarque.numero_guia', '000512')
+            ->assertJsonPath('data.cierre.datos_embarque.sello_sag', 'SAG-81')
             ->assertJsonPath('data.cierre.cerrada_at', $salidaFisica->toAtomString())
             ->assertJsonPath('data.total_folios', 1)
             ->assertJsonPath('data.folios.0.numero_folio', $folio->numero_folio)
@@ -254,11 +273,15 @@ class DespachoFrigorificoApiTest extends TestCase
             'cerrada_at' => $salidaFisica->format('Y-m-d H:i:s'),
         ]);
         $this->assertNotNull($carga->refresh()->cierre_registrado_at);
+        $this->assertEquals($documentos, $carga->datos_embarque_cierre);
+        $this->assertEquals($documentos, $carga->eventos()->where('tipo', 'cierre_despacho')->sole()->datos['datos_embarque']);
+        $this->conToken($contexto['tokenOficina'])->getJson("/api/cargas/{$carga->id}")
+            ->assertOk()->assertJsonPath('data.cierre.datos_embarque.contenedor', 'ABCU1234567');
 
         $this->conToken($contexto['tokenOficina'])
             ->postJson($rutaCierre, [
                 ...$payloadCierre,
-                'conductor' => 'Otra persona',
+                'datos_embarque' => [...$documentos, 'booking' => 'BK-DISTINTO'],
             ])
             ->assertConflict()
             ->assertJsonPath('codigo', 'conflicto_operacional');

@@ -1435,6 +1435,34 @@ button:disabled {
     text-align: center;
 }
 
+.dispatch-document-fields {
+    min-width: 0;
+    border: 0;
+    padding: 0;
+    margin: 0;
+}
+
+.dispatch-document-fields legend {
+    font-weight: 800;
+}
+
+.dispatch-document-fields p {
+    margin: 4px 0 10px;
+    font-size: .85rem;
+}
+
+.load-dispatch-documents {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+    gap: 8px;
+    margin: 10px 0 0;
+}
+
+.load-dispatch-documents dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
 .dialog-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
