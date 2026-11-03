@@ -18,10 +18,12 @@ use App\Services\Temporadas\ServicioTemporadaGlobal;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Tests\Concerns\CreaFolioParaUbicar;
 use Tests\TestCase;
 
 class MovimientoApiTest extends TestCase
 {
+    use CreaFolioParaUbicar;
     use RefreshDatabase;
 
     public function test_consulta_folio_existente_y_recupera_sus_datos_de_validacion(): void
@@ -148,7 +150,7 @@ class MovimientoApiTest extends TestCase
         ]);
     }
 
-    public function test_ubicar_crea_el_folio_y_repetir_la_operacion_es_idempotente(): void
+    public function test_ubicar_no_crea_folios_y_repetir_la_operacion_es_idempotente(): void
     {
         [, , $token] = $this->crearIdentidad();
         [$camara, $posicion] = $this->crearCamara('CAM-01');
@@ -162,12 +164,18 @@ class MovimientoApiTest extends TestCase
             'sesion_destino_id' => $sesionId,
             'version_destino_conocida' => 0,
             'generado_dispositivo_at' => now()->toAtomString(),
-            'datos_folio' => [
-                'variedad' => 'Lapins',
-                'calibre' => 'J',
-                'exportadora' => 'Exportadora de prueba',
-            ],
         ];
+
+        // Un número que no existe se rechaza: la tablet ya no da de alta folios.
+        $this->withToken($token)
+            ->postJson('/api/movimientos/ubicar', [...$payload, 'operacion_id' => (string) Str::uuid(),
+                'datos_folio' => ['variedad' => 'Lapins', 'calibre' => 'J', 'exportadora' => 'Exportadora de prueba']])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'El folio FOLIO-NUEVO no existe. Valida el pallet en Validación PT antes de ubicarlo en cámara; si lo digitaste, revisa el número.');
+        $this->assertSame(0, Folio::query()->count());
+        $this->assertSame(0, $camara->refresh()->version_plano);
+
+        $this->folioParaUbicar('FOLIO-NUEVO', 'pallet', ['variedad' => 'Lapins', 'calibre' => 'J', 'exportadora' => 'Exportadora de prueba']);
 
         $movimientoId = $this->withToken($token)
             ->postJson('/api/movimientos/ubicar', $payload)
@@ -443,6 +451,8 @@ class MovimientoApiTest extends TestCase
         int $version,
         string $numeroFolio,
     ): string {
+        $this->folioParaUbicar($numeroFolio);
+
         return $this->withToken($token)
             ->postJson('/api/movimientos/ubicar', [
                 'operacion_id' => (string) Str::uuid(),

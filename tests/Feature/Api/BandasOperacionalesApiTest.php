@@ -11,10 +11,12 @@ use App\Models\Posicion;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
+use Tests\Concerns\CreaFolioParaUbicar;
 use Tests\TestCase;
 
 class BandasOperacionalesApiTest extends TestCase
 {
+    use CreaFolioParaUbicar;
     use RefreshDatabase;
 
     public function test_el_plano_expone_capacidad_y_estado_calculado_por_banda(): void
@@ -26,6 +28,7 @@ class BandasOperacionalesApiTest extends TestCase
             ->postJson("/api/camaras/{$camara->id}/sesiones")
             ->assertCreated()
             ->json('data.id');
+        $this->folioParaUbicar('PALLET-BANDA-001');
 
         $this->withToken($token)
             ->postJson('/api/movimientos/ubicar', [

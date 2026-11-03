@@ -373,16 +373,7 @@ export function OperationalScreen({ api, auth, onLogout }: OperationalScreenProp
   async function confirmLocate(form: LocateFormValue) {
     if (!plan || !ownSession || (!locateCameraOnly && !selectedPosition)) return;
     setModalError('');
-    const data = {
-      condicion_sag_id: form.condicion_sag_id,
-      variedad: form.variedad,
-      calibre: form.calibre,
-      marca: form.marca,
-      exportadora: form.exportadora,
-    };
-    const compactData = Object.fromEntries(
-      Object.entries(data).filter(([, value]) => Boolean(value)),
-    ) as NonNullable<LocatePayload['datos_folio']>;
+    // Solo se ubican folios existentes: la tablet ya no envía datos para crear uno.
     const payload: LocatePayload = {
       operacion_id: Crypto.randomUUID(),
       numero_folio: form.numero_folio,
@@ -394,7 +385,6 @@ export function OperationalScreen({ api, auth, onLogout }: OperationalScreenProp
       sesion_destino_id: ownSession.id,
       version_destino_conocida: plan.version_plano,
       generado_dispositivo_at: new Date().toISOString(),
-      ...(!form.existente && Object.keys(compactData).length ? { datos_folio: compactData } : {}),
     };
 
     const succeeded = await runOperation(

@@ -10,10 +10,12 @@ use App\Models\User;
 use App\Services\Estiba\DetectorAdvertenciasMovimiento;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
+use Tests\Concerns\CreaFolioParaUbicar;
 use Tests\TestCase;
 
 class AdvertenciasMovimientoApiTest extends TestCase
 {
+    use CreaFolioParaUbicar;
     use RefreshDatabase;
 
     public function test_pregunta_antes_de_dejar_una_posicion_libre_hacia_el_fondo(): void
@@ -53,6 +55,7 @@ class AdvertenciasMovimientoApiTest extends TestCase
             ->postJson("/api/camaras/{$camara->id}/sesiones")
             ->assertCreated()
             ->json('data');
+        $this->folioParaUbicar('FOLIO-ADVERTENCIA');
         $payload = [
             'operacion_id' => (string) Str::uuid(),
             'numero_folio' => 'FOLIO-ADVERTENCIA',
@@ -72,7 +75,7 @@ class AdvertenciasMovimientoApiTest extends TestCase
                 DetectorAdvertenciasMovimiento::POSICIONES_FONDO_LIBRES,
             );
 
-        $this->assertDatabaseCount('folios', 0);
+        $this->assertDatabaseCount('ubicaciones_actuales', 0);
         $this->assertDatabaseCount('operaciones_sincronizacion', 0);
 
         $payload['advertencias_confirmadas'] = [

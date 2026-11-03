@@ -8,9 +8,13 @@ use App\Models\Folio;
 use App\Models\Movimiento;
 use App\Models\ProcesoPrefrioFolio;
 use App\Models\Repaletizaje;
+use App\Models\User;
 use App\Models\ValidacionPallet;
+use App\Services\Folios\ServicioEliminacionFolioManual;
 use BackedEnum;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Gate;
 
 class ServicioExpedienteFolio
 {
@@ -43,6 +47,7 @@ class ServicioExpedienteFolio
             ->where('folio_id', $folio->id)
             ->with([
                 'usuario',
+                'dispositivo',
                 'camaraOrigen',
                 'posicionOrigen',
                 'camaraDestino',
@@ -64,11 +69,22 @@ class ServicioExpedienteFolio
             ->orderBy('confirmado_at')
             ->get();
 
+        $eliminacion = $this->eliminacion($folio);
         $timeline = collect()
             ->concat($this->eventosValidacion($validaciones))
             ->concat($this->eventosPrefrio($prefrio))
             ->concat($this->eventosMovimientos($movimientos))
             ->concat($this->eventosRepaletizaje($repaletizajes, $folio))
+            ->concat($eliminacion ? [[
+                'tipo' => 'eliminacion',
+                'fecha' => $eliminacion['eliminado_at'],
+                'titulo' => 'Eliminado por administración',
+                'descripcion' => $eliminacion['motivo'],
+                'meta' => array_filter([
+                    'Número original' => $eliminacion['numero_folio'],
+                    'Administrador' => $eliminacion['eliminado_por'],
+                ]),
+            ]] : [])
             ->filter(fn (array $evento): bool => $evento['fecha'] !== null)
             ->sortBy('fecha')
             ->values()
@@ -114,6 +130,11 @@ class ServicioExpedienteFolio
                     'posicion' => $posicion->etiqueta,
                 ] : null,
                 'repaletizaje_agotamiento' => $repaAgotado,
+                'origen_sistema' => $folio->origen_sistema,
+            ],
+            'eliminacion' => $eliminacion,
+            'acciones' => [
+                'eliminar_folio_manual' => $this->eliminarFolioManual($folio),
             ],
             'validacion' => $validaciones->last() ? $this->resumenValidacion($validaciones->last()) : null,
             'repaletizajes' => $repaletizajes->map(fn (Repaletizaje $repa): array => [
@@ -161,7 +182,7 @@ class ServicioExpedienteFolio
                 mb_strtoupper($this->valor($validacion->resultado) ?? 'REGISTRADO'),
             ),
             'meta' => array_filter([
-                'Operador' => $validacion->usuario?->nombre,
+                'Operador' => $validacion->usuario?->name,
                 'Línea' => $validacion->linea_proceso,
                 'Turno' => $validacion->turno,
                 'Dispositivo' => $validacion->dispositivo?->codigo,
@@ -237,7 +258,8 @@ class ServicioExpedienteFolio
                 'descripcion' => $origen.' → '.$destino,
                 'meta' => array_filter([
                     'Tipo' => $this->valor($movimiento->tipo_movimiento),
-                    'Operador' => $movimiento->usuario?->nombre,
+                    'Operador' => $movimiento->usuario?->name,
+                    'Tablet' => $movimiento->dispositivo?->nombre ?? $movimiento->dispositivo?->codigo,
                     'Motivo' => $movimiento->motivo,
                 ], fn (mixed $valor): bool => $valor !== null && $valor !== ''),
             ];
@@ -323,7 +345,7 @@ class ServicioExpedienteFolio
                     'Repa' => $repa->codigo,
                     'Resultado' => $textoResultados,
                     'Cantidad resultado' => $repa->cantidad_resultante.' cajas',
-                    'Operador' => $repa->usuario?->nombre,
+                    'Operador' => $repa->usuario?->name,
                     'Mix' => ($repa->campos_mix ?? []) !== []
                         ? implode(', ', $repa->campos_mix)
                         : null,
@@ -352,8 +374,44 @@ class ServicioExpedienteFolio
             'resultado' => $this->valor($validacion->resultado),
             'linea' => $validacion->linea_proceso,
             'turno' => $validacion->turno,
-            'operador' => $validacion->usuario?->nombre,
+            'operador' => $validacion->usuario?->name,
         ];
+    }
+
+    /** @return array<string, string|null>|null */
+    private function eliminacion(Folio $folio): ?array
+    {
+        $datos = $folio->datos_externos['eliminacion_manual'] ?? null;
+        if (! is_array($datos)) {
+            return null;
+        }
+
+        return [
+            'numero_folio' => $datos['numero_folio'] ?? null,
+            'motivo' => $datos['motivo'] ?? null,
+            'eliminado_at' => isset($datos['eliminado_at']) ? $this->fecha(CarbonImmutable::parse($datos['eliminado_at'])) : null,
+            'eliminado_por' => isset($datos['eliminado_por_user_id'])
+                ? User::query()->whereKey($datos['eliminado_por_user_id'])->value('name')
+                : null,
+        ];
+    }
+
+    /**
+     * Solo administración ve la acción; se ofrece mientras el folio siga siendo uno
+     * creado a mano en cámara, sin validación ni otra operación.
+     *
+     * @return array{disponible: bool, motivo_no_disponible: string|null}|null
+     */
+    private function eliminarFolioManual(Folio $folio): ?array
+    {
+        if ($folio->origen_sistema !== 'manual'
+            || isset($folio->datos_externos['eliminacion_manual'])
+            || ! Gate::allows('eliminar-folios-manuales')) {
+            return null;
+        }
+        $motivo = app(ServicioEliminacionFolioManual::class)->motivoNoEliminable($folio);
+
+        return ['disponible' => $motivo === null, 'motivo_no_disponible' => $motivo];
     }
 
     private function ubicacion(?string $camara, ?string $posicion, string $fallback): string

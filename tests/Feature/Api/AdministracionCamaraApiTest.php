@@ -12,10 +12,12 @@ use App\Models\User;
 use App\Services\Estiba\DetectorAdvertenciasMovimiento;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
+use Tests\Concerns\CreaFolioParaUbicar;
 use Tests\TestCase;
 
 class AdministracionCamaraApiTest extends TestCase
 {
+    use CreaFolioParaUbicar;
     use RefreshDatabase;
 
     public function test_administrador_edita_nombre_y_amplia_el_plano(): void
@@ -204,6 +206,7 @@ class AdministracionCamaraApiTest extends TestCase
             ->postJson("/api/camaras/{$camara->id}/sesiones")
             ->assertCreated()
             ->json('data.id');
+        $this->folioParaUbicar($folio);
 
         $this->withToken($token)
             ->postJson('/api/movimientos/ubicar', [

@@ -160,6 +160,7 @@ class OperacionAhoraApiTest extends TestCase
             dispositivo: $dispositivo,
             versionDestinoConocida: 0,
             generadoDispositivoAt: now(),
+            permitirFolioNuevo: true,
         );
         RegistroControlAmbiental::create([
             'operacion_id' => (string) Str::uuid(),

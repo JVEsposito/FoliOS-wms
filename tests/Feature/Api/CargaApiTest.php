@@ -724,6 +724,7 @@ class CargaApiTest extends TestCase
             dispositivo: $dispositivo,
             versionDestinoConocida: 0,
             generadoDispositivoAt: now(),
+            permitirFolioNuevo: true,
         );
 
         return [$camara, $movimiento->folio];

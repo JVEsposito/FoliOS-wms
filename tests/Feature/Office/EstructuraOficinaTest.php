@@ -102,6 +102,18 @@ class EstructuraOficinaTest extends TestCase
         }
     }
 
+    public function test_consultas_exporta_el_buscador_y_el_expediente_de_folio(): void
+    {
+        $html = $this->get('/oficina/consultas/busqueda')->assertOk()->getContent();
+        foreach (['globalSearchForm', 'searchResults', 'folioDialog', 'folioDialogBody'] as $id) {
+            $this->assertStringContainsString('id="'.$id.'"', $html);
+        }
+        if (getenv('ESTIBA_EXPORTAR_UI_TESTS') === '1') {
+            File::ensureDirectoryExists(storage_path('app/ui/oficina'));
+            File::put(storage_path('app/ui/oficina/consultas-busqueda.html'), $html);
+        }
+    }
+
     public function test_supervision_materiales_tiene_navegacion_y_consulta_sin_acciones_operativas(): void
     {
         $html = $this->get('/oficina/materiales/supervision')->assertOk()->getContent();

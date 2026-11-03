@@ -25,6 +25,9 @@ final class FolioLeido
         public readonly ?string $calibre,
         public readonly ?string $envase,
         public readonly ?string $actualizadoAt,
+        // Creado a mano en cámara sin Validación PT y eliminado por administración:
+        // nunca fue un bulto real de la planta.
+        public readonly bool $eliminadoManual = false,
     ) {}
 
     /** @return array{bultos: int, pallets: int, saldos: int, cajas: int} */
@@ -108,6 +111,7 @@ final class FolioLeido
                 calibre: $folio->calibre,
                 envase: isset($externos['envase']) ? (string) $externos['envase'] : null,
                 actualizadoAt: $folio->updated_at,
+                eliminadoManual: isset($externos['eliminacion_manual']),
             );
         }
 

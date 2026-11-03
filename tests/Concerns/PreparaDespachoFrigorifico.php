@@ -66,6 +66,8 @@ trait PreparaDespachoFrigorifico
                     'marca' => 'Marca prueba',
                     'exportadora' => 'Exportadora prueba',
                 ],
+                // Carga controlada del escenario: la tablet ya no crea folios.
+                permitirFolioNuevo: true,
             )->folio;
         }
 
