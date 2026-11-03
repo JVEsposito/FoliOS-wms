@@ -1,4 +1,5 @@
 import { loadPrivateItemImages, releasePrivateItemImages } from './shared/private-item-photos';
+import { createUuid } from './shared/uuid';
 const byId = (id) => document.getElementById(id);
 const elements = {
     access: byId('officeAccess'),
@@ -741,7 +742,7 @@ elements.folioDialogBody.addEventListener('click', async (event) => {
     try {
         const payload = await api(`/api/folios/${button.dataset.removeManualFolio}/eliminar-manual`, {
             method: 'POST',
-            body: JSON.stringify({ operacion_id: globalThis.crypto.randomUUID(), motivo: reason }),
+            body: JSON.stringify({ operacion_id: createUuid(), motivo: reason }),
         });
         const released = payload.data.ubicacion_liberada;
         toast(`Folio ${payload.data.numero_folio} eliminado.${released ? ` ${[released.camara, released.posicion].filter(Boolean).join(' · ')} quedó libre.` : ''}`);
