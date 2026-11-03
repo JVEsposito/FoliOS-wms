@@ -320,6 +320,7 @@ class ValidacionPalletController extends Controller
         Request $request,
         ValidacionPallet $validacionPallet,
         CatalogoOperativoValidacion $catalogo,
+        ServicioCorreccionValidacionPallet $servicio,
     ): JsonResponse {
         $request->validate(['cliente' => ['nullable', 'string', 'max:150']]);
         $validacionPallet->loadMissing(['temporada:id,codigo,nombre,activa', 'folio:id,numero_folio,estado_operacional,condicion_termica,activo']);
@@ -385,6 +386,7 @@ class ValidacionPalletController extends Controller
                     $request->string('cliente')->trim()->toString() ?: $this->clienteDeLaValidacion($validacionPallet),
                 ),
             ],
+            'puede_cambiar_numero_folio' => $servicio->puedeCambiarNumeroFolio($validacionPallet->folio),
             'exige_lote_proceso' => (bool) config('validacion.exigir_lote_proceso'),
         ])->header('Cache-Control', 'no-store, private');
     }

@@ -9,6 +9,18 @@ use Tests\TestCase;
 
 class EstructuraOficinaTest extends TestCase
 {
+    public function test_retornos_packing_exporta_el_selector_de_envases_y_cantidades(): void
+    {
+        $html = $this->get('/oficina/materia-prima/retornos-packing')->assertOk()->getContent();
+        foreach (['returnContainerType', 'returnContainerQuantity', 'editReturnContainerType', 'registeredBoxes'] as $id) {
+            $this->assertStringContainsString('id="'.$id.'"', $html);
+        }
+        if (getenv('ESTIBA_EXPORTAR_UI_TESTS') === '1') {
+            File::ensureDirectoryExists(storage_path('app/ui/oficina'));
+            File::put(storage_path('app/ui/oficina/retornos-packing.html'), $html);
+        }
+    }
+
     public function test_ordenes_mp_exporta_el_editor_y_la_correccion_de_entregas(): void
     {
         $html = $this->get('/oficina/materia-prima/ordenes-proceso')->assertOk()->getContent();

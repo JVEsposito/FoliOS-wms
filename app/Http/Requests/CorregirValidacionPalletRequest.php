@@ -36,6 +36,7 @@ class CorregirValidacionPalletRequest extends FormRequest
 
         return [
             ...$comunes,
+            'numero_folio' => ['sometimes', 'required', 'string', 'max:50', 'not_regex:/[\x00-\x1F\x7F]/u'],
             'tipo_bulto' => [
                 'required',
                 Rule::in([TipoBulto::Pallet->value, TipoBulto::Saldo->value]),
@@ -81,6 +82,9 @@ class CorregirValidacionPalletRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'numero_folio.required' => 'Ingresa el número correcto del folio.',
+            'numero_folio.max' => 'El número de folio admite hasta 50 caracteres.',
+            'numero_folio.not_regex' => 'El número de folio contiene caracteres no válidos.',
             'fecha_hora_validacion.date_format' => 'Indica una fecha y hora de validación válidas.',
             'fecha_embalaje.date_format' => 'Indica una fecha de embalaje válida.',
             'composicion.*.origen_validacion_id.required' => 'Elige el CSG de cada línea.',
@@ -116,6 +120,11 @@ class CorregirValidacionPalletRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        $numeroFolio = $this->input('numero_folio');
+        if (is_string($numeroFolio)) {
+            $this->merge(['numero_folio' => mb_strtoupper(trim($numeroFolio))]);
+        }
+
         $this->merge([
             'turno' => mb_strtoupper(trim((string) $this->input('turno'))),
             'motivo_correccion' => trim((string) $this->input('motivo_correccion')),

@@ -5,6 +5,7 @@ namespace App\Services\MateriaPrima;
 use App\Enums\ContenidoCamara;
 use App\Enums\EstadoCamara;
 use App\Enums\EstadoSubloteRetornoPacking;
+use App\Enums\TipoEnvaseRetornoPacking;
 use App\Exceptions\ConflictoOperacion;
 use App\Models\Camara;
 use App\Models\EntregaFrutaProceso;
@@ -151,6 +152,8 @@ class ServicioRetornoPacking
                         ),
                         'nombre_resultado' => $nombre,
                         'cantidad_bins' => $resultado['cantidad_bins'],
+                        'tipo_envase' => $resultado['tipo_envase'] ?? 'bins',
+                        'cantidad_envases' => $resultado['cantidad_envases'] ?? $resultado['cantidad_bins'],
                         'kilos_netos' => $resultado['kilos_netos'],
                         'estado' => EstadoSubloteRetornoPacking::PendienteUbicacion,
                     ]);
@@ -159,6 +162,8 @@ class ServicioRetornoPacking
                         'numero_sublote' => $sublote->numero_sublote,
                         'resultado' => $nombre,
                         'cantidad_bins' => $sublote->cantidad_bins,
+                        'tipo_envase' => $sublote->tipo_envase->value,
+                        'cantidad_envases' => $sublote->cantidad_envases,
                         'kilos_netos' => $sublote->kilos_netos,
                     ];
                 }
@@ -290,7 +295,7 @@ class ServicioRetornoPacking
                     'camara_id' => $camara->id,
                     'camara_codigo' => $camara->codigo,
                     'camara_destino_id' => $camara->id, 'camara_destino_codigo' => $camara->codigo, 'camara_destino_nombre' => $camara->nombre,
-                    'cantidad_envases' => $sublote->cantidad_bins, 'tipo_envase' => 'bins',
+                    'cantidad_envases' => $sublote->cantidad_envases, 'tipo_envase' => $sublote->tipo_envase->value,
                     'usuario_nombre' => $usuario->name, 'observacion' => $observacion,
                 ],
             );
@@ -576,10 +581,15 @@ class ServicioRetornoPacking
                     'nombre_resultado' => filled($resultado['nombre_resultado'] ?? null)
                         ? trim((string) $resultado['nombre_resultado'])
                         : null,
-                    'cantidad_bins' => (int) $resultado['cantidad_bins'],
+                    'cantidad_bins' => ($resultado['tipo_envase'] ?? 'bins') === 'bins'
+                        ? (int) ($resultado['cantidad_envases'] ?? $resultado['cantidad_bins']) : 0,
                     'kilos_netos' => filled($resultado['kilos_netos'] ?? null)
                         ? round((float) $resultado['kilos_netos'], 3)
                         : null,
+                    ...(($resultado['tipo_envase'] ?? 'bins') === 'bins' ? [] : [
+                        'tipo_envase' => TipoEnvaseRetornoPacking::from($resultado['tipo_envase'])->value,
+                        'cantidad_envases' => (int) $resultado['cantidad_envases'],
+                    ]),
                 ])
                 ->values()
                 ->all(),

@@ -65,6 +65,62 @@ class CorreccionValidacionPalletApiTest extends TestCase
         ]);
     }
 
+    public function test_corrige_solo_el_numero_del_folio_y_conserva_la_identidad_y_el_historial(): void
+    {
+        [$catalogo, $usuario, $tokenPda] = $this->contexto();
+        $captura = $this->payloadValidacion($catalogo, '0000000067');
+        $registro = $this->conToken($tokenPda)->postJson('/api/validacion/pallets', $captura)
+            ->assertCreated()->json('data');
+        $id = $registro['id'];
+        $folioId = $registro['folio']['id'];
+        $tokenOficina = $this->tokenOficina($usuario);
+        $this->conToken($tokenOficina)->getJson("/api/validacion/pallets/{$id}/correccion")
+            ->assertOk()->assertJsonPath('puede_cambiar_numero_folio', true);
+
+        $datos = [
+            ...$this->payloadCorreccion($catalogo, (string) Str::uuid()),
+            ...collect($captura)->only(['tipo_bulto', 'cantidad_cajas', 'linea_proceso', 'turno', 'articulo_validacion_id'])->all(),
+            'numero_folio' => ' 0000000076 ',
+            'motivo_correccion' => 'Se invirtieron los dígitos de la etiqueta.',
+        ];
+        $ruta = "/api/validacion/pallets/{$id}/corregir";
+        $this->conToken($tokenOficina)->putJson($ruta, $datos)
+            ->assertOk()
+            ->assertJsonPath('data.id', $id)
+            ->assertJsonPath('data.numero_folio', '0000000076')
+            ->assertJsonPath('data.folio.id', $folioId)
+            ->assertJsonPath('data.folio.numero_folio', '0000000076')
+            ->assertJsonPath('data.folio.estado_operacional', 'pendiente_prefrio')
+            ->assertJsonPath('data.cantidad_cajas', 120)
+            ->assertJsonPath('data.correcciones.0.numero_folio_anterior', '0000000067')
+            ->assertJsonPath('data.correcciones.0.numero_folio_nuevo', '0000000076');
+        $this->conToken($tokenOficina)->putJson($ruta, $datos)->assertOk();
+        $this->assertDatabaseCount('correcciones_validacion_pallet', 1);
+        $this->assertDatabaseMissing('folios', ['numero_folio' => '0000000067']);
+
+        // La PDA puede reenviar la captura original sin duplicar el bulto corregido.
+        $this->conToken($tokenPda)->postJson('/api/validacion/pallets', $captura)
+            ->assertOk()->assertJsonPath('data.folio.id', $folioId)->assertJsonPath('data.numero_folio', '0000000076');
+        $this->conToken($tokenPda)->postJson('/api/validacion/pallets', $this->payloadValidacion($catalogo, '0000000067'))
+            ->assertCreated()->assertJsonPath('data.numero_intento', 2);
+    }
+
+    public function test_rechaza_un_numero_ocupado_sin_modificar_ningun_folio(): void
+    {
+        [$catalogo, $usuario, $tokenPda] = $this->contexto();
+        $id = $this->conToken($tokenPda)->postJson('/api/validacion/pallets', $this->payloadValidacion($catalogo, 'PT-ORIGINAL'))
+            ->assertCreated()->json('data.id');
+        $this->conToken($tokenPda)->postJson('/api/validacion/pallets', $this->payloadValidacion($catalogo, 'PT-OCUPADO'))->assertCreated();
+        $datos = [...$this->payloadCorreccion($catalogo, (string) Str::uuid()), 'numero_folio' => 'pt-ocupado'];
+        $ruta = "/api/validacion/pallets/{$id}/corregir";
+        $this->conToken($this->tokenOficina($usuario))->putJson($ruta, $datos)
+            ->assertConflict()->assertJsonPath('message', 'El número de folio indicado ya está registrado o tiene una validación definitiva.');
+        $this->assertDatabaseHas('validaciones_pallet', ['id' => $id, 'numero_folio' => 'PT-ORIGINAL']);
+        $this->assertDatabaseHas('secuencias_validacion_folio', ['numero_folio' => 'PT-OCUPADO', 'ultimo_intento' => 1]);
+        $this->assertDatabaseCount('folios', 2);
+        $this->assertDatabaseCount('correcciones_validacion_pallet', 0);
+    }
+
     public function test_la_correccion_es_idempotente_ante_reintentos(): void
     {
         [$catalogo, $usuario, $tokenPda] = $this->contexto();
@@ -106,7 +162,17 @@ class CorreccionValidacionPalletApiTest extends TestCase
                 'condicion_termica' => 'prefrio_aprobado',
             ]);
 
-        $this->conToken($this->tokenOficina($usuario))
+        $tokenOficina = $this->tokenOficina($usuario);
+        $this->conToken($tokenOficina)->getJson("/api/validacion/pallets/{$validacionId}/correccion")
+            ->assertOk()->assertJsonPath('puede_cambiar_numero_folio', false);
+        $this->conToken($tokenOficina)
+            ->putJson("/api/validacion/pallets/{$validacionId}/corregir", [
+                ...$this->payloadCorreccion($catalogo, (string) Str::uuid()),
+                'numero_folio' => 'PAL-CORR-0003-NUEVO',
+            ])->assertConflict();
+        $this->assertDatabaseMissing('folios', ['numero_folio' => 'PAL-CORR-0003-NUEVO']);
+
+        $this->conToken($tokenOficina)
             ->putJson(
                 "/api/validacion/pallets/{$validacionId}/corregir",
                 $this->payloadCorreccion($catalogo, (string) Str::uuid()),

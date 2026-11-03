@@ -133,6 +133,32 @@ class ConciliacionValidacionOrigenTest extends TestCase
         $this->assertSame(1, $caso->fresh()->version);
     }
 
+    public function test_corrige_el_folio_y_compara_con_el_numero_nuevo_en_la_misma_lectura(): void
+    {
+        $this->filas[] = $this->fila([
+            'Pallet' => '000124', 'cantidad' => 236, 'marca' => 'Marca A', 'cod_calibre' => '2J', 'codigo_csg_predio' => '001234',
+        ]);
+        $this->leer();
+        $caso = $this->validar();
+        $tokenOficina = $this->usuario->createToken('oficina', ['oficina'])->plainTextToken;
+        $this->app['auth']->forgetGuards();
+        $this->withToken($tokenOficina)->putJson("/api/validacion/pallets/{$caso->validacion_pallet_id}/corregir", [
+            'operacion_id' => (string) Str::uuid(), 'numero_folio' => '000124',
+            'tipo_bulto' => 'pallet', 'cantidad_cajas' => 236, 'linea_proceso' => 1, 'turno' => 'A',
+            ...$this->catalogo, 'motivo_correccion' => 'Se digitó mal el último dígito.',
+        ])->assertOk();
+
+        $corregido = $caso->fresh();
+        $this->assertSame('000124', $corregido->numero_folio);
+        $this->assertSame(240, $corregido->planta_inicial['cajas']);
+        $this->assertSame(236, $corregido->planta_actual['cajas']);
+        $this->assertSame('cuadrado', $corregido->estado);
+        $this->assertDatabaseHas('eventos_conciliacion_validacion', [
+            'conciliacion_id' => $caso->id, 'tipo' => 'correccion_validacion',
+            'datos->antes->numero_folio' => '000123', 'datos->despues->numero_folio' => '000124',
+        ]);
+    }
+
     public function test_gestion_idempotente_no_cierra_y_lectura_posterior_cuadra_y_reabre(): void
     {
         $this->leer();

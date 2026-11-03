@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\TipoEnvaseRetornoPacking;
 use App\Models\Concerns\ImpideEliminacionFisica;
 use App\Models\Concerns\TemporadaPorColumna;
 use App\Models\Contracts\PerteneceATemporada;
@@ -20,6 +21,8 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
     'folio_definitivo',
     'folio_definitivo_vigente',
     'kilos_totales',
+    'tipo_envase',
+    'cantidad_envases',
     'kilos_totales_definitivos',
     'tipo_resultado_packing_id',
     'nombre_resultado',
@@ -107,6 +110,8 @@ class BinRetornoPacking extends Model implements PerteneceATemporada
     protected function casts(): array
     {
         return [
+            'tipo_envase' => TipoEnvaseRetornoPacking::class,
+            'cantidad_envases' => 'integer',
             'kilos_totales' => 'decimal:3',
             'kilos_totales_definitivos' => 'decimal:3',
             'registrado_at' => 'datetime',

@@ -23,6 +23,11 @@
 
             <section class="vc-section" aria-labelledby="vcBulkTitle">
                 <h3 id="vcBulkTitle"><span aria-hidden="true">1</span>Bulto</h3>
+                <label class="vc-field">
+                    <span>Número de folio</span>
+                    <input name="numero_folio" type="text" maxlength="50" autocomplete="off" spellcheck="false" aria-describedby="vcFolioHint">
+                </label>
+                <p class="vc-hint" id="vcFolioHint"></p>
                 <div class="vc-grid vc-grid--3">
                     <label class="vc-field"><span>Tipo de bulto</span><select name="tipo_bulto"><option value="pallet">Pallet completo</option><option value="saldo">Saldo</option></select></label>
                     <label class="vc-field"><span>Línea</span><select name="linea_proceso"><option value="1">Línea 1</option><option value="2">Línea 2</option><option value="3">Línea 3</option></select></label>

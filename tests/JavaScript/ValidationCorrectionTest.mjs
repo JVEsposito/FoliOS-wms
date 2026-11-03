@@ -167,6 +167,22 @@ test('el catálogo compacto por cliente (artículos por origen) da los mismos pr
     assert.deepEqual(articlesForOrigins(compact, ['o1']).map((item) => item.id), ['santina-2j-5', 'santina-2j-10', 'lapins-2j-5']);
 });
 
+test('permite corregir solo el folio y conserva sus ceros iniciales', () => {
+    const draft = draftFromValidation(validation, index);
+    const article = productChoices(index, draft).article;
+    assert.equal(draft.numero_folio, '0000000005');
+    assert.equal(correctionPayload(draft, article, 'op').numero_folio, undefined);
+    draft.numero_folio = ' 0000000050 ';
+    draft.motivo = 'Número de la etiqueta física.';
+    assert.deepEqual(draftChanges(validation, draft, index), [
+        { label: 'Número de folio', before: '0000000005', after: '0000000050' },
+    ]);
+    assert.deepEqual(draftIssues(draft, index), []);
+    assert.equal(correctionPayload(draft, article, 'op').numero_folio, '0000000050');
+    draft.numero_folio = '  ';
+    assert.match(draftIssues(draft, index)[0], /número de folio válido/);
+});
+
 test('corrige fechas en hora de planta sin enviar el resto de la validación', () => {
     const original = { ...validation, fecha_hora_validacion: '2026-11-03T22:04', fecha_embalaje: '2026-11-03' };
     const draft = draftFromValidation(original, index);

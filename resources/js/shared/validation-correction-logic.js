@@ -170,6 +170,8 @@ export function draftFromValidation(validation, index) {
         fecha_embalaje: validation.fecha_embalaje || '',
     };
     const draft = {
+        numero_folio: validation.numero_folio || '',
+        numero_folio_original: validation.numero_folio || '',
         ...fechasOriginales,
         fechasOriginales,
         tipo_bulto: validation.tipo_bulto || 'pallet',
@@ -210,6 +212,10 @@ export function draftIssues(draft, index, { requireLotAndProcess = false, datesO
         if (String(draft.motivo).trim().length < 5) issues.push('Explica el motivo de la corrección.');
         return issues;
     }
+    const folio = codeKey(draft.numero_folio);
+    if (folio !== codeKey(draft.numero_folio_original) && (!folio || folio.length > 50 || /[\x00-\x1f\x7f]/u.test(folio))) {
+        issues.push('Ingresa un número de folio válido de hasta 50 caracteres.');
+    }
     if (!draft.cliente) issues.push('Elige el cliente.');
     else if (!draft.marca) issues.push('Elige la marca.');
     draft.lines.forEach((line, position) => {
@@ -247,8 +253,10 @@ export function correctionPayload(draft, article, operationId, datesOnly = false
         ...changedDates(draft),
     };
     if (datesOnly) return { ...common, solo_fechas: true };
+    const folio = codeKey(draft.numero_folio);
     return {
         ...common,
+        ...(folio !== codeKey(draft.numero_folio_original) ? { numero_folio: folio } : {}),
         tipo_bulto: draft.tipo_bulto,
         cantidad_cajas: totalBoxes(draft),
         linea_proceso: Number(draft.linea_proceso),
@@ -278,6 +286,10 @@ export function draftChanges(validation, draft, index) {
     const add = (label, before, after) => {
         if (!sameText(before, after)) changes.push({ label, before: String(before || '—'), after: String(after || '—') });
     };
+    const folio = codeKey(draft.numero_folio);
+    if (folio !== codeKey(validation.numero_folio)) {
+        changes.push({ label: 'Número de folio', before: validation.numero_folio, after: folio || '—' });
+    }
     const fechas = changedDates(draft);
     for (const [field, after] of Object.entries(fechas)) {
         changes.push({

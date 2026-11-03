@@ -267,6 +267,11 @@ export function createValidationCorrection({ api, setBusy = () => {}, toast = ()
         const states = [...new Set([folio.estado_operacional, folio.condicion_termica].filter(Boolean).map((value) => STATES[value] || statusText(value)))];
         elements.state.textContent = `${[context.catalogo?.temporada?.nombre, `Folio ${states.join(' · ').toLowerCase()}`, folio.activo === false ? 'inactivo' : null].filter(Boolean).join(' · ')}. `
             + 'Se corrigen la validación y el folio; su estado, cámara y despacho no cambian.';
+        form.elements.numero_folio.value = draft.numero_folio;
+        form.elements.numero_folio.readOnly = context.puede_cambiar_numero_folio !== true;
+        document.getElementById('vcFolioHint').textContent = form.elements.numero_folio.readOnly
+            ? 'El número se puede corregir mientras el bulto esté activo y antes de cargarlo a prefrío.'
+            : 'Si se digitó mal, escribe el número que aparece en la etiqueta del bulto.';
         for (const name of ['fecha_hora_validacion', 'fecha_embalaje']) form.elements[name].value = draft[name];
         form.elements.tipo_bulto.value = draft.tipo_bulto;
         form.elements.linea_proceso.value = draft.linea_proceso;
@@ -323,6 +328,11 @@ export function createValidationCorrection({ api, setBusy = () => {}, toast = ()
             draft[name] = event.target.value;
             renderReview();
         }
+    });
+    form.elements.numero_folio.addEventListener('input', (event) => {
+        if (!draft) return;
+        draft.numero_folio = event.target.value;
+        renderReview();
     });
     for (const name of ['fecha_hora_validacion', 'fecha_embalaje']) {
         form.elements[name].addEventListener('input', (event) => {
