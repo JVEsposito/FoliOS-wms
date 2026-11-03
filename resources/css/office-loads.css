@@ -1660,6 +1660,18 @@ button:disabled {
 }
 
 .return-load-folios { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; }
+.load-instructions { border: 1px solid var(--line); border-radius: 10px; padding: 18px; margin-bottom: 16px; }
+.load-instructions > p, .instruction-card p { color: var(--muted); font-size: .78rem; }
+.load-instructions__cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin-top: 16px; }
+.instruction-card { display: grid; gap: 8px; border: 1px solid var(--line); border-radius: 8px; padding: 14px; }
+.instruction-card.is-selected { border-color: var(--cyan); }
+.instruction-card h3, .instruction-card p { margin: 0; overflow-wrap: anywhere; }
+.instruction-card > span { font-size: .76rem; color: var(--muted); }
+.instruction-card button { margin-top: 4px; }
+.instruction-picker { display: grid; gap: 7px; margin-bottom: 12px; font-size: .8rem; }
+.instruction-picker select, .folio-action-cell select { min-width: 0; max-width: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 6px; color: var(--text); background: var(--panel); }
+.instruction-picker small { color: var(--muted); }
+.instruction-folio-heading th { padding: 12px; color: var(--text); background: var(--panel); text-align: left; }
 .return-load-folios legend { padding: 0 4px; color: var(--muted); font-size: .72rem; font-weight: 900; }
 .return-load-folios > div { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; max-height: 220px; overflow: auto; }
 .return-load-folio { display: flex; align-items: center; gap: 6px; font-family: var(--font-mono, ui-monospace, Consolas, monospace); font-size: .78rem; }

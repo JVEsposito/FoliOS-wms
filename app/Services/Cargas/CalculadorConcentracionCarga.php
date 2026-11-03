@@ -29,6 +29,13 @@ class CalculadorConcentracionCarga
             $analisis['grupo_principal_folio_ids'],
             $analisis['grupo_principal_puntos'],
         );
+        if (isset($analisis['segregaciones'])) {
+            $analisis['segregaciones'] = collect($analisis['segregaciones'])->map(function (array $grupo): array {
+                unset($grupo['grupo_principal_folio_ids'], $grupo['grupo_principal_puntos']);
+
+                return $grupo;
+            })->all();
+        }
 
         return $analisis;
     }
@@ -44,7 +51,25 @@ class CalculadorConcentracionCarga
     public function analizar(
         Collection $asignaciones,
         ?string $camaraObjetivoId = null,
+        array $bandasMezcladas = [],
     ): array {
+        $grupos = $asignaciones->groupBy(fn (CargaFolio $a): string => $a->instructivo_embarque_id ?? '');
+        if ($grupos->count() > 1) {
+            $bandasMezcladas = $asignaciones->filter(fn ($a): bool => $a->folio?->ubicacionActual?->posicion !== null)
+                ->groupBy(fn ($a): string => $a->folio->ubicacionActual->posicion->camara_id.':'.$a->folio->ubicacionActual->posicion->banda)
+                ->filter(fn (Collection $banda): bool => $banda->pluck('instructivo_embarque_id')->unique()->count() > 1)
+                ->keys()->all();
+            $analisis = $grupos->map(fn (Collection $grupo): array => $this->analizar($grupo, $camaraObjetivoId, $bandasMezcladas));
+            $salida = $analisis->sortByDesc('concentrados')->first();
+            foreach (['concentrados', 'faltantes', 'total', 'en_anden', 'cargados', 'por_cargar', 'despachados', 'con_incidencia', 'pendientes'] as $campo) {
+                $salida[$campo] = (int) $analisis->sum($campo);
+            }
+            $salida['porcentaje'] = $salida['total'] ? (int) round($salida['concentrados'] / $salida['total'] * 100) : 0;
+            $salida['cumple_umbral'] = $analisis->every(fn ($a): bool => $a['cumple_umbral']);
+            $salida['segregaciones'] = $analisis->all();
+
+            return $salida;
+        }
         $total = $asignaciones->count();
         // «en_anden» cuenta todo lo que salió de la cámara; «cargados» es el
         // subconjunto que el camarero ya registró arriba del camión.
@@ -65,6 +90,7 @@ class CalculadorConcentracionCarga
                 ->folio
                 ?->ubicacionActual
                 ?->posicion !== null)
+            ->reject(fn ($a): bool => in_array($a->folio->ubicacionActual->posicion->camara_id.':'.$a->folio->ubicacionActual->posicion->banda, $bandasMezcladas, true))
             ->values();
 
         $grupoPrincipal = $this->grupoPrincipal($ubicadas, $camaraObjetivoId);

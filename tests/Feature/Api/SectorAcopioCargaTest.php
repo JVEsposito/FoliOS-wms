@@ -15,7 +15,9 @@ use App\Exceptions\ConflictoOperacion;
 use App\Models\Camara;
 use App\Models\Carga;
 use App\Models\CargaFolio;
+use App\Models\Cliente;
 use App\Models\Dispositivo;
+use App\Models\Embarque;
 use App\Models\Folio;
 use App\Models\PlanOperacional;
 use App\Models\Posicion;
@@ -207,6 +209,72 @@ class SectorAcopioCargaTest extends TestCase
         $this->ubicar($this->folio($carga), $this->posicion(3, 5));
 
         return $carga;
+    }
+
+    public function test_dos_instructivos_no_comparten_banda_ni_con_reservas_antes_de_la_recepcion(): void
+    {
+        $carga = $this->camaraVacia(bandas: 4, profundidad: 6);
+        [$a, $b] = $this->instructivos($carga);
+        $recepcion = $this->recepcion($carga, 4);
+        [$primera, $segunda, $tercera, $cuarta] = $recepcion->tareas()->orderBy('secuencia')->get()->all();
+        CargaFolio::query()->whereIn('folio_id', [$primera->folio_id, $segunda->folio_id])->update(['instructivo_embarque_id' => $a->id]);
+        CargaFolio::query()->whereIn('folio_id', [$tercera->folio_id, $cuarta->folio_id])->update(['instructivo_embarque_id' => $b->id]);
+        $planes = app(ServicioPlanesOperacionales::class);
+        [$operador, $tablet] = $this->operador('INST-A');
+        [$otro, $otraTablet] = $this->operador('INST-B');
+        $primera = $planes->asumir($primera, $operador, $tablet);
+        $acopio = app(ServicioAcopioCarga::class)->paraFolio($primera->folio_id, $primera->id);
+        $bandaA = $acopio['sector']['banda_desde'];
+        $primera = $planes->materializarDestino($primera, $this->posicion($bandaA, 1), $operador, $tablet);
+        $tercera = $planes->asumir($tercera, $otro, $otraTablet);
+        // El pallet F001 todavía no llegó físicamente, pero su reserva protege la banda.
+        try {
+            $planes->materializarDestino($tercera, $this->posicion($bandaA, 2), $otro, $otraTablet);
+            $this->fail('Se mezclaron instructivos en la misma banda.');
+        } catch (ConflictoOperacion $error) {
+            $this->assertStringContainsString('instructivo', $error->getMessage());
+        }
+        $acopioB = app(ServicioAcopioCarga::class)->paraFolio($tercera->folio_id, $tercera->id);
+        $bandaB = $acopioB['sector']['banda_desde'];
+        $this->assertNotSame($bandaA, $bandaB);
+        $planes->materializarDestino($tercera, $this->posicion($bandaB, 1), $otro, $otraTablet);
+        $propuestas = app(ServicioAcopioCarga::class)->paraTareas(collect([$segunda, $cuarta]));
+        $this->assertSame([$bandaA], array_unique(array_column($propuestas[$segunda->id]['puntos'], 'banda')));
+        $this->assertSame([$bandaB], array_unique(array_column($propuestas[$cuarta->id]['puntos'], 'banda')));
+    }
+
+    public function test_el_planificador_separa_instructivos_que_ya_estaban_mezclados_en_inventario(): void
+    {
+        $carga = $this->camaraVacia(bandas: 4, profundidad: 6);
+        [$a, $b] = $this->instructivos($carga);
+        foreach (range(1, 4) as $p) {
+            $folio = $this->folio($carga);
+            CargaFolio::query()->where('folio_id', $folio->id)->update(['instructivo_embarque_id' => $p <= 2 ? $a->id : $b->id]);
+            $this->ubicar($folio, $this->posicion(1, $p));
+        }
+        $plan = app(ServicioPlanConcentracionCarga::class)->sincronizar($carga, $this->usuario);
+        $this->assertNotNull($plan);
+        $this->assertSame(0, $plan->contexto['porcentaje_actual']);
+        $tareas = $plan->tareas()->where('contexto->tipo_decision', 'concentrar_carga')->get();
+        $this->assertNotEmpty($tareas);
+        foreach ($tareas as $tarea) {
+            $this->assertContains($tarea->contexto['instructivo_embarque_id'], [$a->id, $b->id]);
+            $this->assertStringContainsString('Instructivo F00', $tarea->instruccion);
+        }
+        $this->assertSame(1, PlanOperacional::query()->where('referencia_id', $carga->id)->count());
+    }
+
+    private function instructivos(Carga $carga): array
+    {
+        $cliente = Cliente::create(['codigo' => 'INST', 'nombre' => 'Cliente instructivos', 'codigo_folio_materiales' => 'IN', 'activo' => true]);
+        $embarque = Embarque::create(['temporada_id' => $this->temporada->id, 'cliente_id' => $cliente->id, 'carga_id' => $carga->id,
+            'codigo' => 'EIN0000001', 'numero_correlativo' => 1, 'fecha_programada' => '2026-11-03', 'hora_programada' => '18:00',
+            'intervalo_minutos' => 30, 'modalidad' => 'aereo', 'estado' => 'confirmado', 'version' => 1,
+            'creado_por_user_id' => $this->usuario->id, 'actualizado_por_user_id' => $this->usuario->id]);
+        $a = $embarque->instructivos()->create(['orden' => 1, 'numero_externo' => 'F001', 'cantidad_pallets' => 2]);
+        $b = $embarque->instructivos()->create(['orden' => 2, 'numero_externo' => 'F002', 'cantidad_pallets' => 2]);
+
+        return [$a, $b];
     }
 
     private function camaraVacia(int $bandas, int $profundidad): Carga

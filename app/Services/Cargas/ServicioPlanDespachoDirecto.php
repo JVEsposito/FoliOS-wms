@@ -506,7 +506,7 @@ class ServicioPlanDespachoDirecto
             ->whereHas('folio', fn ($folios) => $folios
                 ->where('activo', true)
                 ->where('tipo_bulto', TipoBulto::Pallet->value))
-            ->with('folio.ubicacionActual.posicion.camara')
+            ->with(['folio.ubicacionActual.posicion.camara', 'instructivo'])
             ->orderBy('asignado_at')
             ->lockForUpdate()
             ->get();
@@ -525,9 +525,10 @@ class ServicioPlanDespachoDirecto
             'tipo_movimiento' => TipoMovimiento::Retiro,
             'camara_origen_id' => $posicion->camara_id,
             'posicion_origen_id' => $posicion->id,
-            'instruccion' => "Retirar {$asignacion->folio->numero_folio} directamente a {$presencia->anden->nombre}.",
+            'instruccion' => "Retirar {$asignacion->folio->numero_folio} directamente a {$presencia->anden->nombre}.".$this->referenciaInstructivo($asignacion),
             'contexto' => [
                 'candidate_key' => "retiro:{$asignacion->folio_id}",
+                'instructivo_embarque_id' => $asignacion->instructivo_embarque_id,
                 'tipo_decision' => 'retiro_directo_anden',
                 'origen_logico' => 'camara',
                 'presencia_carga_anden_id' => $presencia->id,
@@ -554,7 +555,7 @@ class ServicioPlanDespachoDirecto
             'tipo_movimiento' => TipoMovimiento::Retiro,
             'camara_origen_id' => null,
             'posicion_origen_id' => null,
-            'instruccion' => "Retirar {$asignacion->folio->numero_folio} desde {$proceso->tunel?->nombre} directamente a {$presencia->anden->nombre}.",
+            'instruccion' => "Retirar {$asignacion->folio->numero_folio} desde {$proceso->tunel?->nombre} directamente a {$presencia->anden->nombre}.".$this->referenciaInstructivo($asignacion),
             'contexto' => [
                 'candidate_key' => "retiro:{$asignacion->folio_id}",
                 'tipo_decision' => 'retiro_directo_anden',
@@ -572,6 +573,13 @@ class ServicioPlanDespachoDirecto
                 'posicion_tunel' => $prefrio->posicion?->etiqueta,
             ],
         ];
+    }
+
+    private function referenciaInstructivo(CargaFolio $asignacion): string
+    {
+        $instructivo = $asignacion->instructivo;
+
+        return $instructivo ? ' · Instructivo '.($instructivo->numero_externo ?: $instructivo->orden) : '';
     }
 
     /** @return array<string, mixed> */

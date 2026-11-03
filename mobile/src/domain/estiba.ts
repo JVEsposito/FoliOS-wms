@@ -395,6 +395,8 @@ export type LoadFolioState = 'pendiente' | 'con_incidencia' | 'en_anden' | 'carg
 
 export type LoadFolio = {
   asignacion_id: string;
+  instructivo_embarque_id?: string | null;
+  instructivo?: { id: string; orden: number; numero_externo: string | null; booking: string | null } | null;
   id: string;
   numero_folio: string;
   tipo_bulto: 'pallet' | 'saldo';

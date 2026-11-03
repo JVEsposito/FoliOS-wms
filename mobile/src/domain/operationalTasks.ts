@@ -176,6 +176,9 @@ export type OperationalLoadStaging = {
   carga_id: string;
   carga_codigo: string;
   carga_folio_id: string;
+  instructivo_embarque_id?: string | null;
+  bandas_otros_instructivos?: number[];
+  bandas_propuestas_otros_instructivos?: Array<{ camara_id: string; banda: number }>;
   camara_objetivo_id: string | null;
   puntos: Array<{ banda: number; posicion: number; nivel: number }>;
   despacho_directo: boolean;

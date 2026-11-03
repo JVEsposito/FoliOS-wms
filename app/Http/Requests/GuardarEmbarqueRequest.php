@@ -42,6 +42,7 @@ class GuardarEmbarqueRequest extends FormRequest
             'documentos' => ['nullable', 'string', 'max:2000'],
             'observacion' => ['nullable', 'string', 'max:2000'],
             'instructivos' => ['required', 'array', 'min:1', 'max:20'],
+            'instructivos.*.id' => ['nullable', 'uuid', 'distinct'],
             'instructivos.*.numero_externo' => ['nullable', 'string', 'max:150'],
             'instructivos.*.recibidor' => ['nullable', 'string', 'max:180'],
             'instructivos.*.pais_destino_id' => [

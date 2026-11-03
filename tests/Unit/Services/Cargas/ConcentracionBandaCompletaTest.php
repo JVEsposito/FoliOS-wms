@@ -77,6 +77,37 @@ class ConcentracionBandaCompletaTest extends TestCase
         $this->assertSame(14, app(CalculadorConcentracionCarga::class)->analizar($asignaciones)['concentrados']);
     }
 
+    public function test_cada_instructivo_debe_cumplir_el_umbral_aunque_el_total_llegue_a_ochenta(): void
+    {
+        $asignaciones = collect();
+        foreach (range(1, 7) as $p) {
+            $asignaciones->push($this->asignacion('CAM-A', 1, $p, 1)->forceFill(['instructivo_embarque_id' => 'F001']));
+        }
+        foreach ([3, 5] as $banda) {
+            $asignaciones->push($this->asignacion('CAM-A', $banda, 1, 1)->forceFill(['instructivo_embarque_id' => 'F002']));
+        }
+        $analisis = app(CalculadorConcentracionCarga::class)->calcular($asignaciones);
+        $this->assertSame(89, $analisis['porcentaje']);
+        $this->assertFalse($analisis['cumple_umbral']);
+        $this->assertSame(100, $analisis['segregaciones']['F001']['porcentaje']);
+        $this->assertSame(50, $analisis['segregaciones']['F002']['porcentaje']);
+        $this->assertArrayNotHasKey('grupo_principal_puntos', $analisis['segregaciones']['F001']);
+    }
+
+    public function test_no_cuenta_una_banda_mezclada_como_dos_segregaciones_completas(): void
+    {
+        $asignaciones = collect([
+            $this->asignacion('CAM-A', 1, 1, 1)->forceFill(['instructivo_embarque_id' => 'F001']),
+            $this->asignacion('CAM-A', 1, 2, 1)->forceFill(['instructivo_embarque_id' => 'F002']),
+            $this->asignacion('CAM-A', 3, 1, 1)->forceFill(['instructivo_embarque_id' => 'F001']),
+        ]);
+        $analisis = app(CalculadorConcentracionCarga::class)->calcular($asignaciones);
+        $this->assertFalse($analisis['cumple_umbral']);
+        $this->assertSame(1, $analisis['concentrados']);
+        $this->assertSame(50, $analisis['segregaciones']['F001']['porcentaje']);
+        $this->assertSame(0, $analisis['segregaciones']['F002']['porcentaje']);
+    }
+
     private function asignacion(string $camaraId, int $banda, int $profundidad, int $nivel, int $niveles = 2): CargaFolio
     {
         $id = implode('-', [$camaraId, $banda, $profundidad, $nivel]);

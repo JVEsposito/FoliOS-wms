@@ -86,6 +86,7 @@ export function TruckLoadingPanel({ load, disabled, onRegister, onUndo }: Props)
           <View key={folio.asignacion_id} style={[styles.row, folio.estado_carga === 'cargado' && styles.rowLoaded]}>
             <View style={styles.rowCopy}>
               <Text style={styles.folio}>{folio.numero_folio}</Text>
+              {folio.instructivo ? <Text style={styles.rowMeta}>Instructivo {folio.instructivo.numero_externo || folio.instructivo.orden}{folio.instructivo.booking ? ` · Booking ${folio.instructivo.booking}` : ''}</Text> : null}
               <Text style={styles.rowMeta}>
                 {folio.estado_carga === 'cargado'
                   ? `Cargado ${folio.cargado_at ? time(folio.cargado_at) : ''}`

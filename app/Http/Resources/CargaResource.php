@@ -85,6 +85,12 @@ class CargaResource extends JsonResource
                 'estado' => $this->embarque->estado->value,
             ] : null),
             'total_folios' => $folios->count(),
+            'total_programado' => $this->resource->relationLoaded('embarque') && $this->embarque?->relationLoaded('instructivos')
+                && $this->embarque->instructivos->isNotEmpty()
+                && $this->embarque->instructivos->every(fn ($i): bool => $i->cantidad_pallets !== null)
+                    ? (int) $this->embarque->instructivos->sum('cantidad_pallets') : null,
+            'segregaciones' => $this->segregaciones($asignaciones, $concentracion),
+            'folios_sin_instructivo' => $asignaciones->whereNull('instructivo_embarque_id')->pluck('folio_id')->values(),
             'folios' => $folios,
             'distribucion' => $this->distribucion($folios),
             'progreso' => $concentracion,
@@ -175,6 +181,8 @@ class CargaResource extends JsonResource
                 $ubicacion = $folio?->ubicacionActual;
                 $posicion = $ubicacion?->posicion;
                 $camara = $posicion?->camara;
+                $instructivo = $this->resource->relationLoaded('embarque') && $this->embarque?->relationLoaded('instructivos')
+                    ? $this->embarque->instructivos->firstWhere('id', $asignacion->instructivo_embarque_id) : null;
                 $prefrio = $folio && $folio->relationLoaded('procesosPrefrio')
                     ? $folio->procesosPrefrio->sortByDesc('created_at')->first(
                         fn ($item): bool => in_array($item->estado->value, ['en_proceso', 'aprobado'], true),
@@ -183,6 +191,11 @@ class CargaResource extends JsonResource
 
                 return [
                     'asignacion_id' => $asignacion->id,
+                    'instructivo_embarque_id' => $asignacion->instructivo_embarque_id,
+                    'instructivo' => $instructivo ? [
+                        'id' => $instructivo->id, 'orden' => $instructivo->orden,
+                        'numero_externo' => $instructivo->numero_externo, 'booking' => $instructivo->booking,
+                    ] : null,
                     'id' => $folio?->id,
                     'numero_folio' => $folio?->numero_folio,
                     'tipo_bulto' => $folio?->tipo_bulto?->value,
@@ -238,5 +251,32 @@ class CargaResource extends JsonResource
                 ];
             })
             ->values();
+    }
+
+    private function segregaciones(Collection $asignaciones, array $concentracion): Collection
+    {
+        if (! $this->resource->relationLoaded('embarque') || ! $this->embarque?->relationLoaded('instructivos')) {
+            return collect();
+        }
+
+        return $this->embarque->instructivos->map(function ($instructivo) use ($asignaciones, $concentracion): array {
+            $grupo = $asignaciones->where('instructivo_embarque_id', $instructivo->id)->values();
+
+            return [
+                'id' => $instructivo->id,
+                'orden' => $instructivo->orden,
+                'numero_externo' => $instructivo->numero_externo,
+                'recibidor' => $instructivo->recibidor,
+                'booking' => $instructivo->booking,
+                'destino_pais' => $instructivo->destino_pais,
+                'destino_ciudad' => $instructivo->destino_ciudad,
+                'pallets_programados' => $instructivo->cantidad_pallets,
+                'cajas_programadas' => $instructivo->cantidad_cajas,
+                'pallets_asignados' => $grupo->count(),
+                'pallets_pendientes' => $instructivo->cantidad_pallets === null ? null : max(0, $instructivo->cantidad_pallets - $grupo->count()),
+                'folios' => $grupo->pluck('folio_id')->values(),
+                'progreso' => $concentracion['segregaciones'][$instructivo->id] ?? app(CalculadorConcentracionCarga::class)->calcular($grupo),
+            ];
+        })->values();
     }
 }

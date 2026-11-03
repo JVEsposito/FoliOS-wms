@@ -284,6 +284,7 @@ class ServicioDespachoFrigorifico
                 try {
                     $asignacionReemplazo = CargaFolio::create([
                         'carga_id' => $carga->id,
+                        'instructivo_embarque_id' => $asignacion->instructivo_embarque_id,
                         'folio_id' => $folioReemplazoBloqueado->id,
                         'estado' => EstadoCargaFolio::Pendiente,
                         'reemplaza_a_carga_folio_id' => $asignacion->id,

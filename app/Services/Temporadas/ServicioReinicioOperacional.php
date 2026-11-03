@@ -436,7 +436,7 @@ class ServicioReinicioOperacional
             ->delete();
         DB::table('carga_folios')
             ->whereIn('carga_id', clone $cargas)
-            ->update(['reemplaza_a_carga_folio_id' => null]);
+            ->update(['reemplaza_a_carga_folio_id' => null, 'instructivo_embarque_id' => null]);
         DB::table('incidencias_carga_folio')
             ->whereIn('carga_folio_id', clone $asignacionesCarga)
             ->update(['carga_folio_reemplazo_id' => null]);

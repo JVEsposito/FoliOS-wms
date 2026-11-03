@@ -2,6 +2,7 @@ import { loadClusterLocation } from './shared/load-cluster-location.js';
 import { createUuid as operationId } from './shared/uuid.js';
 import { showOfficeToast } from './office-toast.js';
 import { loadReceptionDependencies } from './shared/load-reception-dependencies.js';
+import { availableInstructionSlots, groupedLoadFolios, instructionLabel, selectedInstruction } from './shared/load-instructions.js';
 
 const byId = (id) => document.getElementById(id);
 
@@ -65,6 +66,11 @@ const elements = {
     mainCluster: byId('loadMainCluster'),
     distribution: byId('loadDistribution'),
     folioAddSection: byId('folioAddSection'),
+    instructions: byId('loadInstructions'),
+    instructionCards: byId('loadInstructionCards'),
+    instructionPicker: byId('loadInstructionPicker'),
+    instructionSelect: byId('loadInstructionSelect'),
+    unassignedInstructions: byId('loadUnassignedInstructions'),
     folioInput: byId('folioInput'),
     folioInputCount: byId('folioInputCount'),
     addFolios: byId('addFoliosButton'),
@@ -193,6 +199,7 @@ const state = {
     availableRequestId: 0,
     directRequestId: 0,
     selected: null,
+    selectedInstructionId: null,
     selectedIncident: null,
     selectedReplacement: null,
     mode: 'empty',
@@ -391,7 +398,8 @@ function canEdit(load) {
 function canPublish(load) {
     return state.identity?.puede_gestionar_cargas === true
         && load?.estado === 'borrador'
-        && load.total_folios >= 1;
+        && load.total_folios >= 1
+        && !(load.segregaciones?.length && load.folios_sin_instructivo?.length);
 }
 
 const TERMINAL_LOAD_STATES = ['cerrada', 'cancelada', 'retornada', 'retorno_parcial'];
@@ -476,7 +484,7 @@ function syncDirectFolioInput(folios) {
 }
 
 function remainingFolioSlots(load = state.selected) {
-    return Math.max(0, 26 - Number(load?.total_folios || 0));
+    return availableInstructionSlots(load, state.selectedInstructionId);
 }
 
 function statusClass(status) {
@@ -550,7 +558,7 @@ function renderCatalog() {
                 <div class="load-card__line load-card__line--detail">
                     <span class="load-card__distribution">${escapeHtml(distributionText(load))}</span>
                     <span class="priority-dot priority-dot--${priorityClass(load.prioridad)}">${escapeHtml(priorityLabels[load.prioridad] || statusText(load.prioridad))}</span>
-                    <span class="load-card__count">${truck ? `🚚 ${escapeHtml(truck.anden?.nombre || 'En andén')} · ` : ''}${load.incidencias_abiertas ? `⚠ ${load.incidencias_abiertas} · ` : ''}${load.total_folios} / 26</span>
+                    <span class="load-card__count">${truck ? `🚚 ${escapeHtml(truck.anden?.nombre || 'En andén')} · ` : ''}${load.incidencias_abiertas ? `⚠ ${load.incidencias_abiertas} · ` : ''}${load.total_folios} / ${load.total_programado ?? 26}</span>
                 </div>
             </button>
         `;
@@ -769,7 +777,7 @@ function renderConcentration(load) {
     const dependencies = loadReceptionDependencies(progress, Boolean(load.camion_en_anden));
     if (dependencies) elements.concentrationMessage.textContent += ` ${dependencies}`;
     const cluster = progress.grupo_principal;
-    elements.mainCluster.textContent = cluster
+    elements.mainCluster.textContent = load.segregaciones?.length > 1 ? `Avance por instructivo · ${load.segregaciones.length} segregaciones` : cluster
         ? loadClusterLocation(cluster)
         : (atDock ? `${atDock} ${atDock === 1 ? 'folio enviado' : 'folios enviados'} a andén` : 'Sin grupo físico principal');
 }
@@ -807,6 +815,31 @@ function renderIncidents() {
     }).join('');
 }
 
+function renderInstructions(load) {
+    const groups = load.segregaciones || [];
+    const selected = selectedInstruction(load, state.selectedInstructionId);
+    state.selectedInstructionId = selected?.id || null;
+    elements.instructions.classList.toggle('is-hidden', !groups.length);
+    elements.instructionPicker.classList.toggle('is-hidden', !groups.length);
+    elements.instructionSelect.innerHTML = '<option value="">Selecciona un instructivo</option>' + groups.map((group) =>
+        `<option value="${escapeHtml(group.id)}"${group.id === selected?.id ? ' selected' : ''}>${escapeHtml(instructionLabel(group))} · ${group.pallets_asignados} / ${group.pallets_programados ?? 'sin cantidad'} pallets${group.booking ? ` · Booking ${escapeHtml(group.booking)}` : ''}</option>`).join('');
+    elements.instructionCards.innerHTML = groups.map((group) => {
+        const progress = group.progreso || {};
+        return `<article class="instruction-card${group.id === selected?.id ? ' is-selected' : ''}">
+            <h3>${escapeHtml(instructionLabel(group))}</h3>
+            <p>${escapeHtml(group.recibidor || 'Sin recibidor')} · Booking ${escapeHtml(group.booking || 'sin informar')}</p>
+            <strong>${group.pallets_asignados} / ${group.pallets_programados ?? '—'} pallets</strong>
+            <span>${group.cajas_programadas == null ? 'Cajas sin programar' : `${group.cajas_programadas} cajas programadas`}</span>
+            <span>${group.pallets_pendientes == null ? 'Pallets sin programar' : `${group.pallets_pendientes} pallets por asignar`} · ${progress.porcentaje || 0}% concentrado</span>
+            <span>${progress.en_anden || 0} en andén · ${progress.cargados || 0} cargados</span>
+            ${canEdit(load) ? `<button class="secondary-button" data-select-instruction="${escapeHtml(group.id)}" type="button" aria-pressed="${group.id === selected?.id}">Preparar ${escapeHtml(instructionLabel(group))}</button>` : ''}
+        </article>`;
+    }).join('');
+    const unassigned = load.folios_sin_instructivo?.length || 0;
+    elements.unassignedInstructions.textContent = unassigned
+        ? `${unassigned} pallets sin instructivo. Asígnalos desde el detalle de folios antes de publicar la orden.` : '';
+}
+
 function renderFolios(load) {
     if (!load.folios?.length) {
         elements.folioTableBody.innerHTML = `
@@ -819,7 +852,9 @@ function renderFolios(load) {
 
     const editable = canEdit(load);
     const adjustable = canAdjust(load);
-    elements.folioTableBody.innerHTML = load.folios.map((folio) => {
+    elements.folioTableBody.innerHTML = groupedLoadFolios(load).filter((group) => group.folios.length).map(({ instruction, folios }) => {
+        const heading = load.segregaciones?.length ? `<tr class="instruction-folio-heading"><th colspan="6" scope="colgroup">${escapeHtml(instruction ? instructionLabel(instruction) : 'Sin instructivo')} · ${folios.length} pallets${instruction?.booking ? ` · Booking ${escapeHtml(instruction.booking)}` : ''}</th></tr>` : '';
+        return heading + folios.map((folio) => {
         const location = folio.estado_carga === 'despachado' ? 'Despachado'
             : folio.estado_carga === 'retornado' ? 'Retornado a planta'
             : folio.estado_carga === 'en_anden' ? 'En andén'
@@ -836,11 +871,13 @@ function renderFolios(load) {
                 <td><span class="location-label">${escapeHtml(location)}</span></td>
                 <td>${escapeHtml(formatDate(folio.asignado_at))}</td>
                 <td class="folio-action-cell">
+                    ${editable && load.segregaciones?.length && (load.segregaciones.length > 1 || !folio.instructivo_embarque_id) ? `<select data-segregate-folio="${escapeHtml(folio.numero_folio)}" aria-label="Instructivo de ${escapeHtml(folio.numero_folio)}"><option value="" disabled${!folio.instructivo_embarque_id ? ' selected' : ''}>Asignar instructivo</option>${load.segregaciones.map((group) => `<option value="${escapeHtml(group.id)}"${group.id === folio.instructivo_embarque_id ? ' selected' : ''}>${escapeHtml(instructionLabel(group))}</option>`).join('')}</select>` : ''}
                     ${(editable || adjustable) && folio.estado_carga !== 'despachado' ? `<button class="folio-remove" data-remove-folio="${escapeHtml(folio.id)}" data-folio-number="${escapeHtml(folio.numero_folio)}" data-folio-state="${escapeHtml(folio.estado_carga)}" type="button">Quitar</button>` : ''}
                     ${adjustable && folio.estado_carga !== 'despachado' ? `<button class="folio-remove folio-change" data-change-folio="${escapeHtml(folio.id)}" data-folio-number="${escapeHtml(folio.numero_folio)}" data-folio-state="${escapeHtml(folio.estado_carga)}" type="button">Cambiar</button>` : ''}
                 </td>
             </tr>
         `;
+        }).join('');
     }).join('');
 }
 
@@ -917,6 +954,7 @@ function renderTruckPresence(load) {
 }
 
 function renderSelected(load) {
+    if (state.selected?.id !== load.id) state.selectedInstructionId = null;
     state.mode = 'detail';
     state.selected = load;
     elements.empty.classList.add('is-hidden');
@@ -957,11 +995,12 @@ function renderSelected(load) {
     setHeaderDisabled(!editable);
     elements.headerForm.elements.numero_orden_externa.disabled = !editable || linkedShipment;
 
-    elements.totalFolios.textContent = `${load.total_folios} / 26`;
+    elements.totalFolios.textContent = `${load.total_folios} / ${load.total_programado ?? 26}`;
     elements.totalCameras.textContent = String(load.distribucion?.length || 0);
     renderConcentration(load);
     renderTruckPresence(load);
     renderDistribution(load);
+    renderInstructions(load);
     renderFolios(load);
     renderIncidents();
     renderCommands(load);
@@ -1207,7 +1246,9 @@ function updateFolioInputCount() {
         ? `${countLabel} · solo ${remaining} ${remaining === 1 ? 'cupo disponible' : 'cupos disponibles'}`
         : countLabel;
     elements.folioInputCount.classList.toggle('is-error', exceedsCapacity);
-    elements.addFolios.disabled = count === 0 || exceedsCapacity;
+    const missingInstruction = state.selected?.segregaciones?.length && !selectedInstruction(state.selected, state.selectedInstructionId);
+    if (missingInstruction) elements.folioInputCount.textContent = `${countLabel} · selecciona un instructivo`;
+    elements.addFolios.disabled = count === 0 || exceedsCapacity || Boolean(missingInstruction);
 }
 
 function renderReplacementCandidates() {
@@ -1380,6 +1421,40 @@ elements.headerForm.addEventListener('submit', async (event) => {
     }
 });
 
+function selectInstruction(id) {
+    state.selectedInstructionId = id || null;
+    // No transferir silenciosamente un lote pendiente de un instructivo a otro.
+    const hadFolios = parseFolios().length > 0;
+    elements.folioInput.value = '';
+    clearFolioErrors();
+    renderInstructions(state.selected);
+    updateFolioInputCount();
+    renderAvailableFolios();
+    if (hadFolios) toast('Selección limpiada. Elige los pallets para este instructivo.');
+}
+
+elements.instructionSelect.addEventListener('change', () => selectInstruction(elements.instructionSelect.value));
+elements.instructionCards.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-select-instruction]');
+    if (button) selectInstruction(button.dataset.selectInstruction);
+});
+elements.folioTableBody.addEventListener('change', async (event) => {
+    const select = event.target.closest('[data-segregate-folio]');
+    if (!select || !canEdit(state.selected) || !select.value) return;
+    setBusy(true, 'Asignando instructivo…');
+    try {
+        const response = await api(`/api/cargas/${state.selected.id}/segregaciones`, {
+            method: 'POST',
+            body: JSON.stringify({ folios: [select.dataset.segregateFolio],
+                instructivo_embarque_id: select.value, version_esperada: state.selected.version }),
+        });
+        syncLoad(response.data);
+        toast('Instructivo del pallet actualizado.');
+    } catch (error) {
+        if (!(await recoverConflict(error))) { renderFolios(state.selected); toast(error.message, true); }
+    } finally { setBusy(false); }
+});
+
 elements.folioInput.addEventListener('input', () => {
     clearFolioErrors();
     updateFolioInputCount();
@@ -1413,7 +1488,7 @@ elements.availableFolioList.addEventListener('change', (event) => {
     if (checkbox.checked) {
         if (!folios.has(checkbox.dataset.availableFolio) && folios.size >= remainingFolioSlots()) {
             checkbox.checked = false;
-            toast('La orden alcanzó el máximo de 26 folios.', true);
+            toast('No quedan cupos disponibles para el instructivo seleccionado o la orden.', true);
             renderAvailableFolios();
             return;
         }
@@ -1444,7 +1519,7 @@ elements.availableFolioSelectPage.addEventListener('change', () => {
             folios.add(folio.numero_folio);
             remaining -= 1;
         });
-        if (omitted > 0) toast(`Se alcanzó el máximo de 26 folios; ${omitted} quedaron sin seleccionar.`, true);
+        if (omitted > 0) toast(`Se alcanzó el cupo disponible; ${omitted} quedaron sin seleccionar.`, true);
     }
 
     elements.folioInput.value = [...folios].join('\n');
@@ -1467,7 +1542,7 @@ elements.reloadAvailableFolios.addEventListener('click', async () => {
 
 elements.addFolios.addEventListener('click', async () => {
     const folios = parseFolios();
-    if (!folios.length || !canEdit(state.selected)) return;
+    if (!folios.length || !canEdit(state.selected) || folios.length > remainingFolioSlots()) return;
     clearFolioErrors();
     setBusy(true, `Validando ${folios.length} ${folios.length === 1 ? 'folio' : 'folios'}…`);
     try {
@@ -1475,6 +1550,7 @@ elements.addFolios.addEventListener('click', async () => {
             method: 'POST',
             body: JSON.stringify({
                 folios,
+                instructivo_embarque_id: selectedInstruction(state.selected, state.selectedInstructionId)?.id || null,
                 version_esperada: state.selected.version,
             }),
         });

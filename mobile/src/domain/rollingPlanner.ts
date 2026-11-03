@@ -71,14 +71,21 @@ export function calculateRollingFrontier(
   const candidates: RollingCandidate[] = [];
   const unresolvedTaskIds: string[] = [];
   const virtualLoadTargets = new Map<string, OperationalLoadStaging>();
+  const virtualInstructionBands: Array<{ load: string; instruction: string | null; camera: string; band: number }> = [];
 
   for (const original of eligible) {
     if (proposals.length >= limit) break;
     const taskSnapshot = snapshot.tareas.find((item) => item.id === original.id);
     let task = taskWithCurrentLoadTarget(original, taskSnapshot);
     const acopio = loadStaging(task);
-    const virtualTarget = acopio ? virtualLoadTargets.get(acopio.carga_id) : null;
+    const stagingKey = acopio ? `${acopio.carga_id}:${acopio.instructivo_embarque_id ?? ''}` : null;
+    const virtualTarget = stagingKey ? virtualLoadTargets.get(stagingKey) : null;
     if (virtualTarget) task = withLoadTarget(task, virtualTarget);
+    const current = loadStaging(task);
+    if (current) task = withLoadTarget(task, { ...current, bandas_propuestas_otros_instructivos: [
+      ...virtualInstructionBands.filter(b => b.load === current.carga_id
+        && b.instruction !== (current.instructivo_embarque_id ?? null)).map(b => ({ camara_id: b.camera, banda: b.band })),
+    ] });
 
     const candidate = bestCandidate(
       task,
@@ -99,13 +106,15 @@ export function calculateRollingFrontier(
     candidates.push(candidate);
     commitVirtualArrival(task, candidate, virtualPlans);
     const loadTarget = loadStaging(task);
-    if (loadTarget) virtualLoadTargets.set(loadTarget.carga_id, {
+    if (loadTarget && stagingKey) virtualLoadTargets.set(stagingKey, {
       ...loadTarget,
       camara_objetivo_id: candidate.cameraId,
       puntos: [...loadTarget.puntos, {
         banda: candidate.position.banda, posicion: candidate.position.posicion, nivel: candidate.position.nivel,
       }],
     });
+    if (loadTarget) virtualInstructionBands.push({ load: loadTarget.carga_id, instruction: loadTarget.instructivo_embarque_id ?? null,
+      camera: candidate.cameraId, band: candidate.position.banda });
     proposals.push({
       tarea_id: task.id,
       posicion_destino_id: candidate.position.id,
@@ -355,6 +364,8 @@ function positionAllowed(
   if (band.modo !== 'operativa' || band.estado === 'bloqueada' || band.estado === 'en_vaciado') return false;
   const acopio = loadStaging(task);
   const priorityBand = acopio?.sector?.banda_prioritaria;
+  if (acopio?.bandas_otros_instructivos?.includes(position.banda)) return false;
+  if (acopio?.bandas_propuestas_otros_instructivos?.some(b => b.camara_id === plan.id && b.banda === position.banda)) return false;
   if (priorityBand !== undefined && position.banda !== priorityBand) return false;
   if (priorityBand === undefined && acopio?.puntos.length && !acopio.puntos.some((point) => areConcentrationNeighbors(point, position))) {
     return false;

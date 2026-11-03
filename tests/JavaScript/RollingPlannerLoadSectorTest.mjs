@@ -112,3 +112,25 @@ test('la banda prioritaria no permite atravesar stock ni apilar sobre una reserv
         { id: 'arriba', banda: 1, posicion: 1, nivel: 2, estado: 'activa', ocupada: false, reservada: false }];
     assert.equal(bestCandidate(task('t1', acopio), [plan]), null);
 });
+
+test('dos instructivos de una orden conservan geometrías separadas y no comparten bandas en la frontera virtual', () => {
+    const first = { ...staging([]), instructivo_embarque_id: 'F001' };
+    const second = { ...staging([]), instructivo_embarque_id: 'F002' };
+    const tasks = [task('t1', first), task('t2', second), task('t3', first), task('t4', second)];
+    const snap = snapshot(tasks, null);
+    snap.tareas.forEach((t, i) => { t.acopio_carga = tasks[i].contexto.acopio_carga; });
+    const result = calculateRollingFrontier(tasks, snap, [camera(4, 6)]);
+    assert.equal(result.candidates.length, 4);
+    const bands = result.candidates.map(c => c.position.banda);
+    assert.equal(bands[0], bands[2]);
+    assert.equal(bands[1], bands[3]);
+    assert.notEqual(bands[0], bands[1]);
+    assert.deepEqual(first.puntos, [], 'La simulación no modifica el snapshot recibido.');
+});
+
+test('la tablet respeta las bandas de otro instructivo que el servidor ya reservó', () => {
+    const acopio = { ...staging([]), instructivo_embarque_id: 'F002', bandas_otros_instructivos: [1] };
+    const result = bestCandidate(task('t1', acopio), [camera(2, 6)]);
+    assert.equal(result.position.banda, 2);
+    assert.equal(bestCandidate(task('t1', acopio), [camera(1, 6)]), null);
+});

@@ -213,6 +213,7 @@ function updateOverbookControls(force = false) {
 function addInstruction(data = {}) {
     const fragment = elements.instructionTemplate.content.cloneNode(true);
     const card = fragment.querySelector('.instruction-card');
+    if (data.id) card.dataset.instructivoId = data.id;
     const country = card.querySelector('[data-field="pais_destino_id"]');
     country.innerHTML = '<option value="">Selecciona país</option>' + state.catalogs.paises.map((item) => `<option value="${item.id}">${escapeHtml(item.iso_alpha2)} · ${escapeHtml(item.nombre_es)}</option>`).join('');
     country.value = data.pais_destino_id ?? '';
@@ -279,7 +280,7 @@ async function openExisting(id, focusConfirmation = false) {
 
 function instructionPayload() {
     return [...elements.instructionList.querySelectorAll('.instruction-card')].map((card) => {
-        const row = {}; card.querySelectorAll('[data-field]').forEach((field) => {
+        const row = card.dataset.instructivoId ? { id: card.dataset.instructivoId } : {}; card.querySelectorAll('[data-field]').forEach((field) => {
             row[field.dataset.field] = field.type === 'number' && field.value !== '' ? Number(field.value) : field.value;
         }); return row;
     });
@@ -302,6 +303,9 @@ async function saveCurrent({ close = true } = {}) {
     try {
         const response = await api(id ? `/api/embarques/${id}` : '/api/embarques', { method: id ? 'PUT' : 'POST', body: JSON.stringify(shipmentPayload()) });
         state.selected = response.data; elements.form.elements.id.value = response.data.id; elements.form.elements.version_esperada.value = response.data.version;
+        [...elements.instructionList.querySelectorAll('.instruction-card')].forEach((card, index) => {
+            card.dataset.instructivoId = response.data.instructivos[index].id;
+        });
         await loadCalendar({ preserveScroll: true });
         if (close) elements.dialog.close();
         toast(`${response.data.codigo} guardado correctamente.`);
