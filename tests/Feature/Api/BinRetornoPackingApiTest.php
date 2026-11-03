@@ -837,7 +837,7 @@ class BinRetornoPackingApiTest extends TestCase
         unset($cambio['tipo_envase'], $cambio['cantidad_envases']);
         $cambio['operacion_id'] = (string) Str::uuid();
         $this->putJson($ruta, $cambio)->assertOk()->assertJsonPath('data.tipo_envase', 'caja_3_4')->assertJsonPath('data.cantidad_envases', 24);
-        $tipo = TipoResultadoPacking::where('activo', true)->firstOrFail();
+        $tipo = TipoResultadoPacking::where('codigo', 'comercial')->firstOrFail();
         $this->actingAs($c['camarero'], 'sanctum')->postJson($ruta.'/regularizar', [
             'operacion_id' => (string) Str::uuid(), 'folio_definitivo' => 'RET-CAJA-24', 'tipo_resultado_packing_id' => $tipo->id,
             'kilos_totales_definitivos' => 235, 'origenes' => [['origen_id' => $data['origenes'][0]['id'], 'kilos_aportados_definitivos' => 235]],
@@ -857,7 +857,7 @@ class BinRetornoPackingApiTest extends TestCase
     public function test_retorno_por_viaje_separa_bins_y_cajas_y_conserva_la_unidad_al_ubicar(): void
     {
         $c = $this->prepararEntrega('MIXCAJA', 'OP-MIXCAJA');
-        $tipo = TipoResultadoPacking::where('activo', true)->firstOrFail();
+        $tipo = TipoResultadoPacking::where('codigo', 'comercial')->firstOrFail();
         $payload = ['operacion_id' => (string) Str::uuid(), 'cierra_entrega' => false, 'resultados' => [
             ['tipo_resultado_packing_id' => $tipo->id, 'cantidad_bins' => 2, 'kilos_netos' => 400],
             ['tipo_resultado_packing_id' => $tipo->id, 'tipo_envase' => 'caja_3_4', 'cantidad_envases' => 6, 'cantidad_bins' => 0, 'kilos_netos' => 60],
@@ -889,7 +889,7 @@ class BinRetornoPackingApiTest extends TestCase
     public function test_cajas_por_viaje_pueden_migrarse_a_un_folio_con_su_cantidad(): void
     {
         $c = $this->prepararEntrega('MIGCAJA', 'OP-MIGCAJA');
-        $tipo = TipoResultadoPacking::where('activo', true)->firstOrFail();
+        $tipo = TipoResultadoPacking::where('codigo', 'comercial')->firstOrFail();
         $op = (string) Str::uuid();
         $this->actingAs($c['camarero'], 'sanctum')->postJson("/api/materia-prima/fruta-proceso/entregas/{$c['entrega']['id']}/retornos", [
             'operacion_id' => $op, 'cierra_entrega' => false, 'resultados' => [[
