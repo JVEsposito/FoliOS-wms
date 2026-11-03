@@ -12,6 +12,15 @@
         </header>
 
         <div class="vc-body">
+            <section class="vc-section" aria-labelledby="vcDatesTitle">
+                <h3 id="vcDatesTitle">Fechas</h3>
+                <div class="vc-grid vc-grid--2">
+                    <label class="vc-field"><span>Fecha y hora de validación</span><input type="datetime-local" name="fecha_hora_validacion"></label>
+                    <label class="vc-field"><span>Fecha de embalaje</span><input type="date" name="fecha_embalaje"></label>
+                </div>
+                <p class="vc-hint">Ingresa la hora de planta. Verifica la fecha de embalaje en la etiqueta del bulto.</p>
+            </section>
+
             <section class="vc-section" aria-labelledby="vcBulkTitle">
                 <h3 id="vcBulkTitle"><span aria-hidden="true">1</span>Bulto</h3>
                 <label class="vc-field">

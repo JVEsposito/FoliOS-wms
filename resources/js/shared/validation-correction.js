@@ -226,7 +226,8 @@ export function createValidationCorrection({ api, setBusy = () => {}, toast = ()
 
     function renderReview() {
         const changes = draftChanges(context.validacion, draft, index);
-        const issues = draftIssues(draft, index, { requireLotAndProcess: context.exige_lote_proceso === true });
+        const datesOnly = changes.length > 0 && changes.every((change) => change.field);
+        const issues = draftIssues(draft, index, { datesOnly, requireLotAndProcess: context.exige_lote_proceso === true });
         const list = changes.length
             ? `<ul>${changes.map((change) => `<li><b>${escapeHtml(change.label)}</b><span>${escapeHtml(change.before)}</span><span aria-hidden="true">→</span><span class="vc-review__after">${escapeHtml(change.after)}</span></li>`).join('')}</ul>`
             : '<p>Todavía no hay cambios respecto de lo validado.</p>';
@@ -271,6 +272,7 @@ export function createValidationCorrection({ api, setBusy = () => {}, toast = ()
         document.getElementById('vcFolioHint').textContent = form.elements.numero_folio.readOnly
             ? 'El número se puede corregir mientras el bulto esté activo y antes de cargarlo a prefrío.'
             : 'Si se digitó mal, escribe el número que aparece en la etiqueta del bulto.';
+        for (const name of ['fecha_hora_validacion', 'fecha_embalaje']) form.elements[name].value = draft[name];
         form.elements.tipo_bulto.value = draft.tipo_bulto;
         form.elements.linea_proceso.value = draft.linea_proceso;
         form.elements.turno.value = draft.turno;
@@ -285,13 +287,16 @@ export function createValidationCorrection({ api, setBusy = () => {}, toast = ()
         event.preventDefault();
         if (!draft) return;
         draft.motivo = form.elements.motivo_correccion.value;
-        const issues = draftIssues(draft, index, { requireLotAndProcess: context.exige_lote_proceso === true });
+        const changes = draftChanges(context.validacion, draft, index);
+        if (!changes.length) return;
+        const datesOnly = changes.every((change) => change.field);
+        const issues = draftIssues(draft, index, { datesOnly, requireLotAndProcess: context.exige_lote_proceso === true });
         if (issues.length) {
             elements.error.textContent = issues[0];
             return;
         }
         const article = productChoices(index, draft).article;
-        const payload = correctionPayload(draft, article, operationId);
+        const payload = correctionPayload(draft, article, operationId, datesOnly);
         const payloadKey = JSON.stringify({ ...payload, operacion_id: null });
         if (submittedPayload !== null && submittedPayload !== payloadKey) operationId = randomUuid();
         submittedPayload = payloadKey;
@@ -329,6 +334,13 @@ export function createValidationCorrection({ api, setBusy = () => {}, toast = ()
         draft.numero_folio = event.target.value;
         renderReview();
     });
+    for (const name of ['fecha_hora_validacion', 'fecha_embalaje']) {
+        form.elements[name].addEventListener('input', (event) => {
+            if (!draft) return;
+            draft[name] = event.target.value;
+            renderReview();
+        });
+    }
     form.elements.motivo_correccion.addEventListener('input', (event) => {
         if (!draft) return;
         draft.motivo = event.target.value;

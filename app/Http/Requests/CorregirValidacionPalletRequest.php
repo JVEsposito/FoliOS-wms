@@ -20,8 +20,22 @@ class CorregirValidacionPalletRequest extends FormRequest
      */
     public function rules(): array
     {
-        return [
+        $comunes = [
             'operacion_id' => ['required', 'uuid'],
+            'solo_fechas' => ['sometimes', 'boolean'],
+            'fecha_hora_validacion' => ['sometimes', 'required', 'date_format:Y-m-d\TH:i'],
+            'fecha_embalaje' => ['sometimes', 'required', 'date_format:Y-m-d'],
+            'motivo_correccion' => ['required', 'string', 'min:5', 'max:1000'],
+        ];
+        if ($this->boolean('solo_fechas')) {
+            $comunes['fecha_hora_validacion'] = ['required_without:fecha_embalaje', 'date_format:Y-m-d\TH:i'];
+            $comunes['fecha_embalaje'] = ['required_without:fecha_hora_validacion', 'date_format:Y-m-d'];
+
+            return $comunes;
+        }
+
+        return [
+            ...$comunes,
             'numero_folio' => ['sometimes', 'required', 'string', 'max:50', 'not_regex:/[\x00-\x1F\x7F]/u'],
             'tipo_bulto' => [
                 'required',
@@ -61,7 +75,6 @@ class CorregirValidacionPalletRequest extends FormRequest
                 'uuid',
                 'exists:categorias_validacion,id',
             ],
-            'motivo_correccion' => ['required', 'string', 'min:5', 'max:1000'],
         ];
     }
 
@@ -72,6 +85,8 @@ class CorregirValidacionPalletRequest extends FormRequest
             'numero_folio.required' => 'Ingresa el número correcto del folio.',
             'numero_folio.max' => 'El número de folio admite hasta 50 caracteres.',
             'numero_folio.not_regex' => 'El número de folio contiene caracteres no válidos.',
+            'fecha_hora_validacion.date_format' => 'Indica una fecha y hora de validación válidas.',
+            'fecha_embalaje.date_format' => 'Indica una fecha de embalaje válida.',
             'composicion.*.origen_validacion_id.required' => 'Elige el CSG de cada línea.',
             'composicion.*.cantidad_cajas.min' => 'Cada línea debe tener al menos una caja.',
             'composicion.*.lote_materia_prima.required' => 'Ingresa el lote de materia prima de cada línea.',
@@ -82,6 +97,10 @@ class CorregirValidacionPalletRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
+            if ($this->boolean('solo_fechas')) {
+                return;
+            }
+
             $claves = collect($this->input('composicion', []))
                 ->filter(fn (mixed $linea): bool => is_array($linea))
                 ->map(fn (array $linea): string => implode('|', [

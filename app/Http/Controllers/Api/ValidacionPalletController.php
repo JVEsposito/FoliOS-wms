@@ -366,6 +366,8 @@ class ValidacionPalletController extends Controller
                 'articulo_validacion_id' => $validacionPallet->articulo_validacion_id,
                 'categoria_validacion_id' => $validacionPallet->categoria_validacion_id,
                 'fecha_embalaje' => $snapshot['fecha_embalaje'] ?? null,
+                'fecha_hora_validacion' => $validacionPallet->generado_dispositivo_at?->copy()
+                    ->setTimezone(config('app.operational_timezone'))->format('Y-m-d\TH:i'),
                 'articulo' => $snapshot['articulo'] ?? null,
                 'origen' => $snapshot['origen'] ?? null,
                 'categoria' => $snapshot['categoria']['nombre'] ?? null,

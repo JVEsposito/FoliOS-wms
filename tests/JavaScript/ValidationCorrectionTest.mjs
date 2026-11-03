@@ -182,3 +182,20 @@ test('permite corregir solo el folio y conserva sus ceros iniciales', () => {
     draft.numero_folio = '  ';
     assert.match(draftIssues(draft, index)[0], /número de folio válido/);
 });
+
+test('corrige fechas en hora de planta sin enviar el resto de la validación', () => {
+    const original = { ...validation, fecha_hora_validacion: '2026-11-03T22:04', fecha_embalaje: '2026-11-03' };
+    const draft = draftFromValidation(original, index);
+    draft.fecha_hora_validacion = '2026-11-02T22:04';
+    draft.fecha_embalaje = '2026-11-02';
+    draft.motivo = 'La PDA tenía el reloj adelantado.';
+    assert.deepEqual(draftChanges(original, draft, index).map((change) => change.field), ['fecha_hora_validacion', 'fecha_embalaje']);
+    assert.deepEqual(draftIssues(draft, index, { datesOnly: true, requireLotAndProcess: true }), []);
+    assert.deepEqual(correctionPayload(draft, null, 'op', true), {
+        operacion_id: 'op',
+        motivo_correccion: 'La PDA tenía el reloj adelantado.',
+        fecha_hora_validacion: '2026-11-02T22:04',
+        fecha_embalaje: '2026-11-02',
+        solo_fechas: true,
+    });
+});
