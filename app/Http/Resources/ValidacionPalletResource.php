@@ -61,6 +61,8 @@ class ValidacionPalletResource extends JsonResource
                 fn () => $this->correcciones->map(fn ($correccion): array => [
                     'id' => $correccion->id,
                     'motivo' => $correccion->motivo,
+                    'numero_folio_anterior' => $correccion->datos_anteriores['folio']['numero_folio'] ?? null,
+                    'numero_folio_nuevo' => $correccion->datos_nuevos['folio']['numero_folio'] ?? null,
                     'corregido_at' => $correccion->corregido_at?->toAtomString(),
                     'corregido_por' => $correccion->relationLoaded('corregidoPor')
                         ? [
