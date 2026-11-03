@@ -22,6 +22,7 @@ use App\Models\Folio;
 use App\Models\PlanOperacional;
 use App\Models\Posicion;
 use App\Models\ReservaCargaFolio;
+use App\Models\ReservaTareaMovimiento;
 use App\Models\Temporada;
 use App\Models\UbicacionActual;
 use App\Models\User;
@@ -262,6 +263,27 @@ class SectorAcopioCargaTest extends TestCase
             $this->assertStringContainsString('Instructivo F00', $tarea->instruccion);
         }
         $this->assertSame(1, PlanOperacional::query()->where('referencia_id', $carga->id)->count());
+    }
+
+    public function test_el_servidor_reserva_bandas_distintas_para_dos_instructivos_de_la_misma_orden(): void
+    {
+        $carga = $this->camaraVacia(bandas: 4, profundidad: 6);
+        config(['planificador.compute' => 'server']);
+        [$a, $b] = $this->instructivos($carga);
+        $recepcion = $this->recepcion($carga, 2);
+        [$primera, $segunda] = $recepcion->tareas()->orderBy('secuencia')->get()->all();
+        CargaFolio::query()->where('folio_id', $primera->folio_id)->update(['instructivo_embarque_id' => $a->id]);
+        CargaFolio::query()->where('folio_id', $segunda->folio_id)->update(['instructivo_embarque_id' => $b->id]);
+        [$operador, $tablet] = $this->operador('SERVIDOR-A');
+        [$otro, $otraTablet] = $this->operador('SERVIDOR-B');
+        $planes = app(ServicioPlanesOperacionales::class);
+        $primera = $planes->asumir($primera, $operador, $tablet);
+        $segunda = $planes->asumir($segunda, $otro, $otraTablet);
+        $this->assertNotNull($primera->posicion_destino_id);
+        $this->assertNotNull($segunda->posicion_destino_id);
+        $this->assertNotSame($primera->posicionDestino->banda, $segunda->posicionDestino->banda);
+        $this->assertSame($primera->camara_destino_id, $segunda->camara_destino_id);
+        $this->assertSame(2, ReservaTareaMovimiento::query()->conCompromisoVigente()->whereNotNull('bloqueo_posicion_id')->count());
     }
 
     private function instructivos(Carga $carga): array
