@@ -166,6 +166,8 @@ export function draftFromValidation(validation, index) {
     const firstOrigin = lines.map((line) => index.originById.get(line.originId)).find(Boolean);
     const article = index.articleById.get(validation.articulo_validacion_id) || validation.articulo || {};
     const draft = {
+        numero_folio: validation.numero_folio || '',
+        numero_folio_original: validation.numero_folio || '',
         tipo_bulto: validation.tipo_bulto || 'pallet',
         linea_proceso: String(validation.linea_proceso || 1),
         turno: validation.turno || 'A',
@@ -193,6 +195,10 @@ function lineKey(line) {
 /** Lo que falta o no calza, en el orden del formulario. Vacío: se puede guardar. */
 export function draftIssues(draft, index, { requireLotAndProcess = false } = {}) {
     const issues = [];
+    const folio = codeKey(draft.numero_folio);
+    if (folio !== codeKey(draft.numero_folio_original) && (!folio || folio.length > 50 || /[\x00-\x1f\x7f]/u.test(folio))) {
+        issues.push('Ingresa un número de folio válido de hasta 50 caracteres.');
+    }
     if (!draft.cliente) issues.push('Elige el cliente.');
     else if (!draft.marca) issues.push('Elige la marca.');
     draft.lines.forEach((line, position) => {
@@ -218,7 +224,9 @@ export function draftIssues(draft, index, { requireLotAndProcess = false } = {})
 }
 
 export function correctionPayload(draft, article, operationId) {
+    const folio = codeKey(draft.numero_folio);
     return {
+        ...(folio !== codeKey(draft.numero_folio_original) ? { numero_folio: folio } : {}),
         operacion_id: operationId,
         tipo_bulto: draft.tipo_bulto,
         cantidad_cajas: totalBoxes(draft),
@@ -250,6 +258,10 @@ export function draftChanges(validation, draft, index) {
     const add = (label, before, after) => {
         if (!sameText(before, after)) changes.push({ label, before: String(before || '—'), after: String(after || '—') });
     };
+    const folio = codeKey(draft.numero_folio);
+    if (folio !== codeKey(validation.numero_folio)) {
+        changes.push({ label: 'Número de folio', before: validation.numero_folio, after: folio || '—' });
+    }
     const bulk = { pallet: 'Pallet completo', saldo: 'Saldo' };
     add('Tipo', bulk[validation.tipo_bulto] || validation.tipo_bulto, bulk[draft.tipo_bulto] || draft.tipo_bulto);
     add('Línea', `Línea ${validation.linea_proceso}`, `Línea ${draft.linea_proceso}`);

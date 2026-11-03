@@ -2,17 +2,21 @@
 
 namespace App\Services\Validacion;
 
+use App\Enums\CondicionTermicaFolio;
 use App\Enums\DominioTransicionOperacional;
+use App\Enums\EstadoOperacionalFolio;
 use App\Enums\EstadoValidacionPallet;
 use App\Enums\ResultadoValidacionPallet;
 use App\Exceptions\ConflictoOperacion;
 use App\Models\CorreccionValidacionPallet;
 use App\Models\Folio;
+use App\Models\ProcesoPrefrioFolio;
 use App\Models\User;
 use App\Models\ValidacionPallet;
 use App\Services\Transiciones\ComandoTransicionOperacional;
 use App\Services\Transiciones\MotorTransicionesOperacionales;
 use DomainException;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -86,6 +90,15 @@ class ServicioCorreccionValidacionPallet
                 ->where('id', $validacionBloqueada->temporada_id)
                 ->lockForUpdate()
                 ->first();
+            $numeroFolio = $payload['numero_folio'] ?? $validacionBloqueada->numero_folio;
+            $numeroIntento = $validacionBloqueada->numero_intento;
+            $cambiaNumero = $numeroFolio !== $validacionBloqueada->numero_folio;
+            if ($cambiaNumero) {
+                if (! $this->puedeCambiarNumeroFolio($folio)) {
+                    throw new ConflictoOperacion('Solo se puede cambiar el número de un folio activo antes de cargarlo a prefrío.');
+                }
+                $numeroIntento = $this->reservarIntentoParaNuevoNumero($folio, $numeroFolio);
+            }
             $articulo = DB::table('articulos_validacion')
                 ->where('id', $datos['articulo_validacion_id'])
                 ->where('temporada_id', $validacionBloqueada->temporada_id)
@@ -222,6 +235,8 @@ class ServicioCorreccionValidacionPallet
             ];
 
             $validacionBloqueada->forceFill([
+                'numero_folio' => $numeroFolio,
+                'numero_intento' => $numeroIntento,
                 'tipo_bulto' => $payload['tipo_bulto'],
                 'cantidad_cajas' => $payload['cantidad_cajas'],
                 'linea_proceso' => $payload['linea_proceso'],
@@ -235,6 +250,7 @@ class ServicioCorreccionValidacionPallet
 
             $datosExternos = $folio->datos_externos ?? [];
             $folio->forceFill([
+                ...($cambiaNumero ? ['numero_folio' => $numeroFolio] : []),
                 'tipo_bulto' => $payload['tipo_bulto'],
                 'variedad' => $articulo->variedad,
                 'calibre' => $articulo->calibre,
@@ -252,7 +268,17 @@ class ServicioCorreccionValidacionPallet
                     'cantidad_cajas' => $payload['cantidad_cajas'],
                     'combinacion_validacion_id' => $combinacion->id,
                 ],
-            ])->save();
+            ]);
+
+            try {
+                $folio->save();
+            } catch (UniqueConstraintViolationException $error) {
+                if (! $folio->isDirty('numero_folio')) {
+                    throw $error;
+                }
+
+                throw new ConflictoOperacion('El número de folio indicado ya está registrado.');
+            }
 
             $nuevos = $this->datosAuditables(
                 $validacionBloqueada->refresh(),
@@ -279,6 +305,47 @@ class ServicioCorreccionValidacionPallet
         return $this->motorTransiciones->ejecutar($comando, $accion);
     }
 
+    public function puedeCambiarNumeroFolio(Folio $folio): bool
+    {
+        return $folio->activo
+            && $folio->estado_operacional === EstadoOperacionalFolio::PendientePrefrio
+            && $folio->condicion_termica === CondicionTermicaFolio::PendientePrefrio
+            && ! ProcesoPrefrioFolio::query()->where('folio_id', $folio->id)->exists();
+    }
+
+    private function reservarIntentoParaNuevoNumero(Folio $folio, string $numeroFolio): int
+    {
+        // Usa el mismo bloqueo que el registro de Validación PT. El contador anterior
+        // conserva sus intentos, incluso si se registra otro bulto con ese número.
+        $ahora = now();
+        DB::table('secuencias_validacion_folio')->insertOrIgnore([
+            'numero_folio' => $numeroFolio,
+            'ultimo_intento' => 0,
+            'created_at' => $ahora,
+            'updated_at' => $ahora,
+        ]);
+        $secuencia = DB::table('secuencias_validacion_folio')
+            ->where('numero_folio', $numeroFolio)
+            ->lockForUpdate()
+            ->first();
+
+        $folioOcupado = Folio::query()->where('numero_folio', $numeroFolio)
+            ->whereKeyNot($folio->id)->lockForUpdate()->first(['id']);
+        $decisionPrevia = ValidacionPallet::query()->where('numero_folio', $numeroFolio)
+            ->where('estado', EstadoValidacionPallet::Aceptada)
+            ->whereIn('resultado', [ResultadoValidacionPallet::Aprobado, ResultadoValidacionPallet::Rechazado])
+            ->lockForUpdate()->first(['id']);
+        if ($folioOcupado || $decisionPrevia) {
+            throw new ConflictoOperacion('El número de folio indicado ya está registrado o tiene una validación definitiva.');
+        }
+
+        $intento = ((int) $secuencia->ultimo_intento) + 1;
+        DB::table('secuencias_validacion_folio')->where('numero_folio', $numeroFolio)
+            ->update(['ultimo_intento' => $intento, 'updated_at' => $ahora]);
+
+        return $intento;
+    }
+
     private function asegurarCorregible(
         ValidacionPallet $validacion,
         ?Folio $folio,
@@ -299,6 +366,7 @@ class ServicioCorreccionValidacionPallet
     private function normalizarPayload(array $datos): array
     {
         return [
+            ...(isset($datos['numero_folio']) ? ['numero_folio' => $datos['numero_folio']] : []),
             'tipo_bulto' => $datos['tipo_bulto'],
             'cantidad_cajas' => (int) $datos['cantidad_cajas'],
             'linea_proceso' => (int) $datos['linea_proceso'],
@@ -411,6 +479,8 @@ class ServicioCorreccionValidacionPallet
     ): array {
         return [
             'validacion' => [
+                'numero_folio' => $validacion->numero_folio,
+                'numero_intento' => $validacion->numero_intento,
                 'tipo_bulto' => $validacion->tipo_bulto,
                 'cantidad_cajas' => $validacion->cantidad_cajas,
                 'linea_proceso' => $validacion->linea_proceso,
@@ -422,6 +492,7 @@ class ServicioCorreccionValidacionPallet
                 'snapshot' => $validacion->snapshot,
             ],
             'folio' => [
+                'numero_folio' => $folio->numero_folio,
                 'activo' => $folio->activo,
                 'estado_operacional' => $folio->estado_operacional->value,
                 'condicion_termica' => $folio->condicion_termica->value,

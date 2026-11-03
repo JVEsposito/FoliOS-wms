@@ -68,8 +68,9 @@ class ServicioConciliacionValidacion
                 ->latest('iniciada_at')->latest('id')->first();
             $vigente = $lectura && $lectura->estado === 'correcta' && $ultima?->id === $lectura->id
                 && $lectura->terminada_at?->gte(now()->subMinutes((int) config('integraciones.stock_pt.vigencia_minutos', 20)));
-            $nuevaLectura = $lectura && $caso?->lectura_id !== $lectura->id;
-            $estado = $caso?->estado ?? ($diferente ? 'pendiente' : 'por_revisar');
+            $cambioFolio = $caso && $caso->numero_folio !== $validacion->numero_folio;
+            $nuevaLectura = $lectura && ($cambioFolio || $caso?->lectura_id !== $lectura->id);
+            $estado = (! $cambioFolio ? $caso?->estado : null) ?? ($diferente ? 'pendiente' : 'por_revisar');
             if ($contexto === 'vigente' && $vigente && ($planta['presente'] ?? false)) {
                 if ($diferente) {
                     $estado = match ($estado) {
@@ -87,7 +88,7 @@ class ServicioConciliacionValidacion
                 'captura' => $captura, 'validacion_inicial' => $evidencia, 'planta_inicial' => $planta,
                 'validado_at' => $validacion->generado_dispositivo_at,
             ]);
-            $caso->fill(['validacion_actual' => $evidencia, 'planta_actual' => $planta, 'comparacion' => $comparacion,
+            $caso->fill(['numero_folio' => $validacion->numero_folio, 'validacion_actual' => $evidencia, 'planta_actual' => $planta, 'comparacion' => $comparacion,
                 'contexto' => $contexto, 'estado' => $estado,
                 'tuvo_diferencias' => ($caso->tuvo_diferencias ?? false) || $diferente,
                 'lectura_id' => $lectura?->id, 'lectura_at' => $lectura?->terminada_at,
@@ -237,7 +238,7 @@ class ServicioConciliacionValidacion
 
     private function respaldo(ConciliacionValidacionOrigen $caso): array
     {
-        return ['estado' => $caso->estado, 'contexto' => $caso->contexto,
+        return ['numero_folio' => $caso->numero_folio, 'estado' => $caso->estado, 'contexto' => $caso->contexto,
             'validacion' => $caso->validacion_actual, 'comparacion' => $caso->comparacion];
     }
 
