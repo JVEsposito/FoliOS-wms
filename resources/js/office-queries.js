@@ -452,7 +452,9 @@ async function openFolio(id) {
             ? `${payload.material.origen?.titulo || 'Ingreso de material'} · ${payload.material.origen?.referencia || 'Sin referencia'}`
             : (payload.validacion
                 ? `Validado ${formatDate(payload.validacion.fecha)} · ${formatBoxes(payload.validacion.cantidad_cajas)}`
-                : (payload.repaletizajes?.length ? `Origen trazado por ${payload.repaletizajes[0].codigo}` : 'Sin validación directa registrada'));
+                : (payload.repaletizajes?.length
+                    ? `Origen trazado por ${payload.repaletizajes[0].codigo}`
+                    : (folio.origen_sistema === 'manual' ? 'Creado a mano en cámara, sin validación' : 'Sin validación directa registrada')));
         const originDetail = materialProfile
             ? `Origen ${formatDate(payload.material.origen?.fecha || folio.fecha_ingreso)}`
             : `Ingreso ${formatDate(folio.fecha_ingreso)}`;
@@ -473,12 +475,16 @@ async function openFolio(id) {
         const exhaustion = folio.repaletizaje_agotamiento
             ? `<div class="trace-alert"><strong>AGOTADO POR REPALETIZAJE</strong><span>Este folio terminó su existencia física en ${escapeHtml(folio.repaletizaje_agotamiento)}.</span></div>`
             : '';
+        const removal = payload.eliminacion
+            ? `<div class="trace-alert trace-alert--removed"><strong>ELIMINADO POR ADMINISTRACIÓN</strong><span>Folio ${escapeHtml(payload.eliminacion.numero_folio)} creado a mano en cámara sin Validación PT. Eliminado ${escapeHtml(formatDate(payload.eliminacion.eliminado_at))}${payload.eliminacion.eliminado_por ? ` por ${escapeHtml(payload.eliminacion.eliminado_por)}` : ''}.</span><span>Motivo: ${escapeHtml(payload.eliminacion.motivo)}</span><span>Su posición quedó libre y el número puede validarse de nuevo.</span></div>`
+            : '';
 
         elements.folioDialogTitle.textContent = folio.numero;
         releasePrivateItemImages(elements.folioDialogBody);
         elements.folioDialogBody.innerHTML = `
             ${materialProfile && payload.material.foto_principal ? `<img width="120" height="120" style="object-fit:contain" alt="Foto de ${escapeHtml(payload.material.identidad.item)}" data-private-item-photo="${escapeHtml(payload.material.foto_principal.miniatura_url)}">` : ''}
             ${exhaustion}
+            ${removal}
             <section class="folio-dossier-hero">
                 <div><span>ESTADO ACTUAL</span><strong>${escapeHtml(label(folio.estado_explicado))}</strong><small>${escapeHtml(stateDetail)}</small></div>
                 <div><span>CANTIDAD ACTUAL</span><strong>${escapeHtml(currentQuantity)}</strong><small>${escapeHtml(label(folio.tipo_bulto))}</small></div>
@@ -493,9 +499,10 @@ async function openFolio(id) {
             <section class="folio-dossier-section">
                 <div class="folio-dossier-heading"><div><p class="eyebrow">HISTORIA OPERACIONAL</p><h3>Línea de tiempo</h3></div><div class="trace-counts">${traceCounts(payload, materialProfile)}</div></div>
                 ${traceTimeline(payload.timeline)}
-            </section>`;
+            </section>
+            ${manualFolioRemoval(folio, payload.acciones?.eliminar_folio_manual)}`;
         void loadPrivateItemImages(elements.folioDialogBody);
-        elements.folioDialog.showModal();
+        if (!elements.folioDialog.open) elements.folioDialog.showModal();
     } catch (error) {
         toast(error.message, true);
     } finally {
@@ -691,6 +698,62 @@ document.addEventListener('submit', async (event) => {
 
 elements.closeProducerDialog.addEventListener('click', () => elements.producerDialog.close());
 elements.closeFolioDialog.addEventListener('click', () => elements.folioDialog.close());
+
+/*
+ * Solo administración: elimina un pallet que la tablet creó en cámara sin Validación PT,
+ * mientras no haya entrado a otra operación. Libera su posición y su número.
+ */
+function manualFolioRemoval(folio, action) {
+    if (!action) return '';
+    const body = action.disponible
+        ? `<label class="folio-removal__reason"><span>Motivo *</span><textarea data-folio-removal-reason maxlength="1000" placeholder="Ej.: pallet ubicado sin validar; se validará en Validación PT."></textarea></label>
+            <p class="form-error" data-folio-removal-error role="alert"></p>
+            <button class="danger-button" type="button" data-remove-manual-folio="${escapeHtml(folio.id)}">Eliminar folio ${escapeHtml(folio.numero)}</button>`
+        : `<p class="folio-removal__blocked">${escapeHtml(action.motivo_no_disponible)}</p>`;
+    return `<section class="folio-dossier-section folio-removal">
+        <div class="folio-dossier-heading"><div><p class="eyebrow">ADMINISTRACIÓN</p><h3>Folio creado sin validación</h3></div></div>
+        <p class="folio-removal__help">Este folio nació en la tablet del camarero, sin Validación PT. Al eliminarlo queda anulado con trazabilidad, se libera su posición en la cámara y su número queda disponible para validar el pallet real.</p>
+        ${body}
+    </section>`;
+}
+
+elements.folioDialogBody.addEventListener('input', (event) => {
+    if (!event.target.matches('[data-folio-removal-reason]')) return;
+    const error = event.target.closest('.folio-removal')?.querySelector('[data-folio-removal-error]');
+    if (error) error.textContent = '';
+});
+
+elements.folioDialogBody.addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-remove-manual-folio]');
+    if (!button) return;
+    const section = button.closest('.folio-removal');
+    const reason = section.querySelector('[data-folio-removal-reason]').value.trim();
+    const error = section.querySelector('[data-folio-removal-error]');
+    error.textContent = '';
+    if (reason.length < 10) {
+        error.textContent = 'Indica el motivo con al menos 10 caracteres.';
+        section.querySelector('[data-folio-removal-reason]').focus();
+        return;
+    }
+    if (!window.confirm(`¿Eliminar el folio ${elements.folioDialogTitle.textContent}? Se liberará su posición en la cámara.`)) return;
+    button.disabled = true;
+    setBusy(true, 'Eliminando folio y liberando su posición…');
+    try {
+        const payload = await api(`/api/folios/${button.dataset.removeManualFolio}/eliminar-manual`, {
+            method: 'POST',
+            body: JSON.stringify({ operacion_id: globalThis.crypto.randomUUID(), motivo: reason }),
+        });
+        const released = payload.data.ubicacion_liberada;
+        toast(`Folio ${payload.data.numero_folio} eliminado.${released ? ` ${[released.camara, released.posicion].filter(Boolean).join(' · ')} quedó libre.` : ''}`);
+        await openFolio(button.dataset.removeManualFolio);
+        elements.folioDialogBody.querySelector('.trace-alert--removed')?.scrollIntoView({ block: 'start' });
+    } catch (reasonError) {
+        error.textContent = reasonError.message;
+        button.disabled = false;
+    } finally {
+        setBusy(false);
+    }
+});
 
 async function boot() {
     if (!state.token || state.identity?.puede_consultar_oficina_consultas !== true) {

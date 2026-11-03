@@ -10,10 +10,12 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Tests\Concerns\CreaFolioParaUbicar;
 use Tests\TestCase;
 
 class CamaraApiTest extends TestCase
 {
+    use CreaFolioParaUbicar;
     use RefreshDatabase;
 
     public function test_el_listado_indica_ocupacion_y_bloqueo_para_otro_operador(): void
@@ -27,6 +29,7 @@ class CamaraApiTest extends TestCase
             ->postJson("/api/camaras/{$camara->id}/sesiones")
             ->assertCreated()
             ->json('data.id');
+        $this->folioParaUbicar('FOLIO-0001');
 
         $this->withToken($token)
             ->postJson('/api/movimientos/ubicar', [
@@ -117,6 +120,7 @@ class CamaraApiTest extends TestCase
             ->postJson("/api/camaras/{$camara->id}/sesiones")
             ->assertCreated()
             ->json('data.id');
+        $this->folioParaUbicar('FOLIO-PLANO', 'saldo', ['variedad' => 'Santina', 'calibre' => '2J', 'marca' => 'Prueba']);
 
         $this->withToken($token)
             ->postJson('/api/movimientos/ubicar', [
@@ -127,11 +131,6 @@ class CamaraApiTest extends TestCase
                 'sesion_destino_id' => $sesionId,
                 'version_destino_conocida' => 0,
                 'generado_dispositivo_at' => now()->toAtomString(),
-                'datos_folio' => [
-                    'variedad' => 'Santina',
-                    'calibre' => '2J',
-                    'marca' => 'Prueba',
-                ],
             ])
             ->assertOk();
 

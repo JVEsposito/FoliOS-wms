@@ -394,8 +394,9 @@ final class EstadiaCamara implements FuenteHechos
 
         return new HechoCapturado(
             origenId: "{$folio->id}#{$numero}",
-            // Un folio que nació en un repaletizaje anulado nunca estuvo en la planta.
-            estado: $estadia['anulada'] ? Hecho::ESTADO_ANULADO : Hecho::ESTADO_VIGENTE,
+            // Un folio que nació en un repaletizaje anulado, o que se creó a mano en cámara
+            // y administración eliminó, nunca estuvo en la planta.
+            estado: $estadia['anulada'] || $folio->eliminadoManual ? Hecho::ESTADO_ANULADO : Hecho::ESTADO_VIGENTE,
             ocurridoAt: $estadia['ingreso'],
             terminaAt: $salida,
             clienteId: $folio->clienteId,

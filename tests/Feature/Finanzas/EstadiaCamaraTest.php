@@ -141,6 +141,26 @@ class EstadiaCamaraTest extends TestCase
         $this->assertSame('anulacion', $estadia->datos['motivo_salida']);
     }
 
+    public function test_un_folio_creado_a_mano_y_eliminado_por_administracion_no_deja_estadia_vigente(): void
+    {
+        $camara = $this->camara('C1');
+        $folio = $this->folio('600000102', null, exportadora: '');
+        $this->actualizarFolio($folio, ['origen_sistema' => 'manual']);
+        $this->movimiento($folio, null, $camara, '2026-11-03 04:10');
+        $this->ubicar($folio, $camara, '2026-11-03 04:10');
+        $this->capturar(['estadia']);
+        $this->assertSame(Hecho::ESTADO_VIGENTE, $this->hechos('estadia')->sole()->estado);
+
+        // Así la deja la eliminación: anulado, sin ubicación y con su registro.
+        $this->travel(5)->minutes();
+        $this->quitarUbicacion($folio);
+        $this->actualizarFolio($folio, ['numero_folio' => '600000102-ELIM-1', 'estado_operacional' => 'anulado', 'activo' => false,
+            'datos_externos' => json_encode(['eliminacion_manual' => ['numero_folio' => '600000102', 'motivo' => 'Sin validación']])]);
+        $this->capturar(['estadia']);
+
+        $this->assertSame(Hecho::ESTADO_ANULADO, $this->hechos('estadia')->sole()->estado);
+    }
+
     public function test_un_termino_sin_evento_usa_la_ultima_salida_de_camara(): void
     {
         $camara = $this->camara('C1');

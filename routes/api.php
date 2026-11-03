@@ -44,6 +44,7 @@ use App\Http\Controllers\Api\DespachoMaterialController;
 use App\Http\Controllers\Api\DirectorioTransporteController;
 use App\Http\Controllers\Api\DisponibilidadCamarerosController;
 use App\Http\Controllers\Api\DocumentoRecepcionEmbaladaController;
+use App\Http\Controllers\Api\EliminacionFolioManualController;
 use App\Http\Controllers\Api\EmbarqueController;
 use App\Http\Controllers\Api\EtiquetaPtController;
 use App\Http\Controllers\Api\EvacuacionEmergenciaController;
@@ -166,6 +167,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/productores', [ConsultaOficinaController::class, 'productores']);
         Route::get('/productores/{productorCsg}', [ConsultaOficinaController::class, 'productor']);
     });
+    Route::post('/folios/{folio}/eliminar-manual', EliminacionFolioManualController::class)
+        ->middleware('can:eliminar-folios-manuales');
     Route::post('/consultas/sag', [ConsultaSagController::class, 'store'])
         ->middleware(['can:consultar-sag', 'throttle:30,1']);
     Route::post('/consultas/productores/{productorCsg}/clientes', [ConsultaOficinaController::class, 'asociar'])

@@ -29,13 +29,33 @@ class ServicioMovimientoEstibaTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_ubicacion_inicial_crea_el_folio_y_actualiza_el_plano_atomicamente(): void
+    public function test_ubicacion_inicial_crea_el_folio_solo_en_una_carga_controlada_y_actualiza_el_plano_atomicamente(): void
     {
         [$usuario, $dispositivo] = $this->crearActor();
         [$camara, $posicion] = $this->crearCamara('CAM-01');
         $sesion = $this->abrirSesion($camara, $usuario, $dispositivo);
         $operacionId = (string) Str::uuid();
         $generadoAt = CarbonImmutable::parse('2026-07-13 10:00:00');
+
+        // La tablet nunca crea un folio: un número desconocido se rechaza.
+        try {
+            $this->servicio()->ubicar(
+                operacionId: (string) Str::uuid(),
+                numeroFolio: 'FOLIO-0001',
+                tipoBulto: TipoBulto::Pallet,
+                posicionDestino: $posicion,
+                sesionDestino: $sesion,
+                usuario: $usuario,
+                dispositivo: $dispositivo,
+                versionDestinoConocida: 0,
+                generadoDispositivoAt: $generadoAt,
+            );
+            $this->fail('Se esperaba el rechazo del folio inexistente.');
+        } catch (DomainException $exception) {
+            $this->assertStringContainsString('Valida el pallet en Validación PT', $exception->getMessage());
+        }
+        $this->assertSame(0, Folio::query()->count());
+        $this->assertSame(0, $camara->refresh()->version_plano);
 
         $movimiento = $this->servicio()->ubicar(
             operacionId: $operacionId,
@@ -52,6 +72,7 @@ class ServicioMovimientoEstibaTest extends TestCase
                 'calibre' => '2J',
                 'marca' => 'Marca de prueba',
             ],
+            permitirFolioNuevo: true,
         );
 
         $folio = Folio::query()->where('numero_folio', 'FOLIO-0001')->firstOrFail();
@@ -94,8 +115,8 @@ class ServicioMovimientoEstibaTest extends TestCase
             'datosFolio' => ['variedad' => 'Santina'],
         ];
 
-        $primero = $this->servicio()->ubicar(...$argumentos);
-        $segundo = $this->servicio()->ubicar(...$argumentos);
+        $primero = $this->servicio()->ubicar(...$argumentos, permitirFolioNuevo: true);
+        $segundo = $this->servicio()->ubicar(...$argumentos, permitirFolioNuevo: true);
 
         $this->assertSame($primero->id, $segundo->id);
         $this->assertSame(1, Movimiento::query()->count());
@@ -421,6 +442,7 @@ class ServicioMovimientoEstibaTest extends TestCase
             dispositivo: $dispositivo,
             versionDestinoConocida: $versionConocida,
             generadoDispositivoAt: $generadoAt ?? CarbonImmutable::now(),
+            permitirFolioNuevo: true,
         );
     }
 

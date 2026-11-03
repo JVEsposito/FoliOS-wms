@@ -231,10 +231,11 @@ export function LocateModal({
     setLookup(result);
 
     if (!result.existe) {
+      // La tablet no crea folios: un número desconocido es un pallet sin validar o mal digitado.
       setLookupMessage(isMaterial
         ? 'El folio de material no existe. Debe crearse y confirmarse desde Recepción o Transformación antes de ubicarlo.'
-        : 'Folio nuevo. Completa sus datos antes de confirmar la ubicación.');
-      setLookupTone(isMaterial ? 'warning' : 'neutral');
+        : `El folio ${result.numero_folio} no existe. Valida el pallet en Validación PT antes de ubicarlo; si lo digitaste, revisa el número.`);
+      setLookupTone('warning');
       return;
     }
 
@@ -305,43 +306,24 @@ export function LocateModal({
     if (!folio.trim()) return;
     const result = await lookupFolio(folio);
     if (!result
-      || (isMaterial && !result.existe)
-      || (result.existe && (!result.disponible_ubicacion || !isCompatible(result)))) return;
+      || !result.existe
+      || !result.disponible_ubicacion
+      || !isCompatible(result)) return;
 
-    if (result.existe) {
-      await onConfirm({
-        numero_folio: result.numero_folio,
-        tipo_bulto: result.tipo_bulto,
-        existente: true,
-        condicion_sag_id: result.condicion_sag?.id,
-        variedad: result.variedad ?? undefined,
-        calibre: result.calibre ?? undefined,
-        marca: result.marca ?? undefined,
-        exportadora: result.exportadora ?? undefined,
-        item_material_id: result.material?.item_material_id,
-        cantidad: result.material ? Number(result.material.cantidad) : undefined,
-        lote: result.material?.lote ?? undefined,
-        proveedor: result.material?.proveedor ?? undefined,
-        observacion_material: result.material?.observacion ?? undefined,
-      });
-      return;
-    }
-
-    if (isMaterial && (!materialItemId || Number(materialQuantity) <= 0)) return;
     await onConfirm({
-      numero_folio: folio.trim().toUpperCase(),
-      tipo_bulto: type,
-      existente: false,
-      condicion_sag_id: conditionId,
-      variedad: variety.trim() || undefined,
-      calibre: caliber.trim() || undefined,
-      marca: brand.trim() || undefined,
-      exportadora: exporter.trim() || undefined,
-      item_material_id: materialItemId,
-      cantidad: isMaterial ? Number(materialQuantity) : undefined,
-      lote: materialLot.trim() || undefined,
-      proveedor: materialSupplier.trim() || undefined,
-      observacion_material: materialObservation.trim() || undefined,
+      numero_folio: result.numero_folio,
+      tipo_bulto: result.tipo_bulto,
+      existente: true,
+      condicion_sag_id: result.condicion_sag?.id,
+      variedad: result.variedad ?? undefined,
+      calibre: result.calibre ?? undefined,
+      marca: result.marca ?? undefined,
+      exportadora: result.exportadora ?? undefined,
+      item_material_id: result.material?.item_material_id,
+      cantidad: result.material ? Number(result.material.cantidad) : undefined,
+      lote: result.material?.lote ?? undefined,
+      proveedor: result.material?.proveedor ?? undefined,
+      observacion_material: result.material?.observacion ?? undefined,
     });
   }
 
@@ -473,6 +455,13 @@ export function LocateModal({
                   Escanea un folio FAG generado previamente por Recepción o Transformación de Materiales.
                 </Text>
               </View>
+            ) : !existingFolio ? (
+              <View style={[styles.field, styles.wide]}>
+                <Text style={styles.label}>Origen del folio</Text>
+                <Text style={styles.emptyInline}>
+                  Escanea un pallet validado en Validación PT o ingresado por la oficina. La tablet no crea folios nuevos.
+                </Text>
+              </View>
             ) : (
               <>
                 <View style={styles.field}>
@@ -512,7 +501,7 @@ export function LocateModal({
               !folio.trim()
               || lookupBusy
               || lookupBlocked
-              || (isMaterial && !existingFolio)
+              || !existingFolio
             }
             confirmLabel={cameraOnly ? "Asignar a cámara" : "Confirmar ubicación"}
             onCancel={onCancel}

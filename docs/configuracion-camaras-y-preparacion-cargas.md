@@ -135,6 +135,18 @@ habilitacion_almacenamiento = habilitado
 
 Después de ubicarse pasa a `disponible`.
 
+La tablet nunca crea folios. Si el número no existe, la ubicación se rechaza con «El folio … no existe. Valida el pallet en Validación PT antes de ubicarlo en cámara; si lo digitaste, revisa el número.». Antes, la tablet permitía registrar un «folio nuevo» que quedaba disponible sin Validación PT ni prefrío.
+
+### Folios creados a mano antes del bloqueo
+
+Los folios que la tablet creó así (`origen_sistema = manual`) muestran en el expediente de Consultas «Creado a mano en cámara, sin validación». Un administrador puede eliminarlos desde ese expediente, con motivo, mientras conserven esa condición: sin validación ni paso por carga, prefrío, repaletizaje, inspección SAG, retención o una labor en curso. La eliminación:
+
+- anula e inactiva el folio, sin borrarlo físicamente;
+- libera su posición en la cámara y cancela sus labores pendientes;
+- archiva su número con el sufijo `-ELIM-n`, para que el pallet real pueda validarse con el número original;
+- anula sus estadías en Finanzas;
+- queda registrada con usuario, fecha, motivo y snapshot (`eliminaciones_folio_manual`).
+
 ## Preparación de cargas
 
 Una carga `CAR-*` agrupa entre 1 y 26 folios de producto para una orden de embarque.

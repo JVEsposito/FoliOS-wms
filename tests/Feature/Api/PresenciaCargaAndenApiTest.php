@@ -617,6 +617,7 @@ class PresenciaCargaAndenApiTest extends TestCase
                 dispositivo: $dispositivo,
                 versionDestinoConocida: $indice - 1,
                 generadoDispositivoAt: now(),
+                permitirFolioNuevo: true,
             );
             $folios[] = $movimiento->folio;
         }

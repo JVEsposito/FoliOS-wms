@@ -494,6 +494,7 @@ class DespachoFrigorificoApiTest extends TestCase
                     'marca' => 'Marca prueba',
                     'exportadora' => 'Exportadora prueba',
                 ],
+                permitirFolioNuevo: true,
             );
             $folios[] = $movimiento->folio;
         }

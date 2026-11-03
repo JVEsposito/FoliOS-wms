@@ -65,7 +65,10 @@ class ServicioMovimientoEstiba
     ) {}
 
     /**
-     * Ubica un folio por primera vez. Solo los folios de productos pueden nacer aquí; los de Materiales deben existir previamente.
+     * Ubica un folio por primera vez. El folio debe existir: nace en Validación PT,
+     * recepción de fruta embalada, repaletizaje, túnel o una migración controlada.
+     * La tablet del camarero nunca lo crea; $permitirFolioNuevo queda solo para
+     * cargas controladas (fixtures y migraciones) de pallets y saldos.
      *
      * @param  array<string, mixed>  $datosFolio
      * @param  array<string, mixed>  $datosMaterial
@@ -86,6 +89,7 @@ class ServicioMovimientoEstiba
         array $advertenciasConfirmadas = [],
         ?Camara $camaraDestino = null,
         ?TareaMovimiento $tareaMovimiento = null,
+        bool $permitirFolioNuevo = false,
     ): Movimiento {
         $camaraDestino ??= $posicionDestino?->camara;
 
@@ -136,6 +140,7 @@ class ServicioMovimientoEstiba
                 $datosMaterial,
                 $advertenciasConfirmadas,
                 $tareaMovimiento,
+                $permitirFolioNuevo,
             ),
         );
     }
@@ -508,6 +513,7 @@ class ServicioMovimientoEstiba
         array $datosMaterial,
         array $advertenciasConfirmadas,
         ?TareaMovimiento $tareaMovimiento,
+        bool $permitirFolioNuevo = false,
     ): Movimiento {
         $camara = Camara::query()->lockForUpdate()->findOrFail($camaraDestino->id);
         $posicion = $posicionDestino
@@ -534,6 +540,11 @@ class ServicioMovimientoEstiba
         if (! $folio) {
             if ($tipoBulto === TipoBulto::Material) {
                 throw new DomainException('El folio de material no existe. Debe nacer desde Recepción, Transformación o una migración controlada antes de ubicarlo.');
+            }
+            if (! $permitirFolioNuevo) {
+                // Un número desconocido es un pallet sin validar o mal digitado: crearlo aquí
+                // lo dejaba disponible en cámara sin Validación PT ni prefrío.
+                throw new DomainException("El folio {$numeroFolio} no existe. Valida el pallet en Validación PT antes de ubicarlo en cámara; si lo digitaste, revisa el número.");
             }
             $folio = Folio::create($this->atributosNuevoFolio(
                 $numeroFolio,

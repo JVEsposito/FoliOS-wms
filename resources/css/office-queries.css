@@ -74,6 +74,15 @@
 .trace-alert { display: grid; gap: 5px; margin-top: 18px; border: 1px solid color-mix(in srgb, var(--warning-text) 38%, transparent); border-radius: 12px; background: color-mix(in srgb, var(--warning-text) 8%, transparent); padding: 14px 16px; }
 .trace-alert strong { color: var(--amber); font-size: .73rem; letter-spacing: .07em; }
 .trace-alert span { color: var(--warning-text); font-size: .72rem; }
+.trace-alert--removed { border-color: color-mix(in srgb, var(--danger-text) 45%, transparent); background: color-mix(in srgb, var(--danger-text) 8%, transparent); }
+.trace-alert--removed strong { color: var(--danger-text); }
+.folio-removal { display: grid; gap: 10px; }
+.folio-removal__help, .folio-removal__blocked { margin: 0; color: var(--muted); font-size: .76rem; line-height: 1.45; }
+.folio-removal__reason { display: grid; gap: 6px; }
+.folio-removal__reason span { color: var(--muted); font-size: .7rem; font-weight: 800; }
+.folio-removal__reason textarea { min-height: 70px; resize: vertical; border: 1px solid var(--line); border-radius: 10px; background: var(--raised); color: var(--text); padding: 10px 12px; font: inherit; }
+.folio-removal .danger-button { justify-self: start; }
+.folio-removal .form-error:empty { display: none; }
 .folio-dossier-hero { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 18px 0 22px; }
 .folio-dossier-hero > div { display: grid; gap: 6px; min-height: 108px; align-content: center; border: 1px solid var(--line); border-radius: 12px; background: linear-gradient(145deg, var(--surface-muted), var(--raised)); padding: 14px; }
 .folio-dossier-hero span, .folio-spec-grid span { color: var(--muted); font-size: .58rem; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }

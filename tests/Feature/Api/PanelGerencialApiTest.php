@@ -473,6 +473,7 @@ class PanelGerencialApiTest extends TestCase
             dispositivo: $dispositivo,
             versionDestinoConocida: 0,
             generadoDispositivoAt: now(),
+            permitirFolioNuevo: true,
         );
 
         return $movimiento->folio;
