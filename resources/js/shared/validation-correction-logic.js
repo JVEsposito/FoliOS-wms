@@ -165,7 +165,13 @@ export function draftFromValidation(validation, index) {
     }));
     const firstOrigin = lines.map((line) => index.originById.get(line.originId)).find(Boolean);
     const article = index.articleById.get(validation.articulo_validacion_id) || validation.articulo || {};
+    const fechasOriginales = {
+        fecha_hora_validacion: validation.fecha_hora_validacion || '',
+        fecha_embalaje: validation.fecha_embalaje || '',
+    };
     const draft = {
+        ...fechasOriginales,
+        fechasOriginales,
         tipo_bulto: validation.tipo_bulto || 'pallet',
         linea_proceso: String(validation.linea_proceso || 1),
         turno: validation.turno || 'A',
@@ -191,8 +197,19 @@ function lineKey(line) {
 }
 
 /** Lo que falta o no calza, en el orden del formulario. Vacío: se puede guardar. */
-export function draftIssues(draft, index, { requireLotAndProcess = false } = {}) {
+export function draftIssues(draft, index, { requireLotAndProcess = false, datesOnly = false } = {}) {
     const issues = [];
+    const fechas = changedDates(draft);
+    if ('fecha_hora_validacion' in fechas && !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(fechas.fecha_hora_validacion)) {
+        issues.push('Ingresa una fecha y hora de validación válidas.');
+    }
+    if ('fecha_embalaje' in fechas && !/^\d{4}-\d{2}-\d{2}$/.test(fechas.fecha_embalaje)) {
+        issues.push('Ingresa una fecha de embalaje válida.');
+    }
+    if (datesOnly) {
+        if (String(draft.motivo).trim().length < 5) issues.push('Explica el motivo de la corrección.');
+        return issues;
+    }
     if (!draft.cliente) issues.push('Elige el cliente.');
     else if (!draft.marca) issues.push('Elige la marca.');
     draft.lines.forEach((line, position) => {
@@ -217,9 +234,21 @@ export function draftIssues(draft, index, { requireLotAndProcess = false } = {})
     return issues;
 }
 
-export function correctionPayload(draft, article, operationId) {
-    return {
+function changedDates(draft) {
+    return Object.fromEntries(Object.entries(draft.fechasOriginales || {})
+        .filter(([field, original]) => draft[field] !== original)
+        .map(([field]) => [field, draft[field]]));
+}
+
+export function correctionPayload(draft, article, operationId, datesOnly = false) {
+    const common = {
         operacion_id: operationId,
+        motivo_correccion: String(draft.motivo).trim(),
+        ...changedDates(draft),
+    };
+    if (datesOnly) return { ...common, solo_fechas: true };
+    return {
+        ...common,
         tipo_bulto: draft.tipo_bulto,
         cantidad_cajas: totalBoxes(draft),
         linea_proceso: Number(draft.linea_proceso),
@@ -232,7 +261,6 @@ export function correctionPayload(draft, article, operationId) {
             lote_materia_prima: String(line.lot).trim() || null,
             proceso_packing: String(line.process).trim() || null,
         })),
-        motivo_correccion: String(draft.motivo).trim(),
     };
 }
 
@@ -250,6 +278,15 @@ export function draftChanges(validation, draft, index) {
     const add = (label, before, after) => {
         if (!sameText(before, after)) changes.push({ label, before: String(before || '—'), after: String(after || '—') });
     };
+    const fechas = changedDates(draft);
+    for (const [field, after] of Object.entries(fechas)) {
+        changes.push({
+            field,
+            label: field === 'fecha_hora_validacion' ? 'Fecha y hora de validación' : 'Fecha de embalaje',
+            before: (draft.fechasOriginales[field] || '—').replace('T', ' '),
+            after: (after || '—').replace('T', ' '),
+        });
+    }
     const bulk = { pallet: 'Pallet completo', saldo: 'Saldo' };
     add('Tipo', bulk[validation.tipo_bulto] || validation.tipo_bulto, bulk[draft.tipo_bulto] || draft.tipo_bulto);
     add('Línea', `Línea ${validation.linea_proceso}`, `Línea ${draft.linea_proceso}`);

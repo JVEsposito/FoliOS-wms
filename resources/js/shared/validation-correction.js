@@ -66,6 +66,7 @@ export function createValidationCorrection({ api, setBusy = () => {}, toast = ()
     let index = null;
     let draft = null;
     let operationId = null;
+    let submittedPayload = null;
     let notice = '';
     const loadedClients = new Set();
     const linePickers = new Map();
@@ -225,7 +226,8 @@ export function createValidationCorrection({ api, setBusy = () => {}, toast = ()
 
     function renderReview() {
         const changes = draftChanges(context.validacion, draft, index);
-        const issues = draftIssues(draft, index, { requireLotAndProcess: context.exige_lote_proceso === true });
+        const datesOnly = changes.length > 0 && changes.every((change) => change.field);
+        const issues = draftIssues(draft, index, { datesOnly, requireLotAndProcess: context.exige_lote_proceso === true });
         const list = changes.length
             ? `<ul>${changes.map((change) => `<li><b>${escapeHtml(change.label)}</b><span>${escapeHtml(change.before)}</span><span aria-hidden="true">→</span><span class="vc-review__after">${escapeHtml(change.after)}</span></li>`).join('')}</ul>`
             : '<p>Todavía no hay cambios respecto de lo validado.</p>';
@@ -257,6 +259,7 @@ export function createValidationCorrection({ api, setBusy = () => {}, toast = ()
         loadedClients.add(context.catalogo.cliente);
         draft = draftFromValidation(context.validacion, index);
         operationId = randomUuid();
+        submittedPayload = null;
         notice = '';
         const validation = context.validacion;
         elements.title.textContent = `Corregir ${validation.numero_folio || folioNumber}`;
@@ -264,6 +267,7 @@ export function createValidationCorrection({ api, setBusy = () => {}, toast = ()
         const states = [...new Set([folio.estado_operacional, folio.condicion_termica].filter(Boolean).map((value) => STATES[value] || statusText(value)))];
         elements.state.textContent = `${[context.catalogo?.temporada?.nombre, `Folio ${states.join(' · ').toLowerCase()}`, folio.activo === false ? 'inactivo' : null].filter(Boolean).join(' · ')}. `
             + 'Se corrigen la validación y el folio; su estado, cámara y despacho no cambian.';
+        for (const name of ['fecha_hora_validacion', 'fecha_embalaje']) form.elements[name].value = draft[name];
         form.elements.tipo_bulto.value = draft.tipo_bulto;
         form.elements.linea_proceso.value = draft.linea_proceso;
         form.elements.turno.value = draft.turno;
@@ -278,19 +282,27 @@ export function createValidationCorrection({ api, setBusy = () => {}, toast = ()
         event.preventDefault();
         if (!draft) return;
         draft.motivo = form.elements.motivo_correccion.value;
-        const issues = draftIssues(draft, index, { requireLotAndProcess: context.exige_lote_proceso === true });
+        const changes = draftChanges(context.validacion, draft, index);
+        if (!changes.length) return;
+        const datesOnly = changes.every((change) => change.field);
+        const issues = draftIssues(draft, index, { datesOnly, requireLotAndProcess: context.exige_lote_proceso === true });
         if (issues.length) {
             elements.error.textContent = issues[0];
             return;
         }
         const article = productChoices(index, draft).article;
+        const payload = correctionPayload(draft, article, operationId, datesOnly);
+        const payloadKey = JSON.stringify({ ...payload, operacion_id: null });
+        if (submittedPayload !== null && submittedPayload !== payloadKey) operationId = randomUuid();
+        submittedPayload = payloadKey;
+        payload.operacion_id = operationId;
         elements.error.textContent = '';
         elements.submit.disabled = true;
         setBusy(true, `Corrigiendo ${context.validacion.numero_folio}…`);
         try {
             const response = await api(`/api/validacion/pallets/${encodeURIComponent(context.validacion.id)}/corregir`, {
                 method: 'PUT',
-                body: JSON.stringify(correctionPayload(draft, article, operationId)),
+                body: JSON.stringify(payload),
             });
             close();
             toast(response?.message || 'Validación corregida y auditada.');
@@ -312,6 +324,13 @@ export function createValidationCorrection({ api, setBusy = () => {}, toast = ()
             renderReview();
         }
     });
+    for (const name of ['fecha_hora_validacion', 'fecha_embalaje']) {
+        form.elements[name].addEventListener('input', (event) => {
+            if (!draft) return;
+            draft[name] = event.target.value;
+            renderReview();
+        });
+    }
     form.elements.motivo_correccion.addEventListener('input', (event) => {
         if (!draft) return;
         draft.motivo = event.target.value;

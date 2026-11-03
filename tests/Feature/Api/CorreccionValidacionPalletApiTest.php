@@ -8,6 +8,7 @@ use App\Models\Dispositivo;
 use App\Models\Folio;
 use App\Models\TrazabilidadFolioOrigen;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -309,6 +310,57 @@ class CorreccionValidacionPalletApiTest extends TestCase
             ->assertForbidden();
 
         $this->assertDatabaseCount('correcciones_validacion_pallet', 0);
+    }
+
+    public function test_corrige_solo_las_fechas_de_una_validacion_con_el_reloj_adelantado(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-11-03T01:05:00Z'));
+        [$catalogo, $usuario, $tokenPda] = $this->contexto();
+        $captura = $this->conToken($tokenPda)->postJson('/api/validacion/pallets', [
+            ...$this->payloadValidacion($catalogo, 'SAL-FECHA-1'),
+            'tipo_bulto' => 'saldo',
+            'cantidad_cajas' => 60,
+            'generado_dispositivo_at' => '2026-11-04T01:04:00Z',
+            'fecha_embalaje' => '2026-11-03',
+        ])->assertCreated()->json('data');
+        $id = $captura['id'];
+        $tokenOficina = $this->tokenOficina($usuario);
+        $this->conToken($tokenOficina)->getJson("/api/validacion/pallets/{$id}/correccion")
+            ->assertOk()->assertJsonPath('validacion.fecha_hora_validacion', '2026-11-03T22:04');
+
+        $cambio = [
+            'operacion_id' => (string) Str::uuid(),
+            'solo_fechas' => true,
+            'fecha_hora_validacion' => '2026-11-02T22:04',
+            'fecha_embalaje' => '2026-11-02',
+            'motivo_correccion' => 'La PDA tenía la fecha adelantada un día.',
+        ];
+        $ruta = "/api/validacion/pallets/{$id}/corregir";
+        $this->conToken($tokenOficina)->putJson($ruta, [
+            ...$cambio, 'operacion_id' => (string) Str::uuid(), 'fecha_hora_validacion' => '2026-11-03T22:04',
+        ])->assertUnprocessable();
+        $this->conToken($tokenOficina)->putJson($ruta, [
+            ...$cambio, 'operacion_id' => (string) Str::uuid(), 'fecha_embalaje' => '2026-11-03',
+        ])->assertUnprocessable();
+
+        $this->conToken($tokenOficina)->putJson($ruta, $cambio)
+            ->assertOk()
+            ->assertJsonPath('data.folio.id', $captura['folio']['id'])
+            ->assertJsonPath('data.cantidad_cajas', 60)
+            ->assertJsonPath('data.catalogo.composicion.0.fecha_embalaje', '2026-11-02')
+            ->assertJsonPath('data.generado_dispositivo_at', '2026-11-03T01:04:00+00:00')
+            ->assertJsonPath('data.recibido_servidor_at', '2026-11-03T01:05:00+00:00');
+        $this->conToken($tokenOficina)->putJson($ruta, $cambio)->assertOk();
+        $this->assertDatabaseHas('trazabilidad_folio_origenes', [
+            'folio_id' => $captura['folio']['id'], 'fecha_embalaje' => '2026-11-02', 'cantidad_cajas' => 60,
+        ]);
+        $this->assertDatabaseCount('correcciones_validacion_pallet', 1);
+        $this->assertDatabaseHas('correcciones_validacion_pallet', [
+            'validacion_pallet_id' => $id,
+            'datos_anteriores->validacion->generado_dispositivo_at' => '2026-11-04T01:04:00+00:00',
+            'datos_anteriores->validacion->snapshot->fecha_embalaje' => '2026-11-03',
+            'datos_nuevos->validacion->snapshot->fecha_embalaje' => '2026-11-02',
+        ]);
     }
 
     /**

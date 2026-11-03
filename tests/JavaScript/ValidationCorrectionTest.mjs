@@ -166,3 +166,20 @@ test('el catálogo compacto por cliente (artículos por origen) da los mismos pr
     assert.deepEqual(articlesForOrigins(compact, ['o1', 'o2']).map((item) => item.id), ['santina-2j-10']);
     assert.deepEqual(articlesForOrigins(compact, ['o1']).map((item) => item.id), ['santina-2j-5', 'santina-2j-10', 'lapins-2j-5']);
 });
+
+test('corrige fechas en hora de planta sin enviar el resto de la validación', () => {
+    const original = { ...validation, fecha_hora_validacion: '2026-11-03T22:04', fecha_embalaje: '2026-11-03' };
+    const draft = draftFromValidation(original, index);
+    draft.fecha_hora_validacion = '2026-11-02T22:04';
+    draft.fecha_embalaje = '2026-11-02';
+    draft.motivo = 'La PDA tenía el reloj adelantado.';
+    assert.deepEqual(draftChanges(original, draft, index).map((change) => change.field), ['fecha_hora_validacion', 'fecha_embalaje']);
+    assert.deepEqual(draftIssues(draft, index, { datesOnly: true, requireLotAndProcess: true }), []);
+    assert.deepEqual(correctionPayload(draft, null, 'op', true), {
+        operacion_id: 'op',
+        motivo_correccion: 'La PDA tenía el reloj adelantado.',
+        fecha_hora_validacion: '2026-11-02T22:04',
+        fecha_embalaje: '2026-11-02',
+        solo_fechas: true,
+    });
+});

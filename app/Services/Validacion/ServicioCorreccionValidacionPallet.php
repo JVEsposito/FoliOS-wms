@@ -8,10 +8,12 @@ use App\Enums\ResultadoValidacionPallet;
 use App\Exceptions\ConflictoOperacion;
 use App\Models\CorreccionValidacionPallet;
 use App\Models\Folio;
+use App\Models\RepaletizajeDetalle;
 use App\Models\User;
 use App\Models\ValidacionPallet;
 use App\Services\Transiciones\ComandoTransicionOperacional;
 use App\Services\Transiciones\MotorTransicionesOperacionales;
+use Carbon\CarbonImmutable;
 use DomainException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -81,6 +83,20 @@ class ServicioCorreccionValidacionPallet
                 : null;
 
             $this->asegurarCorregible($validacionBloqueada, $folio);
+            $anteriores = $this->datosAuditables($validacionBloqueada, $folio);
+            $snapshot = $validacionBloqueada->snapshot ?? [];
+            $snapshot['ultima_correccion'] = [
+                'operacion_id' => $datos['operacion_id'],
+                'motivo' => $payload['motivo_correccion'],
+                'corregido_por_user_id' => $usuario->id,
+                'corregido_at' => now()->toAtomString(),
+            ];
+
+            if ($payload['solo_fechas'] ?? false) {
+                $this->aplicarFechas($validacionBloqueada, $folio, $payload, $snapshot);
+
+                return $this->auditar($validacionBloqueada, $folio, $usuario, $datos['operacion_id'], $payloadHash, $payload['motivo_correccion'], $anteriores);
+            }
 
             $temporada = DB::table('temporadas')
                 ->where('id', $validacionBloqueada->temporada_id)
@@ -121,8 +137,6 @@ class ServicioCorreccionValidacionPallet
                 );
             }
 
-            $anteriores = $this->datosAuditables($validacionBloqueada, $folio);
-            $snapshot = $validacionBloqueada->snapshot ?? [];
             $composicionAnterior = collect($snapshot['composicion'] ?? []);
             $composicion = array_key_exists('composicion', $payload)
                 ? $this->composicionSolicitada($validacionBloqueada, $articulo, $payload, $snapshot, $composicionAnterior)
@@ -214,13 +228,6 @@ class ServicioCorreccionValidacionPallet
                 'id' => $combinacion->id,
                 'codigo_externo' => $combinacion->codigo_externo,
             ];
-            $snapshot['ultima_correccion'] = [
-                'operacion_id' => $datos['operacion_id'],
-                'motivo' => $payload['motivo_correccion'],
-                'corregido_por_user_id' => $usuario->id,
-                'corregido_at' => now()->toAtomString(),
-            ];
-
             $validacionBloqueada->forceFill([
                 'tipo_bulto' => $payload['tipo_bulto'],
                 'cantidad_cajas' => $payload['cantidad_cajas'],
@@ -254,29 +261,96 @@ class ServicioCorreccionValidacionPallet
                 ],
             ])->save();
 
-            $nuevos = $this->datosAuditables(
-                $validacionBloqueada->refresh(),
-                $folio->refresh(),
-            );
+            if (isset($payload['fecha_hora_validacion']) || isset($payload['fecha_embalaje'])) {
+                $this->aplicarFechas($validacionBloqueada, $folio, $payload, $snapshot);
+            }
 
-            CorreccionValidacionPallet::create([
-                'operacion_id' => $datos['operacion_id'],
-                'payload_hash' => $payloadHash,
-                'validacion_pallet_id' => $validacionBloqueada->id,
-                'folio_id' => $folio->id,
-                'corregido_por_user_id' => $usuario->id,
-                'datos_anteriores' => $anteriores,
-                'datos_nuevos' => $nuevos,
-                'motivo' => $payload['motivo_correccion'],
-                'corregido_at' => now(),
-            ]);
-
-            app(ServicioConciliacionValidacion::class)->registrar($validacionBloqueada->refresh(), 'correccion_autorizada');
-
-            return $this->cargar($validacionBloqueada->refresh());
+            return $this->auditar($validacionBloqueada, $folio, $usuario, $datos['operacion_id'], $payloadHash, $payload['motivo_correccion'], $anteriores);
         };
 
         return $this->motorTransiciones->ejecutar($comando, $accion);
+    }
+
+    private function aplicarFechas(ValidacionPallet $validacion, Folio $folio, array $payload, array $snapshot): void
+    {
+        $zona = config('app.operational_timezone');
+        $validadaAt = $validacion->generado_dispositivo_at;
+        if (isset($payload['fecha_hora_validacion'])) {
+            $horaLocal = $payload['fecha_hora_validacion'];
+            $validadaAt = CarbonImmutable::createFromFormat('!Y-m-d\TH:i', $horaLocal, $zona);
+            if ($validadaAt->format('Y-m-d\TH:i') !== $horaLocal || $validadaAt->gt($validacion->recibido_servidor_at)) {
+                throw new DomainException('La hora de validación debe ser válida en la zona de la planta y anterior o igual a la recepción del servidor.');
+            }
+        }
+
+        $fechaAnterior = $snapshot['fecha_embalaje'] ?? null;
+        $fecha = $payload['fecha_embalaje'] ?? $fechaAnterior;
+        $limite = min(
+            $validadaAt->copy()->setTimezone($zona)->toDateString(),
+            $validacion->recibido_servidor_at->copy()->setTimezone($zona)->toDateString(),
+        );
+        if ($fecha !== null && $fecha > $limite) {
+            throw new DomainException("La fecha de embalaje debe ser {$limite} o anterior. Corrige también la fecha de embalaje.");
+        }
+
+        if ($fecha !== $fechaAnterior) {
+            // Una repa confirmada conserva la composición usada al armarla. Su anulación
+            // devuelve los orígenes a ese punto y permite corregirlos sin romper la genealogía.
+            $detalle = RepaletizajeDetalle::query()->where('folio_origen_id', $folio->id)
+                ->whereHas('repaletizaje', fn ($query) => $query->where('estado', 'confirmado'))
+                ->with('repaletizaje:id,codigo')
+                ->first();
+            if ($detalle) {
+                throw new ConflictoOperacion("Este folio participó en {$detalle->repaletizaje->codigo}. Anula ese repaletizaje antes de corregir el embalaje.");
+            }
+
+            $snapshot['fecha_embalaje'] = $fecha;
+            if (isset($snapshot['composicion'])) {
+                $snapshot['composicion'] = $this->fecharComposicion($snapshot['composicion'], $fecha);
+            }
+            $externos = $folio->datos_externos ?? [];
+            $externos['fecha_embalaje'] = $fecha;
+            $externos['fechas_embalaje'] = [$fecha];
+            if (isset($externos['composicion'])) {
+                $externos['composicion'] = $this->fecharComposicion($externos['composicion'], $fecha);
+            }
+            $folio->forceFill(['datos_externos' => $externos])->save();
+        }
+
+        $validacion->forceFill(['generado_dispositivo_at' => $validadaAt->copy()->utc(), 'snapshot' => $snapshot])->save();
+    }
+
+    private function fecharComposicion(array $lineas, string $fecha): array
+    {
+        return array_map(fn (array $linea): array => [...$linea, 'fecha_embalaje' => $fecha], $lineas);
+    }
+
+    private function auditar(
+        ValidacionPallet $validacion,
+        Folio $folio,
+        User $usuario,
+        string $operacionId,
+        string $payloadHash,
+        string $motivo,
+        array $anteriores,
+    ): ValidacionPallet {
+        $nuevos = $this->datosAuditables($validacion->refresh(), $folio->refresh());
+
+        CorreccionValidacionPallet::create([
+            'operacion_id' => $operacionId,
+            'payload_hash' => $payloadHash,
+            'validacion_pallet_id' => $validacion->id,
+            'folio_id' => $folio->id,
+            'corregido_por_user_id' => $usuario->id,
+            'datos_anteriores' => $anteriores,
+            'datos_nuevos' => $nuevos,
+            'motivo' => $motivo,
+            'corregido_at' => now(),
+        ]);
+
+        app(ServicioConciliacionValidacion::class)->registrar($validacion, 'correccion_autorizada');
+
+        return $this->cargar($validacion->refresh());
     }
 
     private function asegurarCorregible(
@@ -298,7 +372,13 @@ class ServicioCorreccionValidacionPallet
      */
     private function normalizarPayload(array $datos): array
     {
+        $fechas = array_intersect_key($datos, array_flip(['fecha_hora_validacion', 'fecha_embalaje']));
+        if ($datos['solo_fechas'] ?? false) {
+            return ['solo_fechas' => true, 'motivo_correccion' => $datos['motivo_correccion'], ...$fechas];
+        }
+
         return [
+            ...$fechas,
             'tipo_bulto' => $datos['tipo_bulto'],
             'cantidad_cajas' => (int) $datos['cantidad_cajas'],
             'linea_proceso' => (int) $datos['linea_proceso'],
@@ -419,6 +499,7 @@ class ServicioCorreccionValidacionPallet
                 'origen_validacion_id' => $validacion->origen_validacion_id,
                 'categoria_validacion_id' => $validacion->categoria_validacion_id,
                 'catalogo_version_servidor' => $validacion->catalogo_version_servidor,
+                'generado_dispositivo_at' => $validacion->generado_dispositivo_at?->toAtomString(),
                 'snapshot' => $validacion->snapshot,
             ],
             'folio' => [
