@@ -5,6 +5,7 @@ namespace App\Services\Romana;
 use App\Enums\EstadoRecepcionRomana;
 use App\Enums\EstadoRevisionMovimientoEnvase;
 use App\Enums\EstadoValidacionMp;
+use App\Enums\TipoEnvaseRomana;
 use App\Enums\TipoEventoRomana;
 use App\Enums\TipoMovimientoEnvase;
 use App\Enums\TipoRecepcionRomana;
@@ -24,6 +25,7 @@ use App\Services\Notificaciones\ServicioNotificacionesOperacionales;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use JsonException;
 use Ramsey\Uuid\Uuid;
 
@@ -217,6 +219,9 @@ class ServicioRecepcionRomana
                 'peso_neto_por_envase' => $recepcion->estado === EstadoRecepcionRomana::EnPesajeEnvases
                     ? null
                     : $recepcion->peso_neto_por_envase,
+                'reparto_neto_envases' => $recepcion->estado === EstadoRecepcionRomana::EnPesajeEnvases
+                    ? null
+                    : $recepcion->reparto_neto_envases,
                 'observacion' => $payload['observacion'],
                 'version' => $recepcion->version + 1,
             ]);
@@ -341,6 +346,9 @@ class ServicioRecepcionRomana
                     : $recepcion->tipo_envase_calculo_neto,
                 'tipo_envase_pesaje' => $payload['tipo_envase_pesaje'],
                 'tara_unitaria_envase' => $payload['tara_unitaria_envase'],
+                ...($recepcion->estado === EstadoRecepcionRomana::EnPesajeEnvases
+                    ? ['reparto_neto_envases' => null]
+                    : []),
                 'observacion' => $payload['observacion'],
                 'version' => $recepcion->version + 1,
             ];
@@ -444,7 +452,18 @@ class ServicioRecepcionRomana
     ): RecepcionRomana {
         $payload = [
             'recepcion_id' => $recepcion->id,
-            'cantidad_envases' => (int) $datos['cantidad_envases'],
+            // La cantidad total (un solo tipo) conserva el contrato y hash anteriores.
+            ...(isset($datos['envases'])
+                ? ['envases' => collect($datos['envases'])
+                    ->map(fn (array $linea): array => [
+                        'tipo_envase' => (string) $linea['tipo_envase'],
+                        'cantidad' => (int) $linea['cantidad'],
+                    ])
+                    ->filter(fn (array $linea): bool => $linea['cantidad'] > 0)
+                    ->sortBy('tipo_envase')
+                    ->values()
+                    ->all()]
+                : ['cantidad_envases' => (int) $datos['cantidad_envases']]),
             'peso_bruto' => round((float) $datos['peso_bruto'], 3),
             'observacion' => $datos['observacion'] ?? null,
         ];
@@ -489,25 +508,44 @@ class ServicioRecepcionRomana
             }
 
             $this->asegurarRecepcionEnPesajeEnvases($recepcion);
-            $cantidadDeclarada = $this->cantidadDeclaradaParaPesaje($recepcion);
-            $cantidadPesada = (int) $recepcion->pesajesEnvases()
-                ->whereNull('anulado_at')
-                ->sum('cantidad_envases');
-            $cantidad = $payload['cantidad_envases'];
-            if ($cantidadPesada + $cantidad > $cantidadDeclarada) {
-                throw new ConflictoOperacion(sprintf(
-                    'La lectura supera los %d envases pendientes de pesaje.',
-                    max(0, $cantidadDeclarada - $cantidadPesada),
-                ));
+            $declaradas = $this->cantidadesDeclaradasParaPesaje($recepcion);
+            $lineas = $this->lineasSolicitadasTanda($payload, $declaradas);
+            $pesadas = $this->pesadoPorTipo($recepcion);
+            foreach ($lineas as $linea) {
+                $pendientes = max(0, $declaradas[$linea['tipo_envase']] - ($pesadas[$linea['tipo_envase']]['cantidad'] ?? 0));
+                if ($linea['cantidad'] > $pendientes) {
+                    throw new ConflictoOperacion(count($declaradas) === 1
+                        ? sprintf('La lectura supera los %d envases pendientes de pesaje.', $pendientes)
+                        : sprintf(
+                            'La lectura supera los envases pendientes de %s: quedan %d.',
+                            TipoEnvaseRomana::from($linea['tipo_envase'])->etiqueta(),
+                            $pendientes,
+                        ));
+                }
             }
 
-            $taraUnitaria = (float) $recepcion->tara_unitaria_envase;
-            $pesoTara = round($taraUnitaria * $cantidad, 3);
-            if ($payload['peso_bruto'] <= $pesoTara) {
+            // Se calcula en gramos para que tara y neto de la tanda cuadren sin redondeos.
+            $taras = $this->tarasPesaje($recepcion);
+            $tarasGramos = array_map(
+                fn (array $linea): int => (int) round($taras[$linea['tipo_envase']] * 1000) * $linea['cantidad'],
+                $lineas,
+            );
+            $pesoTaraGramos = array_sum($tarasGramos);
+            $pesoBrutoGramos = (int) round($payload['peso_bruto'] * 1000);
+            if ($pesoBrutoGramos <= $pesoTaraGramos) {
                 throw new ConflictoOperacion(
                     'El peso bruto del grupo debe ser mayor que la tara total de sus envases.',
                 );
             }
+            $netosGramos = $this->repartirNetoTanda($recepcion, $lineas, $pesoBrutoGramos - $pesoTaraGramos);
+            $detalle = array_map(fn (array $linea, int $tara, int $neto): array => [
+                'tipo_envase' => $linea['tipo_envase'],
+                'cantidad' => $linea['cantidad'],
+                'tara_unitaria' => round($taras[$linea['tipo_envase']], 3),
+                'peso_tara' => $tara / 1000,
+                'peso_neto' => $neto / 1000,
+            ], $lineas, $tarasGramos, $netosGramos);
+            $cantidad = array_sum(array_column($lineas, 'cantidad'));
             $secuencia = ((int) $recepcion->pesajesEnvases()->max('secuencia')) + 1;
             $ahora = CarbonImmutable::now();
             $pesaje = PesajeEnvaseRecepcionRomana::create([
@@ -515,12 +553,14 @@ class ServicioRecepcionRomana
                 'payload_hash' => $hash,
                 'recepcion_romana_id' => $recepcion->id,
                 'secuencia' => $secuencia,
-                'tipo_envase' => $recepcion->tipo_envase_pesaje,
+                // Con varios tipos, la lectura conserva el primero y la tara promedio; el detalle va por tipo.
+                'tipo_envase' => $lineas[0]['tipo_envase'],
                 'cantidad_envases' => $cantidad,
+                'envases' => $detalle,
                 'peso_bruto' => $payload['peso_bruto'],
-                'tara_unitaria_envase' => $taraUnitaria,
-                'peso_tara' => $pesoTara,
-                'peso_neto' => round($payload['peso_bruto'] - $pesoTara, 3),
+                'tara_unitaria_envase' => round($pesoTaraGramos / $cantidad / 1000, 3),
+                'peso_tara' => $pesoTaraGramos / 1000,
+                'peso_neto' => ($pesoBrutoGramos - $pesoTaraGramos) / 1000,
                 'observacion' => $payload['observacion'],
                 'registrado_por_user_id' => $usuario->id,
                 'pesado_at' => $ahora,
@@ -543,11 +583,12 @@ class ServicioRecepcionRomana
                     'pesaje_id' => $pesaje->id,
                     'secuencia' => $secuencia,
                     'cantidad_envases' => $cantidad,
+                    'envases' => $detalle,
                     'peso_bruto' => (float) $pesaje->peso_bruto,
                     'peso_tara' => (float) $pesaje->peso_tara,
                     'peso_neto' => (float) $pesaje->peso_neto,
                     'cantidad_envases_pesados' => $resumen['cantidad_envases_pesados'],
-                    'cantidad_envases_declarados' => $cantidadDeclarada,
+                    'cantidad_envases_declarados' => array_sum($declaradas),
                     'peso_neto_por_envase' => $resumen['peso_neto_por_envase'],
                 ],
             );
@@ -1072,14 +1113,23 @@ class ServicioRecepcionRomana
             }
 
             $this->asegurarRecepcionEnPesajeEnvases($recepcion);
-            $cantidadDeclarada = $this->cantidadDeclaradaParaPesaje($recepcion);
-            $resumen = $this->resumenPesajesEnvases($recepcion);
-            if ($resumen['cantidad_envases_pesados'] !== $cantidadDeclarada) {
-                throw new ConflictoOperacion(sprintf(
-                    'Faltan %d envases por pesar antes de cerrar la recepción.',
-                    max(0, $cantidadDeclarada - $resumen['cantidad_envases_pesados']),
-                ));
+            $declaradas = $this->cantidadesDeclaradasParaPesaje($recepcion);
+            $pesadas = $this->pesadoPorTipo($recepcion);
+            $faltantes = [];
+            foreach ($declaradas as $tipo => $cantidad) {
+                $falta = $cantidad - ($pesadas[$tipo]['cantidad'] ?? 0);
+                if ($falta > 0) {
+                    $faltantes[$tipo] = $falta;
+                }
             }
+            if ($faltantes !== []) {
+                throw new ConflictoOperacion(count($declaradas) === 1
+                    ? sprintf('Faltan %d envases por pesar antes de cerrar la recepción.', array_sum($faltantes))
+                    : 'Faltan envases por pesar antes de cerrar la recepción: '.collect($faltantes)
+                        ->map(fn (int $falta, string $tipo): string => $falta.' '.TipoEnvaseRomana::from($tipo)->etiqueta())
+                        ->implode(', ').'.');
+            }
+            $resumen = $this->resumenPesajesEnvases($recepcion);
 
             $ahora = CarbonImmutable::now();
             $recepcion->update([
@@ -1106,6 +1156,11 @@ class ServicioRecepcionRomana
                     'tipo_envase_pesaje' => $recepcion->tipo_envase_pesaje->value,
                     'tara_unitaria_envase' => (float) $recepcion->tara_unitaria_envase,
                     'cantidad_envases_pesados' => $resumen['cantidad_envases_pesados'],
+                    'envases' => array_map(fn (string $tipo): array => [
+                        'tipo_envase' => $tipo,
+                        'cantidad' => $pesadas[$tipo]['cantidad'],
+                        'peso_neto' => $pesadas[$tipo]['peso_neto_gramos'] / 1000,
+                    ], array_keys($declaradas)),
                     'peso_bruto' => $resumen['peso_bruto'],
                     'peso_tara' => $resumen['peso_tara'],
                     'peso_neto' => $resumen['peso_neto'],
@@ -1124,6 +1179,7 @@ class ServicioRecepcionRomana
      */
     private function datosRecepcion(array $datos): array
     {
+        $esPesajeEnvases = $datos['tipo_recepcion'] === TipoRecepcionRomana::FrutaPesajeEnvases->value;
         $envases = collect($datos['envases'])
             ->map(fn (array $envase): array => [
                 'tipo_envase' => $envase['tipo_envase'],
@@ -1131,10 +1187,19 @@ class ServicioRecepcionRomana
                 // Omitirla conserva el contrato y hash de las solicitudes anteriores.
                 ...($datos['tipo_recepcion'] !== TipoRecepcionRomana::SoloEnvases->value && isset($envase['propiedad'])
                     ? ['propiedad' => $envase['propiedad']] : []),
+                ...($esPesajeEnvases && isset($envase['tara_unitaria'])
+                    ? ['tara_unitaria' => round((float) $envase['tara_unitaria'], 3)] : []),
             ])
             ->sortBy('tipo_envase')
             ->values()
             ->all();
+        // El envase de referencia del pesaje: el indicado por el contrato anterior o
+        // el primero declarado; su tara es la de esa línea.
+        $tipoPesaje = $esPesajeEnvases ? ($datos['tipo_envase_pesaje'] ?? $envases[0]['tipo_envase'] ?? null) : null;
+        $lineaPesaje = collect($envases)->firstWhere('tipo_envase', $tipoPesaje);
+        $taraPesaje = $lineaPesaje['tara_unitaria'] ?? (isset($datos['tara_unitaria_envase'])
+            ? round((float) $datos['tara_unitaria_envase'], 3)
+            : null);
 
         return [
             'temporada_id' => $datos['temporada_id'],
@@ -1154,10 +1219,8 @@ class ServicioRecepcionRomana
             'peso_bruto' => isset($datos['peso_bruto'])
                 ? round((float) $datos['peso_bruto'], 3)
                 : null,
-            'tipo_envase_pesaje' => $datos['tipo_envase_pesaje'] ?? null,
-            'tara_unitaria_envase' => isset($datos['tara_unitaria_envase'])
-                ? round((float) $datos['tara_unitaria_envase'], 3)
-                : null,
+            'tipo_envase_pesaje' => $tipoPesaje,
+            'tara_unitaria_envase' => $esPesajeEnvases ? $taraPesaje : null,
             'observacion' => $datos['observacion'] ?? null,
         ];
     }
@@ -1171,7 +1234,8 @@ class ServicioRecepcionRomana
             );
         }
         if ($recepcion->tipo_envase_pesaje === null
-            || (float) $recepcion->tara_unitaria_envase <= 0) {
+            || $recepcion->detallesEnvases->isEmpty()
+            || collect($this->tarasPesaje($recepcion))->contains(fn (float $tara): bool => $tara <= 0)) {
             throw new ConflictoOperacion(
                 'La recepción no posee un envase y una tara unitaria configurados.',
             );
@@ -1193,22 +1257,117 @@ class ServicioRecepcionRomana
         }
     }
 
-    private function cantidadDeclaradaParaPesaje(RecepcionRomana $recepcion): int
+    /** @return array<string, int> cantidad declarada por tipo de envase a pesar */
+    private function cantidadesDeclaradasParaPesaje(RecepcionRomana $recepcion): array
     {
-        $tipo = $recepcion->tipo_envase_pesaje?->value;
-        $detalle = $recepcion->detallesEnvases->first(
-            fn ($linea): bool => $linea->tipo_envase->value === $tipo,
-        );
-        if (! $detalle || $detalle->cantidad_declarada < 1) {
+        $declaradas = $recepcion->detallesEnvases
+            ->sortBy(fn ($detalle): string => $detalle->tipo_envase->value)
+            ->mapWithKeys(fn ($detalle): array => [$detalle->tipo_envase->value => (int) $detalle->cantidad_declarada])
+            ->all();
+        if ($declaradas === [] || min($declaradas) < 1) {
             throw new ConflictoOperacion(
                 'El envase configurado para pesaje no está declarado en la recepción.',
             );
         }
 
-        return (int) $detalle->cantidad_declarada;
+        return $declaradas;
     }
 
-    /** @return array<string, float|int|string|null> */
+    /** @return array<string, float> tara por envase de cada tipo configurado */
+    private function tarasPesaje(RecepcionRomana $recepcion): array
+    {
+        return $recepcion->detallesEnvases
+            ->mapWithKeys(fn ($detalle): array => [$detalle->tipo_envase->value => (float) ($detalle->tara_unitaria_salida
+                ?? ($detalle->tipo_envase === $recepcion->tipo_envase_pesaje ? $recepcion->tara_unitaria_envase : 0))])
+            ->all();
+    }
+
+    /** @return array<string, array{cantidad: int, peso_tara_gramos: int, peso_neto_gramos: int}> lo pesado en tandas activas */
+    private function pesadoPorTipo(RecepcionRomana $recepcion): array
+    {
+        $pesado = [];
+        foreach ($recepcion->pesajesEnvases()->whereNull('anulado_at')->orderBy('secuencia')->get() as $pesaje) {
+            foreach ($pesaje->lineas() as $linea) {
+                $actual = $pesado[$linea['tipo_envase']] ?? ['cantidad' => 0, 'peso_tara_gramos' => 0, 'peso_neto_gramos' => 0];
+                $pesado[$linea['tipo_envase']] = [
+                    'cantidad' => $actual['cantidad'] + $linea['cantidad'],
+                    'peso_tara_gramos' => $actual['peso_tara_gramos'] + (int) round($linea['peso_tara'] * 1000),
+                    'peso_neto_gramos' => $actual['peso_neto_gramos'] + (int) round($linea['peso_neto'] * 1000),
+                ];
+            }
+        }
+
+        return $pesado;
+    }
+
+    /**
+     * Envases que trae la tanda. La cantidad total del contrato anterior solo
+     * sirve cuando la recepción pesa un único tipo.
+     *
+     * @param  array<string, mixed>  $payload
+     * @param  array<string, int>  $declaradas
+     * @return list<array{tipo_envase: string, cantidad: int}>
+     */
+    private function lineasSolicitadasTanda(array $payload, array $declaradas): array
+    {
+        if (! isset($payload['envases'])) {
+            if (count($declaradas) !== 1) {
+                throw ValidationException::withMessages([
+                    'envases' => 'Esta recepción pesa varios tipos de envase: indica cuántos de cada tipo trae la tanda.',
+                ]);
+            }
+
+            return [['tipo_envase' => (string) array_key_first($declaradas), 'cantidad' => (int) $payload['cantidad_envases']]];
+        }
+        if ($payload['envases'] === []) {
+            throw ValidationException::withMessages(['envases' => 'Cada lectura debe contener al menos un envase.']);
+        }
+        foreach ($payload['envases'] as $linea) {
+            if (! isset($declaradas[$linea['tipo_envase']])) {
+                throw ValidationException::withMessages([
+                    'envases' => TipoEnvaseRomana::from($linea['tipo_envase'])->etiqueta().' no forma parte del pesaje de esta recepción.',
+                ]);
+            }
+        }
+
+        return $payload['envases'];
+    }
+
+    /**
+     * Reparte el neto de una tanda entre sus tipos de envase. Con un solo tipo
+     * todo el neto es suyo; si se mezclan, se reparte según el peso de referencia
+     * de cada envase para la especie. El resto de gramos queda en el último tipo.
+     *
+     * @param  list<array{tipo_envase: string, cantidad: int}>  $lineas
+     * @return list<int>
+     */
+    private function repartirNetoTanda(RecepcionRomana $recepcion, array $lineas, int $netoGramos): array
+    {
+        if (count($lineas) === 1) {
+            return [$netoGramos];
+        }
+        $referencias = app(ServicioRepartoEnvases::class)->configuracion($recepcion->especie_validacion_id)['referencias'];
+        $pesos = [];
+        foreach ($lineas as $linea) {
+            $referencia = (int) round(($referencias[$linea['tipo_envase']] ?? 0) * 1000);
+            if ($referencia <= 0) {
+                throw ValidationException::withMessages([
+                    'envases' => sprintf(
+                        'Falta configurar el peso de referencia de %s para esta especie en Administración: con él se reparte el neto de una tanda que mezcla tipos de envase.',
+                        TipoEnvaseRomana::from($linea['tipo_envase'])->etiqueta(),
+                    ),
+                ]);
+            }
+            $pesos[] = $linea['cantidad'] * $referencia;
+        }
+        $base = array_sum($pesos);
+        $netos = array_map(fn (int $peso): int => intdiv($netoGramos * $peso, $base), $pesos);
+        $netos[array_key_last($netos)] += $netoGramos - array_sum($netos);
+
+        return $netos;
+    }
+
+    /** @return array<string, mixed> */
     private function resumenPesajesEnvases(RecepcionRomana $recepcion): array
     {
         $totales = $recepcion->pesajesEnvases()
@@ -1222,8 +1381,7 @@ class ServicioRecepcionRomana
         $pesoBruto = round((float) ($totales?->peso_bruto ?? 0), 3);
         $pesoTara = round((float) ($totales?->peso_tara ?? 0), 3);
         $pesoNeto = round((float) ($totales?->peso_neto ?? 0), 3);
-
-        return [
+        $resumen = [
             'cantidad_envases_pesados' => $cantidad,
             'peso_bruto' => $pesoBruto,
             'peso_tara' => $pesoTara,
@@ -1233,6 +1391,40 @@ class ServicioRecepcionRomana
             'peso_neto_por_envase' => $cantidad > 0
                 ? round($pesoNeto / $cantidad, 3)
                 : null,
+            'reparto_neto_envases' => null,
+        ];
+        if ($recepcion->detallesEnvases->count() < 2) {
+            return $resumen;
+        }
+
+        // Varios tipos: el neto pesado de cada uno se congela como reparto. Los lotes
+        // de MP reciben así el neto real de sus bins y totes, no un promedio.
+        $reparto = [];
+        foreach ($this->pesadoPorTipo($recepcion) as $tipo => $pesado) {
+            if ($pesado['cantidad'] < 1) {
+                continue;
+            }
+            $unitario = round($pesado['peso_neto_gramos'] / $pesado['cantidad'] / 1000, 3);
+            $reparto[$tipo] = [
+                'tipo_envase' => $tipo,
+                'cantidad' => $pesado['cantidad'],
+                'peso_referencia' => $unitario,
+                'peso_neto_unitario' => $unitario,
+                'peso_neto' => $pesado['peso_neto_gramos'] / 1000,
+            ];
+        }
+        ksort($reparto);
+        $reparto = array_values($reparto);
+        if ($reparto === []) {
+            return [...$resumen, 'cantidad_envase_calculo_neto' => 0];
+        }
+
+        return [
+            ...$resumen,
+            'tipo_envase_calculo_neto' => $reparto[0]['tipo_envase'],
+            'cantidad_envase_calculo_neto' => $reparto[0]['cantidad'],
+            'peso_neto_por_envase' => $reparto[0]['peso_neto_unitario'],
+            'reparto_neto_envases' => $reparto,
         ];
     }
 
@@ -1490,7 +1682,7 @@ class ServicioRecepcionRomana
         ]);
     }
 
-    /** @param array<int, array{tipo_envase: string, cantidad: int, propiedad?: string}> $envases */
+    /** @param array<int, array{tipo_envase: string, cantidad: int, propiedad?: string, tara_unitaria?: float}> $envases */
     private function sincronizarEnvases(RecepcionRomana $recepcion, array $envases): void
     {
         $tipos = collect($envases)->pluck('tipo_envase')->all();
@@ -1505,7 +1697,7 @@ class ServicioRecepcionRomana
                         ? ['propiedad' => $recepcion->propiedadEnvase($envase['tipo_envase'])]
                         : (isset($envase['propiedad']) ? ['propiedad' => $envase['propiedad']] : [])),
                     ...($recepcion->tipo_recepcion === TipoRecepcionRomana::FrutaPesajeEnvases
-                        ? ['tara_unitaria_salida' => $recepcion->tara_unitaria_envase]
+                        ? ['tara_unitaria_salida' => $envase['tara_unitaria'] ?? $recepcion->tara_unitaria_envase]
                         : []),
                 ],
             );

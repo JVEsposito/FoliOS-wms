@@ -151,6 +151,19 @@ body {
 .container-weighing-config legend { padding: 0 6px; color: var(--muted); font-size: 11px; font-weight: 900; }
 .container-weighing-config label span { display: block; margin-bottom: 6px; }
 .container-weighing-config small { grid-column: 1 / -1; color: var(--muted); }
+/* Varias filas de envase: ocupa todo el ancho del formulario. */
+.weighbridge-form-grid > .container-weighing-config { grid-column: 1 / -1; }
+.container-weighing-lines { grid-column: 1 / -1; display: grid; gap: 10px; }
+.container-weighing-line { display: grid; grid-template-columns: minmax(140px, 1.2fr) minmax(96px, .7fr) minmax(120px, .9fr) minmax(150px, 1fr) 40px; gap: 10px; align-items: end; }
+.container-weighing-line > button { min-height: 44px; border: 1px solid rgba(255, 107, 107, .35); border-radius: 10px; background: rgba(255, 107, 107, .08); color: #ff9d9d; font-size: 1.1rem; font-weight: 800; cursor: pointer; }
+.container-weighing-line > button:disabled { visibility: hidden; }
+.container-weighing-add { grid-column: 1 / -1; justify-self: start; }
+.container-weighing-quantities { display: grid; gap: 12px; margin-bottom: 14px; }
+.container-weighing-quantities small { display: block; margin-top: 6px; }
+@media (max-width: 700px) {
+    .container-weighing-line { grid-template-columns: repeat(2, minmax(0, 1fr)); border-bottom: 1px solid var(--line); padding-bottom: 10px; }
+    .container-weighing-line > button { grid-column: 1 / -1; justify-self: end; width: 44px; }
+}
 .tare-option { display: flex; gap: 10px; align-items: flex-start; margin-top: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--deep); padding: 12px; cursor: pointer; }
 .tare-option input { width: 18px; height: 18px; flex: 0 0 18px; margin-top: 2px; accent-color: var(--cyan); }
 .tare-option span,

@@ -119,7 +119,7 @@ Permite conteo, revisión y segregación de materia prima.
 
 ### Fruta con pesaje acumulativo de envases
 
-Conserva el mismo flujo de fruta, tarjas y segregación. Romana configura el tipo de envase y su tara unitaria, y pesa la cantidad completa en una o más tandas. La recepción es visible y puede ser tomada desde su creación, pero Validación MP no puede confirmarla hasta que Romana complete el total declarado y cierre el pesaje.
+Conserva el mismo flujo de fruta, tarjas y segregación. Romana configura uno o más tipos de envase con su tara unitaria, y pesa la cantidad completa en una o más tandas, que pueden mezclar tipos. Con varios tipos, cada segmento recibe el neto pesado de sus envases. La recepción es visible y puede ser tomada desde su creación, pero Validación MP no puede confirmarla hasta que Romana complete el total declarado y cierre el pesaje.
 
 ### Solo envases
 

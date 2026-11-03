@@ -26,6 +26,16 @@ export type MpReception = {
     cantidad_pesada: number;
     peso_neto: number;
     peso_neto_por_envase: number | null;
+    /** Uno o más tipos de envase; las respuestas anteriores no lo traen. */
+    tipos?: Array<{
+      tipo_envase: ContainerType;
+      cantidad_declarada: number;
+      cantidad_pesada: number;
+      cantidad_pendiente: number;
+      tara_unitaria: number | null;
+      peso_neto: number;
+      peso_neto_por_envase: number | null;
+    }>;
   } | null;
   envases: Array<{
     tipo_envase: ContainerType;

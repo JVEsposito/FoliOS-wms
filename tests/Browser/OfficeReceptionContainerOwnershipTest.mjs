@@ -9,7 +9,7 @@ const root = fileURLToPath(new URL('../../', import.meta.url));
 const html = readFileSync(resolve(root, 'storage/app/ui/oficina/romana.html'), 'utf8');
 const types = [{ codigo: 'bins', nombre: 'Bins plástico', contiene_fruta: true }, { codigo: 'totes', nombre: 'Tote', contiene_fruta: true }];
 
-test('el ingreso exige propiedad, conserva la selección al editar y distingue fruta, pesaje y solo envases', async () => {
+test('el ingreso exige propiedad, conserva la selección al editar y distingue fruta, pesaje con varios envases y solo envases', async () => {
     const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined, args: ['--no-sandbox', '--disable-gpu'] });
     try {
         for (const width of [390, 1280]) {
@@ -21,7 +21,7 @@ test('el ingreso exige propiedad, conserva la selección al editar y distingue f
             }, identity);
             const season = { id: 'temporada', nombre: 'Temporada 2026', codigo: 'TEMP-2627', activa: true };
             const client = { id: 'cliente', nombre: 'LA AGUADA' };
-            const writes = []; const errors = []; let reception = null;
+            const writes = []; const weighings = []; const errors = []; let reception = null;
             await context.route('http://localhost/**', async (route) => {
                 const request = route.request(); const path = new URL(request.url()).pathname;
                 if (path === '/oficina/romana') return route.fulfill({ body: html, contentType: 'text/html' });
@@ -35,14 +35,25 @@ test('el ingreso exige propiedad, conserva la selección al editar y distingue f
                 if (path === '/api/romana/porteria/resumen') return route.fulfill({ json: { data: { pendientes: 0, recientes: [] } } });
                 if (path === '/api/romana/catalogos') return route.fulfill({ json: { temporadas: [season], clientes: [client], especies: [{ id: 'especie', nombre: 'Cereza' }], tipos_envase: types,
                     tipos_servicio: [{ codigo: 'almacenaje', nombre: 'Almacenaje' }], tipos_recepcion: [{ codigo: 'fruta_con_envases', nombre: 'Fruta con envases' }, { codigo: 'fruta_pesaje_envases', nombre: 'Fruta con pesaje acumulativo' }, { codigo: 'solo_envases', nombre: 'Solo envases' }], conceptos_envases: [{ codigo: 'compra', nombre: 'Compra' }, { codigo: 'arriendo', nombre: 'Arriendo' }] } });
+                if (request.method() === 'POST' && path.endsWith('/pesajes-envases')) {
+                    weighings.push(request.postDataJSON());
+                    return route.fulfill({ json: { data: reception } });
+                }
                 if (['POST', 'PUT'].includes(request.method()) && path.startsWith('/api/romana/recepciones')) {
                     const data = request.postDataJSON(); writes.push(data);
+                    const cumulative = data.tipo_recepcion === 'fruta_pesaje_envases';
                     reception = { ...data, id: 'recepcion', numero_recepcion: 'REC-2610-TEST', temporada: season, cliente: client,
                         estado: 'en_bascula_ingreso', estado_validacion_mp: 'pendiente', puede_editar: true, version: writes.length,
                         cantidad_envases_declarados: data.envases.reduce((sum, item) => sum + item.cantidad, 0),
                         envases: data.envases.map((item) => ({ tipo_envase: item.tipo_envase, cantidad_declarada: item.cantidad, cantidad_validada: null,
                             propiedad: data.tipo_recepcion === 'solo_envases' ? (data.concepto_envases === 'arriendo' ? 'arrendada' : 'propia') : item.propiedad })),
-                        pesaje_envases: null, eventos: [], salida_envases: [], inspecciones_envases: [], ingreso_at: '2026-10-29T12:00:00Z' };
+                        pesaje_envases: cumulative ? { tipo_envase: data.envases[0].tipo_envase, tara_unitaria: data.envases[0].tara_unitaria,
+                            cantidad_declarada: data.envases.reduce((sum, item) => sum + item.cantidad, 0), cantidad_pesada: 0,
+                            cantidad_pendiente: data.envases.reduce((sum, item) => sum + item.cantidad, 0), completo: false, cantidad_lecturas_activas: 0,
+                            tipos: data.envases.map((item) => ({ tipo_envase: item.tipo_envase, cantidad_declarada: item.cantidad, cantidad_pesada: 0,
+                                cantidad_pendiente: item.cantidad, tara_unitaria: item.tara_unitaria, peso_neto: 0, peso_neto_por_envase: null })) } : null,
+                        ...(cumulative ? { estado: 'en_pesaje_envases', puede_registrar_pesaje: true, peso_bruto: 0, peso_tara: 0, peso_neto: 0, lecturas_pesaje_envases: [] } : {}),
+                        eventos: [], salida_envases: [], inspecciones_envases: [], ingreso_at: '2026-10-29T12:00:00Z' };
                     return route.fulfill({ status: request.method() === 'POST' ? 201 : 200, json: { data: reception } });
                 }
                 if (path === '/api/romana/recepciones') return route.fulfill({ json: { data: reception ? [reception] : [], resumen: {}, meta: { pagina_actual: 1, ultima_pagina: 1, total: reception ? 1 : 0 } } });
@@ -87,12 +98,44 @@ test('el ingreso exige propiedad, conserva la selección al editar y distingue f
             await page.waitForFunction(() => !document.getElementById('receptionDialog').open);
             assert.deepEqual(writes[1].envases, writes[0].envases);
             await newEntry('fruta_pesaje_envases');
-            assert.equal(await field('propiedad_envase_pesaje').inputValue(), '');
-            await field('cantidad_envases_pesaje').fill('3'); await field('tara_unitaria_envase').fill('40');
-            await field('propiedad_envase_pesaje').selectOption('arrendada');
+            const line = (index, name) => page.locator('#containerWeighingLines [data-weighing-line]').nth(index).locator(`[data-line="${name}"]`);
+            assert.equal(await line(0, 'propiedad').inputValue(), '');
+            await line(0, 'cantidad').fill('3'); await line(0, 'tara_unitaria').fill('40');
+            await page.locator('#saveReceptionButton').click();
+            assert.match(await page.locator('#receptionFormError').textContent(), /propiedad de Bins plástico/);
+            await line(0, 'propiedad').selectOption('arrendada');
+            // Un segundo tipo de envase con fruta en la misma recepción.
+            await page.locator('#addContainerWeighingLine').click();
+            assert.equal(await line(1, 'tipo_envase').inputValue(), 'totes');
+            assert.equal(await page.locator('#addContainerWeighingLine').isDisabled(), true);
+            await line(1, 'cantidad').fill('24');
+            await page.locator('#saveReceptionButton').click();
+            assert.match(await page.locator('#receptionFormError').textContent(), /tara por envase de Tote/);
+            assert.equal(await line(1, 'tara_unitaria').evaluate((node) => node === document.activeElement), true);
+            await line(1, 'tara_unitaria').fill('1.25'); await line(1, 'propiedad').selectOption('cliente');
+            assert.equal(await page.locator('#receptionDialog').evaluate((node) => node.scrollWidth <= node.clientWidth + 1), true);
+            if (process.env.OWNERSHIP_SCREENSHOT_DIR) await page.screenshot({ path: resolve(process.env.OWNERSHIP_SCREENSHOT_DIR, `pesaje-acumulativo-${width}.png`), fullPage: true });
+            assert.equal(writes.length, 2);
             await page.locator('#saveReceptionButton').click();
             await page.waitForFunction(() => !document.getElementById('receptionDialog').open);
-            assert.deepEqual(writes[2].envases, [{ tipo_envase: 'bins', cantidad: 3, propiedad: 'arrendada' }]);
+            assert.deepEqual(writes[2].envases, [
+                { tipo_envase: 'bins', cantidad: 3, tara_unitaria: 40, propiedad: 'arrendada' },
+                { tipo_envase: 'totes', cantidad: 24, tara_unitaria: 1.25, propiedad: 'cliente' },
+            ]);
+            assert.equal(writes[2].tipo_envase_pesaje, undefined);
+            // La tanda mezcla bins y totes: una cantidad por tipo y la tara sumada.
+            await page.waitForFunction(() => document.getElementById('containerWeighingProgress').textContent.includes('Tote 0/24'));
+            await page.locator('#addContainerWeighingButton').click();
+            const tanda = (type) => page.locator(`#containerWeighingQuantities [data-weighing-type="${type}"]`);
+            await tanda('bins').fill('1'); await tanda('totes').fill('24');
+            await page.locator('#containerWeighingForm [name="peso_bruto"]').fill('470');
+            assert.match(await page.locator('#containerWeighingTarePreview').textContent(), /^70,00 kg$/);
+            assert.match(await page.locator('#containerWeighingNetPreview').textContent(), /^400,00 kg$/);
+            if (process.env.OWNERSHIP_SCREENSHOT_DIR) await page.screenshot({ path: resolve(process.env.OWNERSHIP_SCREENSHOT_DIR, `tanda-mixta-${width}.png`), fullPage: true });
+            await page.locator('#containerWeighingForm button[value="default"]').click();
+            await page.waitForFunction(() => !document.getElementById('containerWeighingDialog').open);
+            assert.deepEqual(weighings[0].envases, [{ tipo_envase: 'bins', cantidad: 1 }, { tipo_envase: 'totes', cantidad: 24 }]);
+            assert.equal(weighings[0].peso_bruto, '470');
             await newEntry('solo_envases'); await field('cantidad_bins').fill('5');
             assert.equal(await field('propiedad_bins').isDisabled(), true);
             await field('concepto_envases').selectOption('arriendo');

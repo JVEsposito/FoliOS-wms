@@ -323,17 +323,18 @@ class RecepcionRomanaController extends Controller
     {
         $esPesajeEnvases = $recepcion->tipo_recepcion === TipoRecepcionRomana::FrutaPesajeEnvases;
         $esSoloEnvases = $recepcion->tipo_recepcion === TipoRecepcionRomana::SoloEnvases;
+        // Uno o más tipos de envase: el avance y el cierre se controlan por tipo.
+        $tiposPesaje = $recepcion->avancePesajeEnvasesPorTipo();
         $cantidadDeclaradaPesaje = $esPesajeEnvases
-            ? (int) ($recepcion->detallesEnvases
-                ->first(fn ($detalle): bool => $detalle->tipo_envase === $recepcion->tipo_envase_pesaje)
-                ?->cantidad_declarada ?? 0)
+            ? array_sum(array_column($tiposPesaje, 'cantidad_declarada'))
             : null;
         $cantidadPesada = $esPesajeEnvases ? (int) $recepcion->cantidad_envases_pesados : null;
         $cantidadPendiente = $esPesajeEnvases
-            ? max(0, (int) $cantidadDeclaradaPesaje - (int) $cantidadPesada)
+            ? array_sum(array_column($tiposPesaje, 'cantidad_pendiente'))
             : null;
         $pesajeCompleto = $esPesajeEnvases
             && $cantidadDeclaradaPesaje > 0
+            && $cantidadPendiente === 0
             && $cantidadPesada === $cantidadDeclaradaPesaje;
         $puedeEditar = $recepcion->estado->esEditable()
             && (! $esPesajeEnvases || $cantidadPesada === 0);
@@ -416,6 +417,7 @@ class RecepcionRomanaController extends Controller
                 'cantidad_pesada' => $cantidadPesada,
                 'cantidad_pendiente' => $cantidadPendiente,
                 'completo' => $pesajeCompleto,
+                'tipos' => $tiposPesaje,
                 'cantidad_lecturas_activas' => $recepcion->relationLoaded('pesajesEnvases')
                     ? $recepcion->pesajesEnvases->whereNull('anulado_at')->count()
                     : null,
@@ -475,6 +477,7 @@ class RecepcionRomanaController extends Controller
                         'secuencia' => $pesaje->secuencia,
                         'tipo_envase' => $pesaje->tipo_envase->value,
                         'cantidad_envases' => $pesaje->cantidad_envases,
+                        'envases' => $pesaje->lineas(),
                         'peso_bruto' => (float) $pesaje->peso_bruto,
                         'tara_unitaria' => (float) $pesaje->tara_unitaria_envase,
                         'peso_tara' => (float) $pesaje->peso_tara,
