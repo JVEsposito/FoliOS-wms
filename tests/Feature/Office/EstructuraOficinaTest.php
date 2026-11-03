@@ -9,6 +9,18 @@ use Tests\TestCase;
 
 class EstructuraOficinaTest extends TestCase
 {
+    public function test_preparacion_cargas_exporta_las_segregaciones_por_instructivo(): void
+    {
+        $html = $this->get('/oficina/frigorifico/despacho/cargas')->assertOk()->getContent();
+        foreach (['loadInstructions', 'loadInstructionCards', 'loadInstructionSelect', 'folioTableBody'] as $id) {
+            $this->assertStringContainsString('id="'.$id.'"', $html);
+        }
+        if (getenv('ESTIBA_EXPORTAR_UI_TESTS') === '1') {
+            File::ensureDirectoryExists(storage_path('app/ui/oficina'));
+            File::put(storage_path('app/ui/oficina/cargas.html'), $html);
+        }
+    }
+
     public function test_retornos_packing_exporta_el_selector_de_envases_y_cantidades(): void
     {
         $html = $this->get('/oficina/materia-prima/retornos-packing')->assertOk()->getContent();

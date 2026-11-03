@@ -2,14 +2,13 @@
 
 namespace Tests\Feature;
 
-use Illuminate\Support\Facades\File;
 use Tests\TestCase;
 
 class InterfazOficinaCargasTest extends TestCase
 {
     public function test_la_oficina_de_cargas_se_encuentra_disponible(): void
     {
-        $respuesta = $this->get('/oficina/frigorifico/despacho/cargas')
+        $this->get('/oficina/frigorifico/despacho/cargas')
             ->assertOk()
             ->assertSee('Órdenes de carga')
             ->assertSee('Ingresar a cargas')
@@ -37,10 +36,6 @@ class InterfazOficinaCargasTest extends TestCase
             ->assertSee('incidentResolutionDialog', false)
             ->assertSee('closeDispatchDialog', false)
             ->assertSee('aria-live="assertive"', false);
-        if (getenv('ESTIBA_EXPORTAR_UI_TESTS') === '1') {
-            File::ensureDirectoryExists(storage_path('app/ui/oficina'));
-            File::put(storage_path('app/ui/oficina/cargas.html'), $respuesta->getContent());
-        }
     }
 
     public function test_la_oficina_operacional_de_camaras_enlaza_el_modulo_de_cargas(): void
