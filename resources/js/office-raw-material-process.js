@@ -1,3 +1,4 @@
+import { packingReturnQuantity, packingReturnTotals } from './shared/packing-return-containers';
 import { createOperationalPoller } from './shared/operational-poller';
 
 const byId = (id) => document.getElementById(id);
@@ -118,7 +119,7 @@ function renderSummary() {
     elements.delivered.textContent = formatNumber(summary.bins_entregados);
     elements.completed.textContent = formatNumber(summary.lotes_completados);
     elements.pendingReturns.textContent = formatNumber(summary.entregas_pendientes_retorno);
-    elements.returnedBins.textContent = formatNumber(summary.bins_retornados);
+    elements.returnedBins.textContent = packingReturnTotals(summary);
     elements.recoveredKilos.textContent = formatNumber(summary.kilos_recuperados);
     elements.pendingLocation.textContent = formatNumber(summary.sublotes_pendientes_ubicacion);
     elements.season.textContent = summary.temporada
@@ -127,11 +128,11 @@ function renderSummary() {
 }
 function returnStatus(delivery) {
     const data = delivery.retorno || { estado: 'pendiente', bins_retornados: 0, kilos_recuperados: 0 };
-    return `<div class="return-status-row"><span class="process-status">${escapeHtml(label(data.estado))}</span><span><strong>${formatNumber(data.bins_retornados)} bins</strong> · ${escapeHtml(formatKilos(data.kilos_recuperados))}</span></div>`;
+    return `<div class="return-status-row"><span class="process-status">${escapeHtml(label(data.estado))}</span><span><strong>${escapeHtml(packingReturnTotals(data))}</strong> · ${escapeHtml(formatKilos(data.kilos_recuperados))}</span></div>`;
 }
 function renderResult(result) {
     const location = result.camara ? `${result.camara.codigo} · ${result.camara.nombre}` : label(result.estado);
-    return `<div class="return-result"><div><strong>${escapeHtml(result.numero_sublote)} · ${escapeHtml(result.nombre_resultado)}</strong><small>${formatNumber(result.cantidad_bins)} bins · ${escapeHtml(formatKilos(result.kilos_netos))}</small></div><span class="process-status">${escapeHtml(location)}</span>${result.puede_ubicar ? `<button data-locate="${escapeHtml(result.id)}" type="button">Ubicar</button>` : '<span></span>'}</div>`;
+    return `<div class="return-result"><div><strong>${escapeHtml(result.numero_sublote)} · ${escapeHtml(result.nombre_resultado)}</strong><small>${escapeHtml(packingReturnQuantity(result))} · ${escapeHtml(formatKilos(result.kilos_netos))}</small></div><span class="process-status">${escapeHtml(location)}</span>${result.puede_ubicar ? `<button data-locate="${escapeHtml(result.id)}" type="button">Ubicar</button>` : '<span></span>'}</div>`;
 }
 function renderReturnMovement(movement) {
     const origins = movement.origenes || [];
@@ -161,7 +162,7 @@ function renderDeliveryLots() {
 }
 function renderReturnCards() {
     const cards = state.lots.flatMap((lot) => lot.entregas.filter((delivery) => !delivery.anulado).map((delivery) => ({ lot, delivery })));
-    return cards.map(({ lot, delivery }) => `<article class="process-lot-card return-card"><div class="process-lot-card__heading"><div><h3>${escapeHtml(lot.numero_lote)} · ${escapeHtml(delivery.numero_orden)}</h3><p>${escapeHtml(delivery.linea_proceso)} · turno ${escapeHtml(delivery.turno)} · ${escapeHtml(formatDate(delivery.entregado_at))}</p></div><span class="process-status">${escapeHtml(label(delivery.retorno.estado))}</span></div><div class="process-facts"><div><span>ENVIADO</span><strong>${formatNumber(delivery.cantidad_envases)} bins · ${escapeHtml(formatKilos(delivery.kilos_enviados))}</strong></div><div><span>RETORNADO</span><strong>${formatNumber(delivery.retorno.bins_retornados)} bins · ${escapeHtml(formatKilos(delivery.retorno.kilos_recuperados))}</strong></div><div><span>MERMA</span><strong>${escapeHtml(formatKilos(delivery.retorno.merma_kilos))}</strong></div></div>${returnStatus(delivery)}${delivery.retorno.puede_registrar ? `<div class="process-actions"><button class="primary-button" data-return="${escapeHtml(delivery.id)}" type="button">+ Registrar retorno</button></div>` : ''}<details class="process-history" open><summary>Retornos y sublotes (${delivery.retorno.movimientos.length})</summary><div class="process-history__list">${delivery.retorno.movimientos.length ? delivery.retorno.movimientos.map(renderReturnMovement).join('') : '<small>Packing todavía no registra retornos para este viaje.</small>'}</div></details></article>`).join('');
+    return cards.map(({ lot, delivery }) => `<article class="process-lot-card return-card"><div class="process-lot-card__heading"><div><h3>${escapeHtml(lot.numero_lote)} · ${escapeHtml(delivery.numero_orden)}</h3><p>${escapeHtml(delivery.linea_proceso)} · turno ${escapeHtml(delivery.turno)} · ${escapeHtml(formatDate(delivery.entregado_at))}</p></div><span class="process-status">${escapeHtml(label(delivery.retorno.estado))}</span></div><div class="process-facts"><div><span>ENVIADO</span><strong>${formatNumber(delivery.cantidad_envases)} bins · ${escapeHtml(formatKilos(delivery.kilos_enviados))}</strong></div><div><span>RETORNADO</span><strong>${escapeHtml(packingReturnTotals(delivery.retorno))} · ${escapeHtml(formatKilos(delivery.retorno.kilos_recuperados))}</strong></div><div><span>MERMA</span><strong>${escapeHtml(formatKilos(delivery.retorno.merma_kilos))}</strong></div></div>${returnStatus(delivery)}${delivery.retorno.puede_registrar ? `<div class="process-actions"><button class="primary-button" data-return="${escapeHtml(delivery.id)}" type="button">+ Registrar retorno</button></div>` : ''}<details class="process-history" open><summary>Retornos y sublotes (${delivery.retorno.movimientos.length})</summary><div class="process-history__list">${delivery.retorno.movimientos.length ? delivery.retorno.movimientos.map(renderReturnMovement).join('') : '<small>Packing todavía no registra retornos para este viaje.</small>'}</div></details></article>`).join('');
 }
 function renderLots() {
     const html = state.section === 'entregas' ? renderDeliveryLots() : renderReturnCards();
@@ -266,7 +267,10 @@ async function submitDelivery() {
 }
 function addResultRow() {
     const row = document.createElement('div'); row.className = 'return-result-row';
-    row.innerHTML = `<label><span>Resultado *</span><select data-field="tipo" required><option value="">Seleccionar</option>${state.catalogs.tipos_resultado.map((type) => `<option value="${escapeHtml(type.id)}">${escapeHtml(type.nombre)}</option>`).join('')}</select></label><label><span>Nombre específico</span><input data-field="nombre" maxlength="100" placeholder="Obligatorio para Otro"></label><label><span>Bins *</span><input data-field="bins" type="number" min="1" max="100000" inputmode="numeric" required></label><label><span>Kilos netos</span><input data-field="kilos" type="number" min="0.001" max="999999999.999" step="0.001" inputmode="decimal" placeholder="Opcional"></label><button class="remove-result" type="button" aria-label="Quitar resultado">×</button>`;
+    row.innerHTML = `<label><span>Resultado *</span><select data-field="tipo" required><option value="">Seleccionar</option>${state.catalogs.tipos_resultado.map((type) => `<option value="${escapeHtml(type.id)}">${escapeHtml(type.nombre)}</option>`).join('')}</select></label><label><span>Nombre específico</span><input data-field="nombre" maxlength="100" placeholder="Obligatorio para Otro"></label><label><span>Envase *</span><select data-field="envase">${(state.catalogs.envases_retorno || [{ codigo: "bins", nombre: "BINS" }]).map((type) => `<option value="${escapeHtml(type.codigo)}">${escapeHtml(type.nombre)}</option>`).join('')}</select></label><label><span data-quantity-label>Cantidad de bins *</span><input data-field="bins" type="number" min="1" max="100000" inputmode="numeric" required></label><label><span>Kilos netos</span><input data-field="kilos" type="number" min="0.001" max="999999999.999" step="0.001" inputmode="decimal" placeholder="Opcional"></label><button class="remove-result" type="button" aria-label="Quitar resultado">×</button>`;
+    row.querySelector('[data-field="envase"]').addEventListener('change', () => {
+        row.querySelector('[data-quantity-label]').textContent = row.querySelector('[data-field="envase"]').value === 'caja_3_4' ? 'Cantidad de cajas 3/4 *' : 'Cantidad de bins *';
+    });
     elements.returnResults.append(row);
 }
 function eligibleReturnOrigins() {
@@ -304,18 +308,20 @@ function openReturn(deliveryId) {
     elements.returnForm.elements.entrega_id.value = deliveryId;
     elements.returnTitle.textContent = `Retorno de ${selected.lot.numero_lote}`;
     elements.returnDescription.textContent = `${selected.delivery.linea_proceso} · turno ${selected.delivery.turno} · orden ${selected.delivery.numero_orden}.`;
-    elements.returnSummary.innerHTML = `<div><span>VIAJE</span><strong>${formatNumber(selected.delivery.cantidad_envases)} bins</strong></div><div><span>KILOS ENVIADOS</span><strong>${escapeHtml(formatKilos(selected.delivery.kilos_enviados))}</strong></div><div><span>RETORNADO</span><strong>${formatNumber(selected.delivery.retorno.bins_retornados)} bins</strong></div>`;
+    elements.returnSummary.innerHTML = `<div><span>VIAJE</span><strong>${formatNumber(selected.delivery.cantidad_envases)} bins</strong></div><div><span>KILOS ENVIADOS</span><strong>${escapeHtml(formatKilos(selected.delivery.kilos_enviados))}</strong></div><div><span>RETORNADO</span><strong>${escapeHtml(packingReturnTotals(selected.delivery.retorno))}</strong></div>`;
     elements.returnError.textContent = ''; elements.returnDialog.showModal();
 }
 function collectResults() {
     return [...elements.returnResults.querySelectorAll('.return-result-row')].map((row) => {
         const kilos = row.querySelector('[data-field="kilos"]').value.trim();
-        return { tipo_resultado_packing_id: row.querySelector('[data-field="tipo"]').value, nombre_resultado: row.querySelector('[data-field="nombre"]').value.trim() || null, cantidad_bins: Number(row.querySelector('[data-field="bins"]').value), kilos_netos: kilos ? Number(kilos) : null };
+        const container = row.querySelector('[data-field="envase"]').value;
+        const quantity = Number(row.querySelector('[data-field="bins"]').value);
+        return { tipo_resultado_packing_id: row.querySelector('[data-field="tipo"]').value, nombre_resultado: row.querySelector('[data-field="nombre"]').value.trim() || null, tipo_envase: container, cantidad_envases: quantity, cantidad_bins: container === "bins" ? quantity : 0, kilos_netos: kilos ? Number(kilos) : null };
     });
 }
 async function submitReturn() {
     const results = collectResults();
-    if (!results.length || results.some((item) => !item.tipo_resultado_packing_id || !Number.isInteger(item.cantidad_bins) || item.cantidad_bins < 1)) { elements.returnError.textContent = 'Completa el tipo y la cantidad de bins de cada resultado.'; return; }
+    if (!results.length || results.some((item) => !item.tipo_resultado_packing_id || !Number.isInteger(item.cantidad_envases) || item.cantidad_envases < 1 || item.cantidad_envases > 100000)) { elements.returnError.textContent = 'Completa la clasificación, el envase y la cantidad de cada resultado.'; return; }
     const otherType = state.catalogs.tipos_resultado.find((item) => item.codigo === 'otro');
     if (results.some((item) => item.tipo_resultado_packing_id === otherType?.id && !item.nombre_resultado)) { elements.returnError.textContent = 'Especifica el nombre del resultado clasificado como Otro.'; return; }
     const data = new FormData(elements.returnForm);

@@ -31,6 +31,9 @@ export type ProcessSublot = {
   tipo: { id: string; codigo: string; nombre: string };
   nombre_resultado: string;
   cantidad_bins: number;
+  tipo_envase?: 'bins' | 'caja_3_4';
+  cantidad_envases?: number;
+  envase?: string;
   kilos_netos: number | null;
   estado: 'pendiente_ubicacion' | 'ubicado_camara' | 'anulado';
   camara: ProcessCamera | null;
@@ -67,6 +70,7 @@ export type ProcessReturnMovement = {
 export type ProcessReturnSummary = {
   estado: 'pendiente' | 'parcial' | 'completado';
   bins_retornados: number;
+  cajas_3_4_retornadas?: number;
   kilos_recuperados: number | null;
   merma_kilos: number | null;
   puede_registrar: boolean;
@@ -106,6 +110,7 @@ export type ProcessSummary = {
   bins_entregados: number;
   entregas_pendientes_retorno: number;
   bins_retornados: number;
+  cajas_3_4_retornadas?: number;
   kilos_recuperados: number;
   sublotes_pendientes_ubicacion: number;
   retornos_registrados: number;
@@ -135,7 +140,7 @@ export type CreateProcessDelivery = {
 
 export type ProcessLine = { id: string; codigo: string; nombre: string };
 export type ProcessShift = { codigo: 'A' | 'B'; etiqueta: string; codigo_pre_sif: string; codigo_instructivo: string };
-export type ProcessCatalogs = { tipos_resultado: ProcessResultType[]; camaras: ProcessCamera[]; lineas?: ProcessLine[]; turnos?: ProcessShift[] };
+export type ProcessCatalogs = { tipos_resultado: ProcessResultType[]; camaras: ProcessCamera[]; envases_retorno?: Array<{ codigo: "bins" | "caja_3_4"; nombre: string }>; lineas?: ProcessLine[]; turnos?: ProcessShift[] };
 
 /** Orden abierta que reserva bins de un lote. */
 export type ProcessLotOrder = {
@@ -184,6 +189,8 @@ export type CreatePackingReturn = {
   resultados: Array<{
     tipo_resultado_packing_id: string;
     nombre_resultado: string | null;
+    tipo_envase?: "bins" | "caja_3_4";
+    cantidad_envases?: number;
     cantidad_bins: number;
     kilos_netos: number | null;
   }>;

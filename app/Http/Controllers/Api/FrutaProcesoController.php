@@ -54,6 +54,7 @@ class FrutaProcesoController extends Controller
                 'bins_entregados' => 0,
                 'entregas_pendientes_retorno' => 0,
                 'bins_retornados' => 0,
+                'cajas_3_4_retornadas' => 0,
                 'kilos_recuperados' => 0,
                 'sublotes_pendientes_ubicacion' => 0,
                 'retornos_registrados' => 0,
@@ -117,6 +118,7 @@ class FrutaProcesoController extends Controller
             ->select('tipo_resultado_packing_id')
             ->selectRaw('COUNT(*) as sublotes')
             ->selectRaw('COALESCE(SUM(cantidad_bins), 0) as bins')
+            ->selectRaw("COALESCE(SUM(CASE WHEN tipo_envase = 'caja_3_4' THEN cantidad_envases ELSE 0 END), 0) as cajas_3_4")
             ->selectRaw('COALESCE(SUM(kilos_netos), 0) as kilos')
             ->selectRaw('MAX(updated_at) as actualizados_at')
             ->selectRaw(
@@ -137,6 +139,7 @@ class FrutaProcesoController extends Controller
                     ],
                     'sublotes' => (int) $resumen->getAttribute('sublotes'),
                     'bins' => (int) $resumen->getAttribute('bins'),
+                    'cajas_3_4' => (int) $resumen->getAttribute('cajas_3_4'),
                     'kilos' => round((float) $resumen->getAttribute('kilos'), 3),
                 ];
             })
@@ -171,6 +174,7 @@ class FrutaProcesoController extends Controller
                 'tipo' => $resumen->tipo_resultado_packing_id,
                 'sublotes' => (int) $resumen->getAttribute('sublotes'),
                 'bins' => (int) $resumen->getAttribute('bins'),
+                'cajas_3_4' => (int) $resumen->getAttribute('cajas_3_4'),
                 'kilos' => (float) $resumen->getAttribute('kilos'),
                 'pendientes' => (int) $resumen->getAttribute('pendientes_ubicacion'),
             ])->values()->all(),
@@ -191,6 +195,7 @@ class FrutaProcesoController extends Controller
             'bins_retornados' => (int) $sublotesPorTipo->sum(
                 fn (SubloteRetornoPacking $resumen): int => (int) $resumen->getAttribute('bins'),
             ),
+            'cajas_3_4_retornadas' => (int) $sublotesPorTipo->sum('cajas_3_4'),
             'kilos_recuperados' => round(
                 (float) $sublotesPorTipo->sum(
                     fn (SubloteRetornoPacking $resumen): float => (float) $resumen->getAttribute('kilos'),

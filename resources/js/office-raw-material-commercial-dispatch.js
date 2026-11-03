@@ -1,3 +1,4 @@
+import { packingReturnQuantity } from './shared/packing-return-containers';
 const byId = (id) => document.getElementById(id);
 const keys = { token: 'estiba_wms_office_token', identity: 'estiba_wms_office_identity' };
 const endpoint = '/api/materia-prima/despachos-comerciales';
@@ -50,10 +51,10 @@ function renderAvailable() {
     const matches = state.available.filter((bin) => !search || [bin.folio, bin.clasificacion, ...bin.origenes.flatMap((origen) => [origen.lote, origen.orden])].some((value) => String(value || '').toLocaleLowerCase('es-CL').includes(search)));
     byId('availableBins').innerHTML = matches.length ? matches.map((bin) => `
         <label class="commercial-bin"><input type="checkbox" data-bin-id="${escapeHtml(bin.id)}" ${state.selected.has(bin.id) ? 'checked' : ''}>
-            <span><strong>${escapeHtml(bin.folio)}</strong><small>${escapeHtml(bin.clasificacion)} · ${number(bin.kilos, 3)} kg · ${escapeHtml(bin.origenes.map((origen) => origen.lote || origen.orden).filter(Boolean).join(', ') || 'Origen registrado')}</small></span>
+            <span><strong>${escapeHtml(bin.folio)}</strong><small>${escapeHtml(bin.clasificacion)} · ${escapeHtml(packingReturnQuantity(bin))} · ${number(bin.kilos, 3)} kg · ${escapeHtml(bin.origenes.map((origen) => origen.lote || origen.orden).filter(Boolean).join(', ') || 'Origen registrado')}</small></span>
         </label>`).join('') : '<p class="commercial-empty">No hay bins regularizados disponibles con ese criterio.</p>';
     const selected = state.available.filter((bin) => state.selected.has(bin.id));
-    byId('selectedSummary').textContent = selected.length ? `${selected.length} bin(es) · ${number(selected.reduce((sum, bin) => sum + Number(bin.kilos), 0), 3)} kg definitivos` : 'Selecciona al menos un bin.';
+    byId('selectedSummary').textContent = selected.length ? `${selected.length} folio(s) · ${number(selected.reduce((sum, bin) => sum + Number(bin.kilos), 0), 3)} kg definitivos` : 'Selecciona al menos un retorno.';
 }
 
 function renderDispatches() {
@@ -62,8 +63,8 @@ function renderDispatches() {
         const status = { borrador: 'Borrador · reservado', confirmado: 'Confirmado · salió', cancelado: 'Cancelado' }[dispatch.estado] || dispatch.estado;
         return `<article class="commercial-dispatch">
             <div class="commercial-dispatch__head"><div><strong>${escapeHtml(dispatch.numero)} · ${escapeHtml(dispatch.destinatario)}</strong><small>${date(dispatch.created_at)} · ${escapeHtml(dispatch.creado_por?.name || '')}</small></div><span class="commercial-status ${dispatch.estado === 'confirmado' ? 'is-confirmed' : ''}">${escapeHtml(status)}</span></div>
-            <p>Guía SII: <strong>${escapeHtml(dispatch.numero_guia_sii || 'Pendiente de registrar')}</strong> · ${rows.length} bin(es) · ${number(rows.reduce((sum, row) => sum + Number(row.kilos_definitivos), 0), 3)} kg</p>
-            <ul class="commercial-details">${rows.map((row) => `<li><strong>${escapeHtml(row.folio_definitivo)}</strong> · ${escapeHtml(row.clasificacion)} · ${number(row.kilos_definitivos, 3)} kg</li>`).join('')}</ul>
+            <p>Guía SII: <strong>${escapeHtml(dispatch.numero_guia_sii || 'Pendiente de registrar')}</strong> · ${rows.length} folio(s) · ${number(rows.reduce((sum, row) => sum + Number(row.kilos_definitivos), 0), 3)} kg</p>
+            <ul class="commercial-details">${rows.map((row) => `<li><strong>${escapeHtml(row.folio_definitivo)}</strong> · ${escapeHtml(row.clasificacion)} · ${escapeHtml(packingReturnQuantity(row))} · ${number(row.kilos_definitivos, 3)} kg</li>`).join('')}</ul>
             <div class="commercial-actions">${dispatch.estado === 'borrador' && can('puede_gestionar_despacho_comercial') ? `<button type="button" class="primary-button" data-confirm="${escapeHtml(dispatch.id)}">Registrar guía y confirmar</button><button type="button" class="secondary-button" data-cancel="${escapeHtml(dispatch.id)}">Cancelar borrador</button>` : ''}<button type="button" class="secondary-button" data-print="${escapeHtml(dispatch.id)}">Imprimir comprobante interno</button></div>
         </article>`;
     }).join('') : '<p class="commercial-empty">Aún no hay despachos de retornos en esta temporada.</p>';
@@ -76,7 +77,7 @@ function printDispatch(dispatch) {
         <p>Número: ${escapeHtml(dispatch.numero)} · Estado: ${escapeHtml(dispatch.estado)} · Fecha: ${date(dispatch.confirmado_at || dispatch.created_at)}</p>
         <p>Destinatario: ${escapeHtml(dispatch.destinatario)} · Guía SII: ${escapeHtml(dispatch.numero_guia_sii || 'Pendiente')}</p>
         <p>Observación: ${escapeHtml(dispatch.observacion || '—')}</p>
-        <table><thead><tr><th>Folio bin</th><th>Clasificación</th><th>Kilos definitivos</th></tr></thead><tbody>${(dispatch.bins || []).map((bin) => `<tr><td>${escapeHtml(bin.folio_definitivo)}</td><td>${escapeHtml(bin.clasificacion)}</td><td>${number(bin.kilos_definitivos, 3)} kg</td></tr>`).join('')}</tbody></table>`;
+        <table><thead><tr><th>Folio retorno</th><th>Envases</th><th>Clasificación</th><th>Kilos definitivos</th></tr></thead><tbody>${(dispatch.bins || []).map((bin) => `<tr><td>${escapeHtml(bin.folio_definitivo)}</td><td>${escapeHtml(packingReturnQuantity(bin))}</td><td>${escapeHtml(bin.clasificacion)}</td><td>${number(bin.kilos_definitivos, 3)} kg</td></tr>`).join('')}</tbody></table>`;
     window.print();
 }
 
@@ -86,8 +87,8 @@ function csvCell(value) {
     return `"${safe.replaceAll('"', '""')}"`;
 }
 function downloadCsv() {
-    const rows = [['Despacho', 'Estado', 'Destinatario', 'Guía SII', 'Folio bin', 'Clasificación', 'Kilos definitivos', 'Confirmado']];
-    state.dispatches.forEach((dispatch) => (dispatch.bins || []).forEach((bin) => rows.push([dispatch.numero, dispatch.estado, dispatch.destinatario, dispatch.numero_guia_sii || '', bin.folio_definitivo, bin.clasificacion, bin.kilos_definitivos, dispatch.confirmado_at || ''])));
+    const rows = [['Despacho', 'Estado', 'Destinatario', 'Guía SII', 'Folio retorno', 'Envases', 'Clasificación', 'Kilos definitivos', 'Confirmado']];
+    state.dispatches.forEach((dispatch) => (dispatch.bins || []).forEach((bin) => rows.push([dispatch.numero, dispatch.estado, dispatch.destinatario, dispatch.numero_guia_sii || '', bin.folio_definitivo, packingReturnQuantity(bin), bin.clasificacion, bin.kilos_definitivos, dispatch.confirmado_at || ''])));
     const blob = new Blob([`\ufeff${rows.map((row) => row.map(csvCell).join(';')).join('\r\n')}\r\n`], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = 'despachos-comerciales-retornos.csv'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
@@ -110,7 +111,7 @@ byId('availableBins').addEventListener('change', (event) => { const id = event.t
 byId('createDispatchForm').addEventListener('submit', async (event) => {
     event.preventDefault(); if (state.busy) return;
     byId('createError').textContent = '';
-    if (!state.selected.size) { byId('createError').textContent = 'Selecciona al menos un bin.'; return; }
+    if (!state.selected.size) { byId('createError').textContent = 'Selecciona al menos un retorno.'; return; }
     const form = new FormData(event.currentTarget); busy(true);
     try {
         const response = await api(endpoint, { method: 'POST', body: JSON.stringify({ destinatario: form.get('destinatario'), observacion: form.get('observacion'), bins: [...state.selected] }) });

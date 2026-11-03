@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\EstadoSubloteRetornoPacking;
+use App\Enums\TipoEnvaseRetornoPacking;
 use App\Models\Concerns\ImpideEliminacionFisica;
 use App\Models\Contracts\PerteneceATemporada;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -16,6 +17,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'numero_sublote',
     'nombre_resultado',
     'cantidad_bins',
+    'tipo_envase',
+    'cantidad_envases',
     'kilos_netos',
     'estado',
     'camara_id',
@@ -59,6 +62,8 @@ class SubloteRetornoPacking extends Model implements PerteneceATemporada
     protected function casts(): array
     {
         return [
+            'tipo_envase' => TipoEnvaseRetornoPacking::class,
+            'cantidad_envases' => 'integer',
             'cantidad_bins' => 'integer',
             'kilos_netos' => 'decimal:3',
             'estado' => EstadoSubloteRetornoPacking::class,

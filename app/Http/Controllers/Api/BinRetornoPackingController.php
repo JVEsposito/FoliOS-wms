@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\TipoEnvaseRetornoPacking;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\AnularBinRetornoPackingRequest;
 use App\Http\Requests\DescartarRetornoPackingLegacyRequest;
@@ -44,7 +45,9 @@ class BinRetornoPackingController extends Controller
             ->count();
 
         return response()->json([
-            'bins_registrados' => (clone $bins)->count(),
+            'bins_registrados' => (clone $bins)->where('tipo_envase', 'bins')->count(),
+            'retornos_registrados' => (clone $bins)->count(),
+            'cajas_3_4_registradas' => (int) (clone $bins)->where('tipo_envase', 'caja_3_4')->sum('cantidad_envases'),
             'kilos_registrados' => round((float) (clone $bins)->sum('kilos_totales'), 3),
             'kilos_definitivos' => round(
                 (float) (clone $regularizados)->sum('kilos_totales_definitivos'),
@@ -156,7 +159,8 @@ class BinRetornoPackingController extends Controller
                 $resultadoUnico = $retorno->resultados->count() === 1
                     ? $retorno->resultados->first()
                     : null;
-                $migrable = $resultadoUnico && (int) $resultadoUnico->cantidad_bins === 1;
+                $migrable = $resultadoUnico && ($resultadoUnico->tipo_envase === TipoEnvaseRetornoPacking::CajaTresCuartos
+                    || (int) $resultadoUnico->cantidad_bins === 1);
 
                 return [
                     'id' => $retorno->id,
@@ -174,6 +178,8 @@ class BinRetornoPackingController extends Controller
                         'numero_sublote' => $resultado->numero_sublote,
                         'nombre_resultado' => $resultado->nombre_resultado,
                         'cantidad_bins' => (int) $resultado->cantidad_bins,
+                        'tipo_envase' => $resultado->tipo_envase->value,
+                        'cantidad_envases' => $resultado->cantidad_envases,
                         'kilos_netos' => $resultado->kilos_netos !== null
                             ? (float) $resultado->kilos_netos
                             : null,
@@ -199,6 +205,7 @@ class BinRetornoPackingController extends Controller
         Gate::authorize('consultar-fruta-proceso');
 
         return response()->json([
+            'envases_retorno' => TipoEnvaseRetornoPacking::catalogo(),
             'tipos_resultado' => TipoResultadoPacking::query()
                 ->where('activo', true)
                 ->orderBy('orden')
@@ -297,6 +304,9 @@ class BinRetornoPackingController extends Controller
         return [
             'id' => $bin->id,
             'folio_provisional' => $bin->folio_provisional,
+            'tipo_envase' => $bin->tipo_envase->value,
+            'envase' => $bin->tipo_envase->etiqueta(),
+            'cantidad_envases' => $bin->cantidad_envases,
             'folio_definitivo' => $bin->folio_definitivo,
             'kilos_totales' => (float) $bin->kilos_totales,
             'kilos_totales_verdes' => (float) $bin->kilos_totales,

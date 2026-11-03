@@ -6,6 +6,7 @@ import vm from 'node:vm';
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 import ts from 'typescript';
+import * as packingReturnContainers from '../src/domain/packingReturnContainers.ts';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const require = createRequire(import.meta.url);
@@ -45,6 +46,7 @@ async function harness({ availableOrders, cached = false }) {
       if (id.endsWith('/hooks/useOperationalPolling')) return { useOperationalPolling: () => {} };
       if (id.endsWith('/config/polling')) return { OPERATIONAL_POLL_INTERVAL_MS: 10000 };
       if (id.endsWith('/domain/cameras')) return { cameraDisplayName: () => 'Hidrocooler' };
+      if (id.endsWith('/domain/packingReturnContainers')) return packingReturnContainers;
       if (id.endsWith('/theme/colors')) return { colors: new Proxy({}, { get: () => '#000000' }) };
       return require(id);
     },

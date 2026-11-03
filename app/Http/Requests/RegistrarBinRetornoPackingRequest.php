@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\TipoEnvaseRetornoPacking;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -17,6 +18,9 @@ class RegistrarBinRetornoPackingRequest extends FormRequest
     {
         return [
             'operacion_id' => ['required', 'uuid'],
+            'tipo_envase' => ['sometimes', Rule::enum(TipoEnvaseRetornoPacking::class)],
+            'cantidad_envases' => ['required_if:tipo_envase,caja_3_4', 'integer', 'min:1', 'max:100000',
+                Rule::when($this->input('tipo_envase', 'bins') === 'bins', 'max:1')],
             'kilos_totales' => ['required', 'numeric', 'min:0.001', 'max:999999999.999'],
             'observacion' => ['nullable', 'string', 'max:2000'],
             'origenes' => ['required', 'array', 'min:1', 'max:20'],
