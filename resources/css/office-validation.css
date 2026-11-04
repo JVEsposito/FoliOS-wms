@@ -64,6 +64,9 @@
 /* Una sola pista flexible: la tabla se desplaza dentro de su contenedor y no ensancha la página. */
 .office-app .validation-workspace { grid-template-columns: minmax(0, 1fr) !important; }
 .office-app .validation-heading__actions { flex-wrap: wrap; align-items: flex-end; gap: 10px; }
+.office-app .validation-downloads { display: flex; flex-wrap: wrap; gap: 6px 10px; }
+.office-app .validation-downloads small { flex-basis: 100%; color: var(--text-subtle); overflow-wrap: anywhere; }
+.office-app .validation-downloads small:empty { display: none; }
 
 .office-app .validation-metrics > article.validation-metric--success > strong { color: var(--success-text) !important; }
 .office-app .validation-metrics > article.validation-metric--critical > strong { color: var(--danger-text) !important; }

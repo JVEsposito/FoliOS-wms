@@ -8,6 +8,7 @@ const elements = {
     userName: byId('officeUserName'), userRole: byId('officeUserRole'), initials: byId('officeInitials'), logout: byId('officeLogoutButton'),
     camerasNav: byId('officeCamerasNav'), loadsNav: byId('officeLoadsNav'), materialsNav: byId('officeMaterialsNav'), prefrioNav: byId('officePrefrioNav'), accessesNav: byId('officeAccessesNav'), managementNav: byId('officeManagementNav'), romanaNav: byId('officeRomanaNav'),
     reload: byId('reloadValidationButton'), seasonSelector: byId('seasonSelector'), filters: byId('validationFilters'), history: byId('validationHistoryBody'), userFilter: byId('validationUserFilter'), blankRegister: byId('downloadBlankValidationRegisterButton'), exportRegister: byId('exportValidationRegisterButton'),
+    clientFilter: byId('validationClientFilter'), exportPdf: byId('exportValidationPdfButton'), exportScope: byId('validationExportScope'),
     catalogVersion: byId('catalogVersion'), articleCount: byId('activeArticleCount'), originCount: byId('activeOriginCount'), combinationCount: byId('activeCombinationCount'), observedCount: byId('observedCount'),
     dayValidated: byId('dayValidatedCount'), dayValidatedLabel: byId('dayValidatedLabel'), dayApproved: byId('dayApprovedCount'), dayRejected: byId('dayRejectedCount'), lines: byId('validationLines'), linesTitle: byId('validationLinesTitle'),
     loading: byId('officeLoading'), loadingText: byId('officeLoadingText'), toasts: byId('officeToasts'),
@@ -15,7 +16,7 @@ const elements = {
 const keys = { token: 'estiba_wms_office_token', identity: 'estiba_wms_office_identity' };
 const state = {
     token: localStorage.getItem(keys.token), identity: readJson(keys.identity), seasons: [], season: null,
-    filterSeasons: [], filterSeason: null, validators: [], history: [], summary: null,
+    filterSeasons: [], filterSeason: null, validators: [], history: [], summary: null, appliedFilters: null,
 };
 
 class ApiError extends Error {
@@ -42,8 +43,8 @@ async function api(path, options = {}) {
     return data;
 }
 
-async function download(path) {
-    const headers = new Headers({ Accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+async function download(path, fallbackName = 'RRPP-01.xlsx') {
+    const headers = new Headers({ Accept: 'application/json' });
     if (state.token) headers.set('Authorization', `Bearer ${state.token}`);
     let response;
     try { response = await fetch(path, { headers }); } catch { throw new ApiError('No fue posible conectar con Laravel.', 0); }
@@ -55,7 +56,7 @@ async function download(path) {
     const blob = await response.blob();
     const disposition = response.headers.get('Content-Disposition') || '';
     const match = disposition.match(/filename="?([^";]+)"?/i);
-    const filename = match?.[1] || 'RRPP-01.xlsx';
+    const filename = match?.[1] || fallbackName;
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url; anchor.download = filename; document.body.append(anchor); anchor.click(); anchor.remove();
@@ -82,6 +83,15 @@ async function loadFilterOptions(seasonId = null) {
     state.filterSeason = response.temporada || null;
     state.validators = response.validadores || [];
     renderFilterOptions();
+    const currentClient = elements.clientFilter.value;
+    const clients = new Set(response.clientes || []);
+    if (currentClient) clients.add(currentClient);
+    elements.clientFilter.replaceChildren(
+        new Option('Todos los clientes', ''),
+        ...Array.from(clients, (client) => new Option(client, client)),
+    );
+    elements.clientFilter.value = currentClient;
+    renderExportScope();
 }
 
 function renderFilterOptions() {
@@ -95,7 +105,17 @@ async function loadHistory(seasonId = state.filterSeason?.id || null) {
     const params = historyParams(seasonId);
     const response = await api(`/api/validacion/pallets?${params}`);
     state.history = response.data || [];
+    state.appliedFilters = params;
     renderHistory();
+    renderExportScope();
+}
+
+function renderExportScope() {
+    const appliedSeason = state.appliedFilters?.get('temporada_id');
+    const enabled = Boolean(state.appliedFilters && state.filterSeason && (!appliedSeason || state.filterSeason.id === appliedSeason));
+    elements.exportRegister.disabled = !enabled;
+    elements.exportPdf.disabled = !enabled;
+    elements.exportScope.textContent = enabled ? `Cliente: ${state.appliedFilters.get('cliente') || 'Todos los clientes'}` : '';
 }
 
 function historyParams(seasonId = state.filterSeason?.id || null) {
@@ -184,25 +204,32 @@ elements.history.addEventListener('click', (event) => {
     const item = state.history.find((candidate) => candidate.id === button.dataset.correctValidation);
     if (item) void correction.open(item.id, item.numero_folio);
 });
-elements.seasonSelector.addEventListener('change', () => { setBusy(true, 'Cambiando temporada…'); void loadAll(elements.seasonSelector.value || null).catch((error) => toast(error.message, true)).finally(() => setBusy(false)); });
+elements.seasonSelector.addEventListener('change', () => {
+    elements.clientFilter.value = '';
+    elements.userFilter.value = '';
+    state.appliedFilters = null;
+    renderExportScope();
+    setBusy(true, 'Cambiando temporada…');
+    void loadAll(elements.seasonSelector.value || null).catch((error) => toast(error.message, true)).finally(() => setBusy(false));
+});
 elements.blankRegister.addEventListener('click', () => {
     setBusy(true, 'Preparando formulario RRPP-01 en blanco…');
     void download('/api/validacion/registro/rrpp-01/en-blanco')
         .catch((error) => toast(error.message, true))
         .finally(() => setBusy(false));
 });
-elements.exportRegister.addEventListener('click', () => {
-    const values = Object.fromEntries(new FormData(elements.filters));
-    if (!values.fecha) { toast('Selecciona la fecha del registro RRPP-01.', true); return; }
-    if (!state.filterSeason?.id) { toast('No existe una temporada seleccionada.', true); return; }
-    const params = new URLSearchParams({ temporada_id: state.filterSeason.id, fecha: String(values.fecha) });
-    for (const key of ['folio', 'resultado', 'linea_proceso', 'turno', 'user_id']) {
-        if (String(values[key] || '').trim()) params.set(key, String(values[key]).trim());
-    }
-    setBusy(true, 'Generando registro RRPP-01…');
-    void download(`/api/validacion/registro/rrpp-01?${params}`)
+function exportHistory(format) {
+    const params = new URLSearchParams(state.appliedFilters);
+    if (!params.has('fecha')) { toast('Selecciona una fecha y aplica los filtros para descargar el informe.', true); return; }
+    params.set('temporada_id', state.filterSeason.id);
+    params.set('formato', format);
+    params.delete('per_page');
+    setBusy(true, format === 'pdf' ? 'Generando PDF de validaciones…' : 'Generando registro RRPP-01…');
+    void download(`/api/validacion/registro/rrpp-01?${params}`, format === 'pdf' ? 'validaciones-pt.pdf' : 'RRPP-01.xlsx')
         .catch((error) => toast(error.message, true))
         .finally(() => setBusy(false));
-});
+}
+elements.exportRegister.addEventListener('click', () => exportHistory('xlsx'));
+elements.exportPdf.addEventListener('click', () => exportHistory('pdf'));
 
 if (state.token && state.identity?.puede_consultar_validaciones_pallet === true) { showApp(); setBusy(true, 'Cargando validación…'); void loadAll().catch(() => clearSession()).finally(() => setBusy(false)); }

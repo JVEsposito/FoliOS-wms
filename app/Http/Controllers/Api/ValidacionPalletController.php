@@ -22,6 +22,7 @@ use App\Models\ValidacionPallet;
 use App\Services\Autenticacion\ContextoOperacional;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\Validacion\CatalogoOperativoValidacion;
+use App\Services\Validacion\GeneradorHistorialValidacionesPdf;
 use App\Services\Validacion\ServicioCorreccionValidacionPallet;
 use App\Services\Validacion\ServicioExportacionRegistroValidacion;
 use App\Services\Validacion\ServicioValidacionPallet;
@@ -31,6 +32,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -264,20 +267,29 @@ class ValidacionPalletController extends Controller
             'temporadas' => $temporadas,
             'temporada' => $temporada,
             'validadores' => $validadores,
+            'clientes' => $temporada
+                ? ValidacionPallet::query()->where('temporada_id', $temporada->id)
+                    ->whereNotNull('snapshot->origen->cliente')
+                    ->distinct()->pluck('snapshot->origen->cliente as cliente')
+                    ->filter()->sort(SORT_NATURAL | SORT_FLAG_CASE)->values()
+                : [],
         ]);
     }
 
     public function exportar(
         ExportarRegistroValidacionPalletRequest $request,
         ServicioExportacionRegistroValidacion $exportador,
-    ): BinaryFileResponse {
+        GeneradorHistorialValidacionesPdf $pdf,
+    ): Response {
         $filtros = $request->validated();
+        $esPdf = ($filtros['formato'] ?? null) === 'pdf';
         $validaciones = $this->aplicarFiltros(
             ValidacionPallet::query()
                 ->with(['usuario:id,name'])
-                ->where('estado', EstadoValidacionPallet::Aceptada->value)
-                ->whereNotNull('linea_proceso')
-                ->whereNotNull('turno'),
+                ->when(! $esPdf, fn (Builder $consulta): Builder => $consulta
+                    ->where('estado', EstadoValidacionPallet::Aceptada->value)
+                    ->whereNotNull('linea_proceso')
+                    ->whereNotNull('turno')),
             $filtros,
             $request->rangoFechaUtc(),
         )
@@ -285,8 +297,26 @@ class ValidacionPalletController extends Controller
             ->orderBy('numero_intento')
             ->get();
 
+        $cliente = $filtros['cliente'] ?? null;
+        $identificador = Str::limit(Str::slug($cliente ?? ''), 60, '');
+        $sufijo = $identificador === '' ? '' : '_'.$identificador;
+        if ($esPdf) {
+            if ($validaciones->isEmpty()) {
+                throw ValidationException::withMessages(['filtros' => 'No hay validaciones para los filtros seleccionados.']);
+            }
+
+            $temporada = Temporada::query()->findOrFail($filtros['temporada_id']);
+            $archivo = 'validaciones-pt_'.$filtros['fecha'].$sufijo.'.pdf';
+
+            return response($pdf->generar($validaciones, $temporada, $filtros['fecha'], $cliente), Response::HTTP_OK, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'attachment; filename="'.$archivo.'"',
+                'Cache-Control' => 'no-store, private',
+            ]);
+        }
+
         $ruta = $exportador->generar($validaciones);
-        $archivo = 'RRPP-01_'.$filtros['fecha'].'.xlsx';
+        $archivo = 'RRPP-01_'.$filtros['fecha'].$sufijo.'.xlsx';
 
         return response()->download(
             $ruta,
@@ -475,6 +505,11 @@ class ValidacionPalletController extends Controller
                 $filtros['folio'] ?? null,
                 fn (Builder $consulta, string $folio): Builder => $consulta
                     ->where('numero_folio', $folio),
+            )
+            ->when(
+                $filtros['cliente'] ?? null,
+                fn (Builder $consulta, string $cliente): Builder => $consulta
+                    ->where('snapshot->origen->cliente', $cliente),
             )
             ->when(
                 $filtros['resultado'] ?? null,
