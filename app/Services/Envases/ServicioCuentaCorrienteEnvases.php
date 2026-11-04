@@ -144,7 +144,8 @@ class ServicioCuentaCorrienteEnvases
         $visibles = MovimientoEnvase::query()->select('id');
         $this->aplicarFiltros($visibles, $filtros);
         $idsVisibles = $visibles->pluck('id')->flip();
-        $guiasEmitidas = $this->numerosGuiaEmitida(null, $filtros['temporada_id']);
+        $guiasEmitidas = GuiaDespachoEnvase::query()->where('temporada_id', $filtros['temporada_id'])
+            ->pluck('numero_guia_despacho', 'id');
         $saldos = [];
 
         foreach ($todos->lazy(500) as $movimiento) {
@@ -207,7 +208,10 @@ class ServicioCuentaCorrienteEnvases
             ->orderBy('ocurrido_at')
             ->orderBy('id')
             ->get();
-        $guiasEmitidas = $this->numerosGuiaEmitida($movimientos);
+        $idsGuias = $movimientos->where('documento_tipo', self::DOCUMENTO_GUIA)
+            ->pluck('documento_id')->filter()->unique()->values();
+        $guiasEmitidas = GuiaDespachoEnvase::query()->whereKey($idsGuias)
+            ->get(['id', 'numero_guia_despacho', 'productor_csg_id', 'productor_snapshot'])->keyBy('id');
         [$inicio, $fin] = $this->rangoOperacional($desde, $hasta);
 
         $tipos = [];
@@ -247,9 +251,6 @@ class ServicioCuentaCorrienteEnvases
                 $tipos[$tipo]['entradas'] += $impacto;
             }
 
-            $documento = $movimiento->documento_tipo === self::DOCUMENTO_GUIA
-                ? ($guiasEmitidas[$movimiento->documento_id] ?? null) ?: $movimiento->numero_documento
-                : $movimiento->numero_documento;
             // Una línea por guía y tipo de envase, como en la guía: los orígenes internos de
             // un mismo envase (FIFO, varias recepciones) no se le muestran al cliente.
             $claveDocumento = implode('|', [
@@ -265,12 +266,19 @@ class ServicioCuentaCorrienteEnvases
 
                 continue;
             }
+            $guia = $movimiento->documento_tipo === self::DOCUMENTO_GUIA
+                ? $guiasEmitidas->get($movimiento->documento_id)
+                : null;
+            $productor = $guia?->productorDestino();
             $indices[$clave] = count($lineas);
             $lineas[] = [
                 'orden' => [$documentos[$claveDocumento], $movimiento->tipo_envase->orden(), $movimiento->propiedad->value],
                 'fecha' => $this->local($movimiento->ocurrido_at),
-                'documento' => $documento,
+                'documento' => $guia?->numero_guia_despacho ?: $movimiento->numero_documento,
                 'movimiento' => (in_array($movimiento->id, $historicos, true) ? 'Saldo anterior corregido' : self::etiquetaMovimiento($movimiento->tipo_movimiento)),
+                'destinatario_despacho' => $movimiento->tipo_movimiento === TipoMovimientoEnvase::DespachoCliente
+                    ? ($productor ? 'CSG '.$productor['codigo'].' · '.$productor['nombre'] : 'Sin productor asignado')
+                    : null,
                 'tipo_envase' => $movimiento->tipo_envase->etiqueta(),
                 'propiedad' => self::etiquetaPropiedad($movimiento->propiedad),
                 'entrada' => $esSalida ? null : $impacto,
@@ -440,25 +448,6 @@ class ServicioCuentaCorrienteEnvases
             ->filter(fn (int $impacto): bool => $impacto !== 0)
             ->map(fn (int $impacto, string $id): array => ['movimiento' => $porId[$id], 'impacto' => $impacto])
             ->values()
-            ->all();
-    }
-
-    /**
-     * N° de la guía emitida en el sistema de facturación por cada guía de FoliOS.
-     *
-     * @param  iterable<MovimientoEnvase>|null  $movimientos  null: todas las de la temporada
-     * @return array<string, string|null>
-     */
-    private function numerosGuiaEmitida(?iterable $movimientos, ?string $temporadaId = null): array
-    {
-        $ids = $movimientos === null
-            ? null
-            : collect($movimientos)->where('documento_tipo', self::DOCUMENTO_GUIA)->pluck('documento_id')->filter()->unique()->values();
-
-        return GuiaDespachoEnvase::query()
-            ->when($ids !== null, fn (Builder $q) => $q->whereKey($ids))
-            ->when($temporadaId !== null, fn (Builder $q) => $q->where('temporada_id', $temporadaId))
-            ->pluck('numero_guia_despacho', 'id')
             ->all();
     }
 

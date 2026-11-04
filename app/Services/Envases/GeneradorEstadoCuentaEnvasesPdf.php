@@ -75,7 +75,9 @@ class GeneradorEstadoCuentaEnvasesPdf
         $y -= 16;
 
         foreach ($estado['movimientos'] as $linea) {
-            if ($y < self::LIMITE_INFERIOR) {
+            $destinatario = $linea['destinatario_despacho'] ?? null;
+            $renglones = $destinatario === null ? [] : $this->pdf->envolver($destinatario, 445, 7);
+            if ($y - count($renglones) * 9 < self::LIMITE_INFERIOR) {
                 $paginas[] = $contenido;
                 $contenido = $this->cabecera($estado);
                 $y = 742;
@@ -90,6 +92,10 @@ class GeneradorEstadoCuentaEnvasesPdf
             $contenido .= $this->derecha(480, $y, 7.5, $linea['entrada'] !== null ? (string) $linea['entrada'] : '');
             $contenido .= $this->derecha(522, $y, 7.5, $linea['salida'] !== null ? (string) $linea['salida'] : '');
             $contenido .= $this->derecha(560, $y, 7.5, $this->numero($linea['saldo']), true);
+            foreach ($renglones as $renglon) {
+                $y -= 9;
+                $contenido .= $this->pdf->texto(106, $y, 7, $renglon);
+            }
             $y -= 13;
         }
         if (! $estado['movimientos']) {

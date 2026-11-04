@@ -53,6 +53,7 @@ const state = {
     dialog: null,
 };
 const MAX_GUIDE_FILE_BYTES = 10 * 1024 * 1024;
+const producerRequests = new WeakMap();
 
 function read(key) {
     try {
@@ -69,6 +70,37 @@ function escapeHtml(value) {
         .replaceAll('>', '&gt;')
         .replaceAll('"', '&quot;')
         .replaceAll("'", '&#039;');
+}
+
+function producerLabel(producer) {
+    return producer ? `CSG ${producer.codigo} · ${producer.nombre}` : 'Sin productor asignado';
+}
+
+async function loadProducerOptions(select, clientId, selected = '') {
+    producerRequests.get(select)?.abort();
+    select.disabled = true;
+    select.replaceChildren(new Option(clientId ? 'Cargando productores…' : 'Primero selecciona un cliente', ''));
+    if (!clientId) return;
+
+    const request = new AbortController();
+    producerRequests.set(select, request);
+    try {
+        const { data } = await api(`/api/envases/guias-despacho/productores/${encodeURIComponent(clientId)}`, { signal: request.signal });
+        if (request.signal.aborted) return;
+        select.replaceChildren(
+            new Option(data.length ? 'Seleccionar productor' : 'Cliente sin productores asociados', ''),
+            ...data.map((producer) => new Option(producerLabel(producer), producer.id)),
+        );
+        if (selected && !data.some((producer) => producer.id === selected) && select.form === elements.form) {
+            select.add(new Option('Productor anterior sin asociación activa', selected));
+        }
+        select.value = [...select.options].some((option) => option.value === selected) ? selected : '';
+        select.disabled = false;
+    } catch {
+        if (!request.signal.aborted) {
+            select.replaceChildren(new Option('Error al cargar productores. Actualiza e intenta de nuevo.', ''));
+        }
+    }
 }
 
 function label(value) {
@@ -291,7 +323,12 @@ function openGuideDialog(mode, guide) {
     elements.guideForm.reset();
     elements.guideError.textContent = '';
     const total = guide.resumen.reduce((sum, line) => sum + Number(line.cantidad), 0);
-    const show = { numero: mode !== 'file', motivo: mode === 'number' && Boolean(guide.numero_guia_despacho), archivo: mode !== 'number' };
+    const show = {
+        numero: mode === 'confirm' || mode === 'number',
+        productor: mode === 'producer',
+        motivo: mode === 'producer' || (mode === 'number' && Boolean(guide.numero_guia_despacho)),
+        archivo: mode === 'confirm' || mode === 'file',
+    };
     Object.entries(show).forEach(([field, visible]) => {
         elements.guideForm.querySelector(`[data-guide-field="${field}"]`).classList.toggle('is-hidden', !visible);
     });
@@ -299,16 +336,22 @@ function openGuideDialog(mode, guide) {
         confirm: ['CONFIRMAR SALIDA', `Confirmar salida ${guide.numero}`, 'Confirmar salida'],
         number: ['GUÍA DE DESPACHO EMITIDA', guide.numero_guia_despacho ? 'Corregir N° de guía' : 'Registrar N° de guía', 'Guardar N° de guía'],
         file: ['GUÍA DE DESPACHO EMITIDA', guide.archivo_guia ? 'Reemplazar archivo de la guía' : 'Subir guía emitida', 'Subir archivo'],
+        producer: ['DESTINATARIO DEL DESPACHO', 'Editar productor', 'Guardar productor'],
     }[mode];
     [elements.guideEyebrow.textContent, elements.guideTitle.textContent, elements.guideSubmit.textContent] = titles;
     elements.guideSummary.textContent = mode === 'confirm'
-        ? `${guide.cliente.nombre} · ${total} envases · salida ${formatDate(guide.salida_at)}. Se descontará la existencia y la cuenta corriente del cliente recibirá el movimiento.`
+        ? `${guide.cliente.nombre} · ${producerLabel(guide.productor)} · ${total} envases · salida ${formatDate(guide.salida_at)}. Se descontará la existencia y la cuenta corriente del cliente recibirá el movimiento.`
         : `${guide.numero_guia_despacho ? `Guía N° ${guide.numero_guia_despacho} · ` : ''}${guide.numero} · ${guide.cliente.nombre} · ${total} envases`;
     elements.guideFileNote.textContent = mode === 'confirm'
         ? 'Opcional: también se puede subir después. PDF, JPG, PNG o WebP de hasta 10 MB.'
         : `PDF, JPG, PNG o WebP de hasta 10 MB.${guide.archivo_guia ? ' El archivo anterior queda en el historial.' : ''}`;
     elements.guideForm.elements.numero_guia_despacho.value = mode === 'number' ? guide.numero_guia_despacho || '' : '';
     elements.guideDialog.showModal();
+    if (mode === 'producer') {
+        loadProducerOptions(elements.guideForm.elements.productor_csg_id, guide.cliente.id, guide.productor?.id);
+        elements.guideForm.elements.motivo.focus();
+        return;
+    }
     (mode === 'file' ? elements.guideForm.elements.archivo : elements.guideForm.elements.numero_guia_despacho).focus();
 }
 
@@ -320,8 +363,21 @@ function chosenFile() {
 
 async function submitGuideDialog() {
     const { mode, guide } = state.dialog;
-    const number = elements.guideForm.elements.numero_guia_despacho.value.trim();
     const reason = elements.guideForm.elements.motivo.value.trim();
+    if (mode === 'producer') {
+        const producer = elements.guideForm.elements.productor_csg_id;
+        if (producer.disabled || !producer.value) throw new Error('Selecciona un productor CSG del cliente.');
+        if (!reason) throw new Error('Ingresa el motivo de la corrección.');
+        busy(true, 'Guardando productor…');
+        await api(`/api/envases/guias-despacho/${guide.id}/productor`, {
+            method: 'PUT',
+            body: JSON.stringify({ productor_csg_id: producer.value, motivo: reason, version: guide.version }),
+        });
+        elements.guideDialog.close();
+        toast(`${guide.numero}: productor guardado.`);
+        return;
+    }
+    const number = elements.guideForm.elements.numero_guia_despacho.value.trim();
     const file = chosenFile();
     if (mode !== 'file' && !number) throw new Error('Ingresa el N° de la guía de despacho emitida.');
     if (mode === 'file' && !file) throw new Error('Selecciona el archivo de la guía.');
@@ -378,6 +434,7 @@ function renderGuides(guides) {
             : `<strong>${escapeHtml(guide.numero)}</strong><small>`;
         return `<article class="guide-card">
             <div class="guide-card__head"><div>${title} · ${escapeHtml(guide.cliente.nombre)} · ${formatDate(guide.salida_at)}</small></div><span class="guide-state guide-state--${guide.estado}">${label(guide.estado)}</span></div>
+            <small>${escapeHtml(producerLabel(guide.productor))}</small>
             <div class="guide-lines">${lines}</div>
             ${guideEffect(guide)}
             ${emittedGuide(guide)}
@@ -388,6 +445,7 @@ function renderGuides(guides) {
                 ${guide.puede_registrar_guia && canManage ? `<button data-guide-number="${guide.id}">${guide.numero_guia_despacho ? 'Corregir N° de guía' : 'Registrar N° de guía'}</button>` : ''}
                 ${guide.puede_registrar_guia && canManage ? `<button data-guide-file="${guide.id}">${guide.archivo_guia ? 'Reemplazar archivo de la guía' : 'Subir guía emitida'}</button>` : ''}
                 ${guide.puede_editar && canManage ? `<button data-edit="${guide.id}">Editar</button>` : ''}
+                ${guide.puede_editar_productor ? `<button data-guide-producer="${guide.id}">Editar productor</button>` : ''}
                 ${guide.puede_cancelar && canManage ? `<button class="danger" data-cancel="${guide.id}">Cancelar borrador</button>` : ''}
                 ${guide.puede_confirmar && canManage ? `<button class="primary-button compact" data-confirm="${guide.id}">Confirmar salida</button>` : ''}
                 ${guide.puede_anular && canReverse ? `<button class="danger" data-reverse="${guide.id}">Anular y reversar</button>` : ''}
@@ -405,6 +463,11 @@ async function loadCatalogs() {
     elements.form.elements.cliente_id.innerHTML = '<option value="">Seleccionar cliente</option>'
         + state.catalog.clientes.map((client) => `<option value="${client.id}">${escapeHtml(client.codigo)} · ${escapeHtml(client.nombre)}</option>`).join('');
     elements.form.elements.cliente_id.value = selected;
+    const producer = elements.form.elements.productor_csg_id;
+    const current = producer.disabled && state.editing?.cliente.id === selected
+        ? state.editing.productor?.id
+        : producer.value;
+    await loadProducerOptions(producer, elements.form.elements.cliente_id.value, current);
     if (!elements.lines.children.length) renderLines();
     if (!elements.form.elements.salida_at.value) {
         elements.form.elements.salida_at.value = localDateTime();
@@ -434,6 +497,7 @@ async function reloadAll() {
 function resetForm() {
     state.editing = null;
     elements.form.reset();
+    loadProducerOptions(elements.form.elements.productor_csg_id, '');
     elements.formEyebrow.textContent = 'NUEVA GUÍA';
     elements.formTitle.textContent = 'Preparar borrador';
     elements.formHelp.textContent = 'Al guardar se asignan los movimientos de origen por FIFO y las cantidades quedan reservadas.';
@@ -458,6 +522,7 @@ function editGuide(guide) {
         };
     });
     elements.form.elements.cliente_id.value = guide.cliente.id;
+    loadProducerOptions(elements.form.elements.productor_csg_id, elements.form.elements.cliente_id.value, guide.productor?.id);
     elements.form.elements.salida_at.value = localDateTime(guide.salida_at);
     elements.form.elements.patente_camion.value = guide.patente_camion || '';
     elements.form.elements.nombre_conductor.value = guide.conductor?.nombre || '';
@@ -482,6 +547,7 @@ function formPayload() {
     })).filter((detail) => detail.cantidad > 0);
     return {
         cliente_id: form.cliente_id,
+        productor_csg_id: form.productor_csg_id || null,
         salida_at: new Date(form.salida_at).toISOString(),
         patente_camion: form.patente_camion?.toUpperCase() || null,
         rut_conductor: form.rut_conductor || null,
@@ -518,11 +584,18 @@ elements.logout.addEventListener('click', () => {
 elements.reload.addEventListener('click', reloadAll);
 elements.statusFilter.addEventListener('change', loadGuides);
 elements.cancelEdit.addEventListener('click', resetForm);
-elements.form.elements.cliente_id.addEventListener('change', refreshSourceOptions);
+elements.form.elements.cliente_id.addEventListener('change', (event) => {
+    loadProducerOptions(elements.form.elements.productor_csg_id, event.target.value);
+    refreshSourceOptions();
+});
 
 elements.form.addEventListener('submit', async (event) => {
     event.preventDefault();
     elements.error.textContent = '';
+    if (elements.form.elements.productor_csg_id.disabled) {
+        elements.error.textContent = 'Espera a que carguen los productores o actualiza la pantalla.';
+        return;
+    }
     const payload = formPayload();
     if (!payload.detalles.length) {
         elements.error.textContent = 'Ingresa al menos una cantidad de envases.';
@@ -568,9 +641,11 @@ elements.list.addEventListener('click', async (event) => {
     const emittedFile = event.target.closest('[data-emitted-file]');
     const guideNumber = event.target.closest('[data-guide-number]');
     const guideFile = event.target.closest('[data-guide-file]');
+    const guideProducer = event.target.closest('[data-guide-producer]');
     const id = emittedFile?.dataset.emittedFile
         || guideNumber?.dataset.guideNumber
         || guideFile?.dataset.guideFile
+        || guideProducer?.dataset.guideProducer
         || edit?.dataset.edit
         || confirm?.dataset.confirm
         || cancel?.dataset.cancel
@@ -605,6 +680,10 @@ elements.list.addEventListener('click', async (event) => {
         }
         if (guideFile) {
             openGuideDialog('file', guide);
+            return;
+        }
+        if (guideProducer) {
+            openGuideDialog('producer', guide);
             return;
         }
         if (confirm) {

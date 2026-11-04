@@ -47,6 +47,19 @@ class GuiaDespachoEnvaseController extends Controller
         ])->header('Cache-Control', 'no-store, private');
     }
 
+    public function productores(Cliente $cliente): JsonResponse
+    {
+        Gate::authorize('consultar-cuenta-envases');
+        $productores = $cliente->productoresCsg()->wherePivot('activo', true)
+            ->orderBy('razon_social')->orderBy('codigo')->get(['productores_csg.id', 'codigo', 'razon_social']);
+
+        return response()->json(['data' => $productores->map(fn ($productor): array => [
+            'id' => $productor->id,
+            'codigo' => $productor->codigo,
+            'nombre' => $productor->razon_social,
+        ])])->header('Cache-Control', 'no-store, private');
+    }
+
     public function index(
         Request $request,
         ServicioTemporadaActiva $temporadaActiva,
@@ -205,6 +218,31 @@ class GuiaDespachoEnvaseController extends Controller
         return response()->json(['data' => $this->guia($this->cargar($guia))]);
     }
 
+    public function corregirProductor(
+        GuiaDespachoEnvase $guiaDespachoEnvase,
+        Request $request,
+        ServicioGuiaDespachoEnvases $servicio,
+    ): JsonResponse {
+        Gate::authorize('corregir-productor-despacho-envases');
+        $datos = $request->validate([
+            'productor_csg_id' => ['required', 'uuid'],
+            'motivo' => ['required', 'string', 'max:1000'],
+            'version' => ['required', 'integer', 'min:1'],
+        ], [
+            'productor_csg_id.required' => 'Selecciona un productor CSG.',
+            'productor_csg_id.uuid' => 'Selecciona un productor CSG válido.',
+            'motivo.required' => 'Ingresa el motivo de la corrección.',
+        ]);
+
+        return response()->json(['data' => $this->guia($servicio->corregirProductor(
+            $guiaDespachoEnvase,
+            $datos['productor_csg_id'],
+            $datos['motivo'],
+            (int) $datos['version'],
+            $request->user(),
+        ))]);
+    }
+
     public function subirArchivoGuia(
         GuiaDespachoEnvase $guiaDespachoEnvase,
         Request $request,
@@ -292,6 +330,7 @@ class GuiaDespachoEnvaseController extends Controller
                 Rule::exists('clientes', 'id')->where('activo', true),
             ],
             'salida_at' => ['required', 'date'],
+            'productor_csg_id' => ['nullable', 'uuid'],
             'patente_camion' => ['nullable', 'regex:/^[A-Z0-9]{5,8}$/'],
             'rut_conductor' => ['nullable', 'string', 'max:12'],
             'nombre_conductor' => ['nullable', 'string', 'max:150'],
@@ -314,6 +353,7 @@ class GuiaDespachoEnvaseController extends Controller
             'cliente_id.required' => 'Cliente destino: selecciona un cliente de la lista.',
             'cliente_id.uuid' => 'Cliente destino: selecciona un cliente válido de la lista.',
             'cliente_id.exists' => 'Cliente destino: selecciona un cliente activo de la lista.',
+            'productor_csg_id.uuid' => 'Selecciona un productor CSG válido.',
             'salida_at.required' => 'Fecha y hora efectiva de salida: completa la fecha y la hora.',
             'salida_at.date' => 'Fecha y hora efectiva de salida: ingresa una fecha y hora válidas.',
             'patente_camion.regex' => 'Patente: ingresa entre 5 y 8 letras mayúsculas o números, sin espacios ni guiones. Ejemplo: ABCD12.',
@@ -392,6 +432,9 @@ class GuiaDespachoEnvaseController extends Controller
                 'subido_por' => $archivo->subidoPor?->name,
             ] : null,
             'puede_registrar_guia' => $salidaConfirmada,
+            'productor' => $guia->productorDestino(),
+            'puede_editar_productor' => $guia->estado === EstadoGuiaDespachoEnvase::Confirmada
+                && Gate::allows('corregir-productor-despacho-envases'),
             'estado' => $guia->estado->value,
             'temporada' => [
                 'id' => $guia->temporada_id,

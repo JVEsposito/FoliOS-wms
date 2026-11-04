@@ -26,6 +26,14 @@ test('despacho de envases muestra todos los errores, conserva los datos y permit
     const page = await browser.newPage({ viewport: { width: 1366, height: 900 } });
     const pageErrors = [];
     const submissions = [];
+    const corrections = [];
+    const producer = { id: 'productor-1', codigo: '122104', nombre: 'Productor Uno' };
+    const confirmed = {
+        id: 'confirmada-1', numero: 'GDE-2610-0002', numero_guia_despacho: '2227', estado: 'confirmada',
+        cliente: { id: 'cliente-1', nombre: 'Cliente Uno' }, temporada: { codigo: 'TEMP-TEST' },
+        salida_at: '2026-10-21T12:00:00Z', version: 2, productor: null, puede_editar_productor: true,
+        resumen: [{ tipo_envase: 'bins', cantidad: 6, propiedad: 'propia' }], detalles: [],
+    };
     page.on('pageerror', error => pageErrors.push(error.message));
     await page.addInitScript(() => {
         localStorage.setItem('estiba_wms_office_token', 'token');
@@ -50,6 +58,14 @@ test('despacho de envases muestra todos los errores, conserva los datos y permit
                 origenes: [], inventario: [{ fisico: 20, reservado: 0, disponible: 20 }],
             } });
         }
+        if (path.startsWith('/api/envases/guias-despacho/productores/')) {
+            return route.fulfill({ json: { data: path.endsWith('cliente-1') ? [producer] : [] } });
+        }
+        if (path === '/api/envases/guias-despacho/confirmada-1/productor' && request.method() === 'PUT') {
+            corrections.push(request.postDataJSON());
+            confirmed.productor = producer;
+            return route.fulfill({ json: { data: confirmed } });
+        }
         if (path === '/api/envases/guias-despacho' && request.method() === 'POST') {
             submissions.push(request.postDataJSON());
             if (submissions.length === 1) {
@@ -60,7 +76,7 @@ test('despacho de envases muestra todos los errores, conserva los datos y permit
             if (submissions.length === 2) return route.fulfill({ status: 409, json: { message: stockError } });
             return route.fulfill({ status: 201, json: { data: { numero: 'GDE-2610-0001' } } });
         }
-        if (path === '/api/envases/guias-despacho') return route.fulfill({ json: { data: [] } });
+        if (path === '/api/envases/guias-despacho') return route.fulfill({ json: { data: [confirmed] } });
         return route.fulfill({ status: 404, body: '' });
     });
     try {
@@ -70,6 +86,7 @@ test('despacho de envases muestra todos los errores, conserva los datos y permit
         assert.match(await page.locator('#dispatchPlateHelp').textContent(), /sin espacios ni guiones/);
         assert.equal(await field('patente_camion').getAttribute('aria-describedby'), 'dispatchPlateHelp');
         await field('cliente_id').selectOption('cliente-1');
+        await field('productor_csg_id').selectOption('productor-1');
         await field('patente_camion').fill('AB-CD-12');
         await field('nombre_conductor').fill('Conductor de prueba');
         await field('observacion').fill('Entrega de envases para producción');
@@ -80,12 +97,14 @@ test('despacho de envases muestra todos los errores, conserva los datos y permit
         assert.equal(await page.locator('#dispatchError').getAttribute('role'), 'alert');
         assert.equal(await page.locator('#dispatchError').evaluate(element => getComputedStyle(element).whiteSpace), 'pre-line');
         assert.equal(await field('cliente_id').inputValue(), 'cliente-1');
+        assert.equal(await field('productor_csg_id').inputValue(), 'productor-1');
         assert.equal(await field('patente_camion').inputValue(), 'AB-CD-12');
         assert.equal(await field('cantidad_bins').inputValue(), '6');
         assert.equal(await field('nombre_conductor').inputValue(), 'Conductor de prueba');
         assert.equal(await field('observacion').inputValue(), 'Entrega de envases para producción');
 
         await field('cliente_id').selectOption('cliente-2');
+        await field('productor_csg_id').locator('option').filter({ hasText: 'Cliente sin productores asociados' }).waitFor({ state: 'attached' });
         await field('patente_camion').fill('abcd12');
         await page.locator('#saveDraftButton').click();
         await page.waitForFunction(() => document.querySelector('#dispatchError').textContent.includes('disponibilidad suficiente'));
@@ -98,11 +117,24 @@ test('despacho de envases muestra todos los errores, conserva los datos y permit
         assert.equal(submissions.length, 3);
         assert.equal(submissions[2].patente_camion, 'ABCD12');
         assert.equal(submissions[2].cliente_id, 'cliente-2');
+        assert.equal(submissions[0].productor_csg_id, 'productor-1');
+        assert.equal(submissions[2].productor_csg_id, null);
         assert.equal(submissions[2].detalles[0].cantidad, 5);
         assert.equal(submissions[2].nombre_conductor, 'Conductor de prueba');
         assert.equal(submissions[2].observacion, 'Entrega de envases para producción');
         assert.equal(await page.locator('#dispatchError').textContent(), '');
         assert.equal(await field('cantidad_bins').inputValue(), '0');
+        await page.getByRole('button', { name: 'Editar productor' }).click();
+        const dialog = page.getByRole('dialog');
+        await dialog.getByLabel('Productor (CSG)').selectOption('productor-1');
+        await dialog.getByRole('button', { name: 'Guardar productor' }).click();
+        assert.equal(await dialog.getByRole('alert').textContent(), 'Ingresa el motivo de la corrección.');
+        await dialog.getByLabel('Motivo de la corrección').fill('Destinatario indicado en la guía.');
+        await dialog.getByRole('button', { name: 'Guardar productor' }).click();
+        await page.locator('#guideList').getByText('CSG 122104 · Productor Uno', { exact: true }).waitFor();
+        assert.deepEqual(corrections, [{
+            productor_csg_id: 'productor-1', motivo: 'Destinatario indicado en la guía.', version: 2,
+        }]);
         assert.deepEqual(pageErrors, []);
     } finally {
         await browser.close();

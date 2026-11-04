@@ -19,6 +19,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use JsonException;
 
 class ServicioGuiaDespachoEnvases
@@ -42,8 +43,10 @@ class ServicioGuiaDespachoEnvases
 
             $temporada = $this->temporadaActiva();
             $cliente = $this->clienteActivo($payload['cliente_id']);
+            $productor = $this->datosProductor($cliente, $payload['productor_csg_id'] ?? null);
             $salida = CarbonImmutable::parse($payload['salida_at']);
             $guia = GuiaDespachoEnvase::create([
+                ...$productor,
                 'operacion_id' => $datos['operacion_id'],
                 'payload_hash' => $hash,
                 'numero' => $this->siguienteNumero($salida),
@@ -74,7 +77,10 @@ class ServicioGuiaDespachoEnvases
                 null,
                 EstadoGuiaDespachoEnvase::Borrador,
                 $usuario,
-                ['reserva' => $this->resumenAsignaciones($asignaciones)],
+                [
+                    'reserva' => $this->resumenAsignaciones($asignaciones),
+                    'productor' => $guia->productorDestino(),
+                ],
             );
 
             return $this->cargar($guia);
@@ -101,6 +107,10 @@ class ServicioGuiaDespachoEnvases
 
             $temporada = $this->temporadaActiva();
             $cliente = $this->clienteActivo($payload['cliente_id']);
+            if (! array_key_exists('productor_csg_id', $datos) && $guia->cliente_id === $cliente->id && $guia->productor_csg_id !== null) {
+                $payload['productor_csg_id'] = $guia->productor_csg_id;
+            }
+            $productor = $this->datosProductor($cliente, $payload['productor_csg_id'] ?? null);
             $asignaciones = $this->asignarOrigenes(
                 $payload['detalles'],
                 $temporada,
@@ -113,6 +123,7 @@ class ServicioGuiaDespachoEnvases
                 ->where('guia_despacho_envase_id', $guia->id)
                 ->delete();
             $guia->update([
+                ...$productor,
                 'payload_hash' => $this->hashPayload($payload),
                 'cliente_id' => $cliente->id,
                 'cliente_codigo_snapshot' => $cliente->codigo,
@@ -133,6 +144,7 @@ class ServicioGuiaDespachoEnvases
                 $usuario,
                 [
                     'anterior' => $anterior,
+                    'productor' => $guia->productorDestino(),
                     'reserva' => $this->resumenAsignaciones($asignaciones),
                 ],
             );
@@ -173,6 +185,7 @@ class ServicioGuiaDespachoEnvases
             if (! empty($datos['salida_at'])) {
                 $guia->salida_at = CarbonImmutable::parse($datos['salida_at']);
             }
+            $this->datosProductor($guia->cliente, $guia->productor_csg_id);
             $this->asegurarReservaConfirmable($guia);
 
             $ahora = now();
@@ -226,8 +239,43 @@ class ServicioGuiaDespachoEnvases
                     'movimientos' => collect($movimientos)->pluck('id')->all(),
                     'documento_hash' => $guia->documento_hash,
                     'numero_guia_despacho' => $numeroGuia,
+                    'productor' => $guia->productorDestino(),
                 ],
             );
+
+            return $this->cargar($guia);
+        }, attempts: 3);
+    }
+
+    public function corregirProductor(
+        GuiaDespachoEnvase $guia,
+        string $productorId,
+        string $motivo,
+        int $version,
+        User $usuario,
+    ): GuiaDespachoEnvase {
+        return DB::transaction(function () use ($guia, $productorId, $motivo, $version, $usuario): GuiaDespachoEnvase {
+            $guia = GuiaDespachoEnvase::query()->lockForUpdate()->findOrFail($guia->id);
+            if ($guia->estado !== EstadoGuiaDespachoEnvase::Confirmada) {
+                throw new ConflictoOperacion('Solo puedes corregir el productor de una salida confirmada.');
+            }
+            if ($guia->productor_csg_id === $productorId) {
+                return $this->cargar($guia);
+            }
+            if ($guia->version !== $version) {
+                throw new ConflictoOperacion('La guía cambió desde la última lectura. Actualiza antes de corregir el productor.');
+            }
+
+            $anterior = $guia->productorDestino();
+            $guia->update([
+                ...$this->datosProductor($guia->cliente, $productorId),
+                'version' => $guia->version + 1,
+            ]);
+            $this->registrarEvento($guia, 'productor_corregido', $guia->estado, $guia->estado, $usuario, [
+                'anterior' => $anterior,
+                'nuevo' => $guia->productorDestino(),
+                'motivo' => $motivo,
+            ]);
 
             return $this->cargar($guia);
         }, attempts: 3);
@@ -803,6 +851,7 @@ class ServicioGuiaDespachoEnvases
     {
         return [
             'cliente_id' => $guia->cliente_id,
+            'productor' => $guia->productorDestino(),
             'salida_at' => $guia->salida_at?->toAtomString(),
             'patente_camion' => $guia->patente_camion,
             'rut_conductor' => $guia->rut_conductor,
@@ -859,6 +908,26 @@ class ServicioGuiaDespachoEnvases
         return $cliente;
     }
 
+    /** @return array{productor_csg_id: string|null, productor_snapshot: array{codigo: string, nombre: string}|null} */
+    private function datosProductor(Cliente $cliente, ?string $productorId): array
+    {
+        if ($productorId === null) {
+            return ['productor_csg_id' => null, 'productor_snapshot' => null];
+        }
+
+        $productor = $cliente->productoresCsg()->wherePivot('activo', true)->lockForUpdate()->find($productorId);
+        if ($productor === null) {
+            throw ValidationException::withMessages([
+                'productor_csg_id' => 'Selecciona un productor CSG asociado al cliente de la guía.',
+            ]);
+        }
+
+        return [
+            'productor_csg_id' => $productor->id,
+            'productor_snapshot' => ['codigo' => $productor->codigo, 'nombre' => $productor->razon_social],
+        ];
+    }
+
     /** @param array<string, mixed> $datos */
     private function normalizarPayload(array $datos): array
     {
@@ -910,6 +979,7 @@ class ServicioGuiaDespachoEnvases
             'nombre_conductor' => $datos['nombre_conductor'] ?? null,
             'observacion' => $datos['observacion'] ?? null,
             'detalles' => $detalles->all(),
+            ...array_filter(['productor_csg_id' => $datos['productor_csg_id'] ?? null]),
         ];
     }
 
@@ -951,6 +1021,7 @@ class ServicioGuiaDespachoEnvases
                 ]))
                 ->values()
                 ->all(),
+            ...array_filter(['productor_csg_id' => $guia->productor_csg_id]),
         ];
     }
 
