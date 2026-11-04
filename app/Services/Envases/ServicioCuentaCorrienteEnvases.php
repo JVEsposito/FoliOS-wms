@@ -13,7 +13,9 @@ use App\Models\DetalleEnvaseRecepcionRomana;
 use App\Models\DetalleGuiaDespachoEnvase;
 use App\Models\GuiaDespachoEnvase;
 use App\Models\MovimientoEnvase;
+use App\Models\SegmentoValidacionMp;
 use App\Models\Temporada;
+use App\Models\ValidacionMp;
 use Carbon\CarbonImmutable;
 use DateTimeInterface;
 use Illuminate\Database\Eloquent\Builder;
@@ -212,6 +214,7 @@ class ServicioCuentaCorrienteEnvases
             ->pluck('documento_id')->filter()->unique()->values();
         $guiasEmitidas = GuiaDespachoEnvase::query()->whereKey($idsGuias)
             ->get(['id', 'numero_guia_despacho', 'productor_csg_id', 'productor_snapshot'])->keyBy('id');
+        $productoresRecepcion = $this->productoresRecepcion($movimientos);
         [$inicio, $fin] = $this->rangoOperacional($desde, $hasta);
 
         $tipos = [];
@@ -269,16 +272,19 @@ class ServicioCuentaCorrienteEnvases
             $guia = $movimiento->documento_tipo === self::DOCUMENTO_GUIA
                 ? $guiasEmitidas->get($movimiento->documento_id)
                 : null;
-            $productor = $guia?->productorDestino();
+            $destinatario = $guia?->productorDestino();
             $indices[$clave] = count($lineas);
             $lineas[] = [
                 'orden' => [$documentos[$claveDocumento], $movimiento->tipo_envase->orden(), $movimiento->propiedad->value],
                 'fecha' => $this->local($movimiento->ocurrido_at),
                 'documento' => $guia?->numero_guia_despacho ?: $movimiento->numero_documento,
                 'movimiento' => (in_array($movimiento->id, $historicos, true) ? 'Saldo anterior corregido' : self::etiquetaMovimiento($movimiento->tipo_movimiento)),
-                'destinatario_despacho' => $movimiento->tipo_movimiento === TipoMovimientoEnvase::DespachoCliente
-                    ? ($productor ? 'CSG '.$productor['codigo'].' · '.$productor['nombre'] : 'Sin productor asignado')
-                    : null,
+                'productor' => match ($movimiento->tipo_movimiento) {
+                    TipoMovimientoEnvase::DespachoCliente => $destinatario
+                        ? 'CSG '.$destinatario['codigo'].' · '.$destinatario['nombre'] : 'Sin productor asignado',
+                    TipoMovimientoEnvase::RecepcionFruta => $productoresRecepcion[$movimiento->recepcion_romana_id] ?? 'Sin productor declarado',
+                    default => null,
+                },
                 'tipo_envase' => $movimiento->tipo_envase->etiqueta(),
                 'propiedad' => self::etiquetaPropiedad($movimiento->propiedad),
                 'entrada' => $esSalida ? null : $impacto,
@@ -314,6 +320,37 @@ class ServicioCuentaCorrienteEnvases
             'lineas_pendientes_validacion' => $pendientes,
             'emitido_at' => $this->local(now()),
         ];
+    }
+
+    /**
+     * @param  Collection<int, MovimientoEnvase>  $movimientos
+     * @return array<string, string>
+     */
+    private function productoresRecepcion(Collection $movimientos): array
+    {
+        $recepciones = $movimientos->where('tipo_movimiento', TipoMovimientoEnvase::RecepcionFruta)
+            ->pluck('recepcion_romana_id')->filter()->unique()->values();
+        if ($recepciones->isEmpty()) {
+            return [];
+        }
+
+        return ValidacionMp::query()
+            ->whereIn('recepcion_romana_id', $recepciones)
+            ->where('estado', EstadoValidacionMp::Validada)
+            ->with('segmentos.csg.productor')
+            ->get(['id', 'recepcion_romana_id'])
+            ->keyBy('recepcion_romana_id')
+            ->map(fn (ValidacionMp $validacion): string => $validacion->segmentos
+                ->map(function (SegmentoValidacionMp $segmento): ?string {
+                    $codigo = $segmento->csg_snapshot ?: $segmento->csg?->codigo;
+                    if (! $codigo) {
+                        return null;
+                    }
+                    $nombre = $segmento->csg?->productor?->razon_social ?: $segmento->csg?->predio;
+
+                    return 'CSG '.$codigo.($nombre ? ' · '.$nombre : '');
+                })->filter()->unique()->implode(' / '))
+            ->filter()->all();
     }
 
     /**

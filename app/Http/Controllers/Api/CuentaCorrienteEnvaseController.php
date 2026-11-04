@@ -440,6 +440,7 @@ class CuentaCorrienteEnvaseController extends Controller
                 ['clave' => 'entrada', 'titulo' => 'Recibidos', 'tipo' => 'numero'],
                 ['clave' => 'salida', 'titulo' => 'Entregados', 'tipo' => 'numero'],
                 ['clave' => 'saldo', 'titulo' => 'Saldo', 'tipo' => 'numero'],
+                ['clave' => 'productor', 'titulo' => 'Productor / CSG'],
             ], $estado['movimientos'], [
                 'fecha_corte' => now(config('app.operational_timezone'))->format('d-m-Y H:i'),
                 'usuario' => $request->user()->name,
