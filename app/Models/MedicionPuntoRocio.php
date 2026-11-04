@@ -33,6 +33,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'margen_c',
     'vapor_g_m3',
     'margen_minimo_c',
+    'sellado_referencia_id',
+    'envase_punto_rocio_c',
+    'envase_margen_c',
+    'envase_estado',
+    'origen_referencia_id',
+    'origen_superficie_c',
+    'origen_margen_c',
+    'origen_estado',
     'estado',
     'gotas_visibles',
     'requiere_accion',
@@ -74,6 +82,18 @@ class MedicionPuntoRocio extends Model implements PerteneceATemporada
         return $this->belongsTo(Dispositivo::class);
     }
 
+    /** Sellado cuyo aire quedó dentro del envase. */
+    public function selladoReferencia(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'sellado_referencia_id');
+    }
+
+    /** Medición de donde viene la fruta, con su T° superficial. */
+    public function origenReferencia(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'origen_referencia_id');
+    }
+
     public function alertaPendiente(): bool
     {
         return $this->requiere_accion && $this->accion_registrada_at === null && $this->anulada_at === null;
@@ -93,6 +113,12 @@ class MedicionPuntoRocio extends Model implements PerteneceATemporada
             'margen_c' => 'float',
             'vapor_g_m3' => 'float',
             'margen_minimo_c' => 'float',
+            'envase_punto_rocio_c' => 'float',
+            'envase_margen_c' => 'float',
+            'envase_estado' => EstadoMedicionPuntoRocio::class,
+            'origen_superficie_c' => 'float',
+            'origen_margen_c' => 'float',
+            'origen_estado' => EstadoMedicionPuntoRocio::class,
             'requiere_accion' => 'boolean',
             'medido_at' => 'immutable_datetime',
             'fecha_operacional' => 'immutable_date',

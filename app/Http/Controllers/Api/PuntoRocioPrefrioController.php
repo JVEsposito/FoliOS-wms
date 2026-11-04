@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Enums\EtapaMedicionPuntoRocio;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Prefrio\GuardarMargenesPuntoRocioRequest;
 use App\Http\Requests\Prefrio\GuardarSalaControlRocioRequest;
 use App\Http\Requests\Prefrio\RegistrarMedicionPuntoRocioRequest;
 use App\Http\Requests\Prefrio\TextoPuntoRocioRequest;
@@ -40,8 +41,12 @@ class PuntoRocioPrefrioController extends Controller
             'etapas' => collect(EtapaMedicionPuntoRocio::cases())
                 ->map(fn (EtapaMedicionPuntoRocio $etapa): array => ['valor' => $etapa->value, 'etiqueta' => $etapa->etiqueta()])
                 ->all(),
+            'referencias' => $this->servicio->referencias($fecha),
             'parametros' => [
-                'margen_minimo_c' => (float) config('prefrio.punto_rocio.margen_minimo_c', 2.0),
+                // Margen de las etapas sin ajuste; cada etapa trae el suyo en margenes_por_etapa.
+                'margen_minimo_c' => $this->servicio->margenPorDefecto(),
+                'margenes_por_etapa' => $this->servicio->margenes(),
+                'horas_referencia' => $this->servicio->horasReferencia(),
                 'dias_registro_retroactivo' => (int) config('prefrio.punto_rocio.dias_registro_retroactivo', 7),
                 'zona_horaria' => $this->servicio->zona(),
             ],
@@ -80,6 +85,11 @@ class PuntoRocioPrefrioController extends Controller
         return response()->json(['data' => [
             'id' => $sala->id, 'nombre' => $sala->nombre, 'activa' => $sala->activa, 'version' => $sala->version,
         ]], $sala->wasRecentlyCreated ? 201 : 200);
+    }
+
+    public function guardarMargenes(GuardarMargenesPuntoRocioRequest $request): JsonResponse
+    {
+        return response()->json(['data' => $this->servicio->guardarMargenes($request->validated('margenes'), $request->user())]);
     }
 
     /** La tablet firma con su token; la oficina registra sin dispositivo. */

@@ -41,6 +41,16 @@ test('las alertas sin acción llegan a Operación ahora', () => {
     assert.equal(alerts[1].severity, 'critical');
     assert.equal(alerts[1].condition, 'Gotas visibles · Salida prefrío');
 
+    // Un riesgo dentro del envase llega con su condición y detalle desde el servidor.
+    const [linked] = dewPointAlerts([{
+        punto: 'Sala de paletizado', etapa_etiqueta: 'Paletizado', estado: 'margen_favorable', estado_etiqueta: 'Margen favorable', gotas_visibles: 'no',
+        condicion: 'Condensación posible en el envase', condicion_detalle: 'dentro del envase: rocío del sellado 8,5 °C (09:30, Sala de sellado), superficie 7,0 °C, margen -1,5 °C', critica: true,
+        punto_rocio_c: 2, temperatura_superficie_c: 7, margen_c: 5, fecha: '2026-11-04',
+    }]);
+    assert.equal(linked.severity, 'critical');
+    assert.equal(linked.condition, 'Condensación posible en el envase · Paletizado');
+    assert.equal(linked.evidence, 'Dentro del envase: rocío del sellado 8,5 °C (09:30, Sala de sellado), superficie 7,0 °C, margen -1,5 °C');
+
     const all = buildOperationalAlerts({ prefrio: { tuneles: [], condensacion: { alertas_pendientes: pending } } });
     assert.deepEqual(all.map((alert) => alert.area), ['TUN-01', 'Sala de sellado']);
 });

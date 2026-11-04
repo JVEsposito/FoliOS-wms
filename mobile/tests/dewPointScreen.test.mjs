@@ -13,6 +13,8 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const require = createRequire(import.meta.url);
 const sourceRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../src');
 
+const minutesAgo = (minutes) => new Date(Date.now() - minutes * 60000).toISOString();
+
 function dayFixture({ registrar = true, readings = [] } = {}) {
   return {
     fecha: '2026-11-04',
@@ -20,7 +22,11 @@ function dayFixture({ registrar = true, readings = [] } = {}) {
     mediciones: readings,
     puntos: { salas: [{ id: 'sala-1', nombre: 'Sala de sellado', activa: true }, { id: 'sala-2', nombre: 'Sala antigua', activa: false }], tuneles: [{ id: 't1', nombre: 'TP-01 · Túnel 1' }], camaras: [] },
     etapas: [{ valor: 'sellado', etiqueta: 'Sellado' }, { valor: 'paletizado', etiqueta: 'Paletizado' }, { valor: 'ingreso_prefrio', etiqueta: 'Ingreso prefrío' }],
-    parametros: { margen_minimo_c: 2, dias_registro_retroactivo: 7, zona_horaria: 'America/Santiago' },
+    referencias: [
+      { id: 'sellado-1', etapa: 'sellado', etapa_etiqueta: 'Sellado', punto: 'Sala de sellado', referencia: null, medido_at: minutesAgo(90), temperatura_ambiente_c: 12, humedad_relativa: 60, temperatura_superficie_c: null, punto_rocio_c: 4.47 },
+      { id: 'salida-1', etapa: 'salida_prefrio', etapa_etiqueta: 'Salida prefrío', punto: 'Salida túneles', referencia: null, medido_at: minutesAgo(30), temperatura_ambiente_c: 2, humedad_relativa: 80, temperatura_superficie_c: 1, punto_rocio_c: -1.09 },
+    ],
+    parametros: { margen_minimo_c: 2, margenes_por_etapa: [{ etapa: 'ingreso_prefrio', margen_minimo_c: 0.5 }], horas_referencia: 72, dias_registro_retroactivo: 7, zona_horaria: 'America/Santiago' },
     permisos: { registrar, supervisar: false },
   };
 }
@@ -100,6 +106,7 @@ function harness({ registrar = true } = {}) {
     async input(label, value) { await flush(() => renderer.root.findByProps({ accessibilityLabel: label }).props.onChangeText(value)); },
     value(label) { return renderer.root.findByProps({ accessibilityLabel: label }).props.value; },
     selected(label) { return this.pressable(label)?.props.accessibilityState?.selected === true; },
+    labels() { return renderer.root.findAllByType('Pressable').map((p) => flatten(p.props.children)); },
     text() { return renderer.root.findAllByType('Text').map((node) => flatten(node.props.children)).join('\n'); },
     async unmount() { await flush(() => renderer.unmount()); },
   };
@@ -140,7 +147,7 @@ test('la tablet registra un chequeo, muestra el riesgo en vivo y reintenta sin d
     assert.equal(h.calls.saves[0].medido_at, h.calls.saves[1].medido_at);
     assert.deepEqual(
       { ...h.calls.saves[1], operacion_id: undefined, medido_at: undefined },
-      { operacion_id: undefined, medido_at: undefined, etapa: 'sellado', punto_tipo: 'sala', punto_id: 'sala-1', referencia: 'Línea 2', temperatura_ambiente_c: 15, humedad_relativa: 62.9, temperatura_superficie_c: 7.1, gotas_visibles: 'si', observacion: null },
+      { operacion_id: undefined, medido_at: undefined, etapa: 'sellado', punto_tipo: 'sala', punto_id: 'sala-1', referencia: 'Línea 2', temperatura_ambiente_c: 15, humedad_relativa: 62.9, temperatura_superficie_c: 7.1, gotas_visibles: 'si', observacion: null, sellado_referencia_id: null, origen_referencia_id: null },
     );
     assert.match(h.text(), /Medición guardada: gotas visibles\. Supervisión de frío fue avisada\./);
     assert.match(h.text(), /Sellado · Sala de sellado/);
@@ -160,6 +167,46 @@ test('la tablet registra un chequeo, muestra el riesgo en vivo y reintenta sin d
     await h.input('Humedad relativa *', '60');
     await h.press('Guardar medición');
     assert.notEqual(h.calls.saves[2].operacion_id, h.calls.saves[1].operacion_id);
+  } finally {
+    await h.unmount();
+  }
+});
+
+test('la tablet vincula el sellado y la fruta que llega con el margen de la etapa', async () => {
+  const h = harness();
+  try {
+    await h.mount();
+    // En sellado no se ofrece otro sellado: evalúa su propio aire.
+    await h.press('Sellado');
+    assert.doesNotMatch(h.text(), /Aire del envase/);
+    await h.press('Ingreso prefrío');
+    assert.match(h.text(), /Aire del envase · sellado de referencia/);
+    await h.press('Sala de sellado');
+    await h.input('T° ambiente *', '4');
+    await h.input('Humedad relativa *', '88');
+    await h.input('T° superficial fruta', '3');
+    assert.match(h.text(), /Margen mínimo de la etapa: 0,5 °C/);
+    const sealedChip = h.labels().find((label) => /· Sala de sellado · rocío 4,5 °C$/.test(label));
+    const originChip = h.labels().find((label) => /· Salida prefrío · fruta 1,0 °C$/.test(label));
+    assert.ok(sealedChip, 'Chip del sellado reciente');
+    assert.ok(originChip, 'Chip de la salida reciente');
+    await h.press(sealedChip);
+    assert.match(h.text(), /Dentro del envase\nRocío del sellado 4,5 °C · margen -1,5 °C\nCondensación posible/);
+    await h.press(originChip);
+    // Aire a 4 °C / 88 %: rocío 2,2 °C; la fruta llega a 1,0 °C → condensa al llegar.
+    assert.match(h.text(), /Al llegar\nFruta a 1,0 °C desde Salida prefrío · margen -1,2 °C\nCondensación posible/);
+    await h.press('Guardar medición');
+    const [payload] = h.calls.saves;
+    assert.equal(payload.etapa, 'ingreso_prefrio');
+    assert.equal(payload.sellado_referencia_id, 'sellado-1');
+    assert.equal(payload.origen_referencia_id, 'salida-1');
+    // Después de guardar se conserva el sellado de referencia y se limpia el origen.
+    assert.ok(h.selected(sealedChip));
+    assert.ok(h.selected('Sin vincular') || !h.selected(originChip));
+    assert.ok(!h.selected(originChip));
+    // Tocar de nuevo un chip lo desvincula.
+    await h.press(sealedChip);
+    assert.ok(!h.selected(sealedChip));
   } finally {
     await h.unmount();
   }
