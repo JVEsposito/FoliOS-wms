@@ -7,6 +7,8 @@ use App\Enums\EtapaMedicionPuntoRocio;
 use App\Enums\GotasVisiblesPuntoRocio;
 use App\Enums\TipoPuntoControlRocio;
 use App\Models\Concerns\ImpideEliminacionFisica;
+use App\Models\Concerns\TemporadaPorColumna;
+use App\Models\Contracts\PerteneceATemporada;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
@@ -46,9 +48,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'anulada_por_user_id',
     'motivo_anulacion',
 ])]
-class MedicionPuntoRocio extends Model
+class MedicionPuntoRocio extends Model implements PerteneceATemporada
 {
-    use HasUuids, ImpideEliminacionFisica;
+    use HasUuids, ImpideEliminacionFisica, TemporadaPorColumna;
 
     protected $table = 'mediciones_punto_rocio';
 

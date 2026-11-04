@@ -78,6 +78,7 @@ class TemporadaActivaRutasTest extends TestCase
         Models\Camara::class => 'infraestructura física',
         Models\LineaProceso::class => 'infraestructura física: líneas de Packing y su rendimiento',
         Models\TunelPrefrio::class => 'infraestructura física',
+        Models\SalaControlRocio::class => 'infraestructura física: sala donde se mide el punto de rocío',
         Models\PlantaOrigen::class => 'catálogo global de plantas de origen',
         Models\UmbralPrefrioEspecie::class => 'parámetro térmico global por especie',
         Models\Cliente::class => 'maestro global',
