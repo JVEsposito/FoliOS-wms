@@ -45,6 +45,7 @@
                     <div class="prefrio-heading__actions">
                         <button class="primary-button" id="newProcessButton" type="button">+ Nuevo proceso</button>
                         <button class="secondary-button" id="newTunnelButton" type="button">+ Nuevo túnel</button>
+                        <a class="secondary-button" href="/oficina/prefrio/punto-rocio">Punto de rocío →</a>
                         <button class="secondary-button" id="reloadPrefrioButton" type="button">↻ Actualizar</button>
                     </div>
                 </header>

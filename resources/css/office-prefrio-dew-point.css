@@ -1,0 +1,109 @@
+/* Prefrío · Punto de rocío: chequeos diarios de condensación. Usa los tokens del shell de oficina. */
+.dew-command { grid-template-columns: minmax(320px, 1fr) auto auto; }
+
+.dew-day { display: grid; gap: 5px; }
+.dew-day > span { color: var(--muted); font-size: .66rem; font-weight: 800; letter-spacing: .08em; }
+.dew-day > div { display: flex; align-items: center; gap: 6px; }
+.dew-day input { min-height: 38px; padding: 0 10px; border: 1px solid var(--corporate-border); border-radius: 2px; background: var(--corporate-card); color: var(--text-strong); font: inherit; font-weight: 700; }
+.dew-day .secondary-button { min-width: 38px; min-height: 38px; padding: 0 10px; }
+
+.dew-message:empty { display: none; }
+.dew-message { margin: 0; padding: 9px 12px; border-left: 4px solid var(--corporate-blue); background: var(--corporate-card); color: var(--text); }
+.dew-message[data-error="true"] { border-left-color: var(--danger-text); color: var(--danger-text); }
+
+.dew-metrics { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+
+.dew-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 10px; }
+.dew-panel { display: grid; gap: 10px; align-content: start; padding: 12px; }
+.dew-panel .prefrio-panel__heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.dew-chart { position: relative; height: 280px; }
+.dew-empty { margin: 0; color: var(--muted); }
+.dew-chart .dew-empty { position: absolute; inset: 0; display: grid; place-items: center; }
+.dew-note, .dew-footnote { margin: 0; color: var(--muted); font-size: .78rem; line-height: 1.45; }
+.dew-footnote { padding: 0 2px; }
+
+.dew-history { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.dew-day-bar { display: grid; justify-items: center; gap: 3px; padding: 6px 2px; border: 1px solid var(--corporate-border); border-radius: 2px; background: var(--corporate-card); color: var(--text); cursor: pointer; font: inherit; }
+.dew-day-bar[aria-pressed="true"] { border-color: var(--corporate-blue); box-shadow: inset 0 0 0 1px var(--corporate-blue); }
+.dew-day-bar__value { display: flex; align-items: flex-end; width: 14px; height: 52px; background: color-mix(in srgb, var(--text-subtle) 14%, transparent); }
+.dew-day-bar__value i { display: block; width: 100%; background: var(--text-subtle); }
+.dew-day-bar[data-tone="success"] .dew-day-bar__value i { background: var(--success-text); }
+.dew-day-bar[data-tone="warning"] .dew-day-bar__value i { background: var(--warning-text); }
+.dew-day-bar[data-tone="danger"] .dew-day-bar__value i { background: var(--danger-text); }
+.dew-day-bar strong { color: var(--text-strong); font-size: .85rem; }
+.dew-day-bar small { color: var(--muted); font-size: .66rem; text-transform: capitalize; }
+
+.dew-filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.dew-filters:empty { display: none; }
+.dew-filters button { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 10px; border: 1px solid var(--corporate-border); border-radius: 2px; background: var(--button-secondary); color: var(--text-secondary); font: inherit; font-weight: 700; cursor: pointer; }
+.dew-filters button[aria-pressed="true"] { border-color: var(--corporate-blue); background: var(--corporate-blue); color: #ffffff; }
+.dew-filters i { padding: 0 6px; border-radius: 9px; background: var(--danger-text); color: #ffffff; font-style: normal; font-size: .7rem; }
+
+.dew-table-scroll { overflow-x: auto; }
+.dew-table { width: 100%; min-width: 940px; border-collapse: collapse; }
+.dew-table th { padding: 8px; border-bottom: 1px solid var(--corporate-border); color: var(--muted); font-size: .68rem; font-weight: 800; letter-spacing: .04em; text-align: left; text-transform: uppercase; white-space: nowrap; }
+.dew-table td { padding: 8px; border-bottom: 1px solid var(--corporate-border); color: var(--text); vertical-align: top; }
+.dew-table td small { display: block; margin-top: 2px; color: var(--muted); font-size: .72rem; }
+.dew-table tr.is-alert td:first-child { box-shadow: inset 4px 0 0 var(--danger-text); }
+.dew-table tr.is-voided td { color: var(--text-subtle); text-decoration: line-through; }
+.dew-table tr.is-voided td small, .dew-table tr.is-voided td .dew-badge { text-decoration: none; }
+.dew-empty-row { padding: 20px !important; color: var(--muted) !important; text-align: center; }
+.dew-num { white-space: nowrap; }
+.dew-actions-cell { width: 1%; }
+.dew-row-actions { display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+.dew-row-actions button { min-height: 32px; padding: 0 10px; white-space: nowrap; }
+.dew-followup { font-weight: 700; }
+.dew-followup--pending { color: var(--danger-text) !important; }
+
+.dew-badge { display: inline-block; padding: 2px 7px; border: 1px solid currentColor; border-radius: 2px; font-size: .72rem; font-weight: 800; white-space: nowrap; }
+.dew-badge[data-tone="danger"] { color: var(--danger-text); background: var(--danger-bg, transparent); }
+.dew-badge[data-tone="warning"] { color: var(--warning-text); background: var(--warning-bg, transparent); }
+.dew-badge[data-tone="success"] { color: var(--success-text); background: var(--success-bg, transparent); }
+.dew-badge[data-tone="neutral"] { color: var(--muted); }
+
+.dew-form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.dew-number div { position: relative; }
+.dew-number input { width: 100%; padding-right: 38px; }
+.dew-number b { position: absolute; top: 50%; right: 10px; transform: translateY(-50%); color: var(--muted); font-size: .8rem; }
+.dew-drops { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0; padding: 0; border: 0; }
+.dew-drops legend { width: 100%; margin-bottom: 4px; color: var(--muted); font-size: .72rem; font-weight: 800; }
+.dew-drops label { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; border: 1px solid var(--corporate-border); border-radius: 2px; cursor: pointer; }
+.dew-drops label:has(input:checked) { border-color: var(--corporate-blue); box-shadow: inset 0 0 0 1px var(--corporate-blue); }
+
+.dew-result { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 1.6fr); gap: 10px; padding: 12px; border: 1px solid var(--corporate-border); border-left: 4px solid var(--text-subtle); border-radius: 2px; color: var(--muted); }
+.dew-result[data-tone="danger"] { border-left-color: var(--danger-text); }
+.dew-result[data-tone="warning"] { border-left-color: var(--warning-text); }
+.dew-result[data-tone="success"] { border-left-color: var(--success-text); }
+.dew-result span { display: grid; gap: 2px; }
+.dew-result small { color: var(--muted); font-size: .64rem; font-weight: 800; letter-spacing: .06em; }
+.dew-result strong { color: var(--text-strong); font-size: 1.15rem; }
+.dew-result[data-tone="danger"] .dew-result__state strong { color: var(--danger-text); }
+.dew-result[data-tone="warning"] .dew-result__state strong { color: var(--warning-text); }
+.dew-result[data-tone="success"] .dew-result__state strong { color: var(--success-text); }
+.dew-result em { color: var(--muted); font-size: .74rem; font-style: normal; }
+
+.dew-note-field { display: grid; gap: 6px; }
+.dew-room-list { display: grid; gap: 8px; }
+.dew-room { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px; }
+.dew-room input, .dew-room-new input { min-height: 38px; padding: 0 10px; border: 1px solid var(--corporate-border); border-radius: 2px; background: var(--corporate-card); color: var(--text); font: inherit; }
+.dew-room.is-inactive input { color: var(--text-subtle); }
+.dew-room-new { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px; }
+.dew-room-new label { display: grid; gap: 5px; }
+
+@media (max-width: 1100px) {
+    .dew-command { grid-template-columns: 1fr; }
+    .dew-grid { grid-template-columns: 1fr; }
+    .dew-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 700px) {
+    .dew-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .dew-form-grid { grid-template-columns: 1fr; }
+    .dew-result { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .dew-result__state { grid-column: 1 / -1; }
+    .dew-day > div { display: grid; grid-template-columns: 38px minmax(0, 1fr) 38px auto; }
+    .dew-day input { width: 100%; min-width: 0; }
+    .dew-chart { height: 220px; }
+    .dew-room { grid-template-columns: 1fr 1fr; }
+    .dew-room input { grid-column: 1 / -1; }
+}

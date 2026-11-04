@@ -126,6 +126,20 @@ class EstructuraOficinaTest extends TestCase
         }
     }
 
+    public function test_punto_rocio_exporta_registro_grafico_y_dialogos(): void
+    {
+        $html = $this->get('/oficina/prefrio/punto-rocio')->assertOk()->getContent();
+        foreach (['dewDateInput', 'dewChart', 'historyStrip', 'readingsBody', 'readingForm', 'readingResult', 'noteForm', 'roomForm'] as $id) {
+            $this->assertStringContainsString('id="'.$id.'"', $html);
+        }
+        $this->assertStringContainsString('href="/oficina/prefrio/punto-rocio"', $html);
+        $this->assertStringContainsString('aria-current="page"', $html);
+        if (getenv('ESTIBA_EXPORTAR_UI_TESTS') === '1') {
+            File::ensureDirectoryExists(storage_path('app/ui/oficina'));
+            File::put(storage_path('app/ui/oficina/punto-rocio.html'), $html);
+        }
+    }
+
     public function test_supervision_materiales_tiene_navegacion_y_consulta_sin_acciones_operativas(): void
     {
         $html = $this->get('/oficina/materiales/supervision')->assertOk()->getContent();

@@ -1,9 +1,9 @@
 import { createOfficeSessionSync } from './office-session-sync.js';
 export const byId = (id) => document.getElementById(id);
 export const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-export function message(text = '', error = false) { byId('rfeMessage').textContent = text; byId('rfeMessage').dataset.error = String(error); }
+export function message(text = '', error = false, id = 'rfeMessage') { const node = byId(id); if (!node) return; node.textContent = text; node.dataset.error = String(error); }
 export class ApiError extends Error { constructor(text, status) { super(text); this.status = status; } }
-export function officeSession(permission, load, reset) {
+export function officeSession(permission, load, reset, { messageId = 'rfeMessage', reloadId = 'reloadButton' } = {}) {
     const tokenKey = 'estiba_wms_office_token';
     const identityKey = 'estiba_wms_office_identity';
     let token = null;
@@ -35,7 +35,7 @@ export function officeSession(permission, load, reset) {
             try { identity = JSON.parse(localStorage.getItem(identityKey) || 'null'); } catch { identity = null; }
             reset();
             byId('officeApp').classList.add('is-hidden'); byId('officeAccess').classList.remove('is-hidden');
-            message();
+            message('', false, messageId);
         },
         load: async (_, isCurrent) => {
             await request('/api/oficina/contexto');
@@ -48,7 +48,7 @@ export function officeSession(permission, load, reset) {
             byId('officeInitials').textContent = (identity.nombre ?? 'OF').slice(0, 2).toUpperCase();
             await load(isCurrent);
         },
-        onError: (error) => { message(error.message, true); byId('officeLoginError').textContent = error.message; },
+        onError: (error) => { message(error.message, true, messageId); byId('officeLoginError').textContent = error.message; },
     });
     byId('officeLoginForm').addEventListener('submit', async (event) => {
         event.preventDefault(); const button = event.submitter; button.disabled = true;
@@ -63,6 +63,6 @@ export function officeSession(permission, load, reset) {
         localStorage.removeItem(tokenKey); localStorage.removeItem(identityKey);
         window.dispatchEvent(new Event('estiba:office-session'));
     });
-    byId('reloadButton').addEventListener('click', () => sync.reload(true));
+    byId(reloadId)?.addEventListener('click', () => sync.reload(true));
     return { request, can, start: () => sync.start(), reload: () => sync.reload(true) };
 }

@@ -31,6 +31,7 @@ use App\Models\VerificacionUbicacion;
 use App\Services\Camaras\EstadoEvacuacionEmergencia;
 use App\Services\Planificador\ServicioConciliacionPalletsHistoricos;
 use App\Services\Planificador\ServicioPuestoMandoPlanificador;
+use App\Services\Prefrio\PuntoRocio\ServicioPuntoRocio;
 use App\Services\Verificaciones\ServicioVerificacionesUbicacion;
 use App\Services\Verificaciones\VentanasVerificacion;
 use Carbon\CarbonImmutable;
@@ -732,6 +733,10 @@ class ServicioOperacionAhora
                 'ocupacion_porcentaje' => $this->porcentaje($ocupadas, $capacidad),
             ],
             'tuneles' => $tuneles->values()->all(),
+            // Chequeos de punto de rocío con riesgo de condensación aún sin acción correctiva.
+            'condensacion' => [
+                'alertas_pendientes' => app(ServicioPuntoRocio::class)->alertasPendientes(),
+            ],
         ];
     }
 

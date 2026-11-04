@@ -5,6 +5,7 @@ import {
   PrefrioProcess,
   PrefrioTunnel,
 } from '../domain/prefrio';
+import { DewPointDay, DewPointPayload, DewPointReading } from '../domain/dewPoint';
 import { ApiError } from './apiError';
 import { fetchWithTimeout } from './httpClient';
 
@@ -179,6 +180,25 @@ export async function executePrefrioCommand(
   const response = await request<{ data: PrefrioProcess }>(
     baseUrl,
     route,
+    token,
+    { method: 'POST', body: JSON.stringify(payload) },
+  );
+  return response.data;
+}
+
+/** Chequeos de punto de rocío del día operacional (hoy si no se indica fecha). */
+export async function getDewPointDay(baseUrl: string, token: string, date?: string) {
+  return request<DewPointDay>(
+    baseUrl,
+    `/api/prefrio/punto-rocio${date ? `?fecha=${encodeURIComponent(date)}` : ''}`,
+    token,
+  );
+}
+
+export async function registerDewPointReading(baseUrl: string, token: string, payload: DewPointPayload) {
+  const response = await request<{ data: DewPointReading }>(
+    baseUrl,
+    '/api/prefrio/punto-rocio',
     token,
     { method: 'POST', body: JSON.stringify(payload) },
   );

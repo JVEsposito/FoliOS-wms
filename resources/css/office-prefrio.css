@@ -593,6 +593,8 @@
 .decision-actions { justify-content: flex-end; }
 
 .prefrio-dialog {
+    /* El reset base deja margin: 0 en todo; el modal vuelve a centrarse. */
+    margin: auto;
     width: min(900px, calc(100vw - 30px));
     max-height: calc(100vh - 30px);
     padding: 0;

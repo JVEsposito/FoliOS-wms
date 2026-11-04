@@ -81,6 +81,7 @@ use App\Http\Controllers\Api\PrecargaValidacionOrigenController;
 use App\Http\Controllers\Api\ProcesoPrefrioController;
 use App\Http\Controllers\Api\ProductoHidrocoolerController;
 use App\Http\Controllers\Api\ProveedorMaterialController;
+use App\Http\Controllers\Api\PuntoRocioPrefrioController;
 use App\Http\Controllers\Api\RecepcionFrutaEmbaladaController;
 use App\Http\Controllers\Api\RecepcionMaterialController;
 use App\Http\Controllers\Api\RecepcionRomanaController;
@@ -299,6 +300,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/prefrio/procesos', [ProcesoPrefrioController::class, 'index']);
         Route::get('/prefrio/resumen', [ProcesoPrefrioController::class, 'resumen']);
         Route::get('/prefrio/procesos/{procesoPrefrio}', [ProcesoPrefrioController::class, 'show']);
+        Route::get('/prefrio/punto-rocio', [PuntoRocioPrefrioController::class, 'index']);
     });
     Route::middleware('can:operar-prefrio')->group(function () {
         Route::post('/prefrio/procesos', [ProcesoPrefrioController::class, 'store']);
@@ -308,11 +310,16 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/prefrio/procesos/{procesoPrefrio}/iniciar', [ProcesoPrefrioController::class, 'iniciar']);
         Route::post('/prefrio/procesos/{procesoPrefrio}/eventos/{tipo}', [ProcesoPrefrioController::class, 'registrarEvento']);
         Route::post('/prefrio/procesos/{procesoPrefrio}/verificar', [ProcesoPrefrioController::class, 'enviarAVerificacion']);
+        Route::post('/prefrio/punto-rocio', [PuntoRocioPrefrioController::class, 'store']);
     });
     Route::middleware('can:supervisar-prefrio')->group(function () {
         Route::post('/prefrio/procesos/{procesoPrefrio}/aprobar', [ProcesoPrefrioController::class, 'aprobar']);
         Route::post('/prefrio/procesos/{procesoPrefrio}/reprocesar', [ProcesoPrefrioController::class, 'reprocesar']);
         Route::post('/prefrio/procesos/{procesoPrefrio}/cancelar', [ProcesoPrefrioController::class, 'cancelar']);
+        Route::post('/prefrio/punto-rocio/{medicion}/accion', [PuntoRocioPrefrioController::class, 'accion']);
+        Route::post('/prefrio/punto-rocio/{medicion}/anular', [PuntoRocioPrefrioController::class, 'anular']);
+        Route::post('/prefrio/punto-rocio/salas', [PuntoRocioPrefrioController::class, 'guardarSala']);
+        Route::put('/prefrio/punto-rocio/salas/{sala}', [PuntoRocioPrefrioController::class, 'guardarSala']);
     });
     Route::put(
         '/administracion/prefrio/procesos/{procesoPrefrio}/corregir',

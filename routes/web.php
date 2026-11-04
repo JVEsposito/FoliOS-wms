@@ -86,6 +86,7 @@ Route::view('/oficina/comex/comercial', 'office.comex-commercial');
 Route::view('/oficina/comex/notas', 'office.comex-notes');
 Route::view('/oficina/comex/bookings', 'office.comex-bookings');
 Route::view('/oficina/prefrio', 'office.precooling');
+Route::view('/oficina/prefrio/punto-rocio', 'office.precooling-dew-point');
 Route::view('/oficina/frigorifico/inspeccion-sag', 'office.sag-inspections');
 Route::view('/oficina/operacion-ahora', 'office.operation-now');
 Route::view('/oficina/gerencia', 'office.management');
