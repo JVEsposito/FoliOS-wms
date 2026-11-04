@@ -41,7 +41,11 @@
                         <label><span>Temporada visible</span><select id="seasonSelector"></select></label>
                         <a class="secondary-button" href="/oficina/validacion/pendientes">Pendientes por validar</a>
                         <a class="secondary-button" href="/oficina/validacion/etiquetas">Etiquetas PT</a>
-                        <button class="primary-button" id="exportValidationRegisterButton" type="button">Descargar RRPP-01</button>
+                        <div class="validation-downloads">
+                            <button class="secondary-button" id="exportValidationRegisterButton" type="button" aria-describedby="validationExportScope" disabled>RRPP-01 (Excel)</button>
+                            <button class="primary-button" id="exportValidationPdfButton" type="button" aria-describedby="validationExportScope" disabled>Descargar PDF</button>
+                            <small id="validationExportScope" aria-live="polite"></small>
+                        </div>
                     </div>
                 </header>
 
@@ -69,11 +73,12 @@
                             <select name="linea_proceso"><option value="">Todas las líneas</option><option value="1">Línea 1</option><option value="2">Línea 2</option><option value="3">Línea 3</option></select>
                             <select name="turno"><option value="">Todos los turnos</option><option value="A">Turno A</option><option value="B">Turno B</option></select>
                             <select id="validationUserFilter" name="user_id"><option value="">Todos los encargados</option></select>
+                            <select id="validationClientFilter" name="cliente" aria-label="Cliente"><option value="">Todos los clientes</option></select>
                             <select name="resultado"><option value="">Todos los resultados</option><option value="aprobado">Aprobado</option><option value="observado">Observado</option><option value="rechazado">Rechazado</option></select>
                             <select name="estado"><option value="">Todos los estados</option><option value="aceptada">Aceptada</option><option value="conflicto">Conflicto</option></select>
                             <button class="secondary-button" type="submit">Filtrar</button>
                     </form>
-                    <p class="validation-help">El registro RRPP-01 utiliza la fecha real de terreno y agrupa automáticamente cada hoja por encargado, línea y turno. La versión en blanco conserva el formato oficial para contingencia, trazabilidad y auditoría. <button class="validation-link" id="downloadBlankValidationRegisterButton" type="button">Descargar planilla en blanco</button></p>
+                    <p class="validation-help">El PDF usa los filtros aplicados al historial. El registro RRPP-01 utiliza la fecha real de terreno y agrupa automáticamente cada hoja por encargado, línea y turno. <button class="validation-link" id="downloadBlankValidationRegisterButton" type="button">Descargar planilla en blanco</button></p>
                     <div class="validation-table-scroll"><table class="validation-table"><thead><tr><th>Folio</th><th>Artículo</th><th>Origen</th><th>Resultado</th><th>Validador y jornada</th><th scope="col"><span class="office-visually-hidden">Acciones</span></th></tr></thead><tbody id="validationHistoryBody"></tbody></table></div>
                 </section>
 

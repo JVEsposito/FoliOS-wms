@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\EstadoValidacionPallet;
 use App\Enums\ResultadoValidacionPallet;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Http\FormRequest;
@@ -23,6 +24,9 @@ class ExportarRegistroValidacionPalletRequest extends FormRequest
             'temporada_id' => ['required', 'uuid', 'exists:temporadas,id'],
             'fecha' => ['required', 'date_format:Y-m-d'],
             'folio' => ['nullable', 'string', 'max:50'],
+            'cliente' => ['nullable', 'string', 'max:255'],
+            'formato' => ['nullable', Rule::in(['xlsx', 'pdf'])],
+            'estado' => ['exclude_unless:formato,pdf', 'nullable', Rule::enum(EstadoValidacionPallet::class)],
             'resultado' => ['nullable', Rule::enum(ResultadoValidacionPallet::class)],
             'linea_proceso' => ['nullable', 'integer', Rule::in([1, 2, 3])],
             'turno' => ['nullable', 'string', Rule::in(['A', 'B'])],

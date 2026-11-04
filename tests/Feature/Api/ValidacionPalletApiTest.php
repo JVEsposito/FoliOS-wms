@@ -778,6 +778,59 @@ class ValidacionPalletApiTest extends TestCase
         $zip->close();
     }
 
+    public function test_filtra_el_historial_y_ambas_descargas_por_cliente_registrado(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-11-04T01:00:00Z'));
+        [$catalogo, $token] = $this->contexto(RolUsuario::Administrador, 'VAL-CLIENTES');
+        $falco = json_encode(['origen' => ['cliente' => 'FALCO FRUIT', 'marca' => 'FALCO', 'csg' => '122104']]);
+        for ($numero = 1; $numero <= 27; $numero++) {
+            $this->insertarIntentoResumen($catalogo, sprintf('FALCO-%03d', $numero), ['snapshot' => $falco]);
+        }
+        $this->insertarIntentoResumen($catalogo, 'DIS-001', ['snapshot' => '{"origen":{"cliente":"DIS"}}']);
+        $this->insertarIntentoResumen($catalogo, 'FALCO-CONFLICTO', ['snapshot' => $falco, 'estado' => 'conflicto']);
+        $this->insertarIntentoResumen($catalogo, 'FALCO-OTRA-FECHA', [
+            'snapshot' => $falco, 'generado_dispositivo_at' => now()->addDay(),
+        ]);
+        $filtros = [
+            'temporada_id' => $catalogo['temporada_id'],
+            'fecha' => '2026-11-03',
+            'cliente' => 'FALCO FRUIT',
+            'estado' => 'aceptada',
+        ];
+
+        $this->conToken($token)->getJson('/api/validacion/registro/opciones')
+            ->assertOk()->assertJsonPath('clientes', ['DIS', 'FALCO FRUIT']);
+        $this->conToken($token)->getJson('/api/validacion/pallets?'.http_build_query([...$filtros, 'per_page' => 25]))
+            ->assertOk()->assertJsonCount(25, 'data')->assertJsonPath('meta.total', 27)
+            ->assertJsonPath('data.0.catalogo.origen.cliente', 'FALCO FRUIT');
+        $this->conToken($token)->getJson('/api/validacion/registro/resumen?'.http_build_query($filtros))
+            ->assertOk()->assertJsonPath('dia.validados', 27);
+
+        $ruta = '/api/validacion/registro/rrpp-01?';
+        $pdf = $this->conToken($token)->get($ruta.http_build_query([...$filtros, 'formato' => 'pdf', 'per_page' => 25]))
+            ->assertOk()->assertHeader('Content-Type', 'application/pdf')
+            ->assertDownload('validaciones-pt_2026-11-03_falco-fruit.pdf')->getContent();
+        $this->assertStringStartsWith('%PDF-1.4', $pdf);
+        foreach (['Cliente: FALCO FRUIT', '03-11-2026', '22:00', 'Hoja 2 de 2', 'FALCO-001', 'FALCO-027'] as $texto) {
+            $this->assertStringContainsString($texto, $pdf);
+        }
+        foreach (['DIS-001', 'FALCO-CONFLICTO', 'FALCO-OTRA-FECHA'] as $folio) {
+            $this->assertStringNotContainsString($folio, $pdf);
+        }
+        $this->conToken($token)->getJson($ruta.http_build_query([...$filtros, 'formato' => 'pdf', 'cliente' => 'SIN REGISTROS']))
+            ->assertUnprocessable()->assertJsonValidationErrors('filtros');
+
+        $excel = $this->conToken($token)->get($ruta.http_build_query($filtros))
+            ->assertOk()->assertDownload('RRPP-01_2026-11-03_falco-fruit.xlsx');
+        $zip = new ZipArchive;
+        $this->assertTrue($zip->open($excel->baseResponse->getFile()->getPathname()) === true);
+        $hoja = $zip->getFromName('xl/worksheets/sheet2.xml');
+        $this->assertIsString($hoja);
+        $this->assertMatchesRegularExpression('/^FALCO-\d{3}$/', $this->valorCelda($hoja, 'B11'));
+        $this->assertSame('', $this->valorCelda($hoja, 'B18'));
+        $zip->close();
+    }
+
     public function test_descarga_rrpp_01_en_blanco_sin_validaciones_previas(): void
     {
         [, $token] = $this->contexto(RolUsuario::Validador, 'VAL-RRPP-BLANCO');

@@ -23,6 +23,7 @@ class ConsultarValidacionesPalletRequest extends FormRequest
         return [
             'temporada_id' => ['nullable', 'uuid', 'exists:temporadas,id'],
             'folio' => ['nullable', 'string', 'max:50'],
+            'cliente' => ['nullable', 'string', 'max:255'],
             'resultado' => ['nullable', Rule::enum(ResultadoValidacionPallet::class)],
             'estado' => ['nullable', Rule::enum(EstadoValidacionPallet::class)],
             'fecha' => ['nullable', 'date_format:Y-m-d'],
