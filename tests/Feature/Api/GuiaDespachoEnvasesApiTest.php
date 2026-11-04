@@ -6,6 +6,7 @@ use App\Enums\RolUsuario;
 use App\Models\Cliente;
 use App\Models\GuiaDespachoEnvase;
 use App\Models\MovimientoEnvase;
+use App\Models\ProductorCsg;
 use App\Models\Temporada;
 use App\Models\User;
 use App\Services\Envases\ServicioGuiaDespachoEnvases;
@@ -21,6 +22,88 @@ class GuiaDespachoEnvasesApiTest extends TestCase
 {
     use PreparaInspeccionesEnvases;
     use RefreshDatabase;
+
+    public function test_despacho_nuevo_solo_admite_productores_asociados_al_cliente(): void
+    {
+        $temporada = Temporada::query()->where('activa', true)->firstOrFail();
+        $cliente = Cliente::create(['codigo' => 'EXP-01', 'nombre' => 'Exportadora uno', 'activo' => true]);
+        $otroCliente = Cliente::create(['codigo' => 'EXP-02', 'nombre' => 'Exportadora dos', 'activo' => true]);
+        $operador = User::factory()->create(['rol' => RolUsuario::OperadorRomana]);
+        $productor = $this->productorCsg($cliente, $operador, '122104');
+        $inactivo = $this->productorCsg($cliente, $operador, '122105', activo: false);
+        $ajeno = $this->productorCsg($otroCliente, $operador, '122106');
+        $this->movimientoIngreso($temporada, $cliente, $operador, 'propia', 20);
+        $this->actingAs($operador, 'sanctum');
+
+        $ruta = '/api/envases/guias-despacho';
+        $this->getJson($ruta.'/productores/'.$cliente->id)->assertOk()->assertExactJson(['data' => [[
+            'id' => $productor->id, 'codigo' => '122104', 'nombre' => 'Productor 122104',
+        ]]]);
+        $payload = $this->payloadGuia($cliente, (string) Str::uuid(), [
+            ['tipo_envase' => 'bins', 'cantidad' => 6, 'propiedad' => 'propia'],
+        ]);
+        foreach ([$ajeno, $inactivo] as $invalido) {
+            $this->postJson($ruta, [...$payload, 'productor_csg_id' => $invalido->id])
+                ->assertUnprocessable()->assertJsonValidationErrors('productor_csg_id');
+        }
+
+        $payload['productor_csg_id'] = $productor->id;
+        $guia = $this->postJson($ruta, $payload)->assertCreated()
+            ->assertJsonPath('data.productor.codigo', '122104')->json('data');
+        $this->postJson($ruta, $payload)->assertCreated()->assertJsonPath('data.id', $guia['id']);
+        $this->postJson($ruta, [...$payload, 'productor_csg_id' => null])->assertConflict();
+        $this->putJson($ruta.'/'.$guia['id'], [...$payload, 'version' => $guia['version'], 'cliente_id' => $otroCliente->id])
+            ->assertUnprocessable()->assertJsonValidationErrors('productor_csg_id');
+        $this->postJson($ruta.'/'.$guia['id'].'/confirmar', ['numero_guia_despacho' => '2221'])
+            ->assertOk()->assertJsonPath('data.productor.id', $productor->id);
+        $this->assertDatabaseCount('guias_despacho_envases', 1);
+    }
+
+    public function test_admin_corrige_productor_historico_y_el_pdf_mantiene_el_saldo(): void
+    {
+        $temporada = Temporada::query()->where('activa', true)->firstOrFail();
+        $cliente = Cliente::create(['codigo' => 'EXP-01', 'nombre' => 'Exportadora uno', 'activo' => true]);
+        $operador = User::factory()->create(['rol' => RolUsuario::OperadorRomana]);
+        $admin = User::factory()->create(['rol' => RolUsuario::Administrador]);
+        $productor = $this->productorCsg($cliente, $admin, '122104');
+        $otroProductor = $this->productorCsg($cliente, $admin, '122107');
+        $this->movimientoIngreso($temporada, $cliente, $operador, 'propia', 20);
+        $this->actingAs($operador, 'sanctum');
+        $ruta = '/api/envases/guias-despacho';
+        $guia = $this->postJson($ruta, $this->payloadGuia($cliente, (string) Str::uuid(), [
+            ['tipo_envase' => 'bins', 'cantidad' => 6, 'propiedad' => 'propia'],
+        ]))->assertCreated()->json('data');
+        $ruta .= '/'.$guia['id'];
+        $guia = $this->postJson($ruta.'/confirmar', ['numero_guia_despacho' => '2227'])->assertOk()
+            ->assertJsonPath('data.productor', null)->assertJsonPath('data.puede_editar_productor', false)->json('data');
+        $correccion = ['productor_csg_id' => $productor->id, 'motivo' => 'Destinatario indicado en la guía.', 'version' => $guia['version']];
+        $this->putJson($ruta.'/productor', $correccion)->assertForbidden();
+
+        $this->actingAs($admin, 'sanctum');
+        $reporte = '/api/envases/cuenta-corriente/estado-cuenta?cliente_id='.$cliente->id;
+        $antes = $this->get($reporte)->assertOk()->getContent();
+        $this->assertStringContainsString('Sin productor asignado', $antes);
+        $this->putJson($ruta.'/productor', [...$correccion, 'motivo' => ' '])->assertUnprocessable();
+        $this->putJson($ruta.'/productor', $correccion)->assertOk()
+            ->assertJsonPath('data.productor.codigo', '122104')
+            ->assertJsonPath('data.puede_editar_productor', true)
+            ->assertJsonPath('data.documento_hash', $guia['documento_hash']);
+        $this->putJson($ruta.'/productor', $correccion)->assertOk();
+        $this->putJson($ruta.'/productor', [...$correccion, 'productor_csg_id' => $otroProductor->id])->assertConflict();
+
+        $evento = GuiaDespachoEnvase::findOrFail($guia['id'])->eventos()->where('tipo', 'productor_corregido')->sole();
+        $this->assertSame($admin->id, $evento->user_id);
+        $this->assertNull($evento->datos['anterior']);
+        $this->assertSame('122104', $evento->datos['nuevo']['codigo']);
+        $this->assertSame($correccion['motivo'], $evento->datos['motivo']);
+        $despues = $this->get($reporte)->assertOk()->getContent();
+        $this->assertStringContainsString('CSG 122104', $despues);
+        $this->assertStringContainsString('Productor 122104', $despues);
+        $this->assertStringNotContainsString('Sin productor asignado', $despues);
+        $this->assertSame(-6, $this->saldoCuenta($cliente));
+        $this->assertSame(14, $this->existencia('propia'));
+        $this->assertDatabaseCount('movimientos_envases', 2);
+    }
 
     public function test_identifica_el_formato_de_la_patente_y_permite_corregir_el_borrador_sin_crear_reservas_por_el_error(): void
     {
@@ -583,6 +666,29 @@ class GuiaDespachoEnvasesApiTest extends TestCase
             'salida_at' => '2026-07-21T12:15:00-04:00',
             'detalles' => $detalles,
         ];
+    }
+
+    private function productorCsg(Cliente $cliente, User $usuario, string $codigo, bool $activo = true): ProductorCsg
+    {
+        $productor = ProductorCsg::create([
+            'codigo' => $codigo,
+            'razon_social' => 'Productor '.$codigo,
+            'predio' => 'Predio '.$codigo,
+            'estado_sag' => 'activo',
+            'fuente_url' => 'https://www.sag.gob.cl/',
+            'primera_verificacion_at' => now(),
+            'ultima_verificacion_at' => now(),
+            'ultima_consulta_user_id' => $usuario->id,
+            'respuesta_hash' => hash('sha256', $codigo),
+        ]);
+        $cliente->productoresCsg()->attach($productor, [
+            'id' => (string) Str::uuid(),
+            'activo' => $activo,
+            'asociado_por_user_id' => $usuario->id,
+            'actualizado_por_user_id' => $usuario->id,
+        ]);
+
+        return $productor;
     }
 
     private function movimientoIngreso(

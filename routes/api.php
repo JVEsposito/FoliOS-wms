@@ -223,6 +223,7 @@ Route::middleware('auth:sanctum')->group(function () {
         ->middleware('can:ajustar-cuenta-envases');
     Route::middleware('can:consultar-cuenta-envases')->prefix('envases/guias-despacho')->group(function () {
         Route::get('/catalogos', [GuiaDespachoEnvaseController::class, 'catalogos']);
+        Route::get('/productores/{cliente}', [GuiaDespachoEnvaseController::class, 'productores']);
         Route::get('/', [GuiaDespachoEnvaseController::class, 'index']);
         Route::get('/{guiaDespachoEnvase}', [GuiaDespachoEnvaseController::class, 'show']);
         Route::get('/{guiaDespachoEnvase}/documento', [GuiaDespachoEnvaseController::class, 'documento']);
@@ -239,6 +240,8 @@ Route::middleware('auth:sanctum')->group(function () {
     });
     Route::post('/envases/guias-despacho/{guiaDespachoEnvase}/anular', [GuiaDespachoEnvaseController::class, 'anular'])
         ->middleware('can:anular-despacho-envases');
+    Route::put('/envases/guias-despacho/{guiaDespachoEnvase}/productor', [GuiaDespachoEnvaseController::class, 'corregirProductor'])
+        ->middleware('can:corregir-productor-despacho-envases');
 
     Route::get('/camaras', [CamaraController::class, 'index']);
     Route::get('/camaras/{camara}/plano', [CamaraController::class, 'plano']);

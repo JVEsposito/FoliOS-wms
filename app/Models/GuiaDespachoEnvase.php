@@ -17,6 +17,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
     'operacion_id', 'payload_hash', 'numero', 'numero_guia_despacho', 'temporada_id',
     'temporada_codigo_snapshot', 'temporada_nombre_snapshot',
     'cliente_id', 'cliente_codigo_snapshot', 'cliente_nombre_snapshot', 'estado', 'salida_at',
+    'productor_csg_id', 'productor_snapshot',
     'patente_camion', 'rut_conductor', 'nombre_conductor', 'observacion', 'version',
     'creado_por_user_id', 'confirmado_por_user_id', 'anulado_por_user_id', 'cancelado_por_user_id',
     'confirmado_at', 'cancelado_at', 'anulado_at', 'motivo_anulacion', 'motivo_cancelacion',
@@ -36,6 +37,14 @@ class GuiaDespachoEnvase extends Model implements PerteneceATemporada
     public function cliente(): BelongsTo
     {
         return $this->belongsTo(Cliente::class);
+    }
+
+    /** @return array{id: string, codigo: string, nombre: string}|null */
+    public function productorDestino(): ?array
+    {
+        return $this->productor_csg_id === null
+            ? null
+            : ['id' => $this->productor_csg_id] + $this->productor_snapshot;
     }
 
     public function detalles(): HasMany
@@ -89,6 +98,7 @@ class GuiaDespachoEnvase extends Model implements PerteneceATemporada
             'cancelado_at' => 'datetime',
             'anulado_at' => 'datetime',
             'documento_snapshot' => 'array',
+            'productor_snapshot' => 'array',
             'documento_generado_at' => 'datetime',
             'version' => 'integer',
         ];
