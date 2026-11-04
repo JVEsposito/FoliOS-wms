@@ -101,6 +101,7 @@ async function openPage(browser, width, { supervisor = true } = {}) {
         if (path === '/api/prefrio/punto-rocio' && request.method() === 'POST') {
             const body = request.postDataJSON();
             state.posts.push({ path, body });
+            if (state.failNextReading) { state.failNextReading = false; return route.abort('connectionreset'); }
             const created = reading({
                 id: 'm-new', etapa: body.etapa, etapa_etiqueta: label(body.etapa), punto_tipo: body.punto_tipo, punto_id: body.punto_id, punto: 'Sala de sellado',
                 temperatura_ambiente_c: body.temperatura_ambiente_c, humedad_relativa: body.humedad_relativa, temperatura_superficie_c: body.temperatura_superficie_c,
@@ -192,9 +193,16 @@ test('supervisión revisa el día, registra una medición y atiende la alerta de
             await form.locator('[name="punto"]').selectOption('sala:sala-sellado');
             await form.locator('[name="observacion"]').fill('Antes de sellar la línea 2.');
             if (process.env.DEW_POINT_SCREENSHOT_DIR) await page.screenshot({ path: resolve(process.env.DEW_POINT_SCREENSHOT_DIR, `registro-${width}.png`) });
+            // La primera respuesta se pierde: el reintento debe reutilizar la misma operación.
+            state.failNextReading = true;
             await page.locator('#saveReadingButton').click();
-            await page.locator('#readingDialog').waitFor({ state: 'hidden' });
-            const [post] = state.posts;
+            await page.locator('#readingError', { hasText: 'No hay conexión' }).waitFor();
+            await page.locator('#saveReadingButton').click();
+            await page.locator('#officeToasts .toast').waitFor();
+            assert.equal(state.posts.length, 2);
+            assert.equal(state.posts[0].body.operacion_id, state.posts[1].body.operacion_id);
+            const post = state.posts.pop();
+            state.posts.length = 0;
             assert.equal(post.path, '/api/prefrio/punto-rocio');
             assert.match(post.body.operacion_id, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
             assert.deepEqual(
@@ -215,6 +223,7 @@ test('supervisión revisa el día, registra una medición y atiende la alerta de
             await page.locator('#noteForm [name="texto"]').fill('Se bajó la humedad de la sala y se esperó 20 minutos antes de sellar.');
             await page.locator('#saveNoteButton').click();
             await page.locator('#noteDialog').waitFor({ state: 'hidden' });
+            await page.locator('#officeToasts .toast', { hasText: 'Acción correctiva registrada.' }).waitFor();
             assert.deepEqual(state.posts.at(-1), { path: '/api/prefrio/punto-rocio/m-1/accion', body: { texto: 'Se bajó la humedad de la sala y se esperó 20 minutos antes de sellar.' } });
             assert.match(await page.locator('#readingsBody').textContent(), /Acción de Supervisión frío: Se bajó la humedad/);
             assert.equal(await page.locator('#readingsBody [data-action="accion"][data-id="m-1"]').count(), 0);

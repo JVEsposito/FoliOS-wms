@@ -14,7 +14,7 @@ Chart.register(CategoryScale, LinearScale, LineController, LineElement, PointEle
  */
 const FALLBACK_PALETTE = { cyan: '#2bb3d9', amber: '#d89b2b', red: '#d9534f', green: '#3c9d5d', blue: '#3f7cc4', muted: '#8aa0b2', grid: 'rgba(138, 160, 178, .25)', tooltipBg: '#102f43', tooltipBorder: '#2a4a60', tooltipText: '#ffffff' };
 const DROPS = { si: 'Sí', no: 'No', pendiente: 'Pendiente' };
-const state = { data: null, date: null, stage: '', palette: null, note: null };
+const state = { data: null, date: null, stage: '', palette: null, note: null, attempt: null };
 let chart = null;
 
 const numberFormat = new Intl.NumberFormat('es-CL', { maximumFractionDigits: 1, minimumFractionDigits: 1 });
@@ -279,22 +279,26 @@ byId('readingForm').addEventListener('submit', async (event) => {
     setBusy(true, 'Guardando medición…');
     try {
         const surface = readNumber(form, 'temperatura_superficie_c');
+        const reading = {
+            etapa: form.elements.etapa.value,
+            punto_tipo: type,
+            punto_id: id,
+            referencia: form.elements.referencia.value.trim() || null,
+            temperatura_ambiente_c: ambient,
+            humedad_relativa: humidity,
+            temperatura_superficie_c: surface,
+            gotas_visibles: form.elements.gotas_visibles.value,
+            observacion: form.elements.observacion.value.trim() || null,
+            medido_at: measuredAt.toISOString(),
+        };
+        // Reintentar la misma medición (p. ej., tras perder la red) reutiliza su operación y no la duplica.
+        const key = JSON.stringify(reading);
+        if (state.attempt?.key !== key) state.attempt = { key, id: createUuid() };
         const payload = await session.request('/api/prefrio/punto-rocio', {
             method: 'POST',
-            body: JSON.stringify({
-                operacion_id: createUuid(),
-                etapa: form.elements.etapa.value,
-                punto_tipo: type,
-                punto_id: id,
-                referencia: form.elements.referencia.value.trim() || null,
-                temperatura_ambiente_c: ambient,
-                humedad_relativa: humidity,
-                temperatura_superficie_c: surface,
-                gotas_visibles: form.elements.gotas_visibles.value,
-                observacion: form.elements.observacion.value.trim() || null,
-                medido_at: measuredAt.toISOString(),
-            }),
+            body: JSON.stringify({ operacion_id: state.attempt.id, ...reading }),
         });
+        state.attempt = null;
         byId('readingDialog').close();
         state.date = payload.data.fecha;
         await load();
