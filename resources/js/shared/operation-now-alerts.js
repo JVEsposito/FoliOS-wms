@@ -1,3 +1,5 @@
+import { dewPointAlerts } from './dew-point.js';
+
 const priority = { critical: 0, warning: 1, info: 2 };
 
 function numeric(value) {
@@ -183,6 +185,7 @@ export function buildOperationalAlerts(snapshot = {}) {
         })),
         ...cameraAlerts(productCameras),
         ...tunnelAlerts(snapshot.prefrio?.tuneles || []),
+        ...dewPointAlerts(snapshot.prefrio?.condensacion?.alertas_pendientes || []),
         ...reentryAlerts(snapshot.despacho?.reingresos || []),
         ...synchronizationAlerts(snapshot.sincronizacion),
     ];

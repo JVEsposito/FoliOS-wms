@@ -309,6 +309,48 @@ POST /api/administracion/prefrio/tuneles
 PUT  /api/administracion/prefrio/tuneles/{id}
 ```
 
+## Punto de rocío (chequeos de condensación)
+
+Los chequeos de punto de rocío son mediciones diarias independientes de los procesos de túnel: sirven para vigilar el riesgo de condensación sobre la fruta en sellado, paletizado, ingreso y salida de prefrío, almacenamiento u otra etapa. No bloquean ninguna operación.
+
+Cada medición registra:
+
+- etapa (sellado, paletizado, ingreso prefrío, salida prefrío, almacenamiento u otro);
+- punto de control: una sala configurada por supervisión (sellado, paletizado…), un túnel de prefrío activo o una cámara activa;
+- T° y humedad relativa del aire;
+- T° superficial de la fruta (o de la película) opcional, nunca la de pulpa;
+- gotas visibles: sí, no o pendiente;
+- lote, pallet o referencia y observación opcionales;
+- hora de medición, usuario y tablet.
+
+El servidor calcula con la aproximación de Magnus (a = 17,625; b = 243,04 °C), igual que la calculadora de cerezas:
+
+- punto de rocío del aire;
+- vapor de agua en g/m³;
+- margen = T° superficial − punto de rocío;
+- estado: **Medir superficie** (sin T° superficial), **Condensación posible** (margen < 0), **Margen bajo** (margen menor al mínimo) o **Margen favorable**.
+
+El margen mínimo es 2 °C por defecto (`PREFRIO_PUNTO_ROCIO_MARGEN_MINIMO_C`). Es un criterio preventivo interno, no una norma. Dentro de bolsas selladas, el agua superficial y el vapor de la fruta pueden condensar aunque la sala cumpla.
+
+Una medición con condensación posible, margen bajo o gotas visibles queda como alerta: se avisa a supervisión de frío en Operación ahora (crítica si hay condensación o gotas) y la alerta se mantiene hasta que supervisión registre una acción correctiva. Supervisión también puede anular una medición mal tomada indicando el motivo; la medición anulada queda visible, pero no cuenta en el resumen.
+
+Reglas de registro:
+
+- cada medición usa un `operacion_id` (UUID); repetirlo con el mismo contenido no duplica y reutilizarlo con otro contenido genera conflicto;
+- la hora de medición no puede estar en el futuro y solo se aceptan los últimos 7 días (`PREFRIO_PUNTO_ROCIO_DIAS_RETROACTIVOS`);
+- el día operacional se calcula en la zona horaria de la planta.
+
+La oficina `/oficina/prefrio/punto-rocio` muestra por día el resumen (registros, rocío máximo, margen mínimo, alertas y gotas), el gráfico de T° ambiente, punto de rocío y T° superficial, los últimos 14 días, el filtro por etapa y el registro completo. Permite registrar y corregir desde oficina, y a supervisión registrar acciones, anular y administrar salas. En la tablet, la pestaña **Punto de rocío** de Prefrío registra la medición con el cálculo en vivo y lista los chequeos del día; requiere conexión y un reintento tras perder la red no duplica la medición.
+
+```http
+GET  /api/prefrio/punto-rocio?fecha=YYYY-MM-DD&etapa=…    (consultar)
+POST /api/prefrio/punto-rocio                             (operar)
+POST /api/prefrio/punto-rocio/{medicion}/accion           (supervisar)
+POST /api/prefrio/punto-rocio/{medicion}/anular           (supervisar)
+POST /api/prefrio/punto-rocio/salas                       (supervisar)
+PUT  /api/prefrio/punto-rocio/salas/{sala}                (supervisar)
+```
+
 ## Interfaces implementadas
 
 La oficina `/oficina/prefrio` permite configurar túneles, crear y filtrar procesos, consultar el plano en dos lados desde el fondo hacia la entrada, revisar el historial y tomar decisiones de aprobación, reproceso o cancelación según las capacidades del usuario.

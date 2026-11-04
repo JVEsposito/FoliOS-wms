@@ -31,6 +31,7 @@ import {
   savePrefrioCache,
 } from '../services/prefrioOfflineStore';
 import { colors } from '../theme/colors';
+import { DewPointScreen } from './DewPointScreen';
 import { PrefrioScreen } from './PrefrioScreen';
 
 type PrefrioWorkspaceProps = {
@@ -39,7 +40,7 @@ type PrefrioWorkspaceProps = {
   onLogout: () => void;
 };
 
-type WorkspaceView = 'pendientes' | 'tuneles';
+type WorkspaceView = 'pendientes' | 'tuneles' | 'rocio';
 
 type CandidateGroup = {
   key: PrefrioFolioCandidate['condicion_termica'];
@@ -156,7 +157,7 @@ export function PrefrioWorkspaceScreen({ auth, baseUrl, onLogout }: PrefrioWorks
   useEffect(() => {
     const previous = previousView.current;
     previousView.current = activeView;
-    if (previous === 'tuneles' && activeView === 'pendientes') {
+    if (previous !== 'pendientes' && activeView === 'pendientes') {
       void synchronize(false);
     }
   }, [activeView]);
@@ -327,6 +328,17 @@ export function PrefrioWorkspaceScreen({ auth, baseUrl, onLogout }: PrefrioWorks
     }
   }
 
+  if (activeView === 'rocio') {
+    return (
+      <View style={styles.screen}>
+        <WorkspaceTabs activeView={activeView} pendingCount={folios.length} onChange={setActiveView} />
+        <View style={styles.tunnelWorkspace}>
+          <DewPointScreen auth={auth} baseUrl={baseUrl} onLogout={onLogout} />
+        </View>
+      </View>
+    );
+  }
+
   if (activeView === 'tuneles') {
     return (
       <View style={styles.screen}>
@@ -441,6 +453,9 @@ function WorkspaceTabs({ activeView, pendingCount, onChange }: { activeView: Wor
       </Pressable>
       <Pressable onPress={() => onChange('tuneles')} style={[styles.tab, activeView === 'tuneles' && styles.tabActive]}>
         <Text style={[styles.tabText, activeView === 'tuneles' && styles.tabTextActive]}>Túneles y procesos</Text>
+      </Pressable>
+      <Pressable onPress={() => onChange('rocio')} style={[styles.tab, activeView === 'rocio' && styles.tabActive]}>
+        <Text style={[styles.tabText, activeView === 'rocio' && styles.tabTextActive]}>Punto de rocío</Text>
       </Pressable>
     </View>
   );

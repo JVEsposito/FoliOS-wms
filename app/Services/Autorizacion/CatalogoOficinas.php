@@ -66,6 +66,7 @@ class CatalogoOficinas
         ['frigorifico', 'Contraparte SAG', '/oficina/frigorifico/contraparte-sag', 'frigorifico.contraparte-sag', ['puede_consultar_contraparte_sag']],
         ['frigorifico', 'Inspección SAG', '/oficina/frigorifico/inspeccion-sag', 'frigorifico.inspeccion-sag', ['puede_consultar_inspeccion_sag']],
         ['frigorifico', 'Prefrío', '/oficina/prefrio', 'frigorifico.prefrio', ['puede_consultar_prefrio']],
+        ['frigorifico', 'Punto de rocío', '/oficina/prefrio/punto-rocio', 'frigorifico.prefrio', ['puede_consultar_prefrio']],
         ['frigorifico', 'Cámaras', '/oficina/frigorifico/camaras', 'frigorifico.camaras', ['ambito_camaras_productos']],
         ['frigorifico', 'Labores por turno', '/oficina/frigorifico/labores-turno', 'frigorifico.camaras', ['puede_supervisar_camaras_productos']],
         ['frigorifico', 'Discrepancias', '/oficina/frigorifico/discrepancias', 'frigorifico.camaras', ['puede_supervisar']],

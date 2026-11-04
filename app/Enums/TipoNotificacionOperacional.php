@@ -13,4 +13,5 @@ enum TipoNotificacionOperacional: string
     case IncidenciaCargaResuelta = 'incidencia_carga_resuelta';
     case RecepcionRomanaCreada = 'recepcion_romana_creada';
     case CierreTemporadaPendiente = 'cierre_temporada_pendiente';
+    case CondensacionPrefrio = 'condensacion_prefrio';
 }

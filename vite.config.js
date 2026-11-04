@@ -71,6 +71,8 @@ export default defineConfig({
                 'resources/js/office-repalletizing.js',
                 'resources/css/office-prefrio.css',
                 'resources/js/office-prefrio.js',
+                'resources/css/office-prefrio-dew-point.css',
+                'resources/js/office-prefrio-dew-point.js',
                 'resources/css/office-sag-inspections.css',
                 'resources/js/office-sag-inspections.js',
                 'resources/css/office-sag-counterpart.css',
