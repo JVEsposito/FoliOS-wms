@@ -75,8 +75,9 @@ class GeneradorEstadoCuentaEnvasesPdf
         $y -= 16;
 
         foreach ($estado['movimientos'] as $linea) {
-            $destinatario = $linea['destinatario_despacho'] ?? null;
-            $renglones = $destinatario === null ? [] : $this->pdf->envolver($destinatario, 445, 7);
+            $productor = $linea['productor'] ?? null;
+            $renglones = $productor === null ? [] : $this->pdf->envolver($productor, 445, 7);
+            $guia = $this->cortar((string) $linea['documento'], 17);
             if ($y - count($renglones) * 9 < self::LIMITE_INFERIOR) {
                 $paginas[] = $contenido;
                 $contenido = $this->cabecera($estado);
@@ -85,7 +86,7 @@ class GeneradorEstadoCuentaEnvasesPdf
                 $y -= 16;
             }
             $contenido .= $this->pdf->texto(self::MARGEN + 2, $y, 7.5, $this->fecha($linea['fecha']));
-            $contenido .= $this->pdf->texto(106, $y, 7.5, $this->cortar((string) $linea['documento'], 17));
+            $contenido .= $this->pdf->texto(106, $y, 7.5, $guia);
             $contenido .= $this->pdf->texto(190, $y, 7.5, $this->cortar($linea['movimiento'], 27));
             $contenido .= $this->pdf->texto(318, $y, 7.5, $this->cortar($linea['tipo_envase'], 15));
             $contenido .= $this->pdf->texto(392, $y, 7.5, $linea['propiedad']);
@@ -93,6 +94,13 @@ class GeneradorEstadoCuentaEnvasesPdf
             $contenido .= $this->derecha(522, $y, 7.5, $linea['salida'] !== null ? (string) $linea['salida'] : '');
             $contenido .= $this->derecha(560, $y, 7.5, $this->numero($linea['saldo']), true);
             foreach ($renglones as $renglon) {
+                if ($y - 9 < self::LIMITE_INFERIOR) {
+                    $paginas[] = $contenido;
+                    $y = 742;
+                    $contenido = $this->cabecera($estado).$this->encabezadoDetalle($y);
+                    $y -= 16;
+                    $contenido .= $this->pdf->texto(106, $y, 7.5, $guia.' (continuación)');
+                }
                 $y -= 9;
                 $contenido .= $this->pdf->texto(106, $y, 7, $renglon);
             }

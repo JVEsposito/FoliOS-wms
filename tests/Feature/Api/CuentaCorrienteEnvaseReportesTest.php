@@ -4,7 +4,11 @@ namespace Tests\Feature\Api;
 
 use App\Enums\RolUsuario;
 use App\Models\Cliente;
+use App\Models\CsgValidacion;
+use App\Models\EspecieValidacion;
 use App\Models\MovimientoEnvase;
+use App\Models\ProductorCsg;
+use App\Models\RecepcionRomana;
 use App\Models\Temporada;
 use App\Models\User;
 use App\Services\Envases\ServicioCuentaCorrienteEnvases;
@@ -193,7 +197,7 @@ class CuentaCorrienteEnvaseReportesTest extends TestCase
             'fecha' => '2026-10-14 10:00:00',
             'documento' => '5501',
             'movimiento' => 'Despacho',
-            'destinatario_despacho' => 'Sin productor asignado',
+            'productor' => 'Sin productor asignado',
             'tipo_envase' => 'Bins plástico',
             'propiedad' => 'Propia',
             'entrada' => null,
@@ -203,7 +207,7 @@ class CuentaCorrienteEnvaseReportesTest extends TestCase
             'fecha' => '2026-10-14 10:00:00',
             'documento' => '5501',
             'movimiento' => 'Despacho',
-            'destinatario_despacho' => 'Sin productor asignado',
+            'productor' => 'Sin productor asignado',
             'tipo_envase' => 'Tote',
             'propiedad' => 'Propia',
             'entrada' => null,
@@ -232,6 +236,65 @@ class CuentaCorrienteEnvaseReportesTest extends TestCase
             ['numero' => '5501', 'archivo' => false],
             $movimientos->firstWhere('documento_id', $entregada['id'])['guia_emitida'],
         );
+    }
+
+    public function test_el_estado_de_cuenta_identifica_los_productores_de_una_recepcion_historica_en_pdf_y_excel(): void
+    {
+        $especie = EspecieValidacion::firstOrCreate(['temporada_id' => $this->temporada->id, 'nombre' => 'Cereza'], ['activo' => true]);
+        $this->actingAs($this->administrador, 'sanctum');
+        $recepcionId = $this->postJson('/api/romana/recepciones', [
+            'operacion_id' => (string) Str::uuid(),
+            'temporada_id' => $this->temporada->id,
+            'cliente_id' => $this->productor->id,
+            'tipo_recepcion' => 'fruta_con_envases',
+            'especie_validacion_id' => $especie->id,
+            'tipo_servicio' => 'proceso',
+            'envases' => [['tipo_envase' => 'bins', 'cantidad' => 300]],
+            'numero_guia_despacho' => 'REC-1',
+            'patente_camion' => 'ABCD12',
+            'tipo_camion' => 'termo',
+            'rut_conductor' => '12.345.678-5',
+            'nombre_conductor' => 'Conductor MP',
+            'peso_bruto' => 28000,
+        ])->assertCreated()->json('data.id');
+        $recepcion = RecepcionRomana::findOrFail($recepcionId);
+        $validacion = $recepcion->validacionesMp()->create([
+            'temporada_id' => $this->temporada->id,
+            'operacion_toma_id' => (string) Str::uuid(),
+            'estado' => 'validada',
+            'validador_user_id' => $this->administrador->id,
+            'tomada_at' => now(),
+            'validada_at' => now(),
+        ]);
+        $productor = ProductorCsg::create([
+            'codigo' => '122104', 'razon_social' => 'Agricola Los Robles', 'predio' => 'Predio Los Robles',
+            'estado_sag' => 'activo', 'fuente_url' => 'https://sag.example.test',
+            'primera_verificacion_at' => now(), 'ultima_verificacion_at' => now(),
+            'ultima_consulta_user_id' => $this->administrador->id, 'respuesta_hash' => hash('sha256', '122104'),
+        ]);
+        $csg = CsgValidacion::create([
+            'temporada_id' => $this->temporada->id, 'codigo' => '122104', 'productor_csg_id' => $productor->id,
+            'predio' => $productor->predio, 'activo' => true,
+        ]);
+        foreach ([1, 2] as $secuencia) {
+            $validacion->segmentos()->create([
+                'secuencia' => $secuencia, 'motivos' => ['cuartel'], 'csg_validacion_id' => $csg->id, 'csg_snapshot' => '122104',
+            ]);
+        }
+        $validacion->segmentos()->create(['secuencia' => 3, 'motivos' => ['csg'], 'csg_snapshot' => '122105']);
+        MovimientoEnvase::query()->where('numero_documento', 'REC-1')->update(['recepcion_romana_id' => $recepcionId]);
+
+        $ruta = '/api/envases/cuenta-corriente/estado-cuenta?cliente_id='.$this->productor->id;
+        $productores = 'CSG 122104 · Agricola Los Robles / CSG 122105';
+        $pdf = $this->get($ruta)->assertOk()->getContent();
+        $this->assertStringContainsString(iconv('UTF-8', 'Windows-1252', $productores), $pdf);
+        $this->assertStringContainsString('Sin productor declarado', $pdf);
+
+        $excel = $this->get($ruta.'&formato=xlsx')->assertOk();
+        $filas = $this->filasExcel($excel->baseResponse->getFile()->getPathname());
+        $this->assertSame('Productor / CSG', $filas[0][8]);
+        $this->assertSame(['REC-1', 'Recepción con fruta', 'Bins plástico', 'Del cliente', '300', '', '300', $productores], array_slice($filas[1], 1));
+        $this->assertSame(['300', '180', '130', '140', '160'], array_column(array_slice($filas, 1), 7));
     }
 
     private function movimiento(
