@@ -14,6 +14,7 @@ use App\Enums\TipoPuntoControlRocio;
 use App\Exceptions\ConflictoOperacion;
 use App\Models\Camara;
 use App\Models\Dispositivo;
+use App\Models\MargenPuntoRocioEtapa;
 use App\Models\MedicionPuntoRocio;
 use App\Models\NotificacionOperacional;
 use App\Models\SalaControlRocio;
@@ -36,6 +37,15 @@ use JsonException;
  */
 class ServicioPuntoRocio
 {
+    private const RELACIONES = [
+        'registradoPor:id,name',
+        'accionRegistradaPor:id,name',
+        'anuladaPor:id,name',
+        'dispositivo:id,codigo,nombre',
+        'selladoReferencia:id,etapa,punto_nombre,referencia,medido_at,temperatura_ambiente_c,humedad_relativa,punto_rocio_c,anulada_at',
+        'origenReferencia:id,etapa,punto_nombre,referencia,medido_at,temperatura_superficie_c,anulada_at',
+    ];
+
     public function __construct(
         private readonly ServicioTemporadaActiva $temporadas,
     ) {}
@@ -58,6 +68,12 @@ class ServicioPuntoRocio
             'observacion' => filled($datos['observacion'] ?? null) ? trim((string) $datos['observacion']) : null,
             'medido_at' => $medidoAt->toAtomString(),
         ];
+        // Los vínculos entran al hash solo si vienen: una medición antigua reenviada conserva su huella.
+        foreach (['sellado_referencia_id', 'origen_referencia_id'] as $campo) {
+            if (filled($datos[$campo] ?? null)) {
+                $payload[$campo] = (string) $datos[$campo];
+            }
+        }
         $hash = $this->hash($payload);
 
         $existente = $this->existente((string) $datos['operacion_id'], $hash, $usuario);
@@ -74,12 +90,32 @@ class ServicioPuntoRocio
             throw ValidationException::withMessages(['medido_at' => "Solo se registran mediciones de los últimos {$dias} días."]);
         }
 
+        $etapa = EtapaMedicionPuntoRocio::from($payload['etapa']);
         $punto = $this->punto(TipoPuntoControlRocio::from($payload['punto_tipo']), $payload['punto_id']);
-        $margenMinimo = (float) config('prefrio.punto_rocio.margen_minimo_c', 2.0);
-        $rocio = CalculadoraPuntoRocio::puntoRocio($payload['temperatura_ambiente_c'], $payload['humedad_relativa']);
-        $margen = CalculadoraPuntoRocio::margen($payload['temperatura_superficie_c'], round($rocio, 2));
+        $margenMinimo = $this->margenMinimo($etapa);
+        $rocio = round(CalculadoraPuntoRocio::puntoRocio($payload['temperatura_ambiente_c'], $payload['humedad_relativa']), 2);
+        $margen = CalculadoraPuntoRocio::margen($payload['temperatura_superficie_c'], $rocio);
         $estado = CalculadoraPuntoRocio::estado($margen, $margenMinimo);
         $gotas = GotasVisiblesPuntoRocio::from($payload['gotas_visibles']);
+
+        // Aire del envase: el rocío del sellado frente a la superficie de esta medición.
+        $sellado = $this->referencia($payload['sellado_referencia_id'] ?? null, 'sellado_referencia_id', $medidoAt);
+        if ($sellado && $sellado->etapa !== EtapaMedicionPuntoRocio::Sellado) {
+            throw ValidationException::withMessages(['sellado_referencia_id' => 'El aire del envase debe venir de una medición de sellado.']);
+        }
+        if ($sellado && $etapa === EtapaMedicionPuntoRocio::Sellado) {
+            throw ValidationException::withMessages(['sellado_referencia_id' => 'Una medición de sellado ya evalúa su propio aire: no necesita otro sellado.']);
+        }
+        $envaseMargen = $sellado ? CalculadoraPuntoRocio::margen($payload['temperatura_superficie_c'], $sellado->punto_rocio_c) : null;
+        $envaseEstado = $sellado ? CalculadoraPuntoRocio::estado($envaseMargen, $margenMinimo) : null;
+
+        // Fruta que llega: la superficie de la medición de origen frente al rocío de este punto.
+        $origen = $this->referencia($payload['origen_referencia_id'] ?? null, 'origen_referencia_id', $medidoAt);
+        if ($origen && $origen->temperatura_superficie_c === null) {
+            throw ValidationException::withMessages(['origen_referencia_id' => 'La medición de origen no tiene T° superficial de la fruta.']);
+        }
+        $origenMargen = $origen ? CalculadoraPuntoRocio::margen($origen->temperatura_superficie_c, $rocio) : null;
+        $origenEstado = $origen ? CalculadoraPuntoRocio::estado($origenMargen, $margenMinimo) : null;
 
         try {
             $medicion = DB::transaction(fn (): MedicionPuntoRocio => MedicionPuntoRocio::create([
@@ -96,13 +132,24 @@ class ServicioPuntoRocio
                 'temperatura_ambiente_c' => $payload['temperatura_ambiente_c'],
                 'humedad_relativa' => $payload['humedad_relativa'],
                 'temperatura_superficie_c' => $payload['temperatura_superficie_c'],
-                'punto_rocio_c' => round($rocio, 2),
+                'punto_rocio_c' => $rocio,
                 'margen_c' => $margen !== null ? round($margen, 2) : null,
                 'vapor_g_m3' => round(CalculadoraPuntoRocio::vapor($payload['temperatura_ambiente_c'], $payload['humedad_relativa']), 2),
                 'margen_minimo_c' => $margenMinimo,
+                'sellado_referencia_id' => $sellado?->id,
+                'envase_punto_rocio_c' => $sellado?->punto_rocio_c,
+                'envase_margen_c' => $envaseMargen !== null ? round($envaseMargen, 2) : null,
+                'envase_estado' => $envaseEstado,
+                'origen_referencia_id' => $origen?->id,
+                'origen_superficie_c' => $origen?->temperatura_superficie_c,
+                'origen_margen_c' => $origenMargen !== null ? round($origenMargen, 2) : null,
+                'origen_estado' => $origenEstado,
                 'estado' => $estado,
                 'gotas_visibles' => $gotas,
-                'requiere_accion' => $estado->esAlerta() || $gotas === GotasVisiblesPuntoRocio::Si,
+                'requiere_accion' => $estado->esAlerta()
+                    || $envaseEstado?->esAlerta() === true
+                    || $origenEstado?->esAlerta() === true
+                    || $gotas === GotasVisiblesPuntoRocio::Si,
                 'observacion' => $payload['observacion'],
                 'medido_at' => $medidoAt,
                 'fecha_operacional' => $medidoAt->setTimezone($this->zona())->toDateString(),
@@ -209,6 +256,114 @@ class ServicioPuntoRocio
     }
 
     /**
+     * Margen mínimo de cada etapa: el ajustado por supervisión o el de configuración.
+     *
+     * @return list<array{etapa: string, etiqueta: string, margen_minimo_c: float, version: int, ajustado: bool}>
+     */
+    public function margenes(): array
+    {
+        $ajustes = MargenPuntoRocioEtapa::query()->get()->keyBy(fn (MargenPuntoRocioEtapa $fila): string => $fila->etapa->value);
+
+        return collect(EtapaMedicionPuntoRocio::cases())
+            ->map(function (EtapaMedicionPuntoRocio $etapa) use ($ajustes): array {
+                $ajuste = $ajustes->get($etapa->value);
+
+                return [
+                    'etapa' => $etapa->value,
+                    'etiqueta' => $etapa->etiqueta(),
+                    'margen_minimo_c' => $ajuste?->margen_minimo_c ?? $this->margenPorDefecto(),
+                    'version' => $ajuste?->version ?? 0,
+                    'ajustado' => $ajuste !== null,
+                ];
+            })
+            ->all();
+    }
+
+    /**
+     * @param  list<array{etapa: string, margen_minimo_c: float|int|string, version_conocida?: int}>  $filas
+     * @return list<array<string, mixed>>
+     */
+    public function guardarMargenes(array $filas, User $usuario): array
+    {
+        DB::transaction(function () use ($filas, $usuario): void {
+            foreach ($filas as $fila) {
+                $etapa = EtapaMedicionPuntoRocio::from($fila['etapa']);
+                $valor = round((float) $fila['margen_minimo_c'], 2);
+                $actual = MargenPuntoRocioEtapa::query()->lockForUpdate()->find($etapa->value);
+                if (isset($fila['version_conocida']) && (int) $fila['version_conocida'] !== ($actual?->version ?? 0)) {
+                    throw new ConflictoOperacion("El margen de {$etapa->etiqueta()} cambió mientras lo editabas. Recarga la página.");
+                }
+                if ($actual && $actual->margen_minimo_c === $valor) {
+                    continue;
+                }
+                if (! $actual) {
+                    MargenPuntoRocioEtapa::create([
+                        'etapa' => $etapa->value,
+                        'margen_minimo_c' => $valor,
+                        'actualizado_por_user_id' => $usuario->id,
+                    ]);
+
+                    continue;
+                }
+                $actual->update([
+                    'margen_minimo_c' => $valor,
+                    'version' => $actual->version + 1,
+                    'actualizado_por_user_id' => $usuario->id,
+                ]);
+            }
+        }, attempts: 3);
+
+        return $this->margenes();
+    }
+
+    /**
+     * Mediciones que se pueden vincular a una medición del día consultado: sellados
+     * (aire del envase) y mediciones con T° superficial (fruta que llega).
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function referencias(CarbonImmutable $fecha): array
+    {
+        $horas = $this->horasReferencia();
+        $inicio = $fecha->setTimezone($this->zona())->startOfDay();
+        $fin = $inicio->endOfDay();
+        $ahora = CarbonImmutable::now();
+
+        return MedicionPuntoRocio::query()
+            ->whereNull('anulada_at')
+            ->whereBetween('medido_at', [$inicio->subHours($horas)->utc(), ($fin->lessThan($ahora) ? $fin : $ahora)->utc()])
+            ->where(fn (Builder $consulta) => $consulta
+                ->where('etapa', EtapaMedicionPuntoRocio::Sellado->value)
+                ->orWhereNotNull('temperatura_superficie_c'))
+            ->orderByDesc('medido_at')
+            ->limit(200)
+            ->get()
+            ->map(fn (MedicionPuntoRocio $medicion): array => [
+                'id' => $medicion->id,
+                'etapa' => $medicion->etapa->value,
+                'etapa_etiqueta' => $medicion->etapa->etiqueta(),
+                'punto' => $medicion->punto_nombre,
+                'referencia' => $medicion->referencia,
+                'medido_at' => $medicion->medido_at->toAtomString(),
+                'temperatura_ambiente_c' => $medicion->temperatura_ambiente_c,
+                'humedad_relativa' => $medicion->humedad_relativa,
+                'temperatura_superficie_c' => $medicion->temperatura_superficie_c,
+                'punto_rocio_c' => $medicion->punto_rocio_c,
+            ])
+            ->all();
+    }
+
+    public function horasReferencia(): int
+    {
+        return (int) config('prefrio.punto_rocio.horas_referencia', 72);
+    }
+
+    public function margenPorDefecto(): float
+    {
+        return (float) config('prefrio.punto_rocio.margen_minimo_c', 2.0);
+    }
+
+    /**
      * Mediciones de un día operacional con su resumen.
      *
      * @return array<string, mixed>
@@ -218,7 +373,7 @@ class ServicioPuntoRocio
         $mediciones = MedicionPuntoRocio::query()
             ->whereDate('fecha_operacional', $fecha->toDateString())
             ->when($etapa, fn (Builder $consulta) => $consulta->where('etapa', $etapa->value))
-            ->with(['registradoPor:id,name', 'accionRegistradaPor:id,name', 'anuladaPor:id,name', 'dispositivo:id,codigo,nombre'])
+            ->with(self::RELACIONES)
             ->orderBy('medido_at')
             ->get();
         $vigentes = $mediciones->whereNull('anulada_at');
@@ -307,9 +462,11 @@ class ServicioPuntoRocio
             ->where('medido_at', '>=', now()->subHours($horas))
             ->orderByDesc('medido_at')
             ->limit(20)
+            ->with(['selladoReferencia:id,etapa,punto_nombre,medido_at', 'origenReferencia:id,etapa,punto_nombre,medido_at'])
             ->get()
             ->map(fn (MedicionPuntoRocio $medicion): array => [
                 'id' => $medicion->id,
+                ...$this->condicion($medicion),
                 'etapa' => $medicion->etapa->value,
                 'etapa_etiqueta' => $medicion->etapa->etiqueta(),
                 'punto' => $medicion->punto_nombre,
@@ -343,6 +500,32 @@ class ServicioPuntoRocio
             'margen_c' => $medicion->margen_c,
             'vapor_g_m3' => $medicion->vapor_g_m3,
             'margen_minimo_c' => $medicion->margen_minimo_c,
+            'envase' => $medicion->sellado_referencia_id === null ? null : [
+                'referencia_id' => $medicion->sellado_referencia_id,
+                'punto' => $medicion->selladoReferencia?->punto_nombre,
+                'lote' => $medicion->selladoReferencia?->referencia,
+                'medido_at' => $medicion->selladoReferencia?->medido_at?->toAtomString(),
+                'temperatura_ambiente_c' => $medicion->selladoReferencia?->temperatura_ambiente_c,
+                'humedad_relativa' => $medicion->selladoReferencia?->humedad_relativa,
+                'punto_rocio_c' => $medicion->envase_punto_rocio_c,
+                'margen_c' => $medicion->envase_margen_c,
+                'estado' => $medicion->envase_estado?->value,
+                'estado_etiqueta' => $medicion->envase_estado?->etiqueta(),
+                'referencia_anulada' => $medicion->selladoReferencia?->anulada_at !== null,
+            ],
+            'origen' => $medicion->origen_referencia_id === null ? null : [
+                'referencia_id' => $medicion->origen_referencia_id,
+                'etapa_etiqueta' => $medicion->origenReferencia?->etapa?->etiqueta(),
+                'punto' => $medicion->origenReferencia?->punto_nombre,
+                'lote' => $medicion->origenReferencia?->referencia,
+                'medido_at' => $medicion->origenReferencia?->medido_at?->toAtomString(),
+                'temperatura_superficie_c' => $medicion->origen_superficie_c,
+                'margen_c' => $medicion->origen_margen_c,
+                'estado' => $medicion->origen_estado?->value,
+                'estado_etiqueta' => $medicion->origen_estado?->etiqueta(),
+                'referencia_anulada' => $medicion->origenReferencia?->anulada_at !== null,
+            ],
+            ...$this->condicion($medicion),
             'estado' => $medicion->estado->value,
             'estado_etiqueta' => $medicion->estado->etiqueta(),
             'gotas_visibles' => $medicion->gotas_visibles->value,
@@ -430,14 +613,11 @@ class ServicioPuntoRocio
 
     private function notificar(MedicionPuntoRocio $medicion): void
     {
-        $critica = $medicion->estado === EstadoMedicionPuntoRocio::CondensacionPosible
-            || $medicion->gotas_visibles === GotasVisiblesPuntoRocio::Si;
-        $condicion = $medicion->gotas_visibles === GotasVisiblesPuntoRocio::Si
-            ? 'Gotas visibles'
-            : $medicion->estado->etiqueta();
-        $detalle = $medicion->margen_c !== null
-            ? sprintf('rocío %s °C, superficie %s °C, margen %s °C', $this->numero($medicion->punto_rocio_c), $this->numero($medicion->temperatura_superficie_c), $this->numero($medicion->margen_c))
-            : sprintf('rocío %s °C', $this->numero($medicion->punto_rocio_c));
+        $hallazgos = $this->hallazgos($medicion->loadMissing(['selladoReferencia', 'origenReferencia']));
+        if ($hallazgos === []) {
+            return;
+        }
+        $detalles = collect($hallazgos)->pluck('detalle')->filter()->unique()->values();
 
         NotificacionOperacional::query()->firstOrCreate(
             ['clave' => "punto-rocio:{$medicion->id}:rol:supervisor-frio"],
@@ -445,9 +625,11 @@ class ServicioPuntoRocio
                 'tipo' => TipoNotificacionOperacional::CondensacionPrefrio,
                 'audiencia_tipo' => AudienciaNotificacionOperacional::Rol,
                 'audiencia_valor' => RolUsuario::SupervisorFrio->value,
-                'severidad' => $critica ? SeveridadNotificacionOperacional::Critica : SeveridadNotificacionOperacional::Advertencia,
-                'titulo' => "{$condicion} · {$medicion->etapa->etiqueta()} · {$medicion->punto_nombre}",
-                'mensaje' => ucfirst($detalle).'. Registra una acción correctiva en Prefrío → Punto de rocío.',
+                'severidad' => collect($hallazgos)->contains('critica', true)
+                    ? SeveridadNotificacionOperacional::Critica
+                    : SeveridadNotificacionOperacional::Advertencia,
+                'titulo' => "{$hallazgos[0]['titulo']} · {$medicion->etapa->etiqueta()} · {$medicion->punto_nombre}",
+                'mensaje' => ($detalles->isEmpty() ? '' : ucfirst($detalles->implode('; ')).'. ').'Registra una acción correctiva en Prefrío → Punto de rocío.',
                 'datos' => [
                     'medicion_punto_rocio_id' => $medicion->id,
                     'temporada_id' => $medicion->temporada_id,
@@ -456,6 +638,97 @@ class ServicioPuntoRocio
                 ],
             ],
         );
+    }
+
+    /**
+     * Riesgos de una medición, del más grave al más leve: gotas, condensación
+     * (propia, en el envase, al llegar) y margen bajo.
+     *
+     * @return list<array{titulo: string, detalle: ?string, critica: bool}>
+     */
+    private function hallazgos(MedicionPuntoRocio $medicion): array
+    {
+        $condensacion = EstadoMedicionPuntoRocio::CondensacionPosible;
+        $bajo = EstadoMedicionPuntoRocio::MargenBajo;
+        $propio = sprintf('rocío %s °C, superficie %s °C, margen %s °C', $this->numero($medicion->punto_rocio_c), $this->numero($medicion->temperatura_superficie_c), $this->numero($medicion->margen_c));
+        $sellado = $medicion->selladoReferencia;
+        $envase = sprintf(
+            'dentro del envase: rocío del sellado %s °C%s, superficie %s °C, margen %s °C',
+            $this->numero($medicion->envase_punto_rocio_c),
+            $sellado ? " ({$this->hora($sellado->medido_at)}, {$sellado->punto_nombre})" : '',
+            $this->numero($medicion->temperatura_superficie_c),
+            $this->numero($medicion->envase_margen_c),
+        );
+        $origenMedicion = $medicion->origenReferencia;
+        $origen = sprintf(
+            'al llegar: fruta%s a %s °C, rocío de este punto %s °C, margen %s °C',
+            $origenMedicion ? " desde {$origenMedicion->etapa->etiqueta()} ({$this->hora($origenMedicion->medido_at)}, {$origenMedicion->punto_nombre})" : '',
+            $this->numero($medicion->origen_superficie_c),
+            $this->numero($medicion->punto_rocio_c),
+            $this->numero($medicion->origen_margen_c),
+        );
+
+        return collect([
+            [$medicion->gotas_visibles === GotasVisiblesPuntoRocio::Si, 'Gotas visibles', null, true],
+            [$medicion->estado === $condensacion, $condensacion->etiqueta(), $propio, true],
+            [$medicion->envase_estado === $condensacion, 'Condensación posible en el envase', $envase, true],
+            [$medicion->origen_estado === $condensacion, 'Condensación posible al llegar', $origen, true],
+            [$medicion->estado === $bajo, $bajo->etiqueta(), $propio, false],
+            [$medicion->envase_estado === $bajo, 'Margen bajo en el envase', $envase, false],
+            [$medicion->origen_estado === $bajo, 'Margen bajo al llegar', $origen, false],
+        ])
+            ->filter(fn (array $fila): bool => $fila[0])
+            ->map(fn (array $fila): array => ['titulo' => $fila[1], 'detalle' => $fila[2], 'critica' => $fila[3]])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Riesgo principal de la medición para mostrarlo en listas y alertas.
+     *
+     * @return array{condicion: ?string, condicion_detalle: ?string, critica: bool}
+     */
+    private function condicion(MedicionPuntoRocio $medicion): array
+    {
+        $hallazgos = $this->hallazgos($medicion);
+
+        return [
+            'condicion' => $hallazgos[0]['titulo'] ?? null,
+            'condicion_detalle' => $hallazgos[0]['detalle'] ?? null,
+            'critica' => collect($hallazgos)->contains('critica', true),
+        ];
+    }
+
+    private function hora(?CarbonImmutable $instante): string
+    {
+        return $instante?->setTimezone($this->zona())->format('H:i') ?? '—';
+    }
+
+    /** Medición anterior y vigente que se vincula a la que se registra. */
+    private function referencia(?string $id, string $campo, CarbonImmutable $medidoAt): ?MedicionPuntoRocio
+    {
+        if ($id === null) {
+            return null;
+        }
+        $medicion = MedicionPuntoRocio::query()->find($id)
+            ?? throw ValidationException::withMessages([$campo => 'La medición vinculada no existe.']);
+        if ($medicion->anulada_at !== null) {
+            throw ValidationException::withMessages([$campo => 'La medición vinculada fue anulada.']);
+        }
+        if (! $medicion->medido_at->lessThanOrEqualTo($medidoAt)) {
+            throw ValidationException::withMessages([$campo => 'La medición vinculada debe ser anterior a esta.']);
+        }
+        $horas = $this->horasReferencia();
+        if ($medicion->medido_at->lessThan($medidoAt->subHours($horas))) {
+            throw ValidationException::withMessages([$campo => "Solo se vinculan mediciones de las {$horas} horas anteriores."]);
+        }
+
+        return $medicion;
+    }
+
+    private function margenMinimo(EtapaMedicionPuntoRocio $etapa): float
+    {
+        return MargenPuntoRocioEtapa::query()->find($etapa->value)?->margen_minimo_c ?? $this->margenPorDefecto();
     }
 
     private function numero(?float $valor): string
@@ -488,6 +761,6 @@ class ServicioPuntoRocio
 
     private function cargar(MedicionPuntoRocio $medicion): MedicionPuntoRocio
     {
-        return $medicion->refresh()->load(['registradoPor:id,name', 'accionRegistradaPor:id,name', 'anuladaPor:id,name', 'dispositivo:id,codigo,nombre']);
+        return $medicion->refresh()->load(self::RELACIONES);
     }
 }

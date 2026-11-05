@@ -1,6 +1,6 @@
 import { CategoryScale, Chart, Legend, LinearScale, LineController, LineElement, PointElement, Tooltip } from 'chart.js';
 
-import { DEW_POINT_STATES, evaluateReading } from './shared/dew-point.js';
+import { DEW_POINT_STATES, compareSurface, evaluateReading, worstDewPointState } from './shared/dew-point.js';
 import { readManagementChartPaletteSafely } from './shared/management-chart-theme';
 import { byId, escapeHtml as e, message, officeSession } from './shared/packed-fruit-office-session.js';
 import { createUuid } from './shared/uuid';
@@ -22,6 +22,8 @@ const formatTemperature = (value) => (value === null || value === undefined ? '�
 const formatPercent = (value) => (value === null || value === undefined ? '—' : `${numberFormat.format(value)} %`);
 const zone = () => state.data?.parametros?.zona_horaria || 'America/Santiago';
 const formatTime = (value) => new Intl.DateTimeFormat('es-CL', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: zone() }).format(new Date(value));
+const formatShortDate = (value) => new Intl.DateTimeFormat('es-CL', { day: '2-digit', month: '2-digit', timeZone: zone() }).format(new Date(value));
+const plantDate = (value) => new Intl.DateTimeFormat('en-CA', { timeZone: zone(), year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(value));
 const formatDay = (value) => new Intl.DateTimeFormat('es-CL', { weekday: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(`${value}T12:00:00Z`));
 const say = (text, error = false) => message(text, error, 'dewPointMessage');
 
@@ -78,12 +80,12 @@ function render() {
     byId('nextDayButton').disabled = data.fecha >= todayInPlant();
     byId('newReadingButton').classList.toggle('is-hidden', data.permisos?.registrar !== true);
     byId('roomsButton').classList.toggle('is-hidden', data.permisos?.supervisar !== true);
+    byId('marginsButton').classList.toggle('is-hidden', data.permisos?.supervisar !== true);
     byId('minimumMarginLabel').textContent = numberFormat.format(data.parametros.margen_minimo_c);
     byId('readingCount').textContent = String(summary.registros);
     byId('surfaceCount').textContent = `${summary.con_superficie} con T° superficial`;
     byId('maxDewPoint').textContent = formatTemperature(summary.punto_rocio_maximo_c);
     byId('minMargin').textContent = formatTemperature(summary.margen_minimo_c);
-    byId('minMarginHelp').textContent = `Superficie − rocío · mínimo sano ${numberFormat.format(data.parametros.margen_minimo_c)} °C`;
     byId('alertCount').textContent = String(summary.alertas);
     byId('pendingCount').textContent = `${summary.alertas_pendientes} sin acción`;
     byId('dropCount').textContent = String(summary.gotas_visibles);
@@ -95,6 +97,12 @@ function render() {
 
 function visibleReadings() {
     return (state.data?.mediciones || []).filter((reading) => !state.stage || reading.etapa === state.stage);
+}
+
+/** Margen mínimo vigente de una etapa (ajustado por supervisión o el de configuración). */
+function marginFor(stage) {
+    const row = (state.data?.parametros?.margenes_por_etapa || []).find((item) => item.etapa === stage);
+    return row ? row.margen_minimo_c : (state.data?.parametros?.margen_minimo_c ?? 2);
 }
 
 function renderFilters() {
@@ -112,6 +120,30 @@ function renderFilters() {
 function stateBadge(reading) {
     const meta = DEW_POINT_STATES[reading.estado] || DEW_POINT_STATES.sin_superficie;
     return `<span class="dew-badge" data-tone="${meta.tone}">${e(reading.estado_etiqueta || meta.label)}</span>`;
+}
+
+function smallBadge(stateValue) {
+    const meta = DEW_POINT_STATES[stateValue] || DEW_POINT_STATES.sin_superficie;
+    return `<span class="dew-badge dew-badge--small" data-tone="${meta.tone}">${e(meta.label)}</span>`;
+}
+
+function referenceMoment(value, reading) {
+    if (!value) return '—';
+    return plantDate(value) === reading.fecha ? formatTime(value) : `${formatShortDate(value)} ${formatTime(value)}`;
+}
+
+/** Comparaciones vinculadas guardadas con la medición: aire del envase y fruta que llega. */
+function linkedLines(reading) {
+    const lines = [];
+    if (reading.envase) {
+        const link = reading.envase;
+        lines.push(`<small class="dew-link-line"><b>Envase</b> ${smallBadge(link.estado)} margen ${e(formatTemperature(link.margen_c))} · rocío del sellado ${e(formatTemperature(link.punto_rocio_c))} (${e(referenceMoment(link.medido_at, reading))}, ${e(link.punto || '—')})${link.referencia_anulada ? ' · <em>sellado anulado</em>' : ''}</small>`);
+    }
+    if (reading.origen) {
+        const link = reading.origen;
+        lines.push(`<small class="dew-link-line"><b>Al llegar</b> ${smallBadge(link.estado)} margen ${e(formatTemperature(link.margen_c))} · fruta a ${e(formatTemperature(link.temperatura_superficie_c))} desde ${e(link.etapa_etiqueta || '—')} (${e(referenceMoment(link.medido_at, reading))}, ${e(link.punto || '—')})${link.referencia_anulada ? ' · <em>origen anulado</em>' : ''}</small>`);
+    }
+    return lines.join('');
 }
 
 function renderTable() {
@@ -133,7 +165,7 @@ function renderTable() {
             <td class="dew-num">${e(formatTemperature(reading.temperatura_superficie_c))}</td>
             <td class="dew-num"><strong>${e(formatTemperature(reading.punto_rocio_c))}</strong></td>
             <td class="dew-num">${e(formatTemperature(reading.margen_c))}</td>
-            <td>${stateBadge(reading)}${followUp}${reading.observacion ? `<small>${e(reading.observacion)}</small>` : ''}</td>
+            <td>${stateBadge(reading)}${linkedLines(reading)}${followUp}${reading.observacion ? `<small>${e(reading.observacion)}</small>` : ''}</td>
             <td>${reading.gotas_visibles === 'si' ? '<span class="dew-badge" data-tone="danger">Sí</span>' : e(DROPS[reading.gotas_visibles] || '—')}</td>
             <td>${e(reading.registrado_por || '—')}${reading.dispositivo ? `<small>${e(reading.dispositivo)}</small>` : ''}</td>
             <td class="dew-actions-cell">${actions.length ? `<div class="dew-row-actions">${actions.join('')}</div>` : ''}</td>
@@ -218,14 +250,61 @@ function readNumber(form, name) {
     return raw === '' ? null : Number(raw);
 }
 
+function selectedReference(name) {
+    const id = byId('readingForm').elements[name].value;
+    return id ? (state.data?.referencias || []).find((item) => item.id === id) || null : null;
+}
+
+function referenceLabel(item, kind, measuredDate) {
+    const when = measuredDate && plantDate(item.medido_at) !== measuredDate ? `${formatShortDate(item.medido_at)} ${formatTime(item.medido_at)}` : formatTime(item.medido_at);
+    const where = `${item.punto}${item.referencia ? ` · ${item.referencia}` : ''}`;
+    // En la lista de sellados la etapa sobra: se muestra el aire que quedó en la bolsa.
+    return kind === 'sellado'
+        ? `${when} · ${where} · rocío ${formatTemperature(item.punto_rocio_c)} (${formatTemperature(item.temperatura_ambiente_c)} / ${formatPercent(item.humedad_relativa)})`
+        : `${when} · ${item.etapa_etiqueta} · ${where} · fruta a ${formatTemperature(item.temperatura_superficie_c)}`;
+}
+
+/** Opciones de vínculo: mediciones anteriores a la hora elegida, dentro de la ventana permitida. */
+function renderReferenceOptions() {
+    const form = byId('readingForm');
+    const measuredAt = new Date(form.elements.medido_at.value);
+    const valid = !Number.isNaN(measuredAt.getTime());
+    const hours = state.data?.parametros?.horas_referencia ?? 72;
+    const measuredDate = valid ? plantDate(measuredAt) : null;
+    const candidates = (state.data?.referencias || []).filter((item) => {
+        const at = new Date(item.medido_at).getTime();
+        return valid && at <= measuredAt.getTime() && at >= measuredAt.getTime() - hours * 3600000;
+    });
+    const fill = (name, items, kind, empty) => {
+        const select = form.elements[name];
+        const current = select.value;
+        select.innerHTML = `<option value="">${e(empty)}</option>${items.map((item) => `<option value="${e(item.id)}">${e(referenceLabel(item, kind, measuredDate))}</option>`).join('')}`;
+        select.value = items.some((item) => item.id === current) ? current : '';
+    };
+    const sealing = form.elements.etapa.value === 'sellado';
+    fill('sellado_referencia_id', sealing ? [] : candidates.filter((item) => item.etapa === 'sellado'), 'sellado',
+        sealing ? 'No aplica: el sellado evalúa su propio aire' : 'Sin vincular');
+    form.elements.sellado_referencia_id.disabled = sealing;
+    fill('origen_referencia_id', candidates.filter((item) => item.temperatura_superficie_c !== null), 'origen', 'Sin vincular');
+}
+
+function linkRow(title, comparison, detail) {
+    const meta = DEW_POINT_STATES[comparison.state];
+    return `<li data-tone="${meta.tone}"><b>${e(title)}</b><span>${e(detail)} · margen ${e(formatTemperature(comparison.margin))}</span><strong>${e(meta.label)}</strong></li>`;
+}
+
 function updatePreview() {
     const form = byId('readingForm');
     const result = byId('readingResult');
     const ambient = readNumber(form, 'temperatura_ambiente_c');
     const humidity = readNumber(form, 'humedad_relativa');
     const surface = readNumber(form, 'temperatura_superficie_c');
+    const stage = form.elements.etapa.value;
+    const minimum = marginFor(stage);
     const evaluation = ambient === null || humidity === null ? null
-        : evaluateReading({ ambient, humidity, surface, minimumMargin: state.data?.parametros?.margen_minimo_c ?? 2 });
+        : evaluateReading({ ambient, humidity, surface, minimumMargin: minimum });
+    const sealed = selectedReference('sellado_referencia_id');
+    const origin = selectedReference('origen_referencia_id');
     if (!evaluation) {
         result.dataset.tone = 'neutral';
         result.innerHTML = humidity !== null && (humidity <= 0 || humidity > 100)
@@ -233,12 +312,26 @@ function updatePreview() {
             : 'Ingresa T° y humedad para calcular el punto de rocío.';
         return;
     }
+    const links = [];
+    const states = [evaluation.state];
+    if (sealed) {
+        const comparison = compareSurface(surface, sealed.punto_rocio_c, minimum);
+        states.push(comparison.state);
+        links.push(linkRow('Dentro del envase', comparison, `rocío del sellado ${formatTemperature(sealed.punto_rocio_c)} vs superficie ${formatTemperature(surface)}`));
+    }
+    if (origin) {
+        const comparison = compareSurface(origin.temperatura_superficie_c, evaluation.dewPoint, minimum);
+        states.push(comparison.state);
+        links.push(linkRow('Al llegar', comparison, `fruta a ${formatTemperature(origin.temperatura_superficie_c)} desde ${origin.etapa_etiqueta} vs rocío de este punto ${formatTemperature(evaluation.dewPoint)}`));
+    }
     const meta = DEW_POINT_STATES[evaluation.state];
-    result.dataset.tone = meta.tone;
+    const worst = worstDewPointState(states);
+    result.dataset.tone = worst === 'sin_superficie' ? 'neutral' : DEW_POINT_STATES[worst].tone;
     result.innerHTML = `<span><small>PUNTO DE ROCÍO</small><strong>${e(formatTemperature(evaluation.dewPoint))}</strong></span>
         <span><small>MARGEN VS FRUTA</small><strong>${e(formatTemperature(evaluation.margin))}</strong></span>
         <span><small>VAPOR EN EL AIRE</small><strong>${e(numberFormat.format(evaluation.vapor))} g/m³</strong></span>
-        <span class="dew-result__state"><small>RIESGO AL SELLAR</small><strong>${e(meta.label)}</strong><em>${e(meta.help)}</em></span>`;
+        <span class="dew-result__state" data-tone="${meta.tone}"><small>${stage === 'sellado' ? 'RIESGO AL SELLAR' : 'RIESGO EN ESTE PUNTO'}</small><strong>${e(meta.label)}</strong><em>${e(meta.help)} Margen mínimo de la etapa: ${e(formatTemperature(minimum))}.</em></span>
+        ${links.length ? `<ul class="dew-result__links">${links.join('')}</ul>` : ''}`;
 }
 
 function openReading() {
@@ -253,12 +346,18 @@ function openReading() {
     // Un día pasado dentro de la ventana permitida propone el mediodía de ese día; fuera de ella, la hora actual.
     form.elements.medido_at.value = state.data.fecha === today || state.data.fecha < oldestAllowed ? localDateTimeValue() : `${state.data.fecha}T12:00`;
     form.elements.medido_at.max = localDateTimeValue();
+    renderReferenceOptions();
     updatePreview();
     byId('readingDialog').showModal();
     form.elements.temperatura_ambiente_c.focus();
 }
 
 byId('readingForm').addEventListener('input', updatePreview);
+byId('readingForm').addEventListener('change', (event) => {
+    if (!['etapa', 'medido_at'].includes(event.target.name)) return;
+    renderReferenceOptions();
+    updatePreview();
+});
 byId('readingForm').addEventListener('submit', async (event) => {
     if (event.submitter?.value === 'cancel') return;
     event.preventDefault();
@@ -290,6 +389,8 @@ byId('readingForm').addEventListener('submit', async (event) => {
             gotas_visibles: form.elements.gotas_visibles.value,
             observacion: form.elements.observacion.value.trim() || null,
             medido_at: measuredAt.toISOString(),
+            sellado_referencia_id: form.elements.sellado_referencia_id.value || null,
+            origen_referencia_id: form.elements.origen_referencia_id.value || null,
         };
         // Reintentar la misma medición (p. ej., tras perder la red) reutiliza su operación y no la duplica.
         const key = JSON.stringify(reading);
@@ -303,7 +404,7 @@ byId('readingForm').addEventListener('submit', async (event) => {
         state.date = payload.data.fecha;
         await load();
         toast(payload.data.requiere_accion
-            ? `Medición guardada: ${payload.data.gotas_visibles === 'si' ? 'gotas visibles' : payload.data.estado_etiqueta.toLowerCase()}. Supervisión de frío fue avisada.`
+            ? `Medición guardada: ${(payload.data.condicion || payload.data.estado_etiqueta).toLowerCase()}. Supervisión de frío fue avisada.`
             : 'Medición guardada.');
     } catch (requestError) {
         error.textContent = requestError.message;
@@ -318,7 +419,7 @@ function openNote(reading, mode) {
     const form = byId('noteForm');
     form.reset();
     byId('noteError').textContent = '';
-    const summary = `${formatTime(reading.medido_at)} · ${reading.etapa_etiqueta} · ${reading.punto}: rocío ${formatTemperature(reading.punto_rocio_c)}, margen ${formatTemperature(reading.margen_c)}.`;
+    const summary = `${formatTime(reading.medido_at)} · ${reading.etapa_etiqueta} · ${reading.punto}: ${reading.condicion ? `${reading.condicion.toLowerCase()}; ` : ''}rocío ${formatTemperature(reading.punto_rocio_c)}, margen ${formatTemperature(reading.margen_c)}.`;
     byId('noteEyebrow').textContent = mode === 'accion' ? 'ALERTA' : 'ANULACIÓN';
     byId('noteDialogTitle').textContent = mode === 'accion' ? 'Registrar acción correctiva' : 'Anular medición';
     byId('noteLabel').textContent = mode === 'accion' ? 'Acción correctiva *' : 'Motivo de anulación *';
@@ -424,6 +525,48 @@ byId('roomsButton').addEventListener('click', () => {
     renderRooms();
     byId('roomError').textContent = '';
     byId('roomsDialog').showModal();
+});
+
+function renderMargins() {
+    byId('marginList').innerHTML = (state.data.parametros.margenes_por_etapa || []).map((row) => `<label class="dew-margin">
+        <span>${e(row.etiqueta)}<small>${row.ajustado ? 'Ajustado por supervisión' : 'Por defecto'}</small></span>
+        <span class="dew-number"><div><input name="${e(row.etapa)}" type="number" step="0.1" min="0" max="10" inputmode="decimal" value="${e(String(row.margen_minimo_c))}" aria-label="Margen mínimo de ${e(row.etiqueta)}"><b>°C</b></div></span>
+    </label>`).join('');
+}
+
+byId('marginsButton').addEventListener('click', () => {
+    renderMargins();
+    byId('marginError').textContent = '';
+    byId('marginsDialog').showModal();
+});
+byId('marginsForm').addEventListener('submit', async (event) => {
+    if (event.submitter?.value === 'cancel') return;
+    event.preventDefault();
+    const form = event.currentTarget;
+    const error = byId('marginError');
+    error.textContent = '';
+    const changes = [];
+    for (const row of state.data.parametros.margenes_por_etapa || []) {
+        const value = readNumber(form, row.etapa);
+        if (value === null || !Number.isFinite(value) || value < 0 || value > 10) {
+            error.textContent = `El margen de ${row.etiqueta} debe estar entre 0 y 10 °C.`;
+            form.elements[row.etapa].focus();
+            return;
+        }
+        if (Math.round(value * 100) !== Math.round(row.margen_minimo_c * 100)) changes.push({ etapa: row.etapa, margen_minimo_c: value, version_conocida: row.version });
+    }
+    if (!changes.length) { byId('marginsDialog').close(); return; }
+    setBusy(true, 'Guardando márgenes…');
+    try {
+        await session.request('/api/prefrio/punto-rocio/margenes', { method: 'PUT', body: JSON.stringify({ margenes: changes }) });
+        byId('marginsDialog').close();
+        await load();
+        toast('Márgenes guardados. Rigen para las mediciones nuevas.');
+    } catch (requestError) {
+        error.textContent = requestError.message;
+    } finally {
+        setBusy(false);
+    }
 });
 
 session.start();

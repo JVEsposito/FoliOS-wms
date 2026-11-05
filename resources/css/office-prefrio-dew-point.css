@@ -77,10 +77,39 @@
 .dew-result span { display: grid; gap: 2px; }
 .dew-result small { color: var(--muted); font-size: .64rem; font-weight: 800; letter-spacing: .06em; }
 .dew-result strong { color: var(--text-strong); font-size: 1.15rem; }
-.dew-result[data-tone="danger"] .dew-result__state strong { color: var(--danger-text); }
-.dew-result[data-tone="warning"] .dew-result__state strong { color: var(--warning-text); }
-.dew-result[data-tone="success"] .dew-result__state strong { color: var(--success-text); }
 .dew-result em { color: var(--muted); font-size: .74rem; font-style: normal; }
+
+/* Vínculos con mediciones anteriores: aire del envase y fruta que llega. */
+.dew-links { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0; padding: 10px 12px 12px; border: 1px dashed var(--corporate-border); border-radius: 2px; }
+.dew-links legend { padding: 0 6px; color: var(--muted); font-size: .72rem; font-weight: 800; }
+.dew-links legend small { font-weight: 600; }
+.dew-links label { align-content: start; }
+.dew-links label > small { color: var(--muted); font-size: .7rem; font-weight: 600; line-height: 1.35; }
+.dew-links select:disabled { opacity: .6; }
+.dew-result__links { grid-column: 1 / -1; display: grid; gap: 6px; margin: 0; padding: 10px 0 0; border-top: 1px solid var(--corporate-border); list-style: none; }
+.dew-result__links li { display: grid; grid-template-columns: 130px minmax(0, 1fr) auto; align-items: baseline; gap: 10px; padding-left: 8px; border-left: 3px solid var(--text-subtle); }
+.dew-result__links li[data-tone="danger"] { border-left-color: var(--danger-text); }
+.dew-result__links li[data-tone="warning"] { border-left-color: var(--warning-text); }
+.dew-result__links li[data-tone="success"] { border-left-color: var(--success-text); }
+.dew-result__links b { color: var(--text-strong); font-size: .78rem; }
+.dew-result__links span { color: var(--muted); font-size: .76rem; }
+.dew-result__links strong { font-size: .86rem; white-space: nowrap; }
+.dew-result__links li[data-tone="danger"] strong { color: var(--danger-text); }
+.dew-result__links li[data-tone="warning"] strong { color: var(--warning-text); }
+.dew-result__links li[data-tone="success"] strong { color: var(--success-text); }
+.dew-result__state[data-tone] strong { color: var(--text-strong); }
+.dew-result__state[data-tone="danger"] strong { color: var(--danger-text); }
+.dew-result__state[data-tone="warning"] strong { color: var(--warning-text); }
+.dew-result__state[data-tone="success"] strong { color: var(--success-text); }
+.dew-link-line { display: flex !important; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 5px !important; }
+.dew-link-line b { color: var(--text); }
+.dew-badge--small { padding: 0 5px; font-size: .66rem; }
+
+.dew-margin-list { display: grid; gap: 8px; }
+.dew-margin { display: grid; grid-template-columns: minmax(0, 1fr) 140px; align-items: center; gap: 10px; }
+.dew-margin > span:first-child { display: grid; color: var(--text-strong); font-weight: 800; }
+.dew-margin small { color: var(--muted); font-size: .7rem; font-weight: 600; }
+.dew-margin input { min-height: 38px; width: 100%; padding: 0 38px 0 10px; border: 1px solid var(--corporate-border); border-radius: 2px; background: var(--corporate-card); color: var(--text-strong); font: inherit; font-weight: 800; }
 
 .dew-note-field { display: grid; gap: 6px; }
 .dew-room-list { display: grid; gap: 8px; }
@@ -101,6 +130,9 @@
     .dew-form-grid { grid-template-columns: 1fr; }
     .dew-result { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .dew-result__state { grid-column: 1 / -1; }
+    .dew-links { grid-template-columns: 1fr; }
+    .dew-result__links li { grid-template-columns: 1fr auto; }
+    .dew-result__links li span { grid-column: 1 / -1; grid-row: 2; }
     .dew-day > div { display: grid; grid-template-columns: 38px minmax(0, 1fr) 38px auto; }
     .dew-day input { width: 100%; min-width: 0; }
     .dew-chart { height: 220px; }

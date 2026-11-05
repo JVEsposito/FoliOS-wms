@@ -58,19 +58,44 @@ export function evaluateReading({ ambient, humidity, surface = null, minimumMarg
 export function dewPointAlerts(pending = []) {
     return pending.map((alert) => {
         const drops = alert.gotas_visibles === 'si';
-        const critical = drops || alert.estado === 'condensacion_posible';
+        const critical = typeof alert.critica === 'boolean' ? alert.critica : drops || alert.estado === 'condensacion_posible';
+        const condition = alert.condicion || (drops ? 'Gotas visibles' : alert.estado_etiqueta);
         const format = (value) => (value === null || value === undefined ? '—' : new Intl.NumberFormat('es-CL', { maximumFractionDigits: 1 }).format(value));
+        // Un riesgo vinculado (envase o fruta que llega) trae su propio detalle desde el servidor.
+        const linked = alert.condicion_detalle && condition !== alert.estado_etiqueta && condition !== 'Gotas visibles';
         return {
             area: alert.punto,
             source: 'Prefrío',
             tab: 'prefrio',
             severity: critical ? 'critical' : 'warning',
-            condition: `${drops ? 'Gotas visibles' : alert.estado_etiqueta} · ${alert.etapa_etiqueta}`,
-            evidence: alert.margen_c === null || alert.margen_c === undefined
-                ? `Rocío ${format(alert.punto_rocio_c)} °C`
-                : `Rocío ${format(alert.punto_rocio_c)} °C · superficie ${format(alert.temperatura_superficie_c)} °C · margen ${format(alert.margen_c)} °C`,
+            condition: `${condition} · ${alert.etapa_etiqueta}`,
+            evidence: linked
+                ? alert.condicion_detalle.charAt(0).toUpperCase() + alert.condicion_detalle.slice(1)
+                : (alert.margen_c === null || alert.margen_c === undefined
+                    ? `Rocío ${format(alert.punto_rocio_c)} °C`
+                    : `Rocío ${format(alert.punto_rocio_c)} °C · superficie ${format(alert.temperatura_superficie_c)} °C · margen ${format(alert.margen_c)} °C`),
             href: `/oficina/prefrio/punto-rocio?fecha=${alert.fecha}`,
             action: 'Registrar acción correctiva',
         };
     });
+}
+
+const STATE_RANK = { sin_superficie: 0, margen_favorable: 1, margen_bajo: 2, condensacion_posible: 3 };
+
+/**
+ * Comparación vinculada: una T° superficial frente al punto de rocío de otro aire
+ * (aire del envase al sellar, o aire del punto al que llega la fruta). Redondea
+ * como el servidor.
+ */
+export function compareSurface(surface, dewPointValue, minimumMargin = 2) {
+    const surfaceNumber = surface === '' || surface === null || surface === undefined ? Number.NaN : Number(surface);
+    const dew = dewPointValue === null || dewPointValue === undefined ? Number.NaN : Number(dewPointValue);
+    if (!Number.isFinite(surfaceNumber) || !Number.isFinite(dew)) return { margin: null, state: 'sin_superficie' };
+    const margin = Math.round((surfaceNumber - dew) * 100) / 100;
+    return { margin, state: dewPointState(margin, minimumMargin) };
+}
+
+/** Estado más grave de una lista (condensación > margen bajo > favorable > sin superficie). */
+export function worstDewPointState(states) {
+    return states.filter(Boolean).reduce((worst, current) => (STATE_RANK[current] > STATE_RANK[worst] ? current : worst), 'sin_superficie');
 }

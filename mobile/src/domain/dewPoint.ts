@@ -37,6 +37,37 @@ export type DewPointReading = {
   dispositivo: string | null;
   accion_correctiva: string | null;
   anulada: boolean;
+  /** Riesgo principal (propio o vinculado) que calculó el servidor. */
+  condicion?: string | null;
+  envase?: DewPointLink | null;
+  origen?: DewPointLink | null;
+};
+
+/** Comparación vinculada guardada con la medición. */
+export type DewPointLink = {
+  referencia_id: string;
+  punto: string | null;
+  etapa_etiqueta?: string | null;
+  medido_at: string | null;
+  punto_rocio_c?: number | null;
+  temperatura_superficie_c?: number | null;
+  margen_c: number | null;
+  estado: DewPointState | null;
+  referencia_anulada: boolean;
+};
+
+/** Medición anterior que se puede vincular: un sellado o una con T° superficial. */
+export type DewPointReference = {
+  id: string;
+  etapa: DewPointStage;
+  etapa_etiqueta: string;
+  punto: string;
+  referencia: string | null;
+  medido_at: string;
+  temperatura_ambiente_c: number;
+  humedad_relativa: number;
+  temperatura_superficie_c: number | null;
+  punto_rocio_c: number;
 };
 
 export type DewPointSummary = {
@@ -57,7 +88,14 @@ export type DewPointDay = {
   mediciones: DewPointReading[];
   puntos: { salas: DewPointPlace[]; tuneles: DewPointPlace[]; camaras: DewPointPlace[] };
   etapas: { valor: DewPointStage; etiqueta: string }[];
-  parametros: { margen_minimo_c: number; dias_registro_retroactivo: number; zona_horaria: string };
+  referencias?: DewPointReference[];
+  parametros: {
+    margen_minimo_c: number;
+    margenes_por_etapa?: { etapa: DewPointStage; margen_minimo_c: number }[];
+    horas_referencia?: number;
+    dias_registro_retroactivo: number;
+    zona_horaria: string;
+  };
   permisos: { registrar: boolean; supervisar: boolean };
 };
 
@@ -73,6 +111,8 @@ export type DewPointPayload = {
   gotas_visibles: DewPointDrops;
   observacion: string | null;
   medido_at: string;
+  sellado_referencia_id?: string | null;
+  origen_referencia_id?: string | null;
 };
 
 export type DewPointDraft = {
@@ -85,6 +125,10 @@ export type DewPointDraft = {
   surface: string;
   drops: DewPointDrops;
   note: string;
+  /** Sellado cuyo aire quedó en el envase. */
+  sealed: string | null;
+  /** Medición de donde viene la fruta. */
+  origin: string | null;
 };
 
 export const EMPTY_DEW_POINT_DRAFT: DewPointDraft = {
@@ -96,6 +140,8 @@ export const EMPTY_DEW_POINT_DRAFT: DewPointDraft = {
   surface: '',
   drops: 'pendiente',
   note: '',
+  sealed: null,
+  origin: null,
 };
 
 export const DEW_POINT_STATES: Record<DewPointState, { label: string; tone: 'neutral' | 'danger' | 'warning' | 'success'; help: string }> = {
@@ -154,13 +200,63 @@ export function evaluateReading(ambient: number, humidity: number, surface: numb
   };
 }
 
+const STATE_RANK: Record<DewPointState, number> = { sin_superficie: 0, margen_favorable: 1, margen_bajo: 2, condensacion_posible: 3 };
+
+/** Una T° superficial frente al punto de rocío de otro aire (envase o punto de llegada). */
+export function compareSurface(surface: number | null | undefined, dew: number | null | undefined, minimumMargin = 2) {
+  if (surface === null || surface === undefined || !Number.isFinite(surface) || dew === null || dew === undefined || !Number.isFinite(dew)) {
+    return { margin: null, state: 'sin_superficie' as DewPointState };
+  }
+  const margin = round2(surface - dew);
+  return { margin, state: dewPointState(margin, minimumMargin) };
+}
+
+export function worstState(states: DewPointState[]): DewPointState {
+  return states.reduce<DewPointState>((worst, current) => (STATE_RANK[current] > STATE_RANK[worst] ? current : worst), 'sin_superficie');
+}
+
+/** Margen mínimo vigente de la etapa: el ajustado por supervisión o el general. */
+export function marginForStage(day: DewPointDay | null, stage: DewPointStage | null) {
+  const general = day?.parametros.margen_minimo_c ?? 2;
+  return day?.parametros.margenes_por_etapa?.find((row) => row.etapa === stage)?.margen_minimo_c ?? general;
+}
+
+/** Mediciones vinculables a una medición tomada ahora, dentro de la ventana permitida. */
+export function linkCandidates(day: DewPointDay | null, now: Date = new Date()) {
+  const hours = day?.parametros.horas_referencia ?? 72;
+  const items = (day?.referencias ?? []).filter((item) => {
+    const at = new Date(item.medido_at).getTime();
+    return at <= now.getTime() && at >= now.getTime() - hours * 3600000;
+  });
+  return {
+    sealed: items.filter((item) => item.etapa === 'sellado'),
+    origins: items.filter((item) => item.temperatura_superficie_c !== null),
+  };
+}
+
 /** Vista previa del formulario mientras se escribe; null si aún faltan T° o HR válidas. */
-export function previewDraft(draft: DewPointDraft, minimumMargin = 2) {
+export function previewDraft(
+  draft: DewPointDraft,
+  minimumMargin = 2,
+  references: DewPointReference[] = [],
+) {
   const ambient = parseDecimal(draft.ambient);
   const humidity = parseDecimal(draft.humidity);
   const surface = parseDecimal(draft.surface);
   if (ambient === null || humidity === null || Number.isNaN(ambient) || !validHumidity(humidity)) return null;
-  return evaluateReading(ambient, humidity, surface === null || Number.isNaN(surface) ? null : surface, minimumMargin);
+  const surfaceValue = surface === null || Number.isNaN(surface) ? null : surface;
+  const own = evaluateReading(ambient, humidity, surfaceValue, minimumMargin);
+  if (!own) return null;
+  const sealed = draft.stage !== 'sellado' && draft.sealed ? references.find((item) => item.id === draft.sealed) ?? null : null;
+  const origin = draft.origin ? references.find((item) => item.id === draft.origin) ?? null : null;
+  const envelope = sealed ? { reference: sealed, ...compareSurface(surfaceValue, sealed.punto_rocio_c, minimumMargin) } : null;
+  const arrival = origin ? { reference: origin, ...compareSurface(origin.temperatura_superficie_c, own.dewPoint, minimumMargin) } : null;
+  return {
+    ...own,
+    envelope,
+    arrival,
+    worst: worstState([own.state, envelope?.state ?? 'sin_superficie', arrival?.state ?? 'sin_superficie']),
+  };
 }
 
 /** Valida el formulario y arma los datos de la medición (sin operacion_id ni hora). */
@@ -192,6 +288,9 @@ export function draftToReading(draft: DewPointDraft):
       temperatura_superficie_c: surface,
       gotas_visibles: draft.drops,
       observacion: draft.note.trim() || null,
+      // Un sellado evalúa su propio aire: no lleva sellado de referencia.
+      sellado_referencia_id: draft.stage === 'sellado' ? null : draft.sealed,
+      origen_referencia_id: draft.origin,
     },
   };
 }

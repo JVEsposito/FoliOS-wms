@@ -30,6 +30,8 @@ class RegistrarMedicionPuntoRocioRequest extends FormRequest
             'gotas_visibles' => ['required', Rule::enum(GotasVisiblesPuntoRocio::class)],
             'observacion' => ['nullable', 'string', 'max:1000'],
             'medido_at' => ['required', 'date'],
+            'sellado_referencia_id' => ['nullable', 'uuid'],
+            'origen_referencia_id' => ['nullable', 'uuid'],
         ];
     }
 

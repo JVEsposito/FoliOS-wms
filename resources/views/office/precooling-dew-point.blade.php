@@ -46,6 +46,7 @@
                     <div class="prefrio-heading__actions">
                         <button class="primary-button is-hidden" id="newReadingButton" type="button">+ Registrar medición</button>
                         <button class="secondary-button is-hidden" id="roomsButton" type="button">Salas</button>
+                        <button class="secondary-button is-hidden" id="marginsButton" type="button">Márgenes</button>
                         <button class="secondary-button" id="reloadDewPointButton" type="button">↻ Actualizar</button>
                     </div>
                 </header>
@@ -54,7 +55,7 @@
                 <div class="prefrio-metrics dew-metrics">
                     <article data-tone="primary"><span>REGISTROS</span><strong id="readingCount">0</strong><small id="surfaceCount">0 con T° superficial</small></article>
                     <article data-tone="info"><span>ROCÍO MÁXIMO</span><strong id="maxDewPoint">—</strong><small>Aire más húmedo del día</small></article>
-                    <article data-tone="neutral"><span>MARGEN MÍNIMO</span><strong id="minMargin">—</strong><small id="minMarginHelp">Superficie − rocío</small></article>
+                    <article data-tone="neutral"><span>MARGEN MÍNIMO</span><strong id="minMargin">—</strong><small id="minMarginHelp">Superficie − rocío de cada medición</small></article>
                     <article data-tone="warning"><span>ALERTAS</span><strong id="alertCount">0</strong><small id="pendingCount">0 sin acción</small></article>
                     <article data-tone="danger"><span>GOTAS VISIBLES</span><strong id="dropCount">0</strong><small>Condensación observada</small></article>
                 </div>
@@ -77,7 +78,7 @@
                     <div class="dew-table-scroll"><table class="dew-table"><thead><tr><th>Hora</th><th>Etapa y punto</th><th>Aire</th><th>T° sup.</th><th>Rocío</th><th>Margen</th><th>Estado</th><th>Gotas</th><th>Registró</th><th aria-label="Acciones"></th></tr></thead><tbody id="readingsBody"></tbody></table></div>
                 </section>
 
-                <p class="dew-footnote">El punto de rocío describe el aire de la sala (aproximación de Magnus). Dentro de bolsas selladas, el agua superficial y el vapor de la fruta pueden condensar aunque la sala cumpla. El margen de <span id="minimumMarginLabel">2</span> °C es un criterio preventivo interno, no una norma.</p>
+                <p class="dew-footnote">El punto de rocío describe el aire de la sala (aproximación de Magnus). Dentro de bolsas selladas, el agua superficial y el vapor de la fruta pueden condensar aunque la sala cumpla. El margen mínimo de cada etapa (por defecto <span id="minimumMarginLabel">2</span> °C) es un criterio preventivo interno, no una norma; en cámaras con humedad alta el margen natural es menor.</p>
             </section>
 
             <dialog class="prefrio-dialog dew-dialog" id="readingDialog" aria-labelledby="readingDialogTitle">
@@ -92,6 +93,11 @@
                         <label class="dew-number"><span>Humedad relativa *</span><div><input name="humedad_relativa" type="number" step="0.1" min="0.1" max="100" inputmode="decimal" required><b>%</b></div></label>
                         <label class="dew-number"><span>T° superficial fruta</span><div><input name="temperatura_superficie_c" type="number" step="0.1" min="-30" max="60" inputmode="decimal"><b>°C</b></div></label>
                         <fieldset class="dew-drops"><legend>¿Gotas visibles? *</legend><label><input type="radio" name="gotas_visibles" value="no"><span>No</span></label><label><input type="radio" name="gotas_visibles" value="si"><span>Sí</span></label><label><input type="radio" name="gotas_visibles" value="pendiente" checked><span>Pendiente</span></label></fieldset>
+                        <fieldset class="prefrio-field-wide dew-links">
+                            <legend>Vincular con mediciones anteriores <small>(opcional)</small></legend>
+                            <label><span>Aire del envase · sellado de referencia</span><select name="sellado_referencia_id"></select><small>Compara la T° superficial de esta medición con el rocío del aire que quedó dentro de la bolsa al sellar.</small></label>
+                            <label><span>Fruta que llega · medición de origen</span><select name="origen_referencia_id"></select><small>Compara la T° superficial con que llega la fruta con el rocío del aire de este punto.</small></label>
+                        </fieldset>
                         <label class="prefrio-field-wide"><span>Observación</span><textarea name="observacion" maxlength="1000" rows="2"></textarea></label>
                     </div>
                     <output class="dew-result" id="readingResult" data-tone="neutral" aria-live="polite">Ingresa T° y humedad para calcular el punto de rocío.</output>
@@ -115,6 +121,15 @@
                     <div class="dew-room-list" id="roomList"></div>
                     <div class="dew-room-new"><label><span>Nueva sala</span><input name="nombre" maxlength="80" placeholder="Ej.: Sala de sellado"></label><button class="primary-button" id="addRoomButton" value="default" type="submit">Agregar</button></div>
                     <p class="form-error" id="roomError" role="alert"></p>
+                </form>
+            </dialog>
+
+            <dialog class="prefrio-dialog prefrio-dialog--compact dew-dialog" id="marginsDialog" aria-labelledby="marginsDialogTitle">
+                <form method="dialog" class="prefrio-dialog__shell" id="marginsForm" novalidate>
+                    <div class="prefrio-dialog__heading"><div><p class="eyebrow">CRITERIO PREVENTIVO</p><h2 id="marginsDialogTitle">Margen mínimo por etapa</h2><p>Diferencia mínima entre la T° superficial y el punto de rocío. Bajo ella la medición queda como «Margen bajo». Rige para las mediciones nuevas y para sus comparaciones vinculadas.</p></div><button class="dialog-close" value="cancel" type="submit" aria-label="Cerrar">×</button></div>
+                    <div class="dew-margin-list" id="marginList"></div>
+                    <p class="form-error" id="marginError" role="alert"></p>
+                    <div class="dialog-actions"><button class="secondary-button" value="cancel" type="submit">Cancelar</button><button class="primary-button" id="saveMarginsButton" value="default" type="submit">Guardar márgenes</button></div>
                 </form>
             </dialog>
 

@@ -321,7 +321,8 @@ Cada medición registra:
 - T° superficial de la fruta (o de la película) opcional, nunca la de pulpa;
 - gotas visibles: sí, no o pendiente;
 - lote, pallet o referencia y observación opcionales;
-- hora de medición, usuario y tablet.
+- hora de medición, usuario y tablet;
+- opcionalmente, el sellado cuyo aire quedó en el envase y la medición de donde viene la fruta (ver *Mediciones vinculadas*).
 
 El servidor calcula con la aproximación de Magnus (a = 17,625; b = 243,04 °C), igual que la calculadora de cerezas:
 
@@ -330,7 +331,18 @@ El servidor calcula con la aproximación de Magnus (a = 17,625; b = 243,04 °C),
 - margen = T° superficial − punto de rocío;
 - estado: **Medir superficie** (sin T° superficial), **Condensación posible** (margen < 0), **Margen bajo** (margen menor al mínimo) o **Margen favorable**.
 
-El margen mínimo es 2 °C por defecto (`PREFRIO_PUNTO_ROCIO_MARGEN_MINIMO_C`). Es un criterio preventivo interno, no una norma. Dentro de bolsas selladas, el agua superficial y el vapor de la fruta pueden condensar aunque la sala cumpla.
+El margen mínimo es 2 °C por defecto (`PREFRIO_PUNTO_ROCIO_MARGEN_MINIMO_C`) y supervisión puede ajustarlo por etapa desde la oficina (**Márgenes**). Es un criterio preventivo interno, no una norma. En mantención la humedad alta es la deseada: una cámara a 0 °C y 92 % HR tiene el rocío en −1,1 °C, de modo que con la fruta a 0 °C el margen natural es cercano a 1 °C. Cada medición guarda el margen que se le aplicó.
+
+### Mediciones vinculadas
+
+Una medición puede vincular hasta dos mediciones anteriores (por defecto de las últimas 72 horas, `PREFRIO_PUNTO_ROCIO_HORAS_REFERENCIA`), cada una con un sentido distinto:
+
+- **Aire del envase · sellado de referencia.** El aire de la sala de sellado queda dentro de la bolsa y viaja con la fruta. Se compara la T° superficial de esta medición con el punto de rocío de ese sellado: si la fruta (o la película) baja de ese rocío, puede condensar dentro del envase. Solo se vinculan mediciones de etapa sellado, y una medición de sellado no lleva este vínculo porque ya evalúa su propio aire. Como la fruta también transpira dentro de la bolsa, ese rocío es un mínimo: el riesgo real puede ser mayor.
+- **Fruta que llega · medición de origen.** La fruta llega con la T° superficial que tenía en la medición de origen (por ejemplo, salida de prefrío) y queda expuesta al aire de este punto (por ejemplo, la cámara de mantención). Se compara esa T° superficial con el punto de rocío de esta medición. La medición de origen debe tener T° superficial.
+
+Las dos comparaciones usan el margen mínimo de la etapa de la medición que se registra, se guardan con la medición y alertan igual que el margen propio: condensación posible o margen bajo en cualquiera de ellas deja la medición como alerta y avisa a supervisión de frío. El aviso indica cuál comparación lo provocó (por ejemplo, «Condensación posible en el envase»). Si después se anula la medición vinculada, la comparación guardada se conserva y queda marcada como anulada.
+
+Dentro de bolsas selladas, el agua superficial y el vapor de la fruta pueden condensar aunque la sala cumpla.
 
 Una medición con condensación posible, margen bajo o gotas visibles queda como alerta: se avisa a supervisión de frío en Operación ahora (crítica si hay condensación o gotas) y la alerta se mantiene hasta que supervisión registre una acción correctiva. Supervisión también puede anular una medición mal tomada indicando el motivo; la medición anulada queda visible, pero no cuenta en el resumen.
 
@@ -349,6 +361,7 @@ POST /api/prefrio/punto-rocio/{medicion}/accion           (supervisar)
 POST /api/prefrio/punto-rocio/{medicion}/anular           (supervisar)
 POST /api/prefrio/punto-rocio/salas                       (supervisar)
 PUT  /api/prefrio/punto-rocio/salas/{sala}                (supervisar)
+PUT  /api/prefrio/punto-rocio/margenes                    (supervisar)
 ```
 
 ## Interfaces implementadas

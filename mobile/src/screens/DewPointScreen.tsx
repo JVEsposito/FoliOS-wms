@@ -18,11 +18,14 @@ import {
   DewPointPayload,
   DewPointPlace,
   DewPointReading,
+  DewPointReference,
   DewPointState,
   EMPTY_DEW_POINT_DRAFT,
   attemptFor,
   draftToReading,
   formatCelsius,
+  linkCandidates,
+  marginForStage,
   previewDraft,
 } from '../domain/dewPoint';
 import { AuthSession } from '../domain/estiba';
@@ -58,7 +61,13 @@ export function DewPointScreen({ auth, baseUrl, onLogout }: DewPointScreenProps)
   const [notice, setNotice] = useState('');
   const canRegister = day ? day.permisos.registrar : auth.usuario.capacidades.puede_operar_prefrio === true;
   const minimumMargin = day?.parametros.margen_minimo_c ?? 2;
-  const preview = useMemo(() => previewDraft(draft, minimumMargin), [draft, minimumMargin]);
+  const stageMargin = marginForStage(day, draft.stage);
+  const preview = useMemo(() => previewDraft(draft, stageMargin, day?.referencias ?? []), [draft, stageMargin, day]);
+  // La tablet registra lo que se mide ahora: se ofrecen los vínculos más recientes.
+  const candidates = useMemo(() => {
+    const all = linkCandidates(day);
+    return { sealed: all.sealed.slice(0, 6), origins: all.origins.slice(0, 6) };
+  }, [day]);
   const readings = useMemo(() => [...(day?.mediciones ?? [])].reverse(), [day]);
   const rooms = useMemo(() => (day?.puntos.salas ?? []).filter((room) => room.activa !== false), [day]);
   const hasPoints = rooms.length + (day?.puntos.tuneles.length ?? 0) + (day?.puntos.camaras.length ?? 0) > 0;
@@ -116,9 +125,10 @@ export function DewPointScreen({ auth, baseUrl, onLogout }: DewPointScreenProps)
       const saved = await registerDewPointReading(baseUrl, auth.token, attempt.current.payload);
       attempt.current = null;
       setOnline(true);
-      setDraft((current) => ({ ...EMPTY_DEW_POINT_DRAFT, stage: current.stage, point: current.point, reference: current.reference }));
+      // El mismo punto y lote suelen medirse seguido; el sellado de referencia también se conserva.
+      setDraft((current) => ({ ...EMPTY_DEW_POINT_DRAFT, stage: current.stage, point: current.point, reference: current.reference, sealed: current.sealed }));
       setNotice(saved.requiere_accion
-        ? `Medición guardada: ${saved.gotas_visibles === 'si' ? 'gotas visibles' : saved.estado_etiqueta.toLowerCase()}. Supervisión de frío fue avisada.`
+        ? `Medición guardada: ${(saved.condicion ?? (saved.gotas_visibles === 'si' ? 'Gotas visibles' : saved.estado_etiqueta)).toLowerCase()}. Supervisión de frío fue avisada.`
         : `Medición guardada: rocío ${formatCelsius(saved.punto_rocio_c)}${saved.margen_c === null ? '' : `, margen ${formatCelsius(saved.margen_c)}`}.`);
       await refresh(false);
     } catch (reason) {
@@ -205,6 +215,28 @@ export function DewPointScreen({ auth, baseUrl, onLogout }: DewPointScreenProps)
                 ))}
               </View>
 
+              <View style={styles.links}>
+                <Text style={styles.linksTitle}>VINCULAR CON MEDICIONES ANTERIORES (OPCIONAL)</Text>
+                {draft.stage !== 'sellado' ? (
+                  <LinkGroup
+                    label="Aire del envase · sellado de referencia"
+                    help="Compara la T° superficial de esta medición con el rocío del aire que quedó en la bolsa."
+                    items={candidates.sealed}
+                    kind="sealed"
+                    selected={draft.sealed}
+                    onSelect={(sealed) => update({ sealed })}
+                  />
+                ) : null}
+                <LinkGroup
+                  label="Fruta que llega · medición de origen"
+                  help="Compara la T° superficial con que llega la fruta con el rocío del aire de este punto."
+                  items={candidates.origins}
+                  kind="origin"
+                  selected={draft.origin}
+                  onSelect={(origin) => update({ origin })}
+                />
+              </View>
+
               <View style={styles.inputs}>
                 <View style={styles.field}>
                   <Text style={styles.inputLabel}>Lote, pallet o referencia</Text>
@@ -216,7 +248,7 @@ export function DewPointScreen({ auth, baseUrl, onLogout }: DewPointScreenProps)
                 </View>
               </View>
 
-              <ResultPanel preview={preview} />
+              <ResultPanel preview={preview} sealing={draft.stage === 'sellado'} stageMargin={stageMargin} />
 
               <Pressable disabled={busy} onPress={() => void save()} style={[styles.primaryButton, busy && styles.disabled]}>
                 <Text style={styles.primaryButtonText}>{busy ? 'Guardando…' : 'Guardar medición'}</Text>
@@ -231,7 +263,7 @@ export function DewPointScreen({ auth, baseUrl, onLogout }: DewPointScreenProps)
             {readings.length ? readings.map((reading) => <ReadingCard key={reading.id} reading={reading} />) : (
               <Text style={styles.subtitle}>Aún no hay mediciones hoy.</Text>
             )}
-            <Text style={styles.footnote}>El margen mínimo de {formatCelsius(minimumMargin)} es un criterio preventivo interno, no una norma. Dentro de bolsas selladas puede condensar aunque la sala cumpla.</Text>
+            <Text style={styles.footnote}>El margen mínimo de cada etapa (por defecto {formatCelsius(minimumMargin)}) es un criterio preventivo interno, no una norma. Dentro de bolsas selladas puede condensar aunque la sala cumpla.</Text>
           </View>
         </View>
       </ScrollView>
@@ -281,21 +313,78 @@ function NumberField({ label, unit, value, onChange, signed = false }: { label: 
   );
 }
 
-function ResultPanel({ preview }: { preview: ReturnType<typeof previewDraft> }) {
+function LinkGroup({ label, help, items, kind, selected, onSelect }: {
+  label: string;
+  help: string;
+  items: DewPointReference[];
+  kind: 'sealed' | 'origin';
+  selected: string | null;
+  onSelect: (id: string | null) => void;
+}) {
+  return (
+    <View style={styles.pointGroup}>
+      <Text style={styles.groupLabel}>{label}</Text>
+      <Text style={styles.linkHelp}>{help}</Text>
+      {items.length ? (
+        <View style={styles.chips}>
+          <Chip label="Sin vincular" selected={selected === null} onPress={() => onSelect(null)} />
+          {items.map((item) => (
+            <Chip
+              key={item.id}
+              label={kind === 'sealed'
+                ? `${formatTime(item.medido_at)} · ${item.punto} · rocío ${formatCelsius(item.punto_rocio_c)}`
+                : `${formatTime(item.medido_at)} · ${item.etapa_etiqueta} · fruta ${formatCelsius(item.temperatura_superficie_c)}`}
+              selected={selected === item.id}
+              onPress={() => onSelect(selected === item.id ? null : item.id)}
+            />
+          ))}
+        </View>
+      ) : (
+        <Text style={styles.linkHelp}>{kind === 'sealed' ? 'No hay sellados en las últimas horas.' : 'No hay mediciones recientes con T° superficial.'}</Text>
+      )}
+    </View>
+  );
+}
+
+function ResultPanel({ preview, sealing, stageMargin }: { preview: ReturnType<typeof previewDraft>; sealing: boolean; stageMargin: number }) {
   if (!preview) {
     return <Text style={[styles.result, styles.resultNeutral, styles.resultHint]}>Ingresa T° y humedad para calcular el punto de rocío.</Text>;
   }
   const state = DEW_POINT_STATES[preview.state];
   return (
-    <View style={[styles.result, toneStyle(preview.state)]}>
+    <View style={[styles.result, toneStyle(preview.worst)]}>
       <ResultValue label="PUNTO DE ROCÍO" value={formatCelsius(preview.dewPoint)} />
       <ResultValue label="MARGEN VS FRUTA" value={formatCelsius(preview.margin)} />
       <ResultValue label="VAPOR EN EL AIRE" value={`${new Intl.NumberFormat('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(preview.vapor)} g/m³`} />
       <View style={styles.resultState}>
-        <Text style={styles.resultLabel}>RIESGO AL SELLAR</Text>
+        <Text style={styles.resultLabel}>{sealing ? 'RIESGO AL SELLAR' : 'RIESGO EN ESTE PUNTO'}</Text>
         <Text style={styles.resultStateText}>{state.label}</Text>
-        <Text style={styles.resultHelp}>{state.help}</Text>
+        <Text style={styles.resultHelp}>{state.help} Margen mínimo de la etapa: {formatCelsius(stageMargin)}.</Text>
       </View>
+      {preview.envelope ? (
+        <LinkResult
+          title="Dentro del envase"
+          detail={`Rocío del sellado ${formatCelsius(preview.envelope.reference.punto_rocio_c)} · margen ${formatCelsius(preview.envelope.margin)}`}
+          state={preview.envelope.state}
+        />
+      ) : null}
+      {preview.arrival ? (
+        <LinkResult
+          title="Al llegar"
+          detail={`Fruta a ${formatCelsius(preview.arrival.reference.temperatura_superficie_c)} desde ${preview.arrival.reference.etapa_etiqueta} · margen ${formatCelsius(preview.arrival.margin)}`}
+          state={preview.arrival.state}
+        />
+      ) : null}
+    </View>
+  );
+}
+
+function LinkResult({ title, detail, state }: { title: string; detail: string; state: DewPointState }) {
+  return (
+    <View style={[styles.linkResult, toneStyle(state)]}>
+      <Text style={styles.linkResultTitle}>{title}</Text>
+      <Text style={styles.resultHelp}>{detail}</Text>
+      <Text style={styles.linkResultState}>{DEW_POINT_STATES[state].label}</Text>
     </View>
   );
 }
@@ -317,7 +406,17 @@ function ReadingCard({ reading }: { reading: DewPointReading }) {
         Aire {formatCelsius(reading.temperatura_ambiente_c)} · HR {reading.humedad_relativa.toLocaleString('es-CL')} % · Sup. {formatCelsius(reading.temperatura_superficie_c)}
       </Text>
       <Text style={styles.readingDetail}>Rocío {formatCelsius(reading.punto_rocio_c)} · Margen {formatCelsius(reading.margen_c)}{reading.gotas_visibles === 'si' ? ' · Gotas visibles' : ''}</Text>
-      {reading.alerta_pendiente ? <Text style={styles.readingAlertText}>Supervisión de frío debe registrar una acción correctiva.</Text> : null}
+      {reading.envase ? (
+        <Text style={styles.readingDetail}>
+          Envase: {reading.envase.estado ? DEW_POINT_STATES[reading.envase.estado].label : '—'} · margen {formatCelsius(reading.envase.margen_c)} · sellado {reading.envase.medido_at ? formatTime(reading.envase.medido_at) : '—'}{reading.envase.referencia_anulada ? ' (anulado)' : ''}
+        </Text>
+      ) : null}
+      {reading.origen ? (
+        <Text style={styles.readingDetail}>
+          Al llegar: {reading.origen.estado ? DEW_POINT_STATES[reading.origen.estado].label : '—'} · margen {formatCelsius(reading.origen.margen_c)} · desde {reading.origen.etapa_etiqueta ?? '—'}{reading.origen.referencia_anulada ? ' (anulada)' : ''}
+        </Text>
+      ) : null}
+      {reading.alerta_pendiente ? <Text style={styles.readingAlertText}>{reading.condicion ? `${reading.condicion}: supervisión de frío debe registrar una acción correctiva.` : 'Supervisión de frío debe registrar una acción correctiva.'}</Text> : null}
       {reading.accion_correctiva ? <Text style={styles.readingAction}>Acción: {reading.accion_correctiva}</Text> : null}
     </View>
   );
@@ -384,6 +483,12 @@ const styles = StyleSheet.create({
   chipText: { color: colors.textSecondary, fontSize: 15, fontWeight: '800' },
   chipTextSelected: { color: colors.text, fontWeight: '900' },
   pointGroups: { gap: 10 },
+  links: { gap: 10, padding: 12, borderRadius: 12, borderWidth: 1, borderStyle: 'dashed', borderColor: colors.border },
+  linksTitle: { color: colors.muted, fontSize: 12, fontWeight: '900', letterSpacing: .6 },
+  linkHelp: { color: colors.muted, fontSize: 13, lineHeight: 18 },
+  linkResult: { flexBasis: '100%', gap: 2, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 9, borderWidth: 1, borderLeftWidth: 4 },
+  linkResultTitle: { color: colors.text, fontSize: 14, fontWeight: '900' },
+  linkResultState: { color: colors.text, fontSize: 15, fontWeight: '900' },
   pointGroup: { gap: 6 },
   groupLabel: { color: colors.cyan, fontSize: 13, fontWeight: '900' },
   inputs: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
