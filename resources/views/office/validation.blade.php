@@ -35,17 +35,19 @@
 
 
             <section class="validation-workspace" data-validation-timezone="{{ config('app.operational_timezone') }}">
-                <header class="validation-heading">
+                <header class="validation-heading validation-heading--history">
                     <div><p class="eyebrow">CONTROL DE INGRESO</p><h1>Validación de pallets</h1><p>La aprobación crea el folio pendiente de prefrío; observar conserva la posibilidad de corregir y volver a validar.</p></div>
-                    <div class="validation-heading__actions">
-                        <label><span>Temporada visible</span><select id="seasonSelector"></select></label>
-                        <a class="secondary-button" href="/oficina/validacion/pendientes">Pendientes por validar</a>
-                        <a class="secondary-button" href="/oficina/validacion/etiquetas">Etiquetas PT</a>
-                        <div class="validation-downloads">
-                            <button class="secondary-button" id="exportValidationRegisterButton" type="button" aria-describedby="validationExportScope" disabled>RRPP-01 (Excel)</button>
-                            <button class="primary-button" id="exportValidationPdfButton" type="button" aria-describedby="validationExportScope" disabled>Descargar PDF</button>
-                            <small id="validationExportScope" aria-live="polite"></small>
+                    <div class="validation-toolbar">
+                        <div class="validation-heading__actions">
+                            <label><span>Temporada visible</span><select id="seasonSelector"></select></label>
+                            <a class="secondary-button" href="/oficina/validacion/pendientes">Pendientes por validar</a>
+                            <a class="secondary-button" href="/oficina/validacion/etiquetas">Etiquetas PT</a>
+                            <div class="validation-downloads">
+                                <button class="secondary-button" id="exportValidationRegisterButton" type="button" aria-describedby="validationExportScope" disabled>RRPP-01 (Excel)</button>
+                                <button class="primary-button" id="exportValidationPdfButton" type="button" aria-describedby="validationExportScope" disabled>Descargar PDF</button>
+                            </div>
                         </div>
+                        <small id="validationExportScope" aria-live="polite"></small>
                     </div>
                 </header>
 

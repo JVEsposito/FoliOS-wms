@@ -10,8 +10,8 @@ import {
 function snapshot(overrides = {}) {
     return {
         camaras: [
-            { codigo: 'CAM-10', contenido: 'productos', ocupadas: 40, capacidad_operativa: 100, ocupacion_porcentaje: 40, nivel_ocupacion: 'normal', control_ambiental: { estado: 'vencido', capturado_at: '2026-10-19T06:00:00Z' } },
-            { codigo: 'CAM-11', contenido: 'productos', ocupadas: 50, capacidad_operativa: 100, ocupacion_porcentaje: 50, nivel_ocupacion: 'normal', control_ambiental: { estado: 'vencido', capturado_at: '2026-10-19T06:10:00Z' } },
+            { codigo: 'CAM-10', nombre: 'Cámara de tránsito 06', contenido: 'productos', ocupadas: 40, capacidad_operativa: 100, ocupacion_porcentaje: 40, nivel_ocupacion: 'normal', control_ambiental: { estado: 'vencido', capturado_at: '2026-10-19T06:00:00Z' } },
+            { codigo: 'CAM-11', nombre: 'Cámara de tránsito 05', contenido: 'productos', ocupadas: 50, capacidad_operativa: 100, ocupacion_porcentaje: 50, nivel_ocupacion: 'normal', control_ambiental: { estado: 'vencido', capturado_at: '2026-10-19T06:10:00Z' } },
             { codigo: 'CAM-12', contenido: 'productos', ocupadas: 92, capacidad_operativa: 100, ocupacion_porcentaje: 92, nivel_ocupacion: 'critica', control_ambiental: { estado: 'vigente' } },
         ],
         prefrio: {
@@ -42,7 +42,7 @@ test('agrupa por causa: una fila de control vencido con las cámaras afectadas',
     assert.equal(environment.source, 'Ambiente');
     assert.equal(environment.severity, 'critical');
     assert.equal(environment.detail, 'La última lectura ya no está vigente');
-    assert.deepEqual(environment.items.map((item) => item.code), ['CAM-10', 'CAM-11']);
+    assert.deepEqual(environment.items.map((item) => item.code), ['Cámara de tránsito 05', 'Cámara de tránsito 06']);
     assert.equal(environment.items[0].note, null, 'la evidencia compartida va una sola vez');
 });
 

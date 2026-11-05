@@ -6,7 +6,7 @@ import {
     operationLocationLabel,
 } from '../../resources/js/shared/operation-supervision-drawer.js';
 
-test('presenta código, nombre y posición sin exponer el identificador interno', () => {
+test('presenta nombre y posición sin exponer los identificadores internos', () => {
     const label = operationLocationLabel({
         id: 'uuid-camara',
         codigo: 'CAM-09',
@@ -17,8 +17,7 @@ test('presenta código, nombre y posición sin exponer el identificador interno'
         },
     });
 
-    assert.equal(label, 'CAM-09 · Cámara de tránsito 07 · B02-P04-N1');
-    assert.doesNotMatch(label, /uuid/);
+    assert.equal(label, 'Cámara de tránsito 07 · B02-P04-N1');
 });
 
 test('normaliza el detalle completo de supervisión sin publicar UUID de conflictos', () => {
@@ -182,7 +181,7 @@ test('conserva el paso actual como secuencia mínima para ciclos antiguos', () =
 
     assert.equal(model.steps.length, 1);
     assert.equal(model.currentStep.status, 'En proceso');
-    assert.equal(model.currentStep.route, 'CAM-01 → Andén principal');
+    assert.equal(model.currentStep.route, 'Cámara sin nombre → Andén principal');
     assert.equal(model.explanation.available, false);
     assert.equal(model.explanation.factor, 'Ciclo anterior sin explicación persistida');
 });

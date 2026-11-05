@@ -1,4 +1,4 @@
-import { cameraReferenceLabel } from './camera-display.js';
+import { cameraDisplayName } from './camera-display.js';
 
 const DECISION_LABELS = {
     en_ejecucion: 'En ejecución',
@@ -179,7 +179,9 @@ function buildExplanation(explanation, fallbackReason) {
 
 export function operationLocationLabel(location, fallback = 'Sin ubicación') {
     const camera = location?.camara || location;
-    const cameraName = camera ? cameraReferenceLabel(camera) : '';
+    const cameraName = location?.camara || camera?.nombre || camera?.codigo
+        ? cameraDisplayName(camera)
+        : '';
     const position = text(location?.posicion?.etiqueta, '');
     const parts = [cameraName, position].filter(Boolean);
 

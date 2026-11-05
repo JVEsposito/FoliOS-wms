@@ -64,9 +64,16 @@
 /* Una sola pista flexible: la tabla se desplaza dentro de su contenedor y no ensancha la página. */
 .office-app .validation-workspace { grid-template-columns: minmax(0, 1fr) !important; }
 .office-app .validation-heading__actions { flex-wrap: wrap; align-items: flex-end; gap: 10px; }
-.office-app .validation-downloads { display: flex; flex-wrap: wrap; gap: 6px 10px; }
-.office-app .validation-downloads small { flex-basis: 100%; color: var(--text-subtle); overflow-wrap: anywhere; }
-.office-app .validation-downloads small:empty { display: none; }
+.office-app .validation-heading--history { display: grid; grid-template-columns: minmax(0, 1fr); }
+.office-app .validation-toolbar .validation-heading__actions { min-width: 0; }
+.office-app .validation-toolbar label { flex: 0 1 22rem; min-width: min(100%, 18rem); }
+.office-app .validation-downloads { display: flex; flex-wrap: wrap; gap: 10px; margin-inline-start: auto; }
+.office-app .validation-toolbar > small { display: block; margin-top: 6px; color: var(--text-subtle); text-align: end; overflow-wrap: anywhere; }
+.office-app .validation-toolbar > small:empty { display: none; }
+@media (max-width: 760px) {
+    .office-app .validation-downloads { margin-inline-start: 0; }
+    .office-app .validation-toolbar > small { text-align: start; }
+}
 
 .office-app .validation-metrics > article.validation-metric--success > strong { color: var(--success-text) !important; }
 .office-app .validation-metrics > article.validation-metric--critical > strong { color: var(--danger-text) !important; }

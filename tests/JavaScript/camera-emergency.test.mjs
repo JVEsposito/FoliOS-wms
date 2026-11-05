@@ -24,7 +24,10 @@ test('declarar y cancelar usan sus endpoints y muestran el mensaje del backend',
 });
 
 test('Operación ahora destaca la emergencia activa de la cámara', () => {
-    const alerts = buildOperationalAlerts({ emergencias: [{ camara_codigo: 'CAM-09', motivo: 'Fuga de amoníaco' }] });
+    const alerts = buildOperationalAlerts({
+        camaras: [{ codigo: 'CAM-09', nombre: 'Cámara de tránsito 07' }],
+        emergencias: [{ camara_codigo: 'CAM-09', motivo: 'Fuga de amoníaco' }],
+    });
     assert.equal(alerts[0].severity, 'critical');
-    assert.equal(alerts[0].condition, 'Evacuación de emergencia activa en CAM-09');
+    assert.equal(alerts[0].condition, 'Evacuación de emergencia activa en Cámara de tránsito 07');
 });

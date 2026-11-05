@@ -19,6 +19,7 @@ test('construye alertas solo con evidencia operacional disponible', () => {
         camaras: [
             {
                 codigo: 'C3',
+                nombre: 'Cámara de tránsito 03',
                 contenido: 'productos',
                 ocupadas: 94,
                 capacidad_operativa: 100,
@@ -28,6 +29,7 @@ test('construye alertas solo con evidencia operacional disponible', () => {
             },
             {
                 codigo: 'MAT-01',
+                nombre: 'Bodega de materiales',
                 contenido: 'materiales',
                 ocupadas: 95,
                 capacidad_operativa: 100,
@@ -57,8 +59,8 @@ test('construye alertas solo con evidencia operacional disponible', () => {
         ['Ambiente/camaras', 'Ocupación/camaras', 'Prefrío/prefrio', 'Sincronización/personal', 'Sincronización/personal'],
         'cada alerta declara su fuente y la pestaña donde se ve el detalle',
     );
-    assert.ok(alerts.some((alert) => alert.area === 'C3' && alert.condition === 'Ocupación crítica de cámara'));
-    assert.ok(!alerts.some((alert) => alert.area === 'MAT-01'));
+    assert.ok(alerts.some((alert) => alert.area === 'Cámara de tránsito 03' && alert.condition === 'Ocupación crítica de cámara'));
+    assert.ok(!alerts.some((alert) => alert.area === 'Bodega de materiales' || alert.area === 'C3'));
 });
 
 test('no inventa alertas cuando los indicadores están normales', () => {
