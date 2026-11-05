@@ -22,6 +22,7 @@ function loadComponent() {
     require: (id) => id === 'react-native' ? { Pressable: 'Pressable', Text: 'Text', TextInput: 'TextInput', View: 'View', StyleSheet: { create: (s) => s } }
       : id.endsWith('/ScanInput') ? { ScanInput: 'ScanInput' }
         : id.endsWith('/operatorTheme') ? { operatorTheme: { color: {}, radius: {}, space: {}, type: {}, touch: { minimum: 48 } } }
+          : id.endsWith('/theme/typography') ? { font: {} }
           : require(id),
   });
   return module.exports.TurnVerification;

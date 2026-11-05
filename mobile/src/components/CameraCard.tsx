@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { cameraDisplayName } from '../domain/cameras';
 import { CameraSummary } from '../domain/estiba';
 import { colors } from '../theme/colors';
+import { font } from '../theme/typography';
 
 type CameraCardProps = {
   camera: CameraSummary;
@@ -82,22 +83,22 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   title: {
+    fontFamily: font.heavy,
     flex: 1,
     color: colors.text,
     fontSize: 18,
-    fontWeight: '900',
   },
   state: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   dot: { width: 8, height: 8, borderRadius: 4 },
-  stateText: { fontSize: 14, fontWeight: '800' },
-  content: { marginTop: 7, color: colors.muted, fontSize: 14, fontWeight: '800' },
+  stateText: { fontFamily: font.heavy, fontSize: 14 },
+  content: { fontFamily: font.heavy, marginTop: 7, color: colors.muted, fontSize: 14 },
   occupancyRow: {
     marginTop: 13,
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
-  occupancyLabel: { color: colors.muted, fontSize: 14, fontWeight: '700' },
-  occupancyValue: { color: colors.text, fontSize: 12, fontWeight: '900' },
+  occupancyLabel: { fontFamily: font.bold, color: colors.muted, fontSize: 14 },
+  occupancyValue: { fontFamily: font.heavy, color: colors.text, fontSize: 12 },
   progress: {
     height: 6,
     marginTop: 7,
@@ -106,5 +107,5 @@ const styles = StyleSheet.create({
     backgroundColor: colors.borderSoft,
   },
   progressValue: { height: '100%', borderRadius: 3, backgroundColor: colors.cyan },
-  detail: { marginTop: 7, color: colors.muted, fontSize: 13 },
+  detail: { fontFamily: font.regular, marginTop: 7, color: colors.muted, fontSize: 13 },
 });

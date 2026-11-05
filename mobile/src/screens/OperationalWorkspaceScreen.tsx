@@ -14,6 +14,7 @@ import { EnvironmentalControlScreen } from './EnvironmentalControlScreen';
 import { OperationalScreen } from './OperationalScreen';
 import { useOperationalPolling } from '../hooks/useOperationalPolling';
 import { sendOperatorPresence } from '../services/operatorPresenceApi';
+import { font } from '../theme/typography';
 
 type Props = {
   api: EstibaApi;
@@ -143,9 +144,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   buttonActive: { backgroundColor: o.color.surfaceMuted },
-  buttonText: { color: o.color.textSecondary, fontSize: o.type.body, fontWeight: '600' },
-  buttonTextActive: { color: o.color.primaryPressed, fontWeight: '800' },
+  buttonText: { fontFamily: font.semibold, color: o.color.textSecondary, fontSize: o.type.body },
+  buttonTextActive: { fontFamily: font.heavy, color: o.color.primaryPressed },
   badge: { minWidth: 26, height: 26, paddingHorizontal: 8, borderRadius: o.radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: o.color.warning },
-  badgeText: { color: o.color.onPrimary, fontSize: o.type.caption, fontWeight: '900' },
+  badgeText: { fontFamily: font.heavy, color: o.color.onPrimary, fontSize: o.type.caption },
   content: { flex: 1, minHeight: 0 },
 });

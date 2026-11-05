@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 import type { OperationalShiftContext } from '../../domain/operationalTasks';
 import { operatorTheme as o } from '../../theme/operatorTheme';
+import { font } from '../../theme/typography';
 
 const names: Record<string, string> = {
   recepcion_tuneles: 'Salidas de túnel', recepcion_packing: 'Recepción de packing', separacion_cargas: 'Separación de cargas',
@@ -22,7 +23,7 @@ export function OperatorShiftDuties({ context }: { context: OperationalShiftCont
 }
 const styles = StyleSheet.create({
   card: { padding: 16, gap: 8, borderRadius: 12, borderWidth: 1, borderColor: o.color.primary, marginBottom: 12 },
-  title: { fontSize: 18, fontWeight: '700', color: o.color.text },
-  copy: { fontSize: 15, lineHeight: 22, color: o.color.text },
-  wait: { fontSize: 16, lineHeight: 22, fontWeight: '600', color: o.color.text },
+  title: { fontFamily: font.bold, fontSize: 18, color: o.color.text },
+  copy: { fontFamily: font.regular, fontSize: 15, lineHeight: 22, color: o.color.text },
+  wait: { fontFamily: font.semibold, fontSize: 16, lineHeight: 22, color: o.color.text },
 });

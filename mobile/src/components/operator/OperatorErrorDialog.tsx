@@ -1,6 +1,7 @@
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { operatorTheme as o } from '../../theme/operatorTheme';
+import { font } from '../../theme/typography';
 
 type Props = {
   message: string;
@@ -31,10 +32,10 @@ export function OperatorErrorDialog({ message, onAcknowledge }: Props) {
 const styles = StyleSheet.create({
   backdrop: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: o.space[4], backgroundColor: 'rgba(7,24,33,0.72)' },
   dialog: { width: '100%', maxWidth: 620, maxHeight: '85%', backgroundColor: o.color.surface, borderRadius: o.radius.panel, borderWidth: 2, borderColor: o.color.critical, padding: o.space[4], gap: o.space[3] },
-  title: { color: o.color.critical, fontSize: o.type.heading, fontWeight: '900' },
+  title: { fontFamily: font.heavy, color: o.color.critical, fontSize: o.type.heading },
   body: { flexShrink: 1 },
   content: { paddingVertical: o.space[2] },
-  message: { color: o.color.text, fontSize: o.type.body, lineHeight: 25 },
+  message: { fontFamily: font.regular, color: o.color.text, fontSize: o.type.body, lineHeight: 25 },
   button: { minHeight: o.touch.prominent, alignItems: 'center', justifyContent: 'center', backgroundColor: o.color.primary, borderRadius: o.radius.control },
-  buttonText: { color: o.color.onPrimary, fontSize: o.type.body, fontWeight: '900' },
+  buttonText: { fontFamily: font.heavy, color: o.color.onPrimary, fontSize: o.type.body },
 });

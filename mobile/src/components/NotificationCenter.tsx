@@ -14,6 +14,7 @@ import { AuthSession, OperationalNotification } from '../domain/estiba';
 import { useOperationalPolling } from '../hooks/useOperationalPolling';
 import { EstibaApi } from '../services/estibaApi';
 import { colors } from '../theme/colors';
+import { font } from '../theme/typography';
 
 type Props = {
   api: EstibaApi;
@@ -263,21 +264,21 @@ function formatTime(value: string) {
 
 const styles = StyleSheet.create({
   trigger: { minHeight: 32, paddingHorizontal: 9, borderRadius: 8, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panel, flexDirection: 'row', alignItems: 'center', gap: 5 },
-  bell: { color: colors.amber, fontSize: 13 },
-  triggerText: { color: colors.text, fontSize: 12, fontWeight: '900' },
+  bell: { fontFamily: font.regular, color: colors.amber, fontSize: 13 },
+  triggerText: { fontFamily: font.heavy, color: colors.text, fontSize: 12 },
   badge: { minWidth: 18, height: 18, paddingHorizontal: 4, borderRadius: 9, backgroundColor: colors.red, alignItems: 'center', justifyContent: 'center' },
-  badgeText: { color: '#fff', fontSize: 11, fontWeight: '900' },
+  badgeText: { fontFamily: font.heavy, color: '#fff', fontSize: 11 },
   backdrop: { flex: 1, padding: 20, backgroundColor: 'rgba(0,0,0,0.78)', alignItems: 'center', justifyContent: 'center' },
   modal: { width: '100%', maxWidth: 820, maxHeight: '88%', padding: 18, borderRadius: 18, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panel, position: 'relative' },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
-  eyebrow: { color: colors.cyan, fontSize: 12, fontWeight: '900', letterSpacing: 1.2 },
-  title: { marginTop: 3, color: colors.text, fontSize: 21, fontWeight: '900' },
-  subtitle: { marginTop: 3, color: colors.muted, fontSize: 13 },
+  eyebrow: { fontFamily: font.heavy, color: colors.cyan, fontSize: 12, letterSpacing: 1.2 },
+  title: { fontFamily: font.heavy, marginTop: 3, color: colors.text, fontSize: 21 },
+  subtitle: { fontFamily: font.regular, marginTop: 3, color: colors.muted, fontSize: 13 },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   secondaryButton: { paddingHorizontal: 12, paddingVertical: 9, borderRadius: 8, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background },
-  secondaryText: { color: colors.text, fontSize: 12, fontWeight: '900' },
+  secondaryText: { fontFamily: font.heavy, color: colors.text, fontSize: 12 },
   closeButton: { width: 34, height: 34, borderRadius: 9, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
-  closeText: { color: colors.text, fontSize: 18 },
+  closeText: { fontFamily: font.regular, color: colors.text, fontSize: 18 },
   list: { paddingTop: 14, gap: 8 },
   notification: { padding: 11, borderRadius: 11, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, flexDirection: 'row', gap: 9 },
   notificationUnread: { borderColor: colors.cyan, backgroundColor: colors.selected },
@@ -285,17 +286,17 @@ const styles = StyleSheet.create({
   severity: { width: 7, height: 7, marginTop: 4, borderRadius: 4 },
   copy: { flex: 1, minWidth: 0 },
   notificationTop: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
-  notificationTitle: { flex: 1, color: colors.text, fontSize: 14, fontWeight: '900' },
-  time: { color: colors.muted, fontSize: 12 },
-  message: { marginTop: 4, color: colors.muted, fontSize: 13, lineHeight: 17 },
+  notificationTitle: { fontFamily: font.heavy, flex: 1, color: colors.text, fontSize: 14 },
+  time: { fontFamily: font.regular, color: colors.muted, fontSize: 12 },
+  message: { fontFamily: font.regular, marginTop: 4, color: colors.muted, fontSize: 13, lineHeight: 17 },
   metaRow: { marginTop: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   loadLink: { paddingHorizontal: 9, paddingVertical: 6, borderRadius: 7, backgroundColor: colors.cyan },
-  loadLinkText: { color: colors.accentText, fontSize: 11, fontWeight: '900' },
+  loadLinkText: { fontFamily: font.heavy, color: colors.accentText, fontSize: 11 },
   confirmButton: { paddingHorizontal: 9, paddingVertical: 6, borderRadius: 7, borderWidth: 1, borderColor: colors.green },
-  confirmText: { color: colors.green, fontSize: 11, fontWeight: '900' },
-  confirmed: { color: colors.green, fontSize: 11, fontWeight: '900' },
+  confirmText: { fontFamily: font.heavy, color: colors.green, fontSize: 11 },
+  confirmed: { fontFamily: font.heavy, color: colors.green, fontSize: 11 },
   empty: { minHeight: 180, alignItems: 'center', justifyContent: 'center' },
-  emptyTitle: { color: colors.text, fontSize: 14, fontWeight: '900' },
-  emptyText: { marginTop: 4, color: colors.muted, fontSize: 13 },
+  emptyTitle: { fontFamily: font.heavy, color: colors.text, fontSize: 14 },
+  emptyText: { fontFamily: font.regular, marginTop: 4, color: colors.muted, fontSize: 13 },
   busy: { ...StyleSheet.absoluteFill, borderRadius: 18, backgroundColor: 'rgba(5,8,11,0.45)', alignItems: 'center', justifyContent: 'center' },
 });

@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import type { OperationalTask } from '../../domain/operationalTasks';
 import { operatorTaskPurpose } from '../../domain/operatorTaskPurpose';
 import { operatorTheme as o } from '../../theme/operatorTheme';
+import { font } from '../../theme/typography';
 
 export function OperatorTaskPurpose({ task }: { task: OperationalTask }) {
   const purpose = operatorTaskPurpose(task);
@@ -20,9 +21,9 @@ export function OperatorTaskPurpose({ task }: { task: OperationalTask }) {
 
 const styles = StyleSheet.create({
   panel: { backgroundColor: o.color.surface, borderWidth: 1, borderColor: o.color.infoBorder, borderLeftWidth: 4, borderLeftColor: o.color.primary, borderRadius: o.radius.panel, padding: 16, gap: 6 },
-  caption: { color: o.color.primary, fontSize: o.type.caption, fontWeight: '800' },
-  title: { color: o.color.text, fontSize: o.type.heading, fontWeight: '800' },
-  goal: { color: o.color.text, fontSize: o.type.body, fontWeight: '700' },
-  reason: { color: o.color.textSecondary, fontSize: o.type.small },
-  step: { color: o.color.primaryPressed, fontSize: o.type.body, fontWeight: '700' },
+  caption: { fontFamily: font.heavy, color: o.color.primary, fontSize: o.type.caption },
+  title: { fontFamily: font.heavy, color: o.color.text, fontSize: o.type.heading },
+  goal: { fontFamily: font.bold, color: o.color.text, fontSize: o.type.body },
+  reason: { fontFamily: font.regular, color: o.color.textSecondary, fontSize: o.type.small },
+  step: { fontFamily: font.bold, color: o.color.primaryPressed, fontSize: o.type.body },
 });

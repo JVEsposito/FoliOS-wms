@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { operatorTheme as o } from '../../theme/operatorTheme';
+import { font } from '../../theme/typography';
 
 type Props = {
   deviceName: string;
@@ -90,8 +91,8 @@ const styles = StyleSheet.create({
     gap: o.space[2],
   },
   initials: { width: 38, height: 38, borderRadius: o.radius.pill, backgroundColor: o.color.surfaceMuted, alignItems: 'center', justifyContent: 'center' },
-  initialsText: { color: o.color.text, fontSize: o.type.small, fontWeight: '800' },
-  chevron: { color: o.color.muted, fontSize: o.type.body },
+  initialsText: { fontFamily: font.heavy, color: o.color.text, fontSize: o.type.small },
+  chevron: { fontFamily: font.regular, color: o.color.muted, fontSize: o.type.body },
   backdrop: { flex: 1, backgroundColor: 'rgba(5,12,16,0.55)', alignItems: 'flex-end', paddingTop: 80, paddingHorizontal: o.space[4] },
   panel: {
     width: 380,
@@ -109,12 +110,12 @@ const styles = StyleSheet.create({
   },
   identity: { flexDirection: 'row', alignItems: 'center', gap: o.space[3], padding: o.space[4], borderBottomWidth: 1, borderBottomColor: o.color.border },
   initialsLarge: { width: 52, height: 52, borderRadius: o.radius.pill, backgroundColor: o.color.surfaceMuted, alignItems: 'center', justifyContent: 'center' },
-  initialsLargeText: { color: o.color.text, fontSize: o.type.heading, fontWeight: '800' },
+  initialsLargeText: { fontFamily: font.heavy, color: o.color.text, fontSize: o.type.heading },
   identityText: { flex: 1, minWidth: 0 },
-  name: { color: o.color.text, fontSize: o.type.body, fontWeight: '800' },
-  meta: { color: o.color.muted, fontSize: o.type.small, marginTop: 2 },
+  name: { fontFamily: font.heavy, color: o.color.text, fontSize: o.type.body },
+  meta: { fontFamily: font.regular, color: o.color.muted, fontSize: o.type.small, marginTop: 2 },
   item: { minHeight: o.touch.prominent, justifyContent: 'center', paddingHorizontal: o.space[4], borderRadius: o.radius.control },
-  itemText: { color: o.color.text, fontSize: o.type.body, fontWeight: '600' },
-  logoutText: { color: o.color.critical, fontWeight: '800' },
+  itemText: { fontFamily: font.semibold, color: o.color.text, fontSize: o.type.body },
+  logoutText: { fontFamily: font.heavy, color: o.color.critical },
   divider: { height: 1, marginHorizontal: o.space[2], marginVertical: o.space[1], backgroundColor: o.color.border },
 });

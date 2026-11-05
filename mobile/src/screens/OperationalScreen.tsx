@@ -44,6 +44,7 @@ import {
 import { EstibaApi } from '../services/estibaApi';
 import { ApiError } from '../services/apiError';
 import { colors } from '../theme/colors';
+import { font } from '../theme/typography';
 
 type OperationalScreenProps = {
   api: EstibaApi;
@@ -934,7 +935,7 @@ const styles = StyleSheet.create({
   moduleNav: { padding: 3, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panel, flexDirection: 'row', gap: 3 },
   moduleButton: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 7 },
   moduleButtonActive: { backgroundColor: colors.cyan },
-  moduleButtonText: { color: colors.muted, fontSize: 12, fontWeight: '900' },
+  moduleButtonText: { fontFamily: font.heavy, color: colors.muted, fontSize: 12 },
   moduleButtonTextActive: { color: colors.accentText },
   status: {
     paddingHorizontal: 10,
@@ -947,9 +948,9 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   statusDot: { width: 7, height: 7, borderRadius: 4 },
-  statusText: { color: colors.text, fontSize: 12, fontWeight: '800' },
+  statusText: { fontFamily: font.heavy, color: colors.text, fontSize: 12 },
   logout: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8, borderWidth: 1, borderColor: colors.border },
-  logoutText: { color: colors.text, fontSize: 12, fontWeight: '800' },
+  logoutText: { fontFamily: font.heavy, color: colors.text, fontSize: 12 },
   errorBanner: {
     marginBottom: 10,
     padding: 10,
@@ -961,8 +962,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 10,
   },
-  errorText: { flex: 1, color: colors.red, fontSize: 13 },
-  errorClose: { color: colors.text, fontSize: 16 },
+  errorText: { fontFamily: font.regular, flex: 1, color: colors.red, fontSize: 13 },
+  errorClose: { fontFamily: font.regular, color: colors.text, fontSize: 16 },
   noticeBanner: {
     marginBottom: 10,
     padding: 10,
@@ -974,8 +975,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 10,
   },
-  noticeText: { flex: 1, color: colors.text, fontSize: 13, fontWeight: '800' },
-  noticeClose: { color: colors.text, fontSize: 16 },
+  noticeText: { fontFamily: font.heavy, flex: 1, color: colors.text, fontSize: 13 },
+  noticeClose: { fontFamily: font.regular, color: colors.text, fontSize: 16 },
   demoLoadBanner: {
     marginBottom: 10,
     paddingHorizontal: 14,
@@ -989,9 +990,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 14,
   },
-  demoLoadBannerTitle: { color: colors.amber, fontSize: 12, fontWeight: '900', letterSpacing: 1 },
-  demoLoadBannerText: { marginTop: 3, color: colors.text, fontSize: 13 },
-  demoLoadBannerAction: { color: colors.amber, fontSize: 13, fontWeight: '900' },
+  demoLoadBannerTitle: { fontFamily: font.heavy, color: colors.amber, fontSize: 12, letterSpacing: 1 },
+  demoLoadBannerText: { fontFamily: font.regular, marginTop: 3, color: colors.text, fontSize: 13 },
+  demoLoadBannerAction: { fontFamily: font.heavy, color: colors.amber, fontSize: 13 },
   workspace: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   workspaceCompact: { flexDirection: 'column' },
   cameraPanel: {
@@ -1002,8 +1003,8 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.panel,
   },
-  sectionEyebrow: { color: colors.cyan, fontSize: 12, fontWeight: '900', letterSpacing: 1.2 },
-  sectionTitle: { marginTop: 3, color: colors.text, fontSize: 17, fontWeight: '900' },
+  sectionEyebrow: { fontFamily: font.heavy, color: colors.cyan, fontSize: 12, letterSpacing: 1.2 },
+  sectionTitle: { fontFamily: font.heavy, marginTop: 3, color: colors.text, fontSize: 17 },
   cameraList: { marginTop: 12, gap: 9 },
   cameraListHorizontal: { paddingBottom: 2, flexDirection: 'row', gap: 10 },
   operationArea: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
@@ -1025,8 +1026,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.backgroundDeep,
   },
   cameraOnlyItemActive: { borderColor: colors.cyan, backgroundColor: colors.selected },
-  cameraOnlyCode: { color: colors.text, fontSize: 13, fontWeight: '900' },
-  cameraOnlyMeta: { marginTop: 3, color: colors.muted, fontSize: 12 },
+  cameraOnlyCode: { fontFamily: font.heavy, color: colors.text, fontSize: 13 },
+  cameraOnlyMeta: { fontFamily: font.regular, marginTop: 3, color: colors.muted, fontSize: 12 },
   operationAreaCompact: { width: '100%', flexDirection: 'column' },
   emptyPlan: {
     flex: 1,
@@ -1038,8 +1039,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  emptyIcon: { color: colors.cyan, fontSize: 40 },
-  emptyTitle: { marginTop: 8, color: colors.text, fontSize: 15, fontWeight: '900' },
+  emptyIcon: { fontFamily: font.regular, color: colors.cyan, fontSize: 40 },
+  emptyTitle: { fontFamily: font.heavy, marginTop: 8, color: colors.text, fontSize: 15 },
   busyOverlay: {
     ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(5,8,11,0.76)',
@@ -1047,5 +1048,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 10,
   },
-  busyText: { color: colors.text, fontSize: 14, fontWeight: '900' },
+  busyText: { fontFamily: font.heavy, color: colors.text, fontSize: 14 },
 });

@@ -1,3 +1,4 @@
+import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { useEffect, useMemo, useState } from 'react';
@@ -25,6 +26,7 @@ import { loadApiBaseUrl, saveApiBaseUrl } from './src/services/apiConfiguration'
 import { applyAvailableUpdate } from './src/services/appUpdates';
 import { createEstibaApi } from './src/services/estibaApi';
 import { colors } from './src/theme/colors';
+import { fontAssets } from './src/theme/fontAssets';
 
 type MobileModule = TabletModule;
 
@@ -34,6 +36,9 @@ export default function App() {
   const [auth, setAuth] = useState<AuthSession | null>(null);
   const [activeModule, setActiveModule] = useState<MobileModule | null>(null);
   const api = useMemo(() => createEstibaApi(baseUrl), [baseUrl]);
+  // Inter y JetBrains Mono van dentro del paquete; si fallan se sigue con la del sistema.
+  const [fontsLoaded, fontError] = useFonts(fontAssets);
+  const fontsSettled = fontsLoaded || fontError !== null;
 
   useEffect(() => {
     async function prepareApplication() {
@@ -108,7 +113,7 @@ export default function App() {
     <SafeAreaProvider>
       <SafeAreaView edges={['top', 'right', 'bottom', 'left']} style={styles.app}>
         <StatusBar style="light" />
-        {!configurationLoaded ? (
+        {!configurationLoaded || !fontsSettled ? (
           <View style={styles.boot}>
             <ActivityIndicator color={colors.cyan} size="large" />
             <Text style={styles.bootText}>Preparando FoliOS…</Text>

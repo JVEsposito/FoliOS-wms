@@ -6,6 +6,7 @@ import { isFinishedLoad, operatorLoadCounts, operatorLoadDate, operatorLoadState
 import { useOperationalPolling } from '../../hooks/useOperationalPolling';
 import type { OperationalTasksApi } from '../../services/operationalTasksApi';
 import { operatorTheme as o } from '../../theme/operatorTheme';
+import { font } from '../../theme/typography';
 
 type Filter = 'todas' | 'activas' | 'terminadas';
 
@@ -106,21 +107,21 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: o.color.canvas },
   content: { padding: 20, gap: 14 },
   header: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 10 },
-  title: { color: o.color.text, fontSize: o.type.title, fontWeight: '800' },
-  copy: { color: o.color.textSecondary, fontSize: o.type.body },
-  turn: { color: o.color.primaryPressed, fontSize: o.type.body, fontWeight: '700' },
+  title: { fontFamily: font.heavy, color: o.color.text, fontSize: o.type.title },
+  copy: { fontFamily: font.regular, color: o.color.textSecondary, fontSize: o.type.body },
+  turn: { fontFamily: font.bold, color: o.color.primaryPressed, fontSize: o.type.body },
   filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   button: { minHeight: o.touch.minimum, justifyContent: 'center', padding: 14, borderRadius: o.radius.control, borderWidth: 1, borderColor: o.color.borderStrong, backgroundColor: o.color.surface },
   selected: { borderColor: o.color.primary, backgroundColor: o.color.selected },
-  buttonText: { color: o.color.primaryPressed, fontSize: o.type.body, fontWeight: '700' },
+  buttonText: { fontFamily: font.bold, color: o.color.primaryPressed, fontSize: o.type.body },
   card: { padding: 18, gap: 8, backgroundColor: o.color.surface, borderWidth: 1, borderColor: o.color.border, borderRadius: o.radius.panel },
   cardHeading: { minHeight: o.touch.minimum, gap: 8, justifyContent: 'center' },
-  code: { color: o.color.text, fontSize: o.type.heading, fontWeight: '800' },
-  priority: { color: o.color.primary, fontSize: o.type.small, fontWeight: '700' },
-  summary: { color: o.color.text, fontSize: o.type.body, fontWeight: '700' },
+  code: { fontFamily: font.heavy, color: o.color.text, fontSize: o.type.heading },
+  priority: { fontFamily: font.bold, color: o.color.primary, fontSize: o.type.small },
+  summary: { fontFamily: font.bold, color: o.color.text, fontSize: o.type.body },
   detail: { borderTopWidth: 1, borderTopColor: o.color.border, paddingTop: 14, gap: 12 },
   folio: { gap: 4, paddingVertical: 8 },
-  folioCode: { color: o.color.text, fontSize: o.type.body, fontWeight: '700' },
-  error: { color: o.color.critical, fontSize: o.type.body },
-  warning: { color: o.color.warning, fontSize: o.type.body, fontWeight: '700' },
+  folioCode: { fontFamily: font.bold, color: o.color.text, fontSize: o.type.body },
+  error: { fontFamily: font.regular, color: o.color.critical, fontSize: o.type.body },
+  warning: { fontFamily: font.bold, color: o.color.warning, fontSize: o.type.body },
 });

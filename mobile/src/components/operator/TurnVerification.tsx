@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { ShiftVerification, VerificationItem, MaterialVerificationReading } from '../../domain/verification';
 import { operatorTheme as o } from '../../theme/operatorTheme';
 import { ScanInput } from '../ui/ScanInput';
+import { font } from '../../theme/typography';
 
 type Props = {
   round: ShiftVerification | null;
@@ -90,15 +91,15 @@ export function TurnVerification({ round, busy, onVerify, onVerifyMaterials, loo
 
 const styles = StyleSheet.create({
   card: { backgroundColor: o.color.surface, borderColor: o.color.border, borderWidth: 1, borderRadius: o.radius.panel, padding: o.space[4], gap: o.space[2] },
-  eyebrow: { color: o.color.primary, fontWeight: '800', fontSize: o.type.caption },
-  title: { color: o.color.text, fontSize: o.type.heading, fontWeight: '800' },
-  detail: { color: o.color.muted, fontSize: o.type.small },
+  eyebrow: { fontFamily: font.heavy, color: o.color.primary, fontSize: o.type.caption },
+  title: { fontFamily: font.heavy, color: o.color.text, fontSize: o.type.heading },
+  detail: { fontFamily: font.regular, color: o.color.muted, fontSize: o.type.small },
   position: { borderColor: o.color.border, borderWidth: 1, padding: o.space[3], borderRadius: o.radius.control },
   selected: { backgroundColor: o.color.selected, borderColor: o.color.primary },
-  positionText: { color: o.color.text, fontSize: o.type.body, fontWeight: '700' },
+  positionText: { fontFamily: font.bold, color: o.color.text, fontSize: o.type.body },
   actions: { gap: o.space[2], marginTop: o.space[2] },
   quantity: { minHeight: o.touch.minimum, padding: o.space[3], color: o.color.text, borderColor: o.color.border, borderWidth: 1, borderRadius: o.radius.control },
-  label: { color: o.color.text, fontSize: o.type.small },
+  label: { fontFamily: font.regular, color: o.color.text, fontSize: o.type.small },
   emptyButton: { padding: o.space[3], alignItems: 'center', borderColor: o.color.primary, borderWidth: 1, borderRadius: o.radius.control },
-  emptyText: { color: o.color.primary, fontWeight: '700' },
+  emptyText: { fontFamily: font.bold, color: o.color.primary },
 });

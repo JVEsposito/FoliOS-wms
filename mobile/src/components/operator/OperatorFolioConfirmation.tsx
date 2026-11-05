@@ -11,6 +11,7 @@ import {
 import { operationalTaskPositionLabel, type OperationalTask } from '../../domain/operationalTasks';
 import type { OperatorPinStatus, StartConfirmation } from '../../services/operationalTasksApi';
 import { operatorTheme as o } from '../../theme/operatorTheme';
+import { font } from '../../theme/typography';
 
 export type FolioConfirmationState = {
   pinStatus: OperatorPinStatus | null;
@@ -233,9 +234,9 @@ export function OperatorFolioConfirmation({
 const styles = StyleSheet.create({
   screen: { gap: o.space[4], padding: o.space[4], paddingBottom: o.space[6] },
   header: { gap: o.space[2] },
-  kicker: { color: o.color.critical, fontSize: o.type.small, fontWeight: '900', letterSpacing: 0.6 },
-  title: { color: o.color.text, fontSize: o.type.title, fontWeight: '900' },
-  instruction: { color: o.color.muted, fontSize: o.type.body, lineHeight: 22 },
+  kicker: { fontFamily: font.heavy, color: o.color.critical, fontSize: o.type.small, letterSpacing: 0.6 },
+  title: { fontFamily: font.heavy, color: o.color.text, fontSize: o.type.title },
+  instruction: { fontFamily: font.regular, color: o.color.muted, fontSize: o.type.body, lineHeight: 22 },
   folioCard: {
     gap: o.space[2],
     padding: o.space[4],
@@ -244,12 +245,12 @@ const styles = StyleSheet.create({
     borderColor: o.color.borderStrong,
     backgroundColor: o.color.surface,
   },
-  folioLabel: { color: o.color.muted, fontSize: o.type.small, fontWeight: '800' },
-  folio: { fontSize: 40, fontWeight: '900', fontVariant: ['tabular-nums'], letterSpacing: 1 },
+  folioLabel: { fontFamily: font.heavy, color: o.color.muted, fontSize: o.type.small },
+  folio: { fontFamily: font.heavy, fontSize: 40, fontVariant: ['tabular-nums'], letterSpacing: 1 },
   folioLead: { color: o.color.muted },
   folioTail: { color: o.color.primaryPressed, textDecorationLine: 'underline' },
   folioTailHidden: { color: o.color.critical },
-  origin: { color: o.color.text, fontSize: o.type.body, fontWeight: '700' },
+  origin: { fontFamily: font.bold, color: o.color.text, fontSize: o.type.body },
   slots: { flexDirection: 'row', justifyContent: 'center', gap: o.space[3] },
   slot: {
     width: 68,
@@ -262,14 +263,14 @@ const styles = StyleSheet.create({
     backgroundColor: o.color.surface,
   },
   slotFilled: { borderColor: o.color.primary, backgroundColor: o.color.selected },
-  slotText: { color: o.color.text, fontSize: 34, fontWeight: '900' },
+  slotText: { fontFamily: font.heavy, color: o.color.text, fontSize: 34 },
   error: {
+    fontFamily: font.heavy,
     padding: o.space[3],
     borderRadius: o.radius.control,
     backgroundColor: o.color.criticalSurface,
     color: o.color.critical,
     fontSize: o.type.body,
-    fontWeight: '800',
     textAlign: 'center',
   },
   keypad: {
@@ -294,18 +295,18 @@ const styles = StyleSheet.create({
   keySpacer: { width: '30%' },
   keyErase: { backgroundColor: o.color.surfaceMuted },
   keyPressed: { backgroundColor: o.color.selected },
-  keyText: { color: o.color.text, fontSize: 32, fontWeight: '900' },
+  keyText: { fontFamily: font.heavy, color: o.color.text, fontSize: 32 },
   keyEraseText: { fontSize: o.type.body },
   loading: { alignItems: 'center', gap: o.space[2], padding: o.space[3] },
-  loadingText: { color: o.color.muted, fontSize: o.type.body, fontWeight: '700' },
+  loadingText: { fontFamily: font.bold, color: o.color.muted, fontSize: o.type.body },
   blocked: {
     gap: o.space[2],
     padding: o.space[4],
     borderRadius: o.radius.panel,
     backgroundColor: o.color.criticalSurface,
   },
-  blockedTitle: { color: o.color.critical, fontSize: o.type.heading, fontWeight: '900' },
-  blockedText: { color: o.color.critical, fontSize: o.type.body, lineHeight: 22 },
+  blockedTitle: { fontFamily: font.heavy, color: o.color.critical, fontSize: o.type.heading },
+  blockedText: { fontFamily: font.regular, color: o.color.critical, fontSize: o.type.body, lineHeight: 22 },
   mismatchButton: {
     minHeight: o.touch.prominent,
     alignItems: 'center',
@@ -313,7 +314,7 @@ const styles = StyleSheet.create({
     borderRadius: o.radius.control,
     backgroundColor: o.color.critical,
   },
-  mismatchText: { color: o.color.onPrimary, fontSize: o.type.body, fontWeight: '900' },
+  mismatchText: { fontFamily: font.heavy, color: o.color.onPrimary, fontSize: o.type.body },
   cancelButton: {
     minHeight: o.touch.minimum,
     alignItems: 'center',
@@ -322,5 +323,5 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: o.color.border,
   },
-  cancelText: { color: o.color.text, fontSize: o.type.body, fontWeight: '900' },
+  cancelText: { fontFamily: font.heavy, color: o.color.text, fontSize: o.type.body },
 });

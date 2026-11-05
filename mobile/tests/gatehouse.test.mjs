@@ -105,6 +105,9 @@ function harness({ variant = 'pda', width = 360, failAfterCommit = false, failPe
         login: async (payload) => { calls.logins.push(payload); return auth; }, logout: async () => {},
       }) };
       if (id.endsWith('/demo/demoDatabase')) return { initializeDemoDatabase: async () => {} };
+      // Las fuentes son archivos .ttf del paquete; en Node no hay registro nativo de fuentes.
+      if (id === 'expo-font') return { useFonts: () => [true, null] };
+      if (id.endsWith('/theme/fontAssets')) return { fontAssets: {} };
       if (id.includes('/screens/') && !id.endsWith('/GatehouseScreen')) {
         const name = id.split('/').at(-1);
         return { [name]: (props) => React.createElement(name, props) };

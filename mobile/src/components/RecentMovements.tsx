@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { cameraDisplayName } from '../domain/cameras';
 import { Movement } from '../domain/estiba';
 import { colors } from '../theme/colors';
+import { font } from '../theme/typography';
 
 type RecentMovementsProps = {
   movements: Movement[];
@@ -79,9 +80,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.panel,
   },
   heading: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
-  eyebrow: { color: colors.cyan, fontSize: 12, fontWeight: '900', letterSpacing: 1.2 },
-  title: { marginTop: 3, color: colors.text, fontSize: 15, fontWeight: '900' },
-  sync: { color: colors.muted, fontSize: 12 },
+  eyebrow: { fontFamily: font.heavy, color: colors.cyan, fontSize: 12, letterSpacing: 1.2 },
+  title: { fontFamily: font.heavy, marginTop: 3, color: colors.text, fontSize: 15 },
+  sync: { fontFamily: font.regular, color: colors.muted, fontSize: 12 },
   list: { marginTop: 10, flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   item: {
     minWidth: 245,
@@ -93,10 +94,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  icon: { color: colors.cyan, fontSize: 18, fontWeight: '900' },
+  icon: { fontFamily: font.heavy, color: colors.cyan, fontSize: 18 },
   copy: { flex: 1, minWidth: 0 },
-  itemTitle: { color: colors.text, fontSize: 13, fontWeight: '900' },
-  route: { marginTop: 3, color: colors.muted, fontSize: 11 },
-  time: { color: colors.muted, fontSize: 12 },
-  empty: { marginTop: 10, color: colors.muted, fontSize: 13 },
+  itemTitle: { fontFamily: font.heavy, color: colors.text, fontSize: 13 },
+  route: { fontFamily: font.regular, marginTop: 3, color: colors.muted, fontSize: 11 },
+  time: { fontFamily: font.regular, color: colors.muted, fontSize: 12 },
+  empty: { fontFamily: font.regular, marginTop: 10, color: colors.muted, fontSize: 13 },
 });

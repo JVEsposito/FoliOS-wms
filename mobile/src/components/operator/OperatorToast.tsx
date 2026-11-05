@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { operatorTheme as o } from '../../theme/operatorTheme';
+import { font } from '../../theme/typography';
 
 type Props = {
   /** En pantallas con acciones abajo (maniobra en ejecución) va en el flujo, no encima. */
@@ -83,8 +84,8 @@ const styles = StyleSheet.create({
   mark: { width: 36, height: 36, borderRadius: o.radius.pill, alignItems: 'center', justifyContent: 'center' },
   markSuccess: { backgroundColor: o.color.success },
   markInfo: { borderWidth: 1, borderColor: o.color.borderStrong },
-  markText: { fontSize: o.type.body, fontWeight: '900' },
+  markText: { fontFamily: font.heavy, fontSize: o.type.body },
   markTextSuccess: { color: o.color.successSurface },
   markTextInfo: { color: o.color.textSecondary },
-  text: { flex: 1, color: o.color.text, fontSize: o.type.small, lineHeight: 20, fontWeight: '600' },
+  text: { fontFamily: font.semibold, flex: 1, color: o.color.text, fontSize: o.type.small, lineHeight: 20 },
 });
