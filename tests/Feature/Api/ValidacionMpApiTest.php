@@ -24,6 +24,61 @@ class ValidacionMpApiTest extends TestCase
     use PreparaInspeccionesEnvases;
     use RefreshDatabase;
 
+    public function test_la_pda_recibe_el_campo_faltante_y_puede_corregir_la_segregacion_sin_perder_la_toma(): void
+    {
+        config(['app.locale' => 'es']);
+        app()->setLocale('es');
+        app('translator')->setFallback('es');
+        $temporada = Temporada::query()->where('activa', true)->firstOrFail();
+        $operador = User::factory()->create(['rol' => RolUsuario::OperadorRomana]);
+        $validador = User::factory()->create(['rol' => RolUsuario::ValidadorMp]);
+        $recepcion = $this->actingAs($operador, 'sanctum')
+            ->postJson('/api/romana/recepciones', $this->recepcion($temporada, $this->cliente()))
+            ->assertCreated()->json('data');
+        $csg = CsgValidacion::create(['temporada_id' => $temporada->id, 'codigo' => 'CSG-MP', 'activo' => true]);
+        $variedad = VariedadValidacion::create(['especie_validacion_id' => $recepcion['especie_validacion_id'], 'nombre' => 'Santina', 'activo' => true]);
+        $this->actingAs($validador, 'sanctum');
+        $validacion = $this->postJson('/api/validacion-mp/recepciones/'.$recepcion['id'].'/tomar', [
+            'operacion_id' => (string) Str::uuid(),
+        ])->assertOk()->json('data');
+        $ruta = '/api/validacion-mp/validaciones/'.$validacion['id'].'/confirmar';
+        $segmento = ['motivos' => ['cuartel'], 'csg_validacion_id' => $csg->id,
+            'variedad_validacion_id' => $variedad->id, 'cuartel' => 'A',
+            'envases' => [['tipo_envase' => 'bins', 'cantidad' => 24], ['tipo_envase' => 'totes', 'cantidad' => 5]]];
+        $payload = $this->payloadConInspeccionRc02($ruta, [
+            'operacion_id' => (string) Str::uuid(), 'tarjas_verificadas' => true, 'requiere_segregacion' => true,
+            'envases' => [['tipo_envase' => 'bins', 'cantidad_validada' => 48], ['tipo_envase' => 'totes', 'cantidad_validada' => 10]],
+            'segmentos' => [$segmento, [...$segmento, 'cuartel' => 'B']],
+        ]);
+        foreach ([
+            'motivos' => [[], 'Segmento 2: selecciona al menos un motivo de segregación.'],
+            'csg_validacion_id' => [null, 'Segmento 2: selecciona el CSG.'],
+            'variedad_validacion_id' => [null, 'Segmento 2: selecciona la variedad.'],
+            'envases' => [[], 'Segmento 2: indica el reparto de envases.'],
+        ] as $campo => [$valor, $mensaje]) {
+            $incompleto = $payload;
+            $incompleto['segmentos'][1][$campo] = $valor;
+            $respuesta = $this->postJson($ruta, $incompleto)->assertUnprocessable()->assertJsonValidationErrors('segmentos.1.'.$campo);
+            $this->assertSame($mensaje, $respuesta->json('errors')['segmentos.1.'.$campo][0]);
+        }
+        foreach (['coincide_especie_variedad' => 'Coincide especie y variedad',
+            'coincide_cantidad_bins' => 'Coincide cantidad de bins',
+            'bins_bien_etiquetados' => 'Bins bien etiquetados'] as $campo => $etiqueta) {
+            $incompleto = $payload;
+            $incompleto['inspeccion_envases'][$campo] = null;
+            $respuesta = $this->postJson($ruta, $incompleto)->assertUnprocessable()->assertJsonValidationErrors('inspeccion_envases.'.$campo);
+            $this->assertSame('RC-02: responde Sí o No en «'.$etiqueta.'».', $respuesta->json('errors')['inspeccion_envases.'.$campo][0]);
+        }
+        $this->assertDatabaseHas('validaciones_mp', ['id' => $validacion['id'], 'estado' => 'en_curso']);
+        $this->assertDatabaseCount('segmentos_validacion_mp', 0);
+        $this->assertDatabaseCount('movimientos_envases', 0);
+        // No es necesario volver a tomar la recepción ni cambiar la operación al corregir los campos.
+        $this->postJson($ruta, $payload)->assertOk()->assertJsonPath('data.estado', 'validada')->assertJsonCount(2, 'data.segmentos');
+        $this->postJson($ruta, $payload)->assertOk();
+        $this->assertDatabaseCount('segmentos_validacion_mp', 2);
+        $this->assertDatabaseCount('movimientos_envases', 2);
+    }
+
     public function test_el_ingreso_destare_y_correccion_conservan_la_propiedad_de_cada_envase(): void
     {
         $temporada = Temporada::query()->where('activa', true)->firstOrFail();

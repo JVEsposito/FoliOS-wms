@@ -59,7 +59,7 @@ function harness(reception, catalogOverrides = {}) {
       if (id.endsWith('/components/ContainerInspectionPanel')) return { ContainerInspectionPanel: 'ContainerInspectionPanel' };
       if (id.endsWith('/components/ReceptionDefectsPanel')) return { ReceptionDefectsPanel: 'ReceptionDefectsPanel' };
       if (id.endsWith('/domain/containerInspection')) return { emptyContainerInspection: () => ({}), inspectionPayload: () => ({ items: [] }) };
-      if (id.endsWith('/services/containerCatalog')) return { containerLabel: (value) => value, getContainerCatalog: async () => [] };
+      if (id.endsWith('/services/containerCatalog')) return { containerLabel: () => undefined, getContainerCatalog: async () => [] };
       if (id.endsWith('/services/validationMpApi')) return {
         listPendingMp: async () => [], listMpHistory: async () => [], findMpReception: async () => reception,
         getMpCatalog: async () => catalog, takeMpReception: async () => reception.validacion, completeMpSpecies: async () => reception,
@@ -84,6 +84,12 @@ function harness(reception, catalogOverrides = {}) {
   const auth = { token: 'token', usuario: { id: 7, nombre: 'Validador MP', capacidades: {} } };
   const flatten = (value) => Array.isArray(value) ? value.map(flatten).join('') : typeof value === 'string' || typeof value === 'number' ? String(value) : value?.props ? flatten(value.props.children) : '';
   const flush = async (action) => { await act(async () => { await action(); }); };
+  const segment = (index) => renderer.root.find((node) => typeof node.type === 'function' && node.type.name === 'SegmentEditor' && node.props.index === index);
+  async function press(scope, label) {
+    const button = scope.findAllByType('Pressable').find((node) => node.findAllByType('Text').some((text) => flatten(text.props.children) === label));
+    assert.ok(button, `Botón disponible: ${label}`);
+    await flush(button.props.onPress);
+  }
   return {
     confirmations,
     async mount() { await flush(() => { renderer = create(React.createElement(ValidationMpScreen, { auth, baseUrl: 'https://server.test', onLogout: () => {} })); }); },
@@ -91,11 +97,9 @@ function harness(reception, catalogOverrides = {}) {
     input(label) { return renderer.root.findAllByType('TextInput').find((node) => node.props.accessibilityLabel === label); },
     countInputs() { return renderer.root.findAllByType('TextInput').filter((node) => node.props.keyboardType === 'number-pad' && !node.props.accessibilityLabel); },
     async type(node, value) { await flush(() => node.props.onChangeText(value)); },
-    async press(label) {
-      const button = renderer.root.findAllByType('Pressable').find((node) => node.findAllByType('Text').some((text) => flatten(text.props.children) === label));
-      assert.ok(button, `Botón disponible: ${label}`);
-      await flush(button.props.onPress);
-    },
+    async press(label) { await press(renderer.root, label); },
+    async pressSegment(index, label) { await press(segment(index), label); },
+    segmentInputs(index) { return segment(index).findAllByType('TextInput'); },
     text() { return renderer.root.findAllByType('Text').map((node) => flatten(node.props.children)).join('\n'); },
     total() { return flatten(renderer.root.findAllByType('Text').find((node) => node.props.accessibilityLabel === 'Total de bins de planta')?.props.children); },
     async unmount() { await flush(() => renderer.unmount()); },
@@ -162,4 +166,43 @@ test('sin totes en la recepción no se ofrece el campo', async () => {
   await pda.open('REC-2610-0001');
   assert.equal(pda.input('Bins de planta agregados'), undefined);
   await pda.unmount();
+});
+
+
+test('MP identifica el segmento incompleto antes de enviar y conserva el conteo al corregirlo', async () => {
+  const pda = harness(reception([['bins', 2], ['totes', 48]]));
+  await pda.mount();
+  try {
+    await pda.open('REC-2610-0001');
+    await pda.press('Tarjas de campo verificadas visualmente');
+    await pda.press('Sí');
+    for (const index of [0, 1]) {
+      await pda.pressSegment(index, '11111');
+      await pda.pressSegment(index, 'Santina');
+      const inputs = pda.segmentInputs(index).filter((node) => !node.props.accessibilityLabel);
+      await pda.type(inputs[0], '1');
+      await pda.type(pda.segmentInputs(index).filter((node) => !node.props.accessibilityLabel)[1], '24');
+    }
+    await pda.press('Confirmar Validación MP');
+    assert.match(pda.text(), /Segmento 1: selecciona al menos un motivo de segregación/);
+    assert.equal(pda.confirmations.length, 0);
+    await pda.pressSegment(0, 'Csg');
+    await pda.press('Confirmar Validación MP');
+    assert.match(pda.text(), /Segmento 2: selecciona al menos un motivo de segregación/);
+    assert.equal(pda.confirmations.length, 0);
+    await pda.pressSegment(1, 'Cuartel');
+    await pda.press('Confirmar Validación MP');
+    assert.match(pda.text(), /Segmento 2: ingresa el cuartel/);
+    assert.equal(pda.confirmations.length, 0);
+    await pda.type(pda.segmentInputs(1).find((node) => node.props.placeholder === 'Cuartel'), 'B');
+    await pda.press('Confirmar Validación MP');
+    assert.equal(pda.confirmations.length, 1);
+    assert.deepEqual(pda.confirmations[0].segments.map((segment) => ({
+      motivos: segment.motivos, csg: segment.csg_validacion_id, variedad: segment.variedad_validacion_id, cantidades: segment.cantidades,
+    })), [
+      { motivos: ['csg'], csg: 'csg-1', variedad: 'santina', cantidades: { bins: '1', totes: '24' } },
+      { motivos: ['cuartel'], csg: 'csg-1', variedad: 'santina', cantidades: { bins: '1', totes: '24' } },
+    ]);
+    assert.equal(pda.confirmations[0].segments[1].cuartel, 'B');
+  } finally { await pda.unmount(); }
 });

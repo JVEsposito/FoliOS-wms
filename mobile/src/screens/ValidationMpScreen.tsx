@@ -125,10 +125,18 @@ export function ValidationMpScreen({ auth, baseUrl, onLogout }: Props) {
     }
     if (isFruit && !tagsChecked) { setError('Debes confirmar el chequeo visual de las tarjas de campo.'); return; }
     if (segregation && segments.length < 2) { setError('Agrega al menos dos segmentos para segregar.'); return; }
+    if (isFruit && segregation) {
+      for (const [index, segment] of segments.entries()) {
+        const prefix = `Segmento ${index + 1}: `;
+        if (!segment.motivos.length) { setError(`${prefix}selecciona al menos un motivo de segregación.`); return; }
+        if (!segment.csg_validacion_id) { setError(`${prefix}selecciona el CSG.`); return; }
+        if (!segment.variedad_validacion_id) { setError(`${prefix}selecciona la variedad.`); return; }
+        if (segment.motivos.includes('cuartel') && !segment.cuartel.trim()) { setError(`${prefix}ingresa el cuartel.`); return; }
+      }
+    }
     setBusy(true); setError('');
     try {
       if (isFruit && !segregation && (!csgId || !varietyId)) { setError('Selecciona CSG y variedad para esta recepción.'); setBusy(false); return; }
-      if (isFruit && segregation && segments.some((segment) => !segment.csg_validacion_id || !segment.variedad_validacion_id)) { setError('Cada segmento requiere CSG y variedad.'); setBusy(false); return; }
       const resolvedSegments = segments.map((segment) => ({ ...segment, bins_planta: String(declaresTotes ? segmentPlantBins(segment) : 0) }));
       const result = await confirmMpValidation(baseUrl, auth.token, validationId, { containers: actualContainers, tagsChecked, segregation, segments: resolvedSegments, plantBins: plantBinsTotal, csgId, varietyId, observation, inspection: inspectionPayload(inspection, actualContainers) });
       const lent = result.bins_prestados_planta ?? 0;
