@@ -14,7 +14,8 @@ async function request<T>(baseUrl: string, path: string, token: string, init: Re
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     const detail = data as { message?: string; errors?: Record<string, string[]> };
-    throw new ApiError(Object.values(detail.errors ?? {}).flat()[0] ?? detail.message ?? 'No fue posible completar Validación MP.', response.status, data);
+    const errors = [...new Set(Object.values(detail.errors ?? {}).flat())];
+    throw new ApiError(errors.join('\n') || detail.message || 'No fue posible completar Validación MP.', response.status, data);
   }
   return data as T;
 }
