@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { CameraPlan, Position } from '../domain/estiba';
 import { colors } from '../theme/colors';
+import { font } from '../theme/typography';
 
 type ActionPanelProps = {
   busy: boolean;
@@ -227,8 +228,8 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   panelCompact: { width: '100%' },
-  eyebrow: { color: colors.cyan, fontSize: 13, fontWeight: '900', letterSpacing: 1.2 },
-  title: { marginTop: 3, color: colors.text, fontSize: 18, fontWeight: '900' },
+  eyebrow: { fontFamily: font.heavy, color: colors.cyan, fontSize: 13, letterSpacing: 1.2 },
+  title: { fontFamily: font.heavy, marginTop: 3, color: colors.text, fontSize: 18 },
   selection: {
     padding: 12,
     borderRadius: 11,
@@ -236,9 +237,9 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.background,
   },
-  selectionLabel: { color: colors.muted, fontSize: 12, fontWeight: '900' },
-  selectionValue: { marginTop: 5, color: colors.text, fontSize: 18, fontWeight: '900' },
-  selectionDetail: { marginTop: 2, color: colors.muted, fontSize: 13 },
+  selectionLabel: { fontFamily: font.heavy, color: colors.muted, fontSize: 12 },
+  selectionValue: { fontFamily: font.heavy, marginTop: 5, color: colors.text, fontSize: 18 },
+  selectionDetail: { fontFamily: font.regular, marginTop: 2, color: colors.muted, fontSize: 13 },
   folioSelector: { gap: 6 },
   folioChoice: {
     padding: 8,
@@ -248,8 +249,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   folioChoiceActive: { borderColor: colors.cyan },
-  folioChoiceCode: { color: colors.text, fontSize: 13, fontWeight: '900' },
-  folioChoiceClient: { marginTop: 2, color: colors.muted, fontSize: 12 },
+  folioChoiceCode: { fontFamily: font.heavy, color: colors.text, fontSize: 13 },
+  folioChoiceClient: { fontFamily: font.regular, marginTop: 2, color: colors.muted, fontSize: 12 },
   folioCard: {
     padding: 12,
     borderRadius: 11,
@@ -259,14 +260,14 @@ const styles = StyleSheet.create({
   },
   folioCardSaldo: { borderColor: colors.saldoBorder },
   folioTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  folioType: { color: colors.palletBorder, fontSize: 12, fontWeight: '900' },
+  folioType: { fontFamily: font.heavy, color: colors.palletBorder, fontSize: 12 },
   folioTypeSaldo: { color: colors.saldoBorder },
   folioDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.palletBorder },
   folioDotSaldo: { backgroundColor: colors.saldoBorder },
-  folioNumber: { marginVertical: 8, color: colors.text, fontSize: 18, fontWeight: '900' },
+  folioNumber: { fontFamily: font.heavy, marginVertical: 8, color: colors.text, fontSize: 18 },
   detailRow: { marginTop: 3, flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
-  detailLabel: { color: colors.muted, fontSize: 12 },
-  detailValue: { color: colors.text, fontSize: 12, fontWeight: '800' },
+  detailLabel: { fontFamily: font.regular, color: colors.muted, fontSize: 12 },
+  detailValue: { fontFamily: font.heavy, color: colors.text, fontSize: 12 },
   actions: { gap: 8 },
   actionsCompact: { flexDirection: 'row', flexWrap: 'wrap' },
   actionButton: {
@@ -284,11 +285,11 @@ const styles = StyleSheet.create({
   actionPrimary: { borderColor: colors.cyan, backgroundColor: colors.cyan },
   actionDisabled: { opacity: 0.38 },
   actionPressed: { opacity: 0.72 },
-  actionIcon: { width: 28, color: colors.cyan, fontSize: 25, textAlign: 'center' },
+  actionIcon: { fontFamily: font.regular, width: 28, color: colors.cyan, fontSize: 25, textAlign: 'center' },
   actionCopy: { flex: 1 },
-  actionLabel: { color: colors.text, fontSize: 14, fontWeight: '900' },
-  actionSubtitle: { marginTop: 2, color: colors.muted, fontSize: 12 },
+  actionLabel: { fontFamily: font.heavy, color: colors.text, fontSize: 14 },
+  actionSubtitle: { fontFamily: font.regular, marginTop: 2, color: colors.muted, fontSize: 12 },
   actionPrimaryText: { color: colors.accentText },
   actionPrimarySubtitle: { color: '#5D4A28' },
-  note: { color: colors.muted, fontSize: 12, lineHeight: 16 },
+  note: { fontFamily: font.regular, color: colors.muted, fontSize: 12, lineHeight: 16 },
 });

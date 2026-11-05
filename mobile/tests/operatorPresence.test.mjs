@@ -25,6 +25,7 @@ test('el espacio operacional mantiene presencia entre pestañas y usa la identid
       if (id.endsWith('/services/operatorPresenceApi')) return { sendOperatorPresence: async (...args) => { calls.push(args); } };
       if (id.endsWith('/services/environmentalControlApi')) return { getEnvironmentalControlState: async () => ({ camaras: [] }) };
       if (id.endsWith('/theme/operatorTheme')) return { operatorTheme: { color: {}, space: {}, type: {}, radius: {}, touch: {} } };
+      if (id.endsWith('/theme/typography')) return { font: {} };
       if (id.endsWith('/OperatorHeader')) return { OperatorHeader: (props) => React.createElement('View', null, props.navigation) };
       const name = id.split('/').at(-1);
       return { [name]: name };

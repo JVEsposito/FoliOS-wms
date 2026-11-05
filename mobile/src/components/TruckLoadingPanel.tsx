@@ -3,6 +3,7 @@ import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-nativ
 
 import { LoadFolio, RefrigeratedLoad } from '../domain/estiba';
 import { colors } from '../theme/colors';
+import { font } from '../theme/typography';
 
 type Props = {
   load: RefrigeratedLoad;
@@ -162,30 +163,30 @@ const styles = StyleSheet.create({
   panel: { padding: 13, borderWidth: 1, borderColor: colors.border, borderRadius: 16, backgroundColor: colors.panel, gap: 9 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
   headerCopy: { flex: 1, minWidth: 0 },
-  eyebrow: { color: colors.cyan, fontSize: 11, fontWeight: '900', letterSpacing: 1.1 },
-  title: { marginTop: 3, color: colors.text, fontSize: 17, fontWeight: '900' },
-  subtitle: { marginTop: 3, color: colors.muted, fontSize: 13 },
-  percent: { color: colors.text, fontSize: 22, fontWeight: '900' },
+  eyebrow: { fontFamily: font.heavy, color: colors.cyan, fontSize: 11, letterSpacing: 1.1 },
+  title: { fontFamily: font.heavy, marginTop: 3, color: colors.text, fontSize: 17 },
+  subtitle: { fontFamily: font.regular, marginTop: 3, color: colors.muted, fontSize: 13 },
+  percent: { fontFamily: font.heavy, color: colors.text, fontSize: 22 },
   track: { height: 8, borderRadius: 4, backgroundColor: colors.borderSoft, overflow: 'hidden' },
   fill: { height: '100%', backgroundColor: colors.green },
   scanRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  input: { flex: 1, minHeight: 46, paddingHorizontal: 12, borderRadius: 9, borderWidth: 1, borderColor: colors.border, color: colors.text, backgroundColor: colors.background, fontSize: 16, fontWeight: '800' },
+  input: { fontFamily: font.heavy, flex: 1, minHeight: 46, paddingHorizontal: 12, borderRadius: 9, borderWidth: 1, borderColor: colors.border, color: colors.text, backgroundColor: colors.background, fontSize: 16 },
   list: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   row: { width: 210, padding: 8, borderRadius: 9, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, flexDirection: 'row', alignItems: 'center', gap: 8 },
   rowLoaded: { borderColor: colors.green, backgroundColor: colors.greenDark },
   rowCopy: { flex: 1, minWidth: 0 },
-  folio: { color: colors.text, fontSize: 13, fontWeight: '900' },
-  rowMeta: { marginTop: 2, color: colors.muted, fontSize: 11 },
+  folio: { fontFamily: font.heavy, color: colors.text, fontSize: 13 },
+  rowMeta: { fontFamily: font.regular, marginTop: 2, color: colors.muted, fontSize: 11 },
   primaryButton: { paddingHorizontal: 14, paddingVertical: 12, borderRadius: 9, backgroundColor: colors.cyan, alignItems: 'center' },
-  primaryButtonText: { color: colors.accentText, fontSize: 13, fontWeight: '900' },
+  primaryButtonText: { fontFamily: font.heavy, color: colors.accentText, fontSize: 13 },
   loadButton: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: colors.green, alignItems: 'center' },
-  loadButtonText: { color: colors.text, fontSize: 12, fontWeight: '900' },
+  loadButtonText: { fontFamily: font.heavy, color: colors.text, fontSize: 12 },
   secondaryButton: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, alignItems: 'center' },
-  secondaryButtonText: { color: colors.text, fontSize: 12, fontWeight: '900' },
+  secondaryButtonText: { fontFamily: font.heavy, color: colors.text, fontSize: 12 },
   disabled: { opacity: 0.35 },
   backdrop: { flex: 1, padding: 20, backgroundColor: 'rgba(0,0,0,0.75)', alignItems: 'center', justifyContent: 'center' },
   modal: { width: '100%', maxWidth: 560, padding: 20, borderRadius: 18, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panel },
-  modalTitle: { marginTop: 4, color: colors.text, fontSize: 20, fontWeight: '900' },
+  modalTitle: { fontFamily: font.heavy, marginTop: 4, color: colors.text, fontSize: 20 },
   reason: { minHeight: 80, marginTop: 14, padding: 11, borderRadius: 9, borderWidth: 1, borderColor: colors.border, color: colors.text, backgroundColor: colors.background, textAlignVertical: 'top' },
   modalActions: { marginTop: 14, flexDirection: 'row', justifyContent: 'flex-end', gap: 8 },
 });

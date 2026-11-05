@@ -4,6 +4,8 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { bandNumberingLabel, cameraDisplayName, orderBandsForCamera } from '../domain/cameras';
 import { CameraPlan, OperationalBand, Position } from '../domain/estiba';
 import { colors } from '../theme/colors';
+import { operatorTheme as o } from '../theme/operatorTheme';
+import { font } from '../theme/typography';
 
 type PositionMapProps = {
   plan: CameraPlan;
@@ -13,6 +15,17 @@ type PositionMapProps = {
   suggestedFolioId?: string | null;
 };
 
+const CELL_HEIGHT = 60;
+const CELL_GAP = 6;
+const BAND_WIDTH = 128;
+const BAND_HEADING_HEIGHT = 80;
+const ALL_USES = 3;
+
+/**
+ * Plano de estiba de terreno. Cada dato aparece una vez: la banda en su cabecera, la
+ * posición en la columna izquierda y el nivel en el selector; la celda solo dice qué hay.
+ * Una celda libre va vacía. Ver docs/diseno/folios-v2/pr-13-tablet-revision.md.
+ */
 export function PositionMap({
   highlightedFolioIds = [],
   onSelectPosition,
@@ -26,6 +39,7 @@ export function PositionMap({
     [...new Set(plan.posiciones.map((position) => position.banda))],
   );
   const maxPosition = Math.max(1, ...plan.posiciones.map((position) => position.posicion));
+  const positionNumbers = Array.from({ length: maxPosition }, (_, index) => index + 1);
   const [selectedLevel, setSelectedLevel] = useState(levels[0] ?? 1);
 
   useEffect(() => {
@@ -37,29 +51,30 @@ export function PositionMap({
     if (selected && selected.nivel !== selectedLevel) setSelectedLevel(selected.nivel);
   }, [plan, selectedLevel, selectedPositionId]);
 
+  const contentLabel = plan.contenido === 'materiales' ? 'Material' : plan.contenido === 'materia_prima' ? 'Lote MP' : 'Pallet';
+
   return (
     <View style={styles.panel}>
       <View style={styles.heading}>
         <View style={styles.headingCopy}>
           <Text style={styles.eyebrow}>PLANO DE ESTIBA · {plan.tipo.toUpperCase()}</Text>
           <View style={styles.titleRow}>
-            <Text numberOfLines={1} style={styles.title}>{cameraDisplayName(plan)}</Text>
+            <Text accessibilityRole="header" numberOfLines={1} style={styles.title}>{cameraDisplayName(plan)}</Text>
             <Text style={styles.version}>v{plan.version_plano}</Text>
           </View>
-          <Text style={styles.subtitle}>{plan.posiciones.length} posiciones configuradas</Text>
-        </View>
-        <View style={styles.occupancy}>
-          <Text style={styles.occupancyLabel}>OCUPACIÓN</Text>
-          <Text style={styles.occupancyValue}>{plan.ocupacion.porcentaje}%</Text>
-          <Text style={styles.occupancyDetail}>
-            {plan.ocupacion.ocupadas} de {plan.ocupacion.total}
+          <Text style={styles.subtitle}>
+            {plan.posiciones.length} posiciones · Bandas verticales · {bandNumberingLabel(plan)} · P01 se ocupa primero
           </Text>
+        </View>
+        <View accessible accessibilityLabel={`Ocupación ${plan.ocupacion.porcentaje}%, ${plan.ocupacion.ocupadas} de ${plan.ocupacion.total}`} style={styles.occupancy}>
+          <Text style={styles.occupancyValue}>{String(plan.ocupacion.porcentaje).replace('.', ',')}%</Text>
+          <Text style={styles.occupancyDetail}>{plan.ocupacion.ocupadas} de {plan.ocupacion.total} ocupadas</Text>
         </View>
       </View>
 
       {plan.acceso.modo === 'solo_lectura' && (
         <View style={styles.lockBanner}>
-          <Text style={styles.lockIcon}>⌁</Text>
+          <View style={styles.lockDot} />
           <View style={styles.lockCopy}>
             <Text style={styles.lockTitle}>Cámara en modificación</Text>
             <Text style={styles.lockText}>
@@ -72,63 +87,64 @@ export function PositionMap({
 
       <View style={styles.toolbar}>
         <View style={styles.legend}>
-          <Legend color={colors.free} border={colors.freeBorder} label="Libre" />
-          <Legend
-            color={colors.pallet}
-            border={colors.palletBorder}
-            label={plan.contenido === 'materiales'
-              ? 'Material'
-              : plan.contenido === 'materia_prima'
-                ? 'Lote MP'
-                : 'Pallet'}
-          />
+          <Legend color="transparent" border={colors.freeBorder} label="Libre" />
+          <Legend color={colors.pallet} border={colors.palletBorder} label={contentLabel} />
           {plan.contenido === 'productos' && <Legend color={colors.saldo} border={colors.saldoBorder} label="Saldo" />}
           {plan.contenido === 'productos'
             && plan.posiciones.some((position) => position.folio?.carga_actual)
-            && <Legend color={colors.cyanDark} border={colors.cyan} label="Asignado a carga CAR" />}
+            && <Legend color={colors.cyanDark} border={colors.cyan} label="Asignado a carga" />}
+          {plan.posiciones.some((position) => position.reservada)
+            && <Legend color={colors.amberDark} border={colors.amber} label="Reservada" />}
           <Legend color={colors.blocked} border={colors.blockedBorder} label="Bloqueada" />
         </View>
-        <View style={styles.levelPicker}>
-          {levels.map((level) => (
-            <Pressable
-              key={level}
-              onPress={() => setSelectedLevel(level)}
-              style={[styles.levelButton, selectedLevel === level && styles.levelButtonActive]}
-            >
-              <Text style={[styles.levelText, selectedLevel === level && styles.levelTextActive]}>
-                NIVEL {level}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
+        {levels.length > 1 ? (
+          <View accessibilityRole="tablist" style={styles.levelPicker}>
+            {levels.map((level) => (
+              <Pressable
+                accessibilityRole="tab"
+                accessibilityState={{ selected: selectedLevel === level }}
+                key={level}
+                onPress={() => setSelectedLevel(level)}
+                style={[styles.levelButton, selectedLevel === level && styles.levelButtonActive]}
+              >
+                <Text style={[styles.levelText, selectedLevel === level && styles.levelTextActive]}>Nivel {level}</Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : (
+          <Text style={styles.singleLevel}>Nivel {selectedLevel}</Text>
+        )}
       </View>
 
-      <View style={styles.orientationRow}>
-        <Text style={styles.orientation}>↑ FONDO</Text>
-        <Text style={styles.orientationHint}>
-          Bandas verticales · {bandNumberingLabel(plan)} · P01 se ocupa primero
-        </Text>
-      </View>
-
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View style={styles.bandRow}>
-          {bands.map((band) => (
-            <Band
-              band={band}
-              key={band}
-              level={selectedLevel}
-              maxPosition={maxPosition}
-              onSelectPosition={onSelectPosition}
-              plan={plan}
-              selectedPositionId={selectedPositionId}
-              highlightedFolioIds={highlightedFolioIds}
-              suggestedFolioId={suggestedFolioId}
-            />
+      <Text style={styles.orientation}>↑ Fondo</Text>
+      <View style={styles.grid}>
+        <View style={styles.gutter}>
+          <View style={styles.gutterHeading} />
+          {positionNumbers.map((number) => (
+            <View key={number} style={styles.gutterCell}>
+              <Text style={styles.gutterText}>P{String(number).padStart(2, '0')}</Text>
+            </View>
           ))}
         </View>
-      </ScrollView>
-
-      <Text style={styles.entrance}>↓ ENTRADA</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator style={styles.bandsScroll}>
+          <View style={styles.bandRow}>
+            {bands.map((band) => (
+              <Band
+                band={band}
+                key={band}
+                level={selectedLevel}
+                onSelectPosition={onSelectPosition}
+                plan={plan}
+                positionNumbers={positionNumbers}
+                selectedPositionId={selectedPositionId}
+                highlightedFolioIds={highlightedFolioIds}
+                suggestedFolioId={suggestedFolioId}
+              />
+            ))}
+          </View>
+        </ScrollView>
+      </View>
+      <Text style={styles.orientation}>↓ Entrada</Text>
     </View>
   );
 }
@@ -136,21 +152,25 @@ export function PositionMap({
 type BandProps = PositionMapProps & {
   band: number;
   level: number;
-  maxPosition: number;
+  positionNumbers: number[];
 };
 
 function Band({
   band,
   highlightedFolioIds = [],
   level,
-  maxPosition,
   onSelectPosition,
   plan,
+  positionNumbers,
   selectedPositionId,
   suggestedFolioId = null,
 }: BandProps) {
-  const positions = Array.from({ length: maxPosition }, (_, index) => index + 1);
   const operationalBand = plan.bandas_operacionales?.find((candidate) => candidate.numero === band);
+  const affinity = operationalBand ? operationalBandAffinityLabel(operationalBand) : null;
+  const restrictedUses = operationalBand && operationalBand.usos_permitidos.length < ALL_USES
+    ? operationalBand.usos_permitidos.map(operationalUseLabel).join(' · ')
+    : null;
+  const notable = operationalBand && ['bloqueada', 'en_vaciado', 'completa'].includes(operationalBand.estado);
 
   return (
     <View style={[
@@ -159,20 +179,18 @@ function Band({
       operationalBand?.estado === 'en_vaciado' && styles.bandEmptying,
     ]}>
       <View style={styles.bandHeading}>
-        <Text style={styles.bandHeadingTitle}>BANDA {String(band).padStart(2, '0')}</Text>
+        <Text style={styles.bandTitle}>B{String(band).padStart(2, '0')}</Text>
         {operationalBand ? (
           <>
-            <Text style={styles.bandHeadingState}>{operationalBandLabel(operationalBand)}</Text>
-            <Text numberOfLines={2} style={styles.bandHeadingAffinity}>
-              {operationalBandAffinityLabel(operationalBand)}
+            <Text numberOfLines={1} style={[styles.bandState, notable && styles.bandStateNotable]}>
+              {notable ? `${BAND_STATE[operationalBand.estado]} · ` : ''}{operationalBand.capacidad.disponibles}/{operationalBand.capacidad.efectiva} libres
             </Text>
-            <Text numberOfLines={1} style={styles.bandHeadingUses}>
-              {operationalBand.usos_permitidos.map(operationalUseLabel).join(' · ')}
-            </Text>
+            {affinity ? <Text numberOfLines={1} style={styles.bandAffinity}>{affinity}</Text> : null}
+            {restrictedUses ? <Text numberOfLines={1} style={styles.bandUses}>{restrictedUses}</Text> : null}
           </>
         ) : null}
       </View>
-      {positions.map((number) => {
+      {positionNumbers.map((number) => {
         const position = plan.posiciones.find((candidate) => (
           candidate.nivel === level
           && candidate.banda === band
@@ -181,81 +199,103 @@ function Band({
 
         if (!position) return <View key={number} style={styles.gap} />;
 
-        const blocked = position.estado !== 'activa';
-        const occupied = position.ocupada;
-        const reserved = position.reservada;
-        const saldo = position.folio?.tipo_bulto === 'saldo';
-        const selected = position.id === selectedPositionId;
-        const loadFolio = Boolean(position.folio && highlightedFolioIds?.includes(position.folio.id));
-        const suggested = position.folio?.id === suggestedFolioId;
-        const unclosed = position.folio?.registro_sin_cerrar ?? null;
-
         return (
-          <Pressable
-            accessibilityLabel={`${position.etiqueta}, ${position.folio?.numero_folio ?? (blocked ? 'bloqueada' : reserved ? 'reservada' : 'libre')}${unclosed ? `, registro sin cerrar de ${unclosed.temporada.codigo ?? 'otra temporada'}` : ''}`}
-            accessibilityRole="button"
+          <Cell
+            highlighted={Boolean(position.folio && highlightedFolioIds?.includes(position.folio.id))}
             key={position.id}
             onPress={() => onSelectPosition(position)}
-            style={({ pressed }) => [
-              styles.cell,
-              occupied && styles.occupied,
-              reserved && styles.reserved,
-              saldo && styles.saldo,
-              blocked && styles.blocked,
-              loadFolio && styles.loadFolio,
-              suggested && styles.suggested,
-              unclosed && styles.unclosed,
-              selected && styles.selected,
-              pressed && styles.pressed,
-            ]}
-          >
-            <View style={styles.cellTop}>
-              <Text style={styles.positionNumber}>P{String(number).padStart(2, '0')}</Text>
-              <Text style={styles.cellLocation}>{position.etiqueta}</Text>
-            </View>
-            <Text numberOfLines={1} style={styles.cellFolio}>
-              {(position.folios?.length ?? 0) > 1
-                ? `${position.folios?.length} ítems · ${position.folio?.material?.item.cliente.nombre ?? ''}`
-                : position.folio?.numero_folio ?? (blocked ? 'NO DISP.' : reserved ? 'RESERVADA' : 'LIBRE')}
-            </Text>
-            {position.folio?.carga_actual && !unclosed ? (
-              <Text numberOfLines={1} style={styles.loadCode}>
-                {position.folio.carga_actual.codigo}
-              </Text>
-            ) : null}
-            <View style={styles.cellMetaRow}>
-              <Text numberOfLines={1} style={[styles.cellMeta, unclosed && styles.unclosedMeta]}>
-                {unclosed
-                  ? `Sin cerrar · ${unclosed.temporada.codigo ?? 'otra temporada'}`
-                  : position.folio?.material
-                    ? `${position.folio.material.item.cliente.temporada.codigo}/${position.folio.material.item.cliente.codigo}/${position.folio.material.item.codigo} · ${position.folio.material.cantidad_actual} ${position.folio.material.unidad_medida}`
-                    : position.folio?.variedad
-                      ?? (blocked
-                        ? position.estado
-                        : reserved
-                          ? position.reserva_operacional?.responsable?.nombre ?? 'Tarea en ejecución'
-                          : 'Disponible')}
-              </Text>
-              <Text style={styles.cellKind}>{occupied ? (saldo ? 'S' : 'P') : reserved ? 'R' : '○'}</Text>
-            </View>
-          </Pressable>
+            position={position}
+            selected={position.id === selectedPositionId}
+            suggested={Boolean(suggestedFolioId) && position.folio?.id === suggestedFolioId}
+          />
         );
       })}
     </View>
   );
 }
 
-function operationalBandLabel(band: OperationalBand) {
-  const labels: Record<OperationalBand['estado'], string> = {
-    libre: 'LIBRE',
-    parcial: 'PARCIAL',
-    completa: 'COMPLETA',
-    bloqueada: 'BLOQUEADA',
-    en_vaciado: 'EN VACIADO',
-  };
+function Cell({ highlighted, onPress, position, selected, suggested }: {
+  highlighted: boolean;
+  onPress: () => void;
+  position: Position;
+  selected: boolean;
+  suggested: boolean;
+}) {
+  const blocked = position.estado !== 'activa';
+  const occupied = position.ocupada;
+  const reserved = position.reservada;
+  const saldo = position.folio?.tipo_bulto === 'saldo';
+  const unclosed = position.folio?.registro_sin_cerrar ?? null;
+  const items = position.folios?.length ?? 0;
+  const folio = position.folio?.numero_folio ?? null;
+  const load = position.folio?.carga_actual && !unclosed ? position.folio.carga_actual.codigo : null;
 
-  return `${labels[band.estado]} · ${band.capacidad.disponibles}/${band.capacidad.efectiva} libres`;
+  const detail = unclosed
+    ? `Sin cerrar · ${unclosed.temporada.codigo ?? 'otra temporada'}`
+    : position.folio?.material
+      ? `${position.folio.material.item.codigo} · ${position.folio.material.cantidad_actual} ${position.folio.material.unidad_medida}`
+      : position.folio?.variedad
+        ?? (blocked
+          ? 'No disponible'
+          : reserved
+            ? position.reserva_operacional?.responsable?.nombre ?? 'Tarea en ejecución'
+            : null);
+
+  return (
+    <Pressable
+      accessibilityLabel={`${position.etiqueta}, ${folio ?? (blocked ? 'bloqueada' : reserved ? 'reservada' : 'libre')}${unclosed ? `, registro sin cerrar de ${unclosed.temporada.codigo ?? 'otra temporada'}` : ''}`}
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.cell,
+        occupied && styles.occupied,
+        reserved && styles.reserved,
+        saldo && styles.saldo,
+        blocked && styles.blocked,
+        highlighted && styles.loadFolio,
+        suggested && styles.suggested,
+        unclosed && styles.unclosed,
+        selected && styles.selected,
+        pressed && styles.pressed,
+      ]}
+    >
+      {items > 1 ? (
+        <Text numberOfLines={1} style={styles.cellMain}>{items} ítems</Text>
+      ) : folio ? (
+        <FolioShort value={folio} />
+      ) : reserved ? (
+        <Text numberOfLines={1} style={styles.cellState}>Reservada</Text>
+      ) : blocked ? (
+        <Text numberOfLines={1} style={styles.cellStateBlocked}>Bloqueada</Text>
+      ) : null}
+      {load ? (
+        // Durante la carga importa más a qué CAR va el pallet que su variedad.
+        <Text numberOfLines={1} style={styles.loadCode}>{load}</Text>
+      ) : detail ? (
+        <Text numberOfLines={1} style={[styles.cellDetail, unclosed && styles.cellDetailWarning]}>{detail}</Text>
+      ) : null}
+      {saldo ? <Text accessibilityLabel="Saldo" style={styles.saldoMark}>S</Text> : null}
+    </Pressable>
+  );
 }
+
+function FolioShort({ value }: { value: string }) {
+  const split = value.length > 6 ? value.length - 4 : 0;
+  return (
+    <Text numberOfLines={1} style={styles.cellFolio}>
+      {split ? <Text style={styles.cellFolioHead}>{value.slice(0, split)}</Text> : null}
+      {value.slice(split)}
+    </Text>
+  );
+}
+
+const BAND_STATE: Record<OperationalBand['estado'], string> = {
+  libre: 'Libre',
+  parcial: 'Parcial',
+  completa: 'Completa',
+  bloqueada: 'Bloqueada',
+  en_vaciado: 'En vaciado',
+};
 
 function operationalUseLabel(use: OperationalBand['usos_permitidos'][number]) {
   return {
@@ -265,13 +305,12 @@ function operationalUseLabel(use: OperationalBand['usos_permitidos'][number]) {
   }[use];
 }
 
+/** Solo se muestra cuando la banda tiene afinidad o bultos fuera del planificador. */
 function operationalBandAffinityLabel(band: OperationalBand) {
   const affinity = band.afinidad;
 
   if (!affinity?.activa) {
-    return affinity?.fuera_alcance
-      ? `${affinity.fuera_alcance} bulto(s) fuera del planificador`
-      : 'Sin afinidad · banda liberada';
+    return affinity?.fuera_alcance ? `${affinity.fuera_alcance} fuera del planificador` : null;
   }
 
   const profile = [affinity.cliente?.valor, affinity.marca?.valor, affinity.formato?.valor]
@@ -296,149 +335,119 @@ const styles = StyleSheet.create({
   panel: {
     flex: 1,
     minWidth: 0,
-    padding: 17,
-    borderRadius: 18,
+    padding: o.space[4],
+    gap: o.space[3],
+    borderRadius: o.radius.panel,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.panel,
+    borderColor: o.color.border,
+    backgroundColor: o.color.surface,
   },
-  heading: { flexDirection: 'row', justifyContent: 'space-between', gap: 16 },
-  headingCopy: { flex: 1, minWidth: 0 },
-  eyebrow: { color: colors.cyan, fontSize: 9, fontWeight: '900', letterSpacing: 1.2 },
-  titleRow: { marginTop: 4, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  title: { flexShrink: 1, color: colors.text, fontSize: 19, fontWeight: '900' },
+  heading: { flexDirection: 'row', justifyContent: 'space-between', gap: o.space[4] },
+  headingCopy: { flex: 1, minWidth: 0, gap: 2 },
+  eyebrow: { fontFamily: font.heavy, color: o.color.muted, fontSize: o.type.caption, letterSpacing: 1.2 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: o.space[2] },
+  title: { fontFamily: font.heavy, flexShrink: 1, color: o.color.text, fontSize: o.type.heading },
   version: {
-    paddingHorizontal: 7,
-    paddingVertical: 3,
+    fontFamily: font.monoBold,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
     borderRadius: 6,
-    backgroundColor: colors.borderSoft,
-    color: colors.cyan,
-    fontSize: 9,
-    fontWeight: '800',
+    backgroundColor: o.color.surfaceMuted,
+    color: o.color.muted,
+    fontSize: o.type.caption,
   },
-  subtitle: { marginTop: 3, color: colors.muted, fontSize: 10 },
-  occupancy: { alignItems: 'flex-end' },
-  occupancyLabel: { color: colors.muted, fontSize: 8, fontWeight: '800' },
-  occupancyValue: { color: colors.text, fontSize: 22, fontWeight: '900' },
-  occupancyDetail: { color: colors.muted, fontSize: 9 },
+  subtitle: { fontFamily: font.regular, color: o.color.muted, fontSize: o.type.caption },
+  occupancy: { alignItems: 'flex-end', justifyContent: 'center' },
+  occupancyValue: { fontFamily: font.heavy, color: o.color.text, fontSize: o.type.title },
+  occupancyDetail: { fontFamily: font.regular, color: o.color.muted, fontSize: o.type.caption },
   lockBanner: {
-    marginTop: 12,
-    padding: 10,
-    borderRadius: 10,
+    padding: o.space[3],
+    borderRadius: o.radius.control,
     borderWidth: 1,
-    borderColor: colors.amber,
-    backgroundColor: colors.amberDark,
+    borderColor: o.color.warningBorder,
+    backgroundColor: o.color.warningSurface,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: o.space[3],
   },
-  lockIcon: { color: colors.amber, fontSize: 24, fontWeight: '900' },
+  lockDot: { width: 12, height: 12, borderRadius: o.radius.pill, backgroundColor: o.color.warning },
   lockCopy: { flex: 1 },
-  lockTitle: { color: colors.amber, fontSize: 11, fontWeight: '900' },
-  lockText: { marginTop: 2, color: colors.text, fontSize: 9, lineHeight: 13 },
-  toolbar: {
-    marginVertical: 12,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  swatch: { width: 14, height: 14, borderRadius: 3, borderWidth: 1 },
-  legendText: { color: colors.muted, fontSize: 9, fontWeight: '700' },
-  levelPicker: { flexDirection: 'row', gap: 5 },
-  levelButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.background,
-  },
-  levelButtonActive: { borderColor: colors.cyan, backgroundColor: colors.cyanDark },
-  levelText: { color: colors.muted, fontSize: 8, fontWeight: '900' },
-  levelTextActive: { color: colors.cyan },
-  orientationRow: { marginBottom: 7, flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
-  orientation: { color: colors.cyan, fontSize: 9, fontWeight: '900' },
-  orientationHint: { color: colors.muted, fontSize: 8 },
-  bandRow: { flexDirection: 'row', gap: 8, paddingBottom: 3 },
-  band: {
-    width: 138,
-    padding: 7,
-    borderRadius: 11,
-    borderWidth: 1,
-    borderColor: colors.borderSoft,
-    backgroundColor: colors.background,
-    gap: 5,
-  },
-  bandBlocked: { borderColor: colors.blockedBorder },
-  bandEmptying: { borderColor: colors.amber },
+  lockTitle: { fontFamily: font.bold, color: o.color.warning, fontSize: o.type.body },
+  lockText: { fontFamily: font.regular, marginTop: 2, color: o.color.textSecondary, fontSize: o.type.small },
+  toolbar: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: o.space[3] },
+  legend: { flexDirection: 'row', flexWrap: 'wrap', gap: o.space[4] },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  swatch: { width: 16, height: 16, borderRadius: 4, borderWidth: 1 },
+  legendText: { fontFamily: font.medium, color: o.color.textSecondary, fontSize: o.type.caption },
+  levelPicker: { flexDirection: 'row', gap: 4, padding: 4, borderRadius: o.radius.control, borderWidth: 1, borderColor: o.color.border },
+  levelButton: { minHeight: o.touch.minimum, paddingHorizontal: o.space[4], alignItems: 'center', justifyContent: 'center', borderRadius: 8 },
+  levelButtonActive: { backgroundColor: o.color.surfaceMuted },
+  levelText: { fontFamily: font.semibold, color: o.color.textSecondary, fontSize: o.type.small },
+  levelTextActive: { fontFamily: font.heavy, color: o.color.primaryPressed },
+  singleLevel: { fontFamily: font.semibold, color: o.color.muted, fontSize: o.type.small },
+  orientation: { fontFamily: font.bold, color: o.color.muted, fontSize: o.type.caption, letterSpacing: 0.6 },
+  grid: { flexDirection: 'row' },
+  gutter: { width: 44, gap: CELL_GAP },
+  gutterHeading: { height: BAND_HEADING_HEIGHT },
+  gutterCell: { height: CELL_HEIGHT, justifyContent: 'center' },
+  gutterText: { fontFamily: font.monoBold, color: o.color.muted, fontSize: o.type.caption },
+  bandsScroll: { flex: 1 },
+  bandRow: { flexDirection: 'row', gap: 8, paddingBottom: 4 },
+  band: { width: BAND_WIDTH, gap: CELL_GAP },
+  bandBlocked: { opacity: 0.85 },
+  bandEmptying: {},
   bandHeading: {
-    marginHorizontal: -7,
-    marginTop: -7,
-    marginBottom: 2,
-    paddingVertical: 9,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    borderTopLeftRadius: 10,
-    borderTopRightRadius: 10,
-    backgroundColor: colors.panelStrong,
+    height: BAND_HEADING_HEIGHT,
+    paddingHorizontal: o.space[2],
+    paddingVertical: o.space[2],
+    borderRadius: o.radius.control,
+    backgroundColor: o.color.surfaceMuted,
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 2,
   },
-  bandHeadingTitle: { color: colors.cyan, fontSize: 10, fontWeight: '900', letterSpacing: .4 },
-  bandHeadingState: { color: colors.text, fontSize: 7, fontWeight: '900' },
-  bandHeadingAffinity: {
-    maxWidth: 124,
-    color: colors.cyan,
-    fontSize: 6,
-    fontWeight: '800',
-    textAlign: 'center',
-  },
-  bandHeadingUses: { maxWidth: 124, color: colors.muted, fontSize: 6, fontWeight: '700' },
-  gap: { height: 76 },
+  bandTitle: { fontFamily: font.heavy, color: o.color.text, fontSize: 18 },
+  bandState: { fontFamily: font.medium, color: o.color.textSecondary, fontSize: 12 },
+  bandStateNotable: { fontFamily: font.bold, color: o.color.warning },
+  bandAffinity: { fontFamily: font.semibold, maxWidth: BAND_WIDTH - 12, color: o.color.primaryPressed, fontSize: 12 },
+  bandUses: { fontFamily: font.regular, maxWidth: BAND_WIDTH - 12, color: o.color.muted, fontSize: 12 },
+  gap: { height: CELL_HEIGHT },
   cell: {
-    height: 76,
-    padding: 8,
+    height: CELL_HEIGHT,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.freeBorder,
-    backgroundColor: colors.free,
-    justifyContent: 'space-between',
+    backgroundColor: 'transparent',
+    justifyContent: 'center',
+    gap: 2,
   },
-  loadCode: {
-    position: 'absolute',
-    top: 25,
-    right: 6,
-    maxWidth: 82,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: colors.cyan,
-    backgroundColor: colors.cyanDark,
-    color: colors.cyan,
-    fontSize: 6,
-    fontWeight: '900',
-  },
-  unclosedMeta: { color: colors.amber, fontWeight: '900' },
-  unclosed: { borderStyle: 'dashed', borderWidth: 2, borderColor: colors.amber, opacity: 0.78 },
   occupied: { borderColor: colors.palletBorder, backgroundColor: colors.pallet },
   reserved: { borderColor: colors.amber, backgroundColor: colors.amberDark },
   saldo: { borderColor: colors.saldoBorder, backgroundColor: colors.saldo },
-  blocked: { borderColor: colors.blockedBorder, backgroundColor: colors.blocked, opacity: 0.82 },
+  blocked: { borderColor: colors.blockedBorder, backgroundColor: colors.blocked, opacity: 0.85 },
   loadFolio: { borderWidth: 2, borderColor: colors.amber },
   suggested: { borderWidth: 3, borderColor: colors.green },
+  unclosed: { borderStyle: 'dashed', borderWidth: 2, borderColor: colors.amber, opacity: 0.8 },
   selected: { borderWidth: 3, borderColor: colors.cyan },
   pressed: { opacity: 0.72 },
-  cellTop: { flexDirection: 'row', justifyContent: 'space-between', gap: 4 },
-  positionNumber: { color: colors.cyan, fontSize: 9, fontWeight: '900' },
-  cellLocation: { color: colors.muted, fontSize: 8, fontWeight: '800' },
-  cellFolio: { color: colors.text, fontSize: 11, fontWeight: '900' },
-  cellMetaRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 3 },
-  cellMeta: { flex: 1, color: colors.text, fontSize: 8 },
-  cellKind: { color: colors.text, fontSize: 9, fontWeight: '900' },
-  entrance: { marginTop: 7, color: colors.cyan, fontSize: 9, fontWeight: '900' },
+  cellFolio: { fontFamily: font.monoBold, color: colors.text, fontSize: 15 },
+  cellFolioHead: { color: colors.textSecondary, fontSize: 12 },
+  cellMain: { fontFamily: font.bold, color: colors.text, fontSize: 14 },
+  cellState: { fontFamily: font.bold, color: colors.amber, fontSize: 13 },
+  cellStateBlocked: { fontFamily: font.bold, color: colors.text, fontSize: 13 },
+  cellDetail: { fontFamily: font.regular, color: colors.textSecondary, fontSize: 12 },
+  cellDetailWarning: { fontFamily: font.bold, color: colors.amber },
+  loadCode: {
+    fontFamily: font.monoBold,
+    alignSelf: 'flex-start',
+    maxWidth: BAND_WIDTH - 18,
+    paddingHorizontal: 5,
+    borderRadius: 4,
+    backgroundColor: colors.cyanDark,
+    color: colors.cyan,
+    fontSize: 12,
+  },
+  saldoMark: { fontFamily: font.heavy, position: 'absolute', top: 4, right: 6, color: colors.text, fontSize: 12 },
 });

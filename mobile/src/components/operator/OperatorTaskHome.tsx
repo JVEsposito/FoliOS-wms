@@ -18,6 +18,7 @@ import {
   OperatorRouteLine,
   OperatorStatusBadge,
 } from './OperatorPrimitives';
+import { font } from '../../theme/typography';
 
 export type OperatorLastMovement = { at: string; destination: string; folio: string };
 
@@ -299,7 +300,10 @@ function QueuePanel({ availableCount, busy, mineCount, onOpen, onViewChange, pla
         </View>
       ) : (
         <Text style={styles.queueEmpty}>
-          {view === 'mine'
+          {(view === 'mine' ? mineCount : availableCount) > 0
+            // El contador incluye la maniobra destacada; la cola solo muestra las siguientes.
+            ? 'No hay más maniobras en cola.'
+            : view === 'mine'
             ? 'No tienes más tareas tomadas.'
             : plannerFresh === false
               ? 'Planificador sin actualizar: las tareas volverán cuando se recalcule.'
@@ -388,7 +392,7 @@ const styles = StyleSheet.create({
   main: { flex: 1, minWidth: 0, gap: o.space[4] },
   aside: { width: 340, gap: o.space[4] },
   asideCompact: { width: 'auto' },
-  eyebrow: { color: o.color.muted, fontSize: o.type.caption, fontWeight: '800', letterSpacing: 1.2 },
+  eyebrow: { fontFamily: font.heavy, color: o.color.muted, fontSize: o.type.caption, letterSpacing: 1.2 },
 
   hero: {
     flexGrow: 1,
@@ -404,68 +408,68 @@ const styles = StyleSheet.create({
   heroTop: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: o.space[3] },
   heroBadges: { flexDirection: 'row', flexWrap: 'wrap', gap: o.space[2] },
   identity: { gap: o.space[1] },
-  heroTitle: { color: o.color.text, fontSize: o.type.title, lineHeight: 34, fontWeight: '800' },
-  heroGoal: { color: o.color.textSecondary, fontSize: o.type.body, lineHeight: 22 },
-  folioLabel: { color: o.color.muted, fontSize: o.type.small, fontWeight: '600', marginTop: o.space[3] },
-  folio: { color: o.color.text, fontFamily: o.font.mono, fontSize: 72, lineHeight: 80, fontWeight: '800' },
+  heroTitle: { fontFamily: font.heavy, color: o.color.text, fontSize: o.type.title, lineHeight: 34 },
+  heroGoal: { fontFamily: font.regular, color: o.color.textSecondary, fontSize: o.type.body, lineHeight: 22 },
+  folioLabel: { fontFamily: font.semibold, color: o.color.muted, fontSize: o.type.small, marginTop: o.space[3] },
+  folio: { fontFamily: font.monoBold, color: o.color.text, fontSize: 72, lineHeight: 80 },
   folioCompact: { fontSize: 44, lineHeight: 52 },
   folioHead: { color: o.color.muted },
-  heroMeta: { color: o.color.muted, fontSize: o.type.small },
+  heroMeta: { fontFamily: font.regular, color: o.color.muted, fontSize: o.type.small },
 
   route: { flexDirection: 'row', alignItems: 'stretch', gap: o.space[3] },
   routeCompact: { flexDirection: 'column' },
-  routeArrow: { alignSelf: 'center', color: o.color.muted, fontSize: o.type.display, fontWeight: '700', paddingHorizontal: o.space[2] },
+  routeArrow: { fontFamily: font.bold, alignSelf: 'center', color: o.color.muted, fontSize: o.type.display, paddingHorizontal: o.space[2] },
   routeArrowCompact: { transform: [{ rotate: '90deg' }] },
   routeBlock: { flex: 1, minWidth: 0, gap: o.space[1], padding: o.space[6], borderRadius: o.radius.panel, borderWidth: 2, borderColor: 'transparent', backgroundColor: o.color.surfaceMuted },
   routeBlockPending: { borderStyle: 'dashed', borderColor: o.color.borderStrong, backgroundColor: 'transparent' },
   routeLabelRow: { flexDirection: 'row', alignItems: 'center', gap: o.space[2] },
-  routeLabel: { color: o.color.muted, fontSize: o.type.caption, fontWeight: '800', letterSpacing: 1.2 },
-  routeProposed: { color: o.color.primaryPressed, fontSize: o.type.caption, fontWeight: '800', letterSpacing: 1 },
-  routePlace: { color: o.color.text, fontSize: o.type.title, lineHeight: 34, fontWeight: '800' },
+  routeLabel: { fontFamily: font.heavy, color: o.color.muted, fontSize: o.type.caption, letterSpacing: 1.2 },
+  routeProposed: { fontFamily: font.heavy, color: o.color.primaryPressed, fontSize: o.type.caption, letterSpacing: 1 },
+  routePlace: { fontFamily: font.heavy, color: o.color.text, fontSize: o.type.title, lineHeight: 34 },
   routePlacePending: { color: o.color.textSecondary },
-  routeCode: { color: o.color.primaryPressed, fontFamily: o.font.mono, fontSize: o.type.heading, fontWeight: '700' },
-  routeNote: { color: o.color.muted, fontSize: o.type.body },
+  routeCode: { fontFamily: font.monoBold, color: o.color.primaryPressed, fontSize: o.type.heading },
+  routeNote: { fontFamily: font.regular, color: o.color.muted, fontSize: o.type.body },
 
-  heroHint: { color: o.color.warning, fontSize: o.type.body, fontWeight: '700' },
-  heroDetail: { color: o.color.muted, fontSize: o.type.small },
+  heroHint: { fontFamily: font.bold, color: o.color.warning, fontSize: o.type.body },
+  heroDetail: { fontFamily: font.regular, color: o.color.muted, fontSize: o.type.small },
   heroSpacer: { flexGrow: 1 },
   heroAction: { minHeight: 84, paddingHorizontal: o.space[6], alignItems: 'center', justifyContent: 'center', borderRadius: o.radius.panel, backgroundColor: o.color.primary },
-  heroActionText: { color: o.color.onPrimary, fontSize: o.type.heading, fontWeight: '900' },
+  heroActionText: { fontFamily: font.heavy, color: o.color.onPrimary, fontSize: o.type.heading },
 
   syncRow: { minHeight: o.touch.minimum, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: o.space[2] },
-  syncText: { flex: 1, color: o.color.muted, fontSize: o.type.small },
+  syncText: { fontFamily: font.regular, flex: 1, color: o.color.muted, fontSize: o.type.small },
   refreshButton: { minHeight: o.touch.minimum, minWidth: o.touch.minimum, alignItems: 'center', justifyContent: 'center', borderRadius: o.radius.pill, borderWidth: 1, borderColor: o.color.border },
-  refreshText: { color: o.color.textSecondary, fontSize: o.type.heading, fontWeight: '700' },
+  refreshText: { fontFamily: font.bold, color: o.color.textSecondary, fontSize: o.type.heading },
 
   panel: { padding: o.space[4], gap: o.space[3], borderWidth: 1, borderColor: o.color.border, borderRadius: o.radius.panel, backgroundColor: o.color.surface },
-  panelMeta: { color: o.color.muted, fontSize: o.type.caption },
+  panelMeta: { fontFamily: font.regular, color: o.color.muted, fontSize: o.type.caption },
   queueTabs: { flexDirection: 'row', gap: o.space[2] },
   queueTab: { flex: 1, minHeight: o.touch.minimum, paddingHorizontal: o.space[2], alignItems: 'center', justifyContent: 'center', borderRadius: o.radius.control, borderWidth: 1, borderColor: o.color.border },
   queueTabActive: { backgroundColor: o.color.surfaceMuted, borderColor: o.color.surfaceMuted },
-  queueTabText: { color: o.color.textSecondary, fontSize: o.type.small, fontWeight: '600' },
-  queueTabTextActive: { color: o.color.primaryPressed, fontWeight: '800' },
+  queueTabText: { fontFamily: font.semibold, color: o.color.textSecondary, fontSize: o.type.small },
+  queueTabTextActive: { fontFamily: font.heavy, color: o.color.primaryPressed },
   queueRow: { paddingVertical: o.space[3], gap: o.space[2], borderBottomWidth: 1, borderBottomColor: o.color.border },
   queueRowLast: { borderBottomWidth: 0 },
   queueRowTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: o.space[2] },
-  queuePurpose: { color: o.color.textSecondary, fontSize: o.type.small, fontWeight: '700' },
+  queuePurpose: { fontFamily: font.bold, color: o.color.textSecondary, fontSize: o.type.small },
   queueAction: { minHeight: o.touch.minimum, alignItems: 'center', justifyContent: 'center', borderRadius: o.radius.control, borderWidth: 1, borderColor: o.color.primary },
-  queueActionText: { color: o.color.primaryPressed, fontSize: o.type.small, fontWeight: '800' },
-  queueEmpty: { color: o.color.muted, fontSize: o.type.small, lineHeight: 20 },
+  queueActionText: { fontFamily: font.heavy, color: o.color.primaryPressed, fontSize: o.type.small },
+  queueEmpty: { fontFamily: font.regular, color: o.color.muted, fontSize: o.type.small, lineHeight: 20 },
   moreButton: { minHeight: o.touch.minimum, alignItems: 'center', justifyContent: 'center' },
-  moreText: { color: o.color.primaryPressed, fontSize: o.type.small, fontWeight: '700' },
+  moreText: { fontFamily: font.bold, color: o.color.primaryPressed, fontSize: o.type.small },
 
   lastRow: { flexDirection: 'row', gap: o.space[3] },
   lastMark: { width: 36, height: 36, borderRadius: o.radius.pill, borderWidth: 1, borderColor: o.color.successBorder, backgroundColor: o.color.successSurface, alignItems: 'center', justifyContent: 'center' },
-  lastMarkText: { color: o.color.success, fontSize: o.type.body, fontWeight: '900' },
+  lastMarkText: { fontFamily: font.heavy, color: o.color.success, fontSize: o.type.body },
   lastText: { flex: 1, minWidth: 0, gap: 2 },
-  lastDestination: { color: o.color.textSecondary, fontSize: o.type.small },
+  lastDestination: { fontFamily: font.regular, color: o.color.textSecondary, fontSize: o.type.small },
 
   loadsLink: { minHeight: o.touch.prominent, paddingHorizontal: o.space[4], flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: o.radius.panel, borderWidth: 1, borderColor: o.color.border },
-  loadsLinkText: { color: o.color.text, fontSize: o.type.body, fontWeight: '600' },
-  loadsLinkArrow: { color: o.color.muted, fontSize: o.type.heading },
+  loadsLinkText: { fontFamily: font.semibold, color: o.color.text, fontSize: o.type.body },
+  loadsLinkArrow: { fontFamily: font.regular, color: o.color.muted, fontSize: o.type.heading },
 
   emptyHero: { flexGrow: 1, minHeight: 400, padding: o.space[8], alignItems: 'center', justifyContent: 'center', gap: o.space[3], borderWidth: 1, borderColor: o.color.border, borderRadius: o.radius.panel, backgroundColor: o.color.surface },
-  emptyHeroTitle: { color: o.color.text, fontSize: o.type.title, fontWeight: '800', textAlign: 'center' },
-  emptyHeroCopy: { maxWidth: 520, color: o.color.muted, fontSize: o.type.body, lineHeight: 24, textAlign: 'center' },
+  emptyHeroTitle: { fontFamily: font.heavy, color: o.color.text, fontSize: o.type.title, textAlign: 'center' },
+  emptyHeroCopy: { fontFamily: font.regular, maxWidth: 520, color: o.color.muted, fontSize: o.type.body, lineHeight: 24, textAlign: 'center' },
   disabled: { opacity: 0.45 },
 });

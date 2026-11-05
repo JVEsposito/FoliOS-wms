@@ -2,6 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import type { OperationalTaskPriority } from '../../domain/operationalTasks';
 import { operatorTheme as o, type OperatorTone } from '../../theme/operatorTheme';
+import { font } from '../../theme/typography';
 
 const tonePalette: Record<OperatorTone, { background: string; border: string; text: string }> = {
   neutral: { background: o.color.surfaceMuted, border: o.color.border, text: o.color.muted },
@@ -62,17 +63,16 @@ const styles = StyleSheet.create({
     gap: o.space[2],
   },
   marker: { width: 8, height: 8, borderRadius: 4 },
-  badgeText: { fontSize: o.type.caption, fontWeight: '900', letterSpacing: 0.3 },
+  badgeText: { fontFamily: font.heavy, fontSize: o.type.caption, letterSpacing: 0.3 },
   code: {
+    fontFamily: font.monoBold,
     color: o.color.text,
-    fontFamily: o.font.mono,
     fontSize: o.type.body,
-    fontWeight: '800',
     fontVariant: ['tabular-nums'],
   },
-  codeProminent: { color: o.color.primary, fontSize: o.type.folio, fontWeight: '800', letterSpacing: -1 },
+  codeProminent: { fontFamily: font.monoBold, color: o.color.primary, fontSize: o.type.folio, letterSpacing: -1 },
   route: { minHeight: 36, flexDirection: 'row', alignItems: 'flex-start', gap: o.space[3] },
-  routeLabel: { width: 70, color: o.color.muted, fontSize: o.type.small, fontWeight: '700' },
-  routeValue: { flex: 1, color: o.color.text, fontSize: o.type.small, lineHeight: 20 },
-  routeValueStrong: { color: o.color.primary, fontWeight: '800' },
+  routeLabel: { fontFamily: font.bold, width: 70, color: o.color.muted, fontSize: o.type.small },
+  routeValue: { fontFamily: font.regular, flex: 1, color: o.color.text, fontSize: o.type.small, lineHeight: 20 },
+  routeValueStrong: { fontFamily: font.heavy, color: o.color.primary },
 });

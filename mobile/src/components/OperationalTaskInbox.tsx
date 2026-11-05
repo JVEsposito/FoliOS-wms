@@ -56,6 +56,7 @@ import { OperatorToast } from './operator/OperatorToast';
 import { OperatorLoadStatus } from './operator/OperatorLoadStatus';
 import { TurnVerification } from './operator/TurnVerification';
 import { operatorTheme as o } from '../theme/operatorTheme';
+import { font } from '../theme/typography';
 
 type Props = {
   api: EstibaApi;
@@ -1113,22 +1114,22 @@ function messageFrom(reason: unknown) {
 const styles = StyleSheet.create({
   syncStatus: { minHeight: o.touch.minimum, flexDirection: 'row', alignItems: 'center', gap: o.space[3], paddingHorizontal: o.space[4], marginBottom: o.space[3], borderRadius: o.radius.control, borderWidth: 1, borderColor: o.color.warningBorder, backgroundColor: o.color.warningSurface },
   contextRow: { minHeight: o.touch.minimum, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: o.space[3], marginBottom: o.space[2] },
-  syncText: { flex: 1, color: o.color.muted, fontSize: o.type.small },
+  syncText: { fontFamily: font.regular, flex: 1, color: o.color.muted, fontSize: o.type.small },
   loadsButton: { minHeight: o.touch.minimum, justifyContent: 'center', paddingHorizontal: o.space[4], borderWidth: 1, borderColor: o.color.border, borderRadius: o.radius.control },
-  loadsButtonText: { color: o.color.primaryPressed, fontSize: o.type.small, fontWeight: '700' },
+  loadsButtonText: { fontFamily: font.bold, color: o.color.primaryPressed, fontSize: o.type.small },
   syncDot: { width: 10, height: 10, borderRadius: o.radius.pill, backgroundColor: o.color.warning },
-  syncWarning: { flex: 1, color: o.color.warning, fontSize: o.type.body, fontWeight: '700' },
+  syncWarning: { fontFamily: font.bold, flex: 1, color: o.color.warning, fontSize: o.type.body },
   recoveryPanel: { padding: o.space[4], gap: o.space[3], borderWidth: 1, borderColor: o.color.warning, borderRadius: o.radius.panel, backgroundColor: o.color.surface },
-  recoveryTitle: { color: o.color.warning, fontSize: o.type.heading, fontWeight: '800' },
-  recoveryFolio: { color: o.color.text, fontSize: o.type.heading, fontWeight: '900' },
-  recoveryCopy: { color: o.color.textSecondary, fontSize: o.type.body },
+  recoveryTitle: { fontFamily: font.heavy, color: o.color.warning, fontSize: o.type.heading },
+  recoveryFolio: { fontFamily: font.heavy, color: o.color.text, fontSize: o.type.heading },
+  recoveryCopy: { fontFamily: font.regular, color: o.color.textSecondary, fontSize: o.type.body },
   recoveryButton: { minHeight: o.touch.minimum, padding: o.space[3], justifyContent: 'center', backgroundColor: o.color.primary, borderRadius: o.radius.control },
-  recoveryButtonText: { color: o.color.onPrimary, fontSize: o.type.body, fontWeight: '800' },
+  recoveryButtonText: { fontFamily: font.heavy, color: o.color.onPrimary, fontSize: o.type.body },
   screen: { flex: 1, padding: o.space[4], backgroundColor: o.color.canvas },
   emptyStandalone: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: o.space[8], backgroundColor: o.color.canvas },
-  emptyIcon: { color: o.color.primary, fontSize: 34, fontWeight: '900' },
-  emptyTitle: { color: o.color.text, fontSize: o.type.body, fontWeight: '900', marginTop: o.space[2], textAlign: 'center' },
-  emptyCopy: { color: o.color.muted, fontSize: o.type.small, lineHeight: 20, marginTop: o.space[1], textAlign: 'center', maxWidth: 520 },
+  emptyIcon: { fontFamily: font.heavy, color: o.color.primary, fontSize: 34 },
+  emptyTitle: { fontFamily: font.heavy, color: o.color.text, fontSize: o.type.body, marginTop: o.space[2], textAlign: 'center' },
+  emptyCopy: { fontFamily: font.regular, color: o.color.muted, fontSize: o.type.small, lineHeight: 20, marginTop: o.space[1], textAlign: 'center', maxWidth: 520 },
   busyOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(18,51,66,0.82)', alignItems: 'center', justifyContent: 'center', gap: o.space[3] },
-  busyText: { color: o.color.onNavy, fontSize: o.type.small, fontWeight: '900' },
+  busyText: { fontFamily: font.heavy, color: o.color.onNavy, fontSize: o.type.small },
 });

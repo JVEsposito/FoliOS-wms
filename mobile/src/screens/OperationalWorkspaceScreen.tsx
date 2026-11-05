@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AuthSession } from '../domain/estiba';
@@ -14,6 +14,7 @@ import { EnvironmentalControlScreen } from './EnvironmentalControlScreen';
 import { OperationalScreen } from './OperationalScreen';
 import { useOperationalPolling } from '../hooks/useOperationalPolling';
 import { sendOperatorPresence } from '../services/operatorPresenceApi';
+import { font } from '../theme/typography';
 
 type Props = {
   api: EstibaApi;
@@ -55,6 +56,18 @@ export function OperationalWorkspaceScreen({ api, auth, onChangeModule, onLogout
     return () => { active = false; clearInterval(timer); };
   }, [api.baseUrl, auth.token, environmentalAvailable, view]);
 
+  // En «Plano y operación» el cierre pasa por la revisión de estibas abiertas de esa vista.
+  const planLogout = useRef<(() => Promise<void>) | null>(null);
+  const registerPlanLogout = useCallback((logout: (() => Promise<void>) | null) => { planLogout.current = logout; }, []);
+
+  async function logoutFromMenu() {
+    if (view === 'operacion' && planLogout.current) {
+      await planLogout.current();
+      return;
+    }
+    await logoutFromTasks();
+  }
+
   async function logoutFromTasks() {
     try {
       await api.logout(auth.token);
@@ -76,7 +89,7 @@ export function OperationalWorkspaceScreen({ api, auth, onChangeModule, onLogout
         trailing={<OperatorMenu
           deviceName={auth.dispositivo.nombre}
           onChangeModule={onChangeModule}
-          onLogout={() => void logoutFromTasks()}
+          onLogout={() => void logoutFromMenu()}
           role={auth.usuario.rol}
           userName={auth.usuario.nombre}
         />}
@@ -122,7 +135,7 @@ export function OperationalWorkspaceScreen({ api, auth, onChangeModule, onLogout
         ) : view === 'ambiente' && api.baseUrl ? (
           <EnvironmentalControlScreen auth={auth} baseUrl={api.baseUrl} onDueChange={updateEnvironmentalDue} />
         ) : (
-          <OperationalScreen api={api} auth={auth} onLogout={onLogout} />
+          <OperationalScreen api={api} auth={auth} onLogout={onLogout} onRegisterLogout={registerPlanLogout} />
         )}
       </View>
     </View>
@@ -143,9 +156,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   buttonActive: { backgroundColor: o.color.surfaceMuted },
-  buttonText: { color: o.color.textSecondary, fontSize: o.type.body, fontWeight: '600' },
-  buttonTextActive: { color: o.color.primaryPressed, fontWeight: '800' },
+  buttonText: { fontFamily: font.semibold, color: o.color.textSecondary, fontSize: o.type.body },
+  buttonTextActive: { fontFamily: font.heavy, color: o.color.primaryPressed },
   badge: { minWidth: 26, height: 26, paddingHorizontal: 8, borderRadius: o.radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: o.color.warning },
-  badgeText: { color: o.color.onPrimary, fontSize: o.type.caption, fontWeight: '900' },
+  badgeText: { fontFamily: font.heavy, color: o.color.onPrimary, fontSize: o.type.caption },
   content: { flex: 1, minHeight: 0 },
 });

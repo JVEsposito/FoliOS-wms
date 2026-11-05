@@ -1,6 +1,5 @@
-import { Platform } from 'react-native';
-
 import { estibaTokens as t } from './estibaTokens';
+import { font } from './typography';
 
 /**
  * Tema de terreno FoliOS v2 (tablet del camarero y PDA): siempre oscuro.
@@ -57,10 +56,11 @@ export const operatorTheme = {
     display: 36,
   },
   font: {
-    // Fuentes del sistema hasta el PR 10: no exigen APK nueva (OTA seguro).
-    // Platform?. tolera los dobles de react-native de las pruebas de mobile/tests.
-    condensed: Platform?.OS === 'ios' ? 'AvenirNextCondensed-Bold' : Platform?.OS === 'android' ? 'sans-serif-condensed' : undefined,
-    mono: Platform?.OS === 'ios' ? 'Menlo' : 'monospace',
+    // Inter / JetBrains Mono, cargadas en App.tsx (ver theme/typography.ts). Las claves
+    // condensed y mono se conservan por compatibilidad con estilos armados en código.
+    ...font,
+    condensed: font.heavy,
+    mono: font.monoBold,
   },
   touch: {
     minimum: t.density.touch.control,

@@ -3,6 +3,7 @@ import { Image, StyleSheet, Text, View, useWindowDimensions } from 'react-native
 
 import { areas, type AreaKey } from '../../theme/areas';
 import { operatorTheme as o } from '../../theme/operatorTheme';
+import { font } from '../../theme/typography';
 
 type Props = {
   area?: AreaKey;
@@ -87,12 +88,12 @@ const styles = StyleSheet.create({
   gajo: { width: 38, height: 38 },
   titleBlock: { minWidth: 0, flexShrink: 1 },
   title: {
+    fontFamily: font.heavy,
     color: o.color.text,
-    fontFamily: o.font.condensed,
     fontSize: o.type.heading,
-    fontWeight: '800',
   },
   subtitle: {
+    fontFamily: font.regular,
     color: o.color.muted,
     fontSize: o.type.small,
     marginTop: 2,
@@ -112,6 +113,6 @@ const styles = StyleSheet.create({
   pillOnline: { backgroundColor: 'transparent', borderColor: 'transparent' },
   pillOffline: { backgroundColor: o.color.warningSurface, borderColor: o.color.warningBorder },
   dot: { width: 10, height: 10, borderRadius: o.radius.pill },
-  pillText: { fontSize: o.type.small, fontWeight: '700' },
-  device: { maxWidth: 220, color: o.color.muted, fontSize: o.type.caption, textAlign: 'right' },
+  pillText: { fontFamily: font.bold, fontSize: o.type.small },
+  device: { fontFamily: font.regular, maxWidth: 220, color: o.color.muted, fontSize: o.type.caption, textAlign: 'right' },
 });
