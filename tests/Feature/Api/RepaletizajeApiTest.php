@@ -19,6 +19,7 @@ use App\Services\Validacion\ServicioEtiquetasPt;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class RepaletizajeApiTest extends TestCase
@@ -59,13 +60,22 @@ class RepaletizajeApiTest extends TestCase
         $this->assertSame('111', $nuevo->datos_externos['composicion'][0]['csg']);
     }
 
-    public function test_cambio_folio_heredado_aprobado_queda_disponible_para_carga(): void
+    public static function cambiosFolioParaCarga(): array
+    {
+        return [
+            'saldo aprobado' => [60, 'saldo', 120],
+            'pallet despachable de una caja' => [1, 'pallet', 1],
+        ];
+    }
+
+    #[DataProvider('cambiosFolioParaCarga')]
+    public function test_cambio_folio_heredado_aprobado_queda_disponible_para_carga(int $cajas, string $tipo, int $capacidad): void
     {
         [$token, $temporada] = $this->contexto();
         $origen = $this->folio(
             $temporada,
             'SAL-HEREDADO-PF',
-            60,
+            $cajas,
             condicion: CondicionTermicaFolio::PrefrioAprobado,
             estado: EstadoOperacionalFolio::PendientePrefrio,
         );
@@ -97,21 +107,26 @@ class RepaletizajeApiTest extends TestCase
             'modalidad' => 'cambio_folio',
             'origenes' => [[
                 'folio_id' => $origen->id,
-                'cantidad_aportada' => 60,
+                'cantidad_aportada' => $cajas,
             ]],
             'resultados' => [[
                 'numero_folio' => 'SAL-HEREDADO-PF-NUEVO',
-                'tipo_resultado' => 'saldo',
-                'cantidad_objetivo' => 120,
-                'cantidad_resultante' => 60,
+                'tipo_resultado' => $tipo,
+                'cantidad_objetivo' => $capacidad,
+                'cantidad_resultante' => $cajas,
             ]],
         ])->assertOk()
+            ->assertJsonPath('data.folio_resultante.tipo_bulto', $tipo)
+            ->assertJsonPath('data.resultados.0.cantidad_resultante', $cajas)
             ->assertJsonPath('data.folio_resultante.estado_operacional', 'disponible')
             ->assertJsonPath('data.folio_resultante.condicion_termica', 'prefrio_aprobado');
 
         $nuevo = Folio::query()
             ->where('numero_folio', 'SAL-HEREDADO-PF-NUEVO')
             ->firstOrFail();
+        $this->assertSame($cajas, $nuevo->datos_externos['cantidad_cajas']);
+        $this->assertSame('111', $nuevo->datos_externos['composicion'][0]['csg']);
+        $this->assertFalse($origen->refresh()->activo);
         $this->assertSame(
             HabilitacionAlmacenamientoFolio::Habilitado,
             $nuevo->habilitacion_almacenamiento,
