@@ -1,4 +1,5 @@
 type CameraDisplayIdentity = {
+  codigo?: string | null;
   nombre?: string | null;
 };
 
@@ -9,7 +10,7 @@ type CameraBandLayout = {
 export function cameraDisplayName(camera?: CameraDisplayIdentity | null): string {
   const name = camera?.nombre?.trim();
 
-  return name || 'Cámara sin nombre';
+  return name || camera?.codigo?.trim() || 'Cámara sin nombre';
 }
 
 export function orderBandsForCamera(camera: CameraBandLayout, bands: number[]): number[] {

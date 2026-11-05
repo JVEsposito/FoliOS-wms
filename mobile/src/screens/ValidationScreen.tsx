@@ -1,5 +1,5 @@
 import { font } from '../theme/typography';
-import { FieldHeader } from '../components/field/FieldHeader';
+import { FieldHeader, type FieldLeaveTarget } from '../components/field/FieldHeader';
 import * as Crypto from 'expo-crypto';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -962,19 +962,20 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
     }
   }
 
-  function logout() {
+  function beforeLeave(proceed: () => void, target: FieldLeaveTarget) {
+    const action = target === 'module' ? 'Cambiar módulo' : 'Cerrar sesión';
     if (outbox.some((item) => item.status === 'pendiente')) {
       Alert.alert(
         'Validaciones pendientes',
-        'La bandeja permanece guardada en esta PDA. ¿Deseas cerrar la sesión igualmente?',
+        `La bandeja permanece guardada en esta PDA. ¿Deseas ${action.toLowerCase()} igualmente?`,
         [
           { text: 'Volver', style: 'cancel' },
-          { text: 'Cerrar sesión', style: 'destructive', onPress: onLogout },
+          { text: action, style: 'destructive', onPress: proceed },
         ],
       );
       return;
     }
-    onLogout();
+    proceed();
   }
 
   const catalogProgressLabel = catalogProgress
@@ -1444,7 +1445,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
   return (
     <View style={styles.screen}>
       <ScrollView ref={page} contentContainerStyle={[styles.page, compact && styles.pageCompact]} keyboardShouldPersistTaps="handled">
-        <FieldHeader area="frigorifico" auth={auth} title="Validación PT" subtitle={headerMeta} subtitleCompact={false} onLogout={logout}>{wide ? syncButton : null}</FieldHeader>
+        <FieldHeader area="frigorifico" auth={auth} title="Validación PT" subtitle={headerMeta} subtitleCompact={false} busy={busy || syncing} onBeforeLeave={beforeLeave} onLogout={onLogout}>{wide ? syncButton : null}</FieldHeader>
         {compact ? (
           <View style={styles.headerMetaRow}>
             <Text numberOfLines={2} style={styles.headerMetaCompact}>{headerMeta}</Text>

@@ -15,7 +15,7 @@ const require = createRequire(import.meta.url);
 const sourceRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../src');
 function harness({ failAfterCommit = false, duplicateGuide = false } = {}) {
   const storage = new Map(); let renderer; let committed = null; let sequence = 0;
-  const calls = { saves: [], scans: [], alerts: [], accepts: [], prints: [] };
+  const calls = { saves: [], scans: [], alerts: [], accepts: [], prints: [], leaves: [] };
   let printed = false;
   const catalog = {
     articulos: [{ id: 'article', especie: 'UVA', variedad: 'THOMPSON', variedad_validacion_id: 'variety', envase: '8.2 KG', calibre: 'L', activo: true }],
@@ -29,7 +29,7 @@ function harness({ failAfterCommit = false, duplicateGuide = false } = {}) {
     StyleSheet: { create: (s) => s },
     FlatList: ({ data, renderItem, ListHeaderComponent, ListFooterComponent, ListEmptyComponent }) => React.createElement('FlatList', null, ListHeaderComponent, ...data.map((item, index) => React.createElement('Row', { key: item.id ?? index }, renderItem({ item, index }))), ListFooterComponent, !data.length && ListEmptyComponent),
     Modal: ({ visible, children }) => visible ? React.createElement('Modal', null, children) : null,
-    Alert: { alert: (title, text, buttons) => { calls.alerts.push({ title, text }); buttons.find((b) => b.text === 'Continuar')?.onPress(); } },
+    Alert: { alert: (title, text, buttons) => { calls.alerts.push({ title, text, buttons }); buttons.find((b) => b.text === 'Continuar')?.onPress(); } },
   };
   function load(path) {
     if (cache.has(path)) return cache.get(path).exports;
@@ -71,6 +71,7 @@ function harness({ failAfterCommit = false, duplicateGuide = false } = {}) {
   const pressable = (label) => renderer.root.findAllByType('Pressable').find((p) => p.props.accessibilityLabel === label || flatten(p.props.children) === label);
   return {
     calls, storage,
+    async leave(target) { await flush(() => renderer.root.findByType('FieldHeader').props.onBeforeLeave(() => calls.leaves.push(target), target)); },
     async mount() { await flush(() => { renderer = create(React.createElement(PackedFruitReceptionScreen, { auth, baseUrl: 'http://server', onLogout: () => {} })); }); },
     async unmount() { await flush(() => renderer.unmount()); },
     async press(label) { const target = pressable(label); assert.ok(target, `Botón disponible: ${label}`); assert.ok(!target.props.disabled, `Botón habilitado: ${label}`); await flush(target.props.onPress); },
@@ -89,6 +90,19 @@ function harness({ failAfterCommit = false, duplicateGuide = false } = {}) {
     },
   };
 }
+
+test('cambiar módulo advierte antes de descartar una recepción embalada sin guardar', async () => {
+  const h = harness();
+  try {
+    await h.mount(); await h.truck();
+    await h.leave('module');
+    assert.equal(h.calls.alerts.at(-1).title, 'Cambios sin guardar');
+    assert.deepEqual(h.calls.leaves, []);
+    assert.match(h.message(), /N° de guía/);
+    h.calls.alerts.at(-1).buttons.find(button => button.text === 'Cambiar módulo').onPress();
+    assert.deepEqual(h.calls.leaves, ['module']); assert.equal(h.calls.saves.length, 0);
+  } finally { await h.unmount(); }
+});
 
 test('PDA captura seis pallets, avisa el folio repetido y conserva SAG por pallet', async () => {
   const h = harness({ duplicateGuide: true });

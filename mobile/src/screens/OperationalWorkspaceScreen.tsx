@@ -15,6 +15,8 @@ import { OperationalScreen } from './OperationalScreen';
 import { useOperationalPolling } from '../hooks/useOperationalPolling';
 import { sendOperatorPresence } from '../services/operatorPresenceApi';
 import { font } from '../theme/typography';
+import { cameraDisplayName } from '../domain/cameras';
+import { ApiError } from '../services/apiError';
 
 type Props = {
   api: EstibaApi;
@@ -30,6 +32,15 @@ export function OperationalWorkspaceScreen({ api, auth, onChangeModule, onLogout
   const [view, setView] = useState<WorkspaceView>(api.mode === 'connected' ? 'labores' : 'operacion');
   const [environmentalDue, setEnvironmentalDue] = useState(0);
   const [openSessions, setOpenSessions] = useState<string[]>([]);
+  const [operationBusy, setOperationBusy] = useState(false);
+  const operationBusyRef = useRef(false);
+  const updateOperationBusy = useCallback((busy: boolean) => {
+    operationBusyRef.current = busy;
+    setOperationBusy(busy);
+  }, []);
+  const [leaving, setLeaving] = useState(false);
+  const leavingRef = useRef(false);
+  const navigationBusy = operationBusy || leaving;
   const environmentalAvailable = api.mode === 'connected'
     && auth.usuario.capacidades.puede_consultar_control_ambiental === true;
 
@@ -62,23 +73,48 @@ export function OperationalWorkspaceScreen({ api, auth, onChangeModule, onLogout
   const registerPlanLogout = useCallback((logout: (() => Promise<void>) | null) => { planLogout.current = logout; }, []);
 
   async function logoutFromMenu() {
-    if (!canLeaveWorkspace()) return;
-    if (view === 'operacion' && planLogout.current) {
-      await planLogout.current();
-      return;
-    }
-    await logoutFromTasks();
+    await leaveWorkspace(async () => {
+      if (view === 'operacion' && planLogout.current) await planLogout.current();
+      else await logoutFromTasks();
+    });
   }
 
-  function canLeaveWorkspace() {
-    if (!openSessions.length) return true;
-    Alert.alert('Estibas todavía abiertas', `Cierra las sesiones de ${openSessions.join(', ')} antes de salir o cambiar de módulo.`);
+  async function canLeaveWorkspace() {
+    let names = openSessions;
+    if (api.mode === 'connected') {
+      try {
+        const cameras = await api.listCameras(auth.token);
+        names = cameras.filter((camera) => camera.acceso.modo === 'edicion' && camera.acceso.sesion?.es_propia).map(cameraDisplayName);
+        setOpenSessions(names);
+      } catch (reason) {
+        if (reason instanceof ApiError && reason.status === 401) {
+          onLogout();
+        } else {
+          Alert.alert('No se pudo comprobar las estibas', 'Reintenta cuando haya conexión para verificar las sesiones abiertas antes de salir o cambiar de módulo.');
+        }
+        return false;
+      }
+    }
+    if (!names.length) return true;
+    Alert.alert('Estibas todavía abiertas', `Cierra las sesiones de ${names.join(', ')} antes de salir o cambiar de módulo.`);
     setView('operacion');
     return false;
   }
 
-  function changeModule() {
-    if (canLeaveWorkspace()) onChangeModule?.();
+  async function leaveWorkspace(proceed: () => void | Promise<void>) {
+    if (operationBusyRef.current || leavingRef.current) return;
+    leavingRef.current = true;
+    setLeaving(true);
+    try {
+      if (await canLeaveWorkspace() && !operationBusyRef.current) await proceed();
+    } finally {
+      leavingRef.current = false;
+      setLeaving(false);
+    }
+  }
+
+  async function changeModule() {
+    await leaveWorkspace(() => onChangeModule?.());
   }
 
   async function logoutFromTasks() {
@@ -101,6 +137,7 @@ export function OperationalWorkspaceScreen({ api, auth, onChangeModule, onLogout
         role={auth.usuario.rol}
         userName={auth.usuario.nombre}
         trailing={<OperatorMenu
+          disabled={navigationBusy}
           deviceName={auth.dispositivo.nombre}
           onChangeModule={onChangeModule ? changeModule : undefined}
           onLogout={() => void logoutFromMenu()}
@@ -109,6 +146,7 @@ export function OperationalWorkspaceScreen({ api, auth, onChangeModule, onLogout
         />}
         navigation={<View accessibilityRole="tablist" style={styles.buttons}>
           <Pressable
+            disabled={navigationBusy}
             accessibilityRole="tab"
             accessibilityState={{ selected: view === 'labores' }}
             onPress={() => setView('labores')}
@@ -117,6 +155,7 @@ export function OperationalWorkspaceScreen({ api, auth, onChangeModule, onLogout
             <Text style={[styles.buttonText, view === 'labores' && styles.buttonTextActive]}>Mi jornada</Text>
           </Pressable>
           {environmentalAvailable ? <Pressable
+            disabled={navigationBusy}
             accessibilityLabel={environmentalDue > 0
               ? `Ambiente: ${environmentalDue} ${environmentalDue === 1 ? 'cámara requiere' : 'cámaras requieren'} control ambiental`
               : 'Ambiente'}
@@ -131,6 +170,7 @@ export function OperationalWorkspaceScreen({ api, auth, onChangeModule, onLogout
             ) : null}
           </Pressable> : null}
           <Pressable
+            disabled={navigationBusy}
             accessibilityRole="tab"
             accessibilityState={{ selected: view === 'operacion' }}
             onPress={() => setView('operacion')}
@@ -145,11 +185,11 @@ export function OperationalWorkspaceScreen({ api, auth, onChangeModule, onLogout
         {view === 'labores' ? (
           auth.usuario.rol === 'camarero_materiales' && api.baseUrl
             ? <ScrollView contentContainerStyle={{ padding: 16 }}><MaterialVerificationPanel baseUrl={api.baseUrl} auth={auth} /><MaterialInventoryCountPanel baseUrl={api.baseUrl} auth={auth} /></ScrollView>
-            : <OperationalTaskInbox api={api} auth={auth} />
+            : <OperationalTaskInbox api={api} auth={auth} onBusyChange={updateOperationBusy} />
         ) : view === 'ambiente' && api.baseUrl ? (
-          <EnvironmentalControlScreen auth={auth} baseUrl={api.baseUrl} onDueChange={updateEnvironmentalDue} />
+          <EnvironmentalControlScreen auth={auth} baseUrl={api.baseUrl} onDueChange={updateEnvironmentalDue} onBusyChange={updateOperationBusy} />
         ) : (
-          <OperationalScreen api={api} auth={auth} onLogout={onLogout} onRegisterLogout={registerPlanLogout} onOpenSessionsChange={setOpenSessions} />
+          <OperationalScreen api={api} auth={auth} onLogout={onLogout} onRegisterLogout={registerPlanLogout} onOpenSessionsChange={setOpenSessions} onBusyChange={updateOperationBusy} />
         )}
       </View>
     </View>
@@ -158,7 +198,7 @@ export function OperationalWorkspaceScreen({ api, auth, onChangeModule, onLogout
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: o.color.canvas },
-  buttons: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  buttons: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap', flexShrink: 1, minWidth: 0 },
   button: {
     minHeight: o.touch.minimum,
     flexDirection: 'row',

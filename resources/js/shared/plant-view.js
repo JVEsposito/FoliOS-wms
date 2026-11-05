@@ -264,7 +264,7 @@ export function plantNodeModel(element, index) {
 }
 
 export function plantNodeTitle(model) {
-    return model.kind === 'camara' ? cameraDisplayName({ nombre: model.name }) : model.code;
+    return model.kind === 'camara' ? cameraDisplayName({ nombre: model.name, codigo: model.code }) : model.code;
 }
 
 export function plantNodeLabel(model) {

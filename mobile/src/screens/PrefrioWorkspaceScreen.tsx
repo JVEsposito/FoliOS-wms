@@ -78,6 +78,8 @@ export function PrefrioWorkspaceScreen({ auth, baseUrl, onLogout }: PrefrioWorks
   const [selectedPositionId, setSelectedPositionId] = useState<string | null>(null);
   const [temperature, setTemperature] = useState('');
   const [busy, setBusy] = useState(true);
+  const [childBusy, setChildBusy] = useState(false);
+  const navigationBusy = busy || childBusy;
   const [online, setOnline] = useState(Boolean(baseUrl));
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -333,9 +335,9 @@ export function PrefrioWorkspaceScreen({ auth, baseUrl, onLogout }: PrefrioWorks
   if (activeView === 'rocio') {
     return (
       <View style={styles.screen}>
-        <WorkspaceTabs activeView={activeView} pendingCount={folios.length} onChange={setActiveView} />
+        <WorkspaceTabs activeView={activeView} pendingCount={folios.length} busy={navigationBusy} onChange={setActiveView} />
         <View style={styles.tunnelWorkspace}>
-          <DewPointScreen auth={auth} baseUrl={baseUrl} onLogout={onLogout} />
+          <DewPointScreen auth={auth} baseUrl={baseUrl} onLogout={onLogout} onBusyChange={setChildBusy} />
         </View>
       </View>
     );
@@ -344,9 +346,9 @@ export function PrefrioWorkspaceScreen({ auth, baseUrl, onLogout }: PrefrioWorks
   if (activeView === 'tuneles') {
     return (
       <View style={styles.screen}>
-        <WorkspaceTabs activeView={activeView} pendingCount={folios.length} onChange={setActiveView} />
+        <WorkspaceTabs activeView={activeView} pendingCount={folios.length} busy={navigationBusy} onChange={setActiveView} />
         <View style={styles.tunnelWorkspace}>
-          <PrefrioScreen auth={auth} baseUrl={baseUrl} onLogout={onLogout} />
+          <PrefrioScreen auth={auth} baseUrl={baseUrl} onLogout={onLogout} onBusyChange={setChildBusy} />
         </View>
       </View>
     );
@@ -354,9 +356,9 @@ export function PrefrioWorkspaceScreen({ auth, baseUrl, onLogout }: PrefrioWorks
 
   return (
     <View style={styles.screen}>
-      <WorkspaceTabs activeView={activeView} pendingCount={folios.length} onChange={setActiveView} />
+      <WorkspaceTabs activeView={activeView} pendingCount={folios.length} busy={navigationBusy} onChange={setActiveView} />
       <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
-        <FieldHeader area="frigorifico" auth={auth} title="Prefrío · Pendientes" offline={!online} onLogout={onLogout}><Pressable disabled={busy} onPress={() => void synchronize()} style={styles.secondaryButton}><Text style={styles.secondaryButtonText}>↻</Text></Pressable></FieldHeader>
+        <FieldHeader area="frigorifico" auth={auth} title="Prefrío · Pendientes" busy={busy} offline={!online} onLogout={onLogout}><Pressable disabled={busy} onPress={() => void synchronize()} style={styles.secondaryButton}><Text style={styles.secondaryButtonText}>↻</Text></Pressable></FieldHeader>
 
         {notice ? <Text style={styles.notice}>{notice}</Text> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -430,16 +432,16 @@ export function PrefrioWorkspaceScreen({ auth, baseUrl, onLogout }: PrefrioWorks
   );
 }
 
-function WorkspaceTabs({ activeView, pendingCount, onChange }: { activeView: WorkspaceView; pendingCount: number; onChange: (view: WorkspaceView) => void }) {
+function WorkspaceTabs({ activeView, pendingCount, busy, onChange }: { activeView: WorkspaceView; pendingCount: number; busy: boolean; onChange: (view: WorkspaceView) => void }) {
   return (
     <View style={styles.tabs}>
-      <Pressable onPress={() => onChange('pendientes')} style={[styles.tab, activeView === 'pendientes' && styles.tabActive]}>
+      <Pressable disabled={busy} onPress={() => onChange('pendientes')} style={[styles.tab, activeView === 'pendientes' && styles.tabActive]}>
         <Text style={[styles.tabText, activeView === 'pendientes' && styles.tabTextActive]}>Pendientes ({pendingCount})</Text>
       </Pressable>
-      <Pressable onPress={() => onChange('tuneles')} style={[styles.tab, activeView === 'tuneles' && styles.tabActive]}>
+      <Pressable disabled={busy} onPress={() => onChange('tuneles')} style={[styles.tab, activeView === 'tuneles' && styles.tabActive]}>
         <Text style={[styles.tabText, activeView === 'tuneles' && styles.tabTextActive]}>Túneles y procesos</Text>
       </Pressable>
-      <Pressable onPress={() => onChange('rocio')} style={[styles.tab, activeView === 'rocio' && styles.tabActive]}>
+      <Pressable disabled={busy} onPress={() => onChange('rocio')} style={[styles.tab, activeView === 'rocio' && styles.tabActive]}>
         <Text style={[styles.tabText, activeView === 'rocio' && styles.tabTextActive]}>Punto de rocío</Text>
       </Pressable>
     </View>

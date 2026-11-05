@@ -1,5 +1,5 @@
 import { font } from '../theme/typography';
-import { FieldHeader } from '../components/field/FieldHeader';
+import { FieldHeader, type FieldLeaveTarget } from '../components/field/FieldHeader';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -76,6 +76,16 @@ export function PackedFruitReceptionScreen({ auth, baseUrl, onLogout }: { auth: 
   const editable = !!auth.usuario.capacidades.puede_gestionar_recepciones_fruta_embalada && (!document || document.editable);
   const locked = busy || !!pending || !editable;
   const sagChoices = useMemo(() => [{ id: '', label: 'Sin condición SAG' }, ...asChoices(options?.condiciones_sag ?? [])], [options]);
+
+  function beforeLeave(proceed: () => void, target: FieldLeaveTarget) {
+    if (dirty && !pending) {
+      const action = target === 'module' ? 'Cambiar módulo' : 'Cerrar sesión';
+      Alert.alert('Cambios sin guardar', `¿${action} y descartar la captura?`, [
+        { text: 'Volver', style: 'cancel' },
+        { text: action, style: 'destructive', onPress: proceed },
+      ]);
+    } else proceed();
+  }
 
   async function load(nextPage = page) {
     setBusy(true); setError('');
@@ -245,7 +255,7 @@ export function PackedFruitReceptionScreen({ auth, baseUrl, onLogout }: { auth: 
   </View> : <View><Text style={styles.title}>Recepción de fruta embalada</Text><Text style={styles.note}>Recepciones de la temporada activa.</Text><Button label="Nueva recepción" disabled={busy || !options?.temporada || !editable} onPress={() => void start()} /><Button label="Actualizar" disabled={busy} onPress={() => void load()} /></View>;
 
   return <View style={styles.screen}>
-    <FieldHeader area="frigorifico" auth={auth} title="Fruta embalada" busy={busy} onLogout={() => { if (dirty && !pending) Alert.alert('Cambios sin guardar', '¿Cerrar sesión y descartar la captura?', [{ text: 'Volver', style: 'cancel' }, { text: 'Salir', onPress: onLogout }]); else onLogout(); }} />
+    <FieldHeader area="frigorifico" auth={auth} title="Fruta embalada" busy={busy} onBeforeLeave={beforeLeave} onLogout={onLogout} />
     {busy && <ActivityIndicator color={colors.cyan} />}
     {!!notice && <Text style={styles.warning} accessibilityLiveRegion="polite">{notice}</Text>}
     {!!error && <Text style={styles.error} accessibilityRole="alert">{error}</Text>}

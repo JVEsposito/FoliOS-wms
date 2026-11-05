@@ -12,7 +12,7 @@ const require = createRequire(import.meta.url);
 const root = resolve(dirname(new URL(import.meta.url).pathname), '../src');
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const flatten = value => Array.isArray(value) ? value.map(flatten).join('') : typeof value === 'string' ? value : value?.props ? flatten(value.props.children) : '';
-function harness(width, multiple = true, busy = false) {
+function harness(width, multiple = true, busy = false, onBeforeLeave) {
   const cache = new Map(); const calls = [];
   function load(path) {
     if (cache.has(path)) return cache.get(path).exports;
@@ -38,7 +38,7 @@ function harness(width, multiple = true, busy = false) {
   return {
     calls,
     async mount() { await act(async () => { renderer = create(React.createElement(FieldNavigationProvider, { auth, onChangeModule: multiple ? () => calls.push('module') : undefined },
-      React.createElement(FieldHeader, { area: 'materia-prima', title: 'Validación MP', subtitle: 'TEMP-2627', busy, offline: true, onLogout: () => calls.push('guarded-logout') },
+      React.createElement(FieldHeader, { area: 'materia-prima', title: 'Validación MP', subtitle: 'TEMP-2627', busy, offline: true, onBeforeLeave, onLogout: () => calls.push('guarded-logout') },
         React.createElement('Pressable', { onPress: () => calls.push('refresh') }, React.createElement('Text', null, 'Actualizar'))))); }); },
     text() { return renderer.root.findAllByType('Text').map(node => flatten(node.props.children)).join('\n'); },
     async press(label) { const button = renderer.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === label || flatten(node.props.children) === label); assert.ok(button, label); assert.ok(!button.props.disabled, label); await act(async () => button.props.onPress()); },
@@ -64,4 +64,22 @@ test('un único módulo no ofrece cambiar y una escritura en curso deshabilita e
   try { await h.press('Menú de Operador Uno'); assert.doesNotMatch(h.text(), /Cambiar módulo/); } finally { await h.close(); }
   const busy = harness(360, true, true); await busy.mount();
   try { assert.equal(busy.menuDisabled(), true); } finally { await busy.close(); }
+});
+
+test('cambiar de módulo y cerrar sesión esperan la confirmación de la pantalla', async () => {
+  const confirmations = [];
+  const h = harness(360, true, false, (proceed, target) => confirmations.push({ proceed, target }));
+  await h.mount();
+  try {
+    await h.press('Menú de Operador Uno'); await h.press('Cambiar módulo');
+    assert.equal(confirmations[0].target, 'module'); assert.deepEqual(h.calls, []);
+    // Volver de la advertencia no ejecuta la salida; se puede abrir el menú de nuevo.
+    await h.press('Menú de Operador Uno'); await h.press('Cerrar sesión');
+    assert.equal(confirmations[1].target, 'logout'); assert.deepEqual(h.calls, []);
+    await act(async () => confirmations[1].proceed());
+    assert.deepEqual(h.calls, ['guarded-logout']);
+    await h.press('Menú de Operador Uno'); await h.press('Cambiar módulo');
+    await act(async () => confirmations[2].proceed());
+    assert.deepEqual(h.calls, ['guarded-logout', 'module']);
+  } finally { await h.close(); }
 });

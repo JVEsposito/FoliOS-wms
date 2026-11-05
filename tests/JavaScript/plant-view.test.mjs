@@ -5,8 +5,15 @@ import {
     crewByCamera,
     plantNodeLabel,
     plantNodeModel,
+    plantNodeTitle,
     tunnelStateTone,
 } from '../../resources/js/shared/plant-view.js';
+
+test('el plano conserva el código cuando el modelo de cámara no tiene nombre', () => {
+    const model = { kind: 'camara', name: '   ', code: 'CAM-04', alerts: [] };
+    assert.equal(plantNodeTitle(model), 'CAM-04');
+    assert.equal(plantNodeLabel(model), 'CAM-04');
+});
 
 const element = (tipo, referencia_id, extra = {}) => ({
     id: `e-${tipo}-${referencia_id}`,

@@ -42,6 +42,7 @@ type DewPointScreenProps = {
   auth: AuthSession;
   baseUrl: string | null;
   onLogout: () => void;
+  onBusyChange?: (busy: boolean) => void;
 };
 
 const DROPS: { value: DewPointDrops; label: string }[] = [
@@ -54,12 +55,16 @@ const DROPS: { value: DewPointDrops; label: string }[] = [
  * Chequeo de condensación en terreno: T° y humedad del aire, T° superficial de la fruta
  * y gotas visibles. Las mediciones con riesgo avisan a supervisión de frío; no bloquean.
  */
-export function DewPointScreen({ auth, baseUrl, onLogout }: DewPointScreenProps) {
+export function DewPointScreen({ auth, baseUrl, onLogout, onBusyChange }: DewPointScreenProps) {
   const attempt = useRef<{ key: string; payload: DewPointPayload } | null>(null);
   const saving = useRef(false);
   const [day, setDay] = useState<DewPointDay | null>(null);
   const [draft, setDraft] = useState<DewPointDraft>(EMPTY_DEW_POINT_DRAFT);
   const [busy, setBusy] = useState(true);
+  useEffect(() => {
+    onBusyChange?.(busy);
+    return () => onBusyChange?.(false);
+  }, [busy, onBusyChange]);
   const [online, setOnline] = useState(Boolean(baseUrl));
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -158,7 +163,7 @@ export function DewPointScreen({ auth, baseUrl, onLogout }: DewPointScreenProps)
   return (
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
-        <FieldHeader area="frigorifico" auth={auth} title="Punto de rocío" offline={!online} onLogout={onLogout}><Pressable accessibilityLabel="Actualizar punto de rocío" disabled={busy} onPress={() => void refresh()} style={[styles.secondaryButton, busy && styles.disabled]}><Text style={styles.secondaryButtonText}>↻</Text></Pressable></FieldHeader><Text style={styles.subtitle}>Mide T° y humedad del aire y la T° superficial de la fruta (no la pulpa).</Text>
+        <FieldHeader area="frigorifico" auth={auth} title="Punto de rocío" busy={busy} offline={!online} onLogout={onLogout}><Pressable accessibilityLabel="Actualizar punto de rocío" disabled={busy} onPress={() => void refresh()} style={[styles.secondaryButton, busy && styles.disabled]}><Text style={styles.secondaryButtonText}>↻</Text></Pressable></FieldHeader><Text style={styles.subtitle}>Mide T° y humedad del aire y la T° superficial de la fruta (no la pulpa).</Text>
 
         {notice ? <Text style={styles.notice}>{notice}</Text> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}

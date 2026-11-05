@@ -37,7 +37,7 @@ function harness({ item = pending(), statusError = false, record = null, finalRe
   let renderer; let sequence = 0; let failWrite = false;
   let pollTask;
   const files = new Map();
-  const calls = { posts: [], checks: [], history: [] };
+  const calls = { posts: [], checks: [], history: [], alerts: [], leaves: [] };
   let releaseCatalog; const catalogGate = new Promise((resolve) => { releaseCatalog = resolve; });
   let releaseHistory; const historyGate = new Promise((resolve) => { releaseHistory = resolve; });
   const storage = new Map([[outboxKey, JSON.stringify(item ? [item] : [])]]);
@@ -99,6 +99,7 @@ function harness({ item = pending(), statusError = false, record = null, finalRe
       const p = JSON.parse(options.body); calls.posts.push(clone(p));
       assert.ok(JSON.parse(storage.get(outboxKey)).some((q) => q.id === p.operacion_id && q.status === 'pendiente'), 'Se guarda antes de transmitir');
       if (failPost === 'reject-once' && calls.posts.length === 1) return response({ message: 'Revisa el lote informado.' }, 422);
+      if (failPost === 'offline') throw new TypeError('Sin conexión');
       let saved = records.find((r) => r.operacion_id === p.operacion_id);
       if (!saved) { saved = attempt(p); records.unshift(saved); }
       if (failPost === 'lost-response' && calls.posts.length === 1) throw new TypeError('Respuesta perdida después de guardar');
@@ -110,7 +111,7 @@ function harness({ item = pending(), statusError = false, record = null, finalRe
   const native = {
     ActivityIndicator: 'ActivityIndicator', Image: 'Image', Pressable: 'Pressable', ScrollView: 'ScrollView',
     Text: 'Text', TextInput: 'TextInput', View: 'View', StyleSheet: { create: (styles) => styles },
-    useWindowDimensions: () => ({ width, height: 800 }), Alert: { alert: () => {} },
+    useWindowDimensions: () => ({ width, height: 800 }), Alert: { alert: (title, text, buttons) => calls.alerts.push({ title, text, buttons }) },
     FlatList: ({ data, renderItem, ListEmptyComponent }) => React.createElement('FlatList', null,
       ...data.map((entry) => React.createElement('Row', { key: entry.value }, renderItem({ item: entry }))), !data.length && ListEmptyComponent),
     Modal: ({ visible, children }) => visible ? React.createElement('Modal', null, children) : null,
@@ -157,6 +158,7 @@ function harness({ item = pending(), statusError = false, record = null, finalRe
   const button = (label) => renderer.root.findAllByType('Pressable').find((node) => node.findAllByType('Text').some((text) => flatten(text.props.children) === label));
   return {
     calls, records, offline, storage,
+    async leave(target) { await flush(() => renderer.root.findByType('FieldHeader').props.onBeforeLeave(() => calls.leaves.push(target), target)); },
     cachedFile: () => files.get('catalog'),
     catalogError: (status) => { catalogError = status; },
     cacheError: (value) => { cacheError = value; },
@@ -179,6 +181,18 @@ function harness({ item = pending(), statusError = false, record = null, finalRe
     async lot(value) { await flush(() => renderer.root.findAllByType('TextInput').find((node) => node.props.placeholder === 'Según etiqueta').props.onChangeText(value)); },
   };
 }
+
+test('cambiar módulo en Validación PT requiere confirmar y conserva el UUID de la bandeja', async () => {
+  const h = harness({ item: pending({ status: 'pendiente' }), failPost: 'offline' });
+  try {
+    await h.mount(); const saved = h.outbox(); assert.equal(saved.length, 1);
+    await h.leave('module');
+    assert.equal(h.calls.alerts.at(-1).title, 'Validaciones pendientes');
+    assert.deepEqual(h.calls.leaves, []); assert.deepEqual(h.outbox(), saved);
+    h.calls.alerts.at(-1).buttons.find(button => button.text === 'Cambiar módulo').onPress();
+    assert.deepEqual(h.calls.leaves, ['module']); assert.deepEqual(h.outbox(), saved);
+  } finally { await h.unmount(); }
+});
 
 test('un catálogo lento no bloquea la captura con copia local y conserva el folio al terminar', async () => {
   const h = harness({ item: null, cachedVersion: 218, serverVersion: 227, catalogBlocked: true });

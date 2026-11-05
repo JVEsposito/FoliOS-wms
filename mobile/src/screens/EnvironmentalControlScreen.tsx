@@ -30,7 +30,7 @@ import {
 import { operatorTheme as o } from '../theme/operatorTheme';
 import { font } from '../theme/typography';
 
-type Props = { auth: AuthSession; baseUrl: string; onDueChange?: (due: number) => void };
+type Props = { auth: AuthSession; baseUrl: string; onDueChange?: (due: number) => void; onBusyChange?: (busy: boolean) => void };
 type FieldErrors = Partial<Record<'start' | 'middle' | 'end', string>>;
 type Tone = 'success' | 'warning' | 'critical' | 'info';
 
@@ -77,7 +77,7 @@ function errorMessage(reason: unknown) {
   return reason instanceof Error ? reason.message : 'No fue posible completar la operación.';
 }
 
-export function EnvironmentalControlScreen({ auth, baseUrl, onDueChange }: Props) {
+export function EnvironmentalControlScreen({ auth, baseUrl, onDueChange, onBusyChange }: Props) {
   const { width } = useWindowDimensions();
   const compact = width < o.breakpoint.compact;
   const [status, setStatus] = useState<EnvironmentalCameraState[]>([]);
@@ -94,6 +94,10 @@ export function EnvironmentalControlScreen({ auth, baseUrl, onDueChange }: Props
   const [success, setSuccess] = useState('');
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const canRegister = auth.usuario.capacidades.puede_registrar_control_ambiental === true;
+  useEffect(() => {
+    onBusyChange?.(submitting);
+    return () => onBusyChange?.(false);
+  }, [submitting, onBusyChange]);
 
   const loadStatus = useCallback(async (manual = false) => {
     manual ? setRefreshing(true) : setLoading(true);

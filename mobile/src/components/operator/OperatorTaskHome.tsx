@@ -67,10 +67,12 @@ export function OperatorTaskHome({
   view,
   verification,
 }: Props) {
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const compact = width < 1000;
+  const dockAction = Boolean(next) && (compact || height < 740);
 
   return (
+    <View style={styles.screen}>
     <ScrollView
       contentContainerStyle={styles.content}
       refreshControl={<RefreshControl colors={[o.color.primary]} onRefresh={onRefresh} refreshing={false} tintColor={o.color.primary} />}
@@ -79,7 +81,7 @@ export function OperatorTaskHome({
       <View style={[styles.columns, compact && styles.columnsCompact]}>
         <View style={styles.main}>
           {next ? (
-            <NextTaskCard busy={busy} compact={compact} item={next} onOpen={() => onOpen(next)} suggestion={suggestedDestinations[next.task.id]} />
+            <NextTaskCard busy={busy} compact={compact} item={next} onOpen={() => onOpen(next)} showAction={!dockAction} suggestion={suggestedDestinations[next.task.id]} />
           ) : (
             <View style={styles.emptyHero}>
               {plannerFresh === false ? <OperatorStatusBadge label="PLANIFICADOR SIN ACTUALIZAR" tone="warning" /> : null}
@@ -140,14 +142,20 @@ export function OperatorTaskHome({
         </View>
       </View>
     </ScrollView>
+    {dockAction && next ? <View style={styles.actionDock}>
+      <Text style={styles.dockFolio}>Folio {next.task.folio.numero_folio}</Text>
+      <NextTaskAction busy={busy} item={next} onOpen={() => onOpen(next)} compact />
+    </View> : null}
+    </View>
   );
 }
 
-function NextTaskCard({ busy, compact, item, onOpen, suggestion }: {
+function NextTaskCard({ busy, compact, item, onOpen, showAction, suggestion }: {
   busy: boolean;
   compact: boolean;
   item: OperatorQueueItem;
   onOpen: () => void;
+  showAction: boolean;
   suggestion?: string;
 }) {
   const { task } = item;
@@ -207,25 +215,24 @@ function NextTaskCard({ busy, compact, item, onOpen, suggestion }: {
       {hint ? <Text style={styles.heroHint}>{hint}</Text> : null}
       {detail ? <Text style={styles.heroDetail}>{detail}</Text> : null}
 
-      <View style={styles.heroSpacer} />
-
-      <Pressable
-        accessibilityRole="button"
-        disabled={busy || alternative}
-        onPress={onOpen}
-        style={[styles.heroAction, (busy || alternative) && styles.disabled]}
-      >
-        <Text style={styles.heroActionText}>{primaryActionLabel(item)} →</Text>
-      </Pressable>
+      {showAction ? <NextTaskAction busy={busy} item={item} onOpen={onOpen} /> : null}
     </View>
   );
+}
+
+function NextTaskAction({ busy, item, onOpen, compact = false }: { busy: boolean; item: OperatorQueueItem; onOpen: () => void; compact?: boolean }) {
+  const disabled = busy || isArbitrationAlternative(item.task);
+  return <Pressable accessibilityRole="button" disabled={disabled} onPress={onOpen}
+    style={[styles.heroAction, compact && styles.dockButton, disabled && styles.disabled]}>
+    <Text style={styles.heroActionText}>{primaryActionLabel(item)} →</Text>
+  </Pressable>;
 }
 
 function FolioCode({ compact, value }: { compact: boolean; value: string }) {
   // Los últimos cuatro dígitos son los que el camarero coteja con la etiqueta.
   const split = value.length > 6 ? value.length - 4 : 0;
   return (
-    <Text accessibilityLabel={`Folio ${value}`} selectable style={[styles.folio, compact && styles.folioCompact]}>
+    <Text accessibilityLabel={`Folio ${value}`} selectable numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5} style={[styles.folio, compact && styles.folioCompact]}>
       {split ? <Text style={styles.folioHead}>{value.slice(0, split)}</Text> : null}
       {value.slice(split)}
     </Text>
@@ -431,7 +438,9 @@ const styles = StyleSheet.create({
 
   heroHint: { fontFamily: font.bold, color: o.color.warning, fontSize: o.type.body },
   heroDetail: { fontFamily: font.regular, color: o.color.muted, fontSize: o.type.small },
-  heroSpacer: { height: 0 },
+  actionDock: { paddingHorizontal: o.space[4], paddingVertical: o.space[3], gap: o.space[2], borderTopWidth: 1, borderTopColor: o.color.border, backgroundColor: o.color.surface },
+  dockFolio: { fontFamily: font.monoBold, color: o.color.text, fontSize: o.type.small },
+  dockButton: { minHeight: 64 },
   heroAction: { minHeight: 84, paddingHorizontal: o.space[6], alignItems: 'center', justifyContent: 'center', borderRadius: o.radius.panel, backgroundColor: o.color.primary },
   heroActionText: { fontFamily: font.heavy, color: o.color.onPrimary, fontSize: o.type.heading },
 

@@ -7,6 +7,7 @@ Esta entrega extiende el criterio de la tablet del camarero a los 13 módulos qu
 - Una cabecera de módulo con el gajo del área, título corto y acción contextual (actualizar o sincronizar). Identidad, dispositivo, cambio de módulo y cierre de sesión se agrupan en el menú del operador.
 - Se retira la franja adicional «Módulo activo / Cambiar». El cambio sigue condicionado a los módulos autorizados y a la variante del equipo; no se agregan permisos ni módulos a la PDA.
 - El menú llama al cierre propio de cada pantalla: se conservan las advertencias de captura sin guardar, bandeja pendiente o turno abierto. Queda deshabilitado cuando la pantalla bloqueaba la salida durante una escritura.
+- Cambiar de módulo pasa por la misma advertencia que cerrar sesión en Validación PT, Prefrío y recepción de fruta embalada. Cancelar conserva la pantalla; confirmar el cambio conserva las bandejas persistidas.
 - Inter para lectura; JetBrains Mono para folios, códigos y números operativos. Cada peso usa el archivo de fuente correspondiente; se eliminan los `fontWeight` locales que Android no resolvía sobre fuentes cargadas.
 - Controles secundarios con superficie táctil de al menos 44 dp donde se definen mínimos locales; entradas de al menos 52 dp y acciones primarias del kit de 56 dp. Las acciones conservan su habilitación y callback originales.
 - El estado sin conexión permanece visible. Temporada y versión de catálogo siguen disponibles; en Validación PT se mantiene la fila compacta de catálogo, línea/turno y sincronización.
@@ -34,10 +35,12 @@ Acceso, selección de módulo, cambio de contraseña, impresión, fotos e inspec
 
 ## Ajustes de la tablet de camareros
 
-- La portada cambia a una columna por debajo de 1000 dp. La tarjeta principal no crece para igualar la altura de toda la cola: su botón queda inmediatamente después del recorrido.
+- La portada cambia a una columna por debajo de 1000 dp. En ese ancho, o con menos de 740 dp de altura, su única acción principal queda fija al pie, acompañada del folio, fuera del área de desplazamiento. En pantallas amplias la acción queda después del recorrido.
 - El selector de nivel permite explorar otro nivel aunque haya una posición seleccionada. Solo sigue la posición al cambiar la selección.
 - Ambiente muestra «Estado sin verificar» cuando falla la consulta, y no declara todas las cámaras al día sin datos.
-- Las estibas propias abiertas se comunican al espacio de trabajo y se conservan al cambiar de pestaña. Salir o cambiar de módulo exige cerrarlas desde el plano.
+- Las estibas propias abiertas se comunican al espacio de trabajo y se conservan al cambiar de pestaña. Antes de salir o cambiar de módulo se consultan también al servidor, aunque no se haya abierto el plano. Si la consulta falla se solicita reintentar; una sesión de acceso vencida permite volver al ingreso. Las estibas abiertas deben cerrarse desde el plano.
+- Las pestañas y el menú esperan las escrituras de maniobras, plano y Ambiente; Prefrío aplica el mismo bloqueo al cargar fruta, operar túneles y guardar punto de rocío. Los refrescos de lectura de la bandeja de maniobras no bloquean la navegación.
+- Las cámaras muestran su nombre operacional. Si falta, se conserva el código como respaldo en Oficina y tablet, para distinguirlas; el texto genérico solo aparece cuando faltan ambos.
 
 ## Alcance y comprobación
 

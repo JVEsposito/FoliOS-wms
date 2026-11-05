@@ -98,7 +98,7 @@ const styles = StyleSheet.create({
     fontSize: o.type.small,
     marginTop: 2,
   },
-  navigation: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', flexGrow: 1, gap: 8 },
+  navigation: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', flexGrow: 1, flexShrink: 1, minWidth: 0, maxWidth: '100%', gap: 8 },
   end: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: o.space[3] },
   endCompact: { justifyContent: 'space-between' },
   pill: {
