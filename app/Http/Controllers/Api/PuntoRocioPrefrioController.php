@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Enums\EtapaMedicionPuntoRocio;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Prefrio\GuardarMargenesPuntoRocioRequest;
+use App\Http\Requests\Prefrio\GuardarPlanCadenaFrioRequest;
 use App\Http\Requests\Prefrio\GuardarSalaControlRocioRequest;
 use App\Http\Requests\Prefrio\RegistrarMedicionPuntoRocioRequest;
 use App\Http\Requests\Prefrio\TextoPuntoRocioRequest;
@@ -12,6 +13,7 @@ use App\Models\Dispositivo;
 use App\Models\MedicionPuntoRocio;
 use App\Models\PersonalAccessToken;
 use App\Models\SalaControlRocio;
+use App\Services\Prefrio\PuntoRocio\ServicioPlanCadenaFrio;
 use App\Services\Prefrio\PuntoRocio\ServicioPuntoRocio;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
@@ -21,7 +23,10 @@ use Illuminate\Validation\Rule;
 /** Chequeos diarios de condensación (punto de rocío) en Prefrío: oficina y tablet. */
 class PuntoRocioPrefrioController extends Controller
 {
-    public function __construct(private readonly ServicioPuntoRocio $servicio) {}
+    public function __construct(
+        private readonly ServicioPuntoRocio $servicio,
+        private readonly ServicioPlanCadenaFrio $plan,
+    ) {}
 
     public function index(Request $request): JsonResponse
     {
@@ -42,6 +47,7 @@ class PuntoRocioPrefrioController extends Controller
                 ->map(fn (EtapaMedicionPuntoRocio $etapa): array => ['valor' => $etapa->value, 'etiqueta' => $etapa->etiqueta()])
                 ->all(),
             'referencias' => $this->servicio->referencias($fecha),
+            'plan' => $this->plan->plan(),
             'parametros' => [
                 // Margen de las etapas sin ajuste; cada etapa trae el suyo en margenes_por_etapa.
                 'margen_minimo_c' => $this->servicio->margenPorDefecto(),
@@ -90,6 +96,11 @@ class PuntoRocioPrefrioController extends Controller
     public function guardarMargenes(GuardarMargenesPuntoRocioRequest $request): JsonResponse
     {
         return response()->json(['data' => $this->servicio->guardarMargenes($request->validated('margenes'), $request->user())]);
+    }
+
+    public function guardarPlan(GuardarPlanCadenaFrioRequest $request): JsonResponse
+    {
+        return response()->json(['data' => $this->plan->guardar($request->validated('etapas'), $request->user())]);
     }
 
     /** La tablet firma con su token; la oficina registra sin dispositivo. */

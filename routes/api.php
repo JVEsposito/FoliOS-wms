@@ -321,6 +321,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/prefrio/punto-rocio/salas', [PuntoRocioPrefrioController::class, 'guardarSala']);
         Route::put('/prefrio/punto-rocio/salas/{sala}', [PuntoRocioPrefrioController::class, 'guardarSala']);
         Route::put('/prefrio/punto-rocio/margenes', [PuntoRocioPrefrioController::class, 'guardarMargenes']);
+        Route::put('/prefrio/punto-rocio/plan', [PuntoRocioPrefrioController::class, 'guardarPlan']);
     });
     Route::put(
         '/administracion/prefrio/procesos/{procesoPrefrio}/corregir',

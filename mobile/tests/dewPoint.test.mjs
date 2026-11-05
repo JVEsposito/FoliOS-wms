@@ -4,7 +4,10 @@ import {
   EMPTY_DEW_POINT_DRAFT,
   attemptFor,
   compareSurface,
+  formatHumidityLimit,
+  humidityForDewPoint,
   linkCandidates,
+  planForStage,
   marginForStage,
   worstState,
   dewPoint,
@@ -123,4 +126,21 @@ test('las comparaciones vinculadas usan el margen de la etapa y el rocío del ot
   assert.deepEqual({ margin: preview.arrival.margin, state: preview.arrival.state }, { margin: 2.14, state: 'margen_favorable' });
   assert.equal(preview.worst, 'condensacion_posible');
   assert.equal(previewDraft({ ...EMPTY_DEW_POINT_DRAFT, stage: 'sellado', ambient: '12', humidity: '60', sealed: 'sellado' }, 2, day.referencias).envelope, null);
+});
+
+test('el plan de la etapa compara el rocío medido y da la HR máxima a la T° medida', () => {
+  assert.equal(formatHumidityLimit(humidityForDewPoint(12, -1)), '40 %');
+  assert.equal(formatHumidityLimit(humidityForDewPoint(0, -1)), '93 %');
+  assert.equal(humidityForDewPoint(-1, -0.5), 100);
+  const day = { plan: { etapas: [
+    { etapa: 'almacenamiento', planificada: true, rocio_maximo_c: -1 },
+    { etapa: 'paletizado', planificada: false, rocio_maximo_c: null },
+  ] } };
+  assert.equal(planForStage(day, 'paletizado'), null);
+  const plan = planForStage(day, 'almacenamiento');
+  const out = previewDraft({ ...EMPTY_DEW_POINT_DRAFT, stage: 'almacenamiento', ambient: '0', humidity: '95' }, 0.5, [], plan);
+  assert.deepEqual({ limit: out.plan.limit, out: out.plan.out }, { limit: -1, out: true });
+  const inside = previewDraft({ ...EMPTY_DEW_POINT_DRAFT, stage: 'almacenamiento', ambient: '0', humidity: '90' }, 0.5, [], plan);
+  assert.equal(inside.plan.out, false);
+  assert.equal(previewDraft({ ...EMPTY_DEW_POINT_DRAFT, ambient: '0', humidity: '90' }).plan, null);
 });

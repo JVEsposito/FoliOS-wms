@@ -344,6 +344,21 @@ Las dos comparaciones usan el margen mínimo de la etapa de la medición que se 
 
 Dentro de bolsas selladas, el agua superficial y el vapor de la fruta pueden condensar aunque la sala cumpla.
 
+### Plan de cadena de frío
+
+El plan fija, para cada etapa de la cadena (packing, sellado, paletizado, ingreso y salida de prefrío, traslado, almacenamiento, despacho / andén y carga de contenedor), la **T° del aire planificada** y la **T° superficial más baja que tendrá la fruta en ese aire**. Lo edita supervisión de frío en *Editar plan*; una etapa sin T° de fruta queda fuera del plan.
+
+Con eso FoliOS calcula:
+
+- **rocío máximo** = T° de fruta − margen mínimo de la etapa;
+- en **sellado**, además, el rocío máximo del aire que queda en la bolsa: la fruta más fría de las etapas siguientes menos su margen. Manda el menor de los dos (se muestra «por el envase»);
+- **HR máxima** a la T° de aire planificada para no superar ese rocío. Si la fruta está más caliente que el aire (túnel, cámara), no hay límite de HR;
+- aviso **cerca de congelación** cuando el aire o la fruta planificados quedan a menos de 0,5 °C de la T° de congelación de la fruta (`PREFRIO_TEMPERATURA_CONGELACION_C`, por defecto −1,7 °C, referencia para cereza dulce).
+
+Cada medición guarda el rocío máximo del plan vigente al registrarse y muestra la HR que el plan habría permitido a la T° medida. Si su rocío lo supera queda **fuera de plan**: se ve en el día, en la franja de la cadena y en el registro, pero no notifica ni pide acción correctiva (eso lo deciden los márgenes y las comparaciones). Cambiar el plan no reinterpreta lo ya medido.
+
+Ejemplo con cámara a −1 °C y pulpa entre −0,5 y 0,5 °C (margen de 0,5 °C en las etapas frías): sellado a 12 °C con HR ≤ 39 % para que el aire de la bolsa no condense con la fruta a −1 °C en salida y traslado; traslado a 4 °C con HR ≤ 67 %; despacho a 4 °C con HR ≤ 69 %; contenedor a 0 °C con HR ≤ 93 %. La cámara no tiene límite de HR porque la fruta queda sobre la T° del aire.
+
 Una medición con condensación posible, margen bajo o gotas visibles queda como alerta: se avisa a supervisión de frío en Operación ahora (crítica si hay condensación o gotas) y la alerta se mantiene hasta que supervisión registre una acción correctiva. Supervisión también puede anular una medición mal tomada indicando el motivo; la medición anulada queda visible, pero no cuenta en el resumen.
 
 Reglas de registro:
@@ -362,6 +377,7 @@ POST /api/prefrio/punto-rocio/{medicion}/anular           (supervisar)
 POST /api/prefrio/punto-rocio/salas                       (supervisar)
 PUT  /api/prefrio/punto-rocio/salas/{sala}                (supervisar)
 PUT  /api/prefrio/punto-rocio/margenes                    (supervisar)
+PUT  /api/prefrio/punto-rocio/plan                        (supervisar)
 ```
 
 ## Interfaces implementadas

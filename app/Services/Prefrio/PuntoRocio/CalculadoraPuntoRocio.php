@@ -40,6 +40,16 @@ final class CalculadoraPuntoRocio
         return 100 * ($humedadRelativa / 100 * self::presionSaturacion($temperaturaC)) / self::presionSaturacion($temperaturaDestinoC);
     }
 
+    /**
+     * Humedad relativa máxima del aire a una temperatura para que su punto de
+     * rocío no supere el indicado. Si el rocío permitido alcanza la temperatura
+     * del aire, cualquier humedad sirve (100 %).
+     */
+    public static function humedadParaRocio(float $temperaturaAireC, float $puntoRocioMaximoC): float
+    {
+        return min(100.0, 100 * self::presionSaturacion($puntoRocioMaximoC) / self::presionSaturacion($temperaturaAireC));
+    }
+
     public static function margen(?float $temperaturaSuperficieC, float $puntoRocioC): ?float
     {
         return $temperaturaSuperficieC === null ? null : $temperaturaSuperficieC - $puntoRocioC;

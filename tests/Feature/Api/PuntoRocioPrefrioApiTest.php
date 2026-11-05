@@ -190,8 +190,8 @@ class PuntoRocioPrefrioApiTest extends TestCase
         // En mantención la humedad alta es la deseada: supervisión baja el margen de cámara.
         $this->actingAs($supervisor, 'sanctum')->putJson('/api/prefrio/punto-rocio/margenes', ['margenes' => [
             ['etapa' => 'almacenamiento', 'margen_minimo_c' => 0.5, 'version_conocida' => 0],
-        ]])->assertOk()->assertJsonPath('data.4.etapa', 'almacenamiento')->assertJsonPath('data.4.margen_minimo_c', 0.5)
-            ->assertJsonPath('data.4.ajustado', true)->assertJsonPath('data.0.margen_minimo_c', 2);
+        ]])->assertOk()->assertJsonPath('data.6.etapa', 'almacenamiento')->assertJsonPath('data.6.margen_minimo_c', 0.5)
+            ->assertJsonPath('data.6.ajustado', true)->assertJsonPath('data.1.etapa', 'sellado')->assertJsonPath('data.1.margen_minimo_c', 2);
         $this->actingAs($supervisor, 'sanctum')->putJson('/api/prefrio/punto-rocio/margenes', ['margenes' => [
             ['etapa' => 'almacenamiento', 'margen_minimo_c' => 0.8, 'version_conocida' => 0],
         ]])->assertConflict();
@@ -265,7 +265,7 @@ class PuntoRocioPrefrioApiTest extends TestCase
         $dia = $this->actingAs($supervisor, 'sanctum')->getJson('/api/prefrio/punto-rocio?fecha=2026-11-04')
             ->assertOk()
             ->assertJsonPath('parametros.horas_referencia', 72)
-            ->assertJsonPath('parametros.margenes_por_etapa.4.margen_minimo_c', 0.5)
+            ->assertJsonPath('parametros.margenes_por_etapa.6.margen_minimo_c', 0.5)
             ->json();
         $this->assertSame(
             [$camaraMedicion['id'], $salida['id'], $paletizado['id'], $sellado['id']],
@@ -284,6 +284,84 @@ class PuntoRocioPrefrioApiTest extends TestCase
             ->assertJsonPath('mediciones.1.envase.referencia_anulada', true);
         $medir([...$base, 'sellado_referencia_id' => $sellado['id']])
             ->assertUnprocessable()->assertJsonPath('errors.sellado_referencia_id.0', 'La medición vinculada fue anulada.');
+    }
+
+    public function test_el_plan_de_cadena_de_frio_calcula_el_rocio_y_la_humedad_maxima_de_cada_etapa(): void
+    {
+        $supervisor = User::factory()->create(['rol' => RolUsuario::SupervisorFrio]);
+        $actuar = fn () => $this->actingAs($supervisor, 'sanctum');
+        // En las etapas frías la fruta queda a la T° del aire o sobre ella: se trabaja con 0,5 °C de margen.
+        $actuar()->putJson('/api/prefrio/punto-rocio/margenes', ['margenes' => collect(['salida_prefrio', 'traslado', 'almacenamiento', 'despacho', 'carga_contenedor'])
+            ->map(fn (string $etapa) => ['etapa' => $etapa, 'margen_minimo_c' => 0.5])->all()])->assertOk();
+
+        $plan = $actuar()->putJson('/api/prefrio/punto-rocio/plan', ['etapas' => [
+            ['etapa' => 'packing', 'temperatura_aire_c' => 12, 'temperatura_fruta_c' => 4, 'version_conocida' => 0],
+            ['etapa' => 'sellado', 'temperatura_aire_c' => 12, 'temperatura_fruta_c' => 4],
+            ['etapa' => 'ingreso_prefrio', 'temperatura_aire_c' => -1.5, 'temperatura_fruta_c' => 4],
+            ['etapa' => 'salida_prefrio', 'temperatura_aire_c' => -1, 'temperatura_fruta_c' => -1],
+            ['etapa' => 'traslado', 'temperatura_aire_c' => 4, 'temperatura_fruta_c' => -1],
+            ['etapa' => 'almacenamiento', 'temperatura_aire_c' => -1, 'temperatura_fruta_c' => -0.5],
+            ['etapa' => 'despacho', 'temperatura_aire_c' => 4, 'temperatura_fruta_c' => -0.5],
+            ['etapa' => 'carga_contenedor', 'temperatura_aire_c' => 0, 'temperatura_fruta_c' => -0.5],
+        ]])->assertOk()->assertJsonPath('data.temperatura_congelacion_c', -1.7)->json('data.etapas');
+        $porEtapa = collect($plan)->keyBy('etapa');
+        $this->assertSame(['packing', 'sellado', 'paletizado', 'ingreso_prefrio', 'salida_prefrio', 'traslado', 'almacenamiento', 'despacho', 'carga_contenedor'], array_column($plan, 'etapa'));
+        $resumen = fn (string $etapa) => array_intersect_key($porEtapa[$etapa], array_flip(['rocio_maximo_c', 'limitante', 'humedad_maxima', 'cerca_congelacion']));
+
+        $this->assertEquals(['rocio_maximo_c' => 2.0, 'limitante' => 'fruta', 'humedad_maxima' => 50.4, 'cerca_congelacion' => false], $resumen('packing'));
+        // El aire que queda en la bolsa debe aguantar la fruta más fría de lo que sigue: −1 °C en salida y traslado, menos 0,5.
+        $this->assertEquals(['rocio_maximo_c' => -1.5, 'limitante' => 'envase', 'humedad_maxima' => 39.1, 'cerca_congelacion' => false], $resumen('sellado'));
+        $this->assertEquals(2.0, $porEtapa['sellado']['rocio_fruta_c']);
+        $this->assertEquals(-1.5, $porEtapa['sellado']['rocio_envase_c']);
+        $this->assertFalse($porEtapa['paletizado']['planificada']);
+        $this->assertNull($porEtapa['paletizado']['humedad_maxima']);
+        // En el túnel la fruta está más caliente que el aire: no hay límite de humedad, pero el aire se acerca a la congelación.
+        $this->assertEquals(['rocio_maximo_c' => 2.0, 'limitante' => 'fruta', 'humedad_maxima' => 100.0, 'cerca_congelacion' => true], $resumen('ingreso_prefrio'));
+        $this->assertEquals(96.4, $porEtapa['salida_prefrio']['humedad_maxima']);
+        $this->assertEquals(67.4, $porEtapa['traslado']['humedad_maxima']);
+        $this->assertEquals(100.0, $porEtapa['almacenamiento']['humedad_maxima']);
+        $this->assertEquals(69.9, $porEtapa['despacho']['humedad_maxima']);
+        $this->assertEquals(93.0, $porEtapa['carga_contenedor']['humedad_maxima']);
+
+        // Versiones, etapas válidas y permisos.
+        $actuar()->putJson('/api/prefrio/punto-rocio/plan', ['etapas' => [['etapa' => 'packing', 'temperatura_aire_c' => 14, 'version_conocida' => 0]]])->assertConflict();
+        $actuar()->putJson('/api/prefrio/punto-rocio/plan', ['etapas' => [['etapa' => 'otro', 'temperatura_fruta_c' => 3]]])
+            ->assertUnprocessable()->assertJsonValidationErrors(['etapas.0.etapa' => 'Esa etapa no forma parte de la cadena de frío.']);
+        [, $token] = $this->tablet(RolUsuario::OperadorPrefrio, 'PR-04');
+        $this->conToken($token)->putJson('/api/prefrio/punto-rocio/plan', ['etapas' => [['etapa' => 'packing', 'temperatura_fruta_c' => 3]]])->assertForbidden();
+
+        // Cada medición guarda el rocío máximo del plan y queda fuera si lo supera.
+        $sala = $actuar()->postJson('/api/prefrio/punto-rocio/salas', ['nombre' => 'Sala de sellado'])->json('data.id');
+        $fuera = $this->conToken($token)->postJson('/api/prefrio/punto-rocio', [
+            'operacion_id' => (string) Str::uuid(), 'etapa' => 'sellado', 'punto_tipo' => 'sala', 'punto_id' => $sala, 'temperatura_ambiente_c' => 12,
+            'humedad_relativa' => 60, 'temperatura_superficie_c' => 10, 'gotas_visibles' => 'no', 'medido_at' => '2026-11-04T09:00:00-03:00',
+        ])->assertCreated()
+            ->assertJsonPath('data.estado', 'margen_favorable')
+            ->assertJsonPath('data.requiere_accion', false)
+            ->assertJsonPath('data.plan.rocio_maximo_c', -1.5)
+            ->assertJsonPath('data.plan.humedad_maxima', 39.1)
+            ->assertJsonPath('data.plan.fuera', true)
+            ->json('data');
+        $this->assertSame(0, NotificacionOperacional::query()->count(), 'Quedar fuera del plan se informa, pero no notifica');
+        $this->conToken($token)->postJson('/api/prefrio/punto-rocio', [
+            'operacion_id' => (string) Str::uuid(), 'etapa' => 'otro', 'punto_tipo' => 'sala', 'punto_id' => $sala, 'temperatura_ambiente_c' => 12,
+            'humedad_relativa' => 60, 'gotas_visibles' => 'no', 'medido_at' => '2026-11-04T09:30:00-03:00',
+        ])->assertCreated()->assertJsonPath('data.plan', null);
+
+        // Cambiar el plan no reinterpreta lo ya medido.
+        $actuar()->putJson('/api/prefrio/punto-rocio/plan', ['etapas' => [
+            ['etapa' => 'salida_prefrio', 'temperatura_aire_c' => -1, 'temperatura_fruta_c' => 0, 'version_conocida' => 1],
+            ['etapa' => 'traslado', 'temperatura_aire_c' => 4, 'temperatura_fruta_c' => 2, 'version_conocida' => 1],
+        ]])->assertOk();
+        $dia = $actuar()->getJson('/api/prefrio/punto-rocio?fecha=2026-11-04')
+            ->assertOk()
+            ->assertJsonPath('resumen.fuera_de_plan', 1)
+            ->assertJsonPath('mediciones.0.id', $fuera['id'])
+            ->assertJsonPath('mediciones.0.plan.rocio_maximo_c', -1.5)
+            ->json();
+        $this->assertEquals(-1.0, collect($dia['plan']['etapas'])->firstWhere('etapa', 'sellado')['rocio_maximo_c'], 'El nuevo límite del envase viene de cámara, despacho y carga');
+        $this->assertSame('packing', $dia['etapas'][0]['valor']);
+        $this->assertSame('otro', $dia['etapas'][9]['valor']);
     }
 
     /** @return array{User, string} */

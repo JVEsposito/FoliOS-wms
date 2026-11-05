@@ -13,5 +13,8 @@ return [
         'dias_registro_retroactivo' => (int) env('PREFRIO_PUNTO_ROCIO_DIAS_RETROACTIVOS', 7),
         // Antigüedad máxima de un sellado o de una medición de origen que se vincula.
         'horas_referencia' => (int) env('PREFRIO_PUNTO_ROCIO_HORAS_REFERENCIA', 72),
+        // Temperatura a la que empieza a congelarse la fruta. Referencia para cereza
+        // dulce: −1,7 °C (WFLO Commodity Storage Manual). El plan avisa al acercarse.
+        'temperatura_congelacion_c' => (float) env('PREFRIO_TEMPERATURA_CONGELACION_C', -1.7),
     ],
 ];

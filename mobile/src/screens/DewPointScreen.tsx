@@ -24,8 +24,10 @@ import {
   attemptFor,
   draftToReading,
   formatCelsius,
+  formatHumidityLimit,
   linkCandidates,
   marginForStage,
+  planForStage,
   previewDraft,
 } from '../domain/dewPoint';
 import { AuthSession } from '../domain/estiba';
@@ -62,7 +64,8 @@ export function DewPointScreen({ auth, baseUrl, onLogout }: DewPointScreenProps)
   const canRegister = day ? day.permisos.registrar : auth.usuario.capacidades.puede_operar_prefrio === true;
   const minimumMargin = day?.parametros.margen_minimo_c ?? 2;
   const stageMargin = marginForStage(day, draft.stage);
-  const preview = useMemo(() => previewDraft(draft, stageMargin, day?.referencias ?? []), [draft, stageMargin, day]);
+  const stagePlan = planForStage(day, draft.stage);
+  const preview = useMemo(() => previewDraft(draft, stageMargin, day?.referencias ?? [], stagePlan), [draft, stageMargin, day, stagePlan]);
   // La tablet registra lo que se mide ahora: se ofrecen los vínculos más recientes.
   const candidates = useMemo(() => {
     const all = linkCandidates(day);
@@ -190,6 +193,17 @@ export function DewPointScreen({ auth, baseUrl, onLogout }: DewPointScreenProps)
                   <Chip key={stage.valor} label={stage.etiqueta} selected={draft.stage === stage.valor} onPress={() => update({ stage: stage.valor })} />
                 ))}
               </View>
+
+              {stagePlan ? (
+                <Text style={styles.planLine}>
+                  Plan de {stagePlan.etiqueta.toLowerCase()}: rocío ≤ {formatCelsius(stagePlan.rocio_maximo_c)}
+                  {stagePlan.limitante === 'envase' ? ' (por el aire que queda en la bolsa)' : ''}
+                  {stagePlan.temperatura_aire_c !== null && stagePlan.humedad_maxima !== null
+                    ? ` · con aire a ${formatCelsius(stagePlan.temperatura_aire_c)}, ${stagePlan.humedad_maxima >= 100 ? 'sin límite de HR' : `HR ≤ ${formatHumidityLimit(stagePlan.humedad_maxima)}`}`
+                    : ''}
+                  {stagePlan.cerca_congelacion ? ' · cerca de la congelación de la fruta' : ''}
+                </Text>
+              ) : null}
 
               <Text style={styles.inputLabel}>Punto de control *</Text>
               {hasPoints ? (
@@ -375,6 +389,13 @@ function ResultPanel({ preview, sealing, stageMargin }: { preview: ReturnType<ty
           state={preview.arrival.state}
         />
       ) : null}
+      {preview.plan ? (
+        <View style={[styles.linkResult, preview.plan.out ? styles.resultWarning : styles.resultSuccess]}>
+          <Text style={styles.linkResultTitle}>Plan de la etapa</Text>
+          <Text style={styles.resultHelp}>Rocío ≤ {formatCelsius(preview.plan.limit)} · a esta T° la HR debe ser ≤ {formatHumidityLimit(preview.plan.humidityLimit)}</Text>
+          <Text style={styles.linkResultState}>{preview.plan.out ? 'Fuera del plan' : 'Dentro del plan'}</Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -416,6 +437,7 @@ function ReadingCard({ reading }: { reading: DewPointReading }) {
           Al llegar: {reading.origen.estado ? DEW_POINT_STATES[reading.origen.estado].label : '—'} · margen {formatCelsius(reading.origen.margen_c)} · desde {reading.origen.etapa_etiqueta ?? '—'}{reading.origen.referencia_anulada ? ' (anulada)' : ''}
         </Text>
       ) : null}
+      {reading.plan?.fuera ? <Text style={styles.readingPlan}>Fuera de plan: rocío ≤ {formatCelsius(reading.plan.rocio_maximo_c)} (HR ≤ {formatHumidityLimit(reading.plan.humedad_maxima)} a esa T°)</Text> : null}
       {reading.alerta_pendiente ? <Text style={styles.readingAlertText}>{reading.condicion ? `${reading.condicion}: supervisión de frío debe registrar una acción correctiva.` : 'Supervisión de frío debe registrar una acción correctiva.'}</Text> : null}
       {reading.accion_correctiva ? <Text style={styles.readingAction}>Acción: {reading.accion_correctiva}</Text> : null}
     </View>
@@ -483,6 +505,8 @@ const styles = StyleSheet.create({
   chipText: { color: colors.textSecondary, fontSize: 15, fontWeight: '800' },
   chipTextSelected: { color: colors.text, fontWeight: '900' },
   pointGroups: { gap: 10 },
+  planLine: { color: colors.text, padding: 10, borderRadius: 10, borderWidth: 1, borderColor: colors.cyanDark, backgroundColor: colors.selected, fontSize: 14, fontWeight: '800', lineHeight: 19 },
+  readingPlan: { color: colors.amber, fontSize: 14, fontWeight: '900' },
   links: { gap: 10, padding: 12, borderRadius: 12, borderWidth: 1, borderStyle: 'dashed', borderColor: colors.border },
   linksTitle: { color: colors.muted, fontSize: 12, fontWeight: '900', letterSpacing: .6 },
   linkHelp: { color: colors.muted, fontSize: 13, lineHeight: 18 },

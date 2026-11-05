@@ -6,7 +6,17 @@
 const A = 17.625;
 const B = 243.04;
 
-export type DewPointStage = 'sellado' | 'paletizado' | 'ingreso_prefrio' | 'salida_prefrio' | 'almacenamiento' | 'otro';
+export type DewPointStage =
+  | 'packing'
+  | 'sellado'
+  | 'paletizado'
+  | 'ingreso_prefrio'
+  | 'salida_prefrio'
+  | 'traslado'
+  | 'almacenamiento'
+  | 'despacho'
+  | 'carga_contenedor'
+  | 'otro';
 export type DewPointState = 'sin_superficie' | 'condensacion_posible' | 'margen_bajo' | 'margen_favorable';
 export type DewPointDrops = 'si' | 'no' | 'pendiente';
 export type DewPointPointType = 'sala' | 'tunel' | 'camara';
@@ -40,7 +50,23 @@ export type DewPointReading = {
   /** Riesgo principal (propio o vinculado) que calculó el servidor. */
   condicion?: string | null;
   envase?: DewPointLink | null;
+  /** Rocío máximo del plan vigente al registrar y si se superó. */
+  plan?: { rocio_maximo_c: number; humedad_maxima: number; fuera: boolean } | null;
   origen?: DewPointLink | null;
+};
+
+/** Objetivo de una etapa del plan de cadena de frío, calculado por el servidor. */
+export type DewPointPlanStage = {
+  etapa: DewPointStage;
+  etiqueta: string;
+  orden: number;
+  planificada: boolean;
+  temperatura_aire_c: number | null;
+  temperatura_fruta_c: number | null;
+  rocio_maximo_c: number | null;
+  limitante: 'fruta' | 'envase' | null;
+  humedad_maxima: number | null;
+  cerca_congelacion: boolean;
 };
 
 /** Comparación vinculada guardada con la medición. */
@@ -89,6 +115,7 @@ export type DewPointDay = {
   puntos: { salas: DewPointPlace[]; tuneles: DewPointPlace[]; camaras: DewPointPlace[] };
   etapas: { valor: DewPointStage; etiqueta: string }[];
   referencias?: DewPointReference[];
+  plan?: { etapas: DewPointPlanStage[]; temperatura_congelacion_c: number };
   parametros: {
     margen_minimo_c: number;
     margenes_por_etapa?: { etapa: DewPointStage; margen_minimo_c: number }[];
@@ -221,6 +248,22 @@ export function marginForStage(day: DewPointDay | null, stage: DewPointStage | n
   return day?.parametros.margenes_por_etapa?.find((row) => row.etapa === stage)?.margen_minimo_c ?? general;
 }
 
+/** HR máxima del aire a una temperatura para que su rocío no supere el indicado (tope 100 %). */
+export function humidityForDewPoint(temperature: number, dewPointMax: number) {
+  return Math.min(100, (100 * saturation(dewPointMax)) / saturation(temperature));
+}
+
+/** Objetivo del plan para la etapa elegida, si está planificada. */
+export function planForStage(day: DewPointDay | null, stage: DewPointStage | null) {
+  const row = day?.plan?.etapas.find((item) => item.etapa === stage);
+  return row && row.planificada && row.rocio_maximo_c !== null ? row : null;
+}
+
+/** HR en número entero sin redondear hacia arriba: es un máximo. */
+export function formatHumidityLimit(value: number) {
+  return `${Math.floor(Math.round(value * 10) / 10)} %`;
+}
+
 /** Mediciones vinculables a una medición tomada ahora, dentro de la ventana permitida. */
 export function linkCandidates(day: DewPointDay | null, now: Date = new Date()) {
   const hours = day?.parametros.horas_referencia ?? 72;
@@ -239,6 +282,7 @@ export function previewDraft(
   draft: DewPointDraft,
   minimumMargin = 2,
   references: DewPointReference[] = [],
+  plan: DewPointPlanStage | null = null,
 ) {
   const ambient = parseDecimal(draft.ambient);
   const humidity = parseDecimal(draft.humidity);
@@ -251,10 +295,14 @@ export function previewDraft(
   const origin = draft.origin ? references.find((item) => item.id === draft.origin) ?? null : null;
   const envelope = sealed ? { reference: sealed, ...compareSurface(surfaceValue, sealed.punto_rocio_c, minimumMargin) } : null;
   const arrival = origin ? { reference: origin, ...compareSurface(origin.temperatura_superficie_c, own.dewPoint, minimumMargin) } : null;
+  const planCheck = plan && plan.rocio_maximo_c !== null
+    ? { limit: plan.rocio_maximo_c, humidityLimit: humidityForDewPoint(ambient, plan.rocio_maximo_c), out: own.dewPoint > plan.rocio_maximo_c }
+    : null;
   return {
     ...own,
     envelope,
     arrival,
+    plan: planCheck,
     worst: worstState([own.state, envelope?.state ?? 'sin_superficie', arrival?.state ?? 'sin_superficie']),
   };
 }
