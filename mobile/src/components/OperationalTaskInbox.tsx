@@ -51,7 +51,8 @@ import type { FolioConfirmationState } from './operator/OperatorFolioConfirmatio
 import { cameraSessionConflictMessage } from '../domain/operationalTaskErrors';
 import { OperatorErrorDialog } from './operator/OperatorErrorDialog';
 import { OperatorTaskExecution } from './operator/OperatorTaskExecution';
-import { OperatorTaskHome } from './operator/OperatorTaskHome';
+import { OperatorTaskHome, type OperatorLastMovement } from './operator/OperatorTaskHome';
+import { OperatorToast } from './operator/OperatorToast';
 import { OperatorLoadStatus } from './operator/OperatorLoadStatus';
 import { TurnVerification } from './operator/TurnVerification';
 import { operatorTheme as o } from '../theme/operatorTheme';
@@ -97,6 +98,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
   const [availableFresh, setAvailableFresh] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [lastMovement, setLastMovement] = useState<OperatorLastMovement | null>(null);
   const [confirmation, setConfirmation] = useState<FolioConfirmationState | null>(null);
   const [plannerFresh, setPlannerFresh] = useState<boolean | null>(null);
   const [suggestedDestinations, setSuggestedDestinations] = useState<Record<string, string>>({});
@@ -710,6 +712,7 @@ export function OperationalTaskInbox({ api, auth }: Props) {
       }
 
       setNotice(`Movimiento completado: ${task.folio.numero_folio} → ${operationalTaskPositionLabel(task.destino)}.`);
+      setLastMovement({ at: new Date().toISOString(), destination: operationalTaskPositionLabel(task.destino), folio: task.folio.numero_folio });
       await continueManeuver(task);
     } catch (reason) {
       reportError(messageFrom(reason));
@@ -985,26 +988,36 @@ export function OperationalTaskInbox({ api, auth }: Props) {
     );
   }
 
+  const syncLabel = lastReadAt ? `Actualizado a las ${new Date(lastReadAt).toLocaleTimeString('es-CL')}` : 'Consultando tus labores…';
+  // En la portada la hora va en su columna lateral; en las demás vistas queda como línea discreta.
+  const onHome = !pendingMovement && !recoveryIssue && !showLoads && !activeTask;
+
   return (
     <View style={styles.screen}>
       <OperatorErrorDialog message={error} onAcknowledge={() => setError('')} />
-      <View accessibilityLiveRegion="polite" style={styles.syncStatus}>
-        <Text style={[styles.syncText, connectionIssue ? styles.syncWarning : null]}>
-          {connectionIssue || (lastReadAt ? `Mis tareas actualizadas a las ${new Date(lastReadAt).toLocaleTimeString('es-CL')}` : 'Consultando tus labores…')}
-        </Text>
-      </View>
-      {notice ? (
-        <Pressable onPress={() => setNotice('')} style={styles.noticeBanner}>
-          <Text style={styles.noticeText}>{notice}</Text>
-          <Text style={styles.bannerClose}>×</Text>
-        </Pressable>
+      {connectionIssue ? (
+        <View accessibilityLiveRegion="polite" style={styles.syncStatus}>
+          <View style={styles.syncDot} />
+          <Text style={styles.syncWarning}>{connectionIssue}</Text>
+        </View>
+      ) : null}
+      {!onHome ? (
+        <View style={styles.contextRow}>
+          <Text accessibilityLiveRegion="polite" style={styles.syncText}>{connectionIssue ? '' : syncLabel}</Text>
+          {auth.usuario.capacidades?.puede_consultar_cargas && activeTask && !showLoads && !pendingMovement && !recoveryIssue ? (
+            // Durante una maniobra se pueden revisar las cargas sin perder el movimiento en curso.
+            <Pressable accessibilityRole="button" disabled={busy} onPress={() => setShowLoads(true)} style={styles.loadsButton}>
+              <Text style={styles.loadsButtonText}>Cargas activas del turno →</Text>
+            </Pressable>
+          ) : null}
+        </View>
       ) : null}
 
-      {auth.usuario.capacidades?.puede_consultar_cargas && !showLoads && !pendingMovement && !recoveryIssue ? (
-        <Pressable accessibilityRole="button" disabled={busy} onPress={() => setShowLoads(true)} style={styles.loadsButton}>
-          <Text style={styles.loadsButtonText}>Cargas activas y terminadas del turno →</Text>
-        </Pressable>
-      ) : null}
+      <OperatorToast
+        inline={!onHome}
+        message={notice}
+        onDismiss={() => setNotice('')}
+      />
 
       {pendingMovement || recoveryIssue ? (
         <View style={styles.recoveryPanel}>
@@ -1050,8 +1063,11 @@ export function OperationalTaskInbox({ api, auth }: Props) {
           mineCount={mine.length}
           next={home.next}
           plannerFresh={plannerFresh}
+          lastMovement={lastMovement}
           onOpen={openHomeTask}
+          onOpenLoads={auth.usuario.capacidades?.puede_consultar_cargas ? () => setShowLoads(true) : undefined}
           onRefresh={() => void loadTasks()}
+          syncLabel={syncLabel}
           onViewChange={(source) => setTab(source === 'mine' ? 'mias' : 'disponibles')}
           queue={homeQueue}
           suggestedDestinations={suggestedDestinations}
@@ -1095,21 +1111,20 @@ function messageFrom(reason: unknown) {
 }
 
 const styles = StyleSheet.create({
-  syncStatus: { paddingBottom: o.space[2] },
-  syncText: { color: o.color.muted, fontSize: o.type.small },
-  syncWarning: { color: o.color.warning },
+  syncStatus: { minHeight: o.touch.minimum, flexDirection: 'row', alignItems: 'center', gap: o.space[3], paddingHorizontal: o.space[4], marginBottom: o.space[3], borderRadius: o.radius.control, borderWidth: 1, borderColor: o.color.warningBorder, backgroundColor: o.color.warningSurface },
+  contextRow: { minHeight: o.touch.minimum, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: o.space[3], marginBottom: o.space[2] },
+  syncText: { flex: 1, color: o.color.muted, fontSize: o.type.small },
+  loadsButton: { minHeight: o.touch.minimum, justifyContent: 'center', paddingHorizontal: o.space[4], borderWidth: 1, borderColor: o.color.border, borderRadius: o.radius.control },
+  loadsButtonText: { color: o.color.primaryPressed, fontSize: o.type.small, fontWeight: '700' },
+  syncDot: { width: 10, height: 10, borderRadius: o.radius.pill, backgroundColor: o.color.warning },
+  syncWarning: { flex: 1, color: o.color.warning, fontSize: o.type.body, fontWeight: '700' },
   recoveryPanel: { padding: o.space[4], gap: o.space[3], borderWidth: 1, borderColor: o.color.warning, borderRadius: o.radius.panel, backgroundColor: o.color.surface },
   recoveryTitle: { color: o.color.warning, fontSize: o.type.heading, fontWeight: '800' },
   recoveryFolio: { color: o.color.text, fontSize: o.type.heading, fontWeight: '900' },
   recoveryCopy: { color: o.color.textSecondary, fontSize: o.type.body },
   recoveryButton: { minHeight: o.touch.minimum, padding: o.space[3], justifyContent: 'center', backgroundColor: o.color.primary, borderRadius: o.radius.control },
   recoveryButtonText: { color: o.color.onPrimary, fontSize: o.type.body, fontWeight: '800' },
-  loadsButton: { minHeight: o.touch.minimum, justifyContent: 'center', padding: 14, marginBottom: 12, borderWidth: 1, borderColor: o.color.primary, borderRadius: o.radius.control, backgroundColor: o.color.surface },
-  loadsButtonText: { color: o.color.primaryPressed, fontSize: o.type.body, fontWeight: '800' },
   screen: { flex: 1, padding: o.space[4], backgroundColor: o.color.canvas },
-  noticeBanner: { flexDirection: 'row', justifyContent: 'space-between', gap: o.space[3], padding: o.space[3], borderRadius: o.radius.control, borderWidth: 1, borderLeftWidth: 5, borderColor: o.color.success, backgroundColor: o.color.successSurface, marginBottom: o.space[2] },
-  noticeText: { color: o.color.success, flex: 1, fontSize: o.type.small, fontWeight: '800' },
-  bannerClose: { color: o.color.muted, fontSize: 20, fontWeight: '900' },
   emptyStandalone: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: o.space[8], backgroundColor: o.color.canvas },
   emptyIcon: { color: o.color.primary, fontSize: 34, fontWeight: '900' },
   emptyTitle: { color: o.color.text, fontSize: o.type.body, fontWeight: '900', marginTop: o.space[2], textAlign: 'center' },
