@@ -1,10 +1,12 @@
 import * as Crypto from 'expo-crypto';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
   useWindowDimensions,
 } from 'react-native';
@@ -15,16 +17,6 @@ import {
   EnvironmentalControlPayload,
 } from '../domain/environmentalControl';
 import { AuthSession } from '../domain/estiba';
-import {
-  EntityCode,
-  EstibaAlert,
-  EstibaButton,
-  EstibaEmpty,
-  EstibaField,
-  EstibaHeading,
-  EstibaPanel,
-  EstibaSignal,
-} from '../components/ui/EstibaPrimitives';
 import { ApiError } from '../services/apiError';
 import {
   getEnvironmentalControlState,
@@ -35,10 +27,12 @@ import {
   loadEnvironmentalDraft,
   saveEnvironmentalDraft,
 } from '../services/environmentalControlDraftStore';
-import { estibaTokens as t, type EstibaTone } from '../theme/estibaTokens';
+import { operatorTheme as o } from '../theme/operatorTheme';
+import { font } from '../theme/typography';
 
 type Props = { auth: AuthSession; baseUrl: string; onDueChange?: (due: number) => void };
 type FieldErrors = Partial<Record<'start' | 'middle' | 'end', string>>;
+type Tone = 'success' | 'warning' | 'critical' | 'info';
 
 const labels = { start: 'Inicio', middle: 'Medio', end: 'Fondo' } as const;
 
@@ -69,7 +63,7 @@ function time(value?: string | null) {
     : date.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
 }
 
-function statusPresentation(camera: EnvironmentalCameraState): { label: string; tone: EstibaTone; detail: string } {
+function statusPresentation(camera: EnvironmentalCameraState): { label: string; tone: Tone; detail: string } {
   if (camera.estado === 'vigente') {
     return { label: 'Vigente', tone: 'success', detail: `Hasta ${time(camera.ultimo_registro?.vigente_hasta)}` };
   }
@@ -85,7 +79,7 @@ function errorMessage(reason: unknown) {
 
 export function EnvironmentalControlScreen({ auth, baseUrl, onDueChange }: Props) {
   const { width } = useWindowDimensions();
-  const compact = width < 840;
+  const compact = width < o.breakpoint.compact;
   const [status, setStatus] = useState<EnvironmentalCameraState[]>([]);
   const [frequency, setFrequency] = useState(60);
   const [generatedAt, setGeneratedAt] = useState<string | null>(null);
@@ -245,168 +239,318 @@ export function EnvironmentalControlScreen({ auth, baseUrl, onDueChange }: Props
     await loadStatus(true);
   }
 
-  const cards = useMemo(() => [...status].sort((a, b) => {
+  const ordered = useMemo(() => [...status].sort((a, b) => {
     const priority = { vencido: 0, pendiente: 1, vigente: 2 };
     return priority[a.estado] - priority[b.estado] || a.camara.codigo.localeCompare(b.camara.codigo);
   }), [status]);
+  const pending = ordered.filter((camera) => camera.requiere_control);
+  const upToDate = ordered.filter((camera) => !camera.requiere_control);
+  const [showUpToDate, setShowUpToDate] = useState(false);
 
   return (
     <ScrollView
       style={styles.screen}
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void loadStatus(true)} />}
+      refreshControl={<RefreshControl colors={[o.color.primary]} refreshing={refreshing} tintColor={o.color.primary} onRefresh={() => void loadStatus(true)} />}
     >
-      <EstibaHeading
-        eyebrow="CADENA DE FRÍO · CONTROL HORARIO"
-        title="Estado ambiental de cámaras"
-        description={`Registra inicio, medio y fondo cada ${frequency} minutos. Última consulta: ${time(generatedAt)}.`}
-        actions={<EstibaButton label="Actualizar estado" variant="secondary" busy={refreshing} onPress={() => void loadStatus(true)} />}
-      />
-
-      <View style={styles.summary}>
-        <View style={[styles.summaryItem, due > 0 ? styles.summaryDue : styles.summaryOk]}>
-          <Text style={styles.summaryValue}>{due}</Text>
-          <Text style={styles.summaryLabel}>Requieren control</Text>
+      <View style={styles.heading}>
+        <View style={styles.headingCopy}>
+          <Text style={styles.eyebrow}>CADENA DE FRÍO · INICIO, MEDIO Y FONDO CADA {frequency} MIN</Text>
+          <Text accessibilityRole="header" style={styles.title}>Control ambiental</Text>
+          <Text style={styles.subtitle}>
+            {due === 0 ? 'Todas las cámaras al día' : `${due} ${due === 1 ? 'cámara requiere' : 'cámaras requieren'} control`}
+            {' · '}{current} al día · consultado {time(generatedAt)}
+          </Text>
         </View>
-        <View style={[styles.summaryItem, styles.summaryOk]}>
-          <Text style={styles.summaryValue}>{current}</Text>
-          <Text style={styles.summaryLabel}>Controles vigentes</Text>
-        </View>
-        <View style={styles.identity}>
-          <Text style={styles.identityLabel}>RESPONSABLE Y EQUIPO</Text>
-          <Text style={styles.identityValue}>{auth.usuario.nombre}</Text>
-          <Text style={styles.identityDetail}>{auth.dispositivo.codigo} · {auth.dispositivo.nombre}</Text>
-        </View>
+        <Pressable accessibilityLabel="Actualizar estado" accessibilityRole="button" disabled={refreshing} onPress={() => void loadStatus(true)} style={[styles.refresh, refreshing && styles.disabled]}>
+          <Text style={styles.refreshText}>↻</Text>
+        </Pressable>
       </View>
 
-      {statusError ? <EstibaAlert title="No se pudo actualizar el estado" detail={statusError} tone="critical" live /> : null}
-      {success ? <EstibaAlert title="Registro confirmado" detail={success} tone="success" live /> : null}
-      {lockedAttempt ? <EstibaAlert
+      {statusError ? <Notice live title="No se pudo actualizar el estado" detail={statusError} tone="critical" /> : null}
+      {success ? <Notice live title="Registro confirmado" detail={success} tone="success" /> : null}
+      {lockedAttempt ? <Notice
+        live
         title="Intento pendiente de confirmación"
         detail="Se conservan exactamente la cámara, las lecturas, la hora y el UUID. Reintenta el mismo envío o descártalo después de actualizar el estado."
         tone="warning"
-        live
       /> : null}
 
       <View style={[styles.workspace, compact && styles.workspaceCompact]}>
-        <EstibaPanel title="Cámaras de producto terminado" style={styles.cameraPanel}>
+        <View style={styles.listColumn}>
           {loading && status.length === 0 ? <Text style={styles.muted}>Consultando cámaras…</Text> : null}
-          {!loading && cards.length === 0 ? <EstibaEmpty title="Sin cámaras disponibles" description="No existen cámaras PT activas visibles para este perfil." /> : null}
-          <View style={styles.cameraGrid}>
-            {cards.map((camera) => {
-              const presentation = statusPresentation(camera);
-              const selected = draft.cameraId === camera.camara.id;
-              const readings = camera.ultimo_registro?.temperaturas;
-              return <View key={camera.camara.id} style={[styles.cameraCard, selected && styles.cameraSelected]}>
-                <View style={styles.cameraHeader}>
-                  <View style={styles.cameraTitle}>
-                    <EntityCode value={camera.camara.codigo} large />
-                    <Text style={styles.cameraName}>{camera.camara.nombre}</Text>
-                  </View>
-                  <EstibaSignal label={presentation.label} tone={presentation.tone} />
-                </View>
-                <Text style={styles.muted}>{presentation.detail}</Text>
-                {readings ? <View style={styles.readings}>
-                  <Text style={styles.reading}>Inicio <Text style={styles.readingValue}>{readings.inicio_c.toFixed(2)} °C</Text></Text>
-                  <Text style={styles.reading}>Medio <Text style={styles.readingValue}>{readings.medio_c.toFixed(2)} °C</Text></Text>
-                  <Text style={styles.reading}>Fondo <Text style={styles.readingValue}>{readings.fondo_c.toFixed(2)} °C</Text></Text>
-                </View> : null}
-                {camera.requiere_control && canRegister ? <EstibaButton
-                  label={selected ? 'Cámara seleccionada' : 'Registrar control'}
-                  variant={selected ? 'secondary' : 'primary'}
-                  disabled={lockedAttempt || selected}
-                  onPress={() => selectCamera(camera)}
-                /> : null}
-              </View>;
-            })}
-          </View>
-        </EstibaPanel>
+          {!loading && ordered.length === 0 ? (
+            <View style={styles.empty}>
+              <Text style={styles.emptyTitle}>Sin cámaras disponibles</Text>
+              <Text style={styles.muted}>No existen cámaras PT activas visibles para este perfil.</Text>
+            </View>
+          ) : null}
 
-        <EstibaPanel title="Captura ambiental" style={styles.formPanel}>
-          {!canRegister ? <EstibaAlert title="Perfil de consulta" detail="Puedes revisar la vigencia, pero este perfil no registra controles ambientales." tone="info" /> : null}
-          {canRegister && !hasSelection ? <EstibaEmpty title="Selecciona una cámara pendiente" description="Las cámaras vencidas aparecen primero. Una lectura vigente no admite otro control dentro de la misma hora." /> : null}
+          {pending.length > 0 ? (
+            <View style={styles.list}>
+              {pending.map((camera, index) => (
+                <CameraRow
+                  camera={camera}
+                  canRegister={canRegister}
+                  disabled={lockedAttempt}
+                  key={camera.camara.id}
+                  last={index === pending.length - 1}
+                  onSelect={() => selectCamera(camera)}
+                  selected={draft.cameraId === camera.camara.id}
+                />
+              ))}
+            </View>
+          ) : null}
+
+          {upToDate.length > 0 ? (
+            <>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ expanded: showUpToDate }}
+                onPress={() => setShowUpToDate((value) => !value)}
+                style={styles.upToDateToggle}
+              >
+                <View style={styles.upToDateLabel}>
+                  <View style={[styles.dot, { backgroundColor: o.color.success }]} />
+                  <Text style={styles.upToDateText}>{upToDate.length} {upToDate.length === 1 ? 'cámara al día' : 'cámaras al día'}</Text>
+                </View>
+                <Text style={styles.upToDateChevron}>{showUpToDate ? '▴' : '▾'}</Text>
+              </Pressable>
+              {showUpToDate ? (
+                <View style={styles.list}>
+                  {upToDate.map((camera, index) => (
+                    <CameraRow camera={camera} canRegister={false} disabled key={camera.camara.id} last={index === upToDate.length - 1} onSelect={() => undefined} selected={false} />
+                  ))}
+                </View>
+              ) : null}
+            </>
+          ) : null}
+        </View>
+
+        <View style={[styles.capture, compact && styles.captureCompact]}>
+          <Text style={styles.eyebrow}>CAPTURA</Text>
+          {!canRegister ? <Notice title="Perfil de consulta" detail="Puedes revisar la vigencia, pero este perfil no registra controles ambientales." tone="info" /> : null}
+          {canRegister && !hasSelection ? (
+            <View style={styles.captureEmpty}>
+              <Text style={styles.captureEmptyTitle}>Elige una cámara pendiente</Text>
+              <Text style={styles.muted}>Las vencidas aparecen primero. Una lectura vigente no admite otro control dentro de la misma hora.</Text>
+            </View>
+          ) : null}
           {canRegister && hasSelection ? <>
             <View style={styles.selectedCamera}>
-              <Text style={styles.eyebrow}>CÁMARA SELECCIONADA</Text>
-              <EntityCode value={selectedCamera?.camara.codigo ?? draft.cameraCode ?? 'Cámara no disponible'} large />
-              <Text style={styles.muted}>{selectedCamera?.camara.nombre ?? 'La cámara ya no aparece en el estado actual.'}</Text>
+              <Text numberOfLines={2} style={styles.selectedName}>{selectedCamera?.camara.nombre ?? 'La cámara ya no aparece en el estado actual'}</Text>
+              <Text style={styles.code}>{selectedCamera?.camara.codigo ?? draft.cameraCode ?? 'Cámara no disponible'}</Text>
             </View>
             <View style={[styles.fields, compact && styles.fieldsCompact]}>
-              {(Object.keys(labels) as Array<keyof typeof labels>).map((field) => <View key={field} style={styles.field}>
-                <EstibaField
-                  label={`${labels[field]} (°C)`}
-                  value={draft[field]}
-                  onChangeText={(value) => changeField(field, value)}
-                  editable={!lockedAttempt && !submitting}
-                  keyboardType="numbers-and-punctuation"
-                  placeholder="Ej. -0,80"
-                  error={fieldErrors[field]}
-                  selectTextOnFocus
+              {(Object.keys(labels) as Array<keyof typeof labels>).map((field) => (
+                <View key={field} style={styles.field}>
+                  <Text nativeID={`temp-${field}`} style={styles.fieldLabel}>{labels[field]} °C</Text>
+                  <TextInput
+                    accessibilityLabel={`${labels[field]} (°C)`}
+                    accessibilityLabelledBy={`temp-${field}`}
+                    editable={!lockedAttempt && !submitting}
+                    keyboardType="numbers-and-punctuation"
+                    onChangeText={(value) => changeField(field, value)}
+                    placeholder="-0,80"
+                    placeholderTextColor={o.color.borderStrong}
+                    selectTextOnFocus
+                    style={[styles.input, fieldErrors[field] && styles.inputError, (lockedAttempt || submitting) && styles.inputLocked]}
+                    value={draft[field]}
+                  />
+                  {fieldErrors[field] ? <Text style={styles.fieldError}>{fieldErrors[field]}</Text> : null}
+                </View>
+              ))}
+            </View>
+            {confirming || lockedAttempt ? (
+              <View style={styles.confirmation}>
+                <Text style={styles.confirmationTitle}>Confirma las tres lecturas</Text>
+                <Text style={styles.confirmationValues}>Inicio {draft.start} · Medio {draft.middle} · Fondo {draft.end} °C</Text>
+              </View>
+            ) : null}
+            {submitError ? <Notice live title="El envío no quedó confirmado" detail={submitError} tone="critical" /> : null}
+            <View style={styles.actions}>
+              {!confirming && !lockedAttempt ? <ActionButton label="Revisar lecturas" onPress={review} /> : null}
+              {confirming || lockedAttempt ? (
+                <ActionButton
+                  busy={submitting}
+                  label={lockedAttempt ? 'Reintentar mismo envío' : 'Confirmar y enviar'}
+                  onPress={() => void submit()}
                 />
-              </View>)}
+              ) : null}
+              {confirming && !lockedAttempt ? <ActionButton label="Volver a editar" onPress={() => setConfirming(false)} variant="secondary" /> : null}
+              {lockedAttempt ? <ActionButton disabled={submitting} label="Actualizar y descartar intento" onPress={() => void discardAttempt()} variant="critical" /> : null}
             </View>
-            {confirming || lockedAttempt ? <View style={styles.confirmation}>
-              <Text style={styles.confirmationTitle}>Confirma las tres lecturas</Text>
-              <Text style={styles.confirmationValues}>
-                Inicio {draft.start} °C · Medio {draft.middle} °C · Fondo {draft.end} °C
-              </Text>
-              <Text style={styles.muted}>El registro quedará asociado a {auth.usuario.nombre} y {auth.dispositivo.codigo}.</Text>
-            </View> : null}
-            {submitError ? <EstibaAlert title="El envío no quedó confirmado" detail={submitError} tone="critical" live /> : null}
-            <View style={styles.formActions}>
-              {!confirming && !lockedAttempt ? <EstibaButton label="Revisar lecturas" onPress={review} /> : null}
-              {confirming || lockedAttempt ? <EstibaButton
-                label={lockedAttempt ? 'Reintentar mismo envío' : 'Confirmar y enviar'}
-                variant="confirm"
-                busy={submitting}
-                onPress={() => void submit()}
-              /> : null}
-              {confirming && !lockedAttempt ? <EstibaButton label="Volver a editar" variant="secondary" onPress={() => setConfirming(false)} /> : null}
-              {lockedAttempt ? <EstibaButton label="Actualizar y descartar intento" variant="critical" disabled={submitting} onPress={() => void discardAttempt()} /> : null}
-            </View>
+            <Text style={styles.footnote}>Queda a nombre de {auth.usuario.nombre} · {auth.dispositivo.codigo}</Text>
           </> : null}
           {!draftReady ? <Text style={styles.muted}>Revisando capturas pendientes del equipo…</Text> : null}
-        </EstibaPanel>
+        </View>
       </View>
     </ScrollView>
   );
 }
 
+function CameraRow({ camera, canRegister, disabled, last, onSelect, selected }: {
+  camera: EnvironmentalCameraState;
+  canRegister: boolean;
+  disabled: boolean;
+  last: boolean;
+  onSelect: () => void;
+  selected: boolean;
+}) {
+  const presentation = statusPresentation(camera);
+  const readings = camera.ultimo_registro?.temperaturas;
+  const color = toneColor(presentation.tone);
+  return (
+    <View style={[styles.row, last && styles.rowLast, selected && styles.rowSelected]}>
+      <View style={[styles.statusMark, { borderColor: color }]}>
+        <View style={[styles.statusDot, { backgroundColor: color }]} />
+      </View>
+      <View style={styles.rowCopy}>
+        <View style={styles.rowTitle}>
+          <Text numberOfLines={1} style={styles.rowName}>{camera.camara.nombre}</Text>
+          <Text style={styles.rowCode}>{camera.camara.codigo}</Text>
+        </View>
+        <Text style={[styles.rowStatus, { color }]}>{presentation.label} · {presentation.detail}</Text>
+        {readings ? (
+          <Text style={styles.rowReadings}>
+            Última lectura  Inicio <Text style={styles.rowReadingValue}>{celsius(readings.inicio_c)}</Text>
+            {'  '}Medio <Text style={styles.rowReadingValue}>{celsius(readings.medio_c)}</Text>
+            {'  '}Fondo <Text style={styles.rowReadingValue}>{celsius(readings.fondo_c)}</Text>
+          </Text>
+        ) : <Text style={styles.rowReadings}>Sin lecturas previas</Text>}
+      </View>
+      {camera.requiere_control && canRegister ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ disabled: disabled || selected, selected }}
+          disabled={disabled || selected}
+          onPress={onSelect}
+          style={[styles.rowAction, selected && styles.rowActionSelected, disabled && !selected && styles.disabled]}
+        >
+          <Text style={[styles.rowActionText, selected && styles.rowActionTextSelected]}>{selected ? 'Seleccionada' : 'Registrar'}</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
+function Notice({ detail, live = false, title, tone }: { detail: string; live?: boolean; title: string; tone: Tone }) {
+  const palette = tonePalette(tone);
+  return (
+    <View accessibilityLiveRegion={live ? 'polite' : undefined} style={[styles.notice, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+      <Text style={[styles.noticeTitle, { color: palette.text }]}>{title}</Text>
+      <Text style={styles.noticeDetail}>{detail}</Text>
+    </View>
+  );
+}
+
+function ActionButton({ busy = false, disabled = false, label, onPress, variant = 'primary' }: {
+  busy?: boolean;
+  disabled?: boolean;
+  label: string;
+  onPress: () => void;
+  variant?: 'primary' | 'secondary' | 'critical';
+}) {
+  const inactive = busy || disabled;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ busy, disabled: inactive }}
+      disabled={inactive}
+      onPress={onPress}
+      style={[styles.button, variant === 'secondary' && styles.buttonSecondary, variant === 'critical' && styles.buttonCritical, inactive && styles.disabled]}
+    >
+      <Text style={[styles.buttonText, variant !== 'primary' && styles.buttonTextOutline, variant === 'critical' && styles.buttonTextCritical]}>
+        {busy ? 'Enviando…' : label}
+      </Text>
+    </Pressable>
+  );
+}
+
+function celsius(value: number) {
+  return `${value.toFixed(2).replace('.', ',')} °C`;
+}
+
+function toneColor(tone: Tone) {
+  return tonePalette(tone).text;
+}
+
+function tonePalette(tone: Tone) {
+  if (tone === 'success') return { text: o.color.success, surface: o.color.successSurface, border: o.color.successBorder };
+  if (tone === 'warning') return { text: o.color.warning, surface: o.color.warningSurface, border: o.color.warningBorder };
+  if (tone === 'critical') return { text: o.color.critical, surface: o.color.criticalSurface, border: o.color.criticalBorder };
+  return { text: o.color.primaryPressed, surface: o.color.surfaceMuted, border: o.color.infoBorder };
+}
+
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: t.color.canvas },
-  content: { padding: t.space[6], gap: t.space[6] },
-  summary: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space[3] },
-  summaryItem: { minWidth: 170, minHeight: 92, flexGrow: 1, padding: t.space[4], borderWidth: 1, borderTopWidth: 4, backgroundColor: t.color.surface },
-  summaryDue: { borderColor: t.signal.critical.border, borderTopColor: t.signal.critical.text },
-  summaryOk: { borderColor: t.color.border, borderTopColor: t.signal.success.text },
-  summaryValue: { color: t.color.text, fontSize: t.fontSize.display, fontWeight: t.fontWeight.bold, fontVariant: ['tabular-nums'] },
-  summaryLabel: { color: t.color.muted, fontSize: t.fontSize.small, fontWeight: t.fontWeight.strong },
-  identity: { minWidth: 250, flexGrow: 2, justifyContent: 'center', padding: t.space[4], borderWidth: 1, borderColor: t.color.border, backgroundColor: t.color.surface, gap: t.space[1] },
-  identityLabel: { color: t.color.muted, fontSize: t.fontSize.caption, fontWeight: t.fontWeight.bold, letterSpacing: 1 },
-  identityValue: { color: t.color.text, fontSize: t.fontSize.heading, fontWeight: t.fontWeight.bold },
-  identityDetail: { color: t.color.muted, fontSize: t.fontSize.small },
-  workspace: { flexDirection: 'row', alignItems: 'flex-start', gap: t.space[4] },
-  workspaceCompact: { flexDirection: 'column' },
-  cameraPanel: { flex: 3, minWidth: 0 },
-  formPanel: { flex: 2, minWidth: 0 },
-  cameraGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space[3] },
-  cameraCard: { minWidth: 260, flexBasis: 300, flexGrow: 1, padding: t.space[4], borderWidth: 1, borderColor: t.color.border, backgroundColor: t.color.subtle, gap: t.space[3] },
-  cameraSelected: { borderWidth: 3, borderColor: t.color.primary, backgroundColor: t.color.selected },
-  cameraHeader: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', gap: t.space[3] },
-  cameraTitle: { flex: 1, minWidth: 130, gap: t.space[1] },
-  cameraName: { color: t.color.text, fontSize: t.fontSize.body, fontWeight: t.fontWeight.strong },
-  muted: { color: t.color.muted, fontSize: t.fontSize.small, lineHeight: t.fontSize.small * t.lineHeight.body },
-  readings: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space[3] },
-  reading: { color: t.color.muted, fontSize: t.fontSize.small },
-  readingValue: { color: t.color.text, fontWeight: t.fontWeight.bold, fontVariant: ['tabular-nums'] },
-  selectedCamera: { paddingBottom: t.space[3], borderBottomWidth: 1, borderBottomColor: t.color.border, gap: t.space[1] },
-  eyebrow: { color: t.color.muted, fontSize: t.fontSize.caption, fontWeight: t.fontWeight.bold, letterSpacing: 1 },
-  fields: { flexDirection: 'row', gap: t.space[3] },
+  screen: { flex: 1, backgroundColor: o.color.canvas },
+  content: { padding: o.space[6], gap: o.space[4] },
+  heading: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: o.space[4] },
+  headingCopy: { flex: 1, minWidth: 0, gap: o.space[1] },
+  eyebrow: { fontFamily: font.heavy, color: o.color.muted, fontSize: o.type.caption, letterSpacing: 1.2 },
+  title: { fontFamily: font.heavy, color: o.color.text, fontSize: o.type.title },
+  subtitle: { fontFamily: font.regular, color: o.color.textSecondary, fontSize: o.type.body },
+  refresh: { minWidth: o.touch.minimum, minHeight: o.touch.minimum, alignItems: 'center', justifyContent: 'center', borderRadius: o.radius.pill, borderWidth: 1, borderColor: o.color.border },
+  refreshText: { fontFamily: font.bold, color: o.color.textSecondary, fontSize: o.type.heading },
+
+  workspace: { flexDirection: 'row', alignItems: 'flex-start', gap: o.space[6] },
+  workspaceCompact: { flexDirection: 'column', alignItems: 'stretch' },
+  listColumn: { flex: 3, minWidth: 0, gap: o.space[3] },
+  list: { borderWidth: 1, borderColor: o.color.border, borderRadius: o.radius.panel, backgroundColor: o.color.surface, overflow: 'hidden' },
+  row: { minHeight: 104, paddingHorizontal: o.space[6], paddingVertical: o.space[4], flexDirection: 'row', alignItems: 'center', gap: o.space[4], borderBottomWidth: 1, borderBottomColor: o.color.border },
+  rowLast: { borderBottomWidth: 0 },
+  rowSelected: { backgroundColor: o.color.selected },
+  statusMark: { width: 40, height: 40, borderRadius: o.radius.pill, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  statusDot: { width: 14, height: 14, borderRadius: o.radius.pill },
+  rowCopy: { flex: 1, minWidth: 0, gap: 4 },
+  rowTitle: { flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', columnGap: o.space[3] },
+  rowName: { fontFamily: font.bold, color: o.color.text, fontSize: 20, flexShrink: 1 },
+  rowCode: { fontFamily: font.mono, color: o.color.muted, fontSize: o.type.small },
+  rowStatus: { fontFamily: font.semibold, fontSize: o.type.small },
+  rowReadings: { fontFamily: font.regular, color: o.color.muted, fontSize: o.type.small },
+  rowReadingValue: { fontFamily: font.monoBold, color: o.color.textSecondary },
+  rowAction: { minHeight: 56, minWidth: 148, paddingHorizontal: o.space[4], alignItems: 'center', justifyContent: 'center', borderRadius: o.radius.control, borderWidth: 2, borderColor: o.color.primary },
+  rowActionSelected: { borderColor: o.color.primary, backgroundColor: o.color.primary },
+  rowActionText: { fontFamily: font.heavy, color: o.color.primaryPressed, fontSize: o.type.body },
+  rowActionTextSelected: { color: o.color.onPrimary },
+  upToDateToggle: { minHeight: o.touch.prominent, paddingHorizontal: o.space[6], flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: o.radius.panel, borderWidth: 1, borderColor: o.color.border },
+  upToDateLabel: { flexDirection: 'row', alignItems: 'center', gap: o.space[3] },
+  upToDateText: { fontFamily: font.semibold, color: o.color.text, fontSize: o.type.body },
+  upToDateChevron: { fontFamily: font.bold, color: o.color.muted, fontSize: o.type.heading },
+  dot: { width: 10, height: 10, borderRadius: o.radius.pill },
+  empty: { padding: o.space[6], gap: o.space[2], borderWidth: 1, borderColor: o.color.border, borderRadius: o.radius.panel, backgroundColor: o.color.surface },
+  emptyTitle: { fontFamily: font.bold, color: o.color.text, fontSize: o.type.heading },
+  muted: { fontFamily: font.regular, color: o.color.muted, fontSize: o.type.small, lineHeight: 22 },
+
+  capture: { flex: 2, minWidth: 0, padding: o.space[6], gap: o.space[4], borderWidth: 1, borderColor: o.color.border, borderRadius: o.radius.panel, backgroundColor: o.color.surface },
+  captureCompact: { flex: 0 },
+  captureEmpty: { gap: o.space[2] },
+  captureEmptyTitle: { fontFamily: font.bold, color: o.color.text, fontSize: o.type.heading },
+  selectedCamera: { gap: 2, paddingBottom: o.space[3], borderBottomWidth: 1, borderBottomColor: o.color.border },
+  selectedName: { fontFamily: font.heavy, color: o.color.text, fontSize: o.type.heading },
+  code: { fontFamily: font.monoBold, color: o.color.primaryPressed, fontSize: o.type.body },
+  fields: { flexDirection: 'row', gap: o.space[3] },
   fieldsCompact: { flexDirection: 'column' },
-  field: { flex: 1, minWidth: 120 },
-  confirmation: { padding: t.space[4], borderWidth: 1, borderColor: t.color.inputBorder, backgroundColor: t.color.subtle, gap: t.space[2] },
-  confirmationTitle: { color: t.color.text, fontSize: t.fontSize.heading, fontWeight: t.fontWeight.bold },
-  confirmationValues: { color: t.color.text, fontSize: t.fontSize.body, fontWeight: t.fontWeight.strong, fontVariant: ['tabular-nums'] },
-  formActions: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space[3] },
+  field: { flex: 1, minWidth: 0, gap: o.space[1] },
+  fieldLabel: { fontFamily: font.bold, color: o.color.textSecondary, fontSize: o.type.small },
+  input: { fontFamily: font.monoBold, minHeight: 64, paddingHorizontal: o.space[3], borderRadius: o.radius.control, borderWidth: 2, borderColor: o.color.borderStrong, backgroundColor: o.color.canvas, color: o.color.text, fontSize: 26, textAlign: 'center' },
+  inputError: { borderColor: o.color.critical },
+  inputLocked: { opacity: 0.6 },
+  fieldError: { fontFamily: font.semibold, color: o.color.critical, fontSize: o.type.caption },
+  confirmation: { padding: o.space[4], gap: o.space[1], borderRadius: o.radius.control, borderWidth: 1, borderColor: o.color.infoBorder, backgroundColor: o.color.surfaceMuted },
+  confirmationTitle: { fontFamily: font.bold, color: o.color.text, fontSize: o.type.body },
+  confirmationValues: { fontFamily: font.monoBold, color: o.color.text, fontSize: o.type.body },
+  actions: { gap: o.space[2] },
+  button: { minHeight: o.touch.prominent, paddingHorizontal: o.space[4], alignItems: 'center', justifyContent: 'center', borderRadius: o.radius.control, backgroundColor: o.color.primary },
+  buttonSecondary: { borderWidth: 2, borderColor: o.color.borderStrong, backgroundColor: 'transparent' },
+  buttonCritical: { borderWidth: 2, borderColor: o.color.criticalBorder, backgroundColor: 'transparent' },
+  buttonText: { fontFamily: font.heavy, color: o.color.onPrimary, fontSize: o.type.body },
+  buttonTextOutline: { color: o.color.text },
+  buttonTextCritical: { color: o.color.critical },
+  footnote: { fontFamily: font.regular, color: o.color.muted, fontSize: o.type.caption },
+  notice: { padding: o.space[4], gap: 2, borderRadius: o.radius.control, borderWidth: 1 },
+  noticeTitle: { fontFamily: font.bold, fontSize: o.type.body },
+  noticeDetail: { fontFamily: font.regular, color: o.color.textSecondary, fontSize: o.type.small, lineHeight: 21 },
+  disabled: { opacity: 0.45 },
 });
