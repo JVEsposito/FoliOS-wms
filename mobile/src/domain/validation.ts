@@ -109,7 +109,7 @@ export type AvailableValidationPrefill = {
   pendientes: string[];
 };
 
-export type ValidationPrefill = AvailableValidationPrefill | { disponible: false; motivo: string };
+export type ValidationPrefill = AvailableValidationPrefill | { disponible: false; motivo: string; bloqueado_por_temporada?: boolean };
 
 export type ValidationPrefillTrace = {
   huella: string;

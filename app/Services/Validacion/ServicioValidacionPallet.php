@@ -83,6 +83,10 @@ class ServicioValidacionPallet
             if (! $temporada || $temporada->id !== $datos['temporada_id']) {
                 throw new DomainException('La temporada no existe o no se encuentra activa.');
             }
+            if (filled($datos['fecha_embalaje'] ?? null) && ! $temporada->incluyeFecha($payload['fecha_embalaje'])) {
+                throw new DomainException("La fecha de embalaje está fuera de la temporada activa {$temporada->codigo}. Revisa la etiqueta del pallet.");
+            }
+            app(ServicioPrecargaValidacionOrigen::class)->comprobarTemporadaDeOrigen($payload['numero_folio'], $temporada);
 
             $articulo = DB::table('articulos_validacion')
                 ->where('id', $datos['articulo_validacion_id'])

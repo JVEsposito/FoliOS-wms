@@ -18,7 +18,7 @@ function harness(prefills = {}) {
   let renderer; let sequence = 0;
   const queued = []; const registered = []; const prefillRequests = [];
   const catalog = {
-    temporada: { id: 'season', nombre: '2026', version_catalogo: 1 },
+    temporada: { id: 'season', codigo: 'TEMP-2627', nombre: '2026', version_catalogo: 1 },
     categorias: [{ id: 'category', nombre: 'Exportación', activo: true }],
     articulos: [
       { id: 'santina', especie: 'Cereza', variedad: 'Santina', calibre: '2J', envase: '5 kg', variedad_validacion_id: 'v1', activo: true },
@@ -116,6 +116,9 @@ function harness(prefills = {}) {
     async mount() { await flush(() => { renderer = create(React.createElement(ValidationScreen, { auth, baseUrl: 'https://server.test', onLogout: () => {} })); }); },
     async unmount() { await flush(() => renderer.unmount()); },
     field,
+    disabled(label) {
+      return renderer.root.findAllByType('Pressable').find((node) => node.findAllByType('Text').some((text) => flatten(text.props.children) === label))?.props.disabled;
+    },
     async press(label) {
       const button = renderer.root.findAllByType('Pressable').find((node) => node.findAllByType('Text').some((text) => flatten(text.props.children) === label));
       assert.ok(button, `Botón disponible: ${label}`);
@@ -297,5 +300,26 @@ test('sin datos de planta el folio se valida como siempre y la PDA dice por qué
     assert.match(h.message(), /2610160009 no posee validaciones anteriores en la temporada activa\. El sistema de planta no tiene este pallet en bodega\./);
     assert.equal(h.field('Cliente').props.value, '');
     assert.doesNotMatch(h.message(), /Datos de planta/);
+  } finally { await h.unmount(); }
+});
+
+test('un folio de otra temporada no se puede validar y el siguiente folio vigente se puede aprobar', async () => {
+  const h = harness({
+    2610160009: { disponible: false, motivo: 'Packing informa un embalaje de la temporada anterior.', bloqueado_por_temporada: true },
+    2610160001: planta(),
+  });
+  try {
+    await h.mount(); await h.scan('2610160009');
+    assert.match(h.message(), /Temporada activa TEMP-2627/);
+    assert.match(h.message(), /Fuera de la temporada activa/);
+    assert.match(h.message(), /Packing informa un embalaje de la temporada anterior\./);
+    assert.equal(h.disabled('Aprobar'), true);
+    assert.equal(h.registered.length, 0);
+
+    await h.scan('2610160001');
+    assert.doesNotMatch(h.message(), /Fuera de la temporada activa/);
+    await h.press('Aprobar');
+    assert.equal(h.registered.length, 1);
+    assert.equal(h.registered[0].numero_folio, '2610160001');
   } finally { await h.unmount(); }
 });

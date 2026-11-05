@@ -8,10 +8,12 @@ use App\Models\Folio;
 use App\Models\LecturaStockOrigen;
 use App\Models\OrigenValidacion;
 use App\Models\PalletStockOrigen;
+use App\Models\Temporada;
 use App\Models\ValidacionPallet;
 use App\Services\Integraciones\ServicioCatalogoStockOrigen;
 use App\Services\Integraciones\ServicioLecturaStockOrigen;
 use App\Services\Temporadas\ServicioTemporadaActiva;
+use DomainException;
 use Illuminate\Support\Collection;
 
 /**
@@ -42,6 +44,20 @@ final class ServicioPrecargaValidacionOrigen
         }
     }
 
+    public function comprobarTemporadaDeOrigen(string $numeroFolio, Temporada $temporada): void
+    {
+        $config = $this->lecturas->configuracion();
+        if (! $config['habilitada'] || ! $config['conexion']) {
+            return;
+        }
+
+        $pallet = $this->palletEnBodega($config, $numeroFolio);
+        if ($pallet?->presente && ($motivo = $this->motivoFueraDeTemporada($pallet, $temporada)) !== null
+            && ! $this->desactualizado($pallet, $config)) {
+            throw new DomainException($motivo);
+        }
+    }
+
     /** @return array<string, mixed> */
     public function paraFolio(string $numeroFolio): array
     {
@@ -49,11 +65,7 @@ final class ServicioPrecargaValidacionOrigen
         if (! $config['habilitada'] || ! $config['conexion']) {
             return $this->noDisponible('La lectura del sistema de planta no está configurada.');
         }
-        $pallet = PalletStockOrigen::query()
-            ->where('ambito', $config['ambito'])
-            ->where('bodega', $config['bodega'])
-            ->where('numero_pallet', mb_strtoupper(trim($numeroFolio)))
-            ->first();
+        $pallet = $this->palletEnBodega($config, $numeroFolio);
         if (! $pallet) {
             return $this->noDisponible('El sistema de planta no tiene este pallet en bodega.');
         }
@@ -63,6 +75,14 @@ final class ServicioPrecargaValidacionOrigen
         $temporada = $this->catalogo->preparar();
         if (! $temporada) {
             return $this->noDisponible('No hay una temporada activa con catálogo de validación.');
+        }
+
+        $desactualizada = $this->desactualizado($pallet, $config);
+        $motivo = $this->motivoFueraDeTemporada($pallet, $temporada);
+        if ($motivo !== null) {
+            return $desactualizada
+                ? $this->noDisponible('La copia de packing no está vigente. Comprueba la fecha de embalaje en la etiqueta.')
+                : [...$this->noDisponible($motivo), 'bloqueado_por_temporada' => true];
         }
 
         $resuelto = $this->catalogo->resolver($pallet);
@@ -124,17 +144,12 @@ final class ServicioPrecargaValidacionOrigen
             $pendientes[] = 'Fecha de embalaje no informada por packing.';
         }
 
-        $vigencia = (int) config('integraciones.stock_pt.vigencia_minutos', 20);
-        $lectura = $pallet->lectura_stock_origen_id ? LecturaStockOrigen::find($pallet->lectura_stock_origen_id) : null;
-
         return [
             'disponible' => true,
             'numero_folio' => $pallet->numero_pallet,
             'huella' => $pallet->huella,
             'leido_at' => $pallet->ultima_lectura_at?->toAtomString(),
-            'desactualizada' => ! $lectura || $lectura->estado !== 'correcta'
-                || $lectura->configuracion_hash !== $this->lecturas->huellaConfiguracion($config)
-                || ! $pallet->ultima_lectura_at || $pallet->ultima_lectura_at->lt(now()->subMinutes($vigencia)),
+            'desactualizada' => $desactualizada,
             'tipo_bulto' => $pallet->tipo_bulto,
             'cantidad_cajas' => $pallet->cajas,
             'fecha_embalaje' => $pallet->fecha_embalaje?->toDateString(),
@@ -156,6 +171,35 @@ final class ServicioPrecargaValidacionOrigen
             ],
             'pendientes' => array_values(array_unique($pendientes)),
         ];
+    }
+
+    private function palletEnBodega(array $config, string $numeroFolio): ?PalletStockOrigen
+    {
+        return PalletStockOrigen::query()
+            ->where('ambito', $config['ambito'])
+            ->where('bodega', $config['bodega'])
+            ->where('numero_pallet', mb_strtoupper(trim($numeroFolio)))
+            ->first();
+    }
+
+    private function desactualizado(PalletStockOrigen $pallet, array $config): bool
+    {
+        $vigencia = (int) config('integraciones.stock_pt.vigencia_minutos', 20);
+        $lectura = $pallet->lectura_stock_origen_id ? LecturaStockOrigen::find($pallet->lectura_stock_origen_id) : null;
+
+        return ! $lectura || $lectura->estado !== 'correcta'
+            || $lectura->configuracion_hash !== $this->lecturas->huellaConfiguracion($config)
+            || ! $pallet->ultima_lectura_at || $pallet->ultima_lectura_at->lt(now()->subMinutes($vigencia));
+    }
+
+    private function motivoFueraDeTemporada(PalletStockOrigen $pallet, Temporada $temporada): ?string
+    {
+        $fecha = $pallet->fecha_embalaje;
+        if ($fecha === null || $temporada->incluyeFecha($fecha->toDateString())) {
+            return null;
+        }
+
+        return "Packing informa que el folio {$pallet->numero_pallet} fue embalado el {$fecha->format('d-m-Y')}, fuera de la temporada activa {$temporada->codigo}.";
     }
 
     /** @param  array<string, mixed>  $resuelto */

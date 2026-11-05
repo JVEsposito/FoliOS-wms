@@ -167,6 +167,42 @@ class PrecargaValidacionOrigenTest extends TestCase
             ->assertOk()->assertJsonPath('casos.data.0.comprobacion_vigente', true);
     }
 
+    public function test_el_folio_embalado_fuera_de_temporada_no_se_precarga_ni_se_puede_registrar_manualmente(): void
+    {
+        $catalogo = $this->catalogo();
+        $temporada = $catalogo['temporada'];
+        $temporada->update(['fecha_inicio' => '2026-10-01', 'fecha_fin' => '2027-02-28']);
+        $this->leer([$this->fila('P-ACTUAL', ['fecha_embalaje' => '2026-10-01'])]);
+        $this->respuesta = [$this->fila('P-ANTERIOR', ['fecha_embalaje' => '2026-09-30'])];
+        [, $token] = $this->validador('PDA-TEMPORADA');
+        $consulta = ['numero_folio' => 'P-ANTERIOR', 'temporada_id' => $temporada->id];
+        $op = $this->conToken($token)->postJson('/api/validacion/precarga-origen', $consulta)->assertStatus(202)->json('operacion.id');
+        (new EjecutarOperacionIntegracion($op))->handle(app(ServicioOperacionesIntegracion::class));
+
+        $this->conToken($token)->getJson('/api/integraciones/operaciones/'.$op)
+            ->assertOk()->assertJsonPath('operacion.respuesta.contenido.data.bloqueado_por_temporada', true);
+        $this->conToken($token)->postJson('/api/validacion/precarga-origen', $consulta)
+            ->assertOk()->assertJsonPath('data.disponible', false)->assertJsonPath('data.bloqueado_por_temporada', true);
+
+        $payload = [
+            'tipo_bulto' => 'pallet', 'cantidad_cajas' => 120,
+            'linea_proceso' => 1, 'turno' => 'A', 'temporada_id' => $temporada->id,
+            'catalogo_version' => $temporada->refresh()->version_catalogo, 'articulo_validacion_id' => $catalogo['articulo']->id,
+            'origen_validacion_id' => $catalogo['origenes']['100001'], 'categoria_validacion_id' => $catalogo['categoria'],
+            'resultado' => 'aprobado', 'generado_dispositivo_at' => now()->toAtomString(),
+        ];
+        // Registrar manualmente con una fecha vigente no puede cambiar la fecha conocida de packing.
+        $this->conToken($token)->postJson('/api/validacion/pallets', [...$payload, 'operacion_id' => (string) Str::uuid(), 'numero_folio' => 'P-ANTERIOR', 'fecha_embalaje' => '2026-10-01'])
+            ->assertUnprocessable()->assertJsonPath('codigo', 'regla_de_negocio');
+        $this->conToken($token)->postJson('/api/validacion/pallets', [...$payload, 'operacion_id' => (string) Str::uuid(), 'numero_folio' => 'P-MANUAL', 'fecha_embalaje' => '2027-03-01'])
+            ->assertUnprocessable()->assertJsonPath('codigo', 'regla_de_negocio');
+        $this->assertDatabaseMissing('validaciones_pallet', ['numero_folio' => 'P-ANTERIOR']);
+        $this->assertDatabaseMissing('folios', ['numero_folio' => 'P-MANUAL']);
+
+        $this->conToken($token)->postJson('/api/validacion/pallets', [...$payload, 'operacion_id' => (string) Str::uuid(), 'numero_folio' => 'P-ACTUAL', 'fecha_embalaje' => '2026-10-01'])
+            ->assertCreated()->assertJsonPath('data.temporada_id', $temporada->id);
+    }
+
     /** @return array{temporada: Temporada, articulo: ArticuloValidacion, categoria: string, origenes: array<string, string>} */
     private function catalogo(): array
     {

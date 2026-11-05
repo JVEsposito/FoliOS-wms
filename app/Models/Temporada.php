@@ -44,6 +44,12 @@ class Temporada extends Model
         return $this->tipo === TipoTemporada::Prueba;
     }
 
+    public function incluyeFecha(string $fecha): bool
+    {
+        return ($this->fecha_inicio === null || $fecha >= $this->fecha_inicio->toDateString())
+            && ($this->fecha_fin === null || $fecha <= $this->fecha_fin->toDateString());
+    }
+
     public function clasificaciones(): HasMany
     {
         return $this->hasMany(ClasificacionTemporada::class);
