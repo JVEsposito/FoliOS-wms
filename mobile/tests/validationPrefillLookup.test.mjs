@@ -1,3 +1,4 @@
+import { fieldUiMock } from './helpers/fieldUiMock.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -28,6 +29,7 @@ function harness(responses) {
     const module = { exports: {} }; modules.set(path, module);
     const code = ts.transpileModule(readFileSync(path, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
     const mockRequire = (name) => {
+      const fieldMock = fieldUiMock(name); if (fieldMock) return fieldMock;
       if (name === './validationCatalogTransferStore') return { supportsCatalogTransfer: false };
       if (name.startsWith('.')) return load(resolve(dirname(path), name) + '.ts');
       return require(name);

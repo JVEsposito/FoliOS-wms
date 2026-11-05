@@ -1,3 +1,4 @@
+import { fieldUiMock } from './helpers/fieldUiMock.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -39,6 +40,7 @@ async function harness({ availableOrders, cached = false }) {
   }).outputText;
   vm.runInNewContext(compiled, { module, exports: module.exports, console,
     require: (id) => {
+      const fieldMock = fieldUiMock(id); if (fieldMock) return fieldMock;
       if (id === 'react-native') return native;
       if (id === 'expo-crypto') return { randomUUID: () => 'operation-1' };
       if (id.endsWith('/services/frutaProcesoApi')) return api;

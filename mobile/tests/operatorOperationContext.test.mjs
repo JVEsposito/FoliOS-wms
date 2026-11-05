@@ -1,3 +1,4 @@
+import { fieldUiMock } from './helpers/fieldUiMock.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
@@ -68,6 +69,7 @@ test('la consulta de cargas usa GET condicional y separa la caché entre usuario
   const module = { exports: {} };
   vm.runInNewContext(code, { module, exports: module.exports, Headers, URLSearchParams,
     require: (id) => {
+      const fieldMock = fieldUiMock(id); if (fieldMock) return fieldMock;
       if (id === './apiError') return { ApiError: class extends Error {} };
       if (id === './httpClient') return { fetchWithTimeout: async (url, init) => { calls.push({ url, init }); return responses.shift(); } };
       if (id.endsWith('/physicalFrontierRecovery')) return { resourceFrontier: (snapshot) => snapshot };

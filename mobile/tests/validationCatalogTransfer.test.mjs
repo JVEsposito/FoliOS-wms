@@ -1,3 +1,4 @@
+import { fieldUiMock } from './helpers/fieldUiMock.mjs';
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
@@ -119,6 +120,7 @@ function harness(source = catalog(), shared = {}) {
       module, exports: module.exports, console, Error, Headers, URLSearchParams, AbortController, fetch,
       setTimeout: (fn) => { const key = randomUUID(); timers.set(key, fn); return key; }, clearTimeout: (key) => timers.delete(key),
       require: (name) => {
+      const fieldMock = fieldUiMock(name); if (fieldMock) return fieldMock;
         if (name === 'expo-file-system/legacy') return disk;
         if (name === 'expo-crypto') return { randomUUID, CryptoDigestAlgorithm: { SHA256: 'SHA256' }, digestStringAsync: async (_algorithm, raw) => hash(raw) };
         if (name === '@react-native-async-storage/async-storage') return {

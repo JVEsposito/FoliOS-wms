@@ -1,3 +1,4 @@
+import { fieldUiMock } from './helpers/fieldUiMock.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -64,6 +65,7 @@ function harness({ cameraBusy = true, openConflict = false, completionError = ''
       fileName: path,
     }).outputText;
     const mockRequire = (id) => {
+      const fieldMock = fieldUiMock(id); if (fieldMock) return fieldMock;
       if (id === 'react-native') return native;
       if (id === '@react-native-async-storage/async-storage') return { getItem: async (key) => storage.get(key) ?? null, setItem: async (key, value) => { storage.set(key, value); }, removeItem: async (key) => { storage.delete(key); } };
       if (id === 'expo-crypto') return { randomUUID: () => 'operation-1' };

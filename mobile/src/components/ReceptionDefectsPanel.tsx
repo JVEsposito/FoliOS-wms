@@ -1,3 +1,4 @@
+import { font } from '../theme/typography';
 import { ContainerOption, containerLabel, getContainerCatalog } from '../services/containerCatalog';
 import * as Crypto from 'expo-crypto';
 import * as ImagePicker from 'expo-image-picker';
@@ -170,20 +171,20 @@ function message(reason: unknown) { return reason instanceof Error ? reason.mess
 const styles = StyleSheet.create({
   panel: { padding: 14, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panel, gap: 12 },
   heading: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 },
-  headingCopy: { flex: 1 }, eyebrow: { color: colors.cyan, fontSize: 14, fontWeight: '900', letterSpacing: 1.1 },
-  title: { color: colors.text, fontSize: 17, fontWeight: '900', marginTop: 3 }, muted: { color: colors.muted, fontSize: 12, marginTop: 3 },
-  body: { color: colors.text, fontSize: 14, marginTop: 4 }, record: { padding: 12, borderRadius: 10, backgroundColor: colors.backgroundDeep, borderWidth: 1, borderColor: colors.border },
-  recordTitle: { color: colors.cyan, fontSize: 14, fontWeight: '900' },
+  headingCopy: { flex: 1 }, eyebrow: { color: colors.cyan, fontSize: 14, fontFamily: font.heavy, letterSpacing: 1.1 },
+  title: { color: colors.text, fontSize: 17, fontFamily: font.heavy, marginTop: 3 }, muted: { fontFamily: font.regular, color: colors.muted, fontSize: 12, marginTop: 3 },
+  body: { fontFamily: font.regular, color: colors.text, fontSize: 14, marginTop: 4 }, record: { padding: 12, borderRadius: 10, backgroundColor: colors.backgroundDeep, borderWidth: 1, borderColor: colors.border },
+  recordTitle: { color: colors.cyan, fontSize: 14, fontFamily: font.heavy },
   form: { padding: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.cyanDark, backgroundColor: colors.backgroundDeep, gap: 10 },
   options: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   choice: { borderWidth: 1, borderColor: colors.border, borderRadius: 9, paddingHorizontal: 12, paddingVertical: 9 },
-  choiceSelected: { backgroundColor: colors.cyan, borderColor: colors.cyan }, choiceText: { color: colors.text, fontWeight: '700' },
+  choiceSelected: { backgroundColor: colors.cyan, borderColor: colors.cyan }, choiceText: { color: colors.text, fontFamily: font.bold },
   choiceSelectedText: { color: colors.accentText },
-  input: { padding: 12, color: colors.text, fontSize: 15, borderWidth: 1, borderColor: colors.border, borderRadius: 9 },
+  input: { fontFamily: font.regular, padding: 12, color: colors.text, fontSize: 15, borderWidth: 1, borderColor: colors.border, borderRadius: 9 },
   description: { height: 90 }, previews: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 }, preview: { alignItems: 'center', gap: 5 },
-  photo: { width: 104, height: 104, borderRadius: 9 }, remove: { color: colors.red, fontSize: 12, fontWeight: '800' },
+  photo: { width: 104, height: 104, borderRadius: 9 }, remove: { color: colors.red, fontSize: 12, fontFamily: font.heavy },
   primary: { paddingHorizontal: 16, paddingVertical: 12, borderRadius: 9, backgroundColor: colors.cyan, alignItems: 'center' },
-  primaryText: { color: colors.accentText, fontWeight: '900' }, outline: { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 9, borderWidth: 1, borderColor: colors.cyanDark, alignItems: 'center' },
-  outlineText: { color: colors.cyan, fontWeight: '800' }, actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, flexWrap: 'wrap' },
-  error: { color: colors.red, fontWeight: '800', padding: 8 }, warning: { padding: 10, gap: 8, borderRadius: 8, backgroundColor: colors.panel },
+  primaryText: { color: colors.accentText, fontFamily: font.heavy }, outline: { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 9, borderWidth: 1, borderColor: colors.cyanDark, alignItems: 'center' },
+  outlineText: { color: colors.cyan, fontFamily: font.heavy }, actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, flexWrap: 'wrap' },
+  error: { color: colors.red, fontFamily: font.heavy, padding: 8 }, warning: { padding: 10, gap: 8, borderRadius: 8, backgroundColor: colors.panel },
 });

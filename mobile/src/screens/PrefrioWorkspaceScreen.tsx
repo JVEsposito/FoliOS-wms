@@ -1,3 +1,5 @@
+import { font } from '../theme/typography';
+import { FieldHeader } from '../components/field/FieldHeader';
 import * as Crypto from 'expo-crypto';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -354,24 +356,7 @@ export function PrefrioWorkspaceScreen({ auth, baseUrl, onLogout }: PrefrioWorks
     <View style={styles.screen}>
       <WorkspaceTabs activeView={activeView} pendingCount={folios.length} onChange={setActiveView} />
       <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.eyebrow}>FoliOS · PRE-FRÍO</Text>
-            <Text style={styles.title}>Folios pendientes de ingreso</Text>
-            <Text style={styles.subtitle}>Pallets y saldos aprobados en Validación que todavía no pertenecen a un proceso activo.</Text>
-          </View>
-          <View style={styles.headerActions}>
-            <View style={[styles.connection, online ? styles.online : styles.offline]}>
-              <Text style={styles.connectionText}>{online ? 'EN LÍNEA' : 'SIN CONEXIÓN'}</Text>
-            </View>
-            <Pressable disabled={busy} onPress={() => void synchronize()} style={styles.secondaryButton}>
-              <Text style={styles.secondaryButtonText}>↻ Sincronizar</Text>
-            </Pressable>
-            <Pressable onPress={onLogout} style={styles.secondaryButton}>
-              <Text style={styles.secondaryButtonText}>Cerrar turno</Text>
-            </Pressable>
-          </View>
-        </View>
+        <FieldHeader area="frigorifico" auth={auth} title="Prefrío · Pendientes" offline={!online} onLogout={onLogout}><Pressable disabled={busy} onPress={() => void synchronize()} style={styles.secondaryButton}><Text style={styles.secondaryButtonText}>↻</Text></Pressable></FieldHeader>
 
         {notice ? <Text style={styles.notice}>{notice}</Text> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -649,77 +634,77 @@ const styles = StyleSheet.create({
   tabs: { flexDirection: 'row', gap: 8, paddingHorizontal: 18, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.backgroundDeep },
   tab: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 10, borderWidth: 1, borderColor: colors.border },
   tabActive: { borderColor: colors.cyan, backgroundColor: colors.selected },
-  tabText: { color: colors.muted, fontWeight: '900', fontSize: 14 },
+  tabText: { color: colors.muted, fontFamily: font.heavy, fontSize: 14 },
   tabTextActive: { color: colors.cyan },
   page: { padding: 18, gap: 16, paddingBottom: 44 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 18, padding: 18, borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panel },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 9, flexWrap: 'wrap', justifyContent: 'flex-end' },
-  eyebrow: { color: colors.cyan, fontSize: 14, fontWeight: '900', letterSpacing: 1.2 },
-  title: { color: colors.text, fontSize: 25, fontWeight: '900', marginTop: 4 },
+  eyebrow: { color: colors.cyan, fontSize: 14, fontFamily: font.heavy, letterSpacing: 1.2 },
+  title: { color: colors.text, fontSize: 25, fontFamily: font.heavy, marginTop: 4 },
   subtitle: { color: colors.muted, marginTop: 6, lineHeight: 19 },
   connection: { paddingHorizontal: 11, paddingVertical: 8, borderRadius: 999, borderWidth: 1 },
   online: { borderColor: colors.green, backgroundColor: colors.greenDark },
   offline: { borderColor: colors.red, backgroundColor: colors.blocked },
-  connectionText: { color: colors.text, fontSize: 14, fontWeight: '900' },
+  connectionText: { color: colors.text, fontSize: 14, fontFamily: font.heavy },
   secondaryButton: { paddingHorizontal: 13, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: colors.cyanDark, alignItems: 'center' },
-  secondaryButtonText: { color: colors.cyan, fontSize: 14, fontWeight: '900' },
+  secondaryButtonText: { color: colors.cyan, fontSize: 14, fontFamily: font.heavy },
   primaryButton: { paddingHorizontal: 18, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.green, backgroundColor: colors.greenDark, alignItems: 'center' },
-  primaryButtonText: { color: colors.text, fontSize: 14, fontWeight: '900', textTransform: 'uppercase' },
+  primaryButtonText: { color: colors.text, fontSize: 14, fontFamily: font.heavy, textTransform: 'uppercase' },
   disabled: { opacity: .4 },
-  notice: { color: colors.text, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.green, backgroundColor: colors.greenDark, fontWeight: '800' },
-  error: { color: colors.text, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.red, backgroundColor: colors.blocked, fontWeight: '800' },
+  notice: { color: colors.text, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.green, backgroundColor: colors.greenDark, fontFamily: font.heavy },
+  error: { color: colors.text, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.red, backgroundColor: colors.blocked, fontFamily: font.heavy },
   metrics: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
   metric: { minWidth: 170, flex: 1, padding: 15, borderRadius: 13, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panel },
   metricWarning: { borderColor: colors.amber },
-  metricValue: { color: colors.text, fontSize: 24, fontWeight: '900' },
-  metricLabel: { color: colors.muted, fontSize: 14, fontWeight: '900', marginTop: 4 },
-  searchInput: { minHeight: 52, paddingHorizontal: 15, borderRadius: 12, borderWidth: 1, borderColor: colors.cyanDark, color: colors.text, backgroundColor: colors.backgroundDeep, fontWeight: '800' },
+  metricValue: { color: colors.text, fontSize: 24, fontFamily: font.heavy },
+  metricLabel: { color: colors.muted, fontSize: 14, fontFamily: font.heavy, marginTop: 4 },
+  searchInput: { minHeight: 52, paddingHorizontal: 15, borderRadius: 12, borderWidth: 1, borderColor: colors.cyanDark, color: colors.text, backgroundColor: colors.backgroundDeep, fontFamily: font.heavy },
   group: { gap: 10 },
   groupHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  groupTitle: { color: colors.text, fontSize: 18, fontWeight: '900' },
-  groupCount: { color: colors.cyan, fontSize: 14, fontWeight: '900', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, backgroundColor: colors.selected },
+  groupTitle: { color: colors.text, fontSize: 18, fontFamily: font.heavy },
+  groupCount: { color: colors.cyan, fontSize: 14, fontFamily: font.heavy, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, backgroundColor: colors.selected },
   cards: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   card: { flexGrow: 1, flexBasis: 310, maxWidth: 470, padding: 16, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panel },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 },
-  folioNumber: { color: colors.text, fontSize: 18, fontWeight: '900' },
-  cardMeta: { color: colors.muted, fontSize: 14, marginTop: 3 },
-  statusBadge: { overflow: 'hidden', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 999, color: colors.text, fontSize: 13, fontWeight: '900', textTransform: 'uppercase' },
+  folioNumber: { color: colors.text, fontSize: 18, fontFamily: font.monoBold },
+  cardMeta: { fontFamily: font.regular, color: colors.muted, fontSize: 14, marginTop: 3 },
+  statusBadge: { overflow: 'hidden', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 999, color: colors.text, fontSize: 13, fontFamily: font.heavy, textTransform: 'uppercase' },
   pendingBadge: { backgroundColor: colors.free },
   reprocessBadge: { backgroundColor: colors.amberDark },
   retainedBadge: { backgroundColor: colors.blocked },
-  article: { color: colors.cyan, fontWeight: '900', marginTop: 13 },
-  detail: { color: colors.text, fontSize: 14, marginTop: 5 },
+  article: { color: colors.cyan, fontFamily: font.heavy, marginTop: 13 },
+  detail: { fontFamily: font.regular, color: colors.text, fontSize: 14, marginTop: 5 },
   cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginTop: 15, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.borderSoft },
-  dateText: { color: colors.muted, fontSize: 14 },
-  openText: { color: colors.cyan, fontSize: 14, fontWeight: '900' },
+  dateText: { fontFamily: font.regular, color: colors.muted, fontSize: 14 },
+  openText: { color: colors.cyan, fontSize: 14, fontFamily: font.heavy },
   emptyPanel: { alignItems: 'center', padding: 32, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panel },
-  emptyTitle: { color: colors.text, fontSize: 17, fontWeight: '900' },
+  emptyTitle: { color: colors.text, fontSize: 17, fontFamily: font.heavy },
   modalBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 18, backgroundColor: 'rgba(0,0,0,.76)' },
   modalCard: { width: '100%', maxWidth: 920, maxHeight: '94%', borderRadius: 17, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panelStrong },
   modalContent: { padding: 20 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 15 },
-  modalTitle: { color: colors.text, fontSize: 25, fontWeight: '900', marginTop: 3 },
-  modalClose: { color: colors.text, fontSize: 29, fontWeight: '900', paddingHorizontal: 8 },
+  modalTitle: { color: colors.text, fontSize: 25, fontFamily: font.heavy, marginTop: 3 },
+  modalClose: { color: colors.text, fontSize: 29, fontFamily: font.heavy, paddingHorizontal: 8 },
   detailGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 9 },
   detailBox: { flexGrow: 1, flexBasis: 260, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.borderSoft, backgroundColor: colors.backgroundDeep },
-  inputLabel: { color: colors.muted, fontSize: 13, fontWeight: '900', textTransform: 'uppercase', marginBottom: 5 },
-  detailValue: { color: colors.text, fontWeight: '800' },
-  modalSectionTitle: { color: colors.text, fontSize: 15, fontWeight: '900', marginTop: 18, marginBottom: 9 },
+  inputLabel: { color: colors.muted, fontSize: 13, fontFamily: font.heavy, textTransform: 'uppercase', marginBottom: 5 },
+  detailValue: { color: colors.text, fontFamily: font.heavy },
+  modalSectionTitle: { color: colors.text, fontSize: 15, fontFamily: font.heavy, marginTop: 18, marginBottom: 9 },
   optionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 9 },
   optionCard: { minWidth: 180, flexGrow: 1, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.backgroundDeep },
   optionCardSelected: { borderColor: colors.cyan, backgroundColor: colors.selected },
-  optionTitle: { color: colors.text, fontWeight: '900' },
-  optionDetail: { color: colors.muted, fontSize: 14, marginTop: 4 },
-  optionState: { color: colors.cyan, fontSize: 14, fontWeight: '900', marginTop: 5, textTransform: 'uppercase' },
-  reopenNotice: { color: colors.text, padding: 11, borderRadius: 10, borderWidth: 1, borderColor: colors.amber, backgroundColor: colors.amberDark, fontWeight: '800', lineHeight: 18 },
+  optionTitle: { color: colors.text, fontFamily: font.heavy },
+  optionDetail: { fontFamily: font.regular, color: colors.muted, fontSize: 14, marginTop: 4 },
+  optionState: { color: colors.cyan, fontSize: 14, fontFamily: font.heavy, marginTop: 5, textTransform: 'uppercase' },
+  reopenNotice: { color: colors.text, padding: 11, borderRadius: 10, borderWidth: 1, borderColor: colors.amber, backgroundColor: colors.amberDark, fontFamily: font.heavy, lineHeight: 18 },
   positionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
   position: { paddingHorizontal: 10, paddingVertical: 9, borderRadius: 8, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.backgroundDeep },
   positionSelected: { borderColor: colors.cyan, backgroundColor: colors.selected },
-  positionText: { color: colors.text, fontSize: 14, fontWeight: '900' },
-  temperatureInput: { minHeight: 48, paddingHorizontal: 13, borderRadius: 10, borderWidth: 1, borderColor: colors.border, color: colors.text, backgroundColor: colors.backgroundDeep },
+  positionText: { color: colors.text, fontSize: 14, fontFamily: font.heavy },
+  temperatureInput: { minHeight: 52, paddingHorizontal: 13, borderRadius: 10, borderWidth: 1, borderColor: colors.border, color: colors.text, backgroundColor: colors.backgroundDeep },
   emptyProcess: { gap: 10, padding: 14, borderRadius: 11, borderWidth: 1, borderColor: colors.amber, backgroundColor: colors.amberDark },
   readOnlyNotice: { color: colors.text, marginTop: 18, padding: 13, borderRadius: 10, borderWidth: 1, borderColor: colors.cyanDark, backgroundColor: colors.selected },
   modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 9, marginTop: 20 },
   busyOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: 'rgba(8,12,16,.74)' },
-  busyText: { color: colors.text, fontWeight: '900' },
+  busyText: { color: colors.text, fontFamily: font.heavy },
 });

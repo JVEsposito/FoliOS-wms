@@ -1,3 +1,5 @@
+import { font } from '../theme/typography';
+import { FieldHeader } from '../components/field/FieldHeader';
 import * as Crypto from 'expo-crypto';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -970,24 +972,7 @@ export function PrefrioScreen({ auth, baseUrl, onLogout }: PrefrioScreenProps) {
   return (
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
-        <View style={styles.topbar}>
-          <View>
-            <Text style={styles.eyebrow}>FoliOS · PRE-FRÍO</Text>
-            <Text style={styles.title}>Operación de túneles</Text>
-            <Text style={styles.muted}>{auth.usuario.nombre} · {auth.dispositivo.codigo}</Text>
-          </View>
-          <View style={styles.topbarActions}>
-            <View style={[styles.connection, online ? styles.connectionOnline : styles.connectionOffline]}>
-              <Text style={styles.connectionText}>{online ? 'EN LÍNEA' : 'SIN CONEXIÓN'}</Text>
-            </View>
-            <Pressable onPress={() => void synchronize()} style={styles.secondaryButton}>
-              <Text style={styles.secondaryButtonText}>↻ Sincronizar</Text>
-            </Pressable>
-            <Pressable onPress={logout} style={styles.secondaryButton}>
-              <Text style={styles.secondaryButtonText}>Cerrar turno</Text>
-            </Pressable>
-          </View>
-        </View>
+        <FieldHeader area="frigorifico" auth={auth} title="Prefrío · Túneles" offline={!online} onLogout={logout}><Pressable accessibilityLabel="Sincronizar prefrío" onPress={() => void synchronize()} style={styles.secondaryButton}><Text style={styles.secondaryButtonText}>↻</Text></Pressable></FieldHeader>
 
         {notice ? <Text style={styles.notice}>{notice}</Text> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -1500,88 +1485,88 @@ const styles = StyleSheet.create({
   boot: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, backgroundColor: colors.background },
   topbar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 16 },
   topbarActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  eyebrow: { color: colors.cyan, fontSize: 14, fontWeight: '900', letterSpacing: 1.2 },
-  title: { color: colors.text, fontSize: 26, fontWeight: '900', marginTop: 4 },
-  muted: { color: colors.muted, fontSize: 12, lineHeight: 18 },
-  notice: { color: colors.green, backgroundColor: colors.greenDark, padding: 10, borderRadius: 8, fontWeight: '800' },
-  error: { color: colors.red, backgroundColor: colors.blocked, padding: 10, borderRadius: 8, fontWeight: '800' },
-  warning: { color: colors.amber, marginTop: 10, fontWeight: '800' },
+  eyebrow: { color: colors.cyan, fontSize: 14, fontFamily: font.heavy, letterSpacing: 1.2 },
+  title: { color: colors.text, fontSize: 26, fontFamily: font.heavy, marginTop: 4 },
+  muted: { fontFamily: font.regular, color: colors.muted, fontSize: 12, lineHeight: 18 },
+  notice: { color: colors.green, backgroundColor: colors.greenDark, padding: 10, borderRadius: 8, fontFamily: font.heavy },
+  error: { color: colors.red, backgroundColor: colors.blocked, padding: 10, borderRadius: 8, fontFamily: font.heavy },
+  warning: { color: colors.amber, marginTop: 10, fontFamily: font.heavy },
   connection: { paddingHorizontal: 10, paddingVertical: 7, borderRadius: 999 },
   connectionOnline: { backgroundColor: colors.greenDark },
   connectionOffline: { backgroundColor: colors.blocked },
-  connectionText: { color: colors.text, fontSize: 13, fontWeight: '900' },
+  connectionText: { color: colors.text, fontSize: 13, fontFamily: font.heavy },
   metrics: { flexDirection: 'row', gap: 10 },
   metric: { flex: 1, padding: 13, borderRadius: 12, backgroundColor: colors.panel, borderWidth: 1, borderColor: colors.borderSoft },
-  metricLabel: { color: colors.muted, fontSize: 13, fontWeight: '900' },
-  metricValue: { color: colors.text, fontSize: 24, fontWeight: '900', marginTop: 5 },
+  metricLabel: { color: colors.muted, fontSize: 13, fontFamily: font.heavy },
+  metricValue: { color: colors.text, fontSize: 24, fontFamily: font.heavy, marginTop: 5 },
   metricWarning: { color: colors.amber },
-  sectionTitle: { color: colors.text, fontSize: 16, fontWeight: '900' },
+  sectionTitle: { color: colors.text, fontSize: 16, fontFamily: font.heavy },
   tunnelRow: { gap: 10, paddingBottom: 4 },
   tunnelCard: { width: 230, padding: 14, borderRadius: 14, backgroundColor: colors.panel, borderWidth: 1, borderColor: colors.border },
   tunnelCardSelected: { borderColor: colors.cyan, backgroundColor: colors.selected },
-  tunnelCode: { color: colors.cyan, fontWeight: '900', fontSize: 16 },
-  tunnelName: { color: colors.text, fontWeight: '800', marginTop: 4 },
-  tunnelMeta: { color: colors.muted, fontSize: 14, marginTop: 8 },
-  tunnelState: { color: colors.green, fontSize: 14, fontWeight: '900', marginTop: 10 },
-  tunnelProcess: { color: colors.text, fontSize: 14, marginTop: 3 },
+  tunnelCode: { color: colors.cyan, fontFamily: font.monoBold, fontSize: 16 },
+  tunnelName: { color: colors.text, fontFamily: font.heavy, marginTop: 4 },
+  tunnelMeta: { fontFamily: font.regular, color: colors.muted, fontSize: 14, marginTop: 8 },
+  tunnelState: { color: colors.green, fontSize: 14, fontFamily: font.heavy, marginTop: 10 },
+  tunnelProcess: { fontFamily: font.regular, color: colors.text, fontSize: 14, marginTop: 3 },
   panel: { padding: 16, borderRadius: 14, backgroundColor: colors.panel, borderWidth: 1, borderColor: colors.borderSoft, gap: 10 },
   emptyPanel: { minHeight: 150, alignItems: 'center', justifyContent: 'center', borderRadius: 14, backgroundColor: colors.panel },
-  panelTitle: { color: colors.text, fontSize: 17, fontWeight: '900' },
+  panelTitle: { color: colors.text, fontSize: 17, fontFamily: font.heavy },
   panelHeading: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   processHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderRadius: 14, backgroundColor: colors.panelStrong, borderWidth: 1, borderColor: colors.cyanDark },
-  processCode: { color: colors.text, fontSize: 24, fontWeight: '900', marginTop: 4 },
+  processCode: { color: colors.text, fontSize: 24, fontFamily: font.monoBold, marginTop: 4 },
   processCounts: { alignItems: 'flex-end' },
-  processCountValue: { color: colors.cyan, fontSize: 25, fontWeight: '900' },
-  processCountLabel: { color: colors.muted, fontSize: 13, fontWeight: '900' },
+  processCountValue: { color: colors.cyan, fontSize: 25, fontFamily: font.heavy },
+  processCountLabel: { color: colors.muted, fontSize: 13, fontFamily: font.heavy },
   workGrid: { flexDirection: 'row', gap: 14, alignItems: 'flex-start' },
   positionPanel: { flex: 2, padding: 16, borderRadius: 14, backgroundColor: colors.panel, borderWidth: 1, borderColor: colors.borderSoft },
   operationPanel: { flex: 1, padding: 16, borderRadius: 14, backgroundColor: colors.panel, borderWidth: 1, borderColor: colors.borderSoft, gap: 10 },
   tunnelDirection: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 },
-  tunnelDirectionBack: { color: colors.amber, fontSize: 14, fontWeight: '900', letterSpacing: 1 },
-  tunnelDirectionEntrance: { color: colors.cyan, fontSize: 14, fontWeight: '900', letterSpacing: 1 },
-  tunnelDirectionCopy: { color: colors.muted, fontSize: 13, fontWeight: '800' },
+  tunnelDirectionBack: { color: colors.amber, fontSize: 14, fontFamily: font.heavy, letterSpacing: 1 },
+  tunnelDirectionEntrance: { color: colors.cyan, fontSize: 14, fontFamily: font.heavy, letterSpacing: 1 },
+  tunnelDirectionCopy: { color: colors.muted, fontSize: 13, fontFamily: font.heavy },
   positions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 },
   position: { width: '48%', minHeight: 76, justifyContent: 'center', padding: 8, borderRadius: 10, borderWidth: 1, borderColor: colors.freeBorder, backgroundColor: colors.free },
   positionOccupied: { borderColor: colors.palletBorder, backgroundColor: colors.pallet },
   positionSelected: { borderColor: colors.cyan, backgroundColor: colors.selected },
   positionDisabled: { opacity: 0.35 },
-  positionLabel: { color: colors.text, fontSize: 15, fontWeight: '900' },
-  positionMeta: { color: colors.muted, fontSize: 13, marginTop: 2 },
-  positionFolio: { color: colors.text, fontSize: 13, marginTop: 4 },
-  selectedPosition: { color: colors.cyan, fontWeight: '800' },
+  positionLabel: { color: colors.text, fontSize: 15, fontFamily: font.heavy },
+  positionMeta: { fontFamily: font.regular, color: colors.muted, fontSize: 13, marginTop: 2 },
+  positionFolio: { fontFamily: font.mono, color: colors.text, fontSize: 13, marginTop: 4 },
+  selectedPosition: { color: colors.cyan, fontFamily: font.heavy },
   positionContents: { gap: 6, padding: 9, borderRadius: 9, backgroundColor: colors.backgroundDeep, borderWidth: 1, borderColor: colors.borderSoft },
-  positionContentsTitle: { color: colors.muted, fontSize: 13, fontWeight: '900' },
+  positionContentsTitle: { color: colors.muted, fontSize: 13, fontFamily: font.heavy },
   positionContentRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingTop: 5, borderTopWidth: 1, borderTopColor: colors.borderSoft },
   positionContentCopy: { flex: 1 },
-  positionContentFolio: { color: colors.text, fontSize: 14, fontWeight: '900' },
-  positionContentMeta: { color: colors.muted, fontSize: 13, marginTop: 2 },
-  scannerInput: { minHeight: 58, paddingHorizontal: 14, borderRadius: 10, borderWidth: 2, borderColor: colors.cyanDark, backgroundColor: colors.backgroundDeep, color: colors.text, fontSize: 20, fontWeight: '900' },
-  input: { minHeight: 46, paddingHorizontal: 12, borderRadius: 9, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.backgroundDeep, color: colors.text },
+  positionContentFolio: { color: colors.text, fontSize: 14, fontFamily: font.monoBold },
+  positionContentMeta: { fontFamily: font.regular, color: colors.muted, fontSize: 13, marginTop: 2 },
+  scannerInput: { minHeight: 58, paddingHorizontal: 14, borderRadius: 10, borderWidth: 2, borderColor: colors.cyanDark, backgroundColor: colors.backgroundDeep, color: colors.text, fontSize: 20, fontFamily: font.monoBold },
+  input: { minHeight: 52, paddingHorizontal: 12, borderRadius: 9, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.backgroundDeep, color: colors.text },
   multiline: { minHeight: 96, paddingTop: 12, textAlignVertical: 'top' },
-  primaryButton: { minHeight: 48, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, borderRadius: 9, backgroundColor: colors.cyan },
-  primaryButtonText: { color: colors.accentText, fontWeight: '900' },
+  primaryButton: { minHeight: 56, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, borderRadius: 9, backgroundColor: colors.cyan },
+  primaryButtonText: { color: colors.accentText, fontFamily: font.heavy },
   secondaryButton: { minHeight: 48, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panel },
-  secondaryButtonText: { color: colors.text, fontSize: 14, fontWeight: '800' },
+  secondaryButtonText: { color: colors.text, fontSize: 14, fontFamily: font.heavy },
   buttonDisabled: { opacity: 0.4 },
   actionDivider: { height: 1, backgroundColor: colors.borderSoft, marginVertical: 4 },
   eventGrid: { gap: 8 },
   eventButton: { minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 8, borderWidth: 1, borderColor: colors.cyanDark, backgroundColor: colors.panelStrong },
-  eventButtonText: { color: colors.cyan, fontWeight: '900' },
+  eventButtonText: { color: colors.cyan, fontFamily: font.heavy },
   timelineItem: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.borderSoft },
-  timelineType: { color: colors.text, fontWeight: '900' },
-  timelineMeta: { color: colors.muted, fontSize: 14, marginTop: 2 },
-  timelineNote: { color: colors.text, fontSize: 14, marginTop: 4 },
-  queueCount: { color: colors.cyan, fontSize: 22, fontWeight: '900' },
+  timelineType: { color: colors.text, fontFamily: font.heavy },
+  timelineMeta: { fontFamily: font.regular, color: colors.muted, fontSize: 14, marginTop: 2 },
+  timelineNote: { fontFamily: font.regular, color: colors.text, fontSize: 14, marginTop: 4 },
+  queueCount: { color: colors.cyan, fontSize: 22, fontFamily: font.heavy },
   queueItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: colors.borderSoft },
   queueCopy: { flex: 1 },
-  queueLabel: { color: colors.text, fontWeight: '800' },
-  queueMeta: { color: colors.muted, fontSize: 14, marginTop: 2 },
-  queueError: { color: colors.red, fontSize: 14, marginTop: 4 },
+  queueLabel: { color: colors.text, fontFamily: font.heavy },
+  queueMeta: { fontFamily: font.regular, color: colors.muted, fontSize: 14, marginTop: 2 },
+  queueError: { fontFamily: font.regular, color: colors.red, fontSize: 14, marginTop: 4 },
   smallDangerButton: { paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: colors.red },
-  smallDangerText: { color: colors.red, fontSize: 14, fontWeight: '900' },
+  smallDangerText: { color: colors.red, fontSize: 14, fontFamily: font.heavy },
   loading: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(8,12,16,0.68)' },
   modalBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: 'rgba(0,0,0,0.72)' },
   modalCard: { width: '100%', maxWidth: 520, padding: 20, gap: 12, borderRadius: 16, backgroundColor: colors.panel, borderWidth: 1, borderColor: colors.cyanDark },
-  modalTitle: { color: colors.text, fontSize: 22, fontWeight: '900' },
+  modalTitle: { color: colors.text, fontSize: 22, fontFamily: font.heavy },
   modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10 },
 });

@@ -5,6 +5,7 @@ import { operatorTheme as o } from '../../theme/operatorTheme';
 import { font } from '../../theme/typography';
 
 type Props = {
+  disabled?: boolean;
   deviceName: string;
   onChangeModule?: () => void;
   onLogout: () => void;
@@ -17,10 +18,11 @@ type Props = {
  * maniobra (identidad, tablet, cambiar módulo y cerrar sesión) para que la cabecera
  * solo muestre navegación y estado. Ver docs/diseno/folios-v2/pr-11-tablet-cabecera.md.
  */
-export function OperatorMenu({ deviceName, onChangeModule, onLogout, role, userName }: Props) {
+export function OperatorMenu({ disabled = false, deviceName, onChangeModule, onLogout, role, userName }: Props) {
   const [open, setOpen] = useState(false);
 
   function choose(action: () => void) {
+    if (disabled) return;
     setOpen(false);
     action();
   }
@@ -30,7 +32,8 @@ export function OperatorMenu({ deviceName, onChangeModule, onLogout, role, userN
       <Pressable
         accessibilityLabel={`Menú de ${userName}`}
         accessibilityRole="button"
-        accessibilityState={{ expanded: open }}
+        accessibilityState={{ expanded: open, disabled }}
+        disabled={disabled}
         onPress={() => setOpen(true)}
         style={styles.trigger}
       >
@@ -50,12 +53,12 @@ export function OperatorMenu({ deviceName, onChangeModule, onLogout, role, userN
                 </View>
               </View>
               {onChangeModule ? (
-                <Pressable accessibilityRole="menuitem" onPress={() => choose(onChangeModule)} style={styles.item}>
+                <Pressable accessibilityRole="menuitem" accessibilityState={{ disabled }} disabled={disabled} onPress={() => choose(onChangeModule)} style={styles.item}>
                   <Text style={styles.itemText}>Cambiar módulo</Text>
                 </Pressable>
               ) : null}
               <View style={styles.divider} />
-              <Pressable accessibilityRole="menuitem" onPress={() => choose(onLogout)} style={styles.item}>
+              <Pressable accessibilityRole="menuitem" accessibilityState={{ disabled }} disabled={disabled} onPress={() => choose(onLogout)} style={styles.item}>
                 <Text style={[styles.itemText, styles.logoutText]}>Cerrar sesión</Text>
               </Pressable>
             </Pressable>

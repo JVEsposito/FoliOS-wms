@@ -1,3 +1,5 @@
+import { font } from '../theme/typography';
+import { FieldHeader } from '../components/field/FieldHeader';
 import * as Crypto from 'expo-crypto';
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -475,19 +477,7 @@ export function MaterialReceptionScreen({ auth, baseUrl, onLogout }: Props) {
 
   return (
     <View style={styles.screen}>
-      <View style={[styles.header, compact && styles.headerCompact]}>
-        <View style={styles.headerCopy}>
-          <Text style={styles.eyebrow}>MATERIALES · RECEPCIÓN</Text>
-          <Text style={styles.title}>Ingreso documental y generación de folios</Text>
-          <Text style={styles.muted}>
-            {auth.usuario.nombre} · {auth.dispositivo.codigo} · {catalog.temporada?.nombre ?? 'Sin temporada activa'}
-          </Text>
-        </View>
-        <View style={styles.row}>
-          <Button label="Actualizar" onPress={() => void refresh()} secondary />
-          <Button label="Cerrar sesión" onPress={onLogout} danger />
-        </View>
-      </View>
+      <FieldHeader area="materiales" auth={auth} title="Recepción de materiales" subtitle={catalog.temporada?.nombre} onLogout={onLogout}><Button label="Actualizar" onPress={() => void refresh()} secondary /></FieldHeader>
 
       <View style={styles.tabs}>
         {canManage ? <TabButton label="Nueva recepción" active={tab === 'nueva'} onPress={() => switchTab('nueva')} /> : null}
@@ -1449,49 +1439,49 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: 18, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.backgroundDeep },
   headerCompact: { flexDirection: 'column', alignItems: 'stretch' },
   headerCopy: { flex: 1 },
-  eyebrow: { color: colors.cyan, fontSize: 14, fontWeight: '900', letterSpacing: 1.2 },
-  title: { color: colors.text, fontSize: 21, fontWeight: '900', marginTop: 3 },
-  muted: { color: colors.muted, fontSize: 14, lineHeight: 18, marginTop: 3 },
+  eyebrow: { color: colors.cyan, fontSize: 14, fontFamily: font.heavy, letterSpacing: 1.2 },
+  title: { color: colors.text, fontSize: 21, fontFamily: font.heavy, marginTop: 3 },
+  muted: { fontFamily: font.regular, color: colors.muted, fontSize: 14, lineHeight: 18, marginTop: 3 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 9, flexWrap: 'wrap' },
   between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' },
   tabs: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, padding: 10, paddingHorizontal: 18, borderBottomWidth: 1, borderBottomColor: colors.borderSoft, backgroundColor: colors.panel },
   tab: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 9, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.backgroundDeep },
   tabActive: { borderColor: colors.cyan, backgroundColor: colors.selected },
-  tabText: { color: colors.muted, fontSize: 14, fontWeight: '900' },
+  tabText: { color: colors.muted, fontSize: 14, fontFamily: font.heavy },
   banner: { marginHorizontal: 18, marginTop: 10, padding: 11, borderRadius: 10, borderWidth: 1, borderColor: colors.greenDark, backgroundColor: '#102C20' },
   bannerDanger: { borderColor: colors.blockedBorder, backgroundColor: colors.blocked },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10 },
   content: { padding: 18, gap: 14, paddingBottom: 110 },
   section: { padding: 15, gap: 12, borderRadius: 15, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panel },
-  sectionTitle: { color: colors.text, fontSize: 16, fontWeight: '900' },
+  sectionTitle: { color: colors.text, fontSize: 16, fontFamily: font.heavy },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 11 },
   column: { flexDirection: 'column' },
   stack: { gap: 13 },
   stackSmall: { gap: 9 },
   card: { padding: 13, gap: 11, borderRadius: 13, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.backgroundDeep },
   packageCard: { padding: 11, gap: 9, borderRadius: 11, borderWidth: 1, borderColor: colors.borderSoft, backgroundColor: colors.panelStrong },
-  cardTitle: { color: colors.text, fontSize: 13, fontWeight: '900' },
-  subheading: { color: colors.cyan, fontSize: 14, fontWeight: '900', textTransform: 'uppercase', marginTop: 4 },
+  cardTitle: { color: colors.text, fontSize: 13, fontFamily: font.heavy },
+  subheading: { color: colors.cyan, fontSize: 14, fontFamily: font.heavy, textTransform: 'uppercase', marginTop: 4 },
   field: { flexGrow: 1, flexBasis: 220, gap: 5 },
-  label: { color: colors.muted, fontSize: 13, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.4 },
-  input: { minHeight: 43, borderRadius: 9, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.backgroundDeep, color: colors.text, paddingHorizontal: 11, paddingVertical: 9, fontWeight: '700' },
+  label: { color: colors.muted, fontSize: 13, fontFamily: font.heavy, textTransform: 'uppercase', letterSpacing: 0.4 },
+  input: { minHeight: 52, borderRadius: 9, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.backgroundDeep, color: colors.text, paddingHorizontal: 11, paddingVertical: 9, fontFamily: font.bold },
   multiline: { minHeight: 68, textAlignVertical: 'top' },
   choice: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   disabled: { opacity: 0.45 },
-  inputText: { color: colors.text, fontSize: 14, fontWeight: '800' },
+  inputText: { color: colors.text, fontSize: 14, fontFamily: font.heavy },
   placeholder: { color: colors.muted, flex: 1 },
   readonly: { justifyContent: 'center', borderColor: colors.cyanDark, backgroundColor: colors.selected },
   toggle: { alignSelf: 'flex-start', paddingHorizontal: 11, paddingVertical: 7, borderRadius: 8, borderWidth: 1, borderColor: colors.greenDark, backgroundColor: '#102C20' },
   toggleBlocked: { borderColor: colors.blockedBorder, backgroundColor: colors.blocked },
-  toggleText: { color: colors.green, fontSize: 14, fontWeight: '900' },
+  toggleText: { color: colors.green, fontSize: 14, fontFamily: font.heavy },
   button: { alignSelf: 'flex-start', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 9, backgroundColor: colors.cyan },
   buttonSecondary: { borderWidth: 1, borderColor: colors.cyanDark, backgroundColor: colors.selected },
   buttonDanger: { borderWidth: 1, borderColor: colors.blockedBorder, backgroundColor: colors.blocked },
   buttonSmall: { paddingHorizontal: 10, paddingVertical: 6 },
-  buttonText: { color: colors.accentText, fontSize: 14, fontWeight: '900' },
-  linkText: { color: colors.cyan, fontWeight: '900' },
-  redText: { color: colors.red, fontSize: 14, fontWeight: '900' },
-  greenText: { color: colors.green, fontSize: 14, fontWeight: '900' },
+  buttonText: { color: colors.accentText, fontSize: 14, fontFamily: font.heavy },
+  linkText: { color: colors.cyan, fontFamily: font.heavy },
+  redText: { color: colors.red, fontSize: 14, fontFamily: font.heavy },
+  greenText: { color: colors.green, fontSize: 14, fontFamily: font.heavy },
   submitBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 14, padding: 15, borderRadius: 14, borderWidth: 1, borderColor: colors.cyanDark, backgroundColor: colors.panelStrong },
   filters: { flexDirection: 'row', gap: 8, padding: 12, paddingHorizontal: 18, flexWrap: 'wrap' },
   listCard: { flexDirection: 'row', alignItems: 'center', gap: 13, padding: 13, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panel },
@@ -1500,24 +1490,24 @@ const styles = StyleSheet.create({
   badge: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: colors.amberDark, backgroundColor: '#332710' },
   confirmed: { borderColor: colors.greenDark, backgroundColor: '#102C20' },
   annulled: { borderColor: colors.blockedBorder, backgroundColor: colors.blocked },
-  smallCaps: { color: colors.text, fontSize: 12, fontWeight: '900', textTransform: 'uppercase' },
+  smallCaps: { color: colors.text, fontSize: 12, fontFamily: font.heavy, textTransform: 'uppercase' },
   summaryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 9, marginTop: 9 },
   summary: { minWidth: 135, flexGrow: 1, flexBasis: 165, padding: 9, gap: 4, borderRadius: 8, backgroundColor: colors.backgroundDeep },
   packageResult: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 11, padding: 10, marginTop: 8, borderRadius: 9, borderWidth: 1, borderColor: colors.borderSoft, backgroundColor: colors.panelStrong },
   folioBox: { minWidth: 135, padding: 9, borderRadius: 9, backgroundColor: colors.backgroundDeep },
-  folio: { color: colors.cyan, fontSize: 14, fontWeight: '900', letterSpacing: 0.5 },
+  folio: { color: colors.cyan, fontSize: 14, fontFamily: font.monoBold, letterSpacing: 0.5 },
   empty: { alignItems: 'center', justifyContent: 'center', padding: 34, borderRadius: 13, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panel },
   modalBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 22, backgroundColor: 'rgba(0,0,0,0.72)' },
   modalCard: { width: '100%', maxWidth: 720, maxHeight: '82%', padding: 15, gap: 10, borderRadius: 15, borderWidth: 1, borderColor: colors.cyanDark, backgroundColor: colors.panel },
   calendarCard: { width: '100%', maxWidth: 420, padding: 15, gap: 14, borderRadius: 15, borderWidth: 1, borderColor: colors.cyanDark, backgroundColor: colors.panel },
-  calendarTitle: { color: colors.text, fontSize: 15, fontWeight: '900', textTransform: 'capitalize' },
+  calendarTitle: { color: colors.text, fontSize: 15, fontFamily: font.heavy, textTransform: 'capitalize' },
   calendarGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   calendarCell: { width: '14.2857%', minHeight: 38, alignItems: 'center', justifyContent: 'center' },
-  calendarDayName: { color: colors.muted, fontSize: 13, fontWeight: '900' },
+  calendarDayName: { color: colors.muted, fontSize: 13, fontFamily: font.heavy },
   calendarDate: { borderRadius: 8, borderWidth: 1, borderColor: 'transparent' },
   calendarToday: { borderColor: colors.cyanDark },
   calendarSelected: { backgroundColor: colors.cyan, borderColor: colors.cyan },
-  calendarDateText: { color: colors.text, fontSize: 12, fontWeight: '800' },
+  calendarDateText: { color: colors.text, fontSize: 12, fontFamily: font.heavy },
   search: { minHeight: 43, borderRadius: 9, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.backgroundDeep, color: colors.text, paddingHorizontal: 11 },
   option: { padding: 11, marginBottom: 8, borderRadius: 9, borderWidth: 1, borderColor: colors.borderSoft, backgroundColor: colors.backgroundDeep },
   optionActive: { borderColor: colors.cyan, backgroundColor: colors.selected },

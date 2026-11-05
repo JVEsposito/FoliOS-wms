@@ -259,7 +259,7 @@ export function EnvironmentalControlScreen({ auth, baseUrl, onDueChange }: Props
           <Text style={styles.eyebrow}>CADENA DE FRÍO · INICIO, MEDIO Y FONDO CADA {frequency} MIN</Text>
           <Text accessibilityRole="header" style={styles.title}>Control ambiental</Text>
           <Text style={styles.subtitle}>
-            {due === 0 ? 'Todas las cámaras al día' : `${due} ${due === 1 ? 'cámara requiere' : 'cámaras requieren'} control`}
+            {statusError ? 'Estado sin verificar' : loading && !generatedAt ? 'Consultando estado…' : !status.length ? 'Sin cámaras disponibles' : due === 0 ? 'Todas las cámaras al día' : `${due} ${due === 1 ? 'cámara requiere' : 'cámaras requieren'} control`}
             {' · '}{current} al día · consultado {time(generatedAt)}
           </Text>
         </View>

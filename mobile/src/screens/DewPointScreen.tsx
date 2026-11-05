@@ -1,3 +1,5 @@
+import { font } from '../theme/typography';
+import { FieldHeader } from '../components/field/FieldHeader';
 import * as Crypto from 'expo-crypto';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -156,21 +158,7 @@ export function DewPointScreen({ auth, baseUrl, onLogout }: DewPointScreenProps)
   return (
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
-        <View style={styles.header}>
-          <View style={styles.headerText}>
-            <Text style={styles.eyebrow}>FoliOS · PREFRÍO · CONDENSACIÓN</Text>
-            <Text style={styles.title}>Punto de rocío</Text>
-            <Text style={styles.subtitle}>Mide T° y humedad del aire y la T° superficial de la fruta (no la pulpa). Si la superficie queda bajo el punto de rocío, puede condensar agua.</Text>
-          </View>
-          <View style={styles.headerActions}>
-            <View style={[styles.connection, online ? styles.online : styles.offline]}>
-              <Text style={styles.connectionText}>{online ? 'EN LÍNEA' : 'SIN CONEXIÓN'}</Text>
-            </View>
-            <Pressable disabled={busy} onPress={() => void refresh()} style={[styles.secondaryButton, busy && styles.disabled]}>
-              <Text style={styles.secondaryButtonText}>↻ Actualizar</Text>
-            </Pressable>
-          </View>
-        </View>
+        <FieldHeader area="frigorifico" auth={auth} title="Punto de rocío" offline={!online} onLogout={onLogout}><Pressable accessibilityLabel="Actualizar punto de rocío" disabled={busy} onPress={() => void refresh()} style={[styles.secondaryButton, busy && styles.disabled]}><Text style={styles.secondaryButtonText}>↻</Text></Pressable></FieldHeader><Text style={styles.subtitle}>Mide T° y humedad del aire y la T° superficial de la fruta (no la pulpa).</Text>
 
         {notice ? <Text style={styles.notice}>{notice}</Text> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -472,80 +460,80 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 18, padding: 18, borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panel },
   headerText: { flexShrink: 1, flexBasis: 420, flexGrow: 1 },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 9, flexWrap: 'wrap', justifyContent: 'flex-end' },
-  eyebrow: { color: colors.cyan, fontSize: 14, fontWeight: '900', letterSpacing: 1.2 },
-  title: { color: colors.text, fontSize: 25, fontWeight: '900', marginTop: 4 },
+  eyebrow: { color: colors.cyan, fontSize: 14, fontFamily: font.heavy, letterSpacing: 1.2 },
+  title: { color: colors.text, fontSize: 25, fontFamily: font.heavy, marginTop: 4 },
   subtitle: { color: colors.muted, marginTop: 6, lineHeight: 19 },
   connection: { paddingHorizontal: 11, paddingVertical: 8, borderRadius: 999, borderWidth: 1 },
   online: { borderColor: colors.green, backgroundColor: colors.greenDark },
   offline: { borderColor: colors.red, backgroundColor: colors.blocked },
-  connectionText: { color: colors.text, fontSize: 14, fontWeight: '900' },
+  connectionText: { color: colors.text, fontSize: 14, fontFamily: font.heavy },
   secondaryButton: { paddingHorizontal: 13, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: colors.cyanDark, alignItems: 'center' },
-  secondaryButtonText: { color: colors.cyan, fontSize: 14, fontWeight: '900' },
+  secondaryButtonText: { color: colors.cyan, fontSize: 14, fontFamily: font.heavy },
   primaryButton: { marginTop: 6, paddingHorizontal: 18, paddingVertical: 15, borderRadius: 10, borderWidth: 1, borderColor: colors.green, backgroundColor: colors.greenDark, alignItems: 'center' },
-  primaryButtonText: { color: colors.text, fontSize: 15, fontWeight: '900', textTransform: 'uppercase' },
+  primaryButtonText: { color: colors.text, fontSize: 15, fontFamily: font.heavy, textTransform: 'uppercase' },
   disabled: { opacity: .4 },
-  notice: { color: colors.text, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.green, backgroundColor: colors.greenDark, fontWeight: '800' },
-  error: { color: colors.text, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.red, backgroundColor: colors.blocked, fontWeight: '800' },
-  warning: { color: colors.text, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.amber, backgroundColor: colors.amberDark, fontWeight: '800', lineHeight: 19 },
+  notice: { color: colors.text, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.green, backgroundColor: colors.greenDark, fontFamily: font.heavy },
+  error: { color: colors.text, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.red, backgroundColor: colors.blocked, fontFamily: font.heavy },
+  warning: { color: colors.text, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.amber, backgroundColor: colors.amberDark, fontFamily: font.heavy, lineHeight: 19 },
   metrics: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
   metric: { minWidth: 160, flex: 1, padding: 15, borderRadius: 13, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panel },
   metricWarning: { borderColor: colors.amber },
-  metricValue: { color: colors.text, fontSize: 24, fontWeight: '900' },
-  metricLabel: { color: colors.muted, fontSize: 14, fontWeight: '900', marginTop: 4 },
+  metricValue: { color: colors.text, fontSize: 24, fontFamily: font.heavy },
+  metricLabel: { color: colors.muted, fontSize: 14, fontFamily: font.heavy, marginTop: 4 },
   columns: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, alignItems: 'flex-start' },
   panel: { gap: 10, padding: 16, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panel },
   formPanel: { flexGrow: 3, flexBasis: 520 },
   listPanel: { flexGrow: 2, flexBasis: 340 },
-  panelTitle: { color: colors.text, fontSize: 18, fontWeight: '900', marginBottom: 2 },
-  inputLabel: { color: colors.muted, fontSize: 13, fontWeight: '900', textTransform: 'uppercase', marginTop: 4 },
+  panelTitle: { color: colors.text, fontSize: 18, fontFamily: font.heavy, marginBottom: 2 },
+  inputLabel: { color: colors.muted, fontSize: 13, fontFamily: font.heavy, textTransform: 'uppercase', marginTop: 4 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { minHeight: 46, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.backgroundDeep },
   chipSelected: { borderColor: colors.cyan, backgroundColor: colors.selected },
   chipDanger: { borderColor: colors.red, backgroundColor: colors.blocked },
-  chipText: { color: colors.textSecondary, fontSize: 15, fontWeight: '800' },
-  chipTextSelected: { color: colors.text, fontWeight: '900' },
+  chipText: { color: colors.textSecondary, fontSize: 15, fontFamily: font.heavy },
+  chipTextSelected: { color: colors.text, fontFamily: font.heavy },
   pointGroups: { gap: 10 },
-  planLine: { color: colors.text, padding: 10, borderRadius: 10, borderWidth: 1, borderColor: colors.cyanDark, backgroundColor: colors.selected, fontSize: 14, fontWeight: '800', lineHeight: 19 },
-  readingPlan: { color: colors.amber, fontSize: 14, fontWeight: '900' },
+  planLine: { color: colors.text, padding: 10, borderRadius: 10, borderWidth: 1, borderColor: colors.cyanDark, backgroundColor: colors.selected, fontSize: 14, fontFamily: font.heavy, lineHeight: 19 },
+  readingPlan: { color: colors.amber, fontSize: 14, fontFamily: font.heavy },
   links: { gap: 10, padding: 12, borderRadius: 12, borderWidth: 1, borderStyle: 'dashed', borderColor: colors.border },
-  linksTitle: { color: colors.muted, fontSize: 12, fontWeight: '900', letterSpacing: .6 },
-  linkHelp: { color: colors.muted, fontSize: 13, lineHeight: 18 },
+  linksTitle: { color: colors.muted, fontSize: 12, fontFamily: font.heavy, letterSpacing: .6 },
+  linkHelp: { fontFamily: font.regular, color: colors.muted, fontSize: 13, lineHeight: 18 },
   linkResult: { flexBasis: '100%', gap: 2, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 9, borderWidth: 1, borderLeftWidth: 4 },
-  linkResultTitle: { color: colors.text, fontSize: 14, fontWeight: '900' },
-  linkResultState: { color: colors.text, fontSize: 15, fontWeight: '900' },
+  linkResultTitle: { color: colors.text, fontSize: 14, fontFamily: font.heavy },
+  linkResultState: { color: colors.text, fontSize: 15, fontFamily: font.heavy },
   pointGroup: { gap: 6 },
-  groupLabel: { color: colors.cyan, fontSize: 13, fontWeight: '900' },
+  groupLabel: { color: colors.cyan, fontSize: 13, fontFamily: font.heavy },
   inputs: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   field: { flexGrow: 1, flexBasis: 160, gap: 5 },
   fieldWide: { flexBasis: 300 },
-  input: { minHeight: 50, paddingHorizontal: 13, borderRadius: 10, borderWidth: 1, borderColor: colors.border, color: colors.text, backgroundColor: colors.backgroundDeep, fontWeight: '700' },
+  input: { minHeight: 52, paddingHorizontal: 13, borderRadius: 10, borderWidth: 1, borderColor: colors.border, color: colors.text, backgroundColor: colors.backgroundDeep, fontFamily: font.bold },
   numberBox: { flexDirection: 'row', alignItems: 'center', minHeight: 56, borderRadius: 10, borderWidth: 1, borderColor: colors.cyanDark, backgroundColor: colors.backgroundDeep },
-  numberInput: { flex: 1, paddingHorizontal: 13, color: colors.text, fontSize: 22, fontWeight: '900' },
-  unit: { paddingHorizontal: 12, color: colors.muted, fontSize: 16, fontWeight: '900' },
+  numberInput: { flex: 1, paddingHorizontal: 13, color: colors.text, fontSize: 22, fontFamily: font.heavy },
+  unit: { paddingHorizontal: 12, color: colors.muted, fontSize: 16, fontFamily: font.heavy },
   result: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, padding: 14, borderRadius: 12, borderWidth: 1, borderLeftWidth: 5 },
-  resultHint: { color: colors.muted, fontWeight: '800' },
+  resultHint: { color: colors.muted, fontFamily: font.heavy },
   resultNeutral: { borderColor: colors.border, backgroundColor: colors.backgroundDeep },
   resultDanger: { borderColor: colors.red, backgroundColor: colors.redDark },
   resultWarning: { borderColor: colors.amber, backgroundColor: colors.amberDark },
   resultSuccess: { borderColor: colors.green, backgroundColor: colors.greenDark },
   resultValue: { flexBasis: 130, flexGrow: 1, gap: 3 },
-  resultLabel: { color: colors.muted, fontSize: 12, fontWeight: '900', letterSpacing: .6 },
-  resultNumber: { color: colors.text, fontSize: 22, fontWeight: '900' },
+  resultLabel: { color: colors.muted, fontSize: 12, fontFamily: font.heavy, letterSpacing: .6 },
+  resultNumber: { color: colors.text, fontSize: 22, fontFamily: font.heavy },
   resultState: { flexBasis: 260, flexGrow: 2, gap: 3 },
-  resultStateText: { color: colors.text, fontSize: 20, fontWeight: '900' },
-  resultHelp: { color: colors.textSecondary, fontSize: 13, lineHeight: 18 },
+  resultStateText: { color: colors.text, fontSize: 20, fontFamily: font.heavy },
+  resultHelp: { fontFamily: font.regular, color: colors.textSecondary, fontSize: 13, lineHeight: 18 },
   reading: { gap: 4, padding: 12, borderRadius: 11, borderWidth: 1, borderColor: colors.borderSoft, backgroundColor: colors.backgroundDeep },
   readingAlert: { borderColor: colors.red, borderLeftWidth: 5 },
   readingVoided: { opacity: .55 },
   readingHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
-  readingTime: { color: colors.text, fontSize: 17, fontWeight: '900' },
-  readingTitle: { color: colors.cyan, fontWeight: '900' },
-  readingDetail: { color: colors.text, fontSize: 14 },
-  readingAlertText: { color: colors.red, fontSize: 14, fontWeight: '900' },
-  readingAction: { color: colors.green, fontSize: 14, fontWeight: '800' },
-  badge: { overflow: 'hidden', paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999, borderWidth: 1, color: colors.text, fontSize: 13, fontWeight: '900' },
+  readingTime: { color: colors.text, fontSize: 17, fontFamily: font.heavy },
+  readingTitle: { color: colors.cyan, fontFamily: font.heavy },
+  readingDetail: { fontFamily: font.regular, color: colors.text, fontSize: 14 },
+  readingAlertText: { color: colors.red, fontSize: 14, fontFamily: font.heavy },
+  readingAction: { color: colors.green, fontSize: 14, fontFamily: font.heavy },
+  badge: { overflow: 'hidden', paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999, borderWidth: 1, color: colors.text, fontSize: 13, fontFamily: font.heavy },
   readOnly: { color: colors.text, padding: 13, borderRadius: 10, borderWidth: 1, borderColor: colors.cyanDark, backgroundColor: colors.selected },
-  footnote: { color: colors.muted, fontSize: 13, lineHeight: 18, marginTop: 6 },
+  footnote: { fontFamily: font.regular, color: colors.muted, fontSize: 13, lineHeight: 18, marginTop: 6 },
   busyOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: 'rgba(8,12,16,.74)' },
-  busyText: { color: colors.text, fontWeight: '900' },
+  busyText: { color: colors.text, fontFamily: font.heavy },
 });

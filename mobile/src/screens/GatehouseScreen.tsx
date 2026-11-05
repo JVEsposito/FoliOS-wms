@@ -1,3 +1,5 @@
+import { font } from '../theme/typography';
+import { FieldHeader } from '../components/field/FieldHeader';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -177,9 +179,7 @@ export function GatehouseScreen({ auth, baseUrl, onLogout }: {
   return <KeyboardAvoidingView style={s.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
     <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={s.content}>
       <View style={s.workspace}>
-        <EstibaHeading title="Portería" eyebrow="FoliOS · LLEGADAS"
-          description={auth.usuario.nombre}
-          actions={<EstibaButton label="Cerrar sesión" variant="secondary" disabled={busy} onPress={onLogout} />} />
+        <FieldHeader area="operacion" auth={auth} title="Portería" busy={busy} onLogout={onLogout} />
         <View style={s.actions}>
           {canWrite ? <EstibaButton label="Nuevo ingreso" variant={tab === 'nuevo' ? 'primary' : 'secondary'} onPress={() => setTab('nuevo')} /> : null}
           <EstibaButton label="Bitácora" variant={tab === 'bitacora' ? 'primary' : 'secondary'} onPress={() => setTab('bitacora')} />
@@ -317,8 +317,8 @@ const s = StyleSheet.create({
   cellNarrow: { flexGrow: 0, flexBasis: 'auto', width: '100%' },
   grow: { flex: 1, minWidth: 0 },
   guide: { flexDirection: 'row', alignItems: 'flex-end', gap: t.space[2] },
-  body: { color: t.color.text, fontSize: t.fontSize.body, lineHeight: t.fontSize.body * t.lineHeight.body },
-  muted: { color: t.color.muted, fontSize: t.fontSize.small, lineHeight: t.fontSize.small * t.lineHeight.body },
+  body: { fontFamily: font.regular, color: t.color.text, fontSize: t.fontSize.body, lineHeight: t.fontSize.body * t.lineHeight.body },
+  muted: { fontFamily: font.regular, color: t.color.muted, fontSize: t.fontSize.small, lineHeight: t.fontSize.small * t.lineHeight.body },
   entry: { gap: t.space[2], paddingVertical: t.space[3], borderBottomWidth: 1, borderColor: t.color.border },
   overlay: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: t.space[4], backgroundColor: 'rgba(0,0,0,0.7)' },
   dialog: { width: '100%', maxWidth: 640, height: '85%', padding: t.space[4], gap: t.space[3], borderRadius: t.radius.panel, backgroundColor: t.color.surface },

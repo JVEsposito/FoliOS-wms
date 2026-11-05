@@ -1,3 +1,4 @@
+import { font } from '../../theme/typography';
 import { useState } from 'react';
 import { ScrollView, StyleSheet, Text } from 'react-native';
 
@@ -75,5 +76,5 @@ export function EstibaCatalog() {
 const s = StyleSheet.create({
   screen: { backgroundColor: t.color.canvas },
   content: { padding: t.space[4], gap: t.space[6] },
-  body: { fontSize: t.fontSize.body, lineHeight: t.fontSize.body * t.lineHeight.body, color: t.color.text },
+  body: { fontFamily: font.regular, fontSize: t.fontSize.body, lineHeight: t.fontSize.body * t.lineHeight.body, color: t.color.text },
 });

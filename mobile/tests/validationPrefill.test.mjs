@@ -1,3 +1,4 @@
+import { fieldUiMock } from './helpers/fieldUiMock.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -53,6 +54,7 @@ function harness(prefills = {}) {
       compilerOptions: { jsx: ts.JsxEmit.ReactJSX, module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }, fileName: path,
     }).outputText;
     const mockRequire = (id) => {
+      const fieldMock = fieldUiMock(id); if (fieldMock) return fieldMock;
       if (id === 'react-native') return native;
       if (id === 'expo-crypto') return { randomUUID: () => `operation-${++sequence}` };
       if (id.endsWith('/hooks/useOperationalPolling')) return { useOperationalPolling: () => {} };

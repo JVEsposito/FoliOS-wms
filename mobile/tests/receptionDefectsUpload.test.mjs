@@ -1,3 +1,4 @@
+import { fieldUiMock } from './helpers/fieldUiMock.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -14,6 +15,7 @@ function compile(path, mocks = {}, globals = {}) {
     compilerOptions: { module: ts.ModuleKind.CommonJS },
   }).outputText, { module, exports: module.exports, Error, Blob, Uint8Array, TextEncoder,
     require: (id) => {
+      const fieldMock = fieldUiMock(id); if (fieldMock) return fieldMock;
       if (id in mocks) return mocks[id];
       throw new Error(`Unexpected import: ${id}`);
     }, ...globals });

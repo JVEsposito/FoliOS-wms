@@ -1,3 +1,4 @@
+import { font } from '../theme/typography';
 import * as Crypto from 'expo-crypto';
 import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -72,4 +73,4 @@ export function MaterialDeliveryRegistrationPanel({ delivery, dispatchId, api, t
   </View>;
 }
 
-const styles = StyleSheet.create({ box: { padding: 12, gap: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 12 }, title: { color: colors.text, fontSize: 18, fontWeight: '700' }, text: { color: colors.text, fontSize: 16 }, input: { minHeight: 48, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 8, color: colors.text }, button: { minHeight: 48, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 8, justifyContent: 'center' } });
+const styles = StyleSheet.create({ box: { padding: 12, gap: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 12 }, title: { color: colors.text, fontSize: 18, fontFamily: font.bold }, text: { fontFamily: font.regular, color: colors.text, fontSize: 16 }, input: { minHeight: 52, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 8, color: colors.text }, button: { minHeight: 48, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 8, justifyContent: 'center' } });

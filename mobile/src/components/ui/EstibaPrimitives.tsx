@@ -1,6 +1,7 @@
+import { font } from '../../theme/typography';
 import { useState, type ReactNode } from 'react';
 import {
-  ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
+  ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
   type PressableProps, type StyleProp, type TextInputProps, type ViewStyle,
 } from 'react-native';
 
@@ -66,7 +67,7 @@ export function EstibaButton({ label, variant = 'primary', busy = false, disable
     disabled={inactive}
     onFocus={(event) => { setFocused(true); props.onFocus?.(event); }}
     onBlur={(event) => { setFocused(false); props.onBlur?.(event); }}
-    style={({ pressed }) => [s.button, {
+    style={({ pressed }) => [s.button, (variant === 'primary' || variant === 'confirm') && { minHeight: 56 }, {
       backgroundColor: inactive ? t.color.disabledSurface : palette.background,
       borderColor: inactive ? t.color.border : palette.border,
       opacity: pressed ? 0.8 : 1,
@@ -109,7 +110,7 @@ export function EstibaField({ label, hint, error, style, ...props }: TextInputPr
       selectionColor={t.color.primary}
       onFocus={(event) => { setFocused(true); props.onFocus?.(event); }}
       onBlur={(event) => { setFocused(false); props.onBlur?.(event); }}
-      style={[s.input, props.multiline && s.multilineInput, error ? { borderColor: t.signal.critical.text } : null, focused && s.focused, style]}
+      style={[s.input, { minHeight: 52 }, props.multiline && s.multilineInput, error ? { borderColor: t.signal.critical.text } : null, focused && s.focused, style]}
     />
     {hint ? <Text style={s.smallMuted}>{hint}</Text> : null}
     {error ? <Text accessibilityLiveRegion="polite" style={s.fieldError}>Error: {error}</Text> : null}
@@ -203,34 +204,34 @@ export function EstibaTable({ caption, columns, rows }: {
 
 const s = StyleSheet.create({
   surface: { backgroundColor: t.color.canvas },
-  body: { color: t.color.text, fontSize: t.fontSize.body, lineHeight: t.fontSize.body * t.lineHeight.body },
-  muted: { color: t.color.muted, fontSize: t.fontSize.body, lineHeight: t.fontSize.body * t.lineHeight.body },
-  smallMuted: { color: t.color.muted, fontSize: t.fontSize.small, lineHeight: t.fontSize.small * t.lineHeight.body },
-  strong: { fontWeight: t.fontWeight.strong },
+  body: { fontFamily: font.regular, color: t.color.text, fontSize: t.fontSize.body, lineHeight: t.fontSize.body * t.lineHeight.body },
+  muted: { fontFamily: font.regular, color: t.color.muted, fontSize: t.fontSize.body, lineHeight: t.fontSize.body * t.lineHeight.body },
+  smallMuted: { fontFamily: font.regular, color: t.color.muted, fontSize: t.fontSize.small, lineHeight: t.fontSize.small * t.lineHeight.body },
+  strong: { fontFamily: font.bold },
   heading: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', gap: t.space[4] },
   headingCopy: { flexGrow: 1, flexShrink: 1, gap: t.space[2] },
-  eyebrow: { color: t.color.muted, fontSize: t.fontSize.small, fontWeight: t.fontWeight.bold, letterSpacing: 1, textTransform: 'uppercase' },
-  title: { color: t.color.text, fontSize: t.fontSize.title, lineHeight: t.fontSize.title * t.lineHeight.heading, fontWeight: t.fontWeight.bold },
+  eyebrow: { fontFamily: font.heavy, color: t.color.muted, fontSize: t.fontSize.small,  letterSpacing: 1, textTransform: 'uppercase' },
+  title: { fontFamily: font.heavy, color: t.color.text, fontSize: t.fontSize.title, lineHeight: t.fontSize.title * t.lineHeight.heading,  },
   panel: { backgroundColor: t.color.surface, borderColor: t.color.border, borderWidth: 1, borderRadius: t.radius.panel },
   panelHeader: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: t.space[3], borderBottomWidth: 1, borderBottomColor: t.color.border, padding: t.space[4] },
-  panelTitle: { color: t.color.text, fontSize: t.fontSize.body, fontWeight: t.fontWeight.strong, flexShrink: 1 },
+  panelTitle: { fontFamily: font.bold, color: t.color.text, fontSize: t.fontSize.body,  flexShrink: 1 },
   panelBody: { padding: t.space[4], gap: t.space[4] },
   button: { minHeight: t.density.touch.control, paddingHorizontal: t.space[4], paddingVertical: t.space[3], borderRadius: t.radius.control, borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: t.space[2] },
-  buttonLabel: { fontSize: t.fontSize.body, lineHeight: t.fontSize.body * t.lineHeight.body, fontWeight: t.fontWeight.strong, textAlign: 'center', flexShrink: 1 },
+  buttonLabel: { fontSize: t.fontSize.body, lineHeight: t.fontSize.body * t.lineHeight.body, fontFamily: font.bold, textAlign: 'center', flexShrink: 1 },
   focused: { borderWidth: 3, borderColor: t.color.focus },
   signal: { flexDirection: 'row', alignItems: 'center', gap: t.space[2] },
   marker: { width: 8, height: 8, borderWidth: 1 },
-  signalText: { fontSize: t.fontSize.small, lineHeight: t.fontSize.small * t.lineHeight.body, fontWeight: t.fontWeight.strong, flexShrink: 1 },
-  code: { color: t.color.text, fontSize: t.fontSize.body, fontWeight: t.fontWeight.strong, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontVariant: ['tabular-nums'] },
+  signalText: { fontSize: t.fontSize.small, lineHeight: t.fontSize.small * t.lineHeight.body, fontFamily: font.bold, flexShrink: 1 },
+  code: { color: t.color.text, fontSize: t.fontSize.body,  fontFamily: font.monoBold, fontVariant: ['tabular-nums'] },
   codeLarge: { fontSize: t.fontSize.title },
   field: { gap: t.space[2] },
-  fieldLabel: { color: t.color.text, fontSize: t.fontSize.body, lineHeight: t.fontSize.body * t.lineHeight.body, fontWeight: t.fontWeight.strong },
-  input: { minHeight: t.density.touch.control, borderWidth: 1, borderColor: t.color.inputBorder, borderRadius: t.radius.control, backgroundColor: t.color.surface, color: t.color.text, paddingHorizontal: t.space[3], paddingVertical: t.space[2], fontSize: t.fontSize.body },
+  fieldLabel: { fontFamily: font.bold, color: t.color.text, fontSize: t.fontSize.body, lineHeight: t.fontSize.body * t.lineHeight.body,  },
+  input: { fontFamily: font.regular, minHeight: t.density.touch.control, borderWidth: 1, borderColor: t.color.inputBorder, borderRadius: t.radius.control, backgroundColor: t.color.surface, color: t.color.text, paddingHorizontal: t.space[3], paddingVertical: t.space[2], fontSize: t.fontSize.body },
   multilineInput: { minHeight: 112, textAlignVertical: 'top' },
-  fieldError: { color: t.signal.critical.text, fontSize: t.fontSize.small, lineHeight: t.fontSize.small * t.lineHeight.body },
+  fieldError: { fontFamily: font.regular, color: t.signal.critical.text, fontSize: t.fontSize.small, lineHeight: t.fontSize.small * t.lineHeight.body },
   metric: { gap: t.space[2] },
   metricHeading: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: t.space[2] },
-  metricValue: { color: t.color.text, fontSize: t.fontSize.body, fontWeight: t.fontWeight.bold, fontVariant: ['tabular-nums'] },
+  metricValue: { fontFamily: font.heavy, color: t.color.text, fontSize: t.fontSize.body,  fontVariant: ['tabular-nums'] },
   meter: { height: 8, backgroundColor: t.color.disabledSurface, overflow: 'hidden' },
   alert: { padding: t.space[4], borderWidth: 1, borderLeftWidth: 4, borderRadius: t.radius.control, gap: t.space[2] },
   empty: { padding: t.space[4], gap: t.space[3] },
@@ -242,5 +243,5 @@ const s = StyleSheet.create({
   table: { gap: t.space[3] },
   tableRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: t.color.border },
   tableHead: { backgroundColor: t.color.subtle },
-  cell: { color: t.color.text, minHeight: t.density.touch.row, padding: t.space[4], fontSize: t.fontSize.body, lineHeight: t.fontSize.body * t.lineHeight.body },
+  cell: { fontFamily: font.regular, color: t.color.text, minHeight: t.density.touch.row, padding: t.space[4], fontSize: t.fontSize.body, lineHeight: t.fontSize.body * t.lineHeight.body },
 });

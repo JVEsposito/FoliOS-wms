@@ -1,3 +1,4 @@
+import { fieldUiMock } from './helpers/fieldUiMock.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -69,6 +70,7 @@ function harness({ registrar = true } = {}) {
       fileName: path,
     }).outputText;
     const mockRequire = (id) => {
+      const fieldMock = fieldUiMock(id); if (fieldMock) return fieldMock;
       if (id === 'react-native') return native;
       if (id === 'expo-crypto') return { randomUUID: () => `operation-${++sequence}` };
       if (id.endsWith('/services/prefrioApi')) return api;
@@ -144,7 +146,7 @@ test('la tablet registra un chequeo, muestra el riesgo en vivo y reintenta sin d
     h.failNextSave();
     await h.press('Guardar medición');
     assert.match(h.text(), /no se guardó.*no se duplicará/s);
-    assert.match(h.text(), /SIN CONEXIÓN/);
+    assert.match(h.text(), /sin conexión/i);
     await h.press('Guardar medición');
     assert.equal(h.calls.saves.length, 2);
     assert.equal(h.calls.saves[0].operacion_id, h.calls.saves[1].operacion_id, 'El reintento reutiliza la operación');

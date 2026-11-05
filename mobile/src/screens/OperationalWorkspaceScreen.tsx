@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AuthSession } from '../domain/estiba';
 import { EstibaApi } from '../services/estibaApi';
@@ -29,6 +29,7 @@ type WorkspaceView = 'labores' | 'ambiente' | 'operacion';
 export function OperationalWorkspaceScreen({ api, auth, onChangeModule, onLogout }: Props) {
   const [view, setView] = useState<WorkspaceView>(api.mode === 'connected' ? 'labores' : 'operacion');
   const [environmentalDue, setEnvironmentalDue] = useState(0);
+  const [openSessions, setOpenSessions] = useState<string[]>([]);
   const environmentalAvailable = api.mode === 'connected'
     && auth.usuario.capacidades.puede_consultar_control_ambiental === true;
 
@@ -61,11 +62,23 @@ export function OperationalWorkspaceScreen({ api, auth, onChangeModule, onLogout
   const registerPlanLogout = useCallback((logout: (() => Promise<void>) | null) => { planLogout.current = logout; }, []);
 
   async function logoutFromMenu() {
+    if (!canLeaveWorkspace()) return;
     if (view === 'operacion' && planLogout.current) {
       await planLogout.current();
       return;
     }
     await logoutFromTasks();
+  }
+
+  function canLeaveWorkspace() {
+    if (!openSessions.length) return true;
+    Alert.alert('Estibas todavía abiertas', `Cierra las sesiones de ${openSessions.join(', ')} antes de salir o cambiar de módulo.`);
+    setView('operacion');
+    return false;
+  }
+
+  function changeModule() {
+    if (canLeaveWorkspace()) onChangeModule?.();
   }
 
   async function logoutFromTasks() {
@@ -81,6 +94,7 @@ export function OperationalWorkspaceScreen({ api, auth, onChangeModule, onLogout
   return (
     <View style={styles.screen}>
       <OperatorHeader
+        area={auth.usuario.ambito_camaras === 'materiales' ? 'materiales' : 'frigorifico'}
         connected={api.mode === 'connected'}
         deviceName={auth.dispositivo.nombre}
         modeLabel={api.mode === 'connected' ? 'Conectado' : api.mode === 'demo' ? 'Modo demostración' : 'Sin configurar'}
@@ -88,7 +102,7 @@ export function OperationalWorkspaceScreen({ api, auth, onChangeModule, onLogout
         userName={auth.usuario.nombre}
         trailing={<OperatorMenu
           deviceName={auth.dispositivo.nombre}
-          onChangeModule={onChangeModule}
+          onChangeModule={onChangeModule ? changeModule : undefined}
           onLogout={() => void logoutFromMenu()}
           role={auth.usuario.rol}
           userName={auth.usuario.nombre}
@@ -135,7 +149,7 @@ export function OperationalWorkspaceScreen({ api, auth, onChangeModule, onLogout
         ) : view === 'ambiente' && api.baseUrl ? (
           <EnvironmentalControlScreen auth={auth} baseUrl={api.baseUrl} onDueChange={updateEnvironmentalDue} />
         ) : (
-          <OperationalScreen api={api} auth={auth} onLogout={onLogout} onRegisterLogout={registerPlanLogout} />
+          <OperationalScreen api={api} auth={auth} onLogout={onLogout} onRegisterLogout={registerPlanLogout} onOpenSessionsChange={setOpenSessions} />
         )}
       </View>
     </View>

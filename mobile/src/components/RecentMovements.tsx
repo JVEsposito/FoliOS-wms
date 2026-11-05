@@ -97,7 +97,7 @@ const styles = StyleSheet.create({
   icon: { fontFamily: font.heavy, color: colors.cyan, fontSize: 18 },
   copy: { flex: 1, minWidth: 0 },
   itemTitle: { fontFamily: font.heavy, color: colors.text, fontSize: 13 },
-  route: { fontFamily: font.regular, marginTop: 3, color: colors.muted, fontSize: 11 },
+  route: { fontFamily: font.regular, marginTop: 3, color: colors.muted, fontSize: 12 },
   time: { fontFamily: font.regular, color: colors.muted, fontSize: 12 },
   empty: { fontFamily: font.regular, marginTop: 10, color: colors.muted, fontSize: 13 },
 });

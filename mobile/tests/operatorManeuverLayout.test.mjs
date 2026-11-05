@@ -1,3 +1,4 @@
+import { fieldUiMock } from './helpers/fieldUiMock.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -44,6 +45,7 @@ function harness(width, initial = {}) {
       fileName: path,
     }).outputText;
     const mockRequire = (id) => {
+      const fieldMock = fieldUiMock(id); if (fieldMock) return fieldMock;
       if (id === 'react-native') return native;
       for (const name of ['OperatorFolioConfirmation', 'OperatorExceptionReport', 'OperatorPhysicalContextPanel']) {
         if (id.endsWith('/' + name)) return { [name]: name };

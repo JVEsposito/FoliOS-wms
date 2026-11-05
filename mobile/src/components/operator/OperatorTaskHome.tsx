@@ -68,7 +68,7 @@ export function OperatorTaskHome({
   verification,
 }: Props) {
   const { width } = useWindowDimensions();
-  const compact = width < o.breakpoint.compact;
+  const compact = width < 1000;
 
   return (
     <ScrollView
@@ -395,10 +395,9 @@ const styles = StyleSheet.create({
   eyebrow: { fontFamily: font.heavy, color: o.color.muted, fontSize: o.type.caption, letterSpacing: 1.2 },
 
   hero: {
-    flexGrow: 1,
-    minHeight: 560,
-    padding: o.space[8],
-    gap: o.space[6],
+    flexGrow: 0,
+    padding: o.space[6],
+    gap: o.space[4],
     borderWidth: 1,
     borderColor: o.color.border,
     borderRadius: o.radius.panel,
@@ -432,7 +431,7 @@ const styles = StyleSheet.create({
 
   heroHint: { fontFamily: font.bold, color: o.color.warning, fontSize: o.type.body },
   heroDetail: { fontFamily: font.regular, color: o.color.muted, fontSize: o.type.small },
-  heroSpacer: { flexGrow: 1 },
+  heroSpacer: { height: 0 },
   heroAction: { minHeight: 84, paddingHorizontal: o.space[6], alignItems: 'center', justifyContent: 'center', borderRadius: o.radius.panel, backgroundColor: o.color.primary },
   heroActionText: { fontFamily: font.heavy, color: o.color.onPrimary, fontSize: o.type.heading },
 
