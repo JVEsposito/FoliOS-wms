@@ -31,7 +31,9 @@ class PalletsCargadosApiTest extends TestCase
             ->assertJsonPath('message', "El folio {$primero->numero_folio} todavía no sale de la cámara: envíalo al andén antes de cargarlo.");
 
         $operacion = (string) Str::uuid();
-        $respuesta = $this->registrarCargado($contexto, $carga->id, strtolower($segundo->numero_folio), $operacion)
+        // El reenvío lleva la misma hora del dispositivo: en un CI lento, now() puede cambiar de segundo entre ambos.
+        $generadoAt = now()->toAtomString();
+        $respuesta = $this->registrarCargado($contexto, $carga->id, strtolower($segundo->numero_folio), $operacion, $generadoAt)
             ->assertOk()
             ->assertJsonPath('data.progreso.en_anden', 2)
             ->assertJsonPath('data.progreso.cargados', 1)
@@ -41,7 +43,7 @@ class PalletsCargadosApiTest extends TestCase
         $this->assertNotNull($folio['cargado_at']);
 
         // La misma lectura reenviada por la tablet no duplica el evento.
-        $this->registrarCargado($contexto, $carga->id, strtolower($segundo->numero_folio), $operacion)->assertOk();
+        $this->registrarCargado($contexto, $carga->id, strtolower($segundo->numero_folio), $operacion, $generadoAt)->assertOk();
         $this->assertSame(1, $carga->eventos()->where('tipo', 'folio_cargado')->count());
         // Una segunda lectura nueva del mismo pallet se informa, sin cambiar nada.
         $this->registrarCargado($contexto, $carga->id, $segundo->numero_folio)
@@ -188,12 +190,12 @@ class PalletsCargadosApiTest extends TestCase
     }
 
     /** @param  array<string, mixed>  $contexto */
-    private function registrarCargado(array $contexto, string $cargaId, string $numero, ?string $operacion = null): TestResponse
+    private function registrarCargado(array $contexto, string $cargaId, string $numero, ?string $operacion = null, ?string $generadoAt = null): TestResponse
     {
         return $this->conToken($contexto['token'])->postJson("/api/cargas/{$cargaId}/cargados", [
             'operacion_id' => $operacion ?? (string) Str::uuid(),
             'numero_folio' => $numero,
-            'generado_dispositivo_at' => now()->toAtomString(),
+            'generado_dispositivo_at' => $generadoAt ?? now()->toAtomString(),
         ]);
     }
 
