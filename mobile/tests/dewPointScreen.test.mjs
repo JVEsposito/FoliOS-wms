@@ -21,7 +21,11 @@ function dayFixture({ registrar = true, readings = [] } = {}) {
     resumen: { registros: readings.length, con_superficie: 0, punto_rocio_maximo_c: readings[0]?.punto_rocio_c ?? null, margen_minimo_c: readings[0]?.margen_c ?? null, alertas: readings.filter((r) => r.requiere_accion).length, alertas_pendientes: readings.filter((r) => r.alerta_pendiente).length, gotas_visibles: 0 },
     mediciones: readings,
     puntos: { salas: [{ id: 'sala-1', nombre: 'Sala de sellado', activa: true }, { id: 'sala-2', nombre: 'Sala antigua', activa: false }], tuneles: [{ id: 't1', nombre: 'TP-01 · Túnel 1' }], camaras: [] },
-    etapas: [{ valor: 'sellado', etiqueta: 'Sellado' }, { valor: 'paletizado', etiqueta: 'Paletizado' }, { valor: 'ingreso_prefrio', etiqueta: 'Ingreso prefrío' }],
+    etapas: [{ valor: 'sellado', etiqueta: 'Sellado' }, { valor: 'paletizado', etiqueta: 'Paletizado' }, { valor: 'ingreso_prefrio', etiqueta: 'Ingreso prefrío' }, { valor: 'almacenamiento', etiqueta: 'Almacenamiento' }],
+    plan: {
+      temperatura_congelacion_c: -1.7,
+      etapas: [{ etapa: 'almacenamiento', etiqueta: 'Almacenamiento', orden: 7, planificada: true, temperatura_aire_c: -1, temperatura_fruta_c: -0.5, rocio_maximo_c: -1, limitante: 'fruta', humedad_maxima: 100, cerca_congelacion: false }],
+    },
     referencias: [
       { id: 'sellado-1', etapa: 'sellado', etapa_etiqueta: 'Sellado', punto: 'Sala de sellado', referencia: null, medido_at: minutesAgo(90), temperatura_ambiente_c: 12, humedad_relativa: 60, temperatura_superficie_c: null, punto_rocio_c: 4.47 },
       { id: 'salida-1', etapa: 'salida_prefrio', etapa_etiqueta: 'Salida prefrío', punto: 'Salida túneles', referencia: null, medido_at: minutesAgo(30), temperatura_ambiente_c: 2, humedad_relativa: 80, temperatura_superficie_c: 1, punto_rocio_c: -1.09 },
@@ -207,6 +211,24 @@ test('la tablet vincula el sellado y la fruta que llega con el margen de la etap
     // Tocar de nuevo un chip lo desvincula.
     await h.press(sealedChip);
     assert.ok(!h.selected(sealedChip));
+  } finally {
+    await h.unmount();
+  }
+});
+
+test('la tablet muestra el plan de la etapa y si la medición queda dentro', async () => {
+  const h = harness();
+  try {
+    await h.mount();
+    await h.press('Sellado');
+    assert.doesNotMatch(h.text(), /Plan de sellado/, 'Una etapa sin plan no muestra objetivo');
+    await h.press('Almacenamiento');
+    assert.match(h.text(), /Plan de almacenamiento: rocío ≤ -1,0 °C · con aire a -1,0 °C, sin límite de HR/);
+    await h.input('T° ambiente *', '0');
+    await h.input('Humedad relativa *', '95');
+    assert.match(h.text(), /Plan de la etapa\nRocío ≤ -1,0 °C · a esta T° la HR debe ser ≤ 93 %\nFuera del plan/);
+    await h.input('Humedad relativa *', '90');
+    assert.match(h.text(), /Plan de la etapa\nRocío ≤ -1,0 °C · a esta T° la HR debe ser ≤ 93 %\nDentro del plan/);
   } finally {
     await h.unmount();
   }

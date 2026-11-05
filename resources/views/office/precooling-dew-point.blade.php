@@ -58,7 +58,14 @@
                     <article data-tone="neutral"><span>MARGEN MÍNIMO</span><strong id="minMargin">—</strong><small id="minMarginHelp">Superficie − rocío de cada medición</small></article>
                     <article data-tone="warning"><span>ALERTAS</span><strong id="alertCount">0</strong><small id="pendingCount">0 sin acción</small></article>
                     <article data-tone="danger"><span>GOTAS VISIBLES</span><strong id="dropCount">0</strong><small>Condensación observada</small></article>
+                    <article data-tone="warning"><span>FUERA DE PLAN</span><strong id="outOfPlanCount">0</strong><small>Rocío sobre el plan de la etapa</small></article>
                 </div>
+
+                <section class="panel dew-panel dew-plan-panel" aria-labelledby="planTitle">
+                    <div class="prefrio-panel__heading" data-estiba-contrast="navy"><div><p class="eyebrow">DEL PACKING AL CONTENEDOR</p><h2 id="planTitle">Plan de cadena de frío</h2></div><button class="secondary-button is-hidden" id="editPlanButton" type="button">Editar plan</button></div>
+                    <ol class="dew-chain" id="chainStrip" aria-label="Etapas planificadas y su medición más reciente del día"></ol>
+                    <p class="dew-note" id="chainNote">Rocío máximo = T° más baja de la fruta en ese aire − margen de la etapa. En sellado manda además la fruta más fría de las etapas siguientes, porque ese aire queda en la bolsa.</p>
+                </section>
 
                 <div class="dew-grid">
                     <section class="panel dew-panel dew-chart-panel">
@@ -121,6 +128,16 @@
                     <div class="dew-room-list" id="roomList"></div>
                     <div class="dew-room-new"><label><span>Nueva sala</span><input name="nombre" maxlength="80" placeholder="Ej.: Sala de sellado"></label><button class="primary-button" id="addRoomButton" value="default" type="submit">Agregar</button></div>
                     <p class="form-error" id="roomError" role="alert"></p>
+                </form>
+            </dialog>
+
+            <dialog class="prefrio-dialog dew-dialog" id="planDialog" aria-labelledby="planDialogTitle">
+                <form method="dialog" class="prefrio-dialog__shell" id="planForm" novalidate>
+                    <div class="prefrio-dialog__heading"><div><p class="eyebrow">CADENA DE FRÍO</p><h2 id="planDialogTitle">Editar plan</h2><p>Por etapa, la T° del aire planificada y la T° superficial más baja que tendrá la fruta en ese aire. FoliOS calcula el rocío y la humedad máximos con el margen de cada etapa. Deja la fruta vacía para sacar una etapa del plan; el margen de cada etapa se ajusta en «Márgenes».</p></div><button class="dialog-close" value="cancel" type="submit" aria-label="Cerrar">×</button></div>
+                    <div class="dew-table-scroll"><table class="dew-table dew-plan-table"><thead><tr><th>Etapa</th><th>T° aire</th><th>T° fruta mínima</th><th>Margen</th><th>Rocío máx.</th><th>HR máx.</th></tr></thead><tbody id="planRows"></tbody></table></div>
+                    <p class="dew-note">La propuesta completa solo las etapas frías vacías con una cámara a −1 °C y pulpa entre −0,5 y 0,5 °C: salida de prefrío y traslado con la fruta a −1 °C, almacenamiento, despacho y carga a −0,5 °C. Packing, sellado, paletizado e ingreso a prefrío dependen de tu proceso.</p>
+                    <p class="form-error" id="planError" role="alert"></p>
+                    <div class="dialog-actions"><button class="secondary-button" id="suggestPlanButton" type="button">Completar con la propuesta</button><button class="secondary-button" value="cancel" type="submit">Cancelar</button><button class="primary-button" id="savePlanButton" value="default" type="submit">Guardar plan</button></div>
                 </form>
             </dialog>
 

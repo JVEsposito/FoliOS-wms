@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { dewPoint, dewPointAlerts, dewPointState, evaluateReading, humidityAt, waterVapor } from '../../resources/js/shared/dew-point.js';
+import { coldChainPlan, dewPoint, dewPointAlerts, dewPointState, evaluateReading, humidityAt, humidityForDewPoint, waterVapor } from '../../resources/js/shared/dew-point.js';
 import { buildOperationalAlerts } from '../../resources/js/shared/operation-now-alerts.js';
 
 // Valores calculados por la planilla «Calculadora_Punto_Rocio_Cerezas.xlsx» (15 °C, 62,9 % HR, fruta 7,1 °C).
@@ -53,4 +53,27 @@ test('las alertas sin acción llegan a Operación ahora', () => {
 
     const all = buildOperationalAlerts({ prefrio: { tuneles: [], condensacion: { alertas_pendientes: pending } } });
     assert.deepEqual(all.map((alert) => alert.area), ['TUN-01', 'Sala de sellado']);
+});
+
+test('el plan de cadena de frío calcula como el servidor, con el aire del envase en el sellado', () => {
+    assert.equal(Math.round(humidityForDewPoint(12, -1) * 10) / 10, 40.6);
+    assert.equal(humidityForDewPoint(-1, -0.5), 100, 'Si el rocío permitido supera la T° del aire, no hay límite');
+    const margins = { salida_prefrio: 0.5, traslado: 0.5, almacenamiento: 0.5, despacho: 0.5, carga_contenedor: 0.5 };
+    const plan = coldChainPlan([
+        { etapa: 'packing', temperatura_aire_c: 12, temperatura_fruta_c: 4 },
+        { etapa: 'sellado', temperatura_aire_c: 12, temperatura_fruta_c: 4 },
+        { etapa: 'paletizado', temperatura_aire_c: null, temperatura_fruta_c: null },
+        { etapa: 'ingreso_prefrio', temperatura_aire_c: -1.5, temperatura_fruta_c: 4 },
+        { etapa: 'salida_prefrio', temperatura_aire_c: -1, temperatura_fruta_c: -1 },
+        { etapa: 'traslado', temperatura_aire_c: 4, temperatura_fruta_c: -1 },
+        { etapa: 'almacenamiento', temperatura_aire_c: -1, temperatura_fruta_c: -0.5 },
+        { etapa: 'despacho', temperatura_aire_c: 4, temperatura_fruta_c: -0.5 },
+        { etapa: 'carga_contenedor', temperatura_aire_c: 0, temperatura_fruta_c: -0.5 },
+    ], (stage) => margins[stage] ?? 2);
+    const by = Object.fromEntries(plan.map((row) => [row.etapa, row]));
+    assert.deepEqual([by.packing.rocio_maximo_c, by.packing.humedad_maxima, by.packing.limitante], [2, 50.4, 'fruta']);
+    assert.deepEqual([by.sellado.rocio_envase_c, by.sellado.rocio_maximo_c, by.sellado.humedad_maxima, by.sellado.limitante], [-1.5, -1.5, 39.1, 'envase']);
+    assert.equal(by.paletizado.planificada, false);
+    assert.deepEqual([by.ingreso_prefrio.humedad_maxima, by.ingreso_prefrio.cerca_congelacion], [100, true]);
+    assert.deepEqual([by.traslado.humedad_maxima, by.almacenamiento.humedad_maxima, by.despacho.humedad_maxima, by.carga_contenedor.humedad_maxima], [67.4, 100, 69.9, 93]);
 });

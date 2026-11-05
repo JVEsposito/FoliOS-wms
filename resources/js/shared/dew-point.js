@@ -99,3 +99,47 @@ export function compareSurface(surface, dewPointValue, minimumMargin = 2) {
 export function worstDewPointState(states) {
     return states.filter(Boolean).reduce((worst, current) => (STATE_RANK[current] > STATE_RANK[worst] ? current : worst), 'sin_superficie');
 }
+
+/** HR máxima del aire a una temperatura para que su rocío no supere el indicado (tope 100 %). */
+export function humidityForDewPoint(temperature, dewPointMax) {
+    if (!Number.isFinite(temperature) || !Number.isFinite(dewPointMax)) return null;
+    return Math.min(100, (100 * saturation(dewPointMax)) / saturation(temperature));
+}
+
+const round = (value, decimals) => Math.round(value * 10 ** decimals) / 10 ** decimals;
+
+/**
+ * Plan de cadena de frío calculado como el servidor. Cada fila trae etapa,
+ * temperatura_aire_c y temperatura_fruta_c en el orden de la cadena; marginFor
+ * devuelve el margen mínimo de una etapa. El sellado suma el aire del envase: su
+ * rocío debe quedar bajo la fruta más fría de las etapas siguientes.
+ */
+export function coldChainPlan(rows, marginFor, freezing = -1.7) {
+    const base = rows.map((row) => {
+        const fruit = Number.isFinite(row.temperatura_fruta_c) ? row.temperatura_fruta_c : null;
+        const air = Number.isFinite(row.temperatura_aire_c) ? row.temperatura_aire_c : null;
+        const margin = marginFor(row.etapa);
+        return { ...row, air, fruit, margin, fruitDew: fruit === null ? null : round(fruit - margin, 2) };
+    });
+    return base.map((row, index) => {
+        const later = base.slice(index + 1).map((item) => item.fruitDew).filter((value) => value !== null);
+        const envelope = row.etapa === 'sellado' && later.length ? Math.min(...later) : null;
+        const limits = [row.fruitDew, envelope].filter((value) => value !== null);
+        const maximum = limits.length ? Math.min(...limits) : null;
+        const limiting = maximum === null ? null : (envelope !== null && envelope === maximum && (row.fruitDew === null || envelope < row.fruitDew) ? 'envase' : 'fruta');
+        const cold = [row.air, row.fruit].filter((value) => value !== null);
+        return {
+            etapa: row.etapa,
+            planificada: row.fruit !== null,
+            temperatura_aire_c: row.air,
+            temperatura_fruta_c: row.fruit,
+            margen_minimo_c: row.margin,
+            rocio_fruta_c: row.fruitDew,
+            rocio_envase_c: envelope,
+            rocio_maximo_c: maximum,
+            limitante: limiting,
+            humedad_maxima: maximum !== null && row.air !== null ? round(humidityForDewPoint(row.air, maximum), 1) : null,
+            cerca_congelacion: cold.length > 0 && Math.min(...cold) <= freezing + 0.5,
+        };
+    });
+}

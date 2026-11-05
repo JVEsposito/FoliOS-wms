@@ -11,7 +11,30 @@
 .dew-message { margin: 0; padding: 9px 12px; border-left: 4px solid var(--corporate-blue); background: var(--corporate-card); color: var(--text); }
 .dew-message[data-error="true"] { border-left-color: var(--danger-text); color: var(--danger-text); }
 
-.dew-metrics { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.dew-metrics { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+
+/* Plan de cadena de frío: etapas en orden, con su objetivo y la medición más reciente. */
+.dew-chain { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(150px, 1fr); gap: 14px; margin: 0; padding: 2px 2px 6px; overflow-x: auto; list-style: none; }
+.dew-chain__stage { position: relative; display: grid; align-content: start; gap: 3px; padding: 10px; border: 1px solid var(--corporate-border); border-top: 4px solid var(--text-subtle); border-radius: 2px; background: var(--corporate-card); }
+.dew-chain__stage + .dew-chain__stage::before { content: '→'; position: absolute; top: 50%; left: -13px; transform: translateY(-50%); color: var(--muted); font-weight: 800; }
+.dew-chain__stage[data-tone="success"] { border-top-color: var(--success-text); }
+.dew-chain__stage[data-tone="warning"] { border-top-color: var(--warning-text); }
+.dew-chain__stage small { color: var(--muted); font-size: .66rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.dew-chain__stage strong { color: var(--text-strong); font-size: 1.05rem; }
+.dew-chain__stage span { color: var(--text); font-size: .74rem; }
+.dew-chain__stage em { color: var(--muted); font-style: normal; }
+.dew-chain__last { margin-top: 4px; padding-top: 5px; border-top: 1px solid var(--corporate-border); color: var(--muted) !important; }
+.dew-chain__stage[data-tone="warning"] .dew-chain__last { color: var(--warning-text) !important; font-weight: 800; }
+.dew-chain__stage[data-tone="success"] .dew-chain__last { color: var(--success-text) !important; font-weight: 800; }
+.dew-chain__freeze { color: var(--warning-text) !important; font-weight: 800; }
+.dew-chain__empty { grid-column: 1 / -1; color: var(--muted); }
+.dew-table.dew-plan-table { min-width: 640px; }
+.dew-plan-table td small { display: block; color: var(--muted); font-size: .68rem; }
+.dew-plan-table td { vertical-align: middle; }
+.dew-plan-table .dew-number div { display: inline-block; position: relative; }
+.dew-plan-table .dew-number input { min-height: 36px; width: 96px; padding: 0 34px 0 10px; border: 1px solid var(--corporate-border); border-radius: 2px; background: var(--corporate-card); color: var(--text-strong); font: inherit; font-weight: 800; }
+.dew-plan-table tr.is-unplanned td:first-child strong { color: var(--muted); }
+
 
 .dew-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 10px; }
 .dew-panel { display: grid; gap: 10px; align-content: start; padding: 12px; }

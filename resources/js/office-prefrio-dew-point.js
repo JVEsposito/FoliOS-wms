@@ -1,6 +1,6 @@
 import { CategoryScale, Chart, Legend, LinearScale, LineController, LineElement, PointElement, Tooltip } from 'chart.js';
 
-import { DEW_POINT_STATES, compareSurface, evaluateReading, worstDewPointState } from './shared/dew-point.js';
+import { DEW_POINT_STATES, coldChainPlan, compareSurface, evaluateReading, humidityForDewPoint, worstDewPointState } from './shared/dew-point.js';
 import { readManagementChartPaletteSafely } from './shared/management-chart-theme';
 import { byId, escapeHtml as e, message, officeSession } from './shared/packed-fruit-office-session.js';
 import { createUuid } from './shared/uuid';
@@ -81,6 +81,8 @@ function render() {
     byId('newReadingButton').classList.toggle('is-hidden', data.permisos?.registrar !== true);
     byId('roomsButton').classList.toggle('is-hidden', data.permisos?.supervisar !== true);
     byId('marginsButton').classList.toggle('is-hidden', data.permisos?.supervisar !== true);
+    byId('editPlanButton').classList.toggle('is-hidden', data.permisos?.supervisar !== true);
+    byId('outOfPlanCount').textContent = String(summary.fuera_de_plan ?? 0);
     byId('minimumMarginLabel').textContent = numberFormat.format(data.parametros.margen_minimo_c);
     byId('readingCount').textContent = String(summary.registros);
     byId('surfaceCount').textContent = `${summary.con_superficie} con T° superficial`;
@@ -90,9 +92,46 @@ function render() {
     byId('pendingCount').textContent = `${summary.alertas_pendientes} sin acción`;
     byId('dropCount').textContent = String(summary.gotas_visibles);
     renderFilters();
+    renderChain();
     renderTable();
     renderChart();
     renderHistory();
+}
+
+const formatHumidity = (value) => (value === null || value === undefined ? '—' : `${new Intl.NumberFormat('es-CL', { maximumFractionDigits: 0 }).format(Math.floor(Math.round(value * 10) / 10))} %`);
+
+function planFor(stage) {
+    const row = (state.data?.plan?.etapas || []).find((item) => item.etapa === stage);
+    return row && row.planificada && row.rocio_maximo_c !== null ? row : null;
+}
+
+/** Franja de la cadena: objetivo de cada etapa planificada y su medición más reciente del día. */
+function renderChain() {
+    const stages = (state.data.plan?.etapas || []).filter((row) => row.planificada);
+    const freezing = state.data.plan?.temperatura_congelacion_c;
+    const today = state.data.fecha === todayInPlant();
+    byId('chainNote').classList.toggle('is-hidden', stages.length === 0);
+    if (!stages.length) {
+        byId('chainStrip').innerHTML = `<li class="dew-chain__empty">Aún no hay plan. ${state.data.permisos?.supervisar ? 'Usa «Editar plan» para definir' : 'Supervisión de frío define'}, por etapa, la T° del aire y la T° más baja de la fruta; FoliOS calcula el rocío y la humedad máximos.</li>`;
+        return;
+    }
+    byId('chainStrip').innerHTML = stages.map((row) => {
+        const last = state.data.mediciones.filter((item) => item.etapa === row.etapa && !item.anulada).at(-1);
+        const out = last?.plan?.fuera === true;
+        const tone = !last?.plan ? 'neutral' : (out ? 'warning' : 'success');
+        const lastText = last
+            ? `${today ? 'Hoy' : 'Último'} ${formatTime(last.medido_at)} · rocío ${formatTemperature(last.punto_rocio_c)}${last.plan ? (out ? ' · fuera de plan' : ' · dentro del plan') : ''}`
+            : (today ? 'Sin medición hoy' : 'Sin medición ese día');
+        const humidity = row.humedad_maxima === null ? 'Define la T° del aire' : (row.humedad_maxima >= 100 ? 'Sin límite de HR' : `HR ≤ ${formatHumidity(row.humedad_maxima)}`);
+        return `<li class="dew-chain__stage" data-tone="${tone}" data-stage="${e(row.etapa)}">
+            <small>${row.orden}. ${e(row.etiqueta)}</small>
+            <span>Aire ${e(formatTemperature(row.temperatura_aire_c))} · fruta ${e(formatTemperature(row.temperatura_fruta_c))}</span>
+            <strong>${e(humidity)}</strong>
+            <span>Rocío ≤ ${e(formatTemperature(row.rocio_maximo_c))}${row.limitante === 'envase' ? ' <em>por el envase</em>' : ''}</span>
+            ${row.cerca_congelacion ? `<span class="dew-chain__freeze">Cerca de congelación (${e(formatTemperature(freezing))})</span>` : ''}
+            <span class="dew-chain__last">${e(lastText)}</span>
+        </li>`;
+    }).join('');
 }
 
 function visibleReadings() {
@@ -132,6 +171,11 @@ function referenceMoment(value, reading) {
     return plantDate(value) === reading.fecha ? formatTime(value) : `${formatShortDate(value)} ${formatTime(value)}`;
 }
 
+function planLine(reading) {
+    if (!reading.plan) return '';
+    return `<small class="dew-link-line"><b>Plan</b> ${reading.plan.fuera ? '<span class="dew-badge dew-badge--small" data-tone="warning">Fuera de plan</span>' : '<span class="dew-badge dew-badge--small" data-tone="success">Dentro del plan</span>'} rocío ≤ ${e(formatTemperature(reading.plan.rocio_maximo_c))} · HR ≤ ${e(formatHumidity(reading.plan.humedad_maxima))} a ${e(formatTemperature(reading.temperatura_ambiente_c))}</small>`;
+}
+
 /** Comparaciones vinculadas guardadas con la medición: aire del envase y fruta que llega. */
 function linkedLines(reading) {
     const lines = [];
@@ -165,7 +209,7 @@ function renderTable() {
             <td class="dew-num">${e(formatTemperature(reading.temperatura_superficie_c))}</td>
             <td class="dew-num"><strong>${e(formatTemperature(reading.punto_rocio_c))}</strong></td>
             <td class="dew-num">${e(formatTemperature(reading.margen_c))}</td>
-            <td>${stateBadge(reading)}${linkedLines(reading)}${followUp}${reading.observacion ? `<small>${e(reading.observacion)}</small>` : ''}</td>
+            <td>${stateBadge(reading)}${linkedLines(reading)}${planLine(reading)}${followUp}${reading.observacion ? `<small>${e(reading.observacion)}</small>` : ''}</td>
             <td>${reading.gotas_visibles === 'si' ? '<span class="dew-badge" data-tone="danger">Sí</span>' : e(DROPS[reading.gotas_visibles] || '—')}</td>
             <td>${e(reading.registrado_por || '—')}${reading.dispositivo ? `<small>${e(reading.dispositivo)}</small>` : ''}</td>
             <td class="dew-actions-cell">${actions.length ? `<div class="dew-row-actions">${actions.join('')}</div>` : ''}</td>
@@ -324,9 +368,17 @@ function updatePreview() {
         states.push(comparison.state);
         links.push(linkRow('Al llegar', comparison, `fruta a ${formatTemperature(origin.temperatura_superficie_c)} desde ${origin.etapa_etiqueta} vs rocío de este punto ${formatTemperature(evaluation.dewPoint)}`));
     }
+    const plan = planFor(stage);
+    const outOfPlan = plan ? evaluation.dewPoint > plan.rocio_maximo_c : false;
+    if (plan) {
+        const humidityLimit = humidityForDewPoint(ambient, plan.rocio_maximo_c);
+        links.push(`<li data-tone="${outOfPlan ? 'warning' : 'success'}"><b>Plan de la etapa</b><span>rocío ≤ ${e(formatTemperature(plan.rocio_maximo_c))} · a ${e(formatTemperature(ambient))} la HR debe ser ≤ ${e(formatHumidity(humidityLimit))}</span><strong>${outOfPlan ? 'Fuera del plan' : 'Dentro del plan'}</strong></li>`);
+    }
     const meta = DEW_POINT_STATES[evaluation.state];
     const worst = worstDewPointState(states);
-    result.dataset.tone = worst === 'sin_superficie' ? 'neutral' : DEW_POINT_STATES[worst].tone;
+    const worstTone = worst === 'sin_superficie' ? 'neutral' : DEW_POINT_STATES[worst].tone;
+    // Quedar fuera del plan no es una alerta, pero se marca si nada más grave lo hace.
+    result.dataset.tone = outOfPlan && ['neutral', 'success'].includes(worstTone) ? 'warning' : worstTone;
     result.innerHTML = `<span><small>PUNTO DE ROCÍO</small><strong>${e(formatTemperature(evaluation.dewPoint))}</strong></span>
         <span><small>MARGEN VS FRUTA</small><strong>${e(formatTemperature(evaluation.margin))}</strong></span>
         <span><small>VAPOR EN EL AIRE</small><strong>${e(numberFormat.format(evaluation.vapor))} g/m³</strong></span>
@@ -562,6 +614,98 @@ byId('marginsForm').addEventListener('submit', async (event) => {
         byId('marginsDialog').close();
         await load();
         toast('Márgenes guardados. Rigen para las mediciones nuevas.');
+    } catch (requestError) {
+        error.textContent = requestError.message;
+    } finally {
+        setBusy(false);
+    }
+});
+
+const PLAN_PROPOSAL = {
+    salida_prefrio: { temperatura_aire_c: -1, temperatura_fruta_c: -1 },
+    traslado: { temperatura_aire_c: 4, temperatura_fruta_c: -1 },
+    almacenamiento: { temperatura_aire_c: -1, temperatura_fruta_c: -0.5 },
+    despacho: { temperatura_aire_c: 4, temperatura_fruta_c: -0.5 },
+    carga_contenedor: { temperatura_aire_c: 0, temperatura_fruta_c: -0.5 },
+};
+
+function planDraft() {
+    const form = byId('planForm');
+    return (state.data.plan?.etapas || []).map((row) => ({
+        etapa: row.etapa,
+        temperatura_aire_c: readNumber(form, `aire_${row.etapa}`),
+        temperatura_fruta_c: readNumber(form, `fruta_${row.etapa}`),
+    }));
+}
+
+function renderPlanRows() {
+    byId('planRows').innerHTML = (state.data.plan?.etapas || []).map((row) => `<tr data-stage="${e(row.etapa)}">
+        <td><strong>${row.orden}. ${e(row.etiqueta)}</strong></td>
+        <td><span class="dew-number"><div><input name="aire_${e(row.etapa)}" type="number" step="0.1" min="-30" max="60" inputmode="decimal" value="${row.temperatura_aire_c ?? ''}" aria-label="T° del aire en ${e(row.etiqueta)}"><b>°C</b></div></span></td>
+        <td><span class="dew-number"><div><input name="fruta_${e(row.etapa)}" type="number" step="0.1" min="-30" max="60" inputmode="decimal" value="${row.temperatura_fruta_c ?? ''}" aria-label="T° más baja de la fruta en ${e(row.etiqueta)}"><b>°C</b></div></span></td>
+        <td class="dew-num">${e(formatTemperature(marginFor(row.etapa)))}</td>
+        <td class="dew-num" data-cell="dew"></td>
+        <td class="dew-num" data-cell="humidity"></td>
+    </tr>`).join('');
+    updatePlanPreview();
+}
+
+function updatePlanPreview() {
+    const computed = coldChainPlan(planDraft(), marginFor, state.data.plan?.temperatura_congelacion_c ?? -1.7);
+    for (const row of computed) {
+        const tr = byId('planRows').querySelector(`tr[data-stage="${CSS.escape(row.etapa)}"]`);
+        tr.classList.toggle('is-unplanned', !row.planificada);
+        tr.querySelector('[data-cell="dew"]').innerHTML = row.rocio_maximo_c === null ? '—'
+            : `${e(formatTemperature(row.rocio_maximo_c))}${row.limitante === 'envase' ? '<small>por el envase</small>' : ''}`;
+        tr.querySelector('[data-cell="humidity"]').innerHTML = row.humedad_maxima === null ? '—'
+            : `${e(row.humedad_maxima >= 100 ? 'Sin límite' : formatHumidity(row.humedad_maxima))}${row.cerca_congelacion ? '<small class="dew-chain__freeze">Cerca de congelación</small>' : ''}`;
+    }
+}
+
+byId('editPlanButton').addEventListener('click', () => {
+    renderPlanRows();
+    byId('planError').textContent = '';
+    byId('planDialog').showModal();
+});
+byId('planForm').addEventListener('input', updatePlanPreview);
+byId('suggestPlanButton').addEventListener('click', () => {
+    const form = byId('planForm');
+    for (const [stage, values] of Object.entries(PLAN_PROPOSAL)) {
+        for (const [field, value] of Object.entries({ aire: values.temperatura_aire_c, fruta: values.temperatura_fruta_c })) {
+            const input = form.elements[`${field}_${stage}`];
+            if (input && input.value === '') input.value = String(value);
+        }
+    }
+    updatePlanPreview();
+});
+byId('planForm').addEventListener('submit', async (event) => {
+    if (event.submitter?.value === 'cancel') return;
+    event.preventDefault();
+    const error = byId('planError');
+    error.textContent = '';
+    const changes = [];
+    for (const row of state.data.plan?.etapas || []) {
+        const draft = planDraft().find((item) => item.etapa === row.etapa);
+        for (const [field, label] of [['temperatura_aire_c', 'aire'], ['temperatura_fruta_c', 'fruta']]) {
+            const value = draft[field];
+            if (value !== null && (!Number.isFinite(value) || value < -30 || value > 60)) {
+                error.textContent = `La T° de ${label === 'aire' ? 'aire' : 'fruta'} de ${row.etiqueta} debe estar entre -30 y 60 °C.`;
+                byId('planForm').elements[`${label}_${row.etapa}`].focus();
+                return;
+            }
+        }
+        const same = (a, b) => (a === null && b === null) || (a !== null && b !== null && Math.round(a * 10) === Math.round(b * 10));
+        if (!same(draft.temperatura_aire_c, row.temperatura_aire_c) || !same(draft.temperatura_fruta_c, row.temperatura_fruta_c)) {
+            changes.push({ ...draft, version_conocida: row.version });
+        }
+    }
+    if (!changes.length) { byId('planDialog').close(); return; }
+    setBusy(true, 'Guardando plan…');
+    try {
+        await session.request('/api/prefrio/punto-rocio/plan', { method: 'PUT', body: JSON.stringify({ etapas: changes }) });
+        byId('planDialog').close();
+        await load();
+        toast('Plan guardado. Rige para las mediciones nuevas.');
     } catch (requestError) {
         error.textContent = requestError.message;
     } finally {

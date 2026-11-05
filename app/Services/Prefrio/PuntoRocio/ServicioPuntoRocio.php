@@ -48,6 +48,7 @@ class ServicioPuntoRocio
 
     public function __construct(
         private readonly ServicioTemporadaActiva $temporadas,
+        private readonly ServicioPlanCadenaFrio $plan,
     ) {}
 
     /** @param array<string, mixed> $datos */
@@ -144,6 +145,8 @@ class ServicioPuntoRocio
                 'origen_superficie_c' => $origen?->temperatura_superficie_c,
                 'origen_margen_c' => $origenMargen !== null ? round($origenMargen, 2) : null,
                 'origen_estado' => $origenEstado,
+                // Foto del plan vigente: si después cambia, la medición conserva contra qué se comparó.
+                'plan_rocio_maximo_c' => $this->plan->rocioMaximo($etapa),
                 'estado' => $estado,
                 'gotas_visibles' => $gotas,
                 'requiere_accion' => $estado->esAlerta()
@@ -412,7 +415,7 @@ class ServicioPuntoRocio
         $porDia = MedicionPuntoRocio::query()
             ->whereNull('anulada_at')
             ->whereBetween('fecha_operacional', [$desde->toDateString(), $hasta->toDateString()])
-            ->get(['fecha_operacional', 'punto_rocio_c', 'margen_c', 'requiere_accion', 'gotas_visibles', 'accion_registrada_at'])
+            ->get(['fecha_operacional', 'punto_rocio_c', 'margen_c', 'requiere_accion', 'gotas_visibles', 'accion_registrada_at', 'plan_rocio_maximo_c'])
             ->groupBy(fn (MedicionPuntoRocio $medicion): string => $medicion->fecha_operacional->toDateString());
 
         return collect(range(0, $dias - 1))
@@ -526,6 +529,12 @@ class ServicioPuntoRocio
                 'referencia_anulada' => $medicion->origenReferencia?->anulada_at !== null,
             ],
             ...$this->condicion($medicion),
+            'plan' => $medicion->plan_rocio_maximo_c === null ? null : [
+                'rocio_maximo_c' => $medicion->plan_rocio_maximo_c,
+                // HR que habría permitido el plan a la T° de aire que se midió.
+                'humedad_maxima' => round(CalculadoraPuntoRocio::humedadParaRocio($medicion->temperatura_ambiente_c, $medicion->plan_rocio_maximo_c), 1),
+                'fuera' => $medicion->punto_rocio_c > $medicion->plan_rocio_maximo_c,
+            ],
             'estado' => $medicion->estado->value,
             'estado_etiqueta' => $medicion->estado->etiqueta(),
             'gotas_visibles' => $medicion->gotas_visibles->value,
@@ -569,6 +578,9 @@ class ServicioPuntoRocio
             'margen_bajo' => $mediciones->where('estado', EstadoMedicionPuntoRocio::MargenBajo)->count(),
             'gotas_visibles' => $mediciones->where('gotas_visibles', GotasVisiblesPuntoRocio::Si)->count(),
             'alertas_pendientes' => $alertas->whereNull('accion_registrada_at')->count(),
+            'fuera_de_plan' => $mediciones
+                ->filter(fn (MedicionPuntoRocio $medicion): bool => $medicion->plan_rocio_maximo_c !== null && $medicion->punto_rocio_c > $medicion->plan_rocio_maximo_c)
+                ->count(),
         ];
     }
 
