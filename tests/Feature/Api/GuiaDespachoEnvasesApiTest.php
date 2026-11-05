@@ -23,6 +23,108 @@ class GuiaDespachoEnvasesApiTest extends TestCase
     use PreparaInspeccionesEnvases;
     use RefreshDatabase;
 
+    public function test_filtra_todo_el_historial_y_pagina_mas_de_doscientas_guias(): void
+    {
+        $temporada = Temporada::query()->where('activa', true)->firstOrFail();
+        $cliente = Cliente::create(['codigo' => 'EXP-01', 'nombre' => 'Exportadora uno', 'activo' => true]);
+        $operador = User::factory()->create(['rol' => RolUsuario::OperadorRomana]);
+        $productor = $this->productorCsg($cliente, $operador, '122104');
+        $base = [
+            'temporada_id' => $temporada->id, 'cliente_id' => $cliente->id,
+            'cliente_codigo_snapshot' => 'HIST-01', 'cliente_nombre_snapshot' => 'Nombre histórico',
+            'estado' => 'borrador', 'salida_at' => '2026-11-05 15:00:00',
+            'creado_por_user_id' => $operador->id,
+        ];
+        $antigua = GuiaDespachoEnvase::create([
+            ...$base, 'operacion_id' => (string) Str::uuid(), 'numero' => 'GDE-ANTIGUA',
+            'numero_guia_despacho' => '2246', 'estado' => 'confirmada',
+            'productor_csg_id' => $productor->id,
+            'productor_snapshot' => ['codigo' => '122104', 'nombre' => 'Agrícola histórica'],
+            'patente_camion' => 'ABCD12',
+            // Todavía es el 4 de noviembre en la zona operacional de Chile.
+            'salida_at' => '2026-11-05 02:30:00',
+        ]);
+        $antigua->forceFill(['created_at' => '2026-11-01 00:00:00'])->save();
+        $filas = [];
+        for ($i = 0; $i < 205; $i++) {
+            $filas[] = [...$base, 'id' => (string) Str::uuid(), 'operacion_id' => (string) Str::uuid(),
+                'numero' => 'GDE-NUEVA-'.$i, 'created_at' => '2026-11-05 12:00:00', 'updated_at' => now()];
+        }
+        DB::table('guias_despacho_envases')->insert($filas);
+        $this->actingAs($operador, 'sanctum');
+        $ruta = '/api/envases/guias-despacho';
+        $this->getJson($ruta)->assertOk()->assertJsonCount(25, 'data')
+            ->assertJsonPath('meta.total', 206)->assertJsonPath('meta.last_page', 9)
+            ->assertJsonPath('resumen.borradores', 205);
+        $this->getJson($ruta.'?page=9')->assertOk()->assertJsonCount(6, 'data')
+            ->assertJsonPath('data.5.id', $antigua->id)->assertJsonPath('meta.from', 201);
+        foreach (['2246', 'GDE-ANTIGUA', '122104', 'agrícola', 'ab-cd-12'] as $buscar) {
+            $this->getJson($ruta.'?'.http_build_query(['buscar' => $buscar]))->assertOk()
+                ->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $antigua->id);
+        }
+        $filtros = ['cliente_id' => $cliente->id, 'buscar' => 'histórico', 'estado' => 'confirmada',
+            'csg' => 'con', 'desde' => '2026-11-04', 'hasta' => '2026-11-04'];
+        $this->getJson($ruta.'?'.http_build_query($filtros))->assertOk()
+            ->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.id', $antigua->id)
+            ->assertJsonPath('resumen.borradores', 205);
+        $this->getJson($ruta.'?'.http_build_query([...$filtros, 'desde' => '2026-11-05', 'hasta' => '2026-11-05']))
+            ->assertOk()->assertJsonPath('meta.total', 0);
+        $this->getJson($ruta.'?csg=sin&per_page=100')->assertOk()->assertJsonPath('meta.total', 205)->assertJsonCount(100, 'data');
+        $this->getJson($ruta.'?cliente_id='.(string) Str::uuid())->assertUnprocessable();
+        $this->getJson($ruta.'?desde=2026-11-05&hasta=2026-11-04')->assertUnprocessable();
+        $this->getJson($ruta.'?hasta=2026-11-03')->assertOk()->assertJsonPath('meta.total', 0);
+        $this->getJson($ruta.'?page=0&per_page=201')->assertUnprocessable();
+    }
+
+    public function test_operador_completa_csg_confirmado_sin_repetir_movimientos_ni_sobrescribir_otro(): void
+    {
+        $temporada = Temporada::query()->where('activa', true)->firstOrFail();
+        $cliente = Cliente::create(['codigo' => 'EXP-01', 'nombre' => 'Exportadora uno', 'activo' => true]);
+        $otroCliente = Cliente::create(['codigo' => 'EXP-02', 'nombre' => 'Exportadora dos', 'activo' => true]);
+        $operador = User::factory()->create(['rol' => RolUsuario::OperadorRomana]);
+        $productor = $this->productorCsg($cliente, $operador, '122104');
+        $otroProductor = $this->productorCsg($cliente, $operador, '122105');
+        $ajeno = $this->productorCsg($otroCliente, $operador, '122106');
+        $inactivo = $this->productorCsg($cliente, $operador, '122107', activo: false);
+        $this->movimientoIngreso($temporada, $cliente, $operador, 'propia', 20);
+        $this->actingAs($operador, 'sanctum');
+        $ruta = '/api/envases/guias-despacho';
+        $guia = $this->postJson($ruta, $this->payloadGuia($cliente, (string) Str::uuid(), [
+            ['tipo_envase' => 'bins', 'cantidad' => 6, 'propiedad' => 'propia'],
+        ]))->assertCreated()->json('data');
+        $ruta .= '/'.$guia['id'];
+        $cambio = ['productor_csg_id' => $productor->id, 'motivo' => 'CSG informado después de la salida.', 'version' => $guia['version']];
+        $this->putJson($ruta.'/productor', $cambio)->assertConflict();
+        $guia = $this->postJson($ruta.'/confirmar', ['numero_guia_despacho' => '2246'])->assertOk()
+            ->assertJsonPath('data.puede_editar_productor', true)->json('data');
+        $cambio['version'] = $guia['version'];
+        $consulta = User::factory()->create(['rol' => RolUsuario::Consulta]);
+        $this->actingAs($consulta, 'sanctum')->getJson($ruta)->assertOk()->assertJsonPath('data.puede_editar_productor', false);
+        $this->putJson($ruta.'/productor', $cambio)->assertForbidden();
+        $this->actingAs($operador, 'sanctum');
+        foreach ([$ajeno, $inactivo] as $invalido) {
+            $this->putJson($ruta.'/productor', [...$cambio, 'productor_csg_id' => $invalido->id])
+                ->assertUnprocessable()->assertJsonValidationErrors('productor_csg_id');
+        }
+        $this->putJson($ruta.'/productor', [...$cambio, 'version' => $guia['version'] - 1])->assertConflict();
+        $this->putJson($ruta.'/productor', [...$cambio, 'motivo' => ' '])->assertUnprocessable();
+        $this->putJson($ruta.'/productor', $cambio)->assertOk()
+            ->assertJsonPath('data.productor.id', $productor->id)
+            ->assertJsonPath('data.puede_editar_productor', false)
+            ->assertJsonPath('data.documento_hash', $guia['documento_hash']);
+        $this->putJson($ruta.'/productor', $cambio)->assertOk();
+        // Un segundo operador con la versión vieja tampoco puede sustituir el CSG ya completado.
+        $this->putJson($ruta.'/productor', [...$cambio, 'productor_csg_id' => $otroProductor->id])->assertForbidden();
+        $evento = GuiaDespachoEnvase::findOrFail($guia['id'])->eventos()->where('tipo', 'productor_corregido')->sole();
+        $this->assertSame($operador->id, $evento->user_id);
+        $this->assertNull($evento->datos['anterior']);
+        $this->assertSame('122104', $evento->datos['nuevo']['codigo']);
+        $this->assertSame($cambio['motivo'], $evento->datos['motivo']);
+        $this->assertSame(-6, $this->saldoCuenta($cliente));
+        $this->assertSame(14, $this->existencia('propia'));
+        $this->assertDatabaseCount('movimientos_envases', 2);
+    }
+
     public function test_despacho_nuevo_solo_admite_productores_asociados_al_cliente(): void
     {
         $temporada = Temporada::query()->where('activa', true)->firstOrFail();
@@ -75,9 +177,8 @@ class GuiaDespachoEnvasesApiTest extends TestCase
         ]))->assertCreated()->json('data');
         $ruta .= '/'.$guia['id'];
         $guia = $this->postJson($ruta.'/confirmar', ['numero_guia_despacho' => '2227'])->assertOk()
-            ->assertJsonPath('data.productor', null)->assertJsonPath('data.puede_editar_productor', false)->json('data');
+            ->assertJsonPath('data.productor', null)->assertJsonPath('data.puede_editar_productor', true)->json('data');
         $correccion = ['productor_csg_id' => $productor->id, 'motivo' => 'Destinatario indicado en la guía.', 'version' => $guia['version']];
-        $this->putJson($ruta.'/productor', $correccion)->assertForbidden();
 
         $this->actingAs($admin, 'sanctum');
         $reporte = '/api/envases/cuenta-corriente/estado-cuenta?cliente_id='.$cliente->id;
@@ -103,6 +204,8 @@ class GuiaDespachoEnvasesApiTest extends TestCase
         $this->assertSame(-6, $this->saldoCuenta($cliente));
         $this->assertSame(14, $this->existencia('propia'));
         $this->assertDatabaseCount('movimientos_envases', 2);
+        $this->actingAs($operador, 'sanctum')->getJson($ruta)->assertOk()->assertJsonPath('data.puede_editar_productor', false);
+        $this->putJson($ruta.'/productor', [...$correccion, 'productor_csg_id' => $otroProductor->id, 'version' => $guia['version'] + 1])->assertForbidden();
     }
 
     public function test_identifica_el_formato_de_la_patente_y_permite_corregir_el_borrador_sin_crear_reservas_por_el_error(): void

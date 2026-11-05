@@ -147,6 +147,58 @@
     margin-top: 12px;
 }
 
+.guide-filters {
+    margin-top: 16px;
+}
+
+.guide-history {
+    padding: 16px;
+}
+
+.guide-filters__search {
+    grid-column: span 2;
+}
+
+.guide-filters__actions,
+.guide-pagination {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.guide-filters__actions {
+    align-self: end;
+}
+
+.guide-filters button,
+.guide-pagination button {
+    min-height: 44px;
+    padding: 10px 14px;
+}
+
+.guide-pagination {
+    justify-content: space-between;
+    margin-top: 16px;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.guide-pagination select {
+    width: auto;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    padding: 10px;
+    background: var(--deep);
+    color: var(--text);
+}
+
+.guide-pagination > label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
 .guide-card {
     padding: 14px;
     border: 1px solid var(--line);
@@ -294,6 +346,9 @@
 }
 
 @media (max-width: 650px) {
+    .guide-filters__search {
+        grid-column: auto;
+    }
     .dispatch-kpis,
     .form-grid,
     .dispatch-line {

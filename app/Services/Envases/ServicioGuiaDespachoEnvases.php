@@ -18,6 +18,7 @@ use App\Services\Temporadas\ServicioTemporadaActiva;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use JsonException;
@@ -258,6 +259,13 @@ class ServicioGuiaDespachoEnvases
             $guia = GuiaDespachoEnvase::query()->lockForUpdate()->findOrFail($guia->id);
             if ($guia->estado !== EstadoGuiaDespachoEnvase::Confirmada) {
                 throw new ConflictoOperacion('Solo puedes corregir el productor de una salida confirmada.');
+            }
+            $acceso = Gate::forUser($usuario);
+            if (! $acceso->allows('corregir-productor-despacho-envases')) {
+                $acceso->authorize('gestionar-despacho-envases');
+                if ($guia->productor_csg_id !== null && $guia->productor_csg_id !== $productorId) {
+                    $acceso->authorize('corregir-productor-despacho-envases');
+                }
             }
             if ($guia->productor_csg_id === $productorId) {
                 return $this->cargar($guia);

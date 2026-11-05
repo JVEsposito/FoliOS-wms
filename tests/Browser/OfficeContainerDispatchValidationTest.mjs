@@ -18,7 +18,7 @@ const html = read('resources/views/office/container-dispatches.blade.php')
     .replace('</head>', `<style>${read('resources/css/office.css')}\n${read('resources/css/office-container-dispatches.css')}</style></head>`)
     .replace('</body>', '<script type="module" src="/resources/js/office-container-dispatches.js"></script></body>');
 
-test('despacho de envases muestra todos los errores, conserva los datos y permite corregir y reservar', async () => {
+test('despacho de envases valida, completa CSG y filtra y pagina el historial en el servidor', async () => {
     const browser = await chromium.launch({
         executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined,
         args: ['--no-sandbox', '--disable-gpu'],
@@ -27,6 +27,7 @@ test('despacho de envases muestra todos los errores, conserva los datos y permit
     const pageErrors = [];
     const submissions = [];
     const corrections = [];
+    const searches = [];
     const producer = { id: 'productor-1', codigo: '122104', nombre: 'Productor Uno' };
     const confirmed = {
         id: 'confirmada-1', numero: 'GDE-2610-0002', numero_guia_despacho: '2227', estado: 'confirmada',
@@ -76,7 +77,18 @@ test('despacho de envases muestra todos los errores, conserva los datos y permit
             if (submissions.length === 2) return route.fulfill({ status: 409, json: { message: stockError } });
             return route.fulfill({ status: 201, json: { data: { numero: 'GDE-2610-0001' } } });
         }
-        if (path === '/api/envases/guias-despacho') return route.fulfill({ json: { data: [confirmed] } });
+        if (path === '/api/envases/guias-despacho') {
+            const params = Object.fromEntries(new URL(request.url()).searchParams);
+            searches.push(params);
+            const current = Number(params.page || 1);
+            const size = Number(params.per_page || 25);
+            const total = size + 1;
+            const guide = current === 1 ? confirmed : { ...confirmed, id: 'confirmada-antigua', numero_guia_despacho: '1000' };
+            return route.fulfill({ json: {
+                data: [guide], resumen: { borradores: 8 },
+                meta: { current_page: current, last_page: 2, per_page: size, total, from: (current - 1) * size + 1, to: current === 1 ? size : total },
+            } });
+        }
         return route.fulfill({ status: 404, body: '' });
     });
     try {
@@ -124,7 +136,7 @@ test('despacho de envases muestra todos los errores, conserva los datos y permit
         assert.equal(submissions[2].observacion, 'Entrega de envases para producción');
         assert.equal(await page.locator('#dispatchError').textContent(), '');
         assert.equal(await field('cantidad_bins').inputValue(), '0');
-        await page.getByRole('button', { name: 'Editar productor' }).click();
+        await page.getByRole('button', { name: 'Agregar CSG', exact: true }).click();
         const dialog = page.getByRole('dialog');
         await dialog.getByLabel('Productor (CSG)').selectOption('productor-1');
         await dialog.getByRole('button', { name: 'Guardar productor' }).click();
@@ -135,6 +147,43 @@ test('despacho de envases muestra todos los errores, conserva los datos y permit
         assert.deepEqual(corrections, [{
             productor_csg_id: 'productor-1', motivo: 'Destinatario indicado en la guía.', version: 2,
         }]);
+        const filters = page.locator('#guideFilters');
+        await filters.getByLabel('Buscar guía, cliente, productor, CSG o patente').fill('2246');
+        await filters.getByLabel('Cliente', { exact: true }).selectOption('cliente-1');
+        await filters.getByLabel('Salida desde').fill('2026-11-01');
+        await filters.getByLabel('Salida hasta').fill('2026-11-05');
+        await filters.getByLabel('Productor (CSG)', { exact: true }).selectOption('con');
+        await filters.getByLabel('Estado', { exact: true }).selectOption('confirmada');
+        await filters.getByRole('button', { name: 'Buscar', exact: true }).click();
+        await page.waitForFunction(() => document.querySelector('#guideList').getAttribute('aria-busy') === 'false');
+        assert.deepEqual(searches.at(-1), {
+            buscar: '2246', cliente_id: 'cliente-1', estado: 'confirmada', desde: '2026-11-01', hasta: '2026-11-05', csg: 'con', page: '1', per_page: '25',
+        });
+        assert.equal(await page.locator('#draftCount').textContent(), '8');
+        assert.equal(await page.locator('#guideCount').textContent(), '26 guías');
+        await page.getByRole('button', { name: 'Siguiente', exact: true }).click();
+        await page.locator('#guideList').getByText('Guía N° 1000', { exact: true }).waitFor();
+        assert.equal(searches.at(-1).page, '2');
+        assert.equal(searches.at(-1).buscar, '2246');
+        assert.match(await page.locator('#guidePageInfo').textContent(), /26–26 de 26.*Página 2 de 2/);
+        assert.equal(await page.getByRole('button', { name: 'Siguiente', exact: true }).isDisabled(), true);
+        await page.getByLabel('Guías por página').selectOption('50');
+        await page.locator('#guideList').getByText('Guía N° 2227', { exact: true }).waitFor();
+        assert.equal(searches.at(-1).page, '1');
+        assert.equal(searches.at(-1).per_page, '50');
+        assert.equal(searches.at(-1).csg, 'con');
+        await page.getByRole('button', { name: 'Limpiar filtros', exact: true }).click();
+        await page.waitForFunction(() => document.querySelector('#guideList').getAttribute('aria-busy') === 'false');
+        assert.deepEqual(searches.at(-1), { page: '1', per_page: '50' });
+        assert.equal(await filters.getByLabel('Salida hasta').getAttribute('min'), '');
+        await page.setViewportSize({ width: 390, height: 844 });
+        if (process.env.DISPATCH_FILTER_SCREENSHOT) {
+            await page.locator('section[aria-labelledby="guideHistoryTitle"]').screenshot({ path: process.env.DISPATCH_FILTER_SCREENSHOT });
+        }
+        const overflow = await page.evaluate(() => [...document.querySelectorAll('body *')]
+            .filter(element => { const rect = element.getBoundingClientRect(); return rect.width && rect.right > window.innerWidth + 1; })
+            .map(element => ({ tag: element.tagName, id: element.id, className: element.className, right: element.getBoundingClientRect().right })));
+        assert.deepEqual(overflow, []);
         assert.deepEqual(pageErrors, []);
     } finally {
         await browser.close();
