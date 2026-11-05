@@ -35,14 +35,13 @@ export function CameraCard({ camera, selected, onPress }: CameraCardProps) {
         pressed && styles.pressed,
       ]}
     >
-      <View style={styles.topRow}>
-        <Text numberOfLines={1} style={styles.title}>{displayName}</Text>
-        <View style={styles.state}>
-          <View style={[styles.dot, { backgroundColor: statusColor }]} />
-          <Text style={[styles.stateText, { color: statusColor }]}>{status}</Text>
-        </View>
+      {/* El nombre va solo en su línea: junto al estado se cortaba en «Camara d…». */}
+      <Text numberOfLines={2} style={styles.title}>{displayName}</Text>
+      <View style={styles.state}>
+        <View style={[styles.dot, { backgroundColor: statusColor }]} />
+        <Text style={[styles.stateText, { color: statusColor }]}>{status}</Text>
+        <Text style={styles.content}>· {contentLabel}</Text>
       </View>
-      <Text style={styles.content}>{contentLabel}</Text>
       <View style={styles.occupancyRow}>
         <Text style={styles.occupancyLabel}>Ocupación</Text>
         <Text style={styles.occupancyValue}>{camera.ocupacion.porcentaje}%</Text>
@@ -76,29 +75,23 @@ const styles = StyleSheet.create({
     backgroundColor: colors.selected,
   },
   pressed: { opacity: 0.78 },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
   title: {
     fontFamily: font.heavy,
-    flex: 1,
     color: colors.text,
     fontSize: 18,
+    lineHeight: 23,
   },
-  state: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  state: { marginTop: 6, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   stateText: { fontFamily: font.heavy, fontSize: 14 },
-  content: { fontFamily: font.heavy, marginTop: 7, color: colors.muted, fontSize: 14 },
+  content: { fontFamily: font.medium, color: colors.muted, fontSize: 13 },
   occupancyRow: {
     marginTop: 13,
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
   occupancyLabel: { fontFamily: font.bold, color: colors.muted, fontSize: 14 },
-  occupancyValue: { fontFamily: font.heavy, color: colors.text, fontSize: 12 },
+  occupancyValue: { fontFamily: font.heavy, color: colors.text, fontSize: 14 },
   progress: {
     height: 6,
     marginTop: 7,

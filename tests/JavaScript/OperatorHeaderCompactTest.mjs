@@ -22,7 +22,10 @@ test('la cabecera del camarero es una sola franja sin banner ambiental crítico'
 test('identidad, cambio de módulo y cierre de sesión viven en el menú del operador', () => {
     assert.match(workspace, /trailing=\{<OperatorMenu/);
     assert.match(workspace, /onChangeModule=\{onChangeModule\}/);
-    assert.match(workspace, /onLogout=\{\(\) => void logoutFromTasks\(\)\}/);
+    assert.match(workspace, /onLogout=\{\(\) => void logoutFromMenu\(\)\}/);
+    // En «Plano y operación» el menú usa el cierre que revisa estibas abiertas.
+    assert.match(workspace, /if \(view === 'operacion' && planLogout\.current\)/);
+    assert.match(workspace, /onRegisterLogout=\{registerPlanLogout\}/);
     assert.doesNotMatch(workspace, />Salir</);
     assert.match(header, /\{trailing \?\? <Text/);
     assert.match(menu, /Cambiar módulo/);

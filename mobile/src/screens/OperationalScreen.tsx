@@ -50,9 +50,14 @@ type OperationalScreenProps = {
   api: EstibaApi;
   auth: AuthSession;
   onLogout: () => void;
+  /**
+   * Entrega a la cabecera del espacio de trabajo el cierre de sesión con la revisión de
+   * estibas abiertas: el menú del operador reemplaza el antiguo botón «Salir» de esta vista.
+   */
+  onRegisterLogout?: (logout: (() => Promise<void>) | null) => void;
 };
 
-export function OperationalScreen({ api, auth, onLogout }: OperationalScreenProps) {
+export function OperationalScreen({ api, auth, onLogout, onRegisterLogout }: OperationalScreenProps) {
   const { height, width } = useWindowDimensions();
   const wideLayout = width >= 1180 && height >= 700;
   const [cameras, setCameras] = useState<CameraSummary[]>([]);
@@ -554,6 +559,15 @@ export function OperationalScreen({ api, auth, onLogout }: OperationalScreenProp
     });
   }
 
+  // La referencia siempre apunta al cierre vigente (con las cámaras de este render).
+  const logoutRef = useRef<() => Promise<void>>(async () => undefined);
+  logoutRef.current = logout;
+  useEffect(() => {
+    if (!onRegisterLogout) return;
+    onRegisterLogout(() => logoutRef.current());
+    return () => onRegisterLogout(null);
+  }, [onRegisterLogout]);
+
   async function logout() {
     const openCameras = cameras
       .filter((camera) => camera.acceso.modo === 'edicion' && camera.acceso.sesion?.es_propia)
@@ -643,7 +657,8 @@ export function OperationalScreen({ api, auth, onLogout }: OperationalScreenProp
             )}
           </View>
           <View style={styles.statuses}>
-            <Status color={connectionColor} label={connectionLabel} />
+            {/* La cabecera ya dice «Conectado»; aquí solo se avisa cuando no lo está. */}
+            {api.mode === 'demo' || connectionState === 'offline' ? <Status color={connectionColor} label={connectionLabel} /> : null}
             <Status color={canOperate ? colors.cyan : colors.muted} label={canOperate ? 'Editando ' + cameraDisplayName(plan) : 'Solo consulta'} />
             {(canUseLoads || canUseMaterials) && (
               <NotificationCenter
@@ -662,9 +677,6 @@ export function OperationalScreen({ api, auth, onLogout }: OperationalScreenProp
               />
             )}
           </View>
-          <Pressable accessibilityRole="button" accessibilityLabel="Cerrar sesión" onPress={() => void logout()} style={styles.logout}>
-            <Text style={styles.logoutText}>Salir</Text>
-          </Pressable>
         </View>
 
         {error ? (
