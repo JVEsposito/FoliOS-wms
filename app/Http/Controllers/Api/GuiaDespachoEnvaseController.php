@@ -12,6 +12,7 @@ use App\Services\Envases\GeneradorGuiaDespachoEnvasesPdf;
 use App\Services\Envases\ServicioGuiaDespachoEnvases;
 use App\Services\Envases\ServicioGuiaEmitidaEnvases;
 use App\Services\Temporadas\ServicioTemporadaActiva;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -68,8 +69,16 @@ class GuiaDespachoEnvaseController extends Controller
         $filtros = $request->validate([
             'temporada_id' => ['nullable', 'uuid', 'exists:temporadas,id'],
             'estado' => ['nullable', Rule::enum(EstadoGuiaDespachoEnvase::class)],
+            'buscar' => ['nullable', 'string', 'max:100'],
+            'cliente_id' => ['nullable', 'uuid', 'exists:clientes,id'],
+            'csg' => ['nullable', Rule::in(['con', 'sin'])],
+            'desde' => ['nullable', 'date_format:Y-m-d'],
+            'hasta' => ['nullable', 'date_format:Y-m-d', Rule::when($request->filled('desde'), 'after_or_equal:desde')],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
         $temporadaId = $filtros['temporada_id'] ?? $temporadaActiva->obtener()->id;
+        $zona = config('app.operational_timezone');
         $guias = GuiaDespachoEnvase::query()
             ->with([
                 'cliente',
@@ -86,12 +95,43 @@ class GuiaDespachoEnvaseController extends Controller
                 ! empty($filtros['estado']),
                 fn (Builder $consulta) => $consulta->where('estado', $filtros['estado']),
             )
+            ->when(! empty($filtros['cliente_id']), fn (Builder $consulta) => $consulta->where('cliente_id', $filtros['cliente_id']))
+            ->when(($filtros['csg'] ?? null) === 'con', fn (Builder $consulta) => $consulta->whereNotNull('productor_csg_id'))
+            ->when(($filtros['csg'] ?? null) === 'sin', fn (Builder $consulta) => $consulta->whereNull('productor_csg_id'))
+            ->when(! empty($filtros['desde']), fn (Builder $consulta) => $consulta->where('salida_at', '>=', CarbonImmutable::parse($filtros['desde'], $zona)->startOfDay()->utc()))
+            ->when(! empty($filtros['hasta']), fn (Builder $consulta) => $consulta->where('salida_at', '<', CarbonImmutable::parse($filtros['hasta'], $zona)->addDay()->startOfDay()->utc()))
+            ->when(filled($filtros['buscar'] ?? null), function (Builder $consulta) use ($filtros): void {
+                $texto = trim($filtros['buscar']);
+                $busqueda = '%'.addcslashes($texto, '\\%_').'%';
+                $patente = preg_replace('/[\s-]+/', '', mb_strtoupper($texto));
+                $consulta->where(function (Builder $buscador) use ($busqueda, $patente): void {
+                    foreach (['numero', 'numero_guia_despacho', 'cliente_codigo_snapshot', 'cliente_nombre_snapshot', 'patente_camion'] as $campo) {
+                        $buscador->orWhere($campo, 'like', $busqueda);
+                    }
+                    foreach (['codigo', 'nombre'] as $campo) {
+                        $columna = $buscador->getQuery()->getGrammar()->wrap('productor_snapshot->'.$campo);
+                        $buscador->orWhereRaw('LOWER('.$columna.') like ?', [mb_strtolower($busqueda)]);
+                    }
+                    if (preg_match('/^[A-Z0-9]{5,8}$/', $patente)) {
+                        $buscador->orWhere('patente_camion', $patente);
+                    }
+                });
+            })
             ->orderByDesc('created_at')
-            ->limit(200)
-            ->get();
+            ->orderByDesc('id')
+            ->paginate($filtros['per_page'] ?? 25);
 
         return response()->json([
-            'data' => $guias->map(fn (GuiaDespachoEnvase $guia): array => $this->guia($guia)),
+            'data' => $guias->getCollection()->map(fn (GuiaDespachoEnvase $guia): array => $this->guia($guia)),
+            'meta' => [
+                'current_page' => $guias->currentPage(),
+                'last_page' => $guias->lastPage(),
+                'per_page' => $guias->perPage(),
+                'total' => $guias->total(),
+                'from' => $guias->firstItem(),
+                'to' => $guias->lastItem(),
+            ],
+            'resumen' => ['borradores' => GuiaDespachoEnvase::where('temporada_id', $temporadaId)->where('estado', EstadoGuiaDespachoEnvase::Borrador)->count()],
         ])->header('Cache-Control', 'no-store, private');
     }
 
@@ -223,7 +263,9 @@ class GuiaDespachoEnvaseController extends Controller
         Request $request,
         ServicioGuiaDespachoEnvases $servicio,
     ): JsonResponse {
-        Gate::authorize('corregir-productor-despacho-envases');
+        if (! Gate::allows('corregir-productor-despacho-envases')) {
+            Gate::authorize('gestionar-despacho-envases');
+        }
         $datos = $request->validate([
             'productor_csg_id' => ['required', 'uuid'],
             'motivo' => ['required', 'string', 'max:1000'],
@@ -434,7 +476,8 @@ class GuiaDespachoEnvaseController extends Controller
             'puede_registrar_guia' => $salidaConfirmada,
             'productor' => $guia->productorDestino(),
             'puede_editar_productor' => $guia->estado === EstadoGuiaDespachoEnvase::Confirmada
-                && Gate::allows('corregir-productor-despacho-envases'),
+                && (Gate::allows('corregir-productor-despacho-envases')
+                    || ($guia->productor_csg_id === null && Gate::allows('gestionar-despacho-envases'))),
             'estado' => $guia->estado->value,
             'temporada' => [
                 'id' => $guia->temporada_id,

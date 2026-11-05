@@ -242,7 +242,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/envases/guias-despacho/{guiaDespachoEnvase}/anular', [GuiaDespachoEnvaseController::class, 'anular'])
         ->middleware('can:anular-despacho-envases');
     Route::put('/envases/guias-despacho/{guiaDespachoEnvase}/productor', [GuiaDespachoEnvaseController::class, 'corregirProductor'])
-        ->middleware('can:corregir-productor-despacho-envases');
+        ->middleware('can:consultar-cuenta-envases');
 
     Route::get('/camaras', [CamaraController::class, 'index']);
     Route::get('/camaras/{camara}/plano', [CamaraController::class, 'plano']);

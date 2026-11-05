@@ -25,6 +25,13 @@ const elements = {
     saveDraft: byId('saveDraftButton'),
     cancelEdit: byId('cancelEditButton'),
     statusFilter: byId('guideStatusFilter'),
+    filters: byId('guideFilters'),
+    clientFilter: byId('guideClientFilter'),
+    clearFilters: byId('clearGuideFilters'),
+    pageSize: byId('guidePageSize'),
+    pageInfo: byId('guidePageInfo'),
+    previous: byId('guidePrevious'),
+    next: byId('guideNext'),
     guideDialog: byId('guideDialog'),
     guideForm: byId('guideDialogForm'),
     guideEyebrow: byId('guideDialogEyebrow'),
@@ -51,7 +58,12 @@ const state = {
     guides: [],
     editing: null,
     dialog: null,
+    page: 1,
+    filters: new URLSearchParams(),
+    pagination: null,
+    draftCount: 0,
 };
+let guideRequest;
 const MAX_GUIDE_FILE_BYTES = 10 * 1024 * 1024;
 const producerRequests = new WeakMap();
 
@@ -283,7 +295,7 @@ function renderInventory() {
     elements.physical.textContent = inventory.reduce((sum, item) => sum + Number(item.fisico), 0);
     elements.reserved.textContent = inventory.reduce((sum, item) => sum + Number(item.reservado), 0);
     elements.available.textContent = inventory.reduce((sum, item) => sum + Number(item.disponible), 0);
-    elements.drafts.textContent = state.guides.filter((guide) => guide.estado === 'borrador').length;
+    elements.drafts.textContent = state.draftCount;
 }
 
 function guideEffect(guide) {
@@ -336,7 +348,7 @@ function openGuideDialog(mode, guide) {
         confirm: ['CONFIRMAR SALIDA', `Confirmar salida ${guide.numero}`, 'Confirmar salida'],
         number: ['GUÍA DE DESPACHO EMITIDA', guide.numero_guia_despacho ? 'Corregir N° de guía' : 'Registrar N° de guía', 'Guardar N° de guía'],
         file: ['GUÍA DE DESPACHO EMITIDA', guide.archivo_guia ? 'Reemplazar archivo de la guía' : 'Subir guía emitida', 'Subir archivo'],
-        producer: ['DESTINATARIO DEL DESPACHO', 'Editar productor', 'Guardar productor'],
+        producer: ['DESTINATARIO DEL DESPACHO', guide.productor ? 'Editar productor' : 'Agregar CSG al despacho', 'Guardar productor'],
     }[mode];
     [elements.guideEyebrow.textContent, elements.guideTitle.textContent, elements.guideSubmit.textContent] = titles;
     elements.guideSummary.textContent = mode === 'confirm'
@@ -422,7 +434,8 @@ async function submitGuideDialog() {
 
 function renderGuides(guides) {
     state.guides = guides;
-    elements.count.textContent = `${guides.length} guía${guides.length === 1 ? '' : 's'}`;
+    const total = state.pagination?.total ?? guides.length;
+    elements.count.textContent = `${total} guía${total === 1 ? '' : 's'}`;
     elements.list.innerHTML = guides.length ? guides.map((guide) => {
         const canManage = state.identity?.puede_gestionar_despacho_envases === true;
         const canReverse = state.identity?.puede_anular_despacho_envases === true;
@@ -445,7 +458,7 @@ function renderGuides(guides) {
                 ${guide.puede_registrar_guia && canManage ? `<button data-guide-number="${guide.id}">${guide.numero_guia_despacho ? 'Corregir N° de guía' : 'Registrar N° de guía'}</button>` : ''}
                 ${guide.puede_registrar_guia && canManage ? `<button data-guide-file="${guide.id}">${guide.archivo_guia ? 'Reemplazar archivo de la guía' : 'Subir guía emitida'}</button>` : ''}
                 ${guide.puede_editar && canManage ? `<button data-edit="${guide.id}">Editar</button>` : ''}
-                ${guide.puede_editar_productor ? `<button data-guide-producer="${guide.id}">Editar productor</button>` : ''}
+                ${guide.puede_editar_productor ? `<button data-guide-producer="${guide.id}">${guide.productor ? 'Editar productor' : 'Agregar CSG'}</button>` : ''}
                 ${guide.puede_cancelar && canManage ? `<button class="danger" data-cancel="${guide.id}">Cancelar borrador</button>` : ''}
                 ${guide.puede_confirmar && canManage ? `<button class="primary-button compact" data-confirm="${guide.id}">Confirmar salida</button>` : ''}
                 ${guide.puede_anular && canReverse ? `<button class="danger" data-reverse="${guide.id}">Anular y reversar</button>` : ''}
@@ -463,6 +476,10 @@ async function loadCatalogs() {
     elements.form.elements.cliente_id.innerHTML = '<option value="">Seleccionar cliente</option>'
         + state.catalog.clientes.map((client) => `<option value="${client.id}">${escapeHtml(client.codigo)} · ${escapeHtml(client.nombre)}</option>`).join('');
     elements.form.elements.cliente_id.value = selected;
+    const filterClient = elements.clientFilter.value;
+    elements.clientFilter.innerHTML = '<option value="">Todos los clientes</option>'
+        + state.catalog.clientes.map((client) => `<option value="${client.id}">${escapeHtml(client.codigo)} · ${escapeHtml(client.nombre)}</option>`).join('');
+    elements.clientFilter.value = filterClient;
     const producer = elements.form.elements.productor_csg_id;
     const current = producer.disabled && state.editing?.cliente.id === selected
         ? state.editing.productor?.id
@@ -474,11 +491,51 @@ async function loadCatalogs() {
     }
 }
 
-async function loadGuides() {
-    const query = elements.statusFilter.value
-        ? `?estado=${encodeURIComponent(elements.statusFilter.value)}`
-        : '';
-    renderGuides((await api(`/api/envases/guias-despacho${query}`)).data);
+function renderPagination() {
+    const meta = state.pagination;
+    elements.pageInfo.textContent = meta?.total
+        ? `${meta.from}–${meta.to} de ${meta.total} · Página ${meta.current_page} de ${meta.last_page}`
+        : 'Sin resultados';
+    elements.previous.disabled = !meta || meta.current_page <= 1;
+    elements.next.disabled = !meta || meta.current_page >= meta.last_page;
+}
+
+async function loadGuides(page = state.page) {
+    guideRequest?.abort();
+    const request = new AbortController();
+    guideRequest = request;
+    const query = new URLSearchParams(state.filters);
+    query.set('page', page);
+    query.set('per_page', elements.pageSize.value);
+    elements.list.setAttribute('aria-busy', 'true');
+    elements.previous.disabled = elements.next.disabled = true;
+    try {
+        const response = await api(`/api/envases/guias-despacho?${query}`, { signal: request.signal });
+        if (request.signal.aborted) return;
+        if (response.meta && page > response.meta.last_page) return await loadGuides(response.meta.last_page);
+        state.page = page;
+        state.pagination = response.meta || null;
+        state.draftCount = response.resumen?.borradores ?? response.data.filter((guide) => guide.estado === 'borrador').length;
+        renderGuides(response.data);
+    } catch (error) {
+        if (!request.signal.aborted) throw error;
+    } finally {
+        if (guideRequest === request) {
+            elements.list.setAttribute('aria-busy', 'false');
+            renderPagination();
+        }
+    }
+}
+
+function applyGuideFilters() {
+    const form = elements.filters;
+    form.elements.hasta.min = form.elements.desde.value;
+    if (!form.reportValidity()) return;
+    state.filters = new URLSearchParams();
+    for (const [key, value] of new FormData(form)) {
+        if (String(value).trim()) state.filters.set(key, String(value).trim());
+    }
+    loadGuides(1).catch((error) => toast(error.message, true));
 }
 
 async function reloadAll() {
@@ -582,7 +639,21 @@ elements.logout.addEventListener('click', () => {
     location.reload();
 });
 elements.reload.addEventListener('click', reloadAll);
-elements.statusFilter.addEventListener('change', loadGuides);
+elements.filters.addEventListener('submit', (event) => {
+    event.preventDefault();
+    applyGuideFilters();
+});
+elements.statusFilter.addEventListener('change', applyGuideFilters);
+elements.filters.elements.desde.addEventListener('change', () => {
+    elements.filters.elements.hasta.min = elements.filters.elements.desde.value;
+});
+elements.clearFilters.addEventListener('click', () => {
+    elements.filters.reset();
+    applyGuideFilters();
+});
+elements.pageSize.addEventListener('change', () => loadGuides(1).catch((error) => toast(error.message, true)));
+elements.previous.addEventListener('click', () => loadGuides(state.page - 1).catch((error) => toast(error.message, true)));
+elements.next.addEventListener('click', () => loadGuides(state.page + 1).catch((error) => toast(error.message, true)));
 elements.cancelEdit.addEventListener('click', resetForm);
 elements.form.elements.cliente_id.addEventListener('change', (event) => {
     loadProducerOptions(elements.form.elements.productor_csg_id, event.target.value);
