@@ -1,3 +1,4 @@
+import { font } from '../theme/typography';
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -99,16 +100,16 @@ export function FirstPasswordChangeScreen({ userName, onChangePassword, onLogout
 const styles = StyleSheet.create({
   page: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', padding: 24, backgroundColor: colors.background },
   panel: { width: '100%', maxWidth: 520, padding: 28, borderRadius: 18, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panel },
-  eyebrow: { color: colors.cyan, fontSize: 12, fontWeight: '800', letterSpacing: 1 },
-  title: { color: colors.text, fontSize: 28, fontWeight: '900', marginTop: 12 },
-  description: { color: colors.muted, fontSize: 15, lineHeight: 23, marginTop: 12, marginBottom: 14 },
-  label: { color: colors.text, fontSize: 14, fontWeight: '700', marginTop: 16, marginBottom: 7 },
-  input: { color: colors.text, backgroundColor: colors.backgroundDeep, borderColor: colors.border, borderWidth: 1, borderRadius: 9, paddingHorizontal: 14, minHeight: 49, fontSize: 16 },
-  hint: { color: colors.muted, fontSize: 12, marginTop: 6 },
-  error: { color: colors.red, marginTop: 18, fontSize: 14 },
+  eyebrow: { color: colors.cyan, fontSize: 12, fontFamily: font.heavy, letterSpacing: 1 },
+  title: { color: colors.text, fontSize: 28, fontFamily: font.heavy, marginTop: 12 },
+  description: { fontFamily: font.regular, color: colors.muted, fontSize: 15, lineHeight: 23, marginTop: 12, marginBottom: 14 },
+  label: { color: colors.text, fontSize: 14, fontFamily: font.bold, marginTop: 16, marginBottom: 7 },
+  input: { fontFamily: font.regular, color: colors.text, backgroundColor: colors.backgroundDeep, borderColor: colors.border, borderWidth: 1, borderRadius: 9, paddingHorizontal: 14, minHeight: 52, fontSize: 16 },
+  hint: { fontFamily: font.regular, color: colors.muted, fontSize: 12, marginTop: 6 },
+  error: { fontFamily: font.regular, color: colors.red, marginTop: 18, fontSize: 14 },
   button: { backgroundColor: colors.cyan, borderRadius: 9, alignItems: 'center', justifyContent: 'center', minHeight: 52, marginTop: 25, paddingHorizontal: 12 },
-  buttonText: { color: colors.accentText, fontWeight: '900', fontSize: 15 },
+  buttonText: { color: colors.accentText, fontFamily: font.heavy, fontSize: 15 },
   disabled: { opacity: 0.6 },
   logout: { alignItems: 'center', padding: 14, marginTop: 8 },
-  logoutText: { color: colors.muted, fontWeight: '700' },
+  logoutText: { color: colors.muted, fontFamily: font.bold },
 });

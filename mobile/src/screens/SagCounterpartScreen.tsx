@@ -1,3 +1,5 @@
+import { font } from '../theme/typography';
+import { FieldHeader } from '../components/field/FieldHeader';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -122,7 +124,7 @@ export function SagCounterpartScreen({ auth, baseUrl, onLogout }: { auth: AuthSe
   if (!canRead) return <View style={s.root}><EstibaAlert title="Contraparte SAG no está habilitado en este perfil." /><EstibaButton label="Cerrar sesión" onPress={onLogout} /></View>;
   return <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
     <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
-      <EstibaHeading title="Contraparte SAG" description={auth.usuario.nombre} actions={<EstibaButton label="Cerrar sesión" variant="secondary" onPress={onLogout} />} />
+      <FieldHeader area="consultas" auth={auth} title="Contraparte SAG" onLogout={onLogout} />
       {error ? <EstibaAlert title="No se pudo completar" detail={error} tone="critical" live /> : null}
       {notice ? <EstibaAlert title={notice} tone="success" live /> : null}
       {!recovered ? <EstibaButton label="Recuperar captura" variant="secondary" onPress={() => void run(async () => { const raw = await AsyncStorage.getItem(key); if (raw) { const data = JSON.parse(raw); setForm(data.form); setPending(data.pending); pendingRef.current = data.pending; setEditing(true); } setRecovered(true); })} /> : null}
@@ -182,4 +184,4 @@ export function SagCounterpartScreen({ auth, baseUrl, onLogout }: { auth: AuthSe
   </KeyboardAvoidingView>;
 }
 
-const s = StyleSheet.create({ root: { flex: 1, backgroundColor: colors.canvas }, content: { padding: 16, gap: 16 }, gap: { gap: 10 }, wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, alignItems: 'center' }, body: { color: colors.text, fontSize: 15 }, label: { color: colors.text, fontSize: 15, fontWeight: '700' } });
+const s = StyleSheet.create({ root: { flex: 1, backgroundColor: colors.canvas }, content: { padding: 16, gap: 16 }, gap: { gap: 10 }, wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, alignItems: 'center' }, body: { fontFamily: font.regular, color: colors.text, fontSize: 15 }, label: { color: colors.text, fontSize: 15, fontFamily: font.bold } });

@@ -1,3 +1,4 @@
+import { font } from './src/theme/typography';
 import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
 import * as ScreenOrientation from 'expo-screen-orientation';
@@ -27,6 +28,7 @@ import { applyAvailableUpdate } from './src/services/appUpdates';
 import { createEstibaApi } from './src/services/estibaApi';
 import { colors } from './src/theme/colors';
 import { fontAssets } from './src/theme/fontAssets';
+import { FieldNavigationProvider } from './src/components/field/FieldNavigation';
 
 type MobileModule = TabletModule;
 
@@ -125,15 +127,8 @@ export default function App() {
             onLogout={() => void logoutPersistentModule()}
           />
         ) : auth ? (
+          <FieldNavigationProvider auth={auth} onChangeModule={modules.length > 1 && activeModule ? () => setActiveModule(null) : undefined}>
           <View style={styles.workspace}>
-            {modules.length > 1 && activeModule && !usesOperatorWorkspace(activeModule) ? (
-              <View style={[styles.moduleStrip, isPdaBuild && styles.moduleStripPda]}>
-                <Text numberOfLines={1} style={styles.moduleStripText}>{isPdaBuild ? moduleLabel(activeModule) : `Módulo activo: ${moduleLabel(activeModule)}`}</Text>
-                <Pressable onPress={() => setActiveModule(null)} style={styles.changeModule}>
-                  <Text style={styles.changeModuleText}>{isPdaBuild ? 'Cambiar' : 'Cambiar módulo'}</Text>
-                </Pressable>
-              </View>
-            ) : null}
             {!activeModule ? (
               <ModuleSelection
                 modules={modules}
@@ -189,6 +184,7 @@ export default function App() {
               />
             )}
           </View>
+          </FieldNavigationProvider>
         ) : (
           <LoginScreen
             baseUrl={api.baseUrl}
@@ -201,12 +197,6 @@ export default function App() {
       </SafeAreaView>
     </SafeAreaProvider>
   );
-}
-
-// El espacio del camarero trae «Cambiar módulo» en su menú de operador; repetir la
-// franja de módulo activo encima de su cabecera solo resta altura a la maniobra.
-function usesOperatorWorkspace(module: MobileModule) {
-  return module === 'operacion' || module === 'operacion_materiales';
 }
 
 function availableModules(auth: AuthSession): MobileModule[] {
@@ -375,22 +365,17 @@ const styles = StyleSheet.create({
   app: { flex: 1, backgroundColor: colors.background },
   workspace: { flex: 1 },
   boot: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  bootText: { color: colors.muted, fontSize: 12, fontWeight: '800' },
-  moduleStrip: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingHorizontal: 18, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.backgroundDeep },
-  moduleStripText: { color: colors.muted, fontSize: 10, fontWeight: '900', textTransform: 'uppercase' },
-  changeModule: { paddingHorizontal: 11, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: colors.cyanDark },
-  changeModuleText: { color: colors.cyan, fontSize: 10, fontWeight: '900' },
+  bootText: { color: colors.muted, fontSize: 12, fontFamily: font.heavy },
   selector: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: colors.background },
-  selectorEyebrow: { color: colors.cyan, fontSize: 11, fontWeight: '900', letterSpacing: 1.4 },
-  selectorTitle: { color: colors.text, fontSize: 28, fontWeight: '900', marginTop: 7, textAlign: 'center' },
+  selectorEyebrow: { color: colors.cyan, fontSize: 12, fontFamily: font.heavy, letterSpacing: 1.4 },
+  selectorTitle: { color: colors.text, fontSize: 28, fontFamily: font.heavy, marginTop: 7, textAlign: 'center' },
   selectorCopy: { color: colors.muted, marginTop: 8, textAlign: 'center' },
   selectorCards: { width: '100%', maxWidth: 1300, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 16, marginTop: 28 },
   selectorCard: { flexGrow: 1, flexBasis: 220, maxWidth: 300, minHeight: 210, justifyContent: 'center', padding: 24, borderRadius: 18, borderWidth: 1, borderColor: colors.cyanDark, backgroundColor: colors.panel },
-  selectorIcon: { color: colors.cyan, fontSize: 34, fontWeight: '900' },
-  selectorCardTitle: { color: colors.text, fontSize: 21, fontWeight: '900', marginTop: 14 },
+  selectorIcon: { color: colors.cyan, fontSize: 34, fontFamily: font.heavy },
+  selectorCardTitle: { color: colors.text, fontSize: 21, fontFamily: font.heavy, marginTop: 14 },
   selectorCardCopy: { color: colors.muted, lineHeight: 20, marginTop: 7 },
-  noModule: { color: colors.red, marginTop: 24, fontWeight: '800', textAlign: 'center' },
-  moduleStripPda: { paddingHorizontal: 10, paddingVertical: 5 },
+  noModule: { color: colors.red, marginTop: 24, fontFamily: font.heavy, textAlign: 'center' },
   selectorPda: { justifyContent: 'flex-start', padding: 14, paddingTop: 24 },
   selectorTitlePda: { fontSize: 21 },
   selectorCardsPda: { flexDirection: 'column', gap: 10, marginTop: 18 },

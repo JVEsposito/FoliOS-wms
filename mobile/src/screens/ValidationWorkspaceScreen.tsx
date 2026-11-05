@@ -1,3 +1,4 @@
+import { font } from '../theme/typography';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -82,7 +83,7 @@ const styles = StyleSheet.create({
   },
   tabActive: { borderBottomColor: areas.frigorifico.bright },
   tabDisabled: { opacity: 0.45 },
-  tabText: { color: o.color.muted, fontSize: 16, fontWeight: '600' },
-  tabTextActive: { color: o.color.text, fontWeight: '800' },
+  tabText: { color: o.color.muted, fontSize: 16, fontFamily: font.semibold },
+  tabTextActive: { color: o.color.text, fontFamily: font.heavy },
   content: { flex: 1 },
 });

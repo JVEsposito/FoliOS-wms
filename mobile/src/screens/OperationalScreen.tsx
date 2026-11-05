@@ -55,12 +55,14 @@ type OperationalScreenProps = {
    * estibas abiertas: el menú del operador reemplaza el antiguo botón «Salir» de esta vista.
    */
   onRegisterLogout?: (logout: (() => Promise<void>) | null) => void;
+  onOpenSessionsChange?: (names: string[]) => void;
 };
 
-export function OperationalScreen({ api, auth, onLogout, onRegisterLogout }: OperationalScreenProps) {
+export function OperationalScreen({ api, auth, onLogout, onRegisterLogout, onOpenSessionsChange }: OperationalScreenProps) {
   const { height, width } = useWindowDimensions();
   const wideLayout = width >= 1180 && height >= 700;
   const [cameras, setCameras] = useState<CameraSummary[]>([]);
+  const camerasLoaded = useRef(false);
   const [conditions, setConditions] = useState<SagCondition[]>([]);
   const [materialCatalog, setMaterialCatalog] = useState<MaterialCatalog>({ temporada: null, clientes: [], items: [], destinos: [] });
   const [materialDispatches, setMaterialDispatches] = useState<MaterialDispatch[]>([]);
@@ -180,6 +182,7 @@ export function OperationalScreen({ api, auth, onLogout, onRegisterLogout }: Ope
           )
           : Promise.resolve({ temporada: null, clientes: [], items: [], destinos: [] }),
       ]);
+      camerasLoaded.current = true;
       setCameras(loadedCameras);
       setConditions(loadedConditions);
       setMaterialCatalog(loadedMaterialCatalog);
@@ -561,6 +564,10 @@ export function OperationalScreen({ api, auth, onLogout, onRegisterLogout }: Ope
 
   // La referencia siempre apunta al cierre vigente (con las cámaras de este render).
   const logoutRef = useRef<() => Promise<void>>(async () => undefined);
+  useEffect(() => {
+    if (!camerasLoaded.current) return;
+    onOpenSessionsChange?.(cameras.filter((camera) => camera.acceso.modo === 'edicion' && camera.acceso.sesion?.es_propia).map(cameraDisplayName));
+  }, [cameras, onOpenSessionsChange]);
   logoutRef.current = logout;
   useEffect(() => {
     if (!onRegisterLogout) return;

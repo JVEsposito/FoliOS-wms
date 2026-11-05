@@ -98,14 +98,14 @@ export function CameraReentryPanel({ reentries, disabled, onRegisterTemperature 
 
 const styles = StyleSheet.create({
   panel: { marginBottom: 10, padding: 13, borderWidth: 1, borderColor: colors.amber, borderRadius: 16, backgroundColor: colors.panel, gap: 6 },
-  eyebrow: { fontFamily: font.heavy, color: colors.amber, fontSize: 11, letterSpacing: 1.1 },
+  eyebrow: { fontFamily: font.heavy, color: colors.amber, fontSize: 12, letterSpacing: 1.1 },
   title: { fontFamily: font.heavy, color: colors.text, fontSize: 16 },
   subtitle: { fontFamily: font.regular, color: colors.muted, fontSize: 13 },
   list: { marginTop: 4, flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   row: { width: 300, padding: 9, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, flexDirection: 'row', alignItems: 'center', gap: 8 },
   rowCopy: { flex: 1, minWidth: 0 },
   folio: { fontFamily: font.heavy, color: colors.text, fontSize: 13 },
-  meta: { fontFamily: font.regular, marginTop: 2, color: colors.muted, fontSize: 11 },
+  meta: { fontFamily: font.regular, marginTop: 2, color: colors.muted, fontSize: 12 },
   button: { paddingHorizontal: 11, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, alignItems: 'center' },
   buttonText: { fontFamily: font.heavy, color: colors.text, fontSize: 12 },
   primary: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 9, backgroundColor: colors.cyan, alignItems: 'center' },
@@ -114,6 +114,6 @@ const styles = StyleSheet.create({
   backdrop: { flex: 1, padding: 20, backgroundColor: 'rgba(0,0,0,0.75)', alignItems: 'center', justifyContent: 'center' },
   modal: { width: '100%', maxWidth: 480, padding: 20, borderRadius: 18, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panel },
   modalTitle: { fontFamily: font.heavy, marginTop: 4, color: colors.text, fontSize: 20 },
-  input: { fontFamily: font.heavy, minHeight: 50, marginTop: 14, paddingHorizontal: 12, borderRadius: 9, borderWidth: 1, borderColor: colors.border, color: colors.text, backgroundColor: colors.background, fontSize: 20 },
+  input: { fontFamily: font.heavy, minHeight: 52, marginTop: 14, paddingHorizontal: 12, borderRadius: 9, borderWidth: 1, borderColor: colors.border, color: colors.text, backgroundColor: colors.background, fontSize: 20 },
   actions: { marginTop: 14, flexDirection: 'row', justifyContent: 'flex-end', gap: 8 },
 });

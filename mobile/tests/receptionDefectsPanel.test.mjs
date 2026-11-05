@@ -1,3 +1,4 @@
+import { fieldUiMock } from './helpers/fieldUiMock.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -21,6 +22,7 @@ function harness(api) {
   }).outputText;
   vm.runInNewContext(compiled, { module, exports: module.exports, Error, Date, Promise,
     require: (id) => {
+      const fieldMock = fieldUiMock(id); if (fieldMock) return fieldMock;
       if (id === 'expo-crypto') return { randomUUID: () => `operation-${++uuid}` };
       if (id === 'expo-image-picker') return { launchImageLibraryAsync: async () => ({ canceled: false, assets: [photo] }) };
       if (id === '../services/containerCatalog') return { getContainerCatalog: async () => [], containerLabel: () => 'Bins' };

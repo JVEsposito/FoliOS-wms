@@ -1,3 +1,5 @@
+import { font } from '../theme/typography';
+import { FieldHeader } from '../components/field/FieldHeader';
 import * as Crypto from 'expo-crypto';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -286,24 +288,7 @@ export function DemoDataScreen({ onLogout }: DemoDataScreenProps) {
       style={styles.root}
     >
       <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
-        <View style={styles.header}>
-          <View style={styles.headerCopy}>
-            <Text style={styles.eyebrow}>FoliOS DEMO · ADMINISTRACIÓN LOCAL</Text>
-            <Text style={styles.title}>Datos para tu presentación</Text>
-            <Text style={styles.intro}>
-              Crea clientes, folios y cargas propias. Todo queda únicamente en la memoria interna de esta tablet.
-            </Text>
-          </View>
-          <View style={styles.headerActions}>
-            <View style={styles.offlineChip}>
-              <View style={styles.offlineDot} />
-              <Text style={styles.offlineText}>SQLITE LOCAL · SIN SERVIDOR</Text>
-            </View>
-            <Pressable disabled={busy} onPress={onLogout} style={styles.secondaryButton}>
-              <Text style={styles.secondaryButtonText}>Cerrar demo</Text>
-            </Pressable>
-          </View>
-        </View>
+        <FieldHeader area="administracion" title="Datos de demostración" busy={busy} onLogout={onLogout}><View style={styles.offlineChip}><View style={styles.offlineDot}/><Text style={styles.offlineText}>LOCAL</Text></View></FieldHeader><Text style={styles.intro}>Crea clientes, folios y cargas de ejemplo. Los datos quedan únicamente en esta tablet.</Text>
 
         <View style={styles.metrics}>
           <Metric label="Datos maestros" value={dataset.masters.length + dataset.clients.length} />
@@ -750,32 +735,32 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   page: { padding: 22, gap: 18 },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, backgroundColor: colors.background },
-  loadingText: { color: colors.muted, fontWeight: '800' },
+  loadingText: { color: colors.muted, fontFamily: font.heavy },
   header: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 18, padding: 22, borderWidth: 1, borderColor: colors.cyanDark, borderRadius: 18, backgroundColor: colors.panel },
   headerCopy: { flex: 1, minWidth: 280 },
   headerActions: { alignItems: 'flex-end', gap: 10 },
-  eyebrow: { color: colors.cyan, fontSize: 10, fontWeight: '900', letterSpacing: 1.4 },
-  title: { marginTop: 6, color: colors.text, fontSize: 28, fontWeight: '900' },
+  eyebrow: { color: colors.cyan, fontSize: 12, fontFamily: font.heavy, letterSpacing: 1.4 },
+  title: { marginTop: 6, color: colors.text, fontSize: 28, fontFamily: font.heavy },
   intro: { maxWidth: 720, marginTop: 6, color: colors.muted, lineHeight: 20 },
   offlineChip: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 11, paddingVertical: 7, borderWidth: 1, borderColor: colors.greenDark, borderRadius: 9, backgroundColor: '#10261B' },
   offlineDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.green },
-  offlineText: { color: colors.green, fontSize: 9, fontWeight: '900' },
+  offlineText: { color: colors.green, fontSize: 12, fontFamily: font.heavy },
   secondaryButton: { minWidth: 130, paddingHorizontal: 13, paddingVertical: 9, borderWidth: 1, borderColor: colors.border, borderRadius: 9, alignItems: 'center' },
-  secondaryButtonText: { color: colors.text, fontSize: 10, fontWeight: '900' },
+  secondaryButtonText: { color: colors.text, fontSize: 12, fontFamily: font.heavy },
   metrics: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   metric: { flexGrow: 1, flexBasis: 150, padding: 16, borderWidth: 1, borderColor: colors.border, borderRadius: 14, backgroundColor: colors.panelStrong },
-  metricValue: { color: colors.text, fontSize: 26, fontWeight: '900' },
-  metricLabel: { marginTop: 2, color: colors.muted, fontSize: 10, fontWeight: '800', textTransform: 'uppercase' },
+  metricValue: { color: colors.text, fontSize: 26, fontFamily: font.heavy },
+  metricLabel: { marginTop: 2, color: colors.muted, fontSize: 12, fontFamily: font.heavy, textTransform: 'uppercase' },
   message: { padding: 12, borderWidth: 1, borderRadius: 11 },
   messageError: { borderColor: colors.red, backgroundColor: '#421B21' },
   messageSuccess: { borderColor: colors.greenDark, backgroundColor: '#10261B' },
-  messageText: { color: colors.text, fontSize: 11, fontWeight: '800' },
+  messageText: { color: colors.text, fontSize: 12, fontFamily: font.heavy },
   privacyPanel: { flexDirection: 'row', alignItems: 'center', gap: 13, padding: 16, borderWidth: 1, borderColor: colors.greenDark, borderRadius: 14, backgroundColor: '#10261B' },
   privacyIcon: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 17, backgroundColor: colors.green },
-  privacyIconText: { color: colors.accentText, fontSize: 17, fontWeight: '900' },
+  privacyIconText: { color: colors.accentText, fontSize: 17, fontFamily: font.heavy },
   privacyCopy: { flex: 1 },
-  privacyTitle: { color: colors.text, fontSize: 13, fontWeight: '900' },
-  privacyText: { marginTop: 3, color: colors.muted, fontSize: 10, lineHeight: 15 },
+  privacyTitle: { color: colors.text, fontSize: 13, fontFamily: font.heavy },
+  privacyText: { fontFamily: font.regular, marginTop: 3, color: colors.muted, fontSize: 12, lineHeight: 15 },
   masterWorkspace: { gap: 16 },
   masterWorkspaceWide: { flexDirection: 'row', alignItems: 'flex-start' },
   masterCreator: { flex: 1, padding: 20, borderWidth: 1, borderColor: colors.greenDark, borderRadius: 16, backgroundColor: colors.panel },
@@ -783,22 +768,22 @@ const styles = StyleSheet.create({
   forms: { gap: 16 },
   formsWide: { flexDirection: 'row' },
   card: { flex: 1, padding: 20, borderWidth: 1, borderColor: colors.border, borderRadius: 16, backgroundColor: colors.panel },
-  cardEyebrow: { color: colors.cyan, fontSize: 9, fontWeight: '900', letterSpacing: 1.2 },
-  cardTitle: { marginTop: 5, color: colors.text, fontSize: 21, fontWeight: '900' },
-  cardCopy: { marginTop: 5, marginBottom: 5, color: colors.muted, fontSize: 11, lineHeight: 16 },
+  cardEyebrow: { color: colors.cyan, fontSize: 12, fontFamily: font.heavy, letterSpacing: 1.2 },
+  cardTitle: { marginTop: 5, color: colors.text, fontSize: 21, fontFamily: font.heavy },
+  cardCopy: { fontFamily: font.regular, marginTop: 5, marginBottom: 5, color: colors.muted, fontSize: 12, lineHeight: 16 },
   field: { marginTop: 12, gap: 6 },
-  fieldLabel: { marginTop: 12, color: colors.text, fontSize: 10, fontWeight: '800' },
-  input: { height: 46, paddingHorizontal: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 10, backgroundColor: colors.backgroundDeep, color: colors.text, fontSize: 12 },
+  fieldLabel: { marginTop: 12, color: colors.text, fontSize: 12, fontFamily: font.heavy },
+  input: { fontFamily: font.regular, height: 46, paddingHorizontal: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 10, backgroundColor: colors.backgroundDeep, color: colors.text, fontSize: 12 },
   clientChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 7 },
   clientChoice: { paddingHorizontal: 10, paddingVertical: 8, borderWidth: 1, borderColor: colors.border, borderRadius: 9, backgroundColor: colors.backgroundDeep },
   clientChoiceSelected: { borderColor: colors.cyan, backgroundColor: colors.selected },
-  clientChoiceText: { color: colors.muted, fontSize: 9, fontWeight: '900' },
+  clientChoiceText: { color: colors.muted, fontSize: 12, fontFamily: font.heavy },
   clientChoiceTextSelected: { color: colors.cyan },
   inlineFields: { flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
   inlineField: { flex: 1 },
   smallField: { width: 100 },
   primaryButton: { height: 46, marginTop: 18, paddingHorizontal: 14, borderRadius: 10, backgroundColor: colors.cyan, alignItems: 'center', justifyContent: 'center' },
-  primaryButtonText: { color: colors.accentText, fontSize: 11, fontWeight: '900' },
+  primaryButtonText: { color: colors.accentText, fontSize: 12, fontFamily: font.heavy },
   disabled: { opacity: 0.5 },
   loadWorkspace: { gap: 16 },
   loadWorkspaceWide: { flexDirection: 'row', alignItems: 'flex-start' },
@@ -807,56 +792,56 @@ const styles = StyleSheet.create({
   choiceRow: { marginTop: 8, flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
   choice: { paddingHorizontal: 11, paddingVertical: 8, borderWidth: 1, borderColor: colors.border, borderRadius: 8, backgroundColor: colors.backgroundDeep },
   choiceSelected: { borderColor: colors.cyan, backgroundColor: colors.selected },
-  choiceText: { color: colors.muted, fontSize: 9, fontWeight: '900' },
+  choiceText: { color: colors.muted, fontSize: 12, fontFamily: font.heavy },
   choiceTextSelected: { color: colors.cyan },
   selectionHeading: { marginTop: 7, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  selectionCount: { color: colors.cyan, fontSize: 10, fontWeight: '900' },
+  selectionCount: { color: colors.cyan, fontSize: 12, fontFamily: font.heavy },
   folioChoicesScroll: { maxHeight: 260, marginTop: 8 },
   folioChoices: { gap: 7 },
   folioChoice: { padding: 10, borderWidth: 1, borderColor: colors.border, borderRadius: 9, backgroundColor: colors.backgroundDeep },
   folioChoiceSelected: { borderColor: colors.cyan, backgroundColor: colors.selected },
-  folioChoiceTitle: { color: colors.text, fontSize: 10, fontWeight: '900' },
+  folioChoiceTitle: { color: colors.text, fontSize: 12, fontFamily: font.monoBold },
   folioChoiceTitleSelected: { color: colors.cyan },
-  folioChoiceMeta: { marginTop: 3, color: colors.muted, fontSize: 8 },
-  emptyCopy: { padding: 11, color: colors.muted, fontSize: 10, lineHeight: 15 },
+  folioChoiceMeta: { fontFamily: font.mono, marginTop: 3, color: colors.muted, fontSize: 12 },
+  emptyCopy: { fontFamily: font.regular, padding: 11, color: colors.muted, fontSize: 12, lineHeight: 15 },
   loadRow: { padding: 14, gap: 8, borderBottomWidth: 1, borderBottomColor: colors.borderSoft },
   loadRowTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   statusChip: { paddingHorizontal: 8, paddingVertical: 5, borderWidth: 1, borderColor: colors.amber, borderRadius: 7, backgroundColor: colors.amberDark },
   statusPublished: { borderColor: colors.green, backgroundColor: colors.greenDark },
   statusCancelled: { borderColor: colors.red, backgroundColor: '#421B21' },
-  statusText: { color: colors.text, fontSize: 7, fontWeight: '900' },
-  loadFolios: { color: colors.text, fontSize: 9, lineHeight: 14 },
-  loadObservation: { color: colors.muted, fontSize: 8, fontStyle: 'italic' },
+  statusText: { color: colors.text, fontSize: 12, fontFamily: font.heavy },
+  loadFolios: { fontFamily: font.mono, color: colors.text, fontSize: 12, lineHeight: 14 },
+  loadObservation: { fontFamily: font.regular, color: colors.muted, fontSize: 12, fontStyle: 'italic' },
   loadActions: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
   publishButton: { paddingHorizontal: 11, paddingVertical: 8, borderRadius: 8, backgroundColor: colors.cyan },
-  publishButtonText: { color: colors.accentText, fontSize: 8, fontWeight: '900' },
+  publishButtonText: { color: colors.accentText, fontSize: 12, fontFamily: font.heavy },
   miniAction: { paddingHorizontal: 8, paddingVertical: 7, borderWidth: 1, borderColor: colors.border, borderRadius: 7 },
   miniActionActive: { borderColor: colors.cyan, backgroundColor: colors.selected, opacity: 0.7 },
-  miniActionText: { color: colors.text, fontSize: 8, fontWeight: '800', textTransform: 'uppercase' },
+  miniActionText: { color: colors.text, fontSize: 12, fontFamily: font.heavy, textTransform: 'uppercase' },
   cancelLoadButton: { marginLeft: 'auto', paddingHorizontal: 9, paddingVertical: 7, borderWidth: 1, borderColor: colors.red, borderRadius: 7 },
-  cancelLoadButtonText: { color: colors.red, fontSize: 8, fontWeight: '900' },
+  cancelLoadButtonText: { color: colors.red, fontSize: 12, fontFamily: font.heavy },
   tables: { gap: 16 },
   tablesWide: { flexDirection: 'row', alignItems: 'flex-start' },
   listCard: { flex: 1, overflow: 'hidden', borderWidth: 1, borderColor: colors.border, borderRadius: 16, backgroundColor: colors.panel },
   listHeader: { padding: 17, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: colors.border },
-  listTitle: { marginTop: 4, color: colors.text, fontSize: 18, fontWeight: '900' },
-  count: { color: colors.cyan, fontSize: 25, fontWeight: '900' },
+  listTitle: { marginTop: 4, color: colors.text, fontSize: 18, fontFamily: font.heavy },
+  count: { color: colors.cyan, fontSize: 25, fontFamily: font.heavy },
   listRow: { minHeight: 64, paddingHorizontal: 16, paddingVertical: 11, flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: 1, borderBottomColor: colors.borderSoft },
   inactiveRow: { opacity: 0.55 },
   rowCopy: { flex: 1 },
-  rowTitle: { color: colors.text, fontSize: 11, fontWeight: '900' },
-  rowMeta: { marginTop: 4, color: colors.muted, fontSize: 9 },
+  rowTitle: { color: colors.text, fontSize: 12, fontFamily: font.heavy },
+  rowMeta: { fontFamily: font.regular, marginTop: 4, color: colors.muted, fontSize: 12 },
   deleteButton: { paddingHorizontal: 10, paddingVertical: 7, borderWidth: 1, borderColor: colors.red, borderRadius: 8 },
-  deleteButtonText: { color: colors.red, fontSize: 9, fontWeight: '900' },
+  deleteButtonText: { color: colors.red, fontSize: 12, fontFamily: font.heavy },
   toggleButton: { paddingHorizontal: 10, paddingVertical: 7, borderWidth: 1, borderColor: colors.cyanDark, borderRadius: 8 },
-  toggleButtonText: { color: colors.cyan, fontSize: 9, fontWeight: '900' },
+  toggleButtonText: { color: colors.cyan, fontSize: 12, fontFamily: font.heavy },
   resetPanel: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: 18, borderWidth: 1, borderColor: colors.amberDark, borderRadius: 15, backgroundColor: '#241B10' },
   resetCopy: { flex: 1, minWidth: 240 },
-  resetTitle: { color: colors.text, fontSize: 15, fontWeight: '900' },
-  resetText: { marginTop: 4, color: colors.muted, fontSize: 10 },
+  resetTitle: { color: colors.text, fontSize: 15, fontFamily: font.heavy },
+  resetText: { fontFamily: font.regular, marginTop: 4, color: colors.muted, fontSize: 12 },
   resetButton: { paddingHorizontal: 15, paddingVertical: 11, borderWidth: 1, borderColor: colors.amber, borderRadius: 9 },
-  resetButtonText: { color: colors.amber, fontSize: 10, fontWeight: '900' },
+  resetButtonText: { color: colors.amber, fontSize: 12, fontFamily: font.heavy },
   resetActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   fullResetButton: { paddingHorizontal: 15, paddingVertical: 11, borderWidth: 1, borderColor: colors.red, borderRadius: 9 },
-  fullResetButtonText: { color: colors.red, fontSize: 10, fontWeight: '900' },
+  fullResetButtonText: { color: colors.red, fontSize: 12, fontFamily: font.heavy },
 });

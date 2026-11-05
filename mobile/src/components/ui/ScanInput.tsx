@@ -1,3 +1,4 @@
+import { font } from '../../theme/typography';
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Pressable, StyleProp, StyleSheet, Text, TextInput, TextStyle, View } from 'react-native';
 
@@ -137,16 +138,16 @@ const styles = StyleSheet.create({
     color: colors.text,
     backgroundColor: colors.backgroundDeep,
     fontSize: 21,
-    fontWeight: '900',
+    fontFamily: font.monoBold,
     letterSpacing: 1,
   },
-  inputPda: { minHeight: 50, paddingHorizontal: 10, fontSize: 18, letterSpacing: 0.4 },
+  inputPda: { minHeight: 52, paddingHorizontal: 10, fontSize: 18, letterSpacing: 0.4 },
   keyboard: { width: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.backgroundDeep },
   keyboardActive: { borderColor: colors.cyan, backgroundColor: colors.selected },
-  keyboardText: { color: colors.muted, fontSize: 20 },
+  keyboardText: { fontFamily: font.regular, color: colors.muted, fontSize: 20 },
   keyboardTextActive: { color: colors.cyan },
   submit: { minWidth: 118, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, borderRadius: 12, backgroundColor: colors.cyan },
   submitPda: { minWidth: 0, paddingHorizontal: 12, borderRadius: 10 },
-  submitText: { color: colors.accentText, fontSize: 13, fontWeight: '900' },
+  submitText: { color: colors.accentText, fontSize: 13, fontFamily: font.heavy },
   disabled: { opacity: 0.45 },
 });

@@ -1,3 +1,4 @@
+import { fieldUiMock } from './helpers/fieldUiMock.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -19,6 +20,7 @@ test('el espacio operacional mantiene presencia entre pestañas y usa la identid
   vm.runInNewContext(compile('../src/screens/OperationalWorkspaceScreen.tsx'), {
     module, exports: module.exports,
     require: (id) => {
+      const fieldMock = fieldUiMock(id); if (fieldMock) return fieldMock;
       if (id === 'react-native') return { Pressable: 'Pressable', ScrollView: 'ScrollView', Text: 'Text', View: 'View', StyleSheet: { create: (s) => s } };
       if (id === 'react' || id === 'react/jsx-runtime') return require(id);
       if (id.endsWith('/hooks/useOperationalPolling')) return { useOperationalPolling: (task, options) => polls.push({ task, options }) };

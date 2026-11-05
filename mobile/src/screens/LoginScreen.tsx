@@ -1,3 +1,4 @@
+import { font } from '../theme/typography';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -318,12 +319,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.panel,
   },
   brandLogo: { width: 300, height: 72, marginBottom: 24 },
-  eyebrow: { color: colors.cyan, fontSize: 14, fontWeight: '900', letterSpacing: 1.8 },
-  brandCopy: { maxWidth: 430, marginTop: 22, color: colors.muted, fontSize: 15, lineHeight: 23 },
+  eyebrow: { color: colors.cyan, fontSize: 14, fontFamily: font.heavy, letterSpacing: 1.8 },
+  brandCopy: { fontFamily: font.regular, maxWidth: 430, marginTop: 22, color: colors.muted, fontSize: 15, lineHeight: 23 },
   features: { marginTop: 32, flexDirection: 'row', flexWrap: 'wrap', gap: 18 },
   feature: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   featureDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.green },
-  featureText: { color: colors.text, fontSize: 14, fontWeight: '700' },
+  featureText: { color: colors.text, fontSize: 14, fontFamily: font.bold },
   formPanel: {
     flex: 0.95,
     minHeight: 520,
@@ -355,7 +356,7 @@ const styles = StyleSheet.create({
   modeDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.green },
   demoDot: { backgroundColor: colors.amber },
   unconfiguredDot: { backgroundColor: colors.red },
-  modeText: { maxWidth: 360, color: colors.muted, fontSize: 12, fontWeight: '900' },
+  modeText: { maxWidth: 360, color: colors.muted, fontSize: 12, fontFamily: font.heavy },
   serverButton: {
     minHeight: 48,
     paddingHorizontal: 12,
@@ -366,13 +367,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  serverButtonText: { color: colors.cyan, fontSize: 13, fontWeight: '900' },
-  formTitle: { color: colors.text, fontSize: 30, fontWeight: '900' },
+  serverButtonText: { color: colors.cyan, fontSize: 13, fontFamily: font.heavy },
+  formTitle: { color: colors.text, fontSize: 30, fontFamily: font.heavy },
   formTitlePda: { fontSize: 22 },
-  formIntro: { marginTop: 7, marginBottom: 17, color: colors.muted, fontSize: 12 },
+  formIntro: { fontFamily: font.regular, marginTop: 7, marginBottom: 17, color: colors.muted, fontSize: 12 },
   field: { marginTop: 11, gap: 6 },
-  label: { color: colors.text, fontSize: 14, fontWeight: '800' },
-  input: {
+  label: { color: colors.text, fontSize: 14, fontFamily: font.heavy },
+  input: { fontFamily: font.regular,
     height: 48,
     paddingHorizontal: 13,
     borderRadius: 11,
@@ -382,7 +383,7 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 13,
   },
-  error: { minHeight: 17, marginTop: 8, color: colors.red, fontSize: 13 },
+  error: { fontFamily: font.regular, minHeight: 17, marginTop: 8, color: colors.red, fontSize: 13 },
   configurationError: {
     marginTop: 12,
     padding: 10,
@@ -391,7 +392,7 @@ const styles = StyleSheet.create({
     borderColor: colors.red,
     backgroundColor: '#421B21',
   },
-  configurationErrorText: { color: '#FFB7B7', fontSize: 13, lineHeight: 17 },
+  configurationErrorText: { fontFamily: font.regular, color: '#FFB7B7', fontSize: 13, lineHeight: 17 },
   submit: {
     height: 50,
     paddingHorizontal: 16,
@@ -403,9 +404,9 @@ const styles = StyleSheet.create({
   },
   disabled: { opacity: 0.5 },
   pressed: { opacity: 0.75 },
-  submitText: { color: colors.accentText, fontSize: 12, fontWeight: '900' },
-  submitArrow: { color: colors.accentText, fontSize: 21, fontWeight: '900' },
-  help: { marginTop: 12, color: colors.muted, fontSize: 12, lineHeight: 16, textAlign: 'center' },
+  submitText: { color: colors.accentText, fontSize: 12, fontFamily: font.heavy },
+  submitArrow: { color: colors.accentText, fontSize: 21, fontFamily: font.heavy },
+  help: { fontFamily: font.regular, marginTop: 12, color: colors.muted, fontSize: 12, lineHeight: 16, textAlign: 'center' },
   serverOverlay: {
     flex: 1,
     padding: 24,
@@ -424,8 +425,8 @@ const styles = StyleSheet.create({
   },
   serverHeading: { flexDirection: 'row', justifyContent: 'space-between', gap: 18 },
   serverHeadingCopy: { flex: 1 },
-  serverTitle: { marginTop: 4, color: colors.text, fontSize: 24, fontWeight: '900' },
-  serverIntro: { marginTop: 6, color: colors.muted, fontSize: 14, lineHeight: 18 },
+  serverTitle: { marginTop: 4, color: colors.text, fontSize: 24, fontFamily: font.heavy },
+  serverIntro: { fontFamily: font.regular, marginTop: 6, color: colors.muted, fontSize: 14, lineHeight: 18 },
   serverClose: {
     width: 38,
     height: 38,
@@ -435,9 +436,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  serverCloseText: { color: colors.text, fontSize: 24, lineHeight: 26 },
-  serverExample: { marginTop: 8, color: colors.muted, fontSize: 12, lineHeight: 16 },
-  serverError: { minHeight: 17, marginTop: 8, color: colors.red, fontSize: 13 },
+  serverCloseText: { fontFamily: font.regular, color: colors.text, fontSize: 24, lineHeight: 26 },
+  serverExample: { fontFamily: font.regular, marginTop: 8, color: colors.muted, fontSize: 12, lineHeight: 16 },
+  serverError: { fontFamily: font.regular, minHeight: 17, marginTop: 8, color: colors.red, fontSize: 13 },
   serverActions: { marginTop: 12, flexDirection: 'row', justifyContent: 'flex-end', gap: 10 },
   cancelButton: {
     minWidth: 110,
@@ -448,7 +449,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cancelButtonText: { color: colors.text, fontSize: 14, fontWeight: '900' },
+  cancelButtonText: { color: colors.text, fontSize: 14, fontFamily: font.heavy },
   saveServerButton: {
     minWidth: 170,
     height: 44,
@@ -458,5 +459,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  saveServerText: { color: colors.accentText, fontSize: 14, fontWeight: '900' },
+  saveServerText: { color: colors.accentText, fontSize: 14, fontFamily: font.heavy },
 });

@@ -1,3 +1,4 @@
+import { fieldUiMock } from './helpers/fieldUiMock.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -22,11 +23,11 @@ async function harness({ size = 200, transformation = false, failOnce = false, o
   }).outputText;
   const module = { exports: {} };
   vm.runInNewContext(compiled, { module, exports: module.exports, console, Date, Number, Error, Set,
-    require: id => id === 'react-native' ? { ActivityIndicator: 'ActivityIndicator', Pressable: 'Pressable', Text: 'Text', TextInput: 'TextInput', View: 'View', StyleSheet: { create: s => s } }
+    require: id => fieldUiMock(id) ?? (id === 'react-native' ? { ActivityIndicator: 'ActivityIndicator', Pressable: 'Pressable', Text: 'Text', TextInput: 'TextInput', View: 'View', StyleSheet: { create: s => s } }
       : id === 'expo-crypto' ? { randomUUID: () => `uuid-${++sequence}` }
         : id.endsWith('/estiba-printer-socket') ? { isDirectPrinterAvailable: () => true, sendToPrinter: async () => ({ status: 'sent', bytesSent: 80 }) }
           : id.endsWith('/printerConfiguration') ? { loadPrinterConfiguration: async () => ({ name: 'Bodega', host: '192.168.1.50', port: 9100, profileId: 'printer' }), savePrinterConfiguration: async (_id, c) => c, validatePrinterConfiguration: c => c }
-            : id.endsWith('/theme/colors') ? { colors: {} } : require(id),
+            : id.endsWith('/theme/colors') ? { colors: {} } : require(id)),
   });
   const api = { printProfiles: async () => [{ id: 'printer', nombre: 'Bodega', fabricante: 'Bixolon', ancho_mm: 100, alto_mm: size, dpi: 203, ...(oldServer ? {} : { disenos_disponibles: ['actual', 'clasica_bodega'] }) }], printJobs: async () => [],
     generateLabels: async (...args) => { const payload = args.at(-1); calls.push(JSON.parse(JSON.stringify(payload))); if (failOnce && calls.length === 1) throw new Error('Sin conexión'); return { jobId: 'job', zpl: '^XA^XZ' }; },

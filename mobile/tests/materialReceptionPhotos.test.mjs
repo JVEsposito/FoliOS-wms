@@ -1,3 +1,4 @@
+import { fieldUiMock } from './helpers/fieldUiMock.mjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { puedeConfirmarPorFotos } from '../src/domain/materialReception.ts';
@@ -24,6 +25,7 @@ function harness(picker) {
   const module = { exports: {} };
   vm.runInNewContext(compiled, { module, exports: module.exports, Promise, Error,
     require: (id) => {
+      const fieldMock = fieldUiMock(id); if (fieldMock) return fieldMock;
       if (id === 'expo-crypto') return { randomUUID: () => 'upload-operation' };
       if (id === 'expo-image-picker') return picker;
       if (id === 'react-native') return { ActivityIndicator: 'ActivityIndicator', Image: 'Image', TextInput: 'TextInput', Pressable: 'Pressable', Text: 'Text', View: 'View', StyleSheet: { create: (s) => s } };

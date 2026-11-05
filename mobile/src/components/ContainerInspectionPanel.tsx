@@ -1,3 +1,4 @@
+import { font } from '../theme/typography';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ContainerInspectionDraft, InspectionItem } from '../domain/containerInspection';
 import { containerLabel } from '../services/containerCatalog';
@@ -17,4 +18,4 @@ export function ContainerInspectionPanel({ value, quantities, disabled, onChange
     <TextInput editable={!disabled} accessibilityLabel="Observación de inspección RC-02" multiline maxLength={2000} onChangeText={(observacion) => onChange({ ...value, observacion })} placeholder="Observación de inspección" placeholderTextColor={colors.muted} style={styles.input} value={value.observacion}/>
   </View>;
 }
-const styles = StyleSheet.create({ panel: { gap: 10, paddingVertical: 14 }, item: { gap: 8, paddingVertical: 10, borderBottomWidth: 1, borderColor: colors.border }, title: { color: colors.text, fontSize: 15, fontWeight: '700' }, text: { color: colors.text, fontSize: 14 }, muted: { color: colors.muted, fontSize: 12 }, row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, choice: { borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: 10 }, selected: { borderColor: colors.cyan, backgroundColor: colors.panel }, input: { color: colors.text, borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: 10 } });
+const styles = StyleSheet.create({ panel: { gap: 10, paddingVertical: 14 }, item: { gap: 8, paddingVertical: 10, borderBottomWidth: 1, borderColor: colors.border }, title: { color: colors.text, fontSize: 15, fontFamily: font.bold }, text: { fontFamily: font.regular, color: colors.text, fontSize: 14 }, muted: { fontFamily: font.regular, color: colors.muted, fontSize: 12 }, row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, choice: { borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: 10 }, selected: { borderColor: colors.cyan, backgroundColor: colors.panel }, input: { color: colors.text, borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: 10 } });

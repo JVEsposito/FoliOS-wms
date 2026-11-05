@@ -1,3 +1,5 @@
+import { font } from '../theme/typography';
+import { FieldHeader } from '../components/field/FieldHeader';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
@@ -282,29 +284,7 @@ export function RepalletizingScreen({ auth, baseUrl, onLogout, standalone = fals
 
   return (
     <View style={styles.screen}>
-      <View style={[styles.header, tight && styles.headerTight]}>
-        <View style={styles.headerCopy}>
-          {tight ? null : (
-            <Text style={styles.eyebrow}>{standalone ? 'CÁMARAS · REPALETIZAJE' : 'VALIDACIÓN · REPALETIZAJES'}</Text>
-          )}
-          <Text numberOfLines={1} style={[styles.title, tight && styles.titleTight]}>
-            {tight ? 'Repaletizaje' : 'Consolidar saldos'}
-          </Text>
-          {tight ? null : (
-            <Text style={styles.subtitle}>
-              Cliente, especie, marca y estado térmico nunca se mezclan.
-            </Text>
-          )}
-        </View>
-        <View style={styles.headerActions}>
-          <Pressable disabled={loadingHistory} onPress={() => void reloadHistory()} style={styles.secondary}>
-            <Text style={styles.secondaryText}>↻</Text>
-          </Pressable>
-          <Pressable onPress={onLogout} style={styles.secondary}>
-            <Text style={styles.secondaryText}>Salir</Text>
-          </Pressable>
-        </View>
-      </View>
+      <FieldHeader area="frigorifico" auth={auth} title="Repaletizaje" subtitle="Cliente, especie, marca y estado térmico compatibles" onLogout={onLogout}><Pressable accessibilityLabel="Actualizar repaletizajes" disabled={loadingHistory} onPress={() => void reloadHistory()} style={styles.secondary}><Text style={styles.secondaryText}>↻</Text></Pressable></FieldHeader>
 
       <ScrollView contentContainerStyle={[styles.content, tight && styles.contentTight]} keyboardShouldPersistTaps="handled">
         <View style={styles.shiftRow}>
@@ -592,13 +572,13 @@ const styles = StyleSheet.create({
   contentTight: { padding: 12, gap: 10 },
   shiftRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   shiftOptions: { flexDirection: 'row', gap: 8, width: 150 },
-  shiftHint: { color: colors.amber, fontSize: 13, fontWeight: '800' },
-  sourceLocation: { color: colors.cyan, fontSize: 13, fontWeight: '800', marginTop: 3 },
+  shiftHint: { color: colors.amber, fontSize: 13, fontFamily: font.heavy },
+  sourceLocation: { color: colors.cyan, fontSize: 13, fontFamily: font.heavy, marginTop: 3 },
   headerCopy: { flex: 1 },
   headerActions: { flexDirection: 'row', gap: 8 },
-  eyebrow: { color: colors.cyan, fontSize: 14, fontWeight: '900', letterSpacing: 1.2 },
-  title: { color: colors.text, fontSize: 26, fontWeight: '900', marginTop: 4 },
-  subtitle: { color: colors.muted, fontSize: 14, marginTop: 4 },
+  eyebrow: { color: colors.cyan, fontSize: 14, fontFamily: font.heavy, letterSpacing: 1.2 },
+  title: { color: colors.text, fontSize: 26, fontFamily: font.heavy, marginTop: 4 },
+  subtitle: { fontFamily: font.regular, color: colors.muted, fontSize: 14, marginTop: 4 },
   content: { padding: 16, gap: 12 },
   options: { flexDirection: 'row', gap: 8 },
   toggle: {
@@ -612,12 +592,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.backgroundDeep,
   },
   toggleActive: { borderColor: colors.cyan, backgroundColor: colors.cyanDark },
-  toggleText: { color: colors.muted, fontWeight: '900' },
+  toggleText: { color: colors.muted, fontFamily: font.heavy },
   toggleTextActive: { color: colors.text },
   field: { gap: 5 },
-  fieldLabel: { color: colors.muted, fontSize: 14, fontWeight: '900' },
+  fieldLabel: { color: colors.muted, fontSize: 14, fontFamily: font.heavy },
   input: {
-    minHeight: 46,
+    minHeight: 52,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: colors.border,
@@ -625,9 +605,9 @@ const styles = StyleSheet.create({
     color: colors.text,
     paddingHorizontal: 12,
   },
-  primaryText: { color: colors.accentText, fontWeight: '900' },
+  primaryText: { color: colors.accentText, fontFamily: font.heavy },
   secondary: {
-    minHeight: 40,
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 9,
@@ -635,10 +615,10 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     paddingHorizontal: 12,
   },
-  secondaryText: { color: colors.cyan, fontWeight: '900' },
+  secondaryText: { color: colors.cyan, fontFamily: font.heavy },
   blocked: {
     color: colors.red,
-    fontWeight: '900',
+    fontFamily: font.heavy,
     borderWidth: 1,
     borderColor: colors.red,
     borderRadius: 9,
@@ -653,7 +633,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 6,
     fontSize: 13,
-    fontWeight: '900',
+    fontFamily: font.heavy,
   },
   sourceCard: {
     borderWidth: 1,
@@ -664,8 +644,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   sourceCopy: { flex: 1 },
-  sourceNumber: { color: colors.text, fontWeight: '900' },
-  sourceMeta: { color: colors.muted, fontSize: 14, marginTop: 2 },
+  sourceNumber: { color: colors.text, fontFamily: font.heavy },
+  sourceMeta: { fontFamily: font.regular, color: colors.muted, fontSize: 14, marginTop: 2 },
   compositionLine: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -684,10 +664,10 @@ const styles = StyleSheet.create({
     padding: 7,
   },
   keepButtonActive: { borderColor: colors.cyan, backgroundColor: colors.cyanDark },
-  keepText: { color: colors.cyan, fontSize: 13, fontWeight: '900' },
+  keepText: { color: colors.cyan, fontSize: 13, fontFamily: font.heavy },
   contributionInput: {
     width: 100,
-    minHeight: 40,
+    minHeight: 52,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 8,
@@ -695,8 +675,8 @@ const styles = StyleSheet.create({
     color: colors.text,
     textAlign: 'center',
   },
-  remaining: { color: colors.muted, fontSize: 14 },
-  remove: { color: colors.red, fontWeight: '900', fontSize: 14 },
+  remaining: { fontFamily: font.regular, color: colors.muted, fontSize: 14 },
+  remove: { color: colors.red, fontFamily: font.heavy, fontSize: 14 },
   preview: {
     borderWidth: 1,
     borderColor: colors.cyanDark,
@@ -704,14 +684,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.panel,
     padding: 14,
   },
-  previewLabel: { color: colors.muted, fontSize: 13, fontWeight: '900' },
-  previewNumber: { color: colors.cyan, fontSize: 22, fontWeight: '900', marginTop: 4 },
+  previewLabel: { color: colors.muted, fontSize: 13, fontFamily: font.heavy },
+  previewNumber: { color: colors.cyan, fontSize: 22, fontFamily: font.heavy, marginTop: 4 },
   previewMeta: { color: colors.muted, marginTop: 3 },
   previewCompositionLine: { flexDirection: 'row', justifyContent: 'space-between', gap: 10, paddingTop: 8, marginTop: 8, borderTopWidth: 1, borderTopColor: colors.border },
-  previewCompositionText: { flex: 1, color: colors.text, fontSize: 14, fontWeight: '800' },
-  previewCompositionQuantity: { color: colors.cyan, fontSize: 14, fontWeight: '900' },
-  message: { color: colors.green, fontWeight: '800' },
-  error: { color: colors.red, fontWeight: '800' },
+  previewCompositionText: { flex: 1, color: colors.text, fontSize: 14, fontFamily: font.heavy },
+  previewCompositionQuantity: { color: colors.cyan, fontSize: 14, fontFamily: font.heavy },
+  message: { color: colors.green, fontFamily: font.heavy },
+  error: { color: colors.red, fontFamily: font.heavy },
   confirmActions: { flexDirection: 'row', gap: 8 },
   secondaryWide: {
     flex: 1,
@@ -724,13 +704,13 @@ const styles = StyleSheet.create({
   },
   confirmButton: {
     flex: 2,
-    minHeight: 48,
+    minHeight: 56,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 10,
     backgroundColor: colors.cyan,
   },
-  sectionTitle: { color: colors.text, fontSize: 18, fontWeight: '900', marginTop: 12 },
+  sectionTitle: { color: colors.text, fontSize: 18, fontFamily: font.heavy, marginTop: 12 },
   historyCard: {
     borderWidth: 1,
     borderColor: colors.border,
@@ -738,6 +718,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.panel,
     padding: 11,
   },
-  historyWarning: { color: colors.amber, fontSize: 14, fontWeight: '900', marginTop: 5 },
+  historyWarning: { color: colors.amber, fontSize: 14, fontFamily: font.heavy, marginTop: 5 },
   empty: { color: colors.muted, textAlign: 'center', padding: 20 },
 });

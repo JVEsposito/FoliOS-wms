@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { bandNumberingLabel, cameraDisplayName, orderBandsForCamera } from '../domain/cameras';
@@ -41,13 +41,16 @@ export function PositionMap({
   const maxPosition = Math.max(1, ...plan.posiciones.map((position) => position.posicion));
   const positionNumbers = Array.from({ length: maxPosition }, (_, index) => index + 1);
   const [selectedLevel, setSelectedLevel] = useState(levels[0] ?? 1);
+  const followedPosition = useRef<string | null>(null);
 
   useEffect(() => {
     if (!levels.includes(selectedLevel)) setSelectedLevel(levels[0] ?? 1);
   }, [levels, selectedLevel]);
 
   useEffect(() => {
+    if (followedPosition.current === selectedPositionId) return;
     const selected = plan.posiciones.find((position) => position.id === selectedPositionId);
+    followedPosition.current = selectedPositionId;
     if (selected && selected.nivel !== selectedLevel) setSelectedLevel(selected.nivel);
   }, [plan, selectedLevel, selectedPositionId]);
 
@@ -433,7 +436,7 @@ const styles = StyleSheet.create({
   selected: { borderWidth: 3, borderColor: colors.cyan },
   pressed: { opacity: 0.72 },
   cellFolio: { fontFamily: font.monoBold, color: colors.text, fontSize: 15 },
-  cellFolioHead: { color: colors.textSecondary, fontSize: 12 },
+  cellFolioHead: { fontFamily: font.mono, color: colors.textSecondary, fontSize: 12 },
   cellMain: { fontFamily: font.bold, color: colors.text, fontSize: 14 },
   cellState: { fontFamily: font.bold, color: colors.amber, fontSize: 13 },
   cellStateBlocked: { fontFamily: font.bold, color: colors.text, fontSize: 13 },

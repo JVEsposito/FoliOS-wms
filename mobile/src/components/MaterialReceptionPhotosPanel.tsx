@@ -1,3 +1,4 @@
+import { font } from '../theme/typography';
 import * as Crypto from 'expo-crypto';
 import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useState } from 'react';
@@ -100,4 +101,4 @@ export function MaterialReceptionPhotosPanel({ receptionId, state, api, baseUrl,
   </View>;
 }
 function message(reason: unknown) { return reason instanceof Error ? reason.message : 'No fue posible completar la operación.'; }
-const styles = StyleSheet.create({ panel: { padding: 16, borderWidth: 1, borderColor: colors.border, borderRadius: 12, backgroundColor: colors.panel, gap: 14 }, group: { gap: 10 }, title: { color: colors.text, fontWeight: '800' }, row: { flexDirection: 'row', flexWrap: 'wrap', gap: 16 }, link: { color: colors.cyan, fontWeight: '800', paddingVertical: 8 }, error: { color: colors.red }, photo: { width: 100, height: 100 } });
+const styles = StyleSheet.create({ panel: { padding: 16, borderWidth: 1, borderColor: colors.border, borderRadius: 12, backgroundColor: colors.panel, gap: 14 }, group: { gap: 10 }, title: { color: colors.text, fontFamily: font.heavy }, row: { flexDirection: 'row', flexWrap: 'wrap', gap: 16 }, link: { color: colors.cyan, fontFamily: font.heavy, paddingVertical: 8 }, error: { color: colors.red }, photo: { width: 100, height: 100 } });

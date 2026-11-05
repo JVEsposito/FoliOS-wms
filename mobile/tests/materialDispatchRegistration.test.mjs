@@ -1,3 +1,4 @@
+import { fieldUiMock } from './helpers/fieldUiMock.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -15,6 +16,7 @@ function components() {
   const module = { exports: {} };
   let id = 0;
   vm.runInNewContext(compiled, { module, exports: module.exports, Date, Intl, Error, console, require: name => {
+      const fieldMock = fieldUiMock(name); if (fieldMock) return fieldMock;
     if (name === 'react-native') return { Pressable: 'Pressable', Text: 'Text', TextInput: 'TextInput', View: 'View', StyleSheet: { create: s => s } };
     if (name === 'expo-crypto') return { randomUUID: () => `uuid-${++id}` };
     if (name.endsWith('/colors')) return { colors: {} };

@@ -1,3 +1,5 @@
+import { font } from '../theme/typography';
+import { FieldHeader } from '../components/field/FieldHeader';
 import * as Crypto from 'expo-crypto';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -213,10 +215,7 @@ export function HidrocoolerMpScreen({ auth, baseUrl, onLogout }: Props) {
   return (
     <View style={styles.root}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <View style={styles.header}>
-          <View><Text style={styles.eyebrow}>MATERIA PRIMA · CONTROL DE ENFRIAMIENTO</Text><Text style={styles.title}>Hidrocooler</Text><Text style={styles.muted}>{summary?.temporada ? `${summary.temporada.nombre} · ${summary.temporada.codigo}` : 'Sin temporada activa'}</Text></View>
-          <View style={styles.row}><Button title="Actualizar" onPress={() => void load(1)} /><Button title="Salir" onPress={onLogout} /></View>
-        </View>
+        <FieldHeader area="materia-prima" auth={auth} title="Hidrocooler" subtitle={summary?.temporada?.nombre} onLogout={onLogout}><Button title="Actualizar" onPress={() => void load(1)} /></FieldHeader>
         {summary ? <View style={styles.row}>
           <Stat title="Pendientes" value={summary.pendientes} /><Stat title="En curso" value={summary.en_curso} />
           <Stat title="Retenidos" value={summary.retenidos} /><Stat title="Kilos en curso" value={numberFormat.format(summary.kilos_en_curso)} />
@@ -368,28 +367,28 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
   grow: { flex: 1 },
-  eyebrow: { color: colors.cyan, fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.7 },
-  title: { color: colors.text, fontSize: 26, fontWeight: '900' },
-  muted: { color: colors.muted, fontSize: 12, lineHeight: 18 },
-  error: { color: colors.red, fontSize: 13, lineHeight: 19, fontWeight: '700' },
-  notice: { color: colors.green, fontSize: 13, lineHeight: 19 },
+  eyebrow: { color: colors.cyan, fontSize: 12, fontFamily: font.heavy, textTransform: 'uppercase', letterSpacing: 0.7 },
+  title: { color: colors.text, fontSize: 26, fontFamily: font.heavy },
+  muted: { fontFamily: font.regular, color: colors.muted, fontSize: 12, lineHeight: 18 },
+  error: { color: colors.red, fontSize: 13, lineHeight: 19, fontFamily: font.bold },
+  notice: { fontFamily: font.regular, color: colors.green, fontSize: 13, lineHeight: 19 },
   section: { backgroundColor: colors.panel, borderColor: colors.border, borderWidth: 1, borderRadius: 12, padding: 14, gap: 10 },
-  sectionTitle: { color: colors.text, fontSize: 16, fontWeight: '800' },
+  sectionTitle: { color: colors.text, fontSize: 16, fontFamily: font.heavy },
   stat: { flexGrow: 1, minWidth: 140, padding: 12, backgroundColor: colors.panelStrong, borderRadius: 9 },
-  statValue: { color: colors.text, fontSize: 19, fontWeight: '900', marginTop: 4 },
+  statValue: { color: colors.text, fontSize: 19, fontFamily: font.heavy, marginTop: 4 },
   lot: { padding: 15, borderWidth: 1, borderColor: colors.border, borderRadius: 12, backgroundColor: colors.panel, gap: 7 },
   lotHeader: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, alignItems: 'center' },
-  lotTitle: { color: colors.text, fontSize: 19, fontWeight: '800' },
-  badge: { color: colors.cyan, fontSize: 12, fontWeight: '800' },
-  fact: { color: colors.text, fontSize: 13, lineHeight: 20 },
+  lotTitle: { color: colors.text, fontSize: 19, fontFamily: font.heavy },
+  badge: { color: colors.cyan, fontSize: 12, fontFamily: font.heavy },
+  fact: { fontFamily: font.regular, color: colors.text, fontSize: 13, lineHeight: 20 },
   details: { padding: 12, backgroundColor: colors.backgroundDeep, gap: 6, borderRadius: 8 },
   button: { borderColor: colors.cyanDark, borderWidth: 1, borderRadius: 8, paddingVertical: 9, paddingHorizontal: 13, backgroundColor: colors.panelStrong },
   buttonActive: { backgroundColor: colors.cyan, borderColor: colors.cyan },
   disabled: { opacity: 0.5 },
-  buttonText: { color: colors.text, fontWeight: '700', fontSize: 12 },
+  buttonText: { color: colors.text, fontFamily: font.bold, fontSize: 12 },
   buttonTextActive: { color: colors.accentText },
   field: { minWidth: 200, flexGrow: 1, gap: 5 },
-  fieldLabel: { color: colors.muted, fontSize: 12, fontWeight: '700' },
-  input: { color: colors.text, backgroundColor: colors.panelStrong, borderColor: colors.border, borderWidth: 1, borderRadius: 8, padding: 11, minHeight: 44 },
+  fieldLabel: { color: colors.muted, fontSize: 12, fontFamily: font.bold },
+  input: { color: colors.text, backgroundColor: colors.panelStrong, borderColor: colors.border, borderWidth: 1, borderRadius: 8, padding: 11, minHeight: 52 },
   multiline: { minHeight: 82, textAlignVertical: 'top' },
 });

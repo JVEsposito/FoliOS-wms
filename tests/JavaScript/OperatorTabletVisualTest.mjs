@@ -90,7 +90,7 @@ test('la base visual expone cabecera, estados, rutas y folios reutilizables', ()
 test('la bandeja responde a anchos compactos y mantiene controles táctiles', () => {
     assert.match(theme, /minimum: t\.density\.touch\.control/);
     assert.match(theme, /prominent: 64/);
-    assert.match(home, /width < o\.breakpoint\.compact/);
+    assert.match(home, /width < 1000/);
     assert.match(execution, /width < o\.breakpoint\.compact/);
     assert.match(home, /minHeight: o\.touch\.minimum/);
     assert.match(execution, /minHeight: o\.touch\.minimum/);

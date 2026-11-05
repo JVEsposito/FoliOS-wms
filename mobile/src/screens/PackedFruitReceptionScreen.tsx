@@ -1,3 +1,5 @@
+import { font } from '../theme/typography';
+import { FieldHeader } from '../components/field/FieldHeader';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -243,7 +245,7 @@ export function PackedFruitReceptionScreen({ auth, baseUrl, onLogout }: { auth: 
   </View> : <View><Text style={styles.title}>Recepción de fruta embalada</Text><Text style={styles.note}>Recepciones de la temporada activa.</Text><Button label="Nueva recepción" disabled={busy || !options?.temporada || !editable} onPress={() => void start()} /><Button label="Actualizar" disabled={busy} onPress={() => void load()} /></View>;
 
   return <View style={styles.screen}>
-    <View style={styles.toolbar}><Text style={styles.text}>Frío · Fruta embalada</Text><Button label="Salir" disabled={busy} onPress={() => { if (dirty && !pending) Alert.alert('Cambios sin guardar', '¿Cerrar sesión y descartar la captura?', [{ text: 'Volver', style: 'cancel' }, { text: 'Salir', onPress: onLogout }]); else onLogout(); }} /></View>
+    <FieldHeader area="frigorifico" auth={auth} title="Fruta embalada" busy={busy} onLogout={() => { if (dirty && !pending) Alert.alert('Cambios sin guardar', '¿Cerrar sesión y descartar la captura?', [{ text: 'Volver', style: 'cancel' }, { text: 'Salir', onPress: onLogout }]); else onLogout(); }} />
     {busy && <ActivityIndicator color={colors.cyan} />}
     {!!notice && <Text style={styles.warning} accessibilityLiveRegion="polite">{notice}</Text>}
     {!!error && <Text style={styles.error} accessibilityRole="alert">{error}</Text>}
@@ -263,9 +265,9 @@ export function PackedFruitReceptionScreen({ auth, baseUrl, onLogout }: { auth: 
 }
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background }, content: { padding: 14, paddingBottom: 40 }, toolbar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 10, gap: 8 },
-  title: { color: colors.text, fontSize: 20, fontWeight: '700', marginVertical: 8 }, text: { color: colors.text, fontSize: 15 }, note: { color: colors.muted, marginVertical: 6 }, label: { color: colors.muted, marginBottom: 6 },
-  field: { marginVertical: 7 }, input: { padding: 12, minHeight: 46, backgroundColor: colors.panel, color: colors.text, borderWidth: 1, borderColor: colors.border, borderRadius: 8 },
-  button: { padding: 12, minHeight: 46, marginVertical: 5, borderRadius: 8, backgroundColor: colors.cyanDark }, buttonText: { color: colors.text, fontWeight: '600' }, disabled: { opacity: 0.45 },
+  title: { color: colors.text, fontSize: 20, fontFamily: font.bold, marginVertical: 8 }, text: { fontFamily: font.regular, color: colors.text, fontSize: 15 }, note: { color: colors.muted, marginVertical: 6 }, label: { color: colors.muted, marginBottom: 6 },
+  field: { marginVertical: 7 }, input: { padding: 12, minHeight: 52, backgroundColor: colors.panel, color: colors.text, borderWidth: 1, borderColor: colors.border, borderRadius: 8 },
+  button: { padding: 12, minHeight: 46, marginVertical: 5, borderRadius: 8, backgroundColor: colors.cyanDark }, buttonText: { color: colors.text, fontFamily: font.semibold }, disabled: { opacity: 0.45 },
   card: { padding: 14, marginVertical: 10, backgroundColor: colors.panelStrong, borderRadius: 10 }, warning: { color: colors.amber, margin: 10 }, error: { color: colors.red, padding: 10 },
   modal: { flex: 1, backgroundColor: '#000000aa', justifyContent: 'center', padding: 16 }, modalBody: { flex: 1, maxHeight: '90%', backgroundColor: colors.background, borderRadius: 14, padding: 16 },
 });
