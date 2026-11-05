@@ -1,4 +1,5 @@
-import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { useState } from 'react';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import type { ReactNode } from 'react';
 
 import {
@@ -6,11 +7,9 @@ import {
   OperationalShiftContext,
   operationalTaskDestinationLabel,
   operationalTaskOriginLabel,
-  operationalTaskReason,
 } from '../../domain/operationalTasks';
 import type { OperatorQueueItem, OperatorQueueSource } from '../../domain/operatorTaskQueue';
 import { operatorTaskPurpose } from '../../domain/operatorTaskPurpose';
-import { OperatorTaskPurpose } from './OperatorTaskPurpose';
 import { OperatorShiftDuties } from './OperatorShiftDuties';
 import { operatorTheme as o } from '../../theme/operatorTheme';
 import {
@@ -20,34 +19,50 @@ import {
   OperatorStatusBadge,
 } from './OperatorPrimitives';
 
+export type OperatorLastMovement = { at: string; destination: string; folio: string };
+
 type Props = {
   shiftContext?: OperationalShiftContext | null;
   availableCount: number;
   busy: boolean;
+  lastMovement?: OperatorLastMovement | null;
   mineCount: number;
   next: OperatorQueueItem | null;
   plannerFresh: boolean | null;
   onOpen: (item: OperatorQueueItem) => void;
+  onOpenLoads?: () => void;
   onRefresh: () => void;
   onViewChange: (source: OperatorQueueSource) => void;
   queue: OperatorQueueItem[];
   suggestedDestinations: Record<string, string>;
+  syncLabel?: string;
   view: OperatorQueueSource;
   verification?: ReactNode;
 };
 
+const QUEUE_PREVIEW = 3;
+
+/**
+ * Portada «Mi jornada» del camarero (FoliOS v2): una maniobra a la vez, con el folio y el
+ * recorrido Desde → Hacia en grande y una sola acción principal; la cola, el último
+ * movimiento y las cargas quedan en una columna lateral. Ver
+ * docs/diseno/folios-v2/pr-12-tablet-portada.md.
+ */
 export function OperatorTaskHome({
   shiftContext,
   availableCount,
   busy,
+  lastMovement,
   mineCount,
   next,
   plannerFresh,
   onOpen,
+  onOpenLoads,
   onRefresh,
   onViewChange,
   queue,
   suggestedDestinations,
+  syncLabel,
   view,
   verification,
 }: Props) {
@@ -55,69 +70,74 @@ export function OperatorTaskHome({
   const compact = width < o.breakpoint.compact;
 
   return (
-    <ScrollView contentContainerStyle={styles.content} style={styles.screen}>
-      <View style={styles.sectionHeader}>
-        <View>
-          <Text style={styles.eyebrow}>TRABAJO GUIADO</Text>
-          <Text accessibilityRole="header" style={styles.title}>Mi jornada operacional</Text>
+    <ScrollView
+      contentContainerStyle={styles.content}
+      refreshControl={<RefreshControl colors={[o.color.primary]} onRefresh={onRefresh} refreshing={false} tintColor={o.color.primary} />}
+      style={styles.screen}
+    >
+      <View style={[styles.columns, compact && styles.columnsCompact]}>
+        <View style={styles.main}>
+          {next ? (
+            <NextTaskCard busy={busy} compact={compact} item={next} onOpen={() => onOpen(next)} suggestion={suggestedDestinations[next.task.id]} />
+          ) : (
+            <View style={styles.emptyHero}>
+              {plannerFresh === false ? <OperatorStatusBadge label="PLANIFICADOR SIN ACTUALIZAR" tone="warning" /> : null}
+              <Text accessibilityRole="header" style={styles.emptyHeroTitle}>
+                {plannerFresh === false ? 'Las maniobras volverán cuando se recalcule' : 'Sin maniobras por ahora'}
+              </Text>
+              <Text style={styles.emptyHeroCopy}>
+                {plannerFresh === false
+                  ? 'Espera la próxima evaluación del servidor; esta pantalla se actualiza sola.'
+                  : 'El planificador te asignará la siguiente cuando esté lista. Esta pantalla se actualiza sola.'}
+              </Text>
+            </View>
+          )}
+          {verification}
         </View>
-        <Pressable disabled={busy} onPress={onRefresh} style={styles.refreshButton}>
-          <Text style={styles.refreshText}>↻ Actualizar</Text>
-        </Pressable>
+
+        <View style={[styles.aside, compact && styles.asideCompact]}>
+          <View style={styles.syncRow}>
+            <Text accessibilityLiveRegion="polite" numberOfLines={1} style={styles.syncText}>{syncLabel ?? ''}</Text>
+            <Pressable accessibilityLabel="Actualizar mis labores" accessibilityRole="button" disabled={busy} onPress={onRefresh} style={[styles.refreshButton, busy && styles.disabled]}>
+              <Text style={styles.refreshText}>↻</Text>
+            </Pressable>
+          </View>
+
+          <OperatorShiftDuties context={shiftContext ?? null} />
+
+          <QueuePanel
+            availableCount={availableCount}
+            busy={busy}
+            mineCount={mineCount}
+            onOpen={onOpen}
+            onViewChange={onViewChange}
+            plannerFresh={plannerFresh}
+            queue={queue}
+            suggestedDestinations={suggestedDestinations}
+            view={view}
+          />
+
+          {lastMovement ? (
+            <View accessible accessibilityLabel={`Último movimiento: ${lastMovement.folio} en ${lastMovement.destination}`} style={styles.panel}>
+              <View style={styles.lastRow}>
+                <View style={styles.lastMark}><Text style={styles.lastMarkText}>✓</Text></View>
+                <View style={styles.lastText}>
+                  <Text style={styles.panelMeta}>Último movimiento · {timeLabel(lastMovement.at)}</Text>
+                  <OperatorEntityCode value={lastMovement.folio} />
+                  <Text numberOfLines={2} style={styles.lastDestination}>{lastMovement.destination}</Text>
+                </View>
+              </View>
+            </View>
+          ) : null}
+
+          {onOpenLoads ? (
+            <Pressable accessibilityRole="button" disabled={busy} onPress={onOpenLoads} style={[styles.loadsLink, busy && styles.disabled]}>
+              <Text style={styles.loadsLinkText}>Cargas del turno</Text>
+              <Text style={styles.loadsLinkArrow}>→</Text>
+            </Pressable>
+          ) : null}
+        </View>
       </View>
-
-      <OperatorShiftDuties context={shiftContext ?? null} />
-
-      {next ? (
-        <NextTaskCard busy={busy} compact={compact} item={next} onOpen={() => onOpen(next)} suggestion={suggestedDestinations[next.task.id]} />
-      ) : (
-        <View style={styles.emptyHero}>
-          <OperatorStatusBadge label={plannerFresh === false ? 'PLANIFICADOR SIN ACTUALIZAR' : 'SIN LABORES PENDIENTES'} tone={plannerFresh === false ? 'warning' : 'success'} />
-          <Text style={styles.emptyHeroTitle}>{plannerFresh === false ? 'Planificador sin actualizar: las tareas volverán cuando se recalcule' : 'No hay una maniobra para iniciar'}</Text>
-          <Text style={styles.emptyHeroCopy}>{plannerFresh === false ? 'Espera la próxima evaluación del servidor y actualiza la bandeja.' : 'La bandeja se actualizará automáticamente cuando el servidor publique trabajo.'}</Text>
-        </View>
-      )}
-
-      <View style={styles.queuePanel}>
-        <View style={[styles.queueHeader, compact && styles.queueHeaderCompact]}>
-          <View>
-            <Text style={styles.eyebrow}>SIGUIENTES</Text>
-            <Text accessibilityRole="header" style={styles.queueTitle}>Próximas maniobras en cola</Text>
-          </View>
-          <View style={styles.queueTabs}>
-            <QueueTab active={view === 'mine'} count={mineCount} label="Mis tareas" onPress={() => onViewChange('mine')} />
-            <QueueTab active={view === 'available'} count={availableCount} label="Disponibles" onPress={() => onViewChange('available')} />
-          </View>
-        </View>
-
-        {queue.length ? (
-          <View style={styles.queueList}>
-            {queue.map((item, index) => (
-              <QueueRow
-                busy={busy}
-                compact={compact}
-                index={index + 1}
-                item={item}
-                key={`${item.source}-${item.task.id}`}
-                onOpen={() => onOpen(item)}
-                suggestion={suggestedDestinations[item.task.id]}
-              />
-            ))}
-          </View>
-        ) : (
-          <View style={styles.emptyQueue}>
-            <Text style={styles.emptyQueueTitle}>{view === 'mine' ? 'No tienes más tareas tomadas' : 'No hay tareas disponibles'}</Text>
-            <Text style={styles.emptyQueueCopy}>
-              {view === 'mine'
-                ? 'La maniobra principal se muestra arriba. Puedes revisar las tareas ofrecidas en Disponibles.'
-                : plannerFresh === false
-                  ? 'Planificador sin actualizar: las tareas volverán cuando se recalcule.'
-                  : 'No se recibieron nuevas labores para esta selección.'}
-            </Text>
-          </View>
-        )}
-      </View>
-      {verification}
     </ScrollView>
   );
 }
@@ -133,79 +153,175 @@ function NextTaskCard({ busy, compact, item, onOpen, suggestion }: {
   const purpose = operatorTaskPurpose(task);
   const paused = task.maniobra?.estado === 'pausada_discrepancia';
   const alternative = isArbitrationAlternative(task);
+  // Solo se marca el estado cuando cambia lo que la persona puede hacer; «disponible» y
+  // «asignada» ya los dice el botón principal.
   const state = paused
     ? { label: 'EN ESPERA DE SUPERVISIÓN', tone: 'warning' as const }
     : alternative
       ? { label: 'ALTERNATIVA', tone: 'warning' as const }
       : task.estado === 'en_proceso'
         ? { label: 'EN EJECUCIÓN', tone: 'critical' as const }
-        : item.source === 'mine'
-          ? { label: 'ASIGNADA', tone: 'success' as const }
-          : { label: 'DISPONIBLE', tone: 'info' as const };
+        : null;
+  const hint = paused
+    ? 'No continúes movimientos hasta recibir la decisión supervisada'
+    : alternative
+      ? 'Visible sin reservas; se habilitará cuando el servidor libere capacidad'
+      : null;
+  const destinationPending = !suggestion && !task.destino
+    && task.destino_logico?.tipo !== 'anden' && task.tipo_paso_maniobra !== 'extraccion_temporal';
+  const detail = [maneuverStep(task), commitmentLabel(task)].filter(Boolean).join(' · ');
 
   return (
-    <View style={styles.hero}>
-      <View style={[styles.heroHeader, compact && styles.heroHeaderCompact]}>
-        <View style={styles.heroHeading}>
-          <Text style={styles.heroEyebrow}>{paused ? 'MANIOBRA BAJO CONTROL' : 'SIGUIENTE MANIOBRA'}</Text>
-          <Text style={styles.heroHint}>
-            {paused
-              ? 'No continúes movimientos hasta recibir la decisión supervisada'
-              : alternative
-                ? 'Visible sin reservas; se habilitará cuando el servidor libere capacidad'
-                : item.source === 'mine' ? 'Tu siguiente tarea en la cola' : 'Disponible para tomar'}
-          </Text>
-        </View>
-        <Pressable disabled={busy || alternative} onPress={onOpen} style={[styles.heroAction, compact && styles.heroActionCompact, (busy || alternative) && styles.disabled]}>
-          <Text style={styles.heroActionText}>{primaryActionLabel(item)} →</Text>
-        </Pressable>
-      </View>
-
-      <View style={[styles.heroBody, compact && styles.heroBodyCompact]}>
-        <View style={[styles.heroIdentity, compact && styles.heroIdentityCompact]}>
-          <View style={styles.heroBadges}>
-            <OperatorStatusBadge label={state.label} tone={state.tone} />
-            <OperatorPriorityBadge priority={task.prioridad} />
-            {maneuverObjectiveCount(task) > 1 ? (
-              <OperatorStatusBadge label={`${maneuverObjectiveCount(task)} OBJETIVOS`} tone="info" />
-            ) : null}
-          </View>
-          <Text style={styles.heroTitle}>{purpose.label}</Text>
-          <Text style={styles.folioLabel}>Folio / pallet</Text>
-          <OperatorEntityCode prominent value={task.folio.numero_folio} />
-          <Text style={styles.queueGoal}>Envase: {task.folio.envase || 'sin informar'}</Text>
-        </View>
-
-        <View style={[styles.heroRoute, compact && styles.heroRouteCompact]}>
-          <OperatorRouteLine label="Origen" value={operationalTaskOriginLabel(task)} />
-          <OperatorRouteLine label="Destino" value={suggestion ? `${suggestion} · propuesto` : operationalTaskDestinationLabel(task)} strong />
-          <OperatorRouteLine label="Instrucción" value={operationalTaskReason(task)} />
+    <View style={[styles.hero, compact && styles.heroCompact]}>
+      <View style={styles.heroTop}>
+        <Text style={styles.eyebrow}>{paused ? 'MANIOBRA BAJO CONTROL' : 'SIGUIENTE MANIOBRA'}</Text>
+        <View style={styles.heroBadges}>
+          {state ? <OperatorStatusBadge label={state.label} tone={state.tone} /> : null}
+          <OperatorPriorityBadge priority={task.prioridad} />
+          {maneuverObjectiveCount(task) > 1 ? (
+            <OperatorStatusBadge label={`${maneuverObjectiveCount(task)} OBJETIVOS`} tone="info" />
+          ) : null}
         </View>
       </View>
 
-      <View style={styles.heroFooter}>
-        <Metric label="Movimientos físicos" value={String(task.maniobra?.pasos_totales ?? 1)} />
-        <Metric label="Paso" value={maneuverStep(task)} />
-        <Metric label="Compromiso" value={commitmentLabel(task)} />
+      <View style={styles.identity}>
+        <Text accessibilityRole="header" style={styles.heroTitle}>{purpose.label}</Text>
+        {purpose.goal ? <Text numberOfLines={2} style={styles.heroGoal}>{purpose.goal}</Text> : null}
+        <Text style={styles.folioLabel}>Folio</Text>
+        <FolioCode compact={compact} value={task.folio.numero_folio} />
+        <Text style={styles.heroMeta}>Envase: {task.folio.envase || 'sin informar'}</Text>
       </View>
-      <OperatorTaskPurpose task={task} />
+
+      <View style={[styles.route, compact && styles.routeCompact]}>
+        <RouteBlock label="DESDE" value={operationalTaskOriginLabel(task)} />
+        <Text accessible={false} style={[styles.routeArrow, compact && styles.routeArrowCompact]}>→</Text>
+        <RouteBlock
+          label="HACIA"
+          pending={destinationPending}
+          proposed={Boolean(suggestion)}
+          value={suggestion ?? operationalTaskDestinationLabel(task)}
+        />
+      </View>
+
+      {hint ? <Text style={styles.heroHint}>{hint}</Text> : null}
+      {detail ? <Text style={styles.heroDetail}>{detail}</Text> : null}
+
+      <View style={styles.heroSpacer} />
+
+      <Pressable
+        accessibilityRole="button"
+        disabled={busy || alternative}
+        onPress={onOpen}
+        style={[styles.heroAction, (busy || alternative) && styles.disabled]}
+      >
+        <Text style={styles.heroActionText}>{primaryActionLabel(item)} →</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function FolioCode({ compact, value }: { compact: boolean; value: string }) {
+  // Los últimos cuatro dígitos son los que el camarero coteja con la etiqueta.
+  const split = value.length > 6 ? value.length - 4 : 0;
+  return (
+    <Text accessibilityLabel={`Folio ${value}`} selectable style={[styles.folio, compact && styles.folioCompact]}>
+      {split ? <Text style={styles.folioHead}>{value.slice(0, split)}</Text> : null}
+      {value.slice(split)}
+    </Text>
+  );
+}
+
+function RouteBlock({ label, pending = false, proposed = false, value }: {
+  label: string;
+  pending?: boolean;
+  proposed?: boolean;
+  value: string;
+}) {
+  const [place, ...rest] = value.split(' · ');
+  const position = rest.join(' · ');
+  const code = /^[A-Z0-9][A-Z0-9-]*$/.test(position);
+  return (
+    <View
+      accessible
+      accessibilityLabel={`${label === 'DESDE' ? 'Origen' : 'Destino'}: ${value}${proposed ? ', propuesto' : ''}`}
+      style={[styles.routeBlock, pending && styles.routeBlockPending]}
+    >
+      <View style={styles.routeLabelRow}>
+        <Text style={styles.routeLabel}>{label}</Text>
+        {proposed ? <Text style={styles.routeProposed}>PROPUESTO</Text> : null}
+      </View>
+      <Text numberOfLines={2} style={[styles.routePlace, pending && styles.routePlacePending]}>{place}</Text>
+      {position ? <Text numberOfLines={2} style={code ? styles.routeCode : styles.routeNote}>{position}</Text> : null}
+    </View>
+  );
+}
+
+function QueuePanel({ availableCount, busy, mineCount, onOpen, onViewChange, plannerFresh, queue, suggestedDestinations, view }: {
+  availableCount: number;
+  busy: boolean;
+  mineCount: number;
+  onOpen: (item: OperatorQueueItem) => void;
+  onViewChange: (source: OperatorQueueSource) => void;
+  plannerFresh: boolean | null;
+  queue: OperatorQueueItem[];
+  suggestedDestinations: Record<string, string>;
+  view: OperatorQueueSource;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const visible = expanded ? queue : queue.slice(0, QUEUE_PREVIEW);
+  const hidden = queue.length - visible.length;
+
+  return (
+    <View accessibilityLabel="Próximas maniobras en cola" style={styles.panel}>
+      <Text accessibilityRole="header" style={styles.eyebrow}>LUEGO</Text>
+      <View accessibilityRole="tablist" style={styles.queueTabs}>
+        <QueueTab active={view === 'mine'} count={mineCount} label="Mis tareas" onPress={() => onViewChange('mine')} />
+        <QueueTab active={view === 'available'} count={availableCount} label="Disponibles" onPress={() => onViewChange('available')} />
+      </View>
+
+      {visible.length ? (
+        <View>
+          {visible.map((item, index) => (
+            <QueueRow
+              busy={busy}
+              item={item}
+              key={`${item.source}-${item.task.id}`}
+              last={index === visible.length - 1}
+              onOpen={() => onOpen(item)}
+              suggestion={suggestedDestinations[item.task.id]}
+            />
+          ))}
+          {hidden > 0 || expanded ? (
+            <Pressable accessibilityRole="button" onPress={() => setExpanded((value) => !value)} style={styles.moreButton}>
+              <Text style={styles.moreText}>{expanded ? 'Mostrar menos' : `Ver ${hidden} más en cola`}</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : (
+        <Text style={styles.queueEmpty}>
+          {view === 'mine'
+            ? 'No tienes más tareas tomadas.'
+            : plannerFresh === false
+              ? 'Planificador sin actualizar: las tareas volverán cuando se recalcule.'
+              : 'No hay tareas disponibles.'}
+        </Text>
+      )}
     </View>
   );
 }
 
 function QueueTab({ active, count, label, onPress }: { active: boolean; count: number; label: string; onPress: () => void }) {
   return (
-    <Pressable onPress={onPress} style={[styles.queueTab, active && styles.queueTabActive]}>
+    <Pressable accessibilityRole="tab" accessibilityState={{ selected: active }} onPress={onPress} style={[styles.queueTab, active && styles.queueTabActive]}>
       <Text style={[styles.queueTabText, active && styles.queueTabTextActive]}>{label} · {count}</Text>
     </Pressable>
   );
 }
 
-function QueueRow({ busy, compact, index, item, onOpen, suggestion }: {
+function QueueRow({ busy, item, last, onOpen, suggestion }: {
   busy: boolean;
-  compact: boolean;
-  index: number;
   item: OperatorQueueItem;
+  last: boolean;
   onOpen: () => void;
   suggestion?: string;
 }) {
@@ -214,39 +330,19 @@ function QueueRow({ busy, compact, index, item, onOpen, suggestion }: {
   const paused = task.maniobra?.estado === 'pausada_discrepancia';
   const alternative = isArbitrationAlternative(task);
   return (
-    <View style={[styles.queueRow, compact && styles.queueRowCompact]}>
-      <Text style={styles.queueIndex}>{index}</Text>
-      <View style={[styles.queuePriority, compact && styles.queuePriorityCompact]}><OperatorPriorityBadge priority={task.prioridad} /></View>
-      <View style={[styles.queueIdentity, compact && styles.queueIdentityCompact]}>
-        <Text style={styles.queueMeta}>{paused ? 'EN ESPERA' : alternative ? 'ALTERNATIVA' : item.source === 'mine' ? 'ASIGNADA' : 'DISPONIBLE'}</Text>
+    <View style={[styles.queueRow, last && styles.queueRowLast]}>
+      <View style={styles.queueRowTop}>
         <OperatorEntityCode value={task.folio.numero_folio} />
-        <Text style={styles.queueGoal}>Envase: {task.folio.envase || 'sin informar'}</Text>
+        <OperatorPriorityBadge priority={task.prioridad} />
       </View>
-      <View style={[styles.queueContext, compact && styles.queueRouteCompact]}>
-        <Text style={styles.queuePurpose}>{purpose.label}</Text>
-        <Text style={styles.queueGoal}>{purpose.goal}</Text>
-        <View style={styles.queueRoute}>
-          <Text numberOfLines={2} style={styles.queueRouteText}>{operationalTaskOriginLabel(task)}</Text>
-          <Text style={styles.queueArrow}>→</Text>
-          <Text numberOfLines={2} style={styles.queueRouteDestination}>{suggestion ? `${suggestion} · propuesto` : operationalTaskDestinationLabel(task)}</Text>
-        </View>
-      </View>
-      <View style={styles.queueSteps}>
-        <Text style={styles.queueStepsValue}>{task.maniobra?.pasos_totales ?? 1}</Text>
-        <Text style={styles.queueStepsLabel}>mov.</Text>
-      </View>
-      <Pressable disabled={busy || alternative} onPress={onOpen} style={[styles.queueAction, (busy || alternative) && styles.disabled]}>
+      <Text numberOfLines={1} style={styles.queuePurpose}>{purpose.label}</Text>
+      <OperatorRouteLine
+        label="Ruta"
+        value={`${operationalTaskOriginLabel(task)} → ${suggestion ? `${suggestion} · propuesto` : operationalTaskDestinationLabel(task)}`}
+      />
+      <Pressable accessibilityRole="button" disabled={busy || alternative} onPress={onOpen} style={[styles.queueAction, (busy || alternative) && styles.disabled]}>
         <Text style={styles.queueActionText}>{paused ? 'Ver estado' : alternative ? 'En espera' : item.source === 'mine' ? 'Abrir' : 'Tomar'} →</Text>
       </Pressable>
-    </View>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.metric}>
-      <Text style={styles.metricLabel}>{label}</Text>
-      <Text style={styles.metricValue}>{value}</Text>
     </View>
   );
 }
@@ -259,8 +355,8 @@ function primaryActionLabel(item: OperatorQueueItem) {
 }
 
 function maneuverStep(task: OperationalTask) {
-  if (!task.maniobra) return '1 de 1';
-  return `${task.secuencia_maniobra ?? task.maniobra.secuencia_actual} de ${task.maniobra.pasos_totales}`;
+  if (!task.maniobra || task.maniobra.pasos_totales <= 1) return null;
+  return `Paso ${task.secuencia_maniobra ?? task.maniobra.secuencia_actual} de ${task.maniobra.pasos_totales}`;
 }
 
 function maneuverObjectiveCount(task: OperationalTask) {
@@ -276,75 +372,100 @@ function commitmentLabel(task: OperationalTask) {
   if (task.estado === 'en_proceso') return 'Destino fijo';
   if (task.reserva?.tipo_compromiso === 'fisica') return 'Posición reservada';
   if (task.reserva) return 'Tarea reclamada';
-  return 'Sin reserva';
+  return null;
+}
+
+function timeLabel(iso: string) {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: o.color.canvas },
-  content: { gap: o.space[4], paddingBottom: o.space[8] },
-  sectionHeader: { minHeight: o.touch.minimum, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: o.space[4] },
-  eyebrow: { color: o.color.primaryPressed, fontSize: o.type.caption, fontWeight: '900', letterSpacing: 1.1 },
-  title: { color: o.color.text, fontSize: o.type.title, fontWeight: '900', marginTop: o.space[1] },
-  refreshButton: { minHeight: o.touch.minimum, justifyContent: 'center', paddingHorizontal: o.space[4], borderWidth: 1, borderColor: o.color.primary, borderRadius: o.radius.control, backgroundColor: o.color.surface },
-  refreshText: { color: o.color.primaryPressed, fontSize: o.type.small, fontWeight: '900' },
-  hero: { overflow: 'hidden', borderWidth: 1, borderColor: o.color.borderStrong, borderRadius: o.radius.panel, backgroundColor: o.color.surface, shadowColor: o.color.shadow, shadowOpacity: 0.12, shadowRadius: 6, shadowOffset: { width: 0, height: 3 }, elevation: 3 },
-  heroHeader: { minHeight: 72, padding: o.space[3], backgroundColor: o.color.navy, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: o.space[4] },
-  heroHeaderCompact: { alignItems: 'stretch', flexDirection: 'column' },
-  heroHeading: { flex: 1 },
-  heroEyebrow: { color: o.color.onNavy, fontSize: o.type.body, fontWeight: '900' },
-  heroHint: { color: o.color.textSecondary, fontSize: o.type.small, marginTop: o.space[1] },
-  heroAction: { minHeight: o.touch.prominent, minWidth: 230, paddingHorizontal: o.space[6], alignItems: 'center', justifyContent: 'center', borderRadius: o.radius.control, backgroundColor: o.color.primary },
-  heroActionCompact: { minWidth: 0, alignSelf: 'stretch' },
-  heroActionText: { color: o.color.onPrimary, fontSize: o.type.body, fontWeight: '900' },
-  heroBody: { flexDirection: 'row', gap: o.space[6], padding: o.space[6] },
-  heroBodyCompact: { flexDirection: 'column', gap: o.space[4], padding: o.space[4] },
-  heroIdentity: { flex: 0.44, minWidth: 0, gap: o.space[2] },
-  heroIdentityCompact: { flex: 0 },
+  content: { flexGrow: 1, paddingBottom: o.space[4] },
+  columns: { flex: 1, flexDirection: 'row', alignItems: 'stretch', gap: o.space[6] },
+  columnsCompact: { flexDirection: 'column', gap: o.space[4] },
+  main: { flex: 1, minWidth: 0, gap: o.space[4] },
+  aside: { width: 340, gap: o.space[4] },
+  asideCompact: { width: 'auto' },
+  eyebrow: { color: o.color.muted, fontSize: o.type.caption, fontWeight: '800', letterSpacing: 1.2 },
+
+  hero: {
+    flexGrow: 1,
+    minHeight: 560,
+    padding: o.space[8],
+    gap: o.space[6],
+    borderWidth: 1,
+    borderColor: o.color.border,
+    borderRadius: o.radius.panel,
+    backgroundColor: o.color.surface,
+  },
+  heroCompact: { minHeight: 0, padding: o.space[4], gap: o.space[4] },
+  heroTop: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: o.space[3] },
   heroBadges: { flexDirection: 'row', flexWrap: 'wrap', gap: o.space[2] },
-  heroTitle: { color: o.color.text, fontSize: 34, lineHeight: 40, fontWeight: '900', textTransform: 'uppercase' },
-  folioLabel: { color: o.color.muted, fontSize: o.type.small, fontWeight: '700', marginTop: o.space[2] },
-  heroRoute: { flex: 0.56, minWidth: 0, paddingLeft: o.space[6], borderLeftWidth: 1, borderLeftColor: o.color.border, gap: o.space[2] },
-  heroRouteCompact: { flex: 0, paddingLeft: 0, paddingTop: o.space[4], borderLeftWidth: 0, borderTopWidth: 1, borderTopColor: o.color.border },
-  heroFooter: { minHeight: 76, flexDirection: 'row', backgroundColor: o.color.surfaceMuted, borderTopWidth: 1, borderTopColor: o.color.border },
-  metric: { flex: 1, paddingHorizontal: o.space[4], paddingVertical: o.space[3], justifyContent: 'center', borderRightWidth: 1, borderRightColor: o.color.border },
-  metricLabel: { color: o.color.muted, fontSize: o.type.caption, fontWeight: '700' },
-  metricValue: { color: o.color.text, fontSize: o.type.body, fontWeight: '900', marginTop: o.space[1] },
-  queuePanel: { overflow: 'hidden', borderWidth: 1, borderColor: o.color.border, borderRadius: o.radius.panel, backgroundColor: o.color.surface },
-  queueHeader: { minHeight: 72, padding: o.space[3], flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: o.space[4], backgroundColor: o.color.navy },
-  queueHeaderCompact: { alignItems: 'stretch', flexDirection: 'column' },
-  queueTitle: { color: o.color.onNavy, fontSize: o.type.heading, fontWeight: '900', marginTop: o.space[1] },
+  identity: { gap: o.space[1] },
+  heroTitle: { color: o.color.text, fontSize: o.type.title, lineHeight: 34, fontWeight: '800' },
+  heroGoal: { color: o.color.textSecondary, fontSize: o.type.body, lineHeight: 22 },
+  folioLabel: { color: o.color.muted, fontSize: o.type.small, fontWeight: '600', marginTop: o.space[3] },
+  folio: { color: o.color.text, fontFamily: o.font.mono, fontSize: 72, lineHeight: 80, fontWeight: '800' },
+  folioCompact: { fontSize: 44, lineHeight: 52 },
+  folioHead: { color: o.color.muted },
+  heroMeta: { color: o.color.muted, fontSize: o.type.small },
+
+  route: { flexDirection: 'row', alignItems: 'stretch', gap: o.space[3] },
+  routeCompact: { flexDirection: 'column' },
+  routeArrow: { alignSelf: 'center', color: o.color.muted, fontSize: o.type.display, fontWeight: '700', paddingHorizontal: o.space[2] },
+  routeArrowCompact: { transform: [{ rotate: '90deg' }] },
+  routeBlock: { flex: 1, minWidth: 0, gap: o.space[1], padding: o.space[6], borderRadius: o.radius.panel, borderWidth: 2, borderColor: 'transparent', backgroundColor: o.color.surfaceMuted },
+  routeBlockPending: { borderStyle: 'dashed', borderColor: o.color.borderStrong, backgroundColor: 'transparent' },
+  routeLabelRow: { flexDirection: 'row', alignItems: 'center', gap: o.space[2] },
+  routeLabel: { color: o.color.muted, fontSize: o.type.caption, fontWeight: '800', letterSpacing: 1.2 },
+  routeProposed: { color: o.color.primaryPressed, fontSize: o.type.caption, fontWeight: '800', letterSpacing: 1 },
+  routePlace: { color: o.color.text, fontSize: o.type.title, lineHeight: 34, fontWeight: '800' },
+  routePlacePending: { color: o.color.textSecondary },
+  routeCode: { color: o.color.primaryPressed, fontFamily: o.font.mono, fontSize: o.type.heading, fontWeight: '700' },
+  routeNote: { color: o.color.muted, fontSize: o.type.body },
+
+  heroHint: { color: o.color.warning, fontSize: o.type.body, fontWeight: '700' },
+  heroDetail: { color: o.color.muted, fontSize: o.type.small },
+  heroSpacer: { flexGrow: 1 },
+  heroAction: { minHeight: 84, paddingHorizontal: o.space[6], alignItems: 'center', justifyContent: 'center', borderRadius: o.radius.panel, backgroundColor: o.color.primary },
+  heroActionText: { color: o.color.onPrimary, fontSize: o.type.heading, fontWeight: '900' },
+
+  syncRow: { minHeight: o.touch.minimum, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: o.space[2] },
+  syncText: { flex: 1, color: o.color.muted, fontSize: o.type.small },
+  refreshButton: { minHeight: o.touch.minimum, minWidth: o.touch.minimum, alignItems: 'center', justifyContent: 'center', borderRadius: o.radius.pill, borderWidth: 1, borderColor: o.color.border },
+  refreshText: { color: o.color.textSecondary, fontSize: o.type.heading, fontWeight: '700' },
+
+  panel: { padding: o.space[4], gap: o.space[3], borderWidth: 1, borderColor: o.color.border, borderRadius: o.radius.panel, backgroundColor: o.color.surface },
+  panelMeta: { color: o.color.muted, fontSize: o.type.caption },
   queueTabs: { flexDirection: 'row', gap: o.space[2] },
-  queueTab: { minHeight: o.touch.minimum, paddingHorizontal: o.space[4], alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: o.color.borderStrong, borderRadius: o.radius.control },
-  queueTabActive: { backgroundColor: o.color.surface, borderColor: o.color.surface },
-  queueTabText: { color: o.color.textSecondary, fontSize: o.type.small, fontWeight: '800' },
-  queueTabTextActive: { color: o.color.primaryPressed },
-  queueList: { backgroundColor: o.color.surface },
-  queueRow: { minHeight: 88, paddingHorizontal: o.space[3], paddingVertical: o.space[2], borderBottomWidth: 1, borderBottomColor: o.color.border, flexDirection: 'row', alignItems: 'center', gap: o.space[3] },
-  queueRowCompact: { flexWrap: 'wrap' },
-  queueIndex: { width: 28, color: o.color.muted, fontSize: o.type.body, fontWeight: '900', textAlign: 'center' },
-  queuePriority: { width: 106 },
-  queuePriorityCompact: { width: 'auto' },
-  queueIdentity: { width: 150, gap: o.space[1] },
-  queueIdentityCompact: { flex: 1, width: 'auto' },
-  queueMeta: { color: o.color.muted, fontSize: o.type.caption, fontWeight: '800' },
-  queueRoute: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: o.space[2] },
-  queueContext: { flex: 1, minWidth: 0, gap: 6 },
-  queuePurpose: { color: o.color.primaryPressed, fontSize: o.type.body, fontWeight: '800' },
-  queueGoal: { color: o.color.text, fontSize: o.type.small },
-  queueRouteCompact: { flexBasis: '100%', width: '100%' },
-  queueRouteText: { flex: 1, color: o.color.text, fontSize: o.type.small },
-  queueArrow: { color: o.color.primary, fontSize: o.type.heading, fontWeight: '900' },
-  queueRouteDestination: { flex: 1, color: o.color.primaryPressed, fontSize: o.type.small, fontWeight: '900' },
-  queueSteps: { width: 64, alignItems: 'center' },
-  queueStepsValue: { color: o.color.text, fontSize: o.type.heading, fontWeight: '900' },
-  queueStepsLabel: { color: o.color.muted, fontSize: o.type.caption },
-  queueAction: { minHeight: o.touch.minimum, minWidth: 96, paddingHorizontal: o.space[3], alignItems: 'center', justifyContent: 'center', borderRadius: o.radius.control, backgroundColor: o.color.selected, borderWidth: 1, borderColor: o.color.primary },
-  queueActionText: { color: o.color.primaryPressed, fontSize: o.type.small, fontWeight: '900' },
-  emptyHero: { minHeight: 230, padding: o.space[6], alignItems: 'center', justifyContent: 'center', gap: o.space[3], borderWidth: 1, borderColor: o.color.border, borderRadius: o.radius.panel, backgroundColor: o.color.surface },
-  emptyHeroTitle: { color: o.color.text, fontSize: o.type.heading, fontWeight: '900', textAlign: 'center' },
-  emptyHeroCopy: { maxWidth: 560, color: o.color.muted, fontSize: o.type.small, lineHeight: 20, textAlign: 'center' },
-  emptyQueue: { minHeight: 150, padding: o.space[6], alignItems: 'center', justifyContent: 'center' },
-  emptyQueueTitle: { color: o.color.text, fontSize: o.type.body, fontWeight: '900', textAlign: 'center' },
-  emptyQueueCopy: { maxWidth: 560, color: o.color.muted, fontSize: o.type.small, lineHeight: 20, textAlign: 'center', marginTop: o.space[2] },
+  queueTab: { flex: 1, minHeight: o.touch.minimum, paddingHorizontal: o.space[2], alignItems: 'center', justifyContent: 'center', borderRadius: o.radius.control, borderWidth: 1, borderColor: o.color.border },
+  queueTabActive: { backgroundColor: o.color.surfaceMuted, borderColor: o.color.surfaceMuted },
+  queueTabText: { color: o.color.textSecondary, fontSize: o.type.small, fontWeight: '600' },
+  queueTabTextActive: { color: o.color.primaryPressed, fontWeight: '800' },
+  queueRow: { paddingVertical: o.space[3], gap: o.space[2], borderBottomWidth: 1, borderBottomColor: o.color.border },
+  queueRowLast: { borderBottomWidth: 0 },
+  queueRowTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: o.space[2] },
+  queuePurpose: { color: o.color.textSecondary, fontSize: o.type.small, fontWeight: '700' },
+  queueAction: { minHeight: o.touch.minimum, alignItems: 'center', justifyContent: 'center', borderRadius: o.radius.control, borderWidth: 1, borderColor: o.color.primary },
+  queueActionText: { color: o.color.primaryPressed, fontSize: o.type.small, fontWeight: '800' },
+  queueEmpty: { color: o.color.muted, fontSize: o.type.small, lineHeight: 20 },
+  moreButton: { minHeight: o.touch.minimum, alignItems: 'center', justifyContent: 'center' },
+  moreText: { color: o.color.primaryPressed, fontSize: o.type.small, fontWeight: '700' },
+
+  lastRow: { flexDirection: 'row', gap: o.space[3] },
+  lastMark: { width: 36, height: 36, borderRadius: o.radius.pill, borderWidth: 1, borderColor: o.color.successBorder, backgroundColor: o.color.successSurface, alignItems: 'center', justifyContent: 'center' },
+  lastMarkText: { color: o.color.success, fontSize: o.type.body, fontWeight: '900' },
+  lastText: { flex: 1, minWidth: 0, gap: 2 },
+  lastDestination: { color: o.color.textSecondary, fontSize: o.type.small },
+
+  loadsLink: { minHeight: o.touch.prominent, paddingHorizontal: o.space[4], flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: o.radius.panel, borderWidth: 1, borderColor: o.color.border },
+  loadsLinkText: { color: o.color.text, fontSize: o.type.body, fontWeight: '600' },
+  loadsLinkArrow: { color: o.color.muted, fontSize: o.type.heading },
+
+  emptyHero: { flexGrow: 1, minHeight: 400, padding: o.space[8], alignItems: 'center', justifyContent: 'center', gap: o.space[3], borderWidth: 1, borderColor: o.color.border, borderRadius: o.radius.panel, backgroundColor: o.color.surface },
+  emptyHeroTitle: { color: o.color.text, fontSize: o.type.title, fontWeight: '800', textAlign: 'center' },
+  emptyHeroCopy: { maxWidth: 520, color: o.color.muted, fontSize: o.type.body, lineHeight: 24, textAlign: 'center' },
   disabled: { opacity: 0.45 },
 });

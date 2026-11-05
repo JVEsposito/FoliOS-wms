@@ -84,7 +84,7 @@ function harness({ cameraBusy = true, openConflict = false, completionError = ''
     };
     vm.runInNewContext(compiled, {
       require: mockRequire, module, exports: module.exports,
-      setInterval: () => 1, clearInterval: () => {}, console, Error, Date: clock,
+      setInterval: () => 1, clearInterval: () => {}, setTimeout: () => 1, clearTimeout: () => {}, console, Error, Date: clock,
     }, { filename: path });
     return module.exports;
   }

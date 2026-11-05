@@ -73,7 +73,7 @@ function harness({ initial = task(), offered = [], verificationSlow = false, sto
       if (id.startsWith('.')) { const base = resolve(dirname(path), id); for (const ext of ['.ts', '.tsx']) { try { readFileSync(base + ext); } catch { continue; } return load(base + ext); } }
       return require(id);
     };
-    vm.runInNewContext(code, { require: mockRequire, module, exports: module.exports, console, Error, setInterval: () => 0, clearInterval: () => {} }, { filename: path }); return module.exports;
+    vm.runInNewContext(code, { require: mockRequire, module, exports: module.exports, console, Error, setInterval: () => 0, clearInterval: () => {}, setTimeout: () => 0, clearTimeout: () => {} }, { filename: path }); return module.exports;
   }
   const { OperationalTaskInbox } = load(resolve(sourceRoot, 'components/OperationalTaskInbox.tsx'));
   const { OperationalMovementStore } = load(resolve(sourceRoot, 'services/operationalMovementStore.ts'));
