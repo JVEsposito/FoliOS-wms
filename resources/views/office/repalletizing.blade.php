@@ -101,7 +101,7 @@
                                 </label>
                                 <label>
                                     <span>Capacidad del pallet</span>
-                                    <input name="cantidad_objetivo" type="number" min="2" max="100000" value="120">
+                                    <input name="cantidad_objetivo" type="number" min="1" max="100000" value="120">
                                     <small>Obligatoria para pallet; en saldo evita que se confirme como saldo una cantidad completa.</small>
                                 </label>
                             </div>
@@ -116,7 +116,7 @@
                                 </label>
                                 <label>
                                     <span>Capacidad resultado 1</span>
-                                    <input name="resultado_1_objetivo" type="number" min="2" max="100000" value="120">
+                                    <input name="resultado_1_objetivo" type="number" min="1" max="100000" value="120">
                                 </label>
                                 <label class="is-hidden" id="secondResultNumberField">
                                     <span>Nuevo folio 2 *</span>
@@ -128,7 +128,7 @@
                                 </label>
                                 <label class="is-hidden" id="secondResultTargetField">
                                     <span>Capacidad resultado 2</span>
-                                    <input name="resultado_2_objetivo" type="number" min="2" max="100000" value="120">
+                                    <input name="resultado_2_objetivo" type="number" min="1" max="100000" value="120">
                                 </label>
                             </div>
                             <div class="repa-grid">

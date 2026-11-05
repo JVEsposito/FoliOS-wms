@@ -48,7 +48,7 @@ class RegistrarRepaletizajeRequest extends FormRequest
             'cantidad_objetivo' => [
                 'nullable',
                 'integer',
-                'min:2',
+                'min:1',
                 'max:100000',
                 'required_if:tipo_resultado,pallet',
             ],
@@ -75,7 +75,7 @@ class RegistrarRepaletizajeRequest extends FormRequest
             'resultados' => ['nullable', 'required_unless:modalidad,consolidacion', 'array', 'min:1', 'max:2'],
             'resultados.*.numero_folio' => ['required_with:resultados', 'string', 'max:80', 'distinct'],
             'resultados.*.tipo_resultado' => ['required_with:resultados', Rule::in(['pallet', 'saldo'])],
-            'resultados.*.cantidad_objetivo' => ['nullable', 'integer', 'min:2', 'max:100000'],
+            'resultados.*.cantidad_objetivo' => ['nullable', 'integer', 'min:1', 'max:100000'],
             'resultados.*.cantidad_resultante' => ['required_with:resultados', 'integer', 'min:1', 'max:100000'],
             'resultados.*.composicion' => ['nullable', 'array', 'min:1', 'max:100'],
             'resultados.*.composicion.*.clave' => ['required_with:resultados.*.composicion', 'string', 'max:500'],
@@ -97,6 +97,8 @@ class RegistrarRepaletizajeRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'cantidad_objetivo.min' => 'La capacidad debe ser de al menos una caja.',
+            'resultados.*.cantidad_objetivo.min' => 'La capacidad de cada resultado debe ser de al menos una caja.',
             'origenes.*.composicion.min' => 'La composición de cada origen debe incluir al menos una línea.',
             'resultados.*.composicion.min' => 'La composición de cada resultado debe incluir al menos una línea.',
             'turno.required' => 'Indica el turno del repaletizaje.',
