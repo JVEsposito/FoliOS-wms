@@ -121,7 +121,7 @@ export default function App() {
           />
         ) : auth ? (
           <View style={styles.workspace}>
-            {modules.length > 1 && activeModule ? (
+            {modules.length > 1 && activeModule && !usesOperatorWorkspace(activeModule) ? (
               <View style={[styles.moduleStrip, isPdaBuild && styles.moduleStripPda]}>
                 <Text numberOfLines={1} style={styles.moduleStripText}>{isPdaBuild ? moduleLabel(activeModule) : `Módulo activo: ${moduleLabel(activeModule)}`}</Text>
                 <Pressable onPress={() => setActiveModule(null)} style={styles.changeModule}>
@@ -176,7 +176,12 @@ export default function App() {
                 onLogout={() => void logoutPersistentModule()}
               />
             ) : (
-              <OperationalWorkspaceScreen api={api} auth={auth} onLogout={clearSession} />
+              <OperationalWorkspaceScreen
+                api={api}
+                auth={auth}
+                onChangeModule={modules.length > 1 ? () => setActiveModule(null) : undefined}
+                onLogout={clearSession}
+              />
             )}
           </View>
         ) : (
@@ -191,6 +196,12 @@ export default function App() {
       </SafeAreaView>
     </SafeAreaProvider>
   );
+}
+
+// El espacio del camarero trae «Cambiar módulo» en su menú de operador; repetir la
+// franja de módulo activo encima de su cabecera solo resta altura a la maniobra.
+function usesOperatorWorkspace(module: MobileModule) {
+  return module === 'operacion' || module === 'operacion_materiales';
 }
 
 function availableModules(auth: AuthSession): MobileModule[] {

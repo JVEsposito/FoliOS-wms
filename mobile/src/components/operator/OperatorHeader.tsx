@@ -12,18 +12,22 @@ type Props = {
   navigation?: ReactNode;
   role: string;
   title?: string;
+  /** Acciones al extremo derecho (p. ej. el menú del operador). Reemplaza el nombre de la tablet. */
+  trailing?: ReactNode;
   userName: string;
 };
 
 /**
  * Encabezado de terreno FoliOS v2: gajo del área, título angosto, persona y estado de
- * conexión; regla inferior de 3 px con el color del área. Ver
- * docs/diseno/folios-v2/pr-07-movil-tema.md.
+ * conexión; regla inferior de 3 px con el color del área. Una sola franja: la navegación
+ * va al centro y lo que no se usa en cada maniobra queda en `trailing`. Ver
+ * docs/diseno/folios-v2/pr-07-movil-tema.md y pr-11-tablet-cabecera.md.
  */
-export function OperatorHeader({ area = 'frigorifico', connected, deviceName, modeLabel, navigation, role, title, userName }: Props) {
+export function OperatorHeader({ area = 'frigorifico', connected, deviceName, modeLabel, navigation, role, title, trailing, userName }: Props) {
   const { width } = useWindowDimensions();
   const compact = width < o.breakpoint.compact;
   const definition = areas[area];
+  const tone = connected ? o.color.success : o.color.warning;
 
   return (
     <View style={[styles.header, { borderBottomColor: definition.bright }, compact && styles.headerCompact]}>
@@ -31,19 +35,21 @@ export function OperatorHeader({ area = 'frigorifico', connected, deviceName, mo
         <Image accessibilityLabel={`FoliOS, ${definition.label}`} accessible resizeMode="contain" source={definition.gajo} style={styles.gajo} />
         <View style={styles.titleBlock}>
           <Text numberOfLines={1} style={styles.title}>{title ?? definition.label}</Text>
-          <Text numberOfLines={1} style={styles.subtitle}>{userName}, {humanRole(role).toLowerCase()}</Text>
+          <Text numberOfLines={1} style={styles.subtitle}>{humanRole(role)} · {userName}</Text>
         </View>
+      </View>
+      {navigation ? <View style={styles.navigation}>{navigation}</View> : null}
+      <View style={[styles.end, compact && styles.endCompact]}>
         <View
           accessibilityLabel={`Estado de conexión: ${modeLabel}`}
           accessible
           style={[styles.pill, connected ? styles.pillOnline : styles.pillOffline]}
         >
-          <Text style={[styles.pillMark, { color: connected ? o.color.success : o.color.warning }]}>{connected ? '✓' : '◆'}</Text>
-          <Text style={[styles.pillText, { color: connected ? o.color.success : o.color.warning }]}>{modeLabel}</Text>
+          <View style={[styles.dot, { backgroundColor: tone }]} />
+          <Text numberOfLines={1} style={[styles.pillText, { color: tone }]}>{modeLabel}</Text>
         </View>
+        {trailing ?? <Text numberOfLines={1} style={styles.device}>{deviceName}</Text>}
       </View>
-      {navigation ? <View style={styles.navigation}>{navigation}</View> : null}
-      <Text numberOfLines={1} style={[styles.device, compact && styles.deviceCompact]}>{deviceName}</Text>
     </View>
   );
 }
@@ -55,7 +61,7 @@ function humanRole(role: string) {
 
 const styles = StyleSheet.create({
   header: {
-    minHeight: 76,
+    minHeight: 72,
     paddingHorizontal: o.space[4],
     paddingVertical: o.space[2],
     backgroundColor: o.color.navy,
@@ -91,6 +97,9 @@ const styles = StyleSheet.create({
     fontSize: o.type.small,
     marginTop: 2,
   },
+  navigation: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', flexGrow: 1, gap: 8 },
+  end: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: o.space[3] },
+  endCompact: { justifyContent: 'space-between' },
   pill: {
     minHeight: 36,
     paddingHorizontal: o.space[3],
@@ -100,11 +109,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: o.space[2],
   },
-  pillOnline: { backgroundColor: o.color.successSurface, borderColor: o.color.successBorder },
+  pillOnline: { backgroundColor: 'transparent', borderColor: 'transparent' },
   pillOffline: { backgroundColor: o.color.warningSurface, borderColor: o.color.warningBorder },
-  pillMark: { fontSize: o.type.caption, fontWeight: '900' },
+  dot: { width: 10, height: 10, borderRadius: o.radius.pill },
   pillText: { fontSize: o.type.small, fontWeight: '700' },
-  navigation: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', flexGrow: 1, gap: 8 },
   device: { maxWidth: 220, color: o.color.muted, fontSize: o.type.caption, textAlign: 'right' },
-  deviceCompact: { maxWidth: undefined, textAlign: 'left' },
 });

@@ -5,6 +5,7 @@ import { AuthSession } from '../domain/estiba';
 import { EstibaApi } from '../services/estibaApi';
 import { getEnvironmentalControlState } from '../services/environmentalControlApi';
 import { OperatorHeader } from '../components/operator/OperatorHeader';
+import { OperatorMenu } from '../components/operator/OperatorMenu';
 import { operatorTheme as o } from '../theme/operatorTheme';
 import { MaterialInventoryCountPanel } from '../components/MaterialInventoryCountPanel';
 import { MaterialVerificationPanel } from '../components/MaterialVerificationPanel';
@@ -17,12 +18,14 @@ import { sendOperatorPresence } from '../services/operatorPresenceApi';
 type Props = {
   api: EstibaApi;
   auth: AuthSession;
+  /** Vuelve al selector de módulos; solo existe cuando la persona tiene más de uno. */
+  onChangeModule?: () => void;
   onLogout: () => void;
 };
 
 type WorkspaceView = 'labores' | 'ambiente' | 'operacion';
 
-export function OperationalWorkspaceScreen({ api, auth, onLogout }: Props) {
+export function OperationalWorkspaceScreen({ api, auth, onChangeModule, onLogout }: Props) {
   const [view, setView] = useState<WorkspaceView>(api.mode === 'connected' ? 'labores' : 'operacion');
   const [environmentalDue, setEnvironmentalDue] = useState(0);
   const environmentalAvailable = api.mode === 'connected'
@@ -67,9 +70,16 @@ export function OperationalWorkspaceScreen({ api, auth, onLogout }: Props) {
       <OperatorHeader
         connected={api.mode === 'connected'}
         deviceName={auth.dispositivo.nombre}
-        modeLabel={api.mode === 'connected' ? 'Modo conectado' : api.mode === 'demo' ? 'Modo demostración' : 'Sin configurar'}
+        modeLabel={api.mode === 'connected' ? 'Conectado' : api.mode === 'demo' ? 'Modo demostración' : 'Sin configurar'}
         role={auth.usuario.rol}
         userName={auth.usuario.nombre}
+        trailing={<OperatorMenu
+          deviceName={auth.dispositivo.nombre}
+          onChangeModule={onChangeModule}
+          onLogout={() => void logoutFromTasks()}
+          role={auth.usuario.rol}
+          userName={auth.usuario.nombre}
+        />}
         navigation={<View accessibilityRole="tablist" style={styles.buttons}>
           <Pressable
             accessibilityRole="tab"
@@ -77,17 +87,21 @@ export function OperationalWorkspaceScreen({ api, auth, onLogout }: Props) {
             onPress={() => setView('labores')}
             style={[styles.button, view === 'labores' && styles.buttonActive]}
           >
-            <Text style={[styles.buttonText, view === 'labores' && styles.buttonTextActive]}>Labores</Text>
+            <Text style={[styles.buttonText, view === 'labores' && styles.buttonTextActive]}>Mi jornada</Text>
           </Pressable>
           {environmentalAvailable ? <Pressable
+            accessibilityLabel={environmentalDue > 0
+              ? `Ambiente: ${environmentalDue} ${environmentalDue === 1 ? 'cámara requiere' : 'cámaras requieren'} control ambiental`
+              : 'Ambiente'}
             accessibilityRole="tab"
             accessibilityState={{ selected: view === 'ambiente' }}
             onPress={() => setView('ambiente')}
             style={[styles.button, view === 'ambiente' && styles.buttonActive]}
           >
-            <Text style={[styles.buttonText, view === 'ambiente' && styles.buttonTextActive]}>
-              Ambiente{environmentalDue > 0 ? ` · ${environmentalDue}` : ''}
-            </Text>
+            <Text style={[styles.buttonText, view === 'ambiente' && styles.buttonTextActive]}>Ambiente</Text>
+            {environmentalDue > 0 ? (
+              <View style={styles.badge}><Text style={styles.badgeText}>{environmentalDue}</Text></View>
+            ) : null}
           </Pressable> : null}
           <Pressable
             accessibilityRole="tab"
@@ -97,25 +111,8 @@ export function OperationalWorkspaceScreen({ api, auth, onLogout }: Props) {
           >
             <Text style={[styles.buttonText, view === 'operacion' && styles.buttonTextActive]}>Plano y operación</Text>
           </Pressable>
-          {view !== 'operacion' ? (
-            <Pressable onPress={() => void logoutFromTasks()} style={styles.logout}>
-              <Text style={styles.logoutText}>Salir</Text>
-            </Pressable>
-          ) : null}
         </View>}
       />
-
-      {environmentalAvailable && environmentalDue > 0 && view !== 'ambiente' ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`${environmentalDue} cámaras requieren control ambiental. Revisar ahora.`}
-          onPress={() => setView('ambiente')}
-          style={styles.environmentalPrompt}
-        >
-          <Text style={styles.environmentalPromptTitle}>{environmentalDue} {environmentalDue === 1 ? 'cámara requiere' : 'cámaras requieren'} control ambiental</Text>
-          <Text style={styles.environmentalPromptAction}>Revisar ahora →</Text>
-        </Pressable>
-      ) : null}
 
       <View style={styles.content}>
         {view === 'labores' ? (
@@ -137,35 +134,18 @@ const styles = StyleSheet.create({
   buttons: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   button: {
     minHeight: o.touch.minimum,
-    justifyContent: 'center',
-    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: o.space[2],
+    paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: o.radius.control,
-    borderWidth: 1,
-    borderColor: o.color.borderStrong,
-    backgroundColor: o.color.navyRaised,
+    backgroundColor: 'transparent',
   },
-  buttonActive: { borderColor: o.color.primary, backgroundColor: o.color.selected, borderLeftWidth: 4 },
-  buttonText: { color: o.color.onNavy, fontSize: o.type.small, fontWeight: '700' },
-  buttonTextActive: { color: o.color.primaryPressed },
-  logout: { minHeight: o.touch.minimum, justifyContent: 'center', paddingHorizontal: 16, paddingVertical: 10, borderRadius: o.radius.control, borderWidth: 1, borderColor: o.color.criticalBorder },
-  logoutText: { color: o.color.critical, fontSize: o.type.small, fontWeight: '800' },
-  environmentalPrompt: {
-    minHeight: 56,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: o.color.critical,
-    borderLeftWidth: 6,
-    borderLeftColor: o.color.critical,
-    backgroundColor: o.color.criticalSurface,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  environmentalPromptTitle: { color: o.color.critical, fontSize: o.type.body, fontWeight: '800' },
-  environmentalPromptAction: { color: o.color.critical, fontSize: o.type.body, fontWeight: '800' },
+  buttonActive: { backgroundColor: o.color.surfaceMuted },
+  buttonText: { color: o.color.textSecondary, fontSize: o.type.body, fontWeight: '600' },
+  buttonTextActive: { color: o.color.primaryPressed, fontWeight: '800' },
+  badge: { minWidth: 26, height: 26, paddingHorizontal: 8, borderRadius: o.radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: o.color.warning },
+  badgeText: { color: o.color.onPrimary, fontSize: o.type.caption, fontWeight: '900' },
   content: { flex: 1, minHeight: 0 },
 });
