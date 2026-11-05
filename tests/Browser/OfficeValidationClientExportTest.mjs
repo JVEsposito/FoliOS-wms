@@ -10,14 +10,14 @@ const identity = {
     nombre: 'Oficina prueba', rol: 'administrador',
     puede_consultar_validaciones_pallet: true, modulos_acceso: ['frigorifico.validacion'],
 };
-const temporada = { id: 'temporada-prueba', codigo: 'TEMP-2627', nombre: 'Temporada de prueba', activa: true };
+const temporada = { id: 'temporada-prueba', codigo: 'TEMP-2627', nombre: 'Temporada 2026-2027', activa: true };
 
 test('Validación PT exporta el cliente y los filtros aplicados al historial', async () => {
     const browser = await chromium.launch({
         executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined,
         args: ['--no-sandbox', '--disable-gpu'],
     });
-    const context = await browser.newContext({ viewport: { width: 1440, height: 940 } });
+    const context = await browser.newContext({ viewport: { width: 1920, height: 940 } });
     await context.addInitScript((user) => {
         localStorage.setItem('estiba_wms_office_token', 'fixture');
         localStorage.setItem('estiba_wms_office_identity', JSON.stringify(user));
@@ -83,6 +83,19 @@ test('Validación PT exporta el cliente y los filtros aplicados al historial', a
             await page.getByRole('button', { name, exact: true }).click();
             assert.equal((await download).suggestedFilename(), `validaciones.${formato}`);
             assert.deepEqual(exports.at(-1), { ...expected, formato });
+        }
+
+        const toolbar = page.locator('.validation-toolbar');
+        const layout = await toolbar.evaluate((element) => {
+            const controls = [...element.querySelectorAll('select, a, button')].map((control) => control.getBoundingClientRect());
+            return { seasonWidth: controls[0].width, bottoms: controls.map((control) => control.bottom) };
+        });
+        assert.ok(layout.seasonWidth >= 288, 'el selector permite leer la temporada completa');
+        assert.ok(Math.max(...layout.bottoms) - Math.min(...layout.bottoms) <= 1, 'las acciones se alinean en escritorio');
+
+        for (const width of [1366, 390]) {
+            await page.setViewportSize({ width, height: 940 });
+            assert.equal(await toolbar.evaluate((element) => element.scrollWidth <= element.clientWidth), true);
         }
     } finally {
         await browser.close();

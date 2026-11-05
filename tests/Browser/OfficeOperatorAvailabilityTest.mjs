@@ -6,10 +6,19 @@ import test from 'node:test';
 import { chromium } from 'playwright';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
+const origin = { id: 'camara-7', codigo: 'CAM-09', nombre: 'Cámara de tránsito 07', contenido: 'productos' };
+const destination = { id: 'camara-5', codigo: 'CAM-11', nombre: 'Cámara de tránsito 05', contenido: 'productos' };
 const panel = () => ({ data: {
     generado_at: new Date().toISOString(), jornada: { zona_horaria: 'America/Santiago' }, temporada: { id: 's1', codigo: '2026', nombre: 'Prueba' },
-    sincronizacion: { operaciones_hoy: {} }, camaras: [], camareros: [], prefrio: { resumen: {}, tuneles: [] },
-    incidencias: { resumen: {}, abiertas: [] }, planificador: { despliegue: { mode_global: 'guided' }, salud: { riesgos: {} }, arbitraje: { vigencia: { estado: 'actual' } } },
+    sincronizacion: { operaciones_hoy: {} }, camareros: [], prefrio: { resumen: {}, tuneles: [] },
+    camaras: [origin, destination].map((camera) => ({ ...camera, control_ambiental: { estado: 'vencido', capturado_at: '2026-11-05T12:00:00Z' } })),
+    incidencias: { resumen: {}, abiertas: [] },
+    planificador: { despliegue: { mode_global: 'guided' }, salud: { riesgos: {} }, arbitraje: { vigencia: { estado: 'actual' }, ciclo: {
+        decisiones: [{ maniobra_id: 'maniobra-1', orden: 1, decision: 'seleccionada', estado: 'pendiente', paso_actual: {
+            folio: { numero_folio: '6000000150' }, origen: { camara: origin, posicion: { etiqueta: 'B01-P01-N1' } },
+            destino: { camara: destination }, instruccion: 'Integrar al grupo principal de la carga',
+        } }],
+    } } },
     planta: { configurado: false, catalogo: [], elementos: [] },
 } });
 
@@ -44,6 +53,12 @@ for (const width of [1280, 390]) test(`Operación ahora anuncia una sola vez al 
         const page = await context.newPage(); const errors = []; page.on('pageerror', (error) => errors.push(error.message));
         await page.goto('http://localhost/oficina/operacion-ahora#personal');
         await page.locator('#operatorAvailableCount').filter({ hasText: 'Disponibles: 0' }).waitFor();
+        assert.deepEqual(await page.locator('#operationAlertRows .operation-now-alert__items .operation-now-code').allTextContents(), [
+            'Cámara de tránsito 05', 'Cámara de tránsito 07',
+        ]);
+        assert.deepEqual(await page.locator('#plannerDecisionRows td').nth(3).locator('.operation-now-subtext').allTextContents(), [
+            'Cámara de tránsito 07 · B01-P01-N1 → Cámara de tránsito 05', 'Integrar al grupo principal de la carga',
+        ]);
         assert.equal(await page.locator('.toast').filter({ hasText: 'quedó disponible' }).count(), 0);
         await page.evaluate(() => {
             window.availabilityAlerts = 0;

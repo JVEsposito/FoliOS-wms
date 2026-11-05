@@ -1,4 +1,5 @@
 import { dewPointAlerts } from './dew-point.js';
+import { cameraDisplayName } from './camera-display.js';
 
 const priority = { critical: 0, warning: 1, info: 2 };
 
@@ -14,12 +15,13 @@ function formatNumber(value, maximumFractionDigits = 0) {
 function cameraAlerts(cameras = []) {
     return cameras.flatMap((camera) => {
         const alerts = [];
+        const area = cameraDisplayName(camera);
         const occupancy = numeric(camera.ocupacion_porcentaje);
         const evidence = `${formatNumber(camera.ocupadas)} de ${formatNumber(camera.capacidad_operativa)} posiciones (${formatNumber(occupancy, 1)} %)`;
 
         if (camera.nivel_ocupacion === 'critica') {
             alerts.push({
-                area: camera.codigo,
+                area,
                 source: 'Ocupación',
                 tab: 'camaras',
                 severity: 'critical',
@@ -30,7 +32,7 @@ function cameraAlerts(cameras = []) {
             });
         } else if (camera.nivel_ocupacion === 'advertencia') {
             alerts.push({
-                area: camera.codigo,
+                area,
                 source: 'Ocupación',
                 tab: 'camaras',
                 severity: 'warning',
@@ -44,7 +46,7 @@ function cameraAlerts(cameras = []) {
         const environment = camera.control_ambiental;
         if (environment?.estado === 'vencido' || environment?.estado === 'pendiente') {
             alerts.push({
-                area: camera.codigo,
+                area,
                 source: 'Ambiente',
                 tab: 'camaras',
                 severity: environment.estado === 'vencido' ? 'critical' : 'warning',
@@ -170,20 +172,23 @@ function reentryAlerts(reentries = []) {
 }
 
 export function buildOperationalAlerts(snapshot = {}) {
-    const productCameras = (snapshot.camaras || [])
-        .filter((camera) => camera.contenido === 'productos');
+    const cameras = snapshot.camaras || [];
+    const camerasByCode = new Map(cameras.map((camera) => [camera.codigo, camera]));
     const alerts = [
-        ...(snapshot.emergencias || []).map((emergencia) => ({
-            area: emergencia.camara_codigo || 'Cámara',
-            source: 'Emergencias',
-            tab: 'plano',
-            severity: 'critical',
-            condition: `Evacuación de emergencia activa en ${emergencia.camara_codigo || 'cámara'}`,
-            evidence: emergencia.motivo || 'Evacuación declarada',
-            href: '/oficina/frigorifico/camaras',
-            action: 'Revisar plano de la cámara',
-        })),
-        ...cameraAlerts(productCameras),
+        ...(snapshot.emergencias || []).map((emergencia) => {
+            const area = cameraDisplayName(camerasByCode.get(emergencia.camara_codigo));
+            return {
+                area,
+                source: 'Emergencias',
+                tab: 'plano',
+                severity: 'critical',
+                condition: `Evacuación de emergencia activa en ${area}`,
+                evidence: emergencia.motivo || 'Evacuación declarada',
+                href: '/oficina/frigorifico/camaras',
+                action: 'Revisar plano de la cámara',
+            };
+        }),
+        ...cameraAlerts(cameras.filter((camera) => camera.contenido === 'productos')),
         ...tunnelAlerts(snapshot.prefrio?.tuneles || []),
         ...dewPointAlerts(snapshot.prefrio?.condensacion?.alertas_pendientes || []),
         ...reentryAlerts(snapshot.despacho?.reingresos || []),
