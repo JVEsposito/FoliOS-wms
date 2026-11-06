@@ -142,7 +142,7 @@ class ServicioExportacionRegistroValidacion
     private function paginas(Collection $validaciones): array
     {
         $ordenadas = $validaciones->sortBy(fn (ValidacionPallet $validacion): string => implode('|', [
-            $this->fechaLocal($validacion, 'Y-m-d'),
+            $validacion->fechaJornada()?->toDateString() ?? '',
             str_pad((string) $validacion->user_id, 12, '0', STR_PAD_LEFT),
             (string) $validacion->linea_proceso,
             (string) $validacion->turno,
@@ -152,7 +152,7 @@ class ServicioExportacionRegistroValidacion
         $paginas = [];
 
         foreach ($ordenadas->groupBy(fn (ValidacionPallet $validacion): string => implode('|', [
-            $this->fechaLocal($validacion, 'Y-m-d'),
+            $validacion->fechaJornada()?->toDateString() ?? '',
             (string) $validacion->user_id,
             (string) $validacion->linea_proceso,
             (string) $validacion->turno,
@@ -161,7 +161,7 @@ class ServicioExportacionRegistroValidacion
             $primera = $grupo->first();
             foreach ($grupo->values()->chunk(self::FILAS_POR_HOJA) as $indice => $lote) {
                 $paginas[] = [
-                    'fecha' => $this->fechaLocal($primera, 'd-m-Y'),
+                    'fecha' => $primera->fechaJornada()?->format('d-m-Y') ?? '',
                     'encargado' => $primera->usuario?->name ?? 'Sin usuario',
                     'linea' => (int) $primera->linea_proceso,
                     'turno' => (string) $primera->turno,
@@ -570,14 +570,6 @@ class ServicioExportacionRegistroValidacion
         );
 
         return mb_substr(preg_replace('/[\\\\\\/\\?\\*\\[\\]:]/', '-', $nombre) ?: "Registro-{$numero}", 0, 31);
-    }
-
-    private function fechaLocal(ValidacionPallet $validacion, string $formato): string
-    {
-        return $validacion->generado_dispositivo_at
-            ?->copy()
-            ->timezone(config('app.operational_timezone'))
-            ->format($formato) ?? '';
     }
 
     private function documento(string $xml): DOMDocument

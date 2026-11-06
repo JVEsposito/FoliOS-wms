@@ -285,7 +285,7 @@ class ServicioValidacionPallet
                 'user_id' => $usuario->id,
                 'dispositivo_id' => $dispositivo->id,
                 'validacion_conflicto_id' => $decisionFinalPrevia?->id,
-                'generado_dispositivo_at' => CarbonImmutable::parse($datos['generado_dispositivo_at']),
+                'generado_dispositivo_at' => CarbonImmutable::parse($datos['generado_dispositivo_at'])->utc(),
                 'recibido_servidor_at' => now(),
             ]);
 

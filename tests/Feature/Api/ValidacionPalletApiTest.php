@@ -778,6 +778,75 @@ class ValidacionPalletApiTest extends TestCase
         $zip->close();
     }
 
+    public function test_jornada_noche_conserva_su_fecha_en_historial_resumen_y_descargas_tras_sincronizar(): void
+    {
+        config(['app.operational_timezone' => 'America/Santiago']);
+        $this->travelTo(CarbonImmutable::parse('2026-11-08T13:00:00Z'));
+        [$catalogo, $token] = $this->contexto(RolUsuario::Validador, 'VAL-NOCHE');
+
+        $noche = [
+            ...$this->payload($catalogo, 'PAL-NOCHE'),
+            'turno' => 'B',
+            'fecha_embalaje' => '2026-11-05',
+            'generado_dispositivo_at' => '2026-11-07T02:15:00-03:00',
+        ];
+        $registro = $this->conToken($token)->postJson('/api/validacion/pallets', $noche)
+            ->assertCreated()
+            ->assertJsonPath('data.fecha_jornada', '2026-11-06')
+            ->assertJsonPath('data.generado_dispositivo_at', '2026-11-07T05:15:00+00:00')
+            ->assertJsonPath('data.recibido_servidor_at', '2026-11-08T13:00:00+00:00')
+            ->assertJsonPath('data.catalogo.fecha_embalaje', '2026-11-05')
+            ->json('data.id');
+
+        $this->conToken($token)->postJson('/api/validacion/pallets', $noche)
+            ->assertOk()->assertJsonPath('data.id', $registro)->assertJsonPath('data.fecha_jornada', '2026-11-06');
+
+        foreach ([
+            ['PAL-ANTES-CORTE', 'B', '2026-11-07T09:59:59Z', '2026-11-06'],
+            ['PAL-EN-CORTE', 'B', '2026-11-07T10:00:00Z', '2026-11-07'],
+            ['PAL-TURNO-A', 'A', '2026-11-07T05:15:00Z', '2026-11-07'],
+        ] as [$folio, $turno, $captura, $fechaJornada]) {
+            $this->conToken($token)->postJson('/api/validacion/pallets', [
+                ...$this->payload($catalogo, $folio),
+                'turno' => $turno,
+                'generado_dispositivo_at' => $captura,
+            ])->assertCreated()->assertJsonPath('data.fecha_jornada', $fechaJornada);
+        }
+
+        $filtros = ['temporada_id' => $catalogo['temporada_id'], 'fecha' => '2026-11-06', 'turno' => 'B'];
+        $consulta = http_build_query($filtros);
+        $this->conToken($token)->getJson('/api/validacion/pallets?'.$consulta)
+            ->assertOk()->assertJsonCount(2, 'data')->assertJsonFragment(['numero_folio' => 'PAL-NOCHE']);
+        $this->conToken($token)->getJson('/api/validacion/registro/resumen?'.$consulta)
+            ->assertOk()->assertJsonPath('dia.fecha', '2026-11-06')->assertJsonPath('dia.validados', 2);
+        $this->conToken($token)->getJson('/api/validacion/pallets?fecha=2026-11-07')
+            ->assertOk()->assertJsonCount(2, 'data')
+            ->assertJsonFragment(['numero_folio' => 'PAL-EN-CORTE'])
+            ->assertJsonFragment(['numero_folio' => 'PAL-TURNO-A']);
+
+        $ruta = '/api/validacion/registro/rrpp-01?'.$consulta;
+        $pdf = $this->conToken($token)->get($ruta.'&formato=pdf')
+            ->assertOk()->assertDownload('validaciones-pt_2026-11-06.pdf')->getContent();
+        $this->assertStringContainsString('06-11-2026', $pdf);
+        $this->assertStringContainsString('02:15', $pdf);
+        $this->assertStringContainsString('PAL-NOCHE', $pdf);
+        $this->assertStringNotContainsString('PAL-EN-CORTE', $pdf);
+
+        $excel = $this->conToken($token)->get($ruta)
+            ->assertOk()->assertDownload('RRPP-01_2026-11-06.xlsx');
+        $archivo = $excel->baseResponse->getFile()->getPathname();
+        $zip = new ZipArchive;
+        $this->assertTrue($zip->open($archivo) === true);
+        $hoja = $zip->getFromName('xl/worksheets/sheet1.xml');
+        $zip->close();
+        unlink($archivo);
+
+        $this->assertIsString($hoja);
+        $this->assertSame('06-11-2026', $this->valorCelda($hoja, 'C5'));
+        $this->assertSame('PAL-NOCHE', $this->valorCelda($hoja, 'B11'));
+        $this->assertSame('PAL-ANTES-CORTE', $this->valorCelda($hoja, 'B12'));
+    }
+
     public function test_filtra_el_historial_y_ambas_descargas_por_cliente_registrado(): void
     {
         $this->travelTo(CarbonImmutable::parse('2026-11-04T01:00:00Z'));

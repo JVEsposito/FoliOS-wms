@@ -147,7 +147,7 @@ function harness({ item = pending(), statusError = false, record = null, finalRe
       }
       return require(id);
     };
-    vm.runInNewContext(code, { require: mockRequire, module, exports: module.exports, console, Error, Headers, URLSearchParams, AbortController, fetch, setTimeout: () => 0, clearTimeout: () => {} }, { filename: path });
+    vm.runInNewContext(code, { require: mockRequire, module, exports: module.exports, console, Error, Headers, URLSearchParams, AbortController, fetch, setInterval: () => 0, clearInterval: () => {}, setTimeout: () => 0, clearTimeout: () => {} }, { filename: path });
     return module.exports;
   }
   const { ValidationScreen } = load(resolve(sourceRoot, 'screens/ValidationScreen.tsx'));
@@ -207,12 +207,28 @@ test('un catálogo lento no bloquea la captura con copia local y conserva el fol
   } finally { await h.unmount(); }
 });
 
+test('PDA permite elegir el turno de noche y muestra la fecha de jornada', async () => {
+  const h = harness({ item: null, width: 360 });
+  try {
+    await h.mount();
+    await h.press('Cambiar');
+    assert.match(h.message(), /A · Día\n07:00–19:00/);
+    assert.match(h.message(), /B · Noche\n19:00–07:00/);
+    await h.press('B · Noche');
+    assert.match(h.message(), /Fecha de jornada · \d{2}\/\d{2}\/\d{4}/);
+    assert.match(h.message(), /Línea 1 · Turno B \(noche\)/);
+    assert.deepEqual(JSON.parse(h.storage.get('estiba_validation_work_context:1:pda')), { linea_proceso: 1, turno: 'B' });
+  } finally { await h.unmount(); }
+});
+
 test('la bandeja se envía sin esperar una descarga lenta de catálogo y conserva el UUID original', async () => {
   const h = harness({ item: pending({ status: 'pendiente' }), cachedVersion: 218, serverVersion: 227, catalogBlocked: true });
   try {
     await h.mount();
     assert.equal(h.calls.posts.length, 1);
     assert.equal(h.calls.posts[0].operacion_id, payload().operacion_id);
+    assert.equal(h.calls.posts[0].turno, payload().turno);
+    assert.equal(h.calls.posts[0].generado_dispositivo_at, payload().generado_dispositivo_at);
     assert.equal(h.outbox().length, 0);
     assert.match(h.message(), /catálogo v218/);
     await h.releaseCatalog();

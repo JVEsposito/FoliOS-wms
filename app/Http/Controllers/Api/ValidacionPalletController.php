@@ -26,7 +26,6 @@ use App\Services\Validacion\GeneradorHistorialValidacionesPdf;
 use App\Services\Validacion\ServicioCorreccionValidacionPallet;
 use App\Services\Validacion\ServicioExportacionRegistroValidacion;
 use App\Services\Validacion\ServicioValidacionPallet;
-use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -71,7 +70,6 @@ class ValidacionPalletController extends Controller
         $consulta = $this->aplicarFiltros(
             ValidacionPallet::query()->with($this->relaciones()),
             $filtros,
-            $request->rangoFechaUtc(),
         )
             ->orderByDesc('recibido_servidor_at')
             ->orderByDesc('numero_intento');
@@ -89,7 +87,7 @@ class ValidacionPalletController extends Controller
             : app(ServicioTemporadaActiva::class)->buscar();
 
         $observados = $this->aplicarFiltros(
-            ValidacionPallet::query(), $filtros, $request->rangoFechaUtc(),
+            ValidacionPallet::query(), $filtros,
         )->where('resultado', ResultadoValidacionPallet::Observado->value)->count();
 
         return response()->json([
@@ -108,15 +106,12 @@ class ValidacionPalletController extends Controller
     /** @param array<string, mixed> $filtros */
     private function resumenDia(array $filtros): array
     {
-        $zona = config('app.operational_timezone');
-        $fecha = $filtros['fecha'] ?? CarbonImmutable::now($zona)->format('Y-m-d');
-        $inicio = CarbonImmutable::createFromFormat('!Y-m-d', $fecha, $zona);
+        $fecha = $filtros['fecha'] ?? now(config('app.operational_timezone'))->toDateString();
         unset($filtros['resultado'], $filtros['estado']);
 
         $vigentes = $this->aplicarFiltros(
             ValidacionPallet::query()->with(['usuario:id,name', 'dispositivo:id,codigo']),
-            $filtros,
-            [$inicio->utc(), $inicio->addDay()->startOfDay()->utc()],
+            [...$filtros, 'fecha' => $fecha],
         )
             ->orderByDesc('recibido_servidor_at')
             ->orderByDesc('numero_intento')
@@ -129,7 +124,7 @@ class ValidacionPalletController extends Controller
         $aceptadas = $vigentes->where('estado', EstadoValidacionPallet::Aceptada);
 
         return [
-            'fecha' => $inicio->format('Y-m-d'),
+            'fecha' => $fecha,
             'validados' => $aceptadas->count(),
             'aprobados' => $aceptadas->where('resultado', ResultadoValidacionPallet::Aprobado)->count(),
             'observados' => $aceptadas->where('resultado', ResultadoValidacionPallet::Observado)->count(),
@@ -203,6 +198,7 @@ class ValidacionPalletController extends Controller
                 'id' => (string) $token?->getKey(),
                 'iniciada_at' => $inicio->toAtomString(),
                 'servidor_at' => now()->toAtomString(),
+                'zona_horaria' => config('app.operational_timezone'),
                 'usuario' => [
                     'id' => $usuario->id,
                     'nombre' => $usuario->name,
@@ -291,7 +287,6 @@ class ValidacionPalletController extends Controller
                     ->whereNotNull('linea_proceso')
                     ->whereNotNull('turno')),
             $filtros,
-            $request->rangoFechaUtc(),
         )
             ->orderBy('generado_dispositivo_at')
             ->orderBy('numero_intento')
@@ -486,10 +481,9 @@ class ValidacionPalletController extends Controller
     /**
      * @param  Builder<ValidacionPallet>  $consulta
      * @param  array<string, mixed>  $filtros
-     * @param  array{0:CarbonImmutable,1:CarbonImmutable}|null  $rangoFecha
      * @return Builder<ValidacionPallet>
      */
-    private function aplicarFiltros(Builder $consulta, array $filtros, ?array $rangoFecha): Builder
+    private function aplicarFiltros(Builder $consulta, array $filtros): Builder
     {
         return $consulta
             ->when(
@@ -536,10 +530,8 @@ class ValidacionPalletController extends Controller
                     ->where('user_id', (int) $usuarioId),
             )
             ->when(
-                $rangoFecha,
-                fn (Builder $consulta, array $rango): Builder => $consulta
-                    ->where('generado_dispositivo_at', '>=', $rango[0])
-                    ->where('generado_dispositivo_at', '<', $rango[1]),
+                $filtros['fecha'] ?? null,
+                fn (Builder $consulta, string $fecha): Builder => $consulta->deJornada($fecha),
             );
     }
 }

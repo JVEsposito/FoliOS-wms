@@ -14,6 +14,11 @@ test('la jornada muestra la hora de terreno en Santiago y distingue registros hi
     assert.match(validationJourneyLabel({ ...item, linea_proceso: null }), /^Sin jornada histórica · .*23:30$/);
 });
 
+test('la fila del turno noche distingue la fecha de jornada de la hora de captura', () => {
+    const item = { generado_dispositivo_at: '2026-11-07T05:15:00Z', linea_proceso: 2, turno: 'B', fecha_jornada: '2026-11-06' };
+    assert.equal(validationJourneyLabel(item), 'Línea 2, turno B, 02:15 · Jornada 06-11-2026');
+});
+
 test('el indicador usa el día operacional y no cambia una fecha histórica al convertirla a UTC', () => {
     const now = new Date('2026-07-30T03:30:00Z');
     assert.deepEqual(validationDayContext('2026-07-29', 'America/Santiago', now), { label: 'hoy', title: 'Por línea, hoy' });
