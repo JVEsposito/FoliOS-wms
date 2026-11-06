@@ -11,7 +11,7 @@ class RepaletizajeOfficeTest extends TestCase
         $this->get('/oficina/validacion/repaletizajes')
             ->assertOk()
             ->assertSee('Repaletizajes')
-            ->assertSee('CONSOLIDACIÓN DE SALDOS')
+            ->assertSee('PALLETS Y SALDOS')
             ->assertSee('id="sourceOverview"', false);
     }
 

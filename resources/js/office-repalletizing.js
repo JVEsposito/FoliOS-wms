@@ -175,6 +175,7 @@ function renderSourceCard(source, transform) {
     return `<article class="source-card${expanded ? ' is-expanded' : ''}">
         <div class="source-card__row">
             <div class="source-identity"><strong>${escapeHtml(source.numero_folio)}</strong>
+                <small>${source.tipo_bulto === 'pallet' ? 'Pallet completo' : 'Saldo'}</small>
                 <small>${escapeHtml(source.cliente)} · ${escapeHtml(source.especie)} · ${escapeHtml(source.marca)}</small>
                 <small>Calibre ${escapeHtml(source.calibre)} · ${escapeHtml(source.condicion_termica)}</small>
             </div>
@@ -266,7 +267,7 @@ function render() {
     elements.secondType.classList.toggle('is-hidden', !division);
     elements.secondTarget.classList.toggle('is-hidden', !division);
     elements.divisionEditor.classList.toggle('is-hidden', !division || !state.sources.length);
-    elements.sourceInputLabel.textContent = transform ? 'Agregar pallet o saldo por folio' : 'Agregar saldo por folio';
+    elements.sourceInputLabel.textContent = 'Agregar pallet o saldo por folio';
     elements.keptField.classList.toggle('is-hidden', transform || strategy !== 'conservar');
     elements.newField.classList.toggle('is-hidden', transform || strategy !== 'nuevo');
 
@@ -301,7 +302,7 @@ function render() {
     elements.sourceList.classList.toggle('has-many', state.sources.length > 5);
     elements.sourceList.innerHTML = state.sources.length
         ? state.sources.map((source) => renderSourceCard(source, transform)).join('')
-        : `<p class="empty-copy">${transform ? 'Agrega un pallet o saldo.' : 'Agrega al menos dos folios tipo saldo.'}</p>`;
+        : `<p class="empty-copy">${transform ? 'Agrega un pallet o saldo.' : 'Agrega al menos dos folios: pallets completos o saldos.'}</p>`;
     elements.sourceList.scrollTop = sourceScrollTop;
     if (activeComposition) {
         const input = [...elements.sourceList.querySelectorAll('[data-composition-source]')].find((candidate) => (
@@ -375,15 +376,12 @@ async function addSource() {
     if (mode() !== 'consolidacion' && state.sources.length) {
         elements.sourceError.textContent = 'El cambio y la división reciben exactamente un folio.'; return;
     }
-    setBusy(true, 'Buscando saldo…');
+    setBusy(true, 'Buscando folio…');
     try {
         const source = await api(`/api/validacion/repaletizajes/folios/${encodeURIComponent(number)}`);
         if (!source.existe) throw new ApiError('El folio no existe.');
-        const acceptedTypes = mode() === 'consolidacion' ? ['saldo'] : ['saldo', 'pallet'];
-        if (!source.activo || !acceptedTypes.includes(source.tipo_bulto) || source.cantidad_cajas < 1) {
-            throw new ApiError(mode() === 'consolidacion'
-                ? 'El folio no es un saldo activo con cajas disponibles.'
-                : 'El folio no es un pallet o saldo activo con cajas disponibles.');
+        if (!source.activo || !['pallet', 'saldo'].includes(source.tipo_bulto) || source.cantidad_cajas < 1) {
+            throw new ApiError('El folio no es un pallet o saldo activo con cajas disponibles.');
         }
         if (!['pendiente_prefrio', 'prefrio_aprobado'].includes(source.condicion_termica)) {
             throw new ApiError('El folio posee un estado térmico transitorio o retenido.');
@@ -430,12 +428,12 @@ async function submit() {
     elements.repaError.textContent = '';
     const modality = mode();
     if (modality !== 'consolidacion') { await submitTransformation(modality); return; }
-    if (state.sources.length < 2) { elements.repaError.textContent = 'Agrega al menos dos saldos.'; return; }
+    if (state.sources.length < 2) { elements.repaError.textContent = 'Agrega al menos dos folios: pallets completos o saldos.'; return; }
     if (hardMismatch().length) {
         elements.repaError.textContent = 'Cliente, especie, marca y estado térmico deben ser idénticos.'; return;
     }
     if (state.sources.some((source) => sourceTotal(source) < 1)) {
-        elements.repaError.textContent = 'Cada saldo debe aportar al menos una caja de su composición.'; return;
+        elements.repaError.textContent = 'Cada folio debe aportar al menos una caja de su composición.'; return;
     }
     const type = formValue('tipo_resultado');
     const target = Number(formValue('cantidad_objetivo') || 0);
@@ -625,7 +623,11 @@ elements.addSource.addEventListener('click', () => void addSource());
 elements.sourceInput.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') { event.preventDefault(); void addSource(); }
 });
-elements.form.addEventListener('change', render);
+elements.form.addEventListener('change', (event) => {
+    // Los campos de texto y cantidad ya actualizan con input. Reconstruir al
+    // perder el foco reemplazaba el editor de división justo al entrar en él.
+    if (event.target.matches('select')) render();
+});
 elements.form.elements.modalidad.addEventListener('change', () => {
     state.sources = [];
     state.expandedSources.clear();

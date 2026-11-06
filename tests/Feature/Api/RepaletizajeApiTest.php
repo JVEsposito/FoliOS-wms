@@ -26,10 +26,16 @@ class RepaletizajeApiTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_cambia_un_pallet_o_saldo_a_un_folio_nuevo_sin_alterar_su_composicion(): void
+    public static function tiposDeOrigen(): array
+    {
+        return ['saldo' => ['saldo'], 'pallet completo' => ['pallet']];
+    }
+
+    #[DataProvider('tiposDeOrigen')]
+    public function test_cambia_un_pallet_o_saldo_a_un_folio_nuevo_sin_alterar_su_composicion(string $tipo): void
     {
         [$token, $temporada] = $this->contexto();
-        $origen = $this->folio($temporada, 'SAL-CAMBIO', 60);
+        $origen = $this->folio($temporada, 'SAL-CAMBIO', 60, tipo: TipoBulto::from($tipo));
 
         $this->withToken($token)->postJson('/api/validacion/repaletizajes', [
             'turno' => 'A',
@@ -41,13 +47,14 @@ class RepaletizajeApiTest extends TestCase
             ]],
             'resultados' => [[
                 'numero_folio' => 'SAL-CAMBIO-NUEVO',
-                'tipo_resultado' => 'saldo',
-                'cantidad_objetivo' => 120,
+                'tipo_resultado' => $tipo,
+                'cantidad_objetivo' => $tipo === 'pallet' ? 60 : 120,
                 'cantidad_resultante' => 60,
             ]],
         ])->assertOk()
             ->assertJsonPath('data.modalidad', 'cambio_folio')
             ->assertJsonPath('data.resultados.0.folio.numero_folio', 'SAL-CAMBIO-NUEVO')
+            ->assertJsonPath('data.resultados.0.folio.tipo_bulto', $tipo)
             ->assertJsonPath('data.resultados.0.cantidad_resultante', 60);
 
         $this->assertDatabaseHas('folios', [
@@ -58,6 +65,97 @@ class RepaletizajeApiTest extends TestCase
         $nuevo = Folio::query()->where('numero_folio', 'SAL-CAMBIO-NUEVO')->firstOrFail();
         $this->assertSame(60, $nuevo->datos_externos['cantidad_cajas']);
         $this->assertSame('111', $nuevo->datos_externos['composicion'][0]['csg']);
+    }
+
+    public static function origenesParaConsolidar(): array
+    {
+        return [
+            'pallet conservado y saldo' => ['pallet', 'saldo', 'conservar'],
+            'saldo y pallet con folio nuevo' => ['saldo', 'pallet', 'nuevo'],
+            'dos pallets con folio nuevo' => ['pallet', 'pallet', 'nuevo'],
+        ];
+    }
+
+    #[DataProvider('origenesParaConsolidar')]
+    public function test_consolida_pallets_completos_y_saldos_sin_duplicar_cajas(string $tipoA, string $tipoB, string $estrategia): void
+    {
+        [$token, $temporada] = $this->contexto();
+        $primero = $this->folio($temporada, 'ORIGEN-A', 80, tipo: TipoBulto::from($tipoA));
+        $segundo = $this->folio($temporada, 'ORIGEN-B', 80, tipo: TipoBulto::from($tipoB));
+        $numero = $estrategia === 'conservar' ? $primero->numero_folio : 'RESULTADO-NUEVO';
+        $payload = ['operacion_id' => (string) Str::uuid(), 'turno' => 'A', 'modalidad' => 'consolidacion',
+            'tipo_resultado' => 'pallet', 'estrategia_folio' => $estrategia, 'numero_folio_resultante' => $numero,
+            'folio_conservado_id' => $estrategia === 'conservar' ? $primero->id : null, 'cantidad_objetivo' => 160,
+            'origenes' => [['folio_id' => $primero->id, 'cantidad_aportada' => 80], ['folio_id' => $segundo->id, 'cantidad_aportada' => 80]]];
+        $respuesta = $this->withToken($token)->postJson('/api/validacion/repaletizajes', $payload)->assertOk()
+            ->assertJsonPath('data.folio_resultante.tipo_bulto', 'pallet')->assertJsonPath('data.cantidad_resultante', 160);
+        $this->withToken($token)->postJson('/api/validacion/repaletizajes', $payload)->assertOk()->assertJsonPath('data.id', $respuesta->json('data.id'));
+        $resultado = Folio::where('numero_folio', $numero)->sole();
+        $this->assertSame(160, $resultado->datos_externos['cantidad_cajas']);
+        $this->assertSame(160, collect($resultado->datos_externos['composicion'])->sum('cantidad_cajas'));
+        $this->assertFalse($segundo->refresh()->activo);
+        $this->assertSame($estrategia === 'conservar', $primero->refresh()->activo);
+        $this->assertDatabaseCount('repaletizajes', 1);
+        $this->assertDatabaseHas('repaletizaje_detalles', ['folio_origen_id' => $primero->id, 'tipo_bulto_antes' => $tipoA]);
+        $this->assertDatabaseHas('repaletizaje_detalles', ['folio_origen_id' => $segundo->id, 'tipo_bulto_antes' => $tipoB]);
+    }
+
+    public function test_un_pallet_aporta_cajas_deja_saldo_y_anular_recupera_el_pallet_original(): void
+    {
+        [$token, $temporada] = $this->contexto();
+        $pallet = $this->folio($temporada, 'PAL-240', 240, tipo: TipoBulto::Pallet);
+        $saldo = $this->folio($temporada, 'SAL-40', 40, csg: '222');
+        $payload = ['operacion_id' => (string) Str::uuid(), 'turno' => 'A', 'modalidad' => 'consolidacion',
+            'tipo_resultado' => 'pallet', 'estrategia_folio' => 'nuevo', 'numero_folio_resultante' => 'PAL-REARMADO', 'cantidad_objetivo' => 240,
+            'origenes' => [['folio_id' => $pallet->id, 'cantidad_aportada' => 200], ['folio_id' => $saldo->id, 'cantidad_aportada' => 40]]];
+        $id = $this->withToken($token)->postJson('/api/validacion/repaletizajes', $payload)->assertOk()->json('data.id');
+        $this->assertSame(TipoBulto::Saldo, $pallet->refresh()->tipo_bulto);
+        $this->assertSame(40, $pallet->datos_externos['cantidad_cajas']);
+        $this->assertSame(40, collect($pallet->datos_externos['composicion'])->sum('cantidad_cajas'));
+        $resultado = Folio::where('numero_folio', 'PAL-REARMADO')->sole();
+        $porCsg = collect($resultado->datos_externos['composicion'])->groupBy('csg')->map(fn ($filas) => $filas->sum('cantidad_cajas'))->all();
+        $this->assertSame([111 => 200, 222 => 40], $porCsg);
+        $otro = $this->folio($temporada, 'SAL-OTRO', 10);
+        $this->withToken($token)->postJson('/api/validacion/repaletizajes', [...$payload,
+            'operacion_id' => (string) Str::uuid(), 'numero_folio_resultante' => 'NO-DEBE-CREARSE',
+            'origenes' => [['folio_id' => $pallet->id, 'cantidad_aportada' => 41], ['folio_id' => $otro->id, 'cantidad_aportada' => 10]]])
+            ->assertUnprocessable()->assertJsonPath('message', 'El folio PAL-240 solo dispone de 40 cajas.');
+        $this->assertDatabaseMissing('folios', ['numero_folio' => 'NO-DEBE-CREARSE']);
+        $this->assertSame(10, $otro->refresh()->datos_externos['cantidad_cajas']);
+        $supervisor = $this->token(RolUsuario::SupervisorFrio, 'SUP-PALLET');
+        $this->conToken($supervisor)->postJson("/api/validacion/repaletizajes/{$id}/anular", [
+            'operacion_id' => (string) Str::uuid(), 'motivo' => 'Rearmado registrado por error.',
+        ])->assertOk();
+        $this->assertSame(TipoBulto::Pallet, $pallet->refresh()->tipo_bulto);
+        $this->assertSame(240, $pallet->datos_externos['cantidad_cajas']);
+        $this->assertTrue($pallet->activo);
+        $this->assertTrue($saldo->refresh()->activo);
+        $this->assertSame(40, $saldo->datos_externos['cantidad_cajas']);
+        $this->assertFalse($resultado->refresh()->activo);
+    }
+
+    public function test_baja_altura_de_un_pallet_completo_sin_perder_cajas(): void
+    {
+        [$token, $temporada] = $this->contexto();
+        $pallet = $this->folio($temporada, 'PAL-ALTO', 240, tipo: TipoBulto::Pallet);
+        $clave = $this->withToken($token)->getJson('/api/validacion/repaletizajes/folios/PAL-ALTO')->assertOk()->json('composicion.0.clave');
+        $this->withToken($token)->postJson('/api/validacion/repaletizajes', [
+            'operacion_id' => (string) Str::uuid(), 'turno' => 'A', 'modalidad' => 'division',
+            'origenes' => [['folio_id' => $pallet->id, 'cantidad_aportada' => 240]],
+            'resultados' => [
+                ['numero_folio' => 'PAL-BAJO', 'tipo_resultado' => 'pallet', 'cantidad_objetivo' => 180, 'cantidad_resultante' => 180,
+                    'composicion' => [['clave' => $clave, 'cantidad_cajas' => 180]]],
+                ['numero_folio' => 'SAL-ALTURA', 'tipo_resultado' => 'saldo', 'cantidad_objetivo' => 240, 'cantidad_resultante' => 60,
+                    'composicion' => [['clave' => $clave, 'cantidad_cajas' => 60]]],
+            ],
+        ])->assertOk()->assertJsonCount(2, 'data.resultados');
+        $bajo = Folio::where('numero_folio', 'PAL-BAJO')->sole();
+        $resto = Folio::where('numero_folio', 'SAL-ALTURA')->sole();
+        $this->assertSame(TipoBulto::Pallet, $bajo->tipo_bulto);
+        $this->assertSame(TipoBulto::Saldo, $resto->tipo_bulto);
+        $this->assertSame(180, $bajo->datos_externos['cantidad_cajas']);
+        $this->assertSame(60, $resto->datos_externos['cantidad_cajas']);
+        $this->assertFalse($pallet->refresh()->activo);
     }
 
     public static function cambiosFolioParaCarga(): array

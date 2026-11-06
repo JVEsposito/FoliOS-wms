@@ -16,7 +16,7 @@
             <div class="office-access__brand repa-access-brand">
                 <div class="office-logo" aria-hidden="true">⇄</div>
                 <p class="eyebrow">FoliOS · REPALETIZAJES</p>
-                <h1 id="officeAccessTitle">Consolida saldos sin perder su composición.</h1>
+                <h1 id="officeAccessTitle">Repaletiza pallets y saldos sin perder su composición.</h1>
                 <p>El resultado puede ser pallet o saldo, conservar un folio o recibir otro número escrito o escaneado.</p>
                 <div class="feature-row"><span>Genealogía</span><span>MIX visible</span><span>Estado térmico protegido</span></div>
             </div>
@@ -35,7 +35,7 @@
             <section class="repa-workspace">
                 <header class="repa-heading">
                     <div>
-                        <p class="eyebrow">CONSOLIDACIÓN DE SALDOS Y TRANSFORMACIONES</p>
+                        <p class="eyebrow">CONSOLIDACIÓN Y TRANSFORMACIÓN DE PALLETS Y SALDOS</p>
                         <h1>Repaletizajes</h1>
                         <p>Cliente, especie, marca y estado térmico nunca se mezclan. Las demás diferencias se informan y quedan trazadas como MIX.</p>
                     </div>
@@ -46,14 +46,14 @@
                     <section class="panel repa-builder">
                         <div class="repa-panel-heading">
                             <div><p class="eyebrow">NUEVA REPA</p><h2>Configurar resultado</h2></div>
-                            <span id="sourceCount">0 saldos</span>
+                            <span id="sourceCount">0 folios</span>
                         </div>
                         <form id="repaForm" novalidate>
                             <div class="repa-grid">
                                 <label>
                                     <span>Modalidad *</span>
                                     <select name="modalidad">
-                                        <option value="consolidacion">Consolidar saldos (N → 1)</option>
+                                        <option value="consolidacion">Consolidar folios (N → 1)</option>
                                         <option value="cambio_folio">Cambiar folio (1 → 1)</option>
                                         <option value="division">Dividir bulto (1 → 2)</option>
                                     </select>
@@ -93,7 +93,7 @@
                                 </label>
                                 <label id="keptFolioField">
                                     <span>Folio que se conserva *</span>
-                                    <select name="folio_conservado_id"><option value="">Agrega primero los saldos</option></select>
+                                    <select name="folio_conservado_id"><option value="">Agrega primero los folios</option></select>
                                 </label>
                                 <label class="is-hidden" id="newFolioField">
                                     <span>Folio resultante *</span>
@@ -140,7 +140,7 @@
 
                             <div class="source-entry">
                                 <label>
-                                    <span id="sourceInputLabel">Agregar saldo por folio</span>
+                                    <span id="sourceInputLabel">Agregar pallet o saldo por folio</span>
                                     <input id="sourceFolioInput" maxlength="80" autocomplete="off" placeholder="Escanear o escribir folio">
                                 </label>
                                 <button class="secondary-button" id="addSourceButton" type="button">+ Agregar folio</button>
@@ -153,7 +153,7 @@
                             </div>
                             <div class="mix-warnings is-hidden" id="mixWarnings"></div>
                             <div class="source-overview is-hidden" id="sourceOverview" aria-live="polite"></div>
-                            <div class="source-list" id="sourceList"><p class="empty-copy">Agrega al menos dos folios tipo saldo.</p></div>
+                            <div class="source-list" id="sourceList"><p class="empty-copy">Agrega al menos dos folios: pallets completos o saldos.</p></div>
 
                             <div class="source-list is-hidden" id="divisionEditor"></div>
 
