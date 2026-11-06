@@ -13,7 +13,10 @@ for (const width of [1280,390]) test(`Control de personal: cierre nocturno, conf
     const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined,args:['--no-sandbox','--disable-gpu']});
     try {
         const context = await browser.newContext({viewport:{width,height:950}});
-        await context.addInitScript(() => {localStorage.setItem('estiba_wms_office_token','fixture');});
+        await context.addInitScript((user) => {
+            localStorage.setItem('estiba_wms_office_token', 'fixture');
+            localStorage.setItem('estiba_wms_office_identity', JSON.stringify(user));
+        }, identity);
         const response = fixture(); const writes=[]; let conflict=false; let exportUrl;
         await context.route('http://localhost/**', async (route) => {
             const path = new URL(route.request().url()).pathname;
