@@ -17,7 +17,7 @@ import {
 import { ScanInput, ScanInputHandle } from '../components/ui/ScanInput';
 import { isPdaBuild } from '../config/appVariant';
 import { AuthSession } from '../domain/estiba';
-import { Repalletizing, RepalletizingFolio } from '../domain/repaletizaje';
+import { Repalletizing, RepalletizingComposition, RepalletizingFolio } from '../domain/repaletizaje';
 import {
   createRepalletizing,
   findRepalletizingFolio,
@@ -108,8 +108,11 @@ export function RepalletizingScreen({ auth, baseUrl, onLogout, standalone = fals
   );
 
   const mixFields = useMemo(
-    () => MIX_FIELDS.filter(({ key }) => distinctCount(sources, key) > 1),
-    [sources],
+    () => MIX_FIELDS.filter(({ key }) => {
+      const values = resultComposition.map((line) => String(line[key] ?? '').trim().toUpperCase());
+      return new Set(values).size > 1 || values.includes('MIX');
+    }),
+    [resultComposition],
   );
 
   const actualResultNumber = strategy === 'conservar'
@@ -221,6 +224,10 @@ export function RepalletizingScreen({ auth, baseUrl, onLogout, standalone = fals
     }
     if (!actualResultNumber) {
       setError('Define el folio resultante.');
+      return;
+    }
+    if (sources.some((source) => source.desglose_incompleto && sourceTotal(source) < source.cantidad_cajas)) {
+      setError('Regulariza el desglose del MIX antes de aportar solo parte de sus cajas.');
       return;
     }
     if (sources.some((source) => (
@@ -397,6 +404,7 @@ export function RepalletizingScreen({ auth, baseUrl, onLogout, standalone = fals
               <View key={line.clave} style={styles.compositionLine}>
                 <View style={styles.sourceCopy}>
                   <Text style={styles.sourceMeta}>CSG {line.csg} · {line.fecha_embalaje ?? 'Sin fecha'}</Text>
+                  <Text style={styles.sourceMeta}>{compositionDescription(line)}</Text>
                   <Text style={styles.sourceMeta}>{line.cantidad_cajas} cajas disponibles</Text>
                 </View>
                 <Field label="Aporta">
@@ -409,6 +417,7 @@ export function RepalletizingScreen({ auth, baseUrl, onLogout, standalone = fals
                 </Field>
               </View>
             ))}
+            {source.desglose_incompleto ? <Text style={styles.error}>MIX sin cantidades por componente. Regulariza el desglose antes de aportar parcialmente.</Text> : null}
             <Text style={styles.remaining}>
               Queda {Math.max(0, source.cantidad_cajas - sourceTotal(source))}
             </Text>
@@ -426,8 +435,8 @@ export function RepalletizingScreen({ auth, baseUrl, onLogout, standalone = fals
             {' · '}{sources[0]?.condicion_termica ?? '—'}
           </Text>
           {resultComposition.map((line) => (
-            <View key={`${line.csg}-${line.fecha_embalaje}-${line.predio}`} style={styles.previewCompositionLine}>
-              <Text style={styles.previewCompositionText}>CSG {line.csg} · {line.fecha_embalaje ?? 'Sin fecha'}</Text>
+            <View key={line.clave} testID={`repa-composition-result-${line.clave}`} style={styles.previewCompositionLine}>
+              <Text style={styles.previewCompositionText}>CSG {line.csg} · {line.fecha_embalaje ?? 'Sin fecha'} · {compositionDescription(line)}</Text>
               <Text style={styles.previewCompositionQuantity}>{line.cantidad_cajas} cajas</Text>
             </View>
           ))}
@@ -501,26 +510,19 @@ function allocateComposition(
   });
 }
 
-function aggregateComposition(sources: Source[]): Array<{
-  csg: string;
-  predio: string | null;
-  fecha_embalaje: string | null;
-  cantidad_cajas: number;
-}> {
-  const grouped = new Map<string, {
-    csg: string;
-    predio: string | null;
-    fecha_embalaje: string | null;
-    cantidad_cajas: number;
-  }>();
+function compositionDescription(line: RepalletizingComposition): string {
+  const fields: Array<[string, keyof RepalletizingComposition]> = [['Calibre', 'calibre'], ['Variedad', 'variedad'], ['Envase', 'envase'], ['Categoría', 'categoria'], ['Cuartel', 'cuartel'], ['Lote', 'lote_materia_prima'], ['Proceso', 'proceso_packing']];
+  return fields.filter(([, field]) => line[field]).map(([name, field]) => `${name} ${line[field]}`).join(' · ');
+}
+
+function aggregateComposition(sources: Source[]): RepalletizingComposition[] {
+  const grouped = new Map<string, RepalletizingComposition>();
   sources.flatMap((source) => source.composicion).forEach((line) => {
     const amount = numeric(line.aporte);
     if (!amount) return;
-    const key = `${line.csg}|${line.predio ?? ''}|${line.fecha_embalaje ?? ''}`;
+    const key = line.clave;
     const current = grouped.get(key) ?? {
-      csg: line.csg,
-      predio: line.predio,
-      fecha_embalaje: line.fecha_embalaje,
+      ...line,
       cantidad_cajas: 0,
     };
     current.cantidad_cajas += amount;

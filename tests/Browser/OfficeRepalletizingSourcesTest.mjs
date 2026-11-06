@@ -11,7 +11,7 @@ const source = (number, type, boxes, active = true) => ({
     existe: true, id: number, numero_folio: number, tipo_bulto: type, activo: active, cantidad_cajas: boxes,
     cliente: 'Cliente', especie: 'Cereza', marca: 'Marca', variedad: 'Santina', calibre: '2J', envase: '5 kg', categoria: 'Exportación',
     condicion_termica: 'pendiente_prefrio', csg: '111', predio: 'Huerto', cuartel: 'A',
-    composicion: [{ clave: `line-${number}`, csg: '111', predio: 'Huerto', fecha_embalaje: '2026-11-06', cantidad_cajas: boxes }],
+    composicion: [{ clave: `line-${number}`, csg: '111', predio: 'Huerto', fecha_embalaje: '2026-11-06', calibre: '2J', variedad: 'Santina', envase: '5 kg', categoria: 'Exportación', cantidad_cajas: boxes }],
 });
 
 for (const width of [1280, 390]) test(`Oficina admite pallets completos en consolidación, cambio y división en ${width}px`, async () => {
@@ -24,6 +24,10 @@ for (const width of [1280, 390]) test(`Oficina admite pallets completos en conso
                 puede_consultar_repaletizajes: true, puede_registrar_repaletizajes: true, modulos_acceso: ['frigorifico.repaletizajes'] }));
         });
         const entries = [source('600000209', 'pallet', 240), source('SAL-40', 'saldo', 40), source('INACTIVO', 'pallet', 240, false)];
+        entries.push({ ...source('MIX-240', 'pallet', 240), calibre: 'MIX', composicion: [
+            { clave: 'mix-2j', csg: '111', predio: 'Huerto', fecha_embalaje: '2026-11-06', calibre: '2J', variedad: 'Royal Dawn', envase: '5 kg', cantidad_cajas: 100 },
+            { clave: 'mix-3j', csg: '111', predio: 'Huerto', fecha_embalaje: '2026-11-06', calibre: '3J', variedad: 'Royal Dawn', envase: '5 kg', cantidad_cajas: 140 },
+        ] });
         const writes = []; const errors = [];
         await context.route('http://localhost/**', async (route) => {
             const request = route.request(); const path = new URL(request.url()).pathname;
@@ -88,6 +92,32 @@ for (const width of [1280, 390]) test(`Oficina admite pallets completos en conso
         await submit();
         assert.equal(writes[2].modalidad, 'division');
         assert.deepEqual(writes[2].resultados.map((row) => row.cantidad_resultante), [180, 60]);
+        await field('modalidad').selectOption('consolidacion'); await field('tipo_resultado').selectOption('saldo');
+        await field('cantidad_objetivo').fill('240'); await field('estrategia_folio').selectOption('nuevo');
+        await field('numero_folio_resultante').fill('RESULTADO-SELECTIVO');
+        await add('MIX-240');
+        assert.equal(await page.locator('.source-card [data-composition-key]').count(), 2);
+        assert.match(await page.locator('.composition-lines').innerText(), /Calibre 2J.*Variedad Royal Dawn/s);
+        assert.match(await page.locator('.composition-lines').innerText(), /Calibre 3J/);
+        await add('SAL-40');
+        await page.locator('[data-composition-key="mix-2j"]').fill('0');
+        await page.locator('[data-composition-key="mix-3j"]').fill('60');
+        assert.equal(await page.locator('.composition-preview p').count(), 2);
+        assert.match(await page.locator('.composition-preview').innerText(), /Calibre 3J/);
+        if (process.env.REPA_SCREENSHOT_DIR) await page.screenshot({ path: resolve(process.env.REPA_SCREENSHOT_DIR, `repa-mix-${width}.png`), fullPage: true });
+        await submit();
+        assert.deepEqual(writes[3].origenes[0].composicion, [{ clave: 'mix-3j', cantidad_aportada: 60 }]);
+        await field('modalidad').selectOption('division'); await add('MIX-240');
+        await field('resultado_1_numero').fill('PURO-2J'); await field('resultado_2_numero').fill('PURO-3J');
+        await field('resultado_1_tipo').selectOption('pallet'); await field('resultado_2_tipo').selectOption('pallet');
+        await field('resultado_1_objetivo').fill('100'); await field('resultado_2_objetivo').fill('140');
+        await page.locator('[data-division-output="1"][data-composition-key="mix-3j"]').fill('0');
+        assert.match(await page.locator('#divisionEditor').innerText(), /Calibre 2J/);
+        assert.match(await page.locator('#divisionEditor').innerText(), /Calibre 3J/);
+        await submit();
+        assert.deepEqual(writes[4].resultados.map((row) => row.composicion), [
+            [{ clave: 'mix-2j', cantidad_cajas: 100 }], [{ clave: 'mix-3j', cantidad_cajas: 140 }],
+        ]);
         assert.deepEqual(errors, []);
         await context.close();
     } finally { await browser.close(); }

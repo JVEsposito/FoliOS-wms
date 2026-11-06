@@ -8,6 +8,7 @@ use App\Enums\EstadoOperacionalFolio;
 use App\Enums\HabilitacionAlmacenamientoFolio;
 use App\Enums\RolUsuario;
 use App\Enums\TipoBulto;
+use App\Models\ArticuloValidacion;
 use App\Models\Camara;
 use App\Models\Dispositivo;
 use App\Models\Folio;
@@ -604,7 +605,7 @@ class RepaletizajeApiTest extends TestCase
         ])->assertUnprocessable()
             ->assertJsonPath(
                 'message',
-                'El folio SAL-MIXTO posee más de un CSG o fecha. Indica cuántas cajas aporta cada composición.',
+                'El folio SAL-MIXTO posee más de una composición. Indica cuántas cajas aporta cada componente.',
             );
 
         $respuesta = $this->withToken($token)->postJson('/api/validacion/repaletizajes', [
@@ -1090,6 +1091,107 @@ class RepaletizajeApiTest extends TestCase
         return $usuario
             ->crearTokenParaDispositivo($dispositivo, "test-{$codigo}")
             ->plainTextToken;
+    }
+
+    private function mixtoCalibres(Temporada $temporada, string $numero = 'MIX-CALIBRES'): Folio
+    {
+        $folio = $this->folio($temporada, $numero, 240, calibre: 'MIX', tipo: TipoBulto::Pallet);
+        $folio->update(['datos_externos' => [...$folio->datos_externos, 'fecha_embalaje' => '2026-08-10', 'composicion' => [
+            ['csg' => '111', 'predio' => 'Predio', 'fecha_embalaje' => '2026-08-10', 'calibre' => '2J', 'cantidad_cajas' => 100],
+            ['csg' => '111', 'predio' => 'Predio', 'fecha_embalaje' => '2026-08-10', 'calibre' => '3J', 'cantidad_cajas' => 140],
+        ]]]);
+
+        return $folio;
+    }
+
+    public function test_un_mismo_csg_y_fecha_mantiene_calibres_separados_y_descuenta_el_componente_elegido(): void
+    {
+        [$token, $temporada] = $this->contexto();
+        $mixto = $this->mixtoCalibres($temporada);
+        $otro = $this->folio($temporada, 'OTRO-3J', 20, calibre: '3J');
+        $lineas = $this->withToken($token)->getJson('/api/validacion/repaletizajes/folios/MIX-CALIBRES')
+            ->assertOk()->assertJsonCount(2, 'composicion')->assertJsonPath('desglose_incompleto', false)->json('composicion');
+        $porCalibre = collect($lineas)->keyBy('calibre');
+        $this->assertNotSame($porCalibre['2J']['clave'], $porCalibre['3J']['clave']);
+        $this->assertSame([100, 140], collect($lineas)->pluck('cantidad_cajas')->all());
+        $payload = ['turno' => 'A', 'operacion_id' => (string) Str::uuid(), 'tipo_resultado' => 'saldo',
+            'estrategia_folio' => 'nuevo', 'numero_folio_resultante' => 'SOLO-3J', 'cantidad_objetivo' => 240,
+            'origenes' => [
+                ['folio_id' => $mixto->id, 'cantidad_aportada' => 60, 'composicion' => [['clave' => $porCalibre['3J']['clave'], 'cantidad_aportada' => 60]]],
+                ['folio_id' => $otro->id, 'cantidad_aportada' => 20],
+            ]];
+        $this->conToken($token)->postJson('/api/validacion/repaletizajes', [...$payload,
+            'operacion_id' => (string) Str::uuid(),
+            'origenes' => [
+                ['folio_id' => $mixto->id, 'cantidad_aportada' => 141, 'composicion' => [['clave' => $porCalibre['3J']['clave'], 'cantidad_aportada' => 141]]],
+                ['folio_id' => $otro->id, 'cantidad_aportada' => 20],
+            ],
+        ])->assertUnprocessable();
+        $respuesta = $this->conToken($token)->postJson('/api/validacion/repaletizajes', $payload)->assertOk()
+            ->assertJsonPath('data.folio_resultante.calibre', '3J')->assertJsonPath('data.cantidad_resultante', 80);
+        $this->assertSame([100, 80], collect($mixto->fresh()->datos_externos['composicion'])->pluck('cantidad_cajas', 'calibre')->only(['2J', '3J'])->values()->all());
+        $this->assertSame('MIX', $mixto->fresh()->calibre);
+        $this->conToken($token)->postJson('/api/validacion/repaletizajes', $payload)->assertOk();
+        $this->assertSame(180, $mixto->fresh()->datos_externos['cantidad_cajas']);
+        $supervisor = $this->token(RolUsuario::SupervisorFrio, 'SUP-MIX-CALIBRES');
+        $this->conToken($supervisor)->postJson('/api/validacion/repaletizajes/'.$respuesta->json('data.id').'/anular', [
+            'operacion_id' => (string) Str::uuid(), 'motivo' => 'Restaurar composición mixta de prueba',
+        ])->assertOk();
+        $this->assertSame([100, 140], collect($mixto->fresh()->datos_externos['composicion'])->pluck('cantidad_cajas')->all());
+        $this->assertSame(240, $mixto->fresh()->datos_externos['cantidad_cajas']);
+    }
+
+    public function test_dividir_un_mixto_puede_producir_dos_calibres_puros_sin_perder_cajas(): void
+    {
+        [$token, $temporada] = $this->contexto();
+        $mixto = $this->mixtoCalibres($temporada);
+        $lineas = $this->withToken($token)->getJson('/api/validacion/repaletizajes/folios/MIX-CALIBRES')->assertOk()->json('composicion');
+        $this->conToken($token)->postJson('/api/validacion/repaletizajes', [
+            'turno' => 'A', 'operacion_id' => (string) Str::uuid(), 'modalidad' => 'division',
+            'origenes' => [['folio_id' => $mixto->id, 'cantidad_aportada' => 240]],
+            'resultados' => array_map(fn ($linea) => ['numero_folio' => 'DIV-'.$linea['calibre'], 'tipo_resultado' => 'pallet',
+                'cantidad_objetivo' => $linea['cantidad_cajas'], 'cantidad_resultante' => $linea['cantidad_cajas'],
+                'composicion' => [['clave' => $linea['clave'], 'cantidad_cajas' => $linea['cantidad_cajas']]],
+            ], $lineas),
+        ])->assertOk();
+        $this->assertSame('2J', Folio::where('numero_folio', 'DIV-2J')->sole()->calibre);
+        $this->assertSame('3J', Folio::where('numero_folio', 'DIV-3J')->sole()->calibre);
+        $this->assertSame(100, Folio::where('numero_folio', 'DIV-2J')->sole()->datos_externos['cantidad_cajas']);
+        $this->assertSame(140, Folio::where('numero_folio', 'DIV-3J')->sole()->datos_externos['cantidad_cajas']);
+    }
+
+    public function test_recupera_un_desglose_historico_solo_si_la_genealogia_cuadra_exactamente(): void
+    {
+        [$token, $temporada] = $this->contexto();
+        $mixto = $this->mixtoCalibres($temporada);
+        $articuloPrimero = ArticuloValidacion::create(['temporada_id' => $temporada->id,
+            'especie' => 'Cereza', 'variedad' => 'Santina', 'calibre' => '2J', 'envase' => 'Caja 5 kg', 'activo' => true]);
+        $detalle = $mixto->datos_externos['composicion'];
+        $mixto->update(['datos_externos' => [...$mixto->datos_externos,
+            'composicion' => [['csg' => '111', 'predio' => 'Predio', 'fecha_embalaje' => '2026-08-10', 'cantidad_cajas' => 240, 'articulo_validacion_id' => $articuloPrimero->id]],
+            'genealogia_repaletizaje' => array_map(fn ($linea) => [
+                'especificaciones' => ['calibre' => $linea['calibre'], 'variedad' => 'Santina', 'envase' => 'Caja 5 kg', 'categoria' => 'Exportación', 'cuartel' => 'Cuartel'],
+                'composicion_aportada' => [array_diff_key($linea, ['calibre' => true])],
+            ], $detalle),
+        ]]);
+        $original = $mixto->fresh()->datos_externos;
+        $lineas = $this->withToken($token)->getJson('/api/validacion/repaletizajes/folios/MIX-CALIBRES')->assertOk()
+            ->assertJsonCount(2, 'composicion')->assertJsonPath('desglose_incompleto', false)->json('composicion');
+        $this->assertSame([100, 140], collect($lineas)->pluck('cantidad_cajas', 'calibre')->only(['2J', '3J'])->values()->all());
+        $this->assertSame($original, $mixto->fresh()->datos_externos);
+        // Una genealogía anterior al consumo parcial no autoriza inventar qué calibre quedó.
+        $mixto->update(['datos_externos' => [...$original, 'cantidad_cajas' => 120,
+            'composicion' => [['csg' => '111', 'predio' => 'Predio', 'fecha_embalaje' => '2026-08-10', 'cantidad_cajas' => 120]],
+        ]]);
+        $this->conToken($token)->getJson('/api/validacion/repaletizajes/folios/MIX-CALIBRES')->assertOk()
+            ->assertJsonCount(1, 'composicion')->assertJsonPath('desglose_incompleto', true);
+        $otro = $this->folio($temporada, 'OTRO-20', 20);
+        $this->conToken($token)->postJson('/api/validacion/repaletizajes', [
+            'turno' => 'A', 'operacion_id' => (string) Str::uuid(), 'tipo_resultado' => 'saldo',
+            'estrategia_folio' => 'nuevo', 'numero_folio_resultante' => 'NO-ADIVINAR', 'cantidad_objetivo' => 240,
+            'origenes' => [['folio_id' => $mixto->id, 'cantidad_aportada' => 60], ['folio_id' => $otro->id, 'cantidad_aportada' => 20]],
+        ])->assertUnprocessable()->assertJsonPath('message', 'El folio informa MIX sin cantidades por componente. Regulariza el desglose antes de aportar solo parte de sus cajas.');
+        $this->assertSame(120, $mixto->fresh()->datos_externos['cantidad_cajas']);
     }
 
     private function conToken(string $token): self

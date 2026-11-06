@@ -196,20 +196,25 @@ function renderSourceCard(source, transform) {
         </div>
         <div class="composition-lines${expanded ? '' : ' is-collapsed'}">
             ${lines.map((line) => `<label class="composition-line">
-                <span><b>CSG ${escapeHtml(line.csg)}</b>${line.predio ? ` · ${escapeHtml(line.predio)}` : ''}<small>${line.fecha_embalaje ? `Fecha ${escapeHtml(line.fecha_embalaje)}` : 'Fecha no registrada'} · ${line.cantidad_cajas} cajas disponibles</small></span>
+                <span><b>CSG ${escapeHtml(line.csg)}</b>${line.predio ? ` · ${escapeHtml(line.predio)}` : ''}<small>${escapeHtml(compositionDescription(line))}</small><small>${line.fecha_embalaje ? `Fecha ${escapeHtml(line.fecha_embalaje)}` : 'Fecha no registrada'} · ${line.cantidad_cajas} cajas disponibles</small></span>
                 ${transform ? `<b>${line.cantidad_cajas} cajas</b>` : (singleLine
                     ? `<b>Aporta ${line.aporte} de ${line.cantidad_cajas}</b>`
                     : `<input data-composition-source="${escapeHtml(source.id)}" data-composition-key="${escapeHtml(line.clave)}" type="number" min="0" max="${line.cantidad_cajas}" value="${line.aporte}">`)}
             </label>`).join('') || '<p class="empty-copy">Sin composición registrada.</p>'}
         </div>
+        ${source.desglose_incompleto ? '<p class="form-error">MIX sin cantidades por componente. Regulariza el desglose antes de aportar parcialmente o dividir este folio.</p>' : ''}
     </article>`;
+}
+function compositionDescription(line) {
+    return [['Calibre', 'calibre'], ['Variedad', 'variedad'], ['Envase', 'envase'], ['Categoría', 'categoria'], ['Cuartel', 'cuartel'], ['Lote', 'lote_materia_prima'], ['Proceso', 'proceso_packing']]
+        .filter(([, field]) => line[field]).map(([name, field]) => `${name} ${line[field]}`).join(' · ');
 }
 function resultComposition() {
     const grouped = new Map();
     state.sources.flatMap((source) => source.composicion || []).forEach((line) => {
         const amount = Number(line.aporte || 0);
         if (!amount) return;
-        const key = `${line.csg || ''}|${line.predio || ''}|${line.fecha_embalaje || ''}`;
+        const key = line.clave;
         const current = grouped.get(key) || { ...line, cantidad_cajas: 0 };
         current.cantidad_cajas += amount;
         grouped.set(key, current);
@@ -219,6 +224,7 @@ function resultComposition() {
 function compositionCommon(field) {
     const lines = resultComposition();
     if (!lines.length) return '—';
+    if (lines.some((line) => !Object.hasOwn(line, field))) return common(field);
     const values = [...new Set(lines.map((line) => normalized(line[field])))];
     return values.length === 1 ? (lines[0]?.[field] || '—') : 'MIX';
 }
@@ -324,7 +330,7 @@ function render() {
             <div class="division-lines">${state.sources[0].composicion.map((line) => `<div class="division-line">
                 <div class="division-line__identity">
                     <strong>CSG ${escapeHtml(line.csg)}</strong>
-                    <small>${line.predio ? `${escapeHtml(line.predio)} · ` : ''}Fecha ${escapeHtml(line.fecha_embalaje || 'Sin fecha')} · ${line.cantidad_cajas} cajas</small>
+                    <small>${escapeHtml(compositionDescription(line))}</small><small>${line.predio ? `${escapeHtml(line.predio)} · ` : ''}Fecha ${escapeHtml(line.fecha_embalaje || 'Sin fecha')} · ${line.cantidad_cajas} cajas</small>
                 </div>
                 <div class="division-line__outputs">
                     <label><span>SALIDA 1 · ${escapeHtml(normalized(formValue('resultado_1_numero')) || 'FOLIO 1')}</span><input data-division-output="1" data-composition-key="${escapeHtml(line.clave)}" type="number" min="0" max="${line.cantidad_cajas}" value="${line.salida1 ?? line.cantidad_cajas}"></label>
@@ -339,9 +345,7 @@ function render() {
     elements.hardRule.querySelector('strong').textContent = mismatches.length
         ? `INCOMPATIBLE: ${mismatches.map(([, label]) => label).join(', ')}`
         : 'Compatibilidad obligatoria';
-    const mixes = mixFields.filter(([field]) => state.sources.length > 1 && (
-        field === 'csg' || field === 'predio' ? compositionCommon(field) === 'MIX' : common(field) === 'MIX'
-    ));
+    const mixes = mixFields.filter(([field]) => compositionCommon(field) === 'MIX');
     if (compositionCommon('fecha_embalaje') === 'MIX') mixes.push(['fecha_embalaje', 'Fecha de embalaje']);
     elements.mixWarnings.classList.toggle('is-hidden', !mixes.length);
     elements.mixWarnings.innerHTML = mixes.map(([, label]) => (
@@ -358,13 +362,13 @@ function render() {
     elements.previewThermal.textContent = state.sources.length ? common('condicion_termica') : '—';
     const specs = [
         ['Cliente', common('cliente')], ['Especie', common('especie')], ['Marca', common('marca')],
-        ...mixFields.map(([field, label]) => [label, field === 'csg' || field === 'predio' ? compositionCommon(field) : common(field)]),
+        ...mixFields.map(([field, label]) => [label, compositionCommon(field)]),
         ['Fecha de embalaje', compositionCommon('fecha_embalaje')],
     ];
     const composition = resultComposition();
     elements.specPreview.innerHTML = state.sources.length ? specs.map(([label, value]) => (
         `<div><span>${escapeHtml(label.toUpperCase())}</span><strong class="${value === 'MIX' ? 'is-mix' : ''}">${escapeHtml(value || '—')}</strong></div>`
-    )).join('') + `<section class="composition-preview"><span>COMPOSICIÓN RESULTANTE</span>${composition.map((line) => `<p><strong>CSG ${escapeHtml(line.csg)}</strong><b>${escapeHtml(line.fecha_embalaje || 'Sin fecha')} · ${line.cantidad_cajas} cajas</b></p>`).join('') || '<p>Sin cajas asignadas.</p>'}</section>` : '';
+    )).join('') + `<section class="composition-preview"><span>COMPOSICIÓN RESULTANTE</span>${composition.map((line) => `<p><strong>CSG ${escapeHtml(line.csg)} · ${escapeHtml(compositionDescription(line))}</strong><b>${escapeHtml(line.fecha_embalaje || 'Sin fecha')} · ${line.cantidad_cajas} cajas</b></p>`).join('') || '<p>Sin cajas asignadas.</p>'}</section>` : '';
 }
 async function addSource() {
     const number = normalized(elements.sourceInput.value);
@@ -404,6 +408,7 @@ async function addSource() {
             }
         }
         state.sources.push({ ...source, composicion: composition });
+        if (composition.length > 1) state.expandedSources.add(source.id);
         elements.sourceInput.value = '';
         render();
         if (elements.sourceList.classList.contains('has-many')) {
@@ -434,6 +439,9 @@ async function submit() {
     }
     if (state.sources.some((source) => sourceTotal(source) < 1)) {
         elements.repaError.textContent = 'Cada folio debe aportar al menos una caja de su composición.'; return;
+    }
+    if (state.sources.some((source) => source.desglose_incompleto && sourceTotal(source) < source.cantidad_cajas)) {
+        elements.repaError.textContent = 'Regulariza el desglose del MIX antes de aportar solo parte de sus cajas.'; return;
     }
     const type = formValue('tipo_resultado');
     const target = Number(formValue('cantidad_objetivo') || 0);
@@ -482,6 +490,9 @@ async function submit() {
 async function submitTransformation(modality) {
     if (state.sources.length !== 1) { elements.repaError.textContent = 'Agrega exactamente un pallet o saldo.'; return; }
     const source = state.sources[0];
+    if (modality === 'division' && source.desglose_incompleto) {
+        elements.repaError.textContent = 'Regulariza el desglose del MIX antes de dividir sus cajas.'; return;
+    }
     const count = modality === 'division' ? 2 : 1;
     const numbers = Array.from({ length: count }, (_, index) => normalized(formValue(`resultado_${index + 1}_numero`)));
     if (numbers.some((number) => !number) || new Set(numbers).size !== numbers.length) {
@@ -545,7 +556,7 @@ function renderHistory() {
             ${repa.advertencias?.length ? `<p>⚠ ${repa.advertencias.map((item) => escapeHtml(item.campo)).join(' · ')}</p>` : ''}
             <details><summary>Composición (${repa.origenes.length})</summary>
                 ${repa.origenes.map((origin) => `<div class="repa-origin"><span>${escapeHtml(origin.folio.numero_folio)}</span><strong>${origin.cajas_aportadas} cajas</strong></div>`).join('')}
-                ${(repa.folio_resultante?.composicion || []).map((line) => `<div class="repa-origin"><span>CSG ${escapeHtml(line.csg)} · ${escapeHtml(line.fecha_embalaje || 'Sin fecha')}</span><strong>${line.cantidad_cajas} cajas</strong></div>`).join('')}
+                ${(repa.folio_resultante?.composicion || []).map((line) => `<div class="repa-origin"><span>CSG ${escapeHtml(line.csg)} · ${escapeHtml(line.fecha_embalaje || 'Sin fecha')} · ${escapeHtml(compositionDescription(line))}</span><strong>${line.cantidad_cajas} cajas</strong></div>`).join('')}
             </details>
             ${repa.estado === 'confirmado' && (can('puede_imprimir_etiquetas_pt') || can('puede_consultar_repaletizajes')) ? (repa.resultados || []).map((result) => result.folio?.activo ? `<a class="secondary-button" href="/oficina/validacion/etiquetas?folio=${encodeURIComponent(result.folio.numero_folio)}&tipo=planta&copias=4">Imprimir etiquetas · ${escapeHtml(result.folio.numero_folio)}</a>` : '').join('') : ''}
             ${repa.estado === 'confirmado' && can('puede_consultar_contraparte_sag') ? `<a class="secondary-button" href="/oficina/frigorifico/contraparte-sag?repa=${encodeURIComponent(repa.id)}">Documento SAG</a>` : ''}

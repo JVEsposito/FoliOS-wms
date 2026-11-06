@@ -17,7 +17,7 @@ class ComposicionEtiquetaPt
         $datos = $folio->datos_externos ?? [];
         $lineas = $datos['composicion'] ?? [];
         if ($lineas === []) {
-            $lineas = [['cantidad_cajas' => $datos['cantidad_cajas'] ?? 0, 'csg' => $datos['csg'] ?? '', 'fecha_embalaje' => $datos['fecha_embalaje'] ?? null]];
+            $lineas = [['cantidad_cajas' => $datos['cantidad_cajas'] ?? 0, 'csg' => $datos['csg'] ?? '', 'predio' => $datos['predio'] ?? null, 'fecha_embalaje' => $datos['fecha_embalaje'] ?? null]];
         }
 
         return array_values(array_map(function ($linea) use ($folio, $datos): array {
@@ -37,11 +37,16 @@ class ComposicionEtiquetaPt
                     }
                 }
             }
-            foreach (['especie', 'variedad', 'envase', 'cliente'] as $campo) {
+            foreach (['especie', 'variedad', 'calibre', 'envase', 'categoria', 'cuartel', 'cliente'] as $campo) {
                 $valores = array_values(array_unique(array_filter(array_column($heredados, $campo))));
                 $fallback = count($valores) === 1 ? $valores[0] : (count($valores) > 1 ? 'MIX' : null);
                 $linea[$campo] = $linea[$campo] ?? $articulo[$campo] ?? $fallback
-                    ?? ($campo === 'variedad' ? $folio->variedad : ($campo === 'cliente' ? $folio->exportadora : ($datos[$campo] ?? '')));
+                    ?? match ($campo) {
+                        'variedad' => $folio->variedad,
+                        'calibre' => $folio->calibre,
+                        'cliente' => $folio->exportadora,
+                        default => $datos[$campo] ?? '',
+                    };
             }
             $linea['envase_validacion_id'] = $linea['envase_validacion_id'] ?? $articulo['envase_validacion_id'] ?? null;
             $linea['articulo_validacion_id'] = $articuloId;

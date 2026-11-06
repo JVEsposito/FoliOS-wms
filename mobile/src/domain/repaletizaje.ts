@@ -18,6 +18,7 @@ export type RepalletizingFolio = {
   predio: string | null;
   cuartel: string | null;
   composicion: RepalletizingComposition[];
+  desglose_incompleto?: boolean;
   ubicacion?: {
     camara: { id: string; codigo: string; nombre: string } | null;
     posicion: { id: string; etiqueta: string } | null;
@@ -31,6 +32,13 @@ export type RepalletizingComposition = {
   predio: string | null;
   fecha_embalaje: string | null;
   cantidad_cajas: number;
+  variedad?: string | null;
+  calibre?: string | null;
+  envase?: string | null;
+  categoria?: string | null;
+  cuartel?: string | null;
+  lote_materia_prima?: string | null;
+  proceso_packing?: string | null;
 };
 
 export type CreateRepalletizing = {

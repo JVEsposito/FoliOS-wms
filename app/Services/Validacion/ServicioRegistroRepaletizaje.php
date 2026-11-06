@@ -213,7 +213,7 @@ class ServicioRegistroRepaletizaje
         return [
             'folio' => (string) ($origen['numero_folio'] ?? ''),
             'fecha' => filled($fecha) ? $this->fecha((string) $fecha) : null,
-            'calibre' => $origen['especificaciones']['calibre'] ?? null,
+            'calibre' => $linea['calibre'] ?? $origen['especificaciones']['calibre'] ?? null,
             'csg' => $linea['csg'] ?? ($origen['especificaciones']['csg'] ?? null),
             'cajas' => (int) ($linea['cantidad_cajas'] ?? $linea['cantidad_aportada'] ?? 0),
         ];

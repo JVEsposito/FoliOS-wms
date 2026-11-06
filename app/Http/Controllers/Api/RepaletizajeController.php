@@ -11,7 +11,6 @@ use App\Models\PersonalAccessToken;
 use App\Models\Repaletizaje;
 use App\Models\RepaletizajeDetalle;
 use App\Services\Temporadas\ServicioTemporadaActiva;
-use App\Services\Validacion\ComposicionEtiquetaPt;
 use App\Services\Validacion\ServicioRegistroRepaletizaje;
 use App\Services\Validacion\ServicioRepaletizaje;
 use Illuminate\Http\JsonResponse;
@@ -171,6 +170,8 @@ class RepaletizajeController extends Controller
             ]);
         }
 
+        $composicion = $this->composicionFolio($folio);
+
         return response()->json([
             'existe' => true,
             'id' => $folio->id,
@@ -190,7 +191,8 @@ class RepaletizajeController extends Controller
             'csg' => $folio->datos_externos['csg'] ?? null,
             'predio' => $folio->datos_externos['predio'] ?? null,
             'cuartel' => $folio->datos_externos['cuartel'] ?? null,
-            'composicion' => $this->composicionFolio($folio),
+            'composicion' => $composicion,
+            'desglose_incompleto' => app(ServicioRepaletizaje::class)->desgloseIncompleto($composicion),
             'ubicacion' => $folio->ubicacionActual ? [
                 'camara' => $folio->ubicacionActual->camara?->only([
                     'id',
@@ -347,49 +349,6 @@ class RepaletizajeController extends Controller
     /** @return array<int, array<string, mixed>> */
     private function composicionFolio(Folio $folio): array
     {
-        $datos = $folio->datos_externos ?? [];
-        $fechaPredeterminada = filled($datos['fecha_embalaje'] ?? null)
-            ? (string) $datos['fecha_embalaje']
-            : $this->fechaValidacionFolio($folio);
-        $lineas = collect(app(ComposicionEtiquetaPt::class)->lineas($folio))
-            ->filter(fn (mixed $linea): bool => is_array($linea)
-                && array_key_exists('cantidad_cajas', $linea)
-                && array_key_exists('csg', $linea))
-            ->map(function (array $linea) use ($fechaPredeterminada): array {
-                if (! filled($linea['fecha_embalaje'] ?? null)) {
-                    $linea['fecha_embalaje'] = $fechaPredeterminada;
-                }
-
-                return $linea;
-            });
-
-        if ($lineas->isEmpty() && (int) ($datos['cantidad_cajas'] ?? 0) > 0) {
-            $lineas->push([
-                'origen_validacion_id' => null,
-                'csg' => $datos['csg'] ?? 'SIN CSG',
-                'predio' => $datos['predio'] ?? null,
-                'fecha_embalaje' => $fechaPredeterminada,
-                'cantidad_cajas' => (int) $datos['cantidad_cajas'],
-            ]);
-        }
-
-        return $lineas->map(function (array $linea): array {
-            $linea['clave'] = ServicioRepaletizaje::claveComposicion($linea);
-            $linea['cantidad_cajas'] = (int) $linea['cantidad_cajas'];
-
-            return $linea;
-        })->values()->all();
-    }
-
-    private function fechaValidacionFolio(Folio $folio): ?string
-    {
-        $folio->loadMissing(
-            'validacionPallet:id,folio_id,generado_dispositivo_at,recibido_servidor_at',
-        );
-        $fecha = $folio->validacionPallet?->generado_dispositivo_at
-            ?? $folio->validacionPallet?->recibido_servidor_at
-            ?? $folio->fecha_ingreso;
-
-        return $fecha?->setTimezone(config('app.operational_timezone'))->toDateString();
+        return app(ServicioRepaletizaje::class)->composicionFolio($folio);
     }
 }
