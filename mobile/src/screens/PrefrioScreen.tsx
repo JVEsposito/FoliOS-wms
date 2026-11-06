@@ -1,5 +1,5 @@
 import { font } from '../theme/typography';
-import { FieldHeader } from '../components/field/FieldHeader';
+import { FieldHeader, type FieldLeaveTarget } from '../components/field/FieldHeader';
 import * as Crypto from 'expo-crypto';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -74,6 +74,7 @@ type PrefrioScreenProps = {
   auth: AuthSession;
   baseUrl: string | null;
   onLogout: () => void;
+  onBusyChange?: (busy: boolean) => void;
 };
 
 type EventDraft = {
@@ -117,7 +118,7 @@ function parseOperationalDateTime(value: string): string | null {
   return date.toISOString();
 }
 
-export function PrefrioScreen({ auth, baseUrl, onLogout }: PrefrioScreenProps) {
+export function PrefrioScreen({ auth, baseUrl, onLogout, onBusyChange }: PrefrioScreenProps) {
   const scannerRef = useRef<TextInput>(null);
   const flushing = useRef<Promise<FlushOutcome> | null>(null);
   const synchronizing = useRef<Promise<void> | null>(null);
@@ -188,6 +189,10 @@ export function PrefrioScreen({ auth, baseUrl, onLogout }: PrefrioScreenProps) {
   const processHasBlockingIssue = processQueue.some((item) => item.status !== 'pendiente');
   const processActionsBlocked = operationBusy || processHasBlockingIssue;
   const unresolved = outbox.filter((item) => item.status !== 'pendiente').length;
+  useEffect(() => {
+    onBusyChange?.(busy || operationBusy);
+    return () => onBusyChange?.(false);
+  }, [busy, operationBusy, onBusyChange]);
 
   useEffect(() => {
     void initialize();
@@ -945,19 +950,20 @@ export function PrefrioScreen({ auth, baseUrl, onLogout }: PrefrioScreenProps) {
     }
   }
 
-  function logout() {
+  function beforeLeave(proceed: () => void, target: FieldLeaveTarget) {
+    const action = target === 'module' ? 'Cambiar módulo' : 'Cerrar sesión';
     if (outbox.some((item) => item.status === 'pendiente')) {
       Alert.alert(
         'Operaciones pendientes',
-        'La bandeja permanece guardada en esta PDA. ¿Deseas cerrar la sesión igualmente?',
+        `La bandeja permanece guardada en esta PDA. ¿Deseas ${action.toLowerCase()} igualmente?`,
         [
           { text: 'Volver', style: 'cancel' },
-          { text: 'Cerrar sesión', style: 'destructive', onPress: onLogout },
+          { text: action, style: 'destructive', onPress: proceed },
         ],
       );
       return;
     }
-    onLogout();
+    proceed();
   }
 
   if (!cache.synced_at && busy) {
@@ -972,7 +978,7 @@ export function PrefrioScreen({ auth, baseUrl, onLogout }: PrefrioScreenProps) {
   return (
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
-        <FieldHeader area="frigorifico" auth={auth} title="Prefrío · Túneles" offline={!online} onLogout={logout}><Pressable accessibilityLabel="Sincronizar prefrío" onPress={() => void synchronize()} style={styles.secondaryButton}><Text style={styles.secondaryButtonText}>↻</Text></Pressable></FieldHeader>
+        <FieldHeader area="frigorifico" auth={auth} title="Prefrío · Túneles" offline={!online} busy={busy || operationBusy} onBeforeLeave={beforeLeave} onLogout={onLogout}><Pressable accessibilityLabel="Sincronizar prefrío" onPress={() => void synchronize()} style={styles.secondaryButton}><Text style={styles.secondaryButtonText}>↻</Text></Pressable></FieldHeader>
 
         {notice ? <Text style={styles.notice}>{notice}</Text> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}

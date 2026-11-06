@@ -61,6 +61,7 @@ import { font } from '../theme/typography';
 type Props = {
   api: EstibaApi;
   auth: AuthSession;
+  onBusyChange?: (busy: boolean) => void;
 };
 
 type TaskTab = 'mias' | 'disponibles';
@@ -78,7 +79,7 @@ type MovementWarning = {
   mensaje: string;
 };
 
-export function OperationalTaskInbox({ api, auth }: Props) {
+export function OperationalTaskInbox({ api, auth, onBusyChange }: Props) {
   const taskApi = useMemo(
     () => api.mode === 'connected' && api.baseUrl ? new OperationalTasksApi(api.baseUrl) : null,
     [api.baseUrl, api.mode],
@@ -116,6 +117,12 @@ export function OperationalTaskInbox({ api, auth }: Props) {
   const previewGeneration = useRef(0);
   const executionSessions = useRef<OpenSession[]>([]);
   const busy = Boolean(actionLabel) || loading || !journalReady;
+  // Los refrescos de lectura no impiden navegar; una escritura sí debe terminar.
+  const navigationBusy = Boolean(actionLabel) || !journalReady;
+  useEffect(() => {
+    onBusyChange?.(navigationBusy);
+    return () => onBusyChange?.(false);
+  }, [navigationBusy, onBusyChange]);
 
   const inPhysicalMovement = activeTask?.estado === 'en_proceso';
   // La reserva corre solo mientras la labor está tomada y sin iniciar. La bandeja solo

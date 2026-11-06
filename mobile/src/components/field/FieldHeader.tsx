@@ -7,15 +7,24 @@ import { font } from '../../theme/typography';
 import { OperatorMenu } from '../operator/OperatorMenu';
 import { useFieldNavigation } from './FieldNavigation';
 
+export type FieldLeaveTarget = 'module' | 'logout';
+
 /** Una cabecera de terreno: módulo y acción contextual; identidad y salida en el menú. */
-export function FieldHeader({ area, auth, busy = false, children, offline = false, onLogout, subtitle, subtitleCompact = true, title }: {
+export function FieldHeader({ area, auth, busy = false, children, offline = false, onBeforeLeave, onLogout, subtitle, subtitleCompact = true, title }: {
   area: AreaKey; auth?: AuthSession; busy?: boolean; children?: ReactNode;
+  onBeforeLeave?: (proceed: () => void, target: FieldLeaveTarget) => void;
   offline?: boolean; onLogout: () => void; subtitle?: string; subtitleCompact?: boolean; title: string;
 }) {
   const navigation = useFieldNavigation();
   const identity = auth ?? navigation.auth;
   const compact = useWindowDimensions().width < 720;
   const definition = areas[area];
+  const changeModule = navigation.onChangeModule;
+  function leave(proceed: () => void, target: FieldLeaveTarget) {
+    if (busy) return;
+    if (onBeforeLeave) onBeforeLeave(proceed, target);
+    else proceed();
+  }
   return <View style={[styles.header, { borderBottomColor: definition.bright }]}>
     <Image accessible accessibilityLabel={`FoliOS · ${definition.label}`} source={definition.gajo} resizeMode="contain" style={styles.gajo} />
     <View style={styles.copy}>
@@ -25,7 +34,7 @@ export function FieldHeader({ area, auth, busy = false, children, offline = fals
     </View>
     <View style={styles.actions}>{children}</View>
     <OperatorMenu disabled={busy} deviceName={identity?.dispositivo.nombre ?? ''}
-      onChangeModule={navigation.onChangeModule} onLogout={onLogout}
+      onChangeModule={changeModule ? () => leave(changeModule, 'module') : undefined} onLogout={() => leave(onLogout, 'logout')}
       role={identity?.usuario.rol ?? ''} userName={identity?.usuario.nombre ?? 'Operador'} />
   </View>;
 }

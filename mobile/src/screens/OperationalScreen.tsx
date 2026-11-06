@@ -56,9 +56,10 @@ type OperationalScreenProps = {
    */
   onRegisterLogout?: (logout: (() => Promise<void>) | null) => void;
   onOpenSessionsChange?: (names: string[]) => void;
+  onBusyChange?: (busy: boolean) => void;
 };
 
-export function OperationalScreen({ api, auth, onLogout, onRegisterLogout, onOpenSessionsChange }: OperationalScreenProps) {
+export function OperationalScreen({ api, auth, onLogout, onRegisterLogout, onOpenSessionsChange, onBusyChange }: OperationalScreenProps) {
   const { height, width } = useWindowDimensions();
   const wideLayout = width >= 1180 && height >= 700;
   const [cameras, setCameras] = useState<CameraSummary[]>([]);
@@ -564,6 +565,10 @@ export function OperationalScreen({ api, auth, onLogout, onRegisterLogout, onOpe
 
   // La referencia siempre apunta al cierre vigente (con las cámaras de este render).
   const logoutRef = useRef<() => Promise<void>>(async () => undefined);
+  useEffect(() => {
+    onBusyChange?.(busy);
+    return () => onBusyChange?.(false);
+  }, [busy, onBusyChange]);
   useEffect(() => {
     if (!camerasLoaded.current) return;
     onOpenSessionsChange?.(cameras.filter((camera) => camera.acceso.modo === 'edicion' && camera.acceso.sesion?.es_propia).map(cameraDisplayName));

@@ -10,9 +10,15 @@ test('muestra el nombre operacional de la cámara sin exponer su código', () =>
     );
 });
 
-test('no reutiliza el código cuando la cámara no tiene nombre', () => {
+test('conserva el código como respaldo si la cámara no tiene nombre', () => {
     assert.equal(
         cameraDisplayName({ codigo: 'CAM-04', nombre: '   ' }),
-        'Cámara sin nombre',
+        'CAM-04',
     );
+});
+
+test('distingue dos cámaras sin nombre y solo usa el genérico sin identificadores', () => {
+    assert.notEqual(cameraDisplayName({ codigo: 'CAM-01' }), cameraDisplayName({ codigo: 'CAM-02' }));
+    assert.equal(cameraDisplayName({ codigo: '   ', nombre: null }), 'Cámara sin nombre');
+    assert.equal(cameraDisplayName(null), 'Cámara sin nombre');
 });

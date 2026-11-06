@@ -181,7 +181,7 @@ test('conserva el paso actual como secuencia mínima para ciclos antiguos', () =
 
     assert.equal(model.steps.length, 1);
     assert.equal(model.currentStep.status, 'En proceso');
-    assert.equal(model.currentStep.route, 'Cámara sin nombre → Andén principal');
+    assert.equal(model.currentStep.route, 'CAM-01 → Andén principal');
     assert.equal(model.explanation.available, false);
     assert.equal(model.explanation.factor, 'Ciclo anterior sin explicación persistida');
 });

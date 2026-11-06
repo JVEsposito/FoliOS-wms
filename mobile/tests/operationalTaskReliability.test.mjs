@@ -28,7 +28,7 @@ const task = (overrides = {}) => ({
 function harness({ initial = task(), offered = [], verificationSlow = false, storage = new Map(), postFailure = null } = {}) {
   let renderer; let uuid = 0; let polling; let failWrite = false; let failRemove = false; let committed = false;
   let own = initial ? [clone(initial)] : []; let available = clone(offered);
-  const calls = { posts: [], takes: [], opens: [], closes: [], plans: [], own: [], lists: [] }; const controls = {};
+  const calls = { posts: [], takes: [], opens: [], closes: [], plans: [], own: [], lists: [], busy: [] }; const controls = {};
   const native = { ActivityIndicator: 'ActivityIndicator', Pressable: 'Pressable', Text: 'Text', View: 'View', StyleSheet: { create: (value) => value }, Alert: { alert: () => {} } };
   const asyncStorage = {
     getItem: async (key) => storage.get(key) ?? null,
@@ -86,7 +86,7 @@ function harness({ initial = task(), offered = [], verificationSlow = false, sto
   const props = (name) => renderer.root.findByType(name).props;
   return { calls, controls, storage, flush, plan, taskApi, props, ApiError, store: (...args) => new OperationalMovementStore(...args), polling: () => polling, journal: () => [...storage.values()].map((value) => JSON.parse(value)),
     failNextWrite: () => { failWrite = true; }, failNextRemove: () => { failRemove = true; },
-    async mount() { await flush(() => { renderer = create(React.createElement(OperationalTaskInbox, { api, auth })); }); }, async unmount() { if (renderer) await flush(() => renderer.unmount()); },
+    async mount() { await flush(() => { renderer = create(React.createElement(OperationalTaskInbox, { api, auth, onBusyChange: value => calls.busy.push(value) })); }); }, async unmount() { if (renderer) await flush(() => renderer.unmount()); },
     async open() { await flush(() => { const home = props('OperatorTaskHome'); home.onOpen(home.next); }); }, async action(name) { await flush(() => props('OperatorTaskExecution')[name]()); },
     async retry() { await flush(() => renderer.root.findAllByType('Pressable').find((node) => node.findAllByType('Text').some((entry) => text(entry.props.children) === 'Revisar confirmación')).props.onPress()); },
     message() { return renderer.root.findAllByType('Text').map((node) => text(node.props.children)).join('\n'); }, error() { return props('OperatorErrorDialog').message; }, count(name) { return renderer.root.findAllByType(name).length; },
@@ -97,8 +97,8 @@ test('dos toques simultáneos envían un movimiento y mantienen ocupado hasta fi
   const h = harness(); const response = deferred(); h.controls.post = () => response.promise;
   try {
     await h.mount(); await h.open(); await h.flush(() => { const p = h.props('OperatorTaskExecution'); p.onComplete(); p.onComplete(); });
-    assert.equal(h.calls.posts.length, 1); assert.equal(h.journal().length, 1); assert.match(h.message(), /Guardando entrega/);
-    await h.flush(() => response.resolve()); assert.equal(h.journal().length, 0);
+    assert.equal(h.calls.posts.length, 1); assert.equal(h.journal().length, 1); assert.match(h.message(), /Guardando entrega/); assert.equal(h.calls.busy.at(-1), true);
+    await h.flush(() => response.resolve()); assert.equal(h.journal().length, 0); assert.equal(h.calls.busy.at(-1), false);
   } finally { await h.unmount(); }
 });
 
