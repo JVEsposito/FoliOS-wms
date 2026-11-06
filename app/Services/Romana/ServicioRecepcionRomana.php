@@ -19,6 +19,7 @@ use App\Models\RecepcionRomana;
 use App\Models\Temporada;
 use App\Models\User;
 use App\Services\Documentos\ServicioFormatosRegistro;
+use App\Services\Envases\DocumentoSalidaEnvases;
 use App\Services\Envases\ServicioPrestamoInternoEnvases;
 use App\Services\MateriaPrima\ServicioLoteMateriaPrima;
 use App\Services\Notificaciones\ServicioNotificacionesOperacionales;
@@ -709,6 +710,9 @@ class ServicioRecepcionRomana
         $hash = $this->hash($payload);
 
         return DB::transaction(function () use ($recepcion, $datos, $usuario, $payload, $hash): RecepcionRomana {
+            $documentoSalida = app(DocumentoSalidaEnvases::class);
+            $documentoSalida->bloquear($recepcion->temporada_id, $recepcion->cliente_id, $payload['modo_salida_envases'] !== 'vacio' ? $payload['numero_guia_salida'] : null, 'numero_guia_salida');
+            $clienteConocido = $recepcion->cliente_id;
             $recepcion = RecepcionRomana::query()
                 ->with('detallesEnvases')
                 ->lockForUpdate()
@@ -731,6 +735,12 @@ class ServicioRecepcionRomana
             $this->temporadaActiva($recepcion->temporada_id);
             $tara = (float) $payload['peso_tara'];
             $bruto = (float) $recepcion->peso_bruto;
+            if ($recepcion->cliente_id !== $clienteConocido) {
+                throw new ConflictoOperacion('La recepción cambió de cliente. Actualiza antes de registrar su salida.');
+            }
+            if ($payload['modo_salida_envases'] !== 'vacio') {
+                $documentoSalida->asegurarSinDespacho($recepcion->temporada_id, $recepcion->cliente_id, $payload['numero_guia_salida'], $recepcion->id);
+            }
             $tarasEnvases = $this->calcularTaraEnvasesSalida($recepcion, $payload);
             if ($payload['modo_salida_envases'] !== 'vacio') {
                 app(ServicioInspeccionEnvases::class)->guardar($recepcion, 'despacho', $tarasEnvases['salidas'], $payload['inspeccion_envases'], $usuario, $datos['operacion_id']);
@@ -828,6 +838,9 @@ class ServicioRecepcionRomana
         $hash = $this->hash($payload);
 
         return DB::transaction(function () use ($recepcion, $datos, $usuario, $payload, $hash): RecepcionRomana {
+            $documentoSalida = app(DocumentoSalidaEnvases::class);
+            $documentoSalida->bloquear($recepcion->temporada_id, $recepcion->cliente_id, $payload['modo_salida_envases'] !== 'vacio' ? $payload['numero_guia_salida'] : null, 'numero_guia_salida');
+            $clienteConocido = $recepcion->cliente_id;
             $recepcion = RecepcionRomana::query()->with(['detallesEnvases', 'salidasEnvases'])
                 ->lockForUpdate()->findOrFail($recepcion->id);
             $evento = EventoRecepcionRomana::query()->where('operacion_id', $datos['operacion_id'])->first();
@@ -845,6 +858,9 @@ class ServicioRecepcionRomana
             if ($recepcion->version !== $payload['version_conocida']) {
                 throw new ConflictoOperacion('La recepción cambió. Actualiza el expediente antes de corregir la salida.');
             }
+            if (MovimientoEnvase::query()->where('recepcion_romana_id', $recepcion->id)->where('tipo_movimiento', TipoMovimientoEnvase::ConciliacionSalida->value)->exists()) {
+                throw new ConflictoOperacion('La salida está conciliada con un despacho. Sus cantidades y guía requieren revisión conjunta antes de corregirse.');
+            }
             if ($recepcion->lotesMateriaPrima()->exists()) {
                 throw new ConflictoOperacion('El lote ya fue creado. La corrección de pesos y saldos requiere conciliación supervisada.');
             }
@@ -857,6 +873,12 @@ class ServicioRecepcionRomana
                 throw new ConflictoOperacion('La corrección de salida no permite cambiar el pesaje ni el envase contenedor.');
             }
 
+            if ($recepcion->cliente_id !== $clienteConocido) {
+                throw new ConflictoOperacion('La recepción cambió de cliente. Actualiza antes de registrar su salida.');
+            }
+            if ($payload['modo_salida_envases'] !== 'vacio') {
+                $documentoSalida->asegurarSinDespacho($recepcion->temporada_id, $recepcion->cliente_id, $payload['numero_guia_salida'], $recepcion->id);
+            }
             $resultado = $this->calcularTaraEnvasesSalida($recepcion, $payload);
             $nuevoNeto = round((float) $recepcion->peso_bruto - (float) $recepcion->peso_tara
                 - $resultado['peso_tara_envases'], 3);

@@ -3,10 +3,12 @@
 namespace App\Services\Envases;
 
 use App\Enums\EstadoGuiaDespachoEnvase;
+use App\Enums\TipoMovimientoEnvase;
 use App\Exceptions\ConflictoOperacion;
 use App\Models\ArchivoGuiaDespachoEnvase;
 use App\Models\EventoGuiaDespachoEnvase;
 use App\Models\GuiaDespachoEnvase;
+use App\Models\MovimientoEnvase;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -79,6 +81,9 @@ class ServicioGuiaEmitidaEnvases
         $numero = $this->exigir($numero);
 
         return DB::transaction(function () use ($guia, $numero, $motivo, $usuario): GuiaDespachoEnvase {
+            $documentoSalida = app(DocumentoSalidaEnvases::class);
+            $documentoSalida->bloquear($guia->temporada_id, $guia->cliente_id, $numero);
+            $clienteConocido = $guia->cliente_id;
             $guia = GuiaDespachoEnvase::query()->lockForUpdate()->findOrFail($guia->id);
             $this->asegurarSalidaConfirmada($guia, 'El N° de guía se ingresa al confirmar la salida.');
             $anterior = $guia->numero_guia_despacho;
@@ -91,6 +96,13 @@ class ServicioGuiaEmitidaEnvases
                     'motivo' => 'Indica por qué se corrige el N° de guía.',
                 ]);
             }
+            if ($guia->cliente_id !== $clienteConocido) {
+                throw new ConflictoOperacion('La guía cambió de cliente. Actualiza antes de registrar su número.');
+            }
+            if (MovimientoEnvase::query()->where('tipo_movimiento', TipoMovimientoEnvase::ConciliacionSalida->value)->where('documento_id', $guia->id)->exists()) {
+                throw new ConflictoOperacion('Esta guía participa en una conciliación de salida con Romana. Su número no se puede cambiar de forma aislada.');
+            }
+            $documentoSalida->asegurarSinRomana($guia->temporada_id, $guia->cliente_id, $numero);
             $this->asegurarDisponible($numero, $guia->id);
 
             $guia->update([

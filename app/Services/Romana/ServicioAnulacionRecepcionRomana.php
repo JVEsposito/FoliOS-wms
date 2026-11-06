@@ -75,6 +75,9 @@ class ServicioAnulacionRecepcionRomana
                 throw new ConflictoOperacion('La recepción tiene segmentos o lotes de materia prima vinculados. Requiere conciliación antes de anular.');
             }
             $movimientos = $recepcion->movimientosEnvases()->orderBy('id')->lockForUpdate()->get();
+            if ($movimientos->contains('tipo_movimiento', TipoMovimientoEnvase::ConciliacionSalida)) {
+                throw new ConflictoOperacion('La recepción participa en una conciliación de salida con Despacho. No se puede anular ni eliminar de forma aislada.');
+            }
             $ids = $movimientos->pluck('id');
             $guias = DetalleGuiaDespachoEnvase::whereIn('movimiento_origen_id', $ids)
                 ->whereHas('guia', fn ($q) => $q->whereIn('estado', [
@@ -149,14 +152,14 @@ class ServicioAnulacionRecepcionRomana
         // El cliente de un despacho es su destinatario: no identifica el origen
         // físico de los envases. Usar el mismo inventario por origen que las guías.
         try {
-            $inventario = collect(app(ServicioGuiaDespachoEnvases::class)->inventario($recepcion->temporada)['origenes'])->keyBy('id');
+            $inventario = collect(app(ServicioGuiaDespachoEnvases::class)->inventario($recepcion->temporada, incluirAgotados: true)['origenes'])->keyBy('id');
         } catch (ConflictoOperacion $conflicto) {
             throw new ConflictoOperacion(app(ServicioDiagnosticoEnvasesRecepcion::class)
                 ->inventarioInconsistente($recepcion, $conflicto->getMessage()));
         }
         foreach ($grupos as $grupo) {
             $retirar = $grupo->sum(fn ($m) => $m->cantidad * $m->signo_existencia);
-            $disponible = $grupo->whereNull('movimiento_origen_id')->sum(fn ($m) => $inventario[$m->id]['disponible'] ?? 0);
+            $disponible = $grupo->whereNull('movimiento_origen_id')->sum(fn ($m) => $inventario[$m->id]['disponible_trazable'] ?? 0);
             $primero = $grupo->first();
             $totalFisico = (int) MovimientoEnvase::where('temporada_id', $recepcion->temporada_id)
                 ->where('tipo_envase', $primero->tipo_envase->value)->where('propiedad', $primero->propiedad->value)

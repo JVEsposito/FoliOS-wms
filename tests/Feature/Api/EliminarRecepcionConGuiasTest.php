@@ -195,10 +195,15 @@ class EliminarRecepcionConGuiasTest extends TestCase
 
     public function test_muestra_la_recepcion_y_documento_de_una_salida_que_afecta_el_saldo_global(): void
     {
-        [$r, , , $temporada, $admin] = $this->ingresoEnvases();
+        [$r, $origen, , $temporada, $admin] = $this->ingresoEnvases();
         [$otra, , $cliente] = $this->ingresoEnvases();
         $salida = $this->salidaHistorica($cliente->id, $temporada->id, $admin->id, 200, 'SALIDA-OTRA-RECEPCION');
         $salida->update(['recepcion_romana_id' => $otra->id, 'documento_tipo' => 'recepcion_romana', 'documento_id' => $otra->id]);
+
+        $inventario = collect(app(ServicioGuiaDespachoEnvases::class)->inventario($temporada, incluirAgotados: true)['origenes'])->keyBy('id');
+        // Despacho reserva con el pool neto; el diagnóstico no inventa un vínculo físico.
+        $this->assertSame(76, $inventario->sum('disponible'));
+        $this->assertSame(138, $inventario[$origen->id]['disponible_trazable']);
 
         $mensaje = $this->deleteJson('/api/romana/recepciones/'.$r->id, $this->datos($r->version))->assertConflict()->json('message');
 

@@ -85,6 +85,7 @@ class GuiaDespachoEnvaseController extends Controller
                 'temporada',
                 'detalles.movimientoOrigen.cliente',
                 'archivoVigente.subidoPor',
+                'conciliacionesSalida',
                 'creadoPor',
                 'confirmadoPor',
                 'canceladoPor',
@@ -143,6 +144,7 @@ class GuiaDespachoEnvaseController extends Controller
             'temporada',
             'detalles.movimientoOrigen.cliente',
             'archivoVigente.subidoPor',
+            'conciliacionesSalida',
             'creadoPor',
             'confirmadoPor',
             'canceladoPor',
@@ -353,6 +355,7 @@ class GuiaDespachoEnvaseController extends Controller
             'cliente',
             'detalles.movimientoOrigen.cliente',
             'archivoVigente.subidoPor',
+            'conciliacionesSalida',
             'creadoPor',
             'confirmadoPor',
             'canceladoPor',
@@ -459,6 +462,8 @@ class GuiaDespachoEnvaseController extends Controller
             })
             ->values();
 
+        $conciliaciones = $guia->conciliacionesSalida;
+        $conciliacion = $conciliaciones->first();
         $salidaConfirmada = in_array($guia->estado, [EstadoGuiaDespachoEnvase::Confirmada, EstadoGuiaDespachoEnvase::Anulada], true);
         $archivo = $guia->archivoVigente;
         $datos = [
@@ -499,6 +504,11 @@ class GuiaDespachoEnvaseController extends Controller
             'version' => $guia->version,
             'detalles' => $detalles,
             'resumen' => $resumen,
+            'conciliacion_salida' => $conciliacion ? [
+                'conservar' => $conciliacion->datos['conservar'],
+                'cantidades' => $conciliacion->datos['cantidades_revisadas'],
+                'romana_restaurada' => $conciliaciones->contains(fn ($m) => isset($m->datos['restaura_conciliacion_id'])),
+            ] : null,
             'creado_por' => $guia->creadoPor?->name,
             'confirmado_por' => $guia->confirmadoPor?->name,
             'cancelado_por' => $guia->canceladoPor?->name,

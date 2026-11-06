@@ -165,6 +165,9 @@ class ServicioGuiaDespachoEnvases
         $guiasEmitidas = app(ServicioGuiaEmitidaEnvases::class);
 
         return DB::transaction(function () use ($guia, $usuario, $datos, $guiasEmitidas): GuiaDespachoEnvase {
+            $documentoSalida = app(DocumentoSalidaEnvases::class);
+            $documentoSalida->bloquear($guia->temporada_id, $guia->cliente_id, $datos['numero_guia_despacho'] ?? $guia->numero_guia_despacho);
+            $clienteConocido = $guia->cliente_id;
             $guia = GuiaDespachoEnvase::query()
                 ->whereHas('temporada', fn ($temporada) => $temporada->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
                 ->with(['detalles.movimientoOrigen.cliente', 'temporada', 'cliente', 'creadoPor'])
@@ -181,6 +184,10 @@ class ServicioGuiaDespachoEnvases
             }
 
             $numeroGuia = $guiasEmitidas->exigir($datos['numero_guia_despacho'] ?? null);
+            if ($guia->cliente_id !== $clienteConocido) {
+                throw new ConflictoOperacion('La guía cambió de cliente. Actualiza antes de confirmar.');
+            }
+            $documentoSalida->asegurarSinRomana($guia->temporada_id, $guia->cliente_id, $numeroGuia);
             $guiasEmitidas->asegurarDisponible($numeroGuia, $guia->id);
             $guia->numero_guia_despacho = $numeroGuia;
             if (! empty($datos['salida_at'])) {
@@ -331,6 +338,7 @@ class ServicioGuiaDespachoEnvases
     public function anular(GuiaDespachoEnvase $guia, string $motivo, User $usuario): GuiaDespachoEnvase
     {
         return DB::transaction(function () use ($guia, $motivo, $usuario): GuiaDespachoEnvase {
+            app(DocumentoSalidaEnvases::class)->bloquear($guia->temporada_id, $guia->cliente_id, $guia->numero_guia_despacho);
             $guia = GuiaDespachoEnvase::query()
                 ->whereHas('temporada', fn ($temporada) => $temporada->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
                 ->lockForUpdate()
@@ -351,6 +359,10 @@ class ServicioGuiaDespachoEnvases
             $ahora = now();
             $reversas = [];
             foreach ($movimientos as $movimiento) {
+                $cantidad = app(ServicioConciliacionSalidaEnvases::class)->pendienteAnulacion($movimiento);
+                if ($cantidad === 0) {
+                    continue;
+                }
                 $reversas[] = MovimientoEnvase::create([
                     'operacion_id' => (string) Str::uuid(),
                     'temporada_id' => $guia->temporada_id,
@@ -360,7 +372,7 @@ class ServicioGuiaDespachoEnvases
                     'numero_documento' => $guia->numero,
                     'tipo_movimiento' => TipoMovimientoEnvase::ReversionDespacho,
                     'tipo_envase' => $movimiento->tipo_envase,
-                    'cantidad' => $movimiento->cantidad,
+                    'cantidad' => $cantidad,
                     'signo_cuenta' => 1,
                     'signo_existencia' => 1,
                     'propiedad' => $movimiento->propiedad,
@@ -375,6 +387,7 @@ class ServicioGuiaDespachoEnvases
                     ],
                 ]);
             }
+            app(ServicioConciliacionSalidaEnvases::class)->restaurarRomanaAlAnular($guia, $usuario);
             $guia->update([
                 'estado' => EstadoGuiaDespachoEnvase::Anulada,
                 'anulado_por_user_id' => $usuario->id,
@@ -404,7 +417,7 @@ class ServicioGuiaDespachoEnvases
      *     resumen: array<int, array<string, mixed>>
      * }
      */
-    public function inventario(Temporada $temporada): array
+    public function inventario(Temporada $temporada, bool $incluirAgotados = false): array
     {
         $estado = $this->estadoInventario($temporada->id);
 
@@ -420,6 +433,7 @@ class ServicioGuiaDespachoEnvases
                     'fisico' => $item['fisico'],
                     'reservado' => $item['reservado'],
                     'disponible' => $item['disponible'],
+                    'disponible_trazable' => $item['disponible_trazable'],
                     'documento' => $origen->numero_documento,
                     'documento_tipo' => $origen->documento_tipo,
                     'cliente' => $origen->cliente ? [
@@ -431,7 +445,7 @@ class ServicioGuiaDespachoEnvases
                         ?? $origen->ocurrido_at?->toAtomString(),
                 ];
             })
-            ->filter(fn (array $origen): bool => $origen['fisico'] > 0 || $origen['reservado'] > 0)
+            ->filter(fn (array $origen): bool => $incluirAgotados || $origen['fisico'] > 0 || $origen['reservado'] > 0)
             ->values();
 
         $resumen = $origenes
@@ -675,6 +689,11 @@ class ServicioGuiaDespachoEnvases
             $origen->id => $origen->cantidad + (int) $ajustes->get($origen->id, 0),
         ]);
 
+        // No atribuir a una recepción concreta los consumos históricos sin raíz.
+        // El reparto FIFO sirve para reservar; la eliminación exige distinguir
+        // ese saldo sugerido del saldo demostrado por sus movimientos vinculados.
+        $fisicosTrazables = $fisicos->all();
+
         $incompatibles = MovimientoEnvase::query()
             ->where('temporada_id', $temporadaId)
             ->whereNull('movimiento_origen_id')
@@ -697,6 +716,7 @@ class ServicioGuiaDespachoEnvases
             ->whereIn('tipo_movimiento', [
                 TipoMovimientoEnvase::DespachoCliente->value,
                 TipoMovimientoEnvase::ReversionDespacho->value,
+                TipoMovimientoEnvase::ConciliacionSalida->value,
             ])
             ->selectRaw(
                 'tipo_envase, COALESCE(SUM(CAST(cantidad AS SIGNED) * signo_existencia), 0) as saldo',
@@ -735,9 +755,12 @@ class ServicioGuiaDespachoEnvases
             }
         }
 
+        $this->descontarSalidasRomanaSinOrigen($temporadaId, $origenes, $fisicos);
+
         return $origenes->mapWithKeys(function (MovimientoEnvase $origen) use (
             $fisicos,
             $reservas,
+            $fisicosTrazables,
         ): array {
             $fisico = (int) $fisicos->get($origen->id, 0);
             $reservado = (int) $reservas->get($origen->id, 0);
@@ -748,9 +771,55 @@ class ServicioGuiaDespachoEnvases
                     'fisico' => $fisico,
                     'reservado' => $reservado,
                     'disponible' => $fisico - $reservado,
+                    'disponible_trazable' => (int) ($fisicosTrazables[$origen->id] ?? 0) - $reservado,
                 ],
             ];
         });
+    }
+
+    /** Las devoluciones de Romana sin raíz FIFO también consumen el saldo físico. */
+    private function descontarSalidasRomanaSinOrigen(string $temporadaId, Collection $origenes, Collection $fisicos): void
+    {
+        $salidas = MovimientoEnvase::query()->where('temporada_id', $temporadaId)
+            ->where('tipo_movimiento', TipoMovimientoEnvase::SalidaRecepcionFruta->value)->whereNull('movimiento_origen_id')->get();
+        if ($salidas->isEmpty()) {
+            return;
+        }
+        $ids = $salidas->pluck('id');
+        $compensaciones = MovimientoEnvase::query()->where('temporada_id', $temporadaId)
+            ->where(fn ($q) => $q->whereIn('movimiento_origen_id', $ids)
+                ->orWhere(fn ($q) => $q->where('tipo_movimiento', TipoMovimientoEnvase::ConciliacionSalida->value)
+                    ->whereIn('datos->movimiento_conciliado_id', $ids)))->get();
+        $porSalida = $compensaciones->groupBy(fn ($c) => $c->datos['movimiento_conciliado_id'] ?? $c->movimiento_origen_id)
+            ->map(fn ($grupo) => $grupo->sum(fn ($c) => $c->cantidad * $c->signo_existencia));
+        $netos = [];
+        foreach ($salidas as $salida) {
+            $neto = $salida->cantidad * $salida->signo_existencia + (int) $porSalida->get($salida->id, 0);
+            if ($neto > 0) {
+                throw new ConflictoOperacion('Una devolución de Romana tiene compensaciones físicas superiores a su salida. Requiere conciliación.');
+            }
+            $clave = $salida->tipo_envase->value.'|'.$salida->propiedad->value.'|'.($salida->propiedad === PropiedadEnvase::Cliente ? $salida->cliente_id : '*');
+            $netos[$clave] ??= ['salida' => $salida, 'pendiente' => 0];
+            $netos[$clave]['pendiente'] -= $neto;
+        }
+        foreach ($netos as ['salida' => $salida, 'pendiente' => $pendiente]) {
+            foreach ($origenes as $origen) {
+                if ($pendiente === 0) {
+                    break;
+                }
+                if ($origen->tipo_envase !== $salida->tipo_envase || $origen->propiedad !== $salida->propiedad
+                    || ($salida->propiedad === PropiedadEnvase::Cliente && $origen->cliente_id !== $salida->cliente_id)) {
+                    continue;
+                }
+                $saldo = max(0, (int) $fisicos->get($origen->id, 0));
+                $consumo = min($saldo, $pendiente);
+                $fisicos->put($origen->id, $saldo - $consumo);
+                $pendiente -= $consumo;
+            }
+            if ($pendiente > 0) {
+                throw new ConflictoOperacion('Las devoluciones de Romana superan los ingresos físicos trazables de la temporada. Revisa el inventario antes de reservar otro despacho.');
+            }
+        }
     }
 
     /** @return array<int, string> */
@@ -1070,6 +1139,7 @@ class ServicioGuiaDespachoEnvases
             'temporada',
             'cliente',
             'archivoVigente.subidoPor',
+            'conciliacionesSalida',
             'detalles.movimientoOrigen.cliente',
             'creadoPor',
             'confirmadoPor',
