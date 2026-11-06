@@ -9,6 +9,27 @@ use Tests\TestCase;
 
 class BloquesRegistroRepaletizajeTest extends TestCase
 {
+    public function test_el_registro_imprime_el_calibre_del_componente_y_no_el_mix_del_folio(): void
+    {
+        $repa = $this->repa([
+            'modalidad' => 'consolidacion', 'codigo' => 'REPA-MIX', 'tipo_resultado' => 'pallet',
+            'cantidad_resultante' => 240, 'estado' => 'confirmado',
+            'snapshot' => ['especificaciones' => ['variedad' => 'Royal Dawn', 'marca' => 'FALCO', 'envase' => '5 kg'],
+                'genealogia' => [[
+                    'numero_folio' => 'MIX-240', 'especificaciones' => ['calibre' => 'MIX'],
+                    'composicion_aportada' => [
+                        ['csg' => '152223', 'fecha_embalaje' => '2026-11-03', 'calibre' => '2J', 'cantidad_cajas' => 100],
+                        ['csg' => '152223', 'fecha_embalaje' => '2026-11-03', 'calibre' => '3J', 'cantidad_cajas' => 140],
+                    ],
+                ]],
+            ],
+        ], 'RESULTADO-240');
+        $bloques = app(ServicioRegistroRepaletizaje::class)->bloques($repa);
+        $this->assertSame(['2J', '3J'], array_column($bloques[0]['lineas'], 'calibre'));
+        $this->assertSame([100, 140], array_column($bloques[0]['lineas'], 'cajas'));
+        $this->assertSame(240, $bloques[0]['total']);
+    }
+
     public function test_una_consolidacion_con_mas_de_ocho_lineas_continua_en_otro_bloque_y_el_total_va_al_final(): void
     {
         $genealogia = collect(range(1, 10))->map(fn (int $numero): array => [

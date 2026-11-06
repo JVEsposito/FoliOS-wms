@@ -201,8 +201,7 @@ class ServicioRepaletizaje
                 $origenes->map(fn (array $origen) => app(FechaProcesoEtiquetaPt::class)->deFolio($origen['folio']))->all(),
             );
             $especificaciones = $this->especificacionesResultado($origenes->pluck('folio'));
-            $especificaciones['csg'] = $this->valorComun($composicionResultado->pluck('csg'));
-            $especificaciones['predio'] = $this->valorComun($composicionResultado->pluck('predio'));
+            $especificaciones = $this->especificacionesDeComposicion($especificaciones, $composicionResultado);
             $camposMix = collect($especificaciones)
                 ->filter(fn (mixed $valor): bool => $valor === 'MIX')
                 ->keys()
@@ -359,9 +358,12 @@ class ServicioRepaletizaje
                     $datosExternos['cantidad_cajas'] = $origen['cantidad_despues'];
                     $datosExternos['composicion'] = $origen['composicion_despues'];
                     $this->actualizarResumenComposicion($datosExternos);
+                    $especificacionesRestantes = $this->especificacionesDeComposicion($this->especificaciones($folio), collect($origen['composicion_despues']));
                     $datosExternos['ultimo_repaletizaje'] = $codigo;
                     $folio->update([
                         'tipo_bulto' => TipoBulto::Saldo,
+                        'variedad' => $especificacionesRestantes['variedad'],
+                        'calibre' => $especificacionesRestantes['calibre'],
                         'estado_operacional' => $this->estadoResultado(
                             $condicion,
                             $folio->ubicacionActual !== null,
@@ -443,6 +445,9 @@ class ServicioRepaletizaje
             throw new DomainException('El cambio o división debe consumir la totalidad del folio original.');
         }
         $composicionAntes = collect($this->composicionFolio($folio))->keyBy('clave');
+        if ($payload['modalidad'] === 'division' && $this->desgloseIncompleto($composicionAntes->all())) {
+            throw new DomainException('El folio informa MIX sin cantidades por componente. Regulariza el desglose antes de dividir sus cajas.');
+        }
         if ((int) $composicionAntes->sum('cantidad_cajas') !== $cantidadAntes) {
             throw new DomainException('La composición del folio no coincide con su total. Requiere regularización.');
         }
@@ -520,6 +525,7 @@ class ServicioRepaletizaje
                 'genealogia_repaletizaje' => $genealogia,
             ]);
             $this->actualizarResumenComposicion($datosExternos);
+            $especificaciones = $this->especificacionesDeComposicion($this->especificaciones($folio), collect($resultado['composicion']));
             $nuevo = Folio::create([
                 'temporada_id' => $folio->temporada_id,
                 'numero_folio' => $resultado['numero_folio'],
@@ -539,8 +545,8 @@ class ServicioRepaletizaje
                 'fecha_ingreso' => $folio->fecha_ingreso,
                 'fecha_proceso_pt' => app(FechaProcesoEtiquetaPt::class)->deFolio($folio),
                 'activo' => true,
-                'variedad' => $folio->variedad,
-                'calibre' => $folio->calibre,
+                'variedad' => $especificaciones['variedad'],
+                'calibre' => $especificaciones['calibre'],
                 'marca' => $folio->marca,
                 'exportadora' => $folio->exportadora,
                 'origen_sistema' => 'repaletizaje',
@@ -1047,6 +1053,17 @@ class ServicioRepaletizaje
         ];
     }
 
+    private function especificacionesDeComposicion(array $resumen, Collection $lineas): array
+    {
+        foreach (['variedad', 'calibre', 'envase', 'categoria', 'cuartel', 'csg', 'predio'] as $campo) {
+            if ($lineas->isNotEmpty() && $lineas->every(fn (array $linea): bool => array_key_exists($campo, $linea))) {
+                $resumen[$campo] = $this->valorComun($lineas->pluck($campo));
+            }
+        }
+
+        return $resumen;
+    }
+
     /**
      * @param  array<string, mixed>  $origen
      * @return array{array<int, array<string, mixed>>, array<int, array<string, mixed>>, array<int, array<string, mixed>>}
@@ -1057,6 +1074,9 @@ class ServicioRepaletizaje
         int $aporte,
     ): array {
         $antes = collect($this->composicionFolio($folio))->keyBy('clave');
+        if ($aporte < $this->cantidad($folio) && $this->desgloseIncompleto($antes->all())) {
+            throw new DomainException('El folio informa MIX sin cantidades por componente. Regulariza el desglose antes de aportar solo parte de sus cajas.');
+        }
         $solicitada = collect($origen['composicion'] ?? []);
         if ((int) $antes->sum('cantidad_cajas') !== $this->cantidad($folio)) {
             throw new DomainException(sprintf(
@@ -1068,7 +1088,7 @@ class ServicioRepaletizaje
         if ($solicitada->isEmpty()) {
             if ($antes->count() > 1 && $aporte < $this->cantidad($folio)) {
                 throw new DomainException(sprintf(
-                    'El folio %s posee más de un CSG o fecha. Indica cuántas cajas aporta cada composición.',
+                    'El folio %s posee más de una composición. Indica cuántas cajas aporta cada componente.',
                     $folio->numero_folio,
                 ));
             }
@@ -1140,13 +1160,13 @@ class ServicioRepaletizaje
     }
 
     /** @return array<int, array<string, mixed>> */
-    private function composicionFolio(Folio $folio): array
+    public function composicionFolio(Folio $folio): array
     {
         $datos = $folio->datos_externos ?? [];
         $fechaPredeterminada = filled($datos['fecha_embalaje'] ?? null)
             ? (string) $datos['fecha_embalaje']
             : $this->fechaValidacionFolio($folio);
-        $lineas = collect(app(ComposicionEtiquetaPt::class)->lineas($folio))
+        $lineas = collect($this->recuperarDesgloseHistorico($folio, app(ComposicionEtiquetaPt::class)->lineas($folio)))
             ->filter(fn (mixed $linea): bool => is_array($linea)
                 && array_key_exists('cantidad_cajas', $linea)
                 && array_key_exists('csg', $linea))
@@ -1197,7 +1217,7 @@ class ServicioRepaletizaje
         ];
         // El lote de materia prima y el proceso de packing viajan con sus cajas a los
         // folios resultantes; sin ellos la trazabilidad se cortaría en el repaletizaje.
-        foreach (['lote_materia_prima', 'proceso_packing', 'combinacion_validacion_id', 'articulo_validacion_id', 'envase_validacion_id', 'especie', 'variedad', 'envase', 'envase_codigo', 'cliente'] as $campo) {
+        foreach (['lote_materia_prima', 'proceso_packing', 'combinacion_validacion_id', 'articulo_validacion_id', 'envase_validacion_id', 'especie', 'variedad', 'calibre', 'categoria', 'cuartel', 'envase', 'envase_codigo', 'cliente'] as $campo) {
             if (filled($linea[$campo] ?? null)) {
                 $normalizada[$campo] = (string) $linea[$campo];
             }
@@ -1242,7 +1262,106 @@ class ServicioRepaletizaje
             $partes[] = (string) ($linea['envase_validacion_id'] ?? $linea['envase'] ?? '');
         }
 
+        foreach (['calibre', 'categoria', 'cuartel'] as $campo) {
+            if (filled($linea[$campo] ?? null)) {
+                $partes[] = $campo.':'.mb_strtoupper(trim((string) $linea[$campo]));
+            }
+        }
+
         return hash('sha256', implode('|', $partes));
+    }
+
+    /** Desagrega historiales antiguos solo cuando cada caja conserva un aporte inequívoco. */
+    private function recuperarDesgloseHistorico(Folio $folio, array $actual): array
+    {
+        $datos = $folio->datos_externos ?? [];
+        // El artículo de la primera fila de un repa antiguo no demuestra que todas
+        // las cajas del grupo tengan ese calibre. Recuperar su reparto, no heredarlo.
+        if (! empty($datos['genealogia_repaletizaje'])) {
+            foreach ($actual as $indice => &$linea) {
+                foreach (['calibre' => $folio->calibre, 'variedad' => $folio->variedad,
+                    'envase' => $datos['envase'] ?? null, 'categoria' => $datos['categoria'] ?? null,
+                    'cuartel' => $datos['cuartel'] ?? null] as $campo => $resumen) {
+                    if (in_array(mb_strtoupper(trim((string) $resumen)), ['MIX', 'MIXTA', 'MIXTO'], true)
+                        && ! filled($datos['composicion'][$indice][$campo] ?? null)) {
+                        $linea[$campo] = 'MIX';
+                    }
+                }
+            }
+            unset($linea);
+        }
+        if (! $this->desgloseIncompleto($actual)) {
+            return $actual;
+        }
+        $candidatas = [];
+        foreach ($folio->datos_externos['genealogia_repaletizaje'] ?? [] as $origen) {
+            foreach ($origen['composicion_aportada'] ?? [] as $aporte) {
+                $linea = array_merge($origen['especificaciones'] ?? [], $aporte);
+                foreach (['cliente' => $folio->exportadora, 'especie' => $datos['especie'] ?? null, 'marca' => $folio->marca] as $campo => $valor) {
+                    if (filled($linea[$campo] ?? null) && mb_strtoupper(trim((string) $linea[$campo])) !== mb_strtoupper(trim((string) $valor))) {
+                        return $actual;
+                    }
+                }
+                if ((int) ($linea['cantidad_cajas'] ?? 0) <= 0) {
+                    return $actual;
+                }
+                $candidatas[] = $linea;
+            }
+        }
+        if (! $candidatas || $this->desgloseIncompleto($candidatas)
+            || (int) array_sum(array_column($candidatas, 'cantidad_cajas')) !== $this->cantidad($folio)) {
+            return $actual;
+        }
+        foreach ($actual as $linea) {
+            foreach (['variedad', 'calibre', 'envase', 'categoria', 'cuartel', 'csg', 'predio'] as $campo) {
+                if (in_array(mb_strtoupper(trim((string) ($linea[$campo] ?? ''))), ['MIX', 'MIXTA', 'MIXTO'], true)
+                    && collect($candidatas)->contains(fn (array $candidata): bool => ! filled($candidata[$campo] ?? null))) {
+                    return $actual;
+                }
+            }
+        }
+        $sumas = array_fill(0, count($actual), 0);
+        foreach ($candidatas as $candidata) {
+            $coincidencias = [];
+            foreach ($actual as $indice => $linea) {
+                $coincide = true;
+                foreach (['csg', 'predio', 'fecha_embalaje', 'lote_materia_prima', 'proceso_packing', 'variedad', 'calibre', 'envase', 'categoria', 'cuartel'] as $campo) {
+                    $valor = mb_strtoupper(trim((string) ($linea[$campo] ?? '')));
+                    if ($valor !== '' && ! in_array($valor, ['MIX', 'MIXTA', 'MIXTO'], true)
+                        && $valor !== mb_strtoupper(trim((string) ($candidata[$campo] ?? '')))) {
+                        $coincide = false;
+                        break;
+                    }
+                }
+                if ($coincide) {
+                    $coincidencias[] = $indice;
+                }
+            }
+            if (count($coincidencias) !== 1) {
+                return $actual;
+            }
+            $sumas[$coincidencias[0]] += (int) $candidata['cantidad_cajas'];
+        }
+        foreach ($actual as $indice => $linea) {
+            if ($sumas[$indice] !== (int) $linea['cantidad_cajas']) {
+                return $actual;
+            }
+        }
+
+        return $candidatas;
+    }
+
+    public function desgloseIncompleto(array $lineas): bool
+    {
+        foreach ($lineas as $linea) {
+            foreach (['variedad', 'calibre', 'envase', 'categoria', 'cuartel', 'csg', 'predio'] as $campo) {
+                if (in_array(mb_strtoupper(trim((string) ($linea[$campo] ?? ''))), ['MIX', 'MIXTA', 'MIXTO'], true)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /** @param array<string, mixed> $datosExternos */
@@ -1252,13 +1371,18 @@ class ServicioRepaletizaje
         $datosExternos['csg'] = $this->valorComun($composicion->pluck('csg'));
         $datosExternos['csgs'] = $composicion->pluck('csg')->unique()->values()->all();
         $datosExternos['predio'] = $this->valorComun($composicion->pluck('predio'));
+        foreach (['envase', 'categoria', 'cuartel'] as $campo) {
+            if ($composicion->isNotEmpty() && $composicion->every(fn (array $linea): bool => array_key_exists($campo, $linea))) {
+                $datosExternos[$campo] = $this->valorComun($composicion->pluck($campo));
+            }
+        }
         $datosExternos['fecha_embalaje'] = $this->valorComunFecha($composicion);
         $datosExternos['fechas_embalaje'] = $composicion->pluck('fecha_embalaje')
             ->filter()->unique()->values()->all();
         $camposMix = collect($datosExternos['campos_mix'] ?? [])
             ->reject(fn (string $campo): bool => in_array(
                 $campo,
-                ['csg', 'predio', 'fecha_embalaje'],
+                ['csg', 'predio', 'fecha_embalaje', 'variedad', 'calibre', 'envase', 'categoria', 'cuartel'],
                 true,
             ));
         if ($datosExternos['csg'] === 'MIX') {
@@ -1266,6 +1390,11 @@ class ServicioRepaletizaje
         }
         if ($datosExternos['predio'] === 'MIX') {
             $camposMix->push('predio');
+        }
+        foreach (['variedad', 'calibre', 'envase', 'categoria', 'cuartel'] as $campo) {
+            if ($this->valorComun($composicion->pluck($campo)) === 'MIX') {
+                $camposMix->push($campo);
+            }
         }
         if ($composicion->pluck('fecha_embalaje')->unique()->count() > 1) {
             $camposMix->push('fecha_embalaje');

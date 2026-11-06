@@ -73,6 +73,7 @@ function harness(entries) {
       await flush(button.props.onPress);
     },
     message: () => renderer.root.findAllByType('Text').map((node) => flatten(node.props.children)).join('\n'),
+    resultLines: () => renderer.root.findAllByType('View').filter((node) => node.props.testID?.startsWith('repa-composition-result-')).map((node) => flatten(node.props.children)),
   };
 }
 
@@ -91,6 +92,37 @@ test('la PDA admite un pallet completo como donante parcial junto a un saldo y e
       { folio_id: 'PAL-240', cantidad_aportada: 200 }, { folio_id: 'SAL-40', cantidad_aportada: 40 },
     ]);
     assert.match(h.message(), /NUEVO-240 confirmado/);
+  } finally { await h.unmount(); }
+});
+
+test('la PDA muestra calibres diferentes del mismo CSG/fecha y permite elegir solo sus cajas', async () => {
+  const mixed = folio('MIX-240', 'pallet', 240, { calibre: 'MIX', composicion: [
+    { clave: 'calibre-2j', csg: '111', fecha_embalaje: '2026-11-06', predio: 'Huerto', variedad: 'Royal Dawn', calibre: '2J', envase: '5 kg', cantidad_cajas: 100 },
+    { clave: 'calibre-3j', csg: '111', fecha_embalaje: '2026-11-06', predio: 'Huerto', variedad: 'Royal Dawn', calibre: '3J', envase: '5 kg', cantidad_cajas: 140 },
+  ] });
+  const h = harness([mixed, folio('SAL-40', 'saldo', 40)]);
+  try {
+    await h.mount(); await h.capacity('240'); await h.press('Saldo consolidado'); await h.press('Otro folio'); await h.number('RESULTADO-MIX');
+    await h.add('MIX-240');
+    assert.match(h.message(), /Calibre 2J/); assert.match(h.message(), /Calibre 3J/); assert.match(h.message(), /Variedad Royal Dawn/);
+    assert.equal(h.resultLines().length, 2);
+    await h.add('SAL-40'); await h.contribution(0, '0'); await h.contribution(1, '60');
+    assert.equal(h.resultLines().length, 2);
+    assert.ok(h.resultLines().some((text) => text.includes('Calibre 3J') && text.includes('60 cajas')));
+    await h.press('Confirmar repaletizaje');
+    assert.equal(h.writes.length, 1);
+    assert.deepEqual(h.writes[0].origenes[0].composicion, [{ clave: 'calibre-3j', cantidad_aportada: 60 }]);
+  } finally { await h.unmount(); }
+});
+
+test('la PDA identifica un MIX sin detalle y evita aportes parciales que no se pueden atribuir', async () => {
+  const h = harness([folio('SIN-DETALLE', 'pallet', 240, { calibre: 'MIX', desglose_incompleto: true }), folio('SAL-40', 'saldo', 40)]);
+  try {
+    await h.mount(); await h.capacity('240'); await h.press('Otro folio'); await h.number('NO-ADIVINAR');
+    await h.add('SIN-DETALLE'); await h.add('SAL-40'); await h.contribution(0, '200');
+    assert.match(h.message(), /MIX sin cantidades por componente/);
+    await h.press('Confirmar repaletizaje');
+    assert.equal(h.writes.length, 0); assert.match(h.message(), /Regulariza el desglose/);
   } finally { await h.unmount(); }
 });
 
