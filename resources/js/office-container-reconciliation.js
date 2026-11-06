@@ -1,6 +1,7 @@
 const escapeHtml = (value) => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
 const number = (value) => new Intl.NumberFormat('es-CL').format(value);
 const base = '/api/envases/cuenta-corriente/conciliaciones-salida';
+const normalizeGuide = (value) => String(value ?? '').trim().replace(/[ .]/g, '').replace(/^0+(?=\d)/, '').toUpperCase();
 
 export function createContainerReconciliation({ api, catalogs, scope, afterApplied, toast }) {
     const el = (id) => document.getElementById(id);
@@ -15,8 +16,19 @@ export function createContainerReconciliation({ api, catalogs, scope, afterAppli
 
     function describePair(item) {
         if (!item) return;
-        el('duplicatePairTitle').textContent = `${item.cliente} · Guía de salida ${item.guia_salida}`;
-        el('duplicatePairDocuments').textContent = `${item.recepcion} · Guía de ingreso ${item.guia_ingreso} · Despacho ${item.despacho}`;
+        el('duplicatePairTitle').textContent = `${item.cliente} · Despacho ${item.despacho}`;
+        el('duplicatePairDocuments').textContent = `${item.recepcion} · Guía de ingreso ${item.guia_ingreso} · Salida Romana ${item.guia_salida_romana ?? item.guia_salida} · Salida Despacho ${item.guia_salida}`;
+        const different = normalizeGuide(item.guia_salida_romana ?? item.guia_salida) !== normalizeGuide(item.guia_salida);
+        el('duplicateDifferentGuides').hidden = !different;
+        previewForm.elements.guias_distintas_verificadas.required = different;
+    }
+
+    function updateSearchRequirements() {
+        const manual = search.elements.coincidencia.value === 'manual';
+        search.elements.cliente_id.required = manual;
+        search.elements.buscar.required = manual;
+        search.elements.buscar.minLength = manual ? 3 : 0;
+        el('duplicateManualNotice').hidden = !manual;
     }
 
     function updateSubmit() {
@@ -61,7 +73,7 @@ export function createContainerReconciliation({ api, catalogs, scope, afterAppli
         el('duplicateDetail').hidden = true;
         el('duplicateResult').hidden = true;
         el('duplicateSearchSection').hidden = false;
-        const parameters = new URLSearchParams({ cliente_id: search.elements.cliente_id.value, buscar: search.elements.buscar.value.trim() });
+        const parameters = new URLSearchParams({ cliente_id: search.elements.cliente_id.value, buscar: search.elements.buscar.value.trim(), coincidencia: search.elements.coincidencia.value });
         if (!parameters.get('cliente_id')) parameters.delete('cliente_id');
         parameters.set('temporada_id', state.season);
         parameters.set('page', page);
@@ -71,8 +83,8 @@ export function createContainerReconciliation({ api, catalogs, scope, afterAppli
         state.lastPage = response.meta.last_page;
         el('duplicateCandidatesNote').textContent = `${response.meta.total} posibles dobles salidas pendientes. Revisa cada coincidencia antes de aplicar.`;
         el('duplicatePage').textContent = `Página ${state.page} de ${state.lastPage}`;
-        el('duplicateCandidates').innerHTML = state.items.length ? state.items.map((item, index) => `<article><div><strong>${escapeHtml(item.cliente)} · Salida ${escapeHtml(item.guia_salida)}</strong><p>${escapeHtml(item.recepcion)} · Guía ingreso ${escapeHtml(item.guia_ingreso)} · ${escapeHtml(item.despacho)}</p></div><button class="secondary-button" type="button" data-duplicate-pair="${index}">Comparar documentos</button></article>`).join('')
-            : '<p>No hay coincidencias pendientes con estos filtros. Revisa la guía de uso si esperabas encontrar una.</p>';
+        el('duplicateCandidates').innerHTML = state.items.length ? state.items.map((item, index) => `<article><div><strong>${escapeHtml(item.cliente)} · Salida Despacho ${escapeHtml(item.guia_salida)}</strong><p>${escapeHtml(item.despacho)} · ${escapeHtml(item.recepcion)} · Guía ingreso ${escapeHtml(item.guia_ingreso)} · Salida Romana ${escapeHtml(item.guia_salida_romana ?? item.guia_salida)}</p></div><button class="secondary-button" type="button" data-duplicate-pair="${index}">Comparar documentos</button></article>`).join('')
+            : '<p>No hay coincidencias pendientes con estos filtros. Si hay un error de numeración, usa «Comparación manual» con el cliente y una referencia documental.</p>';
     }
 
     function showApplied(plan) {
@@ -93,6 +105,7 @@ export function createContainerReconciliation({ api, catalogs, scope, afterAppli
         }
         state.season = active.id;
         search.reset();
+        updateSearchRequirements();
         search.elements.cliente_id.innerHTML = '<option value="">Todos los clientes</option>' + catalogs().clientes.map((client) => `<option value="${escapeHtml(client.id)}">${escapeHtml(client.codigo)} · ${escapeHtml(client.nombre)}</option>`).join('');
         search.elements.cliente_id.value = selected.cliente_id || '';
         dialog.showModal();
@@ -104,6 +117,7 @@ export function createContainerReconciliation({ api, catalogs, scope, afterAppli
         run('Buscando coincidencias…', () => loadCandidates());
     });
     search.addEventListener('input', () => {
+        updateSearchRequirements();
         state.items = [];
         el('duplicateCandidates').innerHTML = '';
         el('duplicateCandidatesNote').textContent = 'Filtros modificados. Pulsa Buscar coincidencias para actualizar la lista.';
@@ -127,11 +141,11 @@ export function createContainerReconciliation({ api, catalogs, scope, afterAppli
         el('duplicatePairTitle').focus();
     });
 
-    previewForm.elements.conservar.addEventListener('change', invalidate);
+    previewForm.addEventListener('change', invalidate);
     previewForm.addEventListener('submit', (event) => {
         event.preventDefault();
         if (state.busy || !state.selected) return;
-        const body = { recepcion_id: state.selected.recepcion_id, guia_id: state.selected.guia_id, conservar: previewForm.elements.conservar.value };
+        const body = { recepcion_id: state.selected.recepcion_id, guia_id: state.selected.guia_id, conservar: previewForm.elements.conservar.value, guias_distintas_verificadas: previewForm.elements.guias_distintas_verificadas.checked };
         invalidate();
         const revision = state.revision;
         run('Comparando cantidades…', async () => {

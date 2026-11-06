@@ -102,6 +102,140 @@ class SalidaUnicaEnvasesTest extends TestCase
         return [...['recepcion_id' => $this->recepcion->id, 'guia_id' => $this->guia->id, 'conservar' => 'romana'], ...$cambios];
     }
 
+    private function prepararNumerosDistintos(): void
+    {
+        $this->recepcion->update(['numero_recepcion' => 'REC-2611-0009', 'numero_guia_salida' => '2234']);
+        $this->guia->update(['numero' => 'GDE-2611-0006', 'numero_guia_despacho' => '2235']);
+        foreach (['bins' => 14, 'totes' => 340] as $tipo => $cantidad) {
+            $this->recepcion->salidasEnvases()->where('tipo_envase', $tipo)->update(['cantidad' => $cantidad]);
+            $this->recepcion->detallesEnvases()->where('tipo_envase', $tipo)->update(['cantidad_declarada' => $cantidad, 'cantidad_validada' => $cantidad]);
+            MovimientoEnvase::query()->where('recepcion_romana_id', $this->recepcion->id)->where('tipo_envase', $tipo)
+                ->update(['cantidad' => $cantidad, 'numero_documento' => '2234']);
+            MovimientoEnvase::query()->where('documento_id', $this->guia->id)->where('tipo_envase', $tipo)
+                ->update(['cantidad' => $cantidad, 'numero_documento' => '2235']);
+        }
+    }
+
+    public function test_comparacion_manual_encuentra_2235_y_2234_sin_renumerar_y_exige_cliente_y_referencia(): void
+    {
+        $this->prepararNumerosDistintos();
+        $cantidad = MovimientoEnvase::count();
+        $base = '/api/envases/cuenta-corriente/conciliaciones-salida?temporada_id='.$this->temporada->id;
+        $this->getJson($base)->assertOk()->assertJsonPath('meta.total', 0);
+        $this->getJson($base.'&coincidencia=manual')->assertUnprocessable()->assertJsonValidationErrors(['cliente_id', 'buscar']);
+        $manual = $base.'&coincidencia=manual&cliente_id='.$this->cliente->id;
+        $this->getJson($manual.'&buscar=2')->assertUnprocessable()->assertJsonValidationErrors('buscar');
+        foreach (['2235', '0002.234', 'REC-2611-0009', 'GDE-2611-0006'] as $referencia) {
+            $this->getJson($manual.'&buscar='.$referencia)->assertOk()->assertJsonPath('meta.total', 1)
+                ->assertJsonPath('data.0.recepcion_id', $this->recepcion->id)->assertJsonPath('data.0.guia_id', $this->guia->id)
+                ->assertJsonPath('data.0.guia_salida_romana', '2234')->assertJsonPath('data.0.guia_salida', '2235');
+        }
+        $otro = Cliente::create(['codigo' => 'OTRO-MANUAL', 'nombre' => 'Otro cliente', 'activo' => true]);
+        $this->getJson($base.'&coincidencia=manual&cliente_id='.$otro->id.'&buscar=2235')->assertOk()->assertJsonPath('meta.total', 0);
+        $this->assertSame($cantidad, MovimientoEnvase::count());
+    }
+
+    public function test_concilia_guias_distintas_con_confirmacion_expresa_y_conserva_ambos_numeros_en_auditoria(): void
+    {
+        $this->prepararNumerosDistintos();
+        $base = '/api/envases/cuenta-corriente/conciliaciones-salida';
+        $datos = $this->datosConciliacion();
+        $cantidad = MovimientoEnvase::count();
+        $this->postJson($base.'/previsualizar', $datos)->assertConflict()->assertJsonPath('codigo', 'conflicto_operacional');
+        $datos['guias_distintas_verificadas'] = true;
+        $plan = $this->postJson($base.'/previsualizar', $datos)->assertOk()
+            ->assertJsonPath('data.documentos.guia_salida_romana', '2234')->assertJsonPath('data.documentos.guia_salida', '2235')->json('data');
+        $this->assertSame($cantidad, MovimientoEnvase::count());
+        $datos += ['hash' => $plan['hash'], 'motivo' => 'Error de digitación: se verificó que 2235 y 2234 son la misma salida', 'cantidades_verificadas' => true];
+        $this->postJson($base.'/aplicar', [...$datos, 'guias_distintas_verificadas' => false])->assertConflict();
+        $this->postJson($base.'/aplicar', $datos)->assertOk()->assertJsonPath('data.compensaciones', 2);
+        $this->postJson($base.'/aplicar', $datos)->assertOk();
+        $this->assertSame($cantidad + 2, MovimientoEnvase::count());
+        $this->assertSame('2235', $this->guia->fresh()->numero_guia_despacho);
+        $this->assertSame('2234', $this->recepcion->fresh()->numero_guia_salida);
+        foreach (MovimientoEnvase::where('tipo_movimiento', 'conciliacion_salida')->get() as $correccion) {
+            $this->assertSame('2234', $correccion->datos['guia_salida_romana']);
+            $this->assertSame('2235', $correccion->datos['guia_salida_despacho']);
+            $this->assertTrue($correccion->datos['guias_distintas_verificadas']);
+            $this->assertSame($this->admin->id, $correccion->creado_por_user_id);
+        }
+        foreach (['bins' => 9986, 'totes' => 9660] as $tipo => $saldo) {
+            $this->assertSame($saldo, $this->saldo($tipo, 'signo_cuenta'));
+            $this->assertSame($saldo, $this->saldo($tipo, 'signo_existencia'));
+        }
+        $estado = app(ServicioCuentaCorrienteEnvases::class)->estadoCuenta($this->cliente, $this->temporada, null, null);
+        $tipos = collect($estado['tipos'])->keyBy('tipo_envase');
+        $this->assertSame(14, $tipos['bins']['salidas']);
+        $this->assertSame(340, $tipos['totes']['salidas']);
+        $this->assertSame(14, $tipos['esponjas']['salidas']);
+        $inventario = app(ServicioGuiaDespachoEnvases::class)->inventario($this->temporada);
+        $this->assertSame(9660, collect($inventario['origenes'])->firstWhere('tipo_envase', 'totes')['fisico']);
+        $this->getJson($base.'?temporada_id='.$this->temporada->id.'&coincidencia=manual&cliente_id='.$this->cliente->id.'&buscar=2235')
+            ->assertOk()->assertJsonPath('meta.total', 0);
+        // La anulación del respaldo no vuelve a abonar lo que ya se compensó.
+        app(ServicioGuiaDespachoEnvases::class)->anular($this->guia, 'Anular el respaldo conciliado manualmente', $this->admin);
+        $this->assertSame(9660, $this->saldo('totes', 'signo_cuenta'));
+        $this->assertSame(9660, $this->saldo('totes', 'signo_existencia'));
+    }
+
+    public function test_hash_manual_incluye_ambos_numeros_y_no_admite_otra_recepcion(): void
+    {
+        $this->prepararNumerosDistintos();
+        $base = '/api/envases/cuenta-corriente/conciliaciones-salida';
+        $datos = $this->datosConciliacion(['guias_distintas_verificadas' => true]);
+        $hash = $this->postJson($base.'/previsualizar', $datos)->assertOk()->json('data.hash');
+        $cantidad = MovimientoEnvase::count();
+        // Incluso sin incremento de versión, un cambio documental invalida el plan.
+        $this->recepcion->update(['numero_guia_salida' => '2233']);
+        $this->postJson($base.'/aplicar', [...$datos, 'hash' => $hash, 'motivo' => 'Respaldos de salida revisados', 'cantidades_verificadas' => true])->assertConflict();
+        $this->assertSame($cantidad, MovimientoEnvase::count());
+        $this->recepcion->update(['numero_guia_salida' => '2234']);
+        $otra = $this->recepcion->replicate(['operacion_id', 'numero_recepcion', 'numero_guia_despacho']);
+        $otra->fill(['operacion_id' => (string) Str::uuid(), 'numero_recepcion' => 'REC-OTRA', 'numero_guia_despacho' => 'OTRA-ENTRADA'])->save();
+        $this->postJson($base.'/aplicar', [...$datos, 'recepcion_id' => $otra->id, 'hash' => $hash, 'motivo' => 'Respaldos de salida revisados', 'cantidades_verificadas' => true])->assertConflict();
+        $otro = Cliente::create(['codigo' => 'OTRO-SALIDA', 'nombre' => 'Otro cliente', 'activo' => true]);
+        $otra->update(['cliente_id' => $otro->id]);
+        $this->postJson($base.'/previsualizar', [...$datos, 'recepcion_id' => $otra->id])->assertConflict();
+        $this->assertSame($cantidad, MovimientoEnvase::count());
+    }
+
+    public function test_recepcion_eliminada_no_se_empareja_ni_se_compensa_de_nuevo_con_la_guia_independiente(): void
+    {
+        $this->prepararNumerosDistintos();
+        $eliminada = $this->recepcion->replicate(['operacion_id', 'numero_recepcion', 'numero_guia_despacho']);
+        $eliminada->fill(['operacion_id' => (string) Str::uuid(), 'numero_recepcion' => 'REC-2611-0006', 'numero_guia_despacho' => '13343', 'numero_guia_salida' => '2235'])->save();
+        $m = $this->movimiento('bins', 14, 'arrendada', 'salida_recepcion_fruta', -1, -1,
+            ['recepcion_romana_id' => $eliminada->id, 'documento_tipo' => 'recepcion_romana', 'documento_id' => $eliminada->id, 'numero_documento' => '2235']);
+        $eliminada->salidasEnvases()->create(['tipo_envase' => 'bins', 'cantidad' => 14, 'tara_unitaria' => 1, 'movimiento_envase_id' => $m->id]);
+        app(ServicioAnulacionRecepcionRomana::class)->eliminar($eliminada, ['operacion_id' => (string) Str::uuid(), 'version_conocida' => $eliminada->refresh()->version, 'motivo' => 'Recepción duplicada por error de digitación'], $this->admin);
+        $base = '/api/envases/cuenta-corriente/conciliaciones-salida';
+        $this->getJson($base.'?temporada_id='.$this->temporada->id)->assertOk()->assertJsonPath('meta.total', 0);
+        $this->getJson($base.'?temporada_id='.$this->temporada->id.'&coincidencia=manual&cliente_id='.$this->cliente->id.'&buscar=2235')
+            ->assertOk()->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.recepcion_id', $this->recepcion->id);
+        $cantidad = MovimientoEnvase::count();
+        $this->postJson($base.'/previsualizar', $this->datosConciliacion(['recepcion_id' => $eliminada->id, 'guias_distintas_verificadas' => true]))->assertConflict();
+        $this->assertSame($cantidad, MovimientoEnvase::count());
+        $this->assertSame(EstadoGuiaDespachoEnvase::Confirmada, $this->guia->fresh()->estado);
+        // El bloqueo al corregir 2235 a 2234 corresponde a REC-0009 vigente, no a REC-0006 eliminada.
+        try {
+            app(ServicioGuiaEmitidaEnvases::class)->registrarNumero($this->guia, '2234', 'Corregir error de digitación', $this->admin);
+            $this->fail('No debe renumerar para ocultar la doble salida vigente.');
+        } catch (ConflictoOperacion $e) {
+            $this->assertStringContainsString('REC-2611-0009', $e->getMessage());
+            $this->assertStringContainsString('Comparación manual', $e->getMessage());
+        }
+        $this->guia->update(['numero_guia_despacho' => '2240']);
+        app(ServicioGuiaEmitidaEnvases::class)->registrarNumero($this->guia, '2235', 'Número verificado con respaldo físico', $this->admin);
+        $this->assertSame($cantidad, MovimientoEnvase::count());
+        $estado = app(ServicioCuentaCorrienteEnvases::class)->estadoCuenta($this->cliente, $this->temporada, null, null);
+        $this->assertSame(28, collect($estado['tipos'])->firstWhere('tipo_envase', 'bins')['salidas']);
+        // Una marca de eliminación, aun con un estado histórico inconsistente, tampoco se ofrece.
+        $eliminada->update(['estado' => 'cerrado']);
+        $this->getJson($base.'?temporada_id='.$this->temporada->id.'&coincidencia=manual&cliente_id='.$this->cliente->id.'&buscar=2235')
+            ->assertOk()->assertJsonPath('meta.total', 1);
+        $this->postJson($base.'/previsualizar', $this->datosConciliacion(['recepcion_id' => $eliminada->id]))->assertConflict();
+    }
+
     public function test_oficina_lista_coincidencias_normalizadas_y_filtra_por_cliente_y_documento_sin_escribir(): void
     {
         $cantidad = MovimientoEnvase::count();

@@ -21,7 +21,7 @@ async function setup(browser, manage, width = 390, historical = false, reconcili
     const writes = [];
     const reconciliationCalls = { searches: [], previews: [], applies: [], refreshes: 0 };
     let reconciled = false;
-    const pair = { recepcion_id: 'recepcion-1', guia_id: 'guia-1', cliente: client.nombre, recepcion: 'REC-2627-0011', guia_ingreso: '11893', despacho: 'GDE-2627-0001', guia_salida: '2236' };
+    const pair = { recepcion_id: 'recepcion-1', guia_id: 'guia-1', cliente: client.nombre, recepcion: 'REC-2627-0011', guia_ingreso: '11893', despacho: 'GDE-2627-0001', guia_salida: reconciliation.different ? '2235' : '2236', guia_salida_romana: reconciliation.different ? '2234' : '002.236' };
     const audit = [{ responsable: identity.nombre, motivo: 'Respaldo físico revisado con la guía 2236', conservar: 'despacho', fecha: '2026-11-06T15:00:00Z' }];
     let balance = historical ? -306 : 0;
     await context.route('http://localhost/**', async (route) => {
@@ -38,7 +38,8 @@ async function setup(browser, manage, width = 390, historical = false, reconcili
         if (path.endsWith('/conciliaciones-salida')) {
             const query = Object.fromEntries(new URL(request.url()).searchParams);
             reconciliationCalls.searches.push(query);
-            return route.fulfill({ json: { data: reconciled ? [] : [pair], meta: { page: Number(query.page || 1), last_page: 2, total: reconciled ? 0 : 16 } } });
+            const empty = reconciled || (reconciliation.different && query.coincidencia !== 'manual');
+            return route.fulfill({ json: { data: empty ? [] : [pair], meta: { page: Number(query.page || 1), last_page: 2, total: empty ? 0 : 16 } } });
         }
         if (path.endsWith('/conciliaciones-salida/previsualizar')) {
             const body = request.postDataJSON();
@@ -160,7 +161,7 @@ test('previsualiza y confirma duplicados con fuente explícita, sin perder espon
             await page.locator('#duplicatePreviewForm [name="conservar"]').selectOption('romana');
             await page.locator('#duplicatePreviewForm [type="submit"]').click();
             await page.locator('#duplicateComparison').waitFor({ state: 'visible' });
-            assert.match(await page.locator('#duplicatePairDocuments').textContent(), /Revisado/);
+            assert.match(await page.locator('#duplicatePairTitle').textContent(), /Revisado/);
             assert.match(await page.locator('#duplicateComparisonBody').textContent(), /1.002/);
             const apply = page.locator('#duplicateApplyForm');
             assert.equal(await apply.locator('[type="submit"]').isDisabled(), true);
@@ -220,6 +221,53 @@ test('un conflicto conserva el motivo y exige nueva comparación y confirmación
         assert.notEqual(calls.applies[0].hash, calls.applies[1].hash);
         assert.deepEqual(errors, []);
         await context.close();
+    } finally { await browser.close(); }
+});
+
+test('compara 2235 y 2234 manualmente y exige verificar ambos respaldos antes de previsualizar', async () => {
+    const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined, args: ['--no-sandbox', '--disable-gpu'] });
+    try {
+        for (const width of [390, 1280]) {
+            const { context, page, reconciliationCalls: calls, errors } = await setup(browser, true, width, false, { different: true });
+            await page.locator('#duplicateReconciliationOpen').click();
+            await page.waitForFunction(() => document.getElementById('duplicateCandidates').textContent.includes('No hay coincidencias'));
+            const search = page.locator('#duplicateSearchForm');
+            await search.locator('[name="coincidencia"]').selectOption('manual');
+            assert.equal(await search.locator('[name="cliente_id"]').getAttribute('required'), '');
+            assert.equal(await search.locator('[name="buscar"]').getAttribute('required'), '');
+            await search.locator('[name="cliente_id"]').selectOption('cliente');
+            await search.locator('[name="buscar"]').fill('2235');
+            await search.locator('[type="submit"]').click();
+            await page.locator('#duplicateCandidates [data-duplicate-pair]').click();
+            assert.equal(calls.searches.at(-1).coincidencia, 'manual');
+            assert.equal(calls.searches.at(-1).cliente_id, 'cliente');
+            assert.match(await page.locator('#duplicatePairDocuments').textContent(), /Salida Romana 2234 · Salida Despacho 2235/);
+            const preview = page.locator('#duplicatePreviewForm');
+            await preview.locator('[name="conservar"]').selectOption('romana');
+            await preview.locator('[type="submit"]').click();
+            assert.equal(calls.previews.length, 0);
+            assert.equal(await page.locator('#duplicateDifferentGuides').isVisible(), true);
+            await preview.locator('[name="guias_distintas_verificadas"]').check();
+            await preview.locator('[type="submit"]').click();
+            const apply = page.locator('#duplicateApplyForm');
+            await apply.waitFor({ state: 'visible' });
+            assert.equal(calls.previews[0].guias_distintas_verificadas, true);
+            await apply.locator('[name="motivo"]').fill('Verificados los respaldos 2235 y 2234: misma salida física');
+            await apply.locator('[name="cantidades_verificadas"]').check();
+            await preview.locator('[name="guias_distintas_verificadas"]').uncheck();
+            assert.equal(await apply.isVisible(), false);
+            await preview.locator('[name="guias_distintas_verificadas"]').check();
+            await preview.locator('[type="submit"]').click();
+            await apply.waitFor({ state: 'visible' });
+            await apply.locator('[name="cantidades_verificadas"]').check();
+            await apply.locator('[type="submit"]').click();
+            await page.locator('#duplicateResult').waitFor({ state: 'visible' });
+            assert.equal(calls.applies.length, 1);
+            assert.equal(calls.applies[0].guias_distintas_verificadas, true);
+            assert.equal(await page.locator('#duplicateReconciliationDialog').evaluate((dialog) => dialog.scrollWidth <= dialog.clientWidth + 1), true);
+            assert.deepEqual(errors, []);
+            await context.close();
+        }
     } finally { await browser.close(); }
 });
 
