@@ -547,3 +547,36 @@
 
 .review-dialog .historical-confirmation { display: flex; align-items: flex-start; gap: 10px; }
 .review-dialog .historical-confirmation input { width: auto; flex: none; margin-top: 3px; }
+
+.accounts-heading__actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.reconciliation-dialog { width: min(980px, calc(100vw - 24px)); }
+.reconciliation-shell { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; padding: clamp(16px, 3vw, 28px); min-width: 0; }
+.reconciliation-shell > * { min-width: 0; }
+.reconciliation-shell p { line-height: 1.5; overflow-wrap: anywhere; }
+.reconciliation-dialog form { padding: 0; min-width: 0; grid-template-columns: minmax(0, 1fr); }
+.reconciliation-dialog [hidden] { display: none; }
+.reconciliation-dialog .reconciliation-search { grid-template-columns: 1fr 1fr auto; align-items: end; }
+.reconciliation-dialog button { min-height: 44px; }
+.reconciliation-candidates { display: grid; gap: 10px; margin: 12px 0; }
+.reconciliation-candidates article { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 9px; }
+.reconciliation-candidates p { margin: 5px 0 0; color: var(--text-secondary); }
+.reconciliation-pagination { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+#duplicateDetail { min-width: 0; }
+#duplicateDetail:not([hidden]) { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
+.reconciliation-table-scroll { overflow-x: auto; max-width: 100%; min-width: 0; margin-top: 12px; }
+.reconciliation-table-scroll table { width: 100%; min-width: 740px; border-collapse: collapse; }
+.reconciliation-scroll-hint { display: none; }
+.reconciliation-table-scroll th, .reconciliation-table-scroll td { padding: 9px; border-bottom: 1px solid var(--line); text-align: right; }
+.reconciliation-table-scroll th:first-child, .reconciliation-table-scroll td:nth-child(2) { text-align: left; }
+.reconciliation-table-scroll td:nth-child(6) { font-weight: 800; color: var(--text-strong); }
+.review-dialog .reconciliation-confirmation { display: flex; align-items: flex-start; gap: 10px; }
+.review-dialog .reconciliation-confirmation input { width: 18px; height: 18px; min-height: 18px; min-width: 18px; padding: 0; flex: 0 0 18px; margin-top: 3px; accent-color: var(--corporate-blue); }
+.reconciliation-guide ol { padding-left: 24px; margin: 0; }
+.reconciliation-guide li { margin-bottom: 14px; line-height: 1.6; }
+@media (max-width: 640px) {
+    .accounts-heading { align-items: flex-start; flex-direction: column; }
+    .accounts-heading__actions { justify-content: flex-start; }
+    .reconciliation-dialog .reconciliation-search { grid-template-columns: 1fr; }
+    .reconciliation-candidates article { flex-direction: column; align-items: stretch; }
+    .reconciliation-scroll-hint { display: block; }
+}

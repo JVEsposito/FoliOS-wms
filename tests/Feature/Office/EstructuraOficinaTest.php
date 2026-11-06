@@ -9,6 +9,19 @@ use Tests\TestCase;
 
 class EstructuraOficinaTest extends TestCase
 {
+    public function test_cuenta_envases_incluye_conciliacion_y_guia_de_uso(): void
+    {
+        $html = $this->get('/oficina/envases/cuenta-corriente')->assertOk()->getContent();
+        foreach (['duplicateReconciliationOpen', 'duplicateReconciliationDialog', 'duplicateSearchForm', 'duplicatePreviewForm', 'duplicateApplyForm', 'reconciliationGuideDialog'] as $id) {
+            $this->assertStringContainsString('id="'.$id.'"', $html);
+        }
+        $this->assertStringContainsString('Confirmar conciliación', $html);
+        if (getenv('ESTIBA_EXPORTAR_UI_TESTS') === '1') {
+            File::ensureDirectoryExists(storage_path('app/ui/oficina'));
+            File::put(storage_path('app/ui/oficina/cuenta-corriente.html'), $html);
+        }
+    }
+
     public function test_repaletizajes_exporta_la_vista_para_probar_sus_origenes(): void
     {
         $html = $this->get('/oficina/validacion/repaletizajes')->assertOk()->getContent();
