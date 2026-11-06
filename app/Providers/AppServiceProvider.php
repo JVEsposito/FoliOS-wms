@@ -154,6 +154,8 @@ class AppServiceProvider extends ServiceProvider
 
         $alcance = app(AlcanceOperacionalUsuario::class);
 
+        Gate::define('controlar-personal-frigorifico', fn (User $usuario): bool => $alcance->puedeControlarPersonalFrigorifico($usuario));
+
         Gate::define(
             'consultar-configuracion-camaras',
             fn (User $usuario): bool => $alcance->puedeConsultarConfiguracionCamaras($usuario),

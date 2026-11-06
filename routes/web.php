@@ -18,6 +18,7 @@ Route::view('/oficina/frigorifico/camaras', 'office.cameras', [
     'cameraMode' => 'operacion',
 ]);
 Route::view('/oficina/frigorifico/discrepancias', 'office.discrepancies');
+Route::view('/oficina/frigorifico/control-personal', 'office.staff-control');
 Route::view('/oficina/frigorifico/labores-turno', 'office.shift-duties');
 Route::view('/oficina/administracion/camaras', 'office.cameras', [
     'navigationDomain' => 'administracion',

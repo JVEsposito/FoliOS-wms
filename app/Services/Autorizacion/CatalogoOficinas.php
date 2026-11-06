@@ -68,6 +68,7 @@ class CatalogoOficinas
         ['frigorifico', 'Prefrío', '/oficina/prefrio', 'frigorifico.prefrio', ['puede_consultar_prefrio']],
         ['frigorifico', 'Punto de rocío', '/oficina/prefrio/punto-rocio', 'frigorifico.prefrio', ['puede_consultar_prefrio']],
         ['frigorifico', 'Cámaras', '/oficina/frigorifico/camaras', 'frigorifico.camaras', ['ambito_camaras_productos']],
+        ['frigorifico', 'Control de personal', '/oficina/frigorifico/control-personal', 'frigorifico.control-personal', ['puede_controlar_personal_frigorifico']],
         ['frigorifico', 'Labores por turno', '/oficina/frigorifico/labores-turno', 'frigorifico.camaras', ['puede_supervisar_camaras_productos']],
         ['frigorifico', 'Discrepancias', '/oficina/frigorifico/discrepancias', 'frigorifico.camaras', ['puede_supervisar']],
         ['frigorifico', 'Cargas', '/oficina/frigorifico/despacho/cargas', 'frigorifico.cargas', ['puede_consultar_catalogo_cargas']],

@@ -37,6 +37,7 @@ class IdentidadOficina
             'modulos_acceso' => $capacidades['modulos_acceso'],
             'ambito_camaras' => $this->alcance->ambitoCamaras($usuario),
             'capacidades' => $capacidades,
+            'puede_controlar_personal_frigorifico' => $capacidades['puede_controlar_personal_frigorifico'],
             'puede_configurar_camaras' => $usuario->can('crear-camaras-productos')
                 || $usuario->can('crear-camaras-materiales')
                 || $usuario->can('crear-camaras-materia-prima'),

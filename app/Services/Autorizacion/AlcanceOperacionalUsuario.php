@@ -1408,6 +1408,12 @@ class AlcanceOperacionalUsuario
     /**
      * @return array<string, mixed>
      */
+    public function puedeControlarPersonalFrigorifico(User $usuario): bool
+    {
+        return in_array($this->rolEfectivo($usuario), [RolUsuario::Administrador, RolUsuario::SupervisorFrio], true)
+            && $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador, RolUsuario::SupervisorFrio], 'frigorifico.control-personal');
+    }
+
     public function capacidadesApi(User $usuario): array
     {
         return [
@@ -1415,6 +1421,7 @@ class AlcanceOperacionalUsuario
             'puede_consultar_porteria' => $this->puedeConsultarPorteria($usuario),
             'puede_registrar_porteria' => $this->puedeRegistrarPorteria($usuario),
             'puede_administrar_porteria' => $this->puedeAdministrarPorteria($usuario),
+            'puede_controlar_personal_frigorifico' => $this->puedeControlarPersonalFrigorifico($usuario),
             'solo_consulta' => $this->esSoloConsulta($usuario),
             'modulos_acceso' => $this->catalogoModulos->modulosUsuario($usuario),
             'modulos_tablet' => $this->catalogoModulos->modulosTabletUsuario($usuario),

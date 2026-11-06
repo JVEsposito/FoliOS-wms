@@ -34,6 +34,7 @@ use App\Http\Controllers\Api\ConsultaSagController;
 use App\Http\Controllers\Api\ConsumosOrdenMaterialController;
 use App\Http\Controllers\Api\ContextoOficinaController;
 use App\Http\Controllers\Api\ControlAmbientalController;
+use App\Http\Controllers\Api\ControlPersonalFrigorificoController;
 use App\Http\Controllers\Api\CorreccionItemMaterialController;
 use App\Http\Controllers\Api\CuentaCorrienteEnvaseController;
 use App\Http\Controllers\Api\DefectoRecepcionMpController;
@@ -131,6 +132,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/administracion/reparto-envases/{especieValidacion}', [CatalogoEnvaseController::class, 'guardar']);
     Route::get('/user', fn (Request $request) => $request->user());
     Route::get('/demo/autorizar', [AccesoOficinaController::class, 'autorizarDemo']);
+    Route::middleware('can:controlar-personal-frigorifico')->prefix('frigorifico/control-personal')->group(function (): void {
+        Route::get('/', [ControlPersonalFrigorificoController::class, 'index']);
+        Route::get('/exportar', [ControlPersonalFrigorificoController::class, 'exportar']);
+        Route::post('/personas', [ControlPersonalFrigorificoController::class, 'persona']);
+        Route::put('/personas/{id}', [ControlPersonalFrigorificoController::class, 'persona']);
+        Route::post('/jornadas', [ControlPersonalFrigorificoController::class, 'jornada']);
+        Route::put('/jornadas/{id}', [ControlPersonalFrigorificoController::class, 'jornada']);
+        Route::post('/jornadas/{id}/anular', [ControlPersonalFrigorificoController::class, 'anular']);
+        Route::get('/jornadas/{id}/historial', [ControlPersonalFrigorificoController::class, 'historial']);
+    });
     Route::get('/gerencia/resumen', PanelGerencialController::class)
         ->middleware('can:consultar-panel-gerencial');
     Route::middleware('can:supervisar-camaras-productos')->prefix('labores-turno')->group(function () {
