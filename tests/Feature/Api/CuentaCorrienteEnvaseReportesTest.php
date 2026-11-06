@@ -221,8 +221,10 @@ class CuentaCorrienteEnvaseReportesTest extends TestCase
         $this->assertSame(150, collect($this->getJson('/api/envases/cuenta-corriente/movimientos')->json('balances'))->firstWhere('tipo_envase', 'bins')['saldo']);
 
         $pdf = $this->get('/api/envases/cuenta-corriente/estado-cuenta?desde=2026-10-14&cliente_id='.$this->productor->id)->assertOk()->getContent();
-        $this->assertStringContainsString('(5501) Tj', $pdf);
-        $this->assertStringNotContainsString('(5502) Tj', $pdf);
+        $this->assertStringContainsString('5501) Tj', $pdf);
+        $this->assertStringNotContainsString('5502) Tj', $pdf);
+        $this->assertCount(1, $estado['grupos_documentos']);
+        $this->assertCount(2, $estado['grupos_documentos'][0]['lineas']);
         $this->assertStringNotContainsString('Anulaci', $pdf);
 
         // La trazabilidad interna conserva todo: despacho, anulación y número emitido.
@@ -295,6 +297,19 @@ class CuentaCorrienteEnvaseReportesTest extends TestCase
         $this->assertSame('Productor / CSG', $filas[0][8]);
         $this->assertSame(['REC-1', 'Recepción con fruta', 'Bins plástico', 'Del cliente', '300', '', '300', $productores], array_slice($filas[1], 1));
         $this->assertSame(['300', '180', '130', '140', '160'], array_column(array_slice($filas, 1), 7));
+    }
+
+    public function test_dos_documentos_con_misma_guia_y_fecha_no_se_fusionan_en_el_pdf(): void
+    {
+        foreach ([10, 20] as $cantidad) {
+            $this->movimiento($this->productor, 'recepcion_fruta', $cantidad, 1, 1, 'cliente', '2026-10-14 09:00', 'MISMA-GUIA')
+                ->update(['documento_id' => (string) Str::uuid()]);
+        }
+        $estado = app(ServicioCuentaCorrienteEnvases::class)
+            ->estadoCuenta($this->productor, $this->temporada, '2026-10-14', '2026-10-14');
+        $this->assertCount(2, $estado['grupos_documentos']);
+        $this->assertSame($estado['movimientos'], array_merge(...array_column($estado['grupos_documentos'], 'lineas')));
+        $this->assertSame(190, $estado['tipos'][0]['saldo_final']);
     }
 
     private function movimiento(

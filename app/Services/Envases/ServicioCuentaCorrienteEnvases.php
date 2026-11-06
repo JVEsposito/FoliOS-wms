@@ -297,6 +297,18 @@ class ServicioCuentaCorrienteEnvases
         }
         // Dentro de una guía con varios envases, las líneas van en el orden del catálogo.
         usort($lineas, fn (array $a, array $b): int => $a['orden'] <=> $b['orden']);
+        // Dos documentos distintos pueden compartir guía, fecha y productor.
+        // La agrupación visual conserva la identidad interna del documento.
+        $gruposDocumentos = [];
+        foreach ($lineas as $linea) {
+            $indice = $linea['orden'][0];
+            $gruposDocumentos[$indice] ??= [
+                'fecha' => $linea['fecha'], 'documento' => $linea['documento'],
+                'movimiento' => $linea['movimiento'], 'productor' => $linea['productor'], 'lineas' => [],
+            ];
+            unset($linea['orden']);
+            $gruposDocumentos[$indice]['lineas'][] = $linea;
+        }
         $lineas = array_map(function (array $linea): array {
             unset($linea['orden']);
 
@@ -317,6 +329,7 @@ class ServicioCuentaCorrienteEnvases
             'hasta' => $hasta,
             'tipos' => collect($tipos)->sortBy('orden')->values()->all(),
             'movimientos' => $lineas,
+            'grupos_documentos' => array_values($gruposDocumentos),
             'lineas_pendientes_validacion' => $pendientes,
             'emitido_at' => $this->local(now()),
         ];
