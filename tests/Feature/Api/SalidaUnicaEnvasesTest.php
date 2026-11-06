@@ -97,6 +97,116 @@ class SalidaUnicaEnvasesTest extends TestCase
         return $s->aplicar($this->recepcion, $this->guia, $conservar, $plan['hash'], 'Cantidades verificadas con el respaldo físico', $this->admin);
     }
 
+    private function datosConciliacion(array $cambios = []): array
+    {
+        return [...['recepcion_id' => $this->recepcion->id, 'guia_id' => $this->guia->id, 'conservar' => 'romana'], ...$cambios];
+    }
+
+    public function test_oficina_lista_coincidencias_normalizadas_y_filtra_por_cliente_y_documento_sin_escribir(): void
+    {
+        $cantidad = MovimientoEnvase::count();
+        $ruta = '/api/envases/cuenta-corriente/conciliaciones-salida?temporada_id='.$this->temporada->id;
+        foreach (['', '&buscar=0002.236', '&buscar=11893', '&cliente_id='.$this->cliente->id] as $filtro) {
+            $this->getJson($ruta.$filtro)->assertOk()->assertHeader('Cache-Control', 'no-store, private')
+                ->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.recepcion_id', $this->recepcion->id)
+                ->assertJsonPath('data.0.guia_id', $this->guia->id)->assertJsonPath('data.0.guia_ingreso', '11893');
+        }
+        $otro = Cliente::create(['codigo' => 'SIN-DOBLE', 'nombre' => 'Otro cliente', 'activo' => true]);
+        $this->getJson($ruta.'&cliente_id='.$otro->id)->assertOk()->assertJsonCount(0, 'data');
+        $this->getJson($ruta.'&buscar=NO-EXISTE')->assertOk()->assertJsonPath('meta.total', 0);
+        $this->assertSame($cantidad, MovimientoEnvase::count());
+    }
+
+    public function test_oficina_restringe_listado_previsualizacion_y_aplicacion_a_administradores_activos(): void
+    {
+        $cantidad = MovimientoEnvase::count();
+        foreach (RolUsuario::cases() as $rol) {
+            if ($rol === RolUsuario::Administrador) {
+                continue;
+            }
+            $this->actingAs(User::factory()->create(['rol' => $rol, 'activo' => true]), 'sanctum');
+            $this->getJson('/api/envases/cuenta-corriente/conciliaciones-salida?temporada_id='.$this->temporada->id)->assertForbidden();
+            foreach (['previsualizar', 'aplicar'] as $accion) {
+                $this->postJson('/api/envases/cuenta-corriente/conciliaciones-salida/'.$accion, $this->datosConciliacion())->assertForbidden();
+            }
+        }
+        $this->admin->update(['activo' => false]);
+        $this->actingAs($this->admin->fresh(), 'sanctum');
+        $this->postJson('/api/envases/cuenta-corriente/conciliaciones-salida/previsualizar', $this->datosConciliacion())->assertForbidden();
+        $this->assertSame($cantidad, MovimientoEnvase::count());
+    }
+
+    public function test_oficina_exige_elegir_cantidades_y_previsualiza_sin_alterar_saldos(): void
+    {
+        $ruta = '/api/envases/cuenta-corriente/conciliaciones-salida/previsualizar';
+        $cantidad = MovimientoEnvase::count();
+        $this->postJson($ruta, $this->datosConciliacion(['conservar' => '']))->assertUnprocessable()->assertJsonValidationErrors('conservar');
+        $respuesta = $this->postJson($ruta, $this->datosConciliacion())->assertOk()->assertHeader('Cache-Control', 'no-store, private');
+        $filas = collect($respuesta->json('data.filas'))->keyBy('envase_propiedad');
+        $this->assertSame(7, $filas['totes|arrendada']['diferencia']);
+        $this->assertSame(1002, $filas['totes|arrendada']['conservar']);
+        $this->assertSame(1009, $filas['totes|arrendada']['compensacion']);
+        $this->assertSame(14, $filas['esponjas|propia']['conservar']);
+        $this->assertSame(0, $filas['esponjas|propia']['compensacion']);
+        $this->assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $respuesta->json('data.hash'));
+        $this->assertSame($cantidad, MovimientoEnvase::count());
+    }
+
+    public function test_oficina_confirma_con_hash_y_cantidades_verificadas_y_audita_al_usuario_de_sesion(): void
+    {
+        $base = '/api/envases/cuenta-corriente/conciliaciones-salida';
+        $hash = $this->postJson($base.'/previsualizar', $this->datosConciliacion())->assertOk()->json('data.hash');
+        $cantidad = MovimientoEnvase::count();
+        $datos = $this->datosConciliacion(['hash' => $hash, 'motivo' => 'Guía física verificada por administración', 'cantidades_verificadas' => true, 'usuario' => 'no-usar-este-actor@ejemplo.cl']);
+        $this->postJson($base.'/aplicar', [...$datos, 'cantidades_verificadas' => false])->assertUnprocessable();
+        $this->postJson($base.'/aplicar', [...$datos, 'motivo' => 'corto'])->assertUnprocessable();
+        $this->postJson($base.'/aplicar', [...$datos, 'hash' => str_repeat('0', 64)])->assertConflict();
+        $this->assertSame($cantidad, MovimientoEnvase::count());
+        $this->postJson($base.'/aplicar', $datos)->assertOk()->assertJsonPath('data.aplicada', true)
+            ->assertJsonPath('data.compensaciones', 2)->assertJsonPath('data.auditoria.0.responsable', $this->admin->name)
+            ->assertJsonPath('data.auditoria.0.motivo', $datos['motivo']);
+        $this->assertSame($cantidad + 2, MovimientoEnvase::count());
+        $this->assertSame(8998, $this->saldo('totes', 'signo_cuenta'));
+        $this->assertSame(8998, $this->saldo('totes', 'signo_existencia'));
+        $this->postJson($base.'/aplicar', $datos)->assertOk()->assertJsonPath('data.aplicada', true);
+        $this->assertSame($cantidad + 2, MovimientoEnvase::count());
+        $this->getJson($base.'?temporada_id='.$this->temporada->id)->assertOk()->assertJsonPath('meta.total', 0);
+        $this->postJson($base.'/previsualizar', $this->datosConciliacion())->assertOk()->assertJsonPath('data.aplicada', true);
+    }
+
+    public function test_oficina_rechaza_un_hash_de_otra_fuente_o_un_documento_modificado_y_permite_conservar_despacho(): void
+    {
+        $base = '/api/envases/cuenta-corriente/conciliaciones-salida';
+        $datos = $this->datosConciliacion(['motivo' => 'Cantidades físicas revisadas con la guía', 'cantidades_verificadas' => true]);
+        $hash = $this->postJson($base.'/previsualizar', $datos)->assertOk()->json('data.hash');
+        $cantidad = MovimientoEnvase::count();
+        $this->postJson($base.'/aplicar', [...$datos, 'hash' => $hash, 'conservar' => 'despacho'])->assertConflict();
+        $this->guia->increment('version');
+        $this->postJson($base.'/aplicar', [...$datos, 'hash' => $hash])->assertConflict();
+        $this->assertSame($cantidad, MovimientoEnvase::count());
+        $datos['conservar'] = 'despacho';
+        $hash = $this->postJson($base.'/previsualizar', $datos)->assertOk()->json('data.hash');
+        $this->postJson($base.'/aplicar', [...$datos, 'hash' => $hash])->assertOk();
+        $this->assertSame(8991, $this->saldo('totes', 'signo_cuenta'));
+        $this->assertSame(8991, $this->saldo('totes', 'signo_existencia'));
+        $this->assertSame(-14, $this->saldo('esponjas', 'signo_cuenta'));
+    }
+
+    public function test_oficina_no_lista_documentos_incompatibles_ni_previsualiza_otra_temporada(): void
+    {
+        $base = '/api/envases/cuenta-corriente/conciliaciones-salida';
+        $this->guia->update(['estado' => 'borrador']);
+        $this->getJson($base.'?temporada_id='.$this->temporada->id)->assertOk()->assertJsonCount(0, 'data');
+        $this->postJson($base.'/previsualizar', $this->datosConciliacion())->assertConflict();
+        $this->guia->update(['estado' => 'confirmada', 'numero_guia_despacho' => '9999']);
+        $this->getJson($base.'?temporada_id='.$this->temporada->id)->assertOk()->assertJsonCount(0, 'data');
+        $this->postJson($base.'/previsualizar', $this->datosConciliacion())->assertConflict();
+        $historica = Temporada::create([...$this->vigenciaProductiva(), 'codigo' => 'TEMP-HISTORICA', 'nombre' => 'Temporada histórica', 'activa' => false]);
+        $this->guia->update(['temporada_id' => $historica->id]);
+        $this->getJson($base.'?temporada_id='.$historica->id)->assertConflict();
+        $this->postJson($base.'/previsualizar', $this->datosConciliacion())->assertConflict();
+    }
+
     public function test_normaliza_historial_y_bloquea_confirmar_un_segundo_despacho_sin_crear_movimientos(): void
     {
         $this->assertSame('2236', $this->recepcion->fresh()->documento_salida_normalizado);

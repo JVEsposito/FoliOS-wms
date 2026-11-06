@@ -1,3 +1,5 @@
+import { createContainerReconciliation } from './office-container-reconciliation';
+
 const byId = (id) => document.getElementById(id);
 const elements = {
     access: byId('officeAccess'),
@@ -64,6 +66,11 @@ const state = {
     parameters: new URLSearchParams(),
 };
 const MOVEMENTS_LIMIT = 300;
+const reconciliation = createContainerReconciliation({
+    api, catalogs: () => state.catalogs,
+    scope: () => ({ temporada_id: elements.filters.elements.temporada_id.value, cliente_id: elements.filters.elements.cliente_id.value }),
+    afterApplied: load, toast,
+});
 
 function accountOperationId() {
     if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
@@ -204,6 +211,7 @@ async function loadCatalogs() {
     // El perfil guardado en una sesión anterior puede no conocer esta capacidad.
     state.identity.puede_ajustar_cuenta_envases = state.catalogs.puede_ajustar === true;
     elements.adjustmentNew.classList.toggle('is-hidden', !state.identity.puede_ajustar_cuenta_envases);
+    reconciliation.syncAccess();
     addOptions(elements.filters.elements.cliente_id, state.catalogs.clientes, (item) => `${item.codigo} · ${item.nombre}`);
     addOptions(
         elements.filters.elements.temporada_id,

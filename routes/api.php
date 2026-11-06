@@ -26,6 +26,7 @@ use App\Http\Controllers\Api\CierreTemporadaController;
 use App\Http\Controllers\Api\ClasificacionMaterialController;
 use App\Http\Controllers\Api\ClienteGlobalController;
 use App\Http\Controllers\Api\ComparacionCiclosPlanificadorController;
+use App\Http\Controllers\Api\ConciliacionSalidaEnvaseController;
 use App\Http\Controllers\Api\ConciliacionValidacionController;
 use App\Http\Controllers\Api\CondicionSagController;
 use App\Http\Controllers\Api\ConfiguracionCamaraController;
@@ -229,6 +230,11 @@ Route::middleware('auth:sanctum')->group(function () {
         ->middleware('can:corregir-cantidad-envases');
     Route::post('/envases/cuenta-corriente/ajustes', [CuentaCorrienteEnvaseController::class, 'registrarAjuste'])
         ->middleware('can:ajustar-cuenta-envases');
+    Route::middleware('can:ajustar-cuenta-envases')->prefix('envases/cuenta-corriente/conciliaciones-salida')->group(function () {
+        Route::get('/', [ConciliacionSalidaEnvaseController::class, 'index']);
+        Route::post('/previsualizar', [ConciliacionSalidaEnvaseController::class, 'previsualizar']);
+        Route::post('/aplicar', [ConciliacionSalidaEnvaseController::class, 'aplicar']);
+    });
     Route::post('/romana/recepciones/{recepcion}/anular', [RecepcionRomanaController::class, 'anular'])->middleware('can:anular-recepciones-romana');
     Route::post('/envases/cuenta-corriente/movimientos/{movimientoEnvase}/corregir-saldo-historico', [CuentaCorrienteEnvaseController::class, 'corregirSaldoHistorico'])->middleware('can:ajustar-cuenta-envases');
     Route::post('/envases/cuenta-corriente/movimientos/{movimientoEnvase}/revertir-ajuste', [CuentaCorrienteEnvaseController::class, 'revertirAjuste'])
