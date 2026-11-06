@@ -417,7 +417,7 @@ class ServicioGuiaDespachoEnvases
      *     resumen: array<int, array<string, mixed>>
      * }
      */
-    public function inventario(Temporada $temporada): array
+    public function inventario(Temporada $temporada, bool $incluirAgotados = false): array
     {
         $estado = $this->estadoInventario($temporada->id);
 
@@ -433,6 +433,7 @@ class ServicioGuiaDespachoEnvases
                     'fisico' => $item['fisico'],
                     'reservado' => $item['reservado'],
                     'disponible' => $item['disponible'],
+                    'disponible_trazable' => $item['disponible_trazable'],
                     'documento' => $origen->numero_documento,
                     'documento_tipo' => $origen->documento_tipo,
                     'cliente' => $origen->cliente ? [
@@ -444,7 +445,7 @@ class ServicioGuiaDespachoEnvases
                         ?? $origen->ocurrido_at?->toAtomString(),
                 ];
             })
-            ->filter(fn (array $origen): bool => $origen['fisico'] > 0 || $origen['reservado'] > 0)
+            ->filter(fn (array $origen): bool => $incluirAgotados || $origen['fisico'] > 0 || $origen['reservado'] > 0)
             ->values();
 
         $resumen = $origenes
@@ -688,6 +689,11 @@ class ServicioGuiaDespachoEnvases
             $origen->id => $origen->cantidad + (int) $ajustes->get($origen->id, 0),
         ]);
 
+        // No atribuir a una recepción concreta los consumos históricos sin raíz.
+        // El reparto FIFO sirve para reservar; la eliminación exige distinguir
+        // ese saldo sugerido del saldo demostrado por sus movimientos vinculados.
+        $fisicosTrazables = $fisicos->all();
+
         $incompatibles = MovimientoEnvase::query()
             ->where('temporada_id', $temporadaId)
             ->whereNull('movimiento_origen_id')
@@ -754,6 +760,7 @@ class ServicioGuiaDespachoEnvases
         return $origenes->mapWithKeys(function (MovimientoEnvase $origen) use (
             $fisicos,
             $reservas,
+            $fisicosTrazables,
         ): array {
             $fisico = (int) $fisicos->get($origen->id, 0);
             $reservado = (int) $reservas->get($origen->id, 0);
@@ -764,6 +771,7 @@ class ServicioGuiaDespachoEnvases
                     'fisico' => $fisico,
                     'reservado' => $reservado,
                     'disponible' => $fisico - $reservado,
+                    'disponible_trazable' => (int) ($fisicosTrazables[$origen->id] ?? 0) - $reservado,
                 ],
             ];
         });

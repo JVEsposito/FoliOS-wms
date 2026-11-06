@@ -152,14 +152,14 @@ class ServicioAnulacionRecepcionRomana
         // El cliente de un despacho es su destinatario: no identifica el origen
         // físico de los envases. Usar el mismo inventario por origen que las guías.
         try {
-            $inventario = collect(app(ServicioGuiaDespachoEnvases::class)->inventario($recepcion->temporada)['origenes'])->keyBy('id');
+            $inventario = collect(app(ServicioGuiaDespachoEnvases::class)->inventario($recepcion->temporada, incluirAgotados: true)['origenes'])->keyBy('id');
         } catch (ConflictoOperacion $conflicto) {
             throw new ConflictoOperacion(app(ServicioDiagnosticoEnvasesRecepcion::class)
                 ->inventarioInconsistente($recepcion, $conflicto->getMessage()));
         }
         foreach ($grupos as $grupo) {
             $retirar = $grupo->sum(fn ($m) => $m->cantidad * $m->signo_existencia);
-            $disponible = $grupo->whereNull('movimiento_origen_id')->sum(fn ($m) => $inventario[$m->id]['disponible'] ?? 0);
+            $disponible = $grupo->whereNull('movimiento_origen_id')->sum(fn ($m) => $inventario[$m->id]['disponible_trazable'] ?? 0);
             $primero = $grupo->first();
             $totalFisico = (int) MovimientoEnvase::where('temporada_id', $recepcion->temporada_id)
                 ->where('tipo_envase', $primero->tipo_envase->value)->where('propiedad', $primero->propiedad->value)
