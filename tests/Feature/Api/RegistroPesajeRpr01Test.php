@@ -65,7 +65,7 @@ class RegistroPesajeRpr01Test extends TestCase
         ])->assertOk();
         $this->cerrar($primera, $operador, $operacion);
         $segunda = $this->crearRecepcion($operador);
-        $this->cerrar($segunda, $operador);
+        $this->cerrar($segunda, $operador, numeroGuiaSalida: 'GS-NO-IMPRIMIR-2');
         $this->assertSame('1', $primera->refresh()->formato_registro_version);
         $this->assertSame('2', $segunda->refresh()->formato_registro_version);
         $this->assertSame('2026-08-31', $primera->formato_registro_fecha_vigencia->format('Y-m-d'));
@@ -135,11 +135,15 @@ class RegistroPesajeRpr01Test extends TestCase
         return RecepcionRomana::findOrFail($id);
     }
 
-    private function cerrar(RecepcionRomana $recepcion, User $usuario, ?string $operacion = null): string
-    {
+    private function cerrar(
+        RecepcionRomana $recepcion,
+        User $usuario,
+        ?string $operacion = null,
+        string $numeroGuiaSalida = 'GS-NO-IMPRIMIR',
+    ): string {
         $operacion ??= (string) Str::uuid();
         $this->actingAs($usuario, 'sanctum')->postJson('/api/romana/recepciones/'.$recepcion->id.'/cerrar', $this->payloadConInspeccionRc02('/api/romana/recepciones/'.$recepcion->id.'/cerrar', [
-            'operacion_id' => $operacion, 'modo_salida_envases' => 'mismos', 'numero_guia_salida' => 'GS-NO-IMPRIMIR',
+            'operacion_id' => $operacion, 'modo_salida_envases' => 'mismos', 'numero_guia_salida' => $numeroGuiaSalida,
             'peso_tara' => 10540, 'tipo_envase_calculo_neto' => 'bins',
             'taras_envases' => [['tipo_envase' => 'bins', 'tara_unitaria' => 40], ['tipo_envase' => 'totes', 'tara_unitaria' => 1], ['tipo_envase' => 'esponjas', 'tara_unitaria' => 0.1]],
         ]))->assertOk();
