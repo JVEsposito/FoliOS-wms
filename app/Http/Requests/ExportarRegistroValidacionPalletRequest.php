@@ -4,7 +4,6 @@ namespace App\Http\Requests;
 
 use App\Enums\EstadoValidacionPallet;
 use App\Enums\ResultadoValidacionPallet;
-use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -44,19 +43,5 @@ class ExportarRegistroValidacionPalletRequest extends FormRequest
                 ? mb_strtoupper(trim((string) $this->input('turno')))
                 : null,
         ]);
-    }
-
-    /**
-     * @return array{CarbonImmutable, CarbonImmutable}
-     */
-    public function rangoFechaUtc(): array
-    {
-        $inicio = CarbonImmutable::createFromFormat(
-            '!Y-m-d',
-            (string) $this->input('fecha'),
-            config('app.operational_timezone'),
-        );
-
-        return [$inicio->utc(), $inicio->addDay()->utc()];
     }
 }

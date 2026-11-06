@@ -71,7 +71,7 @@
                     </div>
                     <form class="validation-filters" id="validationFilters">
                             <input name="folio" maxlength="50" placeholder="Buscar folio">
-                            <input name="fecha" type="date" value="{{ now(config('app.operational_timezone'))->format('Y-m-d') }}" aria-label="Fecha de validación">
+                            <input name="fecha" type="date" value="{{ now(config('app.operational_timezone'))->format('Y-m-d') }}" aria-label="Fecha de jornada" title="El turno B de madrugada se cuenta en el día en que comenzó">
                             <select name="linea_proceso"><option value="">Todas las líneas</option><option value="1">Línea 1</option><option value="2">Línea 2</option><option value="3">Línea 3</option></select>
                             <select name="turno"><option value="">Todos los turnos</option><option value="A">Turno A</option><option value="B">Turno B</option></select>
                             <select id="validationUserFilter" name="user_id"><option value="">Todos los encargados</option></select>

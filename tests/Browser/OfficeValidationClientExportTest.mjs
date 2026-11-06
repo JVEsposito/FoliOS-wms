@@ -66,7 +66,7 @@ test('Validación PT exporta el cliente y los filtros aplicados al historial', a
         await page.goto('http://localhost/oficina/validacion');
         const client = page.getByRole('combobox', { name: 'Cliente', exact: true });
         await client.selectOption('FALCO FRUIT');
-        await page.getByLabel('Fecha de validación').fill('2026-11-03');
+        await page.getByLabel('Fecha de jornada').fill('2026-11-03');
         await page.locator('#validationFilters [name="estado"]').selectOption('aceptada');
         await page.getByRole('button', { name: 'Filtrar', exact: true }).click();
         await page.getByText('Cliente: FALCO FRUIT', { exact: true }).waitFor();

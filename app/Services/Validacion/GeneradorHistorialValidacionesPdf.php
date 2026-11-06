@@ -72,7 +72,7 @@ class GeneradorHistorialValidacionesPdf
         $contenido = "q 64 0 0 32 24 549 cm /Logo Do Q\n";
         $contenido .= $this->pdf->texto(105, 567, 15, 'VALIDACIONES DE PALLETS · PT', true);
         $contenido .= $this->pdf->texto(105, 550, 9, sprintf(
-            'Temporada %s · Fecha de terreno %s · %d registros',
+            'Temporada %s · Fecha de jornada %s · %d registros',
             $temporada->codigo,
             CarbonImmutable::parse($fecha)->format('d-m-Y'),
             $cantidad,

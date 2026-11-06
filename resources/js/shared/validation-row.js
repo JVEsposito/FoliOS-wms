@@ -18,7 +18,8 @@ export function validationJourneyLabel(item, timeZone = 'America/Santiago') {
     const time = valid ? new Intl.DateTimeFormat('es-CL', {
         hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone,
     }).format(date) : 'Sin fecha';
-    return `Línea ${item.linea_proceso}, turno ${item.turno}, ${time}${item.dispositivo?.codigo ? ` · ${item.dispositivo.codigo}` : ''}`;
+    const jornada = item.fecha_jornada ? ` · Jornada ${item.fecha_jornada.split('-').reverse().join('-')}` : '';
+    return `Línea ${item.linea_proceso}, turno ${item.turno}, ${time}${jornada}${item.dispositivo?.codigo ? ` · ${item.dispositivo.codigo}` : ''}`;
 }
 
 export function validationDayContext(fecha, timeZone = 'America/Santiago', now = new Date()) {

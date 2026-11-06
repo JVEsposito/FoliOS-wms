@@ -30,6 +30,7 @@ import {
   ValidationSessionSnapshot,
   ValidationShift,
 } from '../domain/validation';
+import { formatValidationJourneyDate, validationJourneyDate, validationShifts } from '../domain/validationJourney';
 import { ApiError } from '../services/apiError';
 import {
   getMyValidationSession,
@@ -95,6 +96,7 @@ type LastResult = {
   brand: string;
   csgs: string[];
   at: string;
+  journeyDate: string | null;
   delivery: 'confirmado' | 'en-equipo';
 };
 
@@ -132,6 +134,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
   const [folio, setFolio] = useState('');
   const [line, setLine] = useState<ValidationLine | null>(null);
   const [shift, setShift] = useState<ValidationShift | null>(null);
+  const [journeyDate, setJourneyDate] = useState<string | null>(null);
   const [folioReview, setFolioReview] = useState<FolioReview | null>(null);
   const [boxes, setBoxes] = useState('');
   const [packageType, setPackageType] = useState<'pallet' | 'saldo'>('pallet');
@@ -158,6 +161,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
   const userId = auth.usuario.id;
   const deviceId = auth.dispositivo.id;
   const canReject = auth.usuario.capacidades.puede_rechazar_pallets;
+  const journeyTimeZone = validationSession?.sesion.zona_horaria;
   const sessionCacheId = auth.sesion?.id ?? 'actual';
   const sessionStartedAt = auth.sesion?.iniciada_at ?? validationSession?.sesion.iniciada_at ?? null;
   const currentSessionOutbox = useMemo(
@@ -291,6 +295,14 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
     void initialize();
     return () => { folioRequest.current++; };
   }, []);
+
+  useEffect(() => {
+    if (!shift) return;
+    const refreshDate = () => setJourneyDate(validationJourneyDate(new Date(), shift, journeyTimeZone));
+    refreshDate();
+    const timer = setInterval(refreshDate, 15_000);
+    return () => clearInterval(timer);
+  }, [shift, journeyTimeZone]);
 
   useOperationalPolling(
     synchronize,
@@ -786,6 +798,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
       brand,
       csgs: selectedOrigins.flatMap((origin) => origin ? [origin.csg] : []),
       at: payload.generado_dispositivo_at,
+      journeyDate: validationJourneyDate(payload.generado_dispositivo_at, shift, journeyTimeZone),
     };
 
     setBusy(true);
@@ -808,7 +821,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
           setRecent((current) => [attempt, ...current.filter((item) => item.id !== attempt.id)].slice(0, 10));
           try { await refreshSession(); } catch { /* conserva actualización optimista */ }
           setOnline(true);
-          setLastResult({ ...registered, delivery: 'confirmado' });
+          setLastResult({ ...registered, journeyDate: attempt.fecha_jornada ?? registered.journeyDate, delivery: 'confirmado' });
         } catch (reasonCaught) {
           if (reasonCaught instanceof ApiError && reasonCaught.status === 0) {
             setOnline(false);
@@ -1067,8 +1080,8 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
   const workContext = line && shift && !editingContext ? (
     <Pressable accessibilityLabel="Cambiar línea y turno" onPress={() => setEditingContext(true)} style={styles.jornada}>
       <View style={styles.jornadaCopy}>
-        <Text style={styles.jornadaLabel}>Jornada · se conserva entre pallets</Text>
-        <Text style={styles.jornadaValue}>Línea {line} · Turno {shift}</Text>
+        <Text style={styles.jornadaLabel}>Fecha de jornada · {formatValidationJourneyDate(journeyDate)}</Text>
+        <Text style={styles.jornadaValue}>Línea {line} · Turno {shift} ({validationShifts[shift].name.toLowerCase()})</Text>
       </View>
       <Text style={styles.linkText}>Cambiar</Text>
     </Pressable>
@@ -1093,8 +1106,16 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
           <Text style={styles.cellLabel}>Turno</Text>
           <View style={styles.segmented}>
             {(['A', 'B'] as ValidationShift[]).map((value) => (
-              <Pressable accessibilityLabel={`Turno ${value}`} key={value} onPress={() => void updateWorkContext(line, value)} style={[styles.segment, shift === value && styles.segmentActive]}>
-                <Text style={[styles.segmentText, shift === value && styles.segmentTextActive]}>{value}</Text>
+              <Pressable
+                accessibilityLabel={`Turno ${value}, ${validationShifts[value].name}, ${validationShifts[value].hours}`}
+                accessibilityRole="button"
+                accessibilityState={{ selected: shift === value }}
+                key={value}
+                onPress={() => void updateWorkContext(line, value)}
+                style={[styles.segment, shift === value && styles.segmentActive]}
+              >
+                <Text style={[styles.segmentText, shift === value && styles.segmentTextActive]}>{value} · {validationShifts[value].name}</Text>
+                <Text style={styles.jornadaLabel}>{validationShifts[value].hours}</Text>
               </Pressable>
             ))}
           </View>
@@ -1337,6 +1358,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
         { label: 'Marca', value: lastResult.brand },
         { label: 'Bulto', value: `${lastResult.boxes} cj · ${packageLabel(lastResult.packageType)}` },
         { label: 'CSG', value: lastResult.csgs.join(' · '), mono: true },
+        { label: 'Jornada', value: formatValidationJourneyDate(lastResult.journeyDate) },
       ]}
       time={formatTime(lastResult.at)}
       title={resultLabel(lastResult.result)}
@@ -1359,7 +1381,9 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
         <View key={item.id} style={styles.trayItem}>
           <View style={styles.trayItemCopy}>
             <Text style={styles.trayFolio}>{item.payload.numero_folio}</Text>
-            <Text style={styles.trayDetail}>{statusLabel(item.status)} · {formatTime(item.payload.generado_dispositivo_at)}</Text>
+            <Text style={styles.trayDetail}>
+              {statusLabel(item.status)} · jornada {formatValidationJourneyDate(validationJourneyDate(item.payload.generado_dispositivo_at, item.payload.turno, journeyTimeZone))} · {formatTime(item.payload.generado_dispositivo_at)}
+            </Text>
             {item.message ? <Text style={styles.trayMessage}>{item.message}</Text> : null}
           </View>
           {item.status !== 'pendiente' ? (
@@ -1410,7 +1434,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
               ) : null}
             </>
           )}
-          detail={`${item.payload.cantidad_cajas} cj · ${packageLabel(item.payload.tipo_bulto)} · línea ${item.payload.linea_proceso}, turno ${item.payload.turno} · guardado en la ${device}`}
+          detail={`${item.payload.cantidad_cajas} cj · ${packageLabel(item.payload.tipo_bulto)} · línea ${item.payload.linea_proceso}, turno ${item.payload.turno} · jornada ${formatValidationJourneyDate(validationJourneyDate(item.payload.generado_dispositivo_at, item.payload.turno, journeyTimeZone))} · guardado en la ${device}`}
           folio={item.payload.numero_folio}
           key={item.id}
           message={item.message}
@@ -1422,12 +1446,12 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
       {visibleSessionAttempts.map((item) => (
         <TalonRow
           aside={<StatusChip small label={item.estado === 'conflicto' ? 'Conflicto' : resultLabel(item.resultado)} tone={item.estado === 'conflicto' ? 'critical' : resultTone(item.resultado)} />}
-          detail={`${item.cantidad_cajas} cj · ${packageLabel(item.tipo_bulto)} · línea ${item.linea_proceso ?? '—'}, turno ${item.turno ?? '—'}${item.numero_intento > 1 ? ` · intento ${item.numero_intento}` : ''}`}
+          detail={`${item.cantidad_cajas} cj · ${packageLabel(item.tipo_bulto)} · línea ${item.linea_proceso ?? '—'}, turno ${item.turno ?? '—'} · jornada ${formatValidationJourneyDate(item.fecha_jornada ?? validationJourneyDate(item.generado_dispositivo_at, item.turno, journeyTimeZone))}${item.numero_intento > 1 ? ` · intento ${item.numero_intento}` : ''}`}
           disabled={busy || Boolean(editingOutbox)}
           folio={item.numero_folio}
           key={item.id}
           onPress={() => { setFolio(item.numero_folio); void inspectFolio(item.numero_folio); }}
-          time={formatTime(item.recibido_servidor_at)}
+          time={formatTime(item.generado_dispositivo_at)}
         />
       ))}
 

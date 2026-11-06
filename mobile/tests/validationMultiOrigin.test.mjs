@@ -79,7 +79,7 @@ function harness() {
       }
       return require(id);
     };
-    vm.runInNewContext(code, { require: mockRequire, module, exports: module.exports, console, setTimeout: () => 0 }, { filename: path });
+    vm.runInNewContext(code, { require: mockRequire, module, exports: module.exports, console, setInterval: () => 0, clearInterval: () => {}, setTimeout: () => 0 }, { filename: path });
     return module.exports;
   }
   const { ValidationScreen } = load(resolve(sourceRoot, 'screens/ValidationScreen.tsx'));

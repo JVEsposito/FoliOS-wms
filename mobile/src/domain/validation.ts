@@ -152,6 +152,7 @@ export type ValidationAttempt = {
   cantidad_cajas: number;
   linea_proceso: ValidationLine | null;
   turno: ValidationShift | null;
+  fecha_jornada?: string | null;
   temporada_id: string;
   articulo_validacion_id: string;
   origen_validacion_id: string;
@@ -203,6 +204,7 @@ export type ValidationSessionSnapshot = {
     id: string;
     iniciada_at: string;
     servidor_at: string;
+    zona_horaria?: string;
     usuario: { id: string; nombre: string };
     dispositivo: { id: string; codigo: string; nombre: string };
     temporada: { id: string; codigo: string; nombre: string } | null;

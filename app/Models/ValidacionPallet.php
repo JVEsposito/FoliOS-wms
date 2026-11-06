@@ -8,7 +8,10 @@ use App\Enums\ResultadoValidacionPallet;
 use App\Models\Concerns\ImpideEliminacionFisica;
 use App\Models\Concerns\TemporadaPorColumna;
 use App\Models\Contracts\PerteneceATemporada;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\Scope;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -26,7 +29,41 @@ class ValidacionPallet extends Model implements PerteneceATemporada
 {
     use HasUuids, ImpideEliminacionFisica, TemporadaPorColumna;
 
+    private const TURNO_NOCHE = 'B';
+
+    private const HORA_FIN_NOCHE = 7;
+
     protected $table = 'validaciones_pallet';
+
+    public function fechaJornada(): ?CarbonImmutable
+    {
+        $local = $this->generado_dispositivo_at?->toImmutable()->setTimezone(config('app.operational_timezone'));
+
+        if ($local && $this->turno === self::TURNO_NOCHE && $local->hour < self::HORA_FIN_NOCHE) {
+            return $local->subDay();
+        }
+
+        return $local;
+    }
+
+    #[Scope]
+    protected function deJornada(Builder $consulta, string $fecha): void
+    {
+        $inicio = CarbonImmutable::parse($fecha, config('app.operational_timezone'))->startOfDay();
+        $siguiente = $inicio->addDay()->startOfDay();
+
+        // El turno B cambia de fecha de jornada a las 07:00. A y los registros sin turno
+        // cambian a medianoche. Los límites se convierten a UTC después del cálculo local.
+        $consulta->where(fn (Builder $jornada) => $jornada
+            ->where(fn (Builder $noche) => $noche
+                ->where('turno', self::TURNO_NOCHE)
+                ->where('generado_dispositivo_at', '>=', $inicio->setTime(self::HORA_FIN_NOCHE, 0)->utc())
+                ->where('generado_dispositivo_at', '<', $siguiente->setTime(self::HORA_FIN_NOCHE, 0)->utc()))
+            ->orWhere(fn (Builder $dia) => $dia
+                ->where(fn (Builder $turno) => $turno->where('turno', '!=', self::TURNO_NOCHE)->orWhereNull('turno'))
+                ->where('generado_dispositivo_at', '>=', $inicio->utc())
+                ->where('generado_dispositivo_at', '<', $siguiente->utc())));
+    }
 
     public function folio(): BelongsTo
     {
