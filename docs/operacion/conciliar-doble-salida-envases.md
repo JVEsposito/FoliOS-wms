@@ -44,6 +44,38 @@ Si cambias de pareja o de origen de cantidades, debes volver a previsualizar.
 Si un documento cambió o se perdió la respuesta al confirmar, la pantalla exige
 otra previsualización; esta informa si la pareja ya fue conciliada.
 
+### Números distintos por error de digitación
+
+No necesitas corregir el número de una guía para que el conciliador la encuentre.
+En **Conciliar duplicados**, cambia **Forma de búsqueda** a
+**Comparación manual · guías distintas**, selecciona el cliente y busca una guía
+o un correlativo completo REC/GDE (al menos 3 caracteres). La lista muestra ambos
+números de salida y la guía de ingreso. Seleccionar un mismo productor o tener
+cantidades parecidas no demuestra que sea la misma salida: verifica los respaldos.
+
+Por ejemplo, para **GDE-2611-0006, guía 2235**, y **REC-2611-0009, salida 2234**:
+
+1. Selecciona FALCO FRUIT y busca 2235 o REC-2611-0009 en comparación manual.
+2. Elige esa pareja, comprueba ambos respaldos y marca que los números distintos
+   corresponden a la misma salida física.
+3. Elige las cantidades comprobadas de Romana o Despacho y previsualiza. Si ambos
+   tienen 14 bins y 340 totes, quedará una sola salida de esas cantidades. Las 14
+   esponjas que figuran solo en Despacho se conservan.
+4. Indica el error de digitación y el respaldo en el motivo y confirma. Se guardan
+   los dos números originales, los documentos vinculados y el responsable.
+
+La comparación manual conserva la restricción de cliente y temporada. No une
+documentos automáticamente, no renumera guías y no cambia originales.
+
+**Recepciones eliminadas:** REC y GDE son correlativos independientes. Eliminar
+REC-2611-0006 no anula GDE-2611-0006. La eliminación de una recepción revierte sus
+entradas y salidas propias, que quedan neteadas en el estado de cuenta; un
+despacho independiente conserva su salida hasta anularlo o conciliarlo con la
+recepción vigente que corresponda. Las recepciones eliminadas o anuladas no se
+ofrecen ni se aceptan como contraparte de una salida vigente. Si el historial no
+conserva sus reversas completas, requiere revisión individual antes de generar
+otra compensación.
+
 **Si no aparece o no permite conciliar:** revisa la temporada activa, cliente y
 guía de salida. La recepción debe estar cerrada y el despacho confirmado. Las
 parejas ya conciliadas no figuran entre las pendientes. Los casos con correcciones
@@ -69,6 +101,8 @@ php artisan envases:conciliar-salida 11893 2236 --conservar=despacho
 
 También se aceptan UUID o correlativos REC/GDE. Si la referencia no es única,
 se exige una identificación más precisa. No se elige por fecha aproximada.
+Si los números de salida difieren, agrega `--guias-distintas-verificadas` tanto al
+diagnóstico como a la aplicación, solo después de comprobar ambos respaldos.
 
 La captura reportada muestra 42 bins en ambos flujos, 1.002 totes en Romana y
 1.009 en Despacho. No permite determinar cuál de esas cantidades refleja la salida

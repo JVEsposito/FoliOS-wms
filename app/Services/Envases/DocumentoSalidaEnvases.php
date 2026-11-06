@@ -37,7 +37,7 @@ class DocumentoSalidaEnvases
             ->whereHas('salidasEnvases', fn ($q) => $q->where('cantidad', '>', 0))
             ->lockForUpdate()->first(['id', 'numero_recepcion', 'numero_guia_salida']);
         if ($otra) {
-            throw new ConflictoOperacion("La guía {$numero} ya registra una salida de envases en Romana ({$otra->numero_recepcion}). No confirmes un segundo despacho: duplicaría cuenta y existencia. Si se trata de un registro duplicado histórico, requiere conciliación.");
+            throw new ConflictoOperacion("La guía {$numero} ya registra una salida de envases en Romana ({$otra->numero_recepcion}). No confirmes un segundo despacho: duplicaría cuenta y existencia. Para un duplicado histórico, abre Cuenta Envases → Conciliar duplicados. Si los números difieren por digitación, usa Comparación manual sin renumerar primero.");
         }
     }
 

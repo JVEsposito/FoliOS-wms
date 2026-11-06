@@ -16,6 +16,7 @@ class ConciliarSalidaDuplicadaEnvases extends Command
         {recepcion : UUID, correlativo REC o número exacto de guía de ingreso}
         {guia : UUID, correlativo GDE o número de guía de salida}
         {--conservar= : Cantidades a conservar: romana o despacho, sin selección automática}
+        {--guias-distintas-verificadas : Confirma que los respaldos con números distintos corresponden a la misma salida física}
         {--aplicar : Crea compensaciones; por defecto solo diagnostica}
         {--hash= : Hash de la previsualización revisada}
         {--usuario= : ID o email del administrador responsable}
@@ -46,8 +47,9 @@ class ConciliarSalidaDuplicadaEnvases extends Command
             }
             $recepcion = $recepciones->first();
             $conservar = (string) $this->option('conservar');
-            $plan = $servicio->previsualizar($recepcion, $guia, $conservar);
-            $this->info("{$recepcion->numero_recepcion} · {$guia->numero} · guía {$guia->numero_guia_despacho} · conservar {$conservar}");
+            $verificadas = (bool) $this->option('guias-distintas-verificadas');
+            $plan = $servicio->previsualizar($recepcion, $guia, $conservar, $verificadas);
+            $this->info("{$recepcion->numero_recepcion} · salida Romana {$recepcion->numero_guia_salida} · {$guia->numero} · salida Despacho {$guia->numero_guia_despacho} · conservar {$conservar}");
             if ($plan['aplicada']) {
                 $this->info('Esta pareja ya fue conciliada. No se crean movimientos adicionales.');
 
@@ -63,7 +65,7 @@ class ConciliarSalidaDuplicadaEnvases extends Command
             $referencia = (string) $this->option('usuario');
             $actor = User::query()->where(fn ($q) => $q->where('email', $referencia)
                 ->when(ctype_digit($referencia), fn ($q) => $q->orWhere('id', $referencia)))->firstOrFail();
-            $resultado = $servicio->aplicar($recepcion, $guia, $conservar, (string) $this->option('hash'), (string) $this->option('motivo'), $actor);
+            $resultado = $servicio->aplicar($recepcion, $guia, $conservar, (string) $this->option('hash'), (string) $this->option('motivo'), $actor, $verificadas);
             $this->info('Conciliación aplicada: '.count($resultado['movimientos']).' compensaciones. Se conservan los asientos originales.');
 
             return self::SUCCESS;

@@ -17,10 +17,10 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Ramsey\Uuid\Uuid;
 
-/** Repara las dos salidas de un mismo documento; nunca borra ni cambia el asiento original. */
+/** Repara dos registros de la misma salida física; nunca borra ni cambia el asiento original. */
 class ServicioConciliacionSalidaEnvases
 {
-    public function previsualizar(RecepcionRomana $recepcion, GuiaDespachoEnvase $guia, string $conservar): array
+    public function previsualizar(RecepcionRomana $recepcion, GuiaDespachoEnvase $guia, string $conservar, bool $guiasDistintasVerificadas = false): array
     {
         if (! in_array($conservar, ['romana', 'despacho'], true)) {
             throw new ConflictoOperacion('Elige explícitamente qué cantidades conservar: romana o despacho.');
@@ -29,10 +29,15 @@ class ServicioConciliacionSalidaEnvases
         $guia->refresh();
         $normalizador = app(ServicioGuiaEmitidaEnvases::class);
         $numero = $normalizador->normalizar($guia->numero_guia_despacho);
+        $numeroRomana = $normalizador->normalizar($recepcion->numero_guia_salida);
         if ($guia->estado !== EstadoGuiaDespachoEnvase::Confirmada || $recepcion->estado !== EstadoRecepcionRomana::Cerrado
+            || $recepcion->eliminada_at !== null
             || $guia->temporada_id !== $recepcion->temporada_id || $guia->cliente_id !== $recepcion->cliente_id
-            || ! $numero || $numero !== $normalizador->normalizar($recepcion->numero_guia_salida)) {
-            throw new ConflictoOperacion('Selecciona una recepción cerrada y un despacho confirmado del mismo cliente, temporada y N° de guía de salida.');
+            || ! $numero || ! $numeroRomana) {
+            throw new ConflictoOperacion('Selecciona una recepción cerrada vigente y un despacho confirmado del mismo cliente y temporada, ambos con guía de salida. Las recepciones eliminadas o anuladas no se concilian como salidas vigentes.');
+        }
+        if ($numero !== $numeroRomana && ! $guiasDistintasVerificadas) {
+            throw new ConflictoOperacion('Las guías de salida tienen números distintos. Verifica que corresponden a la misma salida física y confirma expresamente esa revisión; no cambies los números para forzar la coincidencia.');
         }
         $previos = MovimientoEnvase::query()->where('tipo_movimiento', TipoMovimientoEnvase::ConciliacionSalida->value)
             ->where('documento_id', $guia->id)->orderBy('id')->get();
@@ -95,26 +100,36 @@ class ServicioConciliacionSalidaEnvases
         if (! $acciones) {
             throw new ConflictoOperacion('No hay tipos de envase y propiedad repetidos entre ambas salidas. No se modifica ningún saldo.');
         }
-        $hash = hash('sha256', json_encode([$recepcion->id, $recepcion->version, $guia->id, $guia->version, $numero, $conservar, $filas, $acciones], JSON_THROW_ON_ERROR));
+        $hash = hash('sha256', json_encode([$recepcion->id, $recepcion->version, $numeroRomana, $guia->id, $guia->version, $numero, $conservar, $filas, $acciones], JSON_THROW_ON_ERROR));
 
         return ['aplicada' => false, 'filas' => $filas, 'acciones' => $acciones, 'hash' => $hash];
     }
 
-    public function aplicar(RecepcionRomana $recepcion, GuiaDespachoEnvase $guia, string $conservar, string $hash, string $motivo, User $actor): array
+    public function aplicar(RecepcionRomana $recepcion, GuiaDespachoEnvase $guia, string $conservar, string $hash, string $motivo, User $actor, bool $guiasDistintasVerificadas = false): array
     {
         Gate::forUser($actor)->authorize('ajustar-cuenta-envases');
         if (mb_strlen(trim($motivo)) < 10) {
             throw new ConflictoOperacion('Indica un motivo de al menos 10 caracteres para la conciliación.');
         }
 
-        return DB::transaction(function () use ($recepcion, $guia, $conservar, $hash, $motivo, $actor): array {
-            app(DocumentoSalidaEnvases::class)->bloquear($guia->temporada_id, $guia->cliente_id, $guia->numero_guia_despacho);
+        return DB::transaction(function () use ($recepcion, $guia, $conservar, $hash, $motivo, $actor, $guiasDistintasVerificadas): array {
+            $normalizador = app(ServicioGuiaEmitidaEnvases::class);
+            $numeros = [$normalizador->normalizar($guia->numero_guia_despacho), $normalizador->normalizar($recepcion->numero_guia_salida)];
+            $identidades = [$guia->temporada_id, $guia->cliente_id, $recepcion->temporada_id, $recepcion->cliente_id];
+            // Dos números distintos se coordinan siempre en el mismo orden, antes de bloquear documentos.
+            foreach (collect($numeros)->filter()->unique()->sort(SORT_STRING) as $numero) {
+                app(DocumentoSalidaEnvases::class)->bloquear($guia->temporada_id, $guia->cliente_id, $numero);
+            }
             $guia = GuiaDespachoEnvase::query()->lockForUpdate()->findOrFail($guia->id);
             $recepcion = RecepcionRomana::query()->lockForUpdate()->findOrFail($recepcion->id);
+            if ($identidades !== [$guia->temporada_id, $guia->cliente_id, $recepcion->temporada_id, $recepcion->cliente_id]
+                || $numeros !== [$normalizador->normalizar($guia->numero_guia_despacho), $normalizador->normalizar($recepcion->numero_guia_salida)]) {
+                throw new ConflictoOperacion('Los documentos cambiaron. Vuelve a previsualizar la conciliación.');
+            }
             if ($guia->temporada_id !== app(ServicioTemporadaActiva::class)->obtener()->id) {
                 throw new ConflictoOperacion('Solo se concilian salidas de la temporada activa.');
             }
-            $plan = $this->previsualizar($recepcion, $guia, $conservar);
+            $plan = $this->previsualizar($recepcion, $guia, $conservar, $guiasDistintasVerificadas);
             if ($plan['aplicada']) {
                 return $plan;
             }
@@ -136,7 +151,9 @@ class ServicioConciliacionSalidaEnvases
                     'ocurrido_at' => now(), 'ingreso_at' => now(), 'estado_revision' => EstadoRevisionMovimientoEnvase::Pendiente,
                     'creado_por_user_id' => $actor->id,
                     'datos' => ['movimiento_conciliado_id' => $original->id, 'recepcion_id' => $recepcion->id,
-                        'guia_id' => $guia->id, 'conservar' => $conservar, 'motivo' => trim($motivo), 'hash_plan' => $hash, 'cantidades_revisadas' => $plan['filas']],
+                        'guia_id' => $guia->id, 'conservar' => $conservar, 'motivo' => trim($motivo), 'hash_plan' => $hash, 'cantidades_revisadas' => $plan['filas'],
+                        'guia_salida_romana' => $recepcion->numero_guia_salida, 'guia_salida_despacho' => $guia->numero_guia_despacho,
+                        'guias_distintas_verificadas' => $numeros[0] !== $numeros[1] && $guiasDistintasVerificadas],
                 ]);
                 $ids[] = $correccion->id;
             }
