@@ -299,6 +299,13 @@ function renderInventory() {
 }
 
 function guideEffect(guide) {
+    if (guide.conciliacion_salida) {
+        const c = guide.conciliacion_salida;
+        if (guide.estado === 'anulada') return '<div class="guide-impact guide-impact--cancelled"><b>Despacho anulado · salida de Romana vigente</b><span>La conciliación evita abonar dos veces. Consulta la cuenta corriente para el saldo final.</span></div>';
+        const cantidad = c.cantidades.reduce((sum, fila) => sum + Number(fila.conservar), 0);
+        const fuente = c.conservar === 'romana' ? 'Romana' : 'Despacho';
+        return `<div class="guide-impact guide-impact--confirmed"><b>Salida única conciliada: −${cantidad}</b><span>Cantidades repetidas según ${fuente}. La guía conserva su detalle original como respaldo.</span></div>`;
+    }
     const total = guide.resumen.reduce((sum, line) => sum + Number(line.cantidad), 0);
     if (guide.estado === 'borrador') {
         return `<div class="guide-impact guide-impact--reserved"><b>${total} reservados</b><span>Existencia física sin cambio · cuenta corriente sin movimiento hasta confirmar</span></div>`;

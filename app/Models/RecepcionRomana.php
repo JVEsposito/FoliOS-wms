@@ -204,6 +204,15 @@ class RecepcionRomana extends Model implements PerteneceATemporada
         return $this->hasMany(InspeccionEnvases::class, 'recepcion_romana_id');
     }
 
+    /** El índice documental se calcula en SQL; nunca se copia al insertar una réplica. */
+    protected function getAttributesForInsert(): array
+    {
+        $atributos = parent::getAttributesForInsert();
+        unset($atributos['documento_salida_normalizado']);
+
+        return $atributos;
+    }
+
     protected function casts(): array
     {
         return [

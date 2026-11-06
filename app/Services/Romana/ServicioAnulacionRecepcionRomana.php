@@ -75,6 +75,9 @@ class ServicioAnulacionRecepcionRomana
                 throw new ConflictoOperacion('La recepción tiene segmentos o lotes de materia prima vinculados. Requiere conciliación antes de anular.');
             }
             $movimientos = $recepcion->movimientosEnvases()->orderBy('id')->lockForUpdate()->get();
+            if ($movimientos->contains('tipo_movimiento', TipoMovimientoEnvase::ConciliacionSalida)) {
+                throw new ConflictoOperacion('La recepción participa en una conciliación de salida con Despacho. No se puede anular ni eliminar de forma aislada.');
+            }
             $ids = $movimientos->pluck('id');
             $guias = DetalleGuiaDespachoEnvase::whereIn('movimiento_origen_id', $ids)
                 ->whereHas('guia', fn ($q) => $q->whereIn('estado', [

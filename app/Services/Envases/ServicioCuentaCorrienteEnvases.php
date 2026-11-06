@@ -38,6 +38,7 @@ class ServicioCuentaCorrienteEnvases
         'recepcion_compra' => 'Compra de envases propios',
         'despacho_cliente' => 'Despacho',
         'reversion_despacho' => 'Anulación de despacho',
+        'conciliacion_salida' => 'Conciliación de salida duplicada',
         'correccion_propiedad' => 'Corrección de propiedad',
         'correccion_cantidad' => 'Corrección de cantidad',
         'correccion_cuenta' => 'Corrección de saldo anterior',
@@ -498,6 +499,7 @@ class ServicioCuentaCorrienteEnvases
         foreach ($movimientos as $movimiento) {
             $corrige = match ($movimiento->tipo_movimiento) {
                 TipoMovimientoEnvase::ReversionDespacho => $movimiento->datos['reversa_de_movimiento_id'] ?? null,
+                TipoMovimientoEnvase::ConciliacionSalida => $movimiento->datos['movimiento_conciliado_id'] ?? null,
                 TipoMovimientoEnvase::ReversionSalidaRecepcionFruta,
                 TipoMovimientoEnvase::CorreccionCantidad,
                 TipoMovimientoEnvase::CorreccionCuenta,

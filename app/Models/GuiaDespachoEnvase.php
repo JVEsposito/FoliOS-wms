@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\EstadoGuiaDespachoEnvase;
+use App\Enums\TipoMovimientoEnvase;
 use App\Models\Concerns\ImpideEliminacionFisica;
 use App\Models\Concerns\TemporadaPorColumna;
 use App\Models\Contracts\PerteneceATemporada;
@@ -83,10 +84,25 @@ class GuiaDespachoEnvase extends Model implements PerteneceATemporada
         return $this->hasOne(ArchivoGuiaDespachoEnvase::class)->whereNull('reemplazado_at');
     }
 
+    public function conciliacionesSalida(): HasMany
+    {
+        return $this->hasMany(MovimientoEnvase::class, 'documento_id')
+            ->where('tipo_movimiento', TipoMovimientoEnvase::ConciliacionSalida->value)->orderBy('id');
+    }
+
     public function eventos(): HasMany
     {
         return $this->hasMany(EventoGuiaDespachoEnvase::class)
             ->orderBy('ocurrido_at');
+    }
+
+    /** El índice documental se calcula en SQL; nunca se copia al insertar una réplica. */
+    protected function getAttributesForInsert(): array
+    {
+        $atributos = parent::getAttributesForInsert();
+        unset($atributos['documento_salida_normalizado']);
+
+        return $atributos;
     }
 
     protected function casts(): array
