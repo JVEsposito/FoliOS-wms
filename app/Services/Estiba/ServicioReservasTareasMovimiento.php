@@ -654,18 +654,30 @@ class ServicioReservasTareasMovimiento
         $expiradas = 0;
 
         foreach ($ids as $id) {
-            $expirada = DB::transaction(function () use ($id): bool {
+            $referencia = ReservaTareaMovimiento::query()->with('tareaMovimiento')->find($id)?->tareaMovimiento;
+            if (! $referencia) {
+                continue;
+            }
+            $expirada = DB::transaction(function () use ($id, $referencia): bool {
+                // El barrido debe seguir el orden de asumir/renovar/liberar:
+                // folios -> tarea -> maniobra -> reserva. Nunca reserva -> tarea.
+                app(ServicioExclusionPallet::class)->bloquearFolios($referencia);
+                $tarea = TareaMovimiento::query()->lockForUpdate()->find($referencia->id);
+                if (! $tarea || $tarea->folio_id !== $referencia->folio_id
+                    || $tarea->maniobra_operacional_id !== $referencia->maniobra_operacional_id) {
+                    return false;
+                }
+                if ($tarea->maniobra_operacional_id) {
+                    ManiobraOperacional::query()->lockForUpdate()->findOrFail($tarea->maniobra_operacional_id);
+                }
                 $reserva = ReservaTareaMovimiento::query()->lockForUpdate()->find($id);
-
-                if (! $reserva
+                if (! $reserva || $reserva->tarea_movimiento_id !== $tarea->id
                     || $reserva->estado !== EstadoReservaTareaMovimiento::Activa
-                    || ! $this->estaVencida($reserva)) {
+                    || $reserva->vence_at->gt(now())) {
                     return false;
                 }
 
-                $this->expirar($reserva);
-
-                return true;
+                return $this->expirar($reserva, $tarea);
             }, attempts: 3);
 
             $expiradas += $expirada ? 1 : 0;
@@ -966,10 +978,10 @@ class ServicioReservasTareasMovimiento
         }
     }
 
-    private function expirar(ReservaTareaMovimiento $reserva): void
+    private function expirar(ReservaTareaMovimiento $reserva, ?TareaMovimiento $tareaActual = null): bool
     {
-        if ($this->estaProtegidaPorMovimiento($reserva)) {
-            return;
+        if ($this->estaProtegidaPorMovimiento($reserva, $tareaActual)) {
+            return false;
         }
 
         $this->finalizarReserva($reserva, EstadoReservaTareaMovimiento::Expirada, [
@@ -977,6 +989,8 @@ class ServicioReservasTareasMovimiento
             'motivo_liberacion' => 'Lease vencido por falta de renovación.',
         ]);
         $this->devolverTareaALaBandeja($reserva->tarea_movimiento_id);
+
+        return true;
     }
 
     /** @param array<string, mixed> $atributos */
@@ -1138,9 +1152,9 @@ class ServicioReservasTareasMovimiento
             && $reserva->vence_at->lte(now());
     }
 
-    private function estaProtegidaPorMovimiento(ReservaTareaMovimiento $reserva): bool
+    private function estaProtegidaPorMovimiento(ReservaTareaMovimiento $reserva, ?TareaMovimiento $tareaActual = null): bool
     {
-        $tarea = $reserva->tareaMovimiento()
+        $tarea = $tareaActual ?? $reserva->tareaMovimiento()
             ->first(['id', 'estado', 'maniobra_operacional_id']);
         if (! $tarea) {
             return false;
@@ -1149,11 +1163,14 @@ class ServicioReservasTareasMovimiento
             return true;
         }
 
-        return $tarea->maniobra_operacional_id !== null
-            && CustodiaTemporalManiobra::query()
-                ->where('maniobra_operacional_id', $tarea->maniobra_operacional_id)
-                ->where('estado', EstadoCustodiaTemporal::Activa->value)
-                ->exists();
+        if ($tarea->maniobra_operacional_id === null) {
+            return false;
+        }
+        $custodia = CustodiaTemporalManiobra::query()
+            ->where('maniobra_operacional_id', $tarea->maniobra_operacional_id)
+            ->where('estado', EstadoCustodiaTemporal::Activa->value);
+
+        return ($tareaActual ? $custodia->lockForUpdate() : $custodia)->exists();
     }
 
     private function nuevoVencimiento(): CarbonInterface

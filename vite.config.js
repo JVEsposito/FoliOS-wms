@@ -22,6 +22,8 @@ export default defineConfig({
                 'resources/js/office-cameras.js',
                 'resources/css/office-discrepancies.css',
                 'resources/js/office-discrepancies.js',
+                'resources/css/office-staff-control.css',
+                'resources/js/office-staff-control.js',
                 'resources/css/office-shift-duties.css',
                 'resources/js/office-shift-duties.js',
                 'resources/css/office-loads.css',

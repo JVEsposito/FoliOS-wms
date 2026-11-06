@@ -53,6 +53,19 @@ class EstructuraOficinaTest extends TestCase
         }
     }
 
+    public function test_control_personal_exporta_resumen_jornadas_y_edicion(): void
+    {
+        $html = $this->get('/oficina/frigorifico/control-personal')->assertOk()->getContent();
+        foreach (['staffMonth', 'staffSummary', 'staffRecords', 'staffEntryForm', 'staffPeopleForm', 'staffExportSummary', 'staffExportDetail'] as $id) {
+            $this->assertStringContainsString('id="'.$id.'"', $html);
+        }
+        $this->assertStringContainsString('aria-current="page"', $html);
+        if (getenv('ESTIBA_EXPORTAR_UI_TESTS') === '1') {
+            File::ensureDirectoryExists(storage_path('app/ui/oficina'));
+            File::put(storage_path('app/ui/oficina/control-personal.html'), $html);
+        }
+    }
+
     public function test_labores_turno_tiene_formulario_navegacion_y_resumen(): void
     {
         $html = $this->get('/oficina/frigorifico/labores-turno')->assertOk()->getContent();

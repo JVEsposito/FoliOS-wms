@@ -34,6 +34,7 @@
             ['key' => 'prefrio', 'module' => 'frigorifico.prefrio', 'label' => 'Prefrío', 'href' => '/oficina/prefrio', 'permissions' => ['puede_consultar_prefrio']],
             ['key' => 'punto-rocio', 'module' => 'frigorifico.prefrio', 'label' => 'Punto de rocío', 'href' => '/oficina/prefrio/punto-rocio', 'permissions' => ['puede_consultar_prefrio']],
             ['key' => 'camaras', 'module' => 'frigorifico.camaras', 'label' => 'Cámaras', 'href' => '/oficina/frigorifico/camaras', 'permissions' => ['ambito_camaras_productos']],
+            ['key' => 'control-personal', 'module' => 'frigorifico.control-personal', 'label' => 'Control de personal', 'href' => '/oficina/frigorifico/control-personal', 'permissions' => ['puede_controlar_personal_frigorifico']],
             ['key' => 'labores-turno', 'module' => 'frigorifico.camaras', 'label' => 'Labores por turno', 'href' => '/oficina/frigorifico/labores-turno', 'permissions' => ['puede_supervisar_camaras_productos']],
             ['key' => 'discrepancias', 'module' => 'frigorifico.camaras', 'label' => 'Discrepancias', 'href' => '/oficina/frigorifico/discrepancias', 'permissions' => ['puede_supervisar']],
             ['key' => 'cargas', 'module' => 'frigorifico.cargas', 'section' => 'Despacho', 'label' => 'Cargas', 'href' => '/oficina/frigorifico/despacho/cargas', 'permissions' => ['puede_consultar_catalogo_cargas']],

@@ -106,6 +106,7 @@ class CatalogoModulosAcceso
                     $this->modulo(self::OFICINA_CONTRAPARTE_SAG, 'Contraparte SAG', 'Existencias aprobadas y documentación fitosanitaria de la planta.'),
                     $this->modulo('frigorifico.inspeccion-sag', 'Inspección SAG', 'Muestreos, inspecciones, fumigaciones y cambios de mercado.'),
                     $this->modulo('frigorifico.prefrio', 'Prefrío', 'Túneles, procesos y verificaciones de prefrío.'),
+                    $this->modulo('frigorifico.control-personal', 'Control de personal', 'Ingresos, salidas y horas extra internas. Solo supervisión de frío y administración.'),
                     $this->modulo('frigorifico.camaras', 'Cámaras PT', 'Plano, movimientos y sesiones de producto terminado.'),
                     $this->modulo('frigorifico.cargas', 'Despacho', 'Cargas, estatus operativo y calendario de embarques.'),
                 ],
@@ -386,6 +387,7 @@ class CatalogoModulosAcceso
         return match ($rol) {
             RolUsuario::GuardiaPorteria => [self::OFICINA_PORTERIA],
             RolUsuario::SupervisorFrio => [
+                'frigorifico.control-personal',
                 'gerencia.panel',
                 'materia-prima.romana',
                 'materia-prima.digitacion',
