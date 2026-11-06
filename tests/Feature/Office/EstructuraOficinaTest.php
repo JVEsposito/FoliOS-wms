@@ -9,6 +9,15 @@ use Tests\TestCase;
 
 class EstructuraOficinaTest extends TestCase
 {
+    public function test_repaletizajes_exporta_la_vista_para_probar_sus_origenes(): void
+    {
+        $html = $this->get('/oficina/validacion/repaletizajes')->assertOk()->getContent();
+        if (getenv('ESTIBA_EXPORTAR_UI_TESTS') === '1') {
+            File::ensureDirectoryExists(storage_path('app/ui/oficina'));
+            File::put(storage_path('app/ui/oficina/repaletizajes.html'), $html);
+        }
+    }
+
     public function test_preparacion_cargas_exporta_las_segregaciones_por_instructivo(): void
     {
         $html = $this->get('/oficina/frigorifico/despacho/cargas')->assertOk()->getContent();

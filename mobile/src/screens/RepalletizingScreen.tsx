@@ -146,8 +146,8 @@ export function RepalletizingScreen({ auth, baseUrl, onLogout, standalone = fals
       if (!source.existe) {
         throw new Error('El folio no existe.');
       }
-      if (!source.activo || source.tipo_bulto !== 'saldo' || source.cantidad_cajas < 1) {
-        throw new Error('El folio no es un saldo activo con cajas disponibles.');
+      if (!source.activo || !['pallet', 'saldo'].includes(source.tipo_bulto) || source.cantidad_cajas < 1) {
+        throw new Error('El folio no es un pallet o saldo activo con cajas disponibles.');
       }
       if (!['pendiente_prefrio', 'prefrio_aprobado'].includes(source.condicion_termica)) {
         throw new Error('El folio posee un estado térmico transitorio o retenido.');
@@ -212,7 +212,7 @@ export function RepalletizingScreen({ auth, baseUrl, onLogout, standalone = fals
       return;
     }
     if (sources.length < 2) {
-      setError('Agrega al menos dos saldos.');
+      setError('Agrega al menos dos folios: pallets completos o saldos.');
       return;
     }
     if (hardMismatches.length) {
@@ -228,7 +228,7 @@ export function RepalletizingScreen({ auth, baseUrl, onLogout, standalone = fals
         numeric(line.aporte) > line.cantidad_cajas
       ))
     ))) {
-      setError('Revisa las cajas aportadas por cada saldo.');
+      setError('Revisa las cajas aportadas por cada folio.');
       return;
     }
     if (resultType === 'pallet' && (!target || total !== target)) {
@@ -339,13 +339,13 @@ export function RepalletizingScreen({ auth, baseUrl, onLogout, standalone = fals
           </Field>
         ) : null}
 
-        <Field label="Saldo de origen">
+        <Field label="Pallet o saldo de origen">
           <ScanInput
             autoFocus={isPdaBuild}
             disabled={busy}
             onChangeText={setLookup}
             onSubmit={(code) => void addSource(code)}
-            placeholder={tight ? 'Pistolea el saldo' : 'Escanear o escribir saldo'}
+            placeholder={tight ? 'Pistolea el folio' : 'Escanear o escribir folio'}
             ref={lookupInput}
             submitLabel="Agregar"
             value={lookup}
@@ -382,7 +382,7 @@ export function RepalletizingScreen({ auth, baseUrl, onLogout, standalone = fals
             <View style={styles.sourceCopy}>
               <Text style={styles.sourceNumber}>{source.numero_folio}</Text>
               <Text style={styles.sourceMeta}>
-                {source.cantidad_cajas} cajas · {source.cliente} · {source.especie}
+                {source.tipo_bulto === 'pallet' ? 'Pallet completo' : 'Saldo'} · {source.cantidad_cajas} cajas · {source.cliente} · {source.especie}
               </Text>
               <Text style={styles.sourceMeta}>
                 {source.marca} · {source.calibre} · {source.condicion_termica}

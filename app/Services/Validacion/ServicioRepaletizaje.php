@@ -436,7 +436,7 @@ class ServicioRepaletizaje
         if (! $temporadaActivaId || $folio->temporada_id !== $temporadaActivaId) {
             throw new ConflictoOperacion('El folio no pertenece a la temporada activa.');
         }
-        $this->validarFolioTransformable($folio);
+        $this->validarFolioOperable($folio);
 
         $cantidadAntes = $this->cantidad($folio);
         if ((int) $origenPayload['cantidad_aportada'] !== $cantidadAntes) {
@@ -881,9 +881,9 @@ class ServicioRepaletizaje
 
     private function validarFolioOperable(Folio $folio): void
     {
-        if (! $folio->activo || $folio->tipo_bulto !== TipoBulto::Saldo) {
+        if (! $folio->activo || ! in_array($folio->tipo_bulto, [TipoBulto::Pallet, TipoBulto::Saldo], true)) {
             throw new DomainException(
-                "El folio {$folio->numero_folio} no es un saldo activo.",
+                "El folio {$folio->numero_folio} no es un pallet o saldo activo.",
             );
         }
         if ($this->cantidad($folio) < 1) {
@@ -932,28 +932,6 @@ class ServicioRepaletizaje
         return $condicion === CondicionTermicaFolio::PendientePrefrio
             ? HabilitacionAlmacenamientoFolio::NoHabilitado
             : HabilitacionAlmacenamientoFolio::Habilitado;
-    }
-
-    private function validarFolioTransformable(Folio $folio): void
-    {
-        if (! $folio->activo || ! in_array($folio->tipo_bulto, [TipoBulto::Pallet, TipoBulto::Saldo], true)) {
-            throw new DomainException("El folio {$folio->numero_folio} no es un pallet o saldo activo.");
-        }
-        if ($this->cantidad($folio) < 1) {
-            throw new DomainException("El folio {$folio->numero_folio} no posee cajas disponibles.");
-        }
-        if (! in_array($folio->condicion_termica, [
-            CondicionTermicaFolio::PendientePrefrio,
-            CondicionTermicaFolio::PrefrioAprobado,
-        ], true)) {
-            throw new DomainException("El folio {$folio->numero_folio} posee un estado térmico transitorio o retenido.");
-        }
-        if ($folio->asignacionCargaActual()->exists() || $folio->reservaCargaActual()->exists()) {
-            throw new ConflictoOperacion("El folio {$folio->numero_folio} está reservado o asignado a una carga.");
-        }
-        if ($folio->procesosPrefrio()->whereIn('estado', ['cargado', 'en_proceso'])->exists()) {
-            throw new ConflictoOperacion("El folio {$folio->numero_folio} participa en un proceso de prefrío activo.");
-        }
     }
 
     /** @param Collection<int, Folio> $folios */
