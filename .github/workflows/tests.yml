@@ -124,6 +124,13 @@ jobs:
       - name: Validar estilo
         run: vendor/bin/pint --test
 
+      - name: Preparar MySQL para la suite
+        run: |
+          php -r '
+            $db = new PDO("mysql:host=".getenv("DB_HOST").";port=".getenv("DB_PORT"), getenv("DB_USERNAME"), getenv("DB_PASSWORD"));
+            $db->exec("SET GLOBAL innodb_redo_log_capacity = 1073741824");
+          '
+
       - name: Crear esquema limpio
         run: php artisan migrate:fresh --force
 
