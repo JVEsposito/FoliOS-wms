@@ -14,15 +14,19 @@ class EstadoCuentaEnvasesPdfTest extends TestCase
         $pdf = app(GeneradorEstadoCuentaEnvasesPdf::class)->generar($estado);
         $paginas = substr_count($pdf, '/Type /Page /Parent');
         $this->assertGreaterThan(1, $paginas);
-        $this->assertLessThanOrEqual(18, $paginas);
-        $this->assertSame(1, substr_count($pdf, '(RESUMEN POR TIPO DE ENVASE)'));
-        $this->assertSame($paginas, substr_count($pdf, '(Saldo del envase)'));
+        $this->assertLessThanOrEqual(22, $paginas);
+        $this->assertSame(1, substr_count($pdf, '(RESUMEN EJECUTIVO)'));
+        $this->assertLessThanOrEqual(18, substr_count($pdf, '(Saldo del envase)'));
+        $this->assertLessThan(strpos($pdf, '(DETALLE POR DOCUMENTO)'), strpos($pdf, '(RESUMEN POR CSG)'));
+        $this->assertLessThan(strpos($pdf, '(RESUMEN POR CSG)'), strpos($pdf, '(RESUMEN EJECUTIVO)'));
         $this->assertSame($paginas, substr_count($pdf, '/Logo Do'));
         foreach ($estado['grupos_documentos'] as $grupo) {
             $this->assertSame(1, substr_count($pdf, $grupo['documento']));
-            $this->assertSame(1, substr_count($pdf, 'CSG '.substr($grupo['productor'], 4, 6)));
         }
-        $this->assertSame(200, preg_match_all('/\/F1 8\.50 Tf [\d.]+ [\d.]+ Td \(Tote\)/', $pdf));
+        foreach (array_count_values(array_column($estado['grupos_documentos'], 'productor')) as $productor => $veces) {
+            $this->assertSame($veces + 1, substr_count($pdf, 'CSG '.substr($productor, 4, 6)));
+        }
+        $this->assertSame(212, preg_match_all('/\/F1 8\.50 Tf [\d.]+ [\d.]+ Td \(Tote\)/', $pdf));
         $this->assertSame(200, preg_match_all('/\/F1 8\.00 Tf [\d.]+ [\d.]+ Td \(CSG /', $pdf));
         $this->assertStringContainsString('No incluidas en el saldo.', $pdf);
         $this->comprobarCoordenadas($pdf);
@@ -38,11 +42,13 @@ class EstadoCuentaEnvasesPdfTest extends TestCase
             $grupo['lineas'][] = [...$base, 'tipo_envase' => sprintf('ENVASE%04d', $i)];
         }
         $estado['movimientos'] = $grupo['lineas'];
+        unset($estado['resumen_csg']);
         $pdf = app(GeneradorEstadoCuentaEnvasesPdf::class)->generar($estado);
         $this->assertGreaterThan(1, substr_count($pdf, '/Type /Page /Parent'));
         $this->assertStringContainsString('continuaci', $pdf);
         for ($i = 0; $i < 160; $i++) {
-            $this->assertSame(1, substr_count($pdf, sprintf('ENVASE%04d', $i)));
+            // Cada tipo aparece una vez en su resumen y una vez en el detalle.
+            $this->assertSame(2, substr_count($pdf, sprintf('ENVASE%04d', $i)));
         }
         $this->comprobarCoordenadas($pdf);
     }

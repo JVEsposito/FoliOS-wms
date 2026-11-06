@@ -2,12 +2,13 @@
 
 namespace Tests\Fixtures;
 
+use App\Services\Envases\ResumenEnvasesPorCsg;
 use Carbon\CarbonImmutable;
 
 /** Datos sintéticos para comprobar una temporada completa sin consultar datos de planta. */
 class EstadoCuentaEnvases
 {
-    public static function crear(int $guias = 200): array
+    public static function crear(int $guias = 200, int $cantidadCsg = 12): array
     {
         $tipos = array_map(fn ($nombre) => [
             'nombre' => $nombre, 'saldo_inicial' => 0, 'entradas' => 0, 'salidas' => 0,
@@ -19,13 +20,16 @@ class EstadoCuentaEnvases
             'desde' => '2026-11-01', 'hasta' => '2026-11-05', 'emitido_at' => '2026-11-06 08:00:00',
             'movimientos' => [], 'grupos_documentos' => [], 'lineas_pendientes_validacion' => 6,
         ];
+        $movimientosCsg = [];
         for ($i = 1; $i <= $guias; $i++) {
             $entrada = $i % 2 === 1;
+            $indiceCsg = intdiv($i - 1, 2) % max(1, $cantidadCsg) + 1;
+            $csg = ['codigo' => (string) (100000 + $indiceCsg), 'nombre' => 'Productor de ejemplo PROD-'.str_pad((string) $indiceCsg, 5, '0', STR_PAD_LEFT)];
             $documento = [
                 'fecha' => CarbonImmutable::parse('2026-11-01 08:00:00')->addMinutes($i * 8)->format('Y-m-d H:i:s'),
                 'documento' => 'EJ-'.str_pad((string) $i, 5, '0', STR_PAD_LEFT),
                 'movimiento' => $entrada ? 'Recepción con fruta' : 'Despacho',
-                'productor' => 'CSG '.(100000 + $i).' · Productor de ejemplo PROD-'.str_pad((string) $i, 5, '0', STR_PAD_LEFT),
+                'productor' => 'CSG '.$csg['codigo'].' · '.$csg['nombre'],
                 'lineas' => [],
             ];
             foreach ([12, 6, 288] as $j => $base) {
@@ -46,10 +50,16 @@ class EstadoCuentaEnvases
                 ];
                 $documento['lineas'][] = $linea;
                 $estado['movimientos'][] = $linea;
+                $movimientosCsg[] = [
+                    'movimiento' => $entrada ? 'recepcion_fruta' : 'despacho_cliente',
+                    'tipo_envase' => $j, 'nombre_envase' => $tipos[$j]['nombre'], 'orden' => $j,
+                    'entradas' => $entrada ? $cantidad : 0, 'salidas' => $entrada ? 0 : $cantidad, 'csg' => $csg,
+                ];
             }
             $estado['grupos_documentos'][] = $documento;
         }
         $estado['tipos'] = $guias ? $tipos : [];
+        $estado['resumen_csg'] = ResumenEnvasesPorCsg::generar($movimientosCsg, []);
 
         return $estado;
     }

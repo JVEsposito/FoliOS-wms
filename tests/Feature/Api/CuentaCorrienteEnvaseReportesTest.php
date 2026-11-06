@@ -138,6 +138,9 @@ class CuentaCorrienteEnvaseReportesTest extends TestCase
             'saldo_final' => 160,
         ]], $estado['tipos']);
         $this->assertSame([180, 130, 140, 160], array_column($estado['movimientos'], 'saldo'));
+        // El desglose CSG resume el período, sin repetir las 300 unidades iniciales.
+        $this->assertSame(10, array_sum(array_map(fn ($g) => array_sum(array_column($g['tipos'], 'entradas')), $estado['resumen_csg'])));
+        $this->assertSame(150, array_sum(array_map(fn ($g) => array_sum(array_column($g['tipos'], 'salidas')), $estado['resumen_csg'])));
         // Una anulación histórica sin referencia al despacho descuenta de lo entregado, en la misma columna.
         $this->assertSame([null, null, 10, null], array_column($estado['movimientos'], 'entrada'));
         $this->assertSame([120, 50, null, -20], array_column($estado['movimientos'], 'salida'));
@@ -279,11 +282,13 @@ class CuentaCorrienteEnvaseReportesTest extends TestCase
             'predio' => $productor->predio, 'activo' => true,
         ]);
         foreach ([1, 2] as $secuencia) {
-            $validacion->segmentos()->create([
+            $segmento = $validacion->segmentos()->create([
                 'secuencia' => $secuencia, 'motivos' => ['cuartel'], 'csg_validacion_id' => $csg->id, 'csg_snapshot' => '122104',
             ]);
+            $segmento->envases()->create(['tipo_envase' => 'bins', 'cantidad' => 100]);
         }
-        $validacion->segmentos()->create(['secuencia' => 3, 'motivos' => ['csg'], 'csg_snapshot' => '122105']);
+        $validacion->segmentos()->create(['secuencia' => 3, 'motivos' => ['csg'], 'csg_snapshot' => '122105'])
+            ->envases()->create(['tipo_envase' => 'bins', 'cantidad' => 100]);
         MovimientoEnvase::query()->where('numero_documento', 'REC-1')->update(['recepcion_romana_id' => $recepcionId]);
 
         $ruta = '/api/envases/cuenta-corriente/estado-cuenta?cliente_id='.$this->productor->id;
@@ -291,6 +296,9 @@ class CuentaCorrienteEnvaseReportesTest extends TestCase
         $pdf = $this->get($ruta)->assertOk()->getContent();
         $this->assertStringContainsString(iconv('UTF-8', 'Windows-1252', $productores), $pdf);
         $this->assertStringContainsString('Sin productor declarado', $pdf);
+        $resumen = collect(app(ServicioCuentaCorrienteEnvases::class)->estadoCuenta($this->productor, $this->temporada, null, null)['resumen_csg'])->keyBy('codigo');
+        $this->assertSame(200, $resumen['122104']['tipos'][0]['entradas']);
+        $this->assertSame(100, $resumen['122105']['tipos'][0]['entradas']);
 
         $excel = $this->get($ruta.'&formato=xlsx')->assertOk();
         $filas = $this->filasExcel($excel->baseResponse->getFile()->getPathname());
