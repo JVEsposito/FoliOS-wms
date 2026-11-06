@@ -77,8 +77,9 @@ type ObservationDraft = {
 
 type FolioReview = {
   numero_folio: string;
-  status: 'nuevo' | ValidationResult;
+  status: 'nuevo' | 'fuera_temporada' | ValidationResult;
   attempt: ValidationAttempt | null;
+  motivo?: string;
 };
 
 // Cada línea del bulto: CSG, cajas y, cuando la etiqueta los trae, lote MP y proceso de packing.
@@ -175,7 +176,8 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
     sessionExpanded ? validationSession.data.length : Math.max(0, 6 - currentSessionOutbox.length),
   ) ?? [];
   const terminalDecision = folioReview?.status === 'aprobado' || folioReview?.status === 'rechazado';
-  const captureLocked = terminalDecision || Boolean(prefillPhase);
+  const outsideSeason = folioReview?.status === 'fuera_temporada';
+  const captureLocked = terminalDecision || outsideSeason || Boolean(prefillPhase);
   const observedAttempt = folioReview?.status === 'observado' ? folioReview.attempt : null;
 
   const catalogIndex = useMemo(() => catalog ? indexValidationCatalog(catalog) : null, [catalog]);
@@ -619,6 +621,10 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
         // Con conexión, la PDA parte con lo que la planta informa del pallet.
         const source = baseUrl ? await loadPrefill(baseUrl, normalized, requestId) : null;
         if (!current()) return;
+        if (source?.blocked) {
+          setFolioReview({ numero_folio: normalized, status: 'fuera_temporada', attempt: null, motivo: source.reason ?? undefined });
+          return;
+        }
         setNotice(source?.available
           ? `Datos de planta cargados para ${normalized}. Revisa el pallet y corrige solo lo que no coincida.`
           : `${normalized} no posee validaciones anteriores en la temporada activa.${source?.reason ? ` ${source.reason}` : ''}`);
@@ -641,7 +647,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
   }
 
   /** Sin datos de planta se valida como siempre: el aviso explica por qué. */
-  async function loadPrefill(url: string, normalized: string, requestId: number): Promise<{ available: boolean; reason: string | null }> {
+  async function loadPrefill(url: string, normalized: string, requestId: number): Promise<{ available: boolean; reason: string | null; blocked?: boolean }> {
     const valid = () => folioRequest.current === requestId && catalogRef.current?.temporada.id === catalog?.temporada.id;
     if (!catalog) return { available: false, reason: 'Actualiza el catálogo de la PDA para cargar los datos de packing.' };
     try {
@@ -651,7 +657,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
         onProgress: (phase) => { if (valid()) setPrefillPhase(phase); },
       });
       if (!valid()) return { available: false, reason: null };
-      if (!data.disponible) return { available: false, reason: data.motivo };
+      if (!data.disponible) return { available: false, reason: data.motivo, blocked: data.bloqueado_por_temporada };
       return { available: applyPrefill(data), reason: null };
     } catch (reason) {
       if (!valid()) return { available: false, reason: null };
@@ -706,11 +712,16 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
     if (!line || !shift) return 'Selecciona la línea de proceso y el turno antes de validar.';
     if (!folio.trim()) return 'Escanea o ingresa el folio.';
     if (terminalDecision) return 'El folio ya posee una decisión final y no admite una nueva validación.';
+    if (outsideSeason) return folioReview?.motivo ?? 'El folio está fuera de la temporada activa.';
     if (originError) return originError;
     if (!Number.isInteger(Number(boxes)) || Number(boxes) < 1) return 'Ingresa una cantidad válida de cajas.';
     if (!selectedCategory) return 'Selecciona una categoría.';
     if (!selectedArticle) return 'Completa especie, variedad, calibre y envase.';
     if (!/^\d{4}-\d{2}-\d{2}$/.test(packingDate)) return 'Ingresa una fecha de embalaje válida.';
+    const { codigo, fecha_inicio: start, fecha_fin: end } = catalog.temporada;
+    if ((start && packingDate < start.slice(0, 10)) || (end && packingDate > end.slice(0, 10))) {
+      return `La fecha de embalaje está fuera de la temporada activa ${codigo}. Revisa la etiqueta del pallet.`;
+    }
     if (selectedOrigins.some((origin) => !origin)) return 'Completa todos los CSG del bulto.';
     if (new Set(originDrafts.map(compositionKey)).size !== originDrafts.length) return 'No repitas la misma combinación de CSG, lote y proceso.';
     if (!selectedCombination) return 'Una combinación artículo–CSG no está habilitada.';
@@ -1008,12 +1019,13 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
             : reviewOutbox.length ? `${reviewOutbox.length} por revisar` : 'Catálogo al día';
   const headerMeta = [
     auth.dispositivo.codigo,
+    catalog ? `${catalogVerified ? 'Temporada activa' : 'Temporada del catálogo'} ${catalog.temporada.codigo || catalog.temporada.nombre}` : null,
     wide ? `sesión desde ${formatDateTime(sessionStartedAt)}` : null,
     catalog ? `catálogo v${catalog.temporada.version_catalogo}` : 'sin catálogo',
     lastSync ? `sincronizado ${formatTime(lastSync)}` : null,
   ].filter(Boolean).join(' · ');
   const ready = Boolean(selectedCombination && selectedCategory);
-  const decisionDisabled = busy || terminalDecision || !catalog;
+  const decisionDisabled = busy || terminalDecision || outsideSeason || !catalog;
   const serverRecords = validationSession?.resumen.registros_realizados ?? 0;
   const noCsgYet = !originDrafts.some((draft) => draft.originId);
 
@@ -1502,6 +1514,14 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
 }
 
 function FolioReviewCard({ review }: { review: FolioReview }) {
+  if (review.status === 'fuera_temporada') {
+    return (
+      <View accessibilityRole="alert" style={styles.review}>
+        <StatusChip label="Fuera de la temporada activa" tone="critical" />
+        <Text style={styles.reviewDetail}>{review.motivo}</Text>
+      </View>
+    );
+  }
   const attempt = review.attempt;
   const tone: LabelTone = review.status === 'nuevo'
     ? 'neutral'

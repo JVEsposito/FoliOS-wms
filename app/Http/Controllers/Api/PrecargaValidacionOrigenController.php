@@ -26,7 +26,7 @@ class PrecargaValidacionOrigenController extends Controller
             return response()->json(['data' => $precarga->paraFolio($numero)])->header('Cache-Control', 'private, no-store');
         }
         $copia = $precarga->paraFolio($numero);
-        if ($copia['disponible'] && ! $copia['desactualizada']) {
+        if (($copia['bloqueado_por_temporada'] ?? false) || ($copia['disponible'] && ! $copia['desactualizada'])) {
             return response()->json(['data' => $copia])->header('Cache-Control', 'private, no-store');
         }
         $operaciones = app(ServicioOperacionesIntegracion::class);
