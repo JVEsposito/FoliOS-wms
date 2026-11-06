@@ -5,7 +5,7 @@ namespace App\Services\Envases;
 use App\Services\Documentos\DocumentoPdfPlanta;
 use Carbon\CarbonImmutable;
 
-/** Estado informativo del cliente: resumen inicial y detalle continuo por documento. */
+/** Estado informativo del cliente: resúmenes y detalle en hojas separadas. */
 class GeneradorEstadoCuentaEnvasesPdf
 {
     private const LIMITE_INFERIOR = 64;
@@ -22,10 +22,8 @@ class GeneradorEstadoCuentaEnvasesPdf
         $pagina = ['paginas' => [], 'contenido' => '', 'y' => 0.0, 'detalle' => false];
         $this->nuevaPagina($estado, $pagina, 'resumen');
         foreach ($estado['tipos'] as $tipo) {
-            $detalle = $this->detalleEntregados($tipo['salidas_por_propiedad']);
-            $notas = $detalle ? $this->pdf->envolver($detalle, 513, self::SECUNDARIO) : [];
             $nombres = $this->pdf->envolver($tipo['nombre'], 200, self::CUERPO);
-            $alto = count($nombres) * 12 + count($notas) * 10 + 2;
+            $alto = count($nombres) * 12 + 2;
             $this->reservar($estado, $pagina, $alto, 'resumen');
             $y = $pagina['y'] - 9;
             foreach ($nombres as $i => $nombre) {
@@ -33,9 +31,6 @@ class GeneradorEstadoCuentaEnvasesPdf
             }
             foreach ([300 => $tipo['saldo_inicial'], 370 => $tipo['entradas'], 440 => $tipo['salidas'], 559 => $tipo['saldo_final']] as $x => $valor) {
                 $pagina['contenido'] .= $this->derecha($x, $y, self::CUERPO, $this->numero($valor, $x === 300 || $x === 559), $x === 559);
-            }
-            foreach ($notas as $i => $nota) {
-                $pagina['contenido'] .= $this->pdf->texto(42, $y - count($nombres) * 12 - $i * 10, self::SECUNDARIO, $nota);
             }
             $pagina['y'] -= $alto;
         }
@@ -66,17 +61,15 @@ class GeneradorEstadoCuentaEnvasesPdf
         }
 
         $pagina['y'] -= 12;
-        $this->resumenCsg($estado, $pagina);
-        $pagina['y'] -= 12;
+        $this->resumenProductor($estado, $pagina);
+        if ($estado['movimientos']) {
+            $this->nuevaPagina($estado, $pagina, 'detalle');
+        }
         foreach ($this->documentos($estado) as $documento) {
             $this->documento($estado, $pagina, $documento);
         }
         if (! $estado['movimientos']) {
-            if ($pagina['y'] - 53 < self::LIMITE_INFERIOR) {
-                $this->nuevaPagina($estado, $pagina, 'detalle');
-            } else {
-                $this->encabezadoDetalle($pagina);
-            }
+            $pagina['y'] -= 12;
             $this->nota($estado, $pagina, 'Sin movimientos en el período.');
         }
         $pagina['paginas'][] = $pagina['contenido'];
@@ -91,7 +84,7 @@ class GeneradorEstadoCuentaEnvasesPdf
         return $this->pdf->generar($pagina['paginas']);
     }
 
-    private function resumenCsg(array $estado, array &$pagina): void
+    private function resumenProductor(array $estado, array &$pagina): void
     {
         $grupos = $estado['resumen_csg'] ?? ResumenEnvasesPorCsg::generar(array_map(
             fn ($linea, $i) => [
@@ -102,8 +95,8 @@ class GeneradorEstadoCuentaEnvasesPdf
         ), []);
         $iniciado = false;
         foreach ($grupos as $grupo) {
-            $titulo = $grupo['codigo'] === null ? 'Sin CSG asociado'
-                : 'CSG '.$grupo['codigo'].(! empty($grupo['nombre']) ? ' · '.$grupo['nombre'] : '');
+            $titulo = $grupo['codigo'] === null ? 'Sin productor asociado'
+                : ($grupo['nombre'] ?: 'Productor sin nombre').' · CSG '.$grupo['codigo'];
             $rotulo = $this->pdf->envolver($titulo, 523, self::CUERPO);
             $filas = array_map(fn ($tipo) => [...$tipo, 'textos' => $this->pdf->envolver($tipo['nombre'], 315, self::CUERPO)], $grupo['tipos']);
             $altoRotulo = count($rotulo) * 10 + 2;
@@ -141,11 +134,11 @@ class GeneradorEstadoCuentaEnvasesPdf
         if (! $iniciado) {
             $this->reservar($estado, $pagina, 53, 'notas');
             $this->encabezadoCsg($pagina);
-            $this->nota($estado, $pagina, 'Sin movimientos del período para resumir por CSG.');
+            $this->nota($estado, $pagina, 'Sin movimientos del período para resumir por productor.');
         }
         if (array_filter($grupos, fn ($grupo) => $grupo['codigo'] === null)) {
             $pagina['y'] -= 3;
-            $this->nota($estado, $pagina, 'Sin CSG asociado: registros sin identificación o sin reparto conciliado. Incluidos en los totales.');
+            $this->nota($estado, $pagina, 'Sin productor asociado: registros sin identificación o sin reparto conciliado. Incluidos en los totales.');
         }
     }
 
@@ -162,8 +155,8 @@ class GeneradorEstadoCuentaEnvasesPdf
 
     private function encabezadoCsg(array &$pagina): void
     {
-        $pagina['contenido'] .= $this->pdf->texto(30, $pagina['y'], 10, 'RESUMEN POR CSG', true);
-        $pagina['contenido'] .= $this->pdf->texto(30, $pagina['y'] - 12, self::SECUNDARIO, 'Entradas y salidas de cuenta del período · Sin saldo histórico por CSG');
+        $pagina['contenido'] .= $this->pdf->texto(30, $pagina['y'], 10, 'RESUMEN POR PRODUCTOR', true);
+        $pagina['contenido'] .= $this->pdf->texto(30, $pagina['y'] - 12, self::SECUNDARIO, 'Entradas y salidas de cuenta del período · CSG como referencia del productor');
         $pagina['y'] -= 22;
         $pagina['contenido'] .= $this->fondo($pagina['y'] - 15, 17);
         foreach ([['Envase', 36], ['Entradas', 408], ['Salidas', 534]] as [$texto, $x]) {
@@ -198,11 +191,10 @@ class GeneradorEstadoCuentaEnvasesPdf
         $productor = isset($documento['productor'])
             ? $this->pdf->envolver($documento['productor'], 523, self::SECUNDARIO) : [];
         $filas = array_map(function (array $linea): array {
-            $envase = $this->pdf->envolver($linea['tipo_envase'], 155, self::CUERPO);
-            $propiedad = $this->pdf->envolver($linea['propiedad'] === 'Propia' ? 'De la planta' : $linea['propiedad'], 110, self::CUERPO);
+            $envase = $this->pdf->envolver($linea['tipo_envase'], 300, self::CUERPO);
 
-            return ['datos' => $linea, 'envase' => $envase, 'propiedad' => $propiedad,
-                'alto' => max(count($envase), count($propiedad), 1) * 10.5];
+            return ['datos' => $linea, 'envase' => $envase,
+                'alto' => max(count($envase), 1) * 10.5];
         }, $documento['lineas']);
         $alto = $this->altoRotulo($documento) + count($productor) * 9 + array_sum(array_column($filas, 'alto'));
         $inicioPagina = $pagina['inicio'];
@@ -271,10 +263,8 @@ class GeneradorEstadoCuentaEnvasesPdf
     {
         $y = $pagina['y'] - 8;
         $pagina['contenido'] .= sprintf("0.94 0.98 0.97 rg 484 %.2F 81 %.2F re f 0 g\n", $pagina['y'] - $fila['alto'], $fila['alto']);
-        foreach (['envase' => 36, 'propiedad' => 201] as $campo => $x) {
-            foreach ($fila[$campo] as $i => $texto) {
-                $pagina['contenido'] .= $this->pdf->texto($x, $y - $i * 10.5, self::CUERPO, $texto);
-            }
+        foreach ($fila['envase'] as $i => $texto) {
+            $pagina['contenido'] .= $this->pdf->texto(36, $y - $i * 10.5, self::CUERPO, $texto);
         }
         foreach (['entrada' => 393, 'salida' => 474, 'saldo' => 559] as $campo => $x) {
             $valor = $fila['datos'][$campo];
@@ -322,7 +312,7 @@ class GeneradorEstadoCuentaEnvasesPdf
         $pagina['contenido'] .= $this->pdf->texto(30, $pagina['y'] - 12, self::SECUNDARIO, 'Orden cronológico · Saldos independientes por envase');
         $pagina['y'] -= 22;
         $pagina['contenido'] .= $this->fondo($pagina['y'] - 15, 17);
-        foreach ([['Envase', 36], ['Propiedad', 201], ['Recibidos', 347], ['Entregados', 426], ['Saldo del envase', 493]] as [$texto, $x]) {
+        foreach ([['Envase', 36], ['Recibidos', 347], ['Entregados', 426], ['Saldo del envase', 493]] as [$texto, $x]) {
             $pagina['contenido'] .= $this->pdf->texto($x, $pagina['y'] - 10, self::CUERPO, $texto, true);
         }
         $pagina['y'] -= 20;
@@ -360,20 +350,6 @@ class GeneradorEstadoCuentaEnvasesPdf
         $contenido .= sprintf("0.75 G 30 %.2F m 565 %.2F l S 0 G\n", $y + 3, $y + 3);
 
         return [$contenido, $y - 19];
-    }
-
-    private function detalleEntregados(array $porPropiedad): ?string
-    {
-        if ($porPropiedad['propia'] === 0 && $porPropiedad['arrendada'] === 0) {
-            return null;
-        }
-        $partes = array_filter([
-            $porPropiedad['propia'] ? $this->numero($porPropiedad['propia']).' propios de la planta' : null,
-            $porPropiedad['arrendada'] ? $this->numero($porPropiedad['arrendada']).' arrendados' : null,
-            $porPropiedad['cliente'] ? $this->numero($porPropiedad['cliente']).' del cliente' : null,
-        ]);
-
-        return 'Entregados: '.implode(', ', $partes).'.';
     }
 
     private function fondo(float $y, float $alto): string

@@ -17,8 +17,10 @@ class EstadoCuentaEnvasesPdfTest extends TestCase
         $this->assertLessThanOrEqual(22, $paginas);
         $this->assertSame(1, substr_count($pdf, '(RESUMEN EJECUTIVO)'));
         $this->assertLessThanOrEqual(18, substr_count($pdf, '(Saldo del envase)'));
-        $this->assertLessThan(strpos($pdf, '(DETALLE POR DOCUMENTO)'), strpos($pdf, '(RESUMEN POR CSG)'));
-        $this->assertLessThan(strpos($pdf, '(RESUMEN POR CSG)'), strpos($pdf, '(RESUMEN EJECUTIVO)'));
+        $this->assertLessThan(strpos($pdf, '(DETALLE POR DOCUMENTO)'), strpos($pdf, '(RESUMEN POR PRODUCTOR)'));
+        $this->assertLessThan(strpos($pdf, '(RESUMEN POR PRODUCTOR)'), strpos($pdf, '(RESUMEN EJECUTIVO)'));
+        $this->assertStringNotContainsString('DETALLE POR DOCUMENTO', $this->paginas($pdf)[0]);
+        $this->assertStringNotContainsString('EJ-00001', $this->paginas($pdf)[0]);
         $this->assertSame($paginas, substr_count($pdf, '/Logo Do'));
         foreach ($estado['grupos_documentos'] as $grupo) {
             $this->assertSame(1, substr_count($pdf, $grupo['documento']));
@@ -91,7 +93,61 @@ class EstadoCuentaEnvasesPdfTest extends TestCase
         $pdf = $generador->generar($estado);
         $this->assertStringContainsString('(1.234.567)', $pdf);
         $this->assertStringContainsString('(+1.234.567)', $pdf);
-        $this->assertSame(1, substr_count($pdf, '/Type /Page /Parent'));
+        $this->assertSame(2, substr_count($pdf, '/Type /Page /Parent'));
+    }
+
+    public function test_una_guia_corta_empieza_en_hoja_dos_y_no_muestra_propiedad_en_ninguna_seccion(): void
+    {
+        $estado = EstadoCuentaEnvases::crear(1);
+        $original = $estado;
+        $pdf = app(GeneradorEstadoCuentaEnvasesPdf::class)->generar($estado);
+        $paginas = $this->paginas($pdf);
+        $this->assertCount(2, $paginas);
+        $this->assertStringContainsString('RESUMEN EJECUTIVO', $paginas[0]);
+        $this->assertStringContainsString('RESUMEN POR PRODUCTOR', $paginas[0]);
+        $this->assertStringContainsString('Productor de ejemplo PROD-00001', $paginas[0]);
+        $this->assertStringNotContainsString('EJ-00001', $paginas[0]);
+        $this->assertStringNotContainsString('DETALLE POR DOCUMENTO', $paginas[0]);
+        $this->assertStringContainsString('DETALLE POR DOCUMENTO', $paginas[1]);
+        $this->assertStringContainsString('EJ-00001', $paginas[1]);
+        foreach (['(Propiedad)', '(Propia)', '(Arrendada)', '(De la planta)', 'Entregados:'] as $texto) {
+            $this->assertStringNotContainsString($texto, $pdf);
+        }
+        $this->assertSame($original, $estado);
+    }
+
+    public function test_el_resumen_extenso_continua_sin_mezclarse_con_los_documentos(): void
+    {
+        $estado = EstadoCuentaEnvases::crear(80, 40);
+        $pdf = app(GeneradorEstadoCuentaEnvasesPdf::class)->generar($estado);
+        $paginas = $this->paginas($pdf);
+        $enDetalle = false;
+        $hojasResumen = 0;
+        foreach ($paginas as $pagina) {
+            if (str_contains($pagina, 'DETALLE POR DOCUMENTO')) {
+                $enDetalle = true;
+            }
+            if ($enDetalle) {
+                $this->assertStringNotContainsString('RESUMEN POR PRODUCTOR', $pagina);
+                $this->assertStringNotContainsString('RESUMEN EJECUTIVO', $pagina);
+            } else {
+                $hojasResumen++;
+                $this->assertStringNotContainsString('EJ-', $pagina);
+            }
+        }
+        $this->assertGreaterThan(1, $hojasResumen);
+        foreach ($estado['grupos_documentos'] as $grupo) {
+            $this->assertSame(1, substr_count($pdf, $grupo['documento']));
+        }
+        $this->comprobarCoordenadas($pdf);
+    }
+
+    /** Contenido de cada hoja del PDF, excluyendo la imagen del logo. */
+    private function paginas(string $pdf): array
+    {
+        preg_match_all('/\d+ 0 obj\n<< \/Length \d+ >>\nstream\n(.*?)endstream/s', $pdf, $coincidencias);
+
+        return $coincidencias[1];
     }
 
     private function comprobarCoordenadas(string $pdf): void

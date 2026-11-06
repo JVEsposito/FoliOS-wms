@@ -153,7 +153,9 @@ class CuentaCorrienteEnvaseReportesTest extends TestCase
         $this->assertStringStartsWith('%PDF-1.4', $pdf);
         $this->assertStringContainsString('ESTADO DE CUENTA DE ENVASES', $pdf);
         $this->assertStringContainsString('PRB', $pdf);
-        $this->assertStringContainsString('Entregados: 100 propios de la planta, 50 del cliente.', $pdf);
+        $this->assertStringContainsString('RESUMEN POR PRODUCTOR', $pdf);
+        $this->assertStringNotContainsString('Entregados: 100 propios de la planta, 50 del cliente.', $pdf);
+        $this->assertStringNotContainsString('(Propiedad)', $pdf);
 
         $this->get('/api/envases/cuenta-corriente/estado-cuenta?formato=xlsx&cliente_id='.$this->productor->id)
             ->assertOk()
