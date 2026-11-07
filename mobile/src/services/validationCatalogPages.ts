@@ -54,6 +54,22 @@ function decode(raw: string, index: Index, collection: CatalogCollection, cursor
   return page;
 }
 
+async function requestPage(load: Load, url: string, headers: Headers, collection: CatalogCollection, onRetry: () => void) {
+  for (let retries = 0; ; retries++) {
+    try {
+      const result = await load(url, headers);
+      if (result.response.ok) return result;
+      let message = 'Reintenta la sincronización; las páginas recibidas se conservan.';
+      try { message = (JSON.parse(result.raw) as { message?: string }).message ?? message; } catch { /* Mensaje de red sin JSON. */ }
+      throw new ApiError(`No se pudo descargar ${collection} (HTTP ${result.response.status}). ${message}`, result.response.status);
+    } catch (reason) {
+      if (retries >= 2 || !(reason instanceof ApiError) || ![0, 500, 502, 503, 504].includes(reason.status)) throw reason;
+      onRetry();
+      await new Promise<void>((resolve) => setTimeout(resolve, 1000 * (retries + 1)));
+    }
+  }
+}
+
 export async function downloadCatalogPages(baseUrl: string, token: string, index: Index,
   options: { deviceId: string; onProgress?: (progress: CatalogProgress) => void }, load: Load): Promise<ValidationCatalog> {
   const checkpoint: Checkpoint = { schema: 1, temporada_id: index.temporada.id, version: index.temporada.version_catalogo, paginas: [] };
@@ -87,12 +103,10 @@ export async function downloadCatalogPages(baseUrl: string, token: string, index
       }
       if (!page) {
         const query = cursor ? `?desde=${encodeURIComponent(cursor)}` : '';
-        const result = await load(`${baseUrl}/api/validacion/catalogos/paginas/${encodeURIComponent(index.temporada.id)}/${checkpoint.version}/${collection}${query}`, headers);
-        if (!result.response.ok) {
-          let message = 'Reintenta la sincronización; las páginas recibidas se conservan.';
-          try { message = (JSON.parse(result.raw) as { message?: string }).message ?? message; } catch { /* Mensaje de red sin JSON. */ }
-          throw new ApiError(`No se pudo descargar ${collection} (HTTP ${result.response.status}). ${message}`, result.response.status);
-        }
+        const url = `${baseUrl}/api/validacion/catalogos/paginas/${encodeURIComponent(index.temporada.id)}/${checkpoint.version}/${collection}${query}`;
+        const result = await requestPage(load, url, headers, collection, () => {
+          options.onProgress?.({ ...progress, retryingCollection: collection });
+        });
         const hash = result.response.headers.get('X-Catalog-Target');
         if (!hash || !/^[a-f0-9]{64}$/.test(hash)) throw new Error('La página no incluye su verificación de integridad.');
         raw = result.raw;

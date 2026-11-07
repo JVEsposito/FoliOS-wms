@@ -90,7 +90,14 @@ function harness(source = catalog(), shared = {}) {
       const cursor = parsed.searchParams.get('desde');
       if (editOnPage?.key === `${collection}:${cursor}`) { source = editOnPage.source; server = transport(source); editOnPage = null; }
       if (Number(parsed.pathname.split('/').at(-2)) !== source.temporada.version_catalogo) return response({ message: 'El catálogo cambió durante la descarga' }, 409);
-      if (failedPage === `${collection}:${cursor}`) return response({ message: 'Página temporalmente no disponible' }, 503);
+      if (failedPage?.key === `${collection}:${cursor}` && failedPage.remaining > 0) {
+        failedPage.remaining--;
+        if (failedPage.status === 0) {
+          for (const timer of timers.values()) timer.fn();
+          throw new Error('Aborted');
+        }
+        return response({ message: 'Página temporalmente no disponible' }, failedPage.status);
+      }
       const sorted = [...source[collection]].sort((a, b) => a.id < b.id ? -1 : 1).filter((row) => !cursor || row.id > cursor);
       const rows = sorted.slice(0, 1000);
       const raw = JSON.stringify({ formato: 'paginas-v1', temporada_id: source.temporada.id, version: source.temporada.version_catalogo,
@@ -140,7 +147,13 @@ function harness(source = catalog(), shared = {}) {
     const code = ts.transpileModule(readFileSync(path, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
     vm.runInNewContext(code, {
       module, exports: module.exports, console, Error, Headers, URLSearchParams, AbortController, fetch,
-      setTimeout: (fn, delay) => { const key = randomUUID(); timers.set(key, { fn, deadline: elapsed + delay }); return key; }, clearTimeout: (key) => timers.delete(key),
+      setTimeout: (fn, delay) => {
+        const key = randomUUID();
+        if (delay < 45000) queueMicrotask(fn);
+        else timers.set(key, { fn, deadline: elapsed + delay });
+        return key;
+      },
+      clearTimeout: (key) => timers.delete(key),
       require: (name) => {
       const fieldMock = fieldUiMock(name); if (fieldMock) return fieldMock;
         if (name === 'expo-file-system/legacy') return disk;
@@ -161,7 +174,9 @@ function harness(source = catalog(), shared = {}) {
     api, compatibility: load(resolve(root, 'domain/validationCatalogIndex.ts')), codec: load(resolve(root, 'domain/validationCatalogTransfer.ts')), offline: load(resolve(root, 'services/validationOfflineStore.ts')),
     download: (known = null, base = 'http://planta', device = 'pda') => api.getValidationCatalog(base, 'token', known, { deviceId: device, onProgress: (p) => progress.push(clone(p)) }),
     update: (next) => { source = next; server = transport(next); for (const [key, raw] of server.bodies) history.set(key, raw); }, fail: (digest) => { failure = digest; }, corrupt: (digest) => { corrupt = digest; }, diskFull: (v) => { fullDisk = v; },
-    fullFallback: (value) => { fullFallback = value; }, pages: () => { pages = true; }, failPage: (value) => { failedPage = value; }, corruptPage: () => { corruptPage = true; }, elapsed: () => elapsed,
+    fullFallback: (value) => { fullFallback = value; }, pages: () => { pages = true; },
+    failPage: (key, status = 503, remaining = Infinity) => { failedPage = { key, status, remaining }; },
+    corruptPage: () => { corruptPage = true; }, elapsed: () => elapsed,
     editOnPage: (key, next) => { editOnPage = { key, source: next }; },
     never: () => { never = true; }, abort: () => { for (const timer of timers.values()) timer.fn(); },
     restart: (next = source) => harness(next, { files, directories, storage }),
@@ -279,6 +294,7 @@ test('descarga paginada supera 45 s totales, recibe todas las filas y reanuda tr
     const preserved = [...h.storage];
     h.failPage(`combinaciones:${cursor}`);
     await assert.rejects(h.download(catalog(417), 'http://planta', device), /HTTP 503/);
+    assert.equal(h.calls.filter((url) => url.endsWith(`/combinaciones?desde=${cursor}`)).length, 3);
     assert.ok(h.elapsed() > 45000);
     const restarted = h.restart(source); restarted.pages();
     const received = await restarted.download(catalog(417), 'http://planta', device);
@@ -291,6 +307,25 @@ test('descarga paginada supera 45 s totales, recibe todas las filas y reanuda tr
     restarted.calls.length = 0;
     assert.equal(await restarted.download(received, 'http://planta', device), null);
     assert.equal(restarted.calls.length, 1);
+  }
+});
+
+test('reintenta solo la página interrumpida y completa el catálogo en el mismo intento', async () => {
+  for (const status of [500, 0]) {
+    const source = catalog(443, 1001);
+    const h = harness(source);
+    h.pages();
+    const cursor = source.articulos.map((row) => row.id).sort()[999];
+    h.failPage(`articulos:${cursor}`, status, 1);
+    const received = await h.download(catalog(417));
+    assert.equal(received.temporada.version_catalogo, 443);
+    assert.equal(received.articulos.length, source.articulos.length);
+    assert.equal(h.calls.filter((url) => url.endsWith('/articulos')).length, 1);
+    assert.equal(h.calls.filter((url) => url.endsWith(`/articulos?desde=${cursor}`)).length, 2);
+    const retry = h.progress.find((progress) => progress.retryingCollection === 'articulos');
+    assert.equal(retry.completed, 2);
+    assert.equal(retry.rows, 1001);
+    assert.equal(h.progress.at(-1).retryingCollection, undefined);
   }
 });
 
