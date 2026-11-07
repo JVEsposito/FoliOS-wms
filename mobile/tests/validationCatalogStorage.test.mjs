@@ -20,7 +20,7 @@ const catalog = (version = 218) => ({
   tipos_bulto: ['pallet', 'saldo'], resultados: ['aprobado', 'observado', 'rechazado'], motivos: ['otro'], generado_at: '2026-10-28T12:00:00Z',
 });
 
-function harness() {
+function harness(maxNativeBytes = Infinity) {
   const files = new Map(); const directories = new Set(); const storage = new Map(); const modules = new Map();
   let failWrite = false; let fetchImpl = async () => new Response('{}');
   const disk = {
@@ -29,7 +29,12 @@ function harness() {
     makeDirectoryAsync: async (path) => { directories.add(path); },
     readDirectoryAsync: async (path) => [...files.keys()].filter((key) => key.startsWith(path) && !key.slice(path.length).includes('/')).map((key) => key.slice(path.length)),
     readAsStringAsync: async (path) => { if (!files.has(path)) throw new Error('Archivo ausente.'); return files.get(path); },
-    writeAsStringAsync: async (path, value) => { files.set(path, failWrite ? '{incompleto' : value); if (failWrite) throw new Error('Almacenamiento lleno.'); },
+    writeAsStringAsync: async (path, value) => {
+      if (Buffer.byteLength(value, 'utf8') > maxNativeBytes) throw new Error('La escritura supera el búfer nativo.');
+      const failed = typeof failWrite === 'function' ? failWrite(path) : failWrite;
+      files.set(path, failed ? '{incompleto' : value);
+      if (failed) throw new Error('Almacenamiento lleno.');
+    },
     moveAsync: async ({ from, to }) => { assert.ok(files.has(from)); files.set(to, files.get(from)); files.delete(from); },
     deleteAsync: async (path) => { files.delete(path); },
   };
@@ -80,25 +85,27 @@ test('migra v218, publica v227 y otro usuario comparte la copia sin tocar sus ca
   assert.equal((await h.offline.loadCachedValidationCatalog('2', 'pda', 'http://planta/')).temporada.version_catalogo, 227);
   assert.deepEqual([...h.storage].filter(([key]) => !key.startsWith('estiba_validation_catalog:')), captures);
   assert.ok(h.storage.has('estiba_validation_catalog:1:otra-pda'));
-  assert.equal(h.files.size, 2, 'Copia actual y respaldo, sin duplicar por usuario');
+  assert.equal([...h.files.keys()].filter((key) => key.endsWith('.json')).length, 2, 'Copia actual y respaldo, sin duplicar por usuario');
 });
 
 test('una actualización interrumpida no sustituye v218 ni elimina la bandeja', async () => {
   const h = harness();
   await h.offline.saveValidationCatalog('1', 'pda', catalog(218), 'http://planta');
   h.storage.set('estiba_validation_outbox:1:pda', '[{"id":"sin-enviar"}]');
-  h.failWrite(true);
+  const previousFiles = [...h.files.keys()];
+  h.failWrite((file) => file.endsWith('.combinaciones-0.part'));
   await assert.rejects(h.offline.saveValidationCatalog('1', 'pda', catalog(227), 'http://planta'), /Almacenamiento lleno/);
   assert.equal((await h.offline.loadCachedValidationCatalog('1', 'pda', 'http://planta')).temporada.version_catalogo, 218);
   assert.equal(h.storage.get('estiba_validation_outbox:1:pda'), '[{"id":"sin-enviar"}]');
-  assert.ok([...h.files.keys()].every((key) => !key.endsWith('.tmp')));
+  assert.deepEqual([...h.files.keys()], previousFiles, 'Elimina las partes nuevas aunque falle después de varias escrituras');
 });
 
 test('una copia dañada recupera el respaldo y los catálogos de distintos servidores quedan aislados', async () => {
   const h = harness();
   await h.offline.saveValidationCatalog('1', 'pda', catalog(218), 'http://planta');
   await h.offline.saveValidationCatalog('1', 'pda', catalog(227), 'http://planta');
-  h.files.set([...h.files.keys()].sort().at(-1), '{incompleto');
+  const newest = [...h.files.keys()].filter((key) => key.endsWith('.json')).sort().at(-1);
+  h.files.set(`${newest}.combinaciones-0.part`, '{incompleto');
   assert.equal((await h.offline.loadCachedValidationCatalog('1', 'pda', 'http://planta')).temporada.version_catalogo, 218);
   assert.equal(await h.offline.loadCachedValidationCatalog('1', 'pda', 'http://otra-planta'), null);
 });
@@ -115,13 +122,37 @@ test('no publica respuestas incompletas ni permite que una escritura atrasada re
   assert.equal((await h.offline.loadCachedValidationCatalog('3', 'pda', 'http://planta')).temporada.version_catalogo, 227);
 });
 
-test('el volumen de 29676 artículos y 37184 combinaciones se guarda fuera de la cuota de AsyncStorage', async () => {
-  const h = harness(); const large = catalog(227);
-  large.articulos = Array.from({ length: 29676 }, (_, n) => ({ ...large.articulos[0], id: `article-${n}`, created_at: 'timestamp no operativo', especie_validacion_id: 'FK interna' }));
-  large.combinaciones = Array.from({ length: 37184 }, (_, n) => ({ id: `combination-${n}`, articulo_validacion_id: `article-${n % 29676}`, origen_validacion_id: 'origin' }));
+test('lee el respaldo nativo anterior y lo conserva cuando instala la copia por partes', async () => {
+  const h = harness();
+  const directory = 'file:///private/validation-catalogs/http%3A%2F%2Fplanta/pda/';
+  await h.disk.makeDirectoryAsync(directory);
+  const legacy = catalog(417);
+  const counts = { categorias: 1, articulos: 1, origenes: 1, combinaciones: 1 };
+  const oldFile = directory + '0000000000000001-anterior.json';
+  h.files.set(oldFile, JSON.stringify({ schema: 1, counts, catalog: legacy }));
+  assert.equal((await h.offline.loadCachedValidationCatalog('1', 'pda', 'http://planta')).temporada.version_catalogo, 417);
+
+  await h.offline.saveValidationCatalog('1', 'pda', catalog(442), 'http://planta');
+  assert.equal((await h.offline.loadCachedValidationCatalog('1', 'pda', 'http://planta')).temporada.version_catalogo, 442);
+  assert.ok(h.files.has(oldFile));
+});
+
+test('guarda y recupera 244288 combinaciones sin superar el búfer de cada escritura nativa', async () => {
+  const h = harness(128 * 1024); const large = catalog(442);
+  const id = (prefix, n) => `${prefix}0000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+  large.origenes[0].id = id('b', 1);
+  large.articulos = Array.from({ length: 29676 }, (_, n) => ({ ...large.articulos[0], id: id('a', n), created_at: 'timestamp no operativo', especie_validacion_id: 'FK interna' }));
+  large.combinaciones = Array.from({ length: 244288 }, (_, n) => ({
+    id: id('c', n),
+    articulo_validacion_id: id('a', n % large.articulos.length),
+    origen_validacion_id: large.origenes[0].id,
+    codigo_externo: null,
+  }));
   await h.offline.saveValidationCatalog('nuevo', 'pda', large, 'http://planta');
   const saved = await h.offline.loadCachedValidationCatalog('otro-usuario', 'pda', 'http://planta');
-  assert.equal(saved.articulos.length, 29676); assert.equal(saved.combinaciones.length, 37184);
+  assert.equal(saved.temporada.version_catalogo, 442);
+  assert.equal(saved.articulos.length, 29676); assert.equal(saved.combinaciones.length, 244288);
+  assert.deepEqual(clone(saved.combinaciones.at(-1)), large.combinaciones.at(-1));
   assert.equal('created_at' in saved.articulos[0], false);
   assert.equal('especie_validacion_id' in saved.articulos[0], false);
   assert.equal(h.storage.size, 0, 'No almacena otra copia masiva en la base de capturas');

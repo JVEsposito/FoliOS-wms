@@ -17,18 +17,10 @@ export function assertValidationCatalog(value: unknown): asserts value is Valida
   }
 }
 
-/** No copiar timestamps ni campos internos de cada fila a la PDA. */
-export function compactValidationCatalog(catalog: ValidationCatalog): ValidationCatalog {
-  assertValidationCatalog(catalog);
-  return {
-    temporada: catalog.temporada,
-    categorias: catalog.categorias.map(({ id, temporada_id, nombre, codigo_externo, activo }) => ({ id, temporada_id, nombre, codigo_externo, activo: Boolean(activo) })),
-    articulos: catalog.articulos.map(({ id, temporada_id, variedad_validacion_id, especie, variedad, calibre, envase, codigo_externo, activo }) => ({ id, temporada_id, variedad_validacion_id, especie, variedad, calibre, envase, codigo_externo, activo: Boolean(activo) })),
-    origenes: catalog.origenes.map(({ id, temporada_id, cliente_validacion_id, csg_validacion_id, variedad_ids, cliente, marca, csg, predio, codigo_externo, activo }) => ({ id, temporada_id, cliente_validacion_id, csg_validacion_id, variedad_ids, cliente, marca, csg, predio, codigo_externo, activo: Boolean(activo) })),
-    combinaciones: catalog.combinaciones.map(({ id, articulo_validacion_id, origen_validacion_id, codigo_externo }) => ({ id, articulo_validacion_id, origen_validacion_id, codigo_externo })),
-    tipos_bulto: catalog.tipos_bulto,
-    resultados: catalog.resultados,
-    motivos: catalog.motivos,
-    generado_at: catalog.generado_at,
-  };
-}
+/** Conserva solo los campos operativos al guardar cada lote de la copia local. */
+export const compactCatalogRows = {
+  categorias: (rows: ValidationCatalog['categorias']) => rows.map(({ id, temporada_id, nombre, codigo_externo, activo }) => ({ id, temporada_id, nombre, codigo_externo, activo: Boolean(activo) })),
+  articulos: (rows: ValidationCatalog['articulos']) => rows.map(({ id, temporada_id, variedad_validacion_id, especie, variedad, calibre, envase, codigo_externo, activo }) => ({ id, temporada_id, variedad_validacion_id, especie, variedad, calibre, envase, codigo_externo, activo: Boolean(activo) })),
+  origenes: (rows: ValidationCatalog['origenes']) => rows.map(({ id, temporada_id, cliente_validacion_id, csg_validacion_id, variedad_ids, cliente, marca, csg, predio, codigo_externo, activo }) => ({ id, temporada_id, cliente_validacion_id, csg_validacion_id, variedad_ids, cliente, marca, csg, predio, codigo_externo, activo: Boolean(activo) })),
+  combinaciones: (rows: ValidationCatalog['combinaciones']) => rows.map(({ id, articulo_validacion_id, origen_validacion_id, codigo_externo }) => ({ id, articulo_validacion_id, origen_validacion_id, codigo_externo })),
+};
