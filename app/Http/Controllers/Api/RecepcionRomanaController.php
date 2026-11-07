@@ -15,6 +15,7 @@ use App\Http\Requests\AnularPesajeEnvasesRomanaRequest;
 use App\Http\Requests\CerrarRecepcionRomanaRequest;
 use App\Http\Requests\ConfirmarIngresoRomanaRequest;
 use App\Http\Requests\ConsultarRecepcionesRomanaRequest;
+use App\Http\Requests\CorregirPesoBrutoRomanaRequest;
 use App\Http\Requests\CorregirRecepcionRomanaRequest;
 use App\Http\Requests\CorregirSalidaEnvasesRomanaRequest;
 use App\Http\Requests\CrearRecepcionRomanaRequest;
@@ -202,6 +203,16 @@ class RecepcionRomanaController extends Controller
             $request->validated(),
             $request->user(),
         );
+
+        return response()->json(['data' => $this->recepcion($recepcion, true)]);
+    }
+
+    public function corregirPesoBruto(
+        CorregirPesoBrutoRomanaRequest $request,
+        RecepcionRomana $recepcion,
+        ServicioRecepcionRomana $servicio,
+    ): JsonResponse {
+        $recepcion = $servicio->corregirPesoBruto($recepcion, $request->validated(), $request->user());
 
         return response()->json(['data' => $this->recepcion($recepcion, true)]);
     }
@@ -436,6 +447,9 @@ class RecepcionRomanaController extends Controller
             'observacion_cierre' => $recepcion->observacion_cierre,
             'version' => $recepcion->version,
             'puede_editar' => $puedeEditar,
+            'puede_corregir_peso_bruto' => Gate::allows('corregir-peso-bruto-romana')
+                && $recepcion->estado !== EstadoRecepcionRomana::Anulada && $recepcion->eliminada_at === null
+                && ! $esSoloEnvases && (! $esPesajeEnvases || $cantidadPesada > 0),
             'puede_anular' => Gate::allows('anular-recepciones-romana') && $recepcion->estado !== EstadoRecepcionRomana::Anulada,
             'puede_eliminar' => Gate::allows('eliminar-recepciones-romana') && $recepcion->estado !== EstadoRecepcionRomana::Anulada,
             'eliminada' => $recepcion->eliminada_at !== null,

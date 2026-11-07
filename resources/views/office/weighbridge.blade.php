@@ -86,6 +86,7 @@
                             <button class="secondary-button rec-delete-button is-hidden" id="deleteReceptionButton" type="button">Eliminar recepción</button>
                             <button class="secondary-button is-hidden" id="annulReceptionButton" type="button">Anular recepción</button>
                             <button class="secondary-button is-hidden" id="editReceptionButton" type="button">Editar ingreso</button>
+                            <button class="secondary-button is-hidden" id="correctGrossWeightButton" type="button">Corregir peso bruto</button>
                             <button class="primary-button is-hidden" id="confirmEntryButton" type="button">Confirmar ingreso</button>
                             <button class="primary-button is-hidden" id="addContainerWeighingButton" type="button">+ Registrar tanda</button>
                             <button class="primary-button is-hidden" id="closeReceptionButton" type="button">Registrar destare y cerrar</button>
@@ -116,6 +117,19 @@
                 <footer class="dialog-actions"><button class="secondary-button" id="annulReceptionCancel" type="button">Volver</button><button class="primary-button" type="submit">Confirmar anulación</button></footer>
             </form>
         </dialog>
+        <dialog class="weighbridge-dialog weighbridge-dialog--compact" id="grossWeightDialog" aria-labelledby="grossWeightTitle">
+            <form class="weighbridge-dialog__shell" id="grossWeightForm">
+                <header class="weighbridge-dialog__heading"><div><p class="eyebrow">CORRECCIÓN ADMINISTRATIVA</p><h2 id="grossWeightTitle">Corregir peso bruto</h2><p id="grossWeightDescription"></p></div></header>
+                <label class="field is-hidden" id="grossWeightReadingField"><span>Tanda de pesaje *</span><select name="pesaje_id"></select></label>
+                <p id="grossWeightCurrent"></p>
+                <label class="field weight-field"><span>Peso bruto corregido *</span><div><input name="peso_bruto" type="number" min="0.001" max="200000" step="0.001" inputmode="decimal" required><b>kg</b></div></label>
+                <p id="grossWeightPreview" aria-live="polite"></p>
+                <label class="field"><span>Motivo de la corrección *</span><textarea name="motivo_correccion" rows="3" minlength="10" maxlength="1000" required></textarea></label>
+                <p>Se conserva la tara registrada y se recalcula el neto. Los lotes en borrador se actualizan; si hay lotes confirmados, se requiere conciliación de kilos.</p>
+                <p class="form-error" id="grossWeightError" role="alert"></p>
+                <footer class="dialog-actions"><button class="secondary-button" id="grossWeightCancel" type="button">Cancelar</button><button class="primary-button" type="submit">Guardar peso bruto</button></footer>
+            </form>
+        </dialog>
         <dialog class="weighbridge-dialog" id="receptionDialog">
             <form method="dialog" class="weighbridge-dialog__shell" id="receptionForm" novalidate>
                 <div class="weighbridge-dialog__heading"><div><p class="eyebrow">INGRESO A ROMANA</p><h2 id="receptionDialogTitle">Registrar ingreso</h2><p id="receptionDialogDescription">Captura los antecedentes documentales y el peso del camión cargado.</p></div><button class="dialog-close" value="cancel" type="submit" aria-label="Cerrar">×</button></div>
@@ -136,7 +150,7 @@
                     <label class="field"><span>Patente carro</span><input name="patente_carro" maxlength="10" autocomplete="off" placeholder="Opcional"></label>
                     <label class="field"><span>RUT conductor *</span><input name="rut_conductor" maxlength="12" placeholder="12.345.678-5" required></label>
                     <label class="field field--span-2"><span>Nombre conductor *</span><input name="nombre_conductor" maxlength="150" required></label>
-                    <label class="field weight-field" id="grossWeightField"><span>Peso bruto *</span><div><input name="peso_bruto" type="number" min="1" max="200000" step="0.01" inputmode="decimal" required><b>kg</b></div><small>Lectura del camión cargado sobre la romana.</small></label>
+                    <label class="field weight-field" id="grossWeightField"><span>Peso bruto *</span><div><input name="peso_bruto" type="number" min="1" max="200000" step="0.001" inputmode="decimal" required><b>kg</b></div><small>Lectura del camión cargado sobre la romana.</small></label>
                     <label class="field field--span-2"><span>Observación</span><textarea name="observacion" maxlength="2000"></textarea></label>
                     <label class="field weight-field is-hidden" id="administrativeTareField"><span>Peso tara corregido *</span><div><input name="peso_tara" type="number" min="1" max="200000" step="0.01" inputmode="decimal"><b>kg</b></div><small>Disponible únicamente para una recepción ya cerrada.</small></label>
                     <label class="field is-hidden" id="administrativeNetContainerField"><span>Envase contenedor para neto unitario *</span><select name="tipo_envase_calculo_neto"></select></label>
