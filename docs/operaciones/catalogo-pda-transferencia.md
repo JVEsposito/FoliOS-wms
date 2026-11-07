@@ -1,6 +1,47 @@
 # Descarga recuperable del catálogo PDA
 
-La PDA nativa negocia `GET /api/validacion/catalogos?formato=fragmentos-v1`.
+## Descarga paginada para catálogos grandes
+
+La app nativa actualizada negocia `GET /api/validacion/catalogos?formato=paginas-v1`.
+Ese índice contiene solo temporada, versión y metadatos. No prepara la proyección
+completa ni calcula sus conteos, y no toma el bloqueo del publicador de fragmentos.
+
+La app solicita `/api/validacion/catalogos/paginas/TEMPORADA/VERSION/COLECCION`
+para categorías, artículos, orígenes y combinaciones. Cada respuesta contiene
+como máximo 1.000 filas y un cursor `siguiente`; la siguiente petición envía
+`?desde=CURSOR`. La consulta lee hasta 1.001 filas ordenadas por ID, utilizando
+los índices existentes, sin OFFSET ni ordenamiento global por especie/cliente.
+Cada página identifica su temporada, versión, colección y cursor y se verifica
+contra `X-Catalog-Target` (SHA-256).
+
+Las lecturas usan una transacción de snapshot sin tomar el bloqueo compartido
+de edición de Maestros. La versión se comprueba por página. Si una edición
+comprometida cambia la versión durante la descarga, se devuelve 409: el próximo
+intento comienza una descarga coherente de la versión vigente. No se instalan
+páginas de versiones distintas ni se sustituye la copia completa hasta terminar.
+
+El equipo guarda cada página verificada y su avance en archivos privados. Un
+corte, cierre o petición agotada permite continuar desde la primera página que
+falta de la misma versión. Un archivo dañado se vuelve a descargar. La bandeja,
+jornada y folio en curso no se borran. La pantalla muestra páginas y registros
+recibidos sin inventar un porcentaje mientras todavía se desconoce el total.
+El límite de 45 segundos sigue siendo por petición, no por catálogo completo.
+Si se agota, el mensaje identifica si fue el índice o qué colección se descargaba.
+
+**Despliegue:** instalar primero backend y luego distribuir la actualización de
+la app **en PDA y tablet**. Los endpoints anteriores se conservan, pero las apps
+anteriores continúan usando su descarga completa o por fragmentos; necesitan
+esta actualización móvil para usar las páginas. No requiere migraciones ni
+nuevas dependencias nativas. Se conservan los datos de la instalación.
+
+Las pruebas incluyen 29.676 artículos y 37.184 combinaciones, interrupción,
+reinicio y latencia simulada de 12 segundos por página, con un total superior a
+45 segundos. Esto comprueba la reanudación y los límites por petición; no mide
+la velocidad de la red ni los tiempos del servidor de planta.
+
+## Compatibilidad con descarga por fragmentos
+
+Las versiones anteriores de la PDA negocian `GET /api/validacion/catalogos?formato=fragmentos-v1`.
 La representación anterior se conserva para aplicaciones antiguas y web. Si un backend anterior entrega el catálogo completo, la PDA lo acepta y usa su ETag durante el resto de esa ejecución de la app.
 
 ## Publicación y recuperación

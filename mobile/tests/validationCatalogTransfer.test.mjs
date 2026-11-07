@@ -67,6 +67,7 @@ function harness(source = catalog(), shared = {}) {
   const calls = []; const progress = []; const timers = new Map();
   let server = transport(source); const history = new Map(server.bodies);
   let failure = null; let corrupt = null; let fullDisk = false; let never = false; let active = 0; let maximum = 0; let fullFallback = false;
+  let pages = false; let failedPage = null; let corruptPage = false; let elapsed = 0; let editOnPage = null;
   const disk = {
     documentDirectory: 'file:///private/',
     getInfoAsync: async (path) => ({ exists: directories.has(path) || files.has(path) }),
@@ -81,7 +82,27 @@ function harness(source = catalog(), shared = {}) {
   async function fetch(url, options) {
     assert.equal(options.headers.get('Authorization'), 'Bearer token'); calls.push(url);
     const parsed = new URL(url);
+    if (parsed.pathname.includes('/paginas/')) {
+      elapsed += 12000; // El total puede exceder 45 s; cada respuesta termina dentro de su propio plazo.
+      for (const timer of timers.values()) if (timer.deadline <= elapsed) timer.fn();
+      if (options.signal.aborted) throw new Error('Aborted');
+      const collection = parsed.pathname.split('/').at(-1);
+      const cursor = parsed.searchParams.get('desde');
+      if (editOnPage?.key === `${collection}:${cursor}`) { source = editOnPage.source; server = transport(source); editOnPage = null; }
+      if (Number(parsed.pathname.split('/').at(-2)) !== source.temporada.version_catalogo) return response({ message: 'El catálogo cambió durante la descarga' }, 409);
+      if (failedPage === `${collection}:${cursor}`) return response({ message: 'Página temporalmente no disponible' }, 503);
+      const sorted = [...source[collection]].sort((a, b) => a.id < b.id ? -1 : 1).filter((row) => !cursor || row.id > cursor);
+      const rows = sorted.slice(0, 1000);
+      const raw = JSON.stringify({ formato: 'paginas-v1', temporada_id: source.temporada.id, version: source.temporada.version_catalogo,
+        coleccion: collection, desde: cursor, siguiente: sorted.length > 1000 ? rows.at(-1).id : null, filas: rows });
+      return new Response(corruptPage ? '{dañado' : raw, { status: 200, headers: { 'X-Catalog-Target': hash(raw) } });
+    }
     if (!parsed.pathname.includes('/fragmentos/')) {
+      if (pages) {
+        if (options.headers.get('If-None-Match') === `"validacion-paginas-v1-season-${source.temporada.version_catalogo}"`) return new Response(null, { status: 304 });
+        const { categorias, articulos, origenes, combinaciones, ...metadata } = source;
+        return response({ ...metadata, formato: 'paginas-v1', tamano_pagina: 1000, colecciones: Object.keys(columns) });
+      }
       if (fullFallback) return new Response(JSON.stringify(source), { status: 200, headers: { 'X-Catalog-Transfer': 'full-fallback' } });
       if (options.headers.get('If-None-Match') === `"validacion-partes-v1-season-${server.manifest.temporada.version_catalogo}"`) return new Response(null, { status: 304 });
       return response(server.manifest);
@@ -119,7 +140,7 @@ function harness(source = catalog(), shared = {}) {
     const code = ts.transpileModule(readFileSync(path, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
     vm.runInNewContext(code, {
       module, exports: module.exports, console, Error, Headers, URLSearchParams, AbortController, fetch,
-      setTimeout: (fn) => { const key = randomUUID(); timers.set(key, fn); return key; }, clearTimeout: (key) => timers.delete(key),
+      setTimeout: (fn, delay) => { const key = randomUUID(); timers.set(key, { fn, deadline: elapsed + delay }); return key; }, clearTimeout: (key) => timers.delete(key),
       require: (name) => {
       const fieldMock = fieldUiMock(name); if (fieldMock) return fieldMock;
         if (name === 'expo-file-system/legacy') return disk;
@@ -140,8 +161,9 @@ function harness(source = catalog(), shared = {}) {
     api, codec: load(resolve(root, 'domain/validationCatalogTransfer.ts')), offline: load(resolve(root, 'services/validationOfflineStore.ts')),
     download: (known = null, base = 'http://planta', device = 'pda') => api.getValidationCatalog(base, 'token', known, { deviceId: device, onProgress: (p) => progress.push(clone(p)) }),
     update: (next) => { source = next; server = transport(next); for (const [key, raw] of server.bodies) history.set(key, raw); }, fail: (digest) => { failure = digest; }, corrupt: (digest) => { corrupt = digest; }, diskFull: (v) => { fullDisk = v; },
-    fullFallback: (value) => { fullFallback = value; },
-    never: () => { never = true; }, abort: () => { for (const fn of timers.values()) fn(); },
+    fullFallback: (value) => { fullFallback = value; }, pages: () => { pages = true; }, failPage: (value) => { failedPage = value; }, corruptPage: () => { corruptPage = true; }, elapsed: () => elapsed,
+    editOnPage: (key, next) => { editOnPage = { key, source: next }; },
+    never: () => { never = true; }, abort: () => { for (const timer of timers.values()) timer.fn(); },
     restart: (next = source) => harness(next, { files, directories, storage }),
   };
 }
@@ -226,6 +248,7 @@ test('PDA y tablet actualizan v417 a v418 con recuperación completa y vuelven a
   for (const device of ['pda', 'tablet']) {
     const old = catalog(417); const current = catalog(418); current.articulos[0].envase = 'Envase corregido';
     const h = harness(current);
+    await h.download(); h.calls.length = 0; // Negocia primero el backend que solo ofrece fragmentos-v1.
     await h.offline.saveValidationCatalog('1', device, old, 'http://planta');
     h.storage.set(`estiba_validation_outbox:1:${device}`, '[{"id":"captura-pendiente"}]');
     h.storage.set(`estiba_validation_work_context:1:${device}`, '{"linea_proceso":1,"turno":"A"}');
@@ -244,6 +267,54 @@ test('PDA y tablet actualizan v417 a v418 con recuperación completa y vuelven a
     assert.equal((await h.download(result, 'http://planta', device)).temporada.version_catalogo, 419);
     assert.ok(h.calls.some((url) => url.includes('/fragmentos/')));
   }
+});
+
+test('descarga paginada supera 45 s totales, recibe todas las filas y reanuda tras reiniciar PDA/tablet', async () => {
+  for (const device of ['pda', 'tablet']) {
+    const articles = device === 'pda' ? 29676 : 2501; const combinations = device === 'pda' ? 37184 : 3501;
+    const source = catalog(418, articles, combinations, 30); const h = harness(source); h.pages();
+    const cursor = [...source.combinaciones].sort((a, b) => a.id < b.id ? -1 : 1)[999].id;
+    h.storage.set(`estiba_validation_outbox:1:${device}`, '[{"id":"pendiente"}]');
+    h.storage.set(`estiba_validation_work_context:1:${device}`, '{"turno":"A"}');
+    const preserved = [...h.storage];
+    h.failPage(`combinaciones:${cursor}`);
+    await assert.rejects(h.download(catalog(417), 'http://planta', device), /HTTP 503/);
+    assert.ok(h.elapsed() > 45000);
+    const restarted = h.restart(source); restarted.pages();
+    const received = await restarted.download(catalog(417), 'http://planta', device);
+    assert.equal(received.articulos.length, articles); assert.equal(received.combinaciones.length, combinations);
+    assert.deepEqual([...received.combinaciones.map((r) => r.id)].sort(), source.combinaciones.map((r) => r.id).sort());
+    assert.equal(restarted.calls.filter((url) => url.includes('/paginas/')).length, Math.ceil(combinations / 1000) - 1, 'Solo solicita las páginas de combinaciones pendientes');
+    assert.deepEqual([...h.storage], preserved);
+    restarted.calls.length = 0;
+    assert.equal(await restarted.download(received, 'http://planta', device), null);
+    assert.equal(restarted.calls.length, 1);
+  }
+});
+
+test('si cambia la versión a mitad de descarga, rechaza la mezcla y empieza una copia coherente de la nueva', async () => {
+  const initial = catalog(418, 1200, 1800); const updated = clone(initial); updated.temporada.version_catalogo = 419;
+  updated.articulos[0].envase = 'Edición durante descarga';
+  const h = harness(initial); h.pages(); h.editOnPage('combinaciones:null', updated);
+  await assert.rejects(h.download(catalog(417)), /HTTP 409/);
+  const recovered = await h.download(catalog(417));
+  assert.equal(recovered.temporada.version_catalogo, 419);
+  assert.equal(recovered.articulos.find((row) => row.id === initial.articulos[0].id).envase, 'Edición durante descarga');
+  assert.equal(recovered.combinaciones.length, 1800);
+});
+
+test('una página dañada o de otra versión no instala un catálogo parcial y una edición retira los IDs antiguos', async () => {
+  const source = catalog(418); const h = harness(source); h.pages(); h.corruptPage();
+  await assert.rejects(h.download(catalog(417)), /llegó dañada/);
+  const clean = h.restart(source); clean.pages(); const first = await clean.download(catalog(417));
+  const updated = clone(source); updated.temporada.version_catalogo = 419;
+  updated.articulos = updated.articulos.slice(1);
+  updated.combinaciones = updated.combinaciones.filter((row) => row.articulo_validacion_id !== source.articulos[0].id);
+  clean.update(updated);
+  const next = await clean.download(first);
+  assert.equal(next.temporada.version_catalogo, 419);
+  assert.equal(next.articulos.some((row) => row.id === source.articulos[0].id), false);
+  assert.equal(next.combinaciones.length, updated.combinaciones.length);
 });
 
 test('la recuperación completa también rechaza versiones anteriores y relaciones inválidas', async () => {

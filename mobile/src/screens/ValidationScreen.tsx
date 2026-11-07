@@ -118,7 +118,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
   const catalogNeedsSave = useRef(false);
   const [catalogVerified, setCatalogVerified] = useState(false);
   const [catalogProblem, setCatalogProblem] = useState('');
-  const [catalogProgress, setCatalogProgress] = useState<{ version: number; completed: number; total: number } | null>(null);
+  const [catalogProgress, setCatalogProgress] = useState<{ version: number; completed: number; total: number; rows?: number } | null>(null);
   const historyRefreshedAt = useRef(0);
   const [outbox, setOutbox] = useState<ValidationOutboxItem[]>([]);
   const [recent, setRecent] = useState<ValidationAttempt[]>([]);
@@ -1003,7 +1003,9 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
   }
 
   const catalogProgressLabel = catalogProgress
-    ? `Actualizando catálogo v${catalogProgress.version} · ${catalogProgress.completed} de ${catalogProgress.total} partes (${catalogProgress.total ? Math.round(catalogProgress.completed * 100 / catalogProgress.total) : 100} %)`
+    ? catalogProgress.total === 0 && catalogProgress.rows !== undefined
+      ? `Actualizando catálogo v${catalogProgress.version} · ${catalogProgress.completed} páginas · ${catalogProgress.rows} registros recibidos`
+      : `Actualizando catálogo v${catalogProgress.version} · ${catalogProgress.completed} de ${catalogProgress.total} partes (${catalogProgress.total ? Math.round(catalogProgress.completed * 100 / catalogProgress.total) : 100} %)`
     : null;
   if (!catalog && busy) {
     return <View style={styles.boot}><ActivityIndicator color={o.color.primary} size="large" /><Text style={styles.bootText}>{catalogProgressLabel ?? 'Preparando catálogo de validación…'}</Text></View>;

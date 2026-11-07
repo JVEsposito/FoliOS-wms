@@ -8,6 +8,7 @@ use App\Enums\TipoBulto;
 use App\Http\Controllers\Controller;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\Validacion\CatalogoOperativoValidacion;
+use App\Services\Validacion\DescargaPaginadaCatalogoValidacion;
 use App\Services\Validacion\TransferenciaCatalogoValidacion;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -22,6 +23,17 @@ class CatalogoValidacionController extends Controller
         ServicioTemporadaActiva $temporadas,
         CatalogoOperativoValidacion $operativo,
     ): Response {
+        if ($request->query('formato') === 'paginas-v1') {
+            $indice = app(DescargaPaginadaCatalogoValidacion::class)->indice();
+            $temporada = $indice['temporada'];
+            $etag = "validacion-paginas-v1-{$temporada['id']}-{$temporada['version_catalogo']}";
+            $condicional = $this->configurarCache(response('', 200), $etag);
+            if ($condicional->isNotModified($request)) {
+                return $condicional;
+            }
+
+            return $this->configurarCache(response()->json($indice), $etag);
+        }
         if ($request->query('formato') === 'fragmentos-v1') {
             $inicio = hrtime(true);
             $temporada = $temporadas->buscar();
@@ -70,6 +82,18 @@ class CatalogoValidacionController extends Controller
         return $this->configurarCache(response($cuerpo)->header('Content-Type', 'application/json')
             ->header('X-Catalog-Bytes', (string) strlen($cuerpo))
             ->header('X-Catalog-Target', $hash), hash('sha256', $cuerpo));
+    }
+
+    public function pagina(Request $request, string $temporadaId, int $version, string $coleccion): Response
+    {
+        $datos = $request->validate(['desde' => ['nullable', 'uuid']]);
+        $inicio = hrtime(true);
+        $cuerpo = app(DescargaPaginadaCatalogoValidacion::class)->pagina($temporadaId, $version, $coleccion, $datos['desde'] ?? null);
+        $hash = hash('sha256', $cuerpo);
+
+        return $this->configurarCache(response($cuerpo)->header('Content-Type', 'application/json')
+            ->header('X-Catalog-Bytes', (string) strlen($cuerpo))->header('X-Catalog-Target', $hash)
+            ->header('Server-Timing', 'catalog;dur='.round((hrtime(true) - $inicio) / 1000000, 2)), $hash);
     }
 
     private function catalogoConsistente(Request $request, ServicioTemporadaActiva $temporadas, CatalogoOperativoValidacion $operativo): Response

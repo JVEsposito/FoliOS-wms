@@ -9,8 +9,10 @@ import { ApiError } from './apiError';
 import { assertValidationCatalog } from '../domain/validationCatalogData';
 import { applyCatalogFragmentDelta, assembleCatalog, assertCatalogManifest, catalogCollections, CatalogCollection, catalogFragmentGroup, CatalogManifest, CatalogProgress, decodeCatalogFragment, encodeCatalogFragment } from '../domain/validationCatalogTransfer';
 import { catalogFragmentHash, pruneCatalogFragments, readCatalogFragment, supportsCatalogTransfer, verifyCatalogFragment, writeCatalogFragment } from './validationCatalogTransferStore';
+import { assertCatalogPageIndex, downloadCatalogPages } from './validationCatalogPages';
 
 const legacyCatalogServers = new Set<string>();
+const fragmentCatalogServers = new Set<string>();
 type CatalogDownloadOptions = { deviceId: string; onProgress?: (progress: CatalogProgress) => void };
 
 async function catalogResponse(url: string, headers: Headers) {
@@ -21,8 +23,9 @@ async function catalogResponse(url: string, headers: Headers) {
     const raw = await response.text();
     return { response, raw };
   } catch {
+    const page = url.match(/\/catalogos\/paginas\/[^/]+\/\d+\/([a-z]+)/)?.[1];
     throw new ApiError(controller.signal.aborted
-      ? 'La descarga del catálogo excedió 45 segundos. Reintenta; las partes recibidas y el catálogo anterior se conservan.'
+      ? `${page ? `La página de ${page}` : url.includes('formato=paginas-v1') ? 'El índice del catálogo' : 'La descarga del catálogo'} excedió 45 segundos. Reintenta; las partes recibidas y el catálogo anterior se conservan.`
       : 'La PDA no puede actualizar el catálogo. Se conservará la última copia disponible y las partes ya recibidas.', 0);
   } finally { clearTimeout(timer); }
 }
@@ -79,6 +82,7 @@ export async function getValidationCatalog(
   options?: CatalogDownloadOptions,
 ): Promise<ValidationCatalog | null> {
   const fragmented = Boolean(options && supportsCatalogTransfer && !legacyCatalogServers.has(baseUrl));
+  const format = fragmented ? (fragmentCatalogServers.has(baseUrl) ? 'fragmentos-v1' : 'paginas-v1') : null;
   const headers = new Headers({
     Accept: 'application/json',
     Authorization: `Bearer ${token}`,
@@ -86,11 +90,11 @@ export async function getValidationCatalog(
   if (knownCatalog) {
     headers.set(
       'If-None-Match',
-      `"${fragmented ? 'validacion-partes-v1' : 'validacion-catalogo'}-${knownCatalog.temporada.id}-${knownCatalog.temporada.version_catalogo}"`,
+      `"${format === 'paginas-v1' ? 'validacion-paginas-v1' : fragmented ? 'validacion-partes-v1' : 'validacion-catalogo'}-${knownCatalog.temporada.id}-${knownCatalog.temporada.version_catalogo}"`,
     );
   }
 
-  const { response, raw } = await catalogResponse(`${baseUrl}/api/validacion/catalogos${fragmented ? '?formato=fragmentos-v1' : ''}`, headers);
+  const { response, raw } = await catalogResponse(`${baseUrl}/api/validacion/catalogos${format ? `?formato=${format}` : ''}`, headers);
 
   if (response.status === 304) {
     if (knownCatalog) return null;
@@ -107,7 +111,12 @@ export async function getValidationCatalog(
     );
   }
 
-  if (fragmented && (data as CatalogManifest)?.formato === 'fragmentos-v1') {
+  if (fragmented && (data as { formato?: string })?.formato === 'paginas-v1') {
+    assertCatalogPageIndex(data);
+    assertCatalogVersion(data, knownCatalog);
+    data = await downloadCatalogPages(baseUrl, token, data, options!, catalogResponse);
+  } else if (fragmented && (data as CatalogManifest)?.formato === 'fragmentos-v1') {
+    fragmentCatalogServers.add(baseUrl);
     assertCatalogManifest(data);
     assertCatalogVersion(data, knownCatalog);
     data = await downloadCatalogFragments(baseUrl, token, data, options!, knownCatalog);

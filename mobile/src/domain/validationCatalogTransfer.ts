@@ -7,7 +7,7 @@ export type CatalogFragment = { coleccion: CatalogCollection; grupo: number; has
 export type CatalogManifest = Omit<ValidationCatalog, CatalogCollection> & {
   formato: 'fragmentos-v1'; cantidades: Record<CatalogCollection, number>; fragmentos: CatalogFragment[];
 };
-export type CatalogProgress = { version: number; completed: number; total: number; downloadedBytes: number; reusedBytes: number };
+export type CatalogProgress = { version: number; completed: number; total: number; downloadedBytes: number; reusedBytes: number; rows?: number };
 const columns = {
   categorias: ['id', 'nombre', 'codigo_externo'],
   articulos: ['id', 'variedad_validacion_id', 'especie', 'variedad', 'calibre', 'envase', 'codigo_externo'],

@@ -20,6 +20,97 @@ class CatalogoValidacionApiTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_indice_paginado_no_lee_la_proyeccion_ni_espera_al_publicador(): void
+    {
+        [$temporada, $token] = $this->contexto();
+        $bloqueo = Cache::lock('validacion-transferencia-v1:'.$temporada->id.':publicar', 120);
+        $this->assertTrue($bloqueo->get());
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        try {
+            $indice = $this->withToken($token)->getJson('/api/validacion/catalogos?formato=paginas-v1')
+                ->assertOk()->assertJsonPath('formato', 'paginas-v1')->assertJsonPath('tamano_pagina', 1000)
+                ->assertJsonPath('temporada.version_catalogo', 7)->assertJsonCount(4, 'colecciones');
+            $this->withToken($token)->withHeader('If-None-Match', $indice->headers->get('ETag'))
+                ->getJson('/api/validacion/catalogos?formato=paginas-v1')->assertStatus(304)->assertContent('');
+            $consultas = mb_strtolower(collect(DB::getQueryLog())->pluck('query')->implode(' '));
+            foreach (['articulos_validacion', 'categorias_validacion', 'origenes_validacion', 'combinaciones_validacion', 'cache_locks'] as $tabla) {
+                $this->assertStringNotContainsString($tabla, $consultas);
+            }
+            $this->assertFalse(Cache::lock('validacion-transferencia-v1:'.$temporada->id.':publicar', 120)->get());
+        } finally {
+            DB::disableQueryLog();
+            $bloqueo->release();
+        }
+    }
+
+    public function test_paginas_limitadas_conservan_todas_las_filas_sin_offset_ni_preparar_el_catalogo_completo(): void
+    {
+        [$temporada, $token] = $this->contexto();
+        $origen = DB::table('origenes_validacion')->where('temporada_id', $temporada->id)->value('id');
+        $articulos = $combinaciones = [];
+        for ($i = 1; $i <= 2501; $i++) {
+            $id = sprintf('aa000000-0000-4000-8000-%012d', $i);
+            $articulos[] = ['id' => $id, 'temporada_id' => $temporada->id, 'especie' => 'Cereza', 'variedad' => 'Santina', 'calibre' => '2J', 'envase' => '5 kg', 'activo' => true];
+            $combinaciones[] = ['id' => sprintf('bb000000-0000-4000-8000-%012d', $i), 'temporada_id' => $temporada->id, 'articulo_validacion_id' => $id, 'origen_validacion_id' => $origen, 'activo' => true];
+        }
+        foreach (array_chunk($articulos, 500) as $lote) {
+            DB::table('articulos_validacion')->insert($lote);
+        }
+        foreach (array_chunk($combinaciones, 500) as $lote) {
+            DB::table('combinaciones_validacion')->insert($lote);
+        }
+        $bloqueo = Cache::lock('validacion-transferencia-v1:'.$temporada->id.':publicar', 120);
+        $this->assertTrue($bloqueo->get());
+        try {
+            foreach (['articulos', 'combinaciones'] as $coleccion) {
+                $ids = [];
+                $cursor = null;
+                $paginas = 0;
+                do {
+                    DB::flushQueryLog();
+                    DB::enableQueryLog();
+                    $ruta = '/api/validacion/catalogos/paginas/'.$temporada->id.'/7/'.$coleccion.($cursor ? '?desde='.$cursor : '');
+                    $pagina = $this->withToken($token)->getJson($ruta)->assertOk()->assertJsonPath('desde', $cursor)
+                        ->assertJsonPath('version', 7)->assertJsonPath('coleccion', $coleccion);
+                    $consultas = mb_strtolower(collect(DB::getQueryLog())->pluck('query')->implode(' '));
+                    DB::disableQueryLog();
+                    $this->assertStringNotContainsString(' offset ', $consultas);
+                    $this->assertStringNotContainsString('for share', $consultas);
+                    $this->assertStringContainsString('limit 1001', $consultas);
+                    $this->assertLessThanOrEqual(1000, count($pagina->json('filas')));
+                    $this->assertSame(hash('sha256', $pagina->getContent()), $pagina->headers->get('X-Catalog-Target'));
+                    $ids = [...$ids, ...array_column($pagina->json('filas'), 'id')];
+                    $cursor = $pagina->json('siguiente');
+                    $paginas++;
+                } while ($cursor !== null);
+                $this->assertSame(3, $paginas);
+                $this->assertCount(2502, array_unique($ids));
+                $esperados = DB::table($coleccion.'_validacion')->where('temporada_id', $temporada->id)->orderBy('id')->pluck('id')->all();
+                $this->assertSame($esperados, $ids);
+            }
+        } finally {
+            DB::disableQueryLog();
+            $bloqueo->release();
+        }
+    }
+
+    public function test_paginas_rechazan_otra_version_cursores_invalidos_y_relaciones_retiradas(): void
+    {
+        [$temporada, $token] = $this->contexto();
+        $ruta = '/api/validacion/catalogos/paginas/'.$temporada->id.'/7/';
+        $this->getJson($ruta.'articulos')->assertUnauthorized();
+        $this->withToken($token)->getJson($ruta.'articulos?desde[]=x')->assertUnprocessable();
+        $this->withToken($token)->getJson($ruta.'tabla-no-permitida')->assertNotFound();
+        $this->withToken($token)->getJson($ruta.'origenes')->assertOk()->assertJsonPath('filas.0.variedad_ids', null);
+        $this->withToken($token)->getJson($ruta.'categorias')->assertOk()->assertJsonPath('filas.0.nombre', 'Exportación');
+        DB::table('articulos_validacion')->where('temporada_id', $temporada->id)->update(['activo' => false]);
+        $temporada->increment('version_catalogo');
+        $this->withToken($token)->getJson($ruta.'combinaciones')->assertConflict();
+        $this->withToken($token)->getJson(str_replace('/7/', '/8/', $ruta).'articulos')->assertOk()->assertJsonCount(0, 'filas')->assertJsonPath('siguiente', null);
+        $this->withToken($token)->getJson(str_replace('/7/', '/8/', $ruta).'combinaciones')->assertOk()->assertJsonCount(0, 'filas');
+    }
+
     public function test_fragmentos_conservan_ids_y_diccionarios_y_una_edicion_reutiliza_lo_que_no_cambio(): void
     {
         [$temporada, $token] = $this->contexto();
