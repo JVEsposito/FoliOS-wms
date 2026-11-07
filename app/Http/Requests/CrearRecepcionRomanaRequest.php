@@ -84,7 +84,7 @@ class CrearRecepcionRomanaRequest extends FormRequest
                 'numeric',
                 'min:1',
                 'max:200000',
-                'decimal:0,2',
+                'decimal:0,3',
             ],
             'observacion' => ['nullable', 'string', 'max:2000'],
         ];

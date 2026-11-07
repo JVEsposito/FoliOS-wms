@@ -1180,6 +1180,21 @@ class RecepcionRomanaApiTest extends TestCase
         ]);
     }
 
+    public function test_bruto_corregido_con_milesimas_permite_editar_otro_antecedente_sin_cambiar_el_peso(): void
+    {
+        $operador = User::factory()->create(['rol' => RolUsuario::OperadorRomana]);
+        $datos = $this->datosIngreso($this->cliente());
+        $recepcion = $this->actingAs($operador, 'sanctum')->postJson('/api/romana/recepciones', $datos)->assertCreated()->json('data');
+        $this->actingAs(User::factory()->create(['rol' => RolUsuario::Administrador]), 'sanctum')
+            ->putJson("/api/romana/recepciones/{$recepcion['id']}/peso-bruto", ['operacion_id' => (string) Str::uuid(),
+                'version_conocida' => $recepcion['version'], 'peso_bruto' => 29000.125, 'motivo_correccion' => 'Lectura original digitada erróneamente.'])->assertOk();
+        $edicion = [...$datos, 'operacion_id' => (string) Str::uuid(), 'peso_bruto' => 29000.125, 'observacion' => 'Actualizar solo observación.'];
+        $this->actingAs($operador, 'sanctum')->putJson("/api/romana/recepciones/{$recepcion['id']}", $edicion)
+            ->assertOk()->assertJsonPath('data.peso_bruto', 29000.125)->assertJsonPath('data.observacion', 'Actualizar solo observación.');
+        $this->putJson("/api/romana/recepciones/{$recepcion['id']}", [...$edicion, 'operacion_id' => (string) Str::uuid(), 'peso_bruto' => 29001])
+            ->assertForbidden();
+    }
+
     private function cliente(bool $activo = true): Cliente
     {
         return Cliente::create([
