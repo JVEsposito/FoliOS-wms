@@ -2,6 +2,7 @@
 
 namespace App\Services\Romana;
 
+use App\Enums\EstadoLoteMateriaPrima;
 use App\Enums\EstadoRecepcionRomana;
 use App\Enums\EstadoRevisionMovimientoEnvase;
 use App\Enums\EstadoValidacionMp;
@@ -26,6 +27,7 @@ use App\Services\Notificaciones\ServicioNotificacionesOperacionales;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 use JsonException;
 use Ramsey\Uuid\Uuid;
@@ -154,6 +156,10 @@ class ServicioRecepcionRomana
             }
             if (! $recepcion->estado->esEditable()) {
                 throw new ConflictoOperacion('La recepción ya confirmó su ingreso y sus antecedentes no pueden editarse.');
+            }
+            if ($recepcion->tipo_recepcion === TipoRecepcionRomana::FrutaConEnvases
+                && (int) round((float) $recepcion->peso_bruto * 1000) !== (int) round((float) $payload['peso_bruto'] * 1000)) {
+                Gate::forUser($usuario)->authorize('corregir-peso-bruto-romana');
             }
             $this->asegurarTipoPesajeInmutable($recepcion, $payload);
             if ($recepcion->estado === EstadoRecepcionRomana::EnPesajeEnvases
@@ -401,6 +407,135 @@ class ServicioRecepcionRomana
 
             return $this->cargar($recepcion);
         });
+    }
+
+    /** Corrige solo la lectura de bruto; no vuelve a registrar ingresos ni salidas de envases. */
+    public function corregirPesoBruto(RecepcionRomana $recepcion, array $datos, User $usuario): RecepcionRomana
+    {
+        Gate::forUser($usuario)->authorize('corregir-peso-bruto-romana');
+        $payload = ['accion' => 'corregir_peso_bruto', 'recepcion_id' => $recepcion->id,
+            'version_conocida' => (int) $datos['version_conocida'], 'peso_bruto' => round((float) $datos['peso_bruto'], 3),
+            'pesaje_id' => $datos['pesaje_id'] ?? null, 'motivo_correccion' => $datos['motivo_correccion']];
+        $hash = $this->hash($payload);
+
+        return DB::transaction(function () use ($recepcion, $datos, $usuario, $payload, $hash): RecepcionRomana {
+            $recepcion = RecepcionRomana::query()->with('detallesEnvases')->lockForUpdate()->findOrFail($recepcion->id);
+            $evento = EventoRecepcionRomana::query()->where('operacion_id', $datos['operacion_id'])->first();
+            if ($evento) {
+                $this->asegurarEventoIdempotente($evento, $recepcion, $hash, TipoEventoRomana::PesoBrutoCorregido);
+
+                return $this->cargar($recepcion);
+            }
+            if ($recepcion->estado === EstadoRecepcionRomana::Anulada || $recepcion->eliminada_at !== null
+                || $recepcion->tipo_recepcion === TipoRecepcionRomana::SoloEnvases) {
+                throw new ConflictoOperacion('Solo puedes corregir el bruto de una recepción de fruta vigente.');
+            }
+            $this->temporadaActiva($recepcion->temporada_id);
+            if ($recepcion->version !== $payload['version_conocida']) {
+                throw new ConflictoOperacion('La recepción cambió. Actualiza el expediente antes de corregir el peso bruto.');
+            }
+            $lotes = $recepcion->lotesMateriaPrima()->where('estado', '!=', EstadoLoteMateriaPrima::Anulado->value)
+                ->orderBy('id')->lockForUpdate()->get(['id', 'estado']);
+            if ($lotes->contains(fn ($lote): bool => $lote->estado !== EstadoLoteMateriaPrima::Borrador)) {
+                throw new ConflictoOperacion('La recepción tiene lotes confirmados. Requiere conciliación de kilos antes de corregir el peso bruto.');
+            }
+
+            $anterior = $this->snapshotPesos($recepcion);
+            $pesajeAnterior = null;
+            $pesajePosterior = null;
+            if ($recepcion->tipo_recepcion === TipoRecepcionRomana::FrutaPesajeEnvases) {
+                if ($payload['pesaje_id'] === null) {
+                    throw ValidationException::withMessages(['pesaje_id' => 'Selecciona la tanda cuyo peso bruto deseas corregir.']);
+                }
+                $pesaje = $recepcion->pesajesEnvases()->whereKey($payload['pesaje_id'])->whereNull('anulado_at')->lockForUpdate()->firstOrFail();
+                $pesajeAnterior = ['id' => $pesaje->id, 'secuencia' => $pesaje->secuencia, 'peso_bruto' => (float) $pesaje->peso_bruto,
+                    'peso_tara' => (float) $pesaje->peso_tara, 'peso_neto' => (float) $pesaje->peso_neto, 'envases' => $pesaje->lineas()];
+                $this->asegurarCambioBruto((float) $pesaje->peso_bruto, $payload['peso_bruto']);
+                $netoGramos = (int) round($payload['peso_bruto'] * 1000) - (int) round((float) $pesaje->peso_tara * 1000);
+                if ($netoGramos <= 0) {
+                    throw ValidationException::withMessages(['peso_bruto' => 'El bruto corregido debe superar la tara de la tanda.']);
+                }
+                // Conserva las proporciones medidas y las taras originales de la tanda,
+                // aunque las referencias de la especie hayan cambiado desde su registro.
+                $lineas = $pesaje->lineas();
+                $base = array_sum(array_map(fn ($linea): int => (int) round($linea['peso_neto'] * 1000), $lineas));
+                if ($base <= 0) {
+                    throw new ConflictoOperacion('La tanda no tiene un reparto de neto válido para corregirla.');
+                }
+                $asignados = 0;
+                foreach ($lineas as $i => &$linea) {
+                    $gramos = $i === array_key_last($lineas) ? $netoGramos - $asignados
+                        : intdiv($netoGramos * (int) round($linea['peso_neto'] * 1000), $base);
+                    if ($gramos <= 0) {
+                        throw ValidationException::withMessages(['peso_bruto' => 'El bruto es insuficiente para mantener netos positivos en todos los envases de la tanda.']);
+                    }
+                    $linea['peso_neto'] = $gramos / 1000;
+                    $asignados += $gramos;
+                }
+                unset($linea);
+                $pesaje->update(['peso_bruto' => $payload['peso_bruto'], 'peso_neto' => $netoGramos / 1000, 'envases' => $lineas]);
+                $pesajePosterior = [...$pesajeAnterior, 'peso_bruto' => (float) $pesaje->peso_bruto,
+                    'peso_neto' => (float) $pesaje->peso_neto, 'envases' => $lineas];
+                $actualizacion = $this->resumenPesajesEnvases($recepcion);
+            } else {
+                if ($payload['pesaje_id'] !== null) {
+                    throw ValidationException::withMessages(['pesaje_id' => 'Esta recepción registra el bruto del camión, sin tandas.']);
+                }
+                $this->asegurarCambioBruto((float) $recepcion->peso_bruto, $payload['peso_bruto']);
+                $actualizacion = ['peso_bruto' => $payload['peso_bruto']];
+                if ($recepcion->estado === EstadoRecepcionRomana::Cerrado) {
+                    if ($recepcion->peso_tara === null) {
+                        throw new ConflictoOperacion('La recepción cerrada no tiene una tara registrada. Revisa el expediente.');
+                    }
+                    $neto = ((int) round($payload['peso_bruto'] * 1000) - (int) round((float) $recepcion->peso_tara * 1000)
+                        - (int) round((float) $recepcion->peso_tara_envases * 1000)) / 1000;
+                    if ($neto <= 0) {
+                        throw ValidationException::withMessages(['peso_bruto' => 'El bruto corregido debe superar la tara total registrada.']);
+                    }
+                    $actualizacion['peso_neto'] = $neto;
+                    if ($recepcion->reparto_neto_envases) {
+                        $congelado = $recepcion->reparto_neto_envases;
+                        $reparto = app(ServicioRepartoEnvases::class)->calcular($neto,
+                            array_column($congelado, 'cantidad', 'tipo_envase'), array_column($congelado, 'tipo_envase'),
+                            array_column($congelado, 'peso_referencia', 'tipo_envase'));
+                        $actualizacion['reparto_neto_envases'] = $reparto;
+                        $actualizacion['peso_neto_por_envase'] = round($reparto[0]['peso_neto_unitario'], 3);
+                    } elseif ($recepcion->cantidad_envase_calculo_neto > 0) {
+                        $actualizacion['peso_neto_por_envase'] = round($neto / $recepcion->cantidad_envase_calculo_neto, 3);
+                    } else {
+                        throw new ConflictoOperacion('La recepción cerrada no tiene cantidades válidas para recalcular el neto por envase.');
+                    }
+                }
+            }
+            $recepcion->update([...$actualizacion, 'version' => $recepcion->version + 1]);
+            if ($recepcion->estado === EstadoRecepcionRomana::Cerrado && $lotes->isNotEmpty()) {
+                app(ServicioLoteMateriaPrima::class)->conciliarDestare($recepcion, $usuario);
+            }
+            $this->registrarEvento($recepcion, (string) $datos['operacion_id'], $hash, TipoEventoRomana::PesoBrutoCorregido,
+                $recepcion->estado, $recepcion->estado, $usuario, CarbonImmutable::now(),
+                ['motivo' => $payload['motivo_correccion'], 'version' => $recepcion->version,
+                    'anterior' => $anterior, 'posterior' => $this->snapshotPesos($recepcion),
+                    'pesaje_anterior' => $pesajeAnterior, 'pesaje_posterior' => $pesajePosterior]);
+
+            return $this->cargar($recepcion);
+        }, attempts: 3);
+    }
+
+    private function asegurarCambioBruto(float $anterior, float $nuevo): void
+    {
+        if ((int) round($anterior * 1000) === (int) round($nuevo * 1000)) {
+            throw ValidationException::withMessages(['peso_bruto' => 'El peso bruto corregido es igual al registrado.']);
+        }
+    }
+
+    private function snapshotPesos(RecepcionRomana $recepcion): array
+    {
+        return ['peso_bruto' => $recepcion->peso_bruto !== null ? (float) $recepcion->peso_bruto : null,
+            'peso_tara' => $recepcion->peso_tara !== null ? (float) $recepcion->peso_tara : null,
+            'peso_tara_envases' => $recepcion->peso_tara_envases !== null ? (float) $recepcion->peso_tara_envases : null,
+            'peso_neto' => $recepcion->peso_neto !== null ? (float) $recepcion->peso_neto : null,
+            'peso_neto_por_envase' => $recepcion->peso_neto_por_envase !== null ? (float) $recepcion->peso_neto_por_envase : null,
+            'reparto_neto_envases' => $recepcion->reparto_neto_envases];
     }
 
     public function confirmarIngreso(RecepcionRomana $recepcion, string $operacionId, User $usuario): RecepcionRomana

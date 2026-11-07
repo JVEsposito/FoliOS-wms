@@ -269,6 +269,9 @@ class RecepcionRomanaApiTest extends TestCase
         $edicionValida['peso_bruto'] = 29000;
         $edicionValida['tipo_camion'] = 'plano';
         $this->putJson('/api/romana/recepciones/'.$id, $edicionValida)
+            ->assertForbidden();
+        $administrador = User::factory()->create(['rol' => RolUsuario::Administrador]);
+        $this->actingAs($administrador, 'sanctum')->putJson('/api/romana/recepciones/'.$id, $edicionValida)
             ->assertOk()
             ->assertJsonPath('data.peso_bruto', 29000)
             ->assertJsonPath('data.tipo_camion', 'plano')

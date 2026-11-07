@@ -86,6 +86,7 @@
                             <button class="secondary-button rec-delete-button is-hidden" id="deleteReceptionButton" type="button">Eliminar recepción</button>
                             <button class="secondary-button is-hidden" id="annulReceptionButton" type="button">Anular recepción</button>
                             <button class="secondary-button is-hidden" id="editReceptionButton" type="button">Editar ingreso</button>
+                            <button class="secondary-button is-hidden" id="correctGrossWeightButton" type="button">Corregir peso bruto</button>
                             <button class="primary-button is-hidden" id="confirmEntryButton" type="button">Confirmar ingreso</button>
                             <button class="primary-button is-hidden" id="addContainerWeighingButton" type="button">+ Registrar tanda</button>
                             <button class="primary-button is-hidden" id="closeReceptionButton" type="button">Registrar destare y cerrar</button>
@@ -114,6 +115,19 @@
                 <label class="field"><span id="annulReceptionReasonLabel">Motivo de anulación</span><textarea name="motivo" required minlength="10" maxlength="2000" rows="3"></textarea></label>
                 <p class="form-error" id="annulReceptionError" role="alert"></p>
                 <footer class="dialog-actions"><button class="secondary-button" id="annulReceptionCancel" type="button">Volver</button><button class="primary-button" type="submit">Confirmar anulación</button></footer>
+            </form>
+        </dialog>
+        <dialog class="weighbridge-dialog weighbridge-dialog--compact" id="grossWeightDialog" aria-labelledby="grossWeightTitle">
+            <form class="weighbridge-dialog__shell" id="grossWeightForm">
+                <header class="weighbridge-dialog__heading"><div><p class="eyebrow">CORRECCIÓN ADMINISTRATIVA</p><h2 id="grossWeightTitle">Corregir peso bruto</h2><p id="grossWeightDescription"></p></div></header>
+                <label class="field is-hidden" id="grossWeightReadingField"><span>Tanda de pesaje *</span><select name="pesaje_id"></select></label>
+                <p id="grossWeightCurrent"></p>
+                <label class="field weight-field"><span>Peso bruto corregido *</span><div><input name="peso_bruto" type="number" min="0.001" max="200000" step="0.001" inputmode="decimal" required><b>kg</b></div></label>
+                <p id="grossWeightPreview" aria-live="polite"></p>
+                <label class="field"><span>Motivo de la corrección *</span><textarea name="motivo_correccion" rows="3" minlength="10" maxlength="1000" required></textarea></label>
+                <p>Se conserva la tara registrada y se recalcula el neto. Los lotes en borrador se actualizan; si hay lotes confirmados, se requiere conciliación de kilos.</p>
+                <p class="form-error" id="grossWeightError" role="alert"></p>
+                <footer class="dialog-actions"><button class="secondary-button" id="grossWeightCancel" type="button">Cancelar</button><button class="primary-button" type="submit">Guardar peso bruto</button></footer>
             </form>
         </dialog>
         <dialog class="weighbridge-dialog" id="receptionDialog">
