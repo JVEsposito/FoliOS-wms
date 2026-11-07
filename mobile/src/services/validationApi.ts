@@ -114,7 +114,9 @@ export async function getValidationCatalog(
   } else if (fragmented) {
     // Un backend anterior sigue entregando el contrato completo; conserva su ETag.
     assertValidationCatalog(data);
-    legacyCatalogServers.add(baseUrl);
+    // Una recuperación temporal del publicador no convierte al servidor en legado.
+    // La próxima actualización puede volver a aprovechar las partes y sus deltas.
+    if (response.headers.get('X-Catalog-Transfer') !== 'full-fallback') legacyCatalogServers.add(baseUrl);
   }
   assertValidationCatalog(data);
   assertCatalogVersion(data, knownCatalog);

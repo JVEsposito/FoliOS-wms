@@ -11,7 +11,9 @@ use App\Services\Validacion\CatalogoOperativoValidacion;
 use App\Services\Validacion\TransferenciaCatalogoValidacion;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 class CatalogoValidacionController extends Controller
 {
@@ -30,7 +32,25 @@ class CatalogoValidacionController extends Controller
                 return $condicional;
             }
 
-            $manifiesto = app(TransferenciaCatalogoValidacion::class)->manifiesto($temporada->id, $temporada->version_catalogo);
+            try {
+                $manifiesto = app(TransferenciaCatalogoValidacion::class)->manifiesto($temporada->id, $temporada->version_catalogo);
+            } catch (HttpExceptionInterface $error) {
+                if ($error->getStatusCode() !== 503) {
+                    throw $error;
+                }
+                // La publicación por partes es una optimización, no una condición para
+                // operar. El contrato completo usa el mismo snapshot y ya es compatible
+                // con las PDA instaladas. Nunca se libera un bloqueo de otro proceso.
+                Log::warning('Catálogo de validación entregado completo por publicación de partes no disponible.', [
+                    'temporada_id' => $temporada->id,
+                    'version_catalogo' => $temporada->version_catalogo,
+                    'motivo' => $error->getMessage(),
+                ]);
+
+                return DB::transaction(fn () => $this->catalogoConsistente($request, $temporadas, $operativo))
+                    ->header('X-Catalog-Transfer', 'full-fallback')
+                    ->header('Server-Timing', 'catalog;dur='.round((hrtime(true) - $inicio) / 1000000, 2));
+            }
 
             return $this->configurarCache(response()->json($manifiesto)
                 ->header('X-Catalog-Bytes', (string) array_sum(array_column($manifiesto['fragmentos'], 'bytes')))
@@ -89,7 +109,7 @@ class CatalogoValidacionController extends Controller
         $respuesta->setPrivate();
         $respuesta->headers->addCacheControlDirective('no-cache');
         $respuesta->setVary('Authorization');
-        $respuesta->headers->set('Access-Control-Expose-Headers', 'ETag, X-Catalog-Bytes, X-Catalog-Fragments, X-Catalog-Target, Server-Timing');
+        $respuesta->headers->set('Access-Control-Expose-Headers', 'ETag, X-Catalog-Bytes, X-Catalog-Fragments, X-Catalog-Target, X-Catalog-Transfer, Server-Timing');
 
         return $respuesta;
     }
