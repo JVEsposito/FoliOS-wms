@@ -50,7 +50,10 @@ class TransferenciaCatalogoValidacion
                 foreach ($grupos as $grupo => $filas) {
                     $cuerpo = $this->codificar($coleccion, $columnas, $filas->sortBy('id')->values()->all());
                     $hash = hash('sha256', $cuerpo);
-                    abort_unless(Cache::put('validacion-fragmento-v1:'.$hash, $cuerpo, now()->addDay()),
+                    $claveFragmento = 'validacion-fragmento-v1:'.$hash;
+                    // MySQL devuelve cero filas afectadas al reescribir el mismo valor
+                    // y vencimiento. Eso no significa que falte la parte publicada.
+                    abort_unless(Cache::put($claveFragmento, $cuerpo, now()->addDay()) || Cache::get($claveFragmento) === $cuerpo,
                         503, 'No se pudo guardar una parte del catálogo en el servidor. Reintenta la sincronización.');
                     $fragmentos[] = ['coleccion' => $coleccion, 'grupo' => (int) $grupo,
                         'hash' => $hash, 'bytes' => strlen($cuerpo), 'filas' => $filas->count()];
@@ -67,7 +70,7 @@ class TransferenciaCatalogoValidacion
                 'fragmentos' => $fragmentos,
             ];
             // El manifiesto solo se hace visible después de almacenar todas sus partes.
-            abort_unless(Cache::put($clave, $manifiesto, now()->addHours(6)),
+            abort_unless(Cache::put($clave, $manifiesto, now()->addHours(6)) || Cache::get($clave) === $manifiesto,
                 503, 'No se pudo publicar el catálogo en el servidor. Se conserva la copia anterior de la PDA.');
             $this->retirarVersionesAntiguas($temporadaId, $version, $fragmentos);
 

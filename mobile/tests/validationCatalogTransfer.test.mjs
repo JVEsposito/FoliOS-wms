@@ -66,7 +66,7 @@ function harness(source = catalog(), shared = {}) {
   const directories = shared.directories ?? new Set();
   const calls = []; const progress = []; const timers = new Map();
   let server = transport(source); const history = new Map(server.bodies);
-  let failure = null; let corrupt = null; let fullDisk = false; let never = false; let active = 0; let maximum = 0;
+  let failure = null; let corrupt = null; let fullDisk = false; let never = false; let active = 0; let maximum = 0; let fullFallback = false;
   const disk = {
     documentDirectory: 'file:///private/',
     getInfoAsync: async (path) => ({ exists: directories.has(path) || files.has(path) }),
@@ -82,6 +82,7 @@ function harness(source = catalog(), shared = {}) {
     assert.equal(options.headers.get('Authorization'), 'Bearer token'); calls.push(url);
     const parsed = new URL(url);
     if (!parsed.pathname.includes('/fragmentos/')) {
+      if (fullFallback) return new Response(JSON.stringify(source), { status: 200, headers: { 'X-Catalog-Transfer': 'full-fallback' } });
       if (options.headers.get('If-None-Match') === `"validacion-partes-v1-season-${server.manifest.temporada.version_catalogo}"`) return new Response(null, { status: 304 });
       return response(server.manifest);
     }
@@ -138,7 +139,8 @@ function harness(source = catalog(), shared = {}) {
     files, storage, calls, progress, server: () => server, maxActive: () => maximum,
     api, codec: load(resolve(root, 'domain/validationCatalogTransfer.ts')), offline: load(resolve(root, 'services/validationOfflineStore.ts')),
     download: (known = null, base = 'http://planta', device = 'pda') => api.getValidationCatalog(base, 'token', known, { deviceId: device, onProgress: (p) => progress.push(clone(p)) }),
-    update: (next) => { server = transport(next); for (const [key, raw] of server.bodies) history.set(key, raw); }, fail: (digest) => { failure = digest; }, corrupt: (digest) => { corrupt = digest; }, diskFull: (v) => { fullDisk = v; },
+    update: (next) => { source = next; server = transport(next); for (const [key, raw] of server.bodies) history.set(key, raw); }, fail: (digest) => { failure = digest; }, corrupt: (digest) => { corrupt = digest; }, diskFull: (v) => { fullDisk = v; },
+    fullFallback: (value) => { fullFallback = value; },
     never: () => { never = true; }, abort: () => { for (const fn of timers.values()) fn(); },
     restart: (next = source) => harness(next, { files, directories, storage }),
   };
@@ -218,6 +220,37 @@ test('304 no descarga contenido y las partes de otro servidor o dispositivo no s
   h.calls.length = 0;
   await h.download(null, 'http://planta', 'otra-pda');
   assert.ok(h.calls.filter((url) => url.includes('/fragmentos/')).length > 1);
+});
+
+test('PDA y tablet actualizan v417 a v418 con recuperación completa y vuelven a fragmentos sin borrar capturas', async () => {
+  for (const device of ['pda', 'tablet']) {
+    const old = catalog(417); const current = catalog(418); current.articulos[0].envase = 'Envase corregido';
+    const h = harness(current);
+    await h.offline.saveValidationCatalog('1', device, old, 'http://planta');
+    h.storage.set(`estiba_validation_outbox:1:${device}`, '[{"id":"captura-pendiente"}]');
+    h.storage.set(`estiba_validation_work_context:1:${device}`, '{"linea_proceso":1,"turno":"A"}');
+    const preserved = [...h.storage];
+    h.fullFallback(true);
+    const result = await h.download(old, 'http://planta', device);
+    assert.equal(result.temporada.version_catalogo, 418);
+    assert.equal(result.articulos[0].envase, 'Envase corregido');
+    assert.equal(h.calls.length, 1);
+    assert.deepEqual([...h.storage], preserved);
+    h.fullFallback(false); h.calls.length = 0;
+    assert.equal(await h.download(result, 'http://planta', device), null);
+    assert.ok(h.calls[0].endsWith('?formato=fragmentos-v1'), 'No deja el servidor marcado como legado');
+    const next = clone(current); next.temporada.version_catalogo = 419; next.articulos[0].envase = 'Otra edición';
+    h.update(next); h.calls.length = 0;
+    assert.equal((await h.download(result, 'http://planta', device)).temporada.version_catalogo, 419);
+    assert.ok(h.calls.some((url) => url.includes('/fragmentos/')));
+  }
+});
+
+test('la recuperación completa también rechaza versiones anteriores y relaciones inválidas', async () => {
+  const h = harness(catalog(416)); h.fullFallback(true);
+  await assert.rejects(h.download(catalog(417)), /anterior al catálogo v417/);
+  const bad = catalog(418); bad.combinaciones[0].origen_validacion_id = 'no-existe'; h.update(bad);
+  await assert.rejects(h.download(catalog(417)), /sin artículo u origen/);
 });
 
 test('29676 artículos y 37184 combinaciones: descarga compacta y una edición evita repetir el catálogo entero', async () => {

@@ -6,12 +6,14 @@ use App\Enums\RolUsuario;
 use App\Models\Dispositivo;
 use App\Models\Temporada;
 use App\Models\User;
+use App\Services\Validacion\TransferenciaCatalogoValidacion;
 use Illuminate\Cache\ArrayStore;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
 class CatalogoValidacionApiTest extends TestCase
@@ -97,7 +99,10 @@ class CatalogoValidacionApiTest extends TestCase
         $bloqueo = Cache::lock('validacion-transferencia-v1:'.$temporada->id.':publicar', 120);
         $this->assertTrue($bloqueo->get());
         $this->withToken($token)->getJson('/api/validacion/catalogos?formato=fragmentos-v1')
-            ->assertStatus(503)->assertHeader('Retry-After', '3');
+            ->assertOk()->assertHeader('X-Catalog-Transfer', 'full-fallback')
+            ->assertHeader('ETag', '"validacion-catalogo-'.$temporada->id.'-'.$temporada->version_catalogo.'"')
+            ->assertJsonPath('temporada.version_catalogo', $temporada->version_catalogo)->assertJsonCount(1, 'articulos');
+        $this->assertFalse(Cache::lock('validacion-transferencia-v1:'.$temporada->id.':publicar', 120)->get());
         $bloqueo->release();
         $inicial = clone $temporada;
         $hash = $this->withToken($token)->getJson('/api/validacion/catalogos?formato=fragmentos-v1')->assertOk()->json('fragmentos.0.hash');
@@ -120,8 +125,94 @@ class CatalogoValidacionApiTest extends TestCase
             }
         });
         config(['cache.default' => 'fallo-catalogo', 'cache.stores.fallo-catalogo' => ['driver' => 'fallo-catalogo']]);
-        $this->withToken($token)->getJson('/api/validacion/catalogos?formato=fragmentos-v1')->assertStatus(503);
+        $this->withToken($token)->getJson('/api/validacion/catalogos?formato=fragmentos-v1')
+            ->assertOk()->assertHeader('X-Catalog-Transfer', 'full-fallback')->assertJsonCount(1, 'articulos');
         $this->assertNull(Cache::get('validacion-transferencia-v1:'.$temporada->id.':'.$temporada->version_catalogo));
+    }
+
+    public function test_tres_equipos_reciben_v418_con_cache_database_ocupado_sin_quedar_en_v417(): void
+    {
+        [$temporada, $token] = $this->contexto();
+        config(['cache.default' => 'database']);
+        $temporada->update(['version_catalogo' => 417]);
+        $anterior = $this->withToken($token)->getJson('/api/validacion/catalogos?formato=fragmentos-v1')
+            ->assertOk()->assertJsonPath('formato', 'fragmentos-v1');
+        DB::table('articulos_validacion')->where('temporada_id', $temporada->id)->update(['envase' => 'Envase corregido']);
+        DB::table('categorias_validacion')->insert(['id' => (string) Str::uuid(), 'temporada_id' => $temporada->id, 'nombre' => 'Categoría nueva', 'activo' => true]);
+        $temporada->increment('version_catalogo');
+        $nombreBloqueo = 'validacion-transferencia-v1:'.$temporada->id.':publicar';
+        $publicador = Cache::lock($nombreBloqueo, 120);
+        $this->assertTrue($publicador->get());
+        try {
+            for ($equipo = 0; $equipo < 3; $equipo++) {
+                $respuesta = $this->withToken($token)->withHeader('If-None-Match', $anterior->headers->get('ETag'))
+                    ->getJson('/api/validacion/catalogos?formato=fragmentos-v1')
+                    ->assertOk()->assertHeader('X-Catalog-Transfer', 'full-fallback')
+                    ->assertJsonPath('temporada.version_catalogo', 418)->assertJsonPath('articulos.0.envase', 'Envase corregido')
+                    ->assertJsonCount(2, 'categorias')->assertJsonCount(1, 'combinaciones');
+                $this->assertArrayNotHasKey('fragmentos', $respuesta->json());
+                $this->assertFalse(Cache::lock($nombreBloqueo, 120)->get());
+            }
+            $this->assertNull(Cache::get('validacion-transferencia-v1:'.$temporada->id.':418'));
+        } finally {
+            $publicador->release();
+        }
+        // La recuperación no rompe ni elimina el snapshot anterior.
+        $this->withToken($token)->getJson('/api/validacion/catalogos/fragmentos/'.$temporada->id.'/417/'.$anterior->json('fragmentos.0.hash'))->assertOk();
+        $this->withToken($token)->getJson('/api/validacion/catalogos?formato=fragmentos-v1')
+            ->assertOk()->assertJsonPath('formato', 'fragmentos-v1')->assertJsonPath('temporada.version_catalogo', 418);
+        $this->withToken($token)->withHeader('If-None-Match', '"validacion-partes-v1-'.$temporada->id.'-418"')
+            ->getJson('/api/validacion/catalogos?formato=fragmentos-v1')->assertStatus(304)->assertContent('');
+    }
+
+    public function test_cache_database_con_cero_filas_afectadas_reutiliza_partes_y_publica_la_version_nueva(): void
+    {
+        [$temporada, $token] = $this->contexto();
+        $this->freezeTime();
+        config(['cache.default' => 'database']);
+        $inicial = $this->withToken($token)->getJson('/api/validacion/catalogos?formato=fragmentos-v1')
+            ->assertOk()->assertJsonPath('formato', 'fragmentos-v1')->json();
+        $sinCambios = collect($inicial['fragmentos'])->firstWhere('coleccion', 'categorias');
+        $clave = 'validacion-fragmento-v1:'.$sinCambios['hash'];
+        $cuerpo = Cache::get($clave);
+        $this->assertIsString($cuerpo);
+        $reescritura = Cache::put($clave, $cuerpo, now()->addDay());
+        if (DB::connection()->getDriverName() === 'mysql') {
+            $this->assertFalse($reescritura, 'MySQL no modifica una fila con el mismo valor y vencimiento.');
+        }
+        DB::table('articulos_validacion')->where('temporada_id', $temporada->id)->update(['envase' => 'Envase nuevo']);
+        $temporada->increment('version_catalogo');
+        $nuevo = $this->withToken($token)->getJson('/api/validacion/catalogos?formato=fragmentos-v1')
+            ->assertOk()->assertJsonPath('formato', 'fragmentos-v1')->assertJsonPath('temporada.version_catalogo', 8);
+        $this->assertNull($nuevo->headers->get('X-Catalog-Transfer'));
+        $this->assertSame($sinCambios['hash'], collect($nuevo->json('fragmentos'))->firstWhere('coleccion', 'categorias')['hash']);
+        $this->assertNotSame(collect($inicial['fragmentos'])->firstWhere('coleccion', 'articulos')['hash'], collect($nuevo->json('fragmentos'))->firstWhere('coleccion', 'articulos')['hash']);
+        foreach ($nuevo->json('fragmentos') as $fragmento) {
+            $this->withToken($token)->getJson($this->urlFragmento($temporada, $fragmento['hash']))->assertOk();
+        }
+    }
+
+    public function test_la_recuperacion_relee_la_version_bajo_bloqueo_y_no_usa_el_encabezado_antiguo(): void
+    {
+        [$temporada, $token] = $this->contexto();
+        $this->mock(TransferenciaCatalogoValidacion::class)->shouldReceive('manifiesto')->once()
+            ->andReturnUsing(function () use ($temporada): never {
+                $temporada->increment('version_catalogo');
+                DB::table('articulos_validacion')->where('temporada_id', $temporada->id)->update(['envase' => 'Última edición']);
+                throw new HttpException(503, 'El publicador está ocupado.');
+            });
+        $this->withToken($token)->getJson('/api/validacion/catalogos?formato=fragmentos-v1')
+            ->assertOk()->assertJsonPath('temporada.version_catalogo', 8)->assertJsonPath('articulos.0.envase', 'Última edición')
+            ->assertHeader('ETag', '"validacion-catalogo-'.$temporada->id.'-8"');
+    }
+
+    public function test_no_convierte_un_conflicto_de_version_ni_un_error_de_autorizacion_en_recuperacion(): void
+    {
+        [, $token] = $this->contexto();
+        $this->getJson('/api/validacion/catalogos?formato=fragmentos-v1')->assertUnauthorized();
+        $this->mock(TransferenciaCatalogoValidacion::class)->shouldReceive('manifiesto')->once()
+            ->andThrow(new HttpException(409, 'El catálogo cambió mientras se preparaba.'));
+        $this->withToken($token)->getJson('/api/validacion/catalogos?formato=fragmentos-v1')->assertStatus(409);
     }
 
     private function urlFragmento(Temporada $temporada, string $hash): string
