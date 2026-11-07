@@ -56,3 +56,24 @@ export async function pruneCatalogFragments(server: string, deviceId: string, ke
     }
   } catch { /* La limpieza no afecta el catálogo completo publicado ni la bandeja. */ }
 }
+
+export async function readCatalogPageCheckpoint(server: string, deviceId: string): Promise<string | null> {
+  try { return await FileSystem.readAsStringAsync(directory(server, deviceId) + 'pages-v1-index.json'); }
+  catch { return null; }
+}
+
+/** Solo avanza después de guardar y verificar la página; nunca modifica el catálogo instalado. */
+export async function writeCatalogPageCheckpoint(server: string, deviceId: string, raw: string) {
+  const path = directory(server, deviceId);
+  await FileSystem.makeDirectoryAsync(path, { intermediates: true });
+  const temporary = `${path}pages-${Crypto.randomUUID()}.tmp`;
+  try {
+    await FileSystem.writeAsStringAsync(temporary, raw);
+    if (await FileSystem.readAsStringAsync(temporary) !== raw) throw new Error('No se pudo guardar el avance del catálogo.');
+    await FileSystem.deleteAsync(path + 'pages-v1-index.json', { idempotent: true });
+    await FileSystem.moveAsync({ from: temporary, to: path + 'pages-v1-index.json' });
+  } catch (reason) {
+    await FileSystem.deleteAsync(temporary, { idempotent: true }).catch(() => {});
+    throw reason;
+  }
+}
