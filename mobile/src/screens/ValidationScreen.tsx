@@ -31,6 +31,7 @@ import {
   ValidationShift,
 } from '../domain/validation';
 import { formatValidationJourneyDate, validationJourneyDate, validationShifts } from '../domain/validationJourney';
+import type { CatalogProgress } from '../domain/validationCatalogTransfer';
 import { ApiError } from '../services/apiError';
 import {
   getMyValidationSession,
@@ -118,7 +119,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
   const catalogNeedsSave = useRef(false);
   const [catalogVerified, setCatalogVerified] = useState(false);
   const [catalogProblem, setCatalogProblem] = useState('');
-  const [catalogProgress, setCatalogProgress] = useState<{ version: number; completed: number; total: number; rows?: number } | null>(null);
+  const [catalogProgress, setCatalogProgress] = useState<CatalogProgress | null>(null);
   const historyRefreshedAt = useRef(0);
   const [outbox, setOutbox] = useState<ValidationOutboxItem[]>([]);
   const [recent, setRecent] = useState<ValidationAttempt[]>([]);
@@ -1005,6 +1006,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
   const catalogProgressLabel = catalogProgress
     ? catalogProgress.total === 0 && catalogProgress.rows !== undefined
       ? `Actualizando catálogo v${catalogProgress.version} · ${catalogProgress.completed} páginas · ${catalogProgress.rows} registros recibidos`
+        + (catalogProgress.retryingCollection ? ` · Reintentando página de ${catalogProgress.retryingCollection === 'articulos' ? 'artículos' : catalogProgress.retryingCollection}` : '')
       : `Actualizando catálogo v${catalogProgress.version} · ${catalogProgress.completed} de ${catalogProgress.total} partes (${catalogProgress.total ? Math.round(catalogProgress.completed * 100 / catalogProgress.total) : 100} %)`
     : null;
   if (!catalog && busy) {
@@ -1491,7 +1493,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
           </View>
         ) : null}
 
-        {catalogProblem ? (
+        {catalogProblem && !catalogProgressLabel ? (
           <View accessibilityRole="alert" style={[styles.banner, styles.bannerError]}>
             <SignalMark size={12} tone="warning" />
             <Text style={styles.bannerText}>{catalogProblem}</Text>
