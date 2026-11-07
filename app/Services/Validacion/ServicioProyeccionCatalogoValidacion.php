@@ -11,6 +11,7 @@ use App\Models\ProductorCsg;
 use App\Models\Temporada;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class ServicioProyeccionCatalogoValidacion
 {
@@ -125,7 +126,10 @@ class ServicioProyeccionCatalogoValidacion
                             ])->save();
 
                             $articulos[] = [
-                                'modelo' => $articulo,
+                                // No retener decenas de miles de modelos Eloquent y
+                                // sus originales/relaciones durante todo el cruce.
+                                'id' => $articulo->id,
+                                'activo' => $articulo->activo,
                                 'variedad_id' => $variedad->id,
                                 'cliente_id' => $envase->cliente_validacion_id,
                             ];
@@ -164,27 +168,35 @@ class ServicioProyeccionCatalogoValidacion
                 }
             }
 
+            $porVariedad = [];
+            foreach ($origenes as $origen) {
+                foreach ($origen['variedades'] as $variedad) {
+                    $porVariedad[$variedad][] = $origen;
+                }
+            }
+            $lote = [];
+            $ahora = now();
             foreach ($articulos as $articulo) {
-                foreach ($origenes as $origen) {
+                foreach ($porVariedad[$articulo['variedad_id']] ?? [] as $origen) {
                     if ($articulo['cliente_id'] !== null
                         && $articulo['cliente_id'] !== $origen['cliente_id']) {
                         continue;
                     }
 
-                    if (! in_array($articulo['variedad_id'], $origen['variedades'], true)) {
-                        continue;
-                    }
-
-                    $combinacion = CombinacionValidacion::query()->firstOrNew([
+                    $lote[] = [
+                        'id' => (string) Str::uuid7(),
                         'temporada_id' => $temporada->id,
-                        'articulo_validacion_id' => $articulo['modelo']->id,
+                        'articulo_validacion_id' => $articulo['id'],
                         'origen_validacion_id' => $origen['modelo']->id,
-                    ]);
-                    $combinacion->fill([
-                        'activo' => $articulo['modelo']->activo && $origen['modelo']->activo,
-                    ])->save();
+                        'activo' => $articulo['activo'] && $origen['modelo']->activo,
+                        'created_at' => $ahora, 'updated_at' => $ahora,
+                    ];
+                    if (count($lote) === 500) {
+                        $this->guardarCombinaciones($lote);
+                    }
                 }
             }
+            $this->guardarCombinaciones($lote);
         }, attempts: 3);
     }
 
@@ -294,6 +306,8 @@ class ServicioProyeccionCatalogoValidacion
                 ->update(['activo' => false]);
         }
 
+        $lote = [];
+        $ahora = now();
         foreach ($origenes as $origen) {
             foreach ($articulos as $articulo) {
                 if ($articulo->cliente_validacion_id !== null
@@ -301,15 +315,30 @@ class ServicioProyeccionCatalogoValidacion
                     continue;
                 }
 
-                $combinacion = CombinacionValidacion::query()->firstOrNew([
+                $lote[] = [
+                    'id' => (string) Str::uuid7(),
                     'temporada_id' => $temporada->id,
                     'articulo_validacion_id' => $articulo->id,
                     'origen_validacion_id' => $origen->id,
-                ]);
-                $combinacion->fill([
                     'activo' => $articulo->activo && $origen->activo,
-                ])->save();
+                    'created_at' => $ahora, 'updated_at' => $ahora,
+                ];
+                if (count($lote) === 500) {
+                    $this->guardarCombinaciones($lote);
+                }
             }
+        }
+        $this->guardarCombinaciones($lote);
+    }
+
+    private function guardarCombinaciones(array &$lote): void
+    {
+        if ($lote !== []) {
+            // La restricción única existente conserva ID, código externo e historia
+            // del vínculo. Solo cambia su vigencia, sin SELECT/UPDATE por cada par.
+            DB::table('combinaciones_validacion')->upsert($lote,
+                ['temporada_id', 'articulo_validacion_id', 'origen_validacion_id'], ['activo', 'updated_at']);
+            $lote = [];
         }
     }
 

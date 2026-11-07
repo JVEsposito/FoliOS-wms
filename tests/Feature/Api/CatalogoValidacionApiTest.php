@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Services\Validacion\TransferenciaCatalogoValidacion;
 use Illuminate\Cache\ArrayStore;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -19,6 +20,27 @@ use Tests\TestCase;
 class CatalogoValidacionApiTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_diagnostico_mide_paginas_del_catalogo_sin_modificar_la_proyeccion(): void
+    {
+        [$temporada] = $this->contexto();
+        $antes = DB::table('combinaciones_validacion')->where('temporada_id', $temporada->id)->count();
+        $this->assertSame(0, Artisan::call('validacion:medir-catalogo', ['--paginas' => 1, '--json' => true]));
+        $medida = json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame(7, $medida['version']);
+        $this->assertSame($antes, $medida['conteos']['combinaciones']);
+        $this->assertCount(4, $medida['lectura']);
+        foreach ($medida['lectura'] as $coleccion) {
+            $this->assertSame(1, $coleccion['paginas']);
+            $this->assertSame(1, $coleccion['filas']);
+            $this->assertTrue($coleccion['completa']);
+            $this->assertGreaterThan(0, $coleccion['max_bytes_pagina']);
+            $this->assertGreaterThan(0, $coleccion['max_memoria_php_bytes']);
+        }
+        $this->assertSame($antes, DB::table('combinaciones_validacion')->where('temporada_id', $temporada->id)->count());
+        $this->assertSame(7, $temporada->fresh()->version_catalogo);
+        $this->assertSame(2, Artisan::call('validacion:medir-catalogo', ['--paginas' => -1]));
+    }
 
     public function test_indice_paginado_no_lee_la_proyeccion_ni_espera_al_publicador(): void
     {

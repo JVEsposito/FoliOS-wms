@@ -158,7 +158,7 @@ function harness(source = catalog(), shared = {}) {
   const api = load(resolve(root, 'services/validationApi.ts'));
   return {
     files, storage, calls, progress, server: () => server, maxActive: () => maximum,
-    api, codec: load(resolve(root, 'domain/validationCatalogTransfer.ts')), offline: load(resolve(root, 'services/validationOfflineStore.ts')),
+    api, compatibility: load(resolve(root, 'domain/validationCatalogIndex.ts')), codec: load(resolve(root, 'domain/validationCatalogTransfer.ts')), offline: load(resolve(root, 'services/validationOfflineStore.ts')),
     download: (known = null, base = 'http://planta', device = 'pda') => api.getValidationCatalog(base, 'token', known, { deviceId: device, onProgress: (p) => progress.push(clone(p)) }),
     update: (next) => { source = next; server = transport(next); for (const [key, raw] of server.bodies) history.set(key, raw); }, fail: (digest) => { failure = digest; }, corrupt: (digest) => { corrupt = digest; }, diskFull: (v) => { fullDisk = v; },
     fullFallback: (value) => { fullFallback = value; }, pages: () => { pages = true; }, failPage: (value) => { failedPage = value; }, corruptPage: () => { corruptPage = true; }, elapsed: () => elapsed,
@@ -282,8 +282,10 @@ test('descarga paginada supera 45 s totales, recibe todas las filas y reanuda tr
     assert.ok(h.elapsed() > 45000);
     const restarted = h.restart(source); restarted.pages();
     const received = await restarted.download(catalog(417), 'http://planta', device);
-    assert.equal(received.articulos.length, articles); assert.equal(received.combinaciones.length, combinations);
-    assert.deepEqual([...received.combinaciones.map((r) => r.id)].sort(), source.combinaciones.map((r) => r.id).sort());
+    assert.equal(received.articulos.length, articles); assert.equal(restarted.compatibility.catalogCombinationCount(received), combinations);
+    assert.equal(received.combinaciones.length, 0, 'No conserva cientos de miles de objetos de combinación');
+    const index = restarted.compatibility.indexValidationCatalog(received);
+    assert.ok(source.combinaciones.every((r) => index.articlesByOrigin.get(r.origen_validacion_id).has(r.articulo_validacion_id)), 'Conserva cada relación exacta');
     assert.equal(restarted.calls.filter((url) => url.includes('/paginas/')).length, Math.ceil(combinations / 1000) - 1, 'Solo solicita las páginas de combinaciones pendientes');
     assert.deepEqual([...h.storage], preserved);
     restarted.calls.length = 0;
@@ -300,7 +302,7 @@ test('si cambia la versión a mitad de descarga, rechaza la mezcla y empieza una
   const recovered = await h.download(catalog(417));
   assert.equal(recovered.temporada.version_catalogo, 419);
   assert.equal(recovered.articulos.find((row) => row.id === initial.articulos[0].id).envase, 'Edición durante descarga');
-  assert.equal(recovered.combinaciones.length, 1800);
+  assert.equal(h.compatibility.catalogCombinationCount(recovered), 1800);
 });
 
 test('una página dañada o de otra versión no instala un catálogo parcial y una edición retira los IDs antiguos', async () => {
@@ -314,7 +316,7 @@ test('una página dañada o de otra versión no instala un catálogo parcial y u
   const next = await clean.download(first);
   assert.equal(next.temporada.version_catalogo, 419);
   assert.equal(next.articulos.some((row) => row.id === source.articulos[0].id), false);
-  assert.equal(next.combinaciones.length, updated.combinaciones.length);
+  assert.equal(clean.compatibility.catalogCombinationCount(next), updated.combinaciones.length);
 });
 
 test('la recuperación completa también rechaza versiones anteriores y relaciones inválidas', async () => {

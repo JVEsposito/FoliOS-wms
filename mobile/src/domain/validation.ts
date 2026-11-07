@@ -65,6 +65,8 @@ export type ValidationCatalog = {
   articulos: ValidationArticle[];
   origenes: ValidationOrigin[];
   combinaciones: ValidationCombination[];
+  /** Compatibilidad exacta por posiciones del catálogo; evita un objeto y UUID por vínculo. */
+  compatibilidad?: { formato: 'csr-v1'; offsets: Uint32Array; indices: Uint32Array };
   tipos_bulto: Array<'pallet' | 'saldo'>;
   resultados: ValidationResult[];
   motivos: string[];

@@ -1,5 +1,10 @@
 # Descarga recuperable del catálogo PDA
 
+Para el volumen de v442 y el crecimiento previsto de la temporada, consultar
+[Escalabilidad del catálogo de validación](escalabilidad-catalogo-validacion.md):
+índice compacto en PDA/tablet, guardado numérico por partes, generación por lotes
+y medición PHP de solo lectura.
+
 ## Descarga paginada para catálogos grandes
 
 La app nativa actualizada negocia `GET /api/validacion/catalogos?formato=paginas-v1`.

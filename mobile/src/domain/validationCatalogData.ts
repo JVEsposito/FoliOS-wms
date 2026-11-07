@@ -1,4 +1,5 @@
 import type { ValidationCatalog } from './validation';
+import { validateCatalogCompatibility } from './validationCatalogIndex';
 
 export function assertValidationCatalog(value: unknown): asserts value is ValidationCatalog {
   const catalog = value as ValidationCatalog | null;
@@ -15,6 +16,7 @@ export function assertValidationCatalog(value: unknown): asserts value is Valida
     || catalog.combinaciones.some((row) => !row || !articles.has(row.articulo_validacion_id) || !origins.has(row.origen_validacion_id))) {
     throw new Error('El catálogo contiene combinaciones sin artículo u origen. Se conserva la última copia válida; informa a Oficina.');
   }
+  validateCatalogCompatibility(catalog);
 }
 
 /** Conserva solo los campos operativos al guardar cada lote de la copia local. */
