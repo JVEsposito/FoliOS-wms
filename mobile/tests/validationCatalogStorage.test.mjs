@@ -66,7 +66,7 @@ function harness(maxNativeBytes = Infinity) {
   }
   return {
     files, storage, disk, api: load(resolve(root, 'services/validationApi.ts')),
-    offline: load(resolve(root, 'services/validationOfflineStore.ts')),
+    offline: load(resolve(root, 'services/validationOfflineStore.ts')), compatibility: load(resolve(root, 'domain/validationCatalogIndex.ts')),
     failWrite: (value) => { failWrite = value; }, fetch: (fn) => { fetchImpl = fn; },
   };
 }
@@ -137,25 +137,61 @@ test('lee el respaldo nativo anterior y lo conserva cuando instala la copia por 
   assert.ok(h.files.has(oldFile));
 });
 
-test('guarda y recupera 244288 combinaciones sin superar el búfer de cada escritura nativa', async () => {
+test('v442: guarda 76420 artículos, 342 orígenes y 523632 vínculos sin superar el búfer nativo', async () => {
   const h = harness(128 * 1024); const large = catalog(442);
   const id = (prefix, n) => `${prefix}0000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
-  large.origenes[0].id = id('b', 1);
-  large.articulos = Array.from({ length: 29676 }, (_, n) => ({ ...large.articulos[0], id: id('a', n), created_at: 'timestamp no operativo', especie_validacion_id: 'FK interna' }));
-  large.combinaciones = Array.from({ length: 244288 }, (_, n) => ({
+  large.origenes = Array.from({ length: 342 }, (_, n) => ({ ...large.origenes[0], id: id('b', n), csg: String(100000 + n), variedad_ids: null }));
+  large.articulos = Array.from({ length: 76420 }, (_, n) => ({ ...large.articulos[0], id: id('a', n), created_at: 'timestamp no operativo', especie_validacion_id: 'FK interna' }));
+  large.combinaciones = Array.from({ length: 523632 }, (_, n) => ({
     id: id('c', n),
     articulo_validacion_id: id('a', n % large.articulos.length),
-    origen_validacion_id: large.origenes[0].id,
+    origen_validacion_id: large.origenes[n % large.origenes.length].id,
     codigo_externo: null,
   }));
   await h.offline.saveValidationCatalog('nuevo', 'pda', large, 'http://planta');
   const saved = await h.offline.loadCachedValidationCatalog('otro-usuario', 'pda', 'http://planta');
   assert.equal(saved.temporada.version_catalogo, 442);
-  assert.equal(saved.articulos.length, 29676); assert.equal(saved.combinaciones.length, 244288);
-  assert.deepEqual(clone(saved.combinaciones.at(-1)), large.combinaciones.at(-1));
+  assert.equal(saved.articulos.length, 76420); assert.equal(saved.origenes.length, 342);
+  assert.equal(h.compatibility.catalogCombinationCount(saved), 523632);
+  assert.equal(saved.combinaciones.length, 0);
+  const index = h.compatibility.indexValidationCatalog(saved);
+  assert.ok(large.combinaciones.every((row) => index.articlesByOrigin.get(row.origen_validacion_id).has(row.articulo_validacion_id)));
   assert.equal('created_at' in saved.articulos[0], false);
   assert.equal('especie_validacion_id' in saved.articulos[0], false);
   assert.equal(h.storage.size, 0, 'No almacena otra copia masiva en la base de capturas');
+});
+
+test('migra un respaldo schema 2 por lotes sin materializar los objetos de combinaciones', async () => {
+  const h = harness(); const source = catalog(442);
+  const directory = 'file:///private/validation-catalogs/http%3A%2F%2Fplanta/pda/';
+  await h.disk.makeDirectoryAsync(directory);
+  const name = '0000000000000001-schema2.json';
+  const { categorias, articulos, origenes, combinaciones, ...metadata } = source;
+  const hashes = {}; const counts = {};
+  for (const [collection, rows] of Object.entries({ categorias, articulos, origenes, combinaciones })) {
+    const raw = JSON.stringify(rows); counts[collection] = rows.length;
+    hashes[collection] = [require('node:crypto').createHash('sha256').update(raw).digest('hex')];
+    h.files.set(`${directory}${name}.${collection}-0.part`, raw);
+  }
+  h.files.set(directory + name, JSON.stringify({ schema: 2, counts, metadata, hashes }));
+  const loaded = await h.offline.loadCachedValidationCatalog('user', 'pda', 'http://planta');
+  assert.equal(loaded.combinaciones.length, 0);
+  assert.equal(h.compatibility.catalogCombinationCount(loaded), 1);
+  assert.equal(h.compatibility.indexValidationCatalog(loaded).articlesByOrigin.get('origin').has('article'), true);
+  await h.offline.saveValidationCatalog('user', 'pda', { ...loaded, temporada: { ...loaded.temporada, version_catalogo: 443 } }, 'http://planta');
+  assert.ok(h.files.has(directory + name), 'Conserva el respaldo anterior');
+});
+
+test('un índice numérico inválido recupera el respaldo incluso con hashes de partes válidos', async () => {
+  const h = harness();
+  await h.offline.saveValidationCatalog('u', 'pda', catalog(441), 'http://planta');
+  await h.offline.saveValidationCatalog('u', 'pda', catalog(442), 'http://planta');
+  const newest = [...h.files.keys()].filter((p) => p.endsWith('.json')).sort().at(-1);
+  const manifest = JSON.parse(h.files.get(newest));
+  const bad = '[999999]'; h.files.set(newest + '.combinaciones-0.part', bad);
+  manifest.hashes.combinaciones[0] = require('node:crypto').createHash('sha256').update(bad).digest('hex');
+  h.files.set(newest, JSON.stringify(manifest));
+  assert.equal((await h.offline.loadCachedValidationCatalog('u', 'pda', 'http://planta')).temporada.version_catalogo, 441);
 });
 
 test('ETag envía v218, recibe v227 y un 304 solo reutiliza una copia existente', async () => {

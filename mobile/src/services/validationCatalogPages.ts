@@ -2,6 +2,7 @@ import type { ValidationCatalog } from '../domain/validation';
 import { assertValidationCatalog } from '../domain/validationCatalogData';
 import { catalogCollections, type CatalogCollection, type CatalogProgress } from '../domain/validationCatalogTransfer';
 import { ApiError } from './apiError';
+import { createCatalogCompatibilityBuilder } from '../domain/validationCatalogIndex';
 import { pruneCatalogFragments, readCatalogFragment, readCatalogPageCheckpoint, verifyCatalogFragment, writeCatalogFragment, writeCatalogPageCheckpoint } from './validationCatalogTransferStore';
 
 type Index = Omit<ValidationCatalog, CatalogCollection> & { formato: 'paginas-v1'; tamano_pagina: number; colecciones: CatalogCollection[] };
@@ -70,8 +71,10 @@ export async function downloadCatalogPages(baseUrl: string, token: string, index
   const rows: Record<CatalogCollection, Record<string, unknown>[]> = { categorias: [], articulos: [], origenes: [], combinaciones: [] };
   const headers = new Headers({ Accept: 'application/json', Authorization: `Bearer ${token}` });
   const progress: CatalogProgress = { version: checkpoint.version, completed: 0, total: 0, rows: 0, downloadedBytes: 0, reusedBytes: 0 };
+  let compatibility: ReturnType<typeof createCatalogCompatibilityBuilder> | null = null;
   options.onProgress?.({ ...progress });
   for (const collection of catalogCollections) {
+    if (collection === 'combinaciones') compatibility = createCatalogCompatibilityBuilder(rows as unknown as ValidationCatalog);
     let cursor: string | null = null;
     do {
       const key = `${collection}:${cursor}`;
@@ -101,7 +104,8 @@ export async function downloadCatalogPages(baseUrl: string, token: string, index
         await writeCatalogPageCheckpoint(baseUrl, options.deviceId, JSON.stringify(checkpoint));
         progress.downloadedBytes += bytes(raw);
       }
-      rows[collection].push(...page.filas);
+      if (compatibility) compatibility.append(page.filas as unknown as ValidationCatalog['combinaciones']);
+      else rows[collection].push(...page.filas);
       progress.completed++;
       progress.rows! += page.filas.length;
       options.onProgress?.({ ...progress });
@@ -109,7 +113,7 @@ export async function downloadCatalogPages(baseUrl: string, token: string, index
     } while (cursor !== null);
   }
   const { formato: _format, tamano_pagina: _size, colecciones: _collections, ...metadata } = index;
-  const catalog = { ...metadata, ...rows } as unknown as ValidationCatalog;
+  const catalog = { ...metadata, ...rows, compatibilidad: compatibility!.finish() } as unknown as ValidationCatalog;
   assertValidationCatalog(catalog);
   if (catalogCollections.some((collection) => new Set(rows[collection].map((r) => r.id)).size !== rows[collection].length)) {
     throw new Error('La descarga repite registros. Se conserva el catálogo anterior.');

@@ -510,10 +510,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
     const article = catalog.articulos.find((item) => item.id === attempt.articulo_validacion_id && item.activo);
     const origin = catalog.origenes.find((item) => item.id === attempt.origen_validacion_id && item.activo);
     const category = catalog.categorias.find((item) => item.id === attempt.categoria_validacion_id && item.activo);
-    const combination = catalog.combinaciones.find((item) => (
-      item.articulo_validacion_id === article?.id
-      && item.origen_validacion_id === origin?.id
-    ));
+    const combination = article && origin && catalogIndex?.articlesByOrigin.get(origin.id)?.has(article.id);
 
     if (!article || !origin || !category || !combination) {
       setError('La información guardada del folio ya no está habilitada en el catálogo activo. Requiere revisión de supervisión.');

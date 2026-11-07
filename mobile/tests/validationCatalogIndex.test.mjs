@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { performance } from 'node:perf_hooks';
 import test from 'node:test';
 
-import { articlesForOrigins, createOriginArticleSelector, indexValidationCatalog, productCompatibleWithOrigins } from '../src/domain/validationCatalogIndex.ts';
+import { articlesForOrigins, catalogCombinationCount, compactCatalogCompatibility, createOriginArticleSelector, indexValidationCatalog, productCompatibleWithOrigins, validateCatalogCompatibility } from '../src/domain/validationCatalogIndex.ts';
 import { resolveAppVariant } from '../src/config/resolveAppVariant.ts';
 
 test('pda y pda-pruebas conservan la variante PDA del binario', () => {
@@ -88,4 +88,32 @@ test('cajas, lote y proceso mantienen los IDs de origen y reutilizan el cálculo
   assert.equal(calculations, 1);
   assert.deepEqual(select(['otro']), []);
   assert.equal(calculations, 2);
+});
+
+test('el índice numérico conserva exactamente opciones, intersecciones y restricciones de variedad', () => {
+  const catalog = {
+    articulos: Array.from({ length: 90 }, (_, n) => ({ id: `art-${n}`, activo: n !== 89, variedad_validacion_id: `v${n % 3}` })),
+    origenes: [
+      { id: 'o1', activo: true, variedad_ids: null }, { id: 'o2', activo: true, variedad_ids: ['v0'] },
+      { id: 'o3', activo: false, variedad_ids: null }, { id: 'o4', activo: true, variedad_ids: null },
+    ], combinaciones: [],
+  };
+  for (let i = 0; i < 90; i++) {
+    catalog.combinaciones.push({ articulo_validacion_id: `art-${i}`, origen_validacion_id: 'o1' });
+    if (i % 2 === 0) catalog.combinaciones.push({ articulo_validacion_id: `art-${i}`, origen_validacion_id: 'o2' });
+  }
+  catalog.combinaciones.push(catalog.combinaciones[0]); // El formato anterior podía contener vínculos repetidos.
+  const original = indexValidationCatalog(catalog); const compact = compactCatalogCompatibility(catalog);
+  const indexed = indexValidationCatalog(compact);
+  assert.equal(compact.combinaciones.length, 0);
+  assert.equal(catalogCombinationCount(compact), catalog.combinaciones.length);
+  for (const ids of [[], ['o1'], ['o2'], ['o1', 'o2'], ['o3'], ['o4'], ['o1', 'no-existe']]) {
+    const selected = (index) => articlesForOrigins(index, ids).map((a) => a.id).sort();
+    assert.deepEqual(selected(indexed), selected(original));
+  }
+  for (let i = 0; i < 90; i++) {
+    assert.equal(indexed.articlesByOrigin.get('o2').has(`art-${i}`), original.articlesByOrigin.get('o2').has(`art-${i}`));
+  }
+  compact.compatibilidad.indices[0] = 999999;
+  assert.throws(() => validateCatalogCompatibility(compact), /inválidos/);
 });
