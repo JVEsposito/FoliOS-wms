@@ -26,7 +26,7 @@ trait PreparaLotesMpEnCamara
      * @param  array<string, mixed>  $lote  Reemplazos del payload del lote.
      * @return array{lote: array<string, mixed>, cliente: Cliente, camara: Camara, csg: string}
      */
-    protected function loteMpEnCamara(string $sufijo, array $lote = [], ?Cliente $cliente = null, ?Camara $camara = null): array
+    protected function loteMpEnCamara(string $sufijo, array $lote = [], ?Cliente $cliente = null, ?Camara $camara = null, bool $prepararSinLote = false): array
     {
         $temporada = Temporada::query()->where('activa', true)->firstOrFail();
         $cliente ??= Cliente::create(['codigo' => "EXP-{$sufijo}", 'nombre' => "Exportadora {$sufijo}", 'activo' => true]);
@@ -111,30 +111,34 @@ trait PreparaLotesMpEnCamara
             'cantidad_niveles' => 1,
         ]);
         $digitador = User::factory()->create(['rol' => RolUsuario::DigitadorMateriaPrima]);
+        $payloadLote = [
+            'operacion_id' => (string) Str::uuid(),
+            'segmento_validacion_mp_id' => $segmentoId,
+            'numero_lote' => "L-{$sufijo}",
+            'csg_validacion_id' => $csg->id,
+            'sdp' => '987654321',
+            'ggn' => '1234567890123',
+            'fecha_cosecha' => '2026-10-26',
+            'predio' => "Fundo {$sufijo}",
+            'especie_validacion_id' => $especie->id,
+            'variedad_validacion_id' => $variedad->id,
+            'calibre_validacion_id' => $calibre->id,
+            'cuartel' => 'C-1',
+            'tipo_producto' => 'materia_prima',
+            'envase_primario' => 'bins',
+            'envase_secundario' => 'totes',
+            'cantidad_envases_primarios' => $bins,
+            'cantidad_envases_secundarios' => $totes,
+            'kilos_brutos' => 19000,
+            'kilos_netos_confirmados' => 18000,
+            'requiere_hidrocooler' => false,
+            ...$lote,
+        ];
+        if ($prepararSinLote) {
+            return ['lote' => [], 'cliente' => $cliente, 'camara' => $camara, 'csg' => $csg->codigo, 'payload_lote' => $payloadLote];
+        }
         $creado = $this->actingAs($digitador, 'sanctum')
-            ->postJson('/api/materia-prima/lotes', [
-                'operacion_id' => (string) Str::uuid(),
-                'segmento_validacion_mp_id' => $segmentoId,
-                'numero_lote' => "L-{$sufijo}",
-                'csg_validacion_id' => $csg->id,
-                'sdp' => '987654321',
-                'ggn' => '1234567890123',
-                'fecha_cosecha' => '2026-10-26',
-                'predio' => "Fundo {$sufijo}",
-                'especie_validacion_id' => $especie->id,
-                'variedad_validacion_id' => $variedad->id,
-                'calibre_validacion_id' => $calibre->id,
-                'cuartel' => 'C-1',
-                'tipo_producto' => 'materia_prima',
-                'envase_primario' => 'bins',
-                'envase_secundario' => 'totes',
-                'cantidad_envases_primarios' => $bins,
-                'cantidad_envases_secundarios' => $totes,
-                'kilos_brutos' => 19000,
-                'kilos_netos_confirmados' => 18000,
-                'requiere_hidrocooler' => false,
-                ...$lote,
-            ])
+            ->postJson('/api/materia-prima/lotes', $payloadLote)
             ->assertCreated()
             ->json('data');
         $confirmado = $this->postJson("/api/materia-prima/lotes/{$creado['id']}/confirmar", [

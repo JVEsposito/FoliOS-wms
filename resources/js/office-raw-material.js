@@ -390,6 +390,9 @@ function lotActions(lot) {
     actions.push(`<button data-action="history" data-lot-id="${escapeHtml(lot.id)}" type="button">Ubicaciones</button>`);
     const canManage = state.identity?.puede_gestionar_lotes_materia_prima === true;
     const canSupervise = state.identity?.puede_supervisar_lotes_materia_prima === true;
+    if (state.identity?.rol === 'administrador' && lot.puede_corregir_numero && lot.estado !== 'anulado') {
+        actions.push(`<button data-action="correct-number" data-lot-id="${escapeHtml(lot.id)}" type="button">Corregir N° de lote</button>`);
+    }
     if (canManage && lot.estado === 'borrador') {
         actions.push(`<button data-action="edit" data-lot-id="${escapeHtml(lot.id)}" type="button">Editar</button>`);
         if (!lot.pesos.destare_pendiente) {
@@ -634,6 +637,13 @@ function openOperation(type, lotId) {
     form.lote_id.value = lot.id;
     form.operacion_id.value = operationUuid();
     const definitions = {
+        'correct-number': {
+            eyebrow: 'CORRECCIÓN ADMINISTRATIVA',
+            title: `Corregir N° de lote ${lot.numero_lote}`,
+            description: `${lot.cliente?.nombre || ''} · ${lot.recepcion?.numero_recepcion || ''} · Guía ${lot.recepcion?.numero_guia_despacho || ''}. Se conservan kilos, envases, estado y movimientos.`,
+            fields: `<label class="field"><span>Nuevo número de lote *</span><input name="numero_lote" maxlength="80" value="${escapeHtml(lot.numero_lote)}" required><small>Único en toda la temporada, también entre clientes distintos.</small></label>
+                <label class="field"><span>Motivo de la corrección *</span><textarea name="motivo" minlength="10" maxlength="2000" required></textarea></label>`,
+        },
         'correct-origin': {
             eyebrow: 'CORRECCIÓN DE ORIGEN',
             title: `Corregir ${lot.numero_lote}`,
@@ -676,7 +686,12 @@ async function submitOperation() {
     const payload = { operacion_id: values.operacion_id };
     let path = '';
     let method = 'POST';
-    if (type === 'correct-origin') {
+    if (type === 'correct-number') {
+        const lot = state.lots.find((item) => item.id === lotId);
+        path = `/api/materia-prima/lotes/${lotId}/corregir-numero`;
+        method = 'PUT'; payload.version_conocida = lot?.version;
+        payload.numero_lote = values.numero_lote; payload.motivo = values.motivo;
+    } else if (type === 'correct-origin') {
         const lot = state.lots.find((item) => item.id === lotId);
         path = `/api/materia-prima/lotes/${lotId}/corregir-origen`;
         method = 'PUT';

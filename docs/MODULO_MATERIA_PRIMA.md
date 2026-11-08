@@ -61,9 +61,38 @@ Si Validación MP agregó bins de planta al segmento, el lote los suma a sus env
 
 ## Número de lote
 
-El número se escribe manualmente según la información de la exportadora. Debe ser único entre lotes vigentes para la combinación temporada y cliente.
+El número se escribe manualmente según la información de la exportadora. Debe ser
+único entre todos los lotes vigentes de la temporada, incluso si pertenecen a
+clientes distintos. Se normalizan mayúsculas y espacios al inicio/final. El
+índice único también protege las altas y correcciones simultáneas.
 
 Una anulación supervisada libera la clave, de modo que el número pueda recrearse con los antecedentes correctos sin eliminar el registro anterior.
+
+### Corregir un número informado erróneamente
+
+El administrador selecciona **Corregir N° de lote** en la fila del lote. El cuadro
+muestra cliente, recepción y guía para distinguir duplicados históricos. Ingresa
+el número correcto según el documento y explica el motivo. La operación conserva
+el mismo lote, kilos, envases, estado, cámara y entregas, incluso si ya fue enviado
+a Packing. No hay que anularlo ni recrearlo para cambiar su identificación.
+
+Se registra el número anterior y el nuevo, usuario, motivo y versión. El cambio
+rechaza un número ocupado, un dato igual al actual o una versión desactualizada;
+un reintento de la misma operación no duplica la corrección. Los otros roles no
+pueden usar esta acción, tampoco invocando directamente la API.
+
+Los pallets conservan el dato de su etiqueta y el vínculo con el mismo lote
+mediante el historial de correcciones, limitado al cliente y temporada originales.
+La consulta y su Excel muestran número de etiqueta y número actual y permiten
+buscar por el actual. Un número anterior no se puede reutilizar para otro lote
+vigente del mismo cliente mientras sea necesario para esa trazabilidad.
+Las órdenes publicadas y PRE-SIF conservan sus snapshots; el detalle de la orden
+indica también el número actual si cambió. Una nueva versión toma el dato actual.
+
+El despliegue requiere `php artisan migrate --force`. La migración adapta las
+claves existentes sin renumerar ni eliminar lotes. Si ya hay dos lotes con el mismo
+número en clientes distintos, ambos conservan sus datos y se corrige la fila
+equivocada por su recepción. No se decide automáticamente cuál de los dos es válido.
 
 ## Estados
 

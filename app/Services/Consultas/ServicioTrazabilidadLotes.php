@@ -104,6 +104,7 @@ class ServicioTrazabilidadLotes
             ['clave' => 'predio', 'titulo' => 'Predio', 'ancho' => 22],
             ['clave' => 'fecha_embalaje', 'titulo' => 'Fecha embalaje', 'ancho' => 14],
             ['clave' => 'lote_materia_prima', 'titulo' => 'Lote MP (etiqueta)', 'ancho' => 18],
+            ['clave' => 'lote_materia_prima_actual', 'titulo' => 'Lote MP actual', 'ancho' => 18],
             ['clave' => 'recepcion', 'titulo' => 'Recepción MP verificada', 'ancho' => 22],
             ['clave' => 'proceso_packing', 'titulo' => 'Proceso packing', 'ancho' => 16],
             ['clave' => 'cantidad_cajas', 'titulo' => 'Cajas', 'ancho' => 10, 'tipo' => 'numero'],
@@ -148,6 +149,7 @@ class ServicioTrazabilidadLotes
                             'predio' => $linea?->predio,
                             'fecha_embalaje' => $linea?->fecha_embalaje?->toDateString(),
                             'lote_materia_prima' => $linea?->numero_lote_materia_prima,
+                            'lote_materia_prima_actual' => $linea?->loteMateriaPrima?->numero_lote,
                             'recepcion' => $linea?->loteMateriaPrima?->recepcion?->numero_recepcion,
                             'proceso_packing' => $linea?->numero_proceso_packing,
                             'cantidad_cajas' => $linea?->cantidad_cajas,
@@ -196,7 +198,9 @@ class ServicioTrazabilidadLotes
             ->where('temporada_id', $temporada->id)
             ->where(fn (Builder $consulta) => $consulta
                 ->where('numero_lote_materia_prima', $codigo)
-                ->orWhere('numero_proceso_packing', $codigo));
+                ->orWhere('numero_proceso_packing', $codigo)
+                ->orWhereHas('loteMateriaPrima', fn (Builder $lote) => $lote->where('temporada_id', $temporada->id)
+                    ->whereRaw('UPPER(TRIM(numero_lote)) = ?', [$codigo])));
     }
 
     /** @param array<int, string> $folioIds */
@@ -248,6 +252,7 @@ class ServicioTrazabilidadLotes
                 'predio' => $linea->predio,
                 'fecha_embalaje' => $linea->fecha_embalaje?->toDateString(),
                 'lote_materia_prima' => $linea->numero_lote_materia_prima,
+                'lote_materia_prima_actual' => $linea->loteMateriaPrima?->numero_lote,
                 'lote_verificado' => $linea->lote_materia_prima_id !== null,
                 'recepcion' => $linea->loteMateriaPrima?->recepcion?->numero_recepcion,
                 'proceso_packing' => $linea->numero_proceso_packing,
@@ -318,7 +323,8 @@ class ServicioTrazabilidadLotes
 
     private function coincide(TrazabilidadFolioOrigen $linea, string $codigo): bool
     {
-        return $linea->numero_lote_materia_prima === $codigo || $linea->numero_proceso_packing === $codigo;
+        return $linea->numero_lote_materia_prima === $codigo || $linea->numero_proceso_packing === $codigo
+            || ProyeccionTrazabilidadFolio::normalizarCodigo($linea->loteMateriaPrima?->numero_lote) === $codigo;
     }
 
     private function valor(mixed $valor): mixed
