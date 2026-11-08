@@ -6,7 +6,7 @@ import test from 'node:test';
 import { chromium } from 'playwright';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
-const html = readFileSync(resolve(root, 'storage/app/ui/oficina/materia-prima.html'), 'utf8');
+const html = readFileSync(resolve(root, 'storage/app/ui/oficina/materia-prima-lotes.html'), 'utf8');
 const season = { id: 'temporada', codigo: 'TEMP-2627', nombre: 'Temporada 2026' };
 const lot = (number) => ({ id: number, numero_lote: number, estado: 'asignado_camara',
     recepcion: { numero_recepcion: 'REC-2611-0017', numero_guia_despacho: '4443' }, cliente: { nombre: 'Cliente' },
@@ -19,7 +19,7 @@ test('lotes: búsqueda desde Romana encuentra recepción y paginación conserva 
     try {
         const context = await browser.newContext({ viewport: { width: 1280, height: 1000 } });
         const identity = { id: 1, nombre: 'Administrador', rol: 'administrador', puede_consultar_materia_prima: true,
-            puede_gestionar_lotes_materia_prima: true, modulos_acceso: ['materia-prima.lotes'] };
+            puede_gestionar_lotes_materia_prima: true, modulos_acceso: ['materia-prima.digitacion'] };
         await context.addInitScript((user) => {
             localStorage.setItem('estiba_wms_office_token', 'fixture');
             localStorage.setItem('estiba_wms_office_identity', JSON.stringify(user));
