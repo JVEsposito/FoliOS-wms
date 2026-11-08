@@ -84,7 +84,8 @@ class ProyeccionTrazabilidadFolio
         // cliente y temporada, nunca por coincidencia con otra exportadora.
         $corregidos = LoteMateriaPrima::query()->where('temporada_id', $temporadaId)->where('cliente_id', $clienteId)
             ->where('estado', '!=', EstadoLoteMateriaPrima::Anulado->value)
-            ->whereHas('eventos', fn ($q) => $q->where('tipo', 'numero_lote_corregido')->where('datos->anterior', $numeroLote))
+            ->whereHas('eventos', fn ($q) => $q->where('tipo', 'numero_lote_corregido')->where('datos->cliente_id', $clienteId)
+                ->where('datos->temporada_id', $temporadaId)->where('datos->anterior', $numeroLote))
             ->limit(2)->pluck('id');
 
         return $corregidos->count() === 1 ? $corregidos->first() : null;

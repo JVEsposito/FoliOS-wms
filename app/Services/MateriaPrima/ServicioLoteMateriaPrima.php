@@ -259,6 +259,7 @@ class ServicioLoteMateriaPrima
             // auditado. Si la escritura falla, el evento también se revierte.
             $this->registrarEvento($lote, 'numero_lote_corregido', $usuario, $datos['operacion_id'], $lote->estado, $lote->estado,
                 ['payload_hash' => $hash, 'anterior' => mb_strtoupper(trim($lote->numero_lote)), 'anterior_registrado' => $lote->numero_lote,
+                    'cliente_id' => $lote->cliente_id, 'temporada_id' => $lote->temporada_id,
                     'nuevo' => $numero, 'motivo' => $datos['motivo'], 'version' => $lote->version + 1]);
             $this->guardarNumero(fn () => $lote->update(['numero_lote' => $numero,
                 'clave_numero_vigente' => $this->claveNumeroVigente($lote->temporada_id, $numero),
@@ -1174,7 +1175,8 @@ class ServicioLoteMateriaPrima
         if (LoteMateriaPrima::query()->where('temporada_id', $temporadaId)->where('cliente_id', $clienteId)
             ->where('estado', '!=', EstadoLoteMateriaPrima::Anulado->value)
             ->when($ignorarLoteId, fn ($q) => $q->whereKeyNot($ignorarLoteId))
-            ->whereHas('eventos', fn ($q) => $q->where('tipo', 'numero_lote_corregido')->where('datos->anterior', mb_strtoupper(trim($numero))))->exists()) {
+            ->whereHas('eventos', fn ($q) => $q->where('tipo', 'numero_lote_corregido')->where('datos->cliente_id', $clienteId)
+                ->where('datos->temporada_id', $temporadaId)->where('datos->anterior', mb_strtoupper(trim($numero))))->exists()) {
             throw ValidationException::withMessages(['numero_lote' => 'Este número pertenece al historial de otro lote del cliente. Consulta su corrección antes de reutilizarlo.']);
         }
     }

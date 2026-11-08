@@ -5,6 +5,7 @@ namespace Tests\Feature\Api;
 use App\Enums\EstadoLoteMateriaPrima;
 use App\Enums\RolUsuario;
 use App\Models\Cliente;
+use App\Models\EventoLoteMateriaPrima;
 use App\Models\Folio;
 use App\Models\LoteMateriaPrima;
 use App\Models\Temporada;
@@ -91,6 +92,21 @@ class TrazabilidadLotesApiTest extends TestCase
             ->assertJsonPath('data.resumen.lineas_sin_lote_verificado', 1)
             ->assertJsonPath('data.folios.0.lineas.0.lote_verificado', false)
             ->assertJsonPath('data.folios.0.lineas.0.recepcion', null);
+    }
+
+    public function test_un_alias_de_numero_no_se_transfiere_a_otro_cliente_al_corregir_datos_historicos(): void
+    {
+        $norte = $this->cliente('ALIAS-NORTE');
+        $sur = $this->cliente('ALIAS-SUR');
+        $lote = $this->lote($norte, 'L-ANTERIOR');
+        EventoLoteMateriaPrima::create(['lote_materia_prima_id' => $lote->id, 'tipo' => 'numero_lote_corregido',
+            'user_id' => $this->administrador->id, 'ocurrido_at' => now(), 'datos' => ['anterior' => 'L-ANTERIOR', 'nuevo' => 'L-ACTUAL',
+                'cliente_id' => $norte->id, 'temporada_id' => $this->temporadaId]]);
+        $lote->update(['numero_lote' => 'L-ACTUAL']);
+        $proyeccion = app(ProyeccionTrazabilidadFolio::class);
+        $this->assertSame($lote->id, $proyeccion->loteRegistrado($this->temporadaId, 'L-ANTERIOR', $norte->id));
+        $lote->update(['cliente_id' => $sur->id]);
+        $this->assertNull($proyeccion->loteRegistrado($this->temporadaId, 'L-ANTERIOR', $sur->id));
     }
 
     public function test_concilia_el_vinculo_cuando_el_lote_se_digita_despues_y_lo_retira_al_anularlo(): void
