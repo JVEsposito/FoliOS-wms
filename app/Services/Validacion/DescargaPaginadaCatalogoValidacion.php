@@ -48,11 +48,15 @@ class DescargaPaginadaCatalogoValidacion
                     'a.id', ['a.id', 'a.temporada_id', 'a.variedad_validacion_id', 'a.especie', 'a.variedad', 'a.calibre', 'a.envase', 'a.codigo_externo', 'a.activo']],
                 'origenes' => [DB::table('origenes_validacion')->where('temporada_id', $temporadaId)->where('activo', true),
                     'id', ['id', 'temporada_id', 'cliente_validacion_id', 'csg_validacion_id', 'cliente', 'marca', 'csg', 'predio', 'codigo_externo', 'activo']],
+                // Leer en el orden del cursor evita ordenar el cruce completo por cada página.
                 'combinaciones' => [DB::table('combinaciones_validacion as c')
                     ->join('articulos_validacion as a', 'a.id', '=', 'c.articulo_validacion_id')
                     ->join('origenes_validacion as o', 'o.id', '=', 'c.origen_validacion_id')
                     ->where('c.temporada_id', $temporadaId)->where('c.activo', true)->where('a.activo', true)->where('o.activo', true),
-                    'c.id', ['c.id', 'c.articulo_validacion_id', 'c.origen_validacion_id', 'c.codigo_externo']],
+                    'c.id', [
+                        DB::raw('/*+ JOIN_PREFIX(c) INDEX(c comb_val_temporada_activo) */ c.id'),
+                        'c.articulo_validacion_id', 'c.origen_validacion_id', 'c.codigo_externo',
+                    ]],
             };
             // El índice temporada/activo más la PK permite continuar por ID sin OFFSET
             // ni ordenar el cruce completo por especie/cliente en cada solicitud.

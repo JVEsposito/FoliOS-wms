@@ -95,11 +95,21 @@ class CatalogoValidacionApiTest extends TestCase
                     $ruta = '/api/validacion/catalogos/paginas/'.$temporada->id.'/7/'.$coleccion.($cursor ? '?desde='.$cursor : '');
                     $pagina = $this->withToken($token)->getJson($ruta)->assertOk()->assertJsonPath('desde', $cursor)
                         ->assertJsonPath('version', 7)->assertJsonPath('coleccion', $coleccion);
-                    $consultas = mb_strtolower(collect(DB::getQueryLog())->pluck('query')->implode(' '));
+                    $consultas = collect(DB::getQueryLog());
                     DB::disableQueryLog();
-                    $this->assertStringNotContainsString(' offset ', $consultas);
-                    $this->assertStringNotContainsString('for share', $consultas);
-                    $this->assertStringContainsString('limit 1001', $consultas);
+                    $sql = mb_strtolower($consultas->pluck('query')->implode(' '));
+                    $this->assertStringNotContainsString(' offset ', $sql);
+                    $this->assertStringNotContainsString('for share', $sql);
+                    $this->assertStringContainsString('limit 1001', $sql);
+                    if ($coleccion === 'combinaciones' && DB::getDriverName() === 'mysql') {
+                        $consulta = $consultas->first(fn (array $entrada) => str_contains($entrada['query'], 'from `combinaciones_validacion` as `c`'));
+                        $this->assertNotNull($consulta);
+                        $plan = collect(DB::select('EXPLAIN FORMAT=TRADITIONAL '.$consulta['query'], $consulta['bindings']));
+                        $primeraTabla = $plan->first(fn ($paso) => ! in_array($paso->type, ['const', 'system'], true));
+                        $this->assertSame('c', $primeraTabla?->table);
+                        $this->assertSame('comb_val_temporada_activo', $primeraTabla?->key);
+                        $this->assertFalse($plan->contains(fn ($paso) => str_contains($paso->Extra ?? '', 'Using filesort')));
+                    }
                     $this->assertLessThanOrEqual(1000, count($pagina->json('filas')));
                     $this->assertSame(hash('sha256', $pagina->getContent()), $pagina->headers->get('X-Catalog-Target'));
                     $ids = [...$ids, ...array_column($pagina->json('filas'), 'id')];
