@@ -525,6 +525,8 @@ class AppServiceProvider extends ServiceProvider
             'gestionar-lotes-materia-prima',
             fn (User $usuario): bool => $alcance->puedeGestionarLotesMateriaPrima($usuario),
         );
+        Gate::define('corregir-numero-lote-mp', fn (User $usuario): bool => $usuario->activo
+            && $usuario->rol === RolUsuario::Administrador && $alcance->puedeConsultarMateriaPrima($usuario));
         Gate::define(
             'supervisar-lotes-materia-prima',
             fn (User $usuario): bool => $alcance->puedeSupervisarLotesMateriaPrima($usuario),

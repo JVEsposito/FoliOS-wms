@@ -2,9 +2,11 @@
 
 namespace App\Http\Resources;
 
+use App\Enums\EstadoLoteMateriaPrima;
 use App\Models\EventoLoteMateriaPrima;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\Gate;
 
 class LoteMateriaPrimaResource extends JsonResource
 {
@@ -14,6 +16,8 @@ class LoteMateriaPrimaResource extends JsonResource
         return [
             'id' => $this->id,
             'numero_lote' => $this->numero_lote,
+            'puede_corregir_numero' => $this->estado !== EstadoLoteMateriaPrima::Anulado
+                && Gate::allows('corregir-numero-lote-mp'),
             'estado' => $this->estado->value,
             'version' => $this->version,
             'temporada' => $this->temporada ? [

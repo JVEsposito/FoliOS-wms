@@ -457,6 +457,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/lotes', [MateriaPrimaController::class, 'index']);
         Route::get('/lotes/{loteMateriaPrima}', [MateriaPrimaController::class, 'show']);
     });
+    Route::put('/materia-prima/lotes/{loteMateriaPrima}/corregir-numero', [MateriaPrimaController::class, 'corregirNumero'])
+        ->middleware('can:corregir-numero-lote-mp');
     Route::middleware('can:gestionar-lotes-materia-prima')->prefix('materia-prima')->group(function () {
         Route::post('/lotes/{loteMateriaPrima}/trasladar-camara', [MovimientoCamaraMpController::class, 'trasladar']);
         Route::post('/lotes', [MateriaPrimaController::class, 'store']);

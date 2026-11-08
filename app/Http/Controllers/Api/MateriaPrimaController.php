@@ -13,6 +13,7 @@ use App\Http\Requests\AnularLoteMateriaPrimaRequest;
 use App\Http\Requests\AsignarCamaraLoteMateriaPrimaRequest;
 use App\Http\Requests\CompletarHidrocoolerMateriaPrimaRequest;
 use App\Http\Requests\ConfirmarLoteMateriaPrimaRequest;
+use App\Http\Requests\CorregirNumeroLoteMateriaPrimaRequest;
 use App\Http\Requests\CorregirOrigenLoteMateriaPrimaRequest;
 use App\Http\Requests\GuardarLoteMateriaPrimaRequest;
 use App\Http\Requests\IniciarHidrocoolerMateriaPrimaRequest;
@@ -342,6 +343,12 @@ class MateriaPrimaController extends Controller
                 $request->user(),
             ),
         );
+    }
+
+    public function corregirNumero(CorregirNumeroLoteMateriaPrimaRequest $request, LoteMateriaPrima $loteMateriaPrima,
+        ServicioLoteMateriaPrima $servicio): LoteMateriaPrimaResource
+    {
+        return new LoteMateriaPrimaResource($servicio->corregirNumero($loteMateriaPrima, $request->validated(), $request->user()));
     }
 
     public function confirmar(

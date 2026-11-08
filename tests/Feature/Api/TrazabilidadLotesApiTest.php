@@ -9,15 +9,20 @@ use App\Models\Folio;
 use App\Models\LoteMateriaPrima;
 use App\Models\Temporada;
 use App\Models\User;
+use App\Services\Validacion\ProyeccionTrazabilidadFolio;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Tests\Concerns\PreparaInspeccionesEnvases;
+use Tests\Concerns\PreparaLotesMpEnCamara;
 use Tests\TestCase;
 use ZipArchive;
 
 class TrazabilidadLotesApiTest extends TestCase
 {
+    use PreparaInspeccionesEnvases;
+    use PreparaLotesMpEnCamara;
     use RefreshDatabase;
 
     private string $temporadaId;
@@ -39,6 +44,33 @@ class TrazabilidadLotesApiTest extends TestCase
             'updated_at' => now(),
         ]);
         $this->administrador = User::factory()->create(['rol' => RolUsuario::Administrador, 'activo' => true]);
+    }
+
+    public function test_corregir_numero_conserva_los_pallets_ya_vinculados_y_las_etiquetas_anteriores_sin_cruzar_clientes(): void
+    {
+        $a = $this->loteMpEnCamara('TR-A', ['numero_lote' => '10056']);
+        $b = $this->loteMpEnCamara('TR-B', ['numero_lote' => '10057']);
+        $temporada = $a['lote']['temporada']['id'];
+        DB::table('lotes_materia_prima')->where('id', $b['lote']['id'])->update(['numero_lote' => '10056',
+            'clave_numero_vigente' => hash('sha256', $temporada.'|'.$b['cliente']->id.'|10056')]);
+        $folioA = $this->folio('TRZ-CORREGIR-A', $this->origen($a['cliente'], $temporada), '10056', temporadaId: $temporada);
+        $folioB = $this->folio('TRZ-CORREGIR-B', $this->origen($b['cliente'], $temporada), '10056', temporadaId: $temporada);
+        $this->actingAs($this->administrador, 'sanctum')->putJson("/api/materia-prima/lotes/{$b['lote']['id']}/corregir-numero", [
+            'operacion_id' => (string) Str::uuid(), 'version_conocida' => $b['lote']['version'], 'numero_lote' => '10058',
+            'motivo' => 'Se corrige el número del lote de la segunda recepción.',
+        ])->assertOk();
+        foreach ([[$folioA, $a['lote']['id']], [$folioB, $b['lote']['id']]] as [$folio, $loteId]) {
+            app(ProyeccionTrazabilidadFolio::class)->sincronizar($folio);
+            $this->assertDatabaseHas('trazabilidad_folio_origenes', ['folio_id' => $folio->id,
+                'numero_lote_materia_prima' => '10056', 'lote_materia_prima_id' => $loteId]);
+        }
+        $this->assertSame('10056', $folioB->fresh()->datos_externos['composicion'][0]['lote_materia_prima']);
+        $this->assertDatabaseHas('lotes_materia_prima', ['id' => $b['lote']['id'], 'numero_lote' => '10058']);
+        $this->getJson('/api/consultas/trazabilidad?q=10058&temporada_id='.$temporada)->assertOk()
+            ->assertJsonPath('data.resumen.folios', 1)->assertJsonPath('data.resumen.cajas_coincidentes', 10)
+            ->assertJsonPath('data.folios.0.lineas.0.lote_materia_prima', '10056')
+            ->assertJsonPath('data.folios.0.lineas.0.lote_materia_prima_actual', '10058')
+            ->assertJsonPath('data.folios.0.lineas.0.coincide', true);
     }
 
     public function test_no_afirma_la_recepcion_de_un_lote_de_otro_cliente_con_el_mismo_numero(): void

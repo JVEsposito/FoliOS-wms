@@ -112,7 +112,7 @@ function renderDetalle() {
     const vigente = orden.version_vigente;
     const abierta = orden.estado !== 'terminada';
     const filas = (vigente?.lotes || []).map((fila) => `<tr>
-        <td class="orders-num">${escape(fila.secuencia)}</td><td>${escape(fila.numero_lote)}</td><td>${escape(fila.cliente?.nombre)}</td>
+        <td class="orders-num">${escape(fila.secuencia)}</td><td>${escape(fila.numero_lote)}${fila.numero_lote_actual && fila.numero_lote_actual !== fila.numero_lote ? `<small>Actual: ${escape(fila.numero_lote_actual)}</small>` : ''}</td><td>${escape(fila.cliente?.nombre)}</td>
         <td>${escape(fila.variedad)}</td><td>${escape(fila.csg)}</td><td>${escape(fila.numero_proceso || '—')}</td>
         <td class="orders-num">${number(fila.bins_programados)}</td><td class="orders-num">${number(fila.bins_entregados)}</td><td class="orders-num">${number(fila.bins_pendientes)}</td>
         <td class="orders-num">${number(fila.kilos_programados, 1)}</td><td>${escape(fila.embalaje || '—')}</td><td class="orders-num">${number(fila.cajas_estimadas, 1)}</td>
@@ -158,7 +158,7 @@ function abrirEditor(orden = null) {
         operacionId: uuid(),
         originales: vigente?.lotes || [],
         filas: (vigente?.lotes || []).map((fila) => ({
-            lote_materia_prima_id: fila.lote_materia_prima_id, numero_lote: fila.numero_lote, cliente: fila.cliente?.nombre,
+            lote_materia_prima_id: fila.lote_materia_prima_id, numero_lote: fila.numero_lote_actual || fila.numero_lote, cliente: fila.cliente?.nombre,
             bins_programados: fila.bins_programados, minimo: fila.bins_entregados, numero_proceso: fila.numero_proceso ?? '',
             embalaje: fila.embalaje ?? '', kilos_por_caja: fila.kilos_por_caja ?? '', mercado_destino: fila.mercado_destino ?? '',
             comuna: fila.comuna ?? '', provincia: fila.provincia ?? '',

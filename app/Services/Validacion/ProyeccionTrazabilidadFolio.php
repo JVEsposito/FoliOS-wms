@@ -76,7 +76,18 @@ class ProyeccionTrazabilidadFolio
             ->limit(2)
             ->pluck('id');
 
-        return $lotes->count() === 1 ? $lotes->first() : null;
+        if ($lotes->isNotEmpty()) {
+            return $lotes->count() === 1 ? $lotes->first() : null;
+        }
+        // La etiqueta puede conservar el número anterior a una corrección
+        // administrativa. Solo se resuelve por un alias auditado del mismo
+        // cliente y temporada, nunca por coincidencia con otra exportadora.
+        $corregidos = LoteMateriaPrima::query()->where('temporada_id', $temporadaId)->where('cliente_id', $clienteId)
+            ->where('estado', '!=', EstadoLoteMateriaPrima::Anulado->value)
+            ->whereHas('eventos', fn ($q) => $q->where('tipo', 'numero_lote_corregido')->where('datos->anterior', $numeroLote))
+            ->limit(2)->pluck('id');
+
+        return $corregidos->count() === 1 ? $corregidos->first() : null;
     }
 
     /**

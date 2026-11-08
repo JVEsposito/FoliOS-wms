@@ -123,6 +123,8 @@ class PresentadorOrdenProcesoMp
      */
     public function version(VersionOrdenProcesoMp $version, array $reservas = []): array
     {
+        $version->loadMissing('lotes.lote:id,numero_lote');
+
         return [
             'id' => $version->id,
             'numero' => $version->numero,
@@ -141,6 +143,7 @@ class PresentadorOrdenProcesoMp
                     'secuencia' => $fila->secuencia,
                     'numero_proceso' => $fila->numero_proceso,
                     'numero_lote' => $fila->numero_lote_snapshot,
+                    'numero_lote_actual' => $fila->lote?->numero_lote ?? $fila->numero_lote_snapshot,
                     'cliente' => ['id' => $fila->cliente_id, 'nombre' => $fila->cliente_snapshot],
                     'especie' => $fila->especie_snapshot,
                     'variedad' => $fila->variedad_snapshot,

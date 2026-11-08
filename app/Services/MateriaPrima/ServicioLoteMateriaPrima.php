@@ -26,7 +26,9 @@ use App\Models\VariedadValidacion;
 use App\Services\Romana\ServicioRepartoEnvases;
 use App\Services\Temporadas\GuardiaTemporadaActiva;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 use JsonException;
 
@@ -63,7 +65,7 @@ class ServicioLoteMateriaPrima
             $this->asegurarDisponibilidadSegmento(
                 $preparados['segmento'],
             );
-            $lote = LoteMateriaPrima::create([
+            $lote = $this->guardarNumero(fn () => LoteMateriaPrima::create([
                 'operacion_id' => $datos['operacion_id'],
                 'payload_hash' => $hash,
                 ...$this->atributosLote($datos, $preparados),
@@ -74,7 +76,7 @@ class ServicioLoteMateriaPrima
                 'version' => 1,
                 'creado_por_user_id' => $usuario->id,
                 'actualizado_por_user_id' => $usuario->id,
-            ]);
+            ]));
             $this->guardarEnvases($lote, $preparados['segmento'], $preparados['recepcion']);
             $this->actualizarEstadoSegmento($preparados['segmento']);
             $this->registrarEvento(
@@ -129,11 +131,11 @@ class ServicioLoteMateriaPrima
                 $preparados['segmento'],
                 $lote->id,
             );
-            $lote->update([
+            $this->guardarNumero(fn () => $lote->update([
                 ...$this->atributosLote([...$datos, 'lote_id_para_calculo' => $lote->id], $preparados),
                 'version' => $lote->version + 1,
                 'actualizado_por_user_id' => $usuario->id,
-            ]);
+            ]));
             $this->guardarEnvases($lote, $preparados['segmento'], $preparados['recepcion']);
             $this->registrarEvento(
                 $lote,
@@ -220,6 +222,47 @@ class ServicioLoteMateriaPrima
                     'version' => $lote->version,
                 ],
             );
+
+            return $this->cargar($lote);
+        }, attempts: 3);
+    }
+
+    /** Corrige la identificación sin recrear el lote ni modificar su ejecución física. */
+    public function corregirNumero(LoteMateriaPrima $lote, array $datos, User $usuario): LoteMateriaPrima
+    {
+        Gate::forUser($usuario)->authorize('corregir-numero-lote-mp');
+        $numero = mb_strtoupper(trim((string) $datos['numero_lote']));
+        $hash = $this->hash(['numero_lote' => $numero, 'motivo' => $datos['motivo'], 'version_conocida' => (int) $datos['version_conocida']]);
+
+        return DB::transaction(function () use ($lote, $datos, $usuario, $numero, $hash): LoteMateriaPrima {
+            RecepcionRomana::query()->lockForUpdate()->findOrFail($lote->recepcion_romana_id);
+            $lote = LoteMateriaPrima::query()->lockForUpdate()->findOrFail($lote->id);
+            $evento = EventoLoteMateriaPrima::query()->where('operacion_id', $datos['operacion_id'])->first();
+            if ($evento) {
+                $this->asegurarEventoIdempotente($evento, $lote, 'numero_lote_corregido', $hash);
+
+                return $this->cargar($lote);
+            }
+            $this->guardiaTemporada->asegurar($lote);
+            if ($lote->estado === EstadoLoteMateriaPrima::Anulado) {
+                throw new ConflictoOperacion('Un lote anulado conserva su número histórico y no puede renombrarse.');
+            }
+            if ($lote->version !== (int) $datos['version_conocida']) {
+                throw new ConflictoOperacion('El lote cambió. Actualiza antes de corregir su número.');
+            }
+            if ($numero === mb_strtoupper(trim($lote->numero_lote))) {
+                throw ValidationException::withMessages(['numero_lote' => 'El número corregido es igual al registrado.']);
+            }
+            Cliente::query()->lockForUpdate()->findOrFail($lote->cliente_id);
+            $this->asegurarNumeroUnico($lote->temporada_id, $lote->cliente_id, $numero, $lote->id);
+            // La conciliación de trazabilidad que ejecuta saved debe ver ya el alias
+            // auditado. Si la escritura falla, el evento también se revierte.
+            $this->registrarEvento($lote, 'numero_lote_corregido', $usuario, $datos['operacion_id'], $lote->estado, $lote->estado,
+                ['payload_hash' => $hash, 'anterior' => mb_strtoupper(trim($lote->numero_lote)), 'anterior_registrado' => $lote->numero_lote,
+                    'nuevo' => $numero, 'motivo' => $datos['motivo'], 'version' => $lote->version + 1]);
+            $this->guardarNumero(fn () => $lote->update(['numero_lote' => $numero,
+                'clave_numero_vigente' => $this->claveNumeroVigente($lote->temporada_id, $numero),
+                'version' => $lote->version + 1, 'actualizado_por_user_id' => $usuario->id]));
 
             return $this->cargar($lote);
         }, attempts: 3);
@@ -929,7 +972,6 @@ class ServicioLoteMateriaPrima
             'numero_lote' => $datos['numero_lote'],
             'clave_numero_vigente' => $this->claveNumeroVigente(
                 $recepcion->temporada_id,
-                $recepcion->cliente_id,
                 $datos['numero_lote'],
             ),
             'csg_validacion_id' => $preparados['csg']->id,
@@ -1116,16 +1158,24 @@ class ServicioLoteMateriaPrima
     ): void {
         $consulta = LoteMateriaPrima::query()
             ->where('temporada_id', $temporadaId)
-            ->where('cliente_id', $clienteId)
-            ->where('numero_lote', $numero)
+            ->whereRaw('UPPER(TRIM(numero_lote)) = ?', [mb_strtoupper(trim($numero))])
             ->where('estado', '!=', EstadoLoteMateriaPrima::Anulado->value);
         if ($ignorarLoteId) {
             $consulta->where('id', '!=', $ignorarLoteId);
         }
-        if ($consulta->exists()) {
+        $existente = $consulta->with(['cliente:id,nombre', 'recepcion:id,numero_recepcion'])->first();
+        if ($existente) {
             throw ValidationException::withMessages([
-                'numero_lote' => 'El número de lote ya existe para esta exportadora y temporada.',
+                'numero_lote' => "El lote {$numero} ya existe en esta temporada: {$existente->cliente?->nombre}, recepción {$existente->recepcion?->numero_recepcion}. Corrige el número antes de guardar.",
             ]);
+        }
+        // Una etiqueta antigua de este cliente puede seguir usando el número que
+        // administración corrigió. No se reasigna ese alias a otro lote del cliente.
+        if (LoteMateriaPrima::query()->where('temporada_id', $temporadaId)->where('cliente_id', $clienteId)
+            ->where('estado', '!=', EstadoLoteMateriaPrima::Anulado->value)
+            ->when($ignorarLoteId, fn ($q) => $q->whereKeyNot($ignorarLoteId))
+            ->whereHas('eventos', fn ($q) => $q->where('tipo', 'numero_lote_corregido')->where('datos->anterior', mb_strtoupper(trim($numero))))->exists()) {
+            throw ValidationException::withMessages(['numero_lote' => 'Este número pertenece al historial de otro lote del cliente. Consulta su corrección antes de reutilizarlo.']);
         }
     }
 
@@ -1138,14 +1188,25 @@ class ServicioLoteMateriaPrima
 
     private function claveNumeroVigente(
         string $temporadaId,
-        string $clienteId,
         string $numero,
     ): string {
         return hash('sha256', implode('|', [
-            $temporadaId,
-            $clienteId,
+            'temporada', $temporadaId,
             mb_strtoupper(trim($numero)),
         ]));
+    }
+
+    private function guardarNumero(callable $guardar): mixed
+    {
+        try {
+            return $guardar();
+        } catch (UniqueConstraintViolationException $error) {
+            if (! str_contains($error->getMessage(), 'lote_mp_numero_vigente_unique')
+                && ! str_contains($error->getMessage(), 'lotes_materia_prima.clave_numero_vigente')) {
+                throw $error;
+            }
+            throw ValidationException::withMessages(['numero_lote' => 'El número de lote ya está registrado en esta temporada. Actualiza y utiliza otro número.']);
+        }
     }
 
     /**
