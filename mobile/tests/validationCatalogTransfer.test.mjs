@@ -67,6 +67,7 @@ function harness(source = catalog(), shared = {}, fast = false) {
   const calls = []; const progress = []; const timers = new Map();
   let server = fast ? { bodies: new Map(), manifest: null } : transport(source); const history = new Map(server.bodies);
   let sortedPages = new Map(); let rawBytes = 0; let wireBytes = 0; let pageMutation = null;
+  let incrementalReply = null;
   const pageSizes = { categorias: 1000, articulos: 5000, origenes: 1000, combinaciones: 10000 };
   const sortedRows = (collection) => {
     if (!sortedPages.has(collection)) sortedPages.set(collection, [...source[collection]].sort((a, b) => a.id < b.id ? -1 : 1));
@@ -154,6 +155,10 @@ function harness(source = catalog(), shared = {}, fast = false) {
     if (!parsed.pathname.includes('/fragmentos/')) {
       if (pages || fast) {
         if (options.headers.get('If-None-Match') === `"validacion-paginas-v1-season-${source.temporada.version_catalogo}"`) return new Response(null, { status: 304 });
+        if (incrementalReply && parsed.searchParams.get('incremental') === 'delta-v1') {
+          const raw = JSON.stringify(incrementalReply.data);
+          return new Response(raw, { status: incrementalReply.status, headers: { 'X-Catalog-Target': hash(raw) } });
+        }
         const { categorias, articulos, origenes, combinaciones, ...metadata } = source;
         return response({ ...metadata, formato: 'paginas-v1', tamano_pagina: 1000, colecciones: Object.keys(columns),
           ...(fast ? { transporte: 'compacto-v1', tamanos_pagina: pageSizes, rangos_combinaciones: ranges() } : {}) });
@@ -226,11 +231,66 @@ function harness(source = catalog(), shared = {}, fast = false) {
     failPage: (key, status = 503, remaining = Infinity) => { failedPage = { key, status, remaining }; },
     corruptPage: () => { corruptPage = true; }, elapsed: () => elapsed,
     mutatePage: (fn) => { pageMutation = fn; },
+    delta: (data, status = 200) => { incrementalReply = { data, status }; },
     editOnPage: (key, next) => { editOnPage = { key, source: next }; },
     never: () => { never = true; }, abort: () => { for (const timer of timers.values()) timer.fn(); },
     restart: (next = source) => harness(next, { files, directories, storage }, fast),
   };
 }
+
+test('el modo compacto salta versiones con un delta, conserva la copia durante la espera y recupera una base inválida', async () => {
+  const initial = catalog(448, 20, 40);
+  const h = harness(initial, {}, true);
+  const first = await h.download();
+  await h.offline.saveValidationCatalog('1', 'pda', first, 'http://planta');
+  h.storage.set('estiba_validation_outbox:1:pda', '[{"id":"pendiente"}]');
+  const updated = clone(initial);
+  updated.temporada.version_catalogo = 452;
+  const retired = updated.articulos.shift();
+  const newArticle = { ...retired, id: id('new-article'), envase: 'Nuevo envase' };
+  updated.articulos.push(newArticle);
+  const oldPairs = updated.combinaciones.filter((row) => row.articulo_validacion_id === retired.id);
+  updated.combinaciones = updated.combinaciones.filter((row) => row.articulo_validacion_id !== retired.id);
+  const newPair = { ...oldPairs[0], id: id('new-pair'), articulo_validacion_id: newArticle.id };
+  updated.combinaciones.push(newPair);
+  updated.categorias[0].nombre = 'Nueva categoría';
+  h.update(updated);
+  const pair = (row) => [row.articulo_validacion_id, row.origen_validacion_id];
+  const { categorias, articulos, origenes, combinaciones, ...metadata } = updated;
+  const delta = {
+    ...metadata, formato: 'delta-v1', base: 448,
+    conteos: Object.fromEntries(Object.keys(columns).map((key) => [key, updated[key].length])),
+    cambios: {
+      categorias: { altas: categorias, retiros: [] },
+      articulos: { altas: [newArticle], retiros: [retired.id] },
+      origenes: { altas: [], retiros: [] },
+      combinaciones: { altas: [pair(newPair)], retiros: oldPairs.map(pair) },
+    },
+  };
+  h.delta({ message: 'Preparando cambios' }, 202);
+  await assert.rejects(h.download(first), /Preparando cambios/);
+  assert.equal((await h.offline.loadCachedValidationCatalog('2', 'pda', 'http://planta')).temporada.version_catalogo, 448);
+
+  h.delta(delta); h.calls.length = 0;
+  const result = await h.download(first);
+  assert.equal(h.calls.length, 1);
+  assert.match(h.calls[0], /version_base=448/);
+  assert.equal(result.temporada.version_catalogo, 452);
+  assert.equal(result.categorias[0].nombre, 'Nueva categoría');
+  assert.equal(first.categorias[0].nombre, initial.categorias[0].nombre);
+  assert.equal(result.articulos.some((row) => row.id === retired.id), false);
+  const index = h.compatibility.indexValidationCatalog(result);
+  assert.equal(h.compatibility.catalogCombinationCount(result), combinaciones.length);
+  for (const [article, origin] of combinaciones.map(pair)) assert.equal(index.articlesByOrigin.get(origin).has(article), true);
+  await h.offline.saveValidationCatalog('1', 'pda', result, 'http://planta');
+  assert.equal((await h.offline.loadCachedValidationCatalog('2', 'pda', 'http://planta')).temporada.version_catalogo, 452);
+  assert.equal(h.storage.get('estiba_validation_outbox:1:pda'), '[{"id":"pendiente"}]');
+  assert.equal(await h.download(result), null);
+
+  h.delta({ ...delta, base: 449 }); h.calls.length = 0;
+  assert.equal((await h.download(first)).temporada.version_catalogo, 452);
+  assert.ok(h.calls.some((url) => url.includes('/paginas/')));
+});
 
 test('una edición descarga solo partes nuevas, conserva IDs y retira artículos y combinaciones desactivados', async () => {
   const initial = catalog(218); const h = harness(initial);
@@ -363,6 +423,24 @@ test('volumen v443: recibe los 523632 pares exactos en 74 páginas con cuatro pe
   t.diagnostic(JSON.stringify({ simulation: true, articles: 76420, origins: 342, combinations: 523632, legacyPages, fastPages: 74,
     legacyRaw, legacyGzip, fastRaw: h.bytes().rawBytes, fastGzip: h.bytes().wireBytes, maximumRequests: h.maxActive() }));
   h.calls.length = 0; assert.equal(await h.download(received), null); assert.equal(h.calls.length, 1);
+
+  const { categorias, articulos, origenes, combinaciones, compatibilidad, ...meta } = received;
+  meta.temporada = { ...meta.temporada, version_catalogo: 444 };
+  h.update({ ...source, temporada: meta.temporada });
+  const article = { ...articulos[0], envase: 'Edición menor' };
+  h.delta({
+    ...meta, formato: 'delta-v1', base: 443,
+    conteos: { categorias: categorias.length, articulos: articulos.length, origenes: origenes.length, combinaciones: 523632 },
+    cambios: {
+      categorias: { altas: [], retiros: [] }, articulos: { altas: [article], retiros: [] },
+      origenes: { altas: [], retiros: [] }, combinaciones: { altas: [], retiros: [] },
+    },
+  });
+  h.calls.length = 0;
+  const edited = await h.download(received);
+  assert.equal(edited.articulos[0].envase, 'Edición menor');
+  assert.equal(edited.compatibilidad, compatibilidad);
+  assert.equal(h.calls.length, 1);
 });
 
 test('descarga rápida de PDA/tablet reanuda intervalos guardados sin tocar bandeja ni jornada', async () => {

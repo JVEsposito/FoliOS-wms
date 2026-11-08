@@ -22,6 +22,7 @@ const elements = {
     segmentList: byId('segmentList'),
     filters: byId('lotFilters'),
     lotTableBody: byId('lotTableBody'),
+    lotPageStatus: byId('lotPageStatus'), lotPrevious: byId('lotPrevious'), lotNext: byId('lotNext'),
     lotDialog: byId('lotDialog'),
     lotForm: byId('lotForm'),
     lotDialogTitle: byId('lotDialogTitle'),
@@ -62,6 +63,7 @@ const state = {
     catalogEtag: null,
     segments: [],
     lots: [],
+    lotPage: 1, lotMeta: null, lotRequest: 0,
     panelErrors: { summary: null, segments: null, lots: null, catalogs: null },
     editingLot: null,
     selectedSegment: null,
@@ -211,6 +213,7 @@ function clearSession() {
     state.catalogEtag = null;
     state.segments = [];
     state.lots = [];
+    state.lotPage = 1; state.lotMeta = null; state.lotRequest++;
     state.movementRequest += 1;
     state.movementPage = 1;
     state.movementsLoaded = false;
@@ -699,8 +702,8 @@ async function submitOperation() {
     await api(path, { method, body: JSON.stringify(payload) });
 }
 
-function filtersQuery() {
-    const query = new URLSearchParams();
+function filtersQuery(page = state.lotPage) {
+    const query = new URLSearchParams({ page: String(page) });
     Object.entries(Object.fromEntries(new FormData(elements.filters)))
         .forEach(([key, value]) => {
             if (value) query.set(key, value);
@@ -708,13 +711,26 @@ function filtersQuery() {
     return query.toString();
 }
 
-async function loadLots() {
-    const payload = await api(`/api/materia-prima/lotes?${filtersQuery()}`);
+function renderLotPagination() {
+    const meta = state.lotMeta;
+    elements.lotPageStatus.textContent = meta ? `Página ${meta.current_page} de ${meta.last_page} · ${meta.total} lotes` : '';
+    elements.lotPrevious.disabled = !meta || meta.current_page <= 1;
+    elements.lotNext.disabled = !meta || meta.current_page >= meta.last_page;
+}
+
+async function loadLots(page = state.lotPage) {
+    const request = ++state.lotRequest;
+    const payload = await api(`/api/materia-prima/lotes?${filtersQuery(page)}`);
+    if (request !== state.lotRequest) return;
+    state.lotMeta = payload.meta || null; state.lotPage = payload.meta?.current_page || page;
+    state.panelErrors.lots = null;
     state.lots = payload.data;
     renderLots();
+    renderLotPagination();
 }
 
 async function loadAll({ notify = false, refreshMovements = false } = {}) {
+    const lotRequest = ++state.lotRequest;
     const [summary, catalogs, segments, lots] = await Promise.allSettled([
         api('/api/materia-prima/resumen'),
         loadCatalogs(),
@@ -722,6 +738,7 @@ async function loadAll({ notify = false, refreshMovements = false } = {}) {
         api(`/api/materia-prima/lotes?${filtersQuery()}`),
     ]);
     for (const [name, result] of Object.entries({ summary, catalogs, segments, lots })) {
+        if (name === 'lots' && lotRequest !== state.lotRequest) continue;
         state.panelErrors[name] = result.status === 'rejected'
             ? result.reason?.message || 'Error de conexión'
             : null;
@@ -729,10 +746,15 @@ async function loadAll({ notify = false, refreshMovements = false } = {}) {
     state.summary = summary.status === 'fulfilled' ? summary.value : null;
     if (catalogs.status === 'fulfilled') state.catalogs = catalogs.value;
     state.segments = segments.status === 'fulfilled' ? segments.value.data : [];
-    state.lots = lots.status === 'fulfilled' ? lots.value.data : [];
+    if (lotRequest === state.lotRequest) {
+        state.lots = lots.status === 'fulfilled' ? lots.value.data : [];
+        state.lotMeta = lots.status === 'fulfilled' ? lots.value.meta || null : null;
+        state.lotPage = state.lotMeta?.current_page || state.lotPage;
+    }
     renderSummary();
     renderSegments();
     renderLots();
+    renderLotPagination();
     if (notify && !Object.values(state.panelErrors).some(Boolean)) toast('Materia prima actualizada.');
     if (elements.movements.open && (notify || refreshMovements || !state.movementsLoaded)) await loadMovements(state.movementPage);
 }
@@ -897,13 +919,23 @@ elements.filters.addEventListener('submit', async (event) => {
     event.preventDefault();
     setBusy(true, 'Aplicando filtros…');
     try {
-        await loadLots();
+        await loadLots(1);
     } catch (error) {
         toast(error.message, true);
     } finally {
         setBusy(false);
     }
 });
+
+for (const [button, delta] of [[elements.lotPrevious, -1], [elements.lotNext, 1]]) {
+    button.addEventListener('click', async () => {
+        if (button.disabled) return;
+        setBusy(true, 'Cargando lotes…');
+        try { await loadLots(state.lotPage + delta); }
+        catch (error) { toast(error.message, true); }
+        finally { setBusy(false); }
+    });
+}
 
 elements.segmentList.addEventListener('click', (event) => {
     const button = event.target.closest('[data-create-segment]');
@@ -1040,4 +1072,6 @@ async function boot() {
     }
 }
 
+const receptionSearch = new URLSearchParams(window.location.search).get('buscar');
+if (receptionSearch) elements.filters.elements.buscar.value = receptionSearch.slice(0, 100);
 void boot();

@@ -3,15 +3,19 @@
 namespace Tests\Feature\Api;
 
 use App\Enums\RolUsuario;
+use App\Jobs\PrepararCatalogoIncremental;
 use App\Models\Dispositivo;
 use App\Models\Temporada;
 use App\Models\User;
+use App\Services\Validacion\CatalogoIncrementalValidacion;
 use App\Services\Validacion\TransferenciaCatalogoValidacion;
 use Illuminate\Cache\ArrayStore;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -20,6 +24,52 @@ use Tests\TestCase;
 class CatalogoValidacionApiTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_envia_solo_cambios_incluidos_los_retiros_al_saltar_versiones_del_catalogo(): void
+    {
+        Storage::fake('local');
+        [$temporada, $token] = $this->contexto();
+        $incremental = app(CatalogoIncrementalValidacion::class);
+        $this->assertSame(0, Artisan::call('validacion:preparar-incremental'));
+        $this->assertTrue($incremental->publicada($temporada->id, 7));
+
+        $viejo = DB::table('articulos_validacion')->where('temporada_id', $temporada->id)->first();
+        $origen = DB::table('origenes_validacion')->where('temporada_id', $temporada->id)->value('id');
+        $nuevo = (string) Str::uuid();
+        DB::table('articulos_validacion')->where('id', $viejo->id)->update(['activo' => false]);
+        DB::table('articulos_validacion')->insert([...((array) $viejo), 'id' => $nuevo, 'envase' => '2 kg']);
+        DB::table('combinaciones_validacion')->insert([
+            'id' => (string) Str::uuid(), 'temporada_id' => $temporada->id,
+            'articulo_validacion_id' => $nuevo, 'origen_validacion_id' => $origen, 'activo' => true,
+        ]);
+        $temporada->increment('version_catalogo');
+        $this->assertTrue($incremental->preparar($temporada->id, 8));
+
+        DB::table('categorias_validacion')->where('temporada_id', $temporada->id)->update(['nombre' => 'Exportación PT']);
+        $temporada->increment('version_catalogo');
+        $ruta = '/api/validacion/catalogos?formato=paginas-v1&transporte=compacto-v1';
+        $delta = $ruta.'&incremental=delta-v1&temporada_base='.$temporada->id.'&version_base=7';
+
+        config(['queue.default' => 'database']);
+        Bus::fake();
+        $this->withToken($token)->getJson($delta)->assertStatus(202);
+        $this->withToken($token)->getJson($delta)->assertStatus(202);
+        Bus::assertDispatchedTimes(PrepararCatalogoIncremental::class, 1);
+        $this->assertTrue($incremental->preparar($temporada->id, 9));
+
+        $respuesta = $this->withToken($token)->getJson($delta)->assertOk()->assertHeader('X-Catalog-Transfer', 'delta-v1')
+            ->assertJsonPath('formato', 'delta-v1')->assertJsonPath('base', 7)->assertJsonPath('temporada.version_catalogo', 9)
+            ->assertJsonPath('conteos', ['categorias' => 1, 'articulos' => 1, 'origenes' => 1, 'combinaciones' => 1])
+            ->assertJsonPath('cambios.categorias.altas.0.nombre', 'Exportación PT')
+            ->assertJsonPath('cambios.articulos.altas.0.id', $nuevo)->assertJsonPath('cambios.articulos.retiros', [$viejo->id])
+            ->assertJsonPath('cambios.origenes.altas', [])->assertJsonPath('cambios.origenes.retiros', [])
+            ->assertJsonPath('cambios.combinaciones.altas', [[$nuevo, $origen]])
+            ->assertJsonPath('cambios.combinaciones.retiros', [[$viejo->id, $origen]]);
+        $this->assertSame(hash('sha256', $respuesta->getContent()), $respuesta->headers->get('X-Catalog-Target'));
+        $this->withToken($token)->getJson(str_replace('version_base=7', 'version_base=6', $delta))
+            ->assertOk()->assertJsonPath('formato', 'paginas-v1');
+        $this->withToken($token)->getJson($ruta)->assertOk()->assertJsonPath('formato', 'paginas-v1');
+    }
 
     public function test_paginas_compactas_cubren_intervalos_con_todos_los_pares_y_maestros(): void
     {

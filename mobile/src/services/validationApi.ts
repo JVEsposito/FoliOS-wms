@@ -7,6 +7,7 @@ import {
 } from '../domain/validation';
 import { ApiError } from './apiError';
 import { assertValidationCatalog } from '../domain/validationCatalogData';
+import { applyValidationCatalogDelta } from '../domain/validationCatalogDelta';
 import { applyCatalogFragmentDelta, assembleCatalog, assertCatalogManifest, catalogCollections, CatalogCollection, catalogFragmentGroup, CatalogManifest, CatalogProgress, decodeCatalogFragment, encodeCatalogFragment } from '../domain/validationCatalogTransfer';
 import { catalogFragmentHash, pruneCatalogFragments, readCatalogFragment, supportsCatalogTransfer, verifyCatalogFragment, writeCatalogFragment } from './validationCatalogTransferStore';
 import { assertCatalogPageIndex, downloadCatalogPages } from './validationCatalogPages';
@@ -80,6 +81,7 @@ export async function getValidationCatalog(
   token: string,
   knownCatalog: ValidationCatalog | null = null,
   options?: CatalogDownloadOptions,
+  incremental = true,
 ): Promise<ValidationCatalog | null> {
   const fragmented = Boolean(options && supportsCatalogTransfer && !legacyCatalogServers.has(baseUrl));
   const format = fragmented ? (fragmentCatalogServers.has(baseUrl) ? 'fragmentos-v1' : 'paginas-v1') : null;
@@ -94,8 +96,12 @@ export async function getValidationCatalog(
     );
   }
 
-  // Los backends anteriores ignoran transporte y mantienen páginas v1 de 1.000 filas.
-  const { response, raw } = await catalogResponse(`${baseUrl}/api/validacion/catalogos${format ? `?formato=${format}${format === 'paginas-v1' ? '&transporte=compacto-v1' : ''}` : ''}`, headers);
+  // Los backends anteriores ignoran los parámetros nuevos y mantienen su contrato.
+  const query = format === 'paginas-v1' ? '?formato=paginas-v1&transporte=compacto-v1' : format ? `?formato=${format}` : '';
+  const base = format === 'paginas-v1' && incremental && knownCatalog
+    ? `&incremental=delta-v1&temporada_base=${encodeURIComponent(knownCatalog.temporada.id)}&version_base=${knownCatalog.temporada.version_catalogo}`
+    : '';
+  const { response, raw } = await catalogResponse(`${baseUrl}/api/validacion/catalogos${query}${base}`, headers);
 
   if (response.status === 304) {
     if (knownCatalog) return null;
@@ -104,6 +110,9 @@ export async function getValidationCatalog(
 
   let data: unknown;
   try { data = JSON.parse(raw); } catch { data = {}; }
+  if (response.status === 202 && base) {
+    throw new ApiError(validationMessage(data, 'El servidor está preparando los cambios del catálogo.'), 202);
+  }
   if (!response.ok) {
     throw new ApiError(
       `No se pudo descargar el catálogo (HTTP ${response.status}). ${validationMessage(data, 'Reintenta la sincronización o informa a Oficina.')}`,
@@ -112,6 +121,15 @@ export async function getValidationCatalog(
     );
   }
 
+  if (base && knownCatalog && (data as { formato?: string })?.formato === 'delta-v1') {
+    try {
+      await verifyCatalogFragment(raw, response.headers.get('X-Catalog-Target') ?? '');
+      return applyValidationCatalogDelta(knownCatalog, data);
+    } catch {
+      // Una base incompatible se recupera con una copia completa y verificada.
+      return getValidationCatalog(baseUrl, token, knownCatalog, options, false);
+    }
+  }
   if (fragmented && (data as { formato?: string })?.formato === 'paginas-v1') {
     assertCatalogPageIndex(data);
     assertCatalogVersion(data, knownCatalog);

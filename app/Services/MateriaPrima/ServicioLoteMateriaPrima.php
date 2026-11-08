@@ -1035,7 +1035,7 @@ class ServicioLoteMateriaPrima
     }
 
     /** Distribuye el destare usando la proporción congelada y respeta lotes ya entregados. */
-    public function conciliarDestare(RecepcionRomana $recepcion, User $usuario): void
+    public function conciliarDestare(RecepcionRomana $recepcion, User $usuario, ?array $correccionPeso = null): void
     {
         if ($recepcion->peso_neto === null || ! $recepcion->tipo_envase_calculo_neto) {
             throw new ConflictoOperacion('Romana aún no dispone del neto para conciliar los lotes.');
@@ -1046,12 +1046,22 @@ class ServicioLoteMateriaPrima
         $lotes = LoteMateriaPrima::query()->where('recepcion_romana_id', $recepcion->id)
             ->where('estado', '!=', EstadoLoteMateriaPrima::Anulado->value)->with('envasesDetalle')
             ->orderBy('secuencia_creacion')->orderBy('created_at')->orderBy('id')->lockForUpdate()->get();
+        if ($correccionPeso !== null) {
+            foreach ($lotes as $lote) {
+                // Lectura actual tras bloquear el lote: una entrega concurrente puede
+                // haber terminado después de abrir el snapshot de la recepción.
+                if (in_array($lote->estado, [EstadoLoteMateriaPrima::EntregaParcialProceso, EstadoLoteMateriaPrima::EntregadoProceso], true)
+                    || $lote->entregasProceso()->whereNull('anulado_at')->lockForUpdate()->exists()) {
+                    throw new ConflictoOperacion("El lote {$lote->numero_lote} ya tiene entregas a proceso. El peso no se modificó. Requiere conciliación con sus entregas.");
+                }
+            }
+        }
         $ocupados = [];
         $asignados = 0;
         foreach ($lotes as $lote) {
             $cantidades = $this->cantidadesLote($lote);
             $completo = $this->sumarReparto($reparto, $ocupados, $cantidades);
-            if ($lote->estado !== EstadoLoteMateriaPrima::Borrador) {
+            if ($correccionPeso === null && $lote->estado !== EstadoLoteMateriaPrima::Borrador) {
                 $asignados += (int) round((float) $lote->kilos_netos_calculados * 1000);
 
                 continue;
@@ -1061,17 +1071,21 @@ class ServicioLoteMateriaPrima
             if ($kilos <= 0 || $asignados + $kilos > $neto) {
                 throw ValidationException::withMessages(['envases' => 'El neto de los lotes no cabe en el destare de Romana.']);
             }
+            $anterior = $lote->only(['kilos_brutos', 'kilos_netos_calculados', 'kilos_netos_confirmados']);
+            $estado = $lote->estado;
             $taras = $recepcion->detallesEnvases->keyBy(fn ($d): string => $d->tipo_envase->value);
             $taraTotal = 0;
-            foreach ($lote->envasesDetalle as $envase) {
-                $tara = $taras->get($envase->tipo_envase->value)?->tara_unitaria_salida;
-                $envase->update(['tara_unitaria' => $tara]);
-                $taraTotal += (int) round((float) $tara * 1000) * $envase->cantidad;
+            foreach ($cantidades as $tipo => $cantidad) {
+                $tara = $taras->get($tipo)?->tara_unitaria_salida;
+                $lote->envasesDetalle->first(fn ($e): bool => $e->tipo_envase->value === $tipo)?->update(['tara_unitaria' => $tara]);
+                $taraTotal += (int) round((float) $tara * 1000) * $cantidad;
             }
             $lote->update(['kilos_netos_calculados' => $kilos / 1000, 'kilos_netos_confirmados' => $kilos / 1000,
                 'kilos_brutos' => ($kilos + $taraTotal) / 1000, 'version' => $lote->version + 1, 'actualizado_por_user_id' => $usuario->id]);
-            $this->registrarEvento($lote, 'destare_conciliado', $usuario, null, EstadoLoteMateriaPrima::Borrador,
-                EstadoLoteMateriaPrima::Borrador, ['kilos_netos_calculados' => $kilos / 1000, 'version' => $lote->version]);
+            $this->registrarEvento($lote, $correccionPeso === null ? 'destare_conciliado' : 'peso_romana_conciliado', $usuario, null, $estado,
+                $estado, ['kilos_netos_calculados' => $kilos / 1000, 'version' => $lote->version,
+                    ...($correccionPeso === null ? [] : [...$correccionPeso, 'recepcion_romana_id' => $recepcion->id,
+                        'anterior' => $anterior, 'posterior' => $lote->only(['kilos_brutos', 'kilos_netos_calculados', 'kilos_netos_confirmados'])])]);
             $asignados += $kilos;
         }
     }

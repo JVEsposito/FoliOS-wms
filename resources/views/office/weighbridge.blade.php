@@ -125,7 +125,9 @@
                 <label class="field weight-field"><span>Peso bruto corregido *</span><div><input name="peso_bruto" type="number" min="0.001" max="200000" step="0.001" inputmode="decimal" required><b>kg</b></div></label>
                 <p id="grossWeightPreview" aria-live="polite"></p>
                 <label class="field"><span>Motivo de la corrección *</span><textarea name="motivo_correccion" rows="3" minlength="10" maxlength="1000" required></textarea></label>
-                <p>Se conserva la tara registrada y se recalcula el neto. Los lotes en borrador se actualizan; si hay lotes confirmados, se requiere conciliación de kilos.</p>
+                <p>Se conserva la tara registrada y se recalculan los kilos de los lotes, incluidos los confirmados sin entregas a proceso. Se mantienen sus números, estados y ubicaciones. Si ya hubo entregas, se requiere conciliación con ellas.</p>
+                <div id="grossWeightLots"></div>
+                <a id="grossWeightLotsLink" class="secondary-button" target="_blank" rel="noopener">Ver lotes de esta recepción</a>
                 <p class="form-error" id="grossWeightError" role="alert"></p>
                 <footer class="dialog-actions"><button class="secondary-button" id="grossWeightCancel" type="button">Cancelar</button><button class="primary-button" type="submit">Guardar peso bruto</button></footer>
             </form>

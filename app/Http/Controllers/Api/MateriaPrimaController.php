@@ -291,6 +291,7 @@ class MateriaPrimaController extends Controller
             })
             ->with($this->relaciones())
             ->latest()
+            ->orderByDesc('id')
             ->paginate(100);
 
         return LoteMateriaPrimaResource::collection($lotes);

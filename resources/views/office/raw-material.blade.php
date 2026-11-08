@@ -74,6 +74,10 @@
                                 <tbody id="lotTableBody"></tbody>
                             </table>
                         </div>
+                        <div class="raw-material-panel-heading" aria-label="Páginas de lotes">
+                            <p id="lotPageStatus" aria-live="polite"></p>
+                            <div><button class="secondary-button" id="lotPrevious" type="button" disabled>Anterior</button> <button class="secondary-button" id="lotNext" type="button" disabled>Siguiente</button></div>
+                        </div>
                     </section>
                 </div>
                 @include('office.partials.raw-material-movements')

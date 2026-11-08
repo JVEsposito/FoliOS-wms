@@ -22,6 +22,18 @@ class EstructuraOficinaTest extends TestCase
         }
     }
 
+    public function test_digitacion_lotes_exporta_la_busqueda_y_paginacion(): void
+    {
+        $html = $this->get('/oficina/materia-prima/lotes')->assertOk()->getContent();
+        foreach (['lotFilters', 'lotTableBody', 'lotPageStatus', 'lotPrevious', 'lotNext'] as $id) {
+            $this->assertStringContainsString('id="'.$id.'"', $html);
+        }
+        if (getenv('ESTIBA_EXPORTAR_UI_TESTS') === '1') {
+            File::ensureDirectoryExists(storage_path('app/ui/oficina'));
+            File::put(storage_path('app/ui/oficina/materia-prima-lotes.html'), $html);
+        }
+    }
+
     public function test_cuenta_envases_incluye_conciliacion_y_guia_de_uso(): void
     {
         $html = $this->get('/oficina/envases/cuenta-corriente')->assertOk()->getContent();

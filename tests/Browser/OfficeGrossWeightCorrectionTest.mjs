@@ -28,6 +28,7 @@ test('corrección de bruto: solo admin, vista adaptable, selección de tanda y r
                 cantidad_envases_declarados: 2, envases: [{ tipo_envase: 'bins', cantidad_declarada: 2, cantidad_validada: 2 }],
                 patente_camion: 'ABCD12', nombre_conductor: 'Conductor', rut_conductor: '12.345.678-5',
                 ingreso_at: '2026-11-07T10:00:00Z', salida_at: '2026-11-07T11:00:00Z',
+                lotes_materia_prima: [{ id: 'lote-1', numero_lote: 'L-4443', estado: 'asignado_camara', kilos_netos: 420 }],
                 puede_corregir_peso_bruto: true, // Incluso una respuesta incorrecta no habilita el botón a otros roles.
                 pesaje_envases: cumulative ? { tipo_envase: 'bins', tara_unitaria: 40, cantidad_declarada: 2, cantidad_pesada: 2, cantidad_pendiente: 0, completo: true } : null,
                 lecturas_pesaje_envases: cumulative ? [{ id: 'tanda-1', secuencia: 1, tipo_envase: 'bins', cantidad_envases: 2, peso_bruto: 500, peso_tara: 80, peso_neto: 420, anulado: false }] : [], eventos: [] };
@@ -46,6 +47,7 @@ test('corrección de bruto: solo admin, vista adaptable, selección de tanda y r
                 if (path.endsWith('/peso-bruto')) {
                     writes.push(request.postDataJSON());
                     if (writes.length === 1) return route.abort('failed');
+                    if (writes.length === 2) return route.fulfill({ status: 409, json: { message: 'El lote L-4443 ya tiene entregas a proceso. El peso no se modificó.' } });
                     reception = { ...reception, peso_bruto: 520, peso_neto: 440, version: 4,
                         eventos: [{ tipo: 'peso_bruto_corregido', usuario: { nombre: 'Administrador' }, ocurrido_at: '2026-11-07T12:00:00Z', estado_anterior: 'cerrado', estado_nuevo: 'cerrado',
                             datos: { motivo: writes[1].motivo_correccion, anterior: { peso_bruto: 500 }, posterior: { peso_bruto: 520 } } }] };
@@ -74,8 +76,12 @@ test('corrección de bruto: solo admin, vista adaptable, selección de tanda y r
                 await page.locator('#grossWeightForm [type="submit"]').click();
                 await page.waitForFunction(() => document.getElementById('grossWeightError').textContent.length > 0);
                 await page.locator('#grossWeightForm [type="submit"]').click();
+                await page.waitForFunction(() => document.getElementById('grossWeightError').textContent.includes('L-4443'));
+                assert.match(await page.locator('#grossWeightLots').innerText(), /L-4443/);
+                assert.match(await page.locator('#grossWeightLotsLink').getAttribute('href'), /buscar=REC-2611-0011/);
+                await page.locator('#grossWeightForm [type="submit"]').click();
                 await page.waitForFunction(() => !document.getElementById('grossWeightDialog').open);
-                assert.equal(writes.length, 2); assert.deepEqual(writes[0], writes[1]);
+                assert.equal(writes.length, 3); assert.deepEqual(writes[0], writes[1]); assert.deepEqual(writes[1], writes[2]);
                 assert.equal(writes[1].version_conocida, 3); assert.equal('peso_tara' in writes[1], false);
                 assert.equal(writes[1].pesaje_id, cumulative ? 'tanda-1' : undefined);
                 assert.match(await page.locator('#detailTimeline').innerText(), /500,00 kg → 520,00 kg/);
