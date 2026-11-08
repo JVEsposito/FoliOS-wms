@@ -232,13 +232,13 @@ Después de esa ubicación el folio pasa a `disponible`.
 
 ## Registro RRPP-01
 
-La oficina permite descargar el registro completado según fecha, encargado,
-línea y turno, o una copia en blanco independiente de la existencia de
-validaciones. Ambas variantes se construyen desde la misma plantilla controlada
-y conservan código, versión, columnas, total y configuración de impresión.
+La oficina abre el registro en la jornada vigente, que comienza a las 07:00 en
+la zona horaria de planta. El turno B de madrugada figura en la fecha en que
+empezó el turno. Para descargar el PDF o el Excel, aplica una fecha de jornada
+y un cliente en los filtros. La planilla en blanco está disponible sin filtros.
 
 ```http
-GET /api/validacion/registro/rrpp-01
+GET /api/validacion/registro/rrpp-01?temporada_id=<uuid>&fecha=2026-11-07&cliente=DIS&formato=xlsx
 GET /api/validacion/registro/rrpp-01/en-blanco
 ```
 

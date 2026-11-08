@@ -110,12 +110,20 @@ async function loadHistory(seasonId = state.filterSeason?.id || null) {
     renderExportScope();
 }
 
+function exportableFilters() {
+    const filters = state.appliedFilters;
+    if (!filters?.has('fecha') || !filters.has('cliente') || !state.filterSeason) return null;
+    const appliedSeason = filters.get('temporada_id');
+    return !appliedSeason || state.filterSeason.id === appliedSeason ? filters : null;
+}
+
 function renderExportScope() {
-    const appliedSeason = state.appliedFilters?.get('temporada_id');
-    const enabled = Boolean(state.appliedFilters && state.filterSeason && (!appliedSeason || state.filterSeason.id === appliedSeason));
-    elements.exportRegister.disabled = !enabled;
-    elements.exportPdf.disabled = !enabled;
-    elements.exportScope.textContent = enabled ? `Cliente: ${state.appliedFilters.get('cliente') || 'Todos los clientes'}` : '';
+    const filters = exportableFilters();
+    elements.exportRegister.disabled = !filters;
+    elements.exportPdf.disabled = !filters;
+    elements.exportScope.textContent = filters
+        ? `Cliente: ${filters.get('cliente')}`
+        : 'Selecciona un cliente y una fecha y pulsa Filtrar para descargar.';
 }
 
 function historyParams(seasonId = state.filterSeason?.id || null) {
@@ -219,8 +227,9 @@ elements.blankRegister.addEventListener('click', () => {
         .finally(() => setBusy(false));
 });
 function exportHistory(format) {
-    const params = new URLSearchParams(state.appliedFilters);
-    if (!params.has('fecha')) { toast('Selecciona una fecha y aplica los filtros para descargar el informe.', true); return; }
+    const filters = exportableFilters();
+    if (!filters) return;
+    const params = new URLSearchParams(filters);
     params.set('temporada_id', state.filterSeason.id);
     params.set('formato', format);
     params.delete('per_page');

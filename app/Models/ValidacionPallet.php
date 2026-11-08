@@ -35,6 +35,13 @@ class ValidacionPallet extends Model implements PerteneceATemporada
 
     protected $table = 'validaciones_pallet';
 
+    public static function fechaJornadaVigente(): string
+    {
+        $local = now(config('app.operational_timezone'))->toImmutable();
+
+        return ($local->hour < self::HORA_FIN_NOCHE ? $local->subDay() : $local)->toDateString();
+    }
+
     public function fechaJornada(): ?CarbonImmutable
     {
         $local = $this->generado_dispositivo_at?->toImmutable()->setTimezone(config('app.operational_timezone'));

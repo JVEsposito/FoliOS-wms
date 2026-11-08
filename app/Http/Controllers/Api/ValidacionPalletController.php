@@ -106,7 +106,7 @@ class ValidacionPalletController extends Controller
     /** @param array<string, mixed> $filtros */
     private function resumenDia(array $filtros): array
     {
-        $fecha = $filtros['fecha'] ?? now(config('app.operational_timezone'))->toDateString();
+        $fecha = $filtros['fecha'] ?? ValidacionPallet::fechaJornadaVigente();
         unset($filtros['resultado'], $filtros['estado']);
 
         $vigentes = $this->aplicarFiltros(
@@ -267,7 +267,7 @@ class ValidacionPalletController extends Controller
                 ? ValidacionPallet::query()->where('temporada_id', $temporada->id)
                     ->whereNotNull('snapshot->origen->cliente')
                     ->distinct()->pluck('snapshot->origen->cliente as cliente')
-                    ->filter()->sort(SORT_NATURAL | SORT_FLAG_CASE)->values()
+                    ->filter(fn (?string $cliente): bool => filled($cliente))->sort(SORT_NATURAL | SORT_FLAG_CASE)->values()
                 : [],
         ]);
     }
@@ -292,8 +292,8 @@ class ValidacionPalletController extends Controller
             ->orderBy('numero_intento')
             ->get();
 
-        $cliente = $filtros['cliente'] ?? null;
-        $identificador = Str::limit(Str::slug($cliente ?? ''), 60, '');
+        $cliente = $filtros['cliente'];
+        $identificador = Str::limit(Str::slug($cliente), 60, '');
         $sufijo = $identificador === '' ? '' : '_'.$identificador;
         if ($esPdf) {
             if ($validaciones->isEmpty()) {
@@ -501,9 +501,9 @@ class ValidacionPalletController extends Controller
                     ->where('numero_folio', $folio),
             )
             ->when(
-                $filtros['cliente'] ?? null,
-                fn (Builder $consulta, string $cliente): Builder => $consulta
-                    ->where('snapshot->origen->cliente', $cliente),
+                isset($filtros['cliente']),
+                fn (Builder $consulta): Builder => $consulta
+                    ->where('snapshot->origen->cliente', $filtros['cliente']),
             )
             ->when(
                 $filtros['resultado'] ?? null,

@@ -742,6 +742,7 @@ class ValidacionPalletApiTest extends TestCase
             '/api/validacion/registro/rrpp-01?'.http_build_query([
                 'temporada_id' => $catalogo['temporada_id'],
                 'fecha' => '2026-07-29',
+                'cliente' => 'DIS',
                 'linea_proceso' => 2,
                 'turno' => 'B',
             ]),
@@ -749,7 +750,7 @@ class ValidacionPalletApiTest extends TestCase
 
         $respuesta
             ->assertOk()
-            ->assertDownload('RRPP-01_2026-07-29.xlsx')
+            ->assertDownload('RRPP-01_2026-07-29_dis.xlsx')
             ->assertHeader(
                 'Content-Type',
                 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -781,30 +782,33 @@ class ValidacionPalletApiTest extends TestCase
     public function test_jornada_noche_conserva_su_fecha_en_historial_resumen_y_descargas_tras_sincronizar(): void
     {
         config(['app.operational_timezone' => 'America/Santiago']);
-        $this->travelTo(CarbonImmutable::parse('2026-11-08T13:00:00Z'));
+        $this->travelTo(CarbonImmutable::parse('2026-11-08T02:30:00-03:00'));
         [$catalogo, $token] = $this->contexto(RolUsuario::Validador, 'VAL-NOCHE');
 
         $noche = [
             ...$this->payload($catalogo, 'PAL-NOCHE'),
             'turno' => 'B',
             'fecha_embalaje' => '2026-11-05',
-            'generado_dispositivo_at' => '2026-11-07T02:15:00-03:00',
+            'generado_dispositivo_at' => '2026-11-08T02:00:00-03:00',
         ];
         $registro = $this->conToken($token)->postJson('/api/validacion/pallets', $noche)
             ->assertCreated()
-            ->assertJsonPath('data.fecha_jornada', '2026-11-06')
-            ->assertJsonPath('data.generado_dispositivo_at', '2026-11-07T05:15:00+00:00')
-            ->assertJsonPath('data.recibido_servidor_at', '2026-11-08T13:00:00+00:00')
+            ->assertJsonPath('data.fecha_jornada', '2026-11-07')
+            ->assertJsonPath('data.generado_dispositivo_at', '2026-11-08T05:00:00+00:00')
+            ->assertJsonPath('data.recibido_servidor_at', '2026-11-08T05:30:00+00:00')
             ->assertJsonPath('data.catalogo.fecha_embalaje', '2026-11-05')
             ->json('data.id');
 
         $this->conToken($token)->postJson('/api/validacion/pallets', $noche)
-            ->assertOk()->assertJsonPath('data.id', $registro)->assertJsonPath('data.fecha_jornada', '2026-11-06');
+            ->assertOk()->assertJsonPath('data.id', $registro)->assertJsonPath('data.fecha_jornada', '2026-11-07');
+        $this->conToken($token)->getJson('/api/validacion/registro/resumen')
+            ->assertOk()->assertJsonPath('dia.fecha', '2026-11-07')->assertJsonPath('dia.validados', 1);
 
+        $this->travelTo(CarbonImmutable::parse('2026-11-08T07:00:00-03:00'));
         foreach ([
-            ['PAL-ANTES-CORTE', 'B', '2026-11-07T09:59:59Z', '2026-11-06'],
-            ['PAL-EN-CORTE', 'B', '2026-11-07T10:00:00Z', '2026-11-07'],
-            ['PAL-TURNO-A', 'A', '2026-11-07T05:15:00Z', '2026-11-07'],
+            ['PAL-ANTES-CORTE', 'B', '2026-11-08T09:59:59Z', '2026-11-07'],
+            ['PAL-EN-CORTE', 'B', '2026-11-08T10:00:00Z', '2026-11-08'],
+            ['PAL-TURNO-A', 'A', '2026-11-08T10:00:00Z', '2026-11-08'],
         ] as [$folio, $turno, $captura, $fechaJornada]) {
             $this->conToken($token)->postJson('/api/validacion/pallets', [
                 ...$this->payload($catalogo, $folio),
@@ -813,27 +817,29 @@ class ValidacionPalletApiTest extends TestCase
             ])->assertCreated()->assertJsonPath('data.fecha_jornada', $fechaJornada);
         }
 
-        $filtros = ['temporada_id' => $catalogo['temporada_id'], 'fecha' => '2026-11-06', 'turno' => 'B'];
+        $filtros = ['temporada_id' => $catalogo['temporada_id'], 'fecha' => '2026-11-07', 'cliente' => 'DIS', 'turno' => 'B'];
         $consulta = http_build_query($filtros);
         $this->conToken($token)->getJson('/api/validacion/pallets?'.$consulta)
             ->assertOk()->assertJsonCount(2, 'data')->assertJsonFragment(['numero_folio' => 'PAL-NOCHE']);
         $this->conToken($token)->getJson('/api/validacion/registro/resumen?'.$consulta)
-            ->assertOk()->assertJsonPath('dia.fecha', '2026-11-06')->assertJsonPath('dia.validados', 2);
-        $this->conToken($token)->getJson('/api/validacion/pallets?fecha=2026-11-07')
+            ->assertOk()->assertJsonPath('dia.fecha', '2026-11-07')->assertJsonPath('dia.validados', 2);
+        $this->conToken($token)->getJson('/api/validacion/registro/resumen')
+            ->assertOk()->assertJsonPath('dia.fecha', '2026-11-08')->assertJsonPath('dia.validados', 2);
+        $this->conToken($token)->getJson('/api/validacion/pallets?fecha=2026-11-08')
             ->assertOk()->assertJsonCount(2, 'data')
             ->assertJsonFragment(['numero_folio' => 'PAL-EN-CORTE'])
             ->assertJsonFragment(['numero_folio' => 'PAL-TURNO-A']);
 
         $ruta = '/api/validacion/registro/rrpp-01?'.$consulta;
         $pdf = $this->conToken($token)->get($ruta.'&formato=pdf')
-            ->assertOk()->assertDownload('validaciones-pt_2026-11-06.pdf')->getContent();
-        $this->assertStringContainsString('06-11-2026', $pdf);
-        $this->assertStringContainsString('02:15', $pdf);
+            ->assertOk()->assertDownload('validaciones-pt_2026-11-07_dis.pdf')->getContent();
+        $this->assertStringContainsString('07-11-2026', $pdf);
+        $this->assertStringContainsString('02:00', $pdf);
         $this->assertStringContainsString('PAL-NOCHE', $pdf);
         $this->assertStringNotContainsString('PAL-EN-CORTE', $pdf);
 
         $excel = $this->conToken($token)->get($ruta)
-            ->assertOk()->assertDownload('RRPP-01_2026-11-06.xlsx');
+            ->assertOk()->assertDownload('RRPP-01_2026-11-07_dis.xlsx');
         $archivo = $excel->baseResponse->getFile()->getPathname();
         $zip = new ZipArchive;
         $this->assertTrue($zip->open($archivo) === true);
@@ -842,7 +848,7 @@ class ValidacionPalletApiTest extends TestCase
         unlink($archivo);
 
         $this->assertIsString($hoja);
-        $this->assertSame('06-11-2026', $this->valorCelda($hoja, 'C5'));
+        $this->assertSame('07-11-2026', $this->valorCelda($hoja, 'C5'));
         $this->assertSame('PAL-NOCHE', $this->valorCelda($hoja, 'B11'));
         $this->assertSame('PAL-ANTES-CORTE', $this->valorCelda($hoja, 'B12'));
     }
@@ -876,6 +882,12 @@ class ValidacionPalletApiTest extends TestCase
             ->assertOk()->assertJsonPath('dia.validados', 27);
 
         $ruta = '/api/validacion/registro/rrpp-01?';
+        foreach (['pdf', 'xlsx'] as $formato) {
+            $sinCliente = [...$filtros, 'formato' => $formato];
+            unset($sinCliente['cliente']);
+            $this->conToken($token)->getJson($ruta.http_build_query($sinCliente))
+                ->assertUnprocessable()->assertJsonValidationErrors('cliente');
+        }
         $pdf = $this->conToken($token)->get($ruta.http_build_query([...$filtros, 'formato' => 'pdf', 'per_page' => 25]))
             ->assertOk()->assertHeader('Content-Type', 'application/pdf')
             ->assertDownload('validaciones-pt_2026-11-03_falco-fruit.pdf')->getContent();
@@ -887,6 +899,8 @@ class ValidacionPalletApiTest extends TestCase
             $this->assertStringNotContainsString($folio, $pdf);
         }
         $this->conToken($token)->getJson($ruta.http_build_query([...$filtros, 'formato' => 'pdf', 'cliente' => 'SIN REGISTROS']))
+            ->assertUnprocessable()->assertJsonValidationErrors('filtros');
+        $this->conToken($token)->getJson($ruta.http_build_query([...$filtros, 'formato' => 'pdf', 'cliente' => '0']))
             ->assertUnprocessable()->assertJsonValidationErrors('filtros');
 
         $excel = $this->conToken($token)->get($ruta.http_build_query($filtros))

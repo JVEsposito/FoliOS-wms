@@ -65,6 +65,11 @@ test('Validación PT exporta el cliente y los filtros aplicados al historial', a
         const page = await context.newPage();
         await page.goto('http://localhost/oficina/validacion');
         const client = page.getByRole('combobox', { name: 'Cliente', exact: true });
+        const formats = [['Descargar PDF', 'pdf'], ['RRPP-01 (Excel)', 'xlsx']];
+        await page.getByText('PAL-DIS', { exact: true }).waitFor();
+        for (const [name] of formats) {
+            assert.equal(await page.getByRole('button', { name, exact: true }).isDisabled(), true);
+        }
         await client.selectOption('FALCO FRUIT');
         await page.getByLabel('Fecha de jornada').fill('2026-11-03');
         await page.locator('#validationFilters [name="estado"]').selectOption('aceptada');
@@ -78,11 +83,17 @@ test('Validación PT exporta el cliente y los filtros aplicados al historial', a
         const expected = {
             cliente: 'FALCO FRUIT', fecha: '2026-11-03', estado: 'aceptada', temporada_id: temporada.id,
         };
-        for (const [name, formato] of [['Descargar PDF', 'pdf'], ['RRPP-01 (Excel)', 'xlsx']]) {
+        for (const [name, formato] of formats) {
             const download = page.waitForEvent('download');
             await page.getByRole('button', { name, exact: true }).click();
             assert.equal((await download).suggestedFilename(), `validaciones.${formato}`);
             assert.deepEqual(exports.at(-1), { ...expected, formato });
+        }
+        await client.selectOption('');
+        await page.getByRole('button', { name: 'Filtrar', exact: true }).click();
+        await page.getByText('Selecciona un cliente y una fecha y pulsa Filtrar para descargar.', { exact: true }).waitFor();
+        for (const [name] of formats) {
+            assert.equal(await page.getByRole('button', { name, exact: true }).isDisabled(), true);
         }
 
         const toolbar = page.locator('.validation-toolbar');

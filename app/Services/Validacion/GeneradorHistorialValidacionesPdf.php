@@ -27,7 +27,7 @@ class GeneradorHistorialValidacionesPdf
     public function __construct(private readonly DocumentoPdfPlanta $pdf) {}
 
     /** @param Collection<int, ValidacionPallet> $validaciones */
-    public function generar(Collection $validaciones, Temporada $temporada, string $fecha, ?string $cliente): string
+    public function generar(Collection $validaciones, Temporada $temporada, string $fecha, string $cliente): string
     {
         [$encabezado, $inicio] = $this->encabezado($temporada, $fecha, $cliente, $validaciones->count());
         $paginas = [];
@@ -67,7 +67,7 @@ class GeneradorHistorialValidacionesPdf
     }
 
     /** @return array{string, int} */
-    private function encabezado(Temporada $temporada, string $fecha, ?string $cliente, int $cantidad): array
+    private function encabezado(Temporada $temporada, string $fecha, string $cliente, int $cantidad): array
     {
         $contenido = "q 64 0 0 32 24 549 cm /Logo Do Q\n";
         $contenido .= $this->pdf->texto(105, 567, 15, 'VALIDACIONES DE PALLETS · PT', true);
@@ -78,7 +78,7 @@ class GeneradorHistorialValidacionesPdf
             $cantidad,
         ));
         $y = 531;
-        foreach ($this->pdf->envolver('Cliente: '.($cliente ?? 'Todos los clientes'), 780, 10) as $linea) {
+        foreach ($this->pdf->envolver('Cliente: '.$cliente, 780, 10) as $linea) {
             $contenido .= $this->pdf->texto(self::MARGEN + 4, $y, 10, $linea, true);
             $y -= 13;
         }
