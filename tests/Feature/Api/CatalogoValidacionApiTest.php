@@ -21,6 +21,103 @@ class CatalogoValidacionApiTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_paginas_compactas_cubren_intervalos_con_todos_los_pares_y_maestros(): void
+    {
+        [$temporada, $token] = $this->contexto();
+        $origen = DB::table('origenes_validacion')->where('temporada_id', $temporada->id)->value('id');
+        $articulos = $pares = [];
+        for ($i = 1; $i <= 12001; $i++) {
+            $id = sprintf('aa000000-0000-4000-8000-%012d', $i);
+            $articulos[] = ['id' => $id, 'temporada_id' => $temporada->id, 'especie' => 'Cereza', 'variedad' => 'Santina', 'calibre' => '2J', 'envase' => '5 kg', 'activo' => true];
+            $pares[] = ['id' => sprintf('bb000000-0000-4000-8000-%012d', $i), 'temporada_id' => $temporada->id,
+                'articulo_validacion_id' => $id, 'origen_validacion_id' => $origen, 'activo' => true];
+        }
+        foreach (array_chunk($articulos, 500) as $lote) {
+            DB::table('articulos_validacion')->insert($lote);
+        }
+        foreach (array_chunk($pares, 500) as $lote) {
+            DB::table('combinaciones_validacion')->insert($lote);
+        }
+        DB::table('articulos_validacion')->where('id', $articulos[5]['id'])->update(['activo' => false]);
+        $indice = $this->withToken($token)->getJson('/api/validacion/catalogos?formato=paginas-v1&transporte=compacto-v1')
+            ->assertOk()->assertJsonPath('transporte', 'compacto-v1')->assertJsonPath('tamanos_pagina.combinaciones', 10000)->json();
+        $this->assertCount(4, $indice['rangos_combinaciones']);
+        $recibidos = [];
+        $consultas = [];
+        foreach ($indice['rangos_combinaciones'] as $rango) {
+            $cursor = null;
+            do {
+                DB::flushQueryLog();
+                DB::enableQueryLog();
+                $query = http_build_query(['transporte' => 'compacto-v1', 'desde' => $cursor, ...$rango]);
+                $respuesta = $this->withToken($token)->getJson("/api/validacion/catalogos/paginas/{$temporada->id}/7/combinaciones?{$query}")
+                    ->assertOk()->assertJsonPath('inicio', $rango['inicio'])->assertJsonPath('hasta', $rango['hasta']);
+                $consultas = [...$consultas, ...DB::getQueryLog()];
+                DB::disableQueryLog();
+                $pagina = $respuesta->json();
+                $this->assertLessThanOrEqual(10000, $pagina['cantidad']);
+                $this->assertSame(['articulo_validacion_id', 'origen_validacion_id'], $pagina['datos']['columnas']);
+                $this->assertSame(hash('sha256', $respuesta->getContent()), $respuesta->headers->get('X-Catalog-Target'));
+                foreach ($pagina['datos']['filas'] as [$articulo, $csg]) {
+                    $recibidos[] = $pagina['datos']['textos'][$articulo].':'.$pagina['datos']['textos'][$csg];
+                }
+                $cursor = $pagina['siguiente'];
+            } while ($cursor !== null);
+        }
+        $esperados = DB::table('combinaciones_validacion as c')->join('articulos_validacion as a', 'a.id', '=', 'c.articulo_validacion_id')
+            ->where('c.temporada_id', $temporada->id)->where('a.activo', true)->get(['c.articulo_validacion_id', 'c.origen_validacion_id'])
+            ->map(fn ($p) => $p->articulo_validacion_id.':'.$p->origen_validacion_id)->all();
+        sort($esperados);
+        sort($recibidos);
+        $this->assertSame($esperados, $recibidos);
+        $this->assertCount(12001, array_unique($recibidos));
+        $sql = strtolower(collect($consultas)->pluck('query')->implode(' '));
+        $this->assertStringNotContainsString(' offset ', $sql);
+        if (in_array(DB::connection()->getDriverName(), ['mysql', 'mariadb'], true)) {
+            $this->assertStringContainsString('join_prefix(c) index(c comb_val_temporada_activo)', $sql);
+        }
+        $maestros = $this->withToken($token)->getJson("/api/validacion/catalogos/paginas/{$temporada->id}/7/articulos?transporte=compacto-v1")
+            ->assertOk()->assertJsonPath('cantidad', 5000)->json();
+        $this->assertContains('variedad_validacion_id', $maestros['datos']['columnas']);
+        $this->assertNotContains('temporada_id', $maestros['datos']['columnas']);
+        $this->assertNotNull($maestros['siguiente']);
+    }
+
+    public function test_gzip_conserva_el_hash_del_json_y_respeta_calidad_cero(): void
+    {
+        [$temporada, $token] = $this->contexto();
+        for ($i = 0; $i < 30; $i++) {
+            DB::table('articulos_validacion')->insert(['id' => (string) Str::uuid(), 'temporada_id' => $temporada->id,
+                'especie' => 'Cereza', 'variedad' => 'Santina', 'calibre' => '2J', 'envase' => '5 kg', 'activo' => true]);
+        }
+        $ruta = "/api/validacion/catalogos/paginas/{$temporada->id}/7/articulos";
+        $normal = $this->withToken($token)->withHeader('Accept-Encoding', 'identity')->get($ruta)->assertOk();
+        $comprimida = $this->withToken($token)->withHeader('Accept-Encoding', 'gzip')->get($ruta)->assertOk()->assertHeader('Content-Encoding', 'gzip');
+        $this->assertSame($normal->getContent(), gzdecode($comprimida->getContent()));
+        $this->assertLessThan(strlen($normal->getContent()), strlen($comprimida->getContent()));
+        $this->assertSame(hash('sha256', $normal->getContent()), $comprimida->headers->get('X-Catalog-Target'));
+        $this->assertNotSame($normal->headers->get('ETag'), $comprimida->headers->get('ETag'));
+        $this->assertContains('Accept-Encoding', $comprimida->baseResponse->getVary());
+        $this->withToken($token)->withHeader('Accept-Encoding', 'gzip;q=0, identity')->get($ruta)->assertOk()->assertHeaderMissing('Content-Encoding');
+    }
+
+    public function test_rechaza_intervalos_invalidos_y_el_304_rapido_no_lee_proyeccion(): void
+    {
+        [$temporada, $token] = $this->contexto();
+        $base = "/api/validacion/catalogos/paginas/{$temporada->id}/7/";
+        $this->withToken($token)->getJson($base.'combinaciones?transporte=compacto-v1&inicio[]=0')->assertUnprocessable();
+        $this->withToken($token)->getJson($base.'articulos?transporte=compacto-v1&inicio=aa000000-0000-4000-8000-000000000001')->assertUnprocessable();
+        $this->withToken($token)->getJson($base.'combinaciones?transporte=compacto-v1&inicio=bb000000-0000-4000-8000-000000000000&hasta=aa000000-0000-4000-8000-000000000000')->assertUnprocessable();
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $this->withToken($token)->withHeader('If-None-Match', '"validacion-paginas-v1-'.$temporada->id.'-7"')
+            ->getJson('/api/validacion/catalogos?formato=paginas-v1&transporte=compacto-v1')->assertStatus(304)->assertContent('');
+        $sql = strtolower(collect(DB::getQueryLog())->pluck('query')->implode(' '));
+        DB::disableQueryLog();
+        $this->assertStringNotContainsString('combinaciones_validacion', $sql);
+        $this->assertStringNotContainsString('articulos_validacion', $sql);
+    }
+
     public function test_diagnostico_mide_paginas_del_catalogo_sin_modificar_la_proyeccion(): void
     {
         [$temporada] = $this->contexto();
@@ -39,6 +136,12 @@ class CatalogoValidacionApiTest extends TestCase
         }
         $this->assertSame($antes, DB::table('combinaciones_validacion')->where('temporada_id', $temporada->id)->count());
         $this->assertSame(7, $temporada->fresh()->version_catalogo);
+        $this->assertSame(0, Artisan::call('validacion:medir-catalogo', ['--paginas' => 1, '--rapido' => true, '--json' => true]));
+        $rapido = json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame('compacto-v1', $rapido['transporte']);
+        $this->assertSame(1, $rapido['lectura'][3]['filas']);
+        $this->assertGreaterThan(0, $rapido['lectura'][3]['max_bytes_gzip_estimados']);
+        $this->assertSame($antes, DB::table('combinaciones_validacion')->where('temporada_id', $temporada->id)->count());
         $this->assertSame(2, Artisan::call('validacion:medir-catalogo', ['--paginas' => -1]));
     }
 

@@ -76,7 +76,11 @@ export function assertCatalogManifest(value: unknown): asserts value is CatalogM
 }
 
 export function decodeCatalogFragment(raw: string, fragment: CatalogFragment, seasonId: string): Record<string, unknown>[] {
-  const data = JSON.parse(raw) as { formato: string; coleccion: string; columnas: string[]; textos: string[]; filas: unknown[][] };
+  return decodeCatalogRows(JSON.parse(raw), fragment, seasonId);
+}
+
+export function decodeCatalogRows(value: unknown, fragment: CatalogFragment, seasonId: string): Record<string, unknown>[] {
+  const data = value as { formato: string; coleccion: string; columnas: string[]; textos: string[]; filas: unknown[][] };
   const expected = columns[fragment.coleccion];
   if (!data || data.formato !== 'fragmentos-v1' || data.coleccion !== fragment.coleccion
     || JSON.stringify(data.columnas) !== JSON.stringify(expected) || !Array.isArray(data.textos)

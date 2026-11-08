@@ -1,11 +1,13 @@
 import type { ValidationCatalog } from '../domain/validation';
 import { assertValidationCatalog } from '../domain/validationCatalogData';
 import { catalogCollections, type CatalogCollection, type CatalogProgress } from '../domain/validationCatalogTransfer';
-import { ApiError } from './apiError';
+import { requestCatalogPage } from './validationCatalogPageRequest';
+import { assertFastCatalogOptions, downloadFastCatalogPages, type FastCatalogOptions } from './validationCatalogFastPages';
 import { createCatalogCompatibilityBuilder } from '../domain/validationCatalogIndex';
 import { pruneCatalogFragments, readCatalogFragment, readCatalogPageCheckpoint, verifyCatalogFragment, writeCatalogFragment, writeCatalogPageCheckpoint } from './validationCatalogTransferStore';
 
-type Index = Omit<ValidationCatalog, CatalogCollection> & { formato: 'paginas-v1'; tamano_pagina: number; colecciones: CatalogCollection[] };
+export type CatalogPageIndex = Omit<ValidationCatalog, CatalogCollection> & { formato: 'paginas-v1'; tamano_pagina: number; colecciones: CatalogCollection[] } & Partial<FastCatalogOptions>;
+type Index = CatalogPageIndex;
 type Page = { formato: 'paginas-v1'; temporada_id: string; version: number; coleccion: CatalogCollection; desde: string | null; siguiente: string | null; filas: Record<string, unknown>[] };
 type SavedPage = { coleccion: CatalogCollection; desde: string | null; hash: string };
 type Checkpoint = { schema: 1; temporada_id: string; version: number; paginas: SavedPage[] };
@@ -21,6 +23,7 @@ export function assertCatalogPageIndex(data: unknown): asserts data is Index {
     || !Array.isArray(value.tipos_bulto) || !Array.isArray(value.resultados) || !Array.isArray(value.motivos)) {
     throw new Error('El índice de descarga paginada está incompleto. Se conserva el catálogo anterior.');
   }
+  if (value.transporte !== undefined) assertFastCatalogOptions(value);
 }
 
 function bytes(raw: string): number {
@@ -54,24 +57,9 @@ function decode(raw: string, index: Index, collection: CatalogCollection, cursor
   return page;
 }
 
-async function requestPage(load: Load, url: string, headers: Headers, collection: CatalogCollection, onRetry: () => void) {
-  for (let retries = 0; ; retries++) {
-    try {
-      const result = await load(url, headers);
-      if (result.response.ok) return result;
-      let message = 'Reintenta la sincronización; las páginas recibidas se conservan.';
-      try { message = (JSON.parse(result.raw) as { message?: string }).message ?? message; } catch { /* Mensaje de red sin JSON. */ }
-      throw new ApiError(`No se pudo descargar ${collection} (HTTP ${result.response.status}). ${message}`, result.response.status);
-    } catch (reason) {
-      if (retries >= 2 || !(reason instanceof ApiError) || ![0, 500, 502, 503, 504].includes(reason.status)) throw reason;
-      onRetry();
-      await new Promise<void>((resolve) => setTimeout(resolve, 1000 * (retries + 1)));
-    }
-  }
-}
-
 export async function downloadCatalogPages(baseUrl: string, token: string, index: Index,
   options: { deviceId: string; onProgress?: (progress: CatalogProgress) => void }, load: Load): Promise<ValidationCatalog> {
+  if (index.transporte === 'compacto-v1') return downloadFastCatalogPages(baseUrl, token, index as Index & FastCatalogOptions, options, load);
   const checkpoint: Checkpoint = { schema: 1, temporada_id: index.temporada.id, version: index.temporada.version_catalogo, paginas: [] };
   try {
     const saved = JSON.parse(await readCatalogPageCheckpoint(baseUrl, options.deviceId) ?? 'null') as Checkpoint;
@@ -104,7 +92,7 @@ export async function downloadCatalogPages(baseUrl: string, token: string, index
       if (!page) {
         const query = cursor ? `?desde=${encodeURIComponent(cursor)}` : '';
         const url = `${baseUrl}/api/validacion/catalogos/paginas/${encodeURIComponent(index.temporada.id)}/${checkpoint.version}/${collection}${query}`;
-        const result = await requestPage(load, url, headers, collection, () => {
+        const result = await requestCatalogPage(load, url, headers, collection, () => {
           options.onProgress?.({ ...progress, retryingCollection: collection });
         });
         const hash = result.response.headers.get('X-Catalog-Target');

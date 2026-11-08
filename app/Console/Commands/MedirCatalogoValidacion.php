@@ -13,6 +13,7 @@ class MedirCatalogoValidacion extends Command
 {
     protected $signature = 'validacion:medir-catalogo
         {--paginas=3 : Máximo por colección; 0 recorre todas las páginas}
+        {--rapido : Mide páginas compactas de hasta 5.000 maestros o 10.000 pares}
         {--json : Entrega el informe como JSON}';
 
     protected $description = 'Mide filas, bytes, tiempo y memoria PHP de la descarga paginada del catálogo activo';
@@ -27,22 +28,25 @@ class MedirCatalogoValidacion extends Command
         }
         $temporada = $temporadas->obtener();
         $conteos = $proyeccion->conteos($temporada);
+        $rapido = (bool) $this->option('rapido');
         $filas = [];
         try {
             foreach (DescargaPaginadaCatalogoValidacion::COLECCIONES as $coleccion) {
                 $cursor = null;
                 $medida = ['coleccion' => $coleccion, 'paginas' => 0, 'filas' => 0, 'max_filas_pagina' => 0,
-                    'max_bytes_pagina' => 0, 'max_memoria_php_bytes' => 0, 'max_ms_pagina' => 0, 'completa' => false];
+                    'max_bytes_pagina' => 0, 'max_bytes_gzip_estimados' => 0, 'max_memoria_php_bytes' => 0, 'max_ms_pagina' => 0, 'completa' => false];
                 do {
                     memory_reset_peak_usage();
                     $inicio = hrtime(true);
-                    $raw = $descarga->pagina($temporada->id, $temporada->version_catalogo, $coleccion, $cursor);
+                    $raw = $descarga->pagina($temporada->id, $temporada->version_catalogo, $coleccion, $cursor, $rapido);
                     $pagina = json_decode($raw, true, flags: JSON_THROW_ON_ERROR);
+                    $cantidad = $rapido ? $pagina['cantidad'] : count($pagina['filas']);
                     $cursor = $pagina['siguiente'];
                     $medida['paginas']++;
-                    $medida['filas'] += count($pagina['filas']);
-                    $medida['max_filas_pagina'] = max($medida['max_filas_pagina'], count($pagina['filas']));
+                    $medida['filas'] += $cantidad;
+                    $medida['max_filas_pagina'] = max($medida['max_filas_pagina'], $cantidad);
                     $medida['max_bytes_pagina'] = max($medida['max_bytes_pagina'], strlen($raw));
+                    $medida['max_bytes_gzip_estimados'] = max($medida['max_bytes_gzip_estimados'], strlen(gzencode($raw, 4)));
                     $medida['max_memoria_php_bytes'] = max($medida['max_memoria_php_bytes'], memory_get_peak_usage(true));
                     $medida['max_ms_pagina'] = max($medida['max_ms_pagina'], round((hrtime(true) - $inicio) / 1000000, 2));
                     unset($raw, $pagina);
@@ -56,14 +60,14 @@ class MedirCatalogoValidacion extends Command
             return self::FAILURE;
         }
         $reporte = ['temporada' => $temporada->codigo, 'version' => $temporada->version_catalogo,
-            'memory_limit' => ini_get('memory_limit'), 'conteos' => $conteos, 'lectura' => $filas,
+            'transporte' => $rapido ? 'compacto-v1' : 'paginas-v1', 'memory_limit' => ini_get('memory_limit'), 'conteos' => $conteos, 'lectura' => $filas,
             'nota' => 'Memoria del proceso CLI PHP, incluido el diagnóstico. No mide RAM del equipo ni transferencia por Wi-Fi.'];
         if ($this->option('json')) {
             $this->line(json_encode($reporte, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
         } else {
             $this->info("{$temporada->codigo} · catálogo v{$temporada->version_catalogo} · memory_limit ".ini_get('memory_limit'));
-            $this->table(['Colección', 'Páginas', 'Filas', 'Máx. bytes/página', 'Máx. PHP MiB', 'Máx. ms/página', 'Completa'],
-                array_map(fn ($fila) => [$fila['coleccion'], $fila['paginas'], $fila['filas'], $fila['max_bytes_pagina'],
+            $this->table(['Colección', 'Páginas', 'Filas', 'Máx. bytes/página', 'Gzip estimado', 'Máx. PHP MiB', 'Máx. ms/página', 'Completa'],
+                array_map(fn ($fila) => [$fila['coleccion'], $fila['paginas'], $fila['filas'], $fila['max_bytes_pagina'], $fila['max_bytes_gzip_estimados'],
                     round($fila['max_memoria_php_bytes'] / 1048576, 2), $fila['max_ms_pagina'], $fila['completa'] ? 'Sí' : 'Muestra'], $filas));
             $this->line($reporte['nota']);
         }

@@ -1,5 +1,10 @@
 # Descarga recuperable del catálogo PDA
 
+Para reducir las cientos de solicitudes sucesivas de la maestra, consultar
+[Descarga rápida de la maestra](catalogo-descarga-rapida.md): transporte compacto,
+gzip y hasta cuatro recorridos concurrentes. El contrato paginado descrito abajo
+se mantiene para compatibilidad con las instalaciones anteriores.
+
 Para el volumen de v442 y el crecimiento previsto de la temporada, consultar
 [Escalabilidad del catálogo de validación](escalabilidad-catalogo-validacion.md):
 índice compacto en PDA/tablet, guardado numérico por partes, generación por lotes

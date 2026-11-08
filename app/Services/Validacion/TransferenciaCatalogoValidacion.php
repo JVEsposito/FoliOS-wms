@@ -13,7 +13,7 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 /** Fragmentos estables por ID: una edición no desplaza todas las páginas del catálogo. */
 class TransferenciaCatalogoValidacion
 {
-    private const COLUMNAS = [
+    public const COLUMNAS = [
         'categorias' => ['id', 'nombre', 'codigo_externo'],
         'articulos' => ['id', 'variedad_validacion_id', 'especie', 'variedad', 'calibre', 'envase', 'codigo_externo'],
         'origenes' => ['id', 'cliente_validacion_id', 'csg_validacion_id', 'variedad_ids', 'cliente', 'marca', 'csg', 'predio', 'codigo_externo'],
@@ -124,6 +124,13 @@ class TransferenciaCatalogoValidacion
     /** Diccionario local: los textos y las referencias repetidas viajan una sola vez por parte. */
     private function codificar(string $coleccion, array $columnas, array $filas): string
     {
+        return json_encode(['formato' => 'fragmentos-v1', 'coleccion' => $coleccion,
+            ...$this->codificarFilas($columnas, $filas)], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_LINE_TERMINATORS);
+    }
+
+    /** Diccionario acotado a una página; no materializa el catálogo completo. */
+    public function codificarFilas(array $columnas, array $filas): array
+    {
         $textos = [];
         $indices = [];
         $codificar = function ($valor) use (&$codificar, &$textos, &$indices) {
@@ -148,8 +155,7 @@ class TransferenciaCatalogoValidacion
             $registros[] = array_map(fn ($columna) => $codificar($fila->{$columna} ?? null), $columnas);
         }
 
-        return json_encode(['formato' => 'fragmentos-v1', 'coleccion' => $coleccion, 'columnas' => $columnas,
-            'textos' => $textos, 'filas' => $registros], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_LINE_TERMINATORS);
+        return ['columnas' => $columnas, 'textos' => $textos, 'filas' => $registros];
     }
 
     private function decodificar(array $fragmento): array

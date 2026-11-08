@@ -61,11 +61,29 @@ function transport(source) {
   return { bodies, manifest: { ...meta, formato: 'fragmentos-v1', cantidades: Object.fromEntries(Object.keys(columns).map((key) => [key, source[key].length])), fragmentos: fragments } };
 }
 
-function harness(source = catalog(), shared = {}) {
+function harness(source = catalog(), shared = {}, fast = false) {
   const files = shared.files ?? new Map(); const storage = shared.storage ?? new Map(); const modules = new Map();
   const directories = shared.directories ?? new Set();
   const calls = []; const progress = []; const timers = new Map();
-  let server = transport(source); const history = new Map(server.bodies);
+  let server = fast ? { bodies: new Map(), manifest: null } : transport(source); const history = new Map(server.bodies);
+  let sortedPages = new Map(); let rawBytes = 0; let wireBytes = 0; let pageMutation = null;
+  const pageSizes = { categorias: 1000, articulos: 5000, origenes: 1000, combinaciones: 10000 };
+  const sortedRows = (collection) => {
+    if (!sortedPages.has(collection)) sortedPages.set(collection, [...source[collection]].sort((a, b) => a.id < b.id ? -1 : 1));
+    return sortedPages.get(collection);
+  };
+  const ranges = () => {
+    const sorted = sortedRows('combinaciones'); const boundaries = [];
+    for (let n = 1; n < 4; n++) if (sorted[Math.floor(sorted.length * n / 4)]) boundaries.push(sorted[Math.floor(sorted.length * n / 4)].id);
+    const points = [null, ...new Set(boundaries), null];
+    return points.slice(0, -1).map((inicio, n) => ({ inicio, hasta: points[n + 1] }));
+  };
+  function lowerBound(rows, value, inclusive = true) {
+    if (value === null) return 0;
+    let lo = 0; let hi = rows.length;
+    while (lo < hi) { const mid = lo + ((hi - lo) >>> 1); if (rows[mid].id < value || (!inclusive && rows[mid].id === value)) lo = mid + 1; else hi = mid; }
+    return lo;
+  }
   let failure = null; let corrupt = null; let fullDisk = false; let never = false; let active = 0; let maximum = 0; let fullFallback = false;
   let pages = false; let failedPage = null; let corruptPage = false; let elapsed = 0; let editOnPage = null;
   const disk = {
@@ -83,6 +101,35 @@ function harness(source = catalog(), shared = {}) {
     assert.equal(options.headers.get('Authorization'), 'Bearer token'); calls.push(url);
     const parsed = new URL(url);
     if (parsed.pathname.includes('/paginas/')) {
+      if (fast) {
+        maximum = Math.max(maximum, ++active);
+        try {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+          const collection = parsed.pathname.split('/').at(-1); const cursor = parsed.searchParams.get('desde');
+          if (editOnPage?.key === `${collection}:${cursor}`) { source = editOnPage.source; sortedPages = new Map(); editOnPage = null; }
+          if (Number(parsed.pathname.split('/').at(-2)) !== source.temporada.version_catalogo) return response({ message: 'El catálogo cambió durante la descarga' }, 409);
+          if (failedPage?.key === `${collection}:${cursor}` && failedPage.remaining-- > 0) return response({ message: 'Página no disponible' }, failedPage.status);
+          const inicio = parsed.searchParams.get('inicio'); const hasta = parsed.searchParams.get('hasta');
+          const sorted = sortedRows(collection); const start = Math.max(lowerBound(sorted, inicio), lowerBound(sorted, cursor, false));
+          const end = hasta === null ? sorted.length : lowerBound(sorted, hasta);
+          const rows = sorted.slice(start, Math.min(end, start + pageSizes[collection]));
+          const fields = collection === 'combinaciones' ? ['articulo_validacion_id', 'origen_validacion_id'] : columns[collection];
+          const textos = []; const indexes = new Map();
+          const encode = (value) => {
+            if (value === null || value === undefined) return null;
+            if (Array.isArray(value)) return [...value].sort().map(encode);
+            const text = String(value); if (!indexes.has(text)) { indexes.set(text, textos.length); textos.push(text); } return indexes.get(text);
+          };
+          const filas = rows.map((row) => fields.map((field) => encode(row[field])));
+          let raw = JSON.stringify({ formato: 'paginas-v1', transporte: 'compacto-v1', temporada_id: source.temporada.id,
+            version: source.temporada.version_catalogo, coleccion: collection, desde: cursor, inicio, hasta,
+            siguiente: end > start + rows.length ? rows.at(-1).id : null, ultimo_id: rows.at(-1)?.id ?? null, cantidad: rows.length,
+            datos: { columnas: fields, textos, filas } });
+          if (pageMutation) raw = JSON.stringify(pageMutation(JSON.parse(raw)));
+          rawBytes += Buffer.byteLength(raw); wireBytes += gzipSync(raw, { level: 4 }).length;
+          return new Response(corruptPage ? '{dañado' : raw, { headers: { 'X-Catalog-Target': hash(raw) } });
+        } finally { active--; }
+      }
       elapsed += 12000; // El total puede exceder 45 s; cada respuesta termina dentro de su propio plazo.
       for (const timer of timers.values()) if (timer.deadline <= elapsed) timer.fn();
       if (options.signal.aborted) throw new Error('Aborted');
@@ -105,10 +152,11 @@ function harness(source = catalog(), shared = {}) {
       return new Response(corruptPage ? '{dañado' : raw, { status: 200, headers: { 'X-Catalog-Target': hash(raw) } });
     }
     if (!parsed.pathname.includes('/fragmentos/')) {
-      if (pages) {
+      if (pages || fast) {
         if (options.headers.get('If-None-Match') === `"validacion-paginas-v1-season-${source.temporada.version_catalogo}"`) return new Response(null, { status: 304 });
         const { categorias, articulos, origenes, combinaciones, ...metadata } = source;
-        return response({ ...metadata, formato: 'paginas-v1', tamano_pagina: 1000, colecciones: Object.keys(columns) });
+        return response({ ...metadata, formato: 'paginas-v1', tamano_pagina: 1000, colecciones: Object.keys(columns),
+          ...(fast ? { transporte: 'compacto-v1', tamanos_pagina: pageSizes, rangos_combinaciones: ranges() } : {}) });
       }
       if (fullFallback) return new Response(JSON.stringify(source), { status: 200, headers: { 'X-Catalog-Transfer': 'full-fallback' } });
       if (options.headers.get('If-None-Match') === `"validacion-partes-v1-season-${server.manifest.temporada.version_catalogo}"`) return new Response(null, { status: 304 });
@@ -170,16 +218,17 @@ function harness(source = catalog(), shared = {}) {
   }
   const api = load(resolve(root, 'services/validationApi.ts'));
   return {
-    files, storage, calls, progress, server: () => server, maxActive: () => maximum,
-    api, compatibility: load(resolve(root, 'domain/validationCatalogIndex.ts')), codec: load(resolve(root, 'domain/validationCatalogTransfer.ts')), offline: load(resolve(root, 'services/validationOfflineStore.ts')),
+    files, storage, calls, progress, server: () => server, maxActive: () => maximum, activeCount: () => active, bytes: () => ({ rawBytes, wireBytes }),
+    api, compatibility: load(resolve(root, 'domain/validationCatalogIndex.ts')), fast: load(resolve(root, 'services/validationCatalogFastPages.ts')), codec: load(resolve(root, 'domain/validationCatalogTransfer.ts')), offline: load(resolve(root, 'services/validationOfflineStore.ts')),
     download: (known = null, base = 'http://planta', device = 'pda') => api.getValidationCatalog(base, 'token', known, { deviceId: device, onProgress: (p) => progress.push(clone(p)) }),
-    update: (next) => { source = next; server = transport(next); for (const [key, raw] of server.bodies) history.set(key, raw); }, fail: (digest) => { failure = digest; }, corrupt: (digest) => { corrupt = digest; }, diskFull: (v) => { fullDisk = v; },
+    update: (next) => { source = next; sortedPages = new Map(); server = fast ? { bodies: new Map(), manifest: null } : transport(next); for (const [key, raw] of server.bodies) history.set(key, raw); }, fail: (digest) => { failure = digest; }, corrupt: (digest) => { corrupt = digest; }, diskFull: (v) => { fullDisk = v; },
     fullFallback: (value) => { fullFallback = value; }, pages: () => { pages = true; },
     failPage: (key, status = 503, remaining = Infinity) => { failedPage = { key, status, remaining }; },
     corruptPage: () => { corruptPage = true; }, elapsed: () => elapsed,
+    mutatePage: (fn) => { pageMutation = fn; },
     editOnPage: (key, next) => { editOnPage = { key, source: next }; },
     never: () => { never = true; }, abort: () => { for (const timer of timers.values()) timer.fn(); },
-    restart: (next = source) => harness(next, { files, directories, storage }),
+    restart: (next = source) => harness(next, { files, directories, storage }, fast),
   };
 }
 
@@ -282,6 +331,89 @@ test('PDA y tablet actualizan v417 a v418 con recuperación completa y vuelven a
     assert.equal((await h.download(result, 'http://planta', device)).temporada.version_catalogo, 419);
     assert.ok(h.calls.some((url) => url.includes('/fragmentos/')));
   }
+});
+
+function fastCatalog(articles = 6001, combinations = 25001, origins = 40) {
+  const source = catalog(443, articles, 0, origins); const links = Math.ceil(combinations / articles);
+  source.combinaciones = Array.from({ length: combinations }, (_, n) => ({ id: `019a4455-aaaa-7000-8000-${n.toString(16).padStart(12, '0')}`,
+    articulo_validacion_id: source.articulos[Math.floor(n / links)].id,
+    origen_validacion_id: source.origenes[(Math.floor(n / links) * 7 + n % links) % origins].id, codigo_externo: null }));
+  return source;
+}
+
+test('volumen v443: recibe los 523632 pares exactos en 74 páginas con cuatro peticiones simultáneas', async (t) => {
+  const source = fastCatalog(76420, 523632, 342); const h = harness(source, {}, true); const received = await h.download();
+  assert.equal(received.articulos.length, 76420); assert.equal(received.origenes.length, 342);
+  assert.equal(h.compatibility.catalogCombinationCount(received), 523632); assert.equal(received.combinaciones.length, 0);
+  const index = h.compatibility.indexValidationCatalog(received);
+  assert.ok(source.combinaciones.every((r) => index.articlesByOrigin.get(r.origen_validacion_id)?.has(r.articulo_validacion_id)));
+  assert.equal(h.calls.filter((url) => url.includes('/paginas/')).length, 74); assert.equal(h.maxActive(), 4);
+  assert.equal(h.progress.at(-1).rows, 600395);
+  let legacyRaw = 0; let legacyGzip = 0; let legacyPages = 0;
+  for (const collection of Object.keys(columns)) {
+    const sorted = [...source[collection]].sort((a, b) => a.id < b.id ? -1 : 1);
+    for (let n = 0; n < sorted.length; n += 1000) {
+      const rows = sorted.slice(n, n + 1000);
+      const raw = JSON.stringify({ formato: 'paginas-v1', temporada_id: source.temporada.id, version: 443, coleccion: collection,
+        desde: n ? sorted[n - 1].id : null, siguiente: n + 1000 < sorted.length ? rows.at(-1).id : null, filas: rows });
+      legacyPages++; legacyRaw += Buffer.byteLength(raw); legacyGzip += gzipSync(raw, { level: 4 }).length;
+    }
+  }
+  assert.equal(legacyPages, 603); assert.ok(h.bytes().rawBytes < legacyRaw / 2);
+  t.diagnostic(JSON.stringify({ simulation: true, articles: 76420, origins: 342, combinations: 523632, legacyPages, fastPages: 74,
+    legacyRaw, legacyGzip, fastRaw: h.bytes().rawBytes, fastGzip: h.bytes().wireBytes, maximumRequests: h.maxActive() }));
+  h.calls.length = 0; assert.equal(await h.download(received), null); assert.equal(h.calls.length, 1);
+});
+
+test('descarga rápida de PDA/tablet reanuda intervalos guardados sin tocar bandeja ni jornada', async () => {
+  for (const device of ['pda', 'tablet']) {
+    const source = fastCatalog(10001, 88001, 40); const h = harness(source, {}, true);
+    h.storage.set(`estiba_validation_outbox:1:${device}`, '[{"id":"pendiente"}]'); h.storage.set(`estiba_validation_work_context:1:${device}`, '{"turno":"B"}');
+    const preserved = [...h.storage]; const cursor = source.combinaciones[9999].id; h.failPage(`combinaciones:${cursor}`);
+    await assert.rejects(h.download(null, 'http://planta', device), /HTTP 503/); assert.equal(h.activeCount(), 0);
+    const finished = h.calls.filter((url) => url.includes('/paginas/') && !url.includes(`desde=${cursor}`));
+    const restarted = h.restart(); const received = await restarted.download(null, 'http://planta', device);
+    assert.equal(restarted.compatibility.catalogCombinationCount(received), 88001); assert.ok(restarted.progress.at(-1).reusedBytes > 0);
+    assert.ok(restarted.calls.filter((url) => url.includes('/paginas/')).length < finished.length);
+    assert.equal(restarted.calls.some((url) => url.includes('/articulos?')), false); assert.deepEqual([...h.storage], preserved);
+  }
+});
+
+test('descarga rápida rechaza corrupción, cambio de versión e intervalos superpuestos y conserva copia anterior', async () => {
+  const source = fastCatalog(); const h = harness(source, {}, true);
+  await h.offline.saveValidationCatalog('1', 'pda', catalog(417), 'http://planta'); h.corruptPage();
+  await assert.rejects(h.download(catalog(417)), /dañada/);
+  assert.equal((await h.offline.loadCachedValidationCatalog('1', 'pda', 'http://planta')).temporada.version_catalogo, 417);
+  const next = h.restart(); next.editOnPage('combinaciones:null', { ...source, temporada: { ...source.temporada, version_catalogo: 444 } });
+  await assert.rejects(next.download(catalog(417)), /HTTP 409/);
+  assert.throws(() => next.fast.assertFastCatalogOptions({ transporte: 'compacto-v1',
+    tamanos_pagina: { categorias: 1000, articulos: 5000, origenes: 1000, combinaciones: 10000 },
+    rangos_combinaciones: [{ inicio: null, hasta: source.combinaciones[5].id }, { inicio: source.combinaciones[4].id, hasta: null }] }), /intervalos/);
+});
+
+test('descarga rápida valida cuerpos semánticamente inválidos aun con hash correcto', async () => {
+  for (const mutate of [
+    (page) => ({ ...page, cantidad: page.cantidad + 1 }),
+    (page) => ({ ...page, inicio: 'ffffffff-ffff-ffff-ffff-ffffffffffff' }),
+    (page) => page.coleccion === 'combinaciones' ? { ...page, datos: { ...page.datos, filas: [[-1, 0], ...page.datos.filas.slice(1)] } } : page,
+    (page) => page.coleccion === 'combinaciones' ? { ...page, datos: { ...page.datos, textos: page.datos.textos.map(() => 'ffffffff-ffff-ffff-ffff-ffffffffffff') } } : page,
+  ]) {
+    const h = harness(fastCatalog(51, 101, 5), {}, true); h.mutatePage(mutate); await assert.rejects(h.download(), /página|intervalo|inválida|sin artículo/);
+  }
+});
+
+test('descarga rápida conserva UUID mayúsculas y no publica una copia si falla el almacenamiento', async () => {
+  const source = fastCatalog(51, 101, 5);
+  for (const collection of Object.keys(columns)) for (const row of source[collection]) {
+    row.id = row.id.toUpperCase();
+    if (collection === 'combinaciones') { row.articulo_validacion_id = row.articulo_validacion_id.toUpperCase(); row.origen_validacion_id = row.origen_validacion_id.toUpperCase(); }
+  }
+  const h = harness(source, {}, true); const received = await h.download(); assert.equal(h.compatibility.catalogCombinationCount(received), 101);
+  const index = h.compatibility.indexValidationCatalog(received);
+  assert.ok(source.combinaciones.every((r) => index.articlesByOrigin.get(r.origen_validacion_id).has(r.articulo_validacion_id)));
+  const disk = harness(fastCatalog(), {}, true); await disk.offline.saveValidationCatalog('1', 'pda', catalog(417), 'http://planta');
+  disk.diskFull(true); await assert.rejects(disk.download(catalog(417)), /Almacenamiento lleno/); assert.equal(disk.activeCount(), 0); disk.diskFull(false);
+  assert.equal((await disk.offline.loadCachedValidationCatalog('1', 'pda', 'http://planta')).temporada.version_catalogo, 417);
 });
 
 test('descarga paginada supera 45 s totales, recibe todas las filas y reanuda tras reiniciar PDA/tablet', async () => {
