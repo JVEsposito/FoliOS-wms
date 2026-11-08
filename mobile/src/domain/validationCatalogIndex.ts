@@ -29,13 +29,22 @@ export function createCatalogCompatibilityBuilder(catalog: Pick<ValidationCatalo
   const origins = new Map(catalog.origenes.map((row, index) => [row.id, index]));
   const buckets: number[][] = catalog.origenes.map(() => []);
   let count = 0;
+  function appendPair(articleId: string, originId: string) {
+    const article = articles.get(articleId); const origin = origins.get(originId);
+    if (article === undefined || origin === undefined) throw new Error('El catálogo contiene combinaciones sin artículo u origen.');
+    buckets[origin].push(article);
+    if (++count > 0xffffffff) throw new Error('El catálogo supera la capacidad de su índice de compatibilidad.');
+  }
   return {
     append(rows: Pick<ValidationCombination, 'articulo_validacion_id' | 'origen_validacion_id'>[]) {
       for (const row of rows) {
-        const article = articles.get(row.articulo_validacion_id); const origin = origins.get(row.origen_validacion_id);
-        if (article === undefined || origin === undefined) throw new Error('El catálogo contiene combinaciones sin artículo u origen.');
-        buckets[origin].push(article);
-        if (++count > 0xffffffff) throw new Error('El catálogo supera la capacidad de su índice de compatibilidad.');
+        appendPair(row.articulo_validacion_id, row.origen_validacion_id);
+      }
+    },
+    appendPairs(texts: string[], pairs: unknown[][]) {
+      for (const pair of pairs) {
+        if (!Array.isArray(pair) || pair.length !== 2 || pair.some((n) => typeof n !== 'number' || !Number.isInteger(n) || n < 0 || n >= texts.length)) throw new Error('Referencia inválida en las compatibilidades del catálogo.');
+        appendPair(texts[pair[0] as number], texts[pair[1] as number]);
       }
     },
     finish(): NonNullable<ValidationCatalog['compatibilidad']> {

@@ -2,6 +2,16 @@ import * as Crypto from 'expo-crypto';
 import * as FileSystem from 'expo-file-system/legacy';
 
 export const supportsCatalogTransfer = Boolean(FileSystem.documentDirectory);
+const directories = new Map<string, Promise<void>>();
+
+function ensureDirectory(path: string) {
+  let pending = directories.get(path);
+  if (!pending) {
+    pending = FileSystem.makeDirectoryAsync(path, { intermediates: true }).catch((error) => { directories.delete(path); throw error; });
+    directories.set(path, pending);
+  }
+  return pending;
+}
 
 function directory(server: string, deviceId: string) {
   return `${FileSystem.documentDirectory}validation-transfers-v1/${encodeURIComponent(server.trim().replace(/\/+$/, ''))}/${encodeURIComponent(deviceId)}/`;
@@ -30,7 +40,7 @@ export async function readCatalogFragment(server: string, deviceId: string, hash
 export async function writeCatalogFragment(server: string, deviceId: string, hash: string, raw: string) {
   await verifyCatalogFragment(raw, hash);
   const path = directory(server, deviceId);
-  await FileSystem.makeDirectoryAsync(path, { intermediates: true });
+  await ensureDirectory(path);
   const temporary = `${path}${hash}-${Crypto.randomUUID()}.tmp`;
   try {
     await FileSystem.writeAsStringAsync(temporary, raw);
@@ -57,21 +67,21 @@ export async function pruneCatalogFragments(server: string, deviceId: string, ke
   } catch { /* La limpieza no afecta el catálogo completo publicado ni la bandeja. */ }
 }
 
-export async function readCatalogPageCheckpoint(server: string, deviceId: string): Promise<string | null> {
-  try { return await FileSystem.readAsStringAsync(directory(server, deviceId) + 'pages-v1-index.json'); }
+export async function readCatalogPageCheckpoint(server: string, deviceId: string, kind: 'pages-v1' | 'fast-pages-v1' = 'pages-v1'): Promise<string | null> {
+  try { return await FileSystem.readAsStringAsync(directory(server, deviceId) + `${kind}-index.json`); }
   catch { return null; }
 }
 
 /** Solo avanza después de guardar y verificar la página; nunca modifica el catálogo instalado. */
-export async function writeCatalogPageCheckpoint(server: string, deviceId: string, raw: string) {
+export async function writeCatalogPageCheckpoint(server: string, deviceId: string, raw: string, kind: 'pages-v1' | 'fast-pages-v1' = 'pages-v1') {
   const path = directory(server, deviceId);
-  await FileSystem.makeDirectoryAsync(path, { intermediates: true });
+  await ensureDirectory(path);
   const temporary = `${path}pages-${Crypto.randomUUID()}.tmp`;
   try {
     await FileSystem.writeAsStringAsync(temporary, raw);
     if (await FileSystem.readAsStringAsync(temporary) !== raw) throw new Error('No se pudo guardar el avance del catálogo.');
-    await FileSystem.deleteAsync(path + 'pages-v1-index.json', { idempotent: true });
-    await FileSystem.moveAsync({ from: temporary, to: path + 'pages-v1-index.json' });
+    await FileSystem.deleteAsync(path + `${kind}-index.json`, { idempotent: true });
+    await FileSystem.moveAsync({ from: temporary, to: path + `${kind}-index.json` });
   } catch (reason) {
     await FileSystem.deleteAsync(temporary, { idempotent: true }).catch(() => {});
     throw reason;

@@ -94,7 +94,8 @@ export async function getValidationCatalog(
     );
   }
 
-  const { response, raw } = await catalogResponse(`${baseUrl}/api/validacion/catalogos${format ? `?formato=${format}` : ''}`, headers);
+  // Los backends anteriores ignoran transporte y mantienen páginas v1 de 1.000 filas.
+  const { response, raw } = await catalogResponse(`${baseUrl}/api/validacion/catalogos${format ? `?formato=${format}${format === 'paginas-v1' ? '&transporte=compacto-v1' : ''}` : ''}`, headers);
 
   if (response.status === 304) {
     if (knownCatalog) return null;

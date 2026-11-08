@@ -13,6 +13,7 @@ use App\Services\Validacion\TransferenciaCatalogoValidacion;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Symfony\Component\HttpFoundation\AcceptHeader;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
@@ -24,12 +25,17 @@ class CatalogoValidacionController extends Controller
         CatalogoOperativoValidacion $operativo,
     ): Response {
         if ($request->query('formato') === 'paginas-v1') {
-            $indice = app(DescargaPaginadaCatalogoValidacion::class)->indice();
+            $descarga = app(DescargaPaginadaCatalogoValidacion::class);
+            $compacto = $request->query('transporte') === 'compacto-v1';
+            $indice = $descarga->indice($compacto);
             $temporada = $indice['temporada'];
             $etag = "validacion-paginas-v1-{$temporada['id']}-{$temporada['version_catalogo']}";
             $condicional = $this->configurarCache(response('', 200), $etag);
             if ($condicional->isNotModified($request)) {
                 return $condicional;
+            }
+            if ($compacto) {
+                $indice['rangos_combinaciones'] = $descarga->rangosCombinaciones($temporada['id']);
             }
 
             return $this->configurarCache(response()->json($indice), $etag);
@@ -86,14 +92,35 @@ class CatalogoValidacionController extends Controller
 
     public function pagina(Request $request, string $temporadaId, int $version, string $coleccion): Response
     {
-        $datos = $request->validate(['desde' => ['nullable', 'uuid']]);
+        $datos = $request->validate(['desde' => ['nullable', 'uuid'], 'transporte' => ['nullable', 'in:compacto-v1'],
+            'inicio' => ['nullable', 'regex:/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i'],
+            'hasta' => ['nullable', 'regex:/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i']]);
+        $compacto = ($datos['transporte'] ?? null) === 'compacto-v1';
+        $desde = $datos['desde'] ?? null;
+        $limite = $datos['inicio'] ?? null;
+        $hasta = $datos['hasta'] ?? null;
+        abort_if(($limite !== null || $hasta !== null) && (! $compacto || $coleccion !== 'combinaciones'), 422, 'El intervalo no corresponde a esta colección.');
+        abort_if(($limite !== null && $hasta !== null && strcasecmp($limite, $hasta) >= 0)
+            || ($desde !== null && (($limite !== null && strcasecmp($desde, $limite) < 0) || ($hasta !== null && strcasecmp($desde, $hasta) >= 0))), 422, 'El cursor está fuera del intervalo solicitado.');
         $inicio = hrtime(true);
-        $cuerpo = app(DescargaPaginadaCatalogoValidacion::class)->pagina($temporadaId, $version, $coleccion, $datos['desde'] ?? null);
+        $cuerpo = app(DescargaPaginadaCatalogoValidacion::class)->pagina($temporadaId, $version, $coleccion, $desde, $compacto, $limite, $hasta);
         $hash = hash('sha256', $cuerpo);
+        $enviado = $cuerpo;
+        if ((AcceptHeader::fromString($request->header('Accept-Encoding', ''))->get('gzip')?->getQuality() ?? 0) > 0 && strlen($cuerpo) > 2048) {
+            $comprimido = gzencode($cuerpo, 4);
+            if ($comprimido !== false && strlen($comprimido) < strlen($cuerpo)) {
+                $enviado = $comprimido;
+            }
+        }
+        $respuesta = response($enviado)->header('Content-Type', 'application/json');
+        $respuesta->setVary('Accept-Encoding');
+        if ($enviado !== $cuerpo) {
+            $respuesta->headers->set('Content-Encoding', 'gzip');
+        }
 
-        return $this->configurarCache(response($cuerpo)->header('Content-Type', 'application/json')
+        return $this->configurarCache($respuesta
             ->header('X-Catalog-Bytes', (string) strlen($cuerpo))->header('X-Catalog-Target', $hash)
-            ->header('Server-Timing', 'catalog;dur='.round((hrtime(true) - $inicio) / 1000000, 2)), $hash);
+            ->header('Server-Timing', 'catalog;dur='.round((hrtime(true) - $inicio) / 1000000, 2)), hash('sha256', $enviado));
     }
 
     private function catalogoConsistente(Request $request, ServicioTemporadaActiva $temporadas, CatalogoOperativoValidacion $operativo): Response
@@ -132,7 +159,7 @@ class CatalogoValidacionController extends Controller
         $respuesta->setEtag($etag);
         $respuesta->setPrivate();
         $respuesta->headers->addCacheControlDirective('no-cache');
-        $respuesta->setVary('Authorization');
+        $respuesta->setVary(array_unique([...$respuesta->getVary(), 'Authorization']));
         $respuesta->headers->set('Access-Control-Expose-Headers', 'ETag, X-Catalog-Bytes, X-Catalog-Fragments, X-Catalog-Target, X-Catalog-Transfer, Server-Timing');
 
         return $respuesta;

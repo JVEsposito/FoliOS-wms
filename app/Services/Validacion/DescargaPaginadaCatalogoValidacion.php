@@ -13,9 +13,11 @@ class DescargaPaginadaCatalogoValidacion
 {
     public const TAMANO = 1000;
 
+    public const TAMANOS_RAPIDOS = ['categorias' => 1000, 'articulos' => 5000, 'origenes' => 1000, 'combinaciones' => 10000];
+
     public const COLECCIONES = ['categorias', 'articulos', 'origenes', 'combinaciones'];
 
-    public function indice(): array
+    public function indice(bool $compacto = false): array
     {
         $temporada = app(ServicioTemporadaActiva::class)->buscar();
         abort_unless($temporada, 404, 'No existe una temporada activa para validación.');
@@ -27,14 +29,64 @@ class DescargaPaginadaCatalogoValidacion
             'resultados' => array_column(ResultadoValidacionPallet::cases(), 'value'),
             'motivos' => array_column(MotivoValidacionPallet::cases(), 'value'),
             'generado_at' => now()->toAtomString(),
+            ...($compacto ? ['transporte' => 'compacto-v1', 'tamanos_pagina' => self::TAMANOS_RAPIDOS] : []),
         ];
     }
 
-    public function pagina(string $temporadaId, int $version, string $coleccion, ?string $desde): string
+    /** Cuatro intervalos disjuntos de PK; solo lee los extremos del índice existente. */
+    public function rangosCombinaciones(string $temporadaId): array
+    {
+        $base = DB::table('combinaciones_validacion')->where('temporada_id', $temporadaId)->where('activo', true);
+        if (in_array(DB::connection()->getDriverName(), ['mysql', 'mariadb'], true)) {
+            $base->forceIndex('comb_val_temporada_activo');
+        }
+        $minimo = (clone $base)->orderBy('id')->value('id');
+        $maximo = (clone $base)->orderByDesc('id')->value('id');
+        if ($minimo === null || $maximo === null || $minimo === $maximo) {
+            return [['inicio' => null, 'hasta' => null]];
+        }
+        $minimo = strtolower($minimo);
+        $maximo = strtolower($maximo);
+        // UUID de 128 bits sin depender de BCMath.
+        $mitad = function (string $a, string $b): string {
+            $a = str_replace('-', '', $a);
+            $b = str_replace('-', '', $b);
+            $suma = '';
+            $acarreo = 0;
+            for ($i = 31; $i >= 0; $i--) {
+                $n = hexdec($a[$i]) + hexdec($b[$i]) + $acarreo;
+                $suma = dechex($n % 16).$suma;
+                $acarreo = intdiv($n, 16);
+            }
+            $suma = dechex($acarreo).$suma;
+            $resultado = '';
+            $resto = 0;
+            for ($i = 0; $i < 33; $i++) {
+                $n = $resto * 16 + hexdec($suma[$i]);
+                $resultado .= dechex(intdiv($n, 2));
+                $resto = $n % 2;
+            }
+            $hex = substr($resultado, -32);
+
+            return substr($hex, 0, 8).'-'.substr($hex, 8, 4).'-'.substr($hex, 12, 4).'-'.substr($hex, 16, 4).'-'.substr($hex, 20);
+        };
+        $centro = $mitad($minimo, $maximo);
+        $limites = array_values(array_unique(array_filter([$mitad($minimo, $centro), $centro, $mitad($centro, $maximo)], fn ($p): bool => $p > $minimo && $p < $maximo)));
+        $puntos = [null, ...$limites, null];
+        $rangos = [];
+        for ($i = 0; $i < count($puntos) - 1; $i++) {
+            $rangos[] = ['inicio' => $puntos[$i], 'hasta' => $puntos[$i + 1]];
+        }
+
+        return $rangos;
+    }
+
+    public function pagina(string $temporadaId, int $version, string $coleccion, ?string $desde,
+        bool $compacto = false, ?string $inicio = null, ?string $hasta = null): string
     {
         abort_unless(in_array($coleccion, self::COLECCIONES, true), 404);
 
-        return DB::transaction(function () use ($temporadaId, $version, $coleccion, $desde): string {
+        return DB::transaction(function () use ($temporadaId, $version, $coleccion, $desde, $compacto, $inicio, $hasta): string {
             $temporadas = app(ServicioTemporadaActiva::class);
             // Lectura de snapshot, sin esperar al bloqueo exclusivo de una edición.
             // La versión se comprueba en cada petición y antes de entregar la página.
@@ -58,11 +110,14 @@ class DescargaPaginadaCatalogoValidacion
                         'c.articulo_validacion_id', 'c.origen_validacion_id', 'c.codigo_externo',
                     ]],
             };
+            $tamano = $compacto ? self::TAMANOS_RAPIDOS[$coleccion] : self::TAMANO;
             // El índice temporada/activo más la PK permite continuar por ID sin OFFSET
             // ni ordenar el cruce completo por especie/cliente en cada solicitud.
             $filas = $consulta->when($desde, fn ($q) => $q->where($id, '>', $desde))
-                ->orderBy($id)->limit(self::TAMANO + 1)->get($columnas);
-            $hayMas = $filas->count() > self::TAMANO;
+                ->when($inicio, fn ($q) => $q->where($id, '>=', $inicio))
+                ->when($hasta, fn ($q) => $q->where($id, '<', $hasta))
+                ->orderBy($id)->limit($tamano + 1)->get($columnas);
+            $hayMas = $filas->count() > $tamano;
             if ($hayMas) {
                 $filas->pop();
             }
@@ -87,7 +142,11 @@ class DescargaPaginadaCatalogoValidacion
             return json_encode([
                 'formato' => 'paginas-v1', 'temporada_id' => $temporadaId, 'version' => $version,
                 'coleccion' => $coleccion, 'desde' => $desde, 'siguiente' => $hayMas ? $filas->last()->id : null,
-                'filas' => $filas->values()->all(),
+                ...($compacto ? ['transporte' => 'compacto-v1', 'inicio' => $inicio, 'hasta' => $hasta,
+                    'ultimo_id' => $filas->last()?->id, 'cantidad' => $filas->count(),
+                    'datos' => app(TransferenciaCatalogoValidacion::class)->codificarFilas(
+                        $coleccion === 'combinaciones' ? ['articulo_validacion_id', 'origen_validacion_id'] : TransferenciaCatalogoValidacion::COLUMNAS[$coleccion],
+                        $filas->values()->all())] : ['filas' => $filas->values()->all()]),
             ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         });
     }
