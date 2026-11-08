@@ -142,6 +142,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/jornadas/{id}', [ControlPersonalFrigorificoController::class, 'jornada']);
         Route::post('/jornadas/{id}/anular', [ControlPersonalFrigorificoController::class, 'anular']);
         Route::get('/jornadas/{id}/historial', [ControlPersonalFrigorificoController::class, 'historial']);
+        Route::get('/ficha', [ControlPersonalFrigorificoController::class, 'ficha']);
+        Route::post('/ausencias', [ControlPersonalFrigorificoController::class, 'ausencia']);
+        Route::put('/ausencias/{id}', [ControlPersonalFrigorificoController::class, 'ausencia']);
+        Route::post('/ausencias/{id}/anular', [ControlPersonalFrigorificoController::class, 'anularAusencia']);
+        Route::get('/ausencias/{id}/historial', [ControlPersonalFrigorificoController::class, 'historialAusencia']);
     });
     Route::get('/gerencia/resumen', PanelGerencialController::class)
         ->middleware('can:consultar-panel-gerencial');

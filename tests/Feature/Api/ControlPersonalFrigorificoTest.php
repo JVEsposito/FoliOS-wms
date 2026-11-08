@@ -4,7 +4,9 @@ namespace Tests\Feature\Api;
 
 use App\Enums\RolUsuario;
 use App\Models\PerfilAcceso;
+use App\Models\PersonaFrigorifico;
 use App\Models\User;
+use App\Services\Frigorifico\ControlPersonal;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -72,6 +74,11 @@ class ControlPersonalFrigorificoTest extends TestCase
                 $this->putJson($this->ruta.'/jornadas/inexistente', [])->assertForbidden();
                 $this->postJson($this->ruta.'/jornadas/inexistente/anular', [])->assertForbidden();
                 $this->getJson($this->ruta.'/jornadas/inexistente/historial')->assertForbidden();
+                $this->get($this->ruta.'/ficha?mes=2026-11')->assertForbidden();
+                $this->postJson($this->ruta.'/ausencias', [])->assertForbidden();
+                $this->putJson($this->ruta.'/ausencias/inexistente', [])->assertForbidden();
+                $this->postJson($this->ruta.'/ausencias/inexistente/anular', [])->assertForbidden();
+                $this->getJson($this->ruta.'/ausencias/inexistente/historial')->assertForbidden();
             }
         }
         $this->supervisor->update(['activo' => false]);
@@ -142,5 +149,122 @@ class ControlPersonalFrigorificoTest extends TestCase
         $this->getJson($this->ruta.'?mes=2026-11&persona_id='.$p['id'])->assertOk()->assertJsonCount(0, 'data.jornadas');
         $this->getJson($this->ruta.'?mes=2026-11&sector=Prefr%C3%ADo')->assertOk()->assertJsonCount(1, 'data.jornadas')->assertJsonPath('data.resumen.0.persona_id', $otra['id']);
         $this->getJson($this->ruta.'?mes=2026-13')->assertUnprocessable();
+    }
+
+    private function ausencia(string $personaId, array $cambios = []): array
+    {
+        return [...['persona_id' => $personaId, 'tipo' => 'libre', 'desde' => '2026-11-02', 'hasta' => '2026-11-02', 'observacion' => null], ...$cambios];
+    }
+
+    private function hojaExcel(string $url): string
+    {
+        $response = $this->get($url)->assertOk();
+        $zip = new \ZipArchive;
+        $zip->open($response->baseResponse->getFile()->getPathname());
+        $xml = $zip->getFromName('xl/worksheets/sheet1.xml').$zip->getFromName('xl/sharedStrings.xml');
+        $zip->close();
+
+        return (string) $xml;
+    }
+
+    public function test_ausencias_por_rango_suman_dias_del_mes_sin_chocar_con_jornadas_ni_entre_si(): void
+    {
+        $p = $this->persona();
+        $this->postJson($this->ruta.'/jornadas', $this->jornada($p['id']))->assertCreated();
+        // El día de ingreso de una jornada vigente no admite ausencia.
+        $this->postJson($this->ruta.'/ausencias', $this->ausencia($p['id'], ['desde' => '2026-11-04', 'hasta' => '2026-11-04']))
+            ->assertUnprocessable()->assertJsonValidationErrors('desde');
+        $a = $this->postJson($this->ruta.'/ausencias', $this->ausencia($p['id'], ['tipo' => 'vacaciones', 'desde' => '2026-10-28', 'hasta' => '2026-11-02']))
+            ->assertCreated()->json('data');
+        $this->getJson($this->ruta.'?mes=2026-11')->assertOk()->assertJsonPath('data.resumen.0.ausencias.vacaciones', 2)
+            ->assertJsonPath('data.resumen.0.dias_ausencia', 2)->assertJsonPath('data.ausencias.0.dias_mes', 2)
+            ->assertJsonPath('data.ausencias.0.dias_total', 6)->assertJsonPath('data.ausencias.0.tipo_nombre', 'Vacaciones');
+        // Una persona con solo ausencias en el mes también aparece en el resumen.
+        $this->getJson($this->ruta.'?mes=2026-10')->assertOk()->assertJsonPath('data.resumen.0.ausencias.vacaciones', 4)
+            ->assertJsonPath('data.resumen.0.minutos_trabajados', 0);
+        // Ni jornadas dentro de la ausencia ni ausencias superpuestas.
+        $this->postJson($this->ruta.'/jornadas', $this->jornada($p['id'], ['ingreso' => '2026-11-01T08:00', 'salida' => '2026-11-01T17:00']))
+            ->assertUnprocessable()->assertJsonValidationErrors('ingreso');
+        $this->postJson($this->ruta.'/ausencias', $this->ausencia($p['id'], ['desde' => '2026-11-02', 'hasta' => '2026-11-03']))
+            ->assertUnprocessable()->assertJsonValidationErrors('desde');
+        // Validaciones de fechas: orden, largo máximo y faltas sin anticipar.
+        $this->postJson($this->ruta.'/ausencias', $this->ausencia($p['id'], ['desde' => '2026-11-10', 'hasta' => '2026-11-09']))
+            ->assertUnprocessable()->assertJsonValidationErrors('hasta');
+        $this->postJson($this->ruta.'/ausencias', $this->ausencia($p['id'], ['tipo' => 'licencia', 'desde' => '2026-11-10', 'hasta' => '2027-02-10']))
+            ->assertUnprocessable()->assertJsonValidationErrors('hasta');
+        $this->postJson($this->ruta.'/ausencias', $this->ausencia($p['id'], ['tipo' => 'falta', 'desde' => '2026-11-07', 'hasta' => '2026-11-07']))
+            ->assertUnprocessable()->assertJsonValidationErrors('hasta');
+        $this->postJson($this->ruta.'/ausencias', $this->ausencia($p['id'], ['tipo' => 'falta', 'desde' => '2026-11-06', 'hasta' => '2026-11-06']))->assertCreated();
+        $this->postJson($this->ruta.'/ausencias', $this->ausencia($p['id'], ['tipo' => 'turno']))->assertUnprocessable()->assertJsonValidationErrors('tipo');
+        // Corrección y anulación con versión, motivo e historial propio.
+        $corregir = [...$this->ausencia($p['id'], ['tipo' => 'vacaciones', 'desde' => '2026-10-28', 'hasta' => '2026-11-01']), 'version' => 1];
+        $this->putJson($this->ruta.'/ausencias/'.$a['id'], $corregir)->assertUnprocessable()->assertJsonValidationErrors('motivo');
+        $this->putJson($this->ruta.'/ausencias/'.$a['id'], [...$corregir, 'motivo' => 'Volvió un día antes'])->assertOk()->assertJsonPath('data.version', 2);
+        $this->putJson($this->ruta.'/ausencias/'.$a['id'], [...$corregir, 'motivo' => 'Reintento'])->assertStatus(409);
+        $this->getJson($this->ruta.'?mes=2026-11')->assertOk()->assertJsonPath('data.resumen.0.ausencias.vacaciones', 1)
+            ->assertJsonPath('data.resumen.0.ausencias.falta', 1)->assertJsonPath('data.resumen.0.dias_ausencia', 2);
+        $resumen = $this->hojaExcel($this->ruta.'/exportar?mes=2026-11&vista=resumen');
+        $this->assertStringContainsString('Vacaciones (días)', $resumen);
+        $this->postJson($this->ruta.'/ausencias/'.$a['id'].'/anular', ['version' => 2, 'motivo' => 'Se registró en la persona equivocada'])->assertOk();
+        $this->postJson($this->ruta.'/ausencias/'.$a['id'].'/anular', ['version' => 3, 'motivo' => 'Otra vez'])->assertStatus(409);
+        $this->putJson($this->ruta.'/ausencias/'.$a['id'], [...$corregir, 'version' => 3, 'motivo' => 'Revivir'])->assertUnprocessable();
+        $this->getJson($this->ruta.'?mes=2026-11')->assertOk()->assertJsonPath('data.resumen.0.ausencias.vacaciones', 0)
+            ->assertJsonPath('data.ausencias.1.estado', 'anulada');
+        $this->getJson($this->ruta.'/ausencias/'.$a['id'].'/historial')->assertOk()->assertJsonCount(3, 'data')
+            ->assertJsonPath('data.0.accion', 'ausencia_anulada')->assertJsonPath('data.1.anterior.hasta', '2026-11-02')
+            ->assertJsonPath('data.1.nuevo.hasta', '2026-11-01')->assertJsonPath('data.0.user_id', $this->supervisor->id);
+        // Anulada, el día vuelve a admitir jornada.
+        $this->postJson($this->ruta.'/jornadas', $this->jornada($p['id'], ['ingreso' => '2026-11-01T08:00', 'salida' => '2026-11-01T17:00']))->assertCreated();
+        $ausencias = $this->hojaExcel($this->ruta.'/exportar?mes=2026-11&vista=ausencias');
+        $this->assertStringContainsString('Vacaciones', $ausencias);
+        $this->assertStringContainsString('28-10-2026', $ausencias);
+    }
+
+    public function test_cuenta_dias_de_ausencia_sin_saltar_dias_con_el_cambio_de_horario(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-12-01T12:00:00Z'));
+        $p = $this->persona();
+        // Chile adelanta la hora el primer domingo de septiembre y la atrasa el primer domingo de abril.
+        $this->postJson($this->ruta.'/ausencias', $this->ausencia($p['id'], ['tipo' => 'licencia', 'desde' => '2026-09-05', 'hasta' => '2026-09-07']))->assertCreated();
+        $this->postJson($this->ruta.'/ausencias', $this->ausencia($p['id'], ['tipo' => 'libre', 'desde' => '2026-04-04', 'hasta' => '2026-04-06']))->assertCreated();
+        $this->getJson($this->ruta.'?mes=2026-09')->assertOk()->assertJsonPath('data.resumen.0.ausencias.licencia', 3);
+        $this->getJson($this->ruta.'?mes=2026-04')->assertOk()->assertJsonPath('data.resumen.0.ausencias.libre', 3);
+        $persona = PersonaFrigorifico::query()->findOrFail($p['id']);
+        $ficha = app(ControlPersonal::class)->ficha('2026-09', $persona);
+        $this->assertCount(30, $ficha['dias']);
+        $this->assertSame(['2026-09-05', '2026-09-06', '2026-09-07'], array_column(array_filter($ficha['dias'], fn ($d) => $d['ausencia'] !== null), 'fecha'));
+        $this->assertSame(2, $ficha['dias'][0]['dia_semana']); // 01-09-2026 es martes
+    }
+
+    public function test_ficha_pdf_dia_a_dia_por_persona_y_de_todas_las_personas_con_registros(): void
+    {
+        $ana = $this->persona();
+        $beto = $this->persona(['identificador' => 'INT-002', 'nombre' => 'Beto de prueba', 'sector' => 'Prefrío']);
+        $this->persona(['identificador' => 'INT-003', 'nombre' => 'Carla sin registros']);
+        $this->postJson($this->ruta.'/jornadas', $this->jornada($ana['id'], ['observacion' => 'Cubrió turno de despacho']))->assertCreated();
+        $this->postJson($this->ruta.'/jornadas', $this->jornada($ana['id'], ['ingreso' => '2026-11-05T20:00', 'salida' => null]))->assertCreated();
+        $this->postJson($this->ruta.'/ausencias', $this->ausencia($ana['id']))->assertCreated();
+        $this->postJson($this->ruta.'/ausencias', $this->ausencia($beto['id'], ['tipo' => 'permiso', 'observacion' => 'Trámite personal']))->assertCreated();
+
+        $pdf = $this->get($this->ruta.'/ficha?mes=2026-11&persona_id='.$ana['id'])->assertOk()
+            ->assertHeader('Content-Type', 'application/pdf')->assertHeader('Cache-Control', 'no-store, private');
+        $this->assertStringContainsString('ficha-personal-2026-11-ana-de-prueba.pdf', (string) $pdf->headers->get('Content-Disposition'));
+        $contenido = $pdf->getContent();
+        $this->assertStringStartsWith('%PDF-1.4', $contenido);
+        foreach (['FICHA MENSUAL DE JORNADAS', 'Noviembre 2026', 'Ana de prueba', 'mi'.chr(0xE9).' 04-11', '06:17 +1', '01:17', 'Sin salida',
+            'Cubri'.chr(0xF3).' turno de despacho', 'Libre', 'Sin registro', 'Revisi'.chr(0xF3).'n con el trabajador', 'Hoja 1 de'] as $texto) {
+            $this->assertStringContainsString($texto, $contenido, $texto);
+        }
+        $this->assertStringNotContainsString('Beto de prueba', $contenido);
+
+        $todas = $this->get($this->ruta.'/ficha?mes=2026-11')->assertOk()->getContent();
+        $this->assertStringContainsString('Ana de prueba', $todas);
+        $this->assertStringContainsString('Beto de prueba', $todas);
+        $this->assertStringContainsString('Tr'.chr(0xE1).'mite personal', $todas);
+        $this->assertStringNotContainsString('Carla sin registros', $todas);
+        $this->assertGreaterThan(substr_count($contenido, '/Type /Page '), substr_count($todas, '/Type /Page '));
+        $soloPrefrio = $this->get($this->ruta.'/ficha?mes=2026-11&sector=Prefr%C3%ADo')->assertOk()->getContent();
+        $this->assertStringNotContainsString('Ana de prueba', $soloPrefrio);
+        $this->getJson($this->ruta.'/ficha?mes=2026-09')->assertUnprocessable()->assertJsonValidationErrors('mes');
     }
 }
