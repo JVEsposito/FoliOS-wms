@@ -59,8 +59,37 @@ beneficiarse de gzip las apps anteriores que usen el endpoint paginado.
 - Un cambio de versión devuelve 409 y obliga a obtener un conjunto coherente. La
   limpieza de partes antiguas ocurre únicamente después de completar la descarga.
 
-Una versión nueva sigue necesitando una descarga completa. Este modo no implementa
-deltas entre versiones. Un catálogo instalado sin cambios continúa usando 304.
+Un catálogo instalado sin cambios continúa usando 304.
+
+## Cambios entre versiones
+
+Una PDA o tablet actualizada puede indicar la temporada y versión instaladas.
+El servidor prepara en la cola general una copia privada del catálogo vigente
+y calcula sus diferencias con hasta tres versiones previas conservadas. Compara
+las filas operativas del catálogo publicado, por lo que incluye los cambios
+derivados de las importaciones y de la sincronización SAG. Lee y compara en lotes
+y publica la copia con sus cambios una vez terminada.
+
+Durante la preparación, el equipo sigue usando la copia válida. Los cambios
+incluyen altas, modificaciones y retiros, también de pares artículo/origen.
+El equipo comprueba la integridad, la versión base y las cantidades finales
+antes de instalar la nueva copia. Conserva la anterior, la bandeja y la jornada.
+Si falta la base, cambia la temporada, vence la espera de preparación o las
+diferencias superan 2 MiB sin compresión, usa la descarga compacta completa.
+
+En un despliegue, ejecutar este comando antes del siguiente cambio al maestro.
+
+```bash
+php artisan validacion:preparar-incremental
+```
+
+El comando lee la proyección y escribe la base en el almacenamiento privado de
+Laravel. La cola general con conexión `database` prepara las siguientes versiones.
+El backend HTTP y el worker deben compartir ese almacenamiento y la caché de
+Laravel. Verificar que la PDA parta de la versión informada por el comando.
+Después de un cambio pequeño en Maestros, comprobar la instalación en el equipo
+y verificar la respuesta `X-Catalog-Transfer: delta-v1`. El tiempo total
+incluye la preparación en el worker y el guardado de la copia en el dispositivo.
 
 ## Medición reproducible
 

@@ -82,11 +82,11 @@ class DescargaPaginadaCatalogoValidacion
     }
 
     public function pagina(string $temporadaId, int $version, string $coleccion, ?string $desde,
-        bool $compacto = false, ?string $inicio = null, ?string $hasta = null): string
+        bool $compacto = false, ?string $inicio = null, ?string $hasta = null, ?int $tamano = null): string
     {
         abort_unless(in_array($coleccion, self::COLECCIONES, true), 404);
 
-        return DB::transaction(function () use ($temporadaId, $version, $coleccion, $desde, $compacto, $inicio, $hasta): string {
+        return DB::transaction(function () use ($temporadaId, $version, $coleccion, $desde, $compacto, $inicio, $hasta, $tamano): string {
             $temporadas = app(ServicioTemporadaActiva::class);
             // Lectura de snapshot, sin esperar al bloqueo exclusivo de una edición.
             // La versión se comprueba en cada petición y antes de entregar la página.
@@ -110,7 +110,7 @@ class DescargaPaginadaCatalogoValidacion
                         'c.articulo_validacion_id', 'c.origen_validacion_id', 'c.codigo_externo',
                     ]],
             };
-            $tamano = $compacto ? self::TAMANOS_RAPIDOS[$coleccion] : self::TAMANO;
+            $tamano ??= $compacto ? self::TAMANOS_RAPIDOS[$coleccion] : self::TAMANO;
             // El índice temporada/activo más la PK permite continuar por ID sin OFFSET
             // ni ordenar el cruce completo por especie/cliente en cada solicitud.
             $filas = $consulta->when($desde, fn ($q) => $q->where($id, '>', $desde))
