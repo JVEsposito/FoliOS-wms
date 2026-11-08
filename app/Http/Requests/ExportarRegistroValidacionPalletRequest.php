@@ -23,7 +23,7 @@ class ExportarRegistroValidacionPalletRequest extends FormRequest
             'temporada_id' => ['required', 'uuid', 'exists:temporadas,id'],
             'fecha' => ['required', 'date_format:Y-m-d'],
             'folio' => ['nullable', 'string', 'max:50'],
-            'cliente' => ['nullable', 'string', 'max:255'],
+            'cliente' => ['required', 'string', 'max:255'],
             'formato' => ['nullable', Rule::in(['xlsx', 'pdf'])],
             'estado' => ['exclude_unless:formato,pdf', 'nullable', Rule::enum(EstadoValidacionPallet::class)],
             'resultado' => ['nullable', Rule::enum(ResultadoValidacionPallet::class)],
@@ -31,6 +31,11 @@ class ExportarRegistroValidacionPalletRequest extends FormRequest
             'turno' => ['nullable', 'string', Rule::in(['A', 'B'])],
             'user_id' => ['nullable', 'integer', 'exists:users,id'],
         ];
+    }
+
+    public function messages(): array
+    {
+        return ['cliente.required' => 'Selecciona un cliente para descargar el informe.'];
     }
 
     protected function prepareForValidation(): void

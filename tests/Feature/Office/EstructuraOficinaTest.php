@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Office;
 
+use Carbon\CarbonImmutable;
 use DOMDocument;
 use DOMXPath;
 use Illuminate\Support\Facades\File;
@@ -9,6 +10,18 @@ use Tests\TestCase;
 
 class EstructuraOficinaTest extends TestCase
 {
+    public function test_validacion_abre_la_jornada_vigente_en_hora_de_planta(): void
+    {
+        config(['app.operational_timezone' => 'America/Santiago']);
+
+        foreach (['2026-11-08T02:00:00-03:00' => '2026-11-07', '2026-11-08T07:00:00-03:00' => '2026-11-08'] as $hora => $fecha) {
+            $this->travelTo(CarbonImmutable::parse($hora));
+
+            $this->get('/oficina/validacion')->assertOk()
+                ->assertSee('name="fecha" type="date" value="'.$fecha.'"', false);
+        }
+    }
+
     public function test_cuenta_envases_incluye_conciliacion_y_guia_de_uso(): void
     {
         $html = $this->get('/oficina/envases/cuenta-corriente')->assertOk()->getContent();
