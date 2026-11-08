@@ -7,7 +7,7 @@ import { chromium } from 'playwright';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const identity = {nombre:'Supervisión',rol:'supervisor_frio',modulos_acceso:['frigorifico.control-personal'],puede_controlar_personal_frigorifico:true};
-const fixture = () => ({personas:[{id:'persona-1',nombre:'Ana de prueba',identificador:'INT-001',sector:'Cámaras',funcion:'Camarera',jornada_base_minutos:480,activo:true,version:1}],sectores:['Cámaras'],data:{meta:{mes:'2026-11',zona_horaria:'America/Santiago',criterio:'Jornadas del mes de ingreso. Pendientes y anuladas no suman horas.'},resumen:[{persona_id:'persona-1',nombre:'Ana de prueba',identificador:'INT-001',jornadas_cerradas:0,pendientes:1,minutos_trabajados:0,minutos_extra:0}],jornadas:[{id:'jornada-1',persona_id:'persona-1',persona:{nombre:'Ana de prueba',identificador:'INT-001'},ingreso:'2026-11-04T20:00',salida:null,colacion_minutos:60,jornada_base_minutos:480,sector:'Cámaras',estado:'pendiente',version:1,minutos_trabajados:null,minutos_extra:null}]}});
+const fixture = () => ({personas:[{id:'persona-1',nombre:'Ana de prueba',identificador:'INT-001',sector:'Cámaras',funcion:'Camarera',jornada_base_minutos:480,activo:true,version:1}],sectores:['Cámaras'],data:{meta:{mes:'2026-11',zona_horaria:'America/Santiago',criterio:'Jornadas del mes de ingreso. Pendientes y anuladas no suman horas.',tipos_ausencia:{falta:'Falta',permiso:'Permiso',licencia:'Licencia',libre:'Libre',vacaciones:'Vacaciones'}},resumen:[{persona_id:'persona-1',nombre:'Ana de prueba',identificador:'INT-001',jornadas_cerradas:0,pendientes:1,minutos_trabajados:0,minutos_extra:0,dias_ausencia:0,ausencias:{falta:0,permiso:0,licencia:0,libre:0,vacaciones:0}}],ausencias:[],jornadas:[{id:'jornada-1',persona_id:'persona-1',persona:{nombre:'Ana de prueba',identificador:'INT-001'},ingreso:'2026-11-04T20:00',salida:null,colacion_minutos:60,jornada_base_minutos:480,sector:'Cámaras',estado:'pendiente',version:1,minutos_trabajados:null,minutos_extra:null}]}});
 
 for (const width of [1280,390]) test(`Control de personal: cierre nocturno, conflicto y descarga en ${width}px`, async () => {
     const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined,args:['--no-sandbox','--disable-gpu']});
@@ -17,7 +17,7 @@ for (const width of [1280,390]) test(`Control de personal: cierre nocturno, conf
             localStorage.setItem('estiba_wms_office_token', 'fixture');
             localStorage.setItem('estiba_wms_office_identity', JSON.stringify(user));
         }, identity);
-        const response = fixture(); const writes=[]; let conflict=false; let exportUrl;
+        const response = fixture(); const writes=[]; const absenceWrites=[]; let conflict=false; let exportUrl; let sheetUrl;
         await context.route('http://localhost/**', async (route) => {
             const path = new URL(route.request().url()).pathname;
             if (path === '/oficina/frigorifico/control-personal') return route.fulfill({body:readFileSync(resolve(root,'storage/app/ui/oficina/control-personal.html'),'utf8'),contentType:'text/html'});
@@ -31,6 +31,13 @@ for (const width of [1280,390]) test(`Control de personal: cierre nocturno, conf
                 Object.assign(response.data.resumen[0],{jornadas_cerradas:1,pendientes:0,minutos_trabajados:557,minutos_extra:77});
                 return route.fulfill({json:{data:response.data.jornadas[0]}});
             }
+            if (path.endsWith('/control-personal/ausencias')) {
+                const body=route.request().postDataJSON(); absenceWrites.push(body);
+                const ausencia={id:'ausencia-1',...body,persona:{id:'persona-1',nombre:'Ana de prueba',identificador:'INT-001'},tipo_nombre:'Vacaciones',dias_mes:3,dias_total:3,estado:'vigente',version:1};
+                response.data.ausencias.unshift(ausencia); Object.assign(response.data.resumen[0],{dias_ausencia:3,ausencias:{...response.data.resumen[0].ausencias,vacaciones:3}});
+                return route.fulfill({status:201,json:{data:ausencia}});
+            }
+            if (path.endsWith('/ficha')) {sheetUrl=route.request().url(); return route.fulfill({body:Buffer.from('%PDF-1.4 test'),contentType:'application/pdf'});}
             if (path.endsWith('/exportar')) {exportUrl=route.request().url(); return route.fulfill({body:Buffer.from('PK test export'),contentType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});}
             return route.fulfill({json:{data:{planta:'Pruebas',temporada:null,avisos_materiales:[],avisos_cierre:[]}}});
         });
@@ -50,7 +57,20 @@ for (const width of [1280,390]) test(`Control de personal: cierre nocturno, conf
         assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),true);
         if (process.env.FOLIOS_UI_CAPTURE_DIR) await page.screenshot({path:resolve(process.env.FOLIOS_UI_CAPTURE_DIR,`personal-${width}.png`),fullPage:true});
         const downloaded=page.waitForEvent('download');await page.locator('#staffExportSummary').click();await downloaded;assert.match(exportUrl,/vista=resumen/);
-        conflict=true;await page.getByRole('button',{name:'Corregir',exact:true}).click();
+        await page.locator('#staffAbsenceNew').click();
+        assert.equal(await page.locator('#staffAbsenceType').inputValue(),'libre');
+        await page.locator('#staffAbsencePerson').selectOption('persona-1');
+        await page.locator('#staffAbsenceType').selectOption('vacaciones');
+        await page.locator('#staffAbsenceFrom').fill('2026-11-09');await page.locator('#staffAbsenceTo').fill('2026-11-11');
+        await page.locator('#staffAbsenceSave').click();
+        await page.locator('#staffAbsences').filter({hasText:'Vacaciones'}).waitFor();
+        assert.deepEqual(absenceWrites,[{persona_id:'persona-1',tipo:'vacaciones',desde:'2026-11-09',hasta:'2026-11-11',observacion:null}]);
+        assert.match(await page.locator('#staffAbsences').innerText(),/Vacaciones.*09-11-2026 al 11-11-2026/s);
+        assert.match(await page.locator('#staffSummary').innerText(),/Vacaciones 3/);
+        const sheet=page.waitForEvent('download');await page.getByRole('button',{name:'Ficha PDF de Ana de prueba'}).click();await sheet;
+        assert.match(sheetUrl,/mes=2026-11/);assert.match(sheetUrl,/persona_id=persona-1/);
+        assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),true);
+        conflict=true;await page.getByRole('button',{name:'Corregir',exact:true}).first().click();
         await page.locator('#staffReason').fill('Verificación pendiente');await page.locator('#staffEntrySave').click();
         await page.locator('#staffEntryError').filter({hasText:'El borrador se conserva'}).waitFor();
         assert.equal(await page.locator('#staffReason').inputValue(),'Verificación pendiente');assert.equal(writes[1].version,2);

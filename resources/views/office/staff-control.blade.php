@@ -10,8 +10,9 @@
 <main class="office-app is-hidden" id="staffApp">
     <x-office.navigation domain="frigorifico" office="control-personal" context="FRIGORÍFICO · SUPERVISIÓN" icon="◷" />
     <div class="staff-shell estiba-ui">
-        <x-estiba.heading eyebrow="Supervisión · Control interno" title="Control de personal" description="Ingresos, salidas y horas extra para el seguimiento mensual de Frigorífico.">
+        <x-estiba.heading eyebrow="Supervisión · Control interno" title="Control de personal" description="Registro propio del supervisor: ingresos, salidas, horas extra y ausencias para contrastar a fin de mes con lo que informa RRHH.">
             <button class="eui-button eui-button--secondary" type="button" id="staffPeopleOpen">Personal</button>
+            <button class="eui-button eui-button--secondary" type="button" id="staffAbsenceNew">Registrar ausencia</button>
             <button class="eui-button" type="button" id="staffNew">Registrar jornada</button>
         </x-estiba.heading>
         <p id="staffStatus" role="status" aria-live="polite">Consultando control de personal…</p>
@@ -23,18 +24,24 @@
             <button class="eui-button eui-button--secondary" type="submit">Consultar</button>
             <button class="eui-button eui-button--secondary" type="button" id="staffExportSummary">Excel resumen</button>
             <button class="eui-button eui-button--secondary" type="button" id="staffExportDetail">Excel detalle</button>
+            <button class="eui-button eui-button--secondary" type="button" id="staffExportAbsences">Excel ausencias</button>
+            <button class="eui-button eui-button--secondary" type="button" id="staffSheetAll">Fichas PDF</button>
         </form>
         <div class="staff-totals" id="staffTotals" aria-live="polite"></div>
         <p class="staff-help" id="staffCriterion"></p>
         <section class="eui-panel staff-panel" aria-labelledby="staffSummaryTitle">
             <h2 id="staffSummaryTitle">Resumen mensual por persona</h2>
-            <div class="staff-table-wrap"><table class="staff-table"><thead><tr><th>Persona</th><th>Cerradas</th><th>Pendientes</th><th>Trabajado</th><th>Horas extra</th></tr></thead><tbody id="staffSummary"></tbody></table></div>
+            <div class="staff-table-wrap"><table class="staff-table"><thead><tr><th>Persona</th><th>Cerradas</th><th>Pendientes</th><th>Trabajado</th><th>Horas extra</th><th>Ausencias</th><th>Ficha mensual</th></tr></thead><tbody id="staffSummary"></tbody></table></div>
         </section>
         <section class="eui-panel staff-panel" aria-labelledby="staffRecordsTitle">
             <div class="staff-toolbar"><h2 id="staffRecordsTitle">Jornadas del mes</h2><label>Estado<select class="eui-input" id="staffState"><option value="">Todas las jornadas</option><option value="pendiente">Sin salida</option><option value="cerrada">Cerradas</option><option value="anulada">Anuladas</option></select></label></div>
             <div class="staff-table-wrap"><table class="staff-table"><thead><tr><th>Persona / sector</th><th>Ingreso</th><th>Salida</th><th>Base / colación</th><th>Trabajado</th><th>Extra</th><th>Acciones</th></tr></thead><tbody id="staffRecords"></tbody></table></div>
         </section>
-        <p class="staff-help">Extra interna = tiempo de permanencia − colación − jornada base, con mínimo cero. Define la base correspondiente a cada turno; puedes usar 00:00 para una jornada enteramente extraordinaria. Este control no liquida remuneraciones.</p>
+        <section class="eui-panel staff-panel" aria-labelledby="staffAbsencesTitle">
+            <div class="staff-toolbar"><h2 id="staffAbsencesTitle">Ausencias del mes</h2><label>Estado<select class="eui-input" id="staffAbsenceState"><option value="">Todas las ausencias</option><option value="vigente">Vigentes</option><option value="anulada">Anuladas</option></select></label></div>
+            <div class="staff-table-wrap"><table class="staff-table"><thead><tr><th>Persona</th><th>Tipo</th><th>Periodo</th><th>Días en el mes</th><th>Observación</th><th>Acciones</th></tr></thead><tbody id="staffAbsences"></tbody></table></div>
+        </section>
+        <p class="staff-help">Extra interna = tiempo de permanencia − colación − jornada base, con mínimo cero. Define la base correspondiente a cada turno; puedes usar 00:00 para una jornada enteramente extraordinaria. Este control es interno del supervisor: no envía ni recibe datos de RRHH y no liquida remuneraciones. La ficha mensual PDF sirve para revisar día a día con el trabajador lo que tenemos frente a lo que registró RRHH.</p>
     </div>
 </main>
 <dialog id="staffPeopleDialog" class="staff-dialog estiba-ui" aria-labelledby="staffPeopleTitle">
@@ -69,6 +76,20 @@
         <button class="eui-button staff-full" type="submit" id="staffEntrySave">Guardar jornada</button>
     </form>
 </dialog>
+<dialog id="staffAbsenceDialog" class="staff-dialog estiba-ui" aria-labelledby="staffAbsenceTitle">
+    <div class="staff-toolbar"><h2 id="staffAbsenceTitle">Registrar ausencia</h2><button class="eui-button eui-button--secondary" type="button" data-close>Cerrar</button></div>
+    <form id="staffAbsenceForm" class="staff-fields">
+        <label class="staff-full">Persona<select class="eui-input" id="staffAbsencePerson" required></select></label>
+        <label class="staff-full">Tipo<select class="eui-input" id="staffAbsenceType" required></select></label>
+        <label>Desde<input class="eui-input" type="date" id="staffAbsenceFrom" required></label>
+        <label>Hasta<input class="eui-input" type="date" id="staffAbsenceTo" required></label>
+        <label class="staff-full">Observación<textarea class="eui-input" id="staffAbsenceNote" maxlength="1000" rows="2"></textarea></label>
+        <label class="staff-full" id="staffAbsenceReasonLabel" hidden>Motivo de la corrección<input class="eui-input" id="staffAbsenceReason" maxlength="500"></label>
+        <p class="staff-help staff-full">Días completos sin jornada. No se puede marcar un día que ya tiene una jornada vigente ni superponer dos ausencias. Una falta no se registra por anticipado.</p>
+        <p id="staffAbsenceError" class="form-error staff-full" role="alert"></p>
+        <button class="eui-button staff-full" type="submit" id="staffAbsenceSave">Guardar ausencia</button>
+    </form>
+</dialog>
 <dialog id="staffCancelDialog" class="staff-dialog estiba-ui" aria-labelledby="staffCancelTitle">
     <h2 id="staffCancelTitle">Anular jornada</h2><p id="staffCancelDescription"></p>
     <form id="staffCancelForm" class="staff-fields"><label class="staff-full">Motivo<textarea class="eui-input" id="staffCancelReason" maxlength="500" required></textarea></label>
@@ -76,7 +97,7 @@
         <button class="eui-button" type="submit">Confirmar anulación</button><button class="eui-button eui-button--secondary" type="button" data-close>Volver</button></form>
 </dialog>
 <dialog id="staffHistoryDialog" class="staff-dialog estiba-ui" aria-labelledby="staffHistoryTitle">
-    <div class="staff-toolbar"><h2 id="staffHistoryTitle">Historial de la jornada</h2><button class="eui-button eui-button--secondary" type="button" data-close>Cerrar</button></div>
+    <div class="staff-toolbar"><h2 id="staffHistoryTitle">Historial</h2><button class="eui-button eui-button--secondary" type="button" data-close>Cerrar</button></div>
     <div id="staffHistory"></div>
 </dialog>
 </body>
