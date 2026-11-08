@@ -36,6 +36,7 @@ export function createCatalogCompatibilityBuilder(catalog: Pick<ValidationCatalo
     if (++count > 0xffffffff) throw new Error('El catálogo supera la capacidad de su índice de compatibilidad.');
   }
   return {
+    appendPair,
     append(rows: Pick<ValidationCombination, 'articulo_validacion_id' | 'origen_validacion_id'>[]) {
       for (const row of rows) {
         appendPair(row.articulo_validacion_id, row.origen_validacion_id);

@@ -7,6 +7,7 @@ use App\Enums\ResultadoValidacionPallet;
 use App\Enums\TipoBulto;
 use App\Http\Controllers\Controller;
 use App\Services\Temporadas\ServicioTemporadaActiva;
+use App\Services\Validacion\CatalogoIncrementalValidacion;
 use App\Services\Validacion\CatalogoOperativoValidacion;
 use App\Services\Validacion\DescargaPaginadaCatalogoValidacion;
 use App\Services\Validacion\TransferenciaCatalogoValidacion;
@@ -29,10 +30,36 @@ class CatalogoValidacionController extends Controller
             $compacto = $request->query('transporte') === 'compacto-v1';
             $indice = $descarga->indice($compacto);
             $temporada = $indice['temporada'];
+            $incremental = $compacto && $request->query('incremental') === 'delta-v1'
+                ? app(CatalogoIncrementalValidacion::class) : null;
             $etag = "validacion-paginas-v1-{$temporada['id']}-{$temporada['version_catalogo']}";
             $condicional = $this->configurarCache(response('', 200), $etag);
             if ($condicional->isNotModified($request)) {
+                $incremental?->solicitar($temporada['id'], $temporada['version_catalogo']);
+
                 return $condicional;
+            }
+            if ($incremental !== null) {
+                $datos = $request->validate(['temporada_base' => ['nullable', 'uuid'], 'version_base' => ['nullable', 'integer', 'min:1']]);
+                $base = (int) ($datos['version_base'] ?? 0);
+                $version = $temporada['version_catalogo'];
+                if (($datos['temporada_base'] ?? null) === $temporada['id'] && $base > 0 && $base < $version) {
+                    $inicio = hrtime(true);
+                    $esperando = $incremental->publicada($temporada['id'], $base) && $incremental->solicitar($temporada['id'], $version);
+                    $cambios = $incremental->cambios($temporada['id'], $base, $version);
+                    if ($cambios !== null) {
+                        $metadatos = array_intersect_key($indice, array_flip(['temporada', 'tipos_bulto', 'resultados', 'motivos', 'generado_at']));
+                        $cuerpo = json_encode(['formato' => 'delta-v1', ...$metadatos, ...$cambios],
+                            JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
+
+                        return $this->respuestaPagina($request, $cuerpo, $inicio)->header('X-Catalog-Transfer', 'delta-v1');
+                    }
+                    if ($esperando) {
+                        return response()->json([
+                            'message' => 'El servidor está preparando los cambios del catálogo. Puedes seguir con la copia guardada.',
+                        ], 202)->header('Retry-After', '30')->header('Cache-Control', 'no-store');
+                    }
+                }
             }
             if ($compacto) {
                 $indice['rangos_combinaciones'] = $descarga->rangosCombinaciones($temporada['id']);
@@ -104,6 +131,12 @@ class CatalogoValidacionController extends Controller
             || ($desde !== null && (($limite !== null && strcasecmp($desde, $limite) < 0) || ($hasta !== null && strcasecmp($desde, $hasta) >= 0))), 422, 'El cursor está fuera del intervalo solicitado.');
         $inicio = hrtime(true);
         $cuerpo = app(DescargaPaginadaCatalogoValidacion::class)->pagina($temporadaId, $version, $coleccion, $desde, $compacto, $limite, $hasta);
+
+        return $this->respuestaPagina($request, $cuerpo, $inicio);
+    }
+
+    private function respuestaPagina(Request $request, string $cuerpo, int $inicio): Response
+    {
         $hash = hash('sha256', $cuerpo);
         $enviado = $cuerpo;
         if ((AcceptHeader::fromString($request->header('Accept-Encoding', ''))->get('gzip')?->getQuality() ?? 0) > 0 && strlen($cuerpo) > 2048) {
