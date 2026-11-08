@@ -19,7 +19,7 @@ function fixture(role = 'administrador') {
     node('operationForm').elements = fields;
     const context = vm.createContext({
         document: { getElementById: node }, localStorage: { getItem: () => null },
-        Headers, URLSearchParams, Intl, window: { setTimeout() {} },
+        Headers, URLSearchParams, Intl, window: { setTimeout() {}, location: { search: '' } },
         crypto: { randomUUID: () => '11111111-1111-4111-8111-111111111111' },
         FormData: class { constructor(form) { this.form = form; } [Symbol.iterator]() { return Object.entries(this.form.elements).map(([k, field]) => [k, field.value])[Symbol.iterator](); } },
         containerLabel: () => null,
