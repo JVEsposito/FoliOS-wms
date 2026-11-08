@@ -2,7 +2,6 @@
 
 namespace App\Services\Romana;
 
-use App\Enums\EstadoLoteMateriaPrima;
 use App\Enums\EstadoRecepcionRomana;
 use App\Enums\EstadoRevisionMovimientoEnvase;
 use App\Enums\EstadoValidacionMp;
@@ -434,12 +433,6 @@ class ServicioRecepcionRomana
             if ($recepcion->version !== $payload['version_conocida']) {
                 throw new ConflictoOperacion('La recepción cambió. Actualiza el expediente antes de corregir el peso bruto.');
             }
-            $lotes = $recepcion->lotesMateriaPrima()->where('estado', '!=', EstadoLoteMateriaPrima::Anulado->value)
-                ->orderBy('id')->lockForUpdate()->get(['id', 'estado']);
-            if ($lotes->contains(fn ($lote): bool => $lote->estado !== EstadoLoteMateriaPrima::Borrador)) {
-                throw new ConflictoOperacion('La recepción tiene lotes confirmados. Requiere conciliación de kilos antes de corregir el peso bruto.');
-            }
-
             $anterior = $this->snapshotPesos($recepcion);
             $pesajeAnterior = null;
             $pesajePosterior = null;
@@ -508,8 +501,9 @@ class ServicioRecepcionRomana
                 }
             }
             $recepcion->update([...$actualizacion, 'version' => $recepcion->version + 1]);
-            if ($recepcion->estado === EstadoRecepcionRomana::Cerrado && $lotes->isNotEmpty()) {
-                app(ServicioLoteMateriaPrima::class)->conciliarDestare($recepcion, $usuario);
+            if ($recepcion->estado === EstadoRecepcionRomana::Cerrado) {
+                app(ServicioLoteMateriaPrima::class)->conciliarDestare($recepcion, $usuario,
+                    correccionPeso: ['operacion_romana_id' => (string) $datos['operacion_id'], 'motivo' => $payload['motivo_correccion']]);
             }
             $this->registrarEvento($recepcion, (string) $datos['operacion_id'], $hash, TipoEventoRomana::PesoBrutoCorregido,
                 $recepcion->estado, $recepcion->estado, $usuario, CarbonImmutable::now(),
