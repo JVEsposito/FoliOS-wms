@@ -458,6 +458,9 @@ elements.correctGrossWeight.addEventListener('click', () => {
     select.disabled = !reception.pesaje_envases; select.required = Boolean(reception.pesaje_envases);
     select.innerHTML = readings.map((reading) => `<option value="${escapeHtml(reading.id)}">Tanda ${escapeHtml(reading.secuencia)} · ${escapeHtml(formatWeight(reading.peso_bruto))}</option>`).join('');
     elements.grossWeightError.textContent = '';
+    byId('grossWeightLots').innerHTML = (reception.lotes_materia_prima || []).map((lot) => `<p><strong>${escapeHtml(lot.numero_lote)}</strong> · ${escapeHtml(label(lot.estado))} · ${escapeHtml(formatWeight(lot.kilos_netos))}</p>`).join('')
+        || '<p>Esta recepción no tiene lotes registrados.</p>';
+    byId('grossWeightLotsLink').href = `/oficina/materia-prima/lotes?buscar=${encodeURIComponent(reception.numero_recepcion)}`;
     updateGrossWeightPreview(true);
     elements.grossWeightDialog.showModal();
 });

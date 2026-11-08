@@ -509,6 +509,10 @@ class RecepcionRomanaController extends Controller
                         'motivo_anulacion' => $pesaje->motivo_anulacion,
                     ])->values()
                 : collect();
+            $datos['lotes_materia_prima'] = $recepcion->lotesMateriaPrima()->orderBy('numero_lote')
+                ->get(['id', 'numero_lote', 'estado', 'kilos_netos_confirmados'])
+                ->map(fn ($lote): array => ['id' => $lote->id, 'numero_lote' => $lote->numero_lote,
+                    'estado' => $lote->estado->value, 'kilos_netos' => $lote->kilos_netos_confirmados === null ? null : (float) $lote->kilos_netos_confirmados])->values();
             $datos['eventos'] = $recepcion->eventos
                 ->map(fn (EventoRecepcionRomana $evento): array => [
                     'id' => $evento->id,

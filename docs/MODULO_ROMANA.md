@@ -82,6 +82,26 @@ No se permite volver a un estado anterior. Después de confirmar el ingreso los 
 
 Si la recepción ya está cerrada, una corrección del bruto o de la cantidad del envase seleccionado recalcula peso neto y neto por envase. No puede retirarse el tipo de envase usado para ese cálculo.
 
+### Corrección de peso bruto por el administrador
+
+En el expediente, **Corregir peso bruto** permite corregir la lectura con motivo,
+incluso después de Validación MP y del cierre. Conserva las taras registradas,
+recalcula el neto y concilia los kilos de los lotes vigentes, tanto borradores
+como confirmados, mientras no tengan entregas a proceso. No exige anular ni
+volver a crear lotes: conserva su número, estado, confirmación y ubicación.
+Registra los pesos anteriores y posteriores, el administrador y el motivo en
+Romana y en cada lote afectado. Los registros históricos de hidrocooler, cámara
+y programación conservan sus snapshots; no se generan movimientos de envases.
+
+Si un lote ya tiene entregas a proceso, se identifica por número y se rechaza la
+operación completa: no cambian el bruto, el neto, las tandas ni los lotes. Esas
+entregas necesitan una conciliación propia antes de alterar su base de kilos.
+El cuadro muestra los lotes de la recepción, incluidos los anulados, y el enlace
+**Ver lotes de esta recepción** abre su búsqueda en Digitación. En ese listado,
+**Anterior/Siguiente** permite recorrer todos los resultados, en páginas de 100.
+Un lote confirmado deja de aparecer en segmentos pendientes, pero permanece
+en **Lotes de la temporada** con su estado actual. No anularlo para corregir peso.
+
 El estado de pesaje es independiente del avance de Validación MP. Una recepción puede estar cerrada en Romana y continuar pendiente, tomada o confirmada en el flujo de Validación MP.
 
 ## Datos transaccionales

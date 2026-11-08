@@ -7,7 +7,7 @@ const source = readFileSync(new URL('../../resources/js/office-raw-material.js',
     .replace(/^import .*;\n/gm, '')
     .replace(/void boot\(\);\s*$/, '');
 
-function fixture(responses) {
+function fixture(responses, search = '') {
     const nodes = new Map();
     const requests = [];
     function node(id) {
@@ -21,6 +21,7 @@ function fixture(responses) {
         return nodes.get(id);
     }
     node('lotForm').elements = new Proxy({}, { get: () => ({ addEventListener() {}, value: '' }) });
+    node('lotFilters').elements = { buscar: { value: '' }, estado: { value: '' } };
     node('movementFilters').elements = { camara_id: node('movementCamera') };
     node('movementCamera').value = '';
     const context = vm.createContext({
@@ -28,8 +29,8 @@ function fixture(responses) {
         localStorage: { getItem: () => null, removeItem() {}, setItem() {} },
         Headers, URLSearchParams, Intl,
         loadContainerCatalog: async () => [], containerLabel: () => undefined,
-        FormData: class { [Symbol.iterator]() { return [][Symbol.iterator](); } },
-        window: { setTimeout() {} },
+        FormData: class { constructor(form) { this.form = form; } [Symbol.iterator]() { return Object.entries(this.form.elements || {}).filter(([, input]) => input.value).map(([name, input]) => [name, input.value])[Symbol.iterator](); } },
+        window: { setTimeout() {}, location: { search } },
         fetch: async (path, options) => {
             requests.push({ path, options });
             const response = await responses[path]?.shift();
@@ -55,7 +56,7 @@ test('el error de segmentos no impide mostrar el resumen y los lotes', async () 
         } }],
         '/api/materia-prima/catalogos': [{ body: { csg: [], especies: [], camaras: [] } }],
         '/api/materia-prima/segmentos-pendientes': [new Error('falló segmento')],
-        '/api/materia-prima/lotes?': [{ body: { data: [] } }],
+        '/api/materia-prima/lotes?page=1': [{ body: { data: [] } }],
     });
     await vm.runInContext('loadAll()', context);
     assert.equal(nodes.get('pendingSegmentsCount').textContent, '2');
@@ -133,4 +134,35 @@ test('cerrar sesión descarta una respuesta tardía con movimientos del usuario 
     await reading;
     assert.equal(nodes.get('movementRows').innerHTML, '');
     assert.equal(nodes.get('movementStatus').textContent, '');
+});
+
+test('el enlace desde Romana busca la recepción en todos los estados y comienza en página uno', () => {
+    const { context, nodes } = fixture({}, '?buscar=REC-2611-0017');
+    assert.equal(nodes.get('lotFilters').elements.buscar.value, 'REC-2611-0017');
+    assert.equal(vm.runInContext('filtersQuery()', context), 'page=1&buscar=REC-2611-0017');
+});
+
+test('navega más de cien lotes y una respuesta antigua no oculta la segunda página', async () => {
+    let resolveOld;
+    const pending = new Promise((resolve) => { resolveOld = resolve; });
+    const page = (number) => ({ body: { data: [], meta: { current_page: number, last_page: 2, total: 101 } } });
+    const { context, nodes } = fixture({ '/api/materia-prima/lotes?page=1': [pending], '/api/materia-prima/lotes?page=2': [page(2)] });
+    const first = vm.runInContext('loadLots(1)', context);
+    await vm.runInContext('loadLots(2)', context);
+    resolveOld(page(1)); await first;
+    assert.equal(vm.runInContext('state.lotPage', context), 2);
+    assert.match(nodes.get('lotPageStatus').textContent, /Página 2 de 2 · 101 lotes/);
+    assert.equal(nodes.get('lotPrevious').disabled, false);
+    assert.equal(nodes.get('lotNext').disabled, true);
+});
+
+test('cerrar sesión descarta también los lotes de una respuesta en vuelo', async () => {
+    let resolveOld;
+    const pending = new Promise((resolve) => { resolveOld = resolve; });
+    const { context } = fixture({ '/api/materia-prima/lotes?page=1': [pending] });
+    const reading = vm.runInContext('loadLots()', context);
+    vm.runInContext('clearSession()', context);
+    resolveOld({ body: { data: [{ id: 'privado' }], meta: { current_page: 1, last_page: 1, total: 1 } } }); await reading;
+    assert.equal(vm.runInContext('state.lots.length', context), 0);
+    assert.equal(vm.runInContext('state.lotMeta', context), null);
 });
