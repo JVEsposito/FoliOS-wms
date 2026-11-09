@@ -25,6 +25,7 @@ use App\Models\User;
 use App\Services\Cargas\ServicioPlanDespachoDirecto;
 use App\Services\Cargas\ServicioReingresoCamara;
 use App\Services\Cargas\ServicioTareasCarga;
+use App\Services\Planificador\ServicioDepuracionIngresosCamara;
 use App\Services\Temporadas\GuardiaTemporadaActiva;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\Transiciones\ComandoTransicionOperacional;
@@ -678,6 +679,10 @@ class ServicioMovimientoEstiba
         $this->actualizarActividadSesiones(collect([$sesion]), $recibidoServidorAt);
         if ($tareaEnEjecucion) {
             $this->reservasTareas->completar($tareaEnEjecucion, $movimiento);
+        } elseif ($posicion && $tipoBulto !== TipoBulto::Material) {
+            // Estibado sin la tarea del planificador: su salida de túnel o ingreso pendiente queda cumplida.
+            $folioId = $folio->id;
+            DB::afterCommit(fn () => app(ServicioDepuracionIngresosCamara::class)->depurarFolio($folioId, $usuario));
         }
         $this->planificadorDespachoDirecto->sincronizarTrasMovimiento($movimiento, $usuario);
 

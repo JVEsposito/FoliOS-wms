@@ -2,12 +2,16 @@
 
 namespace Tests\Feature\Api;
 
+use App\Enums\PrioridadOperacional;
 use App\Enums\RolUsuario;
+use App\Enums\TipoMovimiento;
+use App\Enums\TipoPlanOperacional;
 use App\Models\CorreccionValidacionPallet;
 use App\Models\Dispositivo;
 use App\Models\Folio;
 use App\Models\TrazabilidadFolioOrigen;
 use App\Models\User;
+use App\Services\Estiba\ServicioPlanesOperacionales;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -432,6 +436,35 @@ class CorreccionValidacionPalletApiTest extends TestCase
     /**
      * @return array{array<string, string|int>, User, string}
      */
+    public function test_corregir_a_saldo_suelta_la_salida_pendiente_del_planificador(): void
+    {
+        [$catalogo, $usuario, $tokenPda] = $this->contexto();
+        $validacionId = $this->conToken($tokenPda)
+            ->postJson('/api/validacion/pallets', $this->payloadValidacion($catalogo, 'PAL-CORR-SALDO'))
+            ->assertCreated()->json('data.id');
+        $folio = Folio::query()->where('numero_folio', 'PAL-CORR-SALDO')->firstOrFail();
+        $plan = app(ServicioPlanesOperacionales::class)->crear(
+            temporada: $folio->temporada, tipo: TipoPlanOperacional::RecepcionTunel, titulo: 'Recibir túnel de prueba',
+            creadoPor: $usuario, tareas: [[
+                'folio_id' => $folio->id, 'tipo_movimiento' => TipoMovimiento::UbicacionInicial,
+                'prioridad' => PrioridadOperacional::Alta, 'instruccion' => 'Retirar PAL-CORR-SALDO de TUNEL 1.',
+            ]], prioridad: PrioridadOperacional::Alta, motivo: 'Prueba', referenciaTipo: 'proceso_prefrio',
+            referenciaId: (string) Str::uuid(), contexto: ['planner_horizon' => 'rolling'],
+        );
+        $tarea = $plan->tareas()->firstOrFail();
+
+        $this->conToken($this->tokenOficina($usuario))
+            ->putJson("/api/validacion/pallets/{$validacionId}/corregir", [
+                ...$this->payloadCorreccion($catalogo, (string) Str::uuid()),
+                'tipo_bulto' => 'saldo', 'cantidad_cajas' => 1, 'motivo_correccion' => 'Es una caja de muestra, no un pallet.',
+            ])->assertOk();
+
+        $tarea->refresh();
+        $this->assertSame('cancelada', $tarea->estado->value);
+        $this->assertSame('PAL-CORR-SALDO es saldo: el planificador no pide estibar saldos.', $tarea->motivo_cancelacion);
+        $this->assertSame($usuario->id, $tarea->cancelada_por_user_id);
+    }
+
     private function contexto(): array
     {
         $temporadaId = (string) Str::uuid();

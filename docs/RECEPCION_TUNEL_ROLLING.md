@@ -51,6 +51,22 @@ El túnel se conserva como origen lógico en el contexto de la tarea:
 
 La tarea se crea sin `camara_destino_id` ni `posicion_destino_id`. El destino exacto aparece después, cuando la frontera rolling es materializada por el servidor.
 
+## Saldos y pallets ya estibados
+
+El planificador **nunca pide estibar saldos** y **no repite una salida de túnel de un pallet que ya está en
+cámara**. `ServicioDepuracionIngresosCamara` suelta los ingresos a cámara (planes `recepcion_tunel` y
+`almacenamiento_pallet`) que aún no empiezan —bloqueados, pendientes o tomados con destino reservado— cuando:
+
+- el folio es tipo **Saldo**, también si se corrigió a saldo en Validación después de generar la salida;
+- el folio ya tiene una posición en cámara, por ejemplo porque el camarero lo estibó por su cuenta. La salida se
+  da por cumplida; si quedó fuera de afinidad, lo corrige el reordenamiento, no otra salida de túnel. Si el pallet
+  tiene otra labor activa que lo saca de su posición (retiro, despeje), su ubicación es transitoria y no se toca.
+
+Se ejecuta al instante al estibar sin la tarea y al corregir a saldo, y en cada minuto como barrido antes de
+`planificador:recalcular-arbitraje`. La tarea queda cancelada con el motivo y, si tenía maniobra, la maniobra se
+cancela de forma reversible y libera reservas y bandas. Un paso en ejecución (pallet en la grúa) se respeta y se
+reevalúa en el barrido siguiente.
+
 ## Idempotencia
 
 Cada proceso de Prefrío puede originar como máximo un plan mediante la referencia estable:

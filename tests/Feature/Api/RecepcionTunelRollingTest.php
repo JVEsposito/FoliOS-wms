@@ -9,18 +9,26 @@ use App\Enums\ModalidadSalidaCarga;
 use App\Enums\PrioridadCarga;
 use App\Enums\RolUsuario;
 use App\Enums\TipoBulto;
+use App\Enums\TipoMovimiento;
+use App\Enums\TipoPlanOperacional;
 use App\Models\Camara;
 use App\Models\Carga;
 use App\Models\CargaFolio;
+use App\Models\Dispositivo;
 use App\Models\Folio;
+use App\Models\ManiobraOperacional;
 use App\Models\PlanOperacional;
+use App\Models\Posicion;
 use App\Models\PosicionTunelPrefrio;
 use App\Models\ProcesoPrefrio;
 use App\Models\ProcesoPrefrioFolio;
 use App\Models\ReservaCargaFolio;
+use App\Models\ReservaTareaMovimiento;
 use App\Models\Temporada;
 use App\Models\TunelPrefrio;
+use App\Models\UbicacionActual;
 use App\Models\User;
+use App\Services\Planificador\ServicioDepuracionIngresosCamara;
 use App\Services\Prefrio\ServicioGeneracionRecepcionTunel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -224,6 +232,101 @@ class RecepcionTunelRollingTest extends TestCase
      * @param  array<int, TipoBulto>  $tipos
      * @return array<string, mixed>
      */
+    public function test_nunca_pide_estibar_un_saldo_aunque_se_corrija_despues_de_generar(): void
+    {
+        $this->habilitarGeneracion();
+        $contexto = $this->crearProcesoAprobado(2);
+        $plan = app(ServicioGeneracionRecepcionTunel::class)->generar($contexto['proceso'], $contexto['usuario']);
+        [$primera, $segunda] = $plan->tareas()->orderBy('created_at')->orderBy('id')->get()->all();
+        $saldo = $primera->folio;
+        $saldo->update(['tipo_bulto' => TipoBulto::Saldo]);
+
+        $this->assertSame(1, app(ServicioDepuracionIngresosCamara::class)->depurarTemporada($contexto['temporada']));
+        $primera->refresh();
+        $this->assertSame(EstadoTareaMovimiento::Cancelada, $primera->estado);
+        $this->assertSame("{$saldo->numero_folio} es saldo: el planificador no pide estibar saldos.", $primera->motivo_cancelacion);
+        $this->assertSame(EstadoTareaMovimiento::Pendiente, $segunda->refresh()->estado);
+        // Volver a generar no lo reincorpora, y un segundo barrido no encuentra nada.
+        app(ServicioGeneracionRecepcionTunel::class)->generar($contexto['proceso'], $contexto['usuario']);
+        $this->assertSame(0, $plan->tareas()->where('folio_id', $saldo->id)->where('estado', '!=', 'cancelada')->count());
+        $this->assertSame(0, app(ServicioDepuracionIngresosCamara::class)->depurarTemporada($contexto['temporada']));
+    }
+
+    public function test_suelta_la_salida_tomada_con_destino_reservado_de_un_saldo(): void
+    {
+        $this->habilitarGeneracion();
+        $contexto = $this->crearProcesoAprobado(1);
+        $plan = app(ServicioGeneracionRecepcionTunel::class)->generar($contexto['proceso'], $contexto['usuario']);
+        $tarea = $plan->tareas()->firstOrFail();
+        $camarero = User::factory()->create(['rol' => RolUsuario::CamareroFrio, 'activo' => true]);
+        $dispositivo = Dispositivo::create(['codigo' => 'TAB-DEP', 'nombre' => 'Tablet depuración', 'activo' => true]);
+        // Tomada por el camarero con destino reservado, sin iniciar el retiro (como #1 y #2 en planta).
+        $camara = Camara::create(['codigo' => 'CT07', 'nombre' => 'Camara de tránsito 07']);
+        $destino = Posicion::create(['camara_id' => $camara->id, 'banda' => 1, 'posicion' => 1, 'nivel' => 1, 'etiqueta' => 'B01-P01-N1']);
+        $tarea->update(['estado' => EstadoTareaMovimiento::Asumida, 'responsable_user_id' => $camarero->id, 'version' => $tarea->version + 1]);
+        $reserva = ReservaTareaMovimiento::create([
+            'tarea_movimiento_id' => $tarea->id, 'posicion_destino_id' => $destino->id, 'bloqueo_tarea_id' => $tarea->id,
+            'bloqueo_posicion_id' => $destino->id, 'estado' => 'activa', 'user_id' => $camarero->id, 'dispositivo_id' => $dispositivo->id,
+            'reservada_at' => now(), 'renovada_at' => now(), 'vence_at' => now()->addMinutes(10), 'version' => 1,
+        ]);
+        $tarea->folio->update(['tipo_bulto' => TipoBulto::Saldo]);
+
+        $this->artisan('planificador:recalcular-arbitraje')->expectsOutputToContain('Ingresos a cámara soltados: 1.')->assertSuccessful();
+        $tarea->refresh();
+        $this->assertSame(EstadoTareaMovimiento::Cancelada, $tarea->estado);
+        $this->assertNotSame('activa', $reserva->refresh()->estado->value);
+        if ($tarea->maniobra_operacional_id) {
+            $this->assertSame('cancelada', ManiobraOperacional::query()->findOrFail($tarea->maniobra_operacional_id)->estado->value);
+        }
+    }
+
+    public function test_si_el_camarero_estiba_el_pallet_por_su_cuenta_la_salida_se_da_por_cumplida(): void
+    {
+        $this->habilitarGeneracion();
+        $contexto = $this->crearProcesoAprobado(2);
+        $plan = app(ServicioGeneracionRecepcionTunel::class)->generar($contexto['proceso'], $contexto['usuario']);
+        [$primera, $segunda] = $plan->tareas()->orderBy('created_at')->orderBy('id')->get()->all();
+        $camarero = User::factory()->create(['rol' => RolUsuario::CamareroFrio, 'activo' => true]);
+        $dispositivo = Dispositivo::create(['codigo' => 'TAB-EST', 'nombre' => 'Tablet estiba', 'activo' => true]);
+        $token = $camarero->crearTokenParaDispositivo($dispositivo, 'tablet-estiba')->plainTextToken;
+        $camara = Camara::create(['codigo' => 'CT07', 'nombre' => 'Camara de tránsito 07']);
+        $destino = Posicion::create(['camara_id' => $camara->id, 'banda' => 9, 'posicion' => 1, 'nivel' => 1, 'etiqueta' => 'B09-P01-N1']);
+        $sesion = $this->withToken($token)->postJson("/api/camaras/{$camara->id}/sesiones")->assertCreated()->json('data');
+
+        $this->withToken($token)->postJson('/api/movimientos/ubicar', [
+            'operacion_id' => (string) Str::uuid(), 'numero_folio' => $segunda->folio->numero_folio, 'tipo_bulto' => 'pallet',
+            'posicion_destino_id' => $destino->id, 'sesion_destino_id' => $sesion['id'], 'version_destino_conocida' => 0,
+            'generado_dispositivo_at' => now()->toAtomString(),
+        ])->assertOk();
+
+        $segunda->refresh();
+        $this->assertSame(EstadoTareaMovimiento::Cancelada, $segunda->estado);
+        $this->assertSame("{$segunda->folio->numero_folio} ya está ubicado en Camara de tránsito 07 · B09-P01-N1: la salida se da por cumplida.", $segunda->motivo_cancelacion);
+        $this->assertSame($camarero->id, $segunda->cancelada_por_user_id);
+        $this->assertSame(EstadoTareaMovimiento::Pendiente, $primera->refresh()->estado);
+    }
+
+    public function test_el_barrido_suelta_salidas_de_pallets_ya_ubicados_pero_respeta_otras_labores(): void
+    {
+        $this->habilitarGeneracion();
+        $contexto = $this->crearProcesoAprobado(2);
+        $plan = app(ServicioGeneracionRecepcionTunel::class)->generar($contexto['proceso'], $contexto['usuario']);
+        [$primera, $segunda] = $plan->tareas()->orderBy('created_at')->orderBy('id')->get()->all();
+        $camara = Camara::create(['codigo' => 'CT09', 'nombre' => 'Camara 09']);
+        foreach ([$primera, $segunda] as $i => $tarea) {
+            $posicion = Posicion::create(['camara_id' => $camara->id, 'banda' => 1, 'posicion' => $i + 1, 'nivel' => 1, 'etiqueta' => 'B01-P0'.($i + 1).'-N1']);
+            UbicacionActual::create(['folio_id' => $tarea->folio_id, 'camara_id' => $camara->id, 'posicion_id' => $posicion->id, 'ubicado_at' => now()]);
+        }
+        // El segundo tiene otra labor activa que lo saca de su posición: su ubicación es transitoria.
+        $otro = $plan->replicate(['id'])->fill(['referencia_id' => (string) Str::uuid(), 'tipo' => TipoPlanOperacional::ReordenamientoCamara]);
+        $otro->save();
+        $segunda->replicate(['id'])->fill(['plan_operacional_id' => $otro->id, 'tipo_movimiento' => TipoMovimiento::Retiro, 'estado' => EstadoTareaMovimiento::Pendiente])->save();
+
+        $this->assertSame(1, app(ServicioDepuracionIngresosCamara::class)->depurarTemporada($contexto['temporada']));
+        $this->assertSame(EstadoTareaMovimiento::Cancelada, $primera->refresh()->estado);
+        $this->assertSame(EstadoTareaMovimiento::Pendiente, $segunda->refresh()->estado);
+    }
+
     private function crearProcesoAprobado(int $cantidad, array $tipos = []): array
     {
         Temporada::query()->update(['activa' => false]);

@@ -7,6 +7,7 @@ use App\Enums\DominioTransicionOperacional;
 use App\Enums\EstadoOperacionalFolio;
 use App\Enums\EstadoValidacionPallet;
 use App\Enums\ResultadoValidacionPallet;
+use App\Enums\TipoBulto;
 use App\Exceptions\ConflictoOperacion;
 use App\Models\CorreccionValidacionPallet;
 use App\Models\Folio;
@@ -14,6 +15,7 @@ use App\Models\ProcesoPrefrioFolio;
 use App\Models\RepaletizajeDetalle;
 use App\Models\User;
 use App\Models\ValidacionPallet;
+use App\Services\Planificador\ServicioDepuracionIngresosCamara;
 use App\Services\Transiciones\ComandoTransicionOperacional;
 use App\Services\Transiciones\MotorTransicionesOperacionales;
 use Carbon\CarbonImmutable;
@@ -289,6 +291,11 @@ class ServicioCorreccionValidacionPallet
 
             if (isset($payload['fecha_hora_validacion']) || isset($payload['fecha_embalaje'])) {
                 $this->aplicarFechas($validacionBloqueada, $folio, $payload, $snapshot);
+            }
+            if ($folio->tipo_bulto === TipoBulto::Saldo) {
+                // Corregido a saldo: el planificador suelta la salida de túnel o el ingreso que tuviera pendiente.
+                $folioId = $folio->id;
+                DB::afterCommit(fn () => app(ServicioDepuracionIngresosCamara::class)->depurarFolio($folioId, $usuario));
             }
 
             return $this->auditar($validacionBloqueada, $folio, $usuario, $datos['operacion_id'], $payloadHash, $payload['motivo_correccion'], $anteriores);
