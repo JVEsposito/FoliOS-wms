@@ -124,6 +124,58 @@ class CorreccionIntegralRecepcionTest extends TestCase
         $this->assertSame(0, collect($cuenta()['tipos'])->sum('saldo_final'));
     }
 
+    public function test_corrige_una_recepcion_solo_de_envases_sin_mover_la_cuenta_de_envases_comprados(): void
+    {
+        $this->actingAs(User::factory()->create(['rol' => RolUsuario::OperadorRomana]), 'sanctum');
+        $temporada = Temporada::where('activa', true)->firstOrFail();
+        $cliente = Cliente::firstOrCreate(['codigo' => 'CLI-SOLO'], ['nombre' => 'Cliente envases', 'activo' => true]);
+        $r = $this->postJson('/api/romana/recepciones', ['operacion_id' => (string) Str::uuid(), 'temporada_id' => $temporada->id,
+            'cliente_id' => $cliente->id, 'tipo_recepcion' => 'solo_envases', 'concepto_envases' => 'compra',
+            'fecha_ingreso' => now(config('app.operational_timezone'))->toDateString(),
+            'envases' => [['tipo_envase' => 'bins', 'cantidad' => 20]], 'numero_guia_despacho' => 'GUIA-SOLO-1',
+            'patente_camion' => 'ABCD12', 'tipo_camion' => 'plano', 'rut_conductor' => '12.345.678-5', 'nombre_conductor' => 'Conductor'])
+            ->assertCreated()->json('data');
+        $this->actingAs(User::factory()->create(['rol' => RolUsuario::ValidadorMp]), 'sanctum');
+        $v = $this->postJson("/api/validacion-mp/recepciones/{$r['id']}/tomar", ['operacion_id' => (string) Str::uuid()])->assertOk()->json('data');
+        $ruta = "/api/validacion-mp/validaciones/{$v['id']}/confirmar";
+        $this->postJson($ruta, $this->payloadConInspeccionRc02($ruta, ['operacion_id' => (string) Str::uuid(),
+            'envases' => [['tipo_envase' => 'bins', 'cantidad_validada' => 20]]]))->assertOk();
+
+        $estado = $this->comoAdministrador()->getJson("/api/romana/recepciones/{$r['id']}/correccion-integral")->assertOk()
+            ->assertJsonPath('data.propiedad_editable', false)->assertJsonCount(0, 'data.segmentos')->json('data');
+        $payload = [...$this->payload($estado), 'envases_validados' => [['tipo_envase' => 'bins', 'cantidad' => 22]]];
+        $payload['guias'][0]['envases'] = [['tipo_envase' => 'bins', 'cantidad' => 22]];
+        unset($payload['segmentos'], $payload['propiedades']);
+        $this->putJson("/api/romana/recepciones/{$r['id']}/correccion-integral", $payload)->assertOk();
+
+        $movimientos = MovimientoEnvase::where('recepcion_romana_id', $r['id'])->get();
+        $this->assertSame(22, $movimientos->sum(fn ($m) => $m->cantidad * $m->signo_existencia));
+        // Envases comprados: entran a la existencia propia, no a la cuenta del cliente.
+        $this->assertSame(0, $movimientos->sum(fn ($m) => $m->cantidad * $m->signo_cuenta));
+        $this->assertSame('propia', $movimientos->firstWhere('tipo_movimiento.value', 'correccion_cantidad')->propiedad->value);
+    }
+
+    public function test_corrige_el_conteo_de_una_recepcion_validada_que_aun_no_tiene_destare(): void
+    {
+        [$recepcion] = $this->recepcionCerradaConDosGuias(cerrar: false);
+        $estado = $this->comoAdministrador()->getJson("/api/romana/recepciones/{$recepcion->id}/correccion-integral")->assertOk()
+            ->assertJsonPath('data.destare', null)->json('data');
+        $payload = $this->payload($estado);
+        $payload['segmentos'][1]['envases'] = [['tipo_envase' => 'bins', 'cantidad' => 1], ['tipo_envase' => 'totes', 'cantidad' => 49]];
+        $this->putJson("/api/romana/recepciones/{$recepcion->id}/correccion-integral", [...$payload, 'destare' => ['peso_tara' => 1,
+            'modo_salida_envases' => 'vacio']])->assertUnprocessable()->assertJsonValidationErrors('destare');
+        $this->putJson("/api/romana/recepciones/{$recepcion->id}/correccion-integral", $payload)->assertOk();
+        $this->assertSame(3, DetalleEnvaseRecepcionRomana::where('recepcion_romana_id', $recepcion->id)->where('tipo_envase', 'bins')->value('cantidad_validada'));
+        $this->assertSame(3, (int) MovimientoEnvase::where('recepcion_romana_id', $recepcion->id)->where('tipo_envase', 'bins')
+            ->get()->sum(fn ($m) => $m->cantidad * $m->signo_existencia));
+        // Romana cierra después con el conteo corregido.
+        $this->actingAs(User::factory()->create(['rol' => RolUsuario::OperadorRomana]), 'sanctum');
+        $cierre = "/api/romana/recepciones/{$recepcion->id}/cerrar";
+        $this->postJson($cierre, $this->payloadConInspeccionRc02($cierre, ['operacion_id' => (string) Str::uuid(),
+            'modo_salida_envases' => 'vacio', 'taras_envases' => [['tipo_envase' => 'bins', 'tara_unitaria' => 40], ['tipo_envase' => 'totes', 'tara_unitaria' => 2]],
+            'peso_tara' => 10000, 'tipo_envase_calculo_neto' => 'bins']))->assertOk()->assertJsonPath('data.peso_neto', 17686);
+    }
+
     public function test_solo_administracion_corrige_y_respeta_version_y_estado(): void
     {
         [$recepcion] = $this->recepcionCerradaConDosGuias();
@@ -177,7 +229,7 @@ class CorreccionIntegralRecepcionTest extends TestCase
     }
 
     /** Camión con dos guías (1511 y 1512), validado en dos segmentos y con destare cerrado: 4 bins y 97 totes, neto 18.000 kg. */
-    private function recepcionCerradaConDosGuias(): array
+    private function recepcionCerradaConDosGuias(bool $cerrar = true): array
     {
         $this->actingAs(User::factory()->create(['rol' => RolUsuario::OperadorRomana]), 'sanctum');
         $temporada = Temporada::where('activa', true)->firstOrFail();
@@ -203,6 +255,9 @@ class CorreccionIntegralRecepcionTest extends TestCase
                 'csg_validacion_id' => $csg->id, 'variedad_validacion_id' => $variedad->id,
                 'envases' => [['tipo_envase' => 'bins', 'cantidad' => 2], ['tipo_envase' => 'totes', 'cantidad' => $i === 0 ? 48 : 49]]], $r['guias'], [0, 1])]))
             ->assertOk()->json('data');
+        if (! $cerrar) {
+            return [RecepcionRomana::findOrFail($r['id']), $validada['segmentos']];
+        }
         $this->actingAs(User::factory()->create(['rol' => RolUsuario::OperadorRomana]), 'sanctum');
         $cierre = "/api/romana/recepciones/{$r['id']}/cerrar";
         $this->postJson($cierre, $this->payloadConInspeccionRc02($cierre, ['operacion_id' => (string) Str::uuid(),
