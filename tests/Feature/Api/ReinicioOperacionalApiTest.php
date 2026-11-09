@@ -108,6 +108,7 @@ class ReinicioOperacionalApiTest extends TestCase
             ->assertJsonPath('data.frase_confirmacion', "REINICIAR {$temporada->codigo}")
             ->assertJsonPath('data.resumen.frigorifico.folios', 1)
             ->assertJsonPath('data.resumen.materia_prima.recepciones_romana', 1)
+            ->assertJsonPath('data.resumen.materia_prima.guias_recepcion_romana', 1)
             ->assertJsonPath('data.resumen.materia_prima.inspecciones_envases', 2)
             ->assertJsonPath('data.resumen.materia_prima.lotes', 1);
         $this->assertContains(
@@ -125,10 +126,12 @@ class ReinicioOperacionalApiTest extends TestCase
             ->assertJsonPath('reutilizado', false)
             ->assertJsonPath('data.resumen_despues.frigorifico.folios', 0)
             ->assertJsonPath('data.resumen_despues.materia_prima.recepciones_romana', 0)
+            ->assertJsonPath('data.resumen_despues.materia_prima.guias_recepcion_romana', 0)
             ->assertJsonPath('data.resumen_despues.materia_prima.inspecciones_envases', 0);
 
         $this->assertDatabaseMissing('folios', ['id' => $folioPt->id]);
         $this->assertDatabaseMissing('recepciones_romana', ['id' => $materiaPrima['recepcion_id']]);
+        $this->assertDatabaseMissing('guias_recepcion_romana', ['recepcion_romana_id' => $materiaPrima['recepcion_id']]);
         $this->assertDatabaseMissing('lotes_materia_prima', ['id' => $materiaPrima['lote_id']]);
         $this->assertDatabaseCount('trazabilidad_folio_origenes', 0);
         $this->assertDatabaseCount('validaciones_mp', 0);
