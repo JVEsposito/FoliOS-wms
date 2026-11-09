@@ -32,7 +32,7 @@ class ValidacionMpController extends Controller
             ->with([
                 'detallesEnvases', 'guiasRecepcion', 'validacionTomadaPor',
                 'validacionesMp.recepcion', 'validacionesMp.temporada', 'validacionesMp.validador',
-                'validacionesMp.dispositivo', 'validacionesMp.segmentos.envases',
+                'validacionesMp.dispositivo', 'validacionesMp.segmentos.envases', 'validacionesMp.segmentos.guiaRecepcion',
             ])
             ->whereHas('temporada', fn (Builder $temporada): Builder => $temporada
                 ->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
@@ -99,7 +99,7 @@ class ValidacionMpController extends Controller
             ->with([
                 'detallesEnvases', 'guiasRecepcion', 'validacionTomadaPor',
                 'validacionesMp.recepcion', 'validacionesMp.temporada', 'validacionesMp.validador',
-                'validacionesMp.dispositivo', 'validacionesMp.segmentos.envases',
+                'validacionesMp.dispositivo', 'validacionesMp.segmentos.envases', 'validacionesMp.segmentos.guiaRecepcion',
             ])
             ->firstOrFail();
 
@@ -158,7 +158,7 @@ class ValidacionMpController extends Controller
         ]);
         $actualizada = $servicio->completarEspecie($recepcion, $datos['especie_validacion_id'], $datos['version_conocida'], $datos['operacion_id'], $request->user());
         $actualizada->load(['detallesEnvases', 'guiasRecepcion', 'validacionTomadaPor', 'validacionesMp.recepcion', 'validacionesMp.temporada',
-            'validacionesMp.validador', 'validacionesMp.dispositivo', 'validacionesMp.segmentos.envases']);
+            'validacionesMp.validador', 'validacionesMp.dispositivo', 'validacionesMp.segmentos.envases', 'validacionesMp.segmentos.guiaRecepcion']);
 
         return response()->json(['data' => $this->recepcion($actualizada)])->header('Cache-Control', 'no-store, private');
     }
