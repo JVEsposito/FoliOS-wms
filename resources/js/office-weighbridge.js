@@ -1,4 +1,5 @@
 import { createReceptionGuides, guideProblem } from './office-weighbridge-guides.js';
+import { createIntegralCorrection } from './office-weighbridge-integral.js';
 import { createGatehouseRomana } from './office-weighbridge-porteria';
 import { dispatchInspectionPayload } from './office-container-inspection.js';
 import { receptionSteps } from './shared/weighbridge-steps.js';
@@ -444,6 +445,8 @@ function renderDetail(reception) {
     elements.annulReception.classList.toggle('is-hidden', !reception.puede_anular || Boolean(reception.puede_eliminar));
     elements.deleteReception.classList.toggle('is-hidden', !reception.puede_eliminar);
     elements.correctGrossWeight.classList.toggle('is-hidden', state.identity?.rol !== 'administrador' || !reception.puede_corregir_peso_bruto);
+    byId('integralCorrectionButton').classList.toggle('is-hidden', state.identity?.rol !== 'administrador'
+        || reception.estado_validacion_mp !== 'validada' || reception.estado === 'anulada' || Boolean(reception.eliminada));
     elements.editReception.textContent = canCorrect ? 'Corregir recepción' : 'Editar ingreso';
     elements.editReception.classList.toggle('is-hidden', (!canOperate || !reception.puede_editar) && !canCorrect);
     elements.confirmEntry.classList.toggle('is-hidden', !canOperate || !reception.puede_confirmar_ingreso);
@@ -532,6 +535,15 @@ elements.grossWeightForm.addEventListener('submit', async (event) => {
     }
 });
 function closeDetail() { state.selected = null; elements.detail.classList.add('is-hidden'); }
+const integralCorrection = createIntegralCorrection({
+    dialog: byId('integralCorrectionDialog'), api, escapeHtml, operationUuid, toast,
+    onSaved: async (recepcion) => { renderDetail(recepcion); await loadReceptions({ silent: true }); },
+});
+byId('integralCorrectionButton').addEventListener('click', async () => {
+    if (!state.selected) return;
+    setBusy(true, 'Preparando la corrección…');
+    try { await integralCorrection.open(state.selected); } catch (error) { toast(error.message, true); } finally { setBusy(false); }
+});
 
 function configureAdministrativeCorrection(enabled) {
     const closedCorrection = enabled
