@@ -20,6 +20,7 @@ use App\Exceptions\ConflictoOperacion;
 use App\Models\CargaFolio;
 use App\Models\Dispositivo;
 use App\Models\EventoCarga;
+use App\Models\Folio;
 use App\Models\Movimiento;
 use App\Models\PlanOperacional;
 use App\Models\Posicion;
@@ -807,7 +808,10 @@ class ServicioPlanDespachoDirecto
         $anterior = $this->buscarAntecesoraRecepcionTunel($cancelada);
         if (! $anterior
             || $anterior->planOperacional->estado->esFinal()
-            || UbicacionActual::query()->where('folio_id', $anterior->folio_id)->exists()) {
+            || UbicacionActual::query()->where('folio_id', $anterior->folio_id)->exists()
+            // Lo que hoy es saldo o ya no está activo no vuelve a pedir salida de túnel.
+            || ! Folio::query()->whereKey($anterior->folio_id)->where('activo', true)
+                ->where('tipo_bulto', TipoBulto::Pallet->value)->exists()) {
             return;
         }
 

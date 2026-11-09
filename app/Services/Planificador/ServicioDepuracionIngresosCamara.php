@@ -18,7 +18,8 @@ use Throwable;
 /**
  * Suelta los ingresos a cámara (salida de túnel, reingreso o pallet pendiente) que ya no corresponden:
  *
- * - el folio es saldo: el planificador nunca pide estibar saldos;
+ * - el folio es saldo o ya no está activo (consumido en una repa, despachado): el planificador nunca pide
+ *   estibar saldos, sin importar cómo nació la tarea (generación, repa posterior o restauración);
  * - el folio ya está ubicado en una posición de cámara (por ejemplo, el camarero lo estibó por su cuenta):
  *   la salida se da por cumplida y no se vuelve a pedir. Si quedó fuera de afinidad, lo corrige el
  *   reordenamiento, nunca otra salida de túnel.
@@ -61,7 +62,8 @@ class ServicioDepuracionIngresosCamara
                 ->orWhere('tipo_paso_maniobra', TipoPasoManiobra::MovimientoPermanente->value))
             ->whereHas('planOperacional', fn (Builder $plan) => $plan->whereIn('tipo', array_map(fn ($t) => $t->value, self::PLANES_INGRESO)))
             ->whereHas('folio', fn (Builder $folio) => $folio
-                ->where('tipo_bulto', TipoBulto::Saldo->value)
+                ->where('tipo_bulto', '!=', TipoBulto::Pallet->value)
+                ->orWhere('activo', false)
                 ->orWhereHas('ubicacionActual', fn (Builder $ubicacion) => $ubicacion->whereNotNull('posicion_id')))
             ->with(['folio.ubicacionActual.camara', 'folio.ubicacionActual.posicion', 'planOperacional.creadoPor']);
     }
@@ -102,7 +104,10 @@ class ServicioDepuracionIngresosCamara
         if (! $folio instanceof Folio) {
             return null;
         }
-        if ($folio->tipo_bulto === TipoBulto::Saldo) {
+        if (! $folio->activo) {
+            return "{$folio->numero_folio} ya no está activo (consumido o despachado): no hay nada que estibar.";
+        }
+        if ($folio->tipo_bulto !== TipoBulto::Pallet) {
             return "{$folio->numero_folio} es saldo: el planificador no pide estibar saldos.";
         }
         $ubicacion = $folio->ubicacionActual;
