@@ -217,6 +217,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/romana/recepciones/{recepcion}/inspecciones-envases/{tipo}', [InspeccionEnvasesController::class, 'corregir'])->middleware('can:corregir-recepciones-romana');
     Route::put('/romana/recepciones/{recepcion}/corregir', [RecepcionRomanaController::class, 'corregir'])
         ->middleware('can:corregir-recepciones-romana');
+    Route::get('/romana/recepciones/{recepcion}/correccion-integral', [RecepcionRomanaController::class, 'estadoCorreccionIntegral'])
+        ->middleware('can:corregir-recepciones-validadas');
+    Route::put('/romana/recepciones/{recepcion}/correccion-integral', [RecepcionRomanaController::class, 'corregirIntegral'])
+        ->middleware('can:corregir-recepciones-validadas');
     Route::put('/romana/recepciones/{recepcion}/peso-bruto', [RecepcionRomanaController::class, 'corregirPesoBruto'])
         ->middleware('can:corregir-peso-bruto-romana');
     Route::delete('/romana/recepciones/{recepcion}', [RecepcionRomanaController::class, 'destroy'])

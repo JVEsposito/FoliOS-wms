@@ -30,6 +30,7 @@ use App\Models\Temporada;
 use App\Services\Envases\ServicioPrestamoInternoEnvases;
 use App\Services\Romana\GeneradorAvisoReciboPdf;
 use App\Services\Romana\ServicioAnulacionRecepcionRomana;
+use App\Services\Romana\ServicioCorreccionIntegralRecepcion;
 use App\Services\Romana\ServicioGuiasRecepcionRomana;
 use App\Services\Romana\ServicioInspeccionEnvases;
 use App\Services\Romana\ServicioRecepcionRomana;
@@ -40,6 +41,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 
 class RecepcionRomanaController extends Controller
 {
@@ -217,6 +219,41 @@ class RecepcionRomanaController extends Controller
         $recepcion = $servicio->corregirPesoBruto($recepcion, $request->validated(), $request->user());
 
         return response()->json(['data' => $this->recepcion($recepcion, true)]);
+    }
+
+    public function estadoCorreccionIntegral(RecepcionRomana $recepcion, ServicioCorreccionIntegralRecepcion $servicio): JsonResponse
+    {
+        return response()->json(['data' => $servicio->estado($recepcion)])->header('Cache-Control', 'no-store, private');
+    }
+
+    public function corregirIntegral(Request $request, RecepcionRomana $recepcion, ServicioCorreccionIntegralRecepcion $servicio): JsonResponse
+    {
+        $tipos = array_column(TipoEnvaseRomana::catalogo(), 'codigo');
+        $datos = $request->validate([
+            'operacion_id' => ['required', 'uuid'], 'version_conocida' => ['required', 'integer', 'min:1'],
+            'motivo_correccion' => ['required', 'string', 'min:10', 'max:2000'],
+            'guias' => ['required', 'array', 'min:1', 'max:20'], 'guias.*.id' => ['required', 'uuid'],
+            'guias.*.numero_guia_despacho' => ['required', 'string', 'max:80'],
+            'guias.*.envases' => ['present', 'array'], 'guias.*.envases.*.tipo_envase' => ['required', Rule::in($tipos)],
+            'guias.*.envases.*.cantidad' => ['required', 'integer', 'min:0', 'max:100000'],
+            'segmentos' => ['sometimes', 'array'], 'segmentos.*.id' => ['required', 'uuid'],
+            'segmentos.*.envases' => ['present', 'array'], 'segmentos.*.envases.*.tipo_envase' => ['required', Rule::in($tipos)],
+            'segmentos.*.envases.*.cantidad' => ['required', 'integer', 'min:0', 'max:100000'],
+            'envases_validados' => ['sometimes', 'array'], 'envases_validados.*.tipo_envase' => ['required', Rule::in($tipos)],
+            'envases_validados.*.cantidad' => ['required', 'integer', 'min:0', 'max:100000'],
+            'propiedades' => ['sometimes', 'array'], 'propiedades.*.tipo_envase' => ['required', Rule::in($tipos)],
+            'propiedades.*.propiedad' => ['required', Rule::in(['cliente', 'propia', 'arrendada'])],
+            'destare' => ['nullable', 'array'], 'destare.peso_tara' => ['required_with:destare', 'numeric', 'gt:0', 'max:100000'],
+            'destare.modo_salida_envases' => ['required_with:destare', Rule::in(['mismos', 'diferentes', 'vacio'])],
+            'destare.numero_guia_salida' => ['nullable', 'string', 'max:80'],
+            'destare.salida_envases' => ['sometimes', 'array'], 'destare.salida_envases.*.tipo_envase' => ['required', Rule::in($tipos)],
+            'destare.salida_envases.*.cantidad' => ['required', 'integer', 'min:0', 'max:100000'],
+            'destare.taras_envases' => ['sometimes', 'array'], 'destare.taras_envases.*.tipo_envase' => ['required', Rule::in($tipos)],
+            'destare.taras_envases.*.tara_unitaria' => ['required', 'numeric', 'gt:0', 'max:1000'],
+        ]);
+        $recepcion = $servicio->corregir($recepcion, $datos, $request->user());
+
+        return response()->json(['data' => [...$this->recepcion($recepcion->refresh(), true), 'correccion_integral' => $servicio->estado($recepcion)]]);
     }
 
     public function anular(Request $request, RecepcionRomana $recepcion, ServicioAnulacionRecepcionRomana $servicio): JsonResponse

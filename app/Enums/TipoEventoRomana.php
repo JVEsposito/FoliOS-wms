@@ -16,4 +16,5 @@ enum TipoEventoRomana: string
     case RecepcionAnulada = 'recepcion_anulada';
     case RecepcionEliminada = 'recepcion_eliminada';
     case EspecieCompletada = 'especie_completada';
+    case CorreccionIntegral = 'correccion_integral';
 }
