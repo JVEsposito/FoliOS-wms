@@ -31,6 +31,7 @@ use App\Models\UbicacionActual;
 use App\Models\User;
 use App\Services\Camaras\InterbloqueoEvacuacionEmergencia;
 use App\Services\Planificador\ServicioArbitrajeManiobras;
+use App\Services\Planificador\ServicioDepuracionIngresosCamara;
 use App\Services\Planificador\ServicioDestinosServidor;
 use App\Services\Planificador\ServicioIncidenciasDestino;
 use App\Services\Planificador\ServicioRecalculosPendientesPlanificador;
@@ -869,6 +870,17 @@ class ServicioManiobrasOperacionales
 
     private function reanudarTrasDiscrepancia(ManiobraOperacional $maniobra): void
     {
+        // Reanudar volvería a pedir la salida de un pallet que ya está ubicado o no se estiba: la PDA entraría en bucle.
+        foreach ($maniobra->pasos()->whereIn('estado', [
+            EstadoTareaMovimiento::Bloqueada->value, EstadoTareaMovimiento::Pendiente->value,
+            EstadoTareaMovimiento::Asumida->value, EstadoTareaMovimiento::EnProceso->value,
+        ])->get() as $paso) {
+            $motivo = app(ServicioDepuracionIngresosCamara::class)->motivoObsolescencia($paso);
+            if ($motivo !== null) {
+                throw new ConflictoOperacion($motivo.' Reanudar volvería a pedir el movimiento: usa «Cancelar sin reemplazo».');
+            }
+        }
+
         $enProceso = $maniobra->pasos()
             ->where('estado', EstadoTareaMovimiento::EnProceso->value)
             ->lockForUpdate()
@@ -1295,6 +1307,7 @@ class ServicioManiobrasOperacionales
             $maniobra,
             $supervisor,
             'Discrepancia resuelta por supervisión: se invalida el sufijo reversible.',
+            fn (TareaMovimiento $paso): bool => app(ServicioDepuracionIngresosCamara::class)->motivoObsolescencia($paso) !== null,
         )) {
             throw new ConflictoOperacion(
                 'La maniobra ya modificó la realidad física; debe reanudarse para cerrar el movimiento o la custodia.',
@@ -1302,20 +1315,26 @@ class ServicioManiobrasOperacionales
         }
     }
 
+    /**
+     * @param  (\Closure(TareaMovimiento): bool)|null  $pasoObsoleto  un paso en proceso cuyo pallet ya está ubicado
+     *                                                                o no es estibable no frena la cancelación
+     */
     public function cancelarReversible(
         ManiobraOperacional $maniobra,
         User $usuario,
         string $motivo,
+        ?\Closure $pasoObsoleto = null,
     ): bool {
-        return DB::transaction(function () use ($maniobra, $usuario, $motivo): bool {
+        return DB::transaction(function () use ($maniobra, $usuario, $motivo, $pasoObsoleto): bool {
             $maniobra = ManiobraOperacional::query()->lockForUpdate()->findOrFail($maniobra->id);
             if ($maniobra->estado->esFinal()) {
                 return true;
             }
-            if ($maniobra->pasos()
+            $enProceso = $maniobra->pasos()
                 ->where('estado', EstadoTareaMovimiento::EnProceso->value)
                 ->lockForUpdate()
-                ->exists()
+                ->get();
+            if ($enProceso->contains(fn (TareaMovimiento $paso): bool => ! $pasoObsoleto || ! $pasoObsoleto($paso))
                 || $maniobra->custodiasTemporales()
                     ->where('estado', EstadoCustodiaTemporal::Activa->value)
                     ->lockForUpdate()
@@ -1340,6 +1359,17 @@ class ServicioManiobrasOperacionales
                     'motivo_cancelacion' => Str::limit(trim($motivo), 255, ''),
                     'version' => $paso->version + 1,
                 ]);
+            }
+            // Un paso «en movimiento» de un pallet que ya está ubicado nunca podrá completarse: se cierra igual.
+            foreach ($enProceso as $paso) {
+                $paso->update([
+                    'estado' => EstadoTareaMovimiento::Cancelada,
+                    'cancelada_at' => now(),
+                    'cancelada_por_user_id' => $usuario->id,
+                    'motivo_cancelacion' => Str::limit(trim($motivo), 255, ''),
+                    'version' => $paso->version + 1,
+                ]);
+                $this->reservas->liberarPasoObsoleto($paso, $motivo);
             }
             $this->liberarBandas($maniobra, $motivo);
             $maniobra->update([

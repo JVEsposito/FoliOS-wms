@@ -69,6 +69,14 @@ Se ejecuta al instante al estibar sin la tarea, al corregir a saldo y al registr
 cancela de forma reversible y libera reservas y bandas. Un paso en ejecución (pallet en la grúa) se respeta y se
 reevalúa en el barrido siguiente.
 
+### Discrepancias de una salida que ya no corresponde
+
+Si el camarero reporta una discrepancia en una salida de túnel cuyo pallet ya está ubicado (o es saldo), Oficina
+muestra «Corresponde cancelar sin reemplazo» con el motivo, deshabilita **Reanudar** (volvería a pedir el
+movimiento en la PDA y quedaría en bucle) y habilita **Cancelar sin reemplazo** aunque el paso figure «en
+movimiento». El barrido hace lo mismo solo y deja la discrepancia resuelta automáticamente con el motivo. Si en la
+PDA se intenta ubicar un pallet que ya está ubicado, el mensaje indica dónde está y que no hay que moverlo.
+
 ## Idempotencia
 
 Cada proceso de Prefrío puede originar como máximo un plan mediante la referencia estable:

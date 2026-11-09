@@ -2,17 +2,23 @@
 
 namespace App\Services\Planificador;
 
+use App\Enums\AccionResolucionDiscrepancia;
+use App\Enums\EstadoDiscrepanciaManiobra;
 use App\Enums\EstadoTareaMovimiento;
 use App\Enums\TipoBulto;
 use App\Enums\TipoMovimiento;
 use App\Enums\TipoPasoManiobra;
 use App\Enums\TipoPlanOperacional;
+use App\Models\DiscrepanciaManiobra;
 use App\Models\Folio;
 use App\Models\TareaMovimiento;
 use App\Models\Temporada;
 use App\Models\User;
+use App\Services\Estiba\ServicioManiobrasOperacionales;
 use App\Services\Estiba\ServicioPlanesOperacionales;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Throwable;
 
 /**
@@ -24,8 +30,9 @@ use Throwable;
  *   la salida se da por cumplida y no se vuelve a pedir. Si quedó fuera de afinidad, lo corrige el
  *   reordenamiento, nunca otra salida de túnel.
  *
- * Solo toca pasos que aún no empiezan (bloqueados, pendientes o tomados sin retiro). Una maniobra con un
- * paso en ejecución o bajo custodia se respeta y se reintenta en el siguiente barrido.
+ * Un paso «en movimiento» de un pallet que ya está ubicado nunca podrá completarse, así que también se cierra.
+ * Una maniobra con custodia temporal activa se respeta. Si la maniobra estaba pausada por una discrepancia,
+ * la discrepancia queda resuelta como cancelación con el mismo motivo.
  */
 class ServicioDepuracionIngresosCamara
 {
@@ -57,7 +64,7 @@ class ServicioDepuracionIngresosCamara
     {
         return TareaMovimiento::query()
             ->where('tipo_movimiento', TipoMovimiento::UbicacionInicial->value)
-            ->whereIn('estado', array_map(fn ($e) => $e->value, self::ESTADOS_SIN_INICIAR))
+            ->whereIn('estado', array_map(fn ($e) => $e->value, self::ESTADOS_ACTIVOS))
             ->where(fn (Builder $paso) => $paso->whereNull('tipo_paso_maniobra')
                 ->orWhere('tipo_paso_maniobra', TipoPasoManiobra::MovimientoPermanente->value))
             ->whereHas('planOperacional', fn (Builder $plan) => $plan->whereIn('tipo', array_map(fn ($t) => $t->value, self::PLANES_INGRESO)))
@@ -74,13 +81,15 @@ class ServicioDepuracionIngresosCamara
         $soltadas = 0;
         $temporadas = [];
         foreach ($tareas as $tarea) {
-            $motivo = $this->motivo($tarea);
+            $motivo = $this->motivoObsolescencia($tarea);
             $responsable = $usuario ?? $tarea->planOperacional?->creadoPor;
             if ($motivo === null || ! $responsable) {
                 continue;
             }
             try {
-                $resultado = $this->planes->cancelarPorReplanificacion($tarea, $responsable, $motivo);
+                $resultado = $tarea->maniobra_operacional_id
+                    ? $this->cancelarManiobra($tarea, $responsable, $motivo)
+                    : $this->planes->cancelarPorReplanificacion($tarea, $responsable, $motivo);
                 if ($resultado?->estado === EstadoTareaMovimiento::Cancelada) {
                     $soltadas++;
                     $temporadas[$tarea->planOperacional->temporada_id] = true;
@@ -98,10 +107,40 @@ class ServicioDepuracionIngresosCamara
         return $soltadas;
     }
 
-    private function motivo(TareaMovimiento $tarea): ?string
+    private function cancelarManiobra(TareaMovimiento $tarea, User $responsable, string $motivo): ?TareaMovimiento
     {
+        return DB::transaction(function () use ($tarea, $responsable, $motivo): ?TareaMovimiento {
+            $maniobra = $tarea->maniobraOperacional()->firstOrFail();
+            $cancelada = app(ServicioManiobrasOperacionales::class)->cancelarReversible($maniobra, $responsable, $motivo,
+                fn (TareaMovimiento $paso): bool => $this->motivoObsolescencia($paso) !== null);
+            if (! $cancelada) {
+                return null;
+            }
+            DiscrepanciaManiobra::query()->where('maniobra_operacional_id', $maniobra->id)
+                ->where('estado', EstadoDiscrepanciaManiobra::Abierta->value)->lockForUpdate()->get()
+                ->each(fn (DiscrepanciaManiobra $discrepancia) => $discrepancia->update([
+                    'estado' => EstadoDiscrepanciaManiobra::Resuelta, 'accion_resolucion' => AccionResolucionDiscrepancia::CancelarManiobra,
+                    'resuelta_por_user_id' => $responsable->id, 'resuelta_at' => now(),
+                    'resolucion' => Str::limit('Resuelta automáticamente: '.$motivo, 1000, ''),
+                ]));
+
+            return $tarea->refresh();
+        }, attempts: 3);
+    }
+
+    /**
+     * Motivo por el que un ingreso a cámara activo ya no corresponde, o null si sigue vigente. Lo usan el barrido y
+     * supervisión al resolver una discrepancia (para permitir cancelar y no reanudar un paso que entraría en bucle).
+     */
+    public function motivoObsolescencia(TareaMovimiento $tarea): ?string
+    {
+        $tarea->loadMissing(['planOperacional', 'folio.ubicacionActual.camara', 'folio.ubicacionActual.posicion']);
         $folio = $tarea->folio;
-        if (! $folio instanceof Folio) {
+        if (! $folio instanceof Folio
+            || $tarea->tipo_movimiento !== TipoMovimiento::UbicacionInicial
+            || ! in_array($tarea->estado, self::ESTADOS_ACTIVOS, true)
+            || ! in_array($tarea->tipo_paso_maniobra, [null, TipoPasoManiobra::MovimientoPermanente], true)
+            || ! in_array($tarea->planOperacional?->tipo, self::PLANES_INGRESO, true)) {
             return null;
         }
         if (! $folio->activo) {

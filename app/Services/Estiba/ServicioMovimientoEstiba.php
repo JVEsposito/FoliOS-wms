@@ -573,6 +573,13 @@ class ServicioMovimientoEstiba
                 || $ubicacion->camara_id !== $camara->id
                 || $ubicacion->posicion_id !== null
                 || ! $posicion) {
+                if ($tareaMovimiento && $ubicacion->posicion_id !== null) {
+                    $lugar = Posicion::query()->with('camara:id,nombre')->find($ubicacion->posicion_id);
+                    throw new ConflictoMovimiento(sprintf(
+                        'El folio %s ya está ubicado en %s · %s: no hay que moverlo. El planificador cerrará esta salida en el próximo minuto; actualiza las labores.',
+                        $folio->numero_folio, $lugar?->camara?->nombre ?? 'cámara', $lugar?->etiqueta ?? '',
+                    ));
+                }
                 throw new ConflictoMovimiento('El folio ya posee una ubicación actual.');
             }
 

@@ -14,9 +14,12 @@ use App\Models\ManiobraOperacional;
 use App\Models\PlanOperacional;
 use App\Models\Posicion;
 use App\Models\ReservaBandaManiobra;
+use App\Models\ReservaTareaMovimiento;
 use App\Models\TareaMovimiento;
 use App\Models\Temporada;
+use App\Models\UbicacionActual;
 use App\Models\User;
+use App\Services\Planificador\ServicioDepuracionIngresosCamara;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -300,6 +303,66 @@ class DiscrepanciaManiobraApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.0.id', $tareaRecuperacionId)
             ->assertJsonPath('data.0.contexto.tipo_decision', 'retorno_seguro_supervisado');
+    }
+
+    public function test_salida_de_tunel_de_un_pallet_ya_ubicado_se_cancela_y_no_se_reanuda_en_bucle(): void
+    {
+        $supervisor = User::factory()->create(['rol' => RolUsuario::SupervisorFrio, 'activo' => true]);
+        $temporada = Temporada::query()->where('activa', true)->firstOrFail();
+        $discrepancia = $this->crearSalidaTunelYaUbicada($temporada, 'PAL-DISC-UBICADO', 'en_proceso');
+        $maniobra = $discrepancia->maniobraOperacional;
+        $tarea = $discrepancia->tareaMovimiento;
+        $reserva = ReservaTareaMovimiento::create([
+            'tarea_movimiento_id' => $tarea->id, 'posicion_destino_id' => $tarea->posicion_destino_id, 'bloqueo_tarea_id' => $tarea->id,
+            'bloqueo_posicion_id' => $tarea->posicion_destino_id, 'estado' => 'activa', 'user_id' => $discrepancia->reportada_por_user_id,
+            'dispositivo_id' => $discrepancia->dispositivo_id, 'reservada_at' => now(), 'renovada_at' => now(),
+            'vence_at' => now()->addMinutes(10), 'version' => 1,
+        ]);
+
+        $this->actingAs($supervisor, 'sanctum')->getJson('/api/discrepancias-maniobra')->assertOk()
+            ->assertJsonPath('data.0.restricciones.reanudar', 'paso_obsoleto')
+            ->assertJsonPath('data.0.restricciones.cancelar', null)
+            ->assertJsonPath('data.0.paso_obsoleto', 'PAL-DISC-UBICADO ya está ubicado en Cámara discrepancia 01 · B01-P01-N1: la salida se da por cumplida.');
+
+        // Reanudar volvería a pedir la salida en la PDA: se rechaza con la instrucción correcta.
+        $this->actingAs($supervisor, 'sanctum')->postJson("/api/discrepancias-maniobra/{$discrepancia->id}/resolver", [
+            'accion' => 'reanudar_maniobra', 'version_maniobra' => $maniobra->version, 'resolucion' => 'Está con ubicación.',
+        ])->assertConflict()->assertJsonPath('message', 'PAL-DISC-UBICADO ya está ubicado en Cámara discrepancia 01 · B01-P01-N1: la salida se da por cumplida. Reanudar volvería a pedir el movimiento: usa «Cancelar sin reemplazo».');
+
+        $this->actingAs($supervisor, 'sanctum')->postJson("/api/discrepancias-maniobra/{$discrepancia->id}/resolver", [
+            'accion' => 'cancelar_maniobra', 'version_maniobra' => $maniobra->version, 'resolucion' => 'Está con ubicación.',
+        ])->assertOk()->assertJsonPath('data.maniobra.estado', 'cancelada')->assertJsonPath('data.tarea.estado', 'cancelada');
+        $this->assertSame('liberada', $reserva->refresh()->estado->value);
+    }
+
+    public function test_el_barrido_resuelve_la_discrepancia_abierta_de_una_salida_que_ya_no_corresponde(): void
+    {
+        $temporada = Temporada::query()->where('activa', true)->firstOrFail();
+        $discrepancia = $this->crearSalidaTunelYaUbicada($temporada, 'PAL-DISC-SALDO', 'bloqueada');
+        $discrepancia->folio->update(['tipo_bulto' => TipoBulto::Saldo]);
+        UbicacionActual::query()->where('folio_id', $discrepancia->folio_id)->delete();
+
+        $this->assertSame(1, app(ServicioDepuracionIngresosCamara::class)->depurarTemporada($temporada));
+        $discrepancia->refresh();
+        $this->assertSame('resuelta', $discrepancia->estado->value);
+        $this->assertSame(AccionResolucionDiscrepancia::CancelarManiobra, $discrepancia->accion_resolucion);
+        $this->assertSame('Resuelta automáticamente: PAL-DISC-SALDO es saldo: el planificador no pide estibar saldos.', $discrepancia->resolucion);
+        $this->assertSame('cancelada', $discrepancia->maniobraOperacional->refresh()->estado->value);
+    }
+
+    private function crearSalidaTunelYaUbicada(Temporada $temporada, string $folio, string $estado): DiscrepanciaManiobra
+    {
+        $discrepancia = $this->crearDiscrepancia($temporada, $folio, estadoTarea: $estado);
+        $tarea = $discrepancia->tareaMovimiento;
+        $tarea->planOperacional->update(['tipo' => 'recepcion_tunel', 'referencia_tipo' => 'proceso_prefrio']);
+        $origen = $tarea->posicion_origen_id;
+        $tarea->update(['tipo_movimiento' => 'ubicacion_inicial', 'camara_origen_id' => null, 'posicion_origen_id' => null]);
+        // El camarero lo estibó por su cuenta en la posición que la salida consideraba origen.
+        UbicacionActual::create(['folio_id' => $tarea->folio_id, 'camara_id' => $tarea->camara_destino_id,
+            'posicion_id' => $origen, 'ubicado_at' => now()]);
+        $discrepancia->update(['tipo' => 'otra', 'detalle' => 'Es muestra']);
+
+        return $discrepancia->refresh();
     }
 
     private function crearDiscrepancia(

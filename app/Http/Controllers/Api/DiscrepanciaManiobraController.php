@@ -12,6 +12,7 @@ use App\Models\DiscrepanciaManiobra;
 use App\Models\Posicion;
 use App\Services\Estiba\ServicioManiobrasOperacionales;
 use App\Services\Estiba\ServicioReplanificacionDiscrepancia;
+use App\Services\Planificador\ServicioDepuracionIngresosCamara;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -165,7 +166,13 @@ class DiscrepanciaManiobraController extends Controller
     {
         $maniobra = $discrepancia->maniobraOperacional;
         $tarea = $discrepancia->tareaMovimiento;
+        // Pallet que ya está ubicado (o saldo): reanudar entraría en bucle en la PDA; cancelar es lo correcto.
+        $pasoObsoleto = $discrepancia->estado === EstadoDiscrepanciaManiobra::Abierta
+            ? app(ServicioDepuracionIngresosCamara::class)->motivoObsolescencia($tarea)
+            : null;
         $bloqueoCancelacion = match (true) {
+            $maniobra->custodiasTemporales->isNotEmpty() => 'custodia_temporal_activa',
+            $pasoObsoleto !== null => null,
             $tarea->estado === EstadoTareaMovimiento::EnProceso => 'tarea_en_proceso',
             $maniobra->custodiasTemporales->isNotEmpty() => 'custodia_temporal_activa',
             default => null,
@@ -222,7 +229,9 @@ class DiscrepanciaManiobraController extends Controller
                 'origen' => $this->ubicacion($tarea->camaraOrigen, $tarea->posicionOrigen),
                 'destino' => $this->ubicacion($tarea->camaraDestino, $tarea->posicionDestino),
             ],
+            'paso_obsoleto' => $pasoObsoleto,
             'restricciones' => [
+                'reanudar' => $pasoObsoleto !== null ? 'paso_obsoleto' : null,
                 'cancelar' => $bloqueoCancelacion,
                 'replanificar' => $bloqueoReplanificacion,
                 'retorno_seguro' => $bloqueoRetorno,
