@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Services\Planificador\ServicioDepuracionIngresosCamara;
 use App\Services\Planificador\ServicioEstadoArbitrajePlanificador;
 use App\Services\Planificador\ServicioLaboresTurno;
 use App\Services\Temporadas\ServicioTemporadaActiva;
@@ -23,6 +24,11 @@ class RecalcularArbitrajePlanificador extends Command
         }
 
         app(ServicioLaboresTurno::class)->pulso($temporada);
+        // Antes de arbitrar: soltar ingresos de saldos y de pallets que ya están estibados.
+        $soltadas = app(ServicioDepuracionIngresosCamara::class)->depurarTemporada($temporada);
+        if ($soltadas > 0) {
+            $this->components->info("Ingresos a cámara soltados: {$soltadas}.");
+        }
         $solicitado = $estado->asegurarProgramado(
             $temporada,
             (bool) $this->option('forzar'),

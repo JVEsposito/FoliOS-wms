@@ -6,8 +6,11 @@ use App\Enums\CondicionTermicaFolio;
 use App\Enums\EstadoIntegracionFolio;
 use App\Enums\EstadoOperacionalFolio;
 use App\Enums\HabilitacionAlmacenamientoFolio;
+use App\Enums\PrioridadOperacional;
 use App\Enums\RolUsuario;
 use App\Enums\TipoBulto;
+use App\Enums\TipoMovimiento;
+use App\Enums\TipoPlanOperacional;
 use App\Models\ArticuloValidacion;
 use App\Models\Camara;
 use App\Models\Dispositivo;
@@ -16,6 +19,7 @@ use App\Models\Posicion;
 use App\Models\Repaletizaje;
 use App\Models\Temporada;
 use App\Models\User;
+use App\Services\Estiba\ServicioPlanesOperacionales;
 use App\Services\Validacion\ServicioEtiquetasPt;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -761,6 +765,35 @@ class RepaletizajeApiTest extends TestCase
         ])->assertOk();
         $this->assertSame('MARCA A', Folio::query()->where('numero_folio', 'DIV-MARCA-A')->firstOrFail()->marca);
         $this->assertSame('MARCA B', Folio::query()->where('numero_folio', 'DIV-MARCA-B')->firstOrFail()->marca);
+    }
+
+    public function test_la_repa_suelta_la_salida_de_tunel_del_origen_que_queda_saldo_o_se_consume(): void
+    {
+        [$token, $temporada] = $this->contexto();
+        $parcial = $this->folio($temporada, 'PAL-TUN-PARCIAL', 40, tipo: TipoBulto::Pallet);
+        $total = $this->folio($temporada, 'PAL-TUN-TOTAL', 10, tipo: TipoBulto::Pallet);
+        $responsable = User::factory()->create(['rol' => RolUsuario::SupervisorFrio, 'activo' => true]);
+        $plan = app(ServicioPlanesOperacionales::class)->crear(
+            temporada: $temporada, tipo: TipoPlanOperacional::RecepcionTunel, titulo: 'Recibir TUNEL 1',
+            creadoPor: $responsable, tareas: collect([$parcial, $total])->map(fn (Folio $folio): array => [
+                'folio_id' => $folio->id, 'tipo_movimiento' => TipoMovimiento::UbicacionInicial,
+                'prioridad' => PrioridadOperacional::Alta, 'instruccion' => "Retirar {$folio->numero_folio} de TUNEL 1.",
+            ])->all(), prioridad: PrioridadOperacional::Alta, motivo: 'Prueba', referenciaTipo: 'proceso_prefrio',
+            referenciaId: (string) Str::uuid(), contexto: ['planner_horizon' => 'rolling'],
+        );
+
+        // Del pallet que espera su salida se sacan 39 cajas y queda 1 (la muestra); el otro se consume entero.
+        $this->withToken($token)->postJson('/api/validacion/repaletizajes', [
+            'turno' => 'A', 'operacion_id' => (string) Str::uuid(), 'tipo_resultado' => 'saldo', 'estrategia_folio' => 'nuevo',
+            'numero_folio_resultante' => 'SAL-DESDE-TUNEL', 'cantidad_objetivo' => 120,
+            'origenes' => [['folio_id' => $parcial->id, 'cantidad_aportada' => 39], ['folio_id' => $total->id, 'cantidad_aportada' => 10]],
+        ])->assertOk();
+
+        $tareas = $plan->tareas()->get()->keyBy('folio_id');
+        $this->assertSame('cancelada', $tareas[$parcial->id]->estado->value);
+        $this->assertSame('PAL-TUN-PARCIAL es saldo: el planificador no pide estibar saldos.', $tareas[$parcial->id]->motivo_cancelacion);
+        $this->assertSame('cancelada', $tareas[$total->id]->estado->value);
+        $this->assertStringContainsString('ya no está activo', $tareas[$total->id]->motivo_cancelacion);
     }
 
     public function test_sacar_cajas_de_una_marca_deja_el_saldo_con_la_marca_que_queda(): void

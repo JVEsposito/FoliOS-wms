@@ -34,6 +34,7 @@ use Carbon\CarbonInterface;
 use DomainException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class ServicioReservasTareasMovimiento
 {
@@ -400,6 +401,23 @@ class ServicioReservasTareasMovimiento
         }
 
         return true;
+    }
+
+    /**
+     * Cierra la reserva de un paso que ya no puede ejecutarse (su pallet ya está ubicado o no es estibable),
+     * aunque figure en proceso. El llamador cancela antes el paso para que la sesión de estiba también se cierre.
+     */
+    public function liberarPasoObsoleto(TareaMovimiento $tarea, string $motivo): void
+    {
+        $tareaBloqueada = TareaMovimiento::query()->lockForUpdate()->findOrFail($tarea->id);
+        $reserva = $this->reservaActivaTarea($tareaBloqueada->id, true);
+        if ($reserva) {
+            $this->finalizarReserva($reserva, EstadoReservaTareaMovimiento::Liberada, [
+                'liberada_at' => now(),
+                'motivo_liberacion' => Str::limit(trim($motivo), 255, ''),
+            ]);
+        }
+        app(ServicioSesionEstiba::class)->cerrarDeTarea($tareaBloqueada->refresh());
     }
 
     public function validarParaMovimiento(

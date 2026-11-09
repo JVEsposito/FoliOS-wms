@@ -51,6 +51,32 @@ El túnel se conserva como origen lógico en el contexto de la tarea:
 
 La tarea se crea sin `camara_destino_id` ni `posicion_destino_id`. El destino exacto aparece después, cuando la frontera rolling es materializada por el servidor.
 
+## Saldos y pallets ya estibados
+
+El planificador **nunca pide estibar saldos** y **no repite una salida de túnel de un pallet que ya está en
+cámara**. `ServicioDepuracionIngresosCamara` suelta los ingresos a cámara (planes `recepcion_tunel` y
+`almacenamiento_pallet`) que aún no empiezan —bloqueados, pendientes o tomados con destino reservado— cuando:
+
+- el folio es tipo **Saldo** o ya no está activo, sin importar cómo nació la tarea: una repa que deja el pallet como
+  saldo o lo consume, una corrección a saldo en Validación o una salida restaurada al sacar el pallet de una carga
+  de despacho directo (que ahora tampoco se restaura si hoy es saldo);
+- el folio ya tiene una posición en cámara, por ejemplo porque el camarero lo estibó por su cuenta. La salida se
+  da por cumplida; si quedó fuera de afinidad, lo corrige el reordenamiento, no otra salida de túnel. Si el pallet
+  tiene otra labor activa que lo saca de su posición (retiro, despeje), su ubicación es transitoria y no se toca.
+
+Se ejecuta al instante al estibar sin la tarea, al corregir a saldo y al registrar la repa, y en cada minuto como barrido antes de
+`planificador:recalcular-arbitraje`. La tarea queda cancelada con el motivo y, si tenía maniobra, la maniobra se
+cancela de forma reversible y libera reservas y bandas. Un paso en ejecución (pallet en la grúa) se respeta y se
+reevalúa en el barrido siguiente.
+
+### Discrepancias de una salida que ya no corresponde
+
+Si el camarero reporta una discrepancia en una salida de túnel cuyo pallet ya está ubicado (o es saldo), Oficina
+muestra «Corresponde cancelar sin reemplazo» con el motivo, deshabilita **Reanudar** (volvería a pedir el
+movimiento en la PDA y quedaría en bucle) y habilita **Cancelar sin reemplazo** aunque el paso figure «en
+movimiento». El barrido hace lo mismo solo y deja la discrepancia resuelta automáticamente con el motivo. Si en la
+PDA se intenta ubicar un pallet que ya está ubicado, el mensaje indica dónde está y que no hay que moverlo.
+
 ## Idempotencia
 
 Cada proceso de Prefrío puede originar como máximo un plan mediante la referencia estable:

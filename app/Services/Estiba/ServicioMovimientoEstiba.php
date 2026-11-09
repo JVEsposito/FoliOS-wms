@@ -25,6 +25,7 @@ use App\Models\User;
 use App\Services\Cargas\ServicioPlanDespachoDirecto;
 use App\Services\Cargas\ServicioReingresoCamara;
 use App\Services\Cargas\ServicioTareasCarga;
+use App\Services\Planificador\ServicioDepuracionIngresosCamara;
 use App\Services\Temporadas\GuardiaTemporadaActiva;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\Transiciones\ComandoTransicionOperacional;
@@ -572,6 +573,13 @@ class ServicioMovimientoEstiba
                 || $ubicacion->camara_id !== $camara->id
                 || $ubicacion->posicion_id !== null
                 || ! $posicion) {
+                if ($tareaMovimiento && $ubicacion->posicion_id !== null) {
+                    $lugar = Posicion::query()->with('camara:id,nombre')->find($ubicacion->posicion_id);
+                    throw new ConflictoMovimiento(sprintf(
+                        'El folio %s ya está ubicado en %s · %s: no hay que moverlo. El planificador cerrará esta salida en el próximo minuto; actualiza las labores.',
+                        $folio->numero_folio, $lugar?->camara?->nombre ?? 'cámara', $lugar?->etiqueta ?? '',
+                    ));
+                }
                 throw new ConflictoMovimiento('El folio ya posee una ubicación actual.');
             }
 
@@ -678,6 +686,10 @@ class ServicioMovimientoEstiba
         $this->actualizarActividadSesiones(collect([$sesion]), $recibidoServidorAt);
         if ($tareaEnEjecucion) {
             $this->reservasTareas->completar($tareaEnEjecucion, $movimiento);
+        } elseif ($posicion && $tipoBulto !== TipoBulto::Material) {
+            // Estibado sin la tarea del planificador: su salida de túnel o ingreso pendiente queda cumplida.
+            $folioId = $folio->id;
+            DB::afterCommit(fn () => app(ServicioDepuracionIngresosCamara::class)->depurarFolio($folioId, $usuario));
         }
         $this->planificadorDespachoDirecto->sincronizarTrasMovimiento($movimiento, $usuario);
 

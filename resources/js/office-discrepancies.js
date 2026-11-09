@@ -101,22 +101,26 @@ function restrictionText(action, restriction) {
         custodia_temporal_activa: 'Hay pallets fuera de banda: utiliza Retorno seguro para cerrar su custodia.',
         sin_custodia_temporal: 'No existen pallets extraídos que deban volver a banda.',
         plan_no_replanificable: 'Este objetivo no posee un planificador rolling para reconstruir el trabajo pendiente.',
+        paso_obsoleto: 'El pallet ya no requiere este movimiento; reanudar volvería a pedirlo en la PDA.',
     };
     return labels[restriction] ? `${action}: ${labels[restriction]}` : '';
 }
 function renderOpenActions(item) {
+    const resumeRestriction = item.restricciones?.reanudar;
     const cancelRestriction = item.restricciones?.cancelar;
     const replanRestriction = item.restricciones?.replanificar;
     const returnRestriction = item.restricciones?.retorno_seguro;
     const restrictions = [
+        restrictionText('Reanudar', resumeRestriction),
         restrictionText('Recalcular', replanRestriction),
         restrictionText('Retorno seguro', returnRestriction),
         restrictionText('Cancelar', cancelRestriction),
     ].filter(Boolean);
     return `<form class="discrepancy-resolution" data-resolution="${escapeHtml(item.id)}" data-version="${item.maniobra.version}">
+        ${item.paso_obsoleto ? `<p class="discrepancy-obsolete" role="status"><strong>Corresponde cancelar sin reemplazo.</strong> ${escapeHtml(item.paso_obsoleto)}</p>` : ''}
         <label><span>Fundamento de la decisión *</span><textarea class="eui-input" name="resolucion" minlength="3" maxlength="500" required placeholder="Describe la verificación física realizada"></textarea></label>
         <div class="discrepancy-resolution__actions">
-            <button class="eui-button eui-button--confirm" name="accion" value="reanudar_maniobra" type="submit">Reanudar ruta verificada</button>
+            <button class="eui-button eui-button--confirm" name="accion" value="reanudar_maniobra" type="submit"${resumeRestriction ? ' disabled' : ''}>Reanudar ruta verificada</button>
             <button class="eui-button" name="accion" value="replanificar_sufijo" type="submit"${replanRestriction ? ' disabled' : ''}>Recalcular trabajo pendiente</button>
             <button class="eui-button eui-button--critical" name="accion" value="retorno_seguro" type="submit"${returnRestriction ? ' disabled' : ''}>Ordenar retorno seguro</button>
             <button class="eui-button discrepancy-cancel" name="accion" value="cancelar_maniobra" type="submit"${cancelRestriction ? ' disabled' : ''}>Cancelar sin reemplazo</button>

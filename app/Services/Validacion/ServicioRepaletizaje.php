@@ -19,6 +19,7 @@ use App\Models\RepaletizajeResultado;
 use App\Models\UbicacionActual;
 use App\Models\User;
 use App\Services\InspeccionSag\ServicioExistenciasSag;
+use App\Services\Planificador\ServicioDepuracionIngresosCamara;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\Transiciones\ComandoTransicionOperacional;
 use App\Services\Transiciones\MotorTransicionesOperacionales;
@@ -353,6 +354,7 @@ class ServicioRepaletizaje
                         'activo' => false,
                         'datos_externos' => $datosExternos,
                     ]);
+                    $this->soltarIngresosPendientes($folio->id, $usuario);
                 } else {
                     $datosExternos = $folio->datos_externos ?? [];
                     $datosExternos['cantidad_cajas'] = $origen['cantidad_despues'];
@@ -360,6 +362,7 @@ class ServicioRepaletizaje
                     $this->actualizarResumenComposicion($datosExternos);
                     $especificacionesRestantes = $this->especificacionesDeComposicion($this->especificaciones($folio), collect($origen['composicion_despues']));
                     $datosExternos['ultimo_repaletizaje'] = $codigo;
+                    $this->soltarIngresosPendientes($folio->id, $usuario);
                     $folio->update([
                         'tipo_bulto' => TipoBulto::Saldo,
                         'variedad' => $especificacionesRestantes['variedad'],
@@ -1027,6 +1030,12 @@ class ServicioRepaletizaje
                 fn (Folio $folio): mixed => $folio->datos_externos['cuartel'] ?? null,
             )),
         ];
+    }
+
+    /** El origen quedó como saldo o se consumió: su salida de túnel o ingreso pendiente ya no corresponde. */
+    private function soltarIngresosPendientes(string $folioId, User $usuario): void
+    {
+        DB::afterCommit(fn () => app(ServicioDepuracionIngresosCamara::class)->depurarFolio($folioId, $usuario));
     }
 
     private function esMix(mixed $valor): bool
