@@ -97,6 +97,11 @@ class RecepcionRomana extends Model implements PerteneceATemporada
         return $this->hasMany(EventoRecepcionRomana::class, 'recepcion_romana_id');
     }
 
+    public function guiasRecepcion(): HasMany
+    {
+        return $this->hasMany(GuiaRecepcionRomana::class, 'recepcion_romana_id')->where('vigente', 1)->orderBy('secuencia')->orderBy('id');
+    }
+
     public function detallesEnvases(): HasMany
     {
         return $this->hasMany(DetalleEnvaseRecepcionRomana::class, 'recepcion_romana_id');

@@ -208,3 +208,25 @@ test('MP identifica el segmento incompleto antes de enviar y conserva el conteo 
     assert.equal(pda.confirmations[0].segments[1].cuartel, 'B');
   } finally { await pda.unmount(); }
 });
+
+test('varias guías de Romana abren su desglose automáticamente y conservan guía, origen y cantidades al confirmar', async () => {
+  const item = reception([['bins', 4], ['totes', 96]]);
+  item.guias = ['1511', '1512'].map((n) => ({ id: `guia-${n}`, numero_guia_despacho: n,
+    envases: [{ tipo_envase: 'bins', cantidad: 2 }, { tipo_envase: 'totes', cantidad: 48 }] }));
+  const pda = harness(item);
+  await pda.mount(); await pda.open(item.numero_recepcion);
+  assert.match(pda.text(), /Desglose por guía de Romana/);
+  assert.match(pda.text(), /1511 \/ 1512/);
+  assert.equal(pda.input('Bins de planta agregados'), undefined);
+  for (let index = 0; index < 2; index++) {
+    const inputs = pda.segmentInputs(index).filter((n) => !n.props.accessibilityLabel);
+    assert.deepEqual(inputs.map((n) => n.props.value), ['2', '48']);
+    await pda.pressSegment(index, '11111'); await pda.pressSegment(index, 'Santina');
+  }
+  await pda.press('Tarjas de campo verificadas visualmente');
+  await pda.press('Confirmar Validación MP');
+  assert.equal(pda.confirmations.length, 1);
+  assert.deepEqual(pda.confirmations[0].segments.map((s) => s.guia_recepcion_romana_id), ['guia-1511', 'guia-1512']);
+  assert.equal(pda.confirmations[0].segregation, true);
+  await pda.unmount();
+});

@@ -311,3 +311,9 @@ body.has-reception-drawer .office-app .weighbridge-filters { grid-template-colum
 .weighbridge-gatehouse h2, .weighbridge-gatehouse p { margin: 4px 0; }
 .weighbridge-gatehouse ul { flex-basis: 100%; margin: 0; padding-left: 20px; }
 .weighbridge-gatehouse.gatehouse-arrival { outline: 2px solid var(--cyan); }
+
+.reception-guide { border: 1px solid var(--border, #51717d); border-radius: 8px; padding: 14px; margin: 12px 0; }
+.reception-guide legend { font-weight: 700; padding: 0 6px; }
+.reception-guide__heading { display: flex; gap: 12px; align-items: end; }
+.reception-guide__heading .field { flex: 1; }
+.reception-guide__quantities { display: grid; grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); gap: 12px; margin-top: 12px; }

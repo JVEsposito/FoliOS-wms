@@ -13,6 +13,7 @@ use App\Models\EspecieValidacion;
 use App\Models\RecepcionRomana;
 use App\Models\ValidacionMp;
 use App\Models\VariedadValidacion;
+use App\Services\Romana\ServicioGuiasRecepcionRomana;
 use App\Services\Romana\ServicioInspeccionEnvases;
 use App\Services\Romana\ServicioRepartoEnvases;
 use App\Services\Temporadas\ServicioTemporadaActiva;
@@ -29,9 +30,9 @@ class ValidacionMpController extends Controller
     {
         $recepciones = RecepcionRomana::query()->where('estado', '!=', EstadoRecepcionRomana::Anulada->value)
             ->with([
-                'detallesEnvases', 'validacionTomadaPor',
+                'detallesEnvases', 'guiasRecepcion', 'validacionTomadaPor',
                 'validacionesMp.recepcion', 'validacionesMp.temporada', 'validacionesMp.validador',
-                'validacionesMp.dispositivo', 'validacionesMp.segmentos.envases',
+                'validacionesMp.dispositivo', 'validacionesMp.segmentos.envases', 'validacionesMp.segmentos.guiaRecepcion',
             ])
             ->whereHas('temporada', fn (Builder $temporada): Builder => $temporada
                 ->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
@@ -65,7 +66,7 @@ class ValidacionMpController extends Controller
             ->where('estado', EstadoValidacionMp::Validada->value)
             ->where('validada_at', '>=', $inicio->utc())
             ->where('validada_at', '<', $fin->utc())
-            ->with(['recepcion.detallesEnvases', 'validador', 'dispositivo', 'segmentos.envases'])
+            ->with(['recepcion.detallesEnvases', 'recepcion.guiasRecepcion', 'validador', 'dispositivo', 'segmentos.envases'])
             ->orderByDesc('validada_at')
             ->get();
 
@@ -96,9 +97,9 @@ class ValidacionMpController extends Controller
             ->whereHas('temporada', fn (Builder $temporada): Builder => $temporada
                 ->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
             ->with([
-                'detallesEnvases', 'validacionTomadaPor',
+                'detallesEnvases', 'guiasRecepcion', 'validacionTomadaPor',
                 'validacionesMp.recepcion', 'validacionesMp.temporada', 'validacionesMp.validador',
-                'validacionesMp.dispositivo', 'validacionesMp.segmentos.envases',
+                'validacionesMp.dispositivo', 'validacionesMp.segmentos.envases', 'validacionesMp.segmentos.guiaRecepcion',
             ])
             ->firstOrFail();
 
@@ -156,8 +157,8 @@ class ValidacionMpController extends Controller
             'especie_validacion_id' => ['required', 'uuid'],
         ]);
         $actualizada = $servicio->completarEspecie($recepcion, $datos['especie_validacion_id'], $datos['version_conocida'], $datos['operacion_id'], $request->user());
-        $actualizada->load(['detallesEnvases', 'validacionTomadaPor', 'validacionesMp.recepcion', 'validacionesMp.temporada',
-            'validacionesMp.validador', 'validacionesMp.dispositivo', 'validacionesMp.segmentos.envases']);
+        $actualizada->load(['detallesEnvases', 'guiasRecepcion', 'validacionTomadaPor', 'validacionesMp.recepcion', 'validacionesMp.temporada',
+            'validacionesMp.validador', 'validacionesMp.dispositivo', 'validacionesMp.segmentos.envases', 'validacionesMp.segmentos.guiaRecepcion']);
 
         return response()->json(['data' => $this->recepcion($actualizada)])->header('Cache-Control', 'no-store, private');
     }
@@ -175,7 +176,8 @@ class ValidacionMpController extends Controller
             'tarjas_verificadas' => ['nullable', 'boolean'],
             'requiere_segregacion' => ['nullable', 'boolean'],
             'segmentos' => ['nullable', 'array', 'max:100'],
-            'segmentos.*.motivos' => ['required_with:segmentos', 'array', 'max:3'],
+            'segmentos.*.guia_recepcion_romana_id' => ['sometimes', 'nullable', 'uuid'],
+            'segmentos.*.motivos' => ['required_with:segmentos', 'array', 'max:4'],
             'segmentos.*.motivos.*' => [Rule::enum(MotivoSegregacionMp::class)],
             'csg_validacion_id' => [Rule::requiredIf($sinSegregacion), 'nullable', 'uuid'],
             'variedad_validacion_id' => [Rule::requiredIf($sinSegregacion), 'nullable', 'uuid'],
@@ -205,6 +207,7 @@ class ValidacionMpController extends Controller
             'min.array' => 'Agrega al menos :min elemento(s) en :attribute.',
             'max.array' => 'No agregues más de :max elementos en :attribute.',
             'max.string' => 'El texto de :attribute no puede superar :max caracteres.',
+            'segmentos.*.guia_recepcion_romana_id.uuid' => 'Segmento :position: selecciona una guía de esta recepción.',
             'segmentos.*.motivos.required_with' => 'Segmento :position: selecciona al menos un motivo de segregación.',
             'segmentos.*.csg_validacion_id.required_with' => 'Segmento :position: selecciona el CSG.',
             'segmentos.*.variedad_validacion_id.required_with' => 'Segmento :position: selecciona la variedad.',
@@ -275,6 +278,7 @@ class ValidacionMpController extends Controller
             'temporada' => ['id' => $recepcion->temporada_id, 'codigo' => $recepcion->temporada_codigo_snapshot, 'nombre' => $recepcion->temporada_nombre_snapshot],
             'cliente' => ['id' => $recepcion->cliente_id, 'codigo' => $recepcion->cliente_codigo_snapshot, 'nombre' => $recepcion->cliente_nombre_snapshot],
             'numero_guia_despacho' => $recepcion->numero_guia_despacho,
+            'guias' => app(ServicioGuiasRecepcionRomana::class)->datos($recepcion),
             'patente_camion' => $recepcion->patente_camion,
             'conductor' => ['rut' => $recepcion->rut_conductor, 'nombre' => $recepcion->nombre_conductor],
             'ingreso_at' => $recepcion->ingreso_at?->toAtomString(),
@@ -322,6 +326,8 @@ class ValidacionMpController extends Controller
             'segmentos' => $validacion->segmentos->map(fn ($segmento): array => [
                 'id' => $segmento->id,
                 'secuencia' => $segmento->secuencia,
+                'guia_recepcion_romana_id' => $segmento->guia_recepcion_romana_id,
+                'numero_guia_despacho' => $segmento->guiaRecepcion?->numero_guia_despacho,
                 'motivos' => $segmento->motivos,
                 'csg' => $segmento->csg_snapshot,
                 'cuartel' => $segmento->cuartel,

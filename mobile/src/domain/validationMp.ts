@@ -2,7 +2,14 @@ import { ContainerCode, ContainerOption } from '../services/containerCatalog';
 export type ContainerType = ContainerCode;
 export type ReceptionType = 'fruta_con_envases' | 'fruta_pesaje_envases' | 'solo_envases';
 export type MpValidationState = 'pendiente' | 'en_curso' | 'validada';
-export type SegregationReason = 'csg' | 'cuartel' | 'variedad';
+export type SegregationReason = 'csg' | 'cuartel' | 'variedad' | 'guia';
+
+export type MpReceptionGuide = {
+  id: string;
+  numero_guia_despacho: string;
+  envases: Array<{ tipo_envase: ContainerType; cantidad: number }>;
+  envases_validados?: Array<{ tipo_envase: ContainerType; cantidad: number }> | null;
+};
 
 export type MpReception = {
   id: string;
@@ -16,6 +23,7 @@ export type MpReception = {
   temporada: { id: string; codigo: string; nombre: string };
   cliente: { id: string; codigo: string | null; nombre: string };
   numero_guia_despacho: string;
+  guias?: MpReceptionGuide[];
   patente_camion: string;
   conductor: { rut: string; nombre: string };
   ingreso_at: string;
@@ -63,6 +71,8 @@ export type MpValidation = {
   segmentos: Array<{
     id: string;
     secuencia: number;
+    guia_recepcion_romana_id?: string | null;
+    numero_guia_despacho?: string | null;
     motivos: SegregationReason[];
     csg: string | null;
     cuartel: string | null;
@@ -88,6 +98,7 @@ export type MpCatalog = {
 
 export type MpSegmentDraft = {
   key: string;
+  guia_recepcion_romana_id?: string | null;
   motivos: SegregationReason[];
   csg_validacion_id: string | null;
   cuartel: string;

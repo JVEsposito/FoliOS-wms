@@ -30,6 +30,7 @@ use App\Models\Temporada;
 use App\Services\Envases\ServicioPrestamoInternoEnvases;
 use App\Services\Romana\GeneradorAvisoReciboPdf;
 use App\Services\Romana\ServicioAnulacionRecepcionRomana;
+use App\Services\Romana\ServicioGuiasRecepcionRomana;
 use App\Services\Romana\ServicioInspeccionEnvases;
 use App\Services\Romana\ServicioRecepcionRomana;
 use App\Services\Romana\ServicioRepartoEnvases;
@@ -117,6 +118,7 @@ class RecepcionRomanaController extends Controller
                 $consulta
                     ->where('numero_recepcion', 'like', $buscar)
                     ->orWhere('numero_guia_despacho', 'like', $buscar)
+                    ->orWhereHas('guiasRecepcion', fn (Builder $guias) => $guias->where('numero_guia_despacho', 'like', $buscar))
                     ->orWhere('patente_camion', 'like', $buscar)
                     ->orWhere('nombre_conductor', 'like', $buscar)
                     ->orWhere('cliente_nombre_snapshot', 'like', $buscar);
@@ -137,7 +139,7 @@ class RecepcionRomanaController extends Controller
             $base->where('estado', '!=', EstadoRecepcionRomana::Anulada->value);
         }
         $paginacion = $base
-            ->with(['creadoPor', 'ingresoConfirmadoPor', 'cerradoPor', 'validacionTomadaPor', 'detallesEnvases', 'salidasEnvases'])
+            ->with(['creadoPor', 'ingresoConfirmadoPor', 'cerradoPor', 'validacionTomadaPor', 'detallesEnvases', 'guiasRecepcion', 'salidasEnvases'])
             ->orderByDesc('ingreso_at')
             ->paginate((int) ($filtros['por_pagina'] ?? 30));
 
@@ -170,7 +172,7 @@ class RecepcionRomanaController extends Controller
             'creadoPor',
             'ingresoConfirmadoPor',
             'cerradoPor',
-            'detallesEnvases',
+            'detallesEnvases', 'guiasRecepcion',
             'salidasEnvases',
             'pesajesEnvases' => fn ($consulta) => $consulta
                 ->with(['registradoPor', 'anuladoPor'])
@@ -385,6 +387,7 @@ class RecepcionRomanaController extends Controller
                     : $detalle->cantidad_validada - $detalle->cantidad_declarada,
             ])->values(),
             'numero_guia_despacho' => $recepcion->numero_guia_despacho,
+            'guias' => app(ServicioGuiasRecepcionRomana::class)->datos($recepcion),
             'numero_guia_salida' => $recepcion->numero_guia_salida,
             'modo_salida_envases' => $recepcion->modo_salida_envases
                 ?? ($recepcion->estado === EstadoRecepcionRomana::Cerrado && ! $esPesajeEnvases && ! $esSoloEnvases

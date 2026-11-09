@@ -24,6 +24,7 @@ use App\Models\User;
 use App\Models\ValidacionMp;
 use App\Models\VariedadValidacion;
 use App\Services\Envases\ServicioPrestamoInternoEnvases;
+use App\Services\Romana\ServicioGuiasRecepcionRomana;
 use App\Services\Romana\ServicioInspeccionEnvases;
 use App\Services\Romana\ServicioRepartoEnvases;
 use App\Services\Temporadas\GuardiaTemporadaActiva;
@@ -173,6 +174,7 @@ class ServicioValidacionMp
             $segmentos = $esFruta
                 ? $this->prepararSegmentos($validacion, $recepcion, $datos, $cantidades, $requiereSegregacion, $binsPlanta)
                 : [];
+            $segmentos = app(ServicioGuiasRecepcionRomana::class)->distribuirSegmentos($recepcion, $segmentos, $cantidades);
             $tiposReparto = $recepcion->peso_neto !== null
                 ? app(ServicioRepartoEnvases::class)->tipos($recepcion)
                 : array_column(array_filter(TipoEnvaseRomana::catalogo(), fn ($tipo): bool => $tipo['contiene_fruta']), 'codigo');
@@ -316,6 +318,7 @@ class ServicioValidacionMp
 
         $creado = SegmentoValidacionMp::create([
             'validacion_mp_id' => $validacion->id,
+            'guia_recepcion_romana_id' => $segmento['guia_recepcion_romana_id'] ?? null,
             'secuencia' => $secuencia,
             'motivos' => $segmento['motivos'] ?? [],
             'csg_validacion_id' => $csg?->id,
@@ -379,6 +382,7 @@ class ServicioValidacionMp
             'datos' => [
                 'numero_recepcion' => $recepcion->numero_recepcion,
                 'cantidad_declarada' => $declarada,
+                'guias' => app(ServicioGuiasRecepcionRomana::class)->datos($recepcion),
                 'cantidad_validada' => $validada,
                 'diferencia' => $validada - $declarada,
                 'validado_at' => $validadoAt->toAtomString(),
@@ -389,8 +393,8 @@ class ServicioValidacionMp
     private function cargar(ValidacionMp $validacion): ValidacionMp
     {
         return $validacion->refresh()->load([
-            'recepcion.detallesEnvases', 'temporada', 'validador', 'dispositivo',
-            'segmentos.envases', 'segmentos.csg', 'segmentos.variedad',
+            'recepcion.detallesEnvases', 'recepcion.guiasRecepcion', 'temporada', 'validador', 'dispositivo',
+            'segmentos.envases', 'segmentos.guiaRecepcion', 'segmentos.csg', 'segmentos.variedad',
         ]);
     }
 }

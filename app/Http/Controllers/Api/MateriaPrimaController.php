@@ -177,7 +177,7 @@ class MateriaPrimaController extends Controller
             ->whereHas('validacion.recepcion.temporada', fn (Builder $consulta) => $consulta
                 ->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
             ->with([
-                'envases',
+                'envases', 'guiaRecepcion',
                 'csg',
                 'variedad.especie',
                 'validacion.recepcion.detallesEnvases',
@@ -222,6 +222,8 @@ class MateriaPrimaController extends Controller
                 return [
                     'id' => $segmento->id,
                     'secuencia' => $segmento->secuencia,
+                    'guia_recepcion_romana_id' => $segmento->guia_recepcion_romana_id,
+                    'numero_guia_despacho' => $segmento->guiaRecepcion?->numero_guia_despacho,
                     'estado' => $segmento->estado,
                     'motivos' => $segmento->motivos,
                     'bins_prestados_planta' => $segmento->bins_prestados_planta,
@@ -446,7 +448,7 @@ class MateriaPrimaController extends Controller
     private function relaciones(bool $conEventos = false): array
     {
         $relaciones = [
-            'segmento.envases',
+            'segmento.envases', 'segmento.guiaRecepcion',
             'envasesDetalle',
             'recepcion',
             'temporada',

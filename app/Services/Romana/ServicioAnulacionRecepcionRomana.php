@@ -127,6 +127,9 @@ class ServicioAnulacionRecepcionRomana
                 ]);
                 $reversas[] = $reversa->id;
             }
+            if ($eliminar) {
+                $recepcion->guiasRecepcion()->update(['vigente' => null]);
+            }
             $anterior = $recepcion->estado;
             $recepcion->update(['estado' => EstadoRecepcionRomana::Anulada, 'version' => $recepcion->version + 1,
                 ...($eliminar ? ['eliminada_at' => $ahora, 'guia_vigente' => null] : [])]);

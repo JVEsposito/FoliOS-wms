@@ -1304,7 +1304,7 @@ class ServicioLoteMateriaPrima
     public function cargar(LoteMateriaPrima $lote): LoteMateriaPrima
     {
         return $lote->refresh()->load([
-            'segmento.envases',
+            'segmento.envases', 'segmento.guiaRecepcion',
             'envasesDetalle',
             'segmento.validacion.recepcion.detallesEnvases',
             'recepcion',

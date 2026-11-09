@@ -56,3 +56,18 @@ test('MP conserva el conflicto del servidor cuando no hay errores por campo', as
     return true;
   });
 });
+
+test('envía la guía de origen de cada segmento al servidor', async () => {
+  let body;
+  const service = api(async (_url, options) => {
+    body = JSON.parse(options.body);
+    return new Response(JSON.stringify({ data: { estado: 'validada' } }));
+  });
+  await service.confirmMpValidation('https://planta.test', 'token', 'validation-1', {
+    containers: [{ tipo_envase: 'bins', cantidad_validada: 2 }], tagsChecked: true, segregation: true,
+    csgId: null, varietyId: null, plantBins: 0, observation: '', inspection: { items: [] },
+    segments: ['guia-1511', 'guia-1512'].map((id) => ({ guia_recepcion_romana_id: id, motivos: ['guia'],
+      csg_validacion_id: 'csg', variedad_validacion_id: 'santina', cuartel: '', cantidades: { bins: '1' }, bins_planta: '0' })),
+  });
+  assert.deepEqual(body.segmentos.map((s) => s.guia_recepcion_romana_id), ['guia-1511', 'guia-1512']);
+});
