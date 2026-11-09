@@ -207,6 +207,7 @@ class ValidacionMpController extends Controller
             'min.array' => 'Agrega al menos :min elemento(s) en :attribute.',
             'max.array' => 'No agregues más de :max elementos en :attribute.',
             'max.string' => 'El texto de :attribute no puede superar :max caracteres.',
+            'segmentos.*.guia_recepcion_romana_id.uuid' => 'Segmento :position: selecciona una guía de esta recepción.',
             'segmentos.*.motivos.required_with' => 'Segmento :position: selecciona al menos un motivo de segregación.',
             'segmentos.*.csg_validacion_id.required_with' => 'Segmento :position: selecciona el CSG.',
             'segmentos.*.variedad_validacion_id.required_with' => 'Segmento :position: selecciona la variedad.',

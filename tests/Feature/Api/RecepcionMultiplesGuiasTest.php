@@ -32,7 +32,7 @@ class RecepcionMultiplesGuiasTest extends TestCase
         $this->assertDatabaseCount('detalles_envases_recepcion_romana', 2);
         $this->assertDatabaseCount('movimientos_envases', 0);
         $this->assertSame(28000.0, (float) $r['peso_bruto']);
-        $this->assertSame([['tipo_envase' => 'bins', 'cantidad' => 2], ['tipo_envase' => 'totes', 'cantidad' => 48]], $r['guias'][0]['envases']);
+        $this->assertEquals([['tipo_envase' => 'bins', 'cantidad' => 2], ['tipo_envase' => 'totes', 'cantidad' => 48]], $r['guias'][0]['envases']);
         $this->getJson('/api/romana/recepciones?buscar=1512')->assertOk()->assertJsonPath('meta.total', 1);
         $this->postJson('/api/romana/recepciones', [...$datos, 'guias' => array_reverse($datos['guias'])])->assertConflict();
     }
@@ -68,7 +68,7 @@ class RecepcionMultiplesGuiasTest extends TestCase
         $this->getJson('/api/romana/recepciones/'.$r['id'])->assertOk()->assertJsonPath('data.guias.1.numero_guia_despacho', '1512');
         $this->assertSame(2, GuiaRecepcionRomana::where('recepcion_romana_id', $r['id'])->where('vigente', 1)->count());
         // Un cliente antiguo no puede borrar involuntariamente las guías al editar.
-        $this->putJson('/api/romana/recepciones/'.$r['id'], [...$simple, 'numero_guia_despacho' => 'OTRA'])->assertUnprocessable()->assertJsonValidationErrors('guias');
+        $this->putJson('/api/romana/recepciones/'.$r['id'], [...$simple, 'operacion_id' => (string) Str::uuid(), 'numero_guia_despacho' => 'OTRA'])->assertUnprocessable()->assertJsonValidationErrors('guias');
         $this->assertDatabaseCount('recepciones_romana', 2);
     }
 
@@ -84,7 +84,7 @@ class RecepcionMultiplesGuiasTest extends TestCase
         $this->assertDatabaseCount('movimientos_envases', 2);
         $this->assertSame(4, (int) MovimientoEnvase::where('tipo_envase', 'bins')->sum('cantidad'));
         $this->assertSame(97, (int) MovimientoEnvase::where('tipo_envase', 'totes')->sum('cantidad'));
-        $this->assertSame([['tipo_envase' => 'bins', 'cantidad' => 2], ['tipo_envase' => 'totes', 'cantidad' => 49]], GuiaRecepcionRomana::findOrFail($r['guias'][1]['id'])->envases_validados);
+        $this->assertEquals([['tipo_envase' => 'bins', 'cantidad' => 2], ['tipo_envase' => 'totes', 'cantidad' => 49]], GuiaRecepcionRomana::findOrFail($r['guias'][1]['id'])->envases_validados);
         $this->assertSame(2, count(MovimientoEnvase::firstOrFail()->datos['guias']));
         $this->actingAs(User::factory()->create(['rol' => RolUsuario::Administrador]), 'sanctum');
         $segmentos = $this->getJson('/api/materia-prima/segmentos-pendientes')->assertOk()->json('data');
@@ -147,6 +147,39 @@ class RecepcionMultiplesGuiasTest extends TestCase
         $guia = GuiaRecepcionRomana::findOrFail($r['guias'][1]['id']);
         $this->expectException(UniqueConstraintViolationException::class);
         $guia->replicate()->fill(['recepcion_romana_id' => $otra['id']])->save();
+    }
+
+    public function test_busca_guias_secundarias_aunque_el_resumen_este_abreviado_y_conserva_80_caracteres(): void
+    {
+        $datos = $this->ingreso();
+        $primera = str_repeat('A', 80);
+        $segunda = str_repeat('B', 80);
+        $datos['guias'][0]['numero_guia_despacho'] = $primera;
+        $datos['guias'][1]['numero_guia_despacho'] = $segunda;
+        $r = $this->postJson('/api/romana/recepciones', $datos)->assertCreated()->json('data');
+        $this->assertLessThanOrEqual(80, mb_strlen($r['numero_guia_despacho']));
+        $this->getJson('/api/romana/recepciones?buscar='.$segunda)->assertOk()->assertJsonPath('meta.total', 1);
+        $this->assertSame($segunda, $r['guias'][1]['numero_guia_despacho']);
+    }
+
+    public function test_varias_guias_conservan_las_taras_y_el_cierre_del_pesaje_acumulativo(): void
+    {
+        $datos = $this->ingreso();
+        $datos['tipo_recepcion'] = 'fruta_pesaje_envases';
+        $datos['envases'] = [['tipo_envase' => 'bins', 'cantidad' => 4, 'tara_unitaria' => 40, 'propiedad' => 'arrendada']];
+        foreach ($datos['guias'] as &$guia) {
+            $guia['envases'] = [['tipo_envase' => 'bins', 'cantidad' => 2]];
+        }
+        unset($guia);
+        $r = $this->postJson('/api/romana/recepciones', $datos)->assertCreated()->assertJsonCount(2, 'data.guias')->json('data');
+        $this->postJson('/api/romana/recepciones/'.$r['id'].'/pesajes-envases', ['operacion_id' => (string) Str::uuid(),
+            'cantidad_envases' => 4, 'peso_bruto' => 1000])->assertOk()->assertJsonPath('data.peso_neto', 840);
+        $cerrada = $this->postJson('/api/romana/recepciones/'.$r['id'].'/cerrar', ['operacion_id' => (string) Str::uuid()])
+            ->assertOk()->assertJsonPath('data.estado', 'cerrado')->assertJsonPath('data.peso_tara', 160)->json('data');
+        $this->assertEquals($r['guias'], $cerrada['guias']);
+        $this->assertDatabaseCount('pesajes_envases_recepcion_romana', 1);
+        $this->assertDatabaseCount('movimientos_envases', 0);
+        $this->get('/api/romana/recepciones/'.$r['id'].'/aviso-recibo')->assertOk();
     }
 
     private function ingreso(): array

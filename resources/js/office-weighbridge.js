@@ -66,9 +66,12 @@ function guidesEditor() {
     });
 }
 function lockGuideTotals(multiple = receptionGuides?.multiple() === true) {
+    elements.standardContainerLines.querySelector('legend').textContent = multiple ? 'Totales de envases del camión *' : 'Envases declarados en la guía *';
     elements.standardContainerLines.querySelectorAll('input[type="number"]').forEach((input) => { input.readOnly = multiple; });
     elements.containerWeighingLines.querySelectorAll('[data-line="cantidad"]').forEach((input) => { input.readOnly = multiple; });
-    elements.containerWeighingLines.querySelectorAll('[data-line="tipo_envase"], [data-remove-weighing-line]').forEach((input) => { input.disabled = multiple; });
+    elements.containerWeighingLines.querySelectorAll('[data-line="tipo_envase"]').forEach((input) => { input.disabled = multiple; });
+    const rows = elements.containerWeighingLines.querySelectorAll('[data-weighing-line]');
+    elements.containerWeighingLines.querySelectorAll('[data-remove-weighing-line]').forEach((input) => { input.disabled = multiple || rows.length === 1; });
     elements.addContainerWeighingLine.classList.toggle('is-hidden', multiple);
 }
 
