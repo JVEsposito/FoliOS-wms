@@ -40,17 +40,17 @@ type Source = Omit<RepalletizingFolio, 'composicion'> & {
 };
 type ResultType = 'pallet' | 'saldo';
 type FolioStrategy = 'conservar' | 'nuevo';
-type HardField = 'cliente' | 'especie' | 'marca' | 'condicion_termica';
-type MixField = 'variedad' | 'calibre' | 'envase' | 'categoria' | 'csg' | 'predio' | 'cuartel';
+type HardField = 'cliente' | 'especie' | 'condicion_termica';
+type MixField = 'marca' | 'variedad' | 'calibre' | 'envase' | 'categoria' | 'csg' | 'predio' | 'cuartel';
 
 const HARD_FIELDS: Array<{ key: HardField; label: string }> = [
   { key: 'cliente', label: 'cliente' },
   { key: 'especie', label: 'especie' },
-  { key: 'marca', label: 'marca' },
   { key: 'condicion_termica', label: 'estado térmico' },
 ];
 
 const MIX_FIELDS: Array<{ key: MixField; label: string }> = [
+  { key: 'marca', label: 'marca' },
   { key: 'variedad', label: 'variedad' },
   { key: 'calibre', label: 'calibre' },
   { key: 'envase', label: 'envase' },
@@ -219,7 +219,7 @@ export function RepalletizingScreen({ auth, baseUrl, onLogout, standalone = fals
       return;
     }
     if (hardMismatches.length) {
-      setError('Cliente, especie, marca y estado térmico deben coincidir.');
+      setError('Cliente, especie y estado térmico deben coincidir.');
       return;
     }
     if (!actualResultNumber) {
@@ -291,7 +291,7 @@ export function RepalletizingScreen({ auth, baseUrl, onLogout, standalone = fals
 
   return (
     <View style={styles.screen}>
-      <FieldHeader area="frigorifico" auth={auth} title="Repaletizaje" subtitle="Cliente, especie, marca y estado térmico compatibles" onLogout={onLogout}><Pressable accessibilityLabel="Actualizar repaletizajes" disabled={loadingHistory} onPress={() => void reloadHistory()} style={styles.secondary}><Text style={styles.secondaryText}>↻</Text></Pressable></FieldHeader>
+      <FieldHeader area="frigorifico" auth={auth} title="Repaletizaje" subtitle="Cliente, especie y estado térmico compatibles" onLogout={onLogout}><Pressable accessibilityLabel="Actualizar repaletizajes" disabled={loadingHistory} onPress={() => void reloadHistory()} style={styles.secondary}><Text style={styles.secondaryText}>↻</Text></Pressable></FieldHeader>
 
       <ScrollView contentContainerStyle={[styles.content, tight && styles.contentTight]} keyboardShouldPersistTaps="handled">
         <View style={styles.shiftRow}>

@@ -19,10 +19,13 @@ Una repa se bloquea sin posibilidad de excepción cuando existe diferencia de:
 
 - cliente;
 - especie;
-- marca;
 - estado térmico.
 
-Las diferencias de variedad, calibre, envase, categoría, CSG, predio o cuartel no bloquean. El sistema muestra una advertencia y registra el campo como `MIX`, conservando la composición por folio y cantidad aportada.
+Las diferencias de marca, variedad, calibre, envase, categoría, CSG, predio o cuartel no bloquean. El sistema muestra una advertencia y registra el campo como `MIX`, conservando la composición por folio y cantidad aportada.
+
+La marca se puede mezclar cuando el cliente lo pide (MIX de MARCA). Cada línea de la composición conserva la marca
+de sus cajas: al dividir el MIX o sacar las cajas de una marca, el folio resultante y el saldo que queda recuperan su
+marca real. Un folio que ya era MIX sin marca por componente sigue como MIX.
 
 ## Estado térmico
 

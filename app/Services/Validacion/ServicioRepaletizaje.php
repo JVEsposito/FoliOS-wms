@@ -364,6 +364,7 @@ class ServicioRepaletizaje
                         'tipo_bulto' => TipoBulto::Saldo,
                         'variedad' => $especificacionesRestantes['variedad'],
                         'calibre' => $especificacionesRestantes['calibre'],
+                        'marca' => $especificacionesRestantes['marca'],
                         'estado_operacional' => $this->estadoResultado(
                             $condicion,
                             $folio->ubicacionActual !== null,
@@ -547,7 +548,7 @@ class ServicioRepaletizaje
                 'activo' => true,
                 'variedad' => $especificaciones['variedad'],
                 'calibre' => $especificaciones['calibre'],
-                'marca' => $folio->marca,
+                'marca' => $especificaciones['marca'],
                 'exportadora' => $folio->exportadora,
                 'origen_sistema' => 'repaletizaje',
                 'identificador_externo' => $datos['operacion_id'].':'.($indice + 1),
@@ -940,7 +941,12 @@ class ServicioRepaletizaje
             : HabilitacionAlmacenamientoFolio::Habilitado;
     }
 
-    /** @param Collection<int, Folio> $folios */
+    /**
+     * Cliente, especie y estado térmico nunca se mezclan. La marca sí puede mezclarse a pedido del
+     * cliente: queda como MIX de MARCA y cada componente conserva su marca en la composición.
+     *
+     * @param  Collection<int, Folio>  $folios
+     */
     private function validarCompatibilidadDura(Collection $folios): void
     {
         $campos = [
@@ -948,7 +954,6 @@ class ServicioRepaletizaje
             'especie' => $folios->map(
                 fn (Folio $folio): mixed => $folio->datos_externos['especie'] ?? null,
             ),
-            'marca' => $folios->map(fn (Folio $folio): mixed => $folio->marca),
             'estado térmico' => $folios->map(
                 fn (Folio $folio): mixed => $folio->condicion_termica?->value,
             ),
@@ -1024,6 +1029,11 @@ class ServicioRepaletizaje
         ];
     }
 
+    private function esMix(mixed $valor): bool
+    {
+        return in_array(mb_strtoupper(trim((string) $valor)), ['MIX', 'MIXTA', 'MIXTO'], true);
+    }
+
     private function valorComun(Collection $valores): ?string
     {
         $limpios = $valores->map(
@@ -1055,7 +1065,7 @@ class ServicioRepaletizaje
 
     private function especificacionesDeComposicion(array $resumen, Collection $lineas): array
     {
-        foreach (['variedad', 'calibre', 'envase', 'categoria', 'cuartel', 'csg', 'predio'] as $campo) {
+        foreach (['variedad', 'calibre', 'envase', 'categoria', 'cuartel', 'csg', 'predio', 'marca'] as $campo) {
             if ($lineas->isNotEmpty() && $lineas->every(fn (array $linea): bool => array_key_exists($campo, $linea))) {
                 $resumen[$campo] = $this->valorComun($lineas->pluck($campo));
             }
@@ -1166,13 +1176,18 @@ class ServicioRepaletizaje
         $fechaPredeterminada = filled($datos['fecha_embalaje'] ?? null)
             ? (string) $datos['fecha_embalaje']
             : $this->fechaValidacionFolio($folio);
+        // La marca del folio se hereda a cada componente que no la informe, salvo que el folio ya sea MIX.
+        $marca = filled($folio->marca) && ! $this->esMix($folio->marca) ? trim((string) $folio->marca) : null;
         $lineas = collect($this->recuperarDesgloseHistorico($folio, app(ComposicionEtiquetaPt::class)->lineas($folio)))
             ->filter(fn (mixed $linea): bool => is_array($linea)
                 && array_key_exists('cantidad_cajas', $linea)
                 && array_key_exists('csg', $linea))
-            ->map(function (array $linea) use ($fechaPredeterminada): array {
+            ->map(function (array $linea) use ($fechaPredeterminada, $marca): array {
                 if (! filled($linea['fecha_embalaje'] ?? null)) {
                     $linea['fecha_embalaje'] = $fechaPredeterminada;
+                }
+                if (! filled($linea['marca'] ?? null) && $marca !== null) {
+                    $linea['marca'] = $marca;
                 }
 
                 return $this->normalizarLineaComposicion($linea);
@@ -1184,6 +1199,7 @@ class ServicioRepaletizaje
                 'csg' => $datos['csg'] ?? 'SIN CSG',
                 'predio' => $datos['predio'] ?? null,
                 'fecha_embalaje' => $fechaPredeterminada,
+                'marca' => $marca,
                 'cantidad_cajas' => $this->cantidad($folio),
             ]));
         }
@@ -1217,7 +1233,7 @@ class ServicioRepaletizaje
         ];
         // El lote de materia prima y el proceso de packing viajan con sus cajas a los
         // folios resultantes; sin ellos la trazabilidad se cortaría en el repaletizaje.
-        foreach (['lote_materia_prima', 'proceso_packing', 'combinacion_validacion_id', 'articulo_validacion_id', 'envase_validacion_id', 'especie', 'variedad', 'calibre', 'categoria', 'cuartel', 'envase', 'envase_codigo', 'cliente'] as $campo) {
+        foreach (['lote_materia_prima', 'proceso_packing', 'combinacion_validacion_id', 'articulo_validacion_id', 'envase_validacion_id', 'especie', 'variedad', 'calibre', 'categoria', 'cuartel', 'envase', 'envase_codigo', 'cliente', 'marca'] as $campo) {
             if (filled($linea[$campo] ?? null)) {
                 $normalizada[$campo] = (string) $linea[$campo];
             }
@@ -1262,7 +1278,7 @@ class ServicioRepaletizaje
             $partes[] = (string) ($linea['envase_validacion_id'] ?? $linea['envase'] ?? '');
         }
 
-        foreach (['calibre', 'categoria', 'cuartel'] as $campo) {
+        foreach (['calibre', 'categoria', 'cuartel', 'marca'] as $campo) {
             if (filled($linea[$campo] ?? null)) {
                 $partes[] = $campo.':'.mb_strtoupper(trim((string) $linea[$campo]));
             }
@@ -1297,7 +1313,10 @@ class ServicioRepaletizaje
         foreach ($folio->datos_externos['genealogia_repaletizaje'] ?? [] as $origen) {
             foreach ($origen['composicion_aportada'] ?? [] as $aporte) {
                 $linea = array_merge($origen['especificaciones'] ?? [], $aporte);
-                foreach (['cliente' => $folio->exportadora, 'especie' => $datos['especie'] ?? null, 'marca' => $folio->marca] as $campo => $valor) {
+                foreach (['cliente' => $folio->exportadora, 'especie' => $datos['especie'] ?? null, 'marca' => $this->esMix($folio->marca) ? null : $folio->marca] as $campo => $valor) {
+                    if ($valor === null && $campo === 'marca') {
+                        continue;
+                    }
                     if (filled($linea[$campo] ?? null) && mb_strtoupper(trim((string) $linea[$campo])) !== mb_strtoupper(trim((string) $valor))) {
                         return $actual;
                     }

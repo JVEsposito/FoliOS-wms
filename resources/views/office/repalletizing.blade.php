@@ -37,7 +37,7 @@
                     <div>
                         <p class="eyebrow">CONSOLIDACIÓN Y TRANSFORMACIÓN DE PALLETS Y SALDOS</p>
                         <h1>Repaletizajes</h1>
-                        <p>Cliente, especie, marca y estado térmico nunca se mezclan. Las demás diferencias se informan y quedan trazadas como MIX.</p>
+                        <p>Cliente, especie y estado térmico nunca se mezclan. Las demás diferencias, incluida la marca, se informan y quedan trazadas como MIX.</p>
                     </div>
                     <button class="secondary-button" id="reloadButton" type="button">↻ Actualizar</button>
                 </header>

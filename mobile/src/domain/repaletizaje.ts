@@ -32,6 +32,7 @@ export type RepalletizingComposition = {
   predio: string | null;
   fecha_embalaje: string | null;
   cantidad_cajas: number;
+  marca?: string | null;
   variedad?: string | null;
   calibre?: string | null;
   envase?: string | null;
