@@ -40,6 +40,8 @@ class LoteMateriaPrimaResource extends JsonResource
             ] : null,
             'segmento' => $this->segmento ? [
                 'id' => $this->segmento->id,
+                'guia_recepcion_romana_id' => $this->segmento->guia_recepcion_romana_id,
+                'numero_guia_despacho' => $this->segmento->guiaRecepcion?->numero_guia_despacho,
                 'secuencia' => $this->segmento->secuencia,
                 'estado' => $this->segmento->estado,
                 'motivos' => $this->segmento->motivos,

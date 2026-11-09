@@ -105,6 +105,7 @@ class ServicioRecepcionRomana
                 'observacion' => $payload['observacion'],
             ]);
             $this->sincronizarEnvases($recepcion, $payload['envases']);
+            app(ServicioGuiasRecepcionRomana::class)->guardar($recepcion, $payload);
 
             $this->registrarEvento(
                 $recepcion,
@@ -121,6 +122,7 @@ class ServicioRecepcionRomana
                         : (float) $recepcion->peso_bruto,
                     'numero_recepcion' => $numero,
                     'numero_guia_despacho' => $recepcion->numero_guia_despacho,
+                    'guias' => app(ServicioGuiasRecepcionRomana::class)->datos($recepcion),
                     'temporada_id' => $recepcion->temporada_id,
                     'fecha_ingreso' => $payload['fecha_ingreso'],
                     'ingreso_at' => $ingresoAt->toAtomString(),
@@ -232,6 +234,7 @@ class ServicioRecepcionRomana
                 'version' => $recepcion->version + 1,
             ]);
             $this->sincronizarEnvases($recepcion, $payload['envases']);
+            app(ServicioGuiasRecepcionRomana::class)->guardar($recepcion, $payload);
             $this->registrarEvento(
                 $recepcion,
                 (string) $datos['operacion_id'],
@@ -381,6 +384,7 @@ class ServicioRecepcionRomana
 
             $recepcion->update($actualizacion);
             $this->sincronizarEnvases($recepcion, $payload['envases']);
+            app(ServicioGuiasRecepcionRomana::class)->guardar($recepcion, $payload);
             if ($payload['tipo_recepcion'] === TipoRecepcionRomana::SoloEnvases->value) {
                 $recepcion->detallesEnvases()->update(['tara_unitaria_salida' => null]);
             }
@@ -970,7 +974,7 @@ class ServicioRecepcionRomana
             $documentoSalida = app(DocumentoSalidaEnvases::class);
             $documentoSalida->bloquear($recepcion->temporada_id, $recepcion->cliente_id, $payload['modo_salida_envases'] !== 'vacio' ? $payload['numero_guia_salida'] : null, 'numero_guia_salida');
             $clienteConocido = $recepcion->cliente_id;
-            $recepcion = RecepcionRomana::query()->with(['detallesEnvases', 'salidasEnvases'])
+            $recepcion = RecepcionRomana::query()->with(['detallesEnvases', 'guiasRecepcion', 'salidasEnvases'])
                 ->lockForUpdate()->findOrFail($recepcion->id);
             $evento = EventoRecepcionRomana::query()->where('operacion_id', $datos['operacion_id'])->first();
             if ($evento) {
@@ -1330,6 +1334,7 @@ class ServicioRecepcionRomana
      */
     private function datosRecepcion(array $datos): array
     {
+        $guias = app(ServicioGuiasRecepcionRomana::class)->preparar($datos);
         $esPesajeEnvases = $datos['tipo_recepcion'] === TipoRecepcionRomana::FrutaPesajeEnvases->value;
         $envases = collect($datos['envases'])
             ->map(fn (array $envase): array => [
@@ -1361,7 +1366,8 @@ class ServicioRecepcionRomana
             'concepto_envases' => $datos['concepto_envases'] ?? null,
             'tipo_servicio' => $datos['tipo_servicio'] ?? 'almacenaje',
             'envases' => $envases,
-            'numero_guia_despacho' => $datos['numero_guia_despacho'],
+            'numero_guia_despacho' => $guias === null ? $datos['numero_guia_despacho'] : ServicioGuiasRecepcionRomana::resumen($guias),
+            ...($guias === null ? [] : ['guias' => $guias]),
             'patente_camion' => $datos['patente_camion'],
             'tipo_camion' => $datos['tipo_camion'],
             'patente_carro' => $datos['patente_carro'] ?? null,
@@ -1699,6 +1705,7 @@ class ServicioRecepcionRomana
                 ->values()
                 ->all(),
             'numero_guia_despacho' => $recepcion->numero_guia_despacho,
+            'guias' => app(ServicioGuiasRecepcionRomana::class)->datos($recepcion),
             'patente_camion' => $recepcion->patente_camion,
             'tipo_camion' => $recepcion->tipo_camion?->value,
             'patente_carro' => $recepcion->patente_carro,
@@ -2000,7 +2007,7 @@ class ServicioRecepcionRomana
             'ingresoConfirmadoPor',
             'cerradoPor',
             'validacionTomadaPor',
-            'detallesEnvases',
+            'detallesEnvases', 'guiasRecepcion',
             'salidasEnvases',
             'pesajesEnvases' => fn ($consulta) => $consulta
                 ->with(['registradoPor', 'anuladoPor'])

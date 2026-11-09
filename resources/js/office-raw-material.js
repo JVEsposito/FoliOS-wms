@@ -368,7 +368,7 @@ function renderSegments() {
                     <strong>${escapeHtml(segment.recepcion.numero_recepcion)} · S${escapeHtml(segment.secuencia)}</strong>
                     <span>${escapeHtml(segment.destare_pendiente ? 'Destare pendiente' : label(segment.estado))}</span>
                 </div>
-                <p>${escapeHtml(segment.recepcion.cliente.nombre)} · Guía ${escapeHtml(segment.recepcion.numero_guia_despacho)}</p>
+                <p>${escapeHtml(segment.recepcion.cliente.nombre)} · Guía ${escapeHtml(segment.numero_guia_despacho || segment.recepcion.numero_guia_despacho)}</p>
                 <p>${escapeHtml(origin)}</p>
                 <div class="segment-card__containers">
                     ${segment.envases.map((container) => `<span>${escapeHtml(label(container.tipo_envase))}: ${escapeHtml(container.cantidad_disponible)} disponibles de ${escapeHtml(container.cantidad)}</span>`).join('')}
@@ -426,7 +426,7 @@ function renderLots() {
 
     elements.lotTableBody.innerHTML = state.lots.map((lot) => `
         <tr>
-            <td><strong>${escapeHtml(lot.numero_lote)}</strong><small>${escapeHtml(lot.recepcion?.numero_recepcion)} · guía ${escapeHtml(lot.recepcion?.numero_guia_despacho)}</small><small>${escapeHtml(lot.cliente?.nombre)}</small></td>
+            <td><strong>${escapeHtml(lot.numero_lote)}</strong><small>${escapeHtml(lot.recepcion?.numero_recepcion)} · guía ${escapeHtml(lot.segmento?.numero_guia_despacho || lot.recepcion?.numero_guia_despacho)}</small><small>${escapeHtml(lot.cliente?.nombre)}</small></td>
             <td><strong>CSG ${escapeHtml(lot.trazabilidad.csg)}</strong><small>SdP ${escapeHtml(lot.trazabilidad.sdp)} · GGN ${escapeHtml(lot.trazabilidad.ggn)}</small><small>${escapeHtml(lot.trazabilidad.predio)}${lot.trazabilidad.cuartel ? ` · ${escapeHtml(lot.trazabilidad.cuartel)}` : ' · Sin cuartel'}</small></td>
             <td><strong>${escapeHtml(lot.trazabilidad.especie)} · ${escapeHtml(lot.trazabilidad.variedad)}</strong><small>${escapeHtml(label(lot.trazabilidad.tipo_producto))}${lot.trazabilidad.calibre ? ` · Calibre histórico: ${escapeHtml(lot.trazabilidad.calibre)}` : ''}</small><small>Cosecha ${escapeHtml(lot.trazabilidad.fecha_cosecha)}</small></td>
             <td><strong>${(lot.envases.detalle || []).map((item) => `${escapeHtml(item.cantidad)} ${escapeHtml(label(item.tipo_envase))}`).join(' · ')}</strong>${plantBinsLabel(lot.envases.bins_prestados_planta) ? `<small data-plant-bins>${escapeHtml(plantBinsLabel(lot.envases.bins_prestados_planta))} · ${escapeHtml(lot.envases.cantidad_primarios)} bins en proceso</small>` : ''}<small class="weight-value">${escapeHtml(lot.pesos.destare_pendiente ? 'Kilos: pendiente de destare' : formatWeight(lot.pesos.kilos_netos_confirmados) + ' netos')}</small><small>${lot.pesos.destare_pendiente ? 'Confirma el lote después del destare' : lot.pesos.corregido_por_digitador ? `Calculado: ${escapeHtml(formatWeight(lot.pesos.kilos_netos_calculados))}` : 'Neto calculado confirmado'}</small></td>

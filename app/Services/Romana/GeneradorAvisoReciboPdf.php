@@ -3,6 +3,7 @@
 namespace App\Services\Romana;
 
 use App\Enums\EstadoRecepcionRomana;
+use App\Enums\TipoEnvaseRomana;
 use App\Enums\TipoRecepcionRomana;
 use App\Models\RecepcionRomana;
 use App\Services\Documentos\DocumentoPdfPlanta;
@@ -22,7 +23,7 @@ class GeneradorAvisoReciboPdf
 
     public function generar(RecepcionRomana $recepcion): string
     {
-        $recepcion->loadMissing('detallesEnvases', 'cerradoPor');
+        $recepcion->loadMissing('detallesEnvases', 'cerradoPor', 'guiasRecepcion');
         $cerrada = $recepcion->estado === EstadoRecepcionRomana::Cerrado;
         // La salida de envases pertenece a otro documento: RPR-01 declara el ingreso.
         $envases = $recepcion->detallesEnvases
@@ -41,7 +42,9 @@ class GeneradorAvisoReciboPdf
                 default => 'Fruta con envases',
             },
             ucfirst($recepcion->concepto_envases?->value ?? $recepcion->tipo_servicio?->value ?? ''),
-            $recepcion->numero_guia_despacho,
+            $recepcion->guiasRecepcion->count() > 1
+                ? $recepcion->guiasRecepcion->map(fn ($guia) => $guia->numero_guia_despacho.': '.collect($guia->envases)->map(fn ($e) => $e['cantidad'].' '.TipoEnvaseRomana::from($e['tipo_envase'])->etiqueta())->implode(' · '))->implode(' / ')
+                : $recepcion->numero_guia_despacho,
             $envases,
             $recepcion->patente_camion,
             $recepcion->patente_carro,

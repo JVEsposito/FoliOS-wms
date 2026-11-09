@@ -1,3 +1,4 @@
+import { createReceptionGuides, guideProblem } from './office-weighbridge-guides.js';
 import { createGatehouseRomana } from './office-weighbridge-porteria';
 import { dispatchInspectionPayload } from './office-container-inspection.js';
 import { receptionSteps } from './shared/weighbridge-steps.js';
@@ -40,6 +41,37 @@ const state = {
 };
 
 const gatehouseRomana = createGatehouseRomana({ getToken: () => state.token });
+let receptionGuides;
+function guidesEditor() {
+    return receptionGuides ??= createReceptionGuides({
+        form: elements.receptionForm, panel: byId('receptionGuidesPanel'), list: byId('receptionGuidesList'), add: byId('addReceptionGuide'),
+        types: () => state.catalogs.tipos_envase, escapeHtml,
+        readContainers: () => elements.receptionForm.elements.tipo_recepcion.value === 'fruta_pesaje_envases'
+            ? readWeighingLines().map((line) => ({ tipo_envase: line.tipo_envase, cantidad: Number(line.cantidad || 0) })).filter((e) => e.cantidad > 0)
+            : state.catalogs.tipos_envase.map((t) => ({ tipo_envase: t.codigo, cantidad: Number(elements.receptionForm.elements[`cantidad_${t.codigo}`].value || 0) })).filter((e) => e.cantidad > 0),
+        writeTotals(totals, multiple) {
+            state.catalogs.tipos_envase.forEach((t) => {
+                const input = elements.receptionForm.elements[`cantidad_${t.codigo}`];
+                input.value = totals[t.codigo] || 0; input.readOnly = multiple;
+            });
+            if (elements.receptionForm.elements.tipo_recepcion.value === 'fruta_pesaje_envases') {
+                const previous = readWeighingLines();
+                const lines = Object.entries(totals).filter(([, count]) => count > 0).map(([tipo_envase, cantidad]) => ({
+                    ...(previous.find((e) => e.tipo_envase === tipo_envase) || { tara_unitaria: '', propiedad: elements.receptionForm.elements[`propiedad_${tipo_envase}`]?.value || '' }), tipo_envase, cantidad,
+                }));
+                renderWeighingLines(lines);
+            }
+            lockGuideTotals(multiple); syncContainerProperties(); syncAdministrativeNetContainerOptions();
+        },
+    });
+}
+function lockGuideTotals(multiple = receptionGuides?.multiple() === true) {
+    elements.standardContainerLines.querySelectorAll('input[type="number"]').forEach((input) => { input.readOnly = multiple; });
+    elements.containerWeighingLines.querySelectorAll('[data-line="cantidad"]').forEach((input) => { input.readOnly = multiple; });
+    elements.containerWeighingLines.querySelectorAll('[data-line="tipo_envase"], [data-remove-weighing-line]').forEach((input) => { input.disabled = multiple; });
+    elements.addContainerWeighingLine.classList.toggle('is-hidden', multiple);
+}
+
 
 class ApiError extends Error {
     constructor(message, status, data = {}) { super(message); this.name = 'ApiError'; this.status = status; this.data = data; }
@@ -75,6 +107,7 @@ function label(value) {
     };
     return labels[value] || String(value || '').replaceAll('_', ' ').replace(/^./, (character) => character.toUpperCase());
 }
+function guideNumbers(reception) { return reception.guias?.length ? reception.guias.map((g) => g.numero_guia_despacho).join(' / ') : reception.numero_guia_despacho; }
 function stateBadge(status) {
     const style = status === 'cerrado' ? 'closed' : ['en_bascula_salida', 'en_pesaje_envases'].includes(status) ? 'exit' : 'entry';
     return `<span class="state-badge state-badge--${style}">${escapeHtml(label(status))}</span>`;
@@ -221,6 +254,7 @@ function renderWeighingLines(lines) {
         <button type="button" data-remove-weighing-line aria-label="Quitar tipo de envase ${index + 1}" title="Quitar este tipo de envase"${rows.length === 1 ? ' disabled' : ''}>×</button>
     </div>`).join('');
     elements.addContainerWeighingLine.disabled = rows.length >= types.length;
+    lockGuideTotals();
 }
 elements.addContainerWeighingLine.addEventListener('click', () => {
     const lines = readWeighingLines();
@@ -276,7 +310,7 @@ function renderList(payload) {
         return `
         <tr class="rec-row" data-reception-id="${escapeHtml(reception.id)}" tabindex="0">
             <td><span class="rec-k">Recepción</span><span class="rec-title-row"><strong class="rec-code">${escapeHtml(reception.numero_recepcion || 'Ingreso abierto')}</strong>${reception.puede_eliminar ? `<button type="button" class="secondary-button rec-delete-button" data-delete-reception-id="${escapeHtml(reception.id)}" aria-label="Eliminar recepción ${escapeHtml(reception.numero_recepcion)}">Eliminar</button>` : ''}</span><small>Ingreso ${escapeHtml(formatTime(reception.ingreso_at))}</small></td>
-            <td><span class="rec-k">Cliente y guía</span><strong>${escapeHtml(reception.cliente.nombre)}</strong><small>Guía <span class="rec-mono">${escapeHtml(reception.numero_guia_despacho)}</span></small></td>
+            <td><span class="rec-k">Cliente y guía</span><strong>${escapeHtml(reception.cliente.nombre)}</strong><small>Guía <span class="rec-mono">${escapeHtml(guideNumbers(reception))}</span></small></td>
             <td><span class="rec-k">Transporte y declaración</span><strong>${escapeHtml(truck)}</strong><small>${escapeHtml(envasesLabel(reception))} · ${escapeHtml(reception.nombre_conductor)}</small></td>
             <td class="rec-weight"><span class="rec-k">${escapeHtml(weightLabel)}</span><strong class="rec-code">${escapeHtml(weightValue)}</strong></td>
         </tr>
@@ -352,7 +386,7 @@ function renderDetail(reception) {
     state.selected = reception;
     elements.detail.classList.remove('is-hidden');
     elements.detailTitle.textContent = reception.numero_recepcion || `Ingreso · ${reception.patente_camion}`;
-    elements.detailSubtitle.innerHTML = `${receptionStateBadge(reception)} · Guía ${escapeHtml(reception.numero_guia_despacho)} · ${escapeHtml(reception.cliente.nombre)}`;
+    elements.detailSubtitle.innerHTML = `${receptionStateBadge(reception)} · Guía ${escapeHtml(guideNumbers(reception))} · ${escapeHtml(reception.cliente.nombre)}`;
     const weighingKinds = weighingTypes(reception.pesaje_envases);
     const weighingFacts = reception.pesaje_envases ? [
         ...(weighingKinds.length > 1 ? [
@@ -384,7 +418,7 @@ function renderDetail(reception) {
         ),
     ] : [];
     elements.detailFacts.innerHTML = [
-        fact('INGRESO', formatDate(reception.ingreso_at)), fact(reception.tipo_recepcion === 'solo_envases' ? 'CIERRE DOCUMENTAL' : reception.pesaje_envases ? 'CIERRE DE PESAJE' : 'SALIDA / DESTARE', formatDate(reception.salida_at)), fact('TEMPORADA GLOBAL', `${reception.temporada.nombre} · ${reception.temporada.codigo}`), fact('CLIENTE', reception.cliente.nombre), fact('TIPO RECEPCIÓN', label(reception.tipo_recepcion)), fact('SERVICIO / CONCEPTO', reception.tipo_recepcion === 'solo_envases' ? label(reception.concepto_envases) : label(reception.tipo_servicio)), fact('GUÍA', reception.numero_guia_despacho),
+        fact('INGRESO', formatDate(reception.ingreso_at)), fact(reception.tipo_recepcion === 'solo_envases' ? 'CIERRE DOCUMENTAL' : reception.pesaje_envases ? 'CIERRE DE PESAJE' : 'SALIDA / DESTARE', formatDate(reception.salida_at)), fact('TEMPORADA GLOBAL', `${reception.temporada.nombre} · ${reception.temporada.codigo}`), fact('CLIENTE', reception.cliente.nombre), fact('TIPO RECEPCIÓN', label(reception.tipo_recepcion)), fact('SERVICIO / CONCEPTO', reception.tipo_recepcion === 'solo_envases' ? label(reception.concepto_envases) : label(reception.tipo_servicio)), fact('GUÍAS', guideNumbers(reception)),
         ...(reception.destare_pendiente_validacion ? [fact('DESTARE', 'Espera la Validación MP completa en la PDA')] : []),
         ...(reception.modo_salida_envases ? [fact('SALIDA ENVASES', label(reception.modo_salida_envases)), fact('GUÍA DE SALIDA', reception.numero_guia_salida || 'Sin salida'), fact('ENVASES RETIRADOS', (reception.salida_envases || []).filter((x) => x.cantidad > 0).map((x) => `${x.cantidad} ${label(x.tipo_envase)}`).join(' · ') || 'Ninguno')] : []),
         ...(plantBinsFact(reception) ? [fact('BINS DE PLANTA', plantBinsFact(reception))] : []),
@@ -530,6 +564,8 @@ function openNewReception() {
     elements.receptionForm.elements.peso_bruto.readOnly = false;
     elements.receptionForm.elements.peso_bruto.title = '';
     state.catalogs.tipos_envase.forEach(({ codigo }) => { elements.receptionForm.elements[`cantidad_${codigo}`].value = 0; elements.receptionForm.elements[`propiedad_${codigo}`].value = ''; });
+    receptionGuides?.reset();
+    lockGuideTotals(false);
     renderWeighingLines([]);
     configureAdministrativeCorrection(false);
     elements.receptionDialogTitle.textContent = 'Registrar ingreso';
@@ -541,6 +577,8 @@ function openNewReception() {
         toast('No existen clientes operacionales activos para recibir.', true); return;
     }
     if (activeSeasons.length === 1) elements.receptionForm.elements.temporada_id.value = activeSeasons[0].id;
+    guidesEditor().reset();
+    lockGuideTotals();
     toggleReceptionType();
     elements.receptionDialog.showModal();
 }
@@ -577,6 +615,8 @@ function openEditReception() {
         syncAdministrativeNetContainerOptions(reception.tipo_envase_calculo_neto);
         form.tipo_envase_calculo_neto.value = reception.tipo_envase_calculo_neto;
     }
+    guidesEditor().reset(reception.guias || []);
+    lockGuideTotals();
     toggleReceptionType();
     elements.receptionDialog.showModal();
 }
@@ -603,6 +643,12 @@ elements.receptionForm.addEventListener('submit', async (event) => {
         elements.receptionFormError.textContent = 'Selecciona el tipo de camión.';
         elements.receptionForm.elements.tipo_camion.focus();
         return;
+    }
+    const guias = receptionGuides?.payload();
+    if (guias) {
+        const error = guideProblem(guias);
+        if (error) { elements.receptionFormError.textContent = error; return; }
+        data.guias = guias; data.numero_guia_despacho = guias[0].numero_guia_despacho;
     }
     const soloEnvases = data.tipo_recepcion === 'solo_envases';
     const cumulativeWeighing = data.tipo_recepcion === 'fruta_pesaje_envases';
@@ -1043,7 +1089,13 @@ elements.reload.addEventListener('click', async () => { setBusy(true, 'Actualiza
 elements.newReception.addEventListener('click', openNewReception); elements.editReception.addEventListener('click', openEditReception); elements.closeDetail.addEventListener('click', closeDetail);
 function toggleReceptionType() {
     const form = elements.receptionForm.elements;
+    if (form.tipo_recepcion.value === 'solo_envases' && receptionGuides?.multiple()) {
+        form.tipo_recepcion.value = 'fruta_con_envases';
+        elements.receptionFormError.textContent = 'Para registrar solo envases, conserva una única guía o crea una recepción separada.';
+    }
     const soloEnvases = form.tipo_recepcion.value === 'solo_envases';
+    byId('receptionGuidesControl').classList.toggle('is-hidden', soloEnvases);
+    receptionGuides?.refresh();
     const cumulativeWeighing = form.tipo_recepcion.value === 'fruta_pesaje_envases';
     elements.serviceField.classList.toggle('is-hidden', soloEnvases);
     document.getElementById('receptionSpeciesField').classList.toggle('is-hidden', soloEnvases);

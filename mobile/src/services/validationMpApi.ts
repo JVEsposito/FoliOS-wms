@@ -62,6 +62,7 @@ export async function confirmMpValidation(baseUrl: string, token: string, valida
   inspection: ReturnType<typeof inspectionPayload>;
 }) {
   const segmentos = input.segregation ? input.segments.map((segment) => ({
+    ...(segment.guia_recepcion_romana_id ? { guia_recepcion_romana_id: segment.guia_recepcion_romana_id } : {}),
     motivos: segment.motivos,
     csg_validacion_id: segment.csg_validacion_id,
     cuartel: segment.cuartel || null,

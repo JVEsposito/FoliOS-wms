@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
-    'validacion_mp_id', 'secuencia', 'motivos', 'csg_validacion_id', 'csg_snapshot',
+    'validacion_mp_id', 'guia_recepcion_romana_id', 'secuencia', 'motivos', 'csg_validacion_id', 'csg_snapshot',
     'cuartel', 'variedad_validacion_id', 'variedad_snapshot', 'bins_prestados_planta', 'estado', 'observacion',
 ])]
 class SegmentoValidacionMp extends Model
@@ -18,6 +18,11 @@ class SegmentoValidacionMp extends Model
     use HasUuids, ImpideEliminacionFisica;
 
     protected $table = 'segmentos_validacion_mp';
+
+    public function guiaRecepcion(): BelongsTo
+    {
+        return $this->belongsTo(GuiaRecepcionRomana::class, 'guia_recepcion_romana_id');
+    }
 
     public function validacion(): BelongsTo
     {
