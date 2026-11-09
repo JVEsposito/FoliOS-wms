@@ -21,6 +21,8 @@ e244ed8a9eb023978525260419679c92e0c54a4f integrado #508 acopio de cargas con una
 10ec92abcac3ebff816e148338c83e7dd717952f integrado #509 estabilidad de tablets: llegó a main en #513.
 5a4f22c837feeb2b20d2e2930489b1e6a3ad1589 integrado Rama intermedia donde se fusionó #508: su contenido llegó a main en #513.
 984291a3e5de827726a7f0eca3e89a7f2f196011 integrado Rama intermedia donde se fusionó #509: su contenido llegó a main en #513.
+1c37e04f494627c10a6a5dcb2559d374dcd454cc integrado #439 talón del último resultado en Validación PT: todos sus parches ya están en main; fusionarla solo choca con cambios posteriores (jornada, catálogo por páginas, FieldHeader).
+339cf4220d8e519522198576661fa152b178434f integrado diseno/validacion-etiqueta: rama intermedia donde se fusionó #439; mismo contenido, ya en main.
 
 # Obsoleto: reemplazado a propósito o no debe aplicarse.
 200fb92c0087ada0462e619db9f129c552cdebab obsoleto #269 shell de Oficina «Estiba»: reemplazado por el rediseño FoliOS (diseno/pr1–pr9).
