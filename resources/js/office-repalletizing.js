@@ -29,11 +29,11 @@ const state = {
     history: [],
 };
 const hardFields = [
-    ['cliente', 'cliente'], ['especie', 'especie'], ['marca', 'marca'],
+    ['cliente', 'cliente'], ['especie', 'especie'],
     ['condicion_termica', 'estado térmico'],
 ];
 const mixFields = [
-    ['variedad', 'Variedad'], ['calibre', 'Calibre'], ['envase', 'Envase'],
+    ['marca', 'Marca'], ['variedad', 'Variedad'], ['calibre', 'Calibre'], ['envase', 'Envase'],
     ['categoria', 'Categoría'], ['csg', 'CSG'], ['predio', 'Predio'], ['cuartel', 'Cuartel'],
 ];
 
@@ -361,7 +361,7 @@ function render() {
     }
     elements.previewThermal.textContent = state.sources.length ? common('condicion_termica') : '—';
     const specs = [
-        ['Cliente', common('cliente')], ['Especie', common('especie')], ['Marca', common('marca')],
+        ['Cliente', common('cliente')], ['Especie', common('especie')],
         ...mixFields.map(([field, label]) => [label, compositionCommon(field)]),
         ['Fecha de embalaje', compositionCommon('fecha_embalaje')],
     ];
@@ -435,7 +435,7 @@ async function submit() {
     if (modality !== 'consolidacion') { await submitTransformation(modality); return; }
     if (state.sources.length < 2) { elements.repaError.textContent = 'Agrega al menos dos folios: pallets completos o saldos.'; return; }
     if (hardMismatch().length) {
-        elements.repaError.textContent = 'Cliente, especie, marca y estado térmico deben ser idénticos.'; return;
+        elements.repaError.textContent = 'Cliente, especie y estado térmico deben ser idénticos.'; return;
     }
     if (state.sources.some((source) => sourceTotal(source) < 1)) {
         elements.repaError.textContent = 'Cada folio debe aportar al menos una caja de su composición.'; return;

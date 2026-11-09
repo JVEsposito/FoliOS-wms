@@ -723,9 +723,71 @@ class RepaletizajeApiTest extends TestCase
         $this->assertIncompatibilidad('especie', ['especie' => 'Kiwi']);
     }
 
-    public function test_bloquea_marcas_diferentes(): void
+    public function test_mezcla_marcas_como_mix_y_cada_componente_conserva_su_marca(): void
     {
-        $this->assertIncompatibilidad('marca', ['marca' => 'OTRA MARCA']);
+        [$token, $temporada] = $this->contexto();
+        $primero = $this->folio($temporada, 'SAL-MARCA-A', 20, marca: 'MARCA A');
+        $segundo = $this->folio($temporada, 'SAL-MARCA-B', 30, marca: 'MARCA B');
+
+        $respuesta = $this->withToken($token)->postJson('/api/validacion/repaletizajes', [
+            'turno' => 'A',
+            'operacion_id' => (string) Str::uuid(),
+            'tipo_resultado' => 'saldo',
+            'estrategia_folio' => 'nuevo',
+            'numero_folio_resultante' => 'SAL-MIX-MARCAS',
+            'cantidad_objetivo' => 120,
+            'origenes' => [
+                ['folio_id' => $primero->id, 'cantidad_aportada' => 20],
+                ['folio_id' => $segundo->id, 'cantidad_aportada' => 30],
+            ],
+        ])->assertOk()->assertJsonPath('data.folio_resultante.cantidad_cajas', 50);
+        $this->assertContains('marca', $respuesta->json('data.campos_mix'));
+        $mix = Folio::query()->where('numero_folio', 'SAL-MIX-MARCAS')->firstOrFail();
+        $this->assertSame('MIX', $mix->marca);
+
+        // La composición del MIX conserva cuántas cajas son de cada marca.
+        $lineas = collect($this->withToken($token)->getJson('/api/validacion/repaletizajes/folios/SAL-MIX-MARCAS')
+            ->assertOk()->assertJsonPath('marca', 'MIX')->json('composicion'));
+        $this->assertSame(['MARCA A' => 20, 'MARCA B' => 30], $lineas->mapWithKeys(fn (array $l): array => [$l['marca'] => $l['cantidad_cajas']])->sortKeys()->all());
+
+        // Dividir el MIX por marca devuelve folios con su marca real.
+        $this->withToken($token)->postJson('/api/validacion/repaletizajes', [
+            'turno' => 'A', 'operacion_id' => (string) Str::uuid(), 'modalidad' => 'division',
+            'origenes' => [['folio_id' => $mix->id, 'cantidad_aportada' => 50]],
+            'resultados' => $lineas->map(fn (array $l): array => [
+                'numero_folio' => 'DIV-'.str_replace(' ', '-', $l['marca']), 'tipo_resultado' => 'saldo', 'cantidad_objetivo' => 120,
+                'cantidad_resultante' => $l['cantidad_cajas'], 'composicion' => [['clave' => $l['clave'], 'cantidad_cajas' => $l['cantidad_cajas']]],
+            ])->values()->all(),
+        ])->assertOk();
+        $this->assertSame('MARCA A', Folio::query()->where('numero_folio', 'DIV-MARCA-A')->firstOrFail()->marca);
+        $this->assertSame('MARCA B', Folio::query()->where('numero_folio', 'DIV-MARCA-B')->firstOrFail()->marca);
+    }
+
+    public function test_sacar_cajas_de_una_marca_deja_el_saldo_con_la_marca_que_queda(): void
+    {
+        [$token, $temporada] = $this->contexto();
+        $a = $this->folio($temporada, 'SAL-RES-A', 20, marca: 'MARCA A');
+        $b = $this->folio($temporada, 'SAL-RES-B', 30, marca: 'MARCA B');
+        $this->withToken($token)->postJson('/api/validacion/repaletizajes', [
+            'turno' => 'A', 'operacion_id' => (string) Str::uuid(), 'tipo_resultado' => 'saldo', 'estrategia_folio' => 'nuevo',
+            'numero_folio_resultante' => 'SAL-RES-MIX', 'cantidad_objetivo' => 120,
+            'origenes' => [['folio_id' => $a->id, 'cantidad_aportada' => 20], ['folio_id' => $b->id, 'cantidad_aportada' => 30]],
+        ])->assertOk();
+        $mix = Folio::query()->where('numero_folio', 'SAL-RES-MIX')->firstOrFail();
+        $lineaB = collect($this->withToken($token)->getJson('/api/validacion/repaletizajes/folios/SAL-RES-MIX')->json('composicion'))
+            ->firstWhere('marca', 'MARCA B');
+        $otro = $this->folio($temporada, 'SAL-RES-C', 10, marca: 'MARCA B');
+        $this->withToken($token)->postJson('/api/validacion/repaletizajes', [
+            'turno' => 'A', 'operacion_id' => (string) Str::uuid(), 'tipo_resultado' => 'saldo', 'estrategia_folio' => 'nuevo',
+            'numero_folio_resultante' => 'SAL-RES-B2', 'cantidad_objetivo' => 120,
+            'origenes' => [
+                ['folio_id' => $mix->id, 'cantidad_aportada' => 30, 'composicion' => [['clave' => $lineaB['clave'], 'cantidad_aportada' => 30]]],
+                ['folio_id' => $otro->id, 'cantidad_aportada' => 10],
+            ],
+        ])->assertOk();
+        $this->assertSame('MARCA B', Folio::query()->where('numero_folio', 'SAL-RES-B2')->firstOrFail()->marca);
+        $this->assertSame('MARCA A', $mix->refresh()->marca);
+        $this->assertSame(20, (int) $mix->datos_externos['cantidad_cajas']);
     }
 
     public function test_bloquea_estados_termicos_diferentes(): void
