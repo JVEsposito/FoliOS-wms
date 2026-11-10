@@ -12,7 +12,6 @@ use App\Enums\TipoDestinoSag;
 use App\Enums\TipoLoteInspeccionSag;
 use App\Http\Controllers\Controller;
 use App\Models\BloqueMercado;
-use App\Models\CombinacionValidacion;
 use App\Models\Folio;
 use App\Models\LoteInspeccionSag;
 use App\Models\Pais;
@@ -23,6 +22,7 @@ use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -91,71 +91,57 @@ class InspeccionSagController extends Controller
     public function opcionesFolios(): JsonResponse
     {
         $temporadaId = app(ServicioTemporadaActiva::class)->buscar()?->id;
-        $combinaciones = $temporadaId
-            ? CombinacionValidacion::query()
-                ->where('temporada_id', $temporadaId)
-                ->where('activo', true)
-                ->whereHas('articulo', fn (Builder $consulta): Builder => $consulta
-                    ->where('activo', true)
-                    ->whereHas('especieCatalogo', fn (Builder $especie): Builder => $especie
-                        ->where('activo', true))
-                    ->whereHas('variedadCatalogo', fn (Builder $variedad): Builder => $variedad
-                        ->where('activo', true)))
-                ->whereHas('origen', fn (Builder $consulta): Builder => $consulta
-                    ->where('activo', true)
-                    ->whereHas('clienteCatalogo', fn (Builder $catalogo): Builder => $catalogo
-                        ->where('activo', true)
-                        ->whereHas('cliente', fn (Builder $cliente): Builder => $cliente
-                            ->where('activo', true))))
-                ->with([
-                    'articulo.especieCatalogo:id,nombre',
-                    'articulo.variedadCatalogo:id,especie_validacion_id,nombre',
-                    'origen.clienteCatalogo.cliente:id,codigo,nombre',
-                    'origen.csgCatalogo:id,codigo',
+        // Una sola consulta con las combinaciones distintas: hidratar cada combinación con sus
+        // catálogos crece con la temporada y puede agotar memoria o tiempo de la petición.
+        $filas = $temporadaId
+            ? DB::table('combinaciones_validacion as cv')
+                ->join('articulos_validacion as a', 'a.id', '=', 'cv.articulo_validacion_id')
+                ->join('especies_validacion as e', 'e.id', '=', 'a.especie_validacion_id')
+                ->join('variedades_validacion as v', 'v.id', '=', 'a.variedad_validacion_id')
+                ->join('origenes_validacion as o', 'o.id', '=', 'cv.origen_validacion_id')
+                ->join('clientes_validacion as cc', 'cc.id', '=', 'o.cliente_validacion_id')
+                ->join('clientes as c', 'c.id', '=', 'cc.cliente_id')
+                ->leftJoin('csg_validacion as csg', 'csg.id', '=', 'o.csg_validacion_id')
+                ->where('cv.temporada_id', $temporadaId)
+                ->where('cv.activo', true)
+                ->where('a.activo', true)
+                ->where('e.activo', true)
+                ->where('v.activo', true)
+                ->where('o.activo', true)
+                ->where('cc.activo', true)
+                ->where('c.activo', true)
+                ->distinct()
+                ->get([
+                    'c.id as cliente_id', 'c.codigo as cliente_codigo', 'c.nombre as cliente_nombre',
+                    'e.id as especie_id', 'e.nombre as especie_nombre',
+                    'v.id as variedad_id', 'v.nombre as variedad_nombre',
+                    'csg.id as csg_id', 'csg.codigo as csg_codigo',
                 ])
-                ->get()
             : collect();
 
-        $clientes = $combinaciones
-            ->filter(fn (CombinacionValidacion $combinacion): bool => filled(
-                $combinacion->origen?->clienteCatalogo?->cliente?->id,
-            ))
-            ->groupBy(fn (CombinacionValidacion $combinacion): string => (string) $combinacion
-                ->origen->clienteCatalogo->cliente->id)
+        $clientes = $filas
+            ->groupBy(fn (object $fila): string => (string) $fila->cliente_id)
             ->map(function ($asociadas): array {
-                $cliente = $asociadas->first()->origen->clienteCatalogo->cliente;
+                $cliente = $asociadas->first();
                 $especies = $asociadas
-                    ->groupBy(fn (CombinacionValidacion $combinacion): string => (string) $combinacion
-                        ->articulo->especieCatalogo->id)
-                    ->map(function ($porEspecie): array {
-                        $especie = $porEspecie->first()->articulo->especieCatalogo;
-
-                        return [
-                            'id' => $especie->id,
-                            'nombre' => $especie->nombre,
-                            'variedades' => $porEspecie
-                                ->map(fn (CombinacionValidacion $combinacion): array => [
-                                    'id' => $combinacion->articulo->variedadCatalogo->id,
-                                    'nombre' => $combinacion->articulo->variedadCatalogo->nombre,
-                                ])
-                                ->unique('id')->sortBy('nombre')->values(),
-                            'csg' => $porEspecie
-                                ->filter(fn (CombinacionValidacion $combinacion): bool => filled(
-                                    $combinacion->origen?->csgCatalogo?->id,
-                                ))
-                                ->map(fn (CombinacionValidacion $combinacion): array => [
-                                    'id' => $combinacion->origen->csgCatalogo->id,
-                                    'codigo' => $combinacion->origen->csgCatalogo->codigo,
-                                ])
-                                ->unique('id')->sortBy('codigo')->values(),
-                        ];
-                    })
+                    ->groupBy(fn (object $fila): string => (string) $fila->especie_id)
+                    ->map(fn ($porEspecie): array => [
+                        'id' => $porEspecie->first()->especie_id,
+                        'nombre' => $porEspecie->first()->especie_nombre,
+                        'variedades' => $porEspecie
+                            ->map(fn (object $fila): array => ['id' => $fila->variedad_id, 'nombre' => $fila->variedad_nombre])
+                            ->unique('id')->sortBy('nombre')->values(),
+                        'csg' => $porEspecie
+                            ->filter(fn (object $fila): bool => filled($fila->csg_id))
+                            ->map(fn (object $fila): array => ['id' => $fila->csg_id, 'codigo' => $fila->csg_codigo])
+                            ->unique('id')->sortBy('codigo')->values(),
+                    ])
                     ->sortBy('nombre')->values();
 
                 return [
-                    'id' => $cliente->id,
-                    'codigo' => $cliente->codigo,
-                    'nombre' => $cliente->nombre,
+                    'id' => $cliente->cliente_id,
+                    'codigo' => $cliente->cliente_codigo,
+                    'nombre' => $cliente->cliente_nombre,
                     'especies' => $especies,
                 ];
             })

@@ -43,6 +43,8 @@
                     <button class="secondary-button" id="reloadSagButton" type="button">↻ Actualizar</button>
                 </header>
 
+                <div class="sag-load-error" id="sagLoadError" role="alert" hidden></div>
+
                 <section class="sag-metrics" aria-label="Resumen SAG">
                     <article><span>LOTES ACTIVOS</span><strong id="activeLotsMetric">0</strong></article>
                     <article><span>PALLETS EN INSPECCIÓN</span><strong id="activePalletsMetric">0</strong></article>

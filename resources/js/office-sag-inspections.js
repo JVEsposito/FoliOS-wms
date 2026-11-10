@@ -99,7 +99,8 @@ async function api(path, options = {}) {
     const payload = response.status === 204 ? null : await response.json().catch(() => null);
     if (!response.ok) {
         const validation = payload?.errors ? Object.values(payload.errors).flat()[0] : null;
-        throw new Error(validation || payload?.message || 'No fue posible completar la operación.');
+        const server = response.status >= 500 ? `Error del servidor (código ${response.status}).` : null;
+        throw new Error(validation || server || payload?.message || `No fue posible completar la operación (código ${response.status}).`);
     }
     return payload;
 }
@@ -239,20 +240,42 @@ function dateTime(value) {
     return new Intl.DateTimeFormat('es-CL', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
 }
 
+// Cada fuente carga por separado: si una falla, el resto de la pantalla sigue operativa y
+// el error queda a la vista en vez de dejar todas las listas vacías.
+const WORKSPACE_SOURCES = [
+    { key: 'summary', path: '/inspeccion-sag/resumen', label: 'el resumen' },
+    { key: 'catalogs', path: '/inspeccion-sag/catalogos', label: 'los tipos de inspección y destinos' },
+    { key: 'options', path: '/inspeccion-sag/folios/opciones', label: 'los clientes y especies' },
+    { key: 'lots', path: '/inspeccion-sag/lotes?per_page=100', label: 'los lotes' },
+];
+
+function renderLoadErrors(failures) {
+    const banner = document.getElementById('sagLoadError');
+    banner.hidden = failures.length === 0;
+    banner.innerHTML = failures.length
+        ? `<strong>No se pudo cargar ${failures.map((failure) => failure.label).join(', ')}.</strong>${failures
+            .map((failure) => `<span>${escapeHtml(failure.label)}: ${escapeHtml(failure.message)}</span>`).join('')}<span>Usa «Actualizar» para reintentar.</span>`
+        : '';
+}
+
 async function loadWorkspace() {
-    const [summary, catalogs, options, lots] = await Promise.all([
-        api('/inspeccion-sag/resumen'),
-        api('/inspeccion-sag/catalogos'),
-        api('/inspeccion-sag/folios/opciones'),
-        api('/inspeccion-sag/lotes?per_page=100'),
-    ]);
-    state.summary = summary;
-    state.catalogs = catalogs;
-    state.options = options;
-    state.lots = lots.data || [];
+    const results = await Promise.allSettled(WORKSPACE_SOURCES.map((source) => api(source.path)));
+    const failures = [];
+    results.forEach((result, index) => {
+        const source = WORKSPACE_SOURCES[index];
+        if (result.status === 'rejected') {
+            failures.push({ label: source.label, message: result.reason?.message || 'Error desconocido.' });
+            return;
+        }
+        if (source.key === 'summary') state.summary = result.value || {};
+        if (source.key === 'catalogs') state.catalogs = { ...state.catalogs, ...(result.value || {}) };
+        if (source.key === 'options') state.options = result.value || {};
+        if (source.key === 'lots') state.lots = result.value?.data || [];
+    });
     setupOptions();
     renderSummary();
     renderLots();
+    renderLoadErrors(failures);
 }
 
 async function searchFolios() {
@@ -502,9 +525,11 @@ document.addEventListener('change', async (event) => {
 document.getElementById('sagResultList').addEventListener('click', (event) => { const button = event.target.closest('[data-save-result]'); if (button) saveResult(button); });
 elements.detailActions.addEventListener('change', async () => { const action = elements.detailActions.value; elements.detailActions.value = ''; await executeLotAction(state.selectedLot.id, action); });
 document.getElementById('closeSagDetailButton').addEventListener('click', () => elements.detail.classList.add('is-hidden'));
-document.getElementById('reloadSagButton').addEventListener('click', loadWorkspace);
+document.getElementById('reloadSagButton').addEventListener('click', () => {
+    loadWorkspace().catch((error) => renderLoadErrors([{ label: 'la pantalla', message: error.message }]));
+});
 
 if (state.token && state.identity) {
     showApp();
-    loadWorkspace().catch((error) => { elements.detailError.textContent = error.message; });
+    loadWorkspace().catch((error) => renderLoadErrors([{ label: 'la pantalla', message: error.message }]));
 }
