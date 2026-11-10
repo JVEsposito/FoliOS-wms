@@ -1,4 +1,5 @@
 import { createReceptionGuides, guideProblem } from './office-weighbridge-guides.js';
+import { createIntegralCorrection } from './office-weighbridge-integral.js';
 import { createGatehouseRomana } from './office-weighbridge-porteria';
 import { dispatchInspectionPayload } from './office-container-inspection.js';
 import { receptionSteps } from './shared/weighbridge-steps.js';
@@ -105,7 +106,7 @@ function label(value) {
         peso_bruto_corregido: 'Peso bruto corregido',
         mismos: 'Se va con los mismos', diferentes: 'Se va con más o menos', vacio: 'Se va vacío',
         en_bascula_ingreso: 'En báscula ingreso', en_pesaje_envases: 'Pesaje acumulativo', en_bascula_salida: 'Pendiente de destare', cerrado: 'Cerrado',
-        anulada: 'Anulada', recepcion_anulada: 'Recepción anulada', ingreso_registrado: 'Ingreso registrado', ingreso_actualizado: 'Antecedentes de ingreso actualizados', correccion_administrativa: 'Corrección administrativa', ingreso_confirmado: 'Ingreso confirmado', pesaje_envases_registrado: 'Tanda de envases pesada', pesaje_envases_anulado: 'Tanda de pesaje anulada', recepcion_cerrada: 'Recepción cerrada', salida_envases_corregida: 'Salida de envases corregida',
+        anulada: 'Anulada', recepcion_anulada: 'Recepción anulada', ingreso_registrado: 'Ingreso registrado', ingreso_actualizado: 'Antecedentes de ingreso actualizados', correccion_administrativa: 'Corrección administrativa', ingreso_confirmado: 'Ingreso confirmado', pesaje_envases_registrado: 'Tanda de envases pesada', pesaje_envases_anulado: 'Tanda de pesaje anulada', recepcion_cerrada: 'Recepción cerrada', salida_envases_corregida: 'Salida de envases corregida', correccion_integral: 'Corrección administrativa de recepción validada',
         almacenaje: 'Almacenaje', proceso: 'Proceso', prefrio: 'Pre-frío', fruta_con_envases: 'Fruta con envases', fruta_pesaje_envases: 'Fruta con pesaje acumulativo', solo_envases: 'Solo envases', termo: 'Camión termo', plano: 'Camión plano', compra: 'Compra', arriendo: 'Arriendo', pendiente: 'Pendiente', en_curso: 'En curso', validada: 'Validada',
     };
     return labels[value] || String(value || '').replaceAll('_', ' ').replace(/^./, (character) => character.toUpperCase());
@@ -444,6 +445,8 @@ function renderDetail(reception) {
     elements.annulReception.classList.toggle('is-hidden', !reception.puede_anular || Boolean(reception.puede_eliminar));
     elements.deleteReception.classList.toggle('is-hidden', !reception.puede_eliminar);
     elements.correctGrossWeight.classList.toggle('is-hidden', state.identity?.rol !== 'administrador' || !reception.puede_corregir_peso_bruto);
+    byId('integralCorrectionButton').classList.toggle('is-hidden', state.identity?.rol !== 'administrador'
+        || reception.estado_validacion_mp !== 'validada' || reception.estado === 'anulada' || Boolean(reception.eliminada));
     elements.editReception.textContent = canCorrect ? 'Corregir recepción' : 'Editar ingreso';
     elements.editReception.classList.toggle('is-hidden', (!canOperate || !reception.puede_editar) && !canCorrect);
     elements.confirmEntry.classList.toggle('is-hidden', !canOperate || !reception.puede_confirmar_ingreso);
@@ -532,6 +535,15 @@ elements.grossWeightForm.addEventListener('submit', async (event) => {
     }
 });
 function closeDetail() { state.selected = null; elements.detail.classList.add('is-hidden'); }
+const integralCorrection = createIntegralCorrection({
+    dialog: byId('integralCorrectionDialog'), api, escapeHtml, operationUuid, toast,
+    onSaved: async (recepcion) => { renderDetail(recepcion); await loadReceptions({ silent: true }); },
+});
+byId('integralCorrectionButton').addEventListener('click', async () => {
+    if (!state.selected) return;
+    setBusy(true, 'Preparando la corrección…');
+    try { await integralCorrection.open(state.selected); } catch (error) { toast(error.message, true); } finally { setBusy(false); }
+});
 
 function configureAdministrativeCorrection(enabled) {
     const closedCorrection = enabled

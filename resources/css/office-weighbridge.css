@@ -317,3 +317,19 @@ body.has-reception-drawer .office-app .weighbridge-filters { grid-template-colum
 .reception-guide__heading { display: flex; gap: 12px; align-items: end; }
 .reception-guide__heading .field { flex: 1; }
 .reception-guide__quantities { display: grid; grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); gap: 12px; margin-top: 12px; }
+.integral-dialog { width: min(1080px, calc(100vw - 32px)); }
+.integral-shell section { margin-top: 18px; }
+.integral-shell h3 { margin: 0 0 8px; font-size: 1rem; }
+.integral-scroll { overflow-x: auto; }
+.integral-table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+.integral-table th, .integral-table td { padding: 6px 8px; border-bottom: 1px solid var(--eui-border-subtle, rgba(127,127,127,.25)); text-align: left; vertical-align: middle; }
+.integral-table td small { display: block; opacity: .75; }
+.integral-qty { width: 84px; }
+.integral-guide { width: 140px; }
+.integral-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.integral-diff { font-weight: 700; }
+.integral-net { margin-top: 10px; }
+.integral-net small { display: block; opacity: .75; }
+.integral-lots { margin: 0; padding-left: 18px; }
+.integral-help { opacity: .8; }
+.integral-add { margin-top: 10px; max-width: 280px; }

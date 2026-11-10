@@ -12,7 +12,9 @@ use App\Models\Cliente;
 use App\Models\DetalleEnvaseRecepcionRomana;
 use App\Models\DetalleGuiaDespachoEnvase;
 use App\Models\GuiaDespachoEnvase;
+use App\Models\GuiaRecepcionRomana;
 use App\Models\MovimientoEnvase;
+use App\Models\SegmentoValidacionMp;
 use App\Models\Temporada;
 use App\Models\ValidacionMp;
 use Carbon\CarbonImmutable;
@@ -215,6 +217,7 @@ class ServicioCuentaCorrienteEnvases
         $guiasEmitidas = GuiaDespachoEnvase::query()->whereKey($idsGuias)
             ->get(['id', 'numero_guia_despacho', 'productor_csg_id', 'productor_snapshot'])->keyBy('id');
         $recepcionesCsg = $this->recepcionesCsg($movimientos);
+        $guiasRecepcion = $this->guiasRecepcion($movimientos);
         [$inicio, $fin] = $this->rangoOperacional($desde, $hasta);
 
         $tipos = [];
@@ -268,38 +271,49 @@ class ServicioCuentaCorrienteEnvases
             ];
 
             // Una línea por guía y tipo de envase, como en la guía: los orígenes internos de
-            // un mismo envase (FIFO, varias recepciones) no se le muestran al cliente.
-            $claveDocumento = implode('|', [
-                $movimiento->ocurrido_at->getTimestamp(),
-                $movimiento->documento_id ?? $movimiento->numero_documento,
-                $movimiento->tipo_movimiento->value,
-            ]);
-            $clave = $claveDocumento.'|'.$tipo.'|'.$movimiento->propiedad->value;
-            $documentos[$claveDocumento] ??= count($documentos);
-            if (isset($indices[$clave])) {
-                $lineas[$indices[$clave]][$esSalida ? 'salida' : 'entrada'] += $esSalida ? -$impacto : $impacto;
-                $lineas[$indices[$clave]]['saldo'] = $saldos[$tipo];
-
-                continue;
-            }
-            $indices[$clave] = count($lineas);
-            $lineas[] = [
-                'orden' => [$documentos[$claveDocumento], $movimiento->tipo_envase->orden(), $movimiento->propiedad->value],
-                'fecha' => $this->local($movimiento->ocurrido_at),
+            // un mismo envase (FIFO, varias recepciones) no se le muestran al cliente. Una recepción
+            // de fruta con varias guías se muestra separada por guía, con lo validado de cada una.
+            $partes = $this->partesPorGuia($movimiento, $impacto, $esSalida, $guiasRecepcion) ?? [[
+                'impacto' => $impacto, 'clave' => '',
                 'documento' => $guia?->numero_guia_despacho ?: $movimiento->numero_documento,
-                'movimiento' => (in_array($movimiento->id, $historicos, true) ? 'Saldo anterior corregido' : self::etiquetaMovimiento($movimiento->tipo_movimiento)),
                 'productor' => match ($movimiento->tipo_movimiento) {
                     TipoMovimientoEnvase::DespachoCliente => $destinatario
                         ? 'CSG '.$destinatario['codigo'].' · '.$destinatario['nombre'] : 'Sin productor asignado',
                     TipoMovimientoEnvase::RecepcionFruta => $recepcionesCsg[$movimiento->recepcion_romana_id]['productor'] ?? 'Sin productor declarado',
                     default => null,
                 },
-                'tipo_envase' => $movimiento->tipo_envase->etiqueta(),
-                'propiedad' => self::etiquetaPropiedad($movimiento->propiedad),
-                'entrada' => $esSalida ? null : $impacto,
-                'salida' => $esSalida ? -$impacto : null,
-                'saldo' => $saldos[$tipo],
-            ];
+            ]];
+            $saldoLinea = $saldos[$tipo] - $impacto;
+            foreach ($partes as $parte) {
+                $saldoLinea += $parte['impacto'];
+                $claveDocumento = implode('|', [
+                    $movimiento->ocurrido_at->getTimestamp(),
+                    $movimiento->documento_id ?? $movimiento->numero_documento,
+                    $movimiento->tipo_movimiento->value,
+                    $parte['clave'],
+                ]);
+                $clave = $claveDocumento.'|'.$tipo.'|'.$movimiento->propiedad->value;
+                $documentos[$claveDocumento] ??= count($documentos);
+                if (isset($indices[$clave])) {
+                    $lineas[$indices[$clave]][$esSalida ? 'salida' : 'entrada'] += $esSalida ? -$parte['impacto'] : $parte['impacto'];
+                    $lineas[$indices[$clave]]['saldo'] = $saldoLinea;
+
+                    continue;
+                }
+                $indices[$clave] = count($lineas);
+                $lineas[] = [
+                    'orden' => [$documentos[$claveDocumento], $movimiento->tipo_envase->orden(), $movimiento->propiedad->value],
+                    'fecha' => $this->local($movimiento->ocurrido_at),
+                    'documento' => $parte['documento'],
+                    'movimiento' => (in_array($movimiento->id, $historicos, true) ? 'Saldo anterior corregido' : self::etiquetaMovimiento($movimiento->tipo_movimiento)),
+                    'productor' => $parte['productor'],
+                    'tipo_envase' => $movimiento->tipo_envase->etiqueta(),
+                    'propiedad' => self::etiquetaPropiedad($movimiento->propiedad),
+                    'entrada' => $esSalida ? null : $parte['impacto'],
+                    'salida' => $esSalida ? -$parte['impacto'] : null,
+                    'saldo' => $saldoLinea,
+                ];
+            }
         }
         foreach ($tipos as $tipo => $resumen) {
             $tipos[$tipo]['saldo_final'] = $resumen['saldo_inicial'] + $resumen['entradas'] - $resumen['salidas'];
@@ -343,6 +357,66 @@ class ServicioCuentaCorrienteEnvases
             'lineas_pendientes_validacion' => $pendientes,
             'emitido_at' => $this->local(now()),
         ];
+    }
+
+    /**
+     * Recepciones de fruta con más de una guía vigente: lo validado de cada guía y sus productores.
+     *
+     * @param  Collection<int, MovimientoEnvase>  $movimientos
+     * @return array<string, list<array{id: string, numero: string, envases: array<string, int>, productor: ?string}>>
+     */
+    private function guiasRecepcion(Collection $movimientos): array
+    {
+        $recepciones = $movimientos->where('tipo_movimiento', TipoMovimientoEnvase::RecepcionFruta)
+            ->pluck('recepcion_romana_id')->filter()->unique()->values();
+        if ($recepciones->isEmpty()) {
+            return [];
+        }
+        $productores = SegmentoValidacionMp::query()->whereNotNull('guia_recepcion_romana_id')
+            ->whereHas('validacion', fn (Builder $v) => $v->whereIn('recepcion_romana_id', $recepciones)->where('estado', EstadoValidacionMp::Validada->value))
+            ->with('csg.productor')->get()->groupBy('guia_recepcion_romana_id')
+            ->map(fn (Collection $segmentos): ?string => $segmentos->map(function (SegmentoValidacionMp $s): ?string {
+                $codigo = $s->csg_snapshot ?: $s->csg?->codigo;
+                $nombre = $s->csg?->productor?->razon_social ?: $s->csg?->predio;
+
+                return $codigo ? 'CSG '.$codigo.($nombre ? ' · '.$nombre : '') : null;
+            })->filter()->unique()->implode(' / ') ?: null);
+
+        return GuiaRecepcionRomana::query()->whereIn('recepcion_romana_id', $recepciones)->where('vigente', 1)
+            ->whereNotNull('envases_validados')->orderBy('secuencia')->get()
+            ->groupBy('recepcion_romana_id')->filter(fn (Collection $guias): bool => $guias->count() > 1)
+            ->map(fn (Collection $guias): array => $guias->map(fn (GuiaRecepcionRomana $g): array => [
+                'id' => $g->id, 'numero' => $g->numero_guia_despacho, 'productor' => $productores[$g->id] ?? null,
+                'envases' => collect($g->envases_validados)->mapWithKeys(fn ($e): array => [$e['tipo_envase'] => (int) $e['cantidad']])->all(),
+            ])->values()->all())->all();
+    }
+
+    /**
+     * Reparte el ingreso de una recepción con varias guías en una parte por guía. Si lo validado por guía no
+     * cuadra con el ingreso vigente (por ejemplo, tras un ajuste manual de cuenta), conserva una sola línea.
+     *
+     * @return list<array{impacto: int, clave: string, documento: string, productor: ?string}>|null
+     */
+    private function partesPorGuia(MovimientoEnvase $movimiento, int $impacto, bool $esSalida, array $guiasRecepcion): ?array
+    {
+        $guias = $guiasRecepcion[$movimiento->recepcion_romana_id] ?? null;
+        if ($esSalida || $guias === null || $movimiento->tipo_movimiento !== TipoMovimientoEnvase::RecepcionFruta) {
+            return null;
+        }
+        $tipo = $movimiento->tipo_envase->value;
+        $cantidades = array_map(fn (array $g): int => $g['envases'][$tipo] ?? 0, $guias);
+        if (array_sum($cantidades) !== $impacto) {
+            return null;
+        }
+        $partes = [];
+        foreach ($guias as $i => $guia) {
+            if ($cantidades[$i] > 0) {
+                $partes[] = ['impacto' => $cantidades[$i], 'clave' => $guia['id'], 'documento' => $guia['numero'],
+                    'productor' => $guia['productor'] ?? 'Sin productor declarado'];
+            }
+        }
+
+        return $partes;
     }
 
     /**
