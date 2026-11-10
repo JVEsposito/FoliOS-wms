@@ -228,6 +228,47 @@ class PortalClientesTest extends TestCase
         $this->assertSame(SolicitudCargaCliente::ANULADA, $estados[$primera['codigo']]['estado']);
     }
 
+    public function test_reinicio_operacional_elimina_solicitudes_y_sus_embarques(): void
+    {
+        [$usuario, $token] = $this->usuarioCliente();
+        $this->withToken($token);
+        $pedir = fn (string $hora) => $this->postJson($this->portal('/solicitudes-carga'), [
+            'operacion_id' => (string) Str::uuid(), 'fecha' => '2026-11-12', 'hora' => $hora,
+        ])->assertCreated()->json('data.id');
+        $aceptada = $pedir('10:00');
+        $pendiente = $pedir('11:00');
+        $temporadaHistorica = Temporada::create(['codigo' => 'HIST-PORTAL', 'nombre' => 'Temporada histórica', 'activa' => false]);
+        $historica = SolicitudCargaCliente::findOrFail($pendiente)->replicate()->fill([
+            'operacion_id' => (string) Str::uuid(), 'temporada_id' => $temporadaHistorica->id, 'codigo' => 'SC-00003',
+        ]);
+        $historica->save();
+
+        $this->comoAdmin()->postJson("/api/solicitudes-carga-clientes/{$aceptada}/aceptar", ['version_esperada' => 1])
+            ->assertOk()->assertJsonPath('data.estado', 'aceptada');
+        $embarque = Embarque::where('cliente_id', $this->propio->id)->sole();
+
+        $ruta = "/api/administracion/temporadas/{$this->temporada->id}/reinicio-operacional";
+        $previa = $this->getJson($ruta)->assertOk();
+        $this->postJson($ruta, [
+            'operacion_id' => (string) Str::uuid(),
+            'motivo' => 'Reinicio controlado de solicitudes de carga de la temporada.',
+            'password' => 'password',
+            'confirmacion' => "REINICIAR {$this->temporada->codigo}",
+            'confirmar_exclusion_bodega' => true,
+            'confirmar_preservar_configuracion' => true,
+        ])->assertCreated()->assertJsonPath('data.resumen_despues.frigorifico.solicitudes_carga_cliente', 0);
+
+        $previa->assertJsonPath('data.resumen.frigorifico.solicitudes_carga_cliente', 2);
+        $this->assertDatabaseMissing('solicitudes_carga_cliente', ['temporada_id' => $this->temporada->id]);
+        $this->assertDatabaseHas('solicitudes_carga_cliente', ['id' => $historica->id, 'codigo' => 'SC-00003']);
+        $this->assertDatabaseMissing('embarques', ['id' => $embarque->id]);
+        $this->assertDatabaseHas('usuarios_clientes', ['user_id' => $usuario->id, 'cliente_id' => $this->propio->id]);
+
+        $this->withToken($token)->postJson($this->portal('/solicitudes-carga'), [
+            'operacion_id' => (string) Str::uuid(), 'fecha' => '2026-11-12', 'hora' => '10:00',
+        ])->assertCreated()->assertJsonPath('data.codigo', 'SC-00004');
+    }
+
     private function recepcion(Cliente $cliente, string $numero, float $neto, string $guia): void
     {
         RecepcionRomana::create([

@@ -266,6 +266,9 @@ class ServicioReinicioOperacional
                 'embarques' => DB::table('embarques')
                     ->where('temporada_id', $temporada->id)
                     ->count(),
+                'solicitudes_carga_cliente' => DB::table('solicitudes_carga_cliente')
+                    ->where('temporada_id', $temporada->id)
+                    ->count(),
                 'asignaciones_carga' => DB::table('carga_folios')
                     ->whereIn('carga_id', clone $cargas)
                     ->count(),
@@ -452,6 +455,9 @@ class ServicioReinicioOperacional
         $embarques = DB::table('embarques')
             ->select('id')
             ->where('temporada_id', $temporada->id);
+        $eliminados['solicitudes_carga_cliente'] = DB::table('solicitudes_carga_cliente')
+            ->where('temporada_id', $temporada->id)
+            ->delete();
         $eliminados['eventos_embarque'] = DB::table('eventos_embarque')
             ->whereIn('embarque_id', clone $embarques)
             ->delete();
