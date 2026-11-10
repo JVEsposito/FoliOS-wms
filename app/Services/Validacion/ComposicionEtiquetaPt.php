@@ -80,7 +80,9 @@ class ComposicionEtiquetaPt
             }
             $nombres[] = $envase?->nombre ?? $linea['envase'];
             $codigos[] = $envase?->codigo_externo ?: ($linea['envase_codigo'] ?? '—');
-            if ($envase?->kilos_netos_por_caja === null) {
+            if (isset($linea['kilos_netos_por_caja'])) {
+                $total += CuadraturaReembalaje::unidades($linea['kilos_netos_por_caja']) * (int) $linea['cantidad_cajas'];
+            } elseif ($envase?->kilos_netos_por_caja === null) {
                 $faltantes[] = ['id' => $envase?->id, 'nombre' => $envase?->nombre ?: ($linea['envase'] ?: 'Envase sin identificar'), 'codigo_externo' => $envase?->codigo_externo];
             } else {
                 // Enteros en diezmilésimas: evita sumar errores de coma flotante.

@@ -29,6 +29,7 @@ class RepaletizajeServiceProvider extends ServiceProvider
                         '/folios/{numeroFolio}',
                         [RepaletizajeController::class, 'buscarFolio'],
                     );
+                    Route::get('/{repaletizaje}/registro-reembalaje', [RepaletizajeController::class, 'registroReembalaje']);
                     Route::get(
                         '/{repaletizaje}',
                         [RepaletizajeController::class, 'show'],

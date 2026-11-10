@@ -8,7 +8,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'repaletizaje_id', 'folio_id', 'orden', 'tipo_resultado', 'cantidad_objetivo',
+    'repaletizaje_id',
+    'kilos_netos_por_caja', 'folio_id', 'orden', 'tipo_resultado', 'cantidad_objetivo',
     'cantidad_resultante', 'hereda_ubicacion', 'snapshot',
 ])]
 class RepaletizajeResultado extends Model

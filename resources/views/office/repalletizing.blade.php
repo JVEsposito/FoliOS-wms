@@ -55,7 +55,7 @@
                                     <select name="modalidad">
                                         <option value="consolidacion">Consolidar folios (N → 1)</option>
                                         <option value="cambio_folio">Cambiar folio (1 → 1)</option>
-                                        <option value="division">Dividir bulto (1 → 2)</option>
+                                        <option value="division">Dividir bulto (1 → 2)</option><option value="reembalaje">Reembalaje · conversión de formatos y kilos</option>
                                     </select>
                                     <small>El cambio y la división consumen completamente el folio original.</small>
                                 </label>
@@ -76,6 +76,7 @@
                                     <small>Si el turno B cruzó la medianoche, selecciona ayer.</small>
                                 </label>
                             </div>
+                            <section id="repackingEditor" class="is-hidden" aria-label="Reembalaje"></section><div id="repalletizingLegacy">
                             <div class="repa-grid" id="consolidationFields">
                                 <label>
                                     <span>Tipo de resultado *</span>
@@ -168,6 +169,7 @@
                             <div class="repa-actions">
                                 <button class="secondary-button" id="clearButton" type="button">Limpiar</button>
                                 <button class="primary-button" type="submit">Confirmar repaletizaje</button>
+                            </div>
                             </div>
                         </form>
                     </section>

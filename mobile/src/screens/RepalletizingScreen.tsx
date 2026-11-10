@@ -1,3 +1,4 @@
+import { RepackingEditor } from './RepackingEditor';
 import { font } from '../theme/typography';
 import { FieldHeader } from '../components/field/FieldHeader';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -61,6 +62,7 @@ const MIX_FIELDS: Array<{ key: MixField; label: string }> = [
 ];
 
 export function RepalletizingScreen({ auth, baseUrl, onLogout, standalone = false }: Props) {
+  const [repacking, setRepacking] = useState(false);
   const { width } = useWindowDimensions();
   const tight = isPdaBuild || width < 420;
   const lookupInput = useRef<ScanInputHandle>(null);
@@ -289,11 +291,19 @@ export function RepalletizingScreen({ auth, baseUrl, onLogout, standalone = fals
     }
   }
 
+  if (repacking) return <View style={styles.screen}>
+    <FieldHeader area="frigorifico" auth={auth} title="Reembalaje" subtitle="Cuadratura de kilos netos" onLogout={onLogout}/>
+    <ScrollView contentContainerStyle={[styles.content, tight && styles.contentTight]} keyboardShouldPersistTaps="handled">
+      <Toggle active={false} label="Volver a repaletizajes" onPress={() => setRepacking(false)}/>
+      <RepackingEditor auth={auth} baseUrl={baseUrl} shift={shift} chooseShift={chooseShift} day={operationalDay} chooseDay={setOperationalDay} onConfirmed={async () => { clearForm(); await reloadHistory(); }}/>
+    </ScrollView>
+  </View>;
   return (
     <View style={styles.screen}>
       <FieldHeader area="frigorifico" auth={auth} title="Repaletizaje" subtitle="Cliente, especie y estado térmico compatibles" onLogout={onLogout}><Pressable accessibilityLabel="Actualizar repaletizajes" disabled={loadingHistory} onPress={() => void reloadHistory()} style={styles.secondary}><Text style={styles.secondaryText}>↻</Text></Pressable></FieldHeader>
 
       <ScrollView contentContainerStyle={[styles.content, tight && styles.contentTight]} keyboardShouldPersistTaps="handled">
+        <Toggle active={false} label="Reembalaje · convertir formatos" onPress={() => { clearForm(); setRepacking(true); }}/>
         <View style={styles.shiftRow}>
           <Text style={styles.fieldLabel}>Turno RRPL-01</Text>
           <View style={styles.shiftOptions}>
@@ -469,8 +479,9 @@ export function RepalletizingScreen({ auth, baseUrl, onLogout, standalone = fals
               <Text style={styles.sourceMeta}>Turno {repa.turno}{repa.estado === 'anulado' ? ' · ANULADA' : ''}</Text>
             ) : null}
             <Text style={styles.sourceMeta}>
-              {repa.tipo_resultado === 'pallet' ? 'Pallet completo' : (repa.tipo_resultado === 'division' ? 'División' : 'Saldo')} · {repa.cantidad_resultante} cajas · {repa.condicion_termica}
+              {repa.modalidad === 'reembalaje' ? 'Reembalaje' : repa.tipo_resultado === 'pallet' ? 'Pallet completo' : (repa.tipo_resultado === 'division' ? 'División' : 'Saldo')} · {repa.cantidad_resultante} cajas · {repa.condicion_termica}
             </Text>
+            {repa.balance_kilos ? <Text style={styles.sourceMeta}>Entrada {repa.balance_kilos.kilos_entrada} kg · Salida {repa.balance_kilos.kilos_salida} kg · Merma {repa.balance_kilos.kilos_merma} kg</Text> : null}
             {repa.campos_mix.length ? (
               <Text style={styles.historyWarning}>MIX: {repa.campos_mix.join(' · ')}</Text>
             ) : null}

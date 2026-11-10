@@ -51,6 +51,7 @@ class ServicioRegistroRepaletizaje
     /** @param  Collection<int, Repaletizaje>  $repas */
     public function generar(Collection $repas): string
     {
+        $repas = $repas->reject(fn ($repa) => $repa->modalidad === 'reembalaje');
         if ($repas->isEmpty()) {
             throw new DomainException('No existen repaletizajes para generar el registro RRPL-01.');
         }
@@ -76,6 +77,9 @@ class ServicioRegistroRepaletizaje
      */
     public function bloques(Repaletizaje $repa): array
     {
+        if ($repa->modalidad === 'reembalaje') {
+            return [];
+        }
         $resultados = $this->resultados($repa);
         $bloques = [];
 
@@ -189,7 +193,7 @@ class ServicioRegistroRepaletizaje
             'folio' => (string) ($resultado['numero_folio'] ?? ''),
             'variedad' => $especificaciones['variedad'] ?? null,
             'etiqueta' => $especificaciones['marca'] ?? null,
-            'embalaje' => $especificaciones['envase'] ?? null,
+            'embalaje' => $resultado['envase'] ?? $especificaciones['envase'] ?? null,
             'estado' => ($resultado['tipo_resultado'] ?? '') === 'pallet' ? 'completo' : 'saldo',
             'lineas' => collect($resultado['composicion'] ?? [])
                 ->filter(fn (mixed $linea): bool => is_array($linea))
