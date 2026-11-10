@@ -102,16 +102,17 @@ test('el cliente revisa sus datos y solicita un horario de carga sin salir del p
             assert.deepEqual(writes[1], { version: 1 });
 
             await page.locator('[data-tab="folios"]').click();
-            await page.locator('#portalFolios tr').first().waitFor();
+            await page.waitForFunction(() => document.querySelector('#portalFolios').innerText.includes('6000000785'));
             const folios = await page.locator('#portalFolios').innerText();
             assert.match(folios, /6000000785/);
             assert.match(folios, /3115673: 57/);
             await page.locator('#portalFolioFilters [name="q"]').fill('6000000785');
             await page.locator('#portalFolioFilters [name="situacion"]').selectOption('todos');
+            const searched = page.waitForResponse((r) => r.url().includes('situacion=todos&q=6000000785'));
             await page.locator('#portalFolioFilters button').click();
-            await page.waitForFunction(() => performance.getEntriesByType('resource').length >= 0);
+            await searched;
             await page.locator('[data-tab="materiales"]').click();
-            await page.locator('#portalMaterials tr').first().waitFor();
+            await page.waitForFunction(() => document.querySelector('#portalMaterials').innerText.includes('CJ-5'));
             assert.match(await page.locator('#portalMaterials').innerText(), /CJ-5/);
 
             // Todo lo consultado es del portal: nunca rutas internas de la planta.
