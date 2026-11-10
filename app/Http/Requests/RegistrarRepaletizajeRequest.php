@@ -35,7 +35,7 @@ class RegistrarRepaletizajeRequest extends FormRequest
 
         return [
             'operacion_id' => ['required', 'uuid'],
-            'modalidad' => ['required', Rule::in(['consolidacion', 'cambio_folio', 'division'])],
+            'modalidad' => ['required', Rule::in(['consolidacion', 'cambio_folio', 'division', 'reembalaje'])],
             'tipo_resultado' => ['nullable', 'required_if:modalidad,consolidacion', Rule::in(['pallet', 'saldo'])],
             'estrategia_folio' => ['nullable', 'required_if:modalidad,consolidacion', Rule::in(['conservar', 'nuevo'])],
             'numero_folio_resultante' => ['nullable', 'required_if:modalidad,consolidacion', 'string', 'max:80'],
@@ -72,7 +72,13 @@ class RegistrarRepaletizajeRequest extends FormRequest
                 'min:1',
                 'max:100000',
             ],
-            'resultados' => ['nullable', 'required_unless:modalidad,consolidacion', 'array', 'min:1', 'max:2'],
+            'resultados' => ['nullable', 'required_unless:modalidad,consolidacion', 'array', 'min:1', ($this->input('modalidad') === 'reembalaje' ? 'max:20' : 'max:2')],
+            'huella_reembalaje' => ['nullable', 'required_if:modalidad,reembalaje', 'string', 'size:64'],
+            'resultados.*.envase_validacion_id' => ['nullable', 'required_if:modalidad,reembalaje', 'uuid'],
+            'mermas' => ['nullable', 'array', 'max:100'],
+            'mermas.*.clave' => ['required', 'string', 'max:500'],
+            'mermas.*.kilos' => ['required', 'numeric', 'min:0', 'max:99999999999', 'decimal:0,4'],
+            'motivo_merma' => ['nullable', 'string', 'max:1000'],
             'resultados.*.numero_folio' => ['required_with:resultados', 'string', 'max:80', 'distinct'],
             'resultados.*.tipo_resultado' => ['required_with:resultados', Rule::in(['pallet', 'saldo'])],
             'resultados.*.cantidad_objetivo' => ['nullable', 'integer', 'min:1', 'max:100000'],

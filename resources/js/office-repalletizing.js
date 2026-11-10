@@ -1,3 +1,4 @@
+import { createRepackingEditor } from './office-repacking.js';
 const byId = (id) => document.getElementById(id);
 const elements = {
     access: byId('officeAccess'), app: byId('officeApp'), login: byId('officeLoginForm'),
@@ -132,6 +133,13 @@ function updateOperationalDate() {
     elements.operationalDate.classList.toggle('is-hidden', !nightShift);
     if (!nightShift) elements.form.elements.fecha_operacional.value = 'hoy';
 }
+let repackingEditor;
+function repacker() {
+    return repackingEditor ??= createRepackingEditor({ root: byId('repackingEditor'), api, escapeHtml, uuid,
+        shift: () => ({ turno: formValue('turno'), fecha_operacional: formValue('fecha_operacional') || 'hoy' }),
+        onSuccess: async () => { await loadHistory(); toast('Reembalaje confirmado. Imprime las etiquetas del nuevo formato.'); },
+    });
+}
 function mode() { return formValue('modalidad') || 'consolidacion'; }
 function normalized(value) { return String(value ?? '').trim().toLocaleUpperCase('es-CL'); }
 function common(field) {
@@ -256,6 +264,10 @@ function refreshDivisionTotals() {
 }
 function render() {
     updateOperationalDate();
+    const repacking = mode() === 'reembalaje';
+    byId('repackingEditor').classList.toggle('is-hidden', !repacking);
+    byId('repalletizingLegacy').classList.toggle('is-hidden', repacking);
+    if (repacking) { repacker(); return; }
     const sourceScrollTop = elements.sourceList.scrollTop;
     const activeComposition = document.activeElement?.matches('[data-composition-source]') ? {
         source: document.activeElement.dataset.compositionSource,
@@ -432,6 +444,7 @@ function reset() {
 async function submit() {
     elements.repaError.textContent = '';
     const modality = mode();
+    if (modality === 'reembalaje') { await repacker().submit(); return; }
     if (modality !== 'consolidacion') { await submitTransformation(modality); return; }
     if (state.sources.length < 2) { elements.repaError.textContent = 'Agrega al menos dos folios: pallets completos o saldos.'; return; }
     if (hardMismatch().length) {
@@ -552,7 +565,7 @@ function renderHistory() {
     elements.history.innerHTML = state.history.length ? state.history.map((repa) => (
         `<article class="repa-history-card${repa.estado === 'anulado' ? ' is-void' : ''}">
             <header><h3>${escapeHtml(repa.codigo)} · ${(repa.resultados || []).map((result) => escapeHtml(result.folio?.numero_folio)).join(' + ') || escapeHtml(repa.folio_resultante?.numero_folio)}</h3><span>${escapeHtml(repa.estado)}</span></header>
-            <p>${repa.tipo_resultado === 'pallet' ? 'Pallet completo' : (repa.tipo_resultado === 'division' ? 'División en dos folios' : 'Saldo')} · ${repa.cantidad_resultante} cajas · ${escapeHtml(repa.condicion_termica)}</p>
+            <p>${repa.modalidad === 'reembalaje' ? 'Reembalaje' : repa.tipo_resultado === 'pallet' ? 'Pallet completo' : (repa.tipo_resultado === 'division' ? 'División en dos folios' : 'Saldo')} · ${repa.cantidad_resultante} cajas · ${escapeHtml(repa.condicion_termica)}</p>${repa.balance_kilos ? `<p>Entrada ${escapeHtml(repa.balance_kilos.kilos_entrada)} kg · Salida ${escapeHtml(repa.balance_kilos.kilos_salida)} kg · Merma ${escapeHtml(repa.balance_kilos.kilos_merma)} kg</p>` : ''}
             ${repa.advertencias?.length ? `<p>⚠ ${repa.advertencias.map((item) => escapeHtml(item.campo)).join(' · ')}</p>` : ''}
             <details><summary>Composición (${repa.origenes.length})</summary>
                 ${repa.origenes.map((origin) => `<div class="repa-origin"><span>${escapeHtml(origin.folio.numero_folio)}</span><strong>${origin.cajas_aportadas} cajas</strong></div>`).join('')}

@@ -37,11 +37,12 @@ export function findRepalletizingFolio(
   baseUrl: string,
   token: string,
   number: string,
+  repacking = false,
 ): Promise<RepalletizingFolio> {
   return request(
     baseUrl,
     token,
-    `/api/validacion/repaletizajes/folios/${encodeURIComponent(number)}`,
+    `/api/validacion/repaletizajes/folios/${encodeURIComponent(number)}${repacking ? "?reembalaje=1" : ""}`,
   );
 }
 

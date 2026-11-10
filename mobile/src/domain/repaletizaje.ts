@@ -1,5 +1,7 @@
+import type { RepackingContext } from './repacking';
 export type RepalletizingFolio = {
   existe: boolean;
+  reembalaje?: RepackingContext;
   id: string;
   numero_folio: string;
   tipo_bulto: string;
@@ -44,7 +46,10 @@ export type RepalletizingComposition = {
 
 export type CreateRepalletizing = {
   operacion_id: string;
-  modalidad: 'consolidacion' | 'cambio_folio' | 'division';
+  huella_reembalaje?: string;
+  mermas?: Array<{ clave: string; kilos: string }>;
+  motivo_merma?: string | null;
+  modalidad: 'consolidacion' | 'cambio_folio' | 'division' | 'reembalaje';
   tipo_resultado?: 'pallet' | 'saldo';
   estrategia_folio?: 'conservar' | 'nuevo';
   numero_folio_resultante?: string;
@@ -57,6 +62,7 @@ export type CreateRepalletizing = {
   }>;
   resultados?: Array<{
     numero_folio: string;
+    envase_validacion_id?: string;
     tipo_resultado: 'pallet' | 'saldo';
     cantidad_objetivo: number | null;
     cantidad_resultante: number;
@@ -68,10 +74,11 @@ export type CreateRepalletizing = {
 };
 
 export type Repalletizing = {
+  balance_kilos?: { kilos_entrada: string; kilos_salida: string; kilos_merma: string } | null;
   id: string;
   codigo: string;
-  modalidad: 'consolidacion' | 'cambio_folio' | 'division';
-  tipo_resultado: 'pallet' | 'saldo' | 'division';
+  modalidad: 'consolidacion' | 'cambio_folio' | 'division' | 'reembalaje';
+  tipo_resultado: 'pallet' | 'saldo' | 'division' | 'reembalaje';
   estrategia_folio: 'conservar' | 'nuevo';
   cantidad_objetivo: number | null;
   cantidad_resultante: number;

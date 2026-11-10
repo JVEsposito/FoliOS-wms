@@ -6,6 +6,7 @@ use App\Models\ArticuloValidacion;
 use App\Models\CombinacionValidacion;
 use App\Models\EnvaseValidacion;
 use App\Models\Folio;
+use App\Services\Validacion\CuadraturaReembalaje;
 
 class KilosDocumentoSag
 {
@@ -20,6 +21,16 @@ class KilosDocumentoSag
         $peso = 0;
         foreach ($lineas as $linea) {
             $cantidad = (int) ($linea['cantidad_cajas'] ?? 0);
+            if (isset($linea['kilos_netos_por_caja'])) {
+                $unidad = CuadraturaReembalaje::unidades($linea['kilos_netos_por_caja']);
+                if ($cantidad < 1 || $unidad < 1) {
+                    return null;
+                }
+                $cajas += $cantidad;
+                $peso += $unidad * $cantidad;
+
+                continue;
+            }
             $envase = $linea['envase_validacion_id'] ?? $datos['envase_validacion_id'] ?? null;
             if (! $envase) {
                 $articulo = $linea['articulo_validacion_id'] ?? $datos['articulo_validacion_id'] ?? null;

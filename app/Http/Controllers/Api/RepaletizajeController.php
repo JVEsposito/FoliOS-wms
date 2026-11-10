@@ -11,6 +11,7 @@ use App\Models\PersonalAccessToken;
 use App\Models\Repaletizaje;
 use App\Models\RepaletizajeDetalle;
 use App\Services\Temporadas\ServicioTemporadaActiva;
+use App\Services\Validacion\CuadraturaReembalaje;
 use App\Services\Validacion\ServicioRegistroRepaletizaje;
 use App\Services\Validacion\ServicioRepaletizaje;
 use Illuminate\Http\JsonResponse;
@@ -150,7 +151,7 @@ class RepaletizajeController extends Controller
         ]);
     }
 
-    public function buscarFolio(string $numeroFolio): JsonResponse
+    public function buscarFolio(Request $request, string $numeroFolio): JsonResponse
     {
         $numero = mb_strtoupper(trim($numeroFolio));
         $folio = Folio::query()
@@ -193,6 +194,7 @@ class RepaletizajeController extends Controller
             'cuartel' => $folio->datos_externos['cuartel'] ?? null,
             'composicion' => $composicion,
             'desglose_incompleto' => app(ServicioRepaletizaje::class)->desgloseIncompleto($composicion),
+            ...($request->boolean('reembalaje') ? ['reembalaje' => app(CuadraturaReembalaje::class)->contexto($folio, $composicion)] : []),
             'ubicacion' => $folio->ubicacionActual ? [
                 'camara' => $folio->ubicacionActual->camara?->only([
                     'id',
@@ -261,6 +263,8 @@ class RepaletizajeController extends Controller
             'id' => $repa->id,
             'codigo' => $repa->codigo,
             'modalidad' => $repa->modalidad ?? 'consolidacion',
+            'balance_kilos' => $repa->snapshot['balance_kilos'] ?? null,
+            'motivo_merma' => $repa->motivo_merma,
             'tipo_resultado' => $repa->tipo_resultado,
             'estrategia_folio' => $repa->estrategia_folio,
             'cantidad_objetivo' => $repa->cantidad_objetivo,

@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
     'repaletizaje_id',
+    'kilos_aportados',
     'folio_origen_id',
     'orden',
     'es_folio_conservado',

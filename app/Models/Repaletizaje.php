@@ -20,6 +20,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'folio_conservado_id',
     'cantidad_objetivo',
     'cantidad_resultante',
+    'kilos_entrada', 'kilos_salida', 'kilos_merma', 'motivo_merma',
     'condicion_termica',
     'campos_mix',
     'snapshot',

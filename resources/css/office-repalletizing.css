@@ -384,3 +384,14 @@ body {
     .division-line { grid-template-columns: 1fr; }
     .division-line__outputs { grid-template-columns: 1fr 1fr; }
 }
+
+.repacking-result { border: 1px solid var(--border, #51717d); border-radius: 8px; padding: 14px; margin: 16px 0; min-width: 0; }
+.repacking-result legend { font-weight: 700; }
+.repacking-count { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: center; margin: 12px 0; }
+.repacking-count span { flex: 1; min-width: 160px; }
+.repacking-count small { display: block; }
+.repacking-count input { width: 140px; }
+.repacking-keep { display: flex; gap: 10px; align-items: center; margin: 12px 0; }
+.repacking-keep input { width: auto; }
+#repackingEditor { display: grid; gap: 12px; }
+#repackingEditor.is-hidden { display: none; }

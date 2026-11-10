@@ -28,23 +28,35 @@ final class ReglaBalanceRepaletizaje implements ReglaIntegridadOperacional
     public function evaluar(): iterable
     {
         $entradas = DB::table('repaletizaje_detalles')
-            ->selectRaw('repaletizaje_id, SUM(cajas_aportadas) as total_entradas')
+            ->selectRaw('repaletizaje_id, SUM(cajas_aportadas) as total_entradas, SUM(kilos_aportados) as kilos_entradas')
             ->groupBy('repaletizaje_id');
         $salidas = DB::table('repaletizaje_resultados')
-            ->selectRaw('repaletizaje_id, SUM(cantidad_resultante) as total_salidas')
+            ->selectRaw('repaletizaje_id, SUM(cantidad_resultante) as total_salidas, SUM(cantidad_resultante * kilos_netos_por_caja) as kilos_salidas')
             ->groupBy('repaletizaje_id');
 
         return DB::table('repaletizajes as repaletizaje')
             ->leftJoinSub($entradas, 'entradas', 'entradas.repaletizaje_id', '=', 'repaletizaje.id')
             ->leftJoinSub($salidas, 'salidas', 'salidas.repaletizaje_id', '=', 'repaletizaje.id')
             ->where('repaletizaje.estado', 'confirmado')
-            ->whereRaw('COALESCE(entradas.total_entradas, 0) <> COALESCE(salidas.total_salidas, 0)')
+            ->where(function ($q): void {
+                $q->where(fn ($cajas) => $cajas->where('repaletizaje.modalidad', '!=', 'reembalaje')
+                    ->whereRaw('COALESCE(entradas.total_entradas, 0) <> COALESCE(salidas.total_salidas, 0)'))
+                    ->orWhere(fn ($kilos) => $kilos->where('repaletizaje.modalidad', 'reembalaje')
+                        ->where(function ($balance): void {
+                            $balance->whereNull('repaletizaje.kilos_entrada')->orWhereNull('repaletizaje.kilos_salida')->orWhereNull('repaletizaje.kilos_merma')
+                                ->orWhereRaw('repaletizaje.kilos_entrada <> repaletizaje.kilos_salida + repaletizaje.kilos_merma')
+                                ->orWhereRaw('repaletizaje.kilos_entrada <> COALESCE(entradas.kilos_entradas, 0)')
+                                ->orWhereRaw('repaletizaje.kilos_salida <> COALESCE(salidas.kilos_salidas, 0)')
+                                ->orWhere('repaletizaje.kilos_merma', '<', 0);
+                        }));
+            })
             ->orderBy('repaletizaje.confirmado_at')
             ->get([
                 'repaletizaje.id',
                 'repaletizaje.codigo',
                 'repaletizaje.modalidad',
                 'repaletizaje.confirmado_at',
+                'repaletizaje.kilos_entrada', 'repaletizaje.kilos_salida', 'repaletizaje.kilos_merma',
                 'entradas.total_entradas',
                 'salidas.total_salidas',
             ])
@@ -56,7 +68,7 @@ final class ReglaBalanceRepaletizaje implements ReglaIntegridadOperacional
                 entidadId: $fila->id,
                 referencia: $fila->codigo,
                 titulo: 'Repaletizaje con entradas y salidas desbalanceadas',
-                detalle: sprintf(
+                detalle: $fila->modalidad === 'reembalaje' ? sprintf('%s: entrada %s kg, salida %s kg y merma %s kg; revisar la cuadratura y los formatos.', $fila->codigo, $fila->kilos_entrada, $fila->kilos_salida, $fila->kilos_merma) : sprintf(
                     '%s registra %d cajas aportadas y %d cajas resultantes.',
                     $fila->codigo,
                     (int) ($fila->total_entradas ?? 0),

@@ -81,6 +81,10 @@ class ServicioRepaletizaje
                 return $this->cargar($existente);
             }
 
+            if ($payload['modalidad'] === 'reembalaje') {
+                return $this->registrarReembalaje($datos, $payload, $hash, $usuario, $dispositivo);
+            }
+
             if ($payload['modalidad'] !== 'consolidacion') {
                 return $this->registrarTransformacion(
                     $datos,
@@ -424,6 +428,130 @@ class ServicioRepaletizaje
      * @param  array<string, mixed>  $datos
      * @param  array<string, mixed>  $payload
      */
+    /** Un folio completo puede convertirse a varios formatos; cada componente conserva sus kilos. */
+    private function registrarReembalaje(array $datos, array $payload, string $hash, User $usuario, ?Dispositivo $dispositivo): Repaletizaje
+    {
+        if (count($payload['origenes']) !== 1 || count($payload['resultados']) < 1 || count($payload['resultados']) > 20) {
+            throw new DomainException('El reembalaje requiere un folio de origen y entre una y veinte salidas.');
+        }
+        $folio = Folio::with('ubicacionActual')->lockForUpdate()->findOrFail($payload['origenes'][0]['folio_id']);
+        $temporadaId = app(ServicioTemporadaActiva::class)->buscarConBloqueoCompartido()?->id;
+        if (! $temporadaId || $folio->temporada_id !== $temporadaId) {
+            throw new ConflictoOperacion('El folio no pertenece a la temporada activa.');
+        }
+        $this->validarFolioOperable($folio);
+        $cantidadAntes = $this->cantidad($folio);
+        if ($payload['origenes'][0]['cantidad_aportada'] !== $cantidadAntes) {
+            throw new DomainException('El reembalaje consume el folio completo. Divide primero el folio si solo vas a trabajar una parte.');
+        }
+        $composicion = $this->composicionFolio($folio);
+        if ($this->desgloseIncompleto($composicion) || array_sum(array_column($composicion, 'cantidad_cajas')) !== $cantidadAntes) {
+            throw new DomainException('Regulariza el desglose del MIX antes de reembalar. Debe identificar las cajas de cada componente.');
+        }
+        $preparados = app(CuadraturaReembalaje::class)->preparar($folio, $composicion, $payload);
+        $resultados = $preparados['resultados'];
+        foreach ($resultados as $i => $resultado) {
+            $this->validarCantidadResultado($resultado, $resultado['cantidad_resultante']);
+            if ($resultado['numero_folio'] === $folio->numero_folio && $i !== 0) {
+                throw new DomainException('El folio que se conserva debe ser la primera salida.');
+            }
+        }
+        if ($resultados->pluck('numero_folio')->duplicates()->isNotEmpty()) {
+            throw new DomainException('No repitas folios entre las salidas.');
+        }
+        $codigo = $this->siguienteCodigo();
+        if (Folio::whereIn('numero_folio', $resultados->pluck('numero_folio'))->where('id', '!=', $folio->id)->lockForUpdate()->exists()) {
+            throw new ConflictoOperacion('Uno de los folios de salida ya existe.');
+        }
+        $snapshotAntes = $this->snapshotFolio($folio);
+        $conserva = $resultados->first()['numero_folio'] === $folio->numero_folio;
+        $genealogia = [['folio_id' => $folio->id, 'numero_folio' => $folio->numero_folio,
+            'cajas_aportadas' => $cantidadAntes, 'composicion_aportada' => $preparados['componentes_entrada'],
+            'especificaciones' => $this->especificaciones($folio)]];
+        // Al abrir las cajas, la autorización anterior no acredita el nuevo formato.
+        $autorizaciones = $folio->autorizacionesSagActivas()->lockForUpdate()->get();
+        foreach ($autorizaciones as $autorizacion) {
+            $autorizacion->update(['activa' => false, 'motivo_revocacion' => 'Reembalaje '.$codigo,
+                'revocado_por_user_id' => $usuario->id, 'revocado_at' => now()]);
+        }
+        $salidas = $resultados->map(function ($resultado, $i) use ($folio, $codigo, $datos, $genealogia, $snapshotAntes, $conserva) {
+            $externos = $snapshotAntes['atributos']['datos_externos'] ?? [];
+            unset($externos['articulo_validacion_id'], $externos['combinacion_validacion_id']);
+            $externos = [...$externos, 'cantidad_cajas' => $resultado['cantidad_resultante'], 'composicion' => $resultado['composicion'],
+                'envase_validacion_id' => $resultado['envase_validacion_id'], 'envase' => $resultado['envase'],
+                'kilos_netos_por_caja' => $resultado['kilos_netos_por_caja'], 'kilos_netos' => $resultado['kilos_salida'],
+                'repaletizaje_codigo' => $codigo, 'genealogia_repaletizaje' => $genealogia];
+            $this->actualizarResumenComposicion($externos);
+            $spec = $this->especificacionesDeComposicion($snapshotAntes['especificaciones'], collect($resultado['composicion']));
+            $atributos = ['tipo_bulto' => TipoBulto::from($resultado['tipo_resultado']),
+                'estado_operacional' => $this->estadoResultado($folio->condicion_termica, $i === 0 && $folio->ubicacionActual !== null),
+                'condicion_termica' => $folio->condicion_termica,
+                'habilitacion_almacenamiento' => $this->habilitacionResultado($folio->condicion_termica),
+                'variedad' => $spec['variedad'], 'calibre' => $spec['calibre'], 'marca' => $spec['marca'],
+                'activo' => true, 'condicion_sag_id' => null, 'datos_externos' => $externos];
+            if ($conserva && $i === 0) {
+                $folio->update($atributos);
+                $nuevo = $folio;
+            } else {
+                $nuevo = Folio::create([...$atributos, 'temporada_id' => $folio->temporada_id, 'numero_folio' => $resultado['numero_folio'],
+                    'condicion_sag_id' => null, 'exportadora' => $folio->exportadora,
+                    'fuente_habilitacion_almacenamiento' => $folio->fuente_habilitacion_almacenamiento,
+                    'habilitado_almacenamiento_at' => $folio->habilitado_almacenamiento_at,
+                    'habilitado_almacenamiento_por_user_id' => $folio->habilitado_almacenamiento_por_user_id,
+                    'fecha_ingreso' => $folio->fecha_ingreso, 'fecha_proceso_pt' => app(FechaProcesoEtiquetaPt::class)->deFolio($folio),
+                    'origen_sistema' => 'repaletizaje', 'identificador_externo' => $datos['operacion_id'].':'.($i + 1),
+                    'estado_integracion' => EstadoIntegracionFolio::NoVinculado]);
+            }
+
+            return [...$resultado, 'folio' => $nuevo];
+        });
+        $primero = $salidas->first()['folio'];
+        $balance = $preparados['balance'];
+        $repa = Repaletizaje::create(['operacion_id' => $datos['operacion_id'], 'payload_hash' => $hash, 'codigo' => $codigo,
+            'modalidad' => 'reembalaje', 'tipo_resultado' => 'reembalaje', 'estrategia_folio' => $conserva ? 'conservar' : 'nuevo',
+            'folio_resultante_id' => $primero->id, 'folio_conservado_id' => $conserva ? $folio->id : null,
+            'cantidad_objetivo' => null, 'cantidad_resultante' => $salidas->sum('cantidad_resultante'),
+            'condicion_termica' => $folio->condicion_termica->value, 'campos_mix' => [], 'estado' => 'confirmado',
+            'kilos_entrada' => $balance['kilos_entrada'], 'kilos_salida' => $balance['kilos_salida'], 'kilos_merma' => $balance['kilos_merma'],
+            'motivo_merma' => $payload['motivo_merma'],
+            'snapshot' => ['modalidad' => 'reembalaje', 'genealogia' => $genealogia, 'balance_kilos' => $balance,
+                'autorizaciones_sag_revocadas' => $autorizaciones->pluck('id')->all(),
+                'advertencias' => $autorizaciones->isEmpty() && $snapshotAntes['atributos']['condicion_sag_id'] === null ? [] : [['campo' => 'sag', 'mensaje' => 'El nuevo formato requiere revisar sus autorizaciones SAG.']],
+                'resultados' => $salidas->map(fn ($r) => ['folio_id' => $r['folio']->id, 'numero_folio' => $r['numero_folio'],
+                    'tipo_resultado' => $r['tipo_resultado'], 'cantidad_resultante' => $r['cantidad_resultante'],
+                    'envase' => $r['envase'], 'kilos_netos_por_caja' => $r['kilos_netos_por_caja'], 'kilos_salida' => $r['kilos_salida'], 'composicion' => $r['composicion']])->all()],
+            'observacion' => $payload['observacion'], 'turno' => $payload['turno'], 'fecha_operacional' => $this->fechaOperacional($payload),
+            'user_id' => $usuario->id, 'dispositivo_id' => $dispositivo?->id, 'confirmado_at' => now()]);
+        foreach ($salidas as $i => $resultado) {
+            RepaletizajeResultado::create(['repaletizaje_id' => $repa->id, 'folio_id' => $resultado['folio']->id, 'orden' => $i + 1,
+                'tipo_resultado' => $resultado['tipo_resultado'], 'cantidad_objetivo' => $resultado['cantidad_objetivo'],
+                'cantidad_resultante' => $resultado['cantidad_resultante'], 'kilos_netos_por_caja' => $resultado['kilos_netos_por_caja'],
+                'hereda_ubicacion' => $i === 0, 'snapshot' => ['composicion' => $resultado['composicion'], 'kilos_salida' => $resultado['kilos_salida']]]);
+            $datosSalida = $resultado['folio']->datos_externos;
+            $datosSalida['repaletizaje_id'] = $repa->id;
+            $resultado['folio']->update(['datos_externos' => $datosSalida]);
+        }
+        if (! $conserva) {
+            $folio->ubicacionActual?->update(['folio_id' => $primero->id]);
+            $externos = $folio->datos_externos ?? [];
+            $externos['cantidad_cajas'] = 0;
+            $externos['composicion'] = [];
+            $externos['kilos_netos'] = '0.0000';
+            $externos['consumido_en_repaletizaje'] = $codigo;
+            $folio->update(['tipo_bulto' => TipoBulto::Saldo, 'estado_operacional' => EstadoOperacionalFolio::Agotado, 'activo' => false, 'datos_externos' => $externos]);
+        }
+        RepaletizajeDetalle::create(['repaletizaje_id' => $repa->id, 'folio_origen_id' => $folio->id, 'orden' => 1,
+            'es_folio_conservado' => $conserva, 'cajas_antes' => $cantidadAntes, 'cajas_aportadas' => $cantidadAntes,
+            'cajas_despues' => $conserva ? $salidas->first()['cantidad_resultante'] : 0, 'kilos_aportados' => $balance['kilos_entrada'],
+            'tipo_bulto_antes' => $snapshotAntes['atributos']['tipo_bulto'], 'tipo_bulto_despues' => $folio->tipo_bulto->value,
+            'estado_antes' => $snapshotAntes['atributos']['estado_operacional'], 'estado_despues' => $folio->estado_operacional->value,
+            'snapshot_antes' => $snapshotAntes, 'snapshot_despues' => $this->snapshotFolio($folio->refresh())]);
+        $this->generadorRecepcion->generar($repa, $usuario);
+        $this->refrescarPlanos($repa);
+
+        return $this->cargar($repa);
+    }
+
     private function registrarTransformacion(
         array $datos,
         array $payload,
@@ -755,11 +883,9 @@ class ServicioRepaletizaje
                 $this->restaurarUbicacion($folio, $snapshot['ubicacion'] ?? null);
             }
 
-            if ($repa->estrategia_folio === 'nuevo') {
-                $resultadoIds = $repa->resultados->pluck('folio_id');
-                if ($resultadoIds->isEmpty()) {
-                    $resultadoIds->push($repa->folio_resultante_id);
-                }
+            $resultadoIds = $repa->resultados->pluck('folio_id')->push($repa->folio_resultante_id)
+                ->filter()->unique()->diff($repa->detalles->pluck('folio_origen_id'));
+            if ($resultadoIds->isNotEmpty()) {
                 $resultadoIds->each(function (string $folioId) use ($folios): void {
                     $folios->get($folioId)?->update([
                         'estado_operacional' => EstadoOperacionalFolio::Anulado,
@@ -779,6 +905,11 @@ class ServicioRepaletizaje
                     ]));
             }
 
+            if ($repa->modalidad === 'reembalaje') {
+                AutorizacionSagFolio::whereIn('id', $repa->snapshot['autorizaciones_sag_revocadas'] ?? [])
+                    ->where('motivo_revocacion', 'Reembalaje '.$repa->codigo)
+                    ->update(['activa' => true, 'motivo_revocacion' => null, 'revocado_por_user_id' => null, 'revocado_at' => null]);
+            }
             $repa->update([
                 'estado' => 'anulado',
                 'operacion_anulacion_id' => $operacionId,
@@ -819,6 +950,11 @@ class ServicioRepaletizaje
     {
         return [
             'modalidad' => $datos['modalidad'] ?? 'consolidacion',
+            ...(($datos['modalidad'] ?? '') === 'reembalaje' ? [
+                'huella_reembalaje' => $datos['huella_reembalaje'] ?? '',
+                'mermas' => collect($datos['mermas'] ?? [])->map(fn ($l) => ['clave' => $l['clave'], 'kilos' => CuadraturaReembalaje::kilos(CuadraturaReembalaje::unidades($l['kilos']))])->sortBy('clave')->values()->all(),
+                'motivo_merma' => filled($datos['motivo_merma'] ?? null) ? trim($datos['motivo_merma']) : null,
+            ] : []),
             'tipo_resultado' => $datos['tipo_resultado'] ?? null,
             'estrategia_folio' => $datos['estrategia_folio'] ?? null,
             'numero_folio_resultante' => mb_strtoupper(
@@ -840,6 +976,7 @@ class ServicioRepaletizaje
             ])->values()->all(),
             'resultados' => collect($datos['resultados'] ?? [])->map(fn (array $resultado): array => [
                 'numero_folio' => mb_strtoupper(trim((string) $resultado['numero_folio'])),
+                ...(($datos['modalidad'] ?? '') === 'reembalaje' ? ['envase_validacion_id' => $resultado['envase_validacion_id'] ?? null] : []),
                 'tipo_resultado' => $resultado['tipo_resultado'],
                 'cantidad_objetivo' => isset($resultado['cantidad_objetivo'])
                     ? (int) $resultado['cantidad_objetivo']
@@ -1247,6 +1384,9 @@ class ServicioRepaletizaje
                 $normalizada[$campo] = (string) $linea[$campo];
             }
         }
+        if (isset($linea['kilos_netos_por_caja'])) {
+            $normalizada['kilos_netos_por_caja'] = (string) $linea['kilos_netos_por_caja'];
+        }
         $normalizada['clave'] = self::claveComposicion($normalizada);
 
         return $normalizada;
@@ -1291,6 +1431,10 @@ class ServicioRepaletizaje
             if (filled($linea[$campo] ?? null)) {
                 $partes[] = $campo.':'.mb_strtoupper(trim((string) $linea[$campo]));
             }
+        }
+
+        if (isset($linea['kilos_netos_por_caja'])) {
+            $partes[] = 'kg:'.CuadraturaReembalaje::kilos(CuadraturaReembalaje::unidades($linea['kilos_netos_por_caja']));
         }
 
         return hash('sha256', implode('|', $partes));
@@ -1537,6 +1681,7 @@ class ServicioRepaletizaje
 
         return [
             'atributos' => [
+                'condicion_sag_id' => $folio->condicion_sag_id,
                 'tipo_bulto' => $folio->tipo_bulto?->value,
                 'estado_operacional' => $folio->estado_operacional?->value,
                 'condicion_termica' => $folio->condicion_termica?->value,

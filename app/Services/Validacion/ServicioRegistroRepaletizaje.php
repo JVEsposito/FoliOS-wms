@@ -189,7 +189,7 @@ class ServicioRegistroRepaletizaje
             'folio' => (string) ($resultado['numero_folio'] ?? ''),
             'variedad' => $especificaciones['variedad'] ?? null,
             'etiqueta' => $especificaciones['marca'] ?? null,
-            'embalaje' => $especificaciones['envase'] ?? null,
+            'embalaje' => $resultado['envase'] ?? $especificaciones['envase'] ?? null,
             'estado' => ($resultado['tipo_resultado'] ?? '') === 'pallet' ? 'completo' : 'saldo',
             'lineas' => collect($resultado['composicion'] ?? [])
                 ->filter(fn (mixed $linea): bool => is_array($linea))
