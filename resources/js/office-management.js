@@ -1,6 +1,6 @@
 import { BarController, BarElement, CategoryScale, Chart, Legend, LinearScale, Tooltip } from 'chart.js';
 import { createOperationalPoller } from './shared/operational-poller';
-import { productStateSegments } from './shared/management-product-states';
+import { bulkWidths, productStateRows } from './shared/management-product-states';
 import { readManagementChartPaletteSafely } from './shared/management-chart-theme';
 
 // Gerencia solo dibuja barras (horizontales y apiladas) con leyenda y tooltip. Registrar
@@ -30,11 +30,13 @@ const elements = {
     refresh: byId('refreshDashboardButton'),
     lastUpdated: byId('lastUpdatedAt'),
     refreshStatus: byId('refreshStatus'),
-    availablePositions: byId('availablePositionsKpi'),
+    cameraOccupancyKpi: byId('cameraOccupancyKpi'),
     cameraOccupancyProgress: byId('cameraOccupancyProgress'),
     cameraOccupancyDetail: byId('cameraOccupancyDetail'),
-    availableProducts: byId('availableProductsKpi'),
-    productAvailabilityProgress: byId('productAvailabilityProgress'),
+    cameraOccupancyList: byId('cameraOccupancyChart'),
+    productPalletsKpi: byId('productPalletsKpi'),
+    productSaldosKpi: byId('productSaldosKpi'),
+    productBoxesKpi: byId('productBoxesKpi'),
     productAvailabilityDetail: byId('productAvailabilityDetail'),
     materialItems: byId('materialItemsKpi'),
     materialFolios: byId('materialFoliosKpi'),
@@ -42,27 +44,26 @@ const elements = {
     precoolingAvailable: byId('precoolingAvailableKpi'),
     precoolingOccupancyProgress: byId('precoolingOccupancyProgress'),
     precoolingDetail: byId('precoolingDetail'),
-    weighbridgeNetWeight: byId('weighbridgeNetWeightKpi'),
-    weighbridgeClosed: byId('weighbridgeClosedKpi'),
-    weighbridgePending: byId('weighbridgePendingKpi'),
+    weighbridgeSeasonKpi: byId('weighbridgeSeasonKpi'),
+    weighbridgeTodayKpi: byId('weighbridgeTodayKpi'),
+    weighbridgeWeekKpi: byId('weighbridgeWeekKpi'),
     weighbridgeDetail: byId('weighbridgeDetail'),
     weighbridgeSummary: byId('weighbridgeChartSummary'),
+    weighbridgeClientRows: byId('weighbridgeClientRows'),
     materialUnitSelect: byId('materialUnitSelect'),
     materialSummary: byId('materialChartSummary'),
     productEmpty: byId('productEmpty'),
     productDetails: byId('productDetails'),
-    productTotal: byId('productTotalMetric'),
-    productComposition: byId('productCompositionMetric'),
-    productAvailable: byId('productAvailableMetric'),
-    productAvailableDetail: byId('productAvailableDetail'),
-    productCommitted: byId('productCommittedMetric'),
-    productCommittedDetail: byId('productCommittedDetail'),
+    productPallets: byId('productPalletsMetric'),
+    productPalletsDetail: byId('productPalletsDetail'),
+    productSaldos: byId('productSaldosMetric'),
+    productSaldosDetail: byId('productSaldosDetail'),
+    productBoxes: byId('productBoxesMetric'),
+    productBoxesDetail: byId('productBoxesDetail'),
     productOccupancy: byId('productOccupancyMetric'),
     productOccupancyDetail: byId('productOccupancyDetail'),
-    productStateBar: byId('productStateBar'),
-    productStateLegend: byId('productStateLegend'),
-    productBlocked: byId('productBlockedMetric'),
-    productPendingPrecooling: byId('productPendingPrecoolingMetric'),
+    productStateRows: byId('productStateRows'),
+    productExporterRows: byId('productExporterRows'),
     productAgingRows: byId('productAgingRows'),
     productAgingThreshold: byId('productAgingThreshold'),
     productUndated: byId('productUndated'),
@@ -73,8 +74,8 @@ const elements = {
     alerts: byId('managementAlerts'),
     alertCount: byId('alertCount'),
     alertTabCount: byId('alertTabCount'),
+    alertSummary: byId('alertSummary'),
     materialOperationDetail: byId('materialOperationDetail'),
-    productUnlocated: byId('productUnlocatedMetric'),
     activeLoads: byId('activeLoadsMetric'),
     pendingLoads: byId('pendingLoadsMetric'),
     preparingLoads: byId('preparingLoadsMetric'),
@@ -103,7 +104,14 @@ const elements = {
     weighbridgeEntry: byId('weighbridgeEntryMetric'),
     weighbridgeContainers: byId('weighbridgeContainersMetric'),
     weighbridgeTare: byId('weighbridgeTareMetric'),
+    weighbridgeSeason: byId('weighbridgeSeasonMetric'),
+    weighbridgeSeasonDetail: byId('weighbridgeSeasonDetail'),
+    weighbridgeWeek: byId('weighbridgeWeekMetric'),
+    weighbridgeWeekDetail: byId('weighbridgeWeekDetail'),
+    weighbridgeToday: byId('weighbridgeTodayMetric'),
+    weighbridgeTodayDetail: byId('weighbridgeTodayDetail'),
     weighbridgeClients: byId('weighbridgeClientsMetric'),
+    weighbridgeClientsDetail: byId('weighbridgeClientsDetail'),
     rawLotsActive: byId('rawLotsActiveMetric'),
     rawHydrocoolerPending: byId('rawHydrocoolerPendingMetric'),
     rawHydrocoolerActive: byId('rawHydrocoolerActiveMetric'),
@@ -327,6 +335,16 @@ function formatWeight(value) {
     return new Intl.NumberFormat('es-CL', { maximumFractionDigits: 1 }).format(Number(value || 0));
 }
 
+function formatKilos(value) {
+    return `${formatInteger(Math.round(Number(value || 0)))} kg`;
+}
+
+function plural(value, singular, pluralForm = `${singular}s`) {
+    return `${formatInteger(value)} ${Number(value) === 1 ? singular : pluralForm}`;
+}
+
+const cameraName = (camera) => camera?.nombre || camera?.codigo || 'Cámara';
+
 function formatDuration(minutes) {
     if (minutes === null || minutes === undefined) return 'Sin objetivo';
     const total = Math.max(0, Number(minutes || 0));
@@ -340,8 +358,11 @@ function formatDate(value) {
     if (!value) return 'Sin actualizar';
 
     return new Intl.DateTimeFormat('es-CL', {
-        dateStyle: 'short',
-        timeStyle: 'medium',
+        day: 'numeric',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
     }).format(new Date(value));
 }
 
@@ -385,31 +406,32 @@ function renderDashboard(data) {
     const containers = data.envases;
 
     elements.lastUpdated.textContent = formatDate(data.generado_at);
-    elements.refreshStatus.textContent = `Actualiza automáticamente cada ${data.actualizacion_segundos} segundos`;
+    elements.refreshStatus.textContent = `Se actualiza cada ${data.actualizacion_segundos} s`;
 
-    elements.availablePositions.textContent = formatInteger(capacity.disponibles);
+    elements.weighbridgeSeasonKpi.textContent = formatInteger(Math.round(weighbridge.kilos_temporada || 0));
+    elements.weighbridgeTodayKpi.textContent = formatInteger(Math.round(weighbridge.peso_neto_hoy || 0));
+    elements.weighbridgeWeekKpi.textContent = formatInteger(Math.round(weighbridge.kilos_7_dias || 0));
+    elements.weighbridgeDetail.textContent = `${plural(weighbridge.recepciones_temporada || 0, 'recepción', 'recepciones')} · ${plural(weighbridge.clientes_temporada || 0, 'cliente')}`;
+
+    elements.productPalletsKpi.textContent = formatInteger(products.pallets);
+    elements.productSaldosKpi.textContent = formatInteger(products.saldos);
+    elements.productBoxesKpi.textContent = formatInteger(products.cajas);
+    elements.productAvailabilityDetail.textContent = `${plural(products.disponibles_despacho, 'folio')} listos para despacho · ${formatInteger(products.comprometidos_carga)} en carga`;
+
+    elements.cameraOccupancyKpi.textContent = formatQuantity(capacity.ocupacion_porcentaje);
     elements.cameraOccupancyProgress.style.width = `${clampPercentage(capacity.ocupacion_porcentaje)}%`;
-    elements.cameraOccupancyDetail.textContent = `${formatInteger(capacity.ocupadas)} ocupadas de ${formatInteger(capacity.operativas)} operativas · ${capacity.ocupacion_porcentaje}% de uso`;
-
-    elements.availableProducts.textContent = formatInteger(products.disponibles_despacho);
-    elements.productAvailabilityProgress.style.width = `${clampPercentage(products.disponibilidad_porcentaje)}%`;
-    elements.productAvailabilityDetail.textContent = `${formatInteger(loads.activas)} cargas activas · ${formatInteger(loads.folios_con_incidencia)} incidencias · ${formatInteger(products.bloqueados)} bloqueados`;
+    elements.cameraOccupancyDetail.textContent = `${formatInteger(capacity.ocupadas)} de ${formatInteger(capacity.operativas)} posiciones · ${formatInteger(capacity.disponibles)} libres`;
 
     elements.materialItems.textContent = formatInteger(materials.items_con_stock);
     elements.materialFolios.textContent = formatInteger(materials.folios_con_stock);
     elements.materialUnits.textContent = formatInteger(materials.unidades_medida.length);
-    elements.materialOperationDetail.textContent = `${formatInteger(materials.despachos_abiertos)} despachos abiertos · ${formatInteger(materials.recepciones_borrador)} recepciones sin confirmar`;
+    elements.materialOperationDetail.textContent = `${plural(materials.despachos_abiertos, 'despacho abierto', 'despachos abiertos')} · ${plural(materials.recepciones_borrador, 'recepción sin confirmar', 'recepciones sin confirmar')}`;
 
     elements.precoolingAvailable.textContent = formatInteger(precooling.disponibles);
     elements.precoolingOccupancyProgress.style.width = `${clampPercentage(precooling.ocupacion_porcentaje)}%`;
-    elements.precoolingDetail.textContent = `${formatInteger(precooling.folios_pendientes)} folios en espera · ${formatInteger(precooling.procesos_atrasados)} procesos atrasados · promedio ${formatDuration(precooling.duracion_promedio_minutos_7d)}`;
+    elements.precoolingDetail.textContent = `${plural(precooling.folios_pendientes, 'folio')} en espera · ${plural(precooling.procesos_atrasados, 'proceso atrasado', 'procesos atrasados')}`;
 
-    elements.weighbridgeNetWeight.textContent = formatWeight(weighbridge.peso_neto_hoy);
-    elements.weighbridgeClosed.textContent = formatInteger(weighbridge.cerradas_hoy);
-    elements.weighbridgePending.textContent = formatInteger(weighbridge.pendientes_destare);
-    elements.weighbridgeDetail.textContent = `${formatInteger(weighbridge.en_bascula_ingreso)} en ingreso · ${formatInteger(weighbridge.en_pesaje_envases)} en pesaje · ${formatInteger(rawMaterial.confirmados_hoy)} lotes confirmados hoy`;
-
-    renderCameraChart(data.camaras.detalle);
+    renderCameraOccupancy(data.camaras.detalle);
     renderProducts(products, data.camaras.por_contenido.productos);
     renderLoads(loads);
     renderValidation(validation);
@@ -434,19 +456,19 @@ function renderVerifications(verification = {}) {
     const weekly = verification.periodos?.[7] || {};
     const monthly = verification.periodos?.[30] || {};
     const compliance = (period) => period.cumplimiento?.generadas
-        ? `${period.cumplimiento.porcentaje} % (${period.cumplimiento.completadas}/${period.cumplimiento.generadas})`
+        ? `${formatQuantity(period.cumplimiento.porcentaje)} % (${period.cumplimiento.completadas} de ${period.cumplimiento.generadas} rondas)`
         : 'Sin rondas';
     elements.verificationSummary.textContent = `Cumplimiento: 7 días ${compliance(weekly)} · 30 días ${compliance(monthly)}${verification.habilitada ? '' : ' · función desactivada'}`;
     const byCamera = new Map();
     for (const [days, period] of [[7, weekly], [30, monthly]]) {
         for (const camera of period.camaras || []) {
-            byCamera.set(camera.codigo, { ...(byCamera.get(camera.codigo) || {}), [days]: camera });
+            byCamera.set(cameraName(camera), { ...(byCamera.get(cameraName(camera)) || {}), [days]: camera });
         }
     }
     elements.verificationRows.innerHTML = byCamera.size ? [...byCamera].map(([code, values]) => `<tr>
         <td>${escapeHtml(code)}</td>
-        <td>${values[7] ? `${values[7].exactitud_porcentaje} % (${values[7].correctas}/${values[7].total})` : 'Sin verificaciones'}</td>
-        <td>${values[30] ? `${values[30].exactitud_porcentaje} % (${values[30].correctas}/${values[30].total})` : 'Sin verificaciones'}</td>
+        <td>${values[7] ? `${formatQuantity(values[7].exactitud_porcentaje)} % (${values[7].correctas}/${values[7].total})` : 'Sin verificaciones'}</td>
+        <td>${values[30] ? `${formatQuantity(values[30].exactitud_porcentaje)} % (${values[30].correctas}/${values[30].total})` : 'Sin verificaciones'}</td>
     </tr>`).join('') : '<tr><td colspan="3">Sin posiciones verificadas en los últimos 30 días.</td></tr>';
 }
 
@@ -480,61 +502,100 @@ function stackedBarOptions(horizontal = true) {
     };
 }
 
-function renderCameraChart(cameras) {
-    replaceChart('cameras', 'cameraOccupancyChart', {
-        type: 'bar',
-        data: {
-            labels: cameras.map((camera) => camera.codigo),
-            datasets: [
-                { label: 'Ocupadas', data: cameras.map((camera) => camera.ocupadas), backgroundColor: palette.cyan, borderRadius: 5, borderSkipped: false },
-                { label: 'Disponibles', data: cameras.map((camera) => camera.disponibles), backgroundColor: palette.quiet, borderRadius: 5, borderSkipped: false },
-            ],
-        },
-        options: stackedBarOptions(true),
-    });
+const CAMERA_AREAS = [
+    ['productos', 'Producto terminado'],
+    ['materia_prima', 'Materia prima'],
+    ['materiales', 'Materiales'],
+];
+
+function occupancyTone(percent) {
+    if (percent >= 90) return 'alert';
+    if (percent >= 75) return 'watch';
+    return 'normal';
+}
+
+function renderCameraOccupancy(cameras) {
+    const groups = CAMERA_AREAS
+        .map(([content, label]) => [label, cameras.filter((camera) => (camera.contenido || 'productos') === content)])
+        .filter(([, items]) => items.length);
+    elements.cameraOccupancyList.innerHTML = groups.length
+        ? groups.map(([label, items]) => `
+            <div class="management-occupancy__group" role="listitem">
+                <h3>${escapeHtml(label)}</h3>
+                ${items.map((camera) => {
+                    const percent = clampPercentage(camera.ocupacion_porcentaje);
+                    return `<div class="management-occupancy__row" data-tone="${occupancyTone(percent)}">
+                        <span class="management-occupancy__name" title="${escapeHtml(camera.codigo)}">${escapeHtml(cameraName(camera))}</span>
+                        <span class="management-occupancy__track" aria-hidden="true"><i style="width:${percent}%"></i></span>
+                        <span class="management-occupancy__value"><b>${formatQuantity(camera.ocupacion_porcentaje)} %</b>${formatInteger(camera.ocupadas)} / ${formatInteger(camera.operativas)}</span>
+                    </div>`;
+                }).join('')}
+            </div>`).join('')
+        : '<div class="management-empty">No hay cámaras activas configuradas.</div>';
+}
+
+function bulkBar(pallets, saldos, max, tone = 'neutral') {
+    const widths = bulkWidths(pallets, saldos, max);
+    return `<span class="management-bulk-bar" data-tone="${tone}" aria-hidden="true">${widths.pallet ? `<i class="management-bulk management-bulk--pallet" style="width:${widths.pallet}%"></i>` : ''}${widths.saldo ? `<i class="management-bulk management-bulk--saldo" style="width:${widths.saldo}%"></i>` : ''}</span>`;
 }
 
 function renderProducts(products, occupancy) {
-    const { empty, segments, ariaLabel } = productStateSegments(products);
+    const { empty, rows, totals } = productStateRows(products);
     elements.productEmpty.hidden = !empty;
     elements.productDetails.hidden = empty;
     if (empty) return;
 
-    elements.productTotal.textContent = formatInteger(products.total_activos);
-    elements.productComposition.textContent = `${formatInteger(products.pallets)} pallets · ${formatInteger(products.saldos)} saldos · ${formatInteger(products.ingresados_hoy)} ingresados hoy`;
-    elements.productAvailable.textContent = formatInteger(products.disponibles_despacho);
-    elements.productAvailableDetail.textContent = `${formatQuantity(products.disponibilidad_porcentaje)} % del total`;
-    elements.productCommitted.textContent = formatInteger(products.comprometidos_carga);
-    elements.productCommittedDetail.textContent = `${formatInteger(products.cargas_comprometidas)} cargas`;
+    elements.productPallets.textContent = formatInteger(products.pallets);
+    elements.productPalletsDetail.textContent = `bultos completos · ${formatInteger(products.cajas_pallets)} cajas`;
+    elements.productSaldos.textContent = formatInteger(products.saldos);
+    elements.productSaldosDetail.textContent = `bultos parciales por consolidar · ${formatInteger(products.cajas_saldos)} cajas`;
+    elements.productBoxes.textContent = formatInteger(products.cajas);
+    elements.productBoxesDetail.textContent = `${formatInteger(products.ingresados_hoy)} folios ingresados hoy`;
     elements.productOccupancy.textContent = `${formatQuantity(occupancy.ocupacion_porcentaje)} %`;
     elements.productOccupancyDetail.textContent = `${formatInteger(occupancy.ocupadas)} de ${formatInteger(occupancy.operativas)} posiciones operativas`;
 
-    elements.productStateBar.setAttribute('aria-label', ariaLabel);
-    elements.productStateBar.innerHTML = segments.filter(({ count }) => count > 0)
-        .map(({ tone, width }) => `<span class="management-products__segment management-products__segment--${tone}" style="width:${width}%"></span>`)
-        .join('');
-    elements.productStateLegend.innerHTML = segments
-        .map(({ tone, count, label }) => `<div class="management-products__legend-item management-products__legend-item--${tone}"><span class="management-products__dot" aria-hidden="true"></span><span>${label}</span><strong>${formatInteger(count)}</strong></div>`)
-        .join('');
+    const max = Math.max(0, ...rows.map((row) => row.total));
+    elements.productStateRows.innerHTML = rows.map((row) => `
+        <div class="management-state-row${row.total ? '' : ' is-zero'}" data-state="${row.key}" data-tone="${row.tone}" role="row">
+            <span role="cell" class="management-state-row__label"><i aria-hidden="true"></i><span>${escapeHtml(row.label)}${row.hint ? `<small>${escapeHtml(row.hint)}</small>` : ''}</span></span>
+            <span role="cell" class="management-state-row__bar">${bulkBar(row.pallets, row.saldos, max, row.tone)}<em>${row.total ? `${formatQuantity(row.percent)} %` : ''}</em></span>
+            <span role="cell" data-label="Pallets">${formatInteger(row.pallets)}</span>
+            <span role="cell" data-label="Saldos" class="management-state-row__saldos">${formatInteger(row.saldos)}</span>
+            <span role="cell" data-label="Cajas">${formatInteger(row.cajas)}</span>
+        </div>`).join('') + `
+        <div class="management-state-row management-state-row--total" role="row">
+            <span role="cell" class="management-state-row__label"><span>Total en planta</span></span>
+            <span role="cell" class="management-state-row__bar"></span>
+            <span role="cell" data-label="Pallets">${formatInteger(totals.pallets)}</span>
+            <span role="cell" data-label="Saldos" class="management-state-row__saldos">${formatInteger(totals.saldos)}</span>
+            <span role="cell" data-label="Cajas">${formatInteger(totals.cajas)}</span>
+        </div>`;
 
-    elements.productUnlocated.textContent = formatInteger(products.pendientes_ubicacion);
-    elements.productBlocked.textContent = formatInteger(products.bloqueados);
-    elements.productPendingPrecooling.textContent = formatInteger(products.pendientes_prefrio);
-    elements.productUnlocated.closest('.management-products__exception').classList.toggle('is-zero', !products.pendientes_ubicacion);
-    elements.productBlocked.closest('.management-products__exception').classList.toggle('is-zero', !products.bloqueados);
-    elements.productPendingPrecooling.closest('.management-products__exception').classList.toggle('is-zero', !products.pendientes_prefrio);
+    const exporters = products.exportadoras?.detalle || [];
+    const others = products.exportadoras?.otras;
+    const exporterMax = Math.max(0, ...exporters.map((row) => row.pallets + row.saldos));
+    elements.productExporterRows.innerHTML = exporters.length
+        ? exporters.map((row) => `
+            <div class="management-exporter">
+                <div class="management-exporter__head"><strong>${escapeHtml(row.nombre)}</strong><span>${formatInteger(row.cajas)} cajas</span></div>
+                ${bulkBar(row.pallets, row.saldos, exporterMax)}
+                <small>${plural(row.pallets, 'pallet')} · ${plural(row.saldos, 'saldo')}</small>
+            </div>`).join('') + (others ? `<p class="management-exporters__more">Otras ${formatInteger(others.cantidad)}: ${plural(others.pallets, 'pallet')} · ${plural(others.saldos, 'saldo')} · ${formatInteger(others.cajas)} cajas</p>` : '')
+        : '<div class="management-empty">Sin exportadora informada en los folios.</div>';
 
     const aging = products.antiguedad;
-    const dated = aging.tramos.reduce((sum, row) => sum + row.total, 0);
-    elements.productAgingThreshold.textContent = `alerta > ${aging.umbral_alerta_dias} días`;
-    elements.productAgingRows.innerHTML = aging.tramos.map(({ desde_dias: from, hasta_dias: to, total }, index) => {
-        const label = to === null ? `Más de ${aging.umbral_alerta_dias} días` : `${from}–${to} días`;
-        const width = dated ? Math.max(total > 0 ? 2 : 0, (total / dated) * 100) : 0;
-        const tone = index === aging.tramos.length - 1 ? 'danger' : 'info';
-        return `<div class="management-products__aging-row"><span>${label}</span><div class="management-products__aging-track" aria-hidden="true"><span class="management-products__aging-fill management-products__aging-fill--${tone}" style="width:${width}%"></span></div><strong>${formatInteger(total)}</strong></div>`;
+    const agingMax = Math.max(0, ...aging.tramos.map((row) => row.total));
+    elements.productAgingThreshold.textContent = `alerta sobre ${aging.umbral_alerta_dias} días`;
+    elements.productAgingRows.innerHTML = aging.tramos.map(({ desde_dias: from, hasta_dias: to, total, pallets, saldos }, index) => {
+        const label = to === null ? `Más de ${aging.umbral_alerta_dias} días` : `${from} a ${to} días`;
+        const tone = index === aging.tramos.length - 1 && total ? 'alert' : 'neutral';
+        // Una respuesta sin desglose por tipo se dibuja completa como pallets.
+        const palletCount = pallets ?? total;
+        const saldoCount = saldos ?? 0;
+        return `<div class="management-products__aging-row" data-tone="${tone}"><span>${label}</span>${bulkBar(palletCount, saldoCount, agingMax, tone)}<strong>${formatInteger(total)}</strong></div>`;
     }).join('');
     elements.productUndated.hidden = !aging.sin_fecha;
-    elements.productUndated.textContent = `${formatInteger(aging.sin_fecha)} folios sin fecha de ingreso`;
+    elements.productUndated.textContent = `${plural(aging.sin_fecha, 'folio')} sin fecha de ingreso`;
 }
 
 function renderLoads(loads) {
@@ -654,7 +715,7 @@ function renderPrecoolingChart(precooling) {
     replaceChart('precooling', 'precoolingChart', {
         type: 'bar',
         data: {
-            labels: tunnels.map((tunnel) => tunnel.codigo),
+            labels: tunnels.map((tunnel) => tunnel.nombre || tunnel.codigo),
             datasets: [
                 { label: 'Ocupadas', data: tunnels.map((tunnel) => tunnel.ocupadas), backgroundColor: palette.blue, borderRadius: 5, borderSkipped: false },
                 { label: 'Disponibles', data: tunnels.map((tunnel) => tunnel.disponibles), backgroundColor: palette.quiet, borderRadius: 5, borderSkipped: false },
@@ -683,7 +744,7 @@ function renderPrecoolingOperation(precooling) {
             return `
                 <a class="management-operation-row${process.atrasado ? ' is-critical' : ''}" href="/oficina/prefrio">
                     <div>
-                        <strong>${escapeHtml(tunnel.codigo)} · ${escapeHtml(process.codigo)}</strong>
+                        <strong>${escapeHtml(tunnel.nombre || tunnel.codigo)} · ${escapeHtml(process.codigo)}</strong>
                         <span>${escapeHtml(humanize(process.estado))} · ${formatInteger(tunnel.ocupadas)}/${formatInteger(tunnel.capacidad)} posiciones</span>
                     </div>
                     <div class="management-operation-row__metrics">
@@ -697,50 +758,86 @@ function renderPrecoolingOperation(precooling) {
         : '<div class="management-empty">No hay procesos activos en túneles.</div>';
 }
 
+function seriesColors() {
+    return [palette.blue, palette.amber, palette.purple, palette.green, palette.cyanLight];
+}
+
 function renderWeighbridgeChart(weighbridge) {
     const days = weighbridge.tendencia_diaria || [];
+    const series = weighbridge.series_clientes || [];
+    const colors = seriesColors();
+    const colorFor = (serie, index) => (serie.clave === 'otros' ? palette.quiet : colors[index % colors.length]);
+    const datasets = series.length
+        ? series.map((serie, index) => ({
+            label: serie.nombre,
+            data: days.map((day) => Number(day.por_cliente?.[serie.clave] || 0)),
+            backgroundColor: colorFor(serie, index),
+            borderRadius: 3,
+            borderSkipped: false,
+            maxBarThickness: 46,
+        }))
+        : [{ label: 'Kilos', data: days.map((day) => day.peso_neto), backgroundColor: palette.amber, borderRadius: 3, maxBarThickness: 46 }];
+
     replaceChart('weighbridge', 'weighbridgeReceptionChart', {
         type: 'bar',
-        data: {
-            labels: days.map((day) => day.etiqueta),
-            datasets: [{
-                label: 'Peso neto',
-                data: days.map((day) => day.peso_neto),
-                backgroundColor: palette.amber,
-                borderRadius: 5,
-                borderSkipped: false,
-            }],
-        },
+        data: { labels: days.map((day) => day.etiqueta), datasets },
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
             plugins: {
                 legend: { display: false },
                 tooltip: {
+                    padding: 11,
+                    filter: (item) => Number(item.raw) > 0,
                     callbacks: {
-                        label: (context) => `${formatWeight(context.raw)} kg netos`,
-                        afterLabel: (context) => `${formatInteger(days[context.dataIndex]?.recepciones)} recepciones`,
+                        label: (context) => `${context.dataset.label}: ${formatKilos(context.raw)}`,
+                        footer: (items) => {
+                            const day = days[items[0]?.dataIndex];
+                            return day ? `Total ${formatKilos(day.peso_neto)} · ${plural(day.recepciones, 'recepción', 'recepciones')}` : '';
+                        },
                     },
                 },
             },
             scales: {
-                x: { grid: { display: false } },
-                y: { beginAtZero: true, grid: { color: palette.grid }, ticks: { callback: (value) => `${formatWeight(value)} kg` } },
+                x: { stacked: true, grid: { display: false } },
+                y: { stacked: true, beginAtZero: true, grid: { color: palette.grid }, border: { display: false }, ticks: { maxTicksLimit: 5, callback: (value) => formatInteger(value) } },
             },
         },
     });
 
-    elements.weighbridgeSummary.innerHTML = `
-        <span><b>${formatInteger(weighbridge.cerradas_hoy)}</b>recepciones cerradas hoy</span>
-        <span><b>${formatWeight(weighbridge.peso_neto_hoy)} kg</b>peso neto hoy</span>
-    `;
+    const weekly = new Map((weighbridge.clientes || []).map((client) => [String(client.id), client.kilos_7_dias]));
+    const otherKilos = Math.max(0, Number(weighbridge.kilos_7_dias || 0) - series
+        .filter((serie) => serie.clave !== 'otros')
+        .reduce((sum, serie) => sum + Number(weekly.get(serie.clave) || 0), 0));
+    elements.weighbridgeSummary.innerHTML = series.length
+        ? series.map((serie, index) => `<span><i style="background:${colorFor(serie, index)}"></i>${escapeHtml(serie.nombre)} <b>${formatKilos(serie.clave === 'otros' ? otherKilos : weekly.get(serie.clave))}</b></span>`).join('')
+        : '<span>Sin kilos recepcionados en los últimos 7 días.</span>';
 }
 
 function renderWeighbridgeOperation(weighbridge) {
     elements.weighbridgeEntry.textContent = formatInteger(weighbridge.en_bascula_ingreso);
     elements.weighbridgeContainers.textContent = formatInteger(weighbridge.en_pesaje_envases);
     elements.weighbridgeTare.textContent = formatInteger(weighbridge.pendientes_destare);
-    elements.weighbridgeClients.textContent = formatInteger(weighbridge.clientes_hoy);
+    elements.weighbridgeSeason.textContent = formatKilos(weighbridge.kilos_temporada);
+    elements.weighbridgeSeasonDetail.textContent = plural(weighbridge.recepciones_temporada || 0, 'recepción', 'recepciones');
+    elements.weighbridgeWeek.textContent = formatKilos(weighbridge.kilos_7_dias);
+    elements.weighbridgeWeekDetail.textContent = plural(weighbridge.recepciones_7_dias || 0, 'recepción', 'recepciones');
+    elements.weighbridgeToday.textContent = formatKilos(weighbridge.peso_neto_hoy);
+    elements.weighbridgeTodayDetail.textContent = `${plural(weighbridge.cerradas_hoy, 'recepción cerrada', 'recepciones cerradas')} · ${plural(weighbridge.clientes_hoy, 'cliente')}`;
+    elements.weighbridgeClients.textContent = formatInteger(weighbridge.clientes_temporada || 0);
+    elements.weighbridgeClientsDetail.textContent = 'con kilos en la temporada';
+
+    const clients = weighbridge.clientes || [];
+    const max = Math.max(0, ...clients.map((client) => client.kilos_temporada));
+    elements.weighbridgeClientRows.innerHTML = clients.length
+        ? clients.map((client) => `
+            <div class="management-client-kilos__row">
+                <div class="management-client-kilos__head"><strong>${escapeHtml(client.nombre)}</strong><b>${formatKilos(client.kilos_temporada)}</b></div>
+                <span class="management-share" aria-hidden="true"><i style="width:${max ? Math.max(1.5, (client.kilos_temporada / max) * 100) : 0}%"></i></span>
+                <small><span>${formatQuantity(client.participacion_porcentaje)} % del total</span><span>7 días ${formatKilos(client.kilos_7_dias)}</span><span>hoy ${formatKilos(client.kilos_hoy)}</span><span>${plural(client.recepciones_temporada, 'recepción', 'recepciones')}</span></small>
+            </div>`).join('')
+        : '<div class="management-empty">Sin recepciones cerradas en la temporada.</div>';
 }
 
 function renderRawMaterial(rawMaterial, containers) {
@@ -819,33 +916,53 @@ function renderCameraTable(cameras) {
     elements.cameraRows.innerHTML = cameras.length
         ? cameras.map((camera) => `
             <tr>
-                <td><strong>${escapeHtml(camera.codigo)}</strong><small>${escapeHtml(camera.nombre)}</small></td>
+                <td><strong>${escapeHtml(cameraName(camera))}</strong><small>${escapeHtml(camera.codigo)}</small></td>
                 <td><span class="area-chip${cameraAreaClass(camera.contenido)}">${escapeHtml(cameraAreaLabel(camera.contenido))}</span></td>
                 <td>${formatInteger(camera.ocupadas)}</td>
                 <td>${formatInteger(camera.disponibles)}</td>
                 <td>${formatInteger(camera.no_operativas)}</td>
-                <td><span class="usage-chip${camera.ocupacion_porcentaje >= 90 ? ' usage-chip--warning' : ''}">${camera.ocupacion_porcentaje}%</span></td>
+                <td><span class="usage-chip${camera.ocupacion_porcentaje >= 90 ? ' usage-chip--warning' : ''}">${formatQuantity(camera.ocupacion_porcentaje)} %</span></td>
             </tr>
         `).join('')
         : '<tr><td colspan="6"><div class="management-empty">No hay cámaras activas configuradas.</div></td></tr>';
+}
+
+const ALERT_LEVELS = {
+    critica: { label: 'Crítico', plural: 'críticos', tone: 'critical' },
+    advertencia: { label: 'Atención', plural: 'de atención', tone: 'warning' },
+    informativa: { label: 'Aviso', plural: 'avisos', tone: 'info' },
+};
+
+function alertMetric(alert) {
+    if (typeof alert.metrica === 'number') return `${formatQuantity(alert.metrica)}${alert.unidad ? ` <small>${escapeHtml(alert.unidad)}</small>` : ''}`;
+    return escapeHtml(alert.metrica ?? '');
 }
 
 function renderAlerts(alerts) {
     const count = formatInteger(alerts.length);
     elements.alertCount.textContent = count;
     if (elements.alertTabCount) elements.alertTabCount.textContent = count;
+    const byLevel = Object.entries(ALERT_LEVELS)
+        .map(([level, meta]) => [meta, alerts.filter((alert) => alert.nivel === level).length])
+        .filter(([, total]) => total > 0);
+    elements.alertSummary.querySelectorAll('.management-alert-chip').forEach((chip) => chip.remove());
+    elements.alertSummary.insertAdjacentHTML('afterbegin', byLevel
+        .map(([meta, total]) => `<span class="management-alert-chip" data-tone="${meta.tone}">${formatInteger(total)} ${total === 1 ? meta.label.toLowerCase() : meta.plural}</span>`)
+        .join(''));
     elements.alerts.innerHTML = alerts.length
-        ? alerts.map((alert) => `
-            <a class="management-alert${alert.nivel === 'critica' ? ' management-alert--critical' : ''}" href="${escapeHtml(alert.href || '#')}">
-                <i aria-hidden="true"></i>
+        ? alerts.map((alert) => {
+            const level = ALERT_LEVELS[alert.nivel] || ALERT_LEVELS.advertencia;
+            return `
+            <a class="management-alert" data-tone="${level.tone}" href="${escapeHtml(alert.href || '#')}">
+                <span class="management-alert__level">${level.label}</span>
                 <div>
                     <small>${escapeHtml(alert.area || 'Operación')}</small>
                     <strong>${escapeHtml(alert.titulo)}</strong>
                     <span>${escapeHtml(alert.detalle)}</span>
                 </div>
-                <b>${escapeHtml(alert.metrica ?? '')}</b>
-            </a>
-        `).join('')
+                <b>${alertMetric(alert)}</b>
+            </a>`;
+        }).join('')
         : '<div class="management-empty"><strong>Operación sin focos críticos.</strong><span>No hay excepciones activas en la instantánea actual.</span></div>';
 }
 
@@ -950,7 +1067,6 @@ new MutationObserver(() => {
     if (!state.dashboard) return;
 
     applyChartTheme();
-    renderCameraChart(state.dashboard.camaras.detalle);
     renderMaterialChart();
     renderPrecoolingChart(state.dashboard.prefrio);
     renderWeighbridgeChart(state.dashboard.romana);
@@ -971,6 +1087,6 @@ function renderMaterialVerifications(data = {}) {
     byId('materialVerificationSummary').textContent = data.habilitada ? 'La verificación registra diferencias sin ajustar existencias.' : 'Verificación de materiales desactivada.';
     const pct = (value) => value?.porcentaje == null ? 'Sin datos' : `${value.porcentaje} %`;
     byId('materialVerificationRows').innerHTML = [7, 30].flatMap((days) => (data.periodos?.[days]?.camaras || []).map((camera) => `<tr>
-        <td>${escapeHtml(camera.codigo)}</td><td>${days} días</td><td>${pct(camera.ubicacion)}</td><td>${pct(camera.cantidad)}</td><td>${pct(camera.cumplimiento)} (${camera.cumplimiento.completadas}/${camera.cumplimiento.generadas})</td>
+        <td>${escapeHtml(cameraName(camera))}</td><td>${days} días</td><td>${pct(camera.ubicacion)}</td><td>${pct(camera.cantidad)}</td><td>${pct(camera.cumplimiento)} (${camera.cumplimiento.completadas}/${camera.cumplimiento.generadas})</td>
     </tr>`)).join('') || '<tr><td colspan="5">Sin cámaras de materiales.</td></tr>';
 }

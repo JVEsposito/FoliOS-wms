@@ -10,7 +10,7 @@ class ServicioIndicadoresVerificacionMateriales
     public function resumen(string $temporada): array
     {
         $periodos = [];
-        $camaras = Camara::query()->where('contenido', 'materiales')->get(['id', 'codigo']);
+        $camaras = Camara::query()->where('contenido', 'materiales')->get(['id', 'codigo', 'nombre']);
         foreach ([7, 30] as $dias) {
             $desde = now()->subDays($dias);
             $base = DB::table('verificaciones_ubicacion_items as i')
@@ -31,7 +31,7 @@ class ServicioIndicadoresVerificacionMateriales
                 ->selectRaw("p.camara_id, COUNT(DISTINCT r.id) generadas, COUNT(DISTINCT CASE WHEN r.estado = 'completada' THEN r.id END) completadas")
                 ->groupBy('p.camara_id')->get()->keyBy('camara_id');
             $periodos[$dias] = ['camaras' => $camaras->map(fn ($c) => [
-                'id' => $c->id, 'codigo' => $c->codigo,
+                'id' => $c->id, 'codigo' => $c->codigo, 'nombre' => $c->nombre ?: $c->codigo,
                 'ubicacion' => $this->exactitud($presencia->get($c->id)),
                 'cantidad' => $this->exactitud($cantidad->get($c->id)),
                 'cumplimiento' => ['completadas' => (int) ($rondas->get($c->id)?->completadas ?? 0),

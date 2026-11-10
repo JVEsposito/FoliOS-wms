@@ -263,6 +263,82 @@ class PanelGerencialApiTest extends TestCase
             ->assertJsonPath('data.productos.antiguedad.sin_fecha', 0);
     }
 
+    public function test_separa_pallets_y_saldos_por_estado_con_cajas_y_exportadora(): void
+    {
+        $temporada = Temporada::query()->where('activa', true)->firstOrFail();
+        $gerencia = User::factory()->create(['rol' => RolUsuario::Consulta]);
+        $folio = fn (string $numero, TipoBulto $tipo, EstadoOperacionalFolio $estado, int $cajas, ?string $exportadora): Folio => Folio::create([
+            'temporada_id' => $temporada->id, 'numero_folio' => $numero, 'tipo_bulto' => $tipo, 'estado_operacional' => $estado,
+            'fecha_ingreso' => now(), 'activo' => true, 'exportadora' => $exportadora, 'datos_externos' => ['cantidad_cajas' => $cajas],
+        ]);
+        $folio('PT-SU-PALLET', TipoBulto::Pallet, EstadoOperacionalFolio::PendienteUbicacion, 80, 'La Aguada');
+        $folio('PT-SU-SALDO', TipoBulto::Saldo, EstadoOperacionalFolio::PendienteUbicacion, 20, '  LA AGUADA ');
+        $folio('PT-BLOQ-SALDO', TipoBulto::Saldo, EstadoOperacionalFolio::Bloqueado, 15, null);
+
+        $respuesta = $this->actingAs($gerencia, 'sanctum')->getJson('/api/gerencia/resumen')->assertOk()
+            ->assertJsonPath('data.productos.pallets', 1)
+            ->assertJsonPath('data.productos.saldos', 2)
+            ->assertJsonPath('data.productos.cajas', 115)
+            ->assertJsonPath('data.productos.cajas_pallets', 80)
+            ->assertJsonPath('data.productos.cajas_saldos', 35)
+            ->assertJsonPath('data.productos.antiguedad.tramos.0.pallets', 1)
+            ->assertJsonPath('data.productos.antiguedad.tramos.0.saldos', 2);
+        $estados = collect($respuesta->json('data.productos.estados'))->keyBy('clave');
+        $this->assertSame(['clave' => 'pendientes_ubicacion', 'pallets' => 1, 'saldos' => 1, 'cajas' => 100, 'total' => 2], $estados['pendientes_ubicacion']);
+        $this->assertSame([0, 1, 15], [$estados['bloqueados']['pallets'], $estados['bloqueados']['saldos'], $estados['bloqueados']['cajas']]);
+        $this->assertSame(0, $estados['otros']['total']);
+
+        $exportadoras = $respuesta->json('data.productos.exportadoras.detalle');
+        $this->assertCount(2, $exportadoras);
+        $this->assertSame([1, 1, 100], [$exportadoras[0]['pallets'], $exportadoras[0]['saldos'], $exportadoras[0]['cajas']]);
+        $this->assertSame('LA AGUADA', mb_strtoupper($exportadoras[0]['nombre']));
+        $this->assertSame(['Sin exportadora', 0, 1, 15], [$exportadoras[1]['nombre'], $exportadoras[1]['pallets'], $exportadoras[1]['saldos'], $exportadoras[1]['cajas']]);
+        $this->assertNull($respuesta->json('data.productos.exportadoras.otras'));
+    }
+
+    public function test_kilos_recepcionados_en_temporada_por_cliente_y_en_hora_de_planta(): void
+    {
+        config(['app.operational_timezone' => 'America/Santiago']);
+        // 01:30 UTC del 10 de noviembre son las 22:30 del 9 en planta.
+        $this->travelTo(CarbonImmutable::parse('2026-11-10 01:30:00', 'UTC'));
+        $temporada = Temporada::query()->where('activa', true)->firstOrFail();
+        $gerencia = User::factory()->create(['rol' => RolUsuario::Consulta]);
+        $aguada = Cliente::create(['codigo' => 'AGU', 'nombre' => 'La Aguada', 'activo' => true]);
+        $lagunilla = Cliente::create(['codigo' => 'LAG', 'nombre' => 'Lagunilla', 'activo' => true]);
+        $recepcion = function (Cliente $cliente, string $numero, float $neto, string $salida, string $tipo = 'fruta_con_envases') use ($temporada, $gerencia): void {
+            RecepcionRomana::create([
+                'operacion_id' => (string) Str::uuid(), 'payload_hash' => hash('sha256', $numero), 'numero_recepcion' => $numero,
+                'temporada_id' => $temporada->id, 'temporada_codigo_snapshot' => $temporada->codigo, 'temporada_nombre_snapshot' => $temporada->nombre,
+                'cliente_id' => $cliente->id, 'cliente_codigo_snapshot' => $cliente->codigo, 'cliente_nombre_snapshot' => $cliente->nombre,
+                'tipo_recepcion' => $tipo, 'tipo_servicio' => 'proceso', 'cantidad_envases_declarados' => 10, 'tipo_envase_declarado' => 'bins',
+                'numero_guia_despacho' => $numero, 'peso_bruto' => $neto + 8000, 'peso_tara' => 8000, 'peso_neto' => $neto,
+                'patente_camion' => 'ABCD12', 'tipo_camion' => 'termo', 'rut_conductor' => '12345678-5', 'nombre_conductor' => 'Conductor',
+                'estado' => 'cerrado', 'estado_validacion_mp' => 'validada', 'ingreso_at' => CarbonImmutable::parse($salida, 'UTC')->subHours(2),
+                'salida_at' => CarbonImmutable::parse($salida, 'UTC'), 'creado_por_user_id' => $gerencia->id,
+            ]);
+        };
+        $recepcion($aguada, 'REC-NOCHE', 10000, '2026-11-10 01:00:00');
+        $recepcion($lagunilla, 'REC-DOMINGO', 5000, '2026-11-08 15:00:00');
+        $recepcion($lagunilla, 'REC-ENVASES', 900, '2026-11-10 00:30:00', 'solo_envases');
+        $recepcion($aguada, 'REC-OCTUBRE', 4000, '2026-10-20 15:00:00');
+
+        $romana = $this->actingAs($gerencia, 'sanctum')->getJson('/api/gerencia/resumen')->assertOk()->json('data.romana');
+
+        $this->assertEquals([19000, 15000, 10000], [$romana['kilos_temporada'], $romana['kilos_7_dias'], $romana['peso_neto_hoy']]);
+        $this->assertSame([3, 2, 2, 2], [$romana['recepciones_temporada'], $romana['recepciones_7_dias'], $romana['cerradas_hoy'], $romana['clientes_hoy']]);
+        $this->assertSame(['La Aguada', 'Lagunilla'], array_column($romana['clientes'], 'nombre'));
+        $this->assertEquals([14000, 10000, 10000, 2, 73.7], [
+            $romana['clientes'][0]['kilos_temporada'], $romana['clientes'][0]['kilos_7_dias'], $romana['clientes'][0]['kilos_hoy'],
+            $romana['clientes'][0]['recepciones_temporada'], $romana['clientes'][0]['participacion_porcentaje'],
+        ]);
+        $this->assertSame(['La Aguada', 'Lagunilla'], array_column($romana['series_clientes'], 'nombre'));
+        $ultimo = end($romana['tendencia_diaria']);
+        $this->assertSame('2026-11-09', $ultimo['fecha']);
+        $this->assertEquals(10000, $ultimo['peso_neto']);
+        $this->assertEquals([(string) $aguada->id => 10000], $ultimo['por_cliente']);
+        $this->assertEquals(5000, $romana['tendencia_diaria'][5]['peso_neto']);
+    }
+
     public function test_productos_consulta_la_base_como_maximo_tres_veces(): void
     {
         $temporada = Temporada::query()->where('activa', true)->firstOrFail();

@@ -20,6 +20,7 @@ use App\Enums\EstadoValidacionPallet;
 use App\Enums\ResultadoValidacionPallet;
 use App\Enums\TipoBulto;
 use App\Enums\TipoEnvaseRomana;
+use App\Enums\TipoRecepcionRomana;
 use App\Models\Camara;
 use App\Models\Carga;
 use App\Models\CargaFolio;
@@ -40,6 +41,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Query\Builder as ConsultaBase;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -47,11 +49,18 @@ use Illuminate\Support\Str;
 
 class ServicioPanelGerencial
 {
-    public const CLAVE_CACHE = 'gerencia:panel:resumen:v5';
+    public const CLAVE_CACHE = 'gerencia:panel:resumen:v6';
 
     private const CLAVE_BLOQUEO = 'gerencia:panel:resumen:bloqueo';
 
     private const CLAVE_VERSION_CACHE = 'gerencia:panel:resumen:version';
+
+    /** Cajas declaradas del folio; la composición la informa el sistema externo. */
+    private const CAJAS_FOLIO = "COALESCE(CAST(JSON_UNQUOTE(JSON_EXTRACT(folios.datos_externos, '$.cantidad_cajas')) AS UNSIGNED), 0)";
+
+    private const EXPORTADORAS_VISIBLES = 6;
+
+    private const CLIENTES_ROMANA_VISIBLES = 5;
 
     /**
      * @return array<string, mixed>
@@ -154,7 +163,7 @@ class ServicioPanelGerencial
     {
         $hoy = now();
         $camaras = Camara::query()->where('contenido', ContenidoCamara::Productos->value)
-            ->pluck('codigo', 'id');
+            ->get(['id', 'codigo', 'nombre'])->keyBy('id');
         $periodos = [];
         foreach ([7, 30] as $dias) {
             $desde = $hoy->copy()->subDays($dias);
@@ -176,7 +185,8 @@ class ServicioPanelGerencial
                     'porcentaje' => $generadas > 0 ? round($completadas * 100 / $generadas, 1) : null,
                 ],
                 'camaras' => $items->map(fn ($item): array => [
-                    'codigo' => $camaras[$item->camara_id] ?? 'Cámara',
+                    'codigo' => $camaras->get($item->camara_id)?->codigo ?? 'Cámara',
+                    'nombre' => $camaras->get($item->camara_id)?->nombre ?: ($camaras->get($item->camara_id)?->codigo ?? 'Cámara'),
                     'correctas' => (int) $item->correctas,
                     'total' => (int) $item->total,
                     'exactitud_porcentaje' => round($item->correctas * 100 / $item->total, 1),
@@ -249,6 +259,9 @@ class ServicioPanelGerencial
     }
 
     /**
+     * Folios PT activos separados en pallets (bultos completos) y saldos (bultos parciales que
+     * esperan consolidarse), con sus cajas. Tres consultas: conteos, cargas y exportadoras.
+     *
      * @return array<string, mixed>
      */
     private function productos(string $temporadaId): array
@@ -258,89 +271,155 @@ class ServicioPanelGerencial
         $fecha7 = $inicioHoy->copy()->subDays($tramos[0]);
         $fecha14 = $inicioHoy->copy()->subDays($tramos[1]);
         $fechaUmbral = $inicioHoy->copy()->subDays($tramos[2]);
+        $cajas = self::CAJAS_FOLIO;
+        // Gerencia replica aquí Folio::asignacionCargaActual(): una reserva vigente compromete el folio.
+        $reserva = 'EXISTS (SELECT 1 FROM carga_folios cf INNER JOIN reservas_carga_folio r ON r.carga_folio_id = cf.id WHERE cf.folio_id = folios.id)';
+        $ubicadoPt = 'EXISTS (SELECT 1 FROM ubicaciones_actuales ua INNER JOIN posiciones p ON p.id = ua.posicion_id '
+            .'INNER JOIN camaras c ON c.id = p.camara_id WHERE ua.folio_id = folios.id AND p.estado = ? AND c.estado = ? AND c.contenido = ?)';
+        $disponible = EstadoOperacionalFolio::Disponible->value;
+        $condiciones = [
+            'disponibles_despacho' => ["estado_operacional = ? AND NOT {$reserva} AND {$ubicadoPt}", [
+                $disponible, EstadoPosicion::Activa->value, EstadoCamara::Activa->value, ContenidoCamara::Productos->value,
+            ]],
+            'comprometidos_carga' => ["estado_operacional = ? AND {$reserva}", [$disponible]],
+            'pendientes_prefrio' => ['estado_operacional = ?', [EstadoOperacionalFolio::PendientePrefrio->value]],
+            'pendientes_ubicacion' => ['estado_operacional = ?', [EstadoOperacionalFolio::PendienteUbicacion->value]],
+            'bloqueados' => ['estado_operacional = ?', [EstadoOperacionalFolio::Bloqueado->value]],
+        ];
+        $antiguedad = [
+            'tramo_0' => ['fecha_ingreso >= ?', [$fecha7]],
+            'tramo_1' => ['fecha_ingreso >= ? AND fecha_ingreso < ?', [$fecha14, $fecha7]],
+            'tramo_2' => ['fecha_ingreso >= ? AND fecha_ingreso < ?', [$fechaUmbral, $fecha14]],
+            'tramo_3' => ['fecha_ingreso < ?', [$fechaUmbral]],
+            'sin_fecha' => ['fecha_ingreso IS NULL', []],
+            'ingresados_hoy' => ['fecha_ingreso >= ?', [$inicioHoy]],
+        ];
         $base = Folio::query()
             ->where('temporada_id', $temporadaId)
             ->where('activo', true)
-            ->whereIn('tipo_bulto', [TipoBulto::Pallet->value, TipoBulto::Saldo->value]);
-        $conteos = (clone $base)
-            ->selectRaw('COUNT(*) as total_activos')
-            ->selectRaw('SUM(CASE WHEN estado_operacional = ? AND EXISTS (SELECT 1 FROM carga_folios cf INNER JOIN reservas_carga_folio r ON r.carga_folio_id = cf.id WHERE cf.folio_id = folios.id) THEN 1 ELSE 0 END) as comprometidos_carga', [EstadoOperacionalFolio::Disponible->value])
-            ->selectRaw('SUM(CASE WHEN estado_operacional = ? THEN 1 ELSE 0 END) as pendientes_prefrio', [EstadoOperacionalFolio::PendientePrefrio->value])
-            ->selectRaw('SUM(CASE WHEN estado_operacional = ? THEN 1 ELSE 0 END) as bloqueados', [EstadoOperacionalFolio::Bloqueado->value])
-            ->selectRaw('SUM(CASE WHEN estado_operacional = ? THEN 1 ELSE 0 END) as pendientes_ubicacion', [EstadoOperacionalFolio::PendienteUbicacion->value])
-            ->selectRaw('SUM(CASE WHEN fecha_ingreso >= ? THEN 1 ELSE 0 END) as ingresados_hoy', [$inicioHoy])
-            ->selectRaw('SUM(CASE WHEN tipo_bulto = ? THEN 1 ELSE 0 END) as pallets', [TipoBulto::Pallet->value])
-            ->selectRaw('SUM(CASE WHEN tipo_bulto = ? THEN 1 ELSE 0 END) as saldos', [TipoBulto::Saldo->value])
-            ->selectRaw('SUM(CASE WHEN fecha_ingreso >= ? THEN 1 ELSE 0 END) as tramo_0_7', [$fecha7])
-            ->selectRaw('SUM(CASE WHEN fecha_ingreso >= ? AND fecha_ingreso < ? THEN 1 ELSE 0 END) as tramo_8_14', [$fecha14, $fecha7])
-            ->selectRaw('SUM(CASE WHEN fecha_ingreso >= ? AND fecha_ingreso < ? THEN 1 ELSE 0 END) as tramo_15_30', [$fechaUmbral, $fecha14])
-            ->selectRaw('SUM(CASE WHEN fecha_ingreso < ? THEN 1 ELSE 0 END) as sobre_umbral', [$fechaUmbral])
-            ->selectRaw('SUM(CASE WHEN fecha_ingreso IS NULL THEN 1 ELSE 0 END) as sin_fecha')
-            ->firstOrFail();
-        $total = (int) $conteos->total_activos;
-        $disponibles = (clone $base)
-            ->where('estado_operacional', EstadoOperacionalFolio::Disponible->value)
-            ->whereDoesntHave('asignacionCargaActual')
-            ->whereHas(
-                'ubicacionActual.posicion',
-                fn (Builder $posicion): Builder => $posicion
-                    ->where('estado', EstadoPosicion::Activa->value)
-                    ->whereHas(
-                        'camara',
-                        fn (Builder $camara): Builder => $camara
-                            ->where('estado', EstadoCamara::Activa->value)
-                            ->where('contenido', ContenidoCamara::Productos->value),
-                    ),
-            )
-            ->count();
+            ->whereIn('tipo_bulto', [TipoBulto::Pallet->value, TipoBulto::Saldo->value])
+            ->toBase();
+        $consulta = (clone $base)
+            ->groupBy('tipo_bulto')
+            ->select('tipo_bulto')
+            ->selectRaw('COUNT(*) as total')
+            ->selectRaw("COALESCE(SUM({$cajas}), 0) as cajas");
+        foreach ($condiciones as $clave => [$sql, $valores]) {
+            $consulta->selectRaw("SUM(CASE WHEN {$sql} THEN 1 ELSE 0 END) as {$clave}", $valores)
+                ->selectRaw("COALESCE(SUM(CASE WHEN {$sql} THEN {$cajas} ELSE 0 END), 0) as cajas_{$clave}", $valores);
+        }
+        foreach ($antiguedad as $clave => [$sql, $valores]) {
+            $consulta->selectRaw("SUM(CASE WHEN {$sql} THEN 1 ELSE 0 END) as {$clave}", $valores);
+        }
+        $filas = $consulta->get()->keyBy('tipo_bulto');
+        $valor = fn (string $campo, TipoBulto $tipo): int => (int) ($filas->get($tipo->value)?->{$campo} ?? 0);
+        $ambos = fn (string $campo): int => $valor($campo, TipoBulto::Pallet) + $valor($campo, TipoBulto::Saldo);
+
+        $estados = collect(array_keys($condiciones))->map(fn (string $clave): array => [
+            'clave' => $clave,
+            'pallets' => $valor($clave, TipoBulto::Pallet),
+            'saldos' => $valor($clave, TipoBulto::Saldo),
+            'cajas' => $ambos("cajas_{$clave}"),
+        ]);
+        // «Otros» completa el total: disponibles sin ubicación PT vigente, en tránsito, etc.
+        $estados->push([
+            'clave' => 'otros',
+            'pallets' => max(0, $valor('total', TipoBulto::Pallet) - (int) $estados->sum('pallets')),
+            'saldos' => max(0, $valor('total', TipoBulto::Saldo) - (int) $estados->sum('saldos')),
+            'cajas' => max(0, $ambos('cajas') - (int) $estados->sum('cajas')),
+        ]);
+        $estados = $estados->map(fn (array $estado): array => $estado + ['total' => $estado['pallets'] + $estado['saldos']]);
+        $conteo = fn (string $clave): int => (int) $estados->firstWhere('clave', $clave)['total'];
+
         $cargasComprometidas = DB::table('folios')
             ->join('carga_folios', 'carga_folios.folio_id', '=', 'folios.id')
             ->join('reservas_carga_folio', 'reservas_carga_folio.carga_folio_id', '=', 'carga_folios.id')
             ->where('folios.temporada_id', $temporadaId)
             ->where('folios.activo', true)
             ->whereIn('folios.tipo_bulto', [TipoBulto::Pallet->value, TipoBulto::Saldo->value])
-            ->where('folios.estado_operacional', EstadoOperacionalFolio::Disponible->value)
+            ->where('folios.estado_operacional', $disponible)
             ->distinct()
             ->count('carga_folios.carga_id');
 
-        $comprometidos = (int) $conteos->comprometidos_carga;
-        $pendientes = (int) $conteos->pendientes_prefrio;
-        $bloqueados = (int) $conteos->bloqueados;
-        $pendientesUbicacion = (int) $conteos->pendientes_ubicacion;
+        $total = $ambos('total');
+        $disponibles = $conteo('disponibles_despacho');
+        $tramo = fn (int $indice, int $desde, ?int $hasta): array => [
+            'desde_dias' => $desde,
+            'hasta_dias' => $hasta,
+            'total' => $ambos("tramo_{$indice}"),
+            'pallets' => $valor("tramo_{$indice}", TipoBulto::Pallet),
+            'saldos' => $valor("tramo_{$indice}", TipoBulto::Saldo),
+        ];
 
         return [
             'total_activos' => $total,
             'disponibles_despacho' => $disponibles,
-            'comprometidos_carga' => $comprometidos,
-            'pendientes_prefrio' => $pendientes,
-            'bloqueados' => $bloqueados,
-            'pendientes_ubicacion' => $pendientesUbicacion,
-            'ingresados_hoy' => (int) $conteos->ingresados_hoy,
-            'pallets' => (int) $conteos->pallets,
-            'saldos' => (int) $conteos->saldos,
+            'comprometidos_carga' => $conteo('comprometidos_carga'),
+            'pendientes_prefrio' => $conteo('pendientes_prefrio'),
+            'bloqueados' => $conteo('bloqueados'),
+            'pendientes_ubicacion' => $conteo('pendientes_ubicacion'),
+            'ingresados_hoy' => $ambos('ingresados_hoy'),
+            'pallets' => $valor('total', TipoBulto::Pallet),
+            'saldos' => $valor('total', TipoBulto::Saldo),
+            'cajas' => $ambos('cajas'),
+            'cajas_pallets' => $valor('cajas', TipoBulto::Pallet),
+            'cajas_saldos' => $valor('cajas', TipoBulto::Saldo),
             'cargas_comprometidas' => $cargasComprometidas,
+            'estados' => $estados->values()->all(),
+            'exportadoras' => $this->exportadorasPt($base),
             'antiguedad' => [
                 'tramos' => [
-                    ['desde_dias' => 0, 'hasta_dias' => $tramos[0], 'total' => (int) $conteos->tramo_0_7],
-                    ['desde_dias' => $tramos[0] + 1, 'hasta_dias' => $tramos[1], 'total' => (int) $conteos->tramo_8_14],
-                    ['desde_dias' => $tramos[1] + 1, 'hasta_dias' => $tramos[2], 'total' => (int) $conteos->tramo_15_30],
-                    ['desde_dias' => $tramos[2] + 1, 'hasta_dias' => null, 'total' => (int) $conteos->sobre_umbral],
+                    $tramo(0, 0, $tramos[0]),
+                    $tramo(1, $tramos[0] + 1, $tramos[1]),
+                    $tramo(2, $tramos[1] + 1, $tramos[2]),
+                    $tramo(3, $tramos[2] + 1, null),
                 ],
                 'umbral_alerta_dias' => $tramos[2],
-                'sobre_umbral' => (int) $conteos->sobre_umbral,
-                'sin_fecha' => (int) $conteos->sin_fecha,
+                'sobre_umbral' => $ambos('tramo_3'),
+                'sin_fecha' => $ambos('sin_fecha'),
             ],
-            'otros' => max(
-                0,
-                $total - $disponibles - $comprometidos - $pendientes - $bloqueados - $pendientesUbicacion,
-            ),
+            'otros' => $conteo('otros'),
             'disponibilidad_porcentaje' => $this->porcentaje($disponibles, $total),
         ];
     }
 
     /**
+     * Exportadoras con más cajas en planta. El texto del folio se agrupa sin distinguir
+     * mayúsculas ni espacios extremos.
+     *
      * @return array<string, mixed>
      */
+    private function exportadorasPt(ConsultaBase $base): array
+    {
+        $filas = (clone $base)
+            ->selectRaw("NULLIF(UPPER(TRIM(exportadora)), '') as clave")
+            ->selectRaw('MIN(TRIM(exportadora)) as nombre')
+            ->selectRaw('SUM(CASE WHEN tipo_bulto = ? THEN 1 ELSE 0 END) as pallets', [TipoBulto::Pallet->value])
+            ->selectRaw('SUM(CASE WHEN tipo_bulto = ? THEN 1 ELSE 0 END) as saldos', [TipoBulto::Saldo->value])
+            ->selectRaw('COALESCE(SUM('.self::CAJAS_FOLIO.'), 0) as cajas')
+            ->groupBy('clave')
+            ->orderByDesc('cajas')
+            ->orderByDesc('pallets')
+            ->get()
+            ->map(fn (object $fila): array => [
+                'nombre' => $fila->clave === null ? 'Sin exportadora' : (string) $fila->nombre,
+                'pallets' => (int) $fila->pallets,
+                'saldos' => (int) $fila->saldos,
+                'cajas' => (int) $fila->cajas,
+            ]);
+        $resto = $filas->slice(self::EXPORTADORAS_VISIBLES);
+
+        return [
+            'detalle' => $filas->take(self::EXPORTADORAS_VISIBLES)->values()->all(),
+            'otras' => $resto->isEmpty() ? null : [
+                'cantidad' => $resto->count(),
+                'pallets' => (int) $resto->sum('pallets'),
+                'saldos' => (int) $resto->sum('saldos'),
+                'cajas' => (int) $resto->sum('cajas'),
+            ],
+        ];
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -380,7 +459,7 @@ class ServicioPanelGerencial
                 'estado' => $carga->estado->value,
                 'prioridad' => $carga->prioridad?->value,
                 'folios_asignados' => (int) $carga->asignaciones_actuales_count,
-                'camara_objetivo' => $carga->camaraObjetivo?->codigo,
+                'camara_objetivo' => $carga->camaraObjetivo?->nombre ?: $carga->camaraObjetivo?->codigo,
                 'anden' => $carga->andenPrevisto?->codigo,
                 'publicada_at' => $carga->publicada_at?->toAtomString(),
                 'antiguedad_minutos' => (int) $carga->created_at->diffInMinutes(now()),
@@ -931,9 +1010,12 @@ class ServicioPanelGerencial
      */
     private function romana(string $temporadaId): array
     {
-        $hoy = CarbonImmutable::today();
-        $inicio = $hoy->subDays(6)->startOfDay();
-        $termino = $hoy->addDay()->startOfDay();
+        // Los días se cortan en hora de planta: una recepción cerrada a las 22:00 es de ese día.
+        $zona = (string) config('app.operational_timezone', 'America/Santiago');
+        $zonaBase = (string) config('app.timezone', 'UTC');
+        $hoy = CarbonImmutable::now($zona)->startOfDay();
+        $inicio = $hoy->subDays(6);
+        $termino = $hoy->addDay();
         $porEstado = RecepcionRomana::query()
             ->where('temporada_id', $temporadaId)
             ->whereIn('estado', [
@@ -945,50 +1027,88 @@ class ServicioPanelGerencial
             ->select('estado')
             ->selectRaw('COUNT(*) as total')
             ->pluck('total', 'estado');
-        $porDia = RecepcionRomana::query()
-            ->where('temporada_id', $temporadaId)
-            ->where('estado', EstadoRecepcionRomana::Cerrado->value)
-            ->where('salida_at', '>=', $inicio)
-            ->where('salida_at', '<', $termino)
-            ->groupByRaw('DATE(salida_at)')
-            ->selectRaw('DATE(salida_at) as fecha')
-            ->selectRaw('COUNT(*) as recepciones')
-            ->selectRaw('COALESCE(SUM(peso_neto), 0) as peso_neto')
-            ->selectRaw('COALESCE(SUM(cantidad_envases_declarados), 0) as envases')
-            ->selectRaw('COUNT(DISTINCT cliente_id) as clientes')
-            ->get()
-            ->keyBy('fecha');
-        $tendencia = collect(range(6, 0))
-            ->map(function (int $dias) use ($hoy, $porDia): array {
-                $fecha = $hoy->subDays($dias);
-                $fila = $porDia->get($fecha->toDateString());
+        $cerradas = DB::table('recepciones_romana as r')
+            ->where('r.temporada_id', $temporadaId)
+            ->where('r.estado', EstadoRecepcionRomana::Cerrado->value)
+            ->whereNull('r.eliminada_at');
+        $fruta = TipoRecepcionRomana::SoloEnvases->value;
 
-                return [
-                    'fecha' => $fecha->toDateString(),
-                    'etiqueta' => $fecha->locale('es')->isoFormat('ddd D'),
-                    'recepciones' => (int) ($fila?->recepciones ?? 0),
-                    'peso_neto' => round((float) ($fila?->peso_neto ?? 0), 2),
-                ];
-            });
-        $filaHoy = $porDia->get($hoy->toDateString());
+        $temporada = (clone $cerradas)
+            ->where('r.tipo_recepcion', '!=', $fruta)
+            ->leftJoin('clientes as c', 'c.id', '=', 'r.cliente_id')
+            ->groupBy('r.cliente_id')
+            ->select('r.cliente_id')
+            ->selectRaw('MAX(COALESCE(c.nombre, r.cliente_nombre_snapshot)) as nombre')
+            ->selectRaw('COUNT(*) as recepciones')
+            ->selectRaw('COALESCE(SUM(r.peso_neto), 0) as kilos')
+            ->get();
+        $semana = (clone $cerradas)
+            ->where('r.salida_at', '>=', $inicio->setTimezone($zonaBase))
+            ->where('r.salida_at', '<', $termino->setTimezone($zonaBase))
+            ->get(['r.cliente_id', 'r.salida_at', 'r.peso_neto', 'r.tipo_recepcion', 'r.cantidad_envases_declarados'])
+            ->map(fn (object $fila): array => [
+                'cliente' => (string) $fila->cliente_id,
+                'fecha' => CarbonImmutable::parse($fila->salida_at, $zonaBase)->setTimezone($zona)->toDateString(),
+                'kilos' => $fila->tipo_recepcion === $fruta ? 0.0 : (float) $fila->peso_neto,
+                'fruta' => $fila->tipo_recepcion !== $fruta,
+                'envases' => (int) $fila->cantidad_envases_declarados,
+            ]);
+        $deHoy = $semana->where('fecha', $hoy->toDateString());
+        $kilosTemporada = (float) $temporada->sum('kilos');
+
+        $clientes = $temporada
+            ->map(fn (object $fila): array => [
+                'id' => $fila->cliente_id,
+                'nombre' => $fila->nombre ?: 'Cliente sin nombre',
+                'kilos_temporada' => round((float) $fila->kilos, 1),
+                'recepciones_temporada' => (int) $fila->recepciones,
+                'kilos_7_dias' => round((float) $semana->where('cliente', (string) $fila->cliente_id)->sum('kilos'), 1),
+                'kilos_hoy' => round((float) $deHoy->where('cliente', (string) $fila->cliente_id)->sum('kilos'), 1),
+                'participacion_porcentaje' => $this->porcentaje((float) $fila->kilos, $kilosTemporada),
+            ])
+            ->sortByDesc('kilos_temporada')
+            ->values();
+
+        // El gráfico apila a los clientes de más kilos en la semana; el resto va en «Otros».
+        $destacados = $clientes->where('kilos_7_dias', '>', 0)->sortByDesc('kilos_7_dias')
+            ->take(self::CLIENTES_ROMANA_VISIBLES)->pluck('id')->map(fn ($id): string => (string) $id)->all();
+        $series = $clientes->whereIn('id', $destacados)->sortByDesc('kilos_7_dias')
+            ->map(fn (array $cliente): array => ['clave' => (string) $cliente['id'], 'nombre' => $cliente['nombre']])->values();
+        if ($semana->where('fruta', true)->whereNotIn('cliente', $destacados)->sum('kilos') > 0) {
+            $series->push(['clave' => 'otros', 'nombre' => 'Otros clientes']);
+        }
+
+        $tendencia = collect(range(6, 0))->map(function (int $dias) use ($hoy, $semana, $destacados): array {
+            $fecha = $hoy->subDays($dias);
+            $filas = $semana->where('fecha', $fecha->toDateString())->where('fruta', true);
+            $porCliente = $filas->groupBy(fn (array $fila): string => in_array($fila['cliente'], $destacados, true) ? $fila['cliente'] : 'otros')
+                ->map(fn (Collection $grupo): float => round((float) $grupo->sum('kilos'), 1));
+
+            return [
+                'fecha' => $fecha->toDateString(),
+                'etiqueta' => $fecha->locale('es')->isoFormat('ddd D'),
+                'recepciones' => $filas->count(),
+                'peso_neto' => round((float) $filas->sum('kilos'), 2),
+                'por_cliente' => $porCliente->all(),
+            ];
+        });
 
         return [
-            'en_bascula_ingreso' => (int) $porEstado->get(
-                EstadoRecepcionRomana::EnBasculaIngreso->value,
-                0,
-            ),
-            'en_pesaje_envases' => (int) $porEstado->get(
-                EstadoRecepcionRomana::EnPesajeEnvases->value,
-                0,
-            ),
-            'pendientes_destare' => (int) $porEstado->get(
-                EstadoRecepcionRomana::EnBasculaSalida->value,
-                0,
-            ),
-            'cerradas_hoy' => (int) ($filaHoy?->recepciones ?? 0),
-            'peso_neto_hoy' => round((float) ($filaHoy?->peso_neto ?? 0), 2),
-            'envases_hoy' => (int) ($filaHoy?->envases ?? 0),
-            'clientes_hoy' => (int) ($filaHoy?->clientes ?? 0),
+            'en_bascula_ingreso' => (int) $porEstado->get(EstadoRecepcionRomana::EnBasculaIngreso->value, 0),
+            'en_pesaje_envases' => (int) $porEstado->get(EstadoRecepcionRomana::EnPesajeEnvases->value, 0),
+            'pendientes_destare' => (int) $porEstado->get(EstadoRecepcionRomana::EnBasculaSalida->value, 0),
+            'cerradas_hoy' => $deHoy->count(),
+            'peso_neto_hoy' => round((float) $deHoy->sum('kilos'), 2),
+            'envases_hoy' => (int) $deHoy->sum('envases'),
+            'clientes_hoy' => $deHoy->pluck('cliente')->unique()->count(),
+            'kilos_temporada' => round($kilosTemporada, 1),
+            'recepciones_temporada' => (int) $temporada->sum('recepciones'),
+            'kilos_7_dias' => round((float) $semana->sum('kilos'), 1),
+            'recepciones_7_dias' => $semana->where('fruta', true)->count(),
+            'clientes_temporada' => $clientes->count(),
+            'clientes' => $clientes->all(),
+            'series_clientes' => $series->all(),
+            'zona_horaria' => $zona,
             'tendencia_diaria' => $tendencia->all(),
         ];
     }
@@ -1040,9 +1160,10 @@ class ServicioPanelGerencial
             ->map(fn (array $camara): array => [
                 'nivel' => 'advertencia',
                 'area' => 'Cámaras',
-                'titulo' => "{$camara['codigo']} con alta ocupación",
+                'titulo' => ($camara['nombre'] ?: $camara['codigo']).' con alta ocupación',
                 'detalle' => "{$camara['ocupadas']} de {$camara['operativas']} posiciones operativas ocupadas.",
-                'metrica' => "{$camara['ocupacion_porcentaje']}%",
+                'metrica' => $camara['ocupacion_porcentaje'],
+                'unidad' => '%',
                 'href' => '/oficina/frigorifico/camaras',
             ]);
 
@@ -1051,7 +1172,7 @@ class ServicioPanelGerencial
             ->each(fn (array $tunel) => $alertas->push([
                 'nivel' => 'critica',
                 'area' => 'Prefrío',
-                'titulo' => "{$tunel['codigo']} no disponible",
+                'titulo' => ($tunel['nombre'] ?: $tunel['codigo']).' no disponible',
                 'detalle' => 'El túnel está inactivo, en mantenimiento o fuera de servicio.',
                 'metrica' => 'Fuera de servicio',
                 'href' => '/oficina/prefrio',
@@ -1119,9 +1240,10 @@ class ServicioPanelGerencial
             ->each(fn (array $unidad) => $alertas->push([
                 'nivel' => 'advertencia',
                 'area' => 'Materiales',
-                'titulo' => "Stock {$unidad['unidad_medida']} sin disponibilidad operativa",
-                'detalle' => 'No queda cantidad habilitada para nuevos despachos en esta unidad de medida.',
+                'titulo' => "Materiales en {$unidad['unidad_medida']} sin stock disponible",
+                'detalle' => "Hay {$this->cantidad($unidad['cantidad_actual'])} {$unidad['unidad_medida']} en bodega, pero nada habilitado para nuevos despachos.",
                 'metrica' => $unidad['cantidad_actual'],
+                'unidad' => $unidad['unidad_medida'],
                 'href' => '/oficina/materiales/inventario',
             ]));
 
@@ -1130,9 +1252,10 @@ class ServicioPanelGerencial
             ->each(fn (array $unidad) => $alertas->push([
                 'nivel' => 'advertencia',
                 'area' => 'Materiales',
-                'titulo' => "Material {$unidad['unidad_medida']} bloqueado",
-                'detalle' => "{$unidad['cantidad_bloqueada']} {$unidad['unidad_medida']} requieren revisión supervisada.",
+                'titulo' => "Materiales en {$unidad['unidad_medida']} bloqueados",
+                'detalle' => "{$this->cantidad($unidad['cantidad_bloqueada'])} {$unidad['unidad_medida']} requieren revisión supervisada.",
                 'metrica' => $unidad['cantidad_bloqueada'],
+                'unidad' => $unidad['unidad_medida'],
                 'href' => '/oficina/materiales/inventario',
             ]));
 
@@ -1141,9 +1264,10 @@ class ServicioPanelGerencial
             ->each(fn (array $unidad) => $alertas->push([
                 'nivel' => 'advertencia',
                 'area' => 'Materiales',
-                'titulo' => "Material {$unidad['unidad_medida']} sin ubicación",
-                'detalle' => "{$unidad['cantidad_pendiente_ubicacion']} {$unidad['unidad_medida']} todavía no están disponibles para operación.",
+                'titulo' => "Materiales en {$unidad['unidad_medida']} sin ubicar",
+                'detalle' => "{$this->cantidad($unidad['cantidad_pendiente_ubicacion'])} {$unidad['unidad_medida']} esperan ubicación antes de poder despacharse.",
                 'metrica' => $unidad['cantidad_pendiente_ubicacion'],
+                'unidad' => $unidad['unidad_medida'],
                 'href' => '/oficina/materiales/inventario',
             ]));
 
@@ -1236,6 +1360,12 @@ class ServicioPanelGerencial
     private function versionCache(): string
     {
         return (string) Cache::get(self::CLAVE_VERSION_CACHE, '1');
+    }
+
+    /** Cantidad con separador de miles chileno y hasta tres decimales. */
+    private function cantidad(int|float $valor): string
+    {
+        return rtrim(rtrim(number_format((float) $valor, 3, ',', '.'), '0'), ',');
     }
 
     private function porcentaje(int|float $parte, int|float $total): float

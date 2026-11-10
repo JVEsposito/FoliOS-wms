@@ -213,6 +213,18 @@ class EstructuraOficinaTest extends TestCase
         }
     }
 
+    public function test_panel_gerencial_exporta_sus_secciones(): void
+    {
+        $html = $this->get('/oficina/gerencia')->assertOk()->getContent();
+        foreach (['productStateRows', 'productExporterRows', 'weighbridgeClientRows', 'weighbridgeSeasonKpi', 'cameraOccupancyChart'] as $id) {
+            $this->assertStringContainsString('id="'.$id.'"', $html);
+        }
+        if (getenv('ESTIBA_EXPORTAR_UI_TESTS') === '1') {
+            File::ensureDirectoryExists(storage_path('app/ui/oficina'));
+            File::put(storage_path('app/ui/oficina/gerencia.html'), $html);
+        }
+    }
+
     public function test_portal_de_clientes_y_calendario_exportan_sus_vistas(): void
     {
         $portal = $this->get('/oficina/clientes')->assertOk()->assertSee('portalLogin', false)->assertSee('portalSlots', false)

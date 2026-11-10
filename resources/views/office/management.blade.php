@@ -66,47 +66,47 @@
                     <div>
                         <span>ÚLTIMA ACTUALIZACIÓN</span>
                         <strong id="lastUpdatedAt">Sin actualizar</strong>
-                        <small id="refreshStatus">Actualiza automáticamente cada 30 segundos</small>
+                        <small id="refreshStatus">Se actualiza cada 30 s</small>
                     </div>
                     <button class="refresh-button" id="refreshDashboardButton" type="button"><span aria-hidden="true">↻</span> Actualizar ahora</button>
                 </div>
             </section>
 
             <section class="management-kpis" aria-label="Indicadores principales">
+                <article class="management-kpi management-kpi--romana">
+                    <span class="management-kpi__label">Kilos recepcionados</span>
+                    <strong><span id="weighbridgeSeasonKpi">—</span><em>kg</em></strong>
+                    <p>en la temporada</p>
+                    <div class="kpi-split"><span><b id="weighbridgeTodayKpi">—</b>kg hoy</span><span><b id="weighbridgeWeekKpi">—</b>kg en 7 días</span></div>
+                    <small id="weighbridgeDetail">—</small>
+                </article>
+                <article class="management-kpi management-kpi--product">
+                    <span class="management-kpi__label">Producto terminado</span>
+                    <strong id="productPalletsKpi">—</strong>
+                    <p>pallets en planta</p>
+                    <div class="kpi-split"><span><b id="productSaldosKpi">—</b>saldos</span><span><b id="productBoxesKpi">—</b>cajas</span></div>
+                    <small id="productAvailabilityDetail">—</small>
+                </article>
                 <article class="management-kpi management-kpi--capacity">
-                    <div class="management-kpi__top"><span>CAPACIDAD DE CÁMARAS</span><i aria-hidden="true">▦</i></div>
-                    <strong id="availablePositionsKpi">—</strong>
-                    <p>posiciones disponibles</p>
+                    <span class="management-kpi__label">Cámaras</span>
+                    <strong><span id="cameraOccupancyKpi">—</span><em>%</em></strong>
+                    <p>de ocupación</p>
                     <div class="kpi-progress"><i id="cameraOccupancyProgress"></i></div>
                     <small id="cameraOccupancyDetail">—</small>
                 </article>
-                <article class="management-kpi management-kpi--product">
-                    <div class="management-kpi__top"><span>PRODUCTO DISPONIBLE</span><i aria-hidden="true">◇</i></div>
-                    <strong id="availableProductsKpi">—</strong>
-                    <p>folios listos para despacho</p>
-                    <div class="kpi-progress"><i id="productAvailabilityProgress"></i></div>
-                    <small id="productAvailabilityDetail">—</small>
-                </article>
-                <article class="management-kpi management-kpi--material">
-                    <div class="management-kpi__top"><span>INVENTARIO DE MATERIALES</span><i aria-hidden="true">▤</i></div>
-                    <strong id="materialItemsKpi">—</strong>
-                    <p>ítems con stock</p>
-                    <div class="kpi-split"><span><b id="materialFoliosKpi">—</b> folios</span><span><b id="materialUnitsKpi">—</b> unidades de medida</span></div>
-                    <small id="materialOperationDetail">Las cantidades se separan por unidad para evitar totales incompatibles.</small>
-                </article>
                 <article class="management-kpi management-kpi--prefrio">
-                    <div class="management-kpi__top"><span>PREFRÍO</span><i aria-hidden="true">❄</i></div>
+                    <span class="management-kpi__label">Prefrío</span>
                     <strong id="precoolingAvailableKpi">—</strong>
-                    <p>posiciones disponibles</p>
+                    <p>posiciones libres en túneles</p>
                     <div class="kpi-progress"><i id="precoolingOccupancyProgress"></i></div>
                     <small id="precoolingDetail">—</small>
                 </article>
-                <article class="management-kpi management-kpi--romana">
-                    <div class="management-kpi__top"><span>RECEPCIÓN ROMANA</span><i aria-hidden="true">⚖</i></div>
-                    <strong id="weighbridgeNetWeightKpi">—</strong>
-                    <p>kg netos recibidos hoy</p>
-                    <div class="kpi-split"><span><b id="weighbridgeClosedKpi">—</b> cerradas hoy</span><span><b id="weighbridgePendingKpi">—</b> pendientes de cierre</span></div>
-                    <small id="weighbridgeDetail">—</small>
+                <article class="management-kpi management-kpi--material">
+                    <span class="management-kpi__label">Materiales</span>
+                    <strong id="materialItemsKpi">—</strong>
+                    <p>ítems con stock</p>
+                    <div class="kpi-split"><span><b id="materialFoliosKpi">—</b>folios</span><span><b id="materialUnitsKpi">—</b>unidades de medida</span></div>
+                    <small id="materialOperationDetail">—</small>
                 </article>
             </section>
 
@@ -117,13 +117,13 @@
                     default="alerts"
                     :panels="[
                         'alerts' => ['label' => 'Focos', 'icon' => '!', 'badge_id' => 'alertTabCount'],
-                        'cameras' => ['label' => 'Cámaras', 'icon' => '▦'],
+                        'weighbridge' => ['label' => 'Recepción', 'icon' => '⚖'],
                         'products' => ['label' => 'Producto PT', 'icon' => '◇'],
+                        'cameras' => ['label' => 'Cámaras', 'icon' => '▦'],
                         'loads' => ['label' => 'Cargas', 'icon' => '↗'],
                         'validation' => ['label' => 'Validación', 'icon' => '✓'],
                         'precooling' => ['label' => 'Prefrío', 'icon' => '❄'],
                         'materials' => ['label' => 'Materiales', 'icon' => '▤'],
-                        'weighbridge' => ['label' => 'Romana', 'icon' => '⚖'],
                         'raw-material' => ['label' => 'MP y Envases', 'icon' => '▣'],
                     ]"
                 />
@@ -141,15 +141,15 @@
                     <article class="management-panel management-alerts-panel">
                         <header>
                             <div><p class="eyebrow">ATENCIÓN GERENCIAL</p><h2>Focos operacionales priorizados</h2></div>
-                            <span class="alert-count" id="alertCount">0</span>
+                            <div class="management-alert-summary" id="alertSummary" aria-live="polite"><span class="alert-count" id="alertCount">0</span></div>
                         </header>
-                        <p class="management-panel-intro">Muestra excepciones que requieren acción, ordenadas por criticidad y enlazadas con la oficina responsable.</p>
+                        <p class="management-panel-intro">Excepciones que requieren acción, de la más crítica a la informativa. Cada foco abre la oficina responsable.</p>
                         <div class="management-alerts" id="managementAlerts" aria-live="polite"></div>
                     </article>
                 </div>
 
                 <div
-                    class="management-view management-view--cameras"
+                    class="management-view management-view--single management-view--cameras"
                     id="management-panel-cameras"
                     data-office-panel-group="management"
                     data-office-panel-id="cameras"
@@ -159,19 +159,16 @@
                     <article class="management-panel">
                         <header>
                             <div><p class="eyebrow">USO DE INFRAESTRUCTURA</p><h2>Ocupación por cámara</h2></div>
-                            <div class="management-panel-actions">
-                                <div class="chart-legend" aria-label="Leyenda"><span><i class="legend-dot legend-dot--occupied"></i>Ocupada</span><span><i class="legend-dot legend-dot--free"></i>Disponible</span></div>
-                                <a class="management-panel-link" href="/oficina/frigorifico/camaras">Abrir cámaras →</a>
-                            </div>
+                            <a class="management-panel-link" href="/oficina/frigorifico/camaras">Abrir cámaras →</a>
                         </header>
-                        <div class="chart-container chart-container--bar"><canvas id="cameraOccupancyChart" aria-label="Gráfico de ocupación por cámara" role="img"></canvas></div>
+                        <div class="management-occupancy" id="cameraOccupancyChart" role="list" aria-label="Ocupación por cámara"></div>
                     </article>
 
                     <article class="management-panel management-table-panel">
                         <header><div><p class="eyebrow">DETALLE FÍSICO</p><h2>Capacidad por cámara</h2></div></header>
                         <div class="table-scroll">
                             <table>
-                                <thead><tr><th>Cámara</th><th>Área</th><th>Ocupadas</th><th>Disponibles</th><th>No operativas</th><th>Uso</th></tr></thead>
+                                <thead><tr><th>Cámara</th><th>Área</th><th>Ocupadas</th><th>Libres</th><th>No operativas</th><th>Uso</th></tr></thead>
                                 <tbody id="cameraDetailRows"></tbody>
                             </table>
                         </div>
@@ -202,25 +199,34 @@
                         <div id="productEmpty" class="management-empty" hidden>Sin folios PT activos en la temporada</div>
                         <div id="productDetails" class="management-products">
                             <div class="management-products__indicators">
-                                <article><span>FOLIOS ACTIVOS</span><strong id="productTotalMetric">0</strong><small id="productCompositionMetric">0 pallets · 0 saldos · 0 ingresados hoy</small></article>
-                                <article><span>DISPONIBLES PARA DESPACHO</span><strong id="productAvailableMetric">0</strong><small id="productAvailableDetail">0 % del total</small></article>
-                                <article><span>COMPROMETIDOS EN CARGA</span><strong id="productCommittedMetric">0</strong><small id="productCommittedDetail">0 cargas</small></article>
-                                <article><span>OCUPACIÓN DE CÁMARAS PT</span><strong id="productOccupancyMetric">0 %</strong><small id="productOccupancyDetail">0 de 0 posiciones operativas</small></article>
+                                <article><span>Pallets en planta</span><strong id="productPalletsMetric">0</strong><small id="productPalletsDetail">bultos completos</small></article>
+                                <article><span>Saldos en planta</span><strong id="productSaldosMetric">0</strong><small id="productSaldosDetail">bultos parciales por consolidar</small></article>
+                                <article><span>Cajas en planta</span><strong id="productBoxesMetric">0</strong><small id="productBoxesDetail">0 en pallets · 0 en saldos</small></article>
+                                <article><span>Ocupación de cámaras PT</span><strong id="productOccupancyMetric">0 %</strong><small id="productOccupancyDetail">0 de 0 posiciones operativas</small></article>
                             </div>
-                            <section class="management-products__states" aria-label="Distribución de estados PT">
-                                <h3>Estados de folios</h3>
-                                <div id="productStateBar" class="management-products__state-bar" role="img" aria-label="Sin folios PT activos"></div>
-                                <div id="productStateLegend" class="management-products__legend"></div>
+                            <section class="management-products__states" aria-labelledby="productStatesTitle">
+                                <div class="management-products__section-head">
+                                    <h3 id="productStatesTitle">Estado de los folios</h3>
+                                    <div class="management-bulk-legend" aria-hidden="true">
+                                        <span><i class="management-bulk management-bulk--pallet"></i>Pallet · bulto completo</span>
+                                        <span><i class="management-bulk management-bulk--saldo"></i>Saldo · bulto parcial</span>
+                                    </div>
+                                </div>
+                                <div class="management-state-table" role="table" aria-label="Folios PT por estado, separados en pallets y saldos">
+                                    <div class="management-state-row management-state-row--head" role="row">
+                                        <span role="columnheader">Estado</span><span role="columnheader" class="management-state-row__bar-head">Distribución</span>
+                                        <span role="columnheader">Pallets</span><span role="columnheader">Saldos</span><span role="columnheader">Cajas</span>
+                                    </div>
+                                    <div id="productStateRows" role="rowgroup"></div>
+                                </div>
                             </section>
                             <div class="management-products__bottom">
-                                <section class="management-products__exceptions" aria-label="Folios que requieren acción">
-                                    <h3>Requieren acción</h3>
-                                    <div class="management-products__exception"><span>Sin ubicación</span><strong id="productUnlocatedMetric">0</strong></div>
-                                    <div class="management-products__exception"><span>Bloqueados</span><strong id="productBlockedMetric">0</strong></div>
-                                    <a class="management-products__exception" href="/oficina/prefrio"><span>Pendientes de prefrío</span><strong id="productPendingPrecoolingMetric">0</strong></a>
+                                <section class="management-products__exporters" aria-labelledby="productExportersTitle">
+                                    <h3 id="productExportersTitle">Por exportadora <small>según cajas en planta</small></h3>
+                                    <div id="productExporterRows" class="management-exporters"></div>
                                 </section>
                                 <section class="management-products__aging" aria-label="Antigüedad de folios PT desde el ingreso">
-                                    <h3>Antigüedad desde ingreso <small id="productAgingThreshold"></small></h3>
+                                    <h3>Antigüedad desde el ingreso <small id="productAgingThreshold"></small></h3>
                                     <div id="productAgingRows" class="management-products__aging-rows"></div>
                                     <p id="productUndated" class="management-products__undated" hidden></p>
                                 </section>
@@ -354,17 +360,33 @@
                 >
                     <article class="management-panel">
                         <header>
-                            <div><p class="eyebrow">RECEPCIÓN DE MATERIA PRIMA</p><h2>Romana: flujo actual y últimos 7 días</h2></div>
+                            <div><p class="eyebrow">RECEPCIÓN DE MATERIA PRIMA</p><h2>Kilos recepcionados</h2></div>
                             <a class="management-panel-link" href="/oficina/romana">Abrir Romana →</a>
                         </header>
+                        <p class="management-panel-intro">Kilos netos de recepciones cerradas, sin las que solo traen envases. Los días se cuentan en hora de planta.</p>
                         <div class="management-operational-metrics management-operational-metrics--four">
-                            <article><span>EN INGRESO</span><strong id="weighbridgeEntryMetric">0</strong><small>sobre báscula</small></article>
-                            <article><span>PESAJE ENVASES</span><strong id="weighbridgeContainersMetric">0</strong><small>tandas abiertas</small></article>
-                            <article class="is-warning"><span>PENDIENTES DESTARE</span><strong id="weighbridgeTareMetric">0</strong><small>esperan cierre</small></article>
-                            <article><span>CLIENTES HOY</span><strong id="weighbridgeClientsMetric">0</strong><small>con recepción cerrada</small></article>
+                            <article><span>TEMPORADA</span><strong id="weighbridgeSeasonMetric">0 kg</strong><small id="weighbridgeSeasonDetail">0 recepciones</small></article>
+                            <article><span>ÚLTIMOS 7 DÍAS</span><strong id="weighbridgeWeekMetric">0 kg</strong><small id="weighbridgeWeekDetail">0 recepciones</small></article>
+                            <article><span>HOY</span><strong id="weighbridgeTodayMetric">0 kg</strong><small id="weighbridgeTodayDetail">0 recepciones cerradas</small></article>
+                            <article><span>CLIENTES</span><strong id="weighbridgeClientsMetric">0</strong><small id="weighbridgeClientsDetail">con kilos en la temporada</small></article>
                         </div>
-                        <div class="chart-container chart-container--bar"><canvas id="weighbridgeReceptionChart" aria-label="Gráfico de peso neto recibido en romana" role="img"></canvas></div>
-                        <div class="chart-summary" id="weighbridgeChartSummary"></div>
+                        <div class="management-weighbridge">
+                            <section aria-labelledby="weighbridgeTrendTitle">
+                                <h3 id="weighbridgeTrendTitle">Últimos 7 días por cliente</h3>
+                                <div class="chart-container chart-container--bar"><canvas id="weighbridgeReceptionChart" aria-label="Kilos recepcionados por día y cliente" role="img"></canvas></div>
+                                <div class="management-series-legend" id="weighbridgeChartSummary"></div>
+                            </section>
+                            <section aria-labelledby="weighbridgeClientsTitle">
+                                <h3 id="weighbridgeClientsTitle">Kilos por cliente en la temporada</h3>
+                                <div class="management-client-kilos" id="weighbridgeClientRows"></div>
+                            </section>
+                        </div>
+                        <div class="management-flow-now" aria-label="Romana en este momento">
+                            <span class="management-flow-now__title">En romana ahora</span>
+                            <span><b id="weighbridgeEntryMetric">0</b> en ingreso</span>
+                            <span><b id="weighbridgeContainersMetric">0</b> en pesaje de envases</span>
+                            <span><b id="weighbridgeTareMetric">0</b> esperan destare</span>
+                        </div>
                     </article>
                 </div>
 
