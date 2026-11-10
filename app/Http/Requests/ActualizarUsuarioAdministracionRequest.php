@@ -29,7 +29,7 @@ class ActualizarUsuarioAdministracionRequest extends FormRequest
                 'max:255',
                 Rule::unique('users', 'email')->ignore($usuario),
             ],
-            'rol' => ['nullable', 'required_without:perfil_acceso_id', Rule::enum(RolUsuario::class)],
+            'rol' => ['nullable', 'required_without:perfil_acceso_id', Rule::enum(RolUsuario::class)->except([RolUsuario::Cliente])],
             'perfil_acceso_id' => [
                 'nullable',
                 'required_without:rol',

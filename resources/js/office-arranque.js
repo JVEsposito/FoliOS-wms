@@ -37,6 +37,13 @@
     if (script && script.hasAttribute('data-solo-tema')) return;
 
     var token = read('estiba_wms_office_token');
+    // Una cuenta de cliente solo usa su portal: las oficinas internas la devuelven ahí.
+    try {
+        if (token && JSON.parse(read('estiba_wms_office_identity') || 'null').es_cliente === true) {
+            window.location.replace('/oficina/clientes');
+            return;
+        }
+    } catch (e) { /* identidad ilegible: sigue la validación habitual */ }
     if (token && read('estiba_wms_office_identity')) {
         root.setAttribute('data-office-session', 'activa');
         hideRememberedMenu(token);

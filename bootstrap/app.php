@@ -10,6 +10,7 @@ use App\Exceptions\ServicioSagNoDisponible;
 use App\Exceptions\TemporadaConPendientesDeCierre;
 use App\Http\Middleware\AsegurarTemporadaActivaDelRegistro;
 use App\Http\Middleware\ExigirCambioPasswordTablet;
+use App\Http\Middleware\RestringirUsuarioCliente;
 use Illuminate\Contracts\Database\ConcurrencyErrorDetector;
 use Illuminate\Database\DeadlockException;
 use Illuminate\Database\QueryException;
@@ -47,6 +48,8 @@ return Application::configure(basePath: dirname(__DIR__))
         },
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Los usuarios de clientes solo alcanzan el portal, aunque una ruta interna no tenga permiso propio.
+        $middleware->prependToGroup('api', RestringirUsuarioCliente::class);
         $middleware->appendToGroup('api', ExigirCambioPasswordTablet::class);
         // Solo se escribe sobre registros de la temporada activa. Debe correr
         // cuando los parámetros de la ruta ya son modelos.

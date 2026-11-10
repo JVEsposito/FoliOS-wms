@@ -500,7 +500,7 @@ class CatalogoModulosAcceso
                 'materiales.ordenes',
                 'materiales.exportaciones',
             ],
-            RolUsuario::Administrador => [],
+            RolUsuario::Administrador, RolUsuario::Cliente => [],
         };
     }
 

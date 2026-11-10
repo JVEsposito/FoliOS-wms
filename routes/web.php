@@ -34,6 +34,9 @@ Route::redirect('/oficina/frigorifico/calendario-embarques', '/oficina/frigorifi
 Route::view('/oficina/frigorifico/despacho/cargas', 'office.loads');
 Route::view('/oficina/frigorifico/despacho/estatus', 'office.load-status');
 Route::view('/oficina/frigorifico/despacho/calendario', 'office.shipment-calendar');
+// Portal de clientes: misma sesión de FoliOS web, acotada a sus exportadoras.
+Route::view('/oficina/clientes', 'office.client-portal');
+Route::redirect('/portal', '/oficina/clientes');
 Route::view('/oficina/accesos', 'office.accesses');
 Route::view('/oficina/materiales', 'office.materials', [
     'navigationOffice' => 'resumen',

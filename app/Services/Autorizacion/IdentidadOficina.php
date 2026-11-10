@@ -11,6 +11,8 @@ use App\Models\User;
  */
 class IdentidadOficina
 {
+    public const INICIO_CLIENTE = '/oficina/clientes';
+
     public function __construct(
         private readonly AlcanceOperacionalUsuario $alcance,
         private readonly InicioOficina $inicio,
@@ -21,6 +23,10 @@ class IdentidadOficina
      */
     public function para(User $usuario): array
     {
+        if ($usuario->esCliente()) {
+            return $this->cliente($usuario);
+        }
+
         $capacidades = $this->alcance->capacidadesApi($usuario);
 
         $identidad = [
@@ -153,5 +159,29 @@ class IdentidadOficina
         );
 
         return $identidad;
+    }
+
+    /**
+     * Un usuario de cliente no recibe permisos internos: solo sus exportadoras y el portal.
+     *
+     * @return array<string, mixed>
+     */
+    private function cliente(User $usuario): array
+    {
+        return [
+            'id' => $usuario->id,
+            'nombre' => $usuario->name,
+            'email' => $usuario->email,
+            'rol' => $usuario->rol->value,
+            'es_cliente' => true,
+            'debe_cambiar_password' => (bool) $usuario->debe_cambiar_password,
+            'clientes' => $usuario->clientesPortal()->where('clientes.activo', true)->orderBy('nombre')
+                ->get(['clientes.id', 'clientes.codigo', 'clientes.nombre'])
+                ->map(fn ($cliente): array => ['id' => $cliente->id, 'codigo' => $cliente->codigo, 'nombre' => $cliente->nombre])
+                ->values()->all(),
+            'modulos_acceso' => [],
+            'capacidades' => [],
+            'inicio' => self::INICIO_CLIENTE,
+        ];
     }
 }

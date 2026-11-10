@@ -51,6 +51,12 @@
                     <span><i class="legend-dot legend-dot--confirmed"></i>Confirmado</span>
                     <span><i class="legend-dot legend-dot--overbook"></i>Sobrecupo autorizado</span>
                     <span><i class="legend-dot legend-dot--cancelled"></i>Cancelado</span>
+                    <span><i class="legend-dot legend-dot--requested"></i>Solicitud de cliente</span>
+                </section>
+
+                <section class="shipment-requests panel is-hidden" id="clientRequests" aria-labelledby="clientRequestsTitle">
+                    <div class="shipment-requests__head"><div><p class="eyebrow">PORTAL DE CLIENTES</p><h2 id="clientRequestsTitle">Solicitudes de horario</h2></div><p>Aceptar crea el embarque tentativo en ese bloque; rechazar le muestra el motivo al cliente.</p></div>
+                    <div class="shipment-requests__list" id="clientRequestList"></div>
                 </section>
 
                 <section class="shipment-calendar panel" aria-label="Ventanas de embarque">

@@ -50,6 +50,10 @@ return new class extends Migration
         $ids = [];
 
         foreach (RolUsuario::cases() as $rol) {
+            // Los roles creados después (usuario de cliente) no tienen perfil operacional.
+            if (! isset($nombres[$rol->value])) {
+                continue;
+            }
             $id = (string) Str::uuid();
             $ids[$rol->value] = $id;
             DB::table('perfiles_acceso')->insert([

@@ -29,6 +29,8 @@ class AdministracionAccesoController extends Controller
 
         return response()->json([
             'usuarios' => User::query()
+                // Los usuarios de clientes se administran en su propia sección.
+                ->where('rol', '!=', RolUsuario::Cliente->value)
                 ->with('perfilAcceso')
                 ->orderBy('name')
                 ->orderBy('email')
@@ -66,6 +68,7 @@ class AdministracionAccesoController extends Controller
         ActualizarUsuarioAdministracionRequest $request,
         User $usuario,
     ): JsonResponse {
+        abort_if($usuario->esCliente(), Response::HTTP_NOT_FOUND);
         $datos = $request->validated();
         $actor = $request->user();
 

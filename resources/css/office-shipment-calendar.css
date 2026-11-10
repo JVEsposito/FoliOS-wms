@@ -84,3 +84,16 @@
     .shipment-dialog__shell { padding: 14px; }
     .shipment-dialog footer { flex-wrap: wrap; }
 }
+
+/* Solicitudes de horario del portal de clientes. */
+.legend-dot--requested { background: #b07cf0; }
+.shipment-card--requested { border-color: rgba(176, 124, 240, .6); background: rgba(176, 124, 240, .12); border-style: dashed; }
+.shipment-requests { display: grid; gap: 12px; padding: 16px; }
+.shipment-requests__head { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: end; justify-content: space-between; }
+.shipment-requests__head h2 { margin: 2px 0 0; font-size: 1rem; }
+.shipment-requests__head p { margin: 0; color: var(--muted); font-size: .8rem; max-width: 520px; }
+.shipment-requests__list { display: grid; gap: 8px; }
+.shipment-request { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; border: 1px dashed rgba(176, 124, 240, .6); border-radius: 10px; padding: 10px 12px; background: rgba(176, 124, 240, .08); }
+.shipment-request strong { display: block; color: var(--text-strong, var(--text)); }
+.shipment-request small { display: block; margin-top: 3px; color: var(--text-secondary, var(--muted)); font-size: .78rem; overflow-wrap: anywhere; }
+.shipment-request__actions { display: flex; gap: 8px; }

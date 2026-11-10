@@ -213,6 +213,19 @@ class EstructuraOficinaTest extends TestCase
         }
     }
 
+    public function test_portal_de_clientes_y_calendario_exportan_sus_vistas(): void
+    {
+        $portal = $this->get('/oficina/clientes')->assertOk()->assertSee('portalLogin', false)->assertSee('portalSlots', false)
+            ->assertDontSee('officeSidebar', false)->getContent();
+        $this->get('/portal')->assertRedirect('/oficina/clientes');
+        $calendario = $this->get('/oficina/frigorifico/despacho/calendario')->assertOk()->assertSee('clientRequestList', false)->getContent();
+        if (getenv('ESTIBA_EXPORTAR_UI_TESTS') === '1') {
+            File::ensureDirectoryExists(storage_path('app/ui/oficina'));
+            File::put(storage_path('app/ui/oficina/portal-clientes.html'), $portal);
+            File::put(storage_path('app/ui/oficina/calendario-embarques.html'), $calendario);
+        }
+    }
+
     public function test_cabecera_conserva_identidad_y_navegacion_en_las_seis_areas(): void
     {
         foreach (['/oficina/frigorifico/camaras', '/oficina/validacion', '/oficina/validacion/pendientes', '/oficina/envases/cuenta-corriente', '/oficina/materia-prima', '/oficina/frigorifico', '/oficina/materiales', '/oficina/materiales/catalogos', '/oficina/materiales/despachos', '/oficina/materiales/items', '/oficina/administracion', '/oficina/consultas', '/oficina/accesos', '/oficina/porteria', '/oficina/romana', '/oficina/finanzas/tarifario', '/oficina/finanzas/proveedores', '/oficina/rrhh', '/oficina/rrhh/marcaje', '/oficina/comex/comercial', '/oficina/comex/notas', '/oficina/comex/bookings', '/oficina/finanzas/costos-comex', '/oficina/frigorifico/contraparte-sag'] as $path) {

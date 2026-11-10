@@ -856,3 +856,12 @@
 #originObjects { min-height: 300px; width: 100%; }
 #originSample td { max-width: 360px; overflow-wrap: anywhere; white-space: normal; }
 @media (max-width: 650px) { .origin-explorer__grid { grid-template-columns: 1fr; } .origin-filter { grid-template-columns: minmax(0, 1fr) auto; } }
+
+/* Accesos → Usuarios de clientes */
+.client-user-clients { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin: 0; min-width: 0; }
+.client-user-clients legend { padding: 0 4px; font-size: .78rem; font-weight: 700; }
+.client-user-clients > div { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px 14px; max-height: 220px; overflow: auto; }
+.client-user-option { display: flex; gap: 8px; align-items: center; min-height: 36px; cursor: pointer; }
+.client-user-option small { color: var(--muted); }
+#clientUsersTableBody small { display: block; color: var(--muted); }
+#administration-panel-client-users .field--check { display: flex; gap: 8px; align-items: center; }
