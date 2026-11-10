@@ -10,7 +10,7 @@ body {
 }
 
 .management-app {
-    min-width: 1040px;
+    min-width: 0;
     padding-bottom: 32px;
 }
 
@@ -276,7 +276,7 @@ body {
 }
 
 .management-view--single > .management-panel {
-    min-height: 470px;
+    min-height: 0;
 }
 
 .management-view .chart-container--bar {
@@ -313,28 +313,6 @@ body {
 
 .chart-container--bar { height: 285px; }
 .chart-container--doughnut { height: 230px; min-height: 230px; }
-
-.chart-legend {
-    display: flex;
-    gap: 14px;
-}
-
-.chart-legend span {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    color: var(--muted);
-    font-size: .67rem;
-}
-
-.legend-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-}
-
-.legend-dot--occupied { background: var(--cyan); }
-.legend-dot--free { background: var(--text-subtle); }
 
 .chart-filter {
     display: flex;
@@ -526,7 +504,6 @@ body {
 }
 
 @media (max-width: 850px) {
-    .management-app { min-width: 760px; }
     .management-heading { align-items: flex-start; flex-direction: column; }
     .management-refresh { width: 100%; justify-content: space-between; text-align: left; }
     .management-season { min-width: 220px; }
@@ -841,7 +818,7 @@ body {
 
 .management-products__indicators article,
 .management-products__states,
-.management-products__exceptions,
+.management-products__exporters,
 .management-products__aging {
     min-width: 0;
     padding: 15px;
@@ -888,72 +865,11 @@ body {
     font-size: .85rem;
 }
 
-.management-products__state-bar {
-    display: flex;
-    height: 16px;
-    overflow: hidden;
-    border-radius: var(--radius);
-    background: var(--surface-selected);
-}
-
-.management-products__segment { height: 100%; }
-.management-products__segment--success, .management-products__legend-item--success { --product-state-color: var(--success-text); }
-.management-products__segment--info, .management-products__legend-item--info { --product-state-color: var(--info-text); }
-.management-products__segment--warning, .management-products__legend-item--warning { --product-state-color: var(--warning-text); }
-.management-products__segment--danger, .management-products__legend-item--danger { --product-state-color: var(--danger-text); }
-.management-products__segment--quiet, .management-products__legend-item--quiet { --product-state-color: var(--text-secondary); }
-.management-products__segment--other, .management-products__legend-item--other { --product-state-color: var(--text-subtle); }
-.management-products__segment { background: var(--product-state-color); }
-
-.management-products__legend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px 20px;
-    margin-top: 12px;
-}
-
-.management-products__legend-item {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    color: var(--text-secondary);
-    font-size: .7rem;
-}
-
-.management-products__legend-item strong { color: var(--text-strong); font-variant-numeric: tabular-nums; }
-.management-products__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--product-state-color); }
-
 .management-products__bottom {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
 }
-
-.management-products__exception {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    padding: 11px 4px;
-    border-top: 1px solid var(--line);
-    color: var(--text-strong);
-    font-size: .76rem;
-    text-decoration: none;
-}
-
-.management-products__exception strong { color: var(--danger-text); font-variant-numeric: tabular-nums; }
-.management-products__exception.is-zero { color: var(--text-secondary); }
-.management-products__exception.is-zero strong { color: var(--text-secondary); }
-a.management-products__exception:hover, a.management-products__exception:focus-visible { background: var(--surface-selected); }
-
-.management-products__aging-rows { display: grid; gap: 12px; }
-.management-products__aging-row { display: grid; grid-template-columns: minmax(95px, auto) minmax(0, 1fr) auto; align-items: center; gap: 10px; color: var(--text-secondary); font-size: .72rem; }
-.management-products__aging-row strong { color: var(--text-strong); font-variant-numeric: tabular-nums; }
-.management-products__aging-track { height: 9px; overflow: hidden; border-radius: var(--radius); background: var(--surface-selected); }
-.management-products__aging-fill { display: block; height: 100%; border-radius: var(--radius); }
-.management-products__aging-fill--info { background: var(--info-text); }
-.management-products__aging-fill--danger { background: var(--danger-text); }
-.management-products__undated { margin: 12px 0 0; color: var(--warning-text); }
 
 @media (max-width: 1100px) {
     .management-products__indicators { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -963,10 +879,6 @@ a.management-products__exception:hover, a.management-products__exception:focus-v
     .management-products__bottom { grid-template-columns: minmax(0, 1fr); }
 }
 
-@media (max-width: 850px) {
-    .management-app:has(#management-panel-products:not([hidden])) { min-width: 0; }
-    .management-app:has(#management-panel-products:not([hidden])) .management-panel-workspace { padding-inline: 12px; }
-}
 
 /* Materia prima y envases: cada cantidad conserva su unidad y su significado. */
 .management-view--raw-flow > .management-panel {
@@ -1082,3 +994,669 @@ a.management-products__exception:hover, a.management-products__exception:focus-v
         grid-template-columns: minmax(0, 1fr);
     }
 }
+
+/* ----------------------------------------------------------------------------------
+ * Panel gerencial v2: lectura de gerente. Cifras grandes, rótulos legibles, sin glifos
+ * decorativos. Las reglas van con .office-app.management-app para quedar por encima de
+ * las reglas globales de FoliOS, que se cargan después de esta hoja.
+ * ---------------------------------------------------------------------------------- */
+
+.office-app.management-app {
+    --mgmt-label: .78rem;
+    --mgmt-body: .84rem;
+    --mgmt-small: .76rem;
+}
+
+/* Indicadores principales: rótulo, cifra, contexto. */
+.office-app.management-app .management-kpi {
+    gap: 4px;
+    min-height: 0;
+    padding: 16px 20px 18px !important;
+}
+
+.office-app.management-app .management-kpi > .management-kpi__label {
+    order: -2;
+    color: var(--text-secondary) !important;
+    font-size: var(--mgmt-label) !important;
+    font-weight: 700 !important;
+    letter-spacing: .02em !important;
+}
+
+.office-app.management-app .management-kpi > strong {
+    margin-top: 4px !important;
+    font-size: 2.6rem !important;
+}
+
+.office-app.management-app .management-kpi > strong em {
+    margin-left: 4px;
+    color: var(--text-subtle);
+    font-size: 1.1rem;
+    font-style: normal;
+    font-weight: 700;
+}
+
+.office-app.management-app .management-kpi > p {
+    margin: 0 0 8px !important;
+    color: var(--text-subtle) !important;
+    font-size: var(--mgmt-body) !important;
+}
+
+.office-app.management-app .management-kpi > small {
+    margin-top: 8px !important;
+    color: var(--text-subtle) !important;
+    font-size: var(--mgmt-small) !important;
+    line-height: 1.4 !important;
+}
+
+.office-app.management-app .kpi-split {
+    gap: 0;
+    border-top: 1px solid var(--line-soft);
+    border-bottom: 1px solid var(--line-soft);
+}
+
+.office-app.management-app .kpi-split span {
+    gap: 1px;
+    padding: 8px 0;
+    border: 0;
+    border-radius: 0;
+    color: var(--text-subtle);
+    font-size: var(--mgmt-small);
+}
+
+.office-app.management-app .kpi-split span + span {
+    padding-left: 12px;
+    border-left: 1px solid var(--line-soft);
+}
+
+.office-app.management-app .kpi-split b {
+    color: var(--text-strong);
+    font-size: 1.05rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.office-app.management-app .kpi-progress {
+    height: 5px;
+    margin: 4px 0 0;
+}
+
+.management-kpi--romana { --kpi-accent: var(--amber); }
+.management-kpi--product { --kpi-accent: var(--series-product); }
+.management-kpi--capacity { --kpi-accent: var(--cyan); }
+.management-kpi--prefrio { --kpi-accent: var(--green); }
+.management-kpi--material { --kpi-accent: var(--series-material); }
+
+.office-app.management-app .management-kpi {
+    box-shadow: inset 0 3px 0 var(--kpi-accent) !important;
+}
+
+.office-app.management-app .management-kpi .kpi-progress i { background: var(--kpi-accent); }
+
+/* Textos de apoyo de los paneles: tamaño de lectura, no de nota al pie. */
+.office-app.management-app .management-panel-intro {
+    color: var(--text-subtle);
+    font-size: var(--mgmt-body);
+}
+
+.office-app.management-app .management-panel h3 {
+    margin: 0 0 12px;
+    color: var(--text-strong);
+    font-size: .95rem;
+    font-weight: 800;
+}
+
+.office-app.management-app .management-panel h3 small {
+    margin-left: 6px;
+    color: var(--text-subtle);
+    font-size: var(--mgmt-small);
+    font-weight: 500;
+}
+
+.office-app.management-app .management-operational-metrics > article > strong {
+    font-size: 1.9rem !important;
+}
+
+.office-app.management-app .management-operation-row strong { font-size: .9rem; }
+.office-app.management-app .management-operation-row > div:first-child span,
+.office-app.management-app .management-operation-row__metrics span { font-size: var(--mgmt-small); }
+.office-app.management-app .management-empty { font-size: var(--mgmt-body); }
+.office-app.management-app .management-panel-link { font-size: .8rem; }
+
+/* Focos: nivel visible en palabras, cifra con su unidad. */
+.management-alert-summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+}
+
+.management-alert-summary .alert-count { display: none; }
+
+.management-alert-chip,
+.management-alert__level {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: .75rem;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.management-alert-chip[data-tone="critical"],
+.management-alert[data-tone="critical"] .management-alert__level { background: var(--danger-bg); color: var(--danger-text); }
+.management-alert-chip[data-tone="warning"],
+.management-alert[data-tone="warning"] .management-alert__level { background: var(--warning-bg); color: var(--warning-text); }
+.management-alert-chip[data-tone="info"],
+.management-alert[data-tone="info"] .management-alert__level { background: var(--info-bg); color: var(--info-text); }
+
+.office-app.management-app .management-alerts { gap: 8px; }
+
+.office-app.management-app .management-alert {
+    grid-template-columns: 92px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 18px 14px 16px;
+    border: 1px solid var(--line-soft);
+    border-left: 3px solid var(--alert-color, var(--warning-text));
+    border-radius: var(--radius-card, 8px);
+    background: var(--corporate-card);
+}
+
+.management-alert[data-tone="critical"] { --alert-color: var(--danger-text); }
+.management-alert[data-tone="warning"] { --alert-color: var(--warning-text); }
+.management-alert[data-tone="info"] { --alert-color: var(--info-text); }
+
+.management-alert__level { justify-self: start; }
+
+.office-app.management-app .management-alert small {
+    margin-bottom: 2px;
+    color: var(--text-subtle);
+    font-size: .72rem;
+    letter-spacing: .05em;
+}
+
+.office-app.management-app .management-alert strong { color: var(--text-strong); font-size: .95rem; }
+.office-app.management-app .management-alert span { color: var(--text-subtle); font-size: var(--mgmt-body); }
+
+.office-app.management-app .management-alert > b {
+    min-width: 0;
+    padding: 0;
+    background: none;
+    color: var(--alert-color);
+    font-size: 1.35rem;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.office-app.management-app .management-alert > b small {
+    display: inline;
+    margin: 0 0 0 2px;
+    color: var(--text-subtle);
+    font-size: .75rem;
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+/* Ocupación por cámara: nombre, barra y cifra en una sola fila. */
+.management-occupancy {
+    display: grid;
+    gap: 22px;
+}
+
+.management-occupancy__group { display: grid; gap: 4px; }
+
+.office-app.management-app .management-occupancy__group h3 {
+    margin: 0 0 6px;
+    color: var(--text-subtle);
+    font-size: var(--mgmt-label);
+    font-weight: 700;
+    letter-spacing: .03em;
+}
+
+.management-occupancy__row {
+    --occupancy-color: var(--cyan-light);
+    display: grid;
+    grid-template-columns: minmax(150px, 240px) minmax(0, 1fr) 120px;
+    align-items: center;
+    gap: 16px;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--line-soft);
+}
+
+.management-occupancy__row[data-tone="watch"] { --occupancy-color: var(--warning-text); }
+.management-occupancy__row[data-tone="alert"] { --occupancy-color: var(--danger-text); }
+
+.management-occupancy__name {
+    overflow: hidden;
+    color: var(--text-strong);
+    font-size: .9rem;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.management-occupancy__track,
+.management-share {
+    background: color-mix(in srgb, var(--text-subtle) 22%, transparent) !important;
+}
+
+.management-occupancy__track {
+    height: 10px;
+    overflow: hidden;
+    border-radius: 999px;
+}
+
+.management-occupancy__track i {
+    display: block;
+    min-width: 0;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--occupancy-color);
+}
+
+.management-occupancy__value {
+    display: grid;
+    color: var(--text-subtle);
+    font-size: var(--mgmt-small);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+}
+
+.management-occupancy__value b {
+    color: var(--occupancy-color);
+    font-size: .95rem;
+}
+
+.management-occupancy__row[data-tone="normal"] .management-occupancy__value b { color: var(--text-strong); }
+
+/* Pallets y saldos: el pallet es relleno; el saldo, trama del mismo color. */
+.management-bulk {
+    --bulk-color: var(--cyan-light);
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    background-color: var(--bulk-color);
+}
+
+.management-bulk--saldo {
+    background-color: color-mix(in srgb, var(--bulk-color) 22%, transparent);
+    background-image: repeating-linear-gradient(135deg, var(--bulk-color) 0 2px, transparent 2px 5px);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bulk-color) 70%, transparent);
+}
+
+.management-bulk-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+    color: var(--text-subtle);
+    font-size: var(--mgmt-small);
+}
+
+.management-bulk-legend span { display: inline-flex; align-items: center; gap: 7px; }
+
+.management-bulk-bar {
+    display: flex;
+    gap: 2px;
+    height: 14px;
+    min-width: 0;
+}
+
+.management-bulk-bar .management-bulk {
+    width: auto;
+    height: 100%;
+}
+
+.management-bulk-bar[data-tone="ok"] .management-bulk { --bulk-color: var(--success-text); }
+.management-bulk-bar[data-tone="info"] .management-bulk { --bulk-color: var(--info-text); }
+.management-bulk-bar[data-tone="watch"] .management-bulk { --bulk-color: var(--warning-text); }
+.management-bulk-bar[data-tone="attention"] .management-bulk { --bulk-color: var(--series-material); }
+.management-bulk-bar[data-tone="alert"] .management-bulk { --bulk-color: var(--danger-text); }
+.management-bulk-bar[data-tone="other"] .management-bulk { --bulk-color: var(--text-subtle); }
+
+/* Producto PT: tarjetas y tabla de estados. */
+.office-app.management-app .management-products__indicators article,
+.office-app.management-app .management-products__states,
+.office-app.management-app .management-products__exporters,
+.office-app.management-app .management-products__aging {
+    padding: 16px 18px;
+    border-color: var(--line-soft);
+    background: var(--corporate-card);
+}
+
+.office-app.management-app .management-products__indicators article > span {
+    color: var(--text-secondary);
+    font-size: var(--mgmt-label);
+    font-weight: 700;
+    letter-spacing: .02em;
+}
+
+.office-app.management-app .management-products__indicators strong {
+    font-size: clamp(1.8rem, 2.4vw, 2.4rem);
+    font-stretch: var(--font-figure-stretch, 100%);
+}
+
+.office-app.management-app .management-products__indicators small {
+    color: var(--text-subtle);
+    font-size: var(--mgmt-small);
+}
+
+.management-products__section-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px 20px;
+    margin-bottom: 8px;
+}
+
+.office-app.management-app .management-products__section-head h3 { margin: 0; }
+
+.management-state-row {
+    display: grid;
+    grid-template-columns: minmax(180px, 1.1fr) minmax(0, 2fr) repeat(3, 84px);
+    align-items: center;
+    gap: 16px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--line-soft);
+    color: var(--text-strong);
+    font-size: .9rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.management-state-row > span:nth-child(n+3) { text-align: right; font-weight: 700; }
+.management-state-row__saldos { color: var(--text-secondary); }
+
+.management-state-row--head {
+    padding-top: 0;
+    color: var(--text-subtle);
+    font-size: var(--mgmt-small);
+}
+
+.management-state-row--head > span:nth-child(n+3) { font-weight: 600; }
+
+.management-state-row__label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+}
+
+.management-state-row__label > i {
+    flex: none;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--state-color, var(--text-subtle));
+}
+
+.management-state-row__label small {
+    display: block;
+    color: var(--text-subtle);
+    font-size: .72rem;
+    font-weight: 500;
+}
+
+.management-state-row[data-tone="ok"] { --state-color: var(--success-text); }
+.management-state-row[data-tone="info"] { --state-color: var(--info-text); }
+.management-state-row[data-tone="watch"] { --state-color: var(--warning-text); }
+.management-state-row[data-tone="attention"] { --state-color: var(--series-material); }
+.management-state-row[data-tone="alert"] { --state-color: var(--danger-text); }
+.management-state-row[data-tone="other"] { --state-color: var(--text-subtle); }
+
+.management-state-row.is-zero { color: var(--text-subtle); }
+.management-state-row.is-zero .management-state-row__label > i { opacity: .4; }
+
+.management-state-row__bar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 52px;
+    align-items: center;
+    gap: 10px;
+}
+
+.management-state-row__bar em {
+    color: var(--text-subtle);
+    font-size: var(--mgmt-small);
+    font-style: normal;
+    text-align: right;
+}
+
+.management-state-row--total {
+    border-bottom: 0;
+    border-top: 2px solid var(--line);
+    font-weight: 800;
+}
+
+.management-exporters { display: grid; gap: 14px; }
+
+.management-exporter { display: grid; gap: 6px; }
+
+.management-exporter__head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: .9rem;
+}
+
+.management-exporter__head strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.management-exporter__head span {
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.management-exporter small,
+.management-exporters__more {
+    margin: 0;
+    color: var(--text-subtle);
+    font-size: var(--mgmt-small);
+}
+
+.management-products__aging-rows { display: grid; gap: 12px; }
+
+.management-products__aging-row {
+    display: grid;
+    grid-template-columns: 112px minmax(0, 1fr) 48px;
+    align-items: center;
+    gap: 12px;
+    color: var(--text-secondary);
+    font-size: .85rem;
+}
+
+.management-products__aging-row strong {
+    color: var(--text-strong);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+}
+
+.management-products__aging-row[data-tone="alert"] strong { color: var(--danger-text); }
+.management-products__aging-row[data-tone="alert"] .management-bulk { --bulk-color: var(--danger-text); }
+.management-products__undated { margin: 12px 0 0; color: var(--warning-text); font-size: var(--mgmt-small); }
+
+/* Recepción: gráfico por cliente y ranking de la temporada. */
+.management-weighbridge {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(320px, 1fr);
+    gap: 28px;
+    margin-top: 6px;
+}
+
+.office-app.management-app .management-weighbridge .chart-container--bar {
+    height: 300px;
+    min-height: 300px;
+}
+
+.management-series-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 18px;
+    margin-top: 12px;
+    color: var(--text-secondary);
+    font-size: var(--mgmt-small);
+}
+
+.management-series-legend span { display: inline-flex; align-items: center; gap: 7px; }
+.management-series-legend i { width: 10px; height: 10px; border-radius: 3px; }
+.management-series-legend b { color: var(--text-strong); font-variant-numeric: tabular-nums; }
+
+.management-client-kilos {
+    display: grid;
+    gap: 2px;
+    max-height: 360px;
+    overflow: auto;
+}
+
+.management-client-kilos__row {
+    display: grid;
+    gap: 6px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--line-soft);
+}
+
+.management-client-kilos__head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: .92rem;
+}
+
+.management-client-kilos__head strong {
+    overflow: hidden;
+    color: var(--text-strong);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.management-client-kilos__head b {
+    color: var(--text-strong);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.management-share {
+    display: block;
+    height: 6px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--surface-selected);
+}
+
+.management-share i {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--amber);
+}
+
+.management-client-kilos__row small {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 14px;
+    color: var(--text-subtle);
+    font-size: var(--mgmt-small);
+    font-variant-numeric: tabular-nums;
+}
+
+.management-flow-now {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 22px;
+    margin-top: 20px;
+    padding: 12px 16px;
+    border: 1px solid var(--line-soft);
+    border-radius: var(--radius-card, 8px);
+    background: var(--surface-muted);
+    color: var(--text-subtle);
+    font-size: var(--mgmt-body);
+}
+
+.management-flow-now__title {
+    color: var(--text-secondary);
+    font-weight: 800;
+}
+
+.management-flow-now b {
+    margin-right: 4px;
+    color: var(--text-strong);
+    font-size: 1.05rem;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Responsivo: el panel se lee en tablet y teléfono sin desplazamiento lateral. */
+@media (max-width: 1100px) {
+    .management-weighbridge { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 760px) {
+    .office-app.management-app .management-heading { padding-inline: 16px !important; }
+    .office-app.management-app .management-kpis { margin: 0 16px 14px !important; }
+    .office-app.management-app .management-switcher-shell,
+    .office-app.management-app .management-panel-workspace { padding-inline: 16px; }
+    .management-refresh { flex-wrap: wrap; gap: 12px; }
+    .management-season { min-width: 0; width: 100%; }
+
+    .office-app.management-app .management-panel > header {
+        flex-wrap: wrap;
+        align-items: flex-start;
+    }
+
+    .office-app.management-app .management-alert {
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 6px 12px;
+    }
+
+    .management-alert__level { grid-column: 1 / -1; }
+
+    .management-occupancy__row {
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 6px 12px;
+    }
+
+    .management-occupancy__track { grid-column: 1 / -1; grid-row: 2; }
+    .management-occupancy__value { display: block; }
+    .management-occupancy__value b { margin-right: 6px; }
+
+    .management-state-row--head { display: none; }
+
+    .management-state-row {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px 12px;
+    }
+
+    .management-state-row__label,
+    .management-state-row__bar { grid-column: 1 / -1; }
+    .management-state-row--total .management-state-row__bar { display: none; }
+
+    .management-state-row > span:nth-child(n+3) {
+        display: grid;
+        text-align: left;
+    }
+
+    .management-state-row > span[data-label]::before {
+        content: attr(data-label);
+        color: var(--text-subtle);
+        font-size: .72rem;
+        font-weight: 500;
+    }
+
+    .management-products__aging-row { grid-template-columns: 96px minmax(0, 1fr) 40px; }
+    .office-app.management-app .management-weighbridge .chart-container--bar { height: 240px; min-height: 240px; }
+    .management-products__indicators { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Encabezado: temporada y última lectura con tamaño de lectura. */
+.office-app.management-app .management-refresh span,
+.office-app.management-app .management-refresh small {
+    font-size: .74rem;
+    letter-spacing: .02em;
+}
+
+.office-app.management-app .management-refresh strong { font-size: 1rem; }

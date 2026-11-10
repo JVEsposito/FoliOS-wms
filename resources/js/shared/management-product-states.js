@@ -1,47 +1,56 @@
-const STATES = [
-    { key: 'disponibles_despacho', label: 'Disponibles', tone: 'success' },
-    { key: 'comprometidos_carga', label: 'Comprometidos', tone: 'info' },
-    { key: 'pendientes_prefrio', label: 'Pendientes prefrío', tone: 'warning' },
-    { key: 'pendientes_ubicacion', label: 'Sin ubicación', tone: 'quiet' },
-    { key: 'bloqueados', label: 'Bloqueados', tone: 'danger' },
-    { key: 'otros', label: 'Otros', tone: 'other' },
+// Estados PT del panel gerencial. Cada estado separa pallets (bultos completos) de saldos
+// (bultos parciales que esperan consolidarse), para no sumarlos como si fueran lo mismo.
+export const PRODUCT_STATES = [
+    { key: 'disponibles_despacho', label: 'Disponibles para despacho', tone: 'ok' },
+    { key: 'comprometidos_carga', label: 'Comprometidos en carga', tone: 'info' },
+    { key: 'pendientes_prefrio', label: 'Pendientes de prefrío', tone: 'watch' },
+    { key: 'pendientes_ubicacion', label: 'Sin ubicación', tone: 'attention' },
+    { key: 'bloqueados', label: 'Bloqueados', tone: 'alert' },
+    { key: 'otros', label: 'Otros', tone: 'other', hint: 'Disponibles fuera de una cámara PT activa' },
 ];
 
-// Reserva espacio visible a los segmentos pequeños sin perder el total de 100 %.
-function visibleWidths(values) {
-    const sum = values.reduce((total, value) => total + value, 0);
-    if (!sum) return values.map(() => 0);
+const MINIMUM_VISIBLE_WIDTH = 1.5;
 
-    const minimum = 2;
-    const small = values.map((value) => value > 0 && (value / sum) * 100 < minimum);
-    const reserved = small.filter(Boolean).length * minimum;
-    const largeSum = values.reduce((total, value, index) => total + (small[index] ? 0 : value), 0);
-    const widths = values.map((value, index) => {
-        if (!value) return 0;
-        return small[index] ? minimum : (value / largeSum) * (100 - reserved);
-    });
-    const last = widths.findLastIndex((width) => width > 0);
-    widths[last] += 100 - widths.reduce((total, width) => total + width, 0);
+const count = (value) => Math.max(0, Number(value) || 0);
 
-    return widths;
+function visibleWidth(value, max) {
+    if (!value || !max) return 0;
+    return Math.max(MINIMUM_VISIBLE_WIDTH, (value / max) * 100);
 }
 
-export function productStateSegments(products) {
-    const total = Math.max(0, Number(products.total_activos) || 0);
-    const values = STATES.map(({ key }) => Math.max(0, Number(products[key]) || 0));
-    const widths = visibleWidths(values);
-    const segments = STATES.map((state, index) => ({
-        ...state,
-        count: values[index],
-        percent: total ? Math.round((values[index] / total) * 1000) / 10 : 0,
-        width: widths[index],
-    }));
+function stateValues(products, key) {
+    const detail = (products.estados || []).find((state) => state.clave === key);
+    if (detail) return { pallets: count(detail.pallets), saldos: count(detail.saldos), cajas: count(detail.cajas) };
+
+    // Respuesta anterior sin desglose: el conteo se muestra completo, sin inventar la división.
+    return { pallets: count(products[key]), saldos: 0, cajas: 0 };
+}
+
+export function productStateRows(products = {}) {
+    const rows = PRODUCT_STATES.map((state) => {
+        const values = stateValues(products, state.key);
+        return { ...state, ...values, total: values.pallets + values.saldos };
+    });
+    const max = Math.max(0, ...rows.map((row) => row.total));
+    const total = count(products.total_activos);
 
     return {
         empty: total === 0,
-        segments,
-        ariaLabel: total === 0
-            ? 'Sin folios PT activos'
-            : `Estados de ${total} folios PT: ${segments.map(({ label, count }) => `${label} ${count}`).join(', ')}`,
+        rows: rows.map((row) => ({
+            ...row,
+            palletWidth: visibleWidth(row.pallets, max),
+            saldoWidth: visibleWidth(row.saldos, max),
+            percent: total ? Math.round((row.total / total) * 1000) / 10 : 0,
+        })),
+        totals: {
+            pallets: rows.reduce((sum, row) => sum + row.pallets, 0),
+            saldos: rows.reduce((sum, row) => sum + row.saldos, 0),
+            cajas: rows.reduce((sum, row) => sum + row.cajas, 0),
+        },
     };
+}
+
+// Barra apilada pallets + saldos de un tramo o grupo, a escala del mayor de la lista.
+export function bulkWidths(pallets, saldos, max) {
+    return { pallet: visibleWidth(count(pallets), max), saldo: visibleWidth(count(saldos), max) };
 }
