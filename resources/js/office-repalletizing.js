@@ -571,6 +571,7 @@ function renderHistory() {
                 ${repa.origenes.map((origin) => `<div class="repa-origin"><span>${escapeHtml(origin.folio.numero_folio)}</span><strong>${origin.cajas_aportadas} cajas</strong></div>`).join('')}
                 ${(repa.folio_resultante?.composicion || []).map((line) => `<div class="repa-origin"><span>CSG ${escapeHtml(line.csg)} · ${escapeHtml(line.fecha_embalaje || 'Sin fecha')} · ${escapeHtml(compositionDescription(line))}</span><strong>${line.cantidad_cajas} cajas</strong></div>`).join('')}
             </details>
+            ${repa.modalidad === 'reembalaje' ? `<button class="secondary-button" type="button" data-repacking-register="${escapeHtml(repa.id)}">Descargar registro de reembalaje</button>` : ''}
             ${repa.estado === 'confirmado' && (can('puede_imprimir_etiquetas_pt') || can('puede_consultar_repaletizajes')) ? (repa.resultados || []).map((result) => result.folio?.activo ? `<a class="secondary-button" href="/oficina/validacion/etiquetas?folio=${encodeURIComponent(result.folio.numero_folio)}&tipo=planta&copias=4">Imprimir etiquetas · ${escapeHtml(result.folio.numero_folio)}</a>` : '').join('') : ''}
             ${repa.estado === 'confirmado' && can('puede_consultar_contraparte_sag') ? `<a class="secondary-button" href="/oficina/frigorifico/contraparte-sag?repa=${encodeURIComponent(repa.id)}">Documento SAG</a>` : ''}
             ${can('puede_anular_repaletizajes') && repa.puede_anular ? `<button data-annul="${escapeHtml(repa.id)}" type="button">Anular repa</button>` : ''}
@@ -722,3 +723,11 @@ elements.history.addEventListener('click', (event) => {
 
 render();
 if (state.token && state.identity && showApp()) void loadHistory(); else clearSession();
+
+elements.history.addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-repacking-register]');
+    if (!button) return;
+    setBusy(true, 'Generando registro de reembalaje…');
+    try { await download(`/api/validacion/repaletizajes/${encodeURIComponent(button.dataset.repackingRegister)}/registro-reembalaje`); }
+    catch (error) { toast(error.message, true); } finally { setBusy(false); }
+});

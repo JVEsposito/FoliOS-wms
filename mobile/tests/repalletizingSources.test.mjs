@@ -61,6 +61,8 @@ function harness(entries) {
   const field = (label) => renderer.root.find((node) => typeof node.type === 'function' && node.props.label === label);
   return {
     writes, reads,
+    async scanRepacking(number) { await flush(() => renderer.root.findAllByType('ScanInput').find((n) => n.props.submitLabel === 'Consultar').props.onSubmit(number)); },
+    async typeRepacking(label, value) { await flush(() => renderer.root.findAllByType('TextInput').find((n) => n.props.accessibilityLabel === label).props.onChangeText(value)); },
     async mount() { await flush(() => { renderer = create(React.createElement(RepalletizingScreen, { auth: { token: 'token', usuario: { id: '1' }, dispositivo: { id: 'pda' } }, baseUrl: 'http://planta', onLogout: () => {} })); }); },
     async unmount() { await flush(() => renderer.unmount()); },
     async add(number) { await flush(() => renderer.root.findAllByType('ScanInput').find((node) => node.props.submitLabel === 'Agregar').props.onSubmit(number)); },
@@ -148,3 +150,32 @@ test('admitir pallets completos mantiene los bloqueos de inactivos, cajas agotad
     assert.equal(h.writes.length, 0);
   } finally { await h.unmount(); }
 });
+
+for (const format of [{ id: 'half', weight: '2.5000', loss: '0' }, { id: 'two', weight: '2.0000', loss: '1' }]) {
+  test(`PDA/tablet reembala con formato ${format.weight}, conserva la guía de composición y exige merma y motivo`, async () => {
+    const source = folio('ORIGEN-5', 'saldo', 1, { reembalaje: {
+      huella: 'fingerprint', errores: [], kilos_entrada: '5.0000',
+      componentes: [{ clave: 'component', csg: '111', cantidad_cajas: 1, kilos_netos_por_caja: '5.0000', kilos_entrada: '5.0000' }],
+      formatos: [{ id: format.id, nombre: 'Formato destino', kilos_netos_por_caja: format.weight }],
+    } });
+    const pda = harness([source]); await pda.mount();
+    await pda.press('Reembalaje · convertir formatos'); await pda.scanRepacking('ORIGEN-5');
+    await pda.press(`Formato destino · ${format.weight} kg`);
+    await pda.typeRepacking('Cajas salida 1 CSG 111', '2');
+    if (format.loss !== '0') {
+      await pda.press('Confirmar reembalaje'); assert.equal(pda.writes.length, 0);
+      await pda.typeRepacking('Merma kg CSG 111', format.loss);
+      await pda.press('Confirmar reembalaje'); assert.equal(pda.writes.length, 0);
+      await pda.typeRepacking('Motivo de la merma', 'Fruta descartada durante el reembalaje');
+      await pda.press('Otro folio'); await pda.typeRepacking('Folio de salida 1', 'NUEVO-2');
+    }
+    await pda.press('Confirmar reembalaje'); assert.equal(pda.writes.length, 1);
+    const payload = pda.writes[0]; assert.equal(payload.modalidad, 'reembalaje');
+    assert.equal(payload.resultados[0].cantidad_resultante, 2);
+    assert.equal(payload.resultados[0].envase_validacion_id, format.id);
+    assert.equal(payload.resultados[0].numero_folio, format.loss === '0' ? 'ORIGEN-5' : 'NUEVO-2');
+    assert.deepEqual(payload.resultados[0].composicion, [{ clave: 'component', cantidad_cajas: 2 }]);
+    assert.equal(payload.huella_reembalaje, 'fingerprint');
+    await pda.unmount();
+  });
+}

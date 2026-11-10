@@ -51,10 +51,14 @@ class CuadraturaReembalaje
         })->values()->all();
         $formatos = $permitidos->filter(fn ($e) => $e->activo && $e->kilos_netos_por_caja !== null && self::unidades($e->kilos_netos_por_caja) > 0)
             ->map(fn ($e) => ['id' => $e->id, 'nombre' => $e->nombre, 'codigo' => $e->codigo_externo, 'kilos_netos_por_caja' => $e->kilos_netos_por_caja])->values()->all();
+        if ($formatos === []) {
+            $errores[] = 'No hay formatos activos con kilos netos por caja para este cliente y especie. Completa el catálogo de envases.';
+        }
+        $autorizaciones = $folio->autorizacionesSagActivas()->orderBy('id')->pluck('id')->all();
         $huella = hash('sha256', json_encode([$folio->id, $folio->activo, $folio->estado_operacional->value,
-            $folio->condicion_termica->value, $folio->datos_externos['cantidad_cajas'] ?? 0, $componentes, $formatos], JSON_THROW_ON_ERROR));
+            $folio->condicion_termica->value, $folio->datos_externos['cantidad_cajas'] ?? 0, $componentes, $formatos, $folio->condicion_sag_id, $autorizaciones], JSON_THROW_ON_ERROR));
 
-        return ['huella' => $huella, 'componentes' => $componentes, 'errores' => array_values(array_unique($errores)),
+        return ['huella' => $huella, 'advertencias' => $folio->condicion_sag_id !== null || $autorizaciones ? ['Esta operación retira la condición y autorizaciones SAG actuales. El nuevo formato requiere revisión.'] : [], 'componentes' => $componentes, 'errores' => array_values(array_unique($errores)),
             'kilos_entrada' => self::kilos(array_sum(array_map(fn ($l) => self::unidades($l['kilos_entrada']), $componentes))),
             'formatos' => $formatos];
     }

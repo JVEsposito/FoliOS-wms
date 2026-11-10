@@ -103,6 +103,11 @@ class RegistrarRepaletizajeRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'resultados.*.cantidad_resultante.min' => 'Cada salida debe contener al menos una caja.',
+            'resultados.*.envase_validacion_id.required_if' => 'Selecciona el formato de cada salida del reembalaje.',
+            'huella_reembalaje.required_if' => 'Vuelve a consultar el folio antes de confirmar el reembalaje.',
+            'mermas.*.kilos.decimal' => 'La merma admite hasta cuatro decimales de kilo.',
+            'mermas.*.kilos.min' => 'La merma no puede ser negativa.',
             'cantidad_objetivo.min' => 'La capacidad debe ser de al menos una caja.',
             'resultados.*.cantidad_objetivo.min' => 'La capacidad de cada resultado debe ser de al menos una caja.',
             'origenes.*.composicion.min' => 'La composición de cada origen debe incluir al menos una línea.',

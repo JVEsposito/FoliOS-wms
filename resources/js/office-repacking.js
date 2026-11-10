@@ -40,7 +40,7 @@ export function createRepackingEditor({ root, api, escapeHtml: esc, uuid, shift,
     async function find() {
         if (pending) return;
         const number = root.querySelector('[data-lookup]').value.trim(); if (!number) return;
-        pending = true; error(''); source = null; root.querySelector('[data-work]').innerHTML = '';
+        pending = true; error(''); root.querySelector('[data-success]').textContent = ''; source = null; root.querySelector('[data-work]').innerHTML = '';
         try {
             const loaded = await api(`/api/validacion/repaletizajes/folios/${encodeURIComponent(number)}?reembalaje=1`);
             if (!loaded.existe || !loaded.activo || loaded.cantidad_cajas < 1) throw Error('Consulta un pallet o saldo activo con cajas.');
@@ -49,7 +49,7 @@ export function createRepackingEditor({ root, api, escapeHtml: esc, uuid, shift,
             if (loaded.reembalaje.errores.length) throw Error(loaded.reembalaje.errores.join(' '));
             source = loaded; operation = null;
             results = [{ numero_folio: source.numero_folio, tipo_resultado: 'saldo', cantidad_objetivo: 120, envase_validacion_id: '', cantidades: {} }];
-            root.querySelector('[data-work]').innerHTML = `<p><strong>${esc(source.numero_folio)} · ${esc(source.cliente)}</strong> · ${source.cantidad_cajas} cajas · ${esc(source.reembalaje.kilos_entrada)} kg de entrada</p>
+            root.querySelector('[data-work]').innerHTML = `${(source.reembalaje.advertencias || []).map((warning) => `<p role="status">${esc(warning)}</p>`).join('')}<p><strong>${esc(source.numero_folio)} · ${esc(source.cliente)}</strong> · ${source.cantidad_cajas} cajas · ${esc(source.reembalaje.kilos_entrada)} kg de entrada</p>
                 <div data-results></div><button type="button" class="secondary-button" data-add-result>+ Agregar salida / formato</button>
                 <h3>Merma por componente</h3><p>Declárala expresamente; no se calcula ni se acepta como ajuste automático.</p>
                 ${source.reembalaje.componentes.map((l) => `<label class="repacking-count"><span>CSG ${esc(l.csg)} · ${esc(l.variedad || '')} · ${esc(l.calibre || '')}<small>${l.cantidad_cajas} cajas × ${esc(l.kilos_netos_por_caja)} kg</small><small data-difference="${l.clave}"></small></span><input data-loss="${l.clave}" aria-label="Merma kg CSG ${esc(l.csg)}" type="number" min="0" step="0.0001" value="0"></label>`).join('')}
@@ -64,6 +64,12 @@ export function createRepackingEditor({ root, api, escapeHtml: esc, uuid, shift,
         if (!balance.balanced) return error('Deben cuadrar los kilos de cada componente: entrada = salida + merma.');
         if (outputs.some((r) => !r.numero_folio || !r.envase_validacion_id)) return error('Completa folio y formato de cada salida.');
         if (new Set(outputs.map((r) => r.numero_folio)).size !== outputs.length) return error('No repitas folios entre las salidas.');
+        for (const [index, row] of outputs.entries()) {
+            const quantity = Object.values(row.cantidades).reduce((n, c) => n + Number(c || 0), 0);
+            if (quantity < 1 || quantity > 100000) return error(`Salida ${index + 1}: registra entre 1 y 100.000 cajas.`);
+            if (row.tipo_resultado === 'pallet' && (!row.cantidad_objetivo || quantity !== row.cantidad_objetivo)) return error(`Salida ${index + 1}: el pallet debe completar su capacidad exacta.`);
+            if (row.tipo_resultado === 'saldo' && row.cantidad_objetivo && quantity >= row.cantidad_objetivo) return error(`Salida ${index + 1}: un saldo debe quedar bajo la capacidad del pallet.`);
+        }
         const motivo = root.querySelector('[data-reason]').value.trim();
         if (balance.loss > 0 && !motivo) return error('Indica el motivo de la merma.');
         const payload = { modalidad: 'reembalaje', ...shift(), huella_reembalaje: source.reembalaje.huella,

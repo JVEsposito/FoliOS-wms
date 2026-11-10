@@ -1,5 +1,5 @@
 export type RepackingContext = {
-  huella: string; errores: string[]; kilos_entrada: string;
+  huella: string; advertencias?: string[]; errores: string[]; kilos_entrada: string;
   componentes: Array<{ clave: string; csg: string; variedad?: string; calibre?: string; fecha_embalaje?: string; cantidad_cajas: number; kilos_netos_por_caja: string; kilos_entrada: string }>;
   formatos: Array<{ id: string; nombre: string; codigo: string | null; kilos_netos_por_caja: string }>;
 };

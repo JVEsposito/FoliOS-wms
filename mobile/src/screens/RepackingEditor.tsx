@@ -39,6 +39,12 @@ export function RepackingEditor({ auth, baseUrl, shift, chooseShift, day, choose
     if (outputs.some((r) => !r.numero_folio.trim() || !r.envase_validacion_id)) { setError('Completa el folio y formato de cada salida.'); return; }
     if (new Set(outputs.map((r) => r.numero_folio.trim().toUpperCase())).size !== outputs.length) { setError('No repitas folios entre las salidas.'); return; }
     if (balance.loss > 0 && !reason.trim()) { setError('Indica el motivo de la merma.'); return; }
+    for (const [index, row] of outputs.entries()) {
+      const quantity = Object.values(row.cantidades).reduce((n, c) => n + Number(c || 0), 0); const capacity = Number(row.cantidad_objetivo || 0);
+      if (quantity < 1 || quantity > 100000) { setError(`Salida ${index + 1}: registra entre 1 y 100.000 cajas.`); return; }
+      if (row.tipo_resultado === 'pallet' && (!capacity || quantity !== capacity)) { setError(`Salida ${index + 1}: el pallet debe completar su capacidad exacta.`); return; }
+      if (row.tipo_resultado === 'saldo' && capacity && quantity >= capacity) { setError(`Salida ${index + 1}: un saldo debe quedar bajo la capacidad del pallet.`); return; }
+    }
     const payload = { modalidad: 'reembalaje' as const, turno: shift, fecha_operacional: shift === 'B' ? day : 'hoy',
       huella_reembalaje: source.reembalaje.huella, origenes: [{ folio_id: source.id, cantidad_aportada: source.cantidad_cajas, composicion: source.reembalaje.componentes.map((c) => ({ clave: c.clave, cantidad_aportada: c.cantidad_cajas })) }],
       resultados: outputs.map((r) => ({ numero_folio: r.numero_folio.trim().toUpperCase(), tipo_resultado: r.tipo_resultado,
@@ -63,6 +69,7 @@ export function RepackingEditor({ auth, baseUrl, shift, chooseShift, day, choose
     <ScanInput value={lookup} onChangeText={setLookup} onSubmit={(code) => void find(code)} disabled={busy} placeholder="Folio de origen" submitLabel="Consultar"/>
     {busy ? <ActivityIndicator color={colors.cyan}/> : null}{error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}{message ? <Text style={styles.success}>{message}</Text> : null}
     {source?.reembalaje && balance ? <>
+      {source.reembalaje.advertencias?.map((warning) => <Text key={warning} style={styles.warning}>{warning}</Text>)}
       <Text style={styles.title}>{source.numero_folio} · {source.cliente}</Text><Text style={styles.muted}>{source.cantidad_cajas} cajas · {kg(balance.input)} de entrada</Text>
       {outputs.map((r, index) => <View key={r.key} style={styles.card}>
         <Text style={styles.title}>Salida {index + 1}</Text>
@@ -89,4 +96,4 @@ const styles = StyleSheet.create({ editor: { gap: 14 }, title: { color: colors.t
   input: { minHeight: 48, borderWidth: 1, borderColor: colors.border, borderRadius: 8, color: colors.text, padding: 10, fontSize: 17, backgroundColor: colors.background },
   count: { flexDirection: 'row', alignItems: 'center', gap: 8 }, identity: { color: colors.text, fontSize: 14, flex: 1 }, quantity: { width: 90, minHeight: 48, color: colors.text, borderColor: colors.border, borderWidth: 1, borderRadius: 8, padding: 10, backgroundColor: colors.background },
   choice: { borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: 12, minHeight: 44, marginRight: 6 }, active: { borderColor: colors.cyan, backgroundColor: colors.panelStrong }, text: { color: colors.text },
-  error: { color: colors.red }, success: { color: colors.green }, primary: { backgroundColor: colors.cyan, borderRadius: 8, padding: 16 }, primaryText: { color: colors.accentText, fontWeight: '700', textAlign: 'center' } });
+  warning: { color: colors.amber }, error: { color: colors.red }, success: { color: colors.green }, primary: { backgroundColor: colors.cyan, borderRadius: 8, padding: 16 }, primaryText: { color: colors.accentText, fontWeight: '700', textAlign: 'center' } });

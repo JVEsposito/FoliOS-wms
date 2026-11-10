@@ -546,6 +546,7 @@ class ServicioRepaletizaje
             'tipo_bulto_antes' => $snapshotAntes['atributos']['tipo_bulto'], 'tipo_bulto_despues' => $folio->tipo_bulto->value,
             'estado_antes' => $snapshotAntes['atributos']['estado_operacional'], 'estado_despues' => $folio->estado_operacional->value,
             'snapshot_antes' => $snapshotAntes, 'snapshot_despues' => $this->snapshotFolio($folio->refresh())]);
+        $this->soltarIngresosPendientes($folio->id, $usuario);
         $this->generadorRecepcion->generar($repa, $usuario);
         $this->refrescarPlanos($repa);
 

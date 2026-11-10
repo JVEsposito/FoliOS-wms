@@ -12,12 +12,14 @@ use App\Models\Repaletizaje;
 use App\Models\RepaletizajeDetalle;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\Validacion\CuadraturaReembalaje;
+use App\Services\Validacion\RegistroReembalaje;
 use App\Services\Validacion\ServicioRegistroRepaletizaje;
 use App\Services\Validacion\ServicioRepaletizaje;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class RepaletizajeController extends Controller
 {
@@ -70,7 +72,7 @@ class RepaletizajeController extends Controller
         ]);
         $fecha = $datos['fecha'] ?? now(config('app.operational_timezone'))->toDateString();
 
-        $planillas = Repaletizaje::query()
+        $planillas = Repaletizaje::query()->where('modalidad', '!=', 'reembalaje')
             ->whereDate('fecha_operacional', $fecha)
             ->whereHas('folioResultante', fn ($folios) => $folios
                 ->where('temporada_id', app(ServicioTemporadaActiva::class)->buscar()?->id))
@@ -109,7 +111,7 @@ class RepaletizajeController extends Controller
             'user_id' => ['nullable', 'integer', Rule::exists('users', 'id')],
         ]);
 
-        $repas = Repaletizaje::query()
+        $repas = Repaletizaje::query()->where('modalidad', '!=', 'reembalaje')
             ->whereDate('fecha_operacional', $datos['fecha'])
             ->whereHas('folioResultante', fn ($folios) => $folios
                 ->where('temporada_id', app(ServicioTemporadaActiva::class)->buscar()?->id))
@@ -130,6 +132,15 @@ class RepaletizajeController extends Controller
                 'Cache-Control' => 'no-store, private',
             ])
             ->deleteFileAfterSend();
+    }
+
+    public function registroReembalaje(Repaletizaje $repaletizaje, RegistroReembalaje $registro): StreamedResponse
+    {
+        abort_unless($repaletizaje->modalidad === 'reembalaje', 404);
+
+        return response()->streamDownload(fn () => $registro->escribir($repaletizaje), $repaletizaje->codigo.'_reembalaje.csv', [
+            'Content-Type' => 'text/csv; charset=UTF-8', 'Cache-Control' => 'no-store, private',
+        ]);
     }
 
     public function registroEnBlanco(ServicioRegistroRepaletizaje $registro): BinaryFileResponse

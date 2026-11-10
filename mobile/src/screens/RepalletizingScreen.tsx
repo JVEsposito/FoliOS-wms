@@ -481,6 +481,7 @@ export function RepalletizingScreen({ auth, baseUrl, onLogout, standalone = fals
             <Text style={styles.sourceMeta}>
               {repa.modalidad === 'reembalaje' ? 'Reembalaje' : repa.tipo_resultado === 'pallet' ? 'Pallet completo' : (repa.tipo_resultado === 'division' ? 'División' : 'Saldo')} · {repa.cantidad_resultante} cajas · {repa.condicion_termica}
             </Text>
+            {repa.balance_kilos ? <Text style={styles.sourceMeta}>Entrada {repa.balance_kilos.kilos_entrada} kg · Salida {repa.balance_kilos.kilos_salida} kg · Merma {repa.balance_kilos.kilos_merma} kg</Text> : null}
             {repa.campos_mix.length ? (
               <Text style={styles.historyWarning}>MIX: {repa.campos_mix.join(' · ')}</Text>
             ) : null}
