@@ -102,9 +102,12 @@ class ServicioSolicitudesCargaCliente
             }
             $this->asegurarLibre($temporada, $inicio, $intervalo);
 
+            // Un reinicio puede dejar huecos si se conservan solicitudes de otras temporadas.
+            $ultimoNumero = SolicitudCargaCliente::query()->max(DB::raw('CAST(SUBSTR(codigo, 4) AS DECIMAL(20, 0))'));
+
             return SolicitudCargaCliente::create([
                 'operacion_id' => $datos['operacion_id'], 'payload_hash' => $hash, 'temporada_id' => $temporada->id,
-                'cliente_id' => $cliente->id, 'codigo' => sprintf('SC-%05d', SolicitudCargaCliente::count() + 1),
+                'cliente_id' => $cliente->id, 'codigo' => sprintf('SC-%05d', (int) $ultimoNumero + 1),
                 'fecha' => $inicio->toDateString(), 'hora' => $inicio->format('H:i:s'), 'intervalo_minutos' => $intervalo,
                 'estado' => SolicitudCargaCliente::SOLICITADA,
                 'modalidad' => $datos['modalidad'] ?? ModalidadEmbarque::PorConfirmar->value,
