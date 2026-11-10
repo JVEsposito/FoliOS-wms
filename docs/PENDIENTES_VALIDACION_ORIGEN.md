@@ -110,15 +110,33 @@ posterior, sin reconstruir una lectura histórica que no existe. Los GET no escr
 Los respaldos iniciales no se sustituyen. Una corrección autorizada de Validación
 actualiza la comparación vigente y deja la anterior en el historial. Los movimientos,
 despachos y repaletizajes posteriores del folio no cambian la base física validada.
-Si el folio cambió o salió de planta, se indica esa situación y se suspende el cierre
-o reapertura automática de la conciliación.
+
+**Se cruza lo validado con la copia de planta del mismo pallet, no con su existencia
+posterior.** La copia de planta deja de leerse en dos casos:
+
+- **El folio cambió o salió después de validar** (repaletizaje, despacho, consumo): se
+  conserva la última copia leída antes del cambio y la pantalla la muestra como «Planta
+  antes del cambio». Si no hubo una copia anterior al cambio, el caso queda **Por
+  revisar** («Sin copia de planta anterior al cambio») en vez de compararse con un pallet
+  que ya es otro.
+- **La comparación ya coincidió** (Sin diferencias o Cuadrado): queda fija. Un
+  repaletizaje registrado en planta antes que en FoliOS, o una salida, no crea ni reabre
+  diferencias. Esas diferencias de existencia son materia del stock, no de la validación.
+
+Una corrección autorizada de la validación sí vuelve a comparar contra la copia fija:
+si deja de coincidir, el caso pasa a Pendiente de cuadratura.
+
+La migración `2026_11_10_090000_restituir_copia_validada_en_cuadraturas` corrigió los
+casos que la regla anterior había cruzado con la existencia posterior. Les restituyó,
+desde su propio historial, la copia que correspondía al pallet validado. Cada ajuste
+queda en el historial como «Comparación restituida a la copia validada».
 
 | Estado | Significado |
 |---|---|
 | Pendiente de cuadratura | Hay diferencias conocidas con planta. |
 | En revisión | Oficina tomó el caso o informó una corrección en planta. |
 | Cuadrado | Después de haber diferencias, una lectura posterior vigente coincide en los cuatro campos. |
-| Reabierto | Un caso cuadrado vuelve a tener diferencias en una lectura vigente. |
+| Reabierto | Estado histórico: la regla anterior reabría un caso cuadrado ante un cambio posterior en planta. Ya no se genera. |
 | Sin diferencias | La comparación completa coincide y el caso nunca tuvo diferencias. |
 | Por revisar | No hay evidencia completa para confirmar la comparación. |
 
