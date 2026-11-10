@@ -45,7 +45,7 @@ class PerfilAccesoController extends Controller
                 ],
                 $this->oficinas->opcionesInicio(),
             ),
-            'roles_base' => collect(RolUsuario::cases())
+            'roles_base' => collect(RolUsuario::internos())
                 ->sortBy(fn (RolUsuario $rol): int => $rol === RolUsuario::Administrador ? 1 : 0)
                 ->map(fn (RolUsuario $rol): array => [
                     'clave' => $rol->value,
@@ -180,6 +180,7 @@ class PerfilAccesoController extends Controller
             RolUsuario::ValidadorMp => 'Validador MP',
             RolUsuario::Tarjador => 'Tarjador',
             RolUsuario::Consulta => 'Solo consulta',
+            RolUsuario::Cliente => 'Usuario de cliente',
         };
     }
 }

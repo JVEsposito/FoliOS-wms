@@ -15,7 +15,7 @@ const elements = {
     overbook: byId('overbookAuthorization'), overbookReason: byId('overbookReason'),
     loadConfirmation: byId('loadConfirmation'), save: byId('saveShipment'), confirm: byId('confirmShipment'),
     cancel: byId('cancelShipment'), loading: byId('officeLoading'), loadingText: byId('officeLoadingText'),
-    toasts: byId('officeToasts'),
+    toasts: byId('officeToasts'), requests: byId('clientRequests'), requestList: byId('clientRequestList'),
 };
 
 const keys = { token: 'estiba_wms_office_token', identity: 'estiba_wms_office_identity' };
@@ -30,6 +30,7 @@ const state = {
     catalogs: { clientes: [], camaras: [], andenes: [], paises: [], puertos: [] },
     permissions: { gestionar: false, autorizar_sobrecupo: false },
     selected: null,
+    requests: [],
 };
 
 class ApiError extends Error {
@@ -106,7 +107,8 @@ async function loadCalendar({ preserveScroll = false } = {}) {
         state.season = payload.temporada; state.windows = payload.ventanas || []; state.shipments = payload.embarques || [];
         state.catalogs = payload.catalogos || state.catalogs; state.permissions = payload.permisos || state.permissions;
         elements.season.textContent = `${state.season.codigo} · intervalo global ${state.season.intervalo_embarques_minutos} minutos · 24 horas`;
-        renderCalendar(); populateCatalogs();
+        state.requests = (await api('/api/solicitudes-carga-clientes')).data || [];
+        renderCalendar(); populateCatalogs(); renderRequests();
         if (preserveScroll) elements.scroll.scrollTop = previousScroll;
         else scrollToCurrentHour();
     } catch (error) { toast(error.message, true); }
@@ -129,14 +131,55 @@ function renderCalendar() {
     elements.grid.innerHTML = html.join('');
 }
 
+function renderRequests() {
+    elements.requests.classList.toggle('is-hidden', state.requests.length === 0);
+    elements.requestList.innerHTML = state.requests.map((request) => `<article class="shipment-request" data-request="${escapeHtml(request.id)}">
+        <div><strong>${escapeHtml(request.codigo)} · ${escapeHtml(request.cliente?.nombre || 'Cliente')}</strong>
+        <small>${escapeHtml(dateLabel(request.fecha))} · ${escapeHtml(request.hora)} · ${escapeHtml(modeText(request.modalidad))}${request.cantidad_pallets ? ` · ${Number(request.cantidad_pallets)} pallets` : ''}${request.referencia ? ` · ${escapeHtml(request.referencia)}` : ''}</small>
+        ${request.observacion ? `<small>${escapeHtml(request.observacion)}</small>` : ''}<small>Solicitó ${escapeHtml(request.solicitado_por || '')}</small></div>
+        ${state.permissions.gestionar ? `<div class="shipment-request__actions"><button class="secondary-button" type="button" data-request-reject="${escapeHtml(request.id)}">Rechazar</button><button class="primary-button" type="button" data-request-accept="${escapeHtml(request.id)}">Aceptar</button></div>` : ''}
+    </article>`).join('');
+}
+
+async function resolveRequest(id, accept) {
+    const request = state.requests.find((candidate) => candidate.id === id);
+    if (!request) return;
+    const body = { version_esperada: request.version };
+    if (!accept) {
+        const reason = window.prompt(`Motivo del rechazo de ${request.codigo} (lo verá el cliente):`);
+        if (!reason) return;
+        body.motivo = reason;
+    }
+    setBusy(true, accept ? 'Creando embarque tentativo…' : 'Rechazando solicitud…');
+    try {
+        await api(`/api/solicitudes-carga-clientes/${encodeURIComponent(id)}/${accept ? 'aceptar' : 'rechazar'}`, { method: 'POST', body: JSON.stringify(body) });
+        toast(accept ? `${request.codigo} aceptada: el embarque quedó tentativo en el calendario.` : `${request.codigo} rechazada.`);
+    } catch (error) {
+        if (accept && error.status === 409 && state.permissions.autorizar_sobrecupo && /sobrecupo/i.test(error.message)) {
+            const reason = window.prompt(`${error.message}\nPara aceptarla igual, indica el motivo del sobrecupo:`);
+            if (reason) {
+                try {
+                    await api(`/api/solicitudes-carga-clientes/${encodeURIComponent(id)}/aceptar`, { method: 'POST', body: JSON.stringify({ ...body, autorizar_sobrecupo: true, motivo_sobrecupo: reason }) });
+                    toast(`${request.codigo} aceptada con sobrecupo autorizado.`);
+                } catch (retry) { toast(retry.message, true); }
+            }
+        } else toast(error.message, true);
+    } finally {
+        setBusy(false);
+        await loadCalendar({ preserveScroll: true });
+    }
+}
+
 function renderWindow(window, date, time) {
     if (!window) return '<div class="shipment-window"></div>';
+    const requested = (window.solicitudes || []).map((request) => `<article class="shipment-card shipment-card--requested">
+        <strong>${escapeHtml(request.codigo)}</strong><small>${escapeHtml(request.cliente || 'Cliente')} · solicitud${request.cantidad_pallets ? ` · ${Number(request.cantidad_pallets)} pallets` : ''}</small></article>`).join('');
     const cancelled = state.shipments.filter((shipment) => shipment.estado === 'cancelado' && shipment.fecha_programada === date && shipment.hora_programada === time);
     const active = window.embarques || [];
     const cards = [...active.map((summary) => {
         const shipment = state.shipments.find((candidate) => candidate.id === summary.id) || summary;
         return renderShipmentCard(shipment);
-    }), ...cancelled.map(renderShipmentCard)].join('');
+    }), ...cancelled.map(renderShipmentCard)].join('') + requested;
 
     if (window.disponible) {
         return `<div class="shipment-window" role="gridcell">${cards}<button class="shipment-window__available" data-open-window data-date="${date}" data-time="${time}" type="button">Disponible<br><small>Crear embarque aquí</small></button></div>`;
@@ -344,6 +387,12 @@ elements.form.elements.hora_programada.addEventListener('change', () => updateOv
 elements.form.elements.autorizar_sobrecupo.addEventListener('change', () => updateOverbookControls());
 elements.form.addEventListener('submit', async (event) => { event.preventDefault(); await saveCurrent(); });
 
+elements.requestList.addEventListener('click', (event) => {
+    const accept = event.target.closest('[data-request-accept]');
+    const reject = event.target.closest('[data-request-reject]');
+    if (accept) resolveRequest(accept.dataset.requestAccept, true);
+    if (reject) resolveRequest(reject.dataset.requestReject, false);
+});
 elements.grid.addEventListener('click', (event) => {
     const button = event.target.closest('[data-open-window]');
     if (button) openNew(button.dataset.date, button.dataset.time, button.dataset.overbook === '1');

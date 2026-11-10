@@ -37,7 +37,8 @@ class AlcanceOperacionalUsuario
             RolUsuario::OperadorRomana,
             RolUsuario::Validador,
             RolUsuario::ValidadorMp,
-            RolUsuario::Tarjador => [],
+            RolUsuario::Tarjador,
+            RolUsuario::Cliente => [],
         };
 
         return array_values(array_filter(
@@ -1392,6 +1393,10 @@ class AlcanceOperacionalUsuario
 
     public function puedeAccederOficina(User $usuario): bool
     {
+        if ($usuario->esCliente()) {
+            return $usuario->activo && $usuario->clientesPortal()->where('clientes.activo', true)->exists();
+        }
+
         return $this->rolActivoEnModulo($usuario, [
             RolUsuario::GuardiaPorteria,
             RolUsuario::Administrador,

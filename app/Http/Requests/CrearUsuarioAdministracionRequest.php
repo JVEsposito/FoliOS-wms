@@ -22,7 +22,7 @@ class CrearUsuarioAdministracionRequest extends FormRequest
         return [
             'nombre' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')],
-            'rol' => ['nullable', 'required_without:perfil_acceso_id', Rule::enum(RolUsuario::class)],
+            'rol' => ['nullable', 'required_without:perfil_acceso_id', Rule::enum(RolUsuario::class)->except([RolUsuario::Cliente])],
             'perfil_acceso_id' => [
                 'nullable',
                 'required_without:rol',

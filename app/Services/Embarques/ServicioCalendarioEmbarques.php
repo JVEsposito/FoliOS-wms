@@ -14,6 +14,7 @@ use App\Models\Embarque;
 use App\Models\EventoEmbarque;
 use App\Models\Pais;
 use App\Models\Puerto;
+use App\Models\SolicitudCargaCliente;
 use App\Models\Temporada;
 use App\Models\User;
 use App\Services\Autorizacion\AlcanceOperacionalUsuario;
@@ -293,6 +294,13 @@ class ServicioCalendarioEmbarques
             ->orderBy('fecha_programada')
             ->orderBy('hora_programada')
             ->get();
+        // Horarios pedidos por clientes desde el portal, pendientes de respuesta de despacho.
+        $solicitudes = SolicitudCargaCliente::query()
+            ->where('temporada_id', $temporada->id)
+            ->where('estado', SolicitudCargaCliente::SOLICITADA)
+            ->whereBetween('fecha', [$desde->copy()->subDay()->toDateString(), $hasta->toDateString()])
+            ->with('cliente:id,codigo,nombre')
+            ->get();
         $ventanas = [];
 
         for ($dia = $desde->startOfDay(); $dia->lte($hasta->endOfDay()); $dia = $dia->addDay()) {
@@ -305,6 +313,11 @@ class ServicioCalendarioEmbarques
                     $this->inicioModelo($embarque),
                     $this->inicioModelo($embarque)->addMinutes($embarque->intervalo_minutos),
                 ));
+                $pedidas = $solicitudes->filter(function (SolicitudCargaCliente $solicitud) use ($inicio, $fin): bool {
+                    $desdeSolicitud = $this->inicio($solicitud->fecha->toDateString(), substr((string) $solicitud->hora, 0, 5));
+
+                    return $this->intersecta($inicio, $fin, $desdeSolicitud, $desdeSolicitud->addMinutes($solicitud->intervalo_minutos));
+                });
                 $inicianAqui = $conflictos->filter(
                     fn (Embarque $embarque): bool => $this->inicioModelo($embarque)->equalTo($inicio),
                 );
@@ -314,7 +327,15 @@ class ServicioCalendarioEmbarques
                     'hora' => $inicio->format('H:i'),
                     'inicio' => $inicio->toIso8601String(),
                     'fin' => $fin->toIso8601String(),
-                    'disponible' => $conflictos->isEmpty(),
+                    'disponible' => $conflictos->isEmpty() && $pedidas->isEmpty(),
+                    'solicitudes' => $pedidas
+                        ->filter(fn (SolicitudCargaCliente $solicitud): bool => $this->inicio($solicitud->fecha->toDateString(), substr((string) $solicitud->hora, 0, 5))->equalTo($inicio))
+                        ->map(fn (SolicitudCargaCliente $solicitud): array => [
+                            'id' => $solicitud->id,
+                            'codigo' => $solicitud->codigo,
+                            'cliente' => $solicitud->cliente?->nombre,
+                            'cantidad_pallets' => $solicitud->cantidad_pallets,
+                        ])->values()->all(),
                     'ocupada_por' => $conflictos->pluck('codigo')->values()->all(),
                     'embarques' => $inicianAqui->map(fn (Embarque $embarque): array => [
                         'id' => $embarque->id,

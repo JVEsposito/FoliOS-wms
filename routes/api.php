@@ -79,6 +79,7 @@ use App\Http\Controllers\Api\PerfilImpresionEtiquetaController;
 use App\Http\Controllers\Api\PinOperacionalController;
 use App\Http\Controllers\Api\PlanOperacionalController;
 use App\Http\Controllers\Api\PlanoPlantaController;
+use App\Http\Controllers\Api\PortalClienteController;
 use App\Http\Controllers\Api\PrecargaValidacionOrigenController;
 use App\Http\Controllers\Api\ProcesoPrefrioController;
 use App\Http\Controllers\Api\ProductoHidrocoolerController;
@@ -98,12 +99,14 @@ use App\Http\Controllers\Api\RomanaPorteriaController;
 use App\Http\Controllers\Api\SaludPlanificadorController;
 use App\Http\Controllers\Api\SesionesAccesoAdministracionController;
 use App\Http\Controllers\Api\SesionEstibaController;
+use App\Http\Controllers\Api\SolicitudCargaClienteController;
 use App\Http\Controllers\Api\SupervisionMaterialesController;
 use App\Http\Controllers\Api\TomaInventarioMaterialController;
 use App\Http\Controllers\Api\TransferenciaClienteMaterialController;
 use App\Http\Controllers\Api\TransformacionMaterialController;
 use App\Http\Controllers\Api\TunelPrefrioController;
 use App\Http\Controllers\Api\UnidadMaterialController;
+use App\Http\Controllers\Api\UsuarioClienteAdministracionController;
 use App\Http\Controllers\Api\ValidacionMpController;
 use App\Http\Controllers\Api\ValidacionPalletController;
 use App\Http\Controllers\Api\VencimientoMaterialController;
@@ -949,4 +952,34 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/acceso-tablet', [AccesoTabletController::class, 'destroy']);
     Route::get('/acceso-oficina', [AccesoOficinaController::class, 'show']);
     Route::delete('/acceso-oficina', [AccesoOficinaController::class, 'destroy']);
+});
+
+// Portal de clientes: solo usuarios de cliente, siempre acotados a sus exportadoras.
+Route::middleware(['auth:sanctum', 'can:portal-cliente'])->prefix('portal')->group(function (): void {
+    Route::get('/contexto', [PortalClienteController::class, 'contexto']);
+    Route::prefix('/clientes/{cliente}')->whereUuid('cliente')->group(function (): void {
+        Route::get('/resumen', [PortalClienteController::class, 'resumen']);
+        Route::get('/recepciones', [PortalClienteController::class, 'recepciones']);
+        Route::get('/embarques', [PortalClienteController::class, 'embarques']);
+        Route::get('/folios', [PortalClienteController::class, 'folios']);
+        Route::get('/materiales', [PortalClienteController::class, 'materiales']);
+        Route::get('/horarios', [PortalClienteController::class, 'horarios']);
+        Route::get('/solicitudes-carga', [PortalClienteController::class, 'solicitudes']);
+        Route::post('/solicitudes-carga', [PortalClienteController::class, 'solicitar'])->middleware('throttle:20,1');
+        Route::post('/solicitudes-carga/{solicitud}/anular', [PortalClienteController::class, 'anular'])->whereUuid('solicitud');
+    });
+});
+
+// Despacho responde las solicitudes de horario de los clientes.
+Route::middleware('auth:sanctum')->prefix('solicitudes-carga-clientes')->group(function (): void {
+    Route::get('/', [SolicitudCargaClienteController::class, 'index'])->middleware('can:consultar-catalogo-cargas');
+    Route::post('/{solicitud}/aceptar', [SolicitudCargaClienteController::class, 'aceptar'])->whereUuid('solicitud')->middleware('can:gestionar-cargas');
+    Route::post('/{solicitud}/rechazar', [SolicitudCargaClienteController::class, 'rechazar'])->whereUuid('solicitud')->middleware('can:gestionar-cargas');
+});
+
+// Accesos → Usuarios de clientes.
+Route::middleware('auth:sanctum')->prefix('administracion/usuarios-clientes')->group(function (): void {
+    Route::get('/', [UsuarioClienteAdministracionController::class, 'index']);
+    Route::post('/', [UsuarioClienteAdministracionController::class, 'store'])->middleware('can:administrar-accesos');
+    Route::put('/{usuario}', [UsuarioClienteAdministracionController::class, 'update'])->middleware('can:administrar-accesos');
 });

@@ -39,7 +39,7 @@ class GuardarPerfilAccesoRequest extends FormRequest
             'solo_consulta' => ['sometimes', 'boolean'],
             'rol_base' => [
                 'required',
-                Rule::enum(RolUsuario::class),
+                Rule::enum(RolUsuario::class)->except([RolUsuario::Cliente]),
             ],
             'modulos' => ['required', 'array', 'min:1'],
             'modulos.*' => ['required', 'string', 'distinct', Rule::in($catalogo->claves())],

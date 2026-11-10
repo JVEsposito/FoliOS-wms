@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -91,6 +92,17 @@ class User extends Authenticatable
     public function correccionesControlAmbiental(): HasMany
     {
         return $this->hasMany(CorreccionControlAmbiental::class, 'corregido_por_user_id');
+    }
+
+    /** Exportadoras que un usuario de cliente puede consultar en el portal. */
+    public function clientesPortal(): BelongsToMany
+    {
+        return $this->belongsToMany(Cliente::class, 'usuarios_clientes')->withPivot('created_at');
+    }
+
+    public function esCliente(): bool
+    {
+        return $this->rol === RolUsuario::Cliente;
     }
 
     public function perfilAcceso(): BelongsTo

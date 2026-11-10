@@ -154,6 +154,9 @@ class AppServiceProvider extends ServiceProvider
 
         $alcance = app(AlcanceOperacionalUsuario::class);
 
+        // Un usuario de cliente no recibe ningún permiso interno, aunque una regla lo olvide.
+        Gate::before(fn (User $usuario, string $habilidad): ?bool => $usuario->esCliente() && $habilidad !== 'portal-cliente' ? false : null);
+        Gate::define('portal-cliente', fn (User $usuario): bool => $usuario->esCliente() && $usuario->activo);
         Gate::define('controlar-personal-frigorifico', fn (User $usuario): bool => $alcance->puedeControlarPersonalFrigorifico($usuario));
 
         Gate::define(

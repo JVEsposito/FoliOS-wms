@@ -9,7 +9,7 @@
         <title>FoliOS · Administración de accesos</title>
 
         @if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
-            @vite(['resources/css/office.css', 'resources/css/office-admin.css', 'resources/js/office-admin.js', 'resources/js/office-access-profiles.js', 'resources/js/office-user-management.js', 'resources/js/office-label-profiles.js', 'resources/js/office-record-formats.js'])
+            @vite(['resources/css/office.css', 'resources/css/office-admin.css', 'resources/js/office-admin.js', 'resources/js/office-access-profiles.js', 'resources/js/office-user-management.js', 'resources/js/office-client-users.js', 'resources/js/office-label-profiles.js', 'resources/js/office-record-formats.js'])
         @endif
         @include('office.partials.arranque')
     </head>
@@ -85,6 +85,7 @@
                         'hydro-products' => ['label' => 'Productos hidrocooler', 'icon' => '◇'],
                         'profiles' => ['label' => 'Perfiles', 'icon' => '⚙'],
                         'users' => ['label' => 'Usuarios', 'icon' => '●'],
+                        'client-users' => ['label' => 'Usuarios de clientes', 'icon' => '◎'],
                         'sessions' => ['label' => 'Sesiones', 'icon' => '◉'],
                         'devices' => ['label' => 'Tablets', 'icon' => '▣'],
                     ]"
@@ -344,6 +345,35 @@
                             <table class="admin-table">
                                 <thead><tr><th>Usuario</th><th>Perfil</th><th>Estado</th></tr></thead>
                                 <tbody id="usersTableBody"></tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <section class="admin-panel panel" id="administration-panel-client-users" data-office-panel-group="administration" data-office-panel-id="client-users" role="tabpanel" aria-labelledby="administration-tab-client-users">
+                        <div class="admin-panel__heading">
+                            <div><p class="eyebrow">PORTAL DE CLIENTES</p><h2 id="clientUsersTitle">Usuarios de clientes</h2></div>
+                            <span id="clientUsersSummary">0 registrados</span>
+                        </div>
+                        <p class="admin-form__hint">Cuentas externas de exportadoras. Entran por <strong>/portal</strong> o por FoliOS y solo ven kilos recepcionados, embarques, horarios de carga, folios y materiales de las exportadoras asignadas. Nunca acceden a la Oficina interna.</p>
+                        <form class="admin-form" id="clientUserForm" novalidate>
+                            <input type="hidden" name="id">
+                            <div class="admin-form__grid">
+                                <label class="field field--wide"><span>Nombre *</span><input name="nombre" maxlength="255" placeholder="Ej. Comex La Aguada" required></label>
+                                <label class="field field--wide"><span>Correo electrónico *</span><input name="email" type="email" maxlength="255" autocomplete="off" required></label>
+                                <label class="field"><span id="clientUserPasswordLabel">Contraseña temporal *</span><input name="password" type="password" minlength="10" maxlength="255" autocomplete="new-password" placeholder="Mínimo 10 caracteres"></label>
+                                <label class="field field--check is-hidden" id="clientUserActiveField"><input name="activo" type="checkbox" checked><span>Usuario activo</span></label>
+                                <fieldset class="field field--wide client-user-clients"><legend>Exportadoras que puede consultar *</legend><div id="clientUserClients"></div></fieldset>
+                            </div>
+                            <p class="form-error" id="clientUserError" role="alert"></p>
+                            <div class="admin-form__actions">
+                                <button class="secondary-button is-hidden" type="button" id="clientUserCancel">Cancelar edición</button>
+                                <button class="primary-button" type="submit" id="clientUserSubmit">Crear usuario de cliente <span>→</span></button>
+                            </div>
+                        </form>
+                        <div class="admin-table-scroll">
+                            <table class="admin-table">
+                                <thead><tr><th>Usuario</th><th>Exportadoras</th><th>Estado</th><th></th></tr></thead>
+                                <tbody id="clientUsersTableBody"></tbody>
                             </table>
                         </div>
                     </section>

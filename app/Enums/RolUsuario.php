@@ -18,4 +18,12 @@ enum RolUsuario: string
     case ValidadorMp = 'validador_mp';
     case Tarjador = 'tarjador';
     case Consulta = 'consulta';
+    // Usuario externo de una exportadora: solo entra al portal de clientes.
+    case Cliente = 'cliente';
+
+    /** Roles del personal interno (los que administra Accesos y admiten perfiles). */
+    public static function internos(): array
+    {
+        return array_values(array_filter(self::cases(), fn (self $rol): bool => $rol !== self::Cliente));
+    }
 }
