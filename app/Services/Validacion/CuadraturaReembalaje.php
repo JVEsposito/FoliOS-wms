@@ -56,7 +56,7 @@ class CuadraturaReembalaje
         }
         $autorizaciones = $folio->autorizacionesSagActivas()->orderBy('id')->pluck('id')->all();
         $huella = hash('sha256', json_encode([$folio->id, $folio->activo, $folio->estado_operacional->value,
-            $folio->condicion_termica->value, $folio->datos_externos['cantidad_cajas'] ?? 0, $componentes, $formatos, $folio->condicion_sag_id, $autorizaciones], JSON_THROW_ON_ERROR));
+            $folio->condicion_termica->value, $folio->datos_externos['cantidad_cajas'] ?? 0, $componentes, $formatos, $folio->exportadora, $folio->datos_externos['repaletizaje_id'] ?? null, $folio->condicion_sag_id, $autorizaciones], JSON_THROW_ON_ERROR));
 
         return ['huella' => $huella, 'advertencias' => $folio->condicion_sag_id !== null || $autorizaciones ? ['Esta operación retira la condición y autorizaciones SAG actuales. El nuevo formato requiere revisión.'] : [], 'componentes' => $componentes, 'errores' => array_values(array_unique($errores)),
             'kilos_entrada' => self::kilos(array_sum(array_map(fn ($l) => self::unidades($l['kilos_entrada']), $componentes))),

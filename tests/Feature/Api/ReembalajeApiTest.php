@@ -164,6 +164,19 @@ class ReembalajeApiTest extends TestCase
         $this->assertSame($condicion->id, $folio->refresh()->condicion_sag_id);
     }
 
+    public function test_un_reembalaje_posterior_invalida_la_huella_incluso_si_conserva_el_formato_y_las_cajas(): void
+    {
+        [$folio, $envase] = $this->contexto();
+        $this->postJson('/api/validacion/repaletizajes', $this->payload($folio, $envase))->assertOk();
+        $payload = $this->payload($folio->refresh(), $envase);
+        $payload['origenes'][0]['cantidad_aportada'] = 2;
+        $this->postJson('/api/validacion/repaletizajes', $payload)->assertOk();
+        $this->postJson('/api/validacion/repaletizajes', $payload)->assertOk();
+        $payload['operacion_id'] = (string) Str::uuid();
+        $this->postJson('/api/validacion/repaletizajes', $payload)->assertConflict();
+        $this->assertDatabaseCount('repaletizajes', 2);
+    }
+
     private function contexto(string $peso = '2.5000'): array
     {
         $this->actingAs(User::factory()->create(['rol' => RolUsuario::Administrador]), 'sanctum');
