@@ -8,16 +8,19 @@ use App\Models\ClienteValidacion;
 use App\Models\ConciliacionValidacionOrigen;
 use App\Models\ConexionExterna;
 use App\Models\Dispositivo;
+use App\Models\Folio;
 use App\Models\OrigenValidacion;
 use App\Models\PerfilAcceso;
 use App\Models\Temporada;
 use App\Models\User;
 use App\Services\Clientes\ServicioCliente;
 use App\Services\Integraciones\ConectorMySqlLectura;
+use App\Services\Validacion\ComparadorConciliacionValidacion;
 use App\Services\Validacion\ServicioCatalogoJerarquicoValidacion;
 use App\Services\Validacion\ServicioConciliacionValidacion;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 use ZipArchive;
@@ -159,7 +162,7 @@ class ConciliacionValidacionOrigenTest extends TestCase
         ]);
     }
 
-    public function test_gestion_idempotente_no_cierra_y_lectura_posterior_cuadra_y_reabre(): void
+    public function test_gestion_idempotente_no_cierra_y_lectura_posterior_cuadra_sin_reabrir(): void
     {
         $this->leer();
         $caso = $this->validar();
@@ -174,9 +177,11 @@ class ConciliacionValidacionOrigenTest extends TestCase
         $this->leer();
         $this->assertSame('cuadrado', $caso->fresh()->estado);
         $this->assertEquals($inicial, $caso->fresh()->planta_inicial);
+        // Un cambio posterior en planta (repaletizaje o salida) no reabre lo que ya cuadró.
         $this->filas = [$this->fila(['cantidad' => 235])];
         $this->leer();
-        $this->assertSame('reabierto', $caso->fresh()->estado);
+        $this->assertSame('cuadrado', $caso->fresh()->estado);
+        $this->assertSame(236, $caso->fresh()->planta_actual['cajas']);
         $this->assertSame(236, $caso->fresh()->validacion_inicial['datos']['cajas']);
     }
 
@@ -210,10 +215,126 @@ class ConciliacionValidacionOrigenTest extends TestCase
         $this->filas = [$this->fila(['cantidad' => 100])];
         $this->leer();
         $this->assertSame('cuadrado', $caso->fresh()->estado);
+        $this->assertSame(236, $caso->fresh()->planta_actual['cajas']);
+        $this->assertSame('coincide', $caso->fresh()->comparacion['cajas']['estado']);
         $this->getJson(self::URL)->assertJsonPath('casos.data.0.contexto_actual', 'folio_modificado')->assertJsonPath('casos.data.0.comprobacion_vigente', false);
         $this->assertSame(236, $caso->fresh()->validacion_actual['datos']['cajas']);
         $folio->update(['activo' => false, 'estado_operacional' => 'despachado']);
         $this->getJson(self::URL)->assertJsonPath('casos.data.0.contexto_actual', 'salida_o_transformacion');
+    }
+
+    private function coincidente(array $cambios = []): array
+    {
+        return $this->fila(['cantidad' => 236, 'marca' => 'Marca A', 'cod_calibre' => '2J', 'codigo_csg_predio' => '001234', ...$cambios]);
+    }
+
+    private function modificarFolio(ConciliacionValidacionOrigen $caso, int $cajas): void
+    {
+        $folio = $caso->validacion->folio;
+        $f = $folio->datos_externos;
+        $f['cantidad_cajas'] = $cajas;
+        $folio->update(['datos_externos' => $f]);
+    }
+
+    public function test_un_repa_registrado_primero_en_planta_no_crea_diferencias_en_lo_que_coincidio(): void
+    {
+        $this->filas = [$this->coincidente()];
+        $this->leer();
+        $caso = $this->validar();
+        $this->assertSame('sin_diferencias', $caso->estado);
+        // Planta registra el repaletizaje antes que FoliOS: su existencia baja a 168 cajas.
+        $this->filas = [$this->coincidente(['cantidad' => 168])];
+        $this->leer();
+        $this->assertSame('sin_diferencias', $caso->fresh()->estado);
+        $this->assertSame(236, $caso->fresh()->planta_actual['cajas']);
+        $this->modificarFolio($caso, 168);
+        $this->leer();
+        $caso->refresh();
+        $this->assertSame('sin_diferencias', $caso->estado);
+        $this->assertFalse($caso->tuvo_diferencias);
+        $this->assertSame(['coincide'], array_values(array_unique(array_column($caso->comparacion, 'estado'))));
+        $this->getJson(self::URL.'?estado=pendiente')->assertJsonPath('casos.total', 0);
+    }
+
+    public function test_despues_del_cambio_se_conserva_la_copia_anterior_aunque_haya_diferencias(): void
+    {
+        $this->leer();
+        $caso = $this->validar();
+        $this->assertSame(240, $caso->planta_actual['cajas']);
+        $this->modificarFolio($caso, 300);
+        $this->filas = [$this->fila(['cantidad' => 300])];
+        $this->leer();
+        $caso->refresh();
+        $this->assertSame('pendiente', $caso->estado);
+        $this->assertSame(240, $caso->planta_actual['cajas']);
+        $this->assertSame(-4, $caso->comparacion['cajas']['diferencia']);
+        $this->getJson(self::URL)->assertJsonPath('casos.data.0.contexto_actual', 'folio_modificado');
+    }
+
+    public function test_salida_posterior_mantiene_la_comparacion_que_coincidio(): void
+    {
+        $this->filas = [$this->coincidente()];
+        $this->leer();
+        $caso = $this->validar();
+        $caso->validacion->folio->update(['activo' => false, 'estado_operacional' => 'despachado']);
+        $this->filas = [$this->fila(['Pallet' => 'OTRO'])];
+        $this->leer();
+        $caso->refresh();
+        $this->assertSame('sin_diferencias', $caso->estado);
+        $this->assertTrue($caso->planta_actual['presente']);
+        $this->assertSame('coincide', $caso->comparacion['csg']['estado']);
+    }
+
+    public function test_sin_copia_anterior_al_cambio_queda_por_revisar(): void
+    {
+        config(['integraciones.stock_pt.habilitada' => false]);
+        $payload = ['operacion_id' => (string) Str::uuid(), 'numero_folio' => '000123', 'tipo_bulto' => 'pallet', 'cantidad_cajas' => 236,
+            'linea_proceso' => 1, 'turno' => 'A', ...$this->catalogo, 'resultado' => 'aprobado', 'generado_dispositivo_at' => now()->toAtomString()];
+        $this->postJson('/api/validacion/pallets', $payload)->assertCreated();
+        $folio = Folio::where('numero_folio', '000123')->sole();
+        $f = $folio->datos_externos;
+        $f['cantidad_cajas'] = 168;
+        $folio->update(['datos_externos' => $f]);
+        config(['integraciones.stock_pt.habilitada' => true]);
+        $this->filas = [$this->coincidente(['cantidad' => 168])];
+        $this->leer();
+        $caso = ConciliacionValidacionOrigen::sole();
+        $this->assertSame('por_revisar', $caso->estado);
+        $this->assertNull($caso->planta_actual);
+        $this->assertNull($caso->planta_inicial);
+    }
+
+    public function test_restituye_casos_que_se_cruzaron_con_la_existencia_posterior(): void
+    {
+        $this->filas = [$this->coincidente()];
+        $this->leer();
+        $caso = $this->validar();
+        $evento = DB::table('eventos_conciliacion_validacion')->where('conciliacion_id', $caso->id)->sole();
+        // Estado que dejaba la regla anterior: la lectura posterior al repa reemplazó la copia.
+        $planta = [...$caso->planta_actual, 'cajas' => 168, 'csg' => ['001234' => 168]];
+        $comparacion = app(ComparadorConciliacionValidacion::class)->comparar($caso->validacion_actual['datos'], $planta);
+        $caso->forceFill(['estado' => 'pendiente', 'tuvo_diferencias' => true, 'contexto' => 'folio_modificado',
+            'planta_actual' => $planta, 'comparacion' => $comparacion, 'version' => 2])->save();
+        DB::table('eventos_conciliacion_validacion')->insert(['conciliacion_id' => $caso->id, 'tipo' => 'comprobacion',
+            'datos' => json_encode(['antes' => [], 'despues' => ['numero_folio' => '000123', 'estado' => 'pendiente', 'contexto' => 'vigente',
+                'validacion' => $caso->validacion_actual, 'comparacion' => $comparacion], 'planta' => $planta]), 'created_at' => now()]);
+        $sinCambio = ConciliacionValidacionOrigen::where('id', '!=', $caso->id)->count();
+
+        $migracion = require database_path('migrations/2026_11_10_090000_restituir_copia_validada_en_cuadraturas.php');
+        $migracion->up();
+        $migracion->up();
+
+        $caso->refresh();
+        $this->assertSame('sin_diferencias', $caso->estado);
+        $this->assertFalse($caso->tuvo_diferencias);
+        $this->assertSame(236, $caso->planta_actual['cajas']);
+        $this->assertSame('coincide', $caso->comparacion['cajas']['estado']);
+        $this->assertSame(json_decode($evento->datos, true)['lectura_id'], $caso->lectura_id);
+        $this->assertSame(3, $caso->version);
+        $this->assertDatabaseCount('eventos_conciliacion_validacion', 3);
+        $this->assertDatabaseHas('eventos_conciliacion_validacion', ['conciliacion_id' => $caso->id, 'tipo' => 'ajuste_regla',
+            'datos->antes->estado' => 'pendiente', 'datos->despues->estado' => 'sin_diferencias']);
+        $this->assertSame(0, $sinCambio);
     }
 
     public function test_consulta_no_gestiona_y_la_temporada_cerrada_sigue_consultable(): void

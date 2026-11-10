@@ -19,6 +19,9 @@ class ServicioConciliacionValidacion
 {
     public const ESTADOS = ['pendiente', 'en_revision', 'cuadrado', 'reabierto', 'sin_diferencias', 'por_revisar'];
 
+    /** Estados cuya copia de planta ya coincidió con lo validado y no se vuelve a leer. */
+    public const COMPARACION_FIJA = ['sin_diferencias', 'cuadrado'];
+
     public function __construct(
         private readonly ServicioLecturaStockOrigen $lecturas,
         private readonly ServicioCatalogoStockOrigen $catalogo,
@@ -45,14 +48,6 @@ class ServicioConciliacionValidacion
             if ($validacion->estado->value !== 'aceptada' || $validacion->resultado->value !== 'aprobado') {
                 return $caso;
             }
-            $pallet = PalletStockOrigen::where('ambito', $config['ambito'])->where('bodega', $config['bodega'])
-                ->where('numero_pallet', $validacion->numero_folio)->first();
-            $lectura = $pallet?->lectura_stock_origen_id ? LecturaStockOrigen::find($pallet->lectura_stock_origen_id) : null;
-            if (! $this->lecturaCorresponde($lectura, $config)) {
-                $pallet = null;
-                $lectura = null;
-            }
-            $planta = $this->planta($pallet, $config);
             $datos = $this->comparador->datosValidacion($validacion->snapshot, $validacion->cantidad_cajas);
             $evidencia = ['datos' => $datos, 'snapshot' => $validacion->snapshot, 'user_id' => $validacion->user_id,
                 'usuario' => $caso?->validacion_inicial['usuario'] ?? $validacion->usuario?->name,
@@ -60,26 +55,52 @@ class ServicioConciliacionValidacion
                 'generado_at' => $validacion->generado_dispositivo_at?->toAtomString(),
                 'recibido_at' => $validacion->recibido_servidor_at?->toAtomString()];
             $contexto = $this->contexto($validacion, $datos);
+            $cambioFolio = $caso && $caso->numero_folio !== $validacion->numero_folio;
+            // Se cruza lo validado con la copia de planta del mismo pallet validado, no con su
+            // existencia posterior. La copia deja de leerse cuando el folio cambió o salió después
+            // de validar, o cuando ya coincidió con lo validado: un repaletizaje o despacho posterior,
+            // registrado antes o después en planta, no crea ni reabre diferencias.
+            $fijada = $caso && ! $cambioFolio && in_array($caso->estado, self::COMPARACION_FIJA, true);
+            $comparable = $contexto === 'vigente' && ! $fijada;
+            $lectura = null;
+            if ($comparable) {
+                $pallet = PalletStockOrigen::where('ambito', $config['ambito'])->where('bodega', $config['bodega'])
+                    ->where('numero_pallet', $validacion->numero_folio)->first();
+                $lectura = $pallet?->lectura_stock_origen_id ? LecturaStockOrigen::find($pallet->lectura_stock_origen_id) : null;
+                if (! $this->lecturaCorresponde($lectura, $config)) {
+                    $pallet = null;
+                    $lectura = null;
+                }
+                $planta = $this->planta($pallet, $config);
+                $lecturaId = $lectura?->id;
+                $lecturaAt = $lectura?->terminada_at;
+            } else {
+                // Sin una copia anterior al cambio no hay con qué cruzar: queda por revisar.
+                $conservar = $caso && ! $cambioFolio;
+                $planta = $conservar ? $caso->planta_actual : null;
+                $lecturaId = $conservar ? $caso->lectura_id : null;
+                $lecturaAt = $conservar ? $caso->lectura_at : null;
+            }
             $comparacion = $this->comparador->comparar($datos, $planta);
             $diferente = collect($comparacion)->contains('estado', 'diferente');
             $completa = ! collect($comparacion)->contains('estado', 'por_revisar');
-            $ultima = LecturaStockOrigen::where('ambito', $config['ambito'])->where('bodega', $config['bodega'])
-                ->where(fn ($q) => $q->whereNull('numero_pallet')->orWhere('numero_pallet', $validacion->numero_folio))
-                ->latest('iniciada_at')->latest('id')->first();
-            $vigente = $lectura && $lectura->estado === 'correcta' && $ultima?->id === $lectura->id
-                && $lectura->terminada_at?->gte(now()->subMinutes((int) config('integraciones.stock_pt.vigencia_minutos', 20)));
-            $cambioFolio = $caso && $caso->numero_folio !== $validacion->numero_folio;
             $nuevaLectura = $lectura && ($cambioFolio || $caso?->lectura_id !== $lectura->id);
             $estado = (! $cambioFolio ? $caso?->estado : null) ?? ($diferente ? 'pendiente' : 'por_revisar');
-            if ($contexto === 'vigente' && $vigente && ($planta['presente'] ?? false)) {
-                if ($diferente) {
-                    $estado = match ($estado) {
-                        'cuadrado' => 'reabierto', 'en_revision', 'reabierto' => $estado, default => 'pendiente',
-                    };
-                } elseif ($completa) {
+            if ($comparable && $lectura && ($planta['presente'] ?? false)) {
+                $ultima = LecturaStockOrigen::where('ambito', $config['ambito'])->where('bodega', $config['bodega'])
+                    ->where(fn ($q) => $q->whereNull('numero_pallet')->orWhere('numero_pallet', $validacion->numero_folio))
+                    ->latest('iniciada_at')->latest('id')->first();
+                $vigente = $lectura->estado === 'correcta' && $ultima?->id === $lectura->id
+                    && $lectura->terminada_at?->gte(now()->subMinutes((int) config('integraciones.stock_pt.vigencia_minutos', 20)));
+                if ($vigente && $diferente) {
+                    $estado = in_array($estado, ['en_revision', 'reabierto'], true) ? $estado : 'pendiente';
+                } elseif ($vigente && $completa) {
                     $estado = ($caso?->tuvo_diferencias ?? false)
                         ? ($nuevaLectura ? 'cuadrado' : $estado) : 'sin_diferencias';
                 }
+            } elseif ($fijada && $diferente) {
+                // Una corrección autorizada cambió lo validado y ya no coincide con la copia fija.
+                $estado = 'pendiente';
             }
             $anterior = $caso ? $this->respaldo($caso) : null;
             $caso ??= new ConciliacionValidacionOrigen([
@@ -91,7 +112,7 @@ class ServicioConciliacionValidacion
             $caso->fill(['numero_folio' => $validacion->numero_folio, 'validacion_actual' => $evidencia, 'planta_actual' => $planta, 'comparacion' => $comparacion,
                 'contexto' => $contexto, 'estado' => $estado,
                 'tuvo_diferencias' => ($caso->tuvo_diferencias ?? false) || $diferente,
-                'lectura_id' => $lectura?->id, 'lectura_at' => $lectura?->terminada_at,
+                'lectura_id' => $lecturaId, 'lectura_at' => $lecturaAt,
                 'cuadrado_at' => $estado === 'cuadrado' ? ($caso->cuadrado_at ?? now()) : null]);
             $cambio = $this->huella($anterior) !== $this->huella($this->respaldo($caso));
             if (! $caso->exists || $cambio || $nuevaLectura) {
@@ -103,7 +124,7 @@ class ServicioConciliacionValidacion
                     $actor = isset($correccion['corregido_por_user_id']) ? User::find($correccion['corregido_por_user_id']) : null;
                     $this->evento($caso, $anterior === null ? 'captura' : ($actor ? 'correccion_validacion' : 'comprobacion'), [
                         'antes' => $anterior, 'despues' => $this->respaldo($caso), 'planta' => $planta,
-                        'lectura_id' => $lectura?->id, 'lectura_at' => $lectura?->terminada_at?->toAtomString(),
+                        'lectura_id' => $lecturaId, 'lectura_at' => $lecturaAt?->toAtomString(),
                     ], $actor, $correccion['motivo'] ?? null);
                 }
             }

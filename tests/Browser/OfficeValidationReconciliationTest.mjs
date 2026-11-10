@@ -19,11 +19,11 @@ const fixture = { id, numero_folio: '000123', estado: 'pendiente', contexto_actu
     planta_inicial: { cajas: 240, marca: 'Marca B', calibre: '3J', csg: { '001567': 240 }, leida_at: '2026-10-23T15:01:00Z' }, comparacion: comparison };
 const pagination = (data) => ({ data, current_page: 1, last_page: 1, total: data.length });
 
-async function setup(browser, { consulta = false, lost = false, conflict = false, width = 1280, background = false } = {}) {
+async function setup(browser, { consulta = false, lost = false, conflict = false, width = 1280, background = false, caso = {} } = {}) {
     const context = await browser.newContext({ viewport: { width, height: 850 } });
     const identity = { nombre: 'Oficina prueba', rol: consulta ? 'consulta' : 'supervisor_frio', puede_consultar_validaciones_pallet: true, modulos_acceso: ['frigorifico.validacion'] };
     await context.addInitScript((user) => { localStorage.setItem('estiba_wms_office_token', 'fixture'); localStorage.setItem('estiba_wms_office_identity', JSON.stringify(user)); }, identity);
-    const requests = []; const writes = []; const integration = { posts: 0, polls: 0, done: false, reads: 0 }; let current = structuredClone(fixture); let events = [];
+    const requests = []; const writes = []; const integration = { posts: 0, polls: 0, done: false, reads: 0 }; let current = { ...structuredClone(fixture), ...caso }; let events = [];
     await context.route('http://localhost/**', async (route) => {
         const request = route.request(); const url = new URL(request.url()); const path = url.pathname;
         if (path === '/oficina/validacion/pendientes') return route.fulfill({ body: html, contentType: 'text/html' });
@@ -159,5 +159,25 @@ test('Leer ahora espera en segundo plano y mantiene búsquedas y cuadraturas dis
         assert.ok(integration.reads >= 2);
         assert.deepEqual(errors, []);
         await context.close();
+    } finally { await browser.close(); }
+});
+
+test('después de un repa muestra la copia de planta anterior al cambio sin aviso de vigencia', async () => {
+    const browser = await launch();
+    try {
+        const coincide = Object.fromEntries(Object.entries(comparison).map(([k, c]) => [k, { ...c, planta: c.validado, planta_homologada: c.validado, estado: 'coincide', diferencia: k === 'cajas' ? 0 : null }]));
+        const caso = { estado: 'sin_diferencias', contexto_actual: 'folio_modificado', comprobacion_vigente: false, comparacion: coincide, planta_actual: { cajas: 236 } };
+        const { page, context, errors } = await setup(browser, { caso });
+        const fila = await page.locator('#reconciliationBody').innerText();
+        assert.match(fila, /Planta antes del cambio/);
+        assert.doesNotMatch(fila, /sin vigencia/);
+        await page.locator('[data-reconciliation]').click(); await page.locator('#reconciliationDialog[open]').waitFor();
+        assert.match(await page.locator('#reconciliationDetail').innerText(), /Folio modificado después de validar · Planta antes del cambio/);
+        assert.equal(await page.locator('#reconciliationDetail .pending-warning').count(), 0);
+        assert.deepEqual(errors, []);
+        await context.close();
+        const sinCopia = await setup(browser, { caso: { ...caso, estado: 'por_revisar', planta_actual: null } });
+        assert.match(await sinCopia.page.locator('#reconciliationBody').innerText(), /Sin copia de planta anterior al cambio/);
+        await sinCopia.context.close();
     } finally { await browser.close(); }
 });
