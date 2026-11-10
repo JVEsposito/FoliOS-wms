@@ -45,6 +45,8 @@ class GuiaDespachoEnvaseController extends Controller
             'propiedades' => array_column(PropiedadEnvase::cases(), 'value'),
             'origenes' => $inventario['origenes'],
             'inventario' => $inventario['resumen'],
+            'disponibilidad' => $inventario['disponibilidad'],
+            'incidencias' => $inventario['incidencias'],
         ])->header('Cache-Control', 'no-store, private');
     }
 
