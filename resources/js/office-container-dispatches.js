@@ -19,6 +19,7 @@ const elements = {
     reserved: byId('reservedCount'),
     available: byId('availableCount'),
     drafts: byId('draftCount'),
+    inventoryNotice: byId('inventoryNotice'),
     formEyebrow: byId('formEyebrow'),
     formTitle: byId('formTitle'),
     formHelp: byId('formHelp'),
@@ -55,13 +56,15 @@ const state = {
     token: localStorage.getItem(keys.token),
     identity: read(keys.identity),
     catalog: null,
+    inventoryReady: false,
+    inventoryError: '',
     guides: [],
     editing: null,
     dialog: null,
     page: 1,
     filters: new URLSearchParams(),
     pagination: null,
-    draftCount: 0,
+    draftCount: null,
 };
 let guideRequest;
 const MAX_GUIDE_FILE_BYTES = 10 * 1024 * 1024;
@@ -244,8 +247,8 @@ function sourceOptions(type, property, selected = '') {
         ? 'Asignación automática FIFO de existencia propia'
         : 'Asignación automática FIFO con trazabilidad';
     const clientId = selectedClientId();
-    const origins = (state.catalog?.origenes || []).filter((origin) => {
-        if (origin.tipo_envase !== type || origin.propiedad !== property || origin.disponible <= 0) {
+    const origins = (state.inventoryReady ? state.catalog?.origenes || [] : []).filter((origin) => {
+        if (origin.tipo_envase !== type || origin.propiedad !== property || origin.disponible <= 0 || origin.bloqueado) {
             return false;
         }
         return property !== 'cliente' || origin.cliente?.id === clientId;
@@ -270,6 +273,7 @@ function renderLines(values = {}) {
                 <option value="cliente"${property === 'cliente' ? ' selected' : ''}>Del cliente</option>
             </select></label>
             <label><span>Movimiento de origen</span><select name="origen_${type}">${sourceOptions(type, property, value.origen || '')}</select><small>FIFO automático puede dividir la cantidad entre varias guías.</small></label>
+            <p class="dispatch-stock" data-stock-status role="status"></p>
         </article>`;
     }).join('');
     elements.lines.querySelectorAll('[data-type]').forEach((row) => {
@@ -278,7 +282,9 @@ function renderLines(values = {}) {
                 row.dataset.type,
                 event.target.value,
             );
+            renderLineStock(row);
         });
+        renderLineStock(row);
     });
 }
 
@@ -287,15 +293,50 @@ function refreshSourceOptions() {
         const property = row.querySelector(`[name="propiedad_${row.dataset.type}"]`).value;
         const source = row.querySelector(`[name="origen_${row.dataset.type}"]`);
         source.innerHTML = sourceOptions(row.dataset.type, property, source.value);
+        renderLineStock(row);
     });
+}
+
+function stockIncidents(type, property) {
+    return (state.catalog?.incidencias || []).filter((issue) => issue.tipo_envase === type
+        && issue.propiedad === property && (property !== 'cliente' || issue.cliente_id === selectedClientId()));
+}
+
+function renderLineStock(row) {
+    const status = row.querySelector('[data-stock-status]');
+    const property = row.querySelector(`[name="propiedad_${row.dataset.type}"]`).value;
+    const issues = stockIncidents(row.dataset.type, property);
+    status.classList.toggle('dispatch-stock--warning', issues.length > 0);
+    if (!state.inventoryReady) {
+        status.textContent = 'Disponibilidad sin verificar. Actualiza para reservar.';
+    } else if (property === 'cliente' && !selectedClientId()) {
+        status.textContent = 'Selecciona el cliente para consultar sus envases.';
+    } else if (issues.length) {
+        status.textContent = issues.map((issue) => issue.mensaje).join(' ');
+    } else {
+        const pools = (state.catalog.disponibilidad || []).filter((item) => item.tipo_envase === row.dataset.type
+            && item.propiedad === property && (property !== 'cliente' || item.cliente_id === selectedClientId()));
+        const physical = pools.reduce((sum, item) => sum + Number(item.fisico), 0);
+        const reserved = pools.reduce((sum, item) => sum + Number(item.reservado), 0);
+        const available = pools.reduce((sum, item) => sum + Number(item.disponible), 0);
+        status.textContent = physical <= 0 ? 'Agotado · sin existencias de esta propiedad.'
+            : `Físico: ${physical} · Reservado: ${reserved} · Disponible: ${available}${available <= 0 ? ' · Todo reservado.' : ''}`;
+        if (state.editing) status.textContent += ' Al editar se libera y recalcula la reserva de esta guía.';
+    }
 }
 
 function renderInventory() {
     const inventory = state.catalog?.inventario || [];
-    elements.physical.textContent = inventory.reduce((sum, item) => sum + Number(item.fisico), 0);
-    elements.reserved.textContent = inventory.reduce((sum, item) => sum + Number(item.reservado), 0);
-    elements.available.textContent = inventory.reduce((sum, item) => sum + Number(item.disponible), 0);
-    elements.drafts.textContent = state.draftCount;
+    elements.physical.textContent = state.inventoryReady ? inventory.reduce((sum, item) => sum + Number(item.fisico), 0) : '—';
+    elements.reserved.textContent = state.inventoryReady ? inventory.reduce((sum, item) => sum + Number(item.reservado), 0) : '—';
+    elements.available.textContent = state.inventoryReady ? inventory.reduce((sum, item) => sum + Number(item.disponible), 0) : '—';
+    elements.drafts.textContent = state.draftCount ?? '—';
+    elements.saveDraft.disabled = !state.inventoryReady;
+    const issues = state.catalog?.incidencias || [];
+    elements.inventoryNotice.classList.toggle('is-hidden', state.inventoryReady && !issues.length);
+    elements.inventoryNotice.innerHTML = !state.inventoryReady
+        ? `<strong>Disponibilidad sin verificar</strong><p>${escapeHtml(state.inventoryError || 'Cargando inventario…')}</p>`
+        : `<strong>Envases que requieren revisión</strong><p>Se pueden reservar los demás tipos y propiedades con disponibilidad válida.</p><ul>${issues.map((issue) => `<li>${escapeHtml(issue.mensaje)}</li>`).join('')}</ul>`;
 }
 
 function guideEffect(guide) {
@@ -496,6 +537,7 @@ async function loadCatalogs() {
     if (!elements.form.elements.salida_at.value) {
         elements.form.elements.salida_at.value = localDateTime();
     }
+    state.inventoryReady = true;
 }
 
 function renderPagination() {
@@ -547,12 +589,20 @@ function applyGuideFilters() {
 
 async function reloadAll() {
     busy(true, 'Actualizando disponibilidad y guías…');
+    state.inventoryReady = false;
+    state.inventoryError = '';
+    renderInventory();
     try {
-        await loadCatalogs();
-        await loadGuides();
+        const results = await Promise.allSettled([loadCatalogs(), loadGuides()]);
+        if (results[0].status === 'rejected') {
+            state.inventoryReady = false;
+            state.inventoryError = `No se pudo cargar el inventario. Pulsa Actualizar para reintentar. ${results[0].reason.message}`;
+        }
+        if (results[1].status === 'rejected') {
+            toast(`No se pudo actualizar el historial. ${results[1].reason.message}`, true);
+        }
+        renderInventory();
         refreshSourceOptions();
-    } catch (error) {
-        toast(error.message, true);
     } finally {
         busy(false);
     }
@@ -670,6 +720,10 @@ elements.form.elements.cliente_id.addEventListener('change', (event) => {
 elements.form.addEventListener('submit', async (event) => {
     event.preventDefault();
     elements.error.textContent = '';
+    if (!state.inventoryReady) {
+        elements.error.textContent = 'La disponibilidad no está verificada. Pulsa Actualizar antes de reservar.';
+        return;
+    }
     if (elements.form.elements.productor_csg_id.disabled) {
         elements.error.textContent = 'Espera a que carguen los productores o actualiza la pantalla.';
         return;
@@ -677,6 +731,11 @@ elements.form.addEventListener('submit', async (event) => {
     const payload = formPayload();
     if (!payload.detalles.length) {
         elements.error.textContent = 'Ingresa al menos una cantidad de envases.';
+        return;
+    }
+    const issues = payload.detalles.flatMap((line) => stockIncidents(line.tipo_envase, line.propiedad));
+    if (issues.length) {
+        elements.error.textContent = [...new Set(issues.map((issue) => issue.mensaje))].join('\n');
         return;
     }
     busy(true, state.editing ? 'Actualizando reservas…' : 'Creando reserva…');

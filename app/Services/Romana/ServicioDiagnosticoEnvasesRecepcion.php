@@ -66,7 +66,7 @@ class ServicioDiagnosticoEnvasesRecepcion
         if ($pendientes->isEmpty()) {
             $lineas[] = 'No hay una salida individual identificable para esta diferencia. Revisa la conciliación de los ingresos y sus correcciones en Envases.';
         } elseif ($pendientes->contains(fn ($m) => $m->movimiento_origen_id === null)) {
-            $lineas[] = 'Las salidas marcadas «sin origen individual» no permiten determinar qué recepción consumieron; requieren conciliación de Envases.';
+            $lineas[] = 'Las salidas marcadas «sin origen individual» no pueden atribuirse a esta recepción: no permiten determinar qué recepción consumieron; requieren conciliación de Envases.';
         }
 
         return implode("\n", $lineas);

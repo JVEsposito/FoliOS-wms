@@ -5,6 +5,7 @@ namespace App\Services\Envases;
 use App\Enums\EstadoGuiaDespachoEnvase;
 use App\Enums\EstadoRevisionMovimientoEnvase;
 use App\Enums\PropiedadEnvase;
+use App\Enums\TipoEnvaseRomana;
 use App\Enums\TipoMovimientoEnvase;
 use App\Exceptions\ConflictoOperacion;
 use App\Models\Cliente;
@@ -414,14 +415,16 @@ class ServicioGuiaDespachoEnvases
     /**
      * @return array{
      *     origenes: array<int, array<string, mixed>>,
-     *     resumen: array<int, array<string, mixed>>
+     *     resumen: array<int, array<string, mixed>>,
+     *     disponibilidad: array<int, array<string, mixed>>,
+     *     incidencias: array<int, array<string, mixed>>
      * }
      */
     public function inventario(Temporada $temporada, bool $incluirAgotados = false): array
     {
         $estado = $this->estadoInventario($temporada->id);
 
-        $origenes = $estado
+        $todos = $estado['origenes']
             ->map(function (array $item): array {
                 /** @var MovimientoEnvase $origen */
                 $origen = $item['movimiento'];
@@ -434,6 +437,7 @@ class ServicioGuiaDespachoEnvases
                     'reservado' => $item['reservado'],
                     'disponible' => $item['disponible'],
                     'disponible_trazable' => $item['disponible_trazable'],
+                    'bloqueado' => $item['bloqueado'],
                     'documento' => $origen->numero_documento,
                     'documento_tipo' => $origen->documento_tipo,
                     'cliente' => $origen->cliente ? [
@@ -444,11 +448,34 @@ class ServicioGuiaDespachoEnvases
                     'ingreso_at' => $origen->ingreso_at?->toAtomString()
                         ?? $origen->ocurrido_at?->toAtomString(),
                 ];
-            })
-            ->filter(fn (array $origen): bool => $incluirAgotados || $origen['fisico'] > 0 || $origen['reservado'] > 0)
-            ->values();
+            });
 
-        $resumen = $origenes
+        // El saldo físico puede ser negativo aun sin un ingreso FIFO al cual atribuirlo.
+        // Conservarlo en el resumen, sin fabricar un origen ni compensar propiedades.
+        $grupos = $todos->groupBy(fn (array $o): string => $this->claveInventario(
+            $o['tipo_envase'], $o['propiedad'], $o['cliente']['id'] ?? null,
+        ));
+        foreach ($estado['incidencias'] as $incidencia) {
+            if (! $grupos->has($incidencia['clave'])) {
+                $grupos->put($incidencia['clave'], collect());
+            }
+        }
+        $disponibilidad = $grupos->map(function (Collection $grupo, string $clave) use ($estado): array {
+            [$tipo, $propiedad, $clienteId] = explode('|', $clave);
+            $incidencias = collect($estado['incidencias'])->where('clave', $clave);
+            $fisico = (int) $grupo->sum('fisico') + (int) $incidencias->sum('diferencia_fisica');
+            $reservado = (int) $grupo->sum('reservado');
+            $bloqueado = $incidencias->isNotEmpty();
+
+            return [
+                'tipo_envase' => $tipo, 'propiedad' => $propiedad,
+                'cliente_id' => $clienteId === '*' ? null : $clienteId,
+                'fisico' => $fisico, 'reservado' => $reservado,
+                'disponible' => $bloqueado ? 0 : max(0, $fisico - $reservado),
+                'estado' => $bloqueado ? 'requiere_conciliacion' : ($fisico <= 0 ? 'agotado' : ($fisico <= $reservado ? 'reservado' : 'disponible')),
+            ];
+        })->values();
+        $resumen = $disponibilidad
             ->groupBy(fn (array $origen): string => $origen['tipo_envase'].'|'.$origen['propiedad'])
             ->map(function (Collection $grupo, string $clave): array {
                 [$tipo, $propiedad] = explode('|', $clave, 2);
@@ -464,7 +491,12 @@ class ServicioGuiaDespachoEnvases
             ->values()
             ->all();
 
-        return ['origenes' => $origenes->all(), 'resumen' => $resumen];
+        return [
+            'origenes' => $todos->filter(fn (array $o): bool => $incluirAgotados || $o['fisico'] > 0 || $o['reservado'] > 0)->values()->all(),
+            'resumen' => $resumen,
+            'disponibilidad' => $disponibilidad->all(),
+            'incidencias' => $estado['incidencias'],
+        ];
     }
 
     /**
@@ -477,15 +509,17 @@ class ServicioGuiaDespachoEnvases
         Cliente $cliente,
         ?string $excluirGuiaId = null,
     ): array {
-        $estado = $this->estadoInventario(
+        $inventario = $this->estadoInventario(
             $temporada->id,
             $excluirGuiaId,
             bloquear: true,
         );
+        $estado = $inventario['origenes'];
         $asignaciones = [];
         $comprometido = [];
 
         foreach ($detalles as $detalle) {
+            $this->asegurarGrupoDisponible($inventario['incidencias'], $detalle['tipo_envase'], $detalle['propiedad'], $cliente->id);
             $cantidadPendiente = (int) $detalle['cantidad'];
             $propiedad = PropiedadEnvase::from($detalle['propiedad']);
             $origenId = $detalle['movimiento_origen_id'] ?? null;
@@ -582,16 +616,18 @@ class ServicioGuiaDespachoEnvases
 
     private function asegurarReservaConfirmable(GuiaDespachoEnvase $guia): void
     {
-        $estado = $this->estadoInventario(
+        $inventario = $this->estadoInventario(
             $guia->temporada_id,
             $guia->id,
             bloquear: true,
         );
+        $estado = $inventario['origenes'];
         $solicitadoPorOrigen = $guia->detalles
             ->groupBy('movimiento_origen_id')
             ->map(fn (Collection $detalles): int => (int) $detalles->sum('cantidad'));
 
         foreach ($guia->detalles as $detalle) {
+            $this->asegurarGrupoDisponible($inventario['incidencias'], $detalle->tipo_envase->value, $detalle->propiedad->value, $guia->cliente_id);
             if (! $detalle->movimiento_origen_id) {
                 throw new ConflictoOperacion(
                     'La guía contiene una reserva antigua sin origen. Edítala y guárdala antes de confirmar.',
@@ -628,18 +664,13 @@ class ServicioGuiaDespachoEnvases
      * Calcula saldos por origen con consultas agregadas y descuenta en FIFO los
      * despachos propios históricos que fueron confirmados antes de exigir origen.
      *
-     * @return Collection<string, array{
-     *     movimiento: MovimientoEnvase,
-     *     fisico: int,
-     *     reservado: int,
-     *     disponible: int
-     * }>
+     * @return array{origenes: Collection, incidencias: array}
      */
     private function estadoInventario(
         string $temporadaId,
         ?string $excluirGuiaId = null,
         bool $bloquear = false,
-    ): Collection {
+    ): array {
         $consulta = MovimientoEnvase::query()
             ->where('temporada_id', $temporadaId)
             ->whereIn('tipo_movimiento', $this->tiposOrigenInventario())
@@ -694,73 +725,54 @@ class ServicioGuiaDespachoEnvases
         // ese saldo sugerido del saldo demostrado por sus movimientos vinculados.
         $fisicosTrazables = $fisicos->all();
 
-        $incompatibles = MovimientoEnvase::query()
+        $incidencias = [];
+        $historicos = MovimientoEnvase::query()
             ->where('temporada_id', $temporadaId)
             ->whereNull('movimiento_origen_id')
-            ->whereIn('tipo_movimiento', [
-                TipoMovimientoEnvase::DespachoCliente->value,
-                TipoMovimientoEnvase::ReversionDespacho->value,
-            ])
-            ->where('propiedad', '!=', PropiedadEnvase::Propia->value)
-            ->exists();
-        if ($incompatibles) {
-            throw new ConflictoOperacion(
-                'Existen salidas históricas de envases de cliente o arrendados sin origen. Requieren conciliación.',
-            );
-        }
-
-        $ajustesHistoricos = MovimientoEnvase::query()
-            ->where('temporada_id', $temporadaId)
-            ->whereNull('movimiento_origen_id')
-            ->where('propiedad', PropiedadEnvase::Propia->value)
             ->whereIn('tipo_movimiento', [
                 TipoMovimientoEnvase::DespachoCliente->value,
                 TipoMovimientoEnvase::ReversionDespacho->value,
                 TipoMovimientoEnvase::ConciliacionSalida->value,
             ])
-            ->selectRaw(
-                'tipo_envase, COALESCE(SUM(CAST(cantidad AS SIGNED) * signo_existencia), 0) as saldo',
-            )
-            ->groupBy('tipo_envase')
-            ->get();
-
-        foreach ($ajustesHistoricos as $ajusteHistorico) {
-            $saldoSinOrigen = (int) $ajusteHistorico->getAttribute('saldo');
-            if ($saldoSinOrigen > 0) {
-                throw new ConflictoOperacion(
-                    'El historial contiene una reversa de envases propios sin despacho compensado.',
-                );
+            ->with('cliente:id,codigo,nombre')->get();
+        foreach ($historicos->groupBy(fn (MovimientoEnvase $m): string => $this->claveMovimiento($m)) as $grupo) {
+            $movimiento = $grupo->first();
+            $saldo = (int) $grupo->sum(fn (MovimientoEnvase $m): int => $m->cantidad * $m->signo_existencia);
+            if ($saldo === 0) {
+                continue;
             }
+            if ($saldo > 0) {
+                $incidencias[] = $this->incidenciaInventario($movimiento, 'reversa_sin_salida', $saldo,
+                    'Hay una reversa histórica sin salida física compensada.', $saldo);
 
-            $pendiente = -$saldoSinOrigen;
-            foreach ($origenes as $origen) {
-                if ($pendiente === 0) {
-                    break;
-                }
-                if ($origen->propiedad !== PropiedadEnvase::Propia
-                    || $origen->tipo_envase->value !== $ajusteHistorico->tipo_envase->value) {
-                    continue;
-                }
-
-                $saldo = max(0, (int) $fisicos->get($origen->id, 0));
-                $consumo = min($saldo, $pendiente);
-                $fisicos->put($origen->id, $saldo - $consumo);
-                $pendiente -= $consumo;
+                continue;
             }
-
-            if ($pendiente > 0) {
-                throw new ConflictoOperacion(
-                    'Las salidas históricas de envases propios superan los ingresos trazables de la temporada.',
-                );
+            $faltante = $this->consumirSinOrigen($origenes, $fisicos, $movimiento, -$saldo);
+            if ($movimiento->propiedad !== PropiedadEnvase::Propia) {
+                $incidencias[] = $this->incidenciaInventario($movimiento, 'historico_sin_origen', -$saldo,
+                    'Hay salidas históricas sin origen FIFO; requieren conciliación.', -$faltante);
+            } elseif ($faltante > 0) {
+                $incidencias[] = $this->incidenciaInventario($movimiento, 'salida_sin_cobertura', $faltante,
+                    "Las salidas históricas exceden los ingresos trazables en {$faltante} unidades.", -$faltante);
             }
         }
 
-        $this->descontarSalidasRomanaSinOrigen($temporadaId, $origenes, $fisicos);
+        $this->descontarSalidasRomanaSinOrigen($temporadaId, $origenes, $fisicos, $incidencias);
+        foreach ($origenes as $origen) {
+            $fisico = (int) $fisicos->get($origen->id, 0);
+            $reservado = (int) $reservas->get($origen->id, 0);
+            if ($fisico < 0 || $reservado > max(0, $fisico)) {
+                $incidencias[] = $this->incidenciaInventario($origen, 'origen_sin_cobertura', max(0, $reservado - $fisico),
+                    "El origen {$origen->numero_documento} tiene saldo físico {$fisico} y {$reservado} reservados; requiere revisión.");
+            }
+        }
+        $bloqueados = array_fill_keys(array_column($incidencias, 'clave'), true);
 
-        return $origenes->mapWithKeys(function (MovimientoEnvase $origen) use (
+        $estado = $origenes->mapWithKeys(function (MovimientoEnvase $origen) use (
             $fisicos,
             $reservas,
             $fisicosTrazables,
+            $bloqueados,
         ): array {
             $fisico = (int) $fisicos->get($origen->id, 0);
             $reservado = (int) $reservas->get($origen->id, 0);
@@ -770,18 +782,22 @@ class ServicioGuiaDespachoEnvases
                     'movimiento' => $origen,
                     'fisico' => $fisico,
                     'reservado' => $reservado,
-                    'disponible' => $fisico - $reservado,
+                    'disponible' => isset($bloqueados[$this->claveMovimiento($origen)]) ? 0 : max(0, $fisico - $reservado),
+                    'bloqueado' => isset($bloqueados[$this->claveMovimiento($origen)]),
                     'disponible_trazable' => (int) ($fisicosTrazables[$origen->id] ?? 0) - $reservado,
                 ],
             ];
         });
+
+        return ['origenes' => $estado, 'incidencias' => $incidencias];
     }
 
     /** Las devoluciones de Romana sin raíz FIFO también consumen el saldo físico. */
-    private function descontarSalidasRomanaSinOrigen(string $temporadaId, Collection $origenes, Collection $fisicos): void
+    private function descontarSalidasRomanaSinOrigen(string $temporadaId, Collection $origenes, Collection $fisicos, array &$incidencias): void
     {
         $salidas = MovimientoEnvase::query()->where('temporada_id', $temporadaId)
-            ->where('tipo_movimiento', TipoMovimientoEnvase::SalidaRecepcionFruta->value)->whereNull('movimiento_origen_id')->get();
+            ->where('tipo_movimiento', TipoMovimientoEnvase::SalidaRecepcionFruta->value)->whereNull('movimiento_origen_id')
+            ->with('cliente:id,codigo,nombre')->get();
         if ($salidas->isEmpty()) {
             return;
         }
@@ -796,28 +812,76 @@ class ServicioGuiaDespachoEnvases
         foreach ($salidas as $salida) {
             $neto = $salida->cantidad * $salida->signo_existencia + (int) $porSalida->get($salida->id, 0);
             if ($neto > 0) {
-                throw new ConflictoOperacion('Una devolución de Romana tiene compensaciones físicas superiores a su salida. Requiere conciliación.');
+                $incidencias[] = $this->incidenciaInventario($salida, 'compensacion_excesiva', $neto,
+                    "La devolución de Romana tiene {$neto} unidades compensadas de más.", $neto);
+
+                continue;
             }
-            $clave = $salida->tipo_envase->value.'|'.$salida->propiedad->value.'|'.($salida->propiedad === PropiedadEnvase::Cliente ? $salida->cliente_id : '*');
+            $clave = $this->claveMovimiento($salida);
             $netos[$clave] ??= ['salida' => $salida, 'pendiente' => 0];
             $netos[$clave]['pendiente'] -= $neto;
         }
         foreach ($netos as ['salida' => $salida, 'pendiente' => $pendiente]) {
-            foreach ($origenes as $origen) {
-                if ($pendiente === 0) {
-                    break;
-                }
-                if ($origen->tipo_envase !== $salida->tipo_envase || $origen->propiedad !== $salida->propiedad
-                    || ($salida->propiedad === PropiedadEnvase::Cliente && $origen->cliente_id !== $salida->cliente_id)) {
-                    continue;
-                }
-                $saldo = max(0, (int) $fisicos->get($origen->id, 0));
-                $consumo = min($saldo, $pendiente);
-                $fisicos->put($origen->id, $saldo - $consumo);
-                $pendiente -= $consumo;
+            $faltante = $this->consumirSinOrigen($origenes, $fisicos, $salida, $pendiente);
+            if ($faltante > 0) {
+                $incidencias[] = $this->incidenciaInventario($salida, 'romana_sin_cobertura', $faltante,
+                    "Las devoluciones de Romana exceden los ingresos trazables en {$faltante} unidades.", -$faltante);
             }
-            if ($pendiente > 0) {
-                throw new ConflictoOperacion('Las devoluciones de Romana superan los ingresos físicos trazables de la temporada. Revisa el inventario antes de reservar otro despacho.');
+        }
+    }
+
+    /** FIFO dentro de la misma propiedad; los envases de clientes mantienen su titular. */
+    private function consumirSinOrigen(Collection $origenes, Collection $fisicos, MovimientoEnvase $salida, int $pendiente): int
+    {
+        foreach ($origenes as $origen) {
+            if ($pendiente === 0) {
+                break;
+            }
+            if ($this->claveMovimiento($origen) !== $this->claveMovimiento($salida)) {
+                continue;
+            }
+            $fisico = (int) $fisicos->get($origen->id, 0);
+            $consumo = min(max(0, $fisico), $pendiente);
+            $fisicos->put($origen->id, $fisico - $consumo);
+            $pendiente -= $consumo;
+        }
+
+        return $pendiente;
+    }
+
+    private function claveInventario(string $tipo, string $propiedad, ?string $clienteId): string
+    {
+        return $tipo.'|'.$propiedad.'|'.($propiedad === PropiedadEnvase::Cliente->value ? ($clienteId ?? '') : '*');
+    }
+
+    private function claveMovimiento(MovimientoEnvase $movimiento): string
+    {
+        return $this->claveInventario($movimiento->tipo_envase->value, $movimiento->propiedad->value, $movimiento->cliente_id);
+    }
+
+    private function incidenciaInventario(MovimientoEnvase $movimiento, string $codigo, int $cantidad, string $motivo, int $diferenciaFisica = 0): array
+    {
+        $propiedad = match ($movimiento->propiedad) {
+            PropiedadEnvase::Propia => 'Propia', PropiedadEnvase::Arrendada => 'Arrendada', PropiedadEnvase::Cliente => 'Del cliente',
+        };
+        $titular = $movimiento->propiedad === PropiedadEnvase::Cliente ? ' · '.($movimiento->cliente?->nombre ?? 'Sin titular') : '';
+        $tipo = TipoEnvaseRomana::from($movimiento->tipo_envase->value)->etiqueta();
+
+        return [
+            'clave' => $this->claveMovimiento($movimiento), 'codigo' => $codigo,
+            'tipo_envase' => $movimiento->tipo_envase->value, 'propiedad' => $movimiento->propiedad->value,
+            'cliente_id' => $movimiento->propiedad === PropiedadEnvase::Cliente ? $movimiento->cliente_id : null,
+            'cantidad' => $cantidad, 'diferencia_fisica' => $diferenciaFisica,
+            'mensaje' => "{$tipo} · {$propiedad}{$titular}: {$motivo} Revisa los movimientos antes de reservar estos envases.",
+        ];
+    }
+
+    private function asegurarGrupoDisponible(array $incidencias, string $tipo, string $propiedad, string $clienteId): void
+    {
+        $clave = $this->claveInventario($tipo, $propiedad, $clienteId);
+        foreach ($incidencias as $incidencia) {
+            if ($incidencia['clave'] === $clave) {
+                throw new ConflictoOperacion($incidencia['mensaje']);
             }
         }
     }

@@ -18,6 +18,104 @@ const html = read('resources/views/office/container-dispatches.blade.php')
     .replace('</head>', `<style>${read('resources/css/office.css')}\n${read('resources/css/office-container-dispatches.css')}</style></head>`)
     .replace('</body>', '<script type="module" src="/resources/js/office-container-dispatches.js"></script></body>');
 
+test('una diferencia de esponjas de cliente no oculta stock sano y un fallo de carga no se muestra como cero', async () => {
+    const browser = await chromium.launch({
+        executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined,
+        args: ['--no-sandbox', '--disable-gpu'],
+    });
+    const page = await browser.newPage({ viewport: { width: 1366, height: 900 } });
+    const errors = [];
+    let failCatalog = false;
+    let empty = false;
+    let historyLoads = 0;
+    let submissions = 0;
+    page.on('pageerror', error => errors.push(error.message));
+    await page.addInitScript(() => {
+        localStorage.setItem('estiba_wms_office_token', 'token');
+        localStorage.setItem('estiba_wms_office_identity', JSON.stringify({
+            nombre: 'Supervisor', rol: 'supervisor',
+            puede_consultar_cuenta_envases: true, puede_gestionar_despacho_envases: true,
+        }));
+    });
+    await page.route('http://localhost/**', async route => {
+        const request = route.request();
+        const path = new URL(request.url()).pathname;
+        if (path === '/test') return route.fulfill({ contentType: 'text/html', body: html });
+        if (path.startsWith('/resources/js/')) return route.fulfill({ contentType: 'text/javascript', body: read(path.slice(1)) });
+        if (path === '/api/envases/catalogo') return route.fulfill({ json: { data: [{ codigo: 'esponjas', nombre: 'Esponja de bins' }] } });
+        if (path.includes('/productores/')) return route.fulfill({ json: { data: [] } });
+        if (path === '/api/envases/guias-despacho/catalogos') {
+            if (failCatalog) return route.fulfill({ status: 500, json: { message: 'Error de prueba de inventario' } });
+            return route.fulfill({ json: {
+                clientes: [{ id: 'cliente-1', codigo: 'C1', nombre: 'Cliente Uno' }], origenes: [],
+                inventario: [{ tipo_envase: 'esponjas', propiedad: 'propia', fisico: empty ? 0 : 1322, reservado: 0, disponible: empty ? 0 : 1322 },
+                    { tipo_envase: 'esponjas', propiedad: 'cliente', fisico: empty ? 0 : -68, reservado: 0, disponible: 0 }],
+                disponibilidad: [{ tipo_envase: 'esponjas', propiedad: 'propia', fisico: empty ? 0 : 1322, reservado: 0, disponible: empty ? 0 : 1322 }],
+                incidencias: empty ? [] : [{ tipo_envase: 'esponjas', propiedad: 'cliente', cliente_id: 'cliente-1', cantidad: 68,
+                    mensaje: 'Esponja de bins · Del cliente · Cliente Uno: faltan 68 unidades trazables.' }],
+            } });
+        }
+        if (path === '/api/envases/guias-despacho') {
+            if (request.method() === 'POST') {
+                submissions++;
+                assert.equal(request.postDataJSON().detalles[0].propiedad, 'propia');
+                return route.fulfill({ status: 201, json: { data: { numero: 'GDE-SANA' } } });
+            }
+            historyLoads++;
+            return route.fulfill({ json: { data: [], resumen: { borradores: 3 } } });
+        }
+        return route.fulfill({ status: 404 });
+    });
+    try {
+        await page.goto('http://localhost/test');
+        const form = page.locator('#dispatchForm');
+        const save = page.locator('#saveDraftButton');
+        await page.waitForFunction(() => !document.querySelector('#saveDraftButton').disabled);
+        assert.equal(await page.locator('#physicalCount').textContent(), '1254');
+        assert.equal(await page.locator('#availableCount').textContent(), '1322');
+        assert.match(await page.locator('#inventoryNotice').textContent(), /68 unidades/);
+        await form.locator('[name="cliente_id"]').selectOption('cliente-1');
+        await page.waitForFunction(() => !document.querySelector('[name="productor_csg_id"]').disabled);
+        await form.locator('[name="propiedad_esponjas"]').selectOption('cliente');
+        assert.match(await page.locator('[data-stock-status]').textContent(), /68 unidades/);
+        await form.locator('[name="cantidad_esponjas"]').fill('1');
+        await save.click();
+        assert.match(await page.locator('#dispatchError').textContent(), /68 unidades/);
+        assert.equal(submissions, 0);
+        await form.locator('[name="propiedad_esponjas"]').selectOption('propia');
+        assert.match(await page.locator('[data-stock-status]').textContent(), /Disponible: 1322/);
+        await save.click();
+        await page.waitForFunction(() => document.querySelector('#officeToasts').textContent.includes('GDE-SANA creada'));
+        await page.waitForFunction(() => !document.querySelector('#saveDraftButton').disabled);
+        assert.equal(submissions, 1);
+
+        const previousLoads = historyLoads;
+        failCatalog = true;
+        await page.locator('#reloadButton').click();
+        await page.waitForFunction(() => document.querySelector('#inventoryNotice').textContent.includes('Error de prueba de inventario'));
+        assert.equal(await save.isDisabled(), true);
+        assert.equal(await page.locator('#physicalCount').textContent(), '—');
+        assert.equal(await page.locator('#availableCount').textContent(), '—');
+        assert.equal(await page.locator('#draftCount').textContent(), '3');
+        assert.ok(historyLoads > previousLoads);
+        assert.match(await page.locator('#guideList').textContent(), /No existen guías/);
+        await form.evaluate(element => element.dispatchEvent(new Event('submit', { cancelable: true })));
+        assert.match(await page.locator('#dispatchError').textContent(), /no está verificada/);
+        assert.equal(submissions, 1);
+
+        failCatalog = false;
+        empty = true;
+        await page.locator('#reloadButton').click();
+        await page.waitForFunction(() => !document.querySelector('#saveDraftButton').disabled);
+        assert.equal(await page.locator('#physicalCount').textContent(), '0');
+        assert.match(await page.locator('[data-stock-status]').textContent(), /Agotado/);
+        assert.equal(await page.locator('#inventoryNotice').isVisible(), false);
+        assert.deepEqual(errors, []);
+    } finally {
+        await browser.close();
+    }
+});
+
 test('despacho de envases valida, completa CSG y filtra y pagina el historial en el servidor', async () => {
     const browser = await chromium.launch({
         executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined,
