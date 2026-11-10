@@ -4,6 +4,8 @@ namespace App\Models;
 
 use App\Enums\ModalidadEmbarque;
 use App\Models\Concerns\ImpideEliminacionFisica;
+use App\Models\Concerns\TemporadaPorColumna;
+use App\Models\Contracts\PerteneceATemporada;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
@@ -15,9 +17,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'estado', 'modalidad', 'cantidad_pallets', 'referencia', 'observacion', 'motivo_resolucion', 'embarque_id',
     'solicitado_por_user_id', 'resuelto_por_user_id', 'resuelto_at', 'version',
 ])]
-class SolicitudCargaCliente extends Model
+class SolicitudCargaCliente extends Model implements PerteneceATemporada
 {
-    use HasUuids, ImpideEliminacionFisica;
+    use HasUuids, ImpideEliminacionFisica, TemporadaPorColumna;
 
     public const SOLICITADA = 'solicitada';
 
