@@ -10,6 +10,7 @@ use App\Models\Temporada;
 use App\Services\Cargas\CalculadorConcentracionCarga;
 use App\Services\Cargas\ServicioReingresoCamara;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 
 /**
  * Estado de cada carga publicada para «Operación ahora»: cuánto está acopiado
@@ -37,6 +38,10 @@ class ResumenDespachoOperacion
                 'presenciaAndenActiva.anden:id,codigo,nombre',
                 'embarque:id,carga_id,cliente_id,codigo',
                 'embarque.cliente:id,nombre',
+                'embarque.instructivos' => fn ($consulta) => $consulta->orderBy('orden')->orderBy('id'),
+                'incidencias' => fn ($consulta) => $consulta
+                    ->where('incidencias_carga_folio.estado', EstadoIncidenciaCarga::Abierta->value)
+                    ->with('asignacion:id,carga_id,instructivo_embarque_id'),
                 'asignacionesActuales.folio:id,numero_folio,exportadora',
                 'asignacionesActuales.folio.ubicacionActual.posicion.camara:id,codigo,nombre,cantidad_bandas,posiciones_por_banda,cantidad_niveles',
             ])
@@ -91,6 +96,7 @@ class ResumenDespachoOperacion
                     && (int) $carga->incidencias_abiertas === 0
                     && (! $exigeCargados || $porCargarEnAnden === 0),
                 'publicada_at' => $carga->publicada_at?->toAtomString(),
+                'instructivos' => $this->instructivos($carga, $progreso),
             ];
         });
 
@@ -110,6 +116,86 @@ class ResumenDespachoOperacion
                 'reingreso_mas_antiguo_minutos' => $pendientes === [] ? null : max(array_column($pendientes, 'antiguedad_minutos')),
             ],
             'cargas' => $filas->values()->all(),
+        ];
+    }
+
+    /** Subestados informativos: no modifican el estado ni el cierre de la carga. */
+    private function instructivos(Carga $carga, array $progreso): array
+    {
+        $instructivos = $carga->embarque?->instructivos ?? collect();
+        if ($instructivos->isEmpty()) {
+            return [];
+        }
+        $ids = $instructivos->pluck('id');
+        $asignaciones = $carga->asignacionesActuales;
+        $incidencias = $carga->incidencias;
+        $filas = $instructivos->map(function ($instructivo) use ($asignaciones, $incidencias, $progreso): array {
+            $grupo = $asignaciones->where('instructivo_embarque_id', $instructivo->id)->values();
+
+            return [
+                'id' => $instructivo->id,
+                'orden' => $instructivo->orden,
+                'numero_externo' => $instructivo->numero_externo,
+                'booking' => $instructivo->booking,
+                'recibidor' => $instructivo->recibidor,
+                ...$this->subestado($grupo, $progreso['segregaciones'][$instructivo->id] ?? null,
+                    $instructivo->cantidad_pallets,
+                    $incidencias->filter(fn ($incidencia): bool => $incidencia->asignacion?->instructivo_embarque_id === $instructivo->id)->count()),
+            ];
+        });
+        $sinInstructivo = $asignaciones->reject(fn ($asignacion): bool => $ids->contains($asignacion->instructivo_embarque_id))->values();
+        $incidenciasSinInstructivo = $incidencias->reject(fn ($incidencia): bool => $ids->contains($incidencia->asignacion?->instructivo_embarque_id))->count();
+        if ($sinInstructivo->isNotEmpty() || $incidenciasSinInstructivo > 0) {
+            $filas->push([
+                'id' => null, 'orden' => null, 'numero_externo' => null, 'booking' => null, 'recibidor' => null,
+                ...$this->subestado($sinInstructivo, $progreso['segregaciones'][''] ?? null, null, $incidenciasSinInstructivo),
+            ]);
+        }
+
+        return $filas->values()->all();
+    }
+
+    private function subestado(Collection $asignaciones, ?array $progreso, ?int $programados, int $incidencias): array
+    {
+        // Reutilizar el cálculo global conserva el tratamiento de bandas mezcladas.
+        $progreso ??= $this->concentracion->calcular($asignaciones);
+        $asignados = $asignaciones->count();
+        $total = max($asignados, $programados ?? 0);
+        $acopiados = (int) $progreso['concentrados'];
+        $cargados = (int) $progreso['cargados'];
+        $enAnden = (int) $progreso['en_anden'];
+        $porcentaje = $total > 0 ? (int) round($acopiados / $total * 100) : 0;
+        $estado = match (true) {
+            $incidencias > 0 => 'con_incidencia',
+            $asignados === 0 => 'sin_asignar',
+            $cargados >= $total => 'cargado_completo',
+            $cargados > 0 => 'cargando',
+            $enAnden >= $total => 'en_anden',
+            $enAnden > 0 => 'despacho_parcial',
+            $acopiados >= $total => 'separacion_completa',
+            $acopiados > 0 => 'en_preparacion',
+            default => 'pendiente',
+        };
+
+        return [
+            'pallets_programados' => $programados,
+            'pallets_asignados' => $asignados,
+            'pallets_pendientes_asignar' => $programados === null ? null : max(0, $programados - $asignados),
+            'pendientes_ubicacion' => $asignaciones->filter(fn ($a): bool => ! $a->estado->fueraDeCamara()
+                && $a->folio?->ubicacionActual?->posicion === null)->count(),
+            'incidencias_abiertas' => $incidencias,
+            'estado' => $estado,
+            'separacion' => [
+                'acopiados' => $acopiados, 'total' => $total, 'porcentaje' => $porcentaje,
+                'umbral_porcentaje' => (int) $progreso['umbral_porcentaje'],
+                'cumple_umbral' => $total > 0 && $porcentaje >= (int) $progreso['umbral_porcentaje'],
+                'en_anden' => $enAnden,
+            ],
+            'carguio' => [
+                'cargados' => $cargados, 'total' => $total,
+                'porcentaje' => $total > 0 ? (int) floor($cargados / $total * 100) : 0,
+                'en_anden_por_cargar' => max(0, $enAnden - $cargados),
+            ],
         ];
     }
 }
