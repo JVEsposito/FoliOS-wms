@@ -701,6 +701,13 @@
 .operation-now-table--dispatch :where(th, td):nth-child(3) { width: 22%; }
 .operation-now-table--dispatch :where(th, td):nth-child(4) { width: 16%; }
 .operation-now-table--dispatch :where(th, td):nth-child(5) { width: 16%; }
+.operation-now-dispatch-instruction td:first-child {
+    padding-left: 22px;
+    border-left: 3px solid var(--corporate-border);
+}
+.operation-now-dispatch-instruction .operation-now-code { font-size: .78rem; }
+.operation-now-dispatch-load > td { border-top: 2px solid var(--corporate-border); }
+.operation-now-dispatch-load > td[rowspan] { vertical-align: top; }
 .operation-now-table--reentry { min-width: 720px; table-layout: fixed; }
 .operation-now-table--reentry :where(th, td):nth-child(1) { width: 20%; }
 .operation-now-table--reentry :where(th, td):nth-child(2) { width: 30%; }

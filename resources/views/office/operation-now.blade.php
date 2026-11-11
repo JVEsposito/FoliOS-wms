@@ -229,13 +229,13 @@
                             <header class="operation-now-panel__heading">
                                 <div class="operation-now-panel__title">
                                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 6h11v9H2zM13 9h4l4 4v2h-8zM6 18a2 2 0 1 0 0-.01M17 18a2 2 0 1 0 0-.01"/></svg>
-                                    <div><h2 id="operationDispatchTitle">Despacho PT</h2><span>Separación en cámara y pallets cargados por carga</span></div>
+                                    <div><h2 id="operationDispatchTitle">Despacho PT</h2><span>Separación y carguío por carga e instructivo</span></div>
                                 </div>
                                 <div class="operation-now-panel__tools"><strong class="operation-now-panel__summary" id="dispatchPanelSummary">—</strong><a href="/oficina/frigorifico/despacho/estatus">Ver estatus <span aria-hidden="true">→</span></a></div>
                             </header>
                             <div class="operation-now-panel__body operation-now-table-scroll">
                                 <table class="operation-now-table operation-now-table--dispatch">
-                                    <caption class="office-visually-hidden">Avance de separación y carguío de cada carga publicada</caption>
+                                    <caption class="office-visually-hidden">Avance de separación y carguío de cada carga publicada y sus instructivos</caption>
                                     <thead><tr><th scope="col">Carga</th><th scope="col">Separación</th><th scope="col">Cargados</th><th scope="col">Andén</th><th scope="col">Estado</th></tr></thead>
                                     <tbody id="operationDispatchRows"><tr><td colspan="5"><div class="operation-now-empty">Consultando cargas…</div></td></tr></tbody>
                                 </table>

@@ -1185,7 +1185,8 @@ function renderTunnels(tunnels = []) {
 const DISPATCH_STATES = {
     pendiente: 'Pendiente', en_preparacion: 'En preparación', despacho_parcial: 'Saliendo a andén',
     en_separacion: 'En separación', separada: 'Separada', separacion_completa: 'Separación completa',
-    despachada: 'Todo en andén',
+    despachada: 'Todo en andén', sin_asignar: 'Sin pallets asignados',
+    cargado_completo: 'Cargado completo', cargando: 'Cargando', en_anden: 'En andén',
 };
 
 function dispatchMeter(done, total, tone, detail) {
@@ -1200,7 +1201,42 @@ function dispatchMeter(done, total, tone, detail) {
 function dispatchLoadState(load) {
     if (load.incidencias_abiertas) return signal(`${number(load.incidencias_abiertas)} ${load.incidencias_abiertas === 1 ? 'incidencia' : 'incidencias'}`, 'critical');
     if (load.lista_para_cerrar) return signal('Lista para cerrar', 'success');
+    if (['cargado_completo', 'separacion_completa'].includes(load.estado)) return signal(DISPATCH_STATES[load.estado], 'success');
+    if (load.estado === 'sin_asignar') return signal(DISPATCH_STATES[load.estado], 'warning');
     return signal(DISPATCH_STATES[load.estado] || humanize(load.estado), load.prioridad === 'urgente' ? 'warning' : 'neutral');
+}
+
+function dispatchRow(load, { instruction = false, parent = '', dockRows = 1 } = {}) {
+    const separation = load.separacion || {};
+    const loading = load.carguio || {};
+    const title = instruction
+        ? (load.id ? `Instructivo ${load.numero_externo || load.orden}` : 'Sin instructivo asignado')
+        : load.codigo;
+    const reference = instruction
+        ? [load.booking && `Booking ${load.booking}`, load.recibidor,
+            `${number(load.pallets_asignados)} asignados${load.pallets_programados == null ? '' : ` · ${number(load.pallets_programados)} programados`}`].filter(Boolean).join(' · ')
+        : [load.numero_orden_externa, load.embarque, (load.clientes || []).join(' · ')].filter(Boolean).join(' · ');
+    const separationTone = separation.total && separation.acopiados >= separation.total ? 'success' : (separation.cumple_umbral ? 'info' : 'warning');
+    const separationDetail = [separation.en_anden
+        ? `${number(separation.en_anden)} en andén · ${percent(separation.porcentaje)}`
+        : `${percent(separation.porcentaje)} · umbral ${percent(separation.umbral_porcentaje)}`,
+    load.pallets_pendientes_asignar > 0 ? `${number(load.pallets_pendientes_asignar)} por asignar` : '',
+    load.pendientes_ubicacion > 0 ? `${number(load.pendientes_ubicacion)} por ubicar` : ''].filter(Boolean).join(' · ');
+    const loadingDetail = loading.en_anden_por_cargar
+        ? `${number(loading.en_anden_por_cargar)} en andén por subir`
+        : (loading.total && loading.cargados >= loading.total ? 'Carga completa' : 'Sin pallets esperando en andén');
+    const truck = load.camion_en_anden
+        ? `Camión ${load.camion_en_anden.patente || 'sin patente'} · desde ${dateTime(load.camion_en_anden.ingresada_at, { timeOnly: true })}`
+        : 'Sin camión';
+    return `<tr class="${instruction ? 'operation-now-dispatch-instruction' : 'operation-now-dispatch-load'}"${instruction
+        ? ` data-parent-load="${escapeHtml(parent)}" data-instruction-id="${escapeHtml(load.id || 'sin-instructivo')}"`
+        : ` data-dispatch-load="${escapeHtml(load.id)}"`}>
+        <td><span class="operation-now-code">${escapeHtml(title)}${instruction ? `<span class="office-visually-hidden"> de la carga ${escapeHtml(parent)}</span>` : ''}</span><span class="operation-now-subtext">${escapeHtml(reference || 'Sin orden externa')}</span></td>
+        <td>${dispatchMeter(separation.acopiados, separation.total, separationTone, separationDetail)}</td>
+        <td>${dispatchMeter(loading.cargados, loading.total, loading.total && loading.cargados >= loading.total ? 'success' : 'info', loadingDetail)}</td>
+        ${instruction ? '' : `<td rowspan="${dockRows}"><strong>${escapeHtml(load.anden || '—')}</strong><span class="operation-now-subtext">${escapeHtml(truck)}</span></td>`}
+        <td>${dispatchLoadState(load)}</td>
+    </tr>`;
 }
 
 function renderDispatch(dispatch = {}) {
@@ -1213,28 +1249,10 @@ function renderDispatch(dispatch = {}) {
         elements.dispatchRows.innerHTML = `<tr><td colspan="5">${empty('Sin cargas en despacho', 'Las cargas aparecen al publicarse y salen al cerrar el despacho.')}</td></tr>`;
         return;
     }
-
     elements.dispatchRows.innerHTML = loads.map((load) => {
-        const separation = load.separacion || {};
-        const loading = load.carguio || {};
-        const reference = [load.numero_orden_externa, load.embarque, (load.clientes || []).join(' · ')].filter(Boolean).join(' · ');
-        const separationTone = separation.total && separation.acopiados >= separation.total ? 'success' : (separation.cumple_umbral ? 'info' : 'warning');
-        const separationDetail = separation.en_anden
-            ? `${number(separation.en_anden)} en andén · ${percent(separation.porcentaje)}`
-            : `${percent(separation.porcentaje)} · umbral ${percent(separation.umbral_porcentaje)}`;
-        const loadingDetail = loading.en_anden_por_cargar
-            ? `${number(loading.en_anden_por_cargar)} en andén por subir`
-            : (loading.total && loading.cargados >= loading.total ? 'Carga completa' : 'Sin pallets esperando en andén');
-        const truck = load.camion_en_anden
-            ? `Camión ${load.camion_en_anden.patente || 'sin patente'} · desde ${dateTime(load.camion_en_anden.ingresada_at, { timeOnly: true })}`
-            : 'Sin camión';
-        return `<tr>
-            <td><span class="operation-now-code">${escapeHtml(load.codigo)}</span><span class="operation-now-subtext">${escapeHtml(reference || 'Sin orden externa')}</span></td>
-            <td>${dispatchMeter(separation.acopiados, separation.total, separationTone, separationDetail)}</td>
-            <td>${dispatchMeter(loading.cargados, loading.total, loading.total && loading.cargados >= loading.total ? 'success' : 'info', loadingDetail)}</td>
-            <td><strong>${escapeHtml(load.anden || '—')}</strong><span class="operation-now-subtext">${escapeHtml(truck)}</span></td>
-            <td>${dispatchLoadState(load)}</td>
-        </tr>`;
+        const instructions = load.instructivos?.length > 1 ? load.instructivos : [];
+        return dispatchRow(load, { dockRows: instructions.length + 1 })
+            + instructions.map((instruction) => dispatchRow(instruction, { instruction: true, parent: load.codigo })).join('');
     }).join('');
 }
 
