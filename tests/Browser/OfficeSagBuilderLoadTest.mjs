@@ -67,6 +67,35 @@ test('si falla una consulta, el armado de lotes conserva el resto y muestra el e
     } finally { await browser.close(); }
 });
 
+test('una consulta que no responde termina en aviso y no bloquea el resto', async () => {
+    const browser = await launch();
+    try {
+        const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+        await context.addInitScript((user) => {
+            localStorage.setItem('estiba_wms_office_token', 'fixture');
+            localStorage.setItem('estiba_wms_office_identity', JSON.stringify(user));
+        }, identity);
+        const page = await context.newPage();
+        await page.clock.install();
+        const html = readFileSync(resolve(root, 'storage/app/ui/oficina/inspeccion-sag.html'), 'utf8');
+        await context.route('http://localhost/**', (route) => {
+            const path = new URL(route.request().url()).pathname;
+            if (path === '/oficina/frigorifico/inspeccion-sag') return route.fulfill({ body: html, contentType: 'text/html' });
+            if (path.startsWith('/build/')) return route.fulfill({ body: readFileSync(resolve(root, `public${path}`)), contentType: ({ '.js': 'text/javascript', '.css': 'text/css' })[extname(path)] || 'application/octet-stream' });
+            if (path === '/api/inspeccion-sag/folios/opciones') return undefined; // nunca responde
+            if (path === '/api/inspeccion-sag/catalogos') return route.fulfill({ json: catalogs });
+            if (path === '/api/inspeccion-sag/lotes') return route.fulfill({ json: { data: [] } });
+            return route.fulfill({ json: {} });
+        });
+        await page.goto('http://localhost/oficina/frigorifico/inspeccion-sag');
+        await page.waitForFunction(() => document.querySelectorAll('#sagBuilderForm [name="tipo"] option').length === 2);
+        await page.clock.runFor(31000);
+        await page.locator('#sagLoadError').waitFor();
+        assert.match(await page.locator('#sagLoadError').innerText(), /clientes y especies: El servidor no respondió en 30 segundos/);
+        await context.close();
+    } finally { await browser.close(); }
+});
+
 test('con todo disponible no aparece aviso de error', async () => {
     const browser = await launch();
     try {
