@@ -258,8 +258,22 @@ function renderLoadErrors(failures) {
         : '';
 }
 
+// Una consulta que no responde no debe dejar la pantalla esperando sin aviso.
+const WORKSPACE_TIMEOUT_MS = 30000;
+
+async function withTimeout(path) {
+    try {
+        return await api(path, { signal: AbortSignal.timeout(WORKSPACE_TIMEOUT_MS) });
+    } catch (error) {
+        if (error?.name === 'TimeoutError' || error?.name === 'AbortError') {
+            throw new Error(`El servidor no respondió en ${WORKSPACE_TIMEOUT_MS / 1000} segundos.`);
+        }
+        throw error;
+    }
+}
+
 async function loadWorkspace() {
-    const results = await Promise.allSettled(WORKSPACE_SOURCES.map((source) => api(source.path)));
+    const results = await Promise.allSettled(WORKSPACE_SOURCES.map((source) => withTimeout(source.path)));
     const failures = [];
     results.forEach((result, index) => {
         const source = WORKSPACE_SOURCES[index];

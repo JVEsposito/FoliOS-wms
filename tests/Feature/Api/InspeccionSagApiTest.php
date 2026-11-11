@@ -53,6 +53,7 @@ use App\Services\Existencias\ServicioExistencias;
 use App\Services\Prefrio\ServicioGeneracionRecepcionTunel;
 use App\Services\Temporadas\ServicioTemporadaGlobal;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -582,6 +583,31 @@ class InspeccionSagApiTest extends TestCase
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.id', $esperado->id)
             ->assertJsonPath('data.0.sag.estado', 'SI');
+    }
+
+    public function test_las_opciones_de_cliente_y_especie_salen_solo_de_pallets_elegibles(): void
+    {
+        $administrador = $this->administradorConTemporada();
+        $this->crearFolioUbicado('SAG-OPC-001', ['exportadora' => 'VIGENTE', 'variedad' => 'Regina', 'datos_externos' => ['especie' => 'Cereza', 'csg' => 'CSG-A']]);
+        $this->crearFolioUbicado('SAG-OPC-002', ['exportadora' => 'VIGENTE', 'variedad' => 'Lapins', 'datos_externos' => ['especie' => 'Cereza', 'csg' => 'CSG-A']]);
+        $despachado = $this->crearFolioUbicado('SAG-OPC-DESP', ['exportadora' => 'DESPACHADA', 'datos_externos' => ['especie' => 'Kiwi', 'csg' => 'CSG-B']]);
+        Folio::query()->whereKey($despachado->id)->update(['estado_operacional' => EstadoOperacionalFolio::Despachado->value]);
+        $this->crearFolioUbicado('SAG-OPC-SALDO', [
+            'exportadora' => 'SALDO', 'tipo_bulto' => TipoBulto::Saldo,
+            'datos_externos' => ['especie' => 'Ciruela', 'csg' => 'CSG-C'],
+        ]);
+
+        DB::enableQueryLog();
+        $respuesta = $this->actingAs($administrador, 'sanctum')->getJson('/api/inspeccion-sag/folios/opciones')->assertOk();
+        $consultas = collect(DB::getQueryLog())->filter(fn (array $consulta): bool => str_contains($consulta['query'], 'validaciones_pallet'));
+        DB::disableQueryLog();
+
+        // La despachada y el saldo tienen catálogo, pero no son elegibles: no se ofrecen.
+        $this->assertSame(['VIGENTE'], array_column($respuesta->json('clientes'), 'nombre'));
+        $this->assertSame(['Cereza'], array_column($respuesta->json('clientes.0.especies'), 'nombre'));
+        $this->assertSame(['Lapins', 'Regina'], array_column($respuesta->json('clientes.0.especies.0.variedades'), 'nombre'));
+        $this->assertSame(['CSG-A'], array_column($respuesta->json('clientes.0.especies.0.csg'), 'codigo'));
+        $this->assertCount(1, $consultas, 'Las opciones se arman con una sola consulta.');
     }
 
     public function test_cambio_de_mercado_agrega_destino_y_resultados_no_aprobatorios_conservan_aprobaciones_previas(): void

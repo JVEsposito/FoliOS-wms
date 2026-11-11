@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Api;
 use App\Enums\CondicionTermicaFolio;
 use App\Enums\EstadoLoteInspeccionSag;
 use App\Enums\EstadoOperacionalFolio;
+use App\Enums\EstadoValidacionPallet;
 use App\Enums\ResultadoInspeccionSag;
+use App\Enums\ResultadoValidacionPallet;
 use App\Enums\TipoAprobacionSag;
 use App\Enums\TipoBulto;
 use App\Enums\TipoDestinoSag;
@@ -22,7 +24,6 @@ use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -90,34 +91,29 @@ class InspeccionSagController extends Controller
 
     public function opcionesFolios(): JsonResponse
     {
-        $temporadaId = app(ServicioTemporadaActiva::class)->buscar()?->id;
-        // Una sola consulta con las combinaciones distintas: hidratar cada combinación con sus
-        // catálogos crece con la temporada y puede agotar memoria o tiempo de la petición.
-        $filas = $temporadaId
-            ? DB::table('combinaciones_validacion as cv')
-                ->join('articulos_validacion as a', 'a.id', '=', 'cv.articulo_validacion_id')
-                ->join('especies_validacion as e', 'e.id', '=', 'a.especie_validacion_id')
-                ->join('variedades_validacion as v', 'v.id', '=', 'a.variedad_validacion_id')
-                ->join('origenes_validacion as o', 'o.id', '=', 'cv.origen_validacion_id')
-                ->join('clientes_validacion as cc', 'cc.id', '=', 'o.cliente_validacion_id')
-                ->join('clientes as c', 'c.id', '=', 'cc.cliente_id')
-                ->leftJoin('csg_validacion as csg', 'csg.id', '=', 'o.csg_validacion_id')
-                ->where('cv.temporada_id', $temporadaId)
-                ->where('cv.activo', true)
-                ->where('a.activo', true)
-                ->where('e.activo', true)
-                ->where('v.activo', true)
-                ->where('o.activo', true)
-                ->where('cc.activo', true)
-                ->where('c.activo', true)
-                ->distinct()
-                ->get([
-                    'c.id as cliente_id', 'c.codigo as cliente_codigo', 'c.nombre as cliente_nombre',
-                    'e.id as especie_id', 'e.nombre as especie_nombre',
-                    'v.id as variedad_id', 'v.nombre as variedad_nombre',
-                    'csg.id as csg_id', 'csg.codigo as csg_codigo',
-                ])
-            : collect();
+        // Las opciones salen de los pallets elegibles, no del catálogo de combinaciones: ese catálogo
+        // cruza artículos × orígenes de la temporada, crece al cuadrado y la consulta no terminaba.
+        // Así además solo se ofrece lo que la búsqueda de pallets puede encontrar.
+        $filas = $this->consultaElegibles()
+            ->toBase()
+            ->join('validaciones_pallet as vp', fn ($join) => $join
+                ->on('vp.folio_id', '=', 'folios.id')
+                ->where('vp.estado', EstadoValidacionPallet::Aceptada->value)
+                ->where('vp.resultado', ResultadoValidacionPallet::Aprobado->value))
+            ->join('articulos_validacion as a', 'a.id', '=', 'vp.articulo_validacion_id')
+            ->join('especies_validacion as e', fn ($join) => $join->on('e.id', '=', 'a.especie_validacion_id')->where('e.activo', true))
+            ->leftJoin('variedades_validacion as v', fn ($join) => $join->on('v.id', '=', 'a.variedad_validacion_id')->where('v.activo', true))
+            ->join('origenes_validacion as o', 'o.id', '=', 'vp.origen_validacion_id')
+            ->join('clientes_validacion as cc', 'cc.id', '=', 'o.cliente_validacion_id')
+            ->join('clientes as c', fn ($join) => $join->on('c.id', '=', 'cc.cliente_id')->where('c.activo', true))
+            ->leftJoin('csg_validacion as csg', fn ($join) => $join->on('csg.id', '=', 'o.csg_validacion_id')->where('csg.activo', true))
+            ->distinct()
+            ->get([
+                'c.id as cliente_id', 'c.codigo as cliente_codigo', 'c.nombre as cliente_nombre',
+                'e.id as especie_id', 'e.nombre as especie_nombre',
+                'v.id as variedad_id', 'v.nombre as variedad_nombre',
+                'csg.id as csg_id', 'csg.codigo as csg_codigo',
+            ]);
 
         $clientes = $filas
             ->groupBy(fn (object $fila): string => (string) $fila->cliente_id)
@@ -129,6 +125,7 @@ class InspeccionSagController extends Controller
                         'id' => $porEspecie->first()->especie_id,
                         'nombre' => $porEspecie->first()->especie_nombre,
                         'variedades' => $porEspecie
+                            ->filter(fn (object $fila): bool => filled($fila->variedad_id))
                             ->map(fn (object $fila): array => ['id' => $fila->variedad_id, 'nombre' => $fila->variedad_nombre])
                             ->unique('id')->sortBy('nombre')->values(),
                         'csg' => $porEspecie
@@ -318,9 +315,9 @@ class InspeccionSagController extends Controller
         $estadosLoteActivos = collect(EstadoLoteInspeccionSag::cases())->filter->esActivo()->map->value->all();
 
         return Folio::query()
-            ->where('activo', true)
-            ->where('tipo_bulto', TipoBulto::Pallet)
-            ->whereNotIn('estado_operacional', $estadosTerminales)
+            ->where('folios.activo', true)
+            ->where('folios.tipo_bulto', TipoBulto::Pallet)
+            ->whereNotIn('folios.estado_operacional', $estadosTerminales)
             ->whereDoesntHave('material')
             ->whereHas('temporada', fn (Builder $consulta): Builder => $consulta->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
             ->whereDoesntHave('inspeccionesSag.lote', fn (Builder $consulta): Builder => $consulta
