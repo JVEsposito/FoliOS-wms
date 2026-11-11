@@ -8,7 +8,8 @@ on:
 
 jobs:
   backend:
-    runs-on: ubuntu-latest
+    # Mantener estable la imagen que instala las dependencias de Chromium.
+    runs-on: ubuntu-24.04
 
     services:
       mysql:
