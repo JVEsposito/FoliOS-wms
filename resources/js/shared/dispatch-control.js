@@ -65,3 +65,10 @@ export const ESTADOS_PALLET = {
     pendiente: 'En cámara', con_incidencia: 'Con incidencia', en_anden: 'En andén', cargado: 'Cargado', despachado: 'Despachado',
     descartado: 'Descartado', reemplazado: 'Reemplazado', retornado: 'Retornado',
 };
+
+/** Columna P/E: orientación del pallet respecto del frente del camión. */
+export const ORIENTACIONES = { P: 'Punta', E: 'Espejo' };
+
+export function orientacion(codigo) {
+    return codigo ? (ORIENTACIONES[codigo] ?? codigo) : '—';
+}

@@ -148,11 +148,13 @@ test('consolidación abre la planilla, sube pallets con su posición y reintenta
 
     await h.input('Folio que sube al camión', 'a2');
     await h.input('T° pulpa', '0,4');
+    await h.press('Espejo', { containing: true });
     await h.press('Subió · registrar posición');
     assert.deepEqual(
-      [h.calls.position[0].numero_folio, h.calls.position[0].posicion, h.calls.position[0].temperatura, h.calls.position[0].compartir_posicion],
-      ['A2', 2, 0.4, false],
+      [h.calls.position[0].numero_folio, h.calls.position[0].posicion, h.calls.position[0].temperatura, h.calls.position[0].codigo_pe, h.calls.position[0].compartir_posicion],
+      ['A2', 2, 0.4, 'E', false],
     );
+    assert.match(h.text(), /Espejo · 0,4 °C/);
     assert.match(h.text(), /A2 en posición 2: quedó cargado en el camión/);
     assert.equal(h.value('Folio que sube al camión'), '');
     assert.equal(h.value('Posición'), '3');
@@ -166,6 +168,8 @@ test('consolidación abre la planilla, sube pallets con su posición y reintenta
     h.failNextPosition();
     await h.press('Comparten');
     assert.equal(h.calls.position[1].compartir_posicion, true);
+    // La orientación elegida se mantiene para el pallet siguiente.
+    assert.equal(h.calls.position[1].codigo_pe, 'E');
     assert.match(h.text(), /Envío sin confirmar/);
     await h.press('Reintentar envío');
     assert.equal(h.calls.position.length, 3);

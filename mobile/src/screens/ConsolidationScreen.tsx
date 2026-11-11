@@ -6,7 +6,7 @@ import { Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, St
 import { FieldHeader } from '../components/field/FieldHeader';
 import { EntityCode, EstibaAlert, EstibaButton, EstibaField, EstibaMetric, EstibaPanel, EstibaSignal } from '../components/ui/EstibaPrimitives';
 import {
-  HEADER_GROUPS, OPTION_LABELS, PALLET_STATE_LABELS, checkNotApplicable, consolidationStorageKey, declaredPallets, fieldValue, fillNotApplicable,
+  HEADER_GROUPS, OPTION_LABELS, PALLET_ORIENTATIONS, PALLET_STATE_LABELS, checkNotApplicable, orientationLabel, consolidationStorageKey, declaredPallets, fieldValue, fillNotApplicable,
   formatTemperature, hasDraftChanges, nextFreePosition, palletsForList, parseBoxes, parsePosition, parseTemperature, positionOccupant, sectionChanges,
   type ConsolidationCatalog, type ConsolidationControl, type ConsolidationDraft, type ConsolidationField, type ConsolidationLoad, type ConsolidationPallet,
   type ConsolidationSection,
@@ -155,7 +155,7 @@ export function ConsolidationScreen({ auth, baseUrl, onLogout }: { auth: AuthSes
       operacion_id: Crypto.randomUUID(),
       numero_folio: folio.trim().toUpperCase(),
       posicion: parsePosition(position, catalog.posicion_maxima),
-      codigo_pe: code.trim().toUpperCase() || null,
+      codigo_pe: code || null,
       cajas: parseBoxes(boxes),
       temperatura: parseTemperature(temperature),
       compartir_posicion: false,
@@ -167,7 +167,8 @@ export function ConsolidationScreen({ auth, baseUrl, onLogout }: { auth: AuthSes
     const final = { ...payload, compartir_posicion: share };
     const wasWaiting = control.pallets.find((p) => p.numero_folio.toUpperCase() === final.numero_folio)?.estado_carga === 'en_anden';
     await send(`Pallet ${final.numero_folio}`, () => api.position(control.id, final), (result) => {
-      setFolio(''); setCode(''); setTemperature(''); setBoxes('');
+      // La orientación se mantiene: los pallets de una carga suelen ir todos igual.
+      setFolio(''); setTemperature(''); setBoxes('');
       setPosition(String(nextFreePosition(result.pallets, catalog.posicion_maxima)));
       setNotice(`${final.numero_folio} en posición ${final.posicion}${wasWaiting ? ': quedó cargado en el camión' : ''}.`);
       setTimeout(() => folioInput.current?.focus(), 100);
@@ -286,9 +287,18 @@ export function ConsolidationScreen({ auth, baseUrl, onLogout }: { auth: AuthSes
               onChangeText={selectFolio} />
             <View style={s.row}>
               <EstibaField label="Posición" value={position} editable={!blocked} keyboardType="number-pad" maxLength={2} onChangeText={setPosition} style={s.small} />
-              <EstibaField label="P/E" value={code} editable={!blocked} autoCapitalize="characters" maxLength={10} onChangeText={setCode} style={s.small} />
               <EstibaField label="T° pulpa" value={temperature} editable={!blocked} keyboardType="numbers-and-punctuation" placeholder="°C" maxLength={6} onChangeText={setTemperature} style={s.small} />
               <EstibaField label="Cajas" value={boxes} editable={!blocked} keyboardType="number-pad" maxLength={4} onChangeText={setBoxes} style={s.small} />
+            </View>
+            <View style={s.gap}>
+              <Text style={s.label}>P/E · orientación del pallet</Text>
+              <View style={s.chips}>
+                {PALLET_ORIENTATIONS.map((option) => <Pressable key={option.code} accessibilityRole="radio" accessibilityState={{ selected: code === option.code, disabled: blocked }}
+                  disabled={blocked} onPress={() => setCode(code === option.code ? '' : option.code)} style={[s.chip, s.grow, code === option.code && s.chipOn, blocked && s.dim]}>
+                  <Text style={[s.chipText, code === option.code && s.chipTextOn]}>{option.label}</Text>
+                  <Text style={[s.chipHint, code === option.code && s.chipTextOn]}>{option.hint}</Text>
+                </Pressable>)}
+              </View>
             </View>
             <EstibaButton label="Subió · registrar posición" variant="confirm" busy={busy} disabled={blocked || !folio.trim()} onPress={() => void run(() => registerPosition())} />
             <Text style={s.muted}>Un pallet que espera en el andén queda cargado en el camión, igual que cuando lo lee el camarero. Si ya estaba cargado, solo se guarda su posición.</Text>
@@ -301,7 +311,7 @@ export function ConsolidationScreen({ auth, baseUrl, onLogout }: { auth: AuthSes
               <View style={s.grow}>
                 <EntityCode value={pallet.numero_folio} />
                 <Text style={s.muted}>{[PALLET_STATE_LABELS[pallet.estado_carga] ?? pallet.estado_carga, pallet.especie, `${pallet.posicion?.cajas ?? pallet.cajas_folio} cajas`,
-                  pallet.posicion?.codigo_pe ? `P/E ${pallet.posicion.codigo_pe}` : null, pallet.posicion ? formatTemperature(pallet.posicion.temperatura) : null].filter(Boolean).join(' · ')}</Text>
+                  orientationLabel(pallet.posicion?.codigo_pe), pallet.posicion ? formatTemperature(pallet.posicion.temperatura) : null].filter(Boolean).join(' · ')}</Text>
               </View>
             </Pressable>)}
             {editable ? <Text style={s.muted}>Toca un pallet para corregirlo; mantén presionado para quitarlo de la planilla.</Text> : null}
@@ -476,6 +486,7 @@ const s = StyleSheet.create({
   chipOn: { borderColor: colors.primary, backgroundColor: colors.primary },
   chipText: { fontFamily: font.bold, color: colors.text, fontSize: 15 },
   chipTextOn: { color: colors.onPrimary },
+  chipHint: { fontFamily: font.regular, color: colors.muted, fontSize: 12 },
   tabs: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   tab: { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 8, borderWidth: 1, borderColor: colors.border },
   tabOn: { backgroundColor: colors.primary, borderColor: colors.primary },

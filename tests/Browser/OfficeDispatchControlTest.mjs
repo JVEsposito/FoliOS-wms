@@ -107,6 +107,7 @@ for (const width of [1280, 390]) test(`lista las planillas y abre el detalle con
         const folios = await page.locator('#dcxPallets tr td:nth-child(3)').allInnerTexts();
         assert.deepEqual(folios, ['A000001', 'A000002', 'A000003']);
         assert.match(await page.locator('#dcxPallets tr').first().innerText(), /0,5 °C/);
+        assert.match(await page.locator('#dcxPallets tr').first().innerText(), /Punta/);
         await page.waitForFunction(() => document.querySelector('#dcxPhotos img')?.src.startsWith('blob:'));
         assert.ok(requests.filter((r) => r.path.endsWith('/miniatura')).every((r) => r.auth === 'Bearer fixture'));
         assert.equal(await page.locator('#dcxReopen').isVisible(), true);

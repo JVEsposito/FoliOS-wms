@@ -146,6 +146,9 @@ class ServicioControlDespacho
             throw new DomainException('La hora del equipo está adelantada; revisa el reloj de la PDA.');
         }
         $codigoPe = Str::upper(trim((string) ($datos['codigo_pe'] ?? ''))) ?: null;
+        if ($codigoPe !== null && ! array_key_exists($codigoPe, FormularioControlDespacho::orientaciones())) {
+            throw new DomainException('P/E es la orientación del pallet: P (punta) o E (espejo).');
+        }
         $temperatura = $datos['temperatura'] ?? null;
         $temperatura = $temperatura === null || $temperatura === '' ? null : round((float) $temperatura, 1);
         $cajas = isset($datos['cajas']) && $datos['cajas'] !== '' ? (int) $datos['cajas'] : null;

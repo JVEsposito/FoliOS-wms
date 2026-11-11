@@ -67,6 +67,9 @@ class ControlDespachoApiTest extends TestCase
             ->assertJsonPath('data.pallets.0.posicion.posicion', 1)
             ->assertJsonPath('data.pallets.0.posicion.codigo_pe', 'P')
             ->assertJsonPath('data.pallets.0.posicion.temperatura', 0.4);
+        $this->posicion($token, $control['id'], $primero->numero_folio, 1, ['codigo_pe' => 'X'])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'P/E es la orientación del pallet: P (punta) o E (espejo).');
         $evento = $carga->eventos()->where('tipo', 'folio_cargado')->sole();
         $this->assertSame('consolidacion', $evento->datos['registrado_desde']);
         $this->assertSame(1, $evento->datos['posicion']);
@@ -227,8 +230,9 @@ class ControlDespachoApiTest extends TestCase
         $this->enviarAlAnden($contexto, $carga, $contexto['folios'][0]);
         [$token] = $this->consolidador('R24D');
         $control = $this->iniciar($token, $carga);
-        $this->assertSame([['clave' => 'general', 'nombre' => 'Fotos del despacho', 'obligatoria' => false, 'maximo' => 20]],
-            $this->conToken($token)->getJson('/api/control-despacho/catalogo')->assertOk()->json('data.tipos_foto'));
+        $catalogo = $this->conToken($token)->getJson('/api/control-despacho/catalogo')->assertOk()->json('data');
+        $this->assertSame([['clave' => 'general', 'nombre' => 'Fotos del despacho', 'obligatoria' => false, 'maximo' => 20]], $catalogo['tipos_foto']);
+        $this->assertSame(['P' => 'Punta', 'E' => 'Espejo'], collect($catalogo['orientaciones'])->pluck('nombre', 'clave')->all());
 
         $operacion = (string) Str::uuid();
         $archivo = UploadedFile::fake()->image('contenedor.jpg', 640, 480);

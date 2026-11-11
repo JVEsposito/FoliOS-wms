@@ -1,4 +1,4 @@
-import { ESTADOS_PALLET, gruposEncabezado, palletsOrdenados, temperatura, textoValor, tonoInspeccion } from './shared/dispatch-control.js';
+import { ESTADOS_PALLET, gruposEncabezado, orientacion, palletsOrdenados, temperatura, textoValor, tonoInspeccion } from './shared/dispatch-control.js';
 
 const byId = (id) => document.getElementById(id);
 const elements = {
@@ -139,7 +139,7 @@ function renderControl(control) {
     elements.pallets.innerHTML = pallets.length ? pallets.map((pallet) => `
         <tr data-placed="${pallet.posicion ? 'si' : 'no'}">
             <td>${pallet.posicion?.posicion ?? '—'}</td>
-            <td>${escapeHtml(pallet.posicion?.codigo_pe || '—')}</td>
+            <td>${escapeHtml(orientacion(pallet.posicion?.codigo_pe))}</td>
             <td><strong>${escapeHtml(pallet.numero_folio)}</strong></td>
             <td>${escapeHtml([pallet.especie, pallet.variedad].filter(Boolean).join(' · ') || '—')}</td>
             <td>${escapeHtml(textoValor(pallet.posicion?.cajas ?? pallet.cajas_folio))}</td>

@@ -55,6 +55,19 @@ export const HEADER_GROUPS: { key: string; title: string }[] = [
   { key: 'termografos', title: 'Termógrafos' },
 ];
 
+/**
+ * Columna P/E: orientación del pallet respecto del frente del camión. En un pallet
+ * 1000 × 1200, punta lleva el lado angosto hacia el frente y espejo el lado ancho.
+ */
+export const PALLET_ORIENTATIONS: { code: 'P' | 'E'; label: string; hint: string }[] = [
+  { code: 'P', label: 'Punta', hint: 'Lado angosto al frente' },
+  { code: 'E', label: 'Espejo', hint: 'Lado ancho al frente' },
+];
+
+export function orientationLabel(code: string | null | undefined): string | null {
+  return code ? PALLET_ORIENTATIONS.find((option) => option.code === code)?.label ?? code : null;
+}
+
 export const PALLET_STATE_LABELS: Record<string, string> = {
   pendiente: 'En cámara', con_incidencia: 'Con incidencia', en_anden: 'En andén', cargado: 'Cargado', despachado: 'Despachado',
 };

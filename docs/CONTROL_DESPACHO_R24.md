@@ -21,6 +21,15 @@ como siempre.
 En la pestaña **Pallets** se lee el folio y se registra su posición en el camión o
 contenedor (1 a 60). También P/E, temperatura de pulpa y cajas.
 
+**P/E** es la orientación del pallet respecto del frente del camión o contenedor. En un pallet
+1000 × 1200:
+
+- **P · Punta:** lado angosto hacia el frente.
+- **E · Espejo:** lado ancho hacia el frente.
+
+La PDA mantiene la orientación elegida para el pallet siguiente, porque en una carga suelen ir
+todos igual. En la planilla se escribe la letra.
+
 | Estado del pallet | Qué hace la planilla |
 |---|---|
 | En andén | Lo deja **cargado** con la misma transición que usa el camarero (evento `folio_cargado`, marcado `registrado_desde: consolidacion`) y guarda su posición |

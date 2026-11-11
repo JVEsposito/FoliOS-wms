@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { gruposEncabezado, palletsOrdenados, temperatura, textoValor, tonoInspeccion } from '../../resources/js/shared/dispatch-control.js';
+import { gruposEncabezado, orientacion, palletsOrdenados, temperatura, textoValor, tonoInspeccion } from '../../resources/js/shared/dispatch-control.js';
 
 test('la inspección distingue los puntos en que «sí» es un hallazgo', () => {
     assert.equal(tonoInspeccion('puertas', 'si'), 'ok');
@@ -41,4 +41,10 @@ test('los valores se muestran en español', () => {
     assert.equal(textoValor(''), '—');
     assert.equal(temperatura(-0.5), '-0,5 °C');
     assert.equal(temperatura(null), '—');
+});
+
+test('P/E se lee como punta o espejo', () => {
+    assert.equal(orientacion('P'), 'Punta');
+    assert.equal(orientacion('E'), 'Espejo');
+    assert.equal(orientacion(null), '—');
 });

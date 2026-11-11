@@ -130,6 +130,7 @@ class ControlDespachoController extends Controller
             'operacion_id' => ['required', 'uuid'],
             'numero_folio' => ['required', 'string', 'max:50'],
             'posicion' => ['required', 'integer', 'min:1', 'max:'.FormularioControlDespacho::POSICION_MAXIMA],
+            // P (punta) o E (espejo); el servicio responde con un mensaje para el operador.
             'codigo_pe' => ['nullable', 'string', 'max:10'],
             'cajas' => ['nullable', 'integer', 'min:0', 'max:9999'],
             'temperatura' => ['nullable', 'numeric', 'between:-10,40'],

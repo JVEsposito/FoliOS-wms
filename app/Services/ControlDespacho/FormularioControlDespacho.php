@@ -130,6 +130,21 @@ final class FormularioControlDespacho
         ];
     }
 
+    /**
+     * Columna P/E de la grilla: cómo va el pallet respecto del frente del camión o contenedor.
+     * En un pallet 1000 × 1200, «punta» lleva el lado angosto hacia el frente y «espejo» el
+     * lado ancho. En la planilla se escribe la letra.
+     *
+     * @return array<string, array{nombre: string, descripcion: string}>
+     */
+    public static function orientaciones(): array
+    {
+        return [
+            'P' => ['nombre' => 'Punta', 'descripcion' => 'Lado angosto hacia el frente'],
+            'E' => ['nombre' => 'Espejo', 'descripcion' => 'Lado ancho hacia el frente'],
+        ];
+    }
+
     /** @return array<int, string> */
     public static function tiposPallet(): array
     {
@@ -158,6 +173,7 @@ final class FormularioControlDespacho
             'encabezado' => collect(self::encabezado())->map(fn (array $campo, string $clave): array => ['clave' => $clave, ...$campo])->values()->all(),
             'inspeccion' => collect(self::inspeccion())->map(fn (array $campo, string $clave): array => ['clave' => $clave, ...$campo])->values()->all(),
             'cierre' => collect(self::cierre())->map(fn (array $campo, string $clave): array => ['clave' => $clave, ...$campo])->values()->all(),
+            'orientaciones' => collect(self::orientaciones())->map(fn (array $orientacion, string $clave): array => ['clave' => $clave, ...$orientacion])->values()->all(),
             'tipos_foto' => collect(self::tiposFoto())->map(fn (array $tipo, string $clave): array => ['clave' => $clave, ...$tipo])->values()->all(),
         ];
     }
