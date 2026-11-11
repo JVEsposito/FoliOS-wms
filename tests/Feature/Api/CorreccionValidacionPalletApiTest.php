@@ -169,13 +169,7 @@ class CorreccionValidacionPalletApiTest extends TestCase
 
         $tokenOficina = $this->tokenOficina($usuario);
         $this->conToken($tokenOficina)->getJson("/api/validacion/pallets/{$validacionId}/correccion")
-            ->assertOk()->assertJsonPath('puede_cambiar_numero_folio', false);
-        $this->conToken($tokenOficina)
-            ->putJson("/api/validacion/pallets/{$validacionId}/corregir", [
-                ...$this->payloadCorreccion($catalogo, (string) Str::uuid()),
-                'numero_folio' => 'PAL-CORR-0003-NUEVO',
-            ])->assertConflict();
-        $this->assertDatabaseMissing('folios', ['numero_folio' => 'PAL-CORR-0003-NUEVO']);
+            ->assertOk()->assertJsonPath('puede_cambiar_numero_folio', true);
 
         $this->conToken($tokenOficina)
             ->putJson(
@@ -200,6 +194,16 @@ class CorreccionValidacionPalletApiTest extends TestCase
             'disponible',
             $correccion->datos_nuevos['folio']['estado_operacional'],
         );
+
+        // Después de prefrío el número también se corrige: mismo folio, mismo estado.
+        $this->conToken($tokenOficina)
+            ->putJson("/api/validacion/pallets/{$validacionId}/corregir", [
+                ...$this->payloadCorreccion($catalogo, (string) Str::uuid()),
+                'numero_folio' => 'PAL-CORR-0003-NUEVO',
+            ])->assertOk()
+            ->assertJsonPath('data.folio.numero_folio', 'PAL-CORR-0003-NUEVO')
+            ->assertJsonPath('data.folio.estado_operacional', 'disponible');
+        $this->assertSame($folio->id, Folio::query()->where('numero_folio', 'PAL-CORR-0003-NUEVO')->value('id'));
     }
 
     public function test_permite_corregir_un_folio_despachado_e_inactivo(): void
@@ -230,6 +234,15 @@ class CorreccionValidacionPalletApiTest extends TestCase
             ->assertJsonPath('data.folio.estado_operacional', 'despachado')
             ->assertJsonPath('data.folio.activo', false)
             ->assertJsonPath('data.puede_corregir', true);
+
+        // Despachado, el número ya no se corrige.
+        $this->conToken($this->tokenOficina($usuario))->getJson("/api/validacion/pallets/{$validacionId}/correccion")
+            ->assertOk()->assertJsonPath('puede_cambiar_numero_folio', false);
+        $this->conToken($this->tokenOficina($usuario))
+            ->putJson("/api/validacion/pallets/{$validacionId}/corregir", [
+                ...$this->payloadCorreccion($catalogo, (string) Str::uuid()),
+                'numero_folio' => 'PAL-CORR-0005-NUEVO',
+            ])->assertConflict();
 
         $folio = Folio::query()->where('numero_folio', 'PAL-CORR-0005')->firstOrFail();
         $this->assertFalse($folio->activo);

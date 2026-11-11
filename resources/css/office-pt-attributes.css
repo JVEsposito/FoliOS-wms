@@ -42,6 +42,17 @@
 .pta-condition span { text-align: left; color: var(--text-strong) !important; font-size: .88rem !important; font-weight: 700; }
 .pta-thermal__effect { min-height: 1.2em; margin: 0; color: var(--text-secondary); font-size: .85rem; }
 .pta-thermal .primary-button { justify-self: start; }
+.pta-annul { border-color: color-mix(in srgb, var(--danger-text) 45%, var(--line-soft)) !important; }
+.pta-annul__form { display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr); gap: 10px 16px; align-items: start; }
+.pta-annul__form[hidden] { display: none; }
+.pta-annul__form label { display: grid; gap: 4px; }
+.pta-annul__form label > span { color: var(--text-subtle); font-size: .78rem; font-weight: 700; }
+.pta-annul__confirm, .pta-annul__form .form-error, .pta-annul__form button { grid-column: 1 / -1; }
+.pta-annul__confirm { display: flex !important; align-items: center; gap: 10px !important; }
+.pta-annul__confirm input { flex: none; width: 18px !important; height: 18px !important; min-height: 0 !important; margin: 0; accent-color: var(--danger-text); }
+.pta-annul__confirm span { color: var(--text-strong) !important; font-size: .88rem !important; font-weight: 600 !important; }
+.pta-annul__form button { justify-self: start; }
+.pta-change[data-type="anulacion"] header strong { color: var(--danger-text); }
 .pta-history h3 { margin: 2px 0 12px; }
 .pta-change { display: grid; gap: 6px; padding: 12px 0; border-top: 1px solid var(--line-soft); }
 .pta-change header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; }
@@ -56,7 +67,7 @@
 
 @media (max-width: 760px) {
     .pta-workspace { padding: 14px 16px 32px; }
-    .pta-actions { grid-template-columns: minmax(0, 1fr); }
+    .pta-actions, .pta-annul__form { grid-template-columns: minmax(0, 1fr); }
     .pta-search { width: 100%; }
     .pta-search label { flex: 1; }
     .pta-search input { width: 100%; }

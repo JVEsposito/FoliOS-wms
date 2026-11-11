@@ -11,10 +11,12 @@ const elements = {
     thermalForm: byId('ptaThermalForm'), conditions: byId('ptaConditions'), thermalEffect: byId('ptaThermalEffect'),
     thermalError: byId('ptaThermalError'), thermalSubmit: byId('ptaThermalSubmit'), thermalBlocked: byId('ptaThermalBlocked'),
     history: byId('ptaHistory'),
+    annulForm: byId('ptaAnnulForm'), annulError: byId('ptaAnnulError'), annulSubmit: byId('ptaAnnulSubmit'),
+    annulBlocked: byId('ptaAnnulBlocked'), annulConfirmText: byId('ptaAnnulConfirmText'),
     loading: byId('officeLoading'), loadingText: byId('officeLoadingText'), toasts: byId('officeToasts'),
 };
 const keys = { token: 'estiba_wms_office_token', identity: 'estiba_wms_office_identity' };
-const state = { token: localStorage.getItem(keys.token), identity: readJson(keys.identity), ficha: null, operationId: null, submitted: null };
+const state = { token: localStorage.getItem(keys.token), identity: readJson(keys.identity), ficha: null, operationId: null, submitted: null, annulOperationId: null, annulSubmitted: null };
 
 const CONDITIONS = {
     prefrio_aprobado: { label: 'Prefrío aprobado', effect: 'Queda habilitado para almacenar: disponible si está en cámara o por ubicar si no.' },
@@ -28,6 +30,11 @@ const STATES = {
     pendiente_prefrio: 'Pendiente de prefrío', pendiente_ubicacion: 'Pendiente de ubicación', disponible: 'Disponible', bloqueado: 'Bloqueado',
     despachado: 'Despachado', anulado: 'Anulado', agotado: 'Agotado', retirado_definitivo: 'Retirado',
 };
+const ANNUL_CATEGORIES = {
+    folio_incorrecto: 'Folio incorrecto', cantidad_cajas_incorrecta: 'Cantidad de cajas incorrecta', articulo_incorrecto: 'Artículo incorrecto',
+    cliente_origen_incorrecto: 'Cliente u origen incorrecto', pallet_duplicado: 'Pallet duplicado', error_etiqueta: 'Error de etiqueta', otro: 'Otro',
+};
+const CHANGE_TITLES = { condicion_termica: 'Estado de prefrío', producto: 'Producto', anulacion: 'Anulación de validación' };
 const LOAD_STATES = {
     borrador: 'borrador', pendiente: 'pendiente', en_preparacion: 'en preparación', despacho_parcial: 'despacho parcial',
     en_separacion: 'en separación', separada: 'separada', separacion_completa: 'separación completa',
@@ -37,6 +44,7 @@ const ATTRIBUTES = [
     ['envase', 'Embalaje'], ['categoria', 'Categoría'], ['csg', 'CSG'], ['cantidad_cajas', 'Cajas'], ['tipo_bulto', 'Tipo de bulto'],
     ['condicion_termica', 'Prefrío'], ['estado_operacional', 'Estado'],
 ];
+const HISTORY_FIELDS = [['numero_folio', 'Número'], ...ATTRIBUTES];
 
 class ApiError extends Error {
     constructor(message, status = 0) { super(message); this.status = status; }
@@ -124,10 +132,22 @@ function render(ficha) {
     state.operationId = uuid();
     state.submitted = null;
 
+    const categories = ficha.categorias_anulacion || Object.keys(ANNUL_CATEGORIES);
+    elements.annulForm.elements.motivo_categoria.innerHTML = '<option value="">Seleccionar</option>'
+        + categories.map((value) => `<option value="${value}">${escapeHtml(ANNUL_CATEGORIES[value] || statusText(value))}</option>`).join('');
+    elements.annulForm.reset();
+    elements.annulError.textContent = '';
+    elements.annulForm.hidden = !ficha.puede_anular;
+    elements.annulBlocked.hidden = ficha.puede_anular;
+    elements.annulBlocked.textContent = ficha.motivo_no_anulable || '';
+    elements.annulConfirmText.textContent = `Confirmo que la validación del folio ${folio.numero_folio} es errónea y debe anularse.`;
+    state.annulOperationId = uuid();
+    state.annulSubmitted = null;
+
     elements.history.innerHTML = ficha.historial.length ? ficha.historial.map((change) => {
-        const fields = ATTRIBUTES.filter(([field]) => (change.antes?.[field] ?? null) !== (change.despues?.[field] ?? null));
-        return `<article class="pta-change">
-            <header><strong>${change.tipo === 'condicion_termica' ? 'Estado de prefrío' : 'Producto'}</strong><span>${escapeHtml(change.usuario || 'Administración')} · ${formatDate(change.created_at)}${change.carga_codigo ? ` · carga ${escapeHtml(change.carga_codigo)}` : ''}</span></header>
+        const fields = HISTORY_FIELDS.filter(([field]) => field in (change.despues || {}) && (change.antes?.[field] ?? null) !== (change.despues?.[field] ?? null));
+        return `<article class="pta-change" data-type="${escapeHtml(change.tipo)}">
+            <header><strong>${CHANGE_TITLES[change.tipo] || 'Cambio'}</strong><span>${escapeHtml(change.usuario || 'Administración')} · ${formatDate(change.created_at)}${change.carga_codigo ? ` · carga ${escapeHtml(change.carga_codigo)}` : ''}</span></header>
             <p>${escapeHtml(change.motivo)}</p>
             ${fields.length ? `<ul>${fields.map(([field, label]) => `<li><span>${label}</span><del>${escapeHtml(valueText(field, change.antes?.[field]))}</del><b>${escapeHtml(valueText(field, change.despues?.[field]))}</b></li>`).join('')}</ul>` : ''}
         </article>`;
@@ -181,6 +201,34 @@ async function submitThermal(event) {
     }
 }
 
+async function submitAnnul(event) {
+    event.preventDefault();
+    const form = elements.annulForm.elements;
+    const category = form.motivo_categoria.value;
+    const reason = form.motivo.value.trim();
+    if (!category) { elements.annulError.textContent = 'Elige la categoría del motivo.'; return; }
+    if (reason.length < 10) { elements.annulError.textContent = 'Describe el motivo con al menos 10 caracteres.'; return; }
+    if (!form.confirmar.checked) { elements.annulError.textContent = 'Confirma que la validación debe anularse.'; return; }
+    const payloadKey = JSON.stringify({ category, reason });
+    if (state.annulSubmitted !== null && state.annulSubmitted !== payloadKey) state.annulOperationId = uuid();
+    state.annulSubmitted = payloadKey;
+    elements.annulSubmit.disabled = true;
+    elements.annulError.textContent = '';
+    setBusy(true, 'Anulando la validación…');
+    try {
+        const response = await api(`/api/administracion/atributos-pt/folios/${encodeURIComponent(state.ficha.folio.id)}/anular`, {
+            method: 'POST', body: JSON.stringify({ operacion_id: state.annulOperationId, motivo_categoria: category, motivo: reason }),
+        });
+        render(response.data);
+        toast(response.message || 'Validación anulada.');
+    } catch (error) {
+        elements.annulError.textContent = error.message;
+    } finally {
+        elements.annulSubmit.disabled = false;
+        setBusy(false);
+    }
+}
+
 const correction = createValidationCorrection({
     api, setBusy, toast,
     onSaved: () => reload(),
@@ -198,6 +246,7 @@ elements.search.addEventListener('submit', (event) => {
 });
 elements.productButton.addEventListener('click', () => { if (state.ficha) void correction.open(state.ficha.folio.id, state.ficha.folio.numero_folio); });
 elements.thermalForm.addEventListener('submit', (event) => { void submitThermal(event); });
+elements.annulForm.addEventListener('submit', (event) => { void submitAnnul(event); });
 elements.conditions.addEventListener('change', (event) => {
     elements.thermalEffect.textContent = CONDITIONS[event.target.value]?.effect || '';
     elements.thermalError.textContent = '';

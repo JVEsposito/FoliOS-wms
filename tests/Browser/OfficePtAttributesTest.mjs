@@ -27,7 +27,8 @@ const folio = (cambios = {}) => ({ id: 'f1', numero_folio: '6000000785', tipo_bu
     activo: true, exportadora: 'LA AGUADA', marca: 'FALCO', especie: 'Cereza', variedad: 'Santina', calibre: '2J', envase: 'Caja 5 kg', categoria: 'Exportación', csg: '164539', cantidad_cajas: 120,
     ubicacion: { camara: 'Cámara 9 · Cerezas', posicion: 'B04-P07-N2' }, ...cambios });
 const ficha = (cambios = {}, extra = {}) => ({ folio: folio(cambios), carga: { id: 'c1', codigo: 'CAR-0012', estado: 'en_preparacion' }, proceso_prefrio: null, validacion_id: 'v1',
-    editable: true, motivo_bloqueo: null, puede_cambiar_producto: true, puede_cambiar_condicion: true,
+    editable: true, motivo_bloqueo: null, puede_cambiar_producto: true, puede_cambiar_condicion: true, puede_anular: true, motivo_no_anulable: null,
+    categorias_anulacion: ['folio_incorrecto', 'pallet_duplicado', 'otro'],
     condiciones: ['prefrio_aprobado', 'condicion_heredada', 'pendiente_prefrio', 'requiere_reproceso', 'retenido'], historial: [], ...extra });
 
 async function open(browser, { width = 1280, initial = ficha() } = {}) {
@@ -57,6 +58,14 @@ async function open(browser, { width = 1280, initial = ficha() } = {}) {
             const body = request.postDataJSON(); writes.push({ path, body });
             current = ficha({ condicion_termica: 'retenido', estado_operacional: 'bloqueado' }, { historial: [{ id: 'h2', tipo: 'condicion_termica', antes: folio(), despues: folio({ condicion_termica: 'retenido', estado_operacional: 'bloqueado' }), motivo: body.motivo, carga_codigo: 'CAR-0012', usuario: 'Administración', created_at: '2026-11-11T12:05:00Z' }] });
             return route.fulfill({ json: { data: current, message: 'Condición de prefrío cambiada y auditada.' } });
+        }
+        if (path === `${base}/f1/anular`) {
+            const body = request.postDataJSON(); writes.push({ path, body });
+            current = ficha({ numero_folio: '6000000785-ANUL-1', estado_operacional: 'anulado', activo: false, ubicacion: null }, {
+                carga: null, editable: false, motivo_bloqueo: 'El folio está anulado y ya no admite cambios de atributos.', puede_cambiar_producto: false, puede_cambiar_condicion: false,
+                puede_anular: false, motivo_no_anulable: 'El folio ya no está en la planta y su validación no se puede anular.',
+                historial: [{ id: 'h3', tipo: 'anulacion', antes: { numero_folio: '6000000785', estado_operacional: 'disponible' }, despues: { numero_folio: '6000000785-ANUL-1', estado_operacional: 'anulado', activo: false }, motivo: body.motivo, carga_codigo: null, usuario: 'Administración', created_at: '2026-11-11T12:10:00Z' }] });
+            return route.fulfill({ json: { data: current, message: 'Validación del folio 6000000785 anulada. El número 6000000785 quedó libre para validar el pallet correcto.' } });
         }
         return route.fulfill({ json: { data: {} } });
     });
@@ -140,15 +149,42 @@ test('cambia embalaje y cajas con el diálogo de corrección y llama al módulo 
     } finally { await browser.close(); }
 });
 
+test('anula una validación errónea solo con categoría, motivo y confirmación', async () => {
+    const browser = await launch();
+    try {
+        const { context, page, writes, errors } = await open(browser);
+        await page.locator('#ptaSearch [name="folio"]').fill('6000000785');
+        await page.locator('#ptaSearch button').click();
+        await page.locator('#ptaAnnulForm').waitFor();
+        assert.match(await page.locator('#ptaAnnulConfirmText').innerText(), /folio 6000000785/);
+        await page.locator('#ptaAnnulForm [name="motivo_categoria"]').selectOption('pallet_duplicado');
+        await page.locator('#ptaAnnulForm [name="motivo"]').fill('El pallet ya estaba validado con otro folio.');
+        await page.locator('#ptaAnnulSubmit').click();
+        assert.match(await page.locator('#ptaAnnulError').innerText(), /Confirma/);
+        assert.equal(writes.length, 0);
+        await page.locator('#ptaAnnulForm [name="confirmar"]').check();
+        await page.locator('#ptaAnnulSubmit').click();
+        await page.locator('.pta-change[data-type="anulacion"]').waitFor();
+        assert.deepEqual({ ...writes[0].body, operacion_id: undefined }, { operacion_id: undefined, motivo_categoria: 'pallet_duplicado', motivo: 'El pallet ya estaba validado con otro folio.' });
+        assert.match(await page.locator('.toast').last().innerText(), /quedó libre para validar el pallet correcto/);
+        assert.match(await page.locator('#ptaHistory').innerText(), /Anulación de validación[\s\S]*Número\s*6000000785\s*6000000785-ANUL-1/);
+        assert.equal(await page.locator('#ptaAnnulForm').isHidden(), true);
+        await capture(page, 'atributos-pt-anulacion');
+        assert.deepEqual(errors, []);
+        await context.close();
+    } finally { await browser.close(); }
+});
+
 test('un folio despachado se muestra sin opciones de cambio', async () => {
     const browser = await launch();
     try {
-        const despachado = ficha({ estado_operacional: 'despachado' }, { carga: null, editable: false, motivo_bloqueo: 'El folio está despachado y ya no admite cambios de atributos.', puede_cambiar_producto: false, puede_cambiar_condicion: false });
+        const despachado = ficha({ estado_operacional: 'despachado' }, { carga: null, editable: false, motivo_bloqueo: 'El folio está despachado y ya no admite cambios de atributos.', puede_cambiar_producto: false, puede_cambiar_condicion: false, puede_anular: false, motivo_no_anulable: 'El folio ya no está en la planta y su validación no se puede anular.' });
         const { context, page, writes, errors } = await open(browser, { initial: despachado });
         await page.goto('http://localhost/oficina/administracion/atributos-pt?folio=6000000785');
         await page.locator('#ptaFolioTitle', { hasText: '6000000785' }).waitFor();
         assert.equal(await page.locator('#ptaProductButton').isDisabled(), true);
         assert.equal(await page.locator('#ptaThermalForm').isHidden(), true);
+        assert.equal(await page.locator('#ptaAnnulForm').isHidden(), true);
         assert.match(await page.locator('#ptaNotice').innerText(), /despachado y ya no admite cambios/);
         assert.equal(writes.length, 0);
         assert.deepEqual(errors, []);

@@ -23,6 +23,8 @@ class CambioAtributosPt extends Model implements PerteneceATemporada
 
     public const CONDICION_TERMICA = 'condicion_termica';
 
+    public const ANULACION = 'anulacion';
+
     protected $table = 'cambios_atributos_pt';
 
     public function folio(): BelongsTo
