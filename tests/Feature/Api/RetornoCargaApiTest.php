@@ -69,12 +69,15 @@ class RetornoCargaApiTest extends TestCase
         // Acusar recibo no sustituye el movimiento de ubicación.
         $this->assertSame(2, ReingresoFolioCamara::query()->where('carga_id', $carga->id)->where('estado', 'pendiente')->count());
 
-        // Mientras no vuelva a una posición, el pallet no entra a otra carga.
+        // Despacho puede reservar de nuevo; cámaras conserva el reingreso pendiente.
         $nueva = app(ServicioCarga::class)->crear([], $contexto['despachador']);
         $this->conToken($contexto['tokenOficina'])->postJson("/api/cargas/{$nueva->id}/folios", [
             'folios' => [$primero->numero_folio],
             'version_esperada' => $nueva->version,
-        ])->assertUnprocessable()->assertJsonPath('errores.0.codigo', 'pendiente_reingreso');
+        ])->assertOk();
+        $this->assertDatabaseHas('reservas_carga_folio', ['folio_id' => $primero->id]);
+        $this->assertSame(2, ReingresoFolioCamara::where('carga_id', $carga->id)->where('estado', 'pendiente')->count());
+        $this->assertDatabaseMissing('ubicaciones_actuales', ['folio_id' => $primero->id]);
     }
 
     public function test_el_retorno_parcial_conserva_despachado_lo_que_no_volvio(): void

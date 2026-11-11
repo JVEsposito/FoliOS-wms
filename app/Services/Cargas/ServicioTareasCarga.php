@@ -95,7 +95,7 @@ class ServicioTareasCarga
             ->get();
     }
 
-    public function registrarMovimiento(Folio $folio, Movimiento $movimiento, User $usuario): void
+    public function registrarMovimiento(Folio $folio, Movimiento $movimiento, User $usuario, bool $iniciarPreparacion = true): void
     {
         $asignacionLeida = CargaFolio::query()
             ->where('folio_id', $folio->id)
@@ -124,7 +124,7 @@ class ServicioTareasCarga
             return;
         }
 
-        $nuevoEstado = $carga->estado === EstadoCarga::Pendiente
+        $nuevoEstado = $iniciarPreparacion && $carga->estado === EstadoCarga::Pendiente
             ? EstadoCarga::EnPreparacion
             : $carga->estado;
 

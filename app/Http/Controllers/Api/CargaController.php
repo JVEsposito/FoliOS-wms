@@ -3,13 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Enums\CondicionTermicaFolio;
-use App\Enums\ContenidoCamara;
-use App\Enums\EstadoCamara;
 use App\Enums\EstadoCarga;
 use App\Enums\EstadoFolioProcesoPrefrio;
 use App\Enums\EstadoIncidenciaCarga;
 use App\Enums\EstadoOperacionalFolio;
-use App\Enums\EstadoPosicion;
 use App\Enums\EstadoProcesoPrefrio;
 use App\Enums\EstadoTareaMovimiento;
 use App\Enums\HabilitacionAlmacenamientoFolio;
@@ -298,11 +295,7 @@ class CargaController extends Controller
                 EstadoOperacionalFolio::PendientePrefrio->value,
                 EstadoOperacionalFolio::PendienteUbicacion->value,
             ])
-            ->where(fn (Builder $consulta): Builder => $consulta
-                ->where('tipo_bulto', TipoBulto::Pallet->value)
-                ->orWhere(fn (Builder $saldo): Builder => $saldo
-                    ->where('tipo_bulto', TipoBulto::Saldo->value)
-                    ->where('estado_operacional', EstadoOperacionalFolio::Disponible->value)))
+            ->whereIn('tipo_bulto', [TipoBulto::Pallet->value, TipoBulto::Saldo->value])
             ->whereDoesntHave('retencionOperacionalActiva')
             ->where(fn (Builder $consulta): Builder => $consulta
                 ->whereNull('condicion_termica')
@@ -326,18 +319,6 @@ class CargaController extends Controller
 
                 return $consulta->where('id', '!=', $original->id);
             })
-            ->where(fn (Builder $consulta): Builder => $consulta
-                ->where(fn (Builder $tunel): Builder => $tunel
-                    ->whereDoesntHave('ubicacionActual')
-                    ->whereIn('estado_operacional', [
-                        EstadoOperacionalFolio::PendientePrefrio->value,
-                        EstadoOperacionalFolio::PendienteUbicacion->value,
-                    ]))
-                ->orWhereHas('ubicacionActual.posicion', fn (Builder $posicion): Builder => $posicion
-                    ->where('estado', EstadoPosicion::Activa->value)
-                    ->whereHas('camara', fn (Builder $camara): Builder => $camara
-                        ->where('estado', EstadoCamara::Activa->value)
-                        ->where('contenido', ContenidoCamara::Productos->value))))
             ->when(
                 $busqueda !== '',
                 fn (Builder $consulta): Builder => $consulta->where(

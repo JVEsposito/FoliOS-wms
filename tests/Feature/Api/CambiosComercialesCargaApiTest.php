@@ -65,13 +65,16 @@ class CambiosComercialesCargaApiTest extends TestCase
         $this->assertEqualsCanonicalizing([$enAnden->numero_folio, $cargado->numero_folio], $cancelacion['pendientes_reingreso']);
         $this->assertSame('despacho_parcial', $cancelacion['estado_previo']);
 
-        // El pallet en cámara vuelve a ofrecerse; el que quedó afuera no, hasta ubicarse.
+        // La nueva reserva comercial no espera la ubicación física ni cierra el reingreso.
         $otra = $this->crearCargaPublicada($contexto['despachador'], $contexto['anden'], [$enCamara, $libre]);
         $this->assertSame(2, $otra->asignacionesActuales()->count());
         $this->conToken($contexto['tokenOficina'])->postJson("/api/cargas/{$otra->id}/folios", [
             'folios' => [$enAnden->numero_folio],
             'version_esperada' => $otra->version,
-        ])->assertUnprocessable()->assertJsonPath('errores.0.codigo', 'pendiente_reingreso');
+        ])->assertOk();
+        $this->assertDatabaseHas('reservas_carga_folio', ['folio_id' => $enAnden->id]);
+        $this->assertDatabaseHas('reingresos_folio_camara', ['folio_pendiente_id' => $enAnden->id, 'estado' => 'pendiente']);
+        $this->assertDatabaseMissing('ubicaciones_actuales', ['folio_id' => $enAnden->id]);
 
         $this->cancelar($contexto, $carga->refresh(), 'Otra vez')
             ->assertUnprocessable()
@@ -150,6 +153,9 @@ class CambiosComercialesCargaApiTest extends TestCase
         $carga = $this->crearCargaPublicada($contexto['despachador'], $contexto['anden'], [$primero, $segundo]);
         $this->enviarAlAnden($contexto, $carga, $segundo);
         $this->cancelar($contexto, $carga->refresh(), 'Cambio de programa')->assertOk();
+        $nueva = $this->crearCargaPublicada($contexto['despachador'], $contexto['anden'], [$segundo]);
+        $this->assertDatabaseHas('reingresos_folio_camara', ['folio_pendiente_id' => $segundo->id, 'estado' => 'pendiente']);
+        $this->assertSame(0, $nueva->tareas()->count());
         $posicion = Posicion::query()->where('camara_id', $contexto['camara']->id)->where('posicion', 2)->firstOrFail();
 
         $movimiento = app(ServicioMovimientoEstiba::class)->ubicar(
@@ -170,9 +176,9 @@ class CambiosComercialesCargaApiTest extends TestCase
         $this->assertSame($movimiento->id, $reingreso->movimiento_ubicacion_id);
         $this->assertSame($contexto['camara']->id, $reingreso->camara_ubicacion_id);
         $this->assertSame($segundo->numero_folio, Folio::query()->whereKey($segundo->id)->value('numero_folio'));
-        // Ya en cámara, vuelve a poder asignarse.
-        $nueva = $this->crearCargaPublicada($contexto['despachador'], $contexto['anden'], [$segundo]);
+        // Cámaras cierra el reingreso y habilita la extracción de la nueva reserva.
         $this->assertSame(1, $nueva->asignacionesActuales()->count());
+        $this->assertDatabaseHas('tareas_carga', ['carga_id' => $nueva->id, 'camara_origen_id' => $contexto['camara']->id]);
     }
 
     public function test_la_cancelacion_cierra_incidencias_abiertas_y_solo_gestiona_el_despachador_hacia_arriba(): void

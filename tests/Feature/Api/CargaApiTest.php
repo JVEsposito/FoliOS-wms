@@ -2,8 +2,10 @@
 
 namespace Tests\Feature\Api;
 
+use App\Enums\CondicionTermicaFolio;
 use App\Enums\ContenidoCamara;
 use App\Enums\EstadoOperacionalFolio;
+use App\Enums\HabilitacionAlmacenamientoFolio;
 use App\Enums\RolUsuario;
 use App\Enums\TipoBulto;
 use App\Models\Camara;
@@ -18,6 +20,7 @@ use App\Models\ItemMaterial;
 use App\Models\Posicion;
 use App\Models\ReservaCargaFolio;
 use App\Models\User;
+use App\Services\Cargas\PlanificadorExtraccionCarga;
 use App\Services\Cargas\ServicioCarga;
 use App\Services\Estiba\ServicioMovimientoEstiba;
 use App\Services\Estiba\ServicioSesionEstiba;
@@ -270,7 +273,7 @@ class CargaApiTest extends TestCase
             ->assertOk();
     }
 
-    public function test_rechaza_folios_no_disponibles_o_sin_ubicacion(): void
+    public function test_rechaza_folios_bloqueados_pero_reserva_disponibles_sin_ubicacion(): void
     {
         $despachador = $this->despachador();
         $carga = $this->crearCarga($despachador);
@@ -304,12 +307,11 @@ class CargaApiTest extends TestCase
                 'folios' => [$sinUbicacion->numero_folio],
                 'version_esperada' => 1,
             ])
-            ->assertUnprocessable()
-            ->assertJsonPath('codigo', 'folios_no_asignables')
-            ->assertJsonPath('errores.0.codigo', 'sin_ubicacion');
+            ->assertOk()
+            ->assertJsonPath('data.folios.0.ubicacion', null);
     }
 
-    public function test_asigna_pallet_en_tunel_sin_posicion_pero_rechaza_saldo_pendiente_y_reserva_de_otra_carga(): void
+    public function test_asigna_pallet_y_saldo_en_prefrio_sin_posicion_y_rechaza_reserva_de_otra_carga(): void
     {
         $despachador = $this->despachador();
         $primera = $this->crearCarga($despachador);
@@ -355,8 +357,81 @@ class CargaApiTest extends TestCase
                 'folios' => [$saldo->numero_folio],
                 'version_esperada' => 1,
             ])
-            ->assertUnprocessable()
-            ->assertJsonPath('errores.0.codigo', 'estado_no_disponible');
+            ->assertOk()
+            ->assertJsonPath('data.folios.0.ubicacion', null);
+    }
+
+    public function test_planifica_pallets_y_saldos_sin_ubicacion_y_camaras_habilita_su_extraccion_al_ubicarlos(): void
+    {
+        $despachador = $this->despachador();
+        $carga = $this->crearCarga($despachador);
+        $folios = collect();
+        foreach ([TipoBulto::Pallet, TipoBulto::Saldo] as $tipo) {
+            foreach ([EstadoOperacionalFolio::PendientePrefrio, EstadoOperacionalFolio::PendienteUbicacion, EstadoOperacionalFolio::Disponible] as $estado) {
+                $folios->push(Folio::create([
+                    'numero_folio' => 'POR-UBICAR-'.$tipo->value.'-'.$estado->value,
+                    'tipo_bulto' => $tipo, 'estado_operacional' => $estado,
+                    'fecha_ingreso' => now(), 'activo' => true,
+                ]));
+            }
+        }
+        $this->actingAs($despachador, 'sanctum');
+        $this->getJson('/api/cargas/folios-disponibles?q=POR-UBICAR')->assertOk()
+            ->assertJsonCount(6, 'data')->assertJsonPath('data.0.ubicacion', null);
+        $this->postJson("/api/cargas/{$carga->id}/folios", [
+            'folios' => $folios->pluck('numero_folio')->all(), 'version_esperada' => 1,
+        ])->assertOk()->assertJsonPath('data.total_folios', 6);
+        $this->postJson("/api/cargas/{$carga->id}/publicar", ['version_esperada' => 2])
+            ->assertOk()->assertJsonPath('data.estado', 'pendiente');
+        $this->assertDatabaseCount('ubicaciones_actuales', 0);
+        $this->assertDatabaseCount('movimientos', 0);
+        $this->assertDatabaseCount('tareas_carga', 0);
+        foreach ($folios as $folio) {
+            $this->assertSame($folio->estado_operacional, $folio->fresh()->estado_operacional);
+        }
+        $planificador = app(PlanificadorExtraccionCarga::class);
+        $plan = $planificador->planificar($carga);
+        $this->assertSame(6, $plan['resumen']['sin_ubicacion']);
+        $this->assertSame(0, $plan['resumen']['planificables']);
+        $this->getJson('/api/cargas/folios-disponibles?q=POR-UBICAR')->assertOk()->assertJsonCount(0, 'data');
+        // Reservar no aprueba Prefrío. Una vez aprobado, cámaras registra la ubicación.
+        $primero = $folios->first();
+        $primero->update([
+            'condicion_termica' => CondicionTermicaFolio::PrefrioAprobado,
+            'habilitacion_almacenamiento' => HabilitacionAlmacenamientoFolio::Habilitado,
+        ]);
+        [$camara] = $this->crearFolioUbicado($primero->numero_folio);
+        $this->assertDatabaseHas('reservas_carga_folio', ['folio_id' => $primero->id]);
+        $this->assertDatabaseHas('tareas_carga', ['carga_id' => $carga->id, 'camara_origen_id' => $camara->id]);
+        $this->assertSame('pendiente', $carga->refresh()->estado->value);
+        $this->assertSame(4, $carga->version);
+        $plan = $planificador->planificar($carga);
+        $this->assertSame(5, $plan['resumen']['sin_ubicacion']);
+        $this->assertSame(1, $plan['resumen']['planificables']);
+    }
+
+    public function test_cambio_comercial_admite_reemplazo_sin_ubicacion_en_carga_publicada(): void
+    {
+        $despachador = $this->despachador();
+        $carga = $this->crearCarga($despachador);
+        $folios = collect(['SALIENTE', 'ENTRANTE'])->map(fn ($numero) => Folio::create([
+            'numero_folio' => $numero, 'tipo_bulto' => TipoBulto::Pallet,
+            'estado_operacional' => EstadoOperacionalFolio::PendienteUbicacion,
+            'fecha_ingreso' => now(), 'activo' => true,
+        ]));
+        $this->postJson("/api/cargas/{$carga->id}/folios", [
+            'folios' => [$folios[0]->numero_folio], 'version_esperada' => 1,
+        ])->assertOk();
+        $this->postJson("/api/cargas/{$carga->id}/publicar", ['version_esperada' => 2])->assertOk();
+        $this->postJson("/api/cargas/{$carga->id}/folios/{$folios[0]->id}/cambiar", [
+            'numero_folio_entrante' => $folios[1]->numero_folio, 'version_esperada' => 3,
+            'motivo' => 'Cambio solicitado por el cliente',
+        ])->assertOk()->assertJsonPath('data.total_folios', 1)->assertJsonPath('data.folios.0.id', $folios[1]->id);
+        $this->assertDatabaseMissing('reservas_carga_folio', ['folio_id' => $folios[0]->id]);
+        $this->assertDatabaseHas('reservas_carga_folio', ['folio_id' => $folios[1]->id]);
+        $this->assertDatabaseCount('ubicaciones_actuales', 0);
+        $this->assertDatabaseCount('movimientos', 0);
+        $this->assertDatabaseCount('tareas_carga', 0);
     }
 
     public function test_no_cierra_carga_con_pallet_aun_sin_aprobar_en_tunel(): void

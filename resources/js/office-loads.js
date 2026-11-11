@@ -497,11 +497,12 @@ function priorityClass(priority) {
 }
 
 function distributionText(load) {
-    const tunnel = (load.folios || []).filter((folio) => !folio.ubicacion && folio.prefrio && !['en_anden', 'cargado', 'despachado'].includes(folio.estado_carga)).length;
+    const tunnel = (load.folios || []).filter((folio) => !folio.ubicacion && folio.prefrio?.estado === 'en_proceso' && !['en_anden', 'cargado', 'despachado'].includes(folio.estado_carga)).length;
+    const unlocated = pendingLocationFolios(load).length;
     const locations = (load.distribucion || [])
         .map((item) => `${item.camara.codigo}: ${item.cantidad}`)
         .join(' · ');
-    return [locations, tunnel ? `Prefrío: ${tunnel}` : ''].filter(Boolean).join(' · ') || 'Sin distribución disponible';
+    return [locations, tunnel ? `Prefrío: ${tunnel}` : '', unlocated ? `Por ubicar: ${unlocated}` : ''].filter(Boolean).join(' · ') || 'Sin distribución disponible';
 }
 
 function externalNumbers(load) {
@@ -689,8 +690,8 @@ function renderAvailableFolios() {
                 <td><strong>${escapeHtml(folio.variedad || '—')}</strong><small>${escapeHtml(folio.calibre || 'Sin calibre')}</small></td>
                 <td><strong>${escapeHtml(folio.marca || '—')}</strong><small>${escapeHtml(folio.exportadora || 'Sin exportadora')}</small></td>
                 <td>${escapeHtml(sag)}</td>
-                <td><strong class="location-label">${escapeHtml(folio.ubicacion?.camara?.codigo || 'Prefrío')}</strong><small>${escapeHtml(folio.ubicacion?.camara?.nombre || 'Sin cámara')}</small></td>
-                <td><span class="location-label">${escapeHtml(folio.ubicacion?.posicion?.etiqueta || 'En túnel')}</span></td>
+                <td><strong class="location-label">${escapeHtml(folio.ubicacion?.camara?.codigo || 'Sin ubicación')}</strong><small>${escapeHtml(folio.ubicacion?.camara?.nombre || 'Pendiente de registro por cámaras')}</small></td>
+                <td><span class="location-label">${escapeHtml(folio.ubicacion?.posicion?.etiqueta || 'Por ubicar')}</span></td>
                 <td>${escapeHtml(formatDate(folio.fecha_ingreso))}</td>
             </tr>
         `;
@@ -732,9 +733,16 @@ function startNew() {
     elements.headerForm.elements.numero_orden_externa.focus();
 }
 
+function pendingLocationFolios(load) {
+    return (load.folios || []).filter((folio) => !folio.ubicacion
+        && folio.prefrio?.estado !== 'en_proceso'
+        && !['en_anden', 'cargado', 'despachado'].includes(folio.estado_carga));
+}
+
 function renderDistribution(load) {
-    const tunnel = (load.folios || []).filter((folio) => !folio.ubicacion && folio.prefrio && !['en_anden', 'cargado', 'despachado'].includes(folio.estado_carga)).length;
-    if (!load.distribucion?.length && !tunnel) {
+    const tunnel = (load.folios || []).filter((folio) => !folio.ubicacion && folio.prefrio?.estado === 'en_proceso' && !['en_anden', 'cargado', 'despachado'].includes(folio.estado_carga)).length;
+    const unlocated = pendingLocationFolios(load).length;
+    if (!load.distribucion?.length && !tunnel && !unlocated) {
         elements.distribution.innerHTML = '<span class="distribution-empty">Sin folios asignados</span>';
         return;
     }
@@ -745,7 +753,8 @@ function renderDistribution(load) {
             <span>${escapeHtml(item.camara.nombre)}</span>
             <strong>${item.cantidad}</strong>
         </span>
-    `).join('') + (tunnel ? `<span class="distribution-chip"><b>PREFRÍO</b><span>En túnel</span><strong>${tunnel}</strong></span>` : '');
+    `).join('') + (tunnel ? `<span class="distribution-chip"><b>PREFRÍO</b><span>En túnel</span><strong>${tunnel}</strong></span>` : '')
+        + (unlocated ? `<span class="distribution-chip"><b>POR UBICAR</b><span>Pendiente de cámaras</span><strong>${unlocated}</strong></span>` : '');
 }
 
 function renderConcentration(load) {
@@ -861,9 +870,10 @@ function renderFolios(load) {
             : folio.estado_carga === 'en_anden' ? 'En andén'
                 : folio.estado_carga === 'cargado' ? 'Cargado en camión'
                 : folio.ubicacion ? `En cámara ${folio.ubicacion.camara.codigo} · ${folio.ubicacion.posicion.etiqueta}`
-                    : folio.prefrio?.estado === 'aprobado' ? `Aprobado en túnel ${folio.prefrio.tunel}`
-                        : folio.prefrio ? `En túnel ${folio.prefrio.tunel} · prefrío en curso`
-                            : 'Pendiente de prefrío';
+                    : folio.prefrio?.estado === 'aprobado' ? `Prefrío aprobado · por ubicar`
+                        : folio.prefrio?.estado === 'en_proceso' ? `En túnel ${folio.prefrio.tunel} · prefrío en curso`
+                            : folio.estado_operacional === 'pendiente_prefrio' ? 'Pendiente de prefrío'
+                                : 'Por ubicar · pendiente de cámaras';
         return `
             <tr>
                 <td><strong>${escapeHtml(folio.numero_folio)}</strong><small>${escapeHtml(folio.estado_operacional || '—')}</small></td>
