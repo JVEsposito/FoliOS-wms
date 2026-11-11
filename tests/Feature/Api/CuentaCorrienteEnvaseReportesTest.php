@@ -307,6 +307,24 @@ class CuentaCorrienteEnvaseReportesTest extends TestCase
         $this->assertSame('Productor / CSG', $filas[0][8]);
         $this->assertSame(['REC-1', 'Recepción con fruta', 'Bins plástico', 'Del cliente', '300', '', '300', $productores], array_slice($filas[1], 1));
         $this->assertSame(['300', '180', '130', '140', '160'], array_column(array_slice($filas, 1), 7));
+
+        $this->movimiento($this->productor, 'salida_recepcion_fruta', 35, -1, -1, 'cliente', '2026-10-14 10:00', 'DEV-PERIODO')
+            ->update(['recepcion_romana_id' => $recepcionId]);
+        $this->movimiento($this->productor, 'recepcion_fruta', 800, 1, 1, 'cliente', '2026-10-15 10:00', 'REC-POSTERIOR');
+        $periodo = app(ServicioCuentaCorrienteEnvases::class)
+            ->estadoCuenta($this->productor, $this->temporada, '2026-10-14', '2026-10-14');
+
+        // Los dos CSG conservan su saldo inicial. La devolución global queda sin asignar.
+        $this->assertSame(['122104', '122105', null], array_column($periodo['resumen_csg'], 'codigo'));
+        $bins = array_column(array_column($periodo['resumen_csg'], 'tipos'), 0);
+        $this->assertSame([0, 0, 0], array_column($bins, 'entradas'));
+        $this->assertSame([0, 0, 35], array_column($bins, 'salidas'));
+        $this->assertSame([200, 100, -175], array_column($bins, 'saldo_final'));
+        $this->assertSame(125, $periodo['tipos'][0]['saldo_final']);
+
+        $pdfPeriodo = $this->get($ruta.'&desde=2026-10-14&hasta=2026-10-14')->assertOk()->getContent();
+        $this->assertMatchesRegularExpression('/\(RESUMEN POR PRODUCTOR\).*?\(Saldo final\).*?CSG 122104\).*?\(\+200\).*?CSG 122105\).*?\(\+100\).*?\(Sin productor asociado\).*?\(-175\)/s', $pdfPeriodo);
+        $this->assertStringNotContainsString('REC-POSTERIOR', $pdfPeriodo);
     }
 
     public function test_dos_documentos_con_misma_guia_y_fecha_no_se_fusionan_en_el_pdf(): void
