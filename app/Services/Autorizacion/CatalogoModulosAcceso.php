@@ -15,6 +15,8 @@ class CatalogoModulosAcceso
 
     public const OFICINA_CONTRAPARTE_SAG = 'frigorifico.contraparte-sag';
 
+    public const OFICINA_CONTROL_DESPACHO = 'frigorifico.control-despacho';
+
     public const OFICINA_PORTERIA = 'materia-prima.porteria';
 
     public const OFICINA_ORDENES_PROCESO = 'materia-prima.ordenes-proceso';
@@ -44,6 +46,8 @@ class CatalogoModulosAcceso
     public const TABLET_PORTERIA = 'porteria';
 
     public const TABLET_CONTRAPARTE_SAG = 'contraparte_sag';
+
+    public const TABLET_CONSOLIDACION = 'consolidacion';
 
     public const TABLET_OPERACION_FRIGORIFICO = 'operacion';
 
@@ -111,6 +115,7 @@ class CatalogoModulosAcceso
                     $this->modulo('frigorifico.control-personal', 'Control de personal', 'Ingresos, salidas y horas extra internas. Solo supervisión de frío y administración.'),
                     $this->modulo('frigorifico.camaras', 'Cámaras PT', 'Plano, movimientos y sesiones de producto terminado.'),
                     $this->modulo('frigorifico.cargas', 'Despacho', 'Cargas, estatus operativo y calendario de embarques.'),
+                    $this->modulo(self::OFICINA_CONTROL_DESPACHO, 'Control de despacho (R-24)', 'Planilla POEMP R-24 de consolidación: inspección del camión o contenedor, posición y temperatura de cada pallet.'),
                 ],
             ],
             [
@@ -264,6 +269,12 @@ class CatalogoModulosAcceso
                     ),
                     $this->moduloTablet(self::TABLET_RECEPCION_FRUTA_EMBALADA, 'Recepción de fruta embalada', 'Captura de camiones y pallets externos en borrador.', [self::OFICINA_RECEPCION_FRUTA_EMBALADA]),
                     $this->moduloTablet(self::TABLET_CONTRAPARTE_SAG, 'Contraparte SAG', 'Captura, seguimiento y documentos SAG desde PDA, tablet o celular.', [self::OFICINA_CONTRAPARTE_SAG]),
+                    $this->moduloTablet(
+                        self::TABLET_CONSOLIDACION,
+                        'Consolidación',
+                        'Planilla R-24 en el andén: inspección, pallets que suben con su posición y fotos.',
+                        [self::OFICINA_CONTROL_DESPACHO],
+                    ),
                     $this->moduloTablet(
                         self::TABLET_REPALETIZAJE,
                         'Repaletizaje',

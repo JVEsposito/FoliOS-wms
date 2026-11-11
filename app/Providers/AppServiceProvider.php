@@ -437,6 +437,9 @@ class AppServiceProvider extends ServiceProvider
             'consultar-repaletizajes',
             fn (User $usuario): bool => $alcance->puedeConsultarRepaletizajes($usuario),
         );
+        Gate::define('consultar-control-despacho', fn (User $usuario): bool => $alcance->puedeConsultarControlDespacho($usuario));
+        Gate::define('registrar-control-despacho', fn (User $usuario): bool => $alcance->puedeRegistrarControlDespacho($usuario));
+        Gate::define('reabrir-control-despacho', fn (User $usuario): bool => $alcance->puedeReabrirControlDespacho($usuario));
         Gate::define(
             'consultar-validaciones-pallet',
             fn (User $usuario): bool => $alcance->puedeConsultarValidacionesPallet($usuario),

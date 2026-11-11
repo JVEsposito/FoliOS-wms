@@ -1048,6 +1048,44 @@ class AlcanceOperacionalUsuario
             && $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador, RolUsuario::SupervisorFrio], CatalogoModulosAcceso::OFICINA_CONTRAPARTE_SAG);
     }
 
+    /** Planilla R-24: oficina la consulta; la PDA de consolidación la registra. */
+    public function puedeConsultarControlDespacho(User $usuario): bool
+    {
+        return $this->permiteModuloTablet($usuario, CatalogoModulosAcceso::TABLET_CONSOLIDACION)
+            && $this->rolActivoEnModulo($usuario, [
+                RolUsuario::Administrador,
+                RolUsuario::SupervisorFrio,
+                RolUsuario::Despachador,
+                RolUsuario::Consulta,
+            ], CatalogoModulosAcceso::OFICINA_CONTROL_DESPACHO);
+    }
+
+    public function puedeRegistrarControlDespacho(User $usuario): bool
+    {
+        return $this->permiteModuloTablet($usuario, CatalogoModulosAcceso::TABLET_CONSOLIDACION)
+            && $this->rolActivoEnModulo($usuario, [
+                RolUsuario::Administrador,
+                RolUsuario::SupervisorFrio,
+                RolUsuario::Despachador,
+            ], CatalogoModulosAcceso::OFICINA_CONTROL_DESPACHO);
+    }
+
+    /**
+     * Reabrir una planilla cerrada corrige lo ya firmado: solo supervisión de frío o
+     * administración, también cuando el acceso viene de un perfil (se mira su rol base).
+     */
+    public function puedeReabrirControlDespacho(User $usuario): bool
+    {
+        $usuario->loadMissing('perfilAcceso');
+        $rol = $usuario->perfilAcceso?->rol_base ?? $usuario->rol;
+
+        return in_array($rol, [RolUsuario::Administrador, RolUsuario::SupervisorFrio], true)
+            && $this->rolActivoEnModulo($usuario, [
+                RolUsuario::Administrador,
+                RolUsuario::SupervisorFrio,
+            ], CatalogoModulosAcceso::OFICINA_CONTROL_DESPACHO);
+    }
+
     public function puedeConsultarInspeccionSag(User $usuario): bool
     {
         return $this->rolActivoEnModulo($usuario, [
@@ -1549,6 +1587,9 @@ class AlcanceOperacionalUsuario
             'puede_consultar_prefrio' => $this->puedeConsultarPrefrio($usuario),
             'puede_consultar_contraparte_sag' => $this->puedeConsultarContraparteSag($usuario),
             'puede_gestionar_contraparte_sag' => $this->puedeGestionarContraparteSag($usuario),
+            'puede_consultar_control_despacho' => $this->puedeConsultarControlDespacho($usuario),
+            'puede_registrar_control_despacho' => $this->puedeRegistrarControlDespacho($usuario),
+            'puede_reabrir_control_despacho' => $this->puedeReabrirControlDespacho($usuario),
             'puede_consultar_inspeccion_sag' => $this->puedeConsultarInspeccionSag($usuario),
             'puede_gestionar_inspeccion_sag' => $this->puedeGestionarInspeccionSag($usuario),
             'puede_operar_prefrio' => $this->puedeOperarPrefrio($usuario),

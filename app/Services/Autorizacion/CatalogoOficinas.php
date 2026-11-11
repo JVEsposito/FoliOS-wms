@@ -74,6 +74,7 @@ class CatalogoOficinas
         ['frigorifico', 'Cargas', '/oficina/frigorifico/despacho/cargas', 'frigorifico.cargas', ['puede_consultar_catalogo_cargas']],
         ['frigorifico', 'Estatus operativo', '/oficina/frigorifico/despacho/estatus', 'frigorifico.cargas', ['puede_consultar_cargas']],
         ['frigorifico', 'Calendario de embarques', '/oficina/frigorifico/despacho/calendario', 'frigorifico.cargas', ['puede_consultar_catalogo_cargas']],
+        ['frigorifico', 'Control de despacho (R-24)', '/oficina/frigorifico/control-despacho', 'frigorifico.control-despacho', ['puede_consultar_control_despacho']],
         ['frigorifico', 'Existencias PT', '/oficina/frigorifico/existencias', 'frigorifico.cargas', ['puede_consultar_cargas']],
         ['materiales', 'Resumen', '/oficina/materiales', 'materiales.resumen', ['puede_consultar_despachos_materiales']],
         ['materiales', 'Catálogos', '/oficina/materiales/catalogos', 'materiales.catalogos', ['puede_consultar_despachos_materiales']],
