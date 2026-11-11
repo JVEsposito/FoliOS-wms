@@ -19,6 +19,7 @@ Route::middleware(['auth:sanctum', 'can:consultar-control-despacho'])->prefix('c
         Route::post('/controles/{controlDespacho}/posiciones', [ControlDespachoController::class, 'registrarPosicion'])->whereUuid('controlDespacho');
         Route::delete('/controles/{controlDespacho}/posiciones/{posicion}', [ControlDespachoController::class, 'quitarPosicion'])->whereUuid(['controlDespacho', 'posicion']);
         Route::post('/controles/{controlDespacho}/cerrar', [ControlDespachoController::class, 'cerrar'])->whereUuid('controlDespacho');
+        Route::post('/controles/{controlDespacho}/temperaturas', [ControlDespachoController::class, 'completarTemperaturas'])->whereUuid('controlDespacho');
         Route::post('/controles/{controlDespacho}/fotos', [ControlDespachoController::class, 'subirFoto'])->whereUuid('controlDespacho');
         Route::delete('/controles/{controlDespacho}/fotos/{foto}', [ControlDespachoController::class, 'eliminarFoto'])->whereUuid(['controlDespacho', 'foto']);
     });

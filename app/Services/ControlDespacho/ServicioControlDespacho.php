@@ -237,6 +237,60 @@ class ServicioControlDespacho
         }, ControlDespacho::class, $control->id, $numero, $dispositivo, $leidoAt);
     }
 
+    /**
+     * Completa la T° de pulpa de pallets ya posicionados. La planilla impresa la exige y el
+     * cierre no, así que también se admite con la planilla cerrada, pero solo para las que
+     * faltan: lo ya firmado no se cambia.
+     *
+     * @param  array<string, float|int|string>  $temperaturas  posicion_id => temperatura
+     */
+    public function completarTemperaturas(string $operacionId, ControlDespacho $control, array $temperaturas, User $usuario): ControlDespacho
+    {
+        $this->asegurarRegistro($usuario);
+        $valores = [];
+        foreach ($temperaturas as $posicionId => $temperatura) {
+            $valor = round((float) $temperatura, 1);
+            if (! is_numeric($temperatura) || $valor < -10 || $valor > 40) {
+                throw new DomainException('La temperatura de pulpa va de -10 a 40 °C.');
+            }
+            $valores[(string) $posicionId] = $valor;
+        }
+        if ($valores === []) {
+            throw new DomainException('Indica al menos una temperatura de pulpa.');
+        }
+
+        return $this->transicionar('control_despacho.completar_temperaturas', $operacionId, $usuario, [
+            'control_despacho_id' => $control->id,
+            'temperaturas' => $valores,
+        ], function () use ($control, $valores, $usuario): ControlDespacho {
+            if ($this->contexto->actual() === null) {
+                return $control->refresh();
+            }
+
+            $bloqueado = $this->bloquear($control);
+            $posiciones = PosicionControlDespacho::query()
+                ->where('control_despacho_id', $bloqueado->id)
+                ->whereKey(array_keys($valores))
+                ->with('folio:id,numero_folio')
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('id');
+            foreach ($valores as $posicionId => $valor) {
+                $posicion = $posiciones->get($posicionId) ?? throw new DomainException('Uno de los pallets ya no está en la planilla. Actualiza y vuelve a intentar.');
+                if ($bloqueado->estaCerrado() && $posicion->temperatura !== null) {
+                    throw new DomainException("La T° de pulpa del folio {$posicion->folio?->numero_folio} ya está registrada: con la planilla cerrada solo se completan las que faltan.");
+                }
+                $posicion->update(['temperatura' => $valor]);
+            }
+            $bloqueado->update(['actualizado_por_user_id' => $usuario->id]);
+            if ($bloqueado->estaCerrado()) {
+                $bloqueado->update(['planilla_cerrada' => collect($this->planilla->detalle($bloqueado->refresh()))->except(['fotos', 'sugerido'])->all()]);
+            }
+
+            return $bloqueado->refresh();
+        }, ControlDespacho::class, $control->id);
+    }
+
     /** Quita el pallet de la planilla. No lo baja del camión: eso lo hace el camarero con motivo. */
     public function quitarPosicion(string $operacionId, ControlDespacho $control, PosicionControlDespacho $posicion, User $usuario): ControlDespacho
     {

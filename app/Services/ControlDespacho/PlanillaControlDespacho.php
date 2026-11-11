@@ -134,7 +134,12 @@ class PlanillaControlDespacho
             'reaperturas' => $control->reaperturas ?? [],
             'fotos' => $control->fotos()->get()->map->representar()->values()->all(),
         ];
+        $detalle['fotos_pendientes'] = FormularioControlDespacho::fotosPendientes(
+            $encabezado,
+            collect($detalle['fotos'])->countBy('tipo')->all(),
+        );
         $detalle['faltantes_cierre'] = $control->estaCerrado() ? [] : $this->faltantes($detalle);
+        $detalle['faltantes_impresion'] = $this->faltantesImpresion($detalle);
 
         return $detalle;
     }
@@ -296,8 +301,27 @@ class PlanillaControlDespacho
         if ($pallets->whereNotNull('posicion')->isEmpty()) {
             $faltantes[] = 'La planilla no tiene pallets con posición.';
         }
+        if (FormularioControlDespacho::exigeFotos() && ($detalle['fotos_pendientes'] ?? []) !== []) {
+            $faltantes[] = 'Faltan fotos: '.collect($detalle['fotos_pendientes'])
+                ->map(fn (array $foto): string => $foto['requeridas'] > 1 ? "{$foto['nombre']} ({$foto['tomadas']} de {$foto['requeridas']})" : $foto['nombre'])
+                ->implode(', ').'.';
+        }
 
         return $faltantes;
+    }
+
+    /**
+     * Lo que la planilla impresa exige y el cierre no: la T° de pulpa de cada pallet con
+     * posición. Se pide completar antes de imprimir.
+     *
+     * @param  array<string, mixed>  $detalle
+     * @return array<int, string>
+     */
+    public function faltantesImpresion(array $detalle): array
+    {
+        $sinTemperatura = collect($detalle['pallets'])->filter(fn (array $p): bool => $p['posicion'] !== null && $p['posicion']['temperatura'] === null);
+
+        return $sinTemperatura->isEmpty() ? [] : [sprintf('Falta la T° de pulpa de %d pallets: %s.', $sinTemperatura->count(), $this->lista($sinTemperatura))];
     }
 
     /**

@@ -26,7 +26,11 @@ const catalogo = {
         { clave: 'cajas_guia', etiqueta: 'Cajas totales guía de despacho', tipo: 'entero' },
         { clave: 'responsable', etiqueta: 'Responsable', tipo: 'texto' },
     ],
-    tipos_foto: [{ clave: 'general', nombre: 'Fotos del despacho', obligatoria: false, maximo: 20 }],
+    tipos_foto: [
+        { clave: 'patente', nombre: 'Placa patente', obligatoria: true, condicion: null, maximo: 3 },
+        { clave: 'general', nombre: 'Otras fotos del despacho', obligatoria: false, condicion: null, maximo: 20 },
+    ],
+    exige_fotos: false,
 };
 const pallet = (folio, posicion, temperatura, estado = 'cargado') => ({
     asignacion_id: `a-${folio}`, folio_id: `f-${folio}`, numero_folio: folio, estado_carga: estado, especie: 'Cereza', variedad: 'Santina', cajas_folio: 80,
@@ -42,8 +46,8 @@ const control = (extra = {}) => ({
     pallets: [pallet('A000002', 2, -0.4), pallet('A000001', 1, 0.5), pallet('A000003', null, null, 'en_anden')],
     totales: { pallets: 3, cargados: 2, en_anden: 1, en_camara: 0, posicionados: 2, con_temperatura: 2, cajas_pcd: 160, cajas_carga: 240 },
     iniciado_at: '2026-11-11T16:50:00Z', iniciado_por: 'Consolidador', cerrado_at: '2026-11-11T17:40:00Z', cerrado_por: 'Consolidador',
-    reaperturas: [], fotos: [{ id: 'ph1', tipo: 'general', orden: 1, url: '/api/control-despacho/controles/c1/fotos/ph1/original', miniatura_url: '/api/control-despacho/controles/c1/fotos/ph1/miniatura', subida_at: '2026-11-11T17:20:00Z' }],
-    faltantes_cierre: [], ...extra,
+    reaperturas: [], fotos: [{ id: 'ph1', tipo: 'patente', orden: 1, url: '/api/control-despacho/controles/c1/fotos/ph1/original', miniatura_url: '/api/control-despacho/controles/c1/fotos/ph1/miniatura', subida_at: '2026-11-11T17:20:00Z' }],
+    faltantes_cierre: [], faltantes_impresion: [], fotos_pendientes: [], ...extra,
 });
 const pixel = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
 
@@ -70,6 +74,11 @@ async function open(browser, { width = 1280, user = identity(), detail = control
         if (path === '/api/control-despacho/controles/c1') return route.fulfill({ json: { data: current } });
         if (path.endsWith('/miniatura') || path.endsWith('/original')) return route.fulfill({ body: pixel, contentType: 'image/png' });
         if (path === '/api/control-despacho/controles/c1/planilla.xlsx') return route.fulfill({ body: Buffer.from('PK\u0003\u0004fixture'), contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        if (path === '/api/control-despacho/controles/c1/temperaturas') {
+            const values = Object.fromEntries(request.postDataJSON().temperaturas.map((t) => [t.posicion_id, t.temperatura]));
+            current = { ...current, faltantes_impresion: [], pallets: current.pallets.map((p) => (p.posicion && values[p.posicion.id] !== undefined ? { ...p, posicion: { ...p.posicion, temperatura: values[p.posicion.id] } } : p)) };
+            return route.fulfill({ json: { data: current } });
+        }
         if (path === '/api/control-despacho/controles/c1/reabrir') {
             current = control({ estado: 'borrador', version: 5, cerrado_at: null, cerrado_por: null, faltantes_cierre: ['Responde la inspección visual: faltan 1 puntos.'],
                 reaperturas: [{ motivo: request.postDataJSON().motivo, nombre: 'Supervisión Frío', reabierto_at: '2026-11-11T18:00:00Z' }] });
@@ -109,6 +118,7 @@ for (const width of [1280, 390]) test(`lista las planillas y abre el detalle con
         assert.match(await page.locator('#dcxPallets tr').first().innerText(), /0,5 °C/);
         assert.match(await page.locator('#dcxPallets tr').first().innerText(), /Punta/);
         await page.waitForFunction(() => document.querySelector('#dcxPhotos img')?.src.startsWith('blob:'));
+        assert.match(await page.locator('#dcxPhotos').innerText(), /Placa patente/);
         assert.ok(requests.filter((r) => r.path.endsWith('/miniatura')).every((r) => r.auth === 'Bearer fixture'));
         assert.equal(await page.locator('#dcxReopen').isVisible(), true);
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, `desborde a ${width}px`);
@@ -156,6 +166,52 @@ test('sin permiso de reapertura no se ofrece reabrir', async () => {
         await page.locator('#dcxRows tr[data-id="c1"]').click();
         await page.locator('#dcxDetailTitle', { hasText: 'CAR-0042' }).waitFor();
         assert.equal(await page.locator('#dcxReopen').isVisible(), false);
+        assert.deepEqual(errors, []);
+        await context.close();
+    } finally { await browser.close(); }
+});
+
+test('antes de descargar pide completar la T° de pulpa y luego descarga', async () => {
+    const browser = await launch();
+    try {
+        const incompleta = control({
+            pallets: [pallet('A000001', 1, 0.5), pallet('A000002', 2, null)],
+            faltantes_impresion: ['Falta la T° de pulpa de 1 pallets: A000002.'],
+            fotos_pendientes: [{ tipo: 'patente', nombre: 'Placa patente', requeridas: 1, tomadas: 0 }],
+        });
+        const { context, page, requests, errors } = await open(browser, { user: identity({ puede_registrar_control_despacho: true }), detail: incompleta });
+        await page.locator('#dcxRows tr[data-id="c1"]').click();
+        await page.locator('#dcxDetailTitle', { hasText: 'CAR-0042' }).waitFor();
+        assert.match(await page.locator('#dcxPhotosPending').innerText(), /Placa patente.*set estándar/);
+        await page.locator('#dcxDownload').click();
+        await page.locator('#dcxPrint').waitFor();
+        assert.match(await page.locator('#dcxPrintText').innerText(), /A000002/);
+        assert.equal(requests.some((r) => r.path.endsWith('/planilla.xlsx')), false, 'No descarga con datos faltantes');
+        await page.locator('#dcxPrintTemps input').fill('99');
+        await page.locator('#dcxPrintForm button').click();
+        assert.match(await page.locator('#dcxPrintError').innerText(), /-10 a 40/);
+        await page.locator('#dcxPrintTemps input').fill('-0,3');
+        const download = page.waitForEvent('download');
+        await page.locator('#dcxPrintForm button').click();
+        assert.equal((await download).suggestedFilename(), 'R-24_CAR-0042.xlsx');
+        const write = requests.find((r) => r.path.endsWith('/temperaturas'));
+        assert.deepEqual(write.body.temperaturas, [{ posicion_id: 'p-A000002', temperatura: -0.3 }]);
+        assert.equal(await page.locator('#dcxPrint').isVisible(), false);
+        assert.deepEqual(errors, []);
+        await context.close();
+    } finally { await browser.close(); }
+});
+
+test('sin permiso de registro solo informa qué falta para imprimir', async () => {
+    const browser = await launch();
+    try {
+        const incompleta = control({ pallets: [pallet('A000002', 2, null)], faltantes_impresion: ['Falta la T° de pulpa de 1 pallets: A000002.'] });
+        const { context, page, errors } = await open(browser, { user: identity({ puede_registrar_control_despacho: false }), detail: incompleta });
+        await page.locator('#dcxRows tr[data-id="c1"]').click();
+        await page.locator('#dcxDownload').click();
+        await page.locator('#dcxPrint').waitFor();
+        assert.match(await page.locator('#dcxPrintText').innerText(), /Pide a consolidación/);
+        assert.equal(await page.locator('#dcxPrintForm').isVisible(), false);
         assert.deepEqual(errors, []);
         await context.close();
     } finally { await browser.close(); }

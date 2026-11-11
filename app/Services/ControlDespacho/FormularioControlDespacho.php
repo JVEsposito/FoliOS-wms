@@ -152,16 +152,63 @@ final class FormularioControlDespacho
     }
 
     /**
-     * Set fotográfico. Mientras no llegue el set estándar hay una sola categoría opcional;
-     * las categorías obligatorias se agregan aquí y la PDA las muestra sin cambios.
+     * Set fotográfico del despacho, en el orden en que se toman. `condicion` dice cuándo una
+     * foto obligatoria se exige: `contenedor` solo si el camión es contenedor; `termografos`
+     * una por cada termógrafo anotado en el encabezado. Las obligatorias bloquean el cierre
+     * solo con `despacho.control_exige_fotos` activo; mientras tanto la PDA las muestra como
+     * pendientes.
      *
-     * @return array<string, array{nombre: string, obligatoria: bool, maximo: int}>
+     * @return array<string, array{nombre: string, obligatoria: bool, condicion: ?string, maximo: int}>
      */
     public static function tiposFoto(): array
     {
         return [
-            'general' => ['nombre' => 'Fotos del despacho', 'obligatoria' => false, 'maximo' => 20],
+            'contenedor' => ['nombre' => 'Número de contenedor', 'obligatoria' => true, 'condicion' => 'contenedor', 'maximo' => 3],
+            'patente' => ['nombre' => 'Placa patente', 'obligatoria' => true, 'condicion' => null, 'maximo' => 3],
+            'temperatura_corte' => ['nombre' => 'Temperatura de corte del equipo', 'obligatoria' => true, 'condicion' => null, 'maximo' => 3],
+            'temperatura_pulpa' => ['nombre' => 'Temperatura de pulpa', 'obligatoria' => true, 'condicion' => null, 'maximo' => 10],
+            'termografos' => ['nombre' => 'Postura de termógrafos', 'obligatoria' => true, 'condicion' => 'termografos', 'maximo' => 8],
+            'primer_bloque' => ['nombre' => 'Primer bloque (mitad de carga)', 'obligatoria' => true, 'condicion' => null, 'maximo' => 5],
+            'altura_carga' => ['nombre' => 'Altura de carga (si aplica)', 'obligatoria' => false, 'condicion' => null, 'maximo' => 5],
+            'cierre_carga' => ['nombre' => 'Cierre de carga', 'obligatoria' => true, 'condicion' => null, 'maximo' => 5],
+            'general' => ['nombre' => 'Otras fotos del despacho', 'obligatoria' => false, 'condicion' => null, 'maximo' => 20],
         ];
+    }
+
+    public static function exigeFotos(): bool
+    {
+        return (bool) config('despacho.control_exige_fotos', false);
+    }
+
+    /**
+     * Fotos que faltan según el set y lo registrado en la planilla.
+     *
+     * @param  array<string, mixed>  $encabezado
+     * @param  array<string, int>  $cantidadPorTipo
+     * @return array<int, array{tipo: string, nombre: string, requeridas: int, tomadas: int}>
+     */
+    public static function fotosPendientes(array $encabezado, array $cantidadPorTipo): array
+    {
+        $termografos = collect(['termografo_1', 'termografo_2', 'termografo_3', 'termografo_control'])
+            ->filter(fn (string $clave): bool => filled($encabezado[$clave] ?? null))
+            ->count();
+        $pendientes = [];
+        foreach (self::tiposFoto() as $tipo => $definicion) {
+            if (! $definicion['obligatoria']) {
+                continue;
+            }
+            $requeridas = match ($definicion['condicion']) {
+                'contenedor' => ($encabezado['tipo_camion'] ?? null) === 'contenedor' ? 1 : 0,
+                'termografos' => $termografos,
+                default => 1,
+            };
+            $tomadas = (int) ($cantidadPorTipo[$tipo] ?? 0);
+            if ($requeridas > $tomadas) {
+                $pendientes[] = ['tipo' => $tipo, 'nombre' => $definicion['nombre'], 'requeridas' => $requeridas, 'tomadas' => $tomadas];
+            }
+        }
+
+        return $pendientes;
     }
 
     /** @return array<string, mixed> */
@@ -175,6 +222,7 @@ final class FormularioControlDespacho
             'cierre' => collect(self::cierre())->map(fn (array $campo, string $clave): array => ['clave' => $clave, ...$campo])->values()->all(),
             'orientaciones' => collect(self::orientaciones())->map(fn (array $orientacion, string $clave): array => ['clave' => $clave, ...$orientacion])->values()->all(),
             'tipos_foto' => collect(self::tiposFoto())->map(fn (array $tipo, string $clave): array => ['clave' => $clave, ...$tipo])->values()->all(),
+            'exige_fotos' => self::exigeFotos(),
         ];
     }
 

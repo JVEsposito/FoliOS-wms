@@ -85,6 +85,15 @@
                         </div>
                     </div>
                     <div class="dcx-missing" id="dcxMissing" role="status" hidden></div>
+                    <section class="dcx-print" id="dcxPrint" hidden aria-labelledby="dcxPrintTitle">
+                        <h3 id="dcxPrintTitle">Antes de imprimir</h3>
+                        <p id="dcxPrintText">La planilla impresa exige la T° de pulpa de cada pallet.</p>
+                        <form id="dcxPrintForm" novalidate>
+                            <div class="dcx-temps" id="dcxPrintTemps"></div>
+                            <p class="form-error" id="dcxPrintError" role="alert"></p>
+                            <button class="primary-button" type="submit">Guardar y descargar</button>
+                        </form>
+                    </section>
                     <div class="dcx-kpis" id="dcxKpis"></div>
                     <div class="dcx-columns">
                         <section aria-labelledby="dcxHeaderTitle"><h3 id="dcxHeaderTitle">Encabezado</h3><div id="dcxHeader"></div></section>
@@ -100,7 +109,7 @@
                         </div>
                     </section>
                     <section aria-labelledby="dcxClosingTitle"><h3 id="dcxClosingTitle">Cierre</h3><div id="dcxClosing"></div></section>
-                    <section aria-labelledby="dcxPhotosTitle"><h3 id="dcxPhotosTitle">Fotos</h3><div class="dcx-photos" id="dcxPhotos"></div></section>
+                    <section aria-labelledby="dcxPhotosTitle"><h3 id="dcxPhotosTitle">Fotos</h3><div class="dcx-photos" id="dcxPhotos"></div><p class="dcx-muted" id="dcxPhotosPending" hidden></p></section>
                     <section class="dcx-reopen" id="dcxReopen" hidden aria-labelledby="dcxReopenTitle">
                         <h3 id="dcxReopenTitle">Reabrir planilla</h3>
                         <p>La planilla vuelve a borrador para que consolidación la corrija desde la PDA. El motivo queda en su historial.</p>

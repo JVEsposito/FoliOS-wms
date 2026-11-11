@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { gruposEncabezado, orientacion, palletsOrdenados, temperatura, textoValor, tonoInspeccion } from '../../resources/js/shared/dispatch-control.js';
+import { gruposEncabezado, orientacion, palletsOrdenados, palletsSinTemperatura, temperatura, textoValor, tonoInspeccion } from '../../resources/js/shared/dispatch-control.js';
 
 test('la inspección distingue los puntos en que «sí» es un hallazgo', () => {
     assert.equal(tonoInspeccion('puertas', 'si'), 'ok');
@@ -47,4 +47,14 @@ test('P/E se lee como punta o espejo', () => {
     assert.equal(orientacion('P'), 'Punta');
     assert.equal(orientacion('E'), 'Espejo');
     assert.equal(orientacion(null), '—');
+});
+
+test('la impresión pide la T° de los pallets con posición, en orden', () => {
+    const faltan = palletsSinTemperatura([
+        { numero_folio: 'B', posicion: { posicion: 3, temperatura: null } },
+        { numero_folio: 'A', posicion: { posicion: 1, temperatura: 0.4 } },
+        { numero_folio: 'C', posicion: null },
+        { numero_folio: 'D', posicion: { posicion: 2, temperatura: null } },
+    ]).map((pallet) => pallet.numero_folio);
+    assert.deepEqual(faltan, ['D', 'B']);
 });

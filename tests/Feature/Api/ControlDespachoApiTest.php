@@ -166,6 +166,26 @@ class ControlDespachoApiTest extends TestCase
         $this->assertSame('agrorosario', $registro->encabezado['frigorifico_tipo']);
         $this->assertSame(2, collect($registro->planilla_cerrada['pallets'])->whereNotNull('posicion')->count());
 
+        // La T° de pulpa no bloquea el cierre, pero sí la impresión: se completa con la planilla cerrada.
+        $this->assertSame(["Falta la T° de pulpa de 1 pallets: {$primero->numero_folio}."], $cerrada['faltantes_impresion']);
+        $this->conToken($token)->get("/api/control-despacho/controles/{$control['id']}/planilla.xlsx")
+            ->assertUnprocessable()
+            ->assertJsonPath('codigo', 'faltan_datos_impresion')
+            ->assertJsonPath('message', "Antes de imprimir: Falta la T° de pulpa de 1 pallets: {$primero->numero_folio}.");
+        $pallets = collect($cerrada['pallets'])->keyBy('numero_folio');
+        // Lo ya firmado no se cambia: solo se completan las que faltan.
+        $this->conToken($token)->postJson("/api/control-despacho/controles/{$control['id']}/temperaturas", [
+            'operacion_id' => (string) Str::uuid(),
+            'temperaturas' => [['posicion_id' => $pallets[$segundo->numero_folio]['posicion']['id'], 'temperatura' => 0.1]],
+        ])->assertUnprocessable()->assertJsonPath('message', "La T° de pulpa del folio {$segundo->numero_folio} ya está registrada: con la planilla cerrada solo se completan las que faltan.");
+        // Oficina también completa, sin PDA.
+        $this->actingAs($contexto['administrador'], 'sanctum')->postJson("/api/control-despacho/controles/{$control['id']}/temperaturas", [
+            'operacion_id' => (string) Str::uuid(),
+            'temperaturas' => [['posicion_id' => $pallets[$primero->numero_folio]['posicion']['id'], 'temperatura' => -0.3]],
+        ])->assertOk()->assertJsonPath('data.faltantes_impresion', [])->assertJsonPath('data.estado', 'cerrado');
+        $this->assertEquals(-0.3, collect(ControlDespacho::query()->findOrFail($control['id'])->planilla_cerrada['pallets'])->firstWhere('numero_folio', $primero->numero_folio)['posicion']['temperatura']);
+        $this->conToken($token)->get("/api/control-despacho/controles/{$control['id']}/planilla.xlsx")->assertOk();
+
         $this->conToken($token)->putJson("/api/control-despacho/controles/{$control['id']}", [
             'operacion_id' => (string) Str::uuid(), 'version' => $cerrada['version'], 'cierre' => ['sello_lavado' => 'X1'],
         ])->assertUnprocessable()->assertJsonPath('message', 'La planilla está cerrada. Supervisión puede reabrirla con un motivo.');
@@ -199,6 +219,14 @@ class ControlDespachoApiTest extends TestCase
             'cierre' => ['observaciones' => 'Carga revisada sin observaciones relevantes para el cliente final.'],
         ])->assertOk();
 
+        $this->conToken($token)->get("/api/control-despacho/controles/{$control['id']}/planilla.xlsx")
+            ->assertUnprocessable()->assertJsonPath('codigo', 'faltan_datos_impresion');
+        $posicion = collect($this->conToken($token)->getJson("/api/control-despacho/controles/{$control['id']}")->json('data.pallets'))
+            ->firstWhere('numero_folio', $segundo->numero_folio)['posicion']['id'];
+        $this->conToken($token)->postJson("/api/control-despacho/controles/{$control['id']}/temperaturas", [
+            'operacion_id' => (string) Str::uuid(), 'temperaturas' => [['posicion_id' => $posicion, 'temperatura' => 1.5]],
+        ])->assertOk()->assertJsonPath('data.faltantes_impresion', []);
+
         $respuesta = $this->conToken($token)->get("/api/control-despacho/controles/{$control['id']}/planilla.xlsx")->assertOk();
         $this->assertStringContainsString("R-24_{$carga->codigo}.xlsx", (string) $respuesta->headers->get('content-disposition'));
         $zip = new ZipArchive;
@@ -231,7 +259,12 @@ class ControlDespachoApiTest extends TestCase
         [$token] = $this->consolidador('R24D');
         $control = $this->iniciar($token, $carga);
         $catalogo = $this->conToken($token)->getJson('/api/control-despacho/catalogo')->assertOk()->json('data');
-        $this->assertSame([['clave' => 'general', 'nombre' => 'Fotos del despacho', 'obligatoria' => false, 'maximo' => 20]], $catalogo['tipos_foto']);
+        $this->assertSame(
+            ['contenedor', 'patente', 'temperatura_corte', 'temperatura_pulpa', 'termografos', 'primer_bloque', 'altura_carga', 'cierre_carga', 'general'],
+            collect($catalogo['tipos_foto'])->pluck('clave')->all(),
+        );
+        $this->assertFalse($catalogo['exige_fotos']);
+        $this->assertSame(['altura_carga', 'general'], collect($catalogo['tipos_foto'])->where('obligatoria', false)->pluck('clave')->values()->all());
         $this->assertSame(['P' => 'Punta', 'E' => 'Espejo'], collect($catalogo['orientaciones'])->pluck('nombre', 'clave')->all());
 
         $operacion = (string) Str::uuid();
@@ -245,6 +278,41 @@ class ControlDespachoApiTest extends TestCase
 
         $this->conToken($token)->deleteJson("/api/control-despacho/controles/{$control['id']}/fotos/{$foto['id']}")->assertNoContent();
         $this->conToken($token)->getJson("/api/control-despacho/controles/{$control['id']}")->assertOk()->assertJsonCount(0, 'data.fotos');
+    }
+
+    public function test_el_set_fotografico_marca_pendientes_y_solo_bloquea_el_cierre_cuando_se_exige(): void
+    {
+        Storage::fake('local');
+        $contexto = $this->crearContextoFrio(1, 'R24F');
+        $folio = $contexto['folios'][0];
+        $carga = $this->crearCargaPublicada($contexto['despachador'], $contexto['anden'], [$folio]);
+        $this->enviarAlAnden($contexto, $carga, $folio);
+        [$token] = $this->consolidador('R24F');
+        $control = $this->iniciar($token, $carga);
+        $this->posicion($token, $control['id'], $folio->numero_folio, 1, ['temperatura' => 0.2])->assertOk();
+        $guardado = $this->conToken($token)->putJson("/api/control-despacho/controles/{$control['id']}", [
+            'operacion_id' => (string) Str::uuid(), 'version' => 1,
+            'encabezado' => ['tipo_camion' => 'contenedor', 'termografo_1' => 'TG-1', 'termografo_control' => 'TG-INT'],
+            'inspeccion' => collect(FormularioControlDespacho::inspeccion())->map(fn (): string => 'si')->all(),
+        ])->assertOk()->json('data');
+        $pendientes = collect($guardado['fotos_pendientes'])->keyBy('tipo');
+        $this->assertSame(['contenedor', 'patente', 'temperatura_corte', 'temperatura_pulpa', 'termografos', 'primer_bloque', 'cierre_carga'], $pendientes->keys()->all());
+        // Una foto por termógrafo anotado.
+        $this->assertSame(2, $pendientes['termografos']['requeridas']);
+
+        $this->conToken($token)->post("/api/control-despacho/controles/{$control['id']}/fotos", [
+            'tipo' => 'termografos', 'operacion_id' => (string) Str::uuid(), 'archivo' => UploadedFile::fake()->image('tg.jpg', 320, 240),
+        ])->assertCreated();
+        $detalle = $this->conToken($token)->getJson("/api/control-despacho/controles/{$control['id']}")->assertOk()->json('data');
+        $this->assertSame(['requeridas' => 2, 'tomadas' => 1], collect(collect($detalle['fotos_pendientes'])->firstWhere('tipo', 'termografos'))->only(['requeridas', 'tomadas'])->all());
+        $this->assertSame([], $detalle['faltantes_cierre'], 'Sin exigir el set, las fotos no bloquean el cierre.');
+
+        config(['despacho.control_exige_fotos' => true]);
+        $this->cerrar($token, $control['id'], $detalle['version'])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Antes de cerrar la planilla: Faltan fotos: Número de contenedor, Placa patente, Temperatura de corte del equipo, Temperatura de pulpa, Postura de termógrafos (1 de 2), Primer bloque (mitad de carga), Cierre de carga.');
+        config(['despacho.control_exige_fotos' => false]);
+        $this->cerrar($token, $control['id'], $detalle['version'])->assertOk()->assertJsonPath('data.estado', 'cerrado');
     }
 
     public function test_solo_consolidacion_registra_y_oficina_consulta_el_listado(): void

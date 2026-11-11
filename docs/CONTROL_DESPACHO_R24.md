@@ -76,10 +76,37 @@ Un campo que se deja vacío vuelve a la sugerencia.
   - requerimiento Walmart;
   - cantidad por tipo de pallet;
   - responsable y jefe de sección.
-- **Fotos.** Son opcionales, hasta 20, y se guardan en el disco privado. Cuando llegue el
-  set fotográfico estándar se definen sus categorías en
-  `FormularioControlDespacho::tiposFoto()`, con `obligatoria: true` si corresponde. La PDA y
-  oficina las muestran sin otros cambios.
+- **Fotos.** Set fotográfico estándar, en el orden en que se toman. Las fotos se guardan en el
+  disco privado.
+
+| Categoría | Exigencia |
+|---|---|
+| Número de contenedor | Obligatoria, solo si es contenedor |
+| Placa patente | Obligatoria |
+| Temperatura de corte del equipo | Obligatoria |
+| Temperatura de pulpa | Obligatoria |
+| Postura de termógrafos | Obligatoria: una por cada termógrafo anotado en el encabezado |
+| Primer bloque (mitad de carga) | Obligatoria |
+| Altura de carga | Opcional, si aplica |
+| Cierre de carga | Obligatoria |
+| Otras fotos del despacho | Opcional |
+
+La PDA y oficina muestran las fotos pendientes del set. **Mientras el set no sea oficial, no
+bloquean el cierre.** Para exigirlas al cerrar, se agrega `CONTROL_DESPACHO_EXIGE_FOTOS=true` en
+el `.env` de planta. Las categorías se definen en `FormularioControlDespacho::tiposFoto()`.
+
+## T° de pulpa: se exige al imprimir
+
+La planilla R-24 exige la T° de pulpa de cada pallet, pero **no bloquea el cierre**: el camión
+puede salir y la temperatura se completa después.
+
+- Al **descargar o compartir el Excel**, si falta alguna T° de pulpa, el sistema lista los
+  pallets y pide completarlas antes de imprimir. Responde 422 con
+  `codigo: faltan_datos_impresion`.
+- Se completan desde la PDA (pestaña Pallets, «T° de pulpa pendiente») o desde oficina, en el
+  mismo aviso de descarga, si el usuario puede registrar la planilla.
+- Con la planilla **cerrada** solo se completan las temperaturas que faltan. Las ya
+  registradas no se cambian, y la copia congelada de la planilla se actualiza.
 
 ## Cerrar y reabrir
 
@@ -88,7 +115,10 @@ Para cerrar la planilla:
 - se indica si es contenedor o thermo;
 - la inspección está completa;
 - no quedan pallets de la carga sin subir;
-- cada pallet cargado tiene posición.
+- cada pallet cargado tiene posición;
+- las fotos obligatorias están tomadas, solo si `CONTROL_DESPACHO_EXIGE_FOTOS` está activo.
+
+La T° de pulpa no se exige para cerrar.
 
 Al cerrar, las sugerencias quedan confirmadas y la planilla se congela (`planilla_cerrada`).
 Si no se indicó responsable, queda a nombre de quien la cerró.
@@ -132,6 +162,7 @@ Capacidades:
 | PUT | `/api/control-despacho/controles/{id}` (secciones `encabezado`, `inspeccion`, `cierre`, con `version`) |
 | POST / DELETE | `/api/control-despacho/controles/{id}/posiciones` · `/posiciones/{posicion}` |
 | POST | `/api/control-despacho/controles/{id}/cerrar` · `/reabrir` |
+| POST | `/api/control-despacho/controles/{id}/temperaturas` (completa la T° de pulpa, también con la planilla cerrada) |
 | GET / POST / DELETE | `/api/control-despacho/controles/{id}/fotos` |
 
 Todas las escrituras son idempotentes por `operacion_id`, porque pasan por el motor de

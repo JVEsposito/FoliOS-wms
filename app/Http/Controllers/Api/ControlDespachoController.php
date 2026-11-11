@@ -150,6 +150,24 @@ class ControlDespachoController extends Controller
         return $this->detalle($control);
     }
 
+    public function completarTemperaturas(Request $request, ControlDespacho $controlDespacho): JsonResponse
+    {
+        $datos = $request->validate([
+            'operacion_id' => ['required', 'uuid'],
+            'temperaturas' => ['required', 'array', 'min:1', 'max:'.FormularioControlDespacho::POSICION_MAXIMA * 2],
+            'temperaturas.*.posicion_id' => ['required', 'uuid', 'distinct'],
+            'temperaturas.*.temperatura' => ['required', 'numeric', 'between:-10,40'],
+        ]);
+        $control = $this->servicio->completarTemperaturas(
+            $datos['operacion_id'],
+            $controlDespacho,
+            collect($datos['temperaturas'])->pluck('temperatura', 'posicion_id')->all(),
+            $request->user(),
+        );
+
+        return $this->detalle($control);
+    }
+
     public function quitarPosicion(Request $request, ControlDespacho $controlDespacho, PosicionControlDespacho $posicion): JsonResponse
     {
         abort_unless($posicion->control_despacho_id === $controlDespacho->id, 404);
@@ -213,7 +231,16 @@ class ControlDespachoController extends Controller
 
     public function planilla(ControlDespacho $controlDespacho, GeneradorPlanillaControlDespacho $generador): Response
     {
-        $ruta = $generador->generar($this->planilla->detalle($controlDespacho));
+        $detalle = $this->planilla->detalle($controlDespacho);
+        // La planilla impresa exige datos que el cierre no pide: se completan antes de imprimir.
+        if ($detalle['faltantes_impresion'] !== []) {
+            return $this->json([
+                'message' => 'Antes de imprimir: '.implode(' ', $detalle['faltantes_impresion']),
+                'codigo' => 'faltan_datos_impresion',
+                'faltantes_impresion' => $detalle['faltantes_impresion'],
+            ], 422);
+        }
+        $ruta = $generador->generar($detalle);
         $nombre = 'R-24_'.preg_replace('/[^\p{L}\p{N}_-]+/u', '_', $controlDespacho->carga()->value('codigo') ?: $controlDespacho->id).'.xlsx';
 
         return response()->download($ruta, $nombre, [

@@ -6,10 +6,12 @@
 export type ConsolidationFieldType = 'texto' | 'opcion' | 'fecha' | 'hora' | 'entero' | 'nota';
 export type ConsolidationField = { clave: string; etiqueta: string; tipo: ConsolidationFieldType; opciones?: string[]; grupo?: string };
 export type ConsolidationCheck = { clave: string; etiqueta: string; aplica: 'contenedor' | 'thermo' | null };
-export type ConsolidationPhotoType = { clave: string; nombre: string; obligatoria: boolean; maximo: number };
+export type ConsolidationPhotoType = { clave: string; nombre: string; obligatoria: boolean; condicion: 'contenedor' | 'termografos' | null; maximo: number };
+export type ConsolidationPendingPhoto = { tipo: string; nombre: string; requeridas: number; tomadas: number };
 export type ConsolidationCatalog = {
   codigo: string; posicion_maxima: number;
   encabezado: ConsolidationField[]; inspeccion: ConsolidationCheck[]; cierre: ConsolidationField[]; tipos_foto: ConsolidationPhotoType[];
+  orientaciones?: { clave: string; nombre: string; descripcion: string }[]; exige_fotos?: boolean;
 };
 
 export type ConsolidationLoad = {
@@ -37,6 +39,9 @@ export type ConsolidationControl = {
   iniciado_at: string | null; iniciado_por: string | null; cerrado_at: string | null; cerrado_por: string | null;
   reaperturas: { motivo: string; nombre: string; reabierto_at: string }[];
   fotos: ConsolidationPhoto[]; faltantes_cierre: string[];
+  /** Lo que la planilla impresa exige y el cierre no (hoy, la T° de pulpa). */
+  faltantes_impresion: string[];
+  fotos_pendientes: ConsolidationPendingPhoto[];
 };
 
 export type ConsolidationSection = 'encabezado' | 'inspeccion' | 'cierre';
@@ -173,4 +178,21 @@ export function palletsForList(pallets: ConsolidationPallet[]): ConsolidationPal
 export function declaredPallets(values: (key: string) => string): number {
   return ['pallets_taco_1000', 'pallets_chep_1000', 'pallets_yugo_1000', 'pallets_extendido_1016', 'pallets_taco_800']
     .reduce((total, key) => total + (Number(values(key)) || 0), 0);
+}
+
+/** Pallets con posición sin T° de pulpa: la planilla impresa la exige. */
+export function palletsWithoutTemperature(pallets: ConsolidationPallet[]): ConsolidationPallet[] {
+  return pallets
+    .filter((pallet) => pallet.posicion !== null && pallet.posicion.temperatura === null)
+    .sort((a, b) => (a.posicion?.posicion ?? 0) - (b.posicion?.posicion ?? 0));
+}
+
+/** Estado de una categoría del set fotográfico, en palabras para el equipo. */
+export function photoRequirement(type: ConsolidationPhotoType, pending: ConsolidationPendingPhoto[], enforced: boolean): { text: string; missing: boolean } {
+  const missing = pending.find((item) => item.tipo === type.clave);
+  if (!type.obligatoria) return { text: type.clave === 'general' ? 'Opcional.' : 'Opcional: solo si aplica.', missing: false };
+  const condition = type.condicion === 'contenedor' ? ' (solo contenedor)' : type.condicion === 'termografos' ? ' (una por termógrafo)' : '';
+  const rule = enforced ? `Obligatoria${condition} para cerrar.` : `Obligatoria${condition} cuando se active el set estándar.`;
+  if (!missing) return { text: `${rule} Completa.`, missing: false };
+  return { text: `${rule} Faltan ${missing.requeridas - missing.tomadas} de ${missing.requeridas}.`, missing: true };
 }

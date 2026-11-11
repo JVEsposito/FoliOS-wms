@@ -72,3 +72,8 @@ export const ORIENTACIONES = { P: 'Punta', E: 'Espejo' };
 export function orientacion(codigo) {
     return codigo ? (ORIENTACIONES[codigo] ?? codigo) : '—';
 }
+
+/** Pallets con posición sin T° de pulpa, por posición: la planilla impresa la exige. */
+export function palletsSinTemperatura(pallets = []) {
+    return palletsOrdenados(pallets).filter((pallet) => pallet.posicion && (pallet.posicion.temperatura === null || pallet.posicion.temperatura === undefined));
+}

@@ -53,8 +53,16 @@
 .dcx-checks li[data-tone="pendiente"] strong, .dcx-checks li[data-tone="neutro"] strong { color: var(--text-subtle); }
 .dcx-photos { display: flex; flex-wrap: wrap; gap: 10px; }
 .dcx-photo { display: grid; gap: 4px; padding: 4px; border: 1px solid var(--line-soft); border-radius: 8px; background: transparent; color: var(--text-subtle); font-size: .72rem; cursor: zoom-in; }
+.dcx-photo strong { max-width: 120px; color: var(--text-strong); font-size: .74rem; text-align: left; }
 .dcx-photo img { width: 120px; height: 90px; border-radius: 6px; object-fit: cover; background: var(--line-soft); }
 .dcx-muted { margin: 0; color: var(--text-subtle); font-size: .88rem; }
+.dcx-print { padding: 14px 16px; border-left: 3px solid var(--info-text); border-radius: 6px; background: var(--info-bg); }
+.dcx-print p { margin: 0 0 10px; color: var(--text-strong); font-size: .88rem; }
+.dcx-print form { display: grid; gap: 10px; }
+.dcx-print .primary-button { justify-self: start; }
+.dcx-temps { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px 12px; }
+.dcx-temps label { display: grid; gap: 4px; }
+.dcx-temps span { color: var(--text-subtle); font-size: .78rem; font-weight: 700; }
 .dcx-reopen form { display: grid; gap: 8px; max-width: 560px; }
 .dcx-reopen label { display: grid; gap: 4px; }
 .dcx-reopen p { margin: 0 0 8px; color: var(--text-subtle); font-size: .88rem; }

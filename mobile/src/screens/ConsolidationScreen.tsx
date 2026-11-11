@@ -7,7 +7,8 @@ import { FieldHeader } from '../components/field/FieldHeader';
 import { EntityCode, EstibaAlert, EstibaButton, EstibaField, EstibaMetric, EstibaPanel, EstibaSignal } from '../components/ui/EstibaPrimitives';
 import {
   HEADER_GROUPS, OPTION_LABELS, PALLET_ORIENTATIONS, PALLET_STATE_LABELS, checkNotApplicable, orientationLabel, consolidationStorageKey, declaredPallets, fieldValue, fillNotApplicable,
-  formatTemperature, hasDraftChanges, nextFreePosition, palletsForList, parseBoxes, parsePosition, parseTemperature, positionOccupant, sectionChanges,
+  formatTemperature, hasDraftChanges, nextFreePosition, palletsForList, palletsWithoutTemperature, parseBoxes, parsePosition, parseTemperature, photoRequirement,
+  positionOccupant, sectionChanges,
   type ConsolidationCatalog, type ConsolidationControl, type ConsolidationDraft, type ConsolidationField, type ConsolidationLoad, type ConsolidationPallet,
   type ConsolidationSection,
 } from '../domain/consolidation';
@@ -60,6 +61,8 @@ export function ConsolidationScreen({ auth, baseUrl, onLogout }: { auth: AuthSes
   const [sharePrompt, setSharePrompt] = useState<{ occupant: string; payload: PositionPayload } | null>(null);
   const [removeTarget, setRemoveTarget] = useState<ConsolidationPallet | null>(null);
   const [confirmClose, setConfirmClose] = useState(false);
+  // T° de pulpa por completar antes de imprimir: posicion_id => texto.
+  const [pendingTemps, setPendingTemps] = useState<Record<string, string>>({});
 
   useEffect(() => {
     alive.current = true;
@@ -203,6 +206,28 @@ export function ConsolidationScreen({ auth, baseUrl, onLogout }: { auth: AuthSes
     await send('Cerrar planilla', () => api.close(control.id, operation, version), () => setNotice('Planilla R-24 cerrada. Ya puedes compartir el Excel.'));
   }
 
+  async function completeTemperatures() {
+    if (!control) return;
+    const temperaturas = Object.entries(pendingTemps)
+      .filter(([, text]) => text.trim() !== '')
+      .map(([posicion_id, text]) => ({ posicion_id, temperatura: parseTemperature(text) as number }));
+    if (temperaturas.length === 0) throw new Error('Ingresa al menos una T° de pulpa.');
+    const operation = Crypto.randomUUID();
+    await send('Completar T° de pulpa', () => api.completeTemperatures(control.id, operation, temperaturas), (result) => {
+      setPendingTemps({});
+      setNotice(result.faltantes_impresion.length ? 'Temperaturas guardadas. Aún faltan algunas para imprimir.' : 'Temperaturas completas: la planilla ya se puede imprimir.');
+    });
+  }
+
+  async function shareSheet() {
+    if (!control) return;
+    if (control.faltantes_impresion.length) {
+      setTab('pallets');
+      throw new Error(`Antes de imprimir: ${control.faltantes_impresion.join(' ')}`);
+    }
+    await api.shareSheet(control.id, control.carga.codigo);
+  }
+
   async function removePosition(target: ConsolidationPallet) {
     if (!control || !target.posicion) return;
     const operation = Crypto.randomUUID();
@@ -303,6 +328,17 @@ export function ConsolidationScreen({ auth, baseUrl, onLogout }: { auth: AuthSes
             <EstibaButton label="Subió · registrar posición" variant="confirm" busy={busy} disabled={blocked || !folio.trim()} onPress={() => void run(() => registerPosition())} />
             <Text style={s.muted}>Un pallet que espera en el andén queda cargado en el camión, igual que cuando lo lee el camarero. Si ya estaba cargado, solo se guarda su posición.</Text>
           </EstibaPanel> : null}
+          {canRegister && palletsWithoutTemperature(control.pallets).length ? <EstibaPanel title={`T° de pulpa pendiente (${palletsWithoutTemperature(control.pallets).length})`}>
+            <Text style={s.muted}>La planilla impresa la exige; el cierre no. {control.estado === 'cerrado' ? 'Con la planilla cerrada solo se completan las que faltan.' : 'Complétala antes de imprimir.'}</Text>
+            {palletsWithoutTemperature(control.pallets).map((pallet) => <View key={pallet.asignacion_id} style={s.tempRow}>
+              <Text style={s.positionBadge}>{pallet.posicion?.posicion}</Text>
+              <View style={s.grow}><EntityCode value={pallet.numero_folio} /></View>
+              <TextInput accessibilityLabel={`T° de pulpa de ${pallet.numero_folio}`} value={pendingTemps[pallet.posicion?.id ?? ''] ?? ''} editable={!blocked}
+                keyboardType="numbers-and-punctuation" placeholder="°C" placeholderTextColor={colors.muted} maxLength={6} style={s.tempInput}
+                onChangeText={(text) => pallet.posicion && setPendingTemps((old) => ({ ...old, [pallet.posicion!.id]: text }))} />
+            </View>)}
+            <EstibaButton label="Guardar temperaturas" busy={busy} disabled={blocked || !Object.values(pendingTemps).some((text) => text.trim() !== '')} onPress={() => void run(completeTemperatures)} />
+          </EstibaPanel> : null}
           <EstibaPanel title={`Pallets de la carga (${control.totales.pallets})`}>
             {palletsForList(control.pallets).map((pallet) => <Pressable key={pallet.asignacion_id} disabled={!editable || blocked} accessibilityRole="button"
               accessibilityHint="Carga el pallet en el formulario para corregir su posición" onPress={() => selectFolio(pallet.numero_folio)}
@@ -350,7 +386,9 @@ export function ConsolidationScreen({ auth, baseUrl, onLogout }: { auth: AuthSes
           {saveBar('cierre')}
           {control.estado === 'borrador' && control.faltantes_cierre.length ? <EstibaAlert title="Para cerrar la planilla falta" detail={control.faltantes_cierre.join('\n')} tone="warning" /> : null}
           {editable ? <EstibaButton label="Cerrar planilla R-24" variant="confirm" disabled={blocked || control.faltantes_cierre.length > 0 || hasDraftChanges(draft)} onPress={() => setConfirmClose(true)} /> : null}
-          <EstibaButton label="Compartir Excel R-24" variant="secondary" disabled={blocked} onPress={() => void run(() => api.shareSheet(control.id, control.carga.codigo))} />
+          {control.faltantes_impresion.length ? <EstibaAlert title="Para imprimir falta" detail={control.faltantes_impresion.join('\n')} tone="info" /> : null}
+          <EstibaButton label={control.faltantes_impresion.length ? 'Completar T° de pulpa para imprimir' : 'Compartir Excel R-24'} variant="secondary" disabled={blocked}
+            onPress={() => (control.faltantes_impresion.length ? setTab('pallets') : void run(shareSheet))} />
         </> : null}
 
         {tab === 'fotos' ? <PhotosPanel api={api} control={control} catalog={catalog} editable={editable} onChange={setControl} onError={setError} /> : null}
@@ -445,8 +483,9 @@ function PhotosPanel({ api, control, catalog, editable, onChange, onError }: {
   return <>{catalog.tipos_foto.map((type) => {
     const photos = control.fotos.filter((photo) => photo.tipo === type.clave);
     const waiting = queue.filter((photo) => photo.tipo === type.clave);
+    const requirement = photoRequirement(type, control.fotos_pendientes ?? [], catalog.exige_fotos === true);
     return <EstibaPanel key={type.clave} title={`${type.nombre} · ${photos.length}/${type.maximo}`}>
-      <Text style={s.muted}>{type.obligatoria ? 'Obligatoria para cerrar la planilla.' : 'Opcional: el set fotográfico estándar se definirá más adelante.'}</Text>
+      <Text style={requirement.missing ? s.warn : s.muted}>{requirement.text}</Text>
       <View style={s.photos}>
         {photos.map((photo) => <View key={photo.id} style={s.gap}>
           {thumbs[photo.id] ? <Image source={{ uri: thumbs[photo.id] }} style={s.photo} /> : <View style={s.photo} />}
@@ -487,6 +526,9 @@ const s = StyleSheet.create({
   chipText: { fontFamily: font.bold, color: colors.text, fontSize: 15 },
   chipTextOn: { color: colors.onPrimary },
   chipHint: { fontFamily: font.regular, color: colors.muted, fontSize: 12 },
+  warn: { fontFamily: font.bold, color: signal.warning.text, fontSize: 13 },
+  tempRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  tempInput: { fontFamily: font.monoBold, width: 96, minHeight: 48, paddingHorizontal: 10, borderWidth: 1, borderColor: colors.inputBorder, borderRadius: 8, color: colors.text, backgroundColor: colors.surface, fontSize: 18, textAlign: 'center' },
   tabs: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   tab: { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 8, borderWidth: 1, borderColor: colors.border },
   tabOn: { backgroundColor: colors.primary, borderColor: colors.primary },

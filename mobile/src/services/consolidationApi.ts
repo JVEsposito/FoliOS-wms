@@ -43,6 +43,8 @@ export function createConsolidationApi(baseUrl: string, token: string) {
       (await request<{ data: ConsolidationControl }>(`${control(id)}/posiciones`, { method: 'POST', body: JSON.stringify(payload) })).data,
     removePosition: async (id: string, positionId: string, operacionId: string) =>
       (await request<{ data: ConsolidationControl }>(`${control(id)}/posiciones/${encodeURIComponent(positionId)}`, { method: 'DELETE', body: JSON.stringify({ operacion_id: operacionId }) })).data,
+    completeTemperatures: async (id: string, operacionId: string, temperaturas: { posicion_id: string; temperatura: number }[]) =>
+      (await request<{ data: ConsolidationControl }>(`${control(id)}/temperaturas`, { method: 'POST', body: JSON.stringify({ operacion_id: operacionId, temperaturas }) })).data,
     close: async (id: string, operacionId: string, version: number) =>
       (await request<{ data: ConsolidationControl }>(`${control(id)}/cerrar`, { method: 'POST', body: JSON.stringify({ operacion_id: operacionId, version }) })).data,
     async uploadPhoto(id: string, tipo: string, operacionId: string, archivo: { uri: string; name: string; type: string }): Promise<ConsolidationPhoto> {

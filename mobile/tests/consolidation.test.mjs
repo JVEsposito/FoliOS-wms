@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   checkNotApplicable, declaredPallets, fieldValue, fillNotApplicable, formatTemperature, nextFreePosition, palletsForList,
-  parsePosition, parseTemperature, positionOccupant, sectionChanges,
+  palletsWithoutTemperature, parsePosition, parseTemperature, photoRequirement, positionOccupant, sectionChanges,
 } from '../src/domain/consolidation.ts';
 
 const pallet = (numero_folio, posicion = null, estado_carga = 'cargado') => ({
@@ -68,4 +68,17 @@ test('la lista muestra primero lo que espera en el andén', () => {
 test('los tipos de pallet declarados se suman', () => {
   const values = { pallets_chep_1000: '18', pallets_taco_800: '2', pallets_yugo_1000: '' };
   assert.equal(declaredPallets((key) => values[key] ?? ''), 20);
+});
+
+test('la impresión pide la T° de pulpa de los pallets con posición', () => {
+  const withTemp = { ...pallet('B', 2), posicion: { ...pallet('B', 2).posicion, temperatura: 0.3 } };
+  assert.deepEqual(palletsWithoutTemperature([pallet('C', 3), withTemp, pallet('A', 1), pallet('D', null, 'en_anden')]).map((p) => p.numero_folio), ['A', 'C']);
+});
+
+test('el set fotográfico explica qué falta y cuándo se exige', () => {
+  const termografos = { clave: 'termografos', nombre: 'Postura de termógrafos', obligatoria: true, condicion: 'termografos', maximo: 8 };
+  const pending = [{ tipo: 'termografos', nombre: 'Postura de termógrafos', requeridas: 2, tomadas: 1 }];
+  assert.deepEqual(photoRequirement(termografos, pending, false), { text: 'Obligatoria (una por termógrafo) cuando se active el set estándar. Faltan 1 de 2.', missing: true });
+  assert.deepEqual(photoRequirement(termografos, [], true), { text: 'Obligatoria (una por termógrafo) para cerrar. Completa.', missing: false });
+  assert.equal(photoRequirement({ clave: 'altura_carga', nombre: 'Altura', obligatoria: false, condicion: null, maximo: 5 }, [], true).text, 'Opcional: solo si aplica.');
 });

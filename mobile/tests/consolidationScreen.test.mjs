@@ -25,7 +25,11 @@ const catalog = {
     { clave: 'horometro', etiqueta: 'Horómetro en buen estado (thermos)', aplica: 'thermo' },
   ],
   cierre: [{ clave: 'cajas_guia', etiqueta: 'Cajas totales guía de despacho', tipo: 'entero' }],
-  tipos_foto: [{ clave: 'general', nombre: 'Fotos del despacho', obligatoria: false, maximo: 20 }],
+  tipos_foto: [
+    { clave: 'patente', nombre: 'Placa patente', obligatoria: true, condicion: null, maximo: 3 },
+    { clave: 'general', nombre: 'Otras fotos del despacho', obligatoria: false, condicion: null, maximo: 20 },
+  ],
+  exige_fotos: false,
 };
 const pallet = (numero_folio, estado_carga, posicion = null) => ({
   asignacion_id: `a-${numero_folio}`, folio_id: `f-${numero_folio}`, numero_folio, estado_carga, cargado_at: null, especie: 'Cereza', variedad: 'Santina', cajas_folio: 80,
@@ -38,12 +42,14 @@ const controlFixture = (pallets, extra = {}) => ({
   inspeccion: { puertas: null, horometro: null }, cierre: { cajas_guia: 240 }, pallets,
   totales: { pallets: pallets.length, cargados: pallets.filter((p) => p.estado_carga === 'cargado').length, en_anden: pallets.filter((p) => p.estado_carga === 'en_anden').length, en_camara: 0, posicionados: pallets.filter((p) => p.posicion).length, con_temperatura: 0, cajas_pcd: 0, cajas_carga: 240 },
   iniciado_at: null, iniciado_por: 'Consolidador', cerrado_at: null, cerrado_por: null, reaperturas: [], fotos: [],
-  faltantes_cierre: ['Indica si es contenedor o thermo.'], ...extra,
+  faltantes_cierre: ['Indica si es contenedor o thermo.'],
+  faltantes_impresion: pallets.some((p) => p.posicion && p.posicion.temperatura === null) ? ['Falta la T° de pulpa de pallets.'] : [],
+  fotos_pendientes: [{ tipo: 'patente', nombre: 'Placa patente', requeridas: 1, tomadas: 0 }], ...extra,
 });
 
 function harness() {
   const cache = new Map();
-  const calls = { loads: 0, start: [], position: [], save: [] };
+  const calls = { loads: 0, start: [], position: [], save: [], temperatures: [] };
   const storage = new Map();
   let sequence = 0;
   let failNextPosition = false;
@@ -67,6 +73,13 @@ function harness() {
       current = controlFixture(current.pallets.map((p) => (p.numero_folio === payload.numero_folio
         ? { ...p, estado_carga: 'cargado', posicion: { id: `p-${p.numero_folio}`, posicion: payload.posicion, codigo_pe: payload.codigo_pe, cajas: payload.cajas ?? 80, temperatura: payload.temperatura, registrado_at: null, registrado_por: 'Consolidador' } }
         : p)), { encabezado: current.encabezado, inspeccion: current.inspeccion, version: current.version });
+      return current;
+    },
+    completeTemperatures: async (_, operation, temperaturas) => {
+      calls.temperatures.push(JSON.parse(JSON.stringify({ operation, temperaturas })));
+      const values = Object.fromEntries(temperaturas.map((t) => [t.posicion_id, t.temperatura]));
+      current = controlFixture(current.pallets.map((p) => (p.posicion && values[p.posicion.id] !== undefined ? { ...p, posicion: { ...p.posicion, temperatura: values[p.posicion.id] } } : p)),
+        { encabezado: current.encabezado, inspeccion: current.inspeccion, version: current.version });
       return current;
     },
     save: async (_, payload) => {
@@ -202,5 +215,25 @@ test('la inspección marca «no aplica» lo del otro tipo de camión y el cierre
     await h.press('Cierre');
     assert.match(h.text(), /Para cerrar la planilla falta/);
     assert.equal(h.pressable('Cerrar planilla R-24').props.disabled, true);
+  } finally { await h.unmount(); }
+});
+
+test('la T° de pulpa no bloquea el cierre pero se completa antes de imprimir', async () => {
+  const h = harness();
+  try {
+    await h.mount();
+    await h.press('Iniciar planilla R-24', { containing: true });
+    // A1 ya tiene posición y no tiene temperatura.
+    assert.match(h.text(), /T° de pulpa pendiente \(1\)/);
+    await h.press('Cierre');
+    assert.match(h.text(), /Para imprimir falta/);
+    await h.press('Completar T° de pulpa para imprimir');
+    await h.input('T° de pulpa de A1', '-0,2');
+    await h.press('Guardar temperaturas');
+    assert.deepEqual(h.calls.temperatures[0].temperaturas, [{ posicion_id: 'p-A1', temperatura: -0.2 }]);
+    assert.match(h.text(), /la planilla ya se puede imprimir/);
+    assert.doesNotMatch(h.text(), /T° de pulpa pendiente/);
+    await h.press('Fotos');
+    assert.match(h.text(), /Obligatoria cuando se active el set estándar\. Faltan 1 de 1\./);
   } finally { await h.unmount(); }
 });

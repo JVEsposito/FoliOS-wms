@@ -1,4 +1,4 @@
-import { ESTADOS_PALLET, gruposEncabezado, orientacion, palletsOrdenados, temperatura, textoValor, tonoInspeccion } from './shared/dispatch-control.js';
+import { ESTADOS_PALLET, gruposEncabezado, orientacion, palletsOrdenados, palletsSinTemperatura, temperatura, textoValor, tonoInspeccion } from './shared/dispatch-control.js';
 
 const byId = (id) => document.getElementById(id);
 const elements = {
@@ -7,13 +7,14 @@ const elements = {
     filters: byId('dcxFilters'), rows: byId('dcxRows'), count: byId('dcxCount'), page: byId('dcxPage'), prev: byId('dcxPrev'), next: byId('dcxNext'),
     detail: byId('dcxDetail'), detailState: byId('dcxDetailState'), detailTitle: byId('dcxDetailTitle'), detailMeta: byId('dcxDetailMeta'),
     download: byId('dcxDownload'), missing: byId('dcxMissing'), kpis: byId('dcxKpis'), header: byId('dcxHeader'), inspection: byId('dcxInspection'),
-    pallets: byId('dcxPallets'), closing: byId('dcxClosing'), photos: byId('dcxPhotos'),
+    pallets: byId('dcxPallets'), closing: byId('dcxClosing'), photos: byId('dcxPhotos'), photosPending: byId('dcxPhotosPending'),
+    print: byId('dcxPrint'), printText: byId('dcxPrintText'), printForm: byId('dcxPrintForm'), printTemps: byId('dcxPrintTemps'), printError: byId('dcxPrintError'),
     reopen: byId('dcxReopen'), reopenForm: byId('dcxReopenForm'), reopenError: byId('dcxReopenError'),
     history: byId('dcxHistory'), historyList: byId('dcxHistoryList'),
     loading: byId('officeLoading'), loadingText: byId('officeLoadingText'), toasts: byId('officeToasts'),
 };
 const keys = { token: 'estiba_wms_office_token', identity: 'estiba_wms_office_identity' };
-const state = { token: localStorage.getItem(keys.token), identity: readJson(keys.identity), catalog: null, page: 1, lastPage: 1, control: null, photoUrls: [], reopenOperation: null };
+const state = { token: localStorage.getItem(keys.token), identity: readJson(keys.identity), catalog: null, page: 1, lastPage: 1, control: null, photoUrls: [], reopenOperation: null, tempsOperation: null };
 
 class ApiError extends Error {
     constructor(message, status = 0) { super(message); this.status = status; }
@@ -154,6 +155,13 @@ function renderControl(control) {
     elements.closing.innerHTML = closingRows.length ? definitionList(closingRows) : '<p class="dcx-muted">Sin datos de cierre.</p>';
 
     renderPhotos(control.fotos);
+    const pending = control.fotos_pendientes || [];
+    elements.photosPending.hidden = pending.length === 0;
+    elements.photosPending.textContent = pending.length
+        ? `Pendientes del set fotográfico: ${pending.map((photo) => (photo.requeridas > 1 ? `${photo.nombre} (${photo.tomadas} de ${photo.requeridas})` : photo.nombre)).join(', ')}.${catalog.exige_fotos ? '' : ' Se exigirán cuando se active el set estándar.'}`
+        : '';
+    elements.print.hidden = true;
+    state.tempsOperation = null;
     const canReopen = state.identity?.puede_reabrir_control_despacho === true && control.estado === 'cerrado';
     elements.reopen.hidden = !canReopen;
     elements.reopenForm.reset();
@@ -169,7 +177,8 @@ async function renderPhotos(photos) {
         elements.photos.innerHTML = '<p class="dcx-muted">Sin fotos. Son opcionales mientras no se defina el set fotográfico estándar.</p>';
         return;
     }
-    elements.photos.innerHTML = photos.map((photo) => `<button type="button" class="dcx-photo" data-url="${escapeHtml(photo.url)}" aria-label="Abrir foto ${photo.orden}"><img alt="" data-src="${escapeHtml(photo.miniatura_url)}"><span>${formatDate(photo.subida_at)}</span></button>`).join('');
+    const names = Object.fromEntries((state.catalog?.tipos_foto || []).map((type) => [type.clave, type.nombre]));
+    elements.photos.innerHTML = photos.map((photo) => `<button type="button" class="dcx-photo" data-url="${escapeHtml(photo.url)}" aria-label="Abrir foto: ${escapeHtml(names[photo.tipo] || photo.tipo)} ${photo.orden}"><img alt="" data-src="${escapeHtml(photo.miniatura_url)}"><strong>${escapeHtml(names[photo.tipo] || photo.tipo)}</strong><span>${formatDate(photo.subida_at)}</span></button>`).join('');
     for (const image of elements.photos.querySelectorAll('img[data-src]')) {
         try {
             const blob = await (await request(image.dataset.src, { accept: 'image/*' })).blob();
@@ -182,9 +191,26 @@ async function renderPhotos(photos) {
     }
 }
 
+function showPrintRequirements(control) {
+    const missing = palletsSinTemperatura(control.pallets);
+    const canComplete = state.identity?.puede_registrar_control_despacho === true;
+    elements.print.hidden = false;
+    elements.printError.textContent = '';
+    elements.printText.textContent = canComplete
+        ? `${control.faltantes_impresion.join(' ')} Complétala para descargar.${control.estado === 'cerrado' ? ' Con la planilla cerrada solo se completan las que faltan.' : ''}`
+        : `${control.faltantes_impresion.join(' ')} Pide a consolidación completarla desde la PDA.`;
+    elements.printForm.hidden = !canComplete;
+    elements.printTemps.innerHTML = missing.map((pallet) => `
+        <label><span>Pos. ${pallet.posicion.posicion} · ${escapeHtml(pallet.numero_folio)}</span>
+        <input name="${escapeHtml(pallet.posicion.id)}" inputmode="decimal" maxlength="6" placeholder="°C" autocomplete="off" aria-label="T° de pulpa de ${escapeHtml(pallet.numero_folio)}"></label>`).join('');
+    elements.print.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    elements.printTemps.querySelector('input')?.focus();
+}
+
 async function download() {
     const control = state.control;
     if (!control) return;
+    if (control.faltantes_impresion?.length) { showPrintRequirements(control); return; }
     setBusy(true, 'Generando planilla…');
     try {
         const response = await request(`/api/control-despacho/controles/${encodeURIComponent(control.id)}/planilla.xlsx`, { accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -197,11 +223,48 @@ async function download() {
         link.remove();
         window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (error) {
-        toast(error.message, true);
+        if (error.status === 422) {
+            // Otro equipo dejó la planilla incompleta para imprimir: se recarga y se pide completar.
+            try { renderControl((await api(`/api/control-despacho/controles/${encodeURIComponent(control.id)}`)).data); } catch {}
+            if (state.control?.faltantes_impresion?.length) showPrintRequirements(state.control); else toast(error.message, true);
+        } else {
+            toast(error.message, true);
+        }
     } finally {
         setBusy(false);
     }
 }
+
+elements.printForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const control = state.control;
+    elements.printError.textContent = '';
+    const temperaturas = [];
+    for (const input of elements.printTemps.querySelectorAll('input')) {
+        const text = input.value.trim().replace(',', '.');
+        if (text === '') continue;
+        const value = Number(text);
+        if (!Number.isFinite(value) || value < -10 || value > 40) { elements.printError.textContent = 'La T° de pulpa va de -10 a 40 °C.'; input.focus(); return; }
+        temperaturas.push({ posicion_id: input.name, temperatura: Math.round(value * 10) / 10 });
+    }
+    if (!temperaturas.length) { elements.printError.textContent = 'Ingresa las temperaturas que faltan.'; return; }
+    state.tempsOperation ||= uuid();
+    setBusy(true, 'Guardando temperaturas…');
+    try {
+        const result = await api(`/api/control-despacho/controles/${encodeURIComponent(control.id)}/temperaturas`, {
+            method: 'POST', body: JSON.stringify({ operacion_id: state.tempsOperation, temperaturas }),
+        });
+        renderControl(result.data);
+        setBusy(false);
+        if (result.data.faltantes_impresion.length) showPrintRequirements(result.data);
+        else { toast('Temperaturas guardadas.'); await download(); }
+    } catch (error) {
+        elements.printError.textContent = error.message;
+        if (error.status === 409 || error.status === 422) state.tempsOperation = null;
+    } finally {
+        setBusy(false);
+    }
+});
 
 elements.filters.addEventListener('submit', (event) => { event.preventDefault(); void loadList(1); });
 elements.prev.addEventListener('click', () => void loadList(state.page - 1));
