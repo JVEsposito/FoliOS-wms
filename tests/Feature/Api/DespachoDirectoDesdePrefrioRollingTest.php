@@ -172,12 +172,12 @@ class DespachoDirectoDesdePrefrioRollingTest extends TestCase
         ]);
 
         if ($reingresoPendiente) {
-            $anterior = $carga->replicate(['codigo']);
+            $anterior = $carga->replicate(['codigo', 'numero_orden_externa']);
             $anterior->fill(['codigo' => 'CAR-ANTERIOR', 'estado' => EstadoCarga::Cancelada])->save();
             ReingresoFolioCamara::create([
                 'temporada_id' => $temporada->id, 'folio_id' => $folio->id,
                 'folio_pendiente_id' => $folio->id, 'carga_id' => $anterior->id,
-                'origen' => 'retorno_carga', 'estado' => 'pendiente',
+                'origen' => 'retorno_carga', 'estado' => 'pendiente', 'motivo' => 'Retorno del despacho anterior',
                 'registrado_por_user_id' => $supervisor->id, 'registrado_at' => now(),
             ]);
         }

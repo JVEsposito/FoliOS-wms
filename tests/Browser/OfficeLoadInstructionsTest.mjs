@@ -62,6 +62,7 @@ test('prepara dos instructivos en la misma orden y conserva el grupo en escaneo,
         await page.waitForFunction(() => document.querySelector('#loadTotalFolios').textContent === '1 / 14');
         assert.equal(writes[0].instructivo_embarque_id, 'instr-1');
         await page.locator('[data-select-instruction="instr-2"]').click();
+        await page.locator('[data-available-folio="PAL-002"]').waitFor();
         assert.match(await page.locator('#availableFolioTableBody').textContent(), /Sin ubicación/);
         assert.match(await page.locator('#availableFolioTableBody').textContent(), /Por ubicar/);
         assert.doesNotMatch(await page.locator('#availableFolioTableBody').textContent(), /En túnel/);
