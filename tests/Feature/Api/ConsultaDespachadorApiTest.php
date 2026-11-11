@@ -35,12 +35,12 @@ class ConsultaDespachadorApiTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_consulta_solo_folios_disponibles_ubicados_y_sin_carga(): void
+    public function test_consulta_folios_con_y_sin_ubicacion_y_excluye_los_ya_reservados(): void
     {
         $despachador = $this->despachador();
         $folio = $this->crearFolioUbicado('FOLIO-DISPONIBLE-GUI');
 
-        Folio::create([
+        $sinUbicacion = Folio::create([
             'numero_folio' => 'FOLIO-SIN-UBICACION-GUI',
             'tipo_bulto' => TipoBulto::Pallet,
             'estado_operacional' => EstadoOperacionalFolio::Disponible,
@@ -51,11 +51,13 @@ class ConsultaDespachadorApiTest extends TestCase
         $this->actingAs($despachador, 'sanctum')
             ->getJson('/api/cargas/folios-disponibles')
             ->assertOk()
-            ->assertJsonCount(1, 'data')
+            ->assertJsonCount(2, 'data')
             ->assertJsonPath('data.0.numero_folio', $folio->numero_folio)
             ->assertJsonPath('data.0.ubicacion.camara.codigo', 'CAM-01')
             ->assertJsonPath('data.0.ubicacion.posicion.etiqueta', 'B01-P01-N1')
-            ->assertJsonPath('meta.total', 1);
+            ->assertJsonPath('data.1.id', $sinUbicacion->id)
+            ->assertJsonPath('data.1.ubicacion', null)
+            ->assertJsonPath('meta.total', 2);
 
         $cargaId = $this->actingAs($despachador, 'sanctum')
             ->postJson('/api/cargas', [])
@@ -72,7 +74,14 @@ class ConsultaDespachadorApiTest extends TestCase
         $this->actingAs($despachador, 'sanctum')
             ->getJson('/api/cargas/folios-disponibles')
             ->assertOk()
-            ->assertJsonCount(0, 'data');
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $sinUbicacion->id)
+            ->assertJsonPath('data.0.ubicacion', null);
+        $this->postJson("/api/cargas/{$cargaId}/folios", [
+            'folios' => [$sinUbicacion->numero_folio],
+            'version_esperada' => 2,
+        ])->assertOk();
+        $this->getJson('/api/cargas/folios-disponibles')->assertOk()->assertJsonCount(0, 'data');
     }
 
     public function test_busca_folios_disponibles_por_datos_descriptivos_y_ubicacion(): void
@@ -108,7 +117,7 @@ class ConsultaDespachadorApiTest extends TestCase
             ->assertJsonCount(0, 'data');
     }
 
-    public function test_excluye_folios_en_posiciones_o_camaras_inactivas(): void
+    public function test_la_consulta_comercial_no_depende_del_estado_de_la_posicion_o_camara(): void
     {
         $despachador = $this->despachador();
         $folio = $this->crearFolioUbicado('FOLIO-UBICACION-INACTIVA');
@@ -119,15 +128,19 @@ class ConsultaDespachadorApiTest extends TestCase
         $this->actingAs($despachador, 'sanctum')
             ->getJson('/api/cargas/folios-disponibles')
             ->assertOk()
-            ->assertJsonCount(0, 'data');
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $folio->id);
 
+        $this->assertSame(EstadoPosicion::FueraDeServicio, $ubicacion->posicion->fresh()->estado);
         $ubicacion->posicion->update(['estado' => EstadoPosicion::Activa]);
         $ubicacion->posicion->camara->update(['estado' => EstadoCamara::Inactiva]);
 
         $this->actingAs($despachador, 'sanctum')
             ->getJson('/api/cargas/folios-disponibles')
             ->assertOk()
-            ->assertJsonCount(0, 'data');
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $folio->id);
+        $this->assertSame(EstadoCamara::Inactiva, $ubicacion->posicion->camara->fresh()->estado);
     }
 
     public function test_pagina_y_busca_el_catalogo_de_ordenes_en_el_servidor(): void
