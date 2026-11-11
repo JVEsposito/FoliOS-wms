@@ -11,6 +11,7 @@ use App\Enums\HabilitacionAlmacenamientoFolio;
 use App\Enums\ResultadoValidacionPallet;
 use App\Enums\TipoBulto;
 use App\Exceptions\ConflictoOperacion;
+use App\Http\Requests\AnularValidacionPalletRequest;
 use App\Models\CambioAtributosPt;
 use App\Models\CargaFolio;
 use App\Models\Folio;
@@ -87,6 +88,7 @@ class ServicioCambioAtributosPt
         $proceso = $this->procesoPrefrioActivo($folio);
         $validacion = $this->validacionAprobada($folio);
         $bloqueo = $this->motivoBloqueo($folio);
+        $noAnulable = app(ServicioAnulacionAdministrativaValidacion::class)->motivoNoAnulable($folio, $validacion);
 
         return [
             'folio' => [
@@ -124,6 +126,9 @@ class ServicioCambioAtributosPt
             'motivo_bloqueo' => $bloqueo,
             'puede_cambiar_producto' => $bloqueo === null && $validacion !== null,
             'puede_cambiar_condicion' => $bloqueo === null && $proceso === null,
+            'puede_anular' => $noAnulable === null,
+            'motivo_no_anulable' => $noAnulable,
+            'categorias_anulacion' => AnularValidacionPalletRequest::CATEGORIAS,
             'condiciones' => collect(self::CONDICIONES)->map(fn (CondicionTermicaFolio $condicion): string => $condicion->value)->all(),
             'historial' => CambioAtributosPt::query()
                 ->where('folio_id', $folio->id)

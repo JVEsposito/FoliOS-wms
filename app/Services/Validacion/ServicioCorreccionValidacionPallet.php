@@ -2,7 +2,6 @@
 
 namespace App\Services\Validacion;
 
-use App\Enums\CondicionTermicaFolio;
 use App\Enums\DominioTransicionOperacional;
 use App\Enums\EstadoOperacionalFolio;
 use App\Enums\EstadoValidacionPallet;
@@ -11,7 +10,6 @@ use App\Enums\TipoBulto;
 use App\Exceptions\ConflictoOperacion;
 use App\Models\CorreccionValidacionPallet;
 use App\Models\Folio;
-use App\Models\ProcesoPrefrioFolio;
 use App\Models\RepaletizajeDetalle;
 use App\Models\User;
 use App\Models\ValidacionPallet;
@@ -113,7 +111,7 @@ class ServicioCorreccionValidacionPallet
             $cambiaNumero = $numeroFolio !== $validacionBloqueada->numero_folio;
             if ($cambiaNumero) {
                 if (! $this->puedeCambiarNumeroFolio($folio)) {
-                    throw new ConflictoOperacion('Solo se puede cambiar el número de un folio activo antes de cargarlo a prefrío.');
+                    throw new ConflictoOperacion('Solo se puede cambiar el número de un folio activo que siga en la planta (no despachado, anulado ni agotado).');
                 }
                 $numeroIntento = $this->reservarIntentoParaNuevoNumero($folio, $numeroFolio);
             }
@@ -304,12 +302,19 @@ class ServicioCorreccionValidacionPallet
         return $this->motorTransiciones->ejecutar($comando, $accion);
     }
 
+    /**
+     * El número se corrige mientras el bulto siga en la planta, también después de prefrío:
+     * todo lo operativo apunta al folio por su id, y el número anterior queda en la auditoría
+     * de la corrección y en la copia de la validación. Hay que reimprimir la etiqueta.
+     */
     public function puedeCambiarNumeroFolio(Folio $folio): bool
     {
-        return $folio->activo
-            && $folio->estado_operacional === EstadoOperacionalFolio::PendientePrefrio
-            && $folio->condicion_termica === CondicionTermicaFolio::PendientePrefrio
-            && ! ProcesoPrefrioFolio::query()->where('folio_id', $folio->id)->exists();
+        return $folio->activo && ! in_array($folio->estado_operacional, [
+            EstadoOperacionalFolio::Despachado,
+            EstadoOperacionalFolio::Anulado,
+            EstadoOperacionalFolio::RetiradoDefinitivo,
+            EstadoOperacionalFolio::Agotado,
+        ], true);
     }
 
     private function reservarIntentoParaNuevoNumero(Folio $folio, string $numeroFolio): int

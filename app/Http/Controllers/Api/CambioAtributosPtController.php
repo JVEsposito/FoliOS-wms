@@ -4,10 +4,13 @@ namespace App\Http\Controllers\Api;
 
 use App\Exceptions\ConflictoOperacion;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\AnularValidacionPtAdministrativaRequest;
 use App\Http\Requests\CambiarCondicionTermicaPtRequest;
 use App\Http\Requests\CambiarProductoPtRequest;
+use App\Models\AnulacionValidacionPallet;
 use App\Models\Folio;
 use App\Models\ValidacionPallet;
+use App\Services\Folios\ServicioAnulacionAdministrativaValidacion;
 use App\Services\Folios\ServicioCambioAtributosPt;
 use App\Services\Validacion\ContextoCorreccionValidacion;
 use Illuminate\Http\JsonResponse;
@@ -54,6 +57,28 @@ class CambioAtributosPtController extends Controller
         $cambio = $servicio->cambiarCondicionTermica($folio, $request->validated(), $request->user());
 
         return $this->ficha($servicio, $cambio->folio()->firstOrFail(), 'Condición de prefrío cambiada y auditada.');
+    }
+
+    /** Anula la validación del folio, también después de prefrío o de ubicarlo en cámara. */
+    public function anular(
+        AnularValidacionPtAdministrativaRequest $request,
+        Folio $folio,
+        ServicioCambioAtributosPt $servicio,
+        ServicioAnulacionAdministrativaValidacion $anulacion,
+    ): JsonResponse {
+        $ficha = $servicio->ficha($folio);
+        $repetida = AnulacionValidacionPallet::query()->where('operacion_id', $request->validated('operacion_id'))->exists();
+        if (! $repetida && ! $ficha['puede_anular']) {
+            throw new ConflictoOperacion($ficha['motivo_no_anulable']);
+        }
+        $validacion = ValidacionPallet::query()->find($ficha['validacion_id'])
+            ?? AnulacionValidacionPallet::query()->where('operacion_id', $request->validated('operacion_id'))->firstOrFail()->validacion;
+        $resultado = $anulacion->anular($folio, $validacion, $request->validated(), $request->user());
+        $numero = $resultado['anulacion']->numero_folio;
+
+        return $this->ficha($servicio, $folio->refresh(), $resultado['numero_archivado']
+            ? "Validación del folio {$numero} anulada. El número {$numero} quedó libre para validar el pallet correcto."
+            : "Validación del folio {$numero} anulada. Ese número puede volver a validarse.");
     }
 
     private function ficha(ServicioCambioAtributosPt $servicio, Folio $folio, ?string $mensaje = null): JsonResponse

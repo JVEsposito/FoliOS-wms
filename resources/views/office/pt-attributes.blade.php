@@ -85,6 +85,20 @@
                         </section>
                     </div>
 
+                    <section class="panel pta-card pta-annul" aria-labelledby="ptaAnnulTitle">
+                        <p class="eyebrow">ANULAR VALIDACIÓN</p>
+                        <h3 id="ptaAnnulTitle">Anular una validación errónea</h3>
+                        <p>Para un pallet que no existe, quedó duplicado o se validó con datos que no corresponden. El folio queda anulado con todo su historial, libera su posición y, si ya tuvo actividad, su número queda libre para validar el pallet correcto.</p>
+                        <form class="pta-annul__form" id="ptaAnnulForm" novalidate>
+                            <label><span>Categoría *</span><select name="motivo_categoria" required><option value="">Seleccionar</option></select></label>
+                            <label><span>Motivo de la anulación *</span><textarea name="motivo" rows="3" maxlength="2000" placeholder="Qué pasó y cómo se comprobó" required></textarea></label>
+                            <label class="pta-annul__confirm"><input type="checkbox" name="confirmar"><span id="ptaAnnulConfirmText">Confirmo que esta validación es errónea y debe anularse.</span></label>
+                            <p class="form-error" id="ptaAnnulError" role="alert"></p>
+                            <button class="danger-button" id="ptaAnnulSubmit" type="submit">Anular validación</button>
+                        </form>
+                        <p class="pta-card__blocked" id="ptaAnnulBlocked" hidden></p>
+                    </section>
+
                     <section class="panel pta-history" aria-labelledby="ptaHistoryTitle">
                         <p class="eyebrow">TRAZABILIDAD</p>
                         <h3 id="ptaHistoryTitle">Cambios de administración</h3>

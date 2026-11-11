@@ -282,8 +282,8 @@ export function createValidationCorrection({ api, setBusy = () => {}, toast = ()
         form.elements.numero_folio.value = draft.numero_folio;
         form.elements.numero_folio.readOnly = context.puede_cambiar_numero_folio !== true;
         document.getElementById('vcFolioHint').textContent = form.elements.numero_folio.readOnly
-            ? 'El número se puede corregir mientras el bulto esté activo y antes de cargarlo a prefrío.'
-            : 'Si se digitó mal, escribe el número que aparece en la etiqueta del bulto.';
+            ? 'El número se puede corregir mientras el bulto esté activo y siga en la planta.'
+            : 'Si se digitó mal, escribe el número que aparece en la etiqueta del bulto. Luego reimprime la etiqueta.';
         for (const name of ['fecha_hora_validacion', 'fecha_embalaje']) form.elements[name].value = draft[name];
         form.elements.tipo_bulto.value = draft.tipo_bulto;
         form.elements.linea_proceso.value = draft.linea_proceso;

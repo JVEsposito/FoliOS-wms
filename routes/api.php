@@ -179,6 +179,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/folios/{folio}/producto', [CambioAtributosPtController::class, 'contextoProducto'])->whereUuid('folio');
         Route::post('/folios/{folio}/producto', [CambioAtributosPtController::class, 'cambiarProducto'])->whereUuid('folio');
         Route::post('/folios/{folio}/condicion-termica', [CambioAtributosPtController::class, 'cambiarCondicionTermica'])->whereUuid('folio');
+        Route::post('/folios/{folio}/anular', [CambioAtributosPtController::class, 'anular'])->whereUuid('folio');
     });
     Route::get('/administracion/integridad-operacional', [IntegridadOperacionalController::class, 'index'])
         ->middleware('can:consultar-integridad-operacional');

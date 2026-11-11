@@ -15,8 +15,34 @@ puede cambiar un folio despachado, anulado, retirado, agotado ni inactivo.
 | Cajas y composición por CSG (con lote y proceso) | Mismo diálogo y mismas reglas que la PDA |
 | Tipo de bulto, línea, turno, fechas | Mismo diálogo |
 | Estado de prefrío | Prefrío aprobado, condición heredada, pendiente de prefrío, requiere reproceso o retenido |
+| Número de folio | Mismo diálogo. Se corrige también después de prefrío o ya en cámara, mientras el bulto siga en la planta |
+| Anular la validación | Tarjeta «Anular validación», con categoría, motivo y confirmación |
 
-El número de folio sigue la regla de Validación: solo se cambia antes de cargarlo a prefrío.
+El número de folio se corrige (aquí y en Validación) mientras el folio esté activo y no despachado,
+anulado, retirado ni agotado. Todo lo operativo apunta al folio por su id (ubicación, prefrío,
+movimientos, cargas), así que el folio conserva su historia. El número anterior queda en la
+auditoría de la corrección. Después hay que **reimprimir la etiqueta**.
+
+### Anular una validación
+
+Sirve para un pallet que no existe, quedó duplicado o se validó con datos que no corresponden.
+
+- **Sin actividad todavía** (pendiente de prefrío, sin ubicación, carga ni movimientos): usa la
+  anulación normal de Validación. El folio queda anulado con su número, y ese número puede volver a
+  validarse.
+- **Con actividad** (después de prefrío, ubicado en cámara, con movimientos): el folio queda
+  anulado e inactivo **con todo su historial**. Se libera su posición en el plano y se cancelan sus
+  labores pendientes. Su número se archiva con el sufijo `-ANUL-n`, así el pallet correcto se
+  valida con ese número como un folio nuevo, sin heredar la historia del erróneo. La anulación
+  queda en `anulaciones_validacion_pallet` con una copia completa: validación, folio, ubicación,
+  procesos de prefrío y labores canceladas.
+- No se anula lo que otro proceso todavía necesita. La pantalla dice qué hacer primero si el pallet:
+  - está en una carga;
+  - está en un túnel;
+  - está en un lote SAG abierto;
+  - está retenido;
+  - participó en un repaletizaje;
+  - lo está moviendo un camarero.
 
 ### Estado de prefrío
 
@@ -63,6 +89,7 @@ normalidad.
 | GET | `/api/administracion/atributos-pt/folios?folio=…` · `/folios/{folio}` |
 | GET / POST | `/api/administracion/atributos-pt/folios/{folio}/producto` |
 | POST | `/api/administracion/atributos-pt/folios/{folio}/condicion-termica` |
+| POST | `/api/administracion/atributos-pt/folios/{folio}/anular` |
 
 Todas exigen `cambiar-atributos-pt`.
 
