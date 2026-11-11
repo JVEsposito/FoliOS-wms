@@ -273,6 +273,9 @@ class ServicioPlanDespachoDirecto
                     'El pallet ya posee una ubicación de cámara; debe ejecutarse como retiro desde cámara.',
                 );
             }
+            if (app(ServicioReingresoCamara::class)->pendiente($asignacion->folio_id, bloquear: true)) {
+                throw new ConflictoOperacion('El pallet está pendiente de reingreso a cámara; no se puede retirar desde un túnel histórico.');
+            }
 
             $prefrio = ProcesoPrefrioFolio::query()
                 ->where('folio_id', $asignacion->folio_id)
@@ -430,6 +433,11 @@ class ServicioPlanDespachoDirecto
         $directos = collect();
         foreach ($asignaciones as $asignacion) {
             $folio = $asignacion->folio;
+            // Una reserva nueva puede anteceder al reingreso. Su Prefrío
+            // anterior no demuestra que el pallet siga físicamente en túnel.
+            if ($folio?->reingresoPendiente) {
+                continue;
+            }
             $posicion = $folio?->ubicacionActual?->posicion;
 
             if (! $posicion) {
@@ -507,7 +515,7 @@ class ServicioPlanDespachoDirecto
             ->whereHas('folio', fn ($folios) => $folios
                 ->where('activo', true)
                 ->where('tipo_bulto', TipoBulto::Pallet->value))
-            ->with(['folio.ubicacionActual.posicion.camara', 'instructivo'])
+            ->with(['folio.ubicacionActual.posicion.camara', 'folio.reingresoPendiente', 'instructivo'])
             ->orderBy('asignado_at')
             ->lockForUpdate()
             ->get();

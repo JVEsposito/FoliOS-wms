@@ -675,6 +675,9 @@ class ServicioMovimientoEstiba
         if ($posicion && $tipoBulto !== TipoBulto::Material) {
             // Un pallet que volvió desde el andén o el camión cierra su reingreso.
             app(ServicioReingresoCamara::class)->cerrarPorUbicacion($folio, $movimiento, $usuario);
+            // La reserva puede anteceder a la ubicación. Activar su tarea de
+            // cámara sin confundir el ingreso con el inicio de la separación.
+            $this->servicioTareasCarga->registrarMovimiento($folio, $movimiento, $usuario, iniciarPreparacion: false);
         }
 
         if ($tipoBulto === TipoBulto::Material

@@ -1501,8 +1501,7 @@ class ServicioCarga
             EstadoOperacionalFolio::Disponible,
             EstadoOperacionalFolio::PendientePrefrio,
             EstadoOperacionalFolio::PendienteUbicacion,
-        ], true) || ($folio->tipo_bulto === TipoBulto::Saldo
-            && $folio->estado_operacional !== EstadoOperacionalFolio::Disponible)) {
+        ], true)) {
             return [
                 'codigo' => 'estado_no_disponible',
                 'mensaje' => sprintf(
@@ -1522,36 +1521,9 @@ class ServicioCarga
             ];
         }
 
-        if (app(ServicioReingresoCamara::class)->pendiente($folio->id)) {
-            return [
-                'codigo' => 'pendiente_reingreso',
-                'mensaje' => "El folio {$folio->numero_folio} está pendiente de reingreso a cámara; ubícalo antes de asignarlo a otra carga.",
-            ];
-        }
-
-        // Solo los pallets pueden quedar pendientes en túnel sin posición de cámara.
-        if (! $folio->ubicacionActual) {
-            if ($folio->estado_operacional === EstadoOperacionalFolio::Disponible
-                || $folio->tipo_bulto === TipoBulto::Saldo) {
-                return [
-                    'codigo' => 'sin_ubicacion',
-                    'mensaje' => "El folio {$folio->numero_folio} no posee una ubicación actual ni está en Prefrío.",
-                ];
-            }
-
-            return null;
-        }
-
-        $camara = $folio->ubicacionActual->posicion?->camara;
-
-        if (! $camara
-            || $camara->estado !== EstadoCamara::Activa
-            || $camara->contenido !== ContenidoCamara::Productos) {
-            return [
-                'codigo' => 'camara_no_productos',
-                'mensaje' => "El folio {$folio->numero_folio} no está ubicado en una cámara de productos.",
-            ];
-        }
+        // Esta es una reserva comercial, no un movimiento físico. La ubicación
+        // (incluido un reingreso pendiente) la resuelve cámaras; no se inventa
+        // una posición ni se habilita la extracción al reservar o publicar.
 
         return null;
     }

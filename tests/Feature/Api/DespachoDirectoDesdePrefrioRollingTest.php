@@ -16,6 +16,7 @@ use App\Models\Folio;
 use App\Models\PosicionTunelPrefrio;
 use App\Models\ProcesoPrefrio;
 use App\Models\ProcesoPrefrioFolio;
+use App\Models\ReingresoFolioCamara;
 use App\Models\ReservaCargaFolio;
 use App\Models\TareaMovimiento;
 use App\Models\TunelPrefrio;
@@ -24,13 +25,20 @@ use App\Services\Estiba\ServicioPlanesOperacionales;
 use App\Services\Prefrio\ServicioGeneracionRecepcionTunel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class DespachoDirectoDesdePrefrioRollingTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_camion_en_anden_reemplaza_recepcion_y_envia_prefrio_directo_sin_camara(): void
+    public static function origenesFisicos(): array
+    {
+        return ['en_tunel' => [false], 'en_reingreso_con_prefrio_historico' => [true]];
+    }
+
+    #[DataProvider('origenesFisicos')]
+    public function test_camion_en_anden_solo_programa_retiro_desde_un_origen_fisico_valido(bool $reingresoPendiente): void
     {
         config([
             'planificador.mode' => 'guided',
@@ -163,6 +171,16 @@ class DespachoDirectoDesdePrefrioRollingTest extends TestCase
             'carga_folio_id' => $asignacion->id,
         ]);
 
+        if ($reingresoPendiente) {
+            $anterior = $carga->replicate(['codigo', 'numero_orden_externa']);
+            $anterior->fill(['codigo' => 'CAR-ANTERIOR', 'estado' => EstadoCarga::Cancelada])->save();
+            ReingresoFolioCamara::create([
+                'temporada_id' => $temporada->id, 'folio_id' => $folio->id,
+                'folio_pendiente_id' => $folio->id, 'carga_id' => $anterior->id,
+                'origen' => 'retorno_carga', 'estado' => 'pendiente', 'motivo' => 'Retorno del despacho anterior',
+                'registrado_por_user_id' => $supervisor->id, 'registrado_at' => now(),
+            ]);
+        }
         $this->conToken($tokenOficina)
             ->postJson("/api/cargas/{$carga->id}/camion-en-anden", [
                 'operacion_id' => (string) Str::uuid(),
@@ -172,6 +190,15 @@ class DespachoDirectoDesdePrefrioRollingTest extends TestCase
             ])
             ->assertOk();
 
+        if ($reingresoPendiente) {
+            $this->assertFalse(TareaMovimiento::whereHas('planOperacional', fn ($q) => $q->where('tipo', 'despacho_directo'))
+                ->where('folio_id', $folio->id)->exists());
+            $this->assertDatabaseHas('reservas_carga_folio', ['folio_id' => $folio->id]);
+            $this->assertDatabaseHas('reingresos_folio_camara', ['folio_pendiente_id' => $folio->id, 'estado' => 'pendiente']);
+            $this->assertDatabaseCount('ubicaciones_actuales', 0);
+
+            return;
+        }
         $tareaDirecta = TareaMovimiento::query()
             ->whereHas('planOperacional', fn ($consulta) => $consulta
                 ->where('tipo', 'despacho_directo'))

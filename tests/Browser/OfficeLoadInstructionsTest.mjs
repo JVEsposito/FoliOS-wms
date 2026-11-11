@@ -42,7 +42,7 @@ test('prepara dos instructivos en la misma orden y conserva el grupo en escaneo,
             }
             if (path === '/api/cargas') return route.fulfill({ json: { data: [load] } });
             if (path === '/api/cargas/load') return route.fulfill({ json: { data: load } });
-            if (path === '/api/cargas/folios-disponibles') return route.fulfill({ json: { data: [{ id: 'PAL-002', numero_folio: 'PAL-002', tipo_bulto: 'pallet' }] } });
+            if (path === '/api/cargas/folios-disponibles') return route.fulfill({ json: { data: [{ id: 'PAL-002', numero_folio: 'PAL-002', tipo_bulto: 'pallet', estado_operacional: 'pendiente_ubicacion', ubicacion: null }] } });
             if (path === '/api/oficina/contexto') return route.fulfill({ json: { data: { temporada: null, planta: 'Fixture', avisos_cierre: [], avisos_materiales: [] } } });
             return route.fulfill({ json: { data: [] } });
         });
@@ -62,10 +62,16 @@ test('prepara dos instructivos en la misma orden y conserva el grupo en escaneo,
         await page.waitForFunction(() => document.querySelector('#loadTotalFolios').textContent === '1 / 14');
         assert.equal(writes[0].instructivo_embarque_id, 'instr-1');
         await page.locator('[data-select-instruction="instr-2"]').click();
+        await page.locator('[data-available-folio="PAL-002"]').waitFor();
+        assert.match(await page.locator('#availableFolioTableBody').textContent(), /Sin ubicación/);
+        assert.match(await page.locator('#availableFolioTableBody').textContent(), /Por ubicar/);
+        assert.doesNotMatch(await page.locator('#availableFolioTableBody').textContent(), /En túnel/);
         await page.locator('[data-available-folio="PAL-002"]').check();
         await page.locator('#addFoliosButton').click();
         await page.waitForFunction(() => document.querySelector('#loadTotalFolios').textContent === '2 / 14');
         assert.equal(writes[1].instructivo_embarque_id, 'instr-2');
+        assert.match(await page.locator('#loadDistribution').textContent(), /POR UBICAR/);
+        assert.match(await page.locator('#folioTableBody').textContent(), /Por ubicar · pendiente de cámaras/);
         assert.equal(await page.locator('.instruction-folio-heading').count(), 2);
         await page.locator('[data-segregate-folio="PAL-001"]').selectOption('instr-2');
         await page.waitForFunction(() => document.querySelectorAll('.instruction-folio-heading').length === 1);
