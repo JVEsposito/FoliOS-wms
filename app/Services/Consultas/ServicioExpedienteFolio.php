@@ -4,6 +4,7 @@ namespace App\Services\Consultas;
 
 use App\Enums\EstadoProcesoPrefrio;
 use App\Enums\TipoBulto;
+use App\Models\CambioAtributosPt;
 use App\Models\Folio;
 use App\Models\Movimiento;
 use App\Models\ProcesoPrefrioFolio;
@@ -75,6 +76,7 @@ class ServicioExpedienteFolio
             ->concat($this->eventosPrefrio($prefrio))
             ->concat($this->eventosMovimientos($movimientos))
             ->concat($this->eventosRepaletizaje($repaletizajes, $folio))
+            ->concat($this->eventosCambiosAtributos($folio))
             ->concat($eliminacion ? [[
                 'tipo' => 'eliminacion',
                 'fecha' => $eliminacion['eliminado_at'],
@@ -162,6 +164,29 @@ class ServicioExpedienteFolio
                 'repaletizajes' => $repaletizajes->count(),
             ],
         ];
+    }
+
+    /** Cambios de atributos hechos por administración, con su motivo. */
+    private function eventosCambiosAtributos(Folio $folio): array
+    {
+        $etiquetas = ['exportadora' => 'Cliente', 'marca' => 'Marca', 'variedad' => 'Variedad', 'calibre' => 'Calibre', 'envase' => 'Embalaje',
+            'categoria' => 'Categoría', 'csg' => 'CSG', 'cantidad_cajas' => 'Cajas', 'tipo_bulto' => 'Tipo de bulto', 'condicion_termica' => 'Prefrío',
+            'estado_operacional' => 'Estado'];
+
+        return CambioAtributosPt::query()->where('folio_id', $folio->id)->with('usuario:id,name')->oldest('created_at')->get()
+            ->map(fn (CambioAtributosPt $cambio): array => [
+                'tipo' => 'cambio_atributos',
+                'fecha' => $this->fecha($cambio->created_at),
+                'titulo' => $cambio->tipo === CambioAtributosPt::CONDICION_TERMICA ? 'Administración cambió el estado de prefrío' : 'Administración cambió el producto',
+                'descripcion' => $cambio->motivo,
+                'meta' => [
+                    ...collect($etiquetas)
+                        ->filter(fn (string $etiqueta, string $campo): bool => ($cambio->antes[$campo] ?? null) !== ($cambio->despues[$campo] ?? null))
+                        ->mapWithKeys(fn (string $etiqueta, string $campo): array => [$etiqueta => sprintf('%s → %s', $cambio->antes[$campo] ?? '—', $cambio->despues[$campo] ?? '—')])
+                        ->all(),
+                    ...array_filter(['Carga' => $cambio->carga_codigo, 'Administrador' => $cambio->usuario?->name]),
+                ],
+            ])->all();
     }
 
     /** @param Collection<int, ValidacionPallet> $validaciones */

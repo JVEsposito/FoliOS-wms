@@ -204,6 +204,16 @@ class AlcanceOperacionalUsuario
         );
     }
 
+    /** Solo administradores: corrige atributos de un folio PT no despachado, con motivo. */
+    public function puedeCambiarAtributosPt(User $usuario): bool
+    {
+        return $this->rolActivoEnModulo(
+            $usuario,
+            [RolUsuario::Administrador],
+            CatalogoModulosAcceso::OFICINA_ATRIBUTOS_PT,
+        );
+    }
+
     public function puedeConsultarIntegridadOperacional(User $usuario): bool
     {
         return $this->rolActivoEnModulo(
@@ -1513,6 +1523,7 @@ class AlcanceOperacionalUsuario
             'puede_consultar_accesos' => $this->puedeConsultarAccesos($usuario),
             'puede_consultar_configuracion_camaras' => $this->puedeConsultarConfiguracionCamaras($usuario),
             'puede_consultar_integridad_operacional' => $this->puedeConsultarIntegridadOperacional($usuario),
+            'puede_cambiar_atributos_pt' => $this->puedeCambiarAtributosPt($usuario),
             'puede_ejecutar_integridad_operacional' => $this->puedeEjecutarIntegridadOperacional($usuario),
             'puede_registrar_pagos_proveedores' => $this->puedeRegistrarPagosProveedores($usuario),
             'puede_consultar_costos_comex' => $this->puedeConsultarCostosComex($usuario),

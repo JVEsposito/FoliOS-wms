@@ -11,4 +11,5 @@ enum FuenteHabilitacionAlmacenamiento: string
     case ContingenciaAutorizada = 'contingencia_autorizada';
     case RegularizacionManual = 'regularizacion_manual';
     case RegularizacionExistente = 'regularizacion_existente';
+    case CorreccionAdministrativa = 'correccion_administrativa';
 }

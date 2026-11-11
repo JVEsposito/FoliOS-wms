@@ -67,6 +67,8 @@ export default defineConfig({
                 'resources/css/office-validation-annulments.css',
                 'resources/css/office-validation-correction.css',
                 'resources/js/office-validation-annulments.js',
+                'resources/css/office-pt-attributes.css',
+                'resources/js/office-pt-attributes.js',
                 'resources/css/office-validation-pending.css',
                 'resources/js/office-validation-pending.js',
                 'resources/css/office-packed-fruit.css',

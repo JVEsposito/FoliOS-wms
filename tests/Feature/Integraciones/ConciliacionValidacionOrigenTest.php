@@ -392,6 +392,38 @@ class ConciliacionValidacionOrigenTest extends TestCase
         $this->assertSame('cuadrado', $caso->fresh()->estado);
     }
 
+    public function test_cambio_de_atributos_de_administracion_queda_cuadrado_frente_a_planta(): void
+    {
+        $this->leer();
+        $caso = $this->validar();
+        $this->assertSame('pendiente', $caso->estado);
+        $folioId = Folio::where('numero_folio', '000123')->value('id');
+        $this->withToken($this->usuario->createToken('oficina-prueba', ['oficina'])->plainTextToken);
+        $payload = ['operacion_id' => (string) Str::uuid(), 'tipo_bulto' => 'pallet', 'cantidad_cajas' => 238,
+            'linea_proceso' => 1, 'turno' => 'A', 'articulo_validacion_id' => $this->catalogo['articulo_validacion_id'],
+            'origen_validacion_id' => $this->catalogo['origen_validacion_id'], 'categoria_validacion_id' => $this->catalogo['categoria_validacion_id'],
+            'motivo_correccion' => 'Conteo físico de administración: 238 cajas'];
+
+        $this->postJson("/api/administracion/atributos-pt/folios/{$folioId}/producto", $payload)->assertOk()
+            ->assertJsonPath('data.folio.cantidad_cajas', 238);
+        $caso->refresh();
+        // Planta sigue informando 240 cajas, pero administración aceptó 238 como lo correcto.
+        $this->assertSame('diferente', $caso->comparacion['cajas']['estado']);
+        $this->assertSame('cuadrado', $caso->estado);
+        $this->assertNotNull($caso->aceptado_datos_hash);
+        $this->assertDatabaseHas('eventos_conciliacion_validacion', ['conciliacion_id' => $caso->id,
+            'tipo' => 'ajuste_administrador', 'user_id' => $this->usuario->id, 'comentario' => $payload['motivo_correccion']]);
+
+        // Una lectura posterior de planta con los mismos valores no lo reabre.
+        $this->leer();
+        $this->assertSame('cuadrado', $caso->fresh()->estado);
+
+        // Si lo validado cambia otra vez, la aceptación ya no aplica.
+        $this->putJson('/api/validacion/pallets/'.$caso->validacion_pallet_id.'/corregir', [...$payload,
+            'operacion_id' => (string) Str::uuid(), 'cantidad_cajas' => 237])->assertOk();
+        $this->assertSame('pendiente', $caso->fresh()->estado);
+    }
+
     public function test_incorpora_validaciones_anteriores_sin_inventar_una_copia_al_validar(): void
     {
         config(['integraciones.stock_pt.habilitada' => false]);

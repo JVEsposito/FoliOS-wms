@@ -213,6 +213,18 @@ class EstructuraOficinaTest extends TestCase
         }
     }
 
+    public function test_cambio_de_atributos_pt_exporta_su_pantalla(): void
+    {
+        $html = $this->get('/oficina/administracion/atributos-pt')->assertOk()->getContent();
+        foreach (['ptaSearch', 'ptaThermalForm', 'ptaProductButton', 'validationCorrectionDialog'] as $id) {
+            $this->assertStringContainsString('id="'.$id.'"', $html);
+        }
+        if (getenv('ESTIBA_EXPORTAR_UI_TESTS') === '1') {
+            File::ensureDirectoryExists(storage_path('app/ui/oficina'));
+            File::put(storage_path('app/ui/oficina/atributos-pt.html'), $html);
+        }
+    }
+
     public function test_inspeccion_sag_exporta_el_aviso_de_carga(): void
     {
         $html = $this->get('/oficina/frigorifico/inspeccion-sag')->assertOk()->getContent();
