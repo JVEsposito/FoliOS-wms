@@ -102,6 +102,13 @@ class ServicioConciliacionValidacion
                 // Una corrección autorizada cambió lo validado y ya no coincide con la copia fija.
                 $estado = 'pendiente';
             }
+            // Administración aceptó estos valores como correctos frente a planta: siguen cuadrados
+            // mientras lo validado no vuelva a cambiar.
+            $aceptado = $caso?->aceptado_datos_hash !== null && ! $cambioFolio
+                && hash_equals($caso->aceptado_datos_hash, $this->huella($datos));
+            if ($aceptado && $diferente) {
+                $estado = 'cuadrado';
+            }
             $anterior = $caso ? $this->respaldo($caso) : null;
             $caso ??= new ConciliacionValidacionOrigen([
                 'temporada_id' => $validacion->temporada_id, 'validacion_pallet_id' => $validacion->id,
@@ -128,6 +135,43 @@ class ServicioConciliacionValidacion
                     ], $actor, $correccion['motivo'] ?? null);
                 }
             }
+
+            return $caso;
+        }, 3);
+    }
+
+    /**
+     * Un cambio de atributos hecho por administración se acepta como la verdad: si lo validado
+     * difiere de la copia de planta, el caso queda cuadrado y lo seguirá estando mientras no
+     * cambie otra vez. El evento conserva el antes, el después y el motivo.
+     */
+    public function aceptarCambioAdministrativo(ValidacionPallet $validacion, User $usuario, string $motivo): ?ConciliacionValidacionOrigen
+    {
+        $caso = $this->registrar($validacion, 'correccion_autorizada');
+        if (! $caso?->exists) {
+            return $caso;
+        }
+
+        return DB::transaction(function () use ($caso, $validacion, $usuario, $motivo): ConciliacionValidacionOrigen {
+            $caso = ConciliacionValidacionOrigen::query()->lockForUpdate()->findOrFail($caso->id);
+            $validacion = ValidacionPallet::query()->findOrFail($validacion->id);
+            $datos = $this->comparador->datosValidacion($validacion->snapshot, $validacion->cantidad_cajas);
+            $anterior = $this->respaldo($caso);
+            $diferente = collect($caso->comparacion ?? [])->contains('estado', 'diferente');
+            $caso->fill([
+                'aceptado_datos_hash' => $this->huella($datos),
+                'aceptado_at' => now(),
+                'aceptado_por_user_id' => $usuario->id,
+            ]);
+            if ($diferente) {
+                $caso->fill(['estado' => 'cuadrado', 'tuvo_diferencias' => true, 'cuadrado_at' => $caso->cuadrado_at ?? now()]);
+            }
+            $caso->version = ($caso->version ?? 0) + 1;
+            $caso->save();
+            $this->evento($caso, 'ajuste_administrador', [
+                'antes' => $anterior, 'despues' => $this->respaldo($caso), 'planta' => $caso->planta_actual,
+                'lectura_id' => $caso->lectura_id, 'lectura_at' => $caso->lectura_at?->toAtomString(),
+            ], $usuario, $motivo);
 
             return $caso;
         }, 3);

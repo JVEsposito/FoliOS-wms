@@ -73,6 +73,7 @@
             ['key' => 'maestros-temporada', 'module' => 'administracion.maestros-temporada', 'label' => 'Maestros de temporada', 'href' => '/oficina/administracion/maestros-temporada', 'permissions' => ['puede_administrar_catalogos_validacion']],
             ['key' => 'configuracion-camaras', 'module' => 'administracion.camaras', 'label' => 'Configuración de cámaras', 'href' => '/oficina/administracion/camaras', 'permissions' => ['puede_consultar_configuracion_camaras']],
             ['key' => 'integridad-operacional', 'module' => 'administracion.integridad-operacional', 'label' => 'Salud operacional', 'href' => '/oficina/administracion/integridad-operacional', 'permissions' => ['puede_consultar_integridad_operacional']],
+            ['key' => 'atributos-pt', 'module' => 'administracion.atributos-pt', 'label' => 'Cambio de atributos PT', 'href' => '/oficina/administracion/atributos-pt', 'permissions' => ['puede_cambiar_atributos_pt']],
             ['key' => 'demo', 'module' => '', 'label' => 'Demo comercial', 'href' => '/oficina/demo', 'permissions' => ['puede_habilitar_demo']],
             ['key' => 'finanzas-hechos', 'module' => 'finanzas.prefactura', 'section' => 'Finanzas', 'label' => 'Hechos valorizables', 'href' => '/oficina/finanzas/hechos', 'permissions' => ['puede_consultar_finanzas']],
             ['key' => 'finanzas-tarifario', 'module' => 'finanzas.prefactura', 'section' => 'Finanzas', 'label' => 'Tarifario', 'href' => '/oficina/finanzas/tarifario', 'permissions' => ['puede_consultar_finanzas']],

@@ -47,7 +47,17 @@ function randomUuid() {
     return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-export function createValidationCorrection({ api, setBusy = () => {}, toast = () => {}, onSaved = () => {} }) {
+const VALIDATION_ENDPOINTS = {
+    context: (id, client) => `/api/validacion/pallets/${encodeURIComponent(id)}/correccion${client ? `?cliente=${encodeURIComponent(client)}` : ''}`,
+    save: (id) => ({ url: `/api/validacion/pallets/${encodeURIComponent(id)}/corregir`, method: 'PUT' }),
+    note: 'Se corrigen la validación y el folio; su estado, cámara y despacho no cambian.',
+};
+
+/**
+ * `endpoints` permite usar el mismo diálogo desde otro módulo (por ejemplo, el cambio de
+ * atributos PT de administración, que trabaja por folio y no por validación).
+ */
+export function createValidationCorrection({ api, setBusy = () => {}, toast = () => {}, onSaved = () => {}, endpoints = VALIDATION_ENDPOINTS }) {
     const dialog = document.getElementById('validationCorrectionDialog');
     if (!dialog) return { open: async () => {} };
     const form = dialog.querySelector('form');
@@ -63,6 +73,7 @@ export function createValidationCorrection({ api, setBusy = () => {}, toast = ()
         submit: document.getElementById('vcSubmit'),
     };
     let context = null;
+    let subjectId = null;
     let index = null;
     let draft = null;
     let operationId = null;
@@ -100,7 +111,7 @@ export function createValidationCorrection({ api, setBusy = () => {}, toast = ()
         if (!client || loadedClients.has(client)) return;
         setBusy(true, `Cargando el catálogo de ${client}…`);
         try {
-            const data = await api(`/api/validacion/pallets/${encodeURIComponent(context.validacion.id)}/correccion?cliente=${encodeURIComponent(client)}`);
+            const data = await api(endpoints.context(subjectId, client));
             const known = new Set(context.catalogo.articulos.map((article) => article.id));
             context.catalogo.articulos = [...context.catalogo.articulos, ...data.catalogo.articulos.filter((article) => !known.has(article.id))];
             context.catalogo.articulos_por_origen = { ...context.catalogo.articulos_por_origen, ...data.catalogo.articulos_por_origen };
@@ -247,7 +258,8 @@ export function createValidationCorrection({ api, setBusy = () => {}, toast = ()
     async function open(validationId, folioNumber = '') {
         setBusy(true, 'Cargando la validación y su catálogo…');
         try {
-            context = await api(`/api/validacion/pallets/${encodeURIComponent(validationId)}/correccion`);
+            subjectId = validationId;
+            context = await api(endpoints.context(validationId));
         } catch (error) {
             toast(error.message || 'No fue posible cargar la validación.', true);
             return;
@@ -266,7 +278,7 @@ export function createValidationCorrection({ api, setBusy = () => {}, toast = ()
         const folio = validation.folio || {};
         const states = [...new Set([folio.estado_operacional, folio.condicion_termica].filter(Boolean).map((value) => STATES[value] || statusText(value)))];
         elements.state.textContent = `${[context.catalogo?.temporada?.nombre, `Folio ${states.join(' · ').toLowerCase()}`, folio.activo === false ? 'inactivo' : null].filter(Boolean).join(' · ')}. `
-            + 'Se corrigen la validación y el folio; su estado, cámara y despacho no cambian.';
+            + endpoints.note;
         form.elements.numero_folio.value = draft.numero_folio;
         form.elements.numero_folio.readOnly = context.puede_cambiar_numero_folio !== true;
         document.getElementById('vcFolioHint').textContent = form.elements.numero_folio.readOnly
@@ -305,8 +317,9 @@ export function createValidationCorrection({ api, setBusy = () => {}, toast = ()
         elements.submit.disabled = true;
         setBusy(true, `Corrigiendo ${context.validacion.numero_folio}…`);
         try {
-            const response = await api(`/api/validacion/pallets/${encodeURIComponent(context.validacion.id)}/corregir`, {
-                method: 'PUT',
+            const target = endpoints.save(subjectId);
+            const response = await api(target.url, {
+                method: target.method,
                 body: JSON.stringify(payload),
             });
             close();

@@ -11,6 +11,8 @@ class CatalogoModulosAcceso
 
     public const OFICINA_MAESTROS_TEMPORADA = 'administracion.maestros-temporada';
 
+    public const OFICINA_ATRIBUTOS_PT = 'administracion.atributos-pt';
+
     public const OFICINA_CONTRAPARTE_SAG = 'frigorifico.contraparte-sag';
 
     public const OFICINA_PORTERIA = 'materia-prima.porteria';
@@ -146,6 +148,7 @@ class CatalogoModulosAcceso
                     $this->modulo(self::OFICINA_MAESTROS_TEMPORADA, 'Maestros de temporada', 'Base transversal consumida por los módulos operacionales.'),
                     $this->modulo('administracion.camaras', 'Configuración de cámaras', 'Creación y estructura física de cámaras.'),
                     $this->modulo(self::OFICINA_INTEGRIDAD_OPERACIONAL, 'Salud operacional', 'Auditoría de contradicciones entre folios, procesos, ubicaciones y reservas.'),
+                    $this->modulo(self::OFICINA_ATRIBUTOS_PT, 'Cambio de atributos PT', 'Corregir producto, cajas, CSG y estado de prefrío de un folio PT no despachado, con motivo y auditoría.'),
                 ],
             ],
             [

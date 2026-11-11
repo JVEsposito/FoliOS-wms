@@ -242,6 +242,10 @@ class AppServiceProvider extends ServiceProvider
             fn (User $usuario): bool => $alcance->puedeConsultarAccesos($usuario),
         );
         Gate::define(
+            'cambiar-atributos-pt',
+            fn (User $usuario): bool => $alcance->puedeCambiarAtributosPt($usuario),
+        );
+        Gate::define(
             'consultar-integridad-operacional',
             fn (User $usuario): bool => $alcance->puedeConsultarIntegridadOperacional($usuario),
         );

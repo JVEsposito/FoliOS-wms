@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\BandaOperacionalController;
 use App\Http\Controllers\Api\BloqueoMaterialController;
 use App\Http\Controllers\Api\BodegaMaterialController;
 use App\Http\Controllers\Api\CamaraController;
+use App\Http\Controllers\Api\CambioAtributosPtController;
 use App\Http\Controllers\Api\CambioPasswordUsuarioController;
 use App\Http\Controllers\Api\CapacidadMaterialController;
 use App\Http\Controllers\Api\CargaController;
@@ -172,6 +173,13 @@ Route::middleware('auth:sanctum')->group(function () {
         ->middleware('can:consultar-panel-gerencial');
     Route::put('/administracion/operacion-ahora/plano', [PlanoPlantaController::class, 'update'])
         ->middleware('can:administrar-plano-planta');
+    Route::middleware('can:cambiar-atributos-pt')->prefix('administracion/atributos-pt')->group(function (): void {
+        Route::get('/folios', [CambioAtributosPtController::class, 'buscar']);
+        Route::get('/folios/{folio}', [CambioAtributosPtController::class, 'show'])->whereUuid('folio');
+        Route::get('/folios/{folio}/producto', [CambioAtributosPtController::class, 'contextoProducto'])->whereUuid('folio');
+        Route::post('/folios/{folio}/producto', [CambioAtributosPtController::class, 'cambiarProducto'])->whereUuid('folio');
+        Route::post('/folios/{folio}/condicion-termica', [CambioAtributosPtController::class, 'cambiarCondicionTermica'])->whereUuid('folio');
+    });
     Route::get('/administracion/integridad-operacional', [IntegridadOperacionalController::class, 'index'])
         ->middleware('can:consultar-integridad-operacional');
     Route::post('/administracion/integridad-operacional/auditar', [IntegridadOperacionalController::class, 'auditar'])

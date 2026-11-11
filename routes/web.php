@@ -80,6 +80,7 @@ Route::view('/oficina/validacion/pendientes', 'office.validation-pending');
 Route::redirect('/oficina/validacion/catalogo', '/oficina/administracion/maestros-temporada', 301);
 Route::view('/oficina/administracion/maestros-temporada', 'office.validation-catalog');
 Route::view('/oficina/administracion/integridad-operacional', 'office.operational-integrity');
+Route::view('/oficina/administracion/atributos-pt', 'office.pt-attributes');
 Route::view('/oficina/finanzas/proveedores', 'office.finance-suppliers');
 Route::view('/oficina/finanzas/hechos', 'office.finance-facts');
 Route::view('/oficina/finanzas/tarifario', 'office.finance-tariffs');
