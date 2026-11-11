@@ -226,6 +226,7 @@ class ServicioCuentaCorrienteEnvases
         $documentos = [];
         $saldos = [];
         $movimientosCsg = [];
+        $anterioresCsg = [];
         $historicos = $movimientos->where('tipo_movimiento', TipoMovimientoEnvase::CorreccionCuenta)->pluck('movimiento_origen_id')->all();
         foreach ($this->vistaCliente($movimientos) as ['movimiento' => $movimiento, 'impacto' => $impacto]) {
             $tipo = $movimiento->tipo_envase->value;
@@ -241,27 +242,15 @@ class ServicioCuentaCorrienteEnvases
             ];
             $saldos[$tipo] = ($saldos[$tipo] ?? 0) + $impacto;
 
-            if ($inicio !== null && $movimiento->ocurrido_at->lt($inicio)) {
-                $tipos[$tipo]['saldo_inicial'] += $impacto;
-
-                continue;
-            }
             if ($fin !== null && $movimiento->ocurrido_at->gte($fin)) {
                 continue;
             }
             $esSalida = in_array($movimiento->tipo_movimiento, self::SALIDAS, true)
                 || (($movimiento->tipo_movimiento->esAjusteCuenta() || in_array($movimiento->id, $historicos, true)) && $impacto < 0);
-            if ($esSalida) {
-                $tipos[$tipo]['salidas'] -= $impacto;
-                $tipos[$tipo]['salidas_por_propiedad'][$movimiento->propiedad->value] -= $impacto;
-            } else {
-                $tipos[$tipo]['entradas'] += $impacto;
-            }
-
             $guia = $movimiento->documento_tipo === self::DOCUMENTO_GUIA
                 ? $guiasEmitidas->get($movimiento->documento_id) : null;
             $destinatario = $guia?->productorDestino();
-            $movimientosCsg[] = [
+            $movimientoCsg = [
                 'recepcion_id' => $movimiento->recepcion_romana_id,
                 'movimiento' => $movimiento->tipo_movimiento->value,
                 'tipo_envase' => $tipo, 'nombre_envase' => $movimiento->tipo_envase->etiqueta(),
@@ -269,6 +258,19 @@ class ServicioCuentaCorrienteEnvases
                 'entradas' => $esSalida ? 0 : $impacto, 'salidas' => $esSalida ? -$impacto : 0,
                 'csg' => $movimiento->tipo_movimiento === TipoMovimientoEnvase::DespachoCliente ? $destinatario : null,
             ];
+            if ($inicio !== null && $movimiento->ocurrido_at->lt($inicio)) {
+                $tipos[$tipo]['saldo_inicial'] += $impacto;
+                $anterioresCsg[] = $movimientoCsg;
+
+                continue;
+            }
+            if ($esSalida) {
+                $tipos[$tipo]['salidas'] -= $impacto;
+                $tipos[$tipo]['salidas_por_propiedad'][$movimiento->propiedad->value] -= $impacto;
+            } else {
+                $tipos[$tipo]['entradas'] += $impacto;
+            }
+            $movimientosCsg[] = $movimientoCsg;
 
             // Una línea por guía y tipo de envase, como en la guía: los orígenes internos de
             // un mismo envase (FIFO, varias recepciones) no se le muestran al cliente. Una recepción
@@ -353,7 +355,7 @@ class ServicioCuentaCorrienteEnvases
             'tipos' => collect($tipos)->sortBy('orden')->values()->all(),
             'movimientos' => $lineas,
             'grupos_documentos' => array_values($gruposDocumentos),
-            'resumen_csg' => ResumenEnvasesPorCsg::generar($movimientosCsg, $recepcionesCsg),
+            'resumen_csg' => ResumenEnvasesPorCsg::generar($movimientosCsg, $recepcionesCsg, $anterioresCsg),
             'lineas_pendientes_validacion' => $pendientes,
             'emitido_at' => $this->local(now()),
         ];

@@ -55,6 +55,30 @@ class ResumenEnvasesPorCsgTest extends TestCase
         $this->assertSame(11, $r[0]['tipos'][0]['entradas']);
     }
 
+    public function test_saldo_final_suma_arrastre_y_devoluciones_por_productor_y_envase(): void
+    {
+        $a = $this->csg('152425');
+        $b = $this->csg('162425');
+        $despacho = ['movimiento' => 'despacho_cliente', 'entradas' => 0, 'csg' => $a];
+        $anteriores = [
+            $this->linea([...$despacho, 'salidas' => 198]),
+            $this->linea([...$despacho, 'salidas' => 20, 'csg' => $b]),
+            $this->linea([...$despacho, 'tipo_envase' => 'totes', 'nombre_envase' => 'Tote', 'orden' => 3, 'salidas' => 4752]),
+        ];
+        $movimientos = [
+            $this->linea(['entradas' => 18]),
+            $this->linea(['movimiento' => 'salida_recepcion_fruta', 'entradas' => 0, 'salidas' => 5]),
+        ];
+
+        $resumen = ResumenEnvasesPorCsg::generar($movimientos, ['r1' => ['csg' => [$a]]], $anteriores);
+
+        $this->assertSame(['152425', '162425'], array_column($resumen, 'codigo'));
+        $this->assertSame([18, 0], array_column($resumen[0]['tipos'], 'entradas'));
+        $this->assertSame([5, 0], array_column($resumen[0]['tipos'], 'salidas'));
+        $this->assertSame([-185, -4752], array_column($resumen[0]['tipos'], 'saldo_final'));
+        $this->assertSame(-20, $resumen[1]['tipos'][0]['saldo_final']);
+    }
+
     public function test_salidas_multiorigen_no_heredan_un_reparto_de_entrada(): void
     {
         $a = $this->csg('11111');

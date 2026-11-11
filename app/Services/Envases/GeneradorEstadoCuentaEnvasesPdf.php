@@ -14,6 +14,12 @@ class GeneradorEstadoCuentaEnvasesPdf
 
     private const SECUNDARIO = 8;
 
+    private const COLUMNAS_CSG = [
+        'entradas' => ['Entradas', 366],
+        'salidas' => ['Salidas', 462],
+        'saldo_final' => ['Saldo final', 559],
+    ];
+
     public function __construct(private readonly DocumentoPdfPlanta $pdf) {}
 
     /** @param array<string, mixed> $estado ServicioCuentaCorrienteEnvases::estadoCuenta() */
@@ -98,7 +104,7 @@ class GeneradorEstadoCuentaEnvasesPdf
             $titulo = $grupo['codigo'] === null ? 'Sin productor asociado'
                 : ($grupo['nombre'] ?: 'Productor sin nombre').' · CSG '.$grupo['codigo'];
             $rotulo = $this->pdf->envolver($titulo, 523, self::CUERPO);
-            $filas = array_map(fn ($tipo) => [...$tipo, 'textos' => $this->pdf->envolver($tipo['nombre'], 315, self::CUERPO)], $grupo['tipos']);
+            $filas = array_map(fn ($tipo) => [...$tipo, 'textos' => $this->pdf->envolver($tipo['nombre'], 225, self::CUERPO)], $grupo['tipos']);
             $altoRotulo = count($rotulo) * 10 + 2;
             $alto = $altoRotulo + array_sum(array_map(fn ($fila) => count($fila['textos']) * 10.5, $filas));
             $necesario = min($alto, $altoRotulo + 10.5);
@@ -125,8 +131,10 @@ class GeneradorEstadoCuentaEnvasesPdf
                 foreach ($fila['textos'] as $i => $texto) {
                     $pagina['contenido'] .= $this->pdf->texto(36, $pagina['y'] - 8 - $i * 10.5, self::CUERPO, $texto);
                 }
-                $pagina['contenido'] .= $this->derecha(440, $pagina['y'] - 8, self::CUERPO, $this->numero($fila['entradas']));
-                $pagina['contenido'] .= $this->derecha(559, $pagina['y'] - 8, self::CUERPO, $this->numero($fila['salidas']));
+                foreach (self::COLUMNAS_CSG as $campo => [, $x]) {
+                    $esSaldo = $campo === 'saldo_final';
+                    $pagina['contenido'] .= $this->derecha($x, $pagina['y'] - 8, self::CUERPO, $this->numero($fila[$campo], $esSaldo), $esSaldo);
+                }
                 $pagina['y'] -= $altoFila;
                 $pagina['contenido'] .= sprintf("0.88 G 30 %.2F m 565 %.2F l S 0 G\n", $pagina['y'] - 1, $pagina['y'] - 1);
             }
@@ -159,8 +167,9 @@ class GeneradorEstadoCuentaEnvasesPdf
         $pagina['contenido'] .= $this->pdf->texto(30, $pagina['y'] - 12, self::SECUNDARIO, 'Entradas y salidas de cuenta del período · CSG como referencia del productor');
         $pagina['y'] -= 22;
         $pagina['contenido'] .= $this->fondo($pagina['y'] - 15, 17);
-        foreach ([['Envase', 36], ['Entradas', 408], ['Salidas', 534]] as [$texto, $x]) {
-            $pagina['contenido'] .= $this->pdf->texto($x, $pagina['y'] - 10, self::CUERPO, $texto, true);
+        $pagina['contenido'] .= $this->pdf->texto(36, $pagina['y'] - 10, self::CUERPO, 'Envase', true);
+        foreach (self::COLUMNAS_CSG as [$texto, $x]) {
+            $pagina['contenido'] .= $this->derecha($x, $pagina['y'] - 10, self::CUERPO, $texto, true);
         }
         $pagina['y'] -= 20;
     }

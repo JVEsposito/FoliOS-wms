@@ -2,10 +2,42 @@
 
 namespace App\Services\Envases;
 
-/** Atribución del período sin prorrateos: los totales siempre conservan la cuenta. */
+/** Atribución de los movimientos al CSG sin prorrateos. */
 class ResumenEnvasesPorCsg
 {
-    public static function generar(array $movimientos, array $recepciones): array
+    public static function generar(array $movimientos, array $recepciones, array $anteriores = []): array
+    {
+        $resumen = self::atribuir($movimientos, $recepciones);
+        foreach (self::atribuir($anteriores, $recepciones) as $clave => $grupo) {
+            foreach ($grupo['tipos'] as $tipo => $fila) {
+                $saldoInicial = $fila['entradas'] - $fila['salidas'];
+                if ($saldoInicial === 0) {
+                    continue;
+                }
+                $resumen[$clave] ??= [...$grupo, 'tipos' => []];
+                $resumen[$clave]['tipos'][$tipo] ??= [...$fila, 'entradas' => 0, 'salidas' => 0];
+                $resumen[$clave]['tipos'][$tipo]['saldo_inicial'] = $saldoInicial;
+            }
+        }
+        uasort($resumen, function ($a, $b) {
+            if ($a['codigo'] === null || $b['codigo'] === null) {
+                return ($a['codigo'] === null) <=> ($b['codigo'] === null);
+            }
+
+            return strnatcmp($a['codigo'], $b['codigo']);
+        });
+        foreach ($resumen as &$grupo) {
+            uasort($grupo['tipos'], fn ($a, $b) => $a['orden'] <=> $b['orden']);
+            $grupo['tipos'] = array_values(array_map(fn (array $fila): array => [
+                ...$fila, 'saldo_final' => ($fila['saldo_inicial'] ?? 0) + $fila['entradas'] - $fila['salidas'],
+            ], $grupo['tipos']));
+        }
+        unset($grupo);
+
+        return array_values($resumen);
+    }
+
+    private static function atribuir(array $movimientos, array $recepciones): array
     {
         $resumen = [];
         $entradasRecepcion = [];
@@ -57,20 +89,8 @@ class ResumenEnvasesPorCsg
                 }
             }
         }
-        uasort($resumen, function ($a, $b) {
-            if ($a['codigo'] === null || $b['codigo'] === null) {
-                return ($a['codigo'] === null) <=> ($b['codigo'] === null);
-            }
 
-            return strnatcmp($a['codigo'], $b['codigo']);
-        });
-        foreach ($resumen as &$grupo) {
-            uasort($grupo['tipos'], fn ($a, $b) => $a['orden'] <=> $b['orden']);
-            $grupo['tipos'] = array_values($grupo['tipos']);
-        }
-        unset($grupo);
-
-        return array_values($resumen);
+        return $resumen;
     }
 
     private static function agregar(array &$resumen, ?array $csg, array $linea): void
