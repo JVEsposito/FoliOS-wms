@@ -237,7 +237,10 @@
             @endforeach
         </nav>
         <div class="estiba-office-identity">
-            <span class="estiba-office-avatar" id="officeInitials" aria-hidden="true">OF</span>
+            <button type="button" class="estiba-office-avatar" data-office-profile-open aria-label="Cambiar mi foto de perfil" title="Cambiar mi foto de perfil" aria-haspopup="dialog" aria-controls="officeProfileDialog">
+                <span id="officeInitials" aria-hidden="true">OF</span>
+                <img data-office-profile-photo alt="" hidden>
+            </button>
             <span class="estiba-office-user"><strong id="officeUserName">Usuario</strong><small id="officeUserRole">Oficina</small><small data-office-readonly hidden>Solo consulta</small></span>
             <button id="officeLogoutButton" type="button">Cerrar sesión</button>
         </div>
@@ -260,6 +263,19 @@
             <strong>FRÍO QUE<br>MANTIENE VALOR</strong><small>Versión {{ config('app.product_version') }}</small>
         </div>
     </aside>
+
+    <dialog id="officeProfileDialog" class="estiba-office-profile" aria-labelledby="officeProfileTitle" aria-describedby="officeProfileHelp">
+        <form data-profile-form>
+            <header><h2 id="officeProfileTitle">Mi foto de perfil</h2><button type="button" data-profile-close aria-label="Cerrar foto de perfil">Cerrar</button></header>
+            <p id="officeProfileHelp">Elige una foto JPG, PNG o WebP de hasta 5 MB. Se mostrará dentro del círculo de tu perfil.</p>
+            <div class="estiba-office-profile__preview"><span data-profile-initials aria-hidden="true">OF</span><img data-profile-preview alt="Vista previa de mi foto de perfil" hidden></div>
+            <label for="officeProfileFile">Elige una foto</label>
+            <input id="officeProfileFile" data-profile-file type="file" accept="image/jpeg,image/png,image/webp">
+            <p data-profile-error role="alert"></p>
+            <footer><button type="button" data-profile-remove disabled>Quitar foto</button><button type="button" data-profile-close>Cancelar</button><button type="submit" data-profile-save disabled>Guardar foto</button></footer>
+        </form>
+    </dialog>
+    <span class="estiba-office-sr" data-profile-status role="status" aria-live="polite"></span>
 
     <div class="office-navigation-legacy" hidden aria-hidden="true">
         <a id="officeManagementNav" href="/oficina/gerencia" tabindex="-1"></a>

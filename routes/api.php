@@ -54,6 +54,7 @@ use App\Http\Controllers\Api\EvacuacionEmergenciaController;
 use App\Http\Controllers\Api\FolioPrefrioController;
 use App\Http\Controllers\Api\FormatoRegistroController;
 use App\Http\Controllers\Api\FotoItemMaterialController;
+use App\Http\Controllers\Api\FotoPerfilUsuarioController;
 use App\Http\Controllers\Api\FotoRecepcionMaterialController;
 use App\Http\Controllers\Api\FrutaProcesoController;
 use App\Http\Controllers\Api\GuiaDespachoEnvaseController;
@@ -961,6 +962,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/acceso-tablet', [AccesoTabletController::class, 'destroy']);
     Route::get('/acceso-oficina', [AccesoOficinaController::class, 'show']);
     Route::delete('/acceso-oficina', [AccesoOficinaController::class, 'destroy']);
+    Route::get('/usuario/perfil', [FotoPerfilUsuarioController::class, 'perfil']);
+    Route::get('/usuario/foto-perfil', [FotoPerfilUsuarioController::class, 'show']);
+    Route::post('/usuario/foto-perfil', [FotoPerfilUsuarioController::class, 'store'])->middleware('throttle:10,1');
+    Route::delete('/usuario/foto-perfil', [FotoPerfilUsuarioController::class, 'destroy']);
 });
 
 // Portal de clientes: solo usuarios de cliente, siempre acotados a sus exportadoras.

@@ -427,7 +427,44 @@
     color: #ffffff;
     font-size: 12px;
     font-weight: 800;
+    padding: 0;
+    overflow: hidden;
+    cursor: pointer;
+    font-family: inherit;
 }
+
+.estiba-office-avatar:hover { border-color: var(--shell-focus); }
+.estiba-office-avatar:focus-visible { outline: 3px solid var(--shell-focus); outline-offset: 3px; }
+.estiba-office-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.estiba-office-profile {
+    width: min(440px, calc(100vw - 32px));
+    max-height: calc(100dvh - 32px);
+    box-sizing: border-box;
+    padding: 24px;
+    overflow-y: auto;
+    border: 1px solid var(--shell-line);
+    border-radius: 12px;
+    background: var(--shell-navy);
+    color: var(--shell-ink);
+    font-family: var(--font-sans, sans-serif);
+}
+.estiba-office-profile::backdrop { background: rgb(0 0 0 / .6); }
+.estiba-office-profile header, .estiba-office-profile footer { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.estiba-office-profile header { justify-content: space-between; }
+.estiba-office-profile h2 { margin: 0; font-size: 20px; color: #ffffff; }
+.estiba-office-profile p { font-size: 14px; line-height: 1.5; }
+.estiba-office-profile label { display: block; margin-bottom: 8px; font-weight: 700; }
+.estiba-office-profile input { max-width: 100%; font: inherit; }
+.estiba-office-profile__preview { display: grid; place-items: center; width: 120px; height: 120px; overflow: hidden; margin: 22px auto; border: 2px solid var(--shell-line); border-radius: 50%; background: var(--shell-navy-hover); font-size: 32px; font-weight: 800; }
+.estiba-office-profile__preview img { width: 100%; height: 100%; object-fit: cover; }
+.estiba-office-profile footer { justify-content: flex-end; margin-top: 20px; }
+.estiba-office-profile button { min-height: 44px; padding: 8px 12px; border: 1px solid var(--shell-line); border-radius: 6px; background: var(--shell-navy-hover); color: #ffffff; font: 600 14px/1.3 var(--font-sans, sans-serif); cursor: pointer; }
+.estiba-office-profile button:disabled { opacity: .5; cursor: default; }
+.estiba-office-profile button:focus-visible, .estiba-office-profile input:focus-visible { outline: 3px solid var(--shell-focus); outline-offset: 3px; }
+.estiba-office-profile [data-profile-save] { background: var(--shell-focus); color: var(--shell-navy); }
+.estiba-office-profile [data-profile-remove] { margin-right: auto; }
+.estiba-office-profile [data-profile-error] { color: #ffb6a9; }
+.estiba-office-profile [hidden], .estiba-office-avatar [hidden] { display: none; }
 
 .estiba-office-user { min-width: 0; overflow-wrap: anywhere; }
 .estiba-office-user > strong { display: block; color: #ffffff; font-size: 15px; font-weight: 700; line-height: 1.2; }

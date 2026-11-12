@@ -2,6 +2,7 @@ import './office-material-replenishment-indicator';
 import './office-material-inventory-actions.js';
 import { installOfficeUnexpectedErrorNotice } from './shared/office-unexpected-error.js';
 import { initializeOfficeShell, refreshOfficeShell } from './office-shell.js';
+import { initializeOfficeProfile } from './office-profile.js';
 import {
     nextOfficeTheme,
     normalizeOfficeTheme,
@@ -585,6 +586,7 @@ function initializeOfficeActionMenus() {
 
 document.addEventListener('DOMContentLoaded', () => {
     initializeOfficeShell();
+    initializeOfficeProfile();
     refreshOfficeThemeControls();
     document.querySelectorAll('[data-office-theme-toggle]').forEach((button) => {
         button.addEventListener('click', () => applyOfficeTheme(nextOfficeTheme(officeTheme)));

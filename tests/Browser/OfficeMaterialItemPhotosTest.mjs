@@ -44,8 +44,8 @@ test('catálogo muestra miniaturas autenticadas y un lector puede ver la foto si
         assert.equal(await page.locator('[data-office-key="items"]').isVisible(), true);
         assert.equal(calls.some(c => c.path.endsWith('/archivo')), false, 'El listado descarga solo miniaturas');
         await page.getByRole('button', { name: 'Fotos (1)' }).click();
-        await page.waitForFunction(() => document.querySelector('dialog img')?.src.startsWith('blob:'));
-        assert.equal(await page.locator('dialog form').isVisible(), false);
+        await page.waitForFunction(() => document.querySelector('.item-photo-dialog[open] img')?.src.startsWith('blob:'));
+        assert.equal(await page.locator('.item-photo-dialog[open] form').isVisible(), false);
         assert.equal(await page.getByRole('button', { name: 'Eliminar', exact: true }).count(), 0);
         await page.locator('[data-large]').click();
         await page.waitForFunction(() => document.querySelector('.item-photo-large img')?.src.startsWith('blob:'));

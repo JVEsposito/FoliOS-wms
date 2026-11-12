@@ -36,6 +36,8 @@ class RestringirUsuarioCliente
     {
         return $request->is('api/portal', 'api/portal/*')
             || ($request->is('api/acceso-oficina') && in_array($request->method(), ['GET', 'HEAD', 'POST', 'DELETE'], true))
+            || ($request->is('api/usuario/perfil') && in_array($request->method(), ['GET', 'HEAD'], true))
+            || ($request->is('api/usuario/foto-perfil') && in_array($request->method(), ['GET', 'HEAD', 'POST', 'DELETE'], true))
             || ($request->is('api/usuario/password') && $request->isMethod('PUT'));
     }
 }
