@@ -7,7 +7,7 @@ import { FieldHeader } from '../components/field/FieldHeader';
 import { EntityCode, EstibaAlert, EstibaButton, EstibaField, EstibaMetric, EstibaPanel, EstibaSignal } from '../components/ui/EstibaPrimitives';
 import {
   HEADER_GROUPS, OPTION_LABELS, PALLET_ORIENTATIONS, PALLET_STATE_LABELS, checkNotApplicable, orientationLabel, consolidationStorageKey, declaredPallets, fieldValue, fillNotApplicable,
-  formatBytes, formatTemperature, hasDraftChanges, nextFreePosition, palletsForList, palletsWithoutTemperature, parseBoxes, parsePosition, parseTemperature, photoRequirement,
+  formatBytes, formatTemperature, hasDraftChanges, nextFreePosition, palletsForList, palletsWithoutTemperature, parseBoxes, parsePosition, parseTemperature, photoGroups, photoRequirement,
   positionOccupant, sectionChanges,
   type ConsolidationCatalog, type ConsolidationControl, type ConsolidationDraft, type ConsolidationField, type ConsolidationLoad, type ConsolidationPallet,
   type ConsolidationSection,
@@ -492,12 +492,22 @@ function PhotosPanel({ api, control, catalog, editable, onChange, onError }: {
       <Text style={s.body}>{control.fotos_pdf.cantidad} fotos · {formatBytes(control.fotos_pdf.bytes)}. Al cerrar la planilla las fotos quedaron en un solo PDF y se borraron del servidor.</Text>
       <EstibaButton label="Compartir PDF de fotos" variant="secondary" disabled={busy} onPress={() => void sharePdf()} />
     </EstibaPanel> : null}
-    {catalog.tipos_foto.map((type) => {
+    {control.pizarra?.length ? <EstibaPanel title="Pizarra identificatoria">
+      <Text style={s.muted}>Obligatoria en el registro: escríbela así y que se lea en las fotos.</Text>
+      {control.pizarra.map((item) => <View key={item.clave} style={s.between}>
+        <Text style={s.label}>{item.etiqueta}</Text>
+        <Text style={item.valor ? s.body : s.warn}>{item.valor ?? 'Falta en el encabezado'}</Text>
+      </View>)}
+    </EstibaPanel> : null}
+    {photoGroups(catalog).map((group) => <View key={group.clave} style={s.group}>
+    {group.titulo ? <Text style={s.groupTitle} accessibilityRole="header">{group.titulo}</Text> : null}
+    {group.tipos.map((type) => {
     const photos = control.fotos.filter((photo) => photo.tipo === type.clave);
     const archived = photos.filter((photo) => photo.archivada);
     const waiting = queue.filter((photo) => photo.tipo === type.clave);
     const requirement = photoRequirement(type, control.fotos_pendientes ?? [], catalog.exige_fotos === true);
     return <EstibaPanel key={type.clave} title={`${type.nombre} · ${photos.length}/${type.maximo}`}>
+      {type.indicacion ? <Text style={s.body}>{type.indicacion}</Text> : null}
       <Text style={requirement.missing ? s.warn : s.muted}>{requirement.text}</Text>
       <View style={s.photos}>
         {archived.length ? <View style={s.gap}>
@@ -523,6 +533,7 @@ function PhotosPanel({ api, control, catalog, editable, onChange, onError }: {
       </View> : null}
     </EstibaPanel>;
   })}
+    </View>)}
   </>;
 }
 
@@ -530,6 +541,8 @@ const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.canvas },
   content: { padding: 14, gap: 14, paddingBottom: 40 },
   gap: { gap: 8 },
+  group: { gap: 14 },
+  groupTitle: { fontFamily: font.heavy, color: colors.text, fontSize: 17, marginTop: 6 },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end' },
   between: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   grow: { flexGrow: 1, flexShrink: 1 },

@@ -161,12 +161,12 @@ class ArchivoFotosControlDespacho
 
         return [
             'titulo' => "SET FOTOGRÁFICO · POEMP R-24 · CARGA {$codigo}",
-            'detalle' => collect([
-                $encabezado['exportadora'] ?? null,
-                filled($encabezado['contenedor'] ?? null) ? 'Contenedor '.$encabezado['contenedor'] : null,
-                filled($encabezado['patente_camion'] ?? null) ? 'Patente '.$encabezado['patente_camion'] : null,
-                preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($encabezado['fecha_carga'] ?? '')) ? 'Carga '.implode('-', array_reverse(explode('-', $encabezado['fecha_carga']))) : null,
-            ])->filter()->implode(' · '),
+            // La pizarra identificatoria del set, más la patente.
+            'detalle' => collect(FormularioControlDespacho::pizarra($encabezado))
+                ->filter(fn (array $dato): bool => $dato['valor'] !== null)
+                ->map(fn (array $dato): string => "{$dato['etiqueta']} {$dato['valor']}")
+                ->push(filled($encabezado['patente_camion'] ?? null) ? 'Patente '.$encabezado['patente_camion'] : null)
+                ->filter()->implode(' · '),
             'pie' => sprintf('FoliOS · %d fotos · Generado %s', $cantidad, $this->hora(now())),
         ];
     }

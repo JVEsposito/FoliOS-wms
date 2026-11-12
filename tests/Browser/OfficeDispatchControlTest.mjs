@@ -184,7 +184,7 @@ test('antes de descargar pide completar la T° de pulpa y luego descarga', async
         const { context, page, requests, errors } = await open(browser, { user: identity({ puede_registrar_control_despacho: true }), detail: incompleta });
         await page.locator('#dcxRows tr[data-id="c1"]').click();
         await page.locator('#dcxDetailTitle', { hasText: 'CAR-0042' }).waitFor();
-        assert.match(await page.locator('#dcxPhotosPending').innerText(), /Placa patente.*set estándar/);
+        assert.match(await page.locator('#dcxPhotosPending').innerText(), /Placa patente.*El cierre aún no las exige/);
         await page.locator('#dcxDownload').click();
         await page.locator('#dcxPrint').waitFor();
         assert.match(await page.locator('#dcxPrintText').innerText(), /A000002/);

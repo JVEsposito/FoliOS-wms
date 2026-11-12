@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   checkNotApplicable, declaredPallets, fieldValue, fillNotApplicable, formatTemperature, nextFreePosition, palletsForList,
-  palletsWithoutTemperature, parsePosition, parseTemperature, photoRequirement, positionOccupant, sectionChanges,
+  palletsWithoutTemperature, parsePosition, parseTemperature, photoGroups, photoRequirement, positionOccupant, sectionChanges,
 } from '../src/domain/consolidation.ts';
 
 const pallet = (numero_folio, posicion = null, estado_carga = 'cargado') => ({
@@ -76,9 +76,26 @@ test('la impresión pide la T° de pulpa de los pallets con posición', () => {
 });
 
 test('el set fotográfico explica qué falta y cuándo se exige', () => {
-  const termografos = { clave: 'termografos', nombre: 'Postura de termógrafos', obligatoria: true, condicion: 'termografos', maximo: 8 };
-  const pending = [{ tipo: 'termografos', nombre: 'Postura de termógrafos', requeridas: 2, tomadas: 1 }];
-  assert.deepEqual(photoRequirement(termografos, pending, false), { text: 'Obligatoria (una por termógrafo) cuando se active el set estándar. Faltan 1 de 2.', missing: true });
-  assert.deepEqual(photoRequirement(termografos, [], true), { text: 'Obligatoria (una por termógrafo) para cerrar. Completa.', missing: false });
-  assert.equal(photoRequirement({ clave: 'altura_carga', nombre: 'Altura', obligatoria: false, condicion: null, maximo: 5 }, [], true).text, 'Opcional: solo si aplica.');
+  const temperatura = { clave: 'temperatura_pulpa', nombre: 'Temperatura de pulpa antes de cargar', obligatoria: true, condicion: 'pallets', maximo: 60 };
+  const pending = [{ tipo: 'temperatura_pulpa', nombre: 'Temperatura de pulpa antes de cargar', requeridas: 20, tomadas: 12 }];
+  assert.deepEqual(photoRequirement(temperatura, pending, false), { text: 'Obligatoria (una por pallet); el cierre aún no la exige. Faltan 8 de 20.', missing: true });
+  assert.deepEqual(photoRequirement(temperatura, [], true), { text: 'Obligatoria (una por pallet) para cerrar. Completa.', missing: false });
+  const segundo = { clave: 'segundo_termografo', nombre: 'Segundo termógrafo', obligatoria: true, condicion: 'segundo_termografo', maximo: 3 };
+  assert.equal(photoRequirement(segundo, [], true).text, 'Obligatoria (si hay segundo termógrafo) para cerrar. Completa.');
+  assert.equal(photoRequirement({ clave: 'general', nombre: 'Otras', obligatoria: false, condicion: null, maximo: 20 }, [], true).text, 'Opcional.');
+});
+
+test('el set se muestra por etapa del despacho, en el orden del catálogo', () => {
+  const tipos_foto = [
+    { clave: 'camion_patentes', nombre: 'Camión', grupo: 'exterior', obligatoria: true, condicion: null, maximo: 4 },
+    { clave: 'sello_cierre', nombre: 'Sello', grupo: 'cierre', obligatoria: true, condicion: null, maximo: 3 },
+    { clave: 'contenedor', nombre: 'Contenedor', grupo: 'exterior', obligatoria: true, condicion: 'contenedor', maximo: 3 },
+    { clave: 'nueva', nombre: 'Nueva', grupo: 'futuro', obligatoria: false, condicion: null, maximo: 3 },
+  ];
+  const grupos_foto = [{ clave: 'exterior', titulo: '1. Exterior' }, { clave: 'interior', titulo: '2. Interior' }, { clave: 'cierre', titulo: '3. Cierre' }];
+  assert.deepEqual(photoGroups({ tipos_foto, grupos_foto }).map((g) => [g.titulo, g.tipos.map((t) => t.clave)]), [
+    ['1. Exterior', ['camion_patentes', 'contenedor']], ['3. Cierre', ['sello_cierre']], ['Otras', ['nueva']],
+  ]);
+  // Un servidor anterior sin etapas: una sola lista sin título.
+  assert.deepEqual(photoGroups({ tipos_foto }).map((g) => [g.titulo, g.tipos.length]), [[null, 4]]);
 });

@@ -6,6 +6,7 @@ return [
     'cierre_exige_pallets_cargados' => (bool) env('DESPACHO_CIERRE_EXIGE_CARGADOS', false),
 
     // Con «true», cerrar la planilla R-24 de consolidación exige las fotos obligatorias del
-    // set estándar (FormularioControlDespacho::tiposFoto). Activar cuando el set sea oficial.
-    'control_exige_fotos' => (bool) env('CONTROL_DESPACHO_EXIGE_FOTOS', false),
+    // set de consolidación (FormularioControlDespacho::tiposFoto), oficial desde el 12-11-2026.
+    // «false» las deja como pendientes sin bloquear el cierre.
+    'control_exige_fotos' => (bool) env('CONTROL_DESPACHO_EXIGE_FOTOS', true),
 ];
