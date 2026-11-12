@@ -21,7 +21,7 @@ use Laravel\Sanctum\HasApiTokens;
 use Laravel\Sanctum\NewAccessToken;
 
 #[Fillable(['name', 'email', 'password', 'rol', 'perfil_acceso_id', 'activo', 'debe_cambiar_password'])]
-#[Hidden(['password', 'remember_token', 'pin_operacional_hash'])]
+#[Hidden(['password', 'remember_token', 'pin_operacional_hash', 'foto_perfil_ruta'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */

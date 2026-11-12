@@ -168,6 +168,7 @@ export function initializeOfficeShell() {
         syncMenu();
     });
     root.addEventListener('keydown', (event) => {
+        if (event.target.closest?.('dialog[open]')) return;
         if (event.key === 'Escape' && !desktop.matches && root.hasAttribute('data-menu-open')) {
             event.preventDefault();
             closeMobileMenu();
