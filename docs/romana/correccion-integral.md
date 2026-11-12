@@ -6,8 +6,10 @@ cuando Validación MP ya confirmó la recepción. Antes de eso se usa la correcc
 Se envía el estado correcto completo y siempre un motivo:
 
 - **Guías**: número y envases declarados de cada guía del camión (no se agregan ni quitan guías).
-- **Conteo de Validación MP por segmento**: lo realmente recibido. La suma por tipo es lo validado de la recepción.
-  Se pueden agregar tipos de envase (por ejemplo, totes registrados como bins).
+- **Conteo de Validación MP por segmento**: lo realmente recibido, con fruta y vacíos por separado. La suma por tipo
+  (con fruta más vacíos) es lo validado de la recepción. Se pueden agregar tipos de envase (por ejemplo, totes registrados
+  como bins). Si un segmento no envía `cantidad_vacia`, conserva sus vacíos registrados; cambiarlos rehace el peso
+  promedio por envase.
 - **Propiedad** por tipo de envase (cliente, propia o arrendada) en recepciones con fruta.
 - **Recepción solo de envases**: el conteo recibido por tipo; la propiedad la define el concepto (compra o arriendo).
 - **Destare** (recepción cerrada de fruta con envases): tara del camión, si salió con los mismos envases, con otros o

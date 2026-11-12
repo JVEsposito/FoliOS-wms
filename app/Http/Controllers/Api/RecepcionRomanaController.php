@@ -29,6 +29,7 @@ use App\Models\RecepcionRomana;
 use App\Models\Temporada;
 use App\Services\Envases\ServicioPrestamoInternoEnvases;
 use App\Services\Romana\GeneradorAvisoReciboPdf;
+use App\Services\Romana\ObservacionConteoRecepcion;
 use App\Services\Romana\ServicioAnulacionRecepcionRomana;
 use App\Services\Romana\ServicioCorreccionIntegralRecepcion;
 use App\Services\Romana\ServicioGuiasRecepcionRomana;
@@ -239,6 +240,7 @@ class RecepcionRomanaController extends Controller
             'segmentos' => ['sometimes', 'array'], 'segmentos.*.id' => ['required', 'uuid'],
             'segmentos.*.envases' => ['present', 'array'], 'segmentos.*.envases.*.tipo_envase' => ['required', Rule::in($tipos)],
             'segmentos.*.envases.*.cantidad' => ['required', 'integer', 'min:0', 'max:100000'],
+            'segmentos.*.envases.*.cantidad_vacia' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:100000'],
             'envases_validados' => ['sometimes', 'array'], 'envases_validados.*.tipo_envase' => ['required', Rule::in($tipos)],
             'envases_validados.*.cantidad' => ['required', 'integer', 'min:0', 'max:100000'],
             'propiedades' => ['sometimes', 'array'], 'propiedades.*.tipo_envase' => ['required', Rule::in($tipos)],
@@ -416,6 +418,8 @@ class RecepcionRomanaController extends Controller
                 'propiedad' => $recepcion->propiedadEnvase($detalle->tipo_envase->value)->value,
                 'cantidad_declarada' => $detalle->cantidad_declarada,
                 'cantidad_validada' => $detalle->cantidad_validada,
+                'cantidad_vacia' => $detalle->cantidad_vacia,
+                'cantidad_con_fruta' => $detalle->cantidad_validada === null ? null : $detalle->cantidadConFruta(),
                 'tara_unitaria_salida' => $detalle->tara_unitaria_salida !== null
                     ? (float) $detalle->tara_unitaria_salida
                     : null,
@@ -485,6 +489,8 @@ class RecepcionRomanaController extends Controller
             'validado_at' => $recepcion->validado_at?->toAtomString(),
             'observacion' => $recepcion->observacion,
             'observacion_cierre' => $recepcion->observacion_cierre,
+            // Diferencias de conteo y vacíos de Validación MP; también van en el RPR-01.
+            'observacion_conteo' => app(ObservacionConteoRecepcion::class)->lineas($recepcion),
             'version' => $recepcion->version,
             'puede_editar' => $puedeEditar,
             'puede_corregir_peso_bruto' => Gate::allows('corregir-peso-bruto-romana')

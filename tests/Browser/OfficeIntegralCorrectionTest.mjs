@@ -74,11 +74,15 @@ test('Administración corrige guías, conteo, propiedad y destare de una recepci
             await dialog.locator('#integralForm').waitFor();
             assert.equal(await dialog.locator('[data-numero="g1"]').inputValue(), '1511');
             await dialog.locator('[data-numero="g1"]').fill('1521');
-            await dialog.locator('[data-segmento="s1"][data-tipo="totes"]').fill('50');
+            await dialog.locator('[data-segmento="s1"][data-tipo="totes"]').fill('49');
+            // Un tote vacío del segmento 2: entra a la cuenta corriente, no al lote.
+            await dialog.locator('[data-vacio="s2"][data-tipo="totes"]').fill('1');
             await dialog.locator('[data-propiedad="bins"]').selectOption('arrendada');
             // Un tipo nuevo aparece en todas las tablas y conserva lo digitado.
             await dialog.locator('#integralAddType').selectOption('esponjas');
-            assert.equal(await dialog.locator('[data-segmento="s1"][data-tipo="totes"]').inputValue(), '50');
+            assert.equal(await dialog.locator('[data-segmento="s1"][data-tipo="totes"]').inputValue(), '49');
+            assert.equal(await dialog.locator('[data-vacio="s2"][data-tipo="totes"]').inputValue(), '1');
+            assert.equal(await dialog.locator('[data-vacio="s2"][data-tipo="esponjas"]').count(), 0, 'Las esponjas no traen fruta: no tienen vacíos.');
             await dialog.locator('[data-segmento="s2"][data-tipo="esponjas"]').fill('4');
             await dialog.locator('[data-tara="esponjas"]').fill('1');
             await dialog.locator('[name="modo_salida_envases"]').selectOption('diferentes');
@@ -100,8 +104,9 @@ test('Administración corrige guías, conteo, propiedad y destare de una recepci
             const data = writes[1];
             assert.equal(data.version_conocida, 7);
             assert.deepEqual(data.guias.map((g) => g.numero_guia_despacho), ['1521', '1512']);
-            assert.deepEqual(data.segmentos[0].envases, [{ tipo_envase: 'bins', cantidad: 2 }, { tipo_envase: 'totes', cantidad: 50 }]);
-            assert.deepEqual(data.segmentos[1].envases, [{ tipo_envase: 'bins', cantidad: 2 }, { tipo_envase: 'totes', cantidad: 49 }, { tipo_envase: 'esponjas', cantidad: 4 }]);
+            assert.deepEqual(data.segmentos[0].envases, [{ tipo_envase: 'bins', cantidad: 2, cantidad_vacia: 0 }, { tipo_envase: 'totes', cantidad: 49, cantidad_vacia: 0 }]);
+            assert.deepEqual(data.segmentos[1].envases, [{ tipo_envase: 'bins', cantidad: 2, cantidad_vacia: 0 }, { tipo_envase: 'totes', cantidad: 49, cantidad_vacia: 1 },
+                { tipo_envase: 'esponjas', cantidad: 4, cantidad_vacia: 0 }]);
             assert.deepEqual(data.propiedades, [{ tipo_envase: 'bins', propiedad: 'arrendada' }, { tipo_envase: 'totes', propiedad: 'cliente' }, { tipo_envase: 'esponjas', propiedad: 'cliente' }]);
             assert.deepEqual(data.destare, { peso_tara: 9900, modo_salida_envases: 'diferentes', numero_guia_salida: 'GS-1',
                 salida_envases: [{ tipo_envase: 'bins', cantidad: 4 }, { tipo_envase: 'totes', cantidad: 99 }],

@@ -1,4 +1,4 @@
-import { ContainerCode, ContainerOption } from '../services/containerCatalog';
+import type { ContainerCode, ContainerOption } from '../services/containerCatalog';
 export type ContainerType = ContainerCode;
 export type ReceptionType = 'fruta_con_envases' | 'fruta_pesaje_envases' | 'solo_envases';
 export type MpValidationState = 'pendiente' | 'en_curso' | 'validada';
@@ -49,7 +49,11 @@ export type MpReception = {
     tipo_envase: ContainerType;
     cantidad_declarada: number;
     cantidad_validada: number | null;
+    /** Contados que llegaron sin fruta. Los servidores anteriores no lo envían. */
+    cantidad_vacia?: number;
     diferencia: number | null;
+    /** Solo los tipos que traen fruta admiten vacíos; sin el dato, la PDA no los pide. */
+    contiene_fruta?: boolean;
   }>;
   tomada_por: { id: string; nombre: string } | null;
   validacion: MpValidation | null;
@@ -79,7 +83,8 @@ export type MpValidation = {
     variedad: string | null;
     estado: 'pendiente_lote';
     bins_prestados_planta: number;
-    envases: Array<{ tipo_envase: ContainerType; cantidad: number }>;
+    /** `cantidad` va al lote (con fruta); `cantidad_vacia` llegó vacío con el segmento. */
+    envases: Array<{ tipo_envase: ContainerType; cantidad: number; cantidad_vacia?: number }>;
   }>;
 };
 
@@ -106,4 +111,36 @@ export type MpSegmentDraft = {
   cantidades: Record<ContainerType, string>;
   /** Bins de planta del segmento; null usa la sugerencia. */
   bins_planta: string | null;
+  /** Vacíos del segmento por tipo, incluidos en `cantidades`. */
+  vacios?: Record<ContainerType, string>;
 };
+
+/** Conteo de un tipo: `cantidad_vacia` es la parte de lo contado que llegó sin fruta. */
+export type MpContainerCount = { tipo_envase: ContainerType; cantidad_validada: number; cantidad_vacia?: number };
+
+/** Envases con fruta: la base del peso promedio por envase. */
+export function containersWithFruit(count: MpContainerCount): number {
+  return Math.max(0, count.cantidad_validada - (count.cantidad_vacia ?? 0));
+}
+
+export function emptyCountProblem(containers: MpContainerCount[], labelOf: (type: string) => string): string | null {
+  const exceeded = containers.find((item) => (item.cantidad_vacia ?? 0) > item.cantidad_validada);
+  return exceeded ? `${labelOf(exceeded.tipo_envase)}: los vacíos no pueden superar los contados.` : null;
+}
+
+/** Con segmentos, los vacíos de cada tipo se reparten entre ellos y suman el total contado. */
+export function segmentEmptiesProblem(containers: MpContainerCount[], segments: MpSegmentDraft[], labelOf: (type: string) => string): string | null {
+  for (const container of containers) {
+    const total = container.cantidad_vacia ?? 0;
+    let sum = 0;
+    for (const [index, segment] of segments.entries()) {
+      const empties = Number(segment.vacios?.[container.tipo_envase] || 0);
+      if (empties > Number(segment.cantidades[container.tipo_envase] || 0)) {
+        return `Segmento ${index + 1}: los vacíos de ${labelOf(container.tipo_envase).toLowerCase()} no pueden superar sus contados.`;
+      }
+      sum += empties;
+    }
+    if (sum !== total) return `${labelOf(container.tipo_envase)}: reparte los ${total} vacíos entre los segmentos (van ${sum}).`;
+  }
+  return null;
+}

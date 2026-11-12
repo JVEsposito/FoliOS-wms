@@ -58,7 +58,11 @@ class GeneradorAvisoReciboPdf
 
         return $this->renderizar(
             $this->formatos->paraRomana($recepcion), $valores,
-            [$recepcion->observacion, $recepcion->observacion_cierre],
+            [$recepcion->observacion, collect([
+                // Lo que Validación MP contó distinto de la guía: el chofer lo firma con el destare.
+                app(ObservacionConteoRecepcion::class)->resumen($recepcion),
+                $recepcion->observacion_cierre,
+            ])->filter(fn ($texto): bool => filled($texto))->implode("\n") ?: null],
             [$cerrada ? $recepcion->cerradoPor?->name : null, $recepcion->nombre_conductor, null],
         );
     }

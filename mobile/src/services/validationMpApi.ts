@@ -51,7 +51,7 @@ export async function takeMpReception(baseUrl: string, token: string, receptionI
 }
 
 export async function confirmMpValidation(baseUrl: string, token: string, validationId: string, input: {
-  containers: Array<{ tipo_envase: ContainerType; cantidad_validada: number }>;
+  containers: Array<{ tipo_envase: ContainerType; cantidad_validada: number; cantidad_vacia?: number }>;
   tagsChecked: boolean;
   segregation: boolean;
   csgId: string | null;
@@ -68,16 +68,18 @@ export async function confirmMpValidation(baseUrl: string, token: string, valida
     cuartel: segment.cuartel || null,
     variedad_validacion_id: segment.variedad_validacion_id,
     bins_prestados_planta: Number(segment.bins_planta || 0),
-    envases: input.containers.map((container) => ({
-      tipo_envase: container.tipo_envase,
-      cantidad: Number(segment.cantidades[container.tipo_envase] || 0),
-    })),
+    // En la PDA el segmento cuenta todo; el servidor recibe aparte los envases con fruta y los vacíos.
+    envases: input.containers.map((container) => {
+      const counted = Number(segment.cantidades[container.tipo_envase] || 0);
+      const empties = Number(segment.vacios?.[container.tipo_envase] || 0);
+      return { tipo_envase: container.tipo_envase, cantidad: counted - empties, ...(empties > 0 ? { cantidad_vacia: empties } : {}) };
+    }),
   })) : undefined;
   return (await request<{ data: MpValidation }>(baseUrl, `/api/validacion-mp/validaciones/${validationId}/confirmar`, token, {
     method: 'POST',
     body: JSON.stringify({
       operacion_id: Crypto.randomUUID(),
-      envases: input.containers,
+      envases: input.containers.map(({ cantidad_vacia, ...container }) => (cantidad_vacia ? { ...container, cantidad_vacia } : container)),
       tarjas_verificadas: input.tagsChecked,
       requiere_segregacion: input.segregation,
       csg_validacion_id: input.segregation ? null : input.csgId,

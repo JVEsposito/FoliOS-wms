@@ -171,8 +171,9 @@ class ServicioValidacionMp
             if ($binsPlanta > 0 && ! $esFruta) {
                 throw ValidationException::withMessages(['bins_prestados_planta' => 'Los bins de planta solo se agregan a recepciones con fruta.']);
             }
+            $vacios = $this->vacios($cantidades, $esFruta);
             $segmentos = $esFruta
-                ? $this->prepararSegmentos($validacion, $recepcion, $datos, $cantidades, $requiereSegregacion, $binsPlanta)
+                ? $this->prepararSegmentos($validacion, $recepcion, $datos, $cantidades, $requiereSegregacion, $binsPlanta, $vacios)
                 : [];
             $segmentos = app(ServicioGuiasRecepcionRomana::class)->distribuirSegmentos($recepcion, $segmentos, $cantidades);
             $tiposReparto = $recepcion->peso_neto !== null
@@ -187,8 +188,10 @@ class ServicioValidacionMp
             $ahora = now();
             foreach ($recepcion->detallesEnvases as $detalle) {
                 $cantidadValidada = (int) $cantidades->get($detalle->tipo_envase->value)['cantidad_validada'];
-                $detalle->update(['cantidad_validada' => $cantidadValidada]);
-                $this->crearMovimiento($recepcion, $detalle->tipo_envase->value, $detalle->cantidad_declarada, $cantidadValidada, $usuario, $ahora);
+                $vacia = $vacios[$detalle->tipo_envase->value] ?? 0;
+                $detalle->update(['cantidad_validada' => $cantidadValidada, 'cantidad_vacia' => $vacia]);
+                // La cuenta corriente recibe todo lo contado: los vacíos también son envases del cliente.
+                $this->crearMovimiento($recepcion, $detalle->tipo_envase->value, $detalle->cantidad_declarada, $cantidadValidada, $usuario, $ahora, $vacia);
             }
             $prestamos = app(ServicioPrestamoInternoEnvases::class);
             if ($prestamos->prestar($recepcion, $binsPlanta, $usuario, $ahora, $validacion->id)
@@ -200,6 +203,7 @@ class ServicioValidacionMp
             foreach ($segmentos as $segmento) {
                 $this->guardarSegmento($validacion, $recepcion, $segmento);
             }
+            $this->ajustarNetoPorEnvase($recepcion, $datos['operacion_id'], $usuario, $ahora);
 
             app(ServicioInspeccionEnvases::class)->guardar($recepcion, 'recepcion', $cantidades->mapWithKeys(fn ($e, $t) => [$t => (int) $e['cantidad_validada']])->all(), $datos['inspeccion_envases'] ?? null, $usuario, $datos['operacion_id']);
 
@@ -229,6 +233,7 @@ class ServicioValidacionMp
         $cantidades,
         bool $requiereSegregacion,
         int $binsPlanta,
+        array $vacios,
     ): array {
         if (! $requiereSegregacion) {
             return [[
@@ -238,7 +243,8 @@ class ServicioValidacionMp
                 'bins_prestados_planta' => $binsPlanta,
                 'envases' => $cantidades->map(fn (array $envase, string $tipo): array => [
                     'tipo_envase' => $tipo,
-                    'cantidad' => (int) $envase['cantidad_validada'],
+                    'cantidad' => (int) $envase['cantidad_validada'] - ($vacios[$tipo] ?? 0),
+                    'cantidad_vacia' => $vacios[$tipo] ?? 0,
                 ])->values()->all(),
             ]];
         }
@@ -248,6 +254,7 @@ class ServicioValidacionMp
             throw ValidationException::withMessages(['segmentos' => 'Una segregación debe crear al menos dos segmentos futuros.']);
         }
         $sumas = [];
+        $sumasVacias = [];
         $tiposDeclarados = $cantidades->keys();
         foreach ($segmentos as $indice => $segmento) {
             $motivos = collect($segmento['motivos'] ?? [])->unique()->values();
@@ -279,12 +286,20 @@ class ServicioValidacionMp
             $segmentos[$indice]['motivos'] = $motivos->all();
             $segmentos[$indice]['envases'] = $envases->values()->all();
             foreach ($envases as $envase) {
-                $sumas[$envase['tipo_envase']] = ($sumas[$envase['tipo_envase']] ?? 0) + (int) $envase['cantidad'];
+                $vacia = (int) ($envase['cantidad_vacia'] ?? 0);
+                if ($vacia > 0 && ($vacios[$envase['tipo_envase']] ?? 0) === 0) {
+                    throw ValidationException::withMessages(["segmentos.{$indice}.envases" => $this->nombre($envase['tipo_envase']).': indica primero en el conteo cuántos llegaron vacíos.']);
+                }
+                $sumas[$envase['tipo_envase']] = ($sumas[$envase['tipo_envase']] ?? 0) + (int) $envase['cantidad'] + $vacia;
+                $sumasVacias[$envase['tipo_envase']] = ($sumasVacias[$envase['tipo_envase']] ?? 0) + $vacia;
             }
         }
         foreach ($cantidades as $tipo => $cantidad) {
             if (($sumas[$tipo] ?? 0) !== (int) $cantidad['cantidad_validada']) {
                 throw ValidationException::withMessages(['segmentos' => "La distribución de {$tipo} entre segmentos no coincide con lo validado."]);
+            }
+            if (($sumasVacias[$tipo] ?? 0) !== ($vacios[$tipo] ?? 0)) {
+                throw ValidationException::withMessages(['segmentos' => $this->nombre($tipo).': indica en qué segmento llegaron los vacíos; deben sumar '.($vacios[$tipo] ?? 0).'.']);
             }
         }
         if (array_sum(array_map(fn (array $segmento): int => (int) ($segmento['bins_prestados_planta'] ?? 0), $segmentos)) !== $binsPlanta) {
@@ -331,13 +346,14 @@ class ServicioValidacionMp
             'observacion' => $segmento['observacion'] ?? null,
         ]);
         foreach ($segmento['envases'] as $envase) {
-            if ((int) $envase['cantidad'] === 0) {
+            if ((int) $envase['cantidad'] === 0 && (int) ($envase['cantidad_vacia'] ?? 0) === 0) {
                 continue;
             }
             SegmentoEnvaseValidacionMp::create([
                 'segmento_validacion_mp_id' => $creado->id,
                 'tipo_envase' => $envase['tipo_envase'],
                 'cantidad' => $envase['cantidad'],
+                'cantidad_vacia' => (int) ($envase['cantidad_vacia'] ?? 0),
             ]);
         }
     }
@@ -349,6 +365,7 @@ class ServicioValidacionMp
         int $validada,
         User $usuario,
         mixed $validadoAt,
+        int $vacia = 0,
     ): void {
         [$tipo, $signoCuenta, $propiedad] = match ($recepcion->tipo_recepcion) {
             TipoRecepcionRomana::FrutaConEnvases,
@@ -385,9 +402,62 @@ class ServicioValidacionMp
                 'guias' => app(ServicioGuiasRecepcionRomana::class)->datos($recepcion),
                 'cantidad_validada' => $validada,
                 'diferencia' => $validada - $declarada,
+                'cantidad_vacia' => $vacia,
                 'validado_at' => $validadoAt->toAtomString(),
             ],
         ]);
+    }
+
+    /**
+     * Envases que llegaron vacíos por tipo. Solo en recepciones con fruta y en tipos que
+     * transportan fruta; nunca más que lo contado.
+     *
+     * @return array<string, int>
+     */
+    private function vacios($cantidades, bool $esFruta): array
+    {
+        $vacios = [];
+        foreach ($cantidades as $tipo => $envase) {
+            $vacia = (int) ($envase['cantidad_vacia'] ?? 0);
+            if ($vacia === 0) {
+                continue;
+            }
+            if (! $esFruta || ! TipoEnvaseRomana::from($tipo)->contieneFruta()) {
+                throw ValidationException::withMessages(['envases' => 'Solo se registran vacíos en envases que traen fruta.']);
+            }
+            if ($vacia > (int) $envase['cantidad_validada']) {
+                throw ValidationException::withMessages(['envases' => $this->nombre($tipo).': los vacíos no pueden superar los contados.']);
+            }
+            $vacios[$tipo] = $vacia;
+        }
+        $conFruta = collect($cantidades)->filter(fn ($envase, $tipo): bool => TipoEnvaseRomana::from($tipo)->contieneFruta())
+            ->sum(fn ($envase, $tipo): int => (int) $envase['cantidad_validada'] - ($vacios[$tipo] ?? 0));
+        if ($vacios !== [] && $conFruta === 0) {
+            throw ValidationException::withMessages(['envases' => 'Con todos los envases vacíos no queda fruta que validar. Revisa el conteo de vacíos.']);
+        }
+
+        return $vacios;
+    }
+
+    /** Pesaje acumulativo: Romana ya cerró, así que el neto por envase se rehace con el conteo. */
+    private function ajustarNetoPorEnvase(RecepcionRomana $recepcion, string $operacionId, User $usuario, mixed $ahora): void
+    {
+        $cambio = app(ServicioRepartoEnvases::class)->ajustarAConteo($recepcion->load('detallesEnvases'));
+        if ($cambio === null) {
+            return;
+        }
+        EventoRecepcionRomana::create([
+            'operacion_id' => Str::uuid()->toString(), 'payload_hash' => hash('sha256', $operacionId.'|neto_por_envase'),
+            'recepcion_romana_id' => $recepcion->id, 'tipo' => TipoEventoRomana::NetoPorEnvaseAjustado,
+            'estado_anterior' => $recepcion->estado, 'estado_nuevo' => $recepcion->estado,
+            'user_id' => $usuario->id, 'ocurrido_at' => $ahora,
+            'datos' => ['origen' => 'validacion_mp', 'operacion_validacion_id' => $operacionId, ...$cambio],
+        ]);
+    }
+
+    private function nombre(string $tipo): string
+    {
+        return TipoEnvaseRomana::from($tipo)->etiqueta();
     }
 
     private function cargar(ValidacionMp $validacion): ValidacionMp

@@ -3,6 +3,7 @@
 namespace App\Services\Romana;
 
 use App\Enums\TipoEnvaseRomana;
+use App\Enums\TipoRecepcionRomana;
 use App\Models\EspecieValidacion;
 use App\Models\RecepcionRomana;
 use Illuminate\Support\Facades\DB;
@@ -42,7 +43,8 @@ class ServicioRepartoEnvases
         if ($recepcion->tipo_envase_calculo_neto) {
             return [$recepcion->tipo_envase_calculo_neto];
         }
-        $fruta = $recepcion->detallesEnvases->filter(fn ($detalle): bool => $detalle->tipo_envase->contieneFruta() && ($detalle->cantidad_validada ?? $detalle->cantidad_declarada) > 0);
+        $fruta = $recepcion->detallesEnvases->filter(fn ($detalle): bool => $detalle->tipo_envase->contieneFruta()
+            && ($detalle->cantidad_validada !== null ? $detalle->cantidadConFruta() : $detalle->cantidad_declarada) > 0);
         $sugerido = $this->configuracion($recepcion->especie_validacion_id)['sugerido'];
         if ($sugerido && $fruta->contains(fn ($detalle): bool => $detalle->tipo_envase->value === $sugerido)) {
             return [$sugerido];
@@ -55,7 +57,8 @@ class ServicioRepartoEnvases
     public function preparar(RecepcionRomana $recepcion, float $neto, ?array $seleccion): array
     {
         $seleccion ??= $this->tipos($recepcion);
-        $cantidades = $recepcion->detallesEnvases->mapWithKeys(fn ($d): array => [$d->tipo_envase->value => (int) $d->cantidad_validada])->all();
+        // Solo los envases con fruta: los que llegaron vacíos no bajan el peso promedio.
+        $cantidades = $recepcion->detallesEnvases->mapWithKeys(fn ($d): array => [$d->tipo_envase->value => $d->cantidadConFruta()])->all();
         $referencias = $this->configuracion($recepcion->especie_validacion_id)['referencias'];
         $reparto = $this->calcular($neto, $cantidades, $seleccion, $referencias);
         // MP ocurre antes del destare: la selección final debe servir para todos sus segmentos.
@@ -66,6 +69,60 @@ class ServicioRepartoEnvases
         }
 
         return $reparto;
+    }
+
+    /**
+     * Pesaje acumulativo: Romana cierra antes de Validación MP con lo pesado en las tandas.
+     * Al validar, el neto pesado de cada tipo se reparte entre sus envases con fruta según el
+     * conteo de la PDA, sin los vacíos. El neto total no cambia. Devuelve el cambio aplicado,
+     * o null si no hubo cambio.
+     *
+     * @return array{anterior: array<string, mixed>, posterior: array<string, mixed>}|null
+     */
+    public function ajustarAConteo(RecepcionRomana $recepcion): ?array
+    {
+        if ($recepcion->tipo_recepcion !== TipoRecepcionRomana::FrutaPesajeEnvases
+            || $recepcion->peso_neto === null || ! $recepcion->tipo_envase_calculo_neto) {
+            return null;
+        }
+        $recepcion->loadMissing('detallesEnvases');
+        $conFruta = $recepcion->detallesEnvases->mapWithKeys(fn ($d): array => [$d->tipo_envase->value => $d->cantidadConFruta()])->all();
+        $cantidadDe = function (string $tipo) use ($conFruta): int {
+            $cantidad = $conFruta[$tipo] ?? 0;
+            if ($cantidad < 1) {
+                $nombre = TipoEnvaseRomana::from($tipo)->etiqueta();
+                throw ValidationException::withMessages(['envases' => "{$nombre}: Romana pesó fruta, pero el conteo no deja ninguno con fruta. Revisa los vacíos."]);
+            }
+
+            return $cantidad;
+        };
+        $campos = ['tipo_envase_calculo_neto', 'cantidad_envase_calculo_neto', 'peso_neto_por_envase', 'reparto_neto_envases'];
+        $anterior = [
+            'tipo_envase_calculo_neto' => $recepcion->tipo_envase_calculo_neto,
+            'cantidad_envase_calculo_neto' => (int) $recepcion->cantidad_envase_calculo_neto,
+            'peso_neto_por_envase' => $recepcion->peso_neto_por_envase !== null ? (float) $recepcion->peso_neto_por_envase : null,
+            'reparto_neto_envases' => $recepcion->reparto_neto_envases,
+        ];
+        if ($recepcion->reparto_neto_envases) {
+            $filas = array_map(function (array $fila) use ($cantidadDe): array {
+                $cantidad = $cantidadDe($fila['tipo_envase']);
+                $unitario = round((float) $fila['peso_neto'] / $cantidad, 3);
+
+                return [...$fila, 'cantidad' => $cantidad, 'peso_referencia' => $unitario, 'peso_neto_unitario' => $unitario];
+            }, $recepcion->reparto_neto_envases);
+            $posterior = ['tipo_envase_calculo_neto' => $filas[0]['tipo_envase'], 'cantidad_envase_calculo_neto' => $filas[0]['cantidad'],
+                'peso_neto_por_envase' => $filas[0]['peso_neto_unitario'], 'reparto_neto_envases' => $filas];
+        } else {
+            $cantidad = $cantidadDe($recepcion->tipo_envase_calculo_neto);
+            $posterior = ['tipo_envase_calculo_neto' => $recepcion->tipo_envase_calculo_neto, 'cantidad_envase_calculo_neto' => $cantidad,
+                'peso_neto_por_envase' => round((float) $recepcion->peso_neto / $cantidad, 3), 'reparto_neto_envases' => null];
+        }
+        if ($posterior == $anterior) {
+            return null;
+        }
+        $recepcion->update(array_intersect_key($posterior, array_flip($campos)));
+
+        return ['anterior' => $anterior, 'posterior' => $posterior];
     }
 
     /** Función pura. Las referencias se congelan al cerrar; no vuelven a leerse para lotizar. */

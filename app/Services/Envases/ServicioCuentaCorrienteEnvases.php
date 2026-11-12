@@ -454,7 +454,8 @@ class ServicioCuentaCorrienteEnvases
                     foreach ($segmento->envases as $envase) {
                         $tipo = $envase->tipo_envase->value;
                         $envases[$tipo][$clave] ??= [...$csg[$clave], 'cantidad' => 0];
-                        $envases[$tipo][$clave]['cantidad'] += $envase->cantidad;
+                        // Los vacíos también son envases del productor en la cuenta corriente.
+                        $envases[$tipo][$clave]['cantidad'] += $envase->cantidad + $envase->cantidad_vacia;
                     }
                 }
 

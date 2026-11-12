@@ -78,11 +78,14 @@ class ServicioCorreccionIntegralRecepcion
                 'id' => $s->id, 'secuencia' => $s->secuencia, 'guia_recepcion_romana_id' => $s->guia_recepcion_romana_id,
                 'csg' => $s->csg_snapshot ?: $s->csg?->codigo, 'variedad' => $s->variedad_snapshot,
                 'lotes' => $s->lotesMateriaPrima->where('estado', '!=', EstadoLoteMateriaPrima::Anulado)->pluck('numero_lote')->values()->all(),
-                'envases' => $s->envases->map(fn ($e): array => ['tipo_envase' => $e->tipo_envase->value, 'cantidad' => (int) $e->cantidad])->values()->all(),
+                // `cantidad` va al lote (con fruta); `cantidad_vacia` llegó vacío con el segmento.
+                'envases' => $s->envases->map(fn ($e): array => ['tipo_envase' => $e->tipo_envase->value, 'cantidad' => (int) $e->cantidad,
+                    'cantidad_vacia' => (int) $e->cantidad_vacia])->values()->all(),
             ])->all(),
             'envases' => $recepcion->detallesEnvases->map(fn ($d): array => [
                 'tipo_envase' => $d->tipo_envase->value, 'propiedad' => $recepcion->propiedadEnvase($d->tipo_envase->value)->value,
                 'cantidad_declarada' => (int) $d->cantidad_declarada, 'cantidad_validada' => (int) $d->cantidad_validada,
+                'cantidad_vacia' => (int) $d->cantidad_vacia,
                 'tara_unitaria_salida' => $d->tara_unitaria_salida !== null ? (float) $d->tara_unitaria_salida : null,
             ])->values()->all(),
             'destare' => $recepcion->estado === EstadoRecepcionRomana::Cerrado ? [
@@ -122,18 +125,20 @@ class ServicioCorreccionIntegralRecepcion
             $contexto = ['operacion_id' => $datos['operacion_id'], 'motivo' => $payload['motivo'], 'usuario_id' => $usuario->id, 'corregido_at' => $ahora->toAtomString()];
 
             $declarados = $this->corregirGuias($recepcion, $payload['guias']);
-            $validados = $recepcion->tipo_recepcion === TipoRecepcionRomana::SoloEnvases
-                ? $this->validadosSoloEnvases($payload)
+            [$validados, $vacios] = $recepcion->tipo_recepcion === TipoRecepcionRomana::SoloEnvases
+                ? [$this->validadosSoloEnvases($payload), []]
                 : $this->corregirSegmentos($recepcion, $segmentos, $payload['segmentos']);
             $this->asegurarCantidadesPermitidas($recepcion, $validados);
             $propiedades = $this->propiedades($recepcion, $payload, $validados);
-            $this->sincronizarDetalles($recepcion, $declarados, $validados, $propiedades, $payload['destare']['taras_envases'] ?? []);
+            $this->sincronizarDetalles($recepcion, $declarados, $validados, $vacios, $propiedades, $payload['destare']['taras_envases'] ?? []);
+            // Pesaje acumulativo: un cambio en los vacíos rehace el neto por envase sin tocar las tandas.
+            $cambioReparto = app(ServicioRepartoEnvases::class)->ajustarAConteo($recepcion) !== null;
             $this->guiasValidadas($recepcion, $segmentos, $validados);
             $this->ajustarIngresos($recepcion, $validados, $propiedades, $usuario, $contexto);
             $cambioKilos = $recepcion->estado === EstadoRecepcionRomana::Cerrado
-                && $this->corregirDestare($recepcion, $payload['destare'], $validados, $usuario, $ahora, $contexto);
+                && $this->corregirDestare($recepcion, $payload['destare'], $validados, $vacios, $usuario, $ahora, $contexto);
             $cambioLotes = $this->sincronizarLotes($recepcion, $segmentos, $usuario);
-            if (($cambioKilos || $cambioLotes) && $recepcion->peso_neto !== null && $recepcion->tipo_envase_calculo_neto) {
+            if (($cambioKilos || $cambioLotes || $cambioReparto) && $recepcion->peso_neto !== null && $recepcion->tipo_envase_calculo_neto) {
                 app(ServicioLoteMateriaPrima::class)->conciliarDestare($recepcion->refresh(), $usuario,
                     correccionPeso: ['operacion_romana_id' => (string) $datos['operacion_id'], 'motivo' => $payload['motivo']]);
             }
@@ -164,7 +169,11 @@ class ServicioCorreccionIntegralRecepcion
             'motivo' => trim((string) $datos['motivo_correccion']),
             'guias' => collect($datos['guias'])->map(fn ($g): array => ['id' => (string) $g['id'],
                 'numero_guia_despacho' => mb_strtoupper(trim((string) $g['numero_guia_despacho'])), 'envases' => $envases($g['envases'] ?? [])])->sortBy('id')->values()->all(),
-            'segmentos' => collect($datos['segmentos'] ?? [])->map(fn ($s): array => ['id' => (string) $s['id'], 'envases' => $envases($s['envases'] ?? [])])->sortBy('id')->values()->all(),
+            // Sin `cantidad_vacia` se conservan los vacíos registrados del segmento.
+            'segmentos' => collect($datos['segmentos'] ?? [])->map(fn ($s): array => ['id' => (string) $s['id'], 'envases' => collect($s['envases'] ?? [])
+                ->map(fn ($e): array => ['tipo_envase' => (string) $e['tipo_envase'], 'cantidad' => (int) $e['cantidad'],
+                    'cantidad_vacia' => array_key_exists('cantidad_vacia', $e) && $e['cantidad_vacia'] !== null ? (int) $e['cantidad_vacia'] : null])
+                ->filter(fn ($e): bool => $e['cantidad'] > 0 || $e['cantidad_vacia'] !== 0)->sortBy('tipo_envase')->values()->all()])->sortBy('id')->values()->all(),
             'envases_validados' => $envases($datos['envases_validados'] ?? []),
             'propiedades' => collect($datos['propiedades'] ?? [])->mapWithKeys(fn ($p): array => [(string) $p['tipo_envase'] => (string) $p['propiedad']])->sortKeys()->all(),
             'destare' => $destare === null ? null : [
@@ -247,7 +256,7 @@ class ServicioCorreccionIntegralRecepcion
 
     /**
      * @param  Collection<string, SegmentoValidacionMp>  $segmentos
-     * @return array<string, int> validados por tipo
+     * @return array{0: array<string, int>, 1: array<string, int>} validados (con vacíos) y vacíos por tipo
      */
     private function corregirSegmentos(RecepcionRomana $recepcion, Collection $segmentos, array $corregidos): array
     {
@@ -256,30 +265,43 @@ class ServicioCorreccionIntegralRecepcion
         }
         $reparto = app(ServicioRepartoEnvases::class)->tipos($recepcion);
         $validados = [];
+        $vacios = [];
         foreach ($corregidos as $i => $corregido) {
             $segmento = $segmentos[$corregido['id']];
+            $registrados = $segmento->envases->mapWithKeys(fn ($e): array => [$e->tipo_envase->value => (int) $e->cantidad_vacia])->all();
             $tieneReparto = false;
+            $nuevo = [];
             foreach ($corregido['envases'] as $envase) {
                 $this->tipoValido($envase['tipo_envase']);
-                $validados[$envase['tipo_envase']] = ($validados[$envase['tipo_envase']] ?? 0) + $envase['cantidad'];
-                $tieneReparto = $tieneReparto || in_array($envase['tipo_envase'], $reparto, true);
+                $tipo = $envase['tipo_envase'];
+                $vacia = $envase['cantidad_vacia'] ?? ($registrados[$tipo] ?? 0);
+                if ($vacia > 0 && ! TipoEnvaseRomana::from($tipo)->contieneFruta()) {
+                    throw ValidationException::withMessages(["segmentos.{$i}.envases" => 'Solo se registran vacíos en envases que traen fruta.']);
+                }
+                $validados[$tipo] = ($validados[$tipo] ?? 0) + $envase['cantidad'] + $vacia;
+                $vacios[$tipo] = ($vacios[$tipo] ?? 0) + $vacia;
+                $tieneReparto = $tieneReparto || (in_array($tipo, $reparto, true) && $envase['cantidad'] > 0);
+                if ($envase['cantidad'] > 0 || $vacia > 0) {
+                    $nuevo[$tipo] = ['cantidad' => $envase['cantidad'], 'cantidad_vacia' => $vacia];
+                }
             }
             if (! $tieneReparto) {
                 throw ValidationException::withMessages(["segmentos.{$i}.envases" => "El segmento {$segmento->secuencia} debe conservar al menos un envase de reparto con fruta."]);
             }
-            $actual = $segmento->envases->mapWithKeys(fn ($e): array => [$e->tipo_envase->value => (int) $e->cantidad])->filter()->sortKeys()->all();
-            $nuevo = collect($corregido['envases'])->mapWithKeys(fn ($e): array => [$e['tipo_envase'] => $e['cantidad']])->sortKeys()->all();
+            $actual = $segmento->envases->mapWithKeys(fn ($e): array => [$e->tipo_envase->value => ['cantidad' => (int) $e->cantidad, 'cantidad_vacia' => (int) $e->cantidad_vacia]])
+                ->filter(fn ($e): bool => $e['cantidad'] > 0 || $e['cantidad_vacia'] > 0)->sortKeys()->all();
+            ksort($nuevo);
             if ($actual === $nuevo) {
                 continue;
             }
             $segmento->envases()->whereNotIn('tipo_envase', array_keys($nuevo))->delete();
-            foreach ($nuevo as $tipo => $cantidad) {
-                $segmento->envases()->updateOrCreate(['tipo_envase' => $tipo], ['cantidad' => $cantidad]);
+            foreach ($nuevo as $tipo => $conteo) {
+                $segmento->envases()->updateOrCreate(['tipo_envase' => $tipo], $conteo);
             }
             $segmento->load('envases');
         }
 
-        return $validados;
+        return [$validados, array_filter($vacios)];
     }
 
     private function validadosSoloEnvases(array $payload): array
@@ -327,13 +349,14 @@ class ServicioCorreccionIntegralRecepcion
         return $propiedades;
     }
 
-    private function sincronizarDetalles(RecepcionRomana $recepcion, array $declarados, array $validados, array $propiedades, array $taras): void
+    private function sincronizarDetalles(RecepcionRomana $recepcion, array $declarados, array $validados, array $vacios, array $propiedades, array $taras): void
     {
         $tipos = array_unique([...array_keys($declarados), ...array_keys($validados)]);
         $recepcion->detallesEnvases()->whereNotIn('tipo_envase', $tipos)->delete();
         foreach ($tipos as $tipo) {
             $recepcion->detallesEnvases()->updateOrCreate(['tipo_envase' => $tipo], [
                 'cantidad_declarada' => $declarados[$tipo] ?? 0, 'cantidad_validada' => $validados[$tipo] ?? 0,
+                'cantidad_vacia' => $vacios[$tipo] ?? 0,
                 ...($recepcion->tipo_recepcion !== TipoRecepcionRomana::SoloEnvases && isset($propiedades[$tipo]) ? ['propiedad' => $propiedades[$tipo]] : []),
                 ...(isset($taras[$tipo]) ? ['tara_unitaria_salida' => $taras[$tipo]] : []),
             ]);
@@ -351,7 +374,8 @@ class ServicioCorreccionIntegralRecepcion
             } else {
                 foreach ($segmentos->where('guia_recepcion_romana_id', $guia->id) as $segmento) {
                     foreach ($segmento->envases as $envase) {
-                        $sumas[$envase->tipo_envase->value] = ($sumas[$envase->tipo_envase->value] ?? 0) + (int) $envase->cantidad;
+                        $sumas[$envase->tipo_envase->value] = ($sumas[$envase->tipo_envase->value] ?? 0)
+                            + (int) $envase->cantidad + (int) $envase->cantidad_vacia;
                     }
                 }
             }
@@ -446,7 +470,7 @@ class ServicioCorreccionIntegralRecepcion
     }
 
     /** Devuelve true si cambió el neto o el reparto, para conciliar los kilos de los lotes. */
-    private function corregirDestare(RecepcionRomana $recepcion, ?array $destare, array $validados, User $usuario, CarbonImmutable $ahora, array $contexto): bool
+    private function corregirDestare(RecepcionRomana $recepcion, ?array $destare, array $validados, array $vacios, User $usuario, CarbonImmutable $ahora, array $contexto): bool
     {
         if ($destare === null) {
             // Pesaje acumulativo: el destare viene de las tandas y las cantidades no cambian.
@@ -494,14 +518,17 @@ class ServicioCorreccionIntegralRecepcion
             $detalle->update(['tara_unitaria_salida' => $tarasUnitarias[$detalle->tipo_envase->value] ?? $detalle->tara_unitaria_salida]);
         }
         $repartoActual = app(ServicioRepartoEnvases::class)->snapshot($recepcion);
+        // La tara usa todo lo contado; el peso promedio, solo los envases con fruta.
+        $conFruta = array_map(fn (int $cantidad, string $tipo): int => $cantidad - ($vacios[$tipo] ?? 0), $validados, array_keys($validados));
+        $conFruta = array_combine(array_keys($validados), $conFruta);
         if ($recepcion->reparto_neto_envases) {
-            $seleccion = array_values(array_filter(array_column($recepcion->reparto_neto_envases, 'tipo_envase'), fn ($t): bool => ($validados[$t] ?? 0) > 0));
-            $reparto = app(ServicioRepartoEnvases::class)->calcular($neto, $validados, $seleccion,
+            $seleccion = array_values(array_filter(array_column($recepcion->reparto_neto_envases, 'tipo_envase'), fn ($t): bool => ($conFruta[$t] ?? 0) > 0));
+            $reparto = app(ServicioRepartoEnvases::class)->calcular($neto, $conFruta, $seleccion,
                 array_column($recepcion->reparto_neto_envases, 'peso_referencia', 'tipo_envase'));
             $calculo = ['reparto_neto_envases' => $reparto, 'tipo_envase_calculo_neto' => $reparto[0]['tipo_envase'],
                 'cantidad_envase_calculo_neto' => $reparto[0]['cantidad'], 'peso_neto_por_envase' => round($reparto[0]['peso_neto_unitario'], 3)];
         } else {
-            $cantidad = $validados[$recepcion->tipo_envase_calculo_neto] ?? 0;
+            $cantidad = $conFruta[$recepcion->tipo_envase_calculo_neto] ?? 0;
             if ($cantidad < 1) {
                 throw new ConflictoOperacion('No puedes dejar en cero el envase con que se calcula el neto por envase.');
             }

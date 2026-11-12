@@ -71,3 +71,24 @@ test('envía la guía de origen de cada segmento al servidor', async () => {
   });
   assert.deepEqual(body.segmentos.map((s) => s.guia_recepcion_romana_id), ['guia-1511', 'guia-1512']);
 });
+
+test('los vacíos viajan aparte: el segmento envía con fruta y vacíos, el conteo total no cambia', async () => {
+  let body;
+  const service = api(async (_url, options) => {
+    body = JSON.parse(options.body);
+    return new Response(JSON.stringify({ data: { estado: 'validada' } }));
+  });
+  await service.confirmMpValidation('https://planta.test', 'token', 'validation-1', {
+    containers: [{ tipo_envase: 'bins', cantidad_validada: 36 }, { tipo_envase: 'totes', cantidad_validada: 864, cantidad_vacia: 24 }],
+    tagsChecked: true, segregation: true, csgId: null, varietyId: null, plantBins: 0, observation: '', inspection: { items: [] },
+    segments: [
+      { motivos: ['csg'], csg_validacion_id: 'a', variedad_validacion_id: 'v', cuartel: '', cantidades: { bins: '20', totes: '480' }, vacios: { totes: '4' }, bins_planta: '0' },
+      { motivos: ['csg'], csg_validacion_id: 'b', variedad_validacion_id: 'v', cuartel: '', cantidades: { bins: '16', totes: '384' }, vacios: { totes: '20' }, bins_planta: '0' },
+    ],
+  });
+  assert.deepEqual(body.envases, [{ tipo_envase: 'bins', cantidad_validada: 36 }, { tipo_envase: 'totes', cantidad_validada: 864, cantidad_vacia: 24 }]);
+  assert.deepEqual(body.segmentos.map((s) => s.envases), [
+    [{ tipo_envase: 'bins', cantidad: 20 }, { tipo_envase: 'totes', cantidad: 476, cantidad_vacia: 4 }],
+    [{ tipo_envase: 'bins', cantidad: 16 }, { tipo_envase: 'totes', cantidad: 364, cantidad_vacia: 20 }],
+  ]);
+});
