@@ -8,7 +8,6 @@ use App\Models\ControlDespacho;
 use App\Models\FotoControlDespacho;
 use App\Models\User;
 use App\Services\Autorizacion\AlcanceOperacionalUsuario;
-use App\Services\Materiales\GeneradorMiniaturaItemMaterial;
 use DomainException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\UploadedFile;
@@ -19,14 +18,15 @@ use Illuminate\Validation\ValidationException;
 use RuntimeException;
 
 /**
- * Fotos de la planilla R-24. Hoy son opcionales; el set estándar se define en
- * {@see FormularioControlDespacho::tiposFoto()}. Se guardan en el disco privado.
+ * Fotos de la planilla R-24 (set en {@see FormularioControlDespacho::tiposFoto()}). Se guardan
+ * comprimidas en el disco privado mientras la planilla está abierta; al cerrarla pasan a un
+ * único PDF ({@see ArchivoFotosControlDespacho}) y sus archivos sueltos se borran.
  */
 class ServicioFotosControlDespacho
 {
     public function __construct(
         private readonly AlcanceOperacionalUsuario $alcance,
-        private readonly GeneradorMiniaturaItemMaterial $miniaturas,
+        private readonly CompresorFotoControlDespacho $compresor,
     ) {}
 
     /** @return array{0: FotoControlDespacho, 1: bool} */
@@ -36,10 +36,8 @@ class ServicioFotosControlDespacho
             throw new OperacionNoAutorizada('El usuario no está autorizado para registrar la planilla de consolidación.');
         }
         $tipos = FormularioControlDespacho::tiposFoto();
-        $mime = $archivo->getMimeType();
-        $ext = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'][$mime] ?? null;
-        if (! $ext || ! isset($tipos[$tipo]) || $archivo->getSize() > 5 * 1024 * 1024) {
-            throw ValidationException::withMessages(['archivo' => 'Usa JPG, PNG o WebP de hasta 5 MiB.']);
+        if (! in_array($archivo->getMimeType(), ['image/jpeg', 'image/png', 'image/webp'], true) || ! isset($tipos[$tipo]) || $archivo->getSize() > 8 * 1024 * 1024) {
+            throw ValidationException::withMessages(['archivo' => 'Usa JPG, PNG o WebP de hasta 8 MiB.']);
         }
         $sha = hash_file('sha256', $archivo->getRealPath());
         $existente = $this->repetida($control, $operacion, $tipo, $sha);
@@ -48,16 +46,16 @@ class ServicioFotosControlDespacho
         }
 
         $id = (string) Str::uuid();
-        $miniatura = $this->miniaturas->generar($archivo);
+        $comprimida = $this->compresor->comprimir($archivo);
         $base = 'control-despacho/'.$control->id;
-        $original = $base.'/'.$id.'.'.$ext;
+        $ruta = $base.'/'.$id.'.jpg';
         $rutaMiniatura = $base.'/'.$id.'-mini.jpg';
         $guardada = false;
         try {
-            if (! Storage::disk('local')->putFileAs($base, $archivo, basename($original)) || ! Storage::disk('local')->put($rutaMiniatura, $miniatura['jpeg'])) {
+            if (! Storage::disk('local')->put($ruta, $comprimida['jpeg']) || ! Storage::disk('local')->put($rutaMiniatura, $comprimida['miniatura'])) {
                 throw new RuntimeException('No se pudieron guardar las fotos del despacho.');
             }
-            $foto = DB::transaction(function () use ($control, $tipo, $tipos, $operacion, $usuario, $sha, $id, $mime, $archivo, $miniatura, $original, $rutaMiniatura): FotoControlDespacho {
+            $foto = DB::transaction(function () use ($control, $tipo, $tipos, $operacion, $usuario, $sha, $id, $archivo, $comprimida, $ruta, $rutaMiniatura): FotoControlDespacho {
                 $bloqueado = ControlDespacho::query()->lockForUpdate()->findOrFail($control->id);
                 if ($bloqueado->estaCerrado()) {
                     throw new DomainException('La planilla está cerrada: no admite fotos nuevas.');
@@ -70,8 +68,9 @@ class ServicioFotosControlDespacho
 
                 return FotoControlDespacho::create([
                     'id' => $id, 'control_despacho_id' => $bloqueado->id, 'tipo' => $tipo, 'orden' => $orden,
-                    'ruta_original' => $original, 'ruta_miniatura' => $rutaMiniatura, 'mime' => $mime,
-                    'bytes' => $archivo->getSize(), 'ancho' => $miniatura['ancho'], 'alto' => $miniatura['alto'],
+                    'ruta' => $ruta, 'ruta_miniatura' => $rutaMiniatura,
+                    'bytes' => strlen($comprimida['jpeg']), 'bytes_recibidos' => (int) $archivo->getSize(),
+                    'ancho' => $comprimida['ancho'], 'alto' => $comprimida['alto'],
                     'sha256' => $sha, 'operacion_id' => $operacion, 'subida_por_user_id' => $usuario->id,
                 ]);
             }, 3);
@@ -82,7 +81,7 @@ class ServicioFotosControlDespacho
             return [$this->repetida($control, $operacion, $tipo, $sha) ?? throw $error, false];
         } finally {
             if (! $guardada) {
-                Storage::disk('local')->delete([$original, $rutaMiniatura]);
+                Storage::disk('local')->delete([$ruta, $rutaMiniatura]);
             }
         }
     }
@@ -92,16 +91,20 @@ class ServicioFotosControlDespacho
         if (! $this->alcance->puedeRegistrarControlDespacho($usuario)) {
             throw new OperacionNoAutorizada('El usuario no está autorizado para registrar la planilla de consolidación.');
         }
-        DB::transaction(function () use ($control, $foto, $usuario): void {
+        $archivos = [];
+        DB::transaction(function () use ($control, $foto, $usuario, &$archivos): void {
             $bloqueado = ControlDespacho::query()->lockForUpdate()->findOrFail($control->id);
             if ($bloqueado->estaCerrado()) {
                 throw new DomainException('La planilla está cerrada: sus fotos ya no se quitan.');
             }
             $fila = FotoControlDespacho::query()->where('control_despacho_id', $bloqueado->id)->whereKey($foto->id)->lockForUpdate()->firstOrFail();
-            // Una foto de un borrador se reemplaza sin dejar rastro; queda la fila eliminada.
-            $fila->update(['eliminada_por_user_id' => $usuario->id]);
+            // La fila queda como registro de quién la quitó; su archivo se borra. Una foto ya
+            // archivada sale del PDF cuando la planilla se vuelva a cerrar.
+            $archivos = array_filter([$fila->ruta, $fila->ruta_miniatura]);
+            $fila->update(['eliminada_por_user_id' => $usuario->id, 'ruta' => null, 'ruta_miniatura' => null]);
             $fila->delete();
         }, 3);
+        Storage::disk('local')->delete(array_values($archivos));
     }
 
     private function repetida(ControlDespacho $control, string $operacion, string $tipo, string $sha): ?FotoControlDespacho

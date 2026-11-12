@@ -10,6 +10,7 @@ Route::middleware(['auth:sanctum', 'can:consultar-control-despacho'])->prefix('c
     Route::get('/controles', [ControlDespachoController::class, 'index']);
     Route::get('/controles/{controlDespacho}', [ControlDespachoController::class, 'show'])->whereUuid('controlDespacho');
     Route::get('/controles/{controlDespacho}/planilla.xlsx', [ControlDespachoController::class, 'planilla'])->whereUuid('controlDespacho');
+    Route::get('/controles/{controlDespacho}/fotos.pdf', [ControlDespachoController::class, 'fotosPdf'])->whereUuid('controlDespacho');
     Route::get('/controles/{controlDespacho}/fotos/{foto}/{variante}', [ControlDespachoController::class, 'foto'])
         ->whereUuid(['controlDespacho', 'foto'])->whereIn('variante', ['original', 'miniatura']);
 

@@ -69,6 +69,9 @@ class ControlDespacho extends Model implements PerteneceATemporada
             'reaperturas' => 'array',
             'iniciado_at' => 'datetime',
             'cerrado_at' => 'datetime',
+            'fotos_pdf_bytes' => 'integer',
+            'fotos_pdf_cantidad' => 'integer',
+            'fotos_pdf_generado_at' => 'datetime',
         ];
     }
 }

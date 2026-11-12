@@ -7,7 +7,7 @@ import { FieldHeader } from '../components/field/FieldHeader';
 import { EntityCode, EstibaAlert, EstibaButton, EstibaField, EstibaMetric, EstibaPanel, EstibaSignal } from '../components/ui/EstibaPrimitives';
 import {
   HEADER_GROUPS, OPTION_LABELS, PALLET_ORIENTATIONS, PALLET_STATE_LABELS, checkNotApplicable, orientationLabel, consolidationStorageKey, declaredPallets, fieldValue, fillNotApplicable,
-  formatTemperature, hasDraftChanges, nextFreePosition, palletsForList, palletsWithoutTemperature, parseBoxes, parsePosition, parseTemperature, photoRequirement,
+  formatBytes, formatTemperature, hasDraftChanges, nextFreePosition, palletsForList, palletsWithoutTemperature, parseBoxes, parsePosition, parseTemperature, photoRequirement,
   positionOccupant, sectionChanges,
   type ConsolidationCatalog, type ConsolidationControl, type ConsolidationDraft, type ConsolidationField, type ConsolidationLoad, type ConsolidationPallet,
   type ConsolidationSection,
@@ -440,7 +440,7 @@ function PhotosPanel({ api, control, catalog, editable, onChange, onError }: {
   useEffect(() => {
     let active = true;
     for (const photo of control.fotos) {
-      if (thumbs[photo.id]) continue;
+      if (thumbs[photo.id] || photo.archivada) continue;
       void api.thumbnail(photo.miniatura_url).then((uri) => { if (active && uri) setThumbs((old) => ({ ...old, [photo.id]: uri })); });
     }
     return () => { active = false; };
@@ -465,7 +465,7 @@ function PhotosPanel({ api, control, catalog, editable, onChange, onError }: {
       const asset = result.assets[0];
       const type = asset.mimeType ?? 'image/jpeg';
       if (!['image/jpeg', 'image/png', 'image/webp'].includes(type)) throw new Error('Usa JPG, PNG o WebP.');
-      if ((asset.fileSize ?? 0) > 5 * 1024 * 1024) throw new Error('La foto supera el máximo de 5 MiB.');
+      if ((asset.fileSize ?? 0) > 8 * 1024 * 1024) throw new Error('La foto supera el máximo de 8 MiB.');
       const operationId = Crypto.randomUUID();
       const ext = type === 'image/png' ? 'png' : type === 'image/webp' ? 'webp' : 'jpg';
       const photo = { operationId, tipo, archivo: { uri: asset.uri, name: `${operationId}.${ext}`, type } };
@@ -480,14 +480,34 @@ function PhotosPanel({ api, control, catalog, editable, onChange, onError }: {
     finally { setBusy(false); }
   }
 
-  return <>{catalog.tipos_foto.map((type) => {
+  async function sharePdf() {
+    setBusy(true);
+    try { await api.sharePhotosPdf(control.id, control.carga.codigo); }
+    catch (e) { onError(message(e)); }
+    finally { setBusy(false); }
+  }
+
+  return <>
+    {control.fotos_pdf ? <EstibaPanel title="Set fotográfico en PDF">
+      <Text style={s.body}>{control.fotos_pdf.cantidad} fotos · {formatBytes(control.fotos_pdf.bytes)}. Al cerrar la planilla las fotos quedaron en un solo PDF y se borraron del servidor.</Text>
+      <EstibaButton label="Compartir PDF de fotos" variant="secondary" disabled={busy} onPress={() => void sharePdf()} />
+    </EstibaPanel> : null}
+    {catalog.tipos_foto.map((type) => {
     const photos = control.fotos.filter((photo) => photo.tipo === type.clave);
+    const archived = photos.filter((photo) => photo.archivada);
     const waiting = queue.filter((photo) => photo.tipo === type.clave);
     const requirement = photoRequirement(type, control.fotos_pendientes ?? [], catalog.exige_fotos === true);
     return <EstibaPanel key={type.clave} title={`${type.nombre} · ${photos.length}/${type.maximo}`}>
       <Text style={requirement.missing ? s.warn : s.muted}>{requirement.text}</Text>
       <View style={s.photos}>
-        {photos.map((photo) => <View key={photo.id} style={s.gap}>
+        {archived.length ? <View style={s.gap}>
+          <Text style={s.muted}>{archived.length === 1 ? '1 foto en el PDF' : `${archived.length} fotos en el PDF`}</Text>
+          {editable ? archived.map((photo, index) => <View key={photo.id} style={s.between}>
+            <Text style={s.body}>Foto {index + 1}{photo.pagina_pdf ? ` · pág. ${photo.pagina_pdf} del PDF` : ''}</Text>
+            <Pressable disabled={busy} onPress={() => void remove(photo.id)}><Text style={s.link}>Quitar</Text></Pressable>
+          </View>) : null}
+        </View> : null}
+        {photos.filter((photo) => !photo.archivada).map((photo) => <View key={photo.id} style={s.gap}>
           {thumbs[photo.id] ? <Image source={{ uri: thumbs[photo.id] }} style={s.photo} /> : <View style={s.photo} />}
           {editable ? <Pressable disabled={busy} onPress={() => void remove(photo.id)}><Text style={s.link}>Quitar</Text></Pressable> : null}
         </View>)}
@@ -502,7 +522,8 @@ function PhotosPanel({ api, control, catalog, editable, onChange, onError }: {
         <EstibaButton label="Galería" variant="secondary" disabled={busy || photos.length + waiting.length >= type.maximo} onPress={() => void pick(type.clave, false)} style={s.grow} />
       </View> : null}
     </EstibaPanel>;
-  })}</>;
+  })}
+  </>;
 }
 
 const s = StyleSheet.create({

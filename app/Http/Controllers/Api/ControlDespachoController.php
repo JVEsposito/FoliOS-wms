@@ -9,6 +9,7 @@ use App\Models\FotoControlDespacho;
 use App\Models\PersonalAccessToken;
 use App\Models\PosicionControlDespacho;
 use App\Services\Autenticacion\ContextoOperacional;
+use App\Services\ControlDespacho\ArchivoFotosControlDespacho;
 use App\Services\ControlDespacho\FormularioControlDespacho;
 use App\Services\ControlDespacho\GeneradorPlanillaControlDespacho;
 use App\Services\ControlDespacho\PlanillaControlDespacho;
@@ -197,7 +198,7 @@ class ControlDespachoController extends Controller
     public function subirFoto(Request $request, ControlDespacho $controlDespacho, ServicioFotosControlDespacho $fotos): JsonResponse
     {
         $datos = $request->validate([
-            'archivo' => ['required', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'archivo' => ['required', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:8192'],
             'tipo' => ['required', Rule::in(array_keys(FormularioControlDespacho::tiposFoto()))],
             'operacion_id' => ['required', 'uuid'],
         ]);
@@ -217,10 +218,33 @@ class ControlDespachoController extends Controller
     public function foto(ControlDespacho $controlDespacho, FotoControlDespacho $foto, string $variante): Response
     {
         abort_unless($foto->control_despacho_id === $controlDespacho->id, 404);
-        $ruta = $variante === 'miniatura' ? $foto->ruta_miniatura : $foto->ruta_original;
-        abort_unless(Storage::disk('local')->exists($ruta), 404);
+        // Una foto archivada solo existe dentro del PDF del set fotográfico.
+        $ruta = $variante === 'miniatura' ? $foto->ruta_miniatura : $foto->ruta;
+        abort_unless($ruta && Storage::disk('local')->exists($ruta), 404);
         $respuesta = response()->file(Storage::disk('local')->path($ruta), [
-            'Content-Type' => $variante === 'miniatura' ? 'image/jpeg' : $foto->mime,
+            'Content-Type' => 'image/jpeg',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
+        $respuesta->setPrivate();
+        $respuesta->headers->set('Cache-Control', 'no-store, private');
+
+        return $respuesta;
+    }
+
+    /** Set fotográfico en PDF. Se arma al cerrar la planilla; si faltara, se arma aquí. */
+    public function fotosPdf(ControlDespacho $controlDespacho, ArchivoFotosControlDespacho $archivo): Response
+    {
+        if (! $controlDespacho->estaCerrado()) {
+            return $this->json(['message' => 'El PDF de fotos se arma al cerrar la planilla.', 'codigo' => 'planilla_abierta'], 422);
+        }
+        $ruta = $archivo->pdf($controlDespacho);
+        if (! $ruta) {
+            return $this->json(['message' => 'La planilla no tiene fotos.', 'codigo' => 'sin_fotos'], 404);
+        }
+        $nombre = 'R-24_fotos_'.preg_replace('/[^\p{L}\p{N}_-]+/u', '_', $controlDespacho->carga()->value('codigo') ?: $controlDespacho->id).'.pdf';
+        $respuesta = response()->file(Storage::disk('local')->path($ruta), [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="'.$nombre.'"',
             'X-Content-Type-Options' => 'nosniff',
         ]);
         $respuesta->setPrivate();

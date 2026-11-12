@@ -133,6 +133,13 @@ class PlanillaControlDespacho
             'cerrado_por' => $control->cerradoPor?->name,
             'reaperturas' => $control->reaperturas ?? [],
             'fotos' => $control->fotos()->get()->map->representar()->values()->all(),
+            // Set fotográfico archivado en PDF (planilla cerrada).
+            'fotos_pdf' => $control->fotos_pdf_ruta ? [
+                'url' => '/api/control-despacho/controles/'.$control->id.'/fotos.pdf',
+                'bytes' => $control->fotos_pdf_bytes,
+                'cantidad' => $control->fotos_pdf_cantidad,
+                'generado_at' => $control->fotos_pdf_generado_at?->toAtomString(),
+            ] : null,
         ];
         $detalle['fotos_pendientes'] = FormularioControlDespacho::fotosPendientes(
             $encabezado,

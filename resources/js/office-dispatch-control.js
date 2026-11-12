@@ -8,6 +8,7 @@ const elements = {
     detail: byId('dcxDetail'), detailState: byId('dcxDetailState'), detailTitle: byId('dcxDetailTitle'), detailMeta: byId('dcxDetailMeta'),
     download: byId('dcxDownload'), missing: byId('dcxMissing'), kpis: byId('dcxKpis'), header: byId('dcxHeader'), inspection: byId('dcxInspection'),
     pallets: byId('dcxPallets'), closing: byId('dcxClosing'), photos: byId('dcxPhotos'), photosPending: byId('dcxPhotosPending'),
+    photosPdf: byId('dcxPhotosPdf'), photosPdfText: byId('dcxPhotosPdfText'), photosPdfButton: byId('dcxPhotosPdfButton'),
     print: byId('dcxPrint'), printText: byId('dcxPrintText'), printForm: byId('dcxPrintForm'), printTemps: byId('dcxPrintTemps'), printError: byId('dcxPrintError'),
     reopen: byId('dcxReopen'), reopenForm: byId('dcxReopenForm'), reopenError: byId('dcxReopenError'),
     history: byId('dcxHistory'), historyList: byId('dcxHistoryList'),
@@ -22,6 +23,7 @@ class ApiError extends Error {
 function readJson(key) { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch { return null; } }
 function escapeHtml(value) { return String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;'); }
 function formatDate(value) { if (!value) return '—'; const date = new Date(value); return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('es-CL', { dateStyle: 'short', timeStyle: 'short' }).format(date); }
+function formatBytes(bytes) { return bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1).replace('.', ',')} MB` : `${Math.max(1, Math.round((bytes || 0) / 1024))} KB`; }
 function statusText(value) { return String(value || '').replaceAll('_', ' ').replace(/^./, (letter) => letter.toUpperCase()); }
 function errorMessage(data, fallback) { return Object.values(data?.errors || {}).flat()[0] || data?.message || fallback; }
 function uuid() { if (typeof crypto.randomUUID === 'function') return crypto.randomUUID(); const bytes = crypto.getRandomValues(new Uint8Array(16)); bytes[6] = (bytes[6] & 15) | 64; bytes[8] = (bytes[8] & 63) | 128; const hex = [...bytes].map((value) => value.toString(16).padStart(2, '0')).join(''); return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`; }
@@ -154,7 +156,11 @@ function renderControl(control) {
         .map((field) => ({ etiqueta: field.etiqueta, valor: textoValor(control.cierre[field.clave]) }));
     elements.closing.innerHTML = closingRows.length ? definitionList(closingRows) : '<p class="dcx-muted">Sin datos de cierre.</p>';
 
-    renderPhotos(control.fotos);
+    renderPhotos(control.fotos.filter((photo) => !photo.archivada));
+    elements.photosPdf.hidden = !control.fotos_pdf;
+    if (control.fotos_pdf) {
+        elements.photosPdfText.textContent = `Set fotográfico archivado en PDF: ${control.fotos_pdf.cantidad} ${control.fotos_pdf.cantidad === 1 ? 'foto' : 'fotos'} · ${formatBytes(control.fotos_pdf.bytes)}. Las fotos sueltas se borraron del servidor.`;
+    }
     const pending = control.fotos_pendientes || [];
     elements.photosPending.hidden = pending.length === 0;
     elements.photosPending.textContent = pending.length
@@ -174,7 +180,7 @@ async function renderPhotos(photos) {
     state.photoUrls.forEach((url) => URL.revokeObjectURL(url));
     state.photoUrls = [];
     if (!photos.length) {
-        elements.photos.innerHTML = '<p class="dcx-muted">Sin fotos. Son opcionales mientras no se defina el set fotográfico estándar.</p>';
+        elements.photos.innerHTML = state.control?.fotos_pdf ? '' : '<p class="dcx-muted">Sin fotos.</p>';
         return;
     }
     const names = Object.fromEntries((state.catalog?.tipos_foto || []).map((type) => [type.clave, type.nombre]));
@@ -272,6 +278,20 @@ elements.next.addEventListener('click', () => void loadList(state.page + 1));
 elements.rows.addEventListener('click', (event) => { const row = event.target.closest('tr[data-id]'); if (row) void openControl(row.dataset.id); });
 elements.rows.addEventListener('keydown', (event) => { const row = event.target.closest('tr[data-id]'); if (row && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); void openControl(row.dataset.id); } });
 elements.download.addEventListener('click', () => void download());
+elements.photosPdfButton.addEventListener('click', async () => {
+    const control = state.control;
+    if (!control?.fotos_pdf) return;
+    setBusy(true, 'Abriendo PDF de fotos…');
+    try {
+        const url = URL.createObjectURL(await (await request(control.fotos_pdf.url, { accept: 'application/pdf' })).blob());
+        state.photoUrls.push(url);
+        window.open(url, '_blank', 'noopener');
+    } catch (error) {
+        toast(error.message, true);
+    } finally {
+        setBusy(false);
+    }
+});
 elements.photos.addEventListener('click', async (event) => {
     const button = event.target.closest('.dcx-photo');
     if (!button) return;

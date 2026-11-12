@@ -76,8 +76,8 @@ Un campo que se deja vacío vuelve a la sugerencia.
   - requerimiento Walmart;
   - cantidad por tipo de pallet;
   - responsable y jefe de sección.
-- **Fotos.** Set fotográfico estándar, en el orden en que se toman. Las fotos se guardan en el
-  disco privado.
+- **Fotos.** Set fotográfico estándar, en el orden en que se toman. Las fotos se guardan
+  comprimidas y, al cerrar, pasan a un solo PDF (ver «Fotos en PDF»).
 
 | Categoría | Exigencia |
 |---|---|
@@ -94,6 +94,28 @@ Un campo que se deja vacío vuelve a la sugerencia.
 La PDA y oficina muestran las fotos pendientes del set. **Mientras el set no sea oficial, no
 bloquean el cierre.** Para exigirlas al cerrar, se agrega `CONTROL_DESPACHO_EXIGE_FOTOS=true` en
 el `.env` de planta. Las categorías se definen en `FormularioControlDespacho::tiposFoto()`.
+
+## Fotos en PDF
+
+Para ahorrar espacio en el servidor, en el servidor queda **un solo PDF por despacho**:
+
+1. **Al subir**, cada foto queda derecha según su EXIF, en JPEG de hasta 1600 px por lado
+   (calidad 72), con una miniatura para la pantalla. El original del equipo no se guarda: una
+   foto de varios MB ocupa unos cientos de KB.
+2. **Al cerrar la planilla**, las fotos se arman en el PDF «Set fotográfico R-24»:
+   - dos por página, ordenadas por categoría;
+   - con su nombre y la hora y el usuario que la tomó;
+   - en `control-despacho/{control}/set-fotografico-….pdf`, en el disco privado.
+
+   Luego se borran las fotos sueltas y sus miniaturas. Las filas de `fotos_control_despacho` se
+   conservan como registro, con `archivada_at` y su página en el PDF.
+3. **Si la planilla se reabre**, se pueden quitar fotos archivadas o agregar nuevas. Al volver
+   a cerrar, el PDF se rearma: las fotos ya archivadas se leen desde el PDF anterior, que
+   guarda cada JPEG intacto (`pdf_offset`, `pdf_longitud`). Después se borra el PDF anterior.
+
+Si el armado del PDF fallara al cerrar, la planilla igual queda cerrada y el PDF se arma la
+primera vez que se pida. Se ve en oficina («Ver PDF de fotos») y se comparte desde la PDA
+(«Compartir PDF de fotos»): `GET /api/control-despacho/controles/{id}/fotos.pdf`.
 
 ## T° de pulpa: se exige al imprimir
 

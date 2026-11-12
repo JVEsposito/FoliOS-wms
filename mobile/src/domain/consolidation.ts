@@ -27,7 +27,9 @@ export type ConsolidationPallet = {
   asignacion_id: string; folio_id: string; numero_folio: string; estado_carga: string; cargado_at: string | null;
   especie: string | null; variedad: string | null; cajas_folio: number; posicion: ConsolidationPosition | null;
 };
-export type ConsolidationPhoto = { id: string; tipo: string; orden: number; miniatura_url: string; url: string; subida_at: string | null };
+/** Una foto archivada ya no tiene archivo propio: vive dentro del PDF del set fotográfico. */
+export type ConsolidationPhoto = { id: string; tipo: string; orden: number; miniatura_url: string | null; url: string | null; subida_at: string | null; archivada?: boolean; pagina_pdf?: number | null };
+export type ConsolidationPhotosPdf = { url: string; bytes: number; cantidad: number; generado_at: string | null };
 export type ConsolidationValues = Record<string, string | number | null>;
 export type ConsolidationControl = {
   id: string; estado: 'borrador' | 'cerrado'; version: number;
@@ -42,6 +44,7 @@ export type ConsolidationControl = {
   /** Lo que la planilla impresa exige y el cierre no (hoy, la T° de pulpa). */
   faltantes_impresion: string[];
   fotos_pendientes: ConsolidationPendingPhoto[];
+  fotos_pdf?: ConsolidationPhotosPdf | null;
 };
 
 export type ConsolidationSection = 'encabezado' | 'inspeccion' | 'cierre';
@@ -195,4 +198,8 @@ export function photoRequirement(type: ConsolidationPhotoType, pending: Consolid
   const rule = enforced ? `Obligatoria${condition} para cerrar.` : `Obligatoria${condition} cuando se active el set estándar.`;
   if (!missing) return { text: `${rule} Completa.`, missing: false };
   return { text: `${rule} Faltan ${missing.requeridas - missing.tomadas} de ${missing.requeridas}.`, missing: true };
+}
+
+export function formatBytes(bytes: number): string {
+  return bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1).replace('.', ',')} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }

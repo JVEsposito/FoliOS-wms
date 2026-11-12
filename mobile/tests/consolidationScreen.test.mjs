@@ -47,13 +47,21 @@ const controlFixture = (pallets, extra = {}) => ({
   fotos_pendientes: [{ tipo: 'patente', nombre: 'Placa patente', requeridas: 1, tomadas: 0 }], ...extra,
 });
 
-function harness() {
+function harness({ closedWithPdf = false } = {}) {
   const cache = new Map();
-  const calls = { loads: 0, start: [], position: [], save: [], temperatures: [] };
+  const calls = { loads: 0, start: [], position: [], save: [], temperatures: [], sharedPdf: 0 };
   const storage = new Map();
   let sequence = 0;
   let failNextPosition = false;
   let current = controlFixture([pallet('A1', 'cargado', 1), pallet('A2', 'en_anden'), pallet('A3', 'en_anden')]);
+  if (closedWithPdf) {
+    current = controlFixture([{ ...pallet('A1', 'cargado', 1), posicion: { ...pallet('A1', 'cargado', 1).posicion, temperatura: 0.2 } }], {
+      estado: 'cerrado', cerrado_por: 'Consolidador', faltantes_cierre: [], fotos_pendientes: [],
+      fotos: [{ id: 'ph1', tipo: 'patente', orden: 1, url: null, miniatura_url: null, subida_at: null, archivada: true, pagina_pdf: 1 },
+        { id: 'ph2', tipo: 'general', orden: 1, url: null, miniatura_url: null, subida_at: null, archivada: true, pagina_pdf: 1 }],
+      fotos_pdf: { url: '/api/control-despacho/controles/c1/fotos.pdf', bytes: 348160, cantidad: 2, generado_at: null },
+    });
+  }
   let renderer;
   let ApiError;
   const native = {
@@ -64,7 +72,9 @@ function harness() {
   };
   const api = {
     catalog: async () => catalog,
-    loads: async () => { calls.loads += 1; return [{ id: 'g1', codigo: 'CAR-0007', estado: 'despachada', exportadora: 'Subsole', embarque: 'EMB-1', contenedor: 'MSCU1', anden: 'AND-1', patente: 'ABCD12', pallets: 3, en_anden: 2, cargados: 1, control: null }]; },
+    loads: async () => { calls.loads += 1; return [{ id: 'g1', codigo: 'CAR-0007', estado: 'despachada', exportadora: 'Subsole', embarque: 'EMB-1', contenedor: 'MSCU1', anden: 'AND-1', patente: 'ABCD12', pallets: 3, en_anden: 2, cargados: 1, control: closedWithPdf ? { id: 'c1', estado: 'cerrado', posicionados: 1 } : null }]; },
+    sharePhotosPdf: async () => { calls.sharedPdf += 1; },
+    thumbnail: async () => null,
     start: async (loadId, operation) => { calls.start.push({ loadId, operation }); return current; },
     detail: async () => current,
     position: async (_, payload) => {
@@ -236,4 +246,26 @@ test('la T° de pulpa no bloquea el cierre pero se completa antes de imprimir', 
     await h.press('Fotos');
     assert.match(h.text(), /Obligatoria cuando se active el set estándar\. Faltan 1 de 1\./);
   } finally { await h.unmount(); }
+});
+
+test('con la planilla cerrada las fotos se ven en el PDF y se comparten desde ahí', async () => {
+  const h = harness();
+  try {
+    await h.mount();
+    await h.press('Iniciar planilla R-24', { containing: true });
+    await h.press('Fotos');
+    assert.doesNotMatch(h.text(), /Set fotográfico en PDF/);
+  } finally { await h.unmount(); }
+  const closed = harness({ closedWithPdf: true });
+  try {
+    await closed.mount();
+    await closed.press('Abrir planilla', { containing: true });
+    await closed.press('Fotos');
+    assert.match(closed.text(), /Set fotográfico en PDF/);
+    assert.match(closed.text(), /2 fotos · 340 KB/);
+    assert.match(closed.text(), /1 foto en el PDF/);
+    assert.equal(closed.pressable('Quitar'), undefined, 'Cerrada no se quitan fotos');
+    await closed.press('Compartir PDF de fotos');
+    assert.equal(closed.calls.sharedPdf, 1);
+  } finally { await closed.unmount(); }
 });

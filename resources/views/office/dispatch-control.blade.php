@@ -109,7 +109,7 @@
                         </div>
                     </section>
                     <section aria-labelledby="dcxClosingTitle"><h3 id="dcxClosingTitle">Cierre</h3><div id="dcxClosing"></div></section>
-                    <section aria-labelledby="dcxPhotosTitle"><h3 id="dcxPhotosTitle">Fotos</h3><div class="dcx-photos" id="dcxPhotos"></div><p class="dcx-muted" id="dcxPhotosPending" hidden></p></section>
+                    <section aria-labelledby="dcxPhotosTitle"><h3 id="dcxPhotosTitle">Fotos</h3><div class="dcx-photos-pdf" id="dcxPhotosPdf" hidden><p id="dcxPhotosPdfText"></p><button class="secondary-button" id="dcxPhotosPdfButton" type="button">Ver PDF de fotos</button></div><div class="dcx-photos" id="dcxPhotos"></div><p class="dcx-muted" id="dcxPhotosPending" hidden></p></section>
                     <section class="dcx-reopen" id="dcxReopen" hidden aria-labelledby="dcxReopenTitle">
                         <h3 id="dcxReopenTitle">Reabrir planilla</h3>
                         <p>La planilla vuelve a borrador para que consolidación la corrija desde la PDA. El motivo queda en su historial.</p>

@@ -73,6 +73,7 @@ async function open(browser, { width = 1280, user = identity(), detail = control
         }
         if (path === '/api/control-despacho/controles/c1') return route.fulfill({ json: { data: current } });
         if (path.endsWith('/miniatura') || path.endsWith('/original')) return route.fulfill({ body: pixel, contentType: 'image/png' });
+        if (path === '/api/control-despacho/controles/c1/fotos.pdf') return route.fulfill({ body: Buffer.from('%PDF-1.4 fixture'), contentType: 'application/pdf' });
         if (path === '/api/control-despacho/controles/c1/planilla.xlsx') return route.fulfill({ body: Buffer.from('PK\u0003\u0004fixture'), contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
         if (path === '/api/control-despacho/controles/c1/temperaturas') {
             const values = Object.fromEntries(request.postDataJSON().temperaturas.map((t) => [t.posicion_id, t.temperatura]));
@@ -212,6 +213,27 @@ test('sin permiso de registro solo informa qué falta para imprimir', async () =
         await page.locator('#dcxPrint').waitFor();
         assert.match(await page.locator('#dcxPrintText').innerText(), /Pide a consolidación/);
         assert.equal(await page.locator('#dcxPrintForm').isVisible(), false);
+        assert.deepEqual(errors, []);
+        await context.close();
+    } finally { await browser.close(); }
+});
+
+test('una planilla cerrada muestra el set fotográfico archivado en PDF', async () => {
+    const browser = await launch();
+    try {
+        const cerrada = control({
+            fotos: [{ id: 'ph1', tipo: 'patente', orden: 1, url: null, miniatura_url: null, subida_at: '2026-11-11T17:20:00Z', archivada: true, pagina_pdf: 1 }],
+            fotos_pdf: { url: '/api/control-despacho/controles/c1/fotos.pdf', bytes: 2411724, cantidad: 9, generado_at: '2026-11-11T17:41:00Z' },
+        });
+        const { context, page, requests, errors } = await open(browser, { detail: cerrada });
+        await page.locator('#dcxRows tr[data-id="c1"]').click();
+        await page.locator('#dcxPhotosPdf').waitFor();
+        assert.match(await page.locator('#dcxPhotosPdfText').innerText(), /9 fotos · 2,3 MB/);
+        assert.equal(await page.locator('#dcxPhotos img').count(), 0, 'Las fotos archivadas no tienen miniatura');
+        const popup = context.waitForEvent('page');
+        await page.locator('#dcxPhotosPdfButton').click();
+        await popup;
+        assert.ok(requests.some((r) => r.path.endsWith('/fotos.pdf') && r.auth === 'Bearer fixture'));
         assert.deepEqual(errors, []);
         await context.close();
     } finally { await browser.close(); }

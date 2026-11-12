@@ -6,6 +6,7 @@ use App\Enums\RolUsuario;
 use App\Models\Carga;
 use App\Models\ControlDespacho;
 use App\Models\Dispositivo;
+use App\Models\FotoControlDespacho;
 use App\Models\PerfilAcceso;
 use App\Models\User;
 use App\Services\ControlDespacho\FormularioControlDespacho;
@@ -313,6 +314,73 @@ class ControlDespachoApiTest extends TestCase
             ->assertJsonPath('message', 'Antes de cerrar la planilla: Faltan fotos: Número de contenedor, Placa patente, Temperatura de corte del equipo, Temperatura de pulpa, Postura de termógrafos (1 de 2), Primer bloque (mitad de carga), Cierre de carga.');
         config(['despacho.control_exige_fotos' => false]);
         $this->cerrar($token, $control['id'], $detalle['version'])->assertOk()->assertJsonPath('data.estado', 'cerrado');
+    }
+
+    public function test_al_cerrar_las_fotos_pasan_a_un_pdf_y_se_borran_los_archivos_sueltos(): void
+    {
+        Storage::fake('local');
+        $contexto = $this->crearContextoFrio(1, 'R24G');
+        $folio = $contexto['folios'][0];
+        $carga = $this->crearCargaPublicada($contexto['despachador'], $contexto['anden'], [$folio]);
+        $this->enviarAlAnden($contexto, $carga, $folio);
+        [$token] = $this->consolidador('R24G');
+        $control = $this->iniciar($token, $carga);
+        $this->posicion($token, $control['id'], $folio->numero_folio, 1, ['temperatura' => 0.2])->assertOk();
+        $guardado = $this->conToken($token)->putJson("/api/control-despacho/controles/{$control['id']}", [
+            'operacion_id' => (string) Str::uuid(), 'version' => 1,
+            'encabezado' => ['tipo_camion' => 'thermo', 'patente_camion' => 'ABCD12'],
+            'inspeccion' => collect(FormularioControlDespacho::inspeccion())->map(fn (): string => 'si')->all(),
+        ])->assertOk()->json('data');
+
+        // Al subir, la foto se guarda comprimida: JPEG de hasta 1600 px, no el original del equipo.
+        $subir = fn (string $tipo, int $ancho, int $alto) => $this->conToken($token)->post("/api/control-despacho/controles/{$control['id']}/fotos", [
+            'tipo' => $tipo, 'operacion_id' => (string) Str::uuid(), 'archivo' => UploadedFile::fake()->image("{$tipo}.png", $ancho, $alto),
+        ])->assertCreated()->json('data');
+        $patente = $subir('patente', 3200, 2400);
+        $cierre = $subir('cierre_carga', 800, 1200);
+        $this->assertSame([1600, 1200], [$patente['ancho'], $patente['alto']]);
+        $rutas = FotoControlDespacho::query()->pluck('ruta')->all();
+        $this->assertCount(2, $rutas);
+        foreach ($rutas as $ruta) {
+            $this->assertStringEndsWith('.jpg', $ruta);
+            $this->assertStringStartsWith("\xFF\xD8", Storage::disk('local')->get($ruta));
+        }
+        $this->conToken($token)->get("/api/control-despacho/controles/{$control['id']}/fotos.pdf")->assertUnprocessable();
+
+        $cerrada = $this->cerrar($token, $control['id'], $guardado['version'])->assertOk()
+            ->assertJsonPath('data.fotos_pdf.cantidad', 2)
+            ->assertJsonPath('data.fotos.0.archivada', true)
+            ->assertJsonPath('data.fotos.0.miniatura_url', null)
+            ->json('data');
+        // En el servidor queda solo el PDF.
+        $this->assertSame([], array_values(array_filter(Storage::disk('local')->allFiles("control-despacho/{$control['id']}"), fn (string $ruta): bool => ! str_ends_with($ruta, '.pdf'))));
+        $this->assertCount(1, Storage::disk('local')->allFiles("control-despacho/{$control['id']}"));
+        $this->conToken($token)->get($patente['miniatura_url'])->assertNotFound();
+        $pdf = $this->conToken($token)->get("/api/control-despacho/controles/{$control['id']}/fotos.pdf")
+            ->assertOk()->assertHeader('Content-Type', 'application/pdf')->streamedContent();
+        $this->assertStringStartsWith('%PDF-1.4', $pdf);
+        $this->assertStringContainsString('Placa patente', $pdf);
+        $this->assertStringContainsString('Cierre de carga', $pdf);
+        $this->assertSame(1, preg_match_all('#/Type /Page /Parent#', $pdf));
+
+        // Reabierta: se quita una foto ya archivada y se agrega otra; al cerrar, el PDF se rearma.
+        $reabierta = $this->actingAs($contexto['administrador'], 'sanctum')->postJson("/api/control-despacho/controles/{$control['id']}/reabrir", [
+            'operacion_id' => (string) Str::uuid(), 'version' => $cerrada['version'], 'motivo' => 'Falta la foto del primer bloque',
+        ])->assertOk()->json('data');
+        $this->conToken($token)->deleteJson("/api/control-despacho/controles/{$control['id']}/fotos/{$cierre['id']}")->assertNoContent();
+        $subir('primer_bloque', 1000, 700);
+        $anterior = ControlDespacho::query()->findOrFail($control['id'])->fotos_pdf_ruta;
+        $recerrada = $this->cerrar($token, $control['id'], $reabierta['version'])->assertOk()->assertJsonPath('data.fotos_pdf.cantidad', 2)->json('data');
+        $this->assertFalse(Storage::disk('local')->exists($anterior));
+        $archivos = Storage::disk('local')->allFiles("control-despacho/{$control['id']}");
+        $this->assertCount(1, $archivos);
+        $nuevo = Storage::disk('local')->get($archivos[0]);
+        $this->assertStringContainsString('Primer bloque', $nuevo);
+        $this->assertStringNotContainsString('Cierre de carga', $nuevo);
+        // La foto que venía del PDF anterior se rescató intacta.
+        $archivada = FotoControlDespacho::query()->findOrFail($patente['id']);
+        $this->assertStringStartsWith("\xFF\xD8", substr($nuevo, $archivada->pdf_offset, $archivada->pdf_longitud));
+        $this->assertEqualsCanonicalizing(['patente', 'primer_bloque'], collect($recerrada['fotos'])->pluck('tipo')->all());
     }
 
     public function test_solo_consolidacion_registra_y_oficina_consulta_el_listado(): void

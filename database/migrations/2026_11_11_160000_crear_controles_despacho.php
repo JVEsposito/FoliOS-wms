@@ -32,6 +32,12 @@ return new class extends Migration
             $table->foreignId('cerrado_por_user_id')->nullable()->constrained('users')->restrictOnDelete();
             $table->timestamp('cerrado_at')->nullable();
             $table->json('reaperturas')->nullable();
+            // Al cerrar, las fotos se archivan en un único PDF y se borran sus archivos sueltos.
+            $table->string('fotos_pdf_ruta')->nullable();
+            $table->unsignedBigInteger('fotos_pdf_bytes')->nullable();
+            $table->char('fotos_pdf_sha256', 64)->nullable();
+            $table->unsignedSmallInteger('fotos_pdf_cantidad')->nullable();
+            $table->timestamp('fotos_pdf_generado_at')->nullable();
             $table->timestamps();
             $table->index(['temporada_id', 'estado', 'iniciado_at']);
         });
@@ -59,13 +65,20 @@ return new class extends Migration
             $table->foreignUuid('control_despacho_id')->constrained('controles_despacho')->restrictOnDelete();
             $table->string('tipo', 40);
             $table->unsignedSmallInteger('orden');
-            $table->string('ruta_original');
-            $table->string('ruta_miniatura');
-            $table->string('mime', 50);
+            // JPEG comprimido al subir; null una vez archivada en el PDF del set fotográfico.
+            $table->string('ruta')->nullable();
+            $table->string('ruta_miniatura')->nullable();
             $table->unsignedBigInteger('bytes');
+            $table->unsignedBigInteger('bytes_recibidos');
             $table->unsignedInteger('ancho');
             $table->unsignedInteger('alto');
+            // Huella del archivo recibido: el reintento con el mismo operacion_id se reconoce.
             $table->char('sha256', 64);
+            $table->timestamp('archivada_at')->nullable();
+            $table->unsignedSmallInteger('pdf_pagina')->nullable();
+            // Ubicación del JPEG dentro del PDF: permite rearmarlo si la planilla se reabre.
+            $table->unsignedBigInteger('pdf_offset')->nullable();
+            $table->unsignedInteger('pdf_longitud')->nullable();
             $table->uuid('operacion_id')->unique();
             $table->foreignId('subida_por_user_id')->constrained('users')->restrictOnDelete();
             $table->timestamps();

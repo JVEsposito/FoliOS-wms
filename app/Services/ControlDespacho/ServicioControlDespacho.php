@@ -25,6 +25,7 @@ use Closure;
 use DateTimeInterface;
 use DomainException;
 use Illuminate\Support\Str;
+use Throwable;
 
 /**
  * Planilla R-24 que el equipo de consolidación llena en el andén.
@@ -41,6 +42,7 @@ class ServicioControlDespacho
         private readonly ContextoEjecucionTransicionOperacional $contexto,
         private readonly ServicioCargaCamion $carguio,
         private readonly PlanillaControlDespacho $planilla,
+        private readonly ArchivoFotosControlDespacho $archivoFotos,
     ) {}
 
     public function iniciar(string $operacionId, Carga $carga, User $usuario, ?Dispositivo $dispositivo): ControlDespacho
@@ -320,7 +322,20 @@ class ServicioControlDespacho
     public function cerrar(string $operacionId, ControlDespacho $control, int $version, User $usuario): ControlDespacho
     {
         $this->asegurarRegistro($usuario);
+        $cerrado = $this->cerrarPlanilla($operacionId, $control, $version, $usuario);
+        // Las fotos pasan a un único PDF y se borran sus archivos sueltos. Si algo falla, la
+        // planilla igual queda cerrada: el PDF se arma cuando se pida.
+        try {
+            return $this->archivoFotos->archivar($cerrado);
+        } catch (Throwable $error) {
+            report($error);
 
+            return $cerrado;
+        }
+    }
+
+    private function cerrarPlanilla(string $operacionId, ControlDespacho $control, int $version, User $usuario): ControlDespacho
+    {
         return $this->transicionar('control_despacho.cerrar', $operacionId, $usuario, [
             'control_despacho_id' => $control->id,
             'version' => $version,

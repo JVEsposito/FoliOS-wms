@@ -51,6 +51,8 @@
 .dcx-checks li[data-tone="alerta"] { border-left-color: var(--danger-text); background: var(--danger-bg); }
 .dcx-checks li[data-tone="alerta"] strong { color: var(--danger-text); }
 .dcx-checks li[data-tone="pendiente"] strong, .dcx-checks li[data-tone="neutro"] strong { color: var(--text-subtle); }
+.dcx-photos-pdf { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; padding: 10px 12px; border: 1px solid var(--line-soft); border-radius: 8px; }
+.dcx-photos-pdf p { margin: 0; color: var(--text-strong); font-size: .88rem; }
 .dcx-photos { display: flex; flex-wrap: wrap; gap: 10px; }
 .dcx-photo { display: grid; gap: 4px; padding: 4px; border: 1px solid var(--line-soft); border-radius: 8px; background: transparent; color: var(--text-subtle); font-size: .72rem; cursor: zoom-in; }
 .dcx-photo strong { max-width: 120px; color: var(--text-strong); font-size: .74rem; text-align: left; }

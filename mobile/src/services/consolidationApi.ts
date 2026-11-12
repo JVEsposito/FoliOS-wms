@@ -56,7 +56,8 @@ export function createConsolidationApi(baseUrl: string, token: string) {
     },
     removePhoto: (id: string, photoId: string) => request<null>(`${control(id)}/fotos/${encodeURIComponent(photoId)}`, { method: 'DELETE' }),
     /** Miniatura autenticada como data URI: no queda en la caché de imágenes del equipo. */
-    async thumbnail(path: string): Promise<string | null> {
+    async thumbnail(path: string | null): Promise<string | null> {
+      if (!path) return null;
       const r = await fetchWithTimeout(baseUrl.replace(/\/+$/, '') + path, { headers: { Accept: 'image/jpeg', Authorization: `Bearer ${token}` }, cache: 'no-store' }).catch(() => null);
       if (!r?.ok) return null;
       const blob = await r.blob();
@@ -66,6 +67,16 @@ export function createConsolidationApi(baseUrl: string, token: string) {
         reader.onerror = () => resolve(null);
         reader.readAsDataURL(blob);
       });
+    },
+    async sharePhotosPdf(id: string, code: string) {
+      if (!await Sharing.isAvailableAsync()) throw new Error('Este equipo no permite compartir archivos. Descarga el PDF desde Oficina.');
+      const r = await response(`${control(id)}/fotos.pdf`, {}, 60_000);
+      if (!r.ok) { const data = await r.json().catch(() => ({})); throw new ApiError(data.message || 'No se pudo descargar el PDF de fotos.', r.status, data); }
+      const bytes = new Uint8Array(await r.arrayBuffer());
+      if (bytes[0] !== 0x25 || bytes[1] !== 0x50) throw new Error('El servidor no devolvió el PDF de fotos.');
+      const file = new File(Paths.cache, `R-24_fotos_${code.replace(/[^A-Za-z0-9_-]+/g, '_')}_${Date.now()}.pdf`);
+      file.write(bytes);
+      await Sharing.shareAsync(file.uri, { mimeType: 'application/pdf', dialogTitle: 'Fotos R-24' });
     },
     async shareSheet(id: string, code: string) {
       if (!await Sharing.isAvailableAsync()) throw new Error('Este equipo no permite compartir archivos. Descarga la planilla desde Oficina.');
