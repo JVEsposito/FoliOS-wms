@@ -394,8 +394,15 @@ class ControlDespachoApiTest extends TestCase
         $this->conToken($contexto['token'])->getJson('/api/control-despacho/cargas')->assertForbidden();
         $this->conToken($contexto['tokenOficina'])->postJson("/api/control-despacho/cargas/{$carga->id}/control", ['operacion_id' => (string) Str::uuid()])->assertForbidden();
 
-        [$token] = $this->consolidador('R24E');
+        [$token, $usuario] = $this->consolidador('R24E');
         $control = $this->iniciar($token, $carga);
+
+        // La identidad de Oficina publica los permisos: sin ellos la página creía no tener acceso.
+        $this->actingAs($usuario, 'sanctum')->getJson('/api/acceso-oficina')
+            ->assertOk()
+            ->assertJsonPath('usuario.puede_consultar_control_despacho', true)
+            ->assertJsonPath('usuario.puede_registrar_control_despacho', true)
+            ->assertJsonPath('usuario.puede_reabrir_control_despacho', false);
         $this->posicion($token, $control['id'], $folio->numero_folio, 1)->assertOk();
 
         $consulta = User::factory()->create(['rol' => RolUsuario::Consulta, 'activo' => true]);

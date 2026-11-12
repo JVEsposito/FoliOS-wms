@@ -51,7 +51,7 @@ const control = (extra = {}) => ({
 });
 const pixel = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
 
-async function open(browser, { width = 1280, user = identity(), detail = control() } = {}) {
+async function open(browser, { width = 1280, user = identity(), detail = control(), serverIdentity = user } = {}) {
     const context = await browser.newContext({ viewport: { width, height: 900 }, acceptDownloads: true });
     await context.addInitScript((value) => {
         localStorage.setItem('estiba_wms_office_token', 'fixture');
@@ -66,6 +66,7 @@ async function open(browser, { width = 1280, user = identity(), detail = control
             try { return route.fulfill({ body: readFileSync(resolve(root, `public${path}`)), contentType: ({ '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' })[extname(path)] || 'application/octet-stream' }); } catch { return route.fulfill({ status: 404 }); }
         }
         requests.push({ path, search: url.search, method: request.method(), body: request.postData() ? request.postDataJSON() : null, auth: request.headers().authorization });
+        if (path === '/api/acceso-oficina' && request.method() === 'GET') return route.fulfill({ json: { usuario: serverIdentity } });
         if (path === '/api/control-despacho/catalogo') return route.fulfill({ json: { data: catalogo } });
         if (path === '/api/control-despacho/controles') {
             const rows = url.searchParams.get('estado') === 'borrador' ? [] : [{ id: 'c1', estado: current.estado, carga: { id: 'g1', codigo: 'CAR-0042', estado: 'cerrada' }, embarque: 'EMB-0099', exportadora: 'Subsole', contenedor: 'MSCU1234567', tipo_camion: 'contenedor', pallets: 2, iniciado_at: current.iniciado_at, iniciado_por: 'Consolidador', cerrado_at: current.cerrado_at, cerrado_por: current.cerrado_por }];
@@ -234,6 +235,33 @@ test('una planilla cerrada muestra el set fotográfico archivado en PDF', async 
         await page.locator('#dcxPhotosPdfButton').click();
         await popup;
         assert.ok(requests.some((r) => r.path.endsWith('/fotos.pdf') && r.auth === 'Bearer fixture'));
+        assert.deepEqual(errors, []);
+        await context.close();
+    } finally { await browser.close(); }
+});
+
+test('una sesión guardada antes del módulo se actualiza sin cerrar la sesión de FoliOS', async () => {
+    const browser = await launch();
+    try {
+        const anterior = identity({ puede_consultar_control_despacho: undefined, puede_reabrir_control_despacho: undefined });
+        const { context, page, requests, errors } = await open(browser, { user: anterior, serverIdentity: identity() });
+        await page.locator('#dcxRows tr[data-id="c1"]').waitFor();
+        assert.ok(requests.some((r) => r.path === '/api/acceso-oficina' && r.method === 'GET'));
+        assert.equal(await page.evaluate(() => localStorage.getItem('estiba_wms_office_token')), 'fixture');
+        assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('estiba_wms_office_identity')).puede_consultar_control_despacho), true);
+        assert.deepEqual(errors, []);
+        await context.close();
+    } finally { await browser.close(); }
+});
+
+test('sin el módulo lo informa y no cierra la sesión', async () => {
+    const browser = await launch();
+    try {
+        const sinModulo = identity({ puede_consultar_control_despacho: false });
+        const { context, page, errors } = await open(browser, { user: sinModulo, serverIdentity: sinModulo });
+        await page.locator('#dcxRows', { hasText: 'no tiene el módulo' }).waitFor();
+        assert.equal(await page.evaluate(() => localStorage.getItem('estiba_wms_office_token')), 'fixture');
+        assert.equal(page.url(), 'http://localhost/oficina/frigorifico/control-despacho');
         assert.deepEqual(errors, []);
         await context.close();
     } finally { await browser.close(); }

@@ -29,6 +29,8 @@ function errorMessage(data, fallback) { return Object.values(data?.errors || {})
 function uuid() { if (typeof crypto.randomUUID === 'function') return crypto.randomUUID(); const bytes = crypto.getRandomValues(new Uint8Array(16)); bytes[6] = (bytes[6] & 15) | 64; bytes[8] = (bytes[8] & 63) | 128; const hex = [...bytes].map((value) => value.toString(16).padStart(2, '0')).join(''); return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`; }
 function setBusy(active, text = 'Procesando…') { elements.loadingText.textContent = text; elements.loading.classList.toggle('is-hidden', !active); elements.loading.setAttribute('aria-hidden', String(!active)); }
 function toast(message, error = false) { const node = document.createElement('div'); node.className = `toast${error ? ' toast--error' : ''}`; node.textContent = message; elements.toasts.append(node); window.setTimeout(() => node.remove(), 5000); }
+// Permiso de la identidad guardada: arriba o dentro de «capacidades» (identidades de otras versiones).
+const can = (key) => state.identity?.[key] === true || state.identity?.capacidades?.[key] === true;
 function persist(payload) { state.token = payload.token; state.identity = payload.usuario; localStorage.setItem(keys.token, payload.token); localStorage.setItem(keys.identity, JSON.stringify(payload.usuario)); }
 function clearSession() { state.token = null; state.identity = null; localStorage.removeItem(keys.token); localStorage.removeItem(keys.identity); elements.app.classList.add('is-hidden'); elements.access.classList.remove('is-hidden'); }
 
@@ -168,7 +170,7 @@ function renderControl(control) {
         : '';
     elements.print.hidden = true;
     state.tempsOperation = null;
-    const canReopen = state.identity?.puede_reabrir_control_despacho === true && control.estado === 'cerrado';
+    const canReopen = can('puede_reabrir_control_despacho') && control.estado === 'cerrado';
     elements.reopen.hidden = !canReopen;
     elements.reopenForm.reset();
     elements.reopenError.textContent = '';
@@ -199,7 +201,7 @@ async function renderPhotos(photos) {
 
 function showPrintRequirements(control) {
     const missing = palletsSinTemperatura(control.pallets);
-    const canComplete = state.identity?.puede_registrar_control_despacho === true;
+    const canComplete = can('puede_registrar_control_despacho');
     elements.print.hidden = false;
     elements.printError.textContent = '';
     elements.printText.textContent = canComplete
@@ -332,8 +334,8 @@ elements.login.addEventListener('submit', async (event) => {
     setBusy(true, 'Validando acceso…');
     try {
         const payload = await api('/api/acceso-oficina', { method: 'POST', body: JSON.stringify(credentials) });
-        if (payload.usuario.puede_consultar_control_despacho !== true) throw new ApiError('Tu perfil no tiene el módulo Control de despacho (R-24).', 403);
         persist(payload);
+        if (!can('puede_consultar_control_despacho')) { showNoAccess(); return; }
         void start();
     } catch (error) {
         elements.loginError.textContent = error.message;
@@ -356,5 +358,29 @@ async function start() {
     if (initial) void openControl(initial);
 }
 
-if (state.token && state.identity?.puede_consultar_control_despacho === true) void start();
-else clearSession();
+/** Sin el módulo, la página lo dice; la sesión de FoliOS sigue abierta para las demás oficinas. */
+function showNoAccess() {
+    showApp();
+    elements.filters.hidden = true;
+    elements.detail.classList.add('is-hidden');
+    elements.count.textContent = '';
+    elements.rows.innerHTML = '<tr><td colspan="7">Tu perfil no tiene el módulo Control de despacho (R-24). Pide a administración que lo agregue.</td></tr>';
+}
+
+async function boot() {
+    if (!state.token) { clearSession(); return; }
+    if (!can('puede_consultar_control_despacho')) {
+        // La identidad guardada puede ser anterior al módulo: se pide la vigente al servidor.
+        try {
+            const payload = await api('/api/acceso-oficina');
+            state.identity = payload.usuario;
+            localStorage.setItem(keys.identity, JSON.stringify(payload.usuario));
+        } catch (error) {
+            if (error.status === 401) return;
+        }
+    }
+    if (can('puede_consultar_control_despacho')) void start();
+    else showNoAccess();
+}
+
+void boot();
