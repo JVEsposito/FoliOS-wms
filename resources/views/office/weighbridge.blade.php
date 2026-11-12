@@ -183,6 +183,7 @@
         <dialog class="weighbridge-dialog" id="tareDialog">
             <form method="dialog" class="weighbridge-dialog__shell weighbridge-dialog__shell--compact" id="tareForm" novalidate>
                 <div class="weighbridge-dialog__heading"><div><p class="eyebrow">BÁSCULA DE SALIDA</p><h2>Registrar destare</h2><p id="tareDescription">Captura la lectura del camión vacío.</p></div><button class="dialog-close" value="cancel" type="submit" aria-label="Cerrar">×</button></div>
+                <div class="tare-count-note" id="tareCountNote" role="note" hidden><strong>Conteo de Validación MP</strong><ul id="tareCountNoteList"></ul><small>Queda en la observación de cierre de la hoja de pesaje (RPR-01) que firma el chofer.</small></div>
                 <label class="field weight-field"><span>Peso tara *</span><div><input name="peso_tara" type="number" min="1" max="200000" step="0.01" inputmode="decimal" required><b>kg</b></div></label>
                     <label class="field"><span>Envases con fruta para repartir el neto *</span><select name="tipo_envase_calculo_neto" multiple size="4" required></select><small>En envases anidados elige un solo nivel; si contienen fruta independiente, elige ambos.</small></label>
                     <label class="field"><span>Salida de envases *</span><select name="modo_salida_envases" required>

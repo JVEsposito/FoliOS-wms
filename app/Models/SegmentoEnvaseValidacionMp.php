@@ -9,7 +9,11 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['segmento_validacion_mp_id', 'tipo_envase', 'cantidad'])]
+/**
+ * `cantidad` son los envases con fruta del segmento, los que pasan al lote. `cantidad_vacia`
+ * son los que llegaron vacíos con ese segmento: cuentan para la cuenta corriente, no para el lote.
+ */
+#[Fillable(['segmento_validacion_mp_id', 'tipo_envase', 'cantidad', 'cantidad_vacia'])]
 class SegmentoEnvaseValidacionMp extends Model
 {
     use HasUuids, ImpideEliminacionFisica;
@@ -23,6 +27,6 @@ class SegmentoEnvaseValidacionMp extends Model
 
     protected function casts(): array
     {
-        return ['tipo_envase' => TipoEnvaseRomana::class, 'cantidad' => 'integer'];
+        return ['tipo_envase' => TipoEnvaseRomana::class, 'cantidad' => 'integer', 'cantidad_vacia' => 'integer'];
     }
 }

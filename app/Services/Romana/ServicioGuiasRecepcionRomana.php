@@ -104,7 +104,9 @@ class ServicioGuiasRecepcionRomana
             }
             $segmento['guia_recepcion_romana_id'] = $id;
             foreach ($segmento['envases'] as $envase) {
-                $sumas[$id][$envase['tipo_envase']] = ($sumas[$id][$envase['tipo_envase']] ?? 0) + (int) $envase['cantidad'];
+                // Lo validado de la guía incluye los envases que llegaron vacíos con ella.
+                $sumas[$id][$envase['tipo_envase']] = ($sumas[$id][$envase['tipo_envase']] ?? 0)
+                    + (int) $envase['cantidad'] + (int) ($envase['cantidad_vacia'] ?? 0);
             }
         }
         unset($segmento);

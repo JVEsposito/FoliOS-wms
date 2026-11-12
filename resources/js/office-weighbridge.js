@@ -340,6 +340,8 @@ function grossWeightAudit(event) {
     const after = event.datos.pesaje_posterior || event.datos.posterior;
     return `<small>Bruto: ${escapeHtml(formatWeight(before.peso_bruto))} → ${escapeHtml(formatWeight(after.peso_bruto))}${event.datos.pesaje_anterior ? ` · Tanda ${escapeHtml(before.secuencia)}` : ''}</small>`;
 }
+/** Envases con fruta de lo validado; las respuestas anteriores no traen los vacíos. */
+function withFruit(item) { return item.cantidad_con_fruta ?? item.cantidad_validada; }
 function envasesLabel(reception) { return (reception.envases || []).map((item) => `${item.cantidad_declarada} ${label(item.tipo_envase)}${item.propiedad ? ` (${containerProperties[item.propiedad] || item.propiedad})` : ''}`).join(' · ') || 'Sin envases'; }
 /** Tipos de envase del pesaje acumulativo; las respuestas antiguas traen uno solo. */
 function weighingTypes(weighing) {
@@ -430,6 +432,7 @@ function renderDetail(reception) {
         ...weighingFacts,
         ...outboundTareFacts,
         ...standardWeightFacts,
+        ...(reception.observacion_conteo?.length ? [fact('CONTEO VALIDACIÓN MP', reception.observacion_conteo.join(' '))] : []),
         fact('VERSIÓN', String(reception.version)), fact('OBS. INGRESO', reception.observacion || 'Sin observaciones'), fact('OBS. CIERRE', reception.observacion_cierre || 'Sin observaciones'),
     ].join('');
     elements.detailTimeline.innerHTML = (reception.eventos || []).map((event) => `<article class="timeline-item"><i></i><div><strong>${escapeHtml(label(event.tipo))}</strong><small>${escapeHtml(event.usuario?.nombre || 'Sistema')} · ${escapeHtml(event.estado_anterior ? `${receptionStateLabel(reception, event.estado_anterior)} → ${receptionStateLabel(reception, event.estado_nuevo)}` : receptionStateLabel(reception, event.estado_nuevo))}</small>${grossWeightAudit(event)}${event.datos?.motivo ? `<small>Motivo: ${escapeHtml(event.datos.motivo)}</small>` : ''}</div><time>${escapeHtml(formatDate(event.ocurrido_at))}</time></article>`).join('');
@@ -879,7 +882,11 @@ function openTareDialog(correcting) {
     elements.inspectionObservation.value = correcting ? (state.selected.inspecciones_envases?.find((i) => i.tipo === 'despacho')?.observacion || '') : '';
     elements.tareForm.reset(); elements.tareFormError.textContent = ''; elements.containerTarePreview.textContent = '—'; elements.netWeightPreview.textContent = '—'; elements.netPerContainerPreview.textContent = '—';
     const containerSelect = elements.tareForm.elements.tipo_envase_calculo_neto;
-    containerSelect.innerHTML = state.selected.envases.filter((item) => item.cantidad_validada > 0 && state.catalogs.tipos_envase.find((t) => t.codigo === item.tipo_envase)?.contiene_fruta).map((item) => `<option value="${escapeHtml(item.tipo_envase)}">${escapeHtml(label(item.tipo_envase))} · ${item.cantidad_validada} validados</option>`).join('');
+    // El neto se reparte entre los envases con fruta: los vacíos no bajan el peso promedio.
+    containerSelect.innerHTML = state.selected.envases.filter((item) => withFruit(item) > 0 && state.catalogs.tipos_envase.find((t) => t.codigo === item.tipo_envase)?.contiene_fruta).map((item) => `<option value="${escapeHtml(item.tipo_envase)}">${escapeHtml(label(item.tipo_envase))} · ${withFruit(item)} con fruta${item.cantidad_vacia ? ` (${item.cantidad_vacia} vacíos)` : ''}</option>`).join('');
+    const countNotes = state.selected.observacion_conteo || [];
+    byId('tareCountNote').hidden = countNotes.length === 0;
+    byId('tareCountNoteList').innerHTML = countNotes.map((line) => `<li>${escapeHtml(line)}</li>`).join('');
     elements.outboundContainerTareList.innerHTML = state.selected.envases.map((item) => exitRow(item.tipo_envase, item.cantidad_validada, item.tara_unitaria_salida)).join('');
     elements.tareForm.elements.peso_tara.value = correcting ? state.selected.peso_tara : '';
     elements.tareForm.elements.peso_tara.readOnly = correcting;
@@ -982,7 +989,7 @@ function updateNetPreviews() {
     elements.netWeightPreview.textContent = tare > 0 && net > 0 ? formatWeight(net) : '—';
     try {
         const selection = [...elements.tareForm.elements.tipo_envase_calculo_neto.selectedOptions].map((o) => o.value);
-        const quantities = Object.fromEntries(state.selected.envases.map((i) => [i.tipo_envase, i.cantidad_validada]));
+        const quantities = Object.fromEntries(state.selected.envases.map((i) => [i.tipo_envase, withFruit(i)]));
         const references = state.tareCorrection && state.selected.reparto_neto_envases
             ? Object.fromEntries(state.selected.reparto_neto_envases.map((r) => [r.tipo_envase, r.peso_referencia]))
             : state.selected.configuracion_reparto?.referencias || {};

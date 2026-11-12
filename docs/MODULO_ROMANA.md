@@ -157,6 +157,8 @@ peso neto fruta = peso bruto - tara camión - tara de envases
 
 La lectura real de la báscula y la tara calculada de los envases se conservan por separado en el expediente y en su evento de cierre.
 
+La cantidad de cada tipo es la contada en Validación MP, no la declarada en la guía. Los envases que llegaron vacíos sí entran en la tara, pero no en el peso neto por envase, que se reparte solo entre los envases con fruta. Ver [Envases que llegan vacíos](MODULO_VALIDACION_MP.md#envases-que-llegan-vacíos).
+
 En el pesaje acumulativo se declaran uno o más tipos de envase con fruta (por ejemplo, bins y totes), cada uno con su cantidad total, su tara por envase y su propiedad. Por ejemplo, una guía con 60 bins puede registrarse en lecturas de 1, 3 o cualquier número que no supere el saldo pendiente. Una tanda puede mezclar tipos: indica cuántos envases de cada tipo están sobre la báscula. Cada lectura calcula:
 
 ```text
@@ -276,7 +278,7 @@ Una recepción cerrada expone un PDF con:
 - bruto, tara del camión, tara calculada de envases y peso neto cuando corresponde;
 - indicación expresa de “sin registro de kilos” para recepciones exclusivas de envases;
 - para pesaje acumulativo: tara unitaria, total pesado, cantidad de tandas y neto promedio por envase;
-- observaciones;
+- observaciones; si Validación MP contó distinto de la guía o hubo envases vacíos, la observación de cierre lo resume con el peso promedio por envase con fruta;
 - espacios de firma.
 
 El endpoint rechaza recepciones abiertas.

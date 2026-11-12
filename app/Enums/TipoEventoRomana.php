@@ -17,4 +17,6 @@ enum TipoEventoRomana: string
     case RecepcionEliminada = 'recepcion_eliminada';
     case EspecieCompletada = 'especie_completada';
     case CorreccionIntegral = 'correccion_integral';
+    // Pesaje acumulativo: el neto por envase se rehízo con el conteo de Validación MP (vacíos incluidos).
+    case NetoPorEnvaseAjustado = 'neto_por_envase_ajustado';
 }

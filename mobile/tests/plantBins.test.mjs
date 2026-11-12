@@ -97,7 +97,7 @@ function harness(reception, catalogOverrides = {}) {
     async mount() { await flush(() => { renderer = create(React.createElement(ValidationMpScreen, { auth, baseUrl: 'https://server.test', onLogout: () => {} })); }); },
     async open(code) { await flush(() => renderer.root.findByType('ScanInput').props.onSubmit(code)); },
     input(label) { return renderer.root.findAllByType('TextInput').find((node) => node.props.accessibilityLabel === label); },
-    countInputs() { return renderer.root.findAllByType('TextInput').filter((node) => node.props.keyboardType === 'number-pad' && !node.props.accessibilityLabel); },
+    countInputs() { return renderer.root.findAllByType('TextInput').filter((node) => node.props.keyboardType === 'number-pad' && node.props.accessibilityLabel?.endsWith(' contados')); },
     async type(node, value) { await flush(() => node.props.onChangeText(value)); },
     async press(label) { await press(renderer.root, label); },
     async pressSegment(index, label) { await press(segment(index), label); },
@@ -159,6 +159,39 @@ test('con segregación cada segmento indica sus bins de planta y el total es la 
   assert.match(pda.text(), /Indícalos en cada segmento/);
   assert.equal(pda.total(), '2');
   assert.equal(pda.input('Bins de planta agregados'), undefined);
+  await pda.unmount();
+});
+
+test('los vacíos se cuentan aparte, no piden bins de planta y viajan en la confirmación', async () => {
+  const base = reception([['bins', 1], ['totes', 48]]);
+  base.envases = base.envases.map((item) => ({ ...item, contiene_fruta: true }));
+  const pda = harness(base);
+  await pda.mount();
+  await pda.open('REC-2610-0001');
+  const empties = () => pda.input('Totes vacíos');
+  assert.equal(pda.input('Bins de planta agregados').props.value, '1');
+  await pda.type(empties(), '24');
+  assert.match(pda.text(), /Con fruta: 24\. Cuentan para la cuenta corriente y la tara, no para el peso promedio\./);
+  // 24 totes con fruta caben en el bin que llegó.
+  assert.equal(pda.input('Bins de planta agregados').props.value, '0');
+  await pda.press('Tarjas de campo verificadas visualmente');
+  await pda.press('11111');
+  await pda.press('Santina');
+  await pda.type(empties(), '49');
+  await pda.press('Confirmar Validación MP');
+  assert.match(pda.text(), /Totes: los vacíos no pueden superar los contados\./);
+  assert.equal(pda.confirmations.length, 0);
+  await pda.type(empties(), '24');
+  await pda.press('Confirmar Validación MP');
+  assert.deepEqual(pda.confirmations[0].containers, [{ tipo_envase: 'bins', cantidad_validada: 1 }, { tipo_envase: 'totes', cantidad_validada: 48, cantidad_vacia: 24 }]);
+  await pda.unmount();
+});
+
+test('un servidor que no informa si el envase trae fruta no pide vacíos', async () => {
+  const pda = harness(reception([['bins', 1], ['totes', 48]]));
+  await pda.mount();
+  await pda.open('REC-2610-0001');
+  assert.equal(pda.input('Totes vacíos'), undefined);
   await pda.unmount();
 });
 

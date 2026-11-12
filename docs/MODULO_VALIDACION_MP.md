@@ -95,6 +95,27 @@ La diferencia entre declarado y observado:
 
 No deben duplicarse líneas del mismo tipo dentro de una confirmación incompatible ni utilizarse tipos no declarados por la recepción.
 
+### Envases que llegan vacíos
+
+A veces llegan todos los envases, pero algunos vienen sin fruta (por ejemplo, 20 totes vacíos dentro de los bins). En los tipos que traen fruta, el validador indica cuántos de los contados llegaron **vacíos** (`envases.*.cantidad_vacia`, de 0 a lo contado):
+
+- **Cuenta corriente y tara:** cuentan. Son envases del cliente y entraron en el bruto, así que van en el ingreso de la cuenta corriente y en la tara del destare.
+- **Peso promedio por envase:** no cuentan. El neto se reparte solo entre los envases con fruta (`cantidad_validada − cantidad_vacia`). Por ejemplo, 7.350 kg en 864 totes, 24 de ellos vacíos, dan 8,750 kg por tote con fruta y no 8,507 kg.
+- **Lotes:** no cuentan. El segmento guarda aparte los envases con fruta (`cantidad`, los que pasan al lote) y los vacíos (`cantidad_vacia`).
+
+Con segregación o varias guías, cada segmento indica sus vacíos (`segmentos.*.envases.*.cantidad_vacia`). La suma debe coincidir con lo informado en el conteo, y lo validado de cada guía incluye sus vacíos. Si todos los envases con fruta llegan vacíos, la validación se rechaza.
+
+En pesaje acumulativo Romana cierra antes de validar. Al confirmar, el neto pesado de cada tipo se reparte entre sus envases con fruta según el conteo, sin cambiar el neto total. Queda el evento `neto_por_envase_ajustado` con los valores anteriores y nuevos.
+
+### Más o menos envases que la guía
+
+Si el validador cuenta más (o menos) que lo declarado, por ejemplo 36 bins y 864 totes contra 35 y 840, lo contado manda:
+
+- la cuenta corriente recibe lo contado, con la diferencia en el movimiento;
+- el destare usa lo contado para la tara de los envases que quedan en planta, el neto y el peso promedio;
+- Romana lo muestra en el expediente y en el diálogo de destare (`observacion_conteo`);
+- la observación de cierre del RPR-01, la hoja de pesaje que firma el chofer, lo deja escrito: *«Validación MP contó: Bins plástico 36 (guía 35), Tote 864 (guía 840; 24 vacíos). Tara y neto con lo contado. Promedio sin vacíos: 8,750 kg por Tote con fruta (840).»*
+
 ### Bins de planta agregados
 
 Cuando llegan más totes de los que caben en los bins recibidos (por ejemplo 31 totes sobre 1 bin, con 24 por bin), la planta agrega bins propios para procesar la fruta. La PDA sugiere cuántos con la referencia «Totes por bin» de la especie y el validador los confirma o corrige en **Bins de planta agregados**. Con segregación se indican por segmento y deben sumar el total.

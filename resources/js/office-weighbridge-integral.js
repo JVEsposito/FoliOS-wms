@@ -14,10 +14,19 @@ export function createIntegralCorrection({ dialog, api, escapeHtml: esc, operati
     const typeName = (code) => estado.tipos_envase.find((tipo) => tipo.codigo === code)?.nombre || code;
     const amounts = (list) => Object.fromEntries((list || []).map((item) => [item.tipo_envase, Number(item.cantidad) || 0]));
     const toList = (map) => tipos.map((tipo) => ({ tipo_envase: tipo, cantidad: number(map[tipo]) })).filter((item) => item.cantidad > 0);
+    const carriesFruit = (code) => estado.tipos_envase.find((tipo) => tipo.codigo === code)?.contiene_fruta === true;
+    const emptyAmounts = (list) => Object.fromEntries((list || []).map((item) => [item.tipo_envase, Number(item.cantidad_vacia) || 0]));
+    // En el segmento, `cantidad` son los envases con fruta y `cantidad_vacia` los que llegaron vacíos.
+    const segmentList = (full, empty) => tipos.map((tipo) => ({ tipo_envase: tipo, cantidad: number(full[tipo]), cantidad_vacia: carriesFruit(tipo) ? number(empty[tipo]) : 0 }))
+        .filter((item) => item.cantidad > 0 || item.cantidad_vacia > 0);
 
     function inputs(prefix, id, map) {
         return tipos.map((tipo) => `<td><input class="integral-qty" type="number" min="0" max="100000" step="1" inputmode="numeric"
             data-${prefix}="${esc(id)}" data-tipo="${esc(tipo)}" value="${number(map[tipo])}" aria-label="${esc(typeName(tipo))}"></td>`).join('');
+    }
+    function emptyInputs(id, map) {
+        return tipos.map((tipo) => carriesFruit(tipo) ? `<td><input class="integral-qty" type="number" min="0" max="100000" step="1" inputmode="numeric"
+            data-vacio="${esc(id)}" data-tipo="${esc(tipo)}" value="${number(map[tipo])}" aria-label="${esc(typeName(tipo))} vacíos"></td>` : '<td></td>').join('');
     }
     function header(first) {
         return `<tr><th>${first}</th>${tipos.map((tipo) => `<th>${esc(typeName(tipo))}</th>`).join('')}</tr>`;
@@ -36,9 +45,10 @@ export function createIntegralCorrection({ dialog, api, escapeHtml: esc, operati
         if (!dialog.querySelector('#integralForm')) return;
         const guides = read('guia');
         const segments = read('segmento');
+        const empties = read('vacio');
         const received = read('recibido');
         estado.guias.forEach((g) => { g.numero_guia_despacho = dialog.querySelector(`[data-numero="${g.id}"]`)?.value ?? g.numero_guia_despacho; g.envases = toList(guides[g.id] || {}); });
-        estado.segmentos.forEach((s) => { s.envases = toList(segments[s.id] || {}); });
+        estado.segmentos.forEach((s) => { s.envases = segmentList(segments[s.id] || {}, empties[s.id] || {}); });
         if (estado.tipo_recepcion === 'solo_envases') estado.envases_validados = toList(received.total || {});
         dialog.querySelectorAll('[data-propiedad]').forEach((select) => { estado.propiedades[select.dataset.propiedad] = select.value; });
         dialog.querySelectorAll('[data-tara]').forEach((input) => { estado.taras[input.dataset.tara] = input.value; });
@@ -55,7 +65,8 @@ export function createIntegralCorrection({ dialog, api, escapeHtml: esc, operati
     function validated() {
         if (estado.tipo_recepcion === 'solo_envases') return amounts(estado.envases_validados);
         const sums = {};
-        estado.segmentos.forEach((s) => s.envases.forEach((e) => { sums[e.tipo_envase] = (sums[e.tipo_envase] || 0) + e.cantidad; }));
+        // Lo recibido incluye los vacíos: son envases del cliente aunque no traigan fruta.
+        estado.segmentos.forEach((s) => s.envases.forEach((e) => { sums[e.tipo_envase] = (sums[e.tipo_envase] || 0) + e.cantidad + (e.cantidad_vacia || 0); }));
         return sums;
     }
     function declared() {
@@ -104,7 +115,8 @@ export function createIntegralCorrection({ dialog, api, escapeHtml: esc, operati
             : `<section><h3>Conteo de Validación MP por segmento</h3>
                 ${estado.cantidades_editables ? '' : '<p class="integral-help">En pesaje acumulativo el conteo viene de las tandas: corrígelas en Romana.</p>'}
                 <div class="integral-scroll"><table class="integral-table"><thead>${header('Segmento')}</thead><tbody>
-                ${estado.segmentos.map((s) => `<tr><td><strong>${s.secuencia}</strong> · Guía ${esc(estado.guias.find((g) => g.id === s.guia_recepcion_romana_id)?.numero_guia_despacho || '—')}<small>CSG ${esc(s.csg || '—')} · ${esc(s.variedad || '')}${s.lotes.length ? ` · Lote ${esc(s.lotes.join(', '))}` : ''}</small></td>${inputs('segmento', s.id, amounts(s.envases))}</tr>`).join('')}
+                ${estado.segmentos.map((s) => `<tr><td><strong>${s.secuencia}</strong> · Guía ${esc(estado.guias.find((g) => g.id === s.guia_recepcion_romana_id)?.numero_guia_despacho || '—')}<small>CSG ${esc(s.csg || '—')} · ${esc(s.variedad || '')}${s.lotes.length ? ` · Lote ${esc(s.lotes.join(', '))}` : ''} · con fruta</small></td>${inputs('segmento', s.id, amounts(s.envases))}</tr>
+                <tr class="integral-empty-row"><td><small>Segmento ${s.secuencia} · vacíos: cuentan para la cuenta corriente, no para el lote ni el peso promedio</small></td>${emptyInputs(s.id, emptyAmounts(s.envases))}</tr>`).join('')}
                 </tbody></table></div></section>`}
             <div class="integral-add">${otros.length ? `<label class="field"><span>Agregar tipo de envase</span><select id="integralAddType"><option value="">Seleccionar…</option>${otros.map((tipo) => `<option value="${esc(tipo.codigo)}">${esc(tipo.nombre)}</option>`).join('')}</select></label>` : ''}</div>
             ${estado.propiedad_editable ? `<section><h3>Propiedad de los envases</h3><div class="integral-grid">${tipos.map((tipo) => `<label class="field"><span>${esc(typeName(tipo))}</span><select data-propiedad="${esc(tipo)}">${Object.entries(PROPERTY_LABELS).map(([value, text]) => `<option value="${value}" ${estado.propiedades[tipo] === value ? 'selected' : ''}>${text}</option>`).join('')}</select></label>`).join('')}</div></section>` : ''}

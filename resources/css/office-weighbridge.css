@@ -179,6 +179,11 @@ body {
 .outbound-container-tares label input { padding-right: 52px; }
 .outbound-container-tares label b { position: absolute; top: 18px; right: 12px; color: var(--cyan); font-size: .65rem; }
 .outbound-container-tares > small { display: block; margin-top: 9px; color: var(--muted); font-size: .62rem; }
+/* Diferencias de conteo y vacíos de Validación MP: el operador las ve antes del destare. */
+.tare-count-note { margin: 0 0 14px; border: 1px solid var(--amber); border-left-width: 4px; border-radius: 10px; padding: 10px 12px; }
+.tare-count-note strong { display: block; color: var(--text); font-size: .74rem; font-weight: 900; }
+.tare-count-note ul { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 3px; color: var(--text); font-size: .72rem; }
+.tare-count-note small { display: block; margin-top: 7px; color: var(--muted); font-size: .62rem; }
 
 @media (max-width: 1280px) {
     .weighbridge-kpis { grid-template-columns: repeat(3, 1fr); }
@@ -333,3 +338,5 @@ body.has-reception-drawer .office-app .weighbridge-filters { grid-template-colum
 .integral-lots { margin: 0; padding-left: 18px; }
 .integral-help { opacity: .8; }
 .integral-add { margin-top: 10px; max-width: 280px; }
+/* Fila de vacíos bajo cada segmento de la corrección integral. */
+.integral-empty-row td { padding-top: 0; border-bottom-style: dashed; }

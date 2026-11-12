@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'propiedad',
     'cantidad_declarada',
     'cantidad_validada',
+    'cantidad_vacia',
     'tara_unitaria_salida',
 ])]
 class DetalleEnvaseRecepcionRomana extends Model
@@ -35,7 +36,17 @@ class DetalleEnvaseRecepcionRomana extends Model
             'propiedad' => PropiedadEnvase::class,
             'cantidad_declarada' => 'integer',
             'cantidad_validada' => 'integer',
+            'cantidad_vacia' => 'integer',
             'tara_unitaria_salida' => 'decimal:3',
         ];
+    }
+
+    /**
+     * Envases con fruta: lo contado en Validación MP menos los que llegaron vacíos. Es la
+     * base del peso promedio por envase; la cuenta corriente y la tara usan todo lo contado.
+     */
+    public function cantidadConFruta(): int
+    {
+        return max(0, (int) ($this->cantidad_validada ?? 0) - (int) $this->cantidad_vacia);
     }
 }
