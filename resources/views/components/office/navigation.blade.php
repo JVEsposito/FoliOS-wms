@@ -40,6 +40,7 @@
             ['key' => 'cargas', 'module' => 'frigorifico.cargas', 'section' => 'Despacho', 'label' => 'Cargas', 'href' => '/oficina/frigorifico/despacho/cargas', 'permissions' => ['puede_consultar_catalogo_cargas']],
             ['key' => 'despacho-estatus', 'module' => 'frigorifico.cargas', 'section' => 'Despacho', 'label' => 'Estatus operativo', 'href' => '/oficina/frigorifico/despacho/estatus', 'permissions' => ['puede_consultar_cargas']],
             ['key' => 'embarques', 'module' => 'frigorifico.cargas', 'section' => 'Despacho', 'label' => 'Calendario de embarques', 'href' => '/oficina/frigorifico/despacho/calendario', 'permissions' => ['puede_consultar_catalogo_cargas']],
+            ['key' => 'control-despacho', 'module' => 'frigorifico.control-despacho', 'section' => 'Despacho', 'label' => 'Control de despacho (R-24)', 'href' => '/oficina/frigorifico/control-despacho', 'permissions' => ['puede_consultar_control_despacho']],
             ['key' => 'existencias-pt', 'module' => 'frigorifico.cargas', 'label' => 'Existencias PT', 'href' => '/oficina/frigorifico/existencias', 'permissions' => ['puede_consultar_cargas']],
         ],
         'materiales' => [

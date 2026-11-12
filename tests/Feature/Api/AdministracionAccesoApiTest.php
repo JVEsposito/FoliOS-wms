@@ -646,8 +646,10 @@ class AdministracionAccesoApiTest extends TestCase
                 'nombre' => 'Administrador',
             ]);
 
-        $this->assertCount(count(RolUsuario::internos()) + 1, $respuestaCatalogo->json('data'));
+        // Además de un perfil por rol, las migraciones crean Contraparte SAG y Consolidación de despacho.
+        $this->assertCount(count(RolUsuario::internos()) + 2, $respuestaCatalogo->json('data'));
         $respuestaCatalogo->assertJsonFragment(['codigo' => 'CONTRAPARTE_SAG']);
+        $respuestaCatalogo->assertJsonFragment(['codigo' => 'CONSOLIDACION']);
         $this->assertCount(count(RolUsuario::internos()), $respuestaCatalogo->json('roles_base'));
         foreach ($respuestaCatalogo->json('roles_base') as $rolBase) {
             $this->assertContains('administracion.accesos', $rolBase['modulos_disponibles']);

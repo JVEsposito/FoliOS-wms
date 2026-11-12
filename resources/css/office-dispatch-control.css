@@ -1,0 +1,79 @@
+/* Control de despacho (planilla POEMP R-24). Los tonos usan data-tone: las clases con
+   success/warning/danger reciben fondos del CSS global de FoliOS. */
+.office-app.dcx-app .dcx-workspace { display: grid; gap: 16px; width: min(1240px, 100%); margin: 0 auto; padding: 20px 24px 40px; min-width: 0; }
+.office-app.dcx-app .panel { padding: 20px 22px; border: 1px solid var(--line-soft); border-radius: var(--radius-card, 10px); background: var(--corporate-card, var(--surface)); min-width: 0; }
+.office-app.dcx-app .is-hidden { display: none; }
+.dcx-heading { display: grid; gap: 16px; }
+.dcx-heading h1 { margin: 2px 0 6px; }
+.dcx-heading p { margin: 0; max-width: 760px; color: var(--text-subtle); }
+.dcx-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 12px; }
+.dcx-filters label { display: grid; gap: 4px; min-width: 0; }
+.dcx-filters label span, .dcx-reopen label span { color: var(--text-subtle); font-size: .78rem; font-weight: 700; }
+.dcx-filters input[name="buscar"] { width: 280px; max-width: 100%; }
+.dcx-list__head, .dcx-detail__head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 8px 16px; }
+.dcx-list__head h2, .dcx-detail__head h2 { margin: 0; }
+.dcx-list__head p, .dcx-detail__head p { margin: 2px 0 0; color: var(--text-subtle); }
+.dcx-table-wrap { margin-top: 12px; overflow-x: auto; }
+.dcx-table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+.dcx-table th { padding: 8px 10px; border-bottom: 1px solid var(--line-soft); color: var(--text-subtle); font-size: .74rem; font-weight: 700; text-align: left; white-space: nowrap; }
+.dcx-table td { padding: 9px 10px; border-bottom: 1px solid var(--line-soft); color: var(--text-strong); vertical-align: top; }
+.dcx-table td small { display: block; margin-top: 2px; color: var(--text-subtle); font-size: .76rem; }
+.dcx-table tbody tr[data-id] { cursor: pointer; }
+.dcx-table tbody tr[data-id]:hover, .dcx-table tbody tr[data-id]:focus-visible, .dcx-table tbody tr[aria-selected="true"] { background: var(--info-bg); outline: none; }
+.dcx-table--pallets tr[data-placed="no"] td { color: var(--text-subtle); }
+.dcx-chip { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: .76rem; font-weight: 700; white-space: nowrap; }
+.dcx-chip[data-tone="ok"] { background: var(--success-bg); color: var(--success-text); }
+.dcx-chip[data-tone="curso"] { background: var(--warning-bg); color: var(--warning-text); }
+.dcx-pager { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 12px; color: var(--text-subtle); }
+.dcx-detail { display: grid; gap: 18px; }
+/* Las tablas anchas se desplazan dentro de su caja; la página no se ensancha. */
+.dcx-detail > *, .dcx-columns > * { min-width: 0; }
+.dcx-detail h3 { margin: 0 0 8px; font-size: 1rem; }
+.dcx-detail h4 { margin: 12px 0 6px; color: var(--text-subtle); font-size: .78rem; letter-spacing: .04em; text-transform: uppercase; }
+.dcx-detail h4:first-child { margin-top: 0; }
+.dcx-missing { padding: 12px 14px; border-left: 3px solid var(--warning-text); border-radius: 6px; background: var(--warning-bg); color: var(--text-strong); font-size: .88rem; }
+.dcx-missing ul { margin: 6px 0 0; padding-left: 18px; }
+.dcx-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+.dcx-kpis div { display: grid; gap: 2px; padding: 10px 12px; border: 1px solid var(--line-soft); border-radius: 8px; }
+.dcx-kpis span { color: var(--text-subtle); font-size: .74rem; font-weight: 700; }
+.dcx-kpis strong { color: var(--text-strong); font-size: 1.25rem; }
+.dcx-columns { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 24px; }
+.dcx-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px 18px; margin: 0; }
+.dcx-fields div { display: grid; gap: 2px; padding-bottom: 6px; border-bottom: 1px solid var(--line-soft); min-width: 0; }
+.dcx-fields dt { color: var(--text-subtle); font-size: .74rem; font-weight: 700; }
+.dcx-fields dd { margin: 0; color: var(--text-strong); font-weight: 700; overflow-wrap: anywhere; }
+.dcx-checks { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.dcx-checks li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 10px; border-left: 3px solid var(--line-soft); border-radius: 4px; font-size: .86rem; }
+.dcx-checks li span { color: var(--text-strong); }
+.dcx-checks li strong { flex: none; font-size: .8rem; }
+.dcx-checks li[data-tone="ok"] { border-left-color: var(--success-text); }
+.dcx-checks li[data-tone="ok"] strong { color: var(--success-text); }
+.dcx-checks li[data-tone="alerta"] { border-left-color: var(--danger-text); background: var(--danger-bg); }
+.dcx-checks li[data-tone="alerta"] strong { color: var(--danger-text); }
+.dcx-checks li[data-tone="pendiente"] strong, .dcx-checks li[data-tone="neutro"] strong { color: var(--text-subtle); }
+.dcx-photos-pdf { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; padding: 10px 12px; border: 1px solid var(--line-soft); border-radius: 8px; }
+.dcx-photos-pdf p { margin: 0; color: var(--text-strong); font-size: .88rem; }
+.dcx-photos { display: flex; flex-wrap: wrap; gap: 10px; }
+.dcx-photo { display: grid; gap: 4px; padding: 4px; border: 1px solid var(--line-soft); border-radius: 8px; background: transparent; color: var(--text-subtle); font-size: .72rem; cursor: zoom-in; }
+.dcx-photo strong { max-width: 120px; color: var(--text-strong); font-size: .74rem; text-align: left; }
+.dcx-photo img { width: 120px; height: 90px; border-radius: 6px; object-fit: cover; background: var(--line-soft); }
+.dcx-muted { margin: 0; color: var(--text-subtle); font-size: .88rem; }
+.dcx-print { padding: 14px 16px; border-left: 3px solid var(--info-text); border-radius: 6px; background: var(--info-bg); }
+.dcx-print p { margin: 0 0 10px; color: var(--text-strong); font-size: .88rem; }
+.dcx-print form { display: grid; gap: 10px; }
+.dcx-print .primary-button { justify-self: start; }
+.dcx-temps { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px 12px; }
+.dcx-temps label { display: grid; gap: 4px; }
+.dcx-temps span { color: var(--text-subtle); font-size: .78rem; font-weight: 700; }
+.dcx-reopen form { display: grid; gap: 8px; max-width: 560px; }
+.dcx-reopen label { display: grid; gap: 4px; }
+.dcx-reopen p { margin: 0 0 8px; color: var(--text-subtle); font-size: .88rem; }
+.dcx-reopen .secondary-button { justify-self: start; }
+.dcx-history { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: .86rem; }
+.dcx-history li { display: grid; gap: 2px; }
+.dcx-history span { color: var(--text-subtle); }
+
+@media (max-width: 860px) {
+    .office-app.dcx-app .dcx-workspace { padding: 14px 16px 32px; }
+    .dcx-columns { grid-template-columns: minmax(0, 1fr); }
+}

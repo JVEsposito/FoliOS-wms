@@ -11,7 +11,7 @@ export const isDemoRuntime = isDemoOnlyBuild || enabled(process.env.EXPO_PUBLIC_
 /**
  * Variante del APK. Se fija al compilar o publicar el bundle:
  * - `tablet`: operación de cámaras, Prefrío, Materiales y validaciones.
- * - `pda`: equipo de mano (Unitech EA520) para Validación PT, MP y Repaletizaje.
+ * - `pda`: equipo de mano (Unitech EA520) para Validación PT, MP, Repaletizaje y Consolidación.
  *
  * Cada variante tiene su propio canal EAS (`production` y `pda`, y para los
  * equipos de prueba `camaras-pruebas` y `pda-pruebas`), de modo que una
@@ -36,6 +36,6 @@ export const appVariant: AppVariant = resolveAppVariant(appChannel, process.env.
 export const isPdaBuild = appVariant === 'pda';
 
 /** Módulos que la PDA puede abrir; el resto del perfil se ignora en ese equipo. */
-export const PDA_MODULES = ['contraparte_sag', 'porteria', 'validacion', 'validacion_mp', 'repaletizaje', 'recepcion_fruta_embalada'] as const;
+export const PDA_MODULES = ['contraparte_sag', 'consolidacion', 'porteria', 'validacion', 'validacion_mp', 'repaletizaje', 'recepcion_fruta_embalada'] as const;
 
 export const deviceNoun = isPdaBuild ? 'PDA' : 'tablet';

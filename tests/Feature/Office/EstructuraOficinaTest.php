@@ -225,6 +225,18 @@ class EstructuraOficinaTest extends TestCase
         }
     }
 
+    public function test_control_de_despacho_exporta_su_pantalla(): void
+    {
+        $html = $this->get('/oficina/frigorifico/control-despacho')->assertOk()->getContent();
+        foreach (['dcxFilters', 'dcxRows', 'dcxDetail', 'dcxDownload', 'dcxReopenForm'] as $id) {
+            $this->assertStringContainsString('id="'.$id.'"', $html);
+        }
+        if (getenv('ESTIBA_EXPORTAR_UI_TESTS') === '1') {
+            File::ensureDirectoryExists(storage_path('app/ui/oficina'));
+            File::put(storage_path('app/ui/oficina/control-despacho.html'), $html);
+        }
+    }
+
     public function test_inspeccion_sag_exporta_el_aviso_de_carga(): void
     {
         $html = $this->get('/oficina/frigorifico/inspeccion-sag')->assertOk()->getContent();

@@ -98,25 +98,7 @@ class ServicioCargaCamion
                 throw new DomainException("El folio {$numero} todavía no sale de la cámara: envíalo al andén antes de cargarlo.");
             }
 
-            $asignacion->update([
-                'estado' => EstadoCargaFolio::Cargado,
-                'cargado_por_user_id' => $usuario->id,
-                'cargado_desde_dispositivo_id' => $dispositivo->id,
-                'cargado_at' => $leidoAt->isFuture() ? CarbonImmutable::now() : $leidoAt,
-            ]);
-            $cargaBloqueada->update([
-                'version' => $cargaBloqueada->version + 1,
-                'actualizada_por_user_id' => $usuario->id,
-            ]);
-            $this->registrarEvento($cargaBloqueada, TipoEventoCarga::FolioCargado, $usuario, $folio, [
-                'carga_folio_id' => $asignacion->id,
-                'anden_id' => $asignacion->anden_id,
-                'presencia_carga_anden_id' => $cargaBloqueada->presenciaAndenActiva()->value('id'),
-                'dispositivo_id' => $dispositivo->id,
-                'leido_at' => $leidoAt->toAtomString(),
-            ]);
-
-            return $asignacion->refresh();
+            return $this->aplicarCargado($cargaBloqueada, $asignacion, $folio, $usuario, $dispositivo, $leidoAt);
         };
 
         return $this->transicionar('folio.cargar_camion', $operacionId, $usuario, [
@@ -124,6 +106,48 @@ class ServicioCargaCamion
             'numero_folio' => $numero,
             'generado_dispositivo_at' => $leidoAt->toAtomString(),
         ], $accion, Carga::class, (string) $carga->id, $carga->codigo, $dispositivo, $leidoAt);
+    }
+
+    /**
+     * Sube al camión un pallet que espera en el andén. Se ejecuta dentro de una transición
+     * ya abierta, con la carga y la asignación bloqueadas. Lo usan la lectura del camarero y
+     * la planilla R-24 de consolidación: ambas dejan el mismo estado «cargado».
+     *
+     * @param  array<string, mixed>  $datosEvento
+     */
+    public function aplicarCargado(
+        Carga $cargaBloqueada,
+        CargaFolio $asignacion,
+        Folio $folio,
+        User $usuario,
+        Dispositivo $dispositivo,
+        CarbonImmutable $leidoAt,
+        array $datosEvento = [],
+    ): CargaFolio {
+        if ($asignacion->estado !== EstadoCargaFolio::EnAnden) {
+            throw new DomainException("El folio {$folio->numero_folio} todavía no sale de la cámara: envíalo al andén antes de cargarlo.");
+        }
+
+        $asignacion->update([
+            'estado' => EstadoCargaFolio::Cargado,
+            'cargado_por_user_id' => $usuario->id,
+            'cargado_desde_dispositivo_id' => $dispositivo->id,
+            'cargado_at' => $leidoAt->isFuture() ? CarbonImmutable::now() : $leidoAt,
+        ]);
+        $cargaBloqueada->update([
+            'version' => $cargaBloqueada->version + 1,
+            'actualizada_por_user_id' => $usuario->id,
+        ]);
+        $this->registrarEvento($cargaBloqueada, TipoEventoCarga::FolioCargado, $usuario, $folio, [
+            'carga_folio_id' => $asignacion->id,
+            'anden_id' => $asignacion->anden_id,
+            'presencia_carga_anden_id' => $cargaBloqueada->presenciaAndenActiva()->value('id'),
+            'dispositivo_id' => $dispositivo->id,
+            'leido_at' => $leidoAt->toAtomString(),
+            ...$datosEvento,
+        ]);
+
+        return $asignacion->refresh();
     }
 
     public function deshacerCargado(

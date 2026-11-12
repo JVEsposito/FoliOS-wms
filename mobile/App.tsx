@@ -15,6 +15,7 @@ import { FirstPasswordChangeScreen } from './src/screens/FirstPasswordChangeScre
 import { MaterialReceptionScreen } from './src/screens/MaterialReceptionScreen';
 import { PackedFruitReceptionScreen } from './src/screens/PackedFruitReceptionScreen';
 import { SagCounterpartScreen } from './src/screens/SagCounterpartScreen';
+import { ConsolidationScreen } from './src/screens/ConsolidationScreen';
 import { GatehouseScreen } from './src/screens/GatehouseScreen';
 import { FrutaProcesoScreen } from './src/screens/FrutaProcesoScreen';
 import { HidrocoolerMpScreen } from './src/screens/HidrocoolerMpScreen';
@@ -61,7 +62,7 @@ export default function App() {
 
   useEffect(() => {
     // La PDA es un equipo de mano: siempre vertical, incluso en el login.
-    const orientation = isPdaBuild || activeModule === 'validacion' || activeModule === 'validacion_mp' || activeModule === 'repaletizaje' || activeModule === 'fruta_proceso' || activeModule === 'recepcion_fruta_embalada' || activeModule === 'porteria' || activeModule === 'contraparte_sag'
+    const orientation = isPdaBuild || activeModule === 'validacion' || activeModule === 'validacion_mp' || activeModule === 'repaletizaje' || activeModule === 'fruta_proceso' || activeModule === 'recepcion_fruta_embalada' || activeModule === 'porteria' || activeModule === 'contraparte_sag' || activeModule === 'consolidacion'
       ? ScreenOrientation.OrientationLock.PORTRAIT_UP
       : activeModule
         ? ScreenOrientation.OrientationLock.LANDSCAPE
@@ -161,6 +162,8 @@ export default function App() {
               )
             ) : activeModule === 'contraparte_sag' ? (
               <SagCounterpartScreen auth={auth} baseUrl={api.baseUrl ?? ''} onLogout={() => void logoutPersistentModule()} />
+            ) : activeModule === 'consolidacion' ? (
+              <ConsolidationScreen auth={auth} baseUrl={api.baseUrl ?? ''} onLogout={() => void logoutPersistentModule()} />
             ) : activeModule === 'porteria' ? (
               <GatehouseScreen auth={auth} baseUrl={api.baseUrl ?? ''} onLogout={() => void logoutPersistentModule()} />
             ) : activeModule === 'recepcion_fruta_embalada' ? (
@@ -202,6 +205,7 @@ export default function App() {
 function availableModules(auth: AuthSession): MobileModule[] {
   const supported: MobileModule[] = [
     'contraparte_sag',
+    'consolidacion',
     'porteria',
     'demo_administracion',
     'operacion',
@@ -227,7 +231,7 @@ function defaultModule(auth: AuthSession): MobileModule | null {
 }
 
 function moduleLabel(module: MobileModule) {
-  return module === 'contraparte_sag' ? 'Contraparte SAG' : module === 'porteria'
+  return module === 'contraparte_sag' ? 'Contraparte SAG' : module === 'consolidacion' ? 'Consolidación' : module === 'porteria'
     ? 'Portería'
     : module === 'demo_administracion'
     ? 'Administración Demo'
@@ -263,6 +267,13 @@ function ModuleSelection({ modules, onSelect, userName }: { modules: MobileModul
           <Pressable onPress={() => onSelect('contraparte_sag')} style={[styles.selectorCard, isPdaBuild && styles.selectorCardPda]}>
             <Text style={styles.selectorCardTitle}>Contraparte SAG</Text>
             <Text style={styles.selectorCardCopy}>Captura, seguimiento y documentos SAG.</Text>
+          </Pressable>
+        ) : null}
+        {modules.includes('consolidacion') ? (
+          <Pressable onPress={() => onSelect('consolidacion')} style={[styles.selectorCard, isPdaBuild && styles.selectorCardPda]}>
+            <Text style={styles.selectorIcon}>▤</Text>
+            <Text style={styles.selectorCardTitle}>Consolidación</Text>
+            <Text style={styles.selectorCardCopy}>Planilla R-24 en el andén: pallets que suben con su posición, inspección y fotos.</Text>
           </Pressable>
         ) : null}
         {modules.includes('porteria') ? (

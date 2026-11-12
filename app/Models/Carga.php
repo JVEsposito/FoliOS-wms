@@ -149,6 +149,12 @@ class Carga extends Model implements PerteneceATemporada
         return $this->hasOne(Embarque::class);
     }
 
+    /** Planilla R-24 de consolidación, si el equipo la abrió. */
+    public function controlDespacho(): HasOne
+    {
+        return $this->hasOne(ControlDespacho::class);
+    }
+
     protected function casts(): array
     {
         return [
