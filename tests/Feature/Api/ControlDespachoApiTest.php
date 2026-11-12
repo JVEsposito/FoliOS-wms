@@ -332,13 +332,13 @@ class ControlDespachoApiTest extends TestCase
             'inspeccion' => collect(FormularioControlDespacho::inspeccion())->map(fn (): string => 'si')->all(),
         ])->assertOk()->json('data');
 
-        // Al subir, la foto se guarda comprimida: JPEG de hasta 1600 px, no el original del equipo.
+        // Al subir, la foto se guarda comprimida: JPEG de hasta 1280 px, no el original del equipo.
         $subir = fn (string $tipo, int $ancho, int $alto) => $this->conToken($token)->post("/api/control-despacho/controles/{$control['id']}/fotos", [
             'tipo' => $tipo, 'operacion_id' => (string) Str::uuid(), 'archivo' => UploadedFile::fake()->image("{$tipo}.png", $ancho, $alto),
         ])->assertCreated()->json('data');
         $patente = $subir('patente', 3200, 2400);
         $cierre = $subir('cierre_carga', 800, 1200);
-        $this->assertSame([1600, 1200], [$patente['ancho'], $patente['alto']]);
+        $this->assertSame([1280, 960], [$patente['ancho'], $patente['alto']]);
         $rutas = FotoControlDespacho::query()->pluck('ruta')->all();
         $this->assertCount(2, $rutas);
         foreach ($rutas as $ruta) {

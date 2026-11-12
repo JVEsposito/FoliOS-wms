@@ -9,14 +9,16 @@ use RuntimeException;
 
 /**
  * Las fotos del despacho no se guardan como llegan del equipo. Se dejan derechas (EXIF), en
- * JPEG de hasta 1600 px por lado y con una miniatura para la pantalla. Así una foto de varios
- * megabytes ocupa unos cientos de kilobytes, y es esa versión la que después va al PDF.
+ * JPEG de hasta 1280 px por lado y con una miniatura para la pantalla. En el PDF van tres por
+ * página (unos 18 × 8 cm cada una), y para ese tamaño 1280 px conserva legible una patente o
+ * el display de un termógrafo. Se comprime una sola vez: esta versión es la que va al PDF y la
+ * que se rescata intacta si el PDF se rearma.
  */
 class CompresorFotoControlDespacho
 {
-    public const LADO_MAXIMO = 1600;
+    public const LADO_MAXIMO = 1280;
 
-    public const CALIDAD = 72;
+    public const CALIDAD = 60;
 
     public const LADO_MINIATURA = 300;
 

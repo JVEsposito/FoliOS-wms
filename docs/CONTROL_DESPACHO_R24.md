@@ -97,13 +97,17 @@ el `.env` de planta. Las categorías se definen en `FormularioControlDespacho::t
 
 ## Fotos en PDF
 
-Para ahorrar espacio en el servidor, en el servidor queda **un solo PDF por despacho**:
+Un set va de 20 a 40 fotos según el cliente. Para no acumularlas sueltas, en el servidor queda
+**un solo PDF por despacho**:
 
-1. **Al subir**, cada foto queda derecha según su EXIF, en JPEG de hasta 1600 px por lado
-   (calidad 72), con una miniatura para la pantalla. El original del equipo no se guarda: una
-   foto de varios MB ocupa unos cientos de KB.
+1. **Al subir**, cada foto queda derecha según su EXIF, en JPEG de hasta 1280 px por lado
+   (calidad 60), con una miniatura para la pantalla.
+   - El original del equipo no se guarda: una foto de varios MB queda en unos 100 a 200 KB.
+   - En el PDF cada foto ocupa unos 18 × 8 cm, y a ese tamaño 1280 px conserva legible una
+     patente o el display de un termógrafo.
+   - La foto se comprime una sola vez: no pierde calidad si el PDF se rearma.
 2. **Al cerrar la planilla**, las fotos se arman en el PDF «Set fotográfico R-24»:
-   - dos por página, ordenadas por categoría;
+   - tres por página, ordenadas por categoría (40 fotos quedan en 14 páginas);
    - con su nombre y la hora y el usuario que la tomó;
    - en `control-despacho/{control}/set-fotografico-….pdf`, en el disco privado.
 

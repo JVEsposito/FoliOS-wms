@@ -3,8 +3,8 @@
 namespace App\Services\ControlDespacho;
 
 /**
- * PDF «Set fotográfico R-24»: dos fotos por página A4, con su categoría y la hora en que se
- * tomaron. Las fotos ya vienen en JPEG y se incrustan tal cual (DCTDecode), sin recomprimir.
+ * PDF «Set fotográfico R-24»: tres fotos por página A4, con su categoría y la hora en que se
+ * tomaron (un set de 40 fotos queda en 14 páginas). Las fotos ya vienen en JPEG y se incrustan tal cual (DCTDecode), sin recomprimir.
  *
  * Devuelve dónde quedó el JPEG de cada foto dentro del PDF: si la planilla se reabre, el PDF se
  * rearma leyendo esas fotos desde el PDF anterior, porque sus archivos sueltos ya no existen.
@@ -15,7 +15,10 @@ class GeneradorPdfFotosControlDespacho
 
     private const ALTO_PAGINA = 842;
 
-    private const FOTOS_POR_PAGINA = 2;
+    private const FOTOS_POR_PAGINA = 3;
+
+    /** Alto de cada franja de foto: rótulo, imagen y separación. */
+    private const FRANJA = 240;
 
     /**
      * @param  array{titulo: string, detalle: string, pie: string}  $encabezado
@@ -32,10 +35,10 @@ class GeneradorPdfFotosControlDespacho
             $contenido .= $this->texto(40, 30, 8, $encabezado['pie'].' · Página '.($indice + 1).' de '.count($grupos));
             $imagenes = [];
             foreach ($grupo as $posicion => $foto) {
-                // Cada foto ocupa la mitad de la página útil, centrada y sin deformarse.
-                $techo = 760 - $posicion * 365;
+                // Cada foto ocupa un tercio de la página útil, centrada y sin deformarse.
+                $techo = 760 - $posicion * self::FRANJA;
                 $maximoAncho = 515;
-                $maximoAlto = 320;
+                $maximoAlto = self::FRANJA - 34;
                 $escala = min($maximoAncho / $foto['ancho'], $maximoAlto / $foto['alto']);
                 $ancho = $foto['ancho'] * $escala;
                 $alto = $foto['alto'] * $escala;
