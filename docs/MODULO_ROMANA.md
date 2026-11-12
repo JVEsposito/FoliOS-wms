@@ -168,6 +168,8 @@ peso neto de la tanda = peso bruto de la tanda - tara total de la tanda
 
 Si la tanda trae un solo tipo, todo su neto es de ese tipo. Si mezcla tipos, el neto se reparte según el peso de referencia de cada envase para la especie (Administración → reparto de envases); sin esa referencia, la tanda mixta se rechaza y se puede pesar cada tipo por separado. El cálculo se hace en gramos y el resto queda en el último tipo, de modo que el detalle suma exactamente el neto de la lectura.
 
+**Bins con sus totes.** Si la especie tiene configurados los «totes por bin» (cereza: 24), los totes viajan dentro de los bins. Una tanda con bins y totes, por ejemplo 2 bins y 48 totes, descuenta la tara de ambos, pero **todo el neto es de los totes**: el bin solo los contiene y queda con neto cero. El neto por envase de la recepción es el de los totes (en el expediente, los bins aparecen como «Contienen los totes»). Al registrar la tanda en la oficina se indican los bins y los totes se completan solos (bins × totes por bin); si algún bin trae menos, se corrigen a mano. Las tandas registradas antes con el neto repartido entre bins y totes se recalculan así al registrar, anular o corregir otra tanda y al cerrar.
+
 Los acumulados de bruto, tara y neto se recalculan utilizando únicamente lecturas vigentes. Una lectura errónea puede anularse con motivo antes del cierre. No se permite cerrar con menos o más envases que los declarados en cualquiera de los tipos.
 
 Con varios tipos, el neto pesado de cada uno se congela como reparto del neto (`reparto_neto_envases`): los lotes de Materia Prima reciben así el neto real de sus bins y totes, no un promedio. Con un solo tipo, el comportamiento es el de siempre.

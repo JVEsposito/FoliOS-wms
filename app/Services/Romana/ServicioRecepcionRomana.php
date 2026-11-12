@@ -454,14 +454,21 @@ class ServicioRecepcionRomana
                 }
                 // Conserva las proporciones medidas y las taras originales de la tanda,
                 // aunque las referencias de la especie hayan cambiado desde su registro.
-                $lineas = $pesaje->lineas();
+                // Los bins que contienen totes no tienen neto propio y siguen en cero.
+                $lineas = app(ServicioRepartoEnvases::class)->lineasConFruta($recepcion->especie_validacion_id, $pesaje->lineas());
                 $base = array_sum(array_map(fn ($linea): int => (int) round($linea['peso_neto'] * 1000), $lineas));
                 if ($base <= 0) {
                     throw new ConflictoOperacion('La tanda no tiene un reparto de neto válido para corregirla.');
                 }
+                $conNeto = array_keys(array_filter($lineas, fn ($linea): bool => (int) round($linea['peso_neto'] * 1000) > 0));
                 $asignados = 0;
                 foreach ($lineas as $i => &$linea) {
-                    $gramos = $i === array_key_last($lineas) ? $netoGramos - $asignados
+                    if (! in_array($i, $conNeto, true)) {
+                        $linea['peso_neto'] = 0.0;
+
+                        continue;
+                    }
+                    $gramos = $i === end($conNeto) ? $netoGramos - $asignados
                         : intdiv($netoGramos * (int) round($linea['peso_neto'] * 1000), $base);
                     if ($gramos <= 0) {
                         throw ValidationException::withMessages(['peso_bruto' => 'El bruto es insuficiente para mantener netos positivos en todos los envases de la tanda.']);
@@ -1443,8 +1450,9 @@ class ServicioRecepcionRomana
     private function pesadoPorTipo(RecepcionRomana $recepcion): array
     {
         $pesado = [];
+        $reparto = app(ServicioRepartoEnvases::class);
         foreach ($recepcion->pesajesEnvases()->whereNull('anulado_at')->orderBy('secuencia')->get() as $pesaje) {
-            foreach ($pesaje->lineas() as $linea) {
+            foreach ($reparto->lineasConFruta($recepcion->especie_validacion_id, $pesaje->lineas()) as $linea) {
                 $actual = $pesado[$linea['tipo_envase']] ?? ['cantidad' => 0, 'peso_tara_gramos' => 0, 'peso_neto_gramos' => 0];
                 $pesado[$linea['tipo_envase']] = [
                     'cantidad' => $actual['cantidad'] + $linea['cantidad'],
@@ -1502,6 +1510,12 @@ class ServicioRecepcionRomana
     {
         if (count($lineas) === 1) {
             return [$netoGramos];
+        }
+        // Bins con sus totes: la fruta está en los totes y el bin no tiene neto propio.
+        $contenedores = app(ServicioRepartoEnvases::class)->contenedores($recepcion->especie_validacion_id, array_column($lineas, 'tipo_envase'));
+        $conFruta = array_keys(array_filter($lineas, fn (array $linea): bool => ! in_array($linea['tipo_envase'], $contenedores, true)));
+        if ($contenedores !== [] && count($conFruta) === 1) {
+            return array_map(fn (int $indice): int => $indice === $conFruta[0] ? $netoGramos : 0, array_keys($lineas));
         }
         $referencias = app(ServicioRepartoEnvases::class)->configuracion($recepcion->especie_validacion_id)['referencias'];
         $pesos = [];
@@ -1575,12 +1589,14 @@ class ServicioRecepcionRomana
         if ($reparto === []) {
             return [...$resumen, 'cantidad_envase_calculo_neto' => 0];
         }
+        // Con bins que contienen totes, el neto por envase es el de los totes.
+        $principal = ServicioRepartoEnvases::principal($reparto);
 
         return [
             ...$resumen,
-            'tipo_envase_calculo_neto' => $reparto[0]['tipo_envase'],
-            'cantidad_envase_calculo_neto' => $reparto[0]['cantidad'],
-            'peso_neto_por_envase' => $reparto[0]['peso_neto_unitario'],
+            'tipo_envase_calculo_neto' => $principal['tipo_envase'],
+            'cantidad_envase_calculo_neto' => $principal['cantidad'],
+            'peso_neto_por_envase' => $principal['peso_neto_unitario'],
             'reparto_neto_envases' => $reparto,
         ];
     }

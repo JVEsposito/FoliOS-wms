@@ -35,10 +35,63 @@ class ServicioRepartoEnvases
                 ->pluck('peso_referencia', 'tipo_envase')->map(fn ($peso): float => (float) $peso)->all()];
     }
 
+    /**
+     * Envases que solo contienen a otros. Con «totes por bin» configurado en la especie, los
+     * totes viajan dentro de los bins: si una tanda o recepción trae ambos, la fruta está en
+     * los totes y el bin es solo su contenedor, sin neto propio.
+     *
+     * @param  array<int, string>  $tipos
+     * @return array<int, string>
+     */
+    public function contenedores(?string $especieId, array $tipos): array
+    {
+        if (! in_array(TipoEnvaseRomana::Bins->value, $tipos, true) || ! in_array(TipoEnvaseRomana::Totes->value, $tipos, true)) {
+            return [];
+        }
+
+        return $this->configuracion($especieId)['totes_por_bin'] ? [TipoEnvaseRomana::Bins->value] : [];
+    }
+
+    /**
+     * Las líneas de una tanda con el neto en los envases que traen la fruta: con bins que
+     * contienen totes, todo el neto de la tanda es de los totes. Corrige también tandas
+     * registradas antes con el neto repartido por peso de referencia.
+     *
+     * @param  array<int, array<string, mixed>>  $lineas
+     * @return array<int, array<string, mixed>>
+     */
+    public function lineasConFruta(?string $especieId, array $lineas): array
+    {
+        $contenedores = $this->contenedores($especieId, array_column($lineas, 'tipo_envase'));
+        $conFruta = array_keys(array_filter($lineas, fn (array $linea): bool => ! in_array($linea['tipo_envase'], $contenedores, true)));
+        if ($contenedores === [] || count($conFruta) !== 1) {
+            return $lineas;
+        }
+        $netoGramos = array_sum(array_map(fn (array $linea): int => (int) round((float) $linea['peso_neto'] * 1000), $lineas));
+
+        return array_map(fn (array $linea, int $indice): array => [...$linea, 'peso_neto' => $indice === $conFruta[0] ? $netoGramos / 1000 : 0.0],
+            $lineas, array_keys($lineas));
+    }
+
+    /** Fila del reparto que define el neto por envase: la primera que trae fruta. */
+    public static function principal(array $reparto): array
+    {
+        foreach ($reparto as $fila) {
+            if ((float) ($fila['peso_neto_unitario'] ?? 0) > 0) {
+                return $fila;
+            }
+        }
+
+        return $reparto[0];
+    }
+
     public function tipos(RecepcionRomana $recepcion): array
     {
         if ($recepcion->reparto_neto_envases) {
-            return array_column($recepcion->reparto_neto_envases, 'tipo_envase');
+            // Los contenedores (bins con totes) no reciben neto: no sirven para repartirlo.
+            $conFruta = array_filter($recepcion->reparto_neto_envases, fn (array $fila): bool => (float) ($fila['peso_neto_unitario'] ?? 0) > 0);
+
+            return array_column($conFruta ?: $recepcion->reparto_neto_envases, 'tipo_envase');
         }
         if ($recepcion->tipo_envase_calculo_neto) {
             return [$recepcion->tipo_envase_calculo_neto];
@@ -104,14 +157,19 @@ class ServicioRepartoEnvases
             'reparto_neto_envases' => $recepcion->reparto_neto_envases,
         ];
         if ($recepcion->reparto_neto_envases) {
-            $filas = array_map(function (array $fila) use ($cantidadDe): array {
+            $filas = array_map(function (array $fila) use ($cantidadDe, $conFruta): array {
+                if ((float) $fila['peso_neto'] <= 0) {
+                    // Contenedor (bins con totes): sin neto propio, solo cuenta sus envases.
+                    return [...$fila, 'cantidad' => $conFruta[$fila['tipo_envase']] ?? 0, 'peso_referencia' => 0.0, 'peso_neto_unitario' => 0.0];
+                }
                 $cantidad = $cantidadDe($fila['tipo_envase']);
                 $unitario = round((float) $fila['peso_neto'] / $cantidad, 3);
 
                 return [...$fila, 'cantidad' => $cantidad, 'peso_referencia' => $unitario, 'peso_neto_unitario' => $unitario];
             }, $recepcion->reparto_neto_envases);
-            $posterior = ['tipo_envase_calculo_neto' => $filas[0]['tipo_envase'], 'cantidad_envase_calculo_neto' => $filas[0]['cantidad'],
-                'peso_neto_por_envase' => $filas[0]['peso_neto_unitario'], 'reparto_neto_envases' => $filas];
+            $principal = self::principal($filas);
+            $posterior = ['tipo_envase_calculo_neto' => $principal['tipo_envase'], 'cantidad_envase_calculo_neto' => $principal['cantidad'],
+                'peso_neto_por_envase' => $principal['peso_neto_unitario'], 'reparto_neto_envases' => $filas];
         } else {
             $cantidad = $cantidadDe($recepcion->tipo_envase_calculo_neto);
             $posterior = ['tipo_envase_calculo_neto' => $recepcion->tipo_envase_calculo_neto, 'cantidad_envase_calculo_neto' => $cantidad,

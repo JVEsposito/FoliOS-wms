@@ -439,7 +439,10 @@ function renderDetail(reception) {
     elements.weightBalance.innerHTML = reception.tipo_recepcion === 'solo_envases'
         ? '<div class="net-row"><span>Recepción documental</span><strong>Sin registro de kilos</strong></div>'
         : `<div><span>Bruto${reception.pesaje_envases ? ' acumulado' : ''}</span><strong>${escapeHtml(formatWeight(reception.peso_bruto))}</strong></div><div><span>Tara ${reception.pesaje_envases ? 'acumulada' : 'camión'}</span><strong>${escapeHtml(formatWeight(reception.peso_tara))}</strong></div>${reception.modo_salida_envases && reception.peso_tara_envases !== 0 ? `<div><span>Diferencia tara envases</span><strong>${escapeHtml(formatWeight(reception.peso_tara_envases))}</strong></div>` : ''}${reception.pesaje_envases ? (weighingTypes(reception.pesaje_envases).length > 1
-            ? weighingTypes(reception.pesaje_envases).map((item) => `<div><span>Neto por envase · ${escapeHtml(label(item.tipo_envase))}</span><strong>${escapeHtml(formatWeight(item.peso_neto_por_envase))}</strong></div>`).join('')
+            // Un bin que lleva totes no tiene neto propio: la fruta y el neto son de los totes.
+            ? weighingTypes(reception.pesaje_envases).map((item) => (item.cantidad_pesada > 0 && Number(item.peso_neto) === 0
+                ? `<div><span>${escapeHtml(label(item.tipo_envase))}</span><strong>Contienen los totes</strong></div>`
+                : `<div><span>Neto por envase · ${escapeHtml(label(item.tipo_envase))}</span><strong>${escapeHtml(formatWeight(item.peso_neto_por_envase))}</strong></div>`)).join('')
             : `<div><span>Neto promedio por envase</span><strong>${escapeHtml(formatWeight(reception.peso_neto_por_envase))}</strong></div>`) : ''}<div class="net-row"><span>Neto legal</span><strong>${escapeHtml(formatWeight(reception.peso_neto))}</strong></div>`;
     const canOperate = state.identity?.puede_operar_romana === true;
     const canCorrect = state.identity?.puede_corregir_recepciones_romana === true
@@ -770,10 +773,16 @@ elements.addContainerWeighing.addEventListener('click', () => {
     // Una tanda puede mezclar tipos: un campo por cada tipo con envases pendientes.
     const pending = weighingTypes(weighing).filter((item) => item.cantidad_pendiente > 0);
     const single = weighingTypes(weighing).length === 1;
-    elements.containerWeighingQuantities.innerHTML = pending.map((item) => `<label class="field"><span>${single ? 'Cantidad de envases en esta tanda *' : `${escapeHtml(label(item.tipo_envase))} en esta tanda`}</span><input data-weighing-type="${escapeHtml(item.tipo_envase)}" data-tare="${escapeHtml(item.tara_unitaria ?? 0)}" type="number" min="0" max="${item.cantidad_pendiente}" value="${single ? Math.min(3, item.cantidad_pendiente) : 0}" inputmode="numeric"><small>Faltan ${item.cantidad_pendiente} de ${item.cantidad_declarada} · tara ${escapeHtml(formatWeight(item.tara_unitaria))} por envase</small></label>`).join('');
+    // Totes dentro de bins (totes por bin configurado en la especie): se indican los bins y los
+    // totes se completan solos; el operador los corrige si algún bin trae menos.
+    const totesPerBin = Number(state.selected.configuracion_reparto?.totes_por_bin || 0);
+    const nested = !single && totesPerBin > 0 && ['bins', 'totes'].every((code) => weighingTypes(weighing).some((item) => item.tipo_envase === code));
+    elements.containerWeighingQuantities.innerHTML = pending.map((item) => `<label class="field"><span>${single ? 'Cantidad de envases en esta tanda *' : `${escapeHtml(label(item.tipo_envase))} en esta tanda`}</span><input data-weighing-type="${escapeHtml(item.tipo_envase)}" data-tare="${escapeHtml(item.tara_unitaria ?? 0)}"${nested && item.tipo_envase === 'totes' ? ` data-totes-per-bin="${totesPerBin}"` : ''} type="number" min="0" max="${item.cantidad_pendiente}" value="${single ? Math.min(3, item.cantidad_pendiente) : 0}" inputmode="numeric"><small>Faltan ${item.cantidad_pendiente} de ${item.cantidad_declarada} · tara ${escapeHtml(formatWeight(item.tara_unitaria))} por envase</small></label>`).join('');
     elements.containerWeighingDescription.textContent = single
         ? `${weighing.cantidad_pesada}/${weighing.cantidad_declarada} ${label(weighing.tipo_envase)} pesados · faltan ${weighing.cantidad_pendiente} · tara ${formatWeight(weighing.tara_unitaria)} por unidad.`
-        : `${weighing.cantidad_pesada}/${weighing.cantidad_declarada} envases pesados · faltan ${weighing.cantidad_pendiente}. Indica cuántos de cada tipo están sobre la báscula; la tanda puede mezclarlos.`;
+        : nested
+            ? `${weighing.cantidad_pesada}/${weighing.cantidad_declarada} envases pesados · faltan ${weighing.cantidad_pendiente}. Los totes van dentro de los bins (${totesPerBin} por bin): indica los bins y los totes se completan solos; corrígelos si algún bin trae menos. El neto es de los totes.`
+            : `${weighing.cantidad_pesada}/${weighing.cantidad_declarada} envases pesados · faltan ${weighing.cantidad_pendiente}. Indica cuántos de cada tipo están sobre la báscula; la tanda puede mezclarlos.`;
     elements.containerWeighingDialog.showModal();
     elements.containerWeighingQuantities.querySelector('input')?.focus();
     updateContainerWeighingPreviews();
@@ -791,7 +800,15 @@ function updateContainerWeighingPreviews() {
     elements.containerWeighingTarePreview.textContent = quantity > 0 ? formatWeight(tare) : '—';
     elements.containerWeighingNetPreview.textContent = quantity > 0 && gross > tare ? formatWeight(gross - tare) : '—';
 }
-elements.containerWeighingQuantities.addEventListener('input', updateContainerWeighingPreviews);
+elements.containerWeighingQuantities.addEventListener('input', (event) => {
+    const totes = elements.containerWeighingQuantities.querySelector('[data-totes-per-bin]');
+    if (totes && event.target === totes) totes.dataset.edited = '1';
+    // Mientras no se corrijan a mano, los totes siguen a los bins: cada bin trae sus totes.
+    if (totes && event.target.dataset.weighingType === 'bins' && totes.dataset.edited !== '1') {
+        totes.value = String(Math.min(Number(event.target.value || 0) * Number(totes.dataset.totesPerBin), Number(totes.max)));
+    }
+    updateContainerWeighingPreviews();
+});
 elements.containerWeighingForm.elements.peso_bruto.addEventListener('input', updateContainerWeighingPreviews);
 elements.containerWeighingForm.addEventListener('submit', async (event) => {
     if (event.submitter?.value === 'cancel') return;
