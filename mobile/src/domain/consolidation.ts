@@ -6,12 +6,17 @@
 export type ConsolidationFieldType = 'texto' | 'opcion' | 'fecha' | 'hora' | 'entero' | 'nota';
 export type ConsolidationField = { clave: string; etiqueta: string; tipo: ConsolidationFieldType; opciones?: string[]; grupo?: string };
 export type ConsolidationCheck = { clave: string; etiqueta: string; aplica: 'contenedor' | 'thermo' | null };
-export type ConsolidationPhotoType = { clave: string; nombre: string; obligatoria: boolean; condicion: 'contenedor' | 'termografos' | null; maximo: number };
+export type ConsolidationPhotoCondition = 'contenedor' | 'segundo_termografo' | 'pallets' | null;
+/** `indicacion` es lo que debe verse en la foto; `grupo`, la etapa del despacho. */
+export type ConsolidationPhotoType = { clave: string; nombre: string; indicacion?: string; grupo?: string; obligatoria: boolean; condicion: ConsolidationPhotoCondition; maximo: number };
+export type ConsolidationPhotoGroup = { clave: string; titulo: string };
+/** Dato de la pizarra identificatoria; `valor` nulo es un dato que falta en el encabezado. */
+export type ConsolidationBoardItem = { clave: string; etiqueta: string; valor: string | null };
 export type ConsolidationPendingPhoto = { tipo: string; nombre: string; requeridas: number; tomadas: number };
 export type ConsolidationCatalog = {
   codigo: string; posicion_maxima: number;
   encabezado: ConsolidationField[]; inspeccion: ConsolidationCheck[]; cierre: ConsolidationField[]; tipos_foto: ConsolidationPhotoType[];
-  orientaciones?: { clave: string; nombre: string; descripcion: string }[]; exige_fotos?: boolean;
+  orientaciones?: { clave: string; nombre: string; descripcion: string }[]; exige_fotos?: boolean; grupos_foto?: ConsolidationPhotoGroup[];
 };
 
 export type ConsolidationLoad = {
@@ -45,6 +50,7 @@ export type ConsolidationControl = {
   faltantes_impresion: string[];
   fotos_pendientes: ConsolidationPendingPhoto[];
   fotos_pdf?: ConsolidationPhotosPdf | null;
+  pizarra?: ConsolidationBoardItem[];
 };
 
 export type ConsolidationSection = 'encabezado' | 'inspeccion' | 'cierre';
@@ -190,14 +196,29 @@ export function palletsWithoutTemperature(pallets: ConsolidationPallet[]): Conso
     .sort((a, b) => (a.posicion?.posicion ?? 0) - (b.posicion?.posicion ?? 0));
 }
 
+const PHOTO_CONDITIONS: Record<string, string> = {
+  contenedor: ' (solo contenedor)', segundo_termografo: ' (si hay segundo termógrafo)', pallets: ' (una por pallet)',
+};
+
 /** Estado de una categoría del set fotográfico, en palabras para el equipo. */
 export function photoRequirement(type: ConsolidationPhotoType, pending: ConsolidationPendingPhoto[], enforced: boolean): { text: string; missing: boolean } {
   const missing = pending.find((item) => item.tipo === type.clave);
   if (!type.obligatoria) return { text: type.clave === 'general' ? 'Opcional.' : 'Opcional: solo si aplica.', missing: false };
-  const condition = type.condicion === 'contenedor' ? ' (solo contenedor)' : type.condicion === 'termografos' ? ' (una por termógrafo)' : '';
-  const rule = enforced ? `Obligatoria${condition} para cerrar.` : `Obligatoria${condition} cuando se active el set estándar.`;
+  const condition = (type.condicion && PHOTO_CONDITIONS[type.condicion]) || '';
+  const rule = enforced ? `Obligatoria${condition} para cerrar.` : `Obligatoria${condition}; el cierre aún no la exige.`;
   if (!missing) return { text: `${rule} Completa.`, missing: false };
   return { text: `${rule} Faltan ${missing.requeridas - missing.tomadas} de ${missing.requeridas}.`, missing: true };
+}
+
+/** El set fotográfico por etapa del despacho, en el orden del catálogo. */
+export function photoGroups(catalog: Pick<ConsolidationCatalog, 'tipos_foto' | 'grupos_foto'>): { clave: string; titulo: string | null; tipos: ConsolidationPhotoType[] }[] {
+  const groups = catalog.grupos_foto ?? [];
+  if (!groups.length) return [{ clave: 'todas', titulo: null, tipos: catalog.tipos_foto }];
+  const known = new Set(groups.map((group) => group.clave));
+  const result = groups.map((group) => ({ clave: group.clave, titulo: group.titulo, tipos: catalog.tipos_foto.filter((type) => type.grupo === group.clave) }));
+  const loose = catalog.tipos_foto.filter((type) => !type.grupo || !known.has(type.grupo));
+  if (loose.length) result.push({ clave: 'sin_grupo', titulo: 'Otras', tipos: loose });
+  return result.filter((group) => group.tipos.length > 0);
 }
 
 export function formatBytes(bytes: number): string {

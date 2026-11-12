@@ -166,7 +166,7 @@ function renderControl(control) {
     const pending = control.fotos_pendientes || [];
     elements.photosPending.hidden = pending.length === 0;
     elements.photosPending.textContent = pending.length
-        ? `Pendientes del set fotográfico: ${pending.map((photo) => (photo.requeridas > 1 ? `${photo.nombre} (${photo.tomadas} de ${photo.requeridas})` : photo.nombre)).join(', ')}.${catalog.exige_fotos ? '' : ' Se exigirán cuando se active el set estándar.'}`
+        ? `Pendientes del set fotográfico: ${pending.map((photo) => (photo.requeridas > 1 ? `${photo.nombre} (${photo.tomadas} de ${photo.requeridas})` : photo.nombre)).join(', ')}.${catalog.exige_fotos ? '' : ' El cierre aún no las exige.'}`
         : '';
     elements.print.hidden = true;
     state.tempsOperation = null;

@@ -79,21 +79,42 @@ Un campo que se deja vacío vuelve a la sugerencia.
 - **Fotos.** Set fotográfico estándar, en el orden en que se toman. Las fotos se guardan
   comprimidas y, al cerrar, pasan a un solo PDF (ver «Fotos en PDF»).
 
-| Categoría | Exigencia |
-|---|---|
-| Número de contenedor | Obligatoria, solo si es contenedor |
-| Placa patente | Obligatoria |
-| Temperatura de corte del equipo | Obligatoria |
-| Temperatura de pulpa | Obligatoria |
-| Postura de termógrafos | Obligatoria: una por cada termógrafo anotado en el encabezado |
-| Primer bloque (mitad de carga) | Obligatoria |
-| Altura de carga | Opcional, si aplica |
-| Cierre de carga | Obligatoria |
-| Otras fotos del despacho | Opcional |
+El set es el oficial del equipo de consolidación para despachos marítimos de fruta fresca
+(correo del 12-11-2026). La PDA lo muestra por etapa, con lo que debe verse en cada foto.
 
-La PDA y oficina muestran las fotos pendientes del set. **Mientras el set no sea oficial, no
-bloquean el cierre.** Para exigirlas al cerrar, se agrega `CONTROL_DESPACHO_EXIGE_FOTOS=true` en
-el `.env` de planta. Las categorías se definen en `FormularioControlDespacho::tiposFoto()`.
+**Pizarra identificatoria**, obligatoria en los registros: debe leerse el instructivo, el N° de
+contenedor, la planta, la exportadora y la fecha de carga. La PDA muestra esos datos tomados del
+encabezado (`pizarra` en el detalle) para copiarlos tal cual, y marca los que faltan. El PDF del
+set los repite en el encabezado de cada página.
+
+| Etapa | Categoría | Exigencia |
+|---|---|---|
+| 1. Exterior | Camión y patentes (tracto y rampla) | Obligatoria |
+| | Contenedor (sigla y número) | Solo contenedor |
+| | Sello de lavado con que llega la unidad | Solo contenedor |
+| | Placa de información del contenedor (año y tara) | Solo contenedor |
+| | Pantalla del equipo de frío con el seteo | Obligatoria |
+| | Ventilación según instructivo | Solo contenedor |
+| 2. Interior, carga y estiba | Unidad vacía por dentro | Obligatoria |
+| | Temperatura de pulpa antes de cargar | Una por pallet con posición |
+| | Primera carga al fondo con el primer termógrafo | Obligatoria |
+| | Mitad de la carga | Obligatoria |
+| | Cartón piso y bufandas | Solo contenedor |
+| | Segundo termógrafo (penúltimo pallet) | Si el encabezado anota un segundo termógrafo |
+| | Final de la carga y cierre (espiga o ninfa visible) | Obligatoria |
+| 3. Cierre y arranque | Sello de cierre en primer plano | Obligatoria |
+| | Vista trasera con el cierre completo | Obligatoria |
+| | Pantalla al arrancar el equipo de frío | Obligatoria |
+| Otras | Otras fotos del despacho | Opcional |
+
+**Las obligatorias bloquean el cierre.** Para dejarlas solo como pendientes, se agrega
+`CONTROL_DESPACHO_EXIGE_FOTOS=false` en el `.env` de planta. Las categorías se definen en
+`FormularioControlDespacho::tiposFoto()`.
+
+La migración `2026_11_12_120000_set_fotografico_consolidacion` pasa las fotos del set provisional
+a la categoría equivalente: patente → camión y patentes, temperatura de corte → seteo del equipo,
+primer bloque → mitad de la carga. Postura de termógrafos y altura de carga pasan a «Otras». Los
+PDF ya armados conservan sus rótulos anteriores.
 
 ## Fotos en PDF
 
@@ -142,7 +163,7 @@ Para cerrar la planilla:
 - la inspección está completa;
 - no quedan pallets de la carga sin subir;
 - cada pallet cargado tiene posición;
-- las fotos obligatorias están tomadas, solo si `CONTROL_DESPACHO_EXIGE_FOTOS` está activo.
+- las fotos obligatorias del set están tomadas (salvo `CONTROL_DESPACHO_EXIGE_FOTOS=false`).
 
 La T° de pulpa no se exige para cerrar.
 

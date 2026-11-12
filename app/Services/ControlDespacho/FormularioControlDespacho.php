@@ -152,32 +152,76 @@ final class FormularioControlDespacho
     }
 
     /**
-     * Set fotográfico del despacho, en el orden en que se toman. `condicion` dice cuándo una
-     * foto obligatoria se exige: `contenedor` solo si el camión es contenedor; `termografos`
-     * una por cada termógrafo anotado en el encabezado. Las obligatorias bloquean el cierre
-     * solo con `despacho.control_exige_fotos` activo; mientras tanto la PDA las muestra como
-     * pendientes.
+     * Set fotográfico de consolidación para despachos marítimos de fruta fresca, en el orden en
+     * que se toman (correo del equipo de consolidación, 12-11-2026). `grupo` es la etapa del
+     * despacho e `indicacion` lo que debe verse en la foto. `condicion` dice cuándo se exige una
+     * obligatoria: `contenedor` solo si el camión es contenedor; `segundo_termografo` si el
+     * encabezado anota un segundo termógrafo de viaje; `pallets` una por cada pallet con
+     * posición. Las obligatorias bloquean el cierre con `despacho.control_exige_fotos` activo.
      *
-     * @return array<string, array{nombre: string, obligatoria: bool, condicion: ?string, maximo: int}>
+     * @return array<string, array{nombre: string, indicacion: string, grupo: string, obligatoria: bool, condicion: ?string, maximo: int}>
      */
     public static function tiposFoto(): array
     {
         return [
-            'contenedor' => ['nombre' => 'Número de contenedor', 'obligatoria' => true, 'condicion' => 'contenedor', 'maximo' => 3],
-            'patente' => ['nombre' => 'Placa patente', 'obligatoria' => true, 'condicion' => null, 'maximo' => 3],
-            'temperatura_corte' => ['nombre' => 'Temperatura de corte del equipo', 'obligatoria' => true, 'condicion' => null, 'maximo' => 3],
-            'temperatura_pulpa' => ['nombre' => 'Temperatura de pulpa', 'obligatoria' => true, 'condicion' => null, 'maximo' => 10],
-            'termografos' => ['nombre' => 'Postura de termógrafos', 'obligatoria' => true, 'condicion' => 'termografos', 'maximo' => 8],
-            'primer_bloque' => ['nombre' => 'Primer bloque (mitad de carga)', 'obligatoria' => true, 'condicion' => null, 'maximo' => 5],
-            'altura_carga' => ['nombre' => 'Altura de carga (si aplica)', 'obligatoria' => false, 'condicion' => null, 'maximo' => 5],
-            'cierre_carga' => ['nombre' => 'Cierre de carga', 'obligatoria' => true, 'condicion' => null, 'maximo' => 5],
-            'general' => ['nombre' => 'Otras fotos del despacho', 'obligatoria' => false, 'condicion' => null, 'maximo' => 20],
+            'camion_patentes' => ['nombre' => 'Camión y patentes', 'indicacion' => 'Tracto y rampla, con ambas patentes legibles.', 'grupo' => 'exterior', 'obligatoria' => true, 'condicion' => null, 'maximo' => 4],
+            'contenedor' => ['nombre' => 'Contenedor', 'indicacion' => 'Sigla y número de la unidad legibles.', 'grupo' => 'exterior', 'obligatoria' => true, 'condicion' => 'contenedor', 'maximo' => 3],
+            'sello_lavado' => ['nombre' => 'Sello de lavado', 'indicacion' => 'El sello con el que llega la unidad.', 'grupo' => 'exterior', 'obligatoria' => true, 'condicion' => 'contenedor', 'maximo' => 2],
+            'placa_contenedor' => ['nombre' => 'Placa de información del contenedor', 'indicacion' => 'Año de fabricación y tara.', 'grupo' => 'exterior', 'obligatoria' => true, 'condicion' => 'contenedor', 'maximo' => 2],
+            'seteo_equipo' => ['nombre' => 'Pantalla del equipo de frío con el seteo', 'indicacion' => 'Temperatura prevista en la pantalla del reefer.', 'grupo' => 'exterior', 'obligatoria' => true, 'condicion' => null, 'maximo' => 3],
+            'ventilacion' => ['nombre' => 'Ventilación', 'indicacion' => 'Configurada según el instructivo.', 'grupo' => 'exterior', 'obligatoria' => true, 'condicion' => 'contenedor', 'maximo' => 3],
+            'unidad_vacia' => ['nombre' => 'Unidad vacía por dentro', 'indicacion' => 'El interior antes de subir el primer pallet.', 'grupo' => 'interior', 'obligatoria' => true, 'condicion' => null, 'maximo' => 3],
+            'temperatura_pulpa' => ['nombre' => 'Temperatura de pulpa antes de cargar', 'indicacion' => 'Una toma por pallet, antes de subirlo.', 'grupo' => 'interior', 'obligatoria' => true, 'condicion' => 'pallets', 'maximo' => self::POSICION_MAXIMA],
+            'primera_carga' => ['nombre' => 'Primera carga al fondo', 'indicacion' => 'Los dos primeros pallets, con el primer termógrafo instalado.', 'grupo' => 'interior', 'obligatoria' => true, 'condicion' => null, 'maximo' => 4],
+            'mitad_carga' => ['nombre' => 'Mitad de la carga', 'indicacion' => 'El medio de la unidad durante la carga, con los pallets estibados.', 'grupo' => 'interior', 'obligatoria' => true, 'condicion' => null, 'maximo' => 4],
+            'carton_bufandas' => ['nombre' => 'Cartón piso y bufandas', 'indicacion' => 'Durante la estiba.', 'grupo' => 'interior', 'obligatoria' => true, 'condicion' => 'contenedor', 'maximo' => 4],
+            'segundo_termografo' => ['nombre' => 'Segundo termógrafo', 'indicacion' => 'Instalado en el penúltimo pallet (el N° 19 en un contenedor de 20).', 'grupo' => 'interior', 'obligatoria' => true, 'condicion' => 'segundo_termografo', 'maximo' => 3],
+            'cierre_carga' => ['nombre' => 'Final de la carga y cierre', 'indicacion' => 'Cierre completo con cartones y bufandas, donde se vea la espiga (ninfa) del pallet.', 'grupo' => 'interior', 'obligatoria' => true, 'condicion' => null, 'maximo' => 4],
+            'sello_cierre' => ['nombre' => 'Sello de cierre', 'indicacion' => 'En primer plano y legible.', 'grupo' => 'cierre', 'obligatoria' => true, 'condicion' => null, 'maximo' => 3],
+            'trasera_cierre' => ['nombre' => 'Vista trasera con el cierre completo', 'indicacion' => 'Foto general de la parte trasera ya cerrada.', 'grupo' => 'cierre', 'obligatoria' => true, 'condicion' => null, 'maximo' => 3],
+            'arranque_equipo' => ['nombre' => 'Pantalla al arrancar el equipo de frío', 'indicacion' => 'La temperatura cuando el equipo vuelve a funcionar.', 'grupo' => 'cierre', 'obligatoria' => true, 'condicion' => null, 'maximo' => 3],
+            'general' => ['nombre' => 'Otras fotos del despacho', 'indicacion' => 'Lo que convenga dejar registrado.', 'grupo' => 'otras', 'obligatoria' => false, 'condicion' => null, 'maximo' => 20],
+        ];
+    }
+
+    /** @return array<string, string> Etapas del set fotográfico, en orden. */
+    public static function gruposFoto(): array
+    {
+        return [
+            'exterior' => '1. Camión y contenedor (exterior)',
+            'interior' => '2. Interior, carga y estiba',
+            'cierre' => '3. Cierre y arranque',
+            'otras' => 'Otras',
+        ];
+    }
+
+    /**
+     * Pizarra identificatoria: debe aparecer legible en las fotos del set. Se arma con el
+     * encabezado para que el equipo la copie tal cual; `valor` nulo es un dato por completar.
+     *
+     * @param  array<string, mixed>  $encabezado
+     * @return array<int, array{clave: string, etiqueta: string, valor: ?string}>
+     */
+    public static function pizarra(array $encabezado): array
+    {
+        $texto = fn (string $clave): ?string => filled($encabezado[$clave] ?? null) ? trim((string) $encabezado[$clave]) : null;
+        $fecha = $texto('fecha_carga');
+        if ($fecha !== null && preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $fecha, $partes)) {
+            $fecha = "{$partes[3]}-{$partes[2]}-{$partes[1]}";
+        }
+
+        return [
+            ['clave' => 'instructivo', 'etiqueta' => 'Instructivo', 'valor' => $texto('referencia_embarque')],
+            ['clave' => 'contenedor', 'etiqueta' => 'N° de contenedor', 'valor' => $texto('contenedor')],
+            ['clave' => 'planta', 'etiqueta' => 'Planta', 'valor' => $texto('frigorifico')],
+            ['clave' => 'exportadora', 'etiqueta' => 'Exportadora', 'valor' => $texto('exportadora')],
+            ['clave' => 'fecha_carga', 'etiqueta' => 'Fecha de carga', 'valor' => $fecha],
         ];
     }
 
     public static function exigeFotos(): bool
     {
-        return (bool) config('despacho.control_exige_fotos', false);
+        return (bool) config('despacho.control_exige_fotos', true);
     }
 
     /**
@@ -185,13 +229,11 @@ final class FormularioControlDespacho
      *
      * @param  array<string, mixed>  $encabezado
      * @param  array<string, int>  $cantidadPorTipo
+     * @param  int  $palletsConPosicion  Pallets ya ubicados en el camión.
      * @return array<int, array{tipo: string, nombre: string, requeridas: int, tomadas: int}>
      */
-    public static function fotosPendientes(array $encabezado, array $cantidadPorTipo): array
+    public static function fotosPendientes(array $encabezado, array $cantidadPorTipo, int $palletsConPosicion = 0): array
     {
-        $termografos = collect(['termografo_1', 'termografo_2', 'termografo_3', 'termografo_control'])
-            ->filter(fn (string $clave): bool => filled($encabezado[$clave] ?? null))
-            ->count();
         $pendientes = [];
         foreach (self::tiposFoto() as $tipo => $definicion) {
             if (! $definicion['obligatoria']) {
@@ -199,7 +241,8 @@ final class FormularioControlDespacho
             }
             $requeridas = match ($definicion['condicion']) {
                 'contenedor' => ($encabezado['tipo_camion'] ?? null) === 'contenedor' ? 1 : 0,
-                'termografos' => $termografos,
+                'segundo_termografo' => filled($encabezado['termografo_2'] ?? null) ? 1 : 0,
+                'pallets' => max(1, $palletsConPosicion),
                 default => 1,
             };
             $tomadas = (int) ($cantidadPorTipo[$tipo] ?? 0);
@@ -222,6 +265,7 @@ final class FormularioControlDespacho
             'cierre' => collect(self::cierre())->map(fn (array $campo, string $clave): array => ['clave' => $clave, ...$campo])->values()->all(),
             'orientaciones' => collect(self::orientaciones())->map(fn (array $orientacion, string $clave): array => ['clave' => $clave, ...$orientacion])->values()->all(),
             'tipos_foto' => collect(self::tiposFoto())->map(fn (array $tipo, string $clave): array => ['clave' => $clave, ...$tipo])->values()->all(),
+            'grupos_foto' => collect(self::gruposFoto())->map(fn (string $titulo, string $clave): array => ['clave' => $clave, 'titulo' => $titulo])->values()->all(),
             'exige_fotos' => self::exigeFotos(),
         ];
     }

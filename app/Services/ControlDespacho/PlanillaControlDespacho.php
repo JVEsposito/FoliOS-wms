@@ -144,7 +144,9 @@ class PlanillaControlDespacho
         $detalle['fotos_pendientes'] = FormularioControlDespacho::fotosPendientes(
             $encabezado,
             collect($detalle['fotos'])->countBy('tipo')->all(),
+            $pallets->whereNotNull('posicion')->count(),
         );
+        $detalle['pizarra'] = FormularioControlDespacho::pizarra($encabezado);
         $detalle['faltantes_cierre'] = $control->estaCerrado() ? [] : $this->faltantes($detalle);
         $detalle['faltantes_impresion'] = $this->faltantesImpresion($detalle);
 

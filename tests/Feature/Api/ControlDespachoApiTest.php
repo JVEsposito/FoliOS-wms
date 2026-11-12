@@ -24,6 +24,13 @@ class ControlDespachoApiTest extends TestCase
     use PreparaDespachoFrigorifico;
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // El set fotográfico se exige por defecto; cada prueba de fotos lo activa cuando lo necesita.
+        config(['despacho.control_exige_fotos' => false]);
+    }
+
     public function test_consolidacion_sube_pallets_del_anden_con_su_posicion_sin_cambiar_el_carguio_del_camarero(): void
     {
         $contexto = $this->crearContextoFrio(5, 'R24A');
@@ -260,12 +267,17 @@ class ControlDespachoApiTest extends TestCase
         [$token] = $this->consolidador('R24D');
         $control = $this->iniciar($token, $carga);
         $catalogo = $this->conToken($token)->getJson('/api/control-despacho/catalogo')->assertOk()->json('data');
-        $this->assertSame(
-            ['contenedor', 'patente', 'temperatura_corte', 'temperatura_pulpa', 'termografos', 'primer_bloque', 'altura_carga', 'cierre_carga', 'general'],
-            collect($catalogo['tipos_foto'])->pluck('clave')->all(),
-        );
+        // El set del equipo de consolidación, en el orden en que se toma.
+        $this->assertSame([
+            'camion_patentes', 'contenedor', 'sello_lavado', 'placa_contenedor', 'seteo_equipo', 'ventilacion',
+            'unidad_vacia', 'temperatura_pulpa', 'primera_carga', 'mitad_carga', 'carton_bufandas', 'segundo_termografo', 'cierre_carga',
+            'sello_cierre', 'trasera_cierre', 'arranque_equipo', 'general',
+        ], collect($catalogo['tipos_foto'])->pluck('clave')->all());
+        $this->assertSame(['exterior', 'interior', 'cierre', 'otras'], collect($catalogo['grupos_foto'])->pluck('clave')->all());
+        $this->assertSame([], collect($catalogo['tipos_foto'])->pluck('grupo')->diff(collect($catalogo['grupos_foto'])->pluck('clave'))->values()->all());
+        $this->assertSame(['general'], collect($catalogo['tipos_foto'])->where('obligatoria', false)->pluck('clave')->values()->all());
         $this->assertFalse($catalogo['exige_fotos']);
-        $this->assertSame(['altura_carga', 'general'], collect($catalogo['tipos_foto'])->where('obligatoria', false)->pluck('clave')->values()->all());
+        $this->assertTrue((require config_path('despacho.php'))['control_exige_fotos'], 'Sin variable en el .env, el set oficial se exige.');
         $this->assertSame(['P' => 'Punta', 'E' => 'Espejo'], collect($catalogo['orientaciones'])->pluck('nombre', 'clave')->all());
 
         $operacion = (string) Str::uuid();
@@ -293,25 +305,51 @@ class ControlDespachoApiTest extends TestCase
         $this->posicion($token, $control['id'], $folio->numero_folio, 1, ['temperatura' => 0.2])->assertOk();
         $guardado = $this->conToken($token)->putJson("/api/control-despacho/controles/{$control['id']}", [
             'operacion_id' => (string) Str::uuid(), 'version' => 1,
-            'encabezado' => ['tipo_camion' => 'contenedor', 'termografo_1' => 'TG-1', 'termografo_control' => 'TG-INT'],
+            'encabezado' => ['tipo_camion' => 'thermo', 'referencia_embarque' => 'INS-778', 'termografo_1' => 'TG-1'],
             'inspeccion' => collect(FormularioControlDespacho::inspeccion())->map(fn (): string => 'si')->all(),
         ])->assertOk()->json('data');
-        $pendientes = collect($guardado['fotos_pendientes'])->keyBy('tipo');
-        $this->assertSame(['contenedor', 'patente', 'temperatura_corte', 'temperatura_pulpa', 'termografos', 'primer_bloque', 'cierre_carga'], $pendientes->keys()->all());
-        // Una foto por termógrafo anotado.
-        $this->assertSame(2, $pendientes['termografos']['requeridas']);
+        // En un thermo sin segundo termógrafo no se piden las fotos propias del contenedor.
+        $this->assertSame([
+            'camion_patentes', 'seteo_equipo', 'unidad_vacia', 'temperatura_pulpa', 'primera_carga', 'mitad_carga', 'cierre_carga',
+            'sello_cierre', 'trasera_cierre', 'arranque_equipo',
+        ], collect($guardado['fotos_pendientes'])->pluck('tipo')->all());
+        // La pizarra identificatoria sale del encabezado; lo que falta queda por completar.
+        $pizarra = collect($guardado['pizarra'])->pluck('valor', 'clave');
+        $this->assertSame(['instructivo', 'contenedor', 'planta', 'exportadora', 'fecha_carga'], $pizarra->keys()->all());
+        $this->assertSame('INS-778', $pizarra['instructivo']);
+        $this->assertSame('Agrorosario', $pizarra['planta']);
+        $this->assertNull($pizarra['contenedor']);
+        $this->assertMatchesRegularExpression('/^\d{2}-\d{2}-\d{4}$/', $pizarra['fecha_carga']);
 
+        $guardado = $this->conToken($token)->putJson("/api/control-despacho/controles/{$control['id']}", [
+            'operacion_id' => (string) Str::uuid(), 'version' => $guardado['version'],
+            'encabezado' => ['tipo_camion' => 'contenedor', 'contenedor' => 'MSKU1234565', 'termografo_2' => 'TG-2'],
+        ])->assertOk()->json('data');
+        $pendientes = collect($guardado['fotos_pendientes'])->keyBy('tipo');
+        $this->assertSame([
+            'camion_patentes', 'contenedor', 'sello_lavado', 'placa_contenedor', 'seteo_equipo', 'ventilacion',
+            'unidad_vacia', 'temperatura_pulpa', 'primera_carga', 'mitad_carga', 'carton_bufandas', 'segundo_termografo', 'cierre_carga',
+            'sello_cierre', 'trasera_cierre', 'arranque_equipo',
+        ], $pendientes->keys()->all());
+        $this->assertSame('MSKU1234565', collect($guardado['pizarra'])->pluck('valor', 'clave')['contenedor']);
+
+        // La toma de temperatura se pide una por pallet ubicado.
+        $this->assertSame(1, $pendientes['temperatura_pulpa']['requeridas']);
         $this->conToken($token)->post("/api/control-despacho/controles/{$control['id']}/fotos", [
-            'tipo' => 'termografos', 'operacion_id' => (string) Str::uuid(), 'archivo' => UploadedFile::fake()->image('tg.jpg', 320, 240),
+            'tipo' => 'temperatura_pulpa', 'operacion_id' => (string) Str::uuid(), 'archivo' => UploadedFile::fake()->image('t.jpg', 320, 240),
         ])->assertCreated();
         $detalle = $this->conToken($token)->getJson("/api/control-despacho/controles/{$control['id']}")->assertOk()->json('data');
-        $this->assertSame(['requeridas' => 2, 'tomadas' => 1], collect(collect($detalle['fotos_pendientes'])->firstWhere('tipo', 'termografos'))->only(['requeridas', 'tomadas'])->all());
+        $this->assertNull(collect($detalle['fotos_pendientes'])->firstWhere('tipo', 'temperatura_pulpa'));
         $this->assertSame([], $detalle['faltantes_cierre'], 'Sin exigir el set, las fotos no bloquean el cierre.');
+        $this->assertSame(
+            [['tipo' => 'temperatura_pulpa', 'nombre' => 'Temperatura de pulpa antes de cargar', 'requeridas' => 3, 'tomadas' => 1]],
+            collect(FormularioControlDespacho::fotosPendientes(['tipo_camion' => 'thermo'], ['temperatura_pulpa' => 1], 3))->where('tipo', 'temperatura_pulpa')->values()->all(),
+        );
 
         config(['despacho.control_exige_fotos' => true]);
         $this->cerrar($token, $control['id'], $detalle['version'])
             ->assertUnprocessable()
-            ->assertJsonPath('message', 'Antes de cerrar la planilla: Faltan fotos: Número de contenedor, Placa patente, Temperatura de corte del equipo, Temperatura de pulpa, Postura de termógrafos (1 de 2), Primer bloque (mitad de carga), Cierre de carga.');
+            ->assertJsonPath('message', 'Antes de cerrar la planilla: Faltan fotos: Camión y patentes, Contenedor, Sello de lavado, Placa de información del contenedor, Pantalla del equipo de frío con el seteo, Ventilación, Unidad vacía por dentro, Primera carga al fondo, Mitad de la carga, Cartón piso y bufandas, Segundo termógrafo, Final de la carga y cierre, Sello de cierre, Vista trasera con el cierre completo, Pantalla al arrancar el equipo de frío.');
         config(['despacho.control_exige_fotos' => false]);
         $this->cerrar($token, $control['id'], $detalle['version'])->assertOk()->assertJsonPath('data.estado', 'cerrado');
     }
@@ -336,7 +374,7 @@ class ControlDespachoApiTest extends TestCase
         $subir = fn (string $tipo, int $ancho, int $alto) => $this->conToken($token)->post("/api/control-despacho/controles/{$control['id']}/fotos", [
             'tipo' => $tipo, 'operacion_id' => (string) Str::uuid(), 'archivo' => UploadedFile::fake()->image("{$tipo}.png", $ancho, $alto),
         ])->assertCreated()->json('data');
-        $patente = $subir('patente', 3200, 2400);
+        $patente = $subir('camion_patentes', 3200, 2400);
         $cierre = $subir('cierre_carga', 800, 1200);
         $this->assertSame([1280, 960], [$patente['ancho'], $patente['alto']]);
         $rutas = FotoControlDespacho::query()->pluck('ruta')->all();
@@ -359,28 +397,29 @@ class ControlDespachoApiTest extends TestCase
         $pdf = $this->conToken($token)->get("/api/control-despacho/controles/{$control['id']}/fotos.pdf")
             ->assertOk()->assertHeader('Content-Type', 'application/pdf')->streamedContent();
         $this->assertStringStartsWith('%PDF-1.4', $pdf);
-        $this->assertStringContainsString('Placa patente', $pdf);
-        $this->assertStringContainsString('Cierre de carga', $pdf);
+        $this->assertStringContainsString(iconv('UTF-8', 'Windows-1252', 'Camión y patentes'), $pdf);
+        $this->assertStringContainsString('Final de la carga y cierre', $pdf);
+        $this->assertStringContainsString('Patente ABCD12', $pdf);
         $this->assertSame(1, preg_match_all('#/Type /Page /Parent#', $pdf));
 
         // Reabierta: se quita una foto ya archivada y se agrega otra; al cerrar, el PDF se rearma.
         $reabierta = $this->actingAs($contexto['administrador'], 'sanctum')->postJson("/api/control-despacho/controles/{$control['id']}/reabrir", [
-            'operacion_id' => (string) Str::uuid(), 'version' => $cerrada['version'], 'motivo' => 'Falta la foto del primer bloque',
+            'operacion_id' => (string) Str::uuid(), 'version' => $cerrada['version'], 'motivo' => 'Falta la foto de la mitad de la carga',
         ])->assertOk()->json('data');
         $this->conToken($token)->deleteJson("/api/control-despacho/controles/{$control['id']}/fotos/{$cierre['id']}")->assertNoContent();
-        $subir('primer_bloque', 1000, 700);
+        $subir('mitad_carga', 1000, 700);
         $anterior = ControlDespacho::query()->findOrFail($control['id'])->fotos_pdf_ruta;
         $recerrada = $this->cerrar($token, $control['id'], $reabierta['version'])->assertOk()->assertJsonPath('data.fotos_pdf.cantidad', 2)->json('data');
         $this->assertFalse(Storage::disk('local')->exists($anterior));
         $archivos = Storage::disk('local')->allFiles("control-despacho/{$control['id']}");
         $this->assertCount(1, $archivos);
         $nuevo = Storage::disk('local')->get($archivos[0]);
-        $this->assertStringContainsString('Primer bloque', $nuevo);
-        $this->assertStringNotContainsString('Cierre de carga', $nuevo);
+        $this->assertStringContainsString('Mitad de la carga', $nuevo);
+        $this->assertStringNotContainsString('Final de la carga y cierre', $nuevo);
         // La foto que venía del PDF anterior se rescató intacta.
         $archivada = FotoControlDespacho::query()->findOrFail($patente['id']);
         $this->assertStringStartsWith("\xFF\xD8", substr($nuevo, $archivada->pdf_offset, $archivada->pdf_longitud));
-        $this->assertEqualsCanonicalizing(['patente', 'primer_bloque'], collect($recerrada['fotos'])->pluck('tipo')->all());
+        $this->assertEqualsCanonicalizing(['camion_patentes', 'mitad_carga'], collect($recerrada['fotos'])->pluck('tipo')->all());
     }
 
     public function test_solo_consolidacion_registra_y_oficina_consulta_el_listado(): void

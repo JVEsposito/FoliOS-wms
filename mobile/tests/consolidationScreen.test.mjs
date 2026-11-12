@@ -26,9 +26,10 @@ const catalog = {
   ],
   cierre: [{ clave: 'cajas_guia', etiqueta: 'Cajas totales guía de despacho', tipo: 'entero' }],
   tipos_foto: [
-    { clave: 'patente', nombre: 'Placa patente', obligatoria: true, condicion: null, maximo: 3 },
-    { clave: 'general', nombre: 'Otras fotos del despacho', obligatoria: false, condicion: null, maximo: 20 },
+    { clave: 'camion_patentes', nombre: 'Camión y patentes', indicacion: 'Tracto y rampla, con ambas patentes legibles.', grupo: 'exterior', obligatoria: true, condicion: null, maximo: 4 },
+    { clave: 'general', nombre: 'Otras fotos del despacho', grupo: 'otras', obligatoria: false, condicion: null, maximo: 20 },
   ],
+  grupos_foto: [{ clave: 'exterior', titulo: '1. Camión y contenedor (exterior)' }, { clave: 'otras', titulo: 'Otras' }],
   exige_fotos: false,
 };
 const pallet = (numero_folio, estado_carga, posicion = null) => ({
@@ -44,7 +45,12 @@ const controlFixture = (pallets, extra = {}) => ({
   iniciado_at: null, iniciado_por: 'Consolidador', cerrado_at: null, cerrado_por: null, reaperturas: [], fotos: [],
   faltantes_cierre: ['Indica si es contenedor o thermo.'],
   faltantes_impresion: pallets.some((p) => p.posicion && p.posicion.temperatura === null) ? ['Falta la T° de pulpa de pallets.'] : [],
-  fotos_pendientes: [{ tipo: 'patente', nombre: 'Placa patente', requeridas: 1, tomadas: 0 }], ...extra,
+  fotos_pendientes: [{ tipo: 'camion_patentes', nombre: 'Camión y patentes', requeridas: 1, tomadas: 0 }],
+  pizarra: [
+    { clave: 'instructivo', etiqueta: 'Instructivo', valor: 'INS-778' }, { clave: 'contenedor', etiqueta: 'N° de contenedor', valor: null },
+    { clave: 'planta', etiqueta: 'Planta', valor: 'Agrorosario' }, { clave: 'exportadora', etiqueta: 'Exportadora', valor: 'Subsole' },
+    { clave: 'fecha_carga', etiqueta: 'Fecha de carga', valor: '12-11-2026' },
+  ], ...extra,
 });
 
 function harness({ closedWithPdf = false } = {}) {
@@ -57,7 +63,7 @@ function harness({ closedWithPdf = false } = {}) {
   if (closedWithPdf) {
     current = controlFixture([{ ...pallet('A1', 'cargado', 1), posicion: { ...pallet('A1', 'cargado', 1).posicion, temperatura: 0.2 } }], {
       estado: 'cerrado', cerrado_por: 'Consolidador', faltantes_cierre: [], fotos_pendientes: [],
-      fotos: [{ id: 'ph1', tipo: 'patente', orden: 1, url: null, miniatura_url: null, subida_at: null, archivada: true, pagina_pdf: 1 },
+      fotos: [{ id: 'ph1', tipo: 'camion_patentes', orden: 1, url: null, miniatura_url: null, subida_at: null, archivada: true, pagina_pdf: 1 },
         { id: 'ph2', tipo: 'general', orden: 1, url: null, miniatura_url: null, subida_at: null, archivada: true, pagina_pdf: 1 }],
       fotos_pdf: { url: '/api/control-despacho/controles/c1/fotos.pdf', bytes: 348160, cantidad: 2, generado_at: null },
     });
@@ -244,7 +250,13 @@ test('la T° de pulpa no bloquea el cierre pero se completa antes de imprimir', 
     assert.match(h.text(), /la planilla ya se puede imprimir/);
     assert.doesNotMatch(h.text(), /T° de pulpa pendiente/);
     await h.press('Fotos');
-    assert.match(h.text(), /Obligatoria cuando se active el set estándar\. Faltan 1 de 1\./);
+    assert.match(h.text(), /Obligatoria; el cierre aún no la exige\. Faltan 1 de 1\./);
+    // La pizarra viene rellenada desde el encabezado; lo que falta se marca.
+    assert.match(h.text(), /Pizarra identificatoria/);
+    assert.match(h.text(), /Instructivo\nINS-778/);
+    assert.match(h.text(), /N° de contenedor\nFalta en el encabezado/);
+    assert.match(h.text(), /1\. Camión y contenedor \(exterior\)/);
+    assert.match(h.text(), /Tracto y rampla, con ambas patentes legibles\./);
   } finally { await h.unmount(); }
 });
 
