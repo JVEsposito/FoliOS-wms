@@ -1,4 +1,4 @@
-.comms-dialog { width: min(1120px, calc(100vw - 24px)); height: min(820px, calc(100dvh - 24px)); max-width: none; max-height: none; box-sizing: border-box; padding: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--text-strong); font: 14px/1.4 var(--font-sans, sans-serif); overflow: hidden; }
+.comms-dialog { width: min(1120px, calc(100vw - 24px)); height: min(820px, calc(100dvh - 24px)); max-width: none; max-height: none; box-sizing: border-box; margin: auto; padding: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--text-strong); font: 14px/1.4 var(--font-sans, sans-serif); overflow: hidden; }
 .comms-dialog[open] { display: grid; grid-template-rows: auto auto auto minmax(0, 1fr); }
 .comms-dialog::backdrop { background: var(--overlay, rgb(0 0 0 / .65)); }
 .comms-dialog *, .comms-dialog *::before, .comms-dialog *::after { box-sizing: border-box; }

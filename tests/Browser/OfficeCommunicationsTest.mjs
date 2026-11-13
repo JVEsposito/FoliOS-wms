@@ -117,6 +117,10 @@ test('comunicaciones: chat global, reintento, sticker cargable, privado y vista 
     try {
         const { context, page, dialog, state, errors } = await setup(browser);
         const log = dialog.getByRole('log', { name: 'Mensajes', exact: true });
+        assert.ok(await dialog.evaluate(n => {
+            const r = n.getBoundingClientRect();
+            return Math.abs(r.left - (innerWidth - r.width) / 2) < 2 && Math.abs(r.top - (innerHeight - r.height) / 2) < 2;
+        }));
         assert.equal(await log.locator('[data-chat-message="101"] img').count(), 0);
         assert.equal(await page.evaluate(() => window.__chatXss), undefined);
         state.failChat = true;
@@ -153,6 +157,7 @@ test('comunicaciones: chat global, reintento, sticker cargable, privado y vista 
         assert.doesNotMatch(await log.innerText(), /Mensaje reservado|Privado para Ivan/);
         await page.setViewportSize({ width: 390, height: 844 });
         assert.equal(await dialog.evaluate(n => n.scrollWidth <= n.clientWidth + 1), true);
+        await page.waitForFunction(() => document.querySelector('[data-chat-message="302"] img')?.naturalWidth > 0);
         await page.screenshot({ path: resolve(root, 'storage/app/ui/oficina/comunicaciones-mobile.png') });
         await page.keyboard.press('Escape'); await dialog.waitFor({ state: 'hidden' });
         assert.deepEqual(errors, []);
