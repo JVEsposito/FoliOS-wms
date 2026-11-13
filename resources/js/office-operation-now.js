@@ -684,6 +684,7 @@ function renderPlanner(planner = {}) {
         ['discrepancias_abiertas', 'Diferencias reportadas', 'warning'],
         ['maniobras_sin_destino', 'Maniobras sin destino posible', 'warning'],
         ['destinos_rechazados_repetidos', 'Pallets con destino rechazado varias veces', 'warning'],
+        ['folios_no_operables_con_tareas', 'Folios fuera de operación con tareas', 'critical'],
     ];
     elements.plannerRiskRows.innerHTML = riskDefinitions.map(([key, label, warningTone]) => {
         const value = Number(risks[key] || 0);

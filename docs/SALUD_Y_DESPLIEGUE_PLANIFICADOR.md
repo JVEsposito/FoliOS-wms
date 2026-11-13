@@ -117,6 +117,28 @@ limitado. La pantalla deshabilita el inicio cuando no se cumple esta configuraci
 incluidos `off`, `shadow` y `server/batch`; no presenta una simulación como vaciado
 físico. Este control no modifica la configuración del servidor.
 
+## Folios despachados y tareas antiguas
+
+Un folio despachado, anulado, retirado definitivamente, agotado o inactivo no
+puede publicarse como trabajo actual, aunque conserve una tarea antigua o un
+ciclo de arbitraje anterior. Esta regla cubre todos los tipos de plan y se
+revalida al tomar, renovar, iniciar, materializar y confirmar una tarea desde
+la tablet. Un retorno real que reactive el folio vuelve a habilitarlo; el
+historial de despachos no lo excluye permanentemente.
+
+Después del despliegue, el worker de recálculo y el barrido periódico
+`planificador:recalcular-arbitraje` cancelan las tareas obsoletas, con su motivo
+y auditoría. Se liberan reservas de tareas, posiciones, bandas y sesiones
+asociadas sin crear movimientos físicos. Para adelantar el barrido de la
+temporada activa puede ejecutarse `php artisan planificador:recalcular-arbitraje --forzar`.
+
+Si una maniobra conserva otro pallet bajo custodia temporal, el sistema no
+abandona esa custodia ni ofrece la maniobra como trabajo ejecutable. Crea una
+discrepancia automática `folio_fuera_operacion`, conserva los responsables y
+marca la salud como crítica. En **Discrepancias**, supervisión debe comprobar
+la situación física y resolver con el **Retorno seguro** existente. La
+cancelación conserva los pasos ya completados y los movimientos históricos.
+
 ## Snapshot de salud
 
 `GET /api/administracion/planificador/salud` requiere permiso de consulta de
@@ -128,7 +150,8 @@ integridad operacional. Por defecto cubre las últimas ocho horas y acepta:
 La respuesta incluye un `snapshot_version` SHA-256, la configuración efectiva
 por cámara, métricas de planes, maniobras, tareas, movimientos, reservas y
 discrepancias, más señales actuales de riesgo. `critico` identifica leases
-vencidos todavía activos o maniobras completadas con custodia temporal;
+vencidos todavía activos, maniobras completadas con custodia temporal o folios
+fuera de operación con tareas vivas (`folios_no_operables_con_tareas`);
 `advertencia` identifica tareas estancadas, custodias activas, discrepancias
 abiertas, maniobras sin destino posible en el ciclo vigente (`maniobras_sin_destino`) o
 pallets cuyo destino se rechazó varias veces en la última hora

@@ -30,6 +30,7 @@ use App\Models\TareaMovimiento;
 use App\Models\UbicacionActual;
 use App\Models\User;
 use App\Services\Camaras\InterbloqueoEvacuacionEmergencia;
+use App\Services\Planificador\ElegibilidadFolioPlanificador;
 use App\Services\Planificador\ServicioArbitrajeManiobras;
 use App\Services\Planificador\ServicioDepuracionIngresosCamara;
 use App\Services\Planificador\ServicioDestinosServidor;
@@ -105,7 +106,7 @@ class ServicioManiobrasOperacionales
                 ->keyBy('id');
             if ($folios->count() !== $folioIds->count()
                 || $folios->contains(fn (Folio $folio): bool => $folio->temporada_id !== $plan->temporada_id
-                    || ! $folio->activo
+                    || ! ElegibilidadFolioPlanificador::operable($folio)
                     || $folio->tipo_bulto !== TipoBulto::Pallet)) {
                 throw new DomainException('La maniobra solo admite pallets completos activos de la temporada.');
             }
@@ -539,7 +540,11 @@ class ServicioManiobrasOperacionales
         Dispositivo $dispositivo,
     ): TareaMovimiento {
         return DB::transaction(function () use ($tarea, $usuario, $dispositivo): TareaMovimiento {
+            app(ServicioExclusionPallet::class)->bloquearFolios($tarea);
             $tarea = TareaMovimiento::query()->lockForUpdate()->findOrFail($tarea->id);
+            if (! $tarea->estado->esFinal()) {
+                ElegibilidadFolioPlanificador::asegurarTarea($tarea);
+            }
 
             // Compatibilidad explícita con labores activas creadas antes de
             // que las tareas simples adoptaran el contrato de maniobra.

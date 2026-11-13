@@ -54,6 +54,7 @@ final class ServicioPuestoMandoPlanificador
     private function cargarDecisiones(CicloArbitrajeManiobras $ciclo): void
     {
         $ciclo->load([
+            'decisiones' => fn ($q) => $q->whereHas('maniobraOperacional', ElegibilidadFolioPlanificador::maniobras(...)),
             'decisiones.maniobraOperacional' => fn ($consulta) => $consulta->with([
                 'planOperacional:id,tipo,titulo',
                 'responsable:id,name',

@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Services\Planificador\ServicioArbitrajeManiobras;
+use App\Services\Planificador\ServicioDepuracionIngresosCamara;
 use App\Services\Planificador\ServicioEstadoArbitrajePlanificador;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Contracts\Queue\ShouldBeUniqueUntilProcessing;
@@ -43,6 +44,7 @@ class RecalcularArbitrajePlanificador implements ShouldBeUniqueUntilProcessing, 
             return;
         }
 
+        app(ServicioDepuracionIngresosCamara::class)->depurarNoOperablesTemporada($temporada);
         $version = $estado->iniciarCalculo($this->temporadaId);
         $inicio = hrtime(true);
         try {

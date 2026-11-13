@@ -16,6 +16,7 @@ use App\Models\User;
 use App\Services\Autorizacion\AlcanceOperacionalUsuario;
 use App\Services\Camaras\CalculadorAfinidadBanda;
 use App\Services\Camaras\ServicioPrioridadCamara;
+use App\Services\Planificador\ElegibilidadFolioPlanificador;
 use App\Services\Planificador\ServicioDesplieguePlanificador;
 use Illuminate\Support\Collection;
 
@@ -35,12 +36,14 @@ class ServicioRecomendacionUbicacion
         User $usuario,
         ?string $camaraConsultadaId = null,
     ): array {
-        if ($folio->tipo_bulto !== TipoBulto::Pallet) {
+        if ($folio->tipo_bulto !== TipoBulto::Pallet || ! ElegibilidadFolioPlanificador::operable($folio)) {
             return [
                 'aplica' => false,
                 'disponible' => false,
                 'uso' => null,
-                'motivo' => 'La recomendación automática de este incremento aplica solo a pallets completos.',
+                'motivo' => ! ElegibilidadFolioPlanificador::operable($folio)
+                    ? ElegibilidadFolioPlanificador::motivo($folio)
+                    : 'La recomendación automática de este incremento aplica solo a pallets completos.',
                 'criterio' => $this->criterio(),
                 'mejor' => null,
                 'alternativas' => [],

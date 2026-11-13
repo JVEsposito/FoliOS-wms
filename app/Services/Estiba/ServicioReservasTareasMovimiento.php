@@ -29,6 +29,7 @@ use App\Models\TareaMovimiento;
 use App\Models\UbicacionActual;
 use App\Models\User;
 use App\Services\Cargas\ServicioAcopioCarga;
+use App\Services\Planificador\ElegibilidadFolioPlanificador;
 use App\Services\Planificador\ServicioDestinosServidor;
 use Carbon\CarbonInterface;
 use DomainException;
@@ -75,6 +76,7 @@ class ServicioReservasTareasMovimiento
         $exclusion = app(ServicioExclusionPallet::class);
         $exclusion->bloquear($tarea);
         $tarea = TareaMovimiento::query()->lockForUpdate()->findOrFail($tarea->id);
+        ElegibilidadFolioPlanificador::asegurarTarea($tarea);
         $reserva = $exclusion->reservaActual($tarea);
 
         if ($reserva && $this->estaVencida($reserva)) {
@@ -161,6 +163,7 @@ class ServicioReservasTareasMovimiento
             ->with('planOperacional')
             ->lockForUpdate()
             ->findOrFail($tarea->id);
+        ElegibilidadFolioPlanificador::asegurarTarea($tareaBloqueada);
         $reserva = $this->reservaActivaTarea($tareaBloqueada->id, true);
 
         if (! $reserva || $this->estaVencida($reserva)) {
@@ -251,6 +254,7 @@ class ServicioReservasTareasMovimiento
             ->with('planOperacional')
             ->lockForUpdate()
             ->findOrFail($tarea->id);
+        ElegibilidadFolioPlanificador::asegurarTarea($tareaBloqueada);
         $reserva = $this->reservaActivaTarea($tareaBloqueada->id, true);
 
         if (! $reserva || $this->estaVencida($reserva)) {
@@ -320,6 +324,7 @@ class ServicioReservasTareasMovimiento
         Dispositivo $dispositivo,
     ): ?ReservaTareaMovimiento {
         app(ServicioExclusionPallet::class)->bloquear($tarea);
+        ElegibilidadFolioPlanificador::asegurarTarea($tarea);
         $reserva = $this->reservaActivaTarea($tarea->id, true);
 
         if (! $reserva) {
@@ -467,6 +472,7 @@ class ServicioReservasTareasMovimiento
             ->lockForUpdate()
             ->findOrFail($tarea->id);
         app(ServicioExclusionPallet::class)->bloquear($tareaBloqueada, soloFolio: true);
+        ElegibilidadFolioPlanificador::asegurarTarea($tareaBloqueada);
         if ($tareaBloqueada->estado !== EstadoTareaMovimiento::EnProceso && $posicionDestinoId) {
             app(ServicioDestinosDespeje::class)->validar($tareaBloqueada, Posicion::query()->findOrFail($posicionDestinoId));
         }
