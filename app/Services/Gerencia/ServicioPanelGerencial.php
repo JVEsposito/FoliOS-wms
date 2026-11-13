@@ -1046,13 +1046,16 @@ class ServicioPanelGerencial
         $semana = (clone $cerradas)
             ->where('r.ingreso_at', '>=', $inicio->setTimezone($zonaBase))
             ->where('r.ingreso_at', '<', $termino->setTimezone($zonaBase))
-            ->get(['r.cliente_id', 'r.ingreso_at', 'r.peso_neto', 'r.tipo_recepcion', 'r.cantidad_envases_declarados'])
+            ->select(['r.cliente_id', 'r.ingreso_at', 'r.peso_neto', 'r.tipo_recepcion'])
+            // Envases recibidos: lo contado por Validación MP; sin detalle, lo declarado.
+            ->selectRaw('COALESCE((SELECT SUM(COALESCE(d.cantidad_validada, d.cantidad_declarada)) FROM detalles_envases_recepcion_romana d WHERE d.recepcion_romana_id = r.id), r.cantidad_envases_declarados) as envases_recibidos')
+            ->get()
             ->map(fn (object $fila): array => [
                 'cliente' => (string) $fila->cliente_id,
                 'fecha' => CarbonImmutable::parse($fila->ingreso_at, $zonaBase)->setTimezone($zona)->toDateString(),
                 'kilos' => $fila->tipo_recepcion === $fruta ? 0.0 : (float) $fila->peso_neto,
                 'fruta' => $fila->tipo_recepcion !== $fruta,
-                'envases' => (int) $fila->cantidad_envases_declarados,
+                'envases' => (int) $fila->envases_recibidos,
             ]);
         $deHoy = $semana->where('fecha', $hoy->toDateString());
         $kilosTemporada = (float) $temporada->sum('kilos');

@@ -203,7 +203,7 @@ class DefectoRecepcionMpController extends Controller
             ['clave' => 'fotos', 'titulo' => 'Fotos (IDs)', 'ancho' => 65],
         ];
         $filas = $defectos->map(fn (DefectoRecepcionMp $defecto): array => [
-            'fecha' => $defecto->registrado_at?->format('d-m-Y H:i'),
+            'fecha' => $defecto->registrado_at?->setTimezone((string) config('app.operational_timezone'))->format('d-m-Y H:i'),
             'temporada' => $codigo,
             'recepcion' => $defecto->numero_recepcion_snapshot,
             'guia' => $defecto->numero_guia_snapshot,

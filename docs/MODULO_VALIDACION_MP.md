@@ -115,6 +115,12 @@ Si el validador cuenta más (o menos) que lo declarado, por ejemplo 36 bins y 86
 - el destare usa lo contado para la tara de los envases que quedan en planta, el neto y el peso promedio;
 - Romana lo muestra en el expediente y en el diálogo de destare (`observacion_conteo`);
 - la observación de cierre del RPR-01, la hoja de pesaje que firma el chofer, lo deja escrito: *«Validación MP contó: Bins plástico 36 (guía 35), Tote 864 (guía 840; 24 vacíos). Tara y neto con lo contado. Promedio sin vacíos: 8,750 kg por Tote con fruta (840).»*
+- el RPR-01, la hoja de pesaje que firma el chofer, lo refleja en tres lugares:
+  - el campo **Envases recibidos** muestra lo validado y, si difiere, la guía al lado: *«25 Bins plástico · 596 Tote (guía: 23 Bins plástico · 547 Tote)»*. Mientras no hay validación muestra la guía con «(según guía; falta Validación MP)»;
+  - el campo **Tara camión / envases** desglosa la tara: *«17.105,440 kg (camión 15.500,000 + envases 1.605,440)»*;
+  - las horas de ingreso y destare salen en hora de planta.
+
+Caso de referencia: REC-2611-0022 (13-11-2026). Las guías 1524-1525 declaran 23 bins y 547 totes y Validación MP cuenta 25 y 596. La cuenta corriente recibe 25 y 596, la tara descuenta 1.605,44 kg y el neto queda en 5.574,56 kg. `EnvasesVaciosValidacionMpTest::test_rec_2611_0022_cuenta_corriente_destare_y_rpr01_usan_lo_validado` cubre el caso completo.
 
 ### Bins de planta agregados
 

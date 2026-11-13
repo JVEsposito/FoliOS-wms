@@ -22,7 +22,7 @@ class RegistroPesajeRpr01Test extends TestCase
 
     private const CAMPOS = [
         'N° recepción', 'Ingreso', 'Salida / destare', 'Cliente', 'Código cliente',
-        'Tipo recepción', 'Servicio / concepto', 'Guía de despacho', 'Envases declarados',
+        'Tipo recepción', 'Servicio / concepto', 'Guía de despacho', 'Envases recibidos',
         'Patente camión', 'Patente carro', 'Conductor', 'RUT conductor',
         'Peso bruto', 'Tara camión / envases', 'PESO NETO',
     ];

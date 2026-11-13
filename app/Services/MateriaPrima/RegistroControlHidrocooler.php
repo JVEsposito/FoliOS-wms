@@ -76,11 +76,12 @@ class RegistroControlHidrocooler
     {
         $lote = $p->lote;
         $terminado = $p->termino_at !== null;
+        $zona = (string) config('app.operational_timezone');
 
         return [
-            $p->inicio_at?->format('d-m-Y') ?? '',
-            $lote?->recepcion?->ingreso_at?->format('H:i') ?? '',
-            $p->inicio_at?->format('H:i') ?? '',
+            $p->inicio_at?->setTimezone($zona)->format('d-m-Y') ?? '',
+            $lote?->recepcion?->ingreso_at?->setTimezone($zona)->format('H:i') ?? '',
+            $p->inicio_at?->setTimezone($zona)->format('H:i') ?? '',
             $lote?->numero_lote ?? '', $lote?->variedad_snapshot ?? '',
             $this->numero($p->temperatura_agua_inicial_c), $this->numero($p->temperatura_ambiente_c),
             $this->numero($p->humedad_relativa_pct), $this->numero($p->temperatura_inicial_c),
