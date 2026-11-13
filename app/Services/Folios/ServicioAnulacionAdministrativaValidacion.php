@@ -77,7 +77,9 @@ class ServicioAnulacionAdministrativaValidacion
             return sprintf('El pallet está en la carga %s. Quítalo de la carga antes de anular su validación.', $carga?->carga?->codigo ?? 'asignada');
         }
         if ($proceso = ProcesoPrefrioFolio::query()->where('folio_id', $folio->id)
-            ->where('estado', EstadoFolioProcesoPrefrio::EnProceso->value)->with('proceso:id,codigo')->first()) {
+            ->where(fn ($asignacion) => $asignacion->where('estado', EstadoFolioProcesoPrefrio::EnProceso)
+                ->orWhere(fn ($pendiente) => $pendiente->pendienteRetiroParcial()))
+            ->with('proceso:id,codigo')->first()) {
             return sprintf('El pallet está en el proceso de prefrío %s. Retíralo del túnel antes de anular su validación.', $proceso->proceso?->codigo ?? 'activo');
         }
         $loteSag = DB::table('lotes_inspeccion_sag_folios as lf')

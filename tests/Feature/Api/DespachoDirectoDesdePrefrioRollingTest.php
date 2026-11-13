@@ -2,8 +2,10 @@
 
 namespace Tests\Feature\Api;
 
+use App\Enums\CondicionTermicaFolio;
 use App\Enums\EstadoCarga;
 use App\Enums\EstadoFolioProcesoPrefrio;
+use App\Enums\HabilitacionAlmacenamientoFolio;
 use App\Enums\ModalidadSalidaCarga;
 use App\Enums\PrioridadCarga;
 use App\Enums\RolUsuario;
@@ -34,11 +36,15 @@ class DespachoDirectoDesdePrefrioRollingTest extends TestCase
 
     public static function origenesFisicos(): array
     {
-        return ['en_tunel' => [false], 'en_reingreso_con_prefrio_historico' => [true]];
+        return [
+            'en_tunel' => [false, false],
+            'en_reingreso_con_prefrio_historico' => [true, false],
+            'en_tunel_con_aprobacion_parcial' => [false, true],
+        ];
     }
 
     #[DataProvider('origenesFisicos')]
-    public function test_camion_en_anden_solo_programa_retiro_desde_un_origen_fisico_valido(bool $reingresoPendiente): void
+    public function test_camion_en_anden_solo_programa_retiro_desde_un_origen_fisico_valido(bool $reingresoPendiente, bool $parcial): void
     {
         config([
             'planificador.mode' => 'guided',
@@ -102,6 +108,8 @@ class DespachoDirectoDesdePrefrioRollingTest extends TestCase
             'temporada_id' => $temporada->id,
             'numero_folio' => 'PAL-252-PF-001',
             'tipo_bulto' => TipoBulto::Pallet,
+            'condicion_termica' => CondicionTermicaFolio::PrefrioAprobado,
+            'habilitacion_almacenamiento' => HabilitacionAlmacenamientoFolio::Habilitado,
             'fecha_ingreso' => now()->subDay(),
             'activo' => true,
             'marca' => 'MACE',
@@ -115,18 +123,18 @@ class DespachoDirectoDesdePrefrioRollingTest extends TestCase
             'operacion_id' => (string) Str::uuid(),
             'payload_hash' => hash('sha256', 'pfr-252-pf'),
             'tunel_prefrio_id' => $tunel->id,
-            'estado' => 'aprobado',
+            'estado' => $parcial ? 'en_proceso' : 'aprobado',
             'setpoint' => -1.5,
             'formato_referencia' => 'granel',
             'version' => 5,
             'creado_por_user_id' => $supervisor->id,
             'iniciado_por_user_id' => $supervisor->id,
-            'finalizado_por_user_id' => $supervisor->id,
+            'finalizado_por_user_id' => $parcial ? null : $supervisor->id,
             'iniciado_at' => now()->subHours(8),
-            'pendiente_verificacion_at' => now()->subMinutes(5),
-            'finalizado_at' => now(),
+            'pendiente_verificacion_at' => $parcial ? null : now()->subMinutes(5),
+            'finalizado_at' => $parcial ? null : now(),
         ]);
-        ProcesoPrefrioFolio::create([
+        $prefrio = ProcesoPrefrioFolio::create([
             'proceso_prefrio_id' => $proceso->id,
             'folio_id' => $folio->id,
             'posicion_tunel_prefrio_id' => $posicionTunel->id,
@@ -134,9 +142,10 @@ class DespachoDirectoDesdePrefrioRollingTest extends TestCase
             'temperatura_inicial' => 8.0,
             'temperatura_final' => -0.5,
             'cargado_at' => now()->subHours(8),
-            'retirado_at' => now(),
+            'finalizado_parcial_at' => $parcial ? now()->subMinutes(2) : null,
+            'retirado_at' => $parcial ? null : now(),
             'cargado_por_user_id' => $supervisor->id,
-            'retirado_por_user_id' => $supervisor->id,
+            'retirado_por_user_id' => $parcial ? null : $supervisor->id,
         ]);
 
         $planRecepcion = app(ServicioGeneracionRecepcionTunel::class)->generar(
@@ -281,6 +290,11 @@ class DespachoDirectoDesdePrefrioRollingTest extends TestCase
         );
         $this->assertSame('completado', $planRecepcion->refresh()->estado->value);
         $this->assertSame('completado', $tareaDirecta->planOperacional->refresh()->estado->value);
+        if ($parcial) {
+            $this->assertNotNull($prefrio->refresh()->retirado_at);
+            $this->assertSame($operador->id, $prefrio->retirado_por_user_id);
+            $this->assertSame('en_proceso', $proceso->refresh()->estado->value);
+        }
     }
 
     private function conToken(string $token): static

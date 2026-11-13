@@ -229,6 +229,16 @@ class RegistroPrefrioR41
             ->values()
             ->all();
 
+        $salidasParciales = $asignaciones->whereNotNull('finalizado_parcial_at')
+            ->groupBy(fn (ProcesoPrefrioFolio $asignacion): string => $asignacion->finalizado_parcial_at->toAtomString())
+            ->sortKeys()
+            ->map(fn (Collection $grupo, string $momento): string => sprintf(
+                '%s finalización parcial de %d folios (%s).',
+                $hora($momento),
+                $grupo->count(),
+                $grupo->map(fn (ProcesoPrefrioFolio $asignacion): string => (string) $asignacion->folio?->numero_folio)->implode(', '),
+            ))->values()->all();
+
         return [
             'codigo' => $proceso->codigo,
             'tunel' => $proceso->tunel?->codigo,
@@ -250,7 +260,7 @@ class RegistroPrefrioR41
             'profundidades' => max(1, (int) ceil(((int) ($proceso->tunel?->capacidad_posiciones ?? 0)) / 2)),
             'lecturas' => self::lecturas($eventos)->map(fn (array $lectura): array => [...$lectura, 'hora' => $hora($lectura['ocurrido_at'])])->all(),
             'deshielos' => $deshielos->map(fn (EventoPrefrio $e): array => ['fecha' => CarbonImmutable::parse($e->ocurrido_at)->setTimezone($zona)->format('d-m'), 'hora' => $hora($e->ocurrido_at)])->all(),
-            'observaciones' => $observaciones,
+            'observaciones' => [...$salidasParciales, ...$observaciones],
             'estado' => $proceso->estado->value,
         ];
     }

@@ -75,7 +75,7 @@ final class ReglaProyeccionPrefrio implements ReglaIntegridadOperacional
                 'folio.habilitacion_almacenamiento',
                 'proceso.id as proceso_id',
                 'proceso.codigo as proceso_codigo',
-                'proceso.finalizado_at',
+                DB::raw('coalesce(asignacion.finalizado_parcial_at, proceso.finalizado_at) as finalizado_at'),
                 'asignacion.id as asignacion_id',
             ])
             ->map(fn (object $fila): HallazgoIntegridadDetectado => new HallazgoIntegridadDetectado(

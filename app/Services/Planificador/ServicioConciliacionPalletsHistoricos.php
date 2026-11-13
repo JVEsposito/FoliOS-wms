@@ -3,9 +3,7 @@
 namespace App\Services\Planificador;
 
 use App\Enums\CondicionTermicaFolio;
-use App\Enums\EstadoFolioProcesoPrefrio;
 use App\Enums\EstadoOperacionalFolio;
-use App\Enums\EstadoProcesoPrefrio;
 use App\Enums\EstadoTareaMovimiento;
 use App\Enums\HabilitacionAlmacenamientoFolio;
 use App\Enums\PrioridadOperacional;
@@ -59,19 +57,9 @@ final class ServicioConciliacionPalletsHistoricos
             ->whereDoesntHave('asignacionCargaActual')
             ->whereDoesntHave('retencionOperacionalActiva')
             ->whereHas('procesosPrefrio', fn (Builder $consulta) => $consulta
-                ->where('estado', EstadoFolioProcesoPrefrio::Aprobado->value)
-                ->whereHas('proceso', fn (Builder $proceso) => $proceso
-                    ->where('temporada_id', $temporada->id)
-                    ->where('estado', EstadoProcesoPrefrio::Aprobado->value)))
-            ->whereDoesntHave('procesosPrefrio', fn (Builder $consulta) => $consulta
-                ->whereHas('proceso', fn (Builder $proceso) => $proceso
-                    ->whereIn('estado', [
-                        EstadoProcesoPrefrio::Borrador->value,
-                        EstadoProcesoPrefrio::Cargando->value,
-                        EstadoProcesoPrefrio::ListoParaIniciar->value,
-                        EstadoProcesoPrefrio::EnProceso->value,
-                        EstadoProcesoPrefrio::PendienteVerificacion->value,
-                    ])));
+                ->conAprobacion()
+                ->whereHas('proceso', fn (Builder $proceso) => $proceso->where('temporada_id', $temporada->id)))
+            ->whereDoesntHave('procesosPrefrio', fn (Builder $consulta) => $consulta->impideNuevaCarga());
     }
 
     /** @return array<string, mixed> */
@@ -111,9 +99,8 @@ final class ServicioConciliacionPalletsHistoricos
     {
         $motivos = [];
         if ($folio->condicion_termica !== CondicionTermicaFolio::PrefrioAprobado
-            || ! $folio->procesosPrefrio->contains(fn (ProcesoPrefrioFolio $registro): bool => $registro->estado === EstadoFolioProcesoPrefrio::Aprobado
-                && $registro->proceso?->temporada_id === $temporada->id
-                && $registro->proceso?->estado === EstadoProcesoPrefrio::Aprobado)) {
+            || ! $folio->procesosPrefrio->contains(fn (ProcesoPrefrioFolio $registro): bool => $registro->tieneAprobacion()
+                && $registro->proceso?->temporada_id === $temporada->id)) {
             $motivos[] = 'sin_prefrio_aprobado_temporada';
         }
         if ($folio->habilitacion_almacenamiento !== HabilitacionAlmacenamientoFolio::Habilitado) {
@@ -125,7 +112,9 @@ final class ServicioConciliacionPalletsHistoricos
         if ($folio->retencionOperacionalActiva !== null) {
             $motivos[] = 'retencion';
         }
-        if ($folio->procesosPrefrio->contains(fn (ProcesoPrefrioFolio $registro): bool => $registro->proceso?->estado?->esActivo() === true)) {
+        if ($folio->procesosPrefrio->contains(fn (ProcesoPrefrioFolio $registro): bool => $registro->finalizado_parcial_at !== null
+            ? $registro->retirado_at === null
+            : $registro->proceso?->estado?->esActivo() === true)) {
             $motivos[] = 'prefrio_abierto';
         }
 
@@ -155,10 +144,8 @@ final class ServicioConciliacionPalletsHistoricos
 
                 $origen = ProcesoPrefrioFolio::query()
                     ->where('folio_id', $id)
-                    ->where('estado', EstadoFolioProcesoPrefrio::Aprobado->value)
-                    ->whereHas('proceso', fn (Builder $consulta) => $consulta
-                        ->where('temporada_id', $temporada->id)
-                        ->where('estado', EstadoProcesoPrefrio::Aprobado->value))
+                    ->conAprobacion()
+                    ->whereHas('proceso', fn (Builder $consulta) => $consulta->where('temporada_id', $temporada->id))
                     ->latest('created_at')
                     ->first();
                 if (! $origen) {

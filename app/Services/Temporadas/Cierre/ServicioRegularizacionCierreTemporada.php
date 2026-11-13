@@ -178,6 +178,9 @@ final class ServicioRegularizacionCierreTemporada
     private function cancelarPrefrio(string $procesoId, User $usuario, string $motivo): array
     {
         $proceso = ProcesoPrefrio::query()->findOrFail($procesoId);
+        if ($proceso->folios()->pendienteRetiroParcial()->exists()) {
+            throw new DomainException('Confirma primero las salidas parciales pendientes del túnel en Prefrío.');
+        }
         $this->prefrio->cancelar($proceso, [
             'operacion_id' => (string) Str::uuid(),
             'version_conocida' => $proceso->version,

@@ -12,8 +12,8 @@ class FolioSalidaDirectaPrefrioResource extends JsonResource
     {
         $asignacion = $this->relationLoaded('procesosPrefrio')
             ? $this->procesosPrefrio
-                ->filter(fn ($item): bool => $item->proceso?->finalizado_at !== null)
-                ->sortByDesc(fn ($item) => $item->proceso->finalizado_at)
+                ->filter(fn ($item): bool => $item->fechaResultado() !== null)
+                ->sortByDesc(fn ($item) => $item->fechaResultado())
                 ->first()
             : null;
         $proceso = $asignacion?->proceso;
@@ -37,7 +37,7 @@ class FolioSalidaDirectaPrefrioResource extends JsonResource
             'prefrio' => $proceso ? [
                 'id' => $proceso->id,
                 'codigo' => $proceso->codigo,
-                'finalizado_at' => $proceso->finalizado_at?->toAtomString(),
+                'finalizado_at' => $asignacion->fechaResultado()?->format(DATE_ATOM),
             ] : null,
         ];
     }

@@ -11,6 +11,7 @@ export const TUNNEL_STATE_LABELS = {
     listo_para_iniciar: 'Listo',
     en_proceso: 'En ciclo',
     pendiente_verificacion: 'Verificación',
+    pendiente_retiro: 'Pendiente de retiro',
     disponible: 'En espera',
     bloqueado_otra_temporada: 'Temporada anterior',
     mantenimiento: 'Mantención',
@@ -52,7 +53,7 @@ export function tunnelStateTone(tunnel) {
     if (!tunnel?.operable || OUT_OF_SERVICE_TUNNEL.includes(tunnel.estado_operacional)) return 'neutral';
     if (tunnel.estado_operacional === 'bloqueado_otra_temporada') return 'critical';
     if (tunnel.proceso_activo?.objetivo_excedido) return 'critical';
-    if (tunnel.estado_operacional === 'pendiente_verificacion') return 'warning';
+    if (['pendiente_verificacion', 'pendiente_retiro'].includes(tunnel.estado_operacional)) return 'warning';
     if (tunnel.estado_operacional === 'en_proceso') return 'success';
     if (tunnel.estado_operacional === 'disponible') return 'neutral';
     return 'info';

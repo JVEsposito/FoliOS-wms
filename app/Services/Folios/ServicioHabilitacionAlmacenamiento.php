@@ -187,10 +187,32 @@ class ServicioHabilitacionAlmacenamiento
         ?string $procesoOrigen = null,
         ?string $referenciaOrigen = null,
     ): Folio {
+        return $this->marcarSinHabilitacion($folio, CondicionTermicaFolio::EnProceso, 'Folio incorporado a un proceso térmico.', $usuario, $dispositivo, $procesoOrigen, $referenciaOrigen);
+    }
+
+    public function devolverAPrefrioPendiente(
+        Folio $folio,
+        string $motivo,
+        User $usuario,
+        ?Dispositivo $dispositivo,
+        string $procesoId,
+    ): Folio {
+        return $this->marcarSinHabilitacion($folio, CondicionTermicaFolio::PendientePrefrio, $motivo, $usuario, $dispositivo, 'prefrio', $procesoId);
+    }
+
+    private function marcarSinHabilitacion(
+        Folio $folio,
+        CondicionTermicaFolio $condicion,
+        string $motivo,
+        ?User $usuario,
+        ?Dispositivo $dispositivo,
+        ?string $procesoOrigen,
+        ?string $referenciaOrigen,
+    ): Folio {
         $this->validarProducto($folio);
 
         $folio->update([
-            'condicion_termica' => CondicionTermicaFolio::EnProceso,
+            'condicion_termica' => $condicion,
             'habilitacion_almacenamiento' => HabilitacionAlmacenamientoFolio::NoHabilitado,
             'fuente_habilitacion_almacenamiento' => null,
             'habilitado_almacenamiento_at' => null,
@@ -206,7 +228,7 @@ class ServicioHabilitacionAlmacenamiento
             $dispositivo,
             $procesoOrigen,
             $referenciaOrigen,
-            'Folio incorporado a un proceso térmico.',
+            $motivo,
         );
 
         return $folio->refresh();

@@ -591,6 +591,12 @@
 .decision-folio__title small { color: var(--muted); }
 .decision-folio__fields { display: grid; grid-template-columns: 115px minmax(0, 1fr); gap: 7px; }
 .decision-actions { justify-content: flex-end; }
+.partial-folio { display: grid; gap: 8px; padding: 10px; border: 1px solid var(--corporate-border); }
+.partial-folio__fields { grid-template-columns: minmax(0, 1.2fr) minmax(100px, .6fr) minmax(0, 1.2fr); }
+.partial-folio__fields:disabled { display: none; }
+.partial-folio__selection { display: flex; align-items: center; gap: 8px; }
+.partial-folio__selection input { width: 20px; height: 20px; }
+.partial-folio small { color: var(--muted); }
 
 .prefrio-dialog {
     /* El reset base deja margin: 0 en todo; el modal vuelve a centrarse. */
@@ -706,6 +712,7 @@
     .process-filters,
     .prefrio-form-grid,
     .decision-folio__fields,
+    .partial-folio__fields,
     .history-editor-row,
     .history-editor-row--folio { grid-template-columns: 1fr; }
     .prefrio-field-wide { grid-column: auto; }

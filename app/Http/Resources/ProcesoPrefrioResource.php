@@ -53,6 +53,9 @@ class ProcesoPrefrioResource extends JsonResource
                     ? (float) $asignacion->temperatura_final
                     : null,
                 'cargado_at' => $asignacion->cargado_at?->toAtomString(),
+                'finalizado_parcial_at' => $asignacion->finalizado_parcial_at?->toAtomString(),
+                'en_tunel' => $asignacion->ocupaPosicion()
+                    && ($this->estado->esActivo() || $asignacion->finalizado_parcial_at !== null),
                 'retirado_at' => $asignacion->retirado_at?->toAtomString(),
                 'motivo_resultado' => $asignacion->motivo_resultado,
                 'observacion' => $asignacion->observacion,
@@ -80,6 +83,10 @@ class ProcesoPrefrioResource extends JsonResource
                 'cargado_por' => $asignacion->relationLoaded('cargadoPor') ? [
                     'id' => $asignacion->cargadoPor->id,
                     'nombre' => $asignacion->cargadoPor->name,
+                ] : null,
+                'retirado_por' => $asignacion->relationLoaded('retiradoPor') && $asignacion->retiradoPor ? [
+                    'id' => $asignacion->retiradoPor->id,
+                    'nombre' => $asignacion->retiradoPor->name,
                 ] : null,
             ])->values()),
             'eventos' => $this->whenLoaded('eventos', fn () => $this->eventos->map(fn ($evento) => [

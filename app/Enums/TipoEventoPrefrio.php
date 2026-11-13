@@ -15,6 +15,8 @@ enum TipoEventoPrefrio: string
     case Deshielo = 'deshielo';
     case Lectura = 'lectura';
     case VerificacionFinal = 'verificacion_final';
+    case FinalizacionParcial = 'finalizacion_parcial';
+    case RetiroParcialConfirmado = 'retiro_parcial_confirmado';
     case Aprobacion = 'aprobacion';
     case Reproceso = 'reproceso';
     case Cancelacion = 'cancelacion';

@@ -6,7 +6,6 @@ use App\Enums\ContenidoCamara;
 use App\Enums\EstadoAdministrativoTunelPrefrio;
 use App\Enums\EstadoCamara;
 use App\Enums\EstadoDiscrepanciaManiobra;
-use App\Enums\EstadoFolioProcesoPrefrio;
 use App\Enums\EstadoIncidenciaCarga;
 use App\Enums\EstadoOperacionSincronizacion;
 use App\Enums\EstadoPosicion;
@@ -612,19 +611,12 @@ class ServicioOperacionAhora
      */
     private function prefrio(Temporada $temporada, CarbonImmutable $ahora): array
     {
-        $estadosActivos = collect(EstadoProcesoPrefrio::cases())
-            ->filter->esActivo()
-            ->map->value
-            ->all();
         $procesos = ProcesoPrefrio::query()
             ->where('temporada_id', $temporada->id)
-            ->whereIn('estado', $estadosActivos)
+            ->ocupaTunel()
             ->with([
                 'folios' => fn (HasMany $consulta): HasMany => $consulta
-                    ->whereNotIn('estado', [
-                        EstadoFolioProcesoPrefrio::Retirado->value,
-                        EstadoFolioProcesoPrefrio::Cancelado->value,
-                    ])
+                    ->enTunelOperativo()
                     ->with('folio:id,variedad,datos_externos'),
             ])
             ->latest('created_at')
@@ -635,14 +627,10 @@ class ServicioOperacionAhora
         // prefrío no admite un segundo proceso aunque la vista lo filtre.
         $procesosOtraTemporada = ProcesoPrefrio::query()
             ->where('temporada_id', '!=', $temporada->id)
-            ->whereIn('estado', $estadosActivos)
+            ->ocupaTunel()
             ->with([
                 'temporada:id,codigo',
-                'folios' => fn (HasMany $consulta): HasMany => $consulta
-                    ->whereNotIn('estado', [
-                        EstadoFolioProcesoPrefrio::Retirado->value,
-                        EstadoFolioProcesoPrefrio::Cancelado->value,
-                    ]),
+                'folios' => fn (HasMany $consulta): HasMany => $consulta->enTunelOperativo(),
             ])
             ->latest('created_at')
             ->get(['id', 'codigo', 'tunel_prefrio_id', 'temporada_id', 'created_at'])
@@ -752,6 +740,10 @@ class ServicioOperacionAhora
             return $tunel->estado_tecnico->value;
         }
 
+        if ($proceso?->estado->esTerminal()) {
+            return 'pendiente_retiro';
+        }
+
         return $proceso?->estado->value ?? 'disponible';
     }
 
@@ -764,16 +756,15 @@ class ServicioOperacionAhora
         int $posicionesOcupadas,
     ): array {
         $inicio = $proceso->iniciado_at?->toImmutable();
-        $corte = $proceso->estado === EstadoProcesoPrefrio::PendienteVerificacion
-            ? $proceso->pendiente_verificacion_at?->toImmutable()
-            : $ahora;
+        $corte = $proceso->pendiente_verificacion_at?->toImmutable() ?? $proceso->finalizado_at?->toImmutable() ?? $ahora;
         $transcurridos = $inicio && $corte
             ? max(0, (int) floor($inicio->diffInMinutes($corte, false)))
             : null;
         $objetivo = $proceso->duracion_objetivo_minutos;
         $objetivoExcedido = $transcurridos !== null
             && $objetivo !== null
-            && $transcurridos > $objetivo;
+            && $transcurridos > $objetivo
+            && ! $proceso->estado->esTerminal();
 
         return [
             'id' => $proceso->id,

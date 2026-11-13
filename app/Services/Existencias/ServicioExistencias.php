@@ -7,7 +7,6 @@ use App\Enums\ContenidoCamara;
 use App\Enums\EstadoCamara;
 use App\Enums\EstadoCarga;
 use App\Enums\EstadoCargaFolio;
-use App\Enums\EstadoFolioProcesoPrefrio;
 use App\Enums\EstadoOperacionalFolio;
 use App\Enums\EstadoPosicion;
 use App\Enums\HabilitacionAlmacenamientoFolio;
@@ -391,11 +390,8 @@ class ServicioExistencias
                     $ubicacion = $folio->ubicacionActual;
                     $posicion = $ubicacion?->posicion;
                     $asignacionPrefrioActiva = $folio->procesosPrefrio
-                        ->filter(fn ($asignacion): bool => $asignacion->proceso?->estado?->esActivo() === true
-                            && ! in_array($asignacion->estado, [
-                                EstadoFolioProcesoPrefrio::Retirado,
-                                EstadoFolioProcesoPrefrio::Cancelado,
-                            ], true))
+                        ->filter(fn ($asignacion): bool => $asignacion->ocupaPosicion()
+                            && ($asignacion->finalizado_parcial_at !== null || $asignacion->proceso?->estado?->esActivo() === true))
                         ->sortByDesc(fn ($asignacion) => $asignacion->cargado_at?->getTimestamp() ?? 0)
                         ->first();
                     $proceso = $asignacionPrefrioActiva?->proceso;

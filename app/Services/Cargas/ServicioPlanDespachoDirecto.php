@@ -2,14 +2,14 @@
 
 namespace App\Services\Cargas;
 
+use App\Enums\CondicionTermicaFolio;
 use App\Enums\EstadoCarga;
 use App\Enums\EstadoCargaFolio;
-use App\Enums\EstadoFolioProcesoPrefrio;
 use App\Enums\EstadoPlanOperacional;
 use App\Enums\EstadoPresenciaCargaAnden;
-use App\Enums\EstadoProcesoPrefrio;
 use App\Enums\EstadoReservaTareaMovimiento;
 use App\Enums\EstadoTareaMovimiento;
+use App\Enums\HabilitacionAlmacenamientoFolio;
 use App\Enums\PrioridadOperacional;
 use App\Enums\TipoBulto;
 use App\Enums\TipoEventoCarga;
@@ -279,16 +279,15 @@ class ServicioPlanDespachoDirecto
 
             $prefrio = ProcesoPrefrioFolio::query()
                 ->where('folio_id', $asignacion->folio_id)
-                ->where('estado', EstadoFolioProcesoPrefrio::Aprobado->value)
-                ->whereHas('proceso', fn ($consulta) => $consulta
-                    ->where('estado', EstadoProcesoPrefrio::Aprobado->value))
+                ->conAprobacion()
                 ->lockForUpdate()
-                ->exists();
-            if (! $prefrio) {
+                ->latest('cargado_at')->latest('id')->first();
+            if (! $prefrio || ! $this->habilitadoParaSalida($prefrio, $asignacion->folio)) {
                 throw new ConflictoOperacion('El pallet ya no posee un Prefrío aprobado para salida directa.');
             }
 
             $ahora = now();
+            $prefrio->confirmarRetiroSiParcial($usuario, $ahora);
             $asignacion->update([
                 'estado' => EstadoCargaFolio::EnAnden,
                 'anden_id' => $presencia->anden_id,
@@ -408,11 +407,9 @@ class ServicioPlanDespachoDirecto
         $folioIds = $asignaciones->pluck('folio_id');
         $prefrio = ProcesoPrefrioFolio::query()
             ->whereIn('folio_id', $folioIds)
-            ->where('estado', EstadoFolioProcesoPrefrio::Aprobado->value)
-            ->whereHas('proceso', fn ($consulta) => $consulta
-                ->where('estado', EstadoProcesoPrefrio::Aprobado->value))
+            ->conAprobacion()
             ->with(['proceso.tunel:id,codigo,nombre', 'posicion:id,tunel_prefrio_id,numero,etiqueta'])
-            ->latest('retirado_at')
+            ->latest('cargado_at')->latest('id')
             ->get()
             ->unique('folio_id')
             ->keyBy('folio_id');
@@ -442,7 +439,7 @@ class ServicioPlanDespachoDirecto
 
             if (! $posicion) {
                 $origenPrefrio = $prefrio->get($asignacion->folio_id);
-                if ($origenPrefrio) {
+                if ($origenPrefrio && $this->habilitadoParaSalida($origenPrefrio, $folio)) {
                     $directos->push($this->candidatoRetiroPrefrio(
                         $asignacion,
                         $presencia,
@@ -557,6 +554,8 @@ class ServicioPlanDespachoDirecto
         ProcesoPrefrioFolio $prefrio,
     ): array {
         $proceso = $prefrio->proceso;
+        $enTunel = ! $prefrio->retiroParcialConfirmado();
+        $origen = $enTunel ? $proceso->tunel?->nombre : 'el punto de entrega de Prefrío';
 
         return [
             'candidate_key' => "retiro:{$asignacion->folio_id}",
@@ -564,7 +563,7 @@ class ServicioPlanDespachoDirecto
             'tipo_movimiento' => TipoMovimiento::Retiro,
             'camara_origen_id' => null,
             'posicion_origen_id' => null,
-            'instruccion' => "Retirar {$asignacion->folio->numero_folio} desde {$proceso->tunel?->nombre} directamente a {$presencia->anden->nombre}.".$this->referenciaInstructivo($asignacion),
+            'instruccion' => "Retirar {$asignacion->folio->numero_folio} desde {$origen} directamente a {$presencia->anden->nombre}.".$this->referenciaInstructivo($asignacion),
             'contexto' => [
                 'candidate_key' => "retiro:{$asignacion->folio_id}",
                 'tipo_decision' => 'retiro_directo_anden',
@@ -577,11 +576,18 @@ class ServicioPlanDespachoDirecto
                 'patente' => $presencia->patente,
                 'proceso_prefrio_id' => $proceso->id,
                 'tunel_prefrio_id' => $proceso->tunel_prefrio_id,
-                'tunel_nombre' => $proceso->tunel?->nombre,
-                'posicion_tunel_prefrio_id' => $prefrio->posicion_tunel_prefrio_id,
-                'posicion_tunel' => $prefrio->posicion?->etiqueta,
+                'tunel_nombre' => $enTunel ? $proceso->tunel?->nombre : 'Punto de entrega de Prefrío',
+                'posicion_tunel_prefrio_id' => $enTunel ? $prefrio->posicion_tunel_prefrio_id : null,
+                'posicion_tunel' => $enTunel ? $prefrio->posicion?->etiqueta : null,
             ],
         ];
+    }
+
+    private function habilitadoParaSalida(ProcesoPrefrioFolio $prefrio, Folio $folio): bool
+    {
+        return $prefrio->finalizado_parcial_at === null
+            || ($folio->condicion_termica === CondicionTermicaFolio::PrefrioAprobado
+                && $folio->habilitacion_almacenamiento === HabilitacionAlmacenamientoFolio::Habilitado);
     }
 
     private function referenciaInstructivo(CargaFolio $asignacion): string
@@ -823,6 +829,17 @@ class ServicioPlanDespachoDirecto
             return;
         }
 
+        $contexto = $anterior->contexto ?? [];
+        $instruccion = $anterior->instruccion;
+        if (($cancelada->contexto['tunel_nombre'] ?? null) === 'Punto de entrega de Prefrío') {
+            $origen = $contexto['tunel_nombre'] ?? null;
+            if ($origen && $instruccion !== null) {
+                $instruccion = str_replace('de '.$origen, 'del punto de entrega de Prefrío', $instruccion);
+            }
+            $contexto['tunel_nombre'] = 'Punto de entrega de Prefrío';
+            unset($contexto['posicion_tunel'], $contexto['posicion_tunel_prefrio_id']);
+        }
+
         $restaurada = $this->planes->agregarTareaRolling(
             $anterior->planOperacional,
             [
@@ -833,9 +850,9 @@ class ServicioPlanDespachoDirecto
                 'posicion_origen_id' => $anterior->posicion_origen_id,
                 'camara_destino_id' => $anterior->camara_destino_id,
                 'posicion_destino_id' => $anterior->posicion_destino_id,
-                'instruccion' => $anterior->instruccion,
+                'instruccion' => $instruccion,
                 'contexto' => [
-                    ...($anterior->contexto ?? []),
+                    ...$contexto,
                     'restaurada_por_salida_camion' => true,
                     'restaurada_por_user_id' => $usuario->id,
                 ],

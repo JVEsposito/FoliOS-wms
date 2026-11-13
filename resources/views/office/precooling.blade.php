@@ -11,7 +11,7 @@
         @endif
         @include('office.partials.arranque')
     </head>
-    <body>
+    <body data-time-zone="{{ config('app.operational_timezone', 'America/Santiago') }}">
         <section class="office-access" id="officeAccess" aria-labelledby="officeAccessTitle">
             <div class="office-access__brand prefrio-access-brand">
                 <div class="office-logo" aria-hidden="true">❄</div>
@@ -98,6 +98,16 @@
                             <div class="event-timeline" id="processTimeline"></div>
                         </div>
                     </div>
+                    <section class="decision-panel is-hidden" id="partialPanel" aria-labelledby="partialPanelTitle">
+                        <div class="prefrio-panel__heading" data-estiba-contrast="navy">
+                            <div><h3 id="partialPanelTitle">Salidas parciales</h3><p id="partialSummary"></p></div>
+                            <div class="decision-actions">
+                                <button class="secondary-button" id="finalizePartialButton" type="button">Finalizar parcialmente</button>
+                                <button class="primary-button" id="confirmPartialButton" type="button">Confirmar retiro</button>
+                            </div>
+                        </div>
+                        <div class="decision-folios" id="partialHistory"></div>
+                    </section>
                     <section class="decision-panel r41-panel" id="r41Panel" aria-labelledby="r41PanelTitle">
                         <div class="prefrio-panel__heading" data-estiba-contrast="navy"><div><p class="eyebrow">POEMP R-41</p><h3 id="r41PanelTitle">Registro de prefrío</h3></div><button class="secondary-button" id="r41DownloadButton" type="button">Descargar R-41 (Excel)</button></div>
                         <p class="r41-status" id="r41Status" role="status"></p>
@@ -115,7 +125,8 @@
                         <div class="prefrio-panel__heading" data-estiba-contrast="navy"><div><p class="eyebrow">OPERACIÓN MANUAL</p><h3>Registrar acción con fecha y hora real</h3></div><span>La hora indicada queda en la trazabilidad</span></div>
                         <form class="prefrio-form-grid" id="operationalActionForm">
                             <label><span>Acción *</span><select name="accion" id="operationalActionSelect" required></select></label>
-                            <label><span>Fecha y hora de la acción *</span><input name="ocurrido_at" type="datetime-local" required></label>
+                            <label><span>Fecha y hora de la acción *</span><input name="ocurrido_at" type="datetime-local" step="1" required><small>Hora de planta</small></label>
+                            <p class="prefrio-field-wide is-hidden" id="operationalStartNote">Indica cuándo arrancó el túnel. Puedes registrar un inicio anterior a la captura del armado.</p>
                             <fieldset class="r41-reading prefrio-field-wide is-hidden" id="operationalReadingField">
                                 <legend id="operationalReadingTitle">Lectura de temperatura (°C)</legend>
                                 <p class="r41-reading__note" id="operationalReadingNote"></p>
@@ -132,7 +143,7 @@
                     <section class="decision-panel is-hidden" id="decisionPanel">
                         <div class="prefrio-panel__heading" data-estiba-contrast="navy"><div><p class="eyebrow">VERIFICACIÓN FINAL</p><h3>Resultado por folio</h3></div><span>Supervisor de frío o administrador</span></div>
                         <div class="decision-folios" id="decisionFolios"></div>
-                        <label class="decision-time"><span>Fecha y hora de la decisión *</span><input id="decisionOccurredAt" type="datetime-local" required></label>
+                        <label class="decision-time"><span>Fecha y hora de la decisión *</span><input id="decisionOccurredAt" type="datetime-local" step="1" required></label>
                         <div class="decision-actions">
                             <button class="primary-button" id="approveProcessButton" type="button">Aprobar proceso</button>
                             <button class="secondary-button" id="reprocessProcessButton" type="button">Enviar a reproceso</button>
@@ -174,7 +185,7 @@
                     <label><span>Setpoint *</span><input name="setpoint" type="number" min="-20" max="20" step="0.1" value="-1.5" required></label>
                     <label><span>Duración objetivo (min)</span><input name="duracion_objetivo_minutos" type="number" min="1" max="4320" value="720"></label>
                     <label><span>Formato de referencia</span><input name="formato_referencia" maxlength="100" placeholder="Granel 5 kg"></label>
-                    <label><span>Fecha y hora de apertura *</span><input name="ocurrido_at" type="datetime-local" required></label>
+                    <label><span>Fecha y hora de apertura *</span><input name="ocurrido_at" type="datetime-local" step="1" required><small>Hora de planta</small></label>
                     <label class="prefrio-field-wide"><span>Observación</span><textarea name="observacion" maxlength="2000"></textarea></label>
                 </div>
                 <p class="form-error" id="processFormError" role="alert"></p>
@@ -187,12 +198,32 @@
                 <div class="prefrio-dialog__heading"><div><p class="eyebrow" id="reasonEyebrow">DECISIÓN</p><h2 id="reasonTitle">Registrar motivo</h2><p id="reasonDescription"></p></div><button class="dialog-close" value="cancel" type="submit" aria-label="Cerrar">×</button></div>
                 <label><span>Motivo *</span><input name="motivo" maxlength="100" required></label>
                 <label><span>Observación</span><textarea name="observacion" maxlength="2000"></textarea></label>
-                <label><span>Fecha y hora de la decisión *</span><input name="ocurrido_at" type="datetime-local" required></label>
+                <label><span>Fecha y hora de la decisión *</span><input name="ocurrido_at" type="datetime-local" step="1" required></label>
                 <p class="form-error" id="reasonError" role="alert"></p>
                 <div class="dialog-actions"><button class="secondary-button" value="cancel" type="submit">Cancelar</button><button class="danger-button" id="confirmReasonButton" value="default" type="submit">Confirmar</button></div>
             </form>
         </dialog>
 
+
+        <dialog class="prefrio-dialog" id="partialDialog" aria-labelledby="partialDialogTitle">
+            <form method="dialog" class="prefrio-dialog__shell" id="partialForm">
+                <div class="prefrio-dialog__heading">
+                    <div><h2 id="partialDialogTitle"></h2><p id="partialDescription"></p></div>
+                    <button class="dialog-close" value="cancel" type="submit" formnovalidate aria-label="Cerrar">×</button>
+                </div>
+                <div class="prefrio-form-grid">
+                    <label><span>Fecha y hora real *</span><input name="ocurrido_at" type="datetime-local" step="1" required><small>Hora de planta</small></label>
+                    <label id="partialReason"><span>Motivo general *</span><input name="motivo" minlength="3" maxlength="100" required></label>
+                </div>
+                <div class="history-editor-list" id="partialCandidates"></div>
+                <p id="partialSelectionCount" role="status"></p>
+                <p class="form-error" id="partialError" role="alert"></p>
+                <div class="dialog-actions">
+                    <button class="secondary-button" value="cancel" type="submit" formnovalidate>Cancelar</button>
+                    <button class="primary-button" id="savePartialButton" value="default" type="submit" disabled></button>
+                </div>
+            </form>
+        </dialog>
 
         <dialog class="prefrio-dialog prefrio-dialog--history" id="correctionDialog">
             <form method="dialog" class="prefrio-dialog__shell" id="correctionForm">

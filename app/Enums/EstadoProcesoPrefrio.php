@@ -15,13 +15,19 @@ enum EstadoProcesoPrefrio: string
 
     public function esActivo(): bool
     {
-        return in_array($this, [
+        return in_array($this, self::activos(), true);
+    }
+
+    /** @return list<self> */
+    public static function activos(): array
+    {
+        return [
             self::Borrador,
             self::Cargando,
             self::ListoParaIniciar,
             self::EnProceso,
             self::PendienteVerificacion,
-        ], true);
+        ];
     }
 
     public function esTerminal(): bool
