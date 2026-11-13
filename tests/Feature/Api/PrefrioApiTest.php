@@ -919,6 +919,7 @@ class PrefrioApiTest extends TestCase
             [
                 ...$this->payloadAccion(3),
                 'ocurrido_at' => $termino->toAtomString(),
+                'datos' => ['lectura_final' => self::lecturaCompleta()],
             ],
         );
 
@@ -1133,8 +1134,25 @@ class PrefrioApiTest extends TestCase
         return $this->accion(
             $token,
             "/api/prefrio/procesos/{$proceso['id']}/verificar",
-            $this->payloadAccion(3),
+            [...$this->payloadAccion(3), 'datos' => ['lectura_final' => self::lecturaCompleta()]],
         );
+    }
+
+    /**
+     * Lectura POEMP R-41 completa: ventilador, medio y puerta, exterior e interior a cada lado.
+     *
+     * @return array<string, array<string, float>>
+     */
+    public static function lecturaCompleta(float $base = 0.0): array
+    {
+        $lectura = [];
+        foreach (['ventilador', 'medio', 'puerta'] as $fila => $sector) {
+            foreach (['izq_ex', 'izq_in', 'der_in', 'der_ex'] as $columna => $punto) {
+                $lectura[$sector][$punto] = round($base + $fila * 0.3 - $columna * 0.1, 1);
+            }
+        }
+
+        return $lectura;
     }
 
     /**

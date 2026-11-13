@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Services\Prefrio\RegistroPrefrioR41;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -98,6 +99,8 @@ class ProcesoPrefrioResource extends JsonResource
                     'nombre' => $evento->dispositivo->nombre,
                 ] : null,
             ])->values()),
+            // POEMP R-41: próxima lectura horaria, si ya hay lectura final y datos de la planilla.
+            'registro_r41' => $this->whenLoaded('eventos', fn () => RegistroPrefrioR41::estado($this->resource, $this->eventos)),
             'creado_por' => $this->whenLoaded('creadoPor', fn () => [
                 'id' => $this->creadoPor->id,
                 'nombre' => $this->creadoPor->name,

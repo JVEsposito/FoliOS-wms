@@ -31,6 +31,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'pendiente_verificacion_at',
     'finalizado_at',
     'observacion',
+    'registro_r41',
 ])]
 class ProcesoPrefrio extends Model implements PerteneceATemporada
 {
@@ -88,6 +89,8 @@ class ProcesoPrefrio extends Model implements PerteneceATemporada
             'iniciado_at' => 'datetime',
             'pendiente_verificacion_at' => 'datetime',
             'finalizado_at' => 'datetime',
+            // Datos del POEMP R-41 que no salen de la operación: T° objetivo, supervisor, servicio.
+            'registro_r41' => 'array',
         ];
     }
 }

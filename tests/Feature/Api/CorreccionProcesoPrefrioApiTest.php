@@ -77,6 +77,8 @@ class CorreccionProcesoPrefrioApiTest extends TestCase
             'operacion_id' => (string) Str::uuid(),
             'version_conocida' => 4,
             'ocurrido_at' => $inicioBase->addHours(4)->toAtomString(),
+            // POEMP R-41: el término del enfriado lleva la lectura final completa.
+            'datos' => ['lectura_final' => ['ventilador' => ['izq_ex' => -0.4, 'izq_in' => -0.2, 'der_in' => -0.3, 'der_ex' => -0.5], 'medio' => ['izq_ex' => -0.1, 'izq_in' => 0.1, 'der_in' => 0.0, 'der_ex' => -0.2], 'puerta' => ['izq_ex' => 0.3, 'izq_in' => 0.5, 'der_in' => 0.4, 'der_ex' => 0.2]]],
         ]);
         $proceso = $this->accion($supervisor, $proceso['id'], 'aprobar', [
             'operacion_id' => (string) Str::uuid(),

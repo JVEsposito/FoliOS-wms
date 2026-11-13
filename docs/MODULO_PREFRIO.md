@@ -228,6 +228,33 @@ Repetir el mismo UUID con el mismo contenido devuelve el estado confirmado. Reut
 
 Cada proceso utiliza además una versión incremental. Una acción basada en una versión desactualizada recibe un conflicto operacional.
 
+## Registro de prefrío POEMP R-41
+
+La planilla oficial POEMP R-41 se llena desde el proceso. Cada lectura mide 3 sectores del
+túnel (ventilador, medio y puerta) con 4 sensores: exterior e interior del lado izquierdo y
+del derecho. Son 12 temperaturas por lectura, entre -10 y 40 °C.
+
+- **Lectura horaria.** Durante el enfriado se registra una lectura cada 60 minutos
+  (`PREFRIO_INTERVALO_LECTURA_MINUTOS`). Puede quedar parcial: se guardan los sensores
+  medidos y el resto queda vacío. Se envía como evento `lectura` con
+  `datos.sectores.{sector}.{izq_ex|izq_in|der_in|der_ex}`. La tablet y la oficina avisan
+  cuando la próxima lectura venció.
+- **Lectura final obligatoria.** Para enviar a verificación (fin del túnel) se exige una
+  lectura con los 12 sensores en `datos.lectura_final`. Si la última lectura horaria ya está
+  completa, sirve de lectura final y no se pide otra. `PREFRIO_EXIGE_LECTURA_FINAL=false`
+  desactiva la exigencia, por ejemplo mientras haya tablets sin la versión nueva.
+- **Lecturas antiguas.** Las lecturas de una sola temperatura (`datos.temperatura`) se
+  siguen aceptando y aparecen en las observaciones de la planilla como «sin sector».
+- **Datos de la planilla.** La temperatura objetivo, el servicio, el supervisor y el jefe de
+  frío se editan en la oficina (`PUT registro-r41`). Por defecto el supervisor es quien inició
+  el proceso y el jefe de frío quien lo aprobó.
+- **Excel.** `registro-r41.xlsx` usa la plantilla oficial. El encabezado sale del proceso
+  (número de proceso de packing, pallets, especie, variedad, horas de inicio, inversión y
+  término, tiempo total). Los pallets se ubican por lado (impares a la izquierda, pares a la
+  derecha) y profundidad desde el fondo. También salen las lecturas, los deshielos y las
+  observaciones. Cada hoja lleva 10 profundidades y 10 lecturas; un túnel más profundo o un
+  proceso con más lecturas continúa en otra hoja con el mismo encabezado.
+
 ## Roles
 
 ### Administrador
@@ -279,6 +306,7 @@ GET /api/prefrio/folios-disponibles
 GET /api/prefrio/procesos
 GET /api/prefrio/resumen
 GET /api/prefrio/procesos/{id}
+GET /api/prefrio/procesos/{id}/registro-r41.xlsx
 ```
 
 ### Operación
@@ -291,6 +319,7 @@ POST /api/prefrio/procesos/{id}/confirmar-armado
 POST /api/prefrio/procesos/{id}/iniciar
 POST /api/prefrio/procesos/{id}/eventos/{tipo}
 POST /api/prefrio/procesos/{id}/verificar
+PUT  /api/prefrio/procesos/{id}/registro-r41
 ```
 
 ### Supervisión

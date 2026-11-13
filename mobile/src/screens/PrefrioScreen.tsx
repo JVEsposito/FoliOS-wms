@@ -26,6 +26,21 @@ import {
   PrefrioQueuedCommand,
   PrefrioTunnel,
 } from '../domain/prefrio';
+import {
+  R41_POINTS,
+  R41_SECTORS,
+  emptyR41Draft,
+  parseR41Draft,
+  r41FinalReadingRequired,
+  r41MissingMessage,
+  r41ReadingStatus,
+  r41ReadingSummary,
+  r41SectorsOf,
+  updateR41Draft,
+  type R41Draft,
+  type R41PointKey,
+  type R41SectorKey,
+} from '../domain/prefrioR41';
 import { ApiError } from '../services/apiError';
 import {
   createPrefrioProcess,
@@ -140,6 +155,8 @@ export function PrefrioScreen({ auth, baseUrl, onLogout, onBusyChange }: Prefrio
   const [error, setError] = useState('');
   const [eventDraft, setEventDraft] = useState<EventDraft | null>(null);
   const [eventTemperature, setEventTemperature] = useState('');
+  const [readingDraft, setReadingDraft] = useState<R41Draft>(emptyR41Draft());
+  const [clock, setClock] = useState(Date.now());
   const [eventNote, setEventNote] = useState('');
   const [eventOccurredAt, setEventOccurredAt] = useState(operationalDateTime());
   const [actionDraft, setActionDraft] = useState<StateActionDraft | null>(null);
@@ -189,6 +206,19 @@ export function PrefrioScreen({ auth, baseUrl, onLogout, onBusyChange }: Prefrio
   const processHasBlockingIssue = processQueue.some((item) => item.status !== 'pendiente');
   const processActionsBlocked = operationBusy || processHasBlockingIssue;
   const unresolved = outbox.filter((item) => item.status !== 'pendiente').length;
+  const r41Status = useMemo(
+    () => (selectedProcess ? r41ReadingStatus(selectedProcess, clock) : null),
+    [selectedProcess, clock],
+  );
+  const finalReadingRequired = r41Status ? r41FinalReadingRequired(r41Status) : false;
+  const processInProgress = selectedProcess?.estado === 'en_proceso';
+
+  useEffect(() => {
+    if (!processInProgress) return undefined;
+    setClock(Date.now());
+    const timer = setInterval(() => setClock(Date.now()), 30000);
+    return () => clearInterval(timer);
+  }, [processInProgress, selectedProcessId]);
   useEffect(() => {
     onBusyChange?.(busy || operationBusy);
     return () => onBusyChange?.(false);
@@ -654,6 +684,7 @@ export function PrefrioScreen({ auth, baseUrl, onLogout, onBusyChange }: Prefrio
     nextState: PrefrioProcess['estado'],
     occurredAt: string,
     note?: string,
+    datos?: Record<string, unknown>,
   ): Promise<CommandDelivery> {
     if (!selectedProcess) return 'blocked';
     const operationId = Crypto.randomUUID();
@@ -661,6 +692,7 @@ export function PrefrioScreen({ auth, baseUrl, onLogout, onBusyChange }: Prefrio
       operacion_id: operationId,
       version_conocida: selectedProcess.version,
       ...(note?.trim() ? { observacion: note.trim() } : {}),
+      ...(datos ? { datos } : {}),
       ocurrido_at: occurredAt,
     };
     const command = commandFor(operationId, selectedProcess, kind, label, route, payload);
@@ -688,6 +720,7 @@ export function PrefrioScreen({ auth, baseUrl, onLogout, onBusyChange }: Prefrio
     setActionDraft(draft);
     setActionOccurredAt(operationalDateTime());
     setActionNote('');
+    setReadingDraft(emptyR41Draft());
     setError('');
   }
 
@@ -698,6 +731,24 @@ export function PrefrioScreen({ auth, baseUrl, onLogout, onBusyChange }: Prefrio
       setError('Ingresa la fecha y hora como DD-MM-AAAA HH:mm.');
       return;
     }
+    let datos: Record<string, unknown> | undefined;
+    if (actionDraft.kind === 'verificar') {
+      // POEMP R-41: el enfriado termina con la lectura de los 3 sectores, interior y exterior.
+      const reading = parseR41Draft(readingDraft);
+      if (!reading.ok) {
+        setError(reading.message);
+        return;
+      }
+      if (reading.filled > 0 && reading.missing > 0) {
+        setError(r41MissingMessage(reading.missing));
+        return;
+      }
+      if (reading.filled === 0 && finalReadingRequired) {
+        setError('Antes de terminar el enfriado registra la lectura final: los 3 sectores (ventilador, medio y puerta), interior y exterior de ambos lados.');
+        return;
+      }
+      if (reading.filled > 0) datos = { lectura_final: reading.sectores };
+    }
     if (!beginOperation(selectedProcess.id)) return;
     try {
       const delivery = await queueStateAction(
@@ -707,6 +758,7 @@ export function PrefrioScreen({ auth, baseUrl, onLogout, onBusyChange }: Prefrio
         actionDraft.nextState,
         occurredAt,
         actionNote,
+        datos,
       );
       if (delivery === 'blocked') return;
       setNotice(deliveryNotice(actionDraft.label, delivery));
@@ -728,6 +780,20 @@ export function PrefrioScreen({ auth, baseUrl, onLogout, onBusyChange }: Prefrio
       setError('Ingresa una temperatura válida para la lectura.');
       return;
     }
+    let datos: Record<string, unknown> | undefined = temperature !== undefined ? { temperatura: temperature, unidad: '°C' } : undefined;
+    if (eventDraft.type === 'lectura') {
+      // Lectura horaria POEMP R-41: puede quedar parcial si no se midieron todos los sensores.
+      const reading = parseR41Draft(readingDraft);
+      if (!reading.ok) {
+        setError(reading.message);
+        return;
+      }
+      if (reading.filled === 0) {
+        setError('Ingresa al menos una temperatura de la lectura.');
+        return;
+      }
+      datos = { sectores: reading.sectores };
+    }
     const occurredAt = parseOperationalDateTime(eventOccurredAt);
     if (!occurredAt) {
       setError('Ingresa la fecha y hora como DD-MM-AAAA HH:mm.');
@@ -741,7 +807,7 @@ export function PrefrioScreen({ auth, baseUrl, onLogout, onBusyChange }: Prefrio
         operacion_id: operationId,
         version_conocida: selectedProcess.version,
         ...(eventNote.trim() ? { observacion: eventNote.trim() } : {}),
-        ...(temperature !== undefined ? { datos: { temperatura: temperature, unidad: '°C' } } : {}),
+        ...(datos ? { datos } : {}),
         ocurrido_at: occurredAt,
       };
       const command = commandFor(
@@ -777,6 +843,7 @@ export function PrefrioScreen({ auth, baseUrl, onLogout, onBusyChange }: Prefrio
       if (delivery === 'blocked') return;
       setEventDraft(null);
       setEventTemperature('');
+      setReadingDraft(emptyR41Draft());
       setEventNote('');
       setEventOccurredAt(operationalDateTime());
       setNotice(deliveryNotice(command.label, delivery));
@@ -1044,6 +1111,22 @@ export function PrefrioScreen({ auth, baseUrl, onLogout, onBusyChange }: Prefrio
               </View>
             </View>
 
+            {processInProgress && r41Status ? (
+              <View accessibilityLabel="Control horario R-41" style={[styles.r41Banner, r41Status.overdue && styles.r41BannerOverdue]}>
+                <Text style={[styles.r41BannerTitle, r41Status.overdue && styles.r41BannerTitleOverdue]}>
+                  {r41Status.overdue
+                    ? `Lectura R-41 vencida${r41Status.minutesLate > 0 ? ` hace ${r41Status.minutesLate} min` : ''}`
+                    : `Próxima lectura R-41 · ${r41Status.nextReadingAt ? formatDate(r41Status.nextReadingAt) : '—'}`}
+                </Text>
+                <Text style={styles.muted}>
+                  {r41Status.readings
+                    ? `${r41Status.readings} lectura${r41Status.readings === 1 ? '' : 's'} · última ${formatDate(r41Status.lastReadingAt ?? '')}${r41Status.lastReadingComplete ? ' completa' : ' parcial'}.`
+                    : 'Aún no hay lecturas.'}
+                  {` Mide cada ${r41Status.intervalMinutes} min: ventilador, medio y puerta, interior y exterior de ambos lados.`}
+                </Text>
+              </View>
+            ) : null}
+
             <View style={styles.workGrid}>
               <View style={styles.positionPanel}>
                 <Text style={styles.panelTitle}>Plano del túnel</Text>
@@ -1172,7 +1255,7 @@ export function PrefrioScreen({ auth, baseUrl, onLogout, onBusyChange }: Prefrio
                   onConfirm={() => openStateAction({ kind: 'confirmar_armado', title: 'Confirmar armado', description: 'Después de confirmar ya no deben agregarse pallets.', label: 'Armado confirmado', route: `/api/prefrio/procesos/${selectedProcess.id}/confirmar-armado`, nextState: 'listo_para_iniciar' })}
                   onStart={() => openStateAction({ kind: 'iniciar', title: 'Iniciar proceso', description: 'Indica la fecha y hora real en que comenzó el ciclo térmico.', label: 'Proceso iniciado', route: `/api/prefrio/procesos/${selectedProcess.id}/iniciar`, nextState: 'en_proceso' })}
                   onVerify={() => openStateAction({ kind: 'verificar', title: 'Finalizar proceso', description: 'Indica cuándo terminó realmente el ciclo y envíalo a verificación.', label: 'Proceso enviado a verificación', route: `/api/prefrio/procesos/${selectedProcess.id}/verificar`, nextState: 'pendiente_verificacion' })}
-                  onEvent={(draft) => { setEventDraft(draft); setEventOccurredAt(operationalDateTime()); setEventNote(''); setError(''); }}
+                  onEvent={(draft) => { setEventDraft(draft); setEventOccurredAt(operationalDateTime()); setEventNote(''); setReadingDraft(emptyR41Draft()); setError(''); }}
                   onLeave={() => {
                     setSelectedTunnelId(selectedTunnel.id);
                     setSelectedProcessId(null);
@@ -1188,6 +1271,7 @@ export function PrefrioScreen({ auth, baseUrl, onLogout, onBusyChange }: Prefrio
                 <View key={event.id} style={styles.timelineItem}>
                   <Text style={styles.timelineType}>{stateLabel(event.tipo)}</Text>
                   <Text style={styles.timelineMeta}>{formatDate(event.ocurrido_at)} · {event.usuario?.nombre ?? 'PDA'}</Text>
+                  {r41ReadingSummary(r41SectorsOf(event)) ? <Text style={styles.timelineNote}>{r41ReadingSummary(r41SectorsOf(event))}</Text> : null}
                   {event.observacion ? <Text style={styles.timelineNote}>{event.observacion}</Text> : null}
                 </View>
               ))}
@@ -1226,10 +1310,15 @@ export function PrefrioScreen({ auth, baseUrl, onLogout, onBusyChange }: Prefrio
 
       <Modal animationType="fade" onRequestClose={() => setEventDraft(null)} transparent visible={eventDraft !== null}>
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
+          <ScrollView contentContainerStyle={styles.modalScrollContent} keyboardShouldPersistTaps="handled" style={[styles.modalCard, styles.modalScroll]}>
             <Text style={styles.eyebrow}>EVENTO OPERACIONAL</Text>
             <Text style={styles.modalTitle}>{eventDraft?.title}</Text>
-            {eventDraft?.requiresTemperature ? (
+            {eventDraft?.type === 'lectura' ? (
+              <>
+                <Text style={styles.muted}>Lectura horaria POEMP R-41: registra los sensores que midas; puede quedar parcial.</Text>
+                <R41ReadingGrid draft={readingDraft} onChange={setReadingDraft} />
+              </>
+            ) : eventDraft?.requiresTemperature ? (
               <TextInput
                 autoFocus
                 keyboardType="decimal-pad"
@@ -1260,18 +1349,28 @@ export function PrefrioScreen({ auth, baseUrl, onLogout, onBusyChange }: Prefrio
               <Pressable onPress={() => setEventDraft(null)} style={styles.secondaryButton}><Text style={styles.secondaryButtonText}>Cancelar</Text></Pressable>
               <Pressable disabled={operationBusy} onPress={() => void registerEvent()} style={[styles.primaryButton, operationBusy && styles.buttonDisabled]}><Text style={styles.primaryButtonText}>Registrar</Text></Pressable>
             </View>
-          </View>
+          </ScrollView>
         </View>
       </Modal>
 
       <Modal animationType="fade" onRequestClose={() => setActionDraft(null)} transparent visible={actionDraft !== null}>
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
+          <ScrollView contentContainerStyle={styles.modalScrollContent} keyboardShouldPersistTaps="handled" style={[styles.modalCard, styles.modalScroll]}>
             <Text style={styles.eyebrow}>ACCIÓN DE PREFRÍO</Text>
             <Text style={styles.modalTitle}>{actionDraft?.title}</Text>
             <Text style={styles.muted}>{actionDraft?.description}</Text>
+            {actionDraft?.kind === 'verificar' ? (
+              <>
+                <Text style={finalReadingRequired ? styles.r41Required : styles.muted}>
+                  {finalReadingRequired
+                    ? 'Lectura final obligatoria: completa los 3 sectores, interior y exterior de ambos lados.'
+                    : 'La última lectura horaria está completa y servirá de lectura final. Si mides de nuevo, completa los 12 sensores.'}
+                </Text>
+                <R41ReadingGrid draft={readingDraft} onChange={setReadingDraft} />
+              </>
+            ) : null}
             <TextInput
-              autoFocus
+              autoFocus={actionDraft?.kind !== 'verificar'}
               onChangeText={setActionOccurredAt}
               placeholder="DD-MM-AAAA HH:mm"
               placeholderTextColor={colors.muted}
@@ -1290,7 +1389,7 @@ export function PrefrioScreen({ auth, baseUrl, onLogout, onBusyChange }: Prefrio
               <Pressable onPress={() => setActionDraft(null)} style={styles.secondaryButton}><Text style={styles.secondaryButtonText}>Cancelar</Text></Pressable>
               <Pressable disabled={operationBusy} onPress={() => void registerStateAction()} style={[styles.primaryButton, operationBusy && styles.buttonDisabled]}><Text style={styles.primaryButtonText}>Registrar</Text></Pressable>
             </View>
-          </View>
+          </ScrollView>
         </View>
       </Modal>
 
@@ -1395,7 +1494,7 @@ function ProcessActions({
         <EventButton label="Pausa" onPress={() => onEvent({ type: 'pausa', title: 'Registrar pausa', requiresTemperature: false })} />
         <EventButton label="Reanudar" onPress={() => onEvent({ type: 'reanudacion', title: 'Registrar reanudación', requiresTemperature: false })} />
         <EventButton label="Deshielo" onPress={() => onEvent({ type: 'deshielo', title: 'Registrar deshielo', requiresTemperature: false })} />
-        <EventButton label="Lectura" onPress={() => onEvent({ type: 'lectura', title: 'Registrar lectura', requiresTemperature: true })} />
+        <EventButton label="Lectura R-41" onPress={() => onEvent({ type: 'lectura', title: 'Registrar lectura', requiresTemperature: false })} />
         <Pressable onPress={onVerify} style={styles.primaryButton}><Text style={styles.primaryButtonText}>Enviar a verificación</Text></Pressable>
       </View>
     );
@@ -1406,6 +1505,36 @@ function ProcessActions({
   }
 
   return <Text style={styles.muted}>El proceso no posee acciones operacionales disponibles.</Text>;
+}
+
+/** Grilla POEMP R-41: 3 sectores × exterior e interior de cada lado. */
+function R41ReadingGrid({ draft, onChange }: { draft: R41Draft; onChange: (draft: R41Draft) => void }) {
+  const change = (sector: R41SectorKey, point: R41PointKey, value: string) => onChange(updateR41Draft(draft, sector, point, value));
+  return (
+    <View accessibilityLabel="Lectura por sector" style={styles.r41Grid}>
+      <View style={styles.r41Row}>
+        <Text style={[styles.r41Head, styles.r41SectorCell]}>°C</Text>
+        {R41_POINTS.map((point) => <Text key={point.key} style={[styles.r41Head, styles.r41Cell]}>{point.label}</Text>)}
+      </View>
+      {R41_SECTORS.map((sector) => (
+        <View key={sector.key} style={styles.r41Row}>
+          <Text style={[styles.r41SectorLabel, styles.r41SectorCell]}>{sector.label}</Text>
+          {R41_POINTS.map((point) => (
+            <TextInput
+              key={point.key}
+              accessibilityLabel={`${sector.label} ${point.label}`}
+              keyboardType="numbers-and-punctuation"
+              onChangeText={(value) => change(sector.key, point.key, value)}
+              placeholder="—"
+              placeholderTextColor={colors.muted}
+              style={[styles.input, styles.r41Input, styles.r41Cell]}
+              value={draft[sector.key][point.key]}
+            />
+          ))}
+        </View>
+      ))}
+    </View>
+  );
 }
 
 function EventButton({ label, onPress }: { label: string; onPress: () => void }) {
@@ -1574,5 +1703,19 @@ const styles = StyleSheet.create({
   modalBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: 'rgba(0,0,0,0.72)' },
   modalCard: { width: '100%', maxWidth: 520, padding: 20, gap: 12, borderRadius: 16, backgroundColor: colors.panel, borderWidth: 1, borderColor: colors.cyanDark },
   modalTitle: { color: colors.text, fontSize: 22, fontFamily: font.heavy },
+  modalScroll: { flexGrow: 0, maxHeight: '92%' },
+  modalScrollContent: { gap: 12 },
   modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10 },
+  r41Banner: { padding: 12, gap: 4, borderRadius: 12, borderWidth: 1, borderColor: colors.cyanDark, backgroundColor: colors.panel },
+  r41BannerOverdue: { borderColor: colors.amber },
+  r41BannerTitle: { color: colors.cyan, fontSize: 15, fontFamily: font.heavy },
+  r41BannerTitleOverdue: { color: colors.amber },
+  r41Required: { color: colors.amber, fontSize: 13, fontFamily: font.heavy },
+  r41Grid: { gap: 6 },
+  r41Row: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  r41SectorCell: { width: 84 },
+  r41Cell: { flex: 1 },
+  r41Head: { color: colors.muted, fontSize: 12, fontFamily: font.heavy, textAlign: 'center' },
+  r41SectorLabel: { color: colors.text, fontSize: 14, fontFamily: font.heavy },
+  r41Input: { minHeight: 46, paddingHorizontal: 6, textAlign: 'center', fontFamily: font.monoBold },
 });
