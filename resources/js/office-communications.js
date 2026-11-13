@@ -16,7 +16,8 @@ export function createCommunicationsApp(dialog, api, onChanged) {
     let opened = false, generation = 0, selection = 0, tab = 'chat', user = null;
     let conversationRequest = 0, mailRequest = 0, stickerRequest = 0;
     let conversation = null, conversations = [], conversationPage = 1, conversationsMore = false;
-    let messages = [], older = false, chatReady = false, readState = { last: 0, busy: false };
+    let messages = [], older = false, chatReady = false, receivedCursor = 0, readState = { last: 0, busy: false };
+    const renderedMessages = new Map();
     let busyChat = false, busyMail = false, busySticker = false, busyPrivate = false, ticks = 0;
     const drafts = new Map();
     let folder = 'recibidos', mailPage = 1, mailPages = 1, selectedMail = null, composing = false, replyTo = null;
@@ -79,7 +80,7 @@ export function createCommunicationsApp(dialog, api, onChanged) {
             if (!entry.isIntersecting) { visibleImages.delete(node); continue; }
             visibleImages.add(node);
             const id = node.dataset.commsStickerId;
-            if (images.has(id)) { node.src = images.get(id); continue; }
+            if (images.has(id)) { if (node.getAttribute('src') !== images.get(id)) node.src = images.get(id); continue; }
             const path = node.dataset.stickerUrl;
             if (!/^\/api\/comunicaciones\/stickers\/\d+\/archivo$/.test(path || '')) continue;
             const key = `${imageGeneration}:${id}`;
@@ -91,7 +92,7 @@ export function createCommunicationsApp(dialog, api, onChanged) {
     function observeImages() {
         observer.disconnect(); visibleImages.clear();
         $$('img[data-comms-sticker-id]').forEach(node => {
-            if (images.has(node.dataset.commsStickerId)) node.src = images.get(node.dataset.commsStickerId);
+            if (images.has(node.dataset.commsStickerId) && node.getAttribute('src') !== images.get(node.dataset.commsStickerId)) node.src = images.get(node.dataset.commsStickerId);
             observer.observe(node);
         });
     }
@@ -99,7 +100,8 @@ export function createCommunicationsApp(dialog, api, onChanged) {
     function nearBottom() { return log.scrollHeight - log.scrollTop - log.clientHeight < 60; }
     async function markRead() {
         if (!opened || tab !== 'chat' || !conversation || document.hidden || !nearBottom() || !messages.length) return;
-        const last = messages.at(-1).id;
+        // Una confirmación propia puede adelantarse a mensajes ajenos aún no descargados.
+        const last = receivedCursor;
         const state = readState;
         if (state.busy || last <= state.last) return;
         state.busy = true;
@@ -112,7 +114,16 @@ export function createCommunicationsApp(dialog, api, onChanged) {
     }
     function renderMessages({ bottom = false, prepend = false } = {}) {
         const height = log.scrollHeight, top = log.scrollTop;
-        log.innerHTML = messages.map(m => `<article class="comms-message ${m.remitente.id === user.id ? 'is-mine' : ''}" data-chat-message="${Number(m.id)}"><header>${esc(m.remitente.nombre)}</header>${m.texto !== null ? `<p>${esc(m.texto)}</p>` : ''}${m.sticker ? stickerImage(m.sticker) : ''}<time>${esc(date(m.creado_at))}</time></article>`).join('') || '<p>Aún no hay mensajes. Puedes escribir el primero.</p>';
+        if (!renderedMessages.size) log.replaceChildren();
+        for (const m of messages) {
+            if (renderedMessages.has(m.id)) continue;
+            const template = document.createElement('template');
+            template.innerHTML = `<article class="comms-message ${m.remitente.id === user.id ? 'is-mine' : ''}" data-chat-message="${Number(m.id)}"><header>${esc(m.remitente.nombre)}</header>${m.texto !== null ? `<p>${esc(m.texto)}</p>` : ''}${m.sticker ? stickerImage(m.sticker) : ''}<time>${esc(date(m.creado_at))}</time></article>`;
+            const node = template.content.firstElementChild;
+            const next = messages.find(other => other.id > m.id && renderedMessages.has(other.id));
+            log.insertBefore(node, next ? renderedMessages.get(next.id) : null); renderedMessages.set(m.id, node);
+        }
+        if (!messages.length) { const empty = document.createElement('p'); empty.textContent = 'Aún no hay mensajes. Puedes escribir el primero.'; log.append(empty); }
         $('[data-chat-older]').hidden = !older;
         observeImages();
         if (bottom) { log.scrollTop = log.scrollHeight; $('[data-chat-bottom]').hidden = true; void markRead(); }
@@ -143,7 +154,7 @@ export function createCommunicationsApp(dialog, api, onChanged) {
         if (!conversation) return;
         const version = selection, app = generation, id = conversation.id;
         const params = new URLSearchParams();
-        if (mode === 'new' && chatReady) params.set('despues_id', messages.at(-1)?.id || 0);
+        if (mode === 'new' && chatReady) params.set('despues_id', receivedCursor);
         if (mode === 'old' && messages.length) params.set('antes_id', messages[0].id);
         const bottom = mode === 'initial' || nearBottom();
         const result = await api.request(`${base}/chat/conversaciones/${id}/mensajes?${params}`);
@@ -152,7 +163,9 @@ export function createCommunicationsApp(dialog, api, onChanged) {
         $('[data-conversation-title]').textContent = conversation.nombre;
         if (mode !== 'new' || !chatReady) older = result.hay_mas_anteriores;
         const map = new Map(messages.map(m => [m.id, m]));
-        result.data.filter(m => m.conversacion_id === id).forEach(m => map.set(m.id, m));
+        const received = result.data.filter(m => m.conversacion_id === id);
+        received.forEach(m => map.set(m.id, m));
+        if (mode !== 'old' && received.length) receivedCursor = Math.max(receivedCursor, ...received.map(m => m.id));
         messages = [...map.values()].sort((a, b) => a.id - b.id); chatReady = true;
         const current = draft();
         if (current?.intent && result.data.some(m => m.remitente.id === user.id && m.operacion_id === current.intent.id)) {
@@ -165,7 +178,7 @@ export function createCommunicationsApp(dialog, api, onChanged) {
     async function selectConversation(id) {
         if (busyChat) return;
         selection += 1; conversation = conversations.find(c => c.id === id) || { id, nombre: 'Conversación', puede_enviar: false };
-        messages = []; older = false; chatReady = false; readState = { last: 0, busy: false }; clearImages();
+        messages = []; older = false; chatReady = false; receivedCursor = 0; renderedMessages.clear(); readState = { last: 0, busy: false }; clearImages();
         $('[data-sticker-panel]').hidden = true; $('[data-chat-bottom]').hidden = true;
         $('[data-conversation-title]').textContent = conversation.nombre;
         log.innerHTML = '<p>Cargando mensajes…</p>'; renderDraft(); renderConversations();
@@ -403,7 +416,7 @@ export function createCommunicationsApp(dialog, api, onChanged) {
     dialog.addEventListener('close', () => {
         if (dialog.open) return;
         opened = false; generation += 1; selection += 1; poller.stop(); api.reset(); clearImages(); clearTimeout(recipientTimer);
-        messages = []; conversation = null; selectedMail = null; chatReady = false;
+        messages = []; conversation = null; selectedMail = null; chatReady = false; receivedCursor = 0; renderedMessages.clear();
         log.replaceChildren(); $('[data-conversation-list]').replaceChildren(); $('[data-mail-list]').replaceChildren(); $('[data-mail-detail]').replaceChildren();
         busyChat = false; busyMail = false; busySticker = false; busyPrivate = false;
         document.querySelector('[data-communications-open]')?.focus();
@@ -421,7 +434,7 @@ export function createCommunicationsApp(dialog, api, onChanged) {
         reset() {
             opened = false; generation += 1; selection += 1; poller.stop(); clearImages(); clearTimeout(recipientTimer);
             if (dialog.open) dialog.close();
-            drafts.clear(); recipients.clear(); conversations = []; messages = []; stickerRows = []; conversation = null; selectedMail = null;
+            drafts.clear(); recipients.clear(); conversations = []; messages = []; renderedMessages.clear(); receivedCursor = 0; stickerRows = []; conversation = null; selectedMail = null;
             composing = false; replyTo = null; mailIntent = null; stickerIntent = null; user = null;
             folder = 'recibidos'; mailPage = 1; conversationPage = 1; older = false; chatReady = false;
             busyChat = false; busyMail = false; busySticker = false; busyPrivate = false;

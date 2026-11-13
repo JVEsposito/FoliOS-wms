@@ -20,7 +20,7 @@ async function setup(browser) {
         localStorage.setItem('estiba_wms_office_token', 'comms-fixture');
         localStorage.setItem('estiba_wms_office_identity', JSON.stringify(identity));
     }, user);
-    const state = { user, messageId: 300, mailId: 400, failChat: false, failMail: false, chatCalls: [], mailCalls: [], stickers: [], imageCalls: [], holdPrivate: null,
+    const state = { user, messageId: 300, mailId: 400, failChat: false, failMail: false, injectBeforeSend: false, readCalls: [], chatCalls: [], mailCalls: [], stickers: [], imageCalls: [], holdPrivate: null,
         conversations: [{ id: 1, tipo: 'global', nombre: 'Chat global', puede_enviar: true, tiene_no_leidos: true, ultimo_mensaje_id: 101 },
             { id: 2, tipo: 'privado', nombre: 'Sharon B', puede_enviar: true, tiene_no_leidos: true, ultimo_mensaje_id: 201 }],
         messages: new Map([[1, [{ id: 101, conversacion_id: 1, remitente: people[0], texto: 'Aviso <img src=x onerror="window.__chatXss=1">', sticker: null, creado_at: date, operacion_id: null }]],
@@ -60,12 +60,16 @@ async function setup(browser) {
             }
             const payload = req.postDataJSON(); state.chatCalls.push({ conversation: id, ...payload });
             if (state.failChat) { state.failChat = false; return route.abort('failed'); }
+            if (state.injectBeforeSend) {
+                state.injectBeforeSend = false;
+                rows.push({ id: ++state.messageId, conversacion_id: id, remitente: people[0], texto: 'Entrante durante el envío', sticker: null, creado_at: date, operacion_id: null });
+            }
             let message = rows.find(m => m.operacion_id === payload.operacion_id);
             if (!message) { message = { id: ++state.messageId, conversacion_id: id, remitente: state.user, texto: payload.texto, sticker: state.stickers.find(s => s.id === payload.sticker_id) || null, creado_at: date, operacion_id: payload.operacion_id }; rows.push(message); }
             state.conversations.find(c => c.id === id).ultimo_mensaje_id = message.id;
             return route.fulfill({ json: { data: message } });
         }
-        if (/\/chat\/conversaciones\/\d+\/leer$/.test(path)) return route.fulfill({ json: { data: { confirmado: true } } });
+        if (/\/chat\/conversaciones\/\d+\/leer$/.test(path)) { state.readCalls.push(req.postDataJSON()); return route.fulfill({ json: { data: { confirmado: true } } }); }
         if (path.endsWith('/stickers')) {
             if (method === 'POST') {
                 assert.match(req.headers()['content-type'], /^multipart\/form-data/);
@@ -199,6 +203,24 @@ test('comunicaciones: correo con lectura, archivo, respuesta y varios destinatar
         await page.screenshot({ path: resolve(root, 'storage/app/ui/oficina/comunicaciones-correo.png') });
         assert.deepEqual(errors, []);
         await context.close();
+    } finally { await browser.close(); }
+});
+
+test('comunicaciones: confirmar un envío propio no salta un entrante todavía sin descargar', async () => {
+    const browser = await launch();
+    try {
+        const { context, dialog, state, errors } = await setup(browser);
+        state.injectBeforeSend = true;
+        await dialog.locator('#commsChatText').fill('Mi envío simultáneo');
+        await dialog.getByRole('button', { name: 'Enviar mensaje', exact: true }).click();
+        await dialog.locator('[data-chat-message="302"]').waitFor();
+        assert.equal(state.readCalls.some(r => r.hasta_id === 302), false);
+        await dialog.getByRole('button', { name: 'Actualizar', exact: true }).click();
+        await dialog.locator('[data-chat-message="301"]').waitFor();
+        assert.match(await dialog.locator('[data-chat-message="301"]').innerText(), /Entrante durante el envío/);
+        assert.equal(await dialog.locator('[data-chat-message="302"]').count(), 1);
+        assert.deepEqual(await dialog.locator('[data-chat-message]').evaluateAll(nodes => nodes.map(n => Number(n.dataset.chatMessage))), [101, 301, 302]);
+        assert.deepEqual(errors, []); await context.close();
     } finally { await browser.close(); }
 });
 
