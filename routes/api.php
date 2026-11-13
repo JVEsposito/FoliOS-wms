@@ -44,6 +44,7 @@ use App\Http\Controllers\Api\DesocupacionCamaraController;
 use App\Http\Controllers\Api\DespachoComercialRetornoController;
 use App\Http\Controllers\Api\DespachoFrigorificoController;
 use App\Http\Controllers\Api\DespachoMaterialController;
+use App\Http\Controllers\Api\DevolucionEnvasesController;
 use App\Http\Controllers\Api\DirectorioTransporteController;
 use App\Http\Controllers\Api\DisponibilidadCamarerosController;
 use App\Http\Controllers\Api\DocumentoRecepcionEmbaladaController;
@@ -263,6 +264,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/envases/cuenta-corriente/movimientos/{movimientoEnvase}/corregir-saldo-historico', [CuentaCorrienteEnvaseController::class, 'corregirSaldoHistorico'])->middleware('can:ajustar-cuenta-envases');
     Route::post('/envases/cuenta-corriente/movimientos/{movimientoEnvase}/revertir-ajuste', [CuentaCorrienteEnvaseController::class, 'revertirAjuste'])
         ->middleware('can:ajustar-cuenta-envases');
+    // Devolución de envases de un productor CSG: la consultan Romana al registrar y Cuenta Envases al asociar.
+    Route::get('/envases/devoluciones/productores/{cliente}', [DevolucionEnvasesController::class, 'productores']);
+    Route::get('/envases/devoluciones/salida', [DevolucionEnvasesController::class, 'salida']);
     Route::middleware('can:consultar-cuenta-envases')->prefix('envases/guias-despacho')->group(function () {
         Route::get('/catalogos', [GuiaDespachoEnvaseController::class, 'catalogos']);
         Route::get('/productores/{cliente}', [GuiaDespachoEnvaseController::class, 'productores']);

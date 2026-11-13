@@ -893,6 +893,7 @@ class ServicioGuiaDespachoEnvases
             TipoMovimientoEnvase::RecepcionFruta->value,
             TipoMovimientoEnvase::RecepcionArriendo->value,
             TipoMovimientoEnvase::RecepcionCompra->value,
+            TipoMovimientoEnvase::DevolucionEnvases->value,
         ];
     }
 

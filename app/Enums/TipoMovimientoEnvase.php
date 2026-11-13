@@ -9,6 +9,8 @@ enum TipoMovimientoEnvase: string
     case ReversionSalidaRecepcionFruta = 'reversion_salida_fruta';
     case RecepcionArriendo = 'recepcion_arriendo';
     case RecepcionCompra = 'recepcion_compra';
+    // Ingreso de solo envases que un productor (CSG) devuelve: abona su cuenta con la propiedad de cada tipo.
+    case DevolucionEnvases = 'devolucion_envases';
     case DespachoCliente = 'despacho_cliente';
     case ReversionDespacho = 'reversion_despacho';
     case ConciliacionSalida = 'conciliacion_salida';
@@ -27,6 +29,12 @@ enum TipoMovimientoEnvase: string
     public function esAjusteCuenta(): bool
     {
         return in_array($this, [self::AperturaCuenta, self::AjusteCuenta, self::ReversionAjusteCuenta], true);
+    }
+
+    /** Ingresos que crea Validación MP en una recepción de solo envases. */
+    public static function ingresosSoloEnvases(): array
+    {
+        return [self::RecepcionArriendo, self::RecepcionCompra, self::DevolucionEnvases];
     }
 
     public function esPrestamoInterno(): bool

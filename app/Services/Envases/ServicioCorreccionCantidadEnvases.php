@@ -42,13 +42,14 @@ class ServicioCorreccionCantidadEnvases
 
             if (! $detalle || ! $validacion || $validacion->estado !== EstadoValidacionMp::Validada
                 || $validacion->segmentos()->exists() || $recepcion->lotesMateriaPrima()->exists()
-                || ! in_array($ingreso->tipo_movimiento, [TipoMovimientoEnvase::RecepcionCompra, TipoMovimientoEnvase::RecepcionArriendo], true)
+                || ! in_array($ingreso->tipo_movimiento, TipoMovimientoEnvase::ingresosSoloEnvases(), true)
                 || $ingreso->recepcion_romana_id !== $recepcion->id
                 || $ingreso->cliente_id !== $recepcion->cliente_id
                 || $ingreso->temporada_id !== $recepcion->temporada_id
                 || $ingreso->movimiento_origen_id !== null
                 || $ingreso->signo_existencia !== 1
-                || $ingreso->signo_cuenta !== ($ingreso->propiedad === PropiedadEnvase::Arrendada ? 1 : 0)
+                // La compra de envases propios no mueve la cuenta; el arriendo y la devolución sí.
+                || $ingreso->signo_cuenta !== ($ingreso->tipo_movimiento === TipoMovimientoEnvase::RecepcionCompra ? 0 : 1)
                 || $recepcion->cantidad_envases_declarados < $ingreso->cantidad
                 || $detalle->cantidad_declarada !== $ingreso->cantidad
                 || $detalle->cantidad_validada !== $ingreso->cantidad) {

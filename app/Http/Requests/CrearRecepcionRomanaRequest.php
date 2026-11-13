@@ -26,6 +26,7 @@ class CrearRecepcionRomanaRequest extends FormRequest
     public function rules(): array
     {
         $esSoloEnvases = $this->input('tipo_recepcion') === TipoRecepcionRomana::SoloEnvases->value;
+        $esDevolucion = $esSoloEnvases && $this->input('concepto_envases') === ConceptoEnvasesRomana::Devolucion->value;
         $requierePesoBruto = $this->input('tipo_recepcion') === TipoRecepcionRomana::FrutaConEnvases->value;
 
         return [
@@ -49,6 +50,16 @@ class CrearRecepcionRomanaRequest extends FormRequest
                 Rule::requiredIf($esSoloEnvases),
                 Rule::enum(ConceptoEnvasesRomana::class),
             ],
+            // Devolución: el productor CSG al que se abonan los envases y, si se conoce, la guía de salida devuelta.
+            'devolucion_productor_csg_id' => [
+                'nullable',
+                Rule::requiredIf($esDevolucion),
+                'uuid',
+                Rule::exists('productores_csg', 'id'),
+            ],
+            'devolucion_guia_salida' => ['nullable', 'string', 'max:80'],
+            // La fecha retroactiva conserva la hora del registro; en una devolución se puede indicar la real.
+            'hora_ingreso' => ['nullable', 'date_format:H:i'],
             'tipo_servicio' => [
                 'nullable',
                 Rule::requiredIf($this->input('tipo_recepcion') !== TipoRecepcionRomana::SoloEnvases->value),
@@ -108,7 +119,11 @@ class CrearRecepcionRomanaRequest extends FormRequest
             'fecha_ingreso.required' => 'Selecciona la fecha de ingreso de los envases.',
             'fecha_ingreso.date_format' => 'La fecha de ingreso de los envases no es válida.',
             'fecha_ingreso.before_or_equal' => 'La fecha de ingreso de los envases no puede ser futura.',
-            'concepto_envases.required' => 'Indica si los envases ingresan por compra o arriendo.',
+            'concepto_envases.required' => 'Indica si los envases ingresan por compra, arriendo o devolución de un productor.',
+            'devolucion_productor_csg_id.required' => 'Selecciona el productor CSG que devuelve los envases.',
+            'devolucion_productor_csg_id.exists' => 'El productor CSG seleccionado no existe.',
+            'devolucion_guia_salida.max' => 'La guía de salida devuelta admite hasta 80 caracteres.',
+            'hora_ingreso.date_format' => 'Indica la hora del reingreso en formato HH:MM.',
             'tipo_servicio.required' => 'Selecciona el servicio contratado para la fruta.',
             'envases.required' => 'Registra al menos un tipo de envase declarado en la guía.',
             'envases.*.tipo_envase.distinct' => 'Cada tipo de envase puede declararse solo una vez.',
@@ -138,6 +153,17 @@ class CrearRecepcionRomanaRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
+            if ($this->input('tipo_recepcion') === TipoRecepcionRomana::SoloEnvases->value
+                && $this->input('concepto_envases') === ConceptoEnvasesRomana::Devolucion->value) {
+                // Cada tipo vuelve con la propiedad con que salió: propios, arrendados o del cliente.
+                foreach ((array) $this->input('envases', []) as $indice => $envase) {
+                    if (is_array($envase) && empty($envase['propiedad'])) {
+                        $validator->errors()->add("envases.{$indice}.propiedad", 'Indica la propiedad de cada envase devuelto: del cliente, propio o arrendado.');
+                    }
+                }
+
+                return;
+            }
             if ($this->input('tipo_recepcion') !== TipoRecepcionRomana::FrutaPesajeEnvases->value) {
                 return;
             }
@@ -178,7 +204,13 @@ class CrearRecepcionRomanaRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $tipoRecepcion = (string) $this->input('tipo_recepcion');
+        $esDevolucion = $tipoRecepcion === TipoRecepcionRomana::SoloEnvases->value
+            && $this->input('concepto_envases') === ConceptoEnvasesRomana::Devolucion->value;
+        $guiaDevuelta = mb_strtoupper(trim((string) $this->input('devolucion_guia_salida')));
         $this->merge([
+            'devolucion_productor_csg_id' => $esDevolucion ? $this->input('devolucion_productor_csg_id') : null,
+            'devolucion_guia_salida' => $esDevolucion && $guiaDevuelta !== '' ? $guiaDevuelta : null,
+            'hora_ingreso' => $esDevolucion && filled($this->input('hora_ingreso')) ? trim((string) $this->input('hora_ingreso')) : null,
             'concepto_envases' => $tipoRecepcion === TipoRecepcionRomana::SoloEnvases->value
                 ? $this->input('concepto_envases')
                 : null,

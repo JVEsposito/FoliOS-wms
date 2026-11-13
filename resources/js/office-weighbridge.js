@@ -21,7 +21,7 @@ const elements = {
     editReception: byId('editReceptionButton'), confirmEntry: byId('confirmEntryButton'), addContainerWeighing: byId('addContainerWeighingButton'), closeReception: byId('closeReceptionButton'), correctExit: byId('correctExitButton'), downloadReceipt: byId('downloadReceiptButton'), closeDetail: byId('closeDetailButton'),
     containerWeighingPanel: byId('containerWeighingPanel'), containerWeighingProgress: byId('containerWeighingProgress'), containerWeighingList: byId('containerWeighingList'),
     receptionDialog: byId('receptionDialog'), receptionForm: byId('receptionForm'), receptionDialogTitle: byId('receptionDialogTitle'), receptionDialogDescription: byId('receptionDialogDescription'), receptionFormError: byId('receptionFormError'), saveReception: byId('saveReceptionButton'),
-    serviceField: byId('serviceField'), containerEntryDateField: byId('containerEntryDateField'), containerConceptField: byId('containerConceptField'), standardContainerLines: byId('standardContainerLines'), containerWeighingFields: byId('containerWeighingFields'), containerWeighingLines: byId('containerWeighingLines'), addContainerWeighingLine: byId('addContainerWeighingLine'), grossWeightField: byId('grossWeightField'), administrativeCorrectionField: byId('administrativeCorrectionField'), administrativeTareField: byId('administrativeTareField'), administrativeNetContainerField: byId('administrativeNetContainerField'),
+    serviceField: byId('serviceField'), containerEntryDateField: byId('containerEntryDateField'), containerConceptField: byId('containerConceptField'), containerReturnFields: byId('containerReturnFields'), containerReturnLookup: byId('containerReturnLookup'), containerReturnExit: byId('containerReturnExit'), standardContainerLines: byId('standardContainerLines'), containerWeighingFields: byId('containerWeighingFields'), containerWeighingLines: byId('containerWeighingLines'), addContainerWeighingLine: byId('addContainerWeighingLine'), grossWeightField: byId('grossWeightField'), administrativeCorrectionField: byId('administrativeCorrectionField'), administrativeTareField: byId('administrativeTareField'), administrativeNetContainerField: byId('administrativeNetContainerField'),
     tareDialog: byId('tareDialog'), tareForm: byId('tareForm'), tareDescription: byId('tareDescription'), tareFormError: byId('tareFormError'), outboundContainerTares: byId('outboundContainerTares'), outboundContainerTareList: byId('outboundContainerTareList'), outboundGuideField: byId('outboundGuideField'), outboundExtraField: byId('outboundExtraField'), outboundExtraType: byId('outboundExtraType'), outboundAddType: byId('outboundAddType'), exitCorrectionReasonField: byId('exitCorrectionReasonField'), containerTarePreviewRow: byId('containerTarePreviewRow'), containerTarePreview: byId('containerTarePreview'), netWeightPreview: byId('netWeightPreview'), netPerContainerPreview: byId('netPerContainerPreview'),
     containerWeighingDialog: byId('containerWeighingDialog'), containerWeighingForm: byId('containerWeighingForm'), containerWeighingDescription: byId('containerWeighingDescription'), containerWeighingFormError: byId('containerWeighingFormError'), containerWeighingQuantities: byId('containerWeighingQuantities'), containerWeighingTarePreview: byId('containerWeighingTarePreview'), containerWeighingNetPreview: byId('containerWeighingNetPreview'),
     loading: byId('officeLoading'), loadingText: byId('officeLoadingText'), toasts: byId('officeToasts'),
@@ -221,10 +221,15 @@ function propertyOptions(selected = '') {
     return '<option value="">Seleccionar</option>' + Object.entries(containerProperties)
         .map(([value, name]) => `<option value="${value}"${value === selected ? ' selected' : ''}>${name}</option>`).join('');
 }
+function isContainerReturn() {
+    const form = elements.receptionForm.elements;
+    return form.tipo_recepcion.value === 'solo_envases' && form.concepto_envases.value === 'devolucion';
+}
 function syncContainerProperties() {
     const form = elements.receptionForm.elements;
     const fruit = form.tipo_recepcion.value !== 'solo_envases';
-    const standard = fruit && form.tipo_recepcion.value !== 'fruta_pesaje_envases';
+    // En una devolución cada tipo vuelve con la propiedad con que salió.
+    const standard = (fruit && form.tipo_recepcion.value !== 'fruta_pesaje_envases') || isContainerReturn();
     document.querySelector('[data-container-property-help]')?.classList.toggle('is-hidden', !fruit);
     elements.standardContainerLines.querySelectorAll('[data-container-property]').forEach((field) => {
         const active = standard && Number(form[`cantidad_${field.dataset.containerProperty}`]?.value || 0) > 0;
@@ -425,6 +430,7 @@ function renderDetail(reception) {
     ] : [];
     elements.detailFacts.innerHTML = [
         fact('INGRESO', formatDate(reception.ingreso_at)), fact(reception.tipo_recepcion === 'solo_envases' ? 'CIERRE DOCUMENTAL' : reception.pesaje_envases ? 'CIERRE DE PESAJE' : 'SALIDA / DESTARE', formatDate(reception.salida_at)), fact('TEMPORADA GLOBAL', `${reception.temporada.nombre} · ${reception.temporada.codigo}`), fact('CLIENTE', reception.cliente.nombre), fact('TIPO RECEPCIÓN', label(reception.tipo_recepcion)), fact('SERVICIO / CONCEPTO', reception.tipo_recepcion === 'solo_envases' ? label(reception.concepto_envases) : label(reception.tipo_servicio)), fact('GUÍAS', guideNumbers(reception)),
+        ...(reception.devolucion ? [fact('DEVOLUCIÓN DE PRODUCTOR', [`CSG ${reception.devolucion.productor?.codigo || ''}`, reception.devolucion.productor?.nombre, reception.devolucion.guia_salida ? `devuelve guía ${reception.devolucion.guia_salida}` : ''].filter(Boolean).join(' · '))] : []),
         ...(reception.destare_pendiente_validacion ? [fact('DESTARE', 'Espera la Validación MP completa en la PDA')] : []),
         ...(reception.modo_salida_envases ? [fact('SALIDA ENVASES', label(reception.modo_salida_envases)), fact('GUÍA DE SALIDA', reception.numero_guia_salida || 'Sin salida'), fact('ENVASES RETIRADOS', (reception.salida_envases || []).filter((x) => x.cantidad > 0).map((x) => `${x.cantidad} ${label(x.tipo_envase)}`).join(' · ') || 'Ninguno')] : []),
         ...(plantBinsFact(reception) ? [fact('BINS DE PLANTA', plantBinsFact(reception))] : []),
@@ -588,6 +594,8 @@ function openNewReception() {
     receptionGuides?.reset();
     lockGuideTotals(false);
     renderWeighingLines([]);
+    elements.containerReturnExit.textContent = '';
+    state.returnProducersClient = null;
     configureAdministrativeCorrection(false);
     elements.receptionDialogTitle.textContent = 'Registrar ingreso';
     const activeSeasons = state.catalogs.temporadas.filter((season) => season.activa);
@@ -614,6 +622,12 @@ function openEditReception() {
     elements.receptionDialogTitle.textContent = canCorrect ? 'Corregir recepción' : 'Editar pesaje de ingreso';
     form.recepcion_id.value = reception.id; form.temporada_id.value = reception.temporada.id; form.cliente_id.value = reception.cliente.id; form.tipo_recepcion.value = reception.tipo_recepcion; form.especie_validacion_id.value = reception.especie_validacion_id || ''; form.fecha_ingreso.value = reception.fecha_ingreso || ''; form.concepto_envases.value = reception.concepto_envases || ''; form.tipo_servicio.value = reception.tipo_servicio;
     form.numero_guia_despacho.value = reception.numero_guia_despacho;
+    elements.containerReturnExit.textContent = '';
+    form.devolucion_guia_salida.value = reception.devolucion?.guia_salida || '';
+    form.hora_ingreso.value = reception.devolucion && reception.ingreso_at
+        ? new Intl.DateTimeFormat('es-CL', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(reception.ingreso_at)) : '';
+    state.returnProducersClient = null;
+    if (reception.devolucion) void loadReturnProducers(reception.devolucion.productor?.id || '');
     state.catalogs.tipos_envase.map((t) => t.codigo).forEach((tipo) => {
         const item = reception.envases.find((envase) => envase.tipo_envase === tipo);
         form[`cantidad_${tipo}`].value = item?.cantidad_declarada || 0;
@@ -690,8 +704,9 @@ elements.receptionForm.addEventListener('submit', async (event) => {
         if (withoutProperty >= 0) return problem(withoutProperty, 'propiedad', `Selecciona la propiedad de ${label(lines[withoutProperty].tipo_envase)}: del cliente, propios o arrendados por planta.`);
         data.envases = lines.map((line) => ({ tipo_envase: line.tipo_envase, cantidad: Number(line.cantidad), tara_unitaria: Number(line.tara_unitaria), propiedad: line.propiedad }));
     } else {
-        data.envases = state.catalogs.tipos_envase.map((t) => t.codigo).map((tipo) => ({ tipo_envase: tipo, cantidad: Number(data[`cantidad_${tipo}`] || 0), ...(!soloEnvases ? { propiedad: data[`propiedad_${tipo}`] || '' } : {}) })).filter((item) => item.cantidad > 0);
-        const missingProperty = !soloEnvases && data.envases.find((item) => !item.propiedad);
+        const withProperty = !soloEnvases || data.concepto_envases === 'devolucion';
+        data.envases = state.catalogs.tipos_envase.map((t) => t.codigo).map((tipo) => ({ tipo_envase: tipo, cantidad: Number(data[`cantidad_${tipo}`] || 0), ...(withProperty ? { propiedad: data[`propiedad_${tipo}`] || '' } : {}) })).filter((item) => item.cantidad > 0);
+        const missingProperty = withProperty && data.envases.find((item) => !item.propiedad);
         if (missingProperty) {
             elements.receptionFormError.textContent = `Selecciona la propiedad de ${label(missingProperty.tipo_envase)}: del cliente, propios o arrendados por planta.`;
             elements.receptionForm.elements[`propiedad_${missingProperty.tipo_envase}`].focus();
@@ -700,6 +715,8 @@ elements.receptionForm.addEventListener('submit', async (event) => {
     }
     state.catalogs.tipos_envase.map((t) => t.codigo).forEach((tipo) => { delete data[`cantidad_${tipo}`]; delete data[`propiedad_${tipo}`]; });
     if (cumulativeWeighing || soloEnvases) delete data.peso_bruto;
+    if (data.concepto_envases !== 'devolucion') { delete data.devolucion_productor_csg_id; delete data.devolucion_guia_salida; delete data.hora_ingreso; }
+    else if (!data.hora_ingreso) delete data.hora_ingreso;
     const administrativeCorrection = Boolean(id && state.administrativeCorrection);
     if (administrativeCorrection) data.version_conocida = state.selected?.version;
     else delete data.motivo_correccion;
@@ -1126,6 +1143,53 @@ elements.previousPage.addEventListener('click', async () => { if (state.page <= 
 elements.nextPage.addEventListener('click', async () => { if (state.meta && state.page >= state.meta.ultima_pagina) return; state.page++; await loadReceptions({ silent: true }); });
 elements.reload.addEventListener('click', async () => { setBusy(true, 'Actualizando Romana…'); try { await Promise.all([loadCatalogs(), loadReceptions({ silent: true })]); toast('Romana actualizada.'); } catch (error) { toast(error.message, true); } finally { setBusy(false); } });
 elements.newReception.addEventListener('click', openNewReception); elements.editReception.addEventListener('click', openEditReception); elements.closeDetail.addEventListener('click', closeDetail);
+const returnProperties = { cliente: 'del cliente', propia: 'propios', arrendada: 'arrendados' };
+function syncContainerReturn() {
+    const active = isContainerReturn();
+    elements.containerReturnFields.classList.toggle('is-hidden', !active);
+    elements.containerReturnFields.disabled = !active;
+    elements.receptionForm.elements.devolucion_productor_csg_id.required = active;
+    if (active && state.returnProducersClient !== elements.receptionForm.elements.cliente_id.value) void loadReturnProducers();
+}
+async function loadReturnProducers(selected = '') {
+    const form = elements.receptionForm.elements;
+    const client = form.cliente_id.value;
+    state.returnProducersClient = client;
+    const current = selected || form.devolucion_productor_csg_id.value;
+    form.devolucion_productor_csg_id.innerHTML = '<option value="">Seleccionar productor</option>';
+    if (!client) return;
+    try {
+        const producers = (await api(`/api/envases/devoluciones/productores/${encodeURIComponent(client)}`)).data;
+        if (form.cliente_id.value !== client) return;
+        form.devolucion_productor_csg_id.innerHTML = '<option value="">Seleccionar productor</option>' + producers
+            .map((producer) => `<option value="${escapeHtml(producer.id)}">CSG ${escapeHtml(producer.codigo)} · ${escapeHtml(producer.nombre)}</option>`).join('');
+        if (current) form.devolucion_productor_csg_id.value = current;
+    } catch (error) { elements.receptionFormError.textContent = error.message; }
+}
+// Precarga productor y propiedad desde lo que salió con la guía, para no interpretar a mano.
+async function lookupContainerReturn() {
+    const form = elements.receptionForm.elements;
+    const number = form.devolucion_guia_salida.value.trim();
+    elements.containerReturnExit.textContent = '';
+    if (!form.cliente_id.value || !number) { elements.containerReturnExit.textContent = 'Selecciona el cliente e ingresa la guía de salida.'; return; }
+    try {
+        const result = (await api(`/api/envases/devoluciones/salida?${new URLSearchParams({ cliente_id: form.cliente_id.value, numero: number })}`)).data;
+        const exit = result.salidas.length === 1 ? result.salidas[0] : null;
+        if (!result.salidas.length) { elements.containerReturnExit.textContent = `No hay salidas con la guía ${result.numero} para este cliente. Indica el productor y la propiedad de cada envase.`; return; }
+        elements.containerReturnExit.textContent = result.salidas.map((item) => `${item.origen === 'destare' ? 'Destare' : 'Despacho'} ${item.documento} · ${item.fecha || ''} · ${item.productor ? `CSG ${item.productor.codigo} · ${item.productor.nombre}` : 'sin productor CSG'} · ${item.envases.map((line) => `${line.cantidad} ${label(line.tipo_envase)} ${returnProperties[line.propiedad] || line.propiedad}`).join(', ')}`).join(' / ')
+            + (result.devoluciones.length ? ` · Ya registrada en ${result.devoluciones.map((item) => item.numero_recepcion).join(', ')}.` : '');
+        if (!exit) return;
+        if (exit.productor?.id) form.devolucion_productor_csg_id.value = exit.productor.id;
+        const empty = state.catalogs.tipos_envase.every(({ codigo }) => !Number(form[`cantidad_${codigo}`]?.value || 0));
+        const types = [...new Set(exit.envases.map((line) => line.tipo_envase))];
+        types.forEach((type) => {
+            const lines = exit.envases.filter((line) => line.tipo_envase === type);
+            if (empty && form[`cantidad_${type}`]) form[`cantidad_${type}`].value = lines.reduce((sum, line) => sum + line.cantidad, 0);
+            if (lines.length === 1 && form[`propiedad_${type}`]) form[`propiedad_${type}`].value = lines[0].propiedad;
+        });
+        syncContainerProperties();
+    } catch (error) { elements.receptionFormError.textContent = error.message; }
+}
 function toggleReceptionType() {
     const form = elements.receptionForm.elements;
     if (form.tipo_recepcion.value === 'solo_envases' && receptionGuides?.multiple()) {
@@ -1149,6 +1213,7 @@ function toggleReceptionType() {
     form.fecha_ingreso.required = soloEnvases;
     if (soloEnvases && !form.fecha_ingreso.value) form.fecha_ingreso.value = form.fecha_ingreso.max;
     form.concepto_envases.required = soloEnvases;
+    syncContainerReturn();
     form.peso_bruto.required = !cumulativeWeighing && !soloEnvases;
     syncContainerProperties();
     elements.receptionDialogDescription.textContent = soloEnvases
@@ -1163,6 +1228,9 @@ function toggleReceptionType() {
     }
 }
 elements.receptionForm.elements.tipo_recepcion.addEventListener('change', toggleReceptionType);
+elements.receptionForm.elements.concepto_envases.addEventListener('change', () => { syncContainerReturn(); syncContainerProperties(); });
+elements.receptionForm.elements.cliente_id.addEventListener('change', () => { if (isContainerReturn()) void loadReturnProducers(); });
+elements.containerReturnLookup.addEventListener('click', () => { void lookupContainerReturn(); });
 byId('standardContainerLines').addEventListener('input', () => { syncAdministrativeNetContainerOptions(); syncContainerProperties(); });
 elements.receptionForm.addEventListener('change', (event) => {
     if (event.target.name?.startsWith('propiedad_') && elements.receptionFormError.textContent.startsWith('Selecciona la propiedad')) elements.receptionFormError.textContent = '';

@@ -130,6 +130,7 @@ Pueden existir movimientos asociados a:
 - recepción exclusiva de envases;
 - compra;
 - arriendo;
+- devolución de envases de un productor (CSG);
 - confirmación real de Validación MP;
 - guía de despacho;
 - anulación de guía;
@@ -296,6 +297,8 @@ GET  /api/envases/cuenta-corriente/estado-cuenta?cliente_id=…&formato=pdf|xlsx
 POST /api/envases/cuenta-corriente/movimientos/{movimiento}/revisar
 POST /api/envases/cuenta-corriente/movimientos/{movimiento}/corregir-propiedad
 POST /api/envases/cuenta-corriente/movimientos/{movimiento}/corregir-cantidad
+GET  /api/envases/devoluciones/productores/{cliente}
+GET  /api/envases/devoluciones/salida?cliente_id=…&numero=…
 ```
 
 ### Guías de despacho
@@ -331,6 +334,16 @@ La versión FoliOS mostrada bajo el lema en la navegación de Oficina se obtiene
 En **Cuenta Envases → Movimientos**, el administrador puede abrir **Corregir propiedad** en un ingreso de `solo_envases` validado durante la temporada activa. Indica `concepto_envases` (`arriendo` o `compra`) y un `motivo` de 10 a 2000 caracteres. La operación modifica el concepto de la recepción y crea, por cada tipo de envase validado, un asiento que deja en cero el ingreso original y un ingreso con la propiedad correcta. La cantidad física total no cambia. El ingreso original y la trazabilidad (motivo, usuario, fecha e identificador de origen) permanecen en el kardex.
 
 Se rechaza la corrección si alguna línea de esa recepción figura en una guía, incluso si la guía se canceló o anuló; también se bloquea ante salidas propias históricas sin origen trazable. No se puede corregir dos veces la misma recepción. Si la recepción contiene varios tipos de envase, se corrigen todos juntos, porque Romana guarda un único concepto de propiedad para toda ella. La corrección no requiere una migración nueva ni reconstruir los movimientos anteriores. Tras desplegarla, cierra sesión y vuelve a entrar para actualizar las capacidades de la cuenta administrativa.
+
+### Devolución de envases de un productor (CSG)
+
+Cuando un productor devuelve envases que salieron con una guía (por despacho o en el destare de Romana), el ingreso debe abonar su cuenta y no quedar como arriendo sin CSG. Caso que lo originó: la guía 2324 despachó 13 bins, 14 esponjas y 312 totes a CSG 90624; el camión reingresó con esos envases y se registró como arriendo, con lo que el estado de cuenta del productor mostraba esa deuda de más.
+
+- **En Romana**, una recepción de `solo_envases` admite el concepto `devolucion`. Exige el productor CSG asociado y activo para el cliente, y la propiedad de cada envase (del cliente, propio o arrendado). La guía de salida devuelta es opcional; **Buscar salida** precarga productor, cantidades y propiedad desde lo que salió con esa guía. Como la fecha retroactiva conserva la hora del registro, una devolución admite `hora_ingreso` con la hora real.
+- **En Cuenta Envases**, la acción **Asociar devolución CSG** de un ingreso de `solo_envases` ya validado lo convierte en devolución, con el mismo circuito de **Corregir propiedad**: un asiento deja en cero cada ingreso original y otro registra la devolución (`devolucion_envases`) con la propiedad de cada tipo, en la fecha y hora real del reingreso. La recepción guarda el productor, la guía devuelta y la nueva fecha, y Romana registra el antes y el después como corrección administrativa.
+- La devolución mueve la cuenta (`signo_cuenta = 1`) e ingresa existencia como origen disponible para despachos. El total del cliente no cambia al asociar un arriendo: el saldo pasa de la línea sin CSG al productor. En el estado de cuenta y su resumen por CSG figura como «Devolución de envases · CSG … · devuelve guía …».
+- Si se indica la guía devuelta y existe su salida, la devolución no puede quedar antes de esa salida. Aplican los mismos bloqueos de **Corregir propiedad**: una sola corrección por recepción, y ninguna si alguno de sus ingresos ya figura en una guía o reserva.
+- Requiere la migración `2026_11_13_150000_asociar_devolucion_csg_a_recepciones_envases`.
 
 ## Auditoría
 

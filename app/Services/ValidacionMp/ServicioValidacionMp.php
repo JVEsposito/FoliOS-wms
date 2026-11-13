@@ -374,9 +374,12 @@ class ServicioValidacionMp
                 1,
                 $recepcion->propiedadEnvase($tipoEnvase),
             ],
-            TipoRecepcionRomana::SoloEnvases => $recepcion->concepto_envases === ConceptoEnvasesRomana::Arriendo
-                ? [TipoMovimientoEnvase::RecepcionArriendo, 1, PropiedadEnvase::Arrendada]
-                : [TipoMovimientoEnvase::RecepcionCompra, 0, PropiedadEnvase::Propia],
+            TipoRecepcionRomana::SoloEnvases => match ($recepcion->concepto_envases) {
+                ConceptoEnvasesRomana::Arriendo => [TipoMovimientoEnvase::RecepcionArriendo, 1, PropiedadEnvase::Arrendada],
+                // Lo que el productor devuelve abona su cuenta, sea propio, arrendado o del cliente.
+                ConceptoEnvasesRomana::Devolucion => [TipoMovimientoEnvase::DevolucionEnvases, 1, $recepcion->propiedadEnvase($tipoEnvase)],
+                default => [TipoMovimientoEnvase::RecepcionCompra, 0, PropiedadEnvase::Propia],
+            },
         };
         MovimientoEnvase::create([
             'operacion_id' => (string) Str::uuid(),
@@ -404,6 +407,7 @@ class ServicioValidacionMp
                 'diferencia' => $validada - $declarada,
                 'cantidad_vacia' => $vacia,
                 'validado_at' => $validadoAt->toAtomString(),
+                ...($recepcion->datosDevolucion() !== null ? ['devolucion' => $recepcion->datosDevolucion()] : []),
             ],
         ]);
     }
