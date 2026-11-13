@@ -2,6 +2,7 @@
 
 namespace App\Services\Romana;
 
+use App\Enums\ConceptoEnvasesRomana;
 use App\Enums\EstadoRecepcionRomana;
 use App\Enums\EstadoRevisionMovimientoEnvase;
 use App\Enums\EstadoValidacionMp;
@@ -20,6 +21,7 @@ use App\Models\Temporada;
 use App\Models\User;
 use App\Services\Documentos\ServicioFormatosRegistro;
 use App\Services\Envases\DocumentoSalidaEnvases;
+use App\Services\Envases\ServicioDevolucionEnvases;
 use App\Services\Envases\ServicioPrestamoInternoEnvases;
 use App\Services\MateriaPrima\ServicioLoteMateriaPrima;
 use App\Services\Notificaciones\ServicioNotificacionesOperacionales;
@@ -54,8 +56,10 @@ class ServicioRecepcionRomana
             $temporada = $this->temporadaActiva((string) $payload['temporada_id']);
             $cliente = $this->clienteActivo((string) $payload['cliente_id']);
             $this->asegurarGuiaUnica($temporada->id, $cliente->id, (string) $payload['numero_guia_despacho']);
+            $devolucion = $this->datosDevolucion($payload, $cliente);
             $ahora = CarbonImmutable::now();
             $ingresoAt = $this->resolverIngresoAt($payload, $ahora);
+            $this->asegurarCronologiaDevolucion($devolucion, $cliente, $temporada, $ingresoAt);
             $numero = $this->siguienteNumero($ahora);
             $envasePrincipal = $payload['envases'][0];
             $esPesajeEnvases = $payload['tipo_recepcion'] === TipoRecepcionRomana::FrutaPesajeEnvases->value;
@@ -73,6 +77,7 @@ class ServicioRecepcionRomana
                 'especie_validacion_id' => $payload['especie_validacion_id'],
                 'tipo_recepcion' => $payload['tipo_recepcion'],
                 'concepto_envases' => $payload['concepto_envases'],
+                ...$devolucion,
                 'tipo_servicio' => $payload['tipo_servicio'],
                 'cantidad_envases_declarados' => collect($payload['envases'])->sum('cantidad'),
                 'tipo_envase_declarado' => $envasePrincipal['tipo_envase'],
@@ -129,6 +134,7 @@ class ServicioRecepcionRomana
                     'envases' => $payload['envases'],
                     'tipo_envase_pesaje' => $payload['tipo_envase_pesaje'],
                     'tara_unitaria_envase' => $payload['tara_unitaria_envase'],
+                    ...($devolucion['devolucion_productor_csg_id'] !== null ? ['devolucion' => $recepcion->datosDevolucion()] : []),
                 ],
             );
             $this->notificaciones->notificarRecepcionRomanaCreada($recepcion);
@@ -179,9 +185,11 @@ class ServicioRecepcionRomana
                 (string) $payload['numero_guia_despacho'],
                 $recepcion->id,
             );
+            $devolucion = $this->datosDevolucion($payload, $cliente);
             $envasePrincipal = $payload['envases'][0];
             $ahora = CarbonImmutable::now();
             $ingresoAt = $this->resolverIngresoAt($payload, $ahora, $recepcion);
+            $this->asegurarCronologiaDevolucion($devolucion, $cliente, $temporada, $ingresoAt);
             $recepcion->update([
                 'temporada_id' => $temporada->id,
                 'temporada_codigo_snapshot' => $temporada->codigo,
@@ -192,6 +200,7 @@ class ServicioRecepcionRomana
                 'especie_validacion_id' => $payload['especie_validacion_id'],
                 'tipo_recepcion' => $payload['tipo_recepcion'],
                 'concepto_envases' => $payload['concepto_envases'],
+                ...$devolucion,
                 'tipo_servicio' => $payload['tipo_servicio'],
                 'cantidad_envases_declarados' => collect($payload['envases'])->sum('cantidad'),
                 'tipo_envase_declarado' => $envasePrincipal['tipo_envase'],
@@ -320,11 +329,13 @@ class ServicioRecepcionRomana
                 $recepcion->id,
             );
 
+            $devolucion = $this->datosDevolucion($payload, $cliente);
             $estado = $recepcion->estado;
             $anterior = $this->snapshotCorreccion($recepcion);
             $envasePrincipal = $payload['envases'][0];
             $ahora = CarbonImmutable::now();
             $ingresoAt = $this->resolverIngresoAt($payload, $ahora, $recepcion);
+            $this->asegurarCronologiaDevolucion($devolucion, $cliente, $temporada, $ingresoAt);
             $actualizacion = [
                 'temporada_id' => $temporada->id,
                 'temporada_codigo_snapshot' => $temporada->codigo,
@@ -335,6 +346,7 @@ class ServicioRecepcionRomana
                 'especie_validacion_id' => $payload['especie_validacion_id'],
                 'tipo_recepcion' => $payload['tipo_recepcion'],
                 'concepto_envases' => $payload['concepto_envases'],
+                ...$devolucion,
                 'tipo_servicio' => $payload['tipo_servicio'],
                 'cantidad_envases_declarados' => collect($payload['envases'])->sum('cantidad'),
                 'tipo_envase_declarado' => $envasePrincipal['tipo_envase'],
@@ -1343,12 +1355,14 @@ class ServicioRecepcionRomana
     {
         $guias = app(ServicioGuiasRecepcionRomana::class)->preparar($datos);
         $esPesajeEnvases = $datos['tipo_recepcion'] === TipoRecepcionRomana::FrutaPesajeEnvases->value;
+        $esDevolucion = $datos['tipo_recepcion'] === TipoRecepcionRomana::SoloEnvases->value
+            && ($datos['concepto_envases'] ?? null) === ConceptoEnvasesRomana::Devolucion->value;
         $envases = collect($datos['envases'])
             ->map(fn (array $envase): array => [
                 'tipo_envase' => $envase['tipo_envase'],
                 'cantidad' => (int) $envase['cantidad'],
                 // Omitirla conserva el contrato y hash de las solicitudes anteriores.
-                ...($datos['tipo_recepcion'] !== TipoRecepcionRomana::SoloEnvases->value && isset($envase['propiedad'])
+                ...(($datos['tipo_recepcion'] !== TipoRecepcionRomana::SoloEnvases->value || $esDevolucion) && isset($envase['propiedad'])
                     ? ['propiedad' => $envase['propiedad']] : []),
                 ...($esPesajeEnvases && isset($envase['tara_unitaria'])
                     ? ['tara_unitaria' => round((float) $envase['tara_unitaria'], 3)] : []),
@@ -1386,7 +1400,49 @@ class ServicioRecepcionRomana
             'tipo_envase_pesaje' => $tipoPesaje,
             'tara_unitaria_envase' => $esPesajeEnvases ? $taraPesaje : null,
             'observacion' => $datos['observacion'] ?? null,
+            // Solo en devoluciones, para conservar el hash de las solicitudes anteriores.
+            ...($esDevolucion ? [
+                'devolucion_productor_csg_id' => $datos['devolucion_productor_csg_id'] ?? null,
+                'devolucion_guia_salida' => $datos['devolucion_guia_salida'] ?? null,
+                ...(! empty($datos['hora_ingreso']) ? ['hora_ingreso' => $datos['hora_ingreso']] : []),
+            ] : []),
         ];
+    }
+
+    /**
+     * Columnas de devolución de la recepción: el productor debe estar asociado y activo para el cliente.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array{devolucion_productor_csg_id: ?string, devolucion_productor_snapshot: ?array, devolucion_guia_salida: ?string}
+     */
+    private function datosDevolucion(array $payload, Cliente $cliente): array
+    {
+        if (! array_key_exists('devolucion_productor_csg_id', $payload)) {
+            return ['devolucion_productor_csg_id' => null, 'devolucion_productor_snapshot' => null, 'devolucion_guia_salida' => null];
+        }
+        $productor = $cliente->productoresCsg()->wherePivot('activo', true)->find($payload['devolucion_productor_csg_id']);
+        if ($productor === null) {
+            throw ValidationException::withMessages([
+                'devolucion_productor_csg_id' => 'Selecciona un productor CSG asociado al cliente de la recepción.',
+            ]);
+        }
+
+        return [
+            'devolucion_productor_csg_id' => $productor->id,
+            'devolucion_productor_snapshot' => ['codigo' => $productor->codigo, 'nombre' => $productor->razon_social],
+            'devolucion_guia_salida' => $payload['devolucion_guia_salida'],
+        ];
+    }
+
+    /** @param  array{devolucion_productor_csg_id: ?string, devolucion_guia_salida: ?string}  $devolucion */
+    private function asegurarCronologiaDevolucion(array $devolucion, Cliente $cliente, Temporada $temporada, CarbonImmutable $ingresoAt): void
+    {
+        if ($devolucion['devolucion_productor_csg_id'] === null) {
+            return;
+        }
+        app(ServicioDevolucionEnvases::class)->asegurarPosteriorASalida(
+            $cliente, $temporada, $devolucion['devolucion_guia_salida'], $ingresoAt, 'hora_ingreso',
+        );
     }
 
     private function asegurarRecepcionEnPesajeEnvases(RecepcionRomana $recepcion): void
@@ -1707,6 +1763,7 @@ class ServicioRecepcionRomana
             'tipo_recepcion' => $recepcion->tipo_recepcion->value,
             'ingreso_at' => $recepcion->ingreso_at?->toAtomString(),
             'concepto_envases' => $recepcion->concepto_envases?->value,
+            'devolucion' => $recepcion->datosDevolucion(),
             'tipo_servicio' => $recepcion->tipo_servicio->value,
             'envases' => $recepcion->detallesEnvases
                 ->sortBy(fn ($detalle): string => $detalle->tipo_envase->value)
@@ -1766,6 +1823,15 @@ class ServicioRecepcionRomana
         }
 
         $zona = (string) config('app.operational_timezone');
+        if (! empty($payload['hora_ingreso'])) {
+            // Devolución con la hora real del reingreso: no puede quedar en el futuro.
+            $ingresoAt = CarbonImmutable::createFromFormat('Y-m-d H:i', $payload['fecha_ingreso'].' '.$payload['hora_ingreso'], $zona);
+            if ($ingresoAt->gt($ahora)) {
+                throw ValidationException::withMessages(['hora_ingreso' => 'La hora del reingreso no puede ser futura.']);
+            }
+
+            return $ingresoAt->utc();
+        }
         $horaBase = $recepcion?->ingreso_at !== null
             ? CarbonImmutable::instance($recepcion->ingreso_at)->setTimezone($zona)
             : $ahora->setTimezone($zona);
@@ -1867,7 +1933,7 @@ class ServicioRecepcionRomana
                 ['tipo_envase' => $envase['tipo_envase']],
                 [
                     'cantidad_declarada' => $envase['cantidad'],
-                    ...($recepcion->tipo_recepcion === TipoRecepcionRomana::SoloEnvases
+                    ...($recepcion->tipo_recepcion === TipoRecepcionRomana::SoloEnvases && ! $recepcion->esDevolucionEnvases()
                         ? ['propiedad' => $recepcion->propiedadEnvase($envase['tipo_envase'])]
                         : (isset($envase['propiedad']) ? ['propiedad' => $envase['propiedad']] : [])),
                     ...($recepcion->tipo_recepcion === TipoRecepcionRomana::FrutaPesajeEnvases

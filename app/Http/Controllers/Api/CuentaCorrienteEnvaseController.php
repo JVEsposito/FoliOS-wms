@@ -341,18 +341,39 @@ class CuentaCorrienteEnvaseController extends Controller
         ServicioCorreccionPropiedadEnvases $servicio,
     ): JsonResponse {
         Gate::authorize('corregir-propiedad-envases');
+        $esDevolucion = $request->input('concepto_envases') === ConceptoEnvasesRomana::Devolucion->value;
         $datos = $request->validate([
             'concepto_envases' => ['required', Rule::enum(ConceptoEnvasesRomana::class)],
             'motivo' => ['required', 'string', 'min:10', 'max:2000'],
+            // Devolución: productor CSG, guía de salida devuelta, propiedad por tipo y, si cambia, fecha y hora del reingreso.
+            'devolucion_productor_csg_id' => [Rule::requiredIf($esDevolucion), 'nullable', 'uuid'],
+            'devolucion_guia_salida' => ['nullable', 'string', 'max:80'],
+            'propiedades' => [Rule::requiredIf($esDevolucion), 'nullable', 'array'],
+            'propiedades.*' => [Rule::enum(PropiedadEnvase::class)],
+            'ingreso_at' => ['nullable', 'date_format:Y-m-d\\TH:i'],
+        ], [
+            'devolucion_productor_csg_id.required' => 'Selecciona el productor CSG que devolvió los envases.',
+            'propiedades.required' => 'Indica la propiedad de cada envase devuelto.',
+            'ingreso_at.date_format' => 'Indica la fecha y hora del reingreso.',
         ]);
         $servicio->corregir(
             $movimientoEnvase,
             ConceptoEnvasesRomana::from($datos['concepto_envases']),
             trim($datos['motivo']),
             $request->user(),
+            $esDevolucion ? [
+                'productor_csg_id' => $datos['devolucion_productor_csg_id'],
+                'guia_salida' => $datos['devolucion_guia_salida'] ?? null,
+                'propiedades' => $datos['propiedades'],
+                'ingreso_at' => ! empty($datos['ingreso_at'])
+                    ? CarbonImmutable::createFromFormat('Y-m-d\\TH:i', $datos['ingreso_at'], config('app.operational_timezone'))->utc()
+                    : null,
+            ] : [],
         );
 
-        return response()->json(['message' => 'Propiedad corregida. El ingreso original y sus asientos de ajuste siguen disponibles para auditoría.']);
+        return response()->json(['message' => $esDevolucion
+            ? 'Ingreso asociado a la devolución del productor. El ingreso original y sus asientos de ajuste siguen disponibles para auditoría.'
+            : 'Propiedad corregida. El ingreso original y sus asientos de ajuste siguen disponibles para auditoría.']);
     }
 
     public function corregirCantidad(
@@ -506,13 +527,16 @@ class CuentaCorrienteEnvaseController extends Controller
             'puede_corregir_cantidad' => $corregido === false && $cantidadCorregida === false && $conVinculos === false
                 && $movimiento->temporada?->activa
                 && $movimiento->recepcion?->tipo_recepcion === TipoRecepcionRomana::SoloEnvases
-                && in_array($movimiento->tipo_movimiento, [TipoMovimientoEnvase::RecepcionCompra, TipoMovimientoEnvase::RecepcionArriendo], true)
+                && in_array($movimiento->tipo_movimiento, TipoMovimientoEnvase::ingresosSoloEnvases(), true)
                 && empty($movimiento->datos['correccion_propiedad']),
+            // También asocia el ingreso a la devolución de un productor CSG, o cambia esa asociación.
             'puede_corregir_propiedad' => $corregido === false && $movimiento->recepcion?->estado !== EstadoRecepcionRomana::Anulada
                 && $movimiento->temporada?->activa
                 && $movimiento->recepcion_romana_id !== null
-                && in_array($movimiento->tipo_movimiento, [TipoMovimientoEnvase::RecepcionCompra, TipoMovimientoEnvase::RecepcionArriendo], true)
+                && in_array($movimiento->tipo_movimiento, TipoMovimientoEnvase::ingresosSoloEnvases(), true)
                 && empty($movimiento->datos['correccion_propiedad']),
+            'devolucion' => $movimiento->datos['devolucion'] ?? null,
+            'recepcion_romana_id' => $movimiento->recepcion_romana_id,
             'cuenta_corregida' => $movimiento->ajuste_cuenta_acumulado !== null,
             'correccion_cuenta' => $movimiento->datos['correccion_cuenta'] ?? $movimiento->datos['anulacion_recepcion'] ?? null,
             'impacto_cuenta_vigente' => $movimiento->cantidad * $movimiento->signo_cuenta + (int) $movimiento->ajuste_cuenta_acumulado,

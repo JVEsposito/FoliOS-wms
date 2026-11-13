@@ -145,6 +145,13 @@
                     <label class="field" id="receptionSpeciesField"><span>Especie de la fruta *</span><select name="especie_validacion_id" required></select></label>
                     <label class="field is-hidden" id="containerEntryDateField"><span>Fecha de ingreso *</span><input name="fecha_ingreso" type="date" max="{{ now(config('app.operational_timezone'))->toDateString() }}" disabled><small>Disponible solo para ingresos documentales de envases.</small></label>
                     <label class="field is-hidden" id="containerConceptField"><span>Concepto de envases *</span><select name="concepto_envases"></select></label>
+                    <fieldset class="field field--span-2 container-return is-hidden" id="containerReturnFields"><legend>Devolución de un productor</legend>
+                        <small>Los envases que el productor devuelve abonan su cuenta con la propiedad con que salieron. Busca la guía de salida para precargar el productor y la propiedad.</small>
+                        <div class="container-return__lookup"><label><span>Guía de salida que se devuelve</span><input name="devolucion_guia_salida" maxlength="80" autocomplete="off" placeholder="Ej.: 2324"></label><button class="secondary-button" type="button" id="containerReturnLookup">Buscar salida</button></div>
+                        <p class="container-return__exit" id="containerReturnExit" aria-live="polite"></p>
+                        <label><span>Productor CSG que devuelve *</span><select name="devolucion_productor_csg_id"><option value="">Seleccionar productor</option></select></label>
+                        <label><span>Hora real del reingreso</span><input name="hora_ingreso" type="time"><small>Si la fecha es anterior a hoy, indica la hora en que reingresó el camión.</small></label>
+                    </fieldset>
                     <label class="field" id="serviceField"><span>Servicio de fruta *</span><select name="tipo_servicio" required></select></label>
                     <label class="field"><span>Guía de despacho *</span><input name="numero_guia_despacho" maxlength="80" required></label>
                     <div class="field field--span-2" id="receptionGuidesControl"><button class="secondary-button" type="button" id="addReceptionGuide">+ Agregar otra guía</button><small>Un mismo camión y cliente pueden traer varias guías. Se mantiene un solo pesaje.</small></div>

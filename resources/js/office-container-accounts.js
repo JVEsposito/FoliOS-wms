@@ -34,6 +34,14 @@ const elements = {
     propertySummary: byId('propertySummary'),
     propertyError: byId('propertyError'),
     propertyCancel: byId('propertyCancel'),
+    returnDialog: byId('returnDialog'),
+    returnForm: byId('returnForm'),
+    returnSummary: byId('returnSummary'),
+    returnExits: byId('returnExits'),
+    returnProperties: byId('returnProperties'),
+    returnLookup: byId('returnLookup'),
+    returnError: byId('returnError'),
+    returnCancel: byId('returnCancel'),
     quantityDialog: byId('quantityDialog'),
     quantityForm: byId('quantityForm'),
     quantitySummary: byId('quantitySummary'),
@@ -63,6 +71,7 @@ const state = {
     movements: [],
     balances: [],
     adjustment: null,
+    returnExits: [],
     parameters: new URLSearchParams(),
 };
 const MOVEMENTS_LIMIT = 300;
@@ -300,6 +309,9 @@ function render(data) {
             const propertyButton = state.identity?.puede_corregir_propiedad_envases && movement.puede_corregir_propiedad
                 ? `<button class="property-button" data-correct-property="${escapeHtml(movement.id)}">Corregir propiedad</button>`
                 : '';
+            const returnButton = state.identity?.puede_corregir_propiedad_envases && movement.puede_corregir_propiedad
+                ? `<button class="property-button" data-associate-return="${escapeHtml(movement.id)}">${movement.devolucion ? 'Cambiar devolución CSG' : 'Asociar devolución CSG'}</button>`
+                : '';
             const quantityButton = state.identity?.puede_corregir_cantidad_envases && movement.puede_corregir_cantidad
                 ? `<button class="property-button" data-correct-quantity="${escapeHtml(movement.id)}">Corregir cantidad</button>`
                 : '';
@@ -307,6 +319,7 @@ function render(data) {
                 ? `<button data-correct-historical="${escapeHtml(movement.id)}">Corregir saldo anterior</button>` : '';
             const reverseButton = state.identity?.puede_ajustar_cuenta_envases && movement.puede_revertir_ajuste
                 ? `<button data-reverse-adjustment="${escapeHtml(movement.id)}">Revertir asiento</button>` : '';
+            const returnNote = movement.devolucion ? ` · ${escapeHtml(returnLabel(movement.devolucion))}` : '';
             const documentNote = movement.cuenta_corregida ? ` · saldo anterior vigente: ${signed(movement.impacto_cuenta_vigente)}` : movement.corregido ? ' · propiedad corregida' : movement.cantidad_corregida ? ' · cantidad corregida' : movement.correccion_propiedad ? ' · ajuste de propiedad' : movement.correccion_cantidad ? ' · ajuste de cantidad' : '';
             const correction = movement.correccion_propiedad || movement.correccion_cantidad || movement.ajuste_cuenta || movement.correccion_cuenta;
             const trace = correction
@@ -315,7 +328,7 @@ function render(data) {
             const account = movement.impacto_cuenta === 0
                 ? '<td class="impact-none" title="No mueve la cuenta de ningún cliente">—</td>'
                 : `<td class="${movement.impacto_cuenta < 0 ? 'impact-negative' : 'impact-positive'}">${signed(movement.impacto_cuenta)}</td>`;
-            return `<tr><td>${formatDate(movement.ocurrido_at)}</td><td><b>${escapeHtml(movement.cliente?.nombre)}</b><br><small>${escapeHtml(movement.movimiento)} · ${escapeHtml(movement.numero_documento)}${emittedNote}${documentNote}</small>${trace}</td><td>${escapeHtml(typeName(movement.tipo_envase))} · ${movement.cantidad}</td>${account}<td class="impact-stock">${signed(movement.impacto_existencia)}</td><td>${escapeHtml(label(movement.propiedad))}</td><td>${escapeHtml(label(movement.estado_revision))}</td><td><div class="table-actions">${guideButton}${emittedButton}${reviewButton}${propertyButton}${quantityButton}${historicalButton}${reverseButton}${!guideButton && !reviewButton && !propertyButton && !quantityButton && !historicalButton && !reverseButton ? '—' : ''}</div></td></tr>`;
+            return `<tr><td>${formatDate(movement.ocurrido_at)}</td><td><b>${escapeHtml(movement.cliente?.nombre)}</b><br><small>${escapeHtml(movement.movimiento)} · ${escapeHtml(movement.numero_documento)}${emittedNote}${returnNote}${documentNote}</small>${trace}</td><td>${escapeHtml(typeName(movement.tipo_envase))} · ${movement.cantidad}</td>${account}<td class="impact-stock">${signed(movement.impacto_existencia)}</td><td>${escapeHtml(label(movement.propiedad))}</td><td>${escapeHtml(label(movement.estado_revision))}</td><td><div class="table-actions">${guideButton}${emittedButton}${reviewButton}${propertyButton}${returnButton}${quantityButton}${historicalButton}${reverseButton}${!guideButton && !reviewButton && !propertyButton && !returnButton && !quantityButton && !historicalButton && !reverseButton ? '—' : ''}</div></td></tr>`;
         }).join('')
         : '<tr><td colspan="8">Aún no hay movimientos confirmados.</td></tr>';
 }
@@ -491,6 +504,7 @@ document.addEventListener('click', async (event) => {
     const reviewButton = event.target.closest('[data-review]');
     const propertyButton = event.target.closest('[data-correct-property]');
     const quantityButton = event.target.closest('[data-correct-quantity]');
+    const returnButton = event.target.closest('[data-associate-return]');
     const documentButton = event.target.closest('[data-guide-document]');
     const statementButton = event.target.closest('[data-statement]');
     const emittedButton = event.target.closest('[data-emitted-guide]');
@@ -536,6 +550,10 @@ document.addEventListener('click', async (event) => {
         elements.propertyError.textContent = '';
         elements.propertyDialog.showModal();
     }
+    if (returnButton) {
+        const movement = state.movements.find((item) => item.id === returnButton.dataset.associateReturn);
+        if (movement) await openReturn(movement);
+    }
     if (quantityButton) {
         const movement = state.movements.find((item) => item.id === quantityButton.dataset.correctQuantity);
         if (!movement) return;
@@ -566,6 +584,116 @@ elements.propertyForm.elements.concepto_envases.addEventListener('change', () =>
     if (movement) updatePropertySummary(movement);
 });
 elements.propertyCancel.addEventListener('click', () => elements.propertyDialog.close());
+const RETURN_INCOMES = ['recepcion_arriendo', 'recepcion_compra', 'devolucion_envases'];
+const PROPERTY_NAMES = { cliente: 'Del cliente', propia: 'Propios', arrendada: 'Arrendados' };
+function returnLabel(devolucion) {
+    const producer = devolucion?.productor;
+    if (!producer?.codigo) return 'Devolución sin productor';
+    return ['Devolución CSG ' + producer.codigo, producer.nombre, devolucion.guia_salida ? `devuelve guía ${devolucion.guia_salida}` : ''].filter(Boolean).join(' · ');
+}
+// Fecha y hora local de la planta para un campo datetime-local.
+function localDateTime(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    const pad = (number) => String(number).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+function returnIncomes(movement) {
+    // Todas las líneas vigentes de la recepción: la asociación aplica a la recepción completa.
+    const lines = state.movements.filter((item) => item.recepcion_romana_id && item.recepcion_romana_id === movement.recepcion_romana_id
+        && RETURN_INCOMES.includes(item.tipo_movimiento) && !item.corregido && !item.correccion_propiedad);
+    return lines.length ? lines : [movement];
+}
+async function openReturn(movement) {
+    const form = elements.returnForm.elements;
+    elements.returnForm.reset();
+    elements.returnError.textContent = '';
+    elements.returnExits.innerHTML = '';
+    form.movimiento_id.value = movement.id;
+    const lines = returnIncomes(movement);
+    elements.returnSummary.textContent = `${movement.numero_documento} · ${movement.cliente?.nombre || ''} · ${lines.map((line) => `${line.cantidad} ${typeName(line.tipo_envase)} (${PROPERTY_NAMES[line.propiedad] || label(line.propiedad)})`).join(' · ')} · ingreso ${formatDate(movement.ocurrido_at)}`;
+    elements.returnProperties.innerHTML = '<legend>Propiedad de cada envase devuelto</legend>' + lines.map((line) => `<label><span>${escapeHtml(typeName(line.tipo_envase))} · ${line.cantidad}</span><select name="propiedad_${escapeHtml(line.tipo_envase)}" data-return-type="${escapeHtml(line.tipo_envase)}" required>${Object.entries(PROPERTY_NAMES).map(([value, name]) => `<option value="${value}"${value === line.propiedad ? ' selected' : ''}>${name}</option>`).join('')}</select></label>`).join('');
+    form.devolucion_guia_salida.value = movement.devolucion?.guia_salida || movement.numero_documento || '';
+    form.ingreso_at.value = localDateTime(movement.ocurrido_at);
+    form.ingreso_at.max = localDateTime(new Date().toISOString());
+    form.devolucion_productor_csg_id.innerHTML = '<option value="">Cargando productores…</option>';
+    elements.returnDialog.showModal();
+    try {
+        const producers = (await api(`/api/envases/devoluciones/productores/${encodeURIComponent(movement.cliente.id)}`)).data;
+        form.devolucion_productor_csg_id.innerHTML = '<option value="">Seleccionar productor</option>' + producers
+            .map((producer) => `<option value="${escapeHtml(producer.id)}">CSG ${escapeHtml(producer.codigo)} · ${escapeHtml(producer.nombre)}</option>`).join('');
+        if (movement.devolucion?.productor?.id) form.devolucion_productor_csg_id.value = movement.devolucion.productor.id;
+        if (!producers.length) elements.returnError.textContent = 'El cliente no tiene productores CSG activos. Asócialos antes de registrar la devolución.';
+    } catch (error) {
+        form.devolucion_productor_csg_id.innerHTML = '<option value="">Seleccionar productor</option>';
+        elements.returnError.textContent = error.message;
+    }
+    if (form.devolucion_guia_salida.value) await lookupReturnExit();
+}
+// Lo que salió con la guía: productor y propiedad, para no interpretar a mano.
+async function lookupReturnExit() {
+    const form = elements.returnForm.elements;
+    const movement = state.movements.find((item) => item.id === form.movimiento_id.value);
+    const number = form.devolucion_guia_salida.value.trim();
+    elements.returnExits.innerHTML = '';
+    if (!movement || !number) return;
+    try {
+        const result = (await api(`/api/envases/devoluciones/salida?${new URLSearchParams({ cliente_id: movement.cliente.id, numero: number })}`)).data;
+        state.returnExits = result.salidas;
+        const exits = result.salidas.map((exit, index) => `<article class="return-dialog__exit"><div><b>${exit.origen === 'destare' ? 'Destare' : 'Despacho'} · ${escapeHtml(exit.documento)} · ${formatDate(exit.fecha?.replace(' ', 'T'))}</b><small>${exit.productor ? `CSG ${escapeHtml(exit.productor.codigo)} · ${escapeHtml(exit.productor.nombre)}` : 'Sin productor CSG'} · ${exit.envases.map((line) => `${line.cantidad} ${escapeHtml(typeName(line.tipo_envase))} (${PROPERTY_NAMES[line.propiedad] || label(line.propiedad)})`).join(' · ')}</small></div><button class="secondary-button" type="button" data-use-exit="${index}">Usar esta salida</button></article>`);
+        const others = result.devoluciones.filter((item) => item.id !== movement.recepcion_romana_id);
+        const notice = !result.salidas.length
+            ? `<p class="return-dialog__notice">No hay salidas registradas con la guía ${escapeHtml(result.numero)} para este cliente. Puedes asociar la devolución indicando el productor y la propiedad.</p>`
+            : others.length ? `<p class="return-dialog__notice">Esta guía ya tiene devoluciones registradas: ${others.map((item) => `${escapeHtml(item.numero_recepcion)} (${escapeHtml(item.fecha || '')})`).join(', ')}.</p>` : '';
+        elements.returnExits.innerHTML = exits.join('') + notice;
+        if (result.salidas.length === 1) useReturnExit(0);
+    } catch (error) {
+        elements.returnError.textContent = error.message;
+    }
+}
+function useReturnExit(index) {
+    const exit = state.returnExits?.[index];
+    if (!exit) return;
+    const form = elements.returnForm.elements;
+    if (exit.productor?.id && [...form.devolucion_productor_csg_id.options].some((option) => option.value === exit.productor.id)) {
+        form.devolucion_productor_csg_id.value = exit.productor.id;
+    }
+    elements.returnProperties.querySelectorAll('[data-return-type]').forEach((select) => {
+        const lines = exit.envases.filter((line) => line.tipo_envase === select.dataset.returnType);
+        // Solo se precarga si ese tipo salió con una única propiedad.
+        if (lines.length === 1) select.value = lines[0].propiedad;
+    });
+}
+elements.returnLookup.addEventListener('click', () => { elements.returnError.textContent = ''; void lookupReturnExit(); });
+elements.returnExits.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-use-exit]');
+    if (button) useReturnExit(Number(button.dataset.useExit));
+});
+elements.returnCancel.addEventListener('click', () => elements.returnDialog.close());
+elements.returnForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const form = elements.returnForm.elements;
+    const propiedades = Object.fromEntries([...elements.returnProperties.querySelectorAll('[data-return-type]')]
+        .map((select) => [select.dataset.returnType, select.value]));
+    try {
+        await api(`/api/envases/cuenta-corriente/movimientos/${form.movimiento_id.value}/corregir-propiedad`, {
+            method: 'POST',
+            body: JSON.stringify({
+                concepto_envases: 'devolucion',
+                devolucion_productor_csg_id: form.devolucion_productor_csg_id.value,
+                devolucion_guia_salida: form.devolucion_guia_salida.value.trim() || null,
+                propiedades,
+                ingreso_at: form.ingreso_at.value,
+                motivo: form.motivo.value,
+            }),
+        });
+        elements.returnDialog.close();
+        toast('Ingreso asociado a la devolución del productor. Los ajustes quedaron registrados.');
+        await load();
+    } catch (error) {
+        elements.returnError.textContent = error.message;
+    }
+});
 function updateQuantitySummary(movement) {
     const next = Number(elements.quantityForm.elements.cantidad_correcta.value);
     const difference = Number.isInteger(next) && next > 0 && next < movement.cantidad

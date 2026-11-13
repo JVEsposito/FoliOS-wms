@@ -48,7 +48,8 @@ use Illuminate\Validation\ValidationException;
  */
 class ServicioCorreccionIntegralRecepcion
 {
-    private const INGRESOS = [TipoMovimientoEnvase::RecepcionFruta, TipoMovimientoEnvase::RecepcionArriendo, TipoMovimientoEnvase::RecepcionCompra];
+    private const INGRESOS = [TipoMovimientoEnvase::RecepcionFruta, TipoMovimientoEnvase::RecepcionArriendo, TipoMovimientoEnvase::RecepcionCompra,
+        TipoMovimientoEnvase::DevolucionEnvases];
 
     /** Movimientos que la cuenta corriente pliega sobre el ingreso de origen. */
     private const CORRECCIONES = [TipoMovimientoEnvase::CorreccionCantidad, TipoMovimientoEnvase::CorreccionPropiedad,
@@ -68,7 +69,8 @@ class ServicioCorreccionIntegralRecepcion
             'tipo_recepcion' => $recepcion->tipo_recepcion->value, 'estado' => $recepcion->estado->value,
             'validada' => $validacion?->estado === EstadoValidacionMp::Validada,
             'cerrada' => $recepcion->estado === EstadoRecepcionRomana::Cerrado,
-            'propiedad_editable' => $recepcion->tipo_recepcion !== TipoRecepcionRomana::SoloEnvases,
+            // En una devolución cada tipo vuelve con su propiedad; en compra o arriendo la fija el concepto.
+            'propiedad_editable' => $recepcion->tipo_recepcion !== TipoRecepcionRomana::SoloEnvases || $recepcion->esDevolucionEnvases(),
             'cantidades_editables' => $recepcion->tipo_recepcion !== TipoRecepcionRomana::FrutaPesajeEnvases,
             'tipos_envase' => TipoEnvaseRomana::catalogo(),
             'guias' => $recepcion->guiasRecepcion->sortBy('secuencia')->values()->map(fn (GuiaRecepcionRomana $g): array => [
@@ -335,7 +337,7 @@ class ServicioCorreccionIntegralRecepcion
     {
         $propiedades = [];
         foreach (array_keys($validados) as $tipo) {
-            if ($recepcion->tipo_recepcion === TipoRecepcionRomana::SoloEnvases) {
+            if ($recepcion->tipo_recepcion === TipoRecepcionRomana::SoloEnvases && ! $recepcion->esDevolucionEnvases()) {
                 $propiedades[$tipo] = $recepcion->propiedadEnvase($tipo);
 
                 continue;
@@ -357,7 +359,8 @@ class ServicioCorreccionIntegralRecepcion
             $recepcion->detallesEnvases()->updateOrCreate(['tipo_envase' => $tipo], [
                 'cantidad_declarada' => $declarados[$tipo] ?? 0, 'cantidad_validada' => $validados[$tipo] ?? 0,
                 'cantidad_vacia' => $vacios[$tipo] ?? 0,
-                ...($recepcion->tipo_recepcion !== TipoRecepcionRomana::SoloEnvases && isset($propiedades[$tipo]) ? ['propiedad' => $propiedades[$tipo]] : []),
+                ...(($recepcion->tipo_recepcion !== TipoRecepcionRomana::SoloEnvases || $recepcion->esDevolucionEnvases()) && isset($propiedades[$tipo])
+                    ? ['propiedad' => $propiedades[$tipo]] : []),
                 ...(isset($taras[$tipo]) ? ['tara_unitaria_salida' => $taras[$tipo]] : []),
             ]);
         }
@@ -449,8 +452,9 @@ class ServicioCorreccionIntegralRecepcion
 
     private function nuevoIngreso(RecepcionRomana $recepcion, string $tipo, int $cantidad, ?PropiedadEnvase $propiedad, User $usuario, array $contexto): void
     {
-        [$movimiento, $signoCuenta] = match ($recepcion->tipo_recepcion) {
-            TipoRecepcionRomana::SoloEnvases => $propiedad === PropiedadEnvase::Arrendada
+        [$movimiento, $signoCuenta] = match (true) {
+            $recepcion->esDevolucionEnvases() => [TipoMovimientoEnvase::DevolucionEnvases, 1],
+            $recepcion->tipo_recepcion === TipoRecepcionRomana::SoloEnvases => $propiedad === PropiedadEnvase::Arrendada
                 ? [TipoMovimientoEnvase::RecepcionArriendo, 1] : [TipoMovimientoEnvase::RecepcionCompra, 0],
             default => [TipoMovimientoEnvase::RecepcionFruta, 1],
         };
@@ -465,7 +469,8 @@ class ServicioCorreccionIntegralRecepcion
             'estado_revision' => EstadoRevisionMovimientoEnvase::Pendiente, 'creado_por_user_id' => $usuario->id,
             'datos' => ['numero_recepcion' => $recepcion->numero_recepcion, 'cantidad_validada' => $cantidad,
                 'guias' => app(ServicioGuiasRecepcionRomana::class)->datos($recepcion->load('guiasRecepcion')),
-                'correccion_integral' => $contexto],
+                'correccion_integral' => $contexto,
+                ...($recepcion->datosDevolucion() !== null ? ['devolucion' => $recepcion->datosDevolucion()] : [])],
         ]);
     }
 

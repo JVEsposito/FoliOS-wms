@@ -86,7 +86,7 @@ class ServicioAnulacionRecepcionRomana
             $dependientes = $this->movimientosDependientes($recepcion, $ids, $eliminar);
             if (! $eliminar) {
                 $dependientes = $dependientes->concat($movimientos->filter(fn ($m) => $m->movimiento_origen_id !== null
-                    || ! in_array($m->tipo_movimiento, [TipoMovimientoEnvase::RecepcionArriendo, TipoMovimientoEnvase::RecepcionCompra], true)))->unique('id');
+                    || ! in_array($m->tipo_movimiento, TipoMovimientoEnvase::ingresosSoloEnvases(), true)))->unique('id');
             }
             if ($guias->isNotEmpty() || $dependientes->isNotEmpty()) {
                 throw new ConflictoOperacion(app(ServicioDiagnosticoEnvasesRecepcion::class)

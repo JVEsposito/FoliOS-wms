@@ -122,6 +122,31 @@
                 <div class="dialog-actions"><button class="secondary-button" type="button" id="propertyCancel">Cancelar</button><button class="primary-button" type="submit">Confirmar corrección</button></div>
             </form>
         </dialog>
+        <dialog class="review-dialog property-dialog return-dialog" id="returnDialog" aria-labelledby="returnDialogTitle" aria-describedby="returnHelp">
+            <form id="returnForm" method="dialog">
+                <input name="movimiento_id" type="hidden">
+                <header class="review-dialog__header">
+                    <p class="eyebrow">CORRECCIÓN ADMINISTRATIVA</p>
+                    <h2 id="returnDialogTitle">Asociar a devolución de un productor</h2>
+                </header>
+                <div class="property-dialog__context">
+                    <span>INGRESO DE SOLO ENVASES</span>
+                    <strong id="returnSummary"></strong>
+                </div>
+                <p class="property-dialog__help" id="returnHelp">Los envases que volvieron abonan la cuenta del productor CSG, con la propiedad con que salieron. El ingreso original y los ajustes quedan visibles en el historial.</p>
+                <div class="return-dialog__lookup">
+                    <label><span>Guía de salida que se devuelve</span><input name="devolucion_guia_salida" maxlength="80" autocomplete="off" placeholder="Ej.: 2324"></label>
+                    <button class="secondary-button" type="button" id="returnLookup">Buscar salida</button>
+                </div>
+                <div class="return-dialog__exits" id="returnExits" aria-live="polite"></div>
+                <label><span>Productor CSG que devuelve</span><select name="devolucion_productor_csg_id" required><option value="">Seleccionar productor</option></select></label>
+                <fieldset class="return-dialog__properties" id="returnProperties"><legend>Propiedad de cada envase devuelto</legend></fieldset>
+                <label><span>Fecha y hora real del reingreso</span><input name="ingreso_at" type="datetime-local" required></label>
+                <label><span>Motivo</span><textarea name="motivo" minlength="10" maxlength="2000" required placeholder="Ej.: El camión reingresó con los envases despachados por la guía 2324"></textarea></label>
+                <p class="form-error" id="returnError" role="alert"></p>
+                <div class="dialog-actions"><button class="secondary-button" type="button" id="returnCancel">Cancelar</button><button class="primary-button" type="submit">Asociar devolución</button></div>
+            </form>
+        </dialog>
         <dialog class="review-dialog property-dialog" id="quantityDialog" aria-labelledby="quantityDialogTitle" aria-describedby="quantityHelp">
             <form id="quantityForm" method="dialog">
                 <input name="movimiento_id" type="hidden">

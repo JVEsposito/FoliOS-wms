@@ -88,10 +88,10 @@ class RecepcionRomanaController extends Controller
                 ],
                 ['codigo' => TipoRecepcionRomana::SoloEnvases->value, 'nombre' => 'Solo envases'],
             ],
-            'conceptos_envases' => [
-                ['codigo' => ConceptoEnvasesRomana::Compra->value, 'nombre' => 'Compra de envases propios'],
-                ['codigo' => ConceptoEnvasesRomana::Arriendo->value, 'nombre' => 'Arriendo de envases'],
-            ],
+            'conceptos_envases' => array_map(
+                fn (ConceptoEnvasesRomana $concepto): array => ['codigo' => $concepto->value, 'nombre' => $concepto->etiqueta()],
+                ConceptoEnvasesRomana::cases(),
+            ),
             'tipos_envase' => TipoEnvaseRomana::catalogo(),
         ]);
     }
@@ -410,6 +410,8 @@ class RecepcionRomanaController extends Controller
             'tipo_recepcion' => $recepcion->tipo_recepcion->value,
             'especie_validacion_id' => $recepcion->especie_validacion_id,
             'concepto_envases' => $recepcion->concepto_envases?->value,
+            // Devolución de un productor: CSG al que se abonan los envases y guía de salida devuelta.
+            'devolucion' => $recepcion->datosDevolucion(),
             'cantidad_envases_declarados' => $recepcion->cantidad_envases_declarados,
             'tipo_envase_declarado' => $recepcion->tipo_envase_declarado->value,
             'envases' => $recepcion->detallesEnvases->map(fn ($detalle): array => [

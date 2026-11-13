@@ -39,6 +39,7 @@ class ServicioCuentaCorrienteEnvases
         'reversion_salida_fruta' => 'Reversa de devolución en recepción',
         'recepcion_arriendo' => 'Ingreso en arriendo',
         'recepcion_compra' => 'Compra de envases propios',
+        'devolucion_envases' => 'Devolución de envases',
         'despacho_cliente' => 'Despacho',
         'reversion_despacho' => 'Anulación de despacho',
         'conciliacion_salida' => 'Conciliación de salida duplicada',
@@ -78,6 +79,21 @@ class ServicioCuentaCorrienteEnvases
     public static function etiquetaMovimiento(TipoMovimientoEnvase $tipo): string
     {
         return self::ETIQUETAS_MOVIMIENTO[$tipo->value] ?? ucfirst(str_replace('_', ' ', $tipo->value));
+    }
+
+    /** «CSG 90624 · Productor · devuelve guía 2324», o sin productor si la devolución no lo trae. */
+    public static function etiquetaDevolucion(?array $devolucion): string
+    {
+        $productor = $devolucion['productor'] ?? null;
+        if (! $productor || empty($productor['codigo'])) {
+            return 'Sin productor declarado';
+        }
+
+        return implode(' · ', array_filter([
+            'CSG '.$productor['codigo'],
+            $productor['nombre'] ?? null,
+            ! empty($devolucion['guia_salida']) ? 'devuelve guía '.$devolucion['guia_salida'] : null,
+        ]));
     }
 
     public static function etiquetaPropiedad(PropiedadEnvase $propiedad): string
@@ -251,13 +267,20 @@ class ServicioCuentaCorrienteEnvases
             $guia = $movimiento->documento_tipo === self::DOCUMENTO_GUIA
                 ? $guiasEmitidas->get($movimiento->documento_id) : null;
             $destinatario = $guia?->productorDestino();
+            // La devolución de un productor conserva el CSG declarado en Romana o al asociarla.
+            $devolucion = $movimiento->tipo_movimiento === TipoMovimientoEnvase::DevolucionEnvases
+                ? ($movimiento->datos['devolucion'] ?? null) : null;
             $movimientoCsg = [
                 'recepcion_id' => $movimiento->recepcion_romana_id,
                 'movimiento' => $movimiento->tipo_movimiento->value,
                 'tipo_envase' => $tipo, 'nombre_envase' => $movimiento->tipo_envase->etiqueta(),
                 'orden' => $movimiento->tipo_envase->orden(),
                 'entradas' => $esSalida ? 0 : $impacto, 'salidas' => $esSalida ? -$impacto : 0,
-                'csg' => $movimiento->tipo_movimiento === TipoMovimientoEnvase::DespachoCliente ? $destinatario : null,
+                'csg' => match ($movimiento->tipo_movimiento) {
+                    TipoMovimientoEnvase::DespachoCliente => $destinatario,
+                    TipoMovimientoEnvase::DevolucionEnvases => $devolucion['productor'] ?? null,
+                    default => null,
+                },
             ];
             if ($inicio !== null && $movimiento->ocurrido_at->lt($inicio)) {
                 $tipos[$tipo]['saldo_inicial'] += $impacto;
@@ -282,6 +305,7 @@ class ServicioCuentaCorrienteEnvases
                     TipoMovimientoEnvase::DespachoCliente => $destinatario
                         ? 'CSG '.$destinatario['codigo'].' · '.$destinatario['nombre'] : 'Sin productor asignado',
                     TipoMovimientoEnvase::RecepcionFruta => $recepcionesCsg[$movimiento->recepcion_romana_id]['productor'] ?? 'Sin productor declarado',
+                    TipoMovimientoEnvase::DevolucionEnvases => self::etiquetaDevolucion($devolucion),
                     default => null,
                 },
             ]];
@@ -402,6 +426,8 @@ class ServicioCuentaCorrienteEnvases
             $asignaciones = match ($movimiento->tipo_movimiento) {
                 TipoMovimientoEnvase::DespachoCliente => [['csg' => $guia?->productorDestino(), 'compartido' => null, 'tipos' => $porTipo]],
                 TipoMovimientoEnvase::SalidaRecepcionFruta => [['csg' => count($opciones) === 1 ? $opciones[0] : null, 'compartido' => null, 'tipos' => $porTipo]],
+                // La devolución de un productor conserva el CSG declarado en Romana o al asociarla.
+                TipoMovimientoEnvase::DevolucionEnvases => [['csg' => $movimiento->datos['devolucion']['productor'] ?? null, 'compartido' => null, 'tipos' => $porTipo]],
                 TipoMovimientoEnvase::RecepcionFruta => $this->asignarIngreso($porTipo, $opciones,
                     $parte['clave'] !== '' ? ($repartoGuias[$parte['clave']] ?? []) : ($recepcionesCsg[$movimiento->recepcion_romana_id]['envases'] ?? [])),
                 default => [['csg' => null, 'compartido' => null, 'tipos' => $porTipo]],
@@ -507,6 +533,16 @@ class ServicioCuentaCorrienteEnvases
                     'Destare de '.($recepcion?->numero_recepcion ?? 'la recepción').($recepcion?->numero_guia_despacho ? ' (guía de ingreso '.$recepcion->numero_guia_despacho.')' : ''),
                     $vehiculo($recepcion?->patente_camion, $recepcion?->patente_carro),
                     count($opciones) > 1 ? 'Recepción con '.count($opciones).' CSG: la entrega no se reparte por productor' : null,
+                ]),
+            ],
+            TipoMovimientoEnvase::DevolucionEnvases => [
+                'titulo' => 'Guía de ingreso N° '.($numero ?: 'sin número'),
+                'chofer' => $chofer($recepcion?->nombre_conductor, $recepcion?->rut_conductor),
+                'movimiento' => 'Devolución de envases',
+                'referencia' => $unir([
+                    $recepcion ? 'Recepción '.$recepcion->numero_recepcion : null,
+                    ! empty($movimiento->datos['devolucion']['guia_salida']) ? 'devuelve la guía '.$movimiento->datos['devolucion']['guia_salida'] : null,
+                    $vehiculo($recepcion?->patente_camion, $recepcion?->patente_carro),
                 ]),
             ],
             TipoMovimientoEnvase::DespachoCliente => [

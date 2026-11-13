@@ -38,7 +38,9 @@ class GeneradorAvisoReciboPdf
                 TipoRecepcionRomana::SoloEnvases => 'Solo envases',
                 default => 'Fruta con envases',
             },
-            ucfirst($recepcion->concepto_envases?->value ?? $recepcion->tipo_servicio?->value ?? ''),
+            $recepcion->datosDevolucion() !== null
+                ? 'Devolución CSG '.($recepcion->datosDevolucion()['productor']['codigo'] ?? '')
+                : ucfirst($recepcion->concepto_envases?->value ?? $recepcion->tipo_servicio?->value ?? ''),
             $recepcion->guiasRecepcion->count() > 1
                 ? $recepcion->guiasRecepcion->map(fn ($guia) => $guia->numero_guia_despacho.': '.collect($guia->envases)->map(fn ($e) => $e['cantidad'].' '.TipoEnvaseRomana::from($e['tipo_envase'])->etiqueta())->implode(' · '))->implode(' / ')
                 : $recepcion->numero_guia_despacho,

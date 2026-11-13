@@ -75,6 +75,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'formato_registro_version',
     'formato_registro_fecha_vigencia',
     'formato_registro_localidad',
+    'devolucion_productor_csg_id',
+    'devolucion_productor_snapshot',
+    'devolucion_guia_salida',
 ])]
 class RecepcionRomana extends Model implements PerteneceATemporada
 {
@@ -109,13 +112,42 @@ class RecepcionRomana extends Model implements PerteneceATemporada
 
     public function propiedadEnvase(string $tipo): PropiedadEnvase
     {
-        if ($this->tipo_recepcion === TipoRecepcionRomana::SoloEnvases) {
+        if ($this->tipo_recepcion === TipoRecepcionRomana::SoloEnvases && ! $this->esDevolucionEnvases()) {
             return $this->concepto_envases === ConceptoEnvasesRomana::Arriendo
                 ? PropiedadEnvase::Arrendada : PropiedadEnvase::Propia;
         }
 
         return $this->detallesEnvases->first(fn ($detalle) => $detalle->tipo_envase->value === $tipo)?->propiedad
             ?? PropiedadEnvase::Cliente;
+    }
+
+    /** Solo envases que vuelven de un productor: cada tipo conserva la propiedad con que salió. */
+    public function esDevolucionEnvases(): bool
+    {
+        return $this->tipo_recepcion === TipoRecepcionRomana::SoloEnvases
+            && $this->concepto_envases === ConceptoEnvasesRomana::Devolucion;
+    }
+
+    public function devolucionProductor(): BelongsTo
+    {
+        return $this->belongsTo(ProductorCsg::class, 'devolucion_productor_csg_id');
+    }
+
+    /**
+     * Productor y guía devuelta que acompañan a cada ingreso de la devolución en la cuenta corriente.
+     *
+     * @return array{productor: array{id: string, codigo: string, nombre: string}, guia_salida: ?string}|null
+     */
+    public function datosDevolucion(): ?array
+    {
+        if (! $this->esDevolucionEnvases() || $this->devolucion_productor_csg_id === null) {
+            return null;
+        }
+
+        return [
+            'productor' => ['id' => $this->devolucion_productor_csg_id] + ($this->devolucion_productor_snapshot ?? []),
+            'guia_salida' => $this->devolucion_guia_salida,
+        ];
     }
 
     /**
@@ -240,6 +272,7 @@ class RecepcionRomana extends Model implements PerteneceATemporada
             'cantidad_envase_calculo_neto' => 'integer',
             'peso_neto_por_envase' => 'decimal:3',
             'reparto_neto_envases' => 'array',
+            'devolucion_productor_snapshot' => 'array',
             'ingreso_at' => 'datetime',
             'ingreso_confirmado_at' => 'datetime',
             'salida_at' => 'datetime',
