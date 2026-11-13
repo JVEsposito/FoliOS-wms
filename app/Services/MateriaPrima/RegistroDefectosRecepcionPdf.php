@@ -17,7 +17,7 @@ class RegistroDefectosRecepcionPdf
             $contenido = $this->texto(40, 790, 17, 'DEFECTOS DE RECEPCIÓN', true);
             $contenido .= $this->texto(40, 765, 10, "Temporada: {$temporada} · Registro ".($indice + 1).' de '.$defectos->count());
             $campos = [
-                'Fecha' => $defecto->registrado_at?->format('d-m-Y H:i') ?? '—',
+                'Fecha' => $defecto->registrado_at?->setTimezone((string) config('app.operational_timezone'))->format('d-m-Y H:i') ?? '—',
                 'Recepción' => $defecto->numero_recepcion_snapshot ?: '—',
                 'Guía de despacho' => $defecto->numero_guia_snapshot ?: '—',
                 'Cliente' => $defecto->cliente_nombre_snapshot ?: '—',

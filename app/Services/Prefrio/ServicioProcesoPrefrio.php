@@ -807,7 +807,7 @@ class ServicioProcesoPrefrio
         if ($ultimoEvento?->ocurrido_at?->greaterThan($momento)) {
             throw new ConflictoOperacion(sprintf(
                 'La fecha y hora debe ser igual o posterior al último evento (%s).',
-                $ultimoEvento->ocurrido_at->format('d-m-Y H:i'),
+                $ultimoEvento->ocurrido_at->setTimezone((string) config('app.operational_timezone'))->format('d-m-Y H:i'),
             ));
         }
 

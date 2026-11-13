@@ -14,7 +14,7 @@ class GeneradorAvisoReciboPdf
 {
     private const CAMPOS = [
         'N° recepción', 'Ingreso', 'Salida / destare', 'Cliente', 'Código cliente',
-        'Tipo recepción', 'Servicio / concepto', 'Guía de despacho', 'Envases declarados',
+        'Tipo recepción', 'Servicio / concepto', 'Guía de despacho', 'Envases recibidos',
         'Patente camión', 'Patente carro', 'Conductor', 'RUT conductor',
         'Peso bruto', 'Tara camión / envases', 'PESO NETO',
     ];
@@ -25,15 +25,12 @@ class GeneradorAvisoReciboPdf
     {
         $recepcion->loadMissing('detallesEnvases', 'cerradoPor', 'guiasRecepcion');
         $cerrada = $recepcion->estado === EstadoRecepcionRomana::Cerrado;
-        // La salida de envases pertenece a otro documento: RPR-01 declara el ingreso.
-        $envases = $recepcion->detallesEnvases
-            ->sortBy(fn ($detalle): int => $detalle->tipo_envase->orden())
-            ->map(fn ($detalle): string => $detalle->cantidad_declarada.' '.$detalle->tipo_envase->etiqueta())
-            ->implode(' · ');
+        $zona = (string) config('app.operational_timezone');
         $valores = [
             $recepcion->numero_recepcion.($recepcion->estado === EstadoRecepcionRomana::Anulada ? ' · ANULADA' : ''),
-            $recepcion->ingreso_at?->format('d-m-Y H:i'),
-            $cerrada ? $recepcion->salida_at?->format('d-m-Y H:i') : null,
+            // Hora de planta: la base guarda UTC (REC-2611-0022 salía 17:26 en vez de 14:26).
+            $recepcion->ingreso_at?->setTimezone($zona)->format('d-m-Y H:i'),
+            $cerrada ? $recepcion->salida_at?->setTimezone($zona)->format('d-m-Y H:i') : null,
             $recepcion->cliente_nombre_snapshot,
             $recepcion->cliente_codigo_snapshot,
             match ($recepcion->tipo_recepcion) {
@@ -45,14 +42,13 @@ class GeneradorAvisoReciboPdf
             $recepcion->guiasRecepcion->count() > 1
                 ? $recepcion->guiasRecepcion->map(fn ($guia) => $guia->numero_guia_despacho.': '.collect($guia->envases)->map(fn ($e) => $e['cantidad'].' '.TipoEnvaseRomana::from($e['tipo_envase'])->etiqueta())->implode(' · '))->implode(' / ')
                 : $recepcion->numero_guia_despacho,
-            $envases,
+            $this->envasesRecibidos($recepcion),
             $recepcion->patente_camion,
             $recepcion->patente_carro,
             $recepcion->nombre_conductor,
             $recepcion->rut_conductor,
             $this->peso($recepcion->peso_bruto),
-            $cerrada && $recepcion->peso_tara !== null
-                ? $this->peso((float) $recepcion->peso_tara + (float) ($recepcion->peso_tara_envases ?? 0)) : '',
+            $cerrada && $recepcion->peso_tara !== null ? $this->tara($recepcion) : '',
             $cerrada ? $this->peso($recepcion->peso_neto) : '',
         ];
 
@@ -65,6 +61,42 @@ class GeneradorAvisoReciboPdf
             ])->filter(fn ($texto): bool => filled($texto))->implode("\n") ?: null],
             [$cerrada ? $recepcion->cerradoPor?->name : null, $recepcion->nombre_conductor, null],
         );
+    }
+
+    /**
+     * Lo recibido es lo que contó Validación MP: con eso se mueve la cuenta corriente y se
+     * calcula la tara. Si la guía declaraba otra cosa, queda al lado para que el chofer lo vea.
+     * La salida de envases pertenece a otro documento: RPR-01 declara el ingreso.
+     */
+    private function envasesRecibidos(RecepcionRomana $recepcion): string
+    {
+        $detalles = $recepcion->detallesEnvases->sortBy(fn ($detalle): int => $detalle->tipo_envase->orden())->values();
+        $lista = fn (string $campo): string => $detalles
+            ->map(fn ($detalle): string => $detalle->{$campo}.' '.$detalle->tipo_envase->etiqueta())->implode(' · ');
+        if ($detalles->isEmpty()) {
+            return '';
+        }
+        if ($detalles->contains(fn ($detalle): bool => $detalle->cantidad_validada === null)) {
+            return $lista('cantidad_declarada').' (según guía; falta Validación MP)';
+        }
+
+        return $detalles->contains(fn ($detalle): bool => $detalle->cantidad_validada !== $detalle->cantidad_declarada)
+            ? $lista('cantidad_validada').' (guía: '.$lista('cantidad_declarada').')'
+            : $lista('cantidad_validada');
+    }
+
+    /** Tara efectiva con su desglose cuando los envases pesan: bruto - tara = neto. */
+    private function tara(RecepcionRomana $recepcion): string
+    {
+        $camion = (float) $recepcion->peso_tara;
+        $envases = (float) ($recepcion->peso_tara_envases ?? 0);
+        $total = $this->peso($camion + $envases);
+        if (abs($envases) < 0.0005) {
+            return $total;
+        }
+
+        return sprintf('%s (camión %s %s envases %s)', $total, number_format($camion, 3, ',', '.'),
+            $envases > 0 ? '+' : '-', number_format(abs($envases), 3, ',', '.'));
     }
 
     public function generarEnBlanco(): string

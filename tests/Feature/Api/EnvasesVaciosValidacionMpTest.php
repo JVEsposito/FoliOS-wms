@@ -14,7 +14,9 @@ use App\Models\SegmentoValidacionMp;
 use App\Models\Temporada;
 use App\Models\User;
 use App\Models\VariedadValidacion;
+use App\Services\Envases\ServicioCuentaCorrienteEnvases;
 use App\Services\MateriaPrima\ServicioLoteMateriaPrima;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
@@ -104,6 +106,63 @@ class EnvasesVaciosValidacionMpTest extends TestCase
         // El lote recibe todo el neto con los 840 totes con fruta.
         $segmento = SegmentoValidacionMp::query()->whereHas('validacion', fn ($q) => $q->where('recepcion_romana_id', $recepcion['id']))->sole();
         $this->assertEqualsWithDelta(7350, app(ServicioLoteMateriaPrima::class)->netoEstimado($segmento, RecepcionRomana::query()->findOrFail($recepcion['id'])), 0.0005);
+    }
+
+    /**
+     * REC-2611-0022 (08-11-2026): las guías 1524-1525 declaran 23 bins y 547 totes; Validación MP
+     * cuenta 25 bins y 596 totes. El camión entra a las 14:26 y sale vacío a las 15:19, hora de planta.
+     */
+    public function test_rec_2611_0022_cuenta_corriente_destare_y_rpr01_usan_lo_validado(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-11-08 17:26:00', 'UTC'));
+        $recepcion = $this->actingAs($this->operador, 'sanctum')->postJson('/api/romana/recepciones', [
+            ...$this->datosRecepcion(), 'numero_guia_despacho' => '1524-1525', 'peso_bruto' => 22680,
+            'envases' => [['tipo_envase' => 'bins', 'cantidad' => 23], ['tipo_envase' => 'totes', 'cantidad' => 547]],
+        ])->assertCreated()->json('data');
+        $this->postJson("/api/romana/recepciones/{$recepcion['id']}/confirmar-ingreso", ['operacion_id' => (string) Str::uuid()])->assertOk();
+        $validacion = $this->actingAs($this->validador, 'sanctum')
+            ->postJson("/api/validacion-mp/recepciones/{$recepcion['id']}/tomar", ['operacion_id' => (string) Str::uuid()])->assertOk()->json('data');
+        [$csg, $variedad] = $this->origen();
+        $this->confirmar($validacion, [
+            'envases' => [['tipo_envase' => 'bins', 'cantidad_validada' => 25], ['tipo_envase' => 'totes', 'cantidad_validada' => 596]],
+            'requiere_segregacion' => false, 'csg_validacion_id' => $csg->id, 'variedad_validacion_id' => $variedad->id,
+        ])->assertOk();
+
+        // Cuenta corriente: entra lo contado, 25 bins y 596 totes, a la hora de ingreso.
+        $movimientos = MovimientoEnvase::query()->where('recepcion_romana_id', $recepcion['id'])->get()->keyBy(fn ($m) => $m->tipo_envase->value);
+        $this->assertSame([25, 596], [(int) $movimientos['bins']->cantidad, (int) $movimientos['totes']->cantidad]);
+        $this->assertSame([2, 49], [$movimientos['bins']->datos['diferencia'], $movimientos['totes']->datos['diferencia']]);
+        $this->assertTrue($movimientos->every(fn ($m) => $m->signo_cuenta === 1 && $m->ocurrido_at->equalTo(CarbonImmutable::parse('2026-11-08 17:26:00', 'UTC'))));
+
+        // Destare: el camión sale vacío; la tara descuenta los 25 bins y los 596 totes contados.
+        $this->travelTo(CarbonImmutable::parse('2026-11-08 18:19:00', 'UTC'));
+        $ruta = "/api/romana/recepciones/{$recepcion['id']}/cerrar";
+        $this->actingAs($this->operador, 'sanctum')->postJson($ruta, $this->payloadConInspeccionRc02($ruta, [
+            'operacion_id' => (string) Str::uuid(), 'modo_salida_envases' => 'vacio', 'numero_guia_salida' => null, 'salida_envases' => [],
+            'peso_tara' => 15500, 'tipo_envase_calculo_neto' => 'totes',
+            'taras_envases' => [['tipo_envase' => 'bins', 'tara_unitaria' => 43], ['tipo_envase' => 'totes', 'tara_unitaria' => 0.89]],
+        ]))->assertOk()
+            ->assertJsonPath('data.peso_tara_envases', 1605.44)
+            ->assertJsonPath('data.peso_neto', 5574.56)
+            ->assertJsonPath('data.cantidad_envase_calculo_neto', 596)
+            ->assertJsonPath('data.peso_neto_por_envase', 9.353);
+        $this->assertSame(2, MovimientoEnvase::query()->where('recepcion_romana_id', $recepcion['id'])->count(), 'sale vacío: no hay salida de envases');
+
+        // Estado de cuenta del cliente: la recepción suma lo validado.
+        $estado = app(ServicioCuentaCorrienteEnvases::class)->estadoCuenta(Cliente::query()->findOrFail($recepcion['cliente']['id'] ?? $recepcion['cliente_id']), $this->temporada, null, null);
+        $entradas = collect($estado['movimientos'])->mapWithKeys(fn (array $linea) => [$linea['tipo_envase'] => $linea['entrada']]);
+        $this->assertSame(['Bins plástico' => 25, 'Tote' => 596], $entradas->all());
+
+        // RPR-01: lo recibido es lo validado, la tara con su desglose y las horas en hora de planta.
+        preg_match_all('/\(((?:\\\\.|[^\\\\()])*)\) Tj/', (string) $this->get("/api/romana/recepciones/{$recepcion['id']}/aviso-recibo")->assertOk()->getContent(), $c);
+        $textos = array_map(fn (string $v): string => iconv('Windows-1252', 'UTF-8', strtr($v, ['\\(' => '(', '\\)' => ')', '\\\\' => '\\'])), $c[1]);
+        $valor = fn (string $campo): string => $textos[array_search($campo, $textos, true) + 1];
+        $this->assertSame('25 Bins plástico · 596 Tote (guía: 23 Bins plástico · 547 Tote)', $valor('Envases recibidos'));
+        $this->assertSame(['08-11-2026 14:26', '08-11-2026 15:19'], [$valor('Ingreso'), $valor('Salida / destare')]);
+        $this->assertSame('22.680,000 kg', $valor('Peso bruto'));
+        $this->assertSame('17.105,440 kg (camión 15.500,000 + envases 1.605,440)', $valor('Tara camión / envases'));
+        $this->assertSame('5.574,560 kg', $valor('PESO NETO'));
+        $this->assertNotContains('Envases declarados', $textos);
     }
 
     public function test_los_vacios_se_validan_y_en_una_segregacion_se_indica_su_segmento(): void
