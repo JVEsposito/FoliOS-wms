@@ -348,6 +348,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/prefrio/procesos', [ProcesoPrefrioController::class, 'store']);
         Route::post('/prefrio/procesos/{procesoPrefrio}/folios', [ProcesoPrefrioController::class, 'agregarFolio']);
         Route::post('/prefrio/procesos/{procesoPrefrio}/folios/{asignacionPrefrio}/retirar', [ProcesoPrefrioController::class, 'retirarFolio']);
+        Route::post('/prefrio/procesos/{procesoPrefrio}/confirmar-retiro-parcial', [ProcesoPrefrioController::class, 'confirmarRetiroParcial']);
         Route::post('/prefrio/procesos/{procesoPrefrio}/confirmar-armado', [ProcesoPrefrioController::class, 'confirmarArmado']);
         Route::post('/prefrio/procesos/{procesoPrefrio}/iniciar', [ProcesoPrefrioController::class, 'iniciar']);
         Route::post('/prefrio/procesos/{procesoPrefrio}/eventos/{tipo}', [ProcesoPrefrioController::class, 'registrarEvento']);
@@ -357,6 +358,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
     Route::middleware('can:supervisar-prefrio')->group(function () {
         Route::post('/prefrio/procesos/{procesoPrefrio}/aprobar', [ProcesoPrefrioController::class, 'aprobar']);
+        Route::post('/prefrio/procesos/{procesoPrefrio}/finalizar-parcial', [ProcesoPrefrioController::class, 'finalizarParcial']);
         Route::post('/prefrio/procesos/{procesoPrefrio}/reprocesar', [ProcesoPrefrioController::class, 'reprocesar']);
         Route::post('/prefrio/procesos/{procesoPrefrio}/cancelar', [ProcesoPrefrioController::class, 'cancelar']);
         Route::post('/prefrio/punto-rocio/{medicion}/accion', [PuntoRocioPrefrioController::class, 'accion']);

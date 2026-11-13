@@ -3,7 +3,6 @@
 namespace App\Services\Prefrio;
 
 use App\Enums\EstadoAdministrativoTunelPrefrio;
-use App\Enums\EstadoProcesoPrefrio;
 use App\Enums\EstadoTecnicoTunelPrefrio;
 use App\Exceptions\OperacionNoAutorizada;
 use App\Models\PosicionTunelPrefrio;
@@ -123,12 +122,7 @@ class ServicioConfiguracionTunelPrefrio
 
     private function asegurarSinProcesoActivo(TunelPrefrio $tunel): void
     {
-        $estados = collect(EstadoProcesoPrefrio::cases())
-            ->filter->esActivo()
-            ->map->value
-            ->all();
-
-        if ($tunel->procesos()->whereIn('estado', $estados)->exists()) {
+        if ($tunel->procesos()->ocupaTunel()->exists()) {
             throw new DomainException('El túnel posee un proceso activo y no puede modificarse.');
         }
     }

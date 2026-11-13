@@ -2,15 +2,16 @@
 
 namespace App\Services\Prefrio;
 
-use App\Enums\EstadoFolioProcesoPrefrio;
+use App\Enums\EstadoCargaFolio;
 use App\Enums\EstadoPlanOperacional;
-use App\Enums\EstadoProcesoPrefrio;
 use App\Enums\EstadoTareaMovimiento;
+use App\Enums\HabilitacionAlmacenamientoFolio;
 use App\Enums\PrioridadOperacional;
 use App\Enums\TipoBulto;
 use App\Enums\TipoMovimiento;
 use App\Enums\TipoPlanOperacional;
 use App\Models\Carga;
+use App\Models\CargaFolio;
 use App\Models\PlanOperacional;
 use App\Models\ProcesoPrefrio;
 use App\Models\ProcesoPrefrioFolio;
@@ -19,6 +20,7 @@ use App\Models\User;
 use App\Services\Cargas\ServicioPlanConcentracionCarga;
 use App\Services\Estiba\ServicioPlanesOperacionales;
 use App\Services\InspeccionSag\ServicioPreparacionFisicaSag;
+use App\Services\Planificador\ElegibilidadFolioPlanificador;
 use DomainException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -57,10 +59,10 @@ class ServicioGeneracionRecepcionTunel
                 'temporada',
                 'tunel:id,codigo,nombre',
                 'folios' => fn ($consulta) => $consulta
-                    ->where('estado', EstadoFolioProcesoPrefrio::Aprobado->value)
+                    ->conAprobacion()
                     ->with([
                         'posicion:id,tunel_prefrio_id,numero,etiqueta',
-                        'folio:id,temporada_id,numero_folio,tipo_bulto,activo,marca,exportadora,variedad,calibre,datos_externos',
+                        'folio:id,temporada_id,numero_folio,tipo_bulto,activo,estado_operacional,habilitacion_almacenamiento,marca,exportadora,variedad,calibre,datos_externos',
                         'folio.ubicacionActual:id,folio_id,camara_id,posicion_id',
                         'folio.asignacionCargaActual.carga.presenciaAndenActiva',
                     ]),
@@ -68,20 +70,14 @@ class ServicioGeneracionRecepcionTunel
             ->lockForUpdate()
             ->findOrFail($proceso->id);
 
-        if ($proceso->estado !== EstadoProcesoPrefrio::Aprobado) {
-            throw new DomainException(
-                'El objetivo de recepción solo puede generarse para un proceso de prefrío aprobado.',
-            );
+        if ($proceso->folios->isEmpty()) {
+            return null;
         }
 
         $this->preparacionSag->sincronizarDesdePrefrio($proceso, $usuario);
         $existente = $this->planExistente($proceso->id);
-        if ($existente?->estado === EstadoPlanOperacional::Cancelado) {
-            return $existente;
-        }
-
         $asignaciones = $proceso->folios
-            ->filter(fn (ProcesoPrefrioFolio $asignacion): bool => $this->requiereAlmacenamiento($asignacion, $existente))
+            ->filter(fn (ProcesoPrefrioFolio $asignacion): bool => $this->requiereAlmacenamiento($asignacion))
             ->values();
 
         if ($asignaciones->isEmpty()) {
@@ -92,6 +88,8 @@ class ServicioGeneracionRecepcionTunel
         $tareas = $asignaciones
             ->map(function (ProcesoPrefrioFolio $asignacion) use ($proceso, $tunel): array {
                 $folio = $asignacion->folio;
+                $enTunel = ! $asignacion->retiroParcialConfirmado();
+                $origen = $enTunel ? ($tunel?->nombre ?? $proceso->codigo) : 'Punto de entrega de Prefrío';
 
                 return [
                     'folio_id' => $folio->id,
@@ -100,15 +98,15 @@ class ServicioGeneracionRecepcionTunel
                     'instruccion' => sprintf(
                         'Retirar %s de %s y ubicarlo según la frontera operacional vigente.',
                         $folio->numero_folio,
-                        $tunel?->nombre ?? $proceso->codigo,
+                        $origen,
                     ),
                     'contexto' => array_filter([
                         'proceso_prefrio_id' => $proceso->id,
                         'tunel_prefrio_id' => $proceso->tunel_prefrio_id,
                         'tunel_codigo' => $tunel?->codigo,
-                        'tunel_nombre' => $tunel?->nombre,
-                        'posicion_tunel_prefrio_id' => $asignacion->posicion_tunel_prefrio_id,
-                        'posicion_tunel' => $asignacion->posicion?->etiqueta,
+                        'tunel_nombre' => $origen,
+                        'posicion_tunel_prefrio_id' => $enTunel ? $asignacion->posicion_tunel_prefrio_id : null,
+                        'posicion_tunel' => $enTunel ? $asignacion->posicion?->etiqueta : null,
                         'marca' => $folio->marca,
                         'formato' => $folio->datos_externos['envase'] ?? null,
                         'formato_prefrio' => $proceso->formato_referencia,
@@ -121,7 +119,7 @@ class ServicioGeneracionRecepcionTunel
             })
             ->all();
 
-        if ($existente) {
+        if ($existente && $existente->estado !== EstadoPlanOperacional::Cancelado) {
             if ($existente->estado === EstadoPlanOperacional::Completado) {
                 $existente->update([
                     'estado' => EstadoPlanOperacional::Programado,
@@ -137,6 +135,7 @@ class ServicioGeneracionRecepcionTunel
             $existente->refresh()->update([
                 'contexto' => [
                     ...($existente->contexto ?? []),
+                    'total_folios_aprobados' => $proceso->folios->count(),
                     'total_pallets_planificados' => $existente->tareas()->distinct()->count('folio_id'),
                 ],
                 'version' => $existente->version + 1,
@@ -158,7 +157,7 @@ class ServicioGeneracionRecepcionTunel
                 creadoPor: $usuario,
                 tareas: $tareas,
                 prioridad: PrioridadOperacional::Alta,
-                motivo: 'Prefrío aprobado: liberar el túnel y ubicar sus pallets completos.',
+                motivo: 'Prefrío aprobado para los pallets incluidos en esta recepción.',
                 referenciaTipo: self::REFERENCIA_TIPO,
                 referenciaId: $proceso->id,
                 contexto: [
@@ -172,6 +171,7 @@ class ServicioGeneracionRecepcionTunel
                     'total_folios_aprobados' => $proceso->folios->count(),
                     'total_pallets_planificados' => count($tareas),
                 ],
+                cicloReferencia: $existente ? $existente->ciclo_referencia + 1 : null,
             );
             foreach ($plan->tareas()->get() as $nueva) {
                 $this->vincularRestauracionSag($nueva);
@@ -187,14 +187,14 @@ class ServicioGeneracionRecepcionTunel
         }
     }
 
-    private function requiereAlmacenamiento(
-        ProcesoPrefrioFolio $asignacion,
-        ?PlanOperacional $existente,
-    ): bool {
+    private function requiereAlmacenamiento(ProcesoPrefrioFolio $asignacion): bool
+    {
         $folio = $asignacion->folio;
         if (! $folio
-            || ! $folio->activo
+            || ! ElegibilidadFolioPlanificador::operable($folio)
             || $folio->tipo_bulto !== TipoBulto::Pallet
+            || ($asignacion->finalizado_parcial_at !== null
+                && $folio->habilitacion_almacenamiento !== HabilitacionAlmacenamientoFolio::Habilitado)
             || $folio->ubicacionActual !== null) {
             return false;
         }
@@ -207,10 +207,17 @@ class ServicioGeneracionRecepcionTunel
             ])
             ->lockForUpdate()
             ->exists()
-            || $existente?->tareas()
+            || TareaMovimiento::query()
                 ->where('folio_id', $folio->id)
-                ->where('estado', EstadoTareaMovimiento::Completada->value)
-                ->exists()) {
+                ->whereIn('estado', [EstadoTareaMovimiento::Completada, EstadoTareaMovimiento::Cancelada])
+                ->whereHas('planOperacional', fn ($plan) => $plan
+                    ->where('referencia_tipo', self::REFERENCIA_TIPO)
+                    ->where('referencia_id', $asignacion->proceso_prefrio_id)
+                    ->where(fn ($final) => $final->where('estado', EstadoPlanOperacional::Cancelado)
+                        ->orWhere('tareas_movimiento.estado', EstadoTareaMovimiento::Completada)))
+                ->exists()
+            || ($asignacion->finalizado_parcial_at !== null && CargaFolio::query()->where('folio_id', $folio->id)
+                ->whereIn('estado', [EstadoCargaFolio::EnAnden, EstadoCargaFolio::Cargado])->exists())) {
             return false;
         }
 
@@ -246,6 +253,7 @@ class ServicioGeneracionRecepcionTunel
         return PlanOperacional::query()
             ->where('referencia_tipo', self::REFERENCIA_TIPO)
             ->where('referencia_id', $procesoId)
+            ->orderByDesc('ciclo_referencia')
             ->lockForUpdate()
             ->first();
     }

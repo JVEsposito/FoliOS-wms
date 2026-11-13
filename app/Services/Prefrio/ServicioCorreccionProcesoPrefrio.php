@@ -171,6 +171,9 @@ class ServicioCorreccionProcesoPrefrio
             if ($evento->tipo === TipoEventoPrefrio::CorreccionAdministrativa) {
                 throw new DomainException('Las correcciones administrativas previas no pueden reescribirse.');
             }
+            if (in_array($evento->tipo, [TipoEventoPrefrio::FinalizacionParcial, TipoEventoPrefrio::RetiroParcialConfirmado], true)) {
+                throw new DomainException('La finalización y el retiro parcial se conservan como eventos de terreno.');
+            }
 
             $momento = $this->momento($datosEvento['ocurrido_at']);
             $campos = ['ocurrido_at', 'observacion'];
@@ -215,6 +218,9 @@ class ServicioCorreccionProcesoPrefrio
                 throw new DomainException('Uno de los folios no pertenece al proceso indicado.');
             }
 
+            if ($asignacion->finalizado_parcial_at !== null) {
+                throw new DomainException('El folio ya tiene una finalización parcial registrada.');
+            }
             $campos = $this->camposAsignacion();
             $antes = $this->snapshot($asignacion, $campos);
 
@@ -457,6 +463,7 @@ class ServicioCorreccionProcesoPrefrio
             TipoEventoPrefrio::Reanudacion,
             TipoEventoPrefrio::Deshielo,
             TipoEventoPrefrio::Lectura,
+            TipoEventoPrefrio::FinalizacionParcial,
         ];
         foreach ($eventos->whereIn('tipo', $operacionales) as $evento) {
             if ($inicio && $evento->ocurrido_at->lessThan($inicio)) {
@@ -471,29 +478,12 @@ class ServicioCorreccionProcesoPrefrio
             }
         }
 
-        if ($inicio) {
-            $cargaPosterior = $proceso->folios()
-                ->whereNotIn('estado', [
-                    EstadoFolioProcesoPrefrio::Retirado->value,
-                    EstadoFolioProcesoPrefrio::Cancelado->value,
-                ])
-                ->where('cargado_at', '>', $inicio)
-                ->exists();
-            if ($cargaPosterior) {
-                throw new ConflictoOperacion(
-                    'La carga de los folios debe quedar antes o al inicio del proceso.',
-                );
-            }
-        }
     }
 
     private function validarPosiciones(ProcesoPrefrio $proceso): void
     {
         $grupos = $proceso->folios()
-            ->whereNotIn('estado', [
-                EstadoFolioProcesoPrefrio::Retirado->value,
-                EstadoFolioProcesoPrefrio::Cancelado->value,
-            ])
+            ->enTunel()
             ->with('folio:id,numero_folio,tipo_bulto')
             ->lockForUpdate()
             ->get()
@@ -581,7 +571,7 @@ class ServicioCorreccionProcesoPrefrio
 
     private function momento(string $valor): CarbonImmutable
     {
-        $momento = CarbonImmutable::parse($valor);
+        $momento = CarbonImmutable::parse($valor, config('app.operational_timezone', config('app.timezone')))->utc();
         if ($momento->greaterThan(now()->addMinutes(5))) {
             throw new ConflictoOperacion('La corrección no puede dejar fechas en el futuro.');
         }

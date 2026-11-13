@@ -90,7 +90,17 @@ Un túnel admite como máximo un proceso activo. Un folio tampoco puede particip
 
 La relación histórica permite que el mismo folio participe posteriormente en otro proceso cuando requiere reproceso.
 
-Los estados `borrador`, `cargando` y `listo_para_iniciar` admiten carga de folios. Si se agrega o retira un folio después de confirmar el armado, el proceso vuelve a `cargando` y debe confirmarse nuevamente antes de iniciar. Desde `en_proceso` la composición queda cerrada.
+Los estados `borrador`, `cargando` y `listo_para_iniciar` admiten carga de folios. Si se agrega o retira un folio después de confirmar el armado, el proceso vuelve a `cargando` y debe confirmarse nuevamente antes de iniciar. Durante el enfriado se pueden finalizar folios por separado.
+
+La Oficina y la tablet muestran la hora de planta. **Iniciar proceso** registra el momento en que arrancó el túnel y admite una hora anterior a la captura del armado. Las lecturas y el término se ordenan a partir de ese inicio térmico. La base guarda los instantes en UTC. En el escaneo de la tablet, dejar la hora vacía registra la hora del escaneo.
+
+### Salidas parciales
+
+1. Con el ciclo **En proceso**, supervisión elige **Finalizar parcialmente** en Oficina o en la tablet. Selecciona los folios e indica la hora real y el motivo general. Cada folio recibe un resultado térmico y puede llevar temperatura final y motivo propio.
+2. El operador usa **Confirmar retiro** cuando salen físicamente los folios. Si un camarero ya tomó la labor, la confirmación en cámara o andén acredita el retiro. La posición de un saldo compartido sigue ocupada mientras quede otro saldo.
+3. Los demás folios continúan el mismo ciclo y sus lecturas R-41. El último grupo pasa por **Finalizar proceso** y la verificación habitual. Un retiro parcial pendiente mantiene el túnel ocupado después del cierre.
+
+Los pallets aprobados pueden pasar a cámara o a despacho directo. Quedan registradas la decisión por folio, la salida y sus responsables. La planilla R-41 incluye las finalizaciones parciales en sus observaciones.
 
 ## Folios y posiciones
 
@@ -207,6 +217,8 @@ reanudacion
 deshielo
 lectura
 verificacion_final
+finalizacion_parcial
+retiro_parcial_confirmado
 aprobacion
 reproceso
 cancelacion
@@ -316,6 +328,7 @@ GET /api/prefrio/procesos/{id}/registro-r41.xlsx
 POST /api/prefrio/procesos
 POST /api/prefrio/procesos/{id}/folios
 POST /api/prefrio/procesos/{id}/folios/{asignacion}/retirar
+POST /api/prefrio/procesos/{id}/confirmar-retiro-parcial
 POST /api/prefrio/procesos/{id}/confirmar-armado
 POST /api/prefrio/procesos/{id}/iniciar
 POST /api/prefrio/procesos/{id}/eventos/{tipo}
@@ -327,6 +340,7 @@ PUT  /api/prefrio/procesos/{id}/registro-r41
 
 ```http
 POST /api/prefrio/procesos/{id}/aprobar
+POST /api/prefrio/procesos/{id}/finalizar-parcial
 POST /api/prefrio/procesos/{id}/reprocesar
 POST /api/prefrio/procesos/{id}/cancelar
 ```

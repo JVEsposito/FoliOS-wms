@@ -1053,7 +1053,9 @@ class ServicioRepaletizaje
             );
         }
         if ($folio->procesosPrefrio()
-            ->whereIn('estado', ['cargado', 'en_proceso'])
+            ->where(fn ($asignacion) => $asignacion
+                ->whereIn('estado', ['cargado', 'en_proceso'])
+                ->orWhere(fn ($pendiente) => $pendiente->pendienteRetiroParcial()))
             ->exists()) {
             throw new ConflictoOperacion(
                 "El folio {$folio->numero_folio} participa en un proceso de prefrío activo.",

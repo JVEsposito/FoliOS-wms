@@ -10,15 +10,18 @@ use App\Enums\RolUsuario;
 use App\Enums\TipoBulto;
 use App\Models\Camara;
 use App\Models\Dispositivo;
+use App\Models\EventoPrefrio;
 use App\Models\Folio;
 use App\Models\PlanOperacional;
 use App\Models\Posicion;
 use App\Models\PosicionTunelPrefrio;
 use App\Models\ProcesoPrefrio;
 use App\Models\RegistroHabilitacionAlmacenamiento;
+use App\Models\TareaMovimiento;
 use App\Models\TunelPrefrio;
 use App\Models\User;
 use App\Services\Folios\ServicioHabilitacionAlmacenamiento;
+use App\Services\Prefrio\RegistroPrefrioR41;
 use App\Services\Temporadas\ServicioTemporadaGlobal;
 use DomainException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -478,6 +481,171 @@ class PrefrioApiTest extends TestCase
             'Exportadora rolling',
             $plan->tareas()->firstOrFail()->contexto['cliente'] ?? null,
         );
+    }
+
+    public function test_finaliza_folios_por_separado_y_conserva_el_ciclo_y_la_ocupacion(): void
+    {
+        config(['planificador.generacion_automatica' => true, 'planificador.mode' => 'guided', 'planificador.compute' => 'tablet']);
+        [$tunel, $posicion, $operador] = $this->contexto();
+        [, $supervisor] = $this->acceso(RolUsuario::SupervisorFrio, 'PF-PARCIAL-SUP');
+        $posiciones = $tunel->posiciones()->orderBy('numero')->get();
+        $pallet = $this->folioPendiente('PF-PARCIAL-PAL');
+        $saldo = $this->folioPendiente('PF-PARCIAL-SALDO', TipoBulto::Saldo);
+        $restante = $this->folioPendiente('PF-PARCIAL-RESTANTE', TipoBulto::Saldo);
+        $retenido = $this->folioPendiente('PF-PARCIAL-RETENIDO');
+        $proceso = $this->iniciarConFolios($operador, $tunel, [
+            [$saldo, $posicion], [$restante, $posicion], [$pallet, $posiciones[1]], [$retenido, $posiciones[2]],
+        ]);
+        $ruta = "/api/prefrio/procesos/{$proceso['id']}";
+        $resultados = [
+            ['folio_id' => $pallet->id, 'resultado' => 'prefrio_aprobado', 'temperatura_final' => -0.5],
+            ['folio_id' => $saldo->id, 'resultado' => 'pendiente_prefrio', 'motivo' => 'Separación por formato'],
+            ['folio_id' => $retenido->id, 'resultado' => 'retenido'],
+        ];
+        $decision = [...$this->payloadAccion($proceso['version']), 'motivo' => 'Retiro programado', 'resultados' => $resultados];
+        $this->conToken($operador)->postJson("{$ruta}/finalizar-parcial", $decision)->assertForbidden();
+        $this->conToken($supervisor)->postJson("{$ruta}/finalizar-parcial", [
+            ...$decision, 'resultados' => [$resultados[0], $resultados[0]],
+        ])->assertUnprocessable();
+        $this->conToken($supervisor)->postJson("{$ruta}/finalizar-parcial", [
+            ...$decision, 'resultados' => [...$resultados, ['folio_id' => $restante->id, 'resultado' => 'prefrio_aprobado']],
+        ])->assertUnprocessable();
+        $this->conToken($supervisor)->postJson("{$ruta}/finalizar-parcial", [
+            ...$decision, 'resultados' => [...$resultados, ['folio_id' => (string) Str::uuid(), 'resultado' => 'prefrio_aprobado']],
+        ])->assertConflict();
+
+        $parcial = $this->accion($supervisor, "{$ruta}/finalizar-parcial", $decision);
+        $this->assertSame($parcial['version'], $this->accion($supervisor, "{$ruta}/finalizar-parcial", $decision)['version']);
+        $this->assertSame('en_proceso', $parcial['estado']);
+        $this->assertSame($proceso['iniciado_at'], $parcial['iniciado_at']);
+        $this->assertNull($parcial['finalizado_at']);
+        $asignaciones = collect($parcial['folios'])->keyBy('folio.id');
+        $this->assertSame('aprobado', $asignaciones[$pallet->id]['estado']);
+        $this->assertSame(-0.5, $asignaciones[$pallet->id]['temperatura_final']);
+        $this->assertSame('Separación por formato', $asignaciones[$saldo->id]['motivo_resultado']);
+        $this->assertTrue($asignaciones[$saldo->id]['en_tunel']);
+        $this->assertSame('en_proceso', $asignaciones[$restante->id]['estado']);
+        $this->assertSame(CondicionTermicaFolio::EnProceso, $restante->refresh()->condicion_termica);
+        $this->assertSame(HabilitacionAlmacenamientoFolio::Habilitado, $pallet->refresh()->habilitacion_almacenamiento);
+        $this->assertSame(HabilitacionAlmacenamientoFolio::Retenido, $retenido->refresh()->habilitacion_almacenamiento);
+        $this->conToken($operador)->getJson('/api/prefrio/folios-disponibles?folio=PF-PARCIAL-SALDO')->assertJsonCount(0, 'data');
+        $this->assertSame(1, EventoPrefrio::query()->where('operacion_id', $decision['operacion_id'])->count());
+        $tarea = TareaMovimiento::query()->where('folio_id', $pallet->id)->sole();
+        $this->assertSame($posiciones[1]->etiqueta, $tarea->contexto['posicion_tunel']);
+
+        $retiro = [...$this->payloadAccion($parcial['version']), 'folios' => [$saldo->id, $pallet->id]];
+        $retirado = $this->accion($operador, "{$ruta}/confirmar-retiro-parcial", $retiro);
+        $this->assertSame($retirado['version'], $this->accion($operador, "{$ruta}/confirmar-retiro-parcial", $retiro)['version']);
+        $asignaciones = collect($retirado['folios'])->keyBy('folio.id');
+        $this->assertFalse($asignaciones[$saldo->id]['en_tunel']);
+        $this->assertTrue($asignaciones[$restante->id]['en_tunel']);
+        $this->assertSame($posicion->id, $asignaciones[$restante->id]['posicion']['id']);
+        $this->assertNotNull($asignaciones[$saldo->id]['retirado_por']);
+        $this->assertSame('Punto de entrega de Prefrío', $tarea->refresh()->contexto['tunel_nombre']);
+        $this->assertArrayNotHasKey('posicion_tunel', $tarea->contexto);
+        $this->conToken($operador)->getJson('/api/prefrio/folios-disponibles?folio=PF-PARCIAL-SALDO')->assertJsonPath('data.0.id', $saldo->id);
+
+        $lectura = $this->accion($operador, "{$ruta}/eventos/lectura", [
+            ...$this->payloadAccion($retirado['version']), 'datos' => ['sectores' => self::lecturaCompleta()],
+        ]);
+        $verificacion = $this->accion($operador, "{$ruta}/verificar", $this->payloadAccion($lectura['version']));
+        $cierre = $this->accion($supervisor, "{$ruta}/aprobar", $this->payloadAccion($verificacion['version']));
+        $this->assertSame('aprobado', $cierre['estado']);
+        $asignaciones = collect($cierre['folios'])->keyBy('folio.id');
+        $this->assertSame('aprobado', $asignaciones[$restante->id]['estado']);
+        $this->assertSame('retenido', $asignaciones[$retenido->id]['estado']);
+        $this->assertSame('pendiente_prefrio', $asignaciones[$saldo->id]['estado']);
+        $this->assertSame('Retiro programado', $asignaciones[$pallet->id]['motivo_resultado']);
+        $this->assertSame(1, TareaMovimiento::query()->where('folio_id', $pallet->id)->count());
+        $detalle = RegistroPrefrioR41::detalle(ProcesoPrefrio::findOrFail($proceso['id']));
+        $this->assertStringContainsString('finalización parcial de 3 folios', implode(' ', $detalle['observaciones']));
+        $this->conToken($operador)->getJson('/api/prefrio/procesos?solo_activos=1')
+            ->assertJsonPath('data.0.id', $proceso['id']);
+        $this->conToken($operador)->postJson('/api/prefrio/procesos', $this->payloadProceso($tunel->id, (string) Str::uuid()))
+            ->assertConflict();
+        $this->accion($operador, "{$ruta}/confirmar-retiro-parcial", [
+            ...$this->payloadAccion($cierre['version']), 'folios' => [$retenido->id],
+        ]);
+        $this->conToken($operador)->getJson('/api/prefrio/procesos?solo_activos=1')->assertJsonCount(0, 'data');
+        $this->crearProceso($operador, $tunel);
+    }
+
+    public function test_ubicar_un_pallet_aprobado_parcialmente_confirma_su_retiro(): void
+    {
+        config(['planificador.generacion_automatica' => false]);
+        [$tunel, $posicion, $operador] = $this->contexto();
+        [, $supervisor] = $this->acceso(RolUsuario::SupervisorFrio, 'PF-PARCIAL-CAM');
+        $pallet = $this->folioPendiente('PF-PARCIAL-A-CAMARA');
+        $saldo = $this->folioPendiente('PF-PARCIAL-EN-TUNEL', TipoBulto::Saldo);
+        $proceso = $this->iniciarConFolios($operador, $tunel, [
+            [$pallet, $posicion], [$saldo, $tunel->posiciones()->where('numero', 2)->sole()],
+        ]);
+        $ruta = "/api/prefrio/procesos/{$proceso['id']}";
+        $parcial = $this->accion($supervisor, "{$ruta}/finalizar-parcial", [
+            ...$this->payloadAccion($proceso['version']), 'motivo' => 'Ingreso a cámara',
+            'resultados' => [['folio_id' => $pallet->id, 'resultado' => 'prefrio_aprobado']],
+        ]);
+        $camara = Camara::create(['codigo' => 'CAM-PF-PARCIAL', 'nombre' => 'Cámara posterior a prefrío']);
+        $destino = Posicion::create(['camara_id' => $camara->id, 'banda' => 1, 'posicion' => 1, 'nivel' => 1, 'etiqueta' => 'B01-P01-N1']);
+        $sesion = $this->conToken($supervisor)->postJson("/api/camaras/{$camara->id}/sesiones")->assertCreated()->json('data.id');
+        $this->conToken($supervisor)->postJson('/api/movimientos/ubicar', [
+            'operacion_id' => (string) Str::uuid(),
+            'numero_folio' => $pallet->numero_folio,
+            'tipo_bulto' => 'pallet',
+            'posicion_destino_id' => $destino->id,
+            'sesion_destino_id' => $sesion,
+            'version_destino_conocida' => 0,
+            'generado_dispositivo_at' => now()->toAtomString(),
+        ])->assertOk();
+        $detalle = $this->conToken($operador)->getJson($ruta)->assertOk()->assertJsonPath('data.estado', 'en_proceso')->json('data');
+        $asignaciones = collect($detalle['folios'])->keyBy('folio.id');
+        $this->assertFalse($asignaciones[$pallet->id]['en_tunel']);
+        $this->assertNotNull($asignaciones[$pallet->id]['retirado_at']);
+        $this->assertTrue($asignaciones[$saldo->id]['en_tunel']);
+        $this->conToken($operador)->postJson("{$ruta}/confirmar-retiro-parcial", [
+            ...$this->payloadAccion($parcial['version']), 'folios' => [$pallet->id],
+        ])->assertConflict();
+    }
+
+    public function test_inicio_real_anterior_al_armado_y_avisos_en_hora_de_planta(): void
+    {
+        config(['app.operational_timezone' => 'America/Santiago']);
+        [$tunel, $posicion, $operador] = $this->contexto();
+        $folio = $this->folioPendiente('PF-INICIO-RETRO');
+        $captura = now()->toImmutable()->subHours(3)->startOfMinute()->addSeconds(25);
+        $apertura = $captura->setTimezone('America/Santiago');
+        $proceso = $this->conToken($operador)->postJson('/api/prefrio/procesos', [
+            ...$this->payloadProceso($tunel->id, (string) Str::uuid()), 'ocurrido_at' => $apertura->toAtomString(),
+        ])->assertCreated()->assertJsonPath('data.eventos.0.ocurrido_at', $captura->toAtomString())->json('data');
+        $ruta = "/api/prefrio/procesos/{$proceso['id']}";
+        $carga = [
+            ...$this->payloadAccion(0), 'folio_id' => $folio->id, 'posicion_tunel_prefrio_id' => $posicion->id,
+        ];
+        $this->conToken($operador)->postJson("{$ruta}/folios", [
+            ...$carga, 'ocurrido_at' => $captura->subSecond()->toAtomString(),
+        ])->assertConflict()->assertJsonPath('message', sprintf(
+            'La fecha y hora debe ser igual o posterior al último evento (%s, hora de planta).', $apertura->format('d-m-Y H:i:s'),
+        ));
+        $this->accion($operador, "{$ruta}/folios", [
+            ...$carga, 'operacion_id' => (string) Str::uuid(), 'ocurrido_at' => $captura->addMinute()->toAtomString(),
+        ]);
+        $this->accion($operador, "{$ruta}/confirmar-armado", [
+            ...$this->payloadAccion(1), 'ocurrido_at' => $captura->addMinutes(2)->toAtomString(),
+        ]);
+
+        $inicio = $captura->subHour();
+        $iniciado = $this->accion($operador, "{$ruta}/iniciar", [
+            ...$this->payloadAccion(2), 'ocurrido_at' => $inicio->setTimezone('America/Santiago')->format('Y-m-d\TH:i:s'),
+        ]);
+        $this->assertSame($inicio->toAtomString(), $iniciado['iniciado_at']);
+        $this->assertSame('en_proceso', $iniciado['estado']);
+        $this->accion($operador, "{$ruta}/eventos/lectura", [
+            ...$this->payloadAccion(3), 'ocurrido_at' => $inicio->addMinutes(30)->toAtomString(),
+            'datos' => ['sectores' => self::lecturaCompleta()],
+        ]);
+        $this->conToken($operador)->postJson("{$ruta}/eventos/pausa", [
+            ...$this->payloadAccion(4), 'ocurrido_at' => $inicio->subSecond()->toAtomString(),
+        ])->assertConflict();
     }
 
     public function test_aprobacion_habilita_almacenamiento_y_permite_ingreso_inicial_a_camara(): void
@@ -1153,6 +1321,24 @@ class PrefrioApiTest extends TestCase
         }
 
         return $lectura;
+    }
+
+    /**
+     * @param  list<array{Folio, PosicionTunelPrefrio}>  $cargas
+     * @return array<string, mixed>
+     */
+    private function iniciarConFolios(string $token, TunelPrefrio $tunel, array $cargas): array
+    {
+        $proceso = $this->crearProceso($token, $tunel);
+        $ruta = "/api/prefrio/procesos/{$proceso['id']}";
+        foreach ($cargas as [$folio, $posicion]) {
+            $proceso = $this->accion($token, "{$ruta}/folios", [
+                ...$this->payloadAccion($proceso['version']), 'folio_id' => $folio->id, 'posicion_tunel_prefrio_id' => $posicion->id,
+            ]);
+        }
+        $proceso = $this->accion($token, "{$ruta}/confirmar-armado", $this->payloadAccion($proceso['version']));
+
+        return $this->accion($token, "{$ruta}/iniciar", $this->payloadAccion($proceso['version']));
     }
 
     /**

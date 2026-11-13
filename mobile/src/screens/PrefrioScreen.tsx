@@ -21,11 +21,19 @@ import {
   PrefrioFolioCandidate,
   PrefrioMobileCache,
   PrefrioOperationalEventType,
+  PrefrioPartialSelection,
   PrefrioProcess,
   PrefrioProcessFolio,
   PrefrioQueuedCommand,
   PrefrioTunnel,
+  operationalDateTime,
+  parseOperationalDateTime,
+  prefrioFolioInTunnel,
+  prefrioPartialResultLabel,
+  prefrioPartialWithdrawalPending,
+  prefrioTimeZone,
 } from '../domain/prefrio';
+import { PrefrioPartialDialog } from './PrefrioPartialDialog';
 import {
   R41_POINTS,
   R41_SECTORS,
@@ -115,22 +123,14 @@ type RemovalDraft = {
 type CommandDelivery = 'confirmed' | 'queued' | 'blocked';
 type FlushOutcome = 'completed' | 'offline';
 
-function operationalDateTime(value = new Date()): string {
-  const day = String(value.getDate()).padStart(2, '0');
-  const month = String(value.getMonth() + 1).padStart(2, '0');
-  const hours = String(value.getHours()).padStart(2, '0');
-  const minutes = String(value.getMinutes()).padStart(2, '0');
-  return `${day}-${month}-${value.getFullYear()} ${hours}:${minutes}`;
+type PartialDraft = { finalizing: boolean; process: PrefrioProcess; initialTime: string };
+
+function occupiesTunnel(process: PrefrioProcess): boolean {
+  return ACTIVE_STATES.has(process.estado) || process.folios.some(prefrioPartialWithdrawalPending);
 }
 
-function parseOperationalDateTime(value: string): string | null {
-  const match = value.trim().match(/^(\d{2})-(\d{2})-(\d{4})\s+(\d{2}):(\d{2})$/);
-  if (!match) return null;
-  const [, day, month, year, hour, minute] = match;
-  const date = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute));
-  if (date.getFullYear() !== Number(year) || date.getMonth() !== Number(month) - 1 || date.getDate() !== Number(day)
-    || date.getHours() !== Number(hour) || date.getMinutes() !== Number(minute)) return null;
-  return date.toISOString();
+function isPartialCommand(command: PrefrioQueuedCommand): boolean {
+  return command.kind === 'finalizar_parcial' || command.kind === 'confirmar_retiro_parcial';
 }
 
 export function PrefrioScreen({ auth, baseUrl, onLogout, onBusyChange }: PrefrioScreenProps) {
@@ -147,7 +147,7 @@ export function PrefrioScreen({ auth, baseUrl, onLogout, onBusyChange }: Prefrio
   const [selectedPositionId, setSelectedPositionId] = useState<string | null>(null);
   const [folioNumber, setFolioNumber] = useState('');
   const [initialTemperature, setInitialTemperature] = useState('');
-  const [loadOccurredAt, setLoadOccurredAt] = useState(operationalDateTime());
+  const [loadOccurredAt, setLoadOccurredAt] = useState('');
   const [busy, setBusy] = useState(true);
   const [operationBusy, setOperationBusy] = useState(false);
   const [online, setOnline] = useState(Boolean(baseUrl));
@@ -165,6 +165,7 @@ export function PrefrioScreen({ auth, baseUrl, onLogout, onBusyChange }: Prefrio
   const [removalDraft, setRemovalDraft] = useState<RemovalDraft | null>(null);
   const [removalOccurredAt, setRemovalOccurredAt] = useState(operationalDateTime());
   const [removalNote, setRemovalNote] = useState('');
+  const [partialDraft, setPartialDraft] = useState<PartialDraft | null>(null);
   const [creating, setCreating] = useState(false);
   const [createSetpoint, setCreateSetpoint] = useState('-1.5');
   const [createDuration, setCreateDuration] = useState('720');
@@ -174,6 +175,7 @@ export function PrefrioScreen({ auth, baseUrl, onLogout, onBusyChange }: Prefrio
   const userId = auth.usuario.id;
   const deviceId = auth.dispositivo.id;
   const canOperate = auth.usuario.capacidades.puede_operar_prefrio === true;
+  const canSupervise = auth.usuario.capacidades.puede_supervisar_prefrio === true;
   const selectedProcess = useMemo(
     () => cache.processes.find((item) => item.id === selectedProcessId) ?? null,
     [cache.processes, selectedProcessId],
@@ -183,7 +185,7 @@ export function PrefrioScreen({ auth, baseUrl, onLogout, onBusyChange }: Prefrio
     return cache.tunnels.find((item) => item.id === (processTunnelId ?? selectedTunnelId)) ?? null;
   }, [cache.tunnels, selectedProcess, selectedTunnelId]);
   const activeAssignments = useMemo(
-    () => selectedProcess?.folios.filter((item) => !['retirado', 'cancelado'].includes(item.estado)) ?? [],
+    () => selectedProcess?.folios.filter(prefrioFolioInTunnel) ?? [],
     [selectedProcess],
   );
   const assignmentsByPosition = useMemo(() => {
@@ -204,7 +206,11 @@ export function PrefrioScreen({ auth, baseUrl, onLogout, onBusyChange }: Prefrio
   const occupiedPositionCount = assignmentsByPosition.size;
   const processQueue = outbox.filter((item) => item.process_id === selectedProcessId);
   const processHasBlockingIssue = processQueue.some((item) => item.status !== 'pendiente');
-  const processActionsBlocked = operationBusy || processHasBlockingIssue;
+  const pendingPartial = processQueue.some(isPartialCommand);
+  const processActionsBlocked = operationBusy || processHasBlockingIssue || pendingPartial;
+  const partialHistory = selectedProcess?.folios.filter((item) => item.finalizado_parcial_at) ?? [];
+  const partialPending = partialHistory.filter(prefrioPartialWithdrawalPending);
+  const remaining = activeAssignments.filter((item) => item.estado === 'en_proceso').length;
   const unresolved = outbox.filter((item) => item.status !== 'pendiente').length;
   const r41Status = useMemo(
     () => (selectedProcess ? r41ReadingStatus(selectedProcess, clock) : null),
@@ -234,7 +240,7 @@ export function PrefrioScreen({ auth, baseUrl, onLogout, onBusyChange }: Prefrio
   );
 
   useEffect(() => {
-    if (selectedProcess && !ACTIVE_STATES.has(selectedProcess.estado)) {
+    if (selectedProcess && !occupiesTunnel(selectedProcess)) {
       setSelectedTunnelId(selectedProcess.tunel.id);
       setSelectedProcessId(null);
       setSelectedPositionId(null);
@@ -249,13 +255,15 @@ export function PrefrioScreen({ auth, baseUrl, onLogout, onBusyChange }: Prefrio
     }
 
     if (!selectedProcessId && !selectedTunnelId) {
-      const active = cache.processes.find((item) => ACTIVE_STATES.has(item.estado));
+      const active = cache.processes.find(occupiesTunnel);
       if (active) {
         setSelectedProcessId(active.id);
         setSelectedTunnelId(active.tunel.id);
       }
     }
   }, [cache.processes, selectedProcess, selectedProcessId, selectedTunnelId]);
+
+  useEffect(() => { setLoadOccurredAt(''); }, [selectedProcessId]);
 
   useEffect(() => {
     if (selectedProcess && !selectedPositionId) {
@@ -373,12 +381,13 @@ export function PrefrioScreen({ auth, baseUrl, onLogout, onBusyChange }: Prefrio
             ? 'conflicto'
             : 'error';
           const failureMessage = messageFrom(reason);
+          const hasLaterActions = items.some((other) => other.process_id === item.process_id && other.id !== item.id);
           items = await markPrefrioCommand(
             userId,
             deviceId,
             item.id,
             status,
-            `${failureMessage} Las operaciones posteriores de este proceso fueron descartadas para evitar reintentos contradictorios.`,
+            hasLaterActions ? `${failureMessage} Las operaciones posteriores de este proceso fueron descartadas para evitar reintentos contradictorios.` : failureMessage,
           );
           items = await removePrefrioProcessCommands(
             userId,
@@ -441,6 +450,10 @@ export function PrefrioScreen({ auth, baseUrl, onLogout, onBusyChange }: Prefrio
       );
       return false;
     }
+    if (processId && outboxRef.current.some((item) => item.process_id === processId && isPartialCommand(item))) {
+      setError('Espera la sincronización de la salida parcial antes de continuar.');
+      return false;
+    }
 
     operationInFlight.current = true;
     setOperationBusy(true);
@@ -460,7 +473,7 @@ export function PrefrioScreen({ auth, baseUrl, onLogout, onBusyChange }: Prefrio
 
   async function upsertServerProcess(process: PrefrioProcess) {
     const current = cacheRef.current;
-    const processIsActive = ACTIVE_STATES.has(process.estado);
+    const processIsActive = occupiesTunnel(process);
     const nextProcesses = processIsActive
       ? [process, ...current.processes.filter((item) => item.id !== process.id)]
       : current.processes.filter((item) => item.id !== process.id);
@@ -542,7 +555,7 @@ export function PrefrioScreen({ auth, baseUrl, onLogout, onBusyChange }: Prefrio
         setError('La temperatura inicial no es válida.');
         return;
       }
-      const occurredAt = parseOperationalDateTime(loadOccurredAt);
+      const occurredAt = loadOccurredAt.trim() ? parseOperationalDateTime(loadOccurredAt) : new Date().toISOString();
       if (!occurredAt) {
         setError('Ingresa la fecha y hora de carga como DD-MM-AAAA HH:mm.');
         return;
@@ -602,7 +615,7 @@ export function PrefrioScreen({ auth, baseUrl, onLogout, onBusyChange }: Prefrio
       if (delivery === 'blocked') return;
       setFolioNumber('');
       setInitialTemperature('');
-      setLoadOccurredAt(operationalDateTime());
+      setLoadOccurredAt('');
       setSelectedPositionId(
         folio.tipo_bulto === 'saldo'
           ? position.id
@@ -625,7 +638,7 @@ export function PrefrioScreen({ auth, baseUrl, onLogout, onBusyChange }: Prefrio
 
   async function enqueueAndApply(
     command: PrefrioQueuedCommand,
-    optimistic: PrefrioProcess,
+    optimistic?: PrefrioProcess,
     removeEligibleFolioId?: string,
   ): Promise<CommandDelivery> {
     const blocker = blockingCommandFor(command.process_id);
@@ -643,13 +656,15 @@ export function PrefrioScreen({ auth, baseUrl, onLogout, onBusyChange }: Prefrio
     const items = await enqueuePrefrioCommand(userId, deviceId, command);
     replaceOutbox(items);
     const current = cacheRef.current;
-    await replaceCache({
-      ...current,
-      processes: [optimistic, ...current.processes.filter((item) => item.id !== optimistic.id)],
-      eligible_folios: removeEligibleFolioId
-        ? current.eligible_folios.filter((item) => item.id !== removeEligibleFolioId)
-        : current.eligible_folios,
-    });
+    if (optimistic) {
+      await replaceCache({
+        ...current,
+        processes: [optimistic, ...current.processes.filter((item) => item.id !== optimistic.id)],
+        eligible_folios: removeEligibleFolioId
+          ? current.eligible_folios.filter((item) => item.id !== removeEligibleFolioId)
+          : current.eligible_folios,
+      });
+    }
     if (!baseUrl) return 'queued';
 
     let outcome = await flushOutbox();
@@ -922,7 +937,7 @@ export function PrefrioScreen({ auth, baseUrl, onLogout, onBusyChange }: Prefrio
       payload,
     );
     const folios = selectedProcess.folios.map((item) => item.id === assignmentId
-      ? { ...item, estado: 'retirado' as const, retirado_at: payload.ocurrido_at }
+      ? { ...item, estado: 'retirado' as const, en_tunel: false, retirado_at: payload.ocurrido_at }
       : item);
     const quedan = folios.some((item) => item.estado === 'cargado');
     return enqueueAndApply(command, {
@@ -931,6 +946,36 @@ export function PrefrioScreen({ auth, baseUrl, onLogout, onBusyChange }: Prefrio
       version: selectedProcess.version + 1,
       folios,
     });
+  }
+
+  async function submitPartial(selection: PrefrioPartialSelection, time: string): Promise<string | null> {
+    if (!partialDraft || selectedProcess?.id !== partialDraft.process.id) return 'Vuelve a abrir el proceso.';
+    const occurredAt = parseOperationalDateTime(time);
+    if (!occurredAt) return 'Ingresa una fecha y hora de planta válida.';
+    const { process, finalizing } = partialDraft;
+    if (selectedProcess.version !== process.version) return 'El proceso cambió. Cierra el cuadro y vuelve a abrirlo.';
+    if (!beginOperation(process.id)) return 'Revisa la bandeja de operaciones antes de continuar.';
+    try {
+      const id = Crypto.randomUUID();
+      const action = finalizing ? 'finalizar-parcial' : 'confirmar-retiro-parcial';
+      const label = finalizing ? 'Finalización parcial' : 'Confirmación de retiro';
+      const command = commandFor(id, process, finalizing ? 'finalizar_parcial' : 'confirmar_retiro_parcial', label,
+        `/api/prefrio/procesos/${process.id}/${action}`,
+        { ...selection, operacion_id: id, version_conocida: process.version, ocurrido_at: occurredAt });
+      const delivery = await enqueueAndApply(command);
+      if (delivery === 'blocked') {
+        return outboxRef.current.find((item) => item.id === id)?.message ?? 'Revisa la bandeja de operaciones antes de continuar.';
+      }
+      setNotice(delivery === 'confirmed'
+        ? (finalizing ? 'Finalización parcial registrada.' : 'Retiro confirmado.')
+        : 'La salida parcial quedó en la bandeja. El plano se actualizará cuando el servidor la confirme.');
+      setPartialDraft(null);
+      return null;
+    } catch (reason) {
+      return messageFrom(reason);
+    } finally {
+      finishOperation();
+    }
   }
 
   async function createProcess() {
@@ -1052,7 +1097,7 @@ export function PrefrioScreen({ auth, baseUrl, onLogout, onBusyChange }: Prefrio
 
         <View style={styles.metrics}>
           <Metric label="TÚNELES" value={String(cache.tunnels.length)} />
-          <Metric label="PROCESOS ACTIVOS" value={String(cache.processes.filter((item) => ACTIVE_STATES.has(item.estado)).length)} />
+          <Metric label="PROCESOS ACTIVOS" value={String(cache.processes.filter(occupiesTunnel).length)} />
           <Metric label="FOLIOS PENDIENTES" value={String(cache.eligible_folios.length)} />
           <Metric label="BANDEJA" value={String(outbox.length)} warning={unresolved > 0} />
         </View>
@@ -1060,9 +1105,7 @@ export function PrefrioScreen({ auth, baseUrl, onLogout, onBusyChange }: Prefrio
         <Text style={styles.sectionTitle}>Túneles</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tunnelRow}>
           {cache.tunnels.map((tunnel) => {
-            const process = tunnel.proceso_activo
-              ? cache.processes.find((item) => item.id === tunnel.proceso_activo?.id)
-              : null;
+            const process = cache.processes.find((item) => item.tunel.id === tunnel.id && occupiesTunnel(item));
             const selected = selectedTunnel?.id === tunnel.id;
             return (
               <Pressable
@@ -1194,7 +1237,7 @@ export function PrefrioScreen({ auth, baseUrl, onLogout, onBusyChange }: Prefrio
                             {assignment.folio?.cantidad_cajas ? ` · ${assignment.folio.cantidad_cajas} cajas` : ''}
                           </Text>
                         </View>
-                        <Pressable
+                        {canOperate && LOADABLE_STATES.has(selectedProcess.estado) ? <Pressable
                           disabled={processActionsBlocked}
                           onPress={() => void removeAssignment(
                             assignment.id,
@@ -1203,7 +1246,9 @@ export function PrefrioScreen({ auth, baseUrl, onLogout, onBusyChange }: Prefrio
                           style={[styles.smallDangerButton, processActionsBlocked && styles.buttonDisabled]}
                         >
                           <Text style={styles.smallDangerText}>Retirar</Text>
-                        </Pressable>
+                        </Pressable> : prefrioPartialWithdrawalPending(assignment) ? (
+                          <Text style={styles.warning}>Pendiente de retiro</Text>
+                        ) : null}
                       </View>
                     ))}
                   </View>
@@ -1233,12 +1278,12 @@ export function PrefrioScreen({ auth, baseUrl, onLogout, onBusyChange }: Prefrio
                 <TextInput
                   editable={canOperate && LOADABLE_STATES.has(selectedProcess.estado) && !processActionsBlocked}
                   onChangeText={setLoadOccurredAt}
-                  placeholder="DD-MM-AAAA HH:mm"
+                  placeholder="Hora actual al escanear"
                   placeholderTextColor={colors.muted}
                   style={styles.input}
                   value={loadOccurredAt}
                 />
-                <Text style={styles.muted}>Fecha y hora real de carga del folio.</Text>
+                <Text style={styles.muted}>Hora de planta. Ingresa una fecha y hora si registras una carga anterior.</Text>
                 <Pressable
                   disabled={!canOperate || !LOADABLE_STATES.has(selectedProcess.estado) || processActionsBlocked}
                   onPress={() => void addFolio()}
@@ -1253,7 +1298,7 @@ export function PrefrioScreen({ auth, baseUrl, onLogout, onBusyChange }: Prefrio
                   canOperate={canOperate}
                   disabled={processActionsBlocked}
                   onConfirm={() => openStateAction({ kind: 'confirmar_armado', title: 'Confirmar armado', description: 'Después de confirmar ya no deben agregarse pallets.', label: 'Armado confirmado', route: `/api/prefrio/procesos/${selectedProcess.id}/confirmar-armado`, nextState: 'listo_para_iniciar' })}
-                  onStart={() => openStateAction({ kind: 'iniciar', title: 'Iniciar proceso', description: 'Indica la fecha y hora real en que comenzó el ciclo térmico.', label: 'Proceso iniciado', route: `/api/prefrio/procesos/${selectedProcess.id}/iniciar`, nextState: 'en_proceso' })}
+                  onStart={() => openStateAction({ kind: 'iniciar', title: 'Iniciar proceso', description: 'Indica la hora real de planta en que arrancó el túnel. Puede ser anterior a la captura del armado.', label: 'Proceso iniciado', route: `/api/prefrio/procesos/${selectedProcess.id}/iniciar`, nextState: 'en_proceso' })}
                   onVerify={() => openStateAction({ kind: 'verificar', title: 'Finalizar proceso', description: 'Indica cuándo terminó realmente el ciclo y envíalo a verificación.', label: 'Proceso enviado a verificación', route: `/api/prefrio/procesos/${selectedProcess.id}/verificar`, nextState: 'pendiente_verificacion' })}
                   onEvent={(draft) => { setEventDraft(draft); setEventOccurredAt(operationalDateTime()); setEventNote(''); setReadingDraft(emptyR41Draft()); setError(''); }}
                   onLeave={() => {
@@ -1265,6 +1310,33 @@ export function PrefrioScreen({ auth, baseUrl, onLogout, onBusyChange }: Prefrio
               </View>
             </View>
 
+            {(partialHistory.length > 0 || (canSupervise && processInProgress && remaining > 1)) ? (
+              <View style={styles.panel}>
+                <Text style={styles.panelTitle}>Salidas parciales</Text>
+                <Text style={styles.muted}>{remaining} en proceso · {partialPending.length} pendientes de retiro · {partialHistory.length - partialPending.length} retirados</Text>
+                {canSupervise && processInProgress && remaining > 1 ? (
+                  <Pressable disabled={processActionsBlocked} onPress={() => setPartialDraft({
+                    finalizing: true, process: selectedProcess, initialTime: operationalDateTime(),
+                  })} style={[styles.secondaryButton, processActionsBlocked && styles.buttonDisabled]}>
+                    <Text style={styles.secondaryButtonText}>Finalizar parcialmente</Text>
+                  </Pressable>
+                ) : null}
+                {canOperate && partialPending.length > 0 ? (
+                  <Pressable disabled={processActionsBlocked} onPress={() => setPartialDraft({
+                    finalizing: false, process: selectedProcess, initialTime: operationalDateTime(),
+                  })} style={[styles.primaryButton, processActionsBlocked && styles.buttonDisabled]}>
+                    <Text style={styles.primaryButtonText}>Confirmar retiro</Text>
+                  </Pressable>
+                ) : null}
+                {partialHistory.map((item) => (
+                  <View key={item.id} style={styles.timelineItem}>
+                    <Text style={styles.timelineType}>{item.folio?.numero_folio} · {prefrioPartialResultLabel(item)}</Text>
+                    <Text style={styles.timelineMeta}>{item.retirado_at ? `Retirado · ${formatDate(item.retirado_at)}` : 'Pendiente de retiro'}</Text>
+                    <Text style={styles.timelineNote}>{item.motivo_resultado}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
             <View style={styles.panel}>
               <Text style={styles.panelTitle}>Últimos eventos</Text>
               {selectedProcess.eventos.slice(0, 8).map((event) => (
@@ -1307,6 +1379,18 @@ export function PrefrioScreen({ auth, baseUrl, onLogout, onBusyChange }: Prefrio
       </ScrollView>
 
       {busy ? <View style={styles.loading}><ActivityIndicator color={colors.cyan} size="large" /></View> : null}
+
+      {partialDraft ? (
+        <PrefrioPartialDialog
+          finalizing={partialDraft.finalizing}
+          candidates={partialDraft.process.folios.filter((item) => item.folio && (partialDraft.finalizing
+            ? item.estado === 'en_proceso' : prefrioPartialWithdrawalPending(item)))}
+          initialTime={partialDraft.initialTime}
+          busy={operationBusy}
+          onClose={() => setPartialDraft(null)}
+          onSubmit={submitPartial}
+        />
+      ) : null}
 
       <Modal animationType="fade" onRequestClose={() => setEventDraft(null)} transparent visible={eventDraft !== null}>
         <View style={styles.modalBackdrop}>
@@ -1465,7 +1549,7 @@ function ProcessActions({
   if (!ACTIVE_STATES.has(process.estado)) {
     return (
       <View>
-        <Text style={styles.muted}>El proceso está {stateLabel(process.estado).toLowerCase()} y ya no admite operaciones.</Text>
+        <Text style={styles.muted}>Proceso {stateLabel(process.estado).toLowerCase()}. Revisa los retiros en Salidas parciales.</Text>
         <Pressable onPress={onLeave} style={styles.secondaryButton}>
           <Text style={styles.secondaryButtonText}>Volver al túnel</Text>
         </Pressable>
@@ -1593,12 +1677,14 @@ function hasEquivalentPendingCommand(
 
 function nextFreePositionId(process: PrefrioProcess, tunnel: PrefrioTunnel) {
   const occupied = new Set(process.folios
-    .filter((item) => !['retirado', 'cancelado'].includes(item.estado))
+    .filter(prefrioFolioInTunnel)
     .map((item) => item.posicion?.id));
   return tunnel.posiciones.find((item) => item.activa && !occupied.has(item.id))?.id ?? null;
 }
 
 function stateLabel(value: string) {
+  if (value === 'finalizacion_parcial') return 'Finalización parcial';
+  if (value === 'retiro_parcial_confirmado') return 'Retiro parcial confirmado';
   return value.replaceAll('_', ' ').replace(/^./, (letter) => letter.toUpperCase());
 }
 
@@ -1607,7 +1693,7 @@ function formatTemperature(value: number | null) {
 }
 
 function formatDate(value: string) {
-  return new Date(value).toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short' });
+  return new Date(value).toLocaleString('es-CL', { timeZone: prefrioTimeZone, dateStyle: 'short', timeStyle: 'short' });
 }
 
 function messageFrom(reason: unknown) {

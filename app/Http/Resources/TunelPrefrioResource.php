@@ -36,7 +36,8 @@ class TunelPrefrioResource extends JsonResource
                 'codigo' => $this->procesoActivo->codigo,
                 'estado' => $this->procesoActivo->estado->value,
                 'version' => $this->procesoActivo->version,
-                'folios_cargados' => $this->procesoActivo->folios->count(),
+                'folios_cargados' => $this->procesoActivo->folios->filter(fn ($asignacion): bool => $asignacion->ocupaPosicion()
+                    && ($this->procesoActivo->estado->esActivo() || $asignacion->finalizado_parcial_at !== null))->count(),
                 'iniciado_at' => $this->procesoActivo->iniciado_at?->toAtomString(),
             ] : null),
             'creado_por' => $this->whenLoaded('creadoPor', fn () => [

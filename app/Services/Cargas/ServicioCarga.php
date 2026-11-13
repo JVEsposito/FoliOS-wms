@@ -8,10 +8,8 @@ use App\Enums\DominioTransicionOperacional;
 use App\Enums\EstadoCamara;
 use App\Enums\EstadoCarga;
 use App\Enums\EstadoCargaFolio;
-use App\Enums\EstadoFolioProcesoPrefrio;
 use App\Enums\EstadoIncidenciaCarga;
 use App\Enums\EstadoOperacionalFolio;
-use App\Enums\EstadoProcesoPrefrio;
 use App\Enums\HabilitacionAlmacenamientoFolio;
 use App\Enums\ModalidadSalidaCarga;
 use App\Enums\OrigenReingresoCamara;
@@ -205,9 +203,7 @@ class ServicioCarga
                 ->with([
                     'ubicacionActual',
                     'procesosPrefrio' => fn ($consulta) => $consulta
-                        ->where('estado', EstadoFolioProcesoPrefrio::Aprobado->value)
-                        ->whereHas('proceso', fn ($proceso) => $proceso
-                            ->where('estado', EstadoProcesoPrefrio::Aprobado->value))
+                        ->conAprobacion()
                         ->with('proceso:id,codigo,estado,finalizado_at'),
                 ])
                 ->orderBy('id')
@@ -318,6 +314,8 @@ class ServicioCarga
             foreach ($numeros as $numero) {
                 /** @var Folio $folio */
                 $folio = $folios->get($numero);
+                $prefrio = $folio->procesosPrefrio->sortByDesc(fn ($asignacion) => $asignacion->fechaResultado())->first();
+                $prefrio?->confirmarRetiroSiParcial($usuario, $salidaAt);
                 CargaFolio::create([
                     'carga_id' => $carga->id,
                     'folio_id' => $folio->id,
@@ -1595,7 +1593,7 @@ class ServicioCarga
         }
 
         $finalizadoAt = $folio->procesosPrefrio
-            ->map(fn ($asignacion) => $asignacion->proceso?->finalizado_at)
+            ->map(fn ($asignacion) => $asignacion->fechaResultado())
             ->filter()
             ->sortDesc()
             ->first();

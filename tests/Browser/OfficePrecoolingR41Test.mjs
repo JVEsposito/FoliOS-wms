@@ -28,7 +28,7 @@ function processFixture() {
     };
 }
 
-test('la oficina registra lecturas por sector, exige la lectura final completa y descarga el R-41', async () => {
+test('la oficina finaliza folios por separado y mantiene el R-41 operativo', async () => {
     const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined, args: ['--no-sandbox', '--disable-gpu'] });
     try {
         for (const width of [390, 1280]) {
@@ -39,6 +39,11 @@ test('la oficina registra lecturas por sector, exige la lectura final completa y
                 localStorage.setItem('estiba_wms_office_identity', JSON.stringify(user));
             }, identity);
             const process = processFixture();
+            process.folios.push({
+                id: 'a2', estado: 'en_proceso', en_tunel: true,
+                posicion: { id: 'pos2', numero: 2, etiqueta: 'P02', activa: true },
+                folio: { id: 'f2', numero_folio: 'R41-0002', tipo_bulto: 'saldo', cantidad_cajas: 15 },
+            });
             const writes = []; const errors = [];
             await context.route('http://localhost/**', async (route) => {
                 const request = route.request(); const path = new URL(request.url()).pathname;
@@ -47,7 +52,20 @@ test('la oficina registra lecturas por sector, exige la lectura final completa y
                     try { return route.fulfill({ body: readFileSync(resolve(root, `public${path}`)), contentType: ({ '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.svg': 'image/svg+xml' })[extname(path)] || 'application/octet-stream' }); }
                     catch { return route.fulfill({ status: 404, body: '' }); }
                 }
-                if (request.method() !== 'GET') { writes.push({ method: request.method(), path, body: request.postDataJSON() }); return route.fulfill({ json: { data: process } }); }
+                if (request.method() !== 'GET') {
+                    const body = request.postDataJSON();
+                    writes.push({ method: request.method(), path, body });
+                    if (path.endsWith('/finalizar-parcial')) {
+                        process.version++;
+                        Object.assign(process.folios[1], {
+                            estado: 'pendiente_prefrio', finalizado_parcial_at: '2026-11-12T13:30:00Z', motivo_resultado: body.motivo,
+                        });
+                    } else if (path.endsWith('/confirmar-retiro-parcial')) {
+                        process.version++;
+                        Object.assign(process.folios[1], { en_tunel: false, retirado_at: '2026-11-12T13:40:00Z' });
+                    }
+                    return route.fulfill({ json: { data: process } });
+                }
                 if (path === '/api/acceso-oficina') return route.fulfill({ json: { usuario: identity } });
                 if (path === '/api/prefrio/tuneles') return route.fulfill({ json: { data: [{ ...process.tunel, posiciones: [], proceso_activo: { id: 'p1', codigo: process.codigo, estado: 'en_proceso' } }] } });
                 if (path === '/api/prefrio/procesos') return route.fulfill({ json: { data: [process], meta: {} } });
@@ -64,6 +82,33 @@ test('la oficina registra lecturas por sector, exige la lectura final completa y
             assert.match(await page.locator('#r41Status').innerText(), /Al terminar el enfriado se exige una lectura completa/);
             const readings = await page.locator('#r41Readings').innerText();
             assert.match(readings, /Ventilador\s+-0,5\s+—\s+—\s+1,3/);
+
+            await page.locator('#finalizePartialButton').click();
+            const dialog = page.locator('#partialDialog');
+            const pallet = dialog.locator('[data-partial-folio="f1"]');
+            const saldo = dialog.locator('[data-partial-folio="f2"]');
+            await pallet.getByRole('checkbox').check();
+            await saldo.getByRole('checkbox').check();
+            assert.equal(await dialog.locator('#savePartialButton').isDisabled(), true);
+            await pallet.getByRole('checkbox').uncheck();
+            await saldo.locator('[name="resultado"]').selectOption('pendiente_prefrio');
+            await dialog.locator('[name="motivo"]').fill('Separación por formato');
+            await dialog.locator('[name="ocurrido_at"]').fill('2026-11-12T10:30');
+            await dialog.locator('#savePartialButton').click();
+            await dialog.waitFor({ state: 'hidden' });
+            await page.locator('#partialHistory').getByText('Pendiente de retiro', { exact: true }).waitFor();
+            assert.match(writes.at(-1).body.ocurrido_at, /^2026-11-12T10:30(?::00)?$/);
+            assert.deepEqual(writes.at(-1).body.resultados, [
+                { folio_id: 'f2', resultado: 'pendiente_prefrio', temperatura_final: null, motivo: null },
+            ]);
+            assert.equal(await page.locator('#processTunnelMap').getByText('R41-0002').isVisible(), true);
+            await page.locator('#confirmPartialButton').click();
+            await dialog.getByRole('checkbox').check();
+            await dialog.locator('#savePartialButton').click();
+            await dialog.waitFor({ state: 'hidden' });
+            await page.locator('#partialHistory').getByText('Retirado', { exact: true }).waitFor();
+            assert.deepEqual(writes.at(-1).body.folios, ['f2']);
+            assert.equal(await page.locator('#processTunnelMap').getByText('R41-0002').count(), 0);
 
             // Lectura horaria parcial.
             await page.locator('#operationalActionSelect').selectOption('lectura');

@@ -105,7 +105,7 @@ class ServicioPreparacionFisicaSag
         $lotes = $this->lotesPendientes()
             ->where('temporada_id', $proceso->temporada_id)
             ->whereHas('folios', fn ($consulta) => $consulta
-                ->whereIn('folio_id', $proceso->folios()->pluck('folio_id')))
+                ->whereIn('folio_id', $proceso->folios()->conAprobacion()->select('folio_id')))
             ->orderBy('id')
             ->get();
 

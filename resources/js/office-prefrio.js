@@ -15,6 +15,12 @@ const elements = {
     operationalReadingNote: byId('operationalReadingNote'), operationalError: byId('operationalActionError'),
     r41Panel: byId('r41Panel'), r41Status: byId('r41Status'), r41Readings: byId('r41Readings'), r41DataForm: byId('r41DataForm'), r41DataError: byId('r41DataError'), r41Download: byId('r41DownloadButton'),
     approve: byId('approveProcessButton'), reprocessButton: byId('reprocessProcessButton'), cancelProcess: byId('cancelProcessButton'),
+    operationalStartNote: byId('operationalStartNote'),
+    partialPanel: byId('partialPanel'), partialSummary: byId('partialSummary'), partialHistory: byId('partialHistory'),
+    finalizePartial: byId('finalizePartialButton'), confirmPartial: byId('confirmPartialButton'),
+    partialDialog: byId('partialDialog'), partialForm: byId('partialForm'), partialTitle: byId('partialDialogTitle'),
+    partialDescription: byId('partialDescription'), partialReason: byId('partialReason'), partialCandidates: byId('partialCandidates'),
+    partialCount: byId('partialSelectionCount'), partialError: byId('partialError'), savePartial: byId('savePartialButton'),
     tunnelDialog: byId('tunnelDialog'), tunnelForm: byId('tunnelForm'), tunnelDialogTitle: byId('tunnelDialogTitle'), tunnelError: byId('tunnelFormError'), tunnelPreview: byId('tunnelPreview'), tunnelPreviewSummary: byId('tunnelPreviewSummary'),
     processDialog: byId('processDialog'), processForm: byId('processForm'), processError: byId('processFormError'),
     reasonDialog: byId('reasonDialog'), reasonForm: byId('reasonForm'), reasonTitle: byId('reasonTitle'), reasonDescription: byId('reasonDescription'), reasonEyebrow: byId('reasonEyebrow'), reasonError: byId('reasonError'), confirmReason: byId('confirmReasonButton'),
@@ -28,7 +34,17 @@ const r41Points = ['izq_ex', 'izq_in', 'der_in', 'der_ex'];
 const activeStates = new Set(['borrador', 'cargando', 'listo_para_iniciar', 'en_proceso', 'pendiente_verificacion']);
 const state = {
     token: localStorage.getItem(keys.token), identity: readJson(keys.identity), tunnels: [], processes: [], summary: null, selectedTunnelId: null,
-    selectedProcess: null, reasonMode: null,
+    selectedProcess: null, reasonMode: null, partial: null,
+};
+const timeZone = document.body.dataset.timeZone || 'America/Santiago';
+const plantInput = new Intl.DateTimeFormat('sv-SE', {
+    timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+});
+const partialResults = {
+    prefrio_aprobado: 'Prefrío aprobado',
+    pendiente_prefrio: 'Pendiente de prefrío',
+    requiere_reproceso: 'Requiere reproceso',
+    retenido: 'Retenido',
 };
 
 class ApiError extends Error {
@@ -37,9 +53,15 @@ class ApiError extends Error {
 function readJson(key) { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch { return null; } }
 function escapeHtml(value) { return String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;'); }
 function errorMessage(data, fallback) { return Object.values(data?.errors || {}).flat()[0] || data?.message || fallback; }
-function formatDate(value, fallback = 'Sin fecha') { if (!value) return fallback; const date = new Date(value); return Number.isNaN(date.getTime()) ? fallback : new Intl.DateTimeFormat('es-CL', { dateStyle: 'short', timeStyle: 'short' }).format(date); }
-function localDateTimeValue(value = new Date()) { const date = new Date(value); const offset = date.getTimezoneOffset() * 60000; return new Date(date.getTime() - offset).toISOString().slice(0, 16); }
-function occurredAt(value) { const date = new Date(value); if (!value || Number.isNaN(date.getTime())) throw new ApiError('Ingresa una fecha y hora válida.', 422); return date.toISOString(); }
+function formatDate(value, fallback = 'Sin fecha') { if (!value) return fallback; const date = new Date(value); return Number.isNaN(date.getTime()) ? fallback : new Intl.DateTimeFormat('es-CL', { timeZone, dateStyle: 'short', timeStyle: 'short' }).format(date); }
+function localDateTimeValue(value = new Date()) { return plantInput.format(new Date(value)).replace(' ', 'T'); }
+function occurredAt(value) {
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?$/.test(value ?? '')) {
+        throw new ApiError('Ingresa una fecha y hora válida.', 422);
+    }
+    // Laravel interpreta los valores sin offset como hora de planta.
+    return value;
+}
 function statusText(value) {
     const labels = {
         borrador: 'Borrador', cargando: 'Cargando', listo_para_iniciar: 'Listo para iniciar', en_proceso: 'En proceso', pendiente_verificacion: 'Pendiente de verificación',
@@ -47,6 +69,7 @@ function statusText(value) {
         activo: 'Activo', inactivo: 'Inactivo', carga_iniciada: 'Carga iniciada', pallet_agregado: 'Pallet agregado', pallet_retirado: 'Pallet retirado', armado_confirmado: 'Armado confirmado',
         proceso_iniciado: 'Proceso iniciado', inversion_registrada: 'Inversión registrada', pausa: 'Pausa', reanudacion: 'Reanudación', deshielo: 'Deshielo', lectura: 'Lectura',
         verificacion_final: 'Verificación final', aprobacion: 'Aprobación', reproceso: 'Reproceso', cancelacion: 'Cancelación', correccion_administrativa: 'Corrección administrativa',
+        finalizacion_parcial: 'Finalización parcial', retiro_parcial_confirmado: 'Retiro parcial confirmado',
     };
     return labels[value] || String(value || '').replaceAll('_', ' ').replace(/^./, (letter) => letter.toUpperCase());
 }
@@ -141,9 +164,15 @@ function renderProcessFormOptions() {
     select.innerHTML = `<option value="">Selecciona un túnel disponible</option>${available.map((item) => `<option value="${item.id}">${escapeHtml(item.codigo)} · ${escapeHtml(item.nombre)} · ${item.capacidad_posiciones} posiciones</option>`).join('')}`;
     if ([...select.options].some((option) => option.value === current)) select.value = current;
 }
+function foliosDelPlano(process) {
+    const folios = process.folios || [];
+    const historical = !activeStates.has(process.estado) && !folios.some((item) => item.finalizado_parcial_at);
+    return folios.filter((item) => (historical ? null : item.en_tunel) ?? !['retirado', 'cancelado'].includes(item.estado));
+}
+
 function renderProcesses() {
     elements.processBody.innerHTML = state.processes.map((item) => {
-        const activeFolios = (item.folios || []).filter((folio) => !['retirado', 'cancelado'].includes(folio.estado));
+        const activeFolios = foliosDelPlano(item);
         const occupiedPositions = new Set(activeFolios.map((folio) => folio.posicion?.id).filter(Boolean)).size;
         const finalText = item.estado === 'aprobado' ? 'Habilitado' : item.estado === 'requiere_reproceso' ? 'Retenido' : item.estado === 'cancelado' ? 'Cancelado' : 'Pendiente';
         const selected = state.selectedProcess?.id === item.id;
@@ -174,13 +203,145 @@ function renderProcessDetail() {
     const process = state.selectedProcess; if (!process) { elements.detail.classList.add('is-hidden'); return; }
     elements.detail.classList.remove('is-hidden'); elements.detailTitle.textContent = `${process.codigo} · ${process.tunel?.codigo || 'Sin túnel'}`;
     elements.detailSubtitle.textContent = `${process.tunel?.nombre || ''} · ${statusText(process.estado)} · setpoint ${process.setpoint} °C · versión ${process.version}`;
-    const occupied = (process.folios || []).filter((item) => !['retirado', 'cancelado'].includes(item.estado));
+    const occupied = foliosDelPlano(process);
     const occupiedPositions = new Set(occupied.map((item) => item.posicion?.id).filter(Boolean)).size;
     elements.detailMetrics.innerHTML = [
         ['ESTADO', statusText(process.estado)], ['POSICIONES', `${occupiedPositions}/${process.tunel?.capacidad_posiciones || '—'}`], ['FOLIOS', occupied.length], ['INICIO', formatDate(process.iniciado_at, 'No iniciado')], ['FINAL', formatDate(process.finalizado_at, 'Pendiente')],
     ].map(([label, value]) => `<article><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></article>`).join('');
     elements.correctProcess.classList.toggle('is-hidden', state.identity?.rol !== 'administrador');
-    renderTunnelMap(process, occupied); renderTimeline(process); renderR41(process); renderOperationalPanel(process); renderDecisionPanel(process, occupied);
+    renderTunnelMap(process, occupied);
+    renderTimeline(process);
+    renderR41(process);
+    renderOperationalPanel(process);
+    renderDecisionPanel(process, occupied.filter((item) => item.estado === 'en_proceso'));
+    renderPartialPanel(process);
+}
+
+function partialCandidates(process, finalizing) {
+    return (process.folios || []).filter((item) => item.folio && (finalizing
+        ? item.estado === 'en_proceso'
+        : item.finalizado_parcial_at && !item.retirado_at));
+}
+
+function partialResultLabel(item) {
+    return partialResults[item.estado === 'aprobado' ? 'prefrio_aprobado' : item.estado] || statusText(item.estado);
+}
+
+function renderPartialPanel(process) {
+    const history = (process.folios || []).filter((item) => item.finalizado_parcial_at);
+    const remaining = partialCandidates(process, true).length;
+    const waiting = partialCandidates(process, false).length;
+    const canFinalize = state.identity?.puede_supervisar_prefrio === true && process.estado === 'en_proceso' && remaining > 1;
+    const canConfirm = state.identity?.puede_operar_prefrio === true && waiting > 0;
+    elements.partialPanel.classList.toggle('is-hidden', !canFinalize && !canConfirm && !history.length);
+    elements.finalizePartial.classList.toggle('is-hidden', !canFinalize);
+    elements.confirmPartial.classList.toggle('is-hidden', !canConfirm);
+    elements.partialSummary.textContent = `${remaining} en proceso · ${waiting} pendientes de retiro · ${history.length - waiting} retirados`;
+    elements.partialHistory.innerHTML = history.map((item) => `<article class="partial-folio">
+        <div class="decision-folio__title"><strong>${escapeHtml(item.folio?.numero_folio || 'Folio')}</strong>
+            <small>${item.retirado_at ? 'Retirado' : 'Pendiente de retiro'}</small></div>
+        <span>${escapeHtml(partialResultLabel(item))} · ${escapeHtml(item.motivo_resultado || '')}</span>
+        <small>Decisión ${escapeHtml(formatDate(item.finalizado_parcial_at))}${item.temperatura_final == null ? '' : ` · ${r41Value(item.temperatura_final)} °C`}</small>
+        <small>${item.retirado_at
+            ? `Retiro ${escapeHtml(formatDate(item.retirado_at))} · ${escapeHtml(item.retirado_por?.nombre || 'Usuario')}`
+            : escapeHtml(item.posicion?.etiqueta || '')}</small>
+    </article>`).join('');
+}
+
+function openPartialDialog(finalizing) {
+    const process = state.selectedProcess;
+    if (!process) return;
+    const candidates = partialCandidates(process, finalizing);
+    const title = finalizing ? 'Finalizar parcialmente' : 'Confirmar retiro';
+    const form = elements.partialForm;
+    state.partial = { finalizing, process, total: candidates.length, submission: null, sending: false };
+    form.reset();
+    elements.partialTitle.textContent = title;
+    elements.savePartial.textContent = title;
+    elements.partialDescription.textContent = finalizing
+        ? 'Selecciona los folios que saldrán e indica su resultado. Los demás siguen en el ciclo.'
+        : 'Marca los folios que ya salieron físicamente del túnel.';
+    form.elements.ocurrido_at.value = localDateTimeValue();
+    form.elements.motivo.disabled = !finalizing;
+    elements.partialReason.classList.toggle('is-hidden', !finalizing);
+    elements.partialError.textContent = '';
+    const options = Object.entries(partialResults).map(([value, label]) => `<option value="${value}">${label}</option>`).join('');
+    elements.partialCandidates.innerHTML = candidates.map((item) => `<article class="partial-folio" data-partial-folio="${escapeHtml(item.folio.id)}">
+        <label class="partial-folio__selection"><input type="checkbox" data-partial-select>
+            <strong>${escapeHtml(item.folio.numero_folio)}</strong>
+            <small>${escapeHtml(statusText(item.folio.tipo_bulto))} · ${escapeHtml(item.posicion?.etiqueta || '')}</small>
+        </label>
+        ${finalizing ? `<fieldset class="prefrio-form-grid partial-folio__fields" disabled>
+            <label><span>Resultado térmico *</span><select name="resultado" required><option value="">Seleccionar</option>${options}</select></label>
+            <label><span>T° final (°C)</span><input name="temperatura_final" type="number" min="-20" max="50" step="0.1"></label>
+            <label><span>Motivo del folio</span><input name="motivo_folio" minlength="3" maxlength="100" placeholder="Usa el motivo general"></label>
+        </fieldset>` : `<small>${escapeHtml(partialResultLabel(item))} · ${escapeHtml(item.motivo_resultado || '')}</small>`}
+    </article>`).join('');
+    updatePartialSelection();
+    elements.partialDialog.showModal();
+}
+
+function selectedPartialRows() {
+    return [...elements.partialCandidates.querySelectorAll('[data-partial-folio]')].filter((row) => row.querySelector('[data-partial-select]').checked);
+}
+
+function updatePartialSelection() {
+    const { finalizing, total, sending } = state.partial;
+    const count = selectedPartialRows().length;
+    const all = finalizing && count === total;
+    elements.savePartial.disabled = sending || !count || all;
+    elements.partialCount.textContent = all
+        ? 'Usa Finalizar proceso para terminar todos los folios restantes.'
+        : finalizing ? `${count} seleccionados · ${total - count} seguirán en proceso` : `${count} seleccionados`;
+}
+
+async function submitPartial() {
+    const draft = state.partial;
+    if (draft.sending || elements.savePartial.disabled || !elements.partialForm.reportValidity()) return;
+    const { finalizing, process } = draft;
+    const fields = elements.partialForm.elements;
+    const rows = selectedPartialRows();
+    const operation = finalizing ? 'finalizar-parcial' : 'confirmar-retiro-parcial';
+    elements.partialError.textContent = '';
+    try {
+        const data = {
+            version_conocida: process.version,
+            ocurrido_at: occurredAt(fields.ocurrido_at.value),
+            ...(finalizing ? {
+                motivo: fields.motivo.value.trim(),
+                resultados: rows.map((row) => {
+                    const temperature = row.querySelector('[name="temperatura_final"]').value;
+                    return {
+                        folio_id: row.dataset.partialFolio,
+                        resultado: row.querySelector('[name="resultado"]').value,
+                        temperatura_final: temperature === '' ? null : Number(temperature),
+                        motivo: row.querySelector('[name="motivo_folio"]').value.trim() || null,
+                    };
+                }),
+            } : { folios: rows.map((row) => row.dataset.partialFolio) }),
+        };
+        const signature = JSON.stringify(data);
+        if (draft.submission?.signature !== signature) draft.submission = { signature, id: operationUuid() };
+        draft.sending = true;
+        updatePartialSelection();
+        const response = await api(`/api/prefrio/procesos/${process.id}/${operation}`, {
+            method: 'POST', body: JSON.stringify({ ...data, operacion_id: draft.submission.id }),
+        });
+        state.selectedProcess = response.data;
+        elements.partialDialog.close();
+        renderProcessDetail();
+        toast(finalizing ? 'Finalización parcial registrada.' : 'Retiro confirmado.');
+        await Promise.all([loadTunnels(), loadProcesses(), loadSummary()]);
+        markViewUpdated();
+    } catch (error) {
+        if (!elements.partialDialog.open) { toast(error.message, true); return; }
+        elements.partialError.textContent = error.status === 409
+            ? `${error.message} Cierra el cuadro y actualiza el proceso antes de reintentar.`
+            : error.message;
+    } finally {
+        draft.sending = false;
+        if (state.partial === draft) updatePartialSelection();
+    }
 }
 /** Lecturas del R-41 en orden, con la lectura final que acompañó el término del enfriado. */
 function r41Readings(process) {
@@ -256,7 +417,7 @@ function renderDecisionPanel(process, occupied) {
     elements.approve.classList.toggle('is-hidden', !pending); elements.reprocessButton.classList.toggle('is-hidden', !pending); elements.cancelProcess.classList.toggle('is-hidden', terminal);
     elements.decisionFolios.classList.toggle('is-hidden', !pending);
     elements.decisionFolios.innerHTML = occupied.map((item) => `<article class="decision-folio" data-decision-folio="${item.folio.id}"><div class="decision-folio__title"><strong>${escapeHtml(item.folio.numero_folio)}</strong><small>${escapeHtml(item.posicion?.etiqueta || '')}</small></div><div class="decision-folio__fields"><input name="temperatura_final" type="number" min="-20" max="50" step="0.1" value="${item.temperatura_final ?? ''}" placeholder="Temp. final"><input name="observacion" maxlength="1000" value="${escapeHtml(item.observacion || '')}" placeholder="Observación"></div></article>`).join('') || '<p class="empty-prefrio">El proceso no posee folios activos.</p>';
-    if (!elements.decisionOccurredAt.value) elements.decisionOccurredAt.value = localDateTimeValue();
+    elements.decisionOccurredAt.value = localDateTimeValue();
     elements.decisionError.textContent = '';
 }
 function renderOperationalPanel(process) {
@@ -282,6 +443,7 @@ function renderOperationalPanel(process) {
 }
 function syncOperationalTemperature() {
     const action = elements.operationalAction.value;
+    elements.operationalStartNote.classList.toggle('is-hidden', action !== 'iniciar');
     const registro = state.selectedProcess?.registro_r41 || {};
     const finalRequired = action === 'verificar' && registro.exige_lectura_final !== false && !registro.ultima_lectura_completa;
     const visible = action === 'lectura' || action === 'verificar';
@@ -322,20 +484,22 @@ function openCorrectionDialog() {
     elements.correctionForm.elements.duracion_objetivo_minutos.value = process.duracion_objetivo_minutos ?? '';
     elements.correctionForm.elements.formato_referencia.value = process.formato_referencia ?? '';
     elements.correctionForm.elements.observacion.value = process.observacion ?? '';
-    const editableEvents = (process.eventos || []).filter((event) => event.tipo !== 'correccion_administrativa');
+    const editableEvents = (process.eventos || []).filter((event) => ![
+        'correccion_administrativa', 'finalizacion_parcial', 'retiro_parcial_confirmado',
+    ].includes(event.tipo));
     elements.correctionEvents.innerHTML = editableEvents.map((event) => `
         <article class="history-editor-row" data-correction-event="${event.id}">
             <div class="history-editor-row__identity"><strong>${escapeHtml(statusText(event.tipo))}</strong><small>${escapeHtml(event.usuario?.nombre || 'Usuario')}</small></div>
-            <label><span>Fecha y hora *</span><input name="ocurrido_at" type="datetime-local" value="${event.ocurrido_at ? localDateTimeValue(event.ocurrido_at) : ''}" required></label>
+            <label><span>Fecha y hora *</span><input name="ocurrido_at" type="datetime-local" step="1" value="${event.ocurrido_at ? localDateTimeValue(event.ocurrido_at) : ''}" required></label>
             <label><span>Observación</span><input name="observacion" maxlength="2000" value="${escapeHtml(event.observacion || '')}"></label>
         </article>`).join('') || '<p class="empty-prefrio">No existen eventos editables.</p>';
-    elements.correctionFolios.innerHTML = (process.folios || []).map((item) => {
+    elements.correctionFolios.innerHTML = (process.folios || []).filter((item) => !item.finalizado_parcial_at).map((item) => {
         const included = !['retirado', 'cancelado'].includes(item.estado);
         return `
         <article class="history-editor-row history-editor-row--folio" data-correction-folio="${item.id}">
             <div class="history-editor-row__identity"><strong>${escapeHtml(item.folio?.numero_folio || 'Folio')}</strong><small>${escapeHtml(statusText(item.estado))}</small><label class="history-editor-row__toggle"><input data-included type="checkbox"${included ? ' checked' : ''}><span>Incluir</span></label></div>
             <label><span>Posición</span><select name="posicion_tunel_prefrio_id">${correctionPositionOptions(process, item.posicion?.id || '')}</select></label>
-            <label><span>Fecha de carga</span><input name="cargado_at" type="datetime-local" value="${item.cargado_at ? localDateTimeValue(item.cargado_at) : ''}"></label>
+            <label><span>Fecha de carga</span><input name="cargado_at" type="datetime-local" step="1" value="${item.cargado_at ? localDateTimeValue(item.cargado_at) : ''}"></label>
             <label><span>Temp. inicial</span><input name="temperatura_inicial" type="number" min="-20" max="50" step="0.1" value="${item.temperatura_inicial ?? ''}"></label>
             <label><span>Temp. final</span><input name="temperatura_final" type="number" min="-20" max="50" step="0.1" value="${item.temperatura_final ?? ''}"></label>
             <label><span>Observación</span><input name="observacion" maxlength="2000" value="${escapeHtml(item.observacion || '')}"></label>
@@ -575,6 +739,23 @@ elements.correctProcess.addEventListener('click', openCorrectionDialog);
 elements.correctionForm.addEventListener('submit', (event) => { event.preventDefault(); if (event.submitter?.value === 'cancel') { elements.correctionDialog.close(); return; } if (!elements.correctionForm.reportValidity()) return; void saveCorrection(); });
 elements.closeDetail.addEventListener('click', () => { state.selectedProcess = null; elements.detail.classList.add('is-hidden'); renderProcesses(); });
 elements.approve.addEventListener('click', approveProcess); elements.reprocessButton.addEventListener('click', () => openReasonDialog('reprocess')); elements.cancelProcess.addEventListener('click', () => openReasonDialog('cancel'));
+elements.finalizePartial.addEventListener('click', () => openPartialDialog(true));
+elements.confirmPartial.addEventListener('click', () => openPartialDialog(false));
+elements.partialCandidates.addEventListener('change', (event) => {
+    if (!event.target.matches('[data-partial-select]')) return;
+    const fields = event.target.closest('[data-partial-folio]').querySelector('fieldset');
+    if (fields) fields.disabled = !event.target.checked;
+    updatePartialSelection();
+});
+elements.partialForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    if (state.partial.sending) return;
+    if (event.submitter?.value === 'cancel') elements.partialDialog.close();
+    else void submitPartial();
+});
+elements.partialDialog.addEventListener('cancel', (event) => {
+    if (state.partial?.sending) event.preventDefault();
+});
 elements.reasonForm.addEventListener('submit', (event) => { event.preventDefault(); if (event.submitter?.value === 'cancel') { elements.reasonDialog.close(); return; } if (!elements.reasonForm.reportValidity()) return; submitReason(); });
 elements.operationalAction.addEventListener('change', syncOperationalTemperature);
 elements.r41DataForm.addEventListener('submit', (event) => { event.preventDefault(); if (!elements.r41DataForm.reportValidity()) return; void saveR41Data(); });

@@ -18,6 +18,7 @@ use App\Models\FolioMaterial;
 use App\Models\Movimiento;
 use App\Models\OperacionSincronizacion;
 use App\Models\Posicion;
+use App\Models\ProcesoPrefrioFolio;
 use App\Models\SesionEstiba;
 use App\Models\TareaMovimiento;
 use App\Models\UbicacionActual;
@@ -673,6 +674,7 @@ class ServicioMovimientoEstiba
             'ubicado_at' => $recibidoServidorAt,
         ]);
         if ($posicion && $tipoBulto !== TipoBulto::Material) {
+            ProcesoPrefrioFolio::confirmarSalidaParcialDeFolio($folio, $usuario, $recibidoServidorAt);
             // Un pallet que volvió desde el andén o el camión cierra su reingreso.
             app(ServicioReingresoCamara::class)->cerrarPorUbicacion($folio, $movimiento, $usuario);
             // La reserva puede anteceder a la ubicación. Activar su tarea de
