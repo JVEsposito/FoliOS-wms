@@ -183,7 +183,8 @@ class GuiaDespachoEnvasesApiTest extends TestCase
         $this->actingAs($admin, 'sanctum');
         $reporte = '/api/envases/cuenta-corriente/estado-cuenta?cliente_id='.$cliente->id;
         $antes = $this->get($reporte)->assertOk()->getContent();
-        $this->assertStringContainsString('Sin productor asignado', $antes);
+        // Sin productor, la guía queda en el grupo «Sin productor asociado» del detalle por CSG.
+        $this->assertMatchesRegularExpression('/\(Sin productor asociado\)(?:(?!\(CSG ).)*?Gu.a de despacho N. 2227/s', $antes);
         $this->putJson($ruta.'/productor', [...$correccion, 'motivo' => ' '])->assertUnprocessable();
         $this->putJson($ruta.'/productor', $correccion)->assertOk()
             ->assertJsonPath('data.productor.codigo', '122104')
@@ -198,9 +199,8 @@ class GuiaDespachoEnvasesApiTest extends TestCase
         $this->assertSame('122104', $evento->datos['nuevo']['codigo']);
         $this->assertSame($correccion['motivo'], $evento->datos['motivo']);
         $despues = $this->get($reporte)->assertOk()->getContent();
-        $this->assertStringContainsString('CSG 122104', $despues);
-        $this->assertStringContainsString('Productor 122104', $despues);
-        $this->assertStringNotContainsString('Sin productor asignado', $despues);
+        $this->assertMatchesRegularExpression('/\(CSG 122104 . Productor 122104\)(?:(?!\(Sin productor asociado\)).)*?Gu.a de despacho N. 2227/s', $despues);
+        $this->assertDoesNotMatchRegularExpression('/\(Sin productor asociado\)(?:(?!\(CSG ).)*?Gu.a de despacho N. 2227/s', $despues);
         $this->assertSame(-6, $this->saldoCuenta($cliente));
         $this->assertSame(14, $this->existencia('propia'));
         $this->assertDatabaseCount('movimientos_envases', 2);

@@ -7,7 +7,47 @@ class ResumenEnvasesPorCsg
 {
     public static function generar(array $movimientos, array $recepciones, array $anteriores = []): array
     {
-        $resumen = self::atribuir($movimientos, $recepciones);
+        return self::completar(self::atribuir($movimientos, $recepciones), $recepciones, $anteriores);
+    }
+
+    /**
+     * Resumen a partir de lo ya atribuido línea a línea en el detalle por CSG, para que el
+     * resumen y el detalle sumen lo mismo.
+     *
+     * @param  list<array{csg: ?array, tipo_envase: string, nombre_envase: string, orden: int, entradas: int, salidas: int}>  $asignaciones
+     */
+    public static function desdeAsignaciones(array $asignaciones, array $recepciones, array $anteriores = []): array
+    {
+        $resumen = [];
+        foreach ($asignaciones as $asignacion) {
+            self::agregar($resumen, $asignacion['csg'], $asignacion);
+        }
+
+        return self::completar($resumen, $recepciones, $anteriores);
+    }
+
+    /** Saldo inicial por CSG y tipo, con la misma atribución del resumen. */
+    public static function saldosIniciales(array $recepciones, array $anteriores): array
+    {
+        $saldos = [];
+        foreach (self::atribuir($anteriores, $recepciones) as $clave => $grupo) {
+            foreach ($grupo['tipos'] as $tipo => $fila) {
+                $saldos[$clave][$tipo] = $fila['entradas'] - $fila['salidas'];
+            }
+        }
+
+        return $saldos;
+    }
+
+    public static function clave(?array $csg): string
+    {
+        $codigo = trim((string) ($csg['codigo'] ?? ''));
+
+        return $codigo === '' ? 'sin_csg' : 'csg:'.$codigo;
+    }
+
+    private static function completar(array $resumen, array $recepciones, array $anteriores): array
+    {
         foreach (self::atribuir($anteriores, $recepciones) as $clave => $grupo) {
             foreach ($grupo['tipos'] as $tipo => $fila) {
                 $saldoInicial = $fila['entradas'] - $fila['salidas'];
