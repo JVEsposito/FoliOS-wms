@@ -290,8 +290,8 @@ class ServicioPresenciaCargaAnden
         // una tarea de recepción que restaurar. Publicarla ahora para los
         // pallets que permanecen físicamente en el túnel.
         $procesos = ProcesoPrefrio::query()
-            ->where('estado', 'aprobado')
             ->whereHas('folios', fn ($folios) => $folios
+                ->conAprobacion()
                 ->whereHas('folio.asignacionCargaActual', fn ($asignacion) => $asignacion
                     ->where('carga_id', $carga->id)))
             ->get();

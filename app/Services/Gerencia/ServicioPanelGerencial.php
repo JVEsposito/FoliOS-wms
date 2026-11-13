@@ -900,8 +900,8 @@ class ServicioPanelGerencial
             ->with([
                 'procesoActivo' => fn (HasOne $consulta): HasOne => $consulta
                     ->withCount([
-                        'folios as folios_activos_count' => fn (Builder $folios): Builder => $folios
-                            ->whereNull('retirado_at'),
+                        'folios as folios_activos_count' => fn (Builder $folios): Builder => $folios->enTunelOperativo()
+                            ->select(DB::raw('count(distinct posicion_tunel_prefrio_id)')),
                     ]),
             ])
             ->orderBy('codigo')

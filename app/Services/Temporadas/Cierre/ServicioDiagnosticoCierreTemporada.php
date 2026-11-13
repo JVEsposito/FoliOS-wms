@@ -388,7 +388,11 @@ final class ServicioDiagnosticoCierreTemporada
         $consulta = DB::table('procesos_prefrio as p')
             ->leftJoin('tuneles_prefrio as t', 't.id', '=', 'p.tunel_prefrio_id')
             ->where('p.temporada_id', $temporada->id)
-            ->whereIn('p.estado', $activos)
+            ->where(fn (Builder $procesos): Builder => $procesos->whereIn('p.estado', $activos)
+                ->orWhereExists(fn (Builder $folios): Builder => $folios
+                    ->selectRaw('1')->from('procesos_prefrio_folios as pf')
+                    ->whereColumn('pf.proceso_prefrio_id', 'p.id')
+                    ->whereNotNull('pf.finalizado_parcial_at')->whereNull('pf.retirado_at')))
             ->select([
                 'p.id', 'p.codigo as referencia', 'p.estado',
                 DB::raw('coalesce(p.iniciado_por_user_id, p.creado_por_user_id) as responsable_id'),

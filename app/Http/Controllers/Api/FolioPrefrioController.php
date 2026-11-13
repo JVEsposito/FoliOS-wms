@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api;
 
 use App\Enums\CondicionTermicaFolio;
-use App\Enums\EstadoProcesoPrefrio;
 use App\Enums\HabilitacionAlmacenamientoFolio;
 use App\Enums\TipoBulto;
 use App\Http\Controllers\Concerns\RespondeConEtagOperacional;
@@ -39,11 +38,6 @@ class FolioPrefrioController extends Controller
             }
         }
 
-        $estadosActivos = collect(EstadoProcesoPrefrio::cases())
-            ->filter->esActivo()
-            ->map->value
-            ->all();
-
         $consulta = Folio::query()
             ->where('activo', true)
             ->whereHas('temporada', fn ($consulta) => $consulta->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
@@ -58,8 +52,7 @@ class FolioPrefrioController extends Controller
                 HabilitacionAlmacenamientoFolio::Retenido->value,
             ])
             ->whereDoesntHave('ubicacionActual')
-            ->whereDoesntHave('procesosPrefrio.proceso', fn ($consulta) => $consulta
-                ->whereIn('estado', $estadosActivos))
+            ->whereDoesntHave('procesosPrefrio', fn ($consulta) => $consulta->impideNuevaCarga())
             ->when($folio !== '', fn ($consulta) => $consulta
                 ->where('numero_folio', 'like', "%{$folio}%"))
             ->orderBy('fecha_ingreso')

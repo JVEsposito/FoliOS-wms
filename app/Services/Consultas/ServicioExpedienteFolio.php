@@ -2,7 +2,6 @@
 
 namespace App\Services\Consultas;
 
-use App\Enums\EstadoProcesoPrefrio;
 use App\Enums\TipoBulto;
 use App\Models\CambioAtributosPt;
 use App\Models\Folio;
@@ -237,15 +236,16 @@ class ServicioExpedienteFolio
                 ], fn (mixed $valor): bool => $valor !== null && $valor !== ''),
             ]);
 
-            if ($proceso?->finalizado_at) {
-                $aprobado = $proceso->estado === EstadoProcesoPrefrio::Aprobado;
+            if ($resultadoAt = $asignacion->fechaResultado()) {
+                $parcial = $asignacion->finalizado_parcial_at !== null;
+                $aprobado = $asignacion->tieneAprobacion();
                 $eventos->push([
                     'tipo' => 'prefrio_resultado',
-                    'fecha' => $this->fecha($proceso->finalizado_at),
-                    'titulo' => $aprobado ? 'Prefrío aprobado' : 'Prefrío finalizado',
-                    'descripcion' => $aprobado
-                        ? 'Pendiente de prefrío → Disponible'
-                        : mb_strtoupper($this->valor($proceso->estado) ?? 'FINALIZADO'),
+                    'fecha' => $this->fecha($resultadoAt),
+                    'titulo' => $parcial ? 'Finalización parcial de prefrío' : ($aprobado ? 'Prefrío aprobado' : 'Prefrío finalizado'),
+                    'descripcion' => $parcial
+                        ? ($asignacion->motivo_resultado ?? 'Decisión térmica por folio')
+                        : ($aprobado ? 'Pendiente de prefrío → Disponible' : mb_strtoupper($this->valor($proceso->estado) ?? 'FINALIZADO')),
                     'meta' => array_filter([
                         'Proceso' => $proceso->codigo,
                         'Túnel' => $proceso->tunel?->codigo,
@@ -254,6 +254,16 @@ class ServicioExpedienteFolio
                             : null,
                         'Resultado' => $this->valor($asignacion->estado),
                     ], fn (mixed $valor): bool => $valor !== null && $valor !== ''),
+                ]);
+            }
+
+            if ($asignacion->retiroParcialConfirmado()) {
+                $eventos->push([
+                    'tipo' => 'prefrio_retiro',
+                    'fecha' => $this->fecha($asignacion->retirado_at),
+                    'titulo' => 'Retiro parcial confirmado',
+                    'descripcion' => $proceso?->codigo ?? 'Proceso de prefrío',
+                    'meta' => array_filter(['Operador' => $asignacion->retiradoPor?->name]),
                 ]);
             }
         }

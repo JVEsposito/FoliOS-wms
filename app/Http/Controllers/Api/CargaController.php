@@ -4,10 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Enums\CondicionTermicaFolio;
 use App\Enums\EstadoCarga;
-use App\Enums\EstadoFolioProcesoPrefrio;
 use App\Enums\EstadoIncidenciaCarga;
 use App\Enums\EstadoOperacionalFolio;
-use App\Enums\EstadoProcesoPrefrio;
 use App\Enums\EstadoTareaMovimiento;
 use App\Enums\HabilitacionAlmacenamientoFolio;
 use App\Enums\TipoBulto;
@@ -233,10 +231,10 @@ class CargaController extends Controller
             ->whereDoesntHave('ubicacionActual')
             ->whereDoesntHave('asignacionCargaActual')
             ->whereHas('procesosPrefrio', fn (Builder $asignacion): Builder => $asignacion
-                ->where('estado', EstadoFolioProcesoPrefrio::Aprobado->value)
-                ->whereHas('proceso', fn (Builder $proceso): Builder => $proceso
-                    ->where('estado', EstadoProcesoPrefrio::Aprobado->value)
-                    ->whereNotNull('finalizado_at')))
+                ->conAprobacion()
+                ->where(fn (Builder $consulta): Builder => $consulta
+                    ->whereNotNull('finalizado_parcial_at')
+                    ->orWhereHas('proceso', fn (Builder $proceso): Builder => $proceso->whereNotNull('finalizado_at'))))
             ->when(
                 $busqueda !== '',
                 fn (Builder $consulta): Builder => $consulta->where(
@@ -257,10 +255,7 @@ class CargaController extends Controller
             ->with([
                 'condicionSag:id,codigo,nombre',
                 'procesosPrefrio' => fn ($consulta) => $consulta
-                    ->where('estado', EstadoFolioProcesoPrefrio::Aprobado->value)
-                    ->whereHas('proceso', fn ($proceso) => $proceso
-                        ->where('estado', EstadoProcesoPrefrio::Aprobado->value)
-                        ->whereNotNull('finalizado_at'))
+                    ->conAprobacion()
                     ->with('proceso:id,codigo,estado,finalizado_at'),
             ])
             ->orderBy('fecha_ingreso')

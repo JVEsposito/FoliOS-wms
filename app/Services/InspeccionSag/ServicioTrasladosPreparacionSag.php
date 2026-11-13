@@ -4,9 +4,7 @@ namespace App\Services\InspeccionSag;
 
 use App\Enums\EstadoCargaFolio;
 use App\Enums\EstadoCustodiaTemporal;
-use App\Enums\EstadoFolioProcesoPrefrio;
 use App\Enums\EstadoOperacionalFolio;
-use App\Enums\EstadoProcesoPrefrio;
 use App\Enums\EstadoTareaMovimiento;
 use App\Enums\HabilitacionAlmacenamientoFolio;
 use App\Enums\TipoBulto;
@@ -127,6 +125,7 @@ class ServicioTrasladosPreparacionSag
             }
 
             $prefrio = $actual ? null : $this->origenPrefrio($folio);
+            $enPuntoDeEntrega = $prefrio?->retiroParcialConfirmado() === true;
             if (! $actual && ! $prefrio) {
                 continue;
             }
@@ -178,7 +177,7 @@ class ServicioTrasladosPreparacionSag
                     $folio->numero_folio,
                     $actual
                         ? $actual->camara->nombre.' · '.$actual->posicion->etiqueta
-                        : ($prefrio->proceso->tunel?->nombre ?? 'prefrío'),
+                        : ($enPuntoDeEntrega ? 'el punto de entrega de Prefrío' : ($prefrio->proceso->tunel?->nombre ?? 'prefrío')),
                     $destino->camara->nombre,
                     $destino->etiqueta,
                     $lote->codigo,
@@ -194,9 +193,9 @@ class ServicioTrasladosPreparacionSag
                     'proceso_prefrio_id' => $prefrio?->proceso_prefrio_id,
                     'tunel_prefrio_id' => $prefrio?->proceso->tunel_prefrio_id,
                     'tunel_codigo' => $prefrio?->proceso->tunel?->codigo,
-                    'tunel_nombre' => $prefrio?->proceso->tunel?->nombre,
-                    'posicion_tunel_prefrio_id' => $prefrio?->posicion_tunel_prefrio_id,
-                    'posicion_tunel' => $prefrio?->posicion?->etiqueta,
+                    'tunel_nombre' => $enPuntoDeEntrega ? 'Punto de entrega de Prefrío' : $prefrio?->proceso->tunel?->nombre,
+                    'posicion_tunel_prefrio_id' => $enPuntoDeEntrega ? null : $prefrio?->posicion_tunel_prefrio_id,
+                    'posicion_tunel' => $enPuntoDeEntrega ? null : $prefrio?->posicion?->etiqueta,
                     'uso_banda_destino' => UsoBandaOperacional::Inspeccion->value,
                     'destino_precalculado_inmutable' => true,
                     'cliente' => $folio->exportadora,
@@ -377,8 +376,7 @@ class ServicioTrasladosPreparacionSag
             ->lockForUpdate()
             ->first();
 
-        return $asignacion?->estado === EstadoFolioProcesoPrefrio::Aprobado
-            && $asignacion->proceso?->estado === EstadoProcesoPrefrio::Aprobado
+        return $asignacion?->tieneAprobacion() === true
             && $asignacion->proceso->temporada_id === $folio->temporada_id
             ? $asignacion
             : null;

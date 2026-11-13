@@ -58,7 +58,7 @@ final class Prefrio extends FuenteTabla
             ->join('procesos_prefrio as p', 'p.id', '=', 'pf.proceso_prefrio_id')
             ->leftJoin('tuneles_prefrio as t', 't.id', '=', 'p.tunel_prefrio_id')
             ->select([
-                'pf.id', 'pf.folio_id', 'pf.estado', 'pf.temperatura_inicial', 'pf.temperatura_final', 'pf.updated_at',
+                'pf.id', 'pf.folio_id', 'pf.estado', 'pf.temperatura_inicial', 'pf.temperatura_final', 'pf.finalizado_parcial_at', 'pf.updated_at',
                 'p.codigo', 'p.temporada_id', 'p.iniciado_at', 'p.pendiente_verificacion_at', 'p.finalizado_at',
                 't.codigo as tunel',
             ]);
@@ -76,8 +76,9 @@ final class Prefrio extends FuenteTabla
             }
 
             $iniciado = ContextoCaptura::fecha($fila->iniciado_at);
-            $enfriado = ContextoCaptura::fecha($fila->pendiente_verificacion_at);
-            $ocurrido = ContextoCaptura::fecha($fila->finalizado_at) ?? $enfriado ?? ContextoCaptura::fecha($fila->updated_at);
+            $parcial = ContextoCaptura::fecha($fila->finalizado_parcial_at);
+            $enfriado = $parcial ?? ContextoCaptura::fecha($fila->pendiente_verificacion_at);
+            $ocurrido = $parcial ?? ContextoCaptura::fecha($fila->finalizado_at) ?? $enfriado ?? ContextoCaptura::fecha($fila->updated_at);
             $medidas = $historial->delServicio($folio, $ocurrido);
 
             yield new HechoCapturado(

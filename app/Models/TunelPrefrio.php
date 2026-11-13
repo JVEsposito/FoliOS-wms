@@ -3,7 +3,6 @@
 namespace App\Models;
 
 use App\Enums\EstadoAdministrativoTunelPrefrio;
-use App\Enums\EstadoProcesoPrefrio;
 use App\Enums\EstadoTecnicoTunelPrefrio;
 use App\Models\Concerns\ImpideEliminacionFisica;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -44,10 +43,7 @@ class TunelPrefrio extends Model
     public function procesoActivo(): HasOne
     {
         return $this->hasOne(ProcesoPrefrio::class)
-            ->whereIn('estado', collect(EstadoProcesoPrefrio::cases())
-                ->filter->esActivo()
-                ->map->value
-                ->all())
+            ->ocupaTunel()
             ->latestOfMany();
     }
 

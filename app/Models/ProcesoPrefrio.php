@@ -7,6 +7,7 @@ use App\Models\Concerns\ImpideEliminacionFisica;
 use App\Models\Concerns\TemporadaPorColumna;
 use App\Models\Contracts\PerteneceATemporada;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -52,6 +53,13 @@ class ProcesoPrefrio extends Model implements PerteneceATemporada
     public function folios(): HasMany
     {
         return $this->hasMany(ProcesoPrefrioFolio::class);
+    }
+
+    public function scopeOcupaTunel(Builder $consulta): Builder
+    {
+        return $consulta->where(fn (Builder $proceso): Builder => $proceso
+            ->whereIn('estado', EstadoProcesoPrefrio::activos())
+            ->orWhereHas('folios', fn (Builder $folios): Builder => $folios->pendienteRetiroParcial()));
     }
 
     public function eventos(): HasMany

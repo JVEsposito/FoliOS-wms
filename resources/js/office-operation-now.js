@@ -289,7 +289,7 @@ function toneForPlannerDecision(decision) {
 function toneForTunnel(tunnel) {
     if (!tunnel.operable || ['mantenimiento', 'fuera_servicio', 'inactivo'].includes(tunnel.estado_operacional)) return 'neutral';
     if (tunnel.proceso_activo?.objetivo_excedido) return 'critical';
-    if (tunnel.estado_operacional === 'pendiente_verificacion') return 'warning';
+    if (['pendiente_verificacion', 'pendiente_retiro'].includes(tunnel.estado_operacional)) return 'warning';
     if (tunnel.estado_operacional === 'disponible') return 'success';
     return 'info';
 }
@@ -1140,7 +1140,7 @@ function tunnelProgress(tunnel) {
     const hasProgress = progress !== null && progress !== undefined;
     const tone = process.objetivo_excedido
         ? 'critical'
-        : (tunnel.estado_operacional === 'pendiente_verificacion' ? 'warning' : 'success');
+        : (['pendiente_verificacion', 'pendiente_retiro'].includes(tunnel.estado_operacional) ? 'warning' : 'success');
     const detail = hasProgress
         ? `${duration(process.transcurridos_minutos)} de ${duration(process.duracion_objetivo_minutos)}${process.objetivo_excedido ? ` · excedido ${duration(process.minutos_sobre_objetivo)}` : ''}`
         : 'Sin inicio registrado';

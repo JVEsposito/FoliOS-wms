@@ -12,7 +12,9 @@ export type PrefrioAssignmentState =
   | 'cargado'
   | 'en_proceso'
   | 'aprobado'
+  | 'pendiente_prefrio'
   | 'requiere_reproceso'
+  | 'retenido'
   | 'retirado'
   | 'cancelado';
 
@@ -82,6 +84,8 @@ export type PrefrioProcessFolio = {
   temperatura_inicial: number | null;
   temperatura_final: number | null;
   cargado_at: string | null;
+  finalizado_parcial_at?: string | null;
+  en_tunel?: boolean;
   retirado_at: string | null;
   motivo_resultado: string | null;
   observacion: string | null;
@@ -100,6 +104,7 @@ export type PrefrioProcessFolio = {
     cantidad_cajas: number | null;
   } | null;
   cargado_por: { id: string; nombre: string } | null;
+  retirado_por?: { id: string; nombre: string } | null;
 };
 
 export type PrefrioEvent = {
@@ -173,13 +178,76 @@ export type PrefrioActionPayload = {
   ocurrido_at: string;
 };
 
+export const prefrioTimeZone = 'America/Santiago';
+const plantClock = new Intl.DateTimeFormat('sv-SE', {
+  timeZone: prefrioTimeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+  hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+});
+
+export function operationalDateTime(date = new Date()): string {
+  const parts = Object.fromEntries(plantClock.formatToParts(date).map(({ type, value }) => [type, value]));
+  return `${parts.day}-${parts.month}-${parts.year} ${parts.hour}:${parts.minute}:${parts.second}`;
+}
+
+export function parseOperationalDateTime(value: string): string | null {
+  const match = value.trim().match(/^(\d{2})-(\d{2})-(\d{4})\s+(\d{2}):(\d{2})(?::(\d{2}))?$/);
+  if (!match) return null;
+  const [, day, month, year, hour, minute, second = '00'] = match;
+  const wall = Date.parse(`${year}-${month}-${day}T${hour}:${minute}:${second}Z`);
+  if (!Number.isFinite(wall)) return null;
+  const expected = `${day}-${month}-${year} ${hour}:${minute}:${second}`;
+  // Muestrea ambos lados de un posible cambio de hora y comprueba la vuelta a hora de planta.
+  for (const probe of [wall - 86_400_000, wall + 86_400_000]) {
+    const local = Date.parse(`${plantClock.format(new Date(probe)).replace(' ', 'T')}Z`);
+    const candidate = new Date(wall - (local - probe));
+    if (Number.isFinite(candidate.getTime()) && operationalDateTime(candidate) === expected) return candidate.toISOString();
+  }
+  return null;
+}
+
+export const partialThermalResults = {
+  prefrio_aprobado: 'Prefrío aprobado',
+  pendiente_prefrio: 'Pendiente de prefrío',
+  requiere_reproceso: 'Requiere reproceso',
+  retenido: 'Retenido',
+};
+
+export type PrefrioPartialResult = keyof typeof partialThermalResults;
+
+export type PrefrioPartialOutcome = {
+  folio_id: string;
+  resultado: PrefrioPartialResult;
+  temperatura_final?: number;
+  motivo?: string;
+};
+
+export type PrefrioPartialSelection = { motivo: string; resultados: PrefrioPartialOutcome[] } | { folios: string[] };
+
+export function prefrioFolioInTunnel(folio: PrefrioProcessFolio): boolean {
+  return folio.en_tunel ?? !['retirado', 'cancelado'].includes(folio.estado);
+}
+
+export function prefrioPartialWithdrawalPending(folio: PrefrioProcessFolio): boolean {
+  return Boolean(folio.finalizado_parcial_at && !folio.retirado_at);
+}
+
+export function prefrioPartialResultLabel(folio: PrefrioProcessFolio): string {
+  if (folio.estado === 'aprobado') return partialThermalResults.prefrio_aprobado;
+  if (folio.estado === 'pendiente_prefrio' || folio.estado === 'requiere_reproceso' || folio.estado === 'retenido') {
+    return partialThermalResults[folio.estado];
+  }
+  return folio.estado;
+}
+
 export type PrefrioCommandKind =
   | 'agregar_folio'
   | 'retirar_folio'
   | 'confirmar_armado'
   | 'iniciar'
   | 'evento'
-  | 'verificar';
+  | 'verificar'
+  | 'finalizar_parcial'
+  | 'confirmar_retiro_parcial';
 
 export type PrefrioQueuedCommand = {
   id: string;
@@ -188,7 +256,7 @@ export type PrefrioQueuedCommand = {
   kind: PrefrioCommandKind;
   label: string;
   route: string;
-  payload: AddPrefrioFolioPayload | PrefrioActionPayload;
+  payload: AddPrefrioFolioPayload | PrefrioActionPayload | (PrefrioActionPayload & PrefrioPartialSelection);
   status: 'pendiente' | 'conflicto' | 'error';
   attempts: number;
   created_at: string;

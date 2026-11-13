@@ -7,6 +7,7 @@ use App\Enums\DominioTransicionOperacional;
 use App\Enums\EstadoAdministrativoTunelPrefrio;
 use App\Enums\EstadoFolioProcesoPrefrio;
 use App\Enums\EstadoProcesoPrefrio;
+use App\Enums\EstadoTareaMovimiento;
 use App\Enums\EstadoTecnicoTunelPrefrio;
 use App\Enums\FuenteHabilitacionAlmacenamiento;
 use App\Enums\HabilitacionAlmacenamientoFolio;
@@ -20,6 +21,7 @@ use App\Models\Folio;
 use App\Models\PosicionTunelPrefrio;
 use App\Models\ProcesoPrefrio;
 use App\Models\ProcesoPrefrioFolio;
+use App\Models\TareaMovimiento;
 use App\Models\TunelPrefrio;
 use App\Models\User;
 use App\Services\Autorizacion\AlcanceOperacionalUsuario;
@@ -76,7 +78,7 @@ class ServicioProcesoPrefrio
             dispositivo: $dispositivo,
             sujetoTipo: ProcesoPrefrio::class,
             referencia: (string) $datos['tunel_prefrio_id'],
-            ocurridoAt: CarbonImmutable::parse($datos['ocurrido_at']),
+            ocurridoAt: $this->horaOperacion($datos['ocurrido_at']),
         );
         $accion = function () use (
             $datos,
@@ -189,10 +191,7 @@ class ServicioProcesoPrefrio
 
                 $ocupantes = $procesoBloqueado->folios()
                     ->where('posicion_tunel_prefrio_id', $posicion->id)
-                    ->whereNotIn('estado', [
-                        EstadoFolioProcesoPrefrio::Retirado->value,
-                        EstadoFolioProcesoPrefrio::Cancelado->value,
-                    ])
+                    ->enTunel()
                     ->with('folio:id,tipo_bulto')
                     ->lockForUpdate()
                     ->get();
@@ -214,14 +213,9 @@ class ServicioProcesoPrefrio
                     throw new ConflictoOperacion('El folio ya pertenece a este proceso de prefrío.');
                 }
 
-                $estadosActivos = collect(EstadoProcesoPrefrio::cases())
-                    ->filter->esActivo()
-                    ->map->value
-                    ->all();
                 $enOtroProceso = ProcesoPrefrioFolio::query()
                     ->where('folio_id', $folio->id)
-                    ->whereHas('proceso', fn ($consulta) => $consulta
-                        ->whereIn('estado', $estadosActivos))
+                    ->impideNuevaCarga()
                     ->exists();
 
                 if ($enOtroProceso) {
@@ -234,7 +228,7 @@ class ServicioProcesoPrefrio
                     'posicion_tunel_prefrio_id' => $posicion->id,
                     'estado' => EstadoFolioProcesoPrefrio::Cargado,
                     'temperatura_inicial' => $datos['temperatura_inicial'] ?? null,
-                    'cargado_at' => CarbonImmutable::parse($datos['ocurrido_at']),
+                    'cargado_at' => $this->horaOperacion($datos['ocurrido_at']),
                     'observacion' => $this->textoOpcional($datos['observacion'] ?? null),
                     'cargado_por_user_id' => $usuario->id,
                 ]);
@@ -285,7 +279,7 @@ class ServicioProcesoPrefrio
 
                 $asignacion->update([
                     'estado' => EstadoFolioProcesoPrefrio::Retirado,
-                    'retirado_at' => CarbonImmutable::parse($datos['ocurrido_at']),
+                    'retirado_at' => $this->horaOperacion($datos['ocurrido_at']),
                     'retirado_por_user_id' => $usuario->id,
                     'observacion' => $this->textoOpcional($datos['observacion'] ?? null),
                 ]);
@@ -387,7 +381,7 @@ class ServicioProcesoPrefrio
                 $procesoBloqueado->update([
                     'estado' => EstadoProcesoPrefrio::EnProceso,
                     'iniciado_por_user_id' => $usuario->id,
-                    'iniciado_at' => CarbonImmutable::parse($datos['ocurrido_at']),
+                    'iniciado_at' => $this->horaOperacion($datos['ocurrido_at']),
                 ]);
 
                 return null;
@@ -474,7 +468,7 @@ class ServicioProcesoPrefrio
                 }
                 $procesoBloqueado->update([
                     'estado' => EstadoProcesoPrefrio::PendienteVerificacion,
-                    'pendiente_verificacion_at' => CarbonImmutable::parse($datos['ocurrido_at']),
+                    'pendiente_verificacion_at' => $this->horaOperacion($datos['ocurrido_at']),
                 ]);
 
                 return null;
@@ -510,32 +504,164 @@ class ServicioProcesoPrefrio
 
                 foreach ($asignaciones as $asignacion) {
                     $resultado = $resultados->get($asignacion->folio_id, []);
-                    $asignacion->update([
-                        'estado' => EstadoFolioProcesoPrefrio::Aprobado,
+                    $this->aprobarFolio($asignacion, [
                         'temperatura_final' => $resultado['temperatura_final'] ?? null,
                         'motivo_resultado' => 'prefrio_aprobado',
                         'observacion' => $this->textoOpcional($resultado['observacion'] ?? null),
-                    ]);
-                    $this->habilitacion->habilitar(
-                        $asignacion->folio,
-                        CondicionTermicaFolio::PrefrioAprobado,
-                        FuenteHabilitacionAlmacenamiento::PrefrioAprobado,
-                        $usuario,
-                        $dispositivo,
-                        'prefrio',
-                        $procesoBloqueado->id,
-                        $this->textoOpcional($resultado['observacion'] ?? null),
-                    );
+                    ], $usuario, $dispositivo, $this->textoOpcional($resultado['observacion'] ?? null));
                 }
 
                 $procesoBloqueado->update([
                     'estado' => EstadoProcesoPrefrio::Aprobado,
                     'finalizado_por_user_id' => $usuario->id,
-                    'finalizado_at' => CarbonImmutable::parse($datos['ocurrido_at']),
+                    'finalizado_at' => $this->horaOperacion($datos['ocurrido_at']),
                 ]);
 
                 return null;
             },
+        );
+    }
+
+    /** @param array<string, mixed> $datos */
+    public function finalizarParcial(
+        ProcesoPrefrio $proceso,
+        array $datos,
+        User $usuario,
+        ?Dispositivo $dispositivo = null,
+    ): ProcesoPrefrio {
+        $this->asegurarSupervision($usuario);
+
+        return $this->ejecutarEvento(
+            $proceso,
+            TipoEventoPrefrio::FinalizacionParcial,
+            $datos,
+            $usuario,
+            $dispositivo,
+            function (ProcesoPrefrio $procesoBloqueado, CarbonImmutable $momento) use ($datos, $usuario, $dispositivo): ?ProcesoPrefrioFolio {
+                $this->validarEstado($procesoBloqueado, [EstadoProcesoPrefrio::EnProceso]);
+                $resultados = collect($datos['resultados'])->keyBy('folio_id');
+                $enProceso = $procesoBloqueado->folios()->where('estado', EstadoFolioProcesoPrefrio::EnProceso)
+                    ->with('folio')->orderBy('folio_id')->lockForUpdate()->get();
+                $seleccion = $enProceso->whereIn('folio_id', $resultados->keys());
+
+                if ($seleccion->isEmpty() || $seleccion->count() !== count($datos['resultados'])) {
+                    throw new ConflictoOperacion('Selecciona folios distintos que sigan en proceso en este túnel.');
+                }
+                if ($seleccion->count() === $enProceso->count()) {
+                    throw new DomainException('Para terminar todos los folios restantes, usa Finalizar proceso.');
+                }
+
+                foreach ($seleccion as $asignacion) {
+                    $resultado = $resultados->get($asignacion->folio_id);
+                    $condicion = CondicionTermicaFolio::from($resultado['resultado']);
+                    $motivo = $this->textoOpcional($resultado['motivo'] ?? null) ?? trim($datos['motivo']);
+                    $atributos = [
+                        'finalizado_parcial_at' => $momento,
+                        'temperatura_final' => $resultado['temperatura_final'] ?? null,
+                        'motivo_resultado' => $motivo,
+                    ];
+                    if ($condicion === CondicionTermicaFolio::PrefrioAprobado) {
+                        $this->aprobarFolio($asignacion, $atributos, $usuario, $dispositivo, $motivo);
+
+                        continue;
+                    }
+
+                    $estado = match ($condicion) {
+                        CondicionTermicaFolio::PendientePrefrio => EstadoFolioProcesoPrefrio::PendientePrefrio,
+                        CondicionTermicaFolio::RequiereReproceso => EstadoFolioProcesoPrefrio::RequiereReproceso,
+                        CondicionTermicaFolio::Retenido => EstadoFolioProcesoPrefrio::Retenido,
+                        default => throw new DomainException('El resultado térmico no admite un retiro parcial.'),
+                    };
+                    $asignacion->update([...$atributos, 'estado' => $estado]);
+
+                    if ($condicion === CondicionTermicaFolio::PendientePrefrio) {
+                        $this->habilitacion->devolverAPrefrioPendiente($asignacion->folio, $motivo, $usuario, $dispositivo, $procesoBloqueado->id);
+                    } else {
+                        $this->habilitacion->retener($asignacion->folio, $condicion, $motivo, $usuario, $dispositivo, 'prefrio', $procesoBloqueado->id);
+                    }
+                }
+
+                return null;
+            },
+        );
+    }
+
+    /** @param array<string, mixed> $datos */
+    public function confirmarRetiroParcial(
+        ProcesoPrefrio $proceso,
+        array $datos,
+        User $usuario,
+        ?Dispositivo $dispositivo = null,
+    ): ProcesoPrefrio {
+        $this->asegurarOperacion($usuario);
+
+        return $this->ejecutarEvento(
+            $proceso,
+            TipoEventoPrefrio::RetiroParcialConfirmado,
+            $datos,
+            $usuario,
+            $dispositivo,
+            function (ProcesoPrefrio $procesoBloqueado, CarbonImmutable $momento) use ($datos, $usuario): ?ProcesoPrefrioFolio {
+                $pendientes = $procesoBloqueado->folios()->pendienteRetiroParcial()
+                    ->whereIn('folio_id', $datos['folios'])->orderBy('folio_id')->lockForUpdate()->get();
+                if ($pendientes->isEmpty() || $pendientes->count() !== count($datos['folios'])) {
+                    throw new ConflictoOperacion('Algún folio seleccionado ya salió o no tiene un retiro parcial autorizado.');
+                }
+
+                $tareas = TareaMovimiento::query()->whereIn('folio_id', $datos['folios'])
+                    ->whereNotIn('estado', [EstadoTareaMovimiento::Cancelada, EstadoTareaMovimiento::Completada])
+                    ->orderBy('id')->lockForUpdate()->get();
+                if ($tareas->contains(fn (TareaMovimiento $tarea): bool => in_array(
+                    $tarea->estado, [EstadoTareaMovimiento::Asumida, EstadoTareaMovimiento::EnProceso], true,
+                ))) {
+                    throw new ConflictoOperacion('Un camarero ya tomó la labor de uno de estos pallets. Confirma la entrega desde esa labor.');
+                }
+
+                foreach ($pendientes as $asignacion) {
+                    $asignacion->confirmarRetiro($usuario, $momento);
+                }
+                foreach ($tareas as $tarea) {
+                    $contexto = $tarea->contexto ?? [];
+                    $origen = $contexto['tunel_nombre'] ?? null;
+                    if ($tarea->camara_origen_id !== null || ! $origen
+                        || ($contexto['proceso_prefrio_id'] ?? null) !== $procesoBloqueado->id) {
+                        continue;
+                    }
+
+                    unset($contexto['posicion_tunel'], $contexto['posicion_tunel_prefrio_id']);
+                    $tarea->update([
+                        'contexto' => [...$contexto, 'tunel_nombre' => 'Punto de entrega de Prefrío'],
+                        'instruccion' => $tarea->instruccion === null ? null : strtr($tarea->instruccion, [
+                            'desde '.$origen => 'desde el punto de entrega de Prefrío',
+                            'de '.$origen => 'del punto de entrega de Prefrío',
+                        ]),
+                        'version' => $tarea->version + 1,
+                    ]);
+                }
+
+                return null;
+            },
+        );
+    }
+
+    /** @param array<string, mixed> $atributos */
+    private function aprobarFolio(
+        ProcesoPrefrioFolio $asignacion,
+        array $atributos,
+        User $usuario,
+        ?Dispositivo $dispositivo,
+        ?string $observacion,
+    ): void {
+        $asignacion->update([...$atributos, 'estado' => EstadoFolioProcesoPrefrio::Aprobado]);
+        $this->habilitacion->habilitar(
+            $asignacion->folio,
+            CondicionTermicaFolio::PrefrioAprobado,
+            FuenteHabilitacionAlmacenamiento::PrefrioAprobado,
+            $usuario,
+            $dispositivo,
+            'prefrio',
+            $asignacion->proceso_prefrio_id,
+            $observacion,
         );
     }
 
@@ -588,7 +714,7 @@ class ServicioProcesoPrefrio
                 $procesoBloqueado->update([
                     'estado' => EstadoProcesoPrefrio::RequiereReproceso,
                     'finalizado_por_user_id' => $usuario->id,
-                    'finalizado_at' => CarbonImmutable::parse($datos['ocurrido_at']),
+                    'finalizado_at' => $this->horaOperacion($datos['ocurrido_at']),
                 ]);
 
                 return null;
@@ -631,6 +757,7 @@ class ServicioProcesoPrefrio
                     EstadoProcesoPrefrio::PendienteVerificacion,
                 ], true);
                 $asignaciones = $procesoBloqueado->folios()
+                    ->whereNull('finalizado_parcial_at')
                     ->whereNotIn('estado', [
                         EstadoFolioProcesoPrefrio::Retirado->value,
                         EstadoFolioProcesoPrefrio::Cancelado->value,
@@ -661,7 +788,7 @@ class ServicioProcesoPrefrio
                 $procesoBloqueado->update([
                     'estado' => EstadoProcesoPrefrio::Cancelado,
                     'finalizado_por_user_id' => $usuario->id,
-                    'finalizado_at' => CarbonImmutable::parse($datos['ocurrido_at']),
+                    'finalizado_at' => $this->horaOperacion($datos['ocurrido_at']),
                 ]);
 
                 return null;
@@ -671,7 +798,7 @@ class ServicioProcesoPrefrio
 
     /**
      * @param  array<string, mixed>  $datos
-     * @param  callable(ProcesoPrefrio): ?ProcesoPrefrioFolio  $accion
+     * @param  callable(ProcesoPrefrio, CarbonImmutable): ?ProcesoPrefrioFolio  $accion
      */
     private function ejecutarEvento(
         ProcesoPrefrio $proceso,
@@ -699,7 +826,7 @@ class ServicioProcesoPrefrio
             sujetoTipo: ProcesoPrefrio::class,
             sujetoId: (string) $proceso->id,
             referencia: $proceso->codigo,
-            ocurridoAt: CarbonImmutable::parse($datos['ocurrido_at']),
+            ocurridoAt: $this->horaOperacion($datos['ocurrido_at']),
         );
         $accionTransicion = function () use (
             $proceso,
@@ -738,9 +865,13 @@ class ServicioProcesoPrefrio
                 throw new ConflictoOperacion('La versión conocida del proceso de prefrío está desactualizada.');
             }
 
-            $momento = $this->validarMomentoOperacion($datos['ocurrido_at'], $procesoBloqueado);
+            $momento = $this->validarMomentoOperacion(
+                $datos['ocurrido_at'],
+                $procesoBloqueado,
+                $tipo,
+            );
 
-            $asignacion = $accion($procesoBloqueado);
+            $asignacion = $accion($procesoBloqueado, $momento);
             $procesoBloqueado->increment('version');
 
             EventoPrefrio::create([
@@ -783,31 +914,49 @@ class ServicioProcesoPrefrio
         return sprintf('PF-%d-%06d', $anio, $numero);
     }
 
+    private function horaOperacion(string $valor): CarbonImmutable
+    {
+        return CarbonImmutable::parse($valor, config('app.operational_timezone', config('app.timezone')))->utc();
+    }
+
     private function validarMomentoOperacion(
         string $valor,
         ?ProcesoPrefrio $proceso = null,
+        ?TipoEventoPrefrio $tipo = null,
     ): CarbonImmutable {
-        $momento = CarbonImmutable::parse($valor);
+        $momento = $this->horaOperacion($valor);
         if ($momento->greaterThan(now()->addMinutes(5))) {
             throw new ConflictoOperacion(
                 'La fecha y hora de la acción no puede quedar en el futuro.',
             );
         }
 
-        if ($proceso === null) {
+        if ($proceso === null || in_array($tipo, [TipoEventoPrefrio::ProcesoIniciado, TipoEventoPrefrio::RetiroParcialConfirmado], true)) {
             return $momento;
         }
 
         $ultimoEvento = EventoPrefrio::query()
             ->where('proceso_prefrio_id', $proceso->id)
+            // Una vez iniciado el ciclo, la cronología se mide desde el inicio térmico.
+            // La captura del armado puede haberse realizado después en la tablet.
+            ->when($proceso->iniciado_at !== null, fn ($consulta) => $consulta->whereNotIn('tipo', [
+                TipoEventoPrefrio::CargaIniciada,
+                TipoEventoPrefrio::PalletAgregado,
+                TipoEventoPrefrio::PalletRetirado,
+                TipoEventoPrefrio::ArmadoConfirmado,
+                TipoEventoPrefrio::RetiroParcialConfirmado,
+                TipoEventoPrefrio::CorreccionAdministrativa,
+            ]))
             ->latest('ocurrido_at')
             ->latest('created_at')
             ->lockForUpdate()
             ->first();
         if ($ultimoEvento?->ocurrido_at?->greaterThan($momento)) {
             throw new ConflictoOperacion(sprintf(
-                'La fecha y hora debe ser igual o posterior al último evento (%s).',
-                $ultimoEvento->ocurrido_at->setTimezone((string) config('app.operational_timezone'))->format('d-m-Y H:i'),
+                'La fecha y hora debe ser igual o posterior al último evento (%s, hora de planta).',
+                $ultimoEvento->ocurrido_at->toImmutable()
+                    ->setTimezone(config('app.operational_timezone', config('app.timezone')))
+                    ->format('d-m-Y H:i:s'),
             ));
         }
 
@@ -850,12 +999,8 @@ class ServicioProcesoPrefrio
 
     private function asegurarTunelDisponible(TunelPrefrio $tunel, ?string $ignorarProcesoId = null): void
     {
-        $estados = collect(EstadoProcesoPrefrio::cases())
-            ->filter->esActivo()
-            ->map->value
-            ->all();
         $ocupado = $tunel->procesos()
-            ->whereIn('estado', $estados)
+            ->ocupaTunel()
             ->when($ignorarProcesoId, fn ($consulta) => $consulta->whereKeyNot($ignorarProcesoId))
             ->exists();
 
@@ -918,6 +1063,7 @@ class ServicioProcesoPrefrio
                     'folio:id,numero_folio,tipo_bulto,estado_operacional,condicion_termica,habilitacion_almacenamiento,variedad,calibre,marca,exportadora,datos_externos',
                     'posicion:id,tunel_prefrio_id,numero,etiqueta,activa',
                     'cargadoPor:id,name',
+                    'retiradoPor:id,name',
                 ])
                 ->orderBy('created_at'),
             'eventos' => fn ($consulta) => $consulta

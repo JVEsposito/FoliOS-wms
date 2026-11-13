@@ -309,7 +309,8 @@ class ServicioCambioAtributosPt
     private function procesoPrefrioActivo(Folio $folio): ?ProcesoPrefrioFolio
     {
         return ProcesoPrefrioFolio::query()->where('folio_id', $folio->id)
-            ->where('estado', EstadoFolioProcesoPrefrio::EnProceso->value)
+            ->where(fn ($asignacion) => $asignacion->where('estado', EstadoFolioProcesoPrefrio::EnProceso)
+                ->orWhere(fn ($pendiente) => $pendiente->pendienteRetiroParcial()))
             ->with('proceso:id,codigo')->first();
     }
 

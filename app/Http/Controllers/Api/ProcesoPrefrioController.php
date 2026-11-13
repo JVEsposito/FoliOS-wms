@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Enums\EstadoFolioProcesoPrefrio;
 use App\Enums\EstadoProcesoPrefrio;
 use App\Enums\TipoEventoPrefrio;
 use App\Http\Controllers\Concerns\RespondeConEtagOperacional;
@@ -11,9 +10,11 @@ use App\Http\Requests\AccionProcesoPrefrioRequest;
 use App\Http\Requests\AgregarFolioProcesoPrefrioRequest;
 use App\Http\Requests\AprobarProcesoPrefrioRequest;
 use App\Http\Requests\CancelarProcesoPrefrioRequest;
+use App\Http\Requests\ConfirmarRetiroParcialPrefrioRequest;
 use App\Http\Requests\ConsultarProcesosPrefrioRequest;
 use App\Http\Requests\CorregirProcesoPrefrioRequest;
 use App\Http\Requests\CrearProcesoPrefrioRequest;
+use App\Http\Requests\FinalizarParcialProcesoPrefrioRequest;
 use App\Http\Requests\ReprocesarProcesoPrefrioRequest;
 use App\Http\Resources\ProcesoPrefrioResource;
 use App\Models\CargaFolio;
@@ -44,11 +45,6 @@ class ProcesoPrefrioController extends Controller
     {
         abort_unless($request->user()?->can('consultar-prefrio'), 403);
 
-        $estadosActivos = collect(EstadoProcesoPrefrio::cases())
-            ->filter->esActivo()
-            ->map->value
-            ->all();
-
         return response()->json([
             'en_proceso' => ProcesoPrefrio::query()
                 ->whereHas('temporada', fn ($consulta) => $consulta->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
@@ -64,12 +60,8 @@ class ProcesoPrefrioController extends Controller
                 ->count(),
             'folios_activos' => ProcesoPrefrioFolio::query()
                 ->whereHas('proceso', fn ($consulta) => $consulta
-                    ->whereHas('temporada', fn ($temporada) => $temporada->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
-                    ->whereIn('estado', $estadosActivos))
-                ->whereNotIn('estado', [
-                    EstadoFolioProcesoPrefrio::Retirado->value,
-                    EstadoFolioProcesoPrefrio::Cancelado->value,
-                ])
+                    ->whereHas('temporada', fn ($temporada) => $temporada->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id)))
+                ->enTunelOperativo()
                 ->count(),
         ]);
     }
@@ -100,14 +92,9 @@ class ProcesoPrefrioController extends Controller
             return $respuestaCondicional;
         }
 
-        $estadosActivos = collect(EstadoProcesoPrefrio::cases())
-            ->filter->esActivo()
-            ->map->value
-            ->all();
         $procesos = ProcesoPrefrio::query()
             ->whereHas('temporada', fn ($consulta) => $consulta->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
-            ->when($soloActivos, fn ($consulta) => $consulta
-                ->whereIn('estado', $estadosActivos))
+            ->when($soloActivos, fn ($consulta) => $consulta->ocupaTunel())
             ->when($datos['tunel_prefrio_id'] ?? null, fn ($consulta, string $id) => $consulta
                 ->where('tunel_prefrio_id', $id))
             ->when($datos['estado'] ?? null, fn ($consulta, string $estado) => $consulta
@@ -303,23 +290,56 @@ class ProcesoPrefrioController extends Controller
                 $request->user(),
                 $dispositivo,
             );
-            $generador->generar($aprobado, $request->user());
-            // La aprobación es el momento en que un pallet del túnel pasa a
-            // ser elegible para la tarea crítica hacia un camión presente.
-            $presencias = PresenciaCargaAnden::query()
-                ->whereNotNull('bloqueo_carga_id')
-                ->whereIn('carga_id', CargaFolio::query()
-                    ->select('carga_id')
-                    ->whereIn('folio_id', $aprobado->folios()->select('folio_id')))
-                ->get();
-            foreach ($presencias as $presencia) {
-                $despachoDirecto->sincronizar($presencia, $request->user());
-            }
+            $this->programarSalidas($aprobado, $request, $generador, $despachoDirecto);
 
             return $aprobado;
         }, attempts: 3);
 
         return new ProcesoPrefrioResource($proceso);
+    }
+
+    public function finalizarParcial(
+        FinalizarParcialProcesoPrefrioRequest $request,
+        ProcesoPrefrio $procesoPrefrio,
+        ServicioProcesoPrefrio $servicio,
+        ServicioGeneracionRecepcionTunel $generador,
+        ServicioPlanDespachoDirecto $despachoDirecto,
+    ): ProcesoPrefrioResource {
+        $dispositivo = $this->dispositivo($request);
+        $proceso = DB::transaction(function () use ($request, $procesoPrefrio, $servicio, $generador, $despachoDirecto, $dispositivo): ProcesoPrefrio {
+            $proceso = $servicio->finalizarParcial($procesoPrefrio, $request->validated(), $request->user(), $dispositivo);
+            $this->programarSalidas($proceso, $request, $generador, $despachoDirecto);
+
+            return $proceso;
+        }, attempts: 3);
+
+        return new ProcesoPrefrioResource($proceso);
+    }
+
+    public function confirmarRetiroParcial(
+        ConfirmarRetiroParcialPrefrioRequest $request,
+        ProcesoPrefrio $procesoPrefrio,
+        ServicioProcesoPrefrio $servicio,
+    ): ProcesoPrefrioResource {
+        return new ProcesoPrefrioResource($servicio->confirmarRetiroParcial(
+            $procesoPrefrio, $request->validated(), $request->user(), $this->dispositivo($request),
+        ));
+    }
+
+    private function programarSalidas(
+        ProcesoPrefrio $proceso,
+        Request $request,
+        ServicioGeneracionRecepcionTunel $generador,
+        ServicioPlanDespachoDirecto $despachoDirecto,
+    ): void {
+        $generador->generar($proceso, $request->user());
+        $presencias = PresenciaCargaAnden::query()->whereNotNull('bloqueo_carga_id')
+            ->whereIn('carga_id', CargaFolio::query()->select('carga_id')
+                ->whereIn('folio_id', $proceso->folios()->conAprobacion()->select('folio_id')))
+            ->get();
+        foreach ($presencias as $presencia) {
+            $despachoDirecto->sincronizar($presencia, $request->user());
+        }
     }
 
     public function reprocesar(
@@ -384,6 +404,7 @@ class ProcesoPrefrioController extends Controller
                     'folio:id,numero_folio,tipo_bulto,estado_operacional,condicion_termica,habilitacion_almacenamiento,variedad,calibre,marca,exportadora,datos_externos',
                     'posicion:id,tunel_prefrio_id,numero,etiqueta,activa',
                     'cargadoPor:id,name',
+                    'retiradoPor:id,name',
                 ])
                 ->orderBy('created_at'),
             'eventos' => fn ($consulta) => $consulta
