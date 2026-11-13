@@ -112,6 +112,13 @@ El estado de cuenta es la vista del cliente; la trazabilidad interna completa es
 - **Una línea por guía.** Las líneas de un mismo documento, envase y propiedad se suman (una guía con varios orígenes es una sola entrega).
 - **Número de guía.** En los despachos se informa el N° de la guía emitida en el sistema de facturación. Si una guía antigua no lo tiene registrado, se muestra el GDE-… interno.
 - Como las anulaciones se aplican sobre el movimiento original, un estado de cuenta de un período ya enviado puede cambiar si después se anula una guía de ese período.
+- **Detalle por productor (CSG)** (13-11-2026). Después de los resúmenes, el PDF no va en un solo orden cronológico: va agrupado por CSG, en el orden del resumen por productor, y dentro de cada CSG en orden cronológico. Así se evita leer una entrega como si fuera la salida de la guía que estaba justo encima. Caso: la guía de salida 2300 era del destare de REC-2611-0024 (guía 1526) y aparecía bajo la guía 12520 de otro camión.
+  - Cada documento dice qué es, sin interpretaciones:
+    - *Guía de ingreso N° 12520 · Chofer FABIAN URDILES (RUT 21.267.505-9)*, con la recepción y el camión: *Ingreso con fruta · Recepción REC-2611-0026 · Camión RY3495 · carro GRJB65*;
+    - *Guía de salida N° 2300 · Chofer IGNACIO DURAN*, con su origen: *Entregados en el destare · Destare de REC-2611-0024 (guía de ingreso 1526) · Camión KSBB99 · carro JP2999*;
+    - *Guía de despacho N° …*, con el chofer, el camión y el número interno del despacho.
+  - La columna **Saldo del CSG** acumula por envase el saldo de ese productor desde su saldo inicial. Cada CSG cierra con **Total del CSG en el período**, igual a su fila del resumen por productor. El resumen se arma con las mismas atribuciones del detalle.
+  - **Atribución, sin prorrateos.** El ingreso con fruta va al CSG de la recepción. Si hay varios CSG, se reparte según lo validado por guía o por recepción cuando cuadra con lo ingresado, y cada parte dice «Guía compartida con CSG …: aquí solo la parte de este productor». La entrega en el destare va al CSG de la recepción si es uno solo. El despacho va al productor de la guía. Lo demás va a **Sin productor asociado**: ajustes, aperturas, correcciones, entregas de recepciones con varios CSG e ingresos cuyo reparto no cuadra.
 
 El envío por correo no está implementado: requiere configurar un servidor de correo y registrar el correo de cada cliente. Por ahora el estado de cuenta se descarga y se envía por fuera.
 

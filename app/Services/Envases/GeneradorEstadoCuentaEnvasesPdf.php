@@ -68,11 +68,15 @@ class GeneradorEstadoCuentaEnvasesPdf
 
         $pagina['y'] -= 12;
         $this->resumenProductor($estado, $pagina);
-        if ($estado['movimientos']) {
-            $this->nuevaPagina($estado, $pagina, 'detalle');
-        }
-        foreach ($this->documentos($estado) as $documento) {
-            $this->documento($estado, $pagina, $documento);
+        if (isset($estado['detalle_csg'])) {
+            $this->detalleCsg($estado, $pagina);
+        } else {
+            if ($estado['movimientos']) {
+                $this->nuevaPagina($estado, $pagina, 'detalle');
+            }
+            foreach ($this->documentos($estado) as $documento) {
+                $this->documento($estado, $pagina, $documento);
+            }
         }
         if (! $estado['movimientos']) {
             $pagina['y'] -= 12;
@@ -172,6 +176,140 @@ class GeneradorEstadoCuentaEnvasesPdf
             $pagina['contenido'] .= $this->derecha($x, $pagina['y'] - 10, self::CUERPO, $texto, true);
         }
         $pagina['y'] -= 20;
+    }
+
+    /**
+     * Detalle por productor: cada CSG con sus documentos en orden cronológico, el chofer junto a
+     * la guía, la recepción y el camión, y el saldo acumulado del CSG. Cierra con el total del
+     * CSG, que coincide con su fila del resumen por productor.
+     */
+    private function detalleCsg(array $estado, array &$pagina): void
+    {
+        if (! $estado['detalle_csg']) {
+            return;
+        }
+        $this->nuevaPagina($estado, $pagina, 'detalle_csg');
+        foreach ($estado['detalle_csg'] as $grupo) {
+            $titulo = $grupo['codigo'] === null ? 'Sin productor asociado'
+                : 'CSG '.$grupo['codigo'].' · '.($grupo['nombre'] ?: 'Productor sin nombre');
+            $pagina['grupo'] = $titulo;
+            $primero = $grupo['documentos'][0] ?? null;
+            // El título del CSG nunca queda solo al pie de una hoja.
+            $this->reservar($estado, $pagina, 18 + ($primero ? $this->altoDocumentoCsg($primero, 1) : 24), 'detalle_csg', false);
+            $this->tituloCsg($pagina, $titulo);
+            $iniciales = array_filter($grupo['totales'], fn (array $t): bool => $t['saldo_inicial'] !== 0);
+            $notas = [];
+            if ($grupo['codigo'] === null) {
+                $notas[] = 'Movimientos sin un único productor: ajustes, aperturas y correcciones de cuenta, entregas en el destare de recepciones con varios CSG e ingresos cuyo reparto validado no cuadra.';
+            }
+            if ($iniciales) {
+                $notas[] = 'Saldo al inicio del período: '.implode(' · ', array_map(
+                    fn (array $t): string => $t['tipo_envase'].' '.$this->numero($t['saldo_inicial'], true), $iniciales,
+                )).'. El saldo del CSG parte de este valor.';
+            }
+            foreach ($notas as $nota) {
+                foreach ($this->pdf->envolver($nota, 523, self::SECUNDARIO) as $linea) {
+                    $this->reservar($estado, $pagina, 10, 'detalle_csg');
+                    $pagina['contenido'] .= $this->pdf->texto(36, $pagina['y'] - 8, self::SECUNDARIO, $linea);
+                    $pagina['y'] -= 10;
+                }
+            }
+            if (! $grupo['documentos']) {
+                $this->reservar($estado, $pagina, 10, 'detalle_csg');
+                $pagina['contenido'] .= $this->pdf->texto(36, $pagina['y'] - 8, self::SECUNDARIO, 'Sin documentos en el período.');
+                $pagina['y'] -= 10;
+            }
+            foreach ($grupo['documentos'] as $documento) {
+                $this->documentoCsg($estado, $pagina, $documento);
+            }
+            $this->totalCsg($estado, $pagina, $grupo);
+            $pagina['grupo'] = null;
+            $pagina['y'] -= 8;
+        }
+    }
+
+    /** @return array{0: list<string>, 1: list<string>} Encabezado del documento y su referencia. */
+    private function lineasDocumentoCsg(array $documento, bool $continuacion = false): array
+    {
+        $titulo = $documento['titulo'].($documento['chofer'] ? ' · '.$documento['chofer'] : '').($continuacion ? ' (continuación)' : '');
+        $referencia = implode(' · ', array_filter([$documento['movimiento'], $documento['referencia']]));
+        if (! empty($documento['compartido'])) {
+            $referencia .= "\n".$documento['compartido'];
+        }
+
+        return [$this->pdf->envolver($titulo, 430, self::CUERPO), $this->pdf->envolver($referencia, 523, self::SECUNDARIO)];
+    }
+
+    private function altoDocumentoCsg(array $documento, ?int $lineas = null, bool $continuacion = false): float
+    {
+        [$titulo, $referencia] = $this->lineasDocumentoCsg($documento, $continuacion);
+
+        return count($titulo) * 10 + 2 + count($referencia) * 9 + 1 + ($lineas ?? count($documento['lineas'])) * 10.5;
+    }
+
+    private function documentoCsg(array $estado, array &$pagina, array $documento): void
+    {
+        $completo = $this->altoDocumentoCsg($documento);
+        $this->reservar($estado, $pagina, $completo <= $pagina['inicio'] - 42 - self::LIMITE_INFERIOR ? $completo : $this->altoDocumentoCsg($documento, 1), 'detalle_csg');
+        $this->encabezadoDocumentoCsg($pagina, $documento);
+        foreach ($documento['lineas'] as $linea) {
+            $fila = ['datos' => $linea, 'envase' => $this->pdf->envolver($linea['tipo_envase'], 300, self::CUERPO)];
+            $fila['alto'] = max(count($fila['envase']), 1) * 10.5;
+            if ($pagina['y'] - $fila['alto'] < self::LIMITE_INFERIOR) {
+                $this->nuevaPagina($estado, $pagina, 'detalle_csg');
+                $this->encabezadoDocumentoCsg($pagina, $documento, true);
+            }
+            $this->fila($pagina, $fila);
+        }
+    }
+
+    private function encabezadoDocumentoCsg(array &$pagina, array $documento, bool $continuacion = false): void
+    {
+        [$titulo, $referencia] = $this->lineasDocumentoCsg($documento, $continuacion);
+        $alto = count($titulo) * 10 + 2;
+        $pagina['contenido'] .= $this->fondo($pagina['y'] - $alto, $alto);
+        foreach ($titulo as $i => $texto) {
+            $pagina['contenido'] .= $this->pdf->texto(36, $pagina['y'] - 9 - $i * 10, self::CUERPO, $texto, true);
+        }
+        $pagina['contenido'] .= $this->derecha(559, $pagina['y'] - 9, self::SECUNDARIO, $this->fecha($documento['fecha']));
+        $pagina['y'] -= $alto;
+        foreach ($referencia as $texto) {
+            $pagina['contenido'] .= $this->pdf->texto(36, $pagina['y'] - 7, self::SECUNDARIO, $texto);
+            $pagina['y'] -= 9;
+        }
+        $pagina['y'] -= 1;
+    }
+
+    private function tituloCsg(array &$pagina, string $titulo, bool $continuacion = false): void
+    {
+        $lineas = $this->pdf->envolver($titulo.($continuacion ? ' (continuación)' : ''), 523, 9.5);
+        $alto = count($lineas) * 12 + 4;
+        $pagina['contenido'] .= sprintf('0.18 0.33 0.36 rg 30 %.2F 535 %.2F re f 0 g
+', $pagina['y'] - $alto, $alto);
+        foreach ($lineas as $i => $linea) {
+            $pagina['contenido'] .= '1 g
+'.$this->pdf->texto(36, $pagina['y'] - 11 - $i * 12, 9.5, $linea, true).'0 g
+';
+        }
+        $pagina['y'] -= $alto + 3;
+    }
+
+    private function totalCsg(array $estado, array &$pagina, array $grupo): void
+    {
+        $filas = $grupo['totales'];
+        $this->reservar($estado, $pagina, 12 + count($filas) * 10.5, 'detalle_csg');
+        $pagina['contenido'] .= sprintf('0.75 G 30 %.2F m 565 %.2F l S 0 G
+', $pagina['y'] - 1, $pagina['y'] - 1);
+        $pagina['contenido'] .= $this->pdf->texto(36, $pagina['y'] - 10, self::SECUNDARIO, 'Total del CSG en el período (igual al resumen por productor)', true);
+        $pagina['y'] -= 12;
+        foreach ($filas as $total) {
+            $y = $pagina['y'] - 8;
+            $pagina['contenido'] .= $this->pdf->texto(36, $y, self::CUERPO, $total['tipo_envase'], true);
+            foreach (['entradas' => 393, 'salidas' => 474, 'saldo_final' => 559] as $campo => $x) {
+                $pagina['contenido'] .= $this->derecha($x, $y, self::CUERPO, $this->numero($total[$campo], $campo === 'saldo_final'), true);
+            }
+            $pagina['y'] -= 10.5;
+        }
     }
 
     private function documentos(array $estado): array
@@ -284,14 +422,14 @@ class GeneradorEstadoCuentaEnvasesPdf
         $pagina['contenido'] .= sprintf("0.88 G 30 %.2F m 565 %.2F l S 0 G\n", $pagina['y'] - 1, $pagina['y'] - 1);
     }
 
-    private function reservar(array $estado, array &$pagina, float $alto, string $seccion): void
+    private function reservar(array $estado, array &$pagina, float $alto, string $seccion, bool $repetirGrupo = true): void
     {
         if ($pagina['y'] - $alto < self::LIMITE_INFERIOR) {
-            $this->nuevaPagina($estado, $pagina, $seccion);
+            $this->nuevaPagina($estado, $pagina, $seccion, $repetirGrupo);
         }
     }
 
-    private function nuevaPagina(array $estado, array &$pagina, string $seccion): void
+    private function nuevaPagina(array $estado, array &$pagina, string $seccion, bool $repetirGrupo = true): void
     {
         if ($pagina['contenido'] !== '') {
             $pagina['paginas'][] = $pagina['contenido'];
@@ -301,6 +439,22 @@ class GeneradorEstadoCuentaEnvasesPdf
         $pagina['detalle'] = false;
         if ($seccion === 'detalle') {
             $this->encabezadoDetalle($pagina);
+        } elseif ($seccion === 'detalle_csg') {
+            $pagina['detalle'] = true;
+            $pagina['contenido'] .= $this->pdf->texto(30, $pagina['y'], 10, 'DETALLE POR PRODUCTOR (CSG)', true);
+            $leyendas = $this->pdf->envolver('Cada CSG en orden cronológico. Recibidos: envases que el cliente dejó en planta. Entregados: envases que la planta entregó al cliente. Saldo del CSG: acumulado de ese productor por envase.', 535, self::SECUNDARIO);
+            foreach ($leyendas as $i => $leyenda) {
+                $pagina['contenido'] .= $this->pdf->texto(30, $pagina['y'] - 12 - $i * 10, self::SECUNDARIO, $leyenda);
+            }
+            $pagina['y'] -= 14 + count($leyendas) * 10;
+            $pagina['contenido'] .= $this->fondo($pagina['y'] - 15, 17);
+            foreach ([['Envase', 36], ['Recibidos', 347], ['Entregados', 426], ['Saldo del CSG', 500]] as [$texto, $x]) {
+                $pagina['contenido'] .= $this->pdf->texto($x, $pagina['y'] - 10, self::CUERPO, $texto, true);
+            }
+            $pagina['y'] -= 20;
+            if ($repetirGrupo && ! empty($pagina['grupo'])) {
+                $this->tituloCsg($pagina, $pagina['grupo'], true);
+            }
         } elseif ($seccion === 'csg') {
             $this->encabezadoCsg($pagina);
         } elseif ($seccion === 'resumen') {

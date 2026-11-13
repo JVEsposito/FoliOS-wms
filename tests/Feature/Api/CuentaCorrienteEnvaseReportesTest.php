@@ -296,11 +296,19 @@ class CuentaCorrienteEnvaseReportesTest extends TestCase
         $ruta = '/api/envases/cuenta-corriente/estado-cuenta?cliente_id='.$this->productor->id;
         $productores = 'CSG 122104 · Agricola Los Robles / CSG 122105';
         $pdf = $this->get($ruta)->assertOk()->getContent();
-        $this->assertStringContainsString(iconv('UTF-8', 'Windows-1252', $productores), $pdf);
-        $this->assertStringContainsString('Sin productor declarado', $pdf);
-        $resumen = collect(app(ServicioCuentaCorrienteEnvases::class)->estadoCuenta($this->productor, $this->temporada, null, null)['resumen_csg'])->keyBy('codigo');
+        // El detalle por productor reparte la guía según lo validado y lo dice en cada parte.
+        $win = fn (string $texto): string => preg_quote(iconv('UTF-8', 'Windows-1252', $texto), '/');
+        $this->assertMatchesRegularExpression('/'.$win('(CSG 122104 · Agricola Los Robles)').'.*?'.$win('(Guía de ingreso N° REC-1 · Chofer Conductor MP').'.*?'.$win('Camión ABCD12)')
+            .'.*?'.$win('(Guía compartida con CSG 122105: aquí solo la parte de este productor.)').'.*?\(\+200\).*?'
+            .$win('(CSG 122105 · Productor sin nombre)').'.*?'.$win('(Guía de ingreso N° REC-1').'.*?\(\+100\).*?\(Sin productor asociado\)/s', $pdf);
+        $estado = app(ServicioCuentaCorrienteEnvases::class)->estadoCuenta($this->productor, $this->temporada, null, null);
+        $resumen = collect($estado['resumen_csg'])->keyBy('codigo');
         $this->assertSame(200, $resumen['122104']['tipos'][0]['entradas']);
         $this->assertSame(100, $resumen['122105']['tipos'][0]['entradas']);
+        // Cada grupo del detalle termina en lo mismo que su fila del resumen.
+        foreach ($estado['detalle_csg'] as $grupo) {
+            $this->assertSame(array_column($resumen[$grupo['codigo']]['tipos'], 'saldo_final'), array_column($grupo['totales'], 'saldo_final'));
+        }
 
         $excel = $this->get($ruta.'&formato=xlsx')->assertOk();
         $filas = $this->filasExcel($excel->baseResponse->getFile()->getPathname());
@@ -325,6 +333,66 @@ class CuentaCorrienteEnvaseReportesTest extends TestCase
         $pdfPeriodo = $this->get($ruta.'&desde=2026-10-14&hasta=2026-10-14')->assertOk()->getContent();
         $this->assertMatchesRegularExpression('/\(RESUMEN POR PRODUCTOR\).*?\(Saldo final\).*?CSG 122104\).*?\(\+200\).*?CSG 122105\).*?\(\+100\).*?\(Sin productor asociado\).*?\(-175\)/s', $pdfPeriodo);
         $this->assertStringNotContainsString('REC-POSTERIOR', $pdfPeriodo);
+    }
+
+    /**
+     * Estado de cuenta de FALCO FRUIT (13-11-2026): la entrega con guía de salida 2300 aparecía
+     * justo después de la guía 12520 y parecía su salida, aunque era del destare de otro camión.
+     * El detalle va agrupado por CSG, en orden cronológico dentro de cada uno, y cada guía lleva
+     * su chofer, su recepción y su camión.
+     */
+    public function test_el_detalle_va_por_csg_con_chofer_recepcion_y_camion_junto_a_cada_guia(): void
+    {
+        $especie = EspecieValidacion::firstOrCreate(['temporada_id' => $this->temporada->id, 'nombre' => 'Cereza'], ['activo' => true]);
+        $this->actingAs($this->administrador, 'sanctum');
+        $recepcion = function (string $guia, string $patente, string $carro, string $chofer, string $rut, string $csg, string $productor) use ($especie): RecepcionRomana {
+            $id = $this->postJson('/api/romana/recepciones', [
+                'operacion_id' => (string) Str::uuid(), 'temporada_id' => $this->temporada->id, 'cliente_id' => $this->productor->id,
+                'tipo_recepcion' => 'fruta_con_envases', 'especie_validacion_id' => $especie->id, 'tipo_servicio' => 'proceso',
+                'envases' => [['tipo_envase' => 'bins', 'cantidad' => 66]], 'numero_guia_despacho' => $guia,
+                'patente_camion' => $patente, 'patente_carro' => $carro, 'tipo_camion' => 'termo', 'rut_conductor' => $rut, 'nombre_conductor' => $chofer, 'peso_bruto' => 28000,
+            ])->assertCreated()->json('data.id');
+            $modelo = RecepcionRomana::findOrFail($id);
+            $validacion = $modelo->validacionesMp()->create(['temporada_id' => $this->temporada->id, 'operacion_toma_id' => (string) Str::uuid(),
+                'estado' => 'validada', 'validador_user_id' => $this->administrador->id, 'tomada_at' => now(), 'validada_at' => now()]);
+            $productorCsg = ProductorCsg::create(['codigo' => $csg, 'razon_social' => $productor, 'predio' => $productor, 'estado_sag' => 'activo',
+                'fuente_url' => 'https://sag.example.test', 'primera_verificacion_at' => now(), 'ultima_verificacion_at' => now(),
+                'ultima_consulta_user_id' => $this->administrador->id, 'respuesta_hash' => hash('sha256', $csg)]);
+            $csgValidacion = CsgValidacion::create(['temporada_id' => $this->temporada->id, 'codigo' => $csg, 'productor_csg_id' => $productorCsg->id, 'predio' => $productor, 'activo' => true]);
+            $validacion->segmentos()->create(['secuencia' => 1, 'motivos' => ['csg'], 'csg_validacion_id' => $csgValidacion->id, 'csg_snapshot' => $csg])
+                ->envases()->create(['tipo_envase' => 'bins', 'cantidad' => 66]);
+
+            return $modelo;
+        };
+        $guia12520 = $recepcion('12520', 'RY3495', 'GRJB65', 'FABIAN URDILES', '21.267.505-9', '3130606', 'AGRO COMERCIAL ESMERALDA LIMITADA');
+        $guia1526 = $recepcion('1526', 'KSBB99', 'JP2999', 'IGNACIO DURAN', '12.345.678-5', '3115673', 'AGRICOLA JG LIMITADA');
+        $this->movimiento($this->productor, 'recepcion_fruta', 66, 1, 1, 'cliente', '2026-10-09 14:57', '1526')->update(['recepcion_romana_id' => $guia1526->id]);
+        $this->movimiento($this->productor, 'recepcion_fruta', 66, 1, 1, 'cliente', '2026-10-09 15:19', '12520')->update(['recepcion_romana_id' => $guia12520->id]);
+        $this->movimiento($this->productor, 'salida_recepcion_fruta', 70, -1, -1, 'cliente', '2026-10-09 15:54', '2300')->update(['recepcion_romana_id' => $guia1526->id]);
+
+        $estado = app(ServicioCuentaCorrienteEnvases::class)->estadoCuenta($this->productor, $this->temporada, '2026-10-09', '2026-10-09');
+        $this->assertSame(['3115673', '3130606', null], array_column($estado['detalle_csg'], 'codigo'));
+        [$jg, $esmeralda] = $estado['detalle_csg'];
+        $this->assertSame(['Guía de ingreso N° 1526', 'Guía de salida N° 2300'], array_column($jg['documentos'], 'titulo'));
+        $this->assertSame('Chofer IGNACIO DURAN (RUT 12.345.678-5)', $jg['documentos'][1]['chofer']);
+        $this->assertSame('Destare de '.$guia1526->numero_recepcion.' (guía de ingreso 1526) · Camión KSBB99 · carro JP2999', $jg['documentos'][1]['referencia']);
+        $this->assertSame('Entregados en el destare', $jg['documentos'][1]['movimiento']);
+        // Saldo acumulado del CSG: 66 recibidos y 70 entregados.
+        $this->assertSame([66, -4], [$jg['documentos'][0]['lineas'][0]['saldo'], $jg['documentos'][1]['lineas'][0]['saldo']]);
+        $this->assertSame([['tipo_envase' => 'Bins plástico', 'saldo_inicial' => 0, 'entradas' => 66, 'salidas' => 70, 'saldo_final' => -4]], $jg['totales']);
+        $this->assertSame('Chofer FABIAN URDILES (RUT 21.267.505-9)', $esmeralda['documentos'][0]['chofer']);
+        $this->assertSame(66, $esmeralda['totales'][0]['saldo_final']);
+        // El resumen por productor suma lo mismo que el detalle.
+        $resumen = collect($estado['resumen_csg'])->keyBy('codigo');
+        $this->assertSame([-4, 66], [$resumen['3115673']['tipos'][0]['saldo_final'], $resumen['3130606']['tipos'][0]['saldo_final']]);
+
+        $pdf = $this->get('/api/envases/cuenta-corriente/estado-cuenta?cliente_id='.$this->productor->id.'&desde=2026-10-09&hasta=2026-10-09')->assertOk()->getContent();
+        $w = fn (string $texto): string => preg_quote(iconv('UTF-8', 'Windows-1252', $texto), '/');
+        $this->assertMatchesRegularExpression('/'.$w('(CSG 3115673 · AGRICOLA JG LIMITADA)').'.*?'.$w('(Guía de ingreso N° 1526 · Chofer IGNACIO DURAN')
+            .'.*?'.$w('(Guía de salida N° 2300 · Chofer IGNACIO DURAN').'.*?'.$w('(Entregados en el destare · Destare de '.$guia1526->numero_recepcion)
+            .'.*?\(-4\).*?'.$w('(CSG 3130606 · AGRO COMERCIAL ESMERALDA LIMITADA)').'.*?'.$w('(Guía de ingreso N° 12520 · Chofer FABIAN URDILES').'/s', $pdf);
+        $this->assertStringContainsString('(DETALLE POR PRODUCTOR \(CSG\))', $pdf);
+        $this->assertStringNotContainsString('DETALLE POR DOCUMENTO', $pdf);
     }
 
     public function test_dos_documentos_con_misma_guia_y_fecha_no_se_fusionan_en_el_pdf(): void

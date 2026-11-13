@@ -142,6 +142,35 @@ class EstadoCuentaEnvasesPdfTest extends TestCase
         $this->comprobarCoordenadas($pdf);
     }
 
+    public function test_el_detalle_por_csg_agrupa_en_orden_y_repite_el_productor_al_cambiar_de_hoja(): void
+    {
+        $estado = EstadoCuentaEnvases::conDetalleCsg();
+        $pdf = app(GeneradorEstadoCuentaEnvasesPdf::class)->generar($estado);
+        $paginas = $this->paginas($pdf);
+        $this->assertStringNotContainsString('DETALLE POR DOCUMENTO', $pdf);
+        $this->assertStringNotContainsString('DETALLE POR PRODUCTOR', $paginas[0]);
+        // Cada guía aparece una sola vez, con su chofer en la misma línea.
+        foreach ($estado['grupos_documentos'] as $grupo) {
+            $this->assertSame(1, substr_count($pdf, $grupo['documento'].' '.iconv('UTF-8', 'Windows-1252', '·').' Chofer CONDUCTOR '.substr($grupo['documento'], -3)));
+        }
+        // Los CSG van en orden y cada uno cierra con su total, igual al resumen.
+        preg_match_all('/\(CSG (\d+) \S+ Productor de ejemplo PROD-\d+\) Tj/', $pdf, $titulos);
+        $this->assertSame(array_map(fn ($g) => (string) $g['codigo'], $estado['resumen_csg']), $titulos[1]);
+        $this->assertSame(count($estado['detalle_csg']), substr_count($pdf, '(Total del CSG en el per'));
+        foreach ($estado['detalle_csg'] as $grupo) {
+            $resumen = collect($estado['resumen_csg'])->firstWhere('codigo', $grupo['codigo']);
+            $this->assertSame(array_column($resumen['tipos'], 'saldo_final'), array_column($grupo['totales'], 'saldo_final'));
+        }
+        // Un CSG que sigue en otra hoja repite su título como continuación.
+        $this->assertGreaterThan(0, preg_match_all('/PROD-\d+ \\\\\\(continuaci/', $pdf));
+        foreach (array_slice($paginas, 1) as $pagina) {
+            if (str_contains($pagina, 'DETALLE POR PRODUCTOR')) {
+                $this->assertStringContainsString('(Saldo del CSG)', $pagina);
+            }
+        }
+        $this->comprobarCoordenadas($pdf);
+    }
+
     /** Contenido de cada hoja del PDF, excluyendo la imagen del logo. */
     private function paginas(string $pdf): array
     {

@@ -2,6 +2,7 @@
 
 namespace Tests\Fixtures;
 
+use App\Services\Envases\DetalleEnvasesPorCsg;
 use App\Services\Envases\ResumenEnvasesPorCsg;
 use Carbon\CarbonImmutable;
 
@@ -60,6 +61,33 @@ class EstadoCuentaEnvases
         }
         $estado['tipos'] = $guias ? $tipos : [];
         $estado['resumen_csg'] = ResumenEnvasesPorCsg::generar($movimientosCsg, []);
+
+        return $estado;
+    }
+
+    /** El mismo estado con el detalle por CSG, como lo arma ServicioCuentaCorrienteEnvases. */
+    public static function conDetalleCsg(int $guias = 200, int $cantidadCsg = 12): array
+    {
+        $estado = self::crear($guias, $cantidadCsg);
+        $tipos = [];
+        $documentos = array_map(function (array $grupo) use (&$tipos): array {
+            preg_match('/^CSG (\d+) · (.*)$/u', $grupo['productor'], $csg);
+            $porTipo = [];
+            foreach ($grupo['lineas'] as $orden => $linea) {
+                $clave = 't'.$orden;
+                $tipos[$clave] = ['nombre' => $linea['tipo_envase'], 'orden' => $orden];
+                $porTipo[$clave] = ['nombre' => $linea['tipo_envase'], 'orden' => $orden,
+                    'entradas' => (int) $linea['entrada'], 'salidas' => (int) $linea['salida']];
+            }
+            $entrada = $grupo['movimiento'] === 'Recepción con fruta';
+
+            return ['fecha' => $grupo['fecha'], 'movimiento' => $entrada ? 'Ingreso con fruta' : 'Despacho de envases',
+                'titulo' => ($entrada ? 'Guía de ingreso N° ' : 'Guía de despacho N° ').$grupo['documento'],
+                'chofer' => 'Chofer CONDUCTOR '.substr($grupo['documento'], -3).' (RUT 12.345.678-5)',
+                'referencia' => 'Recepción REC-'.$grupo['documento'].' · Camión AB1234 · carro CD5678',
+                'asignaciones' => [['csg' => ['codigo' => $csg[1], 'nombre' => $csg[2]], 'compartido' => null, 'tipos' => $porTipo]]];
+        }, $estado['grupos_documentos']);
+        $estado['detalle_csg'] = DetalleEnvasesPorCsg::armar($documentos, [], $tipos);
 
         return $estado;
     }
