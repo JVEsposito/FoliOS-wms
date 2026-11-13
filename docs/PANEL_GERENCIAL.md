@@ -9,9 +9,12 @@ instantánea se guarda en caché (`gerencia.cache_segundos`) y se invalida con l
 - Muestra el total de la temporada, los últimos 7 días y hoy. Por cliente muestra kilos de la temporada,
   participación, 7 días, hoy y número de recepciones.
 - El gráfico de 7 días apila a los cinco clientes con más kilos de la semana. El resto va en «Otros clientes».
-- Los días se cortan en la hora de planta (`app.operational_timezone`). Una recepción cerrada a las 22:00
-  queda en ese día, aunque en UTC ya sea el siguiente.
-- «Recepciones cerradas hoy» y «clientes hoy» sí incluyen las de solo envases.
+- Cada recepción cuenta en el **día de ingreso** del camión, en hora de planta (`app.operational_timezone`),
+  igual que el filtro de fechas de Romana y Finanzas. Si un camión entra a las 22:38 y se destara pasada la
+  medianoche, sus kilos quedan en el día en que entró. Mientras no se cierra no suma; al cerrarse se suma a
+  su día de ingreso.
+- «Recepciones cerradas hoy» y «clientes hoy» cuentan las que ingresaron hoy y ya se cerraron, e incluyen las
+  de solo envases.
 
 ## Producto terminado: pallets y saldos
 
