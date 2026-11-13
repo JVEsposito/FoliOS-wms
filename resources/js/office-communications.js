@@ -2,6 +2,7 @@ import '../css/office-communications.css';
 import { communicationsSession, escapeCommunications as esc, communicationsDate as date } from './shared/communications-client.js';
 import { createOperationalPoller } from './shared/operational-poller.js';
 import { createUuid } from './shared/uuid.js';
+import { citationLabel, citationSegments, citationTrigger, encodeCitations, insertCitation } from './shared/communications-references.js';
 
 const base = '/api/comunicaciones';
 
@@ -26,12 +27,13 @@ export function createCommunicationsApp(dialog, api, onChanged) {
     const directory = { private: { page: 1, rows: [], more: false, version: 0 }, mail: { page: 1, rows: [], more: false, version: 0 } };
     const images = new Map(), queued = new Set(), visibleImages = new Set();
     let imageQueue = [], imageGeneration = 0, imageActive = 0, recipientTimer = null;
+    let mailCitations = new Map(), citeCard = 0;
     const alive = version => opened && generation === version && communicationsSession()?.token === user?.token && communicationsSession()?.id === user?.id;
     function notice(text = '', error = false) { if (opened) { status.textContent = text; status.dataset.error = String(error); } }
     function failed(error) { if (opened && error.name !== 'AbortError') notice(error.message || 'Sin conexión. Vuelve a intentarlo.', true); }
     function draft() {
         if (!conversation) return null;
-        if (!drafts.has(conversation.id)) drafts.set(conversation.id, { text: '', sticker: null, intent: null });
+        if (!drafts.has(conversation.id)) drafts.set(conversation.id, { text: '', sticker: null, intent: null, citations: new Map() });
         return drafts.get(conversation.id);
     }
     function intent(previous, payload) {
@@ -44,6 +46,7 @@ export function createCommunicationsApp(dialog, api, onChanged) {
         $('[data-chat-send]').disabled = busyChat || !chatReady || !conversation?.puede_enviar;
         chatForm.elements.texto.disabled = busyChat || !chatReady || !conversation?.puede_enviar;
         $('[data-stickers-open]').disabled = busyChat || !chatReady || !conversation?.puede_enviar;
+        chatForm.querySelectorAll('[data-cite-insert]').forEach(b => { b.disabled = busyChat || !chatReady || !conversation?.puede_enviar; });
         $$('[data-select-conversation]').forEach(b => { b.disabled = busyChat; });
         [...mailForm.elements].forEach(e => { e.disabled = busyMail; });
         [...uploadForm.elements].forEach(e => { e.disabled = busySticker; });
@@ -118,7 +121,7 @@ export function createCommunicationsApp(dialog, api, onChanged) {
         for (const m of messages) {
             if (renderedMessages.has(m.id)) continue;
             const template = document.createElement('template');
-            template.innerHTML = `<article class="comms-message ${m.remitente.id === user.id ? 'is-mine' : ''}" data-chat-message="${Number(m.id)}"><header>${esc(m.remitente.nombre)}</header>${m.texto !== null ? `<p>${esc(m.texto)}</p>` : ''}${m.sticker ? stickerImage(m.sticker) : ''}<time>${esc(date(m.creado_at))}</time></article>`;
+            template.innerHTML = `<article class="comms-message ${m.remitente.id === user.id ? 'is-mine' : ''} ${m.me_menciona ? 'is-mention' : ''}" data-chat-message="${Number(m.id)}"><header>${esc(m.remitente.nombre)}${m.me_menciona ? ' <span class="comms-mention-flag">te mencionó</span>' : ''}</header>${m.texto !== null ? `<p>${richText(m.texto, m.referencias)}</p>` : ''}${m.sticker ? stickerImage(m.sticker) : ''}<time>${esc(date(m.creado_at))}</time></article>`;
             const node = template.content.firstElementChild;
             const next = messages.find(other => other.id > m.id && renderedMessages.has(other.id));
             log.insertBefore(node, next ? renderedMessages.get(next.id) : null); renderedMessages.set(m.id, node);
@@ -130,6 +133,92 @@ export function createCommunicationsApp(dialog, api, onChanged) {
         else if (prepend) log.scrollTop = log.scrollHeight - height + top;
         else { log.scrollTop = top; $('[data-chat-bottom]').hidden = nearBottom(); }
     }
+    /** Texto con citas: cada una es un botón que abre su ficha. Todo lo demás se escapa. */
+    function richText(text, references = []) {
+        return citationSegments(text, references || []).map(segment => {
+            if (segment.type === 'text') return esc(segment.value);
+            const r = segment.reference;
+            return `<button type="button" class="comms-cite ${r.tipo === 'usuario' ? 'is-person' : ''} ${r.soy_yo ? 'is-me' : ''}" data-cite-tipo="${esc(r.tipo)}" data-cite-id="${esc(r.id)}" title="${esc(r.nombre_tipo || 'Cita')} · ver ficha">${esc(citationLabel(r))}</button>`;
+        }).join('');
+    }
+    function hideCitationCard() { citeCard += 1; $('[data-cite-card]').hidden = true; $('[data-cite-card-body]').replaceChildren(); }
+    async function openCitation(tipo, id, label) {
+        const card = $('[data-cite-card]'), body = $('[data-cite-card-body]'), view = ++citeCard, app = generation;
+        $('[data-cite-card-type]').textContent = tipo === 'usuario' ? 'Persona' : 'Cita';
+        $('[data-cite-card-title]').textContent = label; body.innerHTML = '<p>Cargando ficha…</p>'; card.hidden = false;
+        try {
+            const { data } = await api.request(`${base}/referencias/${encodeURIComponent(tipo)}/${encodeURIComponent(id)}`);
+            if (!alive(app) || view !== citeCard) return;
+            $('[data-cite-card-type]').textContent = data.nombre_tipo; $('[data-cite-card-title]').textContent = tipo === 'usuario' ? `@${data.etiqueta}` : data.etiqueta;
+            const link = typeof data.enlace === 'string' && data.enlace.startsWith('/oficina/') ? data.enlace : null;
+            body.innerHTML = `<dl>${(data.datos || []).map(d => `<div><dt>${esc(d.etiqueta)}</dt><dd>${esc(d.valor)}</dd></div>`).join('')}</dl><div class="comms-compose-actions">${link ? `<a href="${esc(link)}" target="_blank" rel="noopener">Abrir en ${esc(data.modulo || 'FoliOS')}</a>` : ''}${data.puede_privado ? `<button type="button" data-cite-private="${Number(data.id)}">Escribir por privado</button>` : ''}</div>`;
+        } catch (error) {
+            if (!alive(app) || view !== citeCard || error.name === 'AbortError') return;
+            body.innerHTML = `<p class="comms-cite-error">${esc(error.message || 'No se pudo abrir la ficha.')}</p>`;
+        }
+    }
+    function citationAutocomplete(textarea, box, citations, onChange) {
+        let trigger = null, results = [], active = 0, request = 0, timer = null;
+        const hide = () => { clearTimeout(timer); request += 1; trigger = null; results = []; box.hidden = true; box.replaceChildren(); textarea.removeAttribute('aria-activedescendant'); };
+        const hint = text => { results = []; box.innerHTML = `<p>${esc(text)}</p>`; box.hidden = false; };
+        function render() {
+            if (!results.length) { hint(trigger?.kind === 'user' ? 'No hay personas activas con ese nombre.' : 'Sin coincidencias que puedas citar. Prueba con otro código o número.'); return; }
+            box.innerHTML = results.map((r, i) => `<button type="button" role="option" id="${box.id}-${i}" data-cite-option="${i}" aria-selected="${i === active}"><span>${esc(r.nombre_tipo)}</span><strong>${esc(citationLabel(r))}</strong>${r.resumen ? `<small>${esc(r.resumen)}</small>` : ''}</button>`).join('');
+            box.hidden = false; textarea.setAttribute('aria-activedescendant', `${box.id}-${active}`);
+            box.querySelector(`[data-cite-option="${active}"]`)?.scrollIntoView({ block: 'nearest' });
+        }
+        async function search(current) {
+            const version = ++request, app = generation;
+            try {
+                const result = current.kind === 'user'
+                    ? await api.request(`${base}/usuarios?${new URLSearchParams({ buscar: current.query })}`)
+                    : await api.request(`${base}/referencias?${new URLSearchParams({ buscar: current.query })}`);
+                if (!alive(app) || version !== request) return;
+                results = current.kind === 'user'
+                    ? result.data.slice(0, 8).map(u => ({ tipo: 'usuario', id: String(u.id), etiqueta: u.nombre, nombre_tipo: 'Persona' }))
+                    : result.data;
+                active = 0; render();
+            } catch (error) { if (alive(app) && version === request && error.name !== 'AbortError') hint(error.message || 'No se pudo buscar.'); }
+        }
+        function update() {
+            const current = citationTrigger(textarea.value, textarea.selectionStart);
+            if (!current || textarea.selectionStart !== textarea.selectionEnd) { hide(); return; }
+            trigger = current; clearTimeout(timer);
+            if (current.kind === 'record' && current.query.length < 2) { request += 1; hint('Escribe al menos 2 caracteres del código: folio, recepción, carga, prefrío, lote…'); return; }
+            if (current.kind === 'user' && !current.query) { request += 1; hint('Escribe el nombre de la persona que quieres mencionar.'); return; }
+            timer = setTimeout(() => void search(current), 250);
+        }
+        function choose(index) {
+            const reference = results[index]; if (!reference || !trigger) return;
+            const next = insertCitation(textarea.value, trigger, reference);
+            citations().set(`${reference.tipo}:${reference.id}`, reference);
+            textarea.value = next.text; textarea.focus(); textarea.setSelectionRange(next.caret, next.caret);
+            hide(); onChange(next.text);
+        }
+        textarea.addEventListener('input', update);
+        textarea.addEventListener('click', update);
+        textarea.addEventListener('blur', () => setTimeout(() => { if (document.activeElement !== textarea && !box.contains(document.activeElement)) hide(); }, 150));
+        textarea.addEventListener('keydown', event => {
+            if (box.hidden) return;
+            if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); hide(); return; }
+            if (!results.length) return;
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); active = (active + (event.key === 'ArrowDown' ? 1 : results.length - 1)) % results.length; render(); }
+            else if (event.key === 'Enter' || event.key === 'Tab') { event.preventDefault(); choose(active); }
+        });
+        box.addEventListener('mousedown', event => event.preventDefault());
+        box.addEventListener('click', event => { const option = event.target.closest('[data-cite-option]'); if (option) choose(Number(option.dataset.citeOption)); });
+        return {
+            hide,
+            insert(sigil) {
+                if (textarea.disabled) return;
+                const start = textarea.selectionStart ?? textarea.value.length, end = textarea.selectionEnd ?? start;
+                const before = textarea.value.slice(0, start), prefix = before && !/\s$/.test(before) ? ' ' : '';
+                textarea.value = `${before}${prefix}${sigil}${textarea.value.slice(end)}`;
+                const caret = start + prefix.length + 1;
+                textarea.focus(); textarea.setSelectionRange(caret, caret); onChange(textarea.value); update();
+            },
+        };
+    }
     function renderDraft() {
         const value = draft();
         chatForm.elements.texto.value = value?.text || '';
@@ -139,7 +228,7 @@ export function createCommunicationsApp(dialog, api, onChanged) {
         observeImages(); controls();
     }
     function renderConversations() {
-        $('[data-conversation-list]').innerHTML = conversations.map(c => `<button type="button" class="comms-row ${c.tiene_no_leidos ? 'is-unread' : ''}" data-select-conversation="${c.id}" aria-current="${conversation?.id === c.id}"><strong>${esc(c.nombre)}</strong><small>${c.tipo === 'global' ? 'Todos los usuarios internos' : 'Conversación privada'}</small>${c.extracto ? `<small>${esc(c.extracto)}</small>` : ''}</button>`).join('');
+        $('[data-conversation-list]').innerHTML = conversations.map(c => `<button type="button" class="comms-row ${c.tiene_no_leidos ? 'is-unread' : ''}" data-select-conversation="${c.id}" aria-current="${conversation?.id === c.id}"><strong>${esc(c.nombre)}${c.tiene_menciones ? ' <span class="comms-mention-flag" title="Te mencionaron">@</span>' : ''}</strong><small>${c.tipo === 'global' ? 'Todos los usuarios internos' : 'Conversación privada'}</small>${c.extracto ? `<small>${esc(c.extracto)}</small>` : ''}</button>`).join('');
         $('[data-conversations-more]').hidden = !conversationsMore; controls();
     }
     async function loadConversations({ more = false } = {}) {
@@ -169,7 +258,7 @@ export function createCommunicationsApp(dialog, api, onChanged) {
         messages = [...map.values()].sort((a, b) => a.id - b.id); chatReady = true;
         const current = draft();
         if (current?.intent && result.data.some(m => m.remitente.id === user.id && m.operacion_id === current.intent.id)) {
-            current.text = ''; current.sticker = null; current.intent = null; renderDraft();
+            current.text = ''; current.sticker = null; current.intent = null; current.citations = new Map(); renderDraft();
         }
         if (result.data.length || mode === 'initial') renderMessages({ bottom, prepend: mode === 'old' });
         if (mode === 'new' && nearBottom()) void markRead();
@@ -177,7 +266,7 @@ export function createCommunicationsApp(dialog, api, onChanged) {
     }
     async function selectConversation(id) {
         if (busyChat) return;
-        selection += 1; conversation = conversations.find(c => c.id === id) || { id, nombre: 'Conversación', puede_enviar: false };
+        selection += 1; chatCite.hide(); hideCitationCard(); conversation = conversations.find(c => c.id === id) || { id, nombre: 'Conversación', puede_enviar: false };
         messages = []; older = false; chatReady = false; receivedCursor = 0; renderedMessages.clear(); readState = { last: 0, busy: false }; clearImages();
         $('[data-sticker-panel]').hidden = true; $('[data-chat-bottom]').hidden = true;
         $('[data-conversation-title]').textContent = conversation.nombre;
@@ -189,7 +278,7 @@ export function createCommunicationsApp(dialog, api, onChanged) {
         if (busyChat || !chatReady || !conversation?.puede_enviar) return;
         const value = draft(), id = conversation.id, app = generation, selected = selection;
         value.text = chatForm.elements.texto.value;
-        const payload = { texto: value.text.trim() || null, sticker_id: value.sticker?.id || null };
+        const payload = { texto: encodeCitations(value.text, value.citations).trim() || null, sticker_id: value.sticker?.id || null };
         if (!payload.texto && !payload.sticker_id) { notice('Escribe un mensaje o selecciona un sticker.', true); return; }
         value.intent = intent(value.intent, { conversacion_id: id, ...payload });
         busyChat = true; controls(); notice('Enviando mensaje…');
@@ -197,7 +286,7 @@ export function createCommunicationsApp(dialog, api, onChanged) {
             const result = await api.request(`${base}/chat/conversaciones/${id}/mensajes`, { method: 'POST', body: { ...payload, operacion_id: value.intent.id } });
             if (!alive(app) || selected !== selection) return;
             if (!messages.some(m => m.id === result.data.id)) messages.push(result.data);
-            messages.sort((a, b) => a.id - b.id); value.text = ''; value.sticker = null; value.intent = null;
+            messages.sort((a, b) => a.id - b.id); value.text = ''; value.sticker = null; value.intent = null; value.citations = new Map(); chatCite.hide();
             renderDraft(); renderMessages({ bottom: true }); notice('Mensaje enviado.'); onChanged();
             void loadConversations().catch(() => {});
         } catch (error) {
@@ -274,14 +363,14 @@ export function createCommunicationsApp(dialog, api, onChanged) {
         const result = await api.request(`${base}/correos?${new URLSearchParams({ bandeja: folder, pagina: mailPage, buscar: $('[data-mail-search]').elements.buscar.value })}`);
         if (!alive(app) || request !== mailRequest || folder !== requestedFolder || mailPage !== requestedPage) return;
         mailPages = result.ultima_pagina;
-        $('[data-mail-list]').innerHTML = result.data.map(m => `<button type="button" class="comms-row ${!m.leido ? 'is-unread' : ''}" data-open-mail="${m.id}" aria-current="${selectedMail?.id === m.id}"><strong>${esc(m.asunto)}</strong><small>${esc(folder === 'enviados' ? m.destinatarios.map(u => u.nombre).join(', ') : m.remitente.nombre)}</small><small>${esc(date(m.creado_at))}</small></button>`).join('') || '<p>No hay correos en esta bandeja.</p>';
+        $('[data-mail-list]').innerHTML = result.data.map(m => `<button type="button" class="comms-row ${!m.leido ? 'is-unread' : ''}" data-open-mail="${m.id}" aria-current="${selectedMail?.id === m.id}"><strong>${esc(m.asunto)}${m.me_menciona ? ' <span class="comms-mention-flag" title="Te mencionaron">@</span>' : ''}</strong><small>${esc(folder === 'enviados' ? m.destinatarios.map(u => u.nombre).join(', ') : m.remitente.nombre)}</small><small>${esc(date(m.creado_at))}</small></button>`).join('') || '<p>No hay correos en esta bandeja.</p>';
         $('[data-mail-page]').textContent = `${result.pagina} / ${result.ultima_pagina}`;
         $('[data-mail-prev]').disabled = mailPage <= 1; $('[data-mail-next]').disabled = mailPage >= mailPages;
     }
     function renderMail() {
         if (!selectedMail) { $('[data-mail-detail]').innerHTML = '<p>Selecciona un correo para leerlo.</p>'; return; }
         const m = selectedMail;
-        $('[data-mail-detail]').innerHTML = `<h3>${esc(m.asunto)}</h3><small>De: ${esc(m.remitente.nombre)}</small><small>Para: ${esc(m.destinatarios.map(u => u.nombre).join(', '))}</small><small>${esc(date(m.creado_at))}</small><div class="comms-mail-text">${esc(m.texto)}</div><div class="comms-compose-actions"><button type="button" data-mail-reply>Responder</button>${m.es_destinatario ? `<button type="button" data-mail-read-toggle>${m.leido ? 'Marcar no leído' : 'Marcar leído'}</button><button type="button" data-mail-archive>${m.archivado ? 'Restaurar a recibidos' : 'Archivar'}</button>` : ''}</div>`;
+        $('[data-mail-detail]').innerHTML = `<h3>${esc(m.asunto)}</h3><small>De: ${esc(m.remitente.nombre)}</small><small>Para: ${esc(m.destinatarios.map(u => u.nombre).join(', '))}</small><small>${esc(date(m.creado_at))}</small><div class="comms-mail-text">${richText(m.texto, m.referencias)}</div><div class="comms-compose-actions"><button type="button" data-mail-reply>Responder</button>${m.es_destinatario ? `<button type="button" data-mail-read-toggle>${m.leido ? 'Marcar no leído' : 'Marcar leído'}</button><button type="button" data-mail-archive>${m.archivado ? 'Restaurar a recibidos' : 'Archivar'}</button>` : ''}</div>`;
     }
     async function openMail(id) {
         if (composing) { notice('Envía o cancela el borrador antes de abrir otro correo.', true); return; }
@@ -298,7 +387,7 @@ export function createCommunicationsApp(dialog, api, onChanged) {
     }
     async function compose(reply = false) {
         if (composing) return;
-        composing = true; replyTo = reply ? selectedMail?.id : null; mailIntent = null; recipients.clear(); mailForm.reset();
+        composing = true; replyTo = reply ? selectedMail?.id : null; mailIntent = null; recipients.clear(); mailForm.reset(); mailCitations = new Map(); mailCite.hide(); hideCitationCard();
         if (reply && selectedMail) {
             const people = selectedMail.remitente.id === user.id ? selectedMail.destinatarios : [selectedMail.remitente];
             people.filter(p => p.id !== user.id).forEach(p => recipients.set(p.id, p));
@@ -311,13 +400,13 @@ export function createCommunicationsApp(dialog, api, onChanged) {
     async function sendMail(event) {
         event.preventDefault(); if (busyMail) return;
         if (!recipients.size) { notice('Selecciona al menos un destinatario.', true); return; }
-        const payload = { destinatarios: [...recipients.keys()].sort((a, b) => a - b), asunto: mailForm.elements.asunto.value.trim(), texto: mailForm.elements.texto.value.trim(), respuesta_a_id: replyTo };
+        const payload = { destinatarios: [...recipients.keys()].sort((a, b) => a - b), asunto: mailForm.elements.asunto.value.trim(), texto: encodeCitations(mailForm.elements.texto.value, mailCitations).trim(), respuesta_a_id: replyTo };
         mailIntent = intent(mailIntent, payload); const app = generation;
         busyMail = true; controls(); notice('Enviando correo…');
         try {
             const result = await api.request(`${base}/correos`, { method: 'POST', body: { ...payload, operacion_id: mailIntent.id } });
             if (!alive(app)) return;
-            composing = false; mailIntent = null; replyTo = null; recipients.clear(); mailForm.reset(); mailForm.hidden = true;
+            composing = false; mailIntent = null; replyTo = null; recipients.clear(); mailForm.reset(); mailForm.hidden = true; mailCitations = new Map(); mailCite.hide();
             $('[data-mail-detail]').hidden = false; selectedMail = result.data; folder = 'enviados'; mailPage = 1;
             renderMail(); showFolders(); notice('Correo enviado.'); onChanged(); void loadMails().catch(() => {});
         } catch (error) { if (alive(app)) notice(`${error.message || 'Envío sin confirmar.'} Reintenta sin cambiar el borrador para evitar duplicados.`, true); }
@@ -330,7 +419,7 @@ export function createCommunicationsApp(dialog, api, onChanged) {
     }
     async function switchTab(value) {
         if (busyChat || busyMail || busySticker) return;
-        selection += 1; tab = value; clearImages();
+        selection += 1; tab = value; clearImages(); hideCitationCard(); chatCite.hide(); mailCite.hide();
         $$('[data-comms-tab]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.commsTab === value)));
         $('[data-comms-chat]').hidden = value !== 'chat'; $('[data-comms-mail]').hidden = value !== 'mail'; notice();
         if (value === 'chat') {
@@ -356,6 +445,10 @@ export function createCommunicationsApp(dialog, api, onChanged) {
         const button = event.target.closest('button'); if (!button) return;
         const run = async () => {
             if (button.hasAttribute('data-comms-close')) { dialog.close(); return; }
+            if (button.dataset.citeTipo) return openCitation(button.dataset.citeTipo, button.dataset.citeId, button.textContent);
+            if (button.hasAttribute('data-cite-card-close')) { hideCitationCard(); return; }
+            if (button.dataset.citePrivate) { hideCitationCard(); if (tab !== 'chat') await switchTab('chat'); return openPrivate(Number(button.dataset.citePrivate)); }
+            if (button.dataset.citeInsert) { (button.closest('[data-mail-compose]') ? mailCite : chatCite).insert(button.dataset.citeInsert); return; }
             if (button.dataset.commsTab) return switchTab(button.dataset.commsTab);
             if (button.hasAttribute('data-comms-refresh')) {
                 if (tab === 'chat') { if (conversation) return chatReady ? loadMessages() : selectConversation(conversation.id); await loadConversations(); if (conversations.length) return selectConversation(conversations[0].id); }
@@ -380,7 +473,7 @@ export function createCommunicationsApp(dialog, api, onChanged) {
             if (button.dataset.openMail) return openMail(Number(button.dataset.openMail));
             if (button.hasAttribute('data-mail-prev') || button.hasAttribute('data-mail-next')) { mailPage += button.hasAttribute('data-mail-prev') ? -1 : 1; return loadMails(); }
             if (button.hasAttribute('data-mail-reply')) return compose(true);
-            if (button.hasAttribute('data-mail-cancel')) { composing = false; mailIntent = null; recipients.clear(); replyTo = null; mailForm.reset(); mailForm.hidden = true; $('[data-mail-detail]').hidden = false; notice('Borrador cancelado.'); return; }
+            if (button.hasAttribute('data-mail-cancel')) { composing = false; mailIntent = null; recipients.clear(); replyTo = null; mailForm.reset(); mailCitations = new Map(); mailCite.hide(); mailForm.hidden = true; $('[data-mail-detail]').hidden = false; notice('Borrador cancelado.'); return; }
             if (button.hasAttribute('data-recipients-more')) return loadDirectory('mail', true);
             if (button.dataset.removeRecipient) { recipients.delete(Number(button.dataset.removeRecipient)); showRecipients(); $$('[data-recipient]').forEach(n => { n.checked = recipients.has(Number(n.dataset.recipient)); }); return; }
             if (button.hasAttribute('data-mail-read-toggle') && selectedMail) {
@@ -398,6 +491,8 @@ export function createCommunicationsApp(dialog, api, onChanged) {
         };
         void run().catch(failed);
     });
+    const chatCite = citationAutocomplete(chatForm.elements.texto, chatForm.querySelector('[data-cite-suggest]'), () => draft()?.citations ?? new Map(), text => { if (draft()) draft().text = text; });
+    const mailCite = citationAutocomplete(mailForm.elements.texto, mailForm.querySelector('[data-cite-suggest]'), () => mailCitations, () => {});
     chatForm.addEventListener('submit', event => void sendChat(event).catch(failed));
     chatForm.elements.texto.addEventListener('input', () => { if (draft()) draft().text = chatForm.elements.texto.value; });
     mailForm.addEventListener('submit', event => void sendMail(event).catch(failed));
@@ -415,7 +510,7 @@ export function createCommunicationsApp(dialog, api, onChanged) {
     dialog.addEventListener('cancel', event => { if (busyChat || busyMail || busySticker) event.preventDefault(); });
     dialog.addEventListener('close', () => {
         if (dialog.open) return;
-        opened = false; generation += 1; selection += 1; poller.stop(); api.reset(); clearImages(); clearTimeout(recipientTimer);
+        opened = false; generation += 1; selection += 1; poller.stop(); api.reset(); clearImages(); clearTimeout(recipientTimer); hideCitationCard(); chatCite.hide(); mailCite.hide();
         messages = []; conversation = null; selectedMail = null; chatReady = false; receivedCursor = 0; renderedMessages.clear();
         log.replaceChildren(); $('[data-conversation-list]').replaceChildren(); $('[data-mail-list]').replaceChildren(); $('[data-mail-detail]').replaceChildren();
         busyChat = false; busyMail = false; busySticker = false; busyPrivate = false;
@@ -432,8 +527,8 @@ export function createCommunicationsApp(dialog, api, onChanged) {
             poller.start();
         },
         reset() {
-            opened = false; generation += 1; selection += 1; poller.stop(); clearImages(); clearTimeout(recipientTimer);
-            if (dialog.open) dialog.close();
+            opened = false; generation += 1; selection += 1; poller.stop(); clearImages(); clearTimeout(recipientTimer); hideCitationCard(); chatCite.hide(); mailCite.hide();
+            if (dialog.open) dialog.close(); mailCitations = new Map();
             drafts.clear(); recipients.clear(); conversations = []; messages = []; renderedMessages.clear(); receivedCursor = 0; stickerRows = []; conversation = null; selectedMail = null;
             composing = false; replyTo = null; mailIntent = null; stickerIntent = null; user = null;
             folder = 'recibidos'; mailPage = 1; conversationPage = 1; older = false; chatReady = false;

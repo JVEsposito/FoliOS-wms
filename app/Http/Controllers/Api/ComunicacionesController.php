@@ -6,6 +6,7 @@ use App\Enums\RolUsuario;
 use App\Http\Controllers\Controller;
 use App\Models\StickerChat;
 use App\Models\User;
+use App\Services\Comunicaciones\ReferenciasComunicaciones;
 use App\Services\Comunicaciones\ServicioChatInterno;
 use App\Services\Comunicaciones\ServicioCorreoInterno;
 use App\Services\Comunicaciones\ServicioStickersChat;
@@ -22,9 +23,13 @@ class ComunicacionesController extends Controller
     {
         $usuario = $request->user();
         $nuevos = $chat->conversaciones($usuario)->whereHas('mensajes', fn ($q) => $chat->sinLeer($q, $usuario))->exists();
+        $menciones = $chat->conversaciones($usuario)
+            ->join('com_mensajes', 'com_mensajes.conversacion_id', '=', 'com_conversaciones.id')
+            ->where(fn ($q) => $chat->mencionesSinLeer($chat->sinLeer($q, $usuario), $usuario))
+            ->count('com_mensajes.id');
         $correos = DB::table('com_destinatarios')->where('user_id', $usuario->id)->whereNull('leido_at')->whereNull('archivado_at')->count();
 
-        return $this->json(['data' => ['chat_no_leido' => $nuevos, 'correos_no_leidos' => $correos]]);
+        return $this->json(['data' => ['chat_no_leido' => $nuevos, 'menciones_sin_leer' => $menciones, 'correos_no_leidos' => $correos]]);
     }
 
     public function usuarios(Request $request): JsonResponse
@@ -32,7 +37,7 @@ class ComunicacionesController extends Controller
         $datos = $request->validate(['buscar' => ['nullable', 'string', 'max:100'], 'pagina' => ['nullable', 'integer', 'min:1', 'max:10000']]);
         $consulta = User::where('activo', true)->where('rol', '!=', RolUsuario::Cliente->value)->where('id', '!=', $request->user()->id);
         if ($buscar = trim($datos['buscar'] ?? '')) {
-            $consulta->where('name', 'like', '%'.$buscar.'%');
+            $consulta->where('name', 'like', '%'.addcslashes(ltrim($buscar, '@'), '%_\\').'%');
         }
         $lista = $consulta->orderBy('name')->orderBy('id')->paginate(50, ['id', 'name'], 'pagina', $datos['pagina'] ?? 1);
 
@@ -80,6 +85,21 @@ class ComunicacionesController extends Controller
         return $this->json(['data' => ['confirmado' => true]]);
     }
 
+    /** Registros que el usuario puede citar con «#», según sus permisos de cada módulo. */
+    public function referencias(Request $request, ReferenciasComunicaciones $referencias): JsonResponse
+    {
+        $tipos = $referencias->tiposDisponibles($request->user());
+        $datos = $request->validate(['buscar' => ['nullable', 'string', 'max:60'],
+            'tipo' => ['nullable', 'string', Rule::in(array_column($tipos, 'clave'))]]);
+
+        return $this->json(['data' => $referencias->buscar($request->user(), (string) ($datos['buscar'] ?? ''), $datos['tipo'] ?? null), 'tipos' => $tipos]);
+    }
+
+    public function fichaReferencia(Request $request, string $tipo, string $id, ReferenciasComunicaciones $referencias): JsonResponse
+    {
+        return $this->json(['data' => $referencias->ficha($request->user(), $tipo, $id)]);
+    }
+
     public function stickers(Request $request): JsonResponse
     {
         $datos = $request->validate(['buscar' => ['nullable', 'string', 'max:80'], 'pagina' => ['nullable', 'integer', 'min:1', 'max:10000'], 'mios' => ['nullable', 'boolean']]);
@@ -88,7 +108,7 @@ class ComunicacionesController extends Controller
             $consulta->where('user_id', $request->user()->id);
         }
         if ($buscar = trim($datos['buscar'] ?? '')) {
-            $consulta->where('nombre', 'like', '%'.$buscar.'%');
+            $consulta->where('nombre', 'like', '%'.addcslashes($buscar, '%_\\').'%');
         }
         $lista = $consulta->orderByDesc('id')->paginate(30, ['*'], 'pagina', $datos['pagina'] ?? 1);
 

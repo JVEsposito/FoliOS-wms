@@ -12,6 +12,8 @@ use Illuminate\Validation\ValidationException;
 
 class ServicioCorreoInterno
 {
+    public function __construct(private readonly ReferenciasComunicaciones $referencias) {}
+
     public function visibles(User $usuario): Builder
     {
         return CorreoInterno::query()->where(fn ($q) => $q->where('remitente_user_id', $usuario->id)
@@ -20,12 +22,12 @@ class ServicioCorreoInterno
 
     public function obtener(User $usuario, int $id): CorreoInterno
     {
-        return $this->visibles($usuario)->with(['remitente:id,name', 'destinatarios:id,name'])->findOrFail($id);
+        return $this->visibles($usuario)->with(['remitente:id,name', 'destinatarios:id,name', 'referencias'])->findOrFail($id);
     }
 
     public function listar(User $usuario, string $bandeja, string $buscar, int $pagina): array
     {
-        $consulta = $this->visibles($usuario)->with(['remitente:id,name', 'destinatarios:id,name']);
+        $consulta = $this->visibles($usuario)->with(['remitente:id,name', 'destinatarios:id,name', 'referencias']);
         if ($bandeja === 'enviados') {
             $consulta->where('remitente_user_id', $usuario->id);
         } else {
@@ -39,7 +41,10 @@ class ServicioCorreoInterno
             });
         }
         if ($buscar !== '') {
-            $consulta->where(fn ($q) => $q->where('asunto', 'like', '%'.$buscar.'%')->orWhere('texto', 'like', '%'.$buscar.'%'));
+            // También encuentra correos por lo que citan: «REC-2611» o el nombre de una persona.
+            $patron = '%'.addcslashes(ltrim($buscar, '#@'), '%_\\').'%';
+            $consulta->where(fn ($q) => $q->where('asunto', 'like', $patron)->orWhere('texto', 'like', $patron)
+                ->orWhereHas('referencias', fn ($r) => $r->where('etiqueta', 'like', $patron)));
         }
         $lista = $consulta->orderByDesc('id')->paginate(25, ['*'], 'pagina', $pagina);
 
@@ -54,8 +59,9 @@ class ServicioCorreoInterno
         $asunto = trim($datos['asunto']);
         $texto = trim($datos['texto']);
         $respuesta = isset($datos['respuesta_a_id']) ? (int) $datos['respuesta_a_id'] : null;
+        $citas = $this->referencias->extraer($usuario, $texto);
         try {
-            return DB::transaction(function () use ($usuario, $datos, $ids, $asunto, $texto, $respuesta): CorreoInterno {
+            return DB::transaction(function () use ($usuario, $datos, $ids, $asunto, $texto, $respuesta, $citas): CorreoInterno {
                 $existente = CorreoInterno::where('remitente_user_id', $usuario->id)->where('operacion_id', $datos['operacion_id'])->first();
                 if ($existente) {
                     return $this->reintento($existente, $ids, $asunto, $texto, $respuesta);
@@ -70,6 +76,7 @@ class ServicioCorreoInterno
                 $correo = CorreoInterno::create(['remitente_user_id' => $usuario->id, 'operacion_id' => $datos['operacion_id'],
                     'asunto' => $asunto, 'texto' => $texto, 'respuesta_a_id' => $respuesta]);
                 $correo->destinatarios()->attach($ids);
+                $this->referencias->guardar('correo_id', $correo->id, $citas);
 
                 return $correo;
             }, 3);
@@ -95,7 +102,7 @@ class ServicioCorreoInterno
 
     public function representar(CorreoInterno $correo, User $usuario, bool $completo = true): array
     {
-        $correo->loadMissing(['remitente:id,name', 'destinatarios:id,name']);
+        $correo->loadMissing(['remitente:id,name', 'destinatarios:id,name', 'referencias']);
         $recibido = $correo->destinatarios->firstWhere('id', $usuario->id);
         $datos = ['id' => $correo->id, 'asunto' => $correo->asunto,
             'remitente' => ['id' => $correo->remitente_user_id, 'nombre' => $correo->remitente->name],
@@ -103,7 +110,9 @@ class ServicioCorreoInterno
             'es_destinatario' => $recibido !== null, 'leido' => $recibido ? $recibido->pivot->leido_at !== null : true,
             'archivado' => $recibido ? $recibido->pivot->archivado_at !== null : false,
             'creado_at' => $correo->created_at->toAtomString(), 'respuesta_a_id' => $correo->respuesta_a_id,
-            'extracto' => mb_substr($correo->texto, 0, 140),
+            'extracto' => mb_substr((string) $this->referencias->textoPlano($correo->texto, $correo->referencias), 0, 140),
+            'referencias' => $this->referencias->representar($correo->referencias, $usuario),
+            'me_menciona' => $correo->remitente_user_id !== $usuario->id && $this->referencias->mencionaA($correo->referencias, $usuario),
             'operacion_id' => $correo->remitente_user_id === $usuario->id ? $correo->operacion_id : null];
         if ($completo) {
             $datos['texto'] = $correo->texto;

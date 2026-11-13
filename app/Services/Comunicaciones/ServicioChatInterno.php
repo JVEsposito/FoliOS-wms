@@ -14,6 +14,8 @@ use Illuminate\Validation\ValidationException;
 
 class ServicioChatInterno
 {
+    public function __construct(private readonly ReferenciasComunicaciones $referencias) {}
+
     public function conversaciones(User $usuario): Builder
     {
         return ConversacionChat::query()->leftJoin('com_participantes as mi_lectura', function ($join) use ($usuario): void {
@@ -29,11 +31,20 @@ class ServicioChatInterno
             ->whereColumn('com_mensajes.id', '>', DB::raw('COALESCE(mi_lectura.ultimo_leido_id, 0)'));
     }
 
+    /** Mensajes de otros que mencionan al usuario. */
+    public function mencionesSinLeer(Builder $consulta, User $usuario): Builder
+    {
+        return $consulta->whereExists(fn ($q) => $q->selectRaw('1')->from('com_referencias')
+            ->whereColumn('com_referencias.mensaje_id', 'com_mensajes.id')
+            ->where('com_referencias.tipo', 'usuario')->where('com_referencias.referencia_id', (string) $usuario->id));
+    }
+
     public function listar(User $usuario, int $pagina): array
     {
         $lista = $this->conversaciones($usuario)
-            ->with('ultimoMensaje')
+            ->with('ultimoMensaje.referencias')
             ->withExists(['mensajes as tiene_no_leidos' => fn (Builder $q) => $this->sinLeer($q, $usuario)])
+            ->withExists(['mensajes as tiene_menciones' => fn (Builder $q) => $this->mencionesSinLeer($this->sinLeer($q, $usuario), $usuario)])
             ->orderByRaw("CASE WHEN tipo = 'global' THEN 0 ELSE 1 END")
             ->orderByDesc('ultimo_mensaje_id')->orderByDesc('com_conversaciones.id')->paginate(30, ['*'], 'pagina', $pagina);
         $lista->getCollection()->where('tipo', 'privado')->load('participantes:id,name,activo,rol');
@@ -76,7 +87,7 @@ class ServicioChatInterno
         if ($conversacion->tipo === 'privado') {
             $conversacion->load('participantes:id,name,activo,rol');
         }
-        $consulta = MensajeChat::where('conversacion_id', $id)->with(['remitente:id,name', 'sticker']);
+        $consulta = MensajeChat::where('conversacion_id', $id)->with(['remitente:id,name', 'sticker', 'referencias']);
         if ($despues !== null) {
             $consulta->where('id', '>', $despues)->orderBy('id');
         } else {
@@ -102,8 +113,9 @@ class ServicioChatInterno
         if ($texto === null && $sticker === null) {
             throw ValidationException::withMessages(['texto' => 'Escribe un mensaje o selecciona un sticker.']);
         }
+        $citas = $this->referencias->extraer($usuario, $texto);
         try {
-            return DB::transaction(function () use ($usuario, $id, $datos, $texto, $sticker): MensajeChat {
+            return DB::transaction(function () use ($usuario, $id, $datos, $texto, $sticker, $citas): MensajeChat {
                 // El bloqueo por conversación ordena los commits: un cursor no salta mensajes todavía sin confirmar.
                 $conversacion = $this->obtener($usuario, $id, true);
                 $existente = MensajeChat::where('remitente_user_id', $usuario->id)->where('operacion_id', $datos['operacion_id'])->first();
@@ -119,6 +131,7 @@ class ServicioChatInterno
                 }
                 $mensaje = MensajeChat::create(['conversacion_id' => $id, 'remitente_user_id' => $usuario->id,
                     'operacion_id' => $datos['operacion_id'], 'texto' => $texto, 'sticker_id' => $sticker]);
+                $this->referencias->guardar('mensaje_id', $mensaje->id, $citas);
                 $conversacion->update(['ultimo_mensaje_id' => $mensaje->id]);
 
                 return $mensaje;
@@ -154,17 +167,21 @@ class ServicioChatInterno
             'nombre' => $conversacion->tipo === 'global' ? 'Chat global' : ($otro?->name ?? 'Usuario'),
             'puede_enviar' => $conversacion->tipo === 'global' || ($otro?->activo && ! $otro->esCliente()),
             'tiene_no_leidos' => (bool) ($conversacion->tiene_no_leidos ?? false),
+            'tiene_menciones' => (bool) ($conversacion->tiene_menciones ?? false),
             'ultimo_mensaje_id' => (int) $conversacion->ultimo_mensaje_id,
-            'extracto' => $conversacion->ultimoMensaje ? mb_substr($conversacion->ultimoMensaje->texto ?? 'Sticker', 0, 100) : null];
+            'extracto' => $conversacion->ultimoMensaje
+                ? mb_substr($this->referencias->textoPlano($conversacion->ultimoMensaje->texto, $conversacion->ultimoMensaje->referencias) ?? 'Sticker', 0, 100) : null];
     }
 
     public function representarMensaje(MensajeChat $mensaje, User $usuario): array
     {
-        $mensaje->loadMissing(['remitente:id,name', 'sticker']);
+        $mensaje->loadMissing(['remitente:id,name', 'sticker', 'referencias']);
 
         return ['id' => $mensaje->id, 'conversacion_id' => $mensaje->conversacion_id,
             'remitente' => ['id' => $mensaje->remitente_user_id, 'nombre' => $mensaje->remitente->name],
             'texto' => $mensaje->texto, 'sticker' => $mensaje->sticker ? ServicioStickersChat::representar($mensaje->sticker, $usuario) : null,
+            'referencias' => $this->referencias->representar($mensaje->referencias, $usuario),
+            'me_menciona' => $mensaje->remitente_user_id !== $usuario->id && $this->referencias->mencionaA($mensaje->referencias, $usuario),
             'creado_at' => $mensaje->created_at->toAtomString(),
             'operacion_id' => $mensaje->remitente_user_id === $usuario->id ? $mensaje->operacion_id : null];
     }
