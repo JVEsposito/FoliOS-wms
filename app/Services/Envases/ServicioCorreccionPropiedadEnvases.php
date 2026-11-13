@@ -15,6 +15,7 @@ use App\Models\EventoRecepcionRomana;
 use App\Models\MovimientoEnvase;
 use App\Models\RecepcionRomana;
 use App\Models\User;
+use App\Services\Romana\ServicioAjusteCuentaEnvasesRecepcion;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -68,6 +69,7 @@ class ServicioCorreccionPropiedadEnvases
                     ->where('tipo_movimiento', TipoMovimientoEnvase::CorreccionPropiedad->value)->exists()) {
                 throw new ConflictoOperacion('La recepción ya se corrigió o sus movimientos no coinciden con la validación.');
             }
+            app(ServicioAjusteCuentaEnvasesRecepcion::class)->asegurarSinAjustes($recepcion);
 
             $tipoAnterior = self::tipoIngreso($conceptoAnterior);
             foreach ($ingresos as $ingreso) {

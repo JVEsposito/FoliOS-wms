@@ -543,10 +543,13 @@ class CuentaCorrienteEnvaseController extends Controller
             'puede_corregir_saldo_historico' => $movimiento->temporada?->activa && $movimiento->movimiento_origen_id === null
                 && $movimiento->recepcion?->estado !== EstadoRecepcionRomana::Anulada
                 && in_array($movimiento->tipo_movimiento, [TipoMovimientoEnvase::RecepcionArriendo, TipoMovimientoEnvase::AperturaCuenta, TipoMovimientoEnvase::AjusteCuenta], true)
-                && ! $movimiento->correcciones_invalidantes_exists && empty($movimiento->datos['correccion_propiedad']),
+                && ! $movimiento->correcciones_invalidantes_exists && empty($movimiento->datos['correccion_propiedad'])
+                && empty($movimiento->datos['ajuste_recepcion']),
             'correccion_propiedad' => $movimiento->datos['correccion_propiedad'] ?? null,
             'correccion_cantidad' => $movimiento->datos['correccion_cantidad'] ?? null,
             'ajuste_cuenta' => $movimiento->datos['ajuste_cuenta'] ?? null,
+            // Ajuste de administración hecho desde Romana sobre una recepción: lado, lo registrado y lo correcto.
+            'ajuste_recepcion' => $movimiento->datos['ajuste_recepcion'] ?? null,
             'movimiento_origen_id' => $movimiento->movimiento_origen_id,
             'puede_revertir_ajuste' => ! $conVinculos && $movimiento->temporada?->activa
                 && in_array($movimiento->tipo_movimiento, [TipoMovimientoEnvase::AperturaCuenta, TipoMovimientoEnvase::AjusteCuenta], true),

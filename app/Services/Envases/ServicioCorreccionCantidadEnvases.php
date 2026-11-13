@@ -13,6 +13,7 @@ use App\Models\MovimientoEnvase;
 use App\Models\RecepcionRomana;
 use App\Models\User;
 use App\Models\ValidacionMp;
+use App\Services\Romana\ServicioAjusteCuentaEnvasesRecepcion;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -55,6 +56,7 @@ class ServicioCorreccionCantidadEnvases
                 || $detalle->cantidad_validada !== $ingreso->cantidad) {
                 throw new ConflictoOperacion('El ingreso tiene diferencias o vínculos que requieren conciliación manual.');
             }
+            app(ServicioAjusteCuentaEnvasesRecepcion::class)->asegurarSinAjustes($recepcion, $ingreso->tipo_envase->value);
             if ($cantidadCorrecta >= $ingreso->cantidad) {
                 throw new ConflictoOperacion('La cantidad correcta debe ser menor que la registrada originalmente.');
             }

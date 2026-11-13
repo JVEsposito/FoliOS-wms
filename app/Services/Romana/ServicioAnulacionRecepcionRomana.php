@@ -75,6 +75,11 @@ class ServicioAnulacionRecepcionRomana
                 throw new ConflictoOperacion('La recepción tiene segmentos o lotes de materia prima vinculados. Requiere conciliación antes de anular.');
             }
             $movimientos = $recepcion->movimientosEnvases()->orderBy('id')->lockForUpdate()->get();
+            if (! $eliminar) {
+                // Un ajuste de cuenta de administración ya revertido no deja saldo: no impide anular.
+                $neutros = $this->ajustesNeutros($movimientos);
+                $movimientos = $movimientos->reject(fn (MovimientoEnvase $m): bool => isset($neutros[$m->id]))->values();
+            }
             if ($movimientos->contains('tipo_movimiento', TipoMovimientoEnvase::ConciliacionSalida)) {
                 throw new ConflictoOperacion('La recepción participa en una conciliación de salida con Despacho. No se puede anular ni eliminar de forma aislada.');
             }
@@ -172,6 +177,27 @@ class ServicioAnulacionRecepcionRomana
                     ->disponibilidad($recepcion, $grupo, $retirar, $disponible, $totalFisico));
             }
         }
+    }
+
+    /** @return array<string, true> ajustes de recepción y sus reversas que suman cero en la cuenta */
+    private function ajustesNeutros(Collection $movimientos): array
+    {
+        $neutros = [];
+        foreach ($movimientos as $ajuste) {
+            if ($ajuste->tipo_movimiento !== TipoMovimientoEnvase::AjusteCuenta || empty($ajuste->datos['ajuste_recepcion'])) {
+                continue;
+            }
+            $reversas = $movimientos->where('movimiento_origen_id', $ajuste->id)
+                ->where('tipo_movimiento', TipoMovimientoEnvase::ReversionAjusteCuenta);
+            if ($reversas->isNotEmpty() && $ajuste->cantidad * $ajuste->signo_cuenta + $reversas->sum(fn ($m): int => $m->cantidad * $m->signo_cuenta) === 0) {
+                $neutros[$ajuste->id] = true;
+                foreach ($reversas as $reversa) {
+                    $neutros[$reversa->id] = true;
+                }
+            }
+        }
+
+        return $neutros;
     }
 
     private function movimientosDependientes(RecepcionRomana $recepcion, Collection $ids, bool $eliminar): Collection

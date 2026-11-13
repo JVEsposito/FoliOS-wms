@@ -30,6 +30,7 @@ use App\Models\Temporada;
 use App\Services\Envases\ServicioPrestamoInternoEnvases;
 use App\Services\Romana\GeneradorAvisoReciboPdf;
 use App\Services\Romana\ObservacionConteoRecepcion;
+use App\Services\Romana\ServicioAjusteCuentaEnvasesRecepcion;
 use App\Services\Romana\ServicioAnulacionRecepcionRomana;
 use App\Services\Romana\ServicioCorreccionIntegralRecepcion;
 use App\Services\Romana\ServicioGuiasRecepcionRomana;
@@ -222,9 +223,30 @@ class RecepcionRomanaController extends Controller
         return response()->json(['data' => $this->recepcion($recepcion, true)]);
     }
 
-    public function estadoCorreccionIntegral(RecepcionRomana $recepcion, ServicioCorreccionIntegralRecepcion $servicio): JsonResponse
+    public function estadoCorreccionIntegral(RecepcionRomana $recepcion, ServicioCorreccionIntegralRecepcion $servicio,
+        ServicioAjusteCuentaEnvasesRecepcion $cuenta): JsonResponse
     {
-        return response()->json(['data' => $servicio->estado($recepcion)])->header('Cache-Control', 'no-store, private');
+        return response()->json(['data' => [...$servicio->estado($recepcion), 'cuenta_envases' => $cuenta->estado($recepcion)]])
+            ->header('Cache-Control', 'no-store, private');
+    }
+
+    /** Ajuste de administración solo en la cuenta corriente de envases: no toca guías, lotes ni kilos. */
+    public function ajustarCuentaEnvases(Request $request, RecepcionRomana $recepcion, ServicioAjusteCuentaEnvasesRecepcion $servicio,
+        ServicioCorreccionIntegralRecepcion $integral): JsonResponse
+    {
+        $datos = $request->validate([
+            'operacion_id' => ['required', 'uuid'], 'version_conocida' => ['required', 'integer', 'min:1'],
+            'motivo' => ['required', 'string', 'min:10', 'max:2000'],
+            'productor_csg' => ['nullable', 'string', 'max:40'],
+            'envases' => ['required', 'array', 'min:1', 'max:20'],
+            'envases.*.tipo_envase' => ['required', 'distinct', Rule::in(array_column(TipoEnvaseRomana::catalogo(), 'codigo'))],
+            'envases.*.recibidos' => ['nullable', 'integer', 'min:0', 'max:100000'],
+            'envases.*.entregados' => ['nullable', 'integer', 'min:0', 'max:100000'],
+        ]);
+        $recepcion = $servicio->ajustar($recepcion, $datos, $request->user());
+
+        return response()->json(['data' => [...$this->recepcion($recepcion->refresh(), true),
+            'correccion_integral' => [...$integral->estado($recepcion), 'cuenta_envases' => $servicio->estado($recepcion)]]]);
     }
 
     public function corregirIntegral(Request $request, RecepcionRomana $recepcion, ServicioCorreccionIntegralRecepcion $servicio): JsonResponse

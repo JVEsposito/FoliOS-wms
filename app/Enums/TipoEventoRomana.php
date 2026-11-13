@@ -19,4 +19,6 @@ enum TipoEventoRomana: string
     case CorreccionIntegral = 'correccion_integral';
     // Pesaje acumulativo: el neto por envase se rehízo con el conteo de Validación MP (vacíos incluidos).
     case NetoPorEnvaseAjustado = 'neto_por_envase_ajustado';
+    // Administración ajustó solo la cuenta corriente de envases (sin tocar guías, lotes ni kilos).
+    case AjusteCuentaEnvases = 'ajuste_cuenta_envases';
 }

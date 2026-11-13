@@ -60,6 +60,8 @@ class GeneradorAvisoReciboPdf
                 // Lo que Validación MP contó distinto de la guía: el chofer lo firma con el destare.
                 app(ObservacionConteoRecepcion::class)->resumen($recepcion),
                 $recepcion->observacion_cierre,
+                // Lo corregido después solo en la cuenta de envases, con su motivo.
+                app(ServicioAjusteCuentaEnvasesRecepcion::class)->resumen($recepcion),
             ])->filter(fn ($texto): bool => filled($texto))->implode("\n") ?: null],
             [$cerrada ? $recepcion->cerradoPor?->name : null, $recepcion->nombre_conductor, null],
         );
