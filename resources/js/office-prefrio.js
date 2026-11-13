@@ -539,7 +539,12 @@ async function bootstrap() {
     if (!state.token || !state.identity) return;
     if (!showApp()) return;
     setBusy(true, 'Cargando Prefrío…');
-    try { await loadAll(); } catch (error) { elements.viewStatus.textContent = 'No fue posible actualizar'; toast(error.message, true); if (error.status === 403) clearSession(); } finally { setBusy(false); }
+    try {
+        await loadAll();
+        // Una cita del chat abre directamente el proceso: /oficina/prefrio?proceso={id}.
+        const requested = new URLSearchParams(window.location.search).get('proceso');
+        if (/^[0-9a-f-]{36}$/i.test(requested || '')) await selectProcess(requested, true, false);
+    } catch (error) { elements.viewStatus.textContent = 'No fue posible actualizar'; toast(error.message, true); if (error.status === 403) clearSession(); } finally { setBusy(false); }
 }
 
 elements.login.addEventListener('submit', async (event) => {

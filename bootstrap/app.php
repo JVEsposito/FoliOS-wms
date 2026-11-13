@@ -46,6 +46,7 @@ return Application::configure(basePath: dirname(__DIR__))
             Route::middleware('api')->prefix('api')->group(base_path('routes/rrhh.php'));
             Route::middleware('api')->prefix('api')->group(base_path('routes/contraparte-sag.php'));
             Route::middleware('api')->prefix('api')->group(base_path('routes/control-despacho.php'));
+            Route::middleware('api')->prefix('api')->group(base_path('routes/comunicaciones.php'));
         },
     )
     ->withMiddleware(function (Middleware $middleware): void {
