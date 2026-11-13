@@ -824,7 +824,7 @@ function renderWeighbridgeOperation(weighbridge) {
     elements.weighbridgeWeek.textContent = formatKilos(weighbridge.kilos_7_dias);
     elements.weighbridgeWeekDetail.textContent = plural(weighbridge.recepciones_7_dias || 0, 'recepción', 'recepciones');
     elements.weighbridgeToday.textContent = formatKilos(weighbridge.peso_neto_hoy);
-    elements.weighbridgeTodayDetail.textContent = `${plural(weighbridge.cerradas_hoy, 'recepción cerrada', 'recepciones cerradas')} · ${plural(weighbridge.clientes_hoy, 'cliente')}`;
+    elements.weighbridgeTodayDetail.textContent = `${plural(weighbridge.cerradas_hoy, 'recepción ingresada hoy', 'recepciones ingresadas hoy')} · ${plural(weighbridge.clientes_hoy, 'cliente')}`;
     elements.weighbridgeClients.textContent = formatInteger(weighbridge.clientes_temporada || 0);
     elements.weighbridgeClientsDetail.textContent = 'con kilos en la temporada';
 

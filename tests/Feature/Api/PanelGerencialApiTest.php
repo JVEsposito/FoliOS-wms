@@ -305,7 +305,7 @@ class PanelGerencialApiTest extends TestCase
         $gerencia = User::factory()->create(['rol' => RolUsuario::Consulta]);
         $aguada = Cliente::create(['codigo' => 'AGU', 'nombre' => 'La Aguada', 'activo' => true]);
         $lagunilla = Cliente::create(['codigo' => 'LAG', 'nombre' => 'Lagunilla', 'activo' => true]);
-        $recepcion = function (Cliente $cliente, string $numero, float $neto, string $salida, string $tipo = 'fruta_con_envases') use ($temporada, $gerencia): void {
+        $recepcion = function (Cliente $cliente, string $numero, float $neto, string $salida, string $tipo = 'fruta_con_envases', int $horas = 2) use ($temporada, $gerencia): void {
             RecepcionRomana::create([
                 'operacion_id' => (string) Str::uuid(), 'payload_hash' => hash('sha256', $numero), 'numero_recepcion' => $numero,
                 'temporada_id' => $temporada->id, 'temporada_codigo_snapshot' => $temporada->codigo, 'temporada_nombre_snapshot' => $temporada->nombre,
@@ -321,13 +321,16 @@ class PanelGerencialApiTest extends TestCase
         $recepcion($lagunilla, 'REC-DOMINGO', 5000, '2026-11-08 15:00:00');
         $recepcion($lagunilla, 'REC-ENVASES', 900, '2026-11-10 00:30:00', 'solo_envases');
         $recepcion($aguada, 'REC-OCTUBRE', 4000, '2026-10-20 15:00:00');
+        // Como REC-2611-0050: ingresa el sábado 7 a las 22:44 y se destara el domingo 8 a las 00:44 en planta.
+        // Sus kilos son del sábado, el día de ingreso, no del domingo.
+        $recepcion($lagunilla, 'REC-MEDIANOCHE', 2000, '2026-11-08 03:44:00');
 
         $romana = $this->actingAs($gerencia, 'sanctum')->getJson('/api/gerencia/resumen')->assertOk()->json('data.romana');
 
-        $this->assertEquals([19000, 15000, 10000], [$romana['kilos_temporada'], $romana['kilos_7_dias'], $romana['peso_neto_hoy']]);
-        $this->assertSame([3, 2, 2, 2], [$romana['recepciones_temporada'], $romana['recepciones_7_dias'], $romana['cerradas_hoy'], $romana['clientes_hoy']]);
+        $this->assertEquals([21000, 17000, 10000], [$romana['kilos_temporada'], $romana['kilos_7_dias'], $romana['peso_neto_hoy']]);
+        $this->assertSame([4, 3, 2, 2], [$romana['recepciones_temporada'], $romana['recepciones_7_dias'], $romana['cerradas_hoy'], $romana['clientes_hoy']]);
         $this->assertSame(['La Aguada', 'Lagunilla'], array_column($romana['clientes'], 'nombre'));
-        $this->assertEquals([14000, 10000, 10000, 2, 73.7], [
+        $this->assertEquals([14000, 10000, 10000, 2, 66.7], [
             $romana['clientes'][0]['kilos_temporada'], $romana['clientes'][0]['kilos_7_dias'], $romana['clientes'][0]['kilos_hoy'],
             $romana['clientes'][0]['recepciones_temporada'], $romana['clientes'][0]['participacion_porcentaje'],
         ]);
@@ -337,6 +340,7 @@ class PanelGerencialApiTest extends TestCase
         $this->assertEquals(10000, $ultimo['peso_neto']);
         $this->assertEquals([(string) $aguada->id => 10000], $ultimo['por_cliente']);
         $this->assertEquals(5000, $romana['tendencia_diaria'][5]['peso_neto']);
+        $this->assertEquals(['2026-11-07', 2000], [$romana['tendencia_diaria'][4]['fecha'], $romana['tendencia_diaria'][4]['peso_neto']]);
     }
 
     public function test_productos_consulta_la_base_como_maximo_tres_veces(): void

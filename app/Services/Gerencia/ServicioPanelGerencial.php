@@ -1010,7 +1010,8 @@ class ServicioPanelGerencial
      */
     private function romana(string $temporadaId): array
     {
-        // Los días se cortan en hora de planta: una recepción cerrada a las 22:00 es de ese día.
+        // Cada recepción es del día en que el camión ingresó, en hora de planta: si entra a las
+        // 22:38 y sale después de medianoche, sus kilos son del día de ingreso, no del de salida.
         $zona = (string) config('app.operational_timezone', 'America/Santiago');
         $zonaBase = (string) config('app.timezone', 'UTC');
         $hoy = CarbonImmutable::now($zona)->startOfDay();
@@ -1043,12 +1044,12 @@ class ServicioPanelGerencial
             ->selectRaw('COALESCE(SUM(r.peso_neto), 0) as kilos')
             ->get();
         $semana = (clone $cerradas)
-            ->where('r.salida_at', '>=', $inicio->setTimezone($zonaBase))
-            ->where('r.salida_at', '<', $termino->setTimezone($zonaBase))
-            ->get(['r.cliente_id', 'r.salida_at', 'r.peso_neto', 'r.tipo_recepcion', 'r.cantidad_envases_declarados'])
+            ->where('r.ingreso_at', '>=', $inicio->setTimezone($zonaBase))
+            ->where('r.ingreso_at', '<', $termino->setTimezone($zonaBase))
+            ->get(['r.cliente_id', 'r.ingreso_at', 'r.peso_neto', 'r.tipo_recepcion', 'r.cantidad_envases_declarados'])
             ->map(fn (object $fila): array => [
                 'cliente' => (string) $fila->cliente_id,
-                'fecha' => CarbonImmutable::parse($fila->salida_at, $zonaBase)->setTimezone($zona)->toDateString(),
+                'fecha' => CarbonImmutable::parse($fila->ingreso_at, $zonaBase)->setTimezone($zona)->toDateString(),
                 'kilos' => $fila->tipo_recepcion === $fruta ? 0.0 : (float) $fila->peso_neto,
                 'fruta' => $fila->tipo_recepcion !== $fruta,
                 'envases' => (int) $fila->cantidad_envases_declarados,

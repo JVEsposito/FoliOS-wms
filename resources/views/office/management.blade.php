@@ -367,13 +367,13 @@
                         <div class="management-operational-metrics management-operational-metrics--four">
                             <article><span>TEMPORADA</span><strong id="weighbridgeSeasonMetric">0 kg</strong><small id="weighbridgeSeasonDetail">0 recepciones</small></article>
                             <article><span>ÚLTIMOS 7 DÍAS</span><strong id="weighbridgeWeekMetric">0 kg</strong><small id="weighbridgeWeekDetail">0 recepciones</small></article>
-                            <article><span>HOY</span><strong id="weighbridgeTodayMetric">0 kg</strong><small id="weighbridgeTodayDetail">0 recepciones cerradas</small></article>
+                            <article><span>HOY</span><strong id="weighbridgeTodayMetric">0 kg</strong><small id="weighbridgeTodayDetail">0 recepciones ingresadas hoy</small></article>
                             <article><span>CLIENTES</span><strong id="weighbridgeClientsMetric">0</strong><small id="weighbridgeClientsDetail">con kilos en la temporada</small></article>
                         </div>
                         <div class="management-weighbridge">
                             <section aria-labelledby="weighbridgeTrendTitle">
                                 <h3 id="weighbridgeTrendTitle">Últimos 7 días por cliente</h3>
-                                <div class="chart-container chart-container--bar"><canvas id="weighbridgeReceptionChart" aria-label="Kilos recepcionados por día y cliente" role="img"></canvas></div>
+                                <div class="chart-container chart-container--bar"><canvas id="weighbridgeReceptionChart" aria-label="Kilos recepcionados por día de ingreso y cliente" role="img"></canvas></div>
                                 <div class="management-series-legend" id="weighbridgeChartSummary"></div>
                             </section>
                             <section aria-labelledby="weighbridgeClientsTitle">
