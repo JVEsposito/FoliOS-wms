@@ -1,3 +1,4 @@
+import { mountPalletAdministration } from './shared/admin-pallet-control.js';
 import { mountCameraVacating } from './shared/camera-vacating';
 import { cameraDisplayName } from './shared/camera-display';
 import { bandAffinityText } from './shared/camera-band-affinity';
@@ -1356,3 +1357,5 @@ const cameraVacating = mountCameraVacating({
 });
 
 void boot();
+
+mountPalletAdministration({ anchor: '#cameraOpsWorkspace .camera-ops__camera-heading, #configurationModuleTabs', onChanged: () => loadOperationalCamera(state.selectedOperationalCameraId) });

@@ -1,11 +1,18 @@
 <?php
 
+use App\Http\Controllers\Api\AdministracionPalletController;
 use App\Http\Controllers\Api\DespachoDirectoPlanificadorController;
 use App\Http\Controllers\Api\DiscrepanciaManiobraController;
 use App\Http\Controllers\Api\FronteraFisicaController;
 use App\Http\Controllers\Api\IntervencionPlanificadorController;
 use App\Http\Controllers\Api\PlanOperacionalController;
 use Illuminate\Support\Facades\Route;
+
+Route::middleware(['auth:sanctum', 'can:administrar-camaras'])->group(function (): void {
+    Route::get('/intervenciones-planificador/pallets', [AdministracionPalletController::class, 'consultar']);
+    Route::post('/intervenciones-planificador/pallets/{folio}', [AdministracionPalletController::class, 'intervenir']);
+    Route::patch('/configuracion/camaras/{camara}/prioridad-operacional', [AdministracionPalletController::class, 'prioridad']);
+});
 
 Route::middleware(['auth:sanctum', 'can:operar-camaras-productos'])->group(function () {
     Route::post('/tareas-movimiento/{tareaMovimiento}/resolver-destino', [PlanOperacionalController::class, 'resolverDestinoServidor']);

@@ -553,7 +553,7 @@ class ServicioPlanesOperacionales
     ): TareaMovimiento {
         $tipo = $datos['tipo_movimiento'] ?? null;
 
-        if (! $tipo instanceof TipoMovimiento || $tipo === TipoMovimiento::Reversion) {
+        if (! $tipo instanceof TipoMovimiento || in_array($tipo, [TipoMovimiento::Reversion, TipoMovimiento::CorreccionAdministrativa], true)) {
             throw new DomainException('La tarea requiere un tipo de movimiento físico válido.');
         }
 
@@ -709,7 +709,7 @@ class ServicioPlanesOperacionales
             TipoMovimiento::TrasladoEntreCamaras => $origen && $destino
                 && $camaraOrigen->id !== $camaraDestino->id,
             TipoMovimiento::Retiro => $origen && ! $destino,
-            TipoMovimiento::Reversion => false,
+            TipoMovimiento::Reversion, TipoMovimiento::CorreccionAdministrativa => false,
         };
 
         if (! $valida) {
@@ -735,7 +735,7 @@ class ServicioPlanesOperacionales
             TipoMovimiento::TrasladoEntreCamaras => $origen
                 && ($sinDestino || $camaraDestino?->id !== $camaraOrigen->id),
             TipoMovimiento::Retiro => $origen && $sinDestino,
-            TipoMovimiento::Reversion => false,
+            TipoMovimiento::Reversion, TipoMovimiento::CorreccionAdministrativa => false,
         };
 
         if (! $valida) {

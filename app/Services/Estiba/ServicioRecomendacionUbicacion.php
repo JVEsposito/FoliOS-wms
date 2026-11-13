@@ -15,6 +15,7 @@ use App\Models\Posicion;
 use App\Models\User;
 use App\Services\Autorizacion\AlcanceOperacionalUsuario;
 use App\Services\Camaras\CalculadorAfinidadBanda;
+use App\Services\Camaras\ServicioPrioridadCamara;
 use App\Services\Planificador\ServicioDesplieguePlanificador;
 use Illuminate\Support\Collection;
 
@@ -80,19 +81,29 @@ class ServicioRecomendacionUbicacion
             ->get()
             ->filter(fn (Camara $camara): bool => $this->alcance->puedeVerCamara($usuario, $camara))
             ->values();
+        $prioridades = app(ServicioPrioridadCamara::class);
+        $finalidad = $prioridades->finalidad(folio: $folio);
         $candidatos = $camaras
             ->flatMap(fn (Camara $camara): Collection => $this->candidatosCamara(
                 $camara,
                 $folio,
                 $camaraConsultadaId,
             ))
+            ->map(function (array $item) use ($camaras, $prioridades, $finalidad): array {
+                $camara = $camaras->firstWhere('id', $item['camara']['id']);
+                $item['prioridad_camara'] = $prioridades->orden($camara, $finalidad);
+                $item['afinidad']['motivo'] = $prioridades->motivo($camara, $finalidad).$item['afinidad']['motivo'];
+
+                return $item;
+            })
             ->sort(function (array $izquierda, array $derecha): int {
                 $preferida = fn (array $item): int => (int) $this->despliegue->camaraPreferenteDespacho(
                     $item['camara']['id'],
                     $item['camara']['codigo'],
                 );
 
-                return ($izquierda['afinidad']['orden_compatibilidad'] <=> $derecha['afinidad']['orden_compatibilidad'])
+                return ($izquierda['prioridad_camara'] <=> $derecha['prioridad_camara'])
+                    ?: ($izquierda['afinidad']['orden_compatibilidad'] <=> $derecha['afinidad']['orden_compatibilidad'])
                     ?: ($izquierda['afinidad']['mezclaria_clientes'] <=> $derecha['afinidad']['mezclaria_clientes'])
                     ?: ($preferida($derecha) <=> $preferida($izquierda))
                     ?: ($derecha['afinidad']['puntaje'] <=> $izquierda['afinidad']['puntaje'])

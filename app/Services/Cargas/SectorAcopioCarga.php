@@ -6,6 +6,7 @@ use App\Enums\ContenidoCamara;
 use App\Enums\EstadoCamara;
 use App\Enums\EstadoPosicion;
 use App\Enums\ModoBandaOperacional;
+use App\Enums\PrioridadCamara;
 use App\Enums\UsoBandaOperacional;
 use App\Models\BandaOperacional;
 use App\Models\Camara;
@@ -13,6 +14,7 @@ use App\Models\CargaFolio;
 use App\Models\Posicion;
 use App\Models\ReservaBandaManiobra;
 use App\Models\ReservaTareaMovimiento;
+use App\Services\Camaras\ServicioPrioridadCamara;
 use App\Services\Planificador\ServicioDesplieguePlanificador;
 use Illuminate\Support\Collection;
 
@@ -214,9 +216,10 @@ final class SectorAcopioCarga
             ->when($dirigidas !== null, fn ($consulta) => $consulta->whereIn('id', $dirigidas))
             ->withCount(['ubicacionesActuales as afines' => fn ($consulta) => $consulta
                 ->whereHas('folio', fn ($folio) => $folio->whereIn('exportadora', $exportadoras === [] ? [''] : $exportadoras))])
-            ->get(['id', 'codigo'])
+            ->get(['id', 'codigo', 'prioridad_operacional'])
             ->sortBy(fn (Camara $camara): string => sprintf(
-                '%d:%08d:%s',
+                '%d:%d:%08d:%s',
+                app(ServicioPrioridadCamara::class)->orden($camara, PrioridadCamara::Despacho),
                 $despliegue->camaraPreferenteDespacho($camara->id, $camara->codigo) ? 0 : 1,
                 99_999_999 - (int) $camara->afines,
                 $camara->codigo,

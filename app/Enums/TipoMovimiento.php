@@ -9,4 +9,5 @@ enum TipoMovimiento: string
     case TrasladoEntreCamaras = 'traslado_entre_camaras';
     case Retiro = 'retiro';
     case Reversion = 'reversion';
+    case CorreccionAdministrativa = 'correccion_administrativa';
 }

@@ -1,3 +1,4 @@
+import { mountPalletAdministration } from './shared/admin-pallet-control.js';
 import { createAvailabilityTracker, operatorPresenceLabel } from './shared/operator-availability';
 import { createUuid } from './shared/uuid.js';
 import { createOperationalPoller } from './shared/operational-poller';
@@ -717,7 +718,7 @@ function renderPlanner(planner = {}) {
             <td>${signal(situation?.label || humanize(decision.estado), situation?.tone || toneForPriority(decision.prioridad))}<div class="operation-now-planner__progress"><span class="operation-now-meter" data-tone="${situation?.tone || toneForPlannerDecision(decision.decision)}" style="--operation-progress:${clampedPercent(progress.porcentaje)}%"><i></i></span><small>${escapeHtml(number(progress.pasos_completados))}/${escapeHtml(number(progress.pasos_total))}</small></div></td>
             <td><span class="operation-now-code">${escapeHtml(step?.folio?.numero_folio || 'Sin folio')}</span><span class="operation-now-subtext">${escapeHtml(plannerRoute(step))}</span><span class="operation-now-subtext">${escapeHtml(stepTitle)}</span></td>
             <td><strong>${escapeHtml(responsible)}</strong><span class="operation-now-subtext">${escapeHtml(device)}</span></td>
-            <td><span class="operation-now-planner__reason">${escapeHtml(situation?.reason || plannerConflictDetail(decision))}</span><button type="button" class="operation-now-planner__detail" data-maneuver-detail="${escapeHtml(decision.maniobra_id)}">Ver detalle</button></td>
+            <td><span class="operation-now-planner__reason">${escapeHtml(situation?.reason || plannerConflictDetail(decision))}</span><button type="button" class="operation-now-planner__detail" data-maneuver-detail="${escapeHtml(decision.maniobra_id)}">Ver detalle</button>${state.identity?.rol === 'administrador' && step?.folio?.numero_folio ? `<button type="button" data-admin-pallet="${escapeHtml(step.folio.numero_folio)}">Administrar pallet</button>` : ''}</td>
         </tr>`;
     }).join('');
 
@@ -2029,3 +2030,5 @@ verificationResolutionDialog.querySelector('form').addEventListener('submit', as
     } catch (error) { form.querySelector('[role="alert"]').textContent = error.message; }
     finally { button.disabled = false; }
 });
+
+mountPalletAdministration({ anchor: '#operationPlannerPanel .operation-now-panel__tools', onChanged: () => load({ silent: true }) });

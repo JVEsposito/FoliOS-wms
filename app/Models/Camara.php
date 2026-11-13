@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\ContenidoCamara;
 use App\Enums\EstadoCamara;
+use App\Enums\PrioridadCamara;
 use App\Enums\SentidoNumeracionBandas;
 use App\Models\Concerns\ImpideEliminacionFisica;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -26,6 +27,8 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
     'sentido_numeracion_bandas',
     'creado_por_user_id',
     'actualizado_por_user_id',
+    'prioridad_operacional',
+    'version_prioridad',
 ])]
 class Camara extends Model
 {
@@ -127,6 +130,8 @@ class Camara extends Model
     protected function casts(): array
     {
         return [
+            'prioridad_operacional' => PrioridadCamara::class,
+            'version_prioridad' => 'integer',
             'estado' => EstadoCamara::class,
             'contenido' => ContenidoCamara::class,
             'version_plano' => 'integer',

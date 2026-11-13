@@ -20,6 +20,7 @@ use App\Models\TareaMovimiento;
 use App\Models\User;
 use App\Services\Autorizacion\AlcanceOperacionalUsuario;
 use App\Services\Camaras\CalculadorAfinidadBanda;
+use App\Services\Camaras\ServicioPrioridadCamara;
 use App\Services\Cargas\SectorAcopioCarga;
 use App\Services\Cargas\ServicioAcopioCarga;
 use Illuminate\Support\Collection;
@@ -247,9 +248,11 @@ final class ServicioDestinosServidor
                 $deLaCarga = $carga ? $folios->filter(fn ($f) => $f->asignacionCargaActual?->carga_id === $carga)->count() : 0;
                 $ordenCarga = ! $acopio->usaAcopio($tarea) || ! $carga ? 0
                     : ($folios->isEmpty() ? 1 : ($deLaCarga === $folios->count() ? 0 : 2));
-                $candidatos[] = ['posicion' => $destino, 'motivo' => ($local ? 'Despeje local. ' : '').$afinidad['motivo'],
+                $prioridades = app(ServicioPrioridadCamara::class);
+                $finalidad = $prioridades->finalidad($tarea);
+                $candidatos[] = ['posicion' => $destino, 'motivo' => ($local ? 'Despeje local. ' : '').$prioridades->motivo($camara, $finalidad).$afinidad['motivo'],
                     'orden' => [$this->esDespeje($tarea) && ! $local ? 1 : 0,
-                        $ordenCarga, app(CalculadorAfinidadBanda::class)->orden($afinidad), (int) $afinidad['mezclaria_clientes'],
+                        $prioridades->orden($camara, $finalidad), $ordenCarga, app(CalculadorAfinidadBanda::class)->orden($afinidad), (int) $afinidad['mezclaria_clientes'],
                         $preferida ? 0 : 1, -$afinidad['puntaje'], $camara->codigo, $destino->banda, $destino->posicion, $destino->nivel]];
             }
             usort($candidatos, fn ($a, $b) => $a['orden'] <=> $b['orden']);

@@ -167,6 +167,7 @@ export function bestCandidate(
   // Una propuesta anterior sin reserva física no fija el destino del despeje.
   if (canRecalculateClearance(task)) task = { ...task, destino: null };
   const candidates: Array<RollingCandidate & {
+    cameraPriority: number;
     affinityRank: number;
     mixesClients: boolean;
     preferred: boolean;
@@ -186,6 +187,7 @@ export function bestCandidate(
       if (!positionAllowed(task, plan, position, usedDestinations, protectedOrigins)) continue;
       const scoring = scoreCandidate(task, plan, position);
       candidates.push({
+        cameraPriority: cameraPriority(task, plan),
         taskId: task.id,
         cameraId: plan.id,
         position,
@@ -203,6 +205,7 @@ export function bestCandidate(
   candidates.sort((left, right) => (
     Number(right.localClearance) - Number(left.localClearance)
     || Number(left.outsideSector) - Number(right.outsideSector)
+    || left.cameraPriority - right.cameraPriority
     || left.affinityRank - right.affinityRank
     || Number(left.mixesClients) - Number(right.mixesClients)
     || Number(right.preferred) - Number(left.preferred)
@@ -215,10 +218,17 @@ export function bestCandidate(
 
   const best = candidates[0];
   if (!best) return null;
-  const { affinityRank: _affinityRank, mixesClients: _mixesClients, localClearance, preferred, outsideSector: _outsideSector, ...candidate } = best;
+  const { cameraPriority: _cameraPriority, affinityRank: _affinityRank, mixesClients: _mixesClients, localClearance, preferred, outsideSector: _outsideSector, ...candidate } = best;
   if (localClearance) candidate.reason += '; despeje dentro de la cámara de origen sin traslado adicional';
   if (preferred) candidate.reason += '; cámara preferente para despacho entre bandas de igual afinidad';
   return candidate;
+}
+
+function cameraPriority(task: OperationalTask, plan: CameraPlan): number {
+  const purpose = task.plan?.tipo === 'recepcion_tunel' ? 'salida_tuneles'
+    : ['concentracion_carga', 'despacho_directo'].includes(task.plan?.tipo) || loadStaging(task) ? 'despacho' : 'almacenamiento';
+  const priority = plan.prioridad_operacional ?? 'general';
+  return priority === purpose ? 0 : priority === 'general' ? 1 : 2;
 }
 
 type AffinityProfile = { cliente: string | null; marca: string | null; formato: string | null; pallets: number };

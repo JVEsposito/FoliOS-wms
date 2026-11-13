@@ -134,12 +134,14 @@ class ServicioFronteraFisica
                 )
                 ->orderBy('codigo')
                 ->with('proteccionesBandas')
-                ->get(['id', 'codigo', 'nombre', 'version_plano', 'revision_reservas'])
+                ->get(['id', 'codigo', 'nombre', 'version_plano', 'revision_reservas', 'prioridad_operacional', 'version_prioridad'])
                 ->map(fn (Camara $camara): array => [
                     'id' => $camara->id,
                     'codigo' => $camara->codigo,
                     'nombre' => $camara->nombre,
                     'version_plano' => $camara->version_plano,
+                    'prioridad_operacional' => $camara->prioridad_operacional?->value ?? 'general',
+                    'version_prioridad' => $camara->version_prioridad,
                     'revision_reservas' => $camara->revision_reservas,
                     'version_protecciones' => $camara->versionProtecciones(),
                 ])

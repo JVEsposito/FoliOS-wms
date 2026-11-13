@@ -7,7 +7,8 @@ export type MovementType =
   | 'reubicacion'
   | 'traslado_entre_camaras'
   | 'retiro'
-  | 'reversion';
+  | 'reversion'
+  | 'correccion_administrativa';
 
 export type TabletModule =
   | 'porteria'
@@ -152,6 +153,8 @@ export type Occupancy = {
 };
 
 export type CameraSummary = {
+  prioridad_operacional?: 'general' | 'despacho' | 'almacenamiento' | 'salida_tuneles';
+  version_prioridad?: number;
   id: string;
   codigo: string;
   nombre: string;
