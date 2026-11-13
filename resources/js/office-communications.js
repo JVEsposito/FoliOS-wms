@@ -194,6 +194,11 @@ export function createCommunicationsApp(dialog, api, onChanged) {
     }
     async function loadDirectory(mode, more = false) {
         const state = directory[mode], requestVersion = ++state.version, app = generation;
+        if (!more) {
+            state.rows = [];
+            const region = mode === 'private' ? $('[data-private-users]') : $('[data-recipient-options]');
+            region.textContent = 'Buscando personas…';
+        }
         const search = mode === 'private' ? $('[data-private-search]').elements.buscar.value : $('[data-recipient-search]').value;
         const page = more ? state.page + 1 : 1;
         const result = await api.request(`${base}/usuarios?${new URLSearchParams({ buscar: search, pagina: page })}`);
@@ -318,7 +323,11 @@ export function createCommunicationsApp(dialog, api, onChanged) {
         if (value === 'chat') {
             if (conversation) await selectConversation(conversation.id);
             else { await loadConversations(); if (conversations.length) await selectConversation(conversations[0].id); }
-        } else await loadMails();
+        } else {
+            showFolders();
+            if (!composing && !selectedMail) renderMail();
+            await loadMails();
+        }
     }
     const poller = createOperationalPoller(async () => {
         if (!opened) return;
@@ -404,6 +413,7 @@ export function createCommunicationsApp(dialog, api, onChanged) {
             user = communicationsSession(); if (!user) return;
             if (dialog.open) return;
             generation += 1; opened = true; tab = 'chat'; dialog.showModal(); controls(); notice('Actualizando conversaciones…');
+            $('[data-private-picker]').hidden = true; $('[data-conversation-list]').hidden = false; $('[data-sticker-panel]').hidden = true;
             try { await switchTab('chat'); notice('Actualización automática mientras el panel está abierto.'); }
             catch (error) { failed(error); }
             poller.start();
