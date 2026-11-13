@@ -1410,7 +1410,7 @@ class ServicioManiobrasOperacionales
             }
             if (! $tipoMovimiento instanceof TipoMovimiento
                 || ! $tipoPaso instanceof TipoPasoManiobra
-                || $tipoMovimiento === TipoMovimiento::Reversion) {
+                || in_array($tipoMovimiento, [TipoMovimiento::Reversion, TipoMovimiento::CorreccionAdministrativa], true)) {
                 throw new DomainException(
                     'Cada paso requiere un tipo físico y un tipo de maniobra válidos.',
                 );

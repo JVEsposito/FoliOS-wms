@@ -9,6 +9,7 @@ use App\Enums\EstadoPosicion;
 use App\Enums\EstadoSesionEstiba;
 use App\Enums\EstadoTareaMovimiento;
 use App\Enums\HabilitacionAlmacenamientoFolio;
+use App\Enums\RolUsuario;
 use App\Enums\TipoBulto;
 use App\Enums\TipoMovimiento;
 use App\Enums\TipoPlanOperacional;
@@ -25,6 +26,8 @@ use App\Models\TareaMovimiento;
 use App\Models\User;
 use App\Services\Autorizacion\AlcanceOperacionalUsuario;
 use App\Services\Folios\ServicioHabilitacionAlmacenamiento;
+use App\Services\Planificador\ServicioAdministracionPallets;
+use App\Services\Transiciones\ContextoEjecucionTransicionOperacional;
 use DomainException;
 
 class ValidadorMovimiento
@@ -38,6 +41,11 @@ class ValidadorMovimiento
     public function validar(Movimiento $movimiento): void
     {
         $tipo = $movimiento->tipo_movimiento;
+        if ($tipo === TipoMovimiento::CorreccionAdministrativa) {
+            $this->validarCorreccionAdministrativa($movimiento);
+
+            return;
+        }
 
         if (! $tipo instanceof TipoMovimiento) {
             throw new DomainException('El tipo de movimiento no es válido.');
@@ -76,6 +84,35 @@ class ValidadorMovimiento
         }
 
         $this->reservasTareas->validarIntegridadMovimiento($movimiento);
+    }
+
+    private function validarCorreccionAdministrativa(Movimiento $m): void
+    {
+        $contexto = app(ContextoEjecucionTransicionOperacional::class)->actual();
+        $usuario = User::find($m->user_id);
+        $operacion = OperacionSincronizacion::find($m->operacion_id);
+        if (! $usuario?->activo || $usuario->rol !== RolUsuario::Administrador
+            || ! $usuario->can('administrar-camaras')
+            || $contexto?->tipo !== ServicioAdministracionPallets::TIPO_CORRECCION
+            || $contexto->user_id !== $m->user_id || $contexto->sujeto_id !== $m->folio_id
+            || $contexto->operacion_id !== $m->operacion_id || $m->dispositivo_id !== null
+            || $m->sesion_origen_id !== null || $m->sesion_destino_id !== null || $m->tarea_movimiento_id !== null
+            || ! $operacion || $operacion->user_id !== $m->user_id || $operacion->dispositivo_id !== null
+            || $operacion->tipo !== TipoMovimiento::CorreccionAdministrativa->value
+            || ! ($operacion->payload['confirmacion_fisica'] ?? false) || ! filled($m->motivo)) {
+            throw new OperacionNoAutorizada('La corrección requiere una intervención administrativa auditada y verificada físicamente.');
+        }
+        $folio = Folio::findOrFail($m->folio_id);
+        $this->habilitacion->validarIngresoCamara($folio);
+        $ubicacion = $folio->ubicacionActual;
+        if ($ubicacion?->camara_id !== $m->camara_origen_id || $ubicacion?->posicion_id !== $m->posicion_origen_id) {
+            throw new DomainException('La ubicación de origen cambió antes de registrar la corrección.');
+        }
+        $destino = Posicion::with('camara')->findOrFail($m->posicion_destino_id);
+        if ($destino->camara_id !== $m->camara_destino_id || $destino->id === $m->posicion_origen_id) {
+            throw new DomainException('El destino de la corrección no corresponde a la posición indicada.');
+        }
+        app(ServicioAdministracionPallets::class)->validarDestino($destino, $folio);
     }
 
     private function validarActorYOperacion(

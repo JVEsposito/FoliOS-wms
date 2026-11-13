@@ -18,6 +18,7 @@ class MovimientoResource extends JsonResource
             'plan_operacional_id' => $this->plan_operacional_id,
             'tarea_movimiento_id' => $this->tarea_movimiento_id,
             'tipo_movimiento' => $this->tipo_movimiento->value,
+            'motivo' => $this->motivo,
             'folio' => [
                 'id' => $this->folio_id,
                 'numero_folio' => $this->whenLoaded(

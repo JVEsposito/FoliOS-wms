@@ -738,7 +738,7 @@ class ServicioReservasTareasMovimiento
                 && $posicion->id !== $tarea->posicion_origen_id,
             TipoMovimiento::TrasladoEntreCamaras => $origenCamaraId !== null
                 && $posicion->camara_id !== $origenCamaraId,
-            TipoMovimiento::Retiro, TipoMovimiento::Reversion => false,
+            TipoMovimiento::Retiro, TipoMovimiento::Reversion, TipoMovimiento::CorreccionAdministrativa => false,
         };
 
         if (! $valida) {

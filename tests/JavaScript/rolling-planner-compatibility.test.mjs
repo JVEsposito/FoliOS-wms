@@ -40,6 +40,23 @@ const task = {
     contexto: { cliente: 'Cliente Norte', marca: 'Marca Norte', formato: 'Caja 5' },
 };
 
+test('prioridad de almacenamiento supera afinidad y usa alternativa cuando la cámara está llena', () => {
+    const exact = camera('afinidad', { activa: true, pallets_completos: 1, perfiles: [{ cliente: 'Cliente Norte', marca: 'Marca Norte', formato: 'Caja 5', pallets: 1 }] });
+    const preferred = { ...camera('principal', { activa: false, pallets_completos: 0 }), prioridad_operacional: 'almacenamiento' };
+    assert.equal(bestCandidate(task, [exact, preferred])?.cameraId, 'principal');
+    preferred.posiciones[0].ocupada = true;
+    assert.equal(bestCandidate(task, [exact, preferred])?.cameraId, 'afinidad');
+});
+
+test('salida de túnel y despacho eligen su prioridad global sin cambiar un destino explícito', () => {
+    const a = { ...camera('almacen', { activa: false, pallets_completos: 0 }), prioridad_operacional: 'almacenamiento' };
+    const b = { ...camera('tuneles', { activa: false, pallets_completos: 0 }), prioridad_operacional: 'salida_tuneles' };
+    const c = { ...camera('despacho', { activa: false, pallets_completos: 0 }), prioridad_operacional: 'despacho' };
+    assert.equal(bestCandidate({ ...task, plan: { tipo: 'recepcion_tunel' } }, [a, b, c])?.cameraId, 'tuneles');
+    assert.equal(bestCandidate({ ...task, plan: { tipo: 'concentracion_carga' } }, [a, b, c])?.cameraId, 'despacho');
+    assert.equal(bestCandidate({ ...task, plan: { tipo: 'recepcion_tunel' }, destino: { camara: { id: 'almacen' }, posicion: a.posiciones[0] } }, [a, b, c])?.cameraId, 'almacen');
+});
+
 test('una banda compatible en otra cámara gana a la preferente vacía', () => {
     const preferred = camera('despacho', { activa: false, pallets_completos: 0 });
     const compatible = camera('otra', {

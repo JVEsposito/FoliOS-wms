@@ -16,6 +16,7 @@ const labels: Record<Movement['tipo_movimiento'], string> = {
   traslado_entre_camaras: 'Cambio de cámara',
   retiro: 'Retiro',
   reversion: 'Reversión',
+  correccion_administrativa: 'Corrección administrativa',
 };
 
 function movementEndLabel(end: Movement['origen'], fallback: string) {
