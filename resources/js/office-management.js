@@ -762,16 +762,24 @@ function seriesColors() {
     return [palette.blue, palette.amber, palette.purple, palette.green, palette.cyanLight];
 }
 
+function weighbridgeClientColors(weighbridge) {
+    const colors = seriesColors();
+    return new Map((weighbridge.series_clientes || []).map((serie, index) => [
+        String(serie.clave),
+        serie.clave === 'otros' ? palette.quiet : colors[index % colors.length],
+    ]));
+}
+
 function renderWeighbridgeChart(weighbridge) {
     const days = weighbridge.tendencia_diaria || [];
     const series = weighbridge.series_clientes || [];
-    const colors = seriesColors();
-    const colorFor = (serie, index) => (serie.clave === 'otros' ? palette.quiet : colors[index % colors.length]);
+    const clientColors = weighbridgeClientColors(weighbridge);
+    const colorFor = (serie) => clientColors.get(String(serie.clave));
     const datasets = series.length
-        ? series.map((serie, index) => ({
+        ? series.map((serie) => ({
             label: serie.nombre,
             data: days.map((day) => Number(day.por_cliente?.[serie.clave] || 0)),
-            backgroundColor: colorFor(serie, index),
+            backgroundColor: colorFor(serie),
             borderRadius: 3,
             borderSkipped: false,
             maxBarThickness: 46,
@@ -811,7 +819,7 @@ function renderWeighbridgeChart(weighbridge) {
         .filter((serie) => serie.clave !== 'otros')
         .reduce((sum, serie) => sum + Number(weekly.get(serie.clave) || 0), 0));
     elements.weighbridgeSummary.innerHTML = series.length
-        ? series.map((serie, index) => `<span><i style="background:${colorFor(serie, index)}"></i>${escapeHtml(serie.nombre)} <b>${formatKilos(serie.clave === 'otros' ? otherKilos : weekly.get(serie.clave))}</b></span>`).join('')
+        ? series.map((serie) => `<span><i style="background:${colorFor(serie)}"></i>${escapeHtml(serie.nombre)} <b>${formatKilos(serie.clave === 'otros' ? otherKilos : weekly.get(serie.clave))}</b></span>`).join('')
         : '<span>Sin kilos recepcionados en los últimos 7 días.</span>';
 }
 
@@ -829,12 +837,13 @@ function renderWeighbridgeOperation(weighbridge) {
     elements.weighbridgeClientsDetail.textContent = 'con kilos en la temporada';
 
     const clients = weighbridge.clientes || [];
+    const clientColors = weighbridgeClientColors(weighbridge);
     const max = Math.max(0, ...clients.map((client) => client.kilos_temporada));
     elements.weighbridgeClientRows.innerHTML = clients.length
         ? clients.map((client) => `
             <div class="management-client-kilos__row">
                 <div class="management-client-kilos__head"><strong>${escapeHtml(client.nombre)}</strong><b>${formatKilos(client.kilos_temporada)}</b></div>
-                <span class="management-share" aria-hidden="true"><i style="width:${max ? Math.max(1.5, (client.kilos_temporada / max) * 100) : 0}%"></i></span>
+                <span class="management-share" aria-hidden="true"><i style="width:${max ? Math.max(1.5, (client.kilos_temporada / max) * 100) : 0}%;background:${clientColors.get(String(client.id)) || palette.quiet}"></i></span>
                 <small><span>${formatQuantity(client.participacion_porcentaje)} % del total</span><span>7 días ${formatKilos(client.kilos_7_dias)}</span><span>hoy ${formatKilos(client.kilos_hoy)}</span><span>${plural(client.recepciones_temporada, 'recepción', 'recepciones')}</span></small>
             </div>`).join('')
         : '<div class="management-empty">Sin recepciones cerradas en la temporada.</div>';
@@ -1070,6 +1079,7 @@ new MutationObserver(() => {
     renderMaterialChart();
     renderPrecoolingChart(state.dashboard.prefrio);
     renderWeighbridgeChart(state.dashboard.romana);
+    renderWeighbridgeOperation(state.dashboard.romana);
     renderContainerType();
 }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-office-theme'] });
 
