@@ -32,6 +32,7 @@ use DateTimeInterface;
 use DomainException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use JsonException;
 
 class ServicioProcesoPrefrio
@@ -415,6 +416,15 @@ class ServicioProcesoPrefrio
         ], true)) {
             throw new DomainException('El tipo de evento no corresponde a un registro operacional.');
         }
+        if ($tipo === TipoEventoPrefrio::Lectura) {
+            // POEMP R-41: tres sectores, exterior e interior a cada lado. Una lectura horaria
+            // puede quedar parcial. Las tablets anteriores envían una sola temperatura.
+            if (array_key_exists('sectores', $datos)) {
+                $datos['sectores'] = RegistroPrefrioR41::normalizar($datos['sectores']);
+            } elseif (! is_numeric($datos['temperatura'] ?? null)) {
+                throw ValidationException::withMessages(['sectores' => 'Ingresa al menos una temperatura de la lectura.']);
+            }
+        }
 
         return $this->ejecutarEvento(
             $proceso,
@@ -440,6 +450,11 @@ class ServicioProcesoPrefrio
         ?Dispositivo $dispositivo = null,
     ): ProcesoPrefrio {
         $this->asegurarOperacion($usuario);
+        // Lectura final del R-41 enviada junto con el término del enfriado: debe estar completa.
+        $lecturaFinal = $datos['datos']['lectura_final'] ?? null;
+        if ($lecturaFinal !== null) {
+            $datos['datos']['lectura_final'] = RegistroPrefrioR41::normalizar($lecturaFinal, true, 'lectura_final');
+        }
 
         return $this->ejecutarEvento(
             $proceso,
@@ -447,8 +462,16 @@ class ServicioProcesoPrefrio
             $datos,
             $usuario,
             $dispositivo,
-            function (ProcesoPrefrio $procesoBloqueado) use ($datos): ?ProcesoPrefrioFolio {
+            function (ProcesoPrefrio $procesoBloqueado) use ($datos, $lecturaFinal): ?ProcesoPrefrioFolio {
                 $this->validarEstado($procesoBloqueado, [EstadoProcesoPrefrio::EnProceso]);
+                if ($lecturaFinal === null && config('prefrio.r41.exige_lectura_final', true)) {
+                    // Sin lectura junto al término, la última lectura horaria debe estar completa.
+                    $ultima = RegistroPrefrioR41::lecturas($procesoBloqueado->eventos()->get())->last();
+                    if ($ultima === null || ! RegistroPrefrioR41::completa($ultima['sectores'])) {
+                        throw ValidationException::withMessages(['lectura_final' => 'Antes de terminar el enfriado registra la lectura final: '
+                            .'los 3 sectores (ventilador, medio y puerta), interior y exterior de ambos lados.']);
+                    }
+                }
                 $procesoBloqueado->update([
                     'estado' => EstadoProcesoPrefrio::PendienteVerificacion,
                     'pendiente_verificacion_at' => CarbonImmutable::parse($datos['ocurrido_at']),

@@ -2,6 +2,19 @@
 
 return [
     /*
+     * Registro de prefrío POEMP R-41. Cada lectura del túnel toma tres sectores (ventilador,
+     * medio y puerta), con sensor exterior e interior a cada lado. Las lecturas horarias
+     * pueden quedar parciales, pero al terminar el enfriado se exige una lectura completa.
+     */
+    'r41' => [
+        // Cada cuánto se pide una lectura mientras el túnel enfría.
+        'intervalo_lectura_minutos' => (int) env('PREFRIO_INTERVALO_LECTURA_MINUTOS', 60),
+        // «false» deja terminar sin lectura final completa (por ejemplo, mientras alguna
+        // tablet de Prefrío no tiene la APK con la grilla de sectores).
+        'exige_lectura_final' => (bool) env('PREFRIO_EXIGE_LECTURA_FINAL', true),
+    ],
+
+    /*
      * Control de condensación por punto de rocío (aproximación de Magnus).
      * El margen mínimo es la diferencia entre la T° superficial de la fruta y el
      * punto de rocío del aire: bajo él se alerta «margen bajo». Es un criterio

@@ -341,6 +341,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/prefrio/procesos', [ProcesoPrefrioController::class, 'index']);
         Route::get('/prefrio/resumen', [ProcesoPrefrioController::class, 'resumen']);
         Route::get('/prefrio/procesos/{procesoPrefrio}', [ProcesoPrefrioController::class, 'show']);
+        Route::get('/prefrio/procesos/{procesoPrefrio}/registro-r41.xlsx', [ProcesoPrefrioController::class, 'registroR41']);
         Route::get('/prefrio/punto-rocio', [PuntoRocioPrefrioController::class, 'index']);
     });
     Route::middleware('can:operar-prefrio')->group(function () {
@@ -351,6 +352,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/prefrio/procesos/{procesoPrefrio}/iniciar', [ProcesoPrefrioController::class, 'iniciar']);
         Route::post('/prefrio/procesos/{procesoPrefrio}/eventos/{tipo}', [ProcesoPrefrioController::class, 'registrarEvento']);
         Route::post('/prefrio/procesos/{procesoPrefrio}/verificar', [ProcesoPrefrioController::class, 'enviarAVerificacion']);
+        Route::put('/prefrio/procesos/{procesoPrefrio}/registro-r41', [ProcesoPrefrioController::class, 'guardarRegistroR41']);
         Route::post('/prefrio/punto-rocio', [PuntoRocioPrefrioController::class, 'store']);
     });
     Route::middleware('can:supervisar-prefrio')->group(function () {
