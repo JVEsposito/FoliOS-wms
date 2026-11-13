@@ -44,7 +44,7 @@ cliente, fecha operacional (hora de planta), una referencia legible y sus medida
 
 | Fuente | Cuándo es un hecho | Fecha | Medidas | Cliente |
 | --- | --- | --- | --- | --- |
-| Recepciones en romana | Recepción cerrada | Ingreso del camión | kilos netos, envases declarados | Cliente de la recepción |
+| Recepciones en romana | Recepción cerrada | Ingreso del camión | kilos netos, envases recibidos (lo que contó Validación MP; sin detalle, lo de la guía) | Cliente de la recepción |
 | Pallets validados | Validación PT aceptada y aprobada, con folio | Hora de la PDA | bultos, pallets, saldos, cajas | Cliente de Validación vinculado al cliente global |
 | Recepción de fruta embalada | Recepción aceptada | Llegada | recepciones, bultos, pallets, saldos, cajas | Cliente de la recepción |
 | Prefrío | Folio aprobado en un proceso | Fin del proceso | bultos, pallets, saldos, cajas | Cliente del folio |

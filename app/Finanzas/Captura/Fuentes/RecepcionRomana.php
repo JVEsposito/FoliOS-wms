@@ -32,7 +32,7 @@ final class RecepcionRomana extends FuenteTabla
         return [
             'recepciones' => ['nombre' => 'Recepciones', 'unidad' => 'recepción'],
             'kilos_netos' => ['nombre' => 'Kilos netos', 'unidad' => 'kg'],
-            'envases' => ['nombre' => 'Envases declarados', 'unidad' => 'envase'],
+            'envases' => ['nombre' => 'Envases recibidos (validados)', 'unidad' => 'envase'],
         ];
     }
 
@@ -55,7 +55,10 @@ final class RecepcionRomana extends FuenteTabla
                 'r.cliente_nombre_snapshot', 'r.tipo_recepcion', 'r.tipo_servicio', 'r.estado', 'r.peso_neto',
                 'r.cantidad_envases_declarados', 'r.tipo_envase_declarado', 'r.numero_guia_despacho',
                 'r.patente_camion', 'r.ingreso_at', 'r.salida_at', 'e.nombre as especie',
-            ]);
+            ])
+            // Se cobra por envase recibido: lo que contó Validación MP, no lo que declaró la guía
+            // (REC-2611-0022: guía 23 bins y 547 totes, validado 25 y 596). Sin detalle, lo declarado.
+            ->selectRaw('COALESCE((SELECT SUM(COALESCE(d.cantidad_validada, d.cantidad_declarada)) FROM detalles_envases_recepcion_romana d WHERE d.recepcion_romana_id = r.id), r.cantidad_envases_declarados) as envases_recibidos');
     }
 
     protected function mapear(ContextoCaptura $contexto, Collection $filas): iterable
@@ -76,13 +79,14 @@ final class RecepcionRomana extends FuenteTabla
                 medidas: [
                     'recepciones' => 1,
                     'kilos_netos' => round((float) $fila->peso_neto, 3),
-                    'envases' => (int) $fila->cantidad_envases_declarados,
+                    'envases' => (int) $fila->envases_recibidos,
                 ],
                 datos: [
                     'tipo_recepcion' => $fila->tipo_recepcion,
                     'tipo_servicio' => $fila->tipo_servicio,
                     'especie' => $fila->especie,
                     'tipo_envase' => $fila->tipo_envase_declarado,
+                    'envases_declarados' => (int) $fila->cantidad_envases_declarados,
                     'guia' => $fila->numero_guia_despacho,
                     'patente' => $fila->patente_camion,
                     'salida_at' => ContextoCaptura::fecha($fila->salida_at)?->toIso8601String(),

@@ -13,6 +13,7 @@ use App\Finanzas\Models\Lectura;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Mockery;
 use RuntimeException;
 use Tests\TestCase;
@@ -124,6 +125,25 @@ class CapturaHechosTest extends TestCase
 
         $this->capturar(['romana_recepcion'], conciliar: true);
         $this->assertSame(['R-0010', 'R-0011'], $this->hechos('romana_recepcion')->pluck('referencia')->sort()->values()->all());
+    }
+
+    /** Se cobra por envase recibido: lo validado (REC-2611-0022: guía 23 + 547, validado 25 + 596). */
+    public function test_los_envases_de_la_recepcion_son_los_validados(): void
+    {
+        $cliente = $this->clienteGlobal('PRODUCTOR DE PRUEBA SPA');
+        $validada = $this->recepcionRomana($cliente, 'REC-2611-0022', 5574.56, '2026-11-08 14:26', ['cantidad_envases_declarados' => 570]);
+        foreach ([['bins', 23, 25], ['totes', 547, 596]] as [$tipo, $declarada, $validadaCantidad]) {
+            DB::table('detalles_envases_recepcion_romana')->insert(['id' => (string) Str::uuid(), 'recepcion_romana_id' => $validada,
+                'tipo_envase' => $tipo, 'cantidad_declarada' => $declarada, 'cantidad_validada' => $validadaCantidad, 'created_at' => now(), 'updated_at' => now()]);
+        }
+        // Registro antiguo sin detalle por tipo: queda lo declarado.
+        $this->recepcionRomana($cliente, 'REC-ANTIGUA', 1000, '2026-11-08 15:00');
+
+        $this->capturar(['romana_recepcion']);
+        $hechos = $this->hechos('romana_recepcion')->keyBy('referencia');
+        $this->assertSame(621, $hechos['REC-2611-0022']->medidas['envases']);
+        $this->assertSame(570, $hechos['REC-2611-0022']->datos['envases_declarados']);
+        $this->assertSame(24, $hechos['REC-ANTIGUA']->medidas['envases']);
     }
 
     public function test_la_conciliacion_anula_lo_que_ya_no_existe_en_la_operacion(): void
