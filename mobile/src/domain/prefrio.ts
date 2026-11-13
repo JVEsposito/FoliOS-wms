@@ -128,6 +128,16 @@ export type PrefrioProcess = {
   finalizado_at: string | null;
   folios: PrefrioProcessFolio[];
   eventos: PrefrioEvent[];
+  /** Control horario POEMP R-41; el servidor lo envía cuando incluye los eventos. */
+  registro_r41?: {
+    intervalo_lectura_minutos: number;
+    exige_lectura_final: boolean;
+    lecturas: number;
+    ultima_lectura_at: string | null;
+    ultima_lectura_completa: boolean;
+    proxima_lectura_at: string | null;
+    lectura_vencida: boolean;
+  } | null;
   creado_por: { id: string; nombre: string };
   iniciado_por: { id: string; nombre: string } | null;
   finalizado_por: { id: string; nombre: string } | null;

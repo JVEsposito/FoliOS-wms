@@ -98,12 +98,32 @@
                             <div class="event-timeline" id="processTimeline"></div>
                         </div>
                     </div>
+                    <section class="decision-panel r41-panel" id="r41Panel" aria-labelledby="r41PanelTitle">
+                        <div class="prefrio-panel__heading" data-estiba-contrast="navy"><div><p class="eyebrow">POEMP R-41</p><h3 id="r41PanelTitle">Registro de prefrío</h3></div><button class="secondary-button" id="r41DownloadButton" type="button">Descargar R-41 (Excel)</button></div>
+                        <p class="r41-status" id="r41Status" role="status"></p>
+                        <div class="r41-reading__scroll"><table class="r41-readings"><thead><tr><th scope="col">Lectura</th><th scope="col">Sector</th><th scope="col">Izq. ext.</th><th scope="col">Izq. int.</th><th scope="col">Der. int.</th><th scope="col">Der. ext.</th></tr></thead><tbody id="r41Readings"></tbody></table></div>
+                        <form class="prefrio-form-grid r41-data" id="r41DataForm">
+                            <label><span>T° objetivo (°C)</span><input name="temperatura_objetivo" type="number" min="-10" max="40" step="0.1" inputmode="decimal"></label>
+                            <label><span>Servicio</span><input name="servicio" maxlength="120"></label>
+                            <label><span>Supervisor de prefrío</span><input name="supervisor" maxlength="120"></label>
+                            <label><span>Jefe de frío</span><input name="jefe_frio" maxlength="120"></label>
+                            <p class="form-error prefrio-field-wide" id="r41DataError" role="alert"></p>
+                            <div class="dialog-actions prefrio-field-wide"><button class="secondary-button" type="submit">Guardar datos de la planilla</button></div>
+                        </form>
+                    </section>
                     <section class="decision-panel is-hidden" id="operationalPanel">
                         <div class="prefrio-panel__heading" data-estiba-contrast="navy"><div><p class="eyebrow">OPERACIÓN MANUAL</p><h3>Registrar acción con fecha y hora real</h3></div><span>La hora indicada queda en la trazabilidad</span></div>
                         <form class="prefrio-form-grid" id="operationalActionForm">
                             <label><span>Acción *</span><select name="accion" id="operationalActionSelect" required></select></label>
                             <label><span>Fecha y hora de la acción *</span><input name="ocurrido_at" type="datetime-local" required></label>
-                            <label class="is-hidden" id="operationalTemperatureField"><span>Temperatura °C *</span><input name="temperatura" type="number" min="-20" max="50" step="0.1"></label>
+                            <fieldset class="r41-reading prefrio-field-wide is-hidden" id="operationalReadingField">
+                                <legend id="operationalReadingTitle">Lectura de temperatura (°C)</legend>
+                                <p class="r41-reading__note" id="operationalReadingNote"></p>
+                                <div class="r41-reading__scroll"><table class="r41-grid">
+                                    <thead><tr><th scope="col">Sector</th><th scope="col">Izq. exterior</th><th scope="col">Izq. interior</th><th scope="col">Der. interior</th><th scope="col">Der. exterior</th></tr></thead>
+                                    <tbody><tr><th scope="row">Ventilador</th><td><input name="r41_ventilador_izq_ex" type="number" min="-10" max="40" step="0.1" inputmode="decimal" aria-label="Ventilador izquierda exterior"></td><td><input name="r41_ventilador_izq_in" type="number" min="-10" max="40" step="0.1" inputmode="decimal" aria-label="Ventilador izquierda interior"></td><td><input name="r41_ventilador_der_in" type="number" min="-10" max="40" step="0.1" inputmode="decimal" aria-label="Ventilador derecha interior"></td><td><input name="r41_ventilador_der_ex" type="number" min="-10" max="40" step="0.1" inputmode="decimal" aria-label="Ventilador derecha exterior"></td></tr><tr><th scope="row">Medio</th><td><input name="r41_medio_izq_ex" type="number" min="-10" max="40" step="0.1" inputmode="decimal" aria-label="Medio izquierda exterior"></td><td><input name="r41_medio_izq_in" type="number" min="-10" max="40" step="0.1" inputmode="decimal" aria-label="Medio izquierda interior"></td><td><input name="r41_medio_der_in" type="number" min="-10" max="40" step="0.1" inputmode="decimal" aria-label="Medio derecha interior"></td><td><input name="r41_medio_der_ex" type="number" min="-10" max="40" step="0.1" inputmode="decimal" aria-label="Medio derecha exterior"></td></tr><tr><th scope="row">Puerta</th><td><input name="r41_puerta_izq_ex" type="number" min="-10" max="40" step="0.1" inputmode="decimal" aria-label="Puerta izquierda exterior"></td><td><input name="r41_puerta_izq_in" type="number" min="-10" max="40" step="0.1" inputmode="decimal" aria-label="Puerta izquierda interior"></td><td><input name="r41_puerta_der_in" type="number" min="-10" max="40" step="0.1" inputmode="decimal" aria-label="Puerta derecha interior"></td><td><input name="r41_puerta_der_ex" type="number" min="-10" max="40" step="0.1" inputmode="decimal" aria-label="Puerta derecha exterior"></td></tr></tbody>
+                                </table></div>
+                            </fieldset>
                             <label class="prefrio-field-wide"><span>Observación</span><textarea name="observacion" maxlength="2000" placeholder="Opcional"></textarea></label>
                             <p class="form-error prefrio-field-wide" id="operationalActionError" role="alert"></p>
                             <div class="dialog-actions prefrio-field-wide"><button class="primary-button" type="submit">Registrar acción</button></div>

@@ -719,3 +719,23 @@
     .tunnel-map,
     .tunnel-preview { grid-template-columns: 1fr; }
 }
+
+/* POEMP R-41: lectura por sectores (ventilador, medio, puerta), exterior e interior a cada lado. */
+.r41-reading { display: grid; gap: 8px; min-width: 0; margin: 0; padding: 10px; border: 1px solid var(--corporate-border); border-radius: 2px; }
+.r41-reading legend { padding: 0 4px; color: var(--text-strong); font-size: .78rem; font-weight: 900; }
+.r41-reading__note { margin: 0; color: var(--text-secondary); font-size: .72rem; line-height: 1.4; }
+.r41-reading__note[data-tone="warning"] { color: var(--warning-text); font-weight: 800; }
+.r41-reading__scroll { min-width: 0; overflow-x: auto; }
+.r41-grid, .r41-readings { width: 100%; border-collapse: collapse; font-size: .72rem; }
+.r41-grid th, .r41-grid td, .r41-readings th, .r41-readings td { padding: 5px 6px; border: 1px solid var(--corporate-border); text-align: center; white-space: nowrap; }
+.r41-grid th[scope="row"], .r41-readings th[scope="row"] { text-align: left; color: var(--text-strong); }
+.r41-grid thead th, .r41-readings thead th { color: var(--text-secondary); font-weight: 800; }
+.r41-grid input { width: 100%; min-width: 64px; text-align: center; }
+.r41-panel { display: grid; gap: 10px; }
+.r41-panel > .prefrio-panel__heading { align-items: center; }
+.r41-status { margin: 0; padding: 8px 10px; border-left: 4px solid var(--corporate-border); color: var(--text-secondary); font-size: .74rem; font-weight: 800; }
+.r41-status[data-tone="warning"] { border-left-color: var(--warning-text); background: var(--warning-bg); color: var(--warning-text); }
+.r41-status[data-tone="success"] { border-left-color: var(--success-text, #2f7d55); }
+.r41-readings td.is-empty { color: var(--muted); }
+.r41-readings tr.is-final th { color: var(--corporate-blue); }
+.r41-readings tbody tr.r41-reading-start > * { border-top-width: 2px; }

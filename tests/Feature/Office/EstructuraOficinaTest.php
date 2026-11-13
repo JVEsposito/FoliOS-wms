@@ -186,6 +186,23 @@ class EstructuraOficinaTest extends TestCase
         }
     }
 
+    public function test_prefrio_exporta_el_registro_r41_y_la_grilla_de_lecturas(): void
+    {
+        $html = $this->get('/oficina/prefrio')->assertOk()->getContent();
+        foreach (['r41Panel', 'r41Readings', 'r41DataForm', 'r41DownloadButton', 'operationalReadingField', 'operationalReadingNote'] as $id) {
+            $this->assertStringContainsString('id="'.$id.'"', $html);
+        }
+        foreach (['ventilador', 'medio', 'puerta'] as $sector) {
+            foreach (['izq_ex', 'izq_in', 'der_in', 'der_ex'] as $punto) {
+                $this->assertStringContainsString("name=\"r41_{$sector}_{$punto}\"", $html);
+            }
+        }
+        if (getenv('ESTIBA_EXPORTAR_UI_TESTS') === '1') {
+            File::ensureDirectoryExists(storage_path('app/ui/oficina'));
+            File::put(storage_path('app/ui/oficina/prefrio.html'), $html);
+        }
+    }
+
     public function test_punto_rocio_exporta_registro_grafico_y_dialogos(): void
     {
         $html = $this->get('/oficina/prefrio/punto-rocio')->assertOk()->getContent();

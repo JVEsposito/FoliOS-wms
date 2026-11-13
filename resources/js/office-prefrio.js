@@ -11,7 +11,9 @@ const elements = {
     tunnelMap: byId('processTunnelMap'), timeline: byId('processTimeline'), refreshProcess: byId('refreshProcessButton'), closeDetail: byId('closeProcessDetailButton'),
     decisionPanel: byId('decisionPanel'), decisionFolios: byId('decisionFolios'), decisionError: byId('decisionError'),
     decisionOccurredAt: byId('decisionOccurredAt'), operationalPanel: byId('operationalPanel'), operationalForm: byId('operationalActionForm'),
-    operationalAction: byId('operationalActionSelect'), operationalTemperatureField: byId('operationalTemperatureField'), operationalError: byId('operationalActionError'),
+    operationalAction: byId('operationalActionSelect'), operationalReadingField: byId('operationalReadingField'), operationalReadingTitle: byId('operationalReadingTitle'),
+    operationalReadingNote: byId('operationalReadingNote'), operationalError: byId('operationalActionError'),
+    r41Panel: byId('r41Panel'), r41Status: byId('r41Status'), r41Readings: byId('r41Readings'), r41DataForm: byId('r41DataForm'), r41DataError: byId('r41DataError'), r41Download: byId('r41DownloadButton'),
     approve: byId('approveProcessButton'), reprocessButton: byId('reprocessProcessButton'), cancelProcess: byId('cancelProcessButton'),
     tunnelDialog: byId('tunnelDialog'), tunnelForm: byId('tunnelForm'), tunnelDialogTitle: byId('tunnelDialogTitle'), tunnelError: byId('tunnelFormError'), tunnelPreview: byId('tunnelPreview'), tunnelPreviewSummary: byId('tunnelPreviewSummary'),
     processDialog: byId('processDialog'), processForm: byId('processForm'), processError: byId('processFormError'),
@@ -20,6 +22,9 @@ const elements = {
     loading: byId('officeLoading'), loadingText: byId('officeLoadingText'), toasts: byId('officeToasts'),
 };
 const keys = { token: 'estiba_wms_office_token', identity: 'estiba_wms_office_identity' };
+// POEMP R-41: tres sectores con sensor exterior e interior a cada lado, en el orden de la planilla.
+const r41Sectors = [['ventilador', 'Ventilador'], ['medio', 'Medio'], ['puerta', 'Puerta']];
+const r41Points = ['izq_ex', 'izq_in', 'der_in', 'der_ex'];
 const activeStates = new Set(['borrador', 'cargando', 'listo_para_iniciar', 'en_proceso', 'pendiente_verificacion']);
 const state = {
     token: localStorage.getItem(keys.token), identity: readJson(keys.identity), tunnels: [], processes: [], summary: null, selectedTunnelId: null,
@@ -175,7 +180,46 @@ function renderProcessDetail() {
         ['ESTADO', statusText(process.estado)], ['POSICIONES', `${occupiedPositions}/${process.tunel?.capacidad_posiciones || '—'}`], ['FOLIOS', occupied.length], ['INICIO', formatDate(process.iniciado_at, 'No iniciado')], ['FINAL', formatDate(process.finalizado_at, 'Pendiente')],
     ].map(([label, value]) => `<article><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></article>`).join('');
     elements.correctProcess.classList.toggle('is-hidden', state.identity?.rol !== 'administrador');
-    renderTunnelMap(process, occupied); renderTimeline(process); renderOperationalPanel(process); renderDecisionPanel(process, occupied);
+    renderTunnelMap(process, occupied); renderTimeline(process); renderR41(process); renderOperationalPanel(process); renderDecisionPanel(process, occupied);
+}
+/** Lecturas del R-41 en orden, con la lectura final que acompañó el término del enfriado. */
+function r41Readings(process) {
+    return (process.eventos || [])
+        .filter((event) => event.tipo === 'lectura' || (event.tipo === 'verificacion_final' && event.datos?.datos?.lectura_final))
+        .map((event) => ({ at: event.ocurrido_at, final: event.tipo === 'verificacion_final', sectors: event.tipo === 'lectura' ? event.datos?.sectores || null : event.datos.datos.lectura_final, temperature: event.datos?.temperatura ?? null }))
+        .sort((a, b) => new Date(a.at) - new Date(b.at));
+}
+function r41Value(value) { return value === null || value === undefined || value === '' ? '—' : Number(value).toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 }); }
+function renderR41(process) {
+    const registro = process.registro_r41 || {};
+    const readings = r41Readings(process);
+    const overdue = registro.lectura_vencida === true;
+    elements.r41Status.dataset.tone = overdue || (process.estado === 'en_proceso' && registro.exige_lectura_final && !registro.ultima_lectura_completa) ? 'warning' : '';
+    elements.r41Status.textContent = process.estado === 'en_proceso'
+        ? [overdue ? `Lectura vencida: correspondía a las ${formatDate(registro.proxima_lectura_at)}.` : registro.proxima_lectura_at ? `Próxima lectura: ${formatDate(registro.proxima_lectura_at)} (cada ${registro.intervalo_lectura_minutos} min).` : '',
+            registro.ultima_lectura_completa ? 'La última lectura está completa y sirve de lectura final.' : 'Al terminar el enfriado se exige una lectura completa: 3 sectores, interior y exterior de ambos lados.'].filter(Boolean).join(' ')
+        : `${readings.length} ${readings.length === 1 ? 'lectura registrada' : 'lecturas registradas'}.`;
+    elements.r41Readings.innerHTML = readings.map((reading, index) => r41Sectors.map(([sector, name], row) => {
+        const label = row === 0 ? `<th scope="row" rowspan="3">${reading.final ? 'Final' : index + 1} · ${escapeHtml(formatDate(reading.at))}${reading.sectors ? '' : `<br><small>${escapeHtml(r41Value(reading.temperature))} °C sin sector</small>`}</th>` : '';
+        return `<tr class="${row === 0 ? 'r41-reading-start' : ''}${reading.final ? ' is-final' : ''}">${label}<th scope="row">${name}</th>${r41Points.map((point) => { const value = reading.sectors?.[sector]?.[point]; return `<td class="${value === null || value === undefined ? 'is-empty' : ''}">${escapeHtml(r41Value(value))}</td>`; }).join('')}</tr>`;
+    }).join('')).join('') || '<tr><td colspan="6">Sin lecturas registradas.</td></tr>';
+    const data = registro.datos || {};
+    for (const field of ['temperatura_objetivo', 'servicio', 'supervisor', 'jefe_frio']) elements.r41DataForm.elements[field].value = data[field] ?? '';
+    const canEdit = state.identity?.puede_operar_prefrio === true;
+    [...elements.r41DataForm.elements].forEach((field) => { field.disabled = !canEdit; });
+    elements.r41DataError.textContent = '';
+}
+function r41GridValues() {
+    const sectors = {}; let filled = 0;
+    for (const [sector] of r41Sectors) {
+        sectors[sector] = {};
+        for (const point of r41Points) {
+            const raw = elements.operationalForm.elements[`r41_${sector}_${point}`].value.trim();
+            sectors[sector][point] = raw === '' ? null : Number(raw.replace(',', '.'));
+            if (raw !== '') filled += 1;
+        }
+    }
+    return { sectors, filled, total: r41Sectors.length * r41Points.length };
 }
 function renderTunnelMap(process, occupied) {
     const byPosition = new Map();
@@ -237,10 +281,19 @@ function renderOperationalPanel(process) {
     syncOperationalTemperature();
 }
 function syncOperationalTemperature() {
-    const reading = elements.operationalAction.value === 'lectura';
-    elements.operationalTemperatureField.classList.toggle('is-hidden', !reading);
-    elements.operationalForm.elements.temperatura.required = reading;
-    if (!reading) elements.operationalForm.elements.temperatura.value = '';
+    const action = elements.operationalAction.value;
+    const registro = state.selectedProcess?.registro_r41 || {};
+    const finalRequired = action === 'verificar' && registro.exige_lectura_final !== false && !registro.ultima_lectura_completa;
+    const visible = action === 'lectura' || action === 'verificar';
+    elements.operationalReadingField.classList.toggle('is-hidden', !visible);
+    elements.operationalReadingTitle.textContent = action === 'verificar' ? 'Lectura final (°C)' : 'Lectura de temperatura (°C)';
+    elements.operationalReadingNote.dataset.tone = finalRequired ? 'warning' : '';
+    elements.operationalReadingNote.textContent = action === 'lectura'
+        ? 'Lectura horaria: registra los sensores que midas; puede quedar parcial.'
+        : finalRequired
+            ? 'Obligatoria para terminar: completa los 3 sectores, interior y exterior de ambos lados.'
+            : 'La última lectura horaria está completa y servirá de lectura final. Si mides de nuevo, completa los 12 sensores.';
+    if (!visible) r41Points.forEach((point) => r41Sectors.forEach(([sector]) => { elements.operationalForm.elements[`r41_${sector}_${point}`].value = ''; }));
 }
 function decisionResults() {
     return [...elements.decisionFolios.querySelectorAll('[data-decision-folio]')].map((node) => {
@@ -445,7 +498,13 @@ async function submitOperationalAction() {
     const path = eventTypes.has(action) ? `/api/prefrio/procesos/${process.id}/eventos/${action}` : routes[action];
     if (!path) { elements.operationalError.textContent = 'La acción seleccionada no es válida.'; return; }
     const payload = { operacion_id: operationUuid(), version_conocida: process.version, ocurrido_at: occurredAt(values.ocurrido_at), observacion: String(values.observacion || '').trim() || null };
-    if (action === 'lectura') payload.datos = { temperatura: Number(values.temperatura), unidad: '°C' };
+    if (action === 'lectura' || action === 'verificar') {
+        const { sectors, filled, total } = r41GridValues();
+        if (action === 'lectura' && filled === 0) { elements.operationalError.textContent = 'Ingresa al menos una temperatura de la lectura.'; return; }
+        if (action === 'verificar' && filled > 0 && filled < total) { elements.operationalError.textContent = `La lectura final lleva los ${total} sensores: faltan ${total - filled}.`; return; }
+        if (action === 'lectura') payload.datos = { sectores: sectors };
+        else if (filled === total) payload.datos = { lectura_final: sectors };
+    }
     setBusy(true, 'Registrando acción de prefrío…');
     try {
         const response = await api(path, { method: 'POST', body: JSON.stringify(payload) });
@@ -454,6 +513,26 @@ async function submitOperationalAction() {
         markViewUpdated();
     } catch (error) { elements.operationalError.textContent = error.message; }
     finally { setBusy(false); }
+}
+
+async function saveR41Data() {
+    const process = state.selectedProcess; if (!process) return;
+    const values = Object.fromEntries(new FormData(elements.r41DataForm));
+    const payload = { temperatura_objetivo: values.temperatura_objetivo === '' ? null : Number(values.temperatura_objetivo), servicio: values.servicio.trim() || null, supervisor: values.supervisor.trim() || null, jefe_frio: values.jefe_frio.trim() || null };
+    setBusy(true, 'Guardando datos de la planilla…');
+    try { const response = await api(`/api/prefrio/procesos/${process.id}/registro-r41`, { method: 'PUT', body: JSON.stringify(payload) }); state.selectedProcess = response.data; renderProcessDetail(); toast('Datos de la planilla R-41 guardados.'); }
+    catch (error) { elements.r41DataError.textContent = error.message; } finally { setBusy(false); }
+}
+async function downloadR41() {
+    const process = state.selectedProcess; if (!process) return;
+    setBusy(true, 'Generando planilla R-41…');
+    try {
+        const response = await fetch(`/api/prefrio/procesos/${process.id}/registro-r41.xlsx`, { headers: { Accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', Authorization: `Bearer ${state.token}` } });
+        if (!response.ok) { const data = await response.json().catch(() => ({})); throw new ApiError(errorMessage(data, 'No fue posible generar la planilla R-41.'), response.status, data); }
+        const url = URL.createObjectURL(await response.blob());
+        const link = document.createElement('a'); link.href = url; link.download = `R-41_${process.codigo}.xlsx`;
+        document.body.append(link); link.click(); link.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) { toast(error.message, true); } finally { setBusy(false); }
 }
 
 async function bootstrap() {
@@ -493,6 +572,8 @@ elements.closeDetail.addEventListener('click', () => { state.selectedProcess = n
 elements.approve.addEventListener('click', approveProcess); elements.reprocessButton.addEventListener('click', () => openReasonDialog('reprocess')); elements.cancelProcess.addEventListener('click', () => openReasonDialog('cancel'));
 elements.reasonForm.addEventListener('submit', (event) => { event.preventDefault(); if (event.submitter?.value === 'cancel') { elements.reasonDialog.close(); return; } if (!elements.reasonForm.reportValidity()) return; submitReason(); });
 elements.operationalAction.addEventListener('change', syncOperationalTemperature);
+elements.r41DataForm.addEventListener('submit', (event) => { event.preventDefault(); if (!elements.r41DataForm.reportValidity()) return; void saveR41Data(); });
+elements.r41Download.addEventListener('click', () => void downloadR41());
 elements.operationalForm.addEventListener('submit', (event) => { event.preventDefault(); if (!elements.operationalForm.reportValidity()) return; void submitOperationalAction(); });
 
 bootstrap();

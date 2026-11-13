@@ -23,6 +23,8 @@ use App\Models\PresenciaCargaAnden;
 use App\Models\ProcesoPrefrio;
 use App\Models\ProcesoPrefrioFolio;
 use App\Services\Cargas\ServicioPlanDespachoDirecto;
+use App\Services\Prefrio\GeneradorRegistroPrefrioR41;
+use App\Services\Prefrio\RegistroPrefrioR41;
 use App\Services\Prefrio\RevisionPrefrioOperacional;
 use App\Services\Prefrio\ServicioCorreccionProcesoPrefrio;
 use App\Services\Prefrio\ServicioGeneracionRecepcionTunel;
@@ -133,6 +135,43 @@ class ProcesoPrefrioController extends Controller
         abort_unless($request->user()?->can('consultar-prefrio'), 403);
 
         return new ProcesoPrefrioResource($procesoPrefrio->load($this->relaciones()));
+    }
+
+    /**
+     * Datos del POEMP R-41 que no salen de la operación del túnel. No cambian la versión del
+     * proceso: no compiten con las operaciones de la tablet.
+     */
+    public function guardarRegistroR41(Request $request, ProcesoPrefrio $procesoPrefrio): ProcesoPrefrioResource
+    {
+        $datos = $request->validate([
+            'temperatura_objetivo' => ['nullable', 'numeric', 'between:'.RegistroPrefrioR41::TEMPERATURA_MINIMA.','.RegistroPrefrioR41::TEMPERATURA_MAXIMA],
+            'supervisor' => ['nullable', 'string', 'max:120'],
+            'jefe_frio' => ['nullable', 'string', 'max:120'],
+            'servicio' => ['nullable', 'string', 'max:120'],
+        ], [], [
+            'temperatura_objetivo' => 'la T° objetivo', 'supervisor' => 'el supervisor', 'jefe_frio' => 'el jefe de frío', 'servicio' => 'el servicio',
+        ]);
+        $procesoPrefrio->update(['registro_r41' => [
+            ...collect(RegistroPrefrioR41::DATOS_PLANILLA)->mapWithKeys(fn (string $clave): array => [$clave => match ($clave) {
+                'temperatura_objetivo' => isset($datos[$clave]) ? round((float) $datos[$clave], 1) : null,
+                default => filled($datos[$clave] ?? null) ? trim((string) $datos[$clave]) : null,
+            }])->all(),
+            'actualizado_por_user_id' => $request->user()->id,
+            'actualizado_at' => now()->toAtomString(),
+        ]]);
+
+        return new ProcesoPrefrioResource($procesoPrefrio->refresh()->load($this->relaciones()));
+    }
+
+    /** Planilla oficial POEMP R-41 del proceso, en Excel. */
+    public function registroR41(ProcesoPrefrio $procesoPrefrio, GeneradorRegistroPrefrioR41 $generador): Response
+    {
+        $ruta = $generador->generar(RegistroPrefrioR41::detalle($procesoPrefrio));
+
+        return response()->download($ruta, 'R-41_'.preg_replace('/[^\p{L}\p{N}_-]+/u', '_', $procesoPrefrio->codigo).'.xlsx', [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Cache-Control' => 'no-store, private',
+        ])->deleteFileAfterSend();
     }
 
     public function store(
