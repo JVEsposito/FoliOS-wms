@@ -73,6 +73,19 @@ exigen motivo una vez publicada la carga.
   advertencias; con `confirmar_diferencias=true` se aplica. No bloquea: la
   decisión es comercial. El pallet que entra queda `pendiente` y la carga
   vuelve a `despacho_parcial` si ya estaba toda en el andén.
+- **Completar la orden** (`POST /api/cargas/{carga}/folios`, 13-11-2026): se
+  pueden agregar pallets en cualquier estado salvo `cerrada`, `cancelada`,
+  `retornada` y `retorno_parcial`, no sólo en borrador o pendiente. Es el caso
+  en que el cliente libera parte de los pallets, la operación parte con ellos y
+  el resto llega después. Por ejemplo, CAR-000036 programada por 20 parte con
+  14. Se mantienen el tope de 26 folios y los pallets programados de cada
+  instructivo. Los pallets nuevos quedan `pendiente`, se crea o reabre la tarea
+  de su cámara en la tablet y, si la carga estaba `despachada`, vuelve a
+  `despacho_parcial` hasta que salgan. El evento `folio_asignado` marca
+  `agregado_en_curso` y el estado previo de la carga. En la oficina, la sección
+  pasa a llamarse **Completar la orden** e indica cuántos pallets faltan. La
+  reasignación de instructivo de pallets ya asignados sigue disponible sólo en
+  borrador o pendiente.
 - Las incidencias abiertas del pallet que sale se cierran como
   `retirado_de_carga` con el motivo.
 - Un pallet pendiente de reingreso no puede asignarse a otra carga (código

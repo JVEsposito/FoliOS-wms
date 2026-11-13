@@ -74,6 +74,8 @@ const elements = {
     folioInput: byId('folioInput'),
     folioInputCount: byId('folioInputCount'),
     addFolios: byId('addFoliosButton'),
+    folioAddTitle: byId('folioAddTitle'),
+    folioAddHelp: byId('folioAddHelp'),
     folioErrors: byId('folioErrors'),
     availableFolioSearch: byId('availableFolioSearch'),
     availableFolioSummary: byId('availableFolioSummary'),
@@ -414,6 +416,11 @@ function canCancel(load) {
 function canAdjust(load) {
     return state.identity?.puede_gestionar_cargas === true
         && Boolean(load) && load.estado !== 'borrador' && !TERMINAL_LOAD_STATES.includes(load.estado);
+}
+
+// Faltan pallets por liberar: oficina completa la orden mientras la operación avanza.
+function canAddFolios(load) {
+    return canEdit(load) || canAdjust(load);
 }
 
 function canReturn(load) {
@@ -842,7 +849,7 @@ function renderInstructions(load) {
             <span>${group.cajas_programadas == null ? 'Cajas sin programar' : `${group.cajas_programadas} cajas programadas`}</span>
             <span>${group.pallets_pendientes == null ? 'Pallets sin programar' : `${group.pallets_pendientes} pallets por asignar`} · ${progress.porcentaje || 0}% concentrado</span>
             <span>${progress.en_anden || 0} en andén · ${progress.cargados || 0} cargados</span>
-            ${canEdit(load) ? `<button class="secondary-button" data-select-instruction="${escapeHtml(group.id)}" type="button" aria-pressed="${group.id === selected?.id}">Preparar ${escapeHtml(instructionLabel(group))}</button>` : ''}
+            ${canAddFolios(load) ? `<button class="secondary-button" data-select-instruction="${escapeHtml(group.id)}" type="button" aria-pressed="${group.id === selected?.id}">Preparar ${escapeHtml(instructionLabel(group))}</button>` : ''}
         </article>`;
     }).join('');
     const unassigned = load.folios_sin_instructivo?.length || 0;
@@ -915,7 +922,12 @@ function renderCommands(load) {
     const draft = load.estado === 'borrador';
     const pending = load.estado === 'pendiente';
 
-    elements.folioAddSection.classList.toggle('is-hidden', !editable);
+    elements.folioAddSection.classList.toggle('is-hidden', !canAddFolios(load));
+    const inProgress = canAddFolios(load) && !['borrador', 'pendiente'].includes(load.estado);
+    elements.folioAddTitle.textContent = inProgress ? 'Completar la orden' : 'Agregar folios';
+    elements.folioAddHelp.textContent = inProgress
+        ? 'La operación ya está en curso. Los pallets que agregues quedan pendientes y la tablet los recibe como tarea nueva; si la carga estaba despachada, vuelve a despacho parcial hasta que salgan.'
+        : 'Pega o escanea uno o varios folios, separados por salto de línea, coma o punto y coma. El lote completo se rechaza si uno presenta problemas.';
     elements.cancel.classList.toggle('is-hidden', !canCancel(load));
     elements.publish.classList.toggle('is-hidden', !draft);
     elements.closeDispatch.classList.toggle('is-hidden', !canCloseDispatch(load));
@@ -961,6 +973,13 @@ function renderCommands(load) {
         elements.folioTableHint.textContent = load.modalidad_salida === 'directa_prefrio'
             ? 'Registro histórico de salida directa desde Prefrío, sin ubicación ficticia.'
             : 'Registro histórico de los folios despachados.';
+    } else if (canAddFolios(load)) {
+        const pendingPallets = Math.max(0, Number(load.total_programado || 0) - Number(load.total_folios || 0));
+        elements.commandTitle.textContent = statusLabels[load.estado] || statusText(load.estado);
+        elements.commandDescription.textContent = pendingPallets
+            ? `La operación avanza con lo asignado. Faltan ${pendingPallets} ${pendingPallets === 1 ? 'pallet' : 'pallets'} por asignar: agrégalos cuando el cliente los libere.`
+            : 'La operación avanza con lo asignado. Puedes agregar, quitar o cambiar pallets hasta el cierre.';
+        elements.folioTableHint.textContent = 'Puedes agregar los pallets faltantes; para quitar o cambiar uno se pide el motivo.';
     } else {
         elements.commandTitle.textContent = statusLabels[load.estado] || statusText(load.estado);
         elements.commandDescription.textContent = 'El encabezado y los folios quedan en modo de consulta.';
@@ -1576,7 +1595,7 @@ elements.reloadAvailableFolios.addEventListener('click', async () => {
 
 elements.addFolios.addEventListener('click', async () => {
     const folios = parseFolios();
-    if (!folios.length || !canEdit(state.selected) || folios.length > remainingFolioSlots()) return;
+    if (!folios.length || !canAddFolios(state.selected) || folios.length > remainingFolioSlots()) return;
     clearFolioErrors();
     setBusy(true, `Validando ${folios.length} ${folios.length === 1 ? 'folio' : 'folios'}…`);
     try {
