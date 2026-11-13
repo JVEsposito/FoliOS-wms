@@ -115,6 +115,7 @@ class ServicioArbitrajeManiobras
 
     public function validarAsumible(ManiobraOperacional $maniobra, ?CicloArbitrajeManiobras $ciclo = null): ?DecisionPersistida
     {
+        ElegibilidadFolioPlanificador::asegurarManiobra($maniobra->id);
         if (config('planificador.mode') !== 'guided'
             || $maniobra->estado !== EstadoManiobraOperacional::Pendiente) {
             return null;
@@ -160,6 +161,7 @@ class ServicioArbitrajeManiobras
 
     public function validarMaterializable(ManiobraOperacional $maniobra): ?DecisionPersistida
     {
+        ElegibilidadFolioPlanificador::asegurarManiobra($maniobra->id);
         if (config('planificador.mode') !== 'guided') {
             return null;
         }
@@ -217,10 +219,14 @@ class ServicioArbitrajeManiobras
     {
         $ciclo->loadMissing('decisiones');
 
-        return $ciclo->decisiones
+        $ids = $ciclo->decisiones
             ->filter(fn (DecisionPersistida $decision): bool => $decision->decision->publicable())
             ->pluck('maniobra_operacional_id')
             ->values();
+
+        $vigentes = ManiobraOperacional::whereIn('id', $ids)->tap(ElegibilidadFolioPlanificador::maniobras(...))->pluck('id');
+
+        return $ids->filter(fn ($id) => $vigentes->contains($id))->values();
     }
 
     /**
@@ -229,6 +235,7 @@ class ServicioArbitrajeManiobras
     private function maniobrasVigentes(Temporada $temporada): Collection
     {
         return ManiobraOperacional::query()
+            ->tap(ElegibilidadFolioPlanificador::maniobras(...))
             ->whereHas(
                 'planOperacional',
                 fn ($consulta) => $consulta

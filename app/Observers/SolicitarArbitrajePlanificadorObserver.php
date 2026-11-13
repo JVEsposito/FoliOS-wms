@@ -4,6 +4,7 @@ namespace App\Observers;
 
 use App\Models\Camara;
 use App\Models\CustodiaTemporalManiobra;
+use App\Models\Folio;
 use App\Models\ManiobraOperacional;
 use App\Models\PlanOperacional;
 use App\Models\ReservaBandaManiobra;
@@ -24,6 +25,7 @@ final class SolicitarArbitrajePlanificadorObserver implements ShouldHandleEvents
     public static function modelosObservados(): array
     {
         return [
+            Folio::class,
             Temporada::class,
             Camara::class,
             PlanOperacional::class,
@@ -36,6 +38,9 @@ final class SolicitarArbitrajePlanificadorObserver implements ShouldHandleEvents
 
     public function saved(Model $modelo): void
     {
+        if ($modelo instanceof Folio && ! $modelo->wasChanged(['activo', 'estado_operacional', 'tipo_bulto', 'temporada_id'])) {
+            return;
+        }
         $this->solicitar($modelo);
     }
 
@@ -61,7 +66,7 @@ final class SolicitarArbitrajePlanificadorObserver implements ShouldHandleEvents
     {
         $temporadaId = match (true) {
             $modelo instanceof Temporada => $modelo->id,
-            $modelo instanceof PlanOperacional => $modelo->temporada_id,
+            $modelo instanceof PlanOperacional, $modelo instanceof Folio => $modelo->temporada_id,
             $modelo instanceof ManiobraOperacional => $modelo->planOperacional()
                 ->value('temporada_id'),
             $modelo instanceof TareaMovimiento => $modelo->planOperacional()

@@ -24,6 +24,7 @@ use App\Models\User;
 use App\Services\Camaras\InterbloqueoEvacuacionEmergencia;
 use App\Services\Cargas\ServicioAcopioCarga;
 use App\Services\Cargas\ServicioPlanConcentracionCarga;
+use App\Services\Planificador\ElegibilidadFolioPlanificador;
 use App\Services\Planificador\ServicioArbitrajeManiobras;
 use App\Services\Planificador\ServicioDesplieguePlanificador;
 use App\Services\Planificador\ServicioLaboresTurno;
@@ -176,6 +177,8 @@ class ServicioPlanesOperacionales
 
             $this->validarActor($usuario, $dispositivo);
             $this->validarPlanAsignable($plan);
+
+            ElegibilidadFolioPlanificador::asegurarTarea($tareaBloqueada);
 
             if ($tareaBloqueada->estado->esFinal()) {
                 throw new DomainException('La tarea ya se encuentra finalizada.');
@@ -466,6 +469,8 @@ class ServicioPlanesOperacionales
     public function snapshot(PlanOperacional $plan): array
     {
         $plan = $this->cargar($plan->refresh());
+        $publicables = $plan->tareas()->tap(ElegibilidadFolioPlanificador::tareas(...))->pluck('id');
+        $plan->setRelation('tareas', $plan->tareas->filter(fn ($t) => $t->estado->esFinal() || $publicables->contains($t->id))->values());
         $horizon = $this->horizonte($plan);
         $cameraIds = $plan->tareas
             ->flatMap(fn (TareaMovimiento $tarea): array => array_filter([
@@ -560,7 +565,7 @@ class ServicioPlanesOperacionales
         $folio = Folio::query()->lockForUpdate()->find($datos['folio_id'] ?? null);
         if (! $folio
             || $folio->temporada_id !== $plan->temporada_id
-            || ! $folio->activo
+            || ! ElegibilidadFolioPlanificador::operable($folio)
             || $folio->tipo_bulto !== TipoBulto::Pallet) {
             throw new DomainException('Las tareas operacionales solo admiten pallets completos activos de la temporada.');
         }

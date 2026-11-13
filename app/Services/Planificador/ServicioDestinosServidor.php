@@ -162,6 +162,9 @@ final class ServicioDestinosServidor
         $pasos = $maniobra->pasos()->with(['planOperacional', 'posicionOrigen', 'folio.asignacionCargaActual', 'folio.retencionOperacionalActiva'])->orderBy('secuencia_maniobra')->get()
             ->filter(fn (TareaMovimiento $t): bool => ! $t->estado->esFinal());
         foreach ($pasos as $paso) {
+            if (! ElegibilidadFolioPlanificador::operable($paso->folio)) {
+                throw new ConflictoOperacion(ElegibilidadFolioPlanificador::motivo($paso->folio));
+            }
             $objetivo = $paso->contexto['carga_id'] ?? $paso->planOperacional->contexto['carga_id'] ?? null;
             if (($paso->contexto['tipo_decision'] ?? null) === 'concentrar_carga' && $objetivo
                 && $paso->folio->asignacionCargaActual?->carga_id !== $objetivo) {

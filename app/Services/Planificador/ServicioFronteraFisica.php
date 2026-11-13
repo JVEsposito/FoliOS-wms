@@ -270,6 +270,7 @@ class ServicioFronteraFisica
         Dispositivo $dispositivo,
     ): Collection {
         return TareaMovimiento::query()
+            ->tap(ElegibilidadFolioPlanificador::tareas(...))
             ->where('responsable_user_id', $usuario->id)
             ->where('dispositivo_id', $dispositivo->id)
             ->whereNotNull('maniobra_operacional_id')

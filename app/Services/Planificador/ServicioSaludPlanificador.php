@@ -323,6 +323,7 @@ final class ServicioSaludPlanificador
                 'discrepancias_abiertas' => 0,
                 'maniobras_sin_destino' => 0,
                 'destinos_rechazados_repetidos' => 0,
+                'folios_no_operables_con_tareas' => 0,
             ];
         }
 
@@ -374,6 +375,8 @@ final class ServicioSaludPlanificador
             'discrepancias_abiertas' => $discrepancias->count(),
             'maniobras_sin_destino' => $this->maniobrasSinDestino($temporadaId, $camaraId),
             'destinos_rechazados_repetidos' => $this->incidencias->tareasRepetidas($temporadaId, $camaraId),
+            'folios_no_operables_con_tareas' => (clone $tareas)->whereIn('estado', ElegibilidadFolioPlanificador::TAREAS_VIVAS)
+                ->whereHas('folio', ElegibilidadFolioPlanificador::noOperables(...))->distinct()->count('folio_id'),
         ];
     }
 
@@ -400,6 +403,7 @@ final class ServicioSaludPlanificador
     private function estadoSalud(array $riesgos): string
     {
         if ($riesgos['leases_vencidos_activos'] > 0
+            || $riesgos['folios_no_operables_con_tareas'] > 0
             || $riesgos['maniobras_completadas_con_custodia'] > 0) {
             return 'critico';
         }

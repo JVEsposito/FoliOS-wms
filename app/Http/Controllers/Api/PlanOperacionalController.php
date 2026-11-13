@@ -31,6 +31,7 @@ use App\Services\Estiba\ServicioManiobrasOperacionales;
 use App\Services\Estiba\ServicioMovimientoEstiba;
 use App\Services\Estiba\ServicioPlanesOperacionales;
 use App\Services\Estiba\ServicioReservasTareasMovimiento;
+use App\Services\Planificador\ElegibilidadFolioPlanificador;
 use App\Services\Planificador\ServicioArbitrajeManiobras;
 use App\Services\Planificador\ServicioDesplieguePlanificador;
 use App\Services\Planificador\ServicioEstadoArbitrajePlanificador;
@@ -240,6 +241,7 @@ class PlanOperacionalController extends Controller
         }
 
         $consultaTareas = TareaMovimiento::query()
+            ->when(! in_array($filtros['estado'] ?? null, ['completada', 'cancelada'], true), fn ($q) => ElegibilidadFolioPlanificador::tareas($q))
             ->whereHas('planOperacional.temporada', fn (Builder $consulta): Builder => $consulta->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
             ->whereHas('planOperacional', fn (Builder $consulta): Builder => $consulta->whereNotIn('estado', [
                 EstadoPlanOperacional::Pausado->value,
