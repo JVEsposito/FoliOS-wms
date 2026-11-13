@@ -44,6 +44,7 @@ use App\Services\Transiciones\ComandoTransicionOperacional;
 use App\Services\Transiciones\MotorTransicionesOperacionales;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Str;
 
 final class ServicioAdministracionPallets
 {
@@ -185,7 +186,7 @@ final class ServicioAdministracionPallets
                     }
                 } else {
                     $tarea->update(['estado' => EstadoTareaMovimiento::Cancelada, 'cancelada_at' => now(), 'cancelada_por_user_id' => $usuario->id,
-                        'motivo_cancelacion' => $datos['motivo'], 'version' => $tarea->version + 1]);
+                        'motivo_cancelacion' => Str::limit($datos['motivo'], 255, ''), 'version' => $tarea->version + 1]);
                     app(ServicioReservasTareasMovimiento::class)->liberarPasoObsoleto($tarea, $datos['motivo']);
                 }
                 app(ServicioSesionEstiba::class)->cerrarDeTarea($tarea->refresh());

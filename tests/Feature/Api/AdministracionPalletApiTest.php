@@ -14,7 +14,9 @@ use App\Models\CustodiaTemporalManiobra;
 use App\Models\Dispositivo;
 use App\Models\Folio;
 use App\Models\Movimiento;
+use App\Models\PlanOperacional;
 use App\Models\Posicion;
+use App\Models\ReservaTareaMovimiento;
 use App\Models\TareaMovimiento;
 use App\Models\TransicionOperacional;
 use App\Models\UbicacionActual;
@@ -217,6 +219,31 @@ class AdministracionPalletApiTest extends TestCase
         $this->postJson('/api/intervenciones-planificador/pallets/'.$otro->id, $datos)->assertOk();
         $this->postJson('/api/intervenciones-planificador/pallets/'.$otro->id, [...$datos, 'motivo' => 'Otro motivo con el mismo identificador.'])->assertConflict();
         $this->assertDatabaseCount('movimientos', 1);
+    }
+
+    public function test_libera_tarea_heredada_con_reserva_y_motivo_largo_sin_perder_la_auditoria(): void
+    {
+        $this->actingAs($this->admin, 'sanctum');
+        $f = $this->folio();
+        [, $p] = $this->camara();
+        $this->ocupar($f, $p);
+        $plan = PlanOperacional::create(['temporada_id' => $f->temporada_id, 'tipo' => 'reordenamiento_camara',
+            'estado' => 'en_ejecucion', 'prioridad' => 'normal', 'titulo' => 'Plan heredado', 'creado_por_user_id' => $this->admin->id, 'programado_at' => now()]);
+        $device = Dispositivo::create(['codigo' => 'TABLET-LEGACY-ADMIN', 'nombre' => 'Tablet']);
+        $t = TareaMovimiento::create(['plan_operacional_id' => $plan->id, 'folio_id' => $f->id, 'secuencia' => 1,
+            'estado' => 'asumida', 'prioridad' => 'normal', 'tipo_movimiento' => 'reubicacion', 'camara_origen_id' => $p->camara_id,
+            'posicion_origen_id' => $p->id, 'responsable_user_id' => $this->admin->id, 'dispositivo_id' => $device->id, 'asumida_at' => now(), 'version' => 1]);
+        $reserva = ReservaTareaMovimiento::create(['tarea_movimiento_id' => $t->id, 'bloqueo_tarea_id' => $t->id,
+            'estado' => 'activa', 'user_id' => $this->admin->id, 'dispositivo_id' => $device->id, 'reservada_at' => now(), 'renovada_at' => now(), 'vence_at' => now()->addMinutes(5)]);
+        $datos = $this->payload($f, null, 'liberar_tareas');
+        $datos['motivo'] = trim(str_repeat('Motivo administrativo extenso. ', 16));
+        $this->postJson('/api/intervenciones-planificador/pallets/'.$f->id, $datos)->assertOk();
+        $this->assertSame(EstadoTareaMovimiento::Cancelada, $t->refresh()->estado);
+        $this->assertLessThanOrEqual(255, mb_strlen($t->motivo_cancelacion));
+        $this->assertNull($reserva->refresh()->bloqueo_tarea_id);
+        $this->assertNull($reserva->bloqueo_posicion_id);
+        $this->assertSame($p->id, $f->refresh()->ubicacionActual->posicion_id);
+        $this->assertSame($datos['motivo'], TransicionOperacional::where('operacion_id', $datos['operacion_id'])->sole()->payload['motivo']);
     }
 
     private function folio(): Folio
