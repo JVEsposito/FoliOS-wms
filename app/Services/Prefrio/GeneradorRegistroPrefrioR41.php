@@ -21,9 +21,12 @@ class GeneradorRegistroPrefrioR41 extends PlantillaXlsx
 
     private const PRIMERA_FILA_PALLETS = 12;
 
-    /** Encabezado: celda de cada dato. */
+    /**
+     * Encabezado: celda de cada dato. «N° Prefrío» es el túnel y «N° Proceso» el código del
+     * proceso en FoliOS; los procesos de packing van en las observaciones.
+     */
     private const ENCABEZADO = [
-        'codigo' => 'D5', 'numero_proceso' => 'D6', 'pallets' => 'D9',
+        'tunel' => 'D5', 'codigo' => 'D6', 'pallets' => 'D9',
         'fecha' => 'J5', 'supervisor' => 'J6', 'servicio' => 'J7', 'especie' => 'J8', 'variedad' => 'J9',
         'hora_inicio' => 'U5', 'hora_inversion' => 'U6', 'hora_fin' => 'U7', 'tiempo_total' => 'U8',
     ];
@@ -122,7 +125,10 @@ class GeneradorRegistroPrefrioR41 extends PlantillaXlsx
             $this->texto($documento, $xpath, $columna.'38', $deshielo['hora'] ?? null);
         }
 
-        $notas = [sprintf('FoliOS %s · túnel %s · estado %s.', $registro['codigo'] ?? '', $registro['tunel'] ?? '', str_replace('_', ' ', (string) ($registro['estado'] ?? '')))];
+        $notas = array_values(array_filter([
+            filled($registro['numero_proceso'] ?? null) ? "Procesos packing: {$registro['numero_proceso']}." : null,
+            sprintf('Estado en FoliOS: %s.', str_replace('_', ' ', (string) ($registro['estado'] ?? ''))),
+        ]));
         foreach ($lecturas as $orden => $lectura) {
             // Lecturas de una sola temperatura (tablets anteriores al R-41).
             if ($lectura['sectores'] === null && $lectura['temperatura'] !== null) {

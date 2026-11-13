@@ -108,8 +108,11 @@ class RegistroPrefrioR41ApiTest extends TestCase
         $segunda = $zip->getFromName('xl/worksheets/sheet2.xml');
         $zip->close();
         $celda = fn (string $xml, string $ref): ?string => preg_match('/<c r="'.$ref.'"[^>]*>(?:<is><t[^>]*>(.*?)<\/t><\/is>|<v>(.*?)<\/v>)<\/c>/', $xml, $m) ? html_entity_decode(($m[1] ?? '') !== '' ? $m[1] : ($m[2] ?? '')) : null;
-        $this->assertSame($proceso['codigo'], $celda($hoja, 'D5'));
-        $this->assertSame('PK-77, PK-78', $celda($hoja, 'D6'));
+        // «N° Prefrío» es el túnel y «N° Proceso» el código PF; los procesos de packing van a observaciones.
+        $this->assertSame(TunelPrefrio::query()->findOrFail($proceso['tunel']['id'])->codigo, $celda($hoja, 'D5'));
+        $this->assertMatchesRegularExpression('/^TUN-\d{2}$/', $celda($hoja, 'D5'));
+        $this->assertSame($proceso['codigo'], $celda($hoja, 'D6'));
+        $this->assertStringStartsWith('Procesos packing: PK-77, PK-78. Estado en FoliOS:', $celda($hoja, 'A41'));
         $this->assertSame('0,5 °C', $celda($hoja, 'D7'));
         $this->assertSame('-1,5 °C', $celda($hoja, 'D8'));
         $this->assertSame('2', $celda($hoja, 'D9'));

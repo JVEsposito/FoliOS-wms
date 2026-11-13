@@ -248,11 +248,12 @@ del derecho. Son 12 temperaturas por lectura, entre -10 y 40 °C.
 - **Datos de la planilla.** La temperatura objetivo, el servicio, el supervisor y el jefe de
   frío se editan en la oficina (`PUT registro-r41`). Por defecto el supervisor es quien inició
   el proceso y el jefe de frío quien lo aprobó.
-- **Excel.** `registro-r41.xlsx` usa la plantilla oficial. El encabezado sale del proceso
-  (número de proceso de packing, pallets, especie, variedad, horas de inicio, inversión y
-  término, tiempo total). Los pallets se ubican por lado (impares a la izquierda, pares a la
-  derecha) y profundidad desde el fondo. También salen las lecturas, los deshielos y las
-  observaciones. Cada hoja lleva 10 profundidades y 10 lecturas; un túnel más profundo o un
+- **Excel.** `registro-r41.xlsx` usa la plantilla oficial. El encabezado sale del proceso:
+  «N° Prefrío» es el código del túnel (por ejemplo, TUN-03) y «N° Proceso» es el código del
+  proceso (PF-2026-000047). Los procesos de packing van en las observaciones. También salen
+  los pallets, la especie, la variedad, las horas de inicio, inversión y término y el tiempo
+  total. Los pallets se ubican por lado (impares a la izquierda, pares a la derecha) y
+  profundidad desde el fondo. También salen las lecturas, los deshielos y las observaciones. Cada hoja lleva 10 profundidades y 10 lecturas; un túnel más profundo o un
   proceso con más lecturas continúa en otra hoja con el mismo encabezado.
 
 ## Roles
