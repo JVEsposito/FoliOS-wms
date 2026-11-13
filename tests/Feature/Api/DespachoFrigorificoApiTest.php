@@ -289,6 +289,53 @@ class DespachoFrigorificoApiTest extends TestCase
         $this->travelBack();
     }
 
+    /**
+     * CAR-000036 (13-11-2026): programada por 20 pallets, el cliente liberó 14 y la operación
+     * partió. Oficina debe poder agregar los faltantes con la carga en curso, no sólo en borrador.
+     */
+    public function test_oficina_completa_una_carga_en_curso_con_los_pallets_que_faltaban(): void
+    {
+        $contexto = $this->crearContextoFrio(3);
+        [$primero, $segundo, $tercero] = $contexto['folios'];
+        $carga = $this->crearCargaPublicada($contexto['despachador'], $contexto['anden'], [$primero]);
+        $asignacion = $carga->asignacionesActuales()->firstOrFail();
+        $enviarAnden = fn (CargaFolio $asignacion) => $this->conToken($contexto['token'])
+            ->postJson("/api/cargas/asignaciones/{$asignacion->id}/enviar-anden", [
+                'operacion_id' => (string) Str::uuid(), 'anden_id' => $contexto['anden']->id,
+                'sesion_estiba_id' => $contexto['sesion']->id, 'version_camara_conocida' => $contexto['camara']->refresh()->version_plano,
+                'generado_dispositivo_at' => now()->toAtomString(),
+            ])->assertOk();
+        // El único pallet asignado ya salió de cámara: la carga figura despachada.
+        $enviarAnden($asignacion)->assertJsonPath('data.estado', 'despachada');
+
+        $version = $carga->refresh()->version;
+        $this->conToken($contexto['tokenOficina'])->postJson("/api/cargas/{$carga->id}/folios", [
+            'folios' => [$segundo->numero_folio, $tercero->numero_folio], 'version_esperada' => $version,
+        ])->assertOk()
+            ->assertJsonPath('data.estado', 'despacho_parcial')
+            ->assertJsonPath('data.total_folios', 3)
+            ->assertJsonPath('data.version', $version + 1);
+        $estados = CargaFolio::query()->where('carga_id', $carga->id)->get()->mapWithKeys(fn (CargaFolio $a) => [$a->folio_id => $a->estado->value]);
+        $this->assertSame(['en_anden', 'pendiente', 'pendiente'], [$estados[$primero->id], $estados[$segundo->id], $estados[$tercero->id]]);
+        // La tablet recibe la tarea de la cámara de origen para los pallets nuevos.
+        $this->assertDatabaseHas('tareas_carga', ['carga_id' => $carga->id, 'camara_origen_id' => $contexto['camara']->id, 'estado' => 'pendiente']);
+        $this->assertDatabaseHas('eventos_carga', ['carga_id' => $carga->id, 'folio_id' => $segundo->id, 'tipo' => 'folio_asignado']);
+        $evento = DB::table('eventos_carga')->where('carga_id', $carga->id)->where('folio_id', $tercero->id)->where('tipo', 'folio_asignado')->first();
+        $this->assertSame(['agregado_en_curso' => true, 'estado_carga_previo' => 'despachada'], array_intersect_key(json_decode($evento->datos, true), ['agregado_en_curso' => 1, 'estado_carga_previo' => 1]));
+
+        // Al salir todos vuelve a quedar despachada; cerrada ya no admite pallets nuevos.
+        foreach ($carga->asignacionesActuales()->where('estado', 'pendiente')->get() as $pendiente) {
+            $enviarAnden($pendiente);
+        }
+        $this->assertSame('despachada', $carga->refresh()->estado->value);
+        $this->conToken($contexto['tokenOficina'])->postJson("/api/cargas/{$carga->id}/cerrar-despacho", [
+            'operacion_id' => (string) Str::uuid(), 'patente' => 'AB-CD-12', 'conductor' => 'María Pérez', 'ocurrido_at' => now()->toAtomString(),
+        ])->assertOk()->assertJsonPath('data.estado', 'cerrada');
+        $this->conToken($contexto['tokenOficina'])->postJson("/api/cargas/{$carga->id}/folios", [
+            'folios' => ['FOLIO-INEXISTENTE'], 'version_esperada' => $carga->refresh()->version,
+        ])->assertStatus(422)->assertJsonPath('message', 'La carga ya está cerrada, cancelada o retornada y no admite cambios de pallets.');
+    }
+
     public function test_planifica_la_extraccion_vertical_y_salta_a_otra_banda_ante_una_incidencia(): void
     {
         $contexto = $this->crearContextoFrio(4);

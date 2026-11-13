@@ -465,6 +465,13 @@ class ServicioCarga
     }
 
     /**
+     * Agrega folios mientras la carga no esté cerrada, cancelada ni retornada.
+     *
+     * En planta es común que el cliente libere sólo parte de los pallets y mande el resto
+     * después: la operación avanza con lo asignado y oficina completa la orden sobre la marcha.
+     * Los pallets nuevos entran pendientes, generan su tarea y una carga ya despachada vuelve a
+     * despacho parcial hasta que salgan.
+     *
      * @param  array<int, string>  $numerosFolio
      */
     public function agregarFolios(
@@ -484,8 +491,10 @@ class ServicioCarga
             $instructivoId,
         ): Carga {
             $cargaBloqueada = $this->bloquearCarga($carga);
-            $this->asegurarEditable($cargaBloqueada);
+            $this->asegurarAjustable($cargaBloqueada);
             $this->asegurarVersion($cargaBloqueada, $versionEsperada);
+            $enCurso = $this->enCurso($cargaBloqueada);
+            $estadoPrevio = $cargaBloqueada->estado;
 
             $numeros = $this->normalizarNumerosFolio($numerosFolio);
             $instructivo = $this->instructivos->paraAsignacion($cargaBloqueada, $instructivoId, count($numeros));
@@ -595,6 +604,9 @@ class ServicioCarga
                 $asignados[] = $folio;
             }
 
+            if ($enCurso) {
+                $this->recalcularEstadoDespacho($cargaBloqueada);
+            }
             $this->incrementarVersion($cargaBloqueada, $usuario);
 
             foreach ($asignados as $folio) {
@@ -603,12 +615,11 @@ class ServicioCarga
                     TipoEventoCarga::FolioAsignado,
                     $usuario,
                     $folio,
+                    $enCurso ? ['agregado_en_curso' => true, 'estado_carga_previo' => $estadoPrevio->value] : [],
                 );
             }
 
-            if ($cargaBloqueada->estado === EstadoCarga::Pendiente) {
-                $this->servicioTareas->sincronizar($cargaBloqueada);
-            }
+            $this->sincronizarOperacion($cargaBloqueada, $usuario);
 
             return $cargaBloqueada->refresh();
         };
