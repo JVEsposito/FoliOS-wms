@@ -57,7 +57,7 @@
                                         <option value="cambio_folio">Cambiar folio (1 → 1)</option>
                                         <option value="division">Dividir bulto (1 → 2)</option><option value="reembalaje">Reembalaje · conversión de formatos y kilos</option>
                                     </select>
-                                    <small>El cambio y la división consumen completamente el folio original.</small>
+                                    <small>En división se distribuyen todas las cajas y puedes mantener el folio original en una de las dos salidas.</small>
                                 </label>
                                 <label>
                                     <span>Turno *</span>
@@ -108,7 +108,7 @@
                             </div>
                             <div class="repa-grid is-hidden" id="transformFields">
                                 <label>
-                                    <span>Nuevo folio 1 *</span>
+                                    <span>Folio resultado 1 *</span>
                                     <input name="resultado_1_numero" maxlength="80" autocomplete="off" placeholder="Escanear o escribir">
                                 </label>
                                 <label>
@@ -120,7 +120,7 @@
                                     <input name="resultado_1_objetivo" type="number" min="1" max="100000" value="120">
                                 </label>
                                 <label class="is-hidden" id="secondResultNumberField">
-                                    <span>Nuevo folio 2 *</span>
+                                    <span>Folio resultado 2 *</span>
                                     <input name="resultado_2_numero" maxlength="80" autocomplete="off" placeholder="Escanear o escribir">
                                 </label>
                                 <label class="is-hidden" id="secondResultTypeField">

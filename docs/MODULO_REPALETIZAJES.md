@@ -13,6 +13,22 @@ El operador elige una de dos estrategias:
 
 El número solo identifica el resultado. Cliente, especie, marca, condición térmica y demás especificaciones se derivan de los folios que aportaron cajas.
 
+## División de un bulto en dos
+
+En **Dividir bulto (1 → 2)** se distribuyen todas las cajas del origen entre
+dos salidas. En **Folio resultado 1** o **Folio resultado 2** puedes escribir
+o escanear el número original para conservarlo en ese bulto; el otro número
+debe ser nuevo. También se pueden escribir dos folios nuevos.
+
+El folio conservado mantiene su identidad y ubicación, con las cajas y la
+composición que se le asignaron. El otro resultado queda sin ubicación hasta
+registrar su ubicación física. Con dos folios nuevos, la primera salida
+hereda la ubicación del origen. Cada CSG, fecha y componente debe cuadrar
+completamente, y cada salida debe contener al menos una caja.
+
+La anulación restaura las cantidades, composición y ubicación originales y
+deja inactivo el nuevo folio, siempre que no haya operaciones posteriores.
+
 ## Reglas de compatibilidad
 
 Una repa se bloquea sin posibilidad de excepción cuando existe diferencia de:

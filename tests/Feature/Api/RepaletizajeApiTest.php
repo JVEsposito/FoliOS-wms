@@ -20,6 +20,7 @@ use App\Models\Repaletizaje;
 use App\Models\Temporada;
 use App\Models\User;
 use App\Services\Estiba\ServicioPlanesOperacionales;
+use App\Services\IntegridadOperacional\Reglas\ReglaBalanceRepaletizaje;
 use App\Services\Validacion\ServicioEtiquetasPt;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -1287,6 +1288,120 @@ class RepaletizajeApiTest extends TestCase
             'origenes' => [['folio_id' => $mixto->id, 'cantidad_aportada' => 60], ['folio_id' => $otro->id, 'cantidad_aportada' => 20]],
         ])->assertUnprocessable()->assertJsonPath('message', 'El folio informa MIX sin cantidades por componente. Regulariza el desglose antes de aportar solo parte de sus cajas.');
         $this->assertSame(120, $mixto->fresh()->datos_externos['cantidad_cajas']);
+    }
+
+    public static function salidasQueConservanFolio(): array
+    {
+        return ['primera pallet' => [0, 'pallet'], 'segunda pallet' => [1, 'pallet'],
+            'primera saldo' => [0, 'saldo'], 'segunda saldo' => [1, 'saldo']];
+    }
+
+    #[DataProvider('salidasQueConservanFolio')]
+    public function test_division_conserva_cualquiera_de_las_dos_salidas_y_su_ubicacion_y_se_puede_anular(int $indice, string $tipo): void
+    {
+        [$token, $temporada] = $this->contexto();
+        $origen = $this->folio($temporada, 'DIV-ORIGINAL', 120, tipo: TipoBulto::Pallet,
+            condicion: CondicionTermicaFolio::PrefrioAprobado, estado: EstadoOperacionalFolio::Disponible);
+        $origen->update(['datos_externos' => [...$origen->datos_externos, 'composicion' => [
+            ['csg' => '111', 'predio' => 'Predio A', 'fecha_embalaje' => '2026-08-10', 'cantidad_cajas' => 60],
+            ['csg' => '222', 'predio' => 'Predio B', 'fecha_embalaje' => '2026-08-11', 'cantidad_cajas' => 60],
+        ]]]);
+        $datosAntes = $origen->refresh()->datos_externos;
+        $identificador = $origen->identificador_externo;
+        $camara = Camara::create(['codigo' => 'DIV-CAM', 'nombre' => 'Cámara división']);
+        $posicion = Posicion::create(['camara_id' => $camara->id, 'banda' => 1, 'posicion' => 1, 'nivel' => 1, 'etiqueta' => 'B01-P01-N1']);
+        $ubicacionId = (string) Str::uuid();
+        DB::table('ubicaciones_actuales')->insert(['id' => $ubicacionId, 'folio_id' => $origen->id, 'camara_id' => $camara->id,
+            'posicion_id' => $posicion->id, 'ubicado_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
+        $lineas = $this->conToken($token)->getJson('/api/validacion/repaletizajes/folios/DIV-ORIGINAL')->assertOk()->json('composicion');
+        $resultados = [];
+        foreach ([0, 1] as $salida) {
+            $resultados[] = ['numero_folio' => $salida === $indice ? 'div-original' : 'DIV-NUEVO',
+                'tipo_resultado' => $salida === $indice ? $tipo : 'pallet',
+                'cantidad_objetivo' => $salida === $indice && $tipo === 'saldo' ? 120 : 60,
+                'cantidad_resultante' => 60, 'composicion' => [
+                    ['clave' => $lineas[0]['clave'], 'cantidad_cajas' => $salida === $indice ? 50 : 10],
+                    ['clave' => $lineas[1]['clave'], 'cantidad_cajas' => $salida === $indice ? 10 : 50],
+                ]];
+        }
+        $payload = ['turno' => 'A', 'operacion_id' => (string) Str::uuid(), 'modalidad' => 'division',
+            'origenes' => [['folio_id' => $origen->id, 'cantidad_aportada' => 120]], 'resultados' => $resultados];
+        $repa = $this->conToken($token)->postJson('/api/validacion/repaletizajes', $payload)->assertOk()
+            ->assertJsonPath('data.estrategia_folio', 'conservar')->json('data');
+        $this->assertDatabaseHas('repaletizajes', ['id' => $repa['id'], 'folio_conservado_id' => $origen->id]);
+        $this->assertSame($origen->id, $repa['resultados'][$indice]['folio']['id']);
+        $this->assertTrue($repa['resultados'][$indice]['hereda_ubicacion']);
+        $this->assertFalse($repa['resultados'][1 - $indice]['hereda_ubicacion']);
+        $this->assertTrue($origen->refresh()->activo);
+        $this->assertSame($tipo, $origen->tipo_bulto->value);
+        $this->assertSame(60, $origen->datos_externos['cantidad_cajas']);
+        $this->assertSame([50, 10], array_column($origen->datos_externos['composicion'], 'cantidad_cajas'));
+        $this->assertSame($identificador, $origen->identificador_externo);
+        $this->assertSame('validacion', $origen->origen_sistema);
+        $this->assertSame($ubicacionId, $origen->ubicacionActual->id);
+        $this->assertSame($posicion->id, $origen->ubicacionActual->posicion_id);
+        $nuevo = Folio::where('numero_folio', 'DIV-NUEVO')->sole();
+        $this->assertNull($nuevo->ubicacionActual);
+        $this->assertSame(EstadoOperacionalFolio::PendienteUbicacion, $nuevo->estado_operacional);
+        $this->assertSame([10, 50], array_column($nuevo->datos_externos['composicion'], 'cantidad_cajas'));
+        $this->assertSame(120, Folio::where('activo', true)->get()->sum(fn ($f) => $f->datos_externos['cantidad_cajas']));
+        $detalle = Repaletizaje::findOrFail($repa['id'])->detalles()->sole();
+        $this->assertTrue($detalle->es_folio_conservado);
+        $this->assertSame(120, $detalle->cajas_aportadas);
+        $this->assertSame(60, $detalle->cajas_despues);
+        $this->conToken($token)->postJson('/api/validacion/repaletizajes', $payload)->assertOk()->assertJsonPath('data.id', $repa['id']);
+        $this->assertDatabaseCount('folios', 2);
+        $this->assertDatabaseCount('repaletizajes', 1);
+        $this->assertSame(0, app(ReglaBalanceRepaletizaje::class)->evaluar()->count());
+        $supervisor = $this->token(RolUsuario::SupervisorFrio, 'SUP-DIV-ORIGINAL');
+        $this->conToken($supervisor)->postJson('/api/validacion/repaletizajes/'.$repa['id'].'/anular', [
+            'operacion_id' => (string) Str::uuid(), 'motivo' => 'Restaurar la división de prueba.',
+        ])->assertOk();
+        $this->assertSame($datosAntes, $origen->refresh()->datos_externos);
+        $this->assertSame(TipoBulto::Pallet, $origen->tipo_bulto);
+        $this->assertTrue($origen->activo);
+        $this->assertSame($posicion->id, $origen->ubicacionActual->posicion_id);
+        $this->assertSame($camara->id, $origen->ubicacionActual->camara_id);
+        $this->assertFalse($nuevo->refresh()->activo);
+        $this->assertSame(EstadoOperacionalFolio::Anulado, $nuevo->estado_operacional);
+    }
+
+    public static function divisionesInvalidasConOriginal(): array
+    {
+        return ['original repetido' => ['repetido', 422], 'otro existente' => ['existente', 409],
+            'cambio sin cambio' => ['cambio', 409], 'cajas extra' => ['desbalance', 422]];
+    }
+
+    #[DataProvider('divisionesInvalidasConOriginal')]
+    public function test_division_con_original_rechaza_duplicados_y_desbalances_sin_modificar_stock(string $caso, int $status): void
+    {
+        [$token, $temporada] = $this->contexto();
+        $origen = $this->folio($temporada, 'DIV-VALIDAR', 60, tipo: TipoBulto::Pallet);
+        $antes = $origen->refresh()->datos_externos;
+        $linea = $this->conToken($token)->getJson('/api/validacion/repaletizajes/folios/DIV-VALIDAR')->assertOk()->json('composicion.0.clave');
+        $primero = ['numero_folio' => 'DIV-VALIDAR', 'tipo_resultado' => 'saldo', 'cantidad_objetivo' => 120,
+            'cantidad_resultante' => 30, 'composicion' => [['clave' => $linea, 'cantidad_cajas' => 30]]];
+        $segundo = [...$primero, 'numero_folio' => $caso === 'repetido' ? 'DIV-VALIDAR' : 'DIV-OTRO'];
+        if ($caso === 'existente') {
+            $this->folio($temporada, 'DIV-OTRO', 10)->update(['activo' => false, 'estado_operacional' => 'anulado']);
+        }
+        if ($caso === 'desbalance') {
+            $segundo['cantidad_resultante'] = 31;
+            $segundo['composicion'][0]['cantidad_cajas'] = 31;
+        }
+        if ($caso === 'cambio') {
+            $primero['cantidad_resultante'] = 60;
+            unset($primero['composicion']);
+        }
+        $this->conToken($token)->postJson('/api/validacion/repaletizajes', [
+            'turno' => 'A', 'operacion_id' => (string) Str::uuid(), 'modalidad' => $caso === 'cambio' ? 'cambio_folio' : 'division',
+            'origenes' => [['folio_id' => $origen->id, 'cantidad_aportada' => 60]],
+            'resultados' => $caso === 'cambio' ? [$primero] : [$primero, $segundo],
+        ])->assertStatus($status);
+        $this->assertSame($antes, $origen->refresh()->datos_externos);
+        $this->assertTrue($origen->activo);
+        $this->assertDatabaseCount('repaletizajes', 0);
+        $this->assertDatabaseCount('folios', $caso === 'existente' ? 2 : 1);
     }
 
     private function conToken(string $token): self
