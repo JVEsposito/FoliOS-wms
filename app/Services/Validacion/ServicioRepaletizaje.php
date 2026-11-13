@@ -632,7 +632,14 @@ class ServicioRepaletizaje
                 throw new DomainException('Cada CSG y fecha debe distribuirse completamente entre los resultados.');
             }
         }
-        if (Folio::query()->whereIn('numero_folio', $resultados->pluck('numero_folio'))->lockForUpdate()->exists()) {
+        $indiceConservado = $payload['modalidad'] === 'division'
+            ? $resultados->search(fn (array $resultado): bool => $resultado['numero_folio'] === $folio->numero_folio)
+            : false;
+        $conserva = $indiceConservado !== false;
+        // Si se conserva, la ubicación física sigue al mismo folio, sea la salida 1 o la 2.
+        $indiceUbicacion = $conserva ? $indiceConservado : 0;
+        if (Folio::query()->whereIn('numero_folio', $resultados->pluck('numero_folio'))
+            ->when($conserva, fn ($q) => $q->whereKeyNot($folio->id))->lockForUpdate()->exists()) {
             throw new ConflictoOperacion('Uno de los números de folio resultantes ya existe.');
         }
 
@@ -645,28 +652,33 @@ class ServicioRepaletizaje
             'composicion_aportada' => $composicionAntes->values()->all(),
             'especificaciones' => $this->especificaciones($folio),
         ]];
+        $fechaProceso = app(FechaProcesoEtiquetaPt::class)->deFolio($folio);
         $foliosResultado = $resultados->map(function (array $resultado, int $indice) use (
             $folio,
             $codigo,
             $datos,
             $genealogia,
+            $snapshotAntes,
+            $fechaProceso,
+            $indiceConservado,
+            $indiceUbicacion,
         ): array {
-            $datosExternos = array_merge($folio->datos_externos ?? [], [
+            $datosExternos = array_merge($snapshotAntes['atributos']['datos_externos'] ?? [], [
                 'cantidad_cajas' => $resultado['cantidad_resultante'],
                 'composicion' => $resultado['composicion'],
                 'repaletizaje_codigo' => $codigo,
                 'genealogia_repaletizaje' => $genealogia,
             ]);
             $this->actualizarResumenComposicion($datosExternos);
-            $especificaciones = $this->especificacionesDeComposicion($this->especificaciones($folio), collect($resultado['composicion']));
-            $nuevo = Folio::create([
+            $especificaciones = $this->especificacionesDeComposicion($snapshotAntes['especificaciones'], collect($resultado['composicion']));
+            $atributos = [
                 'temporada_id' => $folio->temporada_id,
                 'numero_folio' => $resultado['numero_folio'],
                 'tipo_bulto' => TipoBulto::from($resultado['tipo_resultado']),
                 'condicion_sag_id' => $folio->condicion_sag_id,
                 'estado_operacional' => $this->estadoResultado(
                     $folio->condicion_termica,
-                    $indice === 0 && $folio->ubicacionActual !== null,
+                    $indice === $indiceUbicacion && $folio->ubicacionActual !== null,
                 ),
                 'condicion_termica' => $folio->condicion_termica,
                 'habilitacion_almacenamiento' => $this->habilitacionResultado(
@@ -676,18 +688,26 @@ class ServicioRepaletizaje
                 'habilitado_almacenamiento_at' => $folio->habilitado_almacenamiento_at,
                 'habilitado_almacenamiento_por_user_id' => $folio->habilitado_almacenamiento_por_user_id,
                 'fecha_ingreso' => $folio->fecha_ingreso,
-                'fecha_proceso_pt' => app(FechaProcesoEtiquetaPt::class)->deFolio($folio),
+                'fecha_proceso_pt' => $fechaProceso,
                 'activo' => true,
                 'variedad' => $especificaciones['variedad'],
                 'calibre' => $especificaciones['calibre'],
                 'marca' => $especificaciones['marca'],
                 'exportadora' => $folio->exportadora,
-                'origen_sistema' => 'repaletizaje',
-                'identificador_externo' => $datos['operacion_id'].':'.($indice + 1),
-                'estado_integracion' => EstadoIntegracionFolio::NoVinculado,
                 'datos_externos' => $datosExternos,
-            ]);
-            $this->heredarAutorizacionesSag($folio, $nuevo);
+            ];
+            if ($indice === $indiceConservado) {
+                $folio->update($atributos);
+                $nuevo = $folio;
+            } else {
+                $nuevo = Folio::create([
+                    ...$atributos,
+                    'origen_sistema' => 'repaletizaje',
+                    'identificador_externo' => $datos['operacion_id'].':'.($indice + 1),
+                    'estado_integracion' => EstadoIntegracionFolio::NoVinculado,
+                ]);
+                $this->heredarAutorizacionesSag($folio, $nuevo);
+            }
 
             return [...$resultado, 'folio' => $nuevo];
         });
@@ -712,9 +732,9 @@ class ServicioRepaletizaje
             'codigo' => $codigo,
             'modalidad' => $payload['modalidad'],
             'tipo_resultado' => $payload['modalidad'] === 'division' ? 'division' : $resultados->first()['tipo_resultado'],
-            'estrategia_folio' => 'nuevo',
+            'estrategia_folio' => $conserva ? 'conservar' : 'nuevo',
             'folio_resultante_id' => $primero->id,
-            'folio_conservado_id' => null,
+            'folio_conservado_id' => $conserva ? $folio->id : null,
             'cantidad_objetivo' => null,
             'cantidad_resultante' => $cantidadAntes,
             'condicion_termica' => $folio->condicion_termica->value,
@@ -737,7 +757,7 @@ class ServicioRepaletizaje
                 'tipo_resultado' => $resultado['tipo_resultado'],
                 'cantidad_objetivo' => $resultado['cantidad_objetivo'],
                 'cantidad_resultante' => $resultado['cantidad_resultante'],
-                'hereda_ubicacion' => $indice === 0,
+                'hereda_ubicacion' => $indice === $indiceUbicacion,
                 'snapshot' => ['composicion' => $resultado['composicion']],
             ]);
             $externos = $resultado['folio']->datos_externos;
@@ -745,28 +765,30 @@ class ServicioRepaletizaje
             $resultado['folio']->update(['datos_externos' => $externos]);
         }
 
-        if ($folio->ubicacionActual) {
-            $folio->ubicacionActual->update(['folio_id' => $primero->id]);
+        if (! $conserva) {
+            if ($folio->ubicacionActual) {
+                $folio->ubicacionActual->update(['folio_id' => $primero->id]);
+            }
+            $externosOrigen = $folio->datos_externos ?? [];
+            $externosOrigen['cantidad_cajas'] = 0;
+            $externosOrigen['composicion'] = [];
+            $externosOrigen['consumido_en_repaletizaje'] = $codigo;
+            $folio->update([
+                'tipo_bulto' => TipoBulto::Saldo,
+                'estado_operacional' => EstadoOperacionalFolio::Agotado,
+                'activo' => false,
+                'datos_externos' => $externosOrigen,
+            ]);
         }
-        $externosOrigen = $folio->datos_externos ?? [];
-        $externosOrigen['cantidad_cajas'] = 0;
-        $externosOrigen['composicion'] = [];
-        $externosOrigen['consumido_en_repaletizaje'] = $codigo;
-        $folio->update([
-            'tipo_bulto' => TipoBulto::Saldo,
-            'estado_operacional' => EstadoOperacionalFolio::Agotado,
-            'activo' => false,
-            'datos_externos' => $externosOrigen,
-        ]);
         $folio->refresh();
         RepaletizajeDetalle::create([
             'repaletizaje_id' => $repa->id,
             'folio_origen_id' => $folio->id,
             'orden' => 1,
-            'es_folio_conservado' => false,
+            'es_folio_conservado' => $conserva,
             'cajas_antes' => $cantidadAntes,
             'cajas_aportadas' => $cantidadAntes,
-            'cajas_despues' => 0,
+            'cajas_despues' => $conserva ? $resultados[$indiceConservado]['cantidad_resultante'] : 0,
             'tipo_bulto_antes' => $snapshotAntes['atributos']['tipo_bulto'],
             'tipo_bulto_despues' => $folio->tipo_bulto->value,
             'estado_antes' => $snapshotAntes['atributos']['estado_operacional'],

@@ -509,7 +509,7 @@ async function submitTransformation(modality) {
     const count = modality === 'division' ? 2 : 1;
     const numbers = Array.from({ length: count }, (_, index) => normalized(formValue(`resultado_${index + 1}_numero`)));
     if (numbers.some((number) => !number) || new Set(numbers).size !== numbers.length) {
-        elements.repaError.textContent = 'Define folios nuevos y diferentes para cada resultado.'; return;
+        elements.repaError.textContent = 'Define folios diferentes para cada resultado. En división, uno puede ser el original.'; return;
     }
     const results = Array.from({ length: count }, (_, index) => {
         const output = index + 1;
