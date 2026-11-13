@@ -434,6 +434,10 @@
 }
 
 .estiba-office-avatar:hover { border-color: var(--shell-focus); }
+.estiba-office-shell .estiba-office-communications { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 40px; height: 40px; padding: 0 10px; border: 1px solid var(--shell-line); border-radius: 6px; background: var(--shell-navy-hover); color: #ffffff; font: 600 12px/1 var(--font-sans, sans-serif); cursor: pointer; }
+.estiba-office-shell .estiba-office-communications[hidden] { display: none; }
+.estiba-office-communications [data-communications-badge] { padding: 3px 5px; border-radius: 10px; background: var(--shell-focus); color: var(--shell-navy); }
+@media (max-width: 1199px) { .estiba-office-communications-label { display: none; } }
 .estiba-office-avatar:focus-visible { outline: 3px solid var(--shell-focus); outline-offset: 3px; }
 .estiba-office-avatar img { width: 100%; height: 100%; object-fit: cover; }
 .estiba-office-profile {

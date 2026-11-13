@@ -1,0 +1,80 @@
+.comms-dialog { width: min(1120px, calc(100vw - 24px)); height: min(820px, calc(100dvh - 24px)); max-width: none; max-height: none; box-sizing: border-box; padding: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--text-strong); font: 14px/1.4 var(--font-sans, sans-serif); overflow: hidden; }
+.comms-dialog[open] { display: grid; grid-template-rows: auto auto auto minmax(0, 1fr); }
+.comms-dialog::backdrop { background: var(--overlay, rgb(0 0 0 / .65)); }
+.comms-dialog *, .comms-dialog *::before, .comms-dialog *::after { box-sizing: border-box; }
+.comms-dialog [hidden] { display: none !important; }
+.comms-dialog button { min-height: 40px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--raised); color: var(--text-strong); cursor: pointer; font: inherit; }
+.comms-dialog button:hover { background: var(--surface-hover); }
+.comms-dialog button:disabled { opacity: .5; cursor: default; }
+.comms-dialog button[aria-pressed="true"], .comms-dialog button[aria-current="true"], .comms-dialog button[type="submit"] { border-color: var(--cyan); background: var(--surface-selected); }
+.comms-dialog :is(button, input, textarea):focus-visible { outline: 3px solid var(--cyan-light); outline-offset: 2px; }
+.comms-dialog input:not([type="checkbox"]), .comms-dialog textarea { display: block; width: 100%; max-width: 100%; min-width: 0; margin: 5px 0 10px; padding: 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--input-bg); color: var(--text-strong); font: inherit; }
+.comms-dialog textarea { resize: vertical; }
+.comms-dialog label { display: block; font-weight: 600; }
+.comms-dialog h2, .comms-dialog h3 { margin: 0; color: var(--text-strong); font-weight: 750; }
+.comms-dialog h2 { font-size: 20px; }
+.comms-dialog h3 { font-size: 16px; }
+.comms-dialog small { color: var(--text-secondary); }
+.comms-header, .comms-tabs, .comms-conversation-heading, .comms-stickers > header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.comms-tabs { justify-content: flex-start; padding-block: 8px; }
+.comms-tabs [data-comms-refresh] { margin-left: auto; }
+.comms-status { min-height: 18px; margin: 0; padding: 4px 18px; font-size: 12px; color: var(--text-secondary); }
+.comms-status[data-error="true"] { color: var(--danger-text); }
+.comms-workspace { display: grid; grid-template-columns: 260px minmax(0, 1fr); min-height: 0; overflow: hidden; }
+.comms-rail { overflow-y: auto; border-right: 1px solid var(--line); padding: 12px; background: var(--surface-muted); }
+.comms-rail > button { width: 100%; margin-bottom: 8px; }
+.comms-rail :is([data-conversation-list], [data-private-users], [data-mail-list]) { display: grid; gap: 5px; margin-top: 10px; }
+.comms-row { display: block; width: 100%; text-align: left; overflow-wrap: anywhere; }
+.comms-row > :is(strong, small) { display: block; }
+.comms-row small { font-size: 12px; font-weight: 400; }
+.comms-row.is-unread strong::before { content: '● '; color: var(--cyan-light); }
+.comms-chat-main { display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto auto; min-width: 0; min-height: 0; position: relative; }
+.comms-conversation-heading { padding: 10px 16px; }
+.comms-messages { overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; min-height: 100px; overscroll-behavior: contain; }
+.comms-message { width: fit-content; max-width: 86%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--raised); overflow-wrap: anywhere; }
+.comms-message.is-mine { align-self: flex-end; background: var(--surface-selected); border-color: var(--cyan); }
+.comms-message header { font-size: 12px; font-weight: 700; }
+.comms-message p, .comms-mail-text { white-space: pre-wrap; overflow-wrap: anywhere; margin: 5px 0; }
+.comms-message time { display: block; font-size: 10px; color: var(--text-secondary); }
+.comms-message img { display: block; width: 160px; height: 160px; max-width: 100%; object-fit: contain; margin: 6px 0; }
+.comms-chat-compose { border-top: 1px solid var(--line); padding: 10px 16px; }
+.comms-chat-compose > div:last-child { display: flex; justify-content: space-between; gap: 8px; }
+.comms-chat-compose [data-chat-sticker] { display: flex; align-items: center; gap: 8px; }
+.comms-chat-compose [data-chat-sticker] img { width: 48px; height: 48px; object-fit: contain; }
+.comms-stickers { max-height: 330px; overflow-y: auto; padding: 10px; border-top: 1px solid var(--line); background: var(--panel); }
+.comms-stickers > header { padding: 0 0 8px; }
+.comms-stickers form { margin-top: 8px; }
+.comms-sticker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 8px; margin: 10px 0; }
+.comms-sticker-grid article { min-width: 0; }
+.comms-sticker-grid button { width: 100%; padding: 5px; }
+.comms-sticker-grid img { display: block; width: 72px; height: 72px; max-width: 100%; object-fit: contain; margin: auto; }
+.comms-sticker-grid small { display: block; overflow-wrap: anywhere; font-size: 11px; }
+.comms-sticker-grid [data-sticker-hide] { min-height: 28px; font-size: 11px; margin-top: 4px; }
+.comms-folders { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; margin: 8px 0 12px; }
+.comms-folders button { padding: 6px 2px; font-size: 11px; }
+.comms-pagination { display: flex; align-items: center; justify-content: space-between; gap: 3px; margin-top: 12px; font-size: 11px; }
+.comms-pagination button { padding: 6px; font-size: 11px; }
+.comms-mail-main { min-width: 0; overflow-y: auto; padding: 18px; }
+.comms-mail-main h3 { font-size: 20px; margin-bottom: 10px; overflow-wrap: anywhere; }
+.comms-mail-main [data-mail-detail] small { display: block; }
+.comms-mail-text { margin-top: 24px; padding-top: 15px; border-top: 1px solid var(--line); }
+.comms-compose-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.comms-recipient-options { max-height: 150px; overflow-y: auto; margin-bottom: 12px; }
+.comms-recipient-options label { padding: 7px; font-weight: 400; }
+.comms-recipient-chips { display: flex; flex-wrap: wrap; gap: 5px; margin: 10px 0; }
+.comms-recipient-chips button { min-height: 30px; font-size: 12px; }
+@media (max-width: 700px) {
+    .comms-dialog { width: calc(100vw - 12px); height: calc(100dvh - 12px); border-radius: 8px; }
+    .comms-workspace { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
+    .comms-rail { max-height: 155px; border-right: 0; border-bottom: 1px solid var(--line); }
+    .comms-rail [data-conversation-list] { display: flex; overflow-x: auto; margin-top: 4px; }
+    .comms-rail [data-conversation-list] button { min-width: 140px; max-width: 200px; }
+    .comms-rail [data-mail-list] { display: flex; overflow-x: auto; }
+    .comms-rail [data-mail-list] button { min-width: 190px; max-width: 240px; }
+    .comms-rail [data-private-picker]:not([hidden]) { padding-bottom: 12px; }
+    .comms-dialog:has([data-private-picker]:not([hidden])) .comms-rail { max-height: 300px; }
+    .comms-mail-main { padding: 12px; }
+    .comms-message { max-width: 94%; }
+    .comms-messages { padding: 10px; }
+    .comms-stickers { max-height: 220px; }
+}

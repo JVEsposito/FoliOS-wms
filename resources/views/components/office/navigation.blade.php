@@ -158,6 +158,9 @@
             <x-estiba.icon name="refresh" />
         </button>
         <div class="estiba-office-tools">
+            <button type="button" class="estiba-office-communications" data-communications-open aria-label="Abrir chat y correo" title="Chat y correo interno" aria-haspopup="dialog" aria-controls="communicationsDialog" hidden>
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 4h16v12H9l-5 4V4Z"/><path d="M8 8h8M8 12h6"/></svg><span class="estiba-office-communications-label">Chat / correo</span><span data-communications-badge hidden>•</span>
+            </button>
             @if (filled($serverLabel))
                 <span class="estiba-office-server" data-office-server>{{ $serverLabel }}</span>
             @endif
@@ -263,6 +266,8 @@
             <strong>FRÍO QUE<br>MANTIENE VALOR</strong><small>Versión {{ config('app.product_version') }}</small>
         </div>
     </aside>
+
+    @include('office.partials.communications')
 
     <dialog id="officeProfileDialog" class="estiba-office-profile" aria-labelledby="officeProfileTitle" aria-describedby="officeProfileHelp">
         <form data-profile-form>
