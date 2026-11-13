@@ -87,6 +87,8 @@ test('administrador designa destino, reintenta sin duplicados, corrige ubicació
         await form.getByRole('button', { name: 'Registrar intervención', exact: true }).click();
         assert.equal(state.calls.length, 2);
         await form.locator('[name="confirmacion_fisica"]').check();
+        const checkbox = await form.locator('[name="confirmacion_fisica"]').boundingBox();
+        assert.ok(checkbox.width <= 24 && checkbox.height <= 24);
         await form.getByRole('button', { name: 'Registrar intervención', exact: true }).click();
         await page.waitForFunction(() => document.querySelector('[data-admin-pallet-form] textarea')?.value === '');
         assert.equal(state.calls.at(-1).accion, 'corregir_ubicacion'); assert.equal(state.calls.at(-1).confirmacion_fisica, true);
