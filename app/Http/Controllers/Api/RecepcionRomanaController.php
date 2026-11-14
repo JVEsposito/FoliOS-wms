@@ -30,6 +30,7 @@ use App\Models\Temporada;
 use App\Services\Envases\ServicioPrestamoInternoEnvases;
 use App\Services\Romana\GeneradorAvisoReciboPdf;
 use App\Services\Romana\ObservacionConteoRecepcion;
+use App\Services\Romana\ProductoresRecepcion;
 use App\Services\Romana\ServicioAjusteCuentaEnvasesRecepcion;
 use App\Services\Romana\ServicioAnulacionRecepcionRomana;
 use App\Services\Romana\ServicioCorreccionIntegralRecepcion;
@@ -270,6 +271,7 @@ class RecepcionRomanaController extends Controller
             'destare' => ['nullable', 'array'], 'destare.peso_tara' => ['required_with:destare', 'numeric', 'gt:0', 'max:100000'],
             'destare.modo_salida_envases' => ['required_with:destare', Rule::in(['mismos', 'diferentes', 'vacio'])],
             'destare.numero_guia_salida' => ['nullable', 'string', 'max:80'],
+            'destare.salida_productor_csg' => ['nullable', 'string', 'max:40'],
             'destare.salida_envases' => ['sometimes', 'array'], 'destare.salida_envases.*.tipo_envase' => ['required', Rule::in($tipos)],
             'destare.salida_envases.*.cantidad' => ['required', 'integer', 'min:0', 'max:100000'],
             'destare.taras_envases' => ['sometimes', 'array'], 'destare.taras_envases.*.tipo_envase' => ['required', Rule::in($tipos)],
@@ -454,6 +456,10 @@ class RecepcionRomanaController extends Controller
             'numero_guia_despacho' => $recepcion->numero_guia_despacho,
             'guias' => app(ServicioGuiasRecepcionRomana::class)->datos($recepcion),
             'numero_guia_salida' => $recepcion->numero_guia_salida,
+            // Camión con varios CSG: productor que recibe los envases del destare, y los CSG para elegirlo.
+            'salida_productor' => $recepcion->salida_productor_snapshot,
+            ...($conEventos ? ['productores_csg' => array_map(fn (array $p): array => ['codigo' => $p['codigo'], 'nombre' => $p['nombre']],
+                app(ProductoresRecepcion::class)->opciones($recepcion))] : []),
             'modo_salida_envases' => $recepcion->modo_salida_envases
                 ?? ($recepcion->estado === EstadoRecepcionRomana::Cerrado && ! $esPesajeEnvases && ! $esSoloEnvases
                     ? ($recepcion->salida_sin_envases ? 'vacio' : 'mismos') : null),

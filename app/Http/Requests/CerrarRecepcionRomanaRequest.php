@@ -48,6 +48,8 @@ class CerrarRecepcionRomanaRequest extends FormRequest
                 Rule::requiredIf($requiereDestare && $this->input('modo_salida_envases') !== 'vacio'),
                 'nullable', 'string', 'max:80',
             ],
+            // Camión con varios CSG: código del productor que recibe los envases que salen.
+            'salida_productor_csg' => ['nullable', 'string', 'max:40'],
             'salida_envases' => ['nullable', 'array', 'max:'.count(TipoEnvaseRomana::cases())],
             'salida_envases.*.tipo_envase' => ['required', 'distinct', Rule::enum(TipoEnvaseRomana::class)],
             'salida_envases.*.cantidad' => ['required', 'integer', 'min:0', 'max:100000'],

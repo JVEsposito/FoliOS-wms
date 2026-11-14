@@ -7,6 +7,7 @@ use App\Models\Cliente;
 use App\Models\CsgValidacion;
 use App\Models\EspecieValidacion;
 use App\Models\LoteMateriaPrima;
+use App\Models\ProductorCsg;
 use App\Models\RecepcionRomana;
 use App\Models\Temporada;
 use App\Models\User;
@@ -16,6 +17,13 @@ use Illuminate\Support\Str;
 /** Recepción validada para las correcciones de administración. Requiere PreparaInspeccionesEnvases. */
 trait PreparaRecepcionValidadaCorregible
 {
+    protected function productorCsg(string $codigo, string $nombre): ProductorCsg
+    {
+        return ProductorCsg::create(['codigo' => $codigo, 'razon_social' => $nombre, 'predio' => 'Fundo de prueba', 'estado_sag' => 'activo',
+            'tipo_codigo' => 'CSG', 'especies' => [], 'fuente_url' => 'https://example.test/sag', 'primera_verificacion_at' => now(),
+            'ultima_verificacion_at' => now(), 'ultima_consulta_user_id' => User::factory()->create()->id, 'respuesta_hash' => str_repeat('a', 64)]);
+    }
+
     protected function comoAdministrador(): static
     {
         return $this->actingAs(User::factory()->create(['rol' => RolUsuario::Administrador, 'activo' => true]), 'sanctum');
@@ -33,9 +41,10 @@ trait PreparaRecepcionValidadaCorregible
 
     /**
      * Camión con dos guías (1511 y 1512), validado en dos segmentos y con destare cerrado: 4 bins y 97 totes,
-     * neto 18.000 kg. Con `$dosCsg` el segundo segmento es de otro productor (CSG-CORR-B).
+     * neto 18.000 kg. Con `$dosCsg` el segundo segmento es de otro productor (CSG-CORR-B) y el destare entrega
+     * los envases a `$productorSalida`.
      */
-    protected function recepcionCerradaConDosGuias(bool $cerrar = true, bool $dosCsg = false): array
+    protected function recepcionCerradaConDosGuias(bool $cerrar = true, bool $dosCsg = false, string $productorSalida = 'CSG-CORR'): array
     {
         $this->actingAs(User::factory()->create(['rol' => RolUsuario::OperadorRomana]), 'sanctum');
         $temporada = Temporada::where('activa', true)->firstOrFail();
@@ -49,8 +58,17 @@ trait PreparaRecepcionValidadaCorregible
             'patente_camion' => 'ABCD12', 'tipo_camion' => 'termo', 'rut_conductor' => '12.345.678-5',
             'nombre_conductor' => 'Conductor de prueba', 'peso_bruto' => 28000])->assertCreated()->json('data');
         $this->postJson("/api/romana/recepciones/{$r['id']}/confirmar-ingreso", ['operacion_id' => (string) Str::uuid()])->assertOk();
-        $csg = CsgValidacion::create(['temporada_id' => $temporada->id, 'codigo' => 'CSG-CORR', 'activo' => true]);
-        $otro = $dosCsg ? CsgValidacion::create(['temporada_id' => $temporada->id, 'codigo' => 'CSG-CORR-B', 'activo' => true]) : $csg;
+        // Con dos CSG, cada uno con su productor asociado al cliente: así la salida puede ir a uno de ellos.
+        $productores = $dosCsg ? [$this->productorCsg('CSG-CORR', 'Agrícola Uno'), $this->productorCsg('CSG-CORR-B', 'Agrícola Dos')] : [];
+        foreach ($productores as $productor) {
+            $usuario = User::factory()->create();
+            $cliente->productoresCsg()->attach($productor->id, ['id' => (string) Str::uuid(), 'activo' => true,
+                'asociado_por_user_id' => $usuario->id, 'actualizado_por_user_id' => $usuario->id]);
+        }
+        $csg = CsgValidacion::create(['temporada_id' => $temporada->id, 'codigo' => 'CSG-CORR', 'activo' => true,
+            'productor_csg_id' => $productores[0]->id ?? null]);
+        $otro = $dosCsg ? CsgValidacion::create(['temporada_id' => $temporada->id, 'codigo' => 'CSG-CORR-B', 'activo' => true,
+            'productor_csg_id' => $productores[1]->id]) : $csg;
         $variedad = VariedadValidacion::create(['especie_validacion_id' => $especie->id, 'nombre' => 'Santina', 'activo' => true]);
         $this->actingAs(User::factory()->create(['rol' => RolUsuario::ValidadorMp]), 'sanctum');
         $v = $this->postJson("/api/validacion-mp/recepciones/{$r['id']}/tomar", ['operacion_id' => (string) Str::uuid()])->assertOk()->json('data');
@@ -69,6 +87,7 @@ trait PreparaRecepcionValidadaCorregible
         $cierre = "/api/romana/recepciones/{$r['id']}/cerrar";
         $this->postJson($cierre, $this->payloadConInspeccionRc02($cierre, ['operacion_id' => (string) Str::uuid(),
             'modo_salida_envases' => 'mismos', 'numero_guia_salida' => 'GS-CORR-1',
+            ...($dosCsg ? ['salida_productor_csg' => $productorSalida] : []),
             'taras_envases' => [['tipo_envase' => 'bins', 'tara_unitaria' => 40], ['tipo_envase' => 'totes', 'tara_unitaria' => 2]],
             'peso_tara' => 10000, 'tipo_envase_calculo_neto' => 'bins']))->assertOk()->assertJsonPath('data.peso_neto', 18000);
 

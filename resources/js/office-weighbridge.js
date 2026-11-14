@@ -432,7 +432,7 @@ function renderDetail(reception) {
         fact('INGRESO', formatDate(reception.ingreso_at)), fact(reception.tipo_recepcion === 'solo_envases' ? 'CIERRE DOCUMENTAL' : reception.pesaje_envases ? 'CIERRE DE PESAJE' : 'SALIDA / DESTARE', formatDate(reception.salida_at)), fact('TEMPORADA GLOBAL', `${reception.temporada.nombre} · ${reception.temporada.codigo}`), fact('CLIENTE', reception.cliente.nombre), fact('TIPO RECEPCIÓN', label(reception.tipo_recepcion)), fact('SERVICIO / CONCEPTO', reception.tipo_recepcion === 'solo_envases' ? label(reception.concepto_envases) : label(reception.tipo_servicio)), fact('GUÍAS', guideNumbers(reception)),
         ...(reception.devolucion ? [fact('DEVOLUCIÓN DE PRODUCTOR', [`CSG ${reception.devolucion.productor?.codigo || ''}`, reception.devolucion.productor?.nombre, reception.devolucion.guia_salida ? `devuelve guía ${reception.devolucion.guia_salida}` : ''].filter(Boolean).join(' · '))] : []),
         ...(reception.destare_pendiente_validacion ? [fact('DESTARE', 'Espera la Validación MP completa en la PDA')] : []),
-        ...(reception.modo_salida_envases ? [fact('SALIDA ENVASES', label(reception.modo_salida_envases)), fact('GUÍA DE SALIDA', reception.numero_guia_salida || 'Sin salida'), fact('ENVASES RETIRADOS', (reception.salida_envases || []).filter((x) => x.cantidad > 0).map((x) => `${x.cantidad} ${label(x.tipo_envase)}`).join(' · ') || 'Ninguno')] : []),
+        ...(reception.modo_salida_envases ? [fact('SALIDA ENVASES', label(reception.modo_salida_envases)), fact('GUÍA DE SALIDA', reception.numero_guia_salida || 'Sin salida'), ...(reception.salida_productor?.codigo ? [fact('ENTREGADOS A', `CSG ${reception.salida_productor.codigo}${reception.salida_productor.nombre ? ` · ${reception.salida_productor.nombre}` : ''}`)] : []), fact('ENVASES RETIRADOS', (reception.salida_envases || []).filter((x) => x.cantidad > 0).map((x) => `${x.cantidad} ${label(x.tipo_envase)}`).join(' · ') || 'Ninguno')] : []),
         ...(plantBinsFact(reception) ? [fact('BINS DE PLANTA', plantBinsFact(reception))] : []),
         fact('CAMIÓN', reception.patente_camion), fact('TIPO DE CAMIÓN', reception.tipo_camion ? label(reception.tipo_camion) : 'No informado'), fact('CARRO', reception.patente_carro || 'No informado'), fact('CONDUCTOR', reception.nombre_conductor), fact('RUT', reception.rut_conductor), fact('ENVASES DECLARADOS', envasesLabel(reception)), fact('VALIDACIÓN MP', label(reception.estado_validacion_mp)),
         ...weighingFacts,
@@ -922,6 +922,10 @@ function openTareDialog(correcting) {
     byId('tareCountNote').hidden = countNotes.length === 0;
     byId('tareCountNoteList').innerHTML = countNotes.map((line) => `<li>${escapeHtml(line)}</li>`).join('');
     elements.outboundContainerTareList.innerHTML = state.selected.envases.map((item) => exitRow(item.tipo_envase, item.cantidad_validada, item.tara_unitaria_salida)).join('');
+    // Camión con varios CSG: Romana elige a qué productor se entregan los envases que salen.
+    const producers = state.selected.productores_csg || [];
+    elements.tareForm.elements.salida_productor_csg.innerHTML = `<option value="">Seleccionar…</option>${producers.map((p) => `<option value="${escapeHtml(p.codigo)}">CSG ${escapeHtml(p.codigo)}${p.nombre ? ` · ${escapeHtml(p.nombre)}` : ''}</option>`).join('')}`;
+    elements.tareForm.elements.salida_productor_csg.value = correcting ? (state.selected.salida_productor?.codigo || '') : '';
     elements.tareForm.elements.peso_tara.value = correcting ? state.selected.peso_tara : '';
     elements.tareForm.elements.peso_tara.readOnly = correcting;
     elements.tareForm.elements.tipo_envase_calculo_neto.disabled = correcting;
@@ -977,6 +981,9 @@ function updateExitMode() {
     const editable = mode === 'diferentes';
     elements.outboundGuideField.classList.toggle('is-hidden', mode === 'vacio');
     elements.tareForm.elements.numero_guia_salida.required = mode !== 'vacio';
+    const chooseProducer = mode !== 'vacio' && (state.selected?.productores_csg || []).length > 1;
+    byId('outboundProducerField').classList.toggle('is-hidden', !chooseProducer);
+    elements.tareForm.elements.salida_productor_csg.required = chooseProducer;
     elements.outboundExtraField.classList.toggle('is-hidden', !editable);
     exitTypes().forEach((row) => {
         const field = row.querySelector('[data-exit-quantity]');
@@ -1060,6 +1067,7 @@ elements.tareForm.addEventListener('submit', async (event) => {
         tipo_envase: row.dataset.exitRow, tara_unitaria: Number(row.querySelector('[data-container-tare]').value),
     }));
     if (data.modo_salida_envases === 'vacio') data.numero_guia_salida = null;
+    if (!elements.tareForm.elements.salida_productor_csg.required) delete data.salida_productor_csg;
     if (state.tareCorrection) data.version_conocida = state.selected.version;
     if (data.modo_salida_envases !== 'vacio') {
         try {

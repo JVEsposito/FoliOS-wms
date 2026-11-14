@@ -199,6 +199,7 @@
                         <option value="vacio">Se va vacío</option>
                     </select></label>
                     <label class="field" id="outboundGuideField"><span>N° de guía de salida *</span><input name="numero_guia_salida" maxlength="80" required></label>
+                    <label class="field is-hidden" id="outboundProducerField"><span>Productor (CSG) que recibe los envases *</span><select name="salida_productor_csg"></select><small>El camión trae varios CSG: la salida se carga en la cuenta de este productor.</small></label>
                     <fieldset class="outbound-container-tares" id="outboundContainerTares"><legend>Envases y tara unitaria por tipo</legend><div id="outboundContainerTareList"></div><small>La entrada usa las cantidades validadas en la PDA. La diferencia por tipo ajusta el neto de fruta.</small>
                         <label class="field is-hidden" id="outboundExtraField"><span>Agregar otro tipo que sale</span><select id="outboundExtraType"></select><button class="secondary-button" type="button" id="outboundAddType">Agregar tipo</button></label>
                     </fieldset>

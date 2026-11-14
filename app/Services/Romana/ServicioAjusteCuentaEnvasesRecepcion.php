@@ -14,9 +14,7 @@ use App\Exceptions\ConflictoOperacion;
 use App\Models\EventoRecepcionRomana;
 use App\Models\MovimientoEnvase;
 use App\Models\RecepcionRomana;
-use App\Models\SegmentoValidacionMp;
 use App\Models\User;
-use App\Models\ValidacionMp;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Carbon\CarbonImmutable;
 use DateTimeInterface;
@@ -166,8 +164,9 @@ class ServicioAjusteCuentaEnvasesRecepcion
                     $this->reversar($vigente['movimiento'], $vigente['neto'], $usuario, $contexto, $hash);
                 }
                 $diferencia = $cambio['correcto'] - $cambio['registro'];
+                // Los entregados siguen a la salida del destare: el CSG elegido en Romana o el único.
                 $movimiento = $diferencia === 0 ? null : $this->registrar($recepcion, $movimientos, $cambio, $diferencia,
-                    $cambio['lado'] === 'recibidos' ? $productor : (count($productores) === 1 ? $productores[0] : null), $usuario, $contexto, $hash);
+                    $cambio['lado'] === 'recibidos' ? $productor : $this->productorSalida($recepcion), $usuario, $contexto, $hash);
                 $registrados[] = ['tipo_envase' => $cambio['tipo'], 'lado' => $cambio['lado'], 'registro' => $cambio['registro'],
                     'anterior' => $cambio['actual'], 'correcto' => $cambio['correcto'], 'diferencia' => $diferencia, 'movimiento_id' => $movimiento?->id];
             }
@@ -373,12 +372,16 @@ class ServicioAjusteCuentaEnvasesRecepcion
 
             return empty($productor['codigo']) ? [] : [['codigo' => (string) $productor['codigo'], 'nombre' => $productor['nombre'] ?? null]];
         }
-        $validacion = ValidacionMp::query()->where('recepcion_romana_id', $recepcion->id)->where('estado', EstadoValidacionMp::Validada)
-            ->with('segmentos.csg.productor')->first();
 
-        return collect($validacion?->segmentos ?? [])->map(fn (SegmentoValidacionMp $s): ?array => ($codigo = $s->csg_snapshot ?: $s->csg?->codigo)
-            ? ['codigo' => (string) $codigo, 'nombre' => $s->csg?->productor?->razon_social ?: $s->csg?->predio] : null)
-            ->filter()->unique('codigo')->sortBy('codigo', SORT_NATURAL)->values()->all();
+        return array_map(fn (array $p): array => ['codigo' => $p['codigo'], 'nombre' => $p['nombre']],
+            app(ProductoresRecepcion::class)->opciones($recepcion));
+    }
+
+    private function productorSalida(RecepcionRomana $recepcion): ?array
+    {
+        $salida = app(ProductoresRecepcion::class)->salida($recepcion);
+
+        return $salida === null ? null : ['codigo' => $salida['codigo'], 'nombre' => $salida['nombre'] ?? null];
     }
 
     private function productorRecibidos(array $productores, ?string $codigo, bool $cambiaRecibidos): ?array
